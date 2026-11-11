@@ -46,26 +46,44 @@ export class RemoteBrowserPageSession {
     this.cancelTabInfoRefresh()
   }
 
-  captureTabInfoAdmission(token: RemoteBrowserOperationToken): () => boolean {
+  captureTabInfoAdmission(token: RemoteBrowserOperationToken): {
+    isCurrent: () => boolean
+    apply: (tab: BrowserTabInfo) => boolean
+  } {
     const generation = ++this.observationGeneration
-    const observed = this.deps.readCurrentObservation()
-    return () => {
+    const observed = this.deps.tokens.isCurrent(token) ? this.deps.readCurrentObservation() : null
+    const isCurrent = (): boolean => {
+      if (
+        generation !== this.observationGeneration ||
+        !observed ||
+        !this.deps.tokens.isCurrent(token)
+      ) {
+        return false
+      }
       const current = this.deps.readCurrentObservation()
-      return (
-        this.deps.tokens.isCurrent(token) &&
-        generation === this.observationGeneration &&
-        observed.every((value, index) => value === current[index])
-      )
+      return observed.every((value, index) => value === current[index])
+    }
+    return {
+      isCurrent,
+      apply: (tab) => {
+        if (!isCurrent()) {
+          return false
+        }
+        this.deps.applyTabInfo(tab)
+        return true
+      }
     }
   }
 
-  async fetchTabInfo(token: RemoteBrowserOperationToken): Promise<BrowserTabInfo | null> {
-    const admits = this.captureTabInfoAdmission(token)
+  async refreshTabInfo(
+    token: RemoteBrowserOperationToken
+  ): Promise<Pick<BrowserTabInfo, 'loadError'> | null> {
+    const admission = this.captureTabInfoAdmission(token)
     try {
       const tab = await this.readTabInfo(token)
-      return admits() ? tab : null
+      return tab && admission.apply(tab) ? { loadError: tab.loadError } : null
     } catch (error) {
-      if (!admits()) {
+      if (!admission.isCurrent()) {
         return null
       }
       throw error
@@ -146,17 +164,11 @@ export class RemoteBrowserPageSession {
       if (!tokens.isCurrent(token)) {
         return
       }
-      void this.fetchTabInfo(token)
-        .then((tab) => {
-          if (tab && tokens.isCurrent(token)) {
-            this.deps.applyTabInfo(tab)
-          }
-        })
-        .catch((error: unknown) => {
-          if (tokens.isCurrent(token) && isRemoteBrowserPageMissingError(error)) {
-            this.deps.closeMissingRemotePage(token.remotePageId)
-          }
-        })
+      void this.refreshTabInfo(token).catch((error: unknown) => {
+        if (tokens.isCurrent(token) && isRemoteBrowserPageMissingError(error)) {
+          this.deps.closeMissingRemotePage(token.remotePageId)
+        }
+      })
     }, delayMs)
   }
 

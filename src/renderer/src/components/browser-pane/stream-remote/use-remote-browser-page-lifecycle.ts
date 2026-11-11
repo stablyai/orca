@@ -11,7 +11,6 @@ import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-t
 import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
 import type { BrowserScreencastFrameMetadata } from '../../../../../shared/browser/screencast/browser-screencast-protocol'
 import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser-workspace-types'
-import { browserPageExists } from '../describe-page/browser-page-load-error'
 import {
   REMOTE_BROWSER_STREAM_IDLE,
   type RemoteBrowserStreamStatus
@@ -23,7 +22,7 @@ import {
   type RemoteBrowserStreamBridge
 } from './remote-browser-page-input-model'
 import { subscribeRuntimeEnvironment } from '@/runtime/rpc/environment-revisions/runtime-environment-pairing-refresh'
-import { findPage } from '@/store/slices/browser/pages/browser-page-records'
+import { createRemoteBrowserPageObservation } from './remote-browser-page-observation'
 
 export function useRemoteBrowserPageLifecycle({
   browserTab,
@@ -78,28 +77,27 @@ export function useRemoteBrowserPageLifecycle({
     runtimeWorktreeRef.current = runtimeWorktree
   }, [activeRuntimeEnvironmentId, browserTab.id, browserTab.url, isActive, runtimeWorktree])
 
+  const currentWorkspaceIdRef = useRef(browserTab.workspaceId)
+  currentWorkspaceIdRef.current = browserTab.workspaceId
   if (!lifecycleRef.current) {
+    const observation = createRemoteBrowserPageObservation({
+      readState: useAppStore.getState,
+      getWorkspaceId: () => currentWorkspaceIdRef.current,
+      getPageId: () => currentBrowserTabIdRef.current
+    })
     lifecycleRef.current = new RemoteBrowserStreamLifecycle({
       identity: {
         isMounted: () => mountedRef.current,
         isActive: () => isActiveRef.current,
         getTabId: () => currentBrowserTabIdRef.current,
         getEnvironmentId: () => activeRuntimeEnvironmentIdRef.current,
-        browserPageExists
+        browserPageExists: observation.browserPageExists
       },
       callRpc: callRuntimeRpc,
       subscribeScreencast: (args, callbacks) => subscribeRuntimeEnvironment(args, callbacks),
       getWorktreeSelector: () => runtimeWorktreeRef.current,
       getCurrentUrl: () => currentBrowserTabUrlRef.current,
-      readCurrentObservation: () => {
-        const state = useAppStore.getState()
-        const page = findPage(state.browserPagesByWorkspace, currentBrowserTabIdRef.current)
-        return [
-          page?.url,
-          page?.loadError,
-          state.browserCertificateFailuresByPageId[currentBrowserTabIdRef.current]
-        ]
-      },
+      readCurrentObservation: observation.readCurrentObservation,
       readStoredHandle: () =>
         useAppStore.getState().remoteBrowserPageHandlesByPageId[currentBrowserTabIdRef.current] ??
         null,
@@ -240,7 +238,12 @@ export function useRemoteBrowserPageLifecycle({
       }
       const state = useAppStore.getState()
       const currentEnvironmentId = runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
-      const pageStillExists = browserPageExists(browserTab.id)
+      const pageStillExists =
+        useAppStore
+          .getState()
+          .browserPagesByWorkspace[browserTab.workspaceId]?.some(
+            (page) => page.id === browserTab.id
+          ) ?? false
       if (currentEnvironmentId === activeRuntimeEnvironmentId && pageStillExists) {
         return
       }
@@ -257,7 +260,14 @@ export function useRemoteBrowserPageLifecycle({
         { timeoutMs: 15_000, suppressFeatureInteraction: true }
       ).catch(() => {})
     }
-  }, [activeRuntimeEnvironmentId, browserTab.id, lifecycle, runtimeWorktree, worktreeId])
+  }, [
+    activeRuntimeEnvironmentId,
+    browserTab.id,
+    browserTab.workspaceId,
+    lifecycle,
+    runtimeWorktree,
+    worktreeId
+  ])
 
   return {
     lifecycle,

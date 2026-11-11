@@ -8,6 +8,7 @@ import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { BrowserPage } from '../../../../../shared/browser-workspace-types'
 import type { BrowserTabInfo } from '../../../../../shared/browser/runtime/runtime-browser-contracts'
 import { useRemoteBrowserPageNavigation } from './use-remote-browser-page-navigation'
+import { createRemoteBrowserPageObservation } from './remote-browser-page-observation'
 import { RemoteBrowserPageSession } from './remote-browser-page-session'
 import { RemoteBrowserOperationTokens } from './remote-browser-stream-tokens'
 import type { RemoteBrowserStreamLifecycle } from './remote-browser-stream-lifecycle'
@@ -90,28 +91,30 @@ function renderNavigation(count = 1) {
     }
   })
   const identity = { mounted: true, active: true, environmentId: 'environment-a' }
+  const observation = createRemoteBrowserPageObservation({
+    readState: useAppStore.getState,
+    getWorkspaceId: () => 'workspace-a',
+    getPageId: () => 'page-a'
+  })
   const tokens = new RemoteBrowserOperationTokens({
     isMounted: () => identity.mounted,
     isActive: () => identity.active,
     getTabId: () => 'page-a',
     getEnvironmentId: () => identity.environmentId,
-    browserPageExists: () => Boolean(currentPage())
+    browserPageExists: observation.browserPageExists
   })
   tokens.setRemotePage('remote-page-a')
+  let project: (tab: BrowserTabInfo) => void = () => {}
   const session = new RemoteBrowserPageSession({
     tokens,
     callRpc: callRuntimeRpc,
     getWorktreeSelector: () => 'worktree-a',
     getCurrentUrl: () => currentPage().url,
-    readCurrentObservation: () => [
-      currentPage()?.url,
-      currentPage()?.loadError,
-      useAppStore.getState().browserCertificateFailuresByPageId['page-a']
-    ],
+    readCurrentObservation: observation.readCurrentObservation,
     readStoredHandle: () => ({ environmentId: 'environment-a', remotePageId: 'remote-page-a' }),
     writeStoredHandle: vi.fn(),
     removeStoredHandle: vi.fn(),
-    applyTabInfo: vi.fn(),
+    applyTabInfo: (tab) => project(tab),
     closeMissingRemotePage: vi.fn()
   })
   const busy = vi.fn()
@@ -135,6 +138,7 @@ function renderNavigation(count = 1) {
       setPaneBusy: busy
     })
   )
+  project = (tab) => hook.result.current.applyRemoteTabInfo(tab)
   return { ...hook, session, tokens, identity, busy, notice }
 }
 
@@ -282,7 +286,7 @@ describe('remote browser authoritative page state', () => {
     ]) {
       const response = deferred<unknown>()
       vi.mocked(callRuntimeRpc).mockReturnValueOnce(response.promise)
-      const read = session.fetchTabInfo(tokens.createOperationToken('remote-page-a')!)
+      const read = session.refreshTabInfo(tokens.createOperationToken('remote-page-a')!)
       act(supersede)
       response.resolve({ tab: failedTab() })
       expect(await read).toBeNull()
@@ -290,12 +294,7 @@ describe('remote browser authoritative page state', () => {
       identity.mounted = true
     }
     vi.mocked(callRuntimeRpc).mockResolvedValueOnce({ tab: failedTab('challenge-z') })
-    const current = await session.fetchTabInfo(tokens.createOperationToken('remote-page-a')!)
-    act(() => {
-      if (current) {
-        result.current.applyRemoteTabInfo(current)
-      }
-    })
+    await act(() => session.refreshTabInfo(tokens.createOperationToken('remote-page-a')!))
     expectPending('challenge-z')
   })
 
@@ -347,7 +346,7 @@ describe('remote browser authoritative page state', () => {
       })
       const stale = deferred<unknown>()
       vi.mocked(callRuntimeRpc).mockReturnValueOnce(stale.promise)
-      const read = session.fetchTabInfo(tokens.createOperationToken('remote-page-a')!)
+      const read = session.refreshTabInfo(tokens.createOperationToken('remote-page-a')!)
       const failure = outcome === 'failure' ? failedTab('challenge-y') : null
       act(() =>
         useAppStore.setState((state) =>
@@ -393,10 +392,150 @@ describe('remote browser authoritative page state', () => {
     }
   )
 
+  it.each([null, undefined])(
+    'keeps an explicit native clear but retains the legacy omitted-error fallback (%s)',
+    async (loadError) => {
+      const { result } = renderNavigation()
+      act(() => result.current.applyRemoteTabInfo(failedTab()))
+      vi.mocked(callRuntimeRpc).mockImplementation(async (_target, method) => {
+        if (typeof method !== 'string') {
+          return undefined
+        }
+        if (method === 'browser.tabShow') {
+          return {
+            tab: {
+              ...failedTab(),
+              url: 'https://loaded.test/',
+              loadError,
+              certificateFailure: null
+            }
+          }
+        }
+        throw new Error('ERR_TIMED_OUT (-7)')
+      })
+      await act(() => result.current.runRemoteNavigation('browser.goto', 'https://loaded.test/'))
+      expect(currentPage().url).toBe('https://loaded.test/')
+      expect(useAppStore.getState().browserCertificateFailuresByPageId['page-a']).toBeUndefined()
+      if (loadError === null) {
+        expect(currentPage().loadError).toBeNull()
+      } else {
+        expect(currentPage().loadError).toEqual({
+          code: -7,
+          description: 'ERR_TIMED_OUT',
+          validatedUrl: 'https://loaded.test/'
+        })
+      }
+    }
+  )
+
+  it('retains parsed command failure when its authoritative read also fails', async () => {
+    const { result } = renderNavigation()
+    vi.mocked(callRuntimeRpc).mockImplementation(async (_target, method) => {
+      if (typeof method !== 'string') {
+        return undefined
+      }
+      throw new Error(method === 'browser.tabShow' ? 'read timed out' : 'ERR_TIMED_OUT (-7)')
+    })
+    await act(() => result.current.runRemoteNavigation('browser.goto', 'https://loaded.test/'))
+    expect(currentPage().loadError).toEqual({
+      code: -7,
+      description: 'ERR_TIMED_OUT',
+      validatedUrl: 'https://loaded.test/'
+    })
+    expect(currentPage().loading).toBe(false)
+  })
+
+  it('does not reinstall X after native clear-to-failure-to-clear at the same URL', async () => {
+    const { result, session, tokens } = renderNavigation()
+    act(() =>
+      result.current.applyRemoteTabInfo({
+        ...failedTab(),
+        loadError: null,
+        certificateFailure: null
+      })
+    )
+    const response = deferred<unknown>()
+    vi.mocked(callRuntimeRpc).mockReturnValueOnce(response.promise)
+    const pending = session.refreshTabInfo(tokens.createOperationToken('remote-page-a')!)
+    act(() => {
+      useAppStore.getState().updateBrowserPageState('page-a', { loadError: failedTab().loadError })
+      useAppStore
+        .getState()
+        .setBrowserPageCertificateFailure('page-a', failedTab().certificateFailure!)
+      useAppStore.getState().updateBrowserPageState('page-a', { loadError: null })
+    })
+    response.resolve({ tab: failedTab() })
+    expect(await pending).toBeNull()
+    expect(currentPage().loadError).toBeNull()
+    vi.mocked(callRuntimeRpc).mockResolvedValueOnce({ tab: failedTab('challenge-y') })
+    await act(() => session.refreshTabInfo(tokens.createOperationToken('remote-page-a')!))
+    expectPending('challenge-y')
+  })
+
+  it('applies admitted state before resolving, so a queued native clear remains final', async () => {
+    const { session, tokens } = renderNavigation()
+    const response = deferred<unknown>()
+    vi.mocked(callRuntimeRpc).mockReturnValueOnce(response.promise)
+    const pending = session.refreshTabInfo(tokens.createOperationToken('remote-page-a')!)
+    const nativeClear = response.promise.then(() =>
+      queueMicrotask(() =>
+        useAppStore.getState().updateBrowserPageState('page-a', { loadError: null })
+      )
+    )
+    await act(async () => {
+      response.resolve({ tab: failedTab() })
+      await pending
+      await nativeClear
+    })
+    expect(currentPage().loadError).toBeNull()
+    expect(useAppStore.getState().browserCertificateFailuresByPageId['page-a']).toBeUndefined()
+  })
+
+  it.each([100, 1000])(
+    'drops an obsolete read without visiting %i unrelated workspace pages after map replacement',
+    async (count) => {
+      const { result, session, tokens } = renderNavigation()
+      act(() => result.current.applyRemoteTabInfo(failedTab()))
+      const response = deferred<unknown>()
+      vi.mocked(callRuntimeRpc).mockReturnValueOnce(response.promise)
+      const pending = session.refreshTabInfo(tokens.createOperationToken('remote-page-a')!)
+      let visits = 0
+      let copies = 0
+      const unrelated = Object.fromEntries(
+        Array.from({ length: count }, (_, index) => [
+          `other-${index}`,
+          new Proxy([page(`other-${index}`)], {
+            get(target, key, receiver) {
+              if (key === 'map') {
+                copies += 1
+              }
+              if (typeof key === 'string' && /^\d+$/.test(key)) {
+                visits += 1
+              }
+              return Reflect.get(target, key, receiver)
+            }
+          })
+        ])
+      )
+      useAppStore.setState((state) => ({
+        browserPagesByWorkspace: { ...state.browserPagesByWorkspace, ...unrelated }
+      }))
+      session.invalidateTabInfoReads()
+      response.resolve({ tab: failedTab('stale') })
+      expect(await pending).toBeNull()
+      expect(visits).toBe(0)
+      expect(copies).toBe(0)
+      expectPending()
+      vi.mocked(callRuntimeRpc).mockResolvedValueOnce({ tab: failedTab('challenge-y') })
+      await act(() => session.refreshTabInfo(tokens.createOperationToken('remote-page-a')!))
+      expectPending('challenge-y')
+    }
+  )
+
   it.each([100, 1000])(
     'publishes no work for identical decoded failure observations among %i pages',
-    (count) => {
-      const { result } = renderNavigation(count)
+    async (count) => {
+      const { result, session, tokens } = renderNavigation(count)
       const failures = Object.fromEntries(
         Array.from({ length: count }, (_, index) => [
           `page-${index}`,
@@ -406,6 +545,8 @@ describe('remote browser authoritative page state', () => {
       useAppStore.setState({ browserCertificateFailuresByPageId: failures })
       act(() => result.current.applyRemoteTabInfo(failedTab()))
       let enumerations = 0
+      let copies = 0
+      let visits = 0
       const state = useAppStore.getState()
       const counted = <T extends object>(value: T): T =>
         new Proxy(value, {
@@ -414,19 +555,42 @@ describe('remote browser authoritative page state', () => {
             return Reflect.ownKeys(target)
           }
         })
+      const countedPages = new Proxy(state.browserPagesByWorkspace['workspace-a'], {
+        get(target, key, receiver) {
+          if (key === 'map') {
+            copies += 1
+          }
+          if (typeof key === 'string' && /^\d+$/.test(key)) {
+            visits += 1
+          }
+          return Reflect.get(target, key, receiver)
+        }
+      })
       useAppStore.setState({
-        browserPagesByWorkspace: counted(state.browserPagesByWorkspace),
+        browserPagesByWorkspace: counted({
+          ...state.browserPagesByWorkspace,
+          'workspace-a': countedPages
+        }),
         browserCertificateFailuresByPageId: counted(state.browserCertificateFailuresByPageId)
       })
       currentPage()
       const before = useAppStore.getState()
       enumerations = 0
+      copies = 0
+      visits = 0
       const changed = vi.fn()
       const unsubscribe = useAppStore.subscribe(changed)
-      act(() => result.current.applyRemoteTabInfo(JSON.parse(JSON.stringify(failedTab()))))
+      vi.mocked(callRuntimeRpc).mockResolvedValueOnce({
+        tab: JSON.parse(JSON.stringify(failedTab()))
+      })
+      await act(async () => {
+        await session.refreshTabInfo(tokens.createOperationToken('remote-page-a')!)
+      })
       unsubscribe()
       expect(changed).not.toHaveBeenCalled()
       expect(enumerations).toBe(0)
+      expect(copies).toBe(0)
+      expect(visits).toBeLessThanOrEqual(count + 20)
       expect(useAppStore.getState()).toBe(before)
       const unrelated = before.browserPagesByWorkspace['workspace-a'][1]
       act(() => result.current.applyRemoteTabInfo(failedTab('challenge-y')))

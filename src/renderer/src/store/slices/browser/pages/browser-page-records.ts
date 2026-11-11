@@ -106,12 +106,17 @@ export function mirrorWorkspaceFromActivePage(
   workspace: BrowserWorkspace,
   pages: BrowserPage[]
 ): BrowserWorkspace {
+  const pageIds =
+    workspace.pageIds?.length === pages.length &&
+    pages.every((page, index) => page.id === workspace.pageIds?.[index])
+      ? workspace.pageIds
+      : pages.map((page) => page.id)
   const activePage = pages.find((page) => page.id === workspace.activePageId) ?? null
   if (!activePage) {
     return {
       ...workspace,
       activePageId: null,
-      pageIds: pages.map((page) => page.id),
+      pageIds,
       url: 'about:blank',
       title: translate('auto.store.slices.browser.08fc23631d', 'Browser'),
       loading: false,
@@ -125,7 +130,7 @@ export function mirrorWorkspaceFromActivePage(
   return {
     ...workspace,
     activePageId: activePage.id,
-    pageIds: pages.map((page) => page.id),
+    pageIds,
     url: activePage.url,
     title: activePage.title,
     loading: activePage.loading,
@@ -145,8 +150,9 @@ export function browserWorkspaceMirrorFieldsEqual(
   const mirroredPageIds = mirrored.pageIds ?? []
   return (
     workspace.activePageId === mirrored.activePageId &&
-    workspacePageIds.length === mirroredPageIds.length &&
-    workspacePageIds.every((pageId, index) => pageId === mirroredPageIds[index]) &&
+    (workspacePageIds === mirroredPageIds ||
+      (workspacePageIds.length === mirroredPageIds.length &&
+        workspacePageIds.every((pageId, index) => pageId === mirroredPageIds[index]))) &&
     workspace.url === mirrored.url &&
     workspace.title === mirrored.title &&
     workspace.loading === mirrored.loading &&

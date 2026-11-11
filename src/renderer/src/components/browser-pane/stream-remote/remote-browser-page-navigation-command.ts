@@ -25,7 +25,6 @@ type RemoteBrowserNavigationCommandOptions = Pick<
   | 'setPaneBusy'
 > & {
   navigationSequence: { current: number }
-  applyRemoteTabInfo: (tab: BrowserTabInfo) => void
   applyRemoteTabMetadata: (tab: Pick<BrowserTabInfo, 'url' | 'title'>) => void
 }
 
@@ -43,7 +42,6 @@ export async function runRemoteBrowserNavigationCommand(
     setPaneNotice,
     setPaneBusy,
     navigationSequence,
-    applyRemoteTabInfo,
     applyRemoteTabMetadata
   }: RemoteBrowserNavigationCommandOptions,
   method: 'browser.goto' | 'browser.back' | 'browser.forward' | 'browser.reload',
@@ -62,7 +60,7 @@ export async function runRemoteBrowserNavigationCommand(
     return
   }
   const operationToken = createRemoteOperationToken()
-  if (!operationToken) {
+  if (!operationToken || !isCurrentRemoteOperationToken(operationToken)) {
     return
   }
   const sequence = ++navigationSequence.current
@@ -103,9 +101,9 @@ export async function runRemoteBrowserNavigationCommand(
     if (!ownsAction()) {
       return
     }
-    let tab: BrowserTabInfo | null
+    let tab: Pick<BrowserTabInfo, 'loadError'> | null
     try {
-      tab = await lifecycle.session.fetchTabInfo(pageToken)
+      tab = await lifecycle.session.refreshTabInfo(pageToken)
     } catch (error) {
       if (!ownsAction()) {
         return
@@ -124,9 +122,15 @@ export async function runRemoteBrowserNavigationCommand(
     if (!ownsAction() || !tab) {
       return
     }
-    applyRemoteTabInfo(tab)
     if (commandError && !tab.loadError) {
-      throw commandError
+      if (tab.loadError === undefined) {
+        throw commandError
+      }
+      setPaneNotice({
+        kind: 'consequence',
+        text:
+          commandError instanceof Error ? commandError.message : 'Remote browser command failed.'
+      })
     }
   } catch (error) {
     if (!ownsAction()) {

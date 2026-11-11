@@ -1,7 +1,6 @@
 import { runRemoteBrowserNavigationCommand } from './remote-browser-page-navigation-command'
 import { useCallback, useRef } from 'react'
 import { useAppStore } from '@/store'
-import { findPage } from '@/store/slices/browser/pages/browser-page-records'
 import { redactKagiSessionToken } from '../../../../../shared/browser-url'
 import { normalizeBrowserHistoryUrl } from '../../../../../shared/workspace-session/workspace-session-browser-history'
 import { resolveBrowserAddressBarSubmission } from '../navigate/browser-address-bar-navigation'
@@ -64,16 +63,23 @@ export function useRemoteBrowserPageNavigation({
   const navigationSequence = useRef(0)
 
   const applyRemoteTabMetadata = useCallback(
-    (tab: Pick<BrowserTabInfo, 'url' | 'title'>): void => {
+    (
+      tab: Pick<BrowserTabInfo, 'url' | 'title'> & Partial<Pick<BrowserTabInfo, 'loadError'>>
+    ): void => {
       const safeUrl = redactKagiSessionToken(tab.url || 'about:blank')
       const title = getBrowserDisplayTitle(tab.title, safeUrl)
-      const page = findPage(useAppStore.getState().browserPagesByWorkspace, browserTab.id)
+      const page = useAppStore
+        .getState()
+        .browserPagesByWorkspace[browserTab.workspaceId]?.find(
+          (entry) => entry.id === browserTab.id
+        )
       if (page?.url !== safeUrl) {
         onSetUrl(browserTab.id, safeUrl, { preserveLoadError: true })
       }
       onUpdatePageState(browserTab.id, {
         title,
-        loading: false
+        loading: false,
+        ...(tab.loadError !== undefined ? { loadError: tab.loadError } : {})
       })
       // File remote navigations in client suggestion history only when URL/title changes; post-input tab reads must not rewrite the store.
       const filing = `${normalizeBrowserHistoryUrl(safeUrl)}\n${title}`
@@ -83,18 +89,24 @@ export function useRemoteBrowserPageNavigation({
       }
       setAddressBarValueFromPage(toDisplayUrl(safeUrl))
     },
-    [addBrowserHistoryEntry, browserTab.id, onSetUrl, onUpdatePageState, setAddressBarValueFromPage]
+    [
+      addBrowserHistoryEntry,
+      browserTab.id,
+      browserTab.workspaceId,
+      onSetUrl,
+      onUpdatePageState,
+      setAddressBarValueFromPage
+    ]
   )
 
   const applyRemoteTabInfo = useCallback(
     (tab: BrowserTabInfo): void => {
-      applyRemoteTabMetadata(tab)
-      onUpdatePageState(browserTab.id, { loadError: tab.loadError ?? null })
+      applyRemoteTabMetadata({ ...tab, loadError: tab.loadError ?? null })
       useAppStore
         .getState()
         .setBrowserPageCertificateFailure(browserTab.id, tab.certificateFailure ?? null)
     },
-    [applyRemoteTabMetadata, browserTab.id, onUpdatePageState]
+    [applyRemoteTabMetadata, browserTab.id]
   )
 
   const prepareCertificateProceed = useCallback((): void => {
@@ -130,7 +142,6 @@ export function useRemoteBrowserPageNavigation({
           setPaneNotice,
           setPaneBusy,
           navigationSequence,
-          applyRemoteTabInfo,
           applyRemoteTabMetadata
         },
         method,
@@ -138,7 +149,6 @@ export function useRemoteBrowserPageNavigation({
       )
     },
     [
-      applyRemoteTabInfo,
       applyRemoteTabMetadata,
       browserTab,
       createRemoteOperationToken,
