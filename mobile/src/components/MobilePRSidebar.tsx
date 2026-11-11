@@ -31,6 +31,7 @@ import { useNow } from '../hooks/use-now'
 import { commentRelativeTime } from './pr-sidebar/pr-comment-relative-time'
 import { prStateBadge } from './pr-sidebar/pr-checks-presentation'
 import { statusColor } from './pr-sidebar/pr-sidebar-status-color'
+import { PrStateIcon } from './PrStateIcon'
 import { PrTabEmptyState } from './pr-sidebar/PrTabEmptyState'
 import { PrChangesCard, PrDescription } from './pr-sidebar/PrTabOverviewCards'
 import { PrTabBottomAction } from './pr-sidebar/PrTabBottomAction'
@@ -238,6 +239,7 @@ function PrTabHeader({ data }: { data: PrSidebarData }) {
     <View style={styles.header}>
       <View style={styles.metaRow}>
         <View style={[styles.badge, { borderColor: badgeColor }]}>
+          <PrStateIcon state={pr.state} size={12} color={badgeColor} strokeWidth={2.2} />
           <Text style={[styles.badgeText, { color: badgeColor }]}>{badge.label}</Text>
         </View>
         <Text style={styles.number}>#{pr.number}</Text>

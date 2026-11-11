@@ -51,11 +51,14 @@ export type NestedRepoScanResult = {
 
 export type ProjectGroupImportMode = 'group' | 'separate'
 
+export type ProjectGroupImportErrorCode = 'not_in_scan' | 'not_git_repository' | 'import_failed'
+
 export type ProjectGroupImportProjectResult = {
   path: string
   projectId?: string
   status: 'imported' | 'already-known' | 'failed'
   error?: string
+  errorCode?: ProjectGroupImportErrorCode
 }
 
 export type ProjectGroupImportResult = {

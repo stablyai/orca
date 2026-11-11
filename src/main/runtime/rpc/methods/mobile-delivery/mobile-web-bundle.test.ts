@@ -1,4 +1,12 @@
-import { mkdirSync, mkdtempSync, rmSync, truncateSync, unlinkSync, writeFileSync } from 'node:fs'
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  truncateSync,
+  unlinkSync,
+  writeFileSync
+} from 'node:fs'
 
 import { tmpdir } from 'node:os'
 
@@ -17,8 +25,6 @@ import type { RpcRequest, RpcResponse } from '../../core'
 
 import '../../../../../shared/orcad-artifacts'
 import type { RpcDispatcher } from '../../dispatcher'
-
-import { resetBundledMobileWebBundleCacheForTests } from './bundled-mobile-web-bundle'
 
 import {
   fillMobileWebBundleReadWindow,
@@ -85,7 +91,6 @@ async function download(buildId: string, path: string): Promise<{ bytes: Buffer;
 beforeEach(() => {
   scratch = mkdtempSync(join(tmpdir(), 'orca-mobile-web-bundle-'))
   installMobileWebBundleAppPath(scratch)
-  resetBundledMobileWebBundleCacheForTests()
   resetMobileWebBundleAssetVerdictsForTests()
   resetMobileWebBundleReadAdmissionForTests()
   vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -140,19 +145,43 @@ describe('an install that carries a mobile web bundle', () => {
     expect(body).toMatchObject({ dataBase64: '', eof: true, assetByteLength: 0 })
   })
 
-  // After auto-update, report build-changed before path lookup so clients restart from the manifest.
-  it('refuses the old buildId after the install swaps bundles mid-download', async () => {
+  // Linux package managers replace the install under a running host (STA-14385): serve the new build, never the gone one.
+  it('serves the replacement build after the install swaps bundles under a running host', async () => {
     const script = bundle.assets.find((asset) => asset.path.endsWith('.js'))!
+    expect((await call('mobileWeb.bundle.manifest')).ok).toBe(true)
     expect((await chunk({ buildId: bundle.buildId, path: script.path, offset: 0 })).ok).toBe(true)
 
     rmSync(join(scratch, 'out', 'mobile-web'), { recursive: true, force: true })
     const replacement = writeSyntheticMobileWebBundle(join(scratch, 'out', 'mobile-web'), 2)
-    resetBundledMobileWebBundleCacheForTests()
     expect(replacement.buildId).not.toBe(bundle.buildId)
 
     const stale = await chunk({ buildId: bundle.buildId, path: script.path, offset: 0 })
+    const manifest = await call('mobileWeb.bundle.manifest')
+    const fresh = await chunk({ buildId: replacement.buildId, path: 'index.html', offset: 0 })
 
     expect(errorMessage(stale)).toBe('mobile_web_bundle_build_changed')
+    expect(
+      MobileWebBundleManifestResultSchema.parse(manifest.ok && manifest.result).manifest.buildId
+    ).toBe(replacement.buildId)
+    expect(errorMessage(fresh)).toBeUndefined()
+  })
+
+  // A newer release written in place may add schema-v1 fields this host predates; it serves only the ones it knows.
+  it('serves a replacement manifest that carries fields this host does not know', async () => {
+    rmSync(join(scratch, 'out', 'mobile-web'), { recursive: true, force: true })
+    const replacement = writeSyntheticMobileWebBundle(join(scratch, 'out', 'mobile-web'), 5)
+    const manifestPath = join(replacement.root, 'manifest.json')
+    const written = JSON.parse(readFileSync(manifestPath, 'utf8'))
+    written.assets[0].laterAssetField = 1
+    written.laterManifestField = true
+    writeFileSync(manifestPath, JSON.stringify(written), 'utf8')
+
+    const response = await call('mobileWeb.bundle.manifest')
+
+    const manifest = MobileWebBundleManifestResultSchema.parse(
+      response.ok && response.result
+    ).manifest
+    expect(manifest.buildId).toBe(replacement.buildId)
   })
 
   // A path survives rebuild; key verdicts by build too so an old failure cannot poison new bytes.
@@ -164,9 +193,22 @@ describe('an install that carries a mobile web bundle', () => {
 
     rmSync(join(scratch, 'out', 'mobile-web'), { recursive: true, force: true })
     const replacement = writeSyntheticMobileWebBundle(join(scratch, 'out', 'mobile-web'), 8)
-    resetBundledMobileWebBundleCacheForTests()
 
     const response = await chunk({ buildId: replacement.buildId, path: 'index.html', offset: 0 })
+
+    expect(errorMessage(response)).toBeUndefined()
+  })
+
+  // A package install writes the manifest and assets one file at a time; a mismatch mid-install must not stick.
+  it('serves an asset once its bytes match again, after a mismatch for the same build', async () => {
+    const original = mobileWebBundleFiller(640, 3)
+    writeFileSync(join(bundle.root, 'index.html'), mobileWebBundleFiller(640, 99))
+    expect(
+      errorMessage(await chunk({ buildId: bundle.buildId, path: 'index.html', offset: 0 }))
+    ).toBe('mobile_web_bundle_asset_changed')
+
+    writeFileSync(join(bundle.root, 'index.html'), original)
+    const response = await chunk({ buildId: bundle.buildId, path: 'index.html', offset: 0 })
 
     expect(errorMessage(response)).toBeUndefined()
   })
@@ -259,7 +301,20 @@ describe('where the resolver probes', () => {
   it('finds the bundle beside an out/main app path', async () => {
     const bundle = writeSyntheticMobileWebBundle(join(scratch, 'out', 'mobile-web'), 3)
     installMobileWebBundleAppPath(join(scratch, 'out', 'main'))
-    resetBundledMobileWebBundleCacheForTests()
+
+    const response = await call('mobileWeb.bundle.manifest')
+
+    expect(
+      MobileWebBundleManifestResultSchema.parse(response.ok && response.result).manifest.buildId
+    ).toBe(bundle.buildId)
+  })
+
+  it('reads a packaged app from app.asar.unpacked, where an in-place update writes its files', async () => {
+    const bundle = writeSyntheticMobileWebBundle(
+      join(scratch, 'app.asar.unpacked', 'out', 'mobile-web'),
+      4
+    )
+    installMobileWebBundleAppPath(join(scratch, 'app.asar'))
 
     const response = await call('mobileWeb.bundle.manifest')
 
@@ -282,7 +337,6 @@ describe('an install with no mobile web bundle', () => {
     const root = join(scratch, 'out', 'mobile-web')
     mkdirSync(root, { recursive: true })
     writeFileSync(join(root, 'manifest.json'), 'not json', 'utf8')
-    resetBundledMobileWebBundleCacheForTests()
 
     expect(errorMessage(await call('mobileWeb.bundle.manifest'))).toBe(
       'mobile_web_bundle_unavailable'

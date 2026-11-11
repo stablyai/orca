@@ -93,7 +93,7 @@ function MenuRow({
           <Text style={styles.name} numberOfLines={1}>
             {row.kind === 'file' ? row.path : row.token}
           </Text>
-          {row.kind === 'command' && row.argumentHint ? (
+          {row.kind !== 'file' && row.argumentHint ? (
             <Text style={styles.hint} numberOfLines={1}>
               {row.argumentHint}
             </Text>

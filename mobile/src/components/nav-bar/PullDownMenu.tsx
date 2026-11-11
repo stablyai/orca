@@ -197,7 +197,9 @@ export function PullDownMenu({ visible, anchorRef, groups, onClose }: PullDownMe
                       disabled={action.disabled || action.loading}
                       onPress={() => press(action)}
                       accessibilityRole="menuitem"
-                      accessibilityLabel={action.label}
+                      accessibilityLabel={
+                        action.status ? `${action.label}, ${action.status}` : action.label
+                      }
                       accessibilityHint={action.hint}
                       accessibilityState={
                         action.checked === undefined ? undefined : { checked: action.checked }
@@ -214,6 +216,11 @@ export function PullDownMenu({ visible, anchorRef, groups, onClose }: PullDownMe
                           </Text>
                         ) : null}
                       </View>
+                      {action.status ? (
+                        <Text style={styles.status} numberOfLines={1}>
+                          {action.status}
+                        </Text>
+                      ) : null}
                       {action.checked ? (
                         <Check size={17} color={tint} strokeWidth={2.2} />
                       ) : action.renderIcon ? (
@@ -281,5 +288,12 @@ const styles = themedStyleSheet(() => ({
   hint: {
     color: colors.textSecondary,
     fontSize: typography.metaSize
+  },
+  status: {
+    marginLeft: 'auto',
+    flexShrink: 0,
+    color: colors.textSecondary,
+    fontSize: typography.metaSize,
+    fontVariant: ['tabular-nums']
   }
 }))

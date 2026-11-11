@@ -4,7 +4,7 @@ import type { StoreDomains } from './store-domain-composition'
 import type { StoreRuntimeState } from './store-runtime-state'
 import { drainProfileStateOperations } from './profile-state-flush-lifetime'
 import { flushCurrentStateAsync } from './write-flush-barriers'
-import { scheduleSave } from './write-scheduling'
+import { scheduleFullProfileSave } from './write-scheduling'
 import { persistGithubCache, suspendGithubCachePersistence } from './github-cache-persistence'
 
 export type ProfileStateMaintenanceOptions = {
@@ -66,7 +66,7 @@ export function beginProfileStateMaintenance(
     runtime.profileMaintenancePending = false
     runtime.pendingProfileMaintenance = null
     resumePreference()
-    scheduleSave(domains.scheduling)
+    scheduleFullProfileSave(domains.scheduling)
     // Updates admitted while paused (or a retry it skipped) resume their routine save.
     persistGithubCache(runtime, 'routine')
   }

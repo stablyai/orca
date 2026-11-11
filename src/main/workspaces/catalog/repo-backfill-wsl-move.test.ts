@@ -26,7 +26,7 @@ vi.mock('electron', () => ({
 }))
 vi.mock('./repo-git-remote-identity', () => ({ probeGitRemoteIdentity: vi.fn() }))
 vi.mock('../../github/client/fetch/repo-slug-upstream', () => ({
-  getRepoUpstream: vi.fn(async () => ({ owner: 'acme', repo: 'app' }))
+  probeRepoUpstream: vi.fn(async () => ({ upstream: { owner: 'acme', repo: 'app' }, origin: null }))
 }))
 vi.mock('../../repository-icons/repo-icon-autodetect', () => ({
   detectGitHubAvatarIcon: vi.fn(async () => null)

@@ -18,7 +18,7 @@ import {
   planAgentSessionLaunch,
   adoptAgentSessionLaunchVerdict
 } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
-import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
+
 import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/agent-session/structured-agent-session-provisional-tab'
 import '@/lib/workspace/creation/new-workspace-project-options'
 import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
@@ -140,7 +140,7 @@ export async function submitFolderWorkspaceCreate({
     quickAgent && linkedWorkItem ? resolveFolderWorkspaceLaunchDraft(linkedWorkItem, note) : null
   const launchRequest = quickAgent
     ? {
-        requestId: newAgentLaunchRequestId(),
+        requestId: createBrowserUuid(),
         agent: quickAgent,
         ...(sessionOptions ? { launchOptions: sessionOptions } : {}),
         ...(chatSessionOptions !== undefined ? { chatLaunchOptions: chatSessionOptions } : {}),

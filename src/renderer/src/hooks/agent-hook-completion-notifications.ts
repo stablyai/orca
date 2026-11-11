@@ -21,14 +21,15 @@ import {
   discardHookLaneCompletionRequests,
   submitHookLaneCompletion
 } from './agent-hook-completion-revision-hold'
+import { getFirstTerminalTab } from '@/store/terminals/terminal-tab-owner-index'
 import * as finishDrops from '@/attention/agent-finish-drop-breadcrumb'
 import type {
   CoordinatorEntry,
   StoreSnapshot,
-  WorktreeTab,
-  TabIndex,
   PaneCoordinatorLivenessSnapshot
 } from './agent-hook-completion-notification-types'
+
+const emptyTerminalTabs: StoreSnapshot['tabsByWorktree'] = {}
 
 const coordinatorsByPaneKey = new Map<string, CoordinatorEntry>()
 const paneKeysRequiringFreshWorking = new Set<string>()
@@ -41,19 +42,6 @@ function disposeCoordinatorForPaneKey(paneKey: string): void {
   coordinatorsByPaneKey.delete(paneKey)
   discardHookLaneCompletionRequests(paneKey)
   paneKeysRequiringFreshWorking.delete(paneKey)
-}
-
-function buildTabIndex(tabsByWorktree: StoreSnapshot['tabsByWorktree']): TabIndex {
-  const index = new Map<string, WorktreeTab>()
-  for (const tabs of Object.values(tabsByWorktree ?? {})) {
-    for (const tab of tabs) {
-      // Preserve first-wins lookup when tab IDs collide across worktrees.
-      if (!index.has(tab.id)) {
-        index.set(tab.id, tab)
-      }
-    }
-  }
-  return index
 }
 
 function pruneClosedPaneCoordinators(): void {
@@ -78,15 +66,14 @@ function pruneClosedPaneCoordinators(): void {
     return
   }
   lastPrunedLivenessSnapshot = livenessSnapshot
-  const tabIndex = buildTabIndex(livenessSnapshot.tabsByWorktree)
   for (const [paneKey, entry] of coordinatorsByPaneKey) {
-    if (!paneCanReceiveHookCompletion(paneKey, tabIndex)) {
+    if (!paneCanReceiveHookCompletion(paneKey)) {
       finishDrops.recordPrunedPendingFinish(entry.worktreeId, paneKey, entry.coordinator)
       disposeCoordinatorForPaneKey(paneKey)
     }
   }
   for (const paneKey of paneKeysRequiringFreshWorking) {
-    if (!paneCanReceiveHookCompletion(paneKey, tabIndex)) {
+    if (!paneCanReceiveHookCompletion(paneKey)) {
       paneKeysRequiringFreshWorking.delete(paneKey)
     }
   }
@@ -140,33 +127,12 @@ function paneHasLivePty(paneKey: string): boolean {
   return getPtyIdForPaneKey(paneKey) !== null
 }
 
-function resolveTabById(
-  state: StoreSnapshot,
-  tabId: string,
-  tabIndex?: TabIndex
-): WorktreeTab | undefined {
-  if (tabIndex) {
-    return tabIndex.get(tabId)
-  }
-  for (const tabs of Object.values(state.tabsByWorktree ?? {})) {
-    const found = tabs.find((candidate) => candidate.id === tabId)
-    if (found) {
-      return found
-    }
-  }
-  return undefined
-}
-
-function paneKeyHasUnsuppressedPtyHint(
-  state: StoreSnapshot,
-  paneKey: string,
-  tabIndex?: TabIndex
-): boolean {
+function paneKeyHasUnsuppressedPtyHint(state: StoreSnapshot, paneKey: string): boolean {
   const parsed = parsePaneKey(paneKey)
   if (!parsed) {
     return false
   }
-  const tab = resolveTabById(state, parsed.tabId, tabIndex)
+  const tab = getFirstTerminalTab(state.tabsByWorktree ?? emptyTerminalTabs, parsed.tabId)
   if (!tab) {
     return false
   }
@@ -180,10 +146,10 @@ function paneKeyHasUnsuppressedPtyHint(
   return ptyHints.length === 0 || ptyHints.some((ptyId) => !state.suppressedPtyExitIds?.[ptyId])
 }
 
-function paneCanReceiveHookCompletion(paneKey: string, tabIndex?: TabIndex): boolean {
+function paneCanReceiveHookCompletion(paneKey: string): boolean {
   const state = useAppStore.getState()
   // Native hooks prove live status even before inactive-worktree PTY maps hydrate.
-  return paneKeyHasUnsuppressedPtyHint(state, paneKey, tabIndex) || paneHasLivePty(paneKey)
+  return paneKeyHasUnsuppressedPtyHint(state, paneKey) || paneHasLivePty(paneKey)
 }
 
 function hookLaneDispatchEnabled(paneKey: string): boolean {

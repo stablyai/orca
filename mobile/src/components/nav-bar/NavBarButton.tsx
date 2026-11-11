@@ -16,6 +16,8 @@ type NavBarButtonProps = {
   /** The screen or panel this button opens is showing. */
   active?: boolean
   disabled?: boolean
+  /** The icon's colour while not active, e.g. a PR state's. */
+  iconColor?: string
 }
 
 // A round top-bar button; the bar floats over content like the composer, so its buttons are round too.
@@ -25,7 +27,8 @@ export function NavBarButton({
   accessibilityLabel,
   onPress,
   active = false,
-  disabled = false
+  disabled = false,
+  iconColor
 }: NavBarButtonProps) {
   useMobileColorScheme()
   return (
@@ -44,7 +47,11 @@ export function NavBarButton({
       accessibilityLabel={accessibilityLabel}
       accessibilityState={{ disabled, selected: active }}
     >
-      <Icon size={18} color={active ? colors.bgBase : colors.textPrimary} strokeWidth={2.1} />
+      <Icon
+        size={18}
+        color={active ? colors.bgBase : (iconColor ?? colors.textPrimary)}
+        strokeWidth={2.1}
+      />
     </Pressable>
   )
 }

@@ -40,13 +40,15 @@ export const ORCHESTRATION_WORKER_START_METHODS = [
     access: {
       kind: 'writes',
       caller: 'from',
+      server: 'on',
       targets: {
         task: 'task',
         parent: 'task',
         deps: 'task',
         run: 'run',
         retryOf: 'dispatch',
-        terminal: 'worker'
+        terminal: 'worker',
+        adoptTaskId: 'task'
       }
     },
     requires: ['accounts'],
@@ -78,6 +80,26 @@ export async function startWorker(
     throw new OrchestrationError(
       SESSION_CODES.hostBoundary,
       `${params.terminal} names a chat by its Orca session ID, which identifies it only on the host that runs it. Run worker-start on that host. No effects were applied.`,
+      { effectsApplied: false }
+    )
+  }
+  if (params.adoptTaskId !== undefined && orchestrationCaller?.kind !== 'peer') {
+    throw new OrchestrationError(
+      'invalid_argument',
+      'Only the paired Orca coordinating a Run names its Task IDs. No effects were applied.',
+      { effectsApplied: false }
+    )
+  }
+  const placement = params.worktree ?? 'current'
+  if (
+    orchestrationCaller?.kind === 'peer' &&
+    !followUp &&
+    !params.terminal &&
+    /^(current|new-child)$/.test(placement)
+  ) {
+    throw new OrchestrationError(
+      'invalid_argument',
+      `--on requires an exact remote worktree selector or new-top-level: ${orchestrationCaller.peerRun.home_label} has no workspace on this server for --worktree ${placement}. No effects were applied.`,
       { effectsApplied: false }
     )
   }

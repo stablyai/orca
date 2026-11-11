@@ -14,7 +14,7 @@ import { __clearSelfWriteRegistryForTests } from '../../external-changes/editor-
 import { registerPendingEditorFlush } from '../flush/editor-pending-flush'
 import { usePluginPanelsStore } from '@/store/plugins/catalog/plugin-contribution-catalog'
 
-import { bumpEditorDiscardEpoch, EditorSaveDiscardedError } from '../flush/editor-discard-epoch'
+import { discardEditorGenerations, EditorSaveDiscardedError } from '../flush/editor-discard-epoch'
 import { editorBufferIdOfView } from '@/store/slices/editor/buffers/editor-buffer-views'
 
 vi.mock('@/lib/workspace/ownership/connection-context', () => ({
@@ -156,7 +156,7 @@ describe('format on the guarded save path', () => {
     const saving = queue.queueSave(file(), 'one')
     const rejection = expect(saving).rejects.toBeInstanceOf(EditorSaveDiscardedError)
     await vi.waitFor(() => expect(callRuntimeRpc).toHaveBeenCalledOnce())
-    bumpEditorDiscardEpoch(editorBufferIdOfView(store.getState(), file().id))
+    discardEditorGenerations(editorBufferIdOfView(store.getState(), file().id), [file().id])
     finish({ kind: 'formatted', text: 'ONE' })
     await rejection
     expect(disk.files.get('/repo/a.ts')).toBe('')
