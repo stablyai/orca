@@ -7,6 +7,7 @@ import {
 } from '@/components/settings/plugins/plugins-search'
 import { getPrivacyPaneSearchEntries } from '@/components/settings/privacy/privacy-search'
 import { getRepositoryPaneSearchEntries } from '@/components/settings/repository/repository-search'
+import { getRepositoryTerminalThemeSearchEntries } from '@/components/settings/repository-terminal-theme-search-entries'
 import { buildSettingsProjectList } from '@/components/settings/navigation/settings-project-list'
 import { getSshPaneSearchEntries } from '@/components/settings/ssh/ssh-search'
 import { translate } from '@/i18n/i18n'
@@ -168,13 +169,14 @@ export function buildRemoteSettingsSections(
         title: checkoutLabel ?? project.displayName,
         description: `${getRepoKindLabel(project)} • ${hostSummary}`,
         icon: SlidersHorizontal,
-        searchEntries: getRepositoryPaneSearchEntries(
-          representativeRepo,
-          {
-            windowsRuntimeSupported: isWindowsTerminalHost
-          },
-          t
-        ),
+        searchEntries: [
+          ...getRepositoryPaneSearchEntries(
+            representativeRepo,
+            { windowsRuntimeSupported: isWindowsTerminalHost },
+            t
+          ),
+          ...getRepositoryTerminalThemeSearchEntries(representativeRepo)
+        ],
         group: 'repositories'
       }
     })

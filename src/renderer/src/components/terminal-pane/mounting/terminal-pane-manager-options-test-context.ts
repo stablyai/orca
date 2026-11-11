@@ -16,6 +16,8 @@ export function createPaneManagerOptionsTestContext(
       systemPrefersDark: false,
       settings: null,
       settingsRef: { current: null },
+      repoTerminalTheme: undefined,
+      repoTerminalThemeRef: { current: undefined },
       requestOpenLinksInAppPreference: vi.fn(),
       requestTerminalLinkAction: vi.fn(),
       effectiveMacOptionAsAlt: 'false',

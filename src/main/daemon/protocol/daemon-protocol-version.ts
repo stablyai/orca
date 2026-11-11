@@ -1,4 +1,5 @@
 // Why: daemons survive app updates, so wire behavior must be version-gated.
+// v57 answers OSC 10/11 from each session's project colours.
 // v56 accepts `reportFocusLost`; v55 daemons from 1.4.251 predate it and reject the request.
 // v55 observes the foreground group at the physical PTY owner.
 // v54 reads the macOS process table in process instead of forking setuid ps on every poll (#31783).
@@ -14,7 +15,7 @@
 // v43 dropped it with the revert); v41 stages long startup commands as sourced scripts; v40 rolled
 // the #25130/#24636 shell-wrapper changes and the wider agent list into a fresh daemon; older owners
 // stay attachable.
-export const PROTOCOL_VERSION = 56
+export const PROTOCOL_VERSION = 57
 export const FOCUS_LOSS_REPORT_PROTOCOL_VERSION = 56
 export const PTY_FOREGROUND_OBSERVATION_PROTOCOL_VERSION = 55
 export const FENCED_TERMINATION_PROTOCOL_VERSION = 51
@@ -22,6 +23,8 @@ export const CLAUDE_ACCOUNT_FUNCTION_DAEMON_PROTOCOL_VERSION = 42
 export const CLAUDE_ACCOUNT_FUNCTION_REVERTED_DAEMON_PROTOCOL_VERSION = 43
 // v39 gives plain fish panes Orca's codex function through XDG_DATA_DIRS.
 export const CODEX_FISH_SHELL_FUNCTION_DAEMON_PROTOCOL_VERSION = 39
+// Why: older daemons ignore `byRepoId` on `setColorQueryReplyColors` and answer every session globally.
+export const REPO_COLOR_QUERY_REPLY_COLORS_DAEMON_PROTOCOL_VERSION = 57
 // Why: older daemons reject `setColorQueryReplyColors` as an unknown request type.
 export const COLOR_QUERY_REPLY_COLORS_DAEMON_PROTOCOL_VERSION = 38
 export const CODEX_NO_DAEMON_SHELL_LAUNCH_DAEMON_PROTOCOL_VERSION = 37
@@ -52,11 +55,15 @@ export const MODE_2031_UNSUBSCRIBE_FACT_PROTOCOL_VERSION = 29
 export const PREVIOUS_DAEMON_PROTOCOL_VERSIONS = [
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
   28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51,
-  52, 53, 54, 55
+  52, 53, 54, 55, 56
 ] as const
 
 export function supportsColorQueryReplyColors(protocolVersion: number): boolean {
   return protocolVersion >= COLOR_QUERY_REPLY_COLORS_DAEMON_PROTOCOL_VERSION
+}
+
+export function supportsRepoColorQueryReplyColors(protocolVersion: number): boolean {
+  return protocolVersion >= REPO_COLOR_QUERY_REPLY_COLORS_DAEMON_PROTOCOL_VERSION
 }
 
 export function supportsPtyStartupIngress(protocolVersion: number): boolean {

@@ -389,3 +389,7 @@ This guide covers worktrees, terminals, and handoffs on its own. At a gate below
 | Creating, editing, running, or inspecting scheduled automations                                                 | `references/automations.md`      |
 | Creating, loading, installing, updating, approving, or publishing an Orca plugin, or adding a plugin catalog    | `references/plugins.md`          |
 | Mobile emulator taps, gestures, typing, buttons, camera, or permissions                                         | invoke the `orca-emulator` skill |
+
+For building a terminal theme or adding one to the selectable list, load
+`references/terminal-themes.md`. It covers importable YAML, separate dark/light
+palettes, and built-in catalog additions.

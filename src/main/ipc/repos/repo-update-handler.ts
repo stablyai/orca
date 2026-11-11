@@ -17,6 +17,7 @@ import {
 } from '../../../shared/github/account-binding'
 
 import { normalizeRepoSourceControlAiOverrides } from '../../../shared/source-control/ai/settings/source-control-ai-repo-settings'
+import { normalizeRepoTerminalThemeOverrides } from '../../../shared/repo-terminal-theme'
 import {
   normalizeCustomWorktreeVisibilitySources,
   normalizeWorktreeVisibilitySourcePreferences
@@ -68,6 +69,7 @@ export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Stor
           externalWorktreeVisibility?: Repo['externalWorktreeVisibility'] | null
           agentWorktreeVisibility?: Repo['agentWorktreeVisibility'] | null
           sourceControlAi?: Repo['sourceControlAi'] | null
+          terminalTheme?: Repo['terminalTheme'] | null
           externalWorktreeDiscoverySuppressedAt?:
             | Repo['externalWorktreeDiscoverySuppressedAt']
             | null
@@ -240,6 +242,16 @@ export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Stor
           delete updates.sourceControlAi
         } else {
           updates.sourceControlAi = normalizedSourceControlAi
+        }
+      }
+      if ('terminalTheme' in updates && updates.terminalTheme === null) {
+        updates.terminalTheme = undefined
+      } else if ('terminalTheme' in updates && updates.terminalTheme !== undefined) {
+        const normalizedTerminalTheme = normalizeRepoTerminalThemeOverrides(updates.terminalTheme)
+        if (normalizedTerminalTheme === undefined) {
+          delete updates.terminalTheme
+        } else {
+          updates.terminalTheme = normalizedTerminalTheme
         }
       }
       const hostId = args.hostId ? normalizeExecutionHostId(args.hostId) : null

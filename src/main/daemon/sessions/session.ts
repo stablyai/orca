@@ -12,7 +12,8 @@ import type { JobTerminationOutcome } from '../../windows/windows-pty-job'
 import type { SessionOptions } from './session-options'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import { randomUUID } from 'node:crypto'
-import { PtyStartupIngress } from '../../../shared/terminal/pty/ingress/pty-startup-ingress'
+import type { PtyStartupIngress } from '../../../shared/terminal/pty/ingress/pty-startup-ingress'
+import { createSessionStartupIngress } from '../session-startup-ingress'
 
 import type {
   SessionState,
@@ -66,9 +67,7 @@ export class Session extends SessionProcessInspection {
       this.startupIngress.accept(data)
     )
 
-    this.startupIngress = new PtyStartupIngress({
-      ...(opts.startupIngress ? { intent: opts.startupIngress } : {}),
-      ...(opts.ownerBackend ? { ownerBackend: opts.ownerBackend } : {}),
+    this.startupIngress = createSessionStartupIngress(opts, {
       readForegroundGroup: this.subprocess.readForegroundGroup,
       write: (data) => this.subprocess.write(data),
       onEmission: (emission) => this.recoveryBarrier.accept(emission)

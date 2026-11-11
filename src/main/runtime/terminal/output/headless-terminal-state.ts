@@ -1,9 +1,11 @@
 import { OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer } from './headless-terminal-hydration'
 import type { RuntimeHeadlessTerminal } from '../records/runtime-terminal-state-records'
+import type { TerminalViewAttributes } from '../../../../shared/terminal/protocol/queries/terminal-view-attributes'
 import { HeadlessEmulator } from '../../../daemon/emulation/headless-emulator'
 import { shouldForwardHeadlessTerminalQueryReply } from './headless-terminal-query-reply-policy'
 import { isNativeWindowsConptyPty } from './terminal-model-query-authority'
-import { getTerminalViewAttributes } from '../view/terminal-view-attribute-store'
+import { getTerminalViewAttributesForScope } from '../view/terminal-view-attribute-store'
+import { resolvePtyViewAttributeScope } from '../../pty-view-attribute-scope'
 import { PtyShellOwnershipMirror } from '../query/pty-shell-ownership-mirror'
 import { PROCESS_BOUNDARY_GROUND } from '../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import { release } from 'node:os'
@@ -69,11 +71,14 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
     if (isNativeWindowsConptyPty(ptyId)) {
       emulator.installConptyPrimaryDeviceAttributesOverride()
     }
-    // Read latest viewer attributes at parse time; remain silent before the first push.
-    emulator.installViewAttributeResponder(() => getTerminalViewAttributes())
-    const viewAttributes = getTerminalViewAttributes()
+    // Why the lazy getter: replies use the freshest renderer push, else main's
+    // seed, at parse time; silent only where neither exists (headless host).
+    // Resolved at reply time so a worktree recorded after the emulator was
+    // created (graph sync lands late) still picks its repo's theme.
+    emulator.installViewAttributeResponder(() => this.resolveViewAttributesForPty(ptyId))
+    const viewAttributes = this.resolveViewAttributesForPty(ptyId)
     if (viewAttributes) {
-      emulator.applyPushedViewAttributes(viewAttributes)
+      emulator.applyPushedViewAttributes(viewAttributes, null)
     }
     const constructed: RuntimeHeadlessTerminal = {
       emulator,
@@ -100,7 +105,16 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
     return state
   }
 
-  /** Idempotently retrofit ConPTY DA1 when spawn metadata arrives after live bytes created the emulator (terminal-query-authority.md). */
+  /** This PTY's effective view attributes: its local repo's theme, else global. */
+  protected resolveViewAttributesForPty(ptyId: string): TerminalViewAttributes | null {
+    return getTerminalViewAttributesForScope(
+      resolvePtyViewAttributeScope(ptyId, this.ptysById.get(ptyId))
+    )
+  }
+
+  /** Phase-5 ConPTY DA1 retrofit (terminal-query-authority.md): invoked via
+   *  markNativeWindowsConptyPty when the spawn mark lands after daemon stream
+   *  data already created this PTY's emulator. Idempotent emulator-side. */
   protected ensureNativeWindowsConptyDa1Override(ptyId: string): void {
     if (isNativeWindowsConptyPty(ptyId)) {
       this.headlessTerminals.get(ptyId)?.emulator.installConptyPrimaryDeviceAttributesOverride()

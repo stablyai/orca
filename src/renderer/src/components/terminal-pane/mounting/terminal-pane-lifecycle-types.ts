@@ -6,6 +6,7 @@ import type { IDisposable } from '@xterm/xterm'
 import type { ParsedAgentStatusPayload } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import type { TerminalKittyKeyboardModeTracker } from '../../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { RepoTerminalThemeOverrides } from '../../../../../shared/repo-terminal-theme'
 import type { TerminalLayoutSnapshot } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import type {
   PaneExternalDropHandler,
@@ -42,6 +43,9 @@ export type UseTerminalPaneLifecycleDeps = {
   systemPrefersDark: boolean
   settings: GlobalSettings | null | undefined
   settingsRef: React.RefObject<GlobalSettings | null | undefined>
+  /** Project theme pick for this pane's worktree (pick > global, per variant). */
+  repoTerminalTheme: RepoTerminalThemeOverrides | undefined
+  repoTerminalThemeRef: React.RefObject<RepoTerminalThemeOverrides | undefined>
   requestOpenLinksInAppPreference: TerminalLinkRoutingPreferenceRequester
   requestTerminalLinkAction: TerminalLinkActionRequester
   /** Resolved Option-as-Alt: `'auto'` already mapped via the layout probe. */

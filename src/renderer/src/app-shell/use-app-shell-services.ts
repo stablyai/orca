@@ -11,6 +11,7 @@ import {
 } from '../hooks/clipboard/primary-selection/usePrimarySelectionPaste'
 import { useRadixBodyPointerEventsRecovery } from '../hooks/useRadixBodyPointerEventsRecovery'
 import { useOsc52ClipboardDefaultOnNotice } from '../components/terminal-pane/clipboard/osc52-clipboard-default-on-notice'
+import { useRepoTerminalViewAttributesPublisher } from '../components/terminal-pane/repo-terminal-view-attributes-publisher'
 import { useWindowsTerminalFontWeightNotice } from '../components/terminal-pane/appearance/windows-terminal-font-weight-notice'
 import { useLocalStructuredSessionTabsSync } from '../runtime/local-structured-session-tabs-sync/use-local-structured-session-tabs-sync'
 import { useHostStructuredAgentsSync } from '../runtime/native-chat/agent-catalogs/host-structured-agents-sync'
@@ -50,6 +51,7 @@ export function useAppShellServices(): void {
   useLargeTextControlPaste()
   usePrimarySelectionPaste(primarySelectionMiddleClickPaste)
   useOsc52ClipboardDefaultOnNotice(persistedUIReady)
+  useRepoTerminalViewAttributesPublisher()
   useWindowsTerminalFontWeightNotice(persistedUIReady)
   useBrowserIdentityMigrationNotice()
   useBrowserClientHostedDownloadNotices()

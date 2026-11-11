@@ -1,5 +1,6 @@
 import {
   DEFAULT_TERMINAL_DIVIDER_DARK,
+  applyRepoTerminalThemeOverride,
   normalizeColor,
   resolveEffectiveTerminalAppearance
 } from '@/lib/terminal/appearance/terminal-theme'
@@ -13,14 +14,22 @@ import type { TerminalPaneMobileController } from '../controller/use-terminal-pa
 export function resolveTerminalPaneAppearance({
   isVisible,
   settings,
+  repoTerminalTheme,
   shouldMeasureHiddenStartup,
   systemPrefersDark
 }: Pick<
   TerminalPaneMobileController,
-  'isVisible' | 'settings' | 'shouldMeasureHiddenStartup' | 'systemPrefersDark'
+  | 'isVisible'
+  | 'repoTerminalTheme'
+  | 'settings'
+  | 'shouldMeasureHiddenStartup'
+  | 'systemPrefersDark'
 >) {
   const effectiveAppearance = settings
-    ? resolveEffectiveTerminalAppearance(settings, systemPrefersDark)
+    ? resolveEffectiveTerminalAppearance(
+        applyRepoTerminalThemeOverride(settings, repoTerminalTheme),
+        systemPrefersDark
+      )
     : null
   const terminalBackground = effectiveAppearance?.theme?.background
   const titleUsesLightSurface = isTerminalBackgroundLight(terminalBackground, {

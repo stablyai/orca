@@ -54,7 +54,7 @@ import { configureAiVaultSessionSources } from '../../ai-vault/cached-session-li
 import { configureHostReadableTranscriptPathSources } from '../../native-chat/host-readable-transcript-path'
 import { createEphemeralAgentSessionClaimSigner } from '../agent-session/ownership/agent-session-claim-identity'
 import { registerConptyDa1OverrideInstaller } from '../terminal/output/terminal-model-query-authority'
-import { registerTerminalViewAttributesApplier } from '../terminal/view/terminal-view-attribute-store'
+import { registerScopedTerminalViewAttributesApplier } from '../pty-view-attribute-scope'
 import { RuntimeMachineName } from '../hosts/platform-probe/runtime-machine-name'
 import { setPRConflictSummaryRemoteFetches } from '../../github/conflict-summary'
 import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from '../../../shared/terminal/replay/terminal-scrollback-policy'
@@ -302,12 +302,8 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
     this.onTerminalSideEffects = deps?.onTerminalSideEffects ?? null
     // ConPTY spawn marks can follow emulator creation; retrofit DA1 (terminal-query-authority.md).
     registerConptyDa1OverrideInstaller((ptyId) => this.ensureNativeWindowsConptyDa1Override(ptyId))
-    // Apply renderer changes to live emulators too: cursor query parity and per-PTY OSC color reset.
-    registerTerminalViewAttributesApplier((attributes) => {
-      for (const state of this.headlessTerminals.values()) {
-        state.emulator.applyPushedViewAttributes(attributes)
-      }
-    })
+    // Apply renderer changes to live emulators too, per PTY's repo-or-global scope.
+    registerScopedTerminalViewAttributesApplier(this.headlessTerminals, this.ptysById)
     // Conflict previews and create refreshes must queue through one fetch owner.
     setPRConflictSummaryRemoteFetches(this.remoteFetches)
   }

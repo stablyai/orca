@@ -8,6 +8,8 @@ import type { TerminalPaneLifecycleRefs } from '../mounting/use-terminal-pane-li
 export function useMountedTerminalAppearance(
   deps: Pick<
     UseTerminalPaneLifecycleDeps,
+    | 'repoTerminalTheme'
+    | 'repoTerminalThemeRef'
     | 'managerRef'
     | 'settingsRef'
     | 'settings'
@@ -37,9 +39,12 @@ export function useMountedTerminalAppearance(
       deps.paneTransportsRef.current,
       deps.effectiveMacOptionAsAltRef.current,
       deps.paneMode2031Ref.current,
-      deps.paneLastThemeModeRef.current
+      deps.paneLastThemeModeRef.current,
+      deps.repoTerminalThemeRef.current
     )
   }, [
+    deps.repoTerminalTheme,
+    deps.repoTerminalThemeRef,
     deps.settings,
     themeBackgroundActive,
     terminalFontReady,

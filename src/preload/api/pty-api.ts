@@ -32,7 +32,10 @@ import type {
 } from '../../shared/terminal/pty/diagnostics/pty-renderer-delivery-health'
 import type { AgentKind, LaunchSource, RequestKind } from '../../shared/telemetry-events'
 import type { TerminalSideEffectBatch } from '../../shared/terminal/output/terminal-side-effect-facts'
-import type { TerminalViewAttributes } from '../../shared/terminal/protocol/queries/terminal-view-attributes'
+import type {
+  RepoTerminalViewAttributesPayload,
+  TerminalViewAttributes
+} from '../../shared/terminal/protocol/queries/terminal-view-attributes'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { TerminalPanePlacement } from '../../shared/workspace-layout/terminal-pane-placement'
 import type { AgentPaneLaunchRequest } from '../../shared/agent-launch/contracts/agent-pane-launch-request'
@@ -159,6 +162,9 @@ export type PtyApi = {
   setPtyDeliveryInterest: (id: string, interested: boolean) => void
   /** Main uses the composed appearance for hidden-PTY OSC/DSR color replies. */
   publishTerminalViewAttributes: (attributes: TerminalViewAttributes) => void
+  /** Per-project terminalTheme snapshots, by execution host then repo id, so hidden PTYs on
+   *  this host and on SSH hosts answer in their project's colors. */
+  publishRepoTerminalViewAttributes: (payload: RepoTerminalViewAttributesPayload) => void
   hasChildProcesses: (id: string) => Promise<boolean>
   getForegroundProcess: (id: string) => Promise<string | null>
   inspectProcess: (

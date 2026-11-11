@@ -6,5 +6,6 @@ export function getThemeNames(): string[] {
 }
 
 export function getTheme(name: string): ITheme | null {
-  return TERMINAL_THEME_CATALOG[name] ?? null
+  // Why own-only: a repo pick from IPC/RPC like `constructor` must not resolve to an Object.prototype member.
+  return Object.hasOwn(TERMINAL_THEME_CATALOG, name) ? TERMINAL_THEME_CATALOG[name] : null
 }

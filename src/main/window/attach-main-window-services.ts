@@ -109,7 +109,11 @@ export function attachMainWindowServices(
       isRecoveryReloadInFlight: options?.isRecoveryReloadInFlight,
       onCodexHomePtySpawned: options?.onCodexHomePtySpawned,
       onPtyExit: options?.onPtyExit,
-      systemPrefersDark: () => nativeTheme.shouldUseDarkColors
+      systemPrefersDark: () => nativeTheme.shouldUseDarkColors,
+      onSystemAppearanceChanged: (listener) => {
+        nativeTheme.on('updated', listener)
+        return () => nativeTheme.removeListener('updated', listener)
+      }
     }
   )
   // Register after PTY handlers so macOS reactivation reinstalls management IPC (docs/daemon-staleness-ux.md §Phase 1).

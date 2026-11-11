@@ -29,7 +29,10 @@ import type {
   PtyRendererDeliveryHealthReply,
   PtyRendererDeliveryStateReport
 } from '../../shared/terminal/pty/diagnostics/pty-renderer-delivery-health'
-import type { TerminalViewAttributes } from '../../shared/terminal/protocol/queries/terminal-view-attributes'
+import type {
+  RepoTerminalViewAttributesPayload,
+  TerminalViewAttributes
+} from '../../shared/terminal/protocol/queries/terminal-view-attributes'
 import type { PtyMainDeliveryDiagnostics } from '../../shared/terminal/pty/diagnostics/pty-delivery-diagnostics'
 import type { AgentKind, LaunchSource, RequestKind } from '../../shared/telemetry-events'
 import type { PreloadApi } from '../api-types'
@@ -180,6 +183,9 @@ export const ptySessionControlApi = {
   },
   publishTerminalViewAttributes: (attributes: TerminalViewAttributes): void => {
     ipcRenderer.send('pty:terminalViewAttributes', attributes)
+  },
+  publishRepoTerminalViewAttributes: (payload: RepoTerminalViewAttributesPayload): void => {
+    ipcRenderer.send('pty:repoTerminalViewAttributes', payload)
   },
   killFenced: (request: PtyFencedTerminationRequest): Promise<PtyFencedTerminationOutcome> =>
     ipcRenderer.invoke('pty:killFenced', request),

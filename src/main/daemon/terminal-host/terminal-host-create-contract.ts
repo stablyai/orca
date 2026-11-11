@@ -36,6 +36,7 @@ export type CreateOrAttachOptions = {
     claim: AgentSessionExecutionClaim
     surface: AgentSessionSurfaceBinding
   }
+  worktreeId?: string
   streamClient: {
     onData: (data: string, rawLength?: number, transformed?: boolean, seq?: number) => void
     onExit: (code: number, incarnationId: PtyIncarnationId, cause?: TerminalExitCause) => void

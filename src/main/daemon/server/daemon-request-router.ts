@@ -2,7 +2,7 @@ import { parseDaemonLaunchNoteChange } from '../protocol/daemon-launch-note-prot
 import { handleDaemonTerminalKill } from './daemon-terminal-kill'
 import { handleDaemonFencedTermination } from './daemon-fenced-termination'
 import { performance } from 'node:perf_hooks'
-import { setPtyOwnerHostColors } from '../../../shared/terminal/pty/ingress/pty-owner-color-query-colors'
+import { setPtyOwnerColors } from '../../../shared/terminal/pty/ingress/pty-owner-color-query-colors'
 import type { ConnectedDaemonClient, DaemonClientConnections } from './daemon-client-connections'
 import type { DaemonFileLog } from '../observability/daemon-file-log'
 import type { DaemonPtySpawnPreparations } from './daemon-pty-spawn-preparations'
@@ -80,7 +80,7 @@ export class DaemonRequestRouter {
           appliedSeq: this.options.host.closeStartupQueryAuthority(request.payload.sessionId)
         }
       case 'setColorQueryReplyColors':
-        setPtyOwnerHostColors(request.payload.colors)
+        setPtyOwnerColors(request.payload)
         return {}
       case 'write':
         return this.write(client, request.payload.sessionId, request.payload.data)

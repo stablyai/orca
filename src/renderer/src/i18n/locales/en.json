@@ -11581,7 +11581,15 @@
             "bbbe994528": "Remove project",
             "cedbe6c02c": "When to run setup",
             "eefc3e51ef": "GitHub account",
-            "f94afd4078": "Keep fork up to date"
+            "f94afd4078": "Keep fork up to date",
+            "terminalTheme": "Terminal Theme",
+            "terminalThemeDescription": "Project-specific terminal color themes for dark and light mode.",
+            "terminal": "terminal",
+            "theme": "theme",
+            "dark": "dark",
+            "light": "light",
+            "ghostty": "ghostty",
+            "colorScheme": "color scheme"
           }
         },
         "runtime": {
@@ -12202,7 +12210,8 @@
           "providerHost": "Provider host",
           "providerAccounts": "Credentials and account checks belong to the local client or selected remote server that owns the provider integration.",
           "hostCollectionProjectScopes": "Host collection + project scopes",
-          "terminalQuickCommandHostCollections": "Commands are saved on the selected Orca host, then scoped globally or to a project setup. Commands from this device also remain available in remote workspaces."
+          "terminalQuickCommandHostCollections": "Commands are saved on the selected Orca host, then scoped globally or to a project setup. Commands from this device also remain available in remote workspaces.",
+          "repositoryTerminalTheme": "Terminals in this project use these themes on this host. A mode left unset uses the client terminal theme."
         },
         "RepositoryForkSyncSection": {
           "defaultBranch": "default branch",
@@ -13437,6 +13446,17 @@
           "terminalLabel": "ZCode sign-in terminal",
           "apiKeyInstructions": "Press Enter to start ZCode, then enter /login and choose the API-key option for your plan site. Enter the key in ZCode’s masked prompt.",
           "oauthInstructions": "Press Enter to run the sign-in command, then open the authorization URL printed by ZCode. Sign-in is saved on this terminal’s execution host."
+        },
+        "RepositoryTerminalThemeSection": {
+          "lightDescription": "Terminal theme for this project when Orca is in light mode.",
+          "darkDescription": "Terminal theme for this project when Orca is in dark mode.",
+          "title": "Terminal Theme",
+          "useGlobal": "Use global",
+          "usingGlobal": "Using global: {{value0}}",
+          "staleOverride": "Saved theme {{value0}} is no longer available. Using global: {{value1}}",
+          "unstorableSelection": "This theme name is too long to save for a project. Rename the theme and try again.",
+          "saveFailed": "Could not save this theme for the project. Try again.",
+          "mirrorsRepoDark": "Follows this project's dark theme: {{value0}}"
         },
         "ZcodePlanAccountsSection": {
           "site": {

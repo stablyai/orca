@@ -50,6 +50,7 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
     hiddenStartupStyle,
     terminalContainerStyle
   } = resolveTerminalPaneAppearance({
+    repoTerminalTheme: controller.repoTerminalTheme,
     isVisible,
     settings,
     shouldMeasureHiddenStartup,

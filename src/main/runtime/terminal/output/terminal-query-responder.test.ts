@@ -5,6 +5,7 @@ import { HeadlessEmulator } from '../../../daemon/emulation/headless-emulator'
 import {
   _resetHiddenRendererPtyDeliveryGateForTest,
   markHiddenRendererPty,
+  setRendererPtyDeliveryInterest,
   unmarkHiddenRendererPty
 } from '../../../ipc/pty/delivery/pty-hidden-delivery-gate'
 import {
@@ -13,6 +14,7 @@ import {
 } from './terminal-model-query-authority'
 import {
   _resetTerminalViewAttributesForTest,
+  setRepoTerminalViewAttributes,
   setTerminalViewAttributes
 } from '../view/terminal-view-attribute-store'
 import type {
@@ -402,5 +404,253 @@ describe('per-PTY OSC color SET layering', () => {
     await settle(runtime, 'pty-clear')
 
     expect(replies.map((reply) => reply.data)).toEqual(['\x1b]11;rgb:1010/2020/3030\x1b\\'])
+  })
+})
+
+describe('view-attribute replay guard and suppression', () => {
+  it('never answers view-attribute queries embedded in a seeded snapshot', async () => {
+    const { runtime, replies } = createResponderRuntime()
+    markHiddenRendererPty('pty-vseed')
+    setTerminalViewAttributes(viewAttributes())
+
+    runtime.seedHeadlessTerminal('pty-vseed', 'prompt\x1b]11;?\x07\x1b[?996n')
+    await settle(runtime, 'pty-vseed')
+    expect(replies).toEqual([])
+
+    runtime.onPtyData('pty-vseed', '\x1b]11;?\x07', Date.now())
+    await settle(runtime, 'pty-vseed')
+    expect(replies.map((reply) => reply.data)).toEqual(['\x1b]11;rgb:1e1e/1e1e/2e2e\x1b\\'])
+  })
+
+  it('never answers view-attribute queries replayed by renderer-buffer hydration', async () => {
+    const { runtime, replies } = createResponderRuntime({
+      rendererBuffer: { data: 'restored\x1b]11;?\x07\x1b[?996n', cols: 80, rows: 24 }
+    })
+    markHiddenRendererPty('pty-vhyd')
+    setTerminalViewAttributes(viewAttributes())
+
+    runtime.onPtyData('pty-vhyd', 'live output', Date.now())
+    await settle(runtime, 'pty-vhyd')
+
+    expect(replies).toEqual([])
+  })
+
+  it('never answers a delivered (unmarked) view-attribute query — the visible xterm owns it', async () => {
+    const { runtime, replies } = createResponderRuntime()
+    setTerminalViewAttributes(viewAttributes())
+
+    runtime.onPtyData('pty-vvis', '\x1b]11;?\x07\x1b[?996n', Date.now())
+    await settle(runtime, 'pty-vvis')
+
+    expect(replies).toEqual([])
+  })
+
+  it('never answers while renderer delivery interest holds the chunk delivered', async () => {
+    const { runtime, replies } = createResponderRuntime()
+    markHiddenRendererPty('pty-vint')
+    setRendererPtyDeliveryInterest('pty-vint', true)
+    setTerminalViewAttributes(viewAttributes())
+
+    runtime.onPtyData('pty-vint', '\x1b]11;?\x07', Date.now())
+    await settle(runtime, 'pty-vint')
+
+    expect(replies).toEqual([])
+  })
+
+  it('yields view-attribute replies while a remote view subscriber is attached', async () => {
+    const { runtime, replies } = createResponderRuntime()
+    markHiddenRendererPty('pty-vrem')
+    setTerminalViewAttributes(viewAttributes())
+    const release = runtime.registerRemoteTerminalViewSubscriber('pty-vrem')
+
+    runtime.onPtyData('pty-vrem', '\x1b]11;?\x07', Date.now())
+    await settle(runtime, 'pty-vrem')
+    expect(replies).toEqual([])
+
+    release()
+    runtime.onPtyData('pty-vrem', '\x1b]11;?\x07', Date.now())
+    await settle(runtime, 'pty-vrem')
+    expect(replies.map((reply) => reply.data)).toEqual(['\x1b]11;rgb:1e1e/1e1e/2e2e\x1b\\'])
+  })
+
+  it.each([
+    ['terminalModelQueryAuthority', () => (settingsState.terminalModelQueryAuthority = false)],
+    ['terminalHiddenDeliveryGate', () => (settingsState.terminalHiddenDeliveryGate = false)],
+    [
+      'terminalMainSideEffectAuthority',
+      () => (settingsState.terminalMainSideEffectAuthority = false)
+    ]
+  ])('never answers view-attribute queries with kill switch %s off', async (_label, flip) => {
+    flip()
+    const { runtime, replies } = createResponderRuntime()
+    markHiddenRendererPty('pty-vkill')
+    setTerminalViewAttributes(viewAttributes())
+
+    runtime.onPtyData('pty-vkill', '\x1b]11;?\x07\x1b[?996n', Date.now())
+    await settle(runtime, 'pty-vkill')
+
+    expect(replies).toEqual([])
+  })
+})
+
+describe('per-repo view attributes', () => {
+  const SOLARIZED = { background: [0x00, 0x2b, 0x36], foreground: [0x83, 0x94, 0x96] } as const
+  const SOLARIZED_BG_REPLY = '\x1b]11;rgb:0000/2b2b/3636\x1b\\'
+  const GLOBAL_BG_REPLY = '\x1b]11;rgb:1e1e/1e1e/2e2e\x1b\\'
+  const repoAttributes = (): TerminalViewAttributes =>
+    viewAttributes({ background: [...SOLARIZED.background], foreground: [...SOLARIZED.foreground] })
+
+  async function query(
+    runtime: OrcaRuntimeService,
+    replies: { ptyId: string; data: string }[],
+    ptyId: string,
+    chunk: string
+  ): Promise<string[]> {
+    const before = replies.length
+    runtime.onPtyData(ptyId, chunk, Date.now())
+    await settle(runtime, ptyId)
+    return replies.slice(before).map((reply) => reply.data)
+  }
+
+  it('answers a registered themed-repo PTY from its repo palette', async () => {
+    const { runtime, replies } = createResponderRuntime()
+    runtime.registerPty('pty-themed', 'repoA::/a')
+    markHiddenRendererPty('pty-themed')
+    setTerminalViewAttributes(viewAttributes())
+    setRepoTerminalViewAttributes({ byHostId: { local: { repoA: repoAttributes() } } })
+
+    expect(
+      await query(runtime, replies, 'pty-themed', '\x1b]11;?\x07\x1b]10;?\x07\x1b[?996n')
+    ).toEqual([SOLARIZED_BG_REPLY, '\x1b]10;rgb:8383/9494/9696\x1b\\', '\x1b[?997;1n'])
+  })
+
+  it('infers the repo from a daemon-style PTY id before graph sync records it', async () => {
+    const { runtime, replies } = createResponderRuntime()
+    markHiddenRendererPty('repoA::/a@@1')
+    setTerminalViewAttributes(viewAttributes())
+    setRepoTerminalViewAttributes({ byHostId: { local: { repoA: repoAttributes() } } })
+
+    expect(await query(runtime, replies, 'repoA::/a@@1', '\x1b]11;?\x07')).toEqual([
+      SOLARIZED_BG_REPLY
+    ])
+  })
+
+  it('answers unthemed-repo and folder-workspace PTYs from the global palette', async () => {
+    const { runtime, replies } = createResponderRuntime()
+    runtime.registerPty('pty-plain', 'repoB::/b')
+    markHiddenRendererPty('pty-plain')
+    markHiddenRendererPty('folder:x@@1')
+    setTerminalViewAttributes(viewAttributes())
+    setRepoTerminalViewAttributes({ byHostId: { local: { repoA: repoAttributes() } } })
+
+    expect(await query(runtime, replies, 'pty-plain', '\x1b]11;?\x07')).toEqual([GLOBAL_BG_REPLY])
+    expect(await query(runtime, replies, 'folder:x@@1', '\x1b]11;?\x07')).toEqual([GLOBAL_BG_REPLY])
+  })
+
+  it('clears OSC SET overlays only on PTYs whose effective palette changed', async () => {
+    const { runtime, replies } = createResponderRuntime()
+    runtime.registerPty('pty-a', 'repoA::/a')
+    runtime.registerPty('pty-g', 'repoB::/b')
+    markHiddenRendererPty('pty-a')
+    markHiddenRendererPty('pty-g')
+    setTerminalViewAttributes(viewAttributes())
+    setRepoTerminalViewAttributes({ byHostId: { local: { repoA: repoAttributes() } } })
+    const setGreen = '\x1b]4;1;#00ff00\x07'
+    const ask = '\x1b]4;1;?\x07'
+    const green = '\x1b]4;1;rgb:0000/ffff/0000\x1b\\'
+    const baseRed = '\x1b]4;1;rgb:cccc/0000/0000\x1b\\'
+    await query(runtime, replies, 'pty-a', setGreen)
+    await query(runtime, replies, 'pty-g', setGreen)
+
+    setTerminalViewAttributes(viewAttributes({ background: [0x10, 0x20, 0x30] }))
+    expect(await query(runtime, replies, 'pty-a', ask)).toEqual([green])
+    expect(await query(runtime, replies, 'pty-g', ask)).toEqual([baseRed])
+
+    await query(runtime, replies, 'pty-g', setGreen)
+    setRepoTerminalViewAttributes({
+      byHostId: { local: { repoA: viewAttributes({ background: [0x07, 0x36, 0x42] }) } }
+    })
+    expect(await query(runtime, replies, 'pty-a', ask)).toEqual([baseRed])
+    expect(await query(runtime, replies, 'pty-g', ask)).toEqual([green])
+  })
+
+  it('keeps a SET made before an opaque-id PTY is registered through an unrelated later push', async () => {
+    // In-process ids ("7") carry no worktree, and spawn-commit registers the PTY only after a
+    // persistence await, so shell rc output can SET colours while the scope is still global.
+    const { runtime, replies } = createResponderRuntime()
+    setTerminalViewAttributes(viewAttributes())
+    setRepoTerminalViewAttributes({ byHostId: { local: { repoA: repoAttributes() } } })
+    markHiddenRendererPty('7')
+    const setGreen = '\x1b]4;1;#00ff00\x07'
+    const ask = '\x1b]4;1;?\x07'
+    const green = '\x1b]4;1;rgb:0000/ffff/0000\x1b\\'
+    await query(runtime, replies, '7', setGreen)
+    runtime.registerPty('7', 'repoA::/a')
+    expect(await query(runtime, replies, '7', ask)).toEqual([green])
+
+    // Another project's theme is edited; repoA's palette is unchanged, as its visible pane shows.
+    setRepoTerminalViewAttributes({
+      byHostId: {
+        local: { repoA: repoAttributes(), repoB: viewAttributes({ background: [1, 2, 3] }) }
+      }
+    })
+    expect(await query(runtime, replies, '7', ask)).toEqual([green])
+
+    // The project's own theme changing still replaces the palette, like the pane's theme apply.
+    setRepoTerminalViewAttributes({
+      byHostId: { local: { repoA: viewAttributes({ background: [0x07, 0x36, 0x42] }) } }
+    })
+    expect(await query(runtime, replies, '7', ask)).toEqual(['\x1b]4;1;rgb:cccc/0000/0000\x1b\\'])
+  })
+
+  it('keeps a SET made in the restart window through the first repo push', async () => {
+    // Fresh main: the global push lands first; the repo map arrives once the catalog settles.
+    // The visible repoA pane painted its theme from the start, so nothing re-themed.
+    const { runtime, replies } = createResponderRuntime()
+    setTerminalViewAttributes(viewAttributes())
+    const ptyId = 'repoA::/a@@deadbeef'
+    markHiddenRendererPty(ptyId)
+    await query(runtime, replies, ptyId, '\x1b]4;1;#00ff00\x07')
+
+    setRepoTerminalViewAttributes({ byHostId: { local: { repoA: repoAttributes() } } })
+    expect(await query(runtime, replies, ptyId, '\x1b]4;1;?\x07')).toEqual([
+      '\x1b]4;1;rgb:0000/ffff/0000\x1b\\'
+    ])
+  })
+
+  it('keeps overlays on an identical repo re-push (renderer reload)', async () => {
+    const { runtime, replies } = createResponderRuntime()
+    runtime.registerPty('pty-a', 'repoA::/a')
+    markHiddenRendererPty('pty-a')
+    setTerminalViewAttributes(viewAttributes())
+    setRepoTerminalViewAttributes({ byHostId: { local: { repoA: repoAttributes() } } })
+    await query(runtime, replies, 'pty-a', '\x1b]11;#ffffff\x07')
+
+    setRepoTerminalViewAttributes({ byHostId: { local: { repoA: repoAttributes() } } })
+    expect(await query(runtime, replies, 'pty-a', '\x1b]11;?\x07')).toEqual([
+      '\x1b]11;rgb:ffff/ffff/ffff\x1b\\'
+    ])
+  })
+
+  it('keeps overlays through cursor-only repo pushes, other-project pushes and the first empty map', async () => {
+    const { runtime, replies } = createResponderRuntime()
+    runtime.registerPty('pty-g', 'repoG::/g')
+    runtime.registerPty('pty-a', 'repoA::/a')
+    markHiddenRendererPty('pty-g')
+    markHiddenRendererPty('pty-a')
+    setTerminalViewAttributes(viewAttributes())
+    await query(runtime, replies, 'pty-g', '\x1b]11;#ffffff\x07')
+    setRepoTerminalViewAttributes({ byHostId: {} })
+    setRepoTerminalViewAttributes({ byHostId: { local: { repoA: repoAttributes() } } })
+    await query(runtime, replies, 'pty-a', '\x1b]11;#ffffff\x07')
+
+    const cursorOnly = { ...repoAttributes(), cursorBlink: false, cursorStyle: 'block' as const }
+    setRepoTerminalViewAttributes({ byHostId: { local: { repoA: cursorOnly } } })
+    setRepoTerminalViewAttributes({
+      byHostId: { local: { repoA: cursorOnly, repoB: repoAttributes() } }
+    })
+    const white = ['\x1b]11;rgb:ffff/ffff/ffff\x1b\\']
+    expect(await query(runtime, replies, 'pty-a', '\x1b]11;?\x07')).toEqual(white)
+    expect(await query(runtime, replies, 'pty-g', '\x1b]11;?\x07')).toEqual(white)
   })
 })

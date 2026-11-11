@@ -35,6 +35,17 @@ function buildSummaries(t: Translate = translate): Record<string, SettingOwnersh
         'These overrides apply to this project setup and inherit the client Source Control AI defaults until customized.'
       )
     },
+    repositoryTerminalTheme: {
+      ownership: 'project-host-setup',
+      label: translate(
+        'auto.components.settings.settingOwnership.projectOnThisHost',
+        'Project on this host'
+      ),
+      description: translate(
+        'auto.components.settings.settingOwnership.repositoryTerminalTheme',
+        'Terminals in this project use these themes on this host. A mode left unset uses the client terminal theme.'
+      )
+    },
     agentLaunchDefaults: {
       ownership: 'host-collection',
       label: t('auto.components.settings.settingOwnership.providerHost', 'Provider host'),
@@ -76,6 +87,7 @@ function buildSummaries(t: Translate = translate): Record<string, SettingOwnersh
 const SUMMARY_KEYS = [
   'sourceControlAiDefaults',
   'repositorySourceControlAi',
+  'repositoryTerminalTheme',
   'agentLaunchDefaults',
   'terminalQuickCommands',
   'workspaceDirectory',

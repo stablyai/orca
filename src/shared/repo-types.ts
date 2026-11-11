@@ -7,6 +7,7 @@ import type { ForkSyncMode } from './git/remotes/git-fork-sync'
 import type { GitRemoteIdentity } from './git/remotes/git-remote-identity'
 import type { RepoSourceControlAiOverrides } from './source-control/ai/settings/source-control-ai-settings-types'
 import type { RepoProjectHostSetupMethod } from './project-types'
+import type { RepoTerminalThemeOverrides } from './repo-terminal-theme'
 import type { JiraProjectReference } from './jira/jira-project-reference'
 import type { OrcadRetainedMarker } from './orcad-retained-marker'
 import type { EditorFormatter } from './editor-formatter'
@@ -100,6 +101,8 @@ export type Repo = {
   projectGroupOrder?: number
   /** Repo-specific source-control AI overrides. Missing fields inherit global settings. */
   sourceControlAi?: RepoSourceControlAiOverrides
+  /** Project Settings theme pick per mode; a missing mode inherits the global theme. */
+  terminalTheme?: RepoTerminalThemeOverrides
   /** Transitional source for ProjectHostSetup.setupMethod while Repo remains compatibility storage. */
   projectHostSetupMethod?: RepoProjectHostSetupMethod
   /** Local row a WSL host now owns, kept for a downgrade; set only by the mover's retention pass. */

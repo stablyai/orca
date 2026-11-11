@@ -24,4 +24,5 @@ export type SessionOptions = {
   onExit?: (code: number) => void
   startupIngress?: PtyStartupIngressIntent
   ownerBackend?: PtyOwnerBackend
+  worktreeId?: string
 }

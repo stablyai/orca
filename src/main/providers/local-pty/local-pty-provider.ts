@@ -22,7 +22,8 @@ import type { TerminalProcessInspection as PtyProcessInspection } from '../../..
 import type { TerminalOscColorQueryReplyColors } from '../../../shared/terminal/protocol/queries/terminal-osc-color-reply'
 import {
   _resetPtyOwnerHostColorsForTest,
-  setPtyOwnerHostColors
+  setPtyOwnerColors,
+  type PtyOwnerRepoColors
 } from '../../../shared/terminal/pty/ingress/pty-owner-color-query-colors'
 import {
   advanceLoadGeneration,
@@ -126,8 +127,11 @@ export class LocalPtyProvider implements IPtyProvider {
   closeStartupQueryAuthority(id: string): number {
     return closeLocalPtyStartupQueryAuthority(id)
   }
-  setColorQueryReplyColors(colors: TerminalOscColorQueryReplyColors): void {
-    setPtyOwnerHostColors(colors)
+  setColorQueryReplyColors(
+    colors: TerminalOscColorQueryReplyColors,
+    byRepoId?: PtyOwnerRepoColors
+  ): void {
+    setPtyOwnerColors({ colors, byRepoId })
   }
   acknowledgeDataEvent(_id: string, _charCount: number): void {
     /* no flow control for local */
