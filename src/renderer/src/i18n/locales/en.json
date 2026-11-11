@@ -28115,9 +28115,9 @@
   },
   "agentSignInStrip": {
     "rowNeedsSignIn": "Needs sign-in",
-    "rowNeedsSignInTooltip": "Set up once in Settings → Agent accounts",
+    "rowNeedsSignInTooltip": "Set up once for Orca Cloud",
     "rowExpired": "Sign-in expired",
-    "rowExpiredTooltip": "Renew in Settings → Agent accounts",
+    "rowExpiredTooltip": "Renew once for Orca Cloud",
     "sandbox": "the sandbox",
     "queued": "Queued prompt: {{prompt}}",
     "pasteLabel": "Code from claude.ai",

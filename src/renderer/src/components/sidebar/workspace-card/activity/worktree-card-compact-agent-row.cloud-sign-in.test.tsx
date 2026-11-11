@@ -407,7 +407,7 @@ function focusTooltip(button: HTMLButtonElement): Element | null {
 describe.each([
   ['compact', renderRow],
   ['full', renderFullRow]
-] as const)('%s row: the sign-in status links to Settings → Agent accounts', (_name, render) => {
+] as const)('%s row: the sign-in status opens the Orca Cloud sign-in sheet', (_name, render) => {
   beforeEach(() => {
     useAppStore.setState({ activeView: 'terminal', settingsNavigationTarget: null })
   })
@@ -421,7 +421,7 @@ describe.each([
 
   it('shows the app tooltip below and from the start on keyboard focus, clear of the name above', () => {
     const [, text] = statusButtons(render(makeAgent(CLOUD_WORKTREE, true)))
-    expect(focusTooltip(text)?.textContent).toBe('Set up once in Settings → Agent accounts')
+    expect(focusTooltip(text)?.textContent).toBe('Set up once for Orca Cloud')
     const content = document.body.querySelector('[data-side]')
     expect(content?.getAttribute('data-side')).toBe('bottom')
     expect(content?.getAttribute('data-align')).toBe('start')
@@ -429,13 +429,13 @@ describe.each([
 
   it('shows the app tooltip on keyboard focus of the dot', () => {
     const [dot] = statusButtons(render(makeAgent(CLOUD_WORKTREE, true)))
-    expect(focusTooltip(dot)?.textContent).toBe('Set up once in Settings → Agent accounts')
+    expect(focusTooltip(dot)?.textContent).toBe('Set up once for Orca Cloud')
   })
 
   it('tells an expired sign-in to renew', () => {
     setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'expired' }))
     const [, text] = statusButtons(render(makeAgent(CLOUD_WORKTREE, true)))
-    expect(focusTooltip(text)?.textContent).toBe('Renew in Settings → Agent accounts')
+    expect(focusTooltip(text)?.textContent).toBe('Renew once for Orca Cloud')
   })
 
   // JA-04 (#349): "Set up once" opens the focused "Agents in Orca Cloud" sheet, not Settings.
