@@ -157,6 +157,7 @@ export abstract class HostRelayHandshake extends HostRelayBase {
     })
     const leaseExpiresAt = now + LEASE_BASE_MS + Math.round((Math.random() * 2 - 1) * LEASE_JITTER_MS)
     a.phase = 'active'
+    a.activeAt = now
     a.generation = generation
     a.lastPongAt = now
     a.lastPingAt = now
@@ -191,7 +192,7 @@ export abstract class HostRelayHandshake extends HostRelayBase {
     })
     // After the ack, which strict shipped parsers must see unchanged; only hosts that asked get it.
     if (a.clientKeepalive) { this.send(ws, { type: 'keepalive-offer', v: 1, intervalMs: this.config.pingIntervalMs }) }
-    metric(this.env, 'control_active', 1, rebind ? 'rebind' : 'new', [], a.clientKeepalive ? 'keepalive' : 'legacy', a.place)
+    metric(this.env, 'control_active', 1, rebind ? 'rebind' : 'new', [a.openedAt === undefined ? -1 : now - a.openedAt], a.clientKeepalive ? 'keepalive' : 'legacy', a.place)
     await this.reschedule()
   }
 }

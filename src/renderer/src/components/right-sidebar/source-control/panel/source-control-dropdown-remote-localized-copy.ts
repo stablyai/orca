@@ -203,6 +203,40 @@ export function localizedRemoteCopy(t: Translate = translate): RemoteDropdownCop
     syncCounts: localizedSyncCounts,
     forcePushWithLease: localizedForcePushWithLease,
     manualForcePush: localizedManualForcePush,
-    unpublishedForcePush: localizedUnpublishedForcePush
+    unpublishedForcePush: localizedUnpublishedForcePush,
+    statusUpToDate: t(
+      'auto.components.right.sidebar.source.control.dropdown.items.statusUpToDate',
+      'Up to date'
+    ),
+    statusSetsUpstream: t(
+      'auto.components.right.sidebar.source.control.dropdown.items.statusSetsUpstream',
+      'Sets upstream'
+    ),
+    statusNotPublished: t(
+      'auto.components.right.sidebar.source.control.dropdown.items.statusNotPublished',
+      'Not published'
+    ),
+    statusNoBranch: t(
+      'auto.components.right.sidebar.source.control.dropdown.items.statusNoBranch',
+      'No branch'
+    ),
+    statusMayFail: t(
+      'auto.components.right.sidebar.source.control.dropdown.items.statusMayFail',
+      'May fail'
+    ),
+    statusPublished: t(
+      'auto.components.right.sidebar.source.control.dropdown.items.statusPublished',
+      'Published'
+    ),
+    statusStashFirst: t(
+      'auto.components.right.sidebar.source.control.dropdown.items.statusStashFirst',
+      'Stash first'
+    ),
+    statusReplaces: (behind) =>
+      t(
+        'auto.components.right.sidebar.source.control.dropdown.items.statusReplaces',
+        'Replaces ↓{{behind}}',
+        { behind }
+      )
   }
 }

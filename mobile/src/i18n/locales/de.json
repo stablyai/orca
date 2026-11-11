@@ -2454,7 +2454,8 @@
     "tabStrip": {
       "checkingCapabilities": "Desktop-Funktionen werden geprüft – gleich erneut versuchen",
       "newTab": "Neuen Tab erstellen",
-      "quickCommandsUpdateRequired": "Desktop-Update für Schnellbefehle erforderlich"
+      "quickCommandsUpdateRequired": "Desktop-Update für Schnellbefehle erforderlich",
+      "tabStatus": "{{title}}, {{status}}"
     },
     "terminalActionSheetActions": {
       "clearTerminal": "Terminal leeren",

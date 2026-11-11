@@ -2184,10 +2184,10 @@
       "renameTerminal": "Rename Terminal",
       "renameTerminalFailed": "Couldn't rename the terminal. {{reason}}",
       "terminalName": "Terminal name",
-      "allowAutoClose": "Allow Auto-Close",
-      "agents": "Agents"
+      "allowAutoClose": "Allow Auto-Close"
     },
     "tabStrip": {
+      "tabStatus": "{{title}}, {{status}}",
       "newTab": "New tab",
       "quickCommandsUpdateRequired": "Desktop update required for quick commands",
       "checkingCapabilities": "Checking desktop capabilities — try again in a moment"
@@ -2889,6 +2889,8 @@
     },
     "presentation": {
       "loadingTabs": "Loading tabs",
+      "oneTab": "1 tab",
+      "tabCount": "{{tabCount}} tabs",
       "tapToRetry": "{{status}} — tap to retry"
     },
     "documentReaders": {
@@ -2926,29 +2928,6 @@
       "skip": "Skip",
       "stop": "Stop",
       "yes": "Yes"
-    },
-    "tabsSheet": {
-      "needsYou": "Needs you",
-      "working": "Working",
-      "everythingElse": "Everything else",
-      "open": "Open",
-      "closeTab": "Close {{title}}"
-    },
-    "tabRows": {
-      "browser": "Browser",
-      "markdown": "Markdown note",
-      "file": "File",
-      "chat": "Chat",
-      "terminal": "Terminal"
-    },
-    "tabBar": {
-      "oneTab": "1 tab",
-      "tabCount": "{{count}} tabs",
-      "anotherNeedsYou": "another tab needs you",
-      "actionsHint": "Shows actions for this tab",
-      "next": "Next tab",
-      "previous": "Previous tab",
-      "hint": "Shows all tabs"
     }
   },
   "chat": {
@@ -3484,7 +3463,12 @@
       "commitThenPullPush": "Commit, then pull and push",
       "resolveConflicts": "Resolve conflicts before committing",
       "stageFile": "Stage at least one file to commit",
-      "enterMessage": "Enter a commit message to commit"
+      "enterMessage": "Enter a commit message to commit",
+      "statusConflicts": "Conflicts",
+      "statusNothingStaged": "Nothing staged",
+      "statusNeedsMessage": "Needs message",
+      "statusNotPublished": "Not published",
+      "statusNoBranch": "No branch"
     },
     "createPrAction": {
       "createReview": "Create {{titleLabel}}",
@@ -3561,7 +3545,15 @@
       "nothingToPushTo": "Nothing to push to {{upstreamName}}",
       "nothingToForcePushTo": "Nothing to force push to {{upstreamName}}",
       "rebaseFromNamedBase": "Rebase from {{baseRef}}",
-      "rebaseWithLatestFrom": "Rebase current branch with latest commits from {{baseRef}}"
+      "rebaseWithLatestFrom": "Rebase current branch with latest commits from {{baseRef}}",
+      "statusUpToDate": "Up to date",
+      "statusSetsUpstream": "Sets upstream",
+      "statusNotPublished": "Not published",
+      "statusNoBranch": "No branch",
+      "statusMayFail": "May fail",
+      "statusPublished": "Published",
+      "statusStashFirst": "Stash first",
+      "statusReplaces": "Replaces ↓{{behind}}"
     },
     "actions": {
       "createPr": "Create PR",
