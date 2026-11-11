@@ -113,9 +113,10 @@ export class OrchestrationStructuredMailboxPointerDelivery<
   owedNow(
     sessionId: string,
     from: AgentMessageSource,
-    db: OrchestrationDb | null
+    db: OrchestrationDb | null,
+    claimedDeliveryId?: string
   ): QueuedMessageOwed {
-    return this.authority.owedNow(sessionId, from, db)
+    return this.authority.owedNow(sessionId, from, db, claimedDeliveryId)
   }
 
   private async deliver(mailboxHandle: string, reservedTypes?: ReadonlySet<string>): Promise<void> {
@@ -250,7 +251,7 @@ export class OrchestrationStructuredMailboxPointerDelivery<
     if (fence === null) {
       return 'park'
     }
-    const { body, whole } = structuredMailMessage({
+    const { body } = structuredMailMessage({
       db,
       mailboxHandle,
       dispatchId: target.dispatchId,
@@ -306,7 +307,10 @@ export class OrchestrationStructuredMailboxPointerDelivery<
       case 'sent':
         // In doubt, including a resend the host answered from an earlier admission: never again.
         if (outcome.state === 'accepted' || outcome.state === 'unknown') {
-          db.retireStructuredMailSend(attempt, outcome.state === 'accepted' && whole)
+          const observed = await mailCustody.observeStructuredMailAttempt(this.deps.host, attempt)
+          mailCustody.settleStructuredMailAttempt(db, attempt, observed, () =>
+            this.authority.owedTo(sessionId, mailboxHandle, [message.id])
+          )
         }
         // Pending or rejected: the record decides on a later pass.
         return 'next'

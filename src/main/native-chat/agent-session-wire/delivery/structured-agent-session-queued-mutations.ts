@@ -2,6 +2,7 @@
 // Published cards own rendered text; mutation answers carry none.
 
 import { contextStructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-current-work'
+import { isSystemMailWithdrawalCaller } from '../../agent-session-journal/writing/mail-withdrawal-receipts'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type {
   AgentSessionMutationEnvelope,
@@ -165,7 +166,7 @@ export function sendQueuedStructuredAgentMessage(
               )
             }
           }
-          await ctx.journal.queuedMessages.withdraw([messageId])
+          await ctx.journal.queuedMessages.withdraw([messageId], undefined, true)
           return {
             ok: false,
             refusal: refuse(
@@ -232,7 +233,11 @@ export function deleteQueuedStructuredAgentMessage(
         return { ok: true, value: { deleted: false, messageId, disposition: 'withdrawn' } }
       }
       // Withdrawal commits wake delivery; removing a returned head can unblock later cards.
-      const withdrawn = await ctx.journal.queuedMessages.withdraw([messageId], ctx.operationReceipt)
+      const withdrawn = await ctx.journal.queuedMessages.withdraw(
+        [messageId],
+        ctx.operationReceipt,
+        isSystemMailWithdrawalCaller(caller.callerKey, params.envelope.sessionId)
+      )
       return withdrawn.length > 0
         ? { ok: true, value: { deleted: true, messageId } }
         : { ok: true, value: { deleted: false, messageId, disposition: 'withdrawn' } }

@@ -59,7 +59,7 @@ export function applyJournalSqlAutomaticSubmissionCommand(
   }
   if (selected.card && selected.owed === 'stale') {
     return queueChange(
-      { kind: 'queue-withdraw', messageIds: [selected.card.messageId] },
+      { kind: 'queue-withdraw', messageIds: [selected.card.messageId], systemMail: true },
       { kind: 'withdrawn', messageId: selected.card.messageId }
     )
   }

@@ -1,3 +1,4 @@
+import { holdStructuredMailSources } from '../observations/structured-agent-session-mail-sources'
 import {
   createStructuredAgentSessionCatalogReads,
   structuredAgentSessionCatalogScopeOwned
@@ -9,6 +10,7 @@ import type { AgentSessionExecutionLocation } from '../../../../shared/agent-ses
 import type { StructuredAttentionRead } from '../../../../shared/agent-session/agent-session-attention'
 import * as providerSupport from '../providers/structured-agent-session-provider-support'
 import type {
+  SetUserConversationName,
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionHostSession
 } from './structured-agent-session-host-types'
@@ -16,17 +18,21 @@ import {
   queuedSendAnswer,
   structuredSendAnswer
 } from '../delivery/structured-agent-session-queued-send-answer'
+import type { JournalMailAttempt } from '../../agent-session-journal/journal-mail-observation'
 
 type ReadContext = {
   deps: StructuredAgentSessionHostDeps
   sessions: Map<string, StructuredAgentSessionHostSession>
   serialize: <T>(id: string, task: () => Promise<T>) => Promise<T>
+  seal: (id: string) => void
   readCommands: StructuredAgentSessionClientDelivery['readCommandsSettled']
   conversation: (id: string) => Promise<StructuredAgentSessionHostSession>
 }
 
 /** Readers share the conversation owner; inventory never founds a journal or prepares a provider. */
 export function createStructuredAgentSessionConversationReads(context: () => ReadContext) {
+  const setUserConversationName: SetUserConversationName = (...args) =>
+    context().deps.conversationNaming?.setUserName(...args) ?? Promise.resolve(null)
   const readModelCatalog = createStructuredAgentSessionCatalogReads(() => ({
     deps: context().deps,
     serialize: context().serialize,
@@ -94,8 +100,21 @@ export function createStructuredAgentSessionConversationReads(context: () => Rea
       sessionLocation: (id: string): AgentSessionExecutionLocation | null =>
         context().deps.store.getConversation(id)?.location ?? null
     },
+    regenerateConversationName: (sessionId: string): boolean =>
+      context().deps.conversationNaming?.regenerate(sessionId) ?? false,
+    setUserConversationName,
+    holdMailSources: (attempts: readonly JournalMailAttempt[], signal: AbortSignal) => {
+      const { serialize, sessions, deps, conversation, seal } = context()
+      return holdStructuredMailSources(
+        { serialize, sessions, store: deps.store, conversation, seal },
+        attempts,
+        signal
+      )
+    },
     queuedSendAnswer: async (id: string, messageId: string) =>
       queuedSendAnswer(await journalOf(id), messageId),
+    mailObservation: async (attempt: JournalMailAttempt) =>
+      (await journalOf(attempt.session_id)).reads.mailObservation(attempt),
     sendAnswer: async (id: string, messageId: string) =>
       structuredSendAnswer(
         await journalOf(id),

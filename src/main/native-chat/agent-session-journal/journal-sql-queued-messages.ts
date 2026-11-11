@@ -61,7 +61,7 @@ export type JournalSqlQueueWrite =
     }
   | { kind: 'queue-update'; input: QueuedMessageUpdate }
   | { kind: 'queue-hold'; messageIds: readonly string[]; reason: QueuedMessageHoldReason }
-  | { kind: 'queue-withdraw'; messageIds: readonly string[] }
+  | { kind: 'queue-withdraw'; messageIds: readonly string[]; systemMail?: true }
   | { kind: 'queue-move'; input: { messageId: string } & AgentSessionQueuedMessageMoveAnchor }
 
 /**
@@ -199,14 +199,15 @@ export class SqlJournalQueuedMessages {
 
   async withdraw(
     messageIds: readonly string[],
-    receipt?: JournalOperationReceipt
+    receipt?: JournalOperationReceipt,
+    systemMail = false
   ): Promise<QueuedMessageRow[]> {
     if (messageIds.length === 0) {
       return []
     }
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: queue-withdraw returns the cards its writer command withdrew.
     return (await this.port.write(
-      { kind: 'queue-withdraw', messageIds },
+      { kind: 'queue-withdraw', messageIds, ...(systemMail ? { systemMail: true } : {}) },
       receipt
     )) as QueuedMessageRow[]
   }

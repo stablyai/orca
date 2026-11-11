@@ -239,7 +239,11 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
   }
 
   /** Read current mailbox custody without settling a card or its reservation. */
-  structuredChatMailOwed(sessionId: string, from: AgentMessageSource): QueuedMessageOwed {
+  structuredChatMailOwed(
+    sessionId: string,
+    from: AgentMessageSource,
+    claimedDeliveryId?: string
+  ): QueuedMessageOwed {
     if (!orchestrationMailNotice(from)) {
       return 'owed'
     }
@@ -249,7 +253,12 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
     } catch {
       return 'unavailable'
     }
-    return this.orchestrationStructuredMailboxPointerDelivery.owedNow(sessionId, from, db)
+    return this.orchestrationStructuredMailboxPointerDelivery.owedNow(
+      sessionId,
+      from,
+      db,
+      claimedDeliveryId
+    )
   }
 
   /** Resolve every structured-owned mailbox here; declining Run or direct mail would leave both delivery lanes refusing it. */

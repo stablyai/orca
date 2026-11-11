@@ -184,3 +184,15 @@ export function resetProviderFaults(): void {
   providerFaults.starts = 0
   providerFaults.turnStarts = 0
 }
+
+/** A chat got the whole orchestration message: its subject and its reply command. */
+export function isWholeMail(text: string): boolean {
+  return text.includes('\nSubject: ') && /\[[^\]\n]*: orca(-dev)? orchestration /.test(text)
+}
+
+export function turnText(turn: { text: string }): string {
+  const input: unknown = JSON.parse(turn.text)
+  return Array.isArray(input)
+    ? input.map((item: unknown) => (isRecord(item) ? String(item.text) : '')).join('')
+    : ''
+}

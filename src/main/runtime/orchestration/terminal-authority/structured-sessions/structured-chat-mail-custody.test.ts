@@ -147,11 +147,13 @@ describe('a queued mail card runs only while its chat still owes it', () => {
     await finishWorker(taskId)
     await vi.waitFor(async () => expect(await queuedCardTexts()).toHaveLength(1), WAIT)
     vi.spyOn(runtime, 'withdrawStaleChatMail').mockImplementation(() => {})
-    // A check takes the report while its card still waits.
-    expect(await call('orchestration.check', {}, { sessionId: COORDINATOR })).toMatchObject({
+    // The consuming check's durable claim excludes this card before final handover.
+    const claim = db.getOrCreateRunDelivery({
       runId,
-      count: 1
+      consumerGeneration: db.getRun(runId)!.consumer_generation
     })
+    expect(claim?.messages).toHaveLength(1)
+    const [reserved] = db.getStructuredMailSends(`run:${runId}`)
     const [card] = await journalOf(COORDINATOR).queuedMessages.list()
     const fields = { messageId: card!.messageId }
     const sent = await host.queuedMessageSend(
@@ -178,6 +180,11 @@ describe('a queued mail card runs only while its chat still owes it', () => {
       'This chat has moved on.'
     )
     expect(await queuedCardTexts()).toEqual([])
+    expect(await host.mailObservation(reserved!)).toMatchObject({
+      state: { kind: 'withdrawn' },
+      withdrawal: 'system'
+    })
+    expect(db.getMessageById(reserved!.message_id)?.read).toBe(0)
     expect(chat.turns).toHaveLength(1)
   })
 

@@ -7,6 +7,10 @@ import type { SenderSnapshotResolver } from '../senders/agent-message-sender'
 
 import type { AgentJournalMessageItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { StructuredSendAnswer as StructuredMailSendState } from '../../../../native-chat/agent-session-wire/delivery/structured-agent-session-queued-send-answer'
+import type {
+  JournalMailAttempt,
+  JournalMailObservation
+} from '../../../../native-chat/agent-session-journal/journal-mail-observation'
 
 export type StructuredPointerSendOutcome =
   /** The chat's queue took it, as it takes a person's message sent while the agent works. */
@@ -31,6 +35,7 @@ export type StructuredMailboxPointerHost = {
     stillOwed: () => boolean
   }) => Promise<StructuredPointerSendOutcome>
   observe: (sessionId: string, operationId: string) => Promise<StructuredMailSendState>
+  observeMail?: (attempt: JournalMailAttempt) => Promise<JournalMailObservation>
   /** Have the chat's queue look again: a card it passed over may be decidable now. */
   wakeQueue: (sessionId: string) => void
   /** Delete a waiting card and report its actual withdrawal or handoff outcome. */

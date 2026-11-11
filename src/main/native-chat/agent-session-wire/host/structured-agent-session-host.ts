@@ -145,9 +145,9 @@ export class StructuredAgentSessionHost {
   loadedSessionIds = this.sessions.loadedSessionIds
   hasLoadedProviders = (): boolean => this.loadedSessionIds().length > 0
   private readonly reads = createStructuredAgentSessionConversationReads(() => ({
-    deps: this.deps,
-    sessions: this.sessions,
+    ...this.lifetimeContext(),
     serialize: this.serialize,
+    seal: (id) => this.runtimeState.sealEventSink(id),
     readCommands: this.clientDelivery.readCommandsSettled,
     conversation: (sessionId) => this.lifetime.conversation(sessionId)
   }))
@@ -229,7 +229,7 @@ export class StructuredAgentSessionHost {
   create = this.entry.create
 
   /** Test-only barrier for streamed event writes. */
-  flushStreamedEvents = (id: string): Promise<void> => this.runtimeState.flushEventSink(id)
+  flushStreamedEvents = (id: string) => this.runtimeState.flushEventSink(id)
 
   /** Quit stops delivery and queued-card handover. */
   stopDelivery = () => {
@@ -307,6 +307,8 @@ export class StructuredAgentSessionHost {
   automationRun = this.reads.automationRun
   queuedSendAnswer = this.reads.queuedSendAnswer
   sendAnswer = this.reads.sendAnswer
+  mailObservation = this.reads.mailObservation
+  holdMailSources = this.reads.holdMailSources
   wakeQueuedMessages = (sessionId: string) => this.queued.refresh(sessionId)
 
   private readonly startJournal = structuredAgentStartJournal(
@@ -333,10 +335,8 @@ export class StructuredAgentSessionHost {
 
   subscribeStatus = this.clientDelivery.subscribeStatus
   publishConversationName = this.clientDelivery.publishConversationName
-  regenerateConversationName = (sessionId: string): boolean =>
-    this.deps.conversationNaming?.regenerate(sessionId) ?? false
-  setUserConversationName: HostTypes.SetUserConversationName = (...args) =>
-    this.deps.conversationNaming?.setUserName(...args) ?? Promise.resolve(null)
+  regenerateConversationName = this.reads.regenerateConversationName
+  setUserConversationName = this.reads.setUserConversationName
 
   subscribeTurnCompletions = this.clientDelivery.subscribeTurnCompletions
   readStatusSummary = this.clientDelivery.readStatusSummary

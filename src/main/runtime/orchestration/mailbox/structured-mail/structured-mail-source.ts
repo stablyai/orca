@@ -15,7 +15,6 @@ import { agentMessageSender, type SenderSnapshotResolver } from '../senders/agen
 import type { OrchestrationCliCommand } from '../../workers/launch/orchestration-cli-command'
 import { completionReportFollowUp } from '../../workers/reports/report-follow-up-action'
 import {
-  formatMessageBanner,
   formatMessageBannerWithContent,
   formatMessagePointer
 } from '../formatting/message-formatting'
@@ -148,19 +147,6 @@ export function structuredMailMessage(input: {
     body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: pointer }], from },
     whole: false
   }
-}
-
-/** Whether a message goes to a chat whole, rather than as a pointer at `check`. */
-export function structuredMailFitsWhole(
-  db: OrchestrationDb,
-  message: MessageRow,
-  cliCommand: OrchestrationCliCommand
-): boolean {
-  const text = formatMessageBanner(message, {
-    cliCommand,
-    followUp: completionReportFollowUp(db, message)
-  })
-  return !structuredAgentSessionBlocksTooLarge([{ type: 'text', text }])
 }
 
 type ReportFact = { kind: 'mail' } | { kind: 'invalid' } | { kind: 'valid'; dispatchId: string }

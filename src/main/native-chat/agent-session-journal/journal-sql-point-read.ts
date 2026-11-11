@@ -1,4 +1,5 @@
 import { planJournalDomainRewindCut } from './journal-domain-rewind-cut'
+import { readJournalDomainMailObservation } from './journal-domain-mail-observation'
 import { readJournalDomainOutline } from './journal-domain-outline'
 import {
   readJournalDomainForkBoundary,
@@ -42,6 +43,11 @@ function read(
   operation: JournalSqlPointRead['operation']
 ): JournalSqlPointReadResult {
   switch (operation.kind) {
+    case 'mail-observation':
+      return {
+        kind: operation.kind,
+        observation: readJournalDomainMailObservation(scope, operation.attempt)
+      }
     case 'rewind-cut':
       return {
         kind: operation.kind,

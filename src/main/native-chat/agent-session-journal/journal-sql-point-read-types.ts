@@ -1,4 +1,5 @@
 import type { JournalOutlineCache } from './journal-domain-outline'
+import type { JournalMailAttempt, JournalMailObservation } from './journal-mail-observation'
 import type { JournalRequestFailureRead } from './journal-request-failure'
 import type { JournalRewindCut, JournalRewindSelection } from './journal-domain-rewind-cut'
 import type { AgentSessionConversationOutline } from '../../../shared/agent-session/agent-session-conversation-outline'
@@ -40,6 +41,7 @@ import type { JournalSqlItemRead, JournalSqlItemReadResult } from './journal-sql
 export type JournalSqlPointRead = {
   sessionId: string
   operation:
+    | { kind: 'mail-observation'; attempt: JournalMailAttempt }
     | {
         kind: 'fork-boundary'
         itemId: string
@@ -84,6 +86,7 @@ export type JournalSqlPointRead = {
 }
 
 export type JournalSqlPointReadResult =
+  | { kind: 'mail-observation'; observation: JournalMailObservation }
   | { kind: 'rewind-cut'; cut: JournalRewindCut | null }
   | { kind: 'fork-boundary'; boundary: JournalForkBoundary }
   | { kind: 'saved-content'; content: JournalSavedContent }

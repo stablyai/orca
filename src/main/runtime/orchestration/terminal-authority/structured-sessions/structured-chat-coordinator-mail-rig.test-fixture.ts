@@ -22,7 +22,7 @@ import { OrchestrationDb } from '../../db/orchestration-db'
 
 import { RpcDispatcher } from '../../../rpc/dispatcher'
 import { ORCHESTRATION_METHODS } from '../../../rpc/methods/orchestration/orchestration'
-import { idOf, isRecord, resultOf } from '../../../rpc/orchestration-session-caller-test-fixture'
+import { idOf, resultOf } from '../../../rpc/orchestration-session-caller-test-fixture'
 import { stopStructuredAgentSessionRuntime } from '../../../agent-session/structured-agent-session-runtime'
 import { ensureTestStructuredAgentSessionHost as ensureStructuredAgentSessionHost } from '../../../agent-session/records/agent-session-record-store-test-harness'
 import { createCoordinatorMailObservationClock } from './structured-chat-coordinator-observation-clock.test-fixture'
@@ -241,6 +241,7 @@ export async function startClearedContext(sessionId: string): Promise<void> {
 }
 
 beforeEach(async () => {
+  observationClock.install()
   resetProviderFaults()
   root = await mkdtemp(join(tmpdir(), 'orca-structured-coordinator-mail-'))
   testState.dir = root
@@ -286,32 +287,30 @@ export function startRuntime(): OrcaRuntimeService {
 }
 
 afterEach(async () => {
-  try {
-    await stopStructuredAgentSessionRuntime()
-    db.close()
-    await observationClock.drainClosedDatabaseRepair()
-    await closeTestStores()
-    vi.restoreAllMocks()
-    await rm(root, { recursive: true, force: true })
-  } finally {
-    observationClock.restore()
+  let firstFailure: unknown
+  const cleanup = async (action: () => unknown) => {
+    try {
+      await action()
+    } catch (error) {
+      firstFailure ??= error
+    }
+  }
+  await cleanup(() => stopStructuredAgentSessionRuntime())
+  await cleanup(() => db.close())
+  await cleanup(() => observationClock.drainClosedDatabaseRepair())
+  await cleanup(() => closeTestStores())
+  await cleanup(() => vi.restoreAllMocks())
+  await cleanup(() => rm(root, { recursive: true, force: true }))
+  await cleanup(() => observationClock.restore())
+  if (firstFailure !== undefined) {
+    throw firstFailure
   }
 })
 
 // Asynchronous pointer edges need slack under parallel load.
 export const WAIT = { timeout: 10_000, interval: 10 }
 
-/** A chat got the whole orchestration message: its subject and its reply command. */
-export function isWholeMail(text: string): boolean {
-  return text.includes('\nSubject: ') && /\[[^\]\n]*: orca(-dev)? orchestration /.test(text)
-}
-
-export function turnText(turn: { text: string }): string {
-  const input: unknown = JSON.parse(turn.text)
-  return Array.isArray(input)
-    ? input.map((item: unknown) => (isRecord(item) ? String(item.text) : '')).join('')
-    : ''
-}
+export { isWholeMail, turnText } from './structured-chat-coordinator-fake-codex-fixture'
 
 export function restartRuntime(): void {
   runtime = startRuntime()

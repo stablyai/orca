@@ -1,4 +1,5 @@
 import type Database from '../../sqlite/sync-database'
+import { recordSystemMailWithdrawal } from './writing/mail-withdrawal-receipts'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { readAgentSessionExecutionOptions } from '../../../shared/agent-session/options/agent-session-execution-options'
@@ -216,6 +217,9 @@ export function applyJournalDomainQueueCommand(
       holdJournalDomainQueueRow(db, target, prior, card.holdReason)
     } else {
       replaceJournalDomainQueueRow(db, target, prior, card)
+    }
+    if (operation.kind === 'queue-withdraw' && operation.systemMail) {
+      recordSystemMailWithdrawal(db, target, card, savedAt)
     }
   }
   for (const { messageId, position } of placements) {

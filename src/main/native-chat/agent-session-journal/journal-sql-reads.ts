@@ -1,4 +1,5 @@
 import type { JournalRequestMark } from './journal-request-failure'
+import type { JournalMailAttempt, JournalMailObservation } from './journal-mail-observation'
 import type { JournalRewindCut, JournalRewindSelection } from './journal-domain-rewind-cut'
 import type { JournalForkBoundary, JournalSavedContent } from './journal-domain-fork-reads'
 import type { AgentSessionConversationOutline } from '../../../shared/agent-session/agent-session-conversation-outline'
@@ -24,6 +25,7 @@ import type {
 } from './journal-input-reads'
 
 export type JournalSqlReads = AgentSessionJournalReads & {
+  mailObservation(attempt: JournalMailAttempt): Promise<JournalMailObservation>
   itemDetail(itemId: string): Promise<AgentJournalRenderItem | null>
   forkBoundary(
     itemId: string,
@@ -102,6 +104,8 @@ export function journalSqlReads(
   const provenance = async (itemId: string) =>
     (await read({ kind: 'item-provenance', itemId })).provenance
   return {
+    mailObservation: async (attempt) =>
+      (await read({ kind: 'mail-observation', attempt })).observation,
     forkBoundary: async (itemId, inheritedAnchor, compareSubmissions) =>
       (await read({ kind: 'fork-boundary', itemId, inheritedAnchor, compareSubmissions })).boundary,
     savedContent: async () => (await read({ kind: 'saved-content' })).content,

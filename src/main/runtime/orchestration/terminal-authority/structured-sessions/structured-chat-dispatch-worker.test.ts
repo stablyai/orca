@@ -2,6 +2,7 @@ import { readTestHostJournal } from '../../../../native-chat/agent-session-journ
 import '../../../rpc/unused-default-rpc-methods.test-fixture'
 
 import { describe, expect, it, vi } from 'vitest'
+import { agentSessionSendSubmission } from '../../../../../shared/agent-session/agent-session-wire'
 import { formatOrcaSessionAddress } from '../../../../../shared/orca-session-address'
 import { testOrcaSessionId } from '../../../../../shared/orca-session-address-test-fixture'
 import { idOf } from '../../../rpc/orchestration-session-caller-test-fixture'
@@ -179,7 +180,37 @@ describe('a chat as the assignee of orchestration dispatch', () => {
     expect(dispatchCount()).toEqual({ n: 0 })
   })
 
-  it("hands the chat its coordinator's mail to the Dispatch whole, so its own check has nothing left", async () => {
+  it("hands the chat its coordinator's mail to the Dispatch whole, so its own check has nothing left", async ({
+    onTestFinished
+  }) => {
+    const accepted = Promise.withResolvers<void>()
+    const release = Promise.withResolvers<void>()
+    let held = false
+    onTestFinished(() => release.resolve())
+    const observe = host.sendAnswer
+    vi.spyOn(host, 'sendAnswer').mockImplementation(async (...args) => {
+      const answer = await observe(...args)
+      if (answer.kind === 'accepted' && !held) {
+        held = true
+        accepted.resolve()
+        await release.promise
+      }
+      return answer
+    })
+    const settle = host.waitForSendSettlement
+    vi.spyOn(host, 'waitForSendSettlement').mockImplementation(async (...args) => {
+      const answer = await settle(...args)
+      if (
+        !held &&
+        answer &&
+        agentSessionSendSubmission(answer.value)?.dispatchState === 'accepted'
+      ) {
+        held = true
+        accepted.resolve()
+        await release.promise
+      }
+      return answer
+    })
     await openChat(COORDINATOR)
     const worker = await openChat(PEER_CHAT)
     const { taskId } = await coordinatorRunAndTask()
@@ -202,9 +233,14 @@ describe('a chat as the assignee of orchestration dispatch', () => {
     )
     expect(await queuedCardTexts(PEER_CHAT)).toEqual([])
     await settleTurn(PEER_CHAT, 0)
-    expect(await call('orchestration.check', {}, { sessionId: PEER_CHAT })).toMatchObject({
-      messages: []
-    })
+    await accepted.promise
+    try {
+      expect(await call('orchestration.check', {}, { sessionId: PEER_CHAT })).toMatchObject({
+        messages: []
+      })
+    } finally {
+      release.resolve()
+    }
   })
 
   it("counts a chat worker's own Dispatch as depth 2, under the nesting cap", async () => {

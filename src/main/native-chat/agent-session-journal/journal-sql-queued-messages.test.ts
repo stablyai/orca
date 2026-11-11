@@ -12,6 +12,9 @@ import { applyJournalDomainSubmission } from './journal-domain-submission-admiss
 import { applyJournalDomainEditLease } from './journal-domain-edit-leases'
 import { insertJournalDomainQueueRow } from './journal-domain-queue-rows'
 import { journalMailSenderKey } from './journal-writer-host-facts'
+import { ensureCommandReceiptsTable } from './writing/command-receipt-schema'
+import { readJournalDomainMailObservation } from './journal-domain-mail-observation'
+import { applyJournalDomainQueueCommand } from './journal-domain-queue-command'
 import { JournalSqlScope } from './journal-sql-scope'
 import {
   readJournalSqlQueue,
@@ -141,7 +144,17 @@ function fixture() {
       ...operation,
       facts: { reopenFloor: null, ...facts }
     })
-  return { db, seed, consume, hold, read }
+  const withdrawSystem = (id: string) =>
+    transaction(() =>
+      applyJournalDomainQueueCommand(
+        db,
+        stateDirectory,
+        target,
+        { kind: 'queue-withdraw', messageIds: [id], systemMail: true },
+        now
+      )
+    )
+  return { db, seed, consume, hold, read, stateDirectory, withdrawSystem }
 }
 
 const ids = (result: ReturnType<typeof readJournalSqlQueue>) =>
@@ -230,4 +243,51 @@ it('derives Stop, clear and reopen pauses from head facts and exact clear member
       }
     ]
   })
+})
+
+it('co-commits exact system causes, retaining them through no-op deletion and tombstone pruning', () => {
+  const f = fixture()
+  f.db
+    .prepare('INSERT INTO agent_session_records(session_id,record_json) VALUES (?,?)')
+    .run('chat', '{}')
+  ensureCommandReceiptsTable(f.db)
+  const attempt = {
+    mailbox_handle: 'owner',
+    message_id: 'mail',
+    session_id: 'chat',
+    operation_id: 'card'
+  }
+  f.seed('card', 0, {
+    body: {
+      ...body('reserved mail'),
+      from: {
+        ...from,
+        orchestration: {
+          ...from.orchestration,
+          messages: [{ messageId: 'mail', runId: 'run', from: 'sender' }]
+        }
+      }
+    }
+  })
+  const observe = () =>
+    readJournalDomainMailObservation(new JournalSqlScope(f.db, 'chat', 'epoch'), attempt)
+  f.db.exec('BEGIN IMMEDIATE')
+  applyJournalDomainQueueCommand(
+    f.db,
+    f.stateDirectory,
+    target,
+    { kind: 'queue-withdraw', messageIds: ['card'], systemMail: true },
+    now
+  )
+  f.db.exec('ROLLBACK')
+  expect(observe()).toMatchObject({ state: { kind: 'waiting' }, withdrawal: 'unknown' })
+  f.withdrawSystem('card')
+  f.withdrawSystem('card')
+  expect(observe()).toMatchObject({ state: { kind: 'withdrawn' }, withdrawal: 'system' })
+  f.db
+    .prepare('DELETE FROM journal_queue_cards WHERE session_id=? AND epoch=? AND message_id=?')
+    .run('chat', 'epoch', 'card')
+  expect(observe()).toMatchObject({ state: { kind: 'withdrawn' }, withdrawal: 'system' })
+  f.db.prepare("UPDATE agent_session_command_receipts SET rejection_json='{}'").run()
+  expect(observe().withdrawal).toBe('unknown')
 })

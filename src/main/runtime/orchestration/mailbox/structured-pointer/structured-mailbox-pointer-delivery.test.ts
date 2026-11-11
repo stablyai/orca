@@ -16,6 +16,8 @@ import '../../db/dispatch-row-writer'
 import '../../db/attempt-outcome-projection'
 import { OrchestrationStructuredMailboxPointerDelivery } from './structured-mailbox-pointer-delivery'
 
+import { structuredMailMessage } from '../structured-mail/structured-mail-source'
+import { settleStructuredMailAttempt } from '../structured-mail/structured-mail-custody'
 import { StructuredMailboxParking } from '../structured-mail/structured-mailbox-parking'
 
 import type {
@@ -27,6 +29,7 @@ import type { StructuredSendAnswer as StructuredMailSendState } from '../../../.
 
 import type { StructuredMailSendRow } from '../../db/messages/structured-mail-send-store'
 
+import type { AgentJournalMessageItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { MAX_PROMPT_BYTES } from '../../../../../shared/rpc-contract/structured-agent-session-message-params'
 
 type Mail = {
@@ -135,6 +138,8 @@ function harness(options: { busy?: boolean; senderNames?: RuntimeOrchestrationSe
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fake implements every OrchestrationDb method the delivery and its custody reads call; the class's other members are never reached.
   const orchestrationDb = db as unknown as OrchestrationDb
+  const admitted = new Map<string, AgentJournalMessageItem>()
+  const systemWithdrawals = new Set<string>()
   const host: StructuredMailboxPointerHost = {
     currentFence: () => 4,
     watchJournal: (sessionId, onActivity) => {
@@ -142,6 +147,7 @@ function harness(options: { busy?: boolean; senderNames?: RuntimeOrchestrationSe
       return () => watching.delete(sessionId)
     },
     send: vi.fn(async (input) => {
+      admitted.set(input.operationId, structuredClone(input.body))
       const answer = answers.shift()
       if (!input.stillOwed()) {
         return { kind: 'obsolete' as const }
@@ -162,8 +168,15 @@ function harness(options: { busy?: boolean; senderNames?: RuntimeOrchestrationSe
     observe: vi.fn(
       async (_sessionId, operationId) => chat.get(operationId) ?? { kind: 'absent' as const }
     ),
+    observeMail: async (attempt) => ({
+      epoch: 'test',
+      state: chat.get(attempt.operation_id) ?? { kind: 'absent' },
+      body: admitted.get(attempt.operation_id) ?? null,
+      withdrawal: systemWithdrawals.has(attempt.operation_id) ? 'system' : 'person'
+    }),
     wakeQueue: vi.fn(),
     withdraw: vi.fn<StructuredMailboxPointerHost['withdraw']>(async (_sessionId, operationId) => {
+      systemWithdrawals.add(operationId)
       chat.set(operationId, { kind: 'withdrawn' })
       return { kind: 'withdrawn' }
     })
@@ -484,6 +497,65 @@ describe('structured mailbox delivery: each message whole', () => {
 })
 
 describe('structured mailbox delivery across a real database close and reopen', () => {
+  it('keeps a real lifecycle correction unread when the earlier accepted body lacks that correction', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'orca-mail-correction-'))
+    const db = new OrchestrationDb(join(directory, 'orchestration.db'))
+    try {
+      const run = db.createRun({
+        objective: 'correction',
+        coordinatorHandle: 'term_coord',
+        coordinatorPaneKey: null
+      })
+      const mailbox = `run:${run.id}`
+      const message = db.insertMessage({
+        runId: run.id,
+        from: 'term_worker',
+        to: mailbox,
+        type: 'worker_done',
+        subject: 'Done',
+        body: 'original report',
+        payload: '{}'
+      })
+      const attempt = {
+        mailbox_handle: mailbox,
+        message_id: message.id,
+        session_id: 'session-1',
+        operation_id: 'old-admission',
+        minted_at_ms: 100
+      }
+      expect(db.reserveStructuredMailSend(attempt)).toBe(true)
+      const admitted = structuredMailMessage({
+        db,
+        mailboxHandle: mailbox,
+        dispatchId: null,
+        message,
+        cliCommand: 'orca-dev',
+        senderSnapshot: () => ({ name: null, agent: null })
+      }).body
+      settleStructuredMailAttempt(
+        db,
+        attempt,
+        {
+          epoch: 'epoch',
+          state: { kind: 'accepted' },
+          body: admitted,
+          withdrawal: 'unknown'
+        },
+        () => 'owed'
+      )
+      expect(db.getUnreadMessages(mailbox)).toMatchObject([
+        {
+          subject: 'Rejected worker_done: Done',
+          body: expect.stringContaining('Orca rejected this worker_done')
+        }
+      ])
+      expect(db.getStructuredMailSends(mailbox)).toEqual([])
+    } finally {
+      db.close()
+      rmSync(directory, { recursive: true, force: true })
+    }
+  })
+
   it.each([
     ['still waits as a card', { kind: 'waiting' }, true, 0],
     ['was handed over while Orca was down', { kind: 'accepted' }, true, 0],
@@ -531,6 +603,14 @@ describe('structured mailbox delivery across a real database close and reopen', 
           )
           .run(mailbox, message.id, 'session-1', operationId, row.minted_at_ms)
       }
+      const admittedBody = structuredMailMessage({
+        db,
+        mailboxHandle: mailbox,
+        dispatchId: null,
+        message,
+        cliCommand: 'orca-dev',
+        senderSnapshot: () => ({ name: null, agent: null })
+      }).body
       expect(db.getMessageById(message.id)?.read).toBe(0)
       db.close()
       db = new OrchestrationDb(file)
@@ -547,6 +627,12 @@ describe('structured mailbox delivery across a real database close and reopen', 
           currentFence: () => 4,
           watchJournal: () => () => {},
           observe: async () => state,
+          observeMail: async () => ({
+            epoch: 'restored',
+            state,
+            body: admittedBody,
+            withdrawal: 'unknown'
+          }),
           wakeQueue: () => {},
           withdraw: async () => ({ kind: 'withdrawn' }),
           send

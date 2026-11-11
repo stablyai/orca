@@ -23,6 +23,8 @@ import {
   journalDomainDatabasePath,
   openJournalDomainDatabase
 } from './journal-domain-database'
+import { readMailWithdrawal } from '../writing/mail-withdrawal-receipts'
+import { structuredAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
 import { migrateJournalDomainSchema } from '../journal-domain-schema'
 
 const cleanup: (() => void)[] = []
@@ -278,4 +280,40 @@ it('opens a newer store read-only before changing persistent pragmas or its only
     'journal domain schema is newer than this writer'
   )
   expect(hash(filename)).toBe(before)
+})
+
+it('preserves positive person and historical system deletion evidence from imported profiles', async () => {
+  const stateDirectory = directory()
+  const source = legacy(stateDirectory)
+  seedSource(source)
+  for (const [operation, caller] of [
+    ['person-card', 'trusted-local:desktop'],
+    ['system-card', 'trusted-local:orchestration:session:chat']
+  ]) {
+    const fingerprint = structuredAgentSessionPayloadFingerprint({
+      method: 'agentSession.queuedMessageDelete',
+      sessionId: 'chat',
+      fields: { messageId: operation }
+    })
+    source
+      .prepare(`INSERT INTO agent_session_command_receipts VALUES(?, 'chat', ?,
+      'agentSession.queuedMessageDelete', ?, 'accepted', ?, NULL, 100)`)
+      .run(
+        `delete-${operation}`,
+        caller,
+        fingerprint,
+        JSON.stringify({ kind: 'queued-draft', messageId: operation })
+      )
+  }
+  const current = open(await initializeJournalDomainDatabase(stateDirectory))
+  const attempt = { mailbox_handle: 'run:original', message_id: 'mail', session_id: 'chat' }
+  expect(readMailWithdrawal(current, { ...attempt, operation_id: 'person-card' }, 'epoch')).toBe(
+    'person'
+  )
+  expect(readMailWithdrawal(current, { ...attempt, operation_id: 'system-card' }, 'epoch')).toBe(
+    'system'
+  )
+  expect(
+    readMailWithdrawal(current, { ...attempt, operation_id: 'unattributed-card' }, 'epoch')
+  ).toBe('unknown')
 })

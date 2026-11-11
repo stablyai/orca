@@ -6,7 +6,9 @@ import type { StructuredMailSendRow } from '../../db/messages/structured-mail-se
 import type { StructuredMailboxPointerHost } from '../structured-pointer/structured-mailbox-pointer-host-contract'
 import type { StructuredPointerTarget } from '../structured-pointer/structured-mailbox-pointer-delivery'
 import { structuredMailboxCustody } from '../routing/structured-session-mail-target'
-import { structuredMailFitsWhole } from './structured-mail-source'
+import { structuredMailWasDeliveredWhole } from './structured-mail-whole'
+import type { JournalMailObservation } from '../../../../native-chat/agent-session-journal/journal-mail-observation'
+import { reconcileLifecycleMessage } from '../../workers/lifecycle/lifecycle-reconciliation'
 import type { QueuedMessageOwed } from '../../../../native-chat/agent-session-journal/queued-messages/queued-message-consume-error'
 import {
   orchestrationMailNotice,
@@ -49,10 +51,12 @@ export function structuredMailOwed(input: {
   /** Why no chat resolves: someone else holds it, or that cannot be read now. */
   unresolved: (mailboxHandle: string) => 'elsewhere' | 'unverifiable'
   ended: (mailboxHandle: string) => boolean
+  claimedDeliveryId?: string
 }): QueuedMessageOwed {
   const { db, mailboxHandle } = input
   try {
-    const held = db.getOutstandingMailboxDelivery?.(mailboxHandle)?.messageIds
+    const delivery = db.getOutstandingMailboxDelivery?.(mailboxHandle)
+    const held = delivery?.id === input.claimedDeliveryId ? undefined : delivery?.messageIds
     const here = input.messageIds.some(
       (id) => !held?.includes(id) && db.areUnreadMessages(mailboxHandle, [id])
     )
@@ -86,7 +90,8 @@ export class StructuredMailAuthority {
   owedTo(
     sessionId: string,
     mailboxHandle: string,
-    messageIds: readonly string[]
+    messageIds: readonly string[],
+    claimedDeliveryId?: string
   ): QueuedMessageOwed {
     const db = this.deps.getDb()
     return db
@@ -95,6 +100,7 @@ export class StructuredMailAuthority {
           sessionId,
           mailboxHandle,
           messageIds,
+          claimedDeliveryId,
           resolve: this.deps.resolve,
           unresolved: (handle) => this.unresolved(handle),
           ended: (handle) => this.ended(handle)
@@ -105,7 +111,8 @@ export class StructuredMailAuthority {
   owedNow(
     sessionId: string,
     from: AgentMessageSource,
-    db: OrchestrationDb | null
+    db: OrchestrationDb | null,
+    claimedDeliveryId?: string
   ): QueuedMessageOwed {
     const mail = orchestrationMailNotice(from)
     if (!mail) {
@@ -113,7 +120,7 @@ export class StructuredMailAuthority {
     }
     // No orchestration database: nothing can owe this mail any more.
     const ids = mail.messages.map((message) => message.messageId)
-    return db ? this.owedTo(sessionId, mail.mailbox, ids) : 'stale'
+    return db ? this.owedTo(sessionId, mail.mailbox, ids, claimedDeliveryId) : 'stale'
   }
 
   ended(mailboxHandle: string): boolean {
@@ -148,7 +155,7 @@ export function hasStructuredMailSends(db: OrchestrationDb | null, mailboxHandle
 export async function settleStructuredMailSends(input: {
   db: OrchestrationDb
   mailboxHandle: string
-  host: Pick<StructuredMailboxPointerHost, 'observe' | 'withdraw' | 'wakeQueue'>
+  host: Pick<StructuredMailboxPointerHost, 'observe' | 'observeMail' | 'withdraw' | 'wakeQueue'>
   cliCommand: OrchestrationCliCommand
   owed: (sessionId: string, messageIds: readonly string[]) => QueuedMessageOwed
 }): Promise<{ outstanding: Set<string>; resend: StructuredMailResend[]; released: boolean }> {
@@ -159,78 +166,132 @@ export async function settleStructuredMailSends(input: {
   const wake = new Set<string>()
   let released = false
   for (const row of db.getStructuredMailSends(mailboxHandle)) {
-    const owed = input.owed(row.session_id, [row.message_id])
-    let state = await host.observe(row.session_id, row.operation_id)
-    if (owed === 'stale' && state.kind === 'waiting') {
-      state = await host.withdraw(row.session_id, row.operation_id)
+    let observation = await observeStructuredMailAttempt(host, row)
+    if (
+      input.owed(row.session_id, [row.message_id]) === 'stale' &&
+      observation.state.kind === 'waiting'
+    ) {
+      await host.withdraw(row.session_id, row.operation_id)
+      observation = await observeStructuredMailAttempt(host, row)
     }
-    const message = db.getMessageById(row.message_id)
-    const unread = message !== undefined && !message.read ? message : undefined
-    const retire = (consumed: boolean) => db.retireStructuredMailSend(row, consumed)
-    // No longer this chat's: mail still unread goes to whoever owns the mailbox now, never read.
-    const release = () => {
-      released = db.releaseStructuredMailSend(row) || released
+    const decision = settleStructuredMailAttempt(db, row, observation, () =>
+      input.owed(row.session_id, [row.message_id])
+    )
+    if (decision.outstanding) {
+      outstanding.add(row.message_id)
     }
-    switch (state.kind) {
-      case 'accepted':
-        // A pointer's handover shows the agent none of an oversized message; `check` still has it.
-        retire(unread !== undefined && structuredMailFitsWhole(db, unread, input.cliCommand))
-        continue
-      case 'unknown':
-        // It may have reached the agent: never sent again; `check` still returns it.
-        retire(false)
-        continue
-      case 'refused':
-        release()
-        continue
-      case 'rejected':
-        if (state.cancelled) {
-          retire(false)
-        } else if (owed === 'stale') {
-          release()
-        } else {
-          if (state.recovered && owed === 'owed') {
-            resend.push({ row, renew: true })
-          }
-          outstanding.add(row.message_id)
-        }
-        continue
-      case 'withdrawn':
-        if (owed === 'owed') {
-          // The person deleted the card, as with any queued message, pointer or whole.
-          retire(true)
-        } else if (owed === 'stale') {
-          release()
-        } else {
-          outstanding.add(row.message_id)
-        }
-        continue
-      case 'absent':
-        if (owed === 'stale') {
-          release()
-          continue
-        }
-        if (owed === 'owed') {
-          // Reserved, then never admitted (a crash between them): the same id is admitted fresh.
-          const mintedAt = parseAgentSessionOperationTimestamp(row.operation_id) ?? 0
-          resend.push({ row, renew: Date.now() - mintedAt > REUSABLE_OPERATION_AGE_MS })
-        }
-        outstanding.add(row.message_id)
-        continue
-      case 'waiting':
-      case 'unreadable':
-        if (unread && !unread.delivered_at) {
-          // A record saved before reservations: the chat holds it, so selection must skip it.
-          db.markAsDelivered([row.message_id], mailboxHandle)
-        }
-        if (owed === 'owed' && state.kind === 'waiting') {
-          // Its owner may only now be readable: a card the queue passed over goes without a later action.
-          wake.add(row.session_id)
-        }
-        outstanding.add(row.message_id)
-        continue
+    if (decision.resend) {
+      resend.push({ row, renew: decision.renew })
     }
+    if (decision.wake) {
+      wake.add(row.session_id)
+    }
+    released ||= decision.released
   }
   wake.forEach((sessionId) => host.wakeQueue(sessionId))
   return { outstanding, resend, released }
+}
+
+export async function observeStructuredMailAttempt(
+  host: Pick<StructuredMailboxPointerHost, 'observe' | 'observeMail'>,
+  row: StructuredMailSendRow
+): Promise<JournalMailObservation> {
+  return host.observeMail
+    ? host.observeMail(row)
+    : {
+        epoch: '',
+        state: await host.observe(row.session_id, row.operation_id),
+        body: null,
+        withdrawal: 'unknown'
+      }
+}
+
+/** Every consumer applies the observed outcome to the current exact attempt and current custody. */
+export function settleStructuredMailAttempt(
+  db: OrchestrationDb,
+  row: StructuredMailSendRow,
+  observation: JournalMailObservation,
+  currentOwed: () => QueuedMessageOwed
+) {
+  const decision = { outstanding: false, released: false, resend: false, renew: false, wake: false }
+  const current = db.getStructuredMailSend(row.mailbox_handle, row.message_id)
+  if (
+    !current ||
+    current.operation_id !== row.operation_id ||
+    current.session_id !== row.session_id
+  ) {
+    return decision
+  }
+  const owed = currentOwed()
+  const state = observation.state
+  const retire = (consumed: boolean) => db.retireStructuredMailSend(row, consumed)
+  const release = () => {
+    decision.released = db.releaseStructuredMailSend(row)
+  }
+  switch (state.kind) {
+    case 'accepted': {
+      const message = db.getMessageById(row.message_id)
+      if (message) {
+        reconcileLifecycleMessage(db, message)
+      }
+      const corrected = db.getMessageById(row.message_id)
+      retire(
+        !!corrected &&
+          !corrected.read &&
+          structuredMailWasDeliveredWhole(row, corrected, observation)
+      )
+      break
+    }
+    case 'unknown':
+      retire(false)
+      break
+    case 'refused':
+      release()
+      break
+    case 'rejected':
+      if (state.cancelled) {
+        retire(false)
+      } else if (owed === 'stale') {
+        release()
+      } else {
+        decision.outstanding = true
+        decision.resend = state.recovered && owed === 'owed'
+        decision.renew = true
+      }
+      break
+    case 'withdrawn':
+      if (
+        observation.withdrawal === 'system' ||
+        (observation.withdrawal === 'person' && owed === 'stale')
+      ) {
+        release()
+      } else if (observation.withdrawal === 'person' && owed === 'owed') {
+        retire(true)
+      } else {
+        decision.outstanding = true
+      }
+      break
+    case 'absent':
+      if (owed === 'stale') {
+        release()
+      } else {
+        decision.outstanding = true
+        decision.resend = owed === 'owed'
+        decision.renew =
+          Date.now() - (parseAgentSessionOperationTimestamp(row.operation_id) ?? 0) >
+          REUSABLE_OPERATION_AGE_MS
+      }
+      break
+    case 'waiting':
+    case 'unreadable': {
+      const unread = db.getMessageById(row.message_id)
+      if (unread && !unread.read && !unread.delivered_at) {
+        db.markAsDelivered([row.message_id], row.mailbox_handle)
+      }
+      decision.outstanding = true
+      decision.wake = owed === 'owed' && state.kind === 'waiting'
+      break
+    }
+  }
+  return decision
 }

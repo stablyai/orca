@@ -68,6 +68,17 @@ async function observeMailSend(
 
 export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHost {
   return {
+    async observeMail(attempt) {
+      const host = getStructuredAgentSessionHost()
+      try {
+        if (host) {
+          return await host.mailObservation(attempt)
+        }
+      } catch {
+        // An unreadable source never proves acceptance or a person's deletion.
+      }
+      return { epoch: '', state: { kind: 'unreadable' }, body: null, withdrawal: 'unknown' }
+    },
     observe(sessionId, operationId) {
       return observeMailSend(sessionId, operationId)
     },
