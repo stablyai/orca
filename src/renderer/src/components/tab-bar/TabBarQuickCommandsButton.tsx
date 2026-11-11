@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { Play } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { getTerminalQuickCommandHostPromptMaxLength } from '@/lib/terminal-quick-command-host-prompt-limit'
@@ -64,7 +64,14 @@ export function TabBarQuickCommandsButton({
     cloudEnvironmentId && hosts.length === 1 && hosts[0].hostId === executionHostId
       ? { hostId: hosts[0].hostId, label: hosts[0].label, environmentId: cloudEnvironmentId }
       : null
-  const suggestedCommands = useCloudSuggestedRunCommands(worktreeId, cloudHost)
+  const { commands: suggestedCommands, refresh: refreshSuggestions } = useCloudSuggestedRunCommands(
+    worktreeId,
+    cloudHost
+  )
+  const handleMenuOpen = useCallback((): void => {
+    refreshRemoteHost()
+    refreshSuggestions()
+  }, [refreshRemoteHost, refreshSuggestions])
   // Floating terminals have a synthetic workspace ID without a repo; never treat that sentinel as a run target.
   const repoId = useMemo(() => {
     if (worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
@@ -199,6 +206,8 @@ export function TabBarQuickCommandsButton({
             <button
               type="button"
               onClick={() => addRepoCommand(defaultHostId)}
+              // A package.json added since the last read turns this into the suggestions menu.
+              onPointerEnter={refreshSuggestions}
               className="my-auto flex h-7 shrink-0 items-center gap-1 rounded-md px-1.5 text-muted-foreground hover:bg-accent/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               aria-label={t(
                 'auto.components.tab.bar.TabBarQuickCommandsButton.8f1e971966',
@@ -241,7 +250,7 @@ export function TabBarQuickCommandsButton({
         addHosts={hosts}
         hostLoadFailed={remoteHostLoadFailed}
         hostOwnershipPending={remoteHostPending}
-        onMenuOpen={refreshRemoteHost}
+        onMenuOpen={handleMenuOpen}
         onAddCommand={addRepoCommand}
         onEditCommand={(entry) =>
           setEditor({ mode: 'edit', command: entry.command, hostId: entry.hostId })

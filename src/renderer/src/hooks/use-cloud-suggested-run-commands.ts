@@ -2,10 +2,11 @@
 // lint, test and friends from package.json, run with the package manager the project declares.
 // Suggestions run like saved quick commands but are not saved; nothing is offered when the file is
 // missing or unreadable.
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useAppStore } from '@/store'
 import { findWorktreeById } from '@/store/github/refresh/worktree-refresh'
 import { readRuntimeFileContent } from '@/runtime/files/reads/runtime-file-read-client'
+import { hasWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { HostedTerminalQuickCommand } from './use-terminal-quick-command-hosts'
 
@@ -57,21 +58,71 @@ export function suggestedRunCommands(
   })
 }
 
-/** Suggestions for one cloud workspace; [] until read, and for anything that isn't cloud. */
+const EMPTY: HostedTerminalQuickCommand[] = []
+
+/** At most one refresh read per workspace in this window; menu opens and hovers don't spam the host. */
+export const SUGGESTION_REFRESH_MIN_MS = 5_000
+const lastReadAtByWorktree = new Map<string, number>()
+
+export function resetSuggestionRefreshThrottleForTest(): void {
+  lastReadAtByWorktree.clear()
+}
+
+/** Same suggestions (same command lines): keep the old array so the menu doesn't re-render. */
+function sameSuggestions(
+  a: readonly HostedTerminalQuickCommand[],
+  b: readonly HostedTerminalQuickCommand[]
+): boolean {
+  const line = (entry: HostedTerminalQuickCommand): string =>
+    `${entry.key}\0${'command' in entry.command ? entry.command.command : ''}`
+  return a.length === b.length && a.every((entry, index) => line(entry) === line(b[index]))
+}
+
+/**
+ * Suggestions for one cloud workspace; [] until read, and for anything that isn't cloud.
+ * package.json can change any time (a new script, a file created mid-session), so it is read
+ * again by `refresh` (the Run menu calls it on open and on hover) and when the window regains
+ * focus, not only when the tab bar mounts (LC2-P3).
+ */
 export function useCloudSuggestedRunCommands(
   worktreeId: string,
   cloudHost: { hostId: ExecutionHostId; label: string; environmentId: string } | null
-): HostedTerminalQuickCommand[] {
-  const [commands, setCommands] = useState<HostedTerminalQuickCommand[]>([])
+): { commands: HostedTerminalQuickCommand[]; refresh: () => void } {
+  const [commands, setCommandsRaw] = useState<HostedTerminalQuickCommand[]>(EMPTY)
+  const [generation, setGeneration] = useState(0)
+  // Reads only reach a sandbox that is up: never one asleep, going to sleep or waking, so a
+  // suggestion read can never be what wakes it (a VM record not running, or a wake in flight).
+  const sandboxUp = useAppStore((state) => {
+    const runtime = state.ephemeralVmRuntimesByWorkspaceId?.[worktreeId]
+    return (
+      (runtime === undefined || runtime.status === 'running') &&
+      !state.wakingEphemeralVmWorkspaceIds?.[worktreeId]
+    )
+  })
+  const refresh = useCallback(() => {
+    const last = lastReadAtByWorktree.get(worktreeId)
+    if (last !== undefined && Date.now() - last < SUGGESTION_REFRESH_MIN_MS) {
+      return
+    }
+    setGeneration((value) => value + 1)
+  }, [worktreeId])
+  const setCommands = useCallback((next: HostedTerminalQuickCommand[]) => {
+    setCommandsRaw((previous) => (sameSuggestions(previous, next) ? previous : next))
+  }, [])
   const worktreePath = useAppStore((state) => findWorktreeById(state, worktreeId)?.path ?? null)
   const hostId = cloudHost?.hostId ?? null
   const label = cloudHost?.label ?? ''
   const environmentId = cloudHost?.environmentId ?? null
   useEffect(() => {
     if (!hostId || !environmentId || !worktreePath) {
-      setCommands([])
+      setCommands(EMPTY)
       return
     }
+    // Asleep or on its way: keep what was last read; the next refresh after the wake reads again.
+    if (!sandboxUp || hasWorktreeSleepIntent(worktreeId)) {
+      return
+    }
+    lastReadAtByWorktree.set(worktreeId, Date.now())
     let cancelled = false
     void readRuntimeFileContent({
       target: { kind: 'environment', environmentId },
@@ -100,6 +151,13 @@ export function useCloudSuggestedRunCommands(
     return () => {
       cancelled = true
     }
-  }, [environmentId, hostId, label, worktreeId, worktreePath])
-  return commands
+  }, [environmentId, generation, hostId, label, sandboxUp, setCommands, worktreeId, worktreePath])
+  useEffect(() => {
+    if (!hostId) {
+      return
+    }
+    window.addEventListener('focus', refresh)
+    return () => window.removeEventListener('focus', refresh)
+  }, [hostId, refresh])
+  return { commands, refresh }
 }
