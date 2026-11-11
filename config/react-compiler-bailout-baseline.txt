@@ -99,11 +99,11 @@
 1 src/renderer/src/components/editor/combined-diff/resolve-changes/use-combined-diff-section-row-keys.ts
 1 src/renderer/src/components/editor/combined-diff/review-controls/use-combined-diff-notes-actions.ts
 1 src/renderer/src/components/editor/combined-diff/scroll-viewport/use-combined-diff-virtualizer.ts
-1 src/renderer/src/components/editor/csv/CsvGrid.tsx
+1 src/renderer/src/components/editor/csv/grid/CsvGrid.tsx
 1 src/renderer/src/components/editor/csv/CsvViewer.tsx
-1 src/renderer/src/components/editor/csv/useCsvClipboard.ts
-1 src/renderer/src/components/editor/csv/useCsvPagedPreview.ts
-3 src/renderer/src/components/editor/csv/useCsvTableEditor.ts
+1 src/renderer/src/components/editor/csv/editing/clipboard/useCsvClipboard.ts
+1 src/renderer/src/components/editor/csv/preview/useCsvPagedPreview.ts
+3 src/renderer/src/components/editor/csv/editing/useCsvTableEditor.ts
 1 src/renderer/src/components/editor/diff/large-files/useDiffViewerLargeDiffLifecycle.ts
 3 src/renderer/src/components/editor/diff/monaco-view/DiffViewer.tsx
 1 src/renderer/src/components/editor/diff/review/DiffNotesSendMenu.tsx
@@ -145,7 +145,7 @@
 3 src/renderer/src/components/editor/useEditorPanelFileContentLoader.ts
 4 src/renderer/src/components/editor/useLocalLogTail.ts
 1 src/renderer/src/components/editor/usePreserveSectionDuringExternalEdit.ts
-7 src/renderer/src/components/emulator-pane/emulator-screen-stream-content.tsx
+1 src/renderer/src/components/emulator-pane/emulator-screen-stream-content.tsx
 3 src/renderer/src/components/emulator-pane/use-emulator-pane-session.ts
 1 src/renderer/src/components/emulator-pane/use-emulator-pane-shutdown.ts
 1 src/renderer/src/components/emulator-pane/use-emulator-video-stream.ts
@@ -705,9 +705,9 @@
 4 src/renderer/src/hooks/skills/freshness/useSkillFreshness.ts
 1 src/renderer/src/hooks/useTaskPageGitHubWorkItemMutation.ts
 6 src/renderer/src/hooks/useVirtualizedScrollAnchor.ts
-1 src/renderer/src/lib/host-chat-program-acquisition.ts
-1 src/renderer/src/lib/quick-open-file-history.ts
-2 src/renderer/src/lib/worker-auto-close.ts
+1 src/renderer/src/lib/agent-session/launch/inventory/host-chat-program-acquisition.ts
+1 src/renderer/src/lib/files/search/quick-open-file-history.ts
+2 src/renderer/src/runtime/agent-orchestration/worker-auto-close.ts
 1 src/renderer/src/runtime/native-chat/naming/structured-chat-name-observation.ts
 1 src/renderer/src/store/plugins/appearance/plugin-icon-themes.ts
 5 src/renderer/src/store/retained-views/app-state-view.ts

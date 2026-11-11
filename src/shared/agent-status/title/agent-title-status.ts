@@ -1,5 +1,6 @@
 import { getDeepSeekBuildTitleStatus } from './providers/dsb-terminal-title'
 import { qoderTitleStatus } from './providers/qoder-terminal-title'
+import { cursorTitleStatus } from './providers/cursor-terminal-title'
 import {
   AGY_AGENT_NAME_RE,
   DROID_AGENT_NAME_RE,
@@ -234,6 +235,10 @@ function computeAgentStatusFromTitle(title: string): AgentStatus | null {
   const qoderStatus = qoderTitleStatus(title)
   if (qoderStatus) {
     return qoderStatus
+  }
+  const cursorStatus = cursorTitleStatus(title)
+  if (cursorStatus) {
+    return cursorStatus
   }
   if (!title || isClaudeManagementTitle(title)) {
     return null

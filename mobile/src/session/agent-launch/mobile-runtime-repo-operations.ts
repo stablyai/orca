@@ -1,6 +1,5 @@
 import { bindDeferredRpcOperation, defineRpcOperation } from '../../transport/rpc/rpc-operation'
 import { rpcResultVariant } from '../../transport/rpc/rpc-operation-result-reader'
-import '../../terminal/terminal-reply-schema'
 import { runtimeRepoListSchema } from './mobile-agent-detection-reply-schema'
 
 export type MobileRuntimeRepoSummary = {

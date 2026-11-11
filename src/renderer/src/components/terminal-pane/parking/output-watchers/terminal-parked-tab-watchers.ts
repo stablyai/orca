@@ -18,8 +18,6 @@ import {
   type ParkedTerminalPaneCapture
 } from './terminal-parked-watcher-registry'
 
-export { canWatcherCoverParkedTerminalTab } from './parked-terminal-tab-coverage'
-export type { ParkedTerminalPtyEligibility } from './parked-terminal-tab-coverage'
 import {
   parkedTerminalTabCoverage,
   parkRestorePolicyFromState

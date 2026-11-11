@@ -1,6 +1,5 @@
 import { bindDeferredRpcOperation, defineRpcOperation } from '../../transport/rpc/rpc-operation'
 import { rpcResultVariant } from '../../transport/rpc/rpc-operation-result-reader'
-import '../../terminal/terminal-reply-schema'
 import { detectedAgentsSchema, refreshedAgentsSchema } from './mobile-agent-detection-reply-schema'
 
 // Launch detection surfaces host refusals; advisory task-drawer readers intentionally skip them.

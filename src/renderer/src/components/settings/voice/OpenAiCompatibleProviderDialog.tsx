@@ -13,7 +13,7 @@ import {
 import { Input } from '../../ui/input'
 import { Label } from '../../ui/label'
 import { useTranslate } from '@/i18n/use-translate'
-import { readIpcErrorMessage } from '@/lib/ipc-error'
+import { readIpcErrorMessage } from '@/runtime/errors/ipc-error'
 import type { OpenAiCompatibleSpeechProviderSummary } from '../../../../../shared/speech-types'
 
 type OpenAiCompatibleProviderDialogProps = {

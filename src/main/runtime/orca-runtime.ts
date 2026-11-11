@@ -62,6 +62,7 @@ import { getHostDisplayLabelOverrides } from '../../shared/host-setting-override
 import type { OrchestrationDb } from './orchestration/db/orchestration-db'
 import { continueRestoredWorkerMailSoon } from './rpc/methods/orchestration/messaging/settled-worker-follow-through'
 import { PeerMailRelay } from './orchestration/federation/peer-mail/peer-mail-relay'
+import { structuredAgentSessionHostTabId } from '../../shared/agent-session/view/structured-agent-session-host-tab-id'
 
 const OrcaRuntimeSidebarBase: typeof OrcaRuntimeWithAgentTransitions = ORCA_SIDEBAR_INPUTS_IS_MAIN
   ? OrcaRuntimeWithSidebarTemporal
@@ -220,6 +221,13 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
       return null
     }
     return this.notifier.publishAgentLaunchTab(request)
+  }
+
+  /** The window follows a listed active chat only on its own intent (#5435), so a focused launch names it. */
+  focusLaunchedChatInHostWindow(worktreeId: string, sessionId: string): void {
+    this.notifier?.focusEditorTab?.(structuredAgentSessionHostTabId(sessionId), worktreeId, {
+      userInitiated: true
+    })
   }
 
   /** Retain final verdicts, clear settled ones, and remove withdrawn panes without removing split siblings. */

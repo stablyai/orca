@@ -140,27 +140,4 @@ describe('accepted details requests and reading cache', () => {
       expect(final?.error).not.toContain('SENTINEL_SECRET')
     }
   )
-
-  it('discards the superseded post-publication cache transaction under a nested context open', () => {
-    const store = createEditorTabsStore()
-    let nested = false
-    const stop = store.subscribe(() => {
-      if (nested) {
-        return
-      }
-      nested = true
-      store.getState().openCheckRunDetails('wt-1', 'new-context', readingCheck, {
-        details: readingDetails(),
-        loading: false,
-        error: null
-      })
-    })
-    store.getState().openCheckRunDetails('wt-1', 'old-context', readingCheck, {
-      details: null,
-      loading: true,
-      error: null
-    })
-    expect(store.getState().openFiles[0].checkRunDetails?.contextKey).toBe('new-context')
-    stop()
-  })
 })

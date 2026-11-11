@@ -17,7 +17,10 @@ import { getProviderSessionClaimKey } from '../../../../../shared/sleeping-recor
 import { isWebTerminalSurfaceTabId } from '../../../../../shared/workspace-layout/terminal-surface-id'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
 import { isWorkspaceSleepRecord } from '../../../../../shared/workspace-sleep'
-import { isPaneResumingInPlace, isPaneSpawnDeferred } from '../../pane-spawn-deferral-registry'
+import {
+  isPaneResumingInPlace,
+  isPaneSpawnDeferred
+} from '../../../components/terminal-pane/session-restore/spawn-deferral/pane-spawn-deferral-registry'
 
 type AppStoreState = ReturnType<typeof useAppStore.getState>
 

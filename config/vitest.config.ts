@@ -153,6 +153,9 @@ const sharedProjects =
             name: `${runtimeProject.test.name}-shared`,
             include: sharedWorkerFiles,
             isolate: false,
+            runner: resolve(
+              'config/scripts/test-runtime/execution-policy/vitest-shared-worker-setup-runner.mjs'
+            ),
             setupFiles: [
               ...runtimeProject.test.setupFiles,
               resolve('config/scripts/test-runtime/environment/vitest-shared-worker-file-reset.mjs')

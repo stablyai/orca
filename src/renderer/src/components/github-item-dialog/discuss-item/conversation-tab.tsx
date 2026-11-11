@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import {
   filterPRCommentsByAudience,
   getPRCommentAudienceCounts,
@@ -17,7 +17,7 @@ import {
   canPostPRReviewThreadReply
 } from '@/components/right-sidebar/checks-panel/comments/pr-comments-ai-launch-ack'
 import { buildPRCommentConversationReplyBody } from '@/components/right-sidebar/checks-panel/comments/pr-comment-fixing-reply-body'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { canUseGitHubRepoContext } from '@/lib/work-items/github/github-source-runtime-context'
 import { getGitHubMutationTarget } from '@/components/github/github-work-item-mutation-target'
 import { taskSourceRuntimeTarget } from '@/lib/work-items/task-source-runtime-target'

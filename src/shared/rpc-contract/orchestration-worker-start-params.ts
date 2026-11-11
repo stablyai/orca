@@ -31,7 +31,9 @@ export const WorkerStartParams = z
     effort: OptionalWorkerLaunchPreference,
     retryOf: OptionalString,
     timeoutMs: OptionalFiniteNumber,
-    devMode: z.boolean().optional()
+    devMode: z.boolean().optional(),
+    /** Only from the paired Orca coordinating this Run: its own ID for the Task this start creates or reopens. */
+    adoptTaskId: OptionalString
   })
   .superRefine((params, ctx) => {
     if (!params.task && !params.spec) {

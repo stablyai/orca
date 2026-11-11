@@ -74,6 +74,7 @@ function persistedSession(
     state.browserTabsByWorktree,
     state.browserPagesByWorkspace,
     state.activeBrowserTabIdByWorktree,
+    {},
     {}
   )
 }

@@ -1,6 +1,6 @@
+import { randomUUID } from 'node:crypto'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
-  clearNativeChatSessionOptionCacheForTests,
   readNativeChatSessionOptionCache,
   seedNativeChatAppliedSessionOptions
 } from './native-chat-session-option-cache'
@@ -14,10 +14,13 @@ import {
 import type { PersistedNativeChatSessionOptions } from './native-chat-session-options'
 
 describe('native chat PTY session options', () => {
-  beforeEach(() => clearNativeChatSessionOptionCacheForTests())
+  let scopeKey: string
+  beforeEach(() => {
+    scopeKey = `native-chat-pty-session-options-test:${randomUUID()}`
+  })
 
   it('keeps the prior model and persistence when Claude rejects the switch', async () => {
-    seedNativeChatAppliedSessionOptions('pty-1', 'claude', {
+    seedNativeChatAppliedSessionOptions(scopeKey, 'claude', {
       model: 'fable',
       effort: 'high'
     })
@@ -25,7 +28,7 @@ describe('native chat PTY session options', () => {
     const onAgentPicker = vi.fn()
     const surface = createNativeChatPtySessionOptions({
       agent: 'claude',
-      scopeKey: 'pty-1',
+      scopeKey,
       mode: 'live',
       modelLabel: 'Model',
       dispatchCommand: vi.fn().mockResolvedValue({ outcome: 'rejected' }),
@@ -46,7 +49,7 @@ describe('native chat PTY session options', () => {
   })
 
   it('stays native and clears stale truth when the switch cannot be verified', async () => {
-    seedNativeChatAppliedSessionOptions('pty-1', 'claude', {
+    seedNativeChatAppliedSessionOptions(scopeKey, 'claude', {
       model: 'fable',
       effort: 'high'
     })
@@ -54,7 +57,7 @@ describe('native chat PTY session options', () => {
     const onAgentPicker = vi.fn()
     const surface = createNativeChatPtySessionOptions({
       agent: 'claude',
-      scopeKey: 'pty-1',
+      scopeKey,
       mode: 'live',
       modelLabel: 'Model',
       dispatchCommand: vi.fn().mockResolvedValue({ outcome: 'unknown' }),
@@ -73,7 +76,7 @@ describe('native chat PTY session options', () => {
   })
 
   it('leaves flip-only unknown after a one-shot so the UI never invents on/off', async () => {
-    seedNativeChatAppliedSessionOptions('pty-1', 'claude', {
+    seedNativeChatAppliedSessionOptions(scopeKey, 'claude', {
       model: 'opus',
       effort: 'high'
     })
@@ -81,7 +84,7 @@ describe('native chat PTY session options', () => {
     const persist = vi.fn()
     const surface = createNativeChatPtySessionOptions({
       agent: 'claude',
-      scopeKey: 'pty-1',
+      scopeKey,
       mode: 'live',
       modelLabel: 'Model',
       dispatchCommand: dispatch,
@@ -106,7 +109,7 @@ describe('native chat PTY session options', () => {
   })
 
   it('no-ops a known toggle at the same absolute target (flip is not set-to-value)', async () => {
-    seedNativeChatAppliedSessionOptions('pty-1', 'claude', {
+    seedNativeChatAppliedSessionOptions(scopeKey, 'claude', {
       model: 'opus',
       effort: 'high',
       fastMode: true
@@ -114,7 +117,7 @@ describe('native chat PTY session options', () => {
     const dispatch = vi.fn()
     const surface = createNativeChatPtySessionOptions({
       agent: 'claude',
-      scopeKey: 'pty-1',
+      scopeKey,
       mode: 'live',
       modelLabel: 'Model',
       dispatchCommand: dispatch
@@ -132,7 +135,7 @@ describe('native chat PTY session options', () => {
   })
 
   it('serializes concurrent setOption calls so later writes win in order', async () => {
-    seedNativeChatAppliedSessionOptions('pty-1', 'claude', {
+    seedNativeChatAppliedSessionOptions(scopeKey, 'claude', {
       model: 'opus',
       effort: 'high',
       fastMode: true
@@ -148,7 +151,7 @@ describe('native chat PTY session options', () => {
     })
     const surface = createNativeChatPtySessionOptions({
       agent: 'claude',
-      scopeKey: 'pty-1',
+      scopeKey,
       mode: 'live',
       modelLabel: 'Model',
       dispatchCommand: dispatch
@@ -172,7 +175,7 @@ describe('native chat PTY session options', () => {
   })
 
   it('does not re-assert absolute state when a typed flip clears tracking mid-dispatch', async () => {
-    seedNativeChatAppliedSessionOptions('pty-1', 'claude', {
+    seedNativeChatAppliedSessionOptions(scopeKey, 'claude', {
       model: 'opus',
       effort: 'high',
       fastMode: true
@@ -186,7 +189,7 @@ describe('native chat PTY session options', () => {
     )
     const surface = createNativeChatPtySessionOptions({
       agent: 'claude',
-      scopeKey: 'pty-1',
+      scopeKey,
       mode: 'live',
       modelLabel: 'Model',
       dispatchCommand: dispatch
@@ -205,7 +208,7 @@ describe('native chat PTY session options', () => {
   })
 
   it('does not write flip state onto a model that changed mid-dispatch', async () => {
-    seedNativeChatAppliedSessionOptions('pty-1', 'claude', {
+    seedNativeChatAppliedSessionOptions(scopeKey, 'claude', {
       model: 'opus',
       effort: 'high',
       fastMode: true
@@ -219,7 +222,7 @@ describe('native chat PTY session options', () => {
     )
     const surface = createNativeChatPtySessionOptions({
       agent: 'claude',
-      scopeKey: 'pty-1',
+      scopeKey,
       mode: 'live',
       modelLabel: 'Model',
       dispatchCommand: dispatch
@@ -234,7 +237,7 @@ describe('native chat PTY session options', () => {
       kind: { currentValue: 'sonnet' }
     })
     // An aborted flip must preserve both source and destination model buckets.
-    const cached = readNativeChatSessionOptionCache('pty-1')
+    const cached = readNativeChatSessionOptionCache(scopeKey)
     expect(cached?.valuesByModel.sonnet?.fastMode).toBeUndefined()
     expect(cached?.valuesByModel.opus?.fastMode).toMatchObject({
       value: true,
@@ -243,7 +246,7 @@ describe('native chat PTY session options', () => {
   })
 
   it('does not commit a non-flip option onto a model that changed mid-dispatch', async () => {
-    seedNativeChatAppliedSessionOptions('pty-1', 'claude', {
+    seedNativeChatAppliedSessionOptions(scopeKey, 'claude', {
       model: 'opus',
       effort: 'high'
     })
@@ -257,7 +260,7 @@ describe('native chat PTY session options', () => {
     const persist = vi.fn()
     const surface = createNativeChatPtySessionOptions({
       agent: 'claude',
-      scopeKey: 'pty-1',
+      scopeKey,
       mode: 'live',
       modelLabel: 'Model',
       dispatchCommand: dispatch,
@@ -272,7 +275,7 @@ describe('native chat PTY session options', () => {
     await pending
 
     // Aborted effort writes must preserve both model buckets and persisted defaults.
-    const cached = readNativeChatSessionOptionCache('pty-1')
+    const cached = readNativeChatSessionOptionCache(scopeKey)
     expect(cached?.valuesByModel.sonnet?.effort).toBeUndefined()
     expect(cached?.valuesByModel.opus?.effort).toMatchObject({
       value: 'high',
@@ -284,14 +287,14 @@ describe('native chat PTY session options', () => {
   })
 
   it('switches to the terminal and drops stale truth for a typed picker command', () => {
-    seedNativeChatAppliedSessionOptions('pty-1', 'claude', {
+    seedNativeChatAppliedSessionOptions(scopeKey, 'claude', {
       model: 'opus',
       effort: 'xhigh'
     })
     const onAgentPicker = vi.fn()
     const surface = createNativeChatPtySessionOptions({
       agent: 'claude',
-      scopeKey: 'pty-1',
+      scopeKey,
       mode: 'live',
       modelLabel: 'Model',
       dispatchCommand: vi.fn(),
@@ -306,13 +309,13 @@ describe('native chat PTY session options', () => {
   })
 
   it('passes an unknown persisted model through as a literal choice', async () => {
-    seedNativeChatAppliedSessionOptions('pty-1', 'claude', {
+    seedNativeChatAppliedSessionOptions(scopeKey, 'claude', {
       model: 'future-model'
     })
     const dispatch = vi.fn()
     const surface = createNativeChatPtySessionOptions({
       agent: 'claude',
-      scopeKey: 'pty-1',
+      scopeKey,
       mode: 'live',
       modelLabel: 'Model',
       dispatchCommand: dispatch
@@ -336,7 +339,7 @@ describe('native chat PTY session options', () => {
     let persisted: PersistedNativeChatSessionOptions = {}
     const surface = createNativeChatPtySessionOptions({
       agent: 'grok',
-      scopeKey: 'pty-1',
+      scopeKey,
       mode: 'live',
       modelLabel: 'Model',
       dispatchCommand: vi.fn(),
@@ -372,7 +375,7 @@ describe('native chat PTY session options', () => {
     })
     const surface = createNativeChatPtySessionOptions({
       agent: 'grok',
-      scopeKey: 'pty-1',
+      scopeKey,
       mode: 'live',
       modelLabel: 'Model',
       persistSelection,

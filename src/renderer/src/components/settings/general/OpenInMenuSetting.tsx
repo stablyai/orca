@@ -14,14 +14,14 @@ import {
 } from '../../ui/dropdown-menu'
 import { Input } from '../../ui/input'
 import { Label } from '../../ui/label'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import {
   getOpenInAppPreset,
   isOpenInAppPresetAdded,
   OpenInApplicationIcon,
   getOpenInAppPresets,
   type OpenInAppPreset
-} from '@/lib/open-in-app-catalog'
+} from '@/lib/files/os-open/open-in-app-catalog'
 import { useTranslate } from '@/i18n/use-translate'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
 

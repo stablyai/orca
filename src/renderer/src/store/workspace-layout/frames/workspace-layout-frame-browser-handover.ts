@@ -1,4 +1,4 @@
-import { noteStagedBrowserTabHandedToFrames } from '@/lib/staged-browser-frame-handover'
+import { noteStagedBrowserTabHandedToFrames } from '@/runtime/browser/creation/staged-browser-frame-handover'
 
 /** Only what the handover reads of the store's browser pages and their handles. */
 type BrowserPages = {

@@ -12,10 +12,12 @@ vi.mock('../store', () => ({ useAppStore: { getState: mocks.getState } }))
 vi.mock('@/lib/workspace/tabs/cycled-tab-owner-activation', () => ({
   activateCycledTabOnOwner: vi.fn()
 }))
-vi.mock('@/lib/focus-terminal-tab-surface', () => ({ focusTerminalTabSurface: vi.fn() }))
+vi.mock('@/components/terminal-pane/input/focus/focus-terminal-tab-surface', () => ({
+  focusTerminalTabSurface: vi.fn()
+}))
 
 import { handleSwitchTerminalTab } from './ipc-tab-switch'
-import { switchFloatingWorkspaceTab } from '@/lib/floating-workspace-terminal-actions'
+import { switchFloatingWorkspaceTab } from '@/components/floating-terminal/floating-workspace-terminal-actions'
 
 describe.each(['main', 'floating'] as const)('%s terminal shortcut chat order', (surface) => {
   it('cycles terminal, chat, terminal in both directions using exact tab selection', () => {
