@@ -16,14 +16,12 @@ vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof FileSystem>()
   return {
     ...actual,
-    readFileSync: new Proxy(actual.readFileSync, {
-      apply(target, thisArg, args) {
-        if (args[0] === files.unavailablePath) {
-          throw Object.assign(new Error('temporarily unreadable'), { code: 'EIO' })
-        }
-        return Reflect.apply(target, thisArg, args)
+    readFileSync: (...args: Parameters<typeof actual.readFileSync>) => {
+      if (args[0] === files.unavailablePath) {
+        throw Object.assign(new Error('temporarily unreadable'), { code: 'EIO' })
       }
-    })
+      return actual.readFileSync(...args)
+    }
   }
 })
 vi.mock('../observability', () => ({
