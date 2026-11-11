@@ -42,9 +42,24 @@ export function selectAwakeBrowserTabsByWorktree(state: {
   return awake
 }
 
+// Pages a host ran (an Orca Cloud VM's browser) are gone after the VM sleeps. When such a page is
+// reported missing after the wake, its tab opens a new page at the same URL instead of closing.
+const reopenAfterSleep = new Set<string>()
+
+/** True once per slept page: the pane recreates the host page instead of closing the tab. */
+export function consumeReopenAfterSleep(browserPageId: string): boolean {
+  return reopenAfterSleep.delete(browserPageId)
+}
+
 /** Sleep: drop the pages, keep the tabs, mark the workspace's tabs asleep. */
 export function sleepWorktreeBrowserTabs(worktreeId: string, now: number = Date.now()): void {
   const state = useAppStore.getState()
+  for (const tab of state.browserTabsByWorktree[worktreeId] ?? []) {
+    reopenAfterSleep.add(tab.id)
+    for (const page of state.browserPagesByWorkspace[tab.id] ?? []) {
+      reopenAfterSleep.add(page.id)
+    }
+  }
   destroyWorktreeBrowserGuests(
     state.browserTabsByWorktree,
     state.browserPagesByWorkspace,
