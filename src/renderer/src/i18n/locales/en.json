@@ -23449,12 +23449,26 @@
       "waking": "Waking sandbox…",
       "unarchiving": "Unarchiving workspace…",
       "wakingDetail": "The remote desktop opens when it’s awake.",
-      "paletteDescription": "Open the sandbox’s desktop in a browser tab.",
+      "paletteDescription": "Open the sandbox’s desktop in a tab.",
       "verbs": {
         "remoteDesktop": "remote desktop",
         "openDesktop": "open desktop",
         "vnc": "vnc",
         "screen": "screen"
+      },
+      "openTabMenuItem": "Open Remote Desktop",
+      "goToTabMenuItem": "Go to Remote Desktop",
+      "tab": {
+        "connected": "Connected",
+        "connecting": "Connecting…",
+        "reconnecting": "Reconnecting…",
+        "disconnected": "Disconnected",
+        "releaseHint": "{{chord}} returns keys to Orca",
+        "reconnectingTitle": "Reconnecting…",
+        "wakingDetail": "The remote desktop reconnects when it’s awake.",
+        "asleepDetail": "Wake it to reconnect. Apps that were open on the remote desktop need to be started again. Your files are safe.",
+        "asleepTitle": "This workspace is asleep.",
+        "waking": "Waking…"
       }
     },
     "orcaCloud": {

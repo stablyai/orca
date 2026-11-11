@@ -96,7 +96,10 @@ function desktopToast(worktreeId: string): DesktopToast {
   }
 }
 
-function requestDesktop(environmentId: string): Promise<CloudRemoteDesktopResult> {
+/** Starts the sandbox's desktop and forwards it here; never throws. */
+export function requestCloudRemoteDesktop(
+  environmentId: string
+): Promise<CloudRemoteDesktopResult> {
   const open = window.api?.ephemeralVm?.openCloudRemoteDesktop
   if (typeof open !== 'function') {
     return Promise.resolve({ ok: false, code: 'unavailable' })
@@ -148,7 +151,7 @@ export function openCloudRemoteDesktop(worktreeId: string, environmentId: string
   return exclusive(worktreeId, async () => {
     const view = desktopToast(worktreeId)
     const stopSlow = view.showStarting()
-    const result = await requestDesktop(environmentId).finally(stopSlow)
+    const result = await requestCloudRemoteDesktop(environmentId).finally(stopSlow)
     if (!result.ok) {
       view.show({ kind: 'failed', code: result.code })
       return
@@ -182,7 +185,7 @@ function wakeThenOpen(worktreeId: string, via: 'wake' | 'unarchive'): Promise<vo
         return wake?.phase === 'failed' && wake.at >= startedAt
       },
       environmentId: () => selectWorkspaceRuntimeEnvironmentId(useAppStore.getState(), worktreeId),
-      open: requestDesktop,
+      open: requestCloudRemoteDesktop,
       onAwake: () => {
         stopSlow = view.showStarting()
       }
