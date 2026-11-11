@@ -1,5 +1,6 @@
 // Home: the org's cloud workspaces (registry on the control plane), filterable by who owns them,
 // which repo they are in, Mine/Team and archived, grouped by section, with live presence and cost.
+import { useHomeWorkspaces } from './cloud-workspace-local-titles'
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
@@ -121,13 +122,7 @@ export function CloudWorkspacesHome({
   }, [])
 
   // A workspace being deleted (or gone) is not something to open or manage; Home leaves it out.
-  const all = useMemo(
-    () =>
-      state.status === 'ready'
-        ? state.workspaces.filter((w) => w.status !== 'destroying' && w.status !== 'destroyed')
-        : [],
-    [state]
-  )
+  const all = useHomeWorkspaces(state.status === 'ready' ? state.workspaces : null)
   const { directory, canAdmin } = useMemberDirectory(orgId, all)
   const repos = useMemo(
     () => [...new Set(all.flatMap((w) => (w.repo ? [w.repo.url] : [])))].sort(),
