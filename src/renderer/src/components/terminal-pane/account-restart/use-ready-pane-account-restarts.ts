@@ -18,21 +18,24 @@ import type { usePaneProcessRestart } from '../process-exit/use-pane-process-res
 import {
   freshIfResumeFoundNothing,
   resumeRemotePaneAgent,
-  waitForResumedTerminalReady,
   stopRemotePaneTerminalForRestart
 } from '@/lib/orca-cloud/cloud-pane-restart-stop'
+import type {
+  AgentProviderSessionMetadata,
+  SleepingAgentLaunchConfig
+} from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import {
   expectPaneBindsHandle,
   remotePtyIdWithHandle
 } from '@/lib/orca-cloud/cloud-restart-bind-check'
-import type { AgentProviderSessionMetadata } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import { waitForResumedTerminalReady } from '@/lib/orca-cloud/cloud-resumed-terminal-ready'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import {
   isRemoteRuntimePtyId,
   parseRemoteRuntimePtyId
 } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { isOrcaCloudEnvironmentId } from '@/lib/orca-cloud/orca-cloud-environment-id'
-import { ORCA_CLOUD_SESSION_ENV_REFRESH } from '@/lib/orca-cloud/cloud-restart-session-env'
+import { defaultLaunchConfig, freshCommandFor } from '@/lib/orca-cloud/cloud-restart-launch-command'
 import { buildFreshAccountRestartCommand } from '@/lib/agent-session/accounts/agent-account-restart-startup'
 import type { AccountRestartAgent } from '@/store/terminals/terminal-contracts'
 import type { usePaneAccountRestartStartup } from './use-pane-account-restart-startup'
@@ -91,16 +94,6 @@ export function useReadyPaneAccountRestarts({
 
 type ReadyRestartPane = { id: number; leafId: string }
 
-/** The fresh command; if it can't be built from settings, the agent's plain launch after the env refresh. */
-function freshCommandFor(build: () => string, agent: AccountRestartAgent): string {
-  try {
-    return build()
-  } catch (err) {
-    console.warn('[orca-cloud] RA-11e fresh command fell back to the plain launch:', err)
-    return `${ORCA_CLOUD_SESSION_ENV_REFRESH}${agent}`
-  }
-}
-
 function worktreeIdForTab(tabId: string): string | null {
   for (const [worktreeId, tabs] of Object.entries(useAppStore.getState().tabsByWorktree)) {
     if (tabs.some((tab) => tab.id === tabId)) {
@@ -116,7 +109,10 @@ function worktreeIdForTab(tabId: string): string | null {
  * ends silently.
  */
 export function runReadyPaneAccountRestarts<
-  Startup extends { resumeProviderSession?: AgentProviderSessionMetadata }
+  Startup extends {
+    resumeProviderSession?: AgentProviderSessionMetadata
+    launchConfig?: SleepingAgentLaunchConfig
+  }
 >(input: {
   panes: readonly ReadyRestartPane[]
   ptyIdOf: (paneId: number) => string | null
@@ -140,19 +136,27 @@ export function runReadyPaneAccountRestarts<
   /** RA-11e: start fresh in the same pane when a resume found no conversation. */
   freshIfResumeFoundNothing?: typeof freshIfResumeFoundNothing
   /** The fresh-launch command for this tab's pane (no session to resume). */
-  buildFreshCommand?: (agent: AccountRestartAgent, leafId: string) => string
+  buildFreshCommand?: (
+    agent: AccountRestartAgent,
+    leafId: string,
+    agentArgs?: string | null
+  ) => string
 }): void {
   const args = {
     stopRemotePane: stopRemotePaneTerminalForRestart,
     resumeRemotePane: resumeRemotePaneAgent,
     waitForResumedTerminal: waitForResumedTerminalReady,
     freshIfResumeFoundNothing,
-    buildFreshCommand: (agent: AccountRestartAgent, leafId: string) =>
-      buildFreshAccountRestartCommand(agent, {
-        tabId: input.tabId,
-        leafId,
-        worktreeId: worktreeIdForTab(input.tabId) ?? ''
-      }),
+    buildFreshCommand: (agent: AccountRestartAgent, leafId: string, agentArgs?: string | null) =>
+      buildFreshAccountRestartCommand(
+        agent,
+        {
+          tabId: input.tabId,
+          leafId,
+          worktreeId: worktreeIdForTab(input.tabId) ?? ''
+        },
+        agentArgs
+      ),
     ...input
   }
   for (const pane of args.panes) {
@@ -213,6 +217,15 @@ export function runReadyPaneAccountRestarts<
       launch()
       continue
     }
+    // RA-11d: the pane's recorded launch, or (a host-launched agent the desktop never recorded) the
+    // agent's default CLI args, the same source the create launch read.
+    // RA-11d: the resume plan always carries a launch config, with empty args when nothing was
+    // recorded (a host-launched agent); only real recorded args win over the defaults.
+    const recorded = launchedStartup.launchConfig
+    const defaults = recorded?.agentArgs?.trim() ? undefined : defaultLaunchConfig(agent)
+    // Substitute only the args: the recorded env (and command) stay the pane's own.
+    const launchConfig =
+      defaults && recorded ? { ...recorded, agentArgs: defaults.agentArgs } : (recorded ?? defaults)
     // Stop that one host terminal first (its exit is ours, not the pane's), then reconnect.
     const store = useAppStore.getState()
     store.suppressPtyExit(ptyId)
@@ -224,6 +237,8 @@ export function runReadyPaneAccountRestarts<
       .then(() =>
         providerSession
           ? args.resumeRemotePane({
+              // RA-11d: the pane's own launch (model, effort, every flag), not the host defaults.
+              ...(launchConfig ? { launchConfig } : {}),
               ptyId,
               worktreeId,
               tabId: args.tabId,
@@ -281,8 +296,9 @@ export function runReadyPaneAccountRestarts<
                       pane.leafId
                     ] ?? null,
                   replacedPtyId: ptyId,
+                  // RA-11d: a fresh fallback keeps the pane's own model, effort and flags too.
                   freshCommand: freshCommandFor(
-                    () => args.buildFreshCommand(agent, pane.leafId),
+                    () => args.buildFreshCommand(agent, pane.leafId, launchConfig?.agentArgs),
                     agent
                   )
                 })

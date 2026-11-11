@@ -10,6 +10,7 @@ import { makeTerminalTab } from '@/store/terminals/terminal-row.test-fixture'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { TEST_REPO } from '@/store/repos/repo.test-fixture'
 import {
+  buildFreshAccountRestartCommand,
   buildPaneAccountRestartStartup,
   type AgentAccountRestartStartup
 } from './agent-account-restart-startup'
@@ -233,6 +234,15 @@ describe('buildPaneAccountRestartStartup on Orca Cloud', () => {
     expect(startup?.command.startsWith(REFRESH)).toBe(true)
     expect(startup?.command).not.toContain('--resume')
     expect(startup?.command).toMatch(/claude/)
+  })
+
+  it('RA-11d: the fresh fallback keeps the pane’s recorded model and effort', () => {
+    const command = buildFreshAccountRestartCommand('claude', pane, '--model opus --effort high')
+    expect(command.startsWith(REFRESH)).toBe(true)
+    // Each arg survives (the launch quotes them per shell).
+    expect(command).toMatch(/--model'? '?opus/)
+    expect(command).toMatch(/--effort'? '?high/)
+    expect(command).not.toContain('--resume')
   })
 
   it('off Orca Cloud a Claude pane with no session still has no restart, and nothing is prefixed', () => {

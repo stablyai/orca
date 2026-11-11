@@ -24,6 +24,7 @@ vi.mock('@/lib/orca-cloud/orca-cloud-environment-id', () => ({
   isOrcaCloudEnvironmentId: (id: string) => cloud.ids.has(id)
 }))
 import { useAppStore } from '@/store/index'
+import { getDefaultSettings } from '../../../../../shared/constants'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import { resetCloudRunningSignoutForTest } from '@/lib/orca-cloud/cloud-running-agent-signout'
@@ -305,7 +306,8 @@ describe('RA-11 Restart on a paired (remote) pane', () => {
       consumePendingPaneAccountRestart: useAppStore.getState().consumePendingPaneAccountRestart,
       buildAccountRestartStartup: () => ({
         command: 'claude',
-        resumeProviderSession: providerSession
+        resumeProviderSession: providerSession,
+        launchConfig: { agentArgs: '--model opus --effort high', agentEnv: {} }
       }),
       handleRestartPane,
       stopRemotePane: async () => {
@@ -314,16 +316,22 @@ describe('RA-11 Restart on a paired (remote) pane', () => {
       resumeRemotePane,
       waitForResumedTerminal: () => Promise.resolve(),
       freshIfResumeFoundNothing,
-      buildFreshCommand: (agent, leafId) => `fresh ${agent} ${leafId}`
+      buildFreshCommand: (agent, leafId, agentArgs) => `fresh ${agent} ${leafId} ${agentArgs}`
     })
     await vi.waitFor(() => expect(handleRestartPane).toHaveBeenCalledTimes(1))
     expect(order).toEqual(['stop', 'resume', 'reconnect'])
     // RA-11e: after the reconnect, the resume is watched once for "no conversation" (then fresh).
     await vi.waitFor(() => expect(freshIfResumeFoundNothing).toHaveBeenCalledTimes(1))
     expect(freshIfResumeFoundNothing).toHaveBeenCalledWith(
-      expect.objectContaining({ replacedPtyId: REMOTE, freshCommand: `fresh claude ${LEAF}` })
+      expect.objectContaining({
+        replacedPtyId: REMOTE,
+        // RA-11d: the fallback gets the pane's recorded args too.
+        freshCommand: `fresh claude ${LEAF} --model opus --effort high`
+      })
     )
     expect(resumeRemotePane).toHaveBeenCalledWith({
+      // RA-11d: the pane's own launch rides along to the host.
+      launchConfig: { agentArgs: '--model opus --effort high', agentEnv: {} },
       ptyId: REMOTE,
       worktreeId: 'wt-1',
       tabId: TAB,
@@ -410,6 +418,114 @@ describe('RA-11 Restart on a paired (remote) pane', () => {
     await vi.waitFor(() => expect(cloudAgentRestartStartedFresh(PANE_KEY, 0)).toBe(true))
     vi.advanceTimersByTime(CLOUD_AGENT_FRESH_NOTICE_MS)
     expect(cloudAgentRestartStartedFresh(PANE_KEY, 0)).toBe(false)
+  })
+
+  it('RA-11d: a host-launched pane with nothing recorded falls back to the default CLI args', async () => {
+    useAppStore.setState({
+      settings: {
+        ...getDefaultSettings('/home/dev'),
+        agentDefaultArgs: {
+          ...getDefaultSettings('/home/dev').agentDefaultArgs,
+          claude: '--model opus --effort high'
+        }
+      }
+    })
+    clickRemoteRestart()
+    const resumeRemotePane = vi.fn(async () => RESUMED)
+    const freshIfResumeFoundNothing = vi.fn(async () => false)
+    const buildFreshCommand = vi.fn(
+      (_agent: string, _leaf: string, agentArgs?: string | null) => `claude ${agentArgs}`
+    )
+    const handleRestartPane = vi.fn()
+    runReadyPaneAccountRestarts({
+      panes: [{ id: 7, leafId: LEAF }],
+      ptyIdOf: () => REMOTE,
+      readyRestartPtyIds: selectReadyAccountRestartPtyIds(useAppStore.getState(), TAB),
+      tabId: TAB,
+      consumePendingPaneAccountRestart: useAppStore.getState().consumePendingPaneAccountRestart,
+      // A host-launched agent: a session, but no launch config recorded on the desktop.
+      buildAccountRestartStartup: () => ({
+        command: 'claude',
+        resumeProviderSession: { key: 'session_id' as const, id: 'sess-tab-1' }
+      }),
+      handleRestartPane,
+      stopRemotePane: () => Promise.resolve(),
+      resumeRemotePane,
+      waitForResumedTerminal: () => Promise.resolve(),
+      freshIfResumeFoundNothing,
+      buildFreshCommand
+    })
+    await vi.waitFor(() => expect(freshIfResumeFoundNothing).toHaveBeenCalledTimes(1))
+    expect(resumeRemotePane).toHaveBeenCalledWith(
+      expect.objectContaining({
+        launchConfig: { agentArgs: '--model opus --effort high', agentEnv: {} }
+      })
+    )
+    expect(buildFreshCommand).toHaveBeenCalledWith('claude', LEAF, '--model opus --effort high')
+  })
+
+  function runWithRecorded(launchConfig: { agentArgs: string; agentEnv: Record<string, string> }) {
+    useAppStore.setState({
+      settings: {
+        ...getDefaultSettings('/home/dev'),
+        agentDefaultArgs: {
+          ...getDefaultSettings('/home/dev').agentDefaultArgs,
+          claude: '--model opus --effort high'
+        }
+      }
+    })
+    clickRemoteRestart()
+    const resumeRemotePane = vi.fn(async () => RESUMED)
+    const freshIfResumeFoundNothing = vi.fn(async () => false)
+    const buildFreshCommand = vi.fn(
+      (_agent: string, _leaf: string, agentArgs?: string | null) => `claude ${agentArgs}`
+    )
+    runReadyPaneAccountRestarts({
+      panes: [{ id: 7, leafId: LEAF }],
+      ptyIdOf: () => REMOTE,
+      readyRestartPtyIds: selectReadyAccountRestartPtyIds(useAppStore.getState(), TAB),
+      tabId: TAB,
+      consumePendingPaneAccountRestart: useAppStore.getState().consumePendingPaneAccountRestart,
+      // The real startup shape: the resume plan always carries a launch config.
+      buildAccountRestartStartup: () => ({
+        command: 'claude',
+        launchConfig,
+        resumeProviderSession: { key: 'session_id' as const, id: 'sess-tab-1' }
+      }),
+      handleRestartPane: vi.fn(),
+      stopRemotePane: () => Promise.resolve(),
+      resumeRemotePane,
+      waitForResumedTerminal: () => Promise.resolve(),
+      freshIfResumeFoundNothing,
+      buildFreshCommand
+    })
+    return { resumeRemotePane, freshIfResumeFoundNothing, buildFreshCommand }
+  }
+
+  it('RA-11d: a recorded launch config with empty args takes the default CLI args, keeping its env', async () => {
+    const { resumeRemotePane, freshIfResumeFoundNothing, buildFreshCommand } = runWithRecorded({
+      agentArgs: '',
+      agentEnv: { ORCA_X: '1' }
+    })
+    await vi.waitFor(() => expect(freshIfResumeFoundNothing).toHaveBeenCalledTimes(1))
+    expect(resumeRemotePane).toHaveBeenCalledWith(
+      expect.objectContaining({
+        launchConfig: { agentArgs: '--model opus --effort high', agentEnv: { ORCA_X: '1' } }
+      })
+    )
+    expect(buildFreshCommand).toHaveBeenCalledWith('claude', LEAF, '--model opus --effort high')
+  })
+
+  it('RA-11d: recorded launch args win over the defaults', async () => {
+    const { resumeRemotePane, freshIfResumeFoundNothing, buildFreshCommand } = runWithRecorded({
+      agentArgs: '--model sonnet',
+      agentEnv: {}
+    })
+    await vi.waitFor(() => expect(freshIfResumeFoundNothing).toHaveBeenCalledTimes(1))
+    expect(resumeRemotePane).toHaveBeenCalledWith(
+      expect.objectContaining({ launchConfig: { agentArgs: '--model sonnet', agentEnv: {} } })
+    )
+    expect(buildFreshCommand).toHaveBeenCalledWith('claude', LEAF, '--model sonnet')
   })
 
   it('a fresh start that could not be typed shows Couldn’t restart (never a quiet bare shell)', async () => {
