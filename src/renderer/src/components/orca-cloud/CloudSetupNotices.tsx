@@ -185,6 +185,18 @@ export function CloudSetupNotices({
   )
 }
 
+/** Bottom right, above the floating-terminal button: top right would cover the prompt's first row. */
+export function CloudSetupNoticesDock({ workspaceId }: { workspaceId: string }): React.JSX.Element {
+  return (
+    <div
+      data-cloud-surface=""
+      className="pointer-events-none absolute right-3 bottom-14 z-30 flex flex-col items-end gap-2"
+    >
+      <CloudSetupNotices workspaceId={workspaceId} />
+    </div>
+  )
+}
+
 export function CloudSetupNoticesView({
   record,
   notices,
@@ -207,7 +219,7 @@ export function CloudSetupNoticesView({
       role="status"
       aria-labelledby={labelId}
       data-cloud-notice="setup"
-      className="pointer-events-auto w-[26rem] max-w-[calc(100%-1.5rem)] rounded-lg border border-border bg-card text-card-foreground shadow-[0_8px_24px_rgba(0,0,0,0.12)] dark:shadow-[0_8px_24px_rgba(0,0,0,0.4)] motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-top-1"
+      className="pointer-events-auto w-[26rem] max-w-[calc(100%-1.5rem)] rounded-lg border border-border bg-card text-card-foreground shadow-[0_8px_24px_rgba(0,0,0,0.12)] dark:shadow-[0_8px_24px_rgba(0,0,0,0.4)] motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-1"
     >
       <h2 id={labelId} className="sr-only">
         {t('orcaCloud.setupNotices.label', 'Workspace setup')}

@@ -2,6 +2,7 @@ import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-ag
 import { parseExecutionHostId } from '../../../../../shared/execution-host'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { useAppStore } from '@/store/index'
+import { holdCloudOpenCover } from '@/lib/orca-cloud/cloud-open-cover-store'
 import { ensureAgentStartupInTerminal } from '@/lib/new-workspace'
 import { queueWorkspaceActivationTerminalFocus } from '@/lib/workspace/activation/workspace-activation-terminal-focus'
 import { seedAgentTabStateAfterWorktreeCreate } from '@/lib/workspace/creation/worktree-creation-agent-seeds'
@@ -23,6 +24,16 @@ export async function completeWorktreeCreation(args: {
   focusOnCompletion: boolean
 }): Promise<void> {
   const { request } = args
+  // Orca Cloud: the start screen stays over the new workspace until its PTY attaches (JA-12).
+  const pending = useAppStore.getState().pendingWorktreeCreations[args.creationId]
+  if (
+    pending &&
+    args.focusOnCompletion &&
+    !args.structuredLaunchAccepted &&
+    request.ephemeralVmRecipe?.provider === 'orca-cloud'
+  ) {
+    holdCloudOpenCover(args.worktreeId, pending)
+  }
   // Why: clearing synchronously after activation lets React commit the panel-to-terminal swap in one frame.
   useAppStore.getState().removePendingWorktreeCreation(args.creationId, { cleanupVm: false })
   // Why: an agent the host planned but did not start has no tab to seed and is not the window's to start.
