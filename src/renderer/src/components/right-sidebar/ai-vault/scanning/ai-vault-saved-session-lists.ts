@@ -1,9 +1,5 @@
 // Last list per scope, kept across restarts so History can paint it while the rescan runs.
 
-import type {
-  AiVaultListResult,
-  AiVaultSession
-} from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import { latestSessionConversationTurn } from '../../../../../../shared/ai-vault/session-display/ai-vault-session-display'
 import { useAppStore } from '@/store/index'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
@@ -11,8 +7,12 @@ import {
   committedTransaction,
   indexedDbConnection,
   settledRequest
-} from '@/lib/indexeddb-connection'
+} from '@/app-shell/storage/indexeddb-connection'
 import { catalogRowsEqual } from '@/lib/catalog-reconciliation/catalog-row-reconciliation'
+import type {
+  AiVaultListResult,
+  AiVaultSession
+} from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { AiVaultSessionLimit } from '../session-list/ai-vault-session-limit'
 
 const DATABASE_NAME = 'orca-ai-vault-session-lists'

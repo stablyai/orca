@@ -11,7 +11,7 @@ import { routeAllMailboxPages } from './mailbox-page-routing'
 import { resolveRunScope } from '../runs/run-scope'
 import type { CheckParams } from '../../../../../../shared/rpc-contract/orchestration-params'
 import type { z } from 'zod'
-import type { OrchestrationSessionCaller } from '../../../../orchestration/addressing/orchestration-caller-identity'
+import type { OrchestrationEntryCaller } from '../../../../orchestration/addressing/orchestration-caller-identity'
 import { checkRunPendingMail } from './check-run-pending-mail'
 import { FEDERATION_RELAY_WAIT_REARM_MS } from '../../../../orchestration/federation/relay/federation-relay-scheduler'
 
@@ -23,7 +23,7 @@ export async function checkRunMailbox(args: {
   db: OrchestrationDb
   handle: string
   paneKey: string | undefined
-  callerSession: OrchestrationSessionCaller | undefined
+  callerSession: OrchestrationEntryCaller | undefined
   typeFilter: MessageType[] | undefined
   signal: AbortSignal | undefined
   legacyCoordinatorRunId: string | undefined

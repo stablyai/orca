@@ -47,14 +47,14 @@ export function newHost(): Host {
   }
 }
 
-export async function mint(key: KeyLike, relayHostId: string, issuer = ISSUER): Promise<string> {
+export async function mint(key: KeyLike, relayHostId: string, issuer = ISSUER, expiresIn = '5m'): Promise<string> {
   return new SignJWT({ purpose: 'host-control', prof: `prof-${USER}`, relayHostId })
     .setProtectedHeader({ alg: 'ES256', kid: REMOTE ? 'spike' : 'mvp' })
     .setSubject(USER)
     .setIssuer(issuer)
     .setAudience('orca-relay')
     .setIssuedAt()
-    .setExpirationTime('5m')
+    .setExpirationTime(expiresIn)
     .sign(key)
 }
 

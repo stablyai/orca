@@ -15,6 +15,11 @@ import {
 import type { TuiAgent } from '../catalog/tui-agent'
 import type { AgentPickerEntry, AgentPickerModel, AgentPickerSurface } from './agent-launch-picker'
 
+type ModelMenuEntry = Pick<AgentPickerEntry, 'agent' | 'catalog'> &
+  Partial<
+    Pick<AgentPickerEntry, 'defaultSurface' | 'textGeneration' | 'catalogRead' | 'coherentCatalog'>
+  >
+
 export function agentPickerOptions(
   agent: TuiAgent,
   model: string | undefined,
@@ -26,7 +31,7 @@ export function agentPickerOptions(
 }
 
 export function agentPickerEntryOptions(
-  entry: AgentPickerEntry,
+  entry: ModelMenuEntry & Pick<AgentPickerEntry, 'terminal'>,
   model: string | undefined,
   surface: AgentPickerSurface
 ): CatalogOption[] {
@@ -112,8 +117,8 @@ export function agentPickerPermissions(agent: TuiAgent, surface: AgentPickerSurf
 }
 
 export function agentPickerModelMenu(
-  entry: AgentPickerEntry,
-  surface: AgentPickerSurface = entry.defaultSurface,
+  entry: ModelMenuEntry,
+  surface: AgentPickerSurface = entry.defaultSurface ?? 'terminal',
   saved?: Readonly<Record<string, string>>
 ) {
   return modelMenuOptions(entry.catalog, {
@@ -129,8 +134,8 @@ export function agentPickerModelMenu(
 }
 
 export function agentPickerModels(
-  entry: AgentPickerEntry,
-  surface: AgentPickerSurface = entry.defaultSurface
+  entry: ModelMenuEntry,
+  surface: AgentPickerSurface = entry.defaultSurface ?? 'terminal'
 ): AgentPickerModel[] {
   if (!agentPickerUsesComposerModelMenu(entry, surface)) {
     if (entry.catalog.origin !== 'unknown') {
@@ -151,7 +156,7 @@ export function agentPickerModels(
 
 /** Terminal discovery is a separate change; these menus keep their existing catalog policy. */
 export function agentPickerUsesComposerModelMenu(
-  entry: AgentPickerEntry,
+  entry: ModelMenuEntry,
   surface: AgentPickerSurface
 ) {
   return !entry.textGeneration && !(entry.agent === 'antigravity' && surface === 'terminal')

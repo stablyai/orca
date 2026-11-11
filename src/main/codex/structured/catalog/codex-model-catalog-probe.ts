@@ -4,13 +4,17 @@ import {
 } from '../../../native-chat/structured-agent-command-resolution'
 import { codexStructuredLaunchArgs } from '../launch/codex-structured-launch-args'
 import { overlayEnvironmentVariables } from '../../../../shared/environment-overlay'
-import { envWithPathRelativeTo } from '../../../../shared/node-cli-command-resolution'
+import {
+  catalogListingDirectory,
+  envWithPathRelativeTo
+} from '../../../../shared/node-cli-command-resolution'
 import type { AgentSessionAccountKind } from '../../../../shared/agent-session/agent-session-availability'
 import { AgentModelCatalogUnavailableError } from '../../../native-chat/agent-model-catalog/agent-model-catalog-unavailable'
 import { isMissingProviderExecutable } from '../../../provider-process/provider-executable-missing'
 import { CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS } from '../../../codex-cli/codex-read-only-app-server-args'
 import { runCodexAppServerSession } from '../../app-server/codex-app-server-session'
 import { fetchCodexModelCatalogListing } from './codex-structured-model-catalog'
+import { codexProjectConfigIsolationArgs } from './codex-project-config-isolation'
 import { applyCodexConfiguredLaunchDefaults } from '../launch/codex-configured-launch-defaults'
 import {
   resolveCodexStructuredInvocation,
@@ -70,13 +74,17 @@ export function createCodexModelCatalogProbe(
       ...(launchDirectory ? { resolveWorkingDirectory: () => launchDirectory } : {})
     })
     assertStructuredAgentResolutionCurrent(operation)
-    // Every listing runs in `cwd` with the user's command line, as other Codex hosts list from their
-    // own folder, so the chat's repo never picks the list; relative paths in user arguments are not
-    // resolved against the chat's folder. No root markers keep Codex from reading a repo above
-    // Orca's folder too, unless an administrator's managed config sets its own.
-    const args = [
+    const userArgs = [
       ...prefixArgs,
-      ...(cwd ? codexStructuredLaunchArgs((await deps.resolveLaunchArgs?.()) ?? []) : []),
+      ...(cwd ? codexStructuredLaunchArgs((await deps.resolveLaunchArgs?.()) ?? []) : [])
+    ]
+    // A command line that may name files relative to the chat's folder runs there, with that
+    // folder untrusted so its project config never replaces the account's list. No root markers
+    // keep Codex from reading a repo above the listing's folder, unless managed config sets its own.
+    const listIn = catalogListingDirectory(command, userArgs, cwd, launchDirectory)
+    const args = [
+      ...userArgs,
+      ...(listIn && listIn !== cwd ? await codexProjectConfigIsolationArgs(listIn) : []),
       '-c',
       'project_root_markers=[]',
       ...CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS
@@ -90,7 +98,7 @@ export function createCodexModelCatalogProbe(
       CODEX_HOME: accountHomePath
     }
     return {
-      identity: { command, args, cwd, overlay: Object.entries(overlay).sort() },
+      identity: { command, args, cwd: listIn, overlay: Object.entries(overlay).sort() },
       run: async (
         signal?: AbortSignal,
         runOperation = operation
@@ -103,7 +111,7 @@ export function createCodexModelCatalogProbe(
           {
             command,
             args,
-            ...(cwd ? { cwd } : {}),
+            ...(listIn ? { cwd: listIn } : {}),
             cliPath: command,
             env,
             timeoutMs: AGENT_MODEL_CATALOG_PROBE_TIMEOUT_MS,

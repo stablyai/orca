@@ -14,7 +14,7 @@ import {
 import { isWorkspaceOwnedBySomeoneElse } from '../../../../../../shared/workspace-creator-visibility'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import { isInactiveWorkspace } from '@/lib/worktree-activity-state'
+import { isInactiveWorkspace } from '@/lib/workspace/activity/worktree-activity-state'
 
 export type DesktopWorkspaceRowFactInputs = {
   repoMap: ReadonlyMap<string, Repo>

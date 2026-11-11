@@ -268,15 +268,18 @@ export class GitGraphHistoryController {
       if (!current()) {
         return undefined
       }
-      const result = error !== undefined ? previous : (accumulated ?? previous)
-      const selection = this.view.getState().selectedId
-      const selectedId =
-        result?.items.find((item) => item.id === selection)?.id ?? result?.items[0]?.id
-      const selectionGone = selection !== undefined && selection !== selectedId
+      // A page that added nothing keeps the result identity, so viewport paging can't repeat it.
+      const stalled =
+        append && !recovered && accumulated?.hasMore && items.length === previous?.items.length
+      const result = error !== undefined || stalled ? previous : (accumulated ?? previous)
+      const selected = this.view.getState().selectedId
+      const selectedId = result?.items.find(({ id }) => id === selected)?.id ?? result?.items[0]?.id
+      const selectionGone = selected !== undefined && selected !== selectedId
       if (selectionGone) {
         this.actions.cancel()
         this.scrollOffset = 0
       }
+      this.pending = undefined
       this.view.setState({
         result,
         error,

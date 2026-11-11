@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 import { resolveGroupTabFromVisibleId } from '@/components/tab-group/tab-group-visible-id'
 import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
 import { createUntitledMarkdownFileWithTemplateSelection } from '@/lib/editor/file-operations/create-untitled-markdown'
-import { ensureClientCreationActionAllowed } from '@/lib/client-creation-action-error'
+import { ensureClientCreationActionAllowed } from '@/lib/workspace/creation/surface-policy/client-creation-action-error'
 import { openDocumentInFloatingWorkspace } from '@/components/floating-terminal/open-document-in-floating-workspace'
 import { extractIpcErrorMessage } from '@/runtime/errors/ipc-error'
 import { focusTerminalTabSurface } from '@/components/terminal-pane/input/focus/focus-terminal-tab-surface'
@@ -111,7 +111,15 @@ export function useFloatingTerminalCreateActions({
           suppressActiveRuntimeFallback: true
         })
       } catch (error) {
-        toast.error(extractIpcErrorMessage(error, 'Failed to create untitled markdown file.'))
+        toast.error(
+          extractIpcErrorMessage(
+            error,
+            translate(
+              'components.toastFallbacks.markdownCreateFailed',
+              'Failed to create untitled markdown file.'
+            )
+          )
+        )
       }
     })()
   }, [activeGroup, markdownCwd, openFile])
@@ -127,7 +135,15 @@ export function useFloatingTerminalCreateActions({
           targetGroupId: activeGroup?.id
         })
       } catch (error) {
-        toast.error(extractIpcErrorMessage(error, 'Failed to open markdown file.'))
+        toast.error(
+          extractIpcErrorMessage(
+            error,
+            translate(
+              'components.toastFallbacks.markdownOpenFailed',
+              'Failed to open markdown file.'
+            )
+          )
+        )
       }
     })()
   }, [activeGroup, openFile])

@@ -12,8 +12,9 @@ import { useAgentLaunchFieldWrite } from './use-agent-launch-field-write'
 import { reconcileAgentChoiceArgs } from '../../../../../shared/agent-launch/choices/agent-choice-reconciliation'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { useTranslate } from '@/i18n/use-translate'
-import { useAgentModelMenu, type AgentModelMenuSource } from './use-agent-model-menu'
+import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import { AgentChoiceFields } from './AgentChoiceControls'
+import { useAgentSettingsModelCatalog } from './use-agent-settings-model-catalog'
 
 export function AgentLaunchChoiceEditor({
   agent,
@@ -23,11 +24,12 @@ export function AgentLaunchChoiceEditor({
   permission,
   permissionControlRef,
   save,
-  catalogSource,
+  catalogTarget,
   showArguments = true
 }: {
-  catalogSource?: AgentModelMenuSource
   showArguments?: boolean
+  /** The host whose models this editor lists; null keeps the release's seed models. */
+  catalogTarget: RuntimeClientTarget | null
   agent: TuiAgent
   label: string
   choices: AgentModelOptionChoices | undefined
@@ -37,8 +39,10 @@ export function AgentLaunchChoiceEditor({
   save: (patch: AgentChoicePatch | undefined, userArgs: string) => Promise<void>
 }): React.JSX.Element {
   const t = useTranslate()
-  const [modelOpen, setModelOpen] = useState(false)
-  const modelMenu = useAgentModelMenu(agent, choices, catalogSource, modelOpen)
+  const { catalog: liveCatalog, usesSeedModels } = useAgentSettingsModelCatalog(
+    agent,
+    catalogTarget
+  )
   const menu = useRef({ open: false, committed: false })
   const editorRef = useRef<HTMLDivElement>(null)
   const [draft, setDraft] = useState<string | null>(null)
@@ -56,7 +60,6 @@ export function AgentLaunchChoiceEditor({
     )
   }
   const onOpenChange = (open: boolean): void => {
-    setModelOpen(open)
     if (!open && !menu.current.committed) {
       saveArgs(text.trim())
     }
@@ -104,10 +107,11 @@ export function AgentLaunchChoiceEditor({
       <div className="space-y-2">
         <AgentChoiceFields
           agent={agent}
-          modelMenu={agent === 'antigravity' ? undefined : modelMenu}
           value={choices}
           disabled={pending}
           layout="rows"
+          liveCatalog={liveCatalog}
+          usesSeedModels={usesSeedModels}
           onOpenChange={onOpenChange}
           optionIds={['effort']}
           onSelect={(patch) => commit(patch)}

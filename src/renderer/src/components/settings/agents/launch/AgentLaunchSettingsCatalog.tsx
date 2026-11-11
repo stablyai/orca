@@ -1,5 +1,5 @@
 import { useAppStateValue } from '@/store/retained-views/app-state-view'
-import { HostAgentLaunchChoiceEditor } from './HostAgentLaunchChoiceEditor'
+import { AgentLaunchChoiceEditor } from '@/components/agent/launch-settings/AgentLaunchChoiceEditor'
 import { agentChatPermissionModes } from '../../../../../../shared/agent-launch/permissions/agent-chat-permission-support'
 import { savedChatPermissionMode } from '../../../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { useChatProgramFacts } from '@/lib/agent-session/launch/inventory/host-chat-program-acquisition'
@@ -254,11 +254,16 @@ export function AgentLaunchSettingsCatalog({
     launchChoiceEditor:
       choicesSupported && settings.agentChoices && (isDetected || chatOnly.has(agent.id))
         ? (permissionControlRef) => (
-            <HostAgentLaunchChoiceEditor
-              detectionTarget={detectionTarget}
-              commandOverride={settings.agentCmdOverrides[agent.id]}
+            <AgentLaunchChoiceEditor
               permissionControlRef={permissionControlRef}
               showArguments={isDetected}
+              catalogTarget={
+                detectionTarget.kind === 'ssh'
+                  ? null
+                  : detectionTarget.kind === 'runtime'
+                    ? { kind: 'environment', environmentId: detectionTarget.environmentId }
+                    : { kind: 'local' }
+              }
               agent={agent.id}
               label={agent.label}
               choices={settings.agentChoices?.defaults[agent.id]}

@@ -10,10 +10,10 @@ import {
   openWorkspacePortInBrowser,
   publishWorkspacePortScanForHost,
   refreshWorkspacePortScanAfterStop,
-  resolvePortOpenInOrcaBrowser,
   scanWorkspacePortsForTarget,
   workspacePortRuntimeTargetKey
 } from '@/lib/workspace-ports/workspace-port-actions'
+import { resolvePortOpenInOrcaBrowser } from '@/lib/workspace-ports/workspace-port-browser-open'
 import { resolveLocalhostLabelRouteForPort } from '@/lib/workspace-ports/workspace-port-localhost-label-selector'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
