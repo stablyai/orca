@@ -1,6 +1,7 @@
-import { useAppStore } from '@/store'
-import { getLocalPreflightContext, localPreflightContextKey } from '@/lib/local-preflight-context'
+import { useAppStore } from '@/store/index'
+import { getLocalPreflightContext } from '@/runtime/hosts/preflight/local-preflight-context'
 import { getProviderRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
+import { localPreflightContextKey } from '../../runtime/hosts/preflight/local-preflight-context-key'
 
 export type IntegrationStepState = 'active' | 'done' | 'upcoming'
 

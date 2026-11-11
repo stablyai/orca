@@ -99,6 +99,12 @@ export function useDocumentAppearance(): void {
   usePluginFontRegistration()
   const reduceEffects = useReduceVisualEffects(useAppStore((s) => s.settings?.reduceVisualEffects))
   const surfaceOpacity = useAppStore((s) => s.settings?.terminalBackgroundOpacity ?? 1)
+  useEffect(() => {
+    document.documentElement.style.setProperty(
+      '--orca-window-surface-opacity',
+      String(surfaceOpacity)
+    )
+  }, [surfaceOpacity])
   // Why re-parse: the theme list keeps the registration as received, and a newer host may send
   // a background this build cannot paint; it must drop to no image, never reach CSS.
   const registeredBackground = pluginTheme?.background

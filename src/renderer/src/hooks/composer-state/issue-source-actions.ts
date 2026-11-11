@@ -45,10 +45,7 @@ import {
   getLinkedItemDisplayName,
   getSmartNameSelection as getFolderSmartNameSelection
 } from '@/components/sidebar/workspace-creation/folder/folder-workspace-source-selection'
-import {
-  buildLinearIssueLinkedWorkItem,
-  getLinearLinkedWorkItemBranchName
-} from '@/lib/work-items/linear/linear-linked-work-item'
+import { getLinearLinkedWorkItemBranchName } from '@/lib/work-items/linear/linear-linked-work-item'
 import {
   getLinearIssueWorkspaceName,
   getLinkedWorkItemSuggestedName,
@@ -122,7 +119,7 @@ export function useIssueSourceActions(input: IssueSourceActionsInput) {
       setLinkedGitLabIssue(null)
       setLinkedGitLabMR(null)
       setLinkedTaskSourceContext(null)
-      const linkedLinearIssue = buildLinearIssueLinkedWorkItem(issue)
+      const linkedLinearIssue = toLinearLinkedWorkItem(issue)
       setLinkedWorkItem(linkedLinearIssue)
       const suggestedName = getLinearIssueWorkspaceName(issue)
       // Treat typed Linear identifiers as lookup text too, rather than user-owned names.

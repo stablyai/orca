@@ -76,4 +76,18 @@ describe('buildSourceControlManualReviewUrl', () => {
       })
     ).toBe('https://github.com/stablyai/orca/compare/main...feature/pushed-name?expand=1')
   })
+
+  it('opens the Azure DevOps PR form for a vs-ssh.visualstudio.com remote', () => {
+    expect(
+      buildSourceControlManualReviewUrl({
+        baseRef: 'refs/remotes/origin/main',
+        branchName: 'feature',
+        repoRemoteName: 'origin',
+        repoRemoteUrl: 'myorg@vs-ssh.visualstudio.com:v3/myorg/Proj/Repo',
+        upstreamName: 'origin/feature'
+      })
+    ).toBe(
+      'https://myorg.visualstudio.com/Proj/_git/Repo/pullrequestcreate?sourceRef=refs%2Fheads%2Ffeature&targetRef=refs%2Fheads%2Fmain'
+    )
+  })
 })

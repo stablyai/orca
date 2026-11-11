@@ -101,7 +101,8 @@ async function acceptRuntimeRegisteredLocalWorktreeRemoval(args: {
       canonicalPath,
       repo,
       undefined,
-      args.hasLocalOptions ? localOptions : undefined
+      args.hasLocalOptions ? localOptions : undefined,
+      { identity: { worktreeId: args.target.id } }
     )
     archiveHookOverride = gateWorktreeRemovalOnArchiveHook({
       worktreePath: canonicalPath,

@@ -1,9 +1,9 @@
 import { useEffect, useMemo } from 'react'
 import {
   getActiveWorkspaceEmojiShortcode,
-  searchWorkspaceEmojiShortcodes,
-  type WorkspaceEmojiSuggestion
-} from '@/lib/workspace-emoji-shortcodes'
+  searchWorkspaceEmojiShortcodes
+} from '@/lib/workspace/display/workspace-emoji-shortcodes'
+import type { StandardEmojiShortcodeEntry } from '../../../../shared/emoji-shortcode-catalog'
 import type { SmartWorkspaceNameFieldProps } from './smart-workspace-name-field-model'
 import { useWorkItemSourceSearch } from './use-work-item-source-search'
 import { useSmartWorkspaceFieldFocusControls } from './use-smart-workspace-field-focus-controls'
@@ -38,7 +38,7 @@ export function useSmartWorkspaceNameFieldController(props: SmartWorkspaceNameFi
     () => getActiveWorkspaceEmojiShortcode(value, emojiCursor),
     [emojiCursor, value]
   )
-  const emojiSuggestions: WorkspaceEmojiSuggestion[] = useMemo(
+  const emojiSuggestions: StandardEmojiShortcodeEntry[] = useMemo(
     () => (activeEmojiShortcode ? searchWorkspaceEmojiShortcodes(activeEmojiShortcode.query) : []),
     [activeEmojiShortcode]
   )

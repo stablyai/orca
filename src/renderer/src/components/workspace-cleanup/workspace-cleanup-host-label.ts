@@ -1,6 +1,6 @@
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import { getExecutionHostLabel } from '../../../../shared/execution-host'
+import { getTranslatedExecutionHostLabel } from '../sidebar/execution-host-label'
 import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup/workspace-cleanup'
 import './workspace-cleanup-host-identity'
 import { resolveWorkspaceCleanupRemovalHostId } from '../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
@@ -11,7 +11,7 @@ export function getWorkspaceCleanupCandidateHostLabel(
 ): string {
   const hostId = resolveWorkspaceCleanupRemovalHostId(candidate)
   return hostId
-    ? getExecutionHostLabel(hostId)
+    ? getTranslatedExecutionHostLabel(hostId)
     : t('components.workspace.cleanup.host.unknown', 'Unknown host')
 }
 

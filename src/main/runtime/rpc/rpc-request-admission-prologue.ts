@@ -23,6 +23,8 @@ import {
   resolveOrchestrationSessionCaller,
   type ResolvedOrchestrationRequest
 } from './orchestration-session-caller'
+import { admitOrchestrationPeerCall } from './orchestration-peer-caller'
+import { waitForRestoredWorkerCallerIdentity } from './worker-caller-identity-restore-wait'
 
 type RpcRequestAdmissionDeps = {
   runtime: OrcaRuntimeService
@@ -59,6 +61,13 @@ export function admitRpcRequest<M extends RpcMethod | RpcStreamingMethod>(
     return reject(migrationFence)
   }
 
+  let peer: ReturnType<typeof admitOrchestrationPeerCall>
+  try {
+    peer = admitOrchestrationPeerCall(runtime, rawRequest, method, options)
+  } catch (error) {
+    return reject(mapDispatcherError(rawRequest, meta, error))
+  }
+
   const admitResolved = ({ request, caller }: ResolvedOrchestrationRequest) => {
     const parsedParams = parseRpcRequestParams(request, method, meta)
     if (parsedParams.error) {
@@ -76,11 +85,24 @@ export function admitRpcRequest<M extends RpcMethod | RpcStreamingMethod>(
     }
     return { method, request, caller, params: parsedParams.value }
   }
+  if (peer) {
+    return admitResolved(peer)
+  }
   // Resolve once before parse and unary/streaming branching so both see the same caller.
   const callerField = method.orchestrationAccess?.caller
-  return needsOrchestrationCallerResolution(rawRequest, callerField)
-    ? resolveOrchestrationSessionCaller(runtime, rawRequest, options, callerField).then(
-        admitResolved,
+  if (needsOrchestrationCallerResolution(rawRequest, callerField)) {
+    return resolveOrchestrationSessionCaller(runtime, rawRequest, options, callerField).then(
+      admitResolved,
+      (error) => reject(mapDispatcherError(rawRequest, meta, error))
+    )
+  }
+  const identityRestore = waitForRestoredWorkerCallerIdentity(runtime, rawRequest, callerField, [
+    options?.signal,
+    options?.connectionSignal
+  ])
+  return identityRestore
+    ? identityRestore.then(
+        () => admitResolved({ request: rawRequest }),
         (error) => reject(mapDispatcherError(rawRequest, meta, error))
       )
     : admitResolved({ request: rawRequest })

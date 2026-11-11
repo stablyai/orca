@@ -35,6 +35,7 @@ type NativeChatRailPreviewTarget = { id: string; top: number; reply: string }
 /** Align the first preview line with its tick: p-4 plus half a text-xs leading-snug line. */
 const PREVIEW_FIRST_LINE_PX = 24
 
+/** Leave bounds to the caller so arrow navigation stops at either end instead of wrapping. */
 function railKeyStep(key: string, index: number, count: number): number | null {
   if (key === 'ArrowDown') {
     return index + 1
@@ -48,6 +49,7 @@ function railKeyStep(key: string, index: number, count: number): number | null {
   return key === 'End' ? count - 1 : null
 }
 
+/** Share navigation state between the sampled ticks and the windowed message directory. */
 export const NativeChatMessageRail = memo(function NativeChatMessageRail({
   rail,
   railRef,
@@ -130,6 +132,7 @@ export const NativeChatMessageRail = memo(function NativeChatMessageRail({
     setTarget((current) => current && { ...current, reply: rail.previewReply })
     rail.onPreview(null)
   }
+  /** Defer focus transfer until the new mode's message or toggle button has mounted. */
   const toggleExpanded = (): void => {
     close()
     restoreToggleFocus.current = expanded
@@ -141,6 +144,7 @@ export const NativeChatMessageRail = memo(function NativeChatMessageRail({
     ? t('components.native-chat.railCollapse', 'Collapse message list')
     : t('components.native-chat.railExpand', 'Expand message list')
 
+  /** Keep selection and pending-history feedback consistent across both rail modes. */
   const renderItem = (item: NativeChatRailItem): React.JSX.Element => {
     // Preview ownership overrides scroll-position highlighting.
     const lit = item.id === (previewedId ?? rail.activeId)

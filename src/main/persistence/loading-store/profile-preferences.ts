@@ -186,7 +186,7 @@ export class ProfilePreferences {
         ...updates.checklist
       }
     }
-    scheduleSave(this[profilePreferencesContext].scheduling)
+    scheduleSave(this[profilePreferencesContext].scheduling, ['onboarding'])
     return this.getOnboarding()
   }
 
@@ -267,7 +267,7 @@ export function getUIUpdateOperations(owner: ProfilePreferences): UIUpdateOperat
     setActiveView: (activeView) =>
       owner[profilePreferencesContext].runtime.activeViewPreference.set(activeView),
     getUI: () => owner.getUI(),
-    scheduleSave: () => scheduleSave(owner[profilePreferencesContext].scheduling),
+    scheduleSave: () => scheduleSave(owner[profilePreferencesContext].scheduling, ['ui']),
     notifyUIChanged: () => notifyUIChanged(owner)
   }
 }

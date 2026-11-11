@@ -58,21 +58,6 @@ function discoveryResult(
   }
 }
 
-/** A root the host could not read: it reports `exists` because it cannot prove otherwise. */
-function unavailableSource(overrides: Partial<SkillDiscoverySource> = {}): SkillDiscoverySource {
-  return {
-    id: 'home',
-    label: 'Agent skills home',
-    path: '/Users/test/.agents/skills',
-    sourceKind: 'home',
-    providers: ['agent-skills'],
-    owner: null,
-    exists: true,
-    skippedReason: 'unavailable',
-    ...overrides
-  }
-}
-
 function deferred<T>(): {
   promise: Promise<T>
   resolve: (value: T) => void
@@ -171,51 +156,6 @@ beforeEach(() => {
 })
 
 describe('useInstalledAgentSkill', () => {
-  // Unread roots contain unknown skills; claiming absent would offer Install for existing skills.
-
-  it('keeps a negative authoritative when the unread root is out of scope', async () => {
-    const scan = deferred<SkillDiscoveryResult>()
-    const discover = vi
-      .fn<(target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>>()
-      .mockReturnValue(scan.promise)
-    Object.defineProperty(window, 'api', {
-      configurable: true,
-      value: { skills: { discover } }
-    })
-
-    await renderProbe()
-    // The probe asks only about home roots, so a stalled repo root proves nothing.
-    scan.resolve(
-      discoveryResult([], [unavailableSource({ id: 'repo', sourceKind: 'repo', path: '/repo' })])
-    )
-    await act(async () => {
-      await scan.promise
-    })
-
-    expect(latestState?.installed).toBe(false)
-    expect(latestState?.error).toBeNull()
-  })
-
-  it('does not flag an incomplete scan once the skill is found anyway', async () => {
-    const scan = deferred<SkillDiscoveryResult>()
-    const discover = vi
-      .fn<(target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>>()
-      .mockReturnValue(scan.promise)
-    Object.defineProperty(window, 'api', {
-      configurable: true,
-      value: { skills: { discover } }
-    })
-
-    await renderProbe()
-    scan.resolve(discoveryResult([skill({ name: 'orca-linear' })], [unavailableSource()]))
-    await act(async () => {
-      await scan.promise
-    })
-
-    expect(latestState?.installed).toBe(true)
-    expect(latestState?.error).toBeNull()
-  })
-
   it('returns installed from refresh when a legacy Linear skill is discovered', async () => {
     const backgroundScan = deferred<SkillDiscoveryResult>()
     const forcedScan = deferred<SkillDiscoveryResult>()

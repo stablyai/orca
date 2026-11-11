@@ -28,6 +28,8 @@ export class MobileTabSelectionPersistence {
   setMobileClientTabSelections(next: PersistedMobileClientTabSelections): void {
     this[mobileTabSelectionPersistenceContext].runtime.state.mobileClientTabSelectionsByDeviceId =
       next
-    scheduleSave(this[mobileTabSelectionPersistenceContext].scheduling)
+    scheduleSave(this[mobileTabSelectionPersistenceContext].scheduling, [
+      'mobileClientTabSelectionsByDeviceId'
+    ])
   }
 }
