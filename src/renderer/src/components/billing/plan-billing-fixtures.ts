@@ -124,7 +124,7 @@ export const sampleUsageHistory: OrcaBillingUsageHistory = {
       { id: 'sbx_checkout', seconds: 14.2 * HOUR },
       { id: 'sbx_ledger', seconds: 11 * HOUR },
       { id: 'sbx_docs', seconds: 7.3 * HOUR },
-      { id: 'sbx_flaky', seconds: 5.9 * HOUR },
+      { id: 'sbx_gone', seconds: 5.9 * HOUR },
       { id: 'sbx_deleted', seconds: 3.1 * HOUR }
     ],
     otherCount: 4,

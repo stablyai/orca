@@ -48,14 +48,35 @@ describe('top workspaces and members', () => {
     expect(rows.at(-1)!.other).toBe(true)
   })
 
+  it('merges unknown ids into one row after the named ones, and folds 0-hour rows into the others line', () => {
+    const history = {
+      ...sampleUsageHistory,
+      sandboxes: {
+        top: [
+          { id: 'sbx_gone1', seconds: 0.6 * HOUR },
+          { id: 'sbx_docs', seconds: 0.5 * HOUR },
+          { id: 'sbx_gone2', seconds: 0.5 * HOUR },
+          { id: 'sbx_tiny', seconds: 20 }
+        ],
+        otherCount: 2,
+        otherSeconds: 0.4 * HOUR
+      }
+    }
+    const rows = topWorkspaceRows(history, sampleUsageNames, translate)!
+    expect(rows.map((row) => [row.label, row.seconds])).toEqual([
+      ['Docs search', 0.5 * HOUR],
+      ['2 deleted workspaces', 3960],
+      ['3 other workspaces', 0.4 * HOUR + 20]
+    ])
+  })
+
   it('titles workspaces and folds the rest into one line', () => {
     const rows = topWorkspaceRows(sampleUsageHistory, sampleUsageNames, translate)!
     expect(rows.map((row) => row.label)).toEqual([
       'Checkout retries',
       'Ledger migration',
       'Docs search',
-      'Flaky e2e repro',
-      'Deleted workspace',
+      '2 deleted workspaces',
       '4 other workspaces'
     ])
   })

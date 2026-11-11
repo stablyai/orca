@@ -54,23 +54,48 @@ function share(seconds: number, total: number): number {
 function rows(
   top: OrcaBillingUsageTop,
   total: number,
-  label: (id: string) => string,
+  /** The row's name, or null for an id that's no longer known (one merged row for all of them). */
+  label: (id: string) => string | null,
+  unknownLabel: (count: number) => string,
   othersLabel: (count: number) => string
 ): UsageBreakdownRow[] {
-  const list: UsageBreakdownRow[] = top.top
-    .filter((row) => row.seconds > 0)
-    .map((row) => ({
-      key: row.id,
-      label: label(row.id),
-      seconds: row.seconds,
-      share: share(row.seconds, total)
-    }))
-  if (top.otherSeconds > 0) {
+  const list: UsageBreakdownRow[] = []
+  let unknown = { count: 0, seconds: 0 }
+  let others = { count: top.otherCount, seconds: top.otherSeconds }
+  for (const row of top.top) {
+    // A row that shows as 0 hours says nothing on its own: it joins the others line.
+    if (formatHours(row.seconds) === '0') {
+      others = { count: others.count + 1, seconds: others.seconds + row.seconds }
+      continue
+    }
+    const name = label(row.id)
+    if (name === null) {
+      unknown = { count: unknown.count + 1, seconds: unknown.seconds + row.seconds }
+    } else {
+      list.push({
+        key: row.id,
+        label: name,
+        seconds: row.seconds,
+        share: share(row.seconds, total)
+      })
+    }
+  }
+  // Named rows lead (they're what someone acts on); the merged unknowns always come after them.
+  list.sort((a, b) => b.seconds - a.seconds)
+  if (unknown.count > 0) {
+    list.push({
+      key: 'unknown',
+      label: unknownLabel(unknown.count),
+      seconds: unknown.seconds,
+      share: share(unknown.seconds, total)
+    })
+  }
+  if (others.seconds > 0) {
     list.push({
       key: 'other',
-      label: othersLabel(top.otherCount),
-      seconds: top.otherSeconds,
-      share: share(top.otherSeconds, total),
+      label: othersLabel(others.count),
+      seconds: others.seconds,
+      share: share(others.seconds, total),
       other: true
     })
   }
@@ -91,8 +116,12 @@ export function topMemberRows(
     (id) =>
       id === names.selfId
         ? t('auto.components.billing.usage.you', 'You')
-        : (names.members.get(id) ??
-          t('auto.components.billing.usage.formerMember', 'Former member')),
+        : (names.members.get(id) ?? null),
+    (count) =>
+      t('auto.components.billing.usage.formerMembers', '{{count}} former members', {
+        count,
+        defaultValue_one: 'Former member'
+      }),
     (count) =>
       count > 0
         ? t('auto.components.billing.usage.otherMembers', '{{count}} others', {
@@ -114,9 +143,12 @@ export function topWorkspaceRows(
   return rows(
     history.sandboxes,
     history.totalSeconds,
-    (id) =>
-      names.workspaces.get(id) ??
-      t('auto.components.billing.usage.deletedWorkspace', 'Deleted workspace'),
+    (id) => names.workspaces.get(id) ?? null,
+    (count) =>
+      t('auto.components.billing.usage.deletedWorkspaces', '{{count}} deleted workspaces', {
+        count,
+        defaultValue_one: 'Deleted workspace'
+      }),
     (count) =>
       t('auto.components.billing.usage.otherWorkspaces', '{{count}} other workspaces', {
         count,

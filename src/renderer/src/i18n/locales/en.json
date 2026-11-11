@@ -20882,11 +20882,9 @@
           "today": "Today",
           "tableCaption": "Sandbox hours per day",
           "you": "You",
-          "formerMember": "Former member",
           "otherMembers_one": "{{count}} other",
           "otherMembers_other": "{{count}} others",
           "unattributed": "Not attributed to a member",
-          "deletedWorkspace": "Deleted workspace",
           "otherWorkspaces_one": "{{count}} other workspace",
           "otherWorkspaces_other": "{{count}} other workspaces",
           "windowTotal_one": "{{value}} sandbox hour in 30 days",
@@ -20894,7 +20892,11 @@
           "total_one": "{{value}} sandbox hour",
           "total_other": "{{value}} sandbox hours",
           "yours": "You used {{yours}} of your team’s {{total}} sandbox hours.",
-          "dayLine": "{{date}} · {{hours}}"
+          "dayLine": "{{date}} · {{hours}}",
+          "formerMembers_one": "Former member",
+          "formerMembers_other": "{{count}} former members",
+          "deletedWorkspaces_one": "Deleted workspace",
+          "deletedWorkspaces_other": "{{count}} deleted workspaces"
         }
       },
       "ports": {
