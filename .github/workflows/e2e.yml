@@ -66,6 +66,11 @@ on:
         description: JSON array of specs to run; empty runs the full suite
         required: false
         type: string
+      background_launch:
+        description: Launch Electron in background for selected compatible specs
+        required: false
+        type: boolean
+        default: false
       managed_ssh_shards:
         description: Managed SSH shard assignments (use one for small selections)
         required: false
@@ -382,6 +387,7 @@ jobs:
 
       - name: Run changed E2E specs
         env:
+          ORCA_BACKGROUND_LAUNCH: ${{ inputs.background_launch && '1' || '' }}
           TEST_FILES_JSON: ${{ inputs.test_files }}
           LAYOUT_OWNER: ${{ inputs.layout_owner }}
           SHARD: ${{ matrix.shard }}

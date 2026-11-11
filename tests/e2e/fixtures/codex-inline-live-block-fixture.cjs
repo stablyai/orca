@@ -69,7 +69,9 @@ function tick() {
   process.stdout.write(out)
   if (heartbeatPath) {
     try {
-      fs.writeFileSync(heartbeatPath, String(frame))
+      const pendingHeartbeatPath = `${heartbeatPath}.tmp`
+      fs.writeFileSync(pendingHeartbeatPath, String(frame))
+      fs.renameSync(pendingHeartbeatPath, heartbeatPath)
     } catch {
       // heartbeat is best-effort; the stream itself is the product
     }

@@ -268,7 +268,7 @@ test('CLI splits an exact cold-parked tab without stealing the active tab or foc
     result: {
       split: {
         tabId: targetTabId,
-        paneRuntimeId: sourcePane.numericPaneId
+        paneRuntimeId: -1
       }
     }
   })
