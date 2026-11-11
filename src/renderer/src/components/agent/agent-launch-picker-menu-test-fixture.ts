@@ -1,4 +1,7 @@
-import { resolveAgentStartupPlanInputs } from '../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
+import {
+  resolveAgentStartupPlanInputs,
+  type AgentStartupSettings
+} from '../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
 import { resolveAgentLaunchCommand } from '../../../../shared/agent-launch/startup/tui-agent-launch-command'
 import { tokenizeStartupCommand } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import {
@@ -7,11 +10,15 @@ import {
   type AgentPickerEntry
 } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 
-export function compilePickerTerminalLaunch(draft: AgentPickerDraft, entry: AgentPickerEntry) {
+export function compilePickerTerminalLaunch(
+  draft: AgentPickerDraft,
+  entry: AgentPickerEntry,
+  settings: AgentStartupSettings = {}
+) {
   const compiled = resolveAgentLaunchCommand({
     ...resolveAgentStartupPlanInputs({
       agent: entry.agent,
-      settings: { agentCmdOverrides: { [entry.agent]: entry.agent } },
+      settings: { ...settings, agentCmdOverrides: { [entry.agent]: entry.agent } },
       ...agentPickerLaunchInputs(draft, entry),
       platform: 'linux',
       shell: 'posix',

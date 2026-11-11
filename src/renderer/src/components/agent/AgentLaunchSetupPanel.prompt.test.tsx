@@ -19,6 +19,56 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
+import { groupAntigravityModelEfforts } from '../../../../shared/agent-session/options/antigravity-model-efforts'
+
+it('launches an untouched saved literal Antigravity pair through the actual setup footer', async () => {
+  const saved = { model: 'gemini-3.8-flash-high', options: { effort: 'low' } }
+  const own: AgentPickerEntry = {
+    ...entry,
+    agent: 'antigravity',
+    label: 'Antigravity',
+    worktreeId: 'repo::/untouched-saved-pair',
+    rows: [{ agent: 'antigravity', kind: 'cli', executionHostId: 'local' }],
+    surfaces: ['terminal'],
+    arguments: '',
+    terminal: saved,
+    terminalCatalog: {
+      origin: 'probe',
+      fetchedAt: 1,
+      models: groupAntigravityModelEfforts([
+        { id: 'gemini-3.8-flash-low', label: 'Gemini 3.8 Flash (Low)' },
+        { id: 'gemini-3.8-flash-medium', label: 'Gemini 3.8 Flash (Medium)' },
+        { id: 'gemini-3.8-flash-high', label: 'Gemini 3.8 Flash (High)' },
+        { id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6 (Thinking)' }
+      ])
+    }
+  }
+  const launch = vi.fn().mockReturnValue(true)
+  act(() =>
+    root.render(
+      <TooltipProvider>
+        <DropdownMenu defaultOpen modal={false}>
+          <DropdownMenuTrigger>New tab</DropdownMenuTrigger>
+          <DropdownMenuContent>
+            <AgentLaunchPickerMenu entries={[own]} runLaunch={launch} />
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </TooltipProvider>
+    )
+  )
+  fireEvent.click(getByRole(document.body, 'button', { name: 'Configure Antigravity' }))
+  fireEvent.click(getByRole(document.body, 'button', { name: 'Launch terminal' }))
+  await waitFor(() => expect(launch).toHaveBeenCalledOnce())
+  expect(
+    compilePickerTerminalLaunch(launch.mock.lastCall![1], own, {
+      agentDefaultArgs: { antigravity: '' },
+      agentLaunchChoices: { antigravity: saved }
+    })
+  ).toMatchObject({
+    ok: true,
+    tokens: ['antigravity', '--model', 'gemini-3.8-flash-high', '--effort', 'low']
+  })
+})
 
 it.each(['claude', 'codex'] as const)(
   'both actual setup callers retain rich %s input/options across freshness, refusal and explicit retry',
