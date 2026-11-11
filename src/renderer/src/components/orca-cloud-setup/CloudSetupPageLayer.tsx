@@ -32,7 +32,7 @@ function reopenComposer(request: CloudSetupPageRequest, autoStart: boolean): voi
 
 function ActiveCloudSetupPage({ request }: { request: CloudSetupPageRequest }): React.JSX.Element {
   const t = useTranslate()
-  const flow = useCloudSetupFlow(request)
+  const flow = useCloudSetupFlow(request, request.debugAccess)
   const projectName = useAppStore(
     (s) => s.repos.find((repo) => repo.id === request.repoId)?.displayName ?? null
   )

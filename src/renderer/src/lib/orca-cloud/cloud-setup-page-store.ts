@@ -4,6 +4,8 @@
 import { useSyncExternalStore } from 'react'
 import type { OrcaCloudAvailability } from '../../../../shared/orca-yaml-hook-types'
 import type { ComposerModalData } from '@/components/new-workspace/composer-modal-data'
+import type { OrcaCloudRunTargetAccess } from '@/components/new-workspace/orca-cloud-run-target-access'
+import { e2eConfig } from '@/lib/e2e-config'
 
 export type CloudSetupPageRequest = {
   prompt: string
@@ -15,6 +17,11 @@ export type CloudSetupPageRequest = {
   cloudOnlyRepo: string | null
   /** The composer as it was: Back and the auto-start reopen it with everything kept. */
   composer: ComposerModalData
+  /**
+   * Dev and e2e only: pins the account's billing answer so every step can be walked against the
+   * real page (dev sign-in has no billing). Never set by the app.
+   */
+  debugAccess?: OrcaCloudRunTargetAccess
   openedAt: number
 }
 
@@ -76,5 +83,14 @@ export function rememberCloudSetupAgentSkipped(agent: string | null): void {
     localStorage.setItem(`${AGENT_SKIP_KEY}:${agent}`, '1')
   } catch {
     // Private mode: the step asks again next time.
+  }
+}
+
+// Dev and e2e: drive the page from the console or CDP (as `__store` is), e.g. to walk the trial step.
+if ((import.meta.env.DEV || e2eConfig.exposeStore) && typeof window !== 'undefined') {
+  ;(window as unknown as Record<string, unknown>).__cloudSetupPage = {
+    open: openCloudSetupPage,
+    close: closeCloudSetupPage,
+    get: getCloudSetupPageRequest
   }
 }

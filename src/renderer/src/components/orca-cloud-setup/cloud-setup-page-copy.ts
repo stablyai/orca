@@ -115,11 +115,12 @@ export function currentStepCopy(
     case 'github-install':
       return {
         title: t('cloudSetupPage.github.title', 'Give Orca Cloud access on GitHub'),
-        lead: t(
+        // The row names the repository ("Orca Cloud can't reach acme/web yet").
+        lead: detail,
+        note: t(
           'cloudSetupPage.github.lead',
           'Orca Cloud clones your code from GitHub. Install the Orca Cloud app on this repository once.'
-        ),
-        note: step?.note ?? null
+        )
       }
     case 'github-waiting':
       return {
