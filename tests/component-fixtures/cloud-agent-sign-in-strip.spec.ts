@@ -147,23 +147,23 @@ test('RA-11: state 1 offers Renew only; state 2 offers Restart and a dismiss cle
   expect(dismiss.y).toBeGreaterThanOrEqual(close.y + close.height)
 })
 
-test('RA-11 Restart: "Restarting Claude…" keeps the strip with the button disabled; a failure offers Try again', async ({
+test('RA-11 Restart: "Restarting Claude…" is the spinner and words only; a failure offers Try again once', async ({
   page
 }) => {
   await page.goto('/fixtures.html?id=agent-sign-in-strip/CloudAgentSignInStrip:runningRestarting')
   await expect(page.locator('html')).toHaveAttribute('data-fixture-state', 'ready')
   const strip = page.locator('[data-cloud-sign-in-strip]')
   await expect(strip).toContainText('Restarting Claude…')
-  const busy = strip.getByRole('button', { name: 'Restart Claude' })
-  await expect(busy).toHaveAttribute('aria-disabled', 'true')
-  // Nothing to close while it runs: the strip leaves with a result.
-  await expect(strip.getByRole('button')).toHaveCount(1)
+  await expect(strip).toContainText('Picking up where you left off.')
+  // Nothing to click twice, nothing to close: the strip leaves with a result.
+  await expect(strip.getByRole('button')).toHaveCount(0)
   await page.goto(
     '/fixtures.html?id=agent-sign-in-strip/CloudAgentSignInStrip:runningRestartFailed'
   )
   await expect(page.locator('html')).toHaveAttribute('data-fixture-state', 'ready')
   await expect(strip).toContainText('Couldn’t restart Claude')
-  await expect(strip).toContainText('Try again.')
+  await expect(strip).toContainText('The workspace didn’t respond.')
+  await expect(strip).not.toContainText('Try again.')
   await expect(strip.getByRole('button', { name: 'Try again' })).toBeEnabled()
   await expect(strip.getByRole('button', { name: 'Dismiss' })).toBeVisible()
 })

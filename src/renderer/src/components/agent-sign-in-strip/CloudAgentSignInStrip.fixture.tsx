@@ -173,5 +173,12 @@ export const runningRestarting = fixture({
 })
 /** RA-11: nothing relaunched in time. */
 export const runningRestartFailed = fixture({
-  restart: { phase: 'failed', agent: 'claude', resumable: true, ptyId: 'p', launchedAt: null }
+  restart: {
+    phase: 'failed',
+    agent: 'claude',
+    resumable: true,
+    ptyId: 'p',
+    launchedAt: null,
+    failure: 'hostUnresponsive'
+  }
 })

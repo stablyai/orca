@@ -7,6 +7,10 @@ import { parseRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remot
 import type { RuntimeTerminalShow } from '../../../../shared/runtime-terminal-contracts'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
+import { agentProviderSessionForHostEnsure } from '@/runtime/hosted-terminals/creation/agent-launch/agent-session-ensure-provider-session'
+import { toHostSessionTabId } from '../../../../shared/workspace-layout/terminal-surface-id'
+import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { AccountRestartAgent } from '@/store/terminals/terminal-contracts'
 
 type StopExactResult = {
   stoppedPtyIds?: string[]
@@ -51,4 +55,37 @@ export async function stopRemotePaneTerminalForRestart(
   if (result.postStopVerified !== true || !result.stoppedPtyIds?.includes(hostPtyId)) {
     throw new Error(result.postStopFailure ?? 'restart_remote_pane_stop_unverified')
   }
+}
+
+/**
+ * Relaunch the pane's agent on its own conversation, in the same pane. Without this the host wakes
+ * the sleeping pane with its original launch (a new conversation). Only for a resumable session;
+ * a pane with none takes the host's fresh launch, which is what "Starts a new conversation" says.
+ */
+export async function resumeRemotePaneAgent(args: {
+  ptyId: string
+  worktreeId: string
+  tabId: string
+  leafId: string
+  agent: AccountRestartAgent
+  providerSession: AgentProviderSessionMetadata
+}): Promise<void> {
+  const environmentId = parseRemoteRuntimePtyId(args.ptyId)?.environmentId
+  if (!environmentId) {
+    throw new Error('restart_remote_pane_unowned')
+  }
+  await callRuntimeRpc(
+    { kind: 'environment', environmentId },
+    'terminal.ensureAgentSession',
+    {
+      kind: 'explicit',
+      worktree: toRuntimeWorktreeSelector(args.worktreeId),
+      agent: args.agent,
+      providerSession: await agentProviderSessionForHostEnsure(environmentId, args.providerSession),
+      // The same pane: the host tab and leaf the stopped terminal lived in.
+      placement: { tabId: toHostSessionTabId(args.tabId), leafId: args.leafId },
+      presentation: 'background'
+    },
+    { timeoutMs: 15_000 }
+  )
 }

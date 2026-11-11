@@ -11,7 +11,13 @@ vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
   }
 }))
 
-const { stopRemotePaneTerminalForRestart } = await import('./cloud-pane-restart-stop')
+vi.mock(
+  '@/runtime/hosted-terminals/creation/agent-launch/agent-session-ensure-provider-session',
+  () => ({ agentProviderSessionForHostEnsure: async (_env: string, session: unknown) => session })
+)
+
+const { resumeRemotePaneAgent, stopRemotePaneTerminalForRestart } =
+  await import('./cloud-pane-restart-stop')
 
 describe('stopRemotePaneTerminalForRestart (RA-11 paired pane)', () => {
   beforeEach(() => {
@@ -45,5 +51,33 @@ describe('stopRemotePaneTerminalForRestart (RA-11 paired pane)', () => {
       'restart_remote_pane_unowned'
     )
     expect(calls).toEqual([])
+  })
+})
+
+describe('resumeRemotePaneAgent (RA-11 paired pane)', () => {
+  beforeEach(() => {
+    calls.length = 0
+  })
+
+  it('ensures the agent on its own session, placed in the same host tab and leaf', async () => {
+    await resumeRemotePaneAgent({
+      ptyId: 'remote:env-1@@term_a',
+      worktreeId: 'wt-1',
+      tabId: 'web-terminal-host-tab%3A%3Aleaf',
+      leafId: 'leaf-1',
+      agent: 'claude',
+      providerSession: { key: 'session_id', id: 'sess-1' }
+    })
+    expect(calls).toHaveLength(1)
+    expect(calls[0]).toMatchObject({
+      method: 'terminal.ensureAgentSession',
+      environmentId: 'env-1',
+      params: {
+        kind: 'explicit',
+        agent: 'claude',
+        providerSession: { key: 'session_id', id: 'sess-1' },
+        placement: { tabId: 'host-tab::leaf', leafId: 'leaf-1' }
+      }
+    })
   })
 })

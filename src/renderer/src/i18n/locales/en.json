@@ -28061,7 +28061,7 @@
     "restarting": "Restarting {{agent}}…",
     "restartingResume": "Picking up where you left off.",
     "restartFailed": "Couldn’t restart {{agent}}",
-    "tryAgainDetail": "Try again.",
+    "restartHostUnresponsive": "The workspace didn’t respond.",
     "restartFailedAnnounce": "Couldn’t restart {{agent}}. Try again.",
     "restartFailedIn": "Couldn’t restart {{agent}} in {{workspace}}.",
     "openWorkspace": "Open workspace"

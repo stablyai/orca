@@ -262,6 +262,65 @@ describe('RA-11 Restart on a paired (remote) pane', () => {
     expect(useAppStore.getState().suppressedPtyExitIds[REMOTE]).toBeUndefined()
   })
 
+  it('a resumable pane is relaunched on its own conversation in the same pane, after the stop', async () => {
+    clickRemoteRestart()
+    const order: string[] = []
+    const providerSession = { key: 'session_id' as const, id: 'sess-tab-1' }
+    const resumeRemotePane = vi.fn(async () => {
+      order.push('resume')
+    })
+    const handleRestartPane = vi.fn(() => order.push('reconnect'))
+    runReadyPaneAccountRestarts({
+      panes: [{ id: 7, leafId: LEAF }],
+      ptyIdOf: () => REMOTE,
+      readyRestartPtyIds: selectReadyAccountRestartPtyIds(useAppStore.getState(), TAB),
+      tabId: TAB,
+      consumePendingPaneAccountRestart: useAppStore.getState().consumePendingPaneAccountRestart,
+      buildAccountRestartStartup: () => ({
+        command: 'claude',
+        resumeProviderSession: providerSession
+      }),
+      handleRestartPane,
+      stopRemotePane: async () => {
+        order.push('stop')
+      },
+      resumeRemotePane
+    })
+    await vi.waitFor(() => expect(handleRestartPane).toHaveBeenCalledTimes(1))
+    expect(order).toEqual(['stop', 'resume', 'reconnect'])
+    expect(resumeRemotePane).toHaveBeenCalledWith({
+      ptyId: REMOTE,
+      worktreeId: 'wt-1',
+      tabId: TAB,
+      leafId: LEAF,
+      agent: 'claude',
+      providerSession
+    })
+  })
+
+  it('a failed resume on the host shows the failure and never reconnects', async () => {
+    clickRemoteRestart()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const handleRestartPane = vi.fn()
+    runReadyPaneAccountRestarts({
+      panes: [{ id: 7, leafId: LEAF }],
+      ptyIdOf: () => REMOTE,
+      readyRestartPtyIds: selectReadyAccountRestartPtyIds(useAppStore.getState(), TAB),
+      tabId: TAB,
+      consumePendingPaneAccountRestart: useAppStore.getState().consumePendingPaneAccountRestart,
+      buildAccountRestartStartup: () => ({
+        command: 'claude',
+        resumeProviderSession: { key: 'session_id' as const, id: 'sess-tab-1' }
+      }),
+      handleRestartPane,
+      stopRemotePane: () => Promise.resolve(),
+      resumeRemotePane: () => Promise.reject(new Error('agent_session_resume_failed'))
+    })
+    await vi.waitFor(() => expect(cloudAgentRestartAttempt(PANE_KEY, 0)?.phase).toBe('failed'))
+    warn.mockRestore()
+    expect(handleRestartPane).not.toHaveBeenCalled()
+  })
+
   it('a reconnect that never binds a new PTY fails at the timeout', async () => {
     clickRemoteRestart()
     const handleRestartPane = runRemote(() => Promise.resolve())
