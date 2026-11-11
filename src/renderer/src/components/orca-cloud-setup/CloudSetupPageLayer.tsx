@@ -110,6 +110,7 @@ function ActiveCloudSetupPage({ request }: { request: CloudSetupPageRequest }): 
       projectName={projectName}
       prompt={request.prompt}
       agentLabel={agentLabel}
+      agent={isOrcaCloudAccountAgent(request.agent) ? request.agent : null}
       onBackToComposer={onBackToComposer}
       onExit={onExit}
       starting={starting}

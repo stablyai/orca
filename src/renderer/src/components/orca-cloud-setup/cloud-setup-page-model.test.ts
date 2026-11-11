@@ -23,8 +23,50 @@ describe('cloudSetupPageModel', () => {
       { id: 'agent', state: 'optional' }
     ]
     const model = cloudSetupPageModel(steps)
-    expect(model.steps.map((step) => step.id)).toEqual(['account', 'plan'])
+    expect(model.steps.map((step) => step.id)).toEqual(['account', 'team', 'plan'])
     expect(model).toMatchObject({ current: null, action: 'done' })
+  })
+
+  it('always lists Team after Account, like the web (DS-b): done once signed in', () => {
+    const signedOut = cloudSetupPageModel([
+      { id: 'account', state: 'needed', need: 'sign-in', canFix: true },
+      { id: 'plan', state: 'pending', need: 'trial' },
+      { id: 'github', state: 'needed', need: 'github', canFix: true }
+    ])
+    expect(signedOut.steps.map((step) => [step.id, step.state])).toEqual([
+      ['account', 'needed'],
+      ['team', 'pending'],
+      ['plan', 'pending'],
+      ['github', 'needed']
+    ])
+    expect(signedOut.current?.id).toBe('account')
+    const signedIn = cloudSetupPageModel([
+      { id: 'account', state: 'done' },
+      { id: 'plan', state: 'done' },
+      { id: 'github', state: 'needed', need: 'github', canFix: true }
+    ])
+    expect(signedIn.steps.map((step) => [step.id, step.state])).toEqual([
+      ['account', 'done'],
+      ['team', 'done'],
+      ['plan', 'done'],
+      ['github', 'needed']
+    ])
+    expect(signedIn.current?.id).toBe('github')
+    // A team switch brings its own Team step: it is kept, not doubled.
+    const switching = cloudSetupPageModel(
+      [
+        { id: 'account', state: 'done' },
+        { id: 'team', state: 'needed' },
+        { id: 'plan', state: 'done' }
+      ],
+      { teamSwitch: true }
+    )
+    expect(switching.steps.map((step) => step.id)).toEqual(['account', 'team', 'plan'])
+    expect(switching.action).toBe('switch-team')
+    // No repository (D3): the only row stays the only step.
+    expect(
+      cloudSetupPageModel([{ id: 'github', state: 'failed', blocksStart: true }]).steps
+    ).toHaveLength(1)
   })
 
   it('maps each blocker to its one action', () => {

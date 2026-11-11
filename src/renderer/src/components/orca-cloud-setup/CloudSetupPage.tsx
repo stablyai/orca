@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { useTranslate } from '@/i18n/use-translate'
+import { AgentIcon } from '@/components/agent/icons/AgentIcon'
+import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
 import type {
   CloudSetupStep,
   CloudSetupStepId
@@ -21,6 +23,8 @@ export type CloudSetupPageProps = {
   projectName: string | null
   prompt: string
   agentLabel: string | null
+  /** The agent the prompt starts with: its glyph sits before its name in the header line (NS-04). */
+  agent?: TerminalAgent | null
   /** Back from the first step: Create workspace again, with the prompt, project and agent kept. */
   onBackToComposer: () => void
   /** The × in the corner: leave setup, keep the draft (nothing starts). */
@@ -253,6 +257,7 @@ export function CloudSetupPage({
   projectName,
   prompt,
   agentLabel,
+  agent = null,
   onBackToComposer,
   onExit,
   starting
@@ -304,8 +309,7 @@ export function CloudSetupPage({
     prompt.trim()
       ? t('cloudSetupPage.headerFor', 'Setting up Orca Cloud for {{name}}', { name: prompt.trim() })
       : t('cloudSetupPage.header', 'Setting up Orca Cloud'),
-    projectName,
-    agentLabel
+    projectName
   ]
     .filter(Boolean)
     .join(' · ')
@@ -326,6 +330,18 @@ export function CloudSetupPage({
           data-cloud-setup-context="true"
         >
           {context}
+          {agentLabel ? (
+            <>
+              {' · '}
+              {/* NS-04 (e): the agent's glyph, muted like the line (never the coloured mark). */}
+              {agent ? (
+                <span aria-hidden="true" className="me-1 inline-flex align-[-2px]">
+                  <AgentIcon agent={agent} size={14} className="[&_path]:fill-current" />
+                </span>
+              ) : null}
+              {agentLabel}
+            </>
+          ) : null}
         </span>
         <Button
           type="button"
