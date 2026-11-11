@@ -1,5 +1,11 @@
 import { explorerRepositoryOwner } from './file-explorer-repository-paths'
-import type { ExplorerRepositoryChange } from './file-explorer-repository-observer'
+import type { FsChangeEvent } from '../../../../../../shared/file-watch/filesystem-change-event'
+
+export type ExplorerRepositoryChange = {
+  path: string
+  directory?: boolean
+  kind: Exclude<FsChangeEvent['kind'], 'overflow'>
+}
 /** Membership changes rebuild the sorted index lazily; event batches only visit matching ranges. */
 export class ExplorerRepositoryPathIndex {
   private paths = new Set<string>()
@@ -87,9 +93,11 @@ export function collectExplorerRepositoryInvalidation(
   sourceIndex: ExplorerRepositoryPathIndex,
   candidateIndex: ExplorerRepositoryPathIndex
 ) {
-  const directories = changes.filter((change) => change.directory || change.deleted)
+  const directories = changes.filter((change) => change.directory || change.kind !== 'update')
   const affected = sourceIndex.descendants(directories.map((change) => change.path))
-  const proofOwners = new Set(affected)
+  const proofOwners = sourceIndex.descendants(
+    changes.filter((change) => change.kind !== 'update').map((change) => change.path)
+  )
   const ignoreOwners = new Set<string | undefined>(proofOwners)
   for (const { path } of changes) {
     const owner = explorerRepositoryOwner(sources, `${path}/`)
@@ -119,7 +127,9 @@ export function collectExplorerRepositoryInvalidation(
     affected,
     proofOwners,
     ignoreOwners,
-    deleted: new Set(changes.filter((change) => change.deleted).map((change) => change.path)),
+    deleted: new Set(
+      changes.filter((change) => change.kind === 'delete').map((change) => change.path)
+    ),
     discoveryCandidates: candidateIndex.related(discoveryPaths)
   }
 }

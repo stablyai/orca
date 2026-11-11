@@ -29,6 +29,7 @@ export type ExplorerRepositoryRead = (
 ) => Promise<GitRepositoryStatus[] | undefined>
 export type ExplorerRepositorySourceState = ExplorerRepositorySource & {
   scheduler: GitStatusRefreshScheduler
+  proofRevision: number
   proofRetryAt: number
   statusDirty: boolean
   query: string[]
@@ -70,6 +71,7 @@ export function createExplorerRepositorySource(
     latestEntries: EMPTY_ENTRIES,
     partial: false,
     ignored: new Map(),
+    proofRevision: 0,
     proofRetryAt: -Infinity,
     statusDirty: true,
     query: [],
@@ -93,13 +95,18 @@ export function createExplorerRepositorySource(
         if (source.statusDirty && Date.now() >= source.proofRetryAt) {
           source.statusDirty = false
           let validated = false
+          let proofRevision: number | undefined
           try {
             await owner.admit(source, signal, async () => {
+              proofRevision = source.proofRevision
               const results = await owner.read(
                 { repositoryPaths: [path], repositoryIntent: 'status' },
                 signal
               )
-              if (!owner.current(source, generation, signal)) {
+              if (
+                !owner.current(source, generation, signal) ||
+                source.proofRevision !== proofRevision
+              ) {
                 return
               }
               const result = results?.find((record) => record.path === path)
@@ -137,7 +144,10 @@ export function createExplorerRepositorySource(
           } catch {
             // Status failure does not prevent independent ignore answers from settling.
           } finally {
-            if (!validated) {
+            if (
+              !validated &&
+              (proofRevision === undefined || source.proofRevision === proofRevision)
+            ) {
               source.statusDirty ||= signal.aborted
               if (!signal.aborted) {
                 statusValidation.settle(false)

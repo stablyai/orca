@@ -136,12 +136,12 @@ export function useFileExplorerRepositories(
         }
         const path = relativePathInsideRoot(root, change.absolutePath)
         if (path !== null) {
-          changes.push({ path, directory: change.isDirectory, deleted: change.kind === 'delete' })
+          changes.push({ path, directory: change.isDirectory, kind: change.kind })
         }
         if (change.oldAbsolutePath) {
           const old = relativePathInsideRoot(root, change.oldAbsolutePath)
           if (old !== null) {
-            changes.push({ path: old, directory: true, deleted: true })
+            changes.push({ path: old, kind: 'delete' })
           }
         }
       }

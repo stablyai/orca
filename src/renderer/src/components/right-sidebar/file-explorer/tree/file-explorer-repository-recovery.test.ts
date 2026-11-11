@@ -133,8 +133,8 @@ it('keeps uncertain listing boundaries, heals under activity, and catches up rev
   observer.setVisible(false)
   requests.length = 0
   observer.invalidateChanges([
-    { path: 'child/new', directory: true },
-    { path: 'child/new/sub', directory: true }
+    { path: 'child/new', directory: true, kind: 'create' },
+    { path: 'child/new/sub', directory: true, kind: 'create' }
   ])
   await vi.advanceTimersByTimeAsync(1000)
   expect(requests).toEqual([])

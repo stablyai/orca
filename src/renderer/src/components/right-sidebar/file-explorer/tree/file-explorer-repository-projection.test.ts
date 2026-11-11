@@ -58,7 +58,7 @@ it.each([10, 100])(
         'modified'
       )
     }
-    observer.invalidateChanges([{ path: 'repo/keep.txt', deleted: true }])
+    observer.invalidateChanges([{ path: 'repo/keep.txt', kind: 'delete' }])
     expect(
       decorations.update([], sources).statusByRelativePath.get('repo/keep.txt')
     ).toBeUndefined()

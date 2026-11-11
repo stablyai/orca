@@ -25,13 +25,14 @@ import {
 import { ExplorerRepositoryReadQueue } from './file-explorer-repository-read-queue'
 import {
   ExplorerRepositoryPathIndex,
-  collectExplorerRepositoryInvalidation
+  collectExplorerRepositoryInvalidation,
+  type ExplorerRepositoryChange
 } from './file-explorer-repository-path-index'
 
 export { explorerRepositoryOwner } from './file-explorer-repository-paths'
 export type { ExplorerRepositorySource } from './file-explorer-repository-source'
 export type ExplorerRepositoryCandidate = { path: string; marker?: boolean; listing?: object }
-export type ExplorerRepositoryChange = { path: string; directory?: boolean; deleted?: boolean }
+export type { ExplorerRepositoryChange } from './file-explorer-repository-path-index'
 
 /** One logical Explorer owns discovery and independent sources; virtual rows never own Git work. */
 export class FileExplorerRepositoryObserver {
@@ -140,7 +141,7 @@ export class FileExplorerRepositoryObserver {
     if (!created.some(Boolean)) {
       return
     }
-    this.repartitionDemand()
+    this.setDemand()
     this.emit()
     if (this.visible) {
       for (const source of created) {
@@ -166,7 +167,7 @@ export class FileExplorerRepositoryObserver {
       this.validations.set(path, validation)
     }
     if (!deferPublish) {
-      this.repartitionDemand()
+      this.setDemand()
       this.emit()
     }
   }
@@ -190,7 +191,7 @@ export class FileExplorerRepositoryObserver {
       this.removeSource(path, false, true)
     }
     if (retired.length) {
-      this.repartitionDemand()
+      this.setDemand()
       this.emit()
     }
     if (this.visible) {
@@ -198,14 +199,9 @@ export class FileExplorerRepositoryObserver {
     }
   }
 
-  setDemand(paths: readonly string[], partition?: ExplorerRepositoryDemand): void {
+  setDemand(paths: readonly string[] = this.demand, partition?: ExplorerRepositoryDemand): void {
     this.demand = paths
-    this.repartitionDemand(partition)
-  }
-
-  private repartitionDemand(partition?: ExplorerRepositoryDemand): void {
-    const { sources, demand, visible } = this
-    updateExplorerRepositoryDemand(sources, demand, visible, () => this.emit(), partition)
+    updateExplorerRepositoryDemand(this.sources, paths, this.visible, () => this.emit(), partition)
   }
 
   invalidate(path?: string, directory = false): void {
@@ -223,6 +219,7 @@ export class FileExplorerRepositoryObserver {
       for (const source of this.sources.values()) {
         source.scheduler.pause()
         source.statusDirty = true
+        source.proofRevision++
         source.proofRetryAt = -Infinity
         source.ignoredQueries.invalidate(this.visible)
       }
@@ -234,7 +231,7 @@ export class FileExplorerRepositoryObserver {
       }
       return
     }
-    this.invalidateChanges([{ path, directory }])
+    this.invalidateChanges([{ path, directory, kind: 'update' }])
   }
 
   invalidateChanges(changes: readonly ExplorerRepositoryChange[]): void {
@@ -257,6 +254,7 @@ export class FileExplorerRepositoryObserver {
       }
       source.statusDirty = true
       if (proofOwners.has(path)) {
+        source.proofRevision++
         source.proofRetryAt = -Infinity
       }
       if (ignoreOwners.has(path)) {
@@ -292,6 +290,7 @@ export class FileExplorerRepositoryObserver {
       this.discovery.resumeSafety()
       for (const source of this.sources.values()) {
         source.statusDirty = true
+        source.proofRevision++
         source.proofRetryAt = -Infinity
         source.ignoredQueries.invalidate(this.visible)
         source.scheduler.resumeSafety()
