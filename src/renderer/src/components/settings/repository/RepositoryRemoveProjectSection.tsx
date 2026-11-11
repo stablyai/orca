@@ -178,12 +178,16 @@ export function RepositoryRemoveProjectSection({
         </div>
         {groups.length > 0 ? (
           <Collapsible>
-            <CollapsibleTrigger className="group flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
-              <ChevronRight className="size-3 transition-transform group-data-[state=open]:rotate-90" />
-              {summaryParts.join(' · ')}
+            <CollapsibleTrigger asChild>
+              <Button type="button" variant="ghost" size="xs" className="-ml-2">
+                <ChevronRight className="transition-transform in-data-[state=open]:rotate-90" />
+                {summaryParts.join(' · ')}
+              </Button>
             </CollapsibleTrigger>
-            <CollapsibleContent className="pt-2 pl-4">
-              <RemovedCheckoutList groups={groups} />
+            <CollapsibleContent>
+              <div className="pt-2 pl-4">
+                <RemovedCheckoutList groups={groups} />
+              </div>
             </CollapsibleContent>
           </Collapsible>
         ) : null}
@@ -191,14 +195,14 @@ export function RepositoryRemoveProjectSection({
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent surface="security" showCloseButton={false}>
           <DialogHeader>
-            <DialogTitle className="text-sm">
+            <DialogTitle>
               {t(
                 'auto.components.settings.RepositoryRemoveProjectSection.dialogTitle',
                 'Remove {{name}}?',
                 { name: repo.displayName }
               )}
             </DialogTitle>
-            <DialogDescription className="text-xs">
+            <DialogDescription>
               {description} {filesNote}
             </DialogDescription>
           </DialogHeader>
