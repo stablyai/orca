@@ -1,6 +1,7 @@
 // The panel's footer links and row actions open Settings over it; the panel closes first so focus
 // lands in Settings rather than behind the sheet.
 import { useAppStore } from '@/store'
+import { openOrcaCloudSignInSheet } from '@/components/settings/agent-accounts/sign-in-sheet/orca-cloud-sign-in-sheet-store'
 import type { AgentHostFooterLink } from './agent-host-capabilities'
 import { closeAgentHostPanel } from './agent-host-panel-store'
 
@@ -16,6 +17,10 @@ const TARGET = {
 
 export function openAgentHostSettings(link: AgentHostFooterLink): void {
   closeAgentHostPanel()
+  if (link === 'agentAccounts') {
+    openOrcaCloudSignInSheet()
+    return
+  }
   const target: { pane: (typeof TARGET)[AgentHostFooterLink]['pane']; sectionId?: string } =
     TARGET[link]
   const store = useAppStore.getState()

@@ -30,8 +30,8 @@ export function orcaCloudAgentAccountsParts(
       id: 'accounts-orca-cloud',
       title: t('orcaCloudAccounts.title', 'Orca Cloud'),
       description: t(
-        'orcaCloudAccounts.help',
-        'Set up once on this computer. Every cloud workspace uses it, including new, cloned and restarted ones.'
+        'orcaCloudAccounts.helpAccountWide',
+        'Set up once. Every cloud workspace uses it, including new, cloned and restarted ones.'
       ),
       content: <OrcaCloudAccountsSection hideHeader />
     }

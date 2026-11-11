@@ -1,6 +1,7 @@
 // Live Agents row for an Orca Cloud build. Reads the Orca account once (shared store with S0 and the
 // composer), never the sandbox; runs S0's setup inline when nothing is set up (R2), and writes the
 // per-workspace Source from the ⋯ menu (S1-b).
+import { openOrcaCloudSignInSheet } from '@/components/settings/agent-accounts/sign-in-sheet/orca-cloud-sign-in-sheet-store'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
@@ -32,7 +33,7 @@ import { VmBuildAgentSignInRow } from '../VmBuildAgentSignInRow'
 import { VmBuildCloudAgentsMenu, type WorkspaceSourcesLoad } from './VmBuildCloudAgentsMenu'
 import { VmBuildCloudAgentsRowView, type DesktopKeySave } from './VmBuildCloudAgentsRowView'
 
-function openSettings(pane: 'accounts' | 'cloud-secrets', sectionId?: string): void {
+function openSettings(pane: 'cloud-secrets', sectionId?: string): void {
   const store = useAppStore.getState()
   store.openSettingsTarget({ pane, repoId: null, ...(sectionId ? { sectionId } : {}) })
   store.openSettingsPage()
@@ -156,7 +157,7 @@ export function VmBuildCloudAgentsRow({
         sources={sources}
         onOpen={readSources}
         onChoose={choose}
-        onManage={() => openSettings('accounts', 'orca-cloud')}
+        onManage={() => openOrcaCloudSignInSheet()}
         onUseKey={() => openSettings('cloud-secrets')}
       />
     )
@@ -184,7 +185,7 @@ export function VmBuildCloudAgentsRow({
             void api?.acknowledge({ agent })
           },
           retryLoad: () => void reloadOrcaCloudAgentAccounts(),
-          manage: () => openSettings('accounts', 'orca-cloud'),
+          manage: () => openOrcaCloudSignInSheet(),
           saveDesktopKey: saveKey,
           signInHere: (agent) => {
             nextRequest.current += 1
