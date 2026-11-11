@@ -284,10 +284,8 @@
         "errorSeatSandboxLimitSelf_other": "You already have {{count}} sandboxes running, the most one seat can run. Put one to sleep or delete it, then try again.",
         "errorTeamSandboxLimit_one": "Your team can run {{count}} sandbox at once ({{perSeat}} per seat). Put it to sleep or delete it, then try again.",
         "errorTeamSandboxLimit_other": "Your team can run {{count}} sandboxes at once ({{perSeat}} per seat). Put one to sleep or delete it, then try again.",
-        "listMeta2_one": "{{count}} workspace · {{usage}}",
-        "listMeta2_other": "{{count}} workspaces · {{usage}}",
-        "listSandboxHours_one": "{{hours}} sandbox hour used",
-        "listSandboxHours_other": "{{hours}} sandbox hours used",
+        "listMetaCount_one": "{{count}} workspace",
+        "listMetaCount_other": "{{count}} workspaces",
         "rowSandboxHours_one": "{{hours}} sandbox hour",
         "rowSandboxHours_other": "{{hours}} sandbox hours",
         "sectionCount_one": "{{count}} workspace",
@@ -1583,6 +1581,20 @@
       "lead": "{{hours}} sandbox hours to try Orca Cloud. No card needed.",
       "lead_one": "{{hours}} sandbox hour to try Orca Cloud. No card needed.",
       "lead_other": "{{hours}} sandbox hours to try Orca Cloud. No card needed."
+    }
+  },
+  "cloudSkillsSync": {
+    "row": {
+      "withheld_one": "Synced without 1 file that looks like a key or credential",
+      "withheld_other": "Synced without {{count}} files that look like keys or credentials"
+    },
+    "summary": {
+      "notSynced_one": "{{count}} found, not synced yet",
+      "notSynced_other": "{{count}} found, not synced yet",
+      "skipped_one": "{{count}} not synced",
+      "skipped_other": "{{count}} not synced",
+      "synced_one": "{{count}} synced",
+      "synced_other": "{{count}} synced"
     }
   },
   "codeHost": {

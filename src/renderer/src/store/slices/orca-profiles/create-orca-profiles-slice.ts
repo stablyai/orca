@@ -2,6 +2,7 @@ import type { StateCreator } from 'zustand'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import type {
+  OrcaCloudSignInEnd,
   OrcaCloudSignInProgress,
   OrcaProfileAuthStatus,
   OrcaProfileSummary,
@@ -20,6 +21,8 @@ export type OrcaProfilesSlice = OrcaProfilesAuthActions & {
   activeOrcaProfileId: string | null
   orcaProfileAuthStatus: OrcaProfileAuthStatus | null
   orcaProfileSignInProgress: OrcaCloudSignInProgress | null
+  /** Set when the last sign-in stopped without finishing (it timed out); cleared by the next one. */
+  orcaProfileSignInEnd: OrcaCloudSignInEnd | null
   orcaProfilesMultiProfileUi: boolean
   orcaProfilesLoading: boolean
   orcaProfileSwitching: boolean
@@ -41,6 +44,7 @@ export const createOrcaProfilesSlice: StateCreator<AppState, [], [], OrcaProfile
   activeOrcaProfileId: null,
   orcaProfileAuthStatus: null,
   orcaProfileSignInProgress: null,
+  orcaProfileSignInEnd: null,
   orcaProfilesMultiProfileUi: false,
   orcaProfilesLoading: false,
   orcaProfileSwitching: false,

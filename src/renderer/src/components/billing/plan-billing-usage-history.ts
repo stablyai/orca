@@ -90,7 +90,8 @@ function rows(
       share: share(unknown.seconds, total)
     })
   }
-  if (others.seconds > 0) {
+  // An others line that shows as 0 hours is noise: leave it out.
+  if (formatHours(others.seconds) !== '0') {
     list.push({
       key: 'other',
       label: othersLabel(others.count),

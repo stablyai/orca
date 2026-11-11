@@ -70,6 +70,15 @@ describe('top workspaces and members', () => {
     ])
   })
 
+  it('drops an others line that rounds to 0 hours', () => {
+    const history = {
+      ...sampleUsageHistory,
+      members: { top: [{ id: 'u-grace', seconds: 2 * HOUR }], otherCount: 1, otherSeconds: 30 }
+    }
+    const rows = topMemberRows(history, sampleUsageNames, translate)!
+    expect(rows.map((row) => row.label)).toEqual(['Grace Hopper'])
+  })
+
   it('titles workspaces and folds the rest into one line', () => {
     const rows = topWorkspaceRows(sampleUsageHistory, sampleUsageNames, translate)!
     expect(rows.map((row) => row.label)).toEqual([

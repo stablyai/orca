@@ -71,7 +71,7 @@ export function SidebarAccountMenu(): React.JSX.Element {
   const mountedRef = useMountedRef()
 
   const identity = getAccountMenuIdentity(authStatus)
-  // The team is named once, on the switcher below; the header carries the plan's hours instead.
+  // The plan's hours are the team's, so they sit on the team row below, not under your name (JA-32).
   const billingResult = useBillingState().result
   const usage = accountMenuUsageLines(billingResult, t, locale)
   const visibleItems = selectVisibleAccountMenuItems(registeredItems, authStatus)
@@ -187,14 +187,6 @@ export function SidebarAccountMenu(): React.JSX.Element {
                           {identity.email}
                         </span>
                       ) : null}
-                      {usage ? (
-                        <span className="truncate text-xs text-muted-foreground tabular-nums">
-                          {usage.hoursLeft}
-                        </span>
-                      ) : null}
-                      {usage?.warning ? (
-                        <span className="text-xs text-foreground text-pretty">{usage.warning}</span>
-                      ) : null}
                     </>
                   ) : (
                     <>
@@ -216,7 +208,7 @@ export function SidebarAccountMenu(): React.JSX.Element {
               {identity.signedIn ? <AccountMenuTrialRow result={billingResult} /> : null}
             </>
           ) : null}
-          <SidebarTeamSubmenu authStatus={authStatus} />
+          <SidebarTeamSubmenu authStatus={authStatus} usage={usage} />
           {extensionItems.length > 0 ? (
             <>
               {extensionItems.map((item) => {
