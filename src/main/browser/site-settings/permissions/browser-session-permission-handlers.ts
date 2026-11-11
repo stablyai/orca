@@ -3,6 +3,7 @@ import { browserManager } from '../../guest-lifecycle/manager/browser-manager'
 import type { Session } from 'electron'
 import type { BrowserSessionProfile } from '../../../../shared/browser-workspace-types'
 import { hasSystemMediaAccess, requestSystemMediaAccess } from './browser-media-access'
+import { hasBrowserDisplayCaptureSystemPicker } from './browser-display-capture-policy'
 import {
   isAutoGrantedBrowserSessionPermission,
   browserSitePermissionsFor
@@ -25,6 +26,11 @@ import {
 // SSH-driven pages must not read the desktop clipboard.
 function deniesRemoteCliDrivenClipboardRead(permission: string, webContentsId?: number): boolean {
   return permission === 'clipboard-read' && isRemoteCliDrivenGuest(webContentsId)
+}
+
+// The system picker is the consent; SSH-driven pages must not see the desktop either.
+function allowsBrowserDisplayCapture(webContentsId?: number): boolean {
+  return hasBrowserDisplayCaptureSystemPicker() && !isRemoteCliDrivenGuest(webContentsId)
 }
 
 type RestrictedFileSystemAccessListener = (
@@ -119,6 +125,14 @@ export function installBrowserSessionPermissionHandlers(
       callback(false)
       return
     }
+    if (permission === 'display-capture') {
+      const allowed = allowsBrowserDisplayCapture(webContents.id)
+      if (!allowed) {
+        notifyDenied()
+      }
+      callback(allowed)
+      return
+    }
     const mediaRequest = 'mediaTypes' in details ? details : undefined
     const sitePermissions = browserSitePermissionsFor(permission, mediaRequest?.mediaTypes)
     if (!sitePermissions) {
@@ -159,6 +173,9 @@ export function installBrowserSessionPermissionHandlers(
     }
     if (allowsBrowserWebAuthnPermission(permission, details)) {
       return true
+    }
+    if (permission === 'display-capture') {
+      return allowsBrowserDisplayCapture(webContents?.id)
     }
     const sitePermissions = browserSitePermissionsFor(
       permission,
