@@ -14,7 +14,7 @@ function isActivityHookLiveAgentState(
   return state === 'working' || state === 'blocked' || state === 'waiting'
 }
 
-/** The card's row state; a stale entry with a live PTY stays listed as unverifiable instead of vanishing. */
+/** The card's row state; a stale working pane with a live PTY stays listed as unverifiable instead of vanishing. */
 export function activityLiveAgentState(
   entry: AgentStatusEntry,
   now: number,
@@ -22,7 +22,8 @@ export function activityLiveAgentState(
 ): ActivityLiveAgentState | null {
   const state = resolveAgentRowState(entry, now, hasLivePty)
   if (state === 'unverifiable') {
-    return state
+    // Stale blocked/waiting keep their attention status through the historical event path.
+    return entry.state === 'working' ? state : null
   }
   if (!isActivityHookLiveAgentState(state)) {
     return null
@@ -36,6 +37,11 @@ export function freshActivityLiveAgentState(
   now: number
 ): ActivityLiveAgentState | null {
   return activityLiveAgentState(entry, now, false)
+}
+
+/** Unverifiable rows stay listed but are not running work. */
+export function isRunningActivityState(state: ActivityLiveAgentState | null | undefined): boolean {
+  return state != null && state !== 'unverifiable'
 }
 
 export function isHistoricalActivityState(

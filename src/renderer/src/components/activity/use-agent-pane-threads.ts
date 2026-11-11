@@ -3,7 +3,7 @@ import { useAppStore } from '@/store'
 import { useStructuredChatTabNames } from '@/runtime/native-chat/naming/structured-chat-name-observation'
 import { buildActivityEvents } from './activity-event-builder'
 import { createActivityEventBuildCache } from '@/components/activity/activity-event-build-cache'
-import { freshActivityLiveAgentState } from './activity-event-state'
+import { freshActivityLiveAgentState, isRunningActivityState } from './activity-event-state'
 import {
   useAgentPaneThreadsDefaultHostId,
   useAllAgentPaneThreadStoreData,
@@ -228,7 +228,8 @@ export function useAgentPaneThreads(args: {
       if (
         readFilter === 'unread' &&
         !thread.unread &&
-        (thread.currentAgentState === null || thread.migrationUnsupportedPtyId !== undefined) &&
+        (!isRunningActivityState(thread.currentAgentState) ||
+          thread.migrationUnsupportedPtyId !== undefined) &&
         thread.paneKey !== effectiveSelectedPaneKey
       ) {
         return false

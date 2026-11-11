@@ -27,4 +27,15 @@ describe('stale activity with a live terminal', () => {
     })
     expect(restored.liveAgentByPaneKey[PANE_KEY]).toBeUndefined()
   })
+
+  it('keeps a stale blocked pane as Blocked attention, not unverifiable', () => {
+    const result = makeActivityResult({
+      entries: { [PANE_KEY]: { ...makeWorkingEntryWithoutHistory(), state: 'blocked' } },
+      ptyIdsByTabId: { 'tab-1': ['pty-1'] },
+      now: 10_000_000
+    })
+
+    expect(result.liveAgentByPaneKey[PANE_KEY]).toBeUndefined()
+    expect(result.events.map((event) => event.state)).toEqual(['blocked'])
+  })
 })
