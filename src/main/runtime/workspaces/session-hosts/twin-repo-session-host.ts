@@ -26,18 +26,22 @@ const WORKTREE_KEYED_FIELDS = new Set(
     .map(([field]) => field)
 )
 
-function partitionHoldsWorktree(
+export function partitionHoldsWorktree(
   session: WorkspaceSessionState | undefined,
   worktreeId: string
 ): boolean {
   const workspaceKey = worktreeWorkspaceKey(worktreeId)
-  return Object.entries(session ?? {}).some(
-    ([field, record]: [string, unknown]) =>
-      WORKTREE_KEYED_FIELDS.has(field) &&
+  for (const field of WORKTREE_KEYED_FIELDS) {
+    const record: unknown = session?.[field as keyof WorkspaceSessionState]
+    if (
       typeof record === 'object' &&
       record !== null &&
       (Object.hasOwn(record, worktreeId) || Object.hasOwn(record, workspaceKey))
-  )
+    ) {
+      return true
+    }
+  }
+  return false
 }
 
 function cachedWorktreeHostId(worktree: CachedWorktreeHost): ExecutionHostId | null {
