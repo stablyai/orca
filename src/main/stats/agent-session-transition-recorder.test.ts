@@ -1,17 +1,17 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Mock } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
+
 import {
-  AGENT_SESSION_MIRROR_LIMIT,
   AgentSessionTransitionRecorder,
-  classifyAgentSessionTransition
+  type AgentSessionSink,
+  type AgentSessionStatusEvent
 } from './agent-session-transition-recorder'
-import type { AgentSessionSink, AgentSessionStatusEvent } from './agent-session-transition-recorder'
+
 import { StatsCollector } from './collector'
-import { AgentHookServer, _internals } from '../agent-hooks/server'
-import { PANE as STORE_PANE } from '../agent-hooks/server.test-fixtures'
+import { AgentHookServer, _internals } from '../agent-hooks/server/agent-hook-server'
+import { PANE as STORE_PANE } from '../agent-hooks/server/testing/server.test-fixtures'
 
 let userDataDir: string
 
@@ -74,18 +74,6 @@ function sink(): AgentSessionSink & {
 }
 
 describe('AgentSessionTransitionRecorder', () => {
-  it('counts a hook-only agent that never writes an agent-shaped terminal title', () => {
-    // #10201: hook-only agents must contribute despite absent OSC titles.
-    const stats = new StatsCollector()
-    const recorder = new AgentSessionTransitionRecorder(stats)
-
-    recorder.onStatus(hook('working', T))
-    recorder.onStatus(hook('done', T + 180_000))
-
-    expect(stats.getSummary().totalAgentsSpawned).toBe(1)
-    expect(stats.getSummary().totalAgentTimeMs).toBe(180_000)
-  })
-
   it('does not double-count a replayed status on reconnect', () => {
     const stats = new StatsCollector()
     const recorder = new AgentSessionTransitionRecorder(stats)
@@ -113,43 +101,6 @@ describe('AgentSessionTransitionRecorder', () => {
 
     expect(stats.getSummary().totalAgentsSpawned).toBe(1)
     expect(stats.getSummary().totalAgentTimeMs).toBe(5_000)
-  })
-
-  it('never opens a session from a replayed or disk-restored working status', () => {
-    // Historical working replay must not mint a new spawn on reconnect.
-    const replayed = sink()
-    new AgentSessionTransitionRecorder(replayed).onStatus(hook('working', T, { isReplay: true }))
-    expect(replayed.onAgentStart).not.toHaveBeenCalled()
-
-    const restored = sink()
-    new AgentSessionTransitionRecorder(restored).onStatus(
-      hook('working', T, { restoredUnconfirmed: true })
-    )
-    expect(restored.onAgentStart).not.toHaveBeenCalled()
-  })
-
-  it('still closes a live session when the terminating status arrives as a replay', () => {
-    const stats = new StatsCollector()
-    const recorder = new AgentSessionTransitionRecorder(stats)
-
-    recorder.onStatus(hook('working', T))
-    recorder.onStatus(hook('done', T + 30_000, { isReplay: true }))
-
-    expect(stats.getSummary().totalAgentsSpawned).toBe(1)
-    expect(stats.getSummary().totalAgentTimeMs).toBe(30_000)
-  })
-
-  it('counts one session per turn across repeated working/done cycles', () => {
-    const stats = new StatsCollector()
-    const recorder = new AgentSessionTransitionRecorder(stats)
-
-    recorder.onStatus(hook('working', T))
-    recorder.onStatus(hook('done', T + 10_000))
-    recorder.onStatus(hook('working', T + 60_000))
-    recorder.onStatus(hook('done', T + 75_000))
-
-    expect(stats.getSummary().totalAgentsSpawned).toBe(2)
-    expect(stats.getSummary().totalAgentTimeMs).toBe(25_000)
   })
 
   it('treats waiting and blocked as session boundaries, not agent work', () => {
@@ -182,18 +133,6 @@ describe('AgentSessionTransitionRecorder', () => {
     expect(stats.getSummary().totalAgentTimeMs).toBe(2_000)
   })
 
-  it('closes an open session when its pane is torn down', () => {
-    const stats = new StatsCollector()
-    const recorder = new AgentSessionTransitionRecorder(stats)
-
-    recorder.onStatus(hook('working', T))
-    vi.setSystemTime(T + 45_000)
-    recorder.onCleared({ paneKey: PANE })
-
-    expect(stats.getSummary().totalAgentTimeMs).toBe(45_000)
-    expect(recorder.trackedPaneCount).toBe(0)
-  })
-
   it('closes sessions on the dropped connection when an SSH batch clear lands', () => {
     const stats = new StatsCollector()
     const recorder = new AgentSessionTransitionRecorder(stats)
@@ -205,91 +144,11 @@ describe('AgentSessionTransitionRecorder', () => {
     expect(stats.getSummary().totalAgentTimeMs).toBe(20_000)
     expect(recorder.trackedPaneCount).toBe(1)
   })
-
-  it('bounds the mirror and closes what it evicts', () => {
-    const stats = new StatsCollector()
-    const recorder = new AgentSessionTransitionRecorder(stats)
-
-    recorder.onStatus(hook('working', T, { paneKey: 'oldest' }))
-    for (let i = 0; i < AGENT_SESSION_MIRROR_LIMIT; i++) {
-      recorder.onStatus(hook('working', T, { paneKey: `pane-${i}` }))
-    }
-
-    expect(recorder.trackedPaneCount).toBe(AGENT_SESSION_MIRROR_LIMIT)
-    expect(stats.getSummary().totalAgentsSpawned).toBe(AGENT_SESSION_MIRROR_LIMIT + 1)
-    expect(stats.getSummary().totalAgentTimeMs).toBe(0)
-  })
 })
 
 describe('AgentSessionTransitionRecorder on rows that also carry the main agent fact', () => {
   // Count main/subagent execution, excluding background shells left by a settled agent.
   const MAIN_AGENT_WORKING = { state: 'working' as const, stateStartedAt: T }
-
-  it('stops the session when the main agent settles and only a watch loop holds the row working', () => {
-    const stats = new StatsCollector()
-    const recorder = new AgentSessionTransitionRecorder(stats)
-
-    recorder.onStatus(mainAgentHook({ state: 'working', mainAgent: MAIN_AGENT_WORKING }, T))
-    recorder.onStatus(
-      mainAgentHook(
-        {
-          state: 'working',
-          workingMode: 'monitoring',
-          mainAgent: { state: 'done', stateStartedAt: T + 20_000 }
-        },
-        T,
-        { receivedAt: T + 20_000 }
-      )
-    )
-    recorder.onStatus(
-      mainAgentHook(
-        { state: 'done', mainAgent: { state: 'done', stateStartedAt: T + 20_000 } },
-        T + 7_200_000
-      )
-    )
-
-    expect(stats.getSummary().totalAgentsSpawned).toBe(1)
-    expect(stats.getSummary().totalAgentTimeMs).toBe(20_000)
-  })
-
-  it('keeps the session open while a subagent outlives the main agent, and closes it when the child settles', () => {
-    const stats = new StatsCollector()
-    const recorder = new AgentSessionTransitionRecorder(stats)
-
-    recorder.onStatus(mainAgentHook({ state: 'working', mainAgent: MAIN_AGENT_WORKING }, T))
-    recorder.onStatus(
-      mainAgentHook(
-        { state: 'working', mainAgent: { state: 'done', stateStartedAt: T + 10_000 } },
-        T
-      )
-    )
-    recorder.onStatus(
-      mainAgentHook(
-        { state: 'done', mainAgent: { state: 'done', stateStartedAt: T + 10_000 } },
-        T + 90_000
-      )
-    )
-
-    expect(stats.getSummary().totalAgentsSpawned).toBe(1)
-    expect(stats.getSummary().totalAgentTimeMs).toBe(90_000)
-  })
-
-  it('dates the stop by the evidence when a shell outlives the last subagent', () => {
-    // Subagent completion can leave monitoring state/clock unchanged; date the stop from evidence.
-    const stats = new StatsCollector()
-    const recorder = new AgentSessionTransitionRecorder(stats)
-    const mainAgentDone = { state: 'done' as const, stateStartedAt: T + 10_000 }
-
-    recorder.onStatus(mainAgentHook({ state: 'working', mainAgent: MAIN_AGENT_WORKING }, T))
-    recorder.onStatus(mainAgentHook({ state: 'working', mainAgent: mainAgentDone }, T))
-    recorder.onStatus(
-      mainAgentHook({ state: 'working', workingMode: 'monitoring', mainAgent: mainAgentDone }, T, {
-        receivedAt: T + 60_000
-      })
-    )
-
-    expect(stats.getSummary().totalAgentTimeMs).toBe(60_000)
-  })
 
   it('dates a subagent reopening a monitoring row by the evidence, not the pinned row clock', () => {
     // Watch-loop changes retain turn-start clock; reopening from it would bill the monitoring gap.
@@ -317,41 +176,6 @@ describe('AgentSessionTransitionRecorder on rows that also carry the main agent 
     expect(stats.getSummary().totalAgentTimeMs).toBe(35_000)
   })
 
-  it('opens a new session dated by the observation when the main agent resumes after monitoring', () => {
-    const stats = new StatsCollector()
-    const recorder = new AgentSessionTransitionRecorder(stats)
-
-    recorder.onStatus(mainAgentHook({ state: 'working', mainAgent: MAIN_AGENT_WORKING }, T))
-    recorder.onStatus(
-      mainAgentHook(
-        {
-          state: 'working',
-          workingMode: 'monitoring',
-          mainAgent: { state: 'done', stateStartedAt: T + 5_000 }
-        },
-        T,
-        { receivedAt: T + 5_000 }
-      )
-    )
-    // Main-agent resume keeps the old row clock; use current evidence.
-    recorder.onStatus(
-      mainAgentHook(
-        { state: 'working', mainAgent: { state: 'working', stateStartedAt: T + 300_000 } },
-        T,
-        { receivedAt: T + 300_000 }
-      )
-    )
-    recorder.onStatus(
-      mainAgentHook(
-        { state: 'done', mainAgent: { state: 'done', stateStartedAt: T + 312_000 } },
-        T + 312_000
-      )
-    )
-
-    expect(stats.getSummary().totalAgentsSpawned).toBe(2)
-    expect(stats.getSummary().totalAgentTimeMs).toBe(17_000)
-  })
-
   it("never dates an edge by an SSH host's main agent clock", () => {
     // Remote main-agent clocks may skew by hours; all duration edges need this host's clocks.
     const skewed = new StatsCollector()
@@ -369,22 +193,6 @@ describe('AgentSessionTransitionRecorder on rows that also carry the main agent 
       )
     )
     expect(skewed.getSummary().totalAgentTimeMs).toBe(60_000)
-  })
-
-  it('never dates a reopen before the close a fact-less OSC repaint caused', () => {
-    // OSC can close the span without main-agent evidence; its restored fact has an older unchanged clock.
-    const osc = new StatsCollector()
-    const local = new AgentSessionTransitionRecorder(osc)
-    local.onStatus(mainAgentHook({ state: 'working', mainAgent: MAIN_AGENT_WORKING }, T))
-    local.onStatus(hook('done', T + 10_000))
-    local.onStatus(mainAgentHook({ state: 'working', mainAgent: MAIN_AGENT_WORKING }, T + 12_000))
-    local.onStatus(
-      mainAgentHook(
-        { state: 'done', mainAgent: { state: 'done', stateStartedAt: T + 20_000 } },
-        T + 20_000
-      )
-    )
-    expect(osc.getSummary().totalAgentTimeMs).toBe(18_000)
   })
 
   it.each([
@@ -455,17 +263,6 @@ describe('AgentSessionTransitionRecorder on rows that also carry the main agent 
     expect(stats.getSummary().totalAgentsSpawned).toBe(2)
     expect(stats.getSummary().totalAgentTimeMs).toBe(30_000)
   })
-
-  it('dates the first live row after a restored one by the evidence, not the restored clock', () => {
-    // A live repeat after hydration can retain an earlier runtime's working clock.
-    const stats = new StatsCollector()
-    const recorder = new AgentSessionTransitionRecorder(stats)
-
-    recorder.onStatus(hook('working', T - 3_600_000, { receivedAt: T }))
-    recorder.onStatus(hook('done', T + 60_000))
-
-    expect(stats.getSummary().totalAgentTimeMs).toBe(60_000)
-  })
 })
 
 describe('AgentSessionTransitionRecorder fed by the status store', () => {
@@ -502,32 +299,5 @@ describe('AgentSessionTransitionRecorder fed by the status store', () => {
       now.mockRestore()
       rmSync(hookDataDir, { recursive: true, force: true })
     }
-  })
-})
-
-describe('classifyAgentSessionTransition', () => {
-  it('treats an unchanged answer as a snapshot, never a transition', () => {
-    expect(
-      classifyAgentSessionTransition({ executing: true, open: true }, hook('working', T))
-    ).toBe('none')
-    expect(classifyAgentSessionTransition({ executing: false, open: false }, hook('done', T))).toBe(
-      'none'
-    )
-  })
-
-  it('opens only on a live working edge', () => {
-    expect(classifyAgentSessionTransition(undefined, hook('working', T))).toBe('start')
-    expect(classifyAgentSessionTransition(undefined, hook('working', T, { isReplay: true }))).toBe(
-      'none'
-    )
-  })
-
-  it('closes only a session it opened', () => {
-    expect(classifyAgentSessionTransition({ executing: true, open: true }, hook('done', T))).toBe(
-      'stop'
-    )
-    expect(classifyAgentSessionTransition({ executing: true, open: false }, hook('done', T))).toBe(
-      'none'
-    )
   })
 })

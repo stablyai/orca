@@ -36,6 +36,16 @@ export async function getAuthenticatedViewer(): Promise<GitLabViewer | null> {
   }
 }
 
+// Uncached: a cached viewer goes stale when glab switches accounts on this host, a WSL distro or a paired server.
+export async function readGlabViewer(
+  hostArgs: string[],
+  options: Parameters<typeof glabExecFileAsync>[1]
+): Promise<Record<string, unknown>> {
+  const { stdout } = await glabExecFileAsync(['api', ...hostArgs, 'user'], options)
+  const viewer: unknown = JSON.parse(stdout)
+  return viewer !== null && typeof viewer === 'object' ? { ...viewer } : {}
+}
+
 export async function diagnoseAuth(): Promise<GitLabAuthDiagnostic> {
   const envTokenInProcess = process.env.GITLAB_TOKEN
     ? 'GITLAB_TOKEN'

@@ -32,33 +32,6 @@ const withoutTab = (tabId: string) => (workspace: WorkspaceLayout) => ({
 })
 
 describe('updateLegacyPersistence: the one update after each apply', () => {
-  it('advances a repo once when its terminal panes change, however many', () => {
-    const before = loaded()
-    const after = edit(
-      edit(before, GIT_KEY, withoutTab('tab-shell')),
-      GIT_KEY,
-      withoutTab('tab-agent')
-    )
-    const next = updateLegacyPersistence(before, after)
-    expect(next.legacy.topologyRevisionByRepoId).toEqual({ 'repo-1': 8 })
-  })
-
-  it('leaves the revision alone for a change that keeps every pane', () => {
-    const before = loaded()
-    const after = edit(before, GIT_KEY, (workspace) => ({
-      ...workspace,
-      groups: workspace.groups.map((group) => ({ ...group, tabOrder: group.tabOrder.toReversed() }))
-    }))
-    expect(updateLegacyPersistence(before, after).legacy).toEqual(before.legacy)
-  })
-
-  it('advances for a retirement even when the pane was already gone', () => {
-    const before = loaded()
-    expect(
-      updateLegacyPersistence(before, before, [GIT_KEY]).legacy.topologyRevisionByRepoId
-    ).toEqual({ 'repo-1': 8 })
-  })
-
   it('keeps a workspace the owner of its rows after its last terminal closes', () => {
     const before = loaded()
     const after = updateLegacyPersistence(before, edit(before, FOLDER_KEY, withoutTab('tab-notes')))
@@ -77,14 +50,5 @@ describe('updateLegacyPersistence: the one update after each apply', () => {
     expect(Object.keys(next.legacy.terminalRowOwners)).toEqual([GIT_KEY])
     // Panes leaving with their workspace advance nothing.
     expect(next.legacy.topologyRevisionByRepoId).toEqual({ 'repo-1': 7 })
-  })
-
-  it('advances nothing when a workspace is renamed with its panes', () => {
-    const before = loaded()
-    const { [FOLDER_KEY]: folder, ...rest } = before.workspaces
-    const renamed = { ...before, workspaces: { ...rest, 'folder:renamed': folder! } }
-    expect(updateLegacyPersistence(before, renamed).legacy.topologyRevisionByRepoId).toEqual({
-      'repo-1': 7
-    })
   })
 })

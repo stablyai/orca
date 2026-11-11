@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { buildCrewSnapshot } from './crew-read-model'
+import { buildCrewSnapshot } from './crew-party-snapshot'
 import { fixture } from './crew-read-model.test-fixture'
 import { isEquivalentPaneKey } from '../db/pane-key-match'
 

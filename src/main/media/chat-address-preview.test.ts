@@ -14,9 +14,9 @@ import {
   releaseOwnedChatPreview
 } from './chat-address-preview-grants'
 import { CHAT_PREVIEW_MAX_TEXT_BYTES } from './chat-address-preview-content'
-import type { ChatAddressPreviewResult } from '../../shared/chat-address-preview'
+import type { ChatAddressPreviewResult } from '../../shared/file-preview/chat-address-preview'
 import type { Store } from '../persistence/loading-store/store'
-import { setTrustedBrowserRendererWebContentsId } from '../ipc/browser-renderer-trust'
+import { setTrustedBrowserRendererWebContentsId } from '../ipc/browser/browser-renderer-trust'
 
 const { authorize, ipcHandle } = vi.hoisted(() => ({
   authorize: vi.fn(async (path: string) => path),
@@ -27,7 +27,9 @@ vi.mock('electron', () => ({
   protocol: { handle: vi.fn() },
   session: { defaultSession: { resolveProxy: async () => 'DIRECT' } }
 }))
-vi.mock('../ipc/local-file-access-resolution', () => ({ resolveLocalFileRequestPath: authorize }))
+vi.mock('../ipc/filesystem/access/local-file-access-resolution', () => ({
+  resolveLocalFileRequestPath: authorize
+}))
 
 function owner(id: number) {
   const events = new EventEmitter()

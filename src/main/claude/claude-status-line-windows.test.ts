@@ -19,7 +19,7 @@ vi.mock('os', async (importOriginal) => {
   return { ...actual, homedir: homedirMock.mockImplementation(actual.homedir) }
 })
 
-import { findGitBash } from '../agent-hooks/windows-git-bash-path.test-fixture'
+import { findGitBash } from '../agent-hooks/installation/commands/testing/windows-git-bash-path.test-fixture'
 import { ClaudeHookService } from './hook-service'
 import { getManagedCommand } from './hook-settings'
 

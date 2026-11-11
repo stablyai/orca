@@ -1,4 +1,3 @@
-import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { loadWindowsSecurity } from '../../shared/windows-security-addon'
 import {
@@ -8,6 +7,7 @@ import {
 } from './native-windows-token-decode'
 import {
   createAntigravityFileCredentialBackend,
+  isAntigravityContainerOrWslHost,
   isAntigravityFileStorageHost
 } from './native-file-credentials'
 import type { AntigravityCredentialBackend } from './native-account-service'
@@ -105,20 +105,7 @@ export function isAntigravityWindowsFileHost(env: NodeJS.ProcessEnv): boolean {
   const folded = Object.fromEntries(
     Object.entries(env).map(([key, value]) => [key.toUpperCase(), value])
   )
-  if (isAntigravityFileStorageHost(folded) || existsSync('/.dockerenv')) {
-    return true
-  }
-  for (const [path, pattern] of [
-    ['/proc/1/cgroup', /docker|containerd|kubepods/],
-    ['/proc/sys/kernel/osrelease', /microsoft|wsl/i]
-  ] as const) {
-    try {
-      if (pattern.test(readFileSync(path, 'utf8'))) {
-        return true
-      }
-    } catch {}
-  }
-  return false
+  return isAntigravityFileStorageHost(folded) || isAntigravityContainerOrWslHost()
 }
 
 export function createAntigravityWindowsCredentialBackend(

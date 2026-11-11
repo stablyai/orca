@@ -1,4 +1,4 @@
-import { WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import { WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY } from '../../../shared/worktree-runtime-capabilities'
 import type { RpcContext } from './core'
 
 export function supportsWorktreeVisibilitySourceDefaults(

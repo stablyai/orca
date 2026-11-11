@@ -1,11 +1,11 @@
 import { AGENT_SESSION_ATTACHMENT_MAX_BYTES } from '../../shared/agent-session/agent-session-attachments'
 import { basename } from 'node:path'
 import type { AgentSessionAttachmentStore } from '../native-chat/agent-session-attachments/agent-session-attachment-store'
-import type { NativeFileDropCopyFailureReason } from '../../shared/native-file-drop'
+import type { NativeFileDropCopyFailureReason } from '../../shared/file-import/native-file-drop'
 import type {
   PrepareDroppedPathsRequest,
   PreparedDroppedPaths
-} from '../../shared/native-file-drop-preparation'
+} from '../../shared/file-import/native-file-drop-preparation'
 import {
   DragTempCopyBatch,
   closeDragTempSource,

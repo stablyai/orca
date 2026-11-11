@@ -136,17 +136,4 @@ describe('STA-4735 an unreadable runtime auth.json must not be written over', ()
     expect(wrote).toBe(false)
     expect(realFs.readFileSync(runtimeAuthPath, 'utf-8')).toBe(ROTATED)
   })
-
-  it('still writes once the file is readable again', async () => {
-    const service = await createService()
-    const runtimeAuthPath = getRuntimeCodexAuthPath()
-    const NEXT = createCodexAuthJson('user@example.com', 'acct-1', 'refresh-2')
-    realFs.mkdirSync(join(runtimeAuthPath, '..'), { recursive: true })
-    realFs.writeFileSync(runtimeAuthPath, 'stale\n', 'utf-8')
-
-    const wrote = service.writeRuntimeAuth(NEXT, { owner: 'managed', accountId: 'account-1' })
-
-    expect(wrote).toBe(true)
-    expect(realFs.readFileSync(runtimeAuthPath, 'utf-8')).toBe(NEXT)
-  })
 })

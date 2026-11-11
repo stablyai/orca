@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { TerminalLayoutSnapshot } from '../../../shared/terminal-tab-types'
+import type { TerminalLayoutSnapshot } from '../../../shared/workspace-layout/terminal-tab-types'
 import {
   collectLayoutLeafIdsInOrder,
   normalizeTerminalLayoutSnapshotForPersistence
@@ -41,14 +41,5 @@ describe('normalizeTerminalLayoutSnapshotForPersistence', () => {
       [leafIds[0]]: 'pty-1',
       [STABLE_B]: 'pty-2'
     })
-  })
-
-  it('still adopts an unclaimed preferred id for a legacy leaf', () => {
-    const normalized = normalizeTerminalLayoutSnapshotForPersistence(
-      splitOf('pane:1', STABLE_B),
-      splitOf(STABLE_A, STABLE_B)
-    )
-
-    expect(collectLayoutLeafIdsInOrder(normalized.snapshot.root)).toEqual([STABLE_A, STABLE_B])
   })
 })

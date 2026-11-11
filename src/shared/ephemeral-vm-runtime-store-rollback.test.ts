@@ -1,24 +1,16 @@
-import {
-  existsSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  statSync,
-  truncateSync,
-  utimesSync,
-  writeFileSync
-} from 'node:fs'
+import { mkdtempSync, readFileSync, truncateSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { removeTempDirs } from './testing/remove-temp-dirs.test-support'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   getEphemeralVmRuntimeFeatureStorePath,
-  restoreRuntimeFeatureList,
   MAX_EPHEMERAL_VM_RUNTIME_FEATURE_STORE_FILE_BYTES
 } from './ephemeral-vm-runtime-feature-store'
 import {
   EphemeralVmRuntimeStoreError,
   getEphemeralVmRuntimeStorePath,
+  getEphemeralVmWriteAheadRuntimeStorePath,
   listEphemeralVmRuntimes,
   updateEphemeralVmRuntimeStatus,
   upsertEphemeralVmRuntime
@@ -28,6 +20,7 @@ import {
   RollbackEphemeralVmRuntimeStoreSchema,
   type EphemeralVmRuntimeRecord
 } from './ephemeral-vm-runtimes'
+import { findWorkspaceEphemeralVmRuntime } from './ephemeral-vm-workspace-runtime'
 
 function runtimeRecord(
   overrides: Partial<EphemeralVmRuntimeRecord> = {}
@@ -97,10 +90,8 @@ function provisionedRootRecord(): EphemeralVmRuntimeRecord {
 describe('ephemeral VM runtime store rollback projection', () => {
   const tempDirs: string[] = []
 
-  afterEach(() => {
-    for (const dir of tempDirs.splice(0)) {
-      rmSync(dir, { recursive: true, force: true })
-    }
+  afterEach(async () => {
+    await removeTempDirs(tempDirs.splice(0))
   })
 
   function makeUserDataPath(): string {
@@ -121,58 +112,97 @@ describe('ephemeral VM runtime store rollback projection', () => {
     expect(listEphemeralVmRuntimes(userDataPath)).toEqual([provisioned, ordinary])
   })
 
-  it('keeps ordinary v1 bytes and sidecar behavior unchanged', () => {
+  it('keeps result-less write-ahead records out of the file older builds read', () => {
     const userDataPath = makeUserDataPath()
-    const runtime = runtimeRecord()
-    const expected = JSON.stringify(
-      EphemeralVmRuntimeStoreSchema.parse({ version: 1, runtimes: [runtime] })
-    )
-
-    upsertEphemeralVmRuntime(userDataPath, runtime)
-
-    expect(readFileSync(getEphemeralVmRuntimeStorePath(userDataPath), 'utf8')).toBe(expected)
-    expect(existsSync(getEphemeralVmRuntimeFeatureStorePath(userDataPath))).toBe(false)
-  })
-
-  it('projects an explicit ordinary checkout mode without changing its current meaning', () => {
-    const userDataPath = makeUserDataPath()
-    const runtime = runtimeRecord({
-      recipe: { ...runtimeRecord().recipe!, checkoutMode: 'orca-worktree' }
+    const ordinary = upsertEphemeralVmRuntime(userDataPath, runtimeRecord())
+    const { recipeResult: _recipeResult, ...writeAheadFields } = provisionedRootRecord()
+    const writeAhead = upsertEphemeralVmRuntime(userDataPath, {
+      ...writeAheadFields,
+      status: 'provisioning'
     })
 
-    upsertEphemeralVmRuntime(userDataPath, runtime)
-
     const persisted = JSON.parse(readFileSync(getEphemeralVmRuntimeStorePath(userDataPath), 'utf8'))
-    expect(RollbackEphemeralVmRuntimeStoreSchema.safeParse(persisted).success).toBe(true)
-    expect(listEphemeralVmRuntimes(userDataPath)).toEqual([runtime])
+    expect(RollbackEphemeralVmRuntimeStoreSchema.parse(persisted).runtimes).toEqual([
+      expect.objectContaining({ id: 'ordinary-runtime' })
+    ])
+    expect(
+      JSON.parse(readFileSync(getEphemeralVmWriteAheadRuntimeStorePath(userDataPath), 'utf8'))
+        .runtimes
+    ).toEqual([expect.objectContaining({ id: 'provisioned-runtime', status: 'provisioning' })])
+    expect(listEphemeralVmRuntimes(userDataPath)).toEqual([writeAhead, ordinary])
+
+    const running = updateEphemeralVmRuntimeStatus(userDataPath, 'provisioned-runtime', {
+      status: 'running',
+      recipeResult: provisionedRootRecord().recipeResult,
+      updatedAt: 2_000
+    })
+
+    const promoted = JSON.parse(readFileSync(getEphemeralVmRuntimeStorePath(userDataPath), 'utf8'))
+    expect(RollbackEphemeralVmRuntimeStoreSchema.parse(promoted).runtimes).toEqual([
+      expect.objectContaining({
+        id: 'provisioned-runtime',
+        recipe: expect.not.objectContaining({ checkoutMode: expect.anything() }),
+        recipeResult: expect.objectContaining({ schemaVersion: 1 })
+      }),
+      expect.objectContaining({ id: 'ordinary-runtime' })
+    ])
+    expect(
+      JSON.parse(readFileSync(getEphemeralVmWriteAheadRuntimeStorePath(userDataPath), 'utf8'))
+        .runtimes
+    ).toEqual([])
+    expect(listEphemeralVmRuntimes(userDataPath)).toEqual([running, ordinary])
+    expect(running).toEqual(provisionedRootRecord())
   })
 
-  it('does not rewrite unchanged features when runtime order differs from feature order', () => {
+  it('prefers the main record when a crash leaves a stale write-ahead copy', () => {
     const userDataPath = makeUserDataPath()
-    const older = {
-      ...provisionedRootRecord(),
-      id: 'a-runtime',
-      recipeId: 'a-recipe',
-      createdAt: 1_000
-    }
-    const newer = {
-      ...provisionedRootRecord(),
-      id: 'z-runtime',
-      recipeId: 'z-recipe',
-      createdAt: 2_000
-    }
-    upsertEphemeralVmRuntime(userDataPath, older)
-    upsertEphemeralVmRuntime(userDataPath, newer)
-    const featurePath = getEphemeralVmRuntimeFeatureStorePath(userDataPath)
-    const oldTimestamp = new Date('2020-01-01T00:00:00.000Z')
-    utimesSync(featurePath, oldTimestamp, oldTimestamp)
-    const beforeBytes = readFileSync(featurePath, 'utf8')
-    const beforeMtime = statSync(featurePath).mtimeMs
+    const running = upsertEphemeralVmRuntime(userDataPath, runtimeRecord())
+    const { recipeResult: _recipeResult, ...stale } = running
+    writeFileSync(
+      getEphemeralVmWriteAheadRuntimeStorePath(userDataPath),
+      JSON.stringify({ version: 1, runtimes: [{ ...stale, status: 'provisioning' }] })
+    )
 
-    updateEphemeralVmRuntimeStatus(userDataPath, newer.id, { status: 'suspended' })
+    expect(listEphemeralVmRuntimes(userDataPath)).toEqual([running])
+  })
 
-    expect(readFileSync(featurePath, 'utf8')).toBe(beforeBytes)
-    expect(statSync(featurePath).mtimeMs).toBe(beforeMtime)
+  it('never overwrites a write-ahead file it cannot read', () => {
+    const userDataPath = makeUserDataPath()
+    upsertEphemeralVmRuntime(userDataPath, runtimeRecord())
+    const sidecarPath = getEphemeralVmWriteAheadRuntimeStorePath(userDataPath)
+    const unreadable = '{"version":2,"runtimes":[{"id":"from-a-newer-build"}]}'
+    writeFileSync(sidecarPath, unreadable)
+
+    // Tracked VMs keep working, and the unreadable records survive the write.
+    updateEphemeralVmRuntimeStatus(userDataPath, 'ordinary-runtime', { status: 'suspended' })
+    expect(readFileSync(sidecarPath, 'utf8')).toBe(unreadable)
+
+    // A new record that could not be kept is refused before its create starts.
+    const { recipeResult: _recipeResult, ...writeAhead } = runtimeRecord({ id: 'new-runtime' })
+    expect(() =>
+      upsertEphemeralVmRuntime(userDataPath, { ...writeAhead, status: 'provisioning' })
+    ).toThrow()
+    expect(readFileSync(sidecarPath, 'utf8')).toBe(unreadable)
+  })
+
+  it('never offers a result-less write-ahead record to workspace suspend or resume', () => {
+    const userDataPath = makeUserDataPath()
+    const { recipeResult: _recipeResult, ...writeAhead } = runtimeRecord({
+      repoId: 'repo-1',
+      workspaceId: 'workspace-1'
+    })
+    upsertEphemeralVmRuntime(userDataPath, { ...writeAhead, status: 'provisioning' })
+
+    expect(findWorkspaceEphemeralVmRuntime(userDataPath, 'workspace-1')).toBeUndefined()
+
+    updateEphemeralVmRuntimeStatus(userDataPath, 'ordinary-runtime', {
+      status: 'running',
+      recipeResult: runtimeRecord().recipeResult
+    })
+    expect(findWorkspaceEphemeralVmRuntime(userDataPath, 'workspace-1')).toMatchObject({
+      id: 'ordinary-runtime',
+      repoId: 'repo-1'
+    })
   })
 
   it('migrates current-main poisoned bytes when they are first read', () => {
@@ -285,32 +315,5 @@ describe('ephemeral VM runtime store rollback projection', () => {
       'provisioned-runtime',
       'ordinary-runtime'
     ])
-  })
-})
-
-describe('runtime feature restoration scaling', () => {
-  it('indexes feature identities once and preserves unmatched runtime references', () => {
-    let reads = 0
-    const runtimes = Array.from({ length: 1000 }, (_, i) => runtimeRecord({ id: `runtime-${i}` }))
-    const features = runtimes.map((runtime) => ({
-      get id() {
-        reads++
-        return runtime.id
-      },
-      recipeId: runtime.recipeId,
-      createdAt: runtime.createdAt,
-      recipeCheckoutMode: 'provisioned-root' as const
-    }))
-    const restored = restoreRuntimeFeatureList(runtimes, features)
-    expect(reads).toBe(1000)
-    expect(restored.map((runtime) => runtime.id)).toEqual(runtimes.map((runtime) => runtime.id))
-    expect(restored.every((runtime) => runtime.recipe?.checkoutMode === 'provisioned-root')).toBe(
-      true
-    )
-    expect(restoreRuntimeFeatureList([runtimes[0]], [])[0]).toBe(runtimes[0])
-    const first = { ...features[0], recipeCheckoutMode: 'orca-worktree' as const }
-    expect(
-      restoreRuntimeFeatureList([runtimes[0]], [first, features[0]])[0].recipe?.checkoutMode
-    ).toBe('orca-worktree')
   })
 })

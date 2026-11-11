@@ -9,9 +9,9 @@ import type { WslMoveCutover, WslMoveCutoverPhase } from '../../../shared/wsl-mo
 import {
   transferOrcadMigrationBlobs,
   type OrcadMigrationBlobSource
-} from '../../ssh/orcad-migration-blob-coordinator'
-import { resolveDurableOrcadCatalogMutation } from '../../ssh/orcad-catalog-durable-mutation'
-import { transferOrcadMigrationSnapshots } from '../../ssh/orcad-migration-snapshot-coordinator'
+} from '../../managed-server/migration/transfers/orcad-migration-blob-coordinator'
+import { resolveDurableOrcadCatalogMutation } from '../../managed-server/migration/cutover/orcad-catalog-durable-mutation'
+import { transferOrcadMigrationSnapshots } from '../../managed-server/migration/transfers/orcad-migration-snapshot-coordinator'
 import { writeWslMoveCutover } from './wsl-move-cutover-journal'
 import type { WslMoveDriverDeps, WslMoveHost, WslMoveManifestExport } from './wsl-move-driver-ports'
 import { assertWslMoveCommitRequestAllowed } from './wsl-move-reset'

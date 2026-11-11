@@ -1,5 +1,5 @@
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
-import { markdownFileIdCandidates } from '../../orca-profiles/profile-session-markdown-transfer'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
+import { markdownFileIdCandidates } from '../../orca-profiles/project-transfer/profile-session-markdown-transfer'
 import { removeWorkspaceSessionOwners } from '../restoring-sessions/session-owner-removal'
 import {
   createOrcadMigrationSourceScope,

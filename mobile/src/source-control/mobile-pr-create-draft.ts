@@ -1,13 +1,13 @@
 import { translate } from '../i18n/mobile-i18n'
-import { refusedRpcMessageOrFallback } from '../transport/rpc-refusal-message'
-import type { RpcOperationSender } from '../transport/rpc-operation-sender'
-import { resolveCreateReviewSeedFromCommits } from '../../../src/shared/hosted-review-create-seed'
+import { refusedRpcMessageOrFallback } from '../transport/rpc/rpc-refusal-message'
+import type { UnvalidatedRpcRequestPort } from '../transport/rpc/unvalidated-rpc-request-port'
+import { resolveCreateReviewSeedFromCommits } from '../../../src/shared/source-control/hosted-review/hosted-review-create-seed'
 import {
   normalizeCreateReviewBaseSearchResults,
   normalizeHostedReviewBaseRef
-} from '../../../src/shared/hosted-review-refs'
+} from '../../../src/shared/source-control/hosted-review/hosted-review-refs'
 import { TEXT_GENERATION_CLIENT_TIMEOUT_MS } from '../../../src/shared/text-generation-client-timeout'
-import type { HostedReviewProvider } from '../../../src/shared/hosted-review'
+import type { HostedReviewProvider } from '../../../src/shared/source-control/hosted-review/hosted-review-contracts'
 import type { MobileGitStatusResult } from './mobile-git-status'
 import { fetchMobileGitHistory } from './mobile-git-history'
 import type { MobileGitHistoryItem, MobileGitHistoryResult } from './git-history-reply-schema'
@@ -41,7 +41,7 @@ const HOSTED_PROVIDERS: readonly HostedReviewProvider[] = [
 
 // The host's prefill decides provider, base and blockers; the branch's commits seed the text.
 export async function loadMobilePrCreateDraft(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   worktreeId: string,
   input: { branch: string; status: MobileGitStatusResult | null; commitsAhead?: number | null }
 ): Promise<MobilePrCreateDraft> {
@@ -84,7 +84,7 @@ function commitBody(message: string | undefined): string {
 }
 
 export async function generateMobilePrFields(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   worktreeId: string,
   input: { base: string; title: string; body: string; draft: boolean; provider: string }
 ): Promise<MobileGeneratePullRequestFieldsResult> {
@@ -116,7 +116,7 @@ export async function generateMobilePrFields(
 
 // The host runs one generation per lane, so an abandoned one would delay the next.
 export async function cancelMobilePrFields(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   worktreeId: string
 ): Promise<void> {
   const reply = await gitCancelGeneratePullRequestFieldsRun.request(client, {
@@ -126,7 +126,7 @@ export async function cancelMobilePrFields(
 }
 
 export async function searchMobilePrBaseRefs(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   worktreeId: string,
   query: string
 ): Promise<string[]> {

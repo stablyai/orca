@@ -1,13 +1,13 @@
-import i18next, { type TOptions } from 'i18next'
+import i18next, { type i18n, type TOptions } from 'i18next'
 import { resolvePluralFamilyKey } from '../../../src/shared/i18n-plural-family'
 import { pseudoLocalizeString } from '../../../src/shared/pseudo-localization'
 import { DEFAULT_UI_LOCALE, type SupportedUiLocale } from '../../../src/shared/ui-locale'
 import enRuntimeRequired from './en-runtime-required.json'
-import { importLocaleCatalog } from './locale-catalog-imports'
+import { importLocaleCatalog, onLocaleCatalogArrival } from './locale-catalog-imports'
 
 export type Translate = (key: string, fallback: string, options?: TOptions) => string
 
-export const mobileI18n = i18next.createInstance()
+export const mobileI18n: i18n = i18next.createInstance()
 
 void mobileI18n.init({
   lng: DEFAULT_UI_LOCALE,
@@ -83,10 +83,12 @@ export function subscribeMobileUiLanguage(listener: () => void): () => void {
 }
 
 let activationRequest = 0
+let requestedLocale: SupportedUiLocale = DEFAULT_UI_LOCALE
 
 // Latest request wins: an older catalog import that settles later must not replace a newer choice.
 export async function activateMobileUiLocale(locale: SupportedUiLocale): Promise<void> {
   const request = ++activationRequest
+  requestedLocale = locale
   try {
     if (locale !== 'en' && !mobileI18n.hasResourceBundle(locale, 'translation')) {
       const catalog = await importLocaleCatalog(locale)
@@ -114,6 +116,16 @@ export async function activateMobileUiLocale(locale: SupportedUiLocale): Promise
   }
   publish()
 }
+
+// Switch in place, without a reload: a newer copy replaces the shown one, a first copy replaces the English fallback.
+// Install it even when another language is up now, so switching back shows the newer copy.
+onLocaleCatalogArrival((locale, catalog) => {
+  mobileI18n.removeResourceBundle(locale, 'translation')
+  mobileI18n.addResourceBundle(locale, 'translation', catalog, false, true, { skipCopy: true })
+  if (locale === requestedLocale) {
+    void activateMobileUiLocale(locale)
+  }
+})
 
 // Development-only layout check: accents and pads every string so clipping shows on device.
 export function setMobilePseudoLocalization(enabled: boolean): void {

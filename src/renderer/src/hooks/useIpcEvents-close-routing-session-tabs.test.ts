@@ -15,12 +15,24 @@ vi.mock('@/components/terminal/terminal-tab-actions', () => ({
   closeTerminalTab: closeTerminalTabMock
 }))
 
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (original) =>
+  (
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await original())
+)
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (original) =>
+  (
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
+  ).runtimeLayoutClientWithTestFrames(await original())
+)
+
 describe('useIpcEvents browser tab close routing', () => {
   beforeEach(() => {
     vi.resetModules()
     vi.unstubAllGlobals()
     // Clear leaked partial mocks so floating browser source validation uses the real resolver.
-    vi.doUnmock('@/lib/floating-workspace-terminal-actions')
+    vi.doUnmock('@/components/floating-terminal/floating-workspace-terminal-actions')
+    vi.doUnmock('@/components/floating-terminal/floating-workspace-tab-creation')
     closeTerminalTabMock.mockReset()
   })
 
@@ -28,27 +40,31 @@ describe('useIpcEvents browser tab close routing', () => {
     const closeSessionTabListenerRef: { current: CloseSessionTabListener | null } = {
       current: null
     }
-    const closeFile = vi.fn()
-    const closeUnifiedTab = vi.fn()
+    const { createEditorTabsStore } =
+      await import('../store/slices/editor/editor-slice-test-harness')
+    const store = createEditorTabsStore()
 
     await useIpcEventsForCloseRouting({
       closeSessionTabListenerRef,
-      getState: () => ({
-        recordClientHostedBrowserCloseIntents: vi.fn(),
-        closeFile,
-        closeUnifiedTab,
-        browserTabsByWorktree: {},
-        unifiedTabsByWorktree: {
-          'wt-1': [{ id: 'host-tab-1', entityId: 'file-1', contentType: 'editor', isPinned: false }]
-        }
-      })
+      getState: store.getState
     })
 
-    closeSessionTabListenerRef.current?.({ tabId: 'host-tab-1', worktreeId: 'wt-1' })
+    const fileId = store.getState().openFile({
+      filePath: '/repo/file.ts',
+      relativePath: 'file.ts',
+      worktreeId: 'wt-1',
+      language: 'typescript',
+      mode: 'edit'
+    })
+    const tab = store.getState().unifiedTabsByWorktree['wt-1']?.find((t) => t.entityId === fileId)
+    expect(tab).toBeDefined()
 
-    // Editor close must remove openFiles via closeFile or host publication resurrects it.
-    expect(closeFile).toHaveBeenCalledWith('file-1')
-    expect(closeUnifiedTab).not.toHaveBeenCalled()
+    closeSessionTabListenerRef.current?.({ tabId: tab!.id, worktreeId: 'wt-1' })
+
+    await vi.waitFor(() => {
+      expect(store.getState().unifiedTabsByWorktree['wt-1']).toEqual([])
+      expect(store.getState().openFiles).toEqual([])
+    })
   })
 
   it('acknowledges whole-tab close only after the fresh session is durably persisted', async () => {

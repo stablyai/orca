@@ -5,15 +5,15 @@ import type { Store } from '../persistence/loading-store/store'
 import type {
   ChatAddressPreviewRequest,
   ChatAddressPreviewResult
-} from '../../shared/chat-address-preview'
-import { isTrustedBrowserRenderer } from '../ipc/browser-renderer-trust'
-import { resolveLocalFileRequestPath } from '../ipc/local-file-access-resolution'
+} from '../../shared/file-preview/chat-address-preview'
+import { isTrustedBrowserRenderer } from '../ipc/browser/browser-renderer-trust'
+import { resolveLocalFileRequestPath } from '../ipc/filesystem/access/local-file-access-resolution'
 import {
   openLocalRegularFile,
   readLocalFileBounded,
   readLocalFilePrefix
 } from '../ipc/filesystem/local-regular-file-read'
-import { assertRasterImagePreviewWithinLimits } from '../../shared/raster-image-preview-limits'
+import { assertRasterImagePreviewWithinLimits } from '../../shared/file-preview/raster-image-preview-limits'
 import {
   CHAT_PREVIEW_MAX_SOURCE_LENGTH,
   PrivatePreviewAddressError,

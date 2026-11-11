@@ -1,10 +1,10 @@
-import { dispatchWorkspaceTabCommand } from '@/lib/workspace-tab-commands'
-import { replayAppKeyDown } from '@/lib/app-keyboard-router'
-import { resolveFloatingWorkspaceBrowserWorkspaceId } from '@/lib/floating-workspace-terminal-actions'
+import { dispatchWorkspaceTabCommand } from '@/lib/workspace/tabs/workspace-tab-commands'
+import { replayAppKeyDown } from '@/lib/keyboard/app-keyboard-router'
+import { resolveFloatingWorkspaceBrowserWorkspaceId } from '@/components/floating-terminal/floating-workspace-terminal-actions'
 import {
   dispatchFloatingWorkspaceGuestClose,
   dispatchFloatingWorkspaceGuestSelectIndex
-} from '@/lib/floating-workspace-guest-bridge'
+} from '@/components/floating-terminal/floating-workspace-guest-bridge'
 
 import { useAppStore } from '../../store'
 

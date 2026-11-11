@@ -1,12 +1,12 @@
-import { resolveAgentChoiceLayers } from '../../agent-choice-layers'
-import { isTuiAgent } from '../../tui-agent-config'
-import type { AgentType } from '../../agent-status-types'
+import { resolveAgentChoiceLayers } from '../../agent-launch/choices/agent-choice-layers'
+import { isTuiAgent } from '../../agent-launch/catalog/tui-agent-config'
+import type { AgentType } from '../../agent-status/contracts/agent-status-types'
 import {
   AGENT_CHAT_PERMISSION_MODE_OPTION_ID,
   isAgentChatPermissionChoice,
   newChatPermissionModeForSettings,
   type NewChatPermissionSettings
-} from '../../agent-chat-permission-mode'
+} from '../../agent-launch/permissions/agent-chat-permission-mode'
 import type { GlobalSettings } from '../../global-settings-types'
 import {
   findCatalogModel,
@@ -57,6 +57,7 @@ export const STRUCTURED_LAUNCH_SEED_OPTION_IDS = [
 /** What a launch may hold and a create may seed; the permission mode never rewrites the selection. */
 export const STRUCTURED_LAUNCH_OPTION_IDS = [
   ...STRUCTURED_LAUNCH_SEED_OPTION_IDS,
+  'interactionMode',
   AGENT_CHAT_PERMISSION_MODE_OPTION_ID
 ] as const
 
@@ -228,6 +229,7 @@ export function structuredLaunchRequestedOptions(selection: {
     explicit[AGENT_CHAT_PERMISSION_MODE_OPTION_ID] ?? seed?.[AGENT_CHAT_PERMISSION_MODE_OPTION_ID]
   return {
     ...(permissionMode ? { [AGENT_CHAT_PERMISSION_MODE_OPTION_ID]: permissionMode } : {}),
+    ...(explicit.interactionMode ? { interactionMode: explicit.interactionMode } : {}),
     ...(changed ? {} : explicit),
     ...held
   }

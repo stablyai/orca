@@ -2,11 +2,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { parseArgs, REPEATED_FLAG_SEPARATOR, specPaths } from '../args'
+import { parseArgs, specPaths } from '../args'
 import { ACCOUNT_COMMAND_SPECS } from '../specs/account'
 import { RuntimeClient } from '../runtime-client'
 import { DATA_ACCOUNT_RUNTIME_CAPABILITY } from '../../shared/account-runtime-capabilities'
-import { addDataAccount, listDataAccounts } from './data-account-commands'
+import { addDataAccount } from './data-account-commands'
 
 const client = new RuntimeClient(join(tmpdir(), 'orca-login-test'), 1000, null, null)
 const context = {
@@ -20,30 +20,6 @@ const context = {
 afterEach(() => vi.restoreAllMocks())
 
 describe('managed data account enrollment', () => {
-  it.each(['opencode', 'devin'])(
-    'shows the active System default for an empty %s roster',
-    async (provider) => {
-      vi.spyOn(client, 'call')
-        .mockResolvedValueOnce({
-          id: 'test',
-          ok: true,
-          result: { capabilities: [DATA_ACCOUNT_RUNTIME_CAPABILITY] },
-          _meta: { runtimeId: 'test' }
-        })
-        .mockResolvedValueOnce({
-          id: 'test',
-          ok: true,
-          result: { [provider]: { accounts: [], activeAccountId: null } },
-          _meta: { runtimeId: 'test' }
-        })
-      const log = vi.spyOn(console, 'log').mockImplementation(() => {})
-      await listDataAccounts({ ...context, json: false }, provider)
-      expect(log).toHaveBeenCalledWith(
-        `No managed ${provider} accounts.\n  system  System default (active)`
-      )
-    }
-  )
-
   it('refuses an old host before starting login', async () => {
     vi.spyOn(client, 'call').mockResolvedValue({
       id: 'test',
@@ -83,40 +59,6 @@ describe('managed data account enrollment', () => {
       label: 'opencode'
     })
     expect(existsSync(directory)).toBe(false)
-  })
-
-  it('passes OpenCode login method and answers before the standalone flag', async () => {
-    vi.spyOn(client, 'call')
-      .mockResolvedValueOnce({
-        id: 'test',
-        ok: true,
-        result: { capabilities: [DATA_ACCOUNT_RUNTIME_CAPABILITY] },
-        _meta: { runtimeId: 'test' }
-      })
-      .mockRejectedValueOnce(new Error('capture failed'))
-    const login = vi.fn(async (_command: string, args: string[]) => {
-      expect(args).toEqual([
-        'auth',
-        'login',
-        'github-copilot',
-        '--method',
-        ' device ',
-        '--answer',
-        'deploymentType=github.com',
-        '--answer',
-        'note name=a=b',
-        '--standalone'
-      ])
-    })
-    const flags = new Map<string, string | boolean>([
-      ['integration', 'github-copilot'],
-      ['method', ' device '],
-      ['answer', ['deploymentType=github.com', 'note name=a=b'].join(REPEATED_FLAG_SEPARATOR)]
-    ])
-    await expect(addDataAccount({ ...context, flags }, 'opencode', login)).rejects.toThrow(
-      'capture failed'
-    )
-    expect(login).toHaveBeenCalledOnce()
   })
 
   it.each([

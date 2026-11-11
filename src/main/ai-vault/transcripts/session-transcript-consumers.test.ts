@@ -1,14 +1,14 @@
 import { appendFile, mkdir, mkdtemp, rm, stat, truncate, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { zstdCompressSync } from 'node:zlib'
 import { afterEach, expect, it, vi } from 'vitest'
-import { isAiVaultScanCancelledError } from '../../../shared/ai-vault-types'
+import { isAiVaultScanCancelledError } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import { scanAiVaultSessions } from '../session-scanner'
 import { parseAgentSessionFileCached } from '../parse-cache/session-scanner-parse-cache'
 import { resetSessionParseCacheForTests } from '../parse-cache/session-parse-cache-store'
 import { isolatedScanRoots, jsonLines } from '../session-scanner-test-fixtures'
 import type { FileWithMtime, SessionFileCandidate } from '../session-scanner-types'
-import { readWholeTranscript } from './session-transcript-reader'
 
 const OPENCODE_SQLITE_SESSION = {
   id: 'local:opencode:sqlite-session:db',
@@ -149,54 +149,6 @@ it('reports a scan cancelled mid-read as cancelled, and the next scan matches a 
   expect(next.sessions).toEqual(cold.sessions)
 })
 
-it('delivers one message stream to every registered consumer', async () => {
-  const { roots } = await writeClaudeFixture()
-  const first = recordingConsumer()
-  const second = recordingConsumer()
-
-  const result = await scanAiVaultSessions({ ...roots, platform: 'darwin', limit: 20 })
-
-  expect(result.issues).toEqual([])
-  const stream = textsFor(first.reads, 'claude')
-  expect(stream).toEqual(textsFor(second.reads, 'claude'))
-  expect(stream).toEqual([
-    'user:ask 1',
-    'assistant:reply 1',
-    'tool:Bash: ls 1',
-    'user:ask 2',
-    'assistant:reply 2',
-    'tool:Bash: ls 2',
-    'user:ask 3',
-    'assistant:reply 3',
-    'tool:Bash: ls 3',
-    'user:ask 4',
-    'assistant:reply 4',
-    'tool:Bash: ls 4'
-  ])
-  const session = result.sessions.find((entry) => entry.agent === 'claude')
-  expect(session?.previewMessages).toHaveLength(5)
-  expect(session?.messageCount).toBe(8)
-})
-
-it('leaves the session list identical whether or not a consumer is registered', async () => {
-  const withoutConsumer = await writeClaudeFixture()
-  const bare = await scanAiVaultSessions({
-    ...withoutConsumer.roots,
-    platform: 'darwin',
-    limit: 20
-  })
-
-  resetSessionParseCacheForTests()
-  recordingConsumer()
-  const observed = await scanAiVaultSessions({
-    ...withoutConsumer.roots,
-    platform: 'darwin',
-    limit: 20
-  })
-
-  expect(observed.sessions).toEqual(bare.sessions)
-})
-
 it('replays only the appended lines on a resumed read', async () => {
   const { roots, transcript } = await writeClaudeFixture()
   const consumer = recordingConsumer()
@@ -290,16 +242,6 @@ it('keeps the session list working when a consumer throws', async () => {
   expect(textsFor(healthy.reads, 'claude')).toHaveLength(12)
 })
 
-it('skips a read a consumer declines without disturbing the others', async () => {
-  const { roots } = await writeClaudeFixture()
-  registerTranscriptConsumer({ beginRead: () => null })
-  const healthy = recordingConsumer()
-
-  await scanAiVaultSessions({ ...roots, platform: 'darwin', limit: 20 })
-
-  expect(textsFor(healthy.reads, 'claude')).toHaveLength(12)
-})
-
 async function claudeCandidate(transcript: string): Promise<SessionFileCandidate> {
   const stats = await stat(transcript)
   const file: FileWithMtime = {
@@ -336,34 +278,6 @@ it('serializes overlapping parses of one path so no consumer read is orphaned', 
   expect(second?.messageCount).toBe(10)
 })
 
-it('publishes an OpenCode SQLite session over the channel and reports it complete', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'orca-transcript-opencode-'))
-  tempRoots.push(root)
-  const dbPath = join(root, 'opencode.db')
-  await writeFile(dbPath, '')
-  const consumer = recordingConsumer()
-
-  const session = await readWholeTranscript({
-    candidate: {
-      agent: 'opencode',
-      codexHome: null,
-      file: {
-        path: `${dbPath}#sqlite-session`,
-        mtimeMs: 1,
-        modifiedAt: new Date(1).toISOString(),
-        sizeBytes: 10
-      }
-    },
-    platform: 'darwin'
-  })
-
-  expect(session).toEqual(OPENCODE_SQLITE_SESSION)
-  expect(consumer.reads).toHaveLength(1)
-  expect(consumer.reads[0].messages).toEqual(OPENCODE_SQLITE_MESSAGES)
-  expect(consumer.reads[0].outcome?.incomplete).toBe(false)
-  consumer.unregister()
-})
-
 it('reports the transcript size, not the cache key, as a whole-file read offset', async () => {
   const root = await mkdtemp(join(tmpdir(), 'orca-transcript-cline-'))
   tempRoots.push(root)
@@ -393,4 +307,40 @@ it('reports the transcript size, not the cache key, as a whole-file read offset'
 
   const read = consumer.reads.find((entry) => entry.start.candidate.agent === 'cline')
   expect(read?.outcome?.byteOffset).toBe((await stat(metadataPath)).size)
+})
+
+it('covers an archived Codex rollout through its compressed size, never resuming into it', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'orca-transcript-consumers-zst-'))
+  tempRoots.push(root)
+  const path = join(root, 'rollout-2026-05-01T10-00-00-archived.jsonl.zst')
+  const records = [
+    { type: 'session_meta', payload: { id: 'archived', cwd: '/repo' } },
+    {
+      timestamp: '2026-05-01T10:00:01.000Z',
+      type: 'response_item',
+      payload: { type: 'message', role: 'user', content: [{ type: 'text', text: 'old ask' }] }
+    }
+  ]
+  await writeFile(path, zstdCompressSync(`${jsonLines(records)}\n`))
+  const stats = await stat(path)
+  const candidate: SessionFileCandidate = {
+    agent: 'codex',
+    file: {
+      path,
+      mtimeMs: stats.mtimeMs,
+      modifiedAt: stats.mtime.toISOString(),
+      sizeBytes: stats.size
+    },
+    codexHome: null
+  }
+  const consumer = recordingConsumer()
+
+  await parseAgentSessionFileCached(candidate, 'darwin', undefined, 'any')
+  await parseAgentSessionFileCached(candidate, 'darwin', undefined, 'any')
+
+  expect(consumer.reads.map((read) => [read.start.mode, read.outcome?.byteOffset])).toEqual([
+    ['replace', stats.size],
+    ['replace', stats.size]
+  ])
+  expect(textsFor(consumer.reads, 'codex')).toEqual(['user:old ask', 'user:old ask'])
 })

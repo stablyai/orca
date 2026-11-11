@@ -3,42 +3,43 @@ import {
   formatAssignmentInventorySnapshot,
   readAssignmentInventorySnapshot
 } from './assignment/assignment-inventory-snapshot.js'
-import { readRegionCorrectionOutcomes } from './region-correction-outcomes.js'
+import { readRegionCorrectionOutcomes } from './assignment/regional-rehome/region-correction-outcomes.js'
 import { RelayAssignmentStore } from './assignment/assignment-store.js'
 import { loadRelayConfig } from './config.js'
-import { startCellHeartbeat } from './cell-heartbeat-client.js'
+import { startCellHeartbeat } from './cell/cell-heartbeat-client.js'
 import {
   CELL_FLAG_DEFAULTS,
   CELL_FLAGS_APPLIED_EVENT,
   type CellFlags,
   cellFlagObjectName,
   cellFlagParser
-} from './cell-flags.js'
-import { startControlFlagChannel } from './relay-control-flag-channel.js'
-import { readCloudRunInstanceZone } from './cloud-run-instance-zone.js'
-import { readSandboxTcpCounters } from './sandbox-tcp-counters.js'
+} from './cell/control-flags/cell-flags.js'
+import { startControlFlagChannel } from './cell/control-flags/relay-control-flag-channel.js'
+import { startEdgeControl } from './edge-relay-control.js'
+import { readCloudRunInstanceZone } from './process-lifecycle/cloud-run-instance-zone.js'
+import { readSandboxTcpCounters } from './observability/sandbox-tcp-counters.js'
 import {
   reconcileCellAdmissionAtStartup,
   roleOwnsAssignmentMaintenance
-} from './cell-admission-startup.js'
-import { openRelayDatabaseAtBoot } from './boot-database-open.js'
+} from './cell/admission/cell-admission-startup.js'
+import { openRelayDatabaseAtBoot } from './database/boot-database-open.js'
 import {
   consumeRelayCellInventoryHold,
   consumeRelayDatabasePoolPressure,
   readRelayDatabasePoolPressure
-} from './database.js'
+} from './database/database.js'
 import { runAssignmentCleanup } from './assignment/assignment-cleanup-steps.js'
-import { runRelayBackgroundOperation } from './relay-background-operation.js'
-import { readPostgresLockWaitSample } from './postgres-lock-wait-sample.js'
-import { jitteredSweepIntervalMs } from './relay-sweep-schedule.js'
-import { observedRelayRequests } from './relay-observability.js'
-import { handleRelayUnhandledRejection } from './relay-database-rejection-fence.js'
-import { startRegionalRehomeWorker } from './regional-rehome-worker.js'
+import { runRelayBackgroundOperation } from './process-lifecycle/relay-background-operation.js'
+import { readPostgresLockWaitSample } from './database/postgres-lock-wait-sample.js'
+import { jitteredSweepIntervalMs } from './process-lifecycle/relay-sweep-schedule.js'
+import { observedRelayRequests } from './observability/relay-observability.js'
+import { handleRelayUnhandledRejection } from './database/relay-database-rejection-fence.js'
+import { startRegionalRehomeWorker } from './assignment/regional-rehome/regional-rehome-worker.js'
 import { createRelayServer } from './relay-server.js'
 import {
   formatRegisteredMigrationInventory,
   readRegisteredMigrationInventory
-} from './registered-migration-inventory.js'
+} from './assignment/migrations/registered-migration-inventory.js'
 
 // Both read the cell's switch file once it exists; until then, the boot values.
 let cellFlagsApplied: (() => CellFlags) | null = null
@@ -68,6 +69,8 @@ const cellFlagChannel =
       })
     : null
 cellFlagsApplied = cellFlagChannel ? () => cellFlagChannel.applied().flags : null
+// Directors with an edge read director/edge.json; until it lands, mode on and the env rollout.
+const edgeControl = config.role === 'director' && config.edge ? startEdgeControl() : undefined
 const {
   server,
   sessions,
@@ -79,7 +82,7 @@ const {
   ready,
   cellIncarnation,
   shadowSeatPoller
-} = createRelayServer(config, database, { cellFlags: cellFlagChannel?.applied })
+} = createRelayServer(config, database, { cellFlags: cellFlagChannel?.applied, edgeControl })
 // Cloud Run sets K_SERVICE; GCE cells and local runs skip the metadata read.
 if (process.env.K_SERVICE) {
   void readCloudRunInstanceZone().then((zone) => observability.setInstanceZone(zone))
@@ -229,6 +232,7 @@ const shutdown = (): void => {
   regionalRehomeWorker?.stop()
   shadowSeatPoller?.stop()
   cellFlagChannel?.stop()
+  edgeControl?.stop()
   sessions.drain(0)
   server.close(() => void closeDatabaseAndExit(shutdownStartedAt).catch(() => undefined))
 }

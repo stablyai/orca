@@ -1,8 +1,8 @@
-import type { OrchestrationDb } from '../../../../orchestration/db'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import {
   liveWorkerTerminalAutoReleaseAt,
   type WorkerTerminalResourceRow
-} from '../../../../orchestration/worker-terminal-ownership'
+} from '../../../../orchestration/terminal-authority/release/worker-terminal-ownership'
 import type { WorkerReleaseReceipt } from './worker-release-completion'
 
 export function exposeWorkerTerminalResource(resource: WorkerTerminalResourceRow): {

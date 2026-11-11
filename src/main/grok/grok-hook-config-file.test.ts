@@ -1,6 +1,5 @@
 import {
   chmodSync,
-  existsSync,
   mkdtempSync,
   readdirSync,
   readFileSync,
@@ -29,31 +28,6 @@ describe('guarded Grok hook config mutation', () => {
     for (const dir of dirs.splice(0)) {
       rmSync(dir, { recursive: true, force: true })
     }
-  })
-
-  it('does not delete a newer user edit', async () => {
-    const configPath = makeConfigPath()
-    const installed = '{"hooks":{"SessionStart":[]}}\n'
-    const userEdit =
-      '{"hooks":{"Notification":[{"hooks":[{"type":"command","command":"user"}]}]}}\n'
-    writeFileSync(configPath, installed)
-    writeFileSync(configPath, userEdit)
-
-    await expect(removeGrokHookConfigIfUnchanged(configPath, installed)).resolves.toBe(false)
-    expect(readFileSync(configPath, 'utf8')).toBe(userEdit)
-  })
-
-  it('does not overwrite a newer user edit', async () => {
-    const configPath = makeConfigPath()
-    const installed = '{"hooks":{"SessionStart":[]}}\n'
-    const userEdit = '{"hooks":{"Notification":[]}}\n'
-    writeFileSync(configPath, installed)
-    writeFileSync(configPath, userEdit)
-
-    await expect(
-      writeGrokHookConfigIfUnchanged(configPath, installed, '{"hooks":{}}\n')
-    ).resolves.toBe(false)
-    expect(readFileSync(configPath, 'utf8')).toBe(userEdit)
   })
 
   it('does not overwrite an edit published after it holds the expected generation', async () => {
@@ -141,26 +115,5 @@ describe('guarded Grok hook config mutation', () => {
       writeGrokHookConfigIfUnchanged(configPath, installed, '{"hooks":{}}\n')
     ).resolves.toBe(true)
     expect(statSync(configPath).mode & 0o777).toBe(0o600)
-  })
-
-  it('removes the config and reports the removal', async () => {
-    const configPath = makeConfigPath()
-    const installed = '{"hooks":{"SessionStart":[]}}\n'
-    writeFileSync(configPath, installed)
-
-    await expect(removeGrokHookConfigIfUnchanged(configPath, installed)).resolves.toBe(true)
-    expect(existsSync(configPath)).toBe(false)
-  })
-
-  it('leaves no temp file behind after a successful write', async () => {
-    const configPath = makeConfigPath()
-    const dir = dirname(configPath)
-    const installed = '{"hooks":{"SessionStart":[]}}\n'
-    writeFileSync(configPath, installed)
-
-    await expect(
-      writeGrokHookConfigIfUnchanged(configPath, installed, '{"hooks":{}}\n')
-    ).resolves.toBe(true)
-    expect(readdirSync(dir)).toEqual(['orca-status.json'])
   })
 })

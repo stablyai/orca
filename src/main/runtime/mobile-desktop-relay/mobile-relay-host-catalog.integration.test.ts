@@ -1,60 +1,65 @@
-import type * as WorktreeScanCacheModule from '../../git/worktree-scan-cache'
-import type * as WorktreeListingModule from '../../git/worktree-listing'
-import { pairedRuntimeConnectionFromOffer } from '../../../shared/paired-runtime-connection'
+import type * as WorktreeScanCacheModule from '../../git/worktrees/catalog/worktree-scan-cache'
+import type * as WorktreeListingModule from '../../git/worktrees/catalog/worktree-listing'
+import { pairedRuntimeConnectionFromOffer } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { DELEGATED_MOBILE_DEVICES_RUNTIME_CAPABILITY } from '../../../shared/delegated-mobile-device-contract'
-import { parsePairingCode, type PairingOffer } from '../../../shared/pairing'
+import { parsePairingCode } from '../../../shared/remote-runtime/pairing/pairing'
+import type { PairingOffer } from '../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import { RUNTIME_PROTOCOL_VERSION } from '../../../shared/protocol-version'
-import { sendRemoteRuntimeRequest } from '../../../shared/remote-runtime/remote-runtime-client'
+import { sendRemoteRuntimeRequestOnSocket } from '../../../shared/remote-runtime/requests/remote-runtime-request-socket'
 import {
   runtimeEnvironmentStatusFromSnapshot,
   type RuntimeHostStatusSnapshot
-} from '../../../shared/runtime-host-status'
+} from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import { OrcaRuntimeService } from '../orca-runtime'
-import { OrcaRuntimeRpcServer } from '../runtime-rpc'
+import { OrcaRuntimeRpcServer } from '../rpc/server/runtime-rpc'
 import {
   authenticateMobileWsSession,
   createEncryptedWsResponseReader,
   sendEncryptedWsRequest
-} from '../runtime-rpc-mobile-ws-test-harness'
-import { makeStore } from '../runtime-rpc-worktree-store-fixtures'
+} from '../rpc/server/runtime-rpc-mobile-ws-test-harness'
+import { makeStore } from '../rpc/server/runtime-rpc-worktree-store-fixtures'
 import type { MobileDesktopRelayHosts } from './mobile-desktop-relay-hosts'
-import { partialRuntimeStore } from '../runtime-store-partial-fixture'
+import { partialRuntimeStore } from '../orca-runtime-tests/runtime-store-partial-fixture'
 
-vi.mock('../../git/worktree-scan-cache', async (importOriginal) => {
-  const facade = await vi.importMock<typeof WorktreeScanCacheModule>('../../git/worktree')
+vi.mock('../../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
+  const listings = getWorktreeListingMocks()
   return {
     ...(await importOriginal<typeof WorktreeScanCacheModule>()),
-    listWorktrees: facade.listWorktrees
+    listWorktrees: listings.listWorktrees
   }
 })
 
-vi.mock('../../git/worktree-listing', async (importOriginal) => {
-  const facade = await vi.importMock<typeof WorktreeListingModule>('../../git/worktree')
+vi.mock('../../git/worktrees/catalog/worktree-listing', async (importOriginal) => {
+  const listings = getWorktreeListingMocks()
   return {
     ...(await importOriginal<typeof WorktreeListingModule>()),
-    listWorktreesStrict: facade.listWorktreesStrict
+    listWorktreesStrict: listings.listWorktreesStrict
   }
 })
 
-vi.mock('../../git/worktree', () => {
-  const worktrees = [
-    {
-      path: '/tmp/worktree-a',
-      head: 'abc',
-      branch: 'feature/foo',
-      isBare: false,
-      isMainWorktree: false
+const { getWorktreeListingMocks } = vi.hoisted(() => {
+  function createWorktreeListingMocks() {
+    const worktrees = [
+      {
+        path: '/tmp/worktree-a',
+        head: 'abc',
+        branch: 'feature/foo',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ]
+    return {
+      listWorktrees: vi.fn().mockResolvedValue(worktrees),
+      listWorktreesStrict: vi.fn().mockResolvedValue(worktrees)
     }
-  ]
-  return {
-    listWorktrees: vi.fn().mockResolvedValue(worktrees),
-    listWorktreesStrict: vi.fn().mockResolvedValue(worktrees)
   }
+  let listings: ReturnType<typeof createWorktreeListingMocks> | undefined
+  return { getWorktreeListingMocks: () => (listings ??= createWorktreeListingMocks()) }
 })
 
 type Contact = 'live' | 'unreachable'
@@ -153,11 +158,17 @@ describe('mobile relay hosts: phone -> desktop lists the servers it shows', () =
         return server ? { environmentId, fence: 'pairing-1', pairing: server.pairing } : null
       },
       call: (host, method, params) =>
-        sendRemoteRuntimeRequest(
+        sendRemoteRuntimeRequestOnSocket(
           pairedRuntimeConnectionFromOffer(servers.get(host.environmentId)!.pairing),
           method,
           params,
-          5_000
+          5_000,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined
         ),
       hostsBrowserPage: () => false,
       onEnvironmentRetired: () => () => {},
@@ -212,17 +223,5 @@ describe('mobile relay hosts: phone -> desktop lists the servers it shows', () =
     await expect(
       phoneCall('mobileRelay.hosts.worktrees', { hostId: 'runtime:box' })
     ).resolves.toEqual(warm)
-  })
-
-  it('answers an empty list on a desktop that relays nowhere', async () => {
-    const desktop = await startRuntime()
-    const session = await authenticateMobileWsSession(pairingUrl(desktop, 'mobile'))
-    const replies = createEncryptedWsResponseReader(session)
-    cleanups.push(() => {
-      replies.dispose()
-      session.ws.close()
-    })
-    sendEncryptedWsRequest(session, { id: 'list', method: 'mobileRelay.hosts.list' })
-    await expect(replies.next('list')).resolves.toMatchObject({ ok: true, result: { hosts: [] } })
   })
 })

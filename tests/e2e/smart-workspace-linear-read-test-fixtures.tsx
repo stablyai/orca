@@ -1,28 +1,28 @@
 import { useStore } from 'zustand'
-import { createTestStore } from '@/store/slices/linear-slice-test-harness'
+import { createTestStore } from '@/store/slices/linear/linear-slice-test-harness'
 import { clearLinearRequestMaps } from '@/store/slices/linear/linear-slice-request-state'
-// @vitest-environment happy-dom
-
 import React from 'react'
 import type * as ReactModule from 'react'
-import type * as MainLinearClient from '../../src/main/linear/client'
-import type * as RuntimeLinearClient from '@/runtime/runtime-linear-client'
-import type * as RuntimeLinearIssueMutations from '@/runtime/runtime-linear-issue-mutations'
 import { registerRuntimeClientIpcBridge } from '@/hooks/ipc-events/runtime-client-ipc-bridge'
-import type { RuntimeClientEvent } from '../../src/shared/runtime-client-events'
 import { cleanup } from '@testing-library/react'
 import { afterEach, vi } from 'vitest'
-import type { LinearIssue } from '../../src/shared/linear/issue-types'
-import type { LinearConnectionStatus } from '../../src/shared/linear/workspace-types'
-import type { Repo } from '../../src/shared/repo-types'
-import { WorkspaceAttachmentSourceStatus } from '../../src/renderer/src/components/sidebar/WorkspaceAttachmentSourceStatus'
+import { WorkspaceAttachmentSourceStatus } from '../../src/renderer/src/components/sidebar/workspace-card/review/WorkspaceAttachmentSourceStatus'
 import { Command } from '@/components/ui/command'
 import {
   referenceLinearIssue,
   referenceRepo
-} from '../../src/renderer/src/components/sidebar/workspace-reference-fixtures.test-support'
+} from '../../src/renderer/src/components/sidebar/workspace-card/review/workspace-reference-fixtures.test-support'
 import { SmartWorkspaceSourceResultList } from '../../src/renderer/src/components/new-workspace/SmartWorkspaceSourceResultList'
 import { useWorkItemSourceSearch } from '../../src/renderer/src/components/new-workspace/use-work-item-source-search'
+import type * as MainLinearClient from '../../src/main/linear/client'
+import type * as RuntimeLinearClient from '@/runtime/linear/runtime-linear-client'
+import type * as RuntimeLinearIssueMutations from '@/runtime/linear/runtime-linear-issue-client'
+import type { RuntimeClientEvent } from '../../src/shared/runtime-client-events'
+import type { LinearIssue } from '../../src/shared/linear/issue-types'
+import type { LinearConnectionStatus } from '../../src/shared/linear/workspace-types'
+import type { Repo } from '../../src/shared/repo-types'
+
+// @vitest-environment happy-dom
 
 const queued = vi.hoisted(() => {
   const updates: VoidFunction[] = []
@@ -64,7 +64,7 @@ const detailTransport = vi.hoisted(() => {
     AuthError: class AuthenticationLinearError extends Error {}
   }
 })
-vi.mock('@/runtime/runtime-rpc-client', async (original) => ({
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (original) => ({
   ...(await original<Record<string, unknown>>()),
   callRuntimeRpc: (...args: unknown[]) => detailTransport.rpc(...args)
 }))
@@ -136,7 +136,7 @@ vi.mock('../../src/main/linear/linear-token-store', () => ({
   getWorkspaceTokenProtection: () => null
 }))
 const events = vi.hoisted(() => ({ emit: (_event: RuntimeClientEvent) => {} }))
-vi.mock('@/runtime/runtime-client-events', () => ({
+vi.mock('@/runtime/rpc/subscriptions/runtime-client-events', () => ({
   subscribeRuntimeClientEvents: async (
     _id: string,
     onEvent: (event: RuntimeClientEvent) => void
@@ -174,15 +174,15 @@ const mocks = vi.hoisted(() => {
   }
 })
 export const actual = await vi.importActual<typeof RuntimeLinearIssueMutations>(
-  '@/runtime/runtime-linear-issue-mutations'
+  '@/runtime/linear/runtime-linear-issue-client'
 )
 export const actualSearch = await vi.importActual<typeof RuntimeLinearClient>(
-  '@/runtime/runtime-linear-client'
+  '@/runtime/linear/runtime-linear-client'
 )
 let stopBridge = () => {}
 let restoreApi = () => {}
 export let pickerStore: ReturnType<typeof createTestStore>
-vi.mock('@/store', () => ({
+vi.mock('@/store/index', () => ({
   useAppStore: Object.assign(
     (selector: Parameters<typeof pickerStore>[0]) => useStore(pickerStore, selector),
     {
@@ -192,7 +192,7 @@ vi.mock('@/store', () => ({
     }
   )
 }))
-vi.mock('@/runtime/runtime-linear-client', async (original) => ({
+vi.mock('@/runtime/linear/runtime-linear-client', async (original) => ({
   ...(await original<Record<string, unknown>>()),
   linearStatus: async (source: unknown) =>
     (await mocks.statusReads(source)) ?? mocks.state.linearStatus,
@@ -204,12 +204,15 @@ vi.mock('@/runtime/runtime-linear-client', async (original) => ({
     workspaceId?: string | null
   ) => mocks.state.searchLinearIssues(query, settings, limit, workspaceId)
 }))
-vi.mock('@/runtime/runtime-linear-issue-mutations', async (original) => ({
+vi.mock('@/runtime/linear/runtime-linear-issue-client', async (original) => ({
   ...(await original<Record<string, unknown>>()),
   linearGetIssue: (...args: unknown[]) => mocks.state.detail(...args)
 }))
-vi.mock('@/lib/local-preflight-context', () => ({
-  getLocalPreflightContext: () => ({}),
+vi.mock('@/runtime/hosts/preflight/local-preflight-context', () => ({
+  getLocalPreflightContext: () => ({})
+}))
+
+vi.mock('@/runtime/hosts/preflight/local-preflight-context-key', () => ({
   localPreflightContextKey: () => 'test'
 }))
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))

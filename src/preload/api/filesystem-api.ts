@@ -1,17 +1,18 @@
-import type { PathExistenceResult } from '../../shared/path-existence-batch'
-import type { RuntimeFileReadChunkResult } from '../../shared/runtime-types'
-import type { SearchOptions, SearchResult } from '../../shared/code-search-types'
+import type { PathExistenceResult } from '../../shared/file-access/path-existence-batch'
+import type { RuntimeFileReadChunkResult } from '../../shared/file-content/runtime-file-read'
+import type { SearchOptions, SearchResult } from '../../shared/file-search/code-search-types'
 import type { PdfExportResult } from '../../shared/pdf-export-failure-copy'
-import type {
-  DirEntry,
-  FsChangedPayload,
-  MarkdownDocument
-} from '../../shared/filesystem-entry-types'
+import type { DirEntry } from '../../shared/file-listing/directory-entry'
+import type { FsChangedPayload } from '../../shared/file-watch/filesystem-change-event'
+import type { MarkdownDocument } from '../../shared/file-listing/file-document'
 import type {
   ImportItemResult,
-  ResolveDroppedPathsResult,
-  StagedExternalImportSource
-} from '../../shared/filesystem-import-result-types'
+  ResolveDroppedPathsResult
+} from '../../shared/file-import/filesystem-import-result'
+import type {
+  StagedRuntimeUploadSource as StagedExternalImportSource,
+  RuntimeUploadFileStreamRequest
+} from '../../shared/file-import/runtime-upload-staging-contract'
 import type {
   LocalLogTailChangedPayload,
   LocalLogTailReadArgs,
@@ -19,13 +20,13 @@ import type {
   LocalLogTailWatchArgs
 } from '../../shared/local-log-tail-types'
 import type { SshMutationExpectation } from '../../shared/ssh-types'
-import type { LocalFileAccess } from '../../shared/local-file-access'
-import type { RemoteFilePreviewAddress } from '../../shared/remote-file-preview-address'
-import type { FileBytesWritePrecondition } from '../../shared/file-bytes-write'
+import type { LocalFileAccess } from '../../shared/file-access/local-file-access'
+import type { RemoteFilePreviewAddress } from '../../shared/file-preview/remote-file-preview-address'
+import type { FileBytesWritePrecondition } from '../../shared/file-write/file-bytes-write'
 import type {
   FileWriteDiskPrecondition,
   FileWriteResult
-} from '../../shared/file-write-disk-precondition'
+} from '../../shared/file-write/file-write-disk-precondition'
 import type {
   CreateVenvResult,
   KernelFrameEvent,
@@ -33,7 +34,6 @@ import type {
   PythonEnvironment,
   PythonEnvironments
 } from '../../shared/notebook-kernel-types'
-import type { RuntimeUploadFileStreamRequest } from '../../shared/runtime-upload-staging-contract'
 import type {
   AgentSessionAttachmentPathUploadResult,
   AgentSessionAttachmentUploadTarget
@@ -41,11 +41,11 @@ import type {
 import type {
   PrepareDroppedPathsRequest,
   PreparedDroppedPaths
-} from '../../shared/native-file-drop-preparation'
+} from '../../shared/file-import/native-file-drop-preparation'
 import type {
   ChatAddressPreviewRequest,
   ChatAddressPreviewResult
-} from '../../shared/chat-address-preview'
+} from '../../shared/file-preview/chat-address-preview'
 
 export type ExportApi = {
   htmlToPdf: (args: { html: string; title: string }) => Promise<PdfExportResult>
@@ -197,6 +197,8 @@ export type FilesystemApi = {
       access?: LocalFileAccess
       wakeWslDistro?: boolean
     }) => Promise<{ size: number; isDirectory: boolean; mtime: number }>
+    /** Local only: whether a symlink below `rootPath` leads to `path` (the root watch can't see past it). */
+    hasSymlinkBelowRoot: (args: { rootPath: string; path: string }) => Promise<boolean>
     pathsExist?: (args: {
       filePaths: string[]
       connectionId?: string

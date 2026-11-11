@@ -5,12 +5,12 @@
  */
 import { win32 } from 'node:path'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
-import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
+import type { ProjectExecutionRuntimeResolution } from '../../../shared/execution-host/project-execution-runtime'
 import type { Project } from '../../../shared/project-types'
 import type { Repo } from '../../../shared/repo-types'
 import { isFolderRepo } from '../../../shared/repo-kind'
 import { isWslUncPath } from '../../../shared/wsl-paths'
-import { isForeignLink } from '../../git/worktree-prune-guard'
+import { isForeignLink } from '../../git/worktrees/removal/worktree-prune-guard'
 import type {
   WslDriveProjectConversionResult,
   WslDriveProjectPreview

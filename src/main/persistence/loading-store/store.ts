@@ -2,8 +2,8 @@ import { dirname } from 'node:path'
 import {
   setMigrationUnsupportedPty,
   setMigrationUnsupportedPtyPersistenceListener
-} from '../../agent-hooks/migration-unsupported-pty-state'
-import { agentHookServer } from '../../agent-hooks/server'
+} from '../../agent-hooks/observations/migration-unsupported-pty-state'
+import { agentHookServer } from '../../agent-hooks/server/agent-hook-server'
 import { ActiveViewPreference } from '../preferences/active-view-preference'
 import { registerPersistedPaneKeyAlias } from '../restoring-sessions/pane-alias-normalization'
 import { normalizePersistedPaneIdentityState } from '../restoring-sessions/workspace-pane-normalization'
@@ -23,7 +23,7 @@ import {
   bindPersistedTabTerminalPanes,
   sweepPersistedUnattachedTerminalRows
 } from '../restoring-sessions/tab-terminal-pane-binding-repair'
-import { scheduleSave } from './write-scheduling'
+import { scheduleFullProfileSave, scheduleSave } from './write-scheduling'
 import {
   migrateLegacyOpenCodeGoApiKey,
   type OpenCodeGoApiKeyTarget
@@ -31,6 +31,7 @@ import {
 import { enqueuePrimaryStateOperation, writeToDiskAsync } from './primary-state-writes'
 import type { ProfileStateDatabaseQuarantine } from '../profile-state/profile-state-database-quarantine'
 import { writeVersionedProfileStateExport } from '../profile-state/legacy-json/profile-state-versioned-export'
+import { createInitialHomeWorkspaceState } from './initial-home-workspace'
 import {
   beginProfileStateMaintenance,
   freezeProfileStateWrites,
@@ -46,6 +47,7 @@ import type {
 } from './profile-state-authority'
 
 export type StoreOptions = StoreRuntimeOptions & {
+  initializeHomeWorkspace?: boolean
   serializedState?: string
   collectUnboundPaneAlias?: (entry: ProfileStateStartupPaneAlias) => void
   /** Consume the validated startup read without caching a second copy. */
@@ -94,16 +96,21 @@ export class Store {
     this.runtime.flushOrThrow = () => this.flushOrThrow()
     this.runtime.runDurableMutation = (mutate) => this.runDurableMutation(mutate)
     let loaded: PersistedState
+    let profileDocumentExisted = true
     if (options.profileStateAuthority !== undefined) {
       if (initial !== undefined) {
+        profileDocumentExisted =
+          initial.takeParsedState !== undefined
+            ? parsedState !== undefined
+            : initial.serializedState !== undefined
         loaded =
           initial.takeParsedState !== undefined
             ? this.domains.loader.loadParsedFromAuthority(parsedState)
             : this.domains.loader.loadFromAuthority(initial.serializedState)
       } else {
-        loaded = this.domains.loader.loadFromAuthority(
-          options.profileStateAuthority.readSerializedState()
-        )
+        const serializedState = options.profileStateAuthority.readSerializedState()
+        profileDocumentExisted = serializedState !== undefined
+        loaded = this.domains.loader.loadFromAuthority(serializedState)
       }
     } else if (options.serializedState !== undefined) {
       loaded = this.domains.loader.loadSerialized(options.serializedState)
@@ -117,7 +124,13 @@ export class Store {
         collectUnboundPaneAlias: options.collectUnboundPaneAlias
       }
     )
-    this.state = normalized.state
+    let initialState = normalized.state
+    // Only a missing desktop profile document receives initial data; empty saved profiles stay empty.
+    if (options.initializeHomeWorkspace && !profileDocumentExisted) {
+      initialState = createInitialHomeWorkspaceState(initialState)
+      this.runtime.loadNeedsSave = true
+    }
+    this.state = initialState
     this.runtime.state = this.state
     this.runtime.activeViewPreference = new ActiveViewPreference(
       this.runtime.dataFile,
@@ -164,7 +177,7 @@ export class Store {
         adaptedProjectGroups ||
         sweptRepoIds.length > 0
       ) {
-        scheduleSave(this.domains.scheduling)
+        scheduleFullProfileSave(this.domains.scheduling)
       }
     }
   }
@@ -172,7 +185,7 @@ export class Store {
   /** Retain the legacy settings key until migration to the main-owned store succeeds. */
   migrateLegacyOpenCodeGoApiKey(target: OpenCodeGoApiKeyTarget): void {
     if (migrateLegacyOpenCodeGoApiKey(this.runtime.protectedSecrets, target)) {
-      scheduleSave(this.domains.scheduling)
+      scheduleSave(this.domains.scheduling, ['settings'])
     }
   }
 

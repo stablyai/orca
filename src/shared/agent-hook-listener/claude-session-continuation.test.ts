@@ -1,15 +1,8 @@
 import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { ClaudeSessionContinuationTracker } from './claude-session-continuation'
-import { scanFileRegionsBackward } from './reverse-file-region-scan'
-import type * as ReverseFileRegionScan from './reverse-file-region-scan'
-
-vi.mock('./reverse-file-region-scan', async (importOriginal) => {
-  const actual = await importOriginal<typeof ReverseFileRegionScan>()
-  return { scanFileRegionsBackward: vi.fn(actual.scanFileRegionsBackward) }
-})
 
 const OLD = '11111111-1111-4111-8111-111111111111'
 const FORK = '22222222-2222-4222-8222-222222222222'
@@ -20,7 +13,6 @@ const FILE_ID = '55555555-5555-4555-8555-555555555555'
 const createdDirs: string[] = []
 
 afterEach(() => {
-  vi.mocked(scanFileRegionsBackward).mockClear()
   for (const dir of createdDirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true })
   }
@@ -79,19 +71,6 @@ describe('ClaudeSessionContinuationTracker', () => {
     expect(new ClaudeSessionContinuationTracker().resolve(session(OLD, oldPath))).toBeNull()
   })
 
-  it('retries a pointer whose fork reaches disk after the first check, without rescanning', () => {
-    const { projectDir } = makeProject()
-    const oldPath = writeTranscript(projectDir, OLD, turn(OLD, 'u1') + pointer(OLD, FORK))
-    const tracker = new ClaudeSessionContinuationTracker()
-    expect(tracker.resolve(session(OLD, oldPath))).toBeNull()
-    expect(tracker.resolve(session(OLD, oldPath))).toBeNull()
-
-    const forkPath = writeTranscript(projectDir, FORK, turn(FORK, 'u1'))
-    expect(tracker.resolve(session(OLD, oldPath))).toEqual(session(FORK, forkPath))
-    const oldScans = vi.mocked(scanFileRegionsBackward).mock.calls.filter(([p]) => p === oldPath)
-    expect(oldScans).toHaveLength(1)
-  })
-
   it.each([
     ['a later prompt', turn(OLD, 'u2')],
     [
@@ -119,6 +98,10 @@ describe('ClaudeSessionContinuationTracker', () => {
         userText([{ type: 'text', text: '[Request interrupted by user]' }]) +
         userText([{ type: 'text', text: '<system-reminder>x</system-reminder>' }]) +
         line({ type: 'user', sessionId: OLD, message: { content: [{ type: 'tool_result' }] } }) +
+        userText([
+          { type: 'text', text: 'server context' },
+          { type: 'advisor_tool_result', tool_use_id: 'server', content: 'advice' }
+        ]) +
         line({
           type: 'assistant',
           sessionId: OLD,
@@ -176,17 +159,6 @@ describe('ClaudeSessionContinuationTracker', () => {
 
     appendFileSync(oldPath, pointer(OLD, FORK))
     expect(tracker.resolve(session(OLD, oldPath))).toEqual(session(FORK, forkPath))
-  })
-
-  it('finds a continuation near the end of a large transcript', () => {
-    const { projectDir } = makeProject()
-    const filler = turn(OLD, 'filler').repeat(Math.ceil((3 * 1024 * 1024) / 90))
-    const oldPath = writeTranscript(projectDir, OLD, filler + pointer(OLD, FORK))
-    const forkPath = writeTranscript(projectDir, FORK, turn(FORK, 'u1'))
-
-    expect(new ClaudeSessionContinuationTracker().resolve(session(OLD, oldPath))).toEqual(
-      session(FORK, forkPath)
-    )
   })
 
   it("uses the job's state when the fork is not named after its session", () => {

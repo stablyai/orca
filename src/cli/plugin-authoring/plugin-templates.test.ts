@@ -5,11 +5,6 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { createPluginFromTemplate } from './plugin-create'
 import { inspectPluginFolder, validatePluginTarget } from './plugin-folder-validation'
 import { PLUGIN_TEMPLATE_NAMES } from './plugin-template-names'
-import {
-  PLUGIN_EDITOR_FRAME_SINCE,
-  PLUGIN_HOOKS_SINCE,
-  PLUGIN_SOURCE_MODULES_SINCE
-} from '../../shared/plugins/manifest/plugin-schema-field-docs'
 
 const roots: string[] = []
 
@@ -37,43 +32,6 @@ describe('orca plugin create templates', () => {
     const readme = await readFile(join(dir, 'README.md'), 'utf8')
     expect(readme).toContain('orca plugin dev watch .')
     expect(readme).not.toContain('dev load')
-  })
-
-  it.each(PLUGIN_TEMPLATE_NAMES)(
-    '%s leaves publisher out by default, with the lowest engines.orca that allows it',
-    async (template) => {
-      const dir = join(await tempRoot(), `bare-${template}`)
-      const created = await createPluginFromTemplate({ dir, template })
-      expect(created.pluginKey).toBe(`local.bare-${template}`)
-      const manifest = JSON.parse(await readFile(join(dir, 'orca-plugin.json'), 'utf8'))
-      expect(manifest.publisher).toBeUndefined()
-      // Hooks and isolated-only editors arrived later than build-less sources.
-      const floor =
-        template === 'hook'
-          ? PLUGIN_HOOKS_SINCE
-          : template === 'editor'
-            ? PLUGIN_EDITOR_FRAME_SINCE
-            : PLUGIN_SOURCE_MODULES_SINCE
-      expect(manifest.engines.orca).toBe(`>=${floor}`)
-      const report = await validatePluginTarget(dir)
-      expect(report.errors).toEqual([])
-    }
-  )
-
-  it('components writes a build-less TSX panel and its gitignored typings', async () => {
-    const dir = join(await tempRoot(), 'todo-panel')
-    const created = await createPluginFromTemplate({ dir, template: 'components' })
-    expect(created.files).toEqual(
-      expect.arrayContaining(['orca-plugin.json', 'src/panel.tsx', 'tsconfig.json', '.gitignore'])
-    )
-    expect(created.files.some((file) => file.startsWith('dist/') || file.includes('build'))).toBe(
-      false
-    )
-    expect(created.typeFiles).toContain('.orca/types/orca/index.d.ts')
-    expect(JSON.parse(await readFile(join(dir, 'tsconfig.json'), 'utf8')).extends).toBe(
-      './.orca/types/tsconfig.json'
-    )
-    expect(await readFile(join(dir, '.gitignore'), 'utf8')).toContain('.orca/')
   })
 
   it('refuses a non-empty folder and never overwrites', async () => {

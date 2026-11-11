@@ -1,8 +1,12 @@
 import { createHash, randomUUID } from 'node:crypto'
 import type { RpcRequest } from './core'
-import type { MessageType } from '../orchestration/db'
-import { MESSAGE_TYPES } from '../orchestration/types'
-import type { LegacyCompatibilityPrincipalRow, MessageRow } from '../orchestration/types'
+import type {
+  MessageType,
+  LegacyCompatibilityPrincipalRow,
+  MessageRow
+} from '../orchestration/db/orchestration-records'
+import { MESSAGE_TYPES } from '../orchestration/db/orchestration-records'
+
 import { OrchestrationError } from '../orchestration/orchestration-error'
 
 const MESSAGE_TYPE_SET = new Set<string>(MESSAGE_TYPES)

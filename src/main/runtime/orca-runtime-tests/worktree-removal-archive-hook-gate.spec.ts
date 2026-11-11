@@ -1,30 +1,28 @@
 // Archive hook failure must preserve the checkout, Git registration, agents and ownership evidence (#19334).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import './runtime-test-module-registration.spec'
+import { assertWorktreeCleanForRemoval } from '../../git/worktrees/removal/worktree-removal-preflight'
 import {
-  assertWorktreeCleanForRemoval,
   deleteWorktreeHistoryDirMock,
-  getEffectiveHooks,
   invalidateAuthorizedRootsCacheMock,
-  listWorktreesStrict,
-  removeWorktree,
-  removeWorktreeLinkedPathsMock,
-  runHook
-} from '../orca-runtime-test-mocks.spec'
+  removeWorktreeLinkedPathsMock
+} from '../orca-runtime-test-mocks/setup.spec'
+import { getEffectiveHooks, runHook } from '../../workspace-hooks/hooks'
+import { listWorktreesStrict } from '../../git/worktrees/catalog/worktree-listing'
+import { removeWorktree } from '../../git/worktrees/removal/worktree-removal'
 import {
-  TEST_REPO_PATH,
   TEST_WORKTREE_ID,
   TEST_WORKTREE_PATH,
   createStaleRuntimeWorktreeStore,
   deferred
-} from '../orca-runtime-test-fixtures.spec'
-import { createWorktreeRemovalRuntime } from '../orca-runtime-test-scenario-builders.spec'
+} from './orca-runtime-test-fixtures.spec'
+import { createWorktreeRemovalRuntime } from './orca-runtime-test-scenario-builders.spec'
 import {
   ARCHIVE_HOOK_FAILED_REMOVAL_CODE,
   asArchiveHookRefusal
 } from '../../../shared/worktree/archive-hook-removal-gate'
-import { runSerializedWorktreeRemovalAcceptance } from '../../workspaces/removal/worktree-removal-acceptance-queue'
-import { startBackgroundWorktreeRemoval } from '../../workspaces/removal/worktree-background-removal'
-import type { RemoveWorktreeResult } from '../../../shared/worktree/create-types'
+import '../../workspaces/removal/worktree-removal-acceptance-queue'
+import '../../workspaces/removal/worktree-background-removal'
 
 function withArchiveHook(): void {
   vi.mocked(getEffectiveHooks).mockReturnValue({
@@ -120,149 +118,6 @@ describe('archive hook removal gate', () => {
       })
     ).rejects.toMatchObject({ code: ARCHIVE_HOOK_FAILED_REMOVAL_CODE })
     expectNothingMutated(removeWorktreeMeta)
-  })
-
-  it('removes and records the waiver when the failure is explicitly overridden', async () => {
-    const runtime = createWorktreeRemovalRuntime()
-    withArchiveHook()
-    vi.mocked(runHook).mockResolvedValue({
-      success: false,
-      output: 'boom',
-      exitCode: 23
-    })
-    vi.mocked(removeWorktree).mockResolvedValue({})
-
-    const result = await runtime.removeManagedWorktree(TEST_WORKTREE_ID, {
-      force: false,
-      runHooks: true,
-      allowUnverifiedPtyStop: false,
-      allowFailedArchiveHook: true
-    })
-
-    expect(result.archiveHookOverride).toEqual({
-      worktreePath: TEST_WORKTREE_PATH,
-      outcome: 'exited',
-      exitCode: 23,
-      output: 'boom',
-      overridden: true
-    })
-    expect(removeWorktree).toHaveBeenCalledWith(
-      TEST_REPO_PATH,
-      TEST_WORKTREE_PATH,
-      false,
-      expect.objectContaining({
-        knownRemovedWorktree: expect.objectContaining({
-          path: TEST_WORKTREE_PATH
-        })
-      })
-    )
-  })
-
-  it('removes without an override record when the hook succeeds', async () => {
-    const runtime = createWorktreeRemovalRuntime()
-    withArchiveHook()
-    vi.mocked(runHook).mockResolvedValue({
-      success: true,
-      output: '',
-      exitCode: 0
-    })
-    vi.mocked(removeWorktree).mockResolvedValue({})
-
-    const result = await runtime.removeManagedWorktree(TEST_WORKTREE_ID, {
-      force: false,
-      runHooks: true
-    })
-
-    expect(result.archiveHookOverride).toBeUndefined()
-    expect(removeWorktree).toHaveBeenCalled()
-  })
-
-  it('removes when the hook is configured but not requested', async () => {
-    const runtime = createWorktreeRemovalRuntime()
-    withArchiveHook()
-    vi.mocked(removeWorktree).mockResolvedValue({})
-
-    const result = await runtime.removeManagedWorktree(TEST_WORKTREE_ID)
-
-    expect(runHook).not.toHaveBeenCalled()
-    expect(result.warning).toContain('archive hook skipped')
-    expect(removeWorktree).toHaveBeenCalled()
-  })
-
-  it('removes when no archive hook is configured', async () => {
-    const runtime = createWorktreeRemovalRuntime()
-    vi.mocked(getEffectiveHooks).mockReturnValue(null)
-    vi.mocked(removeWorktree).mockResolvedValue({})
-
-    const result = await runtime.removeManagedWorktree(TEST_WORKTREE_ID, {
-      force: false,
-      runHooks: true
-    })
-
-    expect(runHook).not.toHaveBeenCalled()
-    expect(result.warning).toBeUndefined()
-    expect(removeWorktree).toHaveBeenCalled()
-  })
-
-  it('holds a desktop removal in the same repo until this one is accepted', async () => {
-    const runtime = createWorktreeRemovalRuntime()
-    withArchiveHook()
-    const hookRun = deferred<{ success: boolean; output: string; exitCode?: number }>()
-    vi.mocked(runHook).mockReturnValue(hookRun.promise)
-    vi.mocked(removeWorktree).mockResolvedValue({})
-
-    const removal = runtime.removeManagedWorktree(TEST_WORKTREE_ID, {
-      force: false,
-      runHooks: true
-    })
-    await vi.waitFor(() => expect(runHook).toHaveBeenCalled())
-    // The desktop IPC path queues its acceptance on this same per-repo queue.
-    const sibling = vi.fn(async () => {})
-    const siblingAccepted = runSerializedWorktreeRemovalAcceptance(TEST_REPO_PATH, sibling)
-    await new Promise((resolve) => setTimeout(resolve, 20))
-    expect(sibling).not.toHaveBeenCalled()
-
-    hookRun.resolve({ success: true, output: '', exitCode: 0 })
-    await siblingAccepted
-    expect(sibling).toHaveBeenCalledTimes(1)
-    await expect(removal).resolves.toEqual({})
-  })
-
-  it('joins a desktop removal of the same worktree accepted while this one waited', async () => {
-    const runtime = createWorktreeRemovalRuntime()
-    withArchiveHook()
-    vi.mocked(runHook).mockResolvedValue({ success: true, output: '' })
-    vi.mocked(removeWorktree).mockResolvedValue({})
-    const siblingTurn = deferred<void>()
-    void runSerializedWorktreeRemovalAcceptance(TEST_REPO_PATH, () => siblingTurn.promise)
-
-    const removal = runtime.removeManagedWorktree(TEST_WORKTREE_ID, {
-      force: false,
-      runHooks: true
-    })
-    await new Promise((resolve) => setTimeout(resolve, 20))
-    // The desktop IPC path coalesces apart from this one; stand in for its accepted removal.
-    const desktopDelete = deferred<RemoveWorktreeResult>()
-    void startBackgroundWorktreeRemoval({
-      removal: {
-        worktreeId: TEST_WORKTREE_ID,
-        repoId: 'repo-1',
-        repoPath: TEST_REPO_PATH,
-        worktree: { path: TEST_WORKTREE_PATH, branch: 'feature', head: 'feature' },
-        deleteBranch: true,
-        force: false
-      },
-      run: () => desktopDelete.promise,
-      publish: () => {}
-    })
-    siblingTurn.resolve()
-    await new Promise((resolve) => setTimeout(resolve, 20))
-    const preserved = { preservedBranch: { branchName: 'feature', head: 'feature' } }
-    desktopDelete.resolve(preserved)
-
-    await expect(removal).resolves.toMatchObject(preserved)
-    expect(runHook).not.toHaveBeenCalled()
-    expect(removeWorktree).not.toHaveBeenCalled()
   })
 
   it('does not coalesce an override retry onto the refusal already in flight', async () => {

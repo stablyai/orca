@@ -1,4 +1,5 @@
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
+import { REMOVE_PROJECT_DOMAINS, REPO_CATALOG_DOMAINS } from '../profile-save-domains'
 import type { ProjectHostSetup, ProjectHostSetupUpdateArgs } from '../../../shared/project-types'
 import type { Repo } from '../../../shared/repo-types'
 import type { RepoHostTarget } from '../../../shared/repo-host-identity'
@@ -6,7 +7,7 @@ import type { GhAccountBinding } from '../../../shared/github/account-binding'
 import {
   removeRepoFromHostWorkspaceSessions,
   removeRepoFromWorkspaceSession
-} from '../../orca-profiles/profile-project-session-state'
+} from '../../orca-profiles/project-transfer/profile-project-session-state'
 import {
   getRepoExecutionHostId,
   parseExecutionHostId,
@@ -27,8 +28,8 @@ import {
 } from '../../workspaces/catalog/local-worktree-scan-generation'
 
 import type { StoreRuntimeState } from './store-runtime-state'
-import type { WriteSchedulingOperations } from './write-scheduling'
-import { scheduleSave } from './write-scheduling'
+
+import { type WriteSchedulingOperations, scheduleSave } from './write-scheduling'
 import { pruneDeregisteredRepoUiResidue } from './repo-lifecycle-ui-residue'
 import { isWslMoveProjectSessionFrozen } from '../moving-wsl-projects/wsl-move-scope-guard'
 import { dropOrcadTerminalRestoreHintsForWorktrees } from '../migrating-orcad-catalog/orcad-terminal-restore-hint-store'
@@ -44,6 +45,14 @@ function removeLocalRepoSession(
     ? session
     : removeRepoFromWorkspaceSession(session, repoId)
 }
+function countSessionTerminalTabs(session: WorkspaceSessionState): number {
+  let count = 0
+  for (const tabs of Object.values(session.tabsByWorktree)) {
+    count += tabs.length
+  }
+  return count
+}
+
 type RepoLifecycleOperationsRuntime = Pick<
   StoreRuntimeState,
   | 'gitUsernameCache'
@@ -72,7 +81,7 @@ export class RepoLifecycleOperations {
     getRepoOrderOperations(this).addRepo(repo)
     const context = this[repoLifecycleOperationsContext]
     if (applyNewWindowsDriveProjectDefault(context.runtime.state, repo)) {
-      scheduleSave(context.scheduling)
+      scheduleSave(context.scheduling, ['projects'])
     }
   }
 
@@ -130,7 +139,7 @@ export class RepoLifecycleOperations {
         }
       }
     }
-    scheduleSave(this[repoLifecycleOperationsContext].scheduling)
+    scheduleSave(this[repoLifecycleOperationsContext].scheduling, REMOVE_PROJECT_DOMAINS)
   }
 
   /** Sweep unregistered local repos at load; unpaired remote absence cannot prove deletion. */
@@ -140,6 +149,7 @@ export class RepoLifecycleOperations {
     if (orphanRepoIds.size === 0) {
       return []
     }
+    const tabCountBefore = countSessionTerminalTabs(state.workspaceSession)
     for (const repoId of orphanRepoIds) {
       retireLocalWorktreeScanGeneration(repoId)
       releaseWslStoppedWorktreeRescan(repoId)
@@ -152,6 +162,10 @@ export class RepoLifecycleOperations {
       )
     }
     pruneDeregisteredRepoUiResidue(state.ui, orphanRepoIds)
+    console.info(
+      `[persistence] swept residue of ${orphanRepoIds.size} deregistered repo(s), dropping ${tabCountBefore - countSessionTerminalTabs(state.workspaceSession)} local terminal tab(s):`,
+      [...orphanRepoIds]
+    )
     return [...orphanRepoIds]
   }
 
@@ -167,24 +181,27 @@ export class RepoLifecycleOperations {
         | 'gitRemoteIdentity'
         | 'defaultJiraProject'
         | 'hookSettings'
+        | 'editorFormatter'
         | 'worktreeBaseRef'
         | 'worktreeBasePath'
         | 'kind'
         | 'folderUpgradeGitRootPath'
         | 'executionHostId'
         | 'symlinkPaths'
+        | 'dictationTerms'
         | 'issueSourcePreference'
         | 'forkSyncMode'
+        | 'agentWorkspaceTrust'
         | 'externalWorktreeVisibilityPromptDismissedAt'
         | 'externalWorktreeInboxBaselinePaths'
         | 'importedExternalWorktreePaths'
         | 'customWorktreeVisibilitySources'
         | 'worktreeVisibilitySourcePreferences'
         | 'projectGroupId'
-        | 'projectGroupOrder'
         | 'projectHostSetupMethod'
       >
     > & {
+      projectGroupOrder?: number | null
       externalWorktreeVisibility?: Repo['externalWorktreeVisibility'] | null
       agentWorktreeVisibility?: Repo['agentWorktreeVisibility'] | null
       sourceControlAi?: Repo['sourceControlAi'] | null
@@ -210,7 +227,8 @@ export function getRepoOrderOperations(
     new RepoOrderPersistenceOperations({
       state: owner[repoLifecycleOperationsContext].runtime.state,
       syncProjectHostSetupCompatibilityState: () => syncProjectHostSetupCompatibilityState(owner),
-      scheduleSave: () => scheduleSave(owner[repoLifecycleOperationsContext].scheduling)
+      scheduleSave: () =>
+        scheduleSave(owner[repoLifecycleOperationsContext].scheduling, REPO_CATALOG_DOMAINS)
     })
   return owner[repoLifecycleOperationsContext].runtime.repoOrderOperations
 }
@@ -256,7 +274,8 @@ export function getRepoUpdateOperations(
       state: owner[repoLifecycleOperationsContext].runtime.state,
       bumpLocalWorktreeScanGeneration,
       syncProjectHostSetupCompatibilityState: () => syncProjectHostSetupCompatibilityState(owner),
-      scheduleSave: () => scheduleSave(owner[repoLifecycleOperationsContext].scheduling),
+      scheduleSave: () =>
+        scheduleSave(owner[repoLifecycleOperationsContext].scheduling, REPO_CATALOG_DOMAINS),
       hydrateRepo: (repo) => hydrateRepo(owner, repo)
     })
   return owner[repoLifecycleOperationsContext].runtime.repoUpdateOperations
@@ -279,7 +298,8 @@ export function getProjectHostSetupOperations(
     new ProjectHostSetupPersistenceOperations({
       state: owner[repoLifecycleOperationsContext].runtime.state,
       updateRepo: (target, updates) => owner.updateRepo(target, updates),
-      scheduleSave: () => scheduleSave(owner[repoLifecycleOperationsContext].scheduling)
+      scheduleSave: () =>
+        scheduleSave(owner[repoLifecycleOperationsContext].scheduling, ['projectHostSetups'])
     })
   return owner[repoLifecycleOperationsContext].runtime.projectHostSetupOperations
 }

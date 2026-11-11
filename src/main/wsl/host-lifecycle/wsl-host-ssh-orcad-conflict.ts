@@ -1,13 +1,13 @@
 /** R25: refuse WSL Add if a known paired server shares the distro orcad's public E2EE key; otherwise one install gets two desktop owners. Other desktops and data dirs outside ~/.orca are unobservable; C4 admission still guards them. */
 import { errorMessage } from '../../../shared/error-message'
-import { listEnvironments } from '../../../shared/runtime-environment-store'
-import { E2EE_KEYPAIR_FILENAME } from '../../../shared/runtime-e2ee-keypair-file'
+import { listEnvironments } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
+import { E2EE_KEYPAIR_FILENAME } from '../../../shared/remote-runtime/host-store/runtime-e2ee-keypair-file'
 import type { WslHostAddResult } from '../../../shared/wsl-host-types'
 import {
   getPreferredPairingOffer,
   type KnownRuntimeEnvironment
-} from '../../../shared/runtime-environments'
-import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
+} from '../../../shared/remote-runtime/host-catalog/runtime-environments'
+import type { OrcadHostTransport } from '../../managed-server/install/orcad-host-transport'
 import { execCommand } from '../../ssh/remote-exec/remote-exec-command'
 import { wslHostAddRefusal } from './wsl-host-add-admission'
 

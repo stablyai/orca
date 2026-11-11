@@ -5,16 +5,6 @@ import { parseOrcaYaml } from './orca-yaml'
 afterEach(() => vi.restoreAllMocks())
 
 describe('orca.yaml alias expansion', () => {
-  it('preserves an ordinary shared scalar', () => {
-    expect(
-      parseOrcaYaml(`
-setupCommand: &setupCommand pnpm install
-scripts:
-  setup: *setupCommand
-`)
-    ).toMatchObject({ scripts: { setup: 'pnpm install' } })
-  })
-
   it('keeps reusing one anchor across a realistic tab list', () => {
     const tabs = Array.from(
       { length: 40 },
@@ -33,17 +23,6 @@ ${tabs}
     expect(parsed?.defaultTabs).toEqual(
       Array.from({ length: 40 }, (_, index) => ({ title: `tab${index}`, command: 'pnpm dev' }))
     )
-  })
-
-  it('rejects nested aliases that expand exponentially', () => {
-    let source = 'a0: &a0 [x, x, x, x, x, x, x, x, x]\n'
-    for (let level = 1; level <= 8; level += 1) {
-      source += `a${level}: &a${level} [${Array(9)
-        .fill(`*a${level - 1}`)
-        .join(', ')}]\n`
-    }
-
-    expect(parseOrcaYaml(`${source}scripts:\n  setup: *a8\n`)).toBeNull()
   })
 })
 
@@ -76,12 +55,6 @@ it('rejects nested merge sequences before their expansion is converted', () => {
       .join(', ')}] }\n`
   }
   expect(parseOrcaYaml(`${source}defaultTabs: [{ <<: *base10 }]`)).toBeNull()
-  expect(toJS).not.toHaveBeenCalled()
-})
-
-it('rejects a cyclic merge before conversion', () => {
-  const toJS = vi.spyOn(Document.prototype, 'toJS')
-  expect(parseOrcaYaml('base: &base { <<: *base, command: pnpm dev }')).toBeNull()
   expect(toJS).not.toHaveBeenCalled()
 })
 

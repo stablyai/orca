@@ -4,8 +4,8 @@ import type { OrcadRollbackOptions, OrcadRollbackResult } from '../install/orcad
 import { isUnconfirmedSshCommandTermination } from '../../ssh/remote-exec/remote-exec-command'
 import { withRolledBackVersion } from '../activation/orcad-activation-record'
 import { writeOrcadActivationRecord } from '../activation/orcad-activation-record-store'
-import { launchAndJudgeOrcadSlot } from '../../ssh/orcad-candidate-launch-verdict'
-import { assessOrcadRollback } from '../../ssh/orcad-update-plan'
+import { launchAndJudgeOrcadSlot } from '../activation/orcad-candidate-launch-verdict'
+import { assessOrcadRollback } from './orcad-rollback-safety'
 import { ORCAD_LOG_FILENAME } from '../install/orcad-remote-host-support'
 import {
   captureOrcadStateSnapshotCommand,
@@ -20,7 +20,7 @@ import {
   newestStateMtimeCommand,
   parseNewestStateMtimeSeconds
 } from '../host-state/orcad-state-newest-mtime'
-import { joinRemotePath } from '../../ssh/ssh-remote-platform'
+import { joinRemotePath } from '../../ssh/remote-host/ssh-remote-platform'
 import type { OrcadActivationLockControl } from '../activation/orcad-activation-lock'
 import {
   rollbackStartingState,
@@ -33,19 +33,19 @@ import {
 } from '../activation/orcad-activation-transaction-transitions'
 import { writeOrcadActivationTransaction } from '../activation/orcad-activation-transaction-store'
 import { ROLLBACK_STALE_COUNT, rollbackRecountRefusal } from './orcad-rollback-admission'
-import { runFencedStop } from '../../ssh/orcad-fenced-stop'
+import { runFencedStop } from '../activation/orcad-fenced-stop'
 import { execOrcadRemoteOr, withoutAbortSignal } from '../install/orcad-remote-runtime-control'
 import { execOrcadStateMutationOr } from '../host-state/orcad-state-mutation-exec'
 import {
   orcadSlotDir,
   resolveOrcadSlotIdentity,
   type OrcadSlotIdentity
-} from '../../ssh/orcad-recovery-slot'
-import { orcadSnapshotPath } from '../../ssh/orcad-incumbent-recovery'
+} from '../activation/orcad-recovery-slot'
+import { orcadSnapshotPath } from '../activation/orcad-incumbent-recovery'
 import {
   putTransactionIncumbentBack,
   restoreAfterRejectedCandidate
-} from '../../ssh/orcad-transaction-incumbent'
+} from '../activation/orcad-transaction-incumbent'
 import {
   readOrcadRollbackBarrierTarget,
   rollbackBarrierRefusal,

@@ -1,31 +1,34 @@
 import { readStructuredAgentLaunchRecord } from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
+import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import type {
-  RuntimeMobileSessionTabsResult,
-  RuntimeMobileSessionAgentTab
-} from '../../../../shared/runtime-types'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
+  RuntimeMobileSessionAgentTab,
+  RuntimeMobileSessionTerminalClientTab
+} from '../../../../shared/runtime-mobile-session-tab-contracts'
+import type {
+  TerminalLayoutSnapshot,
+  TerminalTab
+} from '../../../../shared/workspace-layout/terminal-tab-types'
 import { defaultAgentChatLabel } from '../../../../shared/agent-session/agent-session-chat-label'
-import { sanitizeTerminalLayoutPaneTitlesForLabels } from '../../../../shared/terminal-pane-title-sanitization'
-import { resolveTerminalLayoutRoot } from '../remote-terminal-layout-resolution'
-import { retainLocalScrollbackInRemoteLayout } from '@/components/terminal-pane/remote-layout-scrollback-retention'
-import { getRemoteRuntimePtyEnvironmentId } from '../runtime-terminal-stream'
+import { sanitizeTerminalLayoutPaneTitlesForLabels } from '../../../../shared/workspace-layout/terminal-pane-title-sanitization'
+import { resolveTerminalLayoutRoot } from '../hosted-terminals/actions/remote-terminal-layout-resolution'
+import { retainLocalScrollbackInRemoteLayout } from '@/components/terminal-pane/snapshots/remote-layout-scrollback-retention'
+import { getRemoteRuntimePtyEnvironmentId } from '../hosted-terminals/identity/remote-runtime-pty-owner'
 import {
   HOST_TERMINAL_SURFACE_SEPARATOR,
   WEB_TERMINAL_SURFACE_TAB_PREFIX,
   toWebTerminalSurfaceTabId
-} from '../../../../shared/terminal-surface-id'
+} from '../../../../shared/workspace-layout/terminal-surface-id'
 import type {
   ReadyBrowserSurface,
   ReadyEditorSurface,
   ReadyTerminalSurface,
-  TerminalSurface,
   MirroredAgentTab
 } from './state'
 import type { Tab } from '../../../../shared/tab-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { structuredAgentSessionTabId } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { hasStructuredAgentSessionLaunchCancellationTombstone } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
-import { withPendingPaneTitleRenames } from '../pending-pane-title-renames'
+import { withPendingPaneTitleRenames } from './naming/pending-pane-title-renames'
 import {
   isMirroredTerminalOfAnotherEnvironment,
   type MirrorRowOwnershipState
@@ -39,7 +42,7 @@ export function isReadyTerminalTab(
 
 export function isTerminalSurfaceTab(
   tab: RuntimeMobileSessionTabsResult['tabs'][number]
-): tab is TerminalSurface {
+): tab is RuntimeMobileSessionTerminalClientTab {
   return tab.type === 'terminal'
 }
 
@@ -149,6 +152,8 @@ export function buildMirroredAgentTabs(
         color: tab.color !== undefined ? tab.color : (existing?.color ?? null),
         sortOrder: sortOffset + index,
         createdAt: existing?.createdAt ?? now + sortOffset + index,
+        // Focus visits are client-owned; host snapshots carry none, so rebuilding must not drop them.
+        ...(existing?.lastFocusedAt !== undefined ? { lastFocusedAt: existing.lastFocusedAt } : {}),
         isPinned: tab.isPinned !== undefined ? tab.isPinned : existing?.isPinned === true
       }
     }
@@ -173,7 +178,7 @@ export function isMirroredTerminalSurfaceId(tabId: string): boolean {
 }
 
 export function chooseRemoteTerminalLayout(
-  surfaces: readonly TerminalSurface[],
+  surfaces: readonly RuntimeMobileSessionTerminalClientTab[],
   ptyIdsByLeafId: Record<string, string>,
   existingLayout?: TerminalLayoutSnapshot,
   requestedActiveLeafId?: string

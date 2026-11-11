@@ -2,8 +2,8 @@ import { readInjectedAgentSessionId } from '../../shared/agent-session/lifecycle
 import type {
   CliStatusCaller,
   OrchestrationCallerShowResult
-} from '../../shared/orchestration-caller-status'
-import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES } from '../../shared/orchestration-session-caller-codes'
+} from '../../shared/orchestration/orchestration-caller-status'
+import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES } from '../../shared/orchestration/orchestration-session-caller-codes'
 import type { RuntimeClient } from './client'
 import { RuntimeClientError } from './types'
 

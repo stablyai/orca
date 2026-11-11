@@ -2,8 +2,8 @@ import { memo, useCallback, useEffect, useMemo } from 'react'
 import { registerBrowserOverlaySlotViewport } from '../host-guest/browser-page-viewport'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../../store'
-import { resolveBrowserWorkspaceOwner } from '@/lib/browser-workspace-source-resolution'
-import type { BrowserTab as BrowserTabState } from '../../../../../shared/browser-workspace-types'
+import { resolveBrowserWorkspaceOwner } from '@/lib/browser/workspace/browser-workspace-source-resolution'
+import type { BrowserWorkspace } from '../../../../../shared/browser-workspace-types'
 import type { Tab, TabGroup } from '../../../../../shared/tab-types'
 import BrowserPane from './browser-workspace-pane'
 import { DeferredBrowserContent } from './DeferredBrowserContent'
@@ -15,7 +15,7 @@ import {
   isClientHostedBrowserRowSelectionLive,
   useClientHostedBrowserRowSelection,
   useClientHostedBrowserRows
-} from '@/lib/pane-manager/client-hosted-browser-row-state'
+} from '@/runtime/browser/client-hosting/client-hosted-browser-row-state'
 import { ClientHostedBrowserHostRowPane } from '../client-hosted-browser-host-row-pane'
 import { useAnyBrowserPageMountAdmission } from '../host-guest/browser-page-mount-admission'
 
@@ -26,12 +26,12 @@ type BrowserOverlayAssignment = {
   isActiveInGroup: boolean
 }
 
-const EMPTY_BROWSER_TABS: readonly BrowserTabState[] = []
+const EMPTY_BROWSER_TABS: readonly BrowserWorkspace[] = []
 const EMPTY_UNIFIED_TABS: readonly Tab[] = []
 const EMPTY_GROUPS: readonly TabGroup[] = []
 
 type BrowserOverlaySlotProps = {
-  browserTab: BrowserTabState
+  browserTab: BrowserWorkspace
   isWorktreeActive: boolean
   // Why: undefined = orphan tab (in browserTabs but not referenced by any group's unified-tab list); the fallback branch keeps these hidden.
   groupId: string | undefined

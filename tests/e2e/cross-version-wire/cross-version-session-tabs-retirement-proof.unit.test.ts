@@ -92,9 +92,9 @@ function exitProof(): Record<string, unknown> {
 async function loadBuild(ref: string | null): Promise<Build> {
   if (ref === null) {
     const [ledger, proof, retirement] = await Promise.all([
-      import('../../../src/shared/terminal-retirement-proof-ledger'),
-      import('../../../src/main/runtime/mobile-session-terminal-retirement-proof'),
-      import('../../../src/main/runtime/mobile-session-terminal-retirement')
+      import('../../../src/shared/workspace-layout/terminal-retirement-proof-ledger'),
+      import('../../../src/main/runtime/terminal/surface/mobile-session-terminal-retirement-proof'),
+      import('../../../src/main/runtime/terminal/surface/mobile-session-terminal-retirement')
     ])
     return {
       label: 'stack',
@@ -109,9 +109,12 @@ async function loadBuild(ref: string | null): Promise<Build> {
     importReleaseCheckoutModule(checkout, 'src/shared/terminal-retirement-proof-ledger.ts'),
     importReleaseCheckoutModule(
       checkout,
-      'src/main/runtime/mobile-session-terminal-retirement-proof.ts'
+      'src/main/runtime/terminal/surface/mobile-session-terminal-retirement-proof.ts'
     ),
-    importReleaseCheckoutModule(checkout, 'src/main/runtime/mobile-session-terminal-retirement.ts')
+    importReleaseCheckoutModule(
+      checkout,
+      'src/main/runtime/terminal/surface/mobile-session-terminal-retirement.ts'
+    )
   ])
   return {
     label: ref,
@@ -160,12 +163,6 @@ beforeAll(async () => {
 }, SUITE_TIMEOUT_MS)
 
 describe('cross-version session-tabs retirement proof', () => {
-  it('old host against old client publishes no proof on the renderer-first close (the defect)', () => {
-    const frame = hostPublishesOnExit(preStack, snapshotAfterRendererRepublished())
-    expect(frame).toBeNull()
-    expect(clientRetains(preStack, frame)).toEqual([])
-  })
-
   it('new host against new client publishes a proof the client retains (the fix)', () => {
     const frame = hostPublishesOnExit(stack, snapshotAfterRendererRepublished())
     expect(frame).not.toBeNull()

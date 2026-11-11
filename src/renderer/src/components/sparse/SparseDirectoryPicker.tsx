@@ -10,10 +10,11 @@ import {
   CommandList
 } from '@/components/ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { getWorktreeSymlinkPathFilterState } from '@/components/settings/worktree-symlink-path-filter'
+import { getWorktreeSymlinkPathFilterState } from '@/lib/directory-input/directory-path-suggestion-filter'
 import { joinPath } from '@/lib/path'
 import { Trans } from 'react-i18next'
-import { i18n, translate } from '@/i18n/i18n'
+import { i18n } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   getSparseBrowseTrail,
   joinSparseBrowsePath,
@@ -43,6 +44,7 @@ export function SparseDirectoryPicker({
   describedById,
   onAdd
 }: SparseDirectoryPickerProps): React.JSX.Element {
+  const t = useTranslate()
   const [open, setOpen] = useState(false)
   const [relativePath, setRelativePath] = useState('')
   const [query, setQuery] = useState('')
@@ -104,7 +106,9 @@ export function SparseDirectoryPicker({
     [query, state, selected]
   )
   // Why: free-form typing is repo-relative, so it must not inherit the browsed folder.
-  const literalError = showLiteralItem ? parseSparseDirectoryEntryInput(queryTrimmed).error : null
+  const literalError = showLiteralItem
+    ? parseSparseDirectoryEntryInput(queryTrimmed, t).error
+    : null
   const trail = getSparseBrowseTrail(relativePath)
 
   return (
@@ -115,13 +119,13 @@ export function SparseDirectoryPicker({
           variant="outline"
           role="combobox"
           // Why: combobox takes no name from content, so the visible label is not enough.
-          aria-label={translate('sparsePreset.addPath', 'Add a folder')}
+          aria-label={t('sparsePreset.addPath', 'Add a folder')}
           aria-expanded={open}
           aria-describedby={describedById}
           disabled={disabled || !rootPath}
           className="w-full justify-between"
         >
-          <span className="truncate">{translate('sparsePreset.addPath', 'Add a folder')}</span>
+          <span className="truncate">{t('sparsePreset.addPath', 'Add a folder')}</span>
           <ChevronsUpDown className="size-3.5 opacity-50" />
         </Button>
       </PopoverTrigger>
@@ -138,7 +142,7 @@ export function SparseDirectoryPicker({
               className="rounded px-1 py-0.5 hover:bg-accent hover:text-accent-foreground"
               onClick={() => setRelativePath('')}
             >
-              {translate('sparsePreset.repositoryRoot', 'Repository root')}
+              {t('sparsePreset.repositoryRoot', 'Repository root')}
             </button>
             {trail.map((segment) => (
               <span key={segment.path} className="flex items-center gap-0.5">
@@ -155,27 +159,21 @@ export function SparseDirectoryPicker({
           </div>
           <Command shouldFilter={false} className="min-h-0 flex-1">
             <CommandInput
-              placeholder={translate(
-                'sparsePreset.findOrTypePath',
-                'Find a folder, or type any path…'
-              )}
-              aria-label={translate(
-                'sparsePreset.findOrTypePath',
-                'Find a folder, or type any path…'
-              )}
+              placeholder={t('sparsePreset.findOrTypePath', 'Find a folder, or type any path…')}
+              aria-label={t('sparsePreset.findOrTypePath', 'Find a folder, or type any path…')}
               value={query}
               onValueChange={setQuery}
             />
             <CommandList className="min-h-0 flex-1">
               <CommandEmpty>
                 {state.status === 'loading'
-                  ? translate('sparsePreset.loadingPaths', 'Reading folders…')
+                  ? t('sparsePreset.loadingPaths', 'Reading folders…')
                   : state.status === 'error'
-                    ? translate(
+                    ? t(
                         'sparsePreset.pathsUnavailable',
                         'Could not read this folder. Type the path instead.'
                       )
-                    : translate('sparsePreset.noPathMatches', 'No folders found.')}
+                    : t('sparsePreset.noPathMatches', 'No folders found.')}
               </CommandEmpty>
               {showLiteralItem ? (
                 literalError ? (
@@ -189,7 +187,7 @@ export function SparseDirectoryPicker({
                     <span className="truncate text-xs">
                       <Trans
                         i18n={i18n}
-                        defaults={translate('sparsePreset.addTypedPathCode', 'Add <path/>')}
+                        defaults={t('sparsePreset.addTypedPathCode', 'Add <path/>')}
                         components={{
                           path: (
                             <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">
@@ -225,14 +223,14 @@ export function SparseDirectoryPicker({
                     <span className="flex-1 truncate font-mono text-xs">{entry.name}</span>
                     {alreadySelected ? (
                       <span className="text-[11px] text-muted-foreground">
-                        {translate('sparsePreset.pathAdded', 'Added')}
+                        {t('sparsePreset.pathAdded', 'Added')}
                       </span>
                     ) : null}
                     <Button
                       type="button"
                       variant="ghost"
                       size="icon-xs"
-                      aria-label={translate('sparsePreset.openFolder', 'Open {{name}}', {
+                      aria-label={t('sparsePreset.openFolder', 'Open {{name}}', {
                         name: entry.name
                       })}
                       onClick={(event) => {

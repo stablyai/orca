@@ -1,17 +1,15 @@
-import type { AppState } from '@/store'
-import type { ExecutionHostOwnerRow } from '../../../shared/worktree-execution-host-resolution'
+import type { AppState } from '@/store/types'
+import type { ExecutionHostOwnerRow } from '../../../shared/execution-host/worktree-execution-host-resolution'
 import { isWindowsAbsolutePathLike } from '../../../shared/cross-platform-path'
 import {
   isLocalExecutionHost,
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
-import { resolveQualifiedWorktreeExecutionOwner } from '@/lib/qualified-worktree-execution-owner'
+import { resolveQualifiedWorktreeExecutionOwner } from '@/lib/workspace/ownership/qualified-worktree-execution-owner'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
-import {
-  resolveQualifiedIndexedFolderWorkspace,
-  selectWorktreesByRepo
-} from '@/store/workspace-record-selectors'
+import { resolveQualifiedIndexedFolderWorkspace } from '@/store/folder-workspaces/folder-workspace-record-index'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 type WatchTargetRowState = Pick<
   AppState,

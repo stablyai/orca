@@ -169,7 +169,7 @@ async function submitFeedbackWithDiagnosticBundle(
     }
     const failure = responseFailure(response)
     if (bodyWithoutDiagnosticBundle && shouldRetryWithoutDiagnosticBundle(response.status)) {
-      return submitFeedbackWithoutDiagnosticBundle(bodyWithoutDiagnosticBundle, failure)
+      return await submitFeedbackWithoutDiagnosticBundle(bodyWithoutDiagnosticBundle, failure)
     }
     return { ok: false, ...failure }
   } catch (error) {
@@ -212,7 +212,7 @@ export async function submitFeedback(
     }
     // Retry the owning endpoint; api.onorca.dev serves a different product.
     if (res.status >= 500) {
-      return retryFeedbackOnPrimary(body, new Error(`status ${res.status}`))
+      return await retryFeedbackOnPrimary(body, new Error(`status ${res.status}`))
     }
     return { ok: false, status: res.status, error: `status ${res.status}` }
   } catch (error) {

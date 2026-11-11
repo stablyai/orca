@@ -1,6 +1,6 @@
-import type { LiveAgentWorktreeStatus } from '@/lib/worktree-activity-state'
+import type { LiveAgentWorktreeStatus } from '../../../../shared/sidebar-list/workspace-activity-facts'
 import type { WorkspaceStatusDefinition } from '../../../../shared/worktree/types'
-import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup'
+import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup/workspace-cleanup'
 import {
   buildWorkspaceCleanupFacets,
   type WorkspaceCleanupFacetSources,
@@ -12,12 +12,14 @@ import {
   type WorkspaceCleanupReviewInfo,
   type WorkspaceCleanupReviewLookup
 } from './workspace-cleanup-presentation'
+import './workspace-cleanup-host-identity'
 import {
   getWorkspaceCleanupCandidateHostId,
   getWorkspaceCleanupCandidateIdentity,
   getWorkspaceCleanupHostIdentity
-} from './workspace-cleanup-host-identity'
-import { getWorktreeVisitTimestamp } from '@/lib/worktree-visit-recency'
+} from '../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
+import { getWorktreeVisitTimestamp } from '@/lib/workspace/activation/worktree-visit-recency'
+import type { Translate } from '@/i18n/use-translate'
 
 /** Cache by candidate identity and reuse unchanged row arrays. useMemo owns invalidation; content-addressed/idempotent fills survive discarded renders without unsafe ref mutation. */
 export type WorkspaceCleanupReviewInfoCache = WeakMap<
@@ -29,19 +31,22 @@ export function createWorkspaceCleanupReviewInfoCache(): WorkspaceCleanupReviewI
   return new WeakMap()
 }
 
-export function computeWorkspaceCleanupReviewInfoIndex(args: {
-  candidates: readonly WorkspaceCleanupCandidate[]
-  candidateIdCounts: ReadonlyMap<string, number>
-  reviewSources: WorkspaceCleanupRendererStateInputs
-  reviewLookup: WorkspaceCleanupReviewLookup
-  cache: WorkspaceCleanupReviewInfoCache
-}): Map<string, WorkspaceCleanupReviewInfo> {
+export function computeWorkspaceCleanupReviewInfoIndex(
+  args: {
+    candidates: readonly WorkspaceCleanupCandidate[]
+    candidateIdCounts: ReadonlyMap<string, number>
+    reviewSources: WorkspaceCleanupRendererStateInputs
+    reviewLookup: WorkspaceCleanupReviewLookup
+    cache: WorkspaceCleanupReviewInfoCache
+  },
+  t?: Translate
+): Map<string, WorkspaceCleanupReviewInfo> {
   const { candidates, candidateIdCounts, reviewSources, reviewLookup, cache } = args
   const infos = new Map<string, WorkspaceCleanupReviewInfo>()
   for (const candidate of candidates) {
     let info = cache.get(candidate)
     if (info === undefined) {
-      info = getWorkspaceCleanupReviewInfo(candidate, reviewSources, reviewLookup)
+      info = getWorkspaceCleanupReviewInfo(candidate, reviewSources, reviewLookup, t)
       cache.set(candidate, info)
     }
     infos.set(
@@ -76,13 +81,16 @@ export function createWorkspaceCleanupFacetListCache(): WorkspaceCleanupFacetLis
   return { byCandidate: new WeakMap(), lastList: [] }
 }
 
-export function computeWorkspaceCleanupFacetList(args: {
-  candidates: readonly WorkspaceCleanupCandidate[]
-  sources: Required<Omit<WorkspaceCleanupFacetSources, 'workspaceStatuses'>> & {
-    workspaceStatuses: readonly WorkspaceStatusDefinition[]
-  }
-  cache: WorkspaceCleanupFacetListCache
-}): WorkspaceCleanupFacets[] {
+export function computeWorkspaceCleanupFacetList(
+  args: {
+    candidates: readonly WorkspaceCleanupCandidate[]
+    sources: Required<Omit<WorkspaceCleanupFacetSources, 'workspaceStatuses'>> & {
+      workspaceStatuses: readonly WorkspaceStatusDefinition[]
+    }
+    cache: WorkspaceCleanupFacetListCache
+  },
+  t?: Translate
+): WorkspaceCleanupFacets[] {
   const { candidates, sources, cache } = args
   const list = candidates.map((candidate) => {
     const hostIdentity = getWorkspaceCleanupHostIdentity(
@@ -115,7 +123,7 @@ export function computeWorkspaceCleanupFacetList(args: {
     ) {
       return cached.facet
     }
-    const facet = buildWorkspaceCleanupFacets(candidate, sources)
+    const facet = buildWorkspaceCleanupFacets(candidate, sources, t)
     cache.byCandidate.set(candidate, {
       facet,
       sizeBytes,

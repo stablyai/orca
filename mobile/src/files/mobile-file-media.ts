@@ -1,4 +1,4 @@
-import { MEDIA_FILE_MIME_TYPES } from '../../../src/shared/media-file-extensions'
+import { MEDIA_FILE_MIME_TYPES } from '../../../src/shared/file-preview/media-mime-types'
 
 export const PDF_MIME_TYPE = 'application/pdf'
 

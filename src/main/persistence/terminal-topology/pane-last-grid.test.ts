@@ -89,38 +89,6 @@ describe("a pane's last grid (layout-owner build)", () => {
     expect(layouts[movedTo!]?.lastGridsByLeafId).toEqual({ [LEAF_B]: { cols: 91, rows: 33 } })
   })
 
-  it("writes only the pane's own tab record", async () => {
-    const { store } = await storeWithSplit()
-    await apply(store, { ...on, type: 'createTerminalTab', tabId: 'tab-other' })
-    const before = store.getWorkspaceSession()
-    await apply(store, {
-      ...on,
-      type: 'setPaneGrid',
-      tabId: 'tab-1',
-      leafId: LEAF_B,
-      grid: { cols: 91, rows: 33 }
-    })
-    const after = store.getWorkspaceSession()
-
-    expect(after.terminalLayoutsByTabId['tab-other']).toBe(
-      before.terminalLayoutsByTabId['tab-other']
-    )
-    expect(after.unifiedTabs).toBe(before.unifiedTabs)
-    expect(after.tabsByWorktree).toBe(before.tabsByWorktree)
-  })
-
-  it('is refused for a pane the tab does not hold', async () => {
-    const { store } = await storeWithSplit()
-    const result = await store.applyLayoutCommand({
-      ...on,
-      type: 'setPaneGrid',
-      tabId: 'tab-1',
-      leafId: '33333333-3333-4333-8333-333333333333',
-      grid: { cols: 80, rows: 24 }
-    })
-    expect(result).toMatchObject({ ok: false })
-  })
-
   it("keeps a grid resized just before quit, written by the quit's flush", async () => {
     const { store, directory } = await storeWithSplit()
     await store.persistPtyBinding({

@@ -13,7 +13,7 @@ import {
   type AgentSessionAttachmentUploadStartResult,
   type AgentSessionAttachmentUploadTarget
 } from '../../shared/agent-session/agent-session-attachments'
-import { resolveEnvironment } from '../../shared/runtime-environment-store'
+import { resolveEnvironment } from '../../shared/remote-runtime/host-store/runtime-environment-store'
 import { callRuntimeEnvironment } from './runtime-environments/runtime-environment-transport-routing'
 import {
   isRuntimeEnvironmentManuallyDisconnected,

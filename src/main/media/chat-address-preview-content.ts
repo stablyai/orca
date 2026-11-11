@@ -1,6 +1,6 @@
 import { extname } from 'node:path'
-import type { ChatAddressPreviewKind } from '../../shared/chat-address-preview'
-import { isBinaryBuffer } from '../../shared/binary-buffer'
+import type { ChatAddressPreviewKind } from '../../shared/file-preview/chat-address-preview'
+import { isBinaryBuffer } from '../../shared/file-preview/binary-buffer'
 
 export const CHAT_PREVIEW_PROBE_BYTES = 4096
 export const CHAT_PREVIEW_MAX_TEXT_BYTES = 1024 * 1024

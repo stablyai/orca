@@ -25,6 +25,7 @@ export type GitExecOptions = {
   preferWslDirectGit?: boolean
   useConfiguredSshCommandForNetwork?: boolean
   terminationBarrier?: boolean
+  observeChildTermination?: (terminated: Promise<void>, writes: boolean) => void
   /** Scheduler priority for this child; status is the safe default. */
   admissionTier?: GitAdmissionTier
   /** Skips general admission; only for a caller that bounds its own concurrency (worktree deletes). */

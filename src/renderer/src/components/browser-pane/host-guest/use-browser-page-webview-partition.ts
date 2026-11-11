@@ -1,8 +1,9 @@
 import { useAppStore } from '@/store'
-import { ORCA_BROWSER_PARTITION } from '../../../../../shared/constants'
+import '../../../../../shared/constants'
+import { ORCA_BROWSER_PARTITION } from '../../../../../shared/browser/browser-session-partition'
 import { getOrcaProfileBrowserDefaultPartition } from '../../../../../shared/orca-profiles'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
-import { unadmittedBrowserPartition } from '../../../../../shared/browser-profile-scope'
+import { unadmittedBrowserPartition } from '../../../../../shared/browser/profiles/browser-profile-scope'
 
 export function useBrowserPageWebviewPartition({
   sessionProfileId,

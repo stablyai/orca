@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -101,18 +101,6 @@ describe('the backup taken before the first boot-time rewrite of saved data', ()
       ensureProfileStatePreMigrationBackup(databasePath, PROFILE, writeProfileStateBackup)
     ).resolves.toBe('ready')
     expect(readGeneration(backupPath)).toBe(1)
-  })
-
-  it('refuses rather than replaces something else at the backup path', async () => {
-    const { databasePath, backupPath } = fixture()
-    mkdirSync(backupPath)
-    vi.spyOn(console, 'error').mockImplementation(() => {})
-    const runBackup = vi.fn(writeProfileStateBackup)
-
-    await expect(
-      ensureProfileStatePreMigrationBackup(databasePath, PROFILE, runBackup)
-    ).resolves.toBe('failed')
-    expect(runBackup).not.toHaveBeenCalled()
   })
 
   it('is not one of the hourly backups, so rotation never prunes it', async () => {

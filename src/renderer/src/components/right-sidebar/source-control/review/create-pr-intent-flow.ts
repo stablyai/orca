@@ -1,15 +1,22 @@
-import type { WorktreeGitCopy } from '@/lib/worktree-git-copy'
+import type { SourceControlStoreActions } from '../listing/use-store-actions'
+import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
+import type { SourceControlWorktreeOperationState } from '../panel/use-worktree-operation-state'
+import type { SourceControlCreatePrIntentTarget } from './use-create-pr-intent-target'
+import type { SourceControlCreateReviewComposer } from './use-create-review-composer'
+import type { SourceControlHostedReviewCreated } from './use-hosted-review-created'
+import type { SourceControlHostedReviewState } from './use-hosted-review-state'
+import type { WorktreeGitCopy } from '@/lib/workspace/ownership/worktree-git-copy'
 import type {
   HostedReviewCreationEligibility,
   HostedReviewProvider
-} from '../../../../../../shared/hosted-review'
+} from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import {
   normalizeHostedReviewBaseRef,
   normalizeHostedReviewHeadRef
-} from '../../../../../../shared/hosted-review-refs'
-import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
-import { summarizeCommitFailure } from '../commit/commit-failure-summary'
-import { getStageAllPaths } from '../../../../../../shared/source-control-discard-all-sequence'
+} from '../../../../../../shared/source-control/hosted-review/hosted-review-refs'
+import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
+import { summarizeCommitFailure } from '../../../../../../shared/source-control/recovery/source-control-commit-failure'
+import { getStageAllPaths } from '../../../../../../shared/source-control/listing/source-control-discard-all-sequence'
 
 export type CreatePrIntentRunToken = {
   repoId: string
@@ -141,13 +148,6 @@ export function shouldAttemptCreateHostedReviewForIntent(
   )
 }
 
-export function shouldGenerateHostedReviewDetailsForIntent(
-  eligibility: HostedReviewCreationEligibility
-): boolean {
-  // Generate before main rechecks unavailable lookups so recovered creates never submit fallback fields.
-  return shouldAttemptCreateHostedReviewForIntent(eligibility)
-}
-
 export function resolveCreatePrIntentGeneratedReviewFields(
   current: CreatePrIntentReviewFields,
   generated: CreatePrIntentReviewGeneration
@@ -187,4 +187,17 @@ export function getCreatePrIntentCommitFailureNoticeMessage(
   }
 
   return copy.withSummary(summary)
+}
+
+export type CreatePrIntentReviewOptions = Pick<
+  SourceControlCreateReviewComposer,
+  'prBase' | 'prBody'
+> & {
+  activeRepo: SourceControlWorktreeContext['activeRepo']
+  createHostedReview: SourceControlStoreActions['createHostedReview']
+  operationStore: SourceControlWorktreeOperationState['operationStore']
+  getCreatePrIntentOperationTarget: SourceControlCreatePrIntentTarget['getCreatePrIntentOperationTarget']
+  handlePullRequestCreated: SourceControlHostedReviewCreated['handlePullRequestCreated']
+  hostedReviewCreateCopy: SourceControlHostedReviewState['hostedReviewCreateCopy']
+  prImageUploadPendingRef?: React.RefObject<boolean>
 }

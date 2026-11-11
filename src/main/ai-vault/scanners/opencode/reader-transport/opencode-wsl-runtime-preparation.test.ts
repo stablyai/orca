@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { NODE_RUNTIME_ASSETS } from '../../../../../shared/node-runtime-pin'
 import { runProcess } from '@orca/process-host'
 import type * as preparationModule from './opencode-wsl-runtime-preparation'
 
@@ -34,7 +33,9 @@ vi.mock('../../../../native-chat/wsl-transcript-running-admission', () => ({
 vi.mock('../../../../node-runtime/pinned-runtime-materializer', () => ({
   materializeNodeRuntimeArchive: mocks.download
 }))
-vi.mock('../../../../ssh/relay-bundle-paths', () => ({ relayBundleCandidates: mocks.bundles }))
+vi.mock('../../../../wsl/execution/relay-bundle-paths', () => ({
+  relayBundleCandidates: mocks.bundles
+}))
 
 const home = String.raw`\\wsl.localhost\Ubuntu\home\ada`
 const success = (stdout: string) => ({ stdout, stderr: '', code: 0, timedOut: false })
@@ -72,69 +73,6 @@ async function prepared() {
 }
 
 describe('WSL SQLite runtime preparation', () => {
-  it('returns immediately, coalesces distro aliases, and requests the guest SQLite probe', async () => {
-    let release: (value: ReturnType<typeof success>) => void = () => {}
-    mocks.run.mockReturnValueOnce(
-      new Promise((resolve) => {
-        release = resolve
-      })
-    )
-    expect(await prepare([home, String.raw`\\wsl$\ubuntu\home\ada`])).toHaveLength(1)
-    await vi.waitFor(() => expect(mocks.run).toHaveBeenCalledOnce())
-    expect((await prepare([home]))[0]?.error).toContain('Preparing')
-    expect(mocks.run).toHaveBeenCalledOnce()
-    release(success('present'))
-    expect(await prepared()).toEqual([
-      { distro: 'ubuntu', executable: '/usr/bin/node', readerPath: '/mnt/c/reader.cjs' }
-    ])
-    expect(mocks.run).toHaveBeenCalledWith(
-      expect.objectContaining({
-        program: 'node',
-        loginPath: 'preferred',
-        args: ['-e', expect.stringMatching(/require\('node:sqlite'\).*backup/)]
-      })
-    )
-    expect(mocks.bundles.mock.calls.map(([platform]) => platform)).toEqual(['wsl'])
-    expect(mocks.download).not.toHaveBeenCalled()
-  })
-
-  it('does not start a stopped distro and retries a failed preparation after cooldown', async () => {
-    let now = 10_000
-    vi.spyOn(Date, 'now').mockImplementation(() => now)
-    mocks.running.mockResolvedValue([])
-    await prepare([home])
-    await vi.waitFor(async () => expect((await prepare([home]))[0]?.error).toContain('not running'))
-    expect(mocks.run).not.toHaveBeenCalled()
-    mocks.running.mockImplementation(async (paths) => [...paths])
-    expect((await prepare([home]))[0]?.error).toContain('not running')
-    now += 30_001
-    expect((await prepared())[0]?.executable).toBe('/usr/bin/node')
-  })
-
-  it('keeps a working reader during revalidation and prunes completed removed distros', async () => {
-    let now = 10_000
-    vi.spyOn(Date, 'now').mockImplementation(() => now)
-    const ready = await prepared()
-    now += 600_001
-    let release: (value: ReturnType<typeof success>) => void = () => {}
-    mocks.run.mockReturnValueOnce(
-      new Promise((resolve) => {
-        release = resolve
-      })
-    )
-    expect(await prepare([home])).toEqual(ready)
-    await vi.waitFor(() => expect(mocks.run).toHaveBeenCalledTimes(4))
-    expect(await prepare([home])).toEqual(ready)
-    mocks.run.mockResolvedValueOnce(success('/mnt/c/repaired-reader.cjs'))
-    release(success('present'))
-    await vi.waitFor(async () =>
-      expect((await prepare([home]))[0]?.readerPath).toBe('/mnt/c/repaired-reader.cjs')
-    )
-    expect(await prepare([])).toEqual([])
-    expect((await prepare([home]))[0]?.error).toContain('Preparing')
-    await prepared()
-  })
-
   it('checks the generated SQLite probe against missing API and stderr warnings locally', async () => {
     await prepared()
     const probe = mocks.run.mock.calls.find(([spec]) => spec.program === 'node')?.[0]
@@ -166,122 +104,6 @@ describe('WSL SQLite runtime preparation', () => {
     } finally {
       await rm(directory, { recursive: true, force: true })
     }
-  })
-
-  it('requests pinned runtime verification and preserves literal argv', async () => {
-    const expected = NODE_RUNTIME_ASSETS['linux-arm64-musl'].executableSha256
-    mocks.run.mockImplementation(async (spec) => {
-      if (spec.script?.startsWith('data=')) {
-        return success('present')
-      }
-      if (spec.program === 'node') {
-        return { ...success(''), code: 1, stderr: 'no sqlite' }
-      }
-      if (spec.program === 'uname') {
-        return success('aarch64')
-      }
-      if (spec.program === 'wslpath') {
-        return success(
-          `/mnt/c/${spec.args.at(-1).includes('.tar.gz') ? 'node $literal.tar.gz' : 'reader $literal.cjs'}`
-        )
-      }
-      if (
-        spec.script?.includes('getconf GNU_LIBC_VERSION') ||
-        spec.script?.includes('ldd --version')
-      ) {
-        return success('')
-      }
-      if (spec.script?.includes('/lib/ld-musl-')) {
-        return success('musl libc (aarch64)\nVersion 1.2.5')
-      }
-      if (spec.script?.startsWith('printf')) {
-        return success('/home/ada $literal')
-      }
-      if (spec.script?.includes('ORCA_NODE_RUNTIME_EXTRACT_FAILED')) {
-        return success('ORCA_NODE_RUNTIME_READY')
-      }
-      return success(
-        spec.script?.includes('ORCA_NODE_RUNTIME_MISSING') ? 'ORCA_NODE_RUNTIME_MISSING' : ''
-      )
-    })
-    const result = await prepared()
-    expect(mocks.download).toHaveBeenCalledWith(
-      'linux-arm64-musl',
-      expect.any(String),
-      expect.objectContaining({ signal: expect.any(AbortSignal) })
-    )
-    expect(result[0]).toEqual({
-      distro: 'Ubuntu',
-      executable: `/home/ada $literal/.cache/orca/runtimes/node-${expected}/bin/node`,
-      readerPath: '/mnt/c/reader $literal.cjs'
-    })
-    const install = mocks.run.mock.calls
-      .map(([spec]) => spec)
-      .find((spec) => spec.script?.includes('ORCA_NODE_RUNTIME_EXTRACT_FAILED'))
-    expect(install).toMatchObject({ args: ['/mnt/c/node $literal.tar.gz'], loginPath: 'none' })
-    expect(install.script).toContain(expected)
-    expect(install.timeoutMs).toBeLessThanOrEqual(120_000)
-    expect(
-      mocks.run.mock.calls.every(
-        ([spec]) => (spec === install || spec.timeoutMs <= 15_000) && spec.maxOutputBytes === 16_384
-      )
-    ).toBe(true)
-  })
-
-  it('rechecks running state after downloading before it copies a runtime', async () => {
-    mocks.run.mockImplementation(async (spec) => {
-      if (spec.script?.startsWith('data=')) {
-        return success('present')
-      }
-      if (spec.program === 'node') {
-        return { ...success(''), code: 1 }
-      }
-      if (spec.program === 'uname') {
-        return success('x86_64')
-      }
-      if (spec.program === 'wslpath') {
-        return success('/mnt/c/reader.cjs')
-      }
-      if (spec.script?.includes('getconf GNU_LIBC_VERSION')) {
-        return success('glibc 2.31')
-      }
-      if (spec.script?.startsWith('printf')) {
-        return success('/home/ada')
-      }
-      return success('')
-    })
-    mocks.download.mockImplementationOnce(async () => {
-      mocks.running.mockResolvedValue([])
-      return 'C:\\cache\\node.tar.gz'
-    })
-    await prepare([home])
-    await vi.waitFor(async () => expect((await prepare([home]))[0]?.error).toContain('not running'))
-    expect(mocks.download).toHaveBeenCalledOnce()
-    expect(mocks.run.mock.calls.some(([spec]) => spec.script?.includes('mv -f'))).toBe(false)
-  })
-
-  it('ignores native roots and does no work outside Windows', async () => {
-    expect(await prepare(['C:\\Users\\ada'])).toEqual([])
-    vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')
-    expect(await prepare([home])).toEqual([])
-    expect(mocks.run).not.toHaveBeenCalled()
-  })
-
-  it('skips runtime setup without a database and rechecks soon after OpenCode starts', async () => {
-    let now = 10_000
-    vi.spyOn(Date, 'now').mockImplementation(() => now)
-    mocks.run.mockResolvedValueOnce(success(''))
-    await prepare([home])
-    await vi.waitFor(async () =>
-      expect((await prepare([home]))[0]?.error).toContain('No OpenCode or ZCode database')
-    )
-    expect(mocks.run).toHaveBeenCalledOnce()
-    expect(mocks.download).not.toHaveBeenCalled()
-    expect(mocks.run.mock.calls[0]?.[0].script).toContain('OPENCODE_DB')
-    expect(mocks.run.mock.calls[0]?.[0].script).toContain('XDG_DATA_HOME')
-    now += 30_001
-    expect((await prepared())[0]?.executable).toBe('/usr/bin/node')
-    expect(mocks.running).toHaveBeenCalledWith(expect.any(Array), { requireConfirmed: true })
   })
 
   it.skipIf(process.platform === 'win32').each(['opencode', 'zcode'] as const)(

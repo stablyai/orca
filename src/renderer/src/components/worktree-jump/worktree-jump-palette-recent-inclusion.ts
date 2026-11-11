@@ -3,7 +3,7 @@ import {
   resolveTerminalTabAttentionBadge,
   terminalTabHasUnreadActivity
 } from '@/components/tab-bar/terminal-tab-activity-status'
-import { resolveRecentWorkspaceTabStatus } from '@/lib/recent-workspace-tab-rows'
+import { resolveRecentWorkspaceTabStatus } from '@/lib/workspace/search/palette/recent-workspace-tab-rows'
 import type { TabPaneInputSources } from '../../../../shared/sidebar-list/smart-attention'
 import type { OpenTabPaletteItem, OpenTabRecentRow } from './worktree-jump-palette-model'
 import type { Worktree } from '../../../../shared/worktree/types'

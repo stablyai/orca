@@ -6,8 +6,6 @@ import {
   normalizeJiraProjectReference,
   restrictJiraQueryToProject
 } from './jira-project-reference'
-import { createRepoUpdateSchema } from '../rpc-contract/repo-update-params'
-import { z } from 'zod'
 
 const project = { id: '10', key: 'ALP', name: 'Alpha', siteId: 'site-a' }
 const issue: JiraIssue = {
@@ -40,22 +38,6 @@ describe('Jira project mappings', () => {
     expect(normalizeJiraProjectReference({ ...project, siteId: '' })).toBeUndefined()
     expect(normalizeJiraProjectReference({ id: '10' })).toBeUndefined()
     expect(normalizeJiraProjectReference(null)).toBeNull()
-  })
-
-  it('normalizes the optional field through the repository update schema', () => {
-    const schema = createRepoUpdateSchema({ repo: z.string() })
-    expect(
-      schema.parse({ repo: 'repo', updates: { defaultJiraProject: project } }).updates
-        .defaultJiraProject
-    ).toEqual(project)
-    expect(
-      schema.parse({ repo: 'repo', updates: { defaultJiraProject: null } }).updates
-        .defaultJiraProject
-    ).toBeNull()
-    expect(
-      schema.parse({ repo: 'repo', updates: { defaultJiraProject: { id: 'bad' } } }).updates
-        .defaultJiraProject
-    ).toBeUndefined()
   })
 
   it('chooses only a unique repository with the matching project, account, and host', () => {

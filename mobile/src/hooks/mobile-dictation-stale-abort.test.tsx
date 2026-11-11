@@ -1,4 +1,4 @@
-// Desktop cancellation can overlap a newer recording; late abort completion must neither toast over it nor reset it, and late capture rejection must preserve the reported closure.
+// A new start must not reach the host before its cancel of the previous one, and late capture rejection must preserve the reported closure.
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -107,53 +107,34 @@ beforeEach(() => {
   held.dictation = null
 })
 
-describe('an abort whose desktop cancel answers after a newer dictation is recording', () => {
-  it('does not report the disable over the recording that replaced it', async () => {
-    const rpc = createFakeRpcClient()
-    let renderer: ReactTestRenderer | null = null
-    act(() => {
-      renderer = create(createElement(Probe, { client: rpc, enabled: true }))
-    })
-    await reachRecording(rpc)
-    const staleCancel: { request: SentRequest | null } = { request: null }
-    // The disable effect flushes at scope exit; hold its cancel in the next scope.
-    await act(async () => {
-      renderer?.update(createElement(Probe, { client: rpc, enabled: false }))
-    })
-    await act(async () => {
-      await pumpHolding(rpc, 'speech.dictation.cancel', staleCancel)
-    })
-    expect(staleCancel.request).not.toBeNull()
-    await act(async () => {
-      renderer?.update(createElement(Probe, { client: rpc, enabled: true }))
-      await pump(rpc)
-    })
-    await reachRecording(rpc)
-    errors.length = 0
-    await act(async () => {
-      staleCancel.request?.resolve({ id: 'desktop', ok: true, result: {} })
-      await pump(rpc)
-    })
-    expect(errors).toEqual([])
-    expect(dictation().status).toBe('recording')
-    expect(dictation().error).toBeNull()
-  })
-
-  it('does not idle the recording that replaced a cancel the user asked for', async () => {
+describe('a start right after a cancel the host has not answered yet', () => {
+  it('waits for the host to drop the cancelled dictation before starting the next', async () => {
     const rpc = createFakeRpcClient()
     act(() => {
       create(createElement(Probe, { client: rpc, enabled: true }))
     })
     await reachRecording(rpc)
-    const staleCancel: { request: SentRequest | null } = { request: null }
+    const pendingCancel: { request: SentRequest | null } = { request: null }
     await act(async () => {
       void dictation().cancel()
-      await pumpHolding(rpc, 'speech.dictation.cancel', staleCancel)
+      await pumpHolding(rpc, 'speech.dictation.cancel', pendingCancel)
     })
-    expect(staleCancel.request).not.toBeNull()
-    await reachRecording(rpc)
+    expect(pendingCancel.request).not.toBeNull()
+    expect(dictation().status).toBe('idle')
+
     await act(async () => {
-      staleCancel.request?.resolve({ id: 'desktop', ok: true, result: {} })
+      void dictation()
+        .start()
+        .catch(() => undefined)
+      await Promise.resolve()
+      device.permissions.shift()?.grant()
+      await pump(rpc)
+    })
+    // The host refuses a second start from this phone while it still holds the cancelled one.
+    expect(dictation().status).toBe('starting')
+
+    await act(async () => {
+      pendingCancel.request?.resolve({ id: 'desktop', ok: true, result: {} })
       await pump(rpc)
     })
     expect(dictation().status).toBe('recording')

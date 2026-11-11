@@ -2,7 +2,12 @@ import type { CommandHandler } from '../../dispatch'
 import { printResult } from '../../format'
 import { printOrchestrationResult } from './agent-view'
 import { WORKER_LIST_VIEW, type WorkerListResult } from './worker-agent-views'
-import { WORKER_RELEASE_VIEW, workerStopFailure } from './worker-release-agent-view'
+import {
+  formatHelperStops,
+  WORKER_RELEASE_VIEW,
+  workerStopFailure
+} from './worker-release-agent-view'
+import type { WorkerStopReceipt } from '../../../shared/orchestration/workers/orchestration-worker-stop-receipt'
 import {
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,
@@ -41,15 +46,14 @@ const keepWorkerOpen: CommandHandler = async ({ flags, client, json }) => {
 
 export const ORCHESTRATION_WORKER_TERMINAL_HANDLERS: Record<string, CommandHandler> = {
   'orchestration worker-stop': async ({ flags, client, json }) => {
-    const result = await callOrchestrationMutation<{
-      dispatchId: string
-      state: string
-      processAction: string
-      lastError?: string
-      warning?: string
-    }>(client, flags, 'orchestration.workerStop', {
-      dispatch: getRequiredStringFlag(flags, 'dispatch')
-    })
+    const result = await callOrchestrationMutation<WorkerStopReceipt>(
+      client,
+      flags,
+      'orchestration.workerStop',
+      {
+        dispatch: getRequiredStringFlag(flags, 'dispatch')
+      }
+    )
     if (!flags.has('full')) {
       printOrchestrationResult(result, json, {
         fields: (value) => value,
@@ -57,14 +61,14 @@ export const ORCHESTRATION_WORKER_TERMINAL_HANDLERS: Record<string, CommandHandl
       })
       return
     }
-    if (result.result.state === 'stop_unknown') {
+    if (workerStopFailure(result.result)) {
       process.exitCode = 1
     }
     printResult(
       result,
       json,
       (value) =>
-        `Worker ${value.dispatchId} [${value.state}] process=${value.processAction}${value.lastError ? `\n${value.lastError}` : ''}${value.warning ? `\nWarning: ${value.warning}` : ''}`
+        `Worker ${value.dispatchId} [${value.state}] process=${value.processAction}${value.lastError ? `\n${value.lastError}` : ''}${value.warning ? `\nWarning: ${value.warning}` : ''}${formatHelperStops(value.helpers)}${value.helperStopError ? `\n${value.helperStopError}` : ''}`
     )
   },
 
@@ -169,7 +173,10 @@ export const ORCHESTRATION_WORKER_TERMINAL_HANDLERS: Record<string, CommandHandl
                 const autoRelease = projection?.autoReleaseAt
                   ? ` auto-release=${projection.autoReleaseAt}`
                   : ''
-                return `${worker.dispatchId} task=${worker.taskId} [${worker.workerState}${details} terminal=${worker.terminalState ?? 'none'}${autoRelease}${next}`
+                const coordinatedFrom = worker.coordinatedFrom
+                  ? ` coordinated from ${worker.coordinatedFrom}`
+                  : ''
+                return `${worker.dispatchId} task=${worker.taskId} [${worker.workerState}${details} terminal=${worker.terminalState ?? 'none'}${autoRelease}${next}${coordinatedFrom}`
               })
               .join('\n')
       const counts = Object.entries(value.counts)

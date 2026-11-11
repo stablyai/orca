@@ -1,9 +1,10 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import type { ClientChannel } from 'ssh2'
-import type { AutomationPrecheck, AutomationPrecheckResult } from '../../shared/automations-types'
-import { MAX_AUTOMATION_PRECHECK_OUTPUT_CHARS } from '../../shared/automation-precheck'
+import type { AutomationPrecheck } from '../../shared/automations/automation-definition'
+import type { AutomationPrecheckResult } from '../../shared/automations/history/automation-run'
+import { MAX_AUTOMATION_PRECHECK_OUTPUT_CHARS } from '../../shared/automations/launch/automation-precheck'
 import { getSshConnectionManager } from '../ssh/targets/ssh-target-registry'
-import { quotePosixShell } from '../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../shared/shell/launch/shell-argument-quoting'
 import { admitSelfInitiatedTreeKill } from '../pty/process-retirement/own-chromium-tree-kill-guard'
 import { errorMessage } from '../../shared/error-message'
 

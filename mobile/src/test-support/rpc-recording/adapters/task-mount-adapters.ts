@@ -84,6 +84,7 @@ export function taskMountAdapters(
         client: context.client,
         tasksSupported: true,
         detailRefreshSeq: 0,
+        detailRefreshRequested: { current: false },
         detailRequestItem: model.actionItem,
         hydrateActionItem: model.setActionItem
       })
@@ -136,6 +137,7 @@ export function taskMountAdapters(
       Object.assign(model, {
         client: context.client,
         clientRef: { current: context.client },
+        hostId: 'host-1',
         taskUiReady: true,
         githubProjectFieldVisibilityScope: null,
         taskResumeRef: { current: {} },

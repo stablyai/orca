@@ -1,11 +1,11 @@
 import { extname, join } from 'node:path'
 import { yieldToEventLoop } from '../../shared/event-loop-yield'
-import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
+import type { AiVaultScanIssue } from '../../shared/ai-vault/contracts/ai-vault-types'
 import { wslGatedReaddir } from '../native-chat/wsl-transcript-fs-access'
 import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
 import { openAiVaultScanSource } from './ai-vault-scan-progress'
 import { SCAN_ISSUE_LIMIT, recordSessionScanIssue } from './session-scan-issues'
-import { createAiVaultScopeCwdMatcher } from '../../shared/ai-vault-scope-cwd-match'
+import { createAiVaultScopeCwdMatcher } from '../../shared/ai-vault/scanning/ai-vault-scope-cwd-match'
 import type { CwdBucketLayout } from './session-cwd-bucket-layouts'
 import type { FileWithMtime } from './session-scanner-types'
 import {
@@ -20,7 +20,10 @@ import {
 const TRANSCRIPT_EXTENSIONS = new Set(['.jsonl'])
 export type CwdBucketInventory = {
   layout: CwdBucketLayout
-  directories: string[][]
+  // With no recency pass behind it, files a cwd probe can't place are kept for the parse to decide.
+  scopeOnly: boolean
+  // unverified: a scope-only Claude bucket whose newest transcripts named no in-scope cwd.
+  directories: { paths: string[]; unverified: boolean }[]
   issues: { before: number; issue: AiVaultScanIssue }[]
 }
 
@@ -37,6 +40,7 @@ type InScopeDiscoveryArgs = {
   limit: number
   excludedFilePaths: ReadonlySet<string>
   issues: AiVaultScanIssue[]
+  scopeOnly?: boolean
   signal?: AbortSignal
 }
 
@@ -54,7 +58,12 @@ export async function inventoryCwdBucketFiles(
   args: Omit<InScopeDiscoveryArgs, 'excludedFilePaths' | 'issues'>,
   issueLimit = SCAN_ISSUE_LIMIT
 ): Promise<CwdBucketInventory> {
-  const inventory: CwdBucketInventory = { layout, directories: [], issues: [] }
+  const inventory: CwdBucketInventory = {
+    layout,
+    scopeOnly: args.scopeOnly === true,
+    directories: [],
+    issues: []
+  }
   if (args.scopePaths.length === 0 || args.limit <= 0) {
     return inventory
   }
@@ -66,7 +75,7 @@ export async function inventoryCwdBucketFiles(
   const prefixes = cwdBucketScopePrefixes(layout, args.scopePaths)
   const inScope = createAiVaultScopeCwdMatcher(args.scopePaths)
   let index = 0
-  for (const rootDir of args.rootDirs) {
+  for (const rootDir of args.rootDirs.flatMap(layout.bucketDirs ?? ((dir) => [dir]))) {
     throwIfAiVaultScanCancelled(args.signal)
     let close: () => void = () => undefined
     try {
@@ -82,10 +91,15 @@ export async function inventoryCwdBucketFiles(
       )
       for (const directory of directories) {
         await yieldScanInventory(index++, args.signal)
+        let unverified = false
         if (layout.agent === 'claude') {
           const cwd = await cachedProjectDirCwd(directory, record, layout.agent, args.signal)
+          // No cwd found, or a folder sharing the lossy name: without a recency pass, the parse decides.
           if (!inScope(cwd, directory)) {
-            continue
+            if (!args.scopeOnly) {
+              continue
+            }
+            unverified = true
           }
         }
         const paths: string[] = []
@@ -101,7 +115,7 @@ export async function inventoryCwdBucketFiles(
           throwIfAiVaultScanCancelled(args.signal)
           recordRefusal(record, directory, err, layout.agent)
         }
-        inventory.directories.push(paths)
+        inventory.directories.push({ paths, unverified })
       }
     } finally {
       close()
@@ -120,6 +134,8 @@ export async function selectCwdBucketFiles(
 ): Promise<FileWithMtime[]> {
   const { layout } = inventory
   const collected = new Map<string, FileWithMtime>()
+  // Bounded apart so files the parse may reject never push out ones already known to be in scope.
+  const unverified = new Map<string, FileWithMtime>()
   const record: IssueSink = (issue) => recordSessionScanIssue(args.issues, issue)
   const inScope = createAiVaultScopeCwdMatcher(args.scopePaths)
   let issueIndex = 0
@@ -128,16 +144,17 @@ export async function selectCwdBucketFiles(
     while (inventory.issues[issueIndex]?.before === index) {
       record(inventory.issues[issueIndex++].issue)
     }
-    const paths = inventory.directories[index]
-    if (!paths) {
+    const directory = inventory.directories[index]
+    if (!directory) {
       break
     }
     await collectBucketFiles({
-      paths,
+      paths: directory.paths,
       agent: layout.agent,
       inScope: layout.agent !== 'claude' ? inScope : undefined,
       issues: record,
-      collected,
+      collected: directory.unverified ? unverified : collected,
+      ...(inventory.scopeOnly ? { unknown: unverified } : {}),
       limit: args.limit,
       excludedFilePaths: args.excludedFilePaths,
       signal: args.signal
@@ -145,5 +162,7 @@ export async function selectCwdBucketFiles(
   }
   inventory.directories.length = 0
   inventory.issues.length = 0
-  return [...collected.values()].sort((left, right) => right.mtimeMs - left.mtimeMs)
+  return [...collected.values(), ...unverified.values()].sort(
+    (left, right) => right.mtimeMs - left.mtimeMs
+  )
 }

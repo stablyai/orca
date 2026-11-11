@@ -3,12 +3,12 @@ import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { useAppStore } from '@/store'
 import { createRuntimeAgentProjections } from '../../src/main/runtime/construction/runtime-agent-projections'
-import { createSessionTabsStreamDelta } from '../../src/main/runtime/rpc/methods/session-tabs-sender-delta'
-import { MIRROR_LEAVES_STEP_1 } from '../../src/main/runtime/runtime-leaf-record-projection.test-fixture'
+import { createSessionTabsStreamDelta } from '../../src/main/runtime/rpc/methods/session-tabs/session-tabs-sender-delta'
+import { MIRROR_LEAVES_STEP_1 } from '../../src/main/runtime/terminal/records/runtime-leaf-record-projection.test-fixture'
 import type {
   RuntimeLeafRecord,
   RuntimePtyWorktreeRecord
-} from '../../src/main/runtime/runtime-terminal-state-records'
+} from '../../src/main/runtime/terminal/records/runtime-terminal-state-records'
 import type { RuntimeMobileSessionTabsResult } from '../../src/shared/runtime-types'
 import type { RuntimeSyncWindowGraphResult } from '../../src/shared/runtime-session-contracts'
 
@@ -20,19 +20,19 @@ type SenderGraphReply = Pick<
 import {
   agentSenderIndexWorkForTest,
   selectAgentSenderAssociation
-} from '@/runtime/agent-sender-associations'
-import { agentSenderAliasWorkForTest } from '@/runtime/agent-sender-alias-projection'
+} from '@/runtime/native-chat/agent-senders/agent-sender-associations'
+import { agentSenderAliasWorkForTest } from '@/runtime/native-chat/agent-senders/agent-sender-alias-projection'
 import { applyStructuredSessionTabSnapshots } from '@/runtime/local-structured-session-tabs-sync/snapshot-apply'
 import { resetLocalStructuredSessionVersionForTests } from '@/runtime/local-structured-session-tabs-sync/inventory-generation-fence'
 import { handleGlobalSessionEvent } from '@/runtime/web-session-tabs-sync/global-session-events'
 import { VisibilityResumeCoordinator } from '@/runtime/web-session-tabs-sync/visibility-resume-coordinator'
 import { resetWebSessionTabsSnapshotFreshnessForTests } from '@/runtime/web-session-tabs-sync/tracking-lifecycle'
-import { useAgentMessageSenderView } from '@/components/native-chat/native-chat-agent-message-sender-view'
+import { useAgentMessageSenderView } from '@/components/native-chat/messages/agent-senders/native-chat-agent-message-sender-view'
 import {
   initialStore,
   resetSenderStore
-} from '@/components/native-chat/native-chat-agent-sender.test-fixture'
-import { makeTab } from '@/store/slices/store-test-helpers'
+} from '@/components/native-chat/messages/agent-senders/native-chat-agent-sender.test-fixture'
+import { makeTab } from '@/store/terminals/terminal-tab.test-fixture'
 
 const unissued = (): never => {
   throw new Error('a sender build issued a terminal handle')

@@ -3,7 +3,7 @@ import { getLocalWorktreeCatalogVersion } from '../../../workspaces/catalog/loca
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { withWorktreeSpan } from '../../../observability/instrumentation'
-import { areWorktreePathsEqual } from '../../../git/worktree-path-comparison'
+import { areWorktreePathsEqual } from '../../../git/worktrees/catalog/worktree-path-comparison'
 import { parseWorktreeId } from '../../worktree-logic'
 import type { RemoveWorktreeArgs } from '../ipc-context-schemas'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
@@ -17,6 +17,7 @@ import {
   getWorktreeRemovalOptionsKey
 } from './worktree-removal-coordinator'
 import { resolveRepoForExecutionHost } from '../repo-host-ownership'
+import { withNestedPreservedBranches } from '../../../workspaces/removal/nested-worktree-removal-plan'
 import {
   finishAcceptedWorktreeRemoval,
   waitForPendingWorktreeRemoval
@@ -28,7 +29,7 @@ import {
   observeTerminals,
   runWorkspaceLifecycleCommand,
   workspaceLifecycleKey
-} from '../../../runtime/workspaces/workspace-lifecycle-commands'
+} from '../../../runtime/workspaces/lifecycle/workspace-lifecycle-commands'
 
 export function registerWorktreeRemovalHandlers(context: WorktreeIpcContext): void {
   const { store, options, worktreeRemovalsInFlight } = context
@@ -101,13 +102,7 @@ export function registerWorktreeRemovalHandlers(context: WorktreeIpcContext): vo
           : runSerializedWorktreeRemovalAcceptance(repo.path, accept))
         result = await finishAcceptedWorktreeRemoval(accepted, args.worktreeId, removalHostId)
       } catch (error) {
-        if (nestedPreservedBranches.length > 0) {
-          throw new Error(
-            `${error instanceof Error ? error.message : String(error)} Branches kept after nested deletions: ${nestedPreservedBranches.map((item) => item.branchName).join(', ')}.`,
-            { cause: error }
-          )
-        }
-        throw error
+        throw withNestedPreservedBranches(error, nestedPreservedBranches)
       }
       if (!accepted.removing) {
         options?.onWorktreeLifecycle?.({

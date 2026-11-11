@@ -1,5 +1,5 @@
 import type { DiffComment } from '../../../shared/diff-comment-types'
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 
 // Preserve members without filtering so normalization cannot delete user-authored comments.
 export function normalizeFolderWorkspaceDiffComments(

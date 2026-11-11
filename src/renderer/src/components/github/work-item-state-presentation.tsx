@@ -4,13 +4,14 @@ import type { GitHubAssignableUser } from '../../../../shared/github/pull-reques
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import { formatUiRelativeTimeFromDate } from '@/i18n/relative-time-format'
 import { getTaskPageGitHubWorkItemStateLabel } from '@/components/task-page/github/task-page-github-work-item-status'
+import type { Translate } from '@/i18n/use-translate'
 
-export function formatRelativeTime(input: string): string {
-  return formatUiRelativeTimeFromDate(input)
+export function formatRelativeTime(input: string, intlLocale?: string): string {
+  return formatUiRelativeTimeFromDate(input, undefined, intlLocale)
 }
 
-export function getStateLabel(item: GitHubWorkItem): string {
-  return getTaskPageGitHubWorkItemStateLabel(item)
+export function getStateLabel(item: GitHubWorkItem, t?: Translate): string {
+  return getTaskPageGitHubWorkItemStateLabel(item, t)
 }
 export function ReviewerAvatar({
   login,

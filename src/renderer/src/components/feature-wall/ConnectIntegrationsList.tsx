@@ -2,28 +2,30 @@ import { Fragment, useState } from 'react'
 import { Trans } from 'react-i18next'
 import {
   AzureDevOpsIntegrationCard,
-  BitbucketIntegrationCard,
-  GiteaIntegrationCard,
+  GiteaIntegrationCard
+} from '@/components/integrations/source-control/token-source-control-integration-cards'
+import { BitbucketIntegrationCard } from '@/components/integrations/source-control/bitbucket-integration-card'
+import {
   GitHubIntegrationCard,
   GitLabIntegrationCard
-} from '@/components/settings/source-control-integration-cards'
-import {
-  JiraIntegrationCard,
-  LinearIntegrationCard
-} from '@/components/settings/task-tracker-integration-cards'
+} from '@/components/integrations/source-control/cli-source-control-integration-cards'
+import { JiraIntegrationCard } from '@/components/integrations/task-trackers/jira-integration-card'
+import { LinearIntegrationCard } from '@/components/integrations/task-trackers/linear-integration-card'
 import {
   IntegrationCardGroup,
   IntegrationCardPresentationProvider
-} from '@/components/settings/integration-card-presentation'
-import { useIntegrationProviderStatusRefresh } from '@/components/settings/use-integration-provider-status-refresh'
+} from '@/components/integrations/presentation/integration-card-presentation'
+import { useIntegrationProviderStatusRefresh } from '@/hooks/use-integration-provider-status-refresh'
 import { IntegrationStep } from './connect-integration-step'
 import {
   deriveIntegrationFlowState,
   useIntegrationConnectionStatus
 } from './use-integration-connection-status'
-import { i18n, translate } from '@/i18n/i18n'
+import { i18n } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 function TaskSourceNameList(props: { names: readonly string[] }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <>
       {props.names.map((name, index) => (
@@ -31,15 +33,9 @@ function TaskSourceNameList(props: { names: readonly string[] }): React.JSX.Elem
           {index > 0
             ? index === props.names.length - 1
               ? props.names.length > 2
-                ? translate(
-                    'auto.components.feature.wall.ConnectIntegrationsList.list_end',
-                    ', and '
-                  )
-                : translate(
-                    'auto.components.feature.wall.ConnectIntegrationsList.list_pair',
-                    ' and '
-                  )
-              : translate('auto.components.feature.wall.ConnectIntegrationsList.list_mid', ', ')
+                ? t('auto.components.feature.wall.ConnectIntegrationsList.list_end', ', and ')
+                : t('auto.components.feature.wall.ConnectIntegrationsList.list_pair', ' and ')
+              : t('auto.components.feature.wall.ConnectIntegrationsList.list_mid', ', ')
             : null}
           <span className="font-semibold text-foreground">{name}</span>
         </Fragment>
@@ -50,6 +46,7 @@ function TaskSourceNameList(props: { names: readonly string[] }): React.JSX.Elem
 
 // Recommend review before tasks without gating either; completion follows real provider status.
 export function ConnectIntegrationsList(): React.JSX.Element {
+  const t = useTranslate()
   useIntegrationProviderStatusRefresh()
   const status = useIntegrationConnectionStatus()
   const [reviewReopened, setReviewReopened] = useState(false)
@@ -84,18 +81,18 @@ export function ConnectIntegrationsList(): React.JSX.Element {
           index={0}
           state={flow.review}
           expanded={reviewExpanded}
-          title={translate(
+          title={t(
             'auto.components.feature.wall.ConnectIntegrationsList.review_step_title',
             'See PR status while agents work'
           )}
-          description={translate(
+          description={t(
             'auto.components.feature.wall.ConnectIntegrationsList.review_step_description',
             'Connect a review provider so Orca can show PR or MR status, checks, and reviews.'
           )}
           summary={
             <Trans
               i18n={i18n}
-              defaults={translate(
+              defaults={t(
                 'auto.components.feature.wall.ConnectIntegrationsList.reviewConnectedSummary',
                 '<provider>{{provider}}</provider> connected for review status',
                 { provider: status.reviewProviderName }
@@ -119,11 +116,11 @@ export function ConnectIntegrationsList(): React.JSX.Element {
           index={1}
           state={flow.task}
           expanded={taskExpanded}
-          title={translate(
+          title={t(
             'auto.components.feature.wall.ConnectIntegrationsList.task_step_title',
             'Start agents on your tasks without leaving Orca'
           )}
-          description={translate(
+          description={t(
             'auto.components.feature.wall.ConnectIntegrationsList.33b650af52',
             'Connect where your team tracks work. Orca starts workspaces with the issue title, link, and context already attached.'
           )}
@@ -131,7 +128,7 @@ export function ConnectIntegrationsList(): React.JSX.Element {
             status.trackerProviderName ? (
               <Trans
                 i18n={i18n}
-                defaults={translate(
+                defaults={t(
                   'auto.components.feature.wall.ConnectIntegrationsList.tasksConnectedSummary',
                   '<sources/> connected for tasks'
                 )}
@@ -140,7 +137,7 @@ export function ConnectIntegrationsList(): React.JSX.Element {
             ) : (
               <Trans
                 i18n={i18n}
-                defaults={translate(
+                defaults={t(
                   'auto.components.feature.wall.ConnectIntegrationsList.codeHostTasksSummary',
                   '<provider>{{provider}}</provider> issues available as tasks · add Linear or Jira if your team plans work there',
                   { provider: status.codeHostTaskProviderName }
@@ -162,7 +159,7 @@ export function ConnectIntegrationsList(): React.JSX.Element {
             <JiraIntegrationCard />
           </IntegrationCardGroup>
           <p className="px-1 pt-0.5 text-[12px] leading-snug text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.feature.wall.ConnectIntegrationsList.code_host_tasks_caption',
               "Your code host's issues also work as tasks."
             )}

@@ -1,7 +1,7 @@
 // Share pure slash-command data across desktop/mobile without DOM/RN dependencies or mirrored catalogs.
 
 import type { AgentSessionSlashCommand } from '../../agent-session/agent-session-wire'
-import type { AgentType } from '../../agent-status-types'
+import type { AgentType } from '../../agent-status/contracts/agent-status-types'
 
 /** Terminal replies: composer answers locally without sending; transcript surfaces an agent-written row; absent means terminal/effect-only feedback. */
 export type NativeChatCommandReply = 'composer' | 'transcript'
@@ -155,7 +155,10 @@ export function sessionSlashCommandSuggestions(
     })
 }
 
-export type NativeChatSessionSkill = Pick<AgentSessionSlashCommand, 'name' | 'description' | 'path'>
+export type NativeChatSessionSkill = Pick<
+  AgentSessionSlashCommand,
+  'name' | 'description' | 'path' | 'argumentHint'
+>
 
 function isSessionSkill(entry: AgentSessionSlashCommand, agent?: AgentType): boolean {
   return (
@@ -174,7 +177,8 @@ export function sessionReportedSkills(
           {
             name: entry.name,
             ...(entry.description ? { description: entry.description } : {}),
-            ...(entry.path ? { path: entry.path } : {})
+            ...(entry.path ? { path: entry.path } : {}),
+            ...(entry.argumentHint ? { argumentHint: entry.argumentHint } : {})
           }
         ]
       : []

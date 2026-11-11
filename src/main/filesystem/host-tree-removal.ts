@@ -1,6 +1,6 @@
 // Host deletion needs bounded Windows lock retries and unpatched fs for Electron’s .asar handling.
 
-import { getErrorCode } from '../git/worktree-operation-options'
+import { getErrorCode } from '../git/worktrees/worktree-operation-options'
 import { unregisteredFolderRefusal } from '../../shared/worktree/removal'
 import { join, win32 } from 'node:path'
 import { lstat, readdir, rm, rmdir, unlink } from './asar-transparent-fs'

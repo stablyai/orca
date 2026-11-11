@@ -1,4 +1,4 @@
-import { CLAUDE_PRE_TOOL_USE_DECISION } from '../agent-hooks/agent-tool-plugin-hooks'
+import { CLAUDE_PRE_TOOL_USE_DECISION } from '../agent-hooks/tool-events/agent-tool-plugin-hooks'
 
 /**
  * Lets Claude Code's PreToolUse hook print Orca's answer (plugins' `agent.tool.before`) instead of

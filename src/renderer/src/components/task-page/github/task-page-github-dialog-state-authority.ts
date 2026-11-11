@@ -3,7 +3,7 @@ import type { GitHubOwnerRepo } from '../../../../../shared/github/pull-request-
 import {
   getTaskSourceCacheScope,
   type TaskSourceContext
-} from '../../../../../shared/task-source-context'
+} from '../../../../../shared/work-items/task-source-context'
 import {
   deleteLastConfirmedClientValue,
   getLastConfirmedClientValue

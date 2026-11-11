@@ -2,7 +2,7 @@ import {
   emptyCrew,
   type OrchestrationCrewFrame,
   type OrchestrationCrewSnapshot
-} from '../../../../shared/orchestration-crew'
+} from '../../../../shared/orchestration/orchestration-crew'
 
 export function subscribeCrew(
   read: () => OrchestrationCrewSnapshot,

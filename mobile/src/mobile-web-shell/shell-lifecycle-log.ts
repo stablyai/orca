@@ -156,7 +156,13 @@ function eventLines(
   }
   switch (event.type) {
     case 'shell-failed':
-      return [pageLine('warn', 'Web shell: page load failed', `reason=${event.reason}`)]
+      return [
+        pageLine(
+          'warn',
+          'Web shell: page load failed',
+          `reason=${event.reason}${event.reclaimed === true ? ' reclaimed=yes' : ''}`
+        )
+      ]
     case 'page-painted':
       // Keep one healthy-open line; activatedMs measures flow-to-activation, not flow-to-paint.
       return before.pagePainted

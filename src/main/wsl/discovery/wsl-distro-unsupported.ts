@@ -4,7 +4,7 @@
  */
 import { OrcadHostUnsupportedError } from '../../orcad/orcad-host-unavailable'
 import { OrcadHostGlibcUnsupportedError } from '../../managed-server/lifecycle/orcad-runtime-target'
-import { RemoteNodeRuntimeSelfTestError } from '../../ssh/orcad-remote-node-runtime-report'
+import { RemoteNodeRuntimeSelfTestError } from '../../managed-server/install/orcad-remote-node-runtime-report'
 import { wslHostAddRefusalText } from '../../../shared/wsl-host-failure-copy'
 
 /** Keeps OrcadHostUnsupportedError's name, so callers that classify by name still see it. */
