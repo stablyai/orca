@@ -1,7 +1,7 @@
 // IPC for team cloud workspaces. Every handler answers `not_configured` when this build has no
 // Orca Cloud control plane, so the renderer can hide the section instead of erroring.
 import { randomUUID } from 'node:crypto'
-import { readFile, rename, writeFile } from 'node:fs/promises'
+import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { app, ipcMain } from 'electron'
 import { z } from 'zod'
@@ -19,22 +19,12 @@ import type { ReaderKeyAccess } from '../cloud-workspaces/cloud-read-snapshot-re
 import { registerTeamPresenceHandlers } from './cloud-workspaces-team-presence'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
 import type { CloudReadSnapshotState } from '../../shared/cloud-workspaces/read-snapshot-state'
-import { orcaCloudAccountId } from '../../shared/hosted-sandbox/orca-cloud-account'
+import type { RemovedServerStore } from './runtime-environments/runtime-environment-removal-cleanup'
 import {
-  listEnvironments,
-  removeEnvironment
-} from '../../shared/remote-runtime/host-store/runtime-environment-store'
-import {
-  createCloudPairingPrune,
-  type CloudPairingPrune,
-  type CloudSandboxPresence
-} from '../cloud-workspaces/cloud-pairing-prune'
-import {
-  retireRemovedRuntimeEnvironment,
-  type RemovedServerStore
-} from './runtime-environments/runtime-environment-removal-cleanup'
-import { invalidateRuntimeEnvironmentTransport } from './runtime-environments/runtime-environments'
-import { publishRuntimeEnvironmentCatalogChanged } from './runtime-environments/runtime-environment-catalog-broadcast'
+  CloudEnvironmentId as EnvironmentId,
+  createCloudWorkspacesPairings,
+  STARTUP_PRUNE_DELAY_MS
+} from './cloud-workspaces-pairings'
 
 const Id = z.string().regex(/^sbx_[0-9a-f]{24}$/)
 const GrantId = z.string().regex(/^grt_[0-9a-f]{24}$/)
@@ -154,105 +144,6 @@ async function clientIdFor(userDataPath: string): Promise<string> {
   return id
 }
 
-const bindingsFile = () => join(app.getPath('userData'), 'cloud-workspaces-environments.json')
-
-type Binding = { environmentId: string; grantId: string | null; accountId?: string | null }
-
-const EnvironmentId = z.string().min(1).max(256)
-// Older builds stored the bare environment id; read it as a binding with an unknown grant.
-const StoredBinding = z.union([
-  EnvironmentId.transform((environmentId): Binding => ({ environmentId, grantId: null })),
-  z.object({
-    environmentId: EnvironmentId,
-    grantId: GrantId.nullable(),
-    accountId: z.string().min(1).max(256).nullable().optional()
-  })
-])
-
-async function readBindings(): Promise<Record<string, Binding>> {
-  try {
-    const parsed = z
-      .record(Id, StoredBinding)
-      .safeParse(JSON.parse(await readFile(bindingsFile(), 'utf8')))
-    return parsed.success ? parsed.data : {}
-  } catch {
-    return {}
-  }
-}
-
-// Read-modify-write updates run one at a time so two quick pairings cannot drop each other.
-let bindingsWrite: Promise<void> = Promise.resolve()
-
-/** Temp file + rename so a crash mid-write never leaves a truncated bindings file. */
-function updateBindings(
-  change: (current: Record<string, Binding>) => Record<string, Binding>
-): Promise<void> {
-  bindingsWrite = bindingsWrite
-    .catch(() => undefined)
-    .then(async () => {
-      const file = bindingsFile()
-      const temp = `${file}.${process.pid}.tmp`
-      await writeFile(temp, JSON.stringify(change(await readBindings())), { mode: 0o600 })
-      await rename(temp, file)
-    })
-  return bindingsWrite
-}
-
-let pairingPrune: CloudPairingPrune | null = null
-const STARTUP_PRUNE_DELAY_MS = 15_000
-
-/** One fetch of a sandbox: not found (deleted, or never visible) or destroyed means gone. */
-async function sandboxPresence(id: string): Promise<CloudSandboxPresence> {
-  const s = await getService().catch(() => null)
-  const result = await s?.get(id)
-  if (!result) {
-    return 'unknown'
-  }
-  if (result.ok) {
-    return result.value.status === 'destroyed' ? 'gone' : 'present'
-  }
-  return result.status === 404 && result.error === 'not_found' ? 'gone' : 'unknown'
-}
-
-/** The pairing prune for this process; servers it drops are retired like a Settings removal. */
-function getPairingPrune(removedServerStore: RemovedServerStore | undefined): CloudPairingPrune {
-  if (pairingPrune) {
-    return pairingPrune
-  }
-  pairingPrune = createCloudPairingPrune({
-    activeAccountId: () =>
-      orcaCloudAccountId(ensureActiveOrcaProfile(app.getPath('userData')).profile.cloud),
-    readBindings,
-    updateBindings,
-    listVisible: async () => {
-      const s = await getService().catch(() => null)
-      // Everything this user can see in the team, archived and routine runs included.
-      const result = await s?.list({ scope: 'team', archived: 'include', routines: 'include' })
-      return result?.ok ? new Set(result.value.map((w) => w.id)) : null
-    },
-    presence: sandboxPresence,
-    removeEnvironment: async (environmentId) => {
-      const userDataPath = app.getPath('userData')
-      if (!listEnvironments(userDataPath).some((e) => e.id === environmentId)) {
-        return
-      }
-      removeEnvironment(userDataPath, environmentId)
-      if (removedServerStore) {
-        await retireRemovedRuntimeEnvironment(
-          environmentId,
-          invalidateRuntimeEnvironmentTransport,
-          removedServerStore,
-          userDataPath
-        )
-      }
-      // The window re-reads its servers and purges the dropped host's projects and setups.
-      publishRuntimeEnvironmentCatalogChanged()
-    },
-    log: (line) => console.warn(line)
-  })
-  return pairingPrune
-}
-
 let quitHookInstalled = false
 
 const NOT_CONFIGURED = { ok: false as const, error: 'not_configured' }
@@ -261,7 +152,10 @@ const INVALID = { ok: false as const, error: 'invalid_request' }
 export function registerCloudWorkspacesHandlers(
   options: { removedServerStore?: RemovedServerStore } = {}
 ): void {
-  const prune = getPairingPrune(options.removedServerStore)
+  const { prune, readBindings, updateBindings } = createCloudWorkspacesPairings(
+    getService,
+    options.removedServerStore
+  )
   const handle = (channel: string, fn: (args: unknown) => unknown): void => {
     ipcMain.removeHandler(channel)
     ipcMain.handle(channel, (_event, args: unknown) => fn(args))
