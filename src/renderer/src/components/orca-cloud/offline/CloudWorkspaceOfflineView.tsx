@@ -13,6 +13,7 @@ import { asOfParts } from '../read-snapshot/cloud-read-snapshot-format'
 import { CloudReadPrLink } from '../read-snapshot/CloudReadPrLink'
 import { ChatPanel } from './CloudOfflineChatPanel'
 import { formatAsleepSince } from './CloudAsleepTerminalNotice'
+import { tidyTerminalTail } from './tidy-terminal-tail'
 
 export type CloudOfflineViewProps = {
   snapshot: CloudOfflineSnapshot
@@ -185,7 +186,7 @@ export function CloudWorkspaceOfflineView(props: CloudOfflineViewProps): React.J
                             // Like a live terminal, open at the latest output.
                             ref={scrollToEnd}
                           >
-                            {terminal.lines.join('\n')}
+                            {tidyTerminalTail(terminal.lines).join('\n')}
                           </pre>
                           {snapshot.capturedAt !== null ? (
                             <div
