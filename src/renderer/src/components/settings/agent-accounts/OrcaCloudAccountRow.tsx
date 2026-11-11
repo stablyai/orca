@@ -55,7 +55,7 @@ export function AccountRow({
           }
           detail={t(
             'orcaCloudAccounts.notSetUpDetail',
-            'One sign-in on this computer. Then every cloud workspace can use it.'
+            'One sign-in. Then every cloud workspace can use it.'
           )}
           actions={
             <Button type="button" variant="outline" size="sm" onClick={() => actions.start(agent)}>
@@ -63,13 +63,13 @@ export function AccountRow({
             </Button>
           }
         >
-          {/* The paste path stays reachable without waiting for the browser (RA-5). */}
+          {/* The paste path stays reachable without the browser (RA-5), as a real action (JA-23). */}
           {agent === 'claude' ? (
             <Button
               type="button"
-              variant="link-muted"
-              size="statusAction"
-              className="-ml-1"
+              variant="ghost"
+              size="sm"
+              className="-ml-2.5 mt-1"
               onClick={actions.usePaste}
             >
               {t('orcaCloudAccounts.pasteTokenInstead', 'Paste a token instead')}

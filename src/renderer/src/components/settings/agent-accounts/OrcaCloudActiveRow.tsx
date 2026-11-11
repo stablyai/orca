@@ -65,7 +65,6 @@ export function ActiveRow({
     row.expiresAt !== null
       ? t('orcaCloudAccounts.renewsBy', 'Renews by {{date}}.', { date: formatDate(row.expiresAt) })
       : null
-  const kept = t('orcaCloudAccounts.activeDetail', 'Kept in your Orca account, never in a sandbox.')
   return (
     <RowShell
       agent={agent}
@@ -78,13 +77,11 @@ export function ActiveRow({
               key: keyPhrase(row.keyKind ?? 'team', t)
             })
       }
+      // Status is the title; the row adds only the expiry (JA-23). Where it's kept is in the heading's tooltip.
       detail={
-        <>
-          {kept}
-          {renews ? (
-            <span className={cn(row.expiring && 'text-status-warning-text')}> {renews}</span>
-          ) : null}
-        </>
+        renews ? (
+          <span className={cn(row.expiring && 'text-status-warning-text')}>{renews}</span>
+        ) : null
       }
       actions={
         <>

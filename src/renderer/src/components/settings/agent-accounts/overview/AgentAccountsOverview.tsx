@@ -99,13 +99,15 @@ function HostHeader({ row }: { row: OverviewRow }): React.JSX.Element {
         ? null
         : agentHostKindLabel(row.kind, t)
   return (
-    <span className="flex min-w-0 items-center gap-2">
-      <HostGlyph kind={GLYPH[row.kind]} size={14} />
-      {/* The name keeps room for "Orca Cloud"; the muted detail gives way first (RA-5). */}
-      <span className="min-w-[6rem] truncate text-foreground">{name}</span>
-      {detail ? (
-        <span className="min-w-0 truncate text-xs text-muted-foreground">{detail}</span>
-      ) : null}
+    <span className="flex min-w-0 items-start gap-2">
+      <HostGlyph kind={GLYPH[row.kind]} size={14} className="mt-0.5 shrink-0" />
+      {/* Name and detail stack, so neither truncates at Settings width (RA-5, JA-23). */}
+      <span className="flex min-w-[6rem] flex-col">
+        <span className="break-words text-foreground">{name}</span>
+        {detail ? (
+          <span className="break-words text-xs text-muted-foreground">{detail}</span>
+        ) : null}
+      </span>
     </span>
   )
 }
@@ -247,14 +249,7 @@ export function AgentAccountsOverview(props: AgentAccountsOverviewProps): React.
             )}
           </p>
         </div>
-      ) : (
-        <p className="px-1 text-xs text-muted-foreground">
-          {t(
-            'agentAccountsOverview.footnote',
-            '“Signed in” means the host confirmed it in the last minute. Orca Cloud comes from your Orca account, so there’s nothing to check per sandbox. Orca doesn’t wake a sandbox just to check sign-ins.'
-          )}
-        </p>
-      )}
+      ) : null}
       <p role="status" aria-live="polite" className="sr-only">
         {props.summary}
       </p>

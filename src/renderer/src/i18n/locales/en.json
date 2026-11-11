@@ -21099,7 +21099,11 @@
         "unpinnedName": "Unpinned {{name}}",
         "otherWorkspaces": "Other workspaces",
         "listMetaCount_one": "{{count}} workspace",
-        "listMetaCount_other": "{{count}} workspaces"
+        "listMetaCount_other": "{{count}} workspaces",
+        "restartElsewhere": "Restart it from the computer that created it.",
+        "makePrivateSidebar": "Teammates’ devices are disconnected. Only the owner will be able to open it.",
+        "shareFailed": "Couldn’t change who can open it. Try again.",
+        "workspaceLinkOption": "Workspace link"
       },
       "orcaCloud": {
         "QueuedPrompt": {
@@ -27046,10 +27050,10 @@
       "unavailable": "Orca Cloud isn’t reachable right now. Try again in a moment.",
       "generic": "Something went wrong. Try again."
     },
-    "restartConfirmTitle": "Restart sandbox?",
+    "restartConfirmTitle": "Restart workspace?",
     "restartConfirm": "Running agents stop and resume after the restart. Your files are kept.",
-    "restartFailed": "Couldn’t restart the sandbox",
-    "restarted": "Sandbox restarted",
+    "restartFailed": "Couldn’t restart the workspace",
+    "restarted": "Workspace restarted",
     "restartedDetail": "Orca resumes your agents after the restart.",
     "archiveFailed": "Couldn’t archive the workspace",
     "undo": "Undo",
@@ -27959,7 +27963,7 @@
     "useChatGPT": "Use my ChatGPT account",
     "notSetUpKey": "Not set up · using {{key}}",
     "notSetUp": "Not set up",
-    "notSetUpDetail": "One sign-in on this computer. Then every cloud workspace can use it.",
+    "notSetUpDetail": "One sign-in. Then every cloud workspace can use it.",
     "tryAgain": "Try again",
     "expired": "Your {{agent}} sign-in expired",
     "expiredDetail": "Cloud workspaces use {{key}} until you renew. Nothing else changed.",
@@ -28077,7 +28081,6 @@
     "openRow": "Open agent accounts for {{host}}",
     "emptyTitle": "Only this computer so far",
     "emptyDetail": "When you add an SSH host, pair a machine or start a cloud workspace, its sign-ins show up here.",
-    "footnote": "“Signed in” means the host confirmed it in the last minute. Orca Cloud comes from your Orca account, so there’s nothing to check per sandbox. Orca doesn’t wake a sandbox just to check sign-ins.",
     "summary": "Checked {{count}} hosts. {{attention}} need attention.",
     "cell": {
       "signedIn": "Signed in",
@@ -28309,6 +28312,13 @@
       "synced": "Synced",
       "pending": "Not synced yet",
       "skipped": "Not synced"
+    }
+  },
+  "orcaCloudAgentPicker": {
+    "status": {
+      "notSetUp": "Not set up",
+      "perWorkspace": "Signs in per workspace",
+      "notAvailable": "Not available in cloud"
     }
   }
 }

@@ -155,7 +155,8 @@ export function useWorktreeCardFoundation({
   const remoteBranchConflict = useAppStore((s) => s.remoteBranchConflictByWorktreeId[worktree.id])
   const workspacePorts = useAppStore((s) => {
     const scan = s.workspacePortScan?.result
-    // A sleeping VM's ports died with it; don't show the pre-sleep ones (JA-13).
+    // A sleeping VM's ports died with it: none while asleep or waking, nor after the wake until a
+    // newer scan finds them again (JA-13).
     if (
       vmWorkspacePortsAreStale({
         runtime: s.ephemeralVmRuntimesByWorkspaceId?.[worktree.id],
