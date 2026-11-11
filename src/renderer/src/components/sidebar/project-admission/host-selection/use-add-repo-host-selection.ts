@@ -17,9 +17,9 @@ import {
   pickerExecutionHosts
 } from '../../../../../../shared/execution-host/managed-orcad-execution-host'
 import { translate } from '@/i18n/i18n'
-import { extractIpcErrorMessage } from '@/lib/ipc-error'
+import { extractIpcErrorMessage } from '@/runtime/errors/ipc-error'
 import { toastSshConnectFailure } from '@/ssh/ssh-connect-failure-toast'
-import { isWebClientLocation } from '@/lib/web-client-location'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 
 export function useAddRepoHostSelection({
   isOpen,

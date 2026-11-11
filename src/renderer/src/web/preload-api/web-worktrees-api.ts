@@ -267,6 +267,7 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
     onChanged: () => noopUnsubscribe,
     onGitStatusMetadataChanged: () => noopUnsubscribe,
     onHeadIdentitiesChanged: () => noopUnsubscribe,
+    onMetadataSet: () => noopUnsubscribe,
     onBaseStatus: () => noopUnsubscribe,
     onRemoteBranchConflict: () => noopUnsubscribe
   }

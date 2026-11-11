@@ -15,6 +15,8 @@ export type ActionSheetAction = {
   destructive?: boolean
   disabled?: boolean
   hint?: string
+  /** Short trailing state, e.g. "↑2" or "Up to date". */
+  status?: string
   /** Marks the choice that is current, as a trailing check. */
   checked?: boolean
   loading?: boolean
@@ -77,6 +79,7 @@ export function ActionSheetContent({ title, message, children, actions, onClose 
               key={action.id ?? action.label}
               title={action.label}
               subtitle={action.hint}
+              value={action.status}
               leading={
                 action.renderIcon?.() ?? (
                   <Icon

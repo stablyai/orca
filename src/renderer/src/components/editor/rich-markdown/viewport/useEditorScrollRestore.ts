@@ -1,6 +1,9 @@
 import { useLayoutEffect, type RefObject } from 'react'
 import type { Editor } from '@tiptap/react'
-import { scrollTopCache, setWithLRU } from '@/lib/scroll-cache'
+import {
+  scrollTopCache,
+  setWithLRU
+} from '@/components/editor/model-lifetime/retention/editor-view-state-cache'
 
 export function useEditorScrollRestore(
   scrollContainerRef: RefObject<HTMLDivElement | null>,

@@ -4,7 +4,7 @@ import type { RuntimeClientTarget } from '../../../../shared/runtime-client-targ
 import {
   findWorkspaceFileRoute,
   type RuntimeWorkspaceFileRoute
-} from '@/lib/runtime-workspace-file-route'
+} from '@/lib/files/access/runtime-workspace-file-route'
 import { isFloatingWorkspaceId } from '../../../../shared/floating-workspace-worktree'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
 import { captureRuntimeEnvironmentRequestRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'

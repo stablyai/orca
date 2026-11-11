@@ -9,7 +9,7 @@ import { Bold, Code2, Italic, List, Quote } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { isImeCompositionKeyDown } from '@/lib/text-input/ime/ime-composition-keyboard-event'
 import {
   getCommentBodySubmitState,

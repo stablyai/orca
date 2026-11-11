@@ -206,6 +206,7 @@ describe('discoverCommitMessageModelsLocal on the Windows direct-child path', ()
         cwd: 'C:\\repo',
         wslDistro: 'Ubuntu'
       })
+      await vi.waitFor(() => expect(spawnMock).toHaveBeenCalled())
 
       listeners.get('stdout:data')?.(Buffer.from('auto - Auto\n'))
       listeners.get('close')?.(0)
@@ -526,6 +527,7 @@ describe('discoverCommitMessageModelsLocal on the Windows direct-child path', ()
     spawnMock.mockReturnValue(child as never)
 
     const pending = discoverCommitMessageModelsLocal('cursor', undefined)
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalled())
 
     child.stdout.emit('data', Buffer.alloc(4 * 1024 * 1024 + 1))
 

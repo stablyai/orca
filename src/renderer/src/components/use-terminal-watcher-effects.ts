@@ -5,10 +5,10 @@ import { useTerminalParkingWorkspaceChanges } from './terminal-pane/parking/use-
 import { getTerminalTabOwnerWorktreeId } from '@/store/terminals/terminal-tab-owner-index'
 import { findActivityTerminalPortal } from './activity/activity-terminal-portal'
 import {
-  canWatcherCoverParkedTerminalTab,
   syncParkedTerminalTabWatchersForWorkspaces,
   type ParkedTerminalTabWatcherSyncEntry
 } from './terminal-pane/parking/output-watchers/terminal-parked-tab-watchers'
+import { canWatcherCoverParkedTerminalTab } from './terminal-pane/parking/output-watchers/parked-terminal-tab-coverage'
 import {
   disposeAllParkedTerminalWatchers,
   pruneParkedTerminalWatchers,

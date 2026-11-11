@@ -14,6 +14,7 @@ import { GROK_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-grok
 import { MUSE_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-muse'
 import { OMP_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-omp'
 import { MCODE_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-mcode'
+import { PI_LAUNCH_OPTION_CATALOG } from './agent-session-option-catalog-pi'
 import type {
   AgentSessionOptionCatalog,
   AgentSessionOptionCatalogMap,
@@ -93,5 +94,9 @@ export function sessionOptionValueIsValid(value: unknown): value is SessionOptio
 export function getAgentSessionOptionLaunchCatalog(
   agent: AgentType
 ): AgentSessionOptionCatalog | null {
-  return agent === 'opencode' ? OPENCODE_LAUNCH_OPTION_CATALOG : getAgentSessionOptionCatalog(agent)
+  return agent === 'opencode'
+    ? OPENCODE_LAUNCH_OPTION_CATALOG
+    : agent === 'pi'
+      ? PI_LAUNCH_OPTION_CATALOG
+      : getAgentSessionOptionCatalog(agent)
 }

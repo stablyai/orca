@@ -6,10 +6,10 @@ import type { PaletteHostBadge } from '@/components/cmd-j/palette-host-badge'
 import type { MatchRange } from '../../../../shared/palette-match/normalized-text'
 import type { PaletteSearchResult } from '@/lib/workspace/search/worktrees/worktree-palette-search'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { splitPathHeadForElision } from '@/lib/path-head-elision'
+import { splitPathHeadForElision } from '@/lib/path-display/path-head-elision'
 import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import { useWslHostDistro, WslHostMark } from '@/components/wsl-host-mark/WslHostMark'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 
 const NO_SECONDARY_MATCHES: readonly { text: string; ranges: readonly MatchRange[] }[] = []
 

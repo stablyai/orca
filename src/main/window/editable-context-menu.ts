@@ -172,11 +172,11 @@ function buildMarkdownMenuTemplate(
         ]
       : []),
     { type: 'separator' },
-    { role: 'cut' },
-    { role: 'copy' },
+    { role: 'cut', label: translateMain('menu.cut', 'Cut') },
+    { role: 'copy', label: translateMain('menu.copy', 'Copy') },
     editableContextPasteItem(labels.paste, webContents),
     editableContextPasteItem(labels.pasteAsPlainText, webContents, { plainTextOnly: true }),
-    { role: 'selectAll' }
+    { role: 'selectAll', label: translateMain('menu.selectAll', 'Select All') }
   ]
 }
 
@@ -186,14 +186,14 @@ function buildNativeEditMenuTemplate(
 ): Electron.MenuItemConstructorOptions[] {
   const labels = editableContextMenuLabels()
   return [
-    { role: 'cut' },
-    { role: 'copy' },
+    { role: 'cut', label: translateMain('menu.cut', 'Cut') },
+    { role: 'copy', label: translateMain('menu.copy', 'Copy') },
     editableContextPasteItem(labels.paste, webContents),
     // Plain-text contenteditable composers already paste literally; omit redundant text-only mode.
     ...(params.formControlType !== 'none'
       ? [editableContextPasteItem(labels.pasteAsPlainText, webContents, { plainTextOnly: true })]
       : []),
-    { role: 'selectAll' }
+    { role: 'selectAll', label: translateMain('menu.selectAll', 'Select All') }
   ]
 }
 

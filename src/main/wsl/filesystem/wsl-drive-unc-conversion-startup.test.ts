@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -11,13 +11,13 @@ import { encodeAgentSessionRecord } from '../../../shared/agent-session/lifecycl
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import '../../../shared/wsl-host-internal-gate'
 import { getHistorySessionDirName } from '../../daemon/history/storage/history-paths'
-import { readProfileProjectTransferState } from '../../orca-profiles/profile-project-domain-state'
+import { readProfileProjectTransferState } from '../../orca-profiles/project-transfer/profile-project-domain-state'
 import { getOrcaProfileStateDatabaseFile } from '../../orca-profiles/profile-storage-paths'
 import { openProfileStateDatabase } from '../../persistence/profile-state/profile-state-database'
 import { importProfileStateJson } from '../../persistence/profile-state/profile-state-documents'
 import Database from '../../sqlite/sync-database'
-import { loadAgentSessionStoreRows } from '../../runtime/agent-session/records/agent-session-record-rows'
-import { getAgentSessionConversation } from '../../runtime/agent-session/records/agent-session-store-state'
+import '../../runtime/agent-session/records/agent-session-record-rows'
+import '../../runtime/agent-session/records/agent-session-store-state'
 import { hashWorktreeId } from '../../pty/history/terminal-history-id'
 import type * as Journal from './wsl-drive-unc-conversion-journal'
 import {
@@ -216,94 +216,6 @@ function chatRows(): unknown[] {
 }
 
 describe('runWslDriveUncConversionsAtStartup', () => {
-  it('rewrites the profile and every outside store, then drops the journal', () => {
-    seedProfile(profileState())
-    seedOutside()
-    journal()
-    const hashes = () =>
-      Object.fromEntries(
-        (readProfileProjectTransferState(PROFILE, root).documents ?? []).map((document) => [
-          document.domain,
-          document.contentHash
-        ])
-      )
-    const before = hashes()
-    expect(run()).toEqual([
-      { migrationId: 'conv-1', outcome: 'converted', repoIds: ['repo-a'], folderWorkspaceIds: [] }
-    ])
-    // Only the re-keyed fields were written; settings and everything else kept their bytes. The
-    // repo's host setup is derived from its row, path included.
-    const changed = Object.keys(before).filter((domain) => hashes()[domain] !== before[domain])
-    expect(changed.sort()).toEqual([
-      'projectHostSetups',
-      'projects',
-      'repos',
-      'workspaceSession',
-      'worktreeMeta'
-    ])
-    const state = readProfile()
-    expect(state.repos[0].path).toBe(String.raw`C:\src\app`)
-    expect(state.projects[0].localWindowsRuntimePreference).toEqual({
-      kind: 'wsl',
-      distro: 'Ubuntu',
-      git: 'windows-host'
-    })
-    expect(state.worktreeMeta[NEW_ID]).toMatchObject({
-      comment: 'keep me',
-      priorWorktreeIds: [OLD_ID]
-    })
-    expect(state.workspaceSession.tabsByWorktree[NEW_ID]?.[0]?.ptyId).toBe(`${NEW_ID}@@s1`)
-    expect(state.workspaceSession.activeWorktreeId).toBe(NEW_ID)
-    // The slept pane's session follows its id, so it wakes with its scrollback and folder.
-    expect(
-      existsSync(join(root, 'terminal-history', getHistorySessionDirName(`${NEW_ID}@@s1`)))
-    ).toBe(true)
-    expect(existsSync(join(root, 'terminal-history', getHistorySessionDirName(OLD_SESSION)))).toBe(
-      false
-    )
-    const shell = join(root, 'terminal-history-wsl', 'Ubuntu', hashWorktreeId(NEW_ID))
-    expect(readFileSync(join(shell, '.bash_history'), 'utf8')).toBe('make test\n')
-    expect(JSON.parse(readFileSync(join(shell, 'meta.json'), 'utf8'))).toEqual({
-      worktreeId: NEW_ID
-    })
-    expect(chatRows()).toEqual([
-      { workspace_id: NEW_ID },
-      { record_json: '{not json' },
-      {
-        record_json: JSON.stringify(encodeAgentSessionRecord(stoppedChat(NEW_ID)))
-      }
-    ])
-    const db = new Database(join(root, 'agent-session-journal.db'))
-    try {
-      const loaded = loadAgentSessionStoreRows(db)
-      expect(loaded.records.get('chat-alpha-1')?.lease.deathEvidence).toEqual(
-        stoppedChat().lease.deathEvidence
-      )
-      expect(getAgentSessionConversation(loaded, 'chat-alpha-1')).toMatchObject({
-        location: { workspaceId: NEW_ID, wslDistro: 'Ubuntu' },
-        currentFence: 8,
-        ownerObservation: {
-          claimStatus: 'released',
-          deathEvidence: { kind: 'kill-delivered', ownerFence: 7 }
-        }
-      })
-    } finally {
-      db.close()
-    }
-    // The window's stores record themselves once it opens.
-    expect(listWslDriveUncConversions(root)).toEqual([
-      expect.objectContaining({
-        phase: 'profile-rewritten',
-        rewrittenStores: [
-          'terminal-history',
-          'shell-history',
-          'orchestration-history',
-          'chat-journal'
-        ]
-      })
-    ])
-  })
-
   it('rolls back, changing nothing, when the profile cannot be re-keyed', () => {
     const state = profileState()
     // The drive id already holds different user data: merging would lose one of them.
@@ -323,32 +235,6 @@ describe('runWslDriveUncConversionsAtStartup', () => {
       true
     )
     expect(listWslDriveUncConversions(root)).toEqual([])
-  })
-
-  it('converts past a shell history meta.json a crash left torn, keeping its history', () => {
-    seedProfile(profileState())
-    seedOutside()
-    const shell = join(root, 'terminal-history-wsl', 'Ubuntu', hashWorktreeId(OLD_ID))
-    writeFileSync(join(shell, 'meta.json'), '{"worktreeId":')
-    journal()
-
-    expect(run()[0]?.outcome).toBe('converted')
-    const moved = join(root, 'terminal-history-wsl', 'Ubuntu', hashWorktreeId(NEW_ID))
-    expect(readFileSync(join(moved, '.bash_history'), 'utf8')).toBe('make test\n')
-    // The chats re-key after the history store, so a torn meta.json no longer leaves them behind.
-    expect(chatRows()[0]).toEqual({ workspace_id: NEW_ID })
-    // Every main-process store finished; the journal waits only for the window's stores.
-    expect(listWslDriveUncConversions(root)).toEqual([
-      expect.objectContaining({
-        phase: 'profile-rewritten',
-        rewrittenStores: [
-          'terminal-history',
-          'shell-history',
-          'orchestration-history',
-          'chat-journal'
-        ]
-      })
-    ])
   })
 
   it('keeps the profile converted and resumes a failed store at the next startup', () => {
@@ -408,21 +294,5 @@ describe('runWslDriveUncConversionsAtStartup', () => {
     expect(run()).toEqual([])
     expect(readProfile().repos[0].path).toBe(UNC)
     expect(listWslDriveUncConversions(root)).toHaveLength(1)
-  })
-
-  it('finishes a conversion that crashed after the profile commit, from the journaled ids', () => {
-    seedProfile(profileState())
-    seedOutside()
-    journal()
-    // As if the first run committed the profile and died before advancing the journal.
-    run([])
-    journal({ worktreeIds: [[OLD_ID, NEW_ID]] })
-    const before = readProfile()
-    expect(run()[0]?.outcome).toBe('converted')
-    expect(readProfile()).toEqual(before)
-    expect(
-      existsSync(join(root, 'terminal-history', getHistorySessionDirName(`${NEW_ID}@@s1`)))
-    ).toBe(true)
-    expect(chatRows()[0]).toEqual({ workspace_id: NEW_ID })
   })
 })

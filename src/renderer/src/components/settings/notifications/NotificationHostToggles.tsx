@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { ChevronDown, Server } from 'lucide-react'
 import type { NotificationSourceId } from '../../../../../shared/notification-source'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../../ui/collapsible'
@@ -6,6 +7,7 @@ import { NotificationSettingToggle } from './NotificationSettingToggle'
 import { useNotificationSourceOptions } from './use-notification-source-options'
 import { pickerExecutionHosts } from '../../../../../shared/execution-host/managed-orcad-execution-host'
 import { useTranslate } from '@/i18n/use-translate'
+import { translateHostDisplayLabel } from '../../sidebar/execution-host-label'
 import { useBoundedHostRows } from '../../host-picker/use-bounded-host-rows'
 import { HostListSearchField } from '../../host-picker/HostListSearchField'
 import { HostListOverflowNote } from '../../host-picker/HostListOverflowNote'
@@ -23,7 +25,15 @@ export function NotificationHostToggles({
   onChange
 }: NotificationHostTogglesProps): React.JSX.Element | null {
   const t = useTranslate()
-  const hostOptions = pickerExecutionHosts(useNotificationSourceOptions())
+  const sourceOptions = useNotificationSourceOptions()
+  const hostOptions = useMemo(
+    () =>
+      pickerExecutionHosts(sourceOptions).map((host) => ({
+        ...host,
+        searchText: translateHostDisplayLabel(host, t)
+      })),
+    [sourceOptions, t]
+  )
   const mutedSourceIds = new Set(mutedNotificationSourceIds)
   const isMuted = (host: (typeof hostOptions)[number]): boolean =>
     [host.id, ...(host.aliasHostIds ?? [])].some((id) => mutedSourceIds.has(id))
@@ -71,7 +81,7 @@ export function NotificationHostToggles({
             {rows.shown.map((host) => (
               <NotificationSettingToggle
                 key={host.id}
-                label={host.label}
+                label={translateHostDisplayLabel(host, t)}
                 description={host.detail}
                 checked={!isMuted(host)}
                 disabled={disabled}

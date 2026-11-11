@@ -1,9 +1,9 @@
 import { toast } from 'sonner'
 import type { SshManagedServerStatus } from '../../../../shared/ssh-types'
 import { translate } from '@/i18n/i18n'
-import { isWebClientLocation } from '@/lib/web-client-location'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { leaveBehindLine, REFUSAL_INLINE_CHARS } from '@/ssh/ssh-host-refused-move-copy'
-import { useAppStore } from '../../store'
+import { useAppStore } from '../../store/index'
 
 /** A refused move; when Move anyway clears it, say what stays behind and lead to the card that asks. */
 export function toastSshHostMoveRefused(

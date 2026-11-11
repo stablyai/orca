@@ -1,9 +1,9 @@
 import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/background-terminal-worktree-mount'
 import { resolveTerminalWorktreeRoute } from '@/lib/workspace/ownership/terminal-worktree-route'
-import { insertUnifiedTabAfterAnchor } from '@/lib/unified-tab-anchor-insertion'
+import { insertUnifiedTabAfterAnchor } from '@/lib/workspace/tabs/unified-tab-anchor-insertion'
 import { translate } from '@/i18n/i18n'
 import { revealWorkspaceSurface } from '@/lib/workspace/activation/workspace-surface-reveal'
-import { useAppStore } from '../../store'
+import { useAppStore } from '../../store/index'
 import { focusTerminalInitiatedTab, resolveTerminalPresentation } from './terminal-command-state'
 
 export function registerTerminalRequestIpcBridge(unsubs: (() => void)[]): void {
@@ -62,23 +62,29 @@ export function registerTerminalRequestIpcBridge(unsubs: (() => void)[]): void {
                 recordInteraction: false,
                 ...(data.cwd ? { startupCwd: data.cwd } : {})
               }
-        const pendingStartup = data.command
-          ? {
-              command: data.command,
-              ...(data.env ? { env: data.env } : {}),
-              ...(data.envToDelete ? { envToDelete: data.envToDelete } : {}),
-              ...(data.launchConfig ? { launchConfig: data.launchConfig } : {}),
-              ...(data.resumeProviderSession
-                ? { resumeProviderSession: data.resumeProviderSession }
-                : {}),
-              ...(data.launchToken ? { launchToken: data.launchToken } : {}),
-              ...(data.launchAgent ? { launchAgent: data.launchAgent } : {}),
-              ...(data.trustWorktreeId ? { trustWorktreeId: data.trustWorktreeId } : {}),
-              ...(data.startupCommandDelivery
-                ? { startupCommandDelivery: data.startupCommandDelivery }
-                : {})
-            }
-          : undefined
+        // Why beyond command: a paired viewer's plain terminal carries only spawn env (#39852).
+        const pendingStartup =
+          data.command ||
+          data.env ||
+          data.envToDelete ||
+          data.launchConfig ||
+          data.resumeProviderSession
+            ? {
+                ...(data.command ? { command: data.command } : {}),
+                ...(data.env ? { env: data.env } : {}),
+                ...(data.envToDelete ? { envToDelete: data.envToDelete } : {}),
+                ...(data.launchConfig ? { launchConfig: data.launchConfig } : {}),
+                ...(data.resumeProviderSession
+                  ? { resumeProviderSession: data.resumeProviderSession }
+                  : {}),
+                ...(data.launchToken ? { launchToken: data.launchToken } : {}),
+                ...(data.launchAgent ? { launchAgent: data.launchAgent } : {}),
+                ...(data.trustWorktreeId ? { trustWorktreeId: data.trustWorktreeId } : {}),
+                ...(data.startupCommandDelivery
+                  ? { startupCommandDelivery: data.startupCommandDelivery }
+                  : {})
+              }
+            : undefined
         const tab = store.createTab(
           worktreeId,
           data.targetGroupId,

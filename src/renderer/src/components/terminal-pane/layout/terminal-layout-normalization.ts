@@ -7,7 +7,7 @@ import {
   isTerminalLeafId,
   type TerminalLeafId
 } from '../../../../../shared/workspace-layout/stable-pane-id'
-import { mintStablePaneId } from '@/lib/pane-manager/mint-stable-pane-id'
+import { mintStablePaneId } from '@/lib/pane-manager/pane-layout/mint-stable-pane-id'
 import { normalizeTerminalLayoutPtyOwnership } from '../../../../../shared/workspace-layout/terminal-layout-pty-ownership'
 import { resolveRootlessTerminalLayoutLeafId } from '../../../../../shared/workspace-layout/terminal-pane-tree'
 
