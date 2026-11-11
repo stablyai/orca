@@ -21,7 +21,7 @@ import { structuredLaunchFailure } from '@/lib/agent-session/launch/structured-a
 import { workspaceHasSleepingAgentSessions } from '@/lib/workspace/activation/worktree-agent-activation-gate'
 import { resolveWebSessionVisibleTabId } from '@/runtime/web-session-tabs-sync/navigation/web-session-focus-intent'
 import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
-import type { AgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
+
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { StructuredAgentLaunchSettlement } from '@/lib/agent-session/launch/continuation/structured-agent-launch-settlement'
 import type { NativeChatComposerFocusIntent } from '@/components/native-chat/composer/focus/native-chat-composer-focus-intent'
@@ -50,7 +50,7 @@ export async function resumeAiVaultSessionInNewChat(
   session: AiVaultSession,
   rowAgent: CliConversationRowAgent,
   worktreeId: string,
-  requestId: AgentLaunchRequestId,
+  requestId: string,
   replacing?: AiVaultChatReplacement
 ): Promise<void> {
   try {
