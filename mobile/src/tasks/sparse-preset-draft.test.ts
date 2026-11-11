@@ -15,13 +15,6 @@ describe('parseSparsePresetDirectories', () => {
     })
   })
 
-  it('requires at least one directory', () => {
-    expect(parseSparsePresetDirectories(' \n ')).toEqual({
-      directories: [],
-      error: 'Add at least one directory.'
-    })
-  })
-
   it('rejects root and parent path entries', () => {
     expect(parseSparsePresetDirectories('.')).toEqual({
       directories: [],

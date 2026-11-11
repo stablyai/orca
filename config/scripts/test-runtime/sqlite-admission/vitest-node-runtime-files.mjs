@@ -142,7 +142,7 @@ const NODE_RUNTIME_INCLUDE = [
   'src/shared/remote-runtime/requests/remote-runtime-request-websocket.test.ts',
   'src/shared/remote-runtime/requests/remote-runtime-subscription-connect-bound.test.ts',
   'src/main/codex/configuration/shared-server/codex-shared-server-probe.test.ts',
-  'src/main/opencode/opencode-launch-model-context-supervision.test.ts',
+  'src/main/opencode/model-launch/opencode-launch-model-context-supervision.test.ts',
   'src/main/hermes/hermes-config-remote-adapter.test.ts',
   'src/main/ipc/profiles/orca-profiles-switch-persistence.test.ts',
   'src/main/ipc/settings-delayed-response.test.ts',
