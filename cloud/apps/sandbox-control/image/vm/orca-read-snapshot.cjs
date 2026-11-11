@@ -40,6 +40,61 @@ function gcmSeal(key, nonce, plain, aad) {
   return Buffer.concat([cipher.update(plain), cipher.final(), cipher.getAuthTag()])
 }
 
+const SIG_INFO = 'orca-cloud-read-sig-v1'
+
+/**
+ * This VM's snapshot signing key (Ed25519), created once and kept on the VM's own disk (0600, never
+ * printed). Devices pin its public half per workspace, so a snapshot the control plane forged or
+ * swapped doesn't verify. Same file for the grant script, which hands the public half to pairing devices.
+ */
+function signingKey(stateDir) {
+  if (!path.isAbsolute(stateDir)) {
+    throw new Error('no state dir')
+  }
+  const file = path.join(stateDir, 'read-signing-key.pem')
+  const load = () => {
+    try {
+      const privateKey = crypto.createPrivateKey(fs.readFileSync(file, 'utf8'))
+      return privateKey.asymmetricKeyType === 'ed25519' ? privateKey : null
+    } catch {
+      return null
+    }
+  }
+  let privateKey = load()
+  if (!privateKey) {
+    fs.mkdirSync(stateDir, { recursive: true, mode: 0o700 })
+    // Written whole to a temp file, then linked into place: atomic, and a concurrent first run
+    // (grant + capture) keeps whichever key landed first. A broken file is replaced (devices that
+    // pinned the old signer then see "signer changed" until they trust the new one).
+    const temp = `${file}.${process.pid}.${crypto.randomBytes(4).toString('hex')}`
+    fs.writeFileSync(temp, crypto.generateKeyPairSync('ed25519').privateKey.export({ format: 'pem', type: 'pkcs8' }), { mode: 0o600 })
+    try {
+      fs.linkSync(temp, file)
+    } catch {
+      if (!load()) {
+        fs.renameSync(temp, file)
+      }
+    } finally {
+      fs.rmSync(temp, { force: true })
+    }
+    privateKey = load()
+    if (!privateKey) {
+      throw new Error('signing key unavailable')
+    }
+  }
+  const publicKeyB64 = Buffer.from(crypto.createPublicKey(privateKey).export({ format: 'jwk' }).x, 'base64url').toString('base64')
+  return { privateKey, publicKeyB64 }
+}
+
+/** Signs the sealed body: "orca-cloud-read-sig-v1:<ws>:<snap>:<nonceB64>:" || ciphertext bytes. */
+function sign(out, key) {
+  const message = Buffer.concat([
+    Buffer.from(`${SIG_INFO}:${out.workspaceId}:${out.snapshotId}:${out.nonceB64}:`),
+    Buffer.from(out.ciphertextB64, 'base64')
+  ])
+  return { publicKeyB64: key.publicKeyB64, signatureB64: crypto.sign(null, message, key.privateKey).toString('base64') }
+}
+
 /** Seals `payload` (an object) to every recipient; a malformed key is skipped, not fatal. */
 function seal(payload, recipients, workspaceId, snapshotId) {
   const scope = `${workspaceId}:${snapshotId}`
@@ -233,7 +288,9 @@ function storedSessions(dataDir) {
         open: open.has(row.session_id),
         lastPrompt: str(last.prompt, LIMITS.messageChars),
         lastReply: str(last.reply, LIMITS.messageChars),
-        lastAt: num(last.at)
+        lastAt: num(last.at),
+        // "<repoId>::<path>": which checkout this chat works in.
+        worktreePath: isObj(record.location) && typeof record.location.workspaceId === 'string' ? record.location.workspaceId.split('::').pop() : null
       })
     }
     return out
@@ -267,12 +324,33 @@ function liveAgents(worktrees) {
   return out
 }
 
+/**
+ * The checkout this workspace is about: the one its newest chat works in, else the most recently
+ * active one (a workspace on its own branch is a separate worktree, not the base clone at
+ * /vercel/sandbox/project), else the base clone.
+ */
+function workspaceCheckout(worktrees, sessions) {
+  const byPath = new Map(worktrees.filter((w) => typeof w.path === 'string').map((w) => [w.path, w]))
+  const newest = sessions
+    .filter((s) => s.worktreePath && byPath.has(s.worktreePath))
+    .sort((a, b) => (num(b.updatedAt) || 0) - (num(a.updatedAt) || 0))[0]
+  if (newest) {
+    return byPath.get(newest.worktreePath)
+  }
+  const activity = (w) => Math.max(num(w.lastActivityAt) || 0, num(w.sortOrder) || 0)
+  const ranked = [...byPath.values()].sort(
+    (a, b) => activity(b) - activity(a) || Number(a.isMainWorktree === true) - Number(b.isMainWorktree === true)
+  )
+  return ranked[0] || null
+}
+
 /** `call(method, params)` -> result | null. Never throws: a missing piece is left out. */
 async function gather(call, { workspaceId, snapshotId, reason, now, deadline, listSessions = () => [] }) {
   const timeLeft = () => deadline - Date.now()
   const ps = await call('worktree.ps', { limit: 20 })
   const worktrees = isObj(ps) && Array.isArray(ps.worktrees) ? ps.worktrees.filter(isObj) : []
-  const project = worktrees.find((w) => w.path === PROJECT) || worktrees[0] || null
+  const stored = listSessions()
+  const project = workspaceCheckout(worktrees, stored)
   const selector = project && typeof project.path === 'string' ? `path:${project.path}` : `path:${PROJECT}`
   const [status, log] = await Promise.all([
     call('git.status', { worktree: selector, includeLineStats: true }),
@@ -280,7 +358,7 @@ async function gather(call, { workspaceId, snapshotId, reason, now, deadline, li
   ])
   const live = liveAgents(worktrees)
   const byId = new Map()
-  for (const s of listSessions()) {
+  for (const s of stored) {
     byId.set(s.sessionId, s)
   }
   for (const [sessionId, a] of live) {
@@ -357,9 +435,17 @@ function fitToBudget(payload, maxBytes = MAX_PLAIN_BYTES) {
   return payload
 }
 
+// Fails closed without HOME (signingKey refuses a relative path).
+const stateDir = process.env.HOME ? path.join(process.env.HOME, '.orca-sandbox') : ''
+
 async function main() {
   const started = Date.now()
   const env = process.env
+  if (process.argv[2] === '--signer-public-key') {
+    // For orca-sandbox-grant: pairing devices learn (and pin) this workspace's signer.
+    process.stdout.write(`${signingKey(stateDir).publicKeyB64}\n`)
+    return
+  }
   const snapshotId = env.ORCA_READ_SNAPSHOT_ID || ''
   const workspaceId = env.ORCA_READ_WORKSPACE_ID || ''
   if (!/^rsn_[0-9a-f]{24}$/.test(snapshotId) || !/^sbx_[0-9a-f]{24}$/.test(workspaceId)) {
@@ -393,12 +479,13 @@ async function main() {
     await gather(call, { workspaceId, snapshotId, reason: (env.ORCA_READ_REASON || 'sleep').slice(0, 20), now: Date.now(), deadline, listSessions: () => storedSessions(dataDir) })
   )
   const out = seal(payload, recipients, workspaceId, snapshotId)
+  out.signature = sign(out, signingKey(stateDir))
   // Timing only: counts and sizes would describe the plaintext to the control plane's logs.
   out.stats = { collectMs: Date.now() - started }
   process.stdout.write(`${JSON.stringify(out)}\n`)
 }
 
-module.exports = { seal, gather, fitToBudget, messagesOf, gitOf, prOf, rpc, storedSessions, liveAgents }
+module.exports = { workspaceCheckout, seal, sign, signingKey, gather, fitToBudget, messagesOf, gitOf, prOf, rpc, storedSessions, liveAgents }
 
 if (require.main === module) {
   // A fixed message: an error text could carry workspace content into the control plane's logs.

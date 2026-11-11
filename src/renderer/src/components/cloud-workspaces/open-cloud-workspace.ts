@@ -17,10 +17,13 @@ import {
   toRuntimeExecutionHostId
 } from '../../../../shared/execution-host'
 import { refreshCloudMessageSenders } from '@/lib/cloud-message-sender'
-import { describeError } from './cloud-workspace-errors'
+import { describeError, isUnknownServerFailure } from './cloud-workspace-errors'
 
 /** On success, the worktree that was revealed (null when its projects are still syncing). */
-export type OpenOutcome = { ok: true; worktreeId: string | null } | { ok: false; message: string }
+export type OpenOutcome =
+  | { ok: true; worktreeId: string | null }
+  /** `unknownServerError`: the wake failed on the server for no known reason (shared copy). */
+  | { ok: false; message: string; unknownServerError?: boolean }
 
 // Rejections that mean this device's pairing is no longer accepted (revoked grant, rebuilt VM).
 const PAIRING_REJECTED_CODES = new Set(['unauthorized', 'device_revoked', 'forbidden'])
@@ -148,7 +151,11 @@ async function pairAndReveal(workspace: CloudWorkspace, name: string): Promise<O
       self: workspace.access === 'owner',
       name: workspace.memberNames?.[workspace.ownerUserId] ?? null
     }
-    return { ok: false, message: describeError(grant.error, grant.reason, translate, owner) }
+    return {
+      ok: false,
+      message: describeError(grant.error, grant.reason, translate, owner),
+      unknownServerError: isUnknownServerFailure(grant.error, grant.status)
+    }
   }
   const added = await window.api.runtimeEnvironments.verifyAndAddFromPairingCode({
     name: translate('auto.components.cloudWorkspaces.environmentName', '{{value0}} (cloud)', {

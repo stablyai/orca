@@ -11,13 +11,10 @@ import {
   createCloudWorkspacesService,
   type CloudWorkspacesService
 } from '../cloud-workspaces/cloud-workspaces-service'
-import {
-  getCloudReaderKeyStore,
-  setCloudReaderKeyRevoker
-} from '../cloud-workspaces/cloud-reader-key-store'
-import type { ReaderKeyAccess } from '../cloud-workspaces/cloud-read-snapshot-reader'
+import { setCloudReaderKeyRevoker } from '../cloud-workspaces/cloud-reader-key-store'
+import { profileReaderKey, profileReadPins } from '../cloud-workspaces/cloud-read-profile-access'
+import { setCloudPairingVerifiedListener } from '../cloud-workspaces/cloud-pairing-seam'
 import { registerTeamPresenceHandlers } from './cloud-workspaces-team-presence'
-import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
 import { registerCloudWorkspacePrefsHandlers } from './cloud-workspaces-prefs'
 import type { CloudReadSnapshotState } from '../../shared/cloud-workspaces/read-snapshot-state'
 import type { RemovedServerStore } from './runtime-environments/runtime-environment-removal-cleanup'
@@ -85,10 +82,12 @@ function getService(): Promise<CloudWorkspacesService | null> {
       userDataPath,
       config,
       clientId: await clientIdFor(userDataPath),
-      readerKey: profileReaderKey(userDataPath)
+      readerKey: profileReaderKey(userDataPath),
+      readPins: profileReadPins(userDataPath)
     })
     const started = service
     setCloudReaderKeyRevoker((timeoutMs) => started.revokeReaderKey(timeoutMs))
+    setCloudPairingVerifiedListener((pairingCode) => started.confirmPairing(pairingCode))
     return service
   })()
   servicePromise = starting
@@ -99,23 +98,6 @@ function getService(): Promise<CloudWorkspacesService | null> {
     }
   })
   return starting
-}
-
-/** The active Orca profile's reader key; registrations follow its signed-in user and account. */
-function profileReaderKey(userDataPath: string): ReaderKeyAccess {
-  return {
-    identity: () => {
-      const active = ensureActiveOrcaProfile(userDataPath)
-      const cloud = active.profile.cloud
-      return cloud
-        ? JSON.stringify([active.profile.id, cloud.userId ?? null, cloud.activeOrgId ?? null])
-        : null
-    },
-    load: () =>
-      getCloudReaderKeyStore(userDataPath).load(ensureActiveOrcaProfile(userDataPath).profile.id),
-    peek: () =>
-      getCloudReaderKeyStore(userDataPath).peek(ensureActiveOrcaProfile(userDataPath).profile.id)
-  }
 }
 
 /**
