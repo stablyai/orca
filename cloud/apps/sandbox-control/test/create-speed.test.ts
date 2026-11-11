@@ -175,3 +175,18 @@ describe('repo-backed create', () => {
     expect(h.vercel.boxes.size).toBe(0)
   })
 })
+
+describe('VM hostname (JA-27)', () => {
+  it('is the workspace name (else the repo), as a hostname label, set at every start', async () => {
+    const { workspaceHostname } = await import('../src/sandbox-vm-commands')
+    expect(workspaceHostname('Fix Login Bug!')).toBe('fix-login-bug')
+    expect(workspaceHostname('--ja_hello--')).toBe('ja-hello')
+    expect(workspaceHostname('🙂')).toBeUndefined()
+    expect(workspaceHostname('a'.repeat(80))).toHaveLength(63)
+    const h = await createHarness()
+    await h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'w1', machineSize: 'standard', title: 'Ja Hello', repo } })
+    const start = h.vercel.commands.find((c) => c.command === START_COMMAND)!
+    expect(start.env.ORCA_HOSTNAME).toBe('ja-hello')
+    expect(start.args?.[1]).toContain('sudo -n hostname "$ORCA_HOSTNAME"')
+  })
+})

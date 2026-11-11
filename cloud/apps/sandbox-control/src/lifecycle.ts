@@ -28,6 +28,7 @@ import {
   ORCAD_PORT,
   SHARE_PROXY_PORT,
   VmCommandError,
+  workspaceHostname,
   drainOrcad,
   runningOrcad,
   startOrcad,
@@ -387,6 +388,8 @@ async function boot(
     options.timer.time('orcad', async () =>
       startOrcad(deps.provider, state, {
         sandboxId: row.id,
+        // The workspace's name, else its repo's: never the provider's per-boot VM id.
+        hostname: workspaceHostname(row.name ?? (row.repo_url ? parseGitHubRepo(row.repo_url)?.repo : null)),
         repo: options.repo,
         // Repos hosted outside github.com get no GitHub credential, not even the placeholder.
         githubPlaceholder: deps.config.egressProxyUrl && parseGitHubRepo(row.repo_url ?? '') ? githubPlaceholderToken(row) : undefined,
