@@ -96,6 +96,8 @@ export type SealedReadSnapshot = {
     nonceB64: string
     wrappedKeyB64: string
   }
+  /** The VM's Ed25519 signature over the body (read-snapshot-signature.ts); absent on older VMs. */
+  signature?: { publicKeyB64: string; signatureB64: string }
 }
 
 export class ReadSnapshotError extends Error {

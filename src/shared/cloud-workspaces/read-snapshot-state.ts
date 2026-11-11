@@ -13,6 +13,11 @@ export type CloudReadSnapshotState =
    * workspace (a rollback). Refused rather than shown as current.
    */
   | { state: 'stale' }
+  /**
+   * Not shown because this device cannot tell the workspace wrote it: the signature is forged, a
+   * different signer than the one pinned, or unsigned after a signer was pinned.
+   */
+  | { state: 'unverified'; reason: 'bad_signature' | 'signer_changed' | 'unsigned' }
   /** No such workspace, or this account may not open it (removed, private, archived). */
   | { state: 'not_found' }
   /** This device cannot hold a reader key (no OS keychain); the feature is off here. */

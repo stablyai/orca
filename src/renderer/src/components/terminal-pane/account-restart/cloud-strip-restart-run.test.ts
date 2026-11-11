@@ -2,6 +2,12 @@
 // pane whose signed-out Claude reports 'blocked' (which the account-restart path reads as mid-turn),
 // the mounted pane's runner relaunches it in place, and the strip learns the outcome.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+// Which environments count as Orca Cloud in a test (the real check reads the runtime catalog).
+const cloud = vi.hoisted(() => ({ ids: new Set<string>() }))
+vi.mock('@/lib/orca-cloud/orca-cloud-environment-id', () => ({
+  isOrcaCloudEnvironmentId: (id: string) => cloud.ids.has(id)
+}))
 import { useAppStore } from '@/store/index'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
@@ -329,14 +335,70 @@ describe('RA-11 Restart on a paired (remote) pane', () => {
     expect(cloudAgentRestartAttempt(PANE_KEY, 0)?.phase).toBe('failed')
   })
 
-  it('an account-switch restart on a remote pane does not stop the host terminal', () => {
+  // RA-11c: an account switch on a paired pane reattached to the old agent and never relaunched.
+  it('an account-switch restart on a paired pane stops that host terminal, then reconnects', async () => {
     useAppStore.setState({
       agentStatusByPaneKey: { [PANE_KEY]: { ...entry(TAB, LEAF), state: 'done' } }
     })
     useAppStore.getState().queuePaneAccountRestarts([REMOTE], 'claude')
     const stopRemotePane = vi.fn(() => Promise.resolve())
     const handleRestartPane = runRemote(stopRemotePane)
-    expect(stopRemotePane).not.toHaveBeenCalled()
-    expect(handleRestartPane).toHaveBeenCalledTimes(1)
+    expect(handleRestartPane).not.toHaveBeenCalled()
+    await vi.waitFor(() => expect(handleRestartPane).toHaveBeenCalledTimes(1))
+    expect(stopRemotePane).toHaveBeenCalledWith(REMOTE, 'wt-1')
+    expect(stopRemotePane).not.toHaveBeenCalledWith(OTHER, expect.anything())
+    // Not Orca Cloud: no strip to show a result on, so nothing is tracked.
+    expect(cloudAgentRestartAttempt(PANE_KEY, 0)).toBeNull()
+  })
+
+  it('on Orca Cloud an account-switch restart is tracked: Restarting…, then proof or a failure', async () => {
+    cloud.ids.add('env-1')
+    try {
+      useAppStore.setState({
+        agentStatusByPaneKey: { [PANE_KEY]: { ...entry(TAB, LEAF), state: 'done' } }
+      })
+      useAppStore.getState().queuePaneAccountRestarts([REMOTE], 'claude')
+      const handleRestartPane = runRemote(() => Promise.resolve())
+      expect(cloudAgentRestartAttempt(PANE_KEY, 0)?.phase).toBe('restarting')
+      await vi.waitFor(() => expect(handleRestartPane).toHaveBeenCalledTimes(1))
+      expect(cloudAgentRestartAttempt(PANE_KEY, 0)?.launchedAt).not.toBeNull()
+      // No new PTY bound by the timeout: a visible failure, never a silent stale pane.
+      vi.advanceTimersByTime(CLOUD_AGENT_RESTART_TIMEOUT_MS)
+      expect(cloudAgentRestartAttempt(PANE_KEY, 0)?.phase).toBe('failed')
+    } finally {
+      cloud.ids.clear()
+    }
+  })
+
+  it('a host that will not stop the terminal shows the reason, and a Codex switch asks again', async () => {
+    cloud.ids.add('env-1')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const reopen = vi.spyOn(useAppStore.getState(), 'reopenCodexRestartPrompt')
+    try {
+      useAppStore.getState().queuePaneAccountRestarts([REMOTE], 'codex')
+      const handleRestartPane = vi.fn()
+      runReadyPaneAccountRestarts({
+        panes: [{ id: 7, leafId: LEAF }],
+        ptyIdOf: () => REMOTE,
+        readyRestartPtyIds: selectReadyAccountRestartPtyIds(useAppStore.getState(), TAB),
+        tabId: TAB,
+        consumePendingPaneAccountRestart: useAppStore.getState().consumePendingPaneAccountRestart,
+        buildAccountRestartStartup: () => ({ command: 'codex' }),
+        handleRestartPane,
+        stopRemotePane: () => Promise.reject(new Error('terminal_exact_stop_failed'))
+      })
+      await vi.waitFor(() =>
+        expect(cloudAgentRestartAttempt(PANE_KEY, 0)).toMatchObject({
+          phase: 'failed',
+          failure: 'hostUnresponsive'
+        })
+      )
+      expect(handleRestartPane).not.toHaveBeenCalled()
+      expect(reopen).toHaveBeenCalledWith(REMOTE)
+    } finally {
+      warn.mockRestore()
+      reopen.mockRestore()
+      cloud.ids.clear()
+    }
   })
 })

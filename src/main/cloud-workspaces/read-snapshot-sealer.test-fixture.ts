@@ -6,7 +6,9 @@ import {
   diffieHellman,
   generateKeyPairSync,
   hkdfSync,
-  randomBytes
+  randomBytes,
+  sign,
+  type KeyObject
 } from 'node:crypto'
 import type { SealedReadSnapshot } from '../../shared/cloud-workspaces/read-snapshot'
 
@@ -25,6 +27,8 @@ export function sealReadSnapshotForTest(args: {
   readerPublicKeyB64: string
   keyId: string
   storedAt?: number
+  /** The VM's Ed25519 signing key; unsigned (an older VM) when absent. */
+  signer?: TestSigner
 }): SealedReadSnapshot {
   const { workspaceId, snapshotId, keyId } = args
   const dek = randomBytes(32)
@@ -61,7 +65,26 @@ export function sealReadSnapshotForTest(args: {
     dek,
     `orca-cloud-read-wrap-v1:${workspaceId}:${snapshotId}:${keyId}`
   )
+  const signature = args.signer
+    ? {
+        publicKeyB64: args.signer.publicKeyB64,
+        signatureB64: b64(
+          sign(
+            null,
+            Buffer.concat([
+              Buffer.from(
+                `orca-cloud-read-sig-v1:${workspaceId}:${snapshotId}:${b64(nonce)}:`,
+                'utf8'
+              ),
+              body
+            ]),
+            args.signer.privateKey
+          )
+        )
+      }
+    : undefined
   return {
+    ...(signature ? { signature } : {}),
     v: 1,
     snapshotId,
     workspaceId,
@@ -74,5 +97,18 @@ export function sealReadSnapshotForTest(args: {
       nonceB64: b64(wrapNonce),
       wrappedKeyB64: b64(wrapped)
     }
+  }
+}
+
+export type TestSigner = { privateKey: KeyObject; publicKeyB64: string }
+
+/** A VM's per-workspace Ed25519 signing key (raw public key, std base64). */
+export function generateTestSigner(): TestSigner {
+  const { privateKey, publicKey } = generateKeyPairSync('ed25519')
+  return {
+    privateKey,
+    publicKeyB64: Buffer.from(publicKey.export({ format: 'jwk' }).x!, 'base64url').toString(
+      'base64'
+    )
   }
 }

@@ -6,6 +6,7 @@ import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translat
 import { formatElapsedTime } from '@/components/worktree-creation/worktree-creation-clock'
 import { wakeCloudWorkspace } from '../cloud-workspace-actions'
 import { useCloudOfflineData } from './use-cloud-offline-data'
+import { useIsWorktreeGoingToSleep } from '@/lib/worktree-sleep-view'
 import type { CloudOfflineSnapshot } from '../../../../../shared/hosted-sandbox/cloud-workspace-offline-api'
 
 const RELATIVE_LIMIT_MS = 30 * 24 * 60 * 60 * 1000
@@ -48,9 +49,26 @@ export function CloudAsleepFilesPanel({
   archived?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
-  const { snapshot } = useCloudOfflineData(workspaceId, true)
+  const goingToSleep = useIsWorktreeGoingToSleep(workspaceId)
+  const { snapshot } = useCloudOfflineData(workspaceId, !goingToSleep)
   const now = useNow(30_000)
   const git = snapshot?.git ?? null
+  if (goingToSleep) {
+    // Sleep was just chosen: its copy is being saved, and nothing here should wake it (RA-13b).
+    return (
+      <div
+        className="flex h-full min-h-0 flex-col px-3 py-3 text-xs text-muted-foreground"
+        data-cloud-asleep-files="going-to-sleep"
+      >
+        <p role="status">
+          {t(
+            'orcaCloudWorkspace.files.goingToSleep',
+            'Going to sleep… The read-only copy shows here when it’s done.'
+          )}
+        </p>
+      </div>
+    )
+  }
   const wake = archived ? null : waking ? (
     <span className="inline-flex items-center gap-1.5 text-muted-foreground" role="status">
       <Loader2 className="size-3 motion-safe:animate-spin" aria-hidden="true" />
