@@ -20397,7 +20397,8 @@
         "copyFailed": "Could not copy the link.",
         "signingIn": "Signing in…",
         "cancel": "Cancel",
-        "didNotFinish": "Sign-in didn’t finish. Try again."
+        "didNotFinish": "Sign-in didn’t finish. Try again.",
+        "reopenBrowser": "Reopen browser"
       },
       "plainSshTerminal": {
         "open": "Open plain SSH terminal",

@@ -1,6 +1,7 @@
 import type { StateCreator } from 'zustand'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
+import { isSignInNoticeVisible } from '@/lib/orca-cloud/sign-in-notice-visibility'
 import type {
   ConnectCurrentOrcaProfileResult,
   CreateCloudLinkedOrcaProfileResult,
@@ -108,8 +109,8 @@ export const createOrcaProfilesAuthActions: StateCreator<
               description: result.auth.setupMessage
             }
           )
-        } else if (result.status === 'timed-out' && !alreadyConnected) {
-          // Calm, not an error: nothing broke, the browser just never came back.
+        } else if (result.status === 'timed-out' && !alreadyConnected && !isSignInNoticeVisible()) {
+          // Calm, not an error. Said inline where a sign-in notice is on screen; toast otherwise.
           toast(
             translate(
               'auto.store.slices.orca.profiles.signInDidNotFinish',
