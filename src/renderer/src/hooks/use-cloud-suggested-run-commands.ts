@@ -88,7 +88,11 @@ export function useCloudSuggestedRunCommands(
           )
         }
       })
-      .catch(() => {
+      .catch((error: unknown) => {
+        // A repo without package.json is normal; anything else is worth a line in the console.
+        if (!/ENOENT|not.?found|no such file/i.test(String(error))) {
+          console.warn('[run-suggestions] could not read package.json', error)
+        }
         if (!cancelled) {
           setCommands([])
         }
