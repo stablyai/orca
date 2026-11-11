@@ -62,11 +62,11 @@ export const focused = defineFixture({
   }
 })
 
-/** After a click: "Link copied" in place for about 1.5 s, no toast. */
+/** After a click: check glyph, same width, "Link copied" in the tooltip for about 1.5 s. */
 export const copied = defineFixture({
-  width: 160,
+  width: 260,
   render: () => (
-    <div className="flex items-center p-2">
+    <div className="flex h-20 items-start p-2">
       <CloudWorkspaceNumberChip worktreeId={WORKTREE} />
     </div>
   ),
