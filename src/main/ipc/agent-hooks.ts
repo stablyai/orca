@@ -10,6 +10,7 @@ import { getMigrationUnsupportedPtySnapshot } from '../agent-hooks/observations/
 import { registerAgentPaneAuthorityIpcHandlers } from './agent-pane-authority-ipc'
 import { registerAgentStatusRowTeardownIpcHandlers } from './agent-status-row-teardown-ipc'
 import { createAgentPaneAuthorityOwnership } from './agent-pane-authority-ownership'
+import { registerHermesProfileHandlers } from './hermes-profiles'
 import {
   enrichAgentStatusIpcPayload,
   type AgentStatusRuntimeEnrichment
@@ -31,6 +32,7 @@ export function registerAgentHookHandlers(
   ipcMain.removeHandler('agentStatus:hasVerifiableAgentProcess')
   ipcMain.removeHandler('agentStatus:getMigrationUnsupportedSnapshot')
   registerAgentStatusRowTeardownIpcHandlers()
+  registerHermesProfileHandlers()
   registerAgentPaneAuthorityIpcHandlers({
     ownsPty: createAgentPaneAuthorityOwnership({
       getPtyIdForPaneKey: dependencies.getPtyIdForPaneKey,

@@ -40,6 +40,11 @@ import { cn } from '@/lib/class-names'
 import type { NewTabAgentMenuRow } from '../../../../shared/agent-launch/picker/agent-launch-picker-rows'
 import { useNewTabAgentMenuRows, type NewTabAgentMenuModel } from './use-new-tab-agent-menu-rows'
 import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTarget'
+import { useHermesProfiles } from '@/hooks/useHermesProfiles'
+import { HermesProfileMenuItems } from '@/components/agent/HermesProfileMenuItems'
+import { projectAgentLaunchProfile } from '../../../../shared/agent-launch/choices/agent-launch-profile'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { withHermesProfileArgs } from '../../../../shared/hermes-profiles'
 import { chatUnavailableLabel, rowTitle, rowLabel, rowId } from './tab-agent-row-presentation'
 
 export type QuickLaunchAgentMenuItemsProps = {
@@ -209,6 +214,24 @@ export function ProjectedAgentMenuItems({
     useAppStore.getState().openSettingsTarget({ pane: 'agents', repoId: null })
     useAppStore.getState().openSettingsPage()
   }, [])
+  const localHermes =
+    model.state === 'settled' && model.pickerContext?.executionHostId === LOCAL_EXECUTION_HOST_ID
+  const hermesProfiles = useHermesProfiles(localHermes)
+  const launchHermesProfile = useCallback(
+    (row: NewTabAgentMenuRow, profile: string | null) => {
+      const settings = model.state === 'settled' ? model.pickerContext?.settings : undefined
+      const baseArgs = projectAgentLaunchProfile('hermes', settings, {
+        target: 'terminal'
+      }).args
+      return runLaunch(row, {
+        agent: 'hermes',
+        surface: 'terminal',
+        choices: {},
+        arguments: withHermesProfileArgs(baseArgs, profile)
+      })
+    },
+    [model, runLaunch]
+  )
   if (model.state === 'loading') {
     // Why: rows fill in once when every answer is known, instead of reshuffling under the pointer.
     return (
@@ -303,6 +326,23 @@ export function ProjectedAgentMenuItems({
             </>
           )
           const other = otherSurfaceRow(row, detectedIds)
+          if (
+            !other &&
+            agent === 'hermes' &&
+            (row.kind === 'cli' || row.kind === 'terminal') &&
+            hermesProfiles.profiles.length > 0
+          ) {
+            return (
+              <React.Fragment key={rowId(row)}>
+                {startsCliGroup ? <DropdownMenuSeparator /> : null}
+                <HermesProfileMenuItems
+                  snapshot={hermesProfiles}
+                  disabled={disabled || !!pendingReason}
+                  onSelect={(profile) => launchHermesProfile(row, profile)}
+                />
+              </React.Fragment>
+            )
+          }
           return (
             <React.Fragment key={rowId(row)}>
               {startsCliGroup ? <DropdownMenuSeparator /> : null}
