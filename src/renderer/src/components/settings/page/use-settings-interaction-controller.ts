@@ -19,6 +19,7 @@ import {
   cancelPendingSettingsSubsectionScrollFrame,
   getSettingsScrollTarget,
   readSourceControlAiSettings,
+  scrollSubsectionIntoView,
   SETTINGS_TARGET_HIGHLIGHT_MS
 } from '../navigation/settings-navigation-foundations'
 
@@ -40,6 +41,14 @@ export type SettingsInteractionModel = Pick<
   | 'settings'
   | 'updateSettingsOrThrow'
 >
+
+const SETTINGS_REVEAL_SETTLE_MS = 250
+
+function isFullyVisibleIn(target: HTMLElement, container: HTMLElement): boolean {
+  const targetRect = target.getBoundingClientRect()
+  const containerRect = container.getBoundingClientRect()
+  return targetRect.top >= containerRect.top && targetRect.bottom <= containerRect.bottom
+}
 
 export function useSettingsInteractionController(model: SettingsInteractionModel) {
   const {
@@ -152,14 +161,26 @@ export function useSettingsInteractionController(model: SettingsInteractionModel
 
   useEffect(() => {
     const targetId = highlightedSettingsTarget?.id
-    const target = targetId ? getSettingsScrollTarget(targetId, contentScrollRef.current) : null
+    if (!targetId) {
+      return
+    }
+    const target = getSettingsScrollTarget(targetId, contentScrollRef.current)
     if (!target) {
       return
     }
     // The one owner of the highlight: the same element the jump scrolled to.
     target.classList.add(SETTINGS_TARGET_HIGHLIGHT_CLASS_NAME)
     applySettingsTargetHighlightBleed(target)
+    // A section the jump just revealed grows over ~200ms; re-scroll once if the row is still cut off.
+    const settle = window.setTimeout(() => {
+      const container = contentScrollRef.current
+      if (container && !isFullyVisibleIn(target, container)) {
+        scrollSubsectionIntoView(targetId, container)
+      }
+      applySettingsTargetHighlightBleed(target)
+    }, SETTINGS_REVEAL_SETTLE_MS)
     return () => {
+      window.clearTimeout(settle)
       clearSettingsTargetHighlightBleed(target)
       target.classList.remove(SETTINGS_TARGET_HIGHLIGHT_CLASS_NAME)
     }

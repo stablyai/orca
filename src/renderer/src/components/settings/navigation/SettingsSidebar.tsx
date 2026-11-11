@@ -262,6 +262,8 @@ export function SettingsSidebar({
           repoSectionById={repoSectionById}
           groupTitleById={groupTitleById}
           hiddenResultCount={hiddenResultCount}
+          // The deferred ranking can trail typing by a frame; don't announce a false empty state.
+          pending={deferredSearchQuery !== searchQuery}
           onSelect={pickResult}
         />
       ) : null}

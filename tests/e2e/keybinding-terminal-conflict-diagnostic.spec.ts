@@ -35,6 +35,9 @@ test.describe('Terminal shortcut conflicting with a chord main intercepts', () =
     const searchInput = orcaPage.getByPlaceholder('Search settings')
     await expect(searchInput).toBeVisible()
     await searchInput.fill('shortcuts')
+    // Search lists results; the page moves on an explicit pick.
+    await searchInput.press('ArrowDown')
+    await searchInput.press('Enter')
     await expect(orcaPage.getByRole('heading', { name: 'Shortcuts', exact: true })).toBeVisible()
 
     await orcaPage.getByRole('button', { name: /Conflicts/ }).click()

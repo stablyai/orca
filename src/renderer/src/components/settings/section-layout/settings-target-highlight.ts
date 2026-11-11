@@ -1,4 +1,4 @@
-import { useEffect, useRef, type RefObject } from 'react'
+import { useCallback, useRef, type RefCallback } from 'react'
 
 export const SETTINGS_TARGET_HIGHLIGHT_CLASS_NAME = 'settings-target-highlight'
 
@@ -56,14 +56,13 @@ export function requestSettingsTargetReveal(target: HTMLElement): void {
   target.dispatchEvent(new Event(SETTINGS_TARGET_REVEAL_EVENT, { bubbles: true }))
 }
 
+// A ref callback, so a disclosure that mounts later (or remounts) still gets the listener.
 export function useSettingsTargetReveal<T extends HTMLElement>(
   onReveal: () => void
-): RefObject<T | null> {
-  const ref = useRef<T | null>(null)
+): RefCallback<T> {
   const onRevealRef = useRef(onReveal)
   onRevealRef.current = onReveal
-  useEffect(() => {
-    const node = ref.current
+  return useCallback((node: T | null) => {
     if (!node) {
       return
     }
@@ -71,5 +70,4 @@ export function useSettingsTargetReveal<T extends HTMLElement>(
     node.addEventListener(SETTINGS_TARGET_REVEAL_EVENT, listener)
     return () => node.removeEventListener(SETTINGS_TARGET_REVEAL_EVENT, listener)
   }, [])
-  return ref
 }

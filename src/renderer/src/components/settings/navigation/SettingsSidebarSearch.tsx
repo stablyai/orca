@@ -98,6 +98,7 @@ type SettingsSearchResultsListProps = {
   repoSectionById: ReadonlyMap<string, { repoIcon?: RepoIcon | null; badgeColor?: string }>
   groupTitleById: ReadonlyMap<string, string>
   hiddenResultCount: number
+  pending: boolean
   onSelect: (result: SettingsSearchResult) => void
 }
 
@@ -110,6 +111,7 @@ export function SettingsSearchResultsList({
   repoSectionById,
   groupTitleById,
   hiddenResultCount,
+  pending,
   onSelect
 }: SettingsSearchResultsListProps): React.JSX.Element {
   const t = useTranslate()
@@ -192,7 +194,7 @@ export function SettingsSearchResultsList({
           })}
         </p>
       ) : null}
-      {searchResults.length === 0 ? (
+      {searchResults.length === 0 && !pending ? (
         <p role="status" className="px-3 py-6 text-center text-xs text-muted-foreground">
           {t('settings.search.noResults', 'No settings match “{{value0}}”', {
             value0: searchQuery.trim()
