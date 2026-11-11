@@ -126,11 +126,17 @@ export function OrcaCloudQueuedPromptView({
         />
         <div className="flex items-center justify-between gap-2">
           <p id={hintId} className="text-xs text-muted-foreground">
-            {t(
-              'auto.components.orcaCloud.QueuedPrompt.hint',
-              '{{agent}} starts with it as soon as the workspace is ready.',
-              { agent: agentName }
-            )}
+            {held
+              ? t(
+                  'auto.components.orcaCloud.QueuedPrompt.heldHint',
+                  '{{agent}} starts with it once {{agent}} is set up.',
+                  { agent: agentName }
+                )
+              : t(
+                  'auto.components.orcaCloud.QueuedPrompt.hint',
+                  '{{agent}} starts with it as soon as the workspace is ready.',
+                  { agent: agentName }
+                )}
           </p>
           <div className="flex shrink-0 items-center gap-1.5">
             {prompt ? (

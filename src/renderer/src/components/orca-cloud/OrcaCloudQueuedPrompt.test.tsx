@@ -2,7 +2,9 @@
 
 import { cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
-import { OrcaCloudQueuedPromptView } from './OrcaCloudQueuedPrompt'
+import { useAppStore } from '@/store'
+import { setOrcaCloudAgentAccountsStateForTest } from '@/lib/orca-cloud/orca-cloud-agent-accounts-store'
+import { OrcaCloudQueuedPrompt, OrcaCloudQueuedPromptView } from './OrcaCloudQueuedPrompt'
 
 afterEach(() => {
   cleanup()
@@ -40,5 +42,75 @@ describe('OrcaCloudQueuedPromptView heading (DS-e)', () => {
   it('keeps the draft and hand-off wording', () => {
     expect(heading({ editable: true, draft: true })).toBe('Draft for Claude, typed in when ready')
     expect(heading({ editable: false })).toBe('Sending to Claude next')
+  })
+})
+
+describe('OrcaCloudQueuedPromptView editing hint (N-04)', () => {
+  function hint(held: boolean): string {
+    const { container } = render(
+      <OrcaCloudQueuedPromptView
+        agentName="Claude"
+        prompt=""
+        editable
+        held={held}
+        onQueue={() => {}}
+      />
+    )
+    const textarea = container.querySelector('textarea')
+    const hintId = textarea?.getAttribute('aria-describedby') ?? ''
+    return container.ownerDocument.getElementById(hintId)?.textContent ?? ''
+  }
+
+  it('waits for the workspace when the agent is set up', () => {
+    expect(hint(false)).toBe('Claude starts with it as soon as the workspace is ready.')
+  })
+
+  it('waits for the agent from the first render while it isn’t set up', () => {
+    expect(hint(true)).toBe('Claude starts with it once Claude is set up.')
+  })
+})
+
+describe('OrcaCloudQueuedPrompt held copy from the first frame (N-04)', () => {
+  it('reads the account state synchronously, so the first render already says it waits for setup', () => {
+    setOrcaCloudAgentAccountsStateForTest({
+      load: {
+        kind: 'ready',
+        status: {
+          credentials: {
+            claude: { state: 'none' },
+            codex: { state: 'none' },
+            providerEnabled: { claude: true, codex: true }
+          },
+          sources: { defaults: {}, coveredByKey: { claude: false, codex: false } }
+        }
+      },
+      setups: { claude: { phase: 'idle' }, codex: { phase: 'idle' } },
+      keyKinds: { claude: null, codex: null },
+      queue: { agents: [], index: 0 }
+    })
+    useAppStore.setState({
+      pendingWorktreeCreations: {
+        c1: {
+          status: 'creating',
+          phase: 'provisioning-vm',
+          request: {
+            agent: 'claude',
+            quickPrompt: '',
+            creationStartup: { legacy: { command: 'claude' } },
+            ephemeralVmRecipe: {
+              sourceRepoId: 'repo',
+              recipeId: 'cloud',
+              projectId: 'project',
+              provider: 'orca-cloud'
+            }
+          }
+        }
+      }
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the component reads only these fields
+    } as unknown as Partial<ReturnType<typeof useAppStore.getState>>)
+    const { container } = render(<OrcaCloudQueuedPrompt creationId="c1" />)
+    expect(
+      container.querySelector('[data-orca-cloud-queued-prompt="editing"]')?.textContent
+    ).toContain('Claude starts with it once Claude is set up.')
   })
 })
