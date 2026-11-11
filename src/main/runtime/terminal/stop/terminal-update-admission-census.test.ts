@@ -7,7 +7,7 @@ import {
   OrcadTerminalCensusParamsSchema
 } from '../../../../shared/orcad-terminal-census'
 import { TerminalHost } from '../../../daemon/terminal-host/terminal-host'
-import { listWorktreesSharedStrict } from '../../../git/worktrees/catalog/worktree-scan-cache'
+import { listWorktreesStrict } from '../../../git/worktrees/catalog/worktree-listing'
 import { spawnWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 import { ORCAD_TERMINAL_CENSUS_METHODS } from '../../rpc/methods/orcad/orcad-terminal-census'
 import { TERMINAL_UPDATE_ADMISSION_CLOSED_MESSAGE } from './terminal-update-admission'
@@ -88,7 +88,7 @@ describe("an update's last terminal census", () => {
 describe('bare storage terminal admission', () => {
   it('refuses fresh creation and cannot recreate a saved session that exited before attachment', async () => {
     const path = TEST_WORKTREE_ID.slice(TEST_WORKTREE_ID.indexOf('::') + 2)
-    vi.mocked(listWorktreesSharedStrict).mockResolvedValueOnce([
+    vi.mocked(listWorktreesStrict).mockResolvedValueOnce([
       { path, head: '', branch: '', isBare: true, isMainWorktree: true }
     ])
     const runtime = new OrcaRuntimeService(store)
