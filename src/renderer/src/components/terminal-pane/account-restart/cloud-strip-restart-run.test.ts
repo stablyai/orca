@@ -10,7 +10,8 @@ import {
   beginCloudAgentRestart,
   CLOUD_AGENT_RESTART_TIMEOUT_MS,
   cloudAgentRestartAttempt,
-  resetCloudAgentRestartsForTest
+  resetCloudAgentRestartsForTest,
+  settleCloudAgentRestart
 } from '@/lib/orca-cloud/cloud-agent-restart-attempt'
 import { selectReadyAccountRestartPtyIds } from './pane-account-restart-readiness'
 import { runReadyPaneAccountRestarts } from './use-ready-pane-account-restarts'
@@ -92,7 +93,8 @@ describe('RA-11 Restart through the account-restart runner', () => {
     )
     expect(useAppStore.getState().pendingPaneAccountRestarts).toEqual({})
     expect(cloudAgentRestartAttempt(PANE_KEY, 0)?.launchedAt).not.toBeNull()
-    // Relaunched: the timeout never turns it into a failure.
+    // The strip settles it once the pane shows the new PTY (CloudRunningStripPortal).
+    expect(settleCloudAgentRestart(PANE_KEY)).toBe(true)
     vi.advanceTimersByTime(CLOUD_AGENT_RESTART_TIMEOUT_MS)
     expect(cloudAgentRestartAttempt(PANE_KEY, 0)).toBeNull()
   })
@@ -131,5 +133,146 @@ describe('RA-11 Restart through the account-restart runner', () => {
     expect(cloudAgentRestartAttempt(PANE_KEY, 0)?.phase).toBe('failed')
     // And the stale queued restart no longer jumps the mid-turn rule.
     expect(selectReadyAccountRestartPtyIds(useAppStore.getState(), TAB)).toEqual([])
+  })
+})
+
+// Orca Cloud panes are paired web-host panes: the host already runs a terminal there, so a reconnect
+// alone reattaches to the old agent. The restart stops exactly that host terminal first.
+describe('RA-11 Restart on a paired (remote) pane', () => {
+  const REMOTE = 'remote:env-1@@term_a'
+  const OTHER_TAB = 'tab-2'
+  const OTHER_LEAF = '22222222-2222-4222-8222-222222222222'
+  const OTHER = 'remote:env-1@@term_b'
+  const tab = (id: string, ptyId: string) => ({
+    id,
+    ptyId,
+    worktreeId: 'wt-1',
+    title: 'claude',
+    customTitle: null,
+    color: null,
+    sortOrder: 0,
+    createdAt: 1
+  })
+  const entry = (tabId: string, leafId: string): AgentStatusEntry => ({
+    paneKey: makePaneKey(tabId, leafId),
+    tabId,
+    state: 'blocked',
+    prompt: '',
+    updatedAt: 1,
+    stateStartedAt: 1,
+    stateHistory: [],
+    agentType: 'claude',
+    providerSession: { key: 'session_id', id: `sess-${tabId}` }
+  })
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    resetCloudRunningSignoutForTest()
+    resetCloudAgentRestartsForTest()
+    useAppStore.setState({
+      pendingPaneAccountRestarts: {},
+      suppressedPtyExitIds: {},
+      tabsByWorktree: { 'wt-1': [tab(TAB, REMOTE), tab(OTHER_TAB, OTHER)] },
+      terminalLayoutsByTabId: {
+        [TAB]: {
+          root: { type: 'leaf', leafId: LEAF },
+          activeLeafId: LEAF,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [LEAF]: REMOTE }
+        },
+        [OTHER_TAB]: {
+          root: { type: 'leaf', leafId: OTHER_LEAF },
+          activeLeafId: OTHER_LEAF,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [OTHER_LEAF]: OTHER }
+        }
+      },
+      agentStatusByPaneKey: {
+        [PANE_KEY]: entry(TAB, LEAF),
+        [makePaneKey(OTHER_TAB, OTHER_LEAF)]: entry(OTHER_TAB, OTHER_LEAF)
+      }
+    })
+  })
+  afterEach(() => {
+    resetCloudRunningSignoutForTest()
+    resetCloudAgentRestartsForTest()
+    useAppStore.setState({ pendingPaneAccountRestarts: {}, agentStatusByPaneKey: {} })
+    vi.useRealTimers()
+  })
+
+  function clickRemoteRestart(): void {
+    beginCloudAgentRestart(PANE_KEY, { agent: 'claude', resumable: true, ptyId: REMOTE }, () =>
+      useAppStore.getState().queuePaneAccountRestarts([REMOTE], 'claude')
+    )
+  }
+
+  function runRemote(stopRemotePane: (ptyId: string, worktreeId: string) => Promise<void>) {
+    const handleRestartPane = vi.fn()
+    runReadyPaneAccountRestarts({
+      panes: [{ id: 7, leafId: LEAF }],
+      ptyIdOf: () => REMOTE,
+      readyRestartPtyIds: selectReadyAccountRestartPtyIds(useAppStore.getState(), TAB),
+      tabId: TAB,
+      consumePendingPaneAccountRestart: useAppStore.getState().consumePendingPaneAccountRestart,
+      buildAccountRestartStartup: () => ({ command: 'claude --resume sess-tab-1' }),
+      handleRestartPane,
+      stopRemotePane
+    })
+    return handleRestartPane
+  }
+
+  it('stops only this pane’s host terminal, then reconnects with the resume startup', async () => {
+    clickRemoteRestart()
+    const stopRemotePane = vi.fn(() => Promise.resolve())
+    const handleRestartPane = runRemote(stopRemotePane)
+    // Not before the host confirms the old terminal stopped: else the reconnect reattaches to it.
+    expect(handleRestartPane).not.toHaveBeenCalled()
+    expect(cloudAgentRestartAttempt(PANE_KEY, 0)?.launchedAt).toBeNull()
+    await vi.waitFor(() => expect(handleRestartPane).toHaveBeenCalledTimes(1))
+    expect(stopRemotePane).toHaveBeenCalledTimes(1)
+    expect(stopRemotePane).toHaveBeenCalledWith(REMOTE, 'wt-1')
+    // The other Claude pane on the same account is untouched and keeps its status.
+    expect(stopRemotePane).not.toHaveBeenCalledWith(OTHER, expect.anything())
+    expect(
+      useAppStore.getState().agentStatusByPaneKey[makePaneKey(OTHER_TAB, OTHER_LEAF)]?.state
+    ).toBe('blocked')
+    expect(handleRestartPane).toHaveBeenCalledWith(
+      7,
+      { command: 'claude --resume sess-tab-1' },
+      { focus: false }
+    )
+    expect(cloudAgentRestartAttempt(PANE_KEY, 0)?.launchedAt).not.toBeNull()
+  })
+
+  it('shows the failure and never reconnects when the host terminal could not be stopped', async () => {
+    clickRemoteRestart()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const handleRestartPane = runRemote(() =>
+      Promise.reject(new Error('terminal_exact_stop_failed'))
+    )
+    await vi.waitFor(() => expect(cloudAgentRestartAttempt(PANE_KEY, 0)?.phase).toBe('failed'))
+    warn.mockRestore()
+    expect(handleRestartPane).not.toHaveBeenCalled()
+    // Its exit suppression is withdrawn, so a later real exit still shows.
+    expect(useAppStore.getState().suppressedPtyExitIds[REMOTE]).toBeUndefined()
+  })
+
+  it('a reconnect that never binds a new PTY fails at the timeout', async () => {
+    clickRemoteRestart()
+    const handleRestartPane = runRemote(() => Promise.resolve())
+    await vi.waitFor(() => expect(handleRestartPane).toHaveBeenCalledTimes(1))
+    vi.advanceTimersByTime(CLOUD_AGENT_RESTART_TIMEOUT_MS)
+    expect(cloudAgentRestartAttempt(PANE_KEY, 0)?.phase).toBe('failed')
+  })
+
+  it('an account-switch restart on a remote pane does not stop the host terminal', () => {
+    useAppStore.setState({
+      agentStatusByPaneKey: { [PANE_KEY]: { ...entry(TAB, LEAF), state: 'done' } }
+    })
+    useAppStore.getState().queuePaneAccountRestarts([REMOTE], 'claude')
+    const stopRemotePane = vi.fn(() => Promise.resolve())
+    const handleRestartPane = runRemote(stopRemotePane)
+    expect(stopRemotePane).not.toHaveBeenCalled()
+    expect(handleRestartPane).toHaveBeenCalledTimes(1)
   })
 })

@@ -64,12 +64,8 @@ export function beginCloudAgentRestart(
         return
       }
       forcedRestarts.delete(attempt.ptyId)
-      if (attempt.launchedAt !== null) {
-        // Relaunched but silent so far: the restart happened; the account read decides what shows.
-        restarts.delete(paneKey)
-      } else {
-        restarts.set(paneKey, { ...attempt, phase: 'failed' })
-      }
+      // No proof of a relaunch (a new PTY in the pane, or the relaunched agent's status) in time.
+      restarts.set(paneKey, { ...attempt, phase: 'failed' })
       notifyCloudRunningStrips()
     }, CLOUD_AGENT_RESTART_TIMEOUT_MS)
   )
@@ -126,7 +122,8 @@ export function cloudAgentRestartAttempt(
 }
 
 /**
- * Settle a launched attempt: the relaunched agent reported. Returns whether it settled. The strip
+ * Settle a launched attempt once there is proof it relaunched: the pane's PTY changed or the
+ * relaunched agent reported (the caller checks). Returns whether it settled. The strip
  * then follows the account: gone, or state 1 if the sign-in is still bad.
  */
 export function settleCloudAgentRestart(paneKey: string): boolean {

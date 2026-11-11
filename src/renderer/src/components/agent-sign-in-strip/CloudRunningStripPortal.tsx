@@ -2,7 +2,7 @@
 // sign-in expires. Same component, place and height as #315's pre-launch strip; the terminal keeps
 // running and refits below it, so its scrollback stays readable and selectable.
 import type React from 'react'
-import { useEffect, useRef } from 'react'
+import { useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { useAppStore } from '@/store'
 import { useTranslate } from '@/i18n/use-translate'
@@ -92,23 +92,15 @@ export function CloudRunningStripPortal({
   const gate = useAgentSignInGate(paneKey)
   const held = hold !== null || gate !== null
   const attempt = cloudAgentRestartAttempt(paneKey, revision)
-  // Success: the relaunched agent's first status. The entry seen when the new PTY was asked for is
-  // the old agent's (or none); any later entry is the relaunched one. No clocks: the host stamps it.
-  const launchEntryRef = useRef<{ launchedAt: number; entry: unknown } | null>(null)
-  const launchedAt = attempt?.phase === 'restarting' ? attempt.launchedAt : null
+  // Success needs proof: the pane is bound to a new PTY after the relaunch was asked for (the old
+  // agent's terminal was replaced). Anything less turns into "Couldn't restart" at the timeout.
+  const launched = attempt?.phase === 'restarting' && attempt.launchedAt !== null
+  const attemptPtyId = attempt?.ptyId ?? null
   useEffect(() => {
-    if (launchedAt === null) {
-      launchEntryRef.current = null
-      return
-    }
-    if (launchEntryRef.current?.launchedAt !== launchedAt) {
-      launchEntryRef.current = { launchedAt, entry }
-      return
-    }
-    if (entry !== null && entry !== launchEntryRef.current.entry) {
+    if (launched && ptyId !== null && ptyId !== attemptPtyId) {
       settleCloudAgentRestart(paneKey)
     }
-  }, [paneKey, launchedAt, entry])
+  }, [paneKey, launched, ptyId, attemptPtyId])
   const restart = (args: { agent: HostAgentSignInAgent; resumable: boolean }): void => {
     if (!ptyId) {
       return

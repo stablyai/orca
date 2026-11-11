@@ -87,11 +87,11 @@ describe('Restart attempt (RA-11)', () => {
     expect(cloudAgentRestartAttempt(PANE, 0)).toBeNull()
   })
 
-  it('a relaunch with no status by the timeout counts as restarted, never as failed', () => {
+  it('a relaunch with no proof (no new PTY) by the timeout is a failure, never a quiet success', () => {
     begin()
     noteCloudAgentRestartLaunched(PTY)
     vi.advanceTimersByTime(CLOUD_AGENT_RESTART_TIMEOUT_MS)
-    expect(cloudAgentRestartAttempt(PANE, 0)).toBeNull()
+    expect(cloudAgentRestartAttempt(PANE, 0)?.phase).toBe('failed')
   })
 
   it('ignores launches and failures of other PTYs', () => {
