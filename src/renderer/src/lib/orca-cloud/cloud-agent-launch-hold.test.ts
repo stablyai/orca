@@ -110,7 +110,10 @@ describe('cloud agent launch hold', () => {
     )
     // Set up finishes: the strip offers Start; the launch still waits for it.
     setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'active' }))
-    await new Promise((resolve) => setTimeout(resolve, 20))
+    // Let any subscriber run (zero-delay yields); the hold must still be waiting for Start.
+    for (let i = 0; i < 3; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    }
     expect(readCloudAgentHold('tab:d')).not.toBeNull()
     releaseCloudAgentHold('tab:d', 'proceed')
     await expect(held).resolves.toBe('proceed')

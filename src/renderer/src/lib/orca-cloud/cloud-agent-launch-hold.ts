@@ -46,10 +46,9 @@ export function cloudAgentHoldReason(
   agent: HostAgentSignInAgent,
   accounts: Pick<OrcaCloudAgentAccountsState, 'load' | 'keyKinds'>
 ): CloudAgentHoldReason | null {
-  if (accounts.load.kind !== 'ready') {
-    return null
-  }
-  switch (orcaCloudAgentCoverage(agent, accounts.load.status, accounts.keyKinds[agent]).kind) {
+  switch (orcaCloudAgentCoverageFromAccounts(agent, accounts)?.kind) {
+    case undefined:
+      return null
     case 'expired':
       return 'accountExpired'
     case 'notSetUp':
