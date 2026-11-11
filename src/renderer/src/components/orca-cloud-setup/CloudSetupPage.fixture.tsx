@@ -6,9 +6,9 @@ import type { CloudSetupFlow } from './use-cloud-setup-flow'
 
 const noop = (): void => {}
 
-function flow(rows: CloudSetupStep[]): CloudSetupFlow {
+function flow(rows: CloudSetupStep[], teamSwitch = false): CloudSetupFlow {
   return {
-    ...cloudSetupPageModel(rows),
+    ...cloudSetupPageModel(rows, { teamSwitch }),
     busy: false,
     signingIn: false,
     signInDidNotFinish: false,
@@ -28,11 +28,16 @@ function flow(rows: CloudSetupStep[]): CloudSetupFlow {
   }
 }
 
-function page(rows: CloudSetupStep[], agent: 'claude' | 'codex', label: string) {
+function page(
+  rows: CloudSetupStep[],
+  agent: 'claude' | 'codex',
+  label: string,
+  teamSwitch = false
+) {
   return (
     <div className="h-[560px]">
       <CloudSetupPage
-        flow={flow(rows)}
+        flow={flow(rows, teamSwitch)}
         projectName="Hello-World"
         prompt="Fix the flaky checkout test"
         agentLabel={label}
@@ -90,5 +95,37 @@ export const githubLeft = defineFixture({
       ],
       'claude',
       'Claude'
+    )
+})
+
+/** DS-b re-run repro 1: signed out, the repository check hasn't answered: GitHub shows pending. */
+export const signedOutGithubUnknown = defineFixture({
+  width: 1000,
+  render: () =>
+    page(
+      [
+        { id: 'account', state: 'needed', need: 'sign-in', canFix: true },
+        { id: 'plan', state: 'pending', need: 'trial' },
+        { id: 'agent', state: 'optional' }
+      ],
+      'claude',
+      'Claude'
+    )
+})
+
+/** DS-b re-run repro 2: a member with no active team ("Switch to your team"): Plan shows pending. */
+export const teamSwitchPlanUnknown = defineFixture({
+  width: 1000,
+  render: () =>
+    page(
+      [
+        { id: 'account', state: 'done' },
+        { id: 'team', state: 'needed' },
+        { id: 'github', state: 'needed', need: 'github', canFix: true },
+        { id: 'agent', state: 'optional' }
+      ],
+      'claude',
+      'Claude',
+      true
     )
 })

@@ -92,12 +92,31 @@ export function cloudSetupPageModel(
   rows: readonly CloudSetupStep[],
   { teamSwitch = false }: { teamSwitch?: boolean } = {}
 ): CloudSetupPageModel {
-  const steps = withTeamStep(rows.filter((step) => step.id !== 'agent'))
-  const current = steps.find((step) => step.state !== 'done') ?? null
+  const real = withTeamStep(rows.filter((step) => step.id !== 'agent'))
+  // The current step and its action come from what is known; the stepper always shows all four.
+  const current = real.find((step) => step.state !== 'done') ?? null
+  const steps = withAllWebSteps(real)
   if (!current) {
     return { steps, current: null, action: 'done' }
   }
   return { steps, current, action: actionForStep(current, { teamSwitch }) }
+}
+
+const WEB_STEP_ORDER = ['account', 'team', 'plan', 'github'] as const
+
+/**
+ * The stepper never changes its count (DS-b, as on the web): Account · Team · Plan · GitHub from
+ * the first page. A step the desktop can't judge yet (GitHub before sign-in, Plan while a team
+ * switch is pending) shows as a neutral pending step; it is display only, never the current step,
+ * so it can't hold a start. No account row (D3: no GitHub repository) keeps its single step.
+ */
+function withAllWebSteps(steps: readonly CloudSetupStep[]): readonly CloudSetupStep[] {
+  if (!steps.some((step) => step.id === 'account')) {
+    return steps
+  }
+  return WEB_STEP_ORDER.map(
+    (id): CloudSetupStep => steps.find((step) => step.id === id) ?? { id, state: 'pending' }
+  )
 }
 
 /**

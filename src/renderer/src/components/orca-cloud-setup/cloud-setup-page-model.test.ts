@@ -23,7 +23,7 @@ describe('cloudSetupPageModel', () => {
       { id: 'agent', state: 'optional' }
     ]
     const model = cloudSetupPageModel(steps)
-    expect(model.steps.map((step) => step.id)).toEqual(['account', 'team', 'plan'])
+    expect(model.steps.map((step) => step.id)).toEqual(['account', 'team', 'plan', 'github'])
     expect(model).toMatchObject({ current: null, action: 'done' })
   })
 
@@ -61,12 +61,51 @@ describe('cloudSetupPageModel', () => {
       ],
       { teamSwitch: true }
     )
-    expect(switching.steps.map((step) => step.id)).toEqual(['account', 'team', 'plan'])
+    expect(switching.steps.map((step) => step.id)).toEqual(['account', 'team', 'plan', 'github'])
     expect(switching.action).toBe('switch-team')
     // No repository (D3): the only row stays the only step.
     expect(
       cloudSetupPageModel([{ id: 'github', state: 'failed', blocksStart: true }]).steps
     ).toHaveLength(1)
+  })
+
+  it('always shows all four web steps; an unknown one is pending and never current (DS-b)', () => {
+    // Re-run repro 1: signed out, the GitHub row isn't known yet.
+    const signedOut = cloudSetupPageModel([
+      { id: 'account', state: 'needed', need: 'sign-in', canFix: true },
+      { id: 'plan', state: 'pending', need: 'trial' },
+      { id: 'agent', state: 'optional' }
+    ])
+    expect(signedOut.steps.map((step) => [step.id, step.state])).toEqual([
+      ['account', 'needed'],
+      ['team', 'pending'],
+      ['plan', 'pending'],
+      ['github', 'pending']
+    ])
+    expect(signedOut.current?.id).toBe('account')
+    // Re-run repro 2: a member with no active team, on "Switch to your team": no Plan row.
+    const switching = cloudSetupPageModel(
+      [
+        { id: 'account', state: 'done' },
+        { id: 'team', state: 'needed' },
+        { id: 'github', state: 'needed', need: 'github', canFix: true }
+      ],
+      { teamSwitch: true }
+    )
+    expect(switching.steps.map((step) => [step.id, step.state])).toEqual([
+      ['account', 'done'],
+      ['team', 'needed'],
+      ['plan', 'pending'],
+      ['github', 'needed']
+    ])
+    expect(switching).toMatchObject({ current: { id: 'team' }, action: 'switch-team' })
+    // A placeholder never holds a start: everything known is done → done, even with GitHub unknown.
+    const unknownRepo = cloudSetupPageModel([
+      { id: 'account', state: 'done' },
+      { id: 'plan', state: 'done' }
+    ])
+    expect(unknownRepo.steps.map((step) => step.id)).toEqual(['account', 'team', 'plan', 'github'])
+    expect(unknownRepo).toMatchObject({ current: null, action: 'done' })
   })
 
   it('maps each blocker to its one action', () => {
