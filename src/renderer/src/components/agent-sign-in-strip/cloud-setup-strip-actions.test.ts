@@ -14,7 +14,7 @@ vi.mock('@/lib/orca-cloud/cloud-agent-launch-hold', () => ({
 }))
 
 // The strip reads the agents bridge at build time; these tests never reach it.
-;(window as unknown as { api: unknown }).api = { orcaCloudAgents: {} }
+Object.defineProperty(window, 'api', { value: { orcaCloudAgents: {} }, configurable: true })
 
 const { cloudSetupStripActions } = await import('./cloud-setup-strip-actions')
 
