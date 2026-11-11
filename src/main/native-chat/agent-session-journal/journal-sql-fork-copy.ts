@@ -44,7 +44,7 @@ export class JournalSqlForkCopy {
         await setImmediate()
       }
     } catch (error) {
-      await copy.close()
+      await copy.close().catch(() => undefined)
       throw error
     }
   }
@@ -94,8 +94,8 @@ export class JournalSqlForkCopy {
         }
       }
     } catch (error) {
-      await this.close()
-      await writer.maintain({ kind: 'fork-abort', token })
+      await this.close().catch(() => undefined)
+      await writer.maintain({ kind: 'fork-abort', token }).catch(() => undefined)
       this.requestSweep()
       throw error
     }

@@ -80,18 +80,22 @@ export function journalDomainDisplayTurnState(
 export function readJournalDomainDisplayedRow(
   db: Database.Database,
   target: JournalDomainItemTarget,
-  row: SqliteRow
+  row: SqliteRow,
+  stopStates?: ReadonlyMap<string, unknown>
 ): { item: AgentJournalRenderItem; payload: string } {
   const source: AgentJournalRenderItem = JSON.parse(String(row.payload_json))
   const states =
     row.wire_version === AGENT_SESSION_ITEM_WIRE_VERSION
       ? undefined
-      : readJournalDomainStopStates(db, target, [String(row.item_id)])
+      : (stopStates ?? readJournalDomainStopStates(db, target, [String(row.item_id)]))
   const item = resolveJournalDomainDisplay(
     source,
     row.wire_version,
     row.wire_json,
     states && journalDomainDisplayTurnState(source, states)
   )
-  return { item, payload: item === source ? String(row.payload_json) : JSON.stringify(item) }
+  return {
+    item,
+    payload: item === source ? String(row.payload_json) : JSON.stringify(item)
+  }
 }

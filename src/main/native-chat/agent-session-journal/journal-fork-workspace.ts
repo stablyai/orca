@@ -21,11 +21,23 @@ export function createJournalForkWorkspace(db: Database.Database): void {
       CREATE INDEX temp.fork_headers_member ON fork_headers(member,rank);
       CREATE TEMP TABLE fork_aliases(item_id TEXT PRIMARY KEY,provider_key TEXT NOT NULL);
       CREATE TEMP TABLE fork_kept(member TEXT PRIMARY KEY);
-      CREATE TEMP TABLE fork_bodies(rank INTEGER PRIMARY KEY,item_id TEXT UNIQUE,payload TEXT NOT NULL,mapped TEXT NOT NULL,notice TEXT);
+      CREATE TEMP TABLE fork_bodies(rank INTEGER PRIMARY KEY,item_id TEXT UNIQUE,mapped TEXT NOT NULL,notice TEXT,
+        body_bytes INTEGER NOT NULL,lifecycle INTEGER NOT NULL,turn_scope_id TEXT,payload TEXT NOT NULL);
       CREATE TEMP TABLE fork_edges(parent TEXT NOT NULL,child TEXT NOT NULL,PRIMARY KEY(parent,child)) WITHOUT ROWID;
       CREATE TEMP TABLE fork_omitted(id TEXT UNIQUE,processed INTEGER NOT NULL DEFAULT 0);
       CREATE INDEX temp.fork_omitted_pending ON fork_omitted(processed);
       CREATE TEMP TABLE fork_work(anchor TEXT PRIMARY KEY,last_rank INTEGER NOT NULL);`)
+}
+
+/** UTF-8 bound strings and numeric scalars, without serializing rows containing source JSON. */
+export function journalForkRowBytes(row: SqliteRow | string): number {
+  return typeof row === 'string'
+    ? Buffer.byteLength(row)
+    : Object.values(row).reduce<number>(
+        (bytes, value) =>
+          bytes + (typeof value === 'string' ? Buffer.byteLength(value) : value === null ? 0 : 8),
+        0
+      )
 }
 
 export function journalForkHeaderMember(row: SqliteRow, sourceThreadId?: string): string | null {

@@ -50,3 +50,42 @@ export function assertJournalMetadataPlan(db: Database.Database, sql: string): v
     }
   }
 }
+
+export function captureJournalForkPresentationPlans(db: Database.Database): () => void {
+  const statements = vi.spyOn(db, 'prepare')
+  return () => {
+    const queries = [...new Set(statements.mock.calls.map(([sql]) => sql))]
+    statements.mockRestore()
+    const root = db
+      .prepare("SELECT rootpage FROM temp.sqlite_master WHERE name='fork_bodies'")
+      .get()!.rootpage
+    const payload = db
+      .prepare('PRAGMA temp.table_info(fork_bodies)')
+      .all()
+      .find((row) => row.name === 'payload')!.cid
+    expect(queries.some((sql) => sql.includes('body.lifecycle'))).toBe(true)
+    for (const sql of queries) {
+      const code = db.prepare(`EXPLAIN ${sql}`).all()
+      expect(
+        code.filter((row) => ['OpenRead', 'OpenWrite'].includes(String(row.opcode)) && row.p3 === 0)
+      ).toEqual([])
+      expect(
+        db
+          .prepare(`EXPLAIN QUERY PLAN ${sql}`)
+          .all()
+          .map((row) => String(row.detail))
+          .join('\n')
+      ).not.toContain('TEMP B-TREE')
+      if (sql.includes('body.lifecycle')) {
+        const cursors = new Set(
+          code
+            .filter((row) => row.opcode === 'OpenRead' && row.p2 === root && row.p3 === 1)
+            .map((row) => row.p1)
+        )
+        for (const column of code.filter((row) => row.opcode === 'Column' && cursors.has(row.p1))) {
+          expect(Number(column.p2)).toBeLessThan(Number(payload))
+        }
+      }
+    }
+  }
+}

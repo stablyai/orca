@@ -1,9 +1,9 @@
+import { journalForkRowBytes } from './journal-fork-workspace'
 import type Database from '../../sqlite/sync-database'
 import type { SqliteRow } from '../../sqlite/sqlite-statement'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalLinkageFields } from '../../../shared/agent-session/journal/agent-session-journal-producer'
 import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { mapBodyLinks } from '../agent-session-wire/acquisition/structured-agent-session-fork-snapshot'
 import { continuedOutsideRecordId } from '../agent-session-wire/acquisition/structured-agent-session-history-catch-up'
 import {
@@ -41,7 +41,7 @@ export class JournalForkPresentation {
       units < 64 && bytes < MAX_BYTES && (units === 0 || performance.now() - start < 8)
     const account = (row: SqliteRow | string) => {
       units++
-      bytes += Buffer.byteLength(typeof row === 'string' ? row : JSON.stringify(row))
+      bytes += journalForkRowBytes(row)
     }
     while (budget()) {
       switch (this.phase) {
@@ -86,55 +86,72 @@ export class JournalForkPresentation {
           break
         }
         case 'notices': {
-          const row = this.retainedRow(this.after)
-          if (!row) {
-            this.phase = 'output'
-            this.after = 0
-            continue
-          }
-          const item: AgentJournalRenderItem = JSON.parse(String(row.payload))
-          const key = this.db
-            .prepare('SELECT provider_key,member FROM temp.fork_headers WHERE rank=?')
-            .get(row.rank)!
-          const identity = parseAgentJournalItemKey(String(key.provider_key))!
-          const scoped = (...parts: string[]) => JSON.stringify(parts)
-          const noticePrefix = continuedOutsideRecordId('')
-          if (identity.provider === 'legacy' && identity.recordId.startsWith(noticePrefix)) {
-            const anchor = identity.recordId.slice(noticePrefix.length)
-            const notice =
-              identity.agent === 'codex'
-                ? scoped('codex', anchor)
-                : identity.agent === 'claude'
-                  ? scoped('row', anchor)
-                  : scoped(identity.agent, identity.sessionId, providerTimelineKeyPart(anchor))
-            this.db
-              .prepare('UPDATE temp.fork_bodies SET notice=? WHERE rank=?')
-              .run(notice, row.rank)
-          } else if (!readAgentJournalTurn(item.body)) {
-            const work = (anchor: string) =>
+          const anchors = new Map<string, number>()
+          let exhausted = true
+          for (const row of this.db
+            .prepare(`SELECT body.rank,body.item_id,body.lifecycle,body.turn_scope_id,
+            header.provider_key,header.member,root.provider_key AS root_provider_key,root.turn_id AS root_turn_id
+            FROM temp.fork_bodies body JOIN temp.fork_headers header ON header.rank=body.rank
+            LEFT JOIN temp.fork_headers root ON root.item_id=body.turn_scope_id
+            WHERE body.rank>? AND NOT EXISTS(SELECT 1 FROM temp.fork_omitted WHERE id=body.item_id)
+            ORDER BY body.rank LIMIT ?`)
+            .iterate(this.after, 64 - units)) {
+            const identity = parseAgentJournalItemKey(String(row.provider_key))!
+            const scoped = (...parts: string[]) => JSON.stringify(parts)
+            const noticePrefix = continuedOutsideRecordId('')
+            if (identity.provider === 'legacy' && identity.recordId.startsWith(noticePrefix)) {
+              const anchor = identity.recordId.slice(noticePrefix.length)
+              const notice =
+                identity.agent === 'codex'
+                  ? scoped('codex', anchor)
+                  : identity.agent === 'claude'
+                    ? scoped('row', anchor)
+                    : scoped(identity.agent, identity.sessionId, providerTimelineKeyPart(anchor))
               this.db
-                .prepare(
-                  'INSERT INTO temp.fork_work VALUES(?,?) ON CONFLICT(anchor) DO UPDATE SET last_rank=excluded.last_rank'
-                )
-                .run(anchor, row.rank)
-            work(scoped('row', item.itemId))
-            work(scoped('row', String(key.provider_key)))
-            if (this.input.sourceThreadId && key.member !== null) {
-              work(scoped('codex', String(key.member)))
-            } else if (item.turnScope?.kind === 'turn') {
-              const root = this.db
-                .prepare('SELECT provider_key,turn_id FROM temp.fork_headers WHERE item_id=?')
-                .get(item.turnScope.turnItemId)
-              const rootIdentity = root && parseAgentJournalItemKey(String(root.provider_key))
-              const keyPart =
-                root?.turn_id == null ? null : providerTimelineTurnKeyPart(String(root.turn_id))
-              if (rootIdentity?.provider === 'legacy' && keyPart !== null) {
-                work(scoped(rootIdentity.agent, rootIdentity.sessionId, keyPart))
+                .prepare('UPDATE temp.fork_bodies SET notice=? WHERE rank=?')
+                .run(notice, row.rank)
+              bytes += Buffer.byteLength(notice)
+            } else if (!row.lifecycle) {
+              const work = (anchor: string) => {
+                anchors.set(anchor, Number(row.rank))
+                bytes += Buffer.byteLength(anchor)
+              }
+              work(scoped('row', String(row.item_id)))
+              work(scoped('row', String(row.provider_key)))
+              if (this.input.sourceThreadId && row.member !== null) {
+                work(scoped('codex', String(row.member)))
+              } else if (row.turn_scope_id !== null) {
+                const rootIdentity =
+                  row.root_provider_key === null
+                    ? null
+                    : parseAgentJournalItemKey(String(row.root_provider_key))
+                const keyPart =
+                  row.root_turn_id === null
+                    ? null
+                    : providerTimelineTurnKeyPart(String(row.root_turn_id))
+                if (rootIdentity?.provider === 'legacy' && keyPart !== null) {
+                  work(scoped(rootIdentity.agent, rootIdentity.sessionId, keyPart))
+                }
               }
             }
+            this.after = Number(row.rank)
+            account(row)
+            if (!budget()) {
+              exhausted = false
+              break
+            }
           }
-          this.after = Number(row.rank)
-          account(row)
+          if (anchors.size) {
+            this.db
+              .prepare(`INSERT INTO temp.fork_work(anchor,last_rank)
+              SELECT json_extract(value,'$[0]'),json_extract(value,'$[1]') FROM json_each(?) WHERE 1
+              ON CONFLICT(anchor) DO UPDATE SET last_rank=MAX(fork_work.last_rank,excluded.last_rank)`)
+              .run(JSON.stringify([...anchors]))
+          }
+          if (exhausted) {
+            this.phase = 'output'
+            this.after = 0
+          }
           break
         }
         case 'output': {
@@ -148,15 +165,21 @@ export class JournalForkPresentation {
                 break
               }
               const item: AgentJournalRenderItem = JSON.parse(String(row.payload))
-              const rewrite = (id: string) =>
-                String(
+              let rewritten = false
+              const rewrite = (id: string) => {
+                const mapped = String(
                   this.db.prepare('SELECT mapped FROM temp.fork_bodies WHERE item_id=?').get(id)
                     ?.mapped ?? id
                 )
+                rewritten ||= mapped !== id
+                return mapped
+              }
+              const body = mapBodyLinks(item.body, rewrite)
+              const bodyUnchanged = !rewritten
               const identity = parseAgentJournalItemKey(String(row.mapped))!
               const output: JournalReplacementItem = {
                 identity,
-                body: mapBodyLinks(item.body, rewrite),
+                body,
                 observedAt: item.observedAt,
                 ownerFence: 0,
                 ...agentJournalLinkageFields(item),
@@ -173,7 +196,11 @@ export class JournalForkPresentation {
                 rank: Number(row.rank),
                 mapped: String(row.mapped),
                 item: output,
-                bytes: Buffer.byteLength(JSON.stringify(output))
+                bytes: bodyUnchanged
+                  ? Number(row.body_bytes) +
+                    Buffer.byteLength(JSON.stringify({ ...output, body: null })) -
+                    4
+                  : Buffer.byteLength(JSON.stringify(output))
               }
             }
             const output = this.pendingOutput
@@ -204,7 +231,7 @@ export class JournalForkPresentation {
   }
   private retainedRow(after: number, notices = false): SqliteRow | undefined {
     return this.db
-      .prepare(`SELECT body.rank,body.item_id,body.payload,body.mapped FROM temp.fork_bodies body
+      .prepare(`SELECT body.rank,body.item_id,body.payload,body.mapped,body.body_bytes FROM temp.fork_bodies body
       WHERE rank>? AND NOT EXISTS(SELECT 1 FROM temp.fork_omitted WHERE id=body.item_id)
       ${notices ? 'AND (notice IS NULL OR EXISTS(SELECT 1 FROM temp.fork_work WHERE anchor=body.notice AND last_rank>body.rank))' : ''}
       ORDER BY rank LIMIT 1`)

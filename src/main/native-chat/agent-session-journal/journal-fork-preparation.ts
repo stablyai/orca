@@ -1,19 +1,16 @@
-import { readJournalDomainDisplayedRow } from './journal-domain-item-display'
-import { createJournalForkWorkspace, journalForkHeaderMember } from './journal-fork-workspace'
+import { JournalForkCapture } from './journal-fork-capture'
+import {
+  createJournalForkWorkspace,
+  journalForkHeaderMember,
+  journalForkRowBytes
+} from './journal-fork-workspace'
 import { JournalForkPresentation } from './journal-fork-presentation'
 import type Database from '../../sqlite/sync-database'
 import type { SqliteRow } from '../../sqlite/sqlite-statement'
-import {
-  agentJournalItemKey,
-  parseAgentJournalItemKey
-} from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { savedRewindKeys } from '../../../shared/agent-session/lifecycle/agent-session-rewind'
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { JournalReplacementItem } from './context-epochs/journal-epoch-replacement'
-import {
-  omitForkPresentation,
-  forkDependencies
-} from '../agent-session-wire/acquisition/structured-agent-session-fork-snapshot'
 import { validateJournalForkSource, type JournalForkSourceProof } from './journal-fork-source-proof'
 
 export type JournalForkPreparationInput = {
@@ -31,7 +28,8 @@ const MAX_BYTES = 1024 * 1024
 
 /** One reserved connection, with disk-backed preparation surviving only this finite copy. */
 export class JournalForkPreparation {
-  private phase: 'submissions' | 'headers' | 'members' | 'kept' | 'capture' = 'submissions'
+  private phase: 'submissions' | 'headers' | 'members' | 'kept' | 'capture' | 'closed' =
+    'submissions'
   private presentation?: JournalForkPresentation
   private sourceOpen = false
   private epoch = ''
@@ -40,7 +38,7 @@ export class JournalForkPreparation {
   private position = [0, 0, 0]
   private after = -1
   private end = Number.MAX_SAFE_INTEGER
-  private edges?: Generator<readonly [string, string]>
+  private captureState?: JournalForkCapture
 
   constructor(
     private readonly db: Database.Database,
@@ -49,8 +47,8 @@ export class JournalForkPreparation {
     if (db.isTransaction) {
       throw new Error('fork preparation requires an exclusively reserved reader')
     }
-    createJournalForkWorkspace(db)
     try {
+      createJournalForkWorkspace(db)
       db.exec('BEGIN')
       this.sourceOpen = true
       const validated = validateJournalForkSource(db, input.source)
@@ -63,7 +61,7 @@ export class JournalForkPreparation {
           .get(input.source.sessionId, this.epoch)!.floor
       )
     } catch (error) {
-      this.close()
+      this.abort()
       throw error
     }
   }
@@ -73,18 +71,37 @@ export class JournalForkPreparation {
   }
 
   next(): JournalForkPreparationResult {
-    if (this.presentation) {
-      return this.presentation.next()
+    if (this.phase === 'closed') {
+      throw new Error('fork preparation is closed')
     }
+    try {
+      if (this.presentation) {
+        if (this.sourceOpen || this.db.isTransaction) {
+          throw new Error('fork presentation requires a released source snapshot')
+        }
+        this.db.exec('SAVEPOINT fork_presentation')
+        const result = this.presentation.next()
+        this.db.exec('RELEASE fork_presentation')
+        return result
+      }
+      return this.capture()
+    } catch (error) {
+      this.abort()
+      throw error
+    }
+  }
+
+  private capture(): JournalForkPreparationResult {
     const start = performance.now()
     let units = 0
     let bytes = 0
     const budget = () =>
       units < MAX_ROWS && bytes < MAX_BYTES && (units === 0 || performance.now() - start < 8)
-    const account = (row: SqliteRow | string) => {
+    const accountBytes = (size: number) => {
       units++
-      bytes += Buffer.byteLength(typeof row === 'string' ? row : JSON.stringify(row))
+      bytes += size
     }
+    const account = (row: SqliteRow | string) => accountBytes(journalForkRowBytes(row))
     const prefix = [this.input.source.sessionId, this.epoch] as const
     while (budget()) {
       switch (this.phase) {
@@ -222,75 +239,55 @@ export class JournalForkPreparation {
           break
         }
         case 'capture': {
-          if (this.edges) {
-            const edge = this.edges.next()
-            if (edge.done) {
-              this.edges = undefined
-            } else {
-              this.db
-                .prepare('INSERT OR IGNORE INTO temp.fork_edges VALUES(?,?)')
-                .run(...edge.value)
-              account(JSON.stringify(edge.value))
-            }
-            continue
-          }
-          const row = this.db
-            .prepare(`SELECT header.rank,header.item_id,header.provider_key,item.wire_version,item.wire_json,item.payload_json
-            FROM temp.fork_headers header CROSS JOIN journal_items item
-            WHERE header.rank>? AND (header.rank<? OR EXISTS(SELECT 1 FROM temp.fork_kept WHERE member=header.member))
-              AND item.session_id=? AND item.epoch=? AND item.item_id=header.item_id
-            ORDER BY header.rank LIMIT 1`)
-            .get(this.after, this.end, ...prefix)
-          if (!row) {
+          this.captureState ??= new JournalForkCapture(
+            this.db,
+            { sessionId: prefix[0], epoch: prefix[1] },
+            this.input,
+            this.end
+          )
+          if (this.captureState.next(budget, () => MAX_ROWS - units, accountBytes)) {
             // No domain writer acknowledgement is needed to release this WAL snapshot.
             this.db.exec('COMMIT')
             this.sourceOpen = false
+            this.captureState = undefined
             this.presentation = new JournalForkPresentation(this.db, this.input)
             this.after = 0
             return { kind: 'progress', sourceReleased: true }
           }
-          const { item, payload } = readJournalDomainDisplayedRow(
-            this.db,
-            { sessionId: prefix[0], epoch: prefix[1] },
-            row
-          )
-          const identity = parseAgentJournalItemKey(String(row.provider_key))
-          if (!identity) {
-            throw new Error('agent_session_fork:missing-identity')
-          }
-          const mapped = agentJournalItemKey(
-            identity.provider === 'codex' &&
-              identity.threadId === this.input.sourceThreadId &&
-              this.input.childThreadId
-              ? { ...identity, threadId: this.input.childThreadId }
-              : identity
-          )
-          this.db
-            .prepare('INSERT INTO temp.fork_bodies(rank,item_id,payload,mapped) VALUES(?,?,?,?)')
-            .run(row.rank, item.itemId, payload, mapped)
-          this.edges = forkDependencies(item)
-          if (omitForkPresentation(item.body)) {
-            this.omit(item.itemId)
-          }
-          this.after = Number(row.rank)
-          account(row)
           break
         }
+        case 'closed':
+          throw new Error('fork preparation is closed')
       }
     }
     return { kind: 'progress', sourceReleased: !this.sourceOpen }
   }
 
   close(): void {
-    if (this.sourceOpen && this.db.isTransaction) {
-      this.db.exec('ROLLBACK')
+    try {
+      if (this.db.isTransaction) {
+        this.db.exec('ROLLBACK')
+      }
+      this.db.exec(`DROP TABLE IF EXISTS temp.fork_headers; DROP TABLE IF EXISTS temp.fork_aliases;
+        DROP TABLE IF EXISTS temp.fork_kept; DROP TABLE IF EXISTS temp.fork_bodies; DROP TABLE IF EXISTS temp.fork_edges;
+        DROP TABLE IF EXISTS temp.fork_omitted; DROP TABLE IF EXISTS temp.fork_work`)
+    } catch (error) {
+      try {
+        this.db.close()
+      } catch {}
+      throw error
+    } finally {
+      this.sourceOpen = false
+      this.captureState = undefined
+      this.presentation = undefined
+      this.phase = 'closed'
     }
-    this.sourceOpen = false
-    this.edges = undefined
-    this.db.exec(`DROP TABLE IF EXISTS temp.fork_headers; DROP TABLE IF EXISTS temp.fork_aliases;
-      DROP TABLE IF EXISTS temp.fork_kept; DROP TABLE IF EXISTS temp.fork_bodies; DROP TABLE IF EXISTS temp.fork_edges;
-      DROP TABLE IF EXISTS temp.fork_omitted; DROP TABLE IF EXISTS temp.fork_work`)
-    this.presentation = undefined
+  }
+
+  private abort(): void {
+    try {
+      this.close()
+    } catch {}
   }
 
   private omit(id: string): void {
