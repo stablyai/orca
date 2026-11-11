@@ -1,6 +1,7 @@
 import type { MatchRange } from '../../../../../shared/palette-match/normalized-text'
 import type { SettingsNavSection } from './settings-navigation-types'
 import {
+  foldSettingsSearchText,
   getSettingsSectionSearchEntries,
   normalizeSettingsSearchQuery,
   rankSettingsSearchItems,
@@ -63,14 +64,29 @@ export function rankSettingsSearchResults(
   ).map(({ item }) => item)
 }
 
-/** Range of a title's first case-insensitive match so the row can mark it. */
+/** Range of a title's first match under the ranking fold, mapped back to the original title. */
 export function getSettingsSearchTitleMatchRanges(title: string, query: string): MatchRange[] {
-  const needle = query.trim().toLowerCase()
-  const haystack = title.toLowerCase()
-  // Lowercasing can change length (e.g. İ); skip marking rather than mis-slice.
-  if (needle === '' || haystack.length !== title.length) {
+  const needle = normalizeSettingsSearchQuery(query)
+  if (needle === '') {
     return []
   }
-  const start = haystack.indexOf(needle)
-  return start === -1 ? [] : [{ start, end: start + needle.length }]
+  // Fold per code point so each folded unit maps back to the original text it came from.
+  let folded = ''
+  const originalStarts: number[] = []
+  const originalEnds: number[] = []
+  let offset = 0
+  for (const char of title) {
+    const chunk = foldSettingsSearchText(char)
+    for (let i = 0; i < chunk.length; i += 1) {
+      originalStarts.push(offset)
+      originalEnds.push(offset + char.length)
+    }
+    folded += chunk
+    offset += char.length
+  }
+  const start = folded.indexOf(needle)
+  if (start === -1) {
+    return []
+  }
+  return [{ start: originalStarts[start], end: originalEnds[start + needle.length - 1] }]
 }

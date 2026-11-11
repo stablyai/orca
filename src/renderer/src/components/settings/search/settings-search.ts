@@ -61,7 +61,7 @@ export function isSettingsSearchQueryTooLarge(
 }
 
 // Turkish İ lowercases to i + U+0307; drop the dot so plain-i queries still match.
-function foldSettingsSearchText(value: string): string {
+export function foldSettingsSearchText(value: string): string {
   return value.toLowerCase().replaceAll('\u0307', '')
 }
 

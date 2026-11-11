@@ -1,7 +1,11 @@
 import { Settings } from 'lucide-react'
 import { expect, it } from 'vitest'
 import type { SettingsNavSection } from './settings-navigation-types'
-import { buildSettingsSearchResults, rankSettingsSearchResults } from './settings-search-results'
+import {
+  buildSettingsSearchResults,
+  getSettingsSearchTitleMatchRanges,
+  rankSettingsSearchResults
+} from './settings-search-results'
 
 function section(
   id: string,
@@ -39,4 +43,11 @@ it('ranks individual settings across panes and targets each one', () => {
   ])
   expect(rankSettingsSearchResults('channel', results)[0]?.targetId).toBe('updates-channel')
   expect(rankSettingsSearchResults('  ', results)).toEqual([])
+})
+
+it('marks the same text the ranking fold matched, including dotted capital I', () => {
+  expect(getSettingsSearchTitleMatchRanges('İstanbul', 'stan')).toEqual([{ start: 1, end: 5 }])
+  expect(getSettingsSearchTitleMatchRanges('İstanbul', 'İst')).toEqual([{ start: 0, end: 3 }])
+  expect(getSettingsSearchTitleMatchRanges('Line height', 'İ')).toEqual([{ start: 1, end: 2 }])
+  expect(getSettingsSearchTitleMatchRanges('Theme', 'update')).toEqual([])
 })
