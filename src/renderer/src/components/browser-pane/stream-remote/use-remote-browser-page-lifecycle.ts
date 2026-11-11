@@ -178,6 +178,7 @@ export function useRemoteBrowserPageLifecycle({
     [
       browserTab.id,
       browserTab.workspaceId,
+      browserTab.worktreeId,
       clearStreamFrame,
       closeBrowserPage,
       closeBrowserTab,
