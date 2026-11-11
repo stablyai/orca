@@ -6,11 +6,13 @@ import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../../shared/orchest
 import { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { generateId } from '../../../../orchestration/db/generated-id'
+import { createRootDispatch } from '../../../../orchestration/db/root-dispatch-test-fixture'
 import { RpcDispatcher } from '../../../dispatcher'
 import type { RpcResponse } from '../../../core'
 import { ORCHESTRATION_METHODS } from '../orchestration'
 
 const WORKER_PANE = 'tab_w:11111111-1111-4111-8111-111111111111'
+const OTHER_PANE = 'tab_o:22222222-2222-4222-8222-222222222222'
 const PAIRED = {
   authenticatedCallerFingerprint: 'fingerprint_a',
   pairedDeviceId: 'device_a',
@@ -30,7 +32,8 @@ describe('a paired Orca coordinating its Run on this server', () => {
     db = new OrchestrationDb(join(dir, 'b.db'))
     runtime = new OrcaRuntimeService(null)
     const panes: Record<string, string> = {
-      term_w: WORKER_PANE
+      term_w: WORKER_PANE,
+      term_o: OTHER_PANE
     }
     vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) => panes[handle] ?? null)
     vi.spyOn(runtime, 'getLiveTerminalPaneKey').mockImplementation(
@@ -92,6 +95,31 @@ describe('a paired Orca coordinating its Run on this server', () => {
       items: { conversationId: string; kind: string }[]
     }
   }
+
+  it("reads another Run's work here by its Run, as its pairing already can, but cannot change it", async () => {
+    await peerCall('orchestration.runCurrent', {})
+    const localRun = db.createRun({
+      objective: 'local',
+      coordinatorHandle: 'term_l',
+      coordinatorPaneKey: null
+    })
+    const localTask = db.createTask({ spec: 'local work', runId: localRun.id })
+    const localWork = createRootDispatch(db, localTask.id, 'term_o', OTHER_PANE)
+
+    const list = await peerCall('orchestration.workerList', { run: localRun.id, paginate: true })
+    const show = await peerCall('orchestration.workerShow', { dispatch: localWork.id })
+    const keepOpen = await peerCall('orchestration.workerKeepOpen', {
+      terminal: 'term_o',
+      keep: true
+    })
+
+    expect(list.ok ? list.result : list.error).toMatchObject({
+      workers: [{ dispatchId: localWork.id }],
+      page: { total: 1 }
+    })
+    expect(show.ok ? undefined : show.error).toBeUndefined()
+    expect(keepOpen.ok ? undefined : keepOpen.error.code).toBe('forbidden')
+  })
 
   it('gives every conversation a share of each pull, so an unimportable head starves no other', async () => {
     const stuck = conversationId
