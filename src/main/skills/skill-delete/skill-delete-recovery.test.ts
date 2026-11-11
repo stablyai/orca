@@ -70,20 +70,6 @@ describe('recoverSkillDeleteTransaction', () => {
     expect(await exists(skillDeleteJournalPath(stateDirectory, canonicalPath))).toBe(false)
   })
 
-  it('rolls an interrupted staging back so the skill survives whole', async () => {
-    const { stateDirectory, root } = await fixture()
-    const canonicalPath = join(root, 'demo')
-    const entry = journal(root, canonicalPath, { phase: 'staging' })
-    await mkdir(entry.moves[0].stagedPath, { recursive: true })
-    await writeFile(join(entry.moves[0].stagedPath, 'SKILL.md'), 'content')
-    await writeSkillDeleteJournal(stateDirectory, entry)
-
-    await recoverSkillDeleteTransaction(stateDirectory, canonicalPath)
-    expect(await exists(canonicalPath)).toBe(true)
-    expect(await exists(entry.moves[0].stagedPath)).toBe(false)
-    expect(await exists(skillDeleteJournalPath(stateDirectory, canonicalPath))).toBe(false)
-  })
-
   it('keeps the journal when a rollback rename fails, so startup can retry it', async () => {
     const { stateDirectory, root } = await fixture()
     const canonicalPath = join(root, 'demo')

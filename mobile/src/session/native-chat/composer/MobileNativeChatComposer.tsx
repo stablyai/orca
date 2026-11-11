@@ -39,9 +39,10 @@ import { composerInputStyles as inputStyles } from '../../../components/composer
 import { MobileNativeChatComposerSendSlot } from './MobileNativeChatComposerSendSlot'
 import { MobileNativeChatEditActions } from './MobileNativeChatEditActions'
 import { useMobileNativeChatContextRing } from './MobileNativeChatContextUsageRing'
-import type { MobileNativeChatSendIntent } from '../mobile-native-chat-send'
+import type { MobileNativeChatSendIntent } from './mobile-native-chat-send'
 import { MobileNativeChatComposerMic } from './MobileNativeChatComposerMic'
 import type { MobileNativeChatMicProps } from './MobileNativeChatComposerMic'
+import { MobileNativeChatDictationLeading } from './MobileNativeChatDictationLeading'
 import type { MobileNativeChatStructuredComposer } from './mobile-native-chat-structured-composer'
 import { useMobileNativeChatComposerGoalMode } from './use-mobile-native-chat-composer-goal-mode'
 import { MobileNativeChatComposerPlanChip } from './MobileNativeChatComposerPlanChip'
@@ -49,8 +50,6 @@ import { MobileNativeChatComposerPlanChip } from './MobileNativeChatComposerPlan
 const NO_FILE_PATHS: string[] = []
 const NO_ATTACHMENTS: PendingNativeChatImage[] = []
 const NO_FILES: PendingNativeChatFile[] = []
-
-export type { MobileNativeChatStructuredComposer } from './mobile-native-chat-structured-composer'
 
 type Props = MobileNativeChatMicProps & {
   // Applies dictation's edit to the draft this composer shows; false when it can no longer take it.
@@ -151,6 +150,8 @@ export function MobileNativeChatComposer({
   const fallbackInputRef = useRef<TextInput>(null)
   const fieldRef = inputRef ?? fallbackInputRef
   const groupRef = useRef<View>(null)
+  // This composer's ✕, which its own held mic may be released over.
+  const cancelRef = useRef<View>(null)
   const [focused, setFocused] = useState(false)
   const [picker, setPicker] = useMobileNativeChatPickerPresentation(
     sessionOptions?.controller.optionPickerRequest
@@ -341,7 +342,9 @@ export function MobileNativeChatComposer({
             textAlignVertical="top"
           />
           <View style={inputStyles.actionRow} testID="native-chat-composer-actions">
-            <View style={styles.leadingControls}>
+            <MobileNativeChatDictationLeading
+              {...{ micActive, micStarting, micProcessing, cancelRef, trailing: contextRing.ring }}
+            >
               <MobileNativeChatComposerAttachButton
                 onAttachImage={onAttachImage}
                 onAttachFiles={structured?.onAttachFiles}
@@ -367,17 +370,11 @@ export function MobileNativeChatComposer({
               ) : null}
               <MobileNativeChatComposerPlanChip options={sessionOptions} inputRef={fieldRef} />
               {goal.chip}
-            </View>
-            {contextRing.ring}
+            </MobileNativeChatDictationLeading>
             {onMicPress ? (
               <MobileNativeChatComposerMic
-                onMicPress={onMicPress}
-                micActive={micActive}
-                micStarting={micStarting}
-                micProcessing={micProcessing}
-                dictationMode={dictationMode}
-                onMicPressIn={onMicPressIn}
-                onMicPressOut={onMicPressOut}
+                {...{ onMicPress, micActive, micStarting, micProcessing, dictationMode }}
+                {...{ onMicPressIn, onMicPressOut, cancelRef }}
                 disabled={disabled || offline}
               />
             ) : null}

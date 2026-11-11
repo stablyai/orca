@@ -58,7 +58,7 @@ describe('detectInstalledBrowsers — Comet', () => {
       }
     })
 
-    const { detectInstalledBrowsers } = await import('./browser-cookie-import')
+    const { detectInstalledBrowsers } = await import('./sources/browser-cookie-detection')
     const detected = detectInstalledBrowsers()
     expect(detected.find((b) => b.family === 'comet')).toBeUndefined()
   })
@@ -77,7 +77,7 @@ describe('detectInstalledBrowsers — Comet', () => {
       }
     })
 
-    const { selectBrowserProfile } = await import('./browser-cookie-import')
+    const { selectBrowserProfile } = await import('./sources/browser-cookie-detection')
     const selected = selectBrowserProfile(
       {
         family: 'comet',

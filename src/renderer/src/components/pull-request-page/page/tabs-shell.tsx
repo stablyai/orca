@@ -38,6 +38,7 @@ export function PullRequestPageTabs({
   sourceContext,
   projectOrigin,
   body,
+  bodyImageUrls,
   comments,
   files,
   filesUnavailable,
@@ -63,6 +64,7 @@ export function PullRequestPageTabs({
   sourceContext?: TaskSourceContext | null
   projectOrigin: PullRequestPageProjectOrigin | undefined
   body: string
+  bodyImageUrls?: Record<string, string>
   comments: PRComment[]
   files: GitHubPRFile[]
   filesUnavailable: boolean
@@ -127,6 +129,7 @@ export function PullRequestPageTabs({
             repoId={effectiveRepoId}
             sourceContext={sourceContext}
             body={body}
+            bodyImageUrls={bodyImageUrls}
             comments={comments}
             files={files}
             headSha={details?.headSha}
@@ -144,9 +147,9 @@ export function PullRequestPageTabs({
                 patchCachedPRChecks(detailsCacheKey, nextChecks)
               }
             }}
-            onBodyUpdated={(nextBody) => {
+            onBodyUpdated={(nextBody, representation) => {
               if (detailsCacheKey) {
-                patchCachedWorkItemBody(detailsCacheKey, nextBody)
+                patchCachedWorkItemBody(detailsCacheKey, nextBody, representation)
               }
             }}
             onCommentAdded={appendOptimisticComment}

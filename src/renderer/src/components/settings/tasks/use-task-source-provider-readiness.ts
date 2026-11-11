@@ -1,16 +1,16 @@
 import { useMemo } from 'react'
-import type { TaskProvider } from '../../../../../shared/work-items/task-providers'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkillNames
-} from '@/hooks/useInstalledAgentSkills'
-import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
+} from '@/hooks/skills/discovery/useInstalledAgentSkills'
+import { useActiveProjectSkillRuntime } from '@/hooks/skills/runtime/useActiveProjectSkillRuntime'
 import { useLinearProviderConnected } from '@/hooks/useLinearProviderConnected'
-import { LINEAR_AGENT_SKILL_NAMES } from '@/lib/agent-feature-skill-names'
-import { getLocalPreflightContext } from '@/lib/local-preflight-context'
-import { localPreflightContextKey } from '@/lib/local-preflight-context-key'
-import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
+import { LINEAR_AGENT_SKILL_NAMES } from '@/lib/skills/installation/agent-feature-skill-names'
+import { getLocalPreflightContext } from '@/runtime/hosts/preflight/local-preflight-context'
+import { localPreflightContextKey } from '@/runtime/hosts/preflight/local-preflight-context-key'
+import { getProviderRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
 import { useAppStore } from '@/store/index'
+import type { TaskProvider } from '../../../../../shared/work-items/task-providers'
 import type { TaskProviderReadiness } from './task-source-setup-state'
 
 export function useTaskSourceProviderReadiness(

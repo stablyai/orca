@@ -93,13 +93,28 @@ describe('getHostedReviewForBranch', () => {
       mergeable: 'MERGEABLE'
     }
     let finishOld: (value: typeof old) => void = () => {}
-    getMergeRequestForBranchMock
-      .mockReturnValueOnce(
-        new Promise<typeof old>((resolve) => {
-          finishOld = resolve
-        })
-      )
-      .mockResolvedValueOnce({ ...old, state: 'merged' })
+    const pending = new Promise<typeof old>((resolve) => {
+      finishOld = resolve
+    })
+    let started!: () => void
+    const requestStarted = new Promise<void>((resolve) => {
+      started = resolve
+    })
+    getMergeRequestForBranchMock.mockImplementation(
+      (
+        _repo: string,
+        _branch: string,
+        _linked: unknown,
+        connectionId?: string | null,
+        options?: { userRefresh?: boolean }
+      ) => {
+        started()
+        if (connectionId !== 'ssh-1') {
+          return Promise.resolve(null)
+        }
+        return options?.userRefresh ? Promise.resolve({ ...old, state: 'merged' }) : pending
+      }
+    )
     const input = {
       repoPath: '/repo',
       executionHostId: 'ssh:ssh-1',
@@ -107,18 +122,16 @@ describe('getHostedReviewForBranch', () => {
       force: true
     } as const
     const before = getHostedReviewForBranch(input)
-    await vi.waitFor(() => expect(getMergeRequestForBranchMock).toHaveBeenCalledTimes(1))
+    await requestStarted
     const click = getHostedReviewForBranch({ ...input, userRefresh: true })
     finishOld(old)
     await before
     await expect(click).resolves.toMatchObject({ provider: 'gitlab', state: 'merged', number: 7 })
-    expect(getMergeRequestForBranchMock).toHaveBeenCalledTimes(2)
-    expect(getMergeRequestForBranchMock).toHaveBeenLastCalledWith('/repo', 'feature', null, 'ssh-1')
   })
 
   it('maps GitLab merge requests into the hosted review surface', async () => {
     getProjectSlugMock.mockResolvedValue({ host: 'gitlab.com', path: 'g/p' })
-    getMergeRequestForBranchMock.mockResolvedValue({
+    const mr = {
       number: 7,
       title: 'GitLab branch',
       state: 'opened',
@@ -126,7 +139,13 @@ describe('getHostedReviewForBranch', () => {
       pipelineStatus: 'success',
       updatedAt: '2026-05-10T00:00:00.000Z',
       mergeable: 'MERGEABLE'
-    })
+    }
+    getMergeRequestForBranchMock.mockImplementation(
+      (repo: string, branch: string, _linked: unknown, connectionId?: string | null) =>
+        Promise.resolve(
+          repo === '/repo' && branch === 'feature' && connectionId === 'ssh-1' ? mr : null
+        )
+    )
 
     await expect(
       getHostedReviewForBranch({
@@ -145,7 +164,6 @@ describe('getHostedReviewForBranch', () => {
       mergeable: 'MERGEABLE'
     })
     expect(getProjectSlugMock).toHaveBeenCalledWith('/repo', 'ssh-1')
-    expect(getMergeRequestForBranchMock).toHaveBeenCalledWith('/repo', 'feature', null, 'ssh-1')
     expect(getPRForBranchOutcomeMock).not.toHaveBeenCalled()
   })
 

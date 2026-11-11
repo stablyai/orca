@@ -8,8 +8,8 @@ import {
   listCapableSharedControlSockets,
   startDesktopPresenceReporter
 } from '../notifications/desktop-presence-reporter'
-import { agentHookServer } from '../agent-hooks/server'
-import { installHookStatusSessionTabsRepublish } from '../agent-hooks/hook-status-session-tabs-republish'
+import { agentHookServer } from '../agent-hooks/server/agent-hook-server'
+import { installHookStatusSessionTabsRepublish } from '../agent-hooks/runtime/hook-status-session-tabs-republish'
 import { initTelemetry, track } from '../telemetry/client'
 import { setCodexTrustGrantTelemetry } from '../codex/trust/grants/codex-trust-grant-telemetry'
 import { initObservability } from '../observability/index'

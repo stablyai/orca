@@ -12,7 +12,7 @@ vi.mock('./desktop-integration/app-icon', async () =>
 vi.mock('../browser-passwords/browser-password-guest-service', () => ({
   attachBrowserPasswordGuest: vi.fn()
 }))
-vi.mock('../browser/browser-manager', async () =>
+vi.mock('../browser/guest-lifecycle/manager/browser-manager', async () =>
   (await import('./createMainWindow-test-harness')).browserManagerMock()
 )
 vi.mock('../browser/routing/sessions/browser-route-session-runtime', async () => ({

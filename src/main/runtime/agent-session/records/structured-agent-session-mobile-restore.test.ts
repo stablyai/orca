@@ -6,7 +6,8 @@ import {
   attach,
   seedApproval,
   envelope,
-  CALLER
+  CALLER,
+  hostTestRecoveryCapsuleSettled
 } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-harness'
 import {
   HOST_TEST_SESSION as SESSION,
@@ -87,6 +88,8 @@ describe('prompt delivery after host recovery', () => {
     }
     unsubscribe()
     await original.closeDismissals()
+    // A restarted process starts after the old one's capsule writes finished or died with it.
+    await hostTestRecoveryCapsuleSettled()
     const restarted = new RuntimeMobileNotificationController()
     restarted.configureDismissalStore(h.root)
     const events: MobileNotificationEvent[] = []

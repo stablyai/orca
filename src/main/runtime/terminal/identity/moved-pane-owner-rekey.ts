@@ -1,4 +1,4 @@
-import { agentHookServer } from '../../../agent-hooks/server'
+import { agentHookServer } from '../../../agent-hooks/server/agent-hook-server'
 import { forgetFailedAgentLaunches } from '../../../agent-launch/agent-launch-pane-attachment'
 import type { Store } from '../../../persistence/loading-store/store'
 import { makePaneKey, parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'

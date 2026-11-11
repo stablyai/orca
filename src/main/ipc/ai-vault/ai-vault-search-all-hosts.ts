@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto'
+import { sessionSearchPageKey } from '../../ai-vault-search/session-search-page-cursor'
 import { resolveSessionSearchLimit } from '../../../shared/ai-vault/search/ai-vault-search-limit'
 import type {
   AiVaultSearchHit,
@@ -55,12 +57,22 @@ export async function searchAllExecutionHosts(
   const startedAt = Date.now()
   const limit = resolveSessionSearchLimit(request.limit)
   const sort: MergedSort = request.filters?.sort ?? 'relevance'
+  const key = createHash('sha256')
+    .update(
+      JSON.stringify([
+        sessionSearchPageKey(request),
+        request.within ?? null,
+        legs.map((leg) => leg.executionHostId).sort()
+      ])
+    )
+    .digest('base64url')
   const resumed = request.cursor === undefined ? null : decodeMergedSearchCursor(request.cursor)
   if (request.cursor !== undefined) {
     const known = new Set<string>(legs.map((leg) => leg.executionHostId))
     // A cursor belongs to one query over one host set; anything else is not ours.
     if (
       !resumed ||
+      (resumed.key !== undefined && resumed.key !== key) ||
       resumed.limit !== limit ||
       resumed.sort !== sort ||
       Object.keys(resumed.hosts).some((executionHostId) => !known.has(executionHostId))
@@ -77,7 +89,7 @@ export async function searchAllExecutionHosts(
     walks.map((walk) => fetchHostPage(walk, resumed?.hosts[walk.executionHostId] ?? null))
   )
   const hits = await drainMergedPage(walks, limit, sort)
-  return mergedSearchResponse(walks, { limit, sort }, hits, Date.now() - startedAt)
+  return mergedSearchResponse(walks, { limit, sort, key }, hits, Date.now() - startedAt)
 }
 
 /** Every leg answers in the merged order; the cursor and debug are this merge's own. */
@@ -109,6 +121,17 @@ function newHostWalk(leg: SessionSearchHostLeg, request: AiVaultSearchRequest): 
 }
 
 async function fetchHostPage(walk: HostWalk, entry: MergedSearchCursorEntry | null): Promise<void> {
+  if (entry?.p !== undefined) {
+    // Why: these hits were already hydrated; only the next host read validates new content.
+    walk.pending = stampExecutionHost(entry.p, walk.executionHostId)
+    walk.nextCursor = entry.c
+    walk.generation = entry.g
+    walk.outcome = 'searched'
+    if (entry.t) {
+      walk.truncated = { ...entry.t }
+    }
+    return
+  }
   walk.cursor = entry?.c ?? null
   walk.emitted = entry?.e ?? 0
   walk.generation = entry?.g ?? 0
@@ -217,7 +240,7 @@ function mostRecentWalk(walks: readonly HostWalk[]): HostWalk | null {
 
 function mergedSearchResponse(
   walks: readonly HostWalk[],
-  query: { limit: number; sort: MergedSort },
+  query: { limit: number; sort: MergedSort; key: string },
   hits: AiVaultSearchHit[],
   durationMs: number
 ): AiVaultSearchResponse {
@@ -256,13 +279,13 @@ function mergedSearchResponse(
   }
 }
 
-/** Resume where this request stopped: mid-page by skip count, else the unread page. */
+/** Carry already-read hits verbatim; the next cursor starts after that captured page. */
 function nextCursorEntry(walk: HostWalk): MergedSearchCursorEntry | null {
   if (walk.pending.length > 0) {
-    return { c: walk.cursor, e: walk.emitted, g: walk.generation }
+    return { c: walk.nextCursor, e: 0, g: walk.generation, p: walk.pending, t: walk.truncated }
   }
   if (walk.nextCursor !== null) {
-    return { c: walk.nextCursor, e: 0, g: walk.generation }
+    return { c: walk.nextCursor, e: 0, g: walk.generation, p: [], t: walk.truncated }
   }
   return walk.carry ? { c: walk.cursor, e: walk.emitted, g: walk.generation } : null
 }

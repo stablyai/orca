@@ -14,6 +14,7 @@ import {
 import type { BridgeErrorCapture } from './bridge/bridge-error-capture'
 import type { MobileWebShellSessionState } from './mobile-web-shell-session-contract'
 import type { FakeRpcClient } from './bridge-host-test-fakes'
+import type { PageHostSnapshot } from './use-page-host-snapshot'
 
 const doubles = vi.hoisted((): { client: FakeRpcClient | null } => ({ client: null }))
 
@@ -82,6 +83,7 @@ function FakeShellView(props: {
 function Harness(props: {
   session: MobileWebShellSessionState
   sessionEstablished?: boolean
+  snapshot?: PageHostSnapshot | null
   posted: PostedFrame[]
   probe: Probe
   faults: BridgeErrorCapture[]
@@ -121,7 +123,7 @@ function Harness(props: {
       props.probe.backPops += 1
       return 'popped'
     },
-    snapshot: SNAPSHOT,
+    snapshot: props.snapshot === undefined ? SNAPSHOT : props.snapshot,
     readStorage: () => ({ storage: STORAGE, storageOversize: [] }),
     onStorageWrite: (key, value) => props.probe.storageWrites.push({ key, value }),
     // Use fresh callbacks each render; rebuilding for them would settle pending requests.
@@ -198,7 +200,8 @@ afterEach(async () => {
 
 async function mount(
   session: MobileWebShellSessionState,
-  sessionEstablished?: boolean
+  sessionEstablished?: boolean,
+  snapshot?: PageHostSnapshot | null
 ): Promise<Mounted> {
   const posted: PostedFrame[] = []
   const probe: Probe = {
@@ -219,6 +222,7 @@ async function mount(
     createElement(Harness, {
       session: next,
       ...(sessionEstablished === undefined ? {} : { sessionEstablished }),
+      ...(snapshot === undefined ? {} : { snapshot }),
       posted,
       probe,
       faults,
@@ -310,5 +314,28 @@ describe('a session that handshook before this host existed', () => {
     const mounted = await mount(readyState('session-one'))
     await mounted.deliver(clientFrame({ type: 'request', id: ID, method: 'status.get' }))
     expect(fakeClient().requests).toEqual([])
+  })
+})
+
+describe('a ready the page sent before its host existed', () => {
+  it('is answered with one init as soon as the host snapshot arrives', async () => {
+    const mounted = await mount(readyState('session-one'), undefined, null)
+    await mounted.deliver(clientFrame({ type: 'ready' }))
+    expect(mounted.posted).toEqual([])
+    await act(async () => {
+      mounted.tree.update(
+        createElement(Harness, {
+          session: readyState('session-one'),
+          snapshot: SNAPSHOT,
+          posted: mounted.posted,
+          probe: mounted.probe,
+          faults: mounted.faults,
+          readies: mounted.readies
+        })
+      )
+    })
+    expect(mounted.frames('session-one')).toEqual([
+      expect.objectContaining({ type: 'init', sessionId: 'session-one', buildId: 'build-a' })
+    ])
   })
 })

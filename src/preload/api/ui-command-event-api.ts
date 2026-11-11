@@ -26,6 +26,10 @@ import type {
   TerminalPaneRevealReply,
   TerminalPaneRevealRequest
 } from '../../shared/workspace-layout/terminal-pane-reveal'
+import type {
+  AgentPaneActivityReply,
+  AgentPaneActivityRequest
+} from '../../shared/agent-status/presentation/agent-list-status'
 import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
 import type {
   ProjectMovePauseRequest,
@@ -225,6 +229,8 @@ export type UiCommandEventApi = {
   onLaunchRecipe: (callback: (data: PaneLaunchRecipe) => void) => () => void
   onRevealTerminalPane: (callback: (data: TerminalPaneRevealRequest) => void) => () => void
   replyTerminalPaneReveal: (reply: TerminalPaneRevealReply) => void
+  onApplyAgentPaneActivity: (callback: (data: AgentPaneActivityRequest) => void) => () => void
+  replyAgentPaneActivity: (reply: AgentPaneActivityReply) => void
   onSplitTerminal: (
     callback: (data: {
       tabId: string

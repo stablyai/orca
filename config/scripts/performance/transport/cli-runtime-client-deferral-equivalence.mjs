@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 // Compare stdout/stderr/exit byte-for-byte across two real CLI emits: current tree and selected files restored from baseline (default HEAD~).
-// Full-tree compilation stays outside fast Vitest invariants (runtime-client-deferral.test.ts).
 // Usage: node config/scripts/cli-runtime-client-deferral-equivalence.mjs [--baseline <rev>]
 import { execFileSync, spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync, readFileSync } from 'node:fs'
@@ -158,7 +157,6 @@ function buildCases(isolatedUserData) {
     [['status', '--json'], { ...isolated, ORCA_REMOTE_PAIRING: 'not-a-pairing-code' }],
     [['status', '--json'], { ...isolated, ORCA_ENVIRONMENT: 'no-such-environment' }],
     // Keep suppression for local-only groups. Do not invoke agent hooks on/off: they modify real ~/.claude configuration outside ORCA_USER_DATA_PATH.
-    // Constructor-argument assertions in runtime-client-deferral.test.ts cover null/undefined suppression without those side effects.
     [['environment', 'list', '--json'], { ...isolated, ORCA_ENVIRONMENT: 'no-such-environment' }],
     [['environment', 'list', '--json'], { ...isolated, ORCA_PAIRING_CODE: 'not-a-pairing-code' }],
     [['agent-context', '--json'], { ...isolated, ORCA_PAIRING_CODE: 'not-a-pairing-code' }],

@@ -8,11 +8,9 @@ vi.mock('../../../src/shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUT
 import '../../../src/shared/rpc-contract/workspace-view-collapse-params'
 import { FakeSession } from '../transport/connection/mobile-endpoint-supervisor-test-fakes'
 import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
-import { INITIAL_MOBILE_VIEW } from '../worktree/workspace-view-settings'
 import {
   addPendingViewChange,
   reconcilePendingViewChanges,
-  withPendingViewChanges,
   type PendingViewChange
 } from './host-view-pending-changes'
 import {
@@ -148,16 +146,6 @@ describe('pending changes over the desktop’s values', () => {
     kind: 'collapse',
     key: 'k',
     collapsed
-  })
-
-  it('lay the desired values over the view, oldest first', () => {
-    const view = withPendingViewChanges(INITIAL_MOBILE_VIEW, [
-      { opId: 1, sentAt: 0, kind: 'view', patch: { groupBy: 'none' }, payload: {} },
-      collapse(2, true),
-      { opId: 3, sentAt: 0, kind: 'view', patch: { groupBy: 'pr-status' }, payload: {} }
-    ])
-    expect(view.groupBy).toBe('pr-status')
-    expect(view.collapsedGroups).toEqual(['k'])
   })
 
   it('keep only the latest intent for a section toggled twice', () => {

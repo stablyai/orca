@@ -7,13 +7,14 @@ import {
   loadingHook,
   source
 } from './task-page-linear-refresh-test-fixtures'
+import '@/store/slices/linear/linear-issue-read'
 import {
   pendingLinearIssueWrites,
   registerLinearIssueConsumer
-} from '@/store/slices/linear/linear-issue-publication'
+} from '@/store/slices/linear/linear-issue-write-publication'
 import { writeLinearIssue } from '@/lib/work-items/linear/linear-issue-write'
 
-import { defaultScopeSource } from '@/lib/default-creation-host'
+import { defaultScopeSource } from '@/runtime/hosts/selection/default-creation-host'
 import { getLinearSourceScope } from '@/store/slices/linear/linear-slice-scope'
 
 import type { LinearIssue } from '../../../../../shared/linear/issue-types'

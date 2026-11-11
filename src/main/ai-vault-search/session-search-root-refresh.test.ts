@@ -1,3 +1,4 @@
+import './session-search-worker.test-fixture'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { SessionSearchIndexer } from './session-search-indexer'
@@ -18,7 +19,7 @@ beforeEach(async () => {
   harness = await openSessionSearchIndexerHarness('search-root-refresh')
 })
 afterEach(async () => {
-  indexer?.close()
+  await indexer?.close()
   indexer = undefined
   resetSessionParseCacheForTests()
   resetTranscriptConsumersForTests()
@@ -70,7 +71,7 @@ it('does not access a closed store when pending discovery completes', async () =
   })
   const start = indexer.start()
   await vi.waitFor(() => expect(resolver).toHaveBeenCalledTimes(1))
-  indexer.close()
+  await indexer.close()
   pending.resolve(harness.roots)
   await start
   expect(errors).not.toHaveBeenCalled()

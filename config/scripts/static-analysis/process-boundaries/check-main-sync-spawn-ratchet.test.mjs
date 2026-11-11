@@ -77,12 +77,12 @@ describe('main sync-spawn ratchet', () => {
     ],
     [
       "const { execSync } = require('child_process')\nconst run = execSync\nrun('a')",
-      2,
+      1,
       ['execSync']
     ],
     [
       "function f() { const run = cp.execSync; run('a') }\nconst cp = require('child_process')",
-      2,
+      1,
       ['execSync']
     ],
     [
@@ -91,10 +91,18 @@ describe('main sync-spawn ratchet', () => {
       ['execFileSync']
     ],
     [
-      "import { runProcessSync } from '@orca/process-host'\nconst run = runProcessSync<string>",
+      "import { runProcessSync } from '@orca/process-host'\nconst run = runProcessSync<string>\nrun(a)",
       1,
       ['runProcessSync']
-    ]
+    ],
+    // Binding an alias is setup; each call through it is a use, so an alias refactor keeps the count.
+    [
+      "import { execSync } from 'child_process'\nconst run = execSync\nrun('a')\nrun('b')",
+      2,
+      ['execSync']
+    ],
+    ["import { execSync } from 'child_process'\nexport const run = execSync", 1, ['execSync']],
+    ["import { execSync } from 'child_process'\nconst out = execSync('a')", 1, ['execSync']]
   ])('counts %s', (source, count, symbols) => {
     expect(uses(source)).toEqual({ count, symbols })
   })

@@ -13,7 +13,7 @@ import {
   mobileRelayCredentialNeedsRotation,
   rotateMobileRelayCredential
 } from '../relay/mobile-relay-credential-rotation'
-import type { MobileRelayCredentialBundle } from '../hosts/mobile-relay-credential-bundle'
+import type { MobileRelayCredentialBundle } from '../../host-credentials/mobile-relay-credential-bundle'
 import { MobileEndpointNudgeRouter } from './mobile-endpoint-nudge-router'
 import { MobileRelayDirectGraceTimer } from '../relay/mobile-relay-direct-grace-timer'
 import { MobileRelaySessionEstablisher } from '../relay/mobile-relay-session-establisher'
@@ -148,6 +148,8 @@ export class MobileEndpointSupervisor {
       if (state === 'connected') {
         this.directGrace.onConnected()
         if (this.logical.getActivePath() !== 'relay') {
+          // A direct win answers any race intent deferred by cooldown; replaying it would replace a healthy LAN.
+          this.pendingReplace = false
           void this.rotateCredentialIfNeeded(this.relayReconnect.resetForDirectConnection())
         }
         this.directProbe.schedule()
@@ -159,6 +161,10 @@ export class MobileEndpointSupervisor {
         recoveryPresentation.onActiveFailure(this.logical, this.relayReconnect, state, this.bundle)
         const relayFailure = this.relayReconnect.handleStateFailure(this.logical, state)
         logRelayDialFailure(this.logRelay, relayFailure, 'active-session')
+        // Redials keep direct in connecting, which unforced recovery waits out; one timer per outage races them.
+        if (this.logical.getActivePath() !== 'relay') {
+          this.directGrace.arm()
+        }
       }
     })
     void this.directGrace.loadLastGoodPath()

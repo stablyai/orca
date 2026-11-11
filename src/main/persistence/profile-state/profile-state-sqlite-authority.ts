@@ -35,6 +35,7 @@ import { buildCompleteDocumentReplacements } from './profile-state-complete-repl
 import { ProfileStateBackupRotation } from './profile-state-backup-rotation'
 import { ensureProfileStateAuthorityMarker } from './profile-state-authority-marker'
 import type { ProfileStateWriterInitialization } from './profile-state-writer-protocol'
+import { ProfileStateLegacyDocumentRefresh } from './profile-state-legacy-document-refresh'
 
 /** Reuse one writable handle; fenced domain commits preserve unchanged normalized rows. */
 export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
@@ -42,6 +43,7 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
   private observedRevision: number | undefined
   private writableDatabase: ReturnType<typeof openWritableProfileStateDatabase> | undefined
   private backupRotation: ProfileStateBackupRotation | undefined
+  private readonly legacyDocuments = new ProfileStateLegacyDocumentRefresh()
 
   constructor(
     private readonly databasePath: string,
@@ -71,6 +73,7 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
     assertProfileStateRevisionOnDisk(this.databasePath, this.profileId, revision)
     this.observedRevision = revision
     this.assertCurrentRevision()
+    this.legacyDocuments.startWriterThread(this.writableDatabase?.db)
   }
 
   get revision(): number {
@@ -148,11 +151,13 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
       this.readSerializedState()
     }
     const opened = this.openWritableDatabase()
+    this.legacyDocuments.catchUp(this.writableDatabase?.db)
     this.observedRevision = writeProfileStateDomains(opened.db, {
       expectedRevision: this.observedRevision ?? 0,
       replacements,
       automationRunsAfter
     }).revision
+    this.legacyDocuments.afterWrite(() => this.writableDatabase?.db)
   }
 
   assertCurrentRevision(): void {
@@ -199,6 +204,7 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
       })
     }
     const opened = this.openWritableDatabase()
+    this.legacyDocuments.catchUp(this.writableDatabase?.db)
     const currentRevision = readProfileStateRevision(opened.db)
     const complete = buildCompleteDocumentReplacements(opened.db, replacements)
     if (currentRevision === 0 || complete.length === 0) {
@@ -219,6 +225,7 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
       expectedRevision: this.observedRevision ?? currentRevision,
       replacements: complete
     }).revision
+    this.legacyDocuments.afterWrite(() => this.writableDatabase?.db)
   }
 
   scheduleBackup(): void {
@@ -247,9 +254,11 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
     return quarantineProfileStateDatabase(this.databasePath, this.profileId, quarantineRoot, reason)
   }
 
-  close(): void {
+  /** Only a graceful shutdown refreshes legacy rows; quarantine and maintenance closes must not write. */
+  close(options: { refreshLegacyDocuments?: boolean } = {}): void {
     this.assertActive()
     this.backupRotation?.stop()
+    this.legacyDocuments.beforeClose(this.writableDatabase?.db, options.refreshLegacyDocuments)
     this.writableDatabase?.db.close()
     this.writableDatabase = undefined
   }

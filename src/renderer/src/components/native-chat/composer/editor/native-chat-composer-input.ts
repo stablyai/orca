@@ -1,5 +1,6 @@
 import type { OrchestrationAgentReference } from '../../../../../../shared/orchestration/mailbox/orchestration-agent-reference'
 import type { HTMLAttributes, RefObject } from 'react'
+import { linkedSelectionText } from '../../paste/native-chat-pasted-links'
 
 /** Text coordinates keep transport, attachments, and picker logic independent of the editor. */
 export type NativeChatComposerInput = Pick<
@@ -52,7 +53,12 @@ export function insertNativeChatPastedText(
   }
   // A paste routed from a hidden terminal or a transcript click must leave the caret in the composer.
   input.focus()
-  input.insertText(text)
+  const { selectionStart, selectionEnd } = input
+  const linked =
+    selectionStart !== null && selectionEnd !== null && selectionStart < selectionEnd
+      ? linkedSelectionText(input.value.slice(selectionStart, selectionEnd), text)
+      : null
+  input.insertText(linked ?? text)
   return true
 }
 

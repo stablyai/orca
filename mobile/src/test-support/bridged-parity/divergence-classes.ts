@@ -116,13 +116,13 @@ export const BRIDGED_PARITY_EXCLUSIONS: Readonly<Partial<Record<BridgedParityCla
 
 // Pin strict History verdicts and unchanged legacy counts in both directions.
 export const BRIDGED_PARITY_BASELINE: Readonly<Record<BridgedParityClass | 'identical', number>> = {
-  identical: 388,
+  identical: 385,
   'reply-meta-required': 0,
-  'result-absent-settlement': 332,
+  'result-absent-settlement': 328,
   'result-absent-observation': 6,
   'result-absent-stream-release': 1,
   'params-undefined': 27,
-  'write-ordinal': 23,
+  'write-ordinal': 30,
   unclassified: 0
 }
 
@@ -167,6 +167,13 @@ export const BRIDGED_PARITY_MEMBERS: Readonly<
     'matrix-session.diff-review-git.status-1',
     'matrix-session.diff-review-repo.list-1',
     'matrix-session.diff-review-worktree.show-1',
+    'sc-changes-loaded',
+    'sc-changes-return-from-memory',
+    'sc-changes-write-reads-live',
+    'matrix-git.changes-load-git.branchcompare-1',
+    'matrix-git.changes-load-git.status-1',
+    'matrix-git.changes-load-repo.list-1',
+    'matrix-git.changes-load-worktree.show-1',
     'aivault-history-scan-association',
     'aivault-history-scan-fulfilled',
     'aivault-history-scan-refresh',

@@ -1,6 +1,6 @@
 // Fall back to the exec bridge when sshd refuses forwarding or standalone forward login fails.
 import { OrcadStdioBridgePortForwardProvider } from './orcad-stdio-bridge-provider'
-import { rememberOrcadTunnelTransport } from '../../ssh/orcad-tunnel-transport-memo'
+import { rememberOrcadTunnelTransport } from './orcad-tunnel-transport-memo'
 import type { SshConnection } from '../../ssh/connection/ssh-connection'
 import type {
   PortForwardStartOptions,
@@ -12,15 +12,15 @@ import {
   probeTcpForwarding,
   type ForwardChannelVerdict,
   type TcpForwardingVerdict
-} from '../../ssh/ssh-tcp-forwarding-probe'
+} from '../../ssh/port-forwarding/ssh-tcp-forwarding-probe'
 import { Ssh2PortForwardProvider } from '../../ssh/port-forwarding/ssh2-port-forward-provider'
 import {
   SystemSshPortForwardProvider,
   systemSshForwardBuildArgsOptions
 } from '../../ssh/port-forwarding/system-ssh-port-forward-provider'
-import { buildSystemSshPortForwardArgs } from '../../ssh/system-transport/system-ssh-forward-process'
-import { reserveLocalForwardPort } from '../../ssh/system-transport/system-ssh-forward-port-reservation'
-import { cancelMuxedLocalForward } from '../../ssh/system-transport/system-ssh-muxed-forward-cancel'
+import { buildSystemSshPortForwardArgs } from '../../ssh/system-transport/forwarding/system-ssh-forward-process'
+import { reserveLocalForwardPort } from '../../ssh/system-transport/forwarding/system-ssh-forward-port-reservation'
+import { cancelMuxedLocalForward } from '../../ssh/system-transport/forwarding/system-ssh-muxed-forward-cancel'
 
 type OrcadManagedTunnelTransportDependencies = {
   forwards: SshPortForwardProvider[]

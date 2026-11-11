@@ -30,7 +30,7 @@ function restartedServe(session: WorkspaceSessionState = savedServeTabs()) {
     ownsTab: () => true
   })
   runtime.setAgentBrowserBridge(
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the runtime reads only tabList from the bridge on these paths.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the runtime reads only these bridge methods on these paths.
     {
       tabList: vi.fn(() => ({
         tabs: livePages.map((browserPageId, index) => ({
@@ -42,6 +42,7 @@ function restartedServe(session: WorkspaceSessionState = savedServeTabs()) {
           active: false
         }))
       })),
+      getRemoteTabFaviconUrl: () => null,
       getRegisteredTabs: vi.fn(() => registered()),
       snapshot: vi.fn(async () => ({ snapshot: '' })),
       getActivePageId: vi.fn(() => livePages[0] ?? null),

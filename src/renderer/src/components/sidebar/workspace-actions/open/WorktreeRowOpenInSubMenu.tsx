@@ -1,7 +1,7 @@
 import type React from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
-import { resolveWorktreeRowOpenInRuntimeOwner } from '@/lib/worktree-row-open-in-owner'
+import { resolveWorktreeRowOpenInRuntimeOwner } from '@/lib/workspace/ownership/worktree-row-open-in-owner'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { WorktreeOpenInSubMenu } from './WorktreeOpenInMenu'
 

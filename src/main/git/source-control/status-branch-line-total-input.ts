@@ -52,6 +52,12 @@ export function createBranchLineTotalInput(
   }
 }
 
+/** True for a status key (line-stats or read lease) of `worktreePath` under any execution host. */
+export function isStatusKeyForWorktreePath(key: string, worktreePath: string): boolean {
+  const scoped = key.slice(key.indexOf('\0') + 1)
+  return scoped === worktreePath || scoped.startsWith(`${worktreePath}\0`)
+}
+
 export function getStatusLineStatsCacheKey(
   worktreePath: string,
   options: GitRuntimeOptions = {}

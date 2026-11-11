@@ -1,8 +1,9 @@
 import type { PersistedState } from '../../../shared/persisted-state-types'
+import { WORKSPACE_SESSION_DOMAINS } from '../workspace-session-domains'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { sanitizeWorkspaceSessionTerminalRetirements } from '../../runtime/terminal/surface/mobile-session-terminal-persistence-retirement'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
-import { setMigrationUnsupportedPty } from '../../agent-hooks/migration-unsupported-pty-state'
+import { setMigrationUnsupportedPty } from '../../agent-hooks/observations/migration-unsupported-pty-state'
 import { pruneLocalTerminalScrollbackBuffers } from '../../../shared/workspace-session/workspace-session-terminal-buffers'
 import { pruneWorkspaceSessionBrowserHistory } from '../../../shared/workspace-session/workspace-session-browser-history'
 import { migrateWorkspaceSessionTerminalScrollbackSnapshots } from '../../pty/scrollback/terminal-scrollback-snapshots'
@@ -24,10 +25,8 @@ import {
 } from '../restoring-sessions/workspace-pane-normalization'
 import { deleteRemovedTerminalScrollbackSnapshots } from './terminal-session-cleanup'
 import { preserveMissingWorkspaceSessionTerminalBindings } from './workspace-session-terminal-binding-replay'
-import {
-  getSessionSnapshotOperationsContext,
-  type SessionSnapshotOperations
-} from './session-snapshot-operations'
+import type { SessionSnapshotOperations } from './session-snapshot-operations'
+import { getSessionSnapshotOperationsContext } from './session-snapshot-operations-context'
 import { scheduleSave } from './write-scheduling'
 import { orderTerminalRowsByTabGroups } from '../../../shared/workspace-layout/terminal-row-order'
 
@@ -123,7 +122,11 @@ export function setLocalWorkspaceSession(
     remappedManualUnread.changed
   ) {
     // UI remaps include protected fields, so keep the complete serializer boundary.
-    scheduleSave(context.scheduling, undefined, LOCAL_EXECUTION_HOST_ID)
+    scheduleSave(
+      context.scheduling,
+      [WORKSPACE_SESSION_DOMAINS[0], 'ui', 'sshRemotePtyLeases'],
+      LOCAL_EXECUTION_HOST_ID
+    )
   } else {
     scheduleSave(
       context.scheduling,

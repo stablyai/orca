@@ -4,18 +4,17 @@ import {
   LIVE_CLAUDE_INGEST_DEDUPE_MS,
   MIN_REFETCH_MS,
   normalizeClaudeConfigDir,
-  type ClaudeRuntimeAuthPreparation,
-  type ActiveRateLimitProvider,
-  type ClaudeStatusLineRateLimits,
-  type NormalizedClaudeAccountSelectionTarget,
-  type ProviderRateLimits
+  type ActiveRateLimitProvider
 } from './service-types'
-import type { RateLimitWindow } from '../../../shared/rate-limit-types'
+import type { ClaudeRuntimeAuthPreparation } from '../../claude-accounts/runtime-auth/runtime-auth-types'
+import type { ClaudeStatusLineRateLimits } from '../../../shared/claude-statusline-rate-limits'
+import type { NormalizedClaudeAccountSelectionTarget } from '../../claude-accounts/runtime-selection'
+import type { ProviderRateLimits, RateLimitWindow } from '../../../shared/rate-limit-types'
 import {
   isSameClaudeUsageWindow,
   isStaleClaudeUsageWindow,
   mapClaudeUsageWindow
-} from '../claude-usage-window'
+} from '../providers/claude/claude-usage-window'
 import { readUserClaudeConfigDir } from '../../claude-accounts/claude-profile-paths'
 import { getClaudeProfileRouter } from '../../claude-accounts/claude-profile-installed-router'
 

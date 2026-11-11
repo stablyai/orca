@@ -4,7 +4,8 @@ import type { SshTarget } from '../../../../../../shared/ssh-types'
 import { useAppStore } from '@/store/index'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useTranslate } from '@/i18n/use-translate'
-import { isSshTargetConnecting } from './ssh-target-action-state'
+import { isConnectingSshStatus } from '../../../../ssh/ssh-connection-recoverability'
+import { formatSshUserFacingError } from './ssh-user-facing-error'
 
 type TestOutcome = { ok: true } | { ok: false; message: string }
 
@@ -58,7 +59,7 @@ export function useSshTargetTests(): {
         ok: false,
         message:
           err instanceof Error
-            ? err.message
+            ? formatSshUserFacingError(err.message)
             : t('auto.components.settings.SshPane.68c13b4589', 'Test failed')
       }
     } finally {
@@ -86,7 +87,7 @@ export function useSshTargetTests(): {
     const states = useAppStore.getState().sshConnectionStates
     const isLive = (target: SshTarget): boolean => {
       const status = states.get(target.id)?.status ?? 'disconnected'
-      return status === 'connected' || isSshTargetConnecting(status)
+      return status === 'connected' || isConnectingSshStatus(status)
     }
     const skippedConnected = targets.filter(isLive).length
     const queue = targets.filter((target) => !isLive(target) && !testingIds.has(target.id))

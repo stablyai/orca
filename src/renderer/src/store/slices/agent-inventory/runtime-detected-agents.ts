@@ -4,7 +4,7 @@ import { getRuntimeEnvironmentStatus } from '@/runtime/rpc/compatibility/runtime
 import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
-import { getConnectionIdFromState } from '@/lib/connection-owner-resolution'
+import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
 import { captureRuntimeEnvironmentRequestRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { PREFLIGHT_WORKSPACE_SCOPED_RUNTIME_CAPABILITY } from '../../../../../shared/preflight-runtime-capabilities'
 import {

@@ -3,6 +3,7 @@ import {
   EPHEMERAL_VM_FAILURE_COPY,
   ephemeralVmExitFailure,
   ephemeralVmFailure,
+  ephemeralVmTimeoutFailure,
   type EphemeralVmFailure
 } from './ephemeral-vm-failure-copy'
 
@@ -15,8 +16,17 @@ type FailedEphemeralVmRecipeDestroy = {
   ProcessRunResult
 
 export function getEphemeralVmRecipeDestroyFailure(
-  result: ProcessRunResult
+  result: ProcessRunResult,
+  timeoutSeconds: number
 ): FailedEphemeralVmRecipeDestroy | null {
+  if (result.timedOut) {
+    return {
+      ok: false,
+      skipped: false,
+      ...ephemeralVmTimeoutFailure('destroy', timeoutSeconds),
+      ...result
+    }
+  }
   if (result.aborted) {
     return {
       ok: false,

@@ -272,7 +272,7 @@ vi.mock('../../preflight/agent-detection', () => ({
   detectInstalledAgentsWithShellPathHydration: detectInstalledAgentsWithShellPathHydrationMock
 }))
 
-vi.mock('../../agent-hooks/managed-agent-hook-controls', () => ({
+vi.mock('../../agent-hooks/installation/managed-agent-hook-controls', () => ({
   applyAgentStatusHooksEnabled: applyAgentStatusHooksEnabledMock
 }))
 

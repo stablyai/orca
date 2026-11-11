@@ -17,7 +17,7 @@ vi.mock('electron', () => ({
     }
   }
 }))
-vi.mock('../../browser-manager', () => ({
+vi.mock('../../guest-lifecycle/manager/browser-manager', () => ({
   browserManager: {
     getGuestWebContentsId: (pageId: string) => mocks.pages.get(pageId)?.id ?? null,
     getWebContentsIdByTabId: () =>

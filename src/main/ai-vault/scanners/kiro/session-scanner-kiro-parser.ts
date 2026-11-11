@@ -1,3 +1,4 @@
+import { waitForAiVaultScan } from '../../ai-vault-scan-cancellation'
 import { basename } from 'node:path'
 import { wslGatedReadFile } from '../../../native-chat/wsl-transcript-fs-access'
 import { WslTranscriptFsError } from '../../../native-chat/wsl-transcript-fs-error'
@@ -126,11 +127,12 @@ export async function parseKiroSessionFile(
   file: FileWithMtime,
   platform: NodeJS.Platform = process.platform,
   messages?: TranscriptMessageSink,
-  onSkippedRecords?: (records: SkippedTranscriptRecord[]) => void
+  onSkippedRecords?: (records: SkippedTranscriptRecord[]) => void,
+  signal?: AbortSignal
 ): Promise<AiVaultSession | null> {
   const accumulator = createKiroAccumulator(
     file,
-    await wslGatedReadFile(file.path, 'utf-8', 'scan'),
+    await waitForAiVaultScan(wslGatedReadFile(file.path, 'utf-8', 'scan', signal), signal),
     messages
   )
   if (!accumulator) {
@@ -141,6 +143,8 @@ export async function parseKiroSessionFile(
     const { trailingPartialLine, skippedRecords } = await consumeCompleteJsonlLines({
       path: kiroTranscriptPathForMetadata(file.path),
       start: 0,
+      signal,
+      drain: () => messages?.drain?.() ?? Promise.resolve(),
       onLine: (line) => consumeKiroTranscriptLine(accumulator, line)
     })
     onSkippedRecords?.(skippedRecords)

@@ -13,6 +13,7 @@ export type HostOperationOwnership = 'host' | 'credential' | 'client' | 'stream'
 export const HOST_OPERATION_OWNERSHIP = {
   accounts: 'host',
   agent: 'host',
+  agentActivity: 'host',
   agentHooks: 'host',
   agentSession: 'host',
   agentSessionAttachment: 'host',

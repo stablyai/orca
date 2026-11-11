@@ -18,7 +18,7 @@ vi.mock('./macos-tahoe-release', async () =>
 vi.mock('./desktop-integration/app-icon', async () =>
   (await import('./createMainWindow-test-harness')).appIconMock()
 )
-vi.mock('../browser/browser-manager', async () =>
+vi.mock('../browser/guest-lifecycle/manager/browser-manager', async () =>
   (await import('./createMainWindow-test-harness')).browserManagerMock()
 )
 vi.mock('../browser/client-pages/renderer/browser-client-page-renderer-runtime', async () => {

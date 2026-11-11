@@ -8,15 +8,15 @@ import {
   tryCreateInstallLockCommand,
   tryStealInstallLockCommand
 } from './remote-install-lock-commands'
-import { removeRemoteTreeCommand } from '../../ssh/ssh-remote-commands'
-import { powerShellCommand } from '../../ssh/ssh-remote-powershell'
+import { removeRemoteTreeCommand } from '../../ssh/remote-exec/ssh-remote-commands'
+import { powerShellCommand } from '../../ssh/remote-exec/ssh-remote-powershell'
 import { quotePowerShellLiteral as powerShellLiteral } from '../../../shared/powershell-native-argument'
 import {
   getRemoteHostPlatform,
   isWindowsRemoteHost,
   joinRemotePath,
   type RemoteHostPlatform
-} from '../../ssh/ssh-remote-platform'
+} from '../../ssh/remote-host/ssh-remote-platform'
 
 const DEFAULT_REMOTE_HOST = getRemoteHostPlatform('linux-x64')
 const RELAY_GC_CLAIM_SUFFIX = '.gc-claim'

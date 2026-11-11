@@ -8,6 +8,7 @@ import { extensionIdFromPublicKey, type VerifiedCrx } from './browser-extension-
 import { generateCrxTestKey, type CrxTestKey } from './browser-extension-crx-fixture'
 import type * as InstallStoreModule from './browser-extension-install-store'
 import type * as InstallModule from './browser-extension-webstore-install'
+import type * as MutationLockModule from './browser-extension-mutation-lock'
 
 const state = vi.hoisted(() => {
   const enabled: Record<string, string[]> = {}
@@ -21,12 +22,14 @@ const state = vi.hoisted(() => {
 })
 
 vi.mock('electron', () => ({ app: { getPath: () => state.userData, on: vi.fn() } }))
-vi.mock('../api/runtime', () => ({ openBrowserExtensionOptionsPage: vi.fn() }))
+vi.mock('../tabs-and-windows/browser-extension-options-page', () => ({
+  openBrowserExtensionOptionsPage: vi.fn()
+}))
 vi.mock('../web-store/browser-extension-webstore-updater', () => ({
   reviewHeldBrowserExtensionUpdate: vi.fn()
 }))
 vi.mock('../browser-extension-support', () => ({ isBrowserExtensionSupportEnabled: () => true }))
-vi.mock('../../sessions/browser-session-registry', () => ({
+vi.mock('../../sessions/profiles/browser-session-registry', () => ({
   browserSessionRegistry: {
     listProfiles: () => [{ id: 'default' }, { id: 'work' }],
     getProfile: (id: string) => ({ id }),
@@ -50,6 +53,7 @@ vi.mock('../profile-sessions/browser-extension-session-loader', () => ({
 let key: CrxTestKey
 let extensionId: string
 let install: typeof InstallModule
+let mutationLock: typeof MutationLockModule
 let installStore: typeof InstallStoreModule
 
 beforeAll(() => {
@@ -64,6 +68,7 @@ beforeEach(async () => {
   state.load.mockImplementation(async () => ({}))
   vi.resetModules()
   install = await import('./browser-extension-webstore-install')
+  mutationLock = await import('./browser-extension-mutation-lock')
   installStore = await import('./browser-extension-install-store')
 })
 afterEach(() => {
@@ -111,7 +116,7 @@ describe('store installs', () => {
     await vi.waitFor(() => expect(state.load).toHaveBeenCalledWith('work', first))
     try {
       await expect(
-        install.withBrowserExtensionLock(extensionId, () =>
+        mutationLock.withBrowserExtensionLock(extensionId, () =>
           install.commitStagedWebStoreExtension(staged, null)
         )
       ).rejects.toThrow('already being installed')

@@ -1,11 +1,11 @@
 import { appendFileSync } from 'node:fs'
 import type { SshConnectionState } from '../../../shared/ssh-types'
-import { createCancelledConnectAttemptError } from '../../ssh/ssh-connect-attempt-cancellation'
+import { createCancelledConnectAttemptError } from '../../ssh/connection/reconnect/ssh-connect-attempt-cancellation'
 import {
   getSshProviderAuthority,
   isCurrentSshProviderAuthority,
   rotateSshProviderAuthority
-} from '../../ssh/ssh-provider-authority'
+} from '../../ssh/connection/authority/ssh-provider-authority'
 import {
   adoptSshConnection,
   runAttributedToSshOwner
@@ -33,17 +33,17 @@ import {
 import { connectionManager } from './ssh-ipc-context'
 import { abandonDecisionTransport } from './ssh-session-teardown'
 import { awaitTargetLifecycle } from './ssh-target-lifecycle-queue'
-import { startLegacyRelayBridge } from '../../ssh/legacy-relay/legacy-relay-bridge-registry'
+import { startLegacyRelayBridge } from '../../ssh/legacy-relay/bridge/legacy-relay-bridge-registry'
 import {
   getSshHostServerStatus,
   isSshHostKeptForBridgedTerminals
-} from '../../ssh/ssh-host-server-status'
-import type { HostServerOnConnectResult } from '../../ssh/ssh-host-server-on-connect'
-import { clearSshCredentialDeclined } from '../../ssh/ssh-credential-decline'
+} from '../../ssh/host-server/ssh-host-server-status'
+import type { HostServerOnConnectResult } from '../../ssh/host-server/ssh-host-server-on-connect'
+import { clearSshCredentialDeclined } from '../../ssh/authentication/ssh-credential-decline'
 import {
   createSshUserDisconnectedError,
   isSshUserDisconnected
-} from '../../ssh/ssh-user-disconnect'
+} from '../../ssh/connection/ssh-user-disconnect'
 import {
   isManagedServerRemovalHeld,
   liftSshHostUserDisconnect,

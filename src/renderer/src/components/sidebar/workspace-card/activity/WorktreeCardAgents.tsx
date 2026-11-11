@@ -1,17 +1,17 @@
 import { useWorktreeAgentActivation } from './use-worktree-agent-activation'
 import React, { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import DashboardAgentRow from '@/components/dashboard/DashboardAgentRow'
 import { useNow } from '@/hooks/use-now'
-import { deriveRunningAgentSendTargets } from '@/lib/running-agent-targets'
+import { deriveRunningAgentSendTargets } from '@/lib/agent-session/messaging/running-agent-targets'
 import {
   selectSendTargetControlInputs,
   selectSendTargetInputs
 } from './worktree-card-send-target-inputs'
 import { useWorktreeAgentRows } from './useWorktreeAgentRows'
 import { useWorktreeAgentDisplay } from './use-worktree-agent-display'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
 import { useFocusedAgentPaneKey } from './focused-agent-row-highlight'
 import { CompactAgentExpansion, CompactAgentSummaryButton } from './worktree-card-compact-agents'
@@ -20,11 +20,11 @@ import { buildAgentRowLineageTree } from '@/components/dashboard/agent-row-linea
 import { revealCompactAgentCard } from '../../worktree-list/navigation/worktree-sidebar-reveal'
 import { useWorktreeAgentExpansionState } from './worktree-card-agents-expansion-state'
 import { useTranslate } from '@/i18n/use-translate'
-import { agentSendDisabledReasonLabel } from '@/lib/agent-send-disabled-reason-label'
+import { agentSendDisabledReasonLabel } from '@/lib/agent-session/messaging/agent-send-disabled-reason-label'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { activateRetainedAgentRow } from './activate-retained-agent-row'
 import { selectAgentRowsUnread } from './worktree-card-agent-ack-inputs'
-import { opensClaudeParentConversation } from '@/lib/claude-agent-row-view'
+import { opensClaudeParentConversation } from '@/lib/agent-session/navigation/claude-agent-row-view'
 import { lineageAncestorPaneKeys } from './worktree-card-agent-lineage-disclosure'
 import {
   ChildAgentsWithIdleGroup,

@@ -5,14 +5,14 @@ import type {
   BridgeTerminalKeyRail
 } from './bridge/bridge-terminal-key'
 import type { BridgePageGeometry } from './bridge/bridge-page-geometry'
-import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type {
   MobileWebShellBridgeMessagePayload,
   OrcaMobileWebShellViewHandle
 } from '../../modules/orca-mobile-web-shell/src'
 import { useHostClient } from '../transport/connection/host-client-hooks'
 import { createBridgeDiagnosticReporter } from './bridge-diagnostic-log'
-import { bridgeDiagnosticLine, frameWithoutHostLine } from './shell-bridge-log-lines'
+import { bridgeDiagnosticLine } from './shell-bridge-log-lines'
 import { recordShellLifecycleLine } from './shell-lifecycle-line-recorder'
 import type { BridgeColorScheme, BridgeInitRoute, BridgeUiLocale } from './bridge/bridge-envelope'
 import type { BridgeClearableRouteParam } from './bridge/bridge-route-update'
@@ -27,6 +27,7 @@ import type { BridgeErrorCapture } from './bridge/bridge-error-capture'
 import type { MobileWebShellSessionState } from './mobile-web-shell-session-contract'
 import type { PageHostSnapshot } from './use-page-host-snapshot'
 import type { PageStorageForInit } from './page-storage-keys'
+import { createPageFramesWithoutHost } from './page-frames-without-host'
 
 class BridgeViewGoneError extends Error {
   constructor() {
@@ -68,6 +69,8 @@ export type MobileWebShellBridgeView = {
    * serves never said it takes one — the caller then leaves the key to the navigator.
    */
   readonly sendBack: () => boolean
+  /** Tells the mounted page the app is leaving the foreground; nothing with no host or an older page. */
+  readonly sendAppInactive: () => void
 }
 
 export type MobileWebShellBridgeArgs = {
@@ -135,7 +138,7 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
   // Read identity lazily without rebuilding a live host just to refresh a string.
   const clientIdRef = useRef(clientId)
   const clientRef = useRef(client)
-  const droppedFrameLoggedRef = useRef<string | null>(null)
+  const [framesWithoutHost] = useState(createPageFramesWithoutHost)
   // Update refs on every commit before host construction; native frames may arrive before passive effects.
   useLayoutEffect(() => {
     argsRef.current = args
@@ -207,13 +210,14 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
     hostRef.current = { sessionId, host }
     // Reset host-owned drop totals on rebuild so a new lower count cannot look like frames being recovered.
     latest.onBinaryFramesDropped(0)
+    framesWithoutHost.replayReady(sessionId, host)
     return () => {
       // Capture Back before disposal so the next host for this document inherits it.
       establishedBackRef.current = { sessionId, back: host.readSessionBack() }
       hostRef.current = null
       host.dispose()
     }
-  }, [buildId, client, sessionId, snapshot])
+  }, [buildId, client, framesWithoutHost, sessionId, snapshot])
 
   useEffect(() => {
     const mounted = hostRef.current
@@ -246,25 +250,24 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
       (event: MobileWebShellBridgeMessageEvent) => {
         const mounted = hostRef.current
         if (mounted === null || mounted.sessionId !== sessionId) {
-          if (
-            mounted === null &&
-            sessionId !== null &&
-            droppedFrameLoggedRef.current !== sessionId
-          ) {
-            droppedFrameLoggedRef.current = sessionId
-            recordShellLifecycleLine(
-              argsRef.current.hostId,
-              frameWithoutHostLine({
-                clientReady: clientRef.current !== null,
-                snapshotReady: argsRef.current.snapshot !== null
-              })
+          if (sessionId !== null) {
+            framesWithoutHost.receive(
+              sessionId,
+              event.nativeEvent.json,
+              mounted === null
+                ? {
+                    hostId: argsRef.current.hostId,
+                    clientReady: clientRef.current !== null,
+                    snapshotReady: argsRef.current.snapshot !== null
+                  }
+                : null
             )
           }
           return
         }
         mounted.host.receive(event.nativeEvent.json)
       },
-      [sessionId]
+      [framesWithoutHost, sessionId]
     ),
     // Fenced on the session the same way inbound frames are: a host left over from a session this
     // render has moved past must not be handed this one's route.
@@ -341,6 +344,10 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
     sendBack: useCallback(() => {
       const mounted = hostRef.current
       return mounted !== null && mounted.sessionId === sessionId && mounted.host.sendBack()
+    }, [sessionId]),
+    sendAppInactive: useCallback(() => {
+      const mounted = hostRef.current
+      return mounted?.sessionId === sessionId ? mounted.host.sendAppInactive() : undefined
     }, [sessionId])
   }
 }

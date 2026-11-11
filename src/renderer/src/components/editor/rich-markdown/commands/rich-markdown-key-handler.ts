@@ -1,8 +1,8 @@
 import type { KeyHandlerContext } from './rich-markdown-key-handler-context'
-import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
+import { isImeOwnedKeyboardEvent } from '@/lib/text-input/ime/ime-composition-keyboard-event'
 
 import type { Editor } from '@tiptap/react'
-import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { useAppStore } from '@/store/index'
 import { isMarkdownPreviewFindShortcut } from '../../markdown-preview/search/markdown-preview-search'
 import { handleRichMarkdownAddReviewNoteShortcut } from '../review/rich-markdown-annotation-shortcut'

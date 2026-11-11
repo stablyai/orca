@@ -8,7 +8,7 @@ import { createCompatibleRuntimeStatusResponse } from '@/runtime/rpc/testing/run
 import type { RuntimeHostStatusSnapshot } from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { PublicKnownRuntimeEnvironment } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { SshConnectionStatus } from '../../../../../../shared/ssh-types'
-import type { RuntimeStatus } from '../../../../../../shared/runtime-types'
+import type { RuntimeStatus } from '../../../../../../shared/runtime-session-contracts'
 export function environment(id: string, pairedDeviceId?: string): PublicKnownRuntimeEnvironment {
   return {
     id,

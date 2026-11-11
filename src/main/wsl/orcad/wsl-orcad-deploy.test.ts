@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
+import type { OrcadHostTransport } from '../../managed-server/install/orcad-host-transport'
 import type * as ActiveProbe from './wsl-orcad-active-probe'
 import type * as ManagedRuntimeContext from '../../managed-server/lifecycle/orcad-managed-runtime-context'
 import type * as RemoteVersionedInstall from '../../managed-server/install/remote-versioned-install'
 import { emptyOrcadActivationRecord } from '../../managed-server/activation/orcad-activation-record'
-import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
-import { OrcadActiveReadinessError } from '../../ssh/orcad-active-readiness'
+import { getRemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'
+import { OrcadActiveReadinessError } from '../../managed-server/activation/orcad-active-readiness'
 import { WslDistroNotRunningError } from './wsl-orcad-connection-errors'
 import type { WslDistroHolder } from '../discovery/wsl-distro-holder-types'
 import type { WslOrcadHostTarget } from './wsl-orcad-host-target'
@@ -42,7 +42,7 @@ vi.mock('../../managed-server/install/remote-versioned-install', async (importOr
   readLocalFullVersion: mocks.localVersion
 }))
 vi.mock('./wsl-orcad-instance-adoption', () => ({ adoptUnrecordedWslOrcad: mocks.adopt }))
-vi.mock('../../ssh/orcad-running-version-adoption', () => ({
+vi.mock('../../managed-server/activation/orcad-running-version-adoption', () => ({
   adoptRunningOrcadVersion: mocks.adoptRunning
 }))
 
@@ -59,7 +59,7 @@ vi.mock('../../managed-server/activation/orcad-activation-recovery', () => ({
 vi.mock('../../orcad/orcad-artifact-materializer', () => ({
   materializeOrcadArtifact: async () => '/local/orcad'
 }))
-vi.mock('../../ssh/orcad-remote-deploy', () => ({ deployOrcad: mocks.deploy }))
+vi.mock('../../managed-server/install/orcad-remote-deploy', () => ({ deployOrcad: mocks.deploy }))
 vi.mock('./wsl-orcad-active-probe', async (importOriginal) => ({
   ...(await importOriginal<typeof ActiveProbe>()),
   probeWslActiveOrcad: async (...args: unknown[]) => ({

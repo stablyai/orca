@@ -18,7 +18,7 @@ vi.mock('../runtime-client', async () => {
   })
 })
 
-import { BROWSER_EXPECT_URL_RUNTIME_CAPABILITY } from '../../shared/browser-runtime-capabilities'
+import { BROWSER_EXPECT_URL_RUNTIME_CAPABILITY } from '../../shared/browser/runtime/browser-runtime-capabilities'
 import { RPC_PARAMS_BY_METHOD } from '../../shared/rpc-contract/rpc-params-catalog.generated'
 import { main } from '../index'
 import { okFixture } from '../test-fixtures'

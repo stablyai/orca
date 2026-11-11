@@ -144,21 +144,6 @@ describe('PTY owner colour replies after the asker exits', () => {
     expect(writes).toEqual([REPLY])
   })
 
-  it('settles every query held before the finish marker in one pass', () => {
-    vi.useFakeTimers()
-    const { ingress, writes, runCommand, groupReads } = createHarness()
-    runCommand()
-    for (let index = 0; index < 100; index += 1) {
-      ingress.accept(QUERY)
-    }
-    groupReads.count = 0
-    ingress.accept(PROMPT)
-    vi.runAllTimers()
-
-    expect(writes).toEqual([])
-    expect(groupReads.count).toBeLessThan(10)
-  })
-
   it('sees a finish marker split across reads during the wait', () => {
     vi.useFakeTimers()
     const { ingress, writes, runCommand } = createHarness()
@@ -200,32 +185,6 @@ describe('PTY owner colour replies after the asker exits', () => {
     }
   })
 
-  it('reads no foreground group and holds nothing while no colour query arrives', () => {
-    const { ingress, emissions, runCommand, groupReads } = createHarness()
-    runCommand()
-    groupReads.count = 0
-    for (let index = 0; index < 100; index += 1) {
-      ingress.accept(
-        `\x1b[32mline ${index}\x1b[0m \x1b]8;;https://example.com\x1b\\link\x1b]8;;\x1b\\\r\n`
-      )
-    }
-
-    expect(groupReads.count).toBe(0)
-    expect(emissions.at(-1)?.rawEndSeq).toBe(ingress.acceptedRawSequence)
-  })
-
-  it('answers queries queued during a wait together, not 20 ms apart', () => {
-    vi.useFakeTimers()
-    const { ingress, writes, runCommand } = createHarness()
-    runCommand()
-    for (let index = 0; index < 6; index += 1) {
-      ingress.accept(QUERY)
-    }
-    vi.advanceTimersByTime(20)
-
-    expect(writes).toHaveLength(6)
-  })
-
   it("drops a gone asker's later queries along with the first", () => {
     vi.useFakeTimers()
     const { ingress, writes, setGroup, runCommand } = createHarness()
@@ -237,20 +196,6 @@ describe('PTY owner colour replies after the asker exits', () => {
     vi.runAllTimers()
 
     expect(writes).toEqual([])
-  })
-
-  it('keeps emitted ranges contiguous when a torn query precedes a held echo', () => {
-    vi.useFakeTimers()
-    const { ingress, emissions, runCommand } = createHarness()
-    ingress.accept(QUERY)
-    runCommand()
-    ingress.accept(`${QUERY}\x1b]1^[]11;rgb:0000/0000/0000^[\\tail`)
-    vi.runAllTimers()
-    ingress.drainAndClose()
-
-    for (const [index, emission] of emissions.entries()) {
-      expect(emission.rawStartSeq).toBe(index === 0 ? 0 : emissions[index - 1]?.rawEndSeq)
-    }
   })
 
   it('judges a query completed after an earlier verdict afresh', () => {

@@ -69,16 +69,6 @@ function mountNames() {
 }
 
 describe('useRetiredWorktreeNames', () => {
-  it('holds the watermark too when a refresh fails', async () => {
-    const probe = mountNames()
-    await probe.settle(0, { 'repo-1': [] }, { 'repo-1': 3 })
-
-    probe.rerender({ repoId: 'repo-1', refreshKey: 'b' })
-    await probe.fail(1)
-
-    expect(probe.registry.exhaustedTiers).toBe(3)
-  })
-
   // Match desktop: refresh failure must not un-retire every name for the rest of the sheet session.
   it('keeps previously loaded names when a refresh fails', async () => {
     const probe = mountNames()

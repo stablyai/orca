@@ -146,3 +146,33 @@ describe('AdvertisedUrlWatcher.lookup PID validation', () => {
     expect(watcher.lookup(WORKTREE, 3001, 200)).toBeUndefined()
   })
 })
+
+describe('workspace-grouped listener reconciliation', () => {
+  it('keeps snapshots isolated and expires changed or absent listeners', () => {
+    const watcher = new AdvertisedUrlWatcher()
+    const initial = new Map([
+      ['a', [{ port: 3001, pid: 100 }]],
+      ['b', [{ port: 3001, pid: 200 }]],
+      ['c', [{ port: 3002, pid: 300 }]]
+    ])
+    watcher.reconcileWorkspaces(initial)
+    watcher.bindPty('a-pty', 'a')
+    watcher.bindPty('b-pty', 'b')
+    watcher.bindPty('c-pty', 'c')
+    watcher.ingest('a-pty', 'http://a.local:3001/\n')
+    watcher.ingest('b-pty', 'http://b.local:3001/\n')
+    watcher.ingest('c-pty', 'http://c.local:3002/\n')
+
+    watcher.reconcileWorkspaces(
+      new Map([
+        ['a', [{ port: 3001, pid: 100 }]],
+        ['b', [{ port: 3001, pid: 201 }]],
+        ['c', []]
+      ])
+    )
+
+    expect(watcher.lookup('a', 3001, 100)?.origin).toBe('http://a.local:3001')
+    expect(watcher.lookup('b', 3001, 201)).toBeUndefined()
+    expect(watcher.lookup('c', 3002)).toBeUndefined()
+  })
+})

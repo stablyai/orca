@@ -330,8 +330,8 @@ export class CodexStructuredSessionAdapter implements SessionAdapter {
   projectOptions = (sessionId: string, options: Readonly<Record<string, string>>) =>
     projectCodexSessionOptions(this.sessions.get(sessionId), options)
 
-  closeSession: NonNullable<SessionAdapter['closeSession']> = (...args) =>
-    this.teardown.close(...args)
+  closeSession: NonNullable<SessionAdapter['closeSession']> = (sessionId, observeClose) =>
+    this.teardown.close(sessionId, observeClose)
   forceCloseSession = (sessionId: string): Promise<boolean> => this.teardown.forceClose(sessionId)
   disposeSession: NonNullable<SessionAdapter['disposeSession']> = this.closeSession
   closeAll = (): Promise<void> => this.teardown.closeAll()

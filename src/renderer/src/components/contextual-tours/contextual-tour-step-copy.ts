@@ -1,5 +1,5 @@
 import { translate } from '@/i18n/i18n'
-import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import type { ContextualTourStepId } from '../../../../shared/contextual-tours'
 
 export type LocalizedContextualTourStepCopy = {
@@ -92,16 +92,6 @@ const LOCALIZED_STEP_COPY: Partial<Record<string, StepCopyThunk>> = {
     body: translate(
       'auto.components.contextual.tours.contextual.tour.step.copy.agent.sessions.parallel.body',
       'Each worktree gets its own branch, so parallel work stays separate.'
-    )
-  }),
-  'browser-grab': () => ({
-    title: translate(
-      'auto.components.contextual.tours.contextual.tour.step.copy.browser.grab.title',
-      'Grab page context for agents'
-    ),
-    body: translate(
-      'auto.components.contextual.tours.contextual.tour.step.copy.browser.grab.body',
-      "Use the grab tool to copy a page element's context for agents."
     )
   }),
   'browser-annotate': () => ({

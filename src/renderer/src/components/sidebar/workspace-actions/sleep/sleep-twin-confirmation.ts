@@ -6,7 +6,7 @@ import {
 } from '../../../../../../shared/execution-host'
 import { hostWorktreeTarget } from '../../../../../../shared/worktree/host-qualified-identity'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import { collectHostTwinPurgeScopes } from '@/store/slices/worktrees/teardown/host-twin-worktree-purge'
+import { collectHostTwinPurgeScopes } from '@/store/slices/worktrees/teardown/host-twin-purge-scopes'
 
 /** Sleeping a workspace ID also sleeps its host twins; collect the additional hosts for confirmation. */
 export function collectTwinHostsAlsoSlept(

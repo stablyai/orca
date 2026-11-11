@@ -3,10 +3,7 @@ import {
   agentJournalSubmissionKey,
   parseAgentJournalItemKey
 } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
-import {
-  AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentJournalRenderItem
-} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { nativeChatRowRendersContent } from '../../../shared/native-chat/transcript/native-chat-row-content'
 import { projectNativeChatTranscriptMessages } from '../../../shared/native-chat/transcript/native-chat-transcript-projection'
@@ -16,10 +13,7 @@ import {
   journalImportTime,
   usableJournalHistoryOrigin
 } from '../../native-chat/agent-session-journal/context-epochs/journal-history-origin'
-import {
-  journalLifecycleItemMutation,
-  type JournalLifecycleIdentityMutationInput
-} from '../../native-chat/agent-session-journal/writing/journal-lifecycle-mutation'
+import type { JournalLifecycleIdentityMutationInput } from '../../native-chat/agent-session-journal/writing/journal-lifecycle-mutation'
 import { isHistoricalProviderTimelineItem } from '../../native-chat/agent-session-timeline/provider-timeline-history'
 import { isProviderTimelineTurnInNamespace } from '../../native-chat/agent-session-timeline/provider-timeline-identity'
 import type { StructuredAgentSessionEventSink } from '../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
@@ -38,8 +32,7 @@ import {
 } from './acp-history-replay'
 import { translateHistoryTurn, type AcpHistoryScope } from './acp-history-translation'
 import { matchAcpHistoryTurns, type AcpHistoryCandidate } from './acp-history-turn-matching'
-import { acpAgentName } from '../acp-structured-agent-definitions'
-import { acpHistoryBoundary } from './acp-history-boundary'
+import { acpAgentName } from '../session/acp-structured-agent-definitions'
 
 export type AcpHistoryCatchUpInput = AcpHistoryScope & {
   frames: readonly AcpLoadHistoryFrame[]
@@ -84,7 +77,6 @@ export async function catchUpAcpHistory(input: AcpHistoryCatchUpInput): Promise<
       // The rows written name the import, so a later open's additions settle under their own id.
       const written: string[] = []
       const read = (key: string) => baseline.items.get(key) ?? null
-      const boundaryBody = acpHistoryBoundary()
       const desired = new Map<
         string,
         {
@@ -113,7 +105,6 @@ export async function catchUpAcpHistory(input: AcpHistoryCatchUpInput): Promise<
         }
         desired.set(key, { mutation: final, saved: previous?.saved ?? read(key), bytes })
       }
-      let divided = false
       for (const { source, items } of candidates) {
         check()
         const coverage = kind.get(source.turn)
@@ -126,15 +117,7 @@ export async function catchUpAcpHistory(input: AcpHistoryCatchUpInput): Promise<
         const dividerKey = agentJournalItemKey(dividerIdentity)
         const savedDivider = read(dividerKey)
         if (savedDivider) {
-          compose(
-            boundaryBody
-              ? journalLifecycleItemMutation(
-                  { ...savedDivider, turnScope: AGENT_JOURNAL_THREAD_SCOPE },
-                  dividerIdentity,
-                  boundaryBody
-                )
-              : { kind: 'tombstone', identity: dividerIdentity }
-          )
+          compose({ kind: 'tombstone', identity: dividerIdentity })
         }
         if (coverage === 'native' || coverage === 'adopted') {
           continue
@@ -145,18 +128,6 @@ export async function catchUpAcpHistory(input: AcpHistoryCatchUpInput): Promise<
           const held = read(key)
           if (held && !isHistoricalProviderTimelineItem(held, read)) {
             throw new Error('unowned-history-target')
-          }
-          if (!held && coverage !== 'imported' && !divided && baseline.retained) {
-            if (boundaryBody && !savedDivider) {
-              compose(
-                journalLifecycleItemMutation(
-                  { turnScope: AGENT_JOURNAL_THREAD_SCOPE },
-                  dividerIdentity,
-                  boundaryBody
-                )
-              )
-            }
-            divided = true
           }
           compose(
             held

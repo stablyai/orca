@@ -24,7 +24,7 @@ function requireStore(): StoreApi<AppState> {
 }
 
 vi.mock('@/store/index', () => ({ useAppStore: { getState: () => requireStore().getState() } }))
-vi.mock('@/lib/connection-context', () => ({ getConnectionIdForFile: vi.fn() }))
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({ getConnectionIdForFile: vi.fn() }))
 
 const FILE_ID = '/repo/untitled.md'
 

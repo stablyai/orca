@@ -11,6 +11,7 @@ import type {
   FleetLiveness,
   FleetNextAction,
   FleetResourceProjection,
+  FleetSessionObservation,
   OrchestrationFleetWorker
 } from './orchestration-fleet-projection'
 
@@ -53,7 +54,8 @@ function hasCertifiedExit(worker: FleetLivenessSubject): boolean {
 export function projectLiveness(
   worker: FleetLivenessSubject,
   evidence: FleetAgentStatusEvidence | undefined,
-  now: number
+  now: number,
+  session?: FleetSessionObservation
 ): FleetLiveness {
   // Federated release proves terminal exit, independently of the worker outcome.
   if (worker.workerStage === DURABLE_EXIT_PROOF.workerStage) {
@@ -68,6 +70,17 @@ export function projectLiveness(
   // Operator-close settlement also proves exit; it must not fall through to missing_status.
   if (hasCertifiedExit(worker)) {
     return { verdict: 'exited', source: 'execution_host' }
+  }
+  // Chat-mode workers have no hook stream; the structured host's own verdict is their liveness.
+  if (session) {
+    switch (session.status) {
+      case 'live':
+        return { verdict: 'live', observedAt: now, source: 'execution_host' }
+      case 'exited':
+        return { verdict: 'exited', source: 'execution_host' }
+      case 'unverifiable':
+        return { verdict: 'unverifiable', reason: 'host_unavailable', detail: session.detail }
+    }
   }
   // Settled unsupervised dispatches have no process to miss, but absence still cannot certify exit.
   if (!evidence && isUnsupervisedSettledDispatch(worker)) {
@@ -97,6 +110,14 @@ export function projectLiveness(
     return { verdict: 'unverifiable', reason: 'stale_status', observedAt }
   }
   return { verdict: 'live', observedAt, source: 'agent_status' }
+}
+
+/** A live chat-mode session's own status row, whatever its age; age dates activity, not liveness. */
+export function sessionActivityEvidence(
+  session: FleetSessionObservation
+): FleetAgentStatusEvidence | undefined {
+  const activity = session.status === 'live' ? session.activity : undefined
+  return activity && !activity.activity.restoredUnconfirmed ? activity : undefined
 }
 
 function projectResource(worker: FleetDurableWorker): FleetResourceProjection {
@@ -211,11 +232,14 @@ function projectHost(
 
 export function projectOrchestrationFleetWorker(
   worker: FleetDurableWorker,
-  evidence: FleetAgentStatusEvidence | undefined,
-  now: number
+  hookEvidence: FleetAgentStatusEvidence | undefined,
+  now: number,
+  session?: FleetSessionObservation
 ): OrchestrationFleetWorker {
-  const liveness = projectLiveness(worker, evidence, now)
-  const fresh = liveness.verdict === 'live'
+  const liveness = projectLiveness(worker, hookEvidence, now, session)
+  // A live session's own status row dates its last activity; its age never makes the worker stale.
+  const evidence = session ? sessionActivityEvidence(session) : hookEvidence
+  const fresh = liveness.verdict === 'live' && Boolean(evidence)
   const activity = evidence?.activity
   const workspaceId =
     activity?.worktreeId ?? worker.worktreeId ?? worker.resource?.worktreeId ?? null
@@ -244,13 +268,17 @@ export function projectOrchestrationFleetWorker(
     liveness,
     evidence: {
       durable: true,
-      liveStatus: !evidence
-        ? 'unavailable'
-        : evidence.activity.restoredUnconfirmed
-          ? 'redacted_restore'
-          : fresh
-            ? 'fresh'
-            : 'stale',
+      liveStatus: session
+        ? liveness.verdict === 'live'
+          ? 'fresh'
+          : 'unavailable'
+        : !evidence
+          ? 'unavailable'
+          : evidence.activity.restoredUnconfirmed
+            ? 'redacted_restore'
+            : fresh
+              ? 'fresh'
+              : 'stale',
       lastObservedAt: evidence ? evidence.clock.at : null
     },
     resource: projectResource(worker),

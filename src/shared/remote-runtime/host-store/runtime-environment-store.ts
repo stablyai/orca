@@ -119,7 +119,7 @@ function saveEnvironmentFromPairingCode(
   return { environment, updatedExisting: false }
 }
 
-function parseRemotePairingCode(userDataPath: string, pairingCode: string): PairingOffer {
+export function parseRemotePairingCode(userDataPath: string, pairingCode: string): PairingOffer {
   const offer = parsePairingCode(pairingCode)
   if (!offer) {
     throw remoteServerPairingStoreError('invalidPairingCode')
@@ -159,7 +159,7 @@ export function updateEnvironmentFromPairingCode(
 }
 
 /** Swaps a saved server's pairing in place, keeping its id, name and history. */
-function replaceEnvironmentPairing(
+export function replaceEnvironmentPairing(
   userDataPath: string,
   selector: string,
   offer: PairingOffer,
@@ -193,7 +193,7 @@ function replaceEnvironmentPairing(
   return next
 }
 
-function getPairingConnectionDependency(
+export function getPairingConnectionDependency(
   dependency: 'ssh-tunnel' | undefined,
   offer: PairingOffer
 ): { connectionDependency?: 'ssh-tunnel' } {

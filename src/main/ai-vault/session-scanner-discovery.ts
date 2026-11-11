@@ -246,11 +246,12 @@ async function observeSessionSidecar(
       sizeBytes: fileStat.size
     }
   } catch (error) {
-    return isMissingSidecarError(error) ? 'none' : 'unknown'
+    return isMissingTranscriptPathError(error) ? 'none' : 'unknown'
   }
 }
 
-function isMissingSidecarError(error: unknown): boolean {
+/** A missing file or folder is absence, not a refusal; WSL gate errors are always refusals. */
+export function isMissingTranscriptPathError(error: unknown): boolean {
   if (error instanceof WslTranscriptFsError) {
     return false
   }
@@ -295,7 +296,7 @@ export async function forEachSessionFile(
     // Propagate gate refusal so stalled distros are not reported as empty trees.
     if (
       error instanceof WslTranscriptFsError ||
-      (options.strictErrors && !isMissingSidecarError(error))
+      (options.strictErrors && !isMissingTranscriptPathError(error))
     ) {
       throw error
     }

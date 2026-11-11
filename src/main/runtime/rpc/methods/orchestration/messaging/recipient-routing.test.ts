@@ -99,6 +99,38 @@ describe('orchestration recipient routing oracle', () => {
     expect(check.messages.map((message) => message.id)).toEqual([result.message.id])
   })
 
+  it('keeps a reply to a live terminal-only sender readable there and reports its limitation', async () => {
+    setup()
+    mockTerminalPaneKeys((handle) =>
+      handle === 'term_coord'
+        ? harness.coordinatorPaneKey
+        : handle === 'term_live'
+          ? 'tab_live:leaf_live'
+          : null
+    )
+    const note = db.insertMessage({
+      from: 'term_live',
+      to: `run:${senderRunId}`,
+      subject: 'Pull-mail note',
+      runId: senderRunId
+    })
+
+    const reply = await harness.call(
+      'orchestration.reply',
+      { id: note.id, from: 'term_coord', body: 'Got it' },
+      ctx
+    )
+
+    const [stored] = db.getAllMessagesForHandle('term_live')
+    expect(reply).toMatchObject({
+      message: { id: stored!.id, to_handle: 'term_live' },
+      warnings: [{ code: 'legacy_terminal_recipient', recipient: 'term_live' }]
+    })
+    expect(await harness.call('orchestration.check', { terminal: 'term_live' }, ctx)).toMatchObject(
+      { messages: [{ id: stored!.id }], count: 1 }
+    )
+  })
+
   it('normalizes a cross-Run coordinator handle to the recipient Run mailbox', async () => {
     setup()
     const recipientPane = 'tab_recipient:leaf_recipient'

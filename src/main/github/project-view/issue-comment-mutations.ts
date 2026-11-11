@@ -1,3 +1,4 @@
+import { githubBodyImageUrls, githubBodyMediaHeaders } from '../body-image-urls'
 import { assertPositiveInt, projectGhExecOptions, runRest, validateSlugArgs } from './internals'
 import type { PRComment } from '../../../shared/github/comment-types'
 import type {
@@ -14,6 +15,7 @@ type RawIssueCommentResponse = {
   id?: number
   user?: { login?: string; avatar_url?: string; type?: string } | null
   body?: string
+  body_html?: string | null
   created_at?: string
   html_url?: string
 }
@@ -24,6 +26,7 @@ function mapIssueComment(data: RawIssueCommentResponse, fallbackBody: string): P
     author: data.user?.login ?? 'You',
     authorAvatarUrl: data.user?.avatar_url ?? '',
     body: data.body ?? fallbackBody,
+    bodyImageUrls: githubBodyImageUrls(data.body ?? fallbackBody, data.body_html),
     createdAt: data.created_at ?? new Date().toISOString(),
     url: data.html_url ?? '',
     isBot: data.user?.type === 'Bot'
@@ -55,6 +58,7 @@ export async function addIssueCommentBySlug(
     [
       '-X',
       'POST',
+      ...githubBodyMediaHeaders(args.body),
       `repos/${args.owner}/${args.repo}/issues/${args.number}/comments`,
       '--raw-field',
       `body=${args.body}`

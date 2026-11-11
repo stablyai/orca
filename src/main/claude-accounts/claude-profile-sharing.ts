@@ -11,7 +11,7 @@ import {
 } from 'node:fs'
 import { dirname } from 'node:path'
 import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
-import { writeFileAtomically } from '../codex-accounts/fs-utils'
+import { writeFileAtomically } from '../filesystem/atomic-file-publication'
 import type { ClaudeProfileSurfaceOutcome } from './claude-profile-report'
 
 export function linkClaudeProfileDirectory(

@@ -1,5 +1,5 @@
 import { session, type Session, type WebContents } from 'electron'
-import { browserSessionRegistry } from '../browser/sessions/browser-session-registry'
+import { browserSessionRegistry } from '../browser/sessions/profiles/browser-session-registry'
 import { localSshBrowserProfileIdForSession } from '../browser/routing/local-host-partitions/local-ssh-browser-partitions'
 import type { BrowserPasswordStore } from './browser-password-store'
 import { getBrowserPasswordVault } from './browser-password-vaults'

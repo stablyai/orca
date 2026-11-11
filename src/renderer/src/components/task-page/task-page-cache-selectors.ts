@@ -1,6 +1,6 @@
 import { shallow } from 'zustand/shallow'
 import { workItemsCacheKey } from '@/store/github/cache/cache-identity'
-import { githubTaskBinding } from '@/lib/github-task-observation'
+import { githubTaskBinding } from '@/lib/work-items/github/github-task-observation'
 import type { Repo } from '../../../../shared/repo-types'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import type {

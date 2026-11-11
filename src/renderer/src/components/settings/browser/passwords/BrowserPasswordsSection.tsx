@@ -25,11 +25,8 @@ import {
 } from './BrowserPasswordImportMenu'
 import { BrowserPasswordList } from './BrowserPasswordList'
 import { BrowserPasswordNeverList } from './BrowserPasswordNeverList'
-import {
-  browserPasswordHostOf,
-  toastBrowserPasswordImportResult
-} from './browser-password-import-toast'
-import { getBrowserPasswordsSearchEntry } from './browser-passwords-copy'
+import { toastBrowserPasswordImportResult } from './browser-password-import-toast'
+import { browserPasswordHostOf, getBrowserPasswordsSearchEntry } from './browser-passwords-copy'
 
 type VaultView = {
   status: BrowserPasswordsStatus | null

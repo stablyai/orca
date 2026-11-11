@@ -3,9 +3,16 @@ import { resolve } from 'node:path'
 import { spawnProcess } from '@orca/process-host'
 import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
 import { isRecord } from '../../shared/agent-status/child-work/agent-status-child-work-value-guards'
-import { AcpAgentConnection, type AcpAgentConnectionOptions } from '../acp/acp-agent-connection'
-import { AcpAgentError, AcpAuthRequiredError, AcpSignInPromptError } from '../acp/acp-errors'
-import type { AcpSessionStarted, AcpSessionStartOptions } from '../acp/acp-session-setup'
+import {
+  AcpAgentConnection,
+  type AcpAgentConnectionOptions
+} from '../acp/process/acp-agent-connection'
+import {
+  AcpAgentError,
+  AcpAuthRequiredError,
+  AcpSignInPromptError
+} from '../acp/transport/acp-errors'
+import type { AcpSessionStarted, AcpSessionStartOptions } from '../acp/protocol/acp-session-setup'
 import type { PromptRequest } from '../acp/generated/acp-protocol.generated'
 import { readOpenCodePromptFailure } from '../foreign-sqlite-readers/foreign-sqlite-reader-spawn'
 import type { OpenCodePromptFailure } from '../foreign-sqlite-readers/opencode-prompt-failure-result'

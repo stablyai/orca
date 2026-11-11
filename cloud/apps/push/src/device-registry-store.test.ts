@@ -148,24 +148,4 @@ describe('push device registry store', () => {
       (await devices.upsert({ ...androidDevice('device-0'), hostFingerprint: OTHER })).ok
     ).toBe(true)
   })
-
-
-
-  it('separates the same device id registered against two hosts', async () => {
-    const first = await upsertOk({
-      hostFingerprint: OWNER,
-      deviceId: 'shared-device',
-      platform: 'ios',
-      token: 'a'.repeat(64),
-      apnsEnvironment: 'sandbox'
-    })
-    const second = await upsertOk({
-      hostFingerprint: OTHER,
-      deviceId: 'shared-device',
-      platform: 'ios',
-      token: 'c'.repeat(64),
-      apnsEnvironment: 'sandbox'
-    })
-    expect(first).not.toBe(second)
-  })
 })

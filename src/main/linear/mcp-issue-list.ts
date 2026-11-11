@@ -11,6 +11,7 @@ import {
   type WorkspaceReadFailure
 } from './issue-context/fanout'
 import { ISSUE_FIELDS, mapIssue, type RawIssue } from './issue-context/raw'
+import { linearConnectionHasNextPage } from './issue-context/pagination'
 import { resolveWorkspaceSelector } from './issue-context/workspaces'
 import { encodeIssueListCursor, resolveIssueListCursor } from './mcp-issue-list-cursor'
 import { buildIssueFilter } from './mcp-issue-list-filter'
@@ -199,7 +200,7 @@ async function readIssueListWorkspace(
         workspace: { id: entry.workspace.id, name: entry.workspace.organizationName }
       })
     }
-    hasMore = connection?.pageInfo?.hasNextPage === true
+    hasMore = linearConnectionHasNextPage(connection)
     nextCursor = connection?.pageInfo?.endCursor ?? undefined
     if (!hasMore || !nextCursor) {
       break

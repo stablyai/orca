@@ -94,8 +94,9 @@ export const ghMutationsAndProjectsApi = {
     sourceContext?: TaskSourceContext | null
     number: number
     updates: unknown
-  }): Promise<{ ok: true } | { ok: false; error: string }> =>
-    ipcRenderer.invoke('gh:updateIssue', args),
+  }): Promise<
+    { ok: true; bodyImageUrls?: Record<string, string> } | { ok: false; error: string }
+  > => ipcRenderer.invoke('gh:updateIssue', args),
   addIssueComment: (args: {
     repoPath: string
     repoId?: string | null

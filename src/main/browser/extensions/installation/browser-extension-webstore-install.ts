@@ -3,7 +3,7 @@ import { rename, rm, writeFile } from 'node:fs/promises'
 import { isAbsolute, join, relative, resolve } from 'node:path'
 import type { InstalledBrowserExtension } from '../../../../shared/browser/extensions/browser-extension-types'
 import { BROWSER_EXTENSION_ORIGINAL_MANIFEST_FILE } from '../../../../shared/browser/extensions/browser-extension-worker-api'
-import { browserSessionRegistry } from '../../sessions/browser-session-registry'
+import { browserSessionRegistry } from '../../sessions/profiles/browser-session-registry'
 import {
   readBrowserExtensionArchive,
   writeBrowserExtensionArchive
@@ -36,33 +36,6 @@ import {
 
 const VERSION_PATTERN = /^\d+(\.\d+){0,3}$/
 const STAGING_PREFIX = '.staging-'
-const busyExtensionIds = new Set<string>()
-
-export class BrowserExtensionBusyError extends Error {
-  constructor() {
-    super('This extension is already being installed or removed')
-  }
-}
-
-/** Serializes install, update and uninstall of one extension id. */
-export async function withBrowserExtensionLock<T>(
-  extensionId: string,
-  action: () => Promise<T>
-): Promise<T> {
-  if (busyExtensionIds.has(extensionId)) {
-    throw new BrowserExtensionBusyError()
-  }
-  busyExtensionIds.add(extensionId)
-  try {
-    return await action()
-  } finally {
-    busyExtensionIds.delete(extensionId)
-  }
-}
-
-export function isBrowserExtensionBusy(extensionId: string): boolean {
-  return busyExtensionIds.has(extensionId)
-}
 
 export type StagedWebStoreExtension = {
   extensionId: string

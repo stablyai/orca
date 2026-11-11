@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { AgentStatusOrchestrationContext } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 
-import { AgentHookServer } from '../../../../../agent-hooks/server'
+import { AgentHookServer } from '../../../../../agent-hooks/server/agent-hook-server'
 
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 

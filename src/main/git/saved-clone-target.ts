@@ -138,6 +138,6 @@ export async function reuseSavedCloneTarget(
       storedOrigin
         ? 'Orca has that project recorded as a different repository'
         : 'Orca has no record of which repository that project holds, so it cannot tell whether the folder is missing or holds something else'
-    }. Remove the project from Orca or choose another folder.`
+    }. Clone into a different folder name, or remove the project from Orca.`
   )
 }

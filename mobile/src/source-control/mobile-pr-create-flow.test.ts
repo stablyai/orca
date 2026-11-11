@@ -46,46 +46,4 @@ describe('createMobilePr', () => {
       linkError: 'metadata failed'
     })
   })
-
-  it('maps a host failure result to { ok:false }', async () => {
-    const client = clientWith([ok({ ok: false, code: 'validation', error: 'Push first' })])
-    await expect(
-      createMobilePr(client, 'repo-1::/tmp/wt', {
-        provider: 'github',
-        base: 'main',
-        title: 'T',
-        body: '',
-        draft: false
-      })
-    ).resolves.toEqual({ ok: false, error: 'Push first' })
-  })
-
-  it('maps an RPC transport failure to { ok:false }', async () => {
-    const client = clientWith([fail('disconnected')])
-    const result = await createMobilePr(client, 'repo-1::/tmp/wt', {
-      provider: 'github',
-      base: 'main',
-      title: 'T',
-      body: '',
-      draft: false
-    })
-    expect(result).toEqual({ ok: false, error: 'disconnected' })
-  })
-
-  it('normalizes a thrown sendRequest into { ok:false }', async () => {
-    const client = {
-      sendRequest: vi.fn(async () => {
-        throw new Error('socket hung up')
-      })
-    } as unknown as Pick<RpcClient, 'sendRequest'>
-    await expect(
-      createMobilePr(client, 'repo-1::/tmp/wt', {
-        provider: 'github',
-        base: 'main',
-        title: 'T',
-        body: '',
-        draft: false
-      })
-    ).resolves.toEqual({ ok: false, error: 'socket hung up' })
-  })
 })

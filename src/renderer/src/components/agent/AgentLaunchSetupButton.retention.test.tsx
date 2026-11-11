@@ -1,10 +1,15 @@
 // @vitest-environment happy-dom
-import { act } from 'react'
+import { act, type ReactElement, type ReactNode } from 'react'
 import { fireEvent, getByRole } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
 import { retireAgentPickerDrafts } from './agent-launch-picker-drafts'
 import { AgentLaunchSetupButton } from './AgentLaunchSetupButton'
 import { agentLaunchPromptScopeKey } from './AgentLaunchPromptComposer'
@@ -54,6 +59,19 @@ afterEach(() => {
   clearNativeChatComposerDraftsForTests()
 })
 
+const anchor = (trigger: ReactElement) => <div>{trigger}</div>
+
+function InMenu({ children }: { children: ReactNode }) {
+  return (
+    <TooltipProvider>
+      <DropdownMenu defaultOpen modal={false}>
+        <DropdownMenuTrigger>New tab</DropdownMenuTrigger>
+        <DropdownMenuContent>{children}</DropdownMenuContent>
+      </DropdownMenu>
+    </TooltipProvider>
+  )
+}
+
 describe('setup records exist only for authored setups', () => {
   it('keeps typed prompt and options through close, reopen and a rename', () => {
     const entry: AgentPickerEntry = {
@@ -79,9 +97,9 @@ describe('setup records exist only for authored setups', () => {
     const show = (value: AgentPickerEntry) =>
       act(() =>
         root.render(
-          <TooltipProvider>
-            <AgentLaunchSetupButton entry={value} onUse={vi.fn()} />
-          </TooltipProvider>
+          <InMenu>
+            <AgentLaunchSetupButton entry={value} onUse={vi.fn()} renderAnchor={anchor} />
+          </InMenu>
         )
       )
     const configure = () =>
@@ -151,10 +169,15 @@ describe('setup records exist only for authored setups', () => {
     }
     act(() =>
       root.render(
-        <TooltipProvider>
-          <AgentLaunchSetupButton entry={entry} onUse={vi.fn()} />
-          <AgentLaunchSetupButton entry={entry} initial={preset} onUse={vi.fn()} />
-        </TooltipProvider>
+        <InMenu>
+          <AgentLaunchSetupButton entry={entry} onUse={vi.fn()} renderAnchor={anchor} />
+          <AgentLaunchSetupButton
+            entry={entry}
+            initial={preset}
+            onUse={vi.fn()}
+            renderAnchor={anchor}
+          />
+        </InMenu>
       )
     )
     const user = userEvent.setup()

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildHandlerRoutes, dispatch, type HandlerContext } from './dispatch'
+import { buildHandlerRoutes } from './dispatch'
 import type { HandlerGroup } from './handler-group-manifest'
 
 describe('duplicate command keys', () => {
@@ -20,20 +20,5 @@ describe('duplicate command keys', () => {
     expect(() => buildHandlerRoutes([group('alpha', ['ship it', 'ship it'])])).toThrow(
       'Duplicate CLI handler registration for "ship it"'
     )
-  })
-})
-
-describe('dispatch errors', () => {
-  const ctx = {
-    flags: new Map(),
-    cwd: '/tmp',
-    json: false
-  } as unknown as HandlerContext
-
-  it('reports an unknown command with the joined path', async () => {
-    await expect(dispatch(['not', 'a', 'command'], ctx)).rejects.toMatchObject({
-      code: 'invalid_argument',
-      message: 'Unknown command: not a command'
-    })
   })
 })

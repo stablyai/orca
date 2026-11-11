@@ -45,7 +45,7 @@ import {
 } from './helpers/paired-host-terminal'
 import { expectTerminalAccessibilityText } from './helpers/terminal-accessibility-tree'
 import { focusActiveTerminalInput } from './helpers/terminal'
-import { findOrcadMigrationSourceCutoverForTarget } from '../../src/main/ssh/orcad-migration-cutover-journal'
+import { findOrcadMigrationSourceCutoverForTarget } from '../../src/main/persistence/migrating-orcad-catalog/orcad-migration-cutover-journal'
 
 const TEMPLATE_SOURCE = process.env.ORCA_E2E_ORCAD_CONVERT_TEMPLATE
 const BRIDGE_TIMEOUT_MS = 4 * 60_000

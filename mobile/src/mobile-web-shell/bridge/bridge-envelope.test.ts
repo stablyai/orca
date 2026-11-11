@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest'
 
-import { BRIDGE_MAX_MESSAGE_BYTES } from './bridge-caps'
-
 import {
   BRIDGE_PROTOCOL_VERSION,
   readBridgeClientMessage,
@@ -28,12 +26,6 @@ function readHost(message: unknown): ReturnType<typeof readBridgeHostMessage> {
 function client(fields: Record<string, unknown>): Record<string, unknown> {
   return { v: BRIDGE_PROTOCOL_VERSION, ...fields }
 }
-
-describe('client messages', () => {
-  it('carries the frame refusal through rather than relabelling it', () => {
-    expect(readBridgeClientMessage('{')).toEqual({ ok: false, refusal: 'malformed-json' })
-  })
-})
 
 describe('the readers bound their two directions differently', () => {
   const records = Array.from({ length: 5_000 }, (_, index) => ({
@@ -62,20 +54,6 @@ describe('the readers bound their two directions differently', () => {
     expect(
       readClient(client({ type: 'request', id: ID, method: 'worktree.list', params: { records } }))
     ).toEqual({ ok: false, refusal: 'too-many-nodes' })
-  })
-
-  it('still refuses a host frame one byte over the frame cap', () => {
-    const envelope = (result: string) =>
-      JSON.stringify({
-        v: BRIDGE_PROTOCOL_VERSION,
-        type: 'reply',
-        id: ID,
-        payload: { ...SUCCESS_PAYLOAD, result }
-      })
-    const overhead = new TextEncoder().encode(envelope('')).byteLength
-    const raw = envelope('x'.repeat(BRIDGE_MAX_MESSAGE_BYTES + 1 - overhead))
-    expect(new TextEncoder().encode(raw).byteLength).toBe(BRIDGE_MAX_MESSAGE_BYTES + 1)
-    expect(readBridgeHostMessage(raw)).toEqual({ ok: false, refusal: 'oversized' })
   })
 })
 

@@ -28,6 +28,7 @@ export const CLI_COMMAND_NAMES = [
   'environment',
   'eval',
   'exec',
+  'extension',
   'file',
   'fill',
   'find',

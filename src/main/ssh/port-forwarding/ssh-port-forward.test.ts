@@ -8,7 +8,7 @@ const { startSystemSshPortForwardProcessMock } = vi.hoisted(() => ({
   startSystemSshPortForwardProcessMock: vi.fn()
 }))
 
-vi.mock('../system-transport/system-ssh-forward-process', async (importOriginal) => {
+vi.mock('../system-transport/forwarding/system-ssh-forward-process', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
   return {
     ...actual,

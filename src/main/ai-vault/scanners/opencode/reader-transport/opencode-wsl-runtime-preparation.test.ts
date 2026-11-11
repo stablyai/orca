@@ -33,7 +33,9 @@ vi.mock('../../../../native-chat/wsl-transcript-running-admission', () => ({
 vi.mock('../../../../node-runtime/pinned-runtime-materializer', () => ({
   materializeNodeRuntimeArchive: mocks.download
 }))
-vi.mock('../../../../ssh/relay-bundle-paths', () => ({ relayBundleCandidates: mocks.bundles }))
+vi.mock('../../../../wsl/execution/relay-bundle-paths', () => ({
+  relayBundleCandidates: mocks.bundles
+}))
 
 const home = String.raw`\\wsl.localhost\Ubuntu\home\ada`
 const success = (stdout: string) => ({ stdout, stderr: '', code: 0, timedOut: false })

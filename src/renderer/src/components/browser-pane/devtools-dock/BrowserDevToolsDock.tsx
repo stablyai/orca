@@ -6,7 +6,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { ResizeHandle } from '@/components/tab-group/TabGroupSplitNodeTree'
-import { browserDevToolsDockFraction } from '../../../../../shared/browser-devtools-dock'
+import { browserDevToolsDockFraction } from '../../../../../shared/browser/devtools/browser-devtools-dock'
 import { acquireWebviewsDragPassthrough } from '../host-guest/webview-drag-passthrough'
 import { useBrowserDevToolsDockBounds } from './use-browser-devtools-dock-bounds'
 import { useBrowserDevToolsDockPageFlex } from './browser-devtools-docked-pages'

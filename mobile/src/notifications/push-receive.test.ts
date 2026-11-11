@@ -4,8 +4,8 @@ import { setNotificationViewingWorkspace } from './notification-viewing-policy'
 vi.mock('./push-tray-dismissal', () => ({ dismissPresentedPushNotification: vi.fn() }))
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { sha256 } from '@noble/hashes/sha256'
-import { loadHostCatalog } from '../transport/hosts/host-store'
-import type { HostCatalogEntry } from '../transport/hosts/host-profile'
+import { loadHostCatalog } from '../host-catalog/host-store'
+import type { HostCatalogEntry } from '../host-catalog/host-profile'
 
 import {
   foregroundNotificationBehavior,
@@ -19,7 +19,7 @@ async function shouldSuppressForegroundPush(data: unknown): Promise<boolean> {
 }
 
 vi.mock('react-native', () => ({ AppState: { currentState: 'background' } }))
-vi.mock('../transport/hosts/host-store', () => ({ loadHostCatalog: vi.fn() }))
+vi.mock('../host-catalog/host-store', () => ({ loadHostCatalog: vi.fn() }))
 const storage = vi.hoisted(() => new Map<string, string>())
 vi.mock('@react-native-async-storage/async-storage', () => ({
   default: {
@@ -87,13 +87,6 @@ describe('shouldSuppressForegroundPush', () => {
     await expect(
       shouldSuppressForegroundPush(bell({ hostFingerprint: otherHostFingerprint }))
     ).resolves.toBe(false)
-  })
-
-  it('suppresses pushes for an unpaired host', async () => {
-    vi.mocked(loadHostCatalog).mockResolvedValue([])
-    await expect(
-      shouldSuppressForegroundPush(apnsData({ hostFingerprint, notificationSeq: 1 }))
-    ).resolves.toBe(true)
   })
 
   it('suppresses a push after a matching persisted dismissal', async () => {

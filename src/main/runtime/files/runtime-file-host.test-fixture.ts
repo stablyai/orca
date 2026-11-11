@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, vi } from 'vitest'
 import { awaitRuntimeFileWatcherUnsubscribes } from './watch/file-watcher-leases'
 import type { RuntimeFileCommandHost } from './file-command-host'
-import { resetSshConnectionGenerations } from '../../ssh/connection/ssh-connection-generation'
+import { resetSshConnectionGenerations } from '../../ssh/connection/authority/ssh-connection-generation'
 import { resetRuntimeFileMocks } from './runtime-file-command-mock-registry'
 import {
   getConnectionExecutionHostId,

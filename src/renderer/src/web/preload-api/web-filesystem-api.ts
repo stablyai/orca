@@ -5,7 +5,7 @@ import type { SearchResult } from '../../../../shared/file-search/code-search-ty
 import { assertFileMutationOwnershipCapability } from '../../../../shared/file-write/file-mutation-ownership'
 import type { DirEntry } from '../../../../shared/file-listing/directory-entry'
 import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
-import type { RuntimeStatus } from '../../../../shared/runtime-types'
+import type { RuntimeStatus } from '../../../../shared/runtime-session-contracts'
 import type { SshConnectionState } from '../../../../shared/ssh-types'
 import { toRuntimeWorktreeSelector } from '../../runtime/rpc/targets/runtime-worktree-selector'
 import { createWebFileMutationMethods } from '../web-file-mutation-methods'

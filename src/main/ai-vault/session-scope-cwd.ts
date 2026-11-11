@@ -1,12 +1,25 @@
 import type { AiVaultAgent } from '../../shared/ai-vault/contracts/ai-vault-types'
-import { readTranscriptSlice, wslGatedReadFile } from '../native-chat/wsl-transcript-fs-access'
+import {
+  openTranscriptReadStream,
+  readTranscriptSlice,
+  wslGatedReadFile
+} from '../native-chat/wsl-transcript-fs-access'
+import {
+  isZstdTranscriptPath,
+  readZstdTranscriptSlice,
+  zstdTranscriptStream
+} from '../native-chat/transcript-zstd-decompression'
 import {
   CLAUDE_CWD_BUCKET_LAYOUT,
   CODEBUDDY_CWD_BUCKET_LAYOUT,
   PI_CWD_BUCKET_LAYOUT,
   type CwdBucketLayout
 } from './session-cwd-bucket-layouts'
-import type { FileWithMtime, SessionFileCandidate } from './session-scanner-types'
+import type {
+  AiVaultScanOptions,
+  FileWithMtime,
+  SessionFileCandidate
+} from './session-scanner-types'
 import { asRecord } from './session-scanner-record-value'
 import { extractString, parseJsonObject } from './session-scanner-values'
 import { clineManifestCwd } from './scanners/cline/session-scanner-cline-parser'
@@ -146,6 +159,13 @@ export const AI_VAULT_SCOPE_CWD_SOURCES: Record<AiVaultAgent, SessionScopeCwdSou
   jcode: PARSE
 }
 
+/** Answer from scope sources alone, without the global recency pass (Workspace and Project). */
+export function scopeOnlyScan(
+  options: Pick<AiVaultScanOptions, 'scopePaths' | 'scopeOnly'>
+): boolean {
+  return options.scopeOnly === true && (options.scopePaths?.length ?? 0) > 0
+}
+
 export function scopeWalksAgentFiles(
   agent: AiVaultAgent,
   scopePaths: readonly string[] | undefined
@@ -171,7 +191,12 @@ export async function readTranscriptHeadCwd(
     : [first]) {
     let head: Buffer
     try {
-      head = await readTranscriptSlice(file.path, 0, length, 'scan', signal)
+      head = isZstdTranscriptPath(file.path)
+        ? await readZstdTranscriptSlice(
+            zstdTranscriptStream(openTranscriptReadStream(file.path, {}, 'scan', signal)),
+            length
+          )
+        : await readTranscriptSlice(file.path, 0, length, 'scan', signal)
     } catch (error) {
       if (signal?.aborted) {
         throw error

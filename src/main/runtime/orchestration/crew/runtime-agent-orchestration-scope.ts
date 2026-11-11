@@ -5,22 +5,24 @@ import { isStructuredWorkerHandle } from '../../../../shared/orchestration/worke
 
 export function createOrchestrationProjectionScope(
   db: OrchestrationDb | null,
-  deps: RuntimeAgentOrchestrationDependencies
+  deps: RuntimeAgentOrchestrationDependencies,
+  now = Date.now()
 ) {
   const tasks = new Map<string, ReturnType<OrchestrationDb['getTask']>>()
   const runs = new Map<string, ReturnType<OrchestrationDb['getRun']>>()
   const panes = new Map<string, ReturnType<OrchestrationDb['runsBoundToPane']>>()
-  const now = Date.now()
-  const resolve = createCanonicalSessionPaneResolver(deps.getSessionRecords())
+  const records = deps.getSessionRecords()
+  const resolve = createCanonicalSessionPaneResolver(records)
   return {
     now,
+    records,
     resolve,
-    sessionDispatches: () => {
+    sessionDispatches: (sessions?: readonly string[]) => {
       const destinations = new Map<
         string,
         ReturnType<OrchestrationDb['listSessionDispatchesForPresentation']>[number]
       >()
-      for (const candidate of db?.listSessionDispatchesForPresentation(now) ?? []) {
+      for (const candidate of db?.listSessionDispatchesForPresentation(now, sessions) ?? []) {
         if (!candidate.dispatch.assignee_orca_session_id) {
           continue
         }

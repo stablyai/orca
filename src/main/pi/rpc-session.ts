@@ -21,6 +21,7 @@ import type { StructuredAgentSessionProviderOpenResult } from '../native-chat/ag
 import type { AgentSessionProviderHandleLink } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import { PiRpcSessionStartup } from './rpc-session-startup'
 import { PiHistoryCapture, type PiHistoryCaptureDeps } from './rpc-history-capture'
+import { closeFailedPiSession } from './rpc-failure-cleanup'
 
 export type PiRpcConnection = Pick<
   JsonlRpcAgentConnection,
@@ -75,6 +76,7 @@ export class PiRpcSession {
   private publishedExit = false
   /** What ended this child, once something did. */
   failure?: Error
+  private readonly startupFailure = Promise.withResolvers<never>()
   private exitDelivery: Promise<void> = Promise.resolve()
   private releaseAfterExit?: () => void
   private readonly reading = new ReaderPauseHolds<'lane' | 'journal'>(() => this.connection)
@@ -89,6 +91,7 @@ export class PiRpcSession {
     /** A new Pi session starts on its config's model; a resumed or forked one keeps its own. */
     readonly resolvesConfig = false
   ) {
+    void this.startupFailure.promise.catch(() => {})
     const sink = input.events && providerTimelineSink(input.events)
     if (!sink) {
       throw new Error('Pi structured chat requires the shared timeline sink')
@@ -166,6 +169,7 @@ export class PiRpcSession {
         this.optionObservations.seed(state)
       },
       () => this.failure,
+      this.startupFailure.promise,
       () => this.optionObservations.prepare()
     )
   }
@@ -184,7 +188,9 @@ export class PiRpcSession {
   }
 
   async open(signal: AbortSignal): Promise<StructuredAgentSessionProviderOpenResult> {
+    this.startup.assertLive(signal)
     const result = await this.startup.run(this.resolvedLaunch, signal)
+    this.startup.assertLive(signal)
     // Startup replies stay readable; journal pressure paces only later output.
     if (!this.publishedExit) {
       this.unbindReadingControl = this.input.events?.bindReadingControl?.(
@@ -214,6 +220,7 @@ export class PiRpcSession {
 
   fail(error: Error): void {
     this.failure ??= error
+    this.startupFailure.reject(this.failure)
     this.deps.logger.error('Pi RPC session failed', {
       scope: 'pi-rpc',
       sessionId: this.input.identity.sessionId,
@@ -222,22 +229,7 @@ export class PiRpcSession {
     if (!this.openedLink) {
       return
     }
-    void this.close(false)
-      .then((result) => {
-        if (result.root !== 'exited' && !result.killDelivered) {
-          this.deps.logger.warn('Pi process exit is unverifiable', {
-            scope: 'pi-stop',
-            sessionId: this.input.identity.sessionId
-          })
-        }
-      })
-      .catch((cause: unknown) =>
-        this.deps.logger.error('Pi process cleanup failed', {
-          scope: 'pi-stop',
-          sessionId: this.input.identity.sessionId,
-          error: cause
-        })
-      )
+    closeFailedPiSession(this, this.deps.logger)
   }
 
   drainObservedExit(): Promise<void> {

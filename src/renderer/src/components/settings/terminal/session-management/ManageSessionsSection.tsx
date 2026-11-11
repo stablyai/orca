@@ -3,10 +3,10 @@ import { toast } from 'sonner'
 import type { PtyManagementSession } from '../../../../../../preload/api/pty-management-api'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
-import { getManageSessionsSearchEntries } from '../terminal-window-setup-search'
+import { getManageSessionsSearchEntries } from './manage-sessions-search'
 import { useAppStore } from '../../../../store/index'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
-import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
+import { activateTabAndFocusPane } from '@/lib/workspace/tabs/activate-tab-and-focus-pane'
 import { useDaemonActions, DaemonActionDialog } from '../../../shared/useDaemonActions'
 import { ManageSessionKillDialog } from './ManageSessionKillDialog'
 import { ManageSessionsTable } from './ManageSessionsTable'
@@ -218,7 +218,7 @@ export function ManageSessionsSection(): React.JSX.Element {
 
   return (
     <SettingsGroup
-      title={t('auto.components.settings.ManageSessionsSection.d1b80fd5cd', 'Manage Sessions')}
+      title={t('auto.components.settings.ManageSessionsSection.0e07cc838b', 'Manage sessions')}
       description={t(
         'auto.components.settings.ManageSessionsSection.7c4889a724',
         'Recover from a frozen or misbehaving terminal by killing sessions or restarting the underlying daemon.'

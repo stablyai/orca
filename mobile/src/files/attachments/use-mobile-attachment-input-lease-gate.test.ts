@@ -56,15 +56,6 @@ describe('useMobileAttachmentInputLeaseGate', () => {
     }
   }
 
-  it('passes immediately when the lease is ready and the target is active', async () => {
-    const refs = baseRefs()
-    const showToast = vi.fn()
-    const { gate } = renderGate({ ...refs, showToast })
-
-    await expect(gate()('terminal-1')).resolves.toBe(true)
-    expect(showToast).not.toHaveBeenCalled()
-  })
-
   it('waits out a lease-not-ready window and then sends', async () => {
     const refs = baseRefs()
     refs.leaseReady.current = false

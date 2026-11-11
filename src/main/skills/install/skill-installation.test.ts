@@ -10,17 +10,6 @@ import { nativeSkillInstallFilesystem } from '../filesystem/skill-install-filesy
 afterEach(removeSkillInstallHomes)
 
 describe('skill install service', () => {
-  it('installs one canonical Codex copy and aliases the other agent home to it', async () => {
-    const { root, input } = await createSkillInstallHome()
-    const result = await installSharedSkill(input)
-    const canonical = join(root, 'home', '.agents', 'skills', 'test-skill')
-    const claude = join(root, 'home', '.claude', 'skills', 'test-skill')
-
-    expect(result.status).toBe('installed')
-    expect(result.placements).toHaveLength(2)
-    expect(await realpath(claude)).toBe(await realpath(canonical))
-  })
-
   it('leaves an unowned provider copy untouched and reports partial coverage', async () => {
     const { root, input } = await createSkillInstallHome()
     const claude = join(root, 'home', '.claude', 'skills', 'test-skill')

@@ -6,14 +6,14 @@ import type {
   BrowserClientHostedPageInventory,
   BrowserClientHostCommandEvent
 } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
-import type { RemoteRuntimeSubscription } from '../../../../shared/remote-runtime/remote-runtime-client'
+import type { RemoteRuntimeTransportSubscription } from '../../../../shared/remote-runtime/requests/remote-runtime-subscription-contract'
 
 const { subscribeRemoteRuntimeRequestMock } = vi.hoisted(() => ({
   subscribeRemoteRuntimeRequestMock: vi.fn()
 }))
 
-vi.mock('../../../../shared/remote-runtime/remote-runtime-client', () => ({
-  subscribeRemoteRuntimeRequest: subscribeRemoteRuntimeRequestMock
+vi.mock('../../../../shared/remote-runtime/requests/remote-runtime-subscription-transport', () => ({
+  subscribeRemoteRuntimeTransport: subscribeRemoteRuntimeRequestMock
 }))
 
 import { PairedRuntimeBrowserHostLease } from './paired-runtime-browser-host-lease'
@@ -32,7 +32,7 @@ afterEach(() => {
 
 describe('PairedRuntimeBrowserHostLease', () => {
   it('closes a subscription acquired after local teardown', async () => {
-    let resolveSubscription = (_subscription: RemoteRuntimeSubscription): void => {}
+    let resolveSubscription = (_subscription: RemoteRuntimeTransportSubscription): void => {}
     const close = vi.fn()
     subscribeRemoteRuntimeRequestMock.mockReturnValueOnce(
       new Promise((resolve) => {

@@ -23,7 +23,7 @@ import {
   OrcadManagedIdentityError,
   verifyManagedOrcadTunnelIdentity
 } from './orcad-managed-tunnel-identity'
-import { unusedOrcadHostTransport } from '../../ssh/unused-host-transport.test-fixture'
+import { unusedOrcadHostTransport } from '../testing/managed-host-transport.test-fixture'
 
 vi.mock('../../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
   const facade = getWorktreeListingMocks()

@@ -20,7 +20,7 @@ import type { SshTarget } from '../../shared/ssh-types'
 import {
   isManagedOrcadSshTarget,
   isRuntimeOwnedSshTarget
-} from '../ssh/connection/ssh-connection-store'
+} from '../ssh/targets/ssh-target-runtime-ownership'
 
 /** Include hidden registrations so the guard can reject them before comparing generations. */
 export type DesktopSshTargetRegistry = {

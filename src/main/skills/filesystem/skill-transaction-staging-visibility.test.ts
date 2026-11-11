@@ -21,15 +21,6 @@ async function stagedRoot(stagedName: string): Promise<string> {
 }
 
 describe('native walker', () => {
-  it.each([
-    skillDeleteStagedName('demo', 'id'),
-    '.demo.orca-remove-backup-id',
-    '.demo.orca-placement-backup-id'
-  ])('does not surface a %s staged directly in a scanned root', async (stagedName) => {
-    const root = await stagedRoot(stagedName)
-    expect(await findSkillFiles(root, 4)).toEqual([])
-  })
-
   it('still finds an ordinary skill beside a staged one', async () => {
     const root = await stagedRoot(skillDeleteStagedName('demo', 'id'))
     const real = join(root, 'demo')

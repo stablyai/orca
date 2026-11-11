@@ -5,16 +5,17 @@ import {
   wslGatedReaddir,
   wslGatedStat
 } from '../native-chat/wsl-transcript-fs-access'
-import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
 import type { createAiVaultScopeCwdMatcher } from '../../shared/ai-vault/scanning/ai-vault-scope-cwd-match'
 import type { CwdBucketLayout } from './session-cwd-bucket-layouts'
 import type { AiVaultAgent, AiVaultScanIssue } from '../../shared/ai-vault/contracts/ai-vault-types'
-import { parseWslUncPath } from '../../shared/wsl-paths'
+import { parseWslUncPath, toWindowsWslUncPathSpellings } from '../../shared/wsl-paths'
 import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
 import { yieldToEventLoop } from '../../shared/event-loop-yield'
 import type { FileWithMtime } from './session-scanner-types'
 import { extractString, parseJsonObject } from './session-scanner-values'
 import { scanIssueTextFromError } from './session-scan-issues'
+import { isMissingTranscriptPathError } from './session-scanner-discovery'
+import { noteAiVaultScanFileFound } from './ai-vault-scan-progress'
 
 // Limit representative probing when a bucket contains transcripts without cwd records.
 const REPRESENTATIVE_CWD_LINE_LIMIT = 200
@@ -24,21 +25,21 @@ const TRANSCRIPT_EXTENSIONS = new Set(['.jsonl'])
 // Bucket encodings are lossy; retain Claude’s cache and verify other transcripts individually.
 const PROJECT_DIR_CWD_CACHE_MAX = 2048
 const projectDirCwdCache = new Map<string, string>()
-export type IssueSink = (issue: AiVaultScanIssue) => void
+export type IssueSink = (issue: AiVaultScanIssue, error?: unknown) => void
 
 export function resetProjectDirCwdCacheForTests(): void {
   projectDirCwdCache.clear()
 }
 
-// Report WSL refusal so an unreachable root is not mistaken for an empty one.
+// Report refusals (WSL, permissions) so an unreadable folder or transcript is not mistaken for an empty one.
 export function recordRefusal(
   issues: IssueSink,
   path: string,
   error: unknown,
   agent: AiVaultAgent
 ): void {
-  if (error instanceof WslTranscriptFsError) {
-    issues({ agent, path, ...scanIssueTextFromError(error) })
+  if (!isMissingTranscriptPathError(error)) {
+    issues({ agent, path, ...scanIssueTextFromError(error) }, error)
   }
 }
 
@@ -74,18 +75,26 @@ export function cwdBucketScopePrefixes(
 ): Set<string> {
   const prefixes = new Set<string>()
   for (const scopePath of scopePaths) {
-    for (const candidate of scopePathCandidates(scopePath)) {
+    // Encoders add the NFC spelling; a cwd recorded in NFD names its bucket differently.
+    for (const candidate of scopePathCandidates(scopePath).flatMap((path) => [
+      path,
+      path.normalize('NFD')
+    ])) {
       for (const prefix of layout.encodeScopePrefixes(candidate)) {
-        prefixes.add(prefix)
+        prefixes.add(prefix.toLowerCase())
       }
     }
   }
   return prefixes
 }
 
+// A WSL share has two UNC spellings, and a transcript may record either one.
 function scopePathCandidates(scopePath: string): string[] {
-  const wslScopePath = parseWslUncPath(scopePath)
-  return wslScopePath ? [scopePath, wslScopePath.linuxPath] : [scopePath]
+  const wsl = parseWslUncPath(scopePath)
+  if (!wsl) {
+    return [scopePath]
+  }
+  return [scopePath, wsl.linuxPath, ...toWindowsWslUncPathSpellings(wsl.linuxPath, wsl.distro)]
 }
 
 export async function listProjectDirs(
@@ -106,8 +115,12 @@ export async function listProjectDirs(
     recordRefusal(issues, rootDir, err, layout.agent)
     return []
   }
+  // Case-folded: Windows cwds differ in case, and each bucket's cwd is still checked afterwards.
   return entries
-    .filter((entry) => entry.isDirectory() && layout.isDirInScope(entry.name, scopeProjectPrefixes))
+    .filter(
+      (entry) =>
+        entry.isDirectory() && layout.isDirInScope(entry.name.toLowerCase(), scopeProjectPrefixes)
+    )
     .map((entry) => join(rootDir, entry.name))
 }
 
@@ -204,6 +217,8 @@ export async function collectBucketFiles(args: {
   inScope?: ReturnType<typeof createAiVaultScopeCwdMatcher>
   issues: IssueSink
   collected: Map<string, FileWithMtime>
+  // Files whose first lines name no cwd go here, bounded on their own, instead of being dropped.
+  unknown?: Map<string, FileWithMtime>
   limit: number
   excludedFilePaths: ReadonlySet<string>
   signal?: AbortSignal
@@ -213,19 +228,28 @@ export async function collectBucketFiles(args: {
       await yieldToEventLoop()
     }
     throwIfAiVaultScanCancelled(args.signal)
-    if (args.collected.has(path) || args.excludedFilePaths.has(path)) {
+    if (args.collected.has(path) || args.unknown?.has(path) || args.excludedFilePaths.has(path)) {
       continue
     }
     try {
+      let collected = args.collected
       if (args.inScope) {
         const cwd = await readFirstCwd(path, args.issues, args.agent, args.signal)
-        if (!args.inScope(cwd, path)) {
+        if (cwd === null && args.unknown) {
+          collected = args.unknown
+        } else if (!args.inScope(cwd, path)) {
           continue
         }
       }
       const fileStat = await wslGatedStat(path, 'scan', args.signal)
       throwIfAiVaultScanCancelled(args.signal)
-      addBoundedFile(args.collected, args.limit, {
+      // Scope-only scans don't list cwd-bucket agents recursively, so their file count comes from here.
+      noteAiVaultScanFileFound(args.signal, args.agent, {
+        path,
+        dev: fileStat.dev,
+        ino: fileStat.ino
+      })
+      addBoundedFile(collected, args.limit, {
         path,
         mtimeMs: fileStat.mtimeMs,
         modifiedAt: fileStat.mtime.toISOString(),

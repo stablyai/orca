@@ -37,6 +37,8 @@ export type MobileRelayServerWorktreeRow = Record<string, unknown> & {
   hostId: `runtime:${string}`
   /** The desktop calls this row another client's; the phone applies the shared filter value. */
   desktopOtherClient?: true
+  /** The workspace runs on an environment this desktop created from a recipe; deleting it can destroy that. */
+  recipeEnvironment?: { name: string; destroys: boolean }
 }
 
 /** The server's own `worktree.ps` rows as the desktop last fetched them, refreshed when the server answers. */

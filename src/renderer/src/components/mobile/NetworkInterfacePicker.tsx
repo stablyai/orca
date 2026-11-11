@@ -3,7 +3,7 @@ import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { AddressPicker, type AddressOption } from '../network/AddressPicker'
 import { parseManualNetworkAddress } from '../../../../shared/network/manual-address'
-import type { MobileNetworkInterface } from '../settings/mobile/pairing/mobile-network-interface-selection'
+import type { PairingNetworkInterface } from '../../../../shared/pairing-address-auto-selection'
 
 function formatCustomAddressLabel(address: string): string {
   return translate(
@@ -14,7 +14,7 @@ function formatCustomAddressLabel(address: string): string {
 }
 
 export type NetworkInterfacePickerProps = {
-  networkInterfaces: readonly MobileNetworkInterface[]
+  networkInterfaces: readonly PairingNetworkInterface[]
   customAddresses: readonly string[]
   selectedAddress: string | undefined
   selectedAddressIsCustom: boolean

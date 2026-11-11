@@ -106,20 +106,16 @@ export function isRecordedStructuredWorkerSession(
   sessionId: OrcaSessionId,
   db: OrchestrationDb
 ): boolean {
-  return Boolean(
-    db.db
-      .prepare(
-        `SELECT 1 FROM dispatch_contexts
-         WHERE assignee_orca_session_id = ? AND process_incarnation = ? LIMIT 1`
-      )
-      .get(sessionId, structuredWorkerProcessIncarnation(sessionId))
+  return db.hasRecordedStructuredWorkerSession(
+    sessionId,
+    structuredWorkerProcessIncarnation(sessionId)
   )
 }
 
 /** The session running this worker now: the one minted for it, or its `/clear` successor. */
 export function structuredWorkerSession(
   identity: Pick<StructuredWorkerIdentity, 'sessionId'>,
-  context?: StructuredWorkerReadContext
+  context?: Pick<StructuredWorkerReadContext, 'resolveSession'>
 ): LineageRunningSession {
   if (context) {
     return context.resolveSession(identity.sessionId)
@@ -130,7 +126,7 @@ export function structuredWorkerSession(
 /** The worker's running session on this host, or the typed refusal an actor answers instead. */
 function locateStructuredWorker(
   identity: Pick<StructuredWorkerIdentity, 'sessionId'>,
-  context?: StructuredWorkerReadContext
+  context?: Pick<StructuredWorkerReadContext, 'resolveSession'>
 ): { running: RunningStructuredSession } | { reason: string; refusal: OrchestrationError } {
   const located = structuredWorkerSession(identity, context)
   if (located.kind === 'here') {
@@ -254,9 +250,10 @@ export function structuredWorkerTerminalState(
 
 /** Read the current session's durable liveness without requiring registry identity, which forget removes before some settlement probes. */
 export function observeStructuredWorker(
-  identity: Pick<StructuredWorkerIdentity, 'sessionId'>
+  identity: Pick<StructuredWorkerIdentity, 'sessionId'>,
+  context?: Pick<StructuredWorkerReadContext, 'resolveSession'>
 ): StructuredWorkerObservation {
-  const located = locateStructuredWorker(identity)
+  const located = locateStructuredWorker(identity, context)
   return 'running' in located
     ? observeStructuredSession(located.running.sessionId)
     : { status: 'unverifiable', reason: located.reason }

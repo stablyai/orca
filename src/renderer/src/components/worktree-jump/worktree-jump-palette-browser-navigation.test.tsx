@@ -72,7 +72,8 @@ function listInput(query: string, overrides: Partial<ListInput> = {}): ListInput
       visibleOpenTabItems: [],
       openTabOverflowCount: 0,
       multiPrimaryFirstScreen: false,
-      multiPrimaryLayout: null
+      multiPrimaryLayout: null,
+      visibleExtraSections: []
     },
     showCreateAction: true,
     createWorktreeName: query,

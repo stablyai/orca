@@ -54,7 +54,7 @@ vi.mock('../providers/local-pty/local-pty-provider', () => ({ LocalPtyProvider: 
 vi.mock('../browser/backends/offscreen-browser-backend', () => ({
   OffscreenBrowserBackend: class {}
 }))
-vi.mock('../browser/browser-manager', () => ({ browserManager: {} }))
+vi.mock('../browser/guest-lifecycle/manager/browser-manager', () => ({ browserManager: {} }))
 vi.mock('./main-process-relay-status', () => ({
   getDesktopRelayStatus: vi.fn(),
   publishDesktopRelayStatus: vi.fn()
@@ -106,7 +106,7 @@ vi.mock('./startup-diagnostics', () => ({ logStartupMilestone: vi.fn() }))
 const setupHeadlessServeAutoUpdater = vi.hoisted(() => vi.fn())
 vi.mock('../window/main-window-updater', () => ({ setupHeadlessServeAutoUpdater }))
 vi.mock('../server/serve-stdout-boundary', () => ({ emitServeBrowserIdentityActionLine: vi.fn() }))
-vi.mock('../browser/identity/browser-identity-mode-store', () => ({
+vi.mock('../browser/identity/mode/browser-identity-mode-store', () => ({
   getBrowserIdentityModeStatus: vi.fn()
 }))
 const showWindowWithoutStealingFocus = vi.hoisted(() => vi.fn())

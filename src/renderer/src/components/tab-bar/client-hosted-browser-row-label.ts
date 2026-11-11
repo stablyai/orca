@@ -1,5 +1,6 @@
 import type { ClientHostedBrowserRow } from '../../../../shared/client-hosted-browser-rows'
-import { ORCA_BROWSER_BLANK_URL } from '../../../../shared/constants'
+import '../../../../shared/constants'
+import { ORCA_BROWSER_BLANK_URL } from '../../../../shared/browser/browser-blank-page'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { formatBrowserTabUrlLabel } from './BrowserTab'

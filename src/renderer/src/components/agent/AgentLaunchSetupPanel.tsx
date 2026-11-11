@@ -4,9 +4,11 @@ import type { AgentLaunchSetupPanelProps } from './AgentLaunchSetupButton'
 import {
   agentLaunchSetupOptionRows,
   agentLaunchSetupRowGroups,
-  agentLaunchSetupCatalogState as catalogOf
+  agentLaunchSetupCatalogState as catalogOf,
+  agentLaunchSetupModelRows
 } from './agent-launch-setup-option-rows'
 import { useRef, useState } from 'react'
+import { useSetupModelHighlight } from './use-setup-model-highlight'
 import { Check, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react'
 import { getAgentSessionOptionLaunchCatalog } from '../../../../shared/agent-session/options/agent-session-option-catalog'
 import {
@@ -19,13 +21,13 @@ import {
 } from '@/components/ui/command'
 import { useTranslate } from '@/i18n/use-translate'
 import { agentModelChoiceChips } from './launch-settings/agent-model-choice-chips'
-import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
-import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
+import { isScreenSubmitShortcut } from '@/lib/keyboard/screen-submit-shortcut'
+import { isImeOwnedKeyboardEvent } from '@/lib/text-input/ime/ime-composition-keyboard-event'
 import { AgentDefaultArgsInput } from './launch-settings/AgentLaunchDefaultsEditor'
 import { NativeChatSessionOptionRows } from '../native-chat/session/options/controls/NativeChatSessionOptionRows'
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible'
 import type { SessionOptionDescriptor } from '../../../../shared/native-chat/input/native-chat-session-options'
-import { AgentPermissionMenu } from './launch-settings/AgentPermissionChoiceControls'
+import { AgentPermissionMenu } from './launch-settings/AgentPermissionMenu'
 import {
   AgentLaunchSetupFooter,
   agentLaunchSetupArgumentsNote,
@@ -38,7 +40,10 @@ import {
   applyAgentPickerEdit,
   type AgentPickerEdit
 } from '../../../../shared/agent-launch/picker/agent-launch-picker-edits'
-import { agentPickerArgumentsKnown } from '../../../../shared/agent-launch/picker/agent-launch-picker-authority'
+import {
+  agentPickerArgumentsKnown,
+  agentPickerCatalogAuthoritative
+} from '../../../../shared/agent-launch/picker/agent-launch-picker-authority'
 import { agentPickerEffectiveChoices } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import type { AgentPickerSurface } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import {
@@ -53,6 +58,7 @@ export function AgentLaunchSetupPanel({
   getDraft,
   mode = 'launch',
   disabled,
+  autoFocus = true,
   terminalBlocked,
   onDraftChange,
   onUse
@@ -62,7 +68,7 @@ export function AgentLaunchSetupPanel({
   const editDraft = (edit: AgentPickerEdit) => {
     const current = getDraft()
     if (current) {
-      onDraftChange(applyAgentPickerEdit(entry, current, edit))
+      onDraftChange(applyAgentPickerEdit(entry, current, edit), edit.kind)
     }
   }
   const [modelQuery, setModelQuery] = useState('')
@@ -88,6 +94,15 @@ export function AgentLaunchSetupPanel({
   const { hasModels, catalogPending, catalogMessage } = catalogOf(entry, models, currentModel, mode)
   const modelInArguments = textActionArgumentsOwnModel(entry, draft)
   const modelDisabled = disabled || defaultsPending || catalogPending
+  const modelRows = agentLaunchSetupModelRows(
+    models,
+    currentModel,
+    modelQuery,
+    legacy,
+    modelInArguments
+  )
+  const modelList = useRef<HTMLDivElement>(null)
+  const highlight = useSetupModelHighlight(modelList, modelRows.start, modelQuery)
   const options = agentPickerEntryOptions(entry, currentModel, draft.surface)
   const optionRows = agentLaunchSetupOptionRows({
     options,
@@ -123,10 +138,7 @@ export function AgentLaunchSetupPanel({
     ) : null
   const handleUse = (surface: AgentPickerSurface) => {
     const current = getDraft()
-    if (current) {
-      return onUse({ ...acceptAgentPickerArguments(entry, current), surface })
-    }
-    return false
+    return current ? onUse({ ...acceptAgentPickerArguments(entry, current), surface }) : false
   }
   const use = (surface: AgentPickerSurface) =>
     mode === 'select' ? handleUse(surface) : footer.current?.launch(surface)
@@ -166,6 +178,7 @@ export function AgentLaunchSetupPanel({
         }
       }}
       onKeyDown={(event) => {
+        highlight.endKey()
         event.stopPropagation()
         if (
           !disabled &&
@@ -181,6 +194,8 @@ export function AgentLaunchSetupPanel({
       <Command
         surface="inline"
         density="model"
+        ref={modelList}
+        {...highlight.command}
         onKeyDownCapture={(event) => {
           if (
             !disabled &&
@@ -196,13 +211,14 @@ export function AgentLaunchSetupPanel({
           }
         }}
         onKeyDown={(event) => {
+          highlight.onKeyDown(event)
           if (event.key === 'Enter') {
             event.stopPropagation()
           }
         }}
       >
         <CommandInput
-          autoFocus
+          autoFocus={autoFocus}
           disabled={modelDisabled}
           aria-busy={catalogPending}
           value={modelQuery}
@@ -218,13 +234,7 @@ export function AgentLaunchSetupPanel({
               {catalogMessage}
             </div>
           ) : null}
-          {hasModels &&
-          modelQuery &&
-          entry.catalog.origin !== 'unknown' &&
-          !entry.catalog.listingInProgress &&
-          entry.catalogRead !== 'pending' &&
-          entry.catalogRead !== 'failed' &&
-          entry.catalogRead !== 'unsupported' ? (
+          {hasModels && modelQuery && agentPickerCatalogAuthoritative(entry) ? (
             <CommandEmpty>{t('agentPicker.noModels', 'No models match your search.')}</CommandEmpty>
           ) : null}
           <CommandGroup>
@@ -240,29 +250,28 @@ export function AgentLaunchSetupPanel({
                 {t('agentPicker.legacyModels', 'Legacy models')}
               </CommandItem>
             ) : null}
-            {models
-              .filter(
-                (model) =>
-                  !model.hidden &&
-                  (model.id === currentModel || modelQuery || Boolean(model.isLegacy) === legacy)
-              )
-              .map((model) => (
+            {modelRows.rows.map((model) => {
+              const current = model.unlisted || (currentModel === model.id && !modelInArguments)
+              return (
                 <CommandItem
                   key={model.id}
                   value={model.id}
                   keywords={[model.label]}
                   disabled={modelDisabled}
-                  data-current={currentModel === model.id && !modelInArguments}
-                  onSelect={() => editDraft({ kind: 'choice', patch: { model: model.id } })}
+                  data-current={current}
+                  onSelect={() => {
+                    if (!model.unlisted) {
+                      editDraft({ kind: 'choice', patch: { model: model.id } })
+                    }
+                  }}
                 >
                   {model.label}
                   <span className="ml-auto flex size-3.5 shrink-0 items-center justify-center">
-                    {currentModel === model.id && !modelInArguments ? (
-                      <Check className="size-3.5 text-muted-foreground" />
-                    ) : null}
+                    {current ? <Check className="size-3.5 text-muted-foreground" /> : null}
                   </span>
                 </CommandItem>
-              ))}
+              )
+            })}
             {!legacy && !modelQuery && legacyCount > 0 ? (
               <CommandItem value="__legacy__" disabled={disabled} onSelect={() => setLegacy(true)}>
                 <span className="flex min-w-0 flex-col">
@@ -274,17 +283,6 @@ export function AgentLaunchSetupPanel({
                   </span>
                 </span>
                 <ChevronRight className="ml-auto size-3.5 text-muted-foreground" />
-              </CommandItem>
-            ) : null}
-            {currentModel && !models.some((model) => model.id === currentModel) ? (
-              <CommandItem
-                value={currentModel}
-                disabled={modelDisabled}
-                onSelect={() => {}}
-                data-current="true"
-              >
-                {currentModel}
-                <Check className="ml-auto size-3.5 text-muted-foreground" />
               </CommandItem>
             ) : null}
           </CommandGroup>

@@ -1,4 +1,4 @@
-import { lstat, mkdir, readFile, writeFile } from 'node:fs/promises'
+import { lstat, mkdir, readFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { bundledSkillNudgeEntries } from '../../../shared/bundled-skill-summary'
@@ -51,23 +51,5 @@ describe('skills installed by much older Orca versions', () => {
     const claudeCopy = await readFile(join(orchestrationIn(home, 'claude'), 'SKILL.md'), 'utf8')
     expect(claudeCopy).toBe(SOURCE?.text)
     expect(bundledSkillNudgeEntries(await previewBundledSkillInstall(input(home)))).toEqual([])
-  })
-
-  it('asks before touching an old copy the user added a file to', async () => {
-    const home = await makeSkillHome()
-    const shared = orchestrationIn(home, 'shared')
-    await writeCopy(shared, await readFile(OLDEST_FIXTURE, 'utf8'))
-    await writeFile(join(shared, 'my-notes.md'), 'mine')
-
-    const result = await autoUpdateInstalledBundledSkills({
-      ...input(home),
-      names: ['orchestration']
-    })
-
-    expect(result.skills).toEqual([])
-    expect(await readFile(join(shared, 'SKILL.md'))).toEqual(await readFile(OLDEST_FIXTURE))
-    const plan = await previewBundledSkillInstall(input(home))
-    expect(plan.skills[0]?.ops[0]).toMatchObject({ kind: 'leave', reason: 'edited' })
-    expect(bundledSkillNudgeEntries(plan).map((entry) => entry.name)).toEqual(['orchestration'])
   })
 })

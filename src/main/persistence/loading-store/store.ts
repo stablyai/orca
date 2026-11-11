@@ -2,8 +2,8 @@ import { dirname } from 'node:path'
 import {
   setMigrationUnsupportedPty,
   setMigrationUnsupportedPtyPersistenceListener
-} from '../../agent-hooks/migration-unsupported-pty-state'
-import { agentHookServer } from '../../agent-hooks/server'
+} from '../../agent-hooks/observations/migration-unsupported-pty-state'
+import { agentHookServer } from '../../agent-hooks/server/agent-hook-server'
 import { ActiveViewPreference } from '../preferences/active-view-preference'
 import { registerPersistedPaneKeyAlias } from '../restoring-sessions/pane-alias-normalization'
 import { normalizePersistedPaneIdentityState } from '../restoring-sessions/workspace-pane-normalization'
@@ -23,7 +23,7 @@ import {
   bindPersistedTabTerminalPanes,
   sweepPersistedUnattachedTerminalRows
 } from '../restoring-sessions/tab-terminal-pane-binding-repair'
-import { scheduleSave } from './write-scheduling'
+import { scheduleFullProfileSave, scheduleSave } from './write-scheduling'
 import {
   migrateLegacyOpenCodeGoApiKey,
   type OpenCodeGoApiKeyTarget
@@ -177,7 +177,7 @@ export class Store {
         adaptedProjectGroups ||
         sweptRepoIds.length > 0
       ) {
-        scheduleSave(this.domains.scheduling)
+        scheduleFullProfileSave(this.domains.scheduling)
       }
     }
   }
@@ -185,7 +185,7 @@ export class Store {
   /** Retain the legacy settings key until migration to the main-owned store succeeds. */
   migrateLegacyOpenCodeGoApiKey(target: OpenCodeGoApiKeyTarget): void {
     if (migrateLegacyOpenCodeGoApiKey(this.runtime.protectedSecrets, target)) {
-      scheduleSave(this.domains.scheduling)
+      scheduleSave(this.domains.scheduling, ['settings'])
     }
   }
 

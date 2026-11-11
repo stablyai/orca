@@ -12,7 +12,8 @@ function createRegistration(
     registerOwnedSubscriptionCleanup: registry.registerOwned.bind(registry),
     subscribeToPtyExit: vi.fn((_ptyId: string, _listener: () => void) => vi.fn()),
     handleMobileSubscribe: vi.fn().mockResolvedValue(true),
-    handleMobileUnsubscribe: vi.fn()
+    handleMobileUnsubscribe: vi.fn(),
+    holdHeadlessTerminalThroughExit: vi.fn(() => vi.fn())
   }
   const emit = vi.fn()
   const registration = registerTerminalSubscription({

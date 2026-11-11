@@ -147,6 +147,7 @@ export function taskListMountAdapters(
           serverRepoList: [],
           taskStateHydrated: true,
           tasksSupported: true,
+          taskUiReady: true,
           items: [],
           error: '',
           loading: false,

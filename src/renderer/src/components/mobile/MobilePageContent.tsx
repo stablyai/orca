@@ -1,13 +1,9 @@
 import { useTranslate } from '@/i18n/use-translate'
-import type { MobileNetworkInterface } from '../settings/mobile/pairing/mobile-network-interface-selection'
-import {
-  HeroFlow,
-  HeroIntro,
-  HeroPaired,
-  type PairedDevice,
-  type Platform,
-  type StepIndex
-} from './MobileHero'
+import type { PairingNetworkInterface } from '../../../../shared/pairing-address-auto-selection'
+import { HeroFlow, type Platform, type StepIndex } from './MobileHero'
+import { HeroIntro } from './MobileHeroIntro'
+import { HeroPaired } from './MobileHeroPairedDevices'
+import type { PairedMobileDevice } from './paired-mobile-devices'
 import { getInstallCopy } from './mobile-platform-copy'
 import type { MobilePageStage } from './mobile-page-stage'
 import { MobilePageToolbar } from './MobilePageToolbar'
@@ -19,7 +15,7 @@ type MobilePageContentProps = {
   closeMobilePage: () => void
   copyInstallUrl: () => void
   copyPairingCode: () => void
-  devices: readonly PairedDevice[]
+  devices: readonly PairedMobileDevice[]
   enterFlow: () => void
   generatePairing: (rotate: boolean) => void
   canGeneratePairing: boolean
@@ -33,7 +29,7 @@ type MobilePageContentProps = {
   handleContinue: () => void
   installQrUrl: string | null
   loadNetworkInterfaces: () => void
-  networkInterfaces: MobileNetworkInterface[]
+  networkInterfaces: PairingNetworkInterface[]
   openAndroidInstallGuide: () => void
   openInstallUrl: () => void
   pairAnotherDevice: () => void

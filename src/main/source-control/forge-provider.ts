@@ -57,8 +57,8 @@ export type ForgeReviewForBranchInput = ForgeProviderRepositoryContext & {
   branch: string
   linkedReviewNumber?: number | null
   fallbackReviewNumber?: number | null
-  // GitHub-only merged-at-head visibility; other providers ignore this inspected HEAD.
-  githubCurrentHeadOid?: string | null
+  // The inspected checkout HEAD scopes implicit merged-review visibility.
+  currentHeadOid?: string | null
   userRefresh?: boolean
 }
 
@@ -109,7 +109,7 @@ const gitLabForgeProvider = {
       input.branch,
       input.linkedReviewNumber ?? null,
       forgeConnectionId(input),
-      ...hostedReviewExecutionArgs(input)
+      { ...input, currentHeadOid: input.currentHeadOid }
     )
     return mr ? mapGitLabReview(mr) : null
   },
@@ -178,7 +178,7 @@ const gitHubForgeProvider = {
         ...executionArgs[0],
         ...(input.userRefresh === true ? { userRefresh: true } : {}),
         ...(fallbackReviewNumber !== null ? { acceptMergedFallbackPR: true } : {}),
-        currentHeadOid: input.githubCurrentHeadOid ?? null
+        currentHeadOid: input.currentHeadOid ?? null
       }
     )
     return unwrapGitHubPRForBranchOutcome(outcome)

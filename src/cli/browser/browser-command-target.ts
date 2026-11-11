@@ -1,4 +1,4 @@
-import { BROWSER_EXPECT_URL_RUNTIME_CAPABILITY } from '../../shared/browser-runtime-capabilities'
+import { BROWSER_EXPECT_URL_RUNTIME_CAPABILITY } from '../../shared/browser/runtime/browser-runtime-capabilities'
 import type { RuntimeStatus } from '../../shared/runtime-types'
 import { getOptionalStringFlag, getPresentStringFlag } from '../flags'
 import type { RuntimeClient } from '../runtime-client'

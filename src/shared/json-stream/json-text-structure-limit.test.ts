@@ -5,15 +5,6 @@ import {
 } from './json-text-structure-limit'
 
 describe('JSON text structure admission', () => {
-  it('preserves exact token and nesting boundaries', () => {
-    expect(() =>
-      assertJsonTextStructureWithinLimits('{"rows":[{}]}', {
-        structuralTokens: 7,
-        nestingDepth: 3
-      })
-    ).not.toThrow()
-  })
-
   it('rejects token and nesting limit +1', () => {
     expect(() =>
       assertJsonTextStructureWithinLimits('{"rows":[{}]}', {

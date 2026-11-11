@@ -1,4 +1,4 @@
-import type { PipedChildProcess } from '@orca/process-host/process-spec'
+import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import {
   spawnManagedProviderProcess,
   type ManagedProviderProcess
@@ -9,7 +9,7 @@ const managedChildren = new WeakMap<object, ManagedProviderProcess>()
 
 /** `closePlatform` picks the close rules; the spawn itself always skips the POSIX supervisor. */
 export function managedChild(
-  child: PipedChildProcess,
+  child: ChildProcessWithoutNullStreams,
   closePlatform: NodeJS.Platform = 'linux'
 ): ManagedProviderProcess {
   const existing = managedChildren.get(child)

@@ -3,21 +3,31 @@ import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import type {
   StructuredChatStartTelemetryEvent,
+  StructuredChatPromptTelemetryEvent,
   StructuredChatTelemetryEvent
 } from '../../shared/structured-chat-dispatch-telemetry'
 import { agentKindSchema } from '../../shared/telemetry-property-schemas'
-import { isTelemetryInitialized } from './client'
+import { isTelemetryInitialized, track } from './client'
+import type { EventProps } from '../../shared/telemetry-events'
 
 type TelemetryListener = (event: StructuredChatTelemetryEvent, callerKey: string) => void
 const remoteListeners = new Set<TelemetryListener>()
 const receivedEvents = new Set<string>()
-const telemetryEventSchema = z.strictObject({
-  type: z.literal('structuredChatAgentStart'),
-  id: z.uuid(),
-  agent_kind: agentKindSchema,
-  launch_source: z.literal('unknown'),
-  request_kind: z.enum(['new', 'resume'])
-})
+const telemetryEventSchema = z.discriminatedUnion('type', [
+  z.strictObject({
+    type: z.literal('structuredChatAgentStart'),
+    id: z.uuid(),
+    agent_kind: agentKindSchema,
+    launch_source: z.literal('unknown'),
+    request_kind: z.enum(['new', 'resume'])
+  }),
+  z.strictObject({
+    type: z.literal('structuredChatPromptAccepted'),
+    id: z.uuid(),
+    agent_kind: agentKindSchema,
+    client: z.enum(['desktop', 'mobile'])
+  })
+])
 
 /** Live, best-effort delivery; outcomes settled without the caller connected are not replayed. */
 export function subscribeStructuredChatTelemetry(listener: TelemetryListener): () => void {
@@ -40,11 +50,37 @@ export function recordRemoteStructuredChatTelemetry(value: unknown): boolean {
     receivedEvents.delete(receivedEvents.values().next().value!)
   }
   try {
-    recordAgentStartTelemetry(event, 'structured')
+    if (event.type === 'structuredChatPromptAccepted') {
+      track('native_chat_prompt_submitted', {
+        agent_kind: event.agent_kind,
+        runtime: 'remote',
+        client: event.client
+      })
+    } else {
+      recordAgentStartTelemetry(event, 'structured')
+    }
   } catch {
     // A telemetry failure must not interrupt runtime event delivery.
   }
   return true
+}
+
+/** A paired owner retains consent authority even when this host also runs a desktop. */
+export function recordStructuredChatPromptAccepted(
+  source: EventProps<'native_chat_prompt_submitted'>,
+  ownerKey: string | undefined
+): void {
+  if (ownerKey) {
+    const event: StructuredChatPromptTelemetryEvent = {
+      type: 'structuredChatPromptAccepted',
+      id: randomUUID(),
+      agent_kind: source.agent_kind,
+      client: source.client
+    }
+    relayStructuredChatTelemetry(event, ownerKey)
+  } else if (isTelemetryInitialized()) {
+    track('native_chat_prompt_submitted', source)
+  }
 }
 
 export function recordStructuredChatAgentStart(

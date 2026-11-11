@@ -127,3 +127,104 @@ describe('explicit task refresh conversation reads', () => {
     await expect(getIssueBodyAndComments('/repo', 42, repository, null, {}, true)).rejects.toThrow()
   })
 })
+
+it('pairs issue and comment image sources through collapsed and REST detail reads', async () => {
+  mocks.exec.mockReset()
+  mocks.guard.mockReturnValue({ blocked: false })
+  const body =
+    '![shot](https://github.com/user-attachments/assets/ce11040a-fb66-4289-927f-547b16dfc488)'
+  const html =
+    '<img src="https://private-user-images.githubusercontent.com/1/ce11040a-fb66-4289-927f-547b16dfc488.png?jwt=TEST">'
+  mocks.exec.mockImplementation(async (args: string[]) => ({
+    stdout: JSON.stringify(
+      args.includes('graphql')
+        ? {
+            data: {
+              repository: {
+                issue: {
+                  body,
+                  bodyHTML: html,
+                  comments: { nodes: [{ databaseId: 1, body, bodyHTML: html }] }
+                }
+              }
+            }
+          }
+        : args.some((arg) => arg.includes('/timeline?'))
+          ? []
+          : args.some((arg) => arg.includes('/comments?'))
+            ? [{ id: 1, user: null, body, body_html: html }]
+            : { body, body_html: html }
+    )
+  }))
+  const collapsed = await getIssueDetailsViaGraphQL('/repo', 42, repository)
+  const rest = await getIssueBodyAndComments('/repo', 42, repository)
+  for (const details of [collapsed!, rest]) {
+    expect(details.body).toBe(body)
+    expect(details.bodyImageUrls).toEqual({
+      'https://github.com/user-attachments/assets/ce11040a-fb66-4289-927f-547b16dfc488':
+        'https://private-user-images.githubusercontent.com/1/ce11040a-fb66-4289-927f-547b16dfc488.png?jwt=TEST'
+    })
+    expect(details.comments[0].bodyImageUrls).toEqual(details.bodyImageUrls)
+  }
+  for (const [args] of mocks.exec.mock.calls.filter(([args]) =>
+    args.some((arg: string) => /\/issues\/42(?:$|\/comments)/.test(arg))
+  )) {
+    expect(args).toContain('Accept: application/vnd.github.full+json')
+    expect(args).not.toContain('--cache')
+  }
+})
+
+it.each(['optional HTML', 'required body', 'pathless', 'rejection without errors'] as const)(
+  'admits rejected issue stdout only for available optional HTML failures (%s)',
+  async (input) => {
+    mocks.exec.mockReset()
+    mocks.guard.mockReturnValue({ blocked: false })
+    const body =
+      '![shot](https://github.com/user-attachments/assets/ce11040a-fb66-4289-927f-547b16dfc488)'
+    const html =
+      '<img src="https://private-user-images.githubusercontent.com/1/ce11040a-fb66-4289-927f-547b16dfc488.png?jwt=TEST">'
+    mocks.exec.mockRejectedValueOnce(
+      Object.assign(new Error('GraphQL failed'), {
+        stdout: JSON.stringify({
+          data: {
+            repository: {
+              issue: {
+                body,
+                bodyHTML: html,
+                comments: {
+                  pageInfo: { hasNextPage: false },
+                  nodes: [{ databaseId: 1, body, bodyHTML: html }]
+                }
+              }
+            }
+          },
+          errors:
+            input === 'rejection without errors'
+              ? undefined
+              : [
+                  {
+                    path:
+                      input === 'pathless'
+                        ? undefined
+                        : ['repository', 'issue', input === 'required body' ? 'body' : 'bodyHTML']
+                  }
+                ]
+        })
+      })
+    )
+    mocks.exec.mockResolvedValueOnce({ stdout: '[]' })
+    const result = await getIssueDetailsViaGraphQL('/repo', 42, repository, null, {}, false, true)
+    if (input !== 'optional HTML') {
+      expect(result).toBeNull()
+      expect(mocks.exec).toHaveBeenCalledTimes(1)
+      return
+    }
+    expect(result?.body).toBe(body)
+    expect(result?.bodyImageUrls).toBeUndefined()
+    expect(result?.comments[0].bodyImageUrls).toEqual({
+      'https://github.com/user-attachments/assets/ce11040a-fb66-4289-927f-547b16dfc488':
+        'https://private-user-images.githubusercontent.com/1/ce11040a-fb66-4289-927f-547b16dfc488.png?jwt=TEST'
+    })
+    expect(mocks.exec).toHaveBeenCalledTimes(2)
+  }
+)

@@ -4,7 +4,7 @@ import type {
   PRRefreshErrorType,
   PRRefreshOutcome
 } from '../../../../../shared/github/pull-request-refresh-types'
-import { capRecordByInsertionOrder } from '../cache/cache-policy'
+import '../cache/cache-policy'
 
 export type PRRefreshState = {
   status: 'queued' | 'in-flight' | 'paused' | 'skipped' | 'error'
@@ -164,11 +164,4 @@ export function capPrRefreshStates(
     }
   }
   return capped
-}
-
-export function capPrRefreshSequences(
-  sequences: Record<string, number>,
-  maxEntries?: number
-): Record<string, number> {
-  return capRecordByInsertionOrder(sequences, maxEntries)
 }

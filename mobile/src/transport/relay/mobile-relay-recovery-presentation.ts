@@ -1,4 +1,4 @@
-import type { MobileRelayCredentialBundle } from '../hosts/mobile-relay-credential-bundle'
+import type { MobileRelayCredentialBundle } from '../../host-credentials/mobile-relay-credential-bundle'
 import type { RelayReconnectController } from './mobile-relay-reconnect-controller'
 import type { StableLogicalRpcClient } from '../connection/stable-logical-rpc-client'
 import type { ConnectionState } from '../connection/connection-state'

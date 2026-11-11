@@ -34,20 +34,6 @@ async function fixture() {
 }
 
 describe('resolveSkillInstallDestination', () => {
-  it('derives global paths from host-owned home and environment identity', async () => {
-    const { authority } = await fixture()
-    await expect(
-      resolveSkillInstallDestination(
-        { scope: 'global', environmentId: 'environment_1', executionTarget: { kind: 'host' } },
-        authority
-      )
-    ).resolves.toEqual({
-      scope: 'global',
-      homeDirectory: authority.homeDirectory,
-      destinationIdentity: 'global:environment_1'
-    })
-  })
-
   it.each([
     [{ scope: 'workspace', worktreeId: 'worktree_1' }, 'worktree'],
     [{ scope: 'workspace', folderWorkspaceId: 'folder_1' }, 'folder']

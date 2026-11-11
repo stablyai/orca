@@ -68,7 +68,7 @@ describe('new desktop profile initialization', () => {
           activeTabId: null
         })
         expect(published.settings.telemetry).toEqual(
-          inherited ??
+          (inherited && { ...inherited, protectedMilestones: { installCohort: 'existing' } }) ??
             expect.objectContaining({
               existedBeforeTelemetryRelease: false,
               optedIn: true,
@@ -126,6 +126,30 @@ describe('new desktop profile initialization', () => {
     const original = readPublishedState()
     initializeNewOrcaProfileState(profileId, { ...telemetry, installId: 'replacement' }, root)
     expect(readPublishedState()).toEqual(original)
+  })
+
+  it('starts an inherited install with its own existing-profile milestone state', () => {
+    initializeNewOrcaProfileState(
+      profileId,
+      {
+        optedIn: true,
+        installId: 'retained-install-id',
+        existedBeforeTelemetryRelease: false,
+        protectedMilestones: {
+          installCohort: 'fresh',
+          firstAgentInteractionDay: 20_766,
+          meaningfulActivityDay: 20_766
+        }
+      },
+      root
+    )
+
+    expect(readPublishedState().settings.telemetry).toEqual({
+      optedIn: true,
+      installId: 'retained-install-id',
+      existedBeforeTelemetryRelease: false,
+      protectedMilestones: { installCohort: 'existing' }
+    })
   })
 
   it('preserves existing JSON as input for its later import', () => {

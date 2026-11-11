@@ -61,7 +61,7 @@ vi.mock('sonner', () => ({
     success: mocks.toastSuccess
   }
 }))
-vi.mock('./pairing/mobile-pairing-device-polling', () => ({
+vi.mock('../../mobile/pairing/mobile-pairing-device-polling', () => ({
   useMobilePairingDevicePolling: vi.fn()
 }))
 
@@ -119,7 +119,7 @@ vi.mock('./pairing/MobilePairingSetupSection', () => ({
     </div>
   )
 }))
-vi.mock('./pairing/MobilePairingConnectionOptions', () => ({
+vi.mock('../../mobile/pairing/MobilePairingConnectionOptions', () => ({
   MobilePairingConnectionOptions: (props: {
     onChange: (mode: MobilePairingConnectionMode) => void
   }) => (

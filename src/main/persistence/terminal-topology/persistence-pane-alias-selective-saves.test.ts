@@ -3,11 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { agentHookServer } from '../../agent-hooks/server'
+import { agentHookServer } from '../../agent-hooks/server/agent-hook-server'
 import {
   clearMigrationUnsupportedPty,
   setMigrationUnsupportedPtyPersistenceListener
-} from '../../agent-hooks/migration-unsupported-pty-state'
+} from '../../agent-hooks/observations/migration-unsupported-pty-state'
 import { StateSerializationSecretHandlingOperations } from '../loading-store/state-serialization-secret-handling'
 import { openProfileStateDatabaseReadOnly } from '../profile-state/profile-state-database'
 import { profileStateDatabaseFile } from '../../../shared/profile-state-storage-paths'

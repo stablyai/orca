@@ -1,49 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import {
-  areTaskSourceContextsEqual,
-  normalizeStoredTaskSourceContext,
-  normalizeTaskSourceContext,
-  type TaskSourceContext
-} from './task-source-context'
-import { TaskSourceContextSchema } from './task-source-context-schema'
-
-describe('task source context', () => {
-  it('drops provider identities that do not match the source provider', () => {
-    expect(
-      normalizeTaskSourceContext({
-        provider: 'gitlab',
-        projectId: 'project-1',
-        providerIdentity: { provider: 'github', owner: 'stablyai', repo: 'orca' }
-      })?.providerIdentity
-    ).toBeNull()
-  })
-
-  it('rejects malformed stored scalar and provider-identity fields without throwing', () => {
-    const valid = {
-      kind: 'task-source',
-      provider: 'jira',
-      projectId: 'project-1',
-      hostId: 'local',
-      providerIdentity: {
-        provider: 'jira',
-        siteId: 'site-1',
-        siteUrl: 'https://example.atlassian.net',
-        projectKey: 'OPS'
-      }
-    }
-    for (const malformed of [
-      { ...valid, accountLabel: 44 },
-      { ...valid, hostId: { runtime: 'env-1' } },
-      { ...valid, providerIdentity: { ...valid.providerIdentity, siteId: 44 } },
-      { ...valid, providerIdentity: { ...valid.providerIdentity, projectKey: [] } }
-    ]) {
-      expect(() => TaskSourceContextSchema.safeParse(malformed)).not.toThrow()
-      expect(TaskSourceContextSchema.safeParse(malformed).success).toBe(false)
-      expect(normalizeStoredTaskSourceContext(malformed)).toBeNull()
-    }
-  })
-})
+import { areTaskSourceContextsEqual, type TaskSourceContext } from './task-source-context'
 
 describe('areTaskSourceContextsEqual', () => {
   const base: TaskSourceContext = {

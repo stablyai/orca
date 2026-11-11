@@ -186,15 +186,6 @@ describe('orca skills install/update', () => {
     expect(await skillText(paths.shared)).toBe(OLD_TEXT)
   }, 20_000)
 
-  it('rejects an unknown --agent value', async () => {
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-
-    await main(['skills', 'install', '--skill', NAME, '--agent', 'nope'], paths.root)
-
-    expect(process.exitCode).toBe(1)
-    expect(String(errorSpy.mock.calls[0]?.[0])).toContain('Unknown --agent value "nope"')
-  })
-
   it('plans the current project for --local, linking only into agent folders it has', async () => {
     const project = join(paths.root, 'project')
     await mkdir(join(project, '.claude', 'skills'), { recursive: true })

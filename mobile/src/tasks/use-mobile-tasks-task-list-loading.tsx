@@ -9,7 +9,8 @@ import {
   useRef
 } from './mobile-tasks-dependencies'
 import { readTaskListRows } from './task-list-read'
-import { readTaskList, taskListKey, taskListParams, useTaskListCache } from './task-queries'
+import { readTaskList, taskListKey, taskListParams } from './task-queries'
+import { useTaskListCache } from './use-task-list-cache'
 
 export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
   const {
@@ -54,7 +55,7 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
   } = model
   const queryClient = useQueryClient()
   const unsettledLoadRef = useRef(0)
-  const { begin, shown, rememberPageCount, cancelRead, revalidating, setRevalidating } =
+  const { begin, shown, settle, rememberPageCount, cancelRead, revalidating, rowsReadAt } =
     useTaskListCache(model)
   // By content, so re-picking the same repos (a new Set) does not re-read.
   const savedRepoKey = [...selectedRepoIds].sort().join('\n')
@@ -76,7 +77,7 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
       if (options.silent) {
         setRefreshing(true)
       } else {
-        begin(listKey, provider)
+        begin(params, provider)
       }
       try {
         if (provider !== 'github' || githubMode !== 'items') {
@@ -109,7 +110,7 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
         if (!isCurrent()) {
           return
         }
-        shown(provider)
+        shown(provider, params)
         setItems(snapshot.items)
         setError(snapshot.notice ?? '')
         if (snapshot.github) {
@@ -150,7 +151,7 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
         if (isCurrent()) {
           setLoading(false)
           setRefreshing(false)
-          setRevalidating(false)
+          settle()
           setTaskListSettled(true)
         }
       }
@@ -174,6 +175,7 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
       begin,
       queryClient,
       rememberPageCount,
+      settle,
       shown,
       repoListEnsureLoaded,
       provider,
@@ -215,10 +217,10 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
         unsettledLoadRef.current = 0
         setLoading(false)
         setRefreshing(false)
-        setRevalidating(false)
+        settle()
       }
     },
-    [cancelRead, loadTasks, loadGenerationRef, setLoading, setRefreshing]
+    [cancelRead, loadTasks, loadGenerationRef, setLoading, setRefreshing, settle]
   )
   // Server-repo changes quietly reload unfiltered lists; a changed loadTasks already owns filter reloads, while Jira/Linear read independently.
   const listedServerReposRef = useRef({ serverRepoList, loadTasks })
@@ -236,7 +238,7 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
       void loadTasks({ silent: true })
     }
   }, [serverRepoList, loadTasks, effectiveRepoIds.size, provider, connState, taskStateHydrated])
-  return Object.assign(model, { loadTasks, captureTaskListRefresh, revalidating })
+  return Object.assign(model, { loadTasks, captureTaskListRefresh, revalidating, rowsReadAt })
 }
 
 export type TaskListLoadingModel = ReturnType<typeof useMobileTasksTaskListLoading>

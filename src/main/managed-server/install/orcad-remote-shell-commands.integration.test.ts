@@ -28,7 +28,7 @@ import {
   parseOrcadSnapshotRestore,
   restoreOrcadStateSnapshotCommand
 } from '../host-state/orcad-state-snapshot'
-import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
+import { getRemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'
 
 const host = getRemoteHostPlatform('linux-x64')
 let root = ''

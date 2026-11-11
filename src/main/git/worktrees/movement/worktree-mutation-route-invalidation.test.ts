@@ -1,3 +1,6 @@
+import { randomUUID } from 'node:crypto'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 // Worktree add/move/remove/rollback rewrite the `.git` marker the WSL Git route was derived from.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -57,8 +60,8 @@ vi.mock('../catalog/worktree-scan-cache', () => ({
 
 vi.mock('../creation/worktree-preparation-lock', async (importOriginal) => ({
   ...(await importOriginal<typeof WorktreePreparationLock>()),
-  lockWorktreePreparation: vi.fn(async () => '/owned-lock'),
-  verifyWorktreePreparationLock: vi.fn(async () => '/owned-lock'),
+  lockWorktreePreparation: vi.fn(async () => ownedLockPath),
+  verifyWorktreePreparationLock: vi.fn(async () => ownedLockPath),
   verifyWorktreePreparationLockAtPath: vi.fn(),
   unlockWorktreePreparationAtPath: vi.fn()
 }))
@@ -76,6 +79,8 @@ import {
   seedWslLinkedWorktreeGitRoutingForTests,
   usesHostGitForWslLinkedWorktree
 } from '../../command-runner/wsl-linked-worktree-git-routing'
+
+const ownedLockPath = join(tmpdir(), `orca-route-invalidation-${randomUUID()}`, 'locked')
 
 const REPO = String.raw`C:\repo`
 const LINKED = String.raw`C:\ws\linked`

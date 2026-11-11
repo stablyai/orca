@@ -3,7 +3,6 @@ import {
   agentPermissionHostPlatform,
   permissionEnvNameMatches
 } from '../permissions/agent-permission-env'
-import type { SleepingAgentLaunchConfig } from '../../agent-session/lifecycle/agent-session-resume'
 import type { GlobalSettings } from '../../global-settings-types'
 import { isTuiAgent } from '../catalog/tui-agent-config'
 import { YOLO_TUI_AGENT_ARGS, YOLO_TUI_AGENT_ENV } from '../permissions/tui-agent-permissions'
@@ -305,20 +304,5 @@ export function composeAgentLaunchProfile(
     agentDefaultEnv: Object.fromEntries(
       [...envAgents].map((agent) => [agent, resolveTuiAgentLaunchEnv(agent, settings, platform)])
     )
-  }
-}
-
-/** Resume only the recorded recipe; defaults would grant bypass to unrecorded manual launches that never used it. */
-export function resolveResumeLaunchRecipe(
-  launchConfig: SleepingAgentLaunchConfig | undefined
-): SleepingAgentLaunchConfig {
-  if (!launchConfig) {
-    return { agentArgs: '', agentEnv: {} }
-  }
-  return {
-    agentArgs: launchConfig.agentArgs,
-    agentEnv: launchConfig.agentEnv,
-    ...(launchConfig.agentCommand ? { agentCommand: launchConfig.agentCommand } : {}),
-    ...(launchConfig.ompResumeFilePath ? { ompResumeFilePath: launchConfig.ompResumeFilePath } : {})
   }
 }

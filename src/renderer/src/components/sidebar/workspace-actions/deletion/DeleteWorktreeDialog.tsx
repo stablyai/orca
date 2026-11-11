@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useMemo, useRef, useState } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -38,10 +38,13 @@ import { runLineageDeleteAll } from './delete-worktree-lineage-delete-all'
 import { runDialogForceDelete } from './delete-worktree-dialog-force-delete'
 import { getDeleteStateForWorktreeHost } from './worktree-delete-state-host-match'
 import { useSidebarHostScopeOptions } from '../../worktree-list/controls/use-sidebar-host-scope-options'
+import { translateHostDisplayLabel } from '../../execution-host-label'
 import { RemovalUnsavedFilesNotice } from './RemovalUnsavedFilesNotice'
 import { confirmUnsavedDiscard } from '@/store/slices/worktrees/teardown/removed-workspace-unsaved-files'
 import { useDeleteWorktreeDialogTargets } from './use-delete-worktree-dialog-targets'
 import { collectRemovalUnsavedFiles } from '@/components/editor/save/flush/removal-unsaved-editor-files'
+import { useDetachWorktreeDeleteChildren } from './use-detach-worktree-delete-children'
+import { useDeleteWorktreeDialogDismissal } from './use-delete-worktree-dialog-dismissal'
 
 const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
   const t = useTranslate()
@@ -60,8 +63,8 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
   const gitStatusByWorktree = useAppStore((s) => s.gitStatusByWorktree)
   const { hostOptions } = useSidebarHostScopeOptions()
   const hostLabelById = useMemo(
-    () => new Map(hostOptions.map((host) => [host.id, host.label])),
-    [hostOptions]
+    () => new Map(hostOptions.map((host) => [host.id, translateHostDisplayLabel(host, t)])),
+    [hostOptions, t]
   )
   const isOpen = activeModal === 'delete-worktree'
   const worktreeId = typeof modalData.worktreeId === 'string' ? modalData.worktreeId : ''
@@ -74,12 +77,17 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
           : [],
     [modalData.worktreeIds, worktreeId]
   )
-  const { worktreeDeleteIdentities, lineageDeleteIdentities, resolveConfirmedTargets } =
-    useConfirmedWorktreeDeleteTargets({
-      worktreeIdentityData: modalData.worktreeDeleteIdentities,
-      lineageIdentityData: modalData.lineageDeleteIdentities,
-      closeModal
-    })
+  const {
+    worktreeDeleteIdentities,
+    lineageDeleteIdentities,
+    lineagePreserveIdentities,
+    resolveConfirmedTargets
+  } = useConfirmedWorktreeDeleteTargets({
+    worktreeIdentityData: modalData.worktreeDeleteIdentities,
+    lineageIdentityData: modalData.lineageDeleteIdentities,
+    preservationIdentityData: modalData.lineagePreserveIdentities,
+    closeModal
+  })
   const deleteStateTargets = useMemo(
     () =>
       worktreeDeleteIdentities.length > 0
@@ -115,15 +123,31 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
     () =>
       !isBatchDelete && worktree
         ? getWorkspaceDeleteLineage(worktree, allWorktrees, worktreeLineageById)
-        : { descendants: [], deleteAllTargets: [] },
+        : { descendants: [], directChildren: [], deleteAllTargets: [] },
     [allWorktrees, isBatchDelete, worktree, worktreeLineageById]
   )
   const confirmButtonRef = useRef<HTMLButtonElement>(null)
   // Git cannot remove the original clone with worktree remove; block it before the force-delete dead end.
   const isMainWorktree = !isBatchDelete && (worktree?.isMainWorktree ?? false)
   const childWorkspaceCount = lineageDelete.descendants.length
+  const {
+    preserveChildrenSelected,
+    setPreserveChildren,
+    isDetachingChildren,
+    detachError,
+    canPreserveChildren,
+    detachChildren
+  } = useDetachWorktreeDeleteChildren({
+    isOpen,
+    parent: worktree,
+    lineage: lineageDelete,
+    isFolderWorkspace: isFolderWorkspaceDelete,
+    confirmedIdentities: lineagePreserveIdentities,
+    resolveConfirmedTargets
+  })
   const canDeleteAllLineage =
     !isMainWorktree && !isBatchDelete && lineageDelete.deleteAllTargets.length > 1
+  const deleteAllLineage = canDeleteAllLineage && !preserveChildrenSelected
   const lineageFolderWorkspaceDeleteCount = useMemo(
     () => countFolderWorkspaceDeletes(repoMap, lineageDelete.deleteAllTargets),
     [lineageDelete.deleteAllTargets, repoMap]
@@ -137,11 +161,14 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
     t
   )
   const allowSkipConfirm =
-    !isBatchDelete && modalData.allowSkipConfirm !== false && childWorkspaceCount === 0
+    !isBatchDelete &&
+    modalData.allowSkipConfirm !== false &&
+    childWorkspaceCount === 0 &&
+    !preserveChildrenSelected
   const [isSavingForcePreference, setIsSavingForcePreference] = useState(false)
   const deleteTargets = useMemo(
-    () => (canDeleteAllLineage ? lineageDelete.deleteAllTargets : worktrees),
-    [canDeleteAllLineage, lineageDelete.deleteAllTargets, worktrees]
+    () => (deleteAllLineage ? lineageDelete.deleteAllTargets : worktrees),
+    [deleteAllLineage, lineageDelete.deleteAllTargets, worktrees]
   )
   const deleteStates = useMemo(
     () =>
@@ -153,7 +180,7 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
   const deleteState = worktree
     ? getDeleteStateForWorktreeHost(worktree, deleteStateByWorktreeId)
     : undefined
-  const isDeleting = deleteStates.some((state) => state.isDeleting)
+  const isDeleting = isDetachingChildren || deleteStates.some((state) => state.isDeleting)
   const unsavedTargets = useMemo(
     () => deleteTargets.map(({ id, hostId }) => ({ id, hostId })),
     [deleteTargets]
@@ -185,54 +212,17 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
     ([key, state]) => state !== 'complete' && !dirtyChanges.counts.has(key)
   )
 
-  useEffect(() => {
-    if (isOpen && worktreeIds.length > 0 && worktrees.length === 0 && !isDeleting) {
-      for (const target of deleteStateTargets) {
-        clearWorktreeDeleteState(target.id, target.hostId)
-      }
-      closeModal()
-    }
-  }, [
-    clearWorktreeDeleteState,
-    closeModal,
-    deleteStateTargets,
-    isDeleting,
+  const handleOpenChange = useDeleteWorktreeDialogDismissal({
     isOpen,
-    worktreeIds,
-    worktreeIds.length,
-    worktrees.length
-  ])
-
-  const handleOpenChange = useCallback(
-    (open: boolean) => {
-      if (open || isSavingForcePreference) {
-        return
-      }
-      const state = useAppStore.getState().deleteStateByWorktreeId
-      const currentTarget = deleteStateTargets.find((target) => target.id === worktreeId)
-      const currentState = currentTarget
-        ? getDeleteStateForWorktreeHost(currentTarget, state)
-        : undefined
-      if (isBatchDelete) {
-        for (const target of deleteStateTargets) {
-          if (!getDeleteStateForWorktreeHost(target, state)?.isDeleting) {
-            clearWorktreeDeleteState(target.id, target.hostId)
-          }
-        }
-      } else if (worktreeId && !currentState?.isDeleting) {
-        clearWorktreeDeleteState(worktreeId, currentTarget?.hostId)
-      }
-      closeModal()
-    },
-    [
-      clearWorktreeDeleteState,
-      closeModal,
-      deleteStateTargets,
-      isBatchDelete,
-      isSavingForcePreference,
-      worktreeId
-    ]
-  )
+    isDeleting,
+    isSaving: isSavingForcePreference || isDetachingChildren,
+    isBatchDelete,
+    worktreeId,
+    worktreeCount: worktrees.length,
+    deleteStateTargets,
+    clearWorktreeDeleteState,
+    closeModal
+  })
 
   const persistSkipConfirmPreference = useCallback(
     (): Promise<void> =>
@@ -311,6 +301,10 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
     })
   }
 
+  const handleDetachAndDelete = (): void => {
+    void detachChildren(() => handleDelete(canForceDelete))
+  }
+
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogContent
@@ -339,7 +333,7 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
             showUnknownChangeLossWarning={hasUnknownChangeState}
             targetClassName={deleteCopy.targetClassName}
             targetName={isBatchDelete ? undefined : worktree?.displayName}
-            description={canDeleteAllLineage ? lineageDeleteDescription : deleteCopy.description}
+            description={deleteAllLineage ? lineageDeleteDescription : deleteCopy.description}
           />
         </DialogHeader>
 
@@ -358,7 +352,7 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
 
           <RemovalUnsavedFilesNotice targets={unsavedTargets} enabled={isOpen} />
 
-          {childWorkspaceCount > 0 && (
+          {(childWorkspaceCount > 0 || preserveChildrenSelected) && (
             <DeleteWorktreeLineageNotice
               descendants={lineageDelete.descendants}
               parent={worktree}
@@ -366,6 +360,10 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
               changeCheckStatesByWorktreeId={dirtyChanges.checkStates}
               dirtyChangeCountsByWorktreeId={dirtyChanges.counts}
               dirtyChangePreviewsByWorktreeId={dirtyChanges.previews}
+              preserveChildren={preserveChildrenSelected}
+              canPreserveChildren={canPreserveChildren}
+              disabled={isDeleting}
+              onPreserveChildrenChange={setPreserveChildren}
             />
           )}
         </div>
@@ -373,22 +371,32 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
         <DeleteWorktreeWarningPanels
           isMainWorktree={isMainWorktree}
           mainWorktreeBlocker={deleteCopy.mainWorktreeBlocker}
-          deleteError={deleteError}
+          deleteError={detachError ?? deleteError}
         />
 
         <DialogFooter>
           <DeleteWorktreeDialogFooter
             isMainWorktree={isMainWorktree}
             isDeleting={isDeleting || isSavingForcePreference}
+            isDetachingChildren={isDetachingChildren}
+            deleteDisabled={preserveChildrenSelected && !canPreserveChildren}
             canForceDelete={canForceDelete}
             isBatchDelete={isBatchDelete}
             worktreeCount={worktrees.length}
-            canDeleteAllLineage={canDeleteAllLineage}
+            canDeleteAllLineage={deleteAllLineage}
             lineageDeleteTargetCount={lineageDelete.deleteAllTargets.length}
             onCancel={() => handleOpenChange(false)}
-            onForceDelete={() => handleDelete(true)}
+            onForceDelete={
+              preserveChildrenSelected ? handleDetachAndDelete : () => handleDelete(true)
+            }
             onSavingChange={setIsSavingForcePreference}
-            onDelete={canDeleteAllLineage ? handleDeleteAll : () => handleDelete(false)}
+            onDelete={
+              preserveChildrenSelected
+                ? handleDetachAndDelete
+                : canDeleteAllLineage
+                  ? handleDeleteAll
+                  : () => handleDelete(false)
+            }
             onAlwaysDelete={allowSkipConfirm ? persistSkipConfirmPreference : undefined}
             confirmButtonRef={confirmButtonRef}
           />

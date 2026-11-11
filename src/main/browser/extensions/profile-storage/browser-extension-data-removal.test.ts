@@ -51,7 +51,9 @@ const {
 } = await import('./browser-extension-data-removal')
 const { getBrowserExtensionProfileStateStore } =
   await import('./browser-extension-profile-state-store')
-const { BrowserExtensionSyncStorageStore, getBrowserExtensionSyncStorageStore } =
+const { BrowserExtensionProfileDocumentStore } =
+  await import('./browser-extension-profile-document-store')
+const { getBrowserExtensionSyncStorageStore } =
   await import('./browser-extension-sync-storage-store')
 const { getBrowserExtensionInstallStore } =
   await import('../installation/browser-extension-install-store')
@@ -112,7 +114,7 @@ describe('removeUninstalledBrowserExtensionData', () => {
     expect(Object.keys(states.readProfile('work'))).toEqual([OTHER])
     expect(states.read('home', ID).grantedPermissions).toEqual(['tabs'])
     expect(
-      new BrowserExtensionSyncStorageStore(getBrowserExtensionProfileDataDirectory()).read(
+      new BrowserExtensionProfileDocumentStore(getBrowserExtensionProfileDataDirectory()).read(
         'work',
         ID
       )

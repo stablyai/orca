@@ -17,7 +17,7 @@ import {
 import { verifyRuntimePairingIdentity } from '../../runtime/hosts/identity/runtime-environment-identity-verification'
 import type { ServeReadiness } from '../../server/serve-readiness'
 import { orcadBoundPort } from './orcad-managed-bound-port'
-import { tunneledOrcadPairingCode } from '../../ssh/orcad-tunneled-pairing'
+import { tunneledOrcadPairingCode } from './orcad-tunneled-pairing'
 import { OrcadManagedPairingRepairFailedError } from './orcad-managed-pairing-repair-failure'
 import { quotePosixShellUnlessPlain } from '../../../shared/shell/launch/shell-argument-quoting'
 import { RUNTIME_SERVER_REPLACED_STATUS_CODE } from '../../../shared/remote-runtime/host-status/runtime-host-status'

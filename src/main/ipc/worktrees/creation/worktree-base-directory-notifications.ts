@@ -1,4 +1,5 @@
 import type { BrowserWindow } from 'electron'
+import { basename } from 'node:path'
 import type { WorktreeBaseCollectedChanges } from './worktree-base-directory-change-collector'
 import type { WorktreeBaseWatchTarget } from './worktree-base-directory-event-filter'
 import {
@@ -11,9 +12,16 @@ import {
   mergeHeadIdentityScopes,
   type WorktreeHeadIdentityScope
 } from './worktree-head-identity-scope'
-import { cachedWorktreePathsForScope } from './worktree-head-identity-cached-paths'
+import {
+  allCachedWorktreePaths,
+  cachedWorktreePathsForScope
+} from './worktree-head-identity-cached-paths'
+import { invalidateGitStatusReads } from '../../../git/source-control/git-read-cache-invalidation'
 import { notifyWorktreeGitStatusMetadataChanged } from '../../worktree-remote'
-import { notifyWatchedWorktreeCatalogChanged } from '../../watched-worktree-catalog-notification'
+import {
+  notifyGitStatusChangedForRemoteClients,
+  notifyWatchedWorktreeCatalogChanged
+} from '../../watched-worktree-catalog-notification'
 
 export type WorktreeBaseNotificationWatch = WorktreeBaseWatchTarget & {
   mainWindow: BrowserWindow
@@ -39,6 +47,22 @@ export function clearPendingWorktreeBaseNotifications(watch: WorktreeBaseNotific
 
 export function supportsWorktreeHeadIdentityRefresh(watch: WorktreeBaseNotificationWatch): boolean {
   return watch.kind === 'git-common'
+}
+
+// Structural and unattributed bursts may touch any checkout of this common dir, but no other repo's.
+function changedWorktreePaths(
+  watch: WorktreeBaseNotificationWatch,
+  structural: boolean,
+  attributed: string[] | null
+): string[] | null {
+  if (!structural && attributed) {
+    return attributed
+  }
+  if (!supportsWorktreeHeadIdentityRefresh(watch)) {
+    return null
+  }
+  // Like the head reader: only a `.git` common dir has a primary checkout.
+  return allCachedWorktreePaths(watch.headIdentityRefresh.cache, basename(watch.path) === '.git')
 }
 
 export function scheduleWorktreeBaseNotification(
@@ -90,12 +114,24 @@ export function scheduleWorktreeBaseNotification(
     const gitStatusWorktreePaths = supportsWorktreeHeadIdentityRefresh(watch)
       ? cachedWorktreePathsForScope(watch.headIdentityRefresh.cache, watch.pendingGitStatusScope)
       : null
+    const changedPaths = changedWorktreePaths(
+      watch,
+      pendingStructure.length > 0,
+      gitStatusWorktreePaths
+    )
     clearPendingWorktreeBaseNotifications(watch)
+    if (pendingStructure.length > 0 || sourceControlRepoIds.size > 0) {
+      // Staging can keep a file's status letters, and a phone's re-read must not join a read begun before the change.
+      invalidateGitStatusReads(changedPaths)
+    }
     for (const repoId of pendingStructure) {
       notifyWatchedWorktreeCatalogChanged(watch.mainWindow, repoId)
+      // The renderer re-reads status on worktrees:changed; phones' Changes doesn't, and HEAD or packed-refs moves arrive only here.
+      notifyGitStatusChangedForRemoteClients(repoId, null)
     }
     for (const repoId of sourceControlRepoIds) {
       notifyWorktreeGitStatusMetadataChanged(watch.mainWindow, repoId, gitStatusWorktreePaths)
+      notifyGitStatusChangedForRemoteClients(repoId, gitStatusWorktreePaths)
     }
     if (
       supportsWorktreeHeadIdentityRefresh(watch) &&

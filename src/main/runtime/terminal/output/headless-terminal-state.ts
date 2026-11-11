@@ -221,6 +221,13 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
       })
   }
 
+  /** A resize the PTY took before this mirror existed: the TUI repaints for it, so unlike a reflow it leaves the grid readable. */
+  resizeHeadlessTerminalToPtyGrid(ptyId: string, cols: number, rows: number): void {
+    if (cols > 0 && rows > 0) {
+      this.resizeHeadlessTerminal(ptyId, cols, rows)
+    }
+  }
+
   /** Reflow to provider-proven size after early live bytes used default geometry; preserve renderer restore baselines because no pane was measured. */
   reflowHeadlessTerminalToPtyGrid(ptyId: string, cols: number, rows: number): void {
     if (cols <= 0 || rows <= 0) {

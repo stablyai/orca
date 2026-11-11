@@ -1,14 +1,8 @@
-import { useQueryClient, type QueryClient } from '@tanstack/react-query'
-import { useCallback, useLayoutEffect, useRef, useState } from 'react'
+import { hashKey, type QueryClient } from '@tanstack/react-query'
 import type { PersistedTrustedOrcaHooks } from '../../../src/shared/orca-yaml-hook-types'
 import { defineHostQuery, readHostQueryLive } from '../query/host-query'
-import {
-  hostQueryKey,
-  type HostQueryKey,
-  type HostQueryParams,
-  type HostQueryTarget,
-  hostScopeKey
-} from '../query/host-query-key'
+import { hostQueryKey, type HostQueryParams } from '../query/host-query-key'
+import { holdsRestoredHostQueryData } from '../query/host-query-persistence'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { settingsRead } from '../settings/mobile-settings-read-operations'
 import { readJiraConnectionProbeReply, type MobileJiraConnection } from './jira-mobile-connection'
@@ -26,10 +20,15 @@ import type {
 import type { TaskItem } from './mobile-tasks-project-workspace-types'
 import type { GitHubRepoSources } from './mobile-tasks-provider-detail-types'
 import type { ProviderLoadActionsModel } from './use-mobile-tasks-provider-load-actions'
+import {
+  NO_TASK_INPUT as NO_INPUT,
+  TASKS_TARGET,
+  taskHydrationStorage,
+  taskJiraStatusStorage,
+  taskListStorage
+} from './task-query-storage'
 
-// Tasks reads span the desktop and the servers it relays to; the routed client sends each repo's read to its owner.
-const TASKS_TARGET: HostQueryTarget = { exec: 'local' }
-const NO_INPUT = {}
+export { taskListKey } from './task-query-storage'
 
 // What the Tasks screen opens on: settings, resume state and provider availability, read in one batch.
 export type TaskHydration = {
@@ -40,7 +39,7 @@ export type TaskHydration = {
 }
 
 export const taskHydrationQuery = defineHostQuery<typeof NO_INPUT, TaskHydration>({
-  family: 'tasks.hydration',
+  ...taskHydrationStorage,
   // Keep raw Promise.all fail-fast behavior; an all-settled interpretation barrier would wait and could change error precedence.
   fetch: async (client) => {
     const [settingsReply, uiReply, preflightReply, linearReply] = await Promise.all([
@@ -72,7 +71,7 @@ export const taskHydrationQuery = defineHostQuery<typeof NO_INPUT, TaskHydration
 
 // Jira is advisory: its own read, so it never holds up the other providers.
 export const taskJiraStatusQuery = defineHostQuery<typeof NO_INPUT, MobileJiraConnection>({
-  family: 'tasks.jiraStatus',
+  ...taskJiraStatusStorage,
   fetch: (client) =>
     jiraConnectionStatusProbe
       .request(client)
@@ -82,17 +81,18 @@ export const taskJiraStatusQuery = defineHostQuery<typeof NO_INPUT, MobileJiraCo
   retry: false
 })
 
+/** The hydration and Jira status last read for the host; `stored` when it is an earlier launch's copy, which only draws the view. */
 export function readKeptTaskHydration(
   queryClient: QueryClient,
   hostId: string
-): { hydration?: TaskHydration; jira?: MobileJiraConnection } {
+): { hydration?: TaskHydration; jira?: MobileJiraConnection; stored: boolean } {
+  const hydrationKey = hostQueryKey(hostId, taskHydrationQuery.family, TASKS_TARGET, NO_INPUT)
   return {
-    hydration: queryClient.getQueryData(
-      hostQueryKey(hostId, taskHydrationQuery.family, TASKS_TARGET, NO_INPUT)
-    ),
+    hydration: queryClient.getQueryData(hydrationKey),
     jira: queryClient.getQueryData(
       hostQueryKey(hostId, taskJiraStatusQuery.family, TASKS_TARGET, NO_INPUT)
-    )
+    ),
+    stored: holdsRestoredHostQueryData(queryClient, hashKey(hydrationKey))
   }
 }
 
@@ -161,7 +161,7 @@ export type TaskListSnapshot = (
 
 // Read by the Tasks loader with its own inputs (repos, routed client); a superseded read stops at the next repo.
 export const taskListQuery = defineHostQuery<HostQueryParams, TaskListSnapshot>({
-  family: 'tasks.list',
+  ...taskListStorage,
   gcTime: 10 * 60_000,
   retry: false
 })
@@ -229,92 +229,4 @@ export function taskListParams(input: TaskListInput, repoKey: string): HostQuery
           }
         : null
   }
-}
-
-export function taskListKey(hostId: string, params: HostQueryParams): HostQueryKey {
-  return hostQueryKey(hostId, taskListQuery.family, TASKS_TARGET, params)
-}
-
-type TaskListView = Pick<
-  ProviderLoadActionsModel,
-  | 'hostId'
-  | 'items'
-  | 'setError'
-  | 'setItems'
-  | 'setGithubPages'
-  | 'setGithubCurrentPage'
-  | 'setGithubRepoSources'
-  | 'setGithubSourceErrors'
-  | 'setGithubSourceFallbacks'
-  | 'setGithubCountedTotalPages'
-  | 'setLoading'
-  | 'setTaskListSettled'
->
-
-/** The lists each filter read last, and which of them a read in flight is standing on. */
-export function useTaskListCache(view: TaskListView) {
-  const queryClient = useQueryClient()
-  const { hostId } = view
-  // Set while kept rows stand in for a read in flight; drives the header's refresh line, not the list spinner.
-  const [revalidating, setRevalidating] = useState(false)
-  // The provider whose rows are on screen, so a provider switch never keeps another provider's rows.
-  const shownProviderRef = useRef<string | null>(null)
-  const shownRowsRef = useRef(view.items)
-  useLayoutEffect(() => {
-    shownRowsRef.current = view.items
-  }, [view.items])
-
-  // Stops a replaced or abandoned read before its next repo; the kept rows stay as they were.
-  const cancelRead = useCallback((): void => {
-    void queryClient.cancelQueries(
-      { queryKey: [...hostScopeKey(hostId), taskListQuery.family], fetchStatus: 'fetching' },
-      { silent: true }
-    )
-  }, [hostId, queryClient])
-
-  // A read of `key` starts on that filter's kept rows, else on the same provider's rows still shown, else the spinner.
-  const begin = useCallback(
-    (key: HostQueryKey | null, provider: string): void => {
-      cancelRead()
-      const kept = key ? queryClient.getQueryData<TaskListSnapshot>(key) : undefined
-      if (kept) {
-        shownProviderRef.current = provider
-        view.setItems(kept.items)
-        view.setError(kept.notice ?? '')
-        if (kept.github) {
-          const { sources } = kept.github
-          view.setGithubRepoSources((current) => ({ ...current, ...sources }))
-          view.setGithubPages([kept.items])
-          view.setGithubCurrentPage(0)
-          view.setGithubSourceErrors(kept.github.sourceErrors)
-          view.setGithubSourceFallbacks(kept.github.sourceFallbacks)
-          view.setGithubCountedTotalPages(kept.github.countedTotalPages)
-        }
-        view.setTaskListSettled(true)
-        setRevalidating(true)
-      } else if (shownRowsRef.current.length > 0 && shownProviderRef.current === provider) {
-        setRevalidating(true)
-      } else {
-        view.setLoading(true)
-      }
-    },
-    [cancelRead, queryClient]
-  )
-  const shown = useCallback((provider: string): void => {
-    shownProviderRef.current = provider
-  }, [])
-  // The GitHub page count lands after the rows; keep it with them.
-  const rememberPageCount = useCallback(
-    (key: HostQueryKey | null, countedTotalPages: number): void => {
-      if (key) {
-        queryClient.setQueryData<TaskListSnapshot>(
-          key,
-          (snapshot) =>
-            snapshot?.github && { ...snapshot, github: { ...snapshot.github, countedTotalPages } }
-        )
-      }
-    },
-    [queryClient]
-  )
-  return { revalidating, setRevalidating, begin, shown, cancelRead, rememberPageCount }
 }

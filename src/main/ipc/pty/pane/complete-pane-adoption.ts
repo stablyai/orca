@@ -20,9 +20,9 @@ import {
   seedTerminalRestoreRecordsFromSpawnResult
 } from './agent-session-owners'
 import { seedHeadlessTerminalFromSpawnResult } from './terminal-spawn-restore'
-import { admitProviderReattachLaunchIdentity } from './launch-authority'
-import { ensureWslHookRelayForReattach } from '../../../agent-hooks/wsl-hook-relay-reattach'
-import { wslBridgePtyPresence } from '../../../agent-hooks/wsl-bridge-pty-presence'
+import { admitProviderReattachLaunchIdentity, reattachLaunchBinding } from './launch-authority'
+import { ensureWslHookRelayForReattach } from '../../../agent-hooks/wsl-relay/wsl-hook-relay-reattach'
+import { wslBridgePtyPresence } from '../../../agent-hooks/wsl-relay/wsl-bridge-pty-presence'
 import '../spawn-outcome'
 import { provenSpawnResponse } from '../../../../shared/terminal/pty/lifecycle/terminal-spawn-response'
 import { ptySizes } from '../delivery/visibility-state'
@@ -138,7 +138,8 @@ export async function completePaneAdoption(
         leafId: owner.leafId,
         ...(terminalHandle ? { terminalHandle } : {}),
         ...(result.incarnationId ? { incarnationId: result.incarnationId } : {}),
-        providerReattachLaunchIdentity: admitProviderReattachLaunchIdentity(result) ?? undefined
+        providerReattachLaunchIdentity: admitProviderReattachLaunchIdentity(result) ?? undefined,
+        ...reattachLaunchBinding({ ...result, isReattach: true })
       }
     )
     const response = provenSpawnResponse(

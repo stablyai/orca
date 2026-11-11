@@ -7,8 +7,8 @@ import { getPaletteHostBadge } from '@/components/cmd-j/palette-host-badge'
 import {
   resolveWorktreeBranchLabel,
   resolveWorktreeDisplayName
-} from '@/lib/worktree-default-display-name'
-import { cn } from '@/lib/utils'
+} from '@/lib/workspace/display/worktree-default-display-name'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import {
   getRepoExecutionHostId,
@@ -23,7 +23,7 @@ import { formatPaletteSessionAge } from '@/components/cmd-j/palette-session-age'
 import type { WorktreePaletteItem } from './worktree-jump-palette-model'
 import type { WorktreeJumpPaletteController } from './use-worktree-jump-palette-controller'
 import { getWorkspaceLastActiveAt } from '../../../../shared/workspace-last-active'
-import { getWorktreeVisitTimestamp } from '@/lib/worktree-visit-recency'
+import { getWorktreeVisitTimestamp } from '@/lib/workspace/activation/worktree-visit-recency'
 import {
   getPaletteSupportingTextLabel,
   HighlightedText,

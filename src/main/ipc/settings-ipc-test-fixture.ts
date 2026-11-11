@@ -55,7 +55,7 @@ vi.mock('../ghostty/index', () => ({
   previewGhosttyImport: previewGhosttyImportMock
 }))
 
-vi.mock('../warp-themes', () => ({
+vi.mock('../warp-themes/index', () => ({
   previewWarpThemeImport: previewWarpThemeImportMock
 }))
 
@@ -63,11 +63,11 @@ vi.mock('../network/proxy-settings', () => ({
   applyElectronProxySettings: applyElectronProxySettingsMock
 }))
 
-vi.mock('../browser/sessions/browser-session-proxy', () => ({
+vi.mock('../browser/sessions/proxy/browser-session-proxy', () => ({
   applyBrowserSessionProxies: applyBrowserSessionProxiesMock
 }))
 
-vi.mock('../browser/sessions/browser-session-registry', () => ({
+vi.mock('../browser/sessions/profiles/browser-session-registry', () => ({
   browserSessionRegistry: { listProfiles: listProfilesMock }
 }))
 
@@ -81,7 +81,7 @@ vi.mock('../ai-vault-search/session-search-enablement', () => ({
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 
-vi.mock('../agent-hooks/managed-agent-hook-controls', () => ({
+vi.mock('../agent-hooks/installation/managed-agent-hook-controls', () => ({
   applyAgentStatusHooksEnabled: applyAgentStatusHooksEnabledMock
 }))
 

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { AgentPaneChange } from '../../../../agent-hooks/agent-transition-detector'
+import type { AgentPaneChange } from '../../../../agent-hooks/observations/agent-transition-detector'
 import type { AgentStatusIpcPayload } from '../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { AgentSessionTurnCompletionEvent } from '../../../../../shared/agent-session/view/agent-session-turn-completion-wire'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'

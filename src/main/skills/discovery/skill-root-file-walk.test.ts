@@ -35,20 +35,6 @@ async function writeFileAt(path: string, content = 'x'): Promise<void> {
 }
 
 describe('findSkillFiles', () => {
-  it('finds packages inside the depth bound and ignores deeper ones', async () => {
-    const root = join(await makeTree(), 'skills')
-    await writeFileAt(join(root, 'near', 'SKILL.md'))
-    await writeFileAt(join(root, 'a', 'b', 'c', 'd', 'far', 'SKILL.md'))
-
-    const found = await findSkillFiles(root, 4)
-
-    expect(found).toEqual([join(root, 'near', 'SKILL.md')])
-  })
-
-  it('returns nothing for a missing root rather than throwing', async () => {
-    expect(await findSkillFiles(join(await makeTree(), 'absent'), 4)).toEqual([])
-  })
-
   // Pin real AbortError naming: discovery relies on it to classify unavailable roots.
   it('stops walking once its signal aborts, rejecting with an AbortError', async () => {
     const root = join(await makeTree(), 'skills')

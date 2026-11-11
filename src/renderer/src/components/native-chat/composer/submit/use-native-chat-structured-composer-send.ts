@@ -4,7 +4,7 @@ import {
   captureNativeChatStagedInput
 } from '../../drafts/native-chat-draft-attachment-staging'
 import { mayHoldAgentReferences } from '../../../../../../shared/orchestration/mailbox/orchestration-agent-reference'
-import { getAgentLabel } from '@/lib/agent-catalog'
+import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import { formatAgentTypeLabel } from '../../../../../../shared/agent-status/presentation/agent-type-label'
 import { isTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
 import { MAX_SKILL_REFS } from '../../../../../../shared/rpc-contract/structured-agent-session-message-params'
@@ -191,6 +191,14 @@ export function useNativeChatStructuredComposerSend({
         setCaret(composing ? 0 : left.text.length)
         clearSkillOrigin()
       }
+      // A refused command returns only to an empty composer; a lone command typed since would be replaced.
+      const recoversDraft = () => {
+        const current = readNativeChatComposerDraft(draftScopeKey)
+        return (
+          consumed &&
+          (!hostCommand || (current.text.trim() === '' && (current.images?.length ?? 0) === 0))
+        )
+      }
       const prepareAttachments: StructuredAgentSessionAttachmentPreparation | undefined =
         stagedInput ? (input) => stagedInput.prepare(input, structuredTransport) : undefined
       return dispatchNativeChatStructuredComposerText(
@@ -211,7 +219,7 @@ export function useNativeChatStructuredComposerSend({
             structuredTransport.onError(error, refusedWhile ? { refusedWhile } : undefined)
           }
           if (!accepted) {
-            finishNativeChatComposerSubmission(draftScopeKey, submission, consumed)
+            finishNativeChatComposerSubmission(draftScopeKey, submission, recoversDraft())
             return false
           }
           transferred = true
@@ -224,7 +232,7 @@ export function useNativeChatStructuredComposerSend({
           return true
         })
         .catch((error) => {
-          finishNativeChatComposerSubmission(draftScopeKey, submission, consumed)
+          finishNativeChatComposerSubmission(draftScopeKey, submission, recoversDraft())
           if (hostCommand && !isCurrent()) {
             return false
           }

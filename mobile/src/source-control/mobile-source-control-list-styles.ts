@@ -93,23 +93,6 @@ export const listStyles = themedStyleSheet(() => ({
     alignItems: 'center',
     justifyContent: 'center'
   },
-  // Behind the row's right end; the row slides left to uncover it.
-  discardAction: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    bottom: 0,
-    width: 84,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 2,
-    backgroundColor: colors.statusRed
-  },
-  discardActionText: {
-    color: colors.onStatusRed,
-    fontSize: typography.metaSize,
-    fontWeight: '600'
-  },
   conflictActions: {
     flexDirection: 'row',
     flexWrap: 'wrap',

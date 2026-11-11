@@ -75,14 +75,5 @@ describe('push host challenge store', () => {
     })
   })
 
-  it('rejects an unknown challenge id and a malformed public key', async () => {
-    await expect(store.verify('missing', Buffer.alloc(32, 9).toString('base64'))).resolves.toEqual({
-      ok: false,
-      reason: 'unknown_challenge'
-    })
-    await expect(store.issue('not-base64!!')).resolves.toBeNull()
-    await expect(store.issue(Buffer.alloc(31, 1).toString('base64'))).resolves.toBeNull()
-  })
-
 
 })

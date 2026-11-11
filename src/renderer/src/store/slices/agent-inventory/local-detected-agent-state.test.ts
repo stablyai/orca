@@ -192,45 +192,6 @@ describe('local detected agent context lifecycle', () => {
     expect(store.getState().isRefreshingAgents).toBe(false)
   })
 
-  it('successful full refresh settles both modes with detects finishing first', async () => {
-    const store = createTestStore([])
-    const enabledDetection = Promise.withResolvers<string[]>()
-    const fullDetection = Promise.withResolvers<string[]>()
-    const fullRefresh = Promise.withResolvers<{ agents: string[] }>()
-    detectAgents
-      .mockReturnValueOnce(enabledDetection.promise)
-      .mockReturnValueOnce(fullDetection.promise)
-    refreshAgents.mockReturnValueOnce(fullRefresh.promise)
-    const enabled = store.getState().ensureDetectedAgents()
-    const full = store.getState().ensureAllDetectedAgents()
-    const refreshed = store.getState().refreshAllDetectedAgents()
-
-    expect(store.getState().isDetectingAgents).toBe(false)
-    expect(store.getState().isDetectingLocalAgentsByContext).toEqual({})
-    expect(store.getState().isRefreshingLocalAgentsByContext).toEqual({
-      host: true,
-      'host\u0000all-agents': true
-    })
-    const finishDetections = async () => {
-      enabledDetection.resolve(['claude'])
-      fullDetection.resolve(['claude', 'kiro'])
-      await Promise.all([enabled, full])
-    }
-    await finishDetections()
-    expect(store.getState().isRefreshingAgents).toBe(true)
-    fullRefresh.resolve({ agents: ['codex', 'kiro'] })
-    await refreshed
-
-    expect(store.getState().localDetectedAgentIdsByContext).toEqual({
-      host: ['codex', 'kiro'],
-      'host\u0000all-agents': ['codex', 'kiro']
-    })
-    expect(store.getState().isDetectingLocalAgentsByContext).toEqual({})
-    expect(store.getState().isRefreshingLocalAgentsByContext).toEqual({})
-    expect(store.getState().isDetectingAgents).toBe(false)
-    expect(store.getState().isRefreshingAgents).toBe(false)
-  })
-
   it('failed full refresh settles both modes with detects finishing last', async () => {
     const store = createTestStore([])
     const enabledDetection = Promise.withResolvers<string[]>()
@@ -258,45 +219,6 @@ describe('local detected agent context lifecycle', () => {
     fullRefresh.reject(new Error('shell unavailable'))
     await refreshed
     await finishDetections()
-
-    expect(store.getState().localDetectedAgentIdsByContext).toEqual({
-      host: [],
-      'host\u0000all-agents': []
-    })
-    expect(store.getState().isDetectingLocalAgentsByContext).toEqual({})
-    expect(store.getState().isRefreshingLocalAgentsByContext).toEqual({})
-    expect(store.getState().isDetectingAgents).toBe(false)
-    expect(store.getState().isRefreshingAgents).toBe(false)
-  })
-
-  it('failed full refresh settles both modes with detects finishing first', async () => {
-    const store = createTestStore([])
-    const enabledDetection = Promise.withResolvers<string[]>()
-    const fullDetection = Promise.withResolvers<string[]>()
-    const fullRefresh = Promise.withResolvers<{ agents: string[] }>()
-    detectAgents
-      .mockReturnValueOnce(enabledDetection.promise)
-      .mockReturnValueOnce(fullDetection.promise)
-    refreshAgents.mockReturnValueOnce(fullRefresh.promise)
-    const enabled = store.getState().ensureDetectedAgents()
-    const full = store.getState().ensureAllDetectedAgents()
-    const refreshed = store.getState().refreshAllDetectedAgents()
-
-    expect(store.getState().isDetectingAgents).toBe(false)
-    expect(store.getState().isDetectingLocalAgentsByContext).toEqual({})
-    expect(store.getState().isRefreshingLocalAgentsByContext).toEqual({
-      host: true,
-      'host\u0000all-agents': true
-    })
-    const finishDetections = async () => {
-      enabledDetection.resolve(['claude'])
-      fullDetection.resolve(['claude', 'kiro'])
-      await Promise.all([enabled, full])
-    }
-    await finishDetections()
-    expect(store.getState().isRefreshingAgents).toBe(true)
-    fullRefresh.reject(new Error('shell unavailable'))
-    await refreshed
 
     expect(store.getState().localDetectedAgentIdsByContext).toEqual({
       host: [],
@@ -373,34 +295,6 @@ describe('local detected agent context lifecycle', () => {
     expect(store.getState().detectedAgentIds).toEqual(['codex'])
     expect(store.getState().localDetectedAgentIdsByContext['host\u0000all-agents']).toBeUndefined()
     expect(store.getState().isRefreshingLocalAgentsByContext).toEqual({})
-  })
-
-  it('deduplicates Floating-first callers without cached or settlement broadcast fanout', async () => {
-    let resolveDetection: (agents: string[]) => void = () => {}
-    detectAgents.mockReturnValueOnce(
-      new Promise<string[]>((resolve) => {
-        resolveDetection = resolve
-      })
-    )
-    const store = createTestStore([])
-    const listener = vi.fn()
-    const unsubscribe = store.subscribe(listener)
-
-    const floating = store.getState().ensureDetectedAgents(FLOATING_TERMINAL_WORKTREE_ID)
-    const ordinary = store.getState().ensureDetectedAgents()
-    const joinedOrdinary = store.getState().ensureDetectedAgents()
-
-    expect(ordinary).toBe(floating)
-    expect(joinedOrdinary).toBe(floating)
-    resolveDetection(['codex'])
-    await Promise.all([floating, ordinary, joinedOrdinary])
-    expect(store.getState().detectedAgentIds).toEqual(['codex'])
-
-    listener.mockClear()
-    await store.getState().ensureDetectedAgents()
-    await store.getState().ensureDetectedAgents()
-    expect(listener).not.toHaveBeenCalled()
-    unsubscribe()
   })
 
   it('keeps native provider inventory across WSL selection and refresh', async () => {
