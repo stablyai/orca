@@ -139,7 +139,8 @@ export function createHostedSandboxControlPlaneClient(
         kind: 'boot',
         signal,
         // The repo clones after the sandbox is up; the driver shows it as its own step.
-        features: ['clone-progress']
+        // An environment boot reports its incremental fetch as an update (`clone.mode`).
+        features: ['clone-progress', 'repo-update']
       }),
     cloneStatus: async (id, signal) =>
       (

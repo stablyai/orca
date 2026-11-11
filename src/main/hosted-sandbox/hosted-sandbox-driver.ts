@@ -73,7 +73,7 @@ export function createHostedSandboxDriver(
         ctx?.signal
       )
       if (ready.clone) {
-        await waitForClone(client, ready.sandbox.id, ctx)
+        await waitForClone(client, ready.sandbox.id, ctx, { mode: ready.clone.mode ?? 'clone' })
       }
       ctx?.onProgress?.({ phase: 'connecting' })
       return toReady(ready)
@@ -175,9 +175,14 @@ export async function waitForClone(
   client: Pick<HostedSandboxControlPlaneClient, 'cloneStatus' | 'destroy'>,
   sandboxId: string,
   ctx?: EnvironmentProviderCallContext,
-  { now = Date.now, pollMs = CLONE_POLL_MS }: { now?: () => number; pollMs?: number } = {}
+  {
+    now = Date.now,
+    pollMs = CLONE_POLL_MS,
+    mode = 'clone'
+  }: { now?: () => number; pollMs?: number; mode?: 'clone' | 'update' } = {}
 ): Promise<void> {
-  ctx?.onProgress?.({ phase: 'cloning' })
+  const phase = mode === 'update' ? 'updating' : 'cloning'
+  ctx?.onProgress?.({ phase })
   let lastProgress = ''
   let movedAt = now()
   try {
@@ -203,7 +208,7 @@ export async function waitForClone(
         if (progress !== lastProgress) {
           lastProgress = progress
           movedAt = now()
-          ctx?.onProgress?.({ phase: 'cloning', percent: status.percent, message: status.stage })
+          ctx?.onProgress?.({ phase, percent: status.percent, message: status.stage })
         }
       }
       if (now() - movedAt > CLONE_STALL_MS) {

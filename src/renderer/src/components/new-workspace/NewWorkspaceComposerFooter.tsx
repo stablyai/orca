@@ -16,7 +16,6 @@ type NewWorkspaceComposerFooterProps = Pick<
   | 'createDisabled'
   | 'creating'
   | 'primaryActionLabel'
-  | 'cloudStart'
 > & {
   submitShortcutModifierLabel: string
 }
@@ -30,13 +29,9 @@ export function NewWorkspaceComposerFooter({
   createDisabled,
   creating,
   primaryActionLabel,
-  submitShortcutModifierLabel,
-  cloudStart
+  submitShortcutModifierLabel
 }: NewWorkspaceComposerFooterProps): React.JSX.Element {
   const t = useTranslate()
-  const heldReasonId = React.useId()
-  // B2: Start stays focusable but aria-disabled, saying why ("Switch to acme first").
-  const heldReason = cloudStart?.primaryHeldReason
   return (
     <>
       {createError ? (
@@ -56,16 +51,16 @@ export function NewWorkspaceComposerFooter({
         </div>
       ) : null}
 
-      {/* Wraps instead of overflowing: "Use this computer instead" plus a long primary label
-          ("Give access and start") don't fit beside "Create more" in the modal's width. */}
-      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+      {/* One row: "Create more" on the left, the one primary button on the right. Run on never
+          adds buttons here; Orca Cloud setup happens on its own page after the button. */}
+      <div className="flex items-center justify-between gap-3">
         {showCreateMultiple ? (
           <button
             type="button"
             role="switch"
             aria-checked={createMultiple}
             onClick={() => onCreateMultipleChange?.(!createMultiple)}
-            className="group flex w-fit cursor-pointer items-center gap-2 rounded-md text-xs outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid focus-visible:outline-focus-ring"
+            className="group flex w-fit shrink-0 cursor-pointer items-center gap-2 rounded-md text-xs outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid focus-visible:outline-focus-ring"
           >
             <SwitchIndicator checked={createMultiple} />
             <span className="whitespace-nowrap text-muted-foreground transition-colors group-hover:text-foreground">
@@ -73,32 +68,19 @@ export function NewWorkspaceComposerFooter({
             </span>
           </button>
         ) : null}
-        <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-x-3 gap-y-2">
-          {cloudStart?.onUseThisComputer ? (
-            <Button type="button" variant="ghost" size="sm" onClick={cloudStart.onUseThisComputer}>
-              {t('components.newWorkspace.cloudStart.useThisComputer', 'Use this computer instead')}
-            </Button>
-          ) : null}
-          <Button
-            onClick={heldReason ? undefined : () => void onCreate()}
-            disabled={createDisabled}
-            aria-disabled={heldReason ? true : undefined}
-            aria-describedby={heldReason ? heldReasonId : undefined}
-            title={heldReason}
-            variant={heldReason ? 'default-held' : 'default'}
-            size="sm"
-            className="text-xs"
-          >
+        <Button
+          onClick={() => void onCreate()}
+          disabled={createDisabled}
+          size="sm"
+          className="ml-auto shrink-0"
+        >
+          {/* The footer's compact type, as before; the Button keeps its own variant styling. */}
+          <span className="flex items-center gap-1.5 whitespace-nowrap text-xs">
             {creating ? <LoaderCircle className="size-4 animate-spin" /> : null}
             {primaryActionLabel}
             <ButtonKeyHint modifierLabel={submitShortcutModifierLabel} />
-          </Button>
-        </div>
-        {heldReason ? (
-          <span id={heldReasonId} className="sr-only">
-            {heldReason}
           </span>
-        ) : null}
+        </Button>
       </div>
     </>
   )

@@ -153,7 +153,11 @@ export const HostedSandboxReadyResponseSchema = z
     connection: HostedSandboxConnectionSchema,
     /** Create with feature `clone-progress`: the repo is still cloning; poll GET .../clone. */
     clone: z
-      .object({ state: z.literal('running') })
+      .object({
+        state: z.literal('running'),
+        /** Booted from an environment build: only what changed since it is fetched (feature `repo-update`). */
+        mode: z.literal('update').optional()
+      })
       .strict()
       .optional()
   })
