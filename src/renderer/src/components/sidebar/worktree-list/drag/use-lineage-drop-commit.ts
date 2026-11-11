@@ -15,7 +15,6 @@ import { getCyclicProjectedWorktreeLineageIds } from '../../../../../../shared/s
 import {
   getReorderedWorktreeIdsToUnnest,
   getReorderUnnestRows,
-  isReorderInsideFolderRow,
   type WorktreeReorderDropPoint
 } from './worktree-lineage-drag-drop'
 import { unnestWorktrees } from '../../workspace-actions/parenting/worktree-unnest'
@@ -35,8 +34,9 @@ export function useWorktreeLineageDropCommit(args: {
   worktreeMap: Map<string, Worktree>
   worktreeLineageById: Record<string, WorktreeLineage>
   worktreeDragGroups: readonly WorktreeDragGroup[]
+  keepsFolderParent: (identity: string, point: WorktreeReorderDropPoint | undefined) => boolean
 }) {
-  const { repoMap, worktreeMap, worktreeLineageById, worktreeDragGroups } = args
+  const { repoMap, worktreeMap, worktreeLineageById, worktreeDragGroups, keepsFolderParent } = args
   const worktrees = useAllWorktrees()
   const parentIdentities = useAppStore(selectSidebarLineageParentIdentities)
   const assignWorktreeParent = useAppStore((s) => s.assignWorktreeParent)
@@ -191,7 +191,7 @@ export function useWorktreeLineageDropCommit(args: {
             ? parent
             : undefined
         },
-        keepsFolderParent: (folder) => isReorderInsideFolderRow(folder, unnestArgs.dropPoint)
+        keepsFolderParent: (folder) => keepsFolderParent(folder, unnestArgs.dropPoint)
       })
       if (rows.length === 0) {
         return
@@ -201,6 +201,7 @@ export function useWorktreeLineageDropCommit(args: {
     },
     [
       cyclicLineageIds,
+      keepsFolderParent,
       parentIdentities,
       updateWorktreeLineage,
       worktreeDragGroups,

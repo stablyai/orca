@@ -71,6 +71,8 @@ export function useWorktreeDocumentDrop(args: {
       // Why: pointer still inside the source group means reorder, not status move; commit here and stop the capture handler.
       event.preventDefault()
       event.stopPropagation()
+      const rawDropPoint = getWorktreeReorderDropPoint(event, drop, ctx.scrollRef.current)
+      const dropPoint = ctx.captureFolderRetention?.(rawDropPoint) ?? rawDropPoint
       ctx.onReorderWorktrees({
         groups: ctx.worktreeDragGroups,
         sourceGroupKey: session.sourceGroupKey,
@@ -85,7 +87,7 @@ export function useWorktreeDocumentDrop(args: {
         draggedIds: session.draggedIds,
         sourceGroupKey: session.sourceGroupKey,
         pickedCopies: session.pickedCopies,
-        dropPoint: getWorktreeReorderDropPoint(event, drop, ctx.scrollRef.current)
+        dropPoint
       })
       clearWorktreeDrag()
     }

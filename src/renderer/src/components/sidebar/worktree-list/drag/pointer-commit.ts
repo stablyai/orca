@@ -117,6 +117,8 @@ export function commitWorktreePointerDrop(args: PointerDropCommitArgs): void {
     }
     const drop = ctx.computeWorktreeDrop(event.clientY)
     if (drop) {
+      const rawDropPoint = getWorktreeReorderDropPoint(event, drop, ctx.scrollRef.current)
+      const dropPoint = ctx.captureFolderRetention?.(rawDropPoint) ?? rawDropPoint
       ctx.onReorderWorktrees({
         groups: ctx.worktreeDragGroups,
         sourceGroupKey: drag.sourceGroupKey,
@@ -131,7 +133,7 @@ export function commitWorktreePointerDrop(args: PointerDropCommitArgs): void {
         draggedIds: drag.draggedIds,
         sourceGroupKey: drag.sourceGroupKey,
         pickedCopies: drag.pickedCopies,
-        dropPoint: getWorktreeReorderDropPoint(event, drop, ctx.scrollRef.current)
+        dropPoint
       })
     } else if (ctx.scrollRef.current) {
       const currentPreview = preferredStatusTarget.status

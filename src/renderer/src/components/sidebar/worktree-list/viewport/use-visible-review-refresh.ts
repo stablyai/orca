@@ -51,9 +51,7 @@ export function visibleReviewCardIds(args: {
   return args.virtualItems
     .filter((item) => item.start < bottom && item.end > args.viewportTop)
     .map((item) => args.renderRows[item.index])
-    .flatMap((row): WorktreeItemRow[] =>
-      row?.type === 'lineage-group' ? row.rows : row?.type === 'item' ? [row] : []
-    )
+    .flatMap((row): WorktreeItemRow[] => (row?.type === 'item' ? [row] : []))
     .filter(
       (row) =>
         (row.repo?.kind ?? 'git') === 'git' &&

@@ -8,7 +8,7 @@ import { WorktreeListScrollToTopButton } from './WorktreeListScrollToTopButton'
 import { renderWorktreeSidebarDropIndicators } from './drop-indicators'
 import { useWorktreeListScrollToTop } from './use-scroll-to-top'
 import { getActiveDescendantOptionId } from '../navigation/active-descendant-option'
-import { buildRenderableRows } from '../listing/renderable-rows'
+import { useLineageRowProjection } from '../listing/lineage-row-projection'
 import { useFolderWorkspacePathStatusRows } from '../listing/use-folder-path-statuses'
 import { useGroupToggleWithScrollAnchor } from './use-group-toggle'
 import { usePendingSidebarReveal } from '../navigation/use-pending-reveal'
@@ -22,6 +22,7 @@ import { useWorktreeDragSession } from '../drag/use-session'
 import { useWorktreeDocumentDrop } from '../drag/use-document-drop'
 import { useWorktreeLineageDropCommit } from '../drag/use-lineage-drop-commit'
 import { useWorktreeListKeyboardNavigation, withKeyboardPreview } from '../navigation/use-keyboard'
+import { useWorktreeRowGeometry } from './use-row-geometry'
 import { useWorktreeListVirtualizer } from './use-virtualizer'
 import { useWorktreeNativeDrag } from '../drag/use-native-drag'
 import { useWorktreePointerDrag } from '../drag/use-pointer-drag'
@@ -114,11 +115,11 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
   const scrollSuppression = useWorktreeSidebarScrollSuppression(scrollRef)
   const { markDirectScrollInput, markScrollMovement } = scrollSuppression
 
-  const renderRows = useMemo(() => buildRenderableRows(rows), [rows])
-  const firstHeaderIndex = useMemo(
-    () => renderRows.findIndex((row) => row.type === 'header' || row.type === 'host-header'),
-    [renderRows]
-  )
+  const renderRows = rows
+  const { projection, activeFamilyRoots, firstHeaderIndex } = useLineageRowProjection({
+    ...props,
+    newCardStyle
+  })
 
   const headerDrag = useWorktreeSidebarHeaderDrag({
     rows,
@@ -136,12 +137,23 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     directScrollInputUntilRef: scrollSuppression.directScrollInputUntilRef
   })
 
-  const session = useWorktreeDragSession({ rows, scrollRef })
+  const virtualization = useWorktreeListVirtualizer({
+    renderRows,
+    projection,
+    firstHeaderIndex,
+    scrollRef,
+    scrollOffsetRef,
+    suppressMeasurementAdjustmentUntilRef: scrollSuppression.suppressMeasurementAdjustmentUntilRef
+  })
+  const rowGeometry = useWorktreeRowGeometry({ rows, projection, virtualization, scrollRef })
+
+  const session = useWorktreeDragSession({ rows, scrollRef, geometry: rowGeometry })
   const lineageDrop = useWorktreeLineageDropCommit({
     repoMap,
     worktreeMap,
     worktreeLineageById,
-    worktreeDragGroups: session.worktreeDragGroups
+    worktreeDragGroups: session.worktreeDragGroups,
+    keepsFolderParent: rowGeometry.keepsFolderParent
   })
   const runtime = useWorktreeDragRuntime({
     worktreeDragSessionRef: session.worktreeDragSessionRef,
@@ -167,14 +179,6 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
   const { showScrollToTop, scrollToTop } = useWorktreeListScrollToTop({
     scrollElement,
     onUserScrollIntent: markDirectScrollInput
-  })
-
-  const virtualization = useWorktreeListVirtualizer({
-    renderRows,
-    firstHeaderIndex,
-    scrollRef,
-    scrollOffsetRef,
-    suppressMeasurementAdjustmentUntilRef: scrollSuppression.suppressMeasurementAdjustmentUntilRef
   })
 
   usePendingSidebarReveal({
@@ -336,8 +340,14 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     () => withKeyboardPreview(props, keyboardPreview),
     [keyboardPreview, props]
   )
+  const draggedKeys = session.worktreeDragSessionRef.current?.reorderDraggedKeys
+  const hiddenDragIdentities = useMemo(() => new Set(draggedKeys), [draggedKeys])
   const rowContext = buildWorktreeVirtualRowContext({
+    dragUnitsByRow: rowGeometry.ranges.byRow,
+    hiddenDragIdentities,
     props: rowProps,
+    projection,
+    activeFamilyRoots,
     renderRows,
     firstHeaderIndex,
     virtualization,

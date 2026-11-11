@@ -18,24 +18,13 @@ export type VirtualRowRemovalMotion = {
 }
 
 export function getSidebarRowIdentityKeys(rows: readonly RenderRow[]): ReadonlySet<string> {
-  const keys = new Set<string>()
-  for (const row of rows) {
-    if (row.type === 'lineage-group') {
-      row.rows.forEach((member) => keys.add(`wt:${member.rowKey}`))
-      if (row.folder) {
-        keys.add(getRenderRowKey(row.folder))
-      }
-    } else {
-      keys.add(getRenderRowKey(row))
-    }
-  }
-  return keys
+  return new Set(rows.map(getRenderRowKey))
 }
 
 export function buildVirtualRowRemovalMotions(args: {
   previous: VirtualRowLayoutSnapshot | null
   current: VirtualRowLayoutSnapshot
-  rekeyedRowKeys: ReadonlyMap<string, string>
+  rekeyedRowKeys?: ReadonlyMap<string, string>
 }): VirtualRowRemovalMotion[] {
   const { previous, current, rekeyedRowKeys } = args
   if (previous === null || previous.rowIdentityKeys === current.rowIdentityKeys) {
@@ -53,7 +42,7 @@ export function buildVirtualRowRemovalMotions(args: {
   }
 
   const previousKeyByCurrentKey = new Map<string, string>()
-  rekeyedRowKeys.forEach((currentKey, previousKey) => {
+  rekeyedRowKeys?.forEach((currentKey, previousKey) => {
     previousKeyByCurrentKey.set(currentKey, previousKey)
   })
   const motions: VirtualRowRemovalMotion[] = []
@@ -73,7 +62,7 @@ export function buildVirtualRowRemovalMotions(args: {
 
 export function useVirtualRowRemovalAnimation(args: {
   renderRows: readonly RenderRow[]
-  rekeyedRowKeys: ReadonlyMap<string, string>
+  rekeyedRowKeys?: ReadonlyMap<string, string>
   scrollRef: React.RefObject<HTMLDivElement | null>
   virtualItems: readonly VirtualItem[]
 }): void {

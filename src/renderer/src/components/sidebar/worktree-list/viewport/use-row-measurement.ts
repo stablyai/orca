@@ -6,7 +6,6 @@ import {
   type VirtualizedScrollAnchor
 } from '@/hooks/useVirtualizedScrollAnchor'
 import {
-  buildLineageRowRekeyMap,
   getActiveStickyIndexesForScroll,
   getVirtualRowKey,
   pruneStaleVirtualRowElementCache
@@ -51,7 +50,6 @@ export function useVirtualRowMeasurementSync(args: {
   const prCacheLen = useAppStore((s) => countRecordKeysByReference(s.prCache))
   const issueCacheLen = useAppStore((s) => countRecordKeysByReference(s.issueCache))
   const activeRenderRowKeys = useMemo(() => new Set(renderRows.map(getRenderRowKey)), [renderRows])
-  const lineageRowRekeys = useMemo(() => buildLineageRowRekeyMap(renderRows), [renderRows])
   const totalSize = virtualizer.getTotalSize()
   const virtualItems = virtualizer.getVirtualItems()
   const activeStickyIndexes = getActiveStickyIndexesForScroll({
@@ -102,7 +100,6 @@ export function useVirtualRowMeasurementSync(args: {
     getItemElementKey: getVirtualRowKey,
     getRowKey: getRenderRowKey,
     itemElementSelector: '[data-worktree-virtual-row]',
-    rekeyedRowKeys: lineageRowRekeys,
     rows: renderRows,
     scrollElementRef: scrollRef,
     scrollOffsetRef,
@@ -114,7 +111,6 @@ export function useVirtualRowMeasurementSync(args: {
 
   useVirtualRowRemovalAnimation({
     renderRows,
-    rekeyedRowKeys: lineageRowRekeys,
     scrollRef,
     virtualItems
   })

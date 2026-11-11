@@ -13,6 +13,7 @@ import {
   WORKTREE_SIDEBAR_VIRTUAL_ROW_GAP
 } from './virtual-rows'
 import { getRenderRowKey } from '../listing/render-row'
+import type { LineageRowProjection } from '../listing/lineage-row-projection'
 import type { RenderRow } from '../listing/render-row'
 import { WORKTREE_SIDEBAR_REVEAL_TOP_INSET } from '../navigation/worktree-sidebar-reveal'
 import {
@@ -24,6 +25,7 @@ export type WorktreeListVirtualizer = ReturnType<typeof useWorktreeListVirtualiz
 
 // Guard virtual row identity so recycled DOM nodes cannot overwrite another slot’s measured height.
 export function useWorktreeListVirtualizer(args: {
+  projection: LineageRowProjection
   renderRows: RenderRow[]
   firstHeaderIndex: number
   scrollRef: React.RefObject<HTMLDivElement | null>
@@ -97,7 +99,9 @@ export function useWorktreeListVirtualizer(args: {
           activeStickyHeaderIndexRef.current
         )
       }
-      return measureVirtualElementSize(element, entry, instance)
+      const measured = measureVirtualElementSize(element, entry, instance)
+      const row = index === null ? undefined : renderRows[index]
+      return measured + (row?.type === 'item' || row?.type === 'folder-workspace' ? 0 : 6)
     },
     [firstHeaderIndex, isCurrentVirtualRowElement, renderRows]
   )
@@ -105,13 +109,20 @@ export function useWorktreeListVirtualizer(args: {
   const virtualizer = useVirtualizer({
     count: renderRows.length,
     getScrollElement: () => scrollRef.current,
-    estimateSize: (index) =>
-      estimateRenderRowSize(
-        renderRows,
-        index,
-        firstHeaderIndex,
-        activeStickyHeaderIndexRef.current
-      ),
+    estimateSize: (index) => {
+      const frame = args.projection.frames[index]
+      return (
+        estimateRenderRowSize(
+          renderRows,
+          index,
+          firstHeaderIndex,
+          activeStickyHeaderIndexRef.current
+        ) +
+        (renderRows[index]?.type === 'item' || renderRows[index]?.type === 'folder-workspace'
+          ? frame.before + frame.closing + frame.after
+          : 0)
+      )
+    },
     measureElement: measureCurrentVirtualRowElement,
     // Why: TanStack memoizes rangeExtractor by identity; header indexes must be deps or sticky slots go stale.
     rangeExtractor: useCallback(
