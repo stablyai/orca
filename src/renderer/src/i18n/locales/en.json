@@ -24938,6 +24938,7 @@
       "existingHint": "New commits go on this branch.",
       "new": "New branch",
       "newHint": "Create a new local branch",
+      "newHintCloud": "Create a new branch.",
       "newName": "New branch name",
       "automaticName": "Automatic name",
       "titleCloud": "Branch for this workspace"

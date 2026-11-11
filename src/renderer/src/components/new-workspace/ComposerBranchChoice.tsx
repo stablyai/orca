@@ -119,7 +119,9 @@ export function ComposerBranchChoice({
                 {t('workspace.branchChoice.new', 'New branch')}
               </span>
               <span id={`${id}-new-description`} className="block text-xs text-muted-foreground">
-                {t('workspace.branchChoice.newHint', 'Create a new local branch')}
+                {cloud
+                  ? t('workspace.branchChoice.newHintCloud', 'Create a new branch.')
+                  : t('workspace.branchChoice.newHint', 'Create a new local branch')}
               </span>
             </span>
           </label>

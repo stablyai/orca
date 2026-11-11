@@ -124,6 +124,7 @@ describe('NewWorkspaceComposerNameSection branch reuse', () => {
       />
     )
     expect(screen.getByRole('radiogroup', { name: 'Branch for this worktree' })).toBeTruthy()
+    expect(screen.getByText('Create a new local branch')).toBeTruthy()
 
     rerender(
       <NewWorkspaceComposerNameSection
@@ -135,5 +136,8 @@ describe('NewWorkspaceComposerNameSection branch reuse', () => {
     expect(screen.getByRole('radiogroup', { name: 'Branch for this workspace' })).toBeTruthy()
     expect(screen.getByText('Branch for this workspace')).toBeTruthy()
     expect(screen.queryByText('Branch for this worktree')).toBeNull()
+    // The branch lives in the sandbox, not on this computer.
+    expect(screen.getByText('Create a new branch.')).toBeTruthy()
+    expect(screen.queryByText('Create a new local branch')).toBeNull()
   })
 })
