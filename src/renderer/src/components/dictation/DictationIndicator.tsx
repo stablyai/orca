@@ -59,7 +59,6 @@ type DictationIndicatorProps = {
     notice: DictationCleanupNotice | null
     dismissNotice: () => void
   }
-  /** Set while "Send when dictation ends" counts down to sending the landed words. */
   autoSend: DictationAutoSendCountdown | null
 }
 
@@ -145,7 +144,7 @@ function secondsUntil(deadline: number): number {
   return Math.max(0, Math.ceil((deadline - performance.now()) / 1000))
 }
 
-// Mounted per countdown, so it starts at the full delay; a hidden window takes the send over anyway.
+// A hidden window takes the send over, so pausing the tick while hidden is fine.
 function DictationAutoSendSeconds({ deadline }: { deadline: number }) {
   const t = useTranslate()
   const intlLocale = useIntlLocale()
@@ -220,7 +219,7 @@ function DictationPill({
   // Counts recorded time, so it waits for the mic to open.
   const seconds = useElapsedSeconds(recording)
   const showSpinner = useDelayedFlag(finishing && !autoSend, FINISH_SPINNER_DELAY_MS)
-  const nearCloudLimit = cloudModel && seconds >= CLOUD_LIMIT_WARNING_SECONDS
+  const nearCloudLimit = recording && cloudModel && seconds >= CLOUD_LIMIT_WARNING_SECONDS
   const failedKind = dictationState === 'error' ? failure : null
   const { committed, speechPending } = liveText
   const tentative = liveText.tentative.trim()
@@ -250,9 +249,11 @@ function DictationPill({
         duration: uiNumberFormat(SECONDS_LONG, intlLocale).format(autoSend.delayMs / 1000)
       })
     : null
-  const announced = nearCloudLimit
-    ? `${status} ${t('auto.components.dictation.DictationIndicator.oneMinuteLeft', 'One minute left.')}`
-    : (autoSendAnnouncement ?? queuedStatus ?? status)
+  const announced =
+    autoSendAnnouncement ??
+    (nearCloudLimit
+      ? `${status} ${t('auto.components.dictation.DictationIndicator.oneMinuteLeft', 'One minute left.')}`
+      : (queuedStatus ?? status))
   const cancelLabel = cleaning
     ? t('components.dictation.DictationIndicator.skipCleanup', 'Skip cleanup and insert as heard')
     : t('auto.components.dictation.DictationIndicator.cancel', 'Cancel')
