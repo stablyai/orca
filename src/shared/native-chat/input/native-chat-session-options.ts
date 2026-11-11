@@ -39,8 +39,6 @@ export type SessionOptionDescriptor = {
         currentValue: boolean
       }
   valueSource: SessionOptionValueSource
-  /** Model-pill display only; currentValue remains the accepted selection. */
-  reportedModel?: string
   /** Explicit lane is required: dispatched cannot distinguish PTY from structured transports. */
   transport: NativeChatLiveOptionTransport
   settable: boolean

@@ -242,11 +242,7 @@ export function structuredAgentSessionOptionSnapshot(
 ): SessionOptionDescriptor[] {
   const permission = structuredAgentSessionPermissionDescriptor(state)
   const options = modelOptionSnapshot(state).map((option) =>
-    state.fastModeRestricted && option.id === 'fastMode'
-      ? { ...option, settable: false }
-      : option.id === 'model' && state.reportedModel
-        ? { ...option, reportedModel: state.reportedModel }
-        : option
+    state.fastModeRestricted && option.id === 'fastMode' ? { ...option, settable: false } : option
   )
   const interaction = structuredAgentSessionInteractionDescriptor(state)
   return [...options, ...(permission ? [permission] : []), ...(interaction ? [interaction] : [])]
