@@ -23,7 +23,7 @@ export function readHostWorktreeCardStyle(
       : null
   }
   return {
-    worktreeCardDetailsRow: host.worktreeCardDetailsRow === true,
+    worktreeCardDetailsRow: host.worktreeCardDetailsRow !== false,
     ...(typeof host.experimentalNewWorktreeCardStyle === 'boolean'
       ? { experimentalNewWorktreeCardStyle: host.experimentalNewWorktreeCardStyle }
       : {}),

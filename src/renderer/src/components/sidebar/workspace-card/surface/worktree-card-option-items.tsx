@@ -70,7 +70,7 @@ export function WorktreeCardDisplayMenuItem({
   const toggleProperty = useToggleCardProperty()
   const options = useMemo(() => getWorktreeCardDisplayOptions(hasProjectGroups), [hasProjectGroups])
   const experimentalCard = useAppStore((s) => getWorktreeCardStyle(s.settings) !== 'classic')
-  const detailsRow = useAppStore((s) => s.settings?.worktreeCardDetailsRow === true)
+  const detailsRow = useAppStore((s) => s.settings?.worktreeCardDetailsRow !== false)
   const updateSettings = useAppStore((s) => s.updateSettings)
   return (
     <DropdownMenuSub>

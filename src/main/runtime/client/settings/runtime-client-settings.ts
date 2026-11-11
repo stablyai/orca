@@ -94,7 +94,7 @@ export class RuntimeClientSettingsController {
       experimentalNewWorktreeCardStyle: settings.experimentalNewWorktreeCardStyle === true,
       // Always present, so a client can tell this host accepts the three-way choice.
       worktreeCardStyle: getWorktreeCardStyle(settings),
-      worktreeCardDetailsRow: settings.worktreeCardDetailsRow === true,
+      worktreeCardDetailsRow: settings.worktreeCardDetailsRow !== false,
       compactWorktreeCards: settings.compactWorktreeCards === true,
       minimaxGroupId: settings.minimaxGroupId ?? '',
       minimaxUsageModels: settings.minimaxUsageModels ?? 'general',
