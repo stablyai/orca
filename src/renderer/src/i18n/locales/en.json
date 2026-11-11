@@ -27554,10 +27554,12 @@
       "setupNotRun": "Setup script hasn’t run yet",
       "runSetup": "Run setup script",
       "label": "Workspace setup",
-      "dismiss": "Dismiss",
       "installFailed": "Couldn’t open GitHub. Check your connection and try again.",
       "pushReady": "Orca Cloud can push to {{repo}} now.",
       "setupMissing": "Couldn’t read the setup script from orca.yaml in this workspace."
+    },
+    "toast": {
+      "dismiss": "Dismiss"
     }
   },
   "runActions": {
