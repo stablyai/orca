@@ -1,6 +1,7 @@
 import {
   buildNativeChatFolderTrustPrompt,
   buildNativeChatStartupMenuPrompt,
+  STARTUP_MENU_DESCRIPTION_MAX,
   type NativeChatStartupMenuChoice
 } from '../../../../shared/native-chat/input/native-chat-approval-envelope'
 import type { RuntimeTerminalWaitBlockedReason } from '../../../../shared/runtime-terminal-contracts'
@@ -192,12 +193,18 @@ export function startupDialogPrompt(
   }
   const menu = inkMenu(rows)
   const multiSelect = menu ? inkMultiSelectMenu(menu.choiceRows, menu.heading) : null
-  const choices =
-    multiSelect?.choices ?? (menu ? inkMenuChoices(menu.choiceRows, menu.heading) : [])
   // The ticked rows are what "Enable selected" enables, so the card shows them with its warning.
   const description = multiSelect
     ? `${menu!.description}\n\n${multiSelect.servers.join('\n')}`
     : menu?.description
+  // A clipped list hides ticks the card would approve, so only the terminal can answer it.
+  const choices = multiSelect
+    ? description!.length <= STARTUP_MENU_DESCRIPTION_MAX
+      ? multiSelect.choices
+      : []
+    : menu
+      ? inkMenuChoices(menu.choiceRows, menu.heading)
+      : []
   return {
     prompt: buildNativeChatStartupMenuPrompt({
       ...(description ? { description } : {}),

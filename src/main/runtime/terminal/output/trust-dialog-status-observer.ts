@@ -96,9 +96,10 @@ export class TrustDialogStatusObserver {
     void this.deps.refreshForegroundAgent(ptyId).then(resolved, resolved)
   }
 
-  /** Whether our card's dialog still reads as `prompt` on screen; its keys are aimed from that screen's highlight. */
+  /** Whether the dialog on screen still reads as `prompt`; a card's keys are aimed from that screen's highlight. */
   showsPrompt(ptyId: string, prompt: string): boolean {
-    const agent = this.panes.get(ptyId)?.owned?.agent
+    // A card restored after an Orca restart has no owner here until new output arrives.
+    const agent = this.panes.get(ptyId)?.owned?.agent ?? this.deps.getPaneAgent(ptyId)
     const emulator = this.deps.getEmulator(ptyId)
     if (!agent || !emulator || emulator.isSynchronizedOutput) {
       return false

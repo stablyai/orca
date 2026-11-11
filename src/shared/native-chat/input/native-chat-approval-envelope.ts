@@ -81,7 +81,7 @@ export type NativeChatStartupMenuChoice = { label: string; send: string }
 
 const STARTUP_MENU_LABEL_MAX = 300
 // Room for a full screen of warning text, which the user reads before answering.
-const STARTUP_MENU_DESCRIPTION_MAX = 4000
+export const STARTUP_MENU_DESCRIPTION_MAX = 4000
 const STARTUP_MENU_CHOICES_MAX = 9
 
 function isStartupMenuText(value: unknown, max: number): value is string {
