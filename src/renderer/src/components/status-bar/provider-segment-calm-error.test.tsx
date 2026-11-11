@@ -28,7 +28,9 @@ vi.mock('../../store', () => ({
 describe('ProviderSegment calm error', () => {
   it.each([
     ['cursor', 'stale-token', 'Sign-in expired'],
-    ['gemini', 'unknown', 'Refresh failed']
+    ['gemini', 'unknown', 'Refresh failed'],
+    // design-squad P3: "⚠ Usage unavailable" twice (Claude + Codex) in a cloud workspace.
+    ['claude', 'usage-unavailable', 'Usage unavailable']
   ] as const)('%s %s renders "--", no warning icon, label kept for a11y', async (provider, kind, label) => {
     const { ProviderSegment } = await import('./StatusBar')
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: minimal error-state fixture.
