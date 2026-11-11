@@ -1604,6 +1604,8 @@
         "startupMenu": {
           "title": "{{value0}} is waiting for a choice in the terminal"
         },
+        "strip_one": "{{count}} approval",
+        "strip_other": "{{count}} approvals",
         "title": "Allow {{value0}}?"
       },
       "ask": {

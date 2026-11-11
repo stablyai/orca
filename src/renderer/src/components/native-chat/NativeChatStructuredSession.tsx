@@ -9,10 +9,9 @@ import { cn } from '@/lib/class-names'
 import { NATIVE_CHAT_APPEARANCE_ROOT_CLASS } from '@/components/native-chat/appearance/native-chat-appearance-style'
 import { useNativeChatStoreAppearanceStyle } from '@/components/native-chat/appearance/use-native-chat-store-appearance-style'
 import { useRef, useState } from 'react'
-import { agentSessionPromptQuestions } from '../../../../shared/agent-session/agent-session-question-answer'
 import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { useStructuredChatLiveSession } from '@/components/native-chat/session/structured/use-structured-chat-live-session'
-import { NativeChatApprovalCard } from '@/components/native-chat/prompts/NativeChatApprovalCard'
+import { NativeChatStructuredPromptCard } from '@/components/native-chat/prompts/NativeChatStructuredPromptCard'
 import { NativeChatComposer } from '@/components/native-chat/composer/NativeChatComposer'
 import type { NativeChatComposerHandle } from '@/components/native-chat/composer/native-chat-composer-types'
 import type { NativeChatOptionPickerRequest } from '@/components/native-chat/session/options/controls/native-chat-option-picker-request'
@@ -24,7 +23,6 @@ import { NativeChatMessageList } from '@/components/native-chat/NativeChatMessag
 import { NativeChatContextClearFade } from '@/components/native-chat/conversation/projection/NativeChatContextClearFade'
 import { useStructuredNativeChatSubmitReveal } from '@/components/native-chat/pane/actions/use-structured-native-chat-submit-reveal'
 import { useStructuredPromptResponseHold } from '@/components/native-chat/prompts/use-structured-prompt-response-hold'
-import { NativeChatStructuredQuestionCard } from '@/components/native-chat/prompts/NativeChatStructuredQuestionCard'
 import { nativeChatStructuredAsyncQuestion } from '@/components/native-chat/prompts/NativeChatStructuredAsyncQuestion'
 import {
   selectNativeChatViewState,
@@ -63,7 +61,6 @@ import {
   cancelStructuredPrompt,
   nativeChatStructuredStopControls
 } from '@/components/native-chat/session/structured/writes/native-chat-structured-stop-controls'
-import { chatApprovalFromJournal } from '../../../../shared/native-chat/input/native-chat-interactive-prompt'
 import { useAppStore } from '@/store/index'
 import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agent-session-launch-label'
 import { useNativeChatStructuredComposerTransport } from '@/components/native-chat/composer/submit/use-native-chat-structured-composer-transport'
@@ -78,6 +75,7 @@ import { useNativeChatHostSendGate } from '@/components/native-chat/host-access/
 import { useStructuredAgentSessionStartFailureFacts } from '@/components/native-chat/messages/notices/use-structured-agent-session-start-failure-facts'
 import { pendingPromptsAllUnanswerableHere } from '../../../../shared/agent-session/agent-session-approval-subject'
 import { NativeChatHostSetupContext } from '@/components/native-chat/host-access/native-chat-host-setup'
+import { useNativeChatWorkerApprovalSlots } from '@/components/native-chat/worker-approvals/NativeChatWorkerApprovals'
 
 export function NativeChatStructuredSession(props: Omit<NativeChatStructuredViewProps, 'mode'>) {
   const ownerWorktreeId = useNativeChatTabOwnerWorktreeId(props.tabId)
@@ -114,6 +112,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
   const [optionPickerRequest, setOptionPickerRequest] =
     useState<NativeChatOptionPickerRequest | null>(null)
   const rootRef = useRef<HTMLDivElement>(null)
+  const workerApprovals = useNativeChatWorkerApprovalSlots(props, rootRef)
   const historyPhase = structuredChatHistoryPhase(provisionalLaunch, controller.status)
   const hostOutage = useNativeChatHostOutage(props.target)
   const hostNotice = useNativeChatHostOutageNotice(hostOutage)
@@ -190,7 +189,6 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
   const installLayout = viewState.kind === 'empty' ? 'hero' : 'strip'
   const install = useNativeChatInstallSlot(props, agentLabel, installLayout)
   const canMention = composerShown && install.unavailableHint === undefined
-  const approval = prompt?.body.kind === 'approval' ? chatApprovalFromJournal(prompt.body) : null
   const cancelPrompt = () => cancelStructuredPrompt(controller, prompt)
   const rootInput = useNativeChatRootInputRouting({
     tabId: props.tabId,
@@ -202,7 +200,6 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
     composerReady: composerShown && install.slot.kind !== 'install',
     surfaceReady: !composerShown || install.slot.kind === 'install'
   })
-  const questionBody = prompt?.body.kind === 'question' ? prompt.body : null
   const forks = useNativeChatPaneFork(props, controller, ownerWorktreeId)
   const transport = useNativeChatStructuredComposerTransport({
     props,
@@ -322,6 +319,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
                     structuredAttachments
                     runtimeContext={imageRuntimeContext}
                     deliveryNotices={deliveryNotices}
+                    trailing={workerApprovals.rows}
                   />
                 </NativeChatHostSetupContext.Provider>
               </NativeChatUsageLimitActionsProvider>
@@ -348,6 +346,8 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
             tasks={controller}
             messageListRef={submits.messageListRef}
           />
+          {/* Workers' approvals stay findable even while this chat has its own prompt. */}
+          {workerApprovals.strip}
           {prompt ? null : (
             <NativeChatStructuredComposerTabStrips
               tabId={props.tabId}
@@ -361,29 +361,14 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
             />
           )}
           {composerShown ? null : <NativeChatPromptSlotNotices notices={notices} />}
-          {prompt && approval ? (
-            <NativeChatApprovalCard
-              key={`${prompt.itemId}:${prompt.revision}`}
-              approval={approval}
-              onChoose={(optionId) =>
-                void promptResponse.respond(prompt, { kind: 'option', optionId })
-              }
-              isSubmitting={promptResponse.holds(prompt)}
-              onCancel={cancelPrompt}
-              shouldFocus={!promptsUnanswerable && props.isVisible && props.isFocusedGroup}
-            />
-          ) : null}
-          {prompt && questionBody ? (
-            <NativeChatStructuredQuestionCard
-              key={`${prompt.itemId}:${prompt.revision}`}
-              questions={agentSessionPromptQuestions(questionBody)}
-              onAnswer={(response) => void promptResponse.respond(prompt, response)}
-              isSubmitting={promptResponse.holds(prompt)}
-              onCancel={cancelPrompt}
-              shouldFocus={!promptsUnanswerable && props.isVisible && props.isFocusedGroup}
-              answerInputRef={questionAnswerInputRef}
-            />
-          ) : null}
+          <NativeChatStructuredPromptCard
+            key={prompt ? `${prompt.itemId}:${prompt.revision}` : undefined}
+            prompt={prompt}
+            promptResponse={promptResponse}
+            onCancel={cancelPrompt}
+            shouldFocus={!promptsUnanswerable && props.isVisible && props.isFocusedGroup}
+            answerInputRef={questionAnswerInputRef}
+          />
           {nativeChatStructuredAsyncQuestion(props, controller, session, transport, submits)}
           {composerShown && <NativeChatInstallSlot slot={install.slot} agentLabel={agentLabel} />}
           {composerShown ? (

@@ -294,6 +294,7 @@ async function startOrcadRuntime(
   // Recovery establishes terminal/dispatch identities before fencing observations.
   observedStatusCapture.attach(runtime)
   agentHookServer.setCliWriterExecutionMatcher(observedPaneIdentities, runtime)
+  agentHookServer.setClaudePermissionHolds(runtime.terminalWorkerApprovals)
   // First RPC clients must see a fully published graph.
   const { publishHeadlessRuntimeGraph } =
     await import('../runtime/session-graph/headless-runtime-graph')
