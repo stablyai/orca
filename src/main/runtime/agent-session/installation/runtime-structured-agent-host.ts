@@ -14,7 +14,10 @@ import { overlayEnvironmentVariables } from '../../../../shared/environment-over
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { StructuredAgentId } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import type { RuntimeWorkspaceCatalog } from '../../workspaces/catalog/workspace-catalog'
-import type { HostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
+import {
+  hostWorktreeTarget,
+  type HostWorktreeTarget
+} from '../../../../shared/worktree/host-qualified-identity'
 import type { OrcaRuntimeWithRefreshPtyWorktreeRecordsFromController } from '../../terminal/lifecycle/pty-worktree-refresh'
 import type { RuntimeAccountController } from '../environment/runtime-account-controller'
 import type { OrcaRuntimeWithPruneMobileSessionTabGroupLayout } from '../../session-lifecycle/projection/prune-mobile-session-tab-group-layout'
@@ -28,7 +31,9 @@ export abstract class RuntimeStructuredAgentHost extends OrcaRuntimeWithStartTui
 
   protected async assertWorkspaceAcceptsLaunch(workspaceId: string): Promise<void> {
     if (
-      await this.workspaceUsesBareGitStorage({ id: workspaceId, hostId: LOCAL_EXECUTION_HOST_ID })
+      await this.workspaceUsesBareGitStorage(
+        hostWorktreeTarget({ id: workspaceId, hostId: LOCAL_EXECUTION_HOST_ID })
+      )
     ) {
       throw new Error(BARE_WORKSPACE_LAUNCH_ERROR)
     }
