@@ -1,0 +1,44 @@
+# Test files that fail identically on upstream stablyai/orca at cloud/integration's merge base (e295b0d37c3) on the
+# integration Mac under run-vitest.mjs. premerge-check.sh skips these in its targeted run (logging each skip), and
+# Neil e2e cuts gate the full suite on "no failing file beyond this list". Re-derive at each upstream sync.
+config/scripts/cli-build/verify-cli-bin.test.mjs
+config/scripts/desktop-build/output-contracts/main-entry-facade.test.ts
+config/scripts/desktop-distribution/runtime-verification/process-host-dev-rebuild.test.ts
+config/scripts/macos/terminal-host-bundle/macos-terminal-host-bundle.test.mjs
+config/scripts/worktree-storage/reclaim-worktree-generated-files.test.mjs
+src/main/agent-hooks/server/testing/authority/server-removed-worktree-foreign-authority.test.ts
+src/main/agent-hooks/server/testing/http/server-startup-prompt-control.test.ts
+src/main/agent-hooks/server/testing/identity/server-ai-vault-liveness.test.ts
+src/main/agent-hooks/server/testing/identity/server-copilot-resume-identity.test.ts
+src/main/agent-hooks/server/testing/identity/server-hermes-resume-identity.test.ts
+src/main/agent-hooks/server/testing/identity/server-hook-session-binding.test.ts
+src/main/agent-hooks/server/testing/identity/server-launch-resume-identity.test.ts
+src/main/agent-hooks/server/testing/interruptions/server-claude-helper-kill.test.ts
+src/main/agent-hooks/server/testing/interruptions/server-relayed-claude-cancel.test.ts
+src/main/agent-hooks/server/testing/main-agent/server-turn-ended-at.test.ts
+src/main/agent-hooks/server/testing/main-agent/server-turn-started-at.test.ts
+src/main/agent-hooks/server/testing/persistence/server-last-status-child-held-main-agent.test.ts
+src/main/agent-hooks/server/testing/persistence/server-last-status-main-agent-fact.test.ts
+src/main/agent-hooks/server/testing/persistence/server-last-status-migration.test.ts
+src/main/agent-hooks/server/testing/persistence/server-last-status-restored-children.test.ts
+src/main/agent-hooks/server/testing/persistence/server-last-status-write.test.ts
+src/main/agent-hooks/server/testing/persistence/server-status-persist-throttle.test.ts
+src/main/agent-hooks/server/testing/presence/server-agent-presence.test.ts
+src/main/agent-hooks/server/testing/presence/server-hook-root-provenance.test.ts
+src/main/agent-hooks/server/testing/presence/server-idle-process-owner.test.ts
+src/main/agent-hooks/server/testing/providers/antigravity/server-antigravity-resume-identity.test.ts
+src/main/agent-hooks/server/testing/providers/codex/server-codex-side-thread.test.ts
+src/main/agent-hooks/server/testing/providers/grok/server-grok-background-status.test.ts
+src/main/agent-hooks/server/testing/publication/server-status-listener-fanout.test.ts
+src/main/agent-hooks/server/testing/replay/spool.test.ts
+src/main/agent-hooks/server/testing/structured-ingress/server-ingest-structured-status.test.ts
+src/main/cli/packaged-cli-assets.test.ts
+src/main/ipc/notifications-external-acknowledgement.test.ts
+src/main/ipc/notifications-subject-retirement.test.ts
+src/main/orcad/orcad-forked-child-paths.test.ts
+src/main/runtime/push/notifications/mobile-notification-dismissal-read-failure.test.ts
+src/main/runtime/push/notifications/mobile-notification-dismissal-store.test.ts
+src/main/text-generation/source-control-wsl-prompt.test.ts
+src/shared/remote-runtime/host-store/wsl-host-deployment-store.test.ts
+tests/e2e/helpers/persisted-profile-state.unit.test.ts
+tests/e2e/relay-region-correction.unit.test.ts
