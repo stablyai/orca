@@ -41,6 +41,22 @@ describe('tui agent startup session options', () => {
     expect(plan?.sessionOptions).toEqual({ model: 'zai-coding-plan/glm-5.3-flash' })
   })
 
+  it('starts Pi on the picked model and thinking level in place of its configured ones', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'pi',
+      prompt: '',
+      cmdOverrides: {},
+      platform: 'linux',
+      allowEmptyPromptLaunch: true,
+      sessionOptions: { model: 'anthropic/claude-opus-5-5', effort: 'high' },
+      sessionOptionsOverrideAgentArgs: true,
+      agentArgs: '--model openai/gpt-6 --thinking low --no-skills'
+    })
+    expect(plan?.launchCommand).toBe(
+      "pi '--no-skills' '--model' 'anthropic/claude-opus-5-5' '--thinking' 'high'"
+    )
+  })
+
   it('rejects conflicting singleton flags in an agent command override', () => {
     expect(
       resolveAgentLaunchCommand({

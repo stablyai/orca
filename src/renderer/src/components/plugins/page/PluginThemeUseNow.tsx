@@ -1,6 +1,6 @@
 import { Check, SquareTerminal } from 'lucide-react'
 import { toast } from 'sonner'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { usePluginIconThemes } from '@/store/plugins/appearance/plugin-icon-themes'
 import { useSettingsDarkTheme } from '@/hooks/use-document-dark-theme'
 import { selectTerminalTheme } from '../../../../../shared/terminal-themes/terminal-theme-selection'
@@ -35,6 +35,7 @@ export function PluginThemeUseNow({
   /** Shown instead when the plugin adds no theme. */
   fallback?: React.ReactNode
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const themes = usePluginThemes().filter((theme) => theme.pluginKey === pluginKey)
   const icons = usePluginIconThemes().filter((theme) => theme.pluginKey === pluginKey)
   const terminalThemes = usePluginTerminalThemes()
@@ -49,9 +50,9 @@ export function PluginThemeUseNow({
   const otherMode = dark ? 'light' : 'dark'
   const shownTerminal = selectTerminalTheme(settings, dark)
   const prefixes = {
-    now: translate('auto.components.settings.PluginThemeUseNow.label', 'Use now:'),
-    light: translate('auto.components.settings.PluginThemeUseNow.useForLight', 'Use for light:'),
-    dark: translate('auto.components.settings.PluginThemeUseNow.useForDark', 'Use for dark:')
+    now: t('auto.components.settings.PluginThemeUseNow.label', 'Use now:'),
+    light: t('auto.components.settings.PluginThemeUseNow.useForLight', 'Use for light:'),
+    dark: t('auto.components.settings.PluginThemeUseNow.useForDark', 'Use for dark:')
   }
   const chips: Chip[] = [
     ...themes.map((theme) => ({
@@ -98,12 +99,12 @@ export function PluginThemeUseNow({
       if (!chip.showsNow) {
         toast.success(
           otherMode === 'light'
-            ? translate(
+            ? t(
                 'auto.components.settings.PluginThemeUseNow.assignedLight',
                 '{{value0}} set as your light theme',
                 { value0: chip.label }
               )
-            : translate(
+            : t(
                 'auto.components.settings.PluginThemeUseNow.assignedDark',
                 '{{value0}} set as your dark theme',
                 { value0: chip.label }
@@ -112,7 +113,7 @@ export function PluginThemeUseNow({
       }
     } catch {
       toast.error(
-        translate(
+        t(
           'auto.components.settings.PluginThemeUseNow.saveFailed',
           'Could not save the theme. Try again.'
         )

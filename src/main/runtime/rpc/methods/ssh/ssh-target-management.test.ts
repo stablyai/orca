@@ -1,4 +1,3 @@
-import '../../unused-default-rpc-methods.test-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../../dispatcher'
 import type { RpcRequest } from '../../core'
@@ -24,7 +23,7 @@ vi.mock('../../../../ssh/targets/ssh-target-registry', () => ({
   listRegisteredSshTargets: mocks.listRegisteredSshTargets
 }))
 
-vi.mock('../../../../ssh/ssh-remote-directory-browse', () => ({
+vi.mock('../../../../ssh/filesystem/ssh-remote-directory-browse', () => ({
   browseSshDirectory: mocks.browseSshDirectory
 }))
 

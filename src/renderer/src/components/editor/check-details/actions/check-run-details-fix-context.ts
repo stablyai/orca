@@ -13,6 +13,7 @@ import type { HostedReviewInfo } from '../../../../../../shared/source-control/h
 import type { PRCheckDetail, PRCheckRunDetails } from '../../../../../../shared/github/check-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { isGitHubPRSuppressed } from '../../../../../../shared/worktree/github-pr-suppression'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
@@ -114,9 +115,12 @@ export function buildCheckRunDetailsFixBasePrompt(args: {
   })
 }
 
-export function getCheckRunDetailsFixDisabledReason(worktreeId: string | null): string | undefined {
+export function getCheckRunDetailsFixDisabledReason(
+  worktreeId: string | null,
+  t: Translate = translate
+): string | undefined {
   if (!worktreeId) {
-    return translate(
+    return t(
       'auto.components.editor.check.run.details.fix.with.ai.1a8c4e2b90',
       'Select a workspace before launching an AI action.'
     )
@@ -124,20 +128,20 @@ export function getCheckRunDetailsFixDisabledReason(worktreeId: string | null): 
   const store = useAppStore.getState()
   const worktree = findFirstIndexedWorktree(selectWorktreesByRepo(store), worktreeId)
   if (!worktree) {
-    return translate(
+    return t(
       'auto.components.editor.check.run.details.fix.with.ai.1a8c4e2b90',
       'Select a workspace before launching an AI action.'
     )
   }
   const repo = store.repos.find((candidate) => candidate.id === worktree.repoId) ?? null
   if (!repo) {
-    return translate(
+    return t(
       'auto.components.editor.check.run.details.fix.with.ai.4f2d9a8c17',
       'Select a repository before launching an AI action.'
     )
   }
   if (!resolveHostedReviewForCheckRunDetailsFix(worktreeId)) {
-    return translate(
+    return t(
       'auto.components.editor.check.run.details.fix.with.ai.7c3e1b5d42',
       'Open a PR or MR before launching an AI fix.'
     )

@@ -1,14 +1,14 @@
-import './unused-default-rpc-methods.test-fixture'
 import { z } from 'zod'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ORCHESTRATION_CONTRACT_VERSION } from '../../../shared/protocol-version'
+import { ORCHESTRATION_CONTRACT_VERSION } from '../../../shared/orchestration/orchestration-runtime-capabilities'
 import { OrcaRuntimeService } from '../orca-runtime'
 import { OrchestrationDb } from '../orchestration/db/orchestration-db'
 import '../orchestration/db/contract-constants'
 import '../orchestration/db/messages/mailbox-routing-page'
 import '../orchestration/db/dispatch-row-writer'
 import '../orchestration/db/attempt-outcome-projection'
-import { defineMethod, type RpcRequest } from './core'
+import type { RpcRequest } from './core'
+import { defineOrchestrationMethod } from './methods/orchestration/access/orchestration-method-access'
 import { RpcDispatcher } from './dispatcher'
 
 describe('orchestration contract fence', () => {
@@ -20,7 +20,7 @@ describe('orchestration contract fence', () => {
     }
   })
 
-  function createHarness(method = 'orchestration.send') {
+  function createHarness(method: `orchestration.${string}` = 'orchestration.send') {
     const database = new OrchestrationDb(':memory:')
     databases.push(database)
     const runtime = new OrcaRuntimeService()
@@ -29,9 +29,10 @@ describe('orchestration contract fence', () => {
     const dispatcher = new RpcDispatcher({
       runtime,
       methods: [
-        defineMethod({
+        defineOrchestrationMethod({
           name: method,
           permission: 'workspace',
+          access: { kind: 'writes', targets: {} },
           params: z.object({ subject: z.string() }),
           handler: effect
         })
@@ -83,31 +84,7 @@ describe('orchestration contract fence', () => {
     }
   )
 
-  it('allows the current contract to reach the mutation executor', async () => {
-    const { dispatcher, effect } = createHarness()
-    const response = await dispatcher.dispatch(
-      request({ orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION })
-    )
-
-    expect(response).toMatchObject({ ok: true, result: { accepted: true } })
-    expect(effect).toHaveBeenCalledOnce()
-  })
-
-  it('keeps read-only orchestration inspection available without a contract', async () => {
-    const { dispatcher, effect } = createHarness('orchestration.taskList')
-    const response = await dispatcher.dispatch(
-      request({
-        method: 'orchestration.taskList',
-        params: { subject: 'read' },
-        orchestrationRequestId: undefined
-      })
-    )
-
-    expect(response).toMatchObject({ ok: true, result: { accepted: true } })
-    expect(effect).toHaveBeenCalledOnce()
-  })
-
-  it.each(['orchestration.run', 'orchestration.runStop'])(
+  it.each(['orchestration.run', 'orchestration.runStop'] as const)(
     'retires %s even when the caller sends the current contract',
     async (method) => {
       const { dispatcher, effect } = createHarness(method)

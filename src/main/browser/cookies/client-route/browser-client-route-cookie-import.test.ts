@@ -28,16 +28,20 @@ const {
   selectBrowserProfileMock: vi.fn()
 }))
 
-vi.mock('../browser-cookie-import', () => ({
+vi.mock('../sources/browser-cookie-detection', () => ({
   detectInstalledBrowsers: detectInstalledBrowsersMock,
-  importCookiesFromBrowser: importCookiesFromBrowserMock,
-  importCookiesFromFile: importCookiesFromFileMock,
   selectBrowserProfile: selectBrowserProfileMock
+}))
+vi.mock('../browser-cookie-import', () => ({
+  importCookiesFromBrowser: importCookiesFromBrowserMock
+}))
+vi.mock('../imports/import-cookie-file', () => ({
+  importCookiesFromFile: importCookiesFromFileMock
 }))
 vi.mock('../../routing/partitions/browser-route-partition-binding-runtime', () => ({
   currentBrowserRoutePartitionBindingStore: () => bindingStore
 }))
-vi.mock('../../sessions/browser-session-registry', () => ({
+vi.mock('../../sessions/profiles/browser-session-registry', () => ({
   browserSessionRegistry: {
     getProfile: getProfileMock,
     requireRouteBrowserProfile: requireRouteBrowserProfileMock

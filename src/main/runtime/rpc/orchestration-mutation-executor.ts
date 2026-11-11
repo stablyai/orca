@@ -1,9 +1,9 @@
 import {
   isDurableMutation,
   isTerminalPromptMutation
-} from '../../../shared/orchestration-rpc-contract'
+} from '../../../shared/orchestration/orchestration-rpc-contract'
 import type { OrcaRuntimeService } from '../orca-runtime'
-import type { OrcaSessionId } from '../../../shared/orca-session-address'
+import type { OrchestrationEntryCaller } from '../orchestration/addressing/orchestration-caller-identity'
 import { OrchestrationError } from '../orchestration/orchestration-error'
 import type { RpcRequest } from './core'
 import {
@@ -32,6 +32,14 @@ export type DurableMutationInvocation = {
   replayedReceipt?: unknown
 }
 
+/** Mutations whose pending receipt a restart re-enters, so a stop or cancel still finishes rather
+ *  than answering operation_unknown: each re-runs its ordinary owner, which is safe to repeat. */
+const RESUMABLE_PENDING_METHODS: ReadonlySet<string> = new Set([
+  'orchestration.workerRelease',
+  'orchestration.workerStop',
+  'orchestration.peerRunCancel'
+])
+
 type InFlightMutation = {
   method: string
   payloadHash: string
@@ -48,8 +56,8 @@ export class OrchestrationMutationExecutor {
     params: unknown,
     invoke: (mutation?: DurableMutationInvocation) => unknown,
     callerFingerprintOverride?: string,
-    /** The resolved session's Orca session id; it joins the payload so another caller cannot replay it. */
-    callerOrcaSessionId?: OrcaSessionId
+    /** The resolved caller; its identity joins the payload so another caller cannot replay it. */
+    caller?: OrchestrationEntryCaller
   ): Promise<unknown> {
     const requestId = request.orchestrationRequestId
     if (!requestId || !isDurableMutation(request.method, params)) {
@@ -57,12 +65,7 @@ export class OrchestrationMutationExecutor {
     }
     const callerFingerprint =
       callerFingerprintOverride ?? this.getLocalAuthenticatedCallerFingerprint()
-    const stableParams = replayStableCallerParams(
-      this.runtime,
-      params,
-      callerOrcaSessionId,
-      request.method
-    )
+    const stableParams = replayStableCallerParams(this.runtime, params, caller, request.method)
     const basePayloadHash = hashCanonical({ method: request.method, params: stableParams })
     const key = `${callerFingerprint}:${requestId}`
     const db = this.runtime.getOrchestrationDb()
@@ -134,7 +137,7 @@ export class OrchestrationMutationExecutor {
       isResumablePendingWorkerDone(request.method, params, begun.row.receipt)
     const resumedPendingMutation =
       begun.disposition === 'pending' &&
-      (request.method === 'orchestration.workerRelease' || resumedPendingWorkerDone)
+      (RESUMABLE_PENDING_METHODS.has(request.method) || resumedPendingWorkerDone)
 
     if (begun.disposition === 'completed') {
       const active = this.inFlight.get(key)
@@ -191,7 +194,7 @@ export class OrchestrationMutationExecutor {
           { requestId }
         )
       }
-      if (request.method !== 'orchestration.workerRelease' && !resumedPendingWorkerDone) {
+      if (!resumedPendingMutation) {
         const recovery = getPendingWorkerStartRecovery(request.method, begun.row.receipt)
         throw new OrchestrationError(
           'operation_unknown',

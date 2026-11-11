@@ -1,5 +1,3 @@
-import '../../../rpc/unused-default-rpc-methods.test-fixture'
-
 import { describe, expect, it, vi } from 'vitest'
 import { dispatch as dispatchCommand } from '../../../../../cli/dispatch'
 import { orchestrationTestContext } from '../../../../../cli/handlers/orchestration-handler-test-context'

@@ -69,7 +69,10 @@ function fixture() {
     getStore: () => null,
     getDb: () => db,
     showTerminal,
-    resolveWorktree
+    resolveWorkspace: async (selector: string) => ({
+      kind: 'worktree' as const,
+      worktree: await resolveWorktree(selector)
+    })
   })
   return { controller, db, showTerminal, resolveWorktree }
 }

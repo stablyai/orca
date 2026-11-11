@@ -1,14 +1,14 @@
 import { toast } from 'sonner'
-import { getAgentLabel } from '@/lib/agent-catalog'
-import { ensureDetectedAgentsForWorktree } from '@/lib/agent-detection-target-inventory'
+import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
+import { ensureDetectedAgentsForWorktree } from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
 import { launchAgentInNewTab } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
 import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
 import { useAppStore } from '@/store/index'
 import {
   acquireAgentLaunchChoices,
   AgentLaunchChoiceCancelled
-} from '../../../host-chat-program-acquisition'
-import { agentChoicePending } from '../../../host-chat-program'
+} from '../inventory/host-chat-program-acquisition'
+import { agentChoicePending } from '../inventory/host-chat-program'
 import { worktreeLaunchWorkspace } from '../routing/agent-launch-route-input'
 import { isTuiAgentEnabled } from '../../../../../../shared/agent-launch/catalog/tui-agent-selection'
 import type { LaunchSource } from '../../../../../../shared/telemetry-property-schemas'
@@ -17,12 +17,12 @@ import {
   adoptAgentSessionLaunchVerdict,
   planAgentSessionLaunch
 } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
-import type { AgentLaunchChoice } from '@/lib/agent-menu-selection'
+import type { AgentLaunchChoice } from '@/lib/agent-session/launch/routing/agent-menu-selection'
 import type { AgentLaunchRoute } from '@/lib/agent-session/launch/routing/agent-launch-routing'
 import { translate } from '@/i18n/i18n'
-import { resolveWorktreeDisplayName } from '@/lib/worktree-default-display-name'
-import { getResolvedExecutionHostIdForWorktree } from '@/lib/resolved-worktree-execution-host'
-import { workspaceNavigationToastAction } from '@/lib/workspace-navigation-toast-action'
+import { resolveWorktreeDisplayName } from '@/lib/workspace/display/worktree-default-display-name'
+import { getResolvedExecutionHostIdForWorktree } from '@/lib/workspace/ownership/resolved-worktree-execution-host'
+import { workspaceNavigationToastAction } from '@/lib/workspace/activation/workspace-navigation-toast-action'
 
 type LaunchAgentSessionContinuationArgs = {
   agent: TuiAgent
@@ -163,7 +163,8 @@ export async function launchAgentSessionContinuation({
   const plan = launchChoice
     ? adoptAgentSessionLaunchVerdict({ ...request, ...launchChoice, worktreeId })
     : planAgentSessionLaunch(useAppStore.getState(), request)
-  if (!(await ensureAgentAvailable(agent, worktreeId, plan.route, signal))) {
+  // A dialog closed while detection ran must not start the session the user just left.
+  if (!(await ensureAgentAvailable(agent, worktreeId, plan.route, signal)) || signal?.aborted) {
     return false
   }
   const state = useAppStore.getState()
@@ -173,9 +174,16 @@ export async function launchAgentSessionContinuation({
   const workspaceName =
     (workspace && resolveWorktreeDisplayName(workspace)) || initialCwd || worktreeId
   const result = launchAgentInNewTab({ ...delivery, agentSessionLaunchPlan: plan })
-  if (!result) {
-    notifyLaunchFailed(label)
+  if (!result || 'refused' in result) {
     return false
+  }
+  // A launch still waiting on its host has opened nothing yet: the handoff counts once a chat or
+  // terminal exists, so a declined or cancelled one leaves the dialog open to retry.
+  if (result.surface.kind === 'host-published' && result.structuredSettlement) {
+    const settled = await result.structuredSettlement
+    if (settled.kind === 'cancelled' || settled.kind === 'failed') {
+      return false
+    }
   }
 
   if (result.promptDeliveryResult) {
@@ -191,16 +199,6 @@ export async function launchAgentSessionContinuation({
       })
   }
   return true
-}
-
-function notifyLaunchFailed(agentLabel: string): void {
-  toast.error(
-    translate(
-      'components.agentSessionContinuation.launchFailed',
-      'Could not start a new {{agent}} session.',
-      { agent: agentLabel }
-    )
-  )
 }
 
 function notifyDeliveryFailed(agentLabel: string, prompt: string): void {

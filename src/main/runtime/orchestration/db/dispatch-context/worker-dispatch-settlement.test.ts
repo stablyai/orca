@@ -10,7 +10,7 @@ import '../dispatch-row-writer'
 import '../attempt-outcome-projection'
 import { settleActiveDispatchesForTask } from './dispatch-completion'
 import { mintStructuredWorkerHandle } from '../../terminal-authority/structured-sessions/structured-worker-identity'
-import { RuntimeLegacyWorkerTerminalRecoveryPersistence } from '../../../runtime-legacy-worker-terminal-recovery-persistence'
+import { RuntimeLegacyWorkerTerminalRecoveryPersistence } from '../../terminal-authority/runtime-legacy-worker-terminal-recovery-persistence'
 
 describe('settled assignment worker recovery', () => {
   let directory: string

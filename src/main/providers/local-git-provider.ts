@@ -1,3 +1,5 @@
+import { createBranch } from '../git/create-branch'
+import { applyCommit, recoverSequencer } from '../git/commit-actions'
 import { gitSyncForkDefaultBranch } from '../git/fork-sync'
 import type { GitRuntimeOptions } from '../git/git-runtime-options'
 import { checkIgnoredPaths } from '../git/source-control/check-ignored-paths'
@@ -75,6 +77,12 @@ export function createLocalGitProvider(options: LocalGitProviderOptions = {}): L
     getHistory: (worktreePath, historyOptions = {}) =>
       getHistory(worktreePath, { ...historyOptions, ...interactive }),
     commit: (worktreePath, message) => commitChanges(worktreePath, message, interactive),
+    createBranch: (worktreePath, name, startPoint) =>
+      createBranch(worktreePath, name, startPoint, interactive),
+    applyCommit: (worktreePath, operation, commitId) =>
+      applyCommit(worktreePath, operation, commitId, interactive),
+    recoverSequencer: (worktreePath, operation, action) =>
+      recoverSequencer(worktreePath, operation, action, interactive),
     completeMerge: (worktreePath) => completeMerge(worktreePath, interactive),
     getStagedCommitContext: (worktreePath) => getStagedCommitContext(worktreePath, interactive),
     getDiff: (worktreePath, filePath, staged, compareAgainstHead, oldPath) =>
@@ -104,7 +112,13 @@ export function createLocalGitProvider(options: LocalGitProviderOptions = {}): L
     detectConflictOperation: (worktreePath) => detectConflictOperation(worktreePath, base),
     abortMerge: (worktreePath) => abortMerge(worktreePath, interactive),
     abortRebase: (worktreePath) => abortRebase(worktreePath, interactive),
-    checkoutBranch: (worktreePath, branch) => checkoutBranch(worktreePath, branch, interactive),
+    checkoutBranch: (worktreePath, branch, creation, detached) =>
+      checkoutBranch(
+        worktreePath,
+        branch,
+        { ...interactive, ...(detached ? { detached } : {}) },
+        creation
+      ),
     listLocalBranches: (worktreePath) => listLocalBranches(worktreePath, base),
     getBranchCompare: (worktreePath, baseRef, compareOptions) =>
       getBranchCompare(worktreePath, baseRef, {

@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs'
+import { readProfileStateSplitDocumentForRow } from './profile-state-document-parts-reader'
 import type Database from '../../sqlite/sync-database'
 import {
   ProfileStateRecoveryCommandError,
@@ -237,7 +238,9 @@ function scanProfileStateSections(db: Database.Database): SectionScan | undefine
     const domain = isRecord(row) && typeof row.domain === 'string' ? row.domain : undefined
     let document: ReturnType<typeof validateProfileStateDocumentRow>
     try {
-      document = validateProfileStateDocumentRow(row, { retainParsedValue: true })
+      document =
+        readProfileStateSplitDocumentForRow(db, row, true) ??
+        validateProfileStateDocumentRow(row, { retainParsedValue: true })
     } catch (error) {
       if (!(error instanceof ProfileStateDocumentCorruptionError) || domain === undefined) {
         throw error

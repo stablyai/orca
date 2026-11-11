@@ -3,7 +3,7 @@ import type {
   RunApprovedWorktreeSetupArgs,
   RunApprovedWorktreeSetupResult
 } from '../../../../shared/worktree/create-types'
-import { toRuntimeWorktreeSelector } from '../../runtime/runtime-worktree-selector'
+import { toRuntimeWorktreeSelector } from '../../runtime/rpc/targets/runtime-worktree-selector'
 import { callRuntimeResult, getRemoteRuntimeStatus } from './web-runtime-calls'
 
 /** Paired web clients run approved setup on their host; older hosts lack the method. */

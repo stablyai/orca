@@ -1,6 +1,6 @@
 import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/runtime-session-contracts'
 import type { RuntimeMobileSessionTerminalClientTab } from '../../../../../shared/runtime-mobile-session-tab-contracts'
-import { hostSnapshotAffirmsWorktreeContents } from '../../host-session-snapshot-authority'
+import { hostSnapshotAffirmsWorktreeContents } from '../hydration/host-session-snapshot-authority'
 
 export type WebSessionTerminalHandleUpdate = {
   surfacePresent: boolean

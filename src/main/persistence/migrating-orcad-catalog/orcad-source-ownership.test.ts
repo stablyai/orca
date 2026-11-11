@@ -3,7 +3,7 @@ import { getDefaultPersistedState } from '../../../shared/constants'
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../shared/project-group-types'
 import type { Repo } from '../../../shared/repo-types'
-import { orcadMigrationCutoverFixture } from '../../ssh/orcad-migration-cutover-fixture'
+import { orcadMigrationCutoverFixture } from '../../managed-server/migration/cutover/testing/orcad-migration-cutover-fixture'
 import { subtractOrcadSourceCatalogState } from './orcad-source-catalog-subtraction'
 import { orcadSourceFolderWorkspaceIds, repoBelongsToOrcadSource } from './orcad-source-ownership'
 

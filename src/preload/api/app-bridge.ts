@@ -3,7 +3,7 @@ import type { AppIdentity } from '../../shared/app-identity'
 import type { MacosUpgradeSupport } from '../../shared/macos-upgrade-support'
 import type { FloatingTerminalCwdRequest } from '../../shared/ui-chrome-types'
 import type { MacCapturedDigitRowChord } from '../../shared/macos-symbolic-hotkeys'
-import type { MarkdownDocument } from '../../shared/filesystem-entry-types'
+import type { MarkdownDocument } from '../../shared/file-listing/file-document'
 import type { WriteTerminalRenderDesyncEvidenceArgs } from '../../shared/terminal/diagnostics/terminal-render-desync-evidence'
 import {
   KEYBOARD_LAYOUT_CHANGED_CHANNEL,

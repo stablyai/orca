@@ -1,4 +1,3 @@
-import '../../../unused-default-rpc-methods.test-fixture'
 vi.mock('node:fs/promises', { spy: true })
 import '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { expect, it, vi } from 'vitest'

@@ -7,8 +7,9 @@ import { RefreshCw } from 'lucide-react'
 import { useAppStore } from '@/store/index'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import type { PRCheckDetail, PRCheckRunDetails } from '../../../../../../shared/github/check-types'
 import { getAttachedWorktreesForFolderWorkspace } from '../../folder-workspace-attached-worktrees'
 import { FolderWorkspacePrChecksRow } from './FolderWorkspacePrChecksRow'
@@ -22,6 +23,7 @@ import {
   selectFolderWorkspaces,
   selectWorktreesByRepo
 } from '@/store/workspaces/catalog/workspace-record-fields'
+import { FolderWorkspaceEmptyState } from '../../folder-workspace-empty-state'
 
 type FolderWorkspacePrChecksPanelProps = {
   isVisible?: boolean
@@ -30,6 +32,7 @@ type FolderWorkspacePrChecksPanelProps = {
 export default function FolderWorkspacePrChecksPanel({
   isVisible = true
 }: FolderWorkspacePrChecksPanelProps): React.JSX.Element {
+  const t = useTranslate()
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const activeWorkspaceKey = useAppStore((s) => s.activeWorkspaceKey)
   const folderWorkspaces = useAppStore((s) => selectFolderWorkspaces(s))
@@ -205,7 +208,7 @@ export default function FolderWorkspacePrChecksPanel({
   if (!folderWorkspace) {
     return (
       <div className="flex min-h-0 flex-1 items-center justify-center p-6 text-center text-sm text-muted-foreground">
-        {translate(
+        {t(
           'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.unavailable',
           'PR checks are only shown for folder workspaces.'
         )}
@@ -219,7 +222,7 @@ export default function FolderWorkspacePrChecksPanel({
         <div className="flex items-center gap-2">
           <div className="min-w-0 flex-1">
             <div className="truncate text-sm font-medium text-foreground">
-              {translate(
+              {t(
                 'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.reviewChecks',
                 'Review checks'
               )}
@@ -236,7 +239,7 @@ export default function FolderWorkspacePrChecksPanel({
                 size="icon-xs"
                 onClick={() => setManualRefreshGeneration((generation) => generation + 1)}
                 disabled={childWorktrees.length === 0 || isRefreshing}
-                aria-label={translate(
+                aria-label={t(
                   'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.refresh',
                   'Refresh PR checks'
                 )}
@@ -245,7 +248,7 @@ export default function FolderWorkspacePrChecksPanel({
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom">
-              {translate(
+              {t(
                 'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.refresh',
                 'Refresh PR checks'
               )}
@@ -255,20 +258,17 @@ export default function FolderWorkspacePrChecksPanel({
       </div>
 
       {childWorktrees.length === 0 ? (
-        <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
-          <div className="text-sm font-medium text-foreground">
-            {translate(
-              'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.emptyTitle',
-              'No attached worktrees yet'
-            )}
-          </div>
-          <div className="mt-2 max-w-[16rem] text-xs leading-5 text-muted-foreground">
-            {translate(
-              'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.emptyCopy',
-              'PR checks will appear here after worktrees are attached to this folder workspace.'
-            )}
-          </div>
-        </div>
+        <FolderWorkspaceEmptyState
+          folderWorkspace={folderWorkspace}
+          title={t(
+            'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.emptyTitle',
+            'No attached worktrees yet'
+          )}
+          copy={t(
+            'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.emptyCopy',
+            'PR checks will appear here after worktrees are attached to this folder workspace.'
+          )}
+        />
       ) : (
         <div className="scrollbar-sleek min-h-0 flex-1 overflow-y-auto px-2 py-2">
           <div className="space-y-1">
@@ -288,19 +288,22 @@ export default function FolderWorkspacePrChecksPanel({
   )
 }
 
-function formatReviewChecksHeaderSummary(summary: {
-  attached: number
-  failing: number
-  pending: number
-  passing: number
-}): string | null {
+function formatReviewChecksHeaderSummary(
+  summary: {
+    attached: number
+    failing: number
+    pending: number
+    passing: number
+  },
+  t: Translate = translate
+): string | null {
   if (summary.attached === 0) {
     return null
   }
-  const worktreeCount = formatWorktreeCount(summary.attached)
+  const worktreeCount = formatWorktreeCount(summary.attached, t)
   const attentionParts = [
-    summary.failing > 0 ? formatFailingCount(summary.failing) : null,
-    summary.pending > 0 ? formatPendingCount(summary.pending) : null
+    summary.failing > 0 ? formatFailingCount(summary.failing, t) : null,
+    summary.pending > 0 ? formatPendingCount(summary.pending, t) : null
   ].filter((part): part is string => part !== null)
 
   if (attentionParts.length > 0) {
@@ -309,7 +312,7 @@ function formatReviewChecksHeaderSummary(summary: {
   if (summary.passing === summary.attached) {
     return [
       worktreeCount,
-      translate(
+      t(
         'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.allChecksPassing',
         'all checks passing'
       )
@@ -318,24 +321,24 @@ function formatReviewChecksHeaderSummary(summary: {
   return worktreeCount
 }
 
-function formatWorktreeCount(count: number): string {
-  return translate(
+function formatWorktreeCount(count: number, t: Translate = translate): string {
+  return t(
     'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.worktreeCountLabel',
     '{{count}} worktrees',
     { count, defaultValue_one: '{{count}} worktree' }
   )
 }
 
-function formatFailingCount(count: number): string {
-  return translate(
+function formatFailingCount(count: number, t: Translate = translate): string {
+  return t(
     'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.failingCountLabel',
     '{{count}} failing',
     { count, defaultValue_one: '{{count}} failing' }
   )
 }
 
-function formatPendingCount(count: number): string {
-  return translate(
+function formatPendingCount(count: number, t: Translate = translate): string {
+  return t(
     'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.pendingCountLabel',
     '{{count}} pending',
     { count, defaultValue_one: '{{count}} pending' }

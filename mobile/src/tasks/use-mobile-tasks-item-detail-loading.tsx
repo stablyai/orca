@@ -135,7 +135,9 @@ export function useMobileTasksItemDetailLoading<Model extends ItemDetailLoadingI
             repo: `id:${actionItem.source.repoId}`,
             iid: actionItem.source.number,
             type: actionItem.source.type,
-            projectRef: actionItem.source.projectRef
+            projectRef: actionItem.source.projectRef,
+            // A lost comment settles on any later read (refresh, Retry, reopen); desktop reads never ask.
+            markViewerComments: true
           },
           { timeoutMs: 30_000 }
         )

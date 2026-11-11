@@ -1,42 +1,15 @@
 import { randomUUID } from 'node:crypto'
 import type { Repo } from '../../../shared/repo-types'
-import { normalizeSparseDirectories } from '../../ipc/sparse-checkout-directories'
-import type { RuntimeStore } from '../runtime-store-contract'
+import {
+  normalizeSparsePresetDirectories,
+  normalizeSparsePresetName
+} from '../../ipc/repos/sparse-preset-validation'
+import type { RuntimeStore } from '../construction/runtime-store-contract'
 import { assertWslMoveRepoWritable } from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
 
 type RuntimeRepositorySparsePresetDependencies = {
   getStore: () => RuntimeStore | null
   resolveRepo: (selector: string) => Promise<Repo>
-}
-
-function normalizeName(name: string): string {
-  const trimmed = name.trim()
-  if (!trimmed) {
-    throw new Error('Preset name is required.')
-  }
-  if (trimmed.length > 80) {
-    throw new Error('Preset name is too long.')
-  }
-  return trimmed
-}
-
-function normalizeDirectories(directories: string[]): string[] {
-  let normalized: string[]
-  try {
-    normalized = normalizeSparseDirectories(directories)
-  } catch (error) {
-    if (
-      error instanceof Error &&
-      error.message === 'Sparse checkout directories must be repo-relative paths.'
-    ) {
-      throw new Error('Preset directories must be repo-relative paths.')
-    }
-    throw error
-  }
-  if (normalized.length === 0) {
-    throw new Error('Preset must have at least one directory.')
-  }
-  return normalized
 }
 
 export class RuntimeRepositorySparsePresets {
@@ -58,8 +31,8 @@ export class RuntimeRepositorySparsePresets {
     }
     const repo = await this.deps.resolveRepo(repoSelector)
     assertWslMoveRepoWritable(store, repo)
-    const name = normalizeName(args.name)
-    const directories = normalizeDirectories(args.directories)
+    const name = normalizeSparsePresetName(args.name)
+    const directories = normalizeSparsePresetDirectories(args.directories)
     const now = Date.now()
     const existing = args.id
       ? store.getSparsePresets(repo.id).find((preset) => preset.id === args.id)

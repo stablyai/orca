@@ -21,6 +21,8 @@ export type PRComment = {
   author: string
   authorAvatarUrl: string
   body: string
+  /** Transient display sources from the same body fetch; never submit or persist these URLs. */
+  bodyImageUrls?: Record<string, string>
   createdAt: string
   url: string
   reactions?: GitHubReaction[]

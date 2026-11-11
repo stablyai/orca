@@ -10,7 +10,7 @@ import type {
   GitHubWorkItem,
   GitHubWorkItemDetails
 } from '../../../../../shared/github/work-item-types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import { onGitHubWorkItemDetailsCacheMutation } from '@/lib/work-items/github/github-work-item-details-cache-events'
 
 // Bound cached details for instant reopen; refresh stale entries on open. See docs/gh-work-item-drawer-cache.md.
@@ -220,7 +220,11 @@ export function markUserActionWorkItemDetailsRead(
 
 // An issue's saved body drops `pending` so a read started before it settles superseded.
 // A retired ordinary read owes one replacement; a retired Refresh read is retried by its own loop.
-export function patchCachedWorkItemBody(cacheKey: string, body: string): void {
+export function patchCachedWorkItemBody(
+  cacheKey: string,
+  body: string,
+  representation?: { bodyImageUrls?: Record<string, string> }
+): void {
   const prev = workItemDetailsCache.get(cacheKey)
   if (!prev?.details) {
     return
@@ -230,7 +234,7 @@ export function patchCachedWorkItemBody(cacheKey: string, body: string): void {
     supersedesRead && prev.pending !== undefined && !userActionDetailsReads.has(prev.pending)
   touchWorkItemDetailsCache(cacheKey, {
     ...prev,
-    details: { ...prev.details, body },
+    details: { ...prev.details, body, ...representation },
     fetchedAt: Date.now(),
     pending: supersedesRead ? undefined : prev.pending,
     rereadOwed: retiresOrdinaryRead ? true : prev.rereadOwed,

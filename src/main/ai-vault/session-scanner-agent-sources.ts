@@ -28,6 +28,7 @@ import {
   wslHomeSessionDirs
 } from './session-scanner-roots'
 import { getHermesHome } from '../hermes/hermes-default-home'
+import { isClaudeProjectBucketDirectory } from './scanners/claude/claude-project-dir-encoding'
 import { SUBAGENT_DIR_NAME } from './scanners/claude/session-scanner-subagent-transcripts'
 import type { AiVaultScanOptions } from './session-scanner-types'
 import { normalizeAgentSessionsDir, primeAgentSessionsDirFromEnv } from './session-scanner-values'
@@ -94,8 +95,8 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
         claudeProfileProjectsDirs: options.claudeProfileProjectsDirs
       }),
     extensions: ['.jsonl'],
-    // Read non-resumable task transcripts under their parent instead of duplicating History rows.
-    directoryPredicate: (name) => name !== SUBAGENT_DIR_NAME
+    // Subagent transcripts are read under their parent instead of duplicating History rows.
+    directoryPredicate: isClaudeProjectBucketDirectory
   },
   qoder: {
     rootDirs: (options, wslHomeDirs) =>

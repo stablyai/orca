@@ -28,6 +28,7 @@ export function beginClaudeOptionMutation(session: ClaudeSession, key: string): 
   if (key === 'model') {
     delete session.appliedOptions
     delete session.reportedOptions.reportedModel
+    session.modelMutationDispatch = session.dispatchSequence
   } else {
     if (session.reportedModelMutation === previous) {
       session.reportedModelMutation = sequence
@@ -40,11 +41,19 @@ export function beginClaudeOptionMutation(session: ClaudeSession, key: string): 
   return sequence
 }
 
+/** Until a turn carries the pick, the running process's answers name the model it replaced. */
+export function noteClaudeModelPick(session: ClaudeSession, model: string): void {
+  session.modelPickAwaitingTurn = model
+  delete session.reportedOptions.reportedModel
+}
+
 /** An init names execution; a control answer only acknowledges its input. */
 export function observeClaudeExecutionModel(session: ClaudeSession, model: string): boolean {
   const previous = claudeExecutionObservations(session).model
   const previousResponse = session.reportedOptions.reportedModel
-  session.reportedOptions.reportedModel = model
+  if (!session.modelPickAwaitingTurn) {
+    session.reportedOptions.reportedModel = model
+  }
   if (previous !== model) {
     delete session.appliedOptions
   }
@@ -76,7 +85,12 @@ function observeClaudeResponseModel(
   frame: Record<string, unknown>
 ): boolean {
   const response = readClaudeResponseModel(frame)
-  if (!response) {
+  // Why: a turn running at a model pick keeps answering on the old model; it must not unseat the pick.
+  if (
+    !response ||
+    (session.modelMutationDispatch === session.dispatchSequence &&
+      session.reportedModelMutation !== session.optionMutationSequence)
+  ) {
     return false
   }
   const model =
@@ -87,7 +101,7 @@ function observeClaudeResponseModel(
           : null,
       responseModel: response
     }) ?? response
-  if (model === session.reportedOptions.reportedModel) {
+  if (session.modelPickAwaitingTurn || model === session.reportedOptions.reportedModel) {
     return false
   }
   session.reportedOptions.reportedModel = model

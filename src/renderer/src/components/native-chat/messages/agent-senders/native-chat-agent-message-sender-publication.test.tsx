@@ -6,11 +6,11 @@ import { useAppStore } from '@/store'
 import { useAgentMessageSenderView } from './native-chat-agent-message-sender-view'
 
 import { initialStore, resetSenderStore, status } from './native-chat-agent-sender.test-fixture'
-import { agentSenderPublicationPatch } from '@/runtime/agent-sender-publication-patch'
+import { agentSenderPublicationPatch } from '@/runtime/native-chat/agent-senders/agent-sender-publication-patch'
 import {
   selectAgentSenderAssociation,
   resolveAgentMessageSender
-} from '@/runtime/agent-sender-associations'
+} from '@/runtime/native-chat/agent-senders/agent-sender-associations'
 import type { AgentSenderPublication } from '../../../../../../shared/agent-sender-associations'
 import type { AgentMessageSender } from '../../../../../../shared/agent-session/agent-session-message-source'
 

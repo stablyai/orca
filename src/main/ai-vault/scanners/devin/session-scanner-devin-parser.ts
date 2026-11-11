@@ -198,7 +198,8 @@ export async function parseDevinSessionDocument(
       })
     },
     consume: consumeDevinSessionStep,
-    signal
+    signal,
+    drain: () => messages?.drain?.() ?? Promise.resolve()
   })
   if (!parsed) {
     return null

@@ -66,6 +66,10 @@ export function claudeAndCodexDeclared(): StructuredAgentRegistry {
     ...NO_METHODS,
     compact: unused,
     changeThreadGoal: unused,
+    prepareRewind: async (input) => ({
+      ok: true,
+      revert: { threadId: 'thread', beforeTurnId: input.beforeTurnId, keptTurnId: null }
+    }),
     rewind: unused,
     recoverRewind: unused,
     copyConversation: unused

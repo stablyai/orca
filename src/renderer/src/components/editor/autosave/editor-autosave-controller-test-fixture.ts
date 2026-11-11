@@ -7,11 +7,11 @@ import { withEditorBufferRecords } from '@/store/slices/editor/buffers/editor-bu
 import type { AppState } from '@/store/types'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { emptyTabLayoutState } from '@/store/slices/editor/editor-slice-test-harness'
-import { getDiskBaselineSignature } from '../../../../../shared/disk-baseline-signature'
+import { getDiskBaselineSignature } from '../../../../../shared/file-write/disk-baseline-signature'
 import {
   compareDiskWritePrecondition,
   type FileWriteDiskPrecondition
-} from '../../../../../shared/file-write-disk-precondition'
+} from '../../../../../shared/file-write/file-write-disk-precondition'
 
 export type FakeEditorDisk = {
   files: Map<string, string>

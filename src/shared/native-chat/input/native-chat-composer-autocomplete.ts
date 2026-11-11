@@ -26,6 +26,8 @@ type PickerAutocomplete = {
   skillsEnabled: boolean
   skillStatus: NativeChatSkillDiscoverySnapshot['status']
   skillErrorKind?: NativeChatSkillDiscoverySnapshot['errorKind']
+  /** The host is checking for skills added since its last list, so an empty filter may fill in. */
+  skillsChecking?: boolean
 }
 
 export type ComposerAutocomplete =

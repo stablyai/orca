@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { appendReturnedDraftText } from '../../../../../src/shared/returned-draft-text'
-import type { MobileNativeChatSendIntent } from '../mobile-native-chat-send'
+import type { MobileNativeChatSendIntent } from './mobile-native-chat-send'
 import type { MobileNativeChatInputLockReason } from '../MobileNativeChatView'
-import { useSettledMobileNativeChatInputLock } from '../use-mobile-native-chat-input-lease'
+import { useSettledMobileNativeChatInputLock } from './use-mobile-native-chat-input-lease'
 import {
   mobileNativeChatDraftDestination,
   readMobileNativeChatDraftInputs,
@@ -71,10 +71,11 @@ export function useMobileNativeChatOfflineQueue(args: {
 
   const dispatch = useCallback(
     async (target: string, queued: MobileNativeChatOfflineSend): Promise<boolean> => {
+      if (!beginMobileNativeChatOfflineSend(target, queued.id)) {
+        return false
+      }
       drainingRef.current = true
       setDraining(true)
-      // Marked on its way, so nothing sends it twice; it keeps its place (and its saved copy) until the send settles.
-      beginMobileNativeChatOfflineSend(target, queued.id)
       // A tab closed meanwhile took its queue with it; a late answer must not bring one back.
       const destination = mobileNativeChatDraftDestination(target)
       let handedBack = false
@@ -105,7 +106,7 @@ export function useMobileNativeChatOfflineQueue(args: {
 
   const head = sends[0]
   useEffect(() => {
-    if (ready && scope && !draining && head && !head.paused) {
+    if (ready && scope && !draining && head && !head.paused && !head.sending) {
       void dispatch(scope, head)
     }
   }, [dispatch, draining, head, ready, scope])

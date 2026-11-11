@@ -1,27 +1,28 @@
 import { Moon, Play } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
-import type { SpawnDeferralReason } from '../../../../../../shared/host-spawn-admission'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
+import type { SpawnDeferralReason } from '../../../../../../shared/terminal/pty/admission/spawn-admission-contract'
 
-function sleepingReasonDetail(reason: SpawnDeferralReason): string {
+function sleepingReasonDetail(reason: SpawnDeferralReason, t: Translate = translate): string {
   switch (reason) {
     case 'paused':
-      return translate(
+      return t(
         'auto.components.terminal.pane.TerminalSleepingPaneOverlay.pausedDetail',
         'Automatic restores are paused because the host stopped unexpectedly. Your session is saved.'
       )
     case 'live_cap':
-      return translate(
+      return t(
         'auto.components.terminal.pane.TerminalSleepingPaneOverlay.liveCapDetail',
         'Enough agents are already running on this host. Your session is saved.'
       )
     case 'pressure':
-      return translate(
+      return t(
         'auto.components.terminal.pane.TerminalSleepingPaneOverlay.pressureDetail',
         'The host is under heavy load. Your session is saved.'
       )
     case 'deadline':
-      return translate(
+      return t(
         'auto.components.terminal.pane.TerminalSleepingPaneOverlay.deadlineDetail',
         'The host was busy restoring other terminals. Your session is saved.'
       )
@@ -39,6 +40,7 @@ export function TerminalSleepingPaneOverlay({
   /** Present only when the host can clear its pause. */
   onResumeAutomaticRestores?: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div
       className="absolute inset-0 z-40 flex cursor-pointer items-center justify-center bg-background/70 p-4"
@@ -55,12 +57,12 @@ export function TerminalSleepingPaneOverlay({
           </div>
           <div className="min-w-0 flex-1 space-y-1">
             <div className="text-sm font-medium text-foreground">
-              {translate(
+              {t(
                 'auto.components.terminal.pane.TerminalSleepingPaneOverlay.title',
                 'Sleeping — click to resume'
               )}
             </div>
-            <div className="text-xs text-muted-foreground">{sleepingReasonDetail(reason)}</div>
+            <div className="text-xs text-muted-foreground">{sleepingReasonDetail(reason, t)}</div>
           </div>
         </div>
         <div className="flex justify-end gap-2">
@@ -75,7 +77,7 @@ export function TerminalSleepingPaneOverlay({
                 onResumeAutomaticRestores()
               }}
             >
-              {translate(
+              {t(
                 'auto.components.terminal.pane.TerminalSleepingPaneOverlay.resumeAutomaticRestores',
                 'Resume automatic restores'
               )}
@@ -91,10 +93,7 @@ export function TerminalSleepingPaneOverlay({
             }}
           >
             <Play />
-            {translate(
-              'auto.components.terminal.pane.TerminalSleepingPaneOverlay.resume',
-              'Resume'
-            )}
+            {t('auto.components.terminal.pane.TerminalSleepingPaneOverlay.resume', 'Resume')}
           </Button>
         </div>
       </div>

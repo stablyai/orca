@@ -3,8 +3,9 @@ import { useTranslation } from 'react-i18next'
 import { NativeChatExpandable } from '../../messages/disclosure/NativeChatExpandable'
 import { useNativeChatDisclosure } from '../../messages/disclosure/native-chat-disclosure-store'
 import { Check } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
+import { recomputeOn } from '@/lib/recompute-on'
 import {
   isToolCallBlock,
   type NativeChatBackgroundTaskBlock,
@@ -149,8 +150,8 @@ export function NativeChatToolRun({
   const hasAskCall = asks.length > 0
   const askSubject = hasAskCall ? nativeChatAskRunSubject(asks) : null
   const showsHeader = !hasAskCall || callCount > 0
-  // A single command is more recognizable than its category summary.
-  const runSentence = nativeChatToolRunSentence(headerBlocks, { live })
+  // A single command is more recognizable than its category summary. Its words read translate(), so key it on `t`.
+  const runSentence = recomputeOn([t], () => nativeChatToolRunSentence(headerBlocks, { live }))
   // The card sits inside the run's own scroll box, so that box has to move too.
   const revealDiff = useMemo(
     () =>

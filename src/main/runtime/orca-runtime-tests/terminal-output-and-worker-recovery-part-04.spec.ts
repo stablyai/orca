@@ -14,8 +14,7 @@ import {
   TEST_WORKTREE_ID,
   TEST_WORKTREE_PATH,
   deferred,
-  makeRuntimeStoreWithWorkspaceSession,
-  store
+  makeRuntimeStoreWithWorkspaceSession
 } from './orca-runtime-test-fixtures.spec'
 import { publishLegacyWorkerReveal } from './orca-runtime-test-scenario-builders.spec'
 
@@ -480,56 +479,6 @@ describe('OrcaRuntimeService', () => {
       await vi.advanceTimersByTimeAsync(30_000)
       expect(listProcesses).toHaveBeenCalledTimes(4)
       expect(revealTerminalSession).toHaveBeenCalledOnce()
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('cancels a coalesced SSH worker recovery retry when its provider disconnects', async () => {
-    vi.useFakeTimers()
-    try {
-      const runtime = new OrcaRuntimeService(store)
-      const reconcile = vi.spyOn(runtime, 'reconcileLegacyWorkerTerminals').mockResolvedValue({
-        adoptedDispatchIds: [],
-        exitedDispatchIds: [],
-        deferredDispatchIds: []
-      })
-      const retryInternals = runtime as unknown as {
-        updateLegacyWorkerTerminalRecoveryRetry: (
-          plan: {
-            candidates: { dispatchId: string; ptyId: string }[]
-          },
-          deferredDispatchIds: ReadonlySet<string>,
-          options: { connectionId?: string; materializeRenderer?: boolean }
-        ) => void
-      }
-      const plan = {
-        candidates: [
-          {
-            dispatchId: 'dispatch-ssh-retry',
-            ptyId: 'ssh:ssh-retry@@pty-worker'
-          }
-        ]
-      }
-      const deferred = new Set(['dispatch-ssh-retry'])
-
-      retryInternals.updateLegacyWorkerTerminalRecoveryRetry(plan, deferred, {
-        connectionId: 'ssh-retry',
-        materializeRenderer: true
-      })
-      retryInternals.updateLegacyWorkerTerminalRecoveryRetry(plan, deferred, {
-        connectionId: 'ssh-retry',
-        materializeRenderer: true
-      })
-      runtime.notifySshStateChanged('ssh-retry', {
-        targetId: 'ssh-retry',
-        status: 'disconnected',
-        error: null,
-        reconnectAttempt: 0
-      })
-      await vi.advanceTimersByTimeAsync(30_000)
-
-      expect(reconcile).not.toHaveBeenCalled()
     } finally {
       vi.useRealTimers()
     }

@@ -1,4 +1,4 @@
-import type { RuntimePtyController } from '../../runtime-pty-controller-contract'
+import type { RuntimePtyController } from '../lifecycle/runtime-pty-controller-contract'
 import { AgentLaunchPaneAlreadyLiveError } from '../../../../shared/agent-launch/contracts/agent-launch-pane-already-live'
 import {
   isTerminalLeafId,

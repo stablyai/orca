@@ -11,7 +11,7 @@ import {
   DialogHeader,
   DialogTitle
 } from '../../../ui/dialog'
-import { getManagedOrcadApi } from '../../runtime-environments/managed-servers/use-managed-server-catalog'
+import { getManagedOrcadApi } from '../../../../runtime/hosts/installation/managed-orcad-api-availability'
 
 /** Offer migration of changes made by an older build or retain the managed server’s version. */
 export function hasSshHostSourceChanged(target: SshTarget): boolean {

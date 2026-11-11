@@ -5,7 +5,7 @@ import type {
   WorktreeLineageResolution
 } from './runtime-worktree-lineage-resolution'
 import type { OrchestrationDb } from '../../orchestration/db/orchestration-db'
-import { resolveNestedWorkerMaxDepth } from '../../../../shared/nested-worker-depth'
+import { resolveNestedWorkerMaxDepth } from '../../../../shared/orchestration/workers/nested-worker-depth'
 import type { RuntimeWorktreeLineageController } from './runtime-worktree-lineage-controller'
 import type {
   CrossStoreWorkspaceLineage,

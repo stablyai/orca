@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseRemoteFederatedWorkerStartReceipt } from './federated-attach-receipt'
+import { parseRemoteFederatedWorkerStartReceipt } from '../../../../orchestration/legacy-remote-home/federated-attach-receipt'
 
 describe('remote federated worker start receipt', () => {
   it.each([

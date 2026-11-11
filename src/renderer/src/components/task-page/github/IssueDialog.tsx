@@ -1,6 +1,6 @@
 import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { useRef, useState } from 'react'
-import { getGitHubRuntimeRepoId } from '@/lib/github-source-runtime-context'
+import { getGitHubRuntimeRepoId } from '@/lib/work-items/github/github-source-runtime-context'
 import {
   Dialog,
   DialogContent,
@@ -9,8 +9,8 @@ import {
   DialogDescription,
   DialogFooter
 } from '@/components/ui/dialog'
-import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
-import { translate } from '@/i18n/i18n'
+import { isScreenSubmitShortcut } from '@/lib/keyboard/screen-submit-shortcut'
+import { useTranslate } from '@/i18n/use-translate'
 import { sameGitHubOwnerRepo } from '@/components/github/IssueSourceIndicator'
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
 import { repoMatchesHostIdentity } from '@/store/repos/repo-host-identity'
@@ -34,6 +34,7 @@ export function TaskPageGitHubIssueDialog({
 }: {
   model: TaskPageComposerActionsModel
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const {
     setIssueSourcePreference,
     submitShortcutLabel,
@@ -85,9 +86,7 @@ export function TaskPageGitHubIssueDialog({
         }}
       >
         <DialogHeader>
-          <DialogTitle>
-            {translate('auto.components.TaskPage.d3d0998b7d', 'New GitHub issue')}
-          </DialogTitle>
+          <DialogTitle>{t('auto.components.TaskPage.d3d0998b7d', 'New GitHub issue')}</DialogTitle>
           {(() => {
             // Use the resolved slug as the source indicator, falling back to displayName.
             const entry = newIssueTargetRepo
@@ -102,10 +101,10 @@ export function TaskPageGitHubIssueDialog({
             return (
               <DialogDescription>
                 {target
-                  ? translate('auto.components.TaskPage.filingInTarget', 'Filing in {{target}}', {
+                  ? t('auto.components.TaskPage.filingInTarget', 'Filing in {{target}}', {
                       target
                     })
-                  : translate(
+                  : t(
                       'auto.components.TaskPage.filingInThisRepository',
                       'Filing in this repository'
                     )}
@@ -154,7 +153,7 @@ export function TaskPageGitHubIssueDialog({
           {selectedRepos.length > 1 ? (
             <div className="flex flex-col gap-1">
               <label className="text-[11px] font-medium text-muted-foreground">
-                {translate('auto.components.TaskPage.00022ec0ba', 'Project')}
+                {t('auto.components.TaskPage.00022ec0ba', 'Project')}
               </label>
               <Select
                 value={newIssueRepoId ?? undefined}
@@ -182,7 +181,7 @@ export function TaskPageGitHubIssueDialog({
           ) : null}
           <div className="flex flex-col gap-1">
             <label className="text-[11px] font-medium text-muted-foreground">
-              {translate('auto.components.TaskPage.16cba35bee', 'Title')}
+              {t('auto.components.TaskPage.16cba35bee', 'Title')}
             </label>
             <Input
               autoFocus
@@ -194,13 +193,13 @@ export function TaskPageGitHubIssueDialog({
                   submit()
                 }
               }}
-              placeholder={translate('auto.components.TaskPage.578f730c16', 'Short summary')}
+              placeholder={t('auto.components.TaskPage.578f730c16', 'Short summary')}
               disabled={newIssueSubmitting}
             />
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-[11px] font-medium text-muted-foreground">
-              {translate('auto.components.TaskPage.7f3f7b4c18', 'Description (optional, markdown)')}
+              {t('auto.components.TaskPage.7f3f7b4c18', 'Description (optional, markdown)')}
             </label>
             <GitHubMarkdownComposer
               key={newIssueTargetRepo?.id}
@@ -222,7 +221,7 @@ export function TaskPageGitHubIssueDialog({
               }}
               value={newIssueBody}
               onChange={setNewIssueBody}
-              placeholder={translate('auto.components.TaskPage.34d97ca682', "What's going on?")}
+              placeholder={t('auto.components.TaskPage.34d97ca682', "What's going on?")}
               disabled={newIssueSubmitting}
               minHeightClassName="min-h-40"
               onSubmitShortcut={submit}
@@ -247,7 +246,7 @@ export function TaskPageGitHubIssueDialog({
             />
           </div>
           <p className="text-[10px] text-muted-foreground">
-            {translate('auto.components.TaskPage.shortcutToSubmit', '{{shortcut}} to submit.', {
+            {t('auto.components.TaskPage.shortcutToSubmit', '{{shortcut}} to submit.', {
               shortcut: submitShortcutLabel
             })}
           </p>
@@ -258,7 +257,7 @@ export function TaskPageGitHubIssueDialog({
             onClick={() => setNewIssueOpen(false)}
             disabled={newIssueSubmitting}
           >
-            {translate('auto.components.TaskPage.ff69a30681', 'Cancel')}
+            {t('auto.components.TaskPage.ff69a30681', 'Cancel')}
           </Button>
           <Button
             onClick={submit}
@@ -269,10 +268,10 @@ export function TaskPageGitHubIssueDialog({
             {newIssueSubmitting ? (
               <>
                 <LoaderCircle className="size-4 animate-spin" />
-                {translate('auto.components.TaskPage.8ff6fdc368', 'Creating…')}
+                {t('auto.components.TaskPage.8ff6fdc368', 'Creating…')}
               </>
             ) : (
-              translate('auto.components.TaskPage.e15ba2d2eb', 'Create issue')
+              t('auto.components.TaskPage.e15ba2d2eb', 'Create issue')
             )}
           </Button>
         </DialogFooter>

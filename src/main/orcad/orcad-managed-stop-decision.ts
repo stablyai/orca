@@ -1,7 +1,7 @@
 // Exclusive hard links arbitrate stop versus cancel; cancel cannot succeed once dispatch wins.
 import { linkSync, rmSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
-import { writeDurableSecureJsonFile } from '../../shared/secure-file'
+import { writeDurableSecureJsonFile } from '../../shared/secure-storage/secure-file'
 import {
   OrcadManagedStopDecisionSchema,
   OrcadManagedStopRequestSchema,

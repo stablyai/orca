@@ -9,7 +9,7 @@ import {
 } from '../../shared/agent-session/lifecycle/agent-session-account-home'
 import type { AgentSessionSlashCommand } from '../../shared/agent-session/agent-session-wire'
 import { structuredSlashCommands } from '../../shared/agent-session/view/structured-agent-session-composer'
-import { discoverSkills } from '../skills/discovery'
+import { discoverSkills } from '../skills/discovery/skill-native-discovery'
 import { scanClaudeCommandFolders } from './claude-command-folder-scan'
 import { supportsClaudeStructuredLocation } from './structured/launch/claude-structured-location-support'
 import type { ClaudeCommandCatalogProbe } from './claude-command-catalog-probe'

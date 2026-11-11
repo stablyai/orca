@@ -1,5 +1,5 @@
 import { readFile, stat } from 'node:fs/promises'
-import { buildImageDataUri } from '../../shared/image-data-uri'
+import { buildImageDataUri } from '../../shared/file-preview/image-data-uri'
 import { MAX_REPO_ICON_UPLOAD_BYTES, type RepoIcon } from '../../shared/repo-icon'
 import type { ExecutionHostFilesystemRoute } from '../providers/execution-host-provider-dispatch'
 import { detectImageFileSignature } from '../media/image-file-signature'

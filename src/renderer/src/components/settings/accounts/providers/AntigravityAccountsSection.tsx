@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import { AgentIcon } from '@/lib/agent-catalog'
+import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { callAntigravityAccounts } from '@/runtime/provider-accounts/sign-in/runtime-antigravity-accounts-client'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { useManagedRuntimeInstall } from '@/runtime/hosts/installation/use-managed-runtime-install'
@@ -17,11 +17,9 @@ import { Button } from '../../../ui/button'
 import { Badge } from '../../../ui/badge'
 import { ManagedRuntimeInstallRow } from '../../../managed-runtime/ManagedRuntimeInstallRow'
 import { antigravityChatSignInRunning } from '@/runtime/provider-accounts/sign-in/antigravity-chat-sign-in-status'
-import {
-  AntigravityChatSignInRow,
-  antigravityChatSignInBlocked,
-  useAntigravityChatSignIn
-} from '../../../provider-accounts/AntigravityChatSignInRow'
+import { AntigravityChatSignInRow } from '../../../provider-accounts/AntigravityChatSignInRow'
+import { antigravityChatSignInBlocked } from '../../../provider-accounts/antigravity-chat-runtime-sign-in-policy'
+import { useAntigravityChatSignIn } from '../../../provider-accounts/use-antigravity-chat-sign-in'
 import { openAppHttpLinkFromAnchor } from '@/lib/browser/navigation/app-http-link-open'
 import { formatTimeAgo } from '../../../status-bar/tooltip'
 import { ChatUnavailableOnWindowsNote } from '../../../agent/launch-settings/AgentChatChoiceControls'

@@ -2,7 +2,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { CsvCellValue } from './CsvCellValue'
 import { csvCellIsSelected } from './csv-cell-selection'
 import type { CsvGridInteraction } from './csv-grid-interaction'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 function focusCellInput(node: HTMLTextAreaElement | null): void {
   node?.focus({ preventScroll: true })
@@ -29,6 +29,7 @@ export function CsvGridCell({
   focusGrid: () => void
   children?: React.ReactNode
 }): React.JSX.Element {
+  const t = useTranslate()
   const editing = interaction?.editing
   const active = editing?.position.row === row && editing.position.column === column
   return (
@@ -63,7 +64,7 @@ export function CsvGridCell({
           ref={focusCellInput}
           variant="cell"
           rows={1}
-          aria-label={translate('csv.editCell', 'Edit row {{row}}, column {{column}}', {
+          aria-label={t('csv.editCell', 'Edit row {{row}}, column {{column}}', {
             row: row + 1,
             column: column + 1
           })}

@@ -1,4 +1,4 @@
-import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
+import { recordRendererCrashBreadcrumb } from '@/diagnostics/crash-reporting/crash-breadcrumb-recorder'
 
 // Custom CSI/OSC throws escape xterm’s write loop, skip rescheduling and permanently freeze a nonempty buffer, latching replay/input guards (xterm-write-buffer-stall.repro.test.ts).
 const MAX_REPORTS_PER_HANDLER = 5

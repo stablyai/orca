@@ -1,15 +1,16 @@
+import { SET_TERMINAL_PANE_TITLE_EVENT } from '@/constants/terminal'
+import type { SetTerminalPaneTitleDetail } from '@/constants/terminal'
+import '../../components/terminal-pane/layout/terminal-layout-leaf-traversal'
 import {
-  SET_TERMINAL_PANE_TITLE_EVENT,
-  type SetTerminalPaneTitleDetail
-} from '@/constants/terminal'
-import { collectLeafIdsInOrder } from '../../components/terminal-pane/layout/terminal-layout-leaf-traversal'
-import { chatWorkspaceByTabId as findTerminalTabWorktreeId } from '@/lib/structured-chat-tab-index'
-import { sendLayoutCommandToOwner } from '@/runtime/layout-owner-command'
-import { useAppStore } from '../../store'
-import type { TerminalLayoutSnapshot } from '../../../../shared/workspace-layout/terminal-tab-types'
+  collectLayoutLeafIdsInOrder,
+  resolveRootlessTerminalLayoutLeafId
+} from '../../../../shared/workspace-layout/terminal-pane-tree'
+import { chatWorkspaceByTabId as findTerminalTabWorktreeId } from '@/lib/agent-session/tab-identity/structured-chat-tab-index'
+import { sendLayoutCommandToOwner } from '@/runtime/workspace-layout/commands/layout-owner-command'
+import { useAppStore } from '../../store/index'
 import { isTerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import { resolveRootlessTerminalLayoutLeafId } from '../../../../shared/workspace-layout/terminal-pane-tree'
+import type { TerminalLayoutSnapshot } from '../../../../shared/workspace-layout/terminal-tab-types'
 
 function showRuntimePaneTitle(tabId: string, leafId: string, title: string | null): void {
   const store = useAppStore.getState()
@@ -39,7 +40,7 @@ export function applyRuntimePaneTitle({ tabId, leafId, title }: SetTerminalPaneT
   const layout = store.terminalLayoutsByTabId[tabId]
   // A never-mounted tab's layout can be rootless and name its one pane elsewhere.
   const leafIds = layout?.root
-    ? collectLeafIdsInOrder(layout.root)
+    ? collectLayoutLeafIdsInOrder(layout.root)
     : [layout && resolveRootlessTerminalLayoutLeafId(layout)]
   if (!layout || !isTerminalLeafId(leafId) || !leafIds.includes(leafId)) {
     return

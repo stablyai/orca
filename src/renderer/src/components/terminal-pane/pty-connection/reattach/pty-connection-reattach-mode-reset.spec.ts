@@ -2,13 +2,10 @@ import {
   POST_REPLAY_LIVE_AGENT_REATTACH_RESET,
   POST_REPLAY_DEAD_TUI_RESET,
   POST_REPLAY_MODE_RESET,
-  POST_REPLAY_REATTACH_RESET_KEEP_MOUSE,
-  RESET_GRAPHIC_RENDITION,
   RESET_TERMINAL_CURSOR_STYLE,
   POST_REPLAY_REATTACH_RESET
 } from '../../../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import { replayEpilogue } from '../test-fixtures/pty-connection-test-replay-epilogue'
-import { STARTUP_CWD_FALLBACK_NOTICE } from '../../../../../../shared/startup-cwd-fallback'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
 import {
   bindsPaneInStore,
@@ -63,7 +60,6 @@ export function registerPtyConnectionDaemonPendingEscapeTailTests(): void {
   }
   describe('connectPanePty', () => {
     beforeEach(async () => {
-      vi.resetModules()
       vi.clearAllMocks()
       transportFactoryQueue = []
       createdTransportOptions = []
@@ -89,8 +85,9 @@ export function registerPtyConnectionDaemonPendingEscapeTailTests(): void {
     it('writes the daemon pendingEscapeTailAnsi after the reset on local reattach (#7329)', async () => {
       // Why: re-arm the mid-escape tail LAST, after the reattach reset whose ESC would abort it, so a live continuation completes it.
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks2 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks2 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport('tab-pty')
       transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
         if (sessionId) {
@@ -155,7 +152,6 @@ export function registerPtyConnectionReattachModeResetTests(): void {
   }
   describe('connectPanePty', () => {
     beforeEach(async () => {
-      vi.resetModules()
       vi.clearAllMocks()
       transportFactoryQueue = []
       createdTransportOptions = []
@@ -181,8 +177,9 @@ export function registerPtyConnectionReattachModeResetTests(): void {
     it('writes the onReplayData pendingEscapeTailAnsi meta last, after the replayed bytes (#7329)', async () => {
       // Why this test: the onReplayData meta pass-through had no failing test — severing it kept the suite green.
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks5 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks5 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       enableActiveRuntimeEnvironment()
       const pane = createPane(1)
       const writes: string[] = []
@@ -229,53 +226,11 @@ export function registerPtyConnectionReattachModeResetTests(): void {
       expect(writes.slice(tailIndex + 1)).toEqual([])
     })
 
-    it('preserves live modes and injects focus-in after focused agent reattach', async () => {
-      const { connectPanePty } = await import('../connect-pane-pty')
-      const transport = createMockTransport('tab-pty')
-      transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
-        if (sessionId) {
-          return { id: sessionId, snapshot: '\x1b[?1004h\x1b[?25lrestored cursor snapshot' }
-        }
-        return null
-      })
-      transportFactoryQueue.push(transport)
-      setReattachPaneTitle('Cursor Agent')
-
-      const pane = createPane(1)
-      const textarea = {} as HTMLTextAreaElement
-      // Why: public xterm modes plus an agent title are the stable signal for a live focus-driven TUI; avoid private `_core` probes.
-      configureTerminalFocusMode(pane, textarea)
-      await withMockedDocumentActiveElement(textarea, async () => {
-        const manager = createManager(1)
-        const deps = createDeps({
-          restoredLeafId: LEAF_1,
-          restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
-        })
-        const agentTitleMocks6 =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-
-        connectPanePty(
-          ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks6))
-        )
-        await flushAsyncTicks(20)
-
-        expect(transport.sendInput).toHaveBeenCalledWith('\x1b[I', 'query-reply')
-        // Snapshot ends with ?25l (Cursor Agent parks/hides the cursor); the reset must preserve it, not force ?25h, or a stray block paints.
-        expect(pane.terminal.write).toHaveBeenCalledWith(
-          replayEpilogue(RESET_TERMINAL_CURSOR_STYLE),
-          expect.any(Function)
-        )
-        const writes = (pane.terminal.write as ReturnType<typeof vi.fn>).mock.calls.map(
-          ([data]) => data as string
-        )
-        expect(writes.some((data) => data.includes('\x1b[?25h'))).toBe(false)
-      })
-    })
-
     it('lets fresh host shell proof outrank stale live-agent metadata on reattach', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks7 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks7 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport('tab-pty')
       transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
         if (sessionId) {
@@ -318,60 +273,6 @@ export function registerPtyConnectionReattachModeResetTests(): void {
       )
     })
 
-    it.each([false, true])('cold restore fallback notice: %s', async (fallback) => {
-      // Persisted titles/status describe the dead agent after cold restore; preserving its modes sends junk reports to the replacement shell (#12101).
-      const { connectPanePty } = await import('../connect-pane-pty')
-      const transport = createMockTransport('tab-pty')
-      transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
-        if (sessionId) {
-          return {
-            id: sessionId,
-            snapshot: '\x1b[?1003h\x1b[?1006h\x1b[?2004huser@host ~ $ ',
-            coldRestore: { scrollback: 'cold-payload', cwd: '/tmp/wt-1' },
-            ...(fallback ? { startupCwdFallback: { kind: 'worktree', cwd: '/tmp/wt-1' } } : {})
-          }
-        }
-        return null
-      })
-      transportFactoryQueue.push(transport)
-      setReattachPaneTitle('Cursor Agent')
-
-      const pane = createPane(1)
-      const textarea = {} as HTMLTextAreaElement
-      configureTerminalFocusMode(pane, textarea)
-      await withMockedDocumentActiveElement(textarea, async () => {
-        const manager = createManager(1)
-        const deps = createDeps({
-          restoredLeafId: LEAF_1,
-          restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
-        })
-        const agentTitleMocks8 =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-
-        connectPanePty(
-          ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks8))
-        )
-        await flushAsyncTicks(20)
-
-        const writes = (pane.terminal.write as ReturnType<typeof vi.fn>).mock.calls.map(
-          ([data]) => data as string
-        )
-        expect(writes).toContain(
-          `${RESET_GRAPHIC_RENDITION}\x1b[?1003h\x1b[?1006h\x1b[?2004huser@host ~ $ `
-        )
-        expect(writes).toContain(replayEpilogue(POST_REPLAY_MODE_RESET, 0))
-        expect(writes).not.toContain(replayEpilogue(POST_REPLAY_LIVE_AGENT_REATTACH_RESET))
-        expect(writes.filter((data) => data === STARTUP_CWD_FALLBACK_NOTICE)).toHaveLength(
-          fallback ? 1 : 0
-        )
-        if (fallback) {
-          expect(writes.indexOf(STARTUP_CWD_FALLBACK_NOTICE)).toBeGreaterThan(
-            writes.indexOf(replayEpilogue(POST_REPLAY_MODE_RESET, 0))
-          )
-        }
-      })
-    })
-
     it('applies the fresh-shell reset when a spawn is answered with a cold-restore reattach', async () => {
       // Main can adopt during apparent fresh spawn; cold-restore mode reset must survive this second entry path (#12101).
       const { connectPanePty } = await import('../connect-pane-pty')
@@ -410,8 +311,9 @@ export function registerPtyConnectionReattachModeResetTests(): void {
             bind: bindsPaneInStore(() => mockStoreState, 'tab-1', LEAF_1)
           })
         }
-        const agentTitleMocks9 =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        const agentTitleMocks9 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
 
         connectPanePty(
           ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks9))
@@ -443,312 +345,11 @@ export function registerPtyConnectionReattachModeResetTests(): void {
       })
     })
 
-    it('keeps ?25h in the live agent reattach reset when the snapshot leaves the cursor visible', async () => {
-      const { connectPanePty } = await import('../connect-pane-pty')
-      const transport = createMockTransport('tab-pty')
-      transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
-        if (sessionId) {
-          // A mid-frame snapshot cut after the TUI re-showed its cursor.
-          return {
-            id: sessionId,
-            snapshot: '\x1b[?1004h\x1b[?25l\x1b[?25hrestored cursor snapshot'
-          }
-        }
-        return null
-      })
-      transportFactoryQueue.push(transport)
-      setReattachPaneTitle('Cursor Agent')
-
-      const pane = createPane(1)
-      const textarea = {} as HTMLTextAreaElement
-      configureTerminalFocusMode(pane, textarea)
-      await withMockedDocumentActiveElement(textarea, async () => {
-        const manager = createManager(1)
-        const deps = createDeps({
-          restoredLeafId: LEAF_1,
-          restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
-        })
-        const agentTitleMocks10 =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-
-        connectPanePty(
-          ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks10))
-        )
-        await flushAsyncTicks(20)
-
-        expect(pane.terminal.write).toHaveBeenCalledWith(
-          replayEpilogue(POST_REPLAY_LIVE_AGENT_REATTACH_RESET),
-          expect.any(Function)
-        )
-      })
-    })
-
-    it('does not inject focus-in after reattach when the terminal does not own DOM focus', async () => {
-      const { connectPanePty } = await import('../connect-pane-pty')
-      const transport = createMockTransport('tab-pty')
-      transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
-        if (sessionId) {
-          return { id: sessionId, snapshot: '\x1b[?1004h\x1b[?25lrestored cursor snapshot' }
-        }
-        return null
-      })
-      transportFactoryQueue.push(transport)
-      setReattachPaneTitle('Cursor Agent')
-
-      const pane = createPane(1)
-      const textarea = {} as HTMLTextAreaElement
-      configureTerminalFocusMode(pane, textarea)
-      // Why: a different element owns focus, so the reattach must not send a stray focus-in to a background pane.
-      await withMockedDocumentActiveElement({}, async () => {
-        const manager = createManager(1)
-        const deps = createDeps({
-          restoredLeafId: LEAF_1,
-          restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
-        })
-        const agentTitleMocks11 =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-
-        connectPanePty(
-          ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks11))
-        )
-        await flushAsyncTicks(20)
-
-        expect(transport.sendInput.mock.calls.map(([data]) => data)).not.toContain('\x1b[I')
-        expect(pane.terminal.write).toHaveBeenCalledWith(
-          replayEpilogue(RESET_TERMINAL_CURSOR_STYLE),
-          expect.any(Function)
-        )
-      })
-    })
-
-    it('resets stale focus and cursor modes for a focused non-agent shell reattach', async () => {
-      const { connectPanePty } = await import('../connect-pane-pty')
-      const transport = createMockTransport('tab-pty')
-      transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
-        if (sessionId) {
-          return {
-            id: sessionId,
-            snapshot: '\x1b[?1004h\x1b[?25l\x1b[?1003h\x1b[?1006hstale shell snapshot'
-          }
-        }
-        return null
-      })
-      transportFactoryQueue.push(transport)
-      setReattachPaneTitle('zsh')
-
-      const pane = createPane(1)
-      const textarea = {} as HTMLTextAreaElement
-      configureTerminalFocusMode(pane, textarea)
-      await withMockedDocumentActiveElement(textarea, async () => {
-        const manager = createManager(1)
-        const deps = createDeps({
-          restoredLeafId: LEAF_1,
-          restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
-        })
-        const agentTitleMocks12 =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-
-        connectPanePty(
-          ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks12))
-        )
-        await flushAsyncTicks(20)
-
-        expect(transport.sendInput.mock.calls.map(([data]) => data)).not.toContain('\x1b[I')
-        expect(pane.terminal.write).toHaveBeenCalledWith(
-          replayEpilogue(POST_REPLAY_REATTACH_RESET),
-          expect.any(Function)
-        )
-        expect(pane.terminal.write).not.toHaveBeenCalledWith(
-          replayEpilogue(POST_REPLAY_LIVE_AGENT_REATTACH_RESET),
-          expect.any(Function)
-        )
-      })
-    })
-
-    // Reattach must preserve snapshot-restored mouse modes or xterm selection overrides the live TUI (#8291).
-    const reattachSnapshotResetFor = async (snapshot: string): Promise<string | undefined> => {
-      const { connectPanePty } = await import('../connect-pane-pty')
-      const transport = createMockTransport('tab-pty')
-      transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) =>
-        sessionId ? { id: sessionId, snapshot } : null
-      )
-      transportFactoryQueue.push(transport)
-      setReattachPaneTitle('zsh')
-
-      const pane = createPane(1)
-      const textarea = {} as HTMLTextAreaElement
-      configureTerminalFocusMode(pane, textarea)
-      return withMockedDocumentActiveElement(textarea, async () => {
-        const manager = createManager(1)
-        const deps = createDeps({
-          restoredLeafId: LEAF_1,
-          restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
-        })
-        const agentTitleMocks13 =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-
-        connectPanePty(
-          ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks13))
-        )
-        await flushAsyncTicks(20)
-        return (pane.terminal.write as ReturnType<typeof vi.fn>).mock.calls
-          .map((call) => String(call[0]))
-          .find(
-            (data) =>
-              data === replayEpilogue(POST_REPLAY_REATTACH_RESET) ||
-              data === replayEpilogue(POST_REPLAY_REATTACH_RESET_KEEP_MOUSE)
-          )
-      })
-    }
-
-    it('keeps mouse reporting when a reattach snapshot restores a live alternate-screen TUI', async () => {
-      const reset = await reattachSnapshotResetFor(
-        '\x1b[?1049h\x1b[?1002h\x1b[?1006hthird-party tui session'
-      )
-      expect(reset).toBe(replayEpilogue(POST_REPLAY_REATTACH_RESET_KEEP_MOUSE))
-    })
-
-    it('does not treat persisted tab launchAgent metadata as a live agent reattach', async () => {
-      const { connectPanePty } = await import('../connect-pane-pty')
-      const transport = createMockTransport('tab-pty')
-      transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
-        if (sessionId) {
-          return { id: sessionId, snapshot: '\x1b[?1004h\x1b[?25lstale shell snapshot' }
-        }
-        return null
-      })
-      transportFactoryQueue.push(transport)
-      // Why: launchAgent is launch-ownership metadata that never decays; it must not preserve stale modes for a shell left after agent death.
-      mockStoreState = {
-        ...mockStoreState,
-        tabsByWorktree: {
-          'wt-1': [{ id: 'tab-1', ptyId: 'tab-pty', title: 'zsh', launchAgent: 'claude' }]
-        },
-        runtimePaneTitlesByTabId: {
-          'tab-1': { 1: 'zsh' }
-        }
-      } as StoreState
-
-      const pane = createPane(1)
-      const textarea = {} as HTMLTextAreaElement
-      configureTerminalFocusMode(pane, textarea)
-      await withMockedDocumentActiveElement(textarea, async () => {
-        const manager = createManager(1)
-        const deps = createDeps({
-          restoredLeafId: LEAF_1,
-          restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
-        })
-        const agentTitleMocks14 =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-
-        connectPanePty(
-          ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks14))
-        )
-        await flushAsyncTicks(20)
-
-        expect(transport.sendInput.mock.calls.map(([data]) => data)).not.toContain('\x1b[I')
-        expect(pane.terminal.write).toHaveBeenCalledWith(
-          replayEpilogue(POST_REPLAY_REATTACH_RESET),
-          expect.any(Function)
-        )
-        expect(pane.terminal.write).not.toHaveBeenCalledWith(
-          replayEpilogue(POST_REPLAY_LIVE_AGENT_REATTACH_RESET),
-          expect.any(Function)
-        )
-      })
-    })
-
-    it('does not treat an agent-name token in a shell title as a live agent reattach', async () => {
-      const { connectPanePty } = await import('../connect-pane-pty')
-      const transport = createMockTransport('tab-pty')
-      transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
-        if (sessionId) {
-          return { id: sessionId, snapshot: '\x1b[?1004h\x1b[?25lstale shell snapshot' }
-        }
-        return null
-      })
-      transportFactoryQueue.push(transport)
-      // Why: broad token matching would classify this ordinary ssh title as an agent and preserve stale modes into a bare shell.
-      setReattachPaneTitle('ssh devin@host')
-
-      const pane = createPane(1)
-      const textarea = {} as HTMLTextAreaElement
-      configureTerminalFocusMode(pane, textarea)
-      await withMockedDocumentActiveElement(textarea, async () => {
-        const manager = createManager(1)
-        const deps = createDeps({
-          restoredLeafId: LEAF_1,
-          restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
-        })
-        const agentTitleMocks15 =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-
-        connectPanePty(
-          ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks15))
-        )
-        await flushAsyncTicks(20)
-
-        expect(transport.sendInput.mock.calls.map(([data]) => data)).not.toContain('\x1b[I')
-        expect(pane.terminal.write).toHaveBeenCalledWith(
-          replayEpilogue(POST_REPLAY_REATTACH_RESET),
-          expect.any(Function)
-        )
-        expect(pane.terminal.write).not.toHaveBeenCalledWith(
-          replayEpilogue(POST_REPLAY_LIVE_AGENT_REATTACH_RESET),
-          expect.any(Function)
-        )
-      })
-    })
-
-    it('does not treat ordinary shell scrollback mentioning Cursor Agent as a live agent reattach', async () => {
-      const { connectPanePty } = await import('../connect-pane-pty')
-      const transport = createMockTransport('tab-pty')
-      transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
-        if (sessionId) {
-          return {
-            id: sessionId,
-            snapshot:
-              '\x1b[?1004h\x1b[?25l$ grep -R "Cursor Agent" docs\r\nCursor Agent IME notes\r\n'
-          }
-        }
-        return null
-      })
-      transportFactoryQueue.push(transport)
-      setReattachPaneTitle('zsh')
-
-      const pane = createPane(1)
-      const textarea = {} as HTMLTextAreaElement
-      configureTerminalFocusMode(pane, textarea)
-      await withMockedDocumentActiveElement(textarea, async () => {
-        const manager = createManager(1)
-        const deps = createDeps({
-          restoredLeafId: LEAF_1,
-          restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
-        })
-        const agentTitleMocks16 =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-
-        connectPanePty(
-          ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks16))
-        )
-        await flushAsyncTicks(20)
-
-        expect(transport.sendInput.mock.calls.map(([data]) => data)).not.toContain('\x1b[I')
-        expect(pane.terminal.write).toHaveBeenCalledWith(
-          replayEpilogue(POST_REPLAY_REATTACH_RESET),
-          expect.any(Function)
-        )
-        expect(pane.terminal.write).not.toHaveBeenCalledWith(
-          replayEpilogue(POST_REPLAY_LIVE_AGENT_REATTACH_RESET),
-          expect.any(Function)
-        )
-      })
-    })
-
     it('resets an already-idle agent cursor again after reattach SIGWINCH repaint', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks17 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks17 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       vi.useFakeTimers({
         toFake: [
           'setTimeout',

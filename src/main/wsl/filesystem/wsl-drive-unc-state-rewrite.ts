@@ -6,7 +6,7 @@
 import { composeWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import type { LocalWindowsRuntimePreference } from '../../../shared/project-execution-runtime'
+import type { LocalWindowsRuntimePreference } from '../../../shared/execution-host/project-runtime-preference'
 import type { Project } from '../../../shared/project-types'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import {

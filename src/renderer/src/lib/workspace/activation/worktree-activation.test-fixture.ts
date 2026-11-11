@@ -1,7 +1,7 @@
 import { afterEach, vi } from 'vitest'
 import type { Mock } from 'vitest'
 import { getDefaultSettings } from '../../../../../shared/constants'
-import { resetHookCommandDelayedDeliveryForTests } from '../../hook-command-delayed-delivery'
+import { resetHookCommandDelayedDeliveryForTests } from '../creation/setup/hook-command-delayed-delivery'
 import { useAppStore } from '@/store/index'
 
 export type AppStoreState = ReturnType<typeof useAppStore.getState>

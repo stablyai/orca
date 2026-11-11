@@ -1,4 +1,9 @@
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useGitCommitActionsSupport } from '@/runtime/source-control/git/git-commit-actions-capability'
+import {
+  GitGraphCommitActionControls,
+  GitGraphCommitConfirmStrip
+} from './git-graph-commit-action-controls'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useSidebarResize } from '@/hooks/useSidebarResize'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { RefreshCw } from 'lucide-react'
@@ -15,16 +20,25 @@ import {
 } from '../../../../../shared/git/history/git-history-graph'
 import { useGitGraphHistory, gitGraphFilterSupported } from './use-git-graph-history'
 import { GitGraphFilter } from './git-graph-filter'
+import { loadMoreInView } from './git-graph-viewport-paging'
 import { GitGraphDetails } from './git-graph-details'
 import { GitGraphRefs, useGitGraphWorkspaces } from './git-graph-ref-menu'
-import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { cn } from '@/lib/class-names'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 
 const sameGroup = () => undefined
+// About 200px of rows, so scrolling fetches before the end shows.
+const PAGE_AHEAD_ROWS = 8
 
 export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const history = useGitGraphHistory(worktreeId)
-  const { result, scope, selectedId, revealId, controller } = history
+  const { result, scope, selectedId, revealId, controller, loading } = history
+  const commitActionSupport = useGitCommitActionsSupport(
+    scope?.target ?? null,
+    scope?.route.executionHostId ?? undefined
+  )
   const workspaces = useGitGraphWorkspaces(scope)
   const rows = useMemo(
     () =>
@@ -77,6 +91,16 @@ export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
     overscan: 12,
     getItemKey: (index) => rows[index]!.historyItem.id
   })
+  const virtualItems = virtualizer.getVirtualItems()
+  // Null while the pane has no height; read after getVirtualItems() recomputes it.
+  const lastVisibleIndex = virtualizer.range?.endIndex ?? -1
+  const endInView = lastVisibleIndex >= 0 && lastVisibleIndex >= rows.length - 1 - PAGE_AHEAD_ROWS
+  useEffect(() => {
+    // Viewport demand, not scroll events: page whenever the end of loaded rows is in view.
+    if (endInView) {
+      loadMoreInView(controller, result)
+    }
+  }, [endInView, result, loading, controller])
   const selected = result?.items.find((item) => item.id === selectedId)
   useLayoutEffect(() => {
     if (scroll.current) {
@@ -115,13 +139,13 @@ export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
             <Button
               variant="ghost"
               size="icon-sm"
-              aria-label={translate('gitGraph.refresh', 'Refresh commits')}
+              aria-label={t('gitGraph.refresh', 'Refresh commits')}
               onClick={() => void history.refresh()}
             >
               <RefreshCw className="size-4" />
             </Button>
           </TooltipTrigger>
-          <TooltipContent>{translate('gitGraph.refresh', 'Refresh commits')}</TooltipContent>
+          <TooltipContent>{t('gitGraph.refresh', 'Refresh commits')}</TooltipContent>
         </Tooltip>
       </div>
       {history.error && (
@@ -133,14 +157,14 @@ export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
             className="grid h-7 shrink-0 items-center border-b border-border px-3 text-2xs text-muted-foreground"
             style={{ gridTemplateColumns: columns, minWidth: draftGraphWidth + 604 }}
           >
-            <span>{translate('gitGraph.branchTag', 'Branch / Tag')}</span>
+            <span>{t('gitGraph.branchTag', 'Branch / Tag')}</span>
             <div ref={graphHeader} className="relative flex h-full items-center">
-              <span>{translate('gitGraph.graph', 'Graph')}</span>
+              <span>{t('gitGraph.graph', 'Graph')}</span>
               <div
                 role="separator"
                 tabIndex={0}
                 aria-orientation="vertical"
-                aria-label={translate('gitGraph.resizeColumn', 'Resize graph column')}
+                aria-label={t('gitGraph.resizeColumn', 'Resize graph column')}
                 aria-valuemin={44}
                 aria-valuemax={maxGraphWidth}
                 aria-valuenow={draftGraphWidth}
@@ -166,9 +190,9 @@ export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
                 }}
               />
             </div>
-            <span>{translate('gitGraph.message', 'Message')}</span>
-            <span>{translate('gitGraph.author', 'Author')}</span>
-            <span>{translate('gitGraph.date', 'Date')}</span>
+            <span>{t('gitGraph.message', 'Message')}</span>
+            <span>{t('gitGraph.author', 'Author')}</span>
+            <span>{t('gitGraph.date', 'Date')}</span>
           </div>
           <div
             ref={scroll}
@@ -178,20 +202,13 @@ export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
               if (element) {
                 controller.scrollOffset = element.scrollTop
               }
-              if (
-                element &&
-                element.scrollHeight - element.scrollTop - element.clientHeight < 200 &&
-                !history.loading
-              ) {
-                void history.loadMore()
-              }
             }}
           >
             <div
               className="relative min-w-max"
               style={{ height: virtualizer.getTotalSize(), minWidth: draftGraphWidth + 604 }}
             >
-              {virtualizer.getVirtualItems().map((virtualRow) => {
+              {virtualItems.map((virtualRow) => {
                 const viewModel = rows[virtualRow.index]!
                 const item = viewModel.historyItem
                 return (
@@ -211,6 +228,9 @@ export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
                       >
                         <div className="flex min-w-0 gap-1 overflow-hidden pr-2">
                           <GitGraphRefs
+                            controller={controller.actions}
+                            support={commitActionSupport}
+                            onCheckout={(ref) => controller.actions.requestBranch(item, ref)}
                             workspaces={workspaces}
                             references={item.references ?? []}
                             onSwitch={controller.switchToWorkspace}
@@ -230,14 +250,18 @@ export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
                         </button>
                         <span className="truncate pr-2 text-muted-foreground">{item.author}</span>
                         <span className="truncate text-2xs text-muted-foreground">
-                          {formatGitHistoryTimestamp(item.timestamp)}
+                          {formatGitHistoryTimestamp(item.timestamp, intlLocale)}
                         </span>
                       </div>
                     </ContextMenuTrigger>
-                    <GitHistoryCommitContextMenu
-                      item={item}
-                      onAction={actions.handleCommitAction}
-                    />
+                    <GitHistoryCommitContextMenu item={item} onAction={actions.handleCommitAction}>
+                      <GitGraphCommitActionControls
+                        item={item}
+                        controller={controller.actions}
+                        support={commitActionSupport}
+                        menu
+                      />
+                    </GitHistoryCommitContextMenu>
                   </ContextMenu>
                 )
               })}
@@ -250,21 +274,29 @@ export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
                 disabled={history.loading}
                 onClick={() => void history.loadMore()}
               >
-                {translate('gitGraph.loadMore', 'Load more')}
+                {t('gitGraph.loadMore', 'Load more')}
               </Button>
             )}
             {result && !result.items.length && (
               <div className="p-4 text-xs text-muted-foreground">
-                {translate('gitGraph.noCommits', 'No commits yet')}
+                {t('gitGraph.noCommits', 'No commits yet')}
               </div>
             )}
           </div>
         </div>
         <aside className="w-80 min-w-64 shrink-0 overflow-y-auto border-l border-border scrollbar-sleek">
+          <GitGraphCommitConfirmStrip controller={controller.actions} />
           {selected && (
             <GitGraphDetails
               key={selected.id}
               item={selected}
+              commitActions={
+                <GitGraphCommitActionControls
+                  item={selected}
+                  controller={controller.actions}
+                  support={commitActionSupport}
+                />
+              }
               actions={actions}
               onParent={(id) => void history.reveal(id)}
             />

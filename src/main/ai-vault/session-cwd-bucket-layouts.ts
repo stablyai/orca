@@ -1,19 +1,22 @@
+import { basename, join } from 'node:path'
 import type { AiVaultAgent } from '../../shared/ai-vault/contracts/ai-vault-types'
 import {
-  encodeClaudeProjectPaths,
-  isClaudeProjectDirInScope
+  claudeProjectBucketScopePrefixes,
+  isClaudeProjectBucketInScope
 } from './scanners/claude/claude-project-dir-encoding'
 
 export type CwdBucketLayout = {
   agent: Extract<AiVaultAgent, 'claude' | 'pi' | 'codebuddy'>
   encodeScopePrefixes: (scopePath: string) => string[]
   isDirInScope: (dirName: string, prefixes: ReadonlySet<string>) => boolean
+  /** Folders whose children are cwd buckets; defaults to the root itself. */
+  bucketDirs?: (rootDir: string) => string[]
 }
 
 export const CLAUDE_CWD_BUCKET_LAYOUT: CwdBucketLayout = {
   agent: 'claude',
-  encodeScopePrefixes: encodeClaudeProjectPaths,
-  isDirInScope: isClaudeProjectDirInScope
+  encodeScopePrefixes: claudeProjectBucketScopePrefixes,
+  isDirInScope: isClaudeProjectBucketInScope
 }
 
 // Omit Pi's closing -- so the prefix also matches nested working directories.
@@ -24,6 +27,9 @@ function encodePiSessionDirPrefix(pathValue: string): string {
 
 export const PI_CWD_BUCKET_LAYOUT: CwdBucketLayout = {
   agent: 'pi',
+  // PI_CODING_AGENT_DIR=<dir> makes Pi's root the agent folder, whose buckets sit under sessions/.
+  bucketDirs: (rootDir) =>
+    basename(rootDir) === 'sessions' ? [rootDir] : [rootDir, join(rootDir, 'sessions')],
   encodeScopePrefixes: (pathValue) => {
     const raw = encodePiSessionDirPrefix(pathValue)
     const composed = encodePiSessionDirPrefix(pathValue.normalize('NFC'))

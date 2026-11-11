@@ -5,7 +5,7 @@ import {
 } from '@/components/orchestration-crew/NativeChatCrewPanel'
 import { NativeChatUsageLimitActionsProvider } from '@/components/native-chat/usage/NativeChatUsageLimitActions'
 import { useNativeChatHandOff } from '@/components/native-chat/pane/actions/use-native-chat-hand-off'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { NATIVE_CHAT_APPEARANCE_ROOT_CLASS } from '@/components/native-chat/appearance/native-chat-appearance-style'
 import { useNativeChatStoreAppearanceStyle } from '@/components/native-chat/appearance/use-native-chat-store-appearance-style'
 import { useRef, useState } from 'react'
@@ -77,7 +77,7 @@ import { useNativeChatHostOutageNotice } from '@/components/native-chat/host-acc
 import { useNativeChatHostSendGate } from '@/components/native-chat/host-access/use-native-chat-host-send-gate'
 import { useStructuredAgentSessionStartFailureFacts } from '@/components/native-chat/messages/notices/use-structured-agent-session-start-failure-facts'
 import { pendingPromptsAllUnanswerableHere } from '../../../../shared/agent-session/agent-session-approval-subject'
-import { NativeChatSignInContext } from '@/components/native-chat/host-access/native-chat-sign-in'
+import { NativeChatHostSetupContext } from '@/components/native-chat/host-access/native-chat-host-setup'
 
 export function NativeChatStructuredSession(props: Omit<NativeChatStructuredViewProps, 'mode'>) {
   const ownerWorktreeId = useNativeChatTabOwnerWorktreeId(props.tabId)
@@ -203,11 +203,11 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
     surfaceReady: !composerShown || install.slot.kind === 'install'
   })
   const questionBody = prompt?.body.kind === 'question' ? prompt.body : null
-  const fork = useNativeChatPaneFork(props, controller, ownerWorktreeId)
+  const forks = useNativeChatPaneFork(props, controller, ownerWorktreeId)
   const transport = useNativeChatStructuredComposerTransport({
     props,
     controller,
-    fork,
+    forks,
     sendThroughLaunch: provisionalLaunch.sendThroughLaunch,
     starting: provisionalLaunch.starting,
     transportEnabled: provisionalLaunch.transportEnabled,
@@ -229,7 +229,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
     transport
   })
 
-  const { signIn, notices } = useNativeChatStructuredPaneNotices({
+  const { setup, notices } = useNativeChatStructuredPaneNotices({
     props,
     ownerWorktreeId,
     provisionalLaunch,
@@ -273,8 +273,13 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
       <NativeChatCrewFrame
         panel={<NativeChatCrewPanel {...props} composerRef={composerRef} canMention={canMention} />}
       >
-        <NativeChatContextClearFade clearing={controller.contextClear.clearing}>
-          {find.isOpen ? <NativeChatFindBar find={find} isVisible={props.isVisible} /> : null}
+        <NativeChatContextClearFade
+          // A read failure stays in view: no divider may come to end the fade.
+          clearing={controller.contextClear.clearing && viewState.kind !== 'error'}
+          overlay={
+            find.isOpen ? <NativeChatFindBar find={find} isVisible={props.isVisible} /> : null
+          }
+        >
           {viewState.kind === 'loading' || (viewState.kind === 'error' && !readFailure) ? (
             historyPhase !== 'unread' && <NativeChatLoadingCue />
           ) : viewState.kind === 'error' ? (
@@ -286,7 +291,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
           ) : viewState.kind === 'empty' ? (
             <NativeChatEmptyPane slot={install.slot} agent={props.agent} />
           ) : (
-            <NativeChatRowActionsProvider pane={props} chat={controller} fork={fork}>
+            <NativeChatRowActionsProvider pane={props} chat={controller} forks={forks}>
               <NativeChatUsageLimitActionsProvider
                 recovery={controller}
                 pane={props}
@@ -294,7 +299,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
                 messages={controller.messages}
                 view={continuation.view}
               >
-                <NativeChatSignInContext.Provider value={signIn}>
+                <NativeChatHostSetupContext.Provider value={setup}>
                   <NativeChatMessageList
                     // A rewind or a /clear replaces the conversation; nothing the old one held carries over.
                     key={`${controller.epoch}:${controller.contextClear.clears}`}
@@ -318,7 +323,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
                     runtimeContext={imageRuntimeContext}
                     deliveryNotices={deliveryNotices}
                   />
-                </NativeChatSignInContext.Provider>
+                </NativeChatHostSetupContext.Provider>
               </NativeChatUsageLimitActionsProvider>
             </NativeChatRowActionsProvider>
           )}

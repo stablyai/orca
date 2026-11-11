@@ -1,4 +1,4 @@
-import type { TerminalRunFacts } from '../runtime/terminal-run-facts'
+import type { TerminalRunFacts } from '../runtime/terminal/lifecycle/terminal-run-facts'
 
 type PromptClaim = {
   digest: string

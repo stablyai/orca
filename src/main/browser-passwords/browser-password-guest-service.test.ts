@@ -12,7 +12,7 @@ vi.mock('electron', () => ({
     on: (channel: string, handler: (...args: unknown[]) => void) => handlers.set(channel, handler)
   }
 }))
-vi.mock('../browser/browser-manager', () => ({
+vi.mock('../browser/guest-lifecycle/manager/browser-manager', () => ({
   browserManager: {
     getRendererContextForGuest: () => ({ browserPageId: 'page', renderer }),
     getGuestWebContentsId: () => 411

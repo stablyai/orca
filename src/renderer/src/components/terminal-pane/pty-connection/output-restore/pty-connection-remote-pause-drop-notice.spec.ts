@@ -30,7 +30,6 @@ export function registerPtyConnectionRemotePauseDropNoticeTests(): void {
 
   describe('connectPanePty remote pause drop notice', () => {
     beforeEach(async () => {
-      vi.resetModules()
       vi.clearAllMocks()
       transportFactoryQueue = []
       createdTransportOptions = []
@@ -54,8 +53,9 @@ export function registerPtyConnectionRemotePauseDropNoticeTests(): void {
 
     async function connectRemotePane(dropsReported: boolean) {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const remotePtyId = 'remote:env-1@@terminal-1'
       const transport = createMockTransport(remotePtyId)
       const callbacks: { current: ConnectCallbacks } = { current: {} }

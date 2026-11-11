@@ -1,11 +1,18 @@
 import { appendFile, mkdtemp, rm, writeFile } from 'node:fs/promises'
+
 import { tmpdir } from 'node:os'
+
 import { join } from 'node:path'
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
 import type { NativeChatMessage } from '../../../../../shared/native-chat/native-chat-types'
+
 import '../../../../../shared/rpc-contract/native-chat-params'
-import { RuntimeSubscriptionRegistry } from '../../../runtime-subscription-registry'
+import { RuntimeSubscriptionRegistry } from '../../../client/runtime-subscription-registry'
+
 import type { RpcContext } from '../../core'
+
 import { NATIVE_CHAT_METHODS } from './native-chat'
 
 type SnapshotFrame = {

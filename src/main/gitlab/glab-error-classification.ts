@@ -81,3 +81,20 @@ export function classifyJobLogError(stderr: string): ClassifiedError {
 export function isMissingJobLogError(stderr: string): boolean {
   return classifyGlabError(stderr).type === 'not_found' && !/project\s+not\s+found/i.test(stderr)
 }
+
+/** Older servers reject these optimizations; ordinary permission/transport errors are not capabilities. */
+export function isUnsupportedReviewListFilter(message: string, state: string): boolean {
+  const status = /HTTP\s+(\d{3})/i.exec(message)?.[1]
+  if (status && status !== '400' && status !== '422') {
+    return false
+  }
+  return (
+    /source_project_id[^\n]*(?:unsupported|unknown|unrecognized|not permitted|not allowed|invalid)/i.test(
+      message
+    ) ||
+    (state === 'locked' &&
+      /\bstate\b[^\n]*(?:does not have a valid value|invalid|unsupported|not (?:an? )?allowed)/i.test(
+        message
+      ))
+  )
+}

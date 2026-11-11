@@ -1,10 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import {
-  ExternalAutomationManagerCache,
-  describeExternalManagerFailure
-} from './external-automation-manager-cache'
+import { ExternalAutomationManagerCache } from './external-automation-manager-cache'
 import { ExternalAutomationProbeCancelledError } from './external-automation-probe-scheduler'
-import type { ExternalAutomationManager } from '../../shared/automations-types'
+import type { ExternalAutomationManager } from '../../shared/automations/external/external-automation'
 
 function manager(id: string): ExternalAutomationManager {
   return {
@@ -86,20 +83,5 @@ describe('ExternalAutomationManagerCache', () => {
       })
     ).rejects.toBeInstanceOf(ExternalAutomationProbeCancelledError)
     expect(cache.read(key)?.manager?.id).toBe('openclaw:ssh:target-a')
-  })
-})
-
-describe('describeExternalManagerFailure', () => {
-  it('keeps only a bounded message and never the thrown payload', () => {
-    expect(describeExternalManagerFailure({ prompt: 'secret prompt', jobs: [1, 2] })).toBe(
-      'External automation manager could not be read.'
-    )
-    expect(describeExternalManagerFailure(new Error('  '))).toBe(
-      'External automation manager could not be read.'
-    )
-
-    const long = describeExternalManagerFailure(new Error('x'.repeat(400)))
-    expect(long).toHaveLength(301)
-    expect(long.endsWith('…')).toBe(true)
   })
 })

@@ -1,5 +1,5 @@
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import type { LocalFileAccess } from '../../../../shared/local-file-access'
+import type { LocalFileAccess } from '../../../../shared/file-access/local-file-access'
 
 export type RuntimeReadableFileContent = {
   mediaUrl?: string

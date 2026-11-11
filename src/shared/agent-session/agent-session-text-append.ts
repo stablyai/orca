@@ -1,19 +1,43 @@
 import type { AgentJournalRenderItem } from './journal/agent-session-journal-types'
 import type { AgentSessionSubscribeEvent } from './agent-session-wire'
 
-/** A growing reply sent as only its new text: its text block is empty on the wire, and the reader
- *  restores it as the text it holds for the item (`from` long) followed by `text`. */
+/** What a stream asks for on `agentSession.subscribe`, sent only when the host advertises it. Both
+ *  ends of the stream follow the rules it names, so they hold the same bases. */
+export type AgentSessionTextAppendCapabilities = { textAppend: 1; toolOutputAppend?: 1 }
+type TextAppendRules = Pick<AgentSessionTextAppendCapabilities, 'toolOutputAppend'>
+
+/** What to ask a host for, from whether it advertises each append runtime capability. */
+export function agentSessionTextAppendRequest(advertises: {
+  textAppend: boolean
+  toolOutputAppend: boolean
+}): AgentSessionTextAppendCapabilities | null {
+  if (!advertises.textAppend) {
+    return null
+  }
+  return advertises.toolOutputAppend ? { textAppend: 1, toolOutputAppend: 1 } : { textAppend: 1 }
+}
+
+/** A growing reply, or with `toolOutputAppend` a tool call's output head, sent as only its new text:
+ *  that text is empty on the wire, and the reader restores it as the text it holds for the item
+ *  (`from` long) followed by `text`. */
 export type AgentSessionTextAppendItem = AgentJournalRenderItem & {
   textAppend: { from: number; text: string }
 }
 
-// Bases are only unfinished replies, so a few cover every stream a turn grows at once.
-const MAX_TEXT_APPEND_BASES = 8
+// Bases are only unfinished replies and running tool calls, so a few cover every stream a turn grows at once.
+// Text-only readers already shipped evict past 8, so a host must never hold more for them.
+const MAX_REPLY_APPEND_BASES = 8
+const MAX_TEXT_APPEND_BASES = 16
 
-function growingText(item: AgentJournalRenderItem): string | null {
+function growingText(item: AgentJournalRenderItem, rules: TextAppendRules): string | null {
   const { body } = item
+  if (item.shortened) {
+    return null
+  }
+  if (body.kind === 'tool-call') {
+    return rules.toolOutputAppend === 1 && body.output ? body.output.head : null
+  }
   if (
-    item.shortened ||
     body.kind !== 'message' ||
     (body.role !== 'assistant' && body.role !== 'reasoning') ||
     body.blocks.length !== 1 ||
@@ -22,6 +46,13 @@ function growingText(item: AgentJournalRenderItem): string | null {
     return null
   }
   return body.blocks[0].text
+}
+
+function isFinished(item: AgentJournalRenderItem): boolean {
+  const { body } = item
+  return body.kind === 'tool-call'
+    ? body.state !== 'running'
+    : body.kind === 'message' && body.completedAt !== undefined
 }
 
 function isTextAppendItem(item: AgentJournalRenderItem): item is AgentSessionTextAppendItem {
@@ -40,27 +71,33 @@ function isTextAppendItem(item: AgentJournalRenderItem): item is AgentSessionTex
 }
 
 function withText(item: AgentJournalRenderItem, text: string): AgentJournalRenderItem {
-  if (item.body.kind !== 'message' || item.body.blocks[0]?.type !== 'text') {
+  const { body } = item
+  if (body.kind === 'tool-call' && body.output) {
+    return { ...item, body: { ...body, output: { ...body.output, head: text } } }
+  }
+  if (body.kind !== 'message' || body.blocks[0]?.type !== 'text') {
     return item
   }
-  return { ...item, body: { ...item.body, blocks: [{ ...item.body.blocks[0], text }] } }
+  return { ...item, body: { ...body, blocks: [{ ...body.blocks[0], text }] } }
 }
 
 /** One stream's sender or reader. Both walk every frame of the stream in order with the same
  *  rules, so they hold the same base text for each item without exchanging anything else. */
 function textAppendStream(
+  rules: TextAppendRules,
   mapItem: (base: string | undefined, item: AgentJournalRenderItem) => AgentJournalRenderItem | null
 ): (event: AgentSessionSubscribeEvent) => AgentSessionSubscribeEvent | null {
   const bases = new Map<string, string>()
   let epoch: string | null = null
   const note = (item: AgentJournalRenderItem): void => {
     bases.delete(item.itemId)
-    const text = growingText(item)
-    if (text === null || (item.body.kind === 'message' && item.body.completedAt !== undefined)) {
+    const text = growingText(item, rules)
+    if (text === null || isFinished(item)) {
       return
     }
     bases.set(item.itemId, text)
-    const oldest = bases.size > MAX_TEXT_APPEND_BASES ? bases.keys().next().value : undefined
+    const limit = rules.toolOutputAppend === 1 ? MAX_TEXT_APPEND_BASES : MAX_REPLY_APPEND_BASES
+    const oldest = bases.size > limit ? bases.keys().next().value : undefined
     if (oldest !== undefined) {
       bases.delete(oldest)
     }
@@ -98,13 +135,14 @@ function textAppendStream(
   }
 }
 
-/** Host side, wrapping a stream's emit after every other projection: a reply that extends what
- *  this stream last sent for it goes out as its new text. */
+/** Host side, wrapping a stream's emit after every other projection: text that extends what this
+ *  stream last sent for its item goes out as only the new text. */
 export function sendingTextAppends<R>(
-  emit: (event: AgentSessionSubscribeEvent) => R
+  emit: (event: AgentSessionSubscribeEvent) => R,
+  rules: TextAppendRules
 ): (event: AgentSessionSubscribeEvent) => R {
-  const send = textAppendStream((base, item) => {
-    const text = growingText(item)
+  const send = textAppendStream(rules, (base, item) => {
+    const text = growingText(item, rules)
     if (base === undefined || text === null || !text.startsWith(base)) {
       return item
     }
@@ -118,10 +156,10 @@ export function sendingTextAppends<R>(
 
 /** Client side: whole items back from appends; null when an append does not start where this
  *  reader's text for the item ends, and only a new stream (which sends whole items) can recover. */
-export function createAgentSessionTextAppendReader(): (
-  event: AgentSessionSubscribeEvent
-) => AgentSessionSubscribeEvent | null {
-  return textAppendStream((base, item) => {
+export function createAgentSessionTextAppendReader(
+  rules: TextAppendRules
+): (event: AgentSessionSubscribeEvent) => AgentSessionSubscribeEvent | null {
+  return textAppendStream(rules, (base, item) => {
     if (!('textAppend' in item)) {
       return item
     }
@@ -129,7 +167,7 @@ export function createAgentSessionTextAppendReader(): (
       return null
     }
     const { textAppend, ...rest } = item
-    if (base === undefined || base.length !== textAppend.from || growingText(rest) !== '') {
+    if (base === undefined || base.length !== textAppend.from || growingText(rest, rules) !== '') {
       return null
     }
     return withText(rest, base + textAppend.text)

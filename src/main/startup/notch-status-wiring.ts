@@ -1,5 +1,5 @@
 import { app, type BrowserWindow, type WebContents } from 'electron'
-import { agentHookServer } from '../agent-hooks/server'
+import { agentHookServer } from '../agent-hooks/server/agent-hook-server'
 import { registerNotchHandlers } from '../ipc/notch'
 import { getTrustedUIRendererWindow } from '../ipc/ui'
 import { NotchStatusService } from '../notch/notch-status-service'

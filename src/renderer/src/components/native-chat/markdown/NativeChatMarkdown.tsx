@@ -14,7 +14,7 @@ import CommentMarkdown, {
 } from '@/components/sidebar/CommentMarkdown'
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/comment-markdown-element-renderers'
 import { createDocumentCommentMarkdownComponents } from '@/components/sidebar/comment-markdown-element-renderers'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { withoutPendingNativeChatVisualDirectiveTail } from '../../../../../shared/native-chat/native-chat-visual-directive'
 import { NativeChatMarkdownRowKeyContext } from './native-chat-markdown-row-identity'
 import { useNativeChatVisualMarkdownExtension } from '../media/visuals/native-chat-visual-markdown-extension'
@@ -50,6 +50,7 @@ type NativeChatMarkdownProps = Omit<
   /** Underline file paths in the text that exist in the chat's workspace, when the chat can open them. */
   linkifyFilePaths?: boolean
   visualMessageId?: string
+  /** The text is still arriving: it renders block by block, so an append re-parses only its tail. */
   streaming?: boolean
   /** The transcript row's identity, so reader choices inside the text outlive the row's mount. */
   rowKey?: string
@@ -127,6 +128,7 @@ export function NativeChatMarkdown({
   fadeWords = false,
   visualMessageId,
   streaming = false,
+  growing = false,
   rowKey,
   content,
   variant,
@@ -152,6 +154,7 @@ export function NativeChatMarkdown({
       <CommentMarkdown
         {...props}
         variant={variant}
+        growing={growing || streaming}
         // Only the document variant's links can peek; bare #123 links follow it.
         githubRepo={variant === 'document' ? githubRepo?.referenceRepo : undefined}
         onLinkClick={onLinkClick}

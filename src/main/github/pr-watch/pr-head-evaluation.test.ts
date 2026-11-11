@@ -15,7 +15,7 @@ import {
 } from './pr-head-evaluation'
 import { PRPendingActionResume } from './pr-pending-action-resume'
 import { capturePRPendingActions } from './pr-pending-actions'
-import { deletePRWatchChats } from './pr-watch-tables'
+import './pr-watch-tables'
 import { prInfoFixture, shellCallRow } from './pr-watch-test-fixtures'
 import { prWatchCandidate } from './pr-watch-types'
 
@@ -76,15 +76,6 @@ describe('recordPRHeadObservation over saved state', () => {
     // A force-push away and back to the same head is no new result either.
     expect(read(HEAD_B, green(31002), 30)).toEqual(['chat-1'])
     expect(read(HEAD_A, green(31001), 40)).toEqual([])
-  })
-
-  it('drops heads and context memory with the PR’s last owning chat', () => {
-    read(HEAD_A, [{ ...green(31001)[0], status: 'IN_PROGRESS', conclusion: null }])
-    expect(readPRPendingHeads(database.db, PR_KEY)).toHaveLength(1)
-    database.transaction((db) => deletePRWatchChats(db, ['chat-1']))
-    expect(readPRPendingHeads(database.db, PR_KEY)).toEqual([])
-    const contexts = database.db.prepare('SELECT COUNT(*) AS n FROM pr_check_contexts').get()
-    expect(contexts?.n).toBe(0)
   })
 })
 

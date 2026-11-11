@@ -17,7 +17,7 @@ vi.mock('../../../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: () => ({ hosts: [] }),
   sshConfigHostsToTargets: () => []
 }))
-vi.mock('../../../agent-hooks/managed-agent-hook-controls', () => ({
+vi.mock('../../../agent-hooks/installation/managed-agent-hook-controls', () => ({
   applyAgentStatusHooksEnabled: hooks.apply
 }))
 void Object.fromEntries(Object.keys(tuiAgentPermissions.YOLO_TUI_AGENT_ARGS).map((id) => [id, '']))

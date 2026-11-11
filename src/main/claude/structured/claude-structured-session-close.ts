@@ -21,6 +21,7 @@ import { claudeHeldSends } from '../claude-command-lifecycle'
 import { settledClaudeTurnEndLeaf } from './claude-structured-resume-point'
 import { settleClaudeTurnEndWaiters } from '../claude-request-end-wait'
 import type { StructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
+import type { ProviderProcessCloseOptions } from '../../provider-process/provider-process-close'
 
 /** Root exit releases the lease even with unverified descendants; a failed spawn proves no exit. */
 export function claudeRootExitObserved(
@@ -85,6 +86,7 @@ export async function resolveClaudeAcquisitionError(input: {
 }
 
 export function settleClaudeExitedSession(session: ClaudeSession): void {
+  session.delivery.dispose()
   retireClaudeDispatchWaiters(session)
   settleClaudeTurnEndWaiters(session)
   for (const prompt of session.prompts.clear()) {
@@ -105,18 +107,20 @@ type CloseClaudePublishedSessionInput = {
   onEvent?: (event: ClaudeStructuredSessionEvent) => void
   logger?: StructuredAgentSessionLogger
   settledExitErrors?: Map<string, Error>
+  closeOptions?: ProviderProcessCloseOptions
 }
 
 async function finalizeClaudePublishedSession(
   input: CloseClaudePublishedSessionInput,
   session: ClaudeSession
 ): Promise<boolean> {
+  session.delivery.dispose()
   settleClaudeTurnEndWaiters(session)
   // Null settles callbacks without writing responses during SDK cleanup.
   for (const prompt of session.prompts.clear()) {
     prompt.settle(null)
   }
-  const connectionClosed = await session.connection.close()
+  const connectionClosed = await session.connection.close(input.closeOptions)
   session.unbindReadingControl?.()
   const rootExitVerdict = claudeCloseReport(
     session.connection,

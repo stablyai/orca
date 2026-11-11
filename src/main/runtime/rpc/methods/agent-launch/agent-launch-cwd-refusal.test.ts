@@ -225,6 +225,9 @@ describe('CLI cwd refusal through production creation and durable failed receipt
       if (method === 'worktree.list') {
         return worktreeListFixture(catalog)
       }
+      if (method === 'folderWorkspace.list') {
+        return okFixture('folders', { folderWorkspaces: [] })
+      }
       if (method === 'status.get') {
         return route === 'legacy'
           ? okFixture('status', { capabilities: [] })
@@ -498,6 +501,9 @@ describe('CLI cwd refusal through production creation and durable failed receipt
     callMock.mockImplementation(async (method, params) => {
       if (method === 'worktree.list') {
         return worktreeListFixture(rows)
+      }
+      if (method === 'folderWorkspace.list') {
+        return okFixture('folders', { folderWorkspaces: [] })
       }
       if (method === 'status.get') {
         return agentLaunchHostFixture()
@@ -791,12 +797,14 @@ describe('CLI cwd refusal through production creation and durable failed receipt
     const selector = `id:folder:${folder.id}`
     await main(['worktree', 'show', '--worktree', selector, '--json'], directory)
     expect(process.exitCode).toBe(prior)
-    expect(shown).toHaveBeenCalledWith(selector)
+    expect(shown).toHaveBeenCalledWith(selector, undefined, { matchFolders: true })
     expect(JSON.parse(log.mock.calls.flat().join('')).result.worktree).toMatchObject({
       id: `folder:${folder.id}`,
       path: directory
     })
     expect(catalog).not.toHaveBeenCalled()
-    expect(callMock.mock.calls).toEqual([['worktree.show', { worktree: selector }]])
+    expect(callMock.mock.calls).toEqual([
+      ['worktree.show', { worktree: selector, matchFolderWorkspaces: true }]
+    ])
   })
 })

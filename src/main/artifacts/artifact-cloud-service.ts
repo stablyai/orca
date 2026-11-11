@@ -8,8 +8,8 @@ import type {
   ArtifactPublishedLink,
   ArtifactPublishResult,
   ArtifactWriteRequest
-} from '../../shared/artifacts'
-import { assertArtifactSharingAllowed } from '../../shared/artifact-sharing-gate'
+} from '../../shared/artifacts/artifacts'
+import { assertArtifactSharingAllowed } from '../../shared/artifacts/artifact-sharing-gate'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
 import { getOrcaCloudAuthConfig } from '../orca-profiles/profile-cloud-auth-config'
 import { prepareArtifactCloudUse } from '../orca-profiles/profile-artifact-cloud-cleanup'

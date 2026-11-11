@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { AgentHookServer } from '../../agent-hooks/server'
+import { AgentHookServer } from '../../agent-hooks/server/agent-hook-server'
 import type { AgentStatusStoreView } from './workspace-activity-facts-producer'
 
 import '../../../shared/agent-status/contracts/agent-status-subject'
@@ -11,13 +11,10 @@ import '../../../shared/sidebar-list/sort-stamps'
 import type { SmartStampFields } from '../../../shared/sidebar-list/sort-stamps'
 import '../../../shared/agent-status/lifecycle/agent-transitions.test-fixture'
 import type { AgentTransitionStep } from '../../../shared/agent-status/lifecycle/agent-transitions.test-fixture'
-import { AgentTransitionDetector } from '../../agent-hooks/agent-transition-detector'
+import { AgentTransitionDetector } from '../../agent-hooks/observations/agent-transition-detector'
 import '../../../shared/sidebar-list/stamp-order'
-import {
-  SortStampsProducer,
-  type SortStampsStore,
-  type StoredTierEvidence
-} from './sort-stamps-producer'
+import { SortStampsProducer, type StoredTierEvidence } from './sort-stamps-producer'
+import type { SortStampsStore } from './sort-stamp-records'
 
 vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn(() => ({})) }))

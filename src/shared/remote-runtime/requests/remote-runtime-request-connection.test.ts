@@ -1,6 +1,6 @@
 import { federationRelayPrefix } from '../../../main/runtime/orchestration/federation/relay/federation-relay-prefix'
 import * as memoryLimits from '../remote-runtime-memory-limits'
-import { sendRemoteRuntimeRequest } from '../remote-runtime-client'
+import { sendRemoteRuntimeRequestOnSocket } from '../requests/remote-runtime-request-socket'
 import {
   pairedRuntimeConnectionFromOffer,
   type PairedRuntimeConnection
@@ -75,14 +75,16 @@ describe('RemoteRuntimeRequestConnection', () => {
     }))
     const params = { dispatchId: 'dispatch_remote', items }
     let selectedThrough = 0
-    const response = await sendRemoteRuntimeRequest(
+    const response = await sendRemoteRuntimeRequestOnSocket(
       server.pairing,
       'orchestration.federationImport',
       params,
       5000,
       { orchestrationRequestId: 'before' },
       undefined,
+      undefined,
       [],
+      undefined,
       federationRelayPrefix('dispatch_remote', items, (last) => {
         selectedThrough = last
       })

@@ -1,6 +1,6 @@
 import { debounceRuntimeFileRequest } from '@/runtime/files/runtime-file-request-debounce'
 import { useEffect, useRef } from 'react'
-import { quickOpenRecentCandidateSet } from '../../../shared/quick-open-recent-candidates'
+import { quickOpenRecentCandidateSet } from '../../../shared/quick-open/quick-open-recent-candidates'
 import {
   cancelRuntimeFileList,
   listRuntimeFiles

@@ -5,11 +5,12 @@ import {
   useRef,
   useState
 } from './mobile-tasks-dependencies'
-import { githubTaskKey } from './github-task-identity'
+import { taskItemIdentity } from './task-draft-rows'
 import type { ActionableTaskItem } from './mobile-tasks-project-workspace-types'
 import type { DetailPayload } from './mobile-tasks-provider-detail-types'
-import { isRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
-import { isLogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
+import { isRpcDeliveryUnknown } from '../transport/rpc/rpc-delivery-ambiguity'
+import '../transport/connection/stable-logical-rpc-client'
+import { isLogicalClientCutoverError } from '../transport/connection/logical-client-cutover-error'
 
 export const COMMENT_SEND_UNCONFIRMED_NOTICE =
   'Not confirmed. Check the thread before sending again.'
@@ -32,7 +33,7 @@ type CommentSendOutcome = {
 }
 
 function itemIdentity(item: ActionableTaskItem | null): string | null {
-  return item?.provider === 'github' ? githubTaskKey(item.source) : (item?.key ?? null)
+  return item && taskItemIdentity(item)
 }
 
 function sameCommentText(a: string, b: string): boolean {

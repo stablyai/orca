@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import type { IPtyProvider, PtySpawnResult } from '../../../providers/pty-provider-contract'
 import { ptyIncarnationById, ptyOwnership } from '../provider/ownership-state'
-import { TerminalIntentionalStops } from '../../../runtime/terminal-intentional-stops'
+import { TerminalIntentionalStops } from '../../../runtime/terminal/stop/terminal-intentional-stops'
 import { admitPtySpawnOwnership, discardUnpersistedPtySpawn } from './spawn-registration'
 
 type MarkUnverifiable = (ptyId: string, reason: string) => void

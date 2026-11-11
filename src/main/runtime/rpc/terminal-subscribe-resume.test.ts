@@ -1,10 +1,9 @@
-import './unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from './dispatcher'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import { TERMINAL_METHODS } from './methods/terminal/terminal'
 import { createSubscriptionRegistryDouble } from './subscription-registry-test-double'
-import type { RuntimeTerminalWait } from '../../../shared/runtime-types'
+import type { RuntimeTerminalWait } from '../../../shared/runtime-terminal-contracts'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
@@ -181,6 +180,22 @@ describe('terminal.subscribe resume', () => {
     expect(second.subscribed.resumed).toBe(true)
     await second.receives('ab\x1b[?2031h')
     await second.stop()
+  })
+
+  it('sends a snapshot after a coverage reset while the stream was live, as on a clear', async () => {
+    const host = createHost()
+    const first = await host.subscribe()
+    host.output('hello ')
+    await first.receives('hello ')
+    host.resetCoverage()
+    host.output('after')
+    await first.receives('hello after')
+    await first.stop()
+
+    const next = await host.subscribe({ streamToken: first.subscribed.streamToken, units: 11 })
+    expect(next.subscribed.resumed).toBeUndefined()
+    expect(next.snapshotKinds()).toEqual(['scrollback'])
+    await next.stop()
   })
 
   it.each([

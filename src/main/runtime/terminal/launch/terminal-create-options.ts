@@ -13,7 +13,7 @@ import type {
 import type { TerminalOscColorQueryReplyColors } from '../../../../shared/terminal/protocol/queries/terminal-osc-color-reply'
 import type { RuntimeTerminalPresentation } from '../../../../shared/runtime-terminal-contracts'
 import type { AgentLaunchTabViewerRule } from '../../../../shared/agent-launch/contracts/agent-launch-tab-publication'
-import type { SpawnIntent } from '../../../../shared/host-spawn-admission'
+import type { SpawnIntent } from '../../../../shared/terminal/pty/admission/spawn-admission-contract'
 
 export type TerminalCreateOptions = {
   command?: string

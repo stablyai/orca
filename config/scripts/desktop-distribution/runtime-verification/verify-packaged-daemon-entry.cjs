@@ -164,7 +164,8 @@ async function runTerminalHostRoundTrip({
   const scratch = mkdtempSync(scratchPrefix)
   const socketPath = join(scratch, 'd.sock')
   const tokenPath = join(scratch, 'token')
-  const env = { ...process.env, ORCA_USER_DATA_PATH: join(scratch, 'user-data') }
+  // POSIX sh so the probe's arithmetic does not depend on the builder's login shell (e.g. fish).
+  const env = { ...process.env, SHELL: '/bin/sh', ORCA_USER_DATA_PATH: join(scratch, 'user-data') }
   delete env.ELECTRON_RUN_AS_NODE
   const daemon = spawn(
     command[0],

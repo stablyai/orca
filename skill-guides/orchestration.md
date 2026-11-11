@@ -36,7 +36,8 @@ ORCA orchestration worker-start --spec "<task>" --worktree current --agent codex
 - If a receipt has `next`, follow it. When Orca has nothing for you, end your
   turn.
 - `--worktree current` uses your workspace. Use a new one only when the user
-  asks or sharing would conflict:
+  asks or sharing would conflict: `--worktree new-child --name <short-name>`
+  nests it under yours. For one with no parent, use
   `--worktree new-top-level --repo id:<repoId> --name <short-name>`
   (`ORCA repo list --json` gives the id). If nothing needs to come back to you
   (the user will work in those chats), don't start workers; per workspace run

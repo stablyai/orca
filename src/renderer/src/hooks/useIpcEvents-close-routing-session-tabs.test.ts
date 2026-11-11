@@ -17,12 +17,12 @@ vi.mock('@/components/terminal/terminal-tab-actions', () => ({
 
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (original) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await original())
 )
-vi.mock('@/runtime/runtime-layout-client', async (original) =>
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (original) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await original())
 )
 
@@ -31,7 +31,8 @@ describe('useIpcEvents browser tab close routing', () => {
     vi.resetModules()
     vi.unstubAllGlobals()
     // Clear leaked partial mocks so floating browser source validation uses the real resolver.
-    vi.doUnmock('@/lib/floating-workspace-terminal-actions')
+    vi.doUnmock('@/components/floating-terminal/floating-workspace-terminal-actions')
+    vi.doUnmock('@/components/floating-terminal/floating-workspace-tab-creation')
     closeTerminalTabMock.mockReset()
   })
 

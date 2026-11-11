@@ -1,33 +1,47 @@
 /** Drive the RPC handler and durable ledger to prove early tab publication precedes admission and spawn uses that pane. */
 
 import { closeTestJournalHostDatabases } from '../../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+
 import { mkdtemp, rm } from 'node:fs/promises'
+
 import { tmpdir } from 'node:os'
+
 import { join } from 'node:path'
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
 import {
   AGENT_LAUNCH_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_TAB_CLOSED_CLIENT_CAPABILITY,
   AGENT_LAUNCH_UNSTARTED_TAB_CLIENT_CAPABILITY
 } from '../../../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
+
 import { AGENT_LAUNCH_TAB_CLOSED_CODE } from '../../../../../shared/agent-launch/contracts/agent-launch-tab-closed'
+
 import '../../../../../shared/agent-launch/contracts/agent-launch-replay-refusal'
 import '../../errors'
 import type { AgentLaunchResult } from '../../../../../shared/agent-launch/contracts/agent-launch-intent'
+
 import type {
   AgentLaunchTabPublished,
   AgentLaunchTabPublishRequest
 } from '../../../../../shared/agent-launch/contracts/agent-launch-tab-publication'
+
 import '../../../../../shared/workspace-layout/stable-pane-id'
 import {
   markAgentLaunchesClosedByUser,
   resetAgentLaunchPanesForTests,
   resolveAgentLaunchPaneVerdict
 } from '../../../../agent-launch/agent-launch-pane-attachment'
+
 import type { AgentLaunchPaneVerdict } from '../../../../../shared/agent-launch/contracts/agent-launch-pane-verdict'
+
 import type { AgentSessionRecordStore } from '../../../agent-session/records/agent-session-record-store'
+
 import { openTestAgentSessionRecordStore } from '../../../agent-session/records/agent-session-record-store-test-harness'
+
 import type { RpcContext } from '../../core'
+
 import '../../rpc-caller-identity'
 import {
   methodNamed,
@@ -36,10 +50,11 @@ import {
   setAgentLaunchRecordStore,
   type AgentLaunchRuntimeStubOptions
 } from './agent-launch.test-fixture'
+
 import {
   WORKTREE_ID as MAIN_WORKTREE_ID,
   setupMainOwnedWorkspace
-} from '../../../main-owned-workspace-runtime-fixture'
+} from '../../../terminal/layout/main-owned-workspace-runtime-fixture'
 
 const deliverTerminalAgentLaunchPrompt = vi.hoisted(() => vi.fn(async () => true))
 vi.mock('./agent-launch-terminal-prompt', () => ({ deliverTerminalAgentLaunchPrompt }))

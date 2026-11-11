@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
-  createJournalQueuePauseMarks,
   deriveQueuePauses,
   journalQueuePauseRestatement,
   queuePauseHolding,
   nextSendableQueuedCard
 } from './queued-message-pause'
+import { createJournalQueuePauseMarks } from './queued-message-pause-marks'
 
 const card = (messageId: string) => ({
   messageId,

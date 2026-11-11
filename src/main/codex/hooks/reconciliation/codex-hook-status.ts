@@ -3,8 +3,8 @@ import type {
   AgentHookInstallState,
   AgentHookInstallStatus
 } from '../../../../shared/agent-hook-listener/configuration/agent-hook-types'
-import '../../../agent-hooks/installer-utils'
-import { readHooksJson } from '../../../agent-hooks/hooks-json-read'
+
+import { readHooksJson } from '../../../agent-hooks/installation/configuration/hooks-json-read'
 import {
   assertLoadableHookTrustConfig,
   isCodexConfigTomlRefusedError,

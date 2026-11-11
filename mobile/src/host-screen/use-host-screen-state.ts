@@ -1,10 +1,10 @@
 import { useCallback, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
-import type { ExecutionHostHealth } from '../../../src/shared/execution-host-health'
+import type { ExecutionHostHealth } from '../../../src/shared/execution-host/execution-host-health'
 import { storedHostDescriptor, type HostStoredDescriptor } from './host-stored-identity'
-import type { RpcClient } from '../transport/rpc-client'
-import type { HostProfile } from '../transport/types'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import type { HostProfile } from '../host-catalog/host-profile'
 import { INITIAL_MOBILE_VIEW, type MobileViewState } from '../worktree/workspace-view-settings'
 import type { Worktree } from '../worktree/workspace-list-sections'
 import type { ServedProjectSections } from '../worktree/project-sections-operations'
@@ -12,6 +12,7 @@ import type { SectionRepo } from '../worktree/workspace-list-types'
 import { NO_SERVER_WORKSPACES, type ServerWorkspaces } from '../worktree/server-workspaces'
 import type { ProjectGroup } from '../../../src/shared/project-group-types'
 import { cachedHostWorktrees } from './host-list-queries'
+import { cachedHostView, useHostViewMemory } from './host-view-memory'
 
 export function useHostScreenState(
   hostId: string | undefined,
@@ -40,8 +41,11 @@ export function useHostScreenState(
   const [actionError, setActionError] = useState('')
   const [lastKnownWorktrees, setLastKnownWorktrees] = useState<Worktree[]>(initialCache ?? [])
   const [search, setSearch] = useState('')
-  const [view, setView] = useState<MobileViewState>(INITIAL_MOBILE_VIEW)
+  const [view, setView] = useState<MobileViewState>(
+    () => cachedHostView(queryClient, hostId) ?? INITIAL_MOBILE_VIEW
+  )
   const viewRef = useRef(view)
+  const rememberView = useHostViewMemory(hostId)
   const [servedProjectSections, setServedProjectSections] = useState<ServedProjectSections | null>(
     null
   )
@@ -121,6 +125,7 @@ export function useHostScreenState(
     showWorkspaceOptions,
     showPinnedInGroups,
     setView,
+    rememberView,
     view,
     viewRef,
     sleptIds,

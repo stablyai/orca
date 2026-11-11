@@ -4,7 +4,7 @@ import {
   parseOrcaSessionAddress,
   type OrcaSessionId
 } from '../../../../shared/orca-session-address'
-import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../../shared/orchestration-session-caller-codes'
+import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../../shared/orchestration/orchestration-session-caller-codes'
 import {
   isRecordedStructuredWorkerSession,
   resolveStructuredWorkerIdentity,
@@ -15,7 +15,7 @@ import { canonicalOrcaSessionId } from './session-lineage/canonical-orca-session
 import type { AgentSessionRecordReader } from './session-lineage/structured-session-lineage'
 import type { OrchestrationDb } from '../db/orchestration-db'
 import { mailboxAddressOf } from './orchestration-caller-identity'
-import type { OrchestrationPartyIdentity as OrchestrationParty } from '../../../../shared/orchestration-party-identity'
+import type { OrchestrationPartyIdentity as OrchestrationParty } from '../../../../shared/orchestration/mailbox/orchestration-party-identity'
 import { OrchestrationError } from '../orchestration-error'
 
 /** A party named by an Orca session id: a structured worker, or a chat. */

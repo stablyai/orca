@@ -12,10 +12,8 @@ import {
   type StructuredAgentSessionAwaitedCommandJournal
 } from './structured-agent-session-command-turn'
 import type { StructuredAgentSessionHostSession } from '../host/structured-agent-session-host-types'
-import {
-  operationDidNotRun,
-  type ReadyOperationSelection
-} from './structured-agent-session-operation-child'
+import type { ReadyOperationSelection } from './structured-agent-session-operation-child'
+import { operationDidNotRun } from './structured-agent-session-operation-did-not-run'
 import './structured-agent-session-mutation-admission'
 import { AGENT_SESSION_NOT_ATTACHED } from './structured-agent-session-mutation-refusals'
 import type { AgentSessionMutationSessionPreparation } from './structured-agent-session-mutation-admission'

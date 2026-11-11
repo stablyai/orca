@@ -4,8 +4,9 @@ import { updateWebRuntimePaneLayout } from '@/runtime/hosted-terminals/actions/w
 import {
   requeuePendingPaneTitleRenames,
   takeUnsentPaneTitleRenames
-} from '@/runtime/pending-pane-title-renames'
-import { collectLeafIdsInOrder } from '../terminal-layout-leaf-traversal'
+} from '@/runtime/web-session-tabs-sync/naming/pending-pane-title-renames'
+import '../terminal-layout-leaf-traversal'
+import { collectLayoutLeafIdsInOrder } from '../../../../../../shared/workspace-layout/terminal-pane-tree'
 
 export type RemotePaneLayoutPusher = {
   push: (input: { worktreeId: string; tabId: string; layout: TerminalLayoutSnapshot }) => void
@@ -23,7 +24,7 @@ export function createRemotePaneLayoutPusher(): RemotePaneLayoutPusher {
   return {
     push: ({ worktreeId, tabId, layout }) => {
       // Send explicit local renames even back to the last-pushed title; resending the full map is not rename intent.
-      const renamedLeafIds = takeUnsentPaneTitleRenames(collectLeafIdsInOrder(layout.root))
+      const renamedLeafIds = takeUnsentPaneTitleRenames(collectLayoutLeafIdsInOrder(layout.root))
       if (
         renamedLeafIds.length === 0 &&
         lastAttempt?.worktreeId === worktreeId &&

@@ -1,4 +1,3 @@
-import '../../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import type { Repo } from '../../../../../shared/repo-types'

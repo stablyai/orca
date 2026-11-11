@@ -23,8 +23,7 @@
     "../src/cli/runtime/runtime-access-denied.ts",
     "../src/cli/runtime/runtime-pid-liveness.ts",
     "../src/renderer/src/store/slices/worktrees/create/worktree-create-payload.ts",
-    "../src/renderer/src/lib/orca-hook-trust.ts",
-    "../src/renderer/src/lib/sha256.ts",
+    "../src/renderer/src/runtime/repo-hooks/orca-hook-trust.ts",
     "../src/renderer/src/components/native-chat/native-chat-resolution-receipt.ts",
     "../src/renderer/src/components/native-chat/structured-agent-question-projection.ts",
     "../src/renderer/src/components/native-chat/subagents/native-chat-subagent-delegation.ts",
@@ -39,7 +38,8 @@
     "../src/types/**/*"
   ],
   "exclude": [
-    "../src/main/runtime/orchestration/terminal-authority/structured-sessions/structured-chat-coordinator-mail.test.ts"
+    "../src/main/runtime/orchestration/terminal-authority/structured-sessions/structured-chat-coordinator-mail.test.ts",
+    "../src/main/runtime/rpc/methods/orchestration/orchestration-check-ambiguous-caller.test.ts"
   ],
   "compilerOptions": {
     "composite": true,

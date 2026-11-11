@@ -33,7 +33,6 @@ export function registerPtyConnectionProviderRebindCallbackFencingTests(): void 
   }
   describe('connectPanePty', () => {
     beforeEach(async () => {
-      vi.resetModules()
       vi.clearAllMocks()
       transportFactoryQueue = []
       createdTransportOptions = []
@@ -60,8 +59,9 @@ export function registerPtyConnectionProviderRebindCallbackFencingTests(): void 
 
     it('ignores a late spawn callback after the pane adopted a provider replacement', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks18 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks18 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       let transportPtyId = 'terminal-old'
       const transport = createMockTransport(transportPtyId)
       transport.getPtyId = vi.fn(() => transportPtyId)
@@ -104,8 +104,9 @@ export function registerPtyConnectionProviderRebindCallbackFencingTests(): void 
 
     it('ignores a late split-pane spawn callback when the tab identity belongs to pane one', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks19 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks19 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       let transportPtyId = 'terminal-old'
       const transport = createMockTransport(transportPtyId)
       transport.getPtyId = vi.fn(() => transportPtyId)
@@ -160,8 +161,9 @@ export function registerPtyConnectionProviderRebindCallbackFencingTests(): void 
 
     it('accepts a fresh spawn when the persisted pane still names the retired PTY', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks20 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks20 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       let transportPtyId = 'terminal-new'
       const transport = createMockTransport(transportPtyId)
       transport.getPtyId = vi.fn(() => transportPtyId)

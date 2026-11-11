@@ -25,6 +25,17 @@ export function translateSearchKeyword(
   return uniqueKeywords([localized, fallback, ...(options?.aliases ?? [])])
 }
 
+export type SearchKeywordTranslator = (
+  key: string,
+  fallback: string,
+  options?: Omit<SearchKeywordSpec, 'key' | 'fallback'>
+) => string[]
+
+/** translateSearchKeyword bound to a render's `t`; name the result translateSearchKeyword so catalog extraction still sees its keys. */
+export function searchKeywordTranslator(t: Translate = translate): SearchKeywordTranslator {
+  return (key, fallback, options) => translateSearchKeyword(key, fallback, options, t)
+}
+
 export function searchKeywords(terms: (string | SearchKeywordSpec)[], t?: Translate): string[] {
   return uniqueKeywords(
     terms.flatMap((term) => {

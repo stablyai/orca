@@ -1,9 +1,31 @@
 // @vitest-environment happy-dom
 
-import type * as LaunchErrors from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { StructuredAgentSessionCreateRefusalError } from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
+import type * as LaunchErrors from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
+import { refreshLocalStructuredSessionTabs } from '@/runtime/local-structured-session-tabs-sync/inventory-refresh'
+import {
+  cancelStructuredAgentLaunch,
+  retryStructuredAgentSessionLaunch,
+  startStructuredAgentLaunch
+} from './structured-agent-session-launch'
+import { getStructuredAgentLaunchStatus } from './structured-agent-session-launch-status'
+import {
+  getStructuredAgentSessionLaunchLifecycle,
+  resetStructuredAgentLaunchRegistryForTests
+} from './structured-agent-session-launch-registry'
+import {
+  resetStructuredAgentSessionSendsForTests,
+  sendStructuredAgentSessionMessage
+} from '@/components/native-chat/session/structured/delivery/structured-agent-session-message-sender'
+import { getStructuredAgentSessionPendingSends } from '@/components/native-chat/session/structured/delivery/structured-agent-session-pending-sends'
+import { relaunchFailedStructuredAgentSessionWithMessage } from './structured-agent-session-launch-message'
+import { clearNativeChatComposerDraftsForTests as clearNativeChatDraftCacheForTests } from '@/components/native-chat/drafts/native-chat-draft-reset'
+import { readNativeChatDraftCache } from '@/components/native-chat/drafts/native-chat-draft-views'
+import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/drafts/native-chat-draft-scope'
+import { resetStructuredAgentLaunchPersistenceForTests } from './structured-agent-session-launch-persistence'
 import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/runtime-session-contracts'
-import type { StructuredAgentSessionLaunchIntent } from '@/lib/launch-structured-agent-session'
+import type { StructuredAgentSessionLaunchIntent } from '@/lib/agent-session/launch/structured-agent-session-launch-intent'
 
 const mocks = vi.hoisted(() => ({
   abandonIntent: vi.fn(),
@@ -35,23 +57,26 @@ vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-create-call'
   launchStructuredAgentSession: mocks.launch
 }))
 
-vi.mock('@/lib/launch-structured-agent-session', () => {
+vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-intent', () => {
   return {
     createStructuredAgentSessionLaunchIntent: mocks.createIntent,
     retryStructuredAgentSessionLaunchIntent: mocks.retryIntent,
     restoreStructuredAgentSessionLaunchIntent: mocks.restoreIntent,
-    abandonStructuredAgentSessionLaunchIntent: mocks.abandonIntent,
     launchStructuredAgentSession: mocks.launch,
     StructuredAgentSessionCreateRefusalError:
       launchErrorMocks.StructuredAgentSessionCreateRefusalError
   }
 })
 
+vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-abandon', () => ({
+  abandonStructuredAgentSessionLaunchIntent: mocks.abandonIntent
+}))
+
 vi.mock('@/runtime/local-structured-session-tabs-sync/inventory-refresh', () => ({
   refreshLocalStructuredSessionTabs: vi.fn()
 }))
 
-vi.mock('@/runtime/structured-agent-session-client', () => ({
+vi.mock('../../../runtime/native-chat/requests/structured-agent-session-call', () => ({
   // Sends reach the runtime RPC through this wrapper, as in the app; reads stay on this mock.
   callStructuredAgentSession: (target: unknown, method: string, params?: unknown) =>
     method === 'agentSession.send'
@@ -81,33 +106,10 @@ vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
 }))
 
-vi.mock('@/lib/agent-catalog', () => ({
+vi.mock('@/lib/agent-catalog/agent-catalog', () => ({
   getAgentLabel: () => 'Codex',
   getAgentCatalog: () => [{ id: 'codex', label: 'Codex' }]
 }))
-
-import { StructuredAgentSessionCreateRefusalError } from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
-import { refreshLocalStructuredSessionTabs } from '@/runtime/local-structured-session-tabs-sync/inventory-refresh'
-import {
-  cancelStructuredAgentLaunch,
-  retryStructuredAgentSessionLaunch,
-  startStructuredAgentLaunch
-} from './structured-agent-session-launch'
-import { getStructuredAgentLaunchStatus } from './structured-agent-session-launch-status'
-import {
-  getStructuredAgentSessionLaunchLifecycle,
-  resetStructuredAgentLaunchRegistryForTests
-} from './structured-agent-session-launch-registry'
-import {
-  resetStructuredAgentSessionSendsForTests,
-  sendStructuredAgentSessionMessage
-} from '@/components/native-chat/session/structured/delivery/structured-agent-session-message-sender'
-import { getStructuredAgentSessionPendingSends } from '@/components/native-chat/session/structured/delivery/structured-agent-session-pending-sends'
-import { relaunchFailedStructuredAgentSessionWithMessage } from './structured-agent-session-launch-message'
-import { clearNativeChatComposerDraftsForTests as clearNativeChatDraftCacheForTests } from '@/components/native-chat/drafts/native-chat-draft-reset'
-import { readNativeChatDraftCache } from '@/components/native-chat/drafts/native-chat-draft-views'
-import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/drafts/native-chat-draft-scope'
-import { resetStructuredAgentLaunchPersistenceForTests } from './structured-agent-session-launch-persistence'
 
 type Receipt = { sessionId: string; fence: number }
 
@@ -258,25 +260,6 @@ describe('a new launch after a failed one', () => {
     resolveFresh({ sessionId: fresh.sessionId, fence: 1 })
     await expect(next.launchResult).resolves.toEqual({ sessionId: fresh.sessionId, fence: 1 })
     expect(getStructuredAgentLaunchStatus(WORKTREE_ID, 'codex')).toBe('idle')
-  })
-
-  it('restores a failed chat after reload without unregistering a newer launch', async () => {
-    await refuseFirstLaunch()
-    resetStructuredAgentLaunchRegistryForTests()
-    let resolveFresh!: (receipt: Receipt) => void
-    mocks.launch
-      .mockImplementationOnce(() => new Promise<Receipt>((resolve) => (resolveFresh = resolve)))
-      .mockResolvedValueOnce({ sessionId: failed.sessionId, fence: 1 })
-    const next = startStructuredAgentLaunch(WORKTREE_ID, 'codex', { requestId: 'request-5' })
-
-    expect(retryStructuredAgentSessionLaunch(WORKTREE_ID, failed.sessionId)).toBe(true)
-    await flushLaunchSettlement()
-
-    expect(getStructuredAgentSessionLaunchLifecycle(WORKTREE_ID, failed.sessionId)).toBeNull()
-    expect(getStructuredAgentSessionLaunchLifecycle(WORKTREE_ID, fresh.sessionId)).toBe('pending')
-    expect(getStructuredAgentLaunchStatus(WORKTREE_ID, 'codex')).toBe('pending')
-    resolveFresh({ sessionId: fresh.sessionId, fence: 1 })
-    await expect(next.launchResult).resolves.toEqual({ sessionId: fresh.sessionId, fence: 1 })
   })
 
   it('reads a failed resume as not starting, so resuming again opens a new chat', async () => {

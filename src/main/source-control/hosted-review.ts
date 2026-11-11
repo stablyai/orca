@@ -138,7 +138,7 @@ export async function readHostedReviewForBranch(
           ...(providerOptions.localGitExecOptions
             ? { localGitExecOptions: providerOptions.localGitExecOptions }
             : {}),
-          githubCurrentHeadOid: headOid,
+          currentHeadOid: headOid,
           ...(input.userRefresh === true ? { userRefresh: true } : {}),
           ...reviewLinkForProvider(input, provider.id)
         })

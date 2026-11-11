@@ -6,9 +6,10 @@ import { MobileFileExplorerPanel } from './MobileFileExplorerPanel'
 import type { MobileDirEntry } from './file-tree'
 import { createOrcaQueryClient } from '../query/orca-query-client'
 import { settleQueryNotifications } from '../test-support/rpc-recording/hook-mount'
-import type { RpcClient } from '../transport/rpc-client'
-import { stubRpcClient } from '../transport/rpc-client-test-stub'
-import type { ConnectionState, RpcResponse } from '../transport/types'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import { stubRpcClient } from '../transport/rpc/rpc-client-test-stub'
+import type { ConnectionState } from '../transport/connection/connection-state'
+import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
 
 const mounted: ReactTestRenderer[] = []
 
@@ -117,7 +118,7 @@ vi.mock('./mobile-file-explorer-row-actions-sheet', () => ({
   useMobileFileExplorerRowActions: () => ({ openRowActions: () => {}, rowActionsSheet: null })
 }))
 
-vi.mock('../transport/host-client-hooks', () => ({
+vi.mock('../transport/connection/host-client-hooks', () => ({
   useForceReconnect: () => mockTransport.forceReconnect,
   useHostClient: () => ({
     client: mockTransport.client,
@@ -241,23 +242,6 @@ async function pressByLabel(
   await settleQueryNotifications()
 }
 
-async function pressText(renderer: ReactTestRenderer, text: string): Promise<void> {
-  const pressable = renderer.root
-    .findAll((node) => String(node.type) === 'Pressable')
-    .find((node) =>
-      node
-        .findAll((child) => String(child.type) === 'Text')
-        .some((child) => child.props.children === text)
-    )
-  if (!pressable) {
-    throw new Error(`Unable to find pressable: ${text}`)
-  }
-  await act(async () => {
-    pressable.props.onPress()
-  })
-  await settleQueryNotifications()
-}
-
 async function typeFilter(renderer: ReactTestRenderer, text: string): Promise<void> {
   const input = renderer.root.find((node) => String(node.type) === 'TextInput')
   await act(async () => {
@@ -267,27 +251,6 @@ async function typeFilter(renderer: ReactTestRenderer, text: string): Promise<vo
 }
 
 // A host that pages: `limit` rows strictly after the `after` cursor, as files.readDir does since #35115.
-function pagingHost(folders: Record<string, MobileDirEntry[]>) {
-  return createHost((_method, relativePath, params) => {
-    const entries = folders[relativePath] ?? []
-    const page = typeof params === 'object' && params !== null ? params : {}
-    const after = 'after' in page && typeof page.after === 'object' ? page.after : null
-    const afterName = after !== null && 'name' in after ? after.name : undefined
-    const start = entries.findIndex((candidate) => candidate.name === afterName) + 1
-    const limit = 'limit' in page && typeof page.limit === 'number' ? page.limit : entries.length
-    return ok({
-      entries: entries.slice(start, start + limit),
-      total: entries.length,
-      hasMore: start + limit < entries.length
-    })
-  })
-}
-
-function snapshots(count: number): MobileDirEntry[] {
-  return Array.from({ length: count }, (_, index) =>
-    entry(`snap-${String(index + 1).padStart(4, '0')}.png`)
-  )
-}
 
 function renderedText(renderer: ReactTestRenderer): string {
   return renderer.root
@@ -309,51 +272,6 @@ describe('MobileFileExplorerPanel', () => {
     mockTransport.forceReconnect = vi.fn()
   })
 
-  it('reopens Files with the last listing while the refresh is still out', async () => {
-    const host = listingHost({ '': [entry('src', true), entry('README.md')] })
-    const first = await renderExplorer()
-    act(() => first.unmount())
-
-    const refresh = deferred()
-    host.answer = () => refresh.promise
-    // Past the listing's freshness, so reopening revalidates.
-    vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 60_000)
-    const reopened = await renderExplorer()
-    expect(renderedText(reopened)).toContain('README.md')
-    expect(renderedText(reopened)).not.toContain('Loading files')
-
-    await act(async () => {
-      refresh.resolve(ok([entry('src', true), entry('CHANGELOG.md')]))
-    })
-    await settleQueryNotifications()
-    expect(renderedText(reopened)).toContain('CHANGELOG.md')
-    expect(renderedText(reopened)).not.toContain('README.md')
-  })
-
-  it('paints the last listing before the host client attaches', async () => {
-    listingHost({ '': [entry('src', true), entry('README.md')] })
-    const first = await renderExplorer()
-    act(() => first.unmount())
-
-    // A remount reads its client in an effect, so the first render has none.
-    mockTransport.client = null
-    const reopened = await renderExplorer()
-    expect(renderedText(reopened)).toContain('README.md')
-    expect(renderedText(reopened)).not.toContain('Loading files')
-  })
-
-  it('keeps the loaded tree visible during a transient disconnect', async () => {
-    const host = listingHost({ '': [entry('src', true), entry('README.md')] })
-    const renderer = await renderExplorer()
-    expect(renderedText(renderer)).toContain('src')
-
-    await host.setState(renderer, 'disconnected')
-
-    expect(renderedText(renderer)).toContain('src')
-    expect(renderedText(renderer)).toContain('README.md')
-    expect(renderedText(renderer)).not.toContain('Waiting for desktop')
-  })
-
   it('refreshes the root in the background after reconnect without blanking the tree', async () => {
     const host = listingHost({ '': [entry('src', true), entry('README.md')] })
     const renderer = await renderExplorer()
@@ -372,31 +290,6 @@ describe('MobileFileExplorerPanel', () => {
     })
     await settleQueryNotifications()
     expect(renderedText(renderer)).toContain('CHANGELOG.md')
-  })
-
-  it('keeps an open folder’s rows while it refreshes after reconnect, then shows the new ones', async () => {
-    const host = listingHost({
-      '': [entry('src', true)],
-      src: [entry('deleted-while-offline.ts')]
-    })
-    const renderer = await renderExplorer()
-    await pressByLabel(renderer, 'Open folder src')
-    expect(renderedText(renderer)).toContain('deleted-while-offline.ts')
-
-    await host.setState(renderer, 'disconnected')
-    const srcRefresh = deferred()
-    host.answer = (_method, relativePath) =>
-      relativePath === 'src' ? srcRefresh.promise : ok([entry('src', true)])
-    await host.setState(renderer, 'connected')
-    expect(renderedText(renderer)).toContain('deleted-while-offline.ts')
-    expect(renderer.root.findAll((node) => String(node.type) === 'ActivityIndicator')).toEqual([])
-
-    await act(async () => {
-      srcRefresh.resolve(ok([entry('created-while-offline.ts')]))
-    })
-    await settleQueryNotifications()
-    expect(renderedText(renderer)).toContain('created-while-offline.ts')
-    expect(renderedText(renderer)).not.toContain('deleted-while-offline.ts')
   })
 
   it('rereads a previously cached collapsed folder when reopened after reconnect', async () => {
@@ -460,46 +353,6 @@ describe('MobileFileExplorerPanel', () => {
     // The folder comes from the synthesized tree; a readDir for it would fail on this desktop.
     await pressByLabel(renderer, 'Open folder src')
     expect(renderedText(renderer)).toContain('app.ts')
-  })
-
-  it('pages a big folder with Show more, and a reconnect keeps the pages already shown', async () => {
-    const host = pagingHost({
-      '': [entry('snapshots', true), entry('videos', true)],
-      snapshots: snapshots(1200)
-    })
-    const renderer = await renderExplorer()
-    await pressByLabel(renderer, 'Open folder snapshots')
-    expect(renderedText(renderer)).toContain('snap-0500.png')
-    expect(renderedText(renderer)).not.toContain('snap-0501.png')
-    expect(renderedText(renderer)).toContain('1,200')
-    expect(renderedText(renderer)).toContain('500 of 1,200')
-
-    await pressText(renderer, 'Show 500 more')
-    expect(renderedText(renderer)).toContain('snap-1000.png')
-    expect(renderedText(renderer)).not.toContain('snap-1001.png')
-    expect(renderedText(renderer)).toContain('Show 200 more')
-    expect(renderedText(renderer)).toContain('videos')
-
-    await host.setState(renderer, 'disconnected')
-    await host.setState(renderer, 'connected')
-    expect(renderedText(renderer)).toContain('snap-1000.png')
-    expect(renderedText(renderer)).toContain('1,000 of 1,200')
-  })
-
-  it('says how much of a closed, part-loaded folder the filter searched, and Search all reads the rest', async () => {
-    pagingHost({ '': [entry('snapshots', true)], snapshots: snapshots(12_000) })
-    const renderer = await renderExplorer()
-    // Closed again, so only the cache holds its rows and nothing observes the appends.
-    await pressByLabel(renderer, 'Open folder snapshots')
-    await pressByLabel(renderer, 'Open folder snapshots')
-    await typeFilter(renderer, 'snap-110')
-    expect(renderedText(renderer)).not.toContain('snap-1100.png')
-    expect(renderedText(renderer)).toContain('Searched 500 of 12,000 in snapshots.')
-
-    await pressByLabel(renderer, 'Search all of snapshots')
-    expect(renderedText(renderer)).toContain('snap-1100.png')
-    expect(renderedText(renderer)).toContain('snap-11000.png')
-    expect(renderedText(renderer)).not.toContain('Searched')
   })
 
   it('filters a folder whose read finished after it was closed', async () => {

@@ -2,17 +2,19 @@ import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallStatus } from '../../../../shared/agent-hook-listener/configuration/agent-hook-types'
 import {
   createManagedCommandMatcher,
-  removeManagedCommands,
-  type HookDefinition
-} from '../../../agent-hooks/installer-utils'
-import { wrapPosixHookCommand } from '../../../agent-hooks/posix-hook-command'
+  removeManagedCommands
+} from '../../../agent-hooks/installation/commands/managed-hook-command-matching'
+import type { HookDefinition } from '../../../agent-hooks/installation/configuration/hook-config-schema'
+import { wrapPosixHookCommand } from '../../../agent-hooks/installation/commands/posix-hook-command'
 import {
   readHooksJsonRemote,
+  writeHooksJsonRemote
+} from '../../../agent-hooks/installation/configuration/hooks-json-remote'
+import {
   readTextFileRemote,
-  writeHooksJsonRemote,
-  writeManagedScriptRemote,
   writeTextFileRemoteAtomic
-} from '../../../agent-hooks/installer-utils-remote'
+} from '../../../agent-hooks/installation/remote/hook-text-files-remote'
+import { writeManagedScriptRemote } from '../../../agent-hooks/installation/scripts/managed-script-write-remote'
 import {
   assertLoadableHookTrustConfig,
   type CodexTrustEntry

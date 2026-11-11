@@ -106,22 +106,20 @@ export function buildHydratedTabState(
         .filter((tab) => tab.aiVaultTitle)
         .map((tab) => [tab.id, tab.aiVaultTitle!])
     )
-    const hydratedTabs = [...tabs]
-      .map((tab) => ({
-        ...tab,
-        entityId: tab.entityId ?? tab.id
-      }))
+    const hydratedTabs = tabs
       .map((tab) => {
+        const entityId = tab.entityId ?? tab.id
         if (tab.contentType !== 'terminal') {
-          return tab
+          return { ...tab, entityId }
         }
         const quickCommandLabel = tab.quickCommandLabel?.trim()
           ? tab.quickCommandLabel.trim()
-          : quickCommandLabelByTerminalId.get(tab.entityId)
-        const generatedLabel = generatedTitleByTerminalId.get(tab.entityId)
-        const aiVaultTitle = tab.aiVaultTitle ?? aiVaultTitleByTerminalId.get(tab.entityId)
+          : quickCommandLabelByTerminalId.get(entityId)
+        const generatedLabel = generatedTitleByTerminalId.get(entityId)
+        const aiVaultTitle = tab.aiVaultTitle ?? aiVaultTitleByTerminalId.get(entityId)
         return {
           ...tab,
+          entityId,
           ...(quickCommandLabel ? { quickCommandLabel } : {}),
           ...(aiVaultTitle ? { aiVaultTitle } : {}),
           ...(!tab.generatedLabel?.trim() && generatedLabel ? { generatedLabel } : {})

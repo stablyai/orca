@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { TerminalRunFactsRegister } from '../runtime/terminal-run-facts'
+import { TerminalRunFactsRegister } from '../runtime/terminal/lifecycle/terminal-run-facts'
 import {
   reserveOpenCodeStartupPrompt,
   commitPtyWithOpenCodePromptIntent
@@ -13,7 +13,7 @@ const ownership = vi.hoisted(() => ({
   ptyOwnership: new Map<string, string>(),
   ptyIncarnationById: new Map<string, string>()
 }))
-vi.mock('../agent-hooks/server', () => ({
+vi.mock('../agent-hooks/server/agent-hook-server', () => ({
   agentHookServer: {
     setStartupPromptClaimListener: (claim: typeof control.claim, clear: () => void) => {
       control.claim = claim

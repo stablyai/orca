@@ -1,8 +1,8 @@
 import { translate } from '../i18n/mobile-i18n'
 import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react'
 import { PixelRatio } from 'react-native'
-import type { RpcClient } from '../transport/rpc-client'
-import type { BrowserScreencastFrameMetadata } from '../transport/browser-screencast-protocol'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import type { BrowserScreencastFrameMetadata } from './browser-screencast-protocol'
 import {
   buildMobileBrowserScreencastRequest,
   type MobileBrowserViewMode
@@ -20,7 +20,7 @@ import {
   type BrowserTouchLayout,
   type BrowserZoomState
 } from './browser-touch-geometry'
-import type { MobileBrowserTab } from './MobileBrowserPane'
+import type { MobileBrowserTab } from '../session/tabs/mobile-session-tabs'
 import {
   handleBrowserScreencastEvent,
   type BrowserDialogState,

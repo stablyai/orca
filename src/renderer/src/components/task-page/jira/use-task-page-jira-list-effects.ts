@@ -1,5 +1,5 @@
 import { translate } from '@/i18n/i18n'
-import { isRuntimeProviderSearchQueryWithinLimit } from '@/runtime/runtime-provider-search-bounds'
+import { isRuntimeProviderSearchQueryWithinLimit } from '@/runtime/issue-search/runtime-provider-search-bounds'
 import { withCurrentSprintClause } from '../../../../../shared/jira/jira-jql-predicate'
 import {
   buildJiraStatusCatalog,

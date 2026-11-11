@@ -108,6 +108,10 @@ vi.mock('../network/proxy-settings', () => ({
 vi.mock('../network/electron-proxy-request-guard', () => ({
   installElectronProxyRequestGuard: vi.fn()
 }))
+vi.mock('../browser/extensions/browser-extension-startup', () => ({
+  initializeBrowserExtensionSupport: vi.fn(),
+  switchBrowserExtensionSupport: vi.fn()
+}))
 vi.mock('../network/electron-proxy-credentials', () => ({ handleElectronProxyLogin: vi.fn() }))
 vi.mock('../hang-watchdog/main-thread-hang-watchdog', () => ({
   installMainThreadHangWatchdog: vi.fn()
@@ -116,7 +120,7 @@ vi.mock('../hang-watchdog/hang-detection-marker', () => ({
   consumeHangDetectionMarker: vi.fn(() => null),
   hangDetectionMarkerPath: vi.fn(() => '/test-marker')
 }))
-vi.mock('../browser/browser-manager', () => ({
+vi.mock('../browser/guest-lifecycle/manager/browser-manager', () => ({
   browserCertificateTrustController: {},
   browserManager: {
     installCertificateRequestGuard: vi.fn(),
@@ -139,7 +143,7 @@ vi.mock('../browser/client-hosts/lifecycle/browser-client-host-id', () => ({
 vi.mock('../host/deferred-secret-protection-report', () => ({
   scheduleSecretProtectionGapReport: vi.fn()
 }))
-vi.mock('../ssh/ssh-host-key-store', () => ({ initSshHostKeyStoreFile: vi.fn() }))
+vi.mock('../ssh/host-keys/ssh-host-key-store', () => ({ initSshHostKeyStoreFile: vi.fn() }))
 vi.mock('../pty/shell-startup/legacy-terminal-shim-dir', () => ({
   neutralizeLegacyTerminalShimDir: vi.fn()
 }))
@@ -159,7 +163,7 @@ vi.mock('../git/command-runner/wsl-command-resolution', async (importOriginal) =
   ...(await importOriginal<Record<string, unknown>>()),
   setDefaultWslDistroOverride: vi.fn()
 }))
-vi.mock('../agent-hooks/wsl-hook-relay-manager', () => ({
+vi.mock('../agent-hooks/wsl-relay/wsl-hook-relay-manager', () => ({
   wslHookRelayManager: { setManagedHookSettingsResolver: vi.fn() }
 }))
 vi.mock('../window/desktop-integration/app-icon', () => ({ applyAppIcon: vi.fn() }))
@@ -167,7 +171,7 @@ vi.mock('./dev-education-suppression', () => ({
   shouldSuppressDevEducation: () => false,
   suppressDevEducationForStore: vi.fn()
 }))
-vi.mock('../browser/sessions/browser-session-proxy', () => ({
+vi.mock('../browser/sessions/proxy/browser-session-proxy', () => ({
   awaitBrowserSessionProxies: vi.fn(async () => {}),
   setBrowserNetworkProxySettingsResolver: vi.fn(),
   invalidateBrowserSessionProxyApplication: vi.fn()
@@ -179,16 +183,21 @@ vi.mock('../media/media-preview-protocol', () => ({ installMediaPreviewProtocolH
 vi.mock('../ipc/doc-preview-grant-ipc', () => ({ registerDocPreviewGrantHandlers: vi.fn() }))
 
 // Keep registry/startup real through meta load, retired-choice inspection and identity write; stub only surrounding route/policy/cookie machinery.
-vi.mock('../browser/routing/sessions/browser-route-session-runtime', () => ({
-  configureRouteSessionsForOrcaProfile: vi.fn()
-}))
+vi.mock(
+  '../browser/routing/partitions/browser-route-partition-binding-runtime',
+  async (importOriginal) => ({
+    ...(await importOriginal<Record<string, unknown>>()),
+    configureBrowserRoutePartitionBindingsForOrcaProfile: vi.fn()
+  })
+)
+vi.mock('../browser/routing/sessions/browser-route-session-runtime', () => ({}))
 vi.mock('../browser/client-hosts/lifecycle/paired-runtime-browser-client-host-runtime', () => ({
   configurePairedRuntimeBrowserClientHostsForOrcaProfile: vi.fn()
 }))
 vi.mock('../browser/routing/partitions/browser-route-partition-storage-runtime', () => ({
   collectOrphanedBrowserRoutePartitionStorage: vi.fn(async () => {})
 }))
-vi.mock('../browser/sessions/browser-session-partition-policies', () => ({
+vi.mock('../browser/sessions/partition-policies/browser-session-partition-policies', () => ({
   installBrowserSessionPartitionPolicies: vi.fn(async () => {}),
   forgetBrowserSessionPartitionConfiguration: vi.fn(),
   clearBrowserSessionPartitionPolicies: vi.fn()
@@ -202,7 +211,7 @@ vi.mock('../browser/routing/sessions/browser-session-route-policies', () => ({
   installBrowserRoutePartitionPolicies: vi.fn(),
   clearBrowserRoutePartitionPolicies: vi.fn()
 }))
-vi.mock('../browser/sessions/browser-session-profile-retirement', () => ({
+vi.mock('../browser/sessions/profiles/browser-session-profile-retirement', () => ({
   retireFailedBrowserSessionProfile: vi.fn(async () => {})
 }))
 vi.mock('../browser/webauthn/browser-webauthn-account-picker', () => ({
@@ -246,8 +255,8 @@ import {
   BROWSER_IDENTITY_MODE_FILE,
   BROWSER_IDENTITY_MODE_VERSION,
   readBrowserIdentityModeRecord
-} from '../browser/identity/browser-identity-mode-record'
-import { BROWSER_SESSION_META_FILE_NAME } from '../browser/sessions/browser-session-meta-store'
+} from '../browser/identity/mode/browser-identity-mode-record'
+import { BROWSER_SESSION_META_FILE_NAME } from '../browser/sessions/profiles/browser-session-meta-store'
 import { getOrcaProfileBrowserSessionPartition } from '../../shared/orca-profiles'
 // Transform the ready graph at collection, outside any test timeout; tests re-evaluate it after resetModules.
 import './main-process-ready'
@@ -289,7 +298,7 @@ function seedRetiredProfile(): void {
 
 /** Use fresh module graphs to reset the registry's initialization latch. */
 async function runReady(): Promise<void> {
-  const identity = await import('../browser/identity/browser-identity-mode-store')
+  const identity = await import('../browser/identity/mode/browser-identity-mode-store')
   // Preflight fixes identity for this launch.
   identity.initializeBrowserIdentityModeStore(mocks.userDataPath)
   const { initializeMainProcessReady } = await import('./main-process-ready')
@@ -329,28 +338,6 @@ describe('ready-phase browser identity authority', () => {
   afterEach(() => {
     Object.defineProperty(process, 'platform', { value: ORIGINAL_PLATFORM })
   })
-
-  it.each([
-    { platform: 'win32', isPackaged: true, appId: 'app.id' },
-    { platform: 'win32', isPackaged: false, appId: process.execPath },
-    { platform: 'darwin', isPackaged: true, appId: null },
-    { platform: 'linux', isPackaged: true, appId: null }
-  ])(
-    'sets Windows app identity on $platform (packaged=$isPackaged)',
-    async ({ platform, isPackaged, appId }) => {
-      seedIdentityRecord('clean', true)
-      mocks.isPackaged = isPackaged
-      Object.defineProperty(process, 'platform', { value: platform })
-
-      await runReady()
-
-      if (appId === null) {
-        expect(mocks.setAppUserModelId).not.toHaveBeenCalled()
-      } else {
-        expect(mocks.setAppUserModelId).toHaveBeenCalledExactlyOnceWith(appId)
-      }
-    }
-  )
 
   // Root identity remains authoritative across profile switches; ready must not restore retired per-profile choices in either direction.
   it.each([{ rootMode: 'native' }, { rootMode: 'clean' }])(

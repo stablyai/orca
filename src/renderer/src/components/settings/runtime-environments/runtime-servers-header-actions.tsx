@@ -12,7 +12,7 @@ import {
 } from '../../ui/dropdown-menu'
 import { useRuntimeServersPage } from './runtime-servers-page-context'
 import { RuntimeShareComputerButton } from './pairing/runtime-share-computer-button'
-import { getManagedOrcadApi } from './managed-servers/use-managed-server-catalog'
+import { getManagedOrcadApi } from '../../../runtime/hosts/installation/managed-orcad-api-availability'
 
 function AddServerMenuItem({
   icon,

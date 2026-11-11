@@ -72,13 +72,14 @@ function LinkPeekCard({ body, children }: { body: ReactNode; children: ReactNode
         onPointerEnter={(event) => {
           if (!open) {
             event.preventDefault()
-            if (event.pointerType !== 'touch') {
+            if (event.pointerType !== 'touch' && event.buttons === 0) {
               scheduleOpen()
             }
           }
         }}
         onPointerLeave={cancelPendingOpen}
-        onPointerDown={cancelPendingOpen}
+        onPointerDown={dismiss}
+        onContextMenu={dismiss}
         onFocus={(event) => {
           const keyboardFocus =
             event.target instanceof Element && event.target.matches(':focus-visible')

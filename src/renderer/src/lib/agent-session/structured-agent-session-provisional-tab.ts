@@ -2,7 +2,7 @@ import { readNativeChatComposerDraft } from '@/components/native-chat/drafts/nat
 import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/drafts/native-chat-draft-scope'
 import { nativeChatDraftPositions } from '@/components/native-chat/drafts/native-chat-composer-draft-memory'
 import { structuredAgentSessionTabId } from '../../../../shared/agent-session/view/structured-agent-session-projection'
-import { afterPendingTab } from '@/runtime/layout-owner-pending-tabs'
+import { afterPendingTab } from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
 import type { NativeChatComposerFocusIntent } from '@/components/native-chat/composer/focus/native-chat-composer-focus-intent'
 import type {
   AgentSessionLaunchPlan,
@@ -23,7 +23,7 @@ import {
 import {
   resolveStructuredAgentSessionOwner,
   structuredAgentSessionTargetForHost
-} from '@/runtime/structured-agent-session-owner'
+} from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import {
   openTerminalForDeclinedChat,

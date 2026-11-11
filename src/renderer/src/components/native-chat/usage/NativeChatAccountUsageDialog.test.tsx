@@ -26,7 +26,7 @@ vi.mock('@/runtime/provider-accounts/observations/runtime-provider-accounts-clie
     }
   }
 }))
-vi.mock('@/runtime/structured-agent-session-client', () => ({
+vi.mock('../../../runtime/native-chat/requests/structured-agent-session-call', () => ({
   callStructuredAgentSession: mocks.read
 }))
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({

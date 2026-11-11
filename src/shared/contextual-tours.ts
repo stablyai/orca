@@ -95,13 +95,13 @@ export const CONTEXTUAL_TOURS = [
       // Exactly one split step shows: its target exists only for the active tab's kind.
       {
         id: 'agent-sessions-split-chat',
-        title: 'Split a terminal pane',
+        title: 'Open a pane beside the chat',
         body: 'Press {terminal.splitRight}, or click the split button at the top of the chat. Each side gets its own tabs.',
         targetSelector:
           '[data-contextual-tour-target="chat-pane-split-target"], [data-contextual-tour-target="workspace-agent-terminal-tip"][data-active-content-type="agent-session"]',
         requiredForStart: true,
         preferredPlacement: 'bottom',
-        primaryAction: { kind: 'split-chat-pane', label: 'Split terminal' },
+        primaryAction: { kind: 'split-chat-pane', label: 'Split pane' },
         advanceOnFeatureInteraction: 'tab-splits'
       },
       {
@@ -130,18 +130,11 @@ export const CONTEXTUAL_TOURS = [
     id: 'browser',
     steps: [
       {
-        id: 'browser-grab',
-        title: 'Grab page context for agents',
-        body: "Use the grab tool to copy a page element's context for agents.",
-        targetSelector: '[data-contextual-tour-target="browser-grab-control"]',
-        requiredForStart: true,
-        preferredPlacement: 'bottom'
-      },
-      {
         id: 'browser-annotate',
         title: 'Mark design feedback in place',
         body: 'Annotate elements and send those notes to an agent.',
         targetSelector: '[data-contextual-tour-target="browser-annotation-control"]',
+        requiredForStart: true,
         preferredPlacement: 'bottom'
       },
       {

@@ -10,7 +10,8 @@ import {
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { JiraIcon } from '@/components/icons/JiraIcon'
 import { Trans } from 'react-i18next'
-import { i18n, translate } from '@/i18n/i18n'
+import { i18n } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { JiraSite } from '../../../../shared/jira/jira-types'
 import type { RowEntry, SmartWorkspaceNameSelection } from './smart-workspace-name-field-model'
 
@@ -76,12 +77,13 @@ export function RowLabel({
   jiraSite?: JiraSite | null
   showJiraSiteContext?: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   if (row.kind === 'use-name') {
     return (
       <span className="min-w-0 truncate">
         <Trans
           i18n={i18n}
-          defaults={translate(
+          defaults={t(
             'auto.components.new.workspace.SmartWorkspaceNameField.useAsWorkspaceName',
             'Use <name>"{{name}}"</name> as workspace name'
           )}
@@ -96,7 +98,7 @@ export function RowLabel({
       <span className="min-w-0 truncate">
         <Trans
           i18n={i18n}
-          defaults={translate(
+          defaults={t(
             'auto.components.new.workspace.SmartWorkspaceNameField.createNewBranchNamed',
             'Create new branch <name>{{name}}</name>'
           )}

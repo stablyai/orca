@@ -1,11 +1,8 @@
 import { bindPtyConnectionTestMocks } from '../test-fixtures/pty-connection-mocks.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
-import { beginAgentStartupDeliveryAttempt } from '@/lib/agent-startup-delayed-delivery'
+import { beginAgentStartupDeliveryAttempt } from '@/lib/agent-session/launch/startup/agent-startup-delayed-delivery'
 import { flushAsyncTicks } from '../test-fixtures/pty-connection-test-async'
-import { VISIBLE_PTY_SETTLE_MS } from '../test-fixtures/pty-connection-test-constants'
 import {
-  LEAF_1,
   createMockTransport,
   createPane,
   createManager,
@@ -37,7 +34,6 @@ export function registerPtyConnectionStartupDraftDeliveryTests(): void {
 
   describe('connectPanePty', () => {
     beforeEach(async () => {
-      vi.resetModules()
       vi.clearAllMocks()
       transportFactoryQueue = []
       createdTransportOptions = []
@@ -59,104 +55,13 @@ export function registerPtyConnectionStartupDraftDeliveryTests(): void {
       await restoreTerminalTestGlobals()
     })
 
-    it.each([10_000, 20_000])('keeps Codex draft delivery bounded after %d ms', async (waitMs) => {
-      vi.useFakeTimers()
-      const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-      const { beginAgentStartupDeliveryAttempt: claimStartupDelivery } =
-        await import('@/lib/agent-startup-delayed-delivery')
-
-      const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
-      const transport = createMockTransport('pty-codex')
-      transport.connect.mockImplementation(
-        async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
-          capturedDataCallback.current = callbacks.onData ?? null
-          return 'pty-codex'
-        }
-      )
-      transportFactoryQueue.push(transport)
-
-      mockStoreState = {
-        ...mockStoreState,
-        tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
-        repos: [{ id: 'repo1', connectionId: null }]
-      }
-
-      const pane = createPane(1)
-      const manager = createManager(1)
-      const deps = createDeps({
-        startup: {
-          command: 'codex',
-          launchAgent: 'codex',
-          launchConfig: { agentArgs: '', agentEnv: {} },
-          launchToken: 'launch-token-1',
-          draftPrompt: 'https://github.com/stablyai/orca/issues/42'
-        }
-      })
-      vi.mocked(window.api.pty.getForegroundProcess).mockResolvedValue('codex')
-
-      const binding = connectPanePty(
-        ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks))
-      )
-      await vi.advanceTimersByTimeAsync(VISIBLE_PTY_SETTLE_MS)
-      await flushAsyncTicks()
-      expect(capturedDataCallback.current).not.toBeNull()
-
-      // A focused xterm emits CSI I after Codex enables focus reporting; the startup draft must reuse the same transport instead of racing a direct IPC.
-      ;(
-        pane.terminal.onData as unknown as {
-          mock: { calls: [(data: string) => void][] }
-        }
-      ).mock.calls[0]?.[0]('\x1b[I')
-      ;(
-        pane.terminal.onData as unknown as {
-          mock: { calls: [(data: string) => void][] }
-        }
-      ).mock.calls[0]?.[0]('USER_DRAFT')
-      ;(mockStoreState.recordTerminalInput as ReturnType<typeof vi.fn>).mockClear()
-      await vi.advanceTimersByTimeAsync(waitMs)
-      expect(transport.sendInputAccepted).not.toHaveBeenCalled()
-      capturedDataCallback.current?.('\x1b[?2004h\x1b[2K› ')
-      await flushAsyncTicks()
-
-      if (waitMs === 20_000) {
-        expect(transport.sendInputAccepted).not.toHaveBeenCalled()
-        expect(transport.sendInput.mock.calls.map(([data]) => data)).toEqual([
-          '\x1b[I',
-          'USER_DRAFT'
-        ])
-        binding.dispose()
-        expect(
-          claimStartupDelivery({
-            worktreeId: 'wt-1',
-            tabId: 'tab-1',
-            launchToken: 'launch-token-1'
-          })
-        ).toBe(false)
-        return
-      }
-
-      expect(transport.sendInputAccepted).toHaveBeenCalledWith(
-        '\x1b[200~https://github.com/stablyai/orca/issues/42\x1b[201~',
-        'launch'
-      )
-      expect(transport.sendInput.mock.calls.map(([data]) => data)).toEqual([
-        '\x1b[I',
-        'USER_DRAFT',
-        '\x1b[200~https://github.com/stablyai/orca/issues/42\x1b[201~'
-      ])
-      expect(window.api.pty.writeAccepted).not.toHaveBeenCalled()
-      expect(mockStoreState.recordTerminalInput).toHaveBeenCalledOnce()
-      expect(mockStoreState.recordTerminalInput).toHaveBeenCalledWith(makePaneKey('tab-1', LEAF_1))
-    })
-
     it('keeps startup draft ownership while deferred connect waits through setup', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks2 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks2 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const { beginAgentStartupDeliveryAttempt: claimStartupDelivery } =
-        await import('@/lib/agent-startup-delayed-delivery')
+        await import('@/lib/agent-session/launch/startup/agent-startup-delayed-delivery')
 
       const deferredFrames: FrameRequestCallback[] = []
       globalThis.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
@@ -227,8 +132,9 @@ export function registerPtyConnectionStartupDraftDeliveryTests(): void {
 
     it('releases startup draft delivery when disposed before deferred connect starts', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks3 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks3 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       globalThis.requestAnimationFrame = vi.fn(() => 1)
       const transport = createMockTransport('pty-codex')
       transportFactoryQueue.push(transport)

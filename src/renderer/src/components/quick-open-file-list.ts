@@ -15,15 +15,15 @@ import {
 import { useEffect, useMemo, useRef, useState } from 'react'
 export { isNestedWorktreePath, getNestedWorktreeExcludePaths } from './quick-open-nested-worktrees'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../shared/non-secure-context-uuid'
-import { isQuickOpenRemoteQueryTooLarge } from '@/components/quick-open-search'
-import { QUICK_OPEN_LISTING_MAX_RESULTS } from '../../../shared/quick-open-listing-limits'
+import { isQuickOpenRemoteQueryTooLarge } from '../../../shared/quick-open/quick-open-path-search'
+import { QUICK_OPEN_LISTING_MAX_RESULTS } from '../../../shared/quick-open/quick-open-listing-limits'
 import {
   cancelRuntimeFileList,
   listRuntimeFiles,
   searchRuntimeFilePaths
 } from '@/runtime/files/search/runtime-file-search-client'
 import { debounceRuntimeFileRequest } from '@/runtime/files/runtime-file-request-debounce'
-import { splitFileNameFilterTokens } from '../../../shared/file-name-filter-tokens'
+import { splitFileNameFilterTokens } from '../../../shared/file-listing/file-name-filter-tokens'
 import {
   nextCappedLocalListing,
   type CappedLocalListing

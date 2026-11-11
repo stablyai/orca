@@ -2,9 +2,9 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import type { AppState } from '@/store/types'
 import { useAppStore } from '@/store'
-import { isTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
 import { requestActiveTerminalPaneSplit } from '@/components/tab-bar/request-active-terminal-pane-split'
 import { openNewTerminalTabInWorkspace } from '@/store/terminals/terminal-active-workspace-creation'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
 import type { NativeChatSplitDirection } from './native-chat-pane-shortcut'
 
 export type NativeChatSplitTarget =
@@ -52,10 +52,9 @@ function findSplitSource(
     )
     if (
       tab?.contentType === 'agent-session' &&
-      isTuiAgent(tab.agentSessionAgent) &&
       state.groupsByWorktree[worktreeId]?.some((group) => group.id === target.groupId)
     ) {
-      return { tab, worktreeId, agent: tab.agentSessionAgent }
+      return { tab, worktreeId }
     }
   }
   return null
@@ -76,17 +75,25 @@ export function runNativeChatSplitTarget(
   if (!source) {
     return false
   }
-  void openNewTerminalTabInWorkspace(useAppStore.getState, source.worktreeId, target.groupId, {
-    sourceGroupId: target.groupId,
-    splitDirection: direction
-  }).catch(() => {
-    toast.error(
-      translate(
-        'auto.store.slices.worktrees.localBaseRefUnshallowFailed',
-        'Could not open a terminal for this workspace'
+  if (source.worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
+    // The floating panel is a scratch terminal workspace with its own empty state.
+    void openNewTerminalTabInWorkspace(useAppStore.getState, source.worktreeId, target.groupId, {
+      sourceGroupId: target.groupId,
+      splitDirection: direction
+    }).catch(() => {
+      toast.error(
+        translate(
+          'auto.store.slices.worktrees.localBaseRefUnshallowFailed',
+          'Could not open a terminal for this workspace'
+        )
       )
-    )
-  })
+    })
+  } else {
+    // The new pane shows the split landing so the user picks what opens there.
+    useAppStore
+      .getState()
+      .createEmptySplitGroup(source.worktreeId, target.groupId, direction, { landing: true })
+  }
   useAppStore.getState().recordFeatureInteraction('tab-splits')
   return true
 }

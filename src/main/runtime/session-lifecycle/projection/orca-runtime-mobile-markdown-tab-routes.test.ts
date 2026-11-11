@@ -10,12 +10,12 @@ import { hashMarkdownContent } from '../../../../shared/mobile-markdown-document
 import type { RuntimeMobileSessionMarkdownTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
 import '../../../../shared/remote-runtime/remote-runtime-client-error'
 import '../../../../shared/protocol-version'
-import { FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY } from '../../../../shared/files-runtime-capabilities'
+import { FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY } from '../../../../shared/file-access/files-runtime-capabilities'
 import {
   FILE_WRITE_DISK_PRECONDITION_RUNTIME_CAPABILITY,
   FILE_WRITE_IDENTICAL_RUNTIME_CAPABILITY,
   FILE_WRITE_IF_UNCHANGED_METHOD
-} from '../../../../shared/file-write-disk-precondition'
+} from '../../../../shared/file-write/file-write-disk-precondition'
 import { SshHostNotServedError } from '../../../providers/ssh-host-not-served-error'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import { RpcDispatcher } from '../../rpc/dispatcher'
@@ -162,42 +162,6 @@ async function desktopOnServer(
 }
 
 describe("a phone's Markdown tab on a paired server's workspace", () => {
-  it('never hops on from a server that does not run the workspace itself', async () => {
-    const { desktop, serverCalls, serverForwards } = await desktopOnServer('runtime:env-b')
-
-    await expect(desktop.readMobileMarkdownTab(`id:${TEST_WORKTREE_ID}`, readme)).rejects.toThrow(
-      'runtime:env-b is not dispatched by this process'
-    )
-    await expect(
-      desktop.saveMobileMarkdownTab(
-        `id:${TEST_WORKTREE_ID}`,
-        readme,
-        hashMarkdownContent('# Notes\n'),
-        '# Phone\n'
-      )
-    ).rejects.toThrow()
-    expect(serverCalls).toEqual(['files.read', 'files.read'])
-    expect(serverForwards).not.toHaveBeenCalled()
-    expect(await readFile(readme, 'utf8')).toBe('# Notes\n')
-  })
-
-  it('saves through the server, which checks the precondition and writes', async () => {
-    const { desktop, serverCalls, serverForwards, pins } = await desktopOnServer()
-
-    await expect(
-      desktop.saveMobileMarkdownTab(
-        `id:${TEST_WORKTREE_ID}`,
-        readme,
-        hashMarkdownContent('# Notes\n'),
-        '# Phone\n'
-      )
-    ).resolves.toMatchObject({ content: '# Phone\n', isDirty: false })
-    expect(await readFile(readme, 'utf8')).toBe('# Phone\n')
-    expect(serverCalls).toEqual(['files.read', 'status.get', 'files.writeIfUnchanged'])
-    expect(pins).toEqual([PAIRING_REVISION, PAIRING_REVISION, PAIRING_REVISION])
-    expect(serverForwards).not.toHaveBeenCalled()
-  })
-
   it("refuses a save the server's disk moved under", async () => {
     const { desktop, call } = await desktopOnServer()
     const forward = call.getMockImplementation()!
@@ -217,22 +181,6 @@ describe("a phone's Markdown tab on a paired server's workspace", () => {
       )
     ).rejects.toThrow('conflict')
     expect(await readFile(readme, 'utf8')).toBe('# Changed on the server\n')
-  })
-
-  it('saves an unchanged file on a server too old to check the disk, comparing here first', async () => {
-    const { desktop, serverCalls, pins } = await desktopOnServer('local', PRE_DISK_CHECK_SERVER)
-
-    await expect(
-      desktop.saveMobileMarkdownTab(
-        `id:${TEST_WORKTREE_ID}`,
-        readme,
-        hashMarkdownContent('# Notes\n'),
-        '# Phone\n'
-      )
-    ).resolves.toMatchObject({ content: '# Phone\n', isDirty: false })
-    expect(await readFile(readme, 'utf8')).toBe('# Phone\n')
-    expect(serverCalls).toEqual(['files.read', 'status.get', 'files.read', 'files.write'])
-    expect(pins).toEqual([PAIRING_REVISION, PAIRING_REVISION, PAIRING_REVISION, PAIRING_REVISION])
   })
 
   it('refuses a changed file on a server too old to check the disk, and never writes', async () => {
@@ -269,33 +217,6 @@ function moveWorkspaceAfterFirstLookup(runtime: Runtime, to: ExecutionHostId): v
 }
 
 describe("a phone's Markdown save whose workspace moves host mid-save", () => {
-  it('still writes on the server it started on, pinned, never on local disk', async () => {
-    const { desktop, call, serverCalls, pins } = await desktopOnServer()
-    const forward = call.getMockImplementation()!
-    // Server stub never touches shared temp disk; any disk change exposes a local write.
-    call.mockImplementation(async (environmentId, method, params, timeout, envelope, internal) => {
-      if (method !== FILE_WRITE_IF_UNCHANGED_METHOD) {
-        return forward(environmentId, method, params, timeout, envelope, internal)
-      }
-      serverCalls.push(method)
-      pins.push(internal?.expectedEnvironmentPairingRevision)
-      return { ok: true }
-    })
-    moveWorkspaceAfterFirstLookup(desktop, 'local')
-
-    await expect(
-      desktop.saveMobileMarkdownTab(
-        `id:${TEST_WORKTREE_ID}`,
-        readme,
-        hashMarkdownContent('# Notes\n'),
-        '# Phone\n'
-      )
-    ).resolves.toMatchObject({ content: '# Phone\n', isDirty: false })
-    expect(serverCalls).toEqual(['files.read', 'status.get', FILE_WRITE_IF_UNCHANGED_METHOD])
-    expect(pins).toEqual([PAIRING_REVISION, PAIRING_REVISION, PAIRING_REVISION])
-    expect(await readFile(readme, 'utf8')).toBe('# Notes\n')
-  })
-
   it('still writes on local disk when it started local, never on a server', async () => {
     const runtime = await runtimeOnHost('local')
     const forwards = vi

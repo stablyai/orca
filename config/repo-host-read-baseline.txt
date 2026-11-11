@@ -35,7 +35,7 @@
 2 src/main/ports/workspace-port-ownership.ts
 5 src/main/project-groups/folder-workspace-path-status.ts
 1 src/main/runtime/rpc/methods/agent-launch/agent-launch-worktree-creation.ts
-3 src/main/runtime/runtime-reference-agents.ts
+3 src/main/runtime/workspaces/references/runtime-reference-agents.ts
 1 src/main/runtime/workspaces/catalog/runtime-managed-worktree-queries.ts
 1 src/main/runtime/workspaces/catalog/runtime-worktree-selection.ts
 1 src/main/ssh/targets/ssh-target-orcad-claims.ts

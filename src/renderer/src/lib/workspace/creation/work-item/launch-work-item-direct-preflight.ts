@@ -1,40 +1,36 @@
-import {
-  planAgentCliArgsSuffix,
-  type AgentStartupShell
-} from '../../../../../../shared/agent-launch/startup/tui-agent-startup-shell'
-
+import { invalidTerminalArgsMessage } from './launch-work-item-direct-messages'
+import { planAgentCliArgsSuffix } from '../../../../../../shared/agent-launch/startup/tui-agent-startup-shell'
+import type { AgentStartupShell } from '../../../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { readAgentLaunchPreferencesForWorkspace } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import { useAppStore } from '@/store/index'
-import type { AppState } from '@/store/types'
 import {
   ensureDetectedAgentsForRepo,
   loadProjectLaunchContext
-} from '../../../agent-detection-target-inventory'
-import { toast } from 'sonner'
-import { CLIENT_PLATFORM } from '../../../new-workspace'
-import { getLocalRepoProjectExecutionRuntimeContext } from '../../../local-preflight-context'
+} from '../../../agent-session/launch/inventory/agent-detection-target-inventory'
+import { CLIENT_PLATFORM } from '../new-workspace'
+import { getLocalRepoProjectExecutionRuntimeContext } from '../../../../runtime/hosts/preflight/local-preflight-context'
 import {
   refineLocalLaunchPlatform,
   resolveRepoExecutionHostPlatform
-} from '../../../execution-host-facts'
+} from '../../../../runtime/hosts/platform/execution-host-facts'
 import { isTuiAgentEnabled } from '../../../../../../shared/agent-launch/catalog/tui-agent-selection'
-import { resolveDefaultAgentForWorkspace } from '../../../agent-tab-shortcuts'
+import { resolveDefaultAgentForWorkspace } from '../../../agent-session/launch/shortcuts/agent-tab-shortcuts'
 import { isTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
+import {
+  awaitStructuredRouteHostAnswer,
+  planAgentSessionLaunch
+} from '../../../agent-session/launch/routing/agent-session-launch-plan'
+import type { AgentSessionLaunchRequest } from '../../../agent-session/launch/routing/agent-session-launch-plan'
+import { resolveGitHubPrStartPointForRepo } from '@/lib/source-control/review/github-pr-start-point'
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
+import '../setup/workspace-setup-preparation'
+import type { AppState } from '@/store/types'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { ProjectLaunchContext } from '../../../../../../shared/rpc-contract/preflight-params'
 import type { AgentLaunchRequestId } from '../../../agent-session/launch/routing/agent-launch-request-id'
-import {
-  awaitStructuredRouteHostAnswer,
-  planAgentSessionLaunch,
-  type AgentSessionLaunchRequest
-} from '../../../agent-session/launch/routing/agent-session-launch-plan'
-import { resolveGitHubPrStartPointForRepo } from '@/lib/github-pr-start-point'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
-import {
-  getRepoExecutionHostId,
-  type ExecutionHostId
-} from '../../../../../../shared/execution-host'
-import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { GitHubPrStartPoint } from '../../../../../../shared/worktree/types'
 import type {
@@ -62,8 +58,6 @@ export async function resolveDirectPrStartPoint(
     isCrossRepository: hints.isCrossRepository
   })
 }
-
-import '../setup/workspace-setup-preparation'
 
 export type DirectLaunchOwnerRow = {
   repo: Repo
@@ -189,12 +183,16 @@ export async function resolveDirectProspectiveAgent(
 export function directWorkItemAgentArgsError(
   agentArgs: string | null | undefined,
   shell: AgentStartupShell,
-  nativeChat: boolean
+  nativeChat: boolean,
+  agent?: TuiAgent
 ): string | null {
   if (nativeChat) {
     return null
   }
   // Reject malformed saved arguments before creating a workspace.
+  if (agent) {
+    return invalidTerminalArgsMessage(agent, agentArgs, shell)
+  }
   const plan = planAgentCliArgsSuffix(agentArgs, shell)
   return plan.ok ? null : plan.error
 }
@@ -217,8 +215,7 @@ export function prepareDirectLaunchContext(
   // Why: the agent runs on the repo's execution host, so its OS decides quoting, not this client's (#27971).
   const repoLaunchFact = resolveRepoExecutionHostPlatform(store, repo, () => repoProjectRuntime)
   if (repoLaunchFact.kind === 'withheld') {
-    toast.error(repoLaunchFact.reason)
-    return null
+    return { unavailable: repoLaunchFact }
   }
   const repoLaunchHost = refineLocalLaunchPlatform(repoLaunchFact, args.launchPlatform)
   const shell: AgentStartupShell = repoLaunchHost.platform === 'win32' ? 'powershell' : 'posix'

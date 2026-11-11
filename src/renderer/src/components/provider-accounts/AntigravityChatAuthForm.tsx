@@ -6,8 +6,9 @@ import {
 import type { ReactNode } from 'react'
 import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore } from 'react'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { callAntigravityChatAuthConfig } from '@/runtime/provider-accounts/sign-in/runtime-antigravity-accounts-client'
-import { useStructuredAgentSessionHostCapabilityState } from '@/runtime/structured-agent-session-host-capability'
+import { useStructuredAgentSessionHostCapabilityState } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
 import { ANTIGRAVITY_CHAT_AUTH_CONFIG_RUNTIME_CAPABILITY } from '../../../../shared/account-runtime-capabilities'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import {
@@ -15,7 +16,7 @@ import {
   type AntigravityChatAuthConfig
 } from '../../../../shared/antigravity-chat-auth-config'
 import { Input } from '../ui/input'
-import { SettingRow } from './AntigravityChatAuthSettingRow'
+import { AntigravityChatAuthSettingRow } from './AntigravityChatAuthSettingRow'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 
 export type AntigravityChatAuthAction = {
@@ -91,6 +92,7 @@ function AuthForm({
   signInError,
   children
 }: AuthFormProps & { supported: boolean }): React.JSX.Element {
+  const t = useTranslate()
   const id = useId()
   const edited = useRef(false)
   const reads = useRef(0)
@@ -230,7 +232,7 @@ function AuthForm({
         if (mounted.current) {
           reads.current++
           setError({
-            message: translate(
+            message: t(
               'accounts.antigravity.settingsSaveFailed',
               "Orca couldn't save your Antigravity sign-in settings. Try again."
             ),
@@ -288,23 +290,23 @@ function AuthForm({
       event.currentTarget.blur()
     }
   }
-  const methodName = methodLabel(method)
+  const methodName = methodLabel(method, t)
   return (
     <>
       {heading}
       {!unavailable && (
         <div className="space-y-3">
-          <SettingRow
+          <AntigravityChatAuthSettingRow
             htmlFor={`${id}-method`}
-            label={translate('accounts.antigravity.authMethod', 'Sign in with')}
+            label={t('accounts.antigravity.authMethod', 'Sign in with')}
             description={
               method === 'oauth-business'
-                ? translate(
+                ? t(
                     'accounts.antigravity.enterpriseDescription',
                     "Uses your organization's Gemini Enterprise license."
                   )
                 : method === 'oauth-personal'
-                  ? translate(
+                  ? t(
                       'accounts.antigravity.personalDescription',
                       'Uses your personal Google AI plan.'
                     )
@@ -326,25 +328,22 @@ function AuthForm({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="oauth-personal">{methodLabel('oauth-personal')}</SelectItem>
-                <SelectItem value="oauth-business">{methodLabel('oauth-business')}</SelectItem>
+                <SelectItem value="oauth-personal">{methodLabel('oauth-personal', t)}</SelectItem>
+                <SelectItem value="oauth-business">{methodLabel('oauth-business', t)}</SelectItem>
               </SelectContent>
             </Select>
-          </SettingRow>
+          </AntigravityChatAuthSettingRow>
           {method === 'oauth-business' && (
             <>
-              <SettingRow
+              <AntigravityChatAuthSettingRow
                 htmlFor={`${id}-project`}
-                label={translate('accounts.antigravity.gcpProject', 'Google Cloud project')}
+                label={t('accounts.antigravity.gcpProject', 'Google Cloud project')}
               >
                 <Input
                   id={`${id}-project`}
                   value={project}
                   disabled={blocked}
-                  placeholder={translate(
-                    'accounts.antigravity.projectPlaceholder',
-                    'my-project-id'
-                  )}
+                  placeholder={t('accounts.antigravity.projectPlaceholder', 'my-project-id')}
                   onChange={(event) => {
                     edited.current = true
                     setProject(event.target.value)
@@ -353,16 +352,16 @@ function AuthForm({
                   onBlur={commitText}
                   onKeyDown={commitOnEnter}
                 />
-              </SettingRow>
-              <SettingRow
+              </AntigravityChatAuthSettingRow>
+              <AntigravityChatAuthSettingRow
                 htmlFor={`${id}-location`}
-                label={translate('accounts.antigravity.gcpLocation', 'Google Cloud location')}
+                label={t('accounts.antigravity.gcpLocation', 'Google Cloud location')}
               >
                 <Input
                   id={`${id}-location`}
                   value={location}
                   disabled={blocked}
-                  placeholder={translate('accounts.antigravity.locationPlaceholder', 'us-central1')}
+                  placeholder={t('accounts.antigravity.locationPlaceholder', 'us-central1')}
                   onChange={(event) => {
                     edited.current = true
                     setLocation(event.target.value)
@@ -371,7 +370,7 @@ function AuthForm({
                   onBlur={commitText}
                   onKeyDown={commitOnEnter}
                 />
-              </SettingRow>
+              </AntigravityChatAuthSettingRow>
             </>
           )}
         </div>
@@ -394,11 +393,9 @@ function AuthForm({
   )
 }
 
-function methodLabel(method: string): string | null {
+function methodLabel(method: string, t: Translate = translate): string | null {
   if (method === 'oauth-business') {
-    return translate('accounts.antigravity.enterprise', 'Gemini Enterprise')
+    return t('accounts.antigravity.enterprise', 'Gemini Enterprise')
   }
-  return method === 'oauth-personal'
-    ? translate('accounts.antigravity.personal', 'Google account')
-    : null
+  return method === 'oauth-personal' ? t('accounts.antigravity.personal', 'Google account') : null
 }

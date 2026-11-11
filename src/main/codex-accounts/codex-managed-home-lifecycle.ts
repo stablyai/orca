@@ -9,7 +9,7 @@ import { quotePosixShell } from '../../shared/shell/launch/shell-argument-quotin
 import { parseWslUncPath, toWindowsWslPath } from '../../shared/wsl-paths'
 import { runWslProcess } from '../wsl/execution/wsl-runner'
 import type { CodexAccountAddTarget, ManagedCodexHomeLocation } from './codex-account-service-types'
-import { writeFileAtomically } from './fs-utils'
+import { writeFileAtomically } from '../filesystem/atomic-file-publication'
 import { ManagedCodexHomeTemporarilyUnavailableError } from './host-codex-managed-home-ownership'
 import type { CodexManagedHomePath } from './codex-managed-home-path'
 

@@ -2,7 +2,7 @@ import { Crosshair } from 'lucide-react'
 import React from 'react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { requestScrollToCurrentWorkspaceReveal } from '@/lib/scroll-to-current-workspace-status'
+import { requestScrollToCurrentWorkspaceReveal } from '@/lib/workspace/navigation/scroll-to-current-workspace-status'
 import { useTranslate } from '@/i18n/use-translate'
 
 export function ScrollToCurrentWorkspaceToolbarButton(): React.JSX.Element {

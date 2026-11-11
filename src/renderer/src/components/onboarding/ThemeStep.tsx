@@ -2,23 +2,22 @@ import { useEffect, useState } from 'react'
 import { ExternalLink, Puzzle, Settings2 } from 'lucide-react'
 import { Trans } from 'react-i18next'
 import { toast } from 'sonner'
-import { track } from '@/lib/telemetry'
+import { track } from '@/diagnostics/telemetry/telemetry'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { GhosttyDiscoveryRow } from './GhosttyDiscoveryRow'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { DiscoveryStatusEmitted } from '../../../../shared/onboarding-state-types'
 import { i18n, translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { ThemeSlotControl, useThemeLooks } from './ThemeLookGallery'
 import { ThemeLookCarousel, openThemePluginDirectory } from './ThemeLookCarousel'
 import { ThemeModeTiles } from './ThemeModeTiles'
-import type { ThemeLook, ThemeLookBase } from './onboarding-theme-looks'
 import { themeLookSettingsUpdate } from './onboarding-theme-look-settings'
-import {
-  terminalConfigImportSettingsUpdate,
-  type TerminalConfigImportPreview
-} from '../../../../shared/terminal/appearance/terminal-config-import-preview'
-import { getSystemPrefersDark } from '@/lib/terminal-theme'
+import { terminalConfigImportSettingsUpdate } from '../../../../shared/terminal/appearance/terminal-config-import-preview'
+import type { TerminalConfigImportPreview } from '../../../../shared/terminal/appearance/terminal-config-import-preview'
+import { getSystemPrefersDark } from '@/lib/terminal/appearance/terminal-theme'
 import { useSystemPrefersDark } from '@/hooks/theme/use-system-prefers-dark'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { DiscoveryStatusEmitted } from '../../../../shared/onboarding-state-types'
+import type { ThemeLook, ThemeLookBase } from './onboarding-theme-looks'
 
 type ThemeStepProps = {
   theme: GlobalSettings['theme']
@@ -77,6 +76,7 @@ export function ThemeStep({
   lookBaseline,
   onLookBaselineChange
 }: ThemeStepProps) {
+  const t = useTranslate()
   const [importing, setImporting] = useState(false)
   const [discovery, setDiscovery] = useState<DiscoveryState>({ status: 'idle' })
   const mountedRef = useMountedRef()
@@ -138,7 +138,7 @@ export function ThemeStep({
       if (!resolved.found || Object.keys(resolved.diff).length === 0) {
         if (mountedRef.current) {
           toast.info(
-            translate(
+            t(
               'auto.components.onboarding.ThemeStep.16a9f0446a',
               'No Ghostty settings found to import'
             )
@@ -172,10 +172,7 @@ export function ThemeStep({
     } catch (err) {
       if (mountedRef.current) {
         toast.error(
-          translate(
-            'auto.components.onboarding.ThemeStep.699ddf83c2',
-            'Failed to import Ghostty settings'
-          ),
+          t('auto.components.onboarding.ThemeStep.699ddf83c2', 'Failed to import Ghostty settings'),
           {
             description: err instanceof Error ? err.message : String(err)
           }
@@ -208,8 +205,8 @@ export function ThemeStep({
     <div className="space-y-5">
       <section className="space-y-2.5">
         <ThemeSectionHeading
-          title={translate('components.onboarding.theme.looks.colorMode', 'Color mode')}
-          caption={translate(
+          title={t('components.onboarding.theme.looks.colorMode', 'Color mode')}
+          caption={t(
             'components.onboarding.theme.looks.colorModeCaption',
             'Light, dark, or follow your OS.'
           )}
@@ -229,25 +226,25 @@ export function ThemeStep({
         onPick={pickLook}
         ariaLabel={
           base === 'dark'
-            ? translate('components.onboarding.theme.looks.darkLooks', 'Dark looks')
-            : translate('components.onboarding.theme.looks.lightLooks', 'Light looks')
+            ? t('components.onboarding.theme.looks.darkLooks', 'Dark looks')
+            : t('components.onboarding.theme.looks.lightLooks', 'Light looks')
         }
         header={
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
             <ThemeSectionHeading
-              title={translate('components.onboarding.theme.looks.themes', 'Theme')}
+              title={t('components.onboarding.theme.looks.themes', 'Theme')}
               caption={
                 theme === 'system' && base !== osBase
                   ? base === 'dark'
-                    ? translate(
+                    ? t(
                         'components.onboarding.theme.looks.showsWhenDark',
                         'Shows when your system is dark'
                       )
-                    : translate(
+                    : t(
                         'components.onboarding.theme.looks.showsWhenLight',
                         'Shows when your system is light'
                       )
-                  : translate(
+                  : t(
                       'components.onboarding.theme.looks.themesCaption',
                       'Optional. Go further with app themes and terminal palettes.'
                     )
@@ -273,7 +270,7 @@ export function ThemeStep({
         <div className="flex items-center gap-2">
           <Puzzle className="size-3.5" />
           <span>
-            {translate(
+            {t(
               'components.onboarding.theme.looks.pluginsHint',
               'More themes are available as plugins.'
             )}
@@ -283,10 +280,7 @@ export function ThemeStep({
             className="inline-flex items-center gap-1 font-medium text-foreground underline-offset-4 hover:underline"
             onClick={openThemePluginDirectory}
           >
-            {translate(
-              'components.onboarding.theme.looks.browseThemePlugins',
-              'Browse theme plugins'
-            )}
+            {t('components.onboarding.theme.looks.browseThemePlugins', 'Browse theme plugins')}
             <ExternalLink className="size-3" />
           </button>
         </div>
@@ -295,7 +289,7 @@ export function ThemeStep({
           <span>
             <Trans
               i18n={i18n}
-              defaults={translate(
+              defaults={t(
                 'auto.components.onboarding.ThemeStep.moreTerminalOptions',
                 'More terminal options, including font, cursor, and palette, in <settings>Settings → Terminal</settings>'
               )}

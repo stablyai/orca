@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { toast } from 'sonner'
-import { track } from '@/lib/telemetry'
+import { track } from '@/diagnostics/telemetry/telemetry'
 import { isGitRepoKind } from '../../../../../../shared/repo-kind'
 import {
   buildNestedRepoScanTelemetry,

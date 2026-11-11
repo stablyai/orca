@@ -3,7 +3,7 @@ import type { GitHubIssueOrPRLink } from '../../../../../../shared/github/links'
 import type { GitHubWorkItem } from '../../../../../../shared/github/work-item-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import { githubRepoIdentityKey } from '../../../../../../shared/github/repository-identity-key'
-import { buildTaskSourceContextFromRepo } from '../../../../../../shared/task-source-context'
+import { buildTaskSourceContextFromRepo } from '../../../../../../shared/work-items/task-source-context'
 import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
 import { createHoverPreviewCache } from './native-chat-hover-preview-cache'
 

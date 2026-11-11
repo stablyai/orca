@@ -3,7 +3,7 @@ import { rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type * as WindowsAcl from '../../shared/secure-path-windows-acl'
+import type * as WindowsAcl from '../../shared/secure-storage/secure-path-windows-acl'
 import type { OrcadManagedStopRequest } from '../../shared/orcad-stop-request'
 
 import { acquireOrcadInstanceLock } from './orcad-instance-lock'
@@ -13,7 +13,7 @@ import { claimOrcadManagedStopDecision } from './orcad-managed-stop-decision'
 
 const hardening = vi.hoisted(() => ({ pending: new Set<Promise<void>>() }))
 
-vi.mock('../../shared/secure-path-windows-acl', async (importOriginal) => {
+vi.mock('../../shared/secure-storage/secure-path-windows-acl', async (importOriginal) => {
   const acl = await importOriginal<typeof WindowsAcl>()
   return {
     ...acl,

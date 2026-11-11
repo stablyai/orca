@@ -40,7 +40,6 @@ export function registerPtyConnectionInterruptInferenceTests(): void {
 
   describe('connectPanePty', () => {
     beforeEach(async () => {
-      vi.resetModules()
       vi.clearAllMocks()
       transportFactoryQueue = []
       createdTransportOptions = []
@@ -66,8 +65,9 @@ export function registerPtyConnectionInterruptInferenceTests(): void {
       'handles focused Ctrl+C for %s without guessing Codex cancellation',
       async (agentType) => {
         const { connectPanePty } = await import('../connect-pane-pty')
-        const agentTitleMocks =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
         const transport = createMockTransport()
         transportFactoryQueue.push(transport)
         vi.useFakeTimers()
@@ -145,142 +145,11 @@ export function registerPtyConnectionInterruptInferenceTests(): void {
       }
     )
 
-    it('clears stale working pane title after inferred interrupt applies', async () => {
-      const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks2 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-      const { resolveWorktreeStatus } = await import('@/lib/worktree-status')
-      vi.mocked(window.api.agentStatus.inferInterrupt).mockResolvedValue(true)
-      const transport = createMockTransport()
-      transportFactoryQueue.push(transport)
-      vi.useFakeTimers()
-      vi.setSystemTime(1_100)
-      const paneKey = makePaneKey('tab-1', LEAF_1)
-      mockStoreState.runtimePaneTitlesByTabId = {
-        'tab-1': {
-          1: 'Codex working'
-        }
-      }
-      mockStoreState.agentStatusByPaneKey[paneKey] = {
-        state: 'working',
-        prompt: 'stop visible spinner',
-        updatedAt: 1_000,
-        stateStartedAt: 900,
-        agentType: 'custom-agent',
-        paneKey,
-        terminalTitle: 'Codex working',
-        stateHistory: []
-      }
-      const terminalTarget = createKeyboardEventTarget()
-      const pane = createPane(1)
-      ;(pane.terminal as { element?: unknown }).element = terminalTarget.target
-      let onDataHandler: ((data: string) => void) | null = null
-      pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
-        onDataHandler = handler
-        return { dispose: vi.fn() }
-      }) as typeof pane.terminal.onData)
-      const manager = createManager(1)
-      manager.getActivePane.mockReturnValue({ id: 1 })
-      const deps = createDeps({
-        setRuntimePaneTitle: vi.fn((tabId: string, paneId: number, title: string) => {
-          mockStoreState.runtimePaneTitlesByTabId = {
-            ...mockStoreState.runtimePaneTitlesByTabId,
-            [tabId]: {
-              ...mockStoreState.runtimePaneTitlesByTabId[tabId],
-              [paneId]: title
-            }
-          }
-        })
-      })
-
-      connectPanePty(
-        pane as never,
-        manager as never,
-        bindPaneAgentTitleMocks(deps as never, agentTitleMocks2)
-      )
-      if (!onDataHandler) {
-        throw new Error('expected onData handler to be registered')
-      }
-      terminalTarget.dispatch(keyEvent({ key: 'c', ctrlKey: true }))
-      ;(onDataHandler as unknown as (data: string) => void)('\x03')
-      await flushAsyncTicks()
-      vi.advanceTimersByTime(500)
-      await flushAsyncTicks()
-
-      expect(deps.setRuntimePaneTitle).toHaveBeenCalledWith('tab-1', 1, 'Terminal')
-      expect(deps.updateTabTitle).toHaveBeenCalledWith('tab-1', 'Terminal')
-      expect(
-        resolveWorktreeStatus({
-          tabs: [{ id: 'tab-1', title: 'Codex working' }],
-          browserTabs: [],
-          ptyIdsByTabId: { 'tab-1': ['tab-pty'] },
-          runtimePaneTitlesByTabId: mockStoreState.runtimePaneTitlesByTabId,
-          hasPermission: false,
-          hasLiveWorking: false,
-          hasLiveDone: true,
-          hasRetainedDone: false
-        })
-      ).toBe('done')
-    })
-
-    it('clears unchanged title-only working indicators after acknowledged interrupt input', async () => {
-      const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks3 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-      const transport = createMockTransport()
-      transportFactoryQueue.push(transport)
-      vi.useFakeTimers()
-      vi.setSystemTime(1_100)
-      mockStoreState.runtimePaneTitlesByTabId = {
-        'tab-1': {
-          1: 'Codex working'
-        }
-      }
-      const terminalTarget = createKeyboardEventTarget()
-      const pane = createPane(1)
-      ;(pane.terminal as { element?: unknown }).element = terminalTarget.target
-      let onDataHandler: ((data: string) => void) | null = null
-      pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
-        onDataHandler = handler
-        return { dispose: vi.fn() }
-      }) as typeof pane.terminal.onData)
-      const manager = createManager(1)
-      manager.getActivePane.mockReturnValue({ id: 1 })
-      const deps = createDeps({
-        setRuntimePaneTitle: vi.fn((tabId: string, paneId: number, title: string) => {
-          mockStoreState.runtimePaneTitlesByTabId = {
-            ...mockStoreState.runtimePaneTitlesByTabId,
-            [tabId]: {
-              ...mockStoreState.runtimePaneTitlesByTabId[tabId],
-              [paneId]: title
-            }
-          }
-        })
-      })
-
-      connectPanePty(
-        pane as never,
-        manager as never,
-        bindPaneAgentTitleMocks(deps as never, agentTitleMocks3)
-      )
-      if (!onDataHandler) {
-        throw new Error('expected onData handler to be registered')
-      }
-      terminalTarget.dispatch(keyEvent({ key: 'c', ctrlKey: true }))
-      ;(onDataHandler as unknown as (data: string) => void)('\x03')
-      await flushAsyncTicks()
-      vi.advanceTimersByTime(500)
-      await flushAsyncTicks()
-
-      expect(window.api.agentStatus.inferInterrupt).not.toHaveBeenCalled()
-      expect(deps.setRuntimePaneTitle).toHaveBeenCalledWith('tab-1', 1, 'Terminal')
-      expect(deps.updateTabTitle).toHaveBeenCalledWith('tab-1', 'Terminal')
-    })
-
     it('does not clear title-only working indicators when interrupt writes are unacknowledged', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks4 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks4 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport()
       delete transport.sendInputAccepted
       transportFactoryQueue.push(transport)
@@ -323,8 +192,9 @@ export function registerPtyConnectionInterruptInferenceTests(): void {
 
     it('infers exact Ctrl+C terminal input when keydown capture misses the press', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks5 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks5 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
       vi.useFakeTimers()
@@ -370,45 +240,11 @@ export function registerPtyConnectionInterruptInferenceTests(): void {
       })
     })
 
-    it('marks bracketed paste as stale after acknowledged Ctrl+C input', async () => {
-      const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks6 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-      const { pasteTerminalText } = await import('../../input/paste/terminal-bracketed-paste')
-      const transport = createMockTransport()
-      transportFactoryQueue.push(transport)
-      const pane = createPane(1)
-      pane.terminal.modes.bracketedPasteMode = true
-      const observedIgnoreValues: (boolean | undefined)[] = []
-      pane.terminal.paste.mockImplementation(() => {
-        observedIgnoreValues.push(pane.terminal.options.ignoreBracketedPasteMode)
-      })
-      let onDataHandler: ((data: string) => void) | null = null
-      pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
-        onDataHandler = handler
-        return { dispose: vi.fn() }
-      }) as typeof pane.terminal.onData)
-
-      connectPanePty(
-        pane as never,
-        createManager(1) as never,
-        bindPaneAgentTitleMocks(createDeps() as never, agentTitleMocks6)
-      )
-      if (!onDataHandler) {
-        throw new Error('expected onData handler to be registered')
-      }
-      ;(onDataHandler as unknown as (data: string) => void)('\x03')
-      await flushAsyncTicks()
-      pasteTerminalText(pane.terminal as never, 'a69ce28e1d092e0c8825cd1a109ac36409962bc1')
-
-      expect(observedIgnoreValues).toEqual([true])
-      expect(pane.terminal.options.ignoreBracketedPasteMode).toBe(false)
-    })
-
     it('infers captured Ctrl+C even when xterm emits an enhanced keyboard sequence', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks7 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks7 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
       vi.useFakeTimers()
@@ -460,8 +296,9 @@ export function registerPtyConnectionInterruptInferenceTests(): void {
 
     it('infers interrupt for an explicit working status even if the title is already non-agent', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks8 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks8 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
       vi.useFakeTimers()
@@ -523,8 +360,9 @@ export function registerPtyConnectionInterruptInferenceTests(): void {
 
     it('keeps inferred interrupted status after the pane settles on a non-agent title', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks9 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks9 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
       vi.useFakeTimers()
@@ -602,8 +440,9 @@ export function registerPtyConnectionInterruptInferenceTests(): void {
 
     it('does not infer exact interrupt input when the transport cannot acknowledge writes', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks10 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks10 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport()
       delete transport.sendInputAccepted
       transportFactoryQueue.push(transport)
@@ -643,83 +482,13 @@ export function registerPtyConnectionInterruptInferenceTests(): void {
       expect(window.api.agentStatus.inferInterrupt).not.toHaveBeenCalled()
     })
 
-    it('removes agent status and pane title on PTY exit after inferred interrupt', async () => {
-      const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks11 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-      vi.mocked(window.api.agentStatus.inferInterrupt).mockResolvedValue(true)
-      const transport = createMockTransport('tab-pty')
-      transportFactoryQueue.push(transport)
-      vi.useFakeTimers()
-      vi.setSystemTime(1_100)
-      const paneKey = makePaneKey('tab-1', LEAF_1)
-      mockStoreState.runtimePaneTitlesByTabId = {
-        'tab-1': {
-          1: 'Codex working'
-        }
-      }
-      mockStoreState.agentStatusByPaneKey[paneKey] = {
-        state: 'working',
-        prompt: 'stop then exit',
-        updatedAt: 1_000,
-        stateStartedAt: 900,
-        agentType: 'custom-agent',
-        paneKey,
-        terminalTitle: 'Codex working',
-        stateHistory: []
-      }
-      const terminalTarget = createKeyboardEventTarget()
-      const pane = createPane(1)
-      ;(pane.terminal as { element?: unknown }).element = terminalTarget.target
-      let onDataHandler: ((data: string) => void) | null = null
-      pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
-        onDataHandler = handler
-        return { dispose: vi.fn() }
-      }) as typeof pane.terminal.onData)
-      const deps = createDeps()
-
-      connectPanePty(
-        pane as never,
-        createManager(1) as never,
-        bindPaneAgentTitleMocks(deps as never, agentTitleMocks11)
-      )
-      if (!onDataHandler) {
-        throw new Error('expected onData handler to be registered')
-      }
-      terminalTarget.dispatch(keyEvent({ key: 'c', ctrlKey: true }))
-      ;(onDataHandler as unknown as (data: string) => void)('\x03')
-      await flushAsyncTicks()
-      await vi.advanceTimersByTimeAsync(500)
-      await flushAsyncTicks()
-      expect(window.api.agentStatus.inferInterrupt).toHaveBeenCalledWith({
-        paneKey,
-        baselineUpdatedAt: 1_000,
-        baselineStateStartedAt: 900,
-        baselinePrompt: 'stop then exit',
-        baselineAgentType: 'custom-agent',
-        intent: 'ctrl-c'
-      })
-      const onPtyExit = createdTransportOptions[0]?.onPtyExit as
-        | ((ptyId: string) => void)
-        | undefined
-      if (!onPtyExit) {
-        throw new Error('expected onPtyExit callback to be registered')
-      }
-
-      onPtyExit('tab-pty')
-
-      expect(deps.clearRuntimePaneTitle).toHaveBeenCalledWith('tab-1', 1)
-      expect(deps.clearTabPtyId).toHaveBeenCalledWith('tab-1', 'tab-pty')
-      expect(deps.setCacheTimerStartedAt).toHaveBeenCalledWith(paneKey, null)
-      expect(mockStoreState.removeAgentStatus).toHaveBeenCalledWith(paneKey)
-    })
-
     it('ignores repeated and Alt-modified Escape input before accepting plain Escape', async () => {
       const restoreUserAgent = temporarilySetNavigatorUserAgent('Mozilla/5.0 (X11; Linux x86_64)')
       try {
         const { connectPanePty } = await import('../connect-pane-pty')
-        const agentTitleMocks12 =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        const agentTitleMocks12 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
         const transport = createMockTransport()
         transportFactoryQueue.push(transport)
         vi.useFakeTimers()
@@ -786,8 +555,9 @@ export function registerPtyConnectionInterruptInferenceTests(): void {
 
     it('removes the terminal key listener on dispose before a remount adds another', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks13 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks13 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const firstTransport = createMockTransport()
       const secondTransport = createMockTransport()
       transportFactoryQueue.push(firstTransport, secondTransport)

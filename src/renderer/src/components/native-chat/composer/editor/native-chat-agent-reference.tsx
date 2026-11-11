@@ -10,7 +10,7 @@ import { NativeChatPromptPill } from './NativeChatPromptPill'
 import {
   agentReferenceToken,
   type OrchestrationAgentReference
-} from '../../../../../../shared/orchestration-agent-reference'
+} from '../../../../../../shared/orchestration/mailbox/orchestration-agent-reference'
 import { closeHistory } from '@tiptap/pm/history'
 
 function AgentReferencePill({ node, selected }: NodeViewProps): React.JSX.Element {

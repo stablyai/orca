@@ -63,7 +63,7 @@ export async function getWorkItemDetails(
   connectionId?: string | null,
   projectRefOverride?: ProjectRef | null,
   localGitOptions: LocalGitExecOptions = {},
-  options: { includeReviewDetails?: boolean } = {}
+  options: { includeReviewDetails?: boolean; markViewerComments?: boolean } = {}
 ): Promise<GitLabWorkItemDetails | null> {
   // Retain the list row's selected project to avoid same-number fork/upstream collisions.
   const projectRef =
@@ -83,7 +83,14 @@ export async function getWorkItemDetails(
   await acquire()
   try {
     if (type === 'issue') {
-      return await fetchIssueDetails(repoPath, projectRef, iid, connectionId, localGitOptions)
+      return await fetchIssueDetails(
+        repoPath,
+        projectRef,
+        iid,
+        connectionId,
+        localGitOptions,
+        options.markViewerComments !== false
+      )
     }
     return await fetchMRDetails(repoPath, projectRef, iid, connectionId, localGitOptions, options)
   } catch {
@@ -98,7 +105,8 @@ async function fetchIssueDetails(
   projectRef: ProjectRef,
   iid: number,
   connectionId?: string | null,
-  localGitOptions: LocalGitExecOptions = {}
+  localGitOptions: LocalGitExecOptions = {},
+  markViewerComments = true
 ): Promise<GitLabWorkItemDetails | null> {
   const [issueRes, comments] = await Promise.all([
     glabExecFileAsync(
@@ -109,7 +117,15 @@ async function fetchIssueDetails(
       ],
       glabRepoExecOptions(repoPath, connectionId, localGitOptions)
     ),
-    fetchDiscussionComments(repoPath, projectRef, 'issue', iid, connectionId, localGitOptions)
+    fetchDiscussionComments(
+      repoPath,
+      projectRef,
+      'issue',
+      iid,
+      connectionId,
+      localGitOptions,
+      markViewerComments
+    )
   ])
   const issueRaw = JSON.parse(issueRes.stdout) as GitLabRawIssue
   const item: Omit<GitLabWorkItem, 'repoId'> = (() => {
@@ -134,7 +150,7 @@ async function fetchMRDetails(
   iid: number,
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {},
-  options: { includeReviewDetails?: boolean } = {}
+  options: { includeReviewDetails?: boolean; markViewerComments?: boolean } = {}
 ): Promise<GitLabWorkItemDetails | null> {
   // Discussion can overlap MR details; child jobs need its head_pipeline ID.
   const [mrRes, comments] = await Promise.all([
@@ -146,7 +162,6 @@ async function fetchMRDetails(
       ],
       glabRepoExecOptions(repoPath, connectionId, localGitOptions)
     ),
-    // Checks polling never reads viewerDidAuthor, so it skips the viewer lookup with the other review details.
     fetchDiscussionComments(
       repoPath,
       projectRef,
@@ -154,7 +169,8 @@ async function fetchMRDetails(
       iid,
       connectionId,
       localGitOptions,
-      options.includeReviewDetails !== false
+      // Checks polling never reads viewerDidAuthor, so it skips the viewer lookup with the other review details.
+      options.markViewerComments ?? options.includeReviewDetails !== false
     )
   ])
   const mrRaw = JSON.parse(mrRes.stdout) as GitLabRawMR

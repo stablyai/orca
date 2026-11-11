@@ -1,7 +1,7 @@
 // A windowless server's held session.tabs rows across main's layout commits: what a commit keeps,
 // what it pushes, and which writes the row writer may skip.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-types'
+import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-session-contracts'
 import {
   HEADLESS_LEAF_ID,
   TEST_WORKTREE_ID

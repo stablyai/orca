@@ -1,5 +1,5 @@
 import { readFile, stat } from 'node:fs/promises'
-import { isBinaryBuffer } from '../../../shared/binary-buffer'
+import { isBinaryBuffer } from '../../../shared/file-preview/binary-buffer'
 import { isMissingGitBlobPath } from '../../../shared/git/diff/git-blob-absence'
 import { readGitCommandFailureStderr } from '../../../shared/git/commands/git-command-failure-text'
 import type { GitRuntimeOptions } from '../git-runtime-options'

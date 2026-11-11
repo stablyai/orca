@@ -3,7 +3,7 @@ import { vi } from 'vitest'
 import { z } from 'zod'
 import { dispatch } from '../../src/cli/dispatch'
 import { RuntimeClient, RuntimeClientError } from '../../src/cli/runtime-client'
-import { readOrchestrationCompatibilityEvidence } from '../../src/shared/orchestration-compatibility-evidence'
+import { readOrchestrationCompatibilityEvidence } from '../../src/shared/orchestration/orchestration-compatibility-evidence'
 import {
   createSessionCallerHarness,
   orchestrationRequest,

@@ -1,5 +1,5 @@
 import { openMobileAgentHistoryChat } from './open-mobile-agent-history-chat'
-import { mobileStructuredSessionOpenMessage } from '../session/mobile-structured-session-open-message'
+import { mobileStructuredSessionOpenMessage } from '../session/native-chat/agent-session/mobile-structured-session-open-message'
 import { prepareMobileHistoryResumeTarget } from './mobile-history-resume-target-preparation'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { View } from 'react-native'
@@ -10,25 +10,25 @@ import { MobileSegmentedControl, type MobileSegment } from '../components/Mobile
 import { BottomSearchBar } from '../components/nav-bar/BottomSearchBar'
 import { NavBar } from '../components/nav-bar/NavBar'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
-import { useWorkspaceClient } from '../transport/use-workspace-client'
+import { useWorkspaceClient } from '../worktree/use-workspace-client'
 import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
 import { useSessionScreenHandlers } from '../session/session-screen-handlers'
 import { worktreeCatalogRead } from '../worktree/worktree-catalog-operations'
-import { getWorktreeLabel } from '../session/worktree-label'
+import { getWorktreeLabel } from '../worktree/worktree-label'
 import {
   buildMobileAiVaultResumeLaunch,
   createMobileAiVaultResumeMutationRegistry,
   readMobileAiVaultResumeHost,
   readMobileRuntimeTerminalWindowsShell,
   resumeAiVaultSessionInTerminal
-} from '../session/ai-vault-resume-launch'
-import { prepareMobileAiVaultSessionResume } from '../session/ai-vault-resume-preparation'
+} from './ai-vault-resume-launch'
+import { prepareMobileAiVaultSessionResume } from './ai-vault-resume-preparation'
 import { triggerError, triggerSuccess } from '../platform/haptics'
 import type * as AiVault from '../../../src/shared/ai-vault/contracts/ai-vault-types'
 import type { Worktree } from '../worktree/workspace-list-types'
 import { useMobileAgentHistoryState } from './use-mobile-agent-history-state'
 import { agentHistoryHostStatusRead } from './mobile-agent-history-operations'
-import { interpretOrThrowRefusalMessage } from '../transport/rpc-refusal-message'
+import { interpretOrThrowRefusalMessage } from '../transport/rpc/rpc-refusal-message'
 import { useRefreshHint } from '../query/refresh-hint'
 import { buildMobileAgentHistorySections } from './agent-history-sections'
 import { shouldShowMobileCurrentWorktreeBadge } from './agent-history-current-worktree-badge'

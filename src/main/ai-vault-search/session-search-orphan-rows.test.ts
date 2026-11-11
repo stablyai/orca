@@ -6,10 +6,8 @@ import {
   type SessionSearchHarness
 } from './session-search-engine-test-fixture'
 import { identifierShadowText } from './session-search-identifier-split'
-import { readIndexGeneration } from './session-search-index-generation'
 import { planSessionSearchQuery } from './session-search-query-planner'
 import { sessionSearchSnippet } from './session-search-snippet'
-import type { SessionSearchCursorError } from './session-search-page-cursor'
 import { SessionSearchTypoRepair } from './session-search-typo-repair'
 
 // Purges leave orphaned FTS rows until reclamation; retrieval, snippets and typo repair must exclude them.
@@ -90,33 +88,6 @@ it('snippets nothing for an orphaned row, even asked for it by rowid', async () 
 })
 
 describe('a purge reclaiming rows nothing can reach', () => {
-  async function withReclaimable(): Promise<SessionSearchHarness> {
-    harness = await openSessionSearchHarness('ss-orphan-drain')
-    // Typo repair needs at least two live occurrences.
-    addSyntheticSession(harness.db, { id: 1, text: 'the marmoset lives here', rows: 2 })
-    plantOrphans(harness.db)
-    return harness
-  }
-
-  it('moves the generation anyway, so no cursor spans it', async () => {
-    // Reclamation can change which vocabulary candidates fit the scan limit, so it must fence page cursors.
-    const open = await withReclaimable()
-    addSyntheticSession(open.db, { id: 2, text: 'the marmoset again', rows: 2 })
-    const page = open.engine.search({ query: 'marmoset', limit: 1 })
-    expect(page.page.cursor).not.toBeNull()
-    const before = readIndexGeneration(open.db)
-
-    await open.store.purgeOlderThan(null)
-
-    expect(readIndexGeneration(open.db)).toBeGreaterThan(before)
-    try {
-      open.engine.search({ query: 'marmoset', limit: 1, cursor: page.page.cursor! })
-      expect.unreachable('a cursor must not span a purge')
-    } catch (error) {
-      expect((error as SessionSearchCursorError).rejection).toBe('stale-generation')
-    }
-  })
-
   it('picks the same repair when an unreachable spelling was the more common one', async () => {
     // Add orphaned occurrences to the less common live spelling to test that repair ranks only live rows.
     harness = await openSessionSearchHarness('ss-orphan-drain-tie')

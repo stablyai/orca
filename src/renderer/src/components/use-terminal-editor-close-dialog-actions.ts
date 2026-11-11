@@ -168,6 +168,9 @@ export function useTerminalEditorCloseDialogActions(
     isClosingRef.current = true
     pendingEditorCloseQueueRef.current = []
     closedReactionsRef.current.clear()
+    if (windowCloseAfterDirtyRef.current) {
+      window.api.ui.cancelWindowClose()
+    }
     windowCloseAfterDirtyRef.current = null
     setSaveDialogFileId(null)
     releaseCloseDialogGuardAfterDebounce()

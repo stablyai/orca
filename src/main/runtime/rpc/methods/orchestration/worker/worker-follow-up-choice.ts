@@ -6,7 +6,7 @@ import {
   agentProviderSessionsEqual,
   isResumableTuiAgent
 } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
-import { isStructuredWorkerHandle } from '../../../../../../shared/structured-worker-handle'
+import { isStructuredWorkerHandle } from '../../../../../../shared/orchestration/workers/structured-worker-handle'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import {

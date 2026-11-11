@@ -1,10 +1,10 @@
 import type { OrcaRuntimeWithBindPtyIncarnationHandle as BindPtyIncarnationHandleMethods } from '../terminal/identity/terminal-handle-bindings'
 import { OrcaRuntimeWithTouchMobileSessionTabsForWorktree } from './mobile-session-membership'
 import type { RetiredTerminalSurface } from '../terminal/surface/mobile-session-terminal-retirement'
-import type { RuntimeMobileSessionRetiredTerminalSurface } from '../../../shared/runtime-types'
+import type { RuntimeMobileSessionRetiredTerminalSurface } from '../../../shared/runtime-session-contracts'
 import { LOCAL_EXECUTION_HOST_ID, parseExecutionHostId } from '../../../shared/execution-host'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
-import { keepsExitedPane } from '../exited-split-pane-layout-close'
+import { keepsExitedPane } from '../terminal/lifecycle/exited-split-pane-layout-close'
 import type { ExitedSplitPaneFacts } from '../terminal/lifecycle/exited-split-pane-rule'
 import {
   forgetClosedPaneOfExit,

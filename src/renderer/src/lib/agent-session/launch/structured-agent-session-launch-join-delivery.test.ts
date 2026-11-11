@@ -1,13 +1,17 @@
 // @vitest-environment happy-dom
 // @vitest-environment happy-dom
 import { readNativeChatComposerDraft } from '@/components/native-chat/drafts/native-chat-composer-draft-store'
-// @vitest-environment happy-dom
 import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/drafts/native-chat-draft-scope'
-
-import type * as LaunchErrors from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { refreshLocalStructuredSessionTabs } from '@/runtime/local-structured-session-tabs-sync/inventory-refresh'
+import { startStructuredAgentLaunch } from './structured-agent-session-launch'
+import { hasStagedStructuredLaunchPrompt } from './structured-agent-session-staged-prompt'
+import type * as LaunchErrors from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
 import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/runtime-session-contracts'
 import type * as RecoveryModule from '@/lib/agent-session/launch/structured-agent-session-launch-recovery'
+import type { StructuredAgentSessionLaunchIntent } from '@/lib/agent-session/launch/structured-agent-session-launch-intent'
+import type { StructuredAgentLaunchOptions } from './structured-agent-session-launch-callers'
+// @vitest-environment happy-dom
 
 const mocks = vi.hoisted(() => ({
   abandonIntent: vi.fn(),
@@ -39,15 +43,18 @@ vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-create-call'
   launchStructuredAgentSession: mocks.launch
 }))
 
-vi.mock('@/lib/launch-structured-agent-session', () => {
+vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-intent', () => {
   return {
     createStructuredAgentSessionLaunchIntent: mocks.createIntent,
-    abandonStructuredAgentSessionLaunchIntent: mocks.abandonIntent,
     launchStructuredAgentSession: mocks.launch,
     StructuredAgentSessionCreateRefusalError:
       launchErrorMocks.StructuredAgentSessionCreateRefusalError
   }
 })
+
+vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-abandon', () => ({
+  abandonStructuredAgentSessionLaunchIntent: mocks.abandonIntent
+}))
 
 vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-recovery', async () => {
   const actual = await vi.importActual<typeof RecoveryModule>(
@@ -60,7 +67,7 @@ vi.mock('@/runtime/local-structured-session-tabs-sync/inventory-refresh', () => 
   refreshLocalStructuredSessionTabs: vi.fn()
 }))
 
-vi.mock('@/runtime/structured-agent-session-client', () => ({
+vi.mock('../../../runtime/native-chat/requests/structured-agent-session-call', () => ({
   callStructuredAgentSession: mocks.callStructuredAgentSession
 }))
 
@@ -91,16 +98,10 @@ vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
 }))
 
-vi.mock('@/lib/agent-catalog', () => ({
+vi.mock('@/lib/agent-catalog/agent-catalog', () => ({
   getAgentLabel: () => 'Codex',
   getAgentCatalog: () => [{ id: 'codex', label: 'Codex' }]
 }))
-
-import type { StructuredAgentSessionLaunchIntent } from '@/lib/launch-structured-agent-session'
-import { refreshLocalStructuredSessionTabs } from '@/runtime/local-structured-session-tabs-sync/inventory-refresh'
-import { startStructuredAgentLaunch } from './structured-agent-session-launch'
-import type { StructuredAgentLaunchOptions } from './structured-agent-session-launch-callers'
-import { hasStagedStructuredLaunchPrompt } from './structured-agent-session-launch-prompt'
 
 function launchIntent(worktreeId: string, sessionId: string): StructuredAgentSessionLaunchIntent {
   return {

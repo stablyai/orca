@@ -1,6 +1,6 @@
 import { operationModuleLoader } from '../operation-module-loader'
 import type { MountAdapter } from '../recording-scenario'
-import type * as NewTabAgentLoader from '../../../session/mobile-new-tab-agent-loader'
+import type * as NewTabAgentLoader from '../../../session/agent-launch/mobile-new-tab-agent-loader'
 
 export function newTabAgentMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
@@ -8,7 +8,7 @@ export function newTabAgentMountAdapters(
   return {
     'settings.new-tab-agents': ({ client }) => {
       const loader = modules.load<typeof NewTabAgentLoader>(
-        'mobile/src/session/mobile-new-tab-agent-loader.ts'
+        'mobile/src/session/agent-launch/mobile-new-tab-agent-loader.ts'
       )
       return {
         action: (_name, args) =>

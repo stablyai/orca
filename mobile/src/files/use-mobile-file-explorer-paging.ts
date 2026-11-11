@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { FILE_READ_DIR_MAX_PAGE_ENTRIES } from '../../../src/shared/file-dir-page'
+import { FILE_READ_DIR_MAX_PAGE_ENTRIES } from '../../../src/shared/file-listing/file-dir-page'
 import { hostQueryKey, type HostQueryTarget } from '../query/host-query-key'
 import { hostReadClient } from '../query/host-read-client'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { DIRECTORY_PAGE_SIZE } from './file-tree'
 import {
   fileDirectoryQuery,

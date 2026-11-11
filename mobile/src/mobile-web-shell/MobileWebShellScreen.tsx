@@ -27,9 +27,11 @@ import { useNativeImageActions } from '../platform/native-image-actions'
 import { processDeviceStore } from '../device-store/device-store'
 import { serveDeviceStoreVerb } from './device-store-verb-server'
 import { BRIDGE_STORE_VERB } from './bridge/bridge-store-verb'
+import { useAppLeavesForeground } from './use-app-leaves-foreground'
 import { useShellPageBack } from './use-shell-page-back'
 import { useShellStackPop } from './use-shell-stack-pop'
 import { usePageLocationOnFold } from './page-location-on-fold'
+import { usePageOpenTarget } from './page-open-target'
 import { useMobileWebShellSession } from './use-mobile-web-shell-session'
 import { useShellPageStorageRefresh } from './use-shell-page-storage-refresh'
 import { usePageHostSnapshot } from './use-page-host-snapshot'
@@ -188,6 +190,15 @@ export function MobileWebShellScreen({
     }
     return void (replace ? router.replace(href) : router.push(href))
   }
+  const openTarget = usePageOpenTarget({
+    route,
+    sessionId: readySessionId,
+    pageVersion: state.kind === 'ready' ? (state.compat.pageVersion ?? 0) : null,
+    isFocused: () => navigation.isFocused(),
+    openNatively: openPageRoute,
+    onRouteParamClear
+  })
+  const pageRoute = openTarget.pageRoute
   const holdPageLocation = usePageLocationOnFold(
     isWideLayout,
     () => navigation.isFocused(),
@@ -197,7 +208,7 @@ export function MobileWebShellScreen({
   const bridge = useMobileWebShellBridge({
     hostId,
     hostStatus,
-    route,
+    route: pageRoute,
     safeAreaInsets: pageInsets,
     keyboardInset,
     pageGeometry: pageFold.geometry,
@@ -230,12 +241,14 @@ export function MobileWebShellScreen({
     onPagePainted: reportPagePainted,
     onPageBackClaim: reportPageBackClaim,
     // A caller that tracks the location takes it; pages from #34484 desktops report it only for a fold to reopen.
-    onPageLocation: (href) =>
-      onPageLocation === undefined ? holdPageLocation(href, ownsHostArea) : onPageLocation(href),
-    onTerminalKeyRailClaim: keyRail.reportClaim,
-    onRouteParamClear: (param, value) => {
-      onRouteParamClear?.(param, value)
+    onPageLocation: (href) => {
+      openTarget.recordLocation(href)
+      return onPageLocation === undefined
+        ? holdPageLocation(href, ownsHostArea)
+        : onPageLocation(href)
     },
+    onTerminalKeyRailClaim: keyRail.reportClaim,
+    onRouteParamClear: openTarget.onRouteParamClear,
     // Route refusal builds no tree; use document-load-failed for bounded recovery, then a terminal failure. The host logs the specific issue.
     onRouteRefused: (issue) => {
       console.warn('[web-shell] refused to open this screen', issue)
@@ -251,10 +264,11 @@ export function MobileWebShellScreen({
     // The stream survives dropped frames; keep a count because diagnostics print only once per host.
     onBinaryFramesDropped: reportDroppedBinaryFrames
   })
+  useAppLeavesForeground(bridge.sendAppInactive)
 
   // paneKey changes keep the session mounted; the host deduplicates routes and preserves in-flight frames.
   useShellPageStorageRefresh(refreshStorage, bridge.publishStorage)
-  useEffect(() => bridge.publishRoute(route), [bridge.publishRoute, route])
+  useEffect(() => bridge.publishRoute(pageRoute), [bridge.publishRoute, pageRoute])
 
   usePublishedSafeAreaInsets(bridge.publishSafeAreaInsets, pageInsets)
   const publishKeyboardInset = bridge.publishKeyboardInset

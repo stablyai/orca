@@ -7,7 +7,7 @@ import type {
   RunApprovedWorktreeSetupArgs,
   RunApprovedWorktreeSetupResult
 } from '../../../../shared/worktree/create-types'
-import { runApprovedCreatedWorktreeSetup } from '../../../runtime/created-worktree-approved-setup'
+import { runApprovedCreatedWorktreeSetup } from '../../../runtime/workspaces/creation/created-worktree-approved-setup'
 import {
   addWorktreeCreatePhaseAttributes,
   withWorktreeSpan
@@ -67,8 +67,8 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
           try {
             // Track operational failures; malformed IPC rejected above is outside the creation funnel.
             if (isFolderRepo(repo)) {
-              // Folder creation only registers metadata, so it needs no filesystem host route.
-              result = createFolderWorkspace(createArgs, repo, store)
+              // Folder creation registers metadata; its setup prep checks ownership itself.
+              result = await createFolderWorkspace(createArgs, repo, store)
             } else {
               // Resolve executionHostId-only SSH ownership before any local Git operation.
               const createRoute = requireWorktreeCreateRoute(repo)

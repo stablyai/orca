@@ -8,9 +8,9 @@ import { useState, type ReactNode } from 'react'
 import { useAutomationCreateAttempt } from './use-automation-create-attempt'
 import { ScrollView, Text, View } from 'react-native'
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
-import { toAutomationOwnerPrecondition } from '../../../src/shared/automation-owner-precondition'
+import { toAutomationOwnerPrecondition } from '../../../src/shared/automations/ownership/automation-owner-precondition'
 import { ConfirmModal } from '../components/ConfirmModal'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { AutomationButton, AutomationChoice, AutomationTabs } from './AutomationControls'
 import { AutomationList } from './AutomationList'
 import { AutomationDetail } from './AutomationDetail'
@@ -28,6 +28,7 @@ import {
 import { automationUpdateParams, type AutomationDraft } from './automation-draft'
 import type { AutomationTargets } from './automation-target-inventory'
 import { useAutomationCatalog } from './use-automation-catalog'
+import { automationEditorDraftKey, dropAutomationEditorDraft } from './automation-editor-draft-row'
 import { automationStyles as styles } from './automation-styles'
 
 type AutomationView =
@@ -50,12 +51,11 @@ export function AutomationManager(props: {
 }) {
   const t = useMobileTranslation()
   useMobileColorScheme()
-  const catalog = useAutomationCatalog(props.client, !!props.executionHost)
+  const catalog = useAutomationCatalog(props.hostId, props.client, props.executionHost)
   const startView: AutomationView = props.startInEditor ? { kind: 'editor' } : { kind: 'list' }
   const [view, setView] = useState<AutomationView>(startView)
   const [tab, setTab] = useState<'automations' | 'runs'>('automations')
   const [filter, setFilter] = useState<AutomationRunScope>(null)
-  const filterId = filter?.automationId ?? ''
   const [outcome, setOutcome] = useState('all')
   const [deleting, setDeleting] = useState<MobileAutomationRow | null>(null)
   const createAttempt = useAutomationCreateAttempt(
@@ -67,7 +67,8 @@ export function AutomationManager(props: {
         initialDraft ? { kind: 'editor', row: saved, initialDraft } : { kind: 'detail', row: saved }
       )
     },
-    catalog.isCurrentSnapshot
+    catalog.isCurrentSnapshot,
+    () => dropAutomationEditorDraft(props.executionHost)
   )
   const setupConsent = useAutomationSetupConsent(props.client, props.executionHost)
   const disabled = !catalog.connected || catalog.busy
@@ -107,9 +108,7 @@ export function AutomationManager(props: {
     setTab(next)
     setView({ kind: 'list' })
   }
-  function allAutomations() {
-    showList('automations')
-  }
+  const allAutomations = () => showList('automations')
   function allRuns(automationId = '') {
     selectFilter(automationId)
     showList('runs')
@@ -240,6 +239,7 @@ export function AutomationManager(props: {
           return
         }
         const id = saved.automation.id
+        dropAutomationEditorDraft(props.executionHost, id)
         catalog.setRows((rows) => [...rows.filter((row) => row.automation.id !== id), saved])
         setView({ kind: 'detail', row: saved })
       }
@@ -286,6 +286,7 @@ export function AutomationManager(props: {
             client={props.client}
             current={view.row?.automation}
             initialDraft={view.initialDraft}
+            draftKey={automationEditorDraftKey(props.executionHost, view.row?.automation.id)}
             onDraftChange={createAttempt.observeDraft}
             leaveGuard={props.leaveGuard}
             capabilities={catalog.capabilities}
@@ -351,7 +352,7 @@ export function AutomationManager(props: {
           <View style={styles.stack}>
             <AutomationChoice
               label={t('automations.mobile.automation', 'Automation')}
-              value={filterId}
+              value={filter?.automationId ?? ''}
               options={[
                 { value: '', label: t('automations.mobile.allAutomations', 'All automations') },
                 ...catalog.rows.map((entry) => ({

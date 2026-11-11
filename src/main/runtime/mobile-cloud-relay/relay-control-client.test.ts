@@ -4,7 +4,7 @@ import type { Server, Socket } from 'node:net'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import nacl from 'tweetnacl'
 import { WebSocketServer, type WebSocket } from 'ws'
-import type { E2EEKeypair } from '../e2ee-keypair'
+import type { E2EEKeypair } from '../rpc/server/pairing/e2ee-keypair'
 
 import { RelayControlClient } from './relay-control-client'
 
@@ -204,7 +204,7 @@ describe('RelayControlClient', () => {
     const { socket, authorization, capabilities, path } = await accepted
     expect(authorization).toBe('Bearer scoped-token')
     // Strict older cells reject new hello keys; advertise capabilities in upgrade headers.
-    expect(capabilities).toBe('pending-conn-details,idle-regional-rehome-v1')
+    expect(capabilities).toBe('pending-conn-details,idle-regional-rehome-v1,client-keepalive-v1')
     expect(path).toBe('/v1/host/control')
     const hello = await nextJson(socket)
     expect(hello).toMatchObject({
@@ -274,6 +274,13 @@ describe('RelayControlClient', () => {
     // ast-grep-ignore: test-no-wall-clock -- Real loopback protocol timestamps must match the client clock.
     socket.send(JSON.stringify({ type: 'ping', t: Date.now() }))
     await expect(nextJson(socket)).resolves.toMatchObject({ type: 'pong' })
+    // Offered: the host sends the exact keepalive frame (the edge answers it without waking).
+    socket.send(JSON.stringify({ type: 'keepalive-offer', v: 1, intervalMs: 1_000 }))
+    const keepalive = await new Promise<string>((resolve) => {
+      socket.once('message', (raw) => resolve(raw.toString()))
+    })
+    expect(keepalive).toBe('{"type":"keepalive"}')
+    socket.send('{"type":"keepalive-ack"}')
     socket.send(
       JSON.stringify({
         type: 'conn-open',

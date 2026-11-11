@@ -1,5 +1,5 @@
 /** Push selected distro account homes on connect/selection changes so host-initiated CLI, automation, chat and text-generation launches use the same account. */
-import type { HostAccountLaunchEnv } from '../../../shared/host-account-launch-env'
+import type { HostAccountLaunchEnv } from '../../../shared/agent-launch/startup/host-account-launch-env'
 import { HOST_ACCOUNT_LAUNCH_ENV_RUNTIME_CAPABILITY } from '../../../shared/orcad-runtime-capabilities'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'

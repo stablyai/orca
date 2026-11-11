@@ -118,11 +118,11 @@ export const BRIDGED_PARITY_EXCLUSIONS: Readonly<Partial<Record<BridgedParityCla
 export const BRIDGED_PARITY_BASELINE: Readonly<Record<BridgedParityClass | 'identical', number>> = {
   identical: 385,
   'reply-meta-required': 0,
-  'result-absent-settlement': 329,
-  'result-absent-observation': 3,
-  'result-absent-stream-release': 6,
+  'result-absent-settlement': 328,
+  'result-absent-observation': 6,
+  'result-absent-stream-release': 1,
   'params-undefined': 27,
-  'write-ordinal': 21,
+  'write-ordinal': 30,
   unclassified: 0
 }
 
@@ -151,18 +151,14 @@ export const BRIDGED_PARITY_MEMBERS: Readonly<
   Partial<Record<BridgedParityClass, readonly string[]>>
 > = {
   'result-absent-observation': [
+    'matrix-live-worktree-name-runtime.clientevents.subscribe-1-2',
+    'matrix-host-worktree-refresh-runtime.clientevents.subscribe-1-2',
+    'matrix-host-worktree-refresh-runtime.clientevents.subscribe-1-3',
     'matrix-notifications.desktop-stream-notifications.subscribe-1-1',
     'matrix-notifications.desktop-stream-notifications.subscribe-1-2',
     'matrix-session.native-chat-page-nativechat.subscribe-2-1'
   ],
-  'result-absent-stream-release': [
-    'matrix-live-worktree-name-runtime.clientevents.subscribe-1-1',
-    'matrix-live-worktree-name-runtime.clientevents.subscribe-1-2',
-    'matrix-host-worktree-refresh-runtime.clientevents.subscribe-1-1',
-    'matrix-host-worktree-refresh-runtime.clientevents.subscribe-1-2',
-    'matrix-host-worktree-refresh-runtime.clientevents.subscribe-1-3',
-    'matrix-session.native-chat-page-nativechat.subscribe-1-1'
-  ],
+  'result-absent-stream-release': ['matrix-session.native-chat-page-nativechat.subscribe-1-1'],
   'write-ordinal': [
     'diff-review-notes-refused-before-compare',
     'diff-review-snapshot',
@@ -171,6 +167,13 @@ export const BRIDGED_PARITY_MEMBERS: Readonly<
     'matrix-session.diff-review-git.status-1',
     'matrix-session.diff-review-repo.list-1',
     'matrix-session.diff-review-worktree.show-1',
+    'sc-changes-loaded',
+    'sc-changes-return-from-memory',
+    'sc-changes-write-reads-live',
+    'matrix-git.changes-load-git.branchcompare-1',
+    'matrix-git.changes-load-git.status-1',
+    'matrix-git.changes-load-repo.list-1',
+    'matrix-git.changes-load-worktree.show-1',
     'aivault-history-scan-association',
     'aivault-history-scan-fulfilled',
     'aivault-history-scan-refresh',
@@ -180,6 +183,8 @@ export const BRIDGED_PARITY_MEMBERS: Readonly<
     'aivault-history-screen-worktrees',
     'host-worktree-refresh-stream',
     'live-worktree-name-stream',
+    'matrix-host-worktree-refresh-runtime.clientevents.subscribe-1-1',
+    'matrix-live-worktree-name-runtime.clientevents.subscribe-1-1',
     'matrix-host-worktree-refresh-runtime.clientevents.subscribe-2-1',
     'matrix-live-worktree-name-runtime.clientevents.subscribe-2-1',
     'matrix-live-worktree-name-worktree.show-1',

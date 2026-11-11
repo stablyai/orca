@@ -14,7 +14,7 @@ import {
   isCodexMethodNotFoundError,
   isCodexAppServerUnsupportedError
 } from '../../../../../codex/app-server/codex-app-server-session'
-import { CodexUsageApiKeyAuthError } from '../../../../../rate-limits/codex-rpc-rate-limit-mapper'
+import { CodexUsageApiKeyAuthError } from '../../../../../rate-limits/providers/codex/codex-rpc-rate-limit-mapper'
 import { defineMethod } from '../../../core'
 import { requireInstalledStructuredHost } from '../creation/structured-agent-session-gate'
 import { OptionsParams } from '../../../../../../shared/rpc-contract/structured-agent-session-params'
@@ -82,10 +82,13 @@ export const STRUCTURED_AGENT_SESSION_ACCOUNT_USAGE_METHODS = [
     params: OptionsParams,
     handler: async ({ sessionId }, ctx): Promise<AgentSessionAccountUsage> => {
       const host = await requireInstalledStructuredHost(ctx, sessionId)
-      const record = host.deps.store.getRecord(sessionId)
-      if (!record || !supportsSessionAccountUsage(record)) {
+      const saved = host.deps.store.getRecord(sessionId)
+      if (!saved || !supportsSessionAccountUsage(saved)) {
         return { status: 'failed' }
       }
+      // The account the chat's next turn runs on, which a switch moves it to.
+      const accountHome = await host.deps.launchAccountHome?.(saved).catch(() => null)
+      const record = accountHome ? { ...saved, accountHome } : saved
       const abort = new AbortController()
       let timer: ReturnType<typeof setTimeout> | undefined
       try {

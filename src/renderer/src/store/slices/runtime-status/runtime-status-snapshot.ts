@@ -5,8 +5,8 @@ import {
 } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { RuntimeStatusSlice, RuntimeStatusStoreState } from './runtime-status-types'
 
-import { ensureBrowserClientHostsForRestoredPages } from '@/runtime/restored-client-hosted-browser-host-attach'
-import { replayClientHostedBrowserCloseIntents } from '@/runtime/client-hosted-browser-close-intent-replay'
+import { ensureBrowserClientHostsForRestoredPages } from '@/runtime/browser/client-hosting/restored-client-hosted-browser-host-attach'
+import { replayClientHostedBrowserCloseIntents } from '@/runtime/browser/closing/client-hosted-browser-close-intent-replay'
 
 /** A snapshot’s newer pairing revision signals a CLI update/rollback the renderer catalog missed (P1-C). */
 export function snapshotOutrunsCatalog(

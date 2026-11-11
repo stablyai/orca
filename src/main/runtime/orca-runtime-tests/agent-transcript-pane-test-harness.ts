@@ -3,7 +3,7 @@ import { vi } from 'vitest'
 import { OrcaRuntimeService } from '../orca-runtime'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { TerminalProcessInspection as PtyProcessInspection } from '../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
-import type { RuntimeStore } from '../runtime-store-contract'
+import type { RuntimeStore } from '../construction/runtime-store-contract'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { committingSpawn, registerBoundPty } from './bind-first-pane.test-fixture'
 

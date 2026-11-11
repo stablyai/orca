@@ -26,6 +26,9 @@ export const CLAUDE_HOOK_EVENT_FIRST_VERSIONS = {
 // Older CLIs reject the whole settings file on an unknown top-level key.
 export const CLAUDE_STATUS_LINE_FIRST_VERSION = '1.0.64'
 
+// Before this, a `theme` naming a custom theme is ignored, or (1.0.49 to 1.0.66) voids settings.json.
+const CLAUDE_CUSTOM_THEME_FIRST_VERSION = '2.1.119'
+
 // Exec-form hooks (`args`) spawn without a shell, so a spaced path needs no quoting.
 const CLAUDE_HOOK_EXEC_FORM_FIRST_VERSION = '2.1.139'
 
@@ -69,6 +72,10 @@ export function claudeKnowsHookEvent(
 
 export function claudeKnowsStatusLine(version: string | null | undefined): boolean {
   return claudeKnowsSince(version, CLAUDE_STATUS_LINE_FIRST_VERSION)
+}
+
+export function claudeLoadsCustomThemes(version: string | null | undefined): boolean {
+  return claudeVersionReaches(version, CLAUDE_CUSTOM_THEME_FIRST_VERSION)
 }
 
 // Unknown versions keep the shell form because an older CLI ignores `args`.

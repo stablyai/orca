@@ -18,6 +18,11 @@
         }
       }
     },
+    "6ab2ee0270ea": {
+      "name": "runtime.clientEvents.subscribe#3",
+      "ordinal": 5,
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"runtime.clientEvents.subscribe\",\"params\":null}"
+    },
     "6ab454a38bb0": {
       "name": "runtime.clientEvents.unsubscribe#2",
       "ordinal": 6,
@@ -37,6 +42,17 @@
       "refreshWorktrees": 0,
       "running": true,
       "syncViewSettings": 1
+    },
+    "861847234097": {
+      "name": "streams-registered-at-teardown",
+      "ordinal": 6,
+      "value": [
+        {
+          "cancelled": true,
+          "method": "runtime.clientEvents.subscribe",
+          "payload": "runtime.clientEvents.subscribe#3"
+        }
+      ]
     },
     "a328c933a31f": {
       "name": "streams-registered-at-teardown",
@@ -415,7 +431,7 @@
         "id": "host-worktree-refresh-stream.outer-refused:replayed",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773", "cc261d80eae0", "85612713e3f0"],
+          "payloads": ["eef1ee3c2773", "cc261d80eae0", "85612713e3f0", "6ab2ee0270ea"],
           "settlements": {
             "start": "eb79a9b3682a",
             "cutover": "f2af146a9f12"
@@ -428,7 +444,7 @@
         "id": "host-worktree-refresh-stream.outer-refused:stopped",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773", "cc261d80eae0", "85612713e3f0"],
+          "payloads": ["eef1ee3c2773", "cc261d80eae0", "85612713e3f0", "6ab2ee0270ea"],
           "settlements": {
             "start": "eb79a9b3682a",
             "cutover": "f2af146a9f12",
@@ -439,10 +455,24 @@
         }
       },
       {
+        "id": "host-worktree-refresh-stream.outer-refused:cleanup",
+        "observation": {
+          "sender": [],
+          "payloads": ["eef1ee3c2773", "cc261d80eae0", "85612713e3f0", "6ab2ee0270ea"],
+          "settlements": {
+            "start": "eb79a9b3682a",
+            "cutover": "f2af146a9f12",
+            "stop": "f2af146a9f12"
+          },
+          "state": "7fc7f9b819e5",
+          "effects": ["a507a5cf0d43", "861847234097"]
+        }
+      },
+      {
         "id": "host-worktree-refresh-stream.outer-refused-no-message:replayed",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773", "cc261d80eae0", "85612713e3f0"],
+          "payloads": ["eef1ee3c2773", "cc261d80eae0", "85612713e3f0", "6ab2ee0270ea"],
           "settlements": {
             "start": "eb79a9b3682a",
             "cutover": "f2af146a9f12"
@@ -455,7 +485,7 @@
         "id": "host-worktree-refresh-stream.outer-refused-no-message:stopped",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773", "cc261d80eae0", "85612713e3f0"],
+          "payloads": ["eef1ee3c2773", "cc261d80eae0", "85612713e3f0", "6ab2ee0270ea"],
           "settlements": {
             "start": "eb79a9b3682a",
             "cutover": "f2af146a9f12",
@@ -466,10 +496,24 @@
         }
       },
       {
+        "id": "host-worktree-refresh-stream.outer-refused-no-message:cleanup",
+        "observation": {
+          "sender": [],
+          "payloads": ["eef1ee3c2773", "cc261d80eae0", "85612713e3f0", "6ab2ee0270ea"],
+          "settlements": {
+            "start": "eb79a9b3682a",
+            "cutover": "f2af146a9f12",
+            "stop": "f2af146a9f12"
+          },
+          "state": "7fc7f9b819e5",
+          "effects": ["a507a5cf0d43", "861847234097"]
+        }
+      },
+      {
         "id": "host-worktree-refresh-stream.method-not-found:replayed",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773", "cc261d80eae0", "85612713e3f0"],
+          "payloads": ["eef1ee3c2773", "cc261d80eae0", "85612713e3f0", "6ab2ee0270ea"],
           "settlements": {
             "start": "eb79a9b3682a",
             "cutover": "f2af146a9f12"
@@ -482,7 +526,7 @@
         "id": "host-worktree-refresh-stream.method-not-found:stopped",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773", "cc261d80eae0", "85612713e3f0"],
+          "payloads": ["eef1ee3c2773", "cc261d80eae0", "85612713e3f0", "6ab2ee0270ea"],
           "settlements": {
             "start": "eb79a9b3682a",
             "cutover": "f2af146a9f12",
@@ -490,6 +534,20 @@
           },
           "state": "7fc7f9b819e5",
           "effects": ["a507a5cf0d43"]
+        }
+      },
+      {
+        "id": "host-worktree-refresh-stream.method-not-found:cleanup",
+        "observation": {
+          "sender": [],
+          "payloads": ["eef1ee3c2773", "cc261d80eae0", "85612713e3f0", "6ab2ee0270ea"],
+          "settlements": {
+            "start": "eb79a9b3682a",
+            "cutover": "f2af146a9f12",
+            "stop": "f2af146a9f12"
+          },
+          "state": "7fc7f9b819e5",
+          "effects": ["a507a5cf0d43", "861847234097"]
         }
       }
     ]

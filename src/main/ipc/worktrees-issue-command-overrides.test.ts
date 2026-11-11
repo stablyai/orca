@@ -1,6 +1,6 @@
 import type * as WorktreeScanCacheModule from '../git/worktrees/catalog/worktree-scan-cache'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { addWorktreeMock } from './worktrees-test-module-mocks'
+import { addWorktreeMock, getBranchConflictKindStrictMock } from './worktrees-test-module-mocks'
 import { handlers, setupWorktreeHandlers, store } from './worktrees-test-harness'
 import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
 
@@ -185,6 +185,27 @@ describe('worktrees:create execution host routing', () => {
     await expect(
       handlers['worktrees:create'](null, { repoId: 'repo-1', name: 'wt' })
     ).rejects.toThrow(SshHostNotServedError)
+
+    expect(addWorktreeMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('worktrees:create exact name', () => {
+  beforeEach(() => {
+    setupWorktreeHandlers()
+  })
+
+  // Electron flattens the error to its message, so the renderer reads the code from the trailing token.
+  it('refuses a taken name with the code token instead of suffixing', async () => {
+    getBranchConflictKindStrictMock.mockResolvedValue('local')
+
+    await expect(
+      handlers['worktrees:create'](null, {
+        repoId: 'repo-1',
+        name: 'Login fix',
+        branchIntent: 'create-exact'
+      })
+    ).rejects.toThrow(/\nworktree_create_exact_name_taken$/)
 
     expect(addWorktreeMock).not.toHaveBeenCalled()
   })

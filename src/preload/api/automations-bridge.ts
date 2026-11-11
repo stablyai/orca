@@ -1,7 +1,7 @@
 import type { ExecutionHostId } from '../../shared/execution-host'
 import { ipcRenderer } from 'electron'
 import type { ExternalAutomationManagerResult, PreloadApi } from '../api-types'
-import type { AutomationOwnerRef } from '../../shared/automation-owner-ref'
+import type { AutomationOwnerRef } from '../../shared/automations/ownership/automation-owner-ref'
 import type {
   ScopedExternalManagerActionRequest,
   ScopedExternalManagerListRequest

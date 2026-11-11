@@ -27,11 +27,6 @@ const storeState = vi.hoisted(
     }) as FakeStoreState
 )
 
-const popoverMock = vi.hoisted(() => ({
-  open: false,
-  onOpenChange: undefined as ((open: boolean) => void) | undefined
-}))
-
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
 }))
@@ -45,29 +40,33 @@ vi.mock('@/store', () => ({
 }))
 
 vi.mock('@/components/ui/popover', async () => {
-  const { cloneElement } = await import('react')
+  const { cloneElement, createContext, useContext, useMemo } = await import('react')
+  const PopoverState = createContext<{ open: boolean; onOpenChange?: (open: boolean) => void }>({
+    open: false
+  })
   return {
     Popover: ({
       children,
-      open,
+      open = false,
       onOpenChange
     }: {
       children: React.ReactNode
       open?: boolean
       onOpenChange?: (open: boolean) => void
     }) => {
-      popoverMock.open = open ?? false
-      popoverMock.onOpenChange = onOpenChange
-      return <div>{children}</div>
+      const value = useMemo(() => ({ open, onOpenChange }), [open, onOpenChange])
+      return <PopoverState.Provider value={value}>{children}</PopoverState.Provider>
     },
     // Radix `asChild` renders the child itself and owns its click; mirror that.
-    PopoverTrigger: ({ children }: { children: React.ReactElement }) =>
-      cloneElement(children as React.ReactElement<{ onClick?: () => void }>, {
-        onClick: () => popoverMock.onOpenChange?.(!popoverMock.open)
-      }),
+    PopoverTrigger: ({ children }: { children: React.ReactElement }) => {
+      const { open, onOpenChange } = useContext(PopoverState)
+      return cloneElement(children as React.ReactElement<{ onClick?: () => void }>, {
+        onClick: () => onOpenChange?.(!open)
+      })
+    },
     // Radix mounts content only while open — the property the lazy list relies on.
     PopoverContent: ({ children }: { children: React.ReactNode }) =>
-      popoverMock.open ? <div>{children}</div> : null
+      useContext(PopoverState).open ? <div>{children}</div> : null
   }
 })
 
@@ -151,8 +150,6 @@ function candidateLabels(): string[] {
 }
 
 beforeEach(() => {
-  popoverMock.open = false
-  popoverMock.onOpenChange = undefined
   storeState.worktreesByRepo = {}
   storeState.repos = []
   storeState.worktreeLineageById = {}

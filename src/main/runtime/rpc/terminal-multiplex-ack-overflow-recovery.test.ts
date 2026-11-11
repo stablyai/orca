@@ -1,8 +1,7 @@
-import './unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from './dispatcher'
 import { TERMINAL_METHODS } from './methods/terminal/terminal'
-import type { RuntimeTerminalWait } from '../../../shared/runtime-types'
+import type { RuntimeTerminalWait } from '../../../shared/runtime-terminal-contracts'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
@@ -431,5 +430,82 @@ describe('terminal multiplex RPC', () => {
 
     runtime.cleanupSubscription('terminal-multiplex:conn-ack-trim')
     await dispatchPromise
+  })
+
+  it('sends the next overflow recovery only after output sent ahead of the previous one is acknowledged', async () => {
+    const dataListenerRef: {
+      current?: (data: string, meta?: { seq?: number; rawLength?: number }) => void
+    } = {}
+    let seq = 0
+    const serializeTerminalBuffer = vi.fn(async () => ({
+      data: 'recovered',
+      cols: 120,
+      rows: 40,
+      seq
+    }))
+    const harness = startDesktopMultiplexSubscribe({
+      serializeTerminalBuffer,
+      subscribeToTerminalData: vi.fn(
+        (
+          _: string,
+          listener: (data: string, meta?: { seq?: number; rawLength?: number }) => void
+        ) => {
+          dataListenerRef.current = listener
+          return vi.fn()
+        }
+      )
+    })
+    await vi.waitFor(() =>
+      expect(harness.messages.some((message) => JSON.parse(message).result?.type === 'ready')).toBe(
+        true
+      )
+    )
+    sendDesktopMultiplexSubscribe(harness.handlers)
+    await vi.waitFor(() =>
+      expect(
+        harness.messages.some((message) => JSON.parse(message).result?.type === 'subscribed')
+      ).toBe(true)
+    )
+    const flood = (): void => {
+      const output = 'x'.repeat(3 * 1024 * 1024)
+      seq += output.length
+      dataListenerRef.current?.(output, { seq, rawLength: output.length })
+    }
+    const ack = (bytes: number): void =>
+      harness.handlers.get(7)?.(
+        decodeTerminalStreamFrame(
+          encodeTerminalStreamFrame({
+            opcode: TerminalStreamOpcode.Ack,
+            streamId: 7,
+            seq: 0,
+            payload: encodeTerminalStreamJson({ bytes })
+          })
+        )!
+      )
+    const recoveries = (): number =>
+      harness.binaryFrames
+        .map((bytes) => decodeTerminalStreamFrame(bytes))
+        .filter(
+          (frame) =>
+            frame?.opcode === TerminalStreamOpcode.SnapshotStart &&
+            decodeTerminalStreamJson<{ reason?: string }>(frame.payload)?.reason ===
+              'ack-pending-overflow'
+        ).length
+
+    flood()
+    ack(64 * 1024)
+    await vi.waitFor(() => expect(recoveries()).toBe(1))
+    // 448KB sent before the first image is still unacknowledged, so a second flood must not stack another image behind it.
+    const serializeCalls = serializeTerminalBuffer.mock.calls.length
+    flood()
+    ack(64 * 1024)
+    await Promise.resolve()
+    expect(serializeTerminalBuffer).toHaveBeenCalledTimes(serializeCalls)
+
+    ack(384 * 1024)
+    await vi.waitFor(() => expect(recoveries()).toBe(2))
+
+    harness.registry.cleanupSubscription('terminal-multiplex:conn-desktop-first-paint')
+    await harness.dispatchPromise
   })
 })

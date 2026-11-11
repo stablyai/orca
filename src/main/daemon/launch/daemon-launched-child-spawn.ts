@@ -1,6 +1,6 @@
 import { forkProcess, type ForkSpec } from '@orca/process-host/fork-process'
 import { spawnProcess } from '@orca/process-host'
-import type { SpawnedProcess } from '@orca/process-host/process-spec'
+import type { ChildProcess } from 'node:child_process'
 import { getAppEnvironment } from '../../../shared/app-environment'
 import { removeChromiumDisabledSessionBus } from '../../pty/shell-startup/chromium-session-bus-env'
 import { hostMallocTunablesDaemonEnv } from '../../memory/host-malloc-tunables'
@@ -79,7 +79,7 @@ export function buildDaemonScriptArgs(
 export function spawnDaemonChildProcess(
   options: DaemonChildSpawnOptions,
   useDurableScope: boolean
-): SpawnedProcess {
+): ChildProcess {
   const {
     forkEntryPath,
     relocatedExecPath,

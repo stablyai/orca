@@ -461,4 +461,46 @@ describe('HermesHookService', () => {
     expect(payload.result.nested).toHaveLength(51)
     expect(payload.tool_input.items).toHaveLength(51)
   })
+
+  // Windows refuses to remove a process's current directory.
+  it.skipIf(process.platform === 'win32')(
+    'generated plugin hooks omit a deleted cwd instead of raising',
+    () => {
+      const pythonAvailable =
+        spawnSync('python3', ['--version'], { encoding: 'utf-8' }).status === 0
+      if (!pythonAvailable) {
+        return
+      }
+      new HermesHookService().install()
+
+      const initPath = join(homeDir, 'plugins', _internals.HERMES_PLUGIN_NAME, '__init__.py')
+      const script = [
+        'import importlib.util, json, os',
+        `spec = importlib.util.spec_from_file_location("orca_status", ${JSON.stringify(initPath)})`,
+        'mod = importlib.util.module_from_spec(spec)',
+        'spec.loader.exec_module(mod)',
+        `os.chdir(${JSON.stringify(mkdtempSync(join(homeDir, 'cwd-')))})`,
+        'live = mod._payload_for_event("pre_tool_call", {"tool_name": "patch"})',
+        'os.rmdir(os.getcwd())',
+        'mod._make_hook("pre_tool_call")(session_id="sess-1", tool_name="kanban_show")',
+        'dead = mod._payload_for_event("pre_tool_call", {"tool_name": "patch"})',
+        'print(json.dumps({"live": live, "dead": dead}))'
+      ].join('\n')
+
+      const output = execFileSync('python3', ['-c', script], {
+        env: {
+          ...process.env,
+          ORCA_AGENT_HOOK_PORT: '',
+          ORCA_AGENT_HOOK_ENDPOINT: '',
+          ORCA_PANE_KEY: ''
+        },
+        encoding: 'utf-8',
+        timeout: 15_000
+      })
+      expect(JSON.parse(output)).toEqual({
+        live: expect.objectContaining({ cwd: expect.stringContaining('cwd-') }),
+        dead: { hook_event_name: 'pre_tool_call', tool_name: 'patch' }
+      })
+    }
+  )
 })

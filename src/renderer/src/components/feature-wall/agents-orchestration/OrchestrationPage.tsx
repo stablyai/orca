@@ -19,8 +19,8 @@ import {
 } from './orchestration-types'
 import { arrowPathFromCoordTo, bubblePathBetweenRows } from './orchestration-bubble-path'
 import { AgentRow, WorkspaceCard } from './orchestration-cards'
-import { translate } from '@/i18n/i18n'
-import { forceLayoutReflow } from '@/lib/force-layout-reflow'
+import { useTranslate } from '@/i18n/use-translate'
+import { forceLayoutReflow } from '@/lib/overlay-interaction/force-layout-reflow'
 
 const INITIAL_CHILD_PENDING: RowPending = {
   'child-codex': true,
@@ -39,6 +39,7 @@ export function OrchestrationPage(props: {
   loopMs?: number
   showResponseBeats?: boolean
 }): JSX.Element {
+  const t = useTranslate()
   const {
     active,
     reducedMotion,
@@ -278,7 +279,7 @@ export function OrchestrationPage(props: {
       <div className="relative flex min-w-0 flex-col gap-1.5">
         <WorkspaceCard
           variant="coordinator"
-          name={translate(
+          name={t(
             'auto.components.feature.wall.agents.orchestration.OrchestrationPage.coordinatorName',
             'redesign auth flow'
           )}
@@ -309,14 +310,14 @@ export function OrchestrationPage(props: {
           <span
             className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-1.5 text-muted-foreground"
             style={{ height: 18, fontSize: 10, fontWeight: 500 }}
-            aria-label={translate(
+            aria-label={t(
               'auto.components.feature.wall.agents.orchestration.OrchestrationPage.862605d066',
               '2 child workspaces'
             )}
           >
             <Workflow className="size-2.5" aria-hidden />
             <span className="truncate">
-              {translate(
+              {t(
                 'auto.components.feature.wall.agents.orchestration.OrchestrationPage.30b509a467',
                 '2 children'
               )}
@@ -340,7 +341,7 @@ export function OrchestrationPage(props: {
             <div className="feature-wall-child-card-shell">
               <WorkspaceCard
                 variant="default"
-                name={translate(
+                name={t(
                   'auto.components.feature.wall.agents.orchestration.OrchestrationPage.childPr1Name',
                   'PR 1/2: migrate users.sql'
                 )}
@@ -368,7 +369,7 @@ export function OrchestrationPage(props: {
             <div className="feature-wall-child-card-shell">
               <WorkspaceCard
                 variant="default"
-                name={translate(
+                name={t(
                   'auto.components.feature.wall.agents.orchestration.OrchestrationPage.childPr2Name',
                   'PR 2/2: withSession middleware'
                 )}

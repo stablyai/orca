@@ -4,14 +4,13 @@ import type { QueuedMessageRow } from '../queued-messages/queued-message-table'
 import { isLiveJournalQueueCard } from '../queued-messages/journal-queue-retention'
 import {
   createQueuePauseContext,
-  journalManualStop,
   queuePauseHoldingInContext,
   type QueuePauseContext
 } from '../queued-messages/queued-message-pause'
-import { journalInputOrder } from './journal-input-order'
+import { journalManualStop } from '../queued-messages/queued-message-pause-marks'
+import type { JournalInputOrderResolver } from './journal-input-order-registry'
 
 import { JournalQueuedRowIndex } from './journal-queued-row-index'
-export { compareQueuedRows } from './journal-queued-row-index'
 
 /** Current rows are the entire runtime order; dispatched slots stay reserved until withdrawal. */
 export class JournalInputCardIndex {
@@ -28,6 +27,7 @@ export class JournalInputCardIndex {
   private pauseContext: QueuePauseContext | undefined
   private clearIds: readonly string[] | undefined
   private clearMembers: ReadonlySet<string> = new Set()
+  constructor(private readonly journalInputOrder: JournalInputOrderResolver) {}
   private failed = false
 
   overlay(state: JournalReducerState, rows: readonly QueuedMessageRow[]): void {
@@ -63,10 +63,10 @@ export class JournalInputCardIndex {
       }
     }
     const marks = state.queuePauseMarks
-    const failedAt = journalInputOrder(state).newestTurn.failure()
+    const failedAt = this.journalInputOrder(state).newestTurn.failure()
     const key = [
       state.latestAcceptedTurnSequence,
-      journalInputOrder(state).latestPersonAcceptedSequence(),
+      this.journalInputOrder(state).latestPersonAcceptedSequence(),
       journalManualStop(marks)?.sequence,
       marks.resumedSequence,
       marks.reopenedSequence,
@@ -88,7 +88,8 @@ export class JournalInputCardIndex {
           epoch: state.epoch,
           marks,
           latestAcceptedTurnSequence: state.latestAcceptedTurnSequence,
-          latestPersonAcceptedTurnSequence: journalInputOrder(state).latestPersonAcceptedSequence(),
+          latestPersonAcceptedTurnSequence:
+            this.journalInputOrder(state).latestPersonAcceptedSequence(),
           failedAt,
           reopenFloor: this.floor
         },

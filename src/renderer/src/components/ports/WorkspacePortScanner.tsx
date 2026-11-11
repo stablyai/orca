@@ -1,7 +1,7 @@
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { translate } from '@/i18n/i18n'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { getCachedHasAnyWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import {
@@ -11,13 +11,16 @@ import {
   workspacePortScanKeyForTarget
 } from '@/lib/workspace-ports/workspace-port-actions'
 import { runtimeRpcTargetForAuthorityKey } from '@/runtime/rpc/targets/runtime-client-target'
-import { installWindowVisibilityInterval, isWindowVisible } from '@/lib/window-visibility-interval'
+import {
+  installWindowVisibilityInterval,
+  isWindowVisible
+} from '@/lib/window-activity/window-visibility-interval'
 import {
   reconcileTransientPortScanFailures,
   type PortScanDebounceState
 } from '@/lib/workspace-ports/workspace-port-scan-debounce'
 import type { WorkspacePortScanResult } from '../../../../shared/workspace-ports'
-import { buildExecutionHostRegistry } from '../../../../shared/execution-host-registry'
+import { buildExecutionHostRegistry } from '../../../../shared/execution-host/execution-host-registry'
 
 const WORKSPACE_PORT_SCAN_INTERVAL_MS = 30_000
 const WORKSPACE_PORT_ADVERTISED_URL_SETTLE_MS = 1_000
@@ -249,6 +252,7 @@ export function WorkspacePortScanner({ enabled = true }: { enabled?: boolean }):
         }
         void refresh({ force: true })
       },
+      slowWhileUnfocused: true,
       intervalMs: WORKSPACE_PORT_SCAN_INTERVAL_MS
     })
 

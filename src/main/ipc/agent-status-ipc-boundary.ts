@@ -3,7 +3,7 @@ import {
   mintFleetAgentStatusEvidence,
   type FleetAgentStatusEvidence,
   type FleetEvidenceBinding
-} from '../../shared/orchestration-fleet-agent-status-evidence'
+} from '../../shared/orchestration/fleet/orchestration-fleet-agent-status-evidence'
 import { isValidTerminalTabId } from '../../shared/workspace-layout/terminal-tab-id'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 
@@ -12,7 +12,8 @@ export type AgentStatusRuntimeEnrichment = Pick<
   | 'getAgentStatusTerminalHandleForPaneKey'
   | 'getAgentStatusOrchestrationContextForPaneKey'
   | 'getTerminalProcessIncarnation'
->
+> &
+  Partial<Pick<OrcaRuntimeService, 'getLaunchStatementForPaneKey'>>
 
 const MAX_AGENT_STATUS_DROP_TAB_ID_LENGTH = 160
 
@@ -94,9 +95,11 @@ export function enrichAgentStatusIpcPayload(
   }
   const terminalHandle = runtime.getAgentStatusTerminalHandleForPaneKey(data.paneKey)
   const orchestration = runtime.getAgentStatusOrchestrationContextForPaneKey(data.paneKey)
+  const launchConfig = runtime.getLaunchStatementForPaneKey?.(data.paneKey, data.agentType)
   return {
     ...data,
     ...(terminalHandle ? { terminalHandle } : {}),
+    ...(launchConfig !== undefined ? { launchConfig } : {}),
     ...(orchestration ? { orchestration } : {})
   }
 }

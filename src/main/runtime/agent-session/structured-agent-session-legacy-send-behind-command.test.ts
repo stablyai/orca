@@ -9,7 +9,7 @@ import {
   THREAD,
   type FakeCodexConnection,
   type StructuredCodexRpcHarness
-} from '../structured-codex-session-rpc-test-harness'
+} from '../rpc/methods/structured-sessions/structured-codex-session-rpc-test-harness'
 
 const COMPACTION_TURN = 'compaction-turn'
 // Far under the phone's 15 s send timeout, and far over a handover that is already due.

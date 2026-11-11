@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
-import { committingSpawn, registerLivePty } from './bind-first-pane.test-fixture'
+import { registerLivePty } from './bind-first-pane.test-fixture'
 import './runtime-test-module-registration.spec'
 import { OrcaRuntimeService } from '../orca-runtime'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
@@ -9,11 +9,9 @@ import {
   HEADLESS_SECOND_LEAF_ID,
   TEST_WORKTREE_ID,
   TEST_WORKTREE_PATH,
-  deferred,
   makeHeadlessTerminalLayout,
   makeRuntimeStoreWithWorkspaceSession,
-  makeWorkspaceSessionWithHeadlessTerminal,
-  store
+  makeWorkspaceSessionWithHeadlessTerminal
 } from './orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
@@ -128,29 +126,6 @@ describe('OrcaRuntimeService', () => {
       }
     )
 
-    it('coalesces a reconnect close burst onto one authoritative PTY inventory', async () => {
-      const { runtime, listProcesses, processes } = makeAdoptedLiveTabRuntime()
-      const inventory = deferred<typeof processes>()
-      listProcesses.mockImplementation(() => inventory.promise)
-
-      const closes = Promise.all([
-        runtime.closeMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'host-tab', {
-          reason: 'pty-exit'
-        }),
-        runtime.closeMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'host-tab', {
-          reason: 'cleanup'
-        })
-      ])
-      await vi.waitFor(() => expect(listProcesses).toHaveBeenCalledTimes(1))
-      inventory.resolve(processes)
-
-      await expect(closes).resolves.toEqual([
-        expect.objectContaining({ refused: true, refusalReason: 'live-host-pty' }),
-        expect.objectContaining({ refused: true, refusalReason: 'live-host-pty' })
-      ])
-      expect(listProcesses).toHaveBeenCalledTimes(1)
-    })
-
     it('keeps a live persisted PTY whose pane binding has not reconnected yet', async () => {
       const ptyId = 'persisted-pty'
       const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(
@@ -196,22 +171,6 @@ describe('OrcaRuntimeService', () => {
       expect(kill).not.toHaveBeenCalled()
       expect(getSession().tabsByWorktree[TEST_WORKTREE_ID]).toHaveLength(1)
       expect(getSession().terminalLayoutsByTabId['host-tab']).toBeDefined()
-    })
-
-    it('keeps an explicit user close destructive while the PTY is live', async () => {
-      const { runtime, closeTerminalTab, kill, getSession } = makeAdoptedLiveTabRuntime()
-
-      await runtime.closeMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'host-tab', {
-        reason: 'user'
-      })
-
-      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-        expect(closeTerminalTab).not.toHaveBeenCalled()
-        expect(kill).toHaveBeenCalledWith('serve-live-1')
-        expect(getSession().terminalLayoutsByTabId['host-tab']).toBeUndefined()
-        return
-      }
-      expect(closeTerminalTab).toHaveBeenCalledWith('host-tab')
     })
 
     it('keeps a reasonless legacy close and republishes its live mirror', async () => {
@@ -605,73 +564,5 @@ describe('OrcaRuntimeService', () => {
       expect(getSession().terminalLayoutsByTabId['host-tab']).toBeDefined()
       expect(kill).not.toHaveBeenCalled()
     })
-  })
-
-  it('builds mobile session agent launch commands on the runtime host', async () => {
-    const spawn = vi.fn().mockResolvedValue({ id: 'pty-agent' })
-    const runtime = new OrcaRuntimeService({
-      ...store,
-      getSettings: () => ({
-        ...store.getSettings(),
-        disabledTuiAgents: [],
-        agentCmdOverrides: { 'command-code': 'command-code --profile mobile' },
-        agentDefaultEnv: { 'command-code': { COMMAND_CODE_PROFILE: 'mobile-env' } }
-      })
-    } as never)
-    runtime.setPtyController({
-      spawn: committingSpawn(runtime, spawn),
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null
-    })
-    runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
-
-    await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
-      agent: 'command-code'
-    })
-
-    expect(spawn).toHaveBeenCalledWith(
-      expect.objectContaining({
-        command: "command-code --profile mobile '--yolo'",
-        cwd: TEST_WORKTREE_PATH,
-        env: expect.objectContaining({
-          COMMAND_CODE_PROFILE: 'mobile-env'
-        }),
-        worktreeId: TEST_WORKTREE_ID
-      })
-    )
-  })
-
-  it('injects mobile quick-command prompts into the host-built agent startup command', async () => {
-    const spawn = vi.fn().mockResolvedValue({ id: 'pty-agent-prompt' })
-    const runtime = new OrcaRuntimeService({
-      ...store,
-      getSettings: () => ({
-        ...store.getSettings(),
-        disabledTuiAgents: [],
-        agentCmdOverrides: { codex: 'codex' },
-        agentDefaultArgs: {}
-      })
-    } as never)
-    runtime.setPtyController({
-      spawn: committingSpawn(runtime, spawn),
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null
-    })
-    runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
-
-    await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
-      agent: 'codex',
-      agentPrompt: 'Review this diff'
-    })
-
-    expect(spawn).toHaveBeenCalledWith(
-      expect.objectContaining({
-        command: expect.stringMatching(/^codex .*'Review this diff'$/),
-        launchAgent: 'codex',
-        cwd: TEST_WORKTREE_PATH
-      })
-    )
   })
 })

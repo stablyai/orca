@@ -1,4 +1,4 @@
-import { parseHostStableKey } from '../automation-owner-key'
+import { parseHostStableKey } from '../automations/ownership/automation-owner-key'
 import { MAX_CLIENT_HOSTED_BROWSER_CLOSE_INTENTS as MAX_ORCAD_MIGRATION_CLIENT_HOSTED_BROWSER_CLOSE_INTENTS } from '../workspace-session/client-hosted-browser-close-intent'
 import type {
   OrcadMigrationClientHostedBrowserCloseIntent,

@@ -23,6 +23,7 @@ import {
 } from '../applying-settings/feature-interaction-recording'
 
 import type { StoreRuntimeState } from './store-runtime-state'
+import { persistGithubCache } from './github-cache-persistence'
 import type { WriteSchedulingOperations } from './write-scheduling'
 import { scheduleSave } from './write-scheduling'
 import { bumpLocalWorktreeScanGeneration } from '../../workspaces/catalog/local-worktree-scan-generation'
@@ -30,9 +31,17 @@ import { bumpLocalWorktreeScanGeneration } from '../../workspaces/catalog/local-
 type ProfilePreferencesRuntime = Pick<
   StoreRuntimeState,
   | 'activeViewPreference'
+  | 'dataFile'
   | 'githubCacheDirty'
-  | 'githubCacheGeneration'
+  | 'githubCachePersistedAt'
+  | 'githubCacheLegacyFileHash'
+  | 'githubCachePersistenceDisabled'
+  | 'githubCachePersistTimer'
+  | 'githubCacheRetryDelayMs'
   | 'githubCacheWriteListeners'
+  | 'profileMaintenancePending'
+  | 'quitFlushStarted'
+  | 'writesFrozen'
   | 'protectedSecrets'
   | 'runDurableMutation'
   | 'settingsChangeListeners'
@@ -197,7 +206,7 @@ export class ProfilePreferences {
     // Cache polls write a sidecar at flush; scheduling a full profile save here amplifies every poll.
     this[profilePreferencesContext].runtime.state.githubCache = cache
     this[profilePreferencesContext].runtime.githubCacheDirty = true
-    this[profilePreferencesContext].runtime.githubCacheGeneration += 1
+    persistGithubCache(this[profilePreferencesContext].runtime, 'routine')
     for (const listener of this[profilePreferencesContext].runtime.githubCacheWriteListeners) {
       listener()
     }

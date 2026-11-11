@@ -27,7 +27,8 @@ export const RepoCreate = z.object({
 
 export const RepoClone = z.object({
   url: requiredString('Missing clone URL'),
-  destination: requiredString('Missing clone destination')
+  destination: requiredString('Missing clone destination'),
+  folderName: z.string().optional()
 })
 
 export const RepoSetBaseRef = z.object({
@@ -44,6 +45,7 @@ export const RepoHooksCheck = RepoSelector.extend({
 })
 
 export const RepoSearchRefs = z.object({
+  namespace: z.literal('remote').optional(),
   repo: requiredString('Missing repo selector'),
   query: z
     .unknown()
@@ -70,12 +72,17 @@ export const ProjectGroupUpdate = z.object({
     name: OptionalString,
     isCollapsed: z.boolean().optional(),
     tabOrder: OptionalFiniteNumber,
+    rootProjectOrder: z.number().finite().nullable().optional(),
     color: OptionalString.nullable().optional()
   })
 })
 
 export const ProjectGroupSelector = z.object({
   groupId: requiredString('Missing group id')
+})
+
+export const ProjectGroupUpdateMany = z.object({
+  mutations: z.array(ProjectGroupUpdate)
 })
 
 // Why `connectionId` is optional: older clients omit it, and older hosts strip it (bare selector).

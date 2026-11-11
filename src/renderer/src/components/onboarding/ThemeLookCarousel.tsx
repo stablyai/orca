@@ -1,8 +1,8 @@
 import type React from 'react'
 import { useEffect, useRef, useState } from 'react'
 import { Check, ChevronLeft, ChevronRight, ExternalLink, Puzzle } from 'lucide-react'
-import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { cn } from '@/lib/class-names'
+import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
 import type { ThemeLook } from './onboarding-theme-looks'
 import { ThemeLookCardPreview } from './ThemeLookPreview'
@@ -37,6 +37,7 @@ export function ThemeLookCarousel({
   ariaLabel: string
   header: React.ReactNode
 }): React.JSX.Element {
+  const t = useTranslate()
   const trackRef = useRef<HTMLDivElement>(null)
   const [edges, setEdges] = useState<ScrollEdges>({ start: true, end: false })
   const tabStopId = looks.some((look) => look.id === selectedId) ? selectedId : looks[0]?.id
@@ -90,7 +91,7 @@ export function ThemeLookCarousel({
           variant="ghost"
           size="icon-sm"
           disabled={edges.start}
-          aria-label={translate('components.onboarding.theme.looks.previous', 'Previous looks')}
+          aria-label={t('components.onboarding.theme.looks.previous', 'Previous looks')}
           onClick={() => page(-1)}
         >
           <ChevronLeft />
@@ -99,7 +100,7 @@ export function ThemeLookCarousel({
           variant="ghost"
           size="icon-sm"
           disabled={edges.end}
-          aria-label={translate('components.onboarding.theme.looks.next', 'More looks')}
+          aria-label={t('components.onboarding.theme.looks.next', 'More looks')}
           onClick={() => page(1)}
         >
           <ChevronRight />
@@ -162,10 +163,10 @@ export function ThemeLookCarousel({
         >
           <Puzzle className="size-4" />
           <span className="text-xs font-medium">
-            {translate('components.onboarding.theme.looks.moreThemes', 'More themes')}
+            {t('components.onboarding.theme.looks.moreThemes', 'More themes')}
           </span>
           <span className="flex items-center gap-1 text-2xs">
-            {translate('components.onboarding.theme.looks.browsePlugins', 'Browse plugins')}
+            {t('components.onboarding.theme.looks.browsePlugins', 'Browse plugins')}
             <ExternalLink className="size-2.5" />
           </span>
         </button>

@@ -1,4 +1,8 @@
 import type {
+  GitCommitAction,
+  GitCommitActionResult
+} from '../../shared/git/commands/git-commit-action'
+import type {
   GitBranchCompareResult,
   GitCommitCompareResult,
   GitDiffResult
@@ -24,6 +28,8 @@ import type {
 import type { CommitMessageDraftContext } from '../../shared/source-control/ai/generation/commit-message-generation'
 import type { ConflictResolution } from '../../shared/source-control/listing/source-control-entry-actions'
 import type { GitProviderStatusOptions } from './git-provider-status-options'
+import type { BranchSwitchCreation } from '../../shared/git/branch-switch-target'
+import type { RuntimeGitLocalBranches } from '../../shared/runtime-worktree-contracts'
 import type { GitAdmissionTier } from '../git/command-runner/git-exec-options'
 
 export type { GitProviderStatusOptions } from './git-provider-status-options'
@@ -39,6 +45,21 @@ export type IGitProvider = {
   getHistoryRefs(worktreePath: string, query?: string): Promise<GitHistoryItemRef[]>
   getHistory(worktreePath: string, options?: GitHistoryOptions): Promise<GitHistoryResult>
   commit(worktreePath: string, message: string): Promise<{ success: boolean; error?: string }>
+  createBranch(
+    worktreePath: string,
+    name: string,
+    startPoint: string
+  ): Promise<GitCommitActionResult>
+  applyCommit(
+    worktreePath: string,
+    operation: GitCommitAction,
+    commitId: string
+  ): Promise<GitCommitActionResult>
+  recoverSequencer(
+    worktreePath: string,
+    operation: GitCommitAction,
+    action: 'abort' | 'continue'
+  ): Promise<GitCommitActionResult | void>
   completeMerge(worktreePath: string): Promise<{ success: boolean; error?: string }>
   getStagedCommitContext(worktreePath: string): Promise<CommitMessageDraftContext | null>
   getDiff(
@@ -67,8 +88,13 @@ export type IGitProvider = {
   abortMerge(worktreePath: string): Promise<void>
   abortRebase(worktreePath: string): Promise<void>
   /** `skippedPaths`: files git could not replace (held open on Windows) though the switch landed. */
-  checkoutBranch(worktreePath: string, branch: string): Promise<{ skippedPaths: string[] }>
-  listLocalBranches(worktreePath: string): Promise<{ current: string | null; branches: string[] }>
+  checkoutBranch(
+    worktreePath: string,
+    branch: string,
+    creation?: BranchSwitchCreation,
+    detached?: boolean
+  ): Promise<{ skippedPaths: string[] }>
+  listLocalBranches(worktreePath: string): Promise<RuntimeGitLocalBranches>
   getBranchCompare(
     worktreePath: string,
     baseRef: string,

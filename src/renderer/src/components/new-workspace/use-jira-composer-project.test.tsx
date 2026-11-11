@@ -2,7 +2,7 @@
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../shared/repo-types'
-import { normalizeTaskSourceContext } from '../../../../shared/task-source-context'
+import { normalizeTaskSourceContext } from '../../../../shared/work-items/task-source-context'
 import { useJiraComposerProject } from './use-jira-composer-project'
 vi.mock('../use-jira-project-inventory', () => ({
   useJiraProjectInventory: () => ({ projects: [], connected: true, error: null, loading: false })

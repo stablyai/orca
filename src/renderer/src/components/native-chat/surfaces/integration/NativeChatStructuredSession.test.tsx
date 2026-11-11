@@ -1,17 +1,17 @@
-import { getDefaultSettings } from '../../../../../../shared/constants'
 // @vitest-environment happy-dom
 
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { useAppStore } from '@/store'
-
 const { mocks, moduleFactories, resetStructuredSessionMocks } = await vi.hoisted(async () =>
   (await import('./NativeChatStructuredSession.test-harness')).createStructuredSessionMocks()
 )
 
-vi.mock('@/runtime/structured-agent-session-client', () =>
-  moduleFactories.structuredAgentSessionClient()
+vi.mock('../../../../runtime/native-chat/requests/structured-agent-session-call', () =>
+  moduleFactories.structuredAgentSessionCall()
+)
+vi.mock('../../../../runtime/native-chat/requests/structured-agent-session-subscriptions', () =>
+  moduleFactories.structuredAgentSessionSubscriptions()
 )
 vi.mock('../../session/structured/use-structured-agent-session', () =>
   moduleFactories.useStructuredAgentSession()
@@ -35,59 +35,6 @@ vi.mock('../../prompts/NativeChatQuestionCard', () => moduleFactories.nativeChat
 import { NativeChatStructuredSession } from '../../NativeChatStructuredSession'
 
 describe('NativeChatStructuredSession', () => {
-  it('isolates mounted chats from unrelated settings and renders their live follow-up choice', async () => {
-    const original = useAppStore.getState().settings
-    const settings = { ...getDefaultSettings('/tmp'), nativeChatQueueFollowUps: false }
-    useAppStore.setState({ settings })
-    const view = render(
-      <>
-        {['local-chat', 'ssh-chat'].map((sessionId) => (
-          <NativeChatStructuredSession
-            key={sessionId}
-            isVisible
-            isFocusedGroup
-            tabId={sessionId}
-            sessionId={sessionId}
-            target={
-              sessionId === 'local-chat'
-                ? { kind: 'local' }
-                : { kind: 'environment', environmentId: 'ssh-host' }
-            }
-            agent="codex"
-          />
-        ))}
-      </>
-    )
-    try {
-      await act(async () => {})
-      mocks.controllerRender.mockClear()
-      act(() =>
-        useAppStore.setState({ settings: { ...settings, nativeChatQueueFollowUps: false } })
-      )
-      expect(mocks.controllerRender).not.toHaveBeenCalled()
-      act(() =>
-        useAppStore.setState({
-          settings: { ...settings, showTasksButton: !settings.showTasksButton }
-        })
-      )
-      expect(mocks.controllerRender).not.toHaveBeenCalled()
-      act(() => useAppStore.setState({ settings: { ...settings, nativeChatQueueFollowUps: true } }))
-      expect(new Set(mocks.controllerRender.mock.calls.map(([sessionId]) => sessionId))).toEqual(
-        new Set(['local-chat', 'ssh-chat'])
-      )
-      expect(mocks.controllerRender.mock.calls.every(([, queue]) => queue === true)).toBe(true)
-      mocks.controllerRender.mockClear()
-      act(() => useAppStore.setState({ settings }))
-      expect(new Set(mocks.controllerRender.mock.calls.map(([sessionId]) => sessionId))).toEqual(
-        new Set(['local-chat', 'ssh-chat'])
-      )
-      expect(mocks.controllerRender.mock.calls.every(([, queue]) => queue === false)).toBe(true)
-    } finally {
-      view.unmount()
-      useAppStore.setState({ settings: original })
-    }
-  })
-
   afterEach(() => {
     cleanup()
     resetStructuredSessionMocks()

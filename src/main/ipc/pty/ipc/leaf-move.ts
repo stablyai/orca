@@ -1,7 +1,7 @@
 import { getPtyIpc } from '../pty-host-bindings'
 import type { Store } from '../../../persistence/loading-store/store'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
-import { rekeyMovedPaneOwners } from '../../../runtime/moved-pane-owner-rekey'
+import { rekeyMovedPaneOwners } from '../../../runtime/terminal/identity/moved-pane-owner-rekey'
 import { commitRelayedPaneMove } from '../../../window/terminal-pane-move-commit-fence'
 import {
   isTerminalLeafMoveRequest,

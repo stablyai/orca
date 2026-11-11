@@ -1,7 +1,7 @@
 import { hookMount } from '../hook-mount'
 import { mountFixture } from '../recorder-fixture-shape'
-import type { MobileSessionTab } from '../../../session/mobile-session-route-types'
-import type * as MobileSessionLastTabsModule from '../../../session/mobile-session-last-tabs'
+import type { MobileSessionTab } from '../../../session/tabs/mobile-session-tabs'
+import type * as MobileSessionLastTabsModule from '../../../session/tabs/mobile-session-last-tabs'
 import type { operationModuleLoader } from '../operation-module-loader'
 import type { MountAdapter } from '../recording-scenario'
 
@@ -19,7 +19,7 @@ export function sessionStartupMountAdapters(
         'mobile/src/session/use-mobile-session-startup.ts'
       ).useMobileSessionStartup
       const useLastTabs = modules.load<typeof MobileSessionLastTabsModule>(
-        'mobile/src/session/mobile-session-last-tabs.ts'
+        'mobile/src/session/tabs/mobile-session-last-tabs.ts'
       ).useMobileSessionLastTabs
 
       let created: string | undefined
@@ -43,7 +43,8 @@ export function sessionStartupMountAdapters(
         terminalPaneViewportsRef: { current: new Map() },
         clearPendingLiveInputCommit: () => effect('clear-pending-live-input-commit', {}),
         clearDelayedActionTimers: () => effect('clear-delayed-action-timers', {}),
-        clearTerminalCache: () => effect('clear-terminal-cache', {})
+        clearTerminalCache: () => effect('clear-terminal-cache', {}),
+        terminalResume: { holdsAny: () => false, anyCatchingUp: () => false }
       }
 
       const hook = hookMount(() => {
@@ -63,6 +64,8 @@ export function sessionStartupMountAdapters(
               sessionTabs = typeof update === 'function' ? update(sessionTabs) : update
             },
             readLastSessionTabs: lastTabs.readLastSessionTabs,
+            watchLastSessionTabs: lastTabs.watchLastSessionTabs,
+            sessionTabsRef: { current: sessionTabs },
             appliedSnapshotMarkerRef,
             closedTabTombstonesRef,
             setTerminalsLoaded: (value: boolean) => {

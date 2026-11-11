@@ -4,16 +4,12 @@ import type { DictationCapture } from '../platform/dictation-capture-contract'
 import type { OnDeviceSpeech } from '../platform/on-device-speech-contract'
 import { openMobileDictationCapture } from './mobile-dictation-capture-open'
 import { createMobileDictationId, type DictationStatus } from './mobile-dictation-session-state'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type {
   MobileDictationAudioPhase,
   MobileDictationTranscriptSoFar
 } from './mobile-dictation-audio-chunk'
-import {
-  cancelDesktopDictation,
-  settledDesktopDictationWork,
-  startMobileDictationDesktopSession
-} from './mobile-dictation-desktop-start'
+import { cancelDesktopDictation } from './mobile-dictation-desktop-start'
 import {
   chooseMobileDictationRoute,
   phoneDictationBusyMessage,
@@ -26,6 +22,12 @@ import {
 } from './mobile-dictation-device-engine'
 import type { MobileDictationPendingAudioBudget } from './mobile-dictation-pending-audio-budget'
 import type { MobileDictationHeldAudio } from './mobile-dictation-held-audio'
+import type { MobileDictationRecording } from './mobile-dictation-recording'
+import {
+  replayMobileDictationToHost,
+  startMobileDictationOnHost
+} from './mobile-dictation-host-start'
+import type { ShowMobileDictationEngine } from './mobile-dictation-engine-shown'
 
 // What the engines share with useMobileDictation: its refs (read at call time) and its state transitions.
 export type MobileDictationRun = {
@@ -41,13 +43,19 @@ export type MobileDictationRun = {
   readonly pendingChunks: RefObject<Set<Promise<void>>>
   readonly pendingAudioBudget: RefObject<MobileDictationPendingAudioBudget>
   readonly heldAudio: RefObject<MobileDictationHeldAudio>
+  readonly recording: RefObject<MobileDictationRecording>
   readonly sendHeldAudio: RefObject<() => void>
   readonly finish: RefObject<(emptyTranscriptMessage: string) => Promise<void>>
   readonly onTranscript: RefObject<(text: string) => void>
+  readonly onAudioLimitReached: RefObject<(() => void) | undefined>
+  readonly worktreeId: RefObject<string | undefined>
   readonly keptTranscript: MobileDictationTranscriptSoFar
-  readonly applyStatus: (next: DictationStatus) => void
+  // keepText: leave the words so far on screen (recording, finishing, or a failure kept for Retry).
+  readonly applyStatus: (next: DictationStatus, keepText?: boolean) => void
+  readonly showEngine: ShowMobileDictationEngine
   readonly closeDictationAudio: () => void
-  readonly reportError: (err: unknown) => void
+  // kept: the recording stays for Retry, the words so far stay shown, and nothing is inserted yet.
+  readonly reportError: (err: unknown, kept?: boolean) => void
   readonly failActiveDictation: (dictationId: string, err: unknown) => void
 }
 
@@ -77,6 +85,7 @@ export function settleMobileDictation(
   run.engine.current = { kind: 'host' }
   run.audioPhase.current = 'closed'
   run.heldAudio.current.clear()
+  run.recording.current.clear()
   run.pendingChunks.current.clear()
   run.pendingAudioBudget.current.reset()
   run.applyStatus('idle')
@@ -87,47 +96,7 @@ export function settleMobileDictation(
   }
 }
 
-export async function startMobileDictationOnHost(
-  run: MobileDictationRun,
-  client: RpcClient,
-  dictationId: string,
-  generation: number
-): Promise<void> {
-  await settledDesktopDictationWork(client)
-  if (run.generation.current !== generation) {
-    return
-  }
-  await startMobileDictationDesktopSession({
-    client,
-    dictationId,
-    generation,
-    getCurrentGeneration: () => run.generation.current,
-    getEnabled: () => run.enabled.current,
-    getActiveId: () => run.activeId.current,
-    clearActiveId: (id) => {
-      if (run.activeId.current === id) {
-        run.activeId.current = null
-      }
-    },
-    setIdle: () => run.applyStatus('idle'),
-    commitRecordingStart: (hostDedupesResends) => {
-      run.audioPhase.current = 'sending'
-      run.pendingChunks.current.clear()
-      run.pendingAudioBudget.current.reset(hostDedupesResends)
-      // A phone dictation stopped or failed at finish is already processing; it never records again.
-      if (run.status.current !== 'processing') {
-        run.applyStatus('recording')
-      }
-      run.sendHeldAudio.current()
-      if (run.stopWhenStarted.current) {
-        void run.finish.current(dictationSessionErrorMessage('no-speech'))
-      }
-    },
-    rollbackRecordingStart: run.closeDictationAudio
-  })
-}
-
-// The phone's recognizer failed: replay the audio it kept to the computer, as a start's held audio (seq from 0), and carry on there.
+// The phone's recognizer failed: replay the recording to the computer, as a start's held audio (seq from 0), and carry on there.
 export async function fallBackMobileDictationToHost(
   run: MobileDictationRun,
   dictationId: string,
@@ -145,24 +114,15 @@ export async function fallBackMobileDictationToHost(
     !engine.fallback ||
     !client ||
     client.getState() !== 'connected' ||
-    !run.heldAudio.current.complete
+    !run.recording.current.complete
   ) {
     run.failActiveDictation(dictationId, new Error(phoneDictationFailedMessage()))
     return
   }
-  run.engine.current = { kind: 'host' }
+  run.showEngine('computer', true)
   // A stop that began while the phone was still live is already processing; the computer must finish it too.
   run.stopWhenStarted.current = finishing || run.status.current === 'processing'
-  try {
-    await startMobileDictationOnHost(run, client, dictationId, run.generation.current)
-  } catch (err) {
-    // The host start already released the mic and the dictation; keep what the phone heard.
-    const kept = run.keptTranscript.take(dictationId)
-    if (kept) {
-      run.onTranscript.current(kept)
-    }
-    run.reportError(err)
-  }
+  await replayMobileDictationToHost(run, client, dictationId, run.generation.current)
 }
 
 // Pick the engine before the mic opens, and arm the phone's recognizer so it hears the first word.
@@ -224,11 +184,11 @@ export function commitMobileDictationOnDevice(
       () => void fallBackMobileDictationToHost(run, dictationId, false)
     )
   }
-  // This phone never replays to the computer, so it keeps no audio.
-  if (!fallback) {
-    run.audioPhase.current = 'closed'
-  }
+  // The recording keeps the phone's audio for a replay; nothing goes to the computer while the phone hears it.
+  run.audioPhase.current = 'closed'
+  run.heldAudio.current.clear()
   run.applyStatus('recording')
+  run.showEngine('phone')
   if (run.stopWhenStarted.current) {
     void run.finish.current(dictationSessionErrorMessage('no-speech'))
   }

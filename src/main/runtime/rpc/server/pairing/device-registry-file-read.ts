@@ -1,5 +1,8 @@
 import { readFileSync } from 'node:fs'
-import { hardenExistingSecureFile, isUnreadableError } from '../../../../../shared/secure-file'
+import {
+  hardenExistingSecureFile,
+  isUnreadableError
+} from '../../../../../shared/secure-storage/secure-file'
 import { corruptRegistryCopyExists, isMissingFileError } from './device-registry-corruption'
 import type { DeviceEntry } from './device-entry'
 import { normalizeLoadedDeviceRow } from './device-registry-row-validation'

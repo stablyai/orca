@@ -230,8 +230,8 @@ async function installHeldGitLabLookup(
         gh: { installed: true, authenticated: true },
         glab: { installed: true, authenticated: true }
       }))
-      ipcMain.removeHandler('gitlab:listMRs')
-      ipcMain.handle('gitlab:listMRs', () => ({
+      ipcMain.removeHandler('gitlab:listWorkItems')
+      ipcMain.handle('gitlab:listWorkItems', () => ({
         items: [wrongItem],
         page: 1,
         perPage: 12,

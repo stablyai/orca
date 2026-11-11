@@ -10,8 +10,8 @@ import type { DiffContent, FileContent } from './editor-panel-content-types'
 import type { EditorToggleValue } from './view-mode/EditorViewToggle'
 import { shouldShowEditorPanelHeader } from './editor-header'
 import { getUntitledFileRoot } from './untitled-file-rename-path'
-import { translate } from '@/i18n/i18n'
-import type { ArtifactWriteRequest } from '../../../../shared/artifacts'
+import { useTranslate } from '@/i18n/use-translate'
+import type { ArtifactWriteRequest } from '../../../../shared/artifacts/artifacts'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 type EditorPanelRenderModel = ReturnType<typeof getEditorPanelRenderModel>
@@ -191,9 +191,10 @@ export function EditorPanelShell({
 }
 
 function EditorLoadingFallback(): JSX.Element {
+  const t = useTranslate()
   return (
     <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-      {translate('auto.components.editor.EditorPanelShell.e2c4dec350', 'Loading editor...')}
+      {t('auto.components.editor.EditorPanelShell.e2c4dec350', 'Loading editor...')}
     </div>
   )
 }

@@ -1,26 +1,24 @@
 import { toast } from 'sonner'
-import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 import { launchAgentInNewTab } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
 import { settleAgentTabLaunch } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab-host-agents'
-import { newAgentPromptOutcome } from '@/lib/new-agent-prompt-outcome'
-import { buildAgentSessionForkPrompt } from '@/lib/agent-session-fork-context'
+import { newAgentPromptOutcome } from '@/lib/agent-session/launch/prompt/new-agent-prompt-outcome'
+import { buildAgentSessionForkPrompt } from '@/lib/agent-session/context/agent-session-fork-context'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
-import { resolveOwner } from '@/lib/resolve-owner'
-import {
-  toRuntimeExecutionHostId,
-  type ExecutionHostId
-} from '../../../../../shared/execution-host'
+import { resolveOwner } from '@/lib/workspace/ownership/resolve-owner'
+import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import { useAppStore } from '@/store/index'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { TUI_AGENT_CONFIG } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
 import { getForkAgentLaunchPlatform } from './terminal-agent-session-fork-launch-platform'
 import { slugifyForWorkspaceName } from '../../../../../shared/workspace-name'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
-import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
-import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
+import { getLocalProjectExecutionRuntimeContext } from '@/runtime/hosts/preflight/local-preflight-context'
 import { translate } from '@/i18n/i18n'
 import { planAgentSessionLaunch } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
 import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
+import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 
 type ForkAgentSessionFromPaneArgs = {
   pane: ManagedPane
@@ -250,7 +248,7 @@ export async function startAgentSessionFork(fork: PreparedAgentSessionFork): Pro
   })
   const settled = await settleAgentTabLaunch(result)
   const delivery =
-    result?.promptDeliveryResult ??
+    (result && !('refused' in result) ? result.promptDeliveryResult : undefined) ??
     (settled.kind === 'structured' ? settled.promptDeliveryResult : undefined)
   if (
     (settled.kind !== 'terminal' && settled.kind !== 'structured') ||

@@ -1,17 +1,18 @@
 import { classifyFilesystemDirectoryEntries } from './filesystem-symlink-directory-entries'
-import { markdownDocumentsFromRelativePaths } from '../../../shared/markdown-document-paths'
+import { markdownDocumentsFromRelativePaths } from '../../../shared/file-listing/markdown-document-paths'
 import {
   capturePathExistence,
   validatePathExistenceBatch,
   type PathExistenceResult
-} from '../../../shared/path-existence-batch'
+} from '../../../shared/file-access/path-existence-batch'
 import { ipcMain } from 'electron'
 import { readdir, stat } from 'node:fs/promises'
-import type { DirEntry, MarkdownDocument } from '../../../shared/filesystem-entry-types'
-import { sortDirEntries } from '../../../shared/file-name-sort'
+import type { DirEntry } from '../../../shared/file-listing/directory-entry'
+import type { MarkdownDocument } from '../../../shared/file-listing/file-document'
+import { sortDirEntries } from '../../../shared/file-listing/file-name-sort'
 import { SshHostNotServedError } from '../../providers/ssh-host-not-served-error'
 import { resolveRegisteredWorktreePath } from '../worktrees/removal/registered-worktree-roots-cache'
-import type { LocalFileAccess } from '../../../shared/local-file-access'
+import type { LocalFileAccess } from '../../../shared/file-access/local-file-access'
 import {
   resolveDesktopAuthorizedPath,
   resolveLocalFileRequestPath,
@@ -31,7 +32,7 @@ import {
   assertWslUncPathRunning,
   guardWslUncPathAccess
 } from '../../wsl/filesystem/wsl-unc-access-gate'
-import { parseRemoteFilePreviewAddress } from '../../../shared/remote-file-preview-address'
+import { parseRemoteFilePreviewAddress } from '../../../shared/file-preview/remote-file-preview-address'
 import {
   readLocalFileContent,
   readLocalLogSnapshot,

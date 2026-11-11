@@ -1,13 +1,13 @@
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import type { GitHubPRMergeMethod } from '../../../../../shared/github/pull-request-types'
 import type { Repo } from '../../../../../shared/repo-types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import React, { useState } from 'react'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { useShallow } from 'zustand/react/shallow'
-import { getGitHubRepoRoutingTarget } from '@/lib/github-source-runtime-context'
-import { translate } from '@/i18n/i18n'
+import { getGitHubRepoRoutingTarget } from '@/lib/work-items/github/github-source-runtime-context'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   getPullRequestMergeConfirmationTitle,
   getPullRequestMergeMethodLabel
@@ -23,7 +23,7 @@ import {
   DropdownMenuSeparator
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { LoaderCircle, GitMerge, ChevronDown, ExternalLink } from 'lucide-react'
 import type { TaskPageGitHubWorkItemMutationRunner } from '../linear/task-page-linear-jira-list-model'
 import { resolveTaskPullRequestRepo } from './task-page-github-review-model'
@@ -39,6 +39,7 @@ export function PRMergeCell({
   sourceContext?: TaskSourceContext | null
   workItemMutation: TaskPageGitHubWorkItemMutationRunner
 }): React.JSX.Element {
+  const t = useTranslate()
   const [merging, setMerging] = useState(false)
   const confirm = useConfirmationDialog()
   const ownerTarget = useAppStore(
@@ -47,11 +48,11 @@ export function PRMergeCell({
   if (item.type !== 'pr') {
     return (
       <span className="text-[11px] text-muted-foreground">
-        {translate('auto.components.TaskPage.b1eaa18ace', 'Issue')}
+        {t('auto.components.TaskPage.b1eaa18ace', 'Issue')}
       </span>
     )
   }
-  const mergePresentation = presentGitHubPRMergeState(item)
+  const mergePresentation = presentGitHubPRMergeState(item, t)
   const mergeMethods = resolveGitHubPRMergeMethods(item.mergeMethodSettings)
   const prRepo = resolveTaskPullRequestRepo(item)
   const mergeMutationPending = workItemMutation.isIntentPending({
@@ -80,7 +81,7 @@ export function PRMergeCell({
     const label = getPullRequestMergeMethodLabel(method)
     const confirmed = await confirm({
       title: getPullRequestMergeConfirmationTitle(method, item.number),
-      description: translate(
+      description: t(
         'auto.components.TaskPage.0506a78337',
         'This will update the pull request on GitHub.'
       ),
@@ -97,11 +98,8 @@ export function PRMergeCell({
           type: 'merge'
         },
         sourceContext,
-        successToast: translate('auto.components.TaskPage.a161925adc', 'Pull request merged'),
-        errorToast: translate(
-          'auto.components.TaskPage.88f478cdef',
-          'Failed to merge pull request'
-        ),
+        successToast: t('auto.components.TaskPage.a161925adc', 'Pull request merged'),
+        errorToast: t('auto.components.TaskPage.88f478cdef', 'Failed to merge pull request'),
         mutate: async () => {
           const target = ownerTarget
           const runtimeRepoId =
@@ -152,11 +150,11 @@ export function PRMergeCell({
         },
         sourceContext,
         successToast: enabled
-          ? translate('auto.components.TaskPage.fed317634c', 'Auto-merge enabled')
-          : translate('auto.components.TaskPage.a5bf86defe', 'Auto-merge disabled'),
+          ? t('auto.components.TaskPage.fed317634c', 'Auto-merge enabled')
+          : t('auto.components.TaskPage.a5bf86defe', 'Auto-merge disabled'),
         errorToast: enabled
-          ? translate('auto.components.TaskPage.a3318684bc', 'Failed to enable auto-merge')
-          : translate('auto.components.TaskPage.1a9ea003dc', 'Failed to disable auto-merge'),
+          ? t('auto.components.TaskPage.a3318684bc', 'Failed to enable auto-merge')
+          : t('auto.components.TaskPage.1a9ea003dc', 'Failed to disable auto-merge'),
         mutate: async () => {
           const target = ownerTarget
           const runtimeRepoId =
@@ -239,12 +237,12 @@ export function PRMergeCell({
             onSelect={() => void handleMerge(method)}
           >
             <GitMerge className="size-4" />
-            {getPullRequestMergeMethodLabel(method)}
+            {getPullRequestMergeMethodLabel(method, t)}
           </DropdownMenuItem>
         ))}
         <DropdownMenuItem onSelect={() => openAppHttpLink(item.url)}>
           <ExternalLink className="size-4" />
-          {translate('auto.components.TaskPage.37d60046e3', 'Open GitHub merge box')}
+          {t('auto.components.TaskPage.37d60046e3', 'Open GitHub merge box')}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

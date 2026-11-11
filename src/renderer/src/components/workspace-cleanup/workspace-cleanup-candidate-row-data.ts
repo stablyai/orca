@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import type {
   WorkspaceCleanupBlocker,
   WorkspaceCleanupCandidate
@@ -29,7 +30,8 @@ type CandidateFactStatus = {
 }
 
 export function getCandidateFactStatuses(
-  candidate: WorkspaceCleanupCandidate
+  candidate: WorkspaceCleanupCandidate,
+  t: Translate = translate
 ): CandidateFactStatus[] {
   if (candidate.blockers.length > 0) {
     return candidate.blockers.map(getBlockerFactStatus)
@@ -37,7 +39,7 @@ export function getCandidateFactStatuses(
   if (candidate.git.upstreamAhead && candidate.git.upstreamAhead > 0) {
     return [
       {
-        label: translate(
+        label: t(
           'auto.components.workspace.cleanup.WorkspaceCleanupDialog.9623a5107d',
           'Unpushed commits'
         ),
@@ -49,10 +51,7 @@ export function getCandidateFactStatuses(
   if (candidate.git.clean === false) {
     return [
       {
-        label: translate(
-          'auto.components.workspace.cleanup.WorkspaceCleanupDialog.e97e4580c7',
-          'Dirty'
-        ),
+        label: t('auto.components.workspace.cleanup.WorkspaceCleanupDialog.e97e4580c7', 'Dirty'),
         tone: 'review',
         git: true
       }
@@ -61,7 +60,7 @@ export function getCandidateFactStatuses(
   if (candidate.reasons.includes('archived')) {
     return [
       {
-        label: translate(
+        label: t(
           'auto.components.workspace.cleanup.WorkspaceCleanupDialog.archivedStatus',
           'Archived'
         ),
@@ -99,88 +98,102 @@ function getBlockerFactStatus(blocker: WorkspaceCleanupBlocker): CandidateFactSt
   }
 }
 
-export function formatGitStatus(candidate: WorkspaceCleanupCandidate): string {
-  return formatWorkspaceCleanupGitStatusLabel(getWorkspaceCleanupGitState(candidate))
+export function formatGitStatus(candidate: WorkspaceCleanupCandidate, t?: Translate): string {
+  return formatWorkspaceCleanupGitStatusLabel(getWorkspaceCleanupGitState(candidate), t)
 }
 
-export function formatBranchSafetyDetails(candidate: WorkspaceCleanupCandidate): string[] {
+export function formatBranchSafetyDetails(
+  candidate: WorkspaceCleanupCandidate,
+  t?: Translate
+): string[] {
   const details: string[] = []
   if (candidate.git.upstreamAhead !== null) {
     details.push(
       candidate.git.upstreamAhead === 0
-        ? getNoUnpushedCommitsLabel()
-        : formatUnpushedCommitCount(candidate.git.upstreamAhead)
+        ? getNoUnpushedCommitsLabel(t)
+        : formatUnpushedCommitCount(candidate.git.upstreamAhead, t)
     )
   }
   return details
 }
 
-export function formatContextDetailLabels(candidate: WorkspaceCleanupCandidate): string[] {
+export function formatContextDetailLabels(
+  candidate: WorkspaceCleanupCandidate,
+  t?: Translate
+): string[] {
   const parts: string[] = []
   if (candidate.localContext.terminalTabCount > 0) {
     parts.push(
-      formatWorkspaceCleanupContextDetail('terminal', candidate.localContext.terminalTabCount)
+      formatWorkspaceCleanupContextDetail('terminal', candidate.localContext.terminalTabCount, t)
     )
   }
   if (candidate.localContext.cleanEditorTabCount > 0) {
     parts.push(
-      formatWorkspaceCleanupContextDetail('editor', candidate.localContext.cleanEditorTabCount)
+      formatWorkspaceCleanupContextDetail('editor', candidate.localContext.cleanEditorTabCount, t)
     )
   }
   if (candidate.localContext.browserTabCount > 0) {
     parts.push(
-      formatWorkspaceCleanupContextDetail('browser', candidate.localContext.browserTabCount)
+      formatWorkspaceCleanupContextDetail('browser', candidate.localContext.browserTabCount, t)
     )
   }
   if (candidate.localContext.diffCommentCount > 0) {
-    parts.push(formatWorkspaceCleanupContextDetail('diff', candidate.localContext.diffCommentCount))
+    parts.push(
+      formatWorkspaceCleanupContextDetail('diff', candidate.localContext.diffCommentCount, t)
+    )
   }
   if (candidate.localContext.retainedDoneAgentCount > 0) {
     parts.push(
-      formatWorkspaceCleanupContextDetail('agent', candidate.localContext.retainedDoneAgentCount)
+      formatWorkspaceCleanupContextDetail('agent', candidate.localContext.retainedDoneAgentCount, t)
     )
   }
   return parts
 }
 
-export function formatContextDetails(candidate: WorkspaceCleanupCandidate): string | null {
-  const parts = formatContextDetailLabels(candidate)
+export function formatContextDetails(
+  candidate: WorkspaceCleanupCandidate,
+  t?: Translate
+): string | null {
+  const parts = formatContextDetailLabels(candidate, t)
   return parts.length > 0 ? parts.join(', ') : null
 }
 
-export function getDirtyGitLabel(candidate: WorkspaceCleanupCandidate): string | null {
+export function getDirtyGitLabel(
+  candidate: WorkspaceCleanupCandidate,
+  t: Translate = translate
+): string | null {
   if (candidate.blockers.includes('git-status-error')) {
-    return translate(
-      'components.workspace.cleanup.browse.gitStatusCheckFailed',
-      'Git status check failed'
-    )
+    return t('components.workspace.cleanup.browse.gitStatusCheckFailed', 'Git status check failed')
   }
   if (candidate.blockers.includes('unknown-base')) {
-    return translate(
+    return t(
       'components.workspace.cleanup.browse.gitStatusUnverified',
       'Git status could not be verified'
     )
   }
   if (candidate.blockers.includes('unpushed-commits')) {
     if (candidate.git.upstreamAhead && candidate.git.upstreamAhead > 0) {
-      return formatUnpushedCommitCount(candidate.git.upstreamAhead)
+      return formatUnpushedCommitCount(candidate.git.upstreamAhead, t)
     }
-    return getUnpushedCommitsLabel()
+    return getUnpushedCommitsLabel(t)
   }
   if (candidate.git.upstreamAhead && candidate.git.upstreamAhead > 0) {
-    return formatUnpushedCommitCount(candidate.git.upstreamAhead)
+    return formatUnpushedCommitCount(candidate.git.upstreamAhead, t)
   }
   if (candidate.git.clean === false) {
-    return getUncommittedChangesLabel()
+    return getUncommittedChangesLabel(t)
   }
   if (candidate.git.clean == null) {
-    return getGitStatusUnknownLabel()
+    return getGitStatusUnknownLabel(t)
   }
   return null
 }
 
-export function shouldShowGitMetadataChip(candidate: WorkspaceCleanupCandidate): boolean {
-  return !getCandidateFactStatuses(candidate).some((status) => status.git)
+export function shouldShowGitMetadataChip(
+  candidate: WorkspaceCleanupCandidate,
+  t?: Translate
+): boolean {
+  return !getCandidateFactStatuses(candidate, t).some((status) => status.git)
 }
 
 export function getContextCount(candidate: WorkspaceCleanupCandidate): number {

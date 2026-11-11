@@ -1,6 +1,6 @@
 import { ipcMain } from 'electron'
 import type { GitLabMRInlineCommentInput, GitLabMRUpdate } from '../../../shared/gitlab-types'
-import type { TaskSourceContext } from '../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
 import type { Store } from '../../persistence/loading-store/store'
 import {
   addMRComment,

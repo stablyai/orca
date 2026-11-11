@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { loadHostCatalog } from '../transport/host-store'
-import type { RpcClient } from '../transport/rpc-client'
-import { startRuntimeCapabilityProbe } from '../transport/runtime-capability-probe'
-import { useAllHostClients } from '../transport/use-all-host-clients'
+import { loadHostCatalog } from '../host-catalog/host-store'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import { startRuntimeCapabilityProbe } from '../transport/connection/runtime-capability-probe'
+import { useAllHostClients } from '../transport/connection/use-all-host-clients'
 import { NOTIFICATIONS_REMOTE_PUSH_CAPABILITY } from './push-registration'
 
 export type RemotePushHostSupport = {

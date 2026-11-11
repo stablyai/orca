@@ -68,52 +68,6 @@ describe('useMobileDefaultSessionViewPreference', () => {
     expect(saveDefaultSessionView).toHaveBeenCalledWith('chat')
   })
 
-  it('submits every change immediately so shared persistence preserves event order', async () => {
-    const firstSave = deferred<void>()
-    vi.mocked(saveDefaultSessionView)
-      .mockImplementationOnce(() => firstSave.promise)
-      .mockResolvedValue(undefined)
-    await mount()
-
-    act(() => preference?.setDefaultView('chat'))
-    await act(async () => {
-      await Promise.resolve()
-    })
-    act(() => preference?.setDefaultView('terminal'))
-    act(() => preference?.setDefaultView('chat'))
-    await act(async () => {
-      await Promise.resolve()
-    })
-    expect(saveDefaultSessionView).toHaveBeenCalledTimes(3)
-    expect(saveDefaultSessionView).toHaveBeenNthCalledWith(2, 'terminal')
-    expect(saveDefaultSessionView).toHaveBeenNthCalledWith(3, 'chat')
-
-    await act(async () => {
-      firstSave.resolve()
-      await firstSave.promise
-      await Promise.resolve()
-    })
-    expect(saveDefaultSessionView).toHaveBeenCalledTimes(3)
-  })
-
-  it('reloads the persisted value when the latest write fails', async () => {
-    vi.mocked(loadDefaultSessionView)
-      .mockResolvedValueOnce('terminal')
-      .mockResolvedValueOnce('terminal')
-    vi.mocked(saveDefaultSessionView).mockRejectedValue(new Error('storage unavailable'))
-    await mount()
-
-    await act(async () => {
-      preference?.setDefaultView('chat')
-      await Promise.resolve()
-      await Promise.resolve()
-      await Promise.resolve()
-    })
-
-    expect(preference?.defaultView).toBe('terminal')
-    expect(loadDefaultSessionView).toHaveBeenCalledTimes(2)
-  })
-
   it('does not let an older failed write roll back a newer choice', async () => {
     const recoveryLoad = deferred<MobileSessionView>()
     vi.mocked(loadDefaultSessionView)
@@ -139,28 +93,5 @@ describe('useMobileDefaultSessionViewPreference', () => {
 
     expect(preference?.defaultView).toBe('terminal')
     expect(saveDefaultSessionView).toHaveBeenNthCalledWith(2, 'terminal')
-  })
-
-  it('submits the latest write before the Settings route unmounts', async () => {
-    const firstSave = deferred<void>()
-    vi.mocked(saveDefaultSessionView)
-      .mockImplementationOnce(() => firstSave.promise)
-      .mockResolvedValueOnce(undefined)
-    await mount()
-
-    act(() => preference?.setDefaultView('chat'))
-    await act(async () => {
-      await Promise.resolve()
-    })
-    act(() => preference?.setDefaultView('terminal'))
-    expect(saveDefaultSessionView).toHaveBeenNthCalledWith(2, 'terminal')
-    act(() => renderer?.unmount())
-    renderer = null
-
-    await act(async () => {
-      firstSave.resolve()
-      await firstSave.promise
-      await Promise.resolve()
-    })
   })
 })

@@ -1,10 +1,13 @@
 // L80: emulate the PTY host's binding commit before registration in layout-owner builds; switch-off writes nothing.
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
-import type { RuntimePtyController } from '../runtime-pty-controller-contract'
+import type { RuntimePtyController } from '../terminal/lifecycle/runtime-pty-controller-contract'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { getConnectionExecutionHostId } from '../../../shared/execution-host'
 import { getPtyExecutionHost } from '../../../shared/terminal/pty/lifecycle/terminal-execution-host'
-import { asProfileSessionStore, storeOf } from '../profile-session-store.test-fixture'
+import {
+  asProfileSessionStore,
+  storeOf
+} from '../terminal/layout/profile-session-store.test-fixture'
 import { reusedTerminalIdUnbinding } from '../../persistence/loading-store/reused-terminal-id-unbind'
 import { layoutContainsLeafId } from '../../../shared/workspace-layout/terminal-pane-tree'
 import type { OrcaRuntimeService } from '../orca-runtime'

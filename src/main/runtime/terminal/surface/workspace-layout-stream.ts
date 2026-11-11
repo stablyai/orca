@@ -16,19 +16,19 @@ import type {
   WorkspaceLayoutEvent,
   WorkspaceLayoutStreamEvent
 } from '../../../../shared/workspace-layout/workspace-layout-stream-frames'
-import type { RuntimeStore } from '../../runtime-store-contract'
-import { withLiveTitles } from '../../published-pane-live-titles'
-import { paneStartFactsOf, withPaneStartFacts } from '../../pane-start-statuses'
-import type * as PaneStartStatuses from '../../pane-start-statuses'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
+import { withLiveTitles } from './published-pane-live-titles'
+import { paneStartFactsOf, withPaneStartFacts } from './pane-start-statuses'
+import type * as PaneStartStatuses from './pane-start-statuses'
 import {
   workspaceLayoutFrameObserver,
   workspaceLayoutPartitionReadObserver
-} from '../../workspace-layout-frame-observer'
+} from './workspace-layout-frame-observer'
 import {
   WorkspaceLayoutProjection,
   type DirtyPartitions,
   type ProjectionStore
-} from '../../workspace-layout-projection'
+} from './workspace-layout-projection'
 
 type LayoutListener = (event: WorkspaceLayoutStreamEvent) => void
 

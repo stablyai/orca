@@ -97,12 +97,12 @@ export function getDeleteWorktreeDialogCopy(
         )
       : args.isFolderWorkspaceDelete
         ? t(
-            'auto.components.sidebar.DeleteWorktreeDialog.removeSingleFolder',
-            'Remove <target/> from Orca. The project folder on disk will not be deleted.'
+            'auto.components.sidebar.DeleteWorktreeDialog.removeSingleFolderFromOrca',
+            'Removes it from Orca. The folder on disk is kept.'
           )
         : t(
-            'auto.components.sidebar.DeleteWorktreeDialog.removeSingleGit',
-            'Remove <target/> from git and delete its workspace folder.'
+            'auto.components.sidebar.DeleteWorktreeDialog.deleteSingleWorktreeAndBranch',
+            'Deletes the worktree and its branch (kept if unmerged).'
           ),
     mainWorktreeBlocker: args.isFolderWorkspaceDelete
       ? t(

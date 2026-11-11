@@ -1,4 +1,3 @@
-import './unused-default-rpc-methods.test-fixture'
 import { createHash } from 'node:crypto'
 import { afterEach, describe, expect, it } from 'vitest'
 import type Database from '../../sqlite/sync-database'

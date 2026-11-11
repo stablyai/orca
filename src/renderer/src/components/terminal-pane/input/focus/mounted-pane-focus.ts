@@ -1,6 +1,6 @@
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import { focusPanePreservingOverlays } from '@/lib/pane-manager/pane-overlay-focus'
-import { shouldPreserveEditableFocus } from '../../../../lib/editable-focus-preservation'
+import { focusPanePreservingOverlays } from '@/lib/pane-manager/pane-focus/pane-overlay-focus'
+import { shouldPreserveEditableFocus } from '../../../../lib/text-input/focus/editable-focus-preservation'
 
 export function focusActivePane(manager: PaneManager): void {
   // Tab rename focuses next frame; queued layout focus must not blur it closed first.

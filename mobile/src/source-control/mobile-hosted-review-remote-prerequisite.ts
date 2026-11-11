@@ -8,28 +8,26 @@ import {
   pushMobileHostedReviewBranch
 } from './mobile-hosted-review-git-preparation'
 import { readBranchCompareOutcome } from './mobile-branch-compare-outcome'
-import type { RpcOperationSender } from '../transport/rpc-operation-sender'
+import type { UnvalidatedRpcRequestPort } from '../transport/rpc/unvalidated-rpc-request-port'
 
 type RemotePrerequisiteInput = {
   status: MobileGitStatusResult | null
   onProgress?: (progress: MobileHostedReviewCreateIntentProgress) => void
 }
 
-const ALWAYS_CURRENT = { isCurrent: () => true }
-
 // Desktop publishes only a branch with commits beyond its base; read them only when that decides it.
 async function readBranchCommitsAhead(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   worktreeId: string
 ): Promise<number | undefined> {
-  const compare = await readBranchCompareOutcome(client, worktreeId, ALWAYS_CURRENT)
-  return compare?.kind === 'ready' && compare.result.summary.status === 'ready'
+  const compare = await readBranchCompareOutcome(client, worktreeId)
+  return compare.kind === 'ready' && compare.result.summary.status === 'ready'
     ? compare.result.summary.commitsAhead
     : undefined
 }
 
 export async function applyMobileHostedReviewRemotePrerequisite(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   worktreeId: string,
   prefill: MobilePrPrefill,
   input: RemotePrerequisiteInput

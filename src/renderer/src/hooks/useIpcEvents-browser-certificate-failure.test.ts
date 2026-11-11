@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createHarnessStoreState, loadIpcEventsHarness } from './ipc-events-test-harness'
+import { loadIpcEventsHarness } from './ipc-events-test-harness'
+import { createHarnessStoreState } from './ipc-events-harness-store-state'
 
 const FAILURE = {
   browserPageId: 'page-1',

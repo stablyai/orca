@@ -9,7 +9,7 @@ import {
   waitForWorktreeTabRegistration
 } from '../../../ipc/browser/browser-tab-registration-wait'
 import { whenBrowserMainWindowReady } from '../../../browser/guest-lifecycle/browser-main-window-readiness'
-import type { BrowserSnapshotResult } from '../../../../shared/runtime-browser-contracts'
+import type { BrowserSnapshotResult } from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import type {
   BrowserCommandTargetParams,
   RuntimeBrowserCommandHost,

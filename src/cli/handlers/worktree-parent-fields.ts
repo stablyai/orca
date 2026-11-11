@@ -1,20 +1,24 @@
-import type { RuntimeStatus, RuntimeWorktreeRecord } from '../../shared/runtime-types'
+import type { RuntimeStatus } from '../../shared/runtime-types'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import type {
   CrossStoreInferredSource,
   CrossStoreParentRef
 } from '../../shared/worktree/lineage-types'
-import { crossStoreParentRefOfRow } from '../../shared/worktree/lineage-row-identity'
 import {
-  assertCrossStoreLineageSupported,
   assertFolderParentSetSupported,
   supportsCrossStoreLineage
 } from '../../shared/worktree-runtime-capabilities'
 import { getOptionalStringFlag } from '../flags'
 import { RuntimeClient, RuntimeClientError } from '../runtime-client'
-import { getOptionalWorktreeSelector, resolveWorktreeCreateCwdContext } from '../selectors'
+import { resolveWorktreeCreateCwdContext } from '../selectors'
+import { mayNameFolderWorkspace } from '../folder-workspace-selector'
 import { parentCwdNextSteps, withWorktreeSelectorRecovery } from '../worktree-selector-recovery'
 import { getOptionalParentSelector } from '../caller-folder-workspace'
+import type { CreateParentSelector } from './worktree-create-parent-selector'
+import {
+  resolveCrossEnvironmentParent,
+  resolveParentEnvironment
+} from './worktree-parent-environment'
 
 const CALLER_PARENT_INFERENCE_BUDGET_MS = 3_000
 
@@ -23,70 +27,40 @@ export function callerOrcaClient(client: RuntimeClient): RuntimeClient {
   return client.isRemote ? new RuntimeClient(client.userDataPath, undefined, null, null) : client
 }
 
-/**
- * A parent on this machine for a workspace on the connected server. The server must advertise the
- * capability before anything is sent (an older one would apply the rest and drop the parent); this
- * desktop's Orca supplies its own installationId and the parent row's identity.
- */
-async function resolveCallerCrossStoreParent(
-  client: RuntimeClient,
-  selector: string | undefined
-): Promise<CrossStoreParentRef | undefined> {
-  if (!selector) {
-    return undefined
-  }
-  const status = (await client.call<RuntimeStatus>('status.get')).result
-  assertCrossStoreLineageSupported(status.capabilities, serverLabel(client))
-  return await readCallerParentRef(client, selector)
-}
-
-async function readCallerParentRef(
-  client: RuntimeClient,
-  selector: string
-): Promise<CrossStoreParentRef> {
-  const local = callerOrcaClient(client)
-  const parent = (
-    await local.call<{ worktree: RuntimeWorktreeRecord }>('worktree.show', { worktree: selector })
-  ).result.worktree
-  const { installationId } = (await local.call<{ installationId?: string }>('worktree.lineageList'))
-    .result
-  const ref = crossStoreParentRefOfRow(installationId, parent)
-  if (!ref) {
-    throw new RuntimeClientError(
-      'invalid_argument',
-      "Couldn't confirm the parent's machine or workspace identity. Refresh it and try again."
-    )
-  }
-  return ref
-}
-
 function serverLabel(client: RuntimeClient): string {
   return client.environmentSelector ?? 'the connected server'
 }
 
-/** `worktree create`'s parent fields. Explicit active/current against a server is a parent on this
- * machine; with no parent flag, the caller's own workspace there is inferred the same way. */
+/** `worktree create`'s parent fields. A parent in another environment (--parent-environment, or
+ * active/current against a server) is sent as a verified cross-store ref; with no parent flag, the
+ * caller's own workspace is inferred on this machine's Orca. */
 export async function resolveCreateParentFields(
   client: RuntimeClient,
   args: {
-    explicitParent: { parentWorktree?: string; parentWorkspace?: string; onCallerMachine?: true }
+    explicitParent: CreateParentSelector
     inferredParent: string | undefined
     cwd: string
+    flags: Map<string, string | boolean>
     cwdContext: { parentWorktree?: { selector: string }; parentAmbiguous?: true }
     callerTerminalHandle: string | undefined
     noParent: boolean
   }
 ): Promise<Record<string, unknown>> {
   const { explicitParent, inferredParent, cwdContext, noParent } = args
-  if (explicitParent.onCallerMachine) {
-    const crossStoreParent = await resolveCallerCrossStoreParent(
-      client,
-      explicitParent.parentWorktree
-    )
+  if (explicitParent.parentEnvironment) {
+    const crossStoreParent = await resolveCrossEnvironmentParent(client, {
+      flags: args.flags,
+      cwd: args.cwd,
+      environment: explicitParent.parentEnvironment
+    })
     return { crossStoreParent, noParent }
   }
   const targetParent = {
     parentWorktree: explicitParent.parentWorktree,
+    // The runtime classifies path:/name: parents by kind; older runtimes strip this.
+    ...(explicitParent.parentWorktree && mayNameFolderWorkspace(explicitParent.parentWorktree)
+      ? { matchFolderWorkspaces: true }
+      : {}),
     ...(explicitParent.parentWorkspace ? { parentWorkspace: explicitParent.parentWorkspace } : {}),
     noParent
   }
@@ -177,37 +151,38 @@ async function inferCallerCrossStoreParent(
   }
 }
 
-/** `worktree set`'s parent: active/current against a server names this machine's workspace. */
+/** `worktree set`'s parent; one in another environment is sent as a verified cross-store ref. */
 export async function resolveSetParentFields(
   flags: Map<string, string | boolean>,
   cwd: string,
   client: RuntimeClient
-): Promise<{ crossStoreParent?: CrossStoreParentRef; parentWorktree?: string }> {
+): Promise<{
+  crossStoreParent?: CrossStoreParentRef
+  parentWorktree?: string
+  matchFolderWorkspaces?: true
+}> {
+  const environment = resolveParentEnvironment(flags, client)
+  if (environment) {
+    return {
+      crossStoreParent: await resolveCrossEnvironmentParent(client, { flags, cwd, environment })
+    }
+  }
   const raw = getOptionalStringFlag(flags, 'parent-worktree')
   const rawKey = raw?.startsWith('id:') ? raw.slice('id:'.length) : raw
   if (rawKey && parseWorkspaceKey(rawKey)?.type === 'folder') {
     return { parentWorktree: await assertFolderParentSetSupportedBy(client, rawKey) }
-  }
-  if (client.isRemote && (raw === 'active' || raw === 'current')) {
-    const selector = await getOptionalWorktreeSelector(
-      flags,
-      'parent-worktree',
-      cwd,
-      callerOrcaClient(client)
-    )
-    return { crossStoreParent: await resolveCallerCrossStoreParent(client, selector) }
   }
   const parentWorktree = await withWorktreeSelectorRecovery(
     getOptionalParentSelector(flags, cwd, client),
     parentCwdNextSteps(raw),
     raw
   )
-  return {
-    parentWorktree:
-      parentWorktree && parseWorkspaceKey(parentWorktree)?.type === 'folder'
-        ? await assertFolderParentSetSupportedBy(client, parentWorktree)
-        : parentWorktree
+  if (parentWorktree && parseWorkspaceKey(parentWorktree)?.type === 'folder') {
+    return { parentWorktree: await assertFolderParentSetSupportedBy(client, parentWorktree) }
   }
+  return parentWorktree && mayNameFolderWorkspace(parentWorktree)
+    ? { parentWorktree, matchFolderWorkspaces: true }
+    : { parentWorktree }
 }
 
 /** An older host refuses a folder parent as "not found"; say it needs an update instead. */

@@ -11,7 +11,7 @@ import type { AgentJournalTurnScope } from '../../../../shared/agent-session/jou
 import { isMainAgentWorking } from '../operations/structured-agent-session-turns-cancel'
 import { contextStructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-current-work'
 import type { AgentSessionTurnContext } from '../operations/structured-agent-session-turns'
-import type { JournalStopFailedOn } from '../../agent-session-journal/queued-messages/queued-message-pause'
+import type { JournalStopFailedOn } from '../../agent-session-journal/queued-messages/queued-message-pause-marks'
 import { structuredAgentSessionFailedStopMark } from './structured-agent-session-stopping'
 import { structuredAgentSessionStopNoteIdentity } from '../operations/structured-agent-session-command-turn'
 import { structuredAgentSessionNamedTurnScope } from './structured-agent-session-turn-stop-notes'

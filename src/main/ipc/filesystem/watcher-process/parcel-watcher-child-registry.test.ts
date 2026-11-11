@@ -1,3 +1,4 @@
+// @orca-isolated-worker: initial capacity requires a fresh process-wide registry.
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   MAX_PHYSICAL_WATCHER_CHILDREN,

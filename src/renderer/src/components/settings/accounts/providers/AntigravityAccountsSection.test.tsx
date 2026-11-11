@@ -17,7 +17,9 @@ vi.mock('@/runtime/provider-accounts/sign-in/runtime-antigravity-accounts-client
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
   callRuntimeRpc: vi.fn()
 }))
-vi.mock('@/lib/agent-catalog', () => ({ AgentIcon: () => null }))
+vi.mock('@/components/agent/icons/AgentIcon', () => ({
+  AgentIcon: () => null
+}))
 
 const state: AntigravityAccountState = {
   accounts: [

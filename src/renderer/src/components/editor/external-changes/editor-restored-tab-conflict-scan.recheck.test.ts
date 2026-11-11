@@ -11,8 +11,10 @@ vi.mock('@/runtime/files/reads/runtime-file-read-client', () => ({
 vi.mock('@/runtime/files/metadata/runtime-path-existence-batch', () => ({
   runtimePathsExist: mocks.runtimePathsExist
 }))
-vi.mock('@/lib/connection-context', () => ({ getConnectionIdForFile: () => undefined }))
-vi.mock('@/lib/file-owner-runtime-target', () => {
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
+  getConnectionIdForFile: () => undefined
+}))
+vi.mock('@/lib/files/access/file-owner-runtime-target', () => {
   const owner = { kind: 'environment', environmentId: 'env-1' }
   return {
     getRuntimeTargetForFileOwner: () => owner,
@@ -22,7 +24,7 @@ vi.mock('@/lib/file-owner-runtime-target', () => {
 
 import { createTestStore } from '@/store/testing/app-store-test-fixture'
 import { attachRestoredTabConflictScan } from './editor-restored-tab-conflict-scan'
-import { getDiskBaselineSignature } from '../../../../../shared/disk-baseline-signature'
+import { getDiskBaselineSignature } from '../../../../../shared/file-write/disk-baseline-signature'
 
 const FILE = '/repo/a.ts'
 let store: ReturnType<typeof createTestStore>

@@ -1,4 +1,4 @@
-import { taskProviderFailure } from '../../shared/task-provider-failure'
+import { taskProviderFailure } from '../../shared/work-items/task-provider-failure'
 import type {
   JiraCreateIssueArgs,
   JiraCreateIssueResult,

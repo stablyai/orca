@@ -4,15 +4,17 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { useWorktreeRuntimeTarget } from '@/runtime/use-worktree-runtime-target'
+import { useWorktreeRuntimeTarget } from '@/runtime/rpc/targets/use-worktree-runtime-target'
 import {
   canStopWorkspacePort,
-  getPortOpenBrowserTooltipLabel,
   killWorkspacePortForTarget,
   openWorkspacePortInBrowser,
-  refreshWorkspacePortScanAfterStop,
-  resolvePortOpenInOrcaBrowser
+  refreshWorkspacePortScanAfterStop
 } from '@/lib/workspace-ports/workspace-port-actions'
+import {
+  getPortOpenBrowserTooltipLabel,
+  resolvePortOpenInOrcaBrowser
+} from '@/lib/workspace-ports/workspace-port-browser-open'
 import { useLocalhostLabelRouteForPort } from '@/lib/workspace-ports/workspace-port-localhost-label-selector'
 import { addressForPort } from '@/lib/workspace-ports/workspace-port-urls'
 import type { WorkspacePort } from '../../../../../../shared/workspace-ports'

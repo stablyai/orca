@@ -1,5 +1,5 @@
-import { MEDIA_FILE_MIME_TYPES } from '../../../src/shared/media-file-extensions'
-import { compareFileNames } from '../../../src/shared/file-name-sort'
+import { MEDIA_FILE_MIME_TYPES } from '../../../src/shared/file-preview/media-mime-types'
+import { compareFileNames } from '../../../src/shared/file-listing/file-name-sort'
 
 export type MobileDirEntry = {
   name: string

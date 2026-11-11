@@ -3,12 +3,10 @@ import { useAppStore } from '@/store'
 import type { Tab } from '../../../../shared/tab-types'
 import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { agentChildWorkLiveness } from '../../../../shared/agent-status/child-work/agent-status-child-work-liveness'
-import {
-  getStructuredAgentSessionLaunchLifecycle,
-  structuredAgentSessionLaunchHasRetainedInput
-} from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
-import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-session-owner'
-import { getStructuredAgentSessionStatusFeed } from '@/runtime/structured-agent-session-status-feed'
+import { getStructuredAgentSessionLaunchLifecycle } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
+import { structuredAgentSessionLaunchHasRetainedInput } from '@/lib/agent-session/launch/structured-agent-session-launch-input'
+import { structuredAgentSessionTargetForHost } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
+import { getStructuredAgentSessionStatusFeed } from '@/runtime/native-chat/status/structured-agent-session-status-feed'
 import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { getStructuredAgentSessionPendingSends } from '@/components/native-chat/session/structured/delivery/structured-agent-session-pending-sends'

@@ -3,7 +3,7 @@ import type { RpcContext } from '../../../core'
 import { createOrchestrationRpcHarness } from '../rpc-test-harness'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import type { RuntimeTerminalSummary } from '../../../../../../shared/runtime-types'
+import type { RuntimeTerminalSummary } from '../../../../../../shared/runtime-terminal-contracts'
 import { createRootDispatch } from '../../../../orchestration/db/root-dispatch-test-fixture'
 
 // Groups mean the sender's Run; host-wide discovery previously reached unrelated projects.

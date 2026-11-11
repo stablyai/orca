@@ -1,5 +1,5 @@
 import { memo } from 'react'
-import { Bell, ChevronDown, ChevronRight, GitBranch, GitPullRequest } from 'lucide-react-native'
+import { Bell, ChevronDown, ChevronRight, GitBranch } from 'lucide-react-native'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import type { MobileRenderableRepoIcon } from '../host-screen/host-screen-reply-schema'
 import { triggerMediumImpact } from '../platform/haptics'
@@ -20,6 +20,7 @@ import { HostKindIcon } from './HostKindIcon'
 import { MobileRepoIcon } from './MobileRepoIcon'
 import { WorktreeAgentList } from './WorktreeAgentList'
 import { WorktreeMetaGlyphs, prStateColor } from './WorktreeMetaGlyphs'
+import { PrStateIcon } from './PrStateIcon'
 import { WorktreeUnsavedName } from './WorktreeUnsavedName'
 import { WORKTREE_ROW_LAYOUT } from './worktree-list-row-layout'
 
@@ -27,7 +28,6 @@ type Props = {
   item: Worktree
   view: WorktreeRowView
   isReadOnly: boolean
-  now: number
   repoColor: string
   repoIcon?: MobileRenderableRepoIcon | null
   // Grouped repo header already identifies project; omit duplicate icon/name on each row.
@@ -35,7 +35,8 @@ type Props = {
   /** What the desktop's shared Card layout and properties show, and where identity goes. */
   cardDetails: WorktreeCardDetails
   agentActivityDisplayMode: AgentActivityDisplayMode
-  status: WorktreeStatus
+  /** Null until a live read says (rows from the phone's store carry no agent state). */
+  status: WorktreeStatus | null
   onPress: (item: Worktree) => void
   onAgentPress?: (item: Worktree, paneKey: string) => void
   statusLive?: boolean
@@ -49,7 +50,6 @@ function WorktreeListRowComponent({
   item,
   view,
   isReadOnly,
-  now,
   repoColor,
   repoIcon,
   hideRepo = false,
@@ -77,6 +77,8 @@ function WorktreeListRowComponent({
   const showRepoChip = cardDetails.repoInTitle && !shouldHideRepo && !isFolderWorkspace
   const showRepoInMetaRow = !cardDetails.repoInTitle && !shouldHideRepo
   const hostId = view.hostContextHostId ?? item.hostId
+  const prState = item.linkedPR?.state ?? ''
+  const prColor = prStateColor(prState)
   const hostAccessibilityLabel = [view.hostContextLabel, view.hostContextHealthLabel]
     .filter(Boolean)
     .join(', ')
@@ -154,10 +156,8 @@ function WorktreeListRowComponent({
           </Text>
           {cardDetails.pr && item.linkedPR && (
             <View style={styles.prBadge}>
-              <GitPullRequest size={10} color={prStateColor(item.linkedPR.state)} />
-              <Text style={[styles.prNumber, { color: prStateColor(item.linkedPR.state) }]}>
-                #{item.linkedPR.number}
-              </Text>
+              <PrStateIcon state={prState} size={10} color={prColor} />
+              <Text style={[styles.prNumber, { color: prColor }]}>#{item.linkedPR.number}</Text>
             </View>
           )}
           {isFolderWorkspace && (
@@ -224,7 +224,6 @@ function WorktreeListRowComponent({
         {cardDetails.inlineAgents && item.agents && item.agents.length > 0 ? (
           <WorktreeAgentList
             agents={item.agents}
-            now={now}
             unvisited={item.unread}
             statusLive={statusLive}
             isReadOnly={isReadOnly}

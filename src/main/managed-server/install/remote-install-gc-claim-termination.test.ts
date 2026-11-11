@@ -12,8 +12,8 @@ import {
   releaseRelayGcClaimWithRetry,
   tryAcquireRelayGcClaim
 } from './remote-install-gc-claim'
-import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
-import { unusedSshConnection } from '../../ssh/unused-host-transport.test-fixture'
+import { getRemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'
+import { unusedSshConnection } from '../testing/managed-host-transport.test-fixture'
 
 const conn = unusedSshConnection()
 const mockExec = vi.mocked(execCommand)

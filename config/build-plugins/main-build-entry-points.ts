@@ -1,11 +1,10 @@
 import { resolve } from 'node:path'
 import { ORCAD_LOCAL_SERVE_SELECTION_ENTRY } from '../../src/shared/orcad-local-serve-selection'
-import { CLI_MAIN_ENTRY_NAMES } from './plain-node-entry-guard'
+import { CLI_MAIN_ENTRY_NAMES } from './cli-main-entry-names'
 
 /** Main-build Rollup inputs: output file name (without .js) to its source entry. */
 export const MAIN_BUILD_ENTRY_POINTS: Record<string, string> = {
   index: resolve('src/main/index.ts'),
-  'browser-extension-preload': resolve('src/preload/browser-extension-preload.ts'),
   'browser-extension-native-host-supervisor-entry': resolve(
     'src/main/browser/extensions/native-messaging/browser-extension-native-host-supervisor-entry.ts'
   ),
@@ -20,6 +19,7 @@ export const MAIN_BUILD_ENTRY_POINTS: Record<string, string> = {
   ),
   'stt-worker': resolve('src/main/speech/stt-worker.ts'),
   'warp-theme-parser-worker': resolve('src/main/warp-themes/warp-theme-parser-worker.ts'),
+  'session-search-worker-entry': resolve('src/main/ai-vault-search/session-search-worker-entry.ts'),
   'foreign-sqlite-reader-entry': resolve(
     'src/main/foreign-sqlite-readers/foreign-sqlite-reader-entry.ts'
   ),

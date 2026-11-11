@@ -7,7 +7,7 @@ import {
   formatMarkdownReviewCardQuote,
   getMarkdownReviewCardQuote,
   type MarkdownReviewNote
-} from '@/lib/markdown-review-notes'
+} from '@/lib/editor/markdown/review-notes/markdown-review-notes'
 import { DiffCommentCard } from '../../../diff-comments/DiffCommentCard'
 import {
   MarkdownPreviewAnnotationComposer,

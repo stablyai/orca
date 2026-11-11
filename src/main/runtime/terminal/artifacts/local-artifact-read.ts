@@ -15,12 +15,12 @@ import {
   TERMINAL_ARTIFACT_CONTENT_BLOCK_BYTES,
   terminalArtifactContentDigest
 } from './artifact-integrity'
-import { BINARY_PROBE_BYTES, isBinaryBuffer } from '../../../../shared/binary-buffer'
+import { BINARY_PROBE_BYTES, isBinaryBuffer } from '../../../../shared/file-preview/binary-buffer'
 import type {
   RuntimeFilePreviewResult,
   RuntimeFileReadChunkResult
-} from '../../../../shared/runtime-types'
-import { FONT_FILE_MIME_TYPES } from '../../../../shared/font-file-extensions'
+} from '../../../../shared/file-content/runtime-file-read'
+import { FONT_FILE_MIME_TYPES } from '../../../../shared/file-preview/font-file-extensions'
 import {
   assertFileReadRange,
   fileRangePage,

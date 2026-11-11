@@ -15,18 +15,12 @@ import type {
 } from '../journal/agent-session-journal-types'
 import type { AgentSessionMutationEnvelope } from '../agent-session-wire'
 
-export const AGENT_SESSION_REWIND_REASONS = [
-  'unsupported',
-  'history-not-paginated',
-  'busy',
-  'stale-epoch',
-  'invalid-target',
-  'history-limit',
-  'provider-refused',
-  'proof-mismatch',
-  'outcome-unknown'
-] as const
-export type AgentSessionRewindReason = (typeof AGENT_SESSION_REWIND_REASONS)[number]
+import type { AgentSessionRewindReason } from './agent-session-rewind-reasons'
+
+export {
+  AGENT_SESSION_REWIND_REASONS,
+  type AgentSessionRewindReason
+} from './agent-session-rewind-reasons'
 export type AgentSessionRewindSupport =
   | { supported: true }
   | { supported: false; reason: AgentSessionRewindReason }
@@ -64,8 +58,16 @@ export const AgentSessionRewindRecordSchema = z.object({
       throughEntryId: Key.optional(),
       materialized: z.boolean().optional(),
       resumeCursor: Key.optional(),
+      coverage: z.array(Key).optional(),
       // The chat's session when it was rewound; a later head means the fork no longer applies.
       replacesSessionId: Key
+    })
+    .optional(),
+  providerRevert: z
+    .object({
+      threadId: Key,
+      beforeTurnId: Key,
+      keptTurnId: Key.nullable()
     })
     .optional(),
   reason: z.string().min(1).max(512).optional(),

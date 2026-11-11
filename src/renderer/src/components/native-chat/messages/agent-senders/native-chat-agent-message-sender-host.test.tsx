@@ -29,8 +29,11 @@ const transport = vi.hoisted(() => ({
   unsupported: false,
   olderLookup: false
 }))
-vi.mock('@/runtime/structured-agent-session-client', () => ({
-  ...moduleFactories.structuredAgentSessionClient(),
+vi.mock('../../../../runtime/native-chat/requests/structured-agent-session-call', () =>
+  moduleFactories.structuredAgentSessionCall()
+)
+vi.mock('../../../../runtime/native-chat/requests/structured-agent-session-subscriptions', () => ({
+  ...moduleFactories.structuredAgentSessionSubscriptions(),
   subscribeStructuredAgentSessionStatus: transport.subscribe
 }))
 vi.mock('../../session/structured/use-structured-agent-session', () =>
@@ -70,7 +73,7 @@ import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTest
 import {
   getStructuredAgentSessionStatusFeed,
   resetStructuredAgentSessionStatusFeedsForTests
-} from '@/runtime/structured-agent-session-status-feed'
+} from '@/runtime/native-chat/status/structured-agent-session-status-feed'
 
 const WORKSPACE = 'shared-workspace'
 const ROOT = testOrcaSessionId('root-chat')

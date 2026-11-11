@@ -1,16 +1,16 @@
-import { activateTabAndFocusPane } from '../../../lib/activate-tab-and-focus-pane'
+import { activateTabAndFocusPane } from '../../../lib/workspace/tabs/activate-tab-and-focus-pane'
 import { useAppStore } from '../../../store/index'
-import { matchesWebSessionIntentOwner } from '../../web-runtime-session-environment'
-import { refreshWebRuntimeSessionTabsSnapshot } from '../../web-runtime-session-snapshot'
+import { matchesWebSessionIntentOwner } from '../../web-session-tabs-sync/identity/web-runtime-session-environment'
+import { refreshWebRuntimeSessionTabsSnapshot } from '../../web-session-tabs-sync/inventory/web-runtime-session-snapshot'
 import {
   webSessionIntentOwnerKey,
   type WebSessionIntentOwner
-} from '../../web-session-intent-owner'
+} from '../../web-session-tabs-sync/identity/web-session-intent-owner'
 import {
   clearWebSessionFocusIntentIfMatches,
   recordWebSessionFocusIntent,
   resolveWebSessionVisibleTabId
-} from '../../web-session-focus-intent'
+} from '../../web-session-tabs-sync/navigation/web-session-focus-intent'
 import {
   toHostSessionTabId,
   toWebTerminalSurfaceTabId

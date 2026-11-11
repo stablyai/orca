@@ -16,15 +16,15 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab', () => ({
   launchAgentInNewTab: mocks.launch
 }))
-vi.mock('@/runtime/structured-agent-session-tab-retirement', () => ({
+vi.mock('@/runtime/native-chat/tab-retirement/structured-agent-session-tab-retirement', () => ({
   beginStructuredAgentSessionTabClose: vi.fn()
 }))
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
-vi.mock('../../../host-chat-program-acquisition', () => ({
+vi.mock('../inventory/host-chat-program-acquisition', () => ({
   acquireAgentLaunchChoices: async () => ({ detected: ['codex'], offered: ['codex'] })
 }))
 

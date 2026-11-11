@@ -85,6 +85,17 @@ it('reads the source account and writes the independent copy to the selected hom
     type: 'user',
     forkedFrom: { messageUuid: 'a33ccffb-9cd3-54dc-bd5c-bad5de38fdd7' }
   })
+  expect(result.coverage).toEqual({
+    unit: 'claude-entry',
+    ids: copied
+      .filter(
+        (row) =>
+          ['user', 'assistant', 'attachment'].includes(row.type) ||
+          (row.type === 'system' && typeof row.parentUuid === 'string')
+      )
+      .map((row) => row.uuid)
+  })
+  expect(result.resumeCursor).toBe(messages.at(-1)?.uuid)
   expect(await readFile(sourcePath, 'utf8')).toBe(original)
   expect(await readdir(join(oldHome, 'projects', 'workspace'))).toEqual([`${SOURCE}.jsonl`])
 })

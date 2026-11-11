@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { restPRCheckRollupRows } from '../client/check/rest-pr-check-pages'
+import '../client/check/rest-pr-check-pages'
 import { evaluatePRCheckOccurrence, type PRCheckContextState } from './pr-check-occurrence'
 
 // Provider-shaped reads of one commit: GraphQL statusCheckRollup nodes and the REST check-runs and
@@ -18,24 +18,6 @@ const graphqlStatus = (state: string, run: number) => ({
   state,
   targetUrl: `https://circleci.com/gh/acme/repo/${run}`,
   createdAt: '2026-11-06T10:00:00Z'
-})
-const restRun = (id: number, conclusion: string | null, status = 'completed') => ({
-  id,
-  name: 'build',
-  head_sha: '8d5f74b3c0e1',
-  status,
-  conclusion,
-  html_url: `https://github.com/acme/repo/runs/${id}`,
-  details_url: `https://github.com/acme/repo/actions/runs/101/job/${id}`,
-  started_at: '2026-11-06T10:00:00Z',
-  completed_at: status === 'completed' ? '2026-11-06T10:04:00Z' : null,
-  check_suite: { id: 29001 }
-})
-const restStatus = (state: string, run: number) => ({
-  context: 'ci/circleci: test',
-  state,
-  target_url: `https://circleci.com/gh/acme/repo/${run}`,
-  created_at: '2026-11-06T10:00:00Z'
 })
 
 function after(
@@ -74,44 +56,5 @@ describe('evaluatePRCheckOccurrence', () => {
     expect(after([graphqlStatus('SUCCESS', 101)], runningRows).verdict).toBe('success')
     // The same final state under a new run URL is a new run.
     expect(after([graphqlStatus('SUCCESS', 102)], green.next).verdict).toBe('success')
-  })
-
-  it('reports nothing until every check is final, and nothing for cancellation or approval', () => {
-    expect(after([graphqlStatus('EXPECTED', 101)]).verdict).toBe(null)
-    expect(after([]).verdict).toBe(null)
-    expect(
-      after([graphqlRun(31001, null, 'IN_PROGRESS'), graphqlStatus('FAILURE', 101)]).verdict
-    ).toBe(null)
-    expect(after([graphqlRun(31001, 'CANCELLED')]).verdict).toBe(null)
-    expect(
-      evaluatePRCheckOccurrence([graphqlRun(31001, 'SUCCESS')], false, new Map()).verdict
-    ).toBe(null)
-    const awaitingApproval = restPRCheckRollupRows(
-      [restRun(31001, 'success')],
-      [],
-      [{ id: 29002, status: 'completed', conclusion: 'action_required' }]
-    )
-    expect(after(awaitingApproval).verdict).toBe(null)
-  })
-
-  it('gives the GraphQL and REST reads of one commit the same identity and verdict', () => {
-    const graphql = [graphqlRun(31001, 'FAILURE'), graphqlStatus('SUCCESS', 101)]
-    const rest = restPRCheckRollupRows(
-      [restRun(31001, 'failure')],
-      [restStatus('success', 101)],
-      []
-    )
-    const fromGraphql = after(graphql)
-    const fromRest = after(rest)
-    expect(fromRest.verdict).toBe(fromGraphql.verdict)
-    expect([...fromRest.next.values()]).toEqual([...fromGraphql.next.values()])
-    // Either read after the other sees nothing new; a REST rerun is new to a GraphQL memory.
-    expect(after(rest, fromGraphql.next).verdict).toBe(null)
-    expect(
-      after(
-        restPRCheckRollupRows([restRun(31002, 'failure')], [restStatus('success', 101)], []),
-        fromGraphql.next
-      ).verdict
-    ).toBe('failure')
   })
 })

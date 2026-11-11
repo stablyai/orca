@@ -119,10 +119,17 @@ export function savedMobileNativeChatOfflineSends(
   )
 }
 
-export function beginMobileNativeChatOfflineSend(scope: string, id: string): void {
-  write(scope, (current) =>
-    current.map((send) => (send.id === id ? { ...send, sending: true as const } : send))
-  )
+export function beginMobileNativeChatOfflineSend(scope: string, id: string): boolean {
+  let started = false
+  write(scope, (current) => {
+    const queued = current.find((send) => send.id === id)
+    if (!queued || current.some((send) => send.sending)) {
+      return current
+    }
+    started = true
+    return current.map((send) => (send === queued ? { ...send, sending: true as const } : send))
+  })
+  return started
 }
 
 /** A sent message leaves; one that didn't go stays in its place, paused. */
@@ -178,8 +185,4 @@ export function useMobileNativeChatOfflineSends(
     }
   }, [])
   return useSyncExternalStore(subscribe, () => readMobileNativeChatOfflineSends(scope))
-}
-
-export function resetMobileNativeChatOfflineSendsForTests(): void {
-  queues.clear()
 }

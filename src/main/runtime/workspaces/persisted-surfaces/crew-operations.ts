@@ -1,4 +1,4 @@
-import type { AgentTransitionDetector } from '../../../agent-hooks/agent-transition-detector'
+import type { AgentTransitionDetector } from '../../../agent-hooks/observations/agent-transition-detector'
 import {
   readCrewRuntimeInputs,
   watchCrewRuntimeSources

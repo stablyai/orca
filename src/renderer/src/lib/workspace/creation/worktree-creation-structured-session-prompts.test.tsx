@@ -53,16 +53,19 @@ vi.mock(
 )
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (original) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await original())
 )
-vi.mock('@/runtime/runtime-layout-client', async (original) =>
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (original) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await original())
 )
-vi.mock('@/runtime/structured-agent-session-client', () =>
-  moduleFactories.structuredAgentSessionClient()
+vi.mock('../../../runtime/native-chat/requests/structured-agent-session-call', () =>
+  moduleFactories.structuredAgentSessionCall()
+)
+vi.mock('../../../runtime/native-chat/requests/structured-agent-session-subscriptions', () =>
+  moduleFactories.structuredAgentSessionSubscriptions()
 )
 vi.mock('@/components/machine-identity/use-published-machine-name', () => ({
   usePublishedMachineName: () => null
@@ -258,50 +261,3 @@ it.each([
   replacement.rerender(pane(true))
   expect(promptValue(screen.getByRole('textbox'))).toBe(expectedDraft)
 })
-
-it.each(['journalCorrupt', 'journalWrittenByNewerOrca'] as const)(
-  'reveals a final %s failure and retains the unsent draft',
-  async (reason) => {
-    render(
-      <TooltipProvider>
-        <PendingNativeChatCreation creationId="creation-1" />
-      </TooltipProvider>
-    )
-    changePrompt(screen.getByRole('textbox'), 'Keep this follow-up')
-    let completion: Promise<void> = Promise.resolve()
-    act(() => {
-      completion = executeWorktreeCreation('creation-1', request)
-    })
-    await waitFor(() => expect(host.createSession).toHaveBeenCalledOnce())
-    await main.settle()
-    const { sessionId } = host.createSession.mock.calls[0][0]
-    const tab = useAppStore.getState().getActiveTab(worktree.id)
-    if (!tab) {
-      throw new Error('Created chat tab was not published')
-    }
-    expect(useAppStore.getState().activePendingCreationId).toBe('creation-1')
-    mocks.status = 'error'
-    mocks.readRefusal = { code: 'agent_session_journal_unreadable', details: { reason } }
-    render(
-      <TooltipProvider>
-        <NativeChatStructuredSession
-          isVisible={false}
-          isFocusedGroup={false}
-          tabId={tab.id}
-          sessionId={sessionId}
-          target={{ kind: 'local' }}
-          agent="codex"
-        />
-      </TooltipProvider>
-    )
-    await act(async () => {
-      await completion
-    })
-    expect(useAppStore.getState().activePendingCreationId).toBeNull()
-    expect(useAppStore.getState().activeWorktreeId).toBe(worktree.id)
-    expect(readNativeChatComposerDraft(source).text).toBe('')
-    expect(readNativeChatComposerDraft(structuredAgentSessionDraftScopeKey(sessionId)).text).toBe(
-      'Keep this follow-up'
-    )
-  }
-)

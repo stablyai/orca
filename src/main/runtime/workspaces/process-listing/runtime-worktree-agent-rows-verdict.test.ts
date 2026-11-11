@@ -14,7 +14,7 @@ import type {
   AgentSessionStatusSummary
 } from '../../../../shared/agent-session/agent-session-wire'
 import type { RuntimeWorktreePsSummary } from '../../../../shared/runtime-worktree-contracts'
-import { AgentHookServer, _internals } from '../../../agent-hooks/server'
+import { AgentHookServer, _internals } from '../../../agent-hooks/server/agent-hook-server'
 import { createTrackedJournalOpener } from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import type { AgentSessionJournal } from '../../../native-chat/agent-session-journal/journal-store'
 import { StructuredAgentSessionStatusFeed } from '../../../native-chat/agent-session-wire/observations/structured-agent-session-status-feed'
@@ -112,7 +112,7 @@ function ingest(summary: AgentSessionStatusSummary, children: AgentChildWorkEvid
   const summaries = new Map([[WORKSPACE_ID, row]])
   attachRuntimeWorktreeAgentRows({
     summaries,
-    terminalTitleEvidenceByWorktreeId: new Map(),
+    terminalTitleEvidenceByRow: new Map(),
     rowSources: collectRuntimeWorktreeAgentSources({
       mirroredWorktreeIdByTabId: new Map(),
       connectedPtyEvidence: {

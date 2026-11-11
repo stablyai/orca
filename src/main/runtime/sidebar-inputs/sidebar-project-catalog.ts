@@ -4,7 +4,7 @@ import {
   buildSidebarProjectCatalog,
   type PairedServerCatalog
 } from '../../../shared/sidebar-list/sidebar-project-catalog'
-import type { RuntimeStore } from '../runtime-store-contract'
+import type { RuntimeStore } from '../construction/runtime-store-contract'
 import {
   runtimeVisibleProjectGroups,
   runtimeVisibleProjectHostSetups,

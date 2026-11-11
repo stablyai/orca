@@ -1,6 +1,6 @@
 // Main-owned layout changes must reach subscribed phones without a window to republish rows.
 import { describe, expect, it, vi } from 'vitest'
-import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-types'
+import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-session-contracts'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-session-contracts'
 import { TEST_WORKTREE_ID } from '../orca-runtime-tests/orca-runtime-test-fixtures.spec'
 import {

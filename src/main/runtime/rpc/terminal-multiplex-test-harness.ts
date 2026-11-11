@@ -3,7 +3,7 @@ import { RpcDispatcher } from './dispatcher'
 import type { RpcRequest } from './core'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import { TERMINAL_METHODS } from './methods/terminal/terminal'
-import type { RuntimeTerminalWait } from '../../../shared/runtime-types'
+import type { RuntimeTerminalWait } from '../../../shared/runtime-terminal-contracts'
 import { createSubscriptionRegistryDouble } from './subscription-registry-test-double'
 import {
   TerminalStreamOpcode,

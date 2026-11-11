@@ -5,8 +5,8 @@ import type { AgentsStep } from '../../../../shared/agents-orchestration-steps'
 import type { WorkbenchStep } from '../../../../shared/workbench-steps'
 import type { ReviewStep } from '../../../../shared/review-steps'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { InstalledAgentSkillState } from '@/hooks/useInstalledAgentSkills'
-import { cn } from '@/lib/utils'
+import type { InstalledAgentSkillState } from '@/hooks/skills/discovery/useInstalledAgentSkills'
+import { cn } from '@/lib/class-names'
 import { PreviewMedia, RelatedFeatures } from './FeatureWallPreview'
 import { getLocalizedFeatureWallWorkflowCopy } from './feature-wall-tour-localized-copy'
 import { TasksAnimatedVisual } from './TasksAnimatedVisual'
@@ -22,7 +22,7 @@ import { BrowserUseSkillSetupCard } from './BrowserUseSkillSetupCard'
 import { UsageAccountsCard } from './agents-orchestration/UsageAccountsCard'
 import { AiCommitPrSettingsCard } from './AiCommitPrSettingsCard'
 import { KeepAwakeCard } from './KeepAwakeCard'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function FeatureWallBody(props: {
   selected: FeatureWallWorkflow
@@ -40,6 +40,7 @@ export function FeatureWallBody(props: {
   settings: GlobalSettings | null
   updateSettings: (updates: Partial<GlobalSettings>) => void
 }): JSX.Element {
+  const t = useTranslate()
   const {
     selected,
     posterUrl,
@@ -259,7 +260,7 @@ export function FeatureWallBody(props: {
           >
             <>
               <div className="text-center text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-                {translate('auto.components.feature.wall.FeatureWallBody.25ec5356d6', 'Setup')}
+                {t('auto.components.feature.wall.FeatureWallBody.25ec5356d6', 'Setup')}
               </div>
               {settingContent}
             </>

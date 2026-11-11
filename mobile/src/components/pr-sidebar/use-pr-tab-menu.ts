@@ -4,14 +4,14 @@ import { useClipboardWriter } from '../../platform/clipboard'
 import { triggerError, triggerSuccess } from '../../platform/haptics'
 import { openMobilePrUrl } from '../mobile-pr-url'
 import type { ActionSheetAction } from '../ActionSheetModal'
-import { canEditPRTitle } from '../../session/pr-title-edit'
+import { canEditPRTitle } from '../../source-control/review/pr-title-edit'
 import { resolveGitHubPRMergeMethods } from '../../../../src/shared/github/pull-request-merge-methods'
 import { resolveGitHubPRMergeState } from '../../../../src/shared/github/pull-request-merge-state'
 import {
   MOBILE_GITHUB_MARK_PR_DRAFT_RUNTIME_CAPABILITY,
   MOBILE_GITHUB_MARK_PR_READY_RUNTIME_CAPABILITY
 } from '../../../../src/shared/source-control/runtime/source-control-runtime-capabilities'
-import { useRouteCapability } from '../../transport/use-workspace-client'
+import { useRouteCapability } from '../../worktree/use-workspace-client'
 import type { MobilePrTab } from './use-mobile-pr-tab'
 
 // Everything that should not compete with Merge; Close is red and last.

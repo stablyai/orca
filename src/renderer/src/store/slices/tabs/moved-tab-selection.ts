@@ -6,7 +6,7 @@ import {
   dropMovedTabSelection,
   pendingMovedTabSelections,
   type MovedTabSelection
-} from '@/runtime/layout-owner-pane-intents'
+} from '@/runtime/workspace-layout/intents/layout-owner-pane-intents'
 import { tabActivationPatch } from './tabs-focus-actions'
 import { endsPreviewHere } from './preview-tab-promotion'
 import { buildActiveSurfacePatch } from './tabs-surface'

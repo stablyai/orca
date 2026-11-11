@@ -1,4 +1,4 @@
-import type * as DeferralDrain from '@/lib/pane-spawn-deferral-drain'
+import type * as DeferralDrain from '@/components/terminal-pane/session-restore/spawn-deferral/pane-spawn-deferral-drain'
 import { registerMainOwnedResumeDrainTests } from './pty-connection-main-owned-resume-drain.spec'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 import type * as React from 'react'
@@ -52,11 +52,11 @@ let storeSubscribers: ((state: StoreState) => void)[] = []
 // Main's answer to the window's layout commands, as a switch-on build sends them.
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
 
-vi.mock('@/runtime/sync-runtime-graph', () => ({
+vi.mock('@/runtime/sync-runtime-graph/graph-sync-scheduler', () => ({
   scheduleRuntimeGraphSync
 }))
 
@@ -77,7 +77,7 @@ vi.mock('@/store/index', () => ({
   }
 }))
 
-vi.mock('@/lib/agent-status', async (importOriginal) => {
+vi.mock('@/lib/agent-status/aggregation/worktree-agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } =
     await import('../test-fixtures/pty-connection-test-environment')
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
@@ -108,22 +108,25 @@ const drain = vi.hoisted(() => ({
   queued: new Map<string, () => Promise<boolean>>()
 }))
 
-vi.mock('@/lib/pane-spawn-deferral-drain', async (importOriginal) => {
-  const actual = await importOriginal<typeof DeferralDrain>()
-  return {
-    ...actual,
-    queueDeferredRestoreRetry: (
-      paneKey: string,
-      env: string | null,
-      retry: () => Promise<boolean>
-    ) =>
-      drain.real
-        ? actual.queueDeferredRestoreRetry(paneKey, env, retry)
-        : drain.queued.set(paneKey, retry),
-    cancelDeferredRestoreRetry: (paneKey: string) =>
-      drain.real ? actual.cancelDeferredRestoreRetry(paneKey) : drain.queued.delete(paneKey)
+vi.mock(
+  '@/components/terminal-pane/session-restore/spawn-deferral/pane-spawn-deferral-drain',
+  async (importOriginal) => {
+    const actual = await importOriginal<typeof DeferralDrain>()
+    return {
+      ...actual,
+      queueDeferredRestoreRetry: (
+        paneKey: string,
+        env: string | null,
+        retry: () => Promise<boolean>
+      ) =>
+        drain.real
+          ? actual.queueDeferredRestoreRetry(paneKey, env, retry)
+          : drain.queued.set(paneKey, retry),
+      cancelDeferredRestoreRetry: (paneKey: string) =>
+        drain.real ? actual.cancelDeferredRestoreRetry(paneKey) : drain.queued.delete(paneKey)
+    }
   }
-})
+)
 
 vi.mock('../../render-health/recovery/terminal-pane-recovery', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -196,7 +199,8 @@ async function expectRestoreAskedMainNotDeferred(
   transport: MockTransport,
   paneKey: string
 ): Promise<void> {
-  const { getPaneSpawnDeferral } = await import('@/lib/pane-spawn-deferral-registry')
+  const { getPaneSpawnDeferral } =
+    await import('@/components/terminal-pane/session-restore/spawn-deferral/pane-spawn-deferral-registry')
   // The pane's own launch recipe still registers at mount; what main starts is main's.
   await expectWindowStartAskedMain(transport, paneKey)
   expect(freshSpawns(transport)).toEqual([])
@@ -241,7 +245,8 @@ describe('connectPanePty: a restore the host kept asleep', () => {
   })
 
   afterEach(async () => {
-    const { resetDeferredRestoreDrainForTests } = await import('@/lib/pane-spawn-deferral-drain')
+    const { resetDeferredRestoreDrainForTests } =
+      await import('@/components/terminal-pane/session-restore/spawn-deferral/pane-spawn-deferral-drain')
     resetDeferredRestoreDrainForTests()
     vi.useRealTimers()
     vi.restoreAllMocks()
@@ -250,7 +255,9 @@ describe('connectPanePty: a restore the host kept asleep', () => {
 
   async function mainOwnedResumeFixture() {
     const { connectPanePty } = await import('../connect-pane-pty')
-    const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+    const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>(
+      '@/lib/agent-status/aggregation/worktree-agent-status'
+    )
     const pane = createPane(1)
     const paneKey = makePaneKey('tab-1', pane.leafId)
     const record = {
@@ -462,8 +469,11 @@ describe('connectPanePty: a restore the host kept asleep', () => {
 
   it('keeps the pane sleeping with its resume handle and resumes it when opened', async () => {
     const { connectPanePty } = await import('../connect-pane-pty')
-    const agentTitleMocks2 = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-    const { getPaneSpawnDeferral } = await import('@/lib/pane-spawn-deferral-registry')
+    const agentTitleMocks2 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+      '@/lib/agent-status/aggregation/worktree-agent-status'
+    )
+    const { getPaneSpawnDeferral } =
+      await import('@/components/terminal-pane/session-restore/spawn-deferral/pane-spawn-deferral-registry')
     const transport = deferringTransport()
     transportFactoryQueue.push(transport)
     const pane = createPane(1)
@@ -514,8 +524,11 @@ describe('connectPanePty: a restore the host kept asleep', () => {
 
   it('resumes a hidden pane in the background once the host has room, as an automatic restore', async () => {
     const { connectPanePty } = await import('../connect-pane-pty')
-    const agentTitleMocks3 = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-    const { getPaneSpawnDeferral } = await import('@/lib/pane-spawn-deferral-registry')
+    const agentTitleMocks3 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+      '@/lib/agent-status/aggregation/worktree-agent-status'
+    )
+    const { getPaneSpawnDeferral } =
+      await import('@/components/terminal-pane/session-restore/spawn-deferral/pane-spawn-deferral-registry')
     const transport = deferringTransport()
     transportFactoryQueue.push(transport)
     const pane = createPane(1)
@@ -558,8 +571,11 @@ describe('connectPanePty: a restore the host kept asleep', () => {
 
   it('does not resume a session that meanwhile started in another tab', async () => {
     const { connectPanePty } = await import('../connect-pane-pty')
-    const agentTitleMocks4 = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-    const { getPaneSpawnDeferral } = await import('@/lib/pane-spawn-deferral-registry')
+    const agentTitleMocks4 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+      '@/lib/agent-status/aggregation/worktree-agent-status'
+    )
+    const { getPaneSpawnDeferral } =
+      await import('@/components/terminal-pane/session-restore/spawn-deferral/pane-spawn-deferral-registry')
     const transport = deferringTransport()
     transportFactoryQueue.push(transport)
     const pane = createPane(1)
@@ -614,9 +630,11 @@ describe('connectPanePty: a restore the host kept asleep', () => {
 
   it('stays the owner while its retry is in flight, then hands over to the PTY', async () => {
     const { connectPanePty } = await import('../connect-pane-pty')
-    const agentTitleMocks5 = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+    const agentTitleMocks5 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+      '@/lib/agent-status/aggregation/worktree-agent-status'
+    )
     const { getPaneSpawnDeferral, isPaneSpawnDeferred } =
-      await import('@/lib/pane-spawn-deferral-registry')
+      await import('@/components/terminal-pane/session-restore/spawn-deferral/pane-spawn-deferral-registry')
     const transport = deferringTransport()
     transportFactoryQueue.push(transport)
     const pane = createPane(1)
@@ -661,7 +679,9 @@ describe('connectPanePty: a restore the host kept asleep', () => {
 
   it('does not resume a session another tab has already queued', async () => {
     const { connectPanePty } = await import('../connect-pane-pty')
-    const agentTitleMocks6 = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+    const agentTitleMocks6 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+      '@/lib/agent-status/aggregation/worktree-agent-status'
+    )
     const transport = deferringTransport()
     transportFactoryQueue.push(transport)
     const pane = createPane(1)
@@ -696,8 +716,11 @@ describe('connectPanePty: a restore the host kept asleep', () => {
 
   it('offers to clear a crash pause on the host, then resumes the pane', async () => {
     const { connectPanePty } = await import('../connect-pane-pty')
-    const agentTitleMocks7 = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-    const { getPaneSpawnDeferral } = await import('@/lib/pane-spawn-deferral-registry')
+    const agentTitleMocks7 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+      '@/lib/agent-status/aggregation/worktree-agent-status'
+    )
+    const { getPaneSpawnDeferral } =
+      await import('@/components/terminal-pane/session-restore/spawn-deferral/pane-spawn-deferral-registry')
     const transport = deferringTransport('paused')
     transportFactoryQueue.push(transport)
     const pane = createPane(1)

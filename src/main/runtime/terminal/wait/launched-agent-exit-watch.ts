@@ -23,9 +23,17 @@ export type LaunchedAgentExitRuntime = Pick<
   'readLaunchedAgentForeground' | 'subscribeToTerminalData' | 'readRecentTerminalOutput'
 >
 
-/** What the launch command printed, from the shell's last finished command in the pane's recent bytes. */
-function readLaunchCommandOutput(recentOutput: string): string {
-  const finished = recentOutput.lastIndexOf(COMMAND_FINISHED_MARK)
+/** What the launch command printed, from the shell's last finished command in the pane's recent bytes.
+ * A PTY that died mid-command never finished it, so its output runs to the end. */
+export function readLaunchCommandOutput(
+  recentOutput: string,
+  { ptyExited = false }: { ptyExited?: boolean } = {}
+): string {
+  const lastFinished = recentOutput.lastIndexOf(COMMAND_FINISHED_MARK)
+  const finished =
+    ptyExited && recentOutput.lastIndexOf(COMMAND_STARTED_MARK) >= lastFinished
+      ? recentOutput.length
+      : lastFinished
   if (finished === -1) {
     return ''
   }
@@ -41,13 +49,14 @@ function readLaunchCommandOutput(recentOutput: string): string {
     .slice(-LAUNCH_OUTPUT_MAX_CHARS)
 }
 
+export function launchedAgentExitMessage(output: string): string {
+  return output
+    ? `The agent's launch command exited before the agent was ready. Its output:\n${output}`
+    : "The agent's launch command exited before the agent was ready, without printing anything."
+}
+
 function launchedAgentExitError(recentOutput: string | undefined): Error {
-  const output = readLaunchCommandOutput(recentOutput ?? '')
-  return new Error(
-    output
-      ? `The agent's launch command exited before the agent was ready. Its output:\n${output}`
-      : "The agent's launch command exited before the agent was ready, without printing anything."
-  )
+  return new Error(launchedAgentExitMessage(readLaunchCommandOutput(recentOutput ?? '')))
 }
 
 /** Fails a fresh launch's readiness wait once its launch command has finished and the shell is back in front.

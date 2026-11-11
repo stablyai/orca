@@ -14,7 +14,7 @@ import { absorbBurstBellForHookOwnedIdle } from '../notifications/agent-task-com
 import { resolveCompatibleAgentTypeForOwner } from '../../../../../../shared/agent-status/title/agent-title-owner'
 import { isAgentTaskCompleteTrackingEnabled } from '../notifications/agent-task-complete-settings'
 import { isAgentProcessInspectionCostly } from '../../agent-completion/process-inspection/agent-process-inspection-cost'
-import { isRemoteExecutionHostPtyId } from '../../../../../../shared/remote-execution-host-pty-id'
+import { isRemoteExecutionHostPtyId } from '../../../../../../shared/execution-host/remote-execution-host-pty-id'
 import { retireLiveAgentRowOnConfirmedProcessExit } from './confirmed-process-exit-row-retire'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 

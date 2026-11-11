@@ -17,7 +17,7 @@ import type { AiVaultSession } from '../../src/shared/ai-vault/contracts/ai-vaul
 import type { RuntimeMobileSessionTabsResult } from '../../src/shared/runtime-session-contracts'
 import type { RuntimeTerminalListResult } from '../../src/shared/runtime-terminal-contracts'
 import type { RuntimeWorktreePsSummary } from '../../src/shared/runtime-worktree-contracts'
-import { buildMobileAiVaultResumeLaunch } from '../../mobile/src/session/ai-vault-resume-launch'
+import { buildMobileAiVaultResumeLaunch } from '../../mobile/src/agent-history/ai-vault-resume-launch'
 
 test.skip(process.platform === 'win32', 'the fake agents are POSIX shell scripts')
 

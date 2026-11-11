@@ -1,8 +1,10 @@
 import { useEffect } from 'react'
+import * as z from 'zod'
 import type { ProjectGroup } from '../../../src/shared/project-group-types'
+import { ProjectSectionCatalogSchema } from '../../../src/shared/project-section-catalog-schema'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../src/shared/sidebar-inputs-switch'
 import { defineHostQuery, useHostQuery } from '../query/host-query'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import {
   hostProjectGroupsRead,
   projectSectionsRead,
@@ -19,7 +21,7 @@ type HostProjectSections = {
   groups: readonly ProjectGroup[] | null
 }
 
-const hostProjectSectionsQuery = defineHostQuery({
+export const hostProjectSectionsQuery = defineHostQuery({
   family: 'project.sections',
   fetch: async (
     client,
@@ -42,7 +44,16 @@ const hostProjectSectionsQuery = defineHostQuery({
   staleTime: 60_000,
   gcTime: 30 * 60_000,
   refetchOnWindowFocus: true,
-  signal: { events: ['reposChanged'] }
+  signal: { events: ['reposChanged'] },
+  persist: {
+    version: 1,
+    dataSchema: z.object({
+      sections: ProjectSectionCatalogSchema.nullable(),
+      groups: z
+        .array(z.custom<ProjectGroup>((group) => typeof group === 'object' && group !== null))
+        .nullable()
+    })
+  }
 })
 
 // The Project catalog, read apart from repo labels so a slow or missing reply holds nothing back.

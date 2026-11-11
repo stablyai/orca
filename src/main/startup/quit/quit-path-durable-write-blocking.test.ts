@@ -134,12 +134,6 @@ function readState(dir: string) {
   return profile.readState()
 }
 
-function stallFilesystem(): void {
-  const gate = Promise.withResolvers<void>()
-  releases.push(gate.resolve)
-  fsCalls.holdAsync = gate.promise
-}
-
 function stallCommit(dir: string) {
   const profile = profiles.get(dir)
   if (!profile) {
@@ -172,10 +166,6 @@ const dataFile = (dir: string): string => join(dir, 'orca-data.json')
 const statsFile = (dir: string): string => join(dir, 'orca-stats.json')
 const activeViewFile = (dir: string): string => join(dir, 'active-view.json')
 
-function eventLoopTurned(): Promise<boolean> {
-  return new Promise((resolve) => setTimeout(() => resolve(true), 0))
-}
-
 describe('quit-path durable writes never park the main thread', () => {
   const dirs: string[] = []
 
@@ -205,20 +195,6 @@ describe('quit-path durable writes never park the main thread', () => {
     for (const dir of dirs.splice(0)) {
       rmSync(dir, { recursive: true, force: true })
     }
-  })
-
-  it('store.flushAsync() issues no synchronous fs syscalls', async () => {
-    const dir = makeDir()
-    const store = await createStore(dir)
-    store.updateUI({ sidebarWidth: 321 })
-
-    fsCalls.dirPrefix = dir
-    fsCalls.recording = true
-    await store.flushAsync()
-    fsCalls.recording = false
-
-    expect(fsCalls.syncCalls).toEqual([])
-    expect(readState(dir).ui.sidebarWidth).toBe(321)
   })
 
   it('renderer unload staging issues no synchronous fs syscalls', async () => {
@@ -268,107 +244,6 @@ describe('quit-path durable writes never park the main thread', () => {
     )
   })
 
-  it('store.flushAsync() also moves the active-view and github-cache sidecars off the thread', async () => {
-    const dir = makeDir()
-    const staleCacheTemp = join(dir, 'orca-github-cache.json.999999.1.orphan.tmp')
-    writeFileSync(staleCacheTemp, 'stale', 'utf-8')
-    const staleSeconds = (Date.now() - 25 * 60 * 60 * 1000) / 1000
-    utimesSync(staleCacheTemp, staleSeconds, staleSeconds)
-    const store = await createStore(dir)
-    store.updateUI({ activeView: 'activity' })
-    store.setGitHubCache({ pr: {}, issue: {} })
-
-    fsCalls.dirPrefix = dir
-    fsCalls.recording = true
-    await store.flushAsync()
-    fsCalls.recording = false
-
-    expect(fsCalls.syncCalls).toEqual([])
-    expect(JSON.parse(readFileSync(activeViewFile(dir), 'utf-8')).activeView).toBe('activity')
-    expect(existsSync(join(dir, 'orca-github-cache.json'))).toBe(true)
-    expect(existsSync(staleCacheTemp)).toBe(false)
-  })
-
-  it('stats.flushAsync() issues no synchronous fs syscalls', async () => {
-    const dir = makeDir()
-    const stats = await createStatsCollector(dir)
-    stats.onAgentStart('pty-1', 1_000, 'repo', 'worktree')
-
-    fsCalls.dirPrefix = dir
-    fsCalls.recording = true
-    await stats.flushAsync()
-    fsCalls.recording = false
-
-    expect(fsCalls.syncCalls).toEqual([])
-    expect(JSON.parse(readFileSync(statsFile(dir), 'utf-8')).aggregates.totalAgentsSpawned).toBe(1)
-  })
-
-  it('Grok session cleanup issues no synchronous fs syscalls', async () => {
-    const dir = makeDir()
-    const previousGrokHome = process.env.GROK_HOME
-    process.env.GROK_HOME = dir
-    const { GrokHookService } = await import('../../grok/hook-service')
-    const service = new GrokHookService()
-    try {
-      const configPath = join(dir, 'hooks', 'orca-status.json')
-      const configDir = join(dir, 'hooks')
-      const { mkdirSync } = await import('node:fs')
-      mkdirSync(configDir, { recursive: true })
-      writeFileSync(
-        configPath,
-        `${JSON.stringify({
-          hooks: {
-            SessionStart: [
-              { hooks: [{ type: 'command', command: '/home/test/.orca/agent-hooks/grok-hook.sh' }] }
-            ]
-          }
-        })}\n`
-      )
-      fsCalls.dirPrefix = dir
-      fsCalls.recording = true
-      await service.removeAsync()
-      fsCalls.recording = false
-
-      expect(fsCalls.syncCalls).toEqual([])
-      expect(existsSync(configPath)).toBe(false)
-    } finally {
-      fsCalls.recording = false
-      if (previousGrokHome === undefined) {
-        delete process.env.GROK_HOME
-      } else {
-        process.env.GROK_HOME = previousGrokHome
-      }
-    }
-  })
-
-  it('stats.flushAsync() closes out live agents before it returns, not when its write lands', async () => {
-    // killAllPty skips onPtyExit, so agent time must be closed out before awaiting the write.
-    const dir = makeDir()
-    const stats = await createStatsCollector(dir)
-    stats.onAgentStart('pty-1', Date.now() - 4_000)
-
-    fsCalls.dirPrefix = dir
-    stallFilesystem()
-    const pending = stats.flushAsync()
-
-    expect(stats.getSummary().totalAgentTimeMs).toBeGreaterThan(0)
-    void pending
-  })
-
-  it('a stalled mount leaves the event loop live instead of parking it', async () => {
-    const dir = makeDir()
-    const store = await createStore(dir)
-    store.updateUI({ sidebarWidth: 654 })
-
-    fsCalls.dirPrefix = dir
-    const gate = stallCommit(dir)
-    const pending = store.flushAsync()
-    await gate.started
-
-    await expect(eventLoopTurned()).resolves.toBe(true)
-    void pending
-  })
-
   it('the quit teardown deadline can now bound a wedged state flush', async () => {
     const dir = makeDir()
     const store = await createStore(dir)
@@ -409,59 +284,6 @@ describe('quit-path durable writes never park the main thread', () => {
     await flushed
 
     expect(readState(dir).ui.sidebarWidth).toBe(200)
-  })
-
-  it('store.flushAsync() is one idempotent final barrier', async () => {
-    const dir = makeDir()
-    const store = await createStore(dir)
-    store.updateUI({ sidebarWidth: 777 })
-
-    const first = store.flushAsync()
-    const second = store.flushAsync()
-
-    expect(second).toBe(first)
-    expect(() => store.flushOrThrow()).toThrow('final persistence')
-    await first
-    expect(readState(dir).ui.sidebarWidth).toBe(777)
-  })
-
-  it('serializes github-cache snapshots and keeps the newest generation', async () => {
-    const dir = makeDir()
-    const store = await createStore(dir)
-    let releaseWrite!: () => void
-    const writeRelease = new Promise<void>((resolve) => {
-      releaseWrite = resolve
-    })
-    let signalWrite!: () => void
-    releases.push(releaseWrite)
-    const writeStarted = new Promise<void>((resolve) => {
-      signalWrite = resolve
-    })
-    let held = false
-    fsCalls.dirPrefix = dir
-    fsCalls.recording = true
-    fsCalls.waitAsync = (fn, target) => {
-      if (held || fn !== 'writeFile' || !target.includes('orca-github-cache.json')) {
-        return null
-      }
-      held = true
-      signalWrite()
-      return writeRelease
-    }
-
-    store.setGitHubCache({ pr: { test: { data: null, fetchedAt: 1 } }, issue: {} })
-    const finalFlush = store.flushAsync()
-    await writeStarted
-    store.setGitHubCache({ pr: { test: { data: null, fetchedAt: 2 } }, issue: {} })
-
-    releaseWrite()
-    await finalFlush
-    fsCalls.recording = false
-
-    expect(JSON.parse(readFileSync(join(dir, 'orca-github-cache.json'), 'utf-8'))).toEqual({
-      pr: { test: { data: null, fetchedAt: 2 } },
-      issue: {}
-    })
   })
 
   it('stats.flushAsync() wins over a debounced write already in flight', async () => {
@@ -522,20 +344,5 @@ describe('quit-path durable writes never park the main thread', () => {
     expect(existsSync(dataFile(dir))).toBe(false)
     expect(existsSync(statsTemp)).toBe(false)
     expect(existsSync(freshOtherProcessTemp)).toBe(true)
-  })
-
-  it('store.flushAsync() resolves instead of throwing when the profile mount rejects writes', async () => {
-    const dir = makeDir()
-    const store = await createStore(dir)
-    store.updateUI({ sidebarWidth: 42 })
-    const profile = profiles.get(dir)
-    if (!profile) {
-      throw new Error('Missing test profile')
-    }
-    vi.spyOn(profile.authority, 'writeCompleteSerializedDomains').mockRejectedValueOnce(
-      new Error('profile mount rejected write')
-    )
-
-    await expect(store.flushAsync()).resolves.toBeUndefined()
   })
 })

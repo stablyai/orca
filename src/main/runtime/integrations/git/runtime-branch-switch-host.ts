@@ -8,7 +8,7 @@ import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
 import { isWslMoveWorktreeBlocked } from '../../../persistence/moving-wsl-projects/wsl-move-background-backoff'
 import { worktreeRowTarget } from '../../../persistence/host-qualified-worktree-meta'
-import type { RuntimeStore } from '../../runtime-store-contract'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import { findAgentSwitchBlocker, type AgentSwitchRow } from './branch-switch-agent-blocker'
 import { isPathInsideOrEqual } from '../../../../shared/cross-platform-path'
 import type { RuntimeGitCommandHost } from './runtime-git-command-target'
@@ -129,7 +129,10 @@ export function createBranchSwitchHost<P extends ConnectedPty>(
     },
     // Watchers only cover desktop-hosted local repos, so Orca's own switch updates every client
     // itself; the user's choice also ends first-work automatic branch naming.
-    recordBranchSwitched: (worktree: Pick<Worktree, 'id' | 'hostId' | 'repoId'>) => {
+    recordBranchSwitched: (
+      worktree: Pick<Worktree, 'id' | 'hostId' | 'repoId'>,
+      detached = false
+    ) => {
       const store = sources.getStore()
       try {
         const target = store ? worktreeRowTarget(store, worktree) : undefined
@@ -146,7 +149,7 @@ export function createBranchSwitchHost<P extends ConnectedPty>(
             meta.pushTarget !== undefined)
         store.setWorktreeMeta(target, {
           ...(hasBranchScopedLinks ? CLEARED_HOSTED_REVIEW_LINK_UPDATES : {}),
-          branchNameIsUserChosen: true
+          ...(!detached ? { branchNameIsUserChosen: true } : {})
         })
       } catch (error) {
         // The switch already landed; bookkeeping must not turn it into a failure. First-work

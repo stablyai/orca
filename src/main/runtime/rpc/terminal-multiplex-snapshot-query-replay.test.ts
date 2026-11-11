@@ -1,4 +1,3 @@
-import './unused-default-rpc-methods.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Terminal } from '@xterm/headless'
 import type { RuntimeTerminalDataMeta } from '../terminal/output/runtime-terminal-stream-consumers'

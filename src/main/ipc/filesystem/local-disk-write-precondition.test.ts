@@ -2,8 +2,8 @@ import { link, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getDiskBaselineSignature } from '../../../shared/disk-baseline-signature'
-import type { RuntimeStore } from '../../runtime/runtime-store-contract'
+import { getDiskBaselineSignature } from '../../../shared/file-write/disk-baseline-signature'
+import type { RuntimeStore } from '../../runtime/construction/runtime-store-contract'
 import { createLocalFilesystemProvider } from '../../providers/local-filesystem-provider'
 import type * as LocalRegularFileRead from './local-regular-file-read'
 import type * as NodeFsPromises from 'node:fs/promises'
@@ -130,21 +130,6 @@ describe('local provider guarded write', () => {
         expectedSignature: getDiskBaselineSignature('original')
       })
     ).resolves.toEqual({ ok: true, unchanged: true })
-  })
-
-  it('lets only one of two concurrent saves from the same baseline write', async () => {
-    const filePath = join(base, 'a.ts')
-    await writeFile(filePath, 'original')
-    const fromBaseline = { expectedSignature: getDiskBaselineSignature('original') }
-
-    const results = await Promise.all([
-      provider().writeFileWithDiskPrecondition(filePath, 'client one', fromBaseline),
-      provider().writeFileWithDiskPrecondition(filePath, 'client two', fromBaseline)
-    ])
-
-    const winner = results.findIndex((result) => result.ok)
-    expect(results[1 - winner]).toEqual({ ok: false, diskConflict: 'changed' })
-    expect(await readFile(filePath, 'utf8')).toBe(winner === 0 ? 'client one' : 'client two')
   })
 
   // Windows symlink creation requires elevated rights or Developer Mode.

@@ -10,11 +10,11 @@ import {
 } from '../../../shared/folder-workspaces/folder-workspace-execution-host'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import type { TerminalWorkspaceLaunchScope } from '../../runtime/orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
+import { getWorkspaceRuntimePreference } from '../../../shared/execution-host/project-runtime-preference'
 import {
-  getWorkspaceRuntimePreference,
   resolveProjectExecutionRuntime,
   type ProjectExecutionRuntimeResolution
-} from '../../../shared/project-execution-runtime'
+} from '../../../shared/execution-host/project-execution-runtime'
 import {
   getCachedWslAvailability,
   hasCachedWslAvailability

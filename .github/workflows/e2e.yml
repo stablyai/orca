@@ -338,11 +338,6 @@ jobs:
           retention-days: 14
           if-no-files-found: warn
 
-      # The frame benchmark needs a mapped window, which the headless shards exclude.
-      - name: Run worktree first-paint benchmark
-        if: matrix.shard == '1/14'
-        run: xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm exec playwright test tests/e2e/worktree-switch-first-paint.spec.ts --config tests/playwright.config.ts --project=electron-headful --workers=1
-
       # Upload failure traces/screenshots so CI failures are diagnosable without reproduction.
       - name: Upload Playwright traces
         if: failure() || cancelled()

@@ -1,3 +1,6 @@
+import { recordStructuredChatAgentStart } from '../../../telemetry/structured-chat-dispatch'
+import { tuiAgentToAgentKind } from '../../../../shared/agent-kind'
+import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { isDeepStrictEqual } from 'node:util'
 import { abortSignalReason } from '../../../../shared/abort-signal-reason'
 import type { AgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/agent-session-account-home'
@@ -109,6 +112,16 @@ export async function acquireOwner(
         : {}),
       now: input.now()
     })
+    if (record.lease.claimStatus !== 'live') {
+      recordStructuredChatAgentStart(
+        {
+          agent_kind: isTuiAgent(record.provider) ? tuiAgentToAgentKind(record.provider) : 'other',
+          launch_source: 'unknown',
+          request_kind: record.providerHandleChain.length > 0 ? 'resume' : 'new'
+        },
+        input.telemetryCaller ?? (() => input.callerKey)
+      )
+    }
     return {
       record: proved,
       acquisitionGeneration: acquired.acquisitionGeneration,

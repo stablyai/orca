@@ -1,14 +1,16 @@
 import type React from 'react'
 
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select'
 import { UIZoomControl } from './UIZoomControl'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { ReduceVisualEffectsSetting } from './ReduceVisualEffectsSetting'
 import { NotchStatusSetting } from './NotchStatusSetting'
 import { getReduceVisualEffectsEntries } from './appearance-reduce-visual-effects-search'
 import { AppearanceAdvancedDisclosure } from './AppearanceAdvancedDisclosure'
-import { SettingsSearchableSelect } from '../form-controls/SettingsSearchableSelect'
+import {
+  SettingsSearchableSelect,
+  type SettingsSearchableSelectOption
+} from '../form-controls/SettingsSearchableSelect'
 import { useAppStore } from '../../../store/index'
 import { useShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
 import { ShortcutHintList } from './AppearanceShortcutHintList'
@@ -111,6 +113,29 @@ export function AppearanceInterfaceSection({
   const typographyEntry = getTypographyEntries()[0]
   const zoomEntry = getZoomEntries()[0]
   const reduceVisualEffectsEntry = getReduceVisualEffectsEntries()[0]
+  const languageOptions: SettingsSearchableSelectOption[] = [
+    ...UI_LANGUAGE_CHOICES.map((choice, index) => ({
+      value: choice.value,
+      label: languages.choices[index],
+      keywords: [choice.value]
+    })),
+    ...languages.packs.map((pack) => ({
+      value: pack.id,
+      label: languages.packLabels.get(pack.id) ?? pack.locale,
+      keywords: [pack.id, pack.locale]
+    }))
+  ]
+  if (!languageOptions.some((option) => option.value === settings.uiLanguage)) {
+    languageOptions.push({
+      value: settings.uiLanguage,
+      label: t(
+        'auto.components.settings.AppearanceInterfaceSection.languageUnavailable',
+        '{{value0}} (unavailable)',
+        { value0: settings.uiLanguage }
+      ),
+      disabled: true
+    })
+  }
   const advancedEntries = [
     ...getTitlebarEntries(),
     ...getReduceVisualEffectsEntries(),
@@ -258,39 +283,29 @@ export function AppearanceInterfaceSection({
           <SettingsRow
             label={languageTitle}
             control={
-              <Select
+              <SettingsSearchableSelect
+                ariaLabel={languageTitle}
                 value={settings.uiLanguage}
+                groups={[{ key: 'ui-languages', options: languageOptions }]}
                 onValueChange={(value) => updateSettings({ uiLanguage: value as UiLanguage })}
-              >
-                <SelectTrigger size="sm" className="min-w-[220px]" aria-label={languageTitle}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {UI_LANGUAGE_CHOICES.map((choice, index) => (
-                    <SelectItem key={choice.value} value={choice.value}>
-                      {languages.choices[index]}
-                    </SelectItem>
-                  ))}
-                  {languages.packs.map((pack) => (
-                    <SelectItem key={pack.id} value={pack.id}>
-                      {languages.packLabels.get(pack.id) ?? pack.locale}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                searchPlaceholder={t(
+                  'auto.components.settings.SettingsSearchableSelect.searchLanguages',
+                  'Search languages…'
+                )}
+              />
             }
           />
         </SearchableSetting>
       ) : null}
 
       <SearchableSetting
-        title={t('auto.components.settings.AppearancePane.5e6d7aba8d', 'UI Zoom')}
+        title={t('auto.components.settings.AppearancePane.173edfb768', 'UI zoom')}
         description={zoomEntry?.description}
         keywords={zoomEntry?.keywords ?? ['zoom', 'scale', 'shortcut']}
         forceVisible={forceVisiblePrimary}
       >
         <SettingsRow
-          label={t('auto.components.settings.AppearancePane.5e6d7aba8d', 'UI Zoom')}
+          label={t('auto.components.settings.AppearancePane.173edfb768', 'UI zoom')}
           // Explain the shortcut and terminal exception; the zoom buttons already explain scaling.
           description={
             <>
@@ -307,13 +322,13 @@ export function AppearanceInterfaceSection({
       </SearchableSetting>
 
       <SearchableSetting
-        title={t('auto.components.settings.AppearancePane.102d6b5f9b', 'IDE Font')}
+        title={t('auto.components.settings.AppearancePane.657a7230a2', 'IDE font')}
         description={typographyEntry?.description}
         keywords={typographyEntry?.keywords ?? ['font', 'typeface', 'typography']}
         forceVisible={forceVisiblePrimary}
       >
         <SettingsRow
-          label={t('auto.components.settings.AppearancePane.102d6b5f9b', 'IDE Font')}
+          label={t('auto.components.settings.AppearancePane.657a7230a2', 'IDE font')}
           control={
             <FontAutocomplete
               value={settings.appFontFamily}
@@ -332,12 +347,12 @@ export function AppearanceInterfaceSection({
         <AppearanceAdvancedDisclosure showTopBorder={false}>
           <div className="divide-y divide-border/40">
             <SearchableSetting
-              title={t('auto.components.settings.AppearancePane.9868f39007', 'Titlebar App Name')}
+              title={t('auto.components.settings.AppearancePane.8063dd3b6b', 'Titlebar app name')}
               description={titlebarEntry?.description}
               keywords={titlebarEntry?.keywords ?? ['titlebar', 'orca', 'app', 'name']}
             >
               <SettingsSwitchRow
-                label={t('auto.components.settings.AppearancePane.9868f39007', 'Titlebar App Name')}
+                label={t('auto.components.settings.AppearancePane.8063dd3b6b', 'Titlebar app name')}
                 checked={settings.showTitlebarAppName}
                 onChange={() =>
                   updateSettings({ showTitlebarAppName: !settings.showTitlebarAppName })
@@ -354,16 +369,16 @@ export function AppearanceInterfaceSection({
             {isDesktopWindows ? (
               <SearchableSetting
                 title={t(
-                  'auto.components.settings.AppearancePane.2edf606c46',
-                  'Minimize to Tray on Close'
+                  'auto.components.settings.AppearancePane.95a5581f66',
+                  'Minimize to tray on close'
                 )}
                 description={systemTrayEntry?.description}
                 keywords={systemTrayEntry?.keywords ?? ['tray', 'minimize', 'close']}
               >
                 <SettingsSwitchRow
                   label={t(
-                    'auto.components.settings.AppearancePane.2edf606c46',
-                    'Minimize to Tray on Close'
+                    'auto.components.settings.AppearancePane.95a5581f66',
+                    'Minimize to tray on close'
                   )}
                   // Explain the non-obvious platform restriction and keep-running consequence.
                   description={t(
@@ -380,12 +395,12 @@ export function AppearanceInterfaceSection({
 
             {isDesktopMac ? (
               <SearchableSetting
-                title={t('settings.appearance.menuBarIcon.title', 'Show Menu Bar Icon')}
+                title={t('settings.appearance.menuBarIcon.026624e2ec', 'Show menu bar icon')}
                 description={menuBarIconEntry?.description}
                 keywords={menuBarIconEntry?.keywords ?? ['menu bar', 'status item', 'activity']}
               >
                 <SettingsSwitchRow
-                  label={t('settings.appearance.menuBarIcon.title', 'Show Menu Bar Icon')}
+                  label={t('settings.appearance.menuBarIcon.026624e2ec', 'Show menu bar icon')}
                   // Hiding the status item preserves Dock activation and close-keeps-running behavior.
                   description={t(
                     'settings.appearance.menuBarIcon.description',

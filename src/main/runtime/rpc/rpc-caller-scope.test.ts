@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { OrcaRuntimeService } from '../orca-runtime'
 import type { RpcRequest, RpcResponse } from './core'
 import { RpcDispatcher } from './dispatcher'
+import { ALL_RPC_METHODS } from './methods/rpc-method-registry'
 import type { RpcCallerScope } from './rpc-caller-scope'
 
 const PAIRED: RpcCallerScope = { kind: 'runtime-paired', grants: [] }
@@ -16,7 +17,7 @@ async function dispatchAs(
   params?: unknown,
   runtime = new OrcaRuntimeService()
 ): Promise<RpcResponse> {
-  return new RpcDispatcher({ runtime }).dispatch(
+  return new RpcDispatcher({ runtime, methods: ALL_RPC_METHODS }).dispatch(
     request(method, params),
     scope ? { callerScope: scope } : undefined
   )
@@ -50,6 +51,7 @@ describe('a pinned in-process bridge dispatcher', () => {
   it('ignores a wider per-call scope', async () => {
     const dispatcher = new RpcDispatcher({
       runtime: new OrcaRuntimeService(),
+      methods: ALL_RPC_METHODS,
       callerScope: PAIRED
     })
     const response = await dispatcher.dispatch(request('computer.click', { app: 'Finder' }), {

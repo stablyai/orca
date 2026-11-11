@@ -1,4 +1,4 @@
-import type { ExecutionHostHealth } from '../../../../shared/execution-host-health'
+import type { ExecutionHostHealth } from '../../../../shared/execution-host/execution-host-health'
 import type { WslHostStatus } from '../../../../shared/wsl-host-types'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
@@ -68,8 +68,8 @@ export function getWslHostsTurnedOffLabel(t: Translate = translate): string {
   )
 }
 
-export function getWslHostsTurnOnLabel(): string {
-  return translate('auto.components.terminal.pane.WslHostUnavailableBanner.turnOn', 'Turn on')
+export function getWslHostsTurnOnLabel(t: Translate = translate): string {
+  return t('auto.components.terminal.pane.WslHostUnavailableBanner.turnOn', 'Turn on')
 }
 
 export function getWslHostRowTurnedOffDetail(t: Translate = translate): string {

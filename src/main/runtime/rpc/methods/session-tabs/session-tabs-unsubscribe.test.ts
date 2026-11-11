@@ -1,8 +1,11 @@
-import '../../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
+
 import type { OrcaRuntimeService } from '../../../orca-runtime'
-import { RuntimeSubscriptionRegistry } from '../../../runtime-subscription-registry'
+
+import { RuntimeSubscriptionRegistry } from '../../../client/runtime-subscription-registry'
+
 import { RpcDispatcher } from '../../dispatcher'
+
 import { SESSION_TAB_METHODS } from './session-tabs'
 
 describe('session tab unsubscribe RPC methods', () => {

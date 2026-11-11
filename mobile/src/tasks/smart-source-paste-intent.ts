@@ -8,8 +8,8 @@ import {
 } from '../../../src/shared/new-workspace/github-links'
 import { parseGitLabIssueOrMRLink } from '../../../src/shared/new-workspace/gitlab-links'
 import { isSmartWorkspaceSourceQueryWithinLimit } from '../../../src/shared/new-workspace/smart-workspace-source-results'
-import type { RpcClient } from '../transport/rpc-client'
-import { isMethodNotFoundRefusal } from '../transport/rpc-acceptance-policies'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import { isMethodNotFoundRefusal } from '../transport/rpc/rpc-acceptance-policies'
 import {
   githubRepoSlugRead,
   githubWorkItemBySlugRead,

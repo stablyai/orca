@@ -1,45 +1,23 @@
-import { useCallback, useEffect, useEffectEvent, useRef, useState } from 'react'
-import type { MobilePrSidebarController } from '../session/use-mobile-pr-sidebar-controller'
-import type { RpcClient } from '../transport/rpc-client'
+import { useCallback } from 'react'
+import type { MobilePrSidebarController } from './review/use-mobile-pr-sidebar-controller'
 import type { MobileSourceControlLoaders } from './use-mobile-source-control-loaders'
 
 type Params = {
-  client: RpcClient | null
-  worktreeId: string
   loadStatus: MobileSourceControlLoaders['loadStatus']
   prController: MobilePrSidebarController
   includeDetails: boolean
 }
 
+// Status, the GitHub probe and the PR are read together; a branch or HEAD the status read moves to reads its own PR.
 export function useMobileSourceControlRefresh({
-  client,
-  worktreeId,
   loadStatus,
   prController,
   includeDetails
 }: Params) {
-  const [request, setRequest] = useState<{ client: typeof client; worktreeId: string } | null>(null)
-  const consumedRequest = useRef(request)
-  const refreshCommittedPr = useEffectEvent(() => {
-    void prController.refetchPRSidebar({ includeDetails, refresh: true })
-  })
-  useEffect(() => {
-    if (request !== null && request !== consumedRequest.current) {
-      consumedRequest.current = request
-      if (request.client === client && request.worktreeId === worktreeId) {
-        refreshCommittedPr()
-      }
-    }
-  }, [request, client, worktreeId])
-  const refreshRepoProbe = prController.refreshPRSidebarRepoProbe
+  const { refreshPRSidebarRepoProbe, refetchPRSidebar } = prController
   return useCallback(() => {
-    void Promise.all([loadStatus({ force: true, rereadSettings: true }), refreshRepoProbe()]).then(
-      ([statusLoaded, hosted]) => {
-        if (statusLoaded && hosted) {
-          // Read the PR after React commits the refreshed branch and HEAD.
-          setRequest({ client, worktreeId })
-        }
-      }
-    )
-  }, [client, worktreeId, loadStatus, refreshRepoProbe])
+    void loadStatus({ force: true, rereadSettings: true })
+    void refreshPRSidebarRepoProbe()
+    void refetchPRSidebar({ includeDetails, refresh: true })
+  }, [includeDetails, loadStatus, refetchPRSidebar, refreshPRSidebarRepoProbe])
 }

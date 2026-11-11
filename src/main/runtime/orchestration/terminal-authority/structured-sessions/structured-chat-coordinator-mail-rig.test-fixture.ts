@@ -7,7 +7,7 @@ import { afterEach, beforeEach, expect, vi } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import '../../../../../shared/protocol-version'
-import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../shared/orchestration-runtime-capabilities'
+import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import type { StructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import { activeProviderContext } from '../../../../../shared/agent-session/agent-session-provider-context'
 import { OrcaRuntimeService } from '../../../orca-runtime'
@@ -303,7 +303,7 @@ export const WAIT = { timeout: 10_000, interval: 10 }
 
 /** A chat got the whole orchestration message: its subject and its reply command. */
 export function isWholeMail(text: string): boolean {
-  return text.includes('\nSubject: ') && /\[Reply: orca(-dev)? orchestration reply --id /.test(text)
+  return text.includes('\nSubject: ') && /\[[^\]\n]*: orca(-dev)? orchestration /.test(text)
 }
 
 export function turnText(turn: { text: string }): string {

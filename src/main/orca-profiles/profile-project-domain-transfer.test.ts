@@ -178,6 +178,12 @@ afterEach(() => {
 })
 
 describe('profile domain transfers', () => {
+  it('moves a project without granting publishing permission to either older profile', () => {
+    expect(transfer()).toMatchObject({ status: 'transferred' })
+    expect(JSON.parse(raw('source').json).settings).not.toHaveProperty('artifactSharingEnabled')
+    expect(JSON.parse(raw('target').json).settings).not.toHaveProperty('artifactSharingEnabled')
+  })
+
   it('refuses independently hashed malformed unrelated data before a copy writes anything', () => {
     const before = raw('target').json
     withDatabase('source', (db) =>

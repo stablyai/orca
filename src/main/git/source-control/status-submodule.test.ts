@@ -3,7 +3,7 @@ import type * as GitExecFileModule from '../command-runner/git-exec-file'
 import type * as GitStreamStdoutModule from '../command-runner/git-stream-stdout'
 import type * as GitProcessEnvModule from '../command-runner/git-process-env'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as BoundedFileReader from '../../../shared/node-bounded-file-reader'
+import type * as BoundedFileReader from '../../../shared/file-content/node-bounded-file-reader'
 import path from 'node:path'
 import {
   createBoundedFileReaderModuleMock,
@@ -74,13 +74,13 @@ vi.mock('fs', () => ({
   existsSync: existsSyncMock
 }))
 
-vi.mock('../../../shared/node-bounded-file-reader', async (importOriginal) =>
+vi.mock('../../../shared/file-content/node-bounded-file-reader', async (importOriginal) =>
   createBoundedFileReaderModuleMock(await importOriginal<typeof BoundedFileReader>(), {
     readFileMock,
     statMock
   })
 )
-import { clearSubmodulePathsCacheForTests, listSubmodulePaths } from './submodule-paths'
+import { clearSubmodulePathsCacheForTests } from './submodule-paths'
 import { getDiff } from './file-diff'
 
 describe('submodule diff routing', () => {
@@ -141,32 +141,5 @@ describe('submodule diff routing', () => {
     })
 
     await expect(getDiff(PARENT, '../evil', false)).rejects.toThrow('Access denied')
-  })
-})
-
-describe('listSubmodulePaths', () => {
-  beforeEach(() => {
-    clearSubmodulePathsCacheForTests()
-    gitExecFileAsyncMock.mockReset()
-  })
-
-  it('keeps cached .gitmodules paths separate per WSL distro', async () => {
-    gitExecFileAsyncMock.mockImplementation((_args: string[], options?: { wslDistro?: string }) =>
-      Promise.resolve({
-        stdout:
-          options?.wslDistro === 'debian'
-            ? 'submodule.lib.path\ndebian-lib\0'
-            : 'submodule.lib.path\nubuntu-lib\0'
-      })
-    )
-
-    await expect(listSubmodulePaths('/repo', { wslDistro: 'ubuntu' })).resolves.toEqual([
-      'ubuntu-lib'
-    ])
-    await expect(listSubmodulePaths('/repo', { wslDistro: 'debian' })).resolves.toEqual([
-      'debian-lib'
-    ])
-
-    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
   })
 })

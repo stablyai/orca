@@ -1,4 +1,3 @@
-import '../../rpc/unused-default-rpc-methods.test-fixture'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import {

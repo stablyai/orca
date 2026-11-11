@@ -1,13 +1,19 @@
 import { describe, expect, it } from 'vitest'
+
 import type { AgentStatusOrchestrationContext } from '../../../../../../shared/agent-status/contracts/agent-status-types'
-import { AgentHookServer } from '../../../../../agent-hooks/server'
+
+import { AgentHookServer } from '../../../../../agent-hooks/server/agent-hook-server'
+
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
+
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+
 import { OrcaRuntimeWithGetOrchestrationDispatchAuthority } from '../../../../terminal/output/terminal-orchestration-authority'
+
 import {
   AgentStatusObservedPaneIdentities,
   recordObservedAgentStatusPaneIdentity
-} from '../../../../agent-status-observed-pane-identity'
+} from '../../../../terminal/identity/agent-status-observed-pane-identity'
 
 import { projectFleetWorkerPage } from './worker-observation'
 

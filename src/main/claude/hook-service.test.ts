@@ -17,7 +17,8 @@ vi.mock('../pty/shell-startup/git-bash', async (importOriginal) => ({
 }))
 
 import type { SFTPWrapper } from 'ssh2'
-import { createManagedCommandMatcher, WINDOWS_CMD_SAFE_PATH } from '../agent-hooks/installer-utils'
+import { createManagedCommandMatcher } from '../agent-hooks/installation/commands/managed-hook-command-matching'
+import { WINDOWS_CMD_SAFE_PATH } from '../agent-hooks/installation/commands/windows-hook-command'
 import { ClaudeHookService } from './hook-service'
 import { CLAUDE_EVENTS } from './claude-managed-hook-events'
 import { getWindowsManagedLifecycleHook, OPENCLAUDE_HOOK_SETTINGS } from './hook-settings'

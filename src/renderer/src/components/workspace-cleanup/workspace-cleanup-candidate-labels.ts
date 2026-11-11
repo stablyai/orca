@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import type { WorkspaceCleanupBlocker } from '../../../../shared/workspace-cleanup/workspace-cleanup'
 import type { WorkspaceCleanupGitState } from '../../../../shared/workspace-cleanup/workspace-cleanup-filter-model'
 
@@ -80,99 +81,100 @@ export function getWorkspaceCleanupBlockerLabel(blocker: WorkspaceCleanupBlocker
   }
 }
 
-export function formatWorkspaceCleanupGitStatusLabel(state: WorkspaceCleanupGitState): string {
+export function formatWorkspaceCleanupGitStatusLabel(
+  state: WorkspaceCleanupGitState,
+  t: Translate = translate
+): string {
   switch (state) {
     case 'clean':
-      return translate('auto.components.workspace.cleanup.candidateRow.cleanGit', 'Clean git')
+      return t('auto.components.workspace.cleanup.candidateRow.cleanGit', 'Clean git')
     case 'dirty':
-      return translate('auto.components.workspace.cleanup.candidateRow.dirtyGit', 'Dirty git')
+      return t('auto.components.workspace.cleanup.candidateRow.dirtyGit', 'Dirty git')
     case 'unpushed':
-      return getUnpushedCommitsLabel()
+      return getUnpushedCommitsLabel(t)
     case 'unknown':
-      return translate('auto.components.workspace.cleanup.candidateRow.gitUnknown', 'Git unknown')
+      return t('auto.components.workspace.cleanup.candidateRow.gitUnknown', 'Git unknown')
   }
 }
 
-export function getWorkspaceCleanupGitChipLabel(state: WorkspaceCleanupGitState): string {
+export function getWorkspaceCleanupGitChipLabel(
+  state: WorkspaceCleanupGitState,
+  t: Translate = translate
+): string {
   switch (state) {
     case 'clean':
-      return translate('components.workspace.cleanup.candidateRow.gitChip.clean', 'Clean')
+      return t('components.workspace.cleanup.candidateRow.gitChip.clean', 'Clean')
     case 'dirty':
-      return translate('components.workspace.cleanup.candidateRow.gitChip.dirty', 'Dirty')
+      return t('components.workspace.cleanup.candidateRow.gitChip.dirty', 'Dirty')
     case 'unpushed':
-      return translate('components.workspace.cleanup.candidateRow.gitChip.unpushed', 'Unpushed')
+      return t('components.workspace.cleanup.candidateRow.gitChip.unpushed', 'Unpushed')
     case 'unknown':
-      return translate('components.workspace.cleanup.candidateRow.gitChip.unknown', 'Unknown')
+      return t('components.workspace.cleanup.candidateRow.gitChip.unknown', 'Unknown')
   }
 }
 
-export function getNoUnpushedCommitsLabel(): string {
-  return translate(
+export function getNoUnpushedCommitsLabel(t: Translate = translate): string {
+  return t(
     'auto.components.workspace.cleanup.candidateRow.noUnpushedCommits',
     'No unpushed commits'
   )
 }
 
-export function getUnpushedCommitsLabel(): string {
-  return translate(
-    'auto.components.workspace.cleanup.candidateRow.unpushedCommits',
-    'Unpushed commits'
-  )
+export function getUnpushedCommitsLabel(t: Translate = translate): string {
+  return t('auto.components.workspace.cleanup.candidateRow.unpushedCommits', 'Unpushed commits')
 }
 
-export function formatUnpushedCommitCount(count: number): string {
-  return translate(
+export function formatUnpushedCommitCount(count: number, t: Translate = translate): string {
+  return t(
     'auto.components.workspace.cleanup.candidateRow.unpushedCommitsCount',
     'Unpushed commits: {{value0}}',
     { value0: count }
   )
 }
 
-export function getUncommittedChangesLabel(): string {
-  return translate(
+export function getUncommittedChangesLabel(t: Translate = translate): string {
+  return t(
     'auto.components.workspace.cleanup.candidateRow.uncommittedChanges',
     'Uncommitted changes'
   )
 }
 
-export function getGitStatusUnknownLabel(): string {
-  return translate(
-    'auto.components.workspace.cleanup.candidateRow.gitStatusUnknown',
-    'Git status unknown'
-  )
+export function getGitStatusUnknownLabel(t: Translate = translate): string {
+  return t('auto.components.workspace.cleanup.candidateRow.gitStatusUnknown', 'Git status unknown')
 }
 
 export function formatWorkspaceCleanupContextDetail(
   kind: ContextDetailKind,
-  count: number
+  count: number,
+  t: Translate = translate
 ): string {
   switch (kind) {
     case 'terminal':
-      return translate(
+      return t(
         'auto.components.workspace.cleanup.candidateRow.terminalTabsCount',
         'Terminal tabs: {{value0}}',
         { value0: count }
       )
     case 'editor':
-      return translate(
+      return t(
         'auto.components.workspace.cleanup.candidateRow.editorTabsCount',
         'Editor tabs: {{value0}}',
         { value0: count }
       )
     case 'browser':
-      return translate(
+      return t(
         'auto.components.workspace.cleanup.candidateRow.browserTabsCount',
         'Browser tabs: {{value0}}',
         { value0: count }
       )
     case 'diff':
-      return translate(
+      return t(
         'auto.components.workspace.cleanup.candidateRow.diffNotesCount',
         'Diff notes: {{value0}}',
         { value0: count }
       )
     case 'agent':
-      return translate(
+      return t(
         'auto.components.workspace.cleanup.candidateRow.completedAgentsCount',
         'Completed agents: {{value0}}',
         { value0: count }

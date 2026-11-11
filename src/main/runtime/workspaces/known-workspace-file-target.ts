@@ -1,5 +1,5 @@
 import { getRepoHostIdentityForParts } from '../../../shared/repo-host-identity'
-import { createRepoRowExecutionHostLookup } from '../../../shared/worktree-execution-host-resolution'
+import { createRepoRowExecutionHostLookup } from '../../../shared/execution-host/worktree-execution-host-resolution'
 import type { RuntimeWorkspaceCatalog } from './catalog/workspace-catalog'
 import type { OrcaRuntimeWithListManagedWorktrees } from './managed-workspace-operations'
 import type { OrcaRuntimeWithTransitionGraphReloadToTerminalState } from '../session-graph/session-graph-authority'
@@ -10,7 +10,7 @@ import {
 } from '../../../shared/execution-host'
 import type { ResolvedWorktree } from './catalog/runtime-worktree-path-identity'
 import { resolveWorktreeHostRouting } from './catalog/worktree-launch-host-repo'
-import { findRuntimeWorkspaceFileOwner } from '../../../shared/runtime-workspace-file-owner'
+import { findRuntimeWorkspaceFileOwner } from '../../../shared/file-access/runtime-workspace-file-owner'
 import { RuntimePreallocatedTerminalHandles } from '../terminal/identity/preallocated-terminal-handles'
 export abstract class OrcaRuntimeWithResolveKnownWorkspaceFileTarget extends RuntimePreallocatedTerminalHandles {
   protected abstract listResolvedWorktrees(

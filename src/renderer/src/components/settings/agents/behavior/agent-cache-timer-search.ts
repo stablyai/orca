@@ -4,7 +4,7 @@ import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 
 export const getAgentCacheTimerSearchEntries = createLocalizedCatalog(() => [
   {
-    title: translate('auto.components.settings.general.search.1e0f28c6f1', 'Prompt Cache Timer'),
+    title: translate('auto.components.settings.general.search.34cda90656', 'Prompt cache timer'),
     description: translate(
       'auto.components.settings.general.search.40c9585e43',
       'Countdown timer showing time until prompt cache expires (Claude agents).'

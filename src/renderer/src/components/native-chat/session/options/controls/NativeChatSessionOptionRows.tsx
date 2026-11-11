@@ -1,7 +1,9 @@
 import { useId, useLayoutEffect, useRef } from 'react'
-import { cn } from '@/lib/utils'
+import { Zap } from 'lucide-react'
+import { cn } from '@/lib/class-names'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
+import { Toggle } from '@/components/ui/toggle'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { sortNativeChatSessionOptions } from '../../../../../../../shared/native-chat/input/native-chat-session-option-snapshot'
@@ -20,6 +22,8 @@ import {
 } from '../../../../../../../shared/native-chat/input/native-chat-session-option-labels'
 import { sayNativeChatSessionOptionTranslated as say } from './native-chat-session-option-labels-text'
 import { NativeChatSessionOptionWriteGroup } from './NativeChatSessionOptionWriteGroup'
+import { NativeChatSessionSpeedButton } from './NativeChatSessionSpeedButton'
+import { speedButtonTiers } from '../../../../../../../shared/native-chat/input/native-chat-session-speed-tiers'
 
 type NativeChatSessionOptionRowsProps = {
   /** The current model's options, in display order. */
@@ -33,8 +37,8 @@ type NativeChatSessionOptionRowsProps = {
   onAction: (descriptor: SessionOptionDescriptor) => void
   /** False when the caller already separates these rows from what sits above them. */
   divided?: boolean
-  /** Settings grids provide their own inset and spacing between option blocks. */
-  layout?: 'menu' | 'settings'
+  /** Settings grids provide their own inset and spacing; inline puts levels, unlabeled, left of the rest on one line. */
+  layout?: 'menu' | 'settings' | 'inline'
 }
 
 // Retain missing rows disabled for this visit so model changes cannot slide the picker under the pointer.
@@ -83,7 +87,7 @@ function LevelSegment(props: {
 
 function OptionRow(props: {
   descriptor: SessionOptionDescriptor
-  layout: 'menu' | 'settings'
+  layout: 'menu' | 'settings' | 'inline'
   /** Kept from an earlier model in this visit; the current one does not offer it. */
   gone: boolean
   onSet: (value: SessionOptionValue) => void
@@ -119,6 +123,45 @@ function OptionRow(props: {
         <Button type="button" variant="ghost" size="xs" disabled={off} onClick={onAction}>
           {nativeChatSessionOptionActionLabel(descriptor, say)}
         </Button>
+      </div>
+    )
+  }
+  // Every agent's speed is one button: Fast on/off for two modes, a list for more.
+  const speed = speedButtonTiers(descriptor)
+  const speedButton =
+    descriptor.kind.type === 'boolean' && descriptor.id === 'fastMode' ? (
+      <Toggle
+        variant="chip"
+        size="xs"
+        pressed={!gone && descriptor.kind.currentValue}
+        disabled={off}
+        onPressedChange={onSet}
+      >
+        <Zap className="size-3" />
+        {say('fast')}
+      </Toggle>
+    ) : speed && descriptor.kind.type === 'select' ? (
+      <NativeChatSessionSpeedButton
+        label={say('speed')}
+        standard={speed.standard}
+        tiers={speed.tiers}
+        current={gone ? undefined : descriptor.kind.currentValue}
+        disabled={off}
+        onSet={onSet}
+      />
+    ) : null
+  if (speedButton) {
+    return layout === 'inline' ? (
+      speedButton
+    ) : (
+      <div
+        className={cn(
+          'flex min-h-7 items-center justify-between gap-3 text-xs text-muted-foreground',
+          layout === 'menu' && 'px-2'
+        )}
+      >
+        {say('speed')}
+        {speedButton}
       </div>
     )
   }
@@ -166,7 +209,13 @@ function OptionRow(props: {
         layout === 'menu' && 'pl-2'
       )}
     >
-      <span id={labelId} className="text-xs text-muted-foreground">
+      <span
+        id={labelId}
+        className={cn(
+          'text-xs text-muted-foreground',
+          layout === 'inline' && descriptor.category === 'thought_level' && 'sr-only'
+        )}
+      >
         {label}
       </span>
       <ToggleGroup
@@ -186,7 +235,7 @@ function OptionRow(props: {
           }
         }}
         // Why -ml-2: a wrapped group lines its first label up under the row's.
-        className="-ml-2 flex-wrap"
+        className={cn('flex-wrap', layout !== 'inline' && '-ml-2')}
       >
         {descriptor.kind.choices.map((choice) => (
           <LevelSegment key={choice.value} optionId={descriptor.id} choice={choice} />
@@ -233,19 +282,28 @@ export function NativeChatSessionOptionRows({
       ref={frame}
       className={cn(
         'h-(--option-rows-height) shrink-0 overflow-hidden transition-[height] duration-150 ease-out motion-reduce:transition-none',
-        layout === 'settings' && rows.length === 0 && 'hidden'
+        layout !== 'menu' && rows.length === 0 && 'hidden'
       )}
     >
       <div ref={content}>
         {rows.length > 0 ? (
           <div className={cn(divided && 'border-t border-border', layout === 'menu' && 'p-1')}>
-            <div className={cn('flex flex-col', layout === 'menu' ? 'gap-0.5' : 'gap-2.5')}>
+            <div
+              className={cn(
+                layout === 'inline' ? 'flex flex-wrap items-center gap-3' : 'flex flex-col',
+                layout === 'menu' && 'gap-0.5',
+                layout === 'settings' && 'gap-2.5'
+              )}
+            >
               {rows.map((descriptor) => {
                 const reason = nativeChatSessionOptionDisabledReason(descriptor.disabledReason, say)
                 return (
                   <NativeChatSessionOptionWriteGroup
                     key={descriptor.id}
                     busy={pendingIds.has(descriptor.id)}
+                    className={cn(
+                      layout === 'inline' && descriptor.category !== 'thought_level' && 'ml-auto'
+                    )}
                   >
                     <div data-option-id={descriptor.id}>
                       <OptionRow

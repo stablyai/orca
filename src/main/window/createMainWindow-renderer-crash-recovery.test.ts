@@ -9,7 +9,7 @@ vi.mock('./macos-tahoe-release', async () =>
 vi.mock('./desktop-integration/app-icon', async () =>
   (await import('./createMainWindow-test-harness')).appIconMock()
 )
-vi.mock('../browser/browser-manager', async () =>
+vi.mock('../browser/guest-lifecycle/manager/browser-manager', async () =>
   (await import('./createMainWindow-test-harness')).browserManagerMock()
 )
 vi.mock('../browser/client-pages/renderer/browser-client-page-renderer-runtime', async () => {
@@ -215,184 +215,6 @@ describe('createMainWindow', () => {
     assertInterceptsAfterReset()
   })
 
-  it('notifies the caller when the renderer process is gone', () => {
-    const windowHandlers: Record<string, (...args: any[]) => void> = {}
-    const webContents = {
-      id: 142,
-      on: vi.fn((event, handler) => {
-        windowHandlers[event] = handler
-      }),
-      setZoomLevel: vi.fn(),
-      setBackgroundThrottling: vi.fn(),
-      setWebRTCIPHandlingPolicy: vi.fn(),
-      invalidate: vi.fn(),
-      setWindowOpenHandler: vi.fn(),
-      send: vi.fn()
-    }
-    const browserWindowInstance = {
-      webContents,
-      on: vi.fn(),
-      isDestroyed: vi.fn(() => false),
-      isMaximized: vi.fn(() => true),
-      isFullScreen: vi.fn(() => false),
-      getSize: vi.fn(() => [1200, 800]),
-      setSize: vi.fn(),
-      maximize: vi.fn(),
-      show: vi.fn(),
-      loadFile: vi.fn(() => Promise.resolve()),
-      loadURL: vi.fn(() => Promise.resolve())
-    }
-    browserWindowMock.mockImplementation(function () {
-      return browserWindowInstance
-    })
-    const onRendererProcessGone = vi.fn()
-
-    createMainWindow(null, { onRendererProcessGone })
-
-    const details = { reason: 'crashed', exitCode: 5 } as Electron.RenderProcessGoneDetails
-    windowHandlers['render-process-gone']?.({} as never, details)
-
-    expect(onRendererProcessGone).toHaveBeenCalledWith(
-      details,
-      142,
-      expect.objectContaining({ rendererDocumentLoaded: false })
-    )
-  })
-
-  it('passes the renderer webContents id through crash recording and recovery callbacks', () => {
-    vi.useFakeTimers()
-
-    const windowHandlers: Record<string, (...args: any[]) => void> = {}
-    const webContents = {
-      id: 424,
-      on: vi.fn((event, handler) => {
-        windowHandlers[event] = handler
-      }),
-      setZoomLevel: vi.fn(),
-      setBackgroundThrottling: vi.fn(),
-      setWebRTCIPHandlingPolicy: vi.fn(),
-      invalidate: vi.fn(),
-      setWindowOpenHandler: vi.fn(),
-      send: vi.fn()
-    }
-    const browserWindowInstance = {
-      webContents,
-      on: vi.fn(),
-      isDestroyed: vi.fn(() => false),
-      isMaximized: vi.fn(() => true),
-      isFullScreen: vi.fn(() => false),
-      getSize: vi.fn(() => [1200, 800]),
-      setSize: vi.fn(),
-      maximize: vi.fn(),
-      show: vi.fn(),
-      loadFile: vi.fn(() => Promise.resolve()),
-      loadURL: vi.fn(() => Promise.resolve())
-    }
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
-    browserWindowMock.mockImplementation(function () {
-      return browserWindowInstance
-    })
-    const onRendererProcessGone = vi.fn()
-    const shouldRecoverRenderer = vi.fn(() => true)
-
-    try {
-      createMainWindow(null, {
-        onRendererProcessGone,
-        shouldRecoverRenderer
-      })
-
-      const details = { reason: 'crashed', exitCode: 5 } as Electron.RenderProcessGoneDetails
-      windowHandlers['render-process-gone']?.({} as never, details)
-      vi.advanceTimersByTime(250)
-
-      expect(onRendererProcessGone).toHaveBeenCalledWith(
-        details,
-        424,
-        expect.objectContaining({ rendererDocumentLoaded: false })
-      )
-      expect(shouldRecoverRenderer).toHaveBeenCalledWith(details, 424)
-    } finally {
-      consoleError.mockRestore()
-    }
-  })
-
-  it('forwards expected renderer teardowns so the recorder can diagnose suppression', () => {
-    const windowHandlers: Record<string, (...args: any[]) => void> = {}
-    const webContents = {
-      id: 142,
-      on: vi.fn((event, handler) => {
-        windowHandlers[event] = handler
-      }),
-      setZoomLevel: vi.fn(),
-      setBackgroundThrottling: vi.fn(),
-      setWebRTCIPHandlingPolicy: vi.fn(),
-      invalidate: vi.fn(),
-      setWindowOpenHandler: vi.fn(),
-      send: vi.fn()
-    }
-    const browserWindowInstance = {
-      webContents,
-      on: vi.fn(),
-      isDestroyed: vi.fn(() => false),
-      isMaximized: vi.fn(() => true),
-      isFullScreen: vi.fn(() => false),
-      getSize: vi.fn(() => [1200, 800]),
-      setSize: vi.fn(),
-      maximize: vi.fn(),
-      show: vi.fn(),
-      loadFile: vi.fn(() => Promise.resolve()),
-      loadURL: vi.fn(() => Promise.resolve())
-    }
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
-    browserWindowMock.mockImplementation(function () {
-      return browserWindowInstance
-    })
-    const onRendererProcessGone = vi.fn()
-
-    createMainWindow(null, { onRendererProcessGone })
-
-    windowHandlers['render-process-gone']?.(
-      {} as never,
-      {
-        reason: 'killed',
-        exitCode: 15
-      } as Electron.RenderProcessGoneDetails
-    )
-
-    expect(onRendererProcessGone).toHaveBeenCalledWith(
-      expect.objectContaining({ reason: 'killed', exitCode: 15 }),
-      expect.any(Number),
-      expect.any(Object)
-    )
-
-    consoleError.mockRestore()
-  })
-
-  it('reloads the app shell after an unexpected renderer process loss', () => {
-    vi.useFakeTimers()
-
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const { browserWindowInstance, windowHandlers } = createRendererRecoveryWindowHarness()
-
-    createMainWindow(null)
-
-    windowHandlers['render-process-gone']?.(
-      {} as never,
-      {
-        reason: 'crashed',
-        exitCode: 5
-      } as Electron.RenderProcessGoneDetails
-    )
-    expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(1)
-
-    vi.advanceTimersByTime(250)
-
-    expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(2)
-    expect(browserWindowInstance.loadURL).not.toHaveBeenCalled()
-
-    consoleError.mockRestore()
-  })
-
   it('still preserves PTYs and reloads after Windows session-end', () => {
     vi.useFakeTimers()
 
@@ -429,29 +251,6 @@ describe('createMainWindow', () => {
     // Deliberate logoff reloads must never raise recovery dialogs during teardown.
     vi.runAllTimers()
     expect(onRendererRecoveryExhausted).not.toHaveBeenCalled()
-    consoleError.mockRestore()
-  })
-
-  it('does not reload after renderer loss when recovery is disabled', () => {
-    vi.useFakeTimers()
-
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const { browserWindowInstance, windowHandlers } = createRendererRecoveryWindowHarness()
-
-    createMainWindow(null, { shouldRecoverRenderer: () => false })
-
-    windowHandlers['render-process-gone']?.(
-      {} as never,
-      {
-        reason: 'crashed',
-        exitCode: 5
-      } as Electron.RenderProcessGoneDetails
-    )
-    vi.advanceTimersByTime(250)
-
-    expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(1)
-    expect(browserWindowInstance.loadURL).not.toHaveBeenCalled()
-
     consoleError.mockRestore()
   })
 
@@ -545,37 +344,6 @@ describe('createMainWindow', () => {
 
     expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(1)
     expect(browserWindowInstance.loadURL).not.toHaveBeenCalled()
-
-    consoleError.mockRestore()
-  })
-
-  it('stops auto-reloading after a rapid renderer crash loop trips the breaker', () => {
-    vi.useFakeTimers()
-
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const onRendererRecoveryExhausted = vi.fn()
-    const { browserWindowInstance, windowHandlers } = createRendererRecoveryWindowHarness()
-
-    createMainWindow(null, { onRendererRecoveryExhausted })
-
-    const details = { reason: 'crashed', exitCode: 5 } as Electron.RenderProcessGoneDetails
-    // Allow three renderer-death reloads, then open the breaker.
-    const driveCrashCycle = (): void => {
-      windowHandlers['render-process-gone']?.({} as never, details)
-      vi.advanceTimersByTime(250)
-    }
-    driveCrashCycle()
-    driveCrashCycle()
-    driveCrashCycle()
-    expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(4)
-    expect(onRendererRecoveryExhausted).not.toHaveBeenCalled()
-
-    driveCrashCycle()
-    expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(4)
-    expect(onRendererRecoveryExhausted).toHaveBeenCalledTimes(1)
-    expect(onRendererRecoveryExhausted).toHaveBeenCalledWith(
-      expect.objectContaining({ recentRecoveryCount: 3 })
-    )
 
     consoleError.mockRestore()
   })

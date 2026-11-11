@@ -11,12 +11,12 @@ import {
   type StructuredAgentSessionOptionState
 } from '../../../../../../../shared/agent-session/options/structured-agent-session-options'
 import type { RuntimeClientTarget } from '../../../../../../../shared/runtime-client-target'
-import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
-import { recordHostModelCatalogSnapshot } from '@/runtime/host-model-catalog-snapshots'
+import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
+import { recordHostModelCatalogSnapshot } from '@/runtime/native-chat/model-catalogs/host-model-catalog-snapshots'
 import {
   structuredAgentSessionHostKey,
   useStructuredAgentSessionHostCapabilityState
-} from '@/runtime/structured-agent-session-host-capability'
+} from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
 import type { StructuredAgentSessionOptionRecord } from '../../../../../../../shared/agent-session/options/structured-agent-session-option-state'
 import {
   isHostModelListingWaitInFlight,

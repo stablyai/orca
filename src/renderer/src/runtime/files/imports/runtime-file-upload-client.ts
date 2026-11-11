@@ -1,7 +1,7 @@
-import { extractIpcErrorMessage } from '@/lib/ipc-error'
+import { extractIpcErrorMessage } from '@/runtime/errors/ipc-error'
 import { joinPath } from '@/lib/path'
 import { normalizeRelativePath } from '../../../../../shared/cross-platform-path'
-import type { StagedRuntimeUploadFileIdentity } from '../../../../../shared/runtime-upload-staging-contract'
+import type { StagedRuntimeUploadFileIdentity } from '../../../../../shared/file-import/runtime-upload-staging-contract'
 import {
   DROP_STAGING_GITIGNORE_CONTENT,
   DROP_STAGING_RELATIVE_DIR
@@ -17,7 +17,7 @@ import {
   withSshMutationExpectation
 } from '../runtime-file-routing'
 import { runtimePathExists } from '../metadata/runtime-file-metadata-client'
-import { toRuntimeWorktreeSelector } from '../../runtime-worktree-selector'
+import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
 
 /** Locates a staged file on the client so main can stream it without the renderer reading it. */
 export type RuntimeUploadSource = {

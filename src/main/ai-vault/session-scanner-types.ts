@@ -59,6 +59,8 @@ export type AiVaultScanOptions = {
   limitPerAgent?: number
   // Include sessions for these workspace paths beyond the recency cap (AI_VAULT_SCOPE_CWD_SOURCES).
   scopePaths?: readonly string[]
+  // Return only scopePaths sessions, skipping the global recency pass (Workspace and Project).
+  scopeOnly?: boolean
   platform?: NodeJS.Platform
   executionHostId?: ExecutionHostId
   signal?: AbortSignal
@@ -102,6 +104,7 @@ export type SessionParseResult = {
 }
 
 export type ResumableParseFinalizeOptions = {
+  signal?: AbortSignal
   executionHostId?: ExecutionHostId
   executionHostPlatform?: NodeJS.Platform | null
 }

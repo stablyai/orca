@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { WorkspaceAttachment, Worktree } from '../../../../../../shared/worktree/types'
-import { normalizeTaskSourceContext } from '../../../../../../shared/task-source-context'
+import { normalizeTaskSourceContext } from '../../../../../../shared/work-items/task-source-context'
 import {
   getWorkspaceAttachmentSourceContext,
   matchesWorkspaceAttachmentQuery

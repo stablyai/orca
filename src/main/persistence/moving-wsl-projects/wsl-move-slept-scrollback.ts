@@ -26,7 +26,7 @@ import { parsePtySessionId } from '../../../shared/terminal/pty/lifecycle/pty-se
 import { collectLeafIds } from '../../../shared/workspace-layout/terminal-pane-layout-tree'
 import type { ColdRestoreInfo } from '../../daemon/history/restoration/terminal-history-cold-restore-info'
 import type { TerminalCheckpointFile } from '../../daemon/protocol/daemon-checkpoint-file'
-import type { OrcadMigrationBlobSource } from '../../ssh/orcad-migration-blob-coordinator'
+import type { OrcadMigrationBlobSource } from '../../managed-server/migration/transfers/orcad-migration-blob-coordinator'
 import { orcadMigrationTerminalHistoryKey } from '../migrating-orcad-catalog/orcad-terminal-history-installer'
 import type { WslMoveDriverDeps } from './wsl-move-driver-ports'
 import {

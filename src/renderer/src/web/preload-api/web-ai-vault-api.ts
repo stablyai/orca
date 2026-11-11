@@ -76,6 +76,7 @@ export function createWebAiVaultApi(): NonNullable<Partial<PreloadApi>['aiVault'
           ? { afterFingerprint: args.afterFingerprint }
           : {}),
         scopePaths: args?.scopePaths,
+        ...(args?.scopeOnly === true ? { scopeOnly: true } : {}),
         executionHostId
       }).then((result) =>
         // Fence later host mutations on these rows to the pairing that listed them.

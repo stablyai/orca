@@ -2,11 +2,13 @@ import { restorePersistedStructuredLaunchState } from '@/lib/agent-session/launc
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { getStructuredAgentSessionLaunchSelection } from '../../../lib/agent-session/launch/structured-agent-session-launch-options'
 import {
-  subscribeStructuredAgentLaunchStatus,
-  getStructuredLaunchStateBySessionId,
   useStructuredAgentSessionLaunchFailure,
   useStructuredAgentSessionLaunchLifecycle
 } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
+import {
+  subscribeStructuredAgentLaunchStatus,
+  getStructuredLaunchStateBySessionId
+} from '@/lib/agent-session/launch/structured-agent-session-launch-state-store'
 import {
   structuredAgentSessionLaunchHasRetainedInput,
   getStructuredAgentSessionLaunchResumes
@@ -16,7 +18,7 @@ import {
   relaunchFailedStructuredAgentSessionForMessage,
   retryStructuredAgentSessionLaunch
 } from '@/lib/agent-session/launch/structured-agent-session-launch'
-import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
+import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
 
 export type StructuredAgentSessionLaunchView = {
   kind: 'new' | 'resume'

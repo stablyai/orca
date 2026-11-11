@@ -5,7 +5,7 @@ import { useRepoMap } from '@/store/repos/use-repository-catalog'
 import { useWorktreesForRepo } from '@/store/slices/worktrees/listing/use-worktree-catalog'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { toast } from 'sonner'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type ComposerBaseRefPickerProps = {
   repoId: string
@@ -23,6 +23,7 @@ export function ComposerBaseRefPicker({
   resetHint,
   readOnly = false
 }: ComposerBaseRefPickerProps): React.JSX.Element {
+  const t = useTranslate()
   const repoMap = useRepoMap()
   const repo = repoMap.get(repoId)
   const repoWorktrees = useWorktreesForRepo(repoId)
@@ -50,7 +51,7 @@ export function ComposerBaseRefPicker({
                 )
                 if (!updated) {
                   toast.error(
-                    translate(
+                    t(
                       'auto.components.NewWorkspaceComposerCard.defaultBranchUpdateFailed',
                       'Could not update the project default branch. Try again.'
                     )

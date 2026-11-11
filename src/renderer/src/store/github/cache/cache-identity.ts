@@ -4,8 +4,8 @@ import type { PRCheckDetail } from '../../../../../shared/github/check-types'
 import type { GitHubOwnerRepo } from '../../../../../shared/github/pull-request-types'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import type { GetProjectViewTableArgs } from '../../../../../shared/github/project-request-types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
-import { getTaskSourceCacheScope } from '../../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
+import { getTaskSourceCacheScope } from '../../../../../shared/work-items/task-source-context'
 import {
   LOCAL_EXECUTION_HOST_ID,
   getRepoExecutionHostId,
@@ -14,7 +14,6 @@ import {
 } from '../../../../../shared/execution-host'
 import {
   composeRepoCacheKey,
-  getGitHubPRCacheKey,
   getGitHubRepoCacheKey,
   repoCacheKeyHostId,
   type RuntimeFocusSettings
@@ -112,26 +111,6 @@ export function issueCacheKey(
   )
 }
 
-export function runtimeScopedRepoCacheKey(
-  repoPath: string,
-  repoId: string | undefined,
-  suffix: string,
-  settings?: RuntimeFocusSettings,
-  connectionId?: string | null,
-  executionHostId?: string | null,
-  hasRepoOwner = false
-): string {
-  return getGitHubRepoCacheKey(
-    repoPath,
-    repoId,
-    suffix,
-    settings,
-    connectionId,
-    executionHostId,
-    hasRepoOwner
-  )
-}
-
 export function sourceScopedRepoCacheKey(
   repoPath: string,
   repoId: string | undefined,
@@ -145,30 +124,10 @@ export function sourceScopedRepoCacheKey(
   if (sourceContext?.provider === 'github') {
     return composeRepoCacheKey(getTaskSourceCacheScope(sourceContext), repoId ?? repoPath, suffix)
   }
-  return runtimeScopedRepoCacheKey(
+  return getGitHubRepoCacheKey(
     repoPath,
     repoId,
     suffix,
-    settings,
-    connectionId,
-    executionHostId,
-    hasRepoOwner
-  )
-}
-
-export function prCacheKey(
-  repoPath: string,
-  repoId: string | undefined,
-  branch: string,
-  settings?: RuntimeFocusSettings,
-  connectionId?: string | null,
-  executionHostId?: string | null,
-  hasRepoOwner = false
-): string {
-  return getGitHubPRCacheKey(
-    repoPath,
-    repoId,
-    branch,
     settings,
     connectionId,
     executionHostId,

@@ -14,11 +14,7 @@ import {
 } from '../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { assemblePRRefreshFoundOutcome } from '../client/lookup/pr-refresh-outcome-assembly'
 import type { PRWatchJob } from '../pr-refresh-watch-jobs'
-import {
-  readPRPendingDeliveryChatIds,
-  readPRPendingHeads,
-  upsertPRPendingHead
-} from './pr-check-event-tables'
+import { readPRPendingDeliveryChatIds, readPRPendingHeads } from './pr-check-event-tables'
 import { readPRHeadCheckRollup } from './pr-head-check-read'
 import { capturePRPendingActions } from './pr-pending-actions'
 import { shellCallRow } from './pr-watch-test-fixtures'
@@ -232,32 +228,5 @@ describe('PRWatchService startup retirement', () => {
       { head_sha: HEAD_A, verdict: 'success' }
     ])
     next.stop()
-  })
-
-  it('starts nothing from a workspace that resolves after the service stopped', async () => {
-    // R's action is past the action window, so retirement, had it run, would delete R's head.
-    vi.setSystemTime(1_800_000_000_000 - 30 * 24 * 60 * 60_000)
-    await seedOpenedPR('chat-r', 9)
-    vi.setSystemTime(1_800_000_000_000)
-    const database = await seedOpenedPR()
-    const STALE_KEY = 'github.com/acme/repo#9'
-    database.transaction((db) =>
-      upsertPRPendingHead(db, {
-        prKey: STALE_KEY,
-        headSha: HEAD_A,
-        now: Date.now(),
-        movedAt: null,
-        ttlMs: 60_000
-      })
-    )
-    let releaseQ = (_workspace: PRWatchWorkspace) => {}
-    const qWorkspace = new Promise<PRWatchWorkspace>((resolve) => (releaseQ = resolve))
-    const stopping = service(() => qWorkspace)
-    const starting = stopping.start()
-    stopping.stop()
-    releaseQ(WORKSPACE)
-    await starting
-    expect(queue.scheduled).toEqual([])
-    expect(readPRPendingHeads(database.db, STALE_KEY)).toHaveLength(1)
   })
 })

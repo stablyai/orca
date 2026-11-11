@@ -1,4 +1,3 @@
-import '../../src/main/runtime/rpc/unused-default-rpc-methods.test-fixture'
 import type * as childProcess from 'node:child_process'
 import { describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'

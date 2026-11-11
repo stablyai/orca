@@ -1,13 +1,13 @@
 // Main decides content closes; wait for its frame before cleanup and selection, preserving refused tabs and notifying close waiters.
 
 import type { Tab } from '../../../../../shared/tab-types'
-import { sendLayoutApply } from '@/runtime/layout-apply-send'
+import { sendLayoutApply } from '@/runtime/workspace-layout/commands/layout-apply-send'
 import {
   afterPendingTab,
   beginPendingTab,
   isPendingTab,
   isTabClosePending
-} from '@/runtime/layout-owner-pending-tabs'
+} from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
 import type { AppState } from '../../types'
 import { pickNextActiveTab } from './tab-selection-history'
 import { isEditorTabContentType } from '../editor/tabs/editor-tab-content-type'

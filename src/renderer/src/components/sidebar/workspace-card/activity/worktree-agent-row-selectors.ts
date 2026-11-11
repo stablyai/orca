@@ -7,8 +7,7 @@ import { parsePaneKey } from '../../../../../../shared/workspace-layout/stable-p
 import {
   type LiveEntriesByWorktreeCache,
   liveEntryWorktreeId,
-  patchLiveEntriesByWorktree,
-  recordLiveEntriesFullRebuild
+  patchLiveEntriesByWorktree
 } from './worktree-agent-live-index-patch'
 import './worktree-agent-orchestration-index'
 import { createWorktreeRecordSelector } from '@/store/terminals/worktree-terminal-record-selector'
@@ -150,7 +149,6 @@ function getLiveEntriesByWorktree(state: WorktreeAgentRowsState): Map<string, Ag
       return patched
     }
   }
-  recordLiveEntriesFullRebuild()
   const previous = liveEntriesByWorktreeCache?.entriesByWorktree
   const entriesByWorktree = new Map<string, AgentStatusEntry[]>()
   for (const [paneKey, entry] of Object.entries(agentStatusByPaneKey)) {

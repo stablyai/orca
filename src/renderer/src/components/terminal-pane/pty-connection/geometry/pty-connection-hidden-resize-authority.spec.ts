@@ -29,7 +29,6 @@ export function registerPtyConnectionHiddenResizeAuthorityTests(): void {
   }
   describe('connectPanePty', () => {
     beforeEach(async () => {
-      vi.resetModules()
       vi.clearAllMocks()
       transportFactoryQueue = []
       createdTransportOptions = []
@@ -53,8 +52,9 @@ export function registerPtyConnectionHiddenResizeAuthorityTests(): void {
 
     it('does not forward terminal resizes while the pane is hidden', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks6 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks6 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport('pty-id')
       transportFactoryQueue.push(transport)
       const pane = createPane(1)

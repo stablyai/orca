@@ -14,7 +14,7 @@ import {
   startAgentSessionFork,
   type PreparedAgentSessionFork
 } from './terminal-agent-session-fork'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type TerminalAgentSessionForkDialogProps = {
   open: boolean
@@ -27,6 +27,7 @@ export function TerminalAgentSessionForkDialog({
   fork,
   onOpenChange
 }: TerminalAgentSessionForkDialogProps): React.JSX.Element {
+  const t = useTranslate()
   const [busy, setBusy] = useState(false)
   const busyRef = useRef(false)
 
@@ -74,13 +75,13 @@ export function TerminalAgentSessionForkDialog({
       <DialogContent className="gap-4 sm:max-w-[520px]">
         <DialogHeader>
           <DialogTitle className="text-base">
-            {translate(
+            {t(
               'auto.components.terminal.pane.TerminalAgentSessionForkDialog.64e292e8e3',
               'Fork Agent Session'
             )}
           </DialogTitle>
           <DialogDescription>
-            {translate(
+            {t(
               'auto.components.terminal.pane.TerminalAgentSessionForkDialog.619b5a35d2',
               'Create a top-level workspace fork and start a fresh agent tab with captured context.'
             )}
@@ -91,13 +92,13 @@ export function TerminalAgentSessionForkDialog({
           <GitFork className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
           <div className="min-w-0 space-y-1">
             <p className="text-sm font-medium">
-              {translate(
+              {t(
                 'auto.components.terminal.pane.TerminalAgentSessionForkDialog.620461df22',
                 'Top-level fork'
               )}
             </p>
             <p className="text-xs text-muted-foreground">
-              {translate(
+              {t(
                 'auto.components.terminal.pane.TerminalAgentSessionForkDialog.0c8a8629b1',
                 'The fork appears as its own workspace, not as a nested child. The new agent receives a bounded transcript as an editable draft.'
               )}
@@ -108,7 +109,7 @@ export function TerminalAgentSessionForkDialog({
         <DialogFooter>
           <Button variant="outline" disabled={busy} onClick={() => void handleCopyContext()}>
             <Copy className="size-4" />
-            {translate(
+            {t(
               'auto.components.terminal.pane.TerminalAgentSessionForkDialog.17fc841e59',
               'Copy context'
             )}
@@ -116,11 +117,11 @@ export function TerminalAgentSessionForkDialog({
           <Button disabled={busy} onClick={() => void handleStartFork()}>
             <GitFork className="size-4" />
             {busy
-              ? translate(
+              ? t(
                   'auto.components.terminal.pane.TerminalAgentSessionForkDialog.2b10412cfc',
                   'Creating...'
                 )
-              : translate(
+              : t(
                   'auto.components.terminal.pane.TerminalAgentSessionForkDialog.9d25de2920',
                   'Create fork'
                 )}

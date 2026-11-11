@@ -3,12 +3,14 @@ import { useQueryClient } from '@tanstack/react-query'
 import { translate } from '../i18n/mobile-i18n'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../src/shared/sidebar-inputs-switch'
 import { loadPinnedIds } from '../storage/preferences'
-import { loadHosts, peekHosts, updateLastConnected } from '../transport/host-store'
-import type { HostProfile } from '../transport/types'
-import type { RpcClient } from '../transport/rpc-client'
+import { loadHosts, peekHosts } from '../host-catalog/host-store'
+import { updateLastConnected } from '../host-catalog/host-connection-history'
+import type { HostProfile } from '../host-catalog/host-profile'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { HostScreenState } from './use-host-screen-state'
 import { storedHostDescriptor } from './host-stored-identity'
 import { INITIAL_MOBILE_VIEW } from '../worktree/workspace-view-settings'
+import { cachedHostView } from './host-view-memory'
 import { cachedHostWorktrees } from './host-list-queries'
 
 // The host as last read this launch, so the title's first frame shows its name, not "Host".
@@ -74,8 +76,9 @@ export function useHostScreenIdentity(args: {
     setError('')
     setRepoHostIdByRepoId(new Map())
     // Another desktop's Workspace options must not stand in until this one's are read.
-    viewRef.current = INITIAL_MOBILE_VIEW
-    setView(INITIAL_MOBILE_VIEW)
+    const seedView = cachedHostView(queryClient, hostId) ?? INITIAL_MOBILE_VIEW
+    viewRef.current = seedView
+    setView(seedView)
     setHostLabelById(new Map())
     setServedProjectSections(null)
     setDesktopRepos([])

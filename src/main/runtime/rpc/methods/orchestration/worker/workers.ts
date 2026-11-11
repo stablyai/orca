@@ -1,8 +1,9 @@
 import { stopHelperAfterStart } from './worker-stop'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import type { z } from 'zod'
-import { defineMethod, type RpcContext } from '../../../core'
-import { startFederatedWorker } from '../federation/federated-worker-start'
+import type { RpcContext } from '../../../core'
+import { defineOrchestrationMethod } from '../access/orchestration-method-access'
+import { startFederatedWorker } from '../../../../orchestration/legacy-remote-home/legacy-remote-home'
 import { startLocalWorker } from './local-worker-start'
 import type { WorkerFollowUp } from './worker-follow-up-placement'
 import { withWorkerStartNext } from '../receipt-next'
@@ -21,11 +22,11 @@ import { WorkerStartParams } from '../../../../../../shared/rpc-contract/orchest
 import {
   isWorkerStartTimeoutWithinTimerLimit,
   resolveWorkerStartReadinessTimeoutMs
-} from '../../../../../../shared/orchestration-timing-budgets'
-import { buildOrchestrationTaskDisplayMetadata } from '../../../../../../shared/orchestration-task-display'
+} from '../../../../../../shared/orchestration/orchestration-timing-budgets'
+import { buildOrchestrationTaskDisplayMetadata } from '../../../../../../shared/orchestration/orchestration-task-display'
 import { assertWorkerStartTaskSpecWithinPromptBudget } from './worker-start-prompt-budget'
-import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../../shared/orca-session-address'
-import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as SESSION_CODES } from '../../../../../../shared/orchestration-session-caller-codes'
+import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../../shared/orca-session-address-prefix'
+import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as SESSION_CODES } from '../../../../../../shared/orchestration/orchestration-session-caller-codes'
 import { resolveDispatchCreator } from '../runs/dispatch-creator'
 
 type WorkerStartContext = Pick<
@@ -34,8 +35,22 @@ type WorkerStartContext = Pick<
 >
 
 export const ORCHESTRATION_WORKER_START_METHODS = [
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.workerStart',
+    access: {
+      kind: 'writes',
+      caller: 'from',
+      server: 'on',
+      targets: {
+        task: 'task',
+        parent: 'task',
+        deps: 'task',
+        run: 'run',
+        retryOf: 'dispatch',
+        terminal: 'worker',
+        adoptTaskId: 'task'
+      }
+    },
     requires: ['accounts'],
     permission: 'workspace',
     params: WorkerStartParams,
@@ -65,6 +80,26 @@ export async function startWorker(
     throw new OrchestrationError(
       SESSION_CODES.hostBoundary,
       `${params.terminal} names a chat by its Orca session ID, which identifies it only on the host that runs it. Run worker-start on that host. No effects were applied.`,
+      { effectsApplied: false }
+    )
+  }
+  if (params.adoptTaskId !== undefined && orchestrationCaller?.kind !== 'peer') {
+    throw new OrchestrationError(
+      'invalid_argument',
+      'Only the paired Orca coordinating a Run names its Task IDs. No effects were applied.',
+      { effectsApplied: false }
+    )
+  }
+  const placement = params.worktree ?? 'current'
+  if (
+    orchestrationCaller?.kind === 'peer' &&
+    !followUp &&
+    !params.terminal &&
+    /^(current|new-child)$/.test(placement)
+  ) {
+    throw new OrchestrationError(
+      'invalid_argument',
+      `--on requires an exact remote worktree selector or new-top-level: ${orchestrationCaller.peerRun.home_label} has no workspace on this server for --worktree ${placement}. No effects were applied.`,
       { effectsApplied: false }
     )
   }

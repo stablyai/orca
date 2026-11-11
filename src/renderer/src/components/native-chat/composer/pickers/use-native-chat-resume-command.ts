@@ -252,7 +252,9 @@ export function useNativeChatResumeCommand(args: {
             return
           }
           if (item.name === 'fork') {
-            runFork('/fork')
+            // The picked token may be partial (`/fo`) with text already typed past it.
+            const rest = (textareaRef.current?.value ?? '').replace(/^\/\S*/, '')
+            runFork(`/fork${rest}`)
             return
           }
           // The caret can sit right after `/resume` with a search already typed past it.

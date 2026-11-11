@@ -15,7 +15,7 @@ import {
 import { AgentStateDot } from './AgentStateDot'
 import { MobileAgentIcon } from './MobileAgentIcon'
 import type { AgentChildRowModel } from '../../../src/shared/agent-status/presentation/agent-child-row-model'
-import { mobileAgentChildRowText } from '../session/mobile-agent-child-row-text'
+import { mobileAgentChildRowText } from '../worktree/mobile-agent-child-row-text'
 
 export const AGENT_ROW_INDENT_PER_DEPTH = 14
 

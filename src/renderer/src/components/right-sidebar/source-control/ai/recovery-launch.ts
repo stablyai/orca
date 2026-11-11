@@ -8,21 +8,21 @@ import { ensureAgentLaunchPreferences } from '@/runtime/agent-launch-settings/us
 import {
   AgentLaunchChoiceCancelled,
   acquireAgentLaunchChoices
-} from '@/lib/host-chat-program-acquisition'
+} from '@/lib/agent-session/launch/inventory/host-chat-program-acquisition'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
-import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
+import { focusTerminalTabSurface } from '@/components/terminal-pane/input/focus/focus-terminal-tab-surface'
 import { launchAgentInNewTab } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
 import { settleAgentTabLaunch } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab-host-agents'
 import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
-import { getConnectionId } from '@/lib/connection-context'
+import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
 import {
   ensureDetectedAgentsForWorktree,
   type WorktreeAgentInventoryState
-} from '@/lib/agent-detection-target-inventory'
+} from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
 import {
   pickSourceControlLaunchAgent,
   readSourceControlLaunchRecipeAgentId
@@ -35,7 +35,7 @@ import {
 import type { SourceControlLaunchActionId } from '../../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import { buildSourceControlRecoveryAgentCommandInput } from '../../../../../../shared/source-control/recovery/source-control-recovery-agent-command'
 import { translate } from '@/i18n/i18n'
-import { agentChoiceMayOpenAsChat } from '@/lib/host-chat-program'
+import { agentChoiceMayOpenAsChat } from '@/lib/agent-session/launch/inventory/host-chat-program'
 import { worktreeLaunchWorkspace } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 
 type SourceControlAiLaunchStoreSnapshot = Pick<AppState, 'settings'> & WorktreeAgentInventoryState
@@ -45,7 +45,6 @@ export type SourceControlRecoveryLaunchCopy = {
   emptyPrompt: string
   savedAgentUnavailable: string
   noEnabledAgent: string
-  launchCommandUnavailable: string
   connectionUnavailable: string
   success: string
 }
@@ -76,10 +75,6 @@ export function getDefaultSourceControlRecoveryLaunchCopy(
     noEnabledAgent: translate(
       'auto.components.right.sidebar.source.control.ai.recovery.launch.9bbd9077a2',
       'No enabled AI agents. Configure agents in Settings.'
-    ),
-    launchCommandUnavailable: translate(
-      'auto.components.right.sidebar.source.control.ai.recovery.launch.5540ff50cc',
-      'Could not build the agent launch command.'
     ),
     connectionUnavailable: translate(
       'auto.components.right.sidebar.source.control.ai.recovery.launch.216f762bd7',
@@ -236,8 +231,7 @@ export async function launchSourceControlRecoveryAgentWithDefault({
     launchPlatform: activeSourceControlLaunchPlatform,
     launchSource: 'source_control_recovery'
   })
-  if (!result) {
-    toast.error(copy.launchCommandUnavailable)
+  if (!result || 'refused' in result) {
     return false
   }
 

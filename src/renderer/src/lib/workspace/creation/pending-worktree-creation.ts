@@ -23,10 +23,11 @@ import type { AgentStartedTelemetry } from '@/lib/workspace/creation/worktree-st
 import type {
   TaskSourceContext,
   WorkspaceRunContext
-} from '../../../../../shared/task-source-context'
+} from '../../../../../shared/work-items/task-source-context'
 import type { AgentLaunchRoute } from '@/lib/agent-session/launch/routing/agent-launch-routing'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
+import type { EnvironmentDoctorCheck } from '../../../../../shared/environment-doctor-types'
 import type { NativeChatComposerDraftImage } from '@/components/native-chat/drafts/native-chat-composer-draft-storage'
 import type { AgentJournalSkillRef } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 
@@ -143,6 +144,12 @@ export type WorktreeCreationRequest = {
   setupOnly?: boolean
 }
 
+export type PendingVmEnvironmentCheck = {
+  /** `skipped`: the VM's server predates the checks. */
+  status: 'running' | 'passed' | 'skipped' | 'failed'
+  checks?: readonly EnvironmentDoctorCheck[]
+}
+
 /** Session-only creation status drives sidebar/panel and vanishes on reload; completed worktrees reconcile normally. request owns display fields and retry intent so they cannot drift. */
 export type PendingWorktreeCreation = {
   creationId: string
@@ -157,6 +164,8 @@ export type PendingWorktreeCreation = {
   loaderVisible: boolean
   error?: string
   provisioningLog?: string
+  /** VM creates: the provisioned VM's environment checks, run before the workspace is created. */
+  environmentCheck?: PendingVmEnvironmentCheck
   // Local git checkout meter; absent when git emits none or creation runs over SSH/runtime.
   checkoutProgress?: WorktreeCheckoutProgress
   /** Phases entered so far with their start times, so the chat checklist can time each step. */
@@ -271,7 +280,7 @@ export function getVisibleCheckoutProgress(
 export function getCreationProgressLabel(
   entry: Pick<
     PendingWorktreeCreation,
-    'status' | 'phase' | 'indeterminate' | 'request' | 'checkoutProgress'
+    'status' | 'phase' | 'indeterminate' | 'request' | 'checkoutProgress' | 'environmentCheck'
   >,
   t: Translate = translate
 ): string {
@@ -284,7 +293,12 @@ export function getCreationProgressLabel(
     )
   }
   if (entry.phase === 'provisioning-vm') {
-    return t('auto.lib.pendingWorktreeCreation.provisioningVm', 'Provisioning VM…')
+    if (entry.environmentCheck?.status === 'failed') {
+      return t('auto.lib.pendingWorktreeCreation.vmChecksFailed', 'Environment checks failed')
+    }
+    return entry.environmentCheck
+      ? t('auto.lib.pendingWorktreeCreation.checkingVmEnvironment', 'Checking VM environment…')
+      : t('auto.lib.pendingWorktreeCreation.provisioningVm', 'Provisioning VM…')
   }
   if (entry.indeterminate) {
     return t('auto.lib.pendingWorktreeCreation.settingUpWorkspace', 'Setting up your workspace…')

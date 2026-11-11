@@ -12,14 +12,14 @@ import { getRepoSshConnectionId } from '../../../../shared/execution-host'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
 import { getWorktreePathSettings } from '../../../ipc/worktree-logic'
-import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
+import type { ProjectExecutionRuntimeResolution } from '../../../../shared/execution-host/project-execution-runtime'
 import {
   resolveLocalLaunchScopeRuntime,
   resolveLocalProjectRuntimeForWorktreeId,
   type LaunchScopeRuntimeStore
 } from '../../../workspaces/execution-host/local-project-runtime-resolution'
 import { resolveLocalPtyOptions } from '../../../workspaces/execution-host/local-project-runtime-pty-options'
-import type { RuntimeStore } from '../../runtime-store-contract'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import {
   agentLaunchRepairRefusal,

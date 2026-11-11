@@ -15,7 +15,7 @@ import { getRepoIdFromWorktreeId, splitWorktreeId } from '../../../../shared/wor
 import { workspaceSessionPartitionHostId } from '../../../../shared/workspace-session/workspace-session-partition-owner'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { workspaceSessionListsTerminalTab } from '../../../../shared/workspace-session/workspace-session-terminal-tab-close'
-import type { RuntimeStore } from '../../runtime-store-contract'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import { resolveTwinRepoSessionHostId, type CachedWorktreeHost } from './twin-repo-session-host'
 
 /** Match window save routing without repo lookup; mixed-host folders may route here but still refuse terminal starts. */

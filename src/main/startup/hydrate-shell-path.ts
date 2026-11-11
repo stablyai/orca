@@ -1,4 +1,4 @@
-import type { SpawnedProcess } from '@orca/process-host/process-spec'
+import type { ChildProcess } from 'node:child_process'
 import { delimiter, win32 as pathWin32 } from 'node:path'
 import { spawnProcess } from '@orca/process-host'
 import { stripAnsiEscapeSequences } from '../../shared/ansi-escape-sequences'
@@ -154,7 +154,7 @@ function spawnShellAndReadPath(shell: string): Promise<HydrationResult> {
     let stdout = ''
     let timer: ReturnType<typeof setTimeout> | null = null
 
-    let child: SpawnedProcess
+    let child: ChildProcess
     try {
       child = spawnProcess({
         program: shell,

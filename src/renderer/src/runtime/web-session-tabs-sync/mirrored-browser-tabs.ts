@@ -1,12 +1,10 @@
-import type {
-  RuntimeMobileSessionBrowserTab,
-  RuntimeMobileSessionTabsResult
-} from '../../../../shared/runtime-types'
+import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
+import type { RuntimeMobileSessionBrowserTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
 import type { BrowserPage, BrowserWorkspace } from '../../../../shared/browser-workspace-types'
 import type { Tab } from '../../../../shared/tab-types'
 import type { WebSessionTabsSyncState, MirroredBrowserTab } from './state'
-import { readBrowserClientHostId } from '../browser-client-host-identity'
-import { peekWebSessionBrowserPlacementGroup } from '../web-session-browser-placement'
+import { readBrowserClientHostId } from '../browser/client-hosting/browser-client-host-identity'
+import { peekWebSessionBrowserPlacementGroup } from '../browser/placement/web-session-browser-placement'
 import { browserPageEqual } from './state-equality-tabs'
 import { sameStringArray } from './state-equality-core'
 import { collectLayoutGroupIds } from './tab-group-layout-tree'
@@ -116,14 +114,15 @@ export function clientHostsMirroredBrowserPage(tab: RuntimeMobileSessionBrowserT
 export function resolveMirroredBrowserPageContent(
   tab: RuntimeMobileSessionBrowserTab,
   existingPage: BrowserPage | undefined
-): Pick<BrowserPage, 'url' | 'title' | 'loading' | 'canGoBack' | 'canGoForward'> {
+): Pick<BrowserPage, 'url' | 'title' | 'loading' | 'canGoBack' | 'canGoForward' | 'faviconUrl'> {
   if (clientHostsMirroredBrowserPage(tab) && existingPage) {
     return {
       url: existingPage.url,
       title: existingPage.title,
       loading: existingPage.loading,
       canGoBack: existingPage.canGoBack,
-      canGoForward: existingPage.canGoForward
+      canGoForward: existingPage.canGoForward,
+      faviconUrl: existingPage.faviconUrl
     }
   }
   return {
@@ -131,7 +130,9 @@ export function resolveMirroredBrowserPageContent(
     title: resolveMirroredBrowserTitle(tab, existingPage),
     loading: tab.loading,
     canGoBack: tab.canGoBack,
-    canGoForward: tab.canGoForward
+    canGoForward: tab.canGoForward,
+    // Old hosts omit the field; keep what this client already has.
+    faviconUrl: tab.faviconUrl === undefined ? (existingPage?.faviconUrl ?? null) : tab.faviconUrl
   }
 }
 
@@ -187,7 +188,6 @@ export function buildMirroredBrowserTabs(
       workspaceId,
       worktreeId: snapshot.worktree,
       ...content,
-      faviconUrl: existing?.page.faviconUrl ?? null,
       // Guest owns client-hosted loadError; host omission must not clear it.
       loadError:
         (tab.placement?.kind === 'client' ? existing?.page.loadError : tab.loadError) ?? null,

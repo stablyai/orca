@@ -88,8 +88,8 @@ export function NavBar({
   )
 }
 
-// Sits on the bar's bottom edge so the title, subtitle and accessory never move.
-function NavBarRefreshLine() {
+// Sits on its parent's bottom edge so the title, subtitle and accessory never move.
+export function NavBarRefreshLine() {
   const reducedMotion = useReducedMotionEnabled()
   const sweep = useWorkingSweep(reducedMotion === false)
   // Draw nothing until the preference is known, so a reveal never swaps shapes.

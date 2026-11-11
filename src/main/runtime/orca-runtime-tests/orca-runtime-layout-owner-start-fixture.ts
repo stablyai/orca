@@ -8,7 +8,7 @@ import { resolveHostId } from '../../persistence/loading-store/session-host-part
 import { withDurableRuntimeStore, withRuntimePaneAdmission } from './runtime-durable-store-fixture'
 import { OrcaRuntimeService } from '../orca-runtime'
 import { committingSpawn } from './bind-first-pane.test-fixture'
-import type { RuntimeNotifier } from '../runtime-notifier-contract'
+import type { RuntimeNotifier } from '../client/events/runtime-notifier-contract'
 import type { PaneResumeOutcome } from '../../../shared/workspace-layout/workspace-layout-published'
 
 export const REPO = {

@@ -32,7 +32,6 @@ export function registerPtyConnectionRestoredRuntimePaneBindingTests(): void {
   }
   describe('connectPanePty', () => {
     beforeEach(async () => {
-      vi.resetModules()
       vi.clearAllMocks()
       transportFactoryQueue = []
       createdTransportOptions = []
@@ -56,8 +55,9 @@ export function registerPtyConnectionRestoredRuntimePaneBindingTests(): void {
 
     it('attaches restored remote PTYs for later split panes instead of spawning host tabs', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks6 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks6 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const existingTransport = createMockTransport('remote:env-1@@terminal-1')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
@@ -99,8 +99,9 @@ export function registerPtyConnectionRestoredRuntimePaneBindingTests(): void {
 
     it('publishes a restarted pane PTY id and reuses its restored hint on remount', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks7 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks7 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
 
       const restartedTransport = createMockTransport()
       let spawnedPtyId: string | null = null

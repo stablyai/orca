@@ -2,7 +2,7 @@ import { Monitor, Server } from 'lucide-react'
 import type { PublicKnownRuntimeEnvironment } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../ui/select'
+import { SettingsSearchableSelect } from '../../form-controls/SettingsSearchableSelect'
 import { getActiveServerModeDescription } from './runtime-environment-host-details'
 import { LOCAL_RUNTIME_VALUE, NO_RUNTIME_VALUE } from './runtime-environment-selection'
 
@@ -31,6 +31,7 @@ export function RuntimeDefaultHostRow({
       ? savedEnvironments.find((environment) => environment.id === activeValue)
       : undefined
   const options = unlistedActive ? [...environments, unlistedActive] : environments
+  const label = t('auto.components.settings.serverList.defaultHostLabel', 'New projects open on')
   if (options.length === 0 && allowLocalRuntime) {
     // No choices need only a quiet line, but retain the deep-link target.
     return (
@@ -52,47 +53,79 @@ export function RuntimeDefaultHostRow({
     >
       <div className="min-w-0 space-y-0.5">
         <div id="runtime-active-server-label" className="text-sm font-medium">
-          {t('auto.components.settings.serverList.defaultHostLabel', 'New projects open on')}
+          {label}
         </div>
         <p className="text-xs text-muted-foreground">
           {getActiveServerModeDescription(allowLocalRuntime, t)}
         </p>
       </div>
       <div className="shrink-0">
-        <Select
+        <SettingsSearchableSelect
+          ariaLabel={label}
           value={activeValue}
+          groups={[
+            {
+              key: 'runtime-hosts',
+              options: [
+                ...(allowLocalRuntime
+                  ? [
+                      {
+                        value: LOCAL_RUNTIME_VALUE,
+                        label: t(
+                          'auto.components.settings.serverList.thisComputer',
+                          'This computer'
+                        ),
+                        icon: <Monitor className="size-4" />
+                      }
+                    ]
+                  : []),
+                ...(activeValue === NO_RUNTIME_VALUE
+                  ? [
+                      {
+                        value: NO_RUNTIME_VALUE,
+                        label: t(
+                          'auto.components.settings.RuntimeEnvironmentsPane.b07070ed3c',
+                          'No server connected'
+                        ),
+                        disabled: true
+                      }
+                    ]
+                  : []),
+                ...options.map((environment) => ({
+                  value: environment.id,
+                  label: environment.name,
+                  icon: <Server className="size-4" />,
+                  keywords: [environment.id]
+                })),
+                ...(!options.some((environment) => environment.id === activeValue) &&
+                activeValue !== LOCAL_RUNTIME_VALUE &&
+                activeValue !== NO_RUNTIME_VALUE
+                  ? [
+                      {
+                        value: activeValue,
+                        label: t(
+                          'auto.components.settings.SettingsHostScopePicker.unavailable',
+                          '{{value0}} (unavailable)',
+                          { value0: activeValue }
+                        ),
+                        disabled: true
+                      }
+                    ]
+                  : [])
+              ]
+            }
+          ]}
           onValueChange={(value) => {
             if (value !== activeValue) {
               onValueChange(value)
             }
           }}
+          searchPlaceholder={t(
+            'auto.components.settings.SettingsSearchableSelect.searchHosts',
+            'Search hosts…'
+          )}
           disabled={isBusy}
-        >
-          <SelectTrigger size="sm" className="w-64" aria-labelledby="runtime-active-server-label">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {allowLocalRuntime ? (
-              <SelectItem value={LOCAL_RUNTIME_VALUE}>
-                <Monitor />
-                {t('auto.components.settings.serverList.thisComputer', 'This computer')}
-              </SelectItem>
-            ) : options.length === 0 ? (
-              <SelectItem value={NO_RUNTIME_VALUE} disabled>
-                {t(
-                  'auto.components.settings.RuntimeEnvironmentsPane.b07070ed3c',
-                  'No server connected'
-                )}
-              </SelectItem>
-            ) : null}
-            {options.map((environment) => (
-              <SelectItem key={environment.id} value={environment.id}>
-                <Server />
-                {environment.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        />
       </div>
     </div>
   )

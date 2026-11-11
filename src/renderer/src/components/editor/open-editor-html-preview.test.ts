@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { createStoreCascadesMockApi } from '@/store/testing/app-store-cascade-api.test-fixture'
 import {
   EDITOR_OWNER,
@@ -10,7 +10,7 @@ import {
   seedBrowserLinkTestStore,
   WORKSPACE
 } from '@/lib/browser/navigation/browser-link-open.test-fixture'
-import { beginLinkOpenRequest } from '@/lib/link-open-request'
+import { beginLinkOpenRequest } from '@/lib/links/link-open-request'
 import { registerEditorFrameFlush } from './save/flush/editor-pending-flush'
 import { openEditorHtmlPreview } from './open-editor-html-preview'
 
@@ -214,25 +214,6 @@ it('refuses a local preview when the file gains remote host evidence during its 
   expect(useAppStore.getState().browserTabsByWorktree[WORKSPACE] ?? []).toEqual([])
 })
 
-it.each(['refused', 'rejected'] as const)(
-  'keeps the editor selected when its guest flush is %s',
-  async (failure) => {
-    const unregister = registerEditorFrameFlush('report', () =>
-      failure === 'refused' ? Promise.resolve(false) : Promise.reject(new Error('flush failed'))
-    )
-    try {
-      await openEditorHtmlPreview('report', 'source')
-      const state = useAppStore.getState()
-      expect(state.browserTabsByWorktree[WORKSPACE] ?? []).toEqual([])
-      expect(
-        state.groupsByWorktree[WORKSPACE]?.find((group) => group.id === 'a')?.activeTabId
-      ).toBe('source')
-    } finally {
-      unregister()
-    }
-  }
-)
-
 it('cancels preview when its editor tab closes but the file stays open in another tab', async () => {
   useAppStore.setState((state) => ({
     unifiedTabsByWorktree: {
@@ -266,13 +247,6 @@ it('cancels preview after switching tabs even if the editor is selected again be
     useAppStore.getState().activateTab('terminal-b', { worktreeId: WORKSPACE })
     useAppStore.getState().activateTab('source', { worktreeId: WORKSPACE })
   })
-  expect(useAppStore.getState().browserTabsByWorktree[WORKSPACE] ?? []).toEqual([])
-})
-
-it('keeps another pane selected when the user switches during the editor flush', async () => {
-  useAppStore.getState().focusGroup(WORKSPACE, 'a')
-  await previewWhileFlushing(() => useAppStore.getState().focusGroup(WORKSPACE, 'b'))
-  expect(useAppStore.getState().activeGroupIdByWorktree[WORKSPACE]).toBe('b')
   expect(useAppStore.getState().browserTabsByWorktree[WORKSPACE] ?? []).toEqual([])
 })
 

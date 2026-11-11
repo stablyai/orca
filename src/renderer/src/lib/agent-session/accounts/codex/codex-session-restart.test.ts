@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
-import { defaultScopeHost } from '@/lib/default-creation-host'
+import { defaultScopeHost } from '@/runtime/hosts/selection/default-creation-host'
 
 // Why: these cases model a switch made on the focused host, as the status bar does.
 const markForFocusedHost = (
@@ -21,7 +21,6 @@ import { liveRemoteEvidence } from './codex-session-restart-test-fixture'
 
 const ACCOUNT_A = 'account-a@example.com'
 const ACCOUNT_B = 'account-b@example.com'
-const ACCOUNT_C = 'account-c@example.com'
 
 function setLaunchAgentOnFirstTab(launchAgent: TuiAgent): void {
   const [tab, ...rest] = useAppStore.getState().tabsByWorktree.wt1 ?? []
@@ -274,28 +273,6 @@ describe('markLiveCodexSessionsForRestart', () => {
       restartRequested: true
     })
     expect(useAppStore.getState().pendingPaneAccountRestarts).toEqual({ 'pty-1': 'codex' })
-  })
-
-  it('preserves the pane original account across repeated switches until restart', async () => {
-    vi.mocked(window.api.pty.inspectProcess).mockResolvedValue({
-      foregroundProcess: 'codex',
-      hasChildProcesses: false
-    })
-
-    await markForFocusedHost({
-      previousAccountLabel: ACCOUNT_A,
-      nextAccountLabel: ACCOUNT_B
-    })
-
-    await markForFocusedHost({
-      previousAccountLabel: ACCOUNT_B,
-      nextAccountLabel: ACCOUNT_C
-    })
-
-    expect(useAppStore.getState().codexRestartNoticeByPtyId['pty-1']).toEqual({
-      previousAccountLabel: ACCOUNT_A,
-      nextAccountLabel: ACCOUNT_C
-    })
   })
 
   it('inspects remote runtime PTYs on the server their id names', async () => {

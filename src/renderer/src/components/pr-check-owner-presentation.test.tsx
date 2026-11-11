@@ -4,6 +4,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { acceptPRCheckObservation } from '../../../shared/github/complete-pr-check-owner'
 import { PRTriageStrip } from './right-sidebar/checks-panel/presentation/triage-strip'
 import { i18n } from '@/i18n/i18n'
+import { gitLabPipelineJobsToPRChecks } from '../../../shared/source-control/checks/gitlab/gitlab-pipeline-checks'
 import type { PRCheckDetail } from '../../../shared/github/check-types'
 
 const owner = {
@@ -64,4 +65,32 @@ it.each([false, true])('keeps a failed parent pipeline fixable with empty jobs: 
     <PRTriageStrip {...props} reviewKind="PR" review={accepted} checks={[]} pipelineCheck={null} />
   )
   expect(screen.getByRole('button', { name: 'Fix' }).hasAttribute('disabled')).toBe(true)
+})
+
+it('offers automatic failure repair only for a required failed GitLab job', () => {
+  const check = (allowFailure: boolean) =>
+    gitLabPipelineJobsToPRChecks([
+      {
+        id: 7,
+        name: 'test',
+        stage: 'test',
+        status: 'failed',
+        allowFailure,
+        webUrl: '',
+        duration: null
+      }
+    ])
+  const props = {
+    review: owner,
+    reviewKind: 'MR' as const,
+    isResolvingConflictsWithAI: false,
+    onResolveConflictsWithAI: () => {},
+    isFixingChecksWithAI: false,
+    onFixChecksWithAI: vi.fn()
+  }
+  const view = render(<PRTriageStrip {...props} checks={check(true)} />)
+  expect(screen.queryByRole('button')).toBeNull()
+  view.rerender(<PRTriageStrip {...props} checks={check(false)} />)
+  fireEvent.click(screen.getByRole('button'))
+  expect(props.onFixChecksWithAI).toHaveBeenCalledOnce()
 })

@@ -14,6 +14,7 @@ import { installMultiplexCleanup } from './terminal-multiplex-cleanup'
 import { installMultiplexSlotFrames } from './terminal-multiplex-slot-frames'
 import { installMultiplexSubscribeFrame } from './terminal-multiplex-subscribe-frame'
 import { createMultiplexPtyWaitAdmission } from './terminal-multiplex-pty-wait-admission'
+import { TerminalMultiplexLinkEstimate } from './terminal-multiplex-link-estimate'
 
 export const TERMINAL_MULTIPLEX_METHODS = [
   defineStreamingMethod({
@@ -52,6 +53,8 @@ export const TERMINAL_MULTIPLEX_METHODS = [
         ),
         ackTotalInFlightBytes: 0,
         ackTotalWindowBytes: TERMINAL_MULTIPLEX_ACK_TOTAL_INITIAL_WINDOW_BYTES,
+        linkEstimate: new TerminalMultiplexLinkEstimate(),
+        ackTotalHoldbackBytes: 0,
         ackFlushCursorStreamId: null,
         resolveMultiplex,
         multiplexClosed,

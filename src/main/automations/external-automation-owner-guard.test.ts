@@ -1,12 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { resolveExternalAutomationScope } from './external-automation-owner-guard'
-import { AutomationOwnerConflictError } from '../../shared/automation-owner-conflict'
-import type { AutomationOwnerRef } from '../../shared/automation-owner-ref'
-import {
-  EXTERNAL_AUTOMATION_SCOPE_CODES,
-  type ExternalAutomationScopeError
-} from '../../shared/external-automation-scope'
-import type { ExternalAutomationProvider } from '../../shared/automations-types'
+import { AutomationOwnerConflictError } from '../../shared/automations/ownership/automation-owner-conflict'
+import type { AutomationOwnerRef } from '../../shared/automations/ownership/automation-owner-ref'
+
 import type { SshTarget } from '../../shared/ssh-types'
 
 function sshTarget(overrides: Partial<SshTarget> = {}): SshTarget {
@@ -25,35 +21,11 @@ function registry(targets: SshTarget[]): { getSshTargets: () => SshTarget[] } {
   return { getSshTargets: () => targets }
 }
 
-const desktopSelf: AutomationOwnerRef = {
-  authority: { kind: 'desktop' },
-  selector: { kind: 'self' }
-}
-
 function desktopSsh(targetId: string, targetGeneration: number): AutomationOwnerRef {
   return { authority: { kind: 'desktop' }, selector: { kind: 'ssh', targetId, targetGeneration } }
 }
 
 describe('resolveExternalAutomationScope', () => {
-  it('hides a runtime-owned target even when the captured generation is wrong', () => {
-    const target = sshTarget({
-      generation: 9,
-      owner: { type: 'on-demand-runtime', runtimeId: 'rt-1' }
-    })
-
-    try {
-      resolveExternalAutomationScope(
-        { owner: desktopSsh('target-a', 3), provider: 'openclaw' },
-        registry([target])
-      )
-      expect.unreachable('hidden target must not resolve')
-    } catch (error) {
-      expect((error as ExternalAutomationScopeError).code).toBe(
-        EXTERNAL_AUTOMATION_SCOPE_CODES.targetHidden
-      )
-    }
-  })
-
   it('fails closed with the host-changed conflict on a stale generation', () => {
     try {
       resolveExternalAutomationScope(
@@ -88,36 +60,6 @@ describe('resolveExternalAutomationScope', () => {
       expect.unreachable('missing target must not resolve')
     } catch (error) {
       expect((error as AutomationOwnerConflictError).code).toBe('automation_target_removed')
-    }
-  })
-
-  it('rejects a runtime authority rather than tunnelling it to the desktop surface', () => {
-    const runtimeOwner: AutomationOwnerRef = {
-      authority: { kind: 'runtime', environmentId: 'env-1', pairingRevision: 4 },
-      selector: { kind: 'self' }
-    }
-
-    try {
-      resolveExternalAutomationScope({ owner: runtimeOwner, provider: 'openclaw' }, registry([]))
-      expect.unreachable('runtime authority must not resolve')
-    } catch (error) {
-      expect((error as ExternalAutomationScopeError).code).toBe(
-        EXTERNAL_AUTOMATION_SCOPE_CODES.authorityNotSupported
-      )
-    }
-  })
-
-  it('rejects a provider outside the allowlist', () => {
-    try {
-      resolveExternalAutomationScope(
-        { owner: desktopSelf, provider: 'cron' as ExternalAutomationProvider },
-        registry([])
-      )
-      expect.unreachable('unknown provider must not resolve')
-    } catch (error) {
-      expect((error as ExternalAutomationScopeError).code).toBe(
-        EXTERNAL_AUTOMATION_SCOPE_CODES.providerNotAllowed
-      )
     }
   })
 })

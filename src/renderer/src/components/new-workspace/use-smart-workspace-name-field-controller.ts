@@ -1,17 +1,19 @@
 import { useEffect, useMemo } from 'react'
 import {
   getActiveWorkspaceEmojiShortcode,
-  searchWorkspaceEmojiShortcodes,
-  type WorkspaceEmojiSuggestion
-} from '@/lib/workspace-emoji-shortcodes'
+  searchWorkspaceEmojiShortcodes
+} from '@/lib/workspace/display/workspace-emoji-shortcodes'
+import type { StandardEmojiShortcodeEntry } from '../../../../shared/emoji-shortcode-catalog'
 import type { SmartWorkspaceNameFieldProps } from './smart-workspace-name-field-model'
 import { useWorkItemSourceSearch } from './use-work-item-source-search'
 import { useSmartWorkspaceFieldFocusControls } from './use-smart-workspace-field-focus-controls'
 import { useSmartWorkspaceNameFieldActions } from './use-smart-workspace-name-field-actions'
 import { getSmartWorkspaceNameFieldCopy } from './smart-workspace-name-field-copy'
 import { useLatestHandler } from '@/lib/use-latest-handler'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function useSmartWorkspaceNameFieldController(props: SmartWorkspaceNameFieldProps) {
+  const t = useTranslate()
   const search = useWorkItemSourceSearch({
     ...props,
     defaultLinearWorkspaceId: 'all',
@@ -36,7 +38,7 @@ export function useSmartWorkspaceNameFieldController(props: SmartWorkspaceNameFi
     () => getActiveWorkspaceEmojiShortcode(value, emojiCursor),
     [emojiCursor, value]
   )
-  const emojiSuggestions: WorkspaceEmojiSuggestion[] = useMemo(
+  const emojiSuggestions: StandardEmojiShortcodeEntry[] = useMemo(
     () => (activeEmojiShortcode ? searchWorkspaceEmojiShortcodes(activeEmojiShortcode.query) : []),
     [activeEmojiShortcode]
   )
@@ -80,10 +82,13 @@ export function useSmartWorkspaceNameFieldController(props: SmartWorkspaceNameFi
     allowCrossRepoProjectAdd: props.allowCrossRepoProjectAdd ?? true
   }
   const actions = useSmartWorkspaceNameFieldActions(foundation, { ...search, activeEmojiShortcode })
-  const copy = getSmartWorkspaceNameFieldCopy({
-    ...search,
-    disabledPlaceholder: props.disabledPlaceholder
-  })
+  const copy = getSmartWorkspaceNameFieldCopy(
+    {
+      ...search,
+      disabledPlaceholder: props.disabledPlaceholder
+    },
+    t
+  )
   return {
     ...foundation,
     ...actions,

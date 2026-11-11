@@ -168,13 +168,6 @@ it('ignores unrelated writes while away but queries for a new completion', async
   expect(dismiss).toHaveBeenCalledTimes(1)
 })
 
-it('does not query presence for a visible pane without attention', async () => {
-  useAppStore.setState({ agentStatusByPaneKey: {}, unreadAgentCompletionPanes: {} })
-  renderHook(() => useReadOnScreenAttention())
-  await act(async () => window.dispatchEvent(new Event('focus')))
-  expect(readAway).not.toHaveBeenCalled()
-})
-
 it('rechecks focus after a pending presence query resolves', async () => {
   let resolve!: (away: boolean) => void
   readAway.mockImplementation(

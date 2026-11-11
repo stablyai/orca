@@ -1,4 +1,4 @@
-import { sendLayoutCommandToOwner } from '@/runtime/layout-owner-command'
+import { sendLayoutCommandToOwner } from '@/runtime/workspace-layout/commands/layout-owner-command'
 import { useAppStore } from '@/store/index'
 import type {
   TerminalLeafMoveRequest,

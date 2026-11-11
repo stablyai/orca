@@ -1,10 +1,15 @@
-import './unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
+
 import type { OrcaRuntimeService } from '../orca-runtime'
-import { RuntimeSubscriptionRegistry } from '../runtime-subscription-registry'
+
+import { RuntimeSubscriptionRegistry } from '../client/runtime-subscription-registry'
+
 import type { RpcRequest } from './core'
+
 import { RpcDispatcher } from './dispatcher'
+
 import { TERMINAL_METHODS } from './methods/terminal/terminal'
+
 import { createSubscriptionRegistryDouble } from './subscription-registry-test-double'
 
 const SUBSCRIPTION_ID = 'terminal-1:phone-1'

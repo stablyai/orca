@@ -7,7 +7,7 @@ import { store, syncSinglePty } from './orca-runtime-test-fixtures.spec'
 import {
   clearNativeWindowsConptyPty,
   markNativeWindowsConptyPty
-} from '../terminal-model-query-authority'
+} from '../terminal/output/terminal-model-query-authority'
 
 // Captured pwsh 7.6/ConPTY: grey PSReadLine predictions from history are overwritten by absolute cursor moves.
 const PSREADLINE_PREDICTION_TRANSCRIPT = readFileSync(

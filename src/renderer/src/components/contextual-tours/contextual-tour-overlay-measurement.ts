@@ -48,9 +48,37 @@ export function getContextualTourDisplayProgress(args: {
     return { current: args.stepIndex + 1, total: args.tour.steps.length }
   }
   return getContextualTourStepProgress({
-    visibleStepIndexes: args.visibleStepIndexes,
+    visibleStepIndexes: withPassedSplitLesson(args.tour, args.visibleStepIndexes, args.stepIndex),
     stepIndex: args.stepIndex
   })
+}
+
+// Why: a chat split focuses its landing, which has no split target; the lesson already shown keeps its slot.
+function withPassedSplitLesson(
+  tour: ContextualTour,
+  visibleStepIndexes: readonly number[],
+  stepIndex: number
+): readonly number[] {
+  if (tour.id !== 'workspace-agent-sessions') {
+    return visibleStepIndexes
+  }
+  const splitIndexes = tour.steps.flatMap((step, index) =>
+    step.primaryAction?.kind === 'split-chat-pane' ||
+    step.primaryAction?.kind === 'split-terminal-pane'
+      ? [index]
+      : []
+  )
+  const firstSplit = splitIndexes.at(0)
+  const lastSplit = splitIndexes.at(-1)
+  if (
+    firstSplit === undefined ||
+    lastSplit === undefined ||
+    stepIndex <= lastSplit ||
+    visibleStepIndexes.some((index) => splitIndexes.includes(index))
+  ) {
+    return visibleStepIndexes
+  }
+  return [...visibleStepIndexes, firstSplit].sort((a, b) => a - b)
 }
 
 export function getContextualTourMeasurementAction(args: {

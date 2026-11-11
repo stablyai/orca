@@ -22,7 +22,9 @@ export function registerPtyConnectionShutdownExitDeferralTests(
 ): void {
   it('keeps the surviving split pane mounted when an intentional pane-close PTY exit arrives', async () => {
     const { connectPanePty } = await import('../connect-pane-pty')
-    const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+    const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>(
+      '@/lib/agent-status/aggregation/worktree-agent-status'
+    )
     const transport = createMockTransport('pty-pane-2')
     fixture.transportQueue.push(transport)
     const manager = createManager(1)
@@ -53,7 +55,9 @@ export function registerPtyConnectionShutdownExitDeferralTests(
 
   it('defers all exit-side state mutation while worktree shutdown verification is pending', async () => {
     const { connectPanePty } = await import('../connect-pane-pty')
-    const agentTitleMocks2 = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+    const agentTitleMocks2 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+      '@/lib/agent-status/aggregation/worktree-agent-status'
+    )
     const { settleDeferredPtyShutdownExits } =
       await import('../../pty-transport/shutdown/pty-shutdown-exit-deferral')
     const transport = createMockTransport('pty-pane-2')
@@ -92,7 +96,9 @@ export function registerPtyConnectionShutdownExitDeferralTests(
 
   it('keeps renderer state intact for an exit deferred through rollback', async () => {
     const { connectPanePty } = await import('../connect-pane-pty')
-    const agentTitleMocks3 = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+    const agentTitleMocks3 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+      '@/lib/agent-status/aggregation/worktree-agent-status'
+    )
     const { settleDeferredPtyShutdownExits } =
       await import('../../pty-transport/shutdown/pty-shutdown-exit-deferral')
     const transport = createMockTransport('pty-pane-2')
@@ -127,7 +133,9 @@ export function registerPtyConnectionShutdownExitDeferralTests(
 
   it('preserves wake identifiers when exit arrives after a committed shutdown', async () => {
     const { connectPanePty } = await import('../connect-pane-pty')
-    const agentTitleMocks4 = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+    const agentTitleMocks4 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+      '@/lib/agent-status/aggregation/worktree-agent-status'
+    )
     const { markCommittedPtyShutdowns } =
       await import('../../pty-transport/shutdown/pty-shutdown-exit-deferral')
     const transport = createMockTransport('pty-pane-2')

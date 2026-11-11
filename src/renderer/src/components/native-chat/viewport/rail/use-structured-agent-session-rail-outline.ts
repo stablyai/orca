@@ -6,7 +6,7 @@ import type { AgentJournalCursor } from '../../../../../../shared/agent-session/
 import { agentSessionContextFloorSequence } from '../../../../../../shared/agent-session/agent-session-context-clear'
 import type { StructuredAgentSessionState } from '../../../../../../shared/agent-session/structured-agent-session-reducer'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
-import { readStructuredAgentSessionConversationOutline } from '@/runtime/structured-agent-session-client'
+import { readStructuredAgentSessionConversationOutline } from '@/runtime/native-chat/journal/structured-agent-session-journal-reads'
 import type { NativeChatRailOutlineEntry } from './native-chat-message-rail-items'
 import { selectStructuredRailOutline } from './structured-agent-session-rail-outline'
 

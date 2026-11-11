@@ -1,5 +1,6 @@
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
-import type { Automation, AutomationRun } from '../../../shared/automations-types'
+import type { Automation } from '../../../shared/automations/automation-definition'
+import type { AutomationRun } from '../../../shared/automations/history/automation-run'
 import { ORCAD_MIGRATION_MANIFEST_VERSION } from '../../../shared/orcad-migration/orcad-migration-manifest-validation'
 import type {
   OrcadMigrationDormantStatePayload,

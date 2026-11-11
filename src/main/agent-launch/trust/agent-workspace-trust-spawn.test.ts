@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentWorkspaceTrustDecision } from '../../../shared/agent-workspace-trust-decision'
+import type { AgentWorkspaceTrustDecision } from '../../../shared/agent-launch/permissions/agent-workspace-trust-decision'
 import type { AgentTrustSpawnFields } from './agent-workspace-trust'
 import { applyAgentWorkspaceTrustToSpawn } from './agent-workspace-trust-spawn'
 
@@ -8,12 +8,10 @@ async function sshTrustRequest(input: {
   worktreeId: string
   globalEnabled?: boolean
   repoDecision?: AgentWorkspaceTrustDecision
-  skipForThisLaunch?: boolean
 }): Promise<AgentTrustSpawnFields> {
   const spawnOptions: AgentTrustSpawnFields = {}
   await applyAgentWorkspaceTrustToSpawn({
     launchAgent: 'claude',
-    skipForThisLaunch: input.skipForThisLaunch,
     worktreeId: input.worktreeId,
     cwd: '/srv/app',
     store: {
@@ -47,12 +45,6 @@ describe('agent folder trust follows the repo decision', () => {
     ).toEqual({})
   })
 
-  it('keeps pre-trust for an undecided repo so unattended launches never wait', async () => {
-    expect(await sshTrustRequest({ worktreeId: 'repo-1::/srv/app' })).toEqual({
-      agentWorkspaceTrust: { workspacePath: '/srv/app' }
-    })
-  })
-
   it('never pre-trusts when folder trust is off globally', async () => {
     expect(
       await sshTrustRequest({
@@ -60,12 +52,6 @@ describe('agent folder trust follows the repo decision', () => {
         globalEnabled: false,
         repoDecision: 'pre-trust'
       })
-    ).toEqual({})
-  })
-
-  it("honours this launch's let-agents-ask answer even when the repo has none stored", async () => {
-    expect(
-      await sshTrustRequest({ worktreeId: 'repo-1::/srv/app', skipForThisLaunch: true })
     ).toEqual({})
   })
 })

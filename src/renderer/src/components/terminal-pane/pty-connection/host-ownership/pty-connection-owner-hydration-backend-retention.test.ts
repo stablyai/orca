@@ -42,7 +42,7 @@ let transportFactoryQueue: MockTransport[] = []
 let createdTransportOptions: Record<string, unknown>[] = []
 let storeSubscribers: ((state: StoreState) => void)[] = []
 
-vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync }))
+vi.mock('@/runtime/sync-runtime-graph/graph-sync-scheduler', () => ({ scheduleRuntimeGraphSync }))
 
 vi.mock('@/lib/pane-manager/pane-manager-registry', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -61,7 +61,7 @@ vi.mock('@/store', () => ({
   }
 }))
 
-vi.mock('@/lib/agent-status', async (importOriginal) => {
+vi.mock('@/lib/agent-status/aggregation/worktree-agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } =
     await import('../test-fixtures/pty-connection-test-environment')
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
@@ -129,14 +129,16 @@ describe('connectPanePty owner hydration and backend retention', () => {
 
   it('parks an unknown owner until hydration, then retains the acquired backend on refresh', async () => {
     const { connectPanePty } = await import('../connect-pane-pty')
-    const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+    const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>(
+      '@/lib/agent-status/aggregation/worktree-agent-status'
+    )
     const { createIpcPtyTransport } = await import('../../pty-transport/ipc/pty-transport')
     const { createRemoteRuntimePtyTransport } =
       await import('../../pty-transport/remote-runtime/remote-runtime-pty-transport')
     const { createTerminalPaneManagerOptions } =
       await import('../../mounting/terminal-pane-manager-options')
     const { clearTerminalTabsParkedOnUnresolvedHost, getTabIdsAwaitingHostHydrationRemount } =
-      await import('@/lib/parked-terminal-host-hydration')
+      await import('@/components/terminal-pane/mounting/parked-terminal-host-hydration')
     clearTerminalTabsParkedOnUnresolvedHost()
     const worktree = makeWorktree({ id: 'wt-hydrating', repoId: TEST_REPO.id, hostId: undefined })
     const tab = makeTab({ id: 'tab-1', worktreeId: worktree.id, ptyId: null })
@@ -200,8 +202,9 @@ describe('connectPanePty owner hydration and backend retention', () => {
     'retains the connect owner through focus changes ($rowless, $remote)',
     async ({ rowless, remote }) => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks5 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks5 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const { createTerminalPaneManagerOptions } =
         await import('../../mounting/terminal-pane-manager-options')
       vi.stubGlobal('navigator', { userAgent: 'Windows' })

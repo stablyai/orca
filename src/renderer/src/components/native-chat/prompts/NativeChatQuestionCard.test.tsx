@@ -86,4 +86,44 @@ describe('NativeChatQuestionCard', () => {
     expect(pressAt(10, 10, 'ArrowDown')).toBe(true)
     expect(document.activeElement).toBe(rows[0])
   })
+
+  it('shows a picked preview, keeps it on a second click, and confirms the digit-named option with Enter', () => {
+    vi.useFakeTimers()
+    container.setAttribute('data-native-chat-root', 'true')
+    const onAnswer = vi.fn()
+    act(() => {
+      root.render(
+        <NativeChatQuestionCard
+          prompt={{
+            questions: [
+              {
+                question: 'Which layout?',
+                multiSelect: false,
+                options: [
+                  { label: 'Sidebar', preview: '| nav | main |' },
+                  { label: 'Top bar', preview: '| nav |\n| main |' }
+                ]
+              }
+            ]
+          }}
+          onAnswer={onAnswer}
+          onCancel={() => {}}
+          shouldFocus
+        />
+      )
+    })
+    const rows = container.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')
+    act(() => rows[0]!.focus())
+    pressKey({ key: '2' }, rows[0]!)
+    act(() => rows[1]!.click())
+    act(() => vi.runAllTimers())
+    expect(container.querySelector('pre')?.textContent).toBe('| nav |\n| main |')
+    expect(document.activeElement).toBe(rows[1])
+    expect(onAnswer).not.toHaveBeenCalled()
+    pressKey({ key: 'ArrowUp' }, rows[1]!)
+    pressKey({ key: '2' }, rows[0]!)
+    expect(document.activeElement).toBe(rows[1])
+    pressKey({ key: 'Enter' }, rows[1]!)
+    expect(onAnswer).toHaveBeenCalledWith([{ indices: [1], other: '' }])
+  })
 })

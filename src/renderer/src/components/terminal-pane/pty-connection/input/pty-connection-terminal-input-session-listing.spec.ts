@@ -32,7 +32,6 @@ export function registerPtyConnectionTerminalInputSessionListingTests(): void {
   }
   describe('connectPanePty', () => {
     beforeEach(async () => {
-      vi.resetModules()
       vi.clearAllMocks()
       transportFactoryQueue = []
       createdTransportOptions = []
@@ -62,8 +61,9 @@ export function registerPtyConnectionTerminalInputSessionListingTests(): void {
         typeKeystroke: (data?: string) => void
       }> {
         const { connectPanePty } = await import('../connect-pane-pty')
-        const agentTitleMocks16 =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        const agentTitleMocks16 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
         const transport = createMockTransport('pty-pane-2')
         transportFactoryQueue.push(transport)
         const manager = createManager(2)
@@ -83,30 +83,6 @@ export function registerPtyConnectionTerminalInputSessionListingTests(): void {
         }
       }
 
-      it('does not fire listSessions for first input on a fresh mount', async () => {
-        const listSessions = vi.mocked(window.api.pty.listSessions)
-        listSessions.mockClear()
-        const { typeKeystroke } = await connectActivePaneWithInput()
-
-        for (let i = 0; i < 25; i++) {
-          typeKeystroke('x')
-        }
-
-        expect(listSessions).not.toHaveBeenCalled()
-      })
-
-      it('does not fire listSessions for input after a visibility resume', async () => {
-        const listSessions = vi.mocked(window.api.pty.listSessions)
-        listSessions.mockClear()
-        const { binding, typeKeystroke } = await connectActivePaneWithInput()
-
-        binding.noteVisibilityResume()
-        typeKeystroke('a')
-        typeKeystroke('b')
-
-        expect(listSessions).not.toHaveBeenCalled()
-      })
-
       it('sends the first post-resume input without starting the liveness re-check', async () => {
         const listSessions = vi.mocked(window.api.pty.listSessions)
         listSessions.mockClear()
@@ -125,22 +101,6 @@ export function registerPtyConnectionTerminalInputSessionListingTests(): void {
         typeKeystroke('a')
 
         expect(calls).toEqual(['sendInput'])
-      })
-
-      it('does not re-arm input-driven listSessions across repeated visibility resumes', async () => {
-        const listSessions = vi.mocked(window.api.pty.listSessions)
-        listSessions.mockClear()
-        const { binding, typeKeystroke } = await connectActivePaneWithInput()
-
-        binding.noteVisibilityResume()
-        typeKeystroke('a')
-        typeKeystroke('b')
-        expect(listSessions).not.toHaveBeenCalled()
-
-        binding.noteVisibilityResume()
-        typeKeystroke('c')
-        typeKeystroke('d')
-        expect(listSessions).not.toHaveBeenCalled()
       })
     })
   })

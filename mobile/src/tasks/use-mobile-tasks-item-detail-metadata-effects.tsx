@@ -1,5 +1,5 @@
 import type { GitHubOwnerRepo } from '../../../src/shared/github/pull-request-types'
-import type { SendRequestOptions } from '../transport/rpc-client'
+import type { SendRequestOptions } from '../transport/rpc/unvalidated-rpc-request-port'
 import {
   SHOW_MOBILE_DETAIL_METADATA_EDITORS,
   SHOW_MOBILE_DETAIL_REVIEW_PANELS

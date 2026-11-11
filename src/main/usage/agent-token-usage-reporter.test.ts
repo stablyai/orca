@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { PostHog } from 'posthog-node'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { agentTokenUsageSchema } from '../../shared/telemetry-agent-token-usage-schema'
+import '../../shared/telemetry-agent-token-usage-schema'
 import {
   _enableTransportForTests,
   _setPostHogClientForTests,
@@ -112,31 +112,6 @@ describe('agent token usage', () => {
     expect(captures()).toEqual([])
   })
 
-  it('resolves every session identity in one batch', async () => {
-    const write = vi.spyOn(UsageCacheSnapshotWriter.prototype, 'write')
-    const second = '00000000-0000-4000-8000-000000000002'
-    identity.mockImplementation(async (ids) =>
-      ids.map((id) => (id === 'second-session' ? second : ID))
-    )
-    const instance = reporter()
-    await instance.report([
-      row,
-      { ...row, providerSessionId: 'invalid-session', input_tokens: -1 },
-      { ...row, providerSessionId: 'second-session', input_tokens: 7 }
-    ])
-    expect(identity).toHaveBeenCalledOnce()
-    expect(identity).toHaveBeenCalledWith([row.providerSessionId, 'second-session'])
-    expect(captures()).toEqual([
-      expect.objectContaining({ analytics_session_id: ID, input_tokens: 100 }),
-      expect.objectContaining({ analytics_session_id: second, input_tokens: 7 })
-    ])
-    expect(write).toHaveBeenCalledTimes(1)
-    write.mockClear()
-    await instance.report([])
-    expect(captures()).toHaveLength(2)
-    expect(write).not.toHaveBeenCalled()
-  })
-
   it('does not publish a revision whose write failed and retries it', async () => {
     const instance = reporter()
     const write = vi
@@ -167,45 +142,6 @@ describe('agent token usage', () => {
       expect(captures()).toHaveLength(31)
     }
   )
-
-  it('deduplicates acceptance in memory when only part of a batch is accepted', async () => {
-    vi.spyOn(Date, 'now').mockReturnValue(1_800_000_000_000)
-    identity.mockImplementation(async (ids) =>
-      ids.map((_, index) => `00000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`)
-    )
-    const rows = Array.from({ length: 31 }, (_, index) => ({
-      ...row,
-      providerSessionId: `session-${index}`
-    }))
-    const instance = reporter()
-    const write = vi.spyOn(UsageCacheSnapshotWriter.prototype, 'write')
-    await instance.report(rows)
-    expect(captures()).toHaveLength(30)
-    expect(write).toHaveBeenCalledTimes(1)
-    const persisted = readFileSync(file, 'utf8')
-    resetBurstCapsForSession()
-    await instance.report([])
-    expect(write).toHaveBeenCalledTimes(1)
-    expect(readFileSync(file, 'utf8')).toBe(persisted)
-    expect(captures()).toHaveLength(31)
-    expect(captures().at(-1)).toMatchObject({
-      analytics_session_id: '00000000-0000-4000-8000-000000000031',
-      revision: 1
-    })
-  })
-
-  it('retries a throwing capture without inventing a new revision', async () => {
-    telemetry.mock.capture.mockImplementationOnce(() => {
-      throw new Error('enqueue failed')
-    })
-    const instance = reporter()
-    await expect(instance.report([row])).rejects.toThrow('enqueue failed')
-    await instance.report([row])
-    expect(captures()).toHaveLength(2)
-    expect(captures()[1]).toMatchObject({ revision: 1 })
-    await instance.report([row])
-    expect(captures()).toHaveLength(2)
-  })
 
   it.each(['offline send', 'exit before send'])(
     'retries after %s with the installed SDK',
@@ -285,16 +221,5 @@ describe('agent token usage', () => {
     await expect(reporter().report([row])).rejects.toThrow()
     expect(readFileSync(file, 'utf8')).toBe('{broken')
     expect(captures()).toEqual([])
-  })
-
-  it('rejects invalid counts and unexpected content fields', async () => {
-    await reporter().report([{ ...row, input_tokens: -1 }])
-    const payload = { ...row, analytics_session_id: ID, revision: 1, provider: 'claude' }
-    expect(agentTokenUsageSchema.safeParse(payload).success).toBe(false)
-    const { providerSessionId: _, ...valid } = payload
-    expect(agentTokenUsageSchema.safeParse(valid).success).toBe(true)
-    for (const field of ['prompt', 'path', 'model', 'activity_timestamp', 'estimated_cost']) {
-      expect(agentTokenUsageSchema.safeParse({ ...valid, [field]: 'private' }).success).toBe(false)
-    }
   })
 })

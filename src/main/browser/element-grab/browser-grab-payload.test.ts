@@ -4,7 +4,7 @@ import {
   mintDocPreviewGrant,
   revokeDocPreviewGrant
 } from '../document-preview/doc-preview-grant-registry'
-import { buildDocPreviewUrl } from '../../../shared/doc-preview-scheme'
+import { buildDocPreviewUrl } from '../../../shared/document-preview/doc-preview-scheme'
 
 function makeRawPayload(overrides: Record<string, unknown> = {}) {
   return {

@@ -1,3 +1,5 @@
+import { agentSessionForkSourceFailureWords } from '../../../../../../shared/agent-session/failures/agent-session-failure-copy'
+import { sayAgentSessionFailureTranslated } from '../notices/agent-session-failure-words-text'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
@@ -5,8 +7,9 @@ import { newAgentLaunchRequestId } from '../../../../lib/agent-session/launch/ro
 import { startStructuredAgentLaunch } from '@/lib/agent-session/launch/structured-agent-session-launch'
 import { captureStructuredLaunchSurfaceAddress } from '@/lib/agent-session/launch/structured-agent-session-launch-surface'
 import type { StructuredLaunchSurfaceAddress } from '@/lib/agent-session/launch/structured-agent-session-launch-record'
-import { STRUCTURED_LAUNCH_FORK_UNSUPPORTED_REFUSAL } from '@/lib/agent-session/launch/structured-agent-session-launch-create-call'
+import { STRUCTURED_LAUNCH_FORK_UNSUPPORTED_REFUSAL } from '@/lib/agent-session/launch/structured-agent-session-launch-fork-support'
 import { structuredLaunchFailure } from '@/lib/agent-session/launch/structured-agent-session-launch-failure'
+import type { StructuredPromptDeliveryResult } from '@/lib/agent-session/launch/structured-agent-session-launch-callers'
 import { hostPermissionRefusedText } from '@/lib/agent-session/launch/structured-agent-session-launch-permission-notice'
 import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agent-session-launch-label'
 import {
@@ -27,6 +30,8 @@ export type NativeChatForkRequest = {
   worktreeId: string
   target: RuntimeClientTarget
   forkFrom: StructuredAgentSessionForkSource
+  /** Client-only admission requirement; reacquired from the child after reload. */
+  forkRequiresInheritedOriginal?: boolean
   surfaceAddress: StructuredLaunchSurfaceAddress
 }
 
@@ -54,24 +59,115 @@ function executionHostIdFor(target: RuntimeClientTarget): ExecutionHostId {
     : toRuntimeExecutionHostId(target.environmentId)
 }
 
-/** Opens the fork in a new chat tab and says, once, why it didn't; the source chat is never touched. */
-export async function launchNativeChatFork(request: NativeChatForkRequest): Promise<void> {
-  let launch: ReturnType<typeof startStructuredAgentLaunch> | undefined
+/** A side chat (`/btw`) opens beside its source; its question, if any, is the fork's first message. */
+export type NativeChatSideChatRequest = { question?: string }
+
+/** Whether a side question reached the fork; `unconfirmed` may have. */
+export type NativeChatSideQuestionDelivery = 'sent' | 'failed' | 'unconfirmed'
+
+/** The chat a fork opened (or may have opened), and, for a side question, whether it went out. */
+export type NativeChatForkOutcome = {
+  chat?: { sessionId: string; executionHostId: ExecutionHostId }
+  question?: NativeChatSideQuestionDelivery
+}
+
+/** Opens the fork in a new chat tab and says, once, why it didn't; the source chat is never touched.
+ *  A side question stays the caller's until it goes out, so no composer gets a copy. */
+export async function launchNativeChatFork(
+  request: NativeChatForkRequest & { side?: NativeChatSideChatRequest }
+): Promise<NativeChatForkOutcome> {
+  const question = request.side?.question
+  let launch: ReturnType<typeof startStructuredAgentLaunch>
   try {
     launch = startStructuredAgentLaunch(request.worktreeId, request.agent, {
       requestId: newAgentLaunchRequestId(),
       executionHostId: executionHostIdFor(request.target),
       forkFrom: request.forkFrom,
-      activate: true,
-      surfaceAddress: request.surfaceAddress
+      forkRequiresInheritedOriginal: request.forkRequiresInheritedOriginal,
+      // A side chat is selected once it sits beside its source.
+      activate: request.side === undefined,
+      surfaceAddress: request.surfaceAddress,
+      ...(question ? { prompt: question, promptKeptByCaller: true as const } : {})
     })
-    await launch.launchResult
   } catch (error) {
-    if (error instanceof StructuredAgentSessionCreateAbandonedError) {
-      return
-    }
-    reportNativeChatForkFailure(request.agent, error, launch?.isVisibilityUnknown() === true)
+    reportNativeChatForkFailure(request.agent, error, false)
+    return question ? { question: 'failed' } : {}
   }
+  const failure = await launch.launchResult.then(
+    () => null,
+    (error: unknown) => ({ error })
+  )
+  // A question sent after create can still be refused once the chat exists.
+  const delivery = launch.promptDeliveryResult
+    ? await sideQuestionDelivery(launch.promptDeliveryResult)
+    : undefined
+  const chat = forkChat(launch)
+  if (delivery === 'unconfirmed') {
+    reportSideQuestion(request.agent, delivery)
+    return { chat, question: delivery }
+  }
+  if (failure && !(failure.error instanceof StructuredAgentSessionCreateAbandonedError)) {
+    const unconfirmed = launch.isVisibilityUnknown()
+    reportNativeChatForkFailure(request.agent, failure.error, unconfirmed)
+    return { ...(unconfirmed ? { chat } : {}), ...(delivery ? { question: delivery } : {}) }
+  }
+  // The fork may have said so too, but it stays in the background.
+  if (delivery === 'failed') {
+    reportSideQuestion(request.agent, delivery)
+  }
+  return { ...(failure ? {} : { chat }), ...(delivery ? { question: delivery } : {}) }
+}
+
+function forkChat(launch: ReturnType<typeof startStructuredAgentLaunch>) {
+  return { sessionId: launch.sessionId, executionHostId: launch.executionHostId }
+}
+
+function sideQuestionDelivery(
+  result: Promise<StructuredPromptDeliveryResult>
+): Promise<NativeChatSideQuestionDelivery> {
+  return result.then(
+    (outcome) =>
+      outcome.delivered || outcome.inComposer || outcome.recipientOwned
+        ? 'sent'
+        : outcome.unconfirmed
+          ? 'unconfirmed'
+          : 'failed',
+    () => 'failed'
+  )
+}
+
+/** The source keeps the question either way; the fork it may be in waits in the background. */
+function reportSideQuestion(agent: TuiAgent, delivery: 'failed' | 'unconfirmed'): void {
+  const values = { agent: structuredAgentLabel(agent) }
+  if (delivery === 'unconfirmed') {
+    toast.error(
+      translate(
+        'components.native-chat.sideChat.questionUnconfirmed',
+        "{{agent}} couldn't confirm the side chat got your question",
+        values
+      ),
+      {
+        description: translate(
+          'components.native-chat.sideChat.questionUnconfirmedDetail',
+          'Check the side chat before asking again. Your question is still in this chat.'
+        )
+      }
+    )
+    return
+  }
+  toast.error(
+    translate(
+      'components.native-chat.sideChat.questionNotSent',
+      "{{agent}} didn't get your question",
+      values
+    ),
+    {
+      description: translate(
+        'components.native-chat.sideChat.questionNotSentDetail',
+        'Your question is still in this chat. Send /btw again to retry.'
+      )
+    }
+  )
 }
 
 function reportNativeChatForkFailure(agent: TuiAgent, error: unknown, unconfirmed: boolean): void {
@@ -108,6 +204,17 @@ function forkFailureDetail(agentLabel: string, error: unknown): string {
   }
   if (code === 'structured_agent_session_host_permission') {
     return hostPermissionRefusedText(agentLabel, 'refused')
+  }
+  const sourceFailure =
+    error instanceof StructuredAgentSessionCreateRefusalError
+      ? agentSessionForkSourceFailureWords(
+          error.message,
+          agentLabel,
+          sayAgentSessionFailureTranslated
+        )
+      : null
+  if (sourceFailure) {
+    return sourceFailure
   }
   const causeText = structuredLaunchFailure(error)?.causeText
   if (causeText) {

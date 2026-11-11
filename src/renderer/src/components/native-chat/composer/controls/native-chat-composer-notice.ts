@@ -1,7 +1,7 @@
 // Separate Orca’s notice wording from verbatim external errors so the latter stay readable and copyable.
 
 import { translate } from '@/i18n/i18n'
-import { readIpcErrorDetail } from '@/lib/ipc-error'
+import { readIpcErrorDetail } from '@/runtime/errors/ipc-error'
 import { isClipboardTextTooLargeError } from '../../../../../../shared/clipboard-text'
 
 export type NativeChatComposerNoticeContent = {

@@ -3,7 +3,7 @@ import { afterEach, beforeEach, expect, vi } from 'vitest'
 import {
   forgetInstalledPaneSession,
   announceSessionWrites
-} from '../profile-session-store.test-fixture'
+} from '../terminal/layout/profile-session-store.test-fixture'
 
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { createHash } from 'node:crypto'
@@ -19,7 +19,7 @@ import type { LayoutCommand } from '../../../shared/workspace-layout/workspace-l
 import { applyCommandToSession } from '../../persistence/terminal-topology/terminal-pane-admission'
 import { resolveHostId } from '../../persistence/loading-store/session-host-partitions'
 import { toComparableRelaySshPtyId } from '../../../shared/ssh-pty-id'
-import '../spawned-pty-env-fixtures'
+import '../terminal/launch/spawned-pty-env-fixtures'
 import './runtime-test-module-registration.spec'
 import {
   computeWorktreePathMock,
@@ -32,8 +32,8 @@ import type { TerminalLayoutSnapshot } from '../../../shared/workspace-layout/te
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
-import '../orca-runtime-test-orchestration-messages.spec'
-import type { InMemoryOrchestrationMessages } from '../orca-runtime-test-orchestration-messages.spec'
+import '../orchestration/mailbox/terminal-pointer/in-memory-orchestration-messages.spec'
+import type { InMemoryOrchestrationMessages } from '../orchestration/mailbox/terminal-pointer/in-memory-orchestration-messages.spec'
 import type { OrchestrationDb } from '../orchestration/db/orchestration-db'
 import type { TerminalProcessInspection as PtyProcessInspection } from '../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 import type { Store } from '../../persistence/loading-store/store'

@@ -38,7 +38,9 @@ vi.mock('../runtime-environments/runtime-environment-transport-routing', () => (
 vi.mock('../runtime-environments/runtime-environment-request-connections', () => ({
   isRemoteRuntimeConnectionReady: () => false
 }))
-vi.mock('../../ssh/orcad-terminal-census-client', () => ({ requestOrcadTerminalCensus: vi.fn() }))
+vi.mock('../../managed-server/lifecycle/orcad-terminal-census-client', () => ({
+  requestOrcadTerminalCensus: vi.fn()
+}))
 const service = vi.hoisted(() => ({
   add: vi.fn(
     async (): Promise<{

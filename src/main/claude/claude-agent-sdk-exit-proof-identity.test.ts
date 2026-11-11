@@ -28,6 +28,7 @@ describe('Claude child root identity', () => {
     const child = { pid: 100, kill: vi.fn(() => true) }
     const terminateDescendants = vi.fn(async () => 'exited' as const)
     const tree = createClaudeChildTreeReaper(child, {
+      site: 'claude-structured-child-close',
       platform: 'linux',
       captureDescendants: vi.fn(async () =>
         collectDescendantRows(

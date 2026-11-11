@@ -1,6 +1,6 @@
 import { ClipboardCopy } from 'lucide-react'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function AgentSessionContextCopyMenuItem({
   onSelect,
@@ -9,10 +9,11 @@ export function AgentSessionContextCopyMenuItem({
   onSelect: () => void
   disabled?: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <DropdownMenuItem onSelect={onSelect} disabled={disabled}>
       <ClipboardCopy />
-      {translate('auto.components.terminal.pane.TerminalContextMenu.cff67afad1', 'Copy Context')}
+      {t('auto.components.terminal.pane.TerminalContextMenu.cff67afad1', 'Copy Context')}
     </DropdownMenuItem>
   )
 }

@@ -4,6 +4,7 @@ import type { NativeChatResolvedPrompt } from '../../../../../../shared/native-c
 import type { NativeChatTurnDiff } from '../../../../../../shared/native-chat/tools/native-chat-turn-diffs'
 import type { NativeChatOpenedPullRequest } from '../../../../../../shared/native-chat/tools/native-chat-opened-pull-requests'
 import type { NativeChatRowTypography } from '../../viewport/virtualization/native-chat-row-height-estimate'
+import type { NativeChatSideChatForkOffer } from '../../messages/actions/native-chat-side-chat-fork-point'
 import type {
   NativeChatSubagentChoices,
   NativeChatSubagentSections
@@ -28,8 +29,12 @@ export type NativeChatTranscriptSlotsInput = {
   isWorking: boolean
   /** Session-level lifecycle, which outlives a transcript that never said "done". */
   lifecycleWorking: boolean
+  /** Only where `/btw` listens: find the newest response that offers Fork. */
+  forkOffer?: NativeChatSideChatForkOffer
   subagentSections?: NativeChatSubagentSections
   subagentChoices?: NativeChatSubagentChoices
   /** The open reasoning block the live activity line discloses: its row takes no slot meanwhile. */
   liveReasoningId?: string | null
+  /** A left-side row draws under the last slot: the live activity line or the awaiting-input row. */
+  tailRowBelow?: boolean
 }

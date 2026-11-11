@@ -3,9 +3,9 @@ import type {
   RuntimeTerminalSetPaneTitle
 } from '../../../../shared/runtime-terminal-contracts'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import { OrcaRuntimeWithRemoveManagedWorktree } from '../../workspaces/removal/workspace-removal'
+import { RuntimeNestedWorktreeRemoval } from '../../workspaces/removal/runtime-nested-worktree-removal'
 
-export abstract class RuntimeTerminalNames extends OrcaRuntimeWithRemoveManagedWorktree {
+export abstract class RuntimeTerminalNames extends RuntimeNestedWorktreeRemoval {
   async renameTerminal(handle: string, title: string | null): Promise<RuntimeTerminalRename> {
     // Switch point: a terminal main owns is renamed in main's layout, with or without a window.
     const mainRename = ORCA_LAYOUT_OWNER_IS_MAIN

@@ -11,7 +11,7 @@ import { getHostedReviewCacheKey } from '@/store/slices/hosted-review/hosted-rev
 import { hostedReviewInfoFromGitHubPRInfo } from '../../../../../../shared/source-control/hosted-review/hosted-review-github'
 import type { HostedReviewInfo } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { isFolderRepo } from '../../../../../../shared/repo-kind'
-import { areTaskSourceContextsEqual } from '../../../../../../shared/task-source-context'
+import { areTaskSourceContextsEqual } from '../../../../../../shared/work-items/task-source-context'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import {
   getWorktreeCardPrDisplay,

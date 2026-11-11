@@ -16,7 +16,10 @@ import {
   testState,
   writeDataFile
 } from '../persistence-test-harness'
-import { visibleFolderWorkspaces, visibleRepos } from '../../ssh/orcad-retained-source'
+import {
+  visibleFolderWorkspaces,
+  visibleRepos
+} from '../migrating-orcad-catalog/orcad-source-visibility'
 import { wslMoveCutoverFixture } from '../__fixtures__/wsl-mover/wsl-move-cutover-fixture'
 import { seedWslMoveCutover } from '../__fixtures__/wsl-mover/wsl-move-journal-seeding'
 import { listWslMoveCutovers, wslMoveJournalDirectory } from './wsl-move-cutover-journal'

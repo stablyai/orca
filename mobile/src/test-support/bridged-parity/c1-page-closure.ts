@@ -62,12 +62,9 @@ export const C1_PAGE_CLOSURE: PageClosurePins = {
   },
   'host-worktree-refresh': {
     'host-worktree-refresh-stream': 'write-ordinal',
-    'matrix-host-worktree-refresh-runtime.clientevents.subscribe-1-1':
-      'result-absent-stream-release',
-    'matrix-host-worktree-refresh-runtime.clientevents.subscribe-1-2':
-      'result-absent-stream-release',
-    'matrix-host-worktree-refresh-runtime.clientevents.subscribe-1-3':
-      'result-absent-stream-release',
+    'matrix-host-worktree-refresh-runtime.clientevents.subscribe-1-1': 'write-ordinal',
+    'matrix-host-worktree-refresh-runtime.clientevents.subscribe-1-2': 'result-absent-observation',
+    'matrix-host-worktree-refresh-runtime.clientevents.subscribe-1-3': 'result-absent-observation',
     'matrix-host-worktree-refresh-runtime.clientevents.subscribe-2-1': 'write-ordinal'
   },
   'host.worktree-actions': {

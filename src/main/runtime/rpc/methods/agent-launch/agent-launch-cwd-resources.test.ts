@@ -1,5 +1,4 @@
 import type * as RuntimeEnvironmentStore from '../../../../../shared/remote-runtime/host-store/runtime-environment-store'
-import '../../unused-default-rpc-methods.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
