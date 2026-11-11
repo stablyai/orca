@@ -2,7 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../orca-runtime'
 
 // RA-ORPH: what the exact stop does with processes that outlive the PTY (pty-marked-stragglers.ts).
-const reap = vi.hoisted(() => ({ survivors: [] as number[], calls: [] as string[] }))
+const reap = vi.hoisted(() => {
+  const state: { survivors: number[]; calls: string[] } = { survivors: [], calls: [] }
+  return state
+})
 vi.mock('./pty-marked-stragglers', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   killPtyStragglers: async (ptyId: string) => {
