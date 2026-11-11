@@ -120,6 +120,6 @@ void initWebDeviceKeySupport()
   })
 
 // Prime WebGL here because web hosts terminals too; dynamic import keeps the App/pane-manager graph out of startup.
-void import('../lib/pane-manager/pane-webgl-renderer').then((module) =>
-  module.primeTerminalWebglAddon()
-)
+void import('../lib/pane-manager/terminal-rendering/pane-webgl-renderer')
+  .then(() => import('../lib/pane-manager/terminal-rendering/terminal-webgl-addon-loader'))
+  .then(({ primeTerminalWebglAddon }) => primeTerminalWebglAddon())

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react'
 import type { Terminal } from '@xterm/xterm'
-import { flushTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
+import { flushTerminalOutput } from '@/lib/pane-manager/terminal-output/pane-terminal-output-scheduler'
 import {
   cancelDeferredScrollRestore,
   captureScrollState,

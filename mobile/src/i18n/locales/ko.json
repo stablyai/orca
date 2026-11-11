@@ -2449,7 +2449,8 @@
     "tabStrip": {
       "checkingCapabilities": "데스크톱에서 지원하는 기능을 확인 중입니다. 잠시 후 다시 시도하세요.",
       "newTab": "새 탭",
-      "quickCommandsUpdateRequired": "빠른 명령을 사용하려면 데스크톱 업데이트가 필요합니다."
+      "quickCommandsUpdateRequired": "빠른 명령을 사용하려면 데스크톱 업데이트가 필요합니다.",
+      "tabStatus": "{{title}}, {{status}}"
     },
     "terminalActionSheetActions": {
       "clearTerminal": "터미널 지우기",
@@ -3359,6 +3360,12 @@
   },
   "tasks": {
     "hostedMerge": {
+      "confirmGitHubMerge": "PR #{{number}}을(를) 병합하시겠습니까?",
+      "confirmGitHubSquash": "PR #{{number}}의 커밋을 합쳐서 병합하시겠습니까?",
+      "confirmGitHubRebase": "PR #{{number}}을(를) 리베이스한 후 병합하시겠습니까?",
+      "confirmGitLabMerge": "병합 요청 #{{number}}을(를) 병합하시겠습니까?",
+      "confirmGitLabSquash": "병합 요청 #{{number}}의 커밋을 합쳐서 병합하시겠습니까?",
+      "confirmGitLabRebase": "병합 요청 #{{number}}을(를) 리베이스한 후 병합하시겠습니까?",
       "merged": "병합됨",
       "closed": "닫힘",
       "conflicts": "충돌",

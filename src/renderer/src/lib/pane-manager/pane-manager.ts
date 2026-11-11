@@ -13,11 +13,11 @@ import { disposeDividersIn } from './pane-divider'
 import { cancelActivePaneDrag, createDragReorderState, handlePaneDrop } from './pane-drag-reorder'
 import { beginPaneDragFromPointerDown } from './pane-drag-pointer'
 import { setLigaturesEnabled, disposePane } from './pane-lifecycle'
-import { setInlineImagesEnabled } from './pane-inline-images'
+import { setInlineImagesEnabled } from './terminal-rendering/pane-inline-images'
 import { fitAllPanesInternal } from './pane-tree-ops'
 import { collectPublicPanes, toPublicPane } from './pane-public-view'
-import { applyTerminalGpuAcceleration } from './pane-terminal-gpu-acceleration'
-import { detachPanesWebglForRebuild } from './pane-webgl-reattach'
+import { applyTerminalGpuAcceleration } from './terminal-rendering/pane-terminal-gpu-acceleration'
+import { detachPanesWebglForRebuild } from './terminal-rendering/pane-webgl-reattach'
 import {
   markPaneComplexScriptOutput,
   clearPaneWebglTextureAtlases,
@@ -26,10 +26,10 @@ import {
   resumePaneRendering,
   setPaneGpuRenderingState,
   suspendPaneRendering
-} from './pane-rendering-control'
+} from './terminal-rendering/pane-rendering-control'
 import type { TerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
 import { registerLivePaneManager, unregisterLivePaneManager } from './pane-manager-registry'
-import { releaseHiddenWebglRetention } from './terminal-webgl-hidden-retention'
+import { releaseHiddenWebglRetention } from './terminal-rendering/terminal-webgl-hidden-retention'
 import { schedulePaneRevealPresent, schedulePaneRevealRepaint } from './pane-reveal-repaint'
 import { PaneIdentityRegistry } from './pane-identity-registry'
 import { PaneReparentFrameTracker } from './pane-reparent-frame-tracker'
@@ -53,7 +53,7 @@ import {
   fitRevealedPanes,
   refreshAllPaneTerminals
 } from './pane-manager-layout-sweeps'
-import { collectPaneRenderingDiagnostics } from './pane-rendering-diagnostics'
+import { collectPaneRenderingDiagnostics } from './terminal-rendering/pane-rendering-diagnostics'
 import { applyPaneLayoutGeometry } from './pane-layout-geometry-apply'
 import type { TerminalPaneLayoutNode } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { FIRST_PANE_ID } from '../../../../shared/pane-key'
