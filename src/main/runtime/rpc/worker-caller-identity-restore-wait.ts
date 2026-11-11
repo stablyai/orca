@@ -28,7 +28,8 @@ export function waitForRestoredWorkerCallerIdentity(
     raw && typeof raw === 'object' && !Array.isArray(raw) ? { ...raw } : {}
   const handle = params[callerField]
   // A long-poll check would spend this wait from the CLI's request budget; its handler re-resolves anyway.
-  if (typeof handle !== 'string' || !handle || params.wait === true) {
+  const longPollCheck = request.method === 'orchestration.check' && params.wait === true
+  if (typeof handle !== 'string' || !handle || longPollCheck) {
     return null
   }
   if (
