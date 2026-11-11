@@ -14,7 +14,7 @@ import {
   noteWslHostsLivePolicyBlock,
   resetWslHostsGateForTests
 } from '../../wsl/host-lifecycle/wsl-host-gate'
-import { fixture } from '../../persistence/loading-store/profile-state-delayed-authority-fixture'
+import { fixture } from '../../persistence/loading-store/profile-writing/profile-state-delayed-authority-fixture'
 import { installProjectRuntimeGitRouter } from './project-runtime-git-router'
 
 vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))

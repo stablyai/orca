@@ -1,11 +1,12 @@
 import { useRef, useState, useSyncExternalStore } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { ChevronLeft, GitBranch, MoreHorizontal, PanelLeftOpen } from 'lucide-react-native'
+import { ChevronLeft, MoreHorizontal, PanelLeftOpen } from 'lucide-react-native'
 import { NavBar, NavBarRefreshLine } from '../components/nav-bar/NavBar'
 import { useRefreshHint } from '../query/refresh-hint'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import { MobileSessionHeaderMoreMenu } from './MobileSessionHeaderMoreMenu'
+import { MobileSourceControlButton } from './MobileSourceControlButton'
 import { MobileSessionTabStrip } from './tabs/MobileSessionTabStrip'
 import { MobileSessionTitleBlock } from './MobileSessionTitleBlock'
 import type { SessionTitleCard } from './tabs/use-session-title-card'
@@ -30,6 +31,7 @@ export function MobileSessionHeader({
   const t = useMobileTranslation()
   const {
     hostId,
+    worktreeId,
     isFloatingWorkspaceRoute,
     presentedConnState,
     forceReconnectHost,
@@ -109,10 +111,10 @@ export function MobileSessionHeader({
   const trailing = (
     <>
       {sourceControlInBar ? (
-        <NavBarButton
+        <MobileSourceControlButton
+          hostId={hostId}
+          worktreeId={worktreeId}
           active={activePanel === 'sourceControl'}
-          accessibilityLabel={t('session.header.openSourceControl', 'Open source control')}
-          icon={GitBranch}
           onPress={() => handlePanelTap('sourceControl')}
         />
       ) : null}

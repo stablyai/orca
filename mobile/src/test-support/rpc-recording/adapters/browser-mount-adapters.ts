@@ -100,13 +100,6 @@ export function browserMountAdapters(
           if (name === 'keypress') {
             return performHookAction(() => commands.sendKeypress(String(args.key ?? 'Enter')))
           }
-          if (name === 'dialog') {
-            return performHookAction(() =>
-              commands.sendDialogCommand(
-                args.accept === false ? 'browser.dialogDismiss' : 'browser.dialogAccept'
-              )
-            )
-          }
           if (name === 'wheel') {
             return performHookAction(() => commands.sendWheel({ x: 40, y: 80 }, 0, 120, 1))
           }

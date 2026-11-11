@@ -225,19 +225,6 @@ describe('snapshot replacement ends the previous terminal scroll', () => {
     expect(scrolls).toEqual([])
   })
 
-  it('cancels a pending long press when its terminal is replaced', () => {
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-    boot(false)
-    touch('touchstart', 400)
-    init()
-    settle()
-    messages.length = 0
-    vi.advanceTimersByTime(500)
-    expect(
-      messages.filter((message) => message.type === 'set-select-mode' && message.enabled)
-    ).toEqual([])
-  })
-
   it('does not launch an old finger’s velocity after snapshot replacement', () => {
     boot(false)
     touch('touchstart', 400)

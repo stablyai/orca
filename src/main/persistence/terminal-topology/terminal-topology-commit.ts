@@ -28,7 +28,7 @@ import type {
   DurableProfileStateMutation,
   StoreRuntimeState
 } from '../loading-store/store-runtime-state'
-import type { SessionHostPartitionOperations } from '../loading-store/session-host-partitions'
+import type { SessionHostPartitionOperations } from '../loading-store/workspace-sessions/session-host-partitions'
 import { planTerminalLeafMove, writeMovedLeafProfileRecords } from './terminal-leaf-move'
 import { writeRestorable } from './restorable-write'
 import { assignWorkspaceSessionPartition } from './terminal-topology-membership'

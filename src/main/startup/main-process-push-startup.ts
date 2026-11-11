@@ -1,4 +1,4 @@
-import { getOrcaPushGatewayUrl } from '../orca-profiles/profile-cloud-auth-config'
+import { getOrcaPushGatewayUrl } from '../orca-profiles/cloud-auth/profile-cloud-auth-config'
 import { DesktopPushService } from '../runtime/push/desktop-push-service'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { OrcaRuntimeRpcServer } from '../runtime/rpc/server/runtime-rpc'

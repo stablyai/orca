@@ -12,7 +12,7 @@ import {
   readWorkspaceFileDragSource,
   getWorkspaceFileDragRejectionMessage
 } from '@/lib/files/drop/workspace-file-drag'
-import { FILE_OWNER_UNRESOLVED_MESSAGE } from '@/lib/files/access/file-owner-runtime-target'
+import { fileOwnerUnresolvedMessage } from '@/lib/files/access/file-owner-runtime-target'
 import { getNativeFileDropRejectionMessage } from '@/lib/files/drop/native-file-drop-rejection-message'
 import { captureEditorFileDropOpen, editorGroupStillExists } from './editor-dropped-file-open'
 
@@ -110,7 +110,7 @@ export function useEditorGroupFileDropOwner({
         }
         const source = readWorkspaceFileDragSource(event.dataTransfer)
         if (!source) {
-          toast.error(FILE_OWNER_UNRESOLVED_MESSAGE)
+          toast.error(fileOwnerUnresolvedMessage())
           return
         }
         const open = captureEditorFileDropOpen({ worktreeId, groupId }, source)

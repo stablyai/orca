@@ -1,7 +1,7 @@
 import { join } from 'node:path'
 import { runProcess } from '@orca/process-host'
 import { getAppEnvironment } from '../../shared/app-environment'
-import { getBundledLauncherPath } from '../cli/bundled-cli-launcher-path'
+import { getBundledLauncherPath } from '../cli/packaged-assets/bundled-cli-launcher-path'
 
 let status: Promise<boolean | null> | undefined
 

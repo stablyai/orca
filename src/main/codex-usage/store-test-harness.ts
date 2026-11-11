@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, vi } from 'vitest'
 import type { Mock } from 'vitest'
-import { scanCodexUsageFilesViaWorker } from '../usage/usage-scan-worker-spawn'
+import { scanCodexUsageFilesViaWorker } from '../usage/scan-worker/usage-scan-worker-spawn'
 import { CodexUsageStore, initCodexUsagePath } from './store'
 import type { CodexUsagePersistedState } from './types'
 
@@ -68,7 +68,9 @@ export function createWorktreeUsageSession(worktreeId: string) {
 export function createStoreWithState(state: Partial<CodexUsagePersistedState>): CodexUsageStore {
   const store = new CodexUsageStore({
     getRepos: () => [],
-    getAllWorktreeMeta: () => ({})
+    getAllWorktreeMeta: () => ({}),
+    getRememberedWorktreeDisplayNames: () => new Map(),
+    whenLoaded: async () => {}
   })
 
   ;(store as unknown as { state: CodexUsagePersistedState }).state = {

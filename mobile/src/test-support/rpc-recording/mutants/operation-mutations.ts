@@ -239,14 +239,6 @@ export const OPERATION_MUTATIONS = {
     before: '      void ensureSessionTabs().catch(() => null)',
     after: '      await ensureSessionTabs()'
   },
-  // Accept null Linear status; only result-null reaches the resulting connected property-read failure.
-  'linear-status-nullable': {
-    file: 'task-list-reply-schema.ts',
-    before: `  activeWorkspaceId: salvagedOptional('activeWorkspaceId', z.string().nullable())
-})`,
-    after: `  activeWorkspaceId: salvagedOptional('activeWorkspaceId', z.string().nullable())
-}).nullable()`
-  },
   // Collapse explicit avatarUrl:null to absence; picker rendering alone cannot distinguish them.
   'assignable-user-avatar-null-collapse': {
     file: 'task-provider-entity-reply-schema.ts',

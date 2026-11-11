@@ -1,10 +1,9 @@
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { extractIpcErrorMessage } from '@/runtime/errors/ipc-error'
 import { basename } from '@/lib/path'
-import { downloadRuntimeFile } from '@/runtime/files/reads/runtime-file-read-client'
-import { downloadGrantedRuntimeFile } from '@/runtime/files/reads/runtime-remote-file-download'
+import { openRuntimeFileWithDefaultApp } from '@/runtime/files/reads/runtime-file-default-app-open'
+import { getRelativePathInsideWorktree } from '@/runtime/files/runtime-file-routing'
 import { hostStreamsGrantedFiles } from '@/runtime/files/grants/runtime-terminal-artifact-grant'
 import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
@@ -25,7 +24,6 @@ export async function downloadAndOpenRemoteTerminalFile(
 ): Promise<boolean> {
   const name = basename(filePath) || filePath
   const { target, worktreeId } = fileContext
-  let granted: Parameters<typeof downloadGrantedRuntimeFile>[0] | null = null
   if (grant) {
     if (
       // Why: a paired web client has no local file to stream into.
@@ -40,18 +38,18 @@ export async function downloadAndOpenRemoteTerminalFile(
     if (!isCurrent()) {
       return true
     }
-    granted = { target, worktreeId, absolutePath: filePath, grantId: grant.terminalArtifactGrantId }
   }
   try {
-    const result = fileContext.connectionId
-      ? await window.api.fs.downloadFile({ filePath, connectionId: fileContext.connectionId })
-      : granted
-        ? await downloadGrantedRuntimeFile(granted, name)
-        : await downloadRuntimeFile(fileContext, filePath, name)
-    // Why: cancelling the native save dialog is a deliberate no-op, not a failure.
-    if (!result.canceled) {
-      await window.api.shell.openFilePath(result.destinationPath, LOCAL_EXECUTION_HOST_ID)
-    }
+    await openRuntimeFileWithDefaultApp({
+      target,
+      filePath,
+      relativePath: getRelativePathInsideWorktree(fileContext.worktreePath, filePath) ?? filePath,
+      worktreeId: worktreeId ?? undefined,
+      connectionId: fileContext.connectionId,
+      expectedExternalSshTargetId: fileContext.expectedExternalSshTargetId,
+      expectedEnvironmentPairingRevision: fileContext.expectedEnvironmentPairingRevision,
+      terminalArtifactGrantId: grant?.terminalArtifactGrantId
+    })
   } catch (error) {
     toast.error(
       extractIpcErrorMessage(

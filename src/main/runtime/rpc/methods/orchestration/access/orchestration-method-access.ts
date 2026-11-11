@@ -101,6 +101,16 @@ export function checkOrchestrationAccess<P, G>(
   }
 }
 
+/** The same check for a call this Orca sends on to a paired server instead of running it here. */
+export function checkDeclaredOrchestrationAccess(
+  access: OrchestrationMethodAccessDeclaration,
+  params: unknown,
+  ctx: RpcContext
+): void {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a registered declaration was built for its method's params, which the dispatcher parsed with that method's schema.
+  checkOrchestrationAccess(access as OrchestrationMethodAccess<unknown, unknown>, params, ctx)
+}
+
 function declaredCaller<P>(
   field: Extract<FieldOf<P>, OrchestrationCallerField> | undefined,
   params: P

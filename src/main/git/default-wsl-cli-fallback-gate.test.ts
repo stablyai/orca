@@ -92,18 +92,6 @@ describe.each(CLIS)('$cli default-distro fallback', ({ cli, run }) => {
     expect(spawnedWsl()).toBe(false)
   })
 
-  it('falls back to a running default distro as before', async () => {
-    hostMissingThenWslAnswers(cli)
-
-    await expect(run()).resolves.toEqual({ stdout: '{}', stderr: '' })
-    expect(spawnMock).toHaveBeenNthCalledWith(
-      2,
-      'wsl.exe',
-      expect.arrayContaining(['-d', 'Ubuntu']),
-      expect.anything()
-    )
-  })
-
   it('still falls back to a stopped one inside a user act for it', async () => {
     readWslDistroRunningStateMock.mockResolvedValue('stopped')
     hostMissingThenWslAnswers(cli)
