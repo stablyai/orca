@@ -89,20 +89,12 @@ export function cloneStageLabel(
   stage: 'counting' | 'download' | 'checkout' | undefined,
   t: Translate
 ): string {
-  switch (stage) {
-    case 'counting':
-      return t('auto.components.worktree.creation.VmBuildSheet.cloneCounting', 'Counting objects…')
-    case 'checkout':
-      return t(
-        'auto.components.worktree.creation.VmBuildSheet.cloneCheckout',
-        'Checking out files…'
-      )
-    default:
-      return t(
-        'auto.components.worktree.creation.VmBuildSheet.cloneDownload',
-        'Downloading history…'
-      )
+  if (stage === 'counting') {
+    return t('auto.components.worktree.creation.VmBuildSheet.cloneCounting', 'Counting objects…')
   }
+  return stage === 'checkout'
+    ? t('auto.components.worktree.creation.VmBuildSheet.cloneCheckout', 'Checking out files…')
+    : t('auto.components.worktree.creation.VmBuildSheet.cloneDownload', 'Downloading history…')
 }
 
 /** Screen-reader text for a step's icon, which carries its state visually. */
