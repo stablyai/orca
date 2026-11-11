@@ -201,7 +201,8 @@ export function TerminalPaneRecoveryPortals({
       pane.container.addEventListener(
         'wheel',
         () => requestAnimationFrame(() => noteWakeViewport(pane.leafId, pane.terminal)),
-        { passive: true, signal: listening.signal }
+        // Capture: xterm's scrollable element stops the wheel's propagation, so a bubbling listener never hears it.
+        { passive: true, capture: true, signal: listening.signal }
       )
     }
     return () => listening.abort()
