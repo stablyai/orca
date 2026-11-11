@@ -193,17 +193,6 @@ export function isExpectedAgentProcess(
   )
 }
 
-/** The foreground belongs to `agent`: any name it is recognized by (dsh-TUI 0.19 runs as `dsh-tui`, not `dsh`) or its expectedProcess. */
-export function isAgentForegroundProcess(
-  processName: string | null | undefined,
-  agent: TuiAgent
-): boolean {
-  return (
-    recognizeAgentProcess(processName)?.agent === agent ||
-    isExpectedAgentProcess(processName, TUI_AGENT_CONFIG[agent].expectedProcess)
-  )
-}
-
 /** Agents whose process names (orca, acli, cn, vibe) also belong to ordinary tools. */
 export const GENERIC_PROCESS_NAME_AGENTS: ReadonlySet<TerminalAgent> = new Set([
   'claude-agent-teams',
@@ -211,6 +200,17 @@ export const GENERIC_PROCESS_NAME_AGENTS: ReadonlySet<TerminalAgent> = new Set([
   'continue',
   'mistral-vibe'
 ])
+
+/** Before writing to `agent`: its expectedProcess, or a name it is recognized by (dsh-TUI 0.19 runs as `dsh-tui`, not `dsh`); generic names such as Agent Teams' `orca` launcher prove nothing. */
+export function isAgentForegroundProcess(
+  processName: string | null | undefined,
+  agent: TuiAgent
+): boolean {
+  return (
+    isExpectedAgentProcess(processName, TUI_AGENT_CONFIG[agent].expectedProcess) ||
+    (!GENERIC_PROCESS_NAME_AGENTS.has(agent) && recognizeAgentProcess(processName)?.agent === agent)
+  )
+}
 
 export function recognizeAgentProcess(
   processName: string | null | undefined

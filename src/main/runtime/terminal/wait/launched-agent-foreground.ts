@@ -1,7 +1,7 @@
 import {
-  isAgentForegroundProcess,
   isExpectedAgentProcess,
-  isNodeInterpreterOfAgent
+  isNodeInterpreterOfAgent,
+  recognizeAgentProcess
 } from '../../../../shared/agent-status/process/agent-process-recognition'
 import { PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS } from '../../../../shared/process-table-snapshot'
 import { isShellProcess } from '../../../../shared/agent-status/process/shell-process-detection'
@@ -49,7 +49,7 @@ function judgeFreshForeground(
   processName: string | null,
   agent: TuiAgent
 ): LaunchedAgentForeground {
-  if (processName && isAgentForegroundProcess(processName, agent)) {
+  if (processName && isLaunchedAgent(processName, agent)) {
     return 'agent'
   }
   return processName && isLaunchShell(processName) ? 'shell' : 'unknown'
@@ -57,6 +57,13 @@ function judgeFreshForeground(
 
 function isLaunchShell(processName: string): boolean {
   return isShellProcess(processName.replace(/^-/, ''))
+}
+
+function isLaunchedAgent(processName: string, agent: TuiAgent): boolean {
+  return (
+    recognizeAgentProcess(processName)?.agent === agent ||
+    isExpectedAgentProcess(processName, TUI_AGENT_CONFIG[agent].expectedProcess)
+  )
 }
 
 /** Local POSIX uses a fresh terminal-scoped process group, avoiding slow global scans and stale icon names.
@@ -131,7 +138,7 @@ export async function readLaunchedAgentForeground(
       evidence?.verdict === 'live' &&
       evidence.fence.platform === 'posix' &&
       evidence.processName &&
-      isAgentForegroundProcess(evidence.processName, agent)
+      isLaunchedAgent(evidence.processName, agent)
     ) {
       // Begun no more than one TTL before the read was asked (so any age within one TTL), however long ps took.
       if (
@@ -172,7 +179,7 @@ export async function readLaunchedAgentForeground(
       return 'unknown'
     }
     // Relays before same-agent dedupe call npm Codex's two rows ambiguous and name its `node` wrapper.
-    return isAgentForegroundProcess(foreground, agent) ||
+    return isLaunchedAgent(foreground, agent) ||
       (evidence.reason === 'ambiguous_foreground_group' &&
         isNodeInterpreterOfAgent(foreground, agent))
       ? 'agent'

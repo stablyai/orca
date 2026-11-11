@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const inspectRuntimeTerminalProcess = vi.fn()
 const pasteDraftToAgentPtyWhenReady = vi.fn()
@@ -16,6 +16,9 @@ describe('sendFollowupPromptWhenAgentReady', () => {
   beforeEach(() => {
     inspectRuntimeTerminalProcess.mockReset()
     pasteDraftToAgentPtyWhenReady.mockReset().mockResolvedValue(true)
+  })
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   it.each([
@@ -35,5 +38,23 @@ describe('sendFollowupPromptWhenAgentReady', () => {
     expect(pasteDraftToAgentPtyWhenReady).toHaveBeenCalledWith(
       expect.objectContaining({ ptyId: 'pty-1', content: 'hi', agent })
     )
+  })
+
+  it("does not deliver while Agent Teams' generic `orca` launcher holds the PTY", async () => {
+    vi.useFakeTimers()
+    inspectRuntimeTerminalProcess.mockResolvedValue({
+      foregroundProcess: 'orca',
+      hasChildProcesses: true
+    })
+
+    const delivered = sendFollowupPromptWhenAgentReady({
+      ptyId: 'pty-1',
+      agent: 'claude-agent-teams',
+      prompt: 'hi'
+    })
+    await vi.runAllTimersAsync()
+
+    await expect(delivered).resolves.toBe(false)
+    expect(pasteDraftToAgentPtyWhenReady).not.toHaveBeenCalled()
   })
 })
