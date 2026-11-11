@@ -133,7 +133,14 @@ function StepActions({ flow }: { flow: CloudSetupFlow }): React.JSX.Element | nu
     case 'choose-plan':
       return browser(continueLabel, flow.continueInBrowser)
     case 'fix-billing':
-      return browser(continueLabel, flow.fixBilling)
+      // A failed payment is fixed in the billing portal (browser); hours and the cap in Settings.
+      return flow.current?.need === 'payment' ? (
+        browser(continueLabel, flow.fixBilling)
+      ) : (
+        <Button type="button" onClick={flow.fixBilling}>
+          {t('cloudSetupPage.billing.openSettings', 'Open billing settings')}
+        </Button>
+      )
     case 'github-install':
       return browser(continueLabel, flow.installGitHub)
     case 'start-trial':
@@ -268,7 +275,7 @@ export function CloudSetupPage({
           <StepActions flow={shown} />
         </div>
 
-        <div className="mt-auto pt-12">
+        <div className="mt-12">
           <div className="rounded-lg border border-border bg-muted/30 px-4 py-3">
             <div className="text-xs font-medium text-muted-foreground">
               {t('cloudSetupPage.startsAfter', 'Starts when setup is done')}

@@ -62,7 +62,9 @@ export function currentStepCopy(
                 'cloudSetupPage.trial.lead',
                 '{{hours}} sandbox hours to try Orca Cloud. No card needed.',
                 {
-                  hours
+                  hours,
+                  count: Number(hours),
+                  defaultValue_one: '{{hours}} sandbox hour to try Orca Cloud. No card needed.'
                 }
               ),
         note: t('cloudSetupPage.trial.note', 'Nothing is charged until you choose a plan.')
