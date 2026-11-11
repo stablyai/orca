@@ -4,6 +4,7 @@ import {
   serializeBudgetedMobileSnapshot
 } from './terminal-snapshot-publication'
 import { getOutputAfterSnapshotSeq } from './terminal-stream-replay'
+import { admitFullDepthSnapshot } from './terminal-full-depth-snapshot-limit'
 import { isMovedPaneHistorySessionId } from '../../../../../shared/orcad-migration/orcad-migration-terminal-history'
 import {
   DESKTOP_SNAPSHOT_BYTE_BUDGET,
@@ -42,14 +43,17 @@ export async function publishMultiplexInitialSnapshot(
   const forcedInitialSnapshotTruncated =
     process.env.ORCA_E2E_FORCE_REMOTE_TERMINAL_INITIAL_SNAPSHOT_TRUNCATED === '1'
   // A WSL-moved pane replays its whole carried history once; the first view must hold all of it.
-  // A desktop keeps a local terminal's depth (N-02: a cloud pane reattaching after an app restart
-  // lost everything above the phone-sized 1000 rows); phones keep the phone-sized cut.
+  // A desktop with no local copy of the pane (fresh mount, app reopen) asks for a local terminal's
+  // depth (N-02), at most once per pane per interval. Every other subscribe (phones, reconnects)
+  // gets the 1000-row cut: a deep snapshot per reconnect would flood a flaky link.
+  const fullDepth =
+    !isMobile && request.historyDepth === 'full' && admitFullDepthSnapshot(ptyId)
   const firstRows = isMovedPaneHistorySessionId(ptyId)
     ? MOVED_PANE_SUBSCRIBE_SCROLLBACK_ROWS
-    : isMobile
-      ? MOBILE_SUBSCRIBE_SCROLLBACK_ROWS
-      : DESKTOP_SUBSCRIBE_SCROLLBACK_ROWS
-  const rawBudgetBytes = isMobile ? MOBILE_SNAPSHOT_BYTE_BUDGET : DESKTOP_SNAPSHOT_BYTE_BUDGET
+    : fullDepth
+      ? DESKTOP_SUBSCRIBE_SCROLLBACK_ROWS
+      : MOBILE_SUBSCRIBE_SCROLLBACK_ROWS
+  const rawBudgetBytes = fullDepth ? DESKTOP_SNAPSHOT_BYTE_BUDGET : MOBILE_SNAPSHOT_BYTE_BUDGET
   let read = await runtime.readTerminal(request.terminal)
   let serialized = await serializeBudgetedMobileSnapshot(
     runtime,

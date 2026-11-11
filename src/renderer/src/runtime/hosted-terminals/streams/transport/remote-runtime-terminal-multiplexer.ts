@@ -26,6 +26,8 @@ export class RemoteRuntimeTerminalMultiplexer extends RemoteRuntimeTerminalBinar
     reportsPaneVisibility?: boolean
     /** Set by callers that retune cadence via setOutputCadence; absent leaves the capability unadvertised. */
     outputCadence?: TerminalOutputCadence
+    /** N-02: this view holds no local copy of the pane, so the first snapshot carries full history. */
+    historyDepth?: 'full'
     callbacks: RemoteRuntimeMultiplexedTerminalCallbacks
   }): Promise<RemoteRuntimeMultiplexedTerminal> {
     const streamId = this.allocateStreamId()
@@ -167,7 +169,8 @@ export class RemoteRuntimeTerminalMultiplexer extends RemoteRuntimeTerminalBinar
             ...(args.outputCadence ? { outputCadence: 1 } : {})
           },
           ...(args.inputSessionId ? { inputSessionId: args.inputSessionId } : {}),
-          ...(outputCadence !== 'focused' ? { outputCadence } : {})
+          ...(outputCadence !== 'focused' ? { outputCadence } : {}),
+          ...(args.historyDepth ? { historyDepth: args.historyDepth } : {})
         })
       )
       if (!sent) {

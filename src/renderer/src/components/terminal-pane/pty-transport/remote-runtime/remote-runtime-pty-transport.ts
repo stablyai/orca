@@ -326,6 +326,11 @@ export function createRemoteRuntimePtyTransport(
   let sameHandleEndReuseAttachedAt: number | null = null
   let attachGeneration = 0
   let subscriptionGeneration = 0
+  // N-02: this pane mount holds no copy of the host's history until its first subscribe lands, so
+  // only that subscribe asks for full depth; reconnects already hold the history and fill the gap
+  // from the 1000-row cut.
+  let fullHistoryReceived = false
+  const FULL_HISTORY_DEPTH: 'full' = 'full'
   // A terminal this pane just created has no history, so an empty first image there is not a gap.
   let spawnedHandle: string | null = null
   let inputReadySubscription: number | null = null
@@ -3075,6 +3080,7 @@ export function createRemoteRuntimePtyTransport(
       inputSessionId: inputJournal.sessionId,
       reportsPaneVisibility: true,
       outputCadence: desiredOutputCadence,
+      ...(fullHistoryReceived ? {} : { historyDepth: FULL_HISTORY_DEPTH }),
       callbacks: {
         onData: (data, meta) => {
           if (isCurrentSubscription()) {
@@ -3089,6 +3095,7 @@ export function createRemoteRuntimePtyTransport(
           if ((data || meta?.pendingEscapeTailAnsi) && isCurrentSubscription()) {
             // Why printable: a host model holding only mode/cursor bytes paints a cursor-only pane.
             subscriptionSnapshotHadContent ||= restoredSnapshotPaintsPrintableContent({ data })
+            fullHistoryReceived = true
             if (subscribedPtyId && bufferPtyShutdownReplayData(subscribedPtyId, data)) {
               return
             }
