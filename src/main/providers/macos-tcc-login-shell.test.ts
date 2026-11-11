@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as LoginSessionPtyProbe from './macos-login-session-pty-probe'
 
@@ -20,11 +21,14 @@ vi.mock('./macos-login-session-pty-probe', async (importOriginal) => ({
 }))
 
 import {
+  MACOS_TCC_SHELL_TRAMPOLINE,
   prepareMacosTccLoginShell,
   probeMacosLoginSessionAlive,
   resetMacosLoginShellPreflightForTests,
   wrapShellSpawnForMacosTccAttribution
 } from './macos-tcc-login-shell'
+
+const itOnPosixHost = process.platform === 'win32' ? it.skip : it
 
 const ACCEPTED_RESULT = {
   code: 0,
@@ -92,5 +96,34 @@ describe('probeMacosLoginSessionAlive', () => {
     await expect(spawnProbe).resolves.toEqual(ACCEPTED_OUTCOME)
 
     expect(wrapShellSpawnForMacosTccAttribution('/bin/zsh', ['-l']).file).toBe('/bin/zsh')
+  })
+
+  it('wraps a prepared login shell with the pane-exit trampoline', async () => {
+    setPlatform('darwin')
+    await prepareMacosTccLoginShell()
+    const wrapped = wrapShellSpawnForMacosTccAttribution('/bin/zsh', ['-l'])
+    expect(wrapped.args).toContain(MACOS_TCC_SHELL_TRAMPOLINE)
+  })
+
+  itOnPosixHost('reports a non-zero inner command status through the pane-exit OSC', () => {
+    const result = spawnSync(
+      '/bin/bash',
+      [
+        '--noprofile',
+        '--norc',
+        '-p',
+        '-c',
+        MACOS_TCC_SHELL_TRAMPOLINE,
+        'orca-tcc-login',
+        '/bin/sh',
+        '/bin/sh',
+        '-c',
+        'exit 42'
+      ],
+      { encoding: 'utf8' }
+    )
+
+    expect(result.status).toBe(42)
+    expect(result.stdout).toContain('\x1b]777;orca-pane-exit:42\x07')
   })
 })
