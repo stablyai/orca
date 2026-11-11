@@ -12,27 +12,23 @@ export type NativeChatTimedRowPlacement = {
   unplaced: readonly NativeChatTimedRow[]
 }
 
-/** The message each row follows: the last top-level message at or before its time. */
-export function placeNativeChatTimedRows(
+// Separators no key or message id contains.
+const FIELD = '\u0000'
+const ROW = '\u0001'
+
+/** The message each row follows: the last top-level message at or before its time; null for none. */
+function anchorNativeChatTimedRows(
   slots: readonly NativeChatTranscriptSlot[],
   rows: readonly NativeChatTimedRow[]
-): NativeChatTimedRowPlacement {
+): [key: string, messageId: string | null][] {
   const dated = slots.flatMap((slot) =>
     slot.kind === 'message' && slot.depth === 0 && slot.message.timestamp !== null
       ? [{ id: slot.message.id, at: slot.message.timestamp }]
       : []
   )
-  const afterMessage = new Map<string, NativeChatTimedRow[]>()
-  const unplaced: NativeChatTimedRow[] = []
-  for (const row of rows.toSorted((a, b) => a.at - b.at)) {
-    const anchor = dated.findLast((message) => message.at <= row.at)
-    if (anchor) {
-      afterMessage.set(anchor.id, [...(afterMessage.get(anchor.id) ?? []), row])
-    } else {
-      unplaced.push(row)
-    }
-  }
-  return { afterMessage, unplaced }
+  return rows
+    .toSorted((a, b) => a.at - b.at)
+    .map((row) => [row.key, dated.findLast((message) => message.at <= row.at)?.id ?? null])
 }
 
 /** Stable while no row changes the message it follows, so streaming text does not redraw every row. */
@@ -40,18 +36,30 @@ export function useNativeChatTimedRows(
   slots: readonly NativeChatTranscriptSlot[],
   rows: readonly NativeChatTimedRow[] | undefined
 ): NativeChatTimedRowPlacement | null {
-  const placement = useMemo(
-    () => (rows?.length ? placeNativeChatTimedRows(slots, rows) : null),
-    [slots, rows]
-  )
-  const signature = placement
-    ? [
-        ...[...placement.afterMessage].map(
-          ([id, placed]) => `${id}:${placed.map(({ key }) => key).join(',')}`
-        ),
-        `-:${placement.unplaced.map(({ key }) => key).join(',')}`
-      ].join('|')
+  // A string, so the memo below sees a change only when some row's anchor does.
+  const anchors = rows?.length
+    ? anchorNativeChatTimedRows(slots, rows)
+        .map(([key, messageId]) => `${key}${FIELD}${messageId ?? ''}`)
+        .join(ROW)
     : ''
-  // oxlint-disable-next-line react-hooks/exhaustive-deps -- the signature and rows say when placement changes.
-  return useMemo(() => placement, [signature, rows])
+  return useMemo(() => {
+    if (!rows?.length) {
+      return null
+    }
+    const byKey = new Map(rows.map((row) => [row.key, row]))
+    const afterMessage = new Map<string, NativeChatTimedRow[]>()
+    const unplaced: NativeChatTimedRow[] = []
+    for (const [key, messageId] of anchors.split(ROW).map((entry) => entry.split(FIELD))) {
+      const row = byKey.get(key)
+      if (!row) {
+        continue
+      }
+      if (messageId) {
+        afterMessage.set(messageId, [...(afterMessage.get(messageId) ?? []), row])
+      } else {
+        unplaced.push(row)
+      }
+    }
+    return { afterMessage, unplaced }
+  }, [anchors, rows])
 }
