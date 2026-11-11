@@ -27029,8 +27029,7 @@
       "recentCommits": "Recent commits"
     },
     "terminal": {
-      "asleepNamed": "{{name}} is asleep. Open it to wake it.",
-      "asleep": "This workspace is asleep. Open it to wake it."
+      "asleepHistoryKept": "This workspace is asleep. Your terminal history is kept."
     }
   },
   "cloudAgentSetup": {
