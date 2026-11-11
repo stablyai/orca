@@ -27,6 +27,10 @@ import { remarkNativeChatFileDestinations } from './native-chat-markdown-file-de
 import { NativeChatLinkPeek } from '../links/previews/NativeChatLinkPeek'
 import { NativeChatLinkPeekContext } from '../links/previews/native-chat-link-peek-context'
 import { useNativeChatLinkClick } from '../links/actions/native-chat-link-click-context'
+import {
+  NativeChatReferenceChip,
+  useNativeChatReference
+} from '../links/previews/NativeChatReferenceChip'
 import './native-chat-markdown.css'
 
 /** Existing words stay opaque when a reply first starts growing. */
@@ -80,6 +84,16 @@ function containsImage(children: ReactNode): boolean {
   )
 }
 
+/** Shows a link that only repeats an issue or PR ID as a chip with its title. */
+function ReferenceLabel({ href, children }: { href?: string; children: ReactNode }): ReactNode {
+  const reference = useNativeChatReference(href, children)
+  return reference ? (
+    <NativeChatReferenceChip reference={reference} fallback={children} />
+  ) : (
+    children
+  )
+}
+
 function createNativeChatImageExtension(
   visualExtension: CommentMarkdownExtension | undefined,
   onLinkClick: CommentMarkdownLinkClickHandler | undefined
@@ -95,7 +109,9 @@ function createNativeChatImageExtension(
         const renderAnchor = (children: ReactNode): ReactNode => (
           <NativeChatLinkPeek href={props.href}>
             {typeof Anchor === 'function' ? (
-              <Anchor {...props}>{children}</Anchor>
+              <Anchor {...props}>
+                <ReferenceLabel href={props.href}>{children}</ReferenceLabel>
+              </Anchor>
             ) : (
               <a href={props.href}>{children}</a>
             )}
@@ -148,7 +164,7 @@ export function NativeChatMarkdown({
     linkifyFilePaths && onLinkClick !== undefined,
     streaming
   )
-  const { githubRepo } = useContext(NativeChatLinkPeekContext)
+  const { githubRepo, issueKeys } = useContext(NativeChatLinkPeekContext)
   return (
     <NativeChatMarkdownRowKeyContext.Provider value={rowKey}>
       <CommentMarkdown
@@ -157,6 +173,7 @@ export function NativeChatMarkdown({
         growing={growing || streaming}
         // Only the document variant's links can peek; bare #123 links follow it.
         githubRepo={variant === 'document' ? githubRepo?.referenceRepo : undefined}
+        issueKeys={variant === 'document' ? issueKeys : undefined}
         onLinkClick={onLinkClick}
         allowFileUriLinks={onLinkClick !== undefined}
         content={

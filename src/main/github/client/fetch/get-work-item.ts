@@ -32,6 +32,29 @@ function githubHostKey(host?: string): string {
   return isDefaultGitHubHost(host) ? 'github.com' : host!.trim().toLowerCase()
 }
 
+/** Which repository a lookup may read with this workspace's credentials, or undefined to refuse.
+ *  Pasted hosts must match configured remotes before receiving credentials. A preview reads any
+ *  repo on such a host, as a link card does: that host's sign-in already serves this workspace.
+ *  A workspace with no GitHub remotes (a plain folder) may preview github.com only: that is the
+ *  default `gh` sign-in, and no Enterprise host receives credentials it was not configured for. */
+export function matchOwnerRepoLookup<T extends GitHubApiRepository>(
+  requested: T,
+  candidates: readonly GitHubApiRepository[],
+  options: { preview?: boolean }
+): GitHubApiRepository | undefined {
+  const requestedKey = githubRepoIdentityKey(requested)
+  const requestedHostKey = githubHostKey(requested.host)
+  const exact = candidates.find((candidate) => githubRepoIdentityKey(candidate) === requestedKey)
+  if (exact || !options.preview) {
+    return exact
+  }
+  const sameHost = candidates.some(
+    (candidate) => githubHostKey(candidate.host) === requestedHostKey
+  )
+  const folderPreviewOfDefaultHost = candidates.length === 0 && requestedHostKey === 'github.com'
+  return sameHost || folderPreviewOfDefaultHost ? requested : undefined
+}
+
 export async function getWorkItem(
   repoPath: string,
   number: number,
@@ -179,16 +202,7 @@ export async function getWorkItemByOwnerRepo(
       connectionId,
       localGitOptions
     )
-    const requestedKey = githubRepoIdentityKey(requestedRepository)
-    const requestedHostKey = githubHostKey(requestedRepository.host)
-    // Pasted hosts must match configured remotes before receiving credentials. A preview reads any
-    // repo on such a host, as a link card does: that host's sign-in already serves this workspace.
-    const matchedRepository =
-      candidates.find((candidate) => githubRepoIdentityKey(candidate) === requestedKey) ??
-      (options.preview &&
-      candidates.some((candidate) => githubHostKey(candidate.host) === requestedHostKey)
-        ? requestedRepository
-        : undefined)
+    const matchedRepository = matchOwnerRepoLookup(requestedRepository, candidates, options)
     if (!matchedRepository) {
       return null
     }

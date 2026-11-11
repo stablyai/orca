@@ -21497,6 +21497,18 @@
         "questionNotSentDetail": "Your question is still in this chat. Send /btw again to retry.",
         "questionUnconfirmed": "{{agent}} couldn't confirm the side chat got your question",
         "questionUnconfirmedDetail": "Check the side chat before asking again. Your question is still in this chat."
+      },
+      "linearPeek": {
+        "unassigned": "Unassigned",
+        "updated": "updated {{time}}",
+        "unavailable": "Preview unavailable.",
+        "retry": "Retry"
+      },
+      "trackerPeek": {
+        "unavailable": "Preview unavailable.",
+        "retry": "Retry",
+        "updated": "updated {{time}}",
+        "unassigned": "Unassigned"
       }
     },
     "tab": {
@@ -21966,7 +21978,15 @@
         "turnDiffsTitle": "Turn diffs",
         "turnDiffsCopy": "Shows the files each turn changed, with line counts, below the reply.",
         "turnDiffsSearchChangedFiles": "changed files",
-        "turnDiffsSearchEdits": "edits"
+        "turnDiffsSearchEdits": "edits",
+        "referenceChipsFull": "Full: ID and title",
+        "referenceChipsCompact": "Compact: ID only",
+        "referenceChipsOff": "Off: plain links",
+        "referenceChipsTitle": "Issue and PR chips",
+        "referenceChipsCopy": "A link to a Linear issue or GitHub pull request shows as a chip. Full adds its title and status; Compact shows the ID only.",
+        "referenceChipsSearchLinear": "Linear",
+        "referenceChipsSearchPullRequest": "pull request",
+        "referenceChipsSearchTitle": "title"
       },
       "voice": {
         "dictationLanguage": {

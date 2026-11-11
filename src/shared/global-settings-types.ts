@@ -44,6 +44,8 @@ import type {
 } from './ui-chrome-types'
 import type { WorktreeVisibilityDefaults } from './repo-types'
 
+export type NativeChatReferenceChipMode = 'off' | 'compact' | 'full'
+
 export type { WorktreeVisibilityDefaults } from './repo-types'
 
 /** MiniMax account region used to select the quota endpoint. */
@@ -221,6 +223,9 @@ export type GlobalSettings = GlobalSettingsBase & {
   nativeChatInlineVisuals?: boolean
   /** Hovering a web link in chat fetches the page to preview it; absent means on. GitHub cards ignore this. */
   nativeChatLinkPreviews?: boolean
+  /** How a chat link that only repeats an issue or PR ID shows: a chip with the title, a chip with the ID
+   *  alone (no lookup), or a plain link. Absent means 'full'. */
+  nativeChatReferenceChips?: NativeChatReferenceChipMode
   /** A card under a chat turn that opened a pull request; absent means on. */
   nativeChatOpenedPullRequests?: boolean
   /** Structured Codex/Claude chats inherit the login-shell env; off limits it to nativeChatShellEnvironmentVariables plus PATH/locale. */

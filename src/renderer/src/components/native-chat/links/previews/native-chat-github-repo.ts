@@ -14,7 +14,8 @@ import { FILE_LINK_CONTEXT_INPUT_KEYS } from '../actions/native-chat-file-link-c
 import type { Repo } from '../../../../../../shared/repo-types'
 import {
   getRepoExecutionHostId,
-  isUnresolvedOwnerHostId
+  isUnresolvedOwnerHostId,
+  LOCAL_EXECUTION_HOST_ID
 } from '../../../../../../shared/execution-host'
 import {
   githubHostFromIdentityKey,
@@ -32,6 +33,8 @@ export type NativeChatGitHubRepo = {
   identityKeys: readonly string[]
   /** Where bare `#123` points: upstream unless the repo prefers origin. github.com only. */
   referenceRepo: GitHubRepoReference | null
+  /** Another workspace's repo, lent to a chat that has none so its links preview through the API. */
+  borrowed?: true
 }
 
 function readCachedOriginKey(repo: Repo | null): string | null {
@@ -84,9 +87,7 @@ export function createNativeChatRepoSelector(worktreeId: string | undefined) {
 }
 
 /** The git repo behind the chat's workspace, with its GitHub remotes once resolved. */
-export function useNativeChatGitHubRepo(
-  worktreeId: string | undefined
-): NativeChatGitHubRepo | null {
+function useChatWorkspaceGitHubRepo(worktreeId: string | undefined): NativeChatGitHubRepo | null {
   const selectRepo = useMemo(() => createNativeChatRepoSelector(worktreeId), [worktreeId])
   const repo = useAppStore(selectRepo)
   const [resolved, setResolved] = useState(() => ({
@@ -137,6 +138,83 @@ export function useNativeChatGitHubRepo(
   }, [repo, originKey])
 }
 
+const MAX_BORROWED_REPO_CANDIDATES = 8
+
+function selectLocalGitRepos(state: Pick<AppState, 'repos'>): readonly Repo[] {
+  return state.repos
+}
+
+function isLocal(repo: Repo): boolean {
+  return getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID
+}
+
+/** A local repo to send GitHub previews through for a chat whose workspace has none (a plain
+ *  folder). A github.com git repo is preferred; failing that, a local folder, which main lets
+ *  preview github.com links only. Bare `#123` stays text either way, since no repo owns it. */
+function useBorrowedGitHubRepo(enabled: boolean): NativeChatGitHubRepo | null {
+  const repos = useAppStore(selectLocalGitRepos)
+  const gitCandidates = useMemo(
+    () =>
+      enabled
+        ? repos
+            .filter((repo) => (!repo.kind || repo.kind === 'git') && isLocal(repo))
+            .slice(0, MAX_BORROWED_REPO_CANDIDATES)
+        : [],
+    [enabled, repos]
+  )
+  const folder = useMemo(
+    () =>
+      enabled ? (repos.find((repo) => repo.kind === 'folder' && isLocal(repo)) ?? null) : null,
+    [enabled, repos]
+  )
+  const [borrowed, setBorrowed] = useState<{ repo: Repo; key: string } | null>(null)
+  useEffect(() => {
+    if (gitCandidates.length === 0) {
+      setBorrowed(null)
+      return
+    }
+    let cancelled = false
+    void (async () => {
+      for (const repo of gitCandidates) {
+        const key = await resolveRepoSlug(repo).catch(() => null)
+        if (cancelled) {
+          return
+        }
+        // github.com keys carry no host prefix; enterprise hosts would answer for their own links only.
+        if (key && !githubHostFromIdentityKey(key)) {
+          setBorrowed({ repo, key })
+          return
+        }
+      }
+      setBorrowed(null)
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [gitCandidates])
+  return useMemo(() => {
+    if (borrowed) {
+      return {
+        repo: borrowed.repo,
+        identityKeys: [borrowed.key],
+        referenceRepo: null,
+        borrowed: true
+      }
+    }
+    // No identity keys: the folder has no remotes, and only github.com links resolve against it.
+    return folder ? { repo: folder, identityKeys: [], referenceRepo: null, borrowed: true } : null
+  }, [borrowed, folder])
+}
+
+/** The chat workspace's GitHub repo, or else a borrowed one so GitHub links still preview through the API. */
+export function useNativeChatGitHubRepo(
+  worktreeId: string | undefined
+): NativeChatGitHubRepo | null {
+  const own = useChatWorkspaceGitHubRepo(worktreeId)
+  const borrowed = useBorrowedGitHubRepo(own === null)
+  return own ?? borrowed
+}
+
 export function githubLinkBelongsToRepo(
   repo: NativeChatGitHubRepo,
   slug: { owner: string; repo: string; host?: string }
@@ -150,5 +228,28 @@ export function githubLinkOnRepoHost(
   slug: { owner: string; repo: string; host?: string }
 ): boolean {
   const host = githubHostFromIdentityKey(githubRepoIdentityKey(slug))
+  if (repo.borrowed && repo.identityKeys.length === 0) {
+    // A borrowed folder previews github.com only, the host whose keys carry no prefix.
+    return !host
+  }
   return repo.identityKeys.some((key) => githubHostFromIdentityKey(key) === host)
+}
+
+/** The chat workspace's repo, or else the first local git repo: GitLab lookups name their project
+ *  in the link and need a repo only to pick the host and sign-in that answer. */
+export function useNativeChatLookupRepo(worktreeId: string | undefined): Repo | null {
+  const selectRepo = useMemo(() => createNativeChatRepoSelector(worktreeId), [worktreeId])
+  const own = useAppStore(selectRepo)
+  const repos = useAppStore(selectLocalGitRepos)
+  return useMemo(
+    () =>
+      own ??
+      repos.find(
+        (repo) =>
+          (!repo.kind || repo.kind === 'git') &&
+          getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID
+      ) ??
+      null,
+    [own, repos]
+  )
 }

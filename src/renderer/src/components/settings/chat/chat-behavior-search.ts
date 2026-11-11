@@ -102,6 +102,19 @@ export const getChatBehaviorEntriesByKey = createLocalizedCatalog(() => ({
       translate('components.settings.nativeChat.linkPreviewsSearchHover', 'hover card')
     ]
   },
+  referenceChips: {
+    targetSectionId: 'chat-reference-chips',
+    title: translate('components.settings.nativeChat.referenceChipsTitle', 'Issue and PR chips'),
+    description: translate(
+      'components.settings.nativeChat.referenceChipsCopy',
+      'A link to a Linear issue or GitHub pull request shows as a chip. Full adds its title and status; Compact shows the ID only.'
+    ),
+    keywords: [
+      translate('components.settings.nativeChat.referenceChipsSearchLinear', 'Linear'),
+      translate('components.settings.nativeChat.referenceChipsSearchPullRequest', 'pull request'),
+      translate('components.settings.nativeChat.referenceChipsSearchTitle', 'title')
+    ]
+  },
   shellEnvironment: {
     targetSectionId: 'chat-shell-environment',
     title: translate(
