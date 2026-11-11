@@ -4,12 +4,26 @@ const calls: { method: string; params: unknown; environmentId: string }[] = []
 let showPtyId: string | null = 'host-pty-7'
 let stopResult: Record<string, unknown> = {}
 let readTail: string[] = []
+/** How each terminal.send answers, in order ('ok' once the list runs out). */
+let sendAnswers: ('ok' | 'timeout' | 'refused')[] = []
+/** Tail the host shows after the nth send (the fresh agent came up), if set. */
+let tailAfterSend: string[] | null = null
 
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
   callRuntimeRpc: async (target: { environmentId: string }, method: string, params: unknown) => {
     calls.push({ method, params, environmentId: target.environmentId })
     if (method === 'terminal.read') {
       return { terminal: { tail: readTail } }
+    }
+    if (method === 'terminal.send') {
+      if (tailAfterSend) {
+        readTail = tailAfterSend
+      }
+      const answer = sendAnswers.shift() ?? 'ok'
+      if (answer === 'timeout') {
+        throw new Error('Timed out waiting for the remote Orca runtime to respond.')
+      }
+      return { send: { handle: 'term_new', accepted: answer === 'ok', bytesWritten: 0 } }
     }
     return method === 'terminal.show' ? { terminal: { ptyId: showPtyId } } : stopResult
   }
@@ -93,6 +107,8 @@ describe('freshIfResumeFoundNothing (RA-11e)', () => {
   beforeEach(() => {
     calls.length = 0
     clock = 0
+    sendAnswers = []
+    tailAfterSend = null
   })
 
   it('a resume that found no conversation starts the agent fresh in the same pane, once', async () => {
@@ -109,8 +125,69 @@ describe('freshIfResumeFoundNothing (RA-11e)', () => {
     expect(sends).toHaveLength(1)
     expect(sends[0]).toMatchObject({
       environmentId: 'env-1',
-      params: { terminal: 'term_new', text: 'claude --dangerously-skip-permissions', enter: true }
+      // Enter rides in the text: `enter: true` makes the host wait for the exited Claude's composer.
+      params: { terminal: 'term_new', text: 'claude --dangerously-skip-permissions\r' }
     })
+    expect(sends[0]?.params).not.toHaveProperty('enter')
+  })
+
+  it('a send that times out once is tried again and the fresh start lands', async () => {
+    readTail = ['No conversation found with session ID: s1', '$ ']
+    sendAnswers = ['timeout', 'ok']
+    const relaunched = await freshIfResumeFoundNothing({
+      currentPtyId: () => 'remote:env-1@@term_new',
+      replacedPtyId: 'remote:env-1@@term_old',
+      freshCommand: 'claude',
+      sleep,
+      now
+    })
+    expect(relaunched).toBe(true)
+    expect(calls.filter((c) => c.method === 'terminal.send')).toHaveLength(2)
+  })
+
+  it('a refused send counts as a failed try', async () => {
+    readTail = ['No conversation found with session ID: s1', '$ ']
+    sendAnswers = ['refused', 'ok']
+    await expect(
+      freshIfResumeFoundNothing({
+        currentPtyId: () => 'remote:env-1@@term_new',
+        replacedPtyId: 'remote:env-1@@term_old',
+        freshCommand: 'claude',
+        sleep,
+        now
+      })
+    ).resolves.toBe(true)
+    expect(calls.filter((c) => c.method === 'terminal.send')).toHaveLength(2)
+  })
+
+  it('never types twice: a timed-out send whose Claude came up anyway is not sent again', async () => {
+    readTail = ['No conversation found with session ID: s1', '$ ']
+    sendAnswers = ['timeout']
+    tailAfterSend = ['No conversation found with session ID: s1', '$ claude', 'Claude Code v2.1.319']
+    const relaunched = await freshIfResumeFoundNothing({
+      currentPtyId: () => 'remote:env-1@@term_new',
+      replacedPtyId: 'remote:env-1@@term_old',
+      freshCommand: 'claude',
+      sleep,
+      now
+    })
+    expect(relaunched).toBe(true)
+    expect(calls.filter((c) => c.method === 'terminal.send')).toHaveLength(1)
+  })
+
+  it('every try failing throws, so the caller shows Couldn’t restart instead of a quiet shell', async () => {
+    readTail = ['No conversation found with session ID: s1', '$ ']
+    sendAnswers = ['timeout', 'timeout', 'timeout']
+    await expect(
+      freshIfResumeFoundNothing({
+        currentPtyId: () => 'remote:env-1@@term_new',
+        replacedPtyId: 'remote:env-1@@term_old',
+        freshCommand: 'claude',
+        sleep,
+        now
+      })
+    ).rejects.toThrow('ra11e_fresh_send_failed')
+    expect(calls.filter((c) => c.method === 'terminal.send')).toHaveLength(3)
   })
 
   it('ANSI-coloured output and a late message (after 15 s) are still caught', async () => {

@@ -375,7 +375,7 @@ describe('RA-11 Restart on a paired (remote) pane', () => {
     })
     await vi.waitFor(() => expect(cloudAgentRestartStartedFresh(PANE_KEY, 0)).toBe(true))
     expect(rpc.sends).toEqual([
-      { terminal: 'term_new', text: 'claude --dangerously-skip-permissions', enter: true }
+      { terminal: 'term_new', text: 'claude --dangerously-skip-permissions\r' }
     ])
     vi.advanceTimersByTime(CLOUD_AGENT_FRESH_NOTICE_MS)
     expect(cloudAgentRestartStartedFresh(PANE_KEY, 0)).toBe(false)
@@ -404,6 +404,38 @@ describe('RA-11 Restart on a paired (remote) pane', () => {
     await vi.waitFor(() => expect(cloudAgentRestartStartedFresh(PANE_KEY, 0)).toBe(true))
     vi.advanceTimersByTime(CLOUD_AGENT_FRESH_NOTICE_MS)
     expect(cloudAgentRestartStartedFresh(PANE_KEY, 0)).toBe(false)
+  })
+
+  it('a fresh start that could not be typed shows Couldn’t restart (never a quiet bare shell)', async () => {
+    clickRemoteRestart()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    // The pane settles on its new PTY first; the failed fallback must bring the strip back.
+    const handleRestartPane = vi.fn(() => {
+      settleCloudAgentRestart(PANE_KEY)
+    })
+    runReadyPaneAccountRestarts({
+      panes: [{ id: 7, leafId: LEAF }],
+      ptyIdOf: () => REMOTE,
+      readyRestartPtyIds: selectReadyAccountRestartPtyIds(useAppStore.getState(), TAB),
+      tabId: TAB,
+      consumePendingPaneAccountRestart: useAppStore.getState().consumePendingPaneAccountRestart,
+      buildAccountRestartStartup: () => ({
+        command: 'claude',
+        resumeProviderSession: { key: 'session_id' as const, id: 'sess-tab-1' }
+      }),
+      handleRestartPane,
+      stopRemotePane: () => Promise.resolve(),
+      resumeRemotePane: () => Promise.resolve(),
+      freshIfResumeFoundNothing: () => Promise.reject(new Error('ra11e_fresh_send_failed')),
+      buildFreshCommand: () => 'claude'
+    })
+    await vi.waitFor(() => expect(cloudAgentRestartAttempt(PANE_KEY, 0)?.phase).toBe('failed'))
+    expect(cloudAgentRestartAttempt(PANE_KEY, 0)).toMatchObject({
+      failure: 'hostUnresponsive',
+      resumable: false
+    })
+    expect(cloudAgentRestartStartedFresh(PANE_KEY, 0)).toBe(false)
+    warn.mockRestore()
   })
 
   it('a failed resume on the host shows the failure and never reconnects', async () => {
