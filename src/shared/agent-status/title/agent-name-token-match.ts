@@ -53,3 +53,5 @@ export const DROID_AGENT_NAME_RE = /(?:^|[^\w./\\-])droid(?![\w./\\-])/i
 // Reject Hermes/agy substrings inside cwd/path titles.
 export const HERMES_AGENT_NAME_RE = /(?:^|[^\w./\\-])hermes(?![\w./\\-])/i
 export const AGY_AGENT_NAME_RE = /(?:^|[^\w./\\-])agy(?![\w./\\-])/i
+// Bare `bob` is a person's name and the Neovim version manager, so only Orca's `IBM Bob` titles are identity.
+export const IBM_BOB_AGENT_NAME_RE = /(?:^|[^\w./\\-])ibm[ \t]+bob(?![\w./\\-])/i

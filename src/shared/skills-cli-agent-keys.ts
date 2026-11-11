@@ -44,6 +44,8 @@ export const SKILLS_CLI_AGENT_KEY_BY_TUI_AGENT = {
   grok: 'grok',
   devin: 'devin',
   ante: null,
+  // The skills CLI has no IBM Bob key; its `bob` key belongs to a different project.
+  bob: null,
   // Only TRAE CN ships the traecli alias Orca detects.
   trae: 'trae-cn',
   muse: null,

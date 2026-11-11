@@ -9,7 +9,11 @@ vi.mock('./command-path-directory-worker-client', async () => ({
     (await import('./command-path-directory')).readDetectionDirectory
   )
 }))
-import { findCommandsOnLocalPath, isCommandOnLocalPath } from './command-path-resolver'
+import {
+  findCommandsOnLocalPath,
+  isCommandOnLocalPath,
+  resolveCommandOnLocalPath
+} from './command-path-resolver'
 
 describe('isCommandOnLocalPath', () => {
   // POSIX semantics: executable bit + absolute-only + symlink follow.
@@ -26,6 +30,15 @@ describe('isCommandOnLocalPath', () => {
     })
     afterAll(async () => {
       await rm(dir, { recursive: true, force: true })
+    })
+
+    it('resolves the absolute path of the executable it found', async () => {
+      await expect(
+        resolveCommandOnLocalPath('runme', { platform: 'linux', env: { PATH: dir } })
+      ).resolves.toBe(path.posix.join(dir, 'runme'))
+      await expect(
+        resolveCommandOnLocalPath('plain', { platform: 'linux', env: { PATH: dir } })
+      ).resolves.toBeNull()
     })
 
     it('rejects a non-executable file on PATH', async () => {

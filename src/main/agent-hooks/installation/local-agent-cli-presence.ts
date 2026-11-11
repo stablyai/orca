@@ -186,6 +186,37 @@ async function resolveSearchPath(
   return env[resolvePathEnvKey(env, platform)] ?? ''
 }
 
+async function presenceSearchDirs(
+  options: DetectOptions,
+  platform: NodeJS.Platform
+): Promise<string[]> {
+  const delimiter = options.pathDelimiter ?? pathApiForPlatform(platform).delimiter
+  const guestMounts = options.guestWindowsDriveMounts ?? readGuestWindowsDriveMounts()
+  return pathEntries(await resolveSearchPath(options, platform), delimiter).filter(
+    (dir) => !isUnderWindowsDriveMount(dir, guestMounts)
+  )
+}
+
+/** Resolves one command exactly as presence detection does (`~` expanded, same filtered PATH). */
+export async function resolveLocalAgentCommand(
+  command: string,
+  options: DetectOptions = {}
+): Promise<string | null> {
+  const platform = options.platform ?? process.platform
+  const fileProbe = options.fileProbe ?? {
+    isExecutableFile: (filePath: string) => isExecutableFile(filePath, platform)
+  }
+  if (hasPathSeparatorToken(command)) {
+    const expanded = expandHomePathToken(command, platform, options.homeDir ?? homedir())
+    return isPlatformAbsolutePath(expanded, platform) &&
+      (await fileProbe.isExecutableFile(expanded))
+      ? expanded
+      : null
+  }
+  const dirs = await presenceSearchDirs(options, platform)
+  return probePathCandidate(command, dirs, platform, fileProbe, options.pathExt)
+}
+
 export async function detectLocalManagedAgentCliPresence(
   targets: readonly ManagedAgentHookTarget[],
   settings: CommandOverrideSettings,
@@ -193,11 +224,7 @@ export async function detectLocalManagedAgentCliPresence(
 ): Promise<LocalCliPresenceByAgent> {
   await maybeHydrateShellPath(options)
   const platform = options.platform ?? process.platform
-  const delimiter = options.pathDelimiter ?? pathApiForPlatform(platform).delimiter
-  const guestMounts = options.guestWindowsDriveMounts ?? readGuestWindowsDriveMounts()
-  const dirs = pathEntries(await resolveSearchPath(options, platform), delimiter).filter(
-    (dir) => !isUnderWindowsDriveMount(dir, guestMounts)
-  )
+  const dirs = await presenceSearchDirs(options, platform)
   const homeDir = options.homeDir ?? homedir()
   const fileProbe = options.fileProbe ?? {
     isExecutableFile: (filePath: string) => isExecutableFile(filePath, platform)

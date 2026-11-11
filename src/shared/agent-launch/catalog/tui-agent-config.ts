@@ -1,3 +1,4 @@
+import { BOB_TUI_AGENT_CONFIG } from './bob-tui-agent-config'
 import type { TuiAgent } from './tui-agent'
 import {
   getOrcaCliCommandNameForPlatform,
@@ -172,10 +173,7 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     // agy 1.2.x expands collapsed multiline pastes over seconds; byte ingest finishing does not prove submit readiness.
     submitLineSettleMsPerLine: 45
   },
-  aider: {
-    detectCmd: 'aider',
-    promptInjectionMode: 'stdin-after-start'
-  },
+  aider: { detectCmd: 'aider', promptInjectionMode: 'stdin-after-start' },
   goose: {
     detectCmd: 'goose',
     promptInjectionMode: 'stdin-after-start'
@@ -285,6 +283,7 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     preflightTrust: 'copilot',
     draftPasteReadySignal: 'copilot-composer-prompt'
   },
+  bob: BOB_TUI_AGENT_CONFIG,
   grok: {
     detectCmd: 'grok',
     // Why: argv (grok takes a positional prompt) so multi-line/special-char text isn't mangled as raw PTY keystrokes.

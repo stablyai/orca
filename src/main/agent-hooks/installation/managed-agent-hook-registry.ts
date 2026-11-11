@@ -5,6 +5,7 @@ import type { AgentHookInstallStatus } from '../../../shared/agent-hook-listener
 import type { HookInstallAgent } from '../../../shared/telemetry-daemon-event-schemas'
 import { ampHookService } from '../../amp/hook-service'
 import { antigravityHookService } from '../../antigravity/hook-service'
+import { bobHookService } from '../../bob/hook-service'
 import { claudeHookService } from '../../claude/hook-service'
 import { codexHookService } from '../../codex/hooks/installation/hook-service'
 import { commandCodeHookService } from '../../command-code/hook-service'
@@ -64,7 +65,8 @@ export const MANAGED_AGENT_HOOK_INSTALLERS: readonly ManagedAgentHookInstaller[]
   ['zcode', () => zcodeHookService.install()],
   ['dsh', () => dshHookService.install()],
   ['jcode', () => jcodeHookService.install()],
-  ['kiro', () => kiroHookService.install()]
+  ['kiro', () => kiroHookService.install()],
+  ['bob', () => bobHookService.install()]
 ]
 
 // Refresh shared launchers even after CLI removal; Amp/Hermes manage provider-native plugins separately.
@@ -89,7 +91,8 @@ export const MANAGED_AGENT_HOOK_SCRIPT_REFRESHERS: readonly ManagedAgentHookScri
   ['zcode', () => zcodeHookService.refreshManagedScripts()],
   ['dsh', () => dshHookService.refreshManagedScripts()],
   ['jcode', () => jcodeHookService.refreshManagedScripts()],
-  ['kiro', () => kiroHookService.refreshManagedScripts()]
+  ['kiro', () => kiroHookService.refreshManagedScripts()],
+  ['bob', () => bobHookService.refreshManagedScripts()]
 ]
 
 export const MANAGED_AGENT_HOOK_REMOVERS: readonly ManagedAgentHookRemover[] = [
@@ -115,7 +118,8 @@ export const MANAGED_AGENT_HOOK_REMOVERS: readonly ManagedAgentHookRemover[] = [
   ['zcode', () => zcodeHookService.remove()],
   ['dsh', () => dshHookService.remove()],
   ['jcode', () => jcodeHookService.remove()],
-  ['kiro', () => kiroHookService.remove()]
+  ['kiro', () => kiroHookService.remove()],
+  ['bob', () => bobHookService.remove()]
 ]
 
 export const MANAGED_AGENT_HOOK_ASYNC_REMOVERS: readonly ManagedAgentHookAsyncRemover[] = [
@@ -145,5 +149,6 @@ export const MANAGED_AGENT_HOOK_STATUS_READERS: readonly ManagedAgentHookStatusR
   ['zcode', () => zcodeHookService.getStatus()],
   ['dsh', () => dshHookService.getStatus()],
   ['jcode', () => jcodeHookService.getStatus()],
-  ['kiro', () => kiroHookService.getStatus()]
+  ['kiro', () => kiroHookService.getStatus()],
+  ['bob', () => bobHookService.getStatus()]
 ]

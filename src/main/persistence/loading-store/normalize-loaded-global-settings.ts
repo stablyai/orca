@@ -184,6 +184,7 @@ export function normalizeLoadedGlobalSettings(
     claudeAgentTeamsDefaultDisabledMigrated: true,
     sshRemoteCliControlExistingHostsMigrated: true,
     agentWorkspaceTrustExistingReposMigrated: true,
+    bobDefaultDisabledMigrated: true,
     openInApplications: normalizeOpenInApplications(parsed.settings?.openInApplications, {
       seedDefaults: true
     }),

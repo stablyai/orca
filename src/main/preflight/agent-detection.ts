@@ -35,6 +35,7 @@ import {
   detectInstalledAgents,
   type InstalledAgentDetectionOptions
 } from './installed-agent-detection'
+import { clearIdentityProbeCache } from './preflight-identity-probe'
 export { detectAgentCommandsOnHost } from './agent-command-detection'
 export {
   detectInstalledAgents,
@@ -88,6 +89,7 @@ function preflightCacheKey(wslTarget: WslPreflightTarget | null): string {
 /** @internal - tests need a clean preflight cache between cases. */
 export function _resetPreflightCache(): void {
   cached = null
+  clearIdentityProbeCache()
   cachedByWslDistro.clear()
   preflightInFlight.clear()
   latestPreflightRun.clear()
@@ -134,6 +136,7 @@ export async function refreshShellPathAndDetectAgents(
   if (wslTarget) {
     // Discard cached guest PATH before detecting a newly installed WSL CLI.
     invalidateWslGuestEnvironment(wslTarget.distro)
+    clearIdentityProbeCache()
     const agents = await detectInstalledAgents(context, options)
     return {
       agents,
@@ -146,6 +149,7 @@ export async function refreshShellPathAndDetectAgents(
 
   const hydration = await hydrateShellPath({ force: true })
   const added = hydration.ok ? mergePathSegments(hydration.segments) : []
+  clearIdentityProbeCache()
   const agents = await detectInstalledAgents(context, options)
   return {
     agents,

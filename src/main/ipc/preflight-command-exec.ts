@@ -9,7 +9,8 @@ import { runProcess } from '@orca/process-host'
 import {
   beginLocalCommandSelection,
   isCommandOnLocalPath,
-  listLocalCommandPaths
+  listLocalCommandPaths,
+  resolveCommandOnLocalPath
 } from './command-path/command-path-resolver'
 import { buildLocalPreflightEnv } from './preflight-local-env'
 import { runPreflightCommandInWsl } from './preflight-wsl-command'
@@ -89,6 +90,11 @@ export async function execLocalPreflightCommandOrThrow(
   })
 
   return withPreflightTimeout(command, commandPromise, timeoutMs)
+}
+
+/** Absolute path of `command` on the preflight PATH, or null when absent. */
+export async function resolveLocalCommandPath(command: string): Promise<string | null> {
+  return resolveCommandOnLocalPath(command, { env: buildLocalPreflightEnv() })
 }
 
 // Unreachable distros and absent commands both reject; see docs/reference/wsl-probe-failure-semantics.md.

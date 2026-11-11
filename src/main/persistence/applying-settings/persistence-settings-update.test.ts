@@ -124,4 +124,25 @@ describe('Store', () => {
     expect(updated.notifications.enabled).toBe(false)
     expect(updated.notifications.customSoundPath).toBe('/sounds/custom.wav')
   })
+
+  it('hides IBM Bob on existing profiles once', async () => {
+    writeDataFile({
+      settings: { claudeAgentTeamsDefaultDisabledMigrated: true, disabledTuiAgents: [] }
+    })
+    const store = await createStore()
+    expect(store.getSettings().disabledTuiAgents).toEqual(['bob'])
+    expect(store.getSettings().bobDefaultDisabledMigrated).toBe(true)
+  })
+
+  it('respects an explicit IBM Bob opt-in after the hide migration ran', async () => {
+    writeDataFile({
+      settings: {
+        claudeAgentTeamsDefaultDisabledMigrated: true,
+        bobDefaultDisabledMigrated: true,
+        disabledTuiAgents: []
+      }
+    })
+    const store = await createStore()
+    expect(store.getSettings().disabledTuiAgents).toEqual([])
+  })
 })

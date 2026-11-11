@@ -68,6 +68,7 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
     leaf: Pick<RuntimeSyncedLeaf, 'tabId' | 'leafId' | 'paneRuntimeId'>
   ): string
   protected abstract getOrCreatePtyTitleTrackerEntry(ptyId: string): RuntimePtyTitleTrackerEntry
+  protected abstract emitBobApprovalWaiting(ptyId: string): void
   protected abstract emitTerminalAgentStatusEvents(
     ptyId: string,
     chunk: Pick<ProcessedAgentStatusChunk, 'payloads'> & Partial<ProcessedAgentStatusChunk>,
@@ -259,6 +260,7 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
     }
     titleTrackerEntry.applyingChunk = true
     titleTrackerEntry.chunkTouchedSessionTabs = false
+    let bobApproval: boolean | undefined
     try {
       for (const payload of agentStatusChunk.payloads) {
         titleTrackerEntry.pendingFacts.push({ kind: 'agent-status', payload })
@@ -292,6 +294,10 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
       })
       // Keep Command Code facts in this chunk's batch; exclude OSC 9999 payloads from its bounded text window.
       titleTrackerEntry.commandCodeDetector?.observe(agentStatusChunk.cleanData)
+      // Why: Bob has no hook for a pending approval (see bob-approval-prompt.ts); this is the
+      // only signal that the pane is blocked on the user, so it emits agent status directly
+      // rather than a side-effect fact.
+      bobApproval = titleTrackerEntry.bobApprovalDetector?.observe(agentStatusChunk.cleanData)
     } finally {
       titleTrackerEntry.applyingChunk = false
       try {
@@ -302,6 +308,10 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
             ? null
             : (previousTitleScanTail?.length ?? 0) + agentStatusChunk.lastPayloadCleanOffset
         this.restoreAgentPromptLifecycleByteOrder(ptyId, titleInput, lastPayloadTitleOffset)
+        // Why last: the modal is still on screen, so a same-chunk OSC status must not land after it.
+        if (bobApproval) {
+          this.emitBobApprovalWaiting(ptyId)
+        }
       } finally {
         // Always flush, even after tracker exceptions, so facts cannot leak into the next chunk's seq.
         this.flushPendingTerminalSideEffectFacts(ptyId, titleTrackerEntry)
