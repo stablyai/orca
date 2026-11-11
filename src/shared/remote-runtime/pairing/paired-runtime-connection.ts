@@ -1,5 +1,6 @@
 import type { PairedE2EEAuthCredential } from '../e2ee/paired-e2ee-client-handshake'
 import type { PairingOffer } from './mobile-relay-pairing-offer'
+import type { EndpointAuthHeaders } from '../../network/endpoint-auth-headers'
 
 // Connections carry credentials that may evolve beyond tokens; PairingOffer describes pairing input instead.
 export type PairedRuntimeConnection = {
@@ -7,6 +8,7 @@ export type PairedRuntimeConnection = {
   hostPublicKeyB64: string
   credential: PairedE2EEAuthCredential
   pairedDeviceId?: string
+  edgeAuth?: { origin: string; hostPublicKeyB64: string; headers: EndpointAuthHeaders }
 }
 
 type OfferConnectionFields = Pick<

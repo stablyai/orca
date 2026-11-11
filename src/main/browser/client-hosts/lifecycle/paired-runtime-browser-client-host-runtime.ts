@@ -1,4 +1,5 @@
 import { BROWSER_CLIENT_PROFILE_SWITCH_CAPABILITY } from '../../../../shared/browser/client-hosting/browser-client-profile-switch-protocol'
+import { resolveRuntimeEnvironmentConnection } from '../../../runtime/runtime-environment-edge-auth'
 import { createHash } from 'node:crypto'
 import path from 'node:path'
 import { app } from 'electron'
@@ -9,10 +10,7 @@ import {
 import { BROWSER_CLIENT_FILE_CHANNEL_HOST_CAPABILITY } from '../../../../shared/browser/client-hosting/browser-client-file-channel-protocol'
 import type { BrowserClientHostLeaseAuthority } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
 import type { PairedRuntimeConnection } from '../../../../shared/remote-runtime/pairing/paired-runtime-connection'
-import {
-  getPreferredPairedRuntimeConnection,
-  type KnownRuntimeEnvironment
-} from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
+import type { KnownRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { BrowserClientNetworkRouteRegistry } from '../../network/client-routes/browser-client-network-route-registry'
 import {
   browserAuthorityExecutionHostStorageIdentity,
@@ -163,7 +161,10 @@ export async function startPairedRuntimeBrowserClientHost(options: {
     throw new Error('paired_runtime_browser_client_host_profile_unavailable')
   }
   const pairingRevision = options.environment.pairingRevision ?? options.environment.createdAt
-  const connection = getPreferredPairedRuntimeConnection(options.environment)
+  const connection = resolveRuntimeEnvironmentConnection(
+    app.getPath('userData'),
+    options.environment
+  )
   const storageScope = deriveBrowserRoutePartitionStorageScope({
     orcaProfileId,
     environmentId: options.environment.id

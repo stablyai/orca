@@ -38,3 +38,16 @@ export function redactSocketEndpoint(endpoint: string): string {
     return 'unknown'
   }
 }
+
+export function webSocketUpgradeStatus(event: unknown): number | undefined {
+  if (!event || typeof event !== 'object' || !('httpStatus' in event)) {
+    return undefined
+  }
+  const { httpStatus } = event
+  return typeof httpStatus === 'number' &&
+    Number.isInteger(httpStatus) &&
+    httpStatus >= 200 &&
+    httpStatus <= 599
+    ? httpStatus
+    : undefined
+}

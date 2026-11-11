@@ -4,6 +4,7 @@ import type { ForegroundNudgeReason } from './connection-state'
 import type { HostProfile } from '../../host-catalog/host-profile'
 import type { MobileRelayEndpoint } from '../../../../src/shared/remote-runtime/relay/mobile-relay-credential-contract'
 import { connect } from '../rpc/direct-rpc-connect'
+import { peekEndpointAuthHeaders } from '../endpoint-auth-headers'
 import { MobileEndpointSupervisor } from './mobile-endpoint-supervisor'
 import { connectMobileRelayRpcSession } from '../relay/mobile-relay-rpc-session'
 import { resolveMobileRelayEndpoint } from '../relay/mobile-relay-resume-director'
@@ -97,7 +98,11 @@ function createSupervisor(
   onLog: ConnectionLogSink
 ): MobileEndpointSupervisor {
   return new MobileEndpointSupervisor(logical, host.id, relay, {
-    openDirect: () => connect(host.endpoint, host.deviceToken, host.publicKeyB64, { onLog }),
+    openDirect: () =>
+      connect(host.endpoint, host.deviceToken, host.publicKeyB64, {
+        onLog,
+        edgeAuthHeaders: peekEndpointAuthHeaders(host.id, host.endpoint)
+      }),
     directPath: directPathForEndpoint(host.endpoint),
     directProbeTimeoutMs: directProbeTimeoutMsForEndpoint(host.endpoint),
     openRelay: (relay, credential, confirmReqId, onHostCloseReason) =>

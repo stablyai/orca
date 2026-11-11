@@ -1,3 +1,4 @@
+import { resolveRuntimeEnvironmentConnection } from '../../runtime/runtime-environment-edge-auth'
 import { getRuntimeDesktopSurface } from '../../runtime/construction/runtime-desktop-surface'
 import { sendRemoteRuntimeRequestOnSocket } from '../../../shared/remote-runtime/requests/remote-runtime-request-socket'
 import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../../shared/protocol-version'
@@ -112,7 +113,7 @@ export function createRuntimeEnvironmentStatusOwner(
         'supported'
         ? transport.request(signal)
         : sendRemoteRuntimeRequestOnSocket<RuntimeStatus>(
-            connection,
+            resolveRuntimeEnvironmentConnection(userDataPath, environment),
             'status.get',
             undefined,
             15_000,

@@ -69,6 +69,15 @@ generated from older inputs. Expo caches iOS Simulator builds only, not physical
 `pnpm native fingerprint` prints the current hashes. On pull requests, the `Mobile native fingerprint`
 job reports in its summary whether the PR changes them, which means dev clients need a native rebuild.
 
+Android edge authentication requires a rebuilt development client; Expo Go and older clients refuse to send these credentials. Android builds React Native from source so the WebSocket redirect protection in `patches/react-native@0.83.10.patch` reaches the app. Keep `android.buildReactNativeFromSource` enabled in `app.json`; this increases native build time.
+
+Mobile dependencies use short package-directory names because Android's Prefab tool misreads `=` in pnpm's patched-package paths. On an existing install, the pinned pnpm 12.14.0 does not rebuild the virtual store just because `virtualStoreDirMaxLength` changes. Remove the generated `mobile/node_modules` directory, then reinstall from `mobile/`:
+
+```bash
+node -e "require('node:fs').rmSync('node_modules', { recursive: true, force: true })"
+pnpm install --frozen-lockfile
+```
+
 ## Pair With Desktop Orca
 
 1. Open Orca desktop.

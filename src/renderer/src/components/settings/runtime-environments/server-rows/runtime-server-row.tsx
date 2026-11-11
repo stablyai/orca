@@ -1,3 +1,4 @@
+import { RuntimeServerEdgeAuthAction } from '../../runtime-server-edge-auth-action'
 import { useState } from 'react'
 import { Link2 } from 'lucide-react'
 import {
@@ -105,6 +106,7 @@ export function RuntimeServerRow({
   onRecheck,
   rechecking = false
 }: RuntimeServerRowProps): React.JSX.Element {
+  const [edgeAuthOpen, setEdgeAuthOpen] = useState(false)
   const t = useTranslate()
   const intlLocale = useIntlLocale()
   const [repairOpen, setRepairOpen] = useState(false)
@@ -349,6 +351,15 @@ export function RuntimeServerRow({
             onDisconnect={() => onDisconnect(environment)}
             onMakeDefault={() => onMakeDefault?.(environment)}
             onCheckForUpdates={onCheckForUpdates}
+            onEdgeAuth={
+              endpoint?.toLowerCase().startsWith('wss://') &&
+              !environment.orcadDeployment &&
+              !environment.sshAccess &&
+              !environment.connectionDependency &&
+              window.api.runtimeEnvironments.saveEdgeAuth
+                ? () => setEdgeAuthOpen(true)
+                : undefined
+            }
             onSshAccess={() => {
               onRefreshSshTargets?.()
               setSshDialogOpen(true)
@@ -359,6 +370,14 @@ export function RuntimeServerRow({
         }
         footer={footer}
       />
+      {edgeAuthOpen ? (
+        <RuntimeServerEdgeAuthAction
+          key={`${environment.id}:${environment.pairingRevision ?? environment.createdAt}`}
+          environment={environment}
+          onClose={() => setEdgeAuthOpen(false)}
+          onChanged={onChanged}
+        />
+      ) : null}
       <RuntimeRepairDialog
         open={repairOpen}
         onOpenChange={setRepairOpen}

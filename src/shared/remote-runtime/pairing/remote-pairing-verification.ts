@@ -24,6 +24,8 @@ export type RemotePairingFailure = {
   /** Absent from older hosts; clients then show `message`. */
   errorCode?: string
   errorParams?: Record<string, string | number>
+  savedEnvironmentId?: string
+  savedEnvironmentPairingRevision?: number
 }
 
 export type VerifyAndAddRuntimeEnvironmentResult =

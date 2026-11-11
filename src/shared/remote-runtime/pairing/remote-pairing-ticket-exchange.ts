@@ -1,6 +1,9 @@
 import type { PairingOffer } from './mobile-relay-pairing-offer'
 import { encodePairingOffer } from './pairing'
-import { pairedRuntimeConnectionFromOffer } from './paired-runtime-connection'
+import {
+  type PairedRuntimeConnection,
+  pairedRuntimeConnectionFromOffer
+} from './paired-runtime-connection'
 import {
   EXCHANGE_PAIRING_TICKET_METHOD,
   PAIRING_TICKET_EXCHANGE_RUNTIME_CAPABILITY
@@ -23,6 +26,7 @@ function randomHexToken(): string {
 export async function exchangeRemotePairingTicket(args: {
   pairingCode: string
   offer: PairingOffer
+  edgeAuth?: PairedRuntimeConnection['edgeAuth']
   hostCapabilities: readonly string[] | undefined
   send?: typeof sendRemoteRuntimeRequestOnSocket
   timeoutMs?: number
@@ -34,7 +38,7 @@ export async function exchangeRemotePairingTicket(args: {
   const send = args.send ?? sendRemoteRuntimeRequestOnSocket
   try {
     const response = await send(
-      pairedRuntimeConnectionFromOffer(args.offer),
+      { ...pairedRuntimeConnectionFromOffer(args.offer), edgeAuth: args.edgeAuth },
       EXCHANGE_PAIRING_TICKET_METHOD,
       { deviceToken },
       args.timeoutMs ?? EXCHANGE_TIMEOUT_MS,
@@ -53,7 +57,7 @@ export async function exchangeRemotePairingTicket(args: {
     // client's first later use would not know the new token. The host already stored it, so a
     // failure here still leaves the new token working.
     await send(
-      pairedRuntimeConnectionFromOffer(exchanged),
+      { ...pairedRuntimeConnectionFromOffer(exchanged), edgeAuth: args.edgeAuth },
       'status.get',
       undefined,
       args.timeoutMs ?? EXCHANGE_TIMEOUT_MS,

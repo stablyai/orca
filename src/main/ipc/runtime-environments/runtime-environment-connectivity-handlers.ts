@@ -96,7 +96,7 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
   )
   ipcMain.handle(
     'runtimeEnvironments:verifyAndAddFromPairingCode',
-    async (_event, args: { name: string; pairingCode: string; allowLoopback?: boolean }) => {
+    async (_event, args: Parameters<typeof verifyAndAddRuntimeEnvironmentFromPairingCode>[1]) => {
       const result = await verifyAndAddRuntimeEnvironmentFromPairingCode(getUserDataPath(), args)
       if (result.ok) {
         await publishVerifiedPairing(
@@ -104,6 +104,9 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
           result,
           result.updatedExisting ? { invalidateTransport } : null
         )
+      }
+      if (!result.ok && result.savedEnvironmentId) {
+        await invalidateTransport(result.savedEnvironmentId)
       }
       return result
     }
@@ -117,7 +120,8 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
       _event,
       args: { selector: string }
     ): RuntimeEnvironmentRemoval | Promise<RuntimeEnvironmentRemoval> => {
-      const environment = resolveEnvironment(getUserDataPath(), args.selector)
+      const userDataPath = getUserDataPath()
+      const environment = resolveEnvironment(userDataPath, args.selector)
       if (store.getSettings().activeRuntimeEnvironmentId === environment.id) {
         throw new Error(
           'This server is the default host for new projects. Choose another one under New projects open on before removing it.'

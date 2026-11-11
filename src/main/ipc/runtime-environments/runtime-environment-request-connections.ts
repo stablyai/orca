@@ -4,6 +4,7 @@ import type { PairedRuntimeConnection } from '../../../shared/remote-runtime/pai
 import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { getPreferredPairedRuntimeConnection } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { RuntimeHostStatusOwner } from '../../../shared/remote-runtime/host-status/runtime-host-status-owner'
+import { resolveRuntimeEnvironmentConnection } from '../../runtime/runtime-environment-edge-auth'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import { createRuntimeEnvironmentStatusOwner } from './runtime-environment-status-owner'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
@@ -71,12 +72,13 @@ export function getRuntimeEnvironmentStatusOwner(
     if (cached) {
       closeRemoteRuntimeRequestConnection(environment.id)
     }
+    const connection = () => resolveRuntimeEnvironmentConnection(userDataPath, environment)
     const owner = createRuntimeEnvironmentStatusOwner(userDataPath, environment, {
       isReady: () => getRemoteRuntimeSharedControlDiagnostics(environment.id)?.state === 'ready',
       request: (signal) =>
         sendRemoteRuntimeSharedControlRequest<RuntimeStatus>(
           environment.id,
-          pairedConnection,
+          connection(),
           'status.get',
           undefined,
           15_000,
@@ -84,7 +86,7 @@ export function getRuntimeEnvironmentStatusOwner(
           signal
         ),
       establish: () => {
-        ensureRemoteRuntimeSharedControlConnection(environment.id, pairedConnection)
+        ensureRemoteRuntimeSharedControlConnection(environment.id, connection())
         reconnectRemoteRuntimeSharedControlConnection(environment.id)
       },
       pause: () => pauseRemoteRuntimeSharedControlRetry(environment.id)
@@ -99,9 +101,7 @@ export function getRuntimeEnvironmentStatusOwner(
 }
 
 export function resetRuntimeEnvironmentStatusOwners(): void {
-  for (const id of statusOwners.keys()) {
-    closeRemoteRuntimeRequestConnection(id)
-  }
+  statusOwners.forEach((_owner, id) => closeRemoteRuntimeRequestConnection(id))
 }
 
 export function getRuntimeEnvironmentStatusSnapshot(environmentId: string) {

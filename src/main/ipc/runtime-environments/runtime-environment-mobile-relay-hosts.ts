@@ -4,6 +4,7 @@ import {
 } from '../../browser/client-hosts/lifecycle/paired-runtime-browser-client-host-runtime'
 import { listEnvironments } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { prepareRuntimeEnvironmentBrowserPlacement } from './runtime-environment-browser-placement'
+import { resolveRuntimeEnvironmentConnection } from '../../runtime/runtime-environment-edge-auth'
 import {
   getPreferredPairingOffer,
   type KnownRuntimeEnvironment
@@ -156,7 +157,9 @@ export function createRuntimeEnvironmentMobileRelayHosts(): MobileDesktopRelayHo
         signal
       )
       const { environment } = prepared
+      const { edgeAuth } = resolveRuntimeEnvironmentConnection(userDataPath, environment)
       return {
+        ...(edgeAuth ? { edgeAuth } : {}),
         environmentId,
         fence: relayHostFence(environment),
         pairingRevision: pairingRevision(environment),

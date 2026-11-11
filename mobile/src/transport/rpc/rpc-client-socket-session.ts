@@ -7,7 +7,8 @@ import { AUTH_REJECTED } from './rpc-client-authentication-retry'
 import { isStaleRpcSocketEvent, logRpcSocketClose } from './rpc-socket-close-evidence'
 import {
   describeSocketEvent,
-  redactSocketEndpoint
+  redactSocketEndpoint,
+  webSocketUpgradeStatus
 } from '../../diagnostics/connection/socket-event-debug'
 import {
   reportSocketDeadline,
@@ -25,6 +26,8 @@ const UNAUTHORIZED_CLOSE_CODE = 4001
 
 type SocketSessionOptions = {
   endpoint: string
+  omitNativeErrorDetails?: boolean
+  createSocket?: (url: string) => WebSocket
   deviceToken: string
   serverPublicKeyB64: string
   framingPolicy: PairedE2EEFramingPolicy
@@ -57,9 +60,11 @@ export class RpcClientSocketSession {
   private handshakeTimer: ReturnType<typeof setTimeout> | null = null
 
   constructor(private readonly options: SocketSessionOptions) {
-    this.socket = receiveBinaryAsBase64(new WebSocket(options.endpoint))
+    this.socket = receiveBinaryAsBase64(
+      options.createSocket?.(options.endpoint) ?? new WebSocket(options.endpoint)
+    )
     this.attachHandlers()
-    this.armConnectTimeout()
+    this.armSocketDeadline('connect', CONNECT_TIMEOUT_MS)
   }
 
   sendEncrypted(request: RpcRequest): boolean {
@@ -137,6 +142,7 @@ export class RpcClientSocketSession {
     this.socket.onclose = (event) => {
       const closeCode = logRpcSocketClose({
         event,
+        omitNativeErrorDetails: this.options.omitNativeErrorDetails,
         state: this.options.getState(),
         attempt: this.options.getReconnectAttempt(),
         intentionallyClosed: this.options.isIntentionallyClosed(),
@@ -151,14 +157,22 @@ export class RpcClientSocketSession {
       if (this.isStale('error')) {
         return
       }
-      const error = event as { message?: string } | undefined
-      const description = describeSocketEvent(event)
+      const httpStatus = webSocketUpgradeStatus(event)
+      if (httpStatus !== undefined) {
+        this.options.emitLog('warn', 'WebSocket upgrade rejected', `HTTP ${httpStatus}`)
+      }
+      const details = this.options.omitNativeErrorDetails ? null : describeSocketEvent(event)
       console.log('[net] ws.onerror', {
-        message: error?.message,
+        message: details
+          ? event && 'message' in event
+            ? event.message
+            : undefined
+          : 'Secure connection failed',
+        httpStatus,
         state: this.options.getState(),
         attempt: this.options.getReconnectAttempt(),
-        eventKeys: description.keys,
-        eventStr: description.json
+        eventKeys: details?.keys,
+        eventStr: details?.json
       })
     }
   }
@@ -230,7 +244,7 @@ export class RpcClientSocketSession {
       this.options.onForcedClose(this)
       return
     }
-    this.armHandshakeTimeout()
+    this.armSocketDeadline('handshake', PAIRED_E2EE_HANDSHAKE_DEADLINE_MS)
   }
 
   private deliverRpcText(plaintext: string): void {
@@ -243,14 +257,6 @@ export class RpcClientSocketSession {
     if (isRpcResponse(response)) {
       this.options.onRpcResponse(this, response)
     }
-  }
-
-  private armConnectTimeout(): void {
-    this.armSocketDeadline('connect', CONNECT_TIMEOUT_MS)
-  }
-
-  private armHandshakeTimeout(): void {
-    this.armSocketDeadline('handshake', PAIRED_E2EE_HANDSHAKE_DEADLINE_MS)
   }
 
   private armSocketDeadline(kind: SocketDeadlineKind, timeoutMs: number): void {

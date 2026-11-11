@@ -13,10 +13,9 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { Check, ChevronLeft } from 'lucide-react-native'
-import { colors, radii, spacing, typography, pressedStyle } from '../../../src/theme/mobile-theme'
+import { colors, spacing, pressedStyle } from '../../../src/theme/mobile-theme'
 import { NavBar } from '../../../src/components/nav-bar/NavBar'
 import { NavBarButton } from '../../../src/components/nav-bar/NavBarButton'
-import { themedStyleSheet } from '../../../src/theme/themed-styles'
 import { useMobileColorScheme } from '../../../src/theme/use-mobile-color-scheme'
 import { loadHosts, updateHostNameAndEndpoint } from '../../../src/host-catalog/host-store'
 import { displayHostEndpoint } from '../../../src/transport/hosts/host-endpoint'
@@ -36,6 +35,13 @@ import { hostOs } from '../../../src/platform/host-os'
 import { translate } from '../../../src/i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../src/i18n/use-mobile-translation'
 import { TextField } from '../../../src/components/composer-input/TextField'
+import {
+  EdgeAuthHeadersSection,
+  useEdgeAuthHeaders,
+  type EdgeAuthScrollTarget
+} from '../../../src/components/edge-auth-headers-section'
+import { hostEditStyles as styles } from '../../../src/components/host-edit-styles'
+import { checkEdgeAuthEndpoint } from '../../../src/transport/endpoint-auth-headers'
 
 export default function EditHostScreen() {
   useMobileColorScheme()
@@ -45,6 +51,9 @@ export default function EditHostScreen() {
   const { hostId } = useLocalSearchParams<{ hostId: string }>()
   const primeHosts = usePrimeHosts()
   const refreshHostClient = useRefreshHostClient()
+  const edgeAuth = useEdgeAuthHeaders()
+  const { authNormalized, authChanged, loadAuthForHost } = edgeAuth
+  const authScrollTarget = useRef<EdgeAuthScrollTarget | null>(null)
   const forgetHostClient = useForgetHostClient()
   const queryClient = useQueryClient()
 
@@ -81,24 +90,28 @@ export default function EditHostScreen() {
           setHost(null)
           return
         }
+        try {
+          await loadAuthForHost(found.id, found.endpoint, () => revision === routeRevision.current)
+        } catch {
+          // Keep host editing available while credential controls stay locked.
+        }
+        if (revision !== routeRevision.current) {
+          return
+        }
         setHost(found)
         // The field edits the phone's override; an empty field means "use the desktop's name".
         setName(found.personalName ?? '')
         setAddress(displayHostEndpoint(found.endpoint))
         setLoadError(null)
-      } catch (err) {
+      } catch {
         if (revision !== routeRevision.current) {
           return
         }
-        setLoadError(
-          err instanceof Error
-            ? err.message
-            : translate('host.edit.loadFailed', 'Failed to load host.')
-        )
+        setLoadError(translate('host.edit.loadFailed', 'Failed to load host.'))
         setHost(null)
       }
     },
-    [hostId]
+    [hostId, loadAuthForHost]
   )
 
   useEffect(() => {
@@ -121,15 +134,28 @@ export default function EditHostScreen() {
   const nameTrimmed = name.trim()
   const nameChanged = host != null && nameTrimmed !== (host.personalName ?? '')
   const endpointChanged = endpointEdit?.kind === 'changed'
+  const authEndpointCheck = checkEdgeAuthEndpoint(
+    authNormalized.ok && authChanged ? authNormalized.headers : null,
+    endpointEdit?.kind !== 'invalid' ? endpointEdit?.endpoint : undefined
+  )
   const canSave =
     host != null &&
     endpointEdit != null &&
     endpointEdit.kind !== 'invalid' &&
-    (nameChanged || endpointChanged) &&
+    authNormalized.ok &&
+    (!authChanged || edgeAuth.authLoaded) &&
+    !authEndpointCheck.blocked &&
+    (nameChanged || endpointChanged || authChanged) &&
     !saving
 
   async function handleSave() {
-    if (!host || !hostId || !endpointEdit || savingRef.current) {
+    if (
+      !host ||
+      !hostId ||
+      !endpointEdit ||
+      savingRef.current ||
+      (authChanged && !edgeAuth.authLoaded)
+    ) {
       return
     }
     const nextName = name.trim()
@@ -137,11 +163,15 @@ export default function EditHostScreen() {
       setSaveError(endpointEdit.error)
       return
     }
+    if (!authNormalized.ok || authEndpointCheck.blocked) {
+      setSaveError(authNormalized.ok ? authEndpointCheck.error : authNormalized.error)
+      return
+    }
 
     const willRename = nextName !== (host.personalName ?? '')
     const nextEndpoint = endpointEdit.kind === 'changed' ? endpointEdit.endpoint : undefined
-    if (!willRename && nextEndpoint === undefined) {
-      router.back()
+    if (!willRename && nextEndpoint === undefined && !authChanged) {
+      leave()
       return
     }
 
@@ -166,13 +196,35 @@ export default function EditHostScreen() {
       return
     }
 
-    try {
-      // Persistence already succeeded; failed re-prime must not report save failure. Later loadHosts picks up the committed data.
-      const hosts = await loadHosts()
-      primeHosts(hosts)
-    } catch {
-      // best-effort re-prime; persisted data is unaffected
+    if (revision !== routeRevision.current) {
+      await reprimeHosts()
+      if (nextEndpoint !== undefined) {
+        refreshHostClient(host.id)
+      }
+      return
     }
+
+    // Retrying after a keychain failure must compare against the committed address.
+    setHost({ ...host, personalName: nextName || undefined, endpoint: endpointEdit.endpoint })
+
+    if (authChanged) {
+      try {
+        await edgeAuth.persistAuthChanges(host.id, authNormalized.headers, endpointEdit.endpoint)
+      } catch {
+        if (revision === routeRevision.current) {
+          setSaveError(t('edgeAuth.saveFailed', 'Could not save edge authentication.'))
+          savingRef.current = false
+          setSaving(false)
+        }
+        await reprimeHosts()
+        if (nextEndpoint !== undefined) {
+          refreshHostClient(host.id)
+        }
+        return
+      }
+    }
+
+    await reprimeHosts()
 
     if (revision === routeRevision.current) {
       savingRef.current = false
@@ -180,9 +232,17 @@ export default function EditHostScreen() {
       leave()
     }
 
-    if (nextEndpoint !== undefined) {
+    if (nextEndpoint !== undefined || authChanged) {
       // Why: the live client, even one riding the relay, and its primed profile hold the old address.
       refreshHostClient(host.id)
+    }
+  }
+
+  async function reprimeHosts() {
+    try {
+      primeHosts(await loadHosts())
+    } catch {
+      // The write already committed; another load can recover the cache.
     }
   }
 
@@ -245,6 +305,9 @@ export default function EditHostScreen() {
           behavior={hostOs() === 'ios' ? 'padding' : undefined}
         >
           <ScrollView
+            ref={(node) => {
+              authScrollTarget.current = node
+            }}
             contentContainerStyle={[styles.form, { paddingBottom: insets.bottom + spacing.xl }]}
             keyboardShouldPersistTaps="handled"
           >
@@ -308,6 +371,28 @@ export default function EditHostScreen() {
               <Text style={styles.previewError}>{endpointEdit.error}</Text>
             ) : null}
 
+            {Platform.OS !== 'web' && edgeAuth.authLoaded ? (
+              <EdgeAuthHeadersSection
+                rows={edgeAuth.authRows}
+                storedCount={edgeAuth.storedAuthCount}
+                error={authNormalized.ok ? authEndpointCheck.error : authNormalized.error}
+                onRowsChange={(rows) => {
+                  edgeAuth.setAuthRows(rows)
+                  setSaveError(null)
+                }}
+                scrollViewRef={authScrollTarget}
+              />
+            ) : null}
+
+            {Platform.OS !== 'web' && !edgeAuth.authLoaded ? (
+              <Text style={styles.errorText}>
+                {t(
+                  'edgeAuth.loadFailed',
+                  'Could not load edge authentication. Unlock protected storage and reopen this form.'
+                )}
+              </Text>
+            ) : null}
+
             {saveError ? <Text style={styles.errorText}>{saveError}</Text> : null}
 
             <ListGroup style={styles.removeGroup}>
@@ -335,79 +420,3 @@ export default function EditHostScreen() {
     </View>
   )
 }
-
-const styles = themedStyleSheet(() => ({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bgBase
-  },
-  flex: {
-    flex: 1
-  },
-  removeGroup: {
-    marginTop: spacing.xl
-  },
-  form: {
-    paddingTop: spacing.md,
-    paddingHorizontal: spacing.lg,
-    gap: spacing.sm
-  },
-  help: {
-    color: colors.textSecondary,
-    fontSize: typography.bodySize,
-    lineHeight: 20,
-    marginBottom: spacing.sm
-  },
-  label: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    fontWeight: '500',
-    marginTop: spacing.sm,
-    textTransform: 'uppercase',
-    letterSpacing: 0.4
-  },
-  hint: {
-    color: colors.textMuted,
-    fontSize: typography.metaSize,
-    lineHeight: 16
-  },
-  preview: {
-    marginTop: spacing.sm,
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : typography.monoFamily
-  },
-  previewError: {
-    marginTop: spacing.sm,
-    color: colors.statusRed,
-    fontSize: typography.bodySize
-  },
-  errorText: {
-    color: colors.statusRed,
-    fontSize: typography.bodySize,
-    marginTop: spacing.md
-  },
-  errorState: {
-    flex: 1,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.xl,
-    gap: spacing.md
-  },
-  loadingState: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  secondaryButton: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.control,
-    backgroundColor: colors.bgRaised
-  },
-  secondaryButtonText: {
-    color: colors.textPrimary,
-    fontSize: typography.bodySize,
-    fontWeight: '500'
-  }
-}))

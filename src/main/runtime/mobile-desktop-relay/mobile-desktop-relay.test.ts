@@ -1,3 +1,4 @@
+import type { PairedRuntimeConnection } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { describe, expect, it, vi } from 'vitest'
 import { DELEGATED_MOBILE_DEVICES_RUNTIME_CAPABILITY } from '../../../shared/delegated-mobile-device-contract'
 
@@ -9,6 +10,7 @@ import type { RelayedPhone } from './mobile-desktop-relay-link'
 import type { MobileDesktopRelayHost, MobileDesktopRelayHosts } from './mobile-desktop-relay-hosts'
 
 type FakeSocket = {
+  pairing: PairedRuntimeConnection
   sent: string[]
   capabilities: readonly string[]
   callbacks: RemoteRuntimePassthroughCallbacks
@@ -23,11 +25,18 @@ const sockets = vi.hoisted(() => {
 const openGate = vi.hoisted(() => ({ wait: Promise.resolve() }))
 vi.mock('../../../shared/remote-runtime/remote-runtime-passthrough-socket', () => ({
   openRemoteRuntimePassthroughSocket: async (
-    _pairing: unknown,
+    pairing: PairedRuntimeConnection,
     capabilities: readonly string[],
     callbacks: RemoteRuntimePassthroughCallbacks
   ) => {
-    const socket: FakeSocket = { sent: [], capabilities, callbacks, closed: false, accepts: true }
+    const socket: FakeSocket = {
+      pairing,
+      sent: [],
+      capabilities,
+      callbacks,
+      closed: false,
+      accepts: true
+    }
     sockets.push(socket)
     await openGate.wait
     return {
@@ -119,6 +128,37 @@ function relayWithPhone(
 }
 
 describe('MobileDesktopRelay', () => {
+  it('preserves the desktop edge credentials while using the delegated phone identity', async () => {
+    sockets.length = 0
+    const { relay, phone, hosts, replies } = relayWithPhone()
+    const edgeAuth = {
+      origin: 'wss://orca.example',
+      hostPublicKeyB64: 'k',
+      headers: { 'X-Token': 'synthetic-secret' }
+    }
+    hosts.resolve = async (environmentId) => ({
+      environmentId,
+      fence: 'f',
+      pairing: { v: 2, endpoint: 'wss://orca.example', deviceToken: 'desktop', publicKeyB64: 'k' },
+      edgeAuth
+    })
+    relay.forward(
+      phone,
+      'env-1',
+      { id: 'r1', method: 'terminal.list' },
+      '{"id":"r1","method":"terminal.list"}'
+    )
+    await vi.waitFor(() => expect(sockets[0]?.sent.length).toBe(1))
+    expect(sockets[0]?.pairing).toMatchObject({
+      edgeAuth,
+      credential: { kind: 'token', deviceToken: 'host-token' },
+      pairedDeviceId: 'child'
+    })
+    expect(JSON.stringify(replies)).not.toContain('synthetic-secret')
+    expect(sockets[0]?.sent.join('')).not.toContain('synthetic-secret')
+    relay.dispose()
+  })
+
   it.each([
     ['its own wake', true],
     ['an unrelated replacement', false]

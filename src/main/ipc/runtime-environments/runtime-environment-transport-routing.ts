@@ -5,6 +5,7 @@ import {
   runtimeEnvironmentSetupFailure
 } from '../../../shared/remote-runtime/host-catalog/runtime-environment-subscription-setup'
 import { assertCrewSourceCurrent } from './runtime-environment-subscription-setup'
+import { resolveRuntimeEnvironmentConnection } from '../../runtime/runtime-environment-edge-auth'
 import { getRuntimeEnvironmentStatus } from './runtime-environment-status-probe'
 import { getPreferredPairedRuntimeConnection } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
@@ -101,8 +102,8 @@ export async function callRuntimeEnvironment(
         if (prepared.failure) {
           return prepared.failure
         }
-        const { environment: currentEnvironment, expected } = prepared
-        const pairedConnection = getPreferredPairedRuntimeConnection(currentEnvironment)
+        const { environment: current, expected } = prepared
+        const pairedConnection = resolveRuntimeEnvironmentConnection(userDataPath, current)
         endpoint = pairedConnection.endpoint
         const effectiveTimeoutMs = timeoutMs ?? DEFAULT_REMOTE_RUNTIME_TIMEOUT_MS
         const sharedControlEnvelope = shouldUseSharedControlEnvelope(method, params, envelope)
@@ -115,29 +116,29 @@ export async function callRuntimeEnvironment(
         }
         if (envelope && !sharedControlEnvelope) {
           const response = await sendEnvelopedOneShotCall(
-            { environment: currentEnvironment, connection: pairedConnection },
+            { environment: current, connection: pairedConnection },
             { ...call, envelope },
             expected.runtimeId
           )
-          markEnvironmentUsedFromResponse(userDataPath, currentEnvironment.id, response)
+          markEnvironmentUsedFromResponse(userDataPath, current.id, response)
           return response
         }
         if (shouldUseCachedRequestConnection(method)) {
           const response = await sendRemoteRuntimeConnectionRequestAbortable(
-            currentEnvironment.id,
+            current.id,
             pairedConnection,
             method,
             params,
             effectiveTimeoutMs,
             options?.signal
           )
-          markEnvironmentUsedFromResponse(userDataPath, currentEnvironment.id, response)
+          markEnvironmentUsedFromResponse(userDataPath, current.id, response)
           return response
         }
-        if (shouldRouteCallBySupport(method, currentEnvironment.id)) {
+        if (shouldRouteCallBySupport(method, current.id)) {
           return executeSupportRoutedCall({
             userDataPath,
-            environment: currentEnvironment,
+            environment: current,
             ...call,
             expectedPairingRevision: expected.pairingRevision,
             expectedRuntimeId: expected.runtimeId,
@@ -155,7 +156,7 @@ export async function callRuntimeEnvironment(
           ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
           options?.prepareRequest
         )
-        markEnvironmentUsedFromResponse(userDataPath, currentEnvironment.id, response)
+        markEnvironmentUsedFromResponse(userDataPath, current.id, response)
         return response
       },
       options?.signal
@@ -204,7 +205,7 @@ export async function subscribeRuntimeEnvironment(
   if (crewAttempt) {
     assertCrewSourceCurrent(environment)
   }
-  const pairedConnection = getPreferredPairedRuntimeConnection(environment)
+  const pairedConnection = resolveRuntimeEnvironmentConnection(userDataPath, environment)
   const effectiveTimeoutMs = timeoutMs ?? DEFAULT_REMOTE_RUNTIME_TIMEOUT_MS
   let markedUsed = false
   const markUsedOnce = (runtimeId: string): void => {

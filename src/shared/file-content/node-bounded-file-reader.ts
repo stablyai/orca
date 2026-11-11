@@ -1,4 +1,13 @@
-import { closeSync, constants, fstatSync, openSync, readSync, statSync, type Stats } from 'node:fs'
+import {
+  closeSync,
+  constants,
+  fstatSync,
+  openSync,
+  readSync,
+  statSync,
+  type BigIntStats,
+  type Stats
+} from 'node:fs'
 import { open, stat, type FileHandle } from 'node:fs/promises'
 
 const MIN_GROWTH_BYTES = 64 * 1024
@@ -149,8 +158,18 @@ export async function readNodeFileHandleWithinLimit(
 export function readNodeFileSyncWithinLimit(
   filePath: string,
   maxBytes: number,
-  options: { regularFileOnly?: boolean } = {}
-): BoundedNodeFileRead {
+  options: { regularFileOnly?: boolean; bigint: true }
+): { buffer: Buffer; stats: BigIntStats }
+export function readNodeFileSyncWithinLimit(
+  filePath: string,
+  maxBytes: number,
+  options?: { regularFileOnly?: boolean; bigint?: false }
+): BoundedNodeFileRead
+export function readNodeFileSyncWithinLimit(
+  filePath: string,
+  maxBytes: number,
+  options: { regularFileOnly?: boolean; bigint?: boolean } = {}
+): { buffer: Buffer; stats: Stats | BigIntStats } {
   if (!Number.isSafeInteger(maxBytes) || maxBytes < 0) {
     throw new RangeError('File read limit must be a non-negative safe integer')
   }
@@ -164,14 +183,15 @@ export function readNodeFileSyncWithinLimit(
     : 'r'
   const descriptor = openSync(filePath, flags)
   try {
-    const stats = fstatSync(descriptor)
+    const stats = fstatSync(descriptor, { bigint: options.bigint ?? false })
     if (options.regularFileOnly && !stats.isFile()) {
       throw new NodeFileNotRegularError()
     }
-    validateSize(stats.size, maxBytes)
+    const size = Number(stats.size)
+    validateSize(size, maxBytes)
 
     // Sysctl files report zero size and may return EOF after a partial first read.
-    let buffer = Buffer.allocUnsafe(stats.size || Math.min(MIN_GROWTH_BYTES, maxBytes))
+    let buffer = Buffer.allocUnsafe(size || Math.min(MIN_GROWTH_BYTES, maxBytes))
     let offset = 0
     while (true) {
       while (offset < buffer.length) {

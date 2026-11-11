@@ -13,6 +13,7 @@ vi.mock('sonner', () => ({
 }))
 
 import { useRuntimeEnvironmentMutationActions } from './use-runtime-environment-mutation-actions'
+import { useAppStore } from '@/store/index'
 import { getDefaultSettings } from '../../../../../../shared/constants'
 
 const verifyAndAddFromPairingCode = vi.fn()
@@ -40,16 +41,23 @@ beforeEach(() => {
     value: { runtimeEnvironments: { verifyAndAddFromPairingCode, remove } }
   })
 })
-afterEach(() => cleanup())
+afterEach(() => {
+  cleanup()
+  useAppStore.getState().setRuntimeEnvironments([])
+})
 
-function renderActions(connectEnvironment: () => Promise<boolean>, name = 'Studio over relay') {
+function renderActions(
+  connectEnvironment: (environment: PublicKnownRuntimeEnvironment) => Promise<boolean>,
+  name = 'Studio over relay',
+  loadEnvironments = async () => {}
+) {
   const view = renderHook(() =>
     useRuntimeEnvironmentMutationActions({
       settings: getDefaultSettings('/tmp'),
       allowLocalRuntime: false,
       mountedRef: { current: true },
       setAddServerFormOpen: vi.fn(),
-      loadEnvironments: vi.fn(async () => {}),
+      loadEnvironments,
       connectEnvironment
     })
   )
@@ -92,4 +100,111 @@ it('still discards a brand-new server whose first connect fails', async () => {
   })
 
   expect(remove).toHaveBeenCalledWith({ selector: 'env-new' })
+})
+
+it("lets main judge a saved server's own name, so its code can refresh it", async () => {
+  verifyAndAddFromPairingCode.mockResolvedValue({
+    ok: true,
+    environment: saved,
+    runtimeStatus: { runtimeId: 'runtime-a' },
+    updatedExisting: true
+  })
+  const view = renderActions(async () => true, 'Studio')
+
+  await act(async () => {
+    await view.result.current.addEnvironment(false)
+  })
+
+  expect(verifyAndAddFromPairingCode).toHaveBeenCalledWith(
+    expect.objectContaining({ name: 'Studio' })
+  )
+  expect(toastError).not.toHaveBeenCalled()
+})
+
+it('connects the saved server after retrying credentials without replaying pairing', async () => {
+  const saveEdgeAuth = vi.fn().mockResolvedValue({ configured: true, unreadable: false })
+  window.api.runtimeEnvironments.saveEdgeAuth = saveEdgeAuth
+  verifyAndAddFromPairingCode.mockResolvedValue({
+    ok: false,
+    kind: 'environment-save-failed',
+    message: 'Paired; credentials not saved',
+    savedEnvironmentId: saved.id,
+    savedEnvironmentPairingRevision: 3
+  })
+  const refreshed = { ...saved, pairingRevision: 3 }
+  const connect = vi.fn(async () => true)
+  const view = renderActions(connect, 'Studio', async () => {
+    useAppStore.getState().setRuntimeEnvironments([refreshed])
+  })
+  const headers = [{ name: 'X-Token', value: 'synthetic-secret' }]
+  await act(async () => {
+    await view.result.current.addEnvironment(false, headers)
+  })
+  expect(view.result.current.credentialsPending).toBe(true)
+  await act(async () => {
+    await view.result.current.addEnvironment(false, headers)
+  })
+  expect(connect).toHaveBeenCalledExactlyOnceWith(refreshed)
+  expect(verifyAndAddFromPairingCode).toHaveBeenCalledTimes(1)
+  expect(saveEdgeAuth).toHaveBeenCalledWith({
+    environmentId: saved.id,
+    expectedPairingRevision: 3,
+    headers
+  })
+})
+
+it('invalidates a storage-only retry if the access link changes', async () => {
+  const saveEdgeAuth = vi.fn()
+  window.api.runtimeEnvironments.saveEdgeAuth = saveEdgeAuth
+  verifyAndAddFromPairingCode.mockResolvedValue({
+    ok: false,
+    kind: 'environment-save-failed',
+    message: 'Paired; credentials not saved',
+    savedEnvironmentId: saved.id,
+    savedEnvironmentPairingRevision: 3
+  })
+  const view = renderActions(async () => true)
+  await act(async () => {
+    await view.result.current.addEnvironment(false, [{ name: 'X', value: 'synthetic' }])
+  })
+  act(() => view.result.current.setPairingCode('changed-link'))
+  expect(view.result.current.credentialsPending).toBe(false)
+  expect(saveEdgeAuth).not.toHaveBeenCalled()
+})
+
+it('keeps the credential retry available when refreshing the saved servers fails', async () => {
+  const saveEdgeAuth = vi.fn().mockResolvedValue({ configured: true, unreadable: false })
+  window.api.runtimeEnvironments.saveEdgeAuth = saveEdgeAuth
+  verifyAndAddFromPairingCode.mockResolvedValue({
+    ok: false,
+    kind: 'environment-save-failed',
+    message: 'Paired; credentials not saved',
+    savedEnvironmentId: saved.id,
+    savedEnvironmentPairingRevision: 3
+  })
+  const refreshed = { ...saved, pairingRevision: 3 }
+  const load = vi
+    .fn(async () => {
+      useAppStore.getState().setRuntimeEnvironments([refreshed])
+    })
+    .mockRejectedValueOnce(new Error('Could not refresh saved servers'))
+  const connect = vi.fn(async () => true)
+  const view = renderActions(connect, 'Studio', load)
+  const headers = [{ name: 'X-Token', value: 'synthetic-secret' }]
+
+  await act(async () => {
+    await view.result.current.addEnvironment(false, headers)
+  })
+  await act(async () => {
+    await view.result.current.addEnvironment(false, headers)
+  })
+  expect(view.result.current.credentialsPending).toBe(true)
+  expect(connect).not.toHaveBeenCalled()
+
+  await act(async () => {
+    await view.result.current.addEnvironment(false, headers)
+  })
+  expect(verifyAndAddFromPairingCode).toHaveBeenCalledTimes(1)
+  expect(saveEdgeAuth).toHaveBeenCalledTimes(2)
+  expect(connect).toHaveBeenCalledExactlyOnceWith(refreshed)
 })

@@ -121,7 +121,7 @@ export function writeDurableSecureJsonFile(
 export function writeSecureFile(
   targetPath: string,
   contents: string,
-  options: { durable?: boolean; shouldPublish?: () => boolean } = {}
+  options: { durable?: boolean; shouldPublish?: () => boolean; requireRestricted?: boolean } = {}
 ): boolean {
   const dir = dirname(targetPath)
   if (!existsSync(dir)) {
@@ -137,6 +137,9 @@ export function writeSecureFile(
       process.platform === 'win32'
         ? writeRestrictedWindowsFile(tmpFile, contents)
         : writeModeRestrictedFile(tmpFile, contents)
+    if (options.requireRestricted && !restricted) {
+      throw new Error('Secure file permissions could not be restricted')
+    }
     if (options.durable) {
       fsyncFileSync(tmpFile)
     }

@@ -1,3 +1,4 @@
+import { resolveRuntimeEnvironmentConnection } from '../../runtime/runtime-environment-edge-auth'
 import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
 import type { PairedRuntimeConnection } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import type {
@@ -214,7 +215,7 @@ export async function routeRuntimeEnvironmentCallBySupport(args: {
     if (revisionFailure) {
       return revisionFailure
     }
-    const connection = getPreferredPairedRuntimeConnection(environment)
+    const connection = resolveRuntimeEnvironmentConnection(args.userDataPath, environment)
     const outcome = await waitForPromiseWithSignal(
       supportsSharedControl(args.userDataPath, environment, connection, args.timeoutMs),
       args.signal
@@ -250,7 +251,7 @@ export async function routeRuntimeEnvironmentSubscriptionBySupport<TSubscription
   supported: (route: SupportRoute) => Promise<TSubscription>
   unsupported: (route: SupportRoute) => Promise<TSubscription>
 }): Promise<{ subscription: TSubscription; outcome: SupportRoute['outcome'] }> {
-  const connection = getPreferredPairedRuntimeConnection(args.environment)
+  const connection = resolveRuntimeEnvironmentConnection(args.userDataPath, args.environment)
   const outcome = await waitForPromiseWithSignal(
     supportsSharedControl(args.userDataPath, args.environment, connection, args.timeoutMs),
     args.signal

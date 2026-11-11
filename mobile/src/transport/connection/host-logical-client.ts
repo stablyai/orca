@@ -8,11 +8,15 @@ import type { HostProfile } from '../../host-catalog/host-profile'
 import { directPathForEndpoint } from '../relay/mobile-direct-endpoint-probe'
 import { startMobileEndpointLifecycle } from './mobile-endpoint-lifecycle'
 import { watchHostRevocation } from './host-revocation-watch'
+import { peekEndpointAuthHeaders } from '../endpoint-auth-headers'
 
 export function openHostLogicalClient(host: HostProfile, onLog: ConnectionLogSink): RpcClient {
   // Keep app-visible RPC/subscription identity stable while replacing physical sockets.
   const logical = createStableLogicalRpcClient(
-    connect(host.endpoint, host.deviceToken, host.publicKeyB64, { onLog }),
+    connect(host.endpoint, host.deviceToken, host.publicKeyB64, {
+      onLog,
+      edgeAuthHeaders: peekEndpointAuthHeaders(host.id, host.endpoint)
+    }),
     directPathForEndpoint(host.endpoint)
   )
   if (Platform.OS === 'web') {
