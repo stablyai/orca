@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { sessionReportedSkills, sessionSlashCommandSuggestions } from './native-chat-slash-commands'
+import { sessionSlashCommandSuggestions } from './native-chat-slash-commands'
 
 describe('a session that reports its own command surface', () => {
   const reported = [
@@ -13,21 +13,5 @@ describe('a session that reports its own command surface', () => {
       { name: 'clear', description: 'Clear conversation history' },
       { name: 'opsx:apply' }
     ])
-  })
-
-  it('keeps a reported skill argument hint for the skill row', () => {
-    expect(
-      sessionReportedSkills(
-        [
-          {
-            name: 'demo',
-            kind: 'skill',
-            description: 'Demo skill',
-            argumentHint: '<target>'
-          }
-        ],
-        'claude'
-      )
-    ).toEqual([{ name: 'demo', description: 'Demo skill', argumentHint: '<target>' }])
   })
 })

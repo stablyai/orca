@@ -90,10 +90,11 @@ export function buildNativeChatPickerItems(
 ): NativeChatPickerItem[] {
   // Only shared sigils collide: /review and $review remain separate.
   const sharedSigil = skillSigil === '/'
-  const unclassifiedNames = new Set(
-    commands.filter((command) => command.kindUnspecified).map((command) => command.name)
+  // Before Claude classifies its catalog, a skill arrives as an unclassified command carrying its hint.
+  const unclassified = new Map(
+    commands.filter((command) => command.kindUnspecified).map((command) => [command.name, command])
   )
-  const mergedSkills = mergeNativeChatSkills(skills, sessionSkills, unclassifiedNames, skillSigil)
+  const mergedSkills = mergeNativeChatSkills(skills, sessionSkills, unclassified, skillSigil)
   const skillNames = new Set(mergedSkills.map((skill) => skill.name))
   const available = commandAvailable
     ? commands.filter(({ name }) => commandAvailable(name))
@@ -144,7 +145,7 @@ export function buildNativeChatPickerItems(
 function mergeNativeChatSkills(
   skills: readonly DiscoveredSkill[],
   sessionSkills: readonly NativeChatSessionSkill[] | undefined,
-  unclassifiedNames: ReadonlySet<string>,
+  unclassified: ReadonlyMap<string, SlashCommandSuggestion>,
   skillSigil: '/' | '$'
 ): Extract<NativeChatPickerItem, { kind: 'skill' }>[] {
   const exactPaths = new Map<string, DiscoveredSkill>()
@@ -199,7 +200,7 @@ function mergeNativeChatSkills(
             .filter((skill) => !skill.path)
             .map((skill) => skill.name)
             .filter(reportedSkills.isTokenSafe),
-          ...[...discovered.keys()].filter((name) => unclassifiedNames.has(name))
+          ...[...discovered.keys()].filter((name) => unclassified.has(name))
         ]
       : [...discovered.keys()]
   return [
@@ -207,7 +208,7 @@ function mergeNativeChatSkills(
     ...[...new Set(names)].map((name) =>
       reportedSkills.withReportedSkillCopy(
         discovered.get(name) ?? pickerSkill(name, [], skillSigil),
-        firstReportedByName.get(name)
+        firstReportedByName.get(name) ?? unclassified.get(name)
       )
     )
   ].sort(comparePickerSkills)
