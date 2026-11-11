@@ -5,7 +5,7 @@ import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/dr
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { refreshLocalStructuredSessionTabs } from '@/runtime/local-structured-session-tabs-sync/inventory-refresh'
 import { startStructuredAgentLaunch } from './structured-agent-session-launch'
-import { hasStagedStructuredLaunchPrompt } from './structured-agent-session-launch-prompt'
+import { hasStagedStructuredLaunchPrompt } from './structured-agent-session-staged-prompt'
 import type * as LaunchErrors from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
 import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/runtime-session-contracts'
 import type * as RecoveryModule from '@/lib/agent-session/launch/structured-agent-session-launch-recovery'

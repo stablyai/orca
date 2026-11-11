@@ -29,17 +29,15 @@ import {
   type AiVaultGroup,
   type AiVaultScope
 } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
-import {
-  getExecutionHostLabel,
-  type ExecutionHostScope
-} from '../../../../../../shared/execution-host'
+import type { ExecutionHostScope } from '../../../../../../shared/execution-host'
 import '../session-list/ai-vault-session-filters'
 import {
   agentLabel,
   type AiVaultSessionGroup
 } from '../../../../../../shared/ai-vault/session-display/ai-vault-session-filters'
 import { useTranslate } from '@/i18n/use-translate'
-import type { AiVaultHostScopeOption } from '../scope/ai-vault-host-scope'
+import { getTranslatedExecutionHostLabel } from '../../../sidebar/execution-host-label'
+import { aiVaultHostScopeLabel, type AiVaultHostScopeOption } from '../scope/ai-vault-host-scope'
 import { AiVaultSessionLimitMenu } from '../session-list/AiVaultSessionLimitMenu'
 import type { AiVaultSessionLimit } from '../session-list/ai-vault-session-limit'
 
@@ -173,7 +171,9 @@ export function VaultHostScopeMenu({
 }): React.JSX.Element {
   const t = useTranslate()
   const selectedOption = hostOptions.find((option) => option.id === executionHostScope)
-  const label = selectedOption?.label ?? getExecutionHostLabel(executionHostScope)
+  const label = selectedOption
+    ? aiVaultHostScopeLabel(selectedOption, t)
+    : getTranslatedExecutionHostLabel(executionHostScope, t)
 
   return (
     <DropdownMenu
@@ -210,7 +210,7 @@ export function VaultHostScopeMenu({
         >
           {hostOptions.map((option) => (
             <DropdownMenuRadioItem key={option.id} value={option.id}>
-              {option.label}
+              {aiVaultHostScopeLabel(option, t)}
             </DropdownMenuRadioItem>
           ))}
         </DropdownMenuRadioGroup>

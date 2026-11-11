@@ -68,8 +68,13 @@ export function ProjectGroupNameDialog({
   ) {
     setPreviousOpenState({ open, initialName, sessionKey, generation: generation + 1 })
     if (open) {
-      setName(initialName)
-      setSubmitting(false)
+      // Preserve edited drafts when the localized suggestion changes.
+      if (!previousOpenState.open || name === previousOpenState.initialName) {
+        setName(initialName)
+      }
+      if (!previousOpenState.open) {
+        setSubmitting(false)
+      }
     }
   }
 

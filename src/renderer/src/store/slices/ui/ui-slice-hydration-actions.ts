@@ -1,4 +1,5 @@
 import { retainValidFilterRepoIds } from '../../repos/repo-filter-selection'
+import { normalizeStatusBarUsageFormat } from '../../../../../shared/status-bar-usage-format'
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
 import type { AppState } from '../../types'
 import { normalizeRightSidebarRoute } from '../right-sidebar/right-sidebar-route'
@@ -190,6 +191,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           statusBarVisible: ui.statusBarVisible ?? true,
           usagePercentageDisplay: normalizeUsagePercentageDisplay(ui.usagePercentageDisplay),
           statusBarUsageMode: normalizeStatusBarUsageMode(ui.statusBarUsageMode),
+          statusBarUsageFormat: normalizeStatusBarUsageFormat(ui.statusBarUsageFormat),
           // Why: default true so existing users see the pet on first enabling the flag; only an explicit Hide persists false.
           petVisible: ui.petVisible ?? ui.sidekickVisible ?? true,
           petSize: clampPetSize(ui.petSize ?? ui.sidekickSize ?? PET_SIZE_DEFAULT, {

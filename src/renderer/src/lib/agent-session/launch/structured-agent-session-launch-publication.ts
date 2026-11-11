@@ -1,12 +1,12 @@
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/runtime-session-contracts'
 import { deleteStructuredAgentLaunchRecord } from './structured-agent-session-launch-persistence'
+import { hasStructuredAgentSessionLaunchCancellationTombstone } from './structured-agent-session-launch-registry'
 import {
   getPersistedStructuredAgentLaunchRecord,
   getStructuredLaunchStateBySessionId,
-  hasStructuredAgentSessionLaunchCancellationTombstone,
   notifyStructuredLaunchListeners
-} from './structured-agent-session-launch-registry'
+} from './structured-agent-session-launch-state-store'
 import { forgetUnlistedCreatedChat } from './pane/structured-agent-session-unlisted-created-chats'
 
 function confirmStructuredLaunchFirstMessagePublication(

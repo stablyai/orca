@@ -25,6 +25,7 @@ import type { Repo } from '../../../../../shared/repo-types'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { getPendingSetupDetail } from '../../project-host-setup-detail-labels'
+import { translateHostDisplayLabel } from '@/components/sidebar/execution-host-label'
 import {
   dedupeReadySetupRows,
   compareProjectHostSetupOptions,
@@ -182,7 +183,9 @@ export function buildReadyProjectHostSetupOptions({
       projectId: setup.projectId,
       hostId: setup.hostId,
       repoId: setup.repoId,
-      label: hostById.get(setup.hostId)?.label || getExecutionHostLabel(setup.hostId),
+      label: hostById.get(setup.hostId)
+        ? translateHostDisplayLabel(hostById.get(setup.hostId)!)
+        : getExecutionHostLabel(setup.hostId),
       detail: setup.displayName,
       path: setup.path
     }))
@@ -217,10 +220,15 @@ function buildNeedsSetupOptions({
         kind: 'needs-setup' as const,
         projectId,
         hostId: host.id,
-        label: host.label || getExecutionHostLabel(host.id),
+        label: host.label ? translateHostDisplayLabel(host) : getExecutionHostLabel(host.id),
         detail:
           unavailableDetail ??
-          (pendingSetup ? getPendingSetupDetail(pendingSetup) : 'Project location not set'),
+          (pendingSetup
+            ? getPendingSetupDetail(pendingSetup)
+            : translate(
+                'auto.lib.projectHostSetupOptions.locationNotSet',
+                'Project location not set'
+              )),
         isAvailable,
         attention: host.health === 'error',
         canSetLocation: canSetProjectLocation(projectId, isAvailable, pendingSetup),

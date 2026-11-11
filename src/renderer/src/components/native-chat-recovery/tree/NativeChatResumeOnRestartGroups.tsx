@@ -9,6 +9,7 @@ import { WorktreeHostContextBadge } from '@/components/sidebar/workspace-card/ho
 import { useSidebarHostScopeOptions } from '@/components/sidebar/worktree-list/controls/use-sidebar-host-scope-options'
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
+import { translateHostDisplayLabel } from '@/components/sidebar/execution-host-label'
 import { resolveWorktreeBranchLabel } from '@/lib/workspace/display/worktree-default-display-name'
 import { getHostContextLabel } from '../../../../../shared/worktree/host-context-labels'
 import {
@@ -277,7 +278,7 @@ function MachineNode({
   const t = useTranslate()
   const { hostOptions } = useSidebarHostScopeOptions()
   const hostLabelById = useMemo(
-    () => new Map(hostOptions.map((host) => [host.id, host.label])),
+    () => new Map(hostOptions.map((host) => [host.id, translateHostDisplayLabel(host)])),
     [hostOptions]
   )
   const name = getHostContextLabel(hostId, { hostLabelById })

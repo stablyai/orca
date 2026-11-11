@@ -22,6 +22,7 @@ import { useAppStore } from '@/store/index'
 import { repoIsRemote } from '../../../../shared/agent-launch/startup/agent-launch-remote'
 import { getRuntimeEnvironmentIdForRepo } from '@/lib/workspace/ownership/repo-runtime-owner'
 import { useEphemeralVmRecipeOptions } from '@/hooks/useEphemeralVmRecipeOptions'
+import { selectProjectFirstReason } from './runtime-target-selection-copy'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { ExecutionHostPlatformFact } from '@/runtime/hosts/platform/execution-host-platform-fact'
 
@@ -161,7 +162,7 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
   // Quote for the repo execution host’s OS, not the client’s (#22204).
   const selectedRepoAgentLaunchFact = useMemo((): ExecutionHostPlatformFact => {
     if (!selectedRepo) {
-      return { kind: 'withheld', reason: 'Select a project first.', recovery: 'refreshProjects' }
+      return { kind: 'withheld', reason: selectProjectFirstReason(), recovery: 'refreshProjects' }
     }
     return resolveRepoExecutionHostPlatform(
       { sshConnectionStates, sshStateByEnvironment, runtimeStatusByEnvironmentId },

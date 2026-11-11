@@ -6,10 +6,6 @@ import type { VirtualItem } from '@tanstack/react-virtual'
 import { cn } from '@/lib/class-names'
 import { RepoForkIndicator } from '@/components/repo/repo-fork-indicator'
 
-import {
-  type FolderWorkspacePathStatus,
-  isConfirmedStaleFolderPathStatus
-} from '../../../../../../shared/folder-workspaces/folder-workspace-path-status'
 import '@/store/project-groups/project-group-owner-routing'
 import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
 import {
@@ -19,6 +15,7 @@ import {
 } from '../../../../../../shared/sidebar-list/row-types'
 import { PINNED_GROUP_KEY } from '../../../../../../shared/sidebar-list/group-keys'
 import { getWorkspaceStatusFromGroupKey } from '../../../../../../shared/workspace-statuses'
+import { translateWorkspaceStatusHeaderLabel } from '../../workspace-board-status-label'
 import { getVirtualRowTransform } from '../viewport/virtual-rows'
 import { getSidebarHeaderVisual, renderSidebarHeaderGlyph } from './header-visuals'
 import { resolveProjectGroupHeaderColor } from './project-header-color'
@@ -28,7 +25,10 @@ import {
   getProjectGroupHeaderPaddingLeft,
   WORKTREE_SECTION_HEADER_PADDING_LEFT
 } from './indentation'
-import { FolderPathStatusIndicator } from './FolderPathStatusIndicator'
+import {
+  FolderPathStatusIndicator,
+  isFolderWorkspaceCreateDisabled
+} from './FolderPathStatusIndicator'
 import { RepoScanUnavailableIndicator } from './RepoScanUnavailableIndicator'
 import {
   ProjectGroupCreateWorkspaceButton,
@@ -46,14 +46,6 @@ import {
 import { getWorktreeOptionId } from './option-dom'
 import type { SectionHeaderRowContext } from './section-header-row-context'
 import type { Translate } from '@/i18n/use-translate'
-
-// The folder-scan project group whose parent path is gone can't create new workspaces.
-function isFolderWorkspaceCreateDisabled(status: FolderWorkspacePathStatus | null): boolean {
-  return (
-    status?.exists === false &&
-    (isConfirmedStaleFolderPathStatus(status) || status.reason === 'ambiguous-connection')
-  )
-}
 
 export function renderWorktreeSectionHeaderRow(
   args: {
@@ -123,7 +115,10 @@ export function renderWorktreeSectionHeaderRow(
     ctx.workspaceStatusById,
     t
   )
-  const label = row.label ?? headerVisual.label ?? ''
+  const label = translateWorkspaceStatusHeaderLabel(
+    headerWorkspaceStatus,
+    row.label ?? headerVisual.label ?? ''
+  )
   const hostContext =
     ctx.groupBy === 'repo' ? ctx.projectHeaderHostContexts?.get(row.key) : undefined
   const repoHeaderColor = resolveProjectGroupHeaderColor({

@@ -5,6 +5,7 @@ import { persistedUIValuesEqual } from '../../../../../../shared/persisted-ui-eq
 import { selectWslHostsServing } from '../../use-wsl-hosts-enabled'
 import { selectEphemeralVmHostLifecycles } from '@/store/slices/ephemeral-vm/ephemeral-vm-lifecycle'
 import { useAppStore } from '@/store/index'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { selectSidebarLineageParentIdentities } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import {
   getLocalExecutionHostLabel,
@@ -129,13 +130,11 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
   )
   const selectHostOptions = useMemo(() => createSidebarHostOptionsSelector(), [])
   const selectHostLabels = useMemo(() => createSidebarHostLabelsSelector(), [])
+  useUiLanguageRevision()
   const hostOptions = useAppStore((state) =>
     selectHostOptions(state, repos, args.settings, hostLabelOverrides)
   )
-  const hostLabelById = useMemo(
-    () => selectHostLabels(hostOptions),
-    [hostOptions, selectHostLabels]
-  )
+  const hostLabelById = selectHostLabels(hostOptions)
 
   const hostScopedGroups =
     args.workspaceHostScope !== 'all' || args.visibleWorkspaceHostIds !== null
