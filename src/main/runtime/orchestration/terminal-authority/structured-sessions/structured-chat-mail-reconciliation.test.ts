@@ -4,7 +4,7 @@ import { formatOrcaSessionAddress } from '../../../../../shared/orca-session-add
 import { testOrcaSessionId } from '../../../../../shared/orca-session-address-test-fixture'
 import { JournalSqlOwner } from '../../../../native-chat/agent-session-journal/journal-sql-owner'
 import { JournalSqlReaderPool } from '../../../../native-chat/agent-session-journal/journal-sql-reader-pool'
-import type { AgentSessionJournal } from '../../../../native-chat/agent-session-journal/journal-store'
+import { journalSqlReads } from '../../../../native-chat/agent-session-journal/journal-sql-reads'
 import { resultOf } from '../../../rpc/orchestration-session-caller-test-fixture'
 import { operationId } from './structured-chat-coordinator-fake-codex-fixture'
 import {
@@ -36,8 +36,24 @@ async function busyChat(sessionId: string) {
   return chat
 }
 
-function journalOf(sessionId: string): AgentSessionJournal {
-  return host.collaboratorsForTests().sessions.get(sessionId)!.journal
+function readsOf(sessionId: string) {
+  return journalSqlReads(host.deps.journalDatabase.readers, sessionId)
+}
+
+function holdMailRead(sessionId: string, hold: () => Promise<void>): void {
+  const read = JournalSqlReaderPool.prototype.point
+  let held = false
+  vi.spyOn(JournalSqlReaderPool.prototype, 'point').mockImplementation(async function (
+    this: JournalSqlReaderPool,
+    request
+  ) {
+    const answer = await read.call(this, request)
+    if (!held && request.sessionId === sessionId && request.operation.kind === 'mail-observation') {
+      held = true
+      await hold()
+    }
+    return answer
+  })
 }
 
 describe('mail checks reconcile the currently owned source attempts', () => {
@@ -78,23 +94,9 @@ describe('mail checks reconcile the currently owned source attempts', () => {
     await vi.waitFor(() => expect(chat.turns).toHaveLength(1), WAIT)
     await settleTurn(PEER_CHAT, 0)
     await accepted.promise
-    const read = JournalSqlReaderPool.prototype.point
-    let heldRead = false
-    vi.spyOn(JournalSqlReaderPool.prototype, 'point').mockImplementation(async function (
-      this: JournalSqlReaderPool,
-      request
-    ) {
-      const answer = await read.call(this, request)
-      if (
-        !heldRead &&
-        request.sessionId === PEER_CHAT &&
-        request.operation.kind === 'mail-observation'
-      ) {
-        heldRead = true
-        observed.resolve()
-        await releaseCheck.promise
-      }
-      return answer
+    holdMailRead(PEER_CHAT, async () => {
+      observed.resolve()
+      await releaseCheck.promise
     })
     const checking = call('orchestration.check', {}, { sessionId: PEER_CHAT })
     try {
@@ -282,7 +284,11 @@ describe('mail checks reconcile the currently owned source attempts', () => {
       return observe(attempt)
     })
     try {
-      const [card] = await journalOf(PEER_CHAT).queuedMessages.list()
+      const queue = await readsOf(PEER_CHAT).queue({ kind: 'list', facts: { reopenFloor: null } })
+      if (queue.kind !== 'list') {
+        throw new Error('journal reader returned another queue result')
+      }
+      const [card] = queue.cards
       const edit = {
         messageId: card!.messageId,
         expectedBodyFingerprint: card!.fingerprint,
@@ -325,7 +331,7 @@ describe('mail checks reconcile the currently owned source attempts', () => {
           }
         )
       ).toMatchObject({ ok: true, value: { deleted: true } })
-      expect(await journalOf(PEER_CHAT).reads.mailObservation(original)).toMatchObject({
+      expect(await readsOf(PEER_CHAT).mailObservation(original)).toMatchObject({
         withdrawal: 'person'
       })
       const hold = host.holdMailSources
@@ -447,18 +453,16 @@ describe('mail checks reconcile the currently owned source attempts', () => {
       { sessionId: COORDINATOR }
     )
     await vi.waitFor(async () => expect(await queuedCardTexts(PEER_CHAT)).toHaveLength(1), WAIT)
-    const journal = journalOf(PEER_CHAT)
-    const read = journal.reads.mailObservation
+    const reads = readsOf(PEER_CHAT)
+    const epoch = (await reads.cursor()).epoch
     const reading = Promise.withResolvers<void>()
     const release = Promise.withResolvers<void>()
     onTestFinished(() => release.resolve())
     const finished = Promise.withResolvers<void>()
-    vi.spyOn(journal.reads, 'mailObservation').mockImplementationOnce(async (...args) => {
-      const observed = await read(...args)
+    holdMailRead(PEER_CHAT, async () => {
       reading.resolve()
       await release.promise
       finished.resolve()
-      return observed
     })
     const controller = new AbortController()
     const checking = dispatcher.dispatch(
@@ -471,7 +475,7 @@ describe('mail checks reconcile the currently owned source attempts', () => {
       expect(await checking).toMatchObject({ ok: false, error: { code: 'request_aborted' } })
       // This actual source owner runs while the old read reply remains held.
       await host.withForkSourceAdmission(PEER_CHAT, async () => {
-        expect((await journal.reads.cursor()).epoch).toBe(journal.cursor().epoch)
+        expect((await reads.cursor()).epoch).toBe(epoch)
       })
       expect(db.getUnreadMessages(address)).toMatchObject([{ subject: 'keep after disconnect' }])
     } finally {
@@ -497,7 +501,6 @@ describe('mail checks reconcile the currently owned source attempts', () => {
     )
     await vi.waitFor(async () => expect(await queuedCardTexts(PEER_CHAT)).toHaveLength(1), WAIT)
     const original = db.getStructuredMailSends(address)[0]!
-    const journal = journalOf(PEER_CHAT)
     const automatic = Promise.withResolvers<void>()
     const observe = host.mailObservation
     vi.spyOn(host, 'mailObservation').mockImplementation(async (...args) => {
@@ -506,7 +509,6 @@ describe('mail checks reconcile the currently owned source attempts', () => {
       }
       return observe(...args)
     })
-    const read = journal.reads.mailObservation
     const reading = Promise.withResolvers<void>()
     const release = Promise.withResolvers<void>()
     const finished = Promise.withResolvers<void>()
@@ -514,12 +516,10 @@ describe('mail checks reconcile the currently owned source attempts', () => {
       release.resolve()
       automatic.resolve()
     })
-    vi.spyOn(journal.reads, 'mailObservation').mockImplementationOnce(async (...args) => {
-      const observed = await read(...args)
+    holdMailRead(PEER_CHAT, async () => {
       reading.resolve()
       await release.promise
       finished.resolve()
-      return observed
     })
     observationClock.start()
     const invocation = request('orchestration.check', {}, { sessionId: PEER_CHAT })

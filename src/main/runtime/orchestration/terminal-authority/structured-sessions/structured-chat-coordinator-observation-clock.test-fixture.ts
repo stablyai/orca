@@ -59,6 +59,7 @@ export function createCoordinatorMailObservationClock(
       await Promise.allSettled(pending)
     }
   }
+  const timers = new Map<Parameters<typeof clearTimeout>[0], { delay: number; stack: string }>()
   return {
     install(): void {
       pending.clear()
@@ -86,6 +87,28 @@ export function createCoordinatorMailObservationClock(
     drain,
     start(): void {
       vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+      timers.clear()
+      const after = globalThis.setTimeout
+      const cancel = globalThis.clearTimeout
+      vi.spyOn(globalThis, 'setTimeout').mockImplementation((callback, delay, ...args) => {
+        const timer = after(
+          function (this: ReturnType<typeof setTimeout>, ...fired: Parameters<typeof callback>) {
+            timers.delete(timer)
+            callback.apply(this, fired)
+          },
+          delay,
+          ...args
+        )
+        timers.set(timer, {
+          delay: delay ?? 0,
+          stack: new Error('fake timeout created').stack ?? ''
+        })
+        return timer
+      })
+      vi.spyOn(globalThis, 'clearTimeout').mockImplementation((timer) => {
+        timers.delete(timer)
+        return cancel(timer)
+      })
       startFakeTimeAwakeClock()
       active = true
     },
@@ -115,7 +138,19 @@ export function createCoordinatorMailObservationClock(
       await vi.advanceTimersByTimeAsync(2_000)
       await waitForStructuredAgentSessionRecovery()
       await drain()
-      expect(vi.getTimerCount()).toBe(fakeTimeAwakeClock.heartbeats)
+      const actual = vi.getTimerCount()
+      const expected = fakeTimeAwakeClock.heartbeats
+      if (actual !== expected) {
+        console.error('coordinator mail timers survived cleanup', {
+          test: expect.getState().currentTestName,
+          file: expect.getState().testPath,
+          actual,
+          expected,
+          pendingWork: pending.size,
+          timers: [...timers].map(([handle, metadata]) => ({ handle: Number(handle), ...metadata }))
+        })
+      }
+      expect(actual).toBe(expected)
     },
     restore(): void {
       if (active) {
@@ -124,6 +159,7 @@ export function createCoordinatorMailObservationClock(
       // useRealTimers dropped this clock's pending heartbeat along with the other fake timers.
       fakeTimeAwakeClock.clock = null
       fakeTimeAwakeClock.heartbeats = 0
+      timers.clear()
       active = false
     }
   }
