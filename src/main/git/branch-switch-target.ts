@@ -16,6 +16,52 @@ export class BranchSwitchCollisionError extends Error {
   }
 }
 
+export async function readCurrentBranch(
+  worktreePath: string,
+  options: GitRuntimeOptions
+): Promise<string | null> {
+  try {
+    const { stdout } = await gitExecFileAsync(
+      ['symbolic-ref', '--quiet', '--short', 'HEAD'],
+      gitOptionsForWorktree(worktreePath, options)
+    )
+    return stdout.trim() || null
+  } catch {
+    return null
+  }
+}
+
+export async function readBranchSwitchHead(
+  worktreePath: string,
+  options: GitRuntimeOptions
+): Promise<string | undefined> {
+  try {
+    const { stdout } = await gitExecFileAsync(
+      ['rev-parse', '--verify', 'HEAD'],
+      gitOptionsForWorktree(worktreePath, options)
+    )
+    return stdout.trim() || undefined
+  } catch {
+    return undefined
+  }
+}
+
+export async function validateNewBranchName(
+  path: string,
+  name: string,
+  options: GitRuntimeOptions
+): Promise<void> {
+  if (!isBranchNameValid(name)) {
+    throw new Error('This branch name is invalid. Choose a different name.')
+  }
+  await gitExecFileAsync(
+    ['check-ref-format', '--branch', name],
+    gitOptionsForWorktree(path, options)
+  ).catch(() => {
+    throw new Error('This branch name is invalid. Choose a different name.')
+  })
+}
+
 export async function resolveBranchSwitchTarget(
   path: string,
   target: BranchSwitchTarget,
@@ -23,14 +69,12 @@ export async function resolveBranchSwitchTarget(
 ): Promise<{ branch: string; creation?: BranchSwitchCreation }> {
   const execution = gitOptionsForWorktree(path, { ...options, admissionTier: 'interactive' })
   const run = (args: string[]) => gitExecFileAsync(args, execution)
+  if (target.kind === 'new') {
+    await validateNewBranchName(path, target.name, { ...options, admissionTier: 'interactive' })
+    return { branch: target.name, creation: { kind: 'new' } }
+  }
   if (!isBranchNameValid(target.name)) {
     throw new Error('This branch name is invalid. Choose a different name.')
-  }
-  if (target.kind === 'new') {
-    await run(['check-ref-format', '--branch', target.name]).catch(() => {
-      throw new Error('This branch name is invalid. Choose a different name.')
-    })
-    return { branch: target.name, creation: { kind: 'new' } }
   }
   const full =
     target.kind === 'local'

@@ -2,13 +2,13 @@ import type { AgentJournalCursor } from '../../../../shared/agent-session/journa
 import type { JournalSubmissionRow } from '../durable-rows/journal-row-schema'
 import { isQueuedAgentJournalSubmission } from '../../../../shared/agent-session/requests/agent-session-queued-submission'
 import type { JournalReducerState } from '../projection/journal-reducer'
-import { journalInputOrder } from './journal-input-order'
+import type { JournalInputOrderResolver } from './journal-input-order-registry'
 import type { QueuedMessageRow } from '../queued-messages/queued-message-table'
 import {
-  journalQueueStopHolds,
   failedQueueTurnSequence,
   type DerivedQueuePause
 } from '../queued-messages/queued-message-pause'
+import { journalQueueStopHolds } from '../queued-messages/queued-message-pause-marks'
 import {
   JournalInputPlaceIndex,
   mergeInputPlaces,
@@ -77,7 +77,10 @@ export class LegacyQueueCardIndex {
   private cleared = new Set<string>()
   // A failure holds every waiting card alike, so it gates reads instead of the cached flags.
   private failed = false
-  constructor(private readonly lineage: JournalInputLineageOwner) {}
+  constructor(
+    private readonly lineage: JournalInputLineageOwner,
+    private readonly journalInputOrder: JournalInputOrderResolver
+  ) {}
   hasOverlay(id: string): boolean {
     return this.overlays.has(id)
   }
@@ -144,7 +147,7 @@ export class LegacyQueueCardIndex {
     const marks = state.queuePauseMarks
     this.failed =
       failedQueueTurnSequence(
-        journalInputOrder(state).newestTurn.failure(),
+        this.journalInputOrder(state).newestTurn.failure(),
         marks.resumedSequence
       ) > 0
     const lifted = Math.max(state.latestAcceptedTurnSequence, marks.resumedSequence)

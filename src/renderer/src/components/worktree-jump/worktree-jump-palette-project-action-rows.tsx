@@ -3,8 +3,8 @@ import { FolderTree } from 'lucide-react'
 import { CommandItem } from '@/components/ui/command'
 import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import { getPaletteHostBadge } from '@/components/cmd-j/palette-host-badge'
-import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { cn } from '@/lib/class-names'
+import { useTranslate } from '@/i18n/use-translate'
 import type {
   ProjectTargetPaletteItem,
   QuickActionPaletteItem,
@@ -24,6 +24,7 @@ export function WorktreeJumpPaletteProjectRow({
   renderKey: string
   controller: WorktreeJumpPaletteController
 }): React.JSX.Element {
+  const t = useTranslate()
   const result = entry.result
   const isProject = result.kind === 'project'
   const hostBadge = isProject
@@ -34,8 +35,8 @@ export function WorktreeJumpPaletteProjectRow({
       )
     : null
   const badgeLabel = isProject
-    ? translate('auto.components.WorktreeJumpPalette.projectBadge', 'Project')
-    : translate('auto.components.WorktreeJumpPalette.repoGroupBadge', 'Repo group')
+    ? t('auto.components.WorktreeJumpPalette.projectBadge', 'Project')
+    : t('auto.components.WorktreeJumpPalette.repoGroupBadge', 'Repo group')
 
   return (
     <CommandItem
@@ -85,14 +86,15 @@ export function WorktreeJumpPaletteActionRow({
   renderKey: string
   controller: WorktreeJumpPaletteController
 }): React.JSX.Element {
+  const t = useTranslate()
   const result = entry.result
   const Icon = result.icon
   const kindLabel =
     entry.type === 'settings'
-      ? translate('auto.components.WorktreeJumpPalette.settingsBadge', 'Settings')
+      ? t('auto.components.WorktreeJumpPalette.settingsBadge', 'Settings')
       : result.id === BROWSER_NAVIGATION_ACTION_ID
-        ? translate('worktreeJumpPalette.websiteBadge', 'Website')
-        : translate('auto.components.WorktreeJumpPalette.actionBadge', 'Action')
+        ? t('worktreeJumpPalette.websiteBadge', 'Website')
+        : t('auto.components.WorktreeJumpPalette.actionBadge', 'Action')
 
   return (
     <CommandItem

@@ -1,6 +1,6 @@
 import React from 'react'
 import { Check } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { GitHubAssignableUser } from '../../../../../shared/github/pull-request-types'
 import { useTranslate } from '@/i18n/use-translate'
 

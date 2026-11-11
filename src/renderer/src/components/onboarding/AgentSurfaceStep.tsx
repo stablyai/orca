@@ -8,7 +8,7 @@ import {
   type LucideIcon
 } from 'lucide-react'
 import { Trans } from 'react-i18next'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { i18n } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'

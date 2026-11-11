@@ -1,5 +1,8 @@
-import type { BrowserGrabRect, BrowserGrabScreenshot } from '../../../shared/browser-grab-types'
-import { GRAB_BUDGET } from '../../../shared/browser-grab-types'
+import type {
+  BrowserGrabRect,
+  BrowserGrabScreenshot
+} from '../../../shared/browser/element-grab/browser-grab-types'
+import { GRAB_BUDGET } from '../../../shared/browser/element-grab/browser-grab-types'
 
 const HIDE_BROWSER_GRAB_OVERLAY_SCRIPT = `(function(){
   var g = window.__orcaGrab;

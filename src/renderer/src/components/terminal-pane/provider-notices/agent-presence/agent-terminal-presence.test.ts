@@ -1,38 +1,40 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { noticeTestStore } from '../codex-notice-test-harness'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { useAppStore } from '@/store/index'
+import { makeTerminalTab } from '@/store/terminals/terminal-row.test-fixture'
+import { status } from '@/components/native-chat/messages/agent-senders/native-chat-agent-sender.test-fixture'
 import { whenAgentTerminalAppears } from './agent-terminal-presence'
 
-vi.mock('@/store/index', () => import('../codex-notice-test-harness'))
+const initial = useAppStore.getState()
+
+afterEach(() => {
+  useAppStore.setState(initial, true)
+})
 
 describe('whenAgentTerminalAppears', () => {
-  beforeEach(() => {
-    noticeTestStore.setState(
-      { tabsByWorktree: {}, agentStatusByPaneKey: {}, paneForegroundAgentByPaneKey: {} },
-      true
-    )
-  })
-
-  it.each([
-    ['an Orca-launched Codex tab', { tabsByWorktree: { 'wt-1': [{ launchAgent: 'codex' }] } }],
-    ['a hook-reported Codex', { agentStatusByPaneKey: { 'tab-1:leaf': { agentType: 'codex' } } }],
-    [
-      'a typed codex in the foreground',
-      { paneForegroundAgentByPaneKey: { 'tab-1:leaf': { agent: 'codex' } } }
-    ]
-  ])('calls back once for %s', (_name, patch) => {
+  it('ignores a Claude status entry from a native chat tab', () => {
     const onAppear = vi.fn()
-    whenAgentTerminalAppears('codex', onAppear)
-
-    noticeTestStore.setState(patch)
-    noticeTestStore.setState({ tabsByWorktree: { 'wt-2': [{ launchAgent: 'codex' }] } })
-
-    expect(onAppear).toHaveBeenCalledTimes(1)
-  })
-
-  it('stops watching once unsubscribed', () => {
-    const onAppear = vi.fn()
-    whenAgentTerminalAppears('codex', onAppear)()
-    noticeTestStore.setState({ tabsByWorktree: { 'wt-1': [{ launchAgent: 'codex' }] } })
+    useAppStore.setState({
+      tabsByWorktree: {},
+      agentStatusByPaneKey: {},
+      paneForegroundAgentByPaneKey: {}
+    })
+    const unsubscribe = whenAgentTerminalAppears('claude', onAppear)
+    const entry = status(1)
+    useAppStore.setState({ agentStatusByPaneKey: { [entry.paneKey]: entry } })
     expect(onAppear).not.toHaveBeenCalled()
+    unsubscribe()
+  })
+
+  it('fires for a Claude status entry from a terminal tab', () => {
+    const onAppear = vi.fn()
+    useAppStore.setState({
+      tabsByWorktree: { workspace: [makeTerminalTab({ id: 'tab-1', worktreeId: 'workspace' })] },
+      agentStatusByPaneKey: {},
+      paneForegroundAgentByPaneKey: {}
+    })
+    whenAgentTerminalAppears('claude', onAppear)
+    const entry = status(1)
+    useAppStore.setState({ agentStatusByPaneKey: { [entry.paneKey]: entry } })
+    expect(onAppear).toHaveBeenCalledTimes(1)
   })
 })

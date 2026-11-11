@@ -1,4 +1,4 @@
-import type { RuntimeTerminalSend } from '../../../../../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalSend } from '../../../../../../shared/runtime-terminal-send-contract'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import {
@@ -60,6 +60,7 @@ export async function deliverWorkerDispatchPreamble(args: {
     dispatchId: args.dispatchId,
     taskSpec: args.taskSpec,
     coordinatorHandle: orcaSessionIdOrHandle(args.coordinatorHandle, args.db),
+    coordinatedFrom: args.db.getPeerRun(args.runId)?.home_label,
     // Its mailbox stays keyed by the handle; its commands name its Orca session ID, which binds to it.
     workerHandle:
       structuredSession && isOrcaSessionId(structuredSession.identity.sessionId)

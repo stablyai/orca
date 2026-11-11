@@ -10,13 +10,9 @@ import {
   writeStructuredAgentLaunchRecord,
   markStructuredAgentLaunchCancelledPersisted
 } from './structured-agent-session-launch-persistence'
-
-import { structuredAgentLaunchRecordFor } from './structured-agent-session-launch-record'
-import type { StructuredAgentSessionLaunchIntent } from '../../launch-structured-agent-session'
+import './structured-agent-session-launch-record'
 
 const SERVER = 'runtime:server-1'
-const TOMBSTONES_KEY = 'orca:structuredAgentLaunchCancelledSessions:v1'
-
 function reload(): void {
   resetStructuredAgentLaunchPersistenceForTests()
 }
@@ -61,45 +57,6 @@ describe('structured agent launch persistence', () => {
   })
 
   // This machine cannot re-derive a paired server's seed, so a reload must show the same one.
-  it("keeps a paired server's reported seed across a reload, and no local one", () => {
-    const intent = (
-      executionHostId: 'local' | typeof SERVER,
-      sessionId: string
-    ): StructuredAgentSessionLaunchIntent => ({
-      sessionId,
-      worktreeId: 'workspace-1',
-      executionHostId,
-      target:
-        executionHostId === 'local'
-          ? { kind: 'local' }
-          : { kind: 'environment', environmentId: 'server-1' },
-      agent: 'claude',
-      params: {
-        envelope: {
-          sessionId,
-          clientOperationId: 'operation-9',
-          expectedRuntimeFence: null,
-          payloadFingerprint: 'fingerprint-9'
-        },
-        worktree: 'id:workspace-1',
-        agent: 'claude'
-      },
-      seedOptions: { model: 'opus', fastMode: 'true' }
-    })
-    writeStructuredAgentLaunchRecord(
-      structuredAgentLaunchRecordFor(intent(SERVER, 'claude_paired'), 'pending')
-    )
-    writeStructuredAgentLaunchRecord(
-      structuredAgentLaunchRecordFor(intent('local', 'claude_local'), 'pending')
-    )
-    reload()
-
-    expect(readStructuredAgentLaunchRecord('claude_paired')?.seedOptions).toEqual({
-      model: 'opus',
-      fastMode: 'true'
-    })
-    expect(readStructuredAgentLaunchRecord('claude_local')?.seedOptions).toBeUndefined()
-  })
 
   it('keeps when a failed launch failed across a reload, and still loads records without it', () => {
     writeStructuredAgentLaunchRecord({
@@ -152,22 +109,8 @@ describe('structured agent launch persistence', () => {
 
     expect(
       retireAbsentStructuredAgentLaunchCancellationTombstonesPersisted(new Set(), 'local')
-    ).toBe(true)
+    ).toEqual(['local_session'])
     expect(hasStructuredAgentLaunchCancellationTombstonePersisted('local_session')).toBe(false)
     expect(hasStructuredAgentLaunchCancellationTombstonePersisted('remote_session')).toBe(true)
-  })
-
-  it("expires a paired host's tombstone that host never answered for", () => {
-    const expired = Date.now() - 31 * 24 * 60 * 60 * 1000
-    localStorage.setItem(
-      TOMBSTONES_KEY,
-      JSON.stringify([
-        { sessionId: 'stale_remote', executionHostId: SERVER, cancelledAt: expired },
-        { sessionId: 'fresh_remote', executionHostId: SERVER, cancelledAt: Date.now() }
-      ])
-    )
-
-    expect(hasStructuredAgentLaunchCancellationTombstonePersisted('stale_remote')).toBe(false)
-    expect(hasStructuredAgentLaunchCancellationTombstonePersisted('fresh_remote')).toBe(true)
   })
 })

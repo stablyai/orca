@@ -11,7 +11,7 @@ import type { ChecksPanelControllerState } from '../use-checks-panel-controller-
 import type { ChecksPanelReviewState } from '../use-checks-panel-review-state'
 import type { ChecksPanelPollingState } from './use-checks-panel-polling'
 import type { ChecksPanelReviewDataState } from '../use-checks-panel-review-data'
-import { codeHostErrorText } from '@/lib/code-host-error-copy'
+import { codeHostErrorText } from '@/lib/source-control/remote/code-host-error-copy'
 
 type ChecksPanelEntryRefreshAndTitleActionsInput = Pick<
   ChecksPanelContextState,

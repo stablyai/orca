@@ -40,3 +40,14 @@ export async function resumeStructuredQueue(
   await journal.appendQueueResume(fence, receipt)
   return true
 }
+
+/** A person's chosen continuation is their recovery from a restart; other pauses keep their own lift. */
+export async function liftStructuredQueueRestartHold(
+  journal: Pick<AgentSessionJournal, 'queuedMessages' | 'appendQueueResume'>,
+  fence: number
+): Promise<void> {
+  const pauses = structuredQueuePauses(journal)
+  if (pauses.length > 0 && pauses.every((pause) => pause.reason === 'restarted')) {
+    await journal.appendQueueResume(fence)
+  }
+}

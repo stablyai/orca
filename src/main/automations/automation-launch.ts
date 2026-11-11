@@ -1,12 +1,12 @@
+import type { Automation } from '../../shared/automations/automation-definition'
 import type {
-  Automation,
   AutomationDispatchResult,
   AutomationRun,
   AutomationRunOutputSnapshot,
   AutomationRunSetupSkippedReason
-} from '../../shared/automations-types'
+} from '../../shared/automations/history/automation-run'
 import type { AutomationRunTargetResult } from './run-target-resolution'
-import type { AutomationRunFailureCodeFields } from '../../shared/automation-run-failure-copy'
+import type { AutomationRunFailureCodeFields } from '../../shared/automations/history/automation-run-failure-copy'
 
 const MAX_HEADLESS_OUTPUT_SNAPSHOT_CHARS = 256 * 1024
 

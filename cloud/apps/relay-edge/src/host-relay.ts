@@ -13,9 +13,10 @@ import { CONTROL_CONTINUITY_LIMITS } from '../../../packages/relay-contract/src/
 import { metric } from './metrics'
 import { RelayCredentialStore } from '../../relay/src/credentials/credential-store'
 import type { AssignBody, DeviceRow } from './admin'
+import { ADMIN_JTI_KEY, admitJti, type AdminReplayGuard, type ReplayRefusal, type SeenJtis } from './admin-jti'
 import type { AssignResult, StoredAssignment } from './object-store'
 import type { EdgeClaims } from './env'
-import { SWEEP_AT_KEY, type Session } from './host-relay-base'
+import { KEEPALIVE_PROBE_MS, SWEEP_AT_KEY, type Session } from './host-relay-base'
 import { HostRelayPhones } from './host-relay-phones'
 
 export type { AuthorizeResult, ConfirmResult } from './host-relay-base'
@@ -23,7 +24,12 @@ export type { AuthorizeResult, ConfirmResult } from './host-relay-base'
 export class HostRelay extends HostRelayPhones {
   // ---------------- director admin (phase 2; the Worker verified the signed request) ----------------
 
-  async adminAssign(body: AssignBody): Promise<AssignResult> {
+  // Every op records its token's jti before it runs (admin-jti.ts), so a copy of the token is
+  // refused 409 even while the first call is still in flight. `replay` is null for tokens
+  // without a jti (transitional) and undefined from a Worker deployed before this field.
+  async adminAssign(body: AssignBody, replay?: AdminReplayGuard | null): Promise<AssignResult | ReplayRefusal> {
+    const refused = await this.claimAdminJti(replay)
+    if (refused) { return refused }
     const result = await this.store.applyAssignment(body)
     if (result.outcome === 'applied' && body.cellId !== this.config.cellId) {
       // Moved away: like an old cell, send the desktop and its phones back to the director.
@@ -37,10 +43,13 @@ export class HostRelay extends HostRelayPhones {
 
   // The director's move away: refused while the desktop is connected (it alone can change
   // devices); otherwise the host is frozen (hello and phones get WRONG_CELL) and snapshotted.
-  async adminExport(): Promise<
-    { outcome: 'busy' } | { outcome: 'exported'; assignment: StoredAssignment | null; devices: DeviceRow[] }
+  async adminExport(replay?: AdminReplayGuard | null): Promise<
+    ReplayRefusal | { outcome: 'busy' } | { outcome: 'exported'; assignment: StoredAssignment | null; devices: DeviceRow[] }
   > {
-    if (this.ctx.getWebSockets('control').length > 0) { return { outcome: 'busy' } }
+    const refused = await this.claimAdminJti(replay)
+    if (refused) { return refused }
+    await this.closeSilentControls()
+    if (this.liveControls().length > 0) { return { outcome: 'busy' } }
     const devices = this.store.freezeForExport()
     await this.closeSplices(() => true, RELAY_CLOSE_CODE.WRONG_CELL, 'host moving')
     await this.reschedule()
@@ -48,11 +57,16 @@ export class HostRelay extends HostRelayPhones {
   }
 
   // Erasure: refused while the host is live, as today's guard; otherwise every byte of the object goes.
-  async adminErase(userId: string): Promise<{ outcome: 'erased' | 'busy' | 'mismatch' }> {
+  // An erasure wipes the recorded jti with everything else: a copy of the token then finds an
+  // empty object, and erasing it again changes nothing.
+  async adminErase(userId: string, replay?: AdminReplayGuard | null): Promise<{ outcome: 'erased' | 'busy' | 'mismatch' | ReplayRefusal['outcome'] }> {
+    const refused = await this.claimAdminJti(replay)
+    if (refused) { return refused }
     const assignment = this.store.assignment()
     // Another account now holds this machine's object; its move on wiped the earlier account's data.
     if (assignment && assignment.userId !== userId) { return { outcome: 'mismatch' } }
-    if (this.ctx.getWebSockets('control').length > 0 || this.store.activeBases() > 0) { return { outcome: 'busy' } }
+    await this.closeSilentControls()
+    if (this.liveControls().length > 0 || this.store.activeBases() > 0) { return { outcome: 'busy' } }
     await this.ctx.storage.deleteAlarm()
     await this.ctx.storage.deleteAll()
     this.storeCache = null
@@ -63,9 +77,14 @@ export class HostRelay extends HostRelayPhones {
   // The director takes the host off the edge: every control gets the lease-expiry drain (the
   // desktop re-asks the director), and goes through the same path as that expiry. The assignment,
   // devices and splices are left as they are.
-  async adminDrain(): Promise<{ outcome: 'idle' } | { outcome: 'drained'; controls: number }> {
-    // A socket whose attachment is cleared is already gone (closing, still listed).
-    const controls = this.ctx.getWebSockets('control').filter((ws) => this.attachment(ws) !== null)
+  async adminDrain(replay?: AdminReplayGuard | null): Promise<ReplayRefusal | { outcome: 'idle' } | { outcome: 'drained'; controls: number }> {
+    await this.closeSilentControls()
+    const controls = this.liveControls()
+    // An idle drain of a host nobody pushed changes nothing and must not give the object storage,
+    // so its jti is not recorded; a copy of that token can at most drain a control that arrived
+    // since, which sends the desktop back to the director once.
+    const refused = controls.length > 0 || this.pushed() ? await this.claimAdminJti(replay) : null
+    if (refused) { return refused }
     if (controls.length === 0) { return { outcome: 'idle' } }
     for (const ws of controls) {
       this.send(ws, { type: 'drain', graceMs: 0, recovery: 'resolve-director' })
@@ -73,6 +92,28 @@ export class HostRelay extends HostRelayPhones {
       await this.onSocketGone(ws, RELAY_CLOSE_CODE.DRAINING, '')
     }
     return { outcome: 'drained', controls: controls.length }
+  }
+
+  // A socket whose attachment is cleared is already gone (closing, still listed): drain and export
+  // both ignore it, so a just-drained desktop does not make the export that follows answer busy.
+  private liveControls(): WebSocket[] {
+    return this.ctx.getWebSockets('control').filter((ws) => this.attachment(ws) !== null)
+  }
+
+  // Health probe (GET /__health/object, health.ts), only ever called on the canary object: one
+  // read of the object's SQLite. No writes, no alarm, no storage created.
+  healthCheck(): { ok: true } {
+    this.ctx.storage.sql.exec('SELECT 1').one()
+    return { ok: true }
+  }
+
+  private async claimAdminJti(replay: AdminReplayGuard | null | undefined): Promise<ReplayRefusal | null> {
+    if (!replay) { return null }
+    // Only storage calls between the read and the write: no other event runs in between.
+    const { outcome, seen } = admitJti(await this.ctx.storage.get<SeenJtis>(ADMIN_JTI_KEY), replay, Date.now())
+    if (outcome !== 'fresh') { return { outcome } }
+    await this.ctx.storage.put(ADMIN_JTI_KEY, seen)
+    return null
   }
 
   async fetch(request: Request): Promise<Response> {
@@ -90,6 +131,8 @@ export class HostRelay extends HostRelayPhones {
       })
     }
     if (kind !== 'control') { return new Response(null, { status: 404 }) }
+    // A new control's hello decides rebind against the controls still listed.
+    await this.closeSilentControls()
     const origin = request.headers.get('x-edge-origin') ?? ''
     const claims = JSON.parse(request.headers.get('x-edge-claims') ?? 'null') as EdgeClaims
     const pair = new WebSocketPair()
@@ -128,13 +171,24 @@ export class HostRelay extends HostRelayPhones {
       const a = this.attachment(ws)
       if (!a) { continue }
       if (a.k === 'control' && a.phase === 'active') {
-        if (now - (a.lastPongAt ?? now) > this.config.silenceTimeoutMs) {
+        const seen = a.lastPongAt === undefined ? now : this.lastSeen(ws, a)
+        // A keepalive control gets one relay ping first (probeSilentControls); closed if it stays silent.
+        if (this.keepalive(a) && now - seen > this.config.silenceTimeoutMs && (a.probeAt === undefined || a.probeAt < seen)) {
+          this.send(ws, { type: 'ping', t: now })
+          a.probeAt = now
+          this.attach(ws, a)
+          continue
+        }
+        if (now - seen > this.config.silenceTimeoutMs && (!this.keepalive(a) || now - a.probeAt! >= KEEPALIVE_PROBE_MS - 50)) {
           this.close(ws, RELAY_CLOSE_CODE.PEER_DROPPED, 'control silence timeout')
           await this.onSocketGone(ws, RELAY_CLOSE_CODE.PEER_DROPPED, '')
           continue
         }
         // Same order as the cells' heartbeat: expired auth past its grace, then the 6 h lease.
         if (now > a.claims.exp + CONTROL_CONTINUITY_LIMITS.expiredAuthExistingSpliceGraceMs) {
+          const sinceRefreshS = a.lastRefreshAt === undefined ? -1 : Math.round((now - a.lastRefreshAt) / 1000)
+          const seenAgoS = Math.round((now - seen) / 1000)
+          metric(this.env, 'auth_expired_close', sinceRefreshS, a.lastRefreshAt === undefined ? 'never' : 'refreshed', [seenAgoS], this.keepalive(a) ? 'keepalive' : 'legacy', a.place)
           this.close(ws, RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL, 'relay authorization expired')
           await this.onSocketGone(ws, RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL, '')
           continue
@@ -145,7 +199,7 @@ export class HostRelay extends HostRelayPhones {
           await this.onSocketGone(ws, RELAY_CLOSE_CODE.DRAINING, '')
           continue
         }
-        if (now - (a.lastPingAt ?? 0) >= this.config.pingIntervalMs - 50) {
+        if (!this.keepalive(a) && now - (a.lastPingAt ?? 0) >= this.config.pingIntervalMs - 50) {
           if (a.lastPingAt) { metric(this.env, 'alarm_lag_ms', Math.max(0, now - (a.lastPingAt + this.config.pingIntervalMs)), '', [], '', a.place) }
           this.send(ws, { type: 'ping', t: now })
           a.lastPingAt = now

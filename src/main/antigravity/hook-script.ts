@@ -1,11 +1,11 @@
-import { posixCurlCommand } from '../agent-hooks/hook-post-command'
-import { buildHookProcessCapture } from '../agent-hooks/hook-process-capture'
+import { posixCurlCommand } from '../agent-hooks/installation/scripts/hook-post-command'
+import { buildHookProcessCapture } from '../agent-hooks/installation/scripts/hook-process-capture'
 import {
   buildPosixHookPayloadCapture,
   POSIX_HOOK_JSON_STDIN,
   buildPosixHookSpoolLines,
   buildWindowsHookEnvironmentGuardLines
-} from '../agent-hooks/hook-stdin-contract'
+} from '../agent-hooks/installation/scripts/hook-stdin-contract'
 import { ANTIGRAVITY_PRE_TOOL_USE_DECISION } from './hook-events'
 
 export function getManagedScript(

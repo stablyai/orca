@@ -16,15 +16,15 @@ import { expect, vi } from 'vitest'
 import { checkRuntimeHooks, type HookCheckResult } from '@/runtime/repo-hooks/runtime-hooks-client'
 import { loadHostStructuredAgents } from '@/runtime/native-chat/agent-catalogs/host-structured-agents'
 import { getDefaultSettings } from '../../../../shared/constants'
-import type { Automation } from '../../../../shared/automations-types'
-import type { AutomationDraft } from './AutomationEditorDialog'
+import type { Automation } from '../../../../shared/automations/automation-definition'
+import type { AutomationDraft } from './authoring/AutomationEditorDialog'
 import {
   AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY as LIST_HOST_SCOPE,
   AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY as OWNER_FENCING,
   AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY as CREATE_IDEMPOTENCY,
   AUTOMATION_SURFACE_RUNTIME_CAPABILITY,
   AUTOMATION_EXTRA_AGENT_ARGS_RUNTIME_CAPABILITY
-} from '../../../../shared/protocol-version'
+} from '../../../../shared/automations/automation-runtime-capabilities'
 import {
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY

@@ -4,7 +4,6 @@ import type { RuntimeStatus, RuntimeWorktreeRecord } from '../../shared/runtime-
 import { WORKSPACE_SELECTOR_FOLDER_MATCH_RUNTIME_CAPABILITY } from '../../shared/worktree-runtime-capabilities'
 import type { WorkspacePortHostScanResult } from '../../shared/workspace-ports'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
-import { resolveCurrentAgentWorkspaceSelector } from '../agent-workspace-selector'
 import type { CommandHandler, HandlerContext } from '../dispatch'
 import { getOptionalStringFlag } from '../flags'
 import { printResult } from '../format'
@@ -14,7 +13,7 @@ import {
   RuntimeRpcFailureError,
   type RuntimeRpcSuccess
 } from '../runtime-client'
-import { normalizeWorktreeSelectorForCaller } from '../selectors'
+import { normalizeWorktreeSelectorForCaller, resolveCurrentWorktreeSelector } from '../selectors'
 
 type PortsTarget = { selector: string; worktreePath: string | null }
 
@@ -106,7 +105,7 @@ async function resolvePortsTarget(
   const explicit = getOptionalStringFlag(flags, 'worktree')
   const selector =
     !explicit || explicit === 'active' || explicit === 'current'
-      ? await resolveCurrentAgentWorkspaceSelector(cwd, client, 'ports')
+      ? await resolveCurrentWorktreeSelector(cwd, client, 'ports')
       : await resolveNativeFolderPathSelector(
           await normalizeWorktreeSelectorForCaller(explicit, cwd, client),
           client

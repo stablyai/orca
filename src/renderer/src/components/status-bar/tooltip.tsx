@@ -3,7 +3,7 @@ import {
   formatResetCountdown,
   formatResetDuration
 } from '../../../../shared/rate-limit-reset-format'
-import { AgentIcon } from '@/lib/agent-catalog'
+import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { ClaudeIcon, GeminiIcon, MiniMaxIcon, OpenAIIcon, OpenCodeGoIcon } from './icons'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
@@ -21,6 +21,7 @@ import {
 } from '../../../../shared/usage-percentage-display'
 import { formatUsagePercentageLabel } from './usage-percentage-label'
 import { useResetCountdownClock } from '@/hooks/useResetCountdownClock'
+import { recomputeOn } from '@/lib/recompute-on'
 import { barColor, ProviderExtraUsageSection } from './provider-extra-usage-section'
 
 export {
@@ -287,9 +288,11 @@ export function ProviderPanel({
     )
   }
 
-  const updatedAgo = p.updatedAt
+  const updatedAt = p.updatedAt
+  // Why: both labels read Date.now(); recomputeOn ties React Compiler's cache to the clock tick.
+  const updatedAgo = updatedAt
     ? t('auto.components.status.bar.tooltip.updatedAgo', 'Updated {{time}}', {
-        time: formatTimeAgo(p.updatedAt, t)
+        time: recomputeOn([now], () => formatTimeAgo(updatedAt, t))
       })
     : t('auto.components.status.bar.tooltip.notYetUpdated', 'Not yet updated')
   const resetCreditCount =
@@ -298,7 +301,9 @@ export function ProviderPanel({
       : null
   const resetCreditExpiry =
     resetCreditCount != null
-      ? formatResetCreditExpiry(p.rateLimitResetCredits?.nextExpiresAt, resetCreditCount, t)
+      ? recomputeOn([now], () =>
+          formatResetCreditExpiry(p.rateLimitResetCredits?.nextExpiresAt, resetCreditCount, t)
+        )
       : null
 
   return (

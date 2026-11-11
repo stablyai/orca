@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import type { GitBranchChangeEntry } from '../../../../../../shared/git/diff/git-diff-compare-types'
 import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import type { SourceControlViewMode } from '../../../../../../shared/ui-chrome-types'
-import { compareFileNames } from '../../../../../../shared/file-name-sort'
+import { compareFileNames } from '../../../../../../shared/file-listing/file-name-sort'
 import {
   filterSourceControlPathEntries,
   getSourceControlFileFilterState,

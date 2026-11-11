@@ -34,7 +34,7 @@ import { isUsablePluginLanguagePack } from '../../shared/plugins/languages/plugi
 import { rebuildAppMenu } from '../menu/register-app-menu'
 import { rebuildSystemTrayMenu } from '../tray/system-tray'
 import { logStartupMilestone } from './startup-diagnostics'
-import { agentHookServer } from '../agent-hooks/server'
+import { agentHookServer } from '../agent-hooks/server/agent-hook-server'
 import {
   bindPluginRuntime,
   createPluginAgentStatusForwarder,
@@ -45,6 +45,7 @@ import { mainProcessState as state } from './main-process-state'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { PluginStatusBarState } from '../plugins/status-bar/plugin-status-bar-state'
 import { createDesktopPluginAppearance } from '../plugins/appearance/desktop-plugin-appearance'
+import { bindPluginEditorTypography } from '../plugins/appearance/plugin-editor-typography'
 import { ALL_RPC_METHODS } from '../runtime/rpc/methods/rpc-method-registry'
 
 const PLUGIN_AUTO_UPDATE_STARTUP_DELAY_MS = 60_000
@@ -123,6 +124,7 @@ export async function initializeMainProcessPlugins(runtime: OrcaRuntimeService):
     getDesktopFrameServices: getPluginDesktopFrameServices,
     statusBar: new PluginStatusBarState(),
     appearance: createDesktopPluginAppearance(store, () => state.pluginService),
+    editorTypography: bindPluginEditorTypography(store, () => state.pluginService),
     bundledPluginRoot
   })
   const pluginService = state.pluginService

@@ -12,8 +12,8 @@ import { PAIRING_TICKET_EXCHANGE_RUNTIME_CAPABILITY } from '../../../shared/remo
 import { verifyAndAddRuntimeEnvironmentFromPairingCode } from './runtime-environment-pairing-verification'
 
 const { sendMock } = vi.hoisted(() => ({ sendMock: vi.fn() }))
-vi.mock('../../../shared/remote-runtime/remote-runtime-client', () => ({
-  sendRemoteRuntimeRequest: sendMock
+vi.mock('../../../shared/remote-runtime/requests/remote-runtime-request-socket', () => ({
+  sendRemoteRuntimeRequestOnSocket: sendMock
 }))
 
 const pairingCode = encodePairingOffer({
@@ -64,7 +64,13 @@ describe('Add server with a pairing link', () => {
         expect.anything(),
         'pairing.exchangeTicket',
         { deviceToken: saved.deviceToken },
-        expect.any(Number)
+        expect.any(Number),
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined
       )
     } else {
       expect(saved.deviceToken).toBe('link-token')

@@ -1,5 +1,5 @@
 import type { Translate } from '../i18n/mobile-i18n'
-import { PairingCodeRejectedError } from '../transport/pairing-candidate-race'
+import { PairingCodeRejectedError } from './pairing-candidate-race'
 
 /** Failure copy for a first pairing from the scan or confirm screen. */
 export function getPairingFailureMessage(args: {

@@ -13,7 +13,7 @@ import { makeTab } from '@/store/terminals/terminal-tab.test-fixture'
 const {
   default: { publicLineageFixture, canonicalChatRow, LINEAGE_PARENT, LINEAGE_CHILD }
 } = await vi.importActual<{ default: RuntimeAgentLineageTestModule }>(
-  '../../../../../../main/runtime/runtime-agent-lineage.test-fixture'
+  '../../../../../../main/runtime/workspaces/process-listing/runtime-agent-lineage.test-fixture'
 )
 
 const LEAF = '11111111-1111-4111-8111-111111111111'

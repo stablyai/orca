@@ -12,9 +12,15 @@ vi.mock('@/lib/workspace/tabs/workspace-tab-commands', () => ({
 import { handleGuestWindowCloseMessage } from './browser-page-window-close'
 import { BROWSER_GUEST_WINDOW_CLOSE_CHANNEL } from '../../../../../shared/browser-guest-window-close'
 
-function seedTab(pageId: string, isPinned = false, siblingPageIds: string[] = []): void {
+function seedTab(
+  pageId: string,
+  isPinned = false,
+  siblingPageIds: string[] = [],
+  browserAnnotationsByPageId: Record<string, unknown[]> = {}
+): void {
   storeState.value = {
     closeBrowserPage: closeBrowserPageMock,
+    browserAnnotationsByPageId,
     browserTabsByWorktree: { 'wt-1': [{ id: 'ws-1' }] },
     browserPagesByWorkspace: { 'ws-1': [{ id: pageId }, ...siblingPageIds.map((id) => ({ id }))] },
     unifiedTabsByWorktree: {
@@ -38,6 +44,13 @@ describe('window.close() from a browser page', () => {
     seedTab('page-d', true)
     closeFrom('page-d', { back: false, forward: false })
     expect(dispatchMock).not.toHaveBeenCalled()
+  })
+
+  it('never discards unsent notes', () => {
+    seedTab('page-n', false, [], { 'page-n': [{ id: 'note-1' }] })
+    closeFrom('page-n', { back: false, forward: false })
+    expect(dispatchMock).not.toHaveBeenCalled()
+    expect(closeBrowserPageMock).not.toHaveBeenCalled()
   })
 
   it('closes only the calling page when its Orca tab holds other pages', () => {

@@ -115,7 +115,7 @@ export function createFetchWorktrees(
           if (directCallerAuthority) {
             return refresh.providerResult ?? false
           }
-          return relistIfStale ? fetchWorktreesAttempt(repoId, options, false) : false
+          return relistIfStale ? await fetchWorktreesAttempt(repoId, options, false) : false
         case 'not-current':
           return directCallerAuthority
             ? (staleDetectedWorktreeProviderResult(refresh) ?? false)

@@ -1,5 +1,6 @@
 import type { AgentMessageSource } from '../../../../../shared/agent-session/agent-session-message-source'
-import { vi, type Mock } from 'vitest'
+import { expect, vi, type Mock } from 'vitest'
+import { parseAgentJournalItemKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { activeProviderContext } from '../../../../../shared/agent-session/agent-session-provider-context'
 import {
@@ -33,6 +34,18 @@ export type QueuedRigProviderOptions = {
 
 /** How long a winding-down child is given after the interrupt before the Stop ends it. */
 export const QUEUED_RIG_STOP_GRACE_MS = 2_000
+
+export async function proveQueuedRigStart(
+  host: StructuredAgentSessionHost,
+  sessionId: string,
+  proveOpen: () => void
+): Promise<void> {
+  await eventually(() =>
+    expect(host.collaboratorsForTests().sessions.get(sessionId)?.child?.phase).toBe('starting')
+  )
+  proveOpen()
+  await Promise.resolve()
+}
 
 export function createQueuedRigProvider(
   store: Pick<AgentSessionRecordStore, 'getRecord'>,
@@ -117,7 +130,31 @@ export function createQueuedRigProvider(
     answerPrompt: vi.fn(async ({ commit }) => commit()),
     setOption,
     ...(options.rewind
-      ? { rewind: options.rewind, rewindSupport: () => ({ supported: true as const }) }
+      ? {
+          rewind: options.rewind,
+          rewindSupport: () => ({ supported: true as const }),
+          prepareRewind: async ({ sessionId, beforeTurnId }) => {
+            const record = store.getRecord(sessionId)!
+            const threadId = activeProviderContext(record).head!.handle.nativeId
+            const turns = host()
+              .collaboratorsForTests()
+              .sessions.get(sessionId)!
+              .journal.snapshot()
+              .submissions.flatMap(({ providerItemId }) => {
+                const identity = providerItemId ? parseAgentJournalItemKey(providerItemId) : null
+                return identity?.provider === 'codex' && identity.threadId === threadId
+                  ? [identity.turnId]
+                  : []
+              })
+            const index = turns.indexOf(beforeTurnId)
+            return index === -1
+              ? { ok: false as const, reason: 'invalid-target' as const }
+              : {
+                  ok: true as const,
+                  revert: { threadId, beforeTurnId, keptTurnId: turns[index - 1] ?? null }
+                }
+          }
+        }
       : {}),
     ...(options.recoverRewind ? { recoverRewind: options.recoverRewind } : {}),
     ...(options.windsDown

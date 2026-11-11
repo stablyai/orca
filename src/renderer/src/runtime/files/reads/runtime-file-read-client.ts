@@ -1,4 +1,4 @@
-import type { RuntimeFilePreviewResult } from '../../../../../shared/runtime-file-contracts'
+import type { RuntimeFilePreviewResult } from '../../../../../shared/file-content/runtime-file-read'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import type {
   RuntimeFileDownloadResult,
@@ -17,8 +17,8 @@ import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-se
 import { chatScratchFileAddress } from '../addressing/runtime-chat-scratch-file-address'
 import { readRemoteFileContent } from './runtime-remote-file-content'
 import { isAgentSessionAttachmentStorePath } from '../../../../../shared/agent-session/agent-session-attachments'
-import { decodeSvgBase64, isSvgFilePath } from '../../../../../shared/svg-document'
-import type { LocalFileAccess } from '../../../../../shared/local-file-access'
+import { decodeSvgBase64, isSvgFilePath } from '../../../../../shared/file-preview/svg-document'
+import type { LocalFileAccess } from '../../../../../shared/file-access/local-file-access'
 import {
   isHostFileOutsideWorkspaces,
   readHostFilePreview,

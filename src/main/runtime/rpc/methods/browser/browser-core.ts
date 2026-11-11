@@ -1,3 +1,4 @@
+import { BROWSER_EXTENSION_METHODS } from './browser-extension-rpc-methods'
 import { defineMethod } from '../../core'
 import {
   BrowserTarget,
@@ -118,6 +119,12 @@ export const BROWSER_CORE_METHODS = [
     handler: async (params, { runtime }) => runtime.browserTabCurrent(params)
   }),
   defineMethod({
+    name: 'browser.tabAnnotations',
+    permission: 'workspace',
+    params: BrowserTarget,
+    handler: async (params, { runtime }) => runtime.browserTabAnnotations(params)
+  }),
+  defineMethod({
     name: 'browser.tabSwitch',
     permission: 'workspace',
     params: TabSwitch,
@@ -145,6 +152,7 @@ export const BROWSER_CORE_METHODS = [
     handler: async (params, { runtime }) => runtime.browserTabClose(params)
   }),
   ...BROWSER_PROFILE_METHODS,
+  ...BROWSER_EXTENSION_METHODS,
   defineMethod({
     name: 'browser.hover',
     permission: 'workspace',

@@ -4,7 +4,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../../ui/co
 import { Separator } from '../../ui/separator'
 import { NotificationSettingToggle } from './NotificationSettingToggle'
 import { useNotificationSourceOptions } from './use-notification-source-options'
-import { pickerExecutionHosts } from '../../../../../shared/managed-orcad-execution-host'
+import { pickerExecutionHosts } from '../../../../../shared/execution-host/managed-orcad-execution-host'
 import { useTranslate } from '@/i18n/use-translate'
 import { useBoundedHostRows } from '../../host-picker/use-bounded-host-rows'
 import { HostListSearchField } from '../../host-picker/HostListSearchField'

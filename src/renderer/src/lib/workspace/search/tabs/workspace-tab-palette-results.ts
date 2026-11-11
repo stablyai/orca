@@ -9,7 +9,7 @@ import {
 import {
   resolveWorktreeBranchLabel,
   resolveWorktreeDisplayName
-} from '../../../worktree-default-display-name'
+} from '../../display/worktree-default-display-name'
 import { matchWorkspaceTabAgentSnippet } from './workspace-tab-agent-snippet-match'
 import { maxAgentActivityAt } from './workspace-tab-agent-metadata'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
@@ -25,7 +25,7 @@ import {
   type PaletteSearchContext
 } from '../../../../../../shared/palette-match/palette-ranking'
 import type { TerminalAgent } from '../../../../../../shared/agent-status/identity/terminal-agent'
-import { getUnifiedTabPaletteExecutionHostId } from '../../../unified-tab-host-ownership'
+import { getUnifiedTabPaletteExecutionHostId } from '../../ownership/unified-tab-host-ownership'
 import type { SearchableWorkspaceTab, WorkspaceTabContentType } from './workspace-tab-search-types'
 
 const NO_RANGES: readonly MatchRange[] = []

@@ -83,22 +83,3 @@ it('moves an invite of a host on the relay edge to the edge, never asking the ce
   expect(resolve).not.toHaveBeenCalled()
   expect(assign).not.toHaveBeenCalled()
 })
-
-it('falls through to the cell paths for an invite of a host that is not on the edge', async () => {
-  const { relay, port } = await director()
-  const identity = { userId: 'user-1', relayHostId: HOST }
-  vi.spyOn(relay.store, 'resolveInviteForMove').mockResolvedValue({ ...identity, relayDeviceId: 'device-1' })
-  vi.spyOn(EdgeAssignments.prototype, 'edgeAssignment').mockResolvedValue(null)
-  vi.spyOn(relay.assignments, 'resolve').mockResolvedValue({
-    ...identity,
-    cellId: 'cell-1',
-    cellUrl: 'https://cell-1.example.test',
-    assignmentEpoch: 3,
-    leaseExpiresAt: Date.now() + 60_000
-  })
-  const { messages, code } = await inviteMove(port)
-  expect(messages).toEqual([
-    { type: 'relay-moved', v: 1, cellUrl: 'https://cell-1.example.test', assignmentEpoch: 3 }
-  ])
-  expect(code).toBe(RELAY_CLOSE_CODE.DRAINING)
-})

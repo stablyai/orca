@@ -4,7 +4,7 @@ import {
   resolveQualifiedFolderWorkspaceResult,
   type QualifiedFolderHostState
 } from '../../../../shared/folder-workspaces/folder-workspace-execution-host'
-import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import { folderIdOfSelector, folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { runtimePathsEqual, type ResolvedWorktree } from './runtime-worktree-path-identity'
 
 /** A selector's match: a repo-backed row, or a folder workspace with its derived host (null when underivable). */
@@ -67,12 +67,6 @@ export function resolveKeyedFolderWorkspace(
   }
   const { workspace, hostId, connectionId } = result.value
   return { ...workspace, executionHostId: hostId, connectionId }
-}
-
-/** `folder:<id>` or `id:folder:<id>`. */
-export function folderIdOfSelector(selector: string): string | undefined {
-  const parsed = parseWorkspaceKey(selector.startsWith('id:') ? selector.slice(3) : selector)
-  return parsed?.type === 'folder' ? parsed.folderWorkspaceId : undefined
 }
 
 /** path: and name: name folder workspaces too; branch:, issue: and identity: stay repo-backed. */
@@ -142,7 +136,8 @@ function choiceLines(choices: readonly WorkspaceSelectorChoice[]): string[] {
 export function assertUniqueFolderWorkspaceId(
   catalog: FolderCatalog,
   folderId: string,
-  selector: string
+  selector: string,
+  outcome = 'Nothing was changed.'
 ): void {
   const rows = catalog.folderWorkspaces.filter((folder) => folder.id === folderId)
   if (rows.length < 2) {
@@ -159,7 +154,7 @@ export function assertUniqueFolderWorkspaceId(
     [
       `Folder workspace id "${folderId}" belongs to ${rows.length} folder workspaces in this Orca, so no selector can name one of them:`,
       ...choiceLines(candidates),
-      `Nothing was changed. ${repair}`
+      `${outcome} ${repair}`
     ].join('\n'),
     { selector, candidates, duplicateFolderId: folderId, nextSteps: [repair] }
   )

@@ -1,8 +1,10 @@
 import type { WorktreeSlice } from '../worktree-slice-contract'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import type { AppState } from '../../../types'
-import { cleanupFailedEphemeralVmWorkspace } from '@/lib/ephemeral-vm-failed-create-cleanup'
-import { endWindowCreation } from '@/lib/sidebar-ended-creations'
+import { cleanupFailedEphemeralVmWorkspace } from '@/runtime/ephemeral-vm/ephemeral-vm-failed-create-cleanup'
+import { endWindowCreation } from '@/components/sidebar/sidebar-feed/sidebar-ended-creations'
+import { settleVmCreateCheckoutAfterCleanup } from '@/runtime/ephemeral-vm/vm-create-hidden-checkouts'
+import { cancelVmEnvironmentCheck } from '@/runtime/ephemeral-vm/ephemeral-vm-environment-check-decision'
 import {
   pendingCreationChatDraftScopeKey,
   type PendingWorktreeCreation
@@ -109,6 +111,8 @@ export function createRemovePendingWorktreeCreation(
       }
     })
     if (removedEntry) {
+      // A VM build checking or paused on failed checks stops at once; its create then cleans up the VM.
+      cancelVmEnvironmentCheck(creationId)
       endWindowCreation(creationId)
       const scope = pendingCreationChatDraftScopeKey(creationId)
       releaseNativeChatStagedFiles(scope)
@@ -134,7 +138,7 @@ export function createRemovePendingWorktreeCreation(
         console.error('Failed to remove cancelled provisioned-root project setup:', error),
       reportRuntimeError: (error) =>
         console.error('Failed to clean up cancelled ephemeral VM runtime:', error)
-    })
+    }).then((cleanedUp) => settleVmCreateCheckoutAfterCleanup(creationId, cleanedUp))
   }
 }
 

@@ -1,8 +1,10 @@
+import { stat } from 'node:fs/promises'
+import { basename, join } from 'node:path'
 import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { placeUnshownLiveTerminalsBestEffort } from '../../terminal/adoption/unshown-live-terminal-placement'
 import type { RuntimeTransportMetadata } from '../../../../shared/runtime-bootstrap'
-import { watchRuntimeMetadataOwnership } from '../../runtime-metadata-ownership-watch'
+import { watchRuntimeMetadataOwnership } from './runtime-metadata-ownership-watch'
 import type { RpcTransport } from '../transport'
 import { UnixSocketTransport } from '../unix-socket-transport'
 import { PinnedPortUnavailableError, WebSocketTransport } from '../ws-transport'
@@ -13,7 +15,7 @@ import {
   writeWsFallbackPort
 } from '../ws-fallback-port-store'
 import type { DeviceRegistry } from './pairing/device-registry'
-import type { E2EEKeypair } from '../../e2ee-keypair'
+import type { E2EEKeypair } from './pairing/e2ee-keypair'
 import { UnpairedDeviceAuthThrottle } from '../unpaired-device-auth-throttle'
 import { MobileSocketWiring } from '../mobile-socket-wiring'
 import { createServeNetworkSourceGuard } from './serve-network-source-policy'
@@ -25,9 +27,15 @@ import {
 } from './runtime-rpc-pairing-types'
 import {
   createRuntimeTransportMetadata,
+  runtimeSocketDirs,
   sweepOrphanedRuntimeSockets
 } from './runtime-rpc-socket-metadata'
+import {
+  daemonSocketDirIsTrusted,
+  ensureDaemonSocketDir
+} from '../../../daemon/endpoint/publication/daemon-socket-endpoint-path'
 import { errorMessage } from '../../../../shared/error-message'
+import { logClientConnection } from './runtime-rpc-client-connection-log'
 import {
   loadHostDescriptor,
   publishHostDescriptor
@@ -39,17 +47,33 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
       return
     }
 
-    // Sweep sockets orphaned by SIGKILL/OOM; Windows pipes leave no files.
-    if (this.platform !== 'win32') {
-      sweepOrphanedRuntimeSockets(this.userDataPath, this.pid)
-    }
-
     const transportMeta = createRuntimeTransportMetadata(
       this.userDataPath,
       this.pid,
       this.platform,
       this.runtime.getRuntimeId()
     )
+
+    // Verify a relocated dir's owner before anything lists or unlinks inside it.
+    if (transportMeta.kind === 'unix') {
+      ensureDaemonSocketDir(transportMeta.endpoint)
+    }
+
+    // Sweep sockets orphaned by SIGKILL/OOM; Windows pipes leave no files.
+    if (this.platform !== 'win32') {
+      for (const dir of runtimeSocketDirs(this.userDataPath)) {
+        if (
+          dir === this.userDataPath ||
+          ((await stat(dir).then(
+            () => true,
+            () => false
+          )) &&
+            daemonSocketDirIsTrusted(join(dir, basename(transportMeta.endpoint))))
+        ) {
+          sweepOrphanedRuntimeSockets(dir, this.pid)
+        }
+      }
+    }
 
     const socketTransport = new UnixSocketTransport({
       endpoint: transportMeta.endpoint,
@@ -259,6 +283,7 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
         this.handleWebSocketBinaryMessage(bytes, socket.ws)
       },
       onReady: (socket) => {
+        logClientConnection('connected', socket)
         if (socket.transport.transport === 'direct') {
           this.authenticatedSourceRecorder.note(socket.transport.sourceClass)
         }
@@ -290,6 +315,7 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
         void this.runtime.stagedFileSaves?.abortConnection(socket.connectionId)
         this.binaryMessageRouter.deleteConnection(socket.connectionId)
         this.declaredDesktopClients.forget(socket.connectionId)
+        logClientConnection('disconnected', socket)
         if (!hasOtherConnections) {
           this.runtime.onClientDisconnected(socket.device.clientId)
         }

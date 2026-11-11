@@ -44,6 +44,9 @@ import {
 import { queuedSendAnswer } from '../delivery/structured-agent-session-queued-send-answer'
 import { STOP_COMMAND_RECEIPT } from './structured-agent-session-stop-acceptance'
 import { runTargetedCancel } from './structured-agent-session-targeted-cancel'
+import { journalRowReceiptResult } from './structured-agent-session-journal-row-receipt'
+
+export { journalRowReceiptResult }
 import type { JournalOperationReceipt } from '../../agent-session-journal/writing/journal-row-writer'
 import type { CommandReceiptResult } from '../../agent-session-journal/writing/command-receipt-schema'
 import type { JournalRow } from '../../agent-session-journal/durable-rows/journal-row-schema'
@@ -91,16 +94,6 @@ export type MutationCommandReceipt<TValue> = {
   result: (row: JournalRow | undefined) => CommandReceiptResult
   /** Commit a standalone receipt before answering a row-free result; null records nothing. */
   unwritten?: (value: TValue, ctx: AgentSessionTurnContext) => CommandReceiptResult | null
-}
-
-export function journalRowReceiptResult(
-  row: JournalRow | undefined,
-  ...kinds: JournalRow['kind'][]
-): CommandReceiptResult {
-  if (!row || !kinds.includes(row.kind)) {
-    throw new Error(`an accepted command requires its ${kinds.join(' or ')} row`)
-  }
-  return { kind: 'journal-row', epoch: row.epoch, sequence: row.seq }
 }
 
 function submissionOrDraftReceipt<TValue>(clientMessageId: string): MutationCommandReceipt<TValue> {

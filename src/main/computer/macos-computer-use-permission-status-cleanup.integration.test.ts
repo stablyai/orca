@@ -3,12 +3,12 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawnProcess } from '@orca/process-host'
-import type { ChildProcessHandle } from '@orca/process-host/process-spec'
+import type { ChildProcess } from 'node:child_process'
 import { afterEach, describe, expect, it } from 'vitest'
 import { stopMacOSPermissionStatusHelper } from './macos-computer-use-permission-status-cleanup'
 
 describe.skipIf(process.platform !== 'darwin')('real permission status helper cleanup', () => {
-  const children: ChildProcessHandle[] = []
+  const children: ChildProcess[] = []
   const directories: string[] = []
 
   afterEach(async () => {
@@ -27,7 +27,7 @@ describe.skipIf(process.platform !== 'darwin')('real permission status helper cl
     )
   })
 
-  async function startFixture(executablePath: string, args: string[]): Promise<ChildProcessHandle> {
+  async function startFixture(executablePath: string, args: string[]): Promise<ChildProcess> {
     const child = spawnProcess({
       program: process.execPath,
       args: [

@@ -28,7 +28,7 @@ export const getTerminalAdvancedSearchEntries = createLocalizedCatalog(() => [
     keywords: getTerminalLimitSearchKeywords()
   },
   {
-    title: translate('auto.components.settings.terminal.search.7674e758e1', 'Scrollback Rows'),
+    title: translate('auto.components.settings.terminal.search.edd38f8bb8', 'Scrollback rows'),
     description: translate(
       'auto.components.settings.terminal.search.f7d56b6281',
       'Retained desktop terminal rows.'
@@ -45,7 +45,7 @@ export const getTerminalAdvancedSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
-    title: translate('auto.components.settings.terminal.search.957a0203fc', 'Word Separators'),
+    title: translate('auto.components.settings.terminal.search.10344a316c', 'Word separators'),
     description: translate(
       'auto.components.settings.terminal.search.3ab64c47d8',
       'Characters treated as word boundaries for double-click selection.'
@@ -113,40 +113,6 @@ export const getTerminalMacYenSearchEntries = createLocalizedCatalog(() => [
       ...translateSearchKeyword('auto.components.settings.terminal.search.d8d6f7a3c5', 'macos'),
       ...translateSearchKeyword('auto.components.settings.terminal.search.b495dc6a9f', 'jis'),
       ...translateSearchKeyword('auto.components.settings.terminal.search.4cec42dbf7', 'intl')
-    ]
-  }
-])
-
-export const getTerminalConfigImportSearchEntries = createLocalizedCatalog(() => [
-  {
-    title: translate('auto.components.settings.terminal.search.a979df0083', 'Import from Ghostty'),
-    description: translate(
-      'auto.components.settings.terminal.search.73e9422f19',
-      'One-time import of supported Ghostty terminal settings.'
-    ),
-    keywords: [
-      // Keep product names searchable without translation.
-      'Ghostty',
-      'ghostty',
-      ...translateSearchKeyword('auto.components.settings.terminal.search.fd752b3cac', 'import'),
-      ...translateSearchKeyword('auto.components.settings.terminal.search.f66a7cf715', 'terminal'),
-      ...translateSearchKeyword('auto.components.settings.terminal.search.2ade3ea490', 'config'),
-      ...translateSearchKeyword('auto.components.settings.terminal.search.10f9fb6fea', 'settings')
-    ]
-  },
-  {
-    title: translate('auto.components.settings.terminal.search.kitty_import', 'Import from Kitty'),
-    description: translate(
-      'auto.components.settings.terminal.search.kitty_import_description',
-      'One-time import of supported settings from kitty.conf.'
-    ),
-    keywords: [
-      // Keep product names searchable without translation.
-      'Kitty',
-      'kitty',
-      'kitty.conf',
-      ...translateSearchKeyword('auto.components.settings.terminal.search.fd752b3cac', 'import'),
-      ...translateSearchKeyword('auto.components.settings.terminal.search.2ade3ea490', 'config')
     ]
   }
 ])

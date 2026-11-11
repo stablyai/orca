@@ -4,7 +4,7 @@ import {
 } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import {
   selectFolderWorkspaces,
   selectWorktreesByRepo
@@ -13,7 +13,7 @@ import {
   getAttachedWorktreesForFolderWorkspace,
   attachedWorktreeOwnerKey
 } from './folder-workspace-attached-worktrees'
-import { resolveReviewRepository } from '@/lib/review-owner'
+import { resolveReviewRepository } from '@/lib/source-control/review/review-owner'
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { OverlayActivityOwner } from '@/components/ui/use-overlay-focus-scope'
@@ -26,10 +26,13 @@ import {
   SourceControlScopeProvider,
   type SourceControlScope
 } from './source-control/panel/worktree-scope'
+import { SourceControlHeaderOverflowMenu } from './source-control/panel/header-overflow-menu'
+import { SourceControlHeaderActionsSlot } from './source-control/panel/header-actions-slot'
 import { useWorktreeGitStatusObservation } from './source-control/sync/use-worktree-git-status-observation'
 import { useSourceControlWatchConsumer } from '@/hooks/source-control-watch-consumers'
 import { useSectionOnScreen } from './source-control/panel/section-viewport-presence'
 import { sourceControlFileWatchRuntimeEnvironmentId } from './source-control/sync/worktree-git-owner-target'
+import { FolderWorkspaceEmptyState } from './folder-workspace-empty-state'
 import {
   FOLDER_WORKTREE_CARD_CLASS,
   FolderWorktreeSectionHeader
@@ -111,6 +114,7 @@ const WorktreeSection = memo(
         : null
     )
     const panel = useMemo(() => <SourceControlPanel />, [])
+    const [actionsSlot, setActionsSlot] = useState<HTMLDivElement | null>(null)
     const identity = getWorktreeGitIdentityDisplay(owner.worktree)
     return (
       <section
@@ -130,8 +134,15 @@ const WorktreeSection = memo(
           behind={remote?.behind}
           changeCount={entries.length}
           expanded={isExpanded}
+          showBranchInHeader={!bodyShown || !bodyMounted || isFolderRepo(owner.repo)}
+          actions={
+            isExpanded && (!bodyShown || !bodyMounted || isFolderRepo(owner.repo)) ? (
+              <SourceControlHeaderOverflowMenu worktree={owner.worktree} />
+            ) : null
+          }
           onToggle={() => setExpanded(!isExpanded)}
           onOpen={() => useAppStore.getState().setActiveWorktree(id, owner.executionHostId)}
+          actionsSlotRef={setActionsSlot}
         />
         {isExpanded &&
           (!connected ? (
@@ -153,9 +164,11 @@ const WorktreeSection = memo(
           // A read error renders the body's existing failure banner with Retry.
           <div hidden={!bodyShown}>
             <OverlayActivityOwner.Provider value={onOverlayActivity}>
-              <SourceControlScopeProvider owner={owner} active={bodyActive}>
-                {panel}
-              </SourceControlScopeProvider>
+              <SourceControlHeaderActionsSlot.Provider value={bodyShown ? actionsSlot : null}>
+                <SourceControlScopeProvider owner={owner} active={bodyActive}>
+                  {panel}
+                </SourceControlScopeProvider>
+              </SourceControlHeaderActionsSlot.Provider>
             </OverlayActivityOwner.Provider>
           </div>
         )}
@@ -258,20 +271,18 @@ export default function FolderWorkspaceSourceControlPanel() {
         </Tooltip>
       </div>
       {owners.length === 0 ? (
-        <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
-          <div className="text-sm font-medium">
-            {t(
-              'auto.components.rightSidebar.FolderWorkspaceWorktreesPanel.emptyTitle',
-              'No attached worktrees yet'
-            )}
-          </div>
-          <div className="mt-2 max-w-64 text-xs leading-5 text-muted-foreground">
-            {t(
-              'auto.components.rightSidebar.FolderWorkspaceWorktreesPanel.emptyCopy',
-              'Worktrees created from this workspace will show up here.'
-            )}
-          </div>
-        </div>
+        <FolderWorkspaceEmptyState
+          folderWorkspace={resolution.folderWorkspace ?? null}
+          showRepoActions={resolution.owners.length === 0}
+          title={t(
+            'auto.components.rightSidebar.FolderWorkspaceWorktreesPanel.emptyTitle',
+            'No attached worktrees yet'
+          )}
+          copy={t(
+            'auto.components.rightSidebar.FolderWorkspaceWorktreesPanel.emptyCopy',
+            'Worktrees created from this workspace will show up here.'
+          )}
+        />
       ) : (
         <div
           ref={setScrollRoot}

@@ -3,13 +3,13 @@ import {
   formatOrcaSessionAddress,
   type OrcaSessionId
 } from '../../../../../shared/orca-session-address'
-import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../../../shared/orchestration-session-caller-codes'
+import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../../../shared/orchestration/orchestration-session-caller-codes'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import type { AgentLaunchModeReceipt as WorkerStartModeReceipt } from '../../../../../shared/agent-launch/contracts/agent-launch-intent'
 import { observeChatAssignee } from '../../../orchestration/workers/lifecycle/chat-assignee'
 import type { OrchestrationDb } from '../../../orchestration/db/orchestration-db'
 import { OrchestrationError } from '../../../orchestration/orchestration-error'
-import type { OrchestrationPartyIdentity as OrchestrationParty } from '../../../../../shared/orchestration-party-identity'
+import type { OrchestrationPartyIdentity as OrchestrationParty } from '../../../../../shared/orchestration/mailbox/orchestration-party-identity'
 import { readAgentSessionRecordStore } from '../../../orchestration/addressing/session-lineage/structured-session-lineage'
 import { refuseUndeliverableSessionRecipient } from './messaging/session-recipient'
 

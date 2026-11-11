@@ -1,7 +1,7 @@
 import { Buffer } from 'node:buffer'
 import { describe, expect, it, vi } from 'vitest'
 
-import { decodeBrowserScreencastFrame } from '../../../../shared/browser-screencast-protocol'
+import { decodeBrowserScreencastFrame } from '../../../../shared/browser/screencast/browser-screencast-protocol'
 
 import { startBrowserScreencast } from './browser-screencast-stream'
 import { createMockScreencastWebContents } from './browser-screencast-web-contents-test-double'
@@ -70,6 +70,7 @@ async function startOversizedStream(guest: ReturnType<typeof createGuest>, onFra
     deviceScaleFactor: 2,
     everyNthFrame: 1,
     minFrameIntervalMs: 0,
+    holdPaint: () => () => {},
     onFrame
   })
 }

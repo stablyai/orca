@@ -5,7 +5,7 @@ import {
 import { defineMethod, defineStreamingMethod } from '../../core'
 import { bindStructuredAgentSessionStream } from '../structured-sessions/subscriptions/structured-agent-session-status-stream'
 import { TerminalViewClaudeAgent } from '../../../../../shared/rpc-contract/terminal-unary-params'
-import { agentHookServer } from '../../../../agent-hooks/server'
+import { agentHookServer } from '../../../../agent-hooks/server/agent-hook-server'
 import { assertTerminalAgentSendable } from '../../terminal-agent-send-guard'
 import {
   assertTerminalSendExactPtyBinding,

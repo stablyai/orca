@@ -117,6 +117,8 @@ export const workspaceCreatedSchema = z
 
 export const agentStartedSchema = z
   .object({
+    semantics_version: z.literal(2).optional(),
+    backend: z.enum(['pty', 'structured']).optional(),
     agent_kind: agentKindSchema,
     launch_source: launchSourceSchema,
     request_kind: requestKindSchema,

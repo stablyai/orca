@@ -5,7 +5,7 @@ const { owner } = vi.hoisted(() => {
   }
   return { owner }
 })
-vi.mock('@/lib/worktree-operation-route', () => ({
+vi.mock('@/lib/workspace/ownership/worktree-operation-route', () => ({
   resolveWorktreeOperationRoute: () =>
     owner.current.kind === 'local'
       ? { executionHostId: 'local', runtimeEnvironmentId: null }
@@ -21,7 +21,7 @@ import {
   recordQuickOpenFileVisit,
   quickOpenHistoryScope,
   readQuickOpenHistory
-} from '@/lib/quick-open-file-history'
+} from '@/lib/files/search/quick-open-file-history'
 import type { AppState } from '@/store/types'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 

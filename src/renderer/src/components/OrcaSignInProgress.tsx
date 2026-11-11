@@ -2,8 +2,9 @@ import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from './ui/button'
 import { translate } from '@/i18n/i18n'
-import { cn } from '@/lib/utils'
-import { useAppStore } from '../store'
+import { useTranslate } from '@/i18n/use-translate'
+import { cn } from '@/lib/class-names'
+import { useAppStore } from '../store/index'
 
 async function copySignInLink(link: string): Promise<void> {
   try {
@@ -22,6 +23,7 @@ export function OrcaSignInButton({
   disabled,
   ...props
 }: Omit<React.ComponentProps<typeof Button>, 'onClick' | 'type'>): React.JSX.Element {
+  const t = useTranslate()
   const connect = useAppStore((state) => state.connectCurrentOrcaProfile)
   const signingIn = useAppStore((state) => Boolean(state.orcaProfileSignInProgress))
   return (
@@ -34,7 +36,7 @@ export function OrcaSignInButton({
       {signingIn ? (
         <>
           <Loader2 className="animate-spin" />
-          {translate('auto.components.OrcaSignInProgress.signingIn', 'Signing in…')}
+          {t('auto.components.OrcaSignInProgress.signingIn', 'Signing in…')}
         </>
       ) : (
         children
@@ -48,6 +50,7 @@ export function OrcaSignInWaitNotice({
 }: {
   className?: string
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const link = useAppStore((state) => state.orcaProfileSignInProgress?.link)
   if (!link) {
     return null
@@ -61,14 +64,11 @@ export function OrcaSignInWaitNotice({
       )}
     >
       <span className="pr-2">
-        {translate(
-          'auto.components.OrcaSignInProgress.waiting',
-          'Waiting for sign-in in your browser'
-        )}
+        {t('auto.components.OrcaSignInProgress.waiting', 'Waiting for sign-in in your browser')}
       </span>
       <span aria-hidden>·</span>
       <Button type="button" variant="link" size="xs" onClick={() => void copySignInLink(link)}>
-        {translate('auto.components.OrcaSignInProgress.copyLink', 'Copy sign-in link')}
+        {t('auto.components.OrcaSignInProgress.copyLink', 'Copy sign-in link')}
       </Button>
       <span aria-hidden>·</span>
       <Button
@@ -77,7 +77,7 @@ export function OrcaSignInWaitNotice({
         size="xs"
         onClick={() => void window.api.orcaProfiles.cancelSignIn().catch(() => {})}
       >
-        {translate('auto.components.OrcaSignInProgress.cancel', 'Cancel')}
+        {t('auto.components.OrcaSignInProgress.cancel', 'Cancel')}
       </Button>
     </div>
   )

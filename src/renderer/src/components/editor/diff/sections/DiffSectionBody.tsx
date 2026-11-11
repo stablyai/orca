@@ -1,10 +1,10 @@
 import { DiffTooLargeNotice } from '../large-files/DiffTooLargeNotice'
 import { Suspense, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import type { editor } from 'monaco-editor'
-import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
+import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import { AlertCircle, RefreshCw } from 'lucide-react'
 import { DiffEditor, type DiffOnMount } from '@monaco-editor/react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { Button } from '@/components/ui/button'
 import { combinedDiffSectionScrollbarOptions } from '../monaco-view/diff-editor-scrollbar-options'
 import { isCombinedDiffSizeUnknown } from '../../combined-diff/load-sections/combined-diff-on-demand-load'
@@ -28,7 +28,8 @@ import {
 } from '@/lib/monaco-languages/plugin-syntax-editor-options'
 import { useMonacoTheme } from '@/hooks/use-monaco-theme'
 import { wholeFileDiffTintClass } from '../monaco-view/whole-file-diff-tint'
-import { monacoTypographyOptions, type EditorTypography } from '@/lib/editor-typography'
+import { monacoTypographyOptions } from '@/lib/editor/appearance/editor-typography'
+import type { EditorTypography } from '../../../../../../shared/editor/editor-typography'
 
 const ImageDiffViewer = lazy(() => import('../large-files/ImageDiffViewer'))
 

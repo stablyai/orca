@@ -29,7 +29,7 @@ import { cleanupLocalOrphanedWorktreeDirectory } from '../../../workspaces/remov
 import { recoverPartialLocalWorktreeRemoval } from '../../../workspaces/removal/local-worktree-removal-recovery'
 import { findRegisteredDeletableWorktree } from '../../../workspaces/removal/worktree-removal-safety'
 import { CLIENT_REMOVAL_HOME } from '../../../workspaces/removal/worktree-removal-home-guard'
-import type { RuntimeStore } from '../../runtime-store-contract'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import type { RuntimeWorktreeRemovalTarget } from '../catalog/runtime-worktree-selection'
 import {
   removesInBackground,
@@ -101,7 +101,8 @@ async function acceptRuntimeRegisteredLocalWorktreeRemoval(args: {
       canonicalPath,
       repo,
       undefined,
-      args.hasLocalOptions ? localOptions : undefined
+      args.hasLocalOptions ? localOptions : undefined,
+      { identity: { worktreeId: args.target.id } }
     )
     archiveHookOverride = gateWorktreeRemovalOnArchiveHook({
       worktreePath: canonicalPath,

@@ -9,8 +9,8 @@ import {
   getEditorViewLanguage,
   getMarkdownViewModes
 } from '../../view-mode/markdown-preview-controls'
-import type { FileWriteResult } from '../../../../../../shared/file-write-disk-precondition'
-import type { LocalFileAccess } from '../../../../../../shared/local-file-access'
+import type { FileWriteResult } from '../../../../../../shared/file-write/file-write-disk-precondition'
+import type { LocalFileAccess } from '../../../../../../shared/file-access/local-file-access'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import { writeRuntimeFile } from '@/runtime/files/mutations/runtime-file-mutation-client'
 import { writeRuntimeTerminalArtifactFile } from '@/runtime/files/grants/runtime-terminal-artifact-write'

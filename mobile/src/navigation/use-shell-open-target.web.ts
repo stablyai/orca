@@ -7,7 +7,7 @@ import { store } from 'expo-router/build/global-state/router-store'
 import type { BridgeRpcClient } from '../mobile-web-shell/bridge/bridge-rpc-client'
 import type { BridgeInitRoute } from '../mobile-web-shell/bridge/bridge-init-route'
 import { BRIDGE_OPEN_ROUTE_PARAM } from '../mobile-web-shell/bridge/bridge-route-update'
-import { usePageBridgeClient } from '../transport/client-context.web'
+import { usePageBridgeClient } from '../transport/connection/client-context.web'
 import { createRefusalReporter, handOffRoute, servedHere } from './route-handoff.web'
 
 type StackRouterFactory = typeof StackRouter

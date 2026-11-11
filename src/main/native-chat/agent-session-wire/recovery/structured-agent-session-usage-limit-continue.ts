@@ -1,23 +1,24 @@
 import { AgentSessionPreDispatchError } from '../operations/structured-agent-session-operation-settlement'
-import { createHash, randomUUID } from 'node:crypto'
+import { randomUUID } from 'node:crypto'
 import {
   isNativeChatUsageLimitCutSchedulable,
-  latestNativeChatUsageLimitCut,
-  NATIVE_CHAT_USAGE_LIMIT_CONTINUE_MESSAGE,
-  type NativeChatUsageLimitCut
+  NATIVE_CHAT_USAGE_LIMIT_CONTINUE_MESSAGE
 } from '../../../../shared/native-chat/native-chat-usage-limit-cut'
+import {
+  USAGE_LIMIT_CONTINUE_CHAIN_LIMIT,
+  usageLimitContinueIdentity as identity,
+  usageLimitContinueMessageId,
+  usageLimitContinueTag,
+  type HostUsageLimitCut
+} from './structured-agent-session-usage-limit-chain'
 import { structuredAgentSessionMessageSendMutation } from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import type { AgentSessionStatusSummary } from '../../../../shared/agent-session/agent-session-wire'
-import { restoreJournal } from '../../agent-session-journal/replay/journal-open'
-import { renderJournalStatus } from '../../agent-session-journal/projection/journal-public-read'
-import { journalInputOrder } from '../../agent-session-journal/input-order/journal-input-order'
 import type { StructuredAgentSessionHostDeps } from '../host/structured-agent-session-host-types'
-import type Database from '../../../sqlite/sync-database'
 import type { AgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store'
 import type { sendStructuredAgentSessionTurn } from '../operations/structured-agent-session-host-mutations'
 import { RestartContinuationSupersededError } from './structured-agent-session-restart-continuation'
 
-type Cut = NativeChatUsageLimitCut & { resetsAt: number; turnEndedAt: number }
+type Cut = HostUsageLimitCut & { resetsAt: number; turnEndedAt: number }
 type Attempt = { identity: string; count: number; at: number; unconfirmed?: boolean }
 type Deps = {
   host: Pick<StructuredAgentSessionHostDeps, 'usageLimitAutoContinue' | 'logger'> & {
@@ -32,31 +33,15 @@ type Deps = {
   }
   sessions: ReadonlyMap<string, unknown>
   /** Reads an unopened chat's saved cut; history-sized, so the sweep budgets it. */
-  readSavedCut: (id: string) => NativeChatUsageLimitCut | null
+  readSavedCut: (id: string) => HostUsageLimitCut | null
   serialize: <T>(id: string, run: () => Promise<T>) => Promise<T>
   send: (
     params: Parameters<typeof sendStructuredAgentSessionTurn>[2]
   ) => ReturnType<typeof sendStructuredAgentSessionTurn>
-  readLoadedCut: (id: string) => NativeChatUsageLimitCut | null
+  readLoadedCut: (id: string) => HostUsageLimitCut | null
   publish: (id: string) => void
   now: () => number
 }
-
-/** Reads a chat's saved conversation without opening it, as main does for unopened chats. */
-export function readSavedUsageLimitCut(
-  db: Database.Database,
-  id: string
-): NativeChatUsageLimitCut | null {
-  const load = restoreJournal(db, id)
-  const snapshot =
-    load && !load.newer && !load.damage
-      ? renderJournalStatus(load.state, journalInputOrder(load.state))
-      : null
-  return snapshot ? latestNativeChatUsageLimitCut(snapshot.items, snapshot.submissions) : null
-}
-
-const identity = (cut: NativeChatUsageLimitCut): string =>
-  JSON.stringify([cut.turnItemId, cut.resetsAt])
 
 /** Scheduling is derived from the current cut; only a person's cancellation survives restart. */
 export class StructuredAgentSessionUsageLimitContinue {
@@ -64,7 +49,7 @@ export class StructuredAgentSessionUsageLimitContinue {
   private stopSettings: (() => void) | undefined
   private running = false
   private disposed = false
-  private readonly coldCuts = new Map<string, NativeChatUsageLimitCut | null>()
+  private readonly coldCuts = new Map<string, HostUsageLimitCut | null>()
   /** Pass of each chat's last failed history read; failed reads wait behind unread chats. */
   private readonly coldFailures = new Map<string, number>()
   private readonly attempts = new Map<string, Attempt>()
@@ -132,7 +117,7 @@ export class StructuredAgentSessionUsageLimitContinue {
     this.coldFailures.delete(id)
   }
 
-  private readCut(id: string, cold = false): NativeChatUsageLimitCut | null {
+  private readCut(id: string, cold = false): HostUsageLimitCut | null {
     if (this.deps.sessions.has(id)) {
       this.coldCuts.delete(id)
       return this.deps.readLoadedCut(id)
@@ -154,7 +139,8 @@ export class StructuredAgentSessionUsageLimitContinue {
     const state =
       cancel?.turnItemId === cut.turnItemId && cancel.resetsAt === cut.resetsAt
         ? 'cancelled'
-        : attempt?.identity === identity(cut) && (attempt.count >= 5 || attempt.unconfirmed)
+        : cut.chain >= USAGE_LIMIT_CONTINUE_CHAIN_LIMIT ||
+            (attempt?.identity === identity(cut) && (attempt.count >= 5 || attempt.unconfirmed))
           ? 'failed'
           : this.eligible(id, cut)
             ? 'scheduled'
@@ -162,10 +148,11 @@ export class StructuredAgentSessionUsageLimitContinue {
     return { turnItemId: cut.turnItemId, resetsAt: cut.resetsAt, state }
   }
 
-  private eligible(id: string, cut: NativeChatUsageLimitCut): cut is Cut {
+  private eligible(id: string, cut: HostUsageLimitCut): cut is Cut {
     const record = this.deps.host.store.getRecord(id)
     return (
       !this.disposed &&
+      cut.chain < USAGE_LIMIT_CONTINUE_CHAIN_LIMIT &&
       this.deps.host.usageLimitAutoContinue?.isEnabled() === true &&
       isNativeChatUsageLimitCutSchedulable(cut, this.deps.now()) &&
       record !== null &&
@@ -231,8 +218,8 @@ export class StructuredAgentSessionUsageLimitContinue {
         }
       }
       due.sort((a, b) => a.at - b.at || a.cut.resetsAt - b.cut.resetsAt)
-      const next = due[0]
-      if (next) {
+      // Every due chat goes this pass; one at a time, since a cold send can start an agent process.
+      for (const next of due) {
         await this.send(next.id, next.cut)
       }
     } catch (error) {
@@ -270,12 +257,16 @@ export class StructuredAgentSessionUsageLimitContinue {
       count: (this.attempts.get(id)?.count ?? 0) + 1,
       at
     }
-    const tag = createHash('sha256').update(identity(cut)).digest('hex').slice(0, 16)
+    const tag = usageLimitContinueTag(cut)
     try {
       const result = await this.deps.send({
         ...structuredAgentSessionMessageSendMutation({
           sessionId: id,
-          clientOperationId: `${Math.trunc(at).toString().padStart(13, '0')}-${tag}${randomUUID().replaceAll('-', '').slice(0, 16)}`,
+          clientOperationId: usageLimitContinueMessageId(
+            at,
+            tag,
+            randomUUID().replaceAll('-', '').slice(0, 16)
+          ),
           expectedRuntimeFence: record.lease.runtimeFence,
           body: {
             kind: 'message',

@@ -1,17 +1,17 @@
 import type { BundledSkillPlan } from '../../../../../shared/bundled-skill-plan'
 import { useCallback, useState } from 'react'
 import { OrchestrationSkillPromptDialog } from './OrchestrationSkillPromptDialog'
-import { buildSkillCommandForRuntime } from '../../../lib/skill-runtime-command'
-import { ORCHESTRATION_SKILL_INSTALL_COMMAND } from '@/lib/agent-feature-install-commands'
+import { buildSkillCommandForRuntime } from '../../../lib/skills/runtime/skill-runtime-command'
+import { ORCHESTRATION_SKILL_INSTALL_COMMAND } from '@/lib/skills/installation/agent-feature-install-commands'
 import { ArrowRightLeft, GitBranch, ListChecks, Workflow, type LucideIcon } from 'lucide-react'
-import { ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-skill-names'
-import type { SkillUsageExample } from '@/lib/skill-usage-example'
-import { getOrchestrationUsageExamples } from '@/lib/orchestration-usage-examples'
+import { ORCHESTRATION_SKILL_NAME } from '@/lib/skills/installation/agent-feature-skill-names'
+import type { SkillUsageExample } from '@/lib/skills/examples/skill-usage-example'
+import { getOrchestrationUsageExamples } from '@/components/orchestration/setup/orchestration-usage-examples'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkill
-} from '@/hooks/useInstalledAgentSkills'
-import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
+} from '@/hooks/skills/discovery/useInstalledAgentSkills'
+import { useActiveProjectSkillRuntime } from '@/hooks/skills/runtime/useActiveProjectSkillRuntime'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { matchesSettingsSearch } from '../search/settings-search'
 import { useAppStore } from '../../../store/index'
@@ -21,8 +21,8 @@ import { OrchestrationSkillAgentCoverage } from './OrchestrationSkillAgentCovera
 import { SkillUsageExamplesSection } from '../../skills/examples/SkillUsageExamplesSection'
 import { useTranslate } from '@/i18n/use-translate'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import { resolveNestedWorkerMaxDepth } from '../../../../../shared/nested-worker-depth'
-import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
+import { resolveNestedWorkerMaxDepth } from '../../../../../shared/orchestration/workers/nested-worker-depth'
+import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 import { NumberField } from '../form-controls/SettingsFormControls'
 import {
   getNestedWorkerDepthDescription,
@@ -99,7 +99,7 @@ export function OrchestrationPane({
 
   return (
     <SearchableSetting
-      title={t('auto.components.settings.OrchestrationPane.191ac34567', 'Agent Orchestration')}
+      title={t('auto.components.settings.OrchestrationPane.8a94078d05', 'Agent orchestration')}
       description={t(
         'auto.components.settings.OrchestrationPane.2aacdb0517',
         'Coordinate coding agents across handoffs, worktree handovers, and child-agent work.'

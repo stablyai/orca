@@ -7,7 +7,7 @@ import type { RuntimeClientTarget } from '../../../../shared/runtime-client-targ
 import { toRuntimeWorktreeSelector } from '../rpc/targets/runtime-worktree-selector'
 import type { RuntimeFileOperationArgs } from './runtime-file-client-types'
 import { chatScratchFileAddress } from './addressing/runtime-chat-scratch-file-address'
-import type { LocalFileAccess } from '../../../../shared/local-file-access'
+import type { LocalFileAccess } from '../../../../shared/file-access/local-file-access'
 
 // Why local only: an SSH read is the remote host's to check, and its relay never sees this field.
 export function localAccess(

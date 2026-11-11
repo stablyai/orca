@@ -14,13 +14,13 @@ import { FilePathCursorTooltip, splitTrailingSegment } from '@/components/file-p
 import {
   parseQuickOpenQueryTarget,
   isQuickOpenAbsolutePath
-} from '../../../shared/quick-open-query-target'
+} from '../../../shared/quick-open/quick-open-query-target'
 import { openQuickOpenFile } from './quick-open-file-navigation'
 import { rankQuickOpenFilesWithHistory } from './quick-open-history-ranking'
-import { useQuickOpenHistory } from '@/lib/quick-open-file-history'
+import { useQuickOpenHistory } from '@/lib/files/search/quick-open-file-history'
 import { useRuntimeFileListForWorktree } from '@/components/quick-open-file-list'
 import { useModalReturnFocus } from '@/hooks/useModalReturnFocus'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   parseQuickOpenInstallRgGuidance,
   QuickOpenInstallRgGuidance
@@ -56,6 +56,7 @@ export default function QuickOpen(): React.JSX.Element | null {
 }
 
 function QuickOpenContent({ visible }: { visible: boolean }): React.JSX.Element {
+  const t = useTranslate()
   const closeModal = useAppStore((s) => s.closeModal)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const activeWorktree = useActiveWorktree()
@@ -171,11 +172,11 @@ function QuickOpenContent({ visible }: { visible: boolean }): React.JSX.Element 
       }}
       onOpenAutoFocus={handleOpenAutoFocus}
       onCloseAutoFocus={handleCloseAutoFocus}
-      title={translate('auto.components.QuickOpen.ec31e058f7', 'Go to file')}
-      description={translate('auto.components.QuickOpen.9e97f08d0f', 'Search for a file to open')}
+      title={t('auto.components.QuickOpen.ec31e058f7', 'Go to file')}
+      description={t('auto.components.QuickOpen.9e97f08d0f', 'Search for a file to open')}
     >
       <CommandInput
-        placeholder={translate('auto.components.QuickOpen.1cb6ef47b7', 'Go to file...')}
+        placeholder={t('auto.components.QuickOpen.1cb6ef47b7', 'Go to file...')}
         value={query}
         onValueChange={(value) => {
           invalidate()
@@ -198,7 +199,7 @@ function QuickOpenContent({ visible }: { visible: boolean }): React.JSX.Element 
         ) : null}
         {loading && !absoluteQuery ? (
           <div className="py-6 text-center text-sm text-muted-foreground">
-            {translate('auto.components.QuickOpen.722a21e1a8', 'Loading files...')}
+            {t('auto.components.QuickOpen.722a21e1a8', 'Loading files...')}
           </div>
         ) : loadError && !absoluteQuery ? (
           (() => {
@@ -217,7 +218,7 @@ function QuickOpenContent({ visible }: { visible: boolean }): React.JSX.Element 
           })()
         ) : filtered.length === 0 ? (
           <CommandEmpty>
-            {translate('auto.components.QuickOpen.74e2e1b3e4', 'No matching files.')}
+            {t('auto.components.QuickOpen.74e2e1b3e4', 'No matching files.')}
           </CommandEmpty>
         ) : (
           filtered.map((item) => {
@@ -256,7 +257,7 @@ function QuickOpenContent({ visible }: { visible: boolean }): React.JSX.Element 
         )}
         {truncated && !loading && !loadError ? (
           <div className="px-3 py-2 text-center text-xs text-muted-foreground">
-            {translate(
+            {t(
               'quickOpen.moreMatchesAvailable',
               'More matches may be available. Refine your search to narrow the results.'
             )}
@@ -265,18 +266,18 @@ function QuickOpenContent({ visible }: { visible: boolean }): React.JSX.Element 
       </CommandList>
       <div className="flex items-center justify-end border-t border-border/60 px-3.5 py-2.5 text-[11px] text-muted-foreground/82">
         <div className="flex items-center gap-2">
-          <FooterKey>{translate('auto.components.QuickOpen.250e5b2dfb', 'Enter')}</FooterKey>
-          <span>{translate('auto.components.QuickOpen.61b1c871a6', 'Open')}</span>
-          <FooterKey>{translate('auto.components.QuickOpen.95fccbae88', 'Esc')}</FooterKey>
-          <span>{translate('auto.components.QuickOpen.73b2c581f1', 'Close')}</span>
+          <FooterKey>{t('auto.components.QuickOpen.250e5b2dfb', 'Enter')}</FooterKey>
+          <span>{t('auto.components.QuickOpen.61b1c871a6', 'Open')}</span>
+          <FooterKey>{t('auto.components.QuickOpen.95fccbae88', 'Esc')}</FooterKey>
+          <span>{t('auto.components.QuickOpen.73b2c581f1', 'Close')}</span>
           <FooterKey>↑↓</FooterKey>
-          <span>{translate('auto.components.QuickOpen.1dbd3f59ff', 'Move')}</span>
+          <span>{t('auto.components.QuickOpen.1dbd3f59ff', 'Move')}</span>
         </div>
       </div>
       {/* Announce result count changes to assistive technology. */}
       <div aria-live="polite" className="sr-only">
         {deferredQuery.trim()
-          ? translate('auto.components.QuickOpen.filesFound', '{{count}} files found', {
+          ? t('auto.components.QuickOpen.filesFound', '{{count}} files found', {
               count: filtered.length,
               defaultValue_one: '{{count}} file found'
             })

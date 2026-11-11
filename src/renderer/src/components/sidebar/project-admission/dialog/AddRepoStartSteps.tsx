@@ -4,7 +4,7 @@ import { DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/di
 import { Button } from '@/components/ui/button'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { getAddRepoLocalStartActions } from './add-repo-local-start-actions'
 import { useTranslate } from '@/i18n/use-translate'
 
@@ -110,9 +110,17 @@ export function AddRepoLocalStartStep({
   const visibleSelectedKind = actionsUnavailable ? null : selectedKind
 
   useEffect(() => {
-    if (!actionsUnavailable) {
-      browseActionRef.current?.focus()
+    const browseAction = browseActionRef.current
+    // Another dialog's trap would pull early focus back; AddRepoDialogChrome focuses Browse once this dialog's trap mounts.
+    const focusedDialog = document.activeElement?.closest('[role="dialog"]')
+    if (
+      actionsUnavailable ||
+      !browseAction ||
+      (focusedDialog && !focusedDialog.contains(browseAction))
+    ) {
+      return
     }
+    browseAction.focus()
   }, [actionsUnavailable])
 
   const handleArrowNavigation = (event: React.KeyboardEvent<HTMLDivElement>): void => {
@@ -252,6 +260,7 @@ const AddRepoPrimaryStartAction = ({
     onFocus={onFocus}
     disabled={disabled}
     data-add-repo-action
+    data-add-repo-initial-focus
     className={cn(
       'h-auto min-h-[3.75rem] w-full justify-start gap-3 whitespace-normal px-3 py-2.5 text-left',
       selected

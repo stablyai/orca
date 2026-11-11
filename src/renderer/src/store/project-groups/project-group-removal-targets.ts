@@ -2,7 +2,7 @@ import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { Repo } from '../../../../shared/repo-types'
 import { getProjectGroupSubtreeIds } from '../../../../shared/project-groups'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
-import { catalogOwnsHost, getProjectGroupHostId } from './project-group-owner-routing'
+import { catalogOwnsHost } from './project-group-owner-routing'
 
 export type ProjectGroupRemovalProject = { id: string; hostId: ExecutionHostId }
 
@@ -24,7 +24,7 @@ export function selectProjectGroupRemovalTargets(
   const ownsRowHost = (rowHostId: string): boolean =>
     hostId ? catalogOwnsHost(hostId, rowHostId) : true
   const ownerGroups = hostId
-    ? projectGroups.filter((group) => ownsRowHost(getProjectGroupHostId(group)))
+    ? projectGroups.filter((group) => ownsRowHost(getRepoExecutionHostId(group)))
     : projectGroups
   const groupExists = ownerGroups.some((group) => group.id === groupId)
   if (!groupExists) {

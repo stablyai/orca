@@ -1,5 +1,5 @@
-import type { OrchestrationCompatibilityEvidence } from '../../../../../../shared/orchestration-compatibility-evidence'
-import type { OrchestrationSessionCaller } from '../../../../orchestration/addressing/orchestration-caller-identity'
+import type { OrchestrationCompatibilityEvidence } from '../../../../../../shared/orchestration/orchestration-compatibility-evidence'
+import type { OrchestrationEntryCaller } from '../../../../orchestration/addressing/orchestration-caller-identity'
 import type { MessageRow } from '../../../../orchestration/db/orchestration-records'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { assertCallerHandleMatchesEvidence, orchestrationCallerIdentity } from '../runs/run-scope'
@@ -10,7 +10,7 @@ export function helperQuestionAnswerer(
   args: {
     question: MessageRow
     from: string | undefined
-    session: OrchestrationSessionCaller | undefined
+    session: OrchestrationEntryCaller | undefined
     evidence: OrchestrationCompatibilityEvidence | undefined
   }
 ): { dispatchId: string; consumerGeneration: number } | undefined {

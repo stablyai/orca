@@ -1,7 +1,7 @@
 // Exercise main-owned moves through the real frame transport and its full-build parity check.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as AgentStatusModule from '@/lib/agent-status'
+import type * as AgentStatusModule from '@/lib/agent-status/aggregation/worktree-agent-status'
 import { useAppStore } from '@/store'
 import { localDesktopSession } from '../../../../shared/workspace-layout/workspace-layout-profile.test-fixture'
 import { GIT_KEY } from '../../../../shared/workspace-layout/workspace-layout-session.test-fixture'
@@ -12,6 +12,7 @@ import { loadMainLayoutModel } from '@/runtime/workspace-layout/testing/main-loa
 import { endLayoutFramePositions } from '@/runtime/workspace-layout/frames/layout-frame-position'
 import { openWorkspaceLayoutFrameSync } from '@/runtime/workspace-layout/frames/workspace-layout-frame-sync'
 import { dropTabThroughLayoutOwner } from './tab-group-layout-owner-commands'
+import { moveTabToNewPaneColumn } from '../tab-bar/tab-move-to-pane-column'
 
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 // Simulate main’s layout-command answers and frames.
@@ -34,7 +35,7 @@ vi.mock(
   })
 )
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
-vi.mock('@/lib/agent-status', async (importOriginal) => {
+vi.mock('@/lib/agent-status/aggregation/worktree-agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
   return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
 })
@@ -153,5 +154,45 @@ describe('a tab move drawn from main’s frame', () => {
     expect(tabOf('tab-unbound').groupId).toBe('group-a')
     expect(useAppStore.getState().activeGroupIdByWorktree[GIT_KEY]).toBe('group-b')
     expect(groupOf('group-a')!.activeTabId).toBe(selected.find(([id]) => id === 'group-a')![1])
+  })
+
+  describe('for a caller that selects the moved tab itself', () => {
+    const completion = () => ({ refused: vi.fn(), moveHere: vi.fn() })
+
+    it('draws the move from main’s frame and leaves selecting it to the caller', async () => {
+      const caller = completion()
+      expect(
+        moveTabToNewPaneColumn({
+          unifiedTabId: 'tab-shell',
+          groupId: 'group-a',
+          direction: 'right',
+          completion: caller
+        })
+      ).toBe('owner')
+      await settle()
+
+      expect(tabOf('tab-shell').groupId).toBe(mainGroupOf('tab-shell').id)
+      expect(tabOf('tab-shell').groupId).not.toBe('group-a')
+      expect(caller.refused).not.toHaveBeenCalled()
+      expect(caller.moveHere).not.toHaveBeenCalled()
+      expect(windowTabWrites()).toBe(0)
+    })
+
+    it('tells the caller when main refuses, and leaves the tab where it was', async () => {
+      layoutApplyTestTransport.answerWith({ refuse: 'group_not_found' })
+      const caller = completion()
+
+      moveTabToNewPaneColumn({
+        unifiedTabId: 'tab-shell',
+        groupId: 'group-a',
+        direction: 'right',
+        completion: caller
+      })
+      await settle()
+
+      expect(caller.refused).toHaveBeenCalledTimes(1)
+      expect(tabOf('tab-shell').groupId).toBe('group-a')
+      expect(windowTabWrites()).toBe(0)
+    })
   })
 })

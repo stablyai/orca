@@ -48,6 +48,7 @@ describe('init and state', () => {
     expect(init.grants.native).toEqual([
       BRIDGE_FAULT_GRANT,
       BRIDGE_RPC_ENVELOPE_GRANT,
+      'hostCatalogs',
       'navigate',
       'storage',
       'haptics',
@@ -247,6 +248,19 @@ describe('init and state', () => {
       pendingPath: 'relay',
       relayHostReachability: 'host-offline'
     })
+  })
+
+  it('tells only a page that reads them that the app is leaving the foreground', () => {
+    const reads = harness()
+    reads.host.receive(clientFrame({ type: 'ready', appInactiveFrames: true }))
+    reads.host.sendAppInactive()
+    expect(reads.last().type).toBe('appInactive')
+
+    const older = harness()
+    older.host.receive(clientFrame({ type: 'ready' }))
+    const sent = older.frames().length
+    older.host.sendAppInactive()
+    expect(older.frames()).toHaveLength(sent)
   })
 
   it('sends no path frame to a page that never said it reads them', () => {

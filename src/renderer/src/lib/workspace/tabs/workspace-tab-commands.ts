@@ -6,6 +6,7 @@ import {
   resolvePinnedTabLabel
 } from '@/store/slices/tabs/closing/pinned-tab-close-guard'
 import { createWorkspaceTabCloseCommands } from '@/components/tab-group/workspace-tab-close-commands'
+import { hasUnsentBrowserNotes } from '@/store/slices/browser/annotations/browser-page-annotation'
 import { captureWorkspaceEmptiedReaction } from '@/components/tab-group/workspace-emptied-reaction'
 import {
   handleSwitchRecentTab,
@@ -14,12 +15,13 @@ import {
   handleSwitchTerminalTab
 } from '@/hooks/ipc-tab-switch'
 import { selectEmptyFloatingWorkspacePanelVisible } from '@/store/workspaces/floating/floating-workspace-panel-selector'
+import { findFocusedSplitLandingGroup } from '@/store/slices/tabs/split-landing-groups'
 import {
   isFloatingWorkspacePanelFocused,
   switchFloatingWorkspaceRecentTab,
   switchFloatingWorkspaceTab
-} from '../../floating-workspace-terminal-actions'
-import { TOGGLE_FLOATING_TERMINAL_EVENT } from '../../floating-terminal'
+} from '../../../components/floating-terminal/floating-workspace-terminal-actions'
+import { TOGGLE_FLOATING_TERMINAL_EVENT } from '../../../components/floating-terminal/floating-terminal'
 import { closeWorkspaceBrowserTab } from '../../browser/workspace/workspace-browser-tab-close'
 import { resolveBrowserWorkspaceOwner } from '../../browser/workspace/browser-workspace-source-resolution'
 
@@ -111,6 +113,21 @@ function resolveCloseTarget(
   return null
 }
 
+// A split landing has no tab to close, so Close collapses the pane.
+function closeFocusedSplitLanding(state: TabState): boolean {
+  const group = findFocusedSplitLandingGroup(state, state.activeWorktreeId)
+  if (group === null) {
+    return false
+  }
+  // Closing a sole chooser empties the workspace, which then lands like a last-tab close.
+  const whenEmptied = captureWorkspaceEmptiedReaction(group.worktreeId)
+  if (!state.closeEmptyGroup(group.worktreeId, group.id)) {
+    return false
+  }
+  whenEmptied()
+  return true
+}
+
 /** Input adapters describe intent; targeting and tab operations live here. */
 export function dispatchWorkspaceTabCommand(command: WorkspaceTabCommand): boolean {
   const state = useAppStore.getState()
@@ -122,6 +139,9 @@ export function dispatchWorkspaceTabCommand(command: WorkspaceTabCommand): boole
       }
       if (isFloatingWorkspacePanelFocused()) {
         return false
+      }
+      if (closeFocusedSplitLanding(state)) {
+        return true
       }
     }
     const target = resolveCloseTarget(state, command.target)
@@ -155,6 +175,11 @@ export function dispatchWorkspaceTabCommand(command: WorkspaceTabCommand): boole
     if ((command.bulk || command.skipEmptyCheck) && tab.isPinned) {
       return true
     }
+    const unsentNotes = tab.contentType === 'browser' && hasUnsentBrowserNotes(state, tab.entityId)
+    // Bulk closes keep a tab holding unsent notes open, as they keep pinned tabs.
+    if (command.bulk && unsentNotes) {
+      return true
+    }
     // Why before the pin guard: its prompt takes focus, and the floating panel's reaction reads focus.
     const whenEmptied =
       command.bulk || command.skipEmptyCheck
@@ -170,7 +195,8 @@ export function dispatchWorkspaceTabCommand(command: WorkspaceTabCommand): boole
       guardPinnedTabClose({
         isPinned: tab.isPinned === true,
         tabLabel: resolvePinnedTabLabel(state, target.worktreeId, tab.id),
-        onClose: close
+        onClose: close,
+        unsentNotes
       })
     }
     return true

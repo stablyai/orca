@@ -2,9 +2,10 @@ import React from 'react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { LinuxPenguinIcon } from '@/components/icons/LinuxPenguinIcon'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { Translate } from '@/i18n/use-translate'
-import { useAppStore } from '@/store'
-import { cn } from '@/lib/utils'
+import { useAppStore } from '@/store/index'
+import { cn } from '@/lib/class-names'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import {
   isWslHostRuntimeEnvironment,
@@ -53,7 +54,8 @@ export function WslHostMark({
   /** Off where the row already has its own identity tooltip. */
   withTooltip?: boolean
 }): React.JSX.Element {
-  const label = wslHostRunsOnLabel(distro)
+  const t = useTranslate()
+  const label = wslHostRunsOnLabel(distro, t)
   if (!withTooltip) {
     return (
       <span

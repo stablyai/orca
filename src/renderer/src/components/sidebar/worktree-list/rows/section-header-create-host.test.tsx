@@ -101,7 +101,10 @@ function headerContext(): SectionHeaderRowContext {
       projectGroupHeaderIndexByGroupId: new Map(),
       projectGroupHeaderBucketByGroupId: new Map(),
       repoHeaderSectionEndByRepoId: new Map(),
-      projectGroupHeaderSectionEndByGroupId: new Map()
+      projectGroupHeaderSectionEndByGroupId: new Map(),
+      rootProjectHeaderKeys: undefined,
+      rootProjectHeaderCountByOccurrenceKey: new Map(),
+      rootProjectHeaderSectionEndByKey: new Map()
     },
     projectActions: {
       getWorktreeVisibilityDefaults: () => undefined,

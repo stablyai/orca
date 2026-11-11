@@ -3,7 +3,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { COMMENT_BODY_NONBLANK_SCAN_MAX_BYTES } from '@/lib/comment-body-submit-state'
+import { COMMENT_BODY_NONBLANK_SCAN_MAX_BYTES } from '@/lib/source-control/review/comments/comment-body-submit-state'
 import { DiffCommentPopover } from './DiffCommentPopover'
 
 const roots: Root[] = []

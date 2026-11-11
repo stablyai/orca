@@ -97,3 +97,8 @@ export function queueNoFolderAtSelector(mock: Mock): void {
     })
   )
 }
+
+/** Answers the folder catalog a cwd selection reads beside worktree.list: no folder workspaces. */
+export function noFolderWorkspacesFixture(): OkFixture {
+  return okFixture('req_folders', { folderWorkspaces: [] })
+}

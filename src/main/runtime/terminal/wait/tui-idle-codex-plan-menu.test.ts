@@ -5,7 +5,7 @@ import {
   createTranscriptPane,
   TRANSCRIPT_PANE_PTY_ID
 } from '../../orca-runtime-tests/agent-transcript-pane-test-harness'
-import { readRuntimeFixture } from '../../agent-transcript-replay-test-harness'
+import { readRuntimeFixture } from './agent-transcript-replay-test-harness'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 
 vi.mock('electron', () => ({

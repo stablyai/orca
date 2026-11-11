@@ -14,7 +14,7 @@ import { Presence } from '../components/AutoHeight'
 import { DisclosureChevron } from '../components/DisclosureChevron'
 import { HostDiagnosticsLink } from '../components/HostDiagnosticsLink'
 import { HostOfflineBanner, useHostOfflineBanner } from '../components/HostOfflineBanner'
-import { isConnectionOutage } from '../transport/connection-health'
+import { isConnectionOutage } from '../transport/connection/connection-health'
 import { HostRouteNoticeBanner } from '../components/HostRouteNoticeBanner'
 import { MobileRepoIcon } from '../components/MobileRepoIcon'
 import type { CollapsingTitle } from '../components/nav-bar/PageTitle'
@@ -27,7 +27,7 @@ import {
   HostWorkspaceListReopen,
   HostWorkspaceListStates
 } from '../worktree/host-workspace-list-states'
-import { getWorktreeDotStatus } from '../worktree/workspace-list-ordering'
+import { getWorktreeDotStatus, hasWorktreeAgentState } from '../worktree/workspace-list-ordering'
 import type { Section, WorkspaceListItem, Worktree } from '../worktree/workspace-list-types'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../../src/shared/repo-badge-color'
 import { getWorktreeCardDetails } from '../../../src/shared/worktree/card-properties'
@@ -95,7 +95,8 @@ export function HostWorkspaceList({
     outage: isConnectionOutage(controller.connectionVerdict),
     forceReconnect: hostId && forceReconnectHost ? () => void forceReconnectHost(hostId) : null,
     // Group headers can stand with no rows under them; that list says "unreachable" in its body.
-    hasData: (controller.feed ? sections.length : displayWorktrees.length) > 0
+    hasData: (controller.feed ? sections.length : displayWorktrees.length) > 0,
+    asOf: catalog.readAt
   })
   const renameDrafts = useHostMutationDrafts()
   const resetTitle = pageTitle?.collapsing.reset
@@ -150,7 +151,7 @@ export function HostWorkspaceList({
         item={item}
         view={view}
         isReadOnly={isReadOnly}
-        status={getWorktreeDotStatus(item)}
+        status={hasWorktreeAgentState(item) ? getWorktreeDotStatus(item) : null}
         repoColor={repoLookById.get(item.repoId)?.color ?? DEFAULT_REPO_BADGE_COLOR}
         repoIcon={repoLookById.get(item.repoId)?.icon ?? null}
         hideRepo={groupBy === 'repo' && !view.showProjectName}

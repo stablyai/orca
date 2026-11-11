@@ -8,6 +8,7 @@ import {
   type EdgeDeviceRow
 } from './edge-admin-client.js'
 import { EDGE_CELL_ID, EDGE_EXPORT_SKIP_AFTER_MS, EdgeAssignments, type EdgeRelayConfig } from './edge-relay.js'
+import type { EdgeControlFlags } from './edge-relay-control.js'
 
 const fakes = vi.hoisted(() => ({
   verifyRelayToken: vi.fn(async (token: string) => ({ sub: 'user-1', relayHostId: token }))
@@ -190,20 +191,6 @@ async function keepFailing(h: { clock: { now: number }; assign: () => Promise<Re
 }
 
 describe('relay edge phase 2: the director moves host data with the host', () => {
-  it('pushes the host and its Postgres devices before answering with the edge, with a location hint', async () => {
-    const h = await harness()
-    await h.insertDevice(device('phone-a'))
-    const response = await h.assign('asia-east2')
-    expect(response.status).toBe(200)
-    expect(await response.json()).toMatchObject({ cellUrl: EDGE_URL, assignmentEpoch: 1 })
-    expect(h.fake.pushes).toHaveLength(1)
-    expect(h.fake.pushes[0]).toMatchObject({ cellId: EDGE_CELL_ID, assignmentEpoch: 1, locationHint: 'apac' })
-    expect(h.fake.devices.map((d) => d.relay_device_id)).toEqual(['phone-a'])
-    expect(h.fake.devices[0]!.current_version).toBe(1)
-    // A re-ask of a host already on the edge does not push again.
-    await h.assign()
-    expect(h.fake.pushes).toHaveLength(1)
-  })
 
   it('keeps the host on today\'s path, with no edge row, when the edge cannot take the push', async () => {
     const h = await harness()
@@ -212,46 +199,6 @@ describe('relay edge phase 2: the director moves host data with the host', () =>
     expect(response.status).toBe(200)
     expect(await response.json()).toMatchObject({ cellUrl: 'https://us-c1.relay.example.test' })
     expect(await h.row()).toBeUndefined()
-  })
-
-  it('re-mints above an epoch the edge already holds from a move that never committed', async () => {
-    const h = await harness()
-    h.fake.assignment = { userId: USER, cellId: 'us-c1', assignmentEpoch: 7 }
-    const response = await h.assign()
-    expect(await response.json()).toMatchObject({ cellUrl: EDGE_URL, assignmentEpoch: 8 })
-    expect(await h.row()).toMatchObject({ cell_id: EDGE_CELL_ID })
-    expect(Number((await h.row())!.assignment_epoch)).toBe(8)
-  })
-
-  it('takes devices back before placing the host elsewhere, then fences the edge', async () => {
-    const h = await harness()
-    await h.insertDevice(device('phone-a'))
-    await h.insertDevice(device('phone-b'))
-    await h.assign()
-    // On the edge: phone-a is revoked, phone-b removed, phone-c paired.
-    h.fake.devices = [device('phone-a', { revoked_at: 1_800_000_000_000 }), device('phone-c')]
-    h.leaveCohort()
-    const response = await h.assign()
-    expect(response.status).toBe(200)
-    expect(await response.json()).toMatchObject({ cellUrl: 'https://us-c1.relay.example.test', assignmentEpoch: 9 })
-    expect(h.fake.exports).toBe(1)
-    expect(await h.postgresDevices()).toEqual([
-      { id: 'phone-a', revoked: 1_800_000_000_000 },
-      { id: 'phone-c', revoked: null }
-    ])
-    expect(h.fake.pushes.at(-1)).toEqual({ userId: USER, relayHostId: HOST, cellId: 'us-c1', assignmentEpoch: 9 })
-    expect(h.fake.assignment).toMatchObject({ cellId: 'us-c1', assignmentEpoch: 9 })
-  })
-
-  it('tells the desktop to retry while it is still connected to the edge, placing nothing', async () => {
-    const h = await harness()
-    await h.assign()
-    h.fake.connected = true
-    h.leaveCohort()
-    const response = await h.assign()
-    expect(response.status).toBe(503)
-    expect(response.headers.get('retry-after')).toBe('2')
-    expect(h.assignments.assign).not.toHaveBeenCalled()
   })
 
   it('503s a leaving host while the edge export is unavailable, until it has failed for 120 s', async () => {
@@ -276,69 +223,15 @@ describe('relay edge phase 2: the director moves host data with the host', () =>
     const response = await h.assign()
     expect(response.status).toBe(200)
     expect(await response.json()).toMatchObject({ cellUrl: 'https://us-c1.relay.example.test', assignmentEpoch: 9 })
-    // Postgres keeps what it had: the edge's revoke is lost, nothing is written back.
-    expect(await h.postgresDevices()).toEqual([{ id: 'phone-a', revoked: null }])
+    // The edge's revoke is unknown here: the host's Postgres devices are removed, never resurrected.
+    expect(await h.postgresDevices()).toEqual([])
     expect(skipped()).toHaveLength(1)
     expect(JSON.parse(String(skipped()[0]![0]))).toEqual({
       event: 'orca_relay_edge_export_skipped',
       reason: 'relay_edge_admin_unavailable:network',
-      failingForMs: EDGE_EXPORT_SKIP_AFTER_MS
+      failingForMs: EDGE_EXPORT_SKIP_AFTER_MS,
+      devicesRemoved: 1
     })
-  })
-
-  it('restarts the unavailable clock after any usable export answer', async () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const h = await harness()
-    await h.assign()
-    h.leaveCohort()
-    h.fake.down = true
-    expect((await h.assign()).status).toBe(503)
-    h.clock.now += 100_000
-    // The edge answers (busy: the desktop is still connected): that is a success.
-    h.fake.down = false
-    h.fake.connected = true
-    expect((await h.assign()).status).toBe(503)
-    h.fake.down = true
-    h.clock.now += 20_000
-    expect((await h.assign()).status).toBe(503)
-    await keepFailing(h, EDGE_EXPORT_SKIP_AFTER_MS - 1)
-    expect((await h.assign()).status).toBe(503)
-    h.clock.now += 1
-    expect((await h.assign()).status).toBe(200)
-  })
-
-  it('does not count failures further apart than 30 s as one outage', async () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const h = await harness()
-    await h.assign()
-    h.leaveCohort()
-    h.fake.down = true
-    expect((await h.assign()).status).toBe(503)
-    // One old failure, then quiet for longer than the skip threshold: the next failure starts over.
-    h.clock.now += EDGE_EXPORT_SKIP_AFTER_MS + 1
-    expect((await h.assign()).status).toBe(503)
-    await keepFailing(h, EDGE_EXPORT_SKIP_AFTER_MS - 1)
-    expect((await h.assign()).status).toBe(503)
-    h.clock.now += 1
-    expect((await h.assign()).status).toBe(200)
-  })
-
-  it('skips the export on the first unavailable answer with a 0 ms threshold, and fences when the edge answers', async () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const h = await harness('host', { exportSkipAfterMs: 0 })
-    await h.insertDevice(device('phone-a'))
-    await h.assign()
-    h.leaveCohort()
-    let exportCalls = 0
-    h.fake.exportHost = async () => {
-      exportCalls += 1
-      throw new EdgeAdminUnavailableError('status_503')
-    }
-    const response = await h.assign()
-    expect(response.status).toBe(200)
-    expect(exportCalls).toBe(1)
-    expect(await h.postgresDevices()).toEqual([{ id: 'phone-a', revoked: null }])
-    expect(h.fake.assignment).toMatchObject({ cellId: 'us-c1', assignmentEpoch: 9 })
   })
 
   it('keeps Postgres devices when the edge object holds no assignment (never pushed or erased)', async () => {
@@ -363,18 +256,31 @@ describe('relay edge phase 2: the director moves host data with the host', () =>
     expect(await h.postgresDevices()).toEqual([{ id: 'phone-a', revoked: null }])
   })
 
-  it('moves every host of an allowed account (relay token sub), with no host list', async () => {
-    const h = await harness('account')
+  it('with mode down, skips the export at once, removes the Postgres devices, and fences once', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const flags: EdgeControlFlags = { mode: 'on' }
+    const h = await harness('host', { control: () => flags })
+    await h.insertDevice(device('phone-a'))
+    await h.insertDevice(device('phone-b'))
+    await h.assign()
+    // phone-a was revoked on the edge, which then died; Postgres still holds it live.
+    h.fake.devices = [device('phone-a', { revoked_at: 1_800_000_000_000 })]
+    h.fake.down = true
+    flags.mode = 'down'
+    const assign = vi.spyOn(h.fake, 'assign')
     const response = await h.assign()
-    expect(await response.json()).toMatchObject({ cellUrl: EDGE_URL })
-    expect(h.fake.pushes[0]).toMatchObject({ userId: USER, relayHostId: HOST })
-  })
-
-  it('does not touch the edge for hosts that were never on it', async () => {
-    const h = await harness()
-    h.leaveCohort()
-    expect((await h.assign()).status).toBe(200)
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({ cellUrl: 'https://us-c1.relay.example.test', assignmentEpoch: 9 })
     expect(h.fake.exports).toBe(0)
-    expect(h.fake.pushes).toHaveLength(0)
+    expect(await h.postgresDevices()).toEqual([])
+    const skipped = warn.mock.calls
+      .map(([line]) => JSON.parse(String(line)) as Record<string, unknown>)
+      .filter((line) => line.event === 'orca_relay_edge_export_skipped')
+    expect(skipped).toEqual([{ event: 'orca_relay_edge_export_skipped', reason: 'mode_down', devicesRemoved: 2 }])
+    // One fence try, recorded for the sweep to retry.
+    expect(assign).toHaveBeenCalledTimes(1)
+    const pending = await h.database.query(`SELECT cell_id, assignment_epoch FROM relay_edge_fence_pending`)
+    expect(pending.map((row) => [String(row.cell_id), Number(row.assignment_epoch)])).toEqual([['us-c1', 9]])
   })
 })

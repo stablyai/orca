@@ -61,7 +61,7 @@ import { useWebSessionTabsSync } from '../use-web-session-tabs-sync'
 import { clearRuntimeEnvironmentConnectionGenerations as clearRuntimeEnvironmentConnectionGenerationsForTests } from '@/store/slices/runtime-status/runtime-status-connection-generation'
 import { resetWebRuntimeInitialTerminalBootstrapForTests } from '../initial-terminal/web-runtime-initial-terminal-bootstrap'
 import { resetWebRuntimeWakeTerminalRespawnForTests } from '../../hosted-terminals/restoration/web-runtime-wake-terminal-respawn'
-import { ensureWebRuntimeWorktreeTerminalAfterWake } from '@/lib/web-runtime-worktree-terminal-after-wake'
+import { ensureWebRuntimeWorktreeTerminalAfterWake } from '@/runtime/hosted-terminals/restoration/web-runtime-worktree-terminal-after-wake'
 import {
   connectedRuntimeStatus,
   publicRuntimeEnvironment
@@ -256,6 +256,74 @@ describe('useWebSessionTabsSync initial-terminal bootstrap across an effect re-r
     // Same closure must retry its next accepted empty frame after failure.
     await publish(subscription, { type: 'snapshot', ...emptyActiveSnapshot(2) })
     expect(mocks.createTerminal).toHaveBeenCalledTimes(2)
+    hook.unmount()
+  })
+
+  it('leaves a waiting split landing for the user instead of seeding into it', async () => {
+    mocks.createTerminal.mockResolvedValue({ status: 'created' })
+    useAppStore.setState({
+      groupsByWorktree: {
+        [WORKTREE]: [{ id: 'landing', worktreeId: WORKTREE, activeTabId: null, tabOrder: [] }]
+      },
+      layoutByWorktree: { [WORKTREE]: { type: 'leaf', groupId: 'landing' } },
+      activeGroupIdByWorktree: { [WORKTREE]: 'landing' },
+      splitLandingGroupIds: { landing: WORKTREE }
+    })
+
+    const hook = renderHook(() => useWebSessionTabsSync())
+    await act(settle)
+    const subscription = findActiveSubscription(0)
+    await publish(subscription, { type: 'snapshot', ...emptyActiveSnapshot(1) })
+    expect(mocks.createTerminal).not.toHaveBeenCalled()
+    expect(useAppStore.getState().splitLandingGroupIds).toEqual({ landing: WORKTREE })
+
+    // Skipping claimed nothing: once the chooser is gone, the next empty answer seeds as before.
+    act(() => {
+      useAppStore.setState({ splitLandingGroupIds: {} })
+    })
+    await publish(subscription, { type: 'snapshot', ...emptyActiveSnapshot(2) })
+    expect(mocks.createTerminal).toHaveBeenCalledTimes(1)
+    hook.unmount()
+  })
+
+  it('fills the workspace with the waiting landings when another client empties it', async () => {
+    const leaf = (groupId: string) => ({ type: 'leaf' as const, groupId })
+    const group = (id: string, tabOrder: string[]) => ({
+      id,
+      worktreeId: WORKTREE,
+      activeTabId: tabOrder[0] ?? null,
+      tabOrder
+    })
+    useAppStore.setState({
+      groupsByWorktree: {
+        [WORKTREE]: [group('chat', ['closed-elsewhere']), group('l1', []), group('l2', [])]
+      },
+      layoutByWorktree: {
+        [WORKTREE]: {
+          type: 'split',
+          direction: 'horizontal',
+          first: leaf('chat'),
+          second: { type: 'split', direction: 'vertical', first: leaf('l1'), second: leaf('l2') }
+        }
+      },
+      activeGroupIdByWorktree: { [WORKTREE]: 'l2' },
+      splitLandingGroupIds: { l1: WORKTREE, l2: WORKTREE }
+    })
+
+    const hook = renderHook(() => useWebSessionTabsSync())
+    await act(settle)
+    await publish(findActiveSubscription(0), { type: 'snapshot', ...emptyActiveSnapshot(1) })
+
+    const state = useAppStore.getState()
+    expect(state.groupsByWorktree[WORKTREE].map((kept) => kept.id)).toEqual(['l1', 'l2'])
+    expect(state.layoutByWorktree[WORKTREE]).toEqual({
+      type: 'split',
+      direction: 'vertical',
+      first: leaf('l1'),
+      second: leaf('l2')
+    })
+    expect(state.activeGroupIdByWorktree[WORKTREE]).toBe('l2')
+    expect(mocks.createTerminal).not.toHaveBeenCalled()
     hook.unmount()
   })
 

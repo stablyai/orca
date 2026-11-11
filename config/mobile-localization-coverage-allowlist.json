@@ -42,70 +42,70 @@
     "count": 1
   },
   {
-    "filePath": "mobile/src/components/accounts-snapshot.ts",
+    "filePath": "mobile/src/accounts/accounts-snapshot.ts",
     "kind": "object-property:message",
     "text": "Claude limits use the wrong provider identity",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/components/accounts-snapshot.ts",
+    "filePath": "mobile/src/accounts/accounts-snapshot.ts",
     "kind": "object-property:message",
     "text": "Codex limits use the wrong provider identity",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/components/accounts-snapshot.ts",
+    "filePath": "mobile/src/accounts/accounts-snapshot.ts",
     "kind": "object-property:message",
     "text": "Host Codex accounts cannot name a WSL distro",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/components/accounts-snapshot.ts",
+    "filePath": "mobile/src/accounts/accounts-snapshot.ts",
     "kind": "object-property:message",
     "text": "Host rate-limit targets cannot name a WSL distro",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/components/accounts-snapshot.ts",
+    "filePath": "mobile/src/accounts/accounts-snapshot.ts",
     "kind": "object-property:message",
     "text": "Inactive Claude limits use the wrong provider identity",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/components/accounts-snapshot.ts",
+    "filePath": "mobile/src/accounts/accounts-snapshot.ts",
     "kind": "object-property:message",
     "text": "Inactive Codex limits use the wrong provider identity",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/components/accounts-snapshot.ts",
+    "filePath": "mobile/src/accounts/accounts-snapshot.ts",
     "kind": "object-property:message",
     "text": "WSL Codex accounts require an exact distro",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/components/accounts-snapshot.ts",
+    "filePath": "mobile/src/accounts/accounts-snapshot.ts",
     "kind": "object-property:message",
     "text": "WSL rate-limit targets require an exact distro",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/components/codex-reset-credit-reply-schema.ts",
+    "filePath": "mobile/src/accounts/usage/codex-reset-credit-reply-schema.ts",
     "kind": "object-property:message",
     "text": "Host reset scopes cannot name a WSL distro",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/components/codex-reset-credit-reply-schema.ts",
+    "filePath": "mobile/src/accounts/usage/codex-reset-credit-reply-schema.ts",
     "kind": "object-property:message",
     "text": "WSL reset scopes require an exact distro",
     "dynamic": false,
@@ -210,21 +210,21 @@
     "count": 1
   },
   {
-    "filePath": "mobile/src/session/github-pr-entity-reply-schema.ts",
+    "filePath": "mobile/src/source-control/review/github-pr-entity-reply-schema.ts",
     "kind": "object-property:message",
     "text": "review has no login",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/session/github-pr-read-reply-schema.ts",
+    "filePath": "mobile/src/source-control/review/github-pr-read-reply-schema.ts",
     "kind": "object-property:message",
     "text": "found outcome has no readable pr",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/session/github-pr-read-reply-schema.ts",
+    "filePath": "mobile/src/source-control/review/github-pr-read-reply-schema.ts",
     "kind": "object-property:message",
     "text": "pull request has no number or state",
     "dynamic": false,
@@ -266,14 +266,14 @@
     "count": 1
   },
   {
-    "filePath": "mobile/src/session/QuickCommandEditorForm.tsx",
+    "filePath": "mobile/src/terminal/quick-commands/QuickCommandEditorForm.tsx",
     "kind": "jsx-attribute:placeholder",
     "text": "npm run dev",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/session/use-mobile-pr-actions.ts",
+    "filePath": "mobile/src/source-control/review/use-mobile-pr-actions.ts",
     "kind": "object-property:error",
     "text": "Not connected",
     "dynamic": false,
@@ -304,6 +304,27 @@
     "filePath": "mobile/src/settings/about-screen.tsx",
     "kind": "jsx-attribute:title",
     "text": "stablyai/orca",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/terminal/session/MobileSessionLatchKeys.tsx",
+    "kind": "object-property:label",
+    "text": "Shift",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/terminal/session/MobileSessionLatchKeys.tsx",
+    "kind": "object-property:label",
+    "text": "Ctrl",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/terminal/session/MobileSessionLatchKeys.tsx",
+    "kind": "object-property:label",
+    "text": "Alt",
     "dynamic": false,
     "count": 1
   },
@@ -525,49 +546,49 @@
     "count": 1
   },
   {
-    "filePath": "mobile/src/transport/host-entry-opener.ts",
+    "filePath": "mobile/src/transport/connection/host-entry-opener.ts",
     "kind": "object-property:message",
     "text": "Host client open failed",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/transport/host-entry-opener.ts",
+    "filePath": "mobile/src/transport/connection/host-entry-opener.ts",
     "kind": "object-property:message",
     "text": "Host client recovered",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/transport/mobile-relay-host-overlay.ts",
+    "filePath": "mobile/src/host-catalog/mobile-relay-host-overlay.ts",
     "kind": "object-property:message",
     "text": "Expected exactly one endpoint for configured relay metadata",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/transport/mobile-relay-host-overlay.ts",
+    "filePath": "mobile/src/host-catalog/mobile-relay-host-overlay.ts",
     "kind": "object-property:message",
     "text": "Relay host identity mismatch",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/transport/mobile-relay-host-overlay.ts",
+    "filePath": "mobile/src/host-catalog/mobile-relay-host-overlay.ts",
     "kind": "object-property:message",
     "text": "Relay identity and endpoint must coexist",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/transport/mobile-relay-recovery-log.ts",
+    "filePath": "mobile/src/diagnostics/connection/mobile-relay-recovery-log.ts",
     "kind": "object-property:message",
     "text": "Relay:",
     "dynamic": true,
     "count": 1
   },
   {
-    "filePath": "mobile/src/transport/mobile-relay-rpc-session.ts",
+    "filePath": "mobile/src/transport/relay/mobile-relay-rpc-session.ts",
     "kind": "object-property:message",
     "text": "Relay health check failed",
     "dynamic": false,
@@ -588,42 +609,42 @@
     "count": 1
   },
   {
-    "filePath": "mobile/src/transport/persisted-connection-log-store.ts",
+    "filePath": "mobile/src/diagnostics/connection/persisted-connection-log-store.ts",
     "kind": "object-property:message",
     "text": "Mobile client session started",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/transport/rpc-operation-reply.ts",
+    "filePath": "mobile/src/transport/rpc/rpc-operation-reply.ts",
     "kind": "object-property:message",
     "text": "not a non-null object",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/transport/rpc-operation-reply.ts",
+    "filePath": "mobile/src/transport/rpc/rpc-operation-reply.ts",
     "kind": "object-property:message",
     "text": "reply opened no stream",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/transport/rpc-operation-result-reader.ts",
+    "filePath": "mobile/src/transport/rpc/rpc-operation-result-reader.ts",
     "kind": "object-property:message",
     "text": "further issues omitted",
     "dynamic": true,
     "count": 1
   },
   {
-    "filePath": "mobile/src/transport/socket-deadline-suspension.ts",
+    "filePath": "mobile/src/diagnostics/connection/socket-deadline-suspension.ts",
     "kind": "object-property:title",
     "text": "Handshake timeout",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/transport/socket-deadline-suspension.ts",
+    "filePath": "mobile/src/diagnostics/connection/socket-deadline-suspension.ts",
     "kind": "object-property:title",
     "text": "WebSocket connect timeout",
     "dynamic": false,

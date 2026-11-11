@@ -1,7 +1,8 @@
 import React from 'react'
-import { useAppStore } from '@/store'
-import { cn } from '@/lib/utils'
+import { useAppStore } from '@/store/index'
+import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { retryBackgroundWorktreeCreation } from '@/lib/workspace/creation/worktree-creation-flow'
 import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agent-session-launch-label'
 import { holdNativeChatStagedInput } from '@/components/native-chat/drafts/native-chat-draft-attachment-staging'
@@ -10,7 +11,7 @@ import {
   pendingCreationHeldChatMessage,
   type PendingWorktreeCreation
 } from '@/lib/workspace/creation/pending-worktree-creation'
-import { shouldPreserveEditableFocus } from '@/lib/editable-focus-preservation'
+import { shouldPreserveEditableFocus } from '@/lib/text-input/focus/editable-focus-preservation'
 import { NativeChatComposer } from '@/components/native-chat/composer/NativeChatComposer'
 import type { NativeChatComposerHandle } from '@/components/native-chat/composer/native-chat-composer-types'
 import type { NativeChatStructuredComposerTransport } from '@/components/native-chat/composer/submit/native-chat-structured-composer-transport'
@@ -43,10 +44,10 @@ const NO_COMMAND_CAUSES = {
   retry: false
 } as const
 
-function failureText(entry: PendingWorktreeCreation): string {
+function failureText(entry: PendingWorktreeCreation, t: Translate = translate): string {
   return (
     entry.error ??
-    translate(
+    t(
       'auto.components.worktree.creation.WorktreeCreationPanel.767951265d',
       'Something went wrong while creating the worktree.'
     )
@@ -61,6 +62,7 @@ export default function PendingNativeChatCreation({
   creationId: string
   reserveCollapsedSidebarHeaderSpace?: boolean
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const entry = useAppStore((s) => s.pendingWorktreeCreations[creationId])
   const sourceWorktreeId = useAppStore((s) => {
     const repo = s.repos.find((repo) => repo.id === entry?.request.repoId)
@@ -190,7 +192,7 @@ export default function PendingNativeChatCreation({
       <WorktreeSetupSteps
         steps={deriveWorktreeSetupSteps(entry, now)}
         agentLabel={agentLabel}
-        error={isError ? failureText(entry) : null}
+        error={isError ? failureText(entry, t) : null}
         onRetry={() => retryBackgroundWorktreeCreation(creationId)}
         onDismiss={dismiss}
       />

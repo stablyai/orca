@@ -1,7 +1,7 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { PanelRight } from 'lucide-react'
-import { useAppStore } from '@/store'
-import { cn } from '@/lib/utils'
+import { useAppStore } from '@/store/index'
+import { cn } from '@/lib/class-names'
 import { useSidebarResize } from '@/hooks/useSidebarResize'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
@@ -22,9 +22,9 @@ import { useMeasuredWidth } from './right-sidebar-measured-width'
 import {
   isPairedWebClientWindow,
   shouldRenderDesktopWindowChrome
-} from '@/lib/desktop-window-chrome'
-import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
-import { ActivityBarPositionMenu } from './activity-bar-position-menu'
+} from '@/app-shell/chrome/desktop-window-chrome'
+import { getRendererAppPlatform } from '@/app-shell/platform/renderer-app-platform'
+import { ActivityBarPositionMenu, useActivityBarContextPlugin } from './activity-bar-position-menu'
 import { RightSidebarTopActivityBar } from './right-sidebar-top-activity-bar'
 import { useRightSidebarActivityItems } from './use-right-sidebar-activity-items'
 import { useRightSidebarTabRouting } from './use-right-sidebar-tab-routing'
@@ -34,6 +34,7 @@ import { selectWorktreeCreationSurfaceShown } from '@/lib/workspace/creation/wor
 
 function RightSidebarInner(): React.JSX.Element {
   const t = useTranslate()
+  const contextPlugin = useActivityBarContextPlugin()
   useUiLanguageRevision()
   const hasDesktopWindowChrome = shouldRenderDesktopWindowChrome({
     platform: getRendererAppPlatform(),
@@ -41,6 +42,11 @@ function RightSidebarInner(): React.JSX.Element {
   })
   const rightSidebarShortcut = useShortcutLabel('sidebar.right.toggle')
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
+  const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
+  const routeRequestId = useAppStore((s) => s.rightSidebarRouteRequestId)
+  const settingsFocusRequested = useAppStore((s) => s.aiVaultSearchFocusRequested)
+  const lastRouteRequestId = useRef(routeRequestId)
+  const [focusVaultSearch, setFocusVaultSearch] = useState(false)
   const userRightSidebarWidth = useAppStore((s) => s.rightSidebarWidth)
   // `orca plugin shot --width` sizes the panel for one capture without touching the saved width.
   const captureWidth = usePluginViewCaptureStore((s) => s.panelWidth)
@@ -69,6 +75,43 @@ function RightSidebarInner(): React.JSX.Element {
     pluginFetchStatus,
     installedPluginTabKeys
   })
+
+  useEffect(() => {
+    if (lastRouteRequestId.current === routeRequestId) {
+      if (!rightSidebarOpen || creatingWorktree || effectiveTab !== 'vault') {
+        setFocusVaultSearch(false)
+      }
+      return
+    }
+    lastRouteRequestId.current = routeRequestId
+    setFocusVaultSearch(
+      rightSidebarOpen &&
+        !creatingWorktree &&
+        rightSidebarTab === 'vault' &&
+        effectiveTab === 'vault' &&
+        !settingsFocusRequested
+    )
+  }, [
+    routeRequestId,
+    rightSidebarOpen,
+    rightSidebarTab,
+    effectiveTab,
+    creatingWorktree,
+    settingsFocusRequested
+  ])
+
+  useEffect(() => {
+    if (!focusVaultSearch) {
+      return
+    }
+    const cancel = (): void => setFocusVaultSearch(false)
+    document.addEventListener('pointerdown', cancel, true)
+    document.addEventListener('keydown', cancel, true)
+    return () => {
+      document.removeEventListener('pointerdown', cancel, true)
+      document.removeEventListener('keydown', cancel, true)
+    }
+  }, [focusVaultSearch])
 
   const activityBarSideWidth = activityBarPosition === 'side' ? ACTIVITY_BAR_SIDE_WIDTH : 0
   const windowWidth = useWindowWidth()
@@ -100,7 +143,12 @@ function RightSidebarInner(): React.JSX.Element {
         </div>
       ) : (
         // Keep panels mounted across worktree switches; remounts caused Windows IPC storms and multi-second freezes.
-        <RightSidebarPanelContent effectiveTab={effectiveTab} rightSidebarOpen={rightSidebarOpen} />
+        <RightSidebarPanelContent
+          effectiveTab={effectiveTab}
+          rightSidebarOpen={rightSidebarOpen}
+          focusVaultSearch={focusVaultSearch}
+          onVaultSearchFocusHandled={() => setFocusVaultSearch(false)}
+        />
       )}
     </div>
   ) : null
@@ -174,7 +222,7 @@ function RightSidebarInner(): React.JSX.Element {
             <span className="text-[11px] font-semibold uppercase tracking-wider text-foreground">
               {visibleItems.find((item) => item.id === effectiveTab)?.title ?? ''}
             </span>
-            <TooltipProvider delayDuration={400}>
+            <TooltipProvider>
               <div className="flex items-center">{closeButton}</div>
             </TooltipProvider>
           </div>
@@ -190,14 +238,19 @@ function RightSidebarInner(): React.JSX.Element {
 
       {activityBarPosition === 'side' && (
         <ContextMenu>
-          <ContextMenuTrigger asChild>
+          <ContextMenuTrigger
+            asChild
+            onContextMenu={contextPlugin.onContextMenu}
+            onPointerDown={contextPlugin.onPointerDown}
+          >
             <div className="flex flex-col items-center w-10 min-w-[40px] bg-sidebar border-l border-border side-activity-bar-windows-inset">
-              <TooltipProvider delayDuration={400}>{sideActivityBarIcons}</TooltipProvider>
+              <TooltipProvider>{sideActivityBarIcons}</TooltipProvider>
             </div>
           </ContextMenuTrigger>
           <ActivityBarPositionMenu
             currentPosition={activityBarPosition}
             onChangePosition={setActivityBarPosition}
+            pluginKey={contextPlugin.pluginKey}
           />
         </ContextMenu>
       )}

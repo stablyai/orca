@@ -1,4 +1,4 @@
-import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
+import { runtimeEnvironmentIdUnlessTwin } from '@/lib/workspace/ownership/resolve-owner'
 import { expectPaneToClose } from '@/runtime/workspace-layout/intents/layout-owner-pane-intents'
 import { useAppStore } from '@/store/index'
 

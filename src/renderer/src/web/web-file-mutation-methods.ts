@@ -8,7 +8,7 @@ import {
   pagedTextFileResult,
   readFileInChunks
 } from '../runtime/files/reads/runtime-paged-file-read'
-import type { RuntimeFileReadChunkResult } from '../../../shared/runtime-types'
+import type { RuntimeFileReadChunkResult } from '../../../shared/file-content/runtime-file-read'
 import {
   compareDiskWritePrecondition,
   diskConflictFromReadFailure,
@@ -20,7 +20,7 @@ import {
   type FileWriteDiskComparison,
   type FileWriteDiskPrecondition,
   type FileWriteResult
-} from '../../../shared/file-write-disk-precondition'
+} from '../../../shared/file-write/file-write-disk-precondition'
 
 const SSH_OWNER_CHANGED_MESSAGE =
   "Couldn't verify the SSH connection. Reconnect the host and try again."

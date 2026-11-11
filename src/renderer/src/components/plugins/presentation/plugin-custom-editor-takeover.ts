@@ -1,6 +1,6 @@
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import { filePreviewForPath } from '../../../../../shared/file-preview-kind'
+import { filePreviewForPath } from '../../../../../shared/file-preview/file-preview-kind'
 import { fileList } from './plugin-contribution-file-list'
 
 /** Says when an editor opens files Orca would otherwise show in its own image, PDF or media viewer. */
