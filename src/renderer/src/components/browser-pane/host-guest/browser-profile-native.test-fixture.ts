@@ -87,62 +87,63 @@ export function installProfileNativeFixture(native: Map<number, Electron.WebCont
     webview.dispatchEvent(new Event('did-stop-loading'))
   }
   let nextId = 1
-  const create = vi
-    .spyOn(document, 'createElement')
-    .mockImplementation((name, options?: ElementCreationOptions) => {
-      const element = createElement(name, options)
-      if (name !== 'webview') {
-        return element
-      }
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture installs the webview API used by the production attachment lifecycle.
-      const webview = element as Electron.WebviewTag
-      let guest: ProfileTestGuest | undefined
-      let source = ''
-      Object.defineProperty(webview, 'src', {
-        configurable: true,
-        get: () => source,
-        set: (marker: string) => {
-          const partition = webview.getAttribute('partition') ?? ''
-          admitBrowserPageAttach(marker, 99, partition)
-          const prepared = preparedByMarker.get(marker)!
-          source = prepared.url
-          guest = new ProfileTestGuest(nextId++)
-          guest.url = prepared.url
-          const current = guest
-          native.set(current.id, current.asWebContents())
-          associateBrowserPageAttach(current.asWebContents())
-          startBrowserPageAttach(current.asWebContents())
-          manager.attachGuestPolicies(current.asWebContents())
-          const pageId = prepared.browserPageId
-          guests.set(pageId, current)
-          webviews.set(pageId, webview)
-          creations.push(pageId)
-          webview.dispatchEvent(new Event('did-attach'))
-          if (autoFinish) {
-            finish(current, webview)
-          }
-        }
-      })
-      webview.getWebContentsId = () => {
-        if (!guest) {
-          throw new Error('Not attached')
-        }
-        return guest.id
-      }
-      webview.getURL = () => source
-      webview.getTitle = () => 'Current'
-      webview.isLoading = () => guest?.loading ?? true
-      webview.canGoBack = () => true
-      webview.canGoForward = () => false
-      webview.getZoomLevel = () => 0
-      webview.setZoomLevel = () => {}
-      const remove = webview.remove.bind(webview)
-      webview.remove = () => {
-        remove()
-        guest?.destroy()
-      }
+  function createProfileElement(name: 'webview'): Electron.WebviewTag
+  function createProfileElement(name: string, options?: ElementCreationOptions): HTMLElement
+  function createProfileElement(name: string, options?: ElementCreationOptions): HTMLElement {
+    const element = createElement(name, options)
+    if (name !== 'webview') {
       return element
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture installs the webview API used by the production attachment lifecycle.
+    const webview = element as Electron.WebviewTag
+    let guest: ProfileTestGuest | undefined
+    let source = ''
+    Object.defineProperty(webview, 'src', {
+      configurable: true,
+      get: () => source,
+      set: (marker: string) => {
+        const partition = webview.getAttribute('partition') ?? ''
+        admitBrowserPageAttach(marker, 99, partition)
+        const prepared = preparedByMarker.get(marker)!
+        source = prepared.url
+        guest = new ProfileTestGuest(nextId++)
+        guest.url = prepared.url
+        const current = guest
+        native.set(current.id, current.asWebContents())
+        associateBrowserPageAttach(current.asWebContents())
+        startBrowserPageAttach(current.asWebContents())
+        manager.attachGuestPolicies(current.asWebContents())
+        const pageId = prepared.browserPageId
+        guests.set(pageId, current)
+        webviews.set(pageId, webview)
+        creations.push(pageId)
+        webview.dispatchEvent(new Event('did-attach'))
+        if (autoFinish) {
+          finish(current, webview)
+        }
+      }
     })
+    webview.getWebContentsId = () => {
+      if (!guest) {
+        throw new Error('Not attached')
+      }
+      return guest.id
+    }
+    webview.getURL = () => source
+    webview.getTitle = () => 'Current'
+    webview.isLoading = () => guest?.loading ?? true
+    webview.canGoBack = () => true
+    webview.canGoForward = () => false
+    webview.getZoomLevel = () => 0
+    webview.setZoomLevel = () => {}
+    const remove = webview.remove.bind(webview)
+    webview.remove = () => {
+      remove()
+      guest?.destroy()
+    }
+    return webview
+  }
+  const create = vi.spyOn(document, 'createElement').mockImplementation(createProfileElement)
   const api = {
     preparePageAttach: async (args: { browserPageId: string; partition: string; url: string }) => {
       preparations.push(args)
