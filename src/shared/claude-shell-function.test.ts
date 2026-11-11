@@ -40,12 +40,15 @@ function fixture() {
   const run = (
     shell: string,
     env: string[] = [],
-    fakeKind: 'summary' | 'printenv' = 'summary',
+    fakeKind: 'summary' | 'printenv' | 'direct' = 'summary',
     userSetup = '',
     command = 'claude'
   ) => {
     if (fakeKind === 'printenv') {
       writeFileSync(fake, '#!/bin/sh\nenv\n')
+    } else if (fakeKind === 'direct') {
+      // A subshell left between the pane shell and Claude leads Claude's foreground group.
+      writeFileSync(fake, '#!/bin/sh\n[ "$PPID" = "$PANE_SHELL_PID" ] && echo direct\n')
     }
     const fish = shell.endsWith('fish')
     const fn = fish ? getFishClaudeShellFunction() : getPosixClaudeShellFunction()
@@ -204,4 +207,18 @@ describe.each(SHELLS)('the claude function in %s', (shell) => {
     writeFileSync(f.pointer, f.a)
     expect(f.run(shell, deliberate).stdout).toBe('HOME=/somewhere/else KEY=fake TWIN=none\n')
   })
+
+  it.skipIf(shell.endsWith('fish'))(
+    'replaces the subshell so Claude is a direct child of the pane shell',
+    () => {
+      const f = fixture()
+      const own = 'ORCA_CLAUDE_USER_CONFIG_DIR=/user/own'
+      const setup = 'export PANE_SHELL_PID=$$'
+      writeFileSync(f.pointer, f.a)
+      expect(f.run(shell, [], 'direct', setup).stdout).toBe('direct\n')
+      writeFileSync(f.pointer, '')
+      expect(f.run(shell, [...injected(f.a), own], 'direct', setup).stdout).toBe('direct\n')
+      expect(f.run(shell, [], 'direct', setup).stdout).toBe('direct\n')
+    }
+  )
 })
