@@ -13,6 +13,10 @@ export const HERMES_LAUNCH_SPEC: AcpLaunchSpec = {
   env: {},
   scrubEnvironment: (env, inherited, chosen) => scrubHermesAcpEnvironment(env, inherited, chosen),
   dialect: HERMES_ACP_DIALECT,
+  // Orca stays the orchestrator: only an Orca worker is handed this app's CLI and caller identity.
+  // Tools run in the Hermes gateway, which may still find an installed `orca` on its own PATH;
+  // a profile deny rule for `orca` is what blocks that.
+  orcaCliForWorkersOnly: true,
   loginCommand: agentSessionSignInFor('hermes')?.loginCommand ?? [],
   // `hermes-setup` is interactive and authenticates only after credentials exist.
   authMethod: ({ advertised }) => advertised.find((id) => id !== 'hermes-setup'),

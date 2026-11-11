@@ -8,6 +8,8 @@ export type StructuredAgentDefinition = AgentSessionStoredAgent & {
   capabilities: AgentSessionCapabilities
   /** Absent means Orca never supplies this agent’s managed runtime. */
   managedRuntime?: () => boolean
+  /** Keeps this app's CLI and caller identity away from chats that are not Orca workers. */
+  orcaCliForWorkersOnly?: true
   restingOptions: {
     acceptsKey: (key: string) => boolean
     /** Null means no fallback catalog. */

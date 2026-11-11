@@ -10,6 +10,7 @@ import {
   SEALED_TEST_SPAWN_TOKEN,
   sealedChildEnv
 } from './structured-session-child-env.test-support'
+import { sealStructuredSessionChild } from './structured-session-child-env'
 import {
   mintStructuredWorkerHandle,
   mintStructuredWorkerPaneKey,
@@ -122,6 +123,36 @@ describe('sealStructuredSessionChild identity', () => {
     const env = sealedChildEnv(SESSION_ID, { PATH: '/usr/bin' })
     expect(env.ORCA_AGENT_SESSION_ID).toBe(SESSION_ID)
     expect(env.ORCA_TERMINAL_HANDLE).toBe(handle)
+  })
+
+  it("withholds this app's CLI and caller identity from a chat that is not a worker", () => {
+    installFakeAppEnvironment({ isPackaged: () => true, getPath: () => USER_DATA })
+    const inherited = {
+      PATH: '/usr/bin',
+      ORCA_TERMINAL_HANDLE: 'term_parent',
+      ORCA_AGENT_SESSION_ID: 'a0b1c2d3-0000-4000-8000-00000000abcd',
+      ORCA_CLI_COMMAND: '/parent/orca',
+      ORCA_PAIRING_CODE: 'parent-code'
+    }
+    const seal = (env: Record<string, string>) =>
+      sealStructuredSessionChild({
+        sessionId: SESSION_ID,
+        spawnToken: SEALED_TEST_SPAWN_TOKEN,
+        env,
+        inheritedEnvToDelete: [],
+        orcaCliForWorkersOnly: true
+      })
+    expect(resolveProviderChildEnv(seal({ ...inherited }), inherited)).toEqual({
+      PATH: '/usr/bin',
+      ORCA_STRUCTURED_SESSION: '1',
+      ORCA_AGENT_SESSION_SPAWN_TOKEN: SEALED_TEST_SPAWN_TOKEN
+    })
+    const handle = registerWorker()
+    expect(seal({ PATH: '/usr/bin' }).env).toMatchObject({
+      ORCA_TERMINAL_HANDLE: handle,
+      ORCA_AGENT_SESSION_ID: SESSION_ID,
+      ORCA_USER_DATA_PATH: USER_DATA
+    })
   })
 
   describe.each(['chat', 'worker'] as const)("reaches this app's CLI as a %s", (kind) => {

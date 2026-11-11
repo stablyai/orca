@@ -189,7 +189,8 @@ export function composeStructuredLaunch<L>(
       spawnToken,
       env,
       inheritedEnvToDelete,
-      ...(cliRuntimeCommand ? { cliRuntimeCommand } : {})
+      ...(cliRuntimeCommand ? { cliRuntimeCommand } : {}),
+      ...(definition.orcaCliForWorkersOnly ? { orcaCliForWorkersOnly: true as const } : {})
     })
     return {
       ...launch,

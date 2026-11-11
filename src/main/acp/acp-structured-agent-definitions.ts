@@ -34,6 +34,7 @@ export function acpStructuredAgentDefinition(spec: AcpLaunchSpec): StructuredAge
       approvalEnforcement: 'orca'
     },
     ...(managedRuntime && { managedRuntime: () => managedRuntime.pin() !== null }),
+    ...(spec.orcaCliForWorkersOnly && { orcaCliForWorkersOnly: true as const }),
     restingOptions: {
       acceptsKey: isAcpStructuredOptionKey,
       // Populate catalogs from live agents.

@@ -135,6 +135,8 @@ export type AcpLaunchSpec = {
     chosen: readonly string[]
   ): string[]
   dialect: AcpDialect
+  /** See `StructuredAgentDefinition`. */
+  orcaCliForWorkersOnly?: true
   loginCommand: readonly string[]
   /** Selects an advertised method using the execution host's environment; undefined leaves it signed out. */
   authMethod?(input: {

@@ -45,32 +45,57 @@ export function sealStructuredSessionChild(input: {
   env: Record<string, string>
   inheritedEnvToDelete: readonly string[]
   cliRuntimeCommand?: string
+  /** Only an Orca worker gets this app's CLI and the chat's caller identity. */
+  orcaCliForWorkersOnly?: true
 }): SealedStructuredSessionChild {
   // Why: pair before naming the child so this app's CLI dir stays ahead of a runtime dir holding another `orca`.
   const paired = input.cliRuntimeCommand
     ? withCliRuntimeOnPath(input.cliRuntimeCommand, input.env, { platform: process.platform })
     : input.env
-  const identity = childIdentity(input.sessionId, paired)
+  const identity = childIdentity(input.sessionId, paired, input.orcaCliForWorkersOnly === true)
   const named = new Set([...Object.keys(identity.commandEnv), ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV])
   return {
     env: { ...identity.env, [ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV]: input.spawnToken },
-    envToDelete: input.inheritedEnvToDelete.filter((key) => !named.has(key)),
+    envToDelete: [...input.inheritedEnvToDelete, ...identity.withheld].filter(
+      (key) => !named.has(key)
+    ),
     commandEnv: identity.commandEnv
   }
 }
 
+// The marker stays so any `orca` the child finds on PATH refuses to guess a caller.
+const CLI_ENV_KEYS = [
+  'ORCA_TERMINAL_HANDLE',
+  ORCA_AGENT_SESSION_ID_ENV,
+  'ORCA_CLI_COMMAND',
+  'ORCA_CLI_BIN_DIR',
+  'ORCA_USER_DATA_PATH',
+  'ORCA_ENVIRONMENT',
+  'ORCA_PAIRING_CODE',
+  'ORCA_REMOTE_PAIRING'
+]
+
 function childIdentity(
   sessionId: string,
-  childEnv: Record<string, string>
-): { env: Record<string, string>; commandEnv: Record<string, string> } {
+  childEnv: Record<string, string>,
+  workersOnly: boolean
+): { env: Record<string, string>; commandEnv: Record<string, string>; withheld: string[] } {
   const identity = resolveStructuredWorkerIdentityForSession(sessionId, null)
+  if (workersOnly && !identity) {
+    const named = { [ORCA_STRUCTURED_SESSION_ENV]: '1' }
+    const env = { ...childEnv, ...named }
+    for (const key of CLI_ENV_KEYS) {
+      delete env[key]
+    }
+    return { env, commandEnv: named, withheld: CLI_ENV_KEYS }
+  }
   const named: Record<string, string> = {
     ...(identity ? { ORCA_TERMINAL_HANDLE: identity.handle } : {}),
     [ORCA_AGENT_SESSION_ID_ENV]: sessionId,
     [ORCA_STRUCTURED_SESSION_ENV]: '1'
   }
   const env = { ...childEnv, ...named }
-  return { env, commandEnv: { ...named, ...applyThisAppCli(env) } }
+  return { env, commandEnv: { ...named, ...applyThisAppCli(env) }, withheld: [] }
 }
 
 const REMOTE_RUNTIME_SELECTOR_ENV_KEYS = [
