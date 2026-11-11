@@ -5,7 +5,7 @@ const SHORT_NAME = 'synthetic-short-prompt-demo'
 const RESIZE_NAME = 'synthetic-resize-prompt-demo'
 const LONG_NAME = 'visual-proof-long-prompt-demo'
 const END_MARKER = 'SYNTHETIC-END-MARKER'
-const RESIZE_PROMPT = `Synthetic resize focus validation. ${'placeholder '.repeat(24)}`
+const RESIZE_PROMPT = `Synthetic resize focus validation. ${'placeholder '.repeat(48)}`
 
 test('automation detail keeps short prompts readable and reveals a very long prompt at narrow width', async ({
   orcaPage
@@ -106,7 +106,7 @@ test('automation detail keeps short prompts readable and reveals a very long pro
     lineClamp: getComputedStyle(element).webkitLineClamp
   }))
   expect(collapsedMetrics.scrollHeight).toBeGreaterThan(collapsedMetrics.clientHeight)
-  expect(collapsedMetrics.lineClamp).toBe('4')
+  expect(collapsedMetrics.lineClamp).toBe('8')
 
   await showMore.focus()
   await orcaPage.keyboard.press('Enter')

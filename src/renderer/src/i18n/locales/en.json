@@ -880,7 +880,8 @@
           "added": "Added {{name}}",
           "browse": "Browse the Chrome Web Store",
           "openFailed": "Open a workspace to browse the Chrome Web Store."
-        }
+        },
+        "enabledToggleLabel": "Turn browser extensions on or off"
       },
       "passwords": {
         "searchKeywords": {
@@ -8685,10 +8686,6 @@
             "modeAriaLabel": "Agent Dashboard open mode",
             "modeInWindow": "In-window",
             "modePopout": "Pop-out"
-          },
-          "browserExtensions": {
-            "copy": "Adds Settings › Browser › Extensions for local browser profiles.",
-            "toggleLabel": "Toggle browser extensions"
           }
         },
         "FloatingWorkspacePane": {
@@ -10887,13 +10884,6 @@
               "inWindow": "in-window",
               "worktrees": "worktrees",
               "eaf17a7214": "Agent dashboard"
-            },
-            "browserExtensions": {
-              "title": "Browser extensions",
-              "description": "Run Chrome extensions, such as password managers, in Orca browser tabs.",
-              "extension": "extension",
-              "chrome": "chrome",
-              "password": "password manager"
             }
           }
         },
@@ -13183,7 +13173,7 @@
               "tokenHint": "Repository, project, and workspace access tokens are created from the matching Bitbucket settings page and need read access to pull requests.",
               "basicHint": "Create an Atlassian API token for your account, then pair it with the email address that owns it.",
               "scopesTitle": "Select these Bitbucket API token scopes:",
-              "scopeUser": "Verify your account",
+              "scopeUser": "Show your account name",
               "scopeRepository": "Read build statuses",
               "scopeReadPullRequest": "Read pull requests",
               "scopeWritePullRequest": "Create pull requests",
@@ -17852,6 +17842,12 @@
           "remotePathIsDirectory": "Remote path is a directory",
           "remotePagedReadUnsupported": "Remote file is larger than the 512 KB this Orca server can send. Update the server to open it.",
           "remoteFileTooLarge": "Remote file is too large to open in the editor ({{bytes}} bytes)"
+        },
+        "BinaryFileDefaultAppButton": {
+          "downloadFailed": "Failed to download '{{value0}}'.",
+          "open": "Open with default app",
+          "downloadOpen": "Download & open with default app",
+          "openFailed": "No app on this computer opened this file."
         }
       },
       "diff": {
@@ -18451,17 +18447,17 @@
         },
         "AutomationPromptDisclosure": {
           "showLess": "Show less",
-          "showMore": "Show more"
+          "showMore": "Show more",
+          "copied": "Copied",
+          "copyFailed": "Copy failed",
+          "copyPrompt": "Copy prompt"
         },
         "AutomationDetail": {
           "host": "Host",
-          "a1d52c2189": "Usage coverage",
-          "449fc83bf7": "Tokens",
           "401f40ae79": "Est. spend",
           "a7c312430d": "Last run",
           "2df8970cd5": "Agent",
           "e353ab9516": "Precheck",
-          "620b22145e": "Grace",
           "15ea446b93": "Session",
           "5405a09b1f": "Run location",
           "2f8baf5360": "Create from",
@@ -18471,7 +18467,6 @@
           "1f6026358e": "Delete automation",
           "d79452fb30": "Resume automation",
           "91a4155e95": "Pause automation",
-          "4b1ea02d2e": "Edit automation",
           "2fb1605beb": "Run Now",
           "221916d93c": "Create an automation to start scheduling agent work.",
           "b09b2384fd": "Paused",
@@ -18483,8 +18478,6 @@
           "graceMinutes_other": "{{count}} minutes",
           "graceHours_one": "{{count}} hour",
           "graceHours_other": "{{count}} hours",
-          "usageCoverageRuns_one": "{{known}}/{{count}} run",
-          "usageCoverageRuns_other": "{{known}}/{{count}} runs",
           "usageUnavailable": "Unavailable",
           "noRuns": "No runs",
           "projectDefault": "Project default",
@@ -18494,7 +18487,12 @@
           "precheckNone": "None",
           "migrate": "Migrate",
           "migrateNotice": "{{host}} was upgraded to a new remote host. Migrate this automation to keep it running.",
-          "needsMigration": "Needs migration"
+          "needsMigration": "Needs migration",
+          "repeats": "Repeats",
+          "missedRunGrace": "Missed-run grace",
+          "execution": "Execution",
+          "notRunYet": "Not run yet",
+          "usageDetail": "{{tokens}} tokens · {{known}}/{{total}} runs reported"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "Cancel",
@@ -20000,6 +19998,9 @@
           "pipelinePending": "Pipeline pending",
           "pipelineUnresolved": "Pipeline unresolved"
         }
+      },
+      "NewWorkspaceComposerFooter": {
+        "create": "Create"
       }
     },
     "i18n": {
@@ -20184,7 +20185,6 @@
           "browsePlugins": "Browse plugins",
           "browseThemePlugins": "Browse theme plugins",
           "colorMode": "Color mode",
-          "colorModeCaption": "Light, dark, or follow your OS.",
           "darkLook": "Dark look",
           "darkLooks": "Dark looks",
           "lightLook": "Light look",
@@ -20200,10 +20200,9 @@
           "slotLabel": "Look to edit",
           "sourceBuiltIn": "Built in",
           "sourceCommunity": "Terminal palette",
-          "themes": "Theme",
-          "themesCaption": "Optional. Go further with app themes and terminal palettes."
+          "themes": "Theme"
         },
-        "subtitle": "Choose light or dark, then optionally a theme. Change either any time in Settings."
+        "changeAnyTime": "Change any time in Settings."
       },
       "integrations": {
         "capabilities": {
@@ -20955,6 +20954,15 @@
         "reason": "Reason",
         "needsAccess": "Needs access to",
         "needsNewerOrca": "This request needs a newer version of Orca.",
+        "folderTrust": {
+          "title": "Trust this folder?",
+          "hint": "The agent asks before it can read, edit and run files in this folder.",
+          "trust": "Trust folder",
+          "exit": "Exit"
+        },
+        "startupMenu": {
+          "title": "{{value0}} is waiting for a choice in the terminal"
+        },
         "plan": {
           "file": "Plan file",
           "reviewTitle": "Review proposed plan",
@@ -21063,7 +21071,8 @@
       "fileLinks": {
         "notFound": "File not found: {{value0}}",
         "unverifiable": "Couldn't check {{value0}}: {{value1}}",
-        "unresolved": "Couldn't resolve {{value0}} in this workspace"
+        "unresolved": "Couldn't resolve {{value0}} in this workspace",
+        "folderUnavailable": "This computer can't open the folder {{value0}}"
       },
       "contextUsage": {
         "label": "Context {{used}} of {{window}} tokens, {{percent}}% used",

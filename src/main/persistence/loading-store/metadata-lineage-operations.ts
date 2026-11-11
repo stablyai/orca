@@ -33,9 +33,9 @@ import {
   getWorktreeMetaForHost as getWorktreeMetaForHostOperation,
   migrateWorktreeMetadataLocator,
   removeWorktreeMetadataForHost,
-  setWorktreeMetaForHost as setWorktreeMetaForHostOperation,
-  WORKTREE_METADATA_DOMAINS
+  setWorktreeMetaForHost as setWorktreeMetaForHostOperation
 } from './worktree-identity-metadata'
+import * as saved from '../profile-save-domains'
 import {
   captureNativeLocalWorktreeMetadataScanExpectation as captureNativeLocalWorktreeMetadataScanExpectationOperation,
   pruneSessionlessMissingLocalWorktreeMetadataForRepo as pruneSessionlessMissingLocalWorktreeMetadataForRepoOperation,
@@ -51,6 +51,10 @@ type MetadataLineageOperationsContext = {
   runtime: MetadataLineageOperationsRuntime
   scheduling: WriteSchedulingOperations
   sessions: SessionHostPartitionOperations
+}
+
+function saveDomains(owner: MetadataLineageOperations, domains: readonly string[]): void {
+  scheduleSave(owner[metadataLineageOperationsContext].scheduling, domains)
 }
 
 export class MetadataLineageOperations {
@@ -198,7 +202,7 @@ export class MetadataLineageOperations {
     }
     // Removal may release identity collisions that previously blocked unrelated metadata pruning.
     invalidateLocalWorktreeMetadataPruneInputs()
-    scheduleSave(this[metadataLineageOperationsContext].scheduling)
+    saveDomains(this, saved.WORKTREE_METADATA_REMOVAL_DOMAINS)
   }
 
   selectProbeableLocalWorktreeMetadataCandidates(
@@ -220,7 +224,7 @@ export class MetadataLineageOperations {
       missingMetadata
     )
     if (removed.length > 0) {
-      scheduleSave(this[metadataLineageOperationsContext].scheduling)
+      saveDomains(this, saved.WORKTREE_METADATA_PRUNE_DOMAINS)
     }
     return removed
   }
@@ -247,7 +251,7 @@ export class MetadataLineageOperations {
     state.workspaceLineageByChildKey[worktreeWorkspaceKey(target.id)] =
       toWorkspaceLineageRow(lineage)
     delete state.crossStoreLineageByChildKey?.[worktreeWorkspaceKey(target.id)]
-    scheduleSave(this[metadataLineageOperationsContext].scheduling)
+    saveDomains(this, saved.WORKSPACE_LINEAGE_DOMAINS)
     return lineage
   }
 
@@ -259,7 +263,7 @@ export class MetadataLineageOperations {
     delete state.worktreeLineageById[target.id]
     delete state.workspaceLineageByChildKey[worktreeWorkspaceKey(target.id)]
     delete state.crossStoreLineageByChildKey?.[worktreeWorkspaceKey(target.id)]
-    scheduleSave(this[metadataLineageOperationsContext].scheduling)
+    saveDomains(this, saved.WORKSPACE_LINEAGE_DOMAINS)
   }
 
   migrateWorktreeIdentity(target: HostWorktreeTarget, newWorktreeId: string): void {
@@ -275,9 +279,9 @@ export class MetadataLineageOperations {
     )
     if (legacyChanged || canonicalChanged) {
       // Legacy identity moves also touch sessions, lineage, mobile selections and UI state.
-      scheduleSave(
-        this[metadataLineageOperationsContext].scheduling,
-        legacyChanged ? undefined : WORKTREE_METADATA_DOMAINS
+      saveDomains(
+        this,
+        legacyChanged ? saved.WORKTREE_IDENTITY_MIGRATION_DOMAINS : saved.WORKTREE_METADATA_DOMAINS
       )
     }
   }
@@ -298,7 +302,7 @@ export class MetadataLineageOperations {
     const state = this[metadataLineageOperationsContext].runtime.state
     state.workspaceLineageByChildKey[lineage.childWorkspaceKey] = lineage
     delete state.crossStoreLineageByChildKey?.[lineage.childWorkspaceKey]
-    scheduleSave(this[metadataLineageOperationsContext].scheduling)
+    saveDomains(this, ['workspaceLineageByChildKey', 'crossStoreLineageByChildKey'])
     return lineage
   }
 }

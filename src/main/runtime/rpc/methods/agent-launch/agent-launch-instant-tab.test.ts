@@ -158,7 +158,7 @@ function hostWithWindow(
     events,
     published,
     selectCreatedMobileSessionTabForClient: vi.fn(() => true),
-    // Stand in for main's layout write so both builds share fakes; main-layout-agent-launch-tabs.test.ts covers the real write.
+    // Stand in for main's layout write so both builds share fakes.
     publishAgentLaunchTabInMainLayout: vi.fn(
       (request: Omit<AgentLaunchTabPublishRequest, 'requestId'>) =>
         runtime.publishAgentLaunchTab(request)

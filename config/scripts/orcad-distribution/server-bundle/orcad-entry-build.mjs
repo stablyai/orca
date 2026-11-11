@@ -20,7 +20,7 @@ export const ORCAD_CHILD_ENTRY_POINTS = {
   daemon: 'src/main/daemon/daemon-entry.ts',
   writer: 'src/main/persistence/profile-state/profile-state-writer-worker-entry.ts',
   backup: 'src/main/persistence/profile-state/profile-state-backup-worker-entry.ts',
-  sessionSearch: 'src/main/ai-vault-search/session-search-worker-entry.ts',
+  sessionSearch: 'src/main/ai-vault-search/worker/session-search-worker-entry.ts',
   foreignSqliteReader: 'src/main/foreign-sqlite-readers/foreign-sqlite-reader-entry.ts',
   portScanCommandWorker: 'src/main/ports/port-scan-command-worker-entry.ts',
   commandPathDirectoryWorker: 'src/main/ipc/command-path/command-path-directory-worker-entry.ts',

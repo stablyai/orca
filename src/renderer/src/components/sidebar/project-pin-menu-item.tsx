@@ -8,9 +8,10 @@ import { writePersonalProjectPreference } from '@/runtime/personal-project-order
 import { resolveProjectPreferenceKey } from '../../../../shared/project-preference-identity'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import type { Repo } from '../../../../shared/repo-types'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function ProjectPinMenuItem({ repo }: { repo: Repo }) {
+  const t = useTranslate()
   const supported = usePersonalProjectOrderSupported()
   const projectKey = useAppStore((state) =>
     resolveProjectPreferenceKey(
@@ -37,17 +38,15 @@ export function ProjectPinMenuItem({ repo }: { repo: Repo }) {
             projectKey,
             pinned: !pinned
           }).catch(() =>
-            toast.error(
-              translate('sidebar.projectOrder.saveFailed', 'Could not save project order')
-            )
+            toast.error(t('sidebar.projectOrder.saveFailed', 'Could not save project order'))
           )
         }
       }}
     >
       {pinned ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}
       {pinned
-        ? translate('sidebar.projectOrder.unpin', 'Unpin project')
-        : translate('sidebar.projectOrder.pin', 'Pin project')}
+        ? t('sidebar.projectOrder.unpin', 'Unpin project')
+        : t('sidebar.projectOrder.pin', 'Pin project')}
     </DropdownMenuItem>
   )
 }

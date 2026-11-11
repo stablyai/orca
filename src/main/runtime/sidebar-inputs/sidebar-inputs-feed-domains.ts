@@ -6,7 +6,10 @@ import { getWslHostService } from '../../wsl/host-lifecycle/wsl-host-service-ins
 import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
 import type { DesktopSidebarFacts } from '../../../shared/sidebar-list/desktop-sidebar-facts'
 import type { RuntimeStore } from '../construction/runtime-store-contract'
-import { WORKTREE_METADATA_DOMAINS } from '../../persistence/loading-store/worktree-identity-metadata'
+import {
+  savedWorkspaceCatalog,
+  WORKTREE_METADATA_DOMAINS
+} from '../../persistence/profile-save-domains'
 import type { PersistedUIState } from '../../../shared/persisted-ui-state-types'
 import type { OrcaRuntimeWithSidebarTemporal } from './orca-runtime-sidebar-temporal'
 import type { PairedServerRowsProducer } from './paired-server-rows-producer'
@@ -228,11 +231,11 @@ export function sidebarInputsFeedDomains(
         const detaches = [
           watchCatalog(changed),
           store?.onWorkspaceSessionWritten?.(() => changed()),
-          // Pins, settings (saved with or without notifying), UI, and full saves (repos, folders, SSH).
+          // Pins, settings (saved with or without notifying), UI, and catalog saves (repos, folders, SSH).
           store?.onStateWritten?.((domains) => {
             if (
-              domains === undefined ||
-              DESKTOP_WRITE_DOMAINS.some((domain) => domains.includes(domain))
+              savedWorkspaceCatalog(domains) ||
+              DESKTOP_WRITE_DOMAINS.some((domain) => domains?.includes(domain))
             ) {
               changed(urgent)
             }
@@ -261,9 +264,9 @@ export function sidebarInputsFeedDomains(
           pairedServerRows.revision.onChange(changed),
           // Manual repo order and project order live in the UI state.
           sources.store()?.onUIChanged?.(() => changed()),
-          // Catalog writes are full saves, and some (a project rename) announce no event.
+          // Some catalog writes (a project rename) announce no event.
           sources.store()?.onStateWritten?.((domains) => {
-            if (domains === undefined) {
+            if (savedWorkspaceCatalog(domains)) {
               changed()
             }
           })

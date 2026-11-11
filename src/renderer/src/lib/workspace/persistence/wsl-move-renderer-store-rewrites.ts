@@ -46,7 +46,7 @@ const STORE_REWRITES: Record<
       await Promise.all([
         import('../../../components/editor/file-view-preference-storage'),
         import('../../../components/editor/pdf-scale-preference-storage'),
-        import('../../../components/editor/csv/csv-column-width-preferences')
+        import('../../../components/editor/csv/grid/columns/csv-column-width-preferences')
       ])
     copyFileViewPreferences(PDF_SCALE_PREFERENCES_STORAGE_KEY, (key) =>
       hostFileViewPreferenceKey(key, scope)

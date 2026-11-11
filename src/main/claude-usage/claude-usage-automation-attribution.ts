@@ -2,7 +2,7 @@ import type { AutomationRunUsage } from '../../shared/automations/history/automa
 import type { ClaudeUsagePersistedState } from './types'
 import { estimateCostUsd } from './claude-model-pricing'
 import { addBillableTokens, NO_TOKENS, type ClaudeBillableTokens } from './claude-billable-tokens'
-import { shouldForceAutomationUsageScan } from '../usage/automation-usage-scan-forcing'
+import { shouldForceAutomationUsageScan } from '../usage/provider-lifecycle/automation-usage-scan-forcing'
 
 const AUTOMATION_ATTRIBUTION_WINDOW_MS = 5 * 60_000
 
