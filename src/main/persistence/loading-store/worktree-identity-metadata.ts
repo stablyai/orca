@@ -14,6 +14,7 @@ import type { StoreRuntimeState } from './store-runtime-state'
 
 import { type WriteSchedulingOperations, scheduleSave } from './write-scheduling'
 import { mergeWorktreeMetaForWrite } from './worktree-meta-write-normalization'
+import { WORKTREE_METADATA_DOMAINS } from '../profile-save-domains'
 import {
   isLocalOnlyWorktreeMetaId,
   worktreeMetaHostFor
@@ -25,12 +26,6 @@ type WorktreeMetaState = Pick<
   PersistedState,
   'worktreeMeta' | 'worktreeMetaByIdentity' | 'worktreeIdentityAliases'
 >
-
-export const WORKTREE_METADATA_DOMAINS = [
-  'worktreeMeta',
-  'worktreeMetaByIdentity',
-  'worktreeIdentityAliases'
-] as const
 
 export function resolveAliasIdentityKey(
   state: WorktreeMetaState,

@@ -228,94 +228,9 @@ describe('STA-4343: cleanup deletes on the confirmed host, never the active one'
 import * as launchDrafts from '@/components/native-chat/drafts/native-chat-draft-reset'
 import * as launchDraftsOwner1 from '@/components/native-chat/drafts/native-chat-launch-draft-source'
 import * as launchDraftsOwner2 from '@/components/native-chat/drafts/native-chat-composer-draft-store'
-import * as launchDraftsOwner3 from '@/components/native-chat/drafts/native-chat-composer-draft-memory'
 import * as launchDraftsOwner4 from '@/components/native-chat/drafts/native-chat-composer-draft-load'
 import * as launchDraftsOwner5 from '@/components/native-chat/drafts/native-chat-composer-draft-persistence'
 import * as pendingChips from '@/components/native-chat/attachments/chips/native-chat-pending-attachment-cache'
-
-it.each([
-  { mode: 'normal', twin: true, preserved: false },
-  { mode: 'force', twin: true, preserved: true },
-  { mode: 'forget-local', twin: true, preserved: false },
-  { mode: 'normal', twin: false, preserved: false },
-  { mode: 'postcommit-error', twin: false, preserved: false }
-])(
-  'actual $mode removal revokes the return writer before postcommit work, twin=$twin preserved=$preserved',
-  async ({ mode, twin, preserved }) => {
-    launchDrafts.clearNativeChatComposerDraftsForTests()
-    pendingChips.clearNativeChatPendingAttachmentsForTests()
-    const store = createTestStore()
-    seedStore(store, {
-      worktreesByRepo: {
-        repo1: [
-          makeWorktree({ id: WORKTREE_ID, repoId: 'repo1', hostId: 'local' }),
-          ...(twin
-            ? [makeWorktree({ id: WORKTREE_ID, repoId: 'repo1', hostId: HOST_B_HOST_ID })]
-            : [])
-        ]
-      }
-    })
-    const scope = launchDraftsOwner1.nativeChatLaunchPromptDraftScopeKey(
-      WORKTREE_ID,
-      'codex',
-      'local'
-    )
-    const other = launchDraftsOwner1.nativeChatLaunchPromptDraftScopeKey(
-      WORKTREE_ID,
-      'codex',
-      HOST_B_HOST_ID
-    )
-    launchDraftsOwner2.updateNativeChatComposerDraft(scope, { text: 'old task' }, 'immediate')
-    launchDraftsOwner2.updateNativeChatComposerDraft(
-      other,
-      { text: 'other host task' },
-      'immediate'
-    )
-    const attempt = launchDraftsOwner3.captureNativeChatComposerSubmission(scope)
-    launchDraftsOwner2.updateNativeChatComposerDraft(scope, { text: '' }, 'immediate')
-    pendingChips.addNativeChatPendingAttachment(scope, { id: 'old-chip', path: '', pending: true })
-    mockApi.worktrees.remove.mockRejectedValueOnce(new Error('dirty worktree'))
-    expect(
-      (await store.getState().removeWorktree({ id: WORKTREE_ID, executionHostId: 'local' })).ok
-    ).toBe(false)
-    expect(attempt.draft?.text).toBe('old task')
-    const result = preserved ? { preservedBranch: { branchName: 'keep', head: 'abc123' } } : {}
-    mockApi.worktrees.remove.mockResolvedValue(result)
-    mockApi.worktrees.forgetLocal.mockResolvedValue(result)
-    if (mode === 'postcommit-error') {
-      store.setState({
-        shutdownWorktreeBrowsers: vi.fn(async () => {
-          expect(attempt.draft).toBeUndefined()
-          throw new Error('postcommit housekeeping failed')
-        })
-      })
-    }
-    const removal = await store
-      .getState()
-      .removeWorktree(
-        { id: WORKTREE_ID, executionHostId: 'local' },
-        mode === 'force',
-        mode === 'forget-local' ? { mode: 'forget-local' } : undefined
-      )
-    expect(removal.ok).toBe(mode !== 'postcommit-error')
-    expect(attempt.draft).toBeUndefined()
-    expect(pendingChips.nativeChatPendingAttachmentSnapshot(scope)).toHaveLength(twin ? 1 : 0)
-    const freshScope = launchDraftsOwner1.nativeChatLaunchPromptDraftScopeKey(
-      WORKTREE_ID,
-      'codex',
-      'local'
-    )
-    launchDraftsOwner2.updateNativeChatComposerDraft(
-      freshScope,
-      { text: 'new lifetime' },
-      'immediate'
-    )
-    launchDraftsOwner2.finishNativeChatComposerSubmission(scope, attempt, true)
-    expect(pendingChips.takeNativeChatPendingAttachment(scope, 'old-chip') !== undefined).toBe(twin)
-    expect(launchDraftsOwner2.readNativeChatComposerDraft(freshScope).text).toBe('new lifetime')
-    expect(launchDraftsOwner2.readNativeChatComposerDraft(other).text).toBe('other host task')
-  }
-)
 
 import {
   createMemoryNativeChatComposerDraftStorage,

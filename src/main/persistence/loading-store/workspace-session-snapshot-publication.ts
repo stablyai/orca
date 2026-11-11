@@ -1,4 +1,5 @@
 import type { PersistedState } from '../../../shared/persisted-state-types'
+import { WORKSPACE_SESSION_DOMAINS } from '../workspace-session-domains'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { sanitizeWorkspaceSessionTerminalRetirements } from '../../runtime/terminal/surface/mobile-session-terminal-persistence-retirement'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
@@ -121,7 +122,11 @@ export function setLocalWorkspaceSession(
     remappedManualUnread.changed
   ) {
     // UI remaps include protected fields, so keep the complete serializer boundary.
-    scheduleSave(context.scheduling, undefined, LOCAL_EXECUTION_HOST_ID)
+    scheduleSave(
+      context.scheduling,
+      [WORKSPACE_SESSION_DOMAINS[0], 'ui', 'sshRemotePtyLeases'],
+      LOCAL_EXECUTION_HOST_ID
+    )
   } else {
     scheduleSave(
       context.scheduling,

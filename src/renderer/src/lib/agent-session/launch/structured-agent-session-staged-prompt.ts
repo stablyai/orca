@@ -12,7 +12,7 @@ import { agentSessionWriteNoticeText } from '@/components/native-chat/messages/n
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import type { StructuredAgentSessionSendInput } from '@/components/native-chat/session/structured/delivery/structured-agent-session-send-slot'
 import type { StructuredPromptDeliveryResult } from './structured-agent-session-launch-callers'
-export type { StructuredPromptDeliveryResult } from './structured-agent-session-launch-callers'
+
 type LaunchMessage = Pick<StructuredAgentSessionSendInput, 'text' | 'attachments' | 'skills'>
 
 export type StagedDelivery = Omit<

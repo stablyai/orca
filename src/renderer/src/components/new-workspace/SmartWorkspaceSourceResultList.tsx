@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { CommandGroup, CommandItem, CommandList } from '@/components/ui/command'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
-import { getSmartWorkspaceEmptyHint } from '../../../../shared/new-workspace/smart-workspace-source-results'
+import { translateSmartWorkspaceEmptyHint } from './smart-workspace-empty-hint'
 import { RowIcon, RowLabel } from './smart-workspace-source-row-content'
 import type { RowEntry } from './smart-workspace-name-field-model'
 import type { WorkItemSourceSearch } from './use-work-item-source-search'
@@ -162,7 +162,7 @@ export function SmartWorkspaceSourceResultList({
                     'auto.components.new.workspace.SmartWorkspaceNameField.3e8bb1176a',
                     'Connect Linear in Settings to search issues.'
                   )
-                : (emptyHint ?? getSmartWorkspaceEmptyHint(mode))}
+                : (emptyHint ?? translateSmartWorkspaceEmptyHint(mode))}
           </div>
         ) : searchResultRows.length > 0 ? (
           <CommandGroup>
