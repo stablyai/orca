@@ -18,13 +18,14 @@ let rig: QueuedMessageTestRig | undefined
 afterEach(async () => rig?.dispose())
 
 /** Production sweep through dispatch, on an account whose polled reading the test sets per pass. */
-async function heldChat(identityKnown: boolean) {
+async function heldChat() {
+  await rig?.dispose()
   let clock = HOST_TEST_NOW
   let reading: ProviderRateLimits | null = null
   let enabled = true
   const accountA: UsageLimitAccountScope = {
     scope: 'home-a',
-    account: { key: 'account-a', identityKnown, read: () => reading, refresh: () => {} }
+    account: { key: 'account-a', read: () => reading, refresh: () => {} }
   }
   let attributed: UsageLimitAccountScope = accountA
   const current = await createQueuedMessageTestRig({
@@ -63,38 +64,59 @@ async function heldChat(identityKnown: boolean) {
   }
 }
 
-it('holds an automatic continue until the account weekly window resets, then sends once', async () => {
-  const chat = await heldChat(true)
-  const weeklyReset = chat.cut.resetsAt + 3 * HOUR
-  expect(
-    await chat.pass(chat.cut.resetsAt + 15_000, (now) => weekly(100, weeklyReset, now))
-  ).toEqual([])
-  expect(chat.state()).toMatchObject({ state: 'scheduled', continueAt: weeklyReset })
-  // A reading that clears the window before its own reset never lowers a known account's hold.
-  expect(await chat.pass(chat.cut.resetsAt + HOUR, (now) => weekly(0, null, now))).toEqual([])
-  const sent = await chat.pass(weeklyReset + 15_000, (now) => weekly(0, null, now))
+/** The one continue a pass sent, carried through to an accepted settlement. */
+async function settleOne(sent: readonly { clientMessageId: string }[]) {
   expect(sent).toHaveLength(1)
   const id = sent[0]!.clientMessageId
   await eventually(async () => expect((await rig!.submission(id))?.handedOverAt).toBeDefined())
   await rig!.settleAccepted(id, 'continued')
   expect((await rig!.submission(id))?.dispatchState).toBe('accepted')
-  expect(await chat.pass(weeklyReset + 5 * 60_000, (now) => weekly(0, null, now))).toHaveLength(1)
+}
+
+it('releases a held continue on room newer than its spent evidence, even days after the cut', async () => {
+  const chat = await heldChat()
+  const reset = chat.cut.resetsAt
+  const friday = reset + 96 * HOUR
+  expect(await chat.pass(reset + 15_000, (now) => weekly(100, friday, now))).toEqual([])
+  expect(chat.state()).toMatchObject({ state: 'scheduled', continueAt: friday })
+  // Room in a reading taken before that spending changes nothing.
+  expect(await chat.pass(reset + HOUR, () => weekly(0, null, reset + 5_000))).toEqual([])
+  expect(chat.state()).toMatchObject({ state: 'scheduled', continueAt: friday })
+  // Wednesday, over a day past the cut's reset: fresh room releases it from that reading on.
+  const wednesday = reset + 48 * HOUR
+  expect(await chat.pass(wednesday, (now) => weekly(0, null, now))).toEqual([])
+  expect(chat.state()).toMatchObject({ state: 'scheduled', continueAt: wednesday })
+  await settleOne(await chat.pass(wednesday + 15_000, (now) => weekly(0, null, now)))
+  expect(await chat.pass(wednesday + 5 * 60_000, (now) => weekly(0, null, now))).toHaveLength(1)
 })
 
-it('releases a System Default hold and refusal once a fresh reading of that home has room', async () => {
-  const chat = await heldChat(false)
-  const weeklyReset = chat.cut.resetsAt + 3 * HOUR
-  expect(
-    await chat.pass(chat.cut.resetsAt + 15_000, (now) => weekly(100, weeklyReset, now))
-  ).toEqual([])
-  expect(await chat.pass(chat.cut.resetsAt + 60_000, (now) => weekly(100, null, now))).toEqual([])
-  expect(chat.state()).toMatchObject({ state: 'failed', continueAt: weeklyReset })
-  // Another login signed into the same home: its room overrides both.
-  expect(await chat.pass(chat.cut.resetsAt + HOUR, (now) => weekly(0, null, now))).toHaveLength(1)
+it('holds again on spending inside the grace, and leaves an unknown reset once room returns', async () => {
+  const held = await heldChat()
+  const reset = held.cut.resetsAt
+  await held.pass(reset + 15_000, (now) => weekly(100, reset + 96 * HOUR, now))
+  const wednesday = reset + 48 * HOUR
+  expect(await held.pass(wednesday, (now) => weekly(0, null, now))).toEqual([])
+  const sessionReset = wednesday + 5 * HOUR
+  const spentSession = { usedPercent: 100, resetsAt: sessionReset }
+  for (const at of [wednesday + 10_000, wednesday + 20_000]) {
+    expect(await held.pass(at, (now) => weekly(0, null, now, spentSession))).toEqual([])
+  }
+  expect(held.state()).toMatchObject({ state: 'scheduled', continueAt: sessionReset })
+
+  const refused = await heldChat()
+  const cutReset = refused.cut.resetsAt
+  expect(await refused.pass(cutReset + 15_000, (now) => weekly(100, null, now))).toEqual([])
+  expect(await refused.pass(cutReset + 20 * HOUR, (now) => weekly(100, null, now))).toEqual([])
+  expect(refused.state()).toMatchObject({ state: 'failed' })
+  // Room over a day after the cut's reset, while the refusal still stood: scheduled again.
+  const room = cutReset + 30 * HOUR
+  expect(await refused.pass(room, (now) => weekly(0, null, now))).toEqual([])
+  expect(refused.state()).toMatchObject({ state: 'scheduled' })
+  await settleOne(await refused.pass(room + 15_000, (now) => weekly(0, null, now)))
 })
 
 it('retires a hold when the launch moves to billing the reading does not describe', async () => {
-  const chat = await heldChat(true)
+  const chat = await heldChat()
   const weeklyReset = chat.cut.resetsAt + 3 * HOUR
   expect(
     await chat.pass(chat.cut.resetsAt + 15_000, (now) => weekly(100, weeklyReset, now))
@@ -107,7 +129,7 @@ it('retires a hold when the launch moves to billing the reading does not describ
 })
 
 it('rebuilds a hold after restart from the reading before the cut counts as overdue', async () => {
-  const chat = await heldChat(true)
+  const chat = await heldChat()
   const fridayReset = chat.cut.resetsAt + 96 * HOUR
   // First pass of a fresh host two days after the cut's own reset, the week still spent.
   expect(
@@ -118,7 +140,7 @@ it('rebuilds a hold after restart from the reading before the cut counts as over
 })
 
 it('drops a hidden chat hold while automatic continue is off, and keeps it when the chat opens', async () => {
-  const chat = await heldChat(true)
+  const chat = await heldChat()
   const weeklyReset = chat.cut.resetsAt + 3 * HOUR
   await chat.pass(chat.cut.resetsAt + 15_000, (now) => weekly(100, weeklyReset, now))
   chat.setEnabled(false)
@@ -139,7 +161,7 @@ it('drops a hidden chat hold while automatic continue is off, and keeps it when 
 })
 
 it('never revives an old cut with a spent window that began after its reset', async () => {
-  const chat = await heldChat(true)
+  const chat = await heldChat()
   const laterReset = chat.cut.resetsAt + 23 * DAY
   expect(
     await chat.pass(chat.cut.resetsAt + 21 * DAY, (now) => weekly(100, laterReset, now))
@@ -149,7 +171,7 @@ it('never revives an old cut with a spent window that began after its reset', as
 })
 
 it('asks for a first reading when a late first pass finds none, and waits for it', async () => {
-  const chat = await heldChat(true)
+  const chat = await heldChat()
   let asked = 0
   chat.launchUnder({ scope: 'home-a', bootstrap: () => asked++ })
   // A restart an hour after the reset, before any reading names where it was taken.
@@ -165,7 +187,7 @@ it('asks for a first reading when a late first pass finds none, and waits for it
 })
 
 it('holds a still-eligible cut for a spent window that began after its reset', async () => {
-  const chat = await heldChat(true)
+  const chat = await heldChat()
   const reset = chat.cut.resetsAt
   const sessionSpentUntil = { usedPercent: 100, resetsAt: reset + 10 * HOUR }
   expect(
@@ -176,7 +198,7 @@ it('holds a still-eligible cut for a spent window that began after its reset', a
 })
 
 it('extends a weekly hold for a session window still spent at the weekly reset', async () => {
-  const chat = await heldChat(true)
+  const chat = await heldChat()
   const friday = chat.cut.resetsAt + 96 * HOUR
   expect(await chat.pass(chat.cut.resetsAt + 15_000, (now) => weekly(100, friday, now))).toEqual([])
   const sessionSpentUntil = { usedPercent: 100, resetsAt: friday + 2 * HOUR }
@@ -193,7 +215,7 @@ it('extends a weekly hold for a session window still spent at the weekly reset',
 })
 
 it('rebuilds a covering hold beside a spent window of unknown reset, then settles after the release', async () => {
-  const chat = await heldChat(false)
+  const chat = await heldChat()
   const weeklyReset = chat.cut.resetsAt + 96 * HOUR
   const sessionUnknown = { usedPercent: 100, resetsAt: null }
   // A restart two days after the cut: the covering week holds it; the unknown session refuses for now.

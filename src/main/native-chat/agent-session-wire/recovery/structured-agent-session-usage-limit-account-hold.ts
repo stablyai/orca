@@ -18,8 +18,6 @@ import { usageLimitContinueIdentity as identity } from './structured-agent-sessi
 export type UsageLimitAccountUsage = {
   /** Attributed home and account identity; state kept for another account never applies. */
   key: string
-  /** False when Orca can't tell which login signed into the home (System Default). */
-  identityKnown: boolean
   /** The reading now, or null once it no longer describes this account. */
   read: () => ProviderRateLimits | null
   /** A non-forced fetch that keeps the poller's own Retry-After. */
@@ -51,6 +49,8 @@ type Hold = {
   account?: string
   heldUntil?: number
   unknownReset?: boolean
+  /** When the newest reading that put spending into effect was taken; only later room releases. */
+  spentSeenAt?: number
   refreshedFor?: number
   /** When a due send of this held reset first found no reading to wait for. */
   bootstrapSince?: { reset: number; at: number }
@@ -187,13 +187,15 @@ export class UsageLimitAccountHolds {
       reading?.status === 'ok' &&
       reading.usageMetadata?.source !== 'live-session' &&
       reading.updatedAt >= since
-    // Eligibility first: the cut's own reset, this hold, or a spent window that covered that reset.
-    // Later spending never revives a cut that is overdue from all of them.
+    // Eligibility first: the cut's own reset, this hold (an unknown reset holds from the last reading
+    // that showed it), or a spent window that covered that reset. Later spending never revives a cut
+    // that is overdue from all of them.
     const covering =
       account && reading && fresh(cut.resetsAt) && rateLimitSpentUntil(reading, cut.resetsAt)
     const anchor = Math.max(
       cut.resetsAt,
       hold.heldUntil ?? cut.resetsAt,
+      (hold.unknownReset && hold.spentSeenAt) || cut.resetsAt,
       typeof covering === 'number' ? covering : cut.resetsAt
     )
     if (
@@ -207,19 +209,26 @@ export class UsageLimitAccountHolds {
       }
       // Eligible: every window spent now holds the send, whenever it began.
       const spentUntil = rateLimitSpentUntil(reading)
-      if (spentUntil === null) {
-        hold.unknownReset = true
-      } else if (spentUntil !== undefined) {
-        hold.heldUntil = Math.max(hold.heldUntil ?? spentUntil, spentUntil)
-      } else if (!account.identityKnown) {
-        // Room before the held reset means another login now uses this home.
-        hold.unknownReset = false
-        if (hold.heldUntil !== undefined && reading.updatedAt < hold.heldUntil) {
-          hold.heldUntil = undefined
+      if (spentUntil !== undefined) {
+        if (spentUntil === null) {
+          hold.unknownReset = true
+        } else {
+          hold.heldUntil = Math.max(hold.heldUntil ?? spentUntil, spentUntil)
         }
+        hold.spentSeenAt = Math.max(hold.spentSeenAt ?? reading.updatedAt, reading.updatedAt)
+      } else if (reading.updatedAt > (hold.spentSeenAt ?? Number.NEGATIVE_INFINITY)) {
+        // Room newer than any spending seen releases the hold at that reading, so it counts from now.
+        if (hold.unknownReset || (hold.heldUntil ?? Number.NEGATIVE_INFINITY) > reading.updatedAt) {
+          hold.heldUntil = Math.min(hold.heldUntil ?? reading.updatedAt, reading.updatedAt)
+        }
+        hold.unknownReset = false
       }
     }
-    const resetsAt = Math.max(cut.resetsAt, hold.heldUntil ?? cut.resetsAt)
+    const resetsAt = Math.max(
+      cut.resetsAt,
+      hold.heldUntil ?? cut.resetsAt,
+      (hold.unknownReset && hold.spentSeenAt) || cut.resetsAt
+    )
     let waitFrom = resetsAt + GRACE_MS
     if (!account && scope?.bootstrap && now >= waitFrom) {
       // A first reading is asked for only once a pass sees the send due, however late that is.

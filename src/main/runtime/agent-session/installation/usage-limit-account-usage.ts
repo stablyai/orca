@@ -147,7 +147,6 @@ export function usageLimitAccountSources(deps: UsageLimitAccountSourceDeps): {
         scope,
         account: {
           key: JSON.stringify([home, identity]),
-          identityKnown: identity !== null,
           // Only while the reading still comes from the source this attribution saw.
           read: () =>
             service.usageReadingAccount(provider) === reading
