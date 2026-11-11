@@ -1,3 +1,4 @@
+// @orca-isolated-worker -- Suite hooks own the temporary SQL worker bundle.
 import { build } from 'esbuild'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
