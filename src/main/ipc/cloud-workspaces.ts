@@ -1,7 +1,7 @@
 // IPC for team cloud workspaces. Every handler answers `not_configured` when this build has no
 // Orca Cloud control plane, so the renderer can hide the section instead of erroring.
 import { randomUUID } from 'node:crypto'
-import { readFile, rename, writeFile } from 'node:fs/promises'
+import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { app, ipcMain } from 'electron'
 import { z } from 'zod'
@@ -20,6 +20,12 @@ import { registerTeamPresenceHandlers } from './cloud-workspaces-team-presence'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
 import { registerCloudWorkspacePrefsHandlers } from './cloud-workspaces-prefs'
 import type { CloudReadSnapshotState } from '../../shared/cloud-workspaces/read-snapshot-state'
+import type { RemovedServerStore } from './runtime-environments/runtime-environment-removal-cleanup'
+import {
+  CloudEnvironmentId as EnvironmentId,
+  createCloudWorkspacesPairings,
+  STARTUP_PRUNE_DELAY_MS
+} from './cloud-workspaces-pairings'
 
 const Id = z.string().regex(/^sbx_[0-9a-f]{24}$/)
 const GrantId = z.string().regex(/^grt_[0-9a-f]{24}$/)
@@ -147,52 +153,18 @@ async function clientIdFor(userDataPath: string): Promise<string> {
   return id
 }
 
-const bindingsFile = () => join(app.getPath('userData'), 'cloud-workspaces-environments.json')
-
-type Binding = { environmentId: string; grantId: string | null }
-
-const EnvironmentId = z.string().min(1).max(256)
-// Older builds stored the bare environment id; read it as a binding with an unknown grant.
-const StoredBinding = z.union([
-  EnvironmentId.transform((environmentId): Binding => ({ environmentId, grantId: null })),
-  z.object({ environmentId: EnvironmentId, grantId: GrantId.nullable() })
-])
-
-async function readBindings(): Promise<Record<string, Binding>> {
-  try {
-    const parsed = z
-      .record(Id, StoredBinding)
-      .safeParse(JSON.parse(await readFile(bindingsFile(), 'utf8')))
-    return parsed.success ? parsed.data : {}
-  } catch {
-    return {}
-  }
-}
-
-// Read-modify-write updates run one at a time so two quick pairings cannot drop each other.
-let bindingsWrite: Promise<void> = Promise.resolve()
-
-/** Temp file + rename so a crash mid-write never leaves a truncated bindings file. */
-function updateBindings(
-  change: (current: Record<string, Binding>) => Record<string, Binding>
-): Promise<void> {
-  bindingsWrite = bindingsWrite
-    .catch(() => undefined)
-    .then(async () => {
-      const file = bindingsFile()
-      const temp = `${file}.${process.pid}.tmp`
-      await writeFile(temp, JSON.stringify(change(await readBindings())), { mode: 0o600 })
-      await rename(temp, file)
-    })
-  return bindingsWrite
-}
-
 let quitHookInstalled = false
 
 const NOT_CONFIGURED = { ok: false as const, error: 'not_configured' }
 const INVALID = { ok: false as const, error: 'invalid_request' }
 
-export function registerCloudWorkspacesHandlers(): void {
+export function registerCloudWorkspacesHandlers(
+  options: { removedServerStore?: RemovedServerStore } = {}
+): void {
+  const { prune, readBindings, updateBindings } = createCloudWorkspacesPairings(
+    getService,
+    options.removedServerStore
+  )
   const handle = (channel: string, fn: (args: unknown) => unknown): void => {
     ipcMain.removeHandler(channel)
     ipcMain.handle(channel, (_event, args: unknown) => fn(args))
@@ -201,7 +173,15 @@ export function registerCloudWorkspacesHandlers(): void {
   handle('cloudWorkspaces:list', async (args) => {
     const query = ListQuery.safeParse(args ?? {})
     const s = await getService()
-    return !s ? NOT_CONFIGURED : query.success ? s.list(query.data) : INVALID
+    if (!s || !query.success) {
+      return !s ? NOT_CONFIGURED : INVALID
+    }
+    const result = await s.list(query.data)
+    // Each successful refresh also checks this device's pairings (throttled, in the background).
+    if (result.ok) {
+      void prune.run()
+    }
+    return result
   })
   handle('cloudWorkspaces:get', async (args) => {
     const parsed = z.object({ id: Id }).safeParse(args)
@@ -259,13 +239,24 @@ export function registerCloudWorkspacesHandlers(): void {
         ? s.revokeGrant(parsed.data.id, parsed.data.grantId)
         : INVALID
   })
-  for (const action of ['sleep', 'destroy'] as const) {
-    handle(`cloudWorkspaces:${action}`, async (args) => {
-      const parsed = z.object({ id: Id }).safeParse(args)
-      const s = await getService()
-      return !s ? NOT_CONFIGURED : parsed.success ? s[action](parsed.data.id) : INVALID
-    })
-  }
+  handle('cloudWorkspaces:sleep', async (args) => {
+    const parsed = z.object({ id: Id }).safeParse(args)
+    const s = await getService()
+    return !s ? NOT_CONFIGURED : parsed.success ? s.sleep(parsed.data.id) : INVALID
+  })
+  handle('cloudWorkspaces:destroy', async (args) => {
+    const parsed = z.object({ id: Id }).safeParse(args)
+    const s = await getService()
+    if (!s || !parsed.success) {
+      return !s ? NOT_CONFIGURED : INVALID
+    }
+    const result = await s.destroy(parsed.data.id)
+    // Deleted from here: its pairing, server and projects go now, not at the next list.
+    if (result.ok) {
+      await prune.forget(parsed.data.id).catch(() => undefined)
+    }
+    return result
+  })
   handle(
     'cloudWorkspaces:localWorkspaces',
     async () => (await getService())?.localWorkspaces() ?? []
@@ -281,9 +272,10 @@ export function registerCloudWorkspacesHandlers(): void {
       .safeParse(args)
     if (parsed.success) {
       const { sandboxId, runtimeEnvironmentId, grantId } = parsed.data
+      const accountId = prune.accountForNewBinding()
       await updateBindings((current) => ({
         ...current,
-        [sandboxId]: { environmentId: runtimeEnvironmentId, grantId: grantId ?? null }
+        [sandboxId]: { environmentId: runtimeEnvironmentId, grantId: grantId ?? null, accountId }
       }))
     }
   })
@@ -321,6 +313,9 @@ export function registerCloudWorkspacesHandlers(): void {
   // Handlers are re-registered per main window; the quit hook must only be added once.
   if (!quitHookInstalled) {
     quitHookInstalled = true
+    // Startup: pairings whose sandbox was deleted while this app was closed go now. Delayed so
+    // the Orca session is restored first; a list that still fails just leaves everything alone.
+    setTimeout(() => void prune.run({ force: true }), STARTUP_PRUNE_DELAY_MS).unref?.()
     app.once('will-quit', () => service?.dispose())
   }
 }

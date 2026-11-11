@@ -42,8 +42,13 @@ export type CloudSetupStartRequest = {
   /** The rows still open when the user clicked (account, team, plan, github). */
   needs: CloudSetupStep['id'][]
 }
-/** Null when the session couldn't open; the composer then falls back to today's actions. */
-type SessionStarter = (request: CloudSetupStartRequest) => Promise<{ sessionId: string } | null>
+/**
+ * Null when the session couldn't open; the composer then falls back to today's actions.
+ * `cancelled` when the user cancelled the sign-in: no fallback, nothing else opens.
+ */
+type SessionStarter = (
+  request: CloudSetupStartRequest
+) => Promise<{ sessionId: string } | { cancelled: true } | null>
 
 let source: SessionSource | null = null
 let starter: SessionStarter | null = null

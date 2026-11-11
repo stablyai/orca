@@ -130,6 +130,11 @@ function BrowserWaiting({ flow }: { flow: CloudSetupFlow }): React.JSX.Element {
         {t('cloudSetupPage.waitingBrowser', 'Waiting for your browser…')}
       </span>
       <span className="ms-auto flex items-center gap-2">
+        {flow.signingIn ? (
+          <Button type="button" variant="ghost" size="sm" onClick={flow.cancelSignIn}>
+            {t('cloudSetupPage.cancelSignIn', 'Cancel')}
+          </Button>
+        ) : null}
         {flow.copyLink ? (
           <Button type="button" variant="ghost" size="sm" onClick={flow.copyLink}>
             <Copy aria-hidden />
@@ -159,12 +164,22 @@ function StepActions({ flow }: { flow: CloudSetupFlow }): React.JSX.Element | nu
     flow.action === 'choose-plan' ||
     flow.action === 'fix-billing' ||
     flow.action === 'github-install'
-  if (flow.inBrowser && inBrowserAction && !flow.error) {
+  if (flow.signingIn || (flow.inBrowser && inBrowserAction && !flow.error)) {
     return <BrowserWaiting flow={flow} />
   }
   const continueLabel = t('cloudSetupPage.continueInBrowser', 'Continue in browser')
   switch (flow.action) {
     case 'sign-in':
+      return flow.signInDidNotFinish ? (
+        <div className="flex flex-col items-start gap-3">
+          <p role="status" className="text-sm text-muted-foreground">
+            {t('cloudSetupPage.signIn.didNotFinish', 'Sign-in didn’t finish. Try again.')}
+          </p>
+          {browser(continueLabel, flow.continueInBrowser)}
+        </div>
+      ) : (
+        browser(continueLabel, flow.continueInBrowser)
+      )
     case 'choose-plan':
       return browser(continueLabel, flow.continueInBrowser)
     case 'fix-billing':
@@ -269,7 +284,14 @@ export function CloudSetupPage({
       setViewing(previous.id)
       return
     }
+    // Leaving setup cancels a sign-in this page started (it must not finish behind the user).
+    flow.abandon()
     onBackToComposer()
+  }
+
+  const exit = (): void => {
+    flow.abandon()
+    onExit()
   }
 
   // Each new step moves focus to its heading so screen readers hear the change once.
@@ -311,7 +333,7 @@ export function CloudSetupPage({
           size="icon-sm"
           aria-label={t('cloudSetupPage.exit', 'Exit setup')}
           title={t('cloudSetupPage.exit', 'Exit setup')}
-          onClick={onExit}
+          onClick={exit}
         >
           <X aria-hidden />
         </Button>

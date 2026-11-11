@@ -74,12 +74,12 @@ export async function runRestartCloudWorkspace(
 ): Promise<void> {
   if (options.agentsRunning && options.confirm) {
     const ok = await options.confirm({
-      title: translate('orcaCloudWorkspace.restartConfirmTitle', 'Restart sandbox?'),
+      title: translate('orcaCloudWorkspace.restartConfirmTitle', 'Restart workspace?'),
       description: translate(
         'orcaCloudWorkspace.restartConfirm',
         'Running agents stop and resume after the restart. Your files are kept.'
       ),
-      confirmLabel: translate('orcaCloudWorkspace.restartSandbox', 'Restart sandbox'),
+      confirmLabel: translate('orcaCloudWorkspace.restart', 'Restart'),
       icon: RotateCw
     })
     if (!ok) {
@@ -88,11 +88,11 @@ export async function runRestartCloudWorkspace(
   }
   const result = await restartCloudWorkspace(workspaceId)
   failureToast(
-    translate('orcaCloudWorkspace.restartFailed', 'Couldn’t restart the sandbox'),
+    translate('orcaCloudWorkspace.restartFailed', 'Couldn’t restart the workspace'),
     result
   )
   if (result.ok) {
-    toast.success(translate('orcaCloudWorkspace.restarted', 'Sandbox restarted'), {
+    toast.success(translate('orcaCloudWorkspace.restarted', 'Workspace restarted'), {
       description: translate(
         'orcaCloudWorkspace.restartedDetail',
         'Orca resumes your agents after the restart.'

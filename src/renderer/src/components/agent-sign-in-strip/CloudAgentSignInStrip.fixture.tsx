@@ -11,6 +11,9 @@ import {
   type CloudStripActions
 } from './CloudAgentSignInStrip'
 import { cloudAgentStripModel } from './cloud-agent-strip-model'
+import { cloudRestartAttemptModel, cloudRunningStripModel } from './cloud-running-strip-model'
+import type { CloudAgentRestartAttempt } from '@/lib/orca-cloud/cloud-agent-restart-attempt'
+import type { CloudRunningStrip } from '@/lib/orca-cloud/cloud-running-agent-signout'
 
 const noop = (): void => {}
 const ACTIONS: CloudStripActions = {
@@ -24,29 +27,39 @@ const ACTIONS: CloudStripActions = {
 const PROMPT = 'Fix the flaky auth test and open a PR'
 
 function Pane({
-  reason,
+  reason = 'accountExpired',
   view = null,
   agent = 'claude',
-  width = 900
+  width = 900,
+  running,
+  restart
 }: {
-  reason: CloudAgentStripReason
+  reason?: CloudAgentStripReason
   view?: AgentSignInGateView | null
   agent?: HostAgentSignInAgent
   width?: number
+  /** RA-11: the strip over a running agent instead of a held launch. */
+  running?: CloudRunningStrip
+  /** RA-11: a Restart in flight, or one that failed. */
+  restart?: CloudAgentRestartAttempt
 }): React.JSX.Element {
-  const model = cloudAgentStripModel({
-    agent,
-    reason,
-    view,
-    hostLabel: translate('agentSignInStrip.sandbox', 'the sandbox'),
-    t: translate
-  })
+  const model = restart
+    ? cloudRestartAttemptModel(restart, translate)
+    : running
+      ? cloudRunningStripModel(running, translate)
+      : cloudAgentStripModel({
+          agent,
+          reason,
+          view,
+          hostLabel: translate('agentSignInStrip.sandbox', 'the sandbox'),
+          t: translate
+        })
   return (
     <div className="bg-background p-4">
       {/* Stands in for a terminal pane: its title row (split, close) stays above the strip. */}
       <div
         data-strip-pane
-        className="relative h-[220px] overflow-hidden rounded-md border border-border bg-background"
+        className="pane relative h-[220px] overflow-hidden rounded-md border border-border bg-background"
         style={{ width }}
       >
         <div className="pane-title-overlay-layer">
@@ -64,14 +77,21 @@ function Pane({
         <CloudStripLayer>
           <CloudAgentSignInStrip
             model={model}
-            prompt={PROMPT}
+            prompt={running ? null : PROMPT}
             width={cloudStripWidth(width)}
             actions={ACTIONS}
           />
         </CloudStripLayer>
-        <pre className="absolute inset-x-0 bottom-0 top-20 p-3 font-mono text-xs text-muted-foreground">
-          ~/acme/web $
-        </pre>
+        {/* The terminal: it starts below the strip (reserved, never covered) and keeps its rows. */}
+        <div className="xterm-container overflow-hidden font-mono text-xs leading-4 text-muted-foreground">
+          {running ? (
+            <>
+              <div>⏺ Reading src/auth/session.ts…</div>
+              <div>⏺ API Error: 401 · Not logged in · Run /login</div>
+            </>
+          ) : null}
+          <div data-terminal-last-row>~/acme/web $</div>
+        </div>
       </div>
     </div>
   )
@@ -128,3 +148,37 @@ export const waitingNarrow = fixture({
 export const needExpiredNarrow = fixture({ reason: 'accountExpired', width: 520 })
 /** Below 360 px: one line and Renew; the detail stays the region's description. */
 export const needExpiredCompact = fixture({ reason: 'accountExpired', width: 320 })
+
+/** RA-11 state 1: Claude was running when its Orca-account sign-in expired. */
+export const runningExpired = fixture({ running: { phase: 'expired', agent: 'claude' } })
+export const runningExpiredCompact = fixture({
+  running: { phase: 'expired', agent: 'claude' },
+  width: 320
+})
+/** RA-11 state 2: renewed; this pane's agent still needs a restart (resumes its conversation). */
+export const runningRenewed = fixture({
+  running: { phase: 'renewed', agent: 'claude', resumable: true }
+})
+/** RA-11 state 2 when the session can't be resumed. */
+export const runningRenewedFresh = fixture({
+  running: { phase: 'renewed', agent: 'claude', resumable: false }
+})
+export const runningRenewedNarrow = fixture({
+  running: { phase: 'renewed', agent: 'claude', resumable: true },
+  width: 520
+})
+/** RA-11 after Restart: the strip stays, spinner, button disabled, until the agent reports. */
+export const runningRestarting = fixture({
+  restart: { phase: 'restarting', agent: 'claude', resumable: true, ptyId: 'p', launchedAt: null }
+})
+/** RA-11: nothing relaunched in time. */
+export const runningRestartFailed = fixture({
+  restart: {
+    phase: 'failed',
+    agent: 'claude',
+    resumable: true,
+    ptyId: 'p',
+    launchedAt: null,
+    failure: 'hostUnresponsive'
+  }
+})

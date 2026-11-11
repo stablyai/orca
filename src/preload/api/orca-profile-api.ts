@@ -10,6 +10,7 @@ import type {
   OrcaProfileOrgLeaveArgs
 } from '../../shared/orca-org-management'
 import type {
+  OrcaCloudSignInEnd,
   OrcaCloudSignInProgress,
   ConnectCurrentOrcaProfileResult,
   CreateCloudLinkedOrcaProfileArgs,
@@ -68,7 +69,8 @@ export type OrcaProfileApi = {
   connectCurrent: () => Promise<ConnectCurrentOrcaProfileResult>
   signInProgress: () => Promise<OrcaCloudSignInProgress | null>
   onSignInProgressChanged: (
-    callback: (progress: OrcaCloudSignInProgress | null) => void
+    /** `end` says why a sign-in stopped when the UI should tell the user (it timed out). */
+    callback: (progress: OrcaCloudSignInProgress | null, end: OrcaCloudSignInEnd | null) => void
   ) => () => void
   cancelSignIn: () => Promise<void>
   refreshAuth: () => Promise<RefreshCurrentOrcaProfileAuthResult>

@@ -33,6 +33,7 @@ import {
   type CloudStripActions
 } from './CloudAgentSignInStrip'
 import { cloudAgentStripModel } from './cloud-agent-strip-model'
+import { CloudRunningStripPortal } from './CloudRunningStripPortal'
 
 const ABANDON_CHECK_MS = 1_000
 
@@ -118,6 +119,10 @@ function CloudStripPortal({
   const gateActions = agentSignInCardActions(paneKey)
   const actions: CloudStripActions = {
     primary: (action) => {
+      // RA-11's restart belongs to the running-pane strip; a held launch never offers it.
+      if (action.kind === 'restart') {
+        return
+      }
       switch (action.kind) {
         case 'renew':
           openOrcaCloudSignInSheet()
@@ -168,7 +173,14 @@ export function CloudAgentSignInStripPortals({
   return (
     <>
       {controller.managedPanes.map((pane, index) => (
-        <CloudStripPortal key={pane.id} pane={pane} tabId={controller.tabId} first={index === 0} />
+        <React.Fragment key={pane.id}>
+          <CloudStripPortal pane={pane} tabId={controller.tabId} first={index === 0} />
+          <CloudRunningStripPortal
+            pane={pane}
+            tabId={controller.tabId}
+            worktreeId={controller.worktreeId}
+          />
+        </React.Fragment>
       ))}
     </>
   )

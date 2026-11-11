@@ -17,6 +17,8 @@ export type CloudStripPrimary =
   | { kind: 'submitCode' }
   | { kind: 'retry' }
   | { kind: 'useDeviceCode' }
+  /** RA-11: restart the running agent in its pane, resuming its conversation when it can. */
+  | { kind: 'restart' }
 
 export type CloudStripModel = {
   status: CloudStripStatus
@@ -35,6 +37,10 @@ export type CloudStripModel = {
   otherWays: boolean
   /** Already on a code: ⋯ offers the paste fallback and Cancel instead of "Use a code". */
   codeStep?: boolean
+  /** RA-11 state 2: a dismiss × with this label (the strip otherwise drops its × on Renew). */
+  dismiss?: string
+  /** RA-11 "Restarting…": nothing to close; the strip leaves with the result. */
+  noClose?: boolean
   /** One sentence for the polite region. */
   announcement: string
 }

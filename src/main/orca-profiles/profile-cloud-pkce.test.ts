@@ -6,7 +6,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 vi.mock('electron', () => ({ app: { isPackaged: false }, shell: { openExternal: vi.fn() } }))
 
 import type { OrcaCloudAuthConfig } from './profile-cloud-auth-config'
-import { beginOrcaCloudPkceFlow } from './profile-cloud-pkce'
+import {
+  beginOrcaCloudPkceFlow,
+  ORCA_CLOUD_SIGN_IN_TIMEOUT_MS,
+  orcaCloudSignInTimeoutMs
+} from './profile-cloud-pkce'
 
 const base = 'https://auth.test'
 const config: OrcaCloudAuthConfig = {
@@ -27,6 +31,7 @@ const config: OrcaCloudAuthConfig = {
 
 afterEach(() => {
   delete process.env.ORCA_CLOUD_DEV_OPEN_URL_FILE
+  delete process.env.ORCA_CLOUD_SIGN_IN_TIMEOUT_MS
 })
 
 describe('PKCE loopback for cloud setup', () => {
@@ -74,5 +79,57 @@ describe('PKCE loopback for cloud setup', () => {
     const browser = fetch(callback, { redirect: 'manual' })
     ;(await flow).finishBrowser!('javascript:alert(1)')
     expect((await browser).status).toBe(200)
+  })
+})
+
+describe('PKCE loopback cancel and timeout', () => {
+  async function start(signal?: AbortSignal): Promise<{
+    flow: Promise<unknown>
+    redirect: URL
+  }> {
+    process.env.ORCA_CLOUD_DEV_OPEN_URL_FILE = join(mkdtempSync(join(tmpdir(), 'pkce-')), 'urls')
+    let authorize = ''
+    const flow = beginOrcaCloudPkceFlow(config, 'profile-1', {
+      onAuthorizeUrl: (url) => (authorize = url),
+      ...(signal ? { signal } : {})
+    })
+    flow.catch(() => undefined)
+    await vi.waitFor(() => expect(authorize).not.toBe(''))
+    return { flow, redirect: new URL(new URL(authorize).searchParams.get('redirect_uri')!) }
+  }
+
+  it('Cancel rejects the wait and closes the loopback listener', async () => {
+    const abort = new AbortController()
+    const { flow, redirect } = await start(abort.signal)
+    abort.abort()
+    await expect(flow).rejects.toThrow('orca_cloud_auth_cancelled')
+    // A late browser callback finds nothing listening.
+    await expect(fetch(redirect)).rejects.toThrow()
+  })
+
+  it('an already-cancelled attempt never opens a listener', async () => {
+    const abort = new AbortController()
+    abort.abort()
+    const onAuthorizeUrl = vi.fn()
+    await expect(
+      beginOrcaCloudPkceFlow(config, 'profile-1', { signal: abort.signal, onAuthorizeUrl })
+    ).rejects.toThrow('orca_cloud_auth_cancelled')
+    expect(onAuthorizeUrl).not.toHaveBeenCalled()
+  })
+
+  it('times out a sign-in the browser never finishes', async () => {
+    process.env.ORCA_CLOUD_SIGN_IN_TIMEOUT_MS = '1000'
+    const { flow, redirect } = await start()
+    await expect(flow).rejects.toThrow('orca_cloud_auth_timeout')
+    await expect(fetch(redirect)).rejects.toThrow()
+  })
+
+  it('waits five minutes by default; only unpackaged dev runs may shorten it', () => {
+    expect(ORCA_CLOUD_SIGN_IN_TIMEOUT_MS).toBe(300_000)
+    expect(orcaCloudSignInTimeoutMs({}, false)).toBe(300_000)
+    expect(orcaCloudSignInTimeoutMs({ ORCA_CLOUD_SIGN_IN_TIMEOUT_MS: '60000' }, false)).toBe(60_000)
+    expect(orcaCloudSignInTimeoutMs({ ORCA_CLOUD_SIGN_IN_TIMEOUT_MS: '60000' }, true)).toBe(300_000)
+    expect(orcaCloudSignInTimeoutMs({ ORCA_CLOUD_SIGN_IN_TIMEOUT_MS: '10' }, false)).toBe(300_000)
+    expect(orcaCloudSignInTimeoutMs({ ORCA_CLOUD_SIGN_IN_TIMEOUT_MS: 'x' }, false)).toBe(300_000)
   })
 })

@@ -71,9 +71,10 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
     [activeRepoId, activeWorktree, repos, settings]
   )
   const activeRepoHostIdentity = activeRepo ? getRepoHostIdentity(activeRepo) : null
-  // An asleep Orca Cloud workspace can't be inspected: wait until it's awake instead of showing
-  // "Couldn't verify this repo's setup script" with Retry (RA-12).
-  const asleepCloud = useCloudRecoveryContext(activeWorktreeId)?.asleep === true
+  // An asleep or waking Orca Cloud workspace can't be inspected: wait until it's up instead of
+  // flashing "Couldn't verify this repo's setup script" with Retry (RA-12, JA-15).
+  const cloudContext = useCloudRecoveryContext(activeWorktreeId)
+  const asleepCloud = cloudContext?.asleep === true || cloudContext?.waking === true
   // Orca Cloud never shows this nudge: a cloud workspace reports a setup script that hasn't run in
   // its own notice, and while a create is setting up, starting or stopped on a check the card would
   // flip between states under the start screen (JA-12, PC-7).

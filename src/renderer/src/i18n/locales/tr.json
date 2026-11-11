@@ -1345,8 +1345,7 @@
             "76deec8f58": "Organizasyon değiştirilemedi",
             "7d4bc516ee": "Profil değiştirilemedi",
             "f518e89aa5": "Proje bu profilde zaten mevcut",
-            "f03ae7f27b": "Proje aktarılamadı",
-            "signInTimedOut": "Oturum açma zaman aşımına uğradı"
+            "f03ae7f27b": "Proje aktarılamadı"
           }
         },
         "runtime": {
@@ -18397,7 +18396,6 @@
           "signout": {
             "confirm": {
               "title": "Orca'dan çıkış yapılsın mı?",
-              "description": "Yeniden oturum açana kadar Artifact'ler ve Orca Relay kullanılamayacak. Yerel projeleriniz ve worktree'leriniz etkilenmeyecek.",
               "cancel": "İptal",
               "action": "Çıkış yap"
             }
@@ -20745,7 +20743,6 @@
       "startInTerminal": "{{value0}} ajanını bir terminalde başlat"
     },
     "newWorkspace": {
-      "agentOptional": "Ajan [İsteğe bağlı]",
       "createDescription": "Projeyi ve çalışma alanı adını seçin. Bir ajan başlatmak istiyorsanız ajan seçin.",
       "directSetup": {
         "run": "Run setup",

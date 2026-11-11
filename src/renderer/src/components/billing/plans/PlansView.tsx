@@ -15,7 +15,7 @@ import { PaymentIssueNotice } from '../PaymentIssueNotice'
 import { PlanStatusBadge } from '../PlanStatusBadge'
 import type { PlanBillingNotice } from '../PlanBillingSection'
 import { seatCountLabel } from '../team/team-copy'
-import { formatHours, includedUsagePercent } from '../plan-billing-format'
+import { formatHours, formatHoursUsed, includedUsagePercent } from '../plan-billing-format'
 import {
   includedUsageTone,
   sandboxHoursCount,
@@ -131,7 +131,7 @@ function CurrentPlanStrip({
             'auto.components.billing.sandboxHoursUsedMonth',
             '{{value0}} of {{value1}} sandbox hours used this month',
             {
-              value0: formatHours(Math.min(entitlement.usedSeconds, entitlement.includedSeconds)),
+              value0: formatHoursUsed(Math.min(entitlement.usedSeconds, entitlement.includedSeconds)),
               value1: formatHours(entitlement.includedSeconds)
             }
           )}
