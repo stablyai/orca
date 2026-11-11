@@ -24,6 +24,7 @@ import {
   type ResolvedOrchestrationRequest
 } from './orchestration-session-caller'
 import { admitOrchestrationPeerCall } from './orchestration-peer-caller'
+import { waitForRestoredWorkerCallerIdentity } from './worker-caller-identity-restore-wait'
 
 type RpcRequestAdmissionDeps = {
   runtime: OrcaRuntimeService
@@ -89,9 +90,19 @@ export function admitRpcRequest<M extends RpcMethod | RpcStreamingMethod>(
   }
   // Resolve once before parse and unary/streaming branching so both see the same caller.
   const callerField = method.orchestrationAccess?.caller
-  return needsOrchestrationCallerResolution(rawRequest, callerField)
-    ? resolveOrchestrationSessionCaller(runtime, rawRequest, options, callerField).then(
-        admitResolved,
+  if (needsOrchestrationCallerResolution(rawRequest, callerField)) {
+    return resolveOrchestrationSessionCaller(runtime, rawRequest, options, callerField).then(
+      admitResolved,
+      (error) => reject(mapDispatcherError(rawRequest, meta, error))
+    )
+  }
+  const identityRestore = waitForRestoredWorkerCallerIdentity(runtime, rawRequest, callerField, [
+    options?.signal,
+    options?.connectionSignal
+  ])
+  return identityRestore
+    ? identityRestore.then(
+        () => admitResolved({ request: rawRequest }),
         (error) => reject(mapDispatcherError(rawRequest, meta, error))
       )
     : admitResolved({ request: rawRequest })
