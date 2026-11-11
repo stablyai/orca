@@ -14262,7 +14262,8 @@
           "terminalWarning_one": "{{count}} open terminal in this project will be closed.",
           "terminalWarning_other": "{{count}} open terminals in this project will be closed.",
           "cancel": "Cancel",
-          "confirm": "Remove"
+          "confirm": "Remove",
+          "unknownHost": "Unknown host"
         }
       },
       "right": {

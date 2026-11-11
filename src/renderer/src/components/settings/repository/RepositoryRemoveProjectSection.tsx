@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { ChevronRight } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
+import { parseExecutionHostId, type ExecutionHostId } from '../../../../../shared/execution-host'
 import type { ProjectHostSetup } from '../../../../../shared/project-types'
 import type { Repo } from '../../../../../shared/repo-types'
 import type { SettingsProjectRemovalScope } from '../navigation/settings-project-list'
@@ -18,13 +19,15 @@ import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 import type { SettingsSearchEntry } from '../search/settings-search'
 import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
 import { selectExecutionHostDisplayLabel } from '@/runtime/hosts/display/execution-host-display-label'
 import { countOpenRepoTerminalTabs } from '@/store/repos/repo-removal'
 import { getRecipeVmRemovalTargets } from '@/store/repos/recipe-vm-project-removal'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 
-type RemovedHostGroup = { label: string; paths: string[] }
+type RemovedHostGroup = { hostId: ExecutionHostId; label: string; setups: ProjectHostSetup[] }
 
 function getRemoveProjectDescription(
   scope: SettingsProjectRemovalScope,
@@ -48,33 +51,82 @@ function getRemoveProjectDescription(
   )
 }
 
-// Group by display name so the list reads as machines; raw host IDs are never shown.
+function selectSetupHostLabel(state: AppState, setup: ProjectHostSetup, t: Translate): string {
+  const label = selectExecutionHostDisplayLabel(state, setup.hostId, {
+    sshEnvironmentId: setup.runtimeOwnerEnvironmentId ?? null
+  })
+  const parsed = parseExecutionHostId(setup.hostId)
+  // A runtime missing from the catalog falls back to its raw id, which users can't recognize.
+  return parsed?.kind === 'runtime' && label === parsed.environmentId
+    ? t('auto.components.settings.RepositoryRemoveProjectSection.unknownHost', 'Unknown host')
+    : label
+}
+
+// Group by host, not label: two machines can share a display name.
 function groupSetupsByHost(
   setups: readonly ProjectHostSetup[],
   hostLabels: readonly string[]
 ): RemovedHostGroup[] {
-  const groups = new Map<string, string[]>()
+  const groups = new Map<ExecutionHostId, RemovedHostGroup>()
   setups.forEach((setup, index) => {
-    const label = hostLabels[index] ?? ''
-    groups.set(label, [...(groups.get(label) ?? []), setup.path])
+    const group = groups.get(setup.hostId)
+    if (group) {
+      group.setups.push(setup)
+    } else {
+      groups.set(setup.hostId, {
+        hostId: setup.hostId,
+        label: hostLabels[index] ?? '',
+        setups: [setup]
+      })
+    }
   })
-  return [...groups].map(([label, paths]) => ({ label, paths }))
+  return [...groups.values()]
 }
 
 function RemovedCheckoutList({ groups }: { groups: RemovedHostGroup[] }): React.JSX.Element {
   return (
     <ul className="space-y-2">
       {groups.map((group) => (
-        <li key={group.label} className="space-y-0.5">
+        <li key={group.hostId} className="space-y-0.5">
           <div className="text-xs font-medium text-foreground">{group.label}</div>
-          {group.paths.map((path) => (
-            <div key={path} className="break-all font-mono text-xs text-muted-foreground">
-              {path}
+          {group.setups.map((setup) => (
+            <div key={setup.id} className="break-all font-mono text-xs text-muted-foreground">
+              {setup.path}
             </div>
           ))}
         </li>
       ))}
     </ul>
+  )
+}
+
+// Mounted only while the dialog is open so the tab walk never runs on unrelated store writes.
+function RemoveProjectTerminalWarning({
+  setups
+}: {
+  setups: readonly ProjectHostSetup[]
+}): React.JSX.Element | null {
+  const t = useTranslate()
+  const openTerminalCount = useAppStore((state) =>
+    setups.reduce(
+      (count, setup) => count + countOpenRepoTerminalTabs(state, setup.repoId, setup.hostId),
+      0
+    )
+  )
+  if (openTerminalCount === 0) {
+    return null
+  }
+  return (
+    <p className="text-xs font-medium text-foreground">
+      {t(
+        'auto.components.settings.RepositoryRemoveProjectSection.terminalWarning',
+        '{{count}} open terminals in this project will be closed.',
+        {
+          count: openTerminalCount,
+          defaultValue_one: '{{count}} open terminal in this project will be closed.'
+        }
+      )}
+    </p>
   )
 }
 
@@ -96,26 +148,22 @@ export function RepositoryRemoveProjectSection({
   const t = useTranslate()
   const [dialogOpen, setDialogOpen] = useState(false)
   const hostLabels = useAppStore(
-    useShallow((state) =>
-      setups.map((setup) => selectExecutionHostDisplayLabel(state, setup.hostId))
-    )
+    useShallow((state) => setups.map((setup) => selectSetupHostLabel(state, setup, t)))
   )
-  const openTerminalCount = useAppStore((state) =>
-    setups.reduce(
-      (count, setup) => count + countOpenRepoTerminalTabs(state, setup.repoId, setup.hostId),
-      0
-    )
-  )
+  const worktreesByRepo = useAppStore(selectWorktreesByRepo)
+  const runtimeEnvironments = useAppStore((state) => state.runtimeEnvironments)
   // Removal can destroy a recipe VM, where "files stay on disk" would be false.
-  const removesRecipeVm = useAppStore((state) =>
-    setups.some(
-      (setup) =>
-        getRecipeVmRemovalTargets(
-          state,
-          { id: setup.repoId, connectionId: setup.connectionId },
-          setup.hostId
-        ) !== null
-    )
+  const removesRecipeVm = useMemo(
+    () =>
+      setups.some(
+        (setup) =>
+          getRecipeVmRemovalTargets(
+            { worktreesByRepo, runtimeEnvironments },
+            { id: setup.repoId, connectionId: setup.connectionId },
+            setup.hostId
+          ) !== null
+      ),
+    [setups, worktreesByRepo, runtimeEnvironments]
   )
   const groups = useMemo(() => groupSetupsByHost(setups, hostLabels), [setups, hostLabels])
   const hostCount = new Set(setups.map((setup) => setup.hostId)).size
@@ -130,7 +178,7 @@ export function RepositoryRemoveProjectSection({
         'auto.components.settings.RepositoryRemoveProjectSection.filesNote',
         'Files stay on disk, so you can add it again later.'
       )
-  const summaryParts = [
+  const summary = [
     t('auto.components.settings.RepositoryRemoveProjectSection.hostCount', '{{count}} hosts', {
       count: hostCount,
       defaultValue_one: '{{count}} host'
@@ -140,16 +188,7 @@ export function RepositoryRemoveProjectSection({
       '{{count}} checkouts',
       { count: setups.length, defaultValue_one: '{{count}} checkout' }
     )
-  ]
-  if (openTerminalCount > 0) {
-    summaryParts.push(
-      t(
-        'auto.components.settings.RepositoryRemoveProjectSection.terminalCount',
-        '{{count}} open terminals',
-        { count: openTerminalCount, defaultValue_one: '{{count}} open terminal' }
-      )
-    )
-  }
+  ].join(' · ')
 
   const confirmRemove = (): void => {
     setDialogOpen(false)
@@ -181,7 +220,7 @@ export function RepositoryRemoveProjectSection({
             <CollapsibleTrigger asChild>
               <Button type="button" variant="ghost" size="xs" className="-ml-2">
                 <ChevronRight className="transition-transform in-data-[state=open]:rotate-90" />
-                {summaryParts.join(' · ')}
+                {summary}
               </Button>
             </CollapsibleTrigger>
             <CollapsibleContent>
@@ -211,18 +250,7 @@ export function RepositoryRemoveProjectSection({
               <RemovedCheckoutList groups={groups} />
             </div>
           ) : null}
-          {openTerminalCount > 0 ? (
-            <p className="text-xs font-medium text-foreground">
-              {t(
-                'auto.components.settings.RepositoryRemoveProjectSection.terminalWarning',
-                '{{count}} open terminals in this project will be closed.',
-                {
-                  count: openTerminalCount,
-                  defaultValue_one: '{{count}} open terminal in this project will be closed.'
-                }
-              )}
-            </p>
-          ) : null}
+          <RemoveProjectTerminalWarning setups={setups} />
           <DialogFooter>
             <Button variant="ghost" onClick={() => setDialogOpen(false)}>
               {t('auto.components.settings.RepositoryRemoveProjectSection.cancel', 'Cancel')}
