@@ -505,7 +505,7 @@ it('preserves unresolved browser ownership after restoring hostless content besi
   expect(bResult?.executionHostId).toBe('ssh:b')
   let activation: ReturnType<typeof activateWorkspaceTabPaletteResult> | undefined
   act(() => {
-    activation = activateWorkspaceTabPaletteResult(bResult, activateAndRevealWorkspace)
+    activation = activateWorkspaceTabPaletteResult(bResult)
   })
   expect(activation?.status).toBe('activated')
   expect(useAppStore.getState().activeWorkspaceExecutionHostId).toBe('ssh:b')
