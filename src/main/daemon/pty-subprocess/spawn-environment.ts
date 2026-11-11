@@ -6,7 +6,10 @@ import { dropInheritedOrcaFishHistory } from '../../pty/history/fish-history-ses
 import { removeAppImageRuntimeEnv } from '../../pty/shell-startup/appimage-terminal-env'
 import { removeChromiumDisabledSessionBus } from '../../pty/shell-startup/chromium-session-bus-env'
 import { stripInheritedBuildModeEnv } from '../../pty/shell-startup/build-mode-env'
-import { withCloudSessionEnv } from '../../runtime/secrets/cloud-session-env'
+import {
+  applyCloudSessionEnv,
+  cachedCloudSessionEnv
+} from '../../runtime/secrets/cloud-session-env'
 import { stripPiProcessOwnerEnv } from '../../pty/shell-startup/pi-process-owner-env'
 import { dropIncoherentCondaActivationEnv } from '../../pty/shell-startup/conda-activation-env'
 import { stripLegacyTerminalShimEnv } from '../../pty/shell-startup/legacy-terminal-shim-dir'
@@ -184,7 +187,10 @@ export function createDaemonPtyEnvironment(opts: PtySubprocessOptions): Record<s
   const env: Record<string, string> = {
     // Orca Cloud: the daemon's env is from orcad's start; lay the live session env over it, under the
     // launch's own values and before its requested deletions (an account strip must win).
-    ...mergeGitConfigEnvProtocol(withCloudSessionEnv(inheritedEnv), opts.env),
+    ...mergeGitConfigEnvProtocol(
+      applyCloudSessionEnv(inheritedEnv, cachedCloudSessionEnv(inheritedEnv)),
+      opts.env
+    ),
     TERM: 'xterm-256color',
     COLORTERM: 'truecolor',
     TERM_PROGRAM: 'Orca',
