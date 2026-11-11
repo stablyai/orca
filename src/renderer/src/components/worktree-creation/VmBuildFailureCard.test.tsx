@@ -8,7 +8,10 @@ import { vmBuildFailureCopy } from './vm-build-failure-copy'
 import { InlineError } from '@/components/ui/inline-error'
 import { translate } from '@/i18n/i18n'
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.useRealTimers()
+})
 
 const actions = (): VmBuildFailureActions => ({
   onFixWithAgent: vi.fn(),
@@ -117,6 +120,9 @@ it("keeps Use this computer instead beside an owner's billing fix", () => {
   expect(buttons.slice(0, 2)).toEqual(['Raise spend cap', 'Use this computer instead'])
 })
 
+// The card counts down from the real clock; pin it so the minutes read the same every run.
+const FIXED_NOW = 1_700_000_000_000
+
 const FATAL: VmBuildFailure = {
   kind: 'checks',
   problems: [
@@ -127,10 +133,12 @@ const FATAL: VmBuildFailure = {
       message: 'The environment checks could not finish: unreachable'
     }
   ],
-  sleepsAt: Date.now() + 5 * 60_000
+  sleepsAt: FIXED_NOW + 5 * 60_000
 }
 
 function cloudCard(failure: VmBuildFailure, handlers: VmBuildFailureActions, vmKept = true) {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(FIXED_NOW)
   return (
     <div data-vm-build-sheet>
       <VmBuildFailureCard
