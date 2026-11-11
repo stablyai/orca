@@ -162,8 +162,9 @@ test('RA-11 Restart: "Restarting Claude…" is the spinner and words only; a fai
   )
   await expect(page.locator('html')).toHaveAttribute('data-fixture-state', 'ready')
   await expect(strip).toContainText('Couldn’t restart Claude')
-  await expect(strip).toContainText('The workspace didn’t respond.')
-  await expect(strip).not.toContainText('Try again.')
+  // The visible body is the reason, never a second "Try again." (the polite region may repeat it).
+  const body = strip.locator('[data-strip-text] > span').nth(1)
+  await expect(body).toHaveText('The workspace didn’t respond.')
   await expect(strip.getByRole('button', { name: 'Try again' })).toBeEnabled()
   await expect(strip.getByRole('button', { name: 'Dismiss' })).toBeVisible()
 })
