@@ -28,6 +28,7 @@ import {
 import {
   beginCloudAgentRestart,
   cloudAgentRestartAttempt,
+  cloudAgentRestartStartedFresh,
   dismissCloudAgentRestart,
   settleCloudAgentRestart
 } from '@/lib/orca-cloud/cloud-agent-restart-attempt'
