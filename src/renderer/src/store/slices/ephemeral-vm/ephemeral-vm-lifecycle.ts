@@ -39,6 +39,8 @@ function environmentBuildIdOf(record: EphemeralVmRuntimeRecord): string | undefi
 export type EphemeralVmLifecycleSlice = {
   /** Live (not cleaned up) VM runtimes by the workspace they back. */
   ephemeralVmRuntimesByWorkspaceId: Record<string, EphemeralVmWorkspaceRuntime>
+  /** Live Orca Cloud runtimes' owning team by runtime environment; unfiled ones are absent. */
+  cloudAccountIdByEnvironmentId: Record<string, string>
   /** Workspaces whose VM resume is in flight; the record only flips when it finishes. */
   wakingEphemeralVmWorkspaceIds: Record<string, true>
   refreshEphemeralVmRuntimes: () => Promise<void>
@@ -99,6 +101,29 @@ export function projectEphemeralVmWorkspaceRuntimes(
   return byWorkspaceId
 }
 
+/** Which team owns each live Orca Cloud server, so lists can scope to the active team. */
+export function projectCloudAccountsByEnvironment(
+  records: readonly EphemeralVmRuntimeRecord[]
+): Record<string, string> {
+  const byEnvironment: Record<string, string> = {}
+  for (const record of records) {
+    if (
+      record.recipe?.provider === 'orca-cloud' &&
+      record.runtimeEnvironmentId &&
+      record.cloudAccountId &&
+      !RETIRED_STATUSES.has(record.status)
+    ) {
+      byEnvironment[record.runtimeEnvironmentId] = record.cloudAccountId
+    }
+  }
+  return byEnvironment
+}
+
+function sameAccounts(a: Record<string, string>, b: Record<string, string>): boolean {
+  const keys = Object.keys(a)
+  return keys.length === Object.keys(b).length && keys.every((key) => a[key] === b[key])
+}
+
 function sameRuntimes(
   a: Record<string, EphemeralVmWorkspaceRuntime>,
   b: Record<string, EphemeralVmWorkspaceRuntime>
@@ -133,6 +158,7 @@ export const createEphemeralVmLifecycleSlice: StateCreator<
   EphemeralVmLifecycleSlice
 > = (set) => ({
   ephemeralVmRuntimesByWorkspaceId: {},
+  cloudAccountIdByEnvironmentId: {},
   wakingEphemeralVmWorkspaceIds: {},
   refreshEphemeralVmRuntimes: () => {
     const listRuntimes = window.api?.ephemeralVm?.listRuntimes
@@ -141,17 +167,24 @@ export const createEphemeralVmLifecycleSlice: StateCreator<
     }
     const sequence = ++refreshSequence
     const refresh = (async (): Promise<void> => {
-      const next = projectEphemeralVmWorkspaceRuntimes(await listRuntimes())
+      const records = await listRuntimes()
+      const next = projectEphemeralVmWorkspaceRuntimes(records)
+      const accounts = projectCloudAccountsByEnvironment(records)
       // Out-of-order replies must not roll a newer lifecycle status back; a superseded caller
       // settles with the newer read, so it never acts on a store that has not caught up.
       if (sequence !== refreshSequence) {
         return latestRefresh
       }
-      set((state) =>
-        sameRuntimes(state.ephemeralVmRuntimesByWorkspaceId, next)
+      set((state) => {
+        const runtimesSame = sameRuntimes(state.ephemeralVmRuntimesByWorkspaceId, next)
+        const accountsSame = sameAccounts(state.cloudAccountIdByEnvironmentId ?? {}, accounts)
+        return runtimesSame && accountsSame
           ? state
-          : { ephemeralVmRuntimesByWorkspaceId: next }
-      )
+          : {
+              ...(runtimesSame ? {} : { ephemeralVmRuntimesByWorkspaceId: next }),
+              ...(accountsSame ? {} : { cloudAccountIdByEnvironmentId: accounts })
+            }
+      })
     })()
     latestRefresh = refresh
     return refresh
