@@ -338,9 +338,10 @@ describe('terminal multiplex RPC', () => {
       ).toMatchObject({
         requestId: 7
       })
-      // Desktop initial snapshots carry history, not just the screen (#20158).
+      // Desktop initial snapshots carry history, not just the screen (#20158), at a local
+      // terminal's depth so a reopen keeps it (N-02); overflow recovery stays at 1000.
       expect(runtime.serializeTerminalBuffer).toHaveBeenCalledWith('pty-1', {
-        scrollbackRows: 1000
+        scrollbackRows: 5000
       })
       expect(runtime.serializeAuthoritativeTerminalBuffer).toHaveBeenLastCalledWith('pty-1', {
         scrollbackRows: 5000

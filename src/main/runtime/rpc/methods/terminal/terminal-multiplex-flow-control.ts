@@ -1,5 +1,4 @@
 import { TERMINAL_MULTIPLEX_RECOVERY_SCROLLBACK_ROWS } from '../../../../../shared/terminal/stream/terminal-multiplex-flow-control'
-import { DESKTOP_SUBSCRIBE_SCROLLBACK_ROWS } from '../../../terminal/output/mobile-scrollback-limits'
 import { drainTerminalMultiplexRoundRobin } from '../../terminal-multiplex-round-robin'
 import {
   sendSnapshotFrames,
@@ -42,12 +41,10 @@ export function installMultiplexFlowControl(state: TerminalMultiplexConnection):
       const serialized = await serializeBudgetedRequestedSnapshot(
         runtime,
         stream.ptyId,
-        // A desktop keeps a local terminal's depth after dropped output too (N-02).
-        carriesHistory
-          ? stream.isMobile
-            ? TERMINAL_MULTIPLEX_RECOVERY_SCROLLBACK_ROWS
-            : DESKTOP_SUBSCRIBE_SCROLLBACK_ROWS
-          : 0
+        // Overflow recovery stays at the recovery budget on every client: a full desktop-depth
+        // snapshot on a link that just overflowed can overflow it again (resync storm). Full depth
+        // is only for the initial attach and the reopen (N-02).
+        carriesHistory ? TERMINAL_MULTIPLEX_RECOVERY_SCROLLBACK_ROWS : 0
       )
       if (!isMultiplexStreamAttached(state, stream) || stream.outputPaused) {
         return
