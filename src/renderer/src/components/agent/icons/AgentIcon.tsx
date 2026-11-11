@@ -14,6 +14,7 @@ import {
 } from './agent-icon-glyphs'
 import { AGENT_FAVICON_ASSETS } from './agent-favicon-assets'
 
+/** An agent's branded glyph, falling back to its catalog favicon and then a letter mark. */
 export function AgentIcon({
   agent,
   size = 14,

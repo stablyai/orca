@@ -68,6 +68,31 @@ describe('normalizeMcodeConfigOptions', () => {
     })
   })
 
+  it('drops a lone off variant instead of keeping a non-thinking model row', () => {
+    const normalized = normalizeMcodeConfigOptions([
+      {
+        type: 'select',
+        id: 'model',
+        name: 'Model',
+        category: 'model',
+        currentValue: 'm:minimax:MiniMax-M3:v:',
+        options: [
+          { value: 'm:minimax:MiniMax-M3:v:', name: 'M3' },
+          { value: 'm:minimax:MiniMax-M3.1-Flash:v:thinking', name: 'M3.1-Flash · thinking' }
+        ]
+      }
+    ])
+    const model = selectWith(normalized, 'model')
+    expect(model.options).toEqual([
+      {
+        value: 'm:minimax:MiniMax-M3.1-Flash:v:thinking',
+        name: 'MiniMax M3.1 Flash',
+        description: 'Fast and versatile frontier model with deep reasoning'
+      }
+    ])
+    expect(model.currentValue).toBe('m:minimax:MiniMax-M3.1-Flash:v:thinking')
+  })
+
   it('injects the on default when the running model already has thinking on', () => {
     const normalized = normalizeMcodeConfigOptions([modelSelect('m:minimax:MiniMax-M3:v:thinking')])
     const injected = selectWith(normalized, 'thinkingEffort')

@@ -84,7 +84,7 @@ describe('parseMcodeModelCatalog', () => {
       },
       {
         id: 'm:custom_provider:minimax-legacy:MiniMax-M3:v:thinking',
-        label: 'MiniMax M3',
+        label: 'MiniMax M3 (minimax-legacy)',
         description: 'Frontier model for complex agentic coding and deep reasoning',
         isDefault: false,
         efforts: [
@@ -94,6 +94,26 @@ describe('parseMcodeModelCatalog', () => {
         defaultEffort: 'on',
         declaredDefaultEffort: 'on'
       }
+    ])
+  })
+
+  it('marks only the first match as default for a bare defaultModel', () => {
+    const config = [
+      'provider:',
+      '  minimax:',
+      '    models:',
+      '      MiniMax-M3:',
+      '        name: M3',
+      'custom_provider:',
+      '  minimax-legacy:',
+      '    models:',
+      '      MiniMax-M3:',
+      '        name: M3',
+      'defaultModel: MiniMax-M3'
+    ].join('\n')
+    expect(parseMcodeModelCatalog(config).map((model) => [model.id, model.isDefault])).toEqual([
+      ['m:minimax:MiniMax-M3:v:thinking', true],
+      ['m:custom_provider:minimax-legacy:MiniMax-M3:v:thinking', false]
     ])
   })
 

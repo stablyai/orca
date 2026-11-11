@@ -50,14 +50,10 @@ export function normalizeMcodeConfigOptions(options: SessionConfigOption[]): Ses
   const normalized = options.map((option) => {
     if (option.type === 'select' && (option.category === 'model' || option.id === 'model')) {
       const choices = acpSelectChoices(option)
-      // Keep every configured model — dropping the running one would misreport the current
-      // selection — but collapse an off/thinking variant pair into its thinking row.
+      // Thinking variants only: an off/thinking pair collapses to its thinking row, and a lone
+      // off variant (`:v:`) is dropped instead of surfacing a non-thinking model.
       const cleanChoices: SessionConfigSelectOption[] = choices
-        .filter(
-          (choice) =>
-            choice.value.endsWith(':thinking') ||
-            !choices.some((other) => other.value === `${choice.value}thinking`)
-        )
+        .filter((choice) => !choice.value.endsWith(':v:'))
         .map((choice) => {
           const { name, description } = resolveMcodeModelNameAndDescription(choice)
           return {

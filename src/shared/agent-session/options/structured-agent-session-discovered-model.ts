@@ -11,6 +11,7 @@ export function structuredModelEfforts(
   return [...model.efforts, ...(model.chatEfforts ?? [])]
 }
 
+/** The per-model effort control; mcode also applies it through --effort on the CLI launch line. */
 function effortOption(
   model: AgentSessionOptionsResult['models'][number],
   agent: AgentType

@@ -61,6 +61,8 @@ export function parseMcodeModelCatalog(content: string): AgentSessionModelOption
   const { defaultModel = '' } = parsed.data
   const models: AgentSessionModelOption[] = []
   const seen = new Set<string>()
+  const usedLabels = new Set<string>()
+  let defaultAssigned = false
   // Custom providers keep their compound id (`custom_provider:<key>`), the same identity
   // mcode's own config uses when naming them.
   const providers = [
@@ -85,11 +87,24 @@ export function parseMcodeModelCatalog(content: string): AgentSessionModelOption
         continue
       }
       seen.add(qualifiedId)
+      const baseLabel =
+        MCODE_MODEL_LABELS[modelId] ?? (model.name ? `MiniMax ${model.name}` : modelId)
+      // The same model id under another provider keeps the first label and qualifies the rest.
+      const label = usedLabels.has(baseLabel)
+        ? `${baseLabel} (${provider.name ?? providerId.replace(/^custom_provider:/, '')})`
+        : baseLabel
+      usedLabels.add(baseLabel)
+      // A bare defaultModel matches every provider's copy; only the first match is the default.
+      const isDefault =
+        !defaultAssigned && (defaultModel === qualifiedId || defaultModel === modelId)
+      if (isDefault) {
+        defaultAssigned = true
+      }
       models.push({
         id: `m:${providerId}:${modelId}:v:thinking`,
-        label: MCODE_MODEL_LABELS[modelId] ?? (model.name ? `MiniMax ${model.name}` : modelId),
+        label,
         description: mcodeModelDescription(modelId),
-        isDefault: defaultModel === `${providerId}/${modelId}` || defaultModel === modelId,
+        isDefault,
         ...mcodeModelEfforts({ modelId })
       })
     }

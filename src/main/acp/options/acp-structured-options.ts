@@ -141,6 +141,7 @@ export class AcpStructuredOptions {
     this.picked.add(key)
   }
 
+  /** Adopts an agent-pushed menu, retiring selector proof when the agent moved model or effort itself. */
   adoptConfigOptions(configOptions: SessionConfigOption[] | null | undefined): void {
     if (!configOptions) {
       return
@@ -194,6 +195,7 @@ export class AcpStructuredOptions {
     return this.commands
   }
 
+  /** Whether the session's effort menu accepts this value; a clamping dialect accepts any. */
   offersEffort(value: string): boolean {
     const option = this.select('thought_level')
     return !!(
@@ -202,6 +204,7 @@ export class AcpStructuredOptions {
     )
   }
 
+  /** The agent write for a picker change; mcode's on/off effort rewrites the model's thinking variant. */
   write(key: string, value: string): AcpOptionWrite | null {
     if (key === 'model') {
       const option = this.select('model')
@@ -284,6 +287,7 @@ export class AcpStructuredOptions {
     return withLiveCatalogListing(this.read(), this.configuredDefault()).catalogListing
   }
 
+  /** The running model/effort values as a flat record. */
   reported(): Readonly<Record<string, string>> {
     const { current } = this.read()
     return {
@@ -321,6 +325,7 @@ export class AcpStructuredOptions {
     }
   }
 
+  /** The select row for a category; model also matches the legacy id-only row. */
   private select(category: string): SelectOption | null {
     const option = this.configOptions.find(
       (entry) => entry.category === category || (category === 'model' && entry.id === 'model')
