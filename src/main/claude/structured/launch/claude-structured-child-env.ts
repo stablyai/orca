@@ -13,7 +13,7 @@ import { withCliRuntimeOnPath } from '../../../../shared/node-cli-command-resolu
 import { applyClaudeEnvPatch } from '../../../claude-accounts/environment'
 import { resolveClaudeCommand } from '../../../codex-cli/command'
 import { withoutInheritedClaudeConfigDir } from '../../claude-config-dir-pin'
-import { stripInheritedClaudeSessionEnv } from '../../../../shared/agent-launch/startup/claude-parent-session-env'
+import { stripInheritedAgentSessionEnv } from '../../../../shared/agent-launch/startup/parent-agent-session-env'
 import { overlayEnvironmentVariables } from '../../../../shared/environment-overlay'
 
 function cloneDefinedEnv(env: NodeJS.ProcessEnv | Record<string, string>): Record<string, string> {
@@ -100,7 +100,7 @@ export function claudeChildEnv(
   { runtimeOnPath = true }: { runtimeOnPath?: boolean } = {}
 ): Record<string, string> {
   const inherited = withoutInheritedClaudeConfigDir(sources.inheritedEnv, process.platform)
-  stripInheritedClaudeSessionEnv(inherited)
+  stripInheritedAgentSessionEnv(inherited)
   const env = decorateEnv(overlayEnvironmentVariables(inherited, sources.overlay, process.platform))
   return runtimeOnPath
     ? withCliRuntimeOnPath(sources.command, env, { platform: process.platform })

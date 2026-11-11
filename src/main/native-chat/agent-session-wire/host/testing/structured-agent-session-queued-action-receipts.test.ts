@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS } from '../../../../../shared/agent-session/agent-session-host-authority'
 import { withTestAgentSessionDatabase } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import {
   createQueuedMessageTestRig,
@@ -9,8 +8,6 @@ import {
 import { HOST_TEST_NOW as NOW } from './structured-agent-session-host-test-data.test-fixture'
 
 const CALLER_SCOPE = { kind: 'caller', callerKey: CALLER.callerKey } as const
-void (NOW - AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS - 60_000)
-void (NOW + 6 * 60_000)
 
 let rig: QueuedMessageTestRig
 let serial = 0

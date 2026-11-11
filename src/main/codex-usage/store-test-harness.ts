@@ -68,7 +68,9 @@ export function createWorktreeUsageSession(worktreeId: string) {
 export function createStoreWithState(state: Partial<CodexUsagePersistedState>): CodexUsageStore {
   const store = new CodexUsageStore({
     getRepos: () => [],
-    getAllWorktreeMeta: () => ({})
+    getAllWorktreeMeta: () => ({}),
+    getRememberedWorktreeDisplayNames: () => new Map(),
+    whenLoaded: async () => {}
   })
 
   ;(store as unknown as { state: CodexUsagePersistedState }).state = {

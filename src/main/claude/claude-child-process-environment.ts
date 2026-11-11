@@ -1,5 +1,5 @@
 import { CLAUDE_AUTH_ENV_VARS, applyClaudeEnvPatch } from '../claude-accounts/environment'
-import { stripInheritedClaudeSessionEnv } from '../../shared/agent-launch/startup/claude-parent-session-env'
+import { stripInheritedAgentSessionEnv } from '../../shared/agent-launch/startup/parent-agent-session-env'
 import {
   LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV,
   NATIVE_CHAT_SCRATCH_DIR_ENV
@@ -70,6 +70,6 @@ export function buildClaudeChildProcessEnv(
       platform
     )
   }
-  stripInheritedClaudeSessionEnv(env, { platform })
+  stripInheritedAgentSessionEnv(env, { platform })
   return { ...env, ...configuredEnv }
 }
