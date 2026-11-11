@@ -2,7 +2,7 @@ import { launchStateLifecycle } from './structured-agent-session-launch-lifecycl
 import {
   structuredLaunchStates,
   type StructuredLaunchState
-} from './structured-agent-session-launch-registry'
+} from './structured-agent-session-launch-state-store'
 import type { AgentLaunchRequestId } from './routing/agent-launch-request-id'
 
 // Coalesce re-delivery of one action only. Other actions and failed/unconfirmed retries open independent chats/text; conversation resumes still hold because hosts refuse duplicate adoption.

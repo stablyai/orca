@@ -15,7 +15,7 @@ import {
   getPersistedStructuredAgentLaunchRecord,
   getStructuredLaunchStateBySessionId,
   notifyStructuredLaunchListeners
-} from './structured-agent-session-launch-registry'
+} from './structured-agent-session-launch-state-store'
 
 function markStructuredAgentSessionLaunchCancelledInternal(
   worktreeId: string,

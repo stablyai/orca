@@ -884,6 +884,7 @@
     "settings.accounts.claudeRemoveFolder",
     "settings.browser.extensions.description",
     "settings.browser.extensions.empty",
+    "settings.browser.extensions.enabledToggleLabel",
     "settings.browser.extensions.heldUpdate",
     "settings.browser.extensions.keywordChrome",
     "settings.browser.extensions.keywordExtension",

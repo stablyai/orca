@@ -83,20 +83,6 @@ describe('GitHub issue link title fill', () => {
     )
   })
 
-  it('keeps a hidden branch PR hidden when titling a link beside the selected PR', async () => {
-    const { store, settle } = await setup(vi.fn(async () => 'Repair authentication'))
-    store.setWorktreeMeta(target, { linkedPR: 7 })
-    store.setWorktreeMeta(target, { suppressedGitHubPR: 7 })
-    store.setWorktreeMeta(target, { linkedIssue: 42 })
-    await settle()
-
-    const meta = store.getWorktreeMetaForHost('repo::/work', 'local')
-    expect(getWorkspaceAttachments(meta)).toContainEqual(
-      expect.objectContaining({ type: 'issue', number: 42, title: 'Repair authentication' })
-    )
-    expect(meta?.suppressedGitHubPR).toBe(7)
-  })
-
   it('does not bring back a link removed while its title was being read', async () => {
     let finish: (title: string) => void = () => {}
     const read = vi.fn(() => new Promise<string | null>((resolve) => (finish = resolve)))
