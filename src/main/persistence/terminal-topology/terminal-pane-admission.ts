@@ -31,7 +31,10 @@ import {
 } from './pane-remote-session-follow'
 import { pruneClosedTerminalTabTombstones } from '../../../shared/workspace-layout/closed-terminal-tab-tombstones'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
-import { editorViewsOfModel, type PartitionEditorViews } from '../loading-store/layout-editor-views'
+import {
+  editorViewsOfModel,
+  type PartitionEditorViews
+} from '../loading-store/workspace-sessions/layout-editor-views'
 
 export type TerminalPaneAdmission =
   | (CommandOf<'createTerminalTab'> & { tabId: string; leafId: string })

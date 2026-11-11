@@ -170,6 +170,7 @@ export function getDefaultUIState(): PersistedUIState {
     rightSidebarTab: 'explorer',
     rightSidebarExplorerView: 'files',
     rightSidebarWidth: 350,
+    activityBarPosition: 'top',
     markdownTocPanelWidth: 240,
     combinedDiffFileTreeWidth: 256,
     groupBy: 'repo',

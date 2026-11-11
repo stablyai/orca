@@ -38,7 +38,7 @@ import {
   showRuntimeRpcStartupFailureDialog
 } from '../runtime/rpc/server/runtime-rpc-startup-failure'
 import { registerCliForHeadlessServe } from './serve-cli-registration'
-import { startAppImageCopyPreExtraction } from '../cli/appimage-copy-pre-extraction'
+import { startAppImageCopyPreExtraction } from '../cli/appimage/appimage-copy-pre-extraction'
 import { scheduleAllPendingHistoryTreeRemovals } from '../pty/history/terminal-history-deletion'
 import { triggerStartupNotificationRegistration } from '../ipc/startup-notification-registration'
 import { startDesktopPushService } from './main-process-push-startup'

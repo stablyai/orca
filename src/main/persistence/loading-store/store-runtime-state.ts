@@ -5,10 +5,13 @@ import type { PersistedState } from '../../../shared/persisted-state-types'
 import type {
   WorkspaceSessionOperationListener,
   WorkspaceSessionWriteListener
-} from './workspace-session-write-listeners'
+} from './workspace-sessions/workspace-session-write-listeners'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import type { StateWriteListener, WorktreeMetaWriteListener } from './write-scheduling'
-import type { PartitionEditorViews } from './layout-editor-views'
+import type {
+  StateWriteListener,
+  WorktreeMetaWriteListener
+} from './profile-writing/write-scheduling'
+import type { PartitionEditorViews } from './workspace-sessions/layout-editor-views'
 import type { ActiveViewPreference } from '../preferences/active-view-preference'
 import {
   getProfileTerminalScrollbackSnapshotRoot,
@@ -28,7 +31,7 @@ import type {
   AutomationListProjectionCache,
   AutomationStorageAuthority
 } from '../scheduling-automations/automation-owner-projection'
-import type { ProfileStatePersistenceAuthority } from './profile-state-authority'
+import type { ProfileStatePersistenceAuthority } from './profile-writing/profile-state-authority'
 import type { AutomationRun } from '../../../shared/automations/history/automation-run'
 import { resolveNewPaneShellPath } from '../migrating-orcad-catalog/orcad-shell-history-installer'
 import { OrcadTerminalRestoreHintStore } from '../migrating-orcad-catalog/orcad-terminal-restore-hint-store'

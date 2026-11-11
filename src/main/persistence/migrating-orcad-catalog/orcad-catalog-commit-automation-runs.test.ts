@@ -2,8 +2,8 @@ import { describe, it, expect, vi } from 'vitest'
 import {
   createWorkerMaintenanceFixture,
   maintenanceBarrier
-} from '../loading-store/profile-state-maintenance-fixture'
-import { ProfileStateWriterError } from '../profile-state/profile-state-writer-errors'
+} from '../loading-store/profile-writing/profile-state-maintenance-fixture'
+import { ProfileStateWriterError } from '../profile-state/writer/profile-state-writer-errors'
 import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import {
   DORMANT_AUTOMATION_RUN,

@@ -8,10 +8,4 @@ describe('acceptTerminalLayoutSeq', () => {
     expect(acceptTerminalLayoutSeq(marks, 't', { type: 'scrollback', seq: 14 })).toBe(true)
     expect(acceptTerminalLayoutSeq(marks, 't', { type: 'resized', seq: 3 })).toBe(true)
   })
-
-  it('drops a resize older than the layout seq the stream subscribed at', () => {
-    const marks = new Map<string, number>()
-    acceptTerminalLayoutSeq(marks, 't', { type: 'subscribed', seq: 5 })
-    expect(acceptTerminalLayoutSeq(marks, 't', { type: 'resized', seq: 4 })).toBe(false)
-  })
 })

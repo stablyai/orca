@@ -3,7 +3,6 @@ import { findSqliteRuntimeTests } from './vitest-sqlite-runtime-scan.mjs'
 // SQLite publication, native bindings, worker IPC, socket liveness, and V8 retention use Node.
 const NODE_RUNTIME_INCLUDE = [
   // Exercise the native fetch error and abort contracts used by the Linear SDK in Electron.
-  'src/main/linear/linear-issue-detail-deadline.test.ts',
   'tests/e2e/linear-cli-recovery.unit.test.ts',
   'src/main/runtime/agent-session/lifecycle/structured-agent-cli-writers.test.ts',
   'config/scripts/ci/workflow-contracts/cloud-security-history-workflow.test.mjs',
@@ -131,7 +130,6 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/providers/working-directory-validation.test.ts',
   'src/main/pty/process-retirement/posix-pty-process-groups.integration.test.ts',
   'src/shared/ephemeral-vm-recipe-output-capture.test.ts',
-  'src/main/gitlab/gitlab-known-host-retirement.test.ts',
   'src/main/window/main-window-updater-deferred-setup.test.ts',
   'src/renderer/src/components/terminal-pane/host-state/terminal-pane-host-state-memo.test.ts',
   'src/main/native-chat/agent-session-journal/**/*.test.ts',

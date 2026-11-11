@@ -2,9 +2,9 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
-import { openProfileStateDatabase } from '../../../src/main/persistence/profile-state/profile-state-database'
-import { importProfileStateJson } from '../../../src/main/persistence/profile-state/profile-state-documents'
-import { acquireProfileStateRuntimeAdmission } from '../../../src/main/persistence/profile-state/profile-state-access'
+import { openProfileStateDatabase } from '../../../src/main/persistence/profile-state/database/profile-state-database'
+import { importProfileStateJson } from '../../../src/main/persistence/profile-state/documents/profile-state-documents'
+import { acquireProfileStateRuntimeAdmission } from '../../../src/main/persistence/profile-state/access/profile-state-access'
 import { mutateStoppedProfileState, readPersistedProfileState } from './persisted-profile-state'
 
 const roots: string[] = []

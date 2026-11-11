@@ -18,10 +18,10 @@ import type {
   OrcadMigrationBlobChunkResult,
   OrcadMigrationBlobDescriptor
 } from '../../../shared/orcad-migration/orcad-migration-blob-transfer'
-import type { RepoLifecycleOperations } from '../loading-store/repo-lifecycle-operations'
+import type { RepoLifecycleOperations } from '../loading-store/project-catalog/repo-lifecycle-operations'
 import type { StoreRuntimeState } from '../loading-store/store-runtime-state'
-import type { WriteSchedulingOperations } from '../loading-store/write-scheduling'
-import { scheduleSave } from '../loading-store/write-scheduling'
+import type { WriteSchedulingOperations } from '../loading-store/profile-writing/write-scheduling'
+import { scheduleSave } from '../loading-store/profile-writing/write-scheduling'
 import {
   applyPreparedOrcadMigrationCatalog,
   assertOrcadMigrationReceiptMatchesManifest,

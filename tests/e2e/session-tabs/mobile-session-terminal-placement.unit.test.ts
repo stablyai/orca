@@ -1,6 +1,6 @@
 import '../../../src/main/runtime/orca-runtime-tests/runtime-test-module-registration.spec'
 import { afterEach, expect, it, vi } from 'vitest'
-import { applyPtyBinding } from '../../../src/main/persistence/loading-store/pty-binding-session-update'
+import { applyPtyBinding } from '../../../src/main/persistence/loading-store/terminal-bindings/pty-binding-session-update'
 import { committingSpawn } from '../../../src/main/runtime/orca-runtime-tests/bind-first-pane.test-fixture'
 import { OrcaRuntimeService } from '../../../src/main/runtime/orca-runtime'
 import {
