@@ -19,6 +19,7 @@ type SettingsSearchFieldProps = {
   searchAutoFocus?: boolean
   query: string
   listboxId: string
+  expanded: boolean
   activeOptionId: string | undefined
   onQueryChange: (query: string) => void
   onKeyDown: (event: KeyboardEvent<HTMLInputElement>) => void
@@ -29,6 +30,7 @@ export function SettingsSearchField({
   searchAutoFocus = false,
   query,
   listboxId,
+  expanded,
   activeOptionId,
   onQueryChange,
   onKeyDown
@@ -50,8 +52,8 @@ export function SettingsSearchField({
           aria-label={t('auto.components.settings.SettingsSidebar.dbceaa8840', 'Search settings')}
           role="combobox"
           aria-autocomplete="list"
-          aria-expanded={activeOptionId !== undefined}
-          aria-controls={activeOptionId !== undefined ? listboxId : undefined}
+          aria-expanded={expanded}
+          aria-controls={expanded ? listboxId : undefined}
           aria-activedescendant={activeOptionId}
           className="bg-background/60 pl-9 pr-14 text-[13px]"
         />
@@ -95,6 +97,7 @@ type SettingsSearchResultsListProps = {
   getOptionId: (index: number) => string
   repoSectionById: ReadonlyMap<string, { repoIcon?: RepoIcon | null; badgeColor?: string }>
   groupTitleById: ReadonlyMap<string, string>
+  hiddenResultCount: number
   onSelect: (result: SettingsSearchResult) => void
 }
 
@@ -106,6 +109,7 @@ export function SettingsSearchResultsList({
   getOptionId,
   repoSectionById,
   groupTitleById,
+  hiddenResultCount,
   onSelect
 }: SettingsSearchResultsListProps): React.JSX.Element {
   const t = useTranslate()
@@ -180,13 +184,21 @@ export function SettingsSearchResultsList({
             )
           })}
         </div>
-      ) : (
+      ) : null}
+      {searchResults.length > 0 && hiddenResultCount > 0 ? (
+        <p className="px-3 pt-3 text-xs text-muted-foreground">
+          {t('settings.search.moreResults', '{{value0}} more · keep typing to narrow', {
+            value0: hiddenResultCount
+          })}
+        </p>
+      ) : null}
+      {searchResults.length === 0 ? (
         <p role="status" className="px-3 py-6 text-center text-xs text-muted-foreground">
           {t('settings.search.noResults', 'No settings match “{{value0}}”', {
             value0: searchQuery.trim()
           })}
         </p>
-      )}
+      ) : null}
     </div>
   )
 }

@@ -179,6 +179,10 @@ export function AppearancePane({
     return openSections.has(key)
   }
 
+  function openSection(key: AppearanceSectionKey): void {
+    setOpenSections((current) => (current.has(key) ? current : new Set(current).add(key)))
+  }
+
   function toggleSection(key: AppearanceSectionKey): void {
     setOpenSections((current) => {
       const next = new Set(current)
@@ -207,6 +211,7 @@ export function AppearancePane({
           summary={interfaceSummary}
           open={isSectionOpen('interface')}
           onToggle={() => toggleSection('interface')}
+          onReveal={() => openSection('interface')}
           toggleDisabled={isSearching}
         >
           <AppearanceInterfaceSection
@@ -230,6 +235,7 @@ export function AppearancePane({
           summary={terminalSummary}
           open={isSectionOpen('terminal')}
           onToggle={() => toggleSection('terminal')}
+          onReveal={() => openSection('terminal')}
           toggleDisabled={isSearching}
         >
           <TerminalAppearanceSection
@@ -253,6 +259,7 @@ export function AppearancePane({
           summary={windowSidebarSummary}
           open={isSectionOpen('window')}
           onToggle={() => toggleSection('window')}
+          onReveal={() => openSection('window')}
           toggleDisabled={isSearching}
         >
           <AppearanceWindowSidebarSection

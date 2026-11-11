@@ -1391,7 +1391,8 @@
     "search": {
       "clear": "Clear search",
       "results": "Settings search results",
-      "noResults": "No settings match “{{value0}}”"
+      "noResults": "No settings match “{{value0}}”",
+      "moreResults": "{{value0}} more · keep typing to narrow"
     }
   },
   "menu": {

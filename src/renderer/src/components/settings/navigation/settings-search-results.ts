@@ -9,7 +9,8 @@ import {
 } from '../search/settings-search'
 import { getSettingsTitleTargetId } from '../section-layout/settings-target-highlight'
 
-export type SettingsSearchResultOpenMode = 'preview' | 'pick'
+// Enough to scan; past this the query is too broad to be useful.
+export const SETTINGS_SEARCH_RESULT_LIMIT = 50
 
 export type SettingsSearchResult = {
   key: string

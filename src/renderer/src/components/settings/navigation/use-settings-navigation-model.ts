@@ -21,6 +21,9 @@ import { hasReadyVoiceModel } from './settings-navigation-foundations'
 import { buildSettingsSearchResults } from './settings-search-results'
 import { getGeneralWorkspaceSearchDescriptors } from '../general/general-search'
 import { getGeneralEditorSearchDescriptors } from '../editor/general-editor-search'
+import { GENERAL_SUB_PAGE_ENTRY_ANCHORS } from '../general/general-setting-anchors'
+import { getGeneralSubPageTitle, type GeneralSubPage } from '../general/general-sub-pages'
+import { translate } from '@/i18n/i18n'
 
 export function useSettingsNavigationModel(
   model: SettingsStoreModel,
@@ -134,11 +137,14 @@ export function useSettingsNavigationModel(
   )
   const searchCandidates = useMemo(() => {
     // General sub-page rows carry anchors in descriptors, not in their search entries.
-    const generalAnchorByTitle = new Map(
-      [...getGeneralWorkspaceSearchDescriptors(), ...getGeneralEditorSearchDescriptors()].map(
+    const generalAnchorByTitle = new Map<string, string>([
+      ...[...getGeneralWorkspaceSearchDescriptors(), ...getGeneralEditorSearchDescriptors()].map(
         (descriptor) => [descriptor.entry.title, descriptor.sectionId] as const
+      ),
+      ...(Object.entries(GENERAL_SUB_PAGE_ENTRY_ANCHORS) as [GeneralSubPage, string][]).map(
+        ([page, anchor]) => [getGeneralSubPageTitle(page, translate), anchor] as const
       )
-    )
+    ])
     return buildSettingsSearchResults(navSections, (section, entry) =>
       section.id === 'general' ? generalAnchorByTitle.get(entry.title) : undefined
     )

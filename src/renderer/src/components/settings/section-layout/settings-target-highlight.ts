@@ -1,3 +1,5 @@
+import { useEffect, useRef, type RefObject } from 'react'
+
 export const SETTINGS_TARGET_HIGHLIGHT_CLASS_NAME = 'settings-target-highlight'
 
 const SETTINGS_TITLE_TARGET_PREFIX = 'settings-title:'
@@ -45,4 +47,29 @@ export function applySettingsTargetHighlightBleed(target: HTMLElement): void {
 export function clearSettingsTargetHighlightBleed(target: HTMLElement): void {
   target.style.removeProperty('--settings-target-bleed-left')
   target.style.removeProperty('--settings-target-bleed-right')
+}
+
+const SETTINGS_TARGET_REVEAL_EVENT = 'orca-settings-target-reveal'
+
+// Collapsed sections keep their rows mounted but hidden; the jump asks each one around the target to open.
+export function requestSettingsTargetReveal(target: HTMLElement): void {
+  target.dispatchEvent(new Event(SETTINGS_TARGET_REVEAL_EVENT, { bubbles: true }))
+}
+
+export function useSettingsTargetReveal<T extends HTMLElement>(
+  onReveal: () => void
+): RefObject<T | null> {
+  const ref = useRef<T | null>(null)
+  const onRevealRef = useRef(onReveal)
+  onRevealRef.current = onReveal
+  useEffect(() => {
+    const node = ref.current
+    if (!node) {
+      return
+    }
+    const listener = (): void => onRevealRef.current()
+    node.addEventListener(SETTINGS_TARGET_REVEAL_EVENT, listener)
+    return () => node.removeEventListener(SETTINGS_TARGET_REVEAL_EVENT, listener)
+  }, [])
+  return ref
 }

@@ -1,6 +1,7 @@
 import type React from 'react'
 import { ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/class-names'
+import { useSettingsTargetReveal } from '../section-layout/settings-target-highlight'
 
 type AppearanceSectionProps = {
   id: string
@@ -9,6 +10,8 @@ type AppearanceSectionProps = {
   summary: React.ReactNode
   open: boolean
   onToggle: () => void
+  /** Opens the section when a settings jump targets a row inside it. */
+  onReveal?: () => void
   /** Search forces sections open; prevent collapse from silently changing post-search disclosure state. */
   toggleDisabled?: boolean
   children: React.ReactNode
@@ -21,12 +24,15 @@ export function AppearanceSection({
   summary,
   open,
   onToggle,
+  onReveal,
   toggleDisabled = false,
   children
 }: AppearanceSectionProps): React.JSX.Element {
   const contentId = `appearance-section-${id}`
+  const revealRef = useSettingsTargetReveal<HTMLDivElement>(() => onReveal?.())
   return (
     <div
+      ref={revealRef}
       className={cn(
         'overflow-hidden rounded-xl border border-border/50 bg-card transition-colors',
         open && 'border-ring/40'

@@ -9,10 +9,7 @@ import {
   cancelPendingSettingsDeepLinkTargetWatch,
   getSettingsNavGroupDefinitionsForSearch
 } from '../navigation/settings-navigation-foundations'
-import type {
-  SettingsSearchResult,
-  SettingsSearchResultOpenMode
-} from '../navigation/settings-search-results'
+import type { SettingsSearchResult } from '../navigation/settings-search-results'
 
 export function useSettingsNavigationActions(
   model: Pick<
@@ -42,7 +39,6 @@ export function useSettingsNavigationActions(
   const {
     confirmDiscardSourceControlAiPromptChanges,
     contentScrollRef,
-    hasUnsavedSourceControlAiPromptChanges,
     pendingNavSectionRef,
     pendingScrollTargetRef,
     pendingScrollTargetWatchRef
@@ -86,14 +82,10 @@ export function useSettingsNavigationActions(
   )
 
   const openSettingsSearchResult = useCallback(
-    async (result: SettingsSearchResult, mode: SettingsSearchResultOpenMode): Promise<void> => {
+    async (result: SettingsSearchResult): Promise<void> => {
       const sectionId = result.section.id
       if (sectionId !== activeSectionId) {
-        // Typing and arrowing must not raise the discard dialog; hold the preview until a pick.
-        if (mode === 'preview' && hasUnsavedSourceControlAiPromptChanges) {
-          return
-        }
-        if (mode === 'pick' && !(await confirmDiscardSourceControlAiPromptChanges())) {
+        if (!(await confirmDiscardSourceControlAiPromptChanges())) {
           return
         }
         releaseNativeAccounts()
@@ -107,7 +99,6 @@ export function useSettingsNavigationActions(
     [
       activeSectionId,
       confirmDiscardSourceControlAiPromptChanges,
-      hasUnsavedSourceControlAiPromptChanges,
       pendingNavSectionRef,
       pendingScrollTargetRef,
       releaseNativeAccounts,

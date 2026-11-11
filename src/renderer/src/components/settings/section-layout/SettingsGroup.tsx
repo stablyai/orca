@@ -22,7 +22,7 @@ export function SettingsGroup({
   onHeaderClick
 }: SettingsGroupProps): React.JSX.Element {
   return (
-    <section className={cn('space-y-3', className)}>
+    <section data-settings-group="" className={cn('space-y-3', className)}>
       {title ? (
         <SettingsGroupHeader
           title={title}

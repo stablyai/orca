@@ -144,11 +144,21 @@ function findSettingsRowByVisibleTitle(title: string, root: HTMLElement): HTMLEl
     // A group title stands for its whole card, not the heading text.
     const groupCard = element
       .closest('[data-settings-group-heading]')
-      ?.closest('section')
+      ?.closest('[data-settings-group]')
       ?.querySelector<HTMLElement>('[data-settings-group-body]')?.parentElement
     return groupCard ?? element.closest<HTMLElement>('[data-settings-row]') ?? element
   }
   return null
+}
+
+function hasNestedScroller(target: HTMLElement, container: HTMLElement): boolean {
+  for (let node = target.parentElement; node && node !== container; node = node.parentElement) {
+    const overflowY = getComputedStyle(node).overflowY
+    if ((overflowY === 'auto' || overflowY === 'scroll') && node.scrollHeight > node.clientHeight) {
+      return true
+    }
+  }
+  return false
 }
 
 export function scrollSubsectionIntoView(targetId: string, container?: HTMLElement | null): void {
@@ -157,8 +167,9 @@ export function scrollSubsectionIntoView(targetId: string, container?: HTMLEleme
   if (!target) {
     return
   }
-  if (!container) {
-    target.scrollIntoView({ block: 'start' })
+  // A target inside its own scroll area (the Shortcuts list) needs every scroller moved, not just the page.
+  if (!container || hasNestedScroller(target, container)) {
+    target.scrollIntoView({ block: container ? 'center' : 'start' })
     return
   }
   const containerRect = container.getBoundingClientRect()
