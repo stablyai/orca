@@ -1,0 +1,20 @@
+{
+  "manifestVersion": 2,
+  "id": "catppuccin-latte",
+  "name": "Catppuccin Latte Icons",
+  "version": "0.1.0",
+  "description": "File and folder icons.",
+  "engines": {
+    "orca": ">=1.4.246"
+  },
+  "execution": "data",
+  "contributes": {
+    "iconThemes": [
+      {
+        "id": "catppuccin-latte",
+        "title": "Catppuccin Latte Icons",
+        "path": "icons/theme.json"
+      }
+    ]
+  }
+}
