@@ -37,6 +37,7 @@ import {
   cloudStripWidth,
   type CloudStripActions
 } from './CloudAgentSignInStrip'
+import { watchCloudAgentRestartPane } from '@/lib/orca-cloud/cloud-agent-restart-pane-watch'
 import { cloudRestartAttemptModel, cloudRunningStripModel } from './cloud-running-strip-model'
 
 function openAccounts(): void {
@@ -109,6 +110,7 @@ export function CloudRunningStripPortal({
     beginCloudAgentRestart(paneKey, { ...args, ptyId }, () =>
       useAppStore.getState().queuePaneAccountRestarts([ptyId], args.agent)
     )
+    watchCloudAgentRestartPane(paneKey, worktreeId, args.agent)
   }
   // A Restart in flight (or failed) owns the strip even while the pane has no agent status.
   if (attempt && cloud) {

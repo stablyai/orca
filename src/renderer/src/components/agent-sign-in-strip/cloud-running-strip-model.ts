@@ -69,12 +69,9 @@ export function cloudRestartAttemptModel(
       detail: attempt.resumable
         ? t('agentSignInStrip.restartingResume', 'Picking up where you left off.')
         : t('agentSignInStrip.renewedFresh', 'Starts a new conversation.'),
-      primary: {
-        label: t('agentSignInStrip.restartAgent', 'Restart {{agent}}', { agent }),
-        narrowLabel: t('agentSignInStrip.restart', 'Restart'),
-        action: { kind: 'restart' },
-        busy: true
-      },
+      // The spinner and the words are the whole state: no button to click twice.
+      primary: null,
+      noClose: true,
       announcement: title
     }
   }
@@ -84,7 +81,11 @@ export function cloudRestartAttemptModel(
     status: 'error',
     title,
     compactTitle: title,
-    detail: t('agentSignInStrip.tryAgainDetail', 'Try again.'),
+    // Never "Try again." twice: the body names the reason when one is known, else stays empty.
+    detail:
+      attempt.failure === 'hostUnresponsive'
+        ? t('agentSignInStrip.restartHostUnresponsive', 'The workspace didn’t respond.')
+        : '',
     primary: {
       label: t('agentSignInStrip.tryAgain', 'Try again'),
       action: { kind: 'restart' }

@@ -12,7 +12,11 @@ import {
 } from '@/lib/orca-cloud/cloud-agent-restart-attempt'
 import type { TerminalPaneCloseController } from '../layout/close/use-terminal-pane-close-actions'
 import type { usePaneProcessRestart } from '../process-exit/use-pane-process-restart'
-import { stopRemotePaneTerminalForRestart } from '@/lib/orca-cloud/cloud-pane-restart-stop'
+import {
+  resumeRemotePaneAgent,
+  stopRemotePaneTerminalForRestart
+} from '@/lib/orca-cloud/cloud-pane-restart-stop'
+import type { AgentProviderSessionMetadata } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import type { AccountRestartAgent } from '@/store/terminals/terminal-contracts'
 import type { usePaneAccountRestartStartup } from './use-pane-account-restart-startup'
@@ -80,7 +84,9 @@ function worktreeIdForTab(tabId: string): string | null {
   return null
 }
 
-export function runReadyPaneAccountRestarts<Startup>(input: {
+export function runReadyPaneAccountRestarts<
+  Startup extends { resumeProviderSession?: AgentProviderSessionMetadata }
+>(input: {
   panes: readonly ReadyRestartPane[]
   ptyIdOf: (paneId: number) => string | null
   readyRestartPtyIds: readonly string[]
@@ -90,8 +96,14 @@ export function runReadyPaneAccountRestarts<Startup>(input: {
   handleRestartPane: (paneId: number, startup: Startup, options: { focus: boolean }) => void
   /** Stops the one host terminal behind a paired pane before its restart reconnects. */
   stopRemotePane?: (ptyId: string, worktreeId: string) => Promise<void>
+  /** Relaunches the paired pane's agent on its own conversation, in the same pane. */
+  resumeRemotePane?: typeof resumeRemotePaneAgent
 }): void {
-  const args = { stopRemotePane: stopRemotePaneTerminalForRestart, ...input }
+  const args = {
+    stopRemotePane: stopRemotePaneTerminalForRestart,
+    resumeRemotePane: resumeRemotePaneAgent,
+    ...input
+  }
   for (const pane of args.panes) {
     const ptyId = args.ptyIdOf(pane.id)
     if (
@@ -136,10 +148,25 @@ export function runReadyPaneAccountRestarts<Startup>(input: {
     // terminal first (its exit is ours, not the pane's), then reconnect.
     const store = useAppStore.getState()
     store.suppressPtyExit(ptyId)
-    void args.stopRemotePane(ptyId, worktreeId).then(launch, (err: unknown) => {
-      console.warn('[orca-cloud] restart could not stop the pane’s host terminal:', err)
-      useAppStore.getState().consumeSuppressedPtyExit(ptyId)
-      failCloudAgentRestart(ptyId)
-    })
+    const providerSession = launchedStartup.resumeProviderSession ?? null
+    void args
+      .stopRemotePane(ptyId, worktreeId)
+      .then(() =>
+        providerSession
+          ? args.resumeRemotePane({
+              ptyId,
+              worktreeId,
+              tabId: args.tabId,
+              leafId: pane.leafId,
+              agent,
+              providerSession
+            })
+          : undefined
+      )
+      .then(launch, (err: unknown) => {
+        console.warn('[orca-cloud] restart could not relaunch the pane’s agent on its host:', err)
+        useAppStore.getState().consumeSuppressedPtyExit(ptyId)
+        failCloudAgentRestart(ptyId)
+      })
   }
 }

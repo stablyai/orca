@@ -25,6 +25,8 @@ export type CloudAgentRestartAttempt = {
   ptyId: string
   /** Set when the pane's restart actually ran (a new PTY was asked for). */
   launchedAt: number | null
+  /** Why it failed, when known: the workspace's host did not do what was asked. */
+  failure?: 'hostUnresponsive'
 }
 
 export const CLOUD_AGENT_RESTART_TIMEOUT_MS = 10_000
@@ -99,13 +101,16 @@ export function noteCloudAgentRestartLaunched(ptyId: string, now = Date.now()): 
 }
 
 /** The pane's restart could not run (no startup to launch, or it threw). */
-export function failCloudAgentRestart(ptyId: string): void {
+export function failCloudAgentRestart(
+  ptyId: string,
+  failure?: CloudAgentRestartAttempt['failure']
+): void {
   forcedRestarts.delete(ptyId)
   const paneKey = attemptKeyForPty(ptyId)
   const attempt = paneKey ? restarts.get(paneKey) : undefined
   if (paneKey && attempt) {
     stopRestartTimer(paneKey)
-    restarts.set(paneKey, { ...attempt, phase: 'failed' })
+    restarts.set(paneKey, { ...attempt, phase: 'failed', ...(failure ? { failure } : {}) })
     notifyCloudRunningStrips()
   }
 }

@@ -50,6 +50,8 @@ export type CloudStripModel = {
   codeStep?: boolean
   /** RA-11 state 2: a dismiss × with this label (the strip otherwise drops its × on Renew). */
   dismiss?: string
+  /** RA-11 "Restarting…": nothing to close; the strip leaves with the result. */
+  noClose?: boolean
   /** One sentence for the polite region. */
   announcement: string
 }
