@@ -39,7 +39,7 @@ src/main/git/wsl-git-read-environment.ts
 src/main/github/gh-utils.ts
 src/main/workspace-hooks/hooks.ts
 src/main/ipc/developer-permissions.ts
-src/main/ipc/filesystem/watcher-process/parcel-watcher-child-launch.ts
+src/main/ipc/filesystem/watcher-process/child-lifecycle/parcel-watcher-child-launch.ts
 src/main/ipc/local-network-connection-test.ts
 src/main/ipc/macos-keyboard-input-source.ts
 src/main/ipc/macos-keyboard-layout-snapshot.ts

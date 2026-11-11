@@ -2,8 +2,8 @@
 import { Terminal } from '@xterm/xterm'
 import { describe, expect, it } from 'vitest'
 import { createTerminalDocumentScope } from './document/document-scope'
-import { emitKeyboardAvoidanceMetrics } from './document/keyboard-avoidance-metrics'
-import { commitFitScale } from './document/fit-scale'
+import { emitKeyboardAvoidanceMetrics } from './document/viewport/keyboard-avoidance-metrics'
+import { commitFitScale } from './document/viewport/fit-scale'
 
 function runMetricsOver(term: unknown, fitScale = 1): Record<string, unknown>[] {
   const notifications: Record<string, unknown>[] = []

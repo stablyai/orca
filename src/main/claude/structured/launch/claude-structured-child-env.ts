@@ -10,7 +10,7 @@ import {
 // `--version` probe that runs the same binary.
 
 import { withCliRuntimeOnPath } from '../../../../shared/node-cli-command-resolution'
-import { applyClaudeEnvPatch } from '../../../claude-accounts/environment'
+import { applyClaudeEnvPatch } from '../../../claude-accounts/runtime-auth/environment'
 import { resolveClaudeCommand } from '../../../codex-cli/command'
 import { withoutInheritedClaudeConfigDir } from '../../claude-config-dir-pin'
 import { stripInheritedAgentSessionEnv } from '../../../../shared/agent-launch/startup/parent-agent-session-env'

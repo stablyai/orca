@@ -1,5 +1,5 @@
 import { resolve } from 'node:path'
-import { getClaudeProfileRouter } from '../../claude-accounts/claude-profile-installed-router'
+import { getClaudeProfileRouter } from '../../claude-accounts/profiles/routing/claude-profile-installed-router'
 import { agentSessionAccountHomesEqual } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
 import { claudeNamingContextId } from '../claude-conversation-naming'
 import { CLAUDE_CACHED_FLAG_CHECK_BUDGET_MS } from '../claude-cli-flag-support'

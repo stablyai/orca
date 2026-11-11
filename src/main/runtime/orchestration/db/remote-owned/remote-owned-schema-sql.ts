@@ -41,6 +41,8 @@ CREATE TABLE IF NOT EXISTS remote_placements (
   dispatch_id        TEXT,
   created_at         TEXT NOT NULL DEFAULT (datetime('now'))
 );
+-- Closing a link visits only its own rows here and in remote_dispatches.
+CREATE INDEX IF NOT EXISTS idx_remote_placements_conversation ON remote_placements(conversation_id);
 
 -- What the server last said about one of its Dispatches here, and any stop this Orca owes it.
 CREATE TABLE IF NOT EXISTS remote_dispatches (
@@ -71,6 +73,7 @@ CREATE TABLE IF NOT EXISTS remote_dispatches (
 );
 CREATE INDEX IF NOT EXISTS idx_remote_dispatches_run ON remote_dispatches(run_id);
 CREATE INDEX IF NOT EXISTS idx_remote_dispatches_task ON remote_dispatches(task_id);
+CREATE INDEX IF NOT EXISTS idx_remote_dispatches_conversation ON remote_dispatches(conversation_id);
 CREATE INDEX IF NOT EXISTS idx_remote_dispatches_stop_owed
   ON remote_dispatches(environment_id) WHERE stop_owed = 1;
 
