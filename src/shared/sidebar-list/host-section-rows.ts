@@ -17,6 +17,7 @@ import type { SshConnectionStatus } from '../ssh-types'
 import type { Row } from './row-types'
 import { getFolderWorkspaceHostId } from './folder-workspace-host-id'
 import { countWorkspaceRows } from './host-section-workspace-count'
+import { createHostSectionResolver, mergeHeaderHostsIntoSections } from './host-section-aliases'
 import { localizeProjectHeader, localizeRowsToHost } from './project-header-localization'
 
 export type HostHeaderRow = {
@@ -50,6 +51,8 @@ export type HostSectionOption = {
   blockedReason?: RuntimeHostBlockedReason
   vmState?: ExecutionHostVmState
   connectionStatus?: SshConnectionStatus
+  /** Shares the section of the host it merged into (see host-section-aliases). */
+  mergedIntoHostId?: ExecutionHostId
 }
 
 function getRowHostId(row: Row, defaultHostId: ExecutionHostId): ExecutionHostId | null {
@@ -146,6 +149,13 @@ export function addHostSectionRows(args: {
     return localizeRowsToHost(args.rows, args.hostOptions[0]?.id)
   }
 
+  // Merged-away hosts (each Orca Cloud sandbox after the first) share their shown host's section.
+  const resolveHost = createHostSectionResolver(args.hostOptions)
+  const inputRows = resolveHost ? mergeHeaderHostsIntoSections(args.rows, resolveHost) : args.rows
+  const sectionHostOf = (row: Row): ExecutionHostId | null => {
+    const hostId = getRowHostId(row, args.defaultHostId)
+    return hostId && resolveHost ? resolveHost(hostId) : hostId
+  }
   const hostOptionsById = new Map(args.hostOptions.map((host) => [host.id, host]))
   const rowsByHostId = new Map<ExecutionHostId, Row[]>()
   const globalRows: Row[] = []
@@ -214,7 +224,7 @@ export function addHostSectionRows(args: {
 
   // A nested child stays in its lineage root's section, even when it runs on another machine.
   let lineageRootHostId: ExecutionHostId | null = null
-  for (const row of args.rows) {
+  for (const row of inputRows) {
     if (row.type === 'header' && row.repo) {
       retainPendingAncestors(row.projectGroupDepth ?? 0)
     }
@@ -225,7 +235,7 @@ export function addHostSectionRows(args: {
       }
       continue
     }
-    const ownHostId = getRowHostId(row, args.defaultHostId)
+    const ownHostId = sectionHostOf(row)
     if ((row.type === 'item' || row.type === 'folder-workspace') && row.depth === 0) {
       lineageRootHostId = ownHostId
     }
@@ -249,7 +259,7 @@ export function addHostSectionRows(args: {
 
   const hostOrder: ExecutionHostId[] = []
   for (const host of args.hostOptions) {
-    if (rowsByHostId.has(host.id)) {
+    if (rowsByHostId.has(host.id) && !host.mergedIntoHostId) {
       hostOrder.push(host.id)
     }
   }
@@ -261,7 +271,7 @@ export function addHostSectionRows(args: {
 
   // Show host headers only for mixed hosts; registered empty hosts remain in the scope picker.
   if (rowsByHostId.size <= 1) {
-    return localizeRowsToHost(args.rows, rowsByHostId.keys().next().value)
+    return localizeRowsToHost(inputRows, rowsByHostId.keys().next().value)
   }
 
   const result: HostSectionRow[] = [...globalRows]
@@ -302,9 +312,7 @@ export function addHostSectionRows(args: {
             return { ...row, hostId: row.hostId ?? hostId, ...(repeated ? { repeated: true } : {}) }
           }
           // The enclosing host header already names the owner, unless a nested child runs elsewhere.
-          return 'hostContextLabel' in row &&
-            row.hostContextLabel &&
-            getRowHostId(row, args.defaultHostId) === hostId
+          return 'hostContextLabel' in row && row.hostContextLabel && sectionHostOf(row) === hostId
             ? { ...row, hostContextLabel: undefined }
             : row
         })

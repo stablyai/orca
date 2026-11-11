@@ -40,7 +40,7 @@ import {
   PUSH_TO_GITHUB_URL
 } from './vm-build-repo-actions'
 import { useVmBuildStepTimings, type VmBuildStepTimings } from './vm-build-timing'
-import { headerTitle, stepLabel, type SheetState } from './vm-build-sheet-copy'
+import { cloneStageLabel, headerTitle, stepLabel, type SheetState } from './vm-build-sheet-copy'
 import { humanizeOrcaCloudLogLine, latestOrcaCloudPhaseLabel } from './orca-cloud-build-log'
 
 const NO_STAMPS: readonly number[] = []
@@ -67,9 +67,11 @@ function fixContext(
   cloud: boolean,
   t: Translate
 ): EnvironmentSetupFailureContext {
+  const stepById = (id: VmBuildStep['id']): VmBuildStep =>
+    steps.find((candidate) => candidate.id === id) ?? steps[0]
   if (failure?.kind === 'checks') {
     return {
-      step: stepLabel(steps[1], cloud, t),
+      step: stepLabel(stepById('checks'), cloud, t),
       error: failure.problems
         .filter((check) => check.status === 'fail')
         .map((check) => check.message)
@@ -77,7 +79,11 @@ function fixContext(
       log: formatEnvironmentDoctorChecks(failure.problems).join('\n')
     }
   }
-  return { step: stepLabel(steps[0], cloud, t), error: error ?? '', log: entry.provisioningLog }
+  return {
+    step: stepLabel(stepById('provision'), cloud, t),
+    error: error ?? '',
+    log: entry.provisioningLog
+  }
 }
 
 /** The VM create sheet: a timed checklist, a failure card with one clear way forward, and the build log. */
@@ -140,7 +146,7 @@ export function VmBuildSheet({
   // Unknown roles get the owner's copy; only a known member is told to ask someone else.
   const canManageBilling =
     billing.result?.status !== 'ok' || billing.result.entitlement.canManageBilling
-  const derived = deriveVmBuildSteps(entry, now).map((step) =>
+  const derived = deriveVmBuildSteps(entry, now, { cloud }).map((step) =>
     nothingStarted(failure) && step.state === 'failed'
       ? { ...step, state: 'pending' as const, elapsedMs: null }
       : step
@@ -212,7 +218,8 @@ export function VmBuildSheet({
             >
               {headerTitle(state, cloud, t, failure?.kind === 'create')}
             </h2>
-            {gated ? null : (
+            {/* Orca Cloud: each step carries its own timer, so the header has none. */}
+            {gated || cloud ? null : (
               <span className="text-xs tabular-nums text-muted-foreground">{elapsedLabel}</span>
             )}
             {/* O4: which sandbox hours this start spends, while it starts. */}
@@ -240,7 +247,9 @@ export function VmBuildSheet({
                   detail={
                     cloud && step.id === 'provision' && step.state === 'running'
                       ? latestOrcaCloudPhaseLabel(entry.provisioningLog ?? '', t)
-                      : null
+                      : step.id === 'clone' && step.state === 'running'
+                        ? cloneStageLabel(step.stage, t)
+                        : null
                   }
                   timing={timings[step.id] ?? null}
                   t={t}

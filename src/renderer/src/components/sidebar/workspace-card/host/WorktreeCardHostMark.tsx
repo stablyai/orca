@@ -1,5 +1,6 @@
 import React from 'react'
 import { useAppStore } from '@/store'
+import { findWorktreeById } from '@/store/github/refresh/worktree-refresh'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import { HostGlyph, vmStateToDot } from '@/components/host-row-icon'
@@ -87,6 +88,8 @@ export function WorktreeCardHostStateWord({
       ? vmStateToDot(selectEphemeralVmWorkspaceState(state, worktreeId))
       : null
   )
+  // The separator only when line 2 goes on (a branch); "Asleep ·" alone reads as cut off.
+  const hasBranch = useAppStore((state) => Boolean(findWorktreeById(state, worktreeId)?.branch))
   const t = useTranslate()
   const state = cloud.isCloud ? cloud.state : vmDot
   // Unknown is not a state to name (the panel shows a placeholder until the first read).
@@ -101,7 +104,8 @@ export function WorktreeCardHostStateWord({
         PROBLEM.has(state) ? 'text-destructive' : 'text-muted-foreground'
       )}
     >
-      {cloudStateLabel(state, t)} ·
+      {cloudStateLabel(state, t)}
+      {hasBranch ? ' ·' : null}
     </span>
   )
 }

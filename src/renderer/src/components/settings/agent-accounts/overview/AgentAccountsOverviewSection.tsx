@@ -1,12 +1,9 @@
 // Wires S3 to the renderer's host list, the per-host sign-in probes and the Orca account. Rows open
-// the A16 panel; the Orca Cloud row opens S0 above (one row stands for every cloud workspace).
+// the A16 panel; the Orca Cloud row scrolls to S0 below (one row stands for every cloud workspace).
 import React, { useEffect, useMemo, useState } from 'react'
 import { useAppStore } from '@/store'
 import { useTranslate } from '@/i18n/use-translate'
-import {
-  reloadOrcaCloudAgentAccounts,
-  useOrcaCloudAgentAccounts
-} from '@/lib/orca-cloud/orca-cloud-agent-accounts-store'
+import { useOrcaCloudAgentAccounts } from '@/lib/orca-cloud/orca-cloud-agent-accounts-store'
 import { openAgentHostPanel } from '../../../agent-host-panel/agent-host-panel-store'
 import { ORCA_CLOUD_ACCOUNTS_SECTION_ID } from '../OrcaCloudAccounts'
 import {
@@ -19,7 +16,7 @@ import { AgentAccountsOverview } from './AgentAccountsOverview'
 import { overviewProbeTargets, useOverviewProbes } from './use-overview-probes'
 import { useOverviewHosts } from './use-overview-hosts'
 
-function openSettings(pane: 'accounts' | 'agent-accounts', sectionId?: string): void {
+function openSettings(pane: 'accounts', sectionId?: string): void {
   const store = useAppStore.getState()
   store.openSettingsTarget({ pane, repoId: null, ...(sectionId ? { sectionId } : {}) })
   store.openSettingsPage()
@@ -47,7 +44,11 @@ function useIsCloudMember(enabled: boolean): boolean {
   return member
 }
 
-export function AgentAccountsOverviewSection(): React.JSX.Element {
+export function AgentAccountsOverviewSection({
+  hideHeader = false
+}: {
+  hideHeader?: boolean
+}): React.JSX.Element {
   const t = useTranslate()
   const hosts = useOverviewHosts()
   const { probes, checkAgain, firstPassDone } = useOverviewProbes(hosts)
@@ -71,7 +72,7 @@ export function AgentAccountsOverviewSection(): React.JSX.Element {
   const open = (row: OverviewRow, focus?: 'claude' | 'codex'): void => {
     const host = row.hostId ? hostById.get(row.hostId) : undefined
     if (!host) {
-      // Orca Cloud: S0 above owns setup and the Source for every cloud workspace.
+      // Orca Cloud: S0 below owns setup and the Source for every cloud workspace.
       document.getElementById(ORCA_CLOUD_ACCOUNTS_SECTION_ID)?.scrollIntoView({ block: 'start' })
       return
     }
@@ -94,7 +95,7 @@ export function AgentAccountsOverviewSection(): React.JSX.Element {
         return
       }
       case 'accounts':
-        openSettings('accounts')
+        openSettings('accounts', 'accounts-this-host')
         return
       case 'manage':
         open(row)
@@ -111,15 +112,10 @@ export function AgentAccountsOverviewSection(): React.JSX.Element {
     <AgentAccountsOverview
       rows={rows}
       signedOutOfOrca={signedOutOfOrca}
+      hideHeader={hideHeader}
       summary={summary}
       onOpenRow={(row) => open(row)}
       onAction={onAction}
-      onSignIn={() =>
-        void useAppStore
-          .getState()
-          .connectCurrentOrcaProfile()
-          .then(() => reloadOrcaCloudAgentAccounts())
-      }
     />
   )
 }

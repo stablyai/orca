@@ -13,7 +13,11 @@ export function getHostHeaderDetail(
   /** Orca Cloud hosts use the cloud glossary: Asleep, Waking, Couldn't wake, never "Suspended". */
   isOrcaCloud = false
 ): { text: string; isWarning: boolean } | null {
-  if (isOrcaCloud && row.vmState) {
+  if (isOrcaCloud) {
+    // One header for every sandbox: its detail is the aggregate ("1 running · 1 asleep").
+    if (!row.vmState) {
+      return row.detail ? { text: row.detail, isWarning: false } : null
+    }
     const dot = vmStateToDot(row.vmState)
     return { text: cloudStateLabel(dot, t), isWarning: dot === 'failed' || dot === 'wakeFailed' }
   }

@@ -45,6 +45,8 @@ export const EPHEMERAL_VM_FAILURE_COPY = {
   cloudUnavailable: 'Orca Cloud is unavailable right now. Try again in a moment.',
   cloudGithubNotConnected:
     'Connect GitHub to your Orca account so Orca Cloud can clone this repository.',
+  cloudCloneFailed:
+    'Orca Cloud couldn’t clone this repository, so it deleted the sandbox. Try again.',
   cloudNoGithubRemote:
     'Orca Cloud clones your code from GitHub, and this repository has no GitHub remote. Push it to GitHub, then try again.'
 } as const

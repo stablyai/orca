@@ -14,7 +14,11 @@ import {
 import { ORCA_CLOUD_ACCOUNT_AGENTS } from '../../../../../shared/orca-cloud-agents/orca-cloud-agents-wire'
 import { OrcaCloudAccountsView, type OrcaCloudAccountsActions } from './OrcaCloudAccounts'
 
-export function OrcaCloudAccountsSection(): React.JSX.Element | null {
+export function OrcaCloudAccountsSection({
+  hideHeader = false
+}: {
+  hideHeader?: boolean
+}): React.JSX.Element | null {
   const t = useTranslate()
   const { load, setups, keyKinds } = useOrcaCloudAgentAccounts()
   const running = ORCA_CLOUD_ACCOUNT_AGENTS.some((agent) =>
@@ -86,5 +90,13 @@ export function OrcaCloudAccountsSection(): React.JSX.Element | null {
           .then(() => reloadOrcaCloudAgentAccounts())
     }
   }, [t])
-  return <OrcaCloudAccountsView load={load} rows={rows} actions={actions} now={now} />
+  return (
+    <OrcaCloudAccountsView
+      load={load}
+      rows={rows}
+      actions={actions}
+      now={now}
+      hideHeader={hideHeader}
+    />
+  )
 }

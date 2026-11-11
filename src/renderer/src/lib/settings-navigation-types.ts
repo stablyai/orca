@@ -17,7 +17,6 @@ const SETTINGS_NAV_TARGETS = [
   'general',
   'integrations',
   'accounts',
-  'agent-accounts',
   'agent-api-keys',
   'browser',
   'git',

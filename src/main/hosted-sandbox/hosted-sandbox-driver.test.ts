@@ -12,10 +12,13 @@ import {
 import { isHostedEntitlementDenied } from './hosted-environment-provider'
 import { createHostedSandboxControlPlaneClient } from './hosted-sandbox-control-plane-client'
 import {
+  CLONE_STALL_MS,
   createHostedSandboxDriver,
   HOSTED_SANDBOX_DELETE_NOT_CONFIRMED,
-  HOSTED_SANDBOX_DRIVER_ID
+  HOSTED_SANDBOX_DRIVER_ID,
+  waitForClone
 } from './hosted-sandbox-driver'
+import type { HostedSandboxControlPlaneClient } from './hosted-sandbox-control-plane-client'
 import { createFakeHostedControlPlane } from './fake-hosted-control-plane.test-support'
 
 function setup(options: { token?: string; fetch?: typeof fetch } = {}) {
@@ -160,3 +163,76 @@ function readyConnection(ready: {
   }
   return connection
 }
+
+describe('waitForClone', () => {
+  type Status = Awaited<ReturnType<HostedSandboxControlPlaneClient['cloneStatus']>>
+  function fakeClient(statuses: (Status | Error)[]) {
+    const destroyed: string[] = []
+    let index = 0
+    return {
+      destroyed,
+      client: {
+        cloneStatus: async (): Promise<Status> => {
+          const next = statuses[Math.min(index++, statuses.length - 1)]!
+          if (next instanceof Error) {
+            throw next
+          }
+          return next
+        },
+        destroy: async (id: string) => {
+          destroyed.push(id)
+          return { id, status: 'destroyed' as const }
+        }
+      }
+    }
+  }
+
+  it('reports each change in git progress once, then returns when the clone is done', async () => {
+    const { client, destroyed } = fakeClient([
+      { state: 'running', percent: 10, stage: 'download' },
+      { state: 'running', percent: 10, stage: 'download' },
+      new Error('one failed poll'),
+      { state: 'running', percent: 70, stage: 'checkout' },
+      { state: 'done' }
+    ])
+    const progress: unknown[] = []
+    await waitForClone(client, 'sbx_1', { onProgress: (p) => progress.push(p) }, { pollMs: 0 })
+    expect(progress).toEqual([
+      { phase: 'cloning' },
+      { phase: 'cloning', percent: 10, message: 'download' },
+      { phase: 'cloning', percent: 70, message: 'checkout' }
+    ])
+    expect(destroyed).toEqual([])
+  })
+
+  it('a failed clone deletes the sandbox and fails with its reason', async () => {
+    const { client, destroyed } = fakeClient([{ state: 'failed', reason: 'repo_unreachable' }])
+    const error = await rejection(waitForClone(client, 'sbx_1', {}, { pollMs: 0 }))
+    expect(isEnvironmentProviderError(error, 'conflict') && error.reason).toBe(
+      'clone:repo_unreachable'
+    )
+    expect(destroyed).toEqual(['sbx_1'])
+  })
+
+  it('a clone whose progress stops moving fails as stalled instead of spinning forever', async () => {
+    let clock = 0
+    const { client, destroyed } = fakeClient([{ state: 'running', percent: 60, stage: 'checkout' }])
+    const error = await rejection(
+      waitForClone(client, 'sbx_1', {}, { pollMs: 0, now: () => (clock += 60_000) })
+    )
+    expect(isEnvironmentProviderError(error) && error.reason).toBe('clone:clone_stalled')
+    expect(CLONE_STALL_MS).toBe(5 * 60_000)
+    expect(destroyed).toEqual(['sbx_1'])
+  })
+
+  it('cancel deletes the sandbox the caller never received', async () => {
+    const { client, destroyed } = fakeClient([{ state: 'running', percent: 5, stage: 'download' }])
+    const abort = new AbortController()
+    const waiting = rejection(
+      waitForClone(client, 'sbx_1', { signal: abort.signal }, { pollMs: 5 })
+    )
+    abort.abort()
+    expect(isEnvironmentProviderError(await waiting, 'aborted')).toBe(true)
+    expect(destroyed).toEqual(['sbx_1'])
+  })
+})

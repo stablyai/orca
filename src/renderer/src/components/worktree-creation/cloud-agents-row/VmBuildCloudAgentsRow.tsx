@@ -32,7 +32,7 @@ import { VmBuildAgentSignInRow } from '../VmBuildAgentSignInRow'
 import { VmBuildCloudAgentsMenu, type WorkspaceSourcesLoad } from './VmBuildCloudAgentsMenu'
 import { VmBuildCloudAgentsRowView, type DesktopKeySave } from './VmBuildCloudAgentsRowView'
 
-function openSettings(pane: 'agent-accounts' | 'cloud-secrets', sectionId?: string): void {
+function openSettings(pane: 'accounts' | 'cloud-secrets', sectionId?: string): void {
   const store = useAppStore.getState()
   store.openSettingsTarget({ pane, repoId: null, ...(sectionId ? { sectionId } : {}) })
   store.openSettingsPage()
@@ -156,7 +156,7 @@ export function VmBuildCloudAgentsRow({
         sources={sources}
         onOpen={readSources}
         onChoose={choose}
-        onManage={() => openSettings('agent-accounts', 'orca-cloud')}
+        onManage={() => openSettings('accounts', 'orca-cloud')}
         onUseKey={() => openSettings('cloud-secrets')}
       />
     )
@@ -184,7 +184,7 @@ export function VmBuildCloudAgentsRow({
             void api?.acknowledge({ agent })
           },
           retryLoad: () => void reloadOrcaCloudAgentAccounts(),
-          manage: () => openSettings('agent-accounts', 'orca-cloud'),
+          manage: () => openSettings('accounts', 'orca-cloud'),
           saveDesktopKey: saveKey,
           signInHere: (agent) => {
             nextRequest.current += 1

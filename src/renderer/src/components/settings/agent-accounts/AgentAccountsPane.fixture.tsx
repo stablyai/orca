@@ -71,8 +71,7 @@ const BASE = {
   signedOutOfOrca: false,
   summary: '',
   onOpenRow: noop,
-  onAction: noop,
-  onSignIn: noop
+  onAction: noop
 }
 
 const OVERVIEW_PROBES = {

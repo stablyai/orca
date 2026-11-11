@@ -23,7 +23,7 @@ import { agentName, keySourceLabel } from '../settings/agent-accounts/orca-cloud
 export function openOrcaCloudAgentAccounts(): void {
   useAppStore
     .getState()
-    .openSettingsTarget({ pane: 'agent-accounts', repoId: null, sectionId: 'orca-cloud' })
+    .openSettingsTarget({ pane: 'accounts', repoId: null, sectionId: 'orca-cloud' })
 }
 
 export function orcaCloudAgentCoveredLabel(

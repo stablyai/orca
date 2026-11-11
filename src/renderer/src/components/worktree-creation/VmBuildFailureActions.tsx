@@ -267,6 +267,7 @@ function failureActions(
     case 'unavailable':
     case 'network':
     case 'create':
+    case 'cloneFailed':
       return { primary: [tryAgain], more: [] }
   }
 }

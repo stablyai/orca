@@ -6,8 +6,8 @@ export const getAgentAccountsSearchEntries = createLocalizedCatalog(() => [
   {
     title: translate('settings.agentAccounts.searchTitle', 'Agent accounts'),
     description: translate(
-      'settings.agentAccounts.searchDescription',
-      'Use your Claude and ChatGPT accounts in every cloud workspace.'
+      'settings.agentAccounts.hubSearchDescription',
+      'Where Claude and Codex are signed in: Orca Cloud, this computer and your hosts.'
     ),
     keywords: [
       ...translateSearchKeyword('settings.agentAccounts.search.subscription', 'subscription'),

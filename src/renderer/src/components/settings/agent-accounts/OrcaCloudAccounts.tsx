@@ -78,7 +78,8 @@ export function OrcaCloudAccountsView({
   actions,
   now,
   initialConfirmRemove,
-  initialRowError
+  initialRowError,
+  hideHeader = false
 }: OrcaCloudAccountsViewProps): React.JSX.Element | null {
   const t = useTranslate()
   const announcement = rows ? setupAnnouncement(rows, t) : ''
@@ -148,13 +149,15 @@ export function OrcaCloudAccountsView({
   }
   return (
     <section id={ORCA_CLOUD_ACCOUNTS_SECTION_ID} className="space-y-3">
-      <SettingsGroupHeader
-        title={t('orcaCloudAccounts.title', 'Orca Cloud')}
-        description={t(
-          'orcaCloudAccounts.help',
-          'Set up once on this computer. Every cloud workspace uses it, including new, cloned and restarted ones.'
-        )}
-      />
+      {hideHeader ? null : (
+        <SettingsGroupHeader
+          title={t('orcaCloudAccounts.title', 'Orca Cloud')}
+          description={t(
+            'orcaCloudAccounts.help',
+            'Set up once on this computer. Every cloud workspace uses it, including new, cloned and restarted ones.'
+          )}
+        />
+      )}
       <div className="overflow-hidden rounded-xl border border-border bg-card/50 shadow-xs">
         {body}
       </div>

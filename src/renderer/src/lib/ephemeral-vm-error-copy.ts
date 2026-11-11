@@ -133,7 +133,8 @@ const COPY: Record<EphemeralVmFailureCode, (params: Params | undefined) => strin
   cloudGithubNotConnected: () =>
     translate('ephemeralVm.errors.cloudGithubNotConnected', EN.cloudGithubNotConnected),
   cloudNoGithubRemote: () =>
-    translate('ephemeralVm.errors.cloudNoGithubRemote', EN.cloudNoGithubRemote)
+    translate('ephemeralVm.errors.cloudNoGithubRemote', EN.cloudNoGithubRemote),
+  cloudCloneFailed: () => translate('ephemeralVm.errors.cloudCloneFailed', EN.cloudCloneFailed)
 }
 
 function isEphemeralVmFailureCode(code: string): code is EphemeralVmFailureCode {
