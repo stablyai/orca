@@ -50,6 +50,31 @@ export function shouldShowLocalWorkspacePortSections(
   )
 }
 
+/**
+ * The panel says "no ports" once: centered when it would show no group at all, otherwise inline
+ * under Active Workspace (e.g. above Orca Cloud's Shared links, or beside remote-only forwards).
+ */
+export function shouldShowCenteredPortsEmpty(
+  scan: { unavailableReason?: string } | null | undefined,
+  sections: {
+    activePorts: unknown[]
+    otherWorkspacePorts: unknown[]
+    externalPorts: unknown[]
+    remoteOnlyForwards: unknown[]
+    hasFooter: boolean
+  }
+): boolean {
+  return (
+    Boolean(scan) &&
+    !scan?.unavailableReason &&
+    sections.activePorts.length === 0 &&
+    sections.otherWorkspacePorts.length === 0 &&
+    sections.externalPorts.length === 0 &&
+    sections.remoteOnlyForwards.length === 0 &&
+    !sections.hasFooter
+  )
+}
+
 function workspacePortAsExternal(port: WorkspacePort & { kind: 'workspace' }): WorkspacePort {
   return {
     id: port.id,

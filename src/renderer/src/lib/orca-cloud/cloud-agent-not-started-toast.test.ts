@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const toastMock = vi.hoisted(() => ({ message: vi.fn(), dismiss: vi.fn() }))
 vi.mock('sonner', () => ({ toast: toastMock }))
@@ -39,12 +39,32 @@ function accounts(
   }
 }
 
+const NOW = 1_800_000_000_000
+
+/** The create for `name` runs (`phase`) and then finishes: the sandbox is up, the prompt may show. */
+function creation(name: string, phase: string, status = 'creating'): void {
+  useAppStore.setState({
+    pendingWorktreeCreations: {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the toast reads only these fields
+      c1: { creationId: 'c1', startedAt: NOW, status, phase, request: { name } } as never
+    }
+  })
+}
+function created(name: string): void {
+  creation(name, 'creating')
+  useAppStore.setState({ pendingWorktreeCreations: {} })
+}
+
 describe('cloud agent not-started toast', () => {
   beforeEach(() => {
+    vi.useFakeTimers({ now: NOW })
     toastMock.message.mockClear()
     toastMock.dismiss.mockClear()
     setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'none' }))
-    useAppStore.setState({ activeWorktreeId: null })
+    useAppStore.setState({ activeWorktreeId: null, pendingWorktreeCreations: {} })
+  })
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   it('says it once, with no extra sentence, and names the workspace only after a switch', () => {
@@ -55,6 +75,7 @@ describe('cloud agent not-started toast', () => {
       'Claude isn’t set up for Orca Cloud, so it didn’t start in fix-readme-typo.'
     )
     showCloudAgentNotStartedToast('claude', 'fix-readme-typo')
+    created('fix-readme-typo')
     expect(toastMock.message).toHaveBeenLastCalledWith(
       'Claude isn’t set up for Orca Cloud, so it didn’t start.',
       expect.objectContaining({
@@ -63,8 +84,9 @@ describe('cloud agent not-started toast', () => {
       })
     )
     // The create activates the new workspace, then the user moves elsewhere.
+    toastMock.message.mockClear()
     useAppStore.setState({ activeWorktreeId: 'repo::new' })
-    expect(toastMock.message).toHaveBeenCalledTimes(1)
+    expect(toastMock.message).not.toHaveBeenCalled()
     useAppStore.setState({ activeWorktreeId: 'repo::other' })
     expect(toastMock.message).toHaveBeenLastCalledWith(
       'Claude isn’t set up for Orca Cloud, so it didn’t start in fix-readme-typo.',
@@ -74,6 +96,7 @@ describe('cloud agent not-started toast', () => {
 
   it('clears itself once the agent account turns active', () => {
     showCloudAgentNotStartedToast('claude', 'w')
+    created('w')
     setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'expired' }))
     expect(toastMock.dismiss).not.toHaveBeenCalled()
     setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'active' }))
@@ -92,6 +115,7 @@ describe('cloud agent not-started toast', () => {
       }
     })
     showCloudAgentNotStartedToast('claude', 'w')
+    created('w')
     const options: {
       duration: number
       action: { onClick: (event: { preventDefault: () => void }) => void }
@@ -105,6 +129,7 @@ describe('cloud agent not-started toast', () => {
 
   it('in the workspace itself it stays hidden (its pane strip asks); away, it names it', () => {
     showCloudAgentNotStartedToast('claude', 'fix-readme-typo', { onlyWhenAway: true })
+    created('fix-readme-typo')
     expect(toastMock.message).not.toHaveBeenCalled()
     useAppStore.setState({ activeWorktreeId: 'repo::new' })
     useAppStore.setState({ activeWorktreeId: 'repo::other' })
@@ -118,13 +143,11 @@ describe('cloud agent not-started toast', () => {
     expect(cloudAgentNotStartedMessage('Claude', null, { starting: true })).toBe(
       'Claude isn’t set up for Orca Cloud, so it won’t start.'
     )
-    useAppStore.setState({
-      pendingWorktreeCreations: {
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the toast reads only status and request.name
-        c1: { status: 'creating', request: { name: 'w' } } as never
-      }
-    })
     showCloudAgentNotStartedToast('claude', 'w')
+    // Still provisioning: nothing has started yet, so no prompt (DS-p).
+    creation('w', 'provisioning-vm')
+    expect(toastMock.message).not.toHaveBeenCalled()
+    creation('w', 'fetching')
     expect(toastMock.message).toHaveBeenLastCalledWith(
       'Claude isn’t set up for Orca Cloud, so it won’t start.',
       expect.anything()
@@ -132,6 +155,33 @@ describe('cloud agent not-started toast', () => {
     useAppStore.setState({ pendingWorktreeCreations: {} })
     expect(toastMock.message).toHaveBeenLastCalledWith(
       'Claude isn’t set up for Orca Cloud, so it didn’t start.',
+      expect.anything()
+    )
+  })
+
+  it('a refused create (the running limit) never shows the agent prompt (DS-p)', () => {
+    showCloudAgentNotStartedToast('claude', 'w')
+    creation('w', 'provisioning-vm')
+    creation('w', 'provisioning-vm', 'error')
+    useAppStore.setState({ pendingWorktreeCreations: {} })
+    expect(toastMock.message).not.toHaveBeenCalled()
+  })
+
+  it('follows the create it was asked for even when its name is generated later (DS-p)', () => {
+    // An empty name field: the create names the workspace itself ("chinook").
+    showCloudAgentNotStartedToast('claude', '')
+    creation('chinook', 'provisioning-vm')
+    expect(toastMock.message).not.toHaveBeenCalled()
+    useAppStore.setState({ pendingWorktreeCreations: {} })
+    expect(toastMock.message).toHaveBeenLastCalledWith(
+      'Claude isn’t set up for Orca Cloud, so it didn’t start.',
+      expect.anything()
+    )
+    // Away from it, the toast names the real workspace, not the empty field.
+    useAppStore.setState({ activeWorktreeId: 'chinook-id' })
+    useAppStore.setState({ activeWorktreeId: 'other' })
+    expect(toastMock.message).toHaveBeenLastCalledWith(
+      'Claude isn’t set up for Orca Cloud, so it didn’t start in chinook.',
       expect.anything()
     )
   })
