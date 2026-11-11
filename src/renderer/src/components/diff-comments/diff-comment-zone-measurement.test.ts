@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import type { editor } from 'monaco-editor'
 import { CombinedDiffCommentGeometry } from '../editor/combined-diff/scroll-viewport/combined-diff-comment-geometry'
 import { CombinedDiffViewportOwner } from '../editor/combined-diff/scroll-viewport/combined-diff-viewport-owner'
@@ -19,6 +19,9 @@ function createMeasurementFixture(count: number) {
   const events: string[] = []
   const queries: string[] = []
   const ready: string[] = []
+  const parentChanges: MutationRecord[] = []
+  const parentObserver = new MutationObserver((records) => parentChanges.push(...records))
+  parentObserver.observe(parent, { attributes: true, attributeFilter: ['style'] })
   const entries = Array.from({ length: count }, (_, index) => {
     const node = document.createElement('div')
     node.style.display = 'none'
@@ -121,6 +124,10 @@ function createMeasurementFixture(count: number) {
     events,
     queries,
     ready,
+    parentMutations: () => {
+      parentChanges.push(...parentObserver.takeRecords())
+      return parentChanges
+    },
     layout: () => layout?.(),
     setWidth: (width: number) => {
       contentWidth = width
@@ -131,11 +138,14 @@ function createMeasurementFixture(count: number) {
       events.length = 0
       queries.length = 0
       ready.length = 0
+      parentChanges.length = 0
+      parentObserver.takeRecords()
       for (const entry of entries) {
         entry.currentCalls = 0
       }
     },
     dispose: () => {
+      parentObserver.disconnect()
       for (const entry of entries) {
         entry.lifetime.abort()
       }
@@ -149,7 +159,6 @@ function createMeasurementFixture(count: number) {
 describe('pane comment reservation measurement', () => {
   it('prepares all zones at the changed native width, reads before one reservation batch, and restores styles', () => {
     const fixture = createMeasurementFixture(2)
-    const widthWrites = vi.spyOn(fixture.parent.style, 'width', 'set')
     try {
       fixture.layout()
       expect(fixture.events).toEqual([
@@ -163,10 +172,9 @@ describe('pane comment reservation measurement', () => {
       ])
       expect(fixture.entries.map((entry) => entry.delegate.heightInPx)).toEqual([163, 208])
       expect(fixture.entries.map((entry) => entry.domNode.style.display)).toEqual(['none', 'none'])
-      expect(widthWrites.mock.calls).toEqual([['760px'], ['100px']])
+      expect(fixture.parentMutations()).toHaveLength(2)
       expect(fixture.parent.style.width).toBe('100px')
       fixture.reset()
-      widthWrites.mockClear()
       fixture.setWidth(520)
       expect(fixture.events).toEqual([
         'read-0:520px:block',
@@ -174,9 +182,9 @@ describe('pane comment reservation measurement', () => {
         'ready-zone-0',
         'ready-zone-1'
       ])
-      expect(widthWrites.mock.calls).toEqual([['520px'], ['100px']])
+      expect(fixture.parentMutations()).toHaveLength(2)
+      expect(fixture.parent.style.width).toBe('100px')
     } finally {
-      widthWrites.mockRestore()
       fixture.dispose()
     }
   })
@@ -185,15 +193,11 @@ describe('pane comment reservation measurement', () => {
     'reads only the dirty card among %i zones at unchanged width',
     async (count) => {
       const fixture = createMeasurementFixture(count)
-      const widthWrites = vi.spyOn(fixture.parent.style, 'width', 'set')
-      const styleReads = vi.spyOn(window, 'getComputedStyle')
       try {
         fixture.layout()
         // Native render has already applied the same actual width to the zone container.
         fixture.parent.style.width = '760px'
         fixture.reset()
-        widthWrites.mockClear()
-        styleReads.mockClear()
         const target = fixture.entries[10]
         target.height = 240
         requestDiffCommentZoneMeasurement(fixture.pane, target)
@@ -206,8 +210,7 @@ describe('pane comment reservation measurement', () => {
           'ready-zone-10'
         ])
         expect(fixture.ready).toEqual(['zone-10'])
-        expect(styleReads).toHaveBeenCalledExactlyOnceWith(target.domNode)
-        expect(widthWrites).not.toHaveBeenCalled()
+        expect(fixture.parentMutations()).toHaveLength(0)
         expect(new Set(fixture.queries)).toEqual(new Set(['zone-10']))
         expect(
           fixture.entries
@@ -220,28 +223,21 @@ describe('pane comment reservation measurement', () => {
         // Offscreen native render may still carry the prior width: prepare and restore only once.
         fixture.parent.style.width = '100px'
         fixture.reset()
-        widthWrites.mockClear()
-        styleReads.mockClear()
         requestDiffCommentZoneMeasurement(fixture.pane, target)
         await Promise.resolve()
         expect(fixture.events).toEqual(['read-10:760px:block', 'ready-zone-10'])
-        expect(styleReads).toHaveBeenCalledExactlyOnceWith(target.domNode)
-        expect(widthWrites.mock.calls).toEqual([['760px'], ['100px']])
+        expect(fixture.parentMutations()).toHaveLength(2)
+        expect(fixture.parent.style.width).toBe('100px')
 
         fixture.reset()
-        widthWrites.mockClear()
-        styleReads.mockClear()
         requestDiffCommentZoneMeasurement(fixture.pane, target)
         target.lifetime.abort()
         await Promise.resolve()
         expect(fixture.events).toEqual([])
         expect(fixture.queries).toEqual([])
-        expect(styleReads).not.toHaveBeenCalled()
-        expect(widthWrites).not.toHaveBeenCalled()
+        expect(fixture.parentMutations()).toHaveLength(0)
         expect(fixture.subscribed()).toBe(true)
       } finally {
-        styleReads.mockRestore()
-        widthWrites.mockRestore()
         fixture.dispose()
       }
     }

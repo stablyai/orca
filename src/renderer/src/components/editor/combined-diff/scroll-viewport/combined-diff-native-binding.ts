@@ -213,7 +213,8 @@ export class CombinedDiffNativeBinding implements DiffViewportBinding {
     }
     let range: IRange | null = request.range
     for (const selection of request.selections ?? []) {
-      range = range ? monaco.Range.plusRange(range, selection) : selection
+      const selectionRange = monaco.Selection.liftSelection(selection)
+      range = range ? monaco.Range.plusRange(range, selectionRange) : selectionRange
     }
     if (!range) {
       return
