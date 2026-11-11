@@ -100,3 +100,10 @@ export const AiVaultDeleteSessionParams = z.object({
   sessionId: z.string().min(1).max(512).optional(),
   filePath: z.string().min(1).max(AI_VAULT_SCOPE_PATH_MAX_LENGTH)
 })
+
+// Only the row identity travels; the host reads its own database and writes the snapshot locally.
+export const AiVaultPrepareSessionHandoffParams = z.object({
+  agent: z.enum(AI_VAULT_AGENTS),
+  sessionId: z.string().min(1).max(512).optional(),
+  filePath: z.string().min(1).max(AI_VAULT_SCOPE_PATH_MAX_LENGTH)
+})

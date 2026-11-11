@@ -1,3 +1,4 @@
+import { issueBrowserGuestNavigation } from '../host-guest/browser-guest-metadata-cache'
 import { Fragment, type MutableRefObject } from 'react'
 import { useAppStore } from '@/store'
 import { isMac } from '@/app-shell/app-window-chrome'
@@ -221,12 +222,12 @@ function buildMenuSections(
     sections.push([
       item(
         t('auto.components.browser.pane.BrowserPane.40edfa75cb', 'Back'),
-        () => webviewRef.current?.goBack(),
+        () => issueBrowserGuestNavigation(webviewRef.current, (webview) => webview.goBack()),
         !canGoBack
       ),
       item(
         t('auto.components.browser.pane.BrowserPane.250a9b3e42', 'Forward'),
-        () => webviewRef.current?.goForward(),
+        () => issueBrowserGuestNavigation(webviewRef.current, (webview) => webview.goForward()),
         !canGoForward
       ),
       item(t('auto.components.browser.pane.BrowserPane.0e080d820e', 'Reload'), onReload)

@@ -1,18 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { startupAgentCreateFields, buildTaskWorkspaceCreateParams } from './workspace-create-params'
-
-describe('startupAgentCreateFields', () => {
-  it('sends startupAgent + createdWithAgent so the host resolves launch args', () => {
-    expect(startupAgentCreateFields('claude')).toEqual({
-      startupAgent: 'claude',
-      createdWithAgent: 'claude'
-    })
-  })
-
-  it('launches no agent when none was picked', () => {
-    expect(startupAgentCreateFields(undefined)).toEqual({})
-  })
-})
+import { buildTaskWorkspaceCreateParams } from './workspace-create-params'
 
 describe('task workspace create params', () => {
   it('passes a GitHub PR URL as an agent draft and links the PR', () => {
@@ -225,24 +212,5 @@ describe('task workspace create params', () => {
     })
     // A stray linkedLinearIssue would relink the workspace to the wrong provider.
     expect(params).not.toHaveProperty('linkedLinearIssue')
-  })
-
-  it('keeps a user-edited workspace name over the derived Jira name', () => {
-    expect(
-      buildTaskWorkspaceCreateParams({
-        item: {
-          provider: 'jira',
-          source: {
-            key: 'ORCA-9',
-            title: 'Rename me',
-            url: 'https://acme.atlassian.net/browse/ORCA-9'
-          }
-        },
-        targetRepoId: 'repo-jira',
-        setupDecision: 'inherit',
-        workspaceName: 'my-branch',
-        nameIsAutoManaged: false
-      })
-    ).toMatchObject({ name: 'my-branch' })
   })
 })

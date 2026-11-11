@@ -94,7 +94,7 @@ import type { CodexAccountService } from '../../codex-accounts/service'
 import type { ClaudeAccountService } from '../../claude-accounts/service'
 import type { AutomationService } from '../../automations/service'
 import type { AgentAwakeService } from '../../power/agent-awake-service'
-import type { CrashReportStore } from '../../crash-reporting/crash-report-store'
+import type { CrashReportStore } from '../../crash-reporting/reports/crash-report-store'
 import type { KeybindingService } from '../../keybindings/keybinding-service'
 import type { AiVaultResumeHandlerOptions } from '../ai-vault/ai-vault-resume'
 import {

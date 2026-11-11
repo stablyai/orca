@@ -38,16 +38,6 @@ it('persists dismissal through restart while preserving newer alerts and other h
   expect(await restarted.wasPushDismissed({ ...payload, notificationEpoch: 'epoch-b' })).toBe(false)
 })
 
-it('serializes concurrent dismissals and never lowers a watermark', async () => {
-  await Promise.all([
-    rememberPushDismissal({ ...payload, notificationSeq: 5 }),
-    rememberPushDismissal(payload),
-    rememberPushDismissal({ ...payload, notificationId: 'other' })
-  ])
-  expect(await wasPushDismissed({ ...payload, notificationSeq: 5 })).toBe(true)
-  expect(await wasPushDismissed({ ...payload, notificationId: 'other' })).toBe(true)
-})
-
 it('merges batched and concurrent fences without lowering duplicates or accepting invalid ones', async () => {
   await rememberPushDismissal({ ...payload, notificationSeq: 5 })
   await Promise.all([

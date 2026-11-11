@@ -5,7 +5,7 @@ import { proveClaudeChildExit } from '../claude/claude-agent-sdk-exit-proof'
 import {
   findSelfInitiatedTreeKills,
   resetSelfInitiatedTreeKillLogForTest
-} from '../crash-reporting/self-initiated-tree-kill-log'
+} from '../crash-reporting/process-exits/self-initiated-tree-kill-log'
 import { spawnManagedProviderProcess } from './managed-provider-process'
 
 vi.mock('node:child_process', async (importOriginal) => ({
