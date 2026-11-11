@@ -7679,10 +7679,6 @@
             "modeAriaLabel": "Modo de apertura del Panel de agentes",
             "modeInWindow": "En ventana",
             "modePopout": "Ventana emergente"
-          },
-          "browserExtensions": {
-            "copy": "Añade Ajustes › Navegador › Extensiones para los perfiles de navegador locales.",
-            "toggleLabel": "Activar o desactivar extensiones del navegador"
           }
         },
         "FloatingWorkspacePane": {
@@ -9803,13 +9799,6 @@
               "inWindow": "en la ventana",
               "worktrees": "árboles de trabajo",
               "eaf17a7214": "Panel de agentes"
-            },
-            "browserExtensions": {
-              "title": "Extensiones del navegador",
-              "description": "Ejecuta extensiones de Chrome, como gestores de contraseñas, en las pestañas del navegador de Orca.",
-              "extension": "extensión",
-              "chrome": "chrome",
-              "password": "gestor de contraseñas"
             }
           }
         },

@@ -871,7 +871,8 @@
           "added": "Added {{name}}",
           "browse": "Browse the Chrome Web Store",
           "openFailed": "Open a workspace to browse the Chrome Web Store."
-        }
+        },
+        "enabledToggleLabel": "Turn browser extensions on or off"
       },
       "passwords": {
         "searchKeywords": {
@@ -8676,10 +8677,6 @@
             "modeAriaLabel": "Agent Dashboard open mode",
             "modeInWindow": "In-window",
             "modePopout": "Pop-out"
-          },
-          "browserExtensions": {
-            "copy": "Adds Settings › Browser › Extensions for local browser profiles.",
-            "toggleLabel": "Toggle browser extensions"
           }
         },
         "FloatingWorkspacePane": {
@@ -10878,13 +10875,6 @@
               "inWindow": "in-window",
               "worktrees": "worktrees",
               "eaf17a7214": "Agent dashboard"
-            },
-            "browserExtensions": {
-              "title": "Browser extensions",
-              "description": "Run Chrome extensions, such as password managers, in Orca browser tabs.",
-              "extension": "extension",
-              "chrome": "chrome",
-              "password": "password manager"
             }
           }
         },

@@ -7601,10 +7601,6 @@
             "modeAriaLabel": "代理仪表盘打开模式",
             "modeInWindow": "窗口内",
             "modePopout": "弹出窗口"
-          },
-          "browserExtensions": {
-            "copy": "为本地浏览器配置文件添加“设置 › 浏览器 › 扩展程序”",
-            "toggleLabel": "切换浏览器扩展程序"
           }
         },
         "FloatingWorkspacePane": {
@@ -9739,13 +9735,6 @@
               "inWindow": "窗口内",
               "worktrees": "工作树",
               "eaf17a7214": "智能体仪表盘"
-            },
-            "browserExtensions": {
-              "title": "浏览器扩展程序",
-              "description": "在 Orca 浏览器标签页中运行 Chrome 扩展程序，例如密码管理器",
-              "extension": "扩展程序",
-              "chrome": "chrome",
-              "password": "密码管理器"
             }
           }
         },

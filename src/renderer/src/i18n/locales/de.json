@@ -8066,10 +8066,6 @@
             "modeAriaLabel": "Öffnungsmodus des Agenten-Dashboards",
             "modeInWindow": "Im Fenster",
             "modePopout": "Separates Fenster"
-          },
-          "browserExtensions": {
-            "copy": "Fügt Einstellungen › Browser › Erweiterungen für lokale Browserprofile hinzu.",
-            "toggleLabel": "Browser-Erweiterungen umschalten"
           }
         },
         "FloatingWorkspacePane": {
@@ -10235,13 +10231,6 @@
               "inWindow": "im Fenster",
               "worktrees": "Worktrees",
               "eaf17a7214": "Agenten-Dashboard"
-            },
-            "browserExtensions": {
-              "title": "Browser-Erweiterungen",
-              "description": "Chrome-Erweiterungen wie Passwortmanager in Orca-Browser-Tabs ausführen.",
-              "extension": "Erweiterung",
-              "chrome": "chrome",
-              "password": "Passwortmanager"
             }
           }
         },

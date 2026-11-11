@@ -7388,10 +7388,6 @@
             "modeAriaLabel": "에이전트 대시보드 열기 모드",
             "modeInWindow": "윈도우 내",
             "modePopout": "팝업"
-          },
-          "browserExtensions": {
-            "copy": "로컬 브라우저 프로필에 설정 › 브라우저 › 확장 프로그램을 추가합니다.",
-            "toggleLabel": "브라우저 확장 프로그램 켜기/끄기"
           }
         },
         "FloatingWorkspacePane": {
@@ -9510,13 +9506,6 @@
               "inWindow": "창 내부",
               "worktrees": "작업 트리",
               "eaf17a7214": "에이전트 대시보드"
-            },
-            "browserExtensions": {
-              "title": "브라우저 확장 프로그램",
-              "description": "비밀번호 관리자 같은 Chrome 확장 프로그램을 Orca 브라우저 탭에서 실행합니다.",
-              "extension": "확장 프로그램",
-              "chrome": "크롬",
-              "password": "비밀번호 관리자"
             }
           }
         },
