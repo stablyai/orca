@@ -52,6 +52,13 @@ const NATIVE_CHAT_AGENT_PROFILES: Partial<Record<AgentType, NativeChatAgentProfi
   },
   opencode: OPENCODE_PROFILE,
   opencode2: OPENCODE_PROFILE,
+  // ACP lists built-in commands and no skills. The server reads ~/.gemini/config/skills
+  // (linked into the chat home) plus shared .agents/skills, not Gemini CLI's ~/.gemini/skills.
+  antigravity: {
+    skillPrefix: '/',
+    skillSourceOwner: 'antigravity',
+    keepsScannedSkills: true
+  },
   grok: {
     skillPrefix: '/',
     skillSourceOwner: 'grok'
