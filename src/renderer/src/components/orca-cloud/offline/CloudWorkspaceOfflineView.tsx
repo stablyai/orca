@@ -58,8 +58,6 @@ export function CloudWorkspaceOfflineView(props: CloudOfflineViewProps): React.J
     : asOf
       ? t('components.orcaCloud.read.asOf', 'Asleep · As of {{when}}', { when: asOf.relative })
       : t('orcaCloudWorkspace.asleep.noCopy', 'Asleep · nothing cached yet')
-  // Sections may come from the copy the workspace saved when it went to sleep (Orca Cloud).
-  const fromCloud = snapshot.source === 'cloud' || snapshot.source === 'mixed'
   return (
     <section
       className="flex h-full min-h-0 w-full max-w-3xl flex-col gap-5 px-6 py-8"
@@ -81,9 +79,7 @@ export function CloudWorkspaceOfflineView(props: CloudOfflineViewProps): React.J
                   'components.orcaCloud.offline.savingCopy',
                   'Saving a read-only copy of chats, terminals and changes…'
                 )
-              : fromCloud
-                ? t('components.orcaCloud.read.note', 'Read-only copy saved when it went to sleep.')
-                : t('orcaCloudWorkspace.asleep.readOnly', 'Read-only copy kept on this computer.')
+              : t('components.orcaCloud.read.note', 'Read-only copy saved when it went to sleep.')
         }
         headingRef={props.headingRef}
         action={

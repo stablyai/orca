@@ -27083,8 +27083,7 @@
     "undo": "Undo",
     "unarchiveFailed": "Couldn’t unarchive the workspace",
     "asleep": {
-      "noCopy": "Asleep · nothing cached yet",
-      "readOnly": "Read-only copy kept on this computer."
+      "noCopy": "Asleep · nothing cached yet"
     },
     "bytes": {
       "gb": "{{value}} GB",

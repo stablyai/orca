@@ -87,10 +87,10 @@ describe('the asleep view kept on screen after Sleep', () => {
     expect(container.textContent).toContain(
       'Saving a read-only copy of chats, terminals and changes…'
     )
-    expect(container.textContent).not.toContain('Read-only copy kept on this computer.')
+    expect(container.textContent).not.toContain('Read-only copy saved when it went to sleep.')
     rerender(<CloudWorkspaceOfflineView {...props} goingToSleep={false} />)
     expect(container.textContent).not.toContain('Saving a read-only copy')
-    expect(container.textContent).toContain('Read-only copy kept on this computer.')
+    expect(container.textContent).toContain('Read-only copy saved when it went to sleep.')
   })
 
   it('once main commits the suspend (no Keep awake handler) offers Wake to continue instead', () => {
