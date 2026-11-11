@@ -19,9 +19,9 @@ export type {
 } from './hang-observation-schema'
 
 function object(value: unknown): Record<string, unknown> | null {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the branch excludes null, primitives and arrays before reading unknown properties.
   return value !== null && typeof value === 'object' && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
+    ? // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the branch excludes null, primitives and arrays before reading unknown properties.
+      (value as Record<string, unknown>)
     : null
 }
 function finite(value: unknown): value is number {
