@@ -14,6 +14,7 @@ import { ORCHESTRATION_METHODS } from '../orchestration'
 import { createFederationWorkerStartRequest as startRequest } from './federation-request.test-support'
 import { configureFederationWorkerRuntime } from './federation-runtime.test-support'
 import { syncFederationBarrier } from './federation-sync-barrier.test-support'
+import { RuntimeEnvironmentStoreError } from '../../../../../../shared/remote-runtime/host-store/runtime-environment-store-records'
 
 describe('orchestration federation', () => {
   const databases: OrchestrationDb[] = []
@@ -26,6 +27,7 @@ describe('orchestration federation', () => {
   let workerCapabilities: string[]
   let workerPeerFingerprint: string
   let loseNextAckResponse: boolean
+  let environmentRemoved: boolean
 
   beforeEach(() => {
     homeDb = new OrchestrationDb(':memory:')
@@ -40,13 +42,22 @@ describe('orchestration federation', () => {
     workerCapabilities = [...(workerRuntime.getStatus().capabilities ?? [])]
     workerPeerFingerprint = 'windows_peer_fingerprint'
     loseNextAckResponse = false
+    environmentRemoved = false
     const transport: OrchestrationEnvironmentTransport = {
-      resolve: () => ({
-        environmentId: 'environment_windows',
-        name: 'windows',
-        peerFingerprint: workerPeerFingerprint,
-        pairingRevision: 73
-      }),
+      resolve: (selector) => {
+        if (environmentRemoved) {
+          throw new RuntimeEnvironmentStoreError(
+            'invalid_argument',
+            `Unknown environment: ${selector}`
+          )
+        }
+        return {
+          environmentId: 'environment_windows',
+          name: 'windows',
+          peerFingerprint: workerPeerFingerprint,
+          pairingRevision: 73
+        }
+      },
       call: async (_selector, method, params, _timeoutMs, envelope) => {
         if (method === 'status.get') {
           return {
@@ -347,6 +358,22 @@ describe('orchestration federation', () => {
     expect(stopped).toMatchObject({ ok: false, error: { code: 'peer_changed' } })
     expect(homeDb.getWorkerDispatch(dispatch.id)?.state).toBe('ready')
     expect(workerRuntime.closeTerminal).not.toHaveBeenCalled()
+  })
+
+  it('says the pairing is gone when the server a worker ran on was removed', async () => {
+    const task = createHomeTask()
+    await homeDispatcher.dispatch(startRequest(task.id))
+    const dispatch = homeDb.getDispatchContext(task.id)!
+    environmentRemoved = true
+
+    const shown = await homeDispatcher.dispatch({
+      id: 'rpc_removed_environment_show',
+      authToken: 'coordinator-token',
+      method: 'orchestration.workerShow',
+      params: { dispatch: dispatch.id }
+    })
+
+    expect(shown).toMatchObject({ ok: false, error: { code: 'peer_changed' } })
   })
 
   it('returns stop_unknown when the worker server disconnects after the home fence', async () => {
