@@ -14,6 +14,7 @@ import type {
   CreatedWebRuntimeSessionTerminal
 } from '@/runtime/hosted-terminals/creation/terminal-create-contracts'
 import { translate } from '@/i18n/i18n'
+import { useAppStore } from '@/store'
 import { isOrcaCloudEnvironmentId } from './orca-cloud-environment-id'
 import {
   cloudAgentLaunchDecision,
@@ -89,17 +90,31 @@ export async function createWithCloudAgentHold(
   }
   // Started by the person's click in the held pane: bring the agent's tab forward so they see their
   // queued prompt run. A Renew's auto-start (maybe on a background tab) never steals focus.
-  const created = await create(
-    takeCloudAgentHoldStartedByPerson(cloudTabHoldKey(tabId)) ? { ...args, activate: true } : args
-  )
+  const startedByPerson = takeCloudAgentHoldStartedByPerson(cloudTabHoldKey(tabId))
+  const created = await create(startedByPerson ? { ...args, activate: true } : args)
   // The agent opened in its own tab; the placeholder shell has done its job.
   if (args.environmentId) {
-    void closeWebRuntimeSessionTab({
+    const closed = closeWebRuntimeSessionTab({
       worktreeId: args.worktreeId,
       tabId,
       environmentId: args.environmentId,
       reason: 'user'
     }).catch(() => undefined)
+    if (startedByPerson && created.hostTabId) {
+      // Closing the (active) placeholder selects its neighbour, a plain terminal; the person asked
+      // for the agent, so its tab takes focus once the placeholder is gone.
+      const agentTabId = toWebTerminalSurfaceTabId(
+        webTerminalPlacementParentTabId(created.hostTabId)
+      )
+      void closed.then(() => focusAgentTab(args.worktreeId, agentTabId))
+    }
   }
   return created
+}
+
+function focusAgentTab(worktreeId: string, agentTabId: string): void {
+  const state = useAppStore.getState()
+  if ((state.tabsByWorktree[worktreeId] ?? []).some((tab) => tab.id === agentTabId)) {
+    state.setActiveTab(agentTabId)
+  }
 }
