@@ -277,3 +277,20 @@ it('asks for readings while a reset is unknown, and releases an expired hold fro
   await settleOne(await chat.quietPass(room + 15_000))
   expect(await chat.quietPass(room + 5 * 60_000)).toHaveLength(1)
 })
+
+it('keeps a cancelled cut on its own reset while the account shows an unknown reset', async () => {
+  const chat = await heldChat()
+  const reset = chat.cut.resetsAt
+  await chat.pass(reset - 60_000, (now) => weekly(0, null, now))
+  await rig!.host.usageLimitContinue.cancel({
+    sessionId: SESSION,
+    turnItemId: chat.cut.turnItemId,
+    resetsAt: reset
+  })
+  expect(await chat.pass(reset + HOUR, (now) => weekly(100, null, now))).toEqual([])
+  expect(chat.state()).toEqual({
+    turnItemId: chat.cut.turnItemId,
+    resetsAt: reset,
+    state: 'cancelled'
+  })
+})

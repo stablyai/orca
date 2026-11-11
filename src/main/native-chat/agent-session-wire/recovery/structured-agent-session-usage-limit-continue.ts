@@ -131,7 +131,8 @@ export class StructuredAgentSessionUsageLimitContinue {
     return {
       turnItemId: cut.turnItemId,
       resetsAt: cut.resetsAt,
-      ...(hold.resetsAt > cut.resetsAt ? { continueAt: hold.resetsAt } : {}),
+      // While the reset is unknown, `hold.resetsAt` is a reading time, not a reset.
+      ...(!hold.unknownReset && hold.resetsAt > cut.resetsAt ? { continueAt: hold.resetsAt } : {}),
       state
     }
   }
