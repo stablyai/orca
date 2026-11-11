@@ -190,8 +190,18 @@ describe('provisionStageLabel (N-01)', () => {
   it('stays quiet for a normal start, then names what the sandbox step waits on', () => {
     const log = '[orca-cloud] provisioning\n'
     expect(
-      provisionStageLabel({ phase: 'provisioning-vm', provisioningLog: log }, 4000, t)
+      provisionStageLabel({ phase: 'provisioning-vm', provisioningLog: log }, 4900, t)
     ).toBeNull()
+    expect(provisionStageLabel({ phase: 'provisioning-vm', provisioningLog: log }, 5000, t)).toBe(
+      'Starting the sandbox…'
+    )
+    expect(
+      provisionStageLabel(
+        { phase: 'provisioning-vm', provisioningLog: '[orca-cloud] checking-entitlement\n' },
+        5000,
+        t
+      )
+    ).toBe('Checking your plan…')
     expect(provisionStageLabel({ phase: 'preparing' }, 6000, t)).toBe('Getting your project ready…')
     expect(provisionStageLabel({ phase: 'provisioning-vm', provisioningLog: log }, 6000, t)).toBe(
       'Starting the sandbox…'
