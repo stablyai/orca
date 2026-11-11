@@ -274,7 +274,45 @@ test('CLI splits an exact cold-parked tab without stealing the active tab or foc
   expect(splitRun.response.result.split.handle).toMatch(/^term_/)
   expect(await readActiveUiContext(orcaPage)).toEqual(contextBefore)
 
-  await waitForTabParked(orcaPage, targetTabId, { parkDelayMs: PARKING_DELAY_MS })
+  try {
+    await waitForTabParked(orcaPage, targetTabId, { parkDelayMs: PARKING_DELAY_MS })
+  } catch (error) {
+    const parkingState = await orcaPage.evaluate(async (worktreeId) => {
+      const state = window.__store?.getState()
+      if (!state) {
+        throw new Error('Parking diagnostics require the E2E store')
+      }
+      const tabs = state.tabsByWorktree[worktreeId] ?? []
+      const layouts = Object.fromEntries(
+        tabs.map((tab) => [tab.id, state.terminalLayoutsByTabId[tab.id]])
+      )
+      const ptyIds = [
+        ...new Set(
+          tabs.flatMap((tab) => [
+            ...(tab.ptyId ? [tab.ptyId] : []),
+            ...(state.ptyIdsByTabId[tab.id] ?? []),
+            ...Object.values(layouts[tab.id]?.ptyIdsByLeafId ?? {})
+          ])
+        )
+      ]
+      return {
+        tabs,
+        layouts,
+        pendingStartupByTabId: Object.fromEntries(
+          tabs.map((tab) => [tab.id, state.pendingStartupByTabId[tab.id]])
+        ),
+        mountedTabIds: [...(window.__paneManagers?.keys() ?? [])],
+        parkedTabIds: window.__terminalParkingDebug?.parkedTabIds(),
+        worktreeVerdicts: window.__terminalParkingDebug?.worktreeVerdicts(),
+        capabilities: await window.api.pty.getAuthoritativeBufferSnapshotCapabilities?.(ptyIds)
+      }
+    }, worktreeId)
+    await testInfo.attach('parked-cli-split-parking-state.json', {
+      body: Buffer.from(JSON.stringify(parkingState, null, 2)),
+      contentType: 'application/json'
+    })
+    throw error
+  }
   expect(await readActiveUiContext(orcaPage)).toEqual(contextBefore)
 
   await testInfo.attach('parked-cli-split-focus-preserved.png', {
