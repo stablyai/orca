@@ -17,6 +17,7 @@ const terminalHarness = vi.hoisted(() => ({
     reset: ReturnType<typeof vi.fn>
     paste: ReturnType<typeof vi.fn>
     input: ReturnType<typeof vi.fn>
+    focus: ReturnType<typeof vi.fn>
     scrollToTop: ReturnType<typeof vi.fn>
     scrollToBottom: ReturnType<typeof vi.fn>
     selectAll: ReturnType<typeof vi.fn>
@@ -385,7 +386,7 @@ describe('AgentTerminalPreview', () => {
     expect(unsubscribe).toHaveBeenCalledWith('pty-1')
   })
 
-  it('sends no typed key or paste to the pty when not interactive', async () => {
+  it('sends no typed key or paste to the pty and takes no focus when not interactive', async () => {
     render(<AgentTerminalPreview ptyId="pty-1" interactive={false} />)
     await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
     const terminal = terminalHarness.instances[0]!
@@ -400,5 +401,6 @@ describe('AgentTerminalPreview', () => {
     })
 
     expect(input).not.toHaveBeenCalled()
+    expect(terminal.focus).not.toHaveBeenCalled()
   })
 })
