@@ -28062,7 +28062,9 @@
     "restartingResume": "Picking up where you left off.",
     "restartFailed": "Couldn’t restart {{agent}}",
     "tryAgainDetail": "Try again.",
-    "restartFailedAnnounce": "Couldn’t restart {{agent}}. Try again."
+    "restartFailedAnnounce": "Couldn’t restart {{agent}}. Try again.",
+    "restartFailedIn": "Couldn’t restart {{agent}} in {{workspace}}.",
+    "openWorkspace": "Open workspace"
   },
   "cloudAgentCheck": {
     "keyAgentSignedOut": "{{agent}} isn’t signed in.",

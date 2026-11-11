@@ -242,6 +242,11 @@ describe('RA-11 Restart on a paired (remote) pane', () => {
       { focus: false }
     )
     expect(cloudAgentRestartAttempt(PANE_KEY, 0)?.launchedAt).not.toBeNull()
+    // Never closes a tab or pane: the same tab and leaf are there after the restart.
+    const state = useAppStore.getState()
+    expect(state.tabsByWorktree['wt-1']?.map((t) => t.id)).toEqual([TAB, OTHER_TAB])
+    expect(state.terminalLayoutsByTabId[TAB]?.root).toEqual({ type: 'leaf', leafId: LEAF })
+    expect(state.terminalLayoutsByTabId[OTHER_TAB]?.ptyIdsByLeafId).toEqual({ [OTHER_LEAF]: OTHER })
   })
 
   it('shows the failure and never reconnects when the host terminal could not be stopped', async () => {

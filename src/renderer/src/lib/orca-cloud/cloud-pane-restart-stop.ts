@@ -1,6 +1,8 @@
 // RA-11: Restart on a paired (web-host) pane. The host already runs a terminal in that pane, so a
 // desktop reconnect reattaches to it (ensureAgentSession hands back the live session) and nothing
-// relaunches. Stop exactly that one host terminal first; the reconnect then starts the agent anew.
+// relaunches. Put exactly that one host terminal to sleep first (the reversible stop the pane-sleep
+// path uses: the leaf stays, as a sleeping surface); the reconnect then wakes it with --resume.
+// A plain stop is a close: the host drops the tab and there is nothing left to relaunch into.
 import { parseRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import type { RuntimeTerminalShow } from '../../../../shared/runtime-terminal-contracts'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
@@ -39,6 +41,8 @@ export async function stopRemotePaneTerminalForRestart(
     {
       worktree: toRuntimeWorktreeSelector(worktreeId),
       expectedPtyIds: [hostPtyId],
+      // Reversible: the host keeps the pane (and its scrollback) for the wake.
+      keepHistory: true,
       // Only this pane: every other terminal in the workspace keeps running.
       targetOnly: true
     },
