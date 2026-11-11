@@ -21,6 +21,10 @@ export type DiffViewportLayout = Readonly<{
   items: readonly DiffItemLayout[]
 }>
 
+export function diffViewportInputMax(layout: DiffViewportLayout, height: number): number {
+  return Math.max(0, layout.logicalHeight + layout.trailingSlack - height)
+}
+
 export function diffRevealDisplacement(input: {
   top: number
   bottom: number

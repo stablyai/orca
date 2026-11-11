@@ -2,7 +2,12 @@ import { CombinedDiffViewportAnchor, type DiffSemanticPoint } from './combined-d
 import { CombinedDiffViewportScene } from './combined-diff-viewport-scene'
 import { CombinedDiffViewportItems, type DiffViewportInput } from './combined-diff-viewport-items'
 import { CombinedDiffExtentTransaction } from './combined-diff-extent-transaction'
-import type { DiffItemLayout, DiffReadingAnchor, DiffViewportLayout } from './combined-diff-layout'
+import {
+  diffViewportInputMax,
+  type DiffItemLayout,
+  type DiffReadingAnchor,
+  type DiffViewportLayout
+} from './combined-diff-layout'
 
 export type { DiffSemanticPoint } from './combined-diff-viewport-anchor'
 export type { DiffViewportItem, DiffViewportBinding } from './combined-diff-viewport-item'
@@ -187,11 +192,8 @@ export class CombinedDiffViewportOwner {
 
   input(delta: number): void {
     this.cancelNavigation()
-    const max = Math.max(0, this.layout.logicalHeight - this.surface.getHeight(this.geometry.index))
-    const nextTop = Math.max(
-      -this.layout.leadingSlack,
-      Math.min(this.logicalTop + delta, max + this.layout.trailingSlack)
-    )
+    const max = diffViewportInputMax(this.layout, this.surface.getHeight(this.geometry.index))
+    const nextTop = Math.max(-this.layout.leadingSlack, Math.min(this.logicalTop + delta, max))
     this.anchor.beginInput(nextTop - this.logicalTop)
     this.logicalTop = nextTop
     this.reconcile()

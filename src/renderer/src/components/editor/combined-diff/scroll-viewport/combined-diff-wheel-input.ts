@@ -1,5 +1,5 @@
 import { getWheelScrollDeltaY } from '@/lib/wheel-scroll-delta'
-import type { DiffViewportLayout } from './combined-diff-layout'
+import { diffViewportInputMax, type DiffViewportLayout } from './combined-diff-layout'
 
 export function handleCombinedDiffWheel(
   event: WheelEvent,
@@ -16,7 +16,7 @@ export function handleCombinedDiffWheel(
     return
   }
   const min = -layout.leadingSlack
-  const max = Math.max(0, layout.logicalHeight - height) + layout.trailingSlack
+  const max = diffViewportInputMax(layout, height)
   const next = Math.max(min, Math.min(layout.logicalTop + delta, max))
   if (next !== layout.logicalTop) {
     event.preventDefault()

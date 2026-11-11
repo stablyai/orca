@@ -3,12 +3,16 @@ import { expect, it, vi } from 'vitest'
 import { installDiffEditorShiftWheelScroll } from '../../diff/monaco-view/diff-editor-shift-wheel-scroll'
 import { CombinedDiffViewportOwner } from './combined-diff-viewport-owner'
 
-function viewport(): { owner: CombinedDiffViewportOwner; host: HTMLDivElement; close(): void } {
+function viewport(height = 500): {
+  owner: CombinedDiffViewportOwner
+  host: HTMLDivElement
+  close(): void
+} {
   const owner = new CombinedDiffViewportOwner()
   const host = document.createElement('div')
   Object.defineProperties(host, {
     clientWidth: { value: 800 },
-    clientHeight: { value: 500 }
+    clientHeight: { value: height }
   })
   document.body.append(host)
   const unmount = owner.mount(host)
@@ -56,6 +60,55 @@ function wheel(target: HTMLElement, deltaY: number, init: WheelEventInit = {}): 
   target.dispatchEvent(event)
   return event
 }
+
+it('preserves a reading point through underfilled expansion without swallowing boundary wheels', async () => {
+  const view = viewport(976)
+  const { owner } = view
+  let lineTop = 218
+  const point = {
+    resolveScrollTop: (displacement: number) => lineTop - displacement,
+    project: () => lineTop - owner.getScrollTop(),
+    dispose: () => {}
+  }
+  try {
+    owner.setItems([row('first', 0, 422), row('second', 1, 422)])
+    await commit()
+    owner.input(120)
+    expect(owner.getScrollTop()).toBe(0)
+    expect(wheel(owner.scene, 120).defaultPrevented).toBe(false)
+    for (const [height, nextLineTop, scrollTop] of [
+      [462, 258, 40],
+      [502, 298, 80],
+      [542, 338, 120]
+    ]) {
+      owner.preserve(point)
+      lineTop = nextLineTop
+      owner.measure(owner.getItem('first')!, height)
+      await commit()
+      expect(point.project()).toBe(218)
+      expect(owner.getScrollTop()).toBe(scrollTop)
+      expect(wheel(owner.scene, 120).defaultPrevented).toBe(false)
+      expect(owner.getScrollTop()).toBe(scrollTop)
+    }
+    expect(wheel(owner.scene, -60).defaultPrevented).toBe(true)
+    expect(owner.getScrollTop()).toBe(60)
+    expect(wheel(owner.scene, -120).defaultPrevented).toBe(true)
+    expect(owner.getScrollTop()).toBe(0)
+    owner.preserve(point, 438)
+    owner.invalidateView()
+    await commit()
+    expect(owner.getScrollTop()).toBe(-100)
+    expect(wheel(owner.scene, 60).defaultPrevented).toBe(true)
+    expect(owner.getScrollTop()).toBe(-40)
+    expect(wheel(owner.scene, 60).defaultPrevented).toBe(true)
+    expect(owner.getScrollTop()).toBe(0)
+    expect(wheel(owner.scene, 120).defaultPrevented).toBe(false)
+    owner.navigate(1)
+    expect(owner.getScrollTop()).toBe(0)
+  } finally {
+    view.close()
+  }
+})
 
 it('keeps the beginning when a loading edge grows before the next native row', async () => {
   const view = viewport()

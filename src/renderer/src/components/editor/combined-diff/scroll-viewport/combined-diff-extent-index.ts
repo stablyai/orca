@@ -169,9 +169,8 @@ export class CombinedDiffExtentIndex {
     revision: number,
     preserveSlack: boolean
   ): DiffViewportLayout {
-    const naturalMax = Math.max(0, this.total - height)
     const leadingSlack = preserveSlack ? Math.max(0, -logicalTop) : 0
-    const trailingSlack = preserveSlack ? Math.max(0, logicalTop - naturalMax) : 0
+    const trailingSlack = preserveSlack ? Math.max(0, logicalTop + height - this.total) : 0
     const scrollHeight = leadingSlack + this.total + trailingSlack
     const scrollTop = Math.max(
       0,
