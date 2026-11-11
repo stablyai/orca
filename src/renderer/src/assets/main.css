@@ -2757,6 +2757,36 @@ html.native-shell .app-layout {
   border-radius: 999px;
 }
 
+.monaco-editor .orca-git-change-gutter {
+  width: 3px !important;
+  margin-left: 3px;
+}
+
+.monaco-editor .orca-git-change-gutter-added {
+  background: var(--git-decoration-added);
+}
+
+.monaco-editor .orca-git-change-gutter-modified {
+  background: var(--git-decoration-modified);
+}
+
+/* A deletion has no line of its own: draw a wedge on the boundary where the lines were. */
+.monaco-editor .orca-git-change-gutter-deleted::after,
+.monaco-editor .orca-git-change-gutter-deleted-top::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: -4px;
+  border-left: 5px solid var(--git-decoration-deleted);
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+}
+
+.monaco-editor .orca-git-change-gutter-deleted-top::after {
+  top: -4px;
+  bottom: auto;
+}
+
 .monaco-editor .orca-conflict-margin {
   background: color-mix(in srgb, var(--destructive) 8%, transparent);
 }
