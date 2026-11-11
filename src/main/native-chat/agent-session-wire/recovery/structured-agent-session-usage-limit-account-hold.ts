@@ -21,8 +21,9 @@ export type UsageLimitAccountUsage = {
   /** The reading now, or null once it no longer describes this account. */
   read: () => ProviderRateLimits | null
   /** A non-forced fetch that keeps the poller's Retry-After and failure backoff; with
-   *  `notWithinMs`, at most one per account that often, however many chats ask. */
-  refresh: (notWithinMs?: number) => void
+   *  `notWithinMs`, at most one per account that often, however many chats ask. False when the
+   *  service started none. */
+  refresh: (notWithinMs?: number) => boolean
 }
 
 /** Where a launch would bill: a hold never outlives the scope it was taken in. */
@@ -32,12 +33,14 @@ export type UsageLimitAccountScope = {
   /** The reading that describes this scope's account; absent when none does. */
   account?: UsageLimitAccountUsage
   /** Asks for a first reading while the provider has none; a due send waits for it briefly. */
-  bootstrap?: () => void
+  bootstrap?: () => boolean
 }
 
 export type UsageLimitAccountVerdict = {
   /** The latest reset the send waits for: the cut's, or a later one the account still shows spent. */
   resetsAt: number
+  /** `resetsAt` without the reading time an unknown reset holds from: the latest known reset. */
+  knownResetsAt: number
   /** The account shows a spent window with no known reset; nothing is sent automatically. */
   unknownReset: boolean
   /** Due, but no reading taken since that reset has arrived yet. */
@@ -172,7 +175,12 @@ export class UsageLimitAccountHolds {
     let hold = this.holds.get(id)
     // Nothing attributed and nothing held: the cut decides, and nothing is kept for it.
     if (!hold && !scope) {
-      return { resetsAt: cut.resetsAt, unknownReset: false, awaitingReading: false }
+      return {
+        resetsAt: cut.resetsAt,
+        knownResetsAt: cut.resetsAt,
+        unknownReset: false,
+        awaitingReading: false
+      }
     }
     const account = scope?.account
     if (
@@ -242,6 +250,7 @@ export class UsageLimitAccountHolds {
     }
     return {
       resetsAt,
+      knownResetsAt: Math.max(cut.resetsAt, hold.heldUntil ?? cut.resetsAt),
       unknownReset: hold.unknownReset === true,
       awaitingReading:
         (account ? !fresh(resetsAt) : scope?.bootstrap !== undefined) &&
@@ -263,7 +272,8 @@ export class UsageLimitAccountHolds {
     )
   }
 
-  /** Whether the send may go now; a due send short of a fresh reading asks once per held reset. */
+  /** Whether the send may go now; a due send short of a fresh reading asks until the service
+   *  starts one read per held reset. */
   ready(
     id: string,
     cut: { turnItemId: string; resetsAt: number },
@@ -283,8 +293,9 @@ export class UsageLimitAccountHolds {
     }
     const refresh = scope?.account?.refresh ?? scope?.bootstrap
     if (hold.awaitingReading && record && refresh && record.refreshedFor !== hold.resetsAt) {
-      record.refreshedFor = hold.resetsAt
-      refresh()
+      if (refresh()) {
+        record.refreshedFor = hold.resetsAt
+      }
     }
     return !hold.awaitingReading
   }

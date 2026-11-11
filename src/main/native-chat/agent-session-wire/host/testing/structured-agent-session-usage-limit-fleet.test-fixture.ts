@@ -55,7 +55,7 @@ export function fakeAccountSources(
       (() => ({
         usageReadingAccount: () => sources.reading,
         usageReading: () => sources.limits,
-        requestUsageReading: () => {}
+        requestUsageReading: () => true
       })),
     settings: () => sources.settings,
     shellEnvironment: async () => {

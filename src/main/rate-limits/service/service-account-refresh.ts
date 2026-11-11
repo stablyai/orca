@@ -51,15 +51,19 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
 
   /** An automatic, non-forced read of one provider's selected account. It waits out Retry-After
    *  and the failure backoff the poller keeps; with `notWithinMs` it also waits while a reading
-   *  or an admitted automatic read of that account is that recent, however many callers ask. */
-  requestUsageReading(provider: 'claude' | 'codex', options: { notWithinMs?: number } = {}): void {
+   *  or an admitted automatic read of that account is that recent, however many callers ask.
+   *  Returns whether it started a read. */
+  requestUsageReading(
+    provider: 'claude' | 'codex',
+    options: { notWithinMs?: number } = {}
+  ): boolean {
     const limits = this.state[provider]
     const now = Date.now()
     if (this.isFetching || this.isRetryAfterActive(limits)) {
-      return
+      return false
     }
     if (limits?.status === 'error' && !this.failureRetryDue(provider, now)) {
-      return
+      return false
     }
     if (options.notWithinMs !== undefined) {
       const checkedAt = limits?.status === 'ok' ? this.providerCheckedAt(provider, limits) : null
@@ -71,13 +75,14 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
         checkedAt ?? Number.NEGATIVE_INFINITY
       )
       if (now - last < options.notWithinMs) {
-        return
+        return false
       }
     }
     this.automaticReadingAt[provider] = { at: now, source: this.usageReadingAccounts[provider] }
     // Starts the failure clock as the poller's own retries do.
     this.lastActiveFailureRetryAtByProvider[provider] = now
     void (provider === 'claude' ? this.fetchClaudeOnly() : this.fetchCodexOnly()).catch(() => {})
+    return true
   }
 
   async refreshGrok(): Promise<RateLimitState> {

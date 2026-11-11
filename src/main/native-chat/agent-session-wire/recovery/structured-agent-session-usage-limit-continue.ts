@@ -128,7 +128,7 @@ export class StructuredAgentSessionUsageLimitContinue {
     return {
       turnItemId: cut.turnItemId,
       resetsAt: cut.resetsAt,
-      ...(hold.resetsAt > cut.resetsAt ? { continueAt: hold.resetsAt } : {}),
+      ...(hold.knownResetsAt > cut.resetsAt ? { continueAt: hold.knownResetsAt } : {}),
       state
     }
   }

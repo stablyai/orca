@@ -31,6 +31,7 @@ async function heldChat() {
       read: () => reading,
       refresh: () => {
         reading = answer?.(clock) ?? reading
+        return true
       }
     }
   }
@@ -191,14 +192,19 @@ it('never revives an old cut with a spent window that began after its reset', as
 it('asks for a first reading when a late first pass finds none, and waits for it', async () => {
   const chat = await heldChat()
   let asked = 0
-  chat.launchUnder({ scope: 'home-a', bootstrap: () => asked++ })
+  // The first ask lands while another fetch is running, so the service starts no read.
+  chat.launchUnder({ scope: 'home-a', bootstrap: () => ++asked > 1 })
   // A restart an hour after the reset, before any reading names where it was taken.
   expect(await chat.pass(chat.cut.resetsAt + HOUR, (now) => weekly(0, null, now))).toEqual([])
   expect(asked).toBe(1)
+  expect(await chat.pass(chat.cut.resetsAt + HOUR + 10_000, (now) => weekly(0, null, now))).toEqual(
+    []
+  )
+  expect(asked).toBe(2)
   expect(await chat.pass(chat.cut.resetsAt + HOUR + 60_000, (now) => weekly(0, null, now))).toEqual(
     []
   )
-  expect(asked).toBe(1)
+  expect(asked).toBe(2)
   expect(
     await chat.pass(chat.cut.resetsAt + HOUR + 120_000, (now) => weekly(0, null, now))
   ).toHaveLength(1)
@@ -261,7 +267,8 @@ it('asks for readings while a reset is unknown, and releases an expired hold fro
   for (const at of [reset + 12 * HOUR, reset + 22 * HOUR]) {
     expect(await chat.quietPass(at)).toEqual([])
   }
-  expect(chat.state()).toMatchObject({ state: 'failed' })
+  // The row names the last known reset, never the time of the reading that showed it unknown.
+  expect(chat.state()).toMatchObject({ state: 'failed', continueAt: reset + 3 * HOUR })
   chat.answerRefresh((now) => weekly(0, null, now))
   const room = reset + 30 * HOUR
   expect(await chat.quietPass(room)).toEqual([])
