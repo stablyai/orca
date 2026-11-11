@@ -27547,6 +27547,10 @@
     "failedLocalNextV2": "Use Move to this computer from the sandbox panel to bring them over. Your files are safe in the cloud workspace."
   },
   "orcaCloud": {
+    "agentHold": {
+      "notSetUp": "{{agent}} isn’t set up for Orca Cloud",
+      "expired": "{{agent}} sign-in expired"
+    },
     "continueOffer": {
       "title": "An agent was interrupted by the restart",
       "action": "Continue"
