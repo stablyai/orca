@@ -27,6 +27,7 @@ import type { CloudLoadState } from './cloud-load-state'
 import { CreateApiKeyDialog } from './CreateApiKeyDialog'
 import { formatKeyPrefix } from './cloud-api-format'
 import { PersonSentence } from './PersonName'
+import { CLOUD_ROUTINES_UI_ENABLED } from '../../../../../shared/cloud-api/cloud-routines-ui'
 import { CloudApiEmptyState, CloudApiSkeletonRows } from './cloud-api-parts'
 import { KeyRow } from './ApiKeyRow'
 
@@ -192,10 +193,17 @@ export function CloudApiKeysView(props: CloudApiKeysViewProps): React.JSX.Elemen
           <CloudApiEmptyState
             icon={KeyRound}
             title={t('auto.components.settings.cloudApi.keys.emptyTitle', 'No Orca API keys yet')}
-            description={t(
-              'auto.components.settings.cloudApi.keys.emptyBody',
-              'Create a key to start workspaces, message agents and run routines from scripts, CI or any MCP client.'
-            )}
+            description={
+              CLOUD_ROUTINES_UI_ENABLED
+                ? t(
+                    'auto.components.settings.cloudApi.keys.emptyBody',
+                    'Create a key to start workspaces, message agents and run routines from scripts, CI or any MCP client.'
+                  )
+                : t(
+                    'auto.components.settings.cloudApi.keys.emptyBodyNoRoutines',
+                    'Create a key to start workspaces and message agents from scripts, CI or any MCP client.'
+                  )
+            }
             action={createButton}
           />
         ) : (
