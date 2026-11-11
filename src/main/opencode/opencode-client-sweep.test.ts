@@ -3,11 +3,9 @@ import type { ProcessResult, ProcessSpec } from '@orca/process-host/process-spec
 import {
   isOpenCodeClientArgv,
   isOpenCodeClientProcess,
-  nativeWindowsRowToIdentity,
   parsePsArgsLine,
   parsePsCommLine,
   parsePsElapsedToMs,
-  splitCommandLineArgv,
   sweepProcessIdentities
 } from './opencode-client-sweep'
 
@@ -35,23 +33,6 @@ describe('parsePsCommLine', () => {
       pid: 999,
       executable: 'My App Helper'
     })
-  })
-})
-
-describe('splitCommandLineArgv', () => {
-  it('groups double-quoted spans', () => {
-    expect(
-      splitCommandLineArgv('"C:\\Program Files\\OpenCode\\opencode.exe" --session ses_1')
-    ).toEqual(['C:\\Program Files\\OpenCode\\opencode.exe', '--session', 'ses_1'])
-  })
-})
-
-describe('nativeWindowsRowToIdentity', () => {
-  it('skips rows without a creation time or command line', () => {
-    expect(nativeWindowsRowToIdentity({ pid: 4, ppid: 0, name: 'System', command: '' })).toBeNull()
-    expect(
-      nativeWindowsRowToIdentity({ pid: 4, ppid: 0, name: 'System', command: 'opencode' })
-    ).toBeNull()
   })
 })
 

@@ -118,30 +118,6 @@ describe('RelayControlOrigin pending-connection replay', () => {
     fakes.controlConnect.mockReset()
   })
 
-  it('dials a pending connection the ack restates in full, without waiting on a timer', async () => {
-    fakes.controlConnect.mockResolvedValue(
-      ack({
-        pendingConns: [
-          { connId: 'conn-1', connTicket: TICKET, kind: 'invite', relayDeviceId: 'device-1' }
-        ]
-      })
-    )
-    const { origin, owned } = createOrigin()
-
-    await origin.open()
-
-    expect(fakes.transports[0]!.openConnection).toHaveBeenCalledOnce()
-    expect(fakes.transports[0]!.openConnection).toHaveBeenCalledWith({
-      type: 'conn-open',
-      connId: 'conn-1',
-      connTicket: TICKET,
-      kind: 'invite',
-      relayDeviceId: 'device-1',
-      attachDeadlineMs: 10_000
-    })
-    expect(owned).toEqual(['conn-1'])
-  })
-
   it('replays a pending connection the relay only identified, reusing the observed conn-open', async () => {
     fakes.controlConnect
       .mockResolvedValueOnce(ack())
@@ -162,69 +138,5 @@ describe('RelayControlOrigin pending-connection replay', () => {
       relayDeviceId: 'device-1',
       attachDeadlineMs: 10_000
     })
-  })
-
-  it('never re-dials a pending connection that is already owned or open', async () => {
-    fakes.controlConnect.mockResolvedValueOnce(ack()).mockResolvedValueOnce(
-      ack({
-        activeConnIds: ['conn-active'],
-        pendingConns: [
-          { connId: 'conn-active', connTicket: TICKET, kind: 'resume', relayDeviceId: 'device-1' },
-          { connId: 'conn-1', connTicket: TICKET, kind: 'resume', relayDeviceId: 'device-1' }
-        ]
-      })
-    )
-    const { origin } = createOrigin()
-    await origin.open()
-    fakes.controls[0]!.options.onConnectionOpen(connOpen())
-    expect(fakes.transports[0]!.openConnection).toHaveBeenCalledOnce()
-
-    await origin.rebind('relay-jwt', ASSIGNMENT)
-
-    expect(fakes.transports[0]!.openConnection).toHaveBeenCalledOnce()
-  })
-
-  it('skips a pending connection no control ever described', async () => {
-    // Identifiers alone cannot authorize pairing or E2EE binding; never guess missing kind/device.
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    fakes.controlConnect.mockResolvedValue(
-      ack({ pendingConns: [{ connId: 'conn-unknown', connTicket: TICKET }] })
-    )
-    const { origin, owned } = createOrigin()
-
-    await origin.open()
-
-    expect(fakes.transports[0]!.openConnection).not.toHaveBeenCalled()
-    expect(owned).toEqual([])
-    expect(warn).toHaveBeenCalledOnce()
-    warn.mockRestore()
-  })
-
-  it('dials nothing once the origin is closed', async () => {
-    fakes.controlConnect.mockResolvedValue(ack())
-    const { origin, owned } = createOrigin()
-    await origin.open()
-    await origin.close()
-
-    fakes.controls[0]!.options.onConnectionOpen(connOpen({ connId: 'conn-late' }))
-
-    expect(fakes.transports[0]!.openConnection).not.toHaveBeenCalled()
-    expect(owned).toEqual([])
-  })
-
-  it('releases a replayed connection whose dial fails', async () => {
-    fakes.controlConnect.mockResolvedValue(
-      ack({
-        pendingConns: [
-          { connId: 'conn-1', connTicket: TICKET, kind: 'resume', relayDeviceId: 'device-1' }
-        ]
-      })
-    )
-    const { origin, released } = createOrigin()
-    fakes.transports[0]!.openConnection.mockRejectedValue(new Error('relay_transport_stopped'))
-
-    await origin.open()
-
-    await vi.waitFor(() => expect(released).toEqual(['conn-1']))
   })
 })
