@@ -11,20 +11,23 @@ vi.mock('@/components/sidebar/workspace-actions/sleep/use-worktree-sleep-state',
   useIsSleepingWorktree: () => false
 }))
 
+// A fixed clock: the gate reads state, not time.
+const T0 = 1_800_000_000_000
+
 const status = (state: HostedWorkspaceStatus['state']): HostedWorkspaceStatus => ({
   state,
   metrics: null,
   uptimeMs: null,
   usage: { totalMs: 0, centsPerHour: 100, costCents: 0 },
   archive: null,
-  checkedAt: Date.now()
+  checkedAt: T0
 })
 
 function seed(state: HostedWorkspaceStatus['state']): void {
   seedCloudWorkspaceSnapshot({
     ids: new Set(['ws']),
     idsLoaded: true,
-    status: { ws: { status: status(state), loading: false, error: null, fetchedAt: Date.now() } }
+    status: { ws: { status: status(state), loading: false, error: null, fetchedAt: T0 } }
   })
 }
 
