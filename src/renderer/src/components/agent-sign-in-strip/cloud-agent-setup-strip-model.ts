@@ -11,7 +11,7 @@ import type { CloudStripModel } from './cloud-agent-strip-model'
 function base(agent: string, t: Translate): CloudStripModel {
   const title = t('agentSignInStrip.notSetUp', '{{agent}} isn’t set up for Orca Cloud', { agent })
   return {
-    status: 'need',
+    status: 'setup',
     title,
     compactTitle: t('agentSignInStrip.notSetUpCompact', '{{agent}} not set up', { agent }),
     detail: t('agentSignInStrip.notSetUpDetail', 'Set up once. Every cloud workspace uses it.'),

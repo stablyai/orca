@@ -7,7 +7,7 @@ import type { CloudAgentStripReason } from '@/lib/orca-cloud/cloud-agent-launch-
 import type { HostAgentSignInAgent } from '../../../../shared/host-agent-sign-in-status'
 import { HOST_AGENT_SIGN_IN_AGENT_NAME } from '../../../../shared/host-agent-sign-in-status'
 
-export type CloudStripStatus = 'need' | 'warning' | 'busy' | 'error' | 'done'
+export type CloudStripStatus = 'need' | 'setup' | 'warning' | 'busy' | 'error' | 'done'
 
 export type CloudStripPrimary =
   | { kind: 'renew' }

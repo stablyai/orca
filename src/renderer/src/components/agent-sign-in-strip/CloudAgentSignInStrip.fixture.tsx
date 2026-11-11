@@ -214,6 +214,11 @@ export const notSetUpCodexDevice = fixture({
   }
 })
 export const notSetUpPaste = fixture({ setUp: { setup: { phase: 'paste', reason: 'chosen' } } })
+/** The paste step at 900 px window width (a ~520 px pane): the detail moves to the title's tooltip. */
+export const notSetUpPasteTiny = fixture({
+  setUp: { setup: { phase: 'paste', reason: 'chosen' } },
+  width: 520
+})
 export const notSetUpFailed = fixture({ setUp: { setup: { phase: 'failed', error: 'denied' } } })
 /** Set up finished: Start {{agent}} releases the held launch. */
 export const notSetUpDone = fixture({ setUp: { setup: { phase: 'saved' }, ready: true } })
