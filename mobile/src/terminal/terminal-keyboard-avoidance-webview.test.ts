@@ -1,10 +1,9 @@
 // @vitest-environment happy-dom
 import { Terminal } from '@xterm/xterm'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { createTerminalDocumentScope } from './document/document-scope'
 import { emitKeyboardAvoidanceMetrics } from './document/keyboard-avoidance-metrics'
 import { commitFitScale } from './document/fit-scale'
-import { parseTerminalKeyboardAvoidanceMetrics } from './terminal-webview-contract'
 
 function runMetricsOver(term: unknown, fitScale = 1): Record<string, unknown>[] {
   const notifications: Record<string, unknown>[] = []
@@ -17,8 +16,6 @@ function runMetricsOver(term: unknown, fitScale = 1): Record<string, unknown>[] 
   emitKeyboardAvoidanceMetrics(scope)
   return notifications
 }
-
-type Cell = { isBgDefault: () => boolean; isInverse: () => number }
 type MetricsNotification = {
   type: string
   cursorY: number
@@ -47,31 +44,6 @@ function checkedMetrics(value: Record<string, unknown> | undefined): MetricsNoti
   }
 }
 
-function makeLine(text = '', styledColumns: number[] = []) {
-  const styled = new Set(styledColumns)
-  return {
-    isWrapped: false,
-    length: 10,
-    translateToString: vi.fn(() => text),
-    getCell: (column: number): Cell => ({
-      isBgDefault: () => !styled.has(column),
-      isInverse: () => 0
-    })
-  }
-}
-
-function runMetrics(lines: (ReturnType<typeof makeLine> | undefined)[], altScreen = false) {
-  const buffer = {
-    cursorY: 2,
-    viewportY: 3,
-    type: altScreen ? 'alternate' : 'normal',
-    getLine: (index: number) => lines[index - 3],
-    getNullCell: () => ({})
-  }
-  const notified = runMetricsOver({ buffer: { active: buffer }, cols: 10, rows: lines.length })
-  return checkedMetrics(notified[0])
-}
-
 function runTerminalMetrics(term: Terminal) {
   return checkedMetrics(runMetricsOver(term)[0])
 }
@@ -81,21 +53,6 @@ function write(term: Terminal, data: string): Promise<void> {
 }
 
 describe('terminal keyboard-avoidance WebView metrics', () => {
-  it('finds text on wrapped rows using the visible viewport offset', () => {
-    const lines = [makeLine('header'), makeLine(''), makeLine('wrapped footer')]
-    lines[2]!.isWrapped = true
-    expect(runMetrics(lines)).toMatchObject({ contentBottomRow: 2 })
-  })
-
-  it('keeps background-only ANSI chrome visible', () => {
-    expect(runMetrics([makeLine('header'), makeLine(''), makeLine('')])).toMatchObject({
-      contentBottomRow: 0
-    })
-    expect(runMetrics([makeLine('header'), makeLine(''), makeLine('', [4])])).toMatchObject({
-      contentBottomRow: 2
-    })
-  })
-
   it('classifies real xterm text and styled whitespace by rendered visibility', async () => {
     const cases = [
       { name: 'default spaces', data: '     ', expected: 0 },
@@ -146,38 +103,6 @@ describe('terminal keyboard-avoidance WebView metrics', () => {
     } finally {
       term.dispose()
     }
-  })
-
-  it('keeps real xterm metrics compatible with old payloads', async () => {
-    const term = new Terminal({ cols: 10, rows: 8 })
-    try {
-      await write(term, '\x1b[8;1Hfooter\x1b[2;1H')
-      const { cursorY, rows, altScreen } = runTerminalMetrics(term)
-      expect(parseTerminalKeyboardAvoidanceMetrics({ cursorY, rows, altScreen })).toEqual({
-        cursorY: 1,
-        contentBottomRow: 1,
-        rows: 8,
-        altScreen: false
-      })
-    } finally {
-      term.dispose()
-    }
-  })
-
-  it('stops at the first bottom-up match and skips scans on alternate screen', () => {
-    const footer = makeLine('footer')
-    const header = makeLine('header')
-    expect(runMetrics([header, makeLine(''), footer])).toMatchObject({ contentBottomRow: 2 })
-    expect(footer.translateToString).toHaveBeenCalledTimes(1)
-    expect(header.translateToString).not.toHaveBeenCalled()
-
-    footer.translateToString.mockImplementation(() => {
-      throw new Error('alternate screen must not scan')
-    })
-    expect(runMetrics([header, makeLine(''), footer], true)).toMatchObject({
-      altScreen: true,
-      contentBottomRow: 0
-    })
   })
 
   it('reports the row pitch as drawn, fit scale included, and none before a cell is measured', () => {

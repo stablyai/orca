@@ -12,13 +12,6 @@ import type {
   WorkerApprovalPayload
 } from '../../../../../shared/orchestration/approvals/worker-approval-payload'
 
-export type {
-  WorkerApprovalAnswerer,
-  WorkerApprovalDecision,
-  WorkerApprovalOutcome,
-  WorkerApprovalPayload
-}
-
 /** The outcome of a chat prompt Orca answered: its reason is told only when it went to the worker as mail. */
 export function chatAnswerOutcome(input: {
   by: WorkerApprovalAnswerer

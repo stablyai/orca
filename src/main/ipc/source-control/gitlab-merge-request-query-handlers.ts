@@ -7,9 +7,12 @@ import {
   normalizeGitLabMRListState,
   normalizeGitLabPositiveInteger,
   normalizeGitLabSearchQuery
-} from '../../gitlab/gitlab-preload-args'
-import { getMergeRequest, getMergeRequestForBranch } from '../../gitlab/merge-request-lookup'
-import { listMergeRequests } from '../../gitlab/merge-request-list'
+} from '../../gitlab/requests/gitlab-preload-args'
+import {
+  getMergeRequest,
+  getMergeRequestForBranch
+} from '../../gitlab/merge-requests/merge-request-lookup'
+import { listMergeRequests } from '../../gitlab/merge-requests/merge-request-list'
 
 import {
   type GitLabRepoSelectorArgs,

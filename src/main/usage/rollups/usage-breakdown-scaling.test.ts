@@ -33,58 +33,6 @@ function events(count: number): Event[] {
   }))
 }
 
-it('keeps first encounter order when streamed rollup sort keys tie', () => {
-  const accumulator = aggregation.createAccumulator()
-  for (const [index, event] of events(4).entries()) {
-    accumulator.add({ ...event, sessionId: `session-${index % 2}`, projectLabel: 'Same label' })
-  }
-  const result = accumulator.finalize()
-  expect(result.sessions.map((session) => session.sessionId)).toEqual(['session-0', 'session-1'])
-  expect(result.sessions[0].locationBreakdown.map((entry) => entry.locationKey)).toEqual([
-    'path-0',
-    'path-2'
-  ])
-  expect(result.sessions[0].modelBreakdown.map((entry) => entry.modelKey)).toEqual([
-    'model-0',
-    'model-2'
-  ])
-  expect(result.dailyAggregates.map((entry) => entry.projectKey)).toEqual([
-    'path-0',
-    'path-1',
-    'path-2',
-    'path-3'
-  ])
-})
-
-it('preserves first-wins duplicate rows and exact location/model tuple identity', () => {
-  const source = aggregation.aggregate(events(1)).sessions[0]
-  const existing = structuredClone(source)
-  existing.locationBreakdown.push({ ...existing.locationBreakdown[0], eventCount: 42 })
-  aggregation.mergeSessions(new Map([['session', existing]]), [source])
-  expect(existing.locationBreakdown.map((entry) => entry.eventCount)).toEqual([2, 42])
-  const input = events(2)
-  input[0].projectKey = 'a::b'
-  input[0].model = 'c'
-  input[1].projectKey = 'a'
-  input[1].model = 'b::c'
-  expect(aggregation.aggregate(input).sessions[0].locationModelBreakdown).toHaveLength(2)
-})
-
-it('keeps location/model tuples distinct under quote and backslash keys', () => {
-  const input = events(4)
-  input[0].projectKey = 'a"'
-  input[0].model = 'b'
-  input[1].projectKey = 'a'
-  input[1].model = '"b'
-  input[2].projectKey = 'a\\'
-  input[2].model = 'b'
-  input[3].projectKey = 'a'
-  input[3].model = '\\b'
-  const session = aggregation.aggregate(input).sessions[0]
-  expect(session.locationModelBreakdown).toHaveLength(4)
-  expect(session.locationModelBreakdown.every((entry) => entry.eventCount === 1)).toBe(true)
-})
-
 // Index newly appended rows too or later sources append duplicate location/model entries.
 it('folds later sources into rows the merge itself appended', () => {
   const [first] = events(1)

@@ -19,16 +19,16 @@ import {
   importProfileStateJson,
   profileStateJsonMatchesAcceptance,
   readProfileStateSnapshot
-} from '../../persistence/profile-state/profile-state-documents'
-import { readProfileStateRevision } from '../../persistence/profile-state/profile-state-revision'
+} from '../../persistence/profile-state/documents/profile-state-documents'
+import { readProfileStateRevision } from '../../persistence/profile-state/database/profile-state-revision'
 import {
   openProfileStateDatabase,
   openProfileStateDatabaseReadOnly
-} from '../../persistence/profile-state/profile-state-database'
-import { parseProfileStateRoot } from '../../persistence/profile-state/profile-state-document-validation'
-import { assertProfileStateCanInitialize } from '../../persistence/profile-state/profile-state-recovery-required'
-import { hasProfileStateDatabaseFiles } from '../../persistence/profile-state/profile-state-storage-classification'
-import { ensureProfileStateAuthorityMarker } from '../../persistence/profile-state/profile-state-authority-marker'
+} from '../../persistence/profile-state/database/profile-state-database'
+import { parseProfileStateRoot } from '../../persistence/profile-state/documents/profile-state-document-validation'
+import { assertProfileStateCanInitialize } from '../../persistence/profile-state/recovery/profile-state-recovery-required'
+import { hasProfileStateDatabaseFiles } from '../../persistence/profile-state/database/profile-state-storage-classification'
+import { ensureProfileStateAuthorityMarker } from '../../persistence/profile-state/database/profile-state-authority-marker'
 
 export type ReadProfileStateResult = {
   state: PersistedState

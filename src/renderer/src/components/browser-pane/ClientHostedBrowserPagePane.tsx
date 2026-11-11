@@ -4,7 +4,6 @@ import { useBrowserAgentCursor } from './agent-cursor/use-browser-agent-cursor'
 import { BrowserPageFeedbackBadge } from './assemble-chrome/browser-page-feedback-badge'
 import { BrowserLinkStatusBubble } from './assemble-chrome/browser-link-status-bubble'
 import { useAppStore } from '@/store'
-import type { BrowserLoadError } from '../../../../shared/browser-workspace-types'
 import { createBrowserClientPageLoadFailureHandler } from './browser-client-page-guest-metadata'
 import {
   issueBrowserGuestNavigation,
@@ -65,7 +64,9 @@ export function ClientHostedBrowserPagePane({
   const webviewRef = useRef<Electron.WebviewTag | null>(null)
   const addressBarInputRef = useRef<HTMLInputElement | null>(null)
   // Seed retained failures from the page: a fresh null on remount would clear both the error and its certificate record.
-  const activeLoadFailureRef = useRef<BrowserLoadError | null>(browserTab.loadError ?? null)
+  const activeLoadFailureRef = useRef<NonNullable<typeof browserTab.loadError> | null>(
+    browserTab.loadError ?? null
+  )
   const onUpdatePageStateRef = useRef(onUpdatePageState)
   const isActiveRef = useRef(isActive)
   const [attachmentError, setAttachmentError] = useState<string | null>(null)
@@ -305,7 +306,8 @@ export function ClientHostedBrowserPagePane({
     setAddressBarValueFromPage
   ])
 
-  const showFailureOverlay = !attachmentError && Boolean(browserTab.loadError)
+  const unavailable = Boolean(attachmentError) || restoredPageUnrecovered
+  const showFailureOverlay = !unavailable && Boolean(browserTab.loadError)
 
   const markup = useClientHostedBrowserMarkup({
     webviewRef,
@@ -313,7 +315,7 @@ export function ClientHostedBrowserPagePane({
     runtimeEnvironmentId,
     placement,
     isActive,
-    unavailable: Boolean(attachmentError) || restoredPageUnrecovered,
+    unavailable,
     showFailureOverlay
   })
 
@@ -397,7 +399,7 @@ export function ClientHostedBrowserPagePane({
               onRetry={() => reload.runReloadTrigger('reload')}
             />
           ) : null}
-          {attachmentError || restoredPageUnrecovered ? (
+          {unavailable ? (
             <ClientHostedBrowserUnavailableNotice
               runtimeEnvironmentId={runtimeEnvironmentId}
               worktreeId={worktreeId}

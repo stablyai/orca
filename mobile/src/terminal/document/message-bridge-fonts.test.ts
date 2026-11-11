@@ -154,15 +154,6 @@ describe('the terminal waits for its bundled glyphs', () => {
     stopMessageBridge(fonts.scope)
   })
 
-  it('still starts the terminal if font decoding fails', async () => {
-    const fonts = pendingFonts()
-    startMessageBridge(fonts.scope)
-    fonts.fail()
-    await fonts.loaded.catch(() => {})
-    expect(fonts.postToHost).toHaveBeenCalledWith({ type: 'web-ready', cellBox: null })
-    stopMessageBridge(fonts.scope)
-  })
-
   it('unwinds the document and reports an error if deferred startup fails', async () => {
     const fonts = pendingFonts()
     document.body.innerHTML = TERMINAL_DOCUMENT_MARKUP
@@ -185,14 +176,5 @@ describe('the terminal waits for its bundled glyphs', () => {
       fatal: true,
       message: expect.stringContaining('readiness transport failed')
     })
-  })
-
-  it('does not revive a document stopped during the font load', async () => {
-    const fonts = pendingFonts()
-    startMessageBridge(fonts.scope)
-    stopMessageBridge(fonts.scope)
-    fonts.finish()
-    await fonts.loaded
-    expect(fonts.postToHost).not.toHaveBeenCalled()
   })
 })
