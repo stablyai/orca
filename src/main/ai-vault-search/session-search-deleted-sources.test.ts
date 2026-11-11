@@ -444,11 +444,15 @@ it('keeps one unfinished retirement unit through repeated membership rejection',
     }
     expect(retainedRows()).toBe(300)
     refusing = false
+    promises = 0
+    hook.enable()
     await retireSessionSearchPassSources(
       retirementArgs(state),
       [harness.roots.claudeProjectsDir!],
       new Set()
     )
+    hook.disable()
+    expect(promises).toBeLessThanOrEqual(64 * 300 + 2000)
     expect(retainedRows()).toBe(0)
     expect(state.pending).toBe(false)
   } finally {

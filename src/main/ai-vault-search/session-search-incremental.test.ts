@@ -463,10 +463,14 @@ it.each(['commit', 'open', 'observation'] as const)(
     const stream = filesystem.openTranscriptReadStream
     let refuseOpen = false
     let refuseObservation = false
+    let observations = 0
     const actualStat = filesystem.wslGatedStat
     const observation = vi
       .spyOn(filesystem, 'wslGatedStat')
       .mockImplementation((observed, ...args) => {
+        if (observed === path) {
+          observations++
+        }
         if (refuseObservation && observed === path) {
           return Promise.reject(
             Object.assign(new Error('fixture refused observation'), { code: 'EIO' })
@@ -533,6 +537,7 @@ it.each(['commit', 'open', 'observation'] as const)(
       await cycle()
       expect(current()).toEqual({ text: { n: 1 }, title: { title: 'Rewritten title' } })
       expect(subject.status().phase).toBe('current')
+      observations = 0
       refuse()
       await rewrite('codex newx question', 'codex next question', 'Held title')
       for (let attempt = 0; attempt < 3; attempt++) {
@@ -545,10 +550,18 @@ it.each(['commit', 'open', 'observation'] as const)(
           )
         ).toEqual({ state: 'failed', fail_count: 3 })
       }
-      expect(subject.status().phase).toBe('degraded')
+      if (failure === 'observation') {
+        expect(observations).toBe(3)
+        expect(subject.status().phase).not.toBe('indexing')
+      } else {
+        expect(subject.status().phase).toBe('degraded')
+      }
       expect(subject.status().filesDue).toBe(0)
       allow()
       await cycle()
+      if (failure === 'observation') {
+        expect(observations).toBe(3)
+      }
       expect(current()).toEqual({ text: { n: 1 }, title: { title: 'Rewritten title' } })
       if (failure === 'open') {
         await subject.close()
