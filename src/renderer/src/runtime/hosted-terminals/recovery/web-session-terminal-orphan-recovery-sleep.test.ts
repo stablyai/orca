@@ -4,7 +4,7 @@ import { toWebTerminalSurfaceTabId } from '../../../../../shared/workspace-layou
 import {
   clearWorktreeSleepIntent,
   markWorktreeSleepIntent
-} from '../../../lib/worktree-sleep-intent'
+} from '../../../lib/workspace/sleep/worktree-sleep-intent'
 import { clearWebSessionTerminalOrphanRecoveryForTests } from './web-session-terminal-orphan-recovery'
 import { applyWebSessionTabsSnapshot } from '../../web-session-tabs-sync/snapshot-api'
 import {

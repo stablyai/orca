@@ -3,21 +3,17 @@ import {
   getStructuredAgentSessionPendingSends,
   publishStructuredAgentSessionSends
 } from '@/components/native-chat/session/structured/delivery/structured-agent-session-pending-sends'
-import {
-  restoreStructuredAgentSessionLaunchIntent,
-  type StructuredAgentSessionLaunchIntent
-} from '../../launch-structured-agent-session'
+import { restoreStructuredAgentSessionLaunchIntent } from './structured-agent-session-launch-intent'
+import type { StructuredAgentSessionLaunchIntent } from './structured-agent-session-launch-intent'
 import { StructuredAgentSessionOwnerUnresolvedError } from './structured-agent-session-launch-errors'
-import {
-  createStructuredLaunchCallerGroup,
-  type StructuredLaunchCallerGroup
-} from './structured-agent-session-launch-callers'
+import { createStructuredLaunchCallerGroup } from './structured-agent-session-launch-callers'
+import type { StructuredLaunchCallerGroup } from './structured-agent-session-launch-callers'
 import {
   getPersistedStructuredAgentLaunchRecord,
   setStructuredLaunchState,
-  structuredLaunchIdentity,
-  type StructuredLaunchState
+  structuredLaunchIdentity
 } from './structured-agent-session-launch-registry'
+import type { StructuredLaunchState } from './structured-agent-session-launch-registry'
 import {
   initialStructuredLaunchSelection,
   structuredLaunchSelectionController
