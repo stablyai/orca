@@ -43,6 +43,7 @@ import { getWorkspaceComposerInitialFocusTarget } from '@/lib/workspace/creation
 import '@/components/sidebar/workspace-creation/folder/folder-workspace-source-repos'
 import { getFolderWorkspacePrimaryActionLabel } from '@/components/sidebar/workspace-creation/folder/folder-workspace-source-selection'
 import { useAgentMenuObservation } from '@/components/tab-bar/use-new-tab-agent-menu-rows'
+import { modelOffersAgentSetup } from '@/components/tab-bar/new-tab-agent-menu-model'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 
 // Keep Add Project’s clone/SSH machinery outside the composer entry render, matching App loading.
@@ -382,10 +383,7 @@ function QuickTabBody({
         nameInputRef={nameInputRef}
         quickAgent={quickAgent}
         agentPickerDraft={pickerDraft}
-        agentSetupDisabled={
-          observation.model.state !== 'settled' ||
-          observation.model.pickerContext?.executionHostId !== 'local'
-        }
+        agentSetupDisabled={!modelOffersAgentSetup(observation.model)}
         onQuickAgentChange={handleQuickAgentChange}
         {...cardProps}
         // Chips list offered agents, keeping a pick whose chat is still being learned.
