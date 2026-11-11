@@ -186,6 +186,14 @@ export class HostRelay extends HostRelayPhones {
         }
         // Same order as the cells' heartbeat: expired auth past its grace, then the 6 h lease.
         if (now > a.claims.exp + CONTROL_CONTINUITY_LIMITS.expiredAuthExistingSpliceGraceMs) {
+          // A host already silent past the limit is gone (asleep, offline): it closes as one, so
+          // drop counts stay comparable with the cells, whose pings would have closed it earlier.
+          // Its probe is cut short: the expired authorization ends the socket either way.
+          if (now - seen > this.config.silenceTimeoutMs) {
+            this.close(ws, RELAY_CLOSE_CODE.PEER_DROPPED, 'control silence timeout')
+            await this.onSocketGone(ws, RELAY_CLOSE_CODE.PEER_DROPPED, '', Math.min(now, seen + this.config.silenceTimeoutMs + this.config.pingIntervalMs))
+            continue
+          }
           const sinceRefreshS = a.lastRefreshAt === undefined ? -1 : Math.round((now - a.lastRefreshAt) / 1000)
           const seenAgoS = Math.round((now - seen) / 1000)
           metric(this.env, 'auth_expired_close', sinceRefreshS, a.lastRefreshAt === undefined ? 'never' : 'refreshed', [seenAgoS], this.keepalive(a) ? 'keepalive' : 'legacy', a.place)
