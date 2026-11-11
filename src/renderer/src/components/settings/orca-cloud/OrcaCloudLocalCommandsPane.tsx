@@ -16,6 +16,7 @@ import type {
 import { CloudApiEmptyState } from '../cloud-api/cloud-api-parts'
 import { SettingsBadge, SettingsRow } from '../form-controls/SettingsFormControls'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
+import { LocalCommandText } from '../../local-commands/LocalCommandText'
 
 const AUDIT_ROWS = 20
 
@@ -179,7 +180,7 @@ export function OrcaCloudLocalCommandsView({
               key={rule.id}
               label={
                 <span className="block truncate font-mono text-xs" title={rule.command}>
-                  {rule.command}
+                  <LocalCommandText text={rule.command} />
                 </span>
               }
               description={`${rule.workspaceLabel} · ${rule.cwd}`}
@@ -215,7 +216,11 @@ export function OrcaCloudLocalCommandsView({
               >
                 <div className="min-w-0 flex-1 space-y-0.5">
                   <p className="truncate font-mono text-xs" title={entry.command}>
-                    {entry.command || t('localCommands.audit.noCommand', '(unreadable request)')}
+                    {entry.command ? (
+                      <LocalCommandText text={entry.command} />
+                    ) : (
+                      t('localCommands.audit.noCommand', '(unreadable request)')
+                    )}
                   </p>
                   <p className="truncate text-xs text-muted-foreground">
                     {[
