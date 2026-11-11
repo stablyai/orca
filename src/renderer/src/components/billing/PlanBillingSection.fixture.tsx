@@ -271,6 +271,36 @@ export const usageWarningMember = defineFixture({
   )
 })
 
+/** A member while overage is on: one line saying the cap, and what's been used. */
+export const overageOnMember = defineFixture({
+  width: 600,
+  render: () => (
+    <PlanBillingView
+      {...handlers}
+      result={{
+        status: 'ok',
+        entitlement: {
+          ...sampleTeam,
+          canManageBilling: false,
+          overage: { ...sampleTeam.overage, optedIn: true, active: true, spentCents: 300 }
+        }
+      }}
+    />
+  )
+})
+
+/** Keyboard: "Turn off overage" reads as a link at rest and shows its focus ring. */
+export const overageTurnOffFocused = defineFixture({
+  ...usageAlert100OverageOn,
+  interact: async (frame) => {
+    const turnOff = [...frame.querySelectorAll<HTMLButtonElement>('button')].find(
+      (button) => button.textContent === 'Turn off overage'
+    )
+    turnOff?.focus()
+    await new Promise((resolve) => setTimeout(resolve, 100))
+  }
+})
+
 /** An admin types a cap above billing's maximum: the field says what the maximum is. */
 export const capTooHigh = defineFixture({
   width: 600,
