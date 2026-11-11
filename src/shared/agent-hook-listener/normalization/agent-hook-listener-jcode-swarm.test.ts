@@ -10,6 +10,7 @@ import { normalizeAndAccept, PANE_KEY } from './agent-hook-listener-test-harness
 // swarm worker's hooks with the coordinator pane's ORCA_PANE_KEY; only session_id differs.
 const ROOT = 'session_tigress_1792603131095_636843aadc1b740b'
 const WORKER = 'session_retriever_1792603161400_81ad62e08be2201b'
+const SECOND_WORKER = 'session_heron_1792603162400_5c1d2e3f4a5b6c7d'
 const CWD = '/tmp/jcapt-cwd'
 const capturedHooks: Record<string, string>[] = [
   {
@@ -71,13 +72,21 @@ describe('Jcode swarm workers sharing the coordinator pane', () => {
   function writeSessionFiles(): void {
     for (const [id, parentId] of [
       [ROOT, null],
-      [WORKER, ROOT]
+      [WORKER, ROOT],
+      [SECOND_WORKER, ROOT]
     ]) {
       writeFileSync(
         join(home, 'sessions', `${id}.json`),
         JSON.stringify({ id, parent_id: parentId, title: 'captured', messages: [] })
       )
     }
+  }
+
+  async function run(payload: Record<string, string>) {
+    await checkHookOwnerPresence(state, 'jcode', { paneKey: PANE_KEY, payload }, 'production', () =>
+      Promise.resolve()
+    )
+    return normalizeAndAccept(state, 'jcode', payload)
   }
 
   afterEach(() => {
@@ -107,16 +116,6 @@ describe('Jcode swarm workers sharing the coordinator pane', () => {
   })
   it("shows an inline worker's permission request on the coordinator's row until it settles", async () => {
     writeSessionFiles()
-    const run = async (payload: Record<string, string>) => {
-      await checkHookOwnerPresence(
-        state,
-        'jcode',
-        { paneKey: PANE_KEY, payload },
-        'production',
-        () => Promise.resolve()
-      )
-      return normalizeAndAccept(state, 'jcode', payload)
-    }
     for (const payload of capturedHooks.slice(0, 5)) {
       await run(payload)
     }
@@ -150,5 +149,25 @@ describe('Jcode swarm workers sharing the coordinator pane', () => {
     expect((await run({ ...permission, event: 'pre_tool' }))?.payload.state).toBe('waiting')
     const rested = await run({ ...permission, event: 'post_tool', status: 'ok' })
     expect(rested?.payload).toMatchObject({ state: 'done', sessionBoundary: true })
+  })
+
+  it('shows the open question when another helper settles first', async () => {
+    writeSessionFiles()
+    for (const payload of capturedHooks.slice(0, 5)) {
+      await run(payload)
+    }
+    const ask = (sessionId: string, action: string) => ({
+      cwd: CWD,
+      session_id: sessionId,
+      tool_input: `{"action":"${action}","description":"d","rationale":"r","wait":true}`,
+      tool_name: 'request_permission'
+    })
+    await run({ ...ask(WORKER, 'push'), event: 'pre_tool' })
+    await run({ ...ask(SECOND_WORKER, 'delete'), event: 'pre_tool' })
+
+    const stillOpen = await run({ ...ask(SECOND_WORKER, 'delete'), event: 'post_tool' })
+    expect(stillOpen?.payload).toMatchObject({ state: 'waiting', toolInput: 'push' })
+    const settled = await run({ ...ask(WORKER, 'push'), event: 'post_tool' })
+    expect(settled?.payload.state).toBe('working')
   })
 })
