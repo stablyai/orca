@@ -6,6 +6,7 @@ import {
   captureWakeScrollback,
   finishWakeScrollbackRestore,
   forgetWakeScrollback,
+  hasPendingWakeScrollback,
   resetWakeScrollbackForTests
 } from './cloud-wake-scrollback'
 
@@ -201,6 +202,48 @@ describe('WAKE-SCROLLBACK', () => {
     armWakeScrollback(['leaf-1'])
     expect(await wake(terminal, 'leaf-1', '$ ')).toBe(false)
     expect(text(terminal)).toEqual(['$'])
+  })
+
+  // m4air run: by "asleep" a resubscribe had replaced 2000 rows with the host's 1000-row snapshot.
+  it('captures once per sleep (at going to sleep): a later look at a replaced buffer changes nothing', async () => {
+    const terminal = pane(10)
+    const seq = Array.from({ length: 2000 }, (_, index) => String(index + 1)).join('\r\n')
+    await write(terminal, `$ seq 1 2000\r\n${seq}\r\n$ sleep 900\r\n`)
+    captureWakeScrollback('leaf-1', terminal, { sleptAt: null, agentPane: false, maxRows: 5000 })
+    // The transport resubscribes while the VM suspends: a cleared, host-limited image.
+    const last1000 = Array.from({ length: 1000 }, (_, index) => String(index + 1001)).join('\r\n')
+    await write(terminal, `\x1b[2J\x1b[3J\x1b[H${last1000}\r\n$ sleep 900\r\n`)
+    captureWakeScrollback('leaf-1', terminal, {
+      sleptAt: SLEPT_AT,
+      agentPane: false,
+      maxRows: 5000
+    })
+    armWakeScrollback(['leaf-1'])
+    expect(await wake(terminal, 'leaf-1', '$ ')).toBe(true)
+    const lines = text(terminal)
+    expect(lines[0]).toBe('$ seq 1 2000')
+    expect(lines[1]).toBe('1')
+  })
+
+  it("a past sleep's woken-but-untaken capture is replaced by the next sleep's", async () => {
+    const terminal = pane(6)
+    await write(terminal, '$ echo old\r\nold\r\n$ ')
+    capture(terminal, 'leaf-1')
+    armWakeScrollback(['leaf-1'])
+    await write(terminal, 'echo new\r\nnew\r\n$ ')
+    capture(terminal, 'leaf-1')
+    armWakeScrollback(['leaf-1'])
+    expect(beginWakeScrollbackRestore('leaf-1', terminal)?.block).toContain('new')
+  })
+
+  it('reports a pending restore only when there is output to put back', async () => {
+    const empty = pane(4)
+    captureWakeScrollback('leaf-e', empty, { sleptAt: SLEPT_AT, agentPane: false, maxRows: 5000 })
+    expect(hasPendingWakeScrollback('leaf-e')).toBe(false)
+    const full = pane(4)
+    await write(full, '$ ls\r\nREADME\r\n$ ')
+    capture(full, 'leaf-f')
+    expect(hasPendingWakeScrollback('leaf-f')).toBe(true)
   })
 
   it('a person who had scrolled up keeps their place instead of jumping', async () => {

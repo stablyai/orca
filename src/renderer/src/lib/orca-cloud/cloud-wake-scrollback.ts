@@ -67,7 +67,13 @@ export function captureWakeScrollback(
   }
 ): void {
   const existing = pending.get(leafId)
-  if (existing && (options.sleptAt === null || existing.sleptAt === options.sleptAt)) {
+  // One capture per sleep, the earliest: by "asleep" the transport may already have resubscribed
+  // and replaced the buffer with the host's 1000-row snapshot. A later look only refines the time.
+  // An armed (woken) but untaken capture is a past sleep's; a new sleep captures afresh.
+  if (existing && !existing.armed) {
+    if (options.sleptAt !== null) {
+      existing.sleptAt = options.sleptAt
+    }
     return
   }
   const normal = terminal.buffer.normal
@@ -116,6 +122,11 @@ export function armWakeScrollback(leafIds: Iterable<string>): void {
       entry.armed = true
     }
   }
+}
+
+/** The pane has pre-sleep output waiting to be put back after its wake. */
+export function hasPendingWakeScrollback(leafId: string): boolean {
+  return (pending.get(leafId)?.text ?? null) !== null
 }
 
 /** The pane closed or its workspace was deleted. */

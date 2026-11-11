@@ -38,6 +38,7 @@ import { withoutWslHostStoppedLines } from '../../../../../../../shared/wsl-host
 import { makePaneKey } from '../../../../../../../shared/workspace-layout/stable-pane-id'
 import { cloudWokeActionFor, runCloudWokeAction } from '@/lib/orca-cloud/cloud-wake-hint-action'
 import { captureCloudPaneBeforeWake } from '@/lib/orca-cloud/cloud-wake-pane-capture'
+import { useIsWorktreeGoingToSleep } from '@/lib/worktree-sleep-view'
 import { armWakeScrollback, forgetWakeScrollback } from '@/lib/orca-cloud/cloud-wake-scrollback'
 import { restartPaneExists } from '@/lib/orca-cloud/cloud-agent-restart-pane-watch'
 import { mapPaneTerminalErrors } from '../../../errors/terminal-error-accumulation'
@@ -141,13 +142,18 @@ export function TerminalPaneRecoveryPortals({
   // so after the wake the pane can say it stopped and offer it back (JA-15).
   const isCloud = cloud !== null
   const asleepSince = cloud?.asleepSince ?? null
+  // Sleep was asked for: look now, before the transport's resubscribes (while the VM suspends)
+  // replace the pane's buffer with the host's 1000-row snapshot (WAKE-SCROLLBACK).
+  const goingToSleep = useIsWorktreeGoingToSleep(controller.worktreeId)
+  // Set once the workspace was asleep this cycle: only then is a replay the woken terminal's.
+  const sleptRef = useRef(false)
   useEffect(() => {
     if (!isCloud) {
       return
     }
-    if (cloudAsleep || cloudWaking) {
+    if (goingToSleep || cloudAsleep || cloudWaking) {
       for (const pane of managedPanes) {
-        // The Rerun hint and the pre-sleep output (WAKE-SCROLLBACK), before the new terminal attaches.
+        // The Rerun hint and the pre-sleep output, before the new terminal attaches.
         captureCloudPaneBeforeWake({
           tabId,
           leafId: pane.leafId,
@@ -159,11 +165,26 @@ export function TerminalPaneRecoveryPortals({
     } else {
       resetWakeProcessCapture(managedPanes.map((pane) => pane.leafId))
     }
-    if (!cloudAsleep) {
-      // Waking or live: the next clearing replay is the woken terminal's.
+    if (cloudAsleep) {
+      sleptRef.current = true
+    } else if (sleptRef.current && (cloudWaking || cloudAwake)) {
+      // Waking or live after a sleep: the next clearing replay is the woken terminal's.
       armWakeScrollback(managedPanes.map((pane) => pane.leafId))
+      if (cloudAwake) {
+        sleptRef.current = false
+      }
     }
-  }, [isCloud, cloudAsleep, cloudWaking, managedPanes, tabId, controller.worktreeId, asleepSince])
+  }, [
+    isCloud,
+    goingToSleep,
+    cloudAsleep,
+    cloudWaking,
+    cloudAwake,
+    managedPanes,
+    tabId,
+    controller.worktreeId,
+    asleepSince
+  ])
   // A pane closed, or its tab or workspace went away: drop its kept pre-sleep output.
   const leafIdsRef = useRef<(typeof managedPanes)[number]['leafId'][]>([])
   useEffect(() => {
