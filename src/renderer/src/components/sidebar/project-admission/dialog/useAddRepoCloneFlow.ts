@@ -6,7 +6,7 @@ import type { Repo } from '../../../../../../shared/repo-types'
 import { getCloneDestinationAutoFill } from '../create/clone-defaults'
 import type { AddRepoDialogStep } from './add-repo-dialog-types'
 import { translate } from '@/i18n/i18n'
-import { extractIpcErrorMessage } from '@/lib/ipc-error'
+import { extractIpcErrorMessage } from '@/runtime/errors/ipc-error'
 import { upsertAddedRepoWithProjectHostSetup } from '../completion/add-repo-store-upsert'
 import {
   resolveAddRepoRuntimeTarget,

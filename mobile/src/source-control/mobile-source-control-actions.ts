@@ -31,6 +31,7 @@ export type MobileSourceControlAction = {
   iconKey: MobileSourceControlActionIcon
   disabled?: boolean
   hint?: string
+  status?: string
   loading?: boolean
   skipAutoClose?: boolean
   closeBeforePress?: boolean
@@ -84,7 +85,7 @@ export function buildMobileSourceControlActions(
   const busy = args.busyAction !== null
   const blockForce = (item: DropdownItem): DropdownItem =>
     args.forcePushBlockedReason
-      ? { ...item, disabled: true, title: args.forcePushBlockedReason }
+      ? { ...item, disabled: true, title: args.forcePushBlockedReason, status: undefined }
       : item
   const row = (
     item: DropdownItem,
@@ -98,6 +99,7 @@ export function buildMobileSourceControlActions(
     disabled: busy || item.disabled,
     // Mobile has no tooltips: show why a row is disabled, and always what Force Push replaces.
     hint: item.disabled || item.kind === 'force_push' ? item.title : undefined,
+    status: item.status,
     loading: args.busyAction === actionId,
     skipAutoClose: true,
     onPress

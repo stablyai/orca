@@ -6,10 +6,11 @@ import { Command as CommandPrimitive } from 'cmdk'
 import { SearchIcon } from 'lucide-react'
 import * as DialogPrimitive from 'radix-ui/dialog'
 
-import { cn } from '@/lib/utils'
-import { handleOverlayCloseAutoFocus } from '@/lib/overlay-focus-ownership'
+import { cn } from '@/lib/class-names'
+import { handleOverlayCloseAutoFocus } from '@/lib/overlay-interaction/overlay-focus-ownership'
 import { getWheelScrollDeltaY } from '@/lib/wheel-scroll-delta'
 import { OverlayFocusScope, useOverlayFocusScope } from './use-overlay-focus-scope'
+import { useTranslate } from '@/i18n/use-translate'
 import { handleImeOverlayEscape } from '@/lib/text-input/ime/ime-overlay-escape'
 import { useImeTextFieldProps } from '@/lib/text-input/ime/ime-text-field'
 import { DialogOverlay } from '@/components/ui/dialog'
@@ -55,8 +56,8 @@ function Command({
 
 function CommandDialog({
   children,
-  title = 'Command Palette',
-  description = 'Search for a command to run...',
+  title,
+  description,
   shouldFilter,
   onOpenAutoFocus,
   onCloseAutoFocus,
@@ -77,6 +78,7 @@ function CommandDialog({
   surface?: 'default' | 'palette'
   commandProps?: React.ComponentProps<typeof CommandPrimitive>
 }) {
+  const t = useTranslate()
   const { ref: focusScopeRef, scope } = useOverlayFocusScope()
   const { className: commandClassName, ...commandRootProps } = commandProps ?? {}
 
@@ -99,9 +101,15 @@ function CommandDialog({
             onOpenAutoFocus={onOpenAutoFocus}
             onCloseAutoFocus={(event) => handleOverlayCloseAutoFocus(event, onCloseAutoFocus)}
           >
-            <DialogPrimitive.Title className="sr-only">{title}</DialogPrimitive.Title>
+            <DialogPrimitive.Title className="sr-only">
+              {title ?? t('auto.components.ui.command.paletteTitle', 'Command Palette')}
+            </DialogPrimitive.Title>
             <DialogPrimitive.Description className="sr-only">
-              {description}
+              {description ??
+                t(
+                  'auto.components.ui.command.paletteDescription',
+                  'Search for a command to run...'
+                )}
             </DialogPrimitive.Description>
             <Command
               shouldFilter={shouldFilter}

@@ -13,14 +13,14 @@ import {
   persistClaudeUsageSourceCache
 } from './persisted-source-cache'
 import { normalizeClaudeUsageSourceFiles } from './persisted-projection-validation'
-import { usageSourceCachePath } from '../usage/usage-source-cache-file'
+import { usageSourceCachePath } from '../usage/cache/usage-source-cache-file'
 
 import { ClaudeUsageStore } from './store'
 import { listClaudeTranscriptFiles } from './transcript-file-discovery'
 import {
   scanClaudeUsageFilesViaWorker,
   splitUsageCacheFileViaWorker
-} from '../usage/usage-scan-worker-spawn'
+} from '../usage/scan-worker/usage-scan-worker-spawn'
 
 export async function createPersistedUsageTestFixture() {
   const directory = await mkdtemp(join(tmpdir(), 'orca-claude-persisted-usage-'))

@@ -5,13 +5,13 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { createUsageService } from './usage-service'
 import { createTestUsageStoreHost } from '../usage/usage-store-host-test-fixture'
 import type { ClaudeUsagePersistedState } from '../claude-usage/types'
-import type { UsageCacheSplitResult } from '../usage/usage-source-cache-file'
+import type { UsageCacheSplitResult } from '../usage/cache/usage-source-cache-file'
 import {
   scanClaudeUsageFilesViaWorker,
   splitUsageCacheFileViaWorker,
   stopUsageScanWorker
-} from '../usage/usage-scan-worker-spawn'
-vi.mock('../usage/usage-scan-worker-spawn', () => ({
+} from '../usage/scan-worker/usage-scan-worker-spawn'
+vi.mock('../usage/scan-worker/usage-scan-worker-spawn', () => ({
   scanClaudeUsageFilesViaWorker: vi.fn(),
   scanCodexUsageFilesViaWorker: vi.fn(),
   scanOpenCodeUsageDatabasesViaWorker: vi.fn(),

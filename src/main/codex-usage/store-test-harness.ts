@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, vi } from 'vitest'
 import { createTestUsageStoreHost } from '../usage/usage-store-host-test-fixture'
-import { scanCodexUsageFilesViaWorker } from '../usage/usage-scan-worker-spawn'
+import { scanCodexUsageFilesViaWorker } from '../usage/scan-worker/usage-scan-worker-spawn'
 import { CodexUsageStore } from './store'
 import type { CodexUsagePersistedState } from './types'
 

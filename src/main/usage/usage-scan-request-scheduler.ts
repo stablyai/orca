@@ -6,7 +6,7 @@ import {
   type UsageScanWorkerRequest,
   type UsageScanWorkerRequestBody,
   type UsageScanWorkerResponse
-} from './usage-scan-worker-protocol'
+} from './scan-worker/usage-scan-worker-protocol'
 
 type ScanCall = {
   request: UsageScanWorkerRequest

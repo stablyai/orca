@@ -1,4 +1,4 @@
-import { codexOpenCodeTokenSessions } from '../usage/agent-token-usage'
+import { codexOpenCodeTokenSessions } from '../usage/reporting/token-usage/agent-token-usage'
 import { join } from 'node:path'
 import type {
   OpenCodeUsageBreakdownKind,
@@ -28,8 +28,8 @@ import {
   buildOpenCodeUsageRecentSessions,
   buildOpenCodeUsageSummary
 } from './snapshot-rollups'
-import { UsageProviderStoreLifecycle } from '../usage/usage-provider-store-lifecycle'
-import { splitUsageCacheFileViaWorker } from '../usage/usage-scan-worker-spawn'
+import { UsageProviderStoreLifecycle } from '../usage/provider-lifecycle/usage-provider-store-lifecycle'
+import { splitUsageCacheFileViaWorker } from '../usage/scan-worker/usage-scan-worker-spawn'
 
 export class OpenCodeUsageStore extends UsageProviderStoreLifecycle<
   'processedDatabases',

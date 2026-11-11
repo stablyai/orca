@@ -5,13 +5,13 @@ import {
   UsageScanWorkerClient,
   UsageScanWorkerUnavailableError,
   USAGE_SCAN_NO_PROGRESS_TIMEOUT_MS
-} from './usage-scan-worker-client'
+} from './scan-worker/usage-scan-worker-client'
 import type {
   UsageScanWorkerProviderId,
   UsageScanWorkerRequest,
   UsageScanWorkerScanBody,
   UsageScanWorkerValue
-} from './usage-scan-worker-protocol'
+} from './scan-worker/usage-scan-worker-protocol'
 
 class ScanWorker extends EventEmitter {
   posted: UsageScanWorkerRequest[] = []

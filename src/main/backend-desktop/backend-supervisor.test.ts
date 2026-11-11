@@ -40,7 +40,9 @@ vi.mock('../worker-threads/worker-thread-entry-path', () => ({
 vi.mock('../window/renderer-document-navigation', () => ({
   isRendererDocumentNavigation: () => true
 }))
-vi.mock('../usage/usage-worktree-metadata', () => ({ loadKnownUsageWorktreesByRepo: vi.fn() }))
+vi.mock('../usage/worktree-attribution/usage-worktree-metadata', () => ({
+  loadKnownUsageWorktreesByRepo: vi.fn()
+}))
 vi.mock('../claude-usage/transcript-file-discovery', () => ({
   claudeProfileTranscriptDirs: vi.fn()
 }))

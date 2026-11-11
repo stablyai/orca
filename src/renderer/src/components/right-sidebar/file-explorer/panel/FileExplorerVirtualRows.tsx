@@ -1,7 +1,7 @@
 import React from 'react'
 import type { Virtualizer } from '@tanstack/react-virtual'
 import { dirname } from '@/lib/path'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { GitFileStatus } from '../../../../../../shared/git/status/git-status-types'
 import { FileExplorerRow } from './FileExplorerRow'
 import { InlineInputRow, type InlineInput } from '../mutations/file-explorer-inline-input-row'

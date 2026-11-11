@@ -44,7 +44,12 @@ export async function startOrcad(options: OrcadOptions = {}): Promise<OrcadHandl
   process.env.ORCA_USER_DATA_PATH = userDataPath
   const { readiness, instance, stop } = await startOrcadWithHost(
     userDataPath,
-    (registerCleanup) => startOrcadRuntime(options, registerCleanup),
+    (registerCleanup) =>
+      activateBackendServices({
+        supervised: process.env[ORCA_SERVE_SUPERVISED_ENV] === '1',
+        registerCleanup,
+        activate: (cleanup) => activateOrcadRuntime(options, cleanup)
+      }),
     async () => {
       try {
         runOrcadQuitHandlers()
@@ -58,18 +63,6 @@ export async function startOrcad(options: OrcadOptions = {}): Promise<OrcadHandl
   )
   const version = getAppEnvironment().getVersion()
   return { readiness, managedStop: { version, runtimeId: readiness.runtimeId, instance }, stop }
-}
-
-async function startOrcadRuntime(
-  options: OrcadOptions,
-  registerCleanup: (cleanup: OrcadRuntimeCleanup) => void
-): Promise<Pick<OrcadHandle, 'readiness'>> {
-  // Read before daemon activation consumes the supervised flag.
-  return activateBackendServices({
-    supervised: process.env[ORCA_SERVE_SUPERVISED_ENV] === '1',
-    registerCleanup,
-    activate: (cleanup) => activateOrcadRuntime(options, cleanup)
-  })
 }
 
 async function activateOrcadRuntime(
@@ -233,6 +226,8 @@ async function activateOrcadRuntime(
   paneGridsForShutdown = runtime
 
   accountLaunch?.attachToRuntime(runtime)
+  const { wireGitHubIssueLinkTitleFill } = await import('../github/github-issue-link-title-wiring')
+  registerCleanup(wireGitHubIssueLinkTitleFill(profileStore, runtime))
   const { installOrcadEmulatorBridge } = await import('./orcad-emulator-bridge')
   installOrcadEmulatorBridge(runtime, registerCleanup)
 

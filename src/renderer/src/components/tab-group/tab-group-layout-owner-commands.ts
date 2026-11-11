@@ -1,6 +1,6 @@
 // Main frames/reconnect snapshots draw moves and select them unless selection changed; divider ratios persist on release.
 
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import type { TabSplitDirection } from '@/store/slices/tabs/tabs-slice-contract'
 import { sendLayoutCommandToOwner } from '@/runtime/workspace-layout/commands/layout-owner-command'
 import type { WindowLayoutCommand } from '@/runtime/workspace-layout/commands/layout-apply-send'
@@ -13,7 +13,7 @@ import {
 import { tabSelectionKey } from '@/store/slices/tabs/moved-tab-selection'
 import { layoutFramesFlowing } from '@/runtime/workspace-layout/frames/layout-frame-position'
 import { splitRatioIntentAt } from '../../../../shared/workspace-layout/split-ratio-intents'
-import { serverTabCount } from '@/lib/frame-drawn-desktop-created-tabs'
+import { serverTabCount } from '@/store/workspace-layout/frames/frame-drawn-desktop-created-tabs'
 import { tabOrderAnchor } from '../../../../shared/workspace-layout/tab-order'
 
 export type TabDrop =

@@ -30,6 +30,10 @@ export async function applyClaudeMessageOptions(
 ): Promise<void> {
   throwIfSignalAborted(signal)
   const model = options.model
+  // Only a turn carrying the newest pick reports on it; earlier captured sends run the replaced model.
+  if (model === session.modelPickAwaitingTurn) {
+    delete session.modelPickAwaitingTurn
+  }
   if (model && session.appliedInputOptions.get('model') !== model) {
     await waitForPromiseWithSignal(
       setClaudeStructuredOption(session, { key: 'model', value: model }, timeoutMs),

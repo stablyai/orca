@@ -4,7 +4,7 @@ import { CodexUsageStore } from '../codex-usage/store'
 import { OpenCodeUsageStore } from '../opencode-usage/store'
 import { MuseUsageStore } from '../muse-usage/store'
 import type { UsageStoreHost } from '../usage/usage-store-host'
-import { stopUsageScanWorker } from '../usage/usage-scan-worker-spawn'
+import { stopUsageScanWorker } from '../usage/scan-worker/usage-scan-worker-spawn'
 import type { UsageProviderKey } from '../../shared/backend-service-contract'
 
 const rangeSchema = z.object({

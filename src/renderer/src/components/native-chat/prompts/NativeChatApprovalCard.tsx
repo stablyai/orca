@@ -3,7 +3,7 @@ import { useRef, useState } from 'react'
 import { ChevronDown, ShieldQuestion, X } from 'lucide-react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { approvalDetailPreview } from '../../../../../shared/agent-session/agent-session-approval-detail-preview'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { NativeChatMarkdown } from '../markdown/NativeChatMarkdown'
 import { approvalBlockedPathToShow } from '../../../../../shared/agent-session/agent-session-approval-blocked-path'
@@ -27,16 +27,19 @@ export type NativeChatApprovalCardProps = {
   /** A choice is being delivered: the options wait for its answer. */
   isSubmitting?: boolean
   shouldFocus?: boolean
+  /** Shown when the card has no options: only the terminal can answer it. */
+  onOpenTerminal?: () => void
 }
 
-/** PTY options are literal replies; structured options are journal ids. Style the first option as primary. */
+/** PTY options are literal replies; structured options are journal ids. The first option is primary unless the options are neutral. */
 export function NativeChatApprovalCard({
   approval,
   onChoose,
   onCancel,
   onCollapse,
   isSubmitting = false,
-  shouldFocus = false
+  shouldFocus = false,
+  onOpenTerminal
 }: NativeChatApprovalCardProps): React.JSX.Element {
   const t = useTranslate()
   const cardRef = useRef<HTMLDivElement>(null)
@@ -167,7 +170,7 @@ export function NativeChatApprovalCard({
                   onClick={() => onChoose(opt.send)}
                   className={cn(
                     'rounded-md px-4 py-1.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50',
-                    i === 0
+                    i === 0 && !approval.neutralOptions
                       ? 'bg-primary text-primary-foreground hover:bg-primary/90'
                       : 'border border-border bg-background text-foreground hover:bg-accent hover:text-accent-foreground'
                   )}
@@ -175,6 +178,15 @@ export function NativeChatApprovalCard({
                   {opt.label}
                 </button>
               ))}
+              {approval.options.length === 0 && onOpenTerminal ? (
+                <button
+                  type="button"
+                  onClick={onOpenTerminal}
+                  className="rounded-md bg-primary px-4 py-1.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  {t('components.native-chat.question.openTerminal', 'Answer in terminal')}
+                </button>
+              ) : null}
             </div>
           </div>
         </div>

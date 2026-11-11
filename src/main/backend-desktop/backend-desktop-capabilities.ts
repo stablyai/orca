@@ -1,6 +1,6 @@
 import { agentTokenUsageSchema } from '../../shared/telemetry-agent-token-usage-schema'
 import { claudeProfileTranscriptDirs } from '../claude-usage/transcript-file-discovery'
-import { loadKnownUsageWorktreesByRepo } from '../usage/usage-worktree-metadata'
+import { loadKnownUsageWorktreesByRepo } from '../usage/worktree-attribution/usage-worktree-metadata'
 import { isTelemetryEnabled, track } from '../telemetry/client'
 import type { Store } from '../persistence/loading-store/store'
 

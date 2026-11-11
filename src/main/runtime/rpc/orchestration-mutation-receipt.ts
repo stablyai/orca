@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { isTerminalPromptMutation } from '../../../shared/orchestration/orchestration-rpc-contract'
 import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import type { OrcaRuntimeService } from '../orca-runtime'
-import type { OrcaSessionId } from '../../../shared/orca-session-address'
+import type { OrchestrationEntryCaller } from '../orchestration/addressing/orchestration-caller-identity'
 
 export const EFFECT_FREE_WORKER_DONE_CHECKPOINT = JSON.stringify({
   pending: { effectFree: 'worker_done' }
@@ -15,11 +15,13 @@ export type MutationReplayNudge =
   | { kind: 'federation'; runId?: string }
 
 const CALLER_ORCA_SESSION_ID_KEY = '__orcaCallerOrcaSessionId'
+// A paired Orca's address names its conversation, so one Run's receipt never answers another's.
+const PEER_CALLER_KEY = '__orcaPeerCaller'
 
 export function replayStableCallerParams(
   runtime: OrcaRuntimeService,
   params: unknown,
-  callerOrcaSessionId?: OrcaSessionId,
+  caller?: OrchestrationEntryCaller,
   method?: string
 ): unknown {
   if (!params || typeof params !== 'object' || Array.isArray(params)) {
@@ -27,9 +29,12 @@ export function replayStableCallerParams(
   }
   const source = params as Record<string, unknown>
   // Absent for terminal callers, so their payload hashes are unchanged.
-  const result: Record<string, unknown> = callerOrcaSessionId
-    ? { ...source, [CALLER_ORCA_SESSION_ID_KEY]: callerOrcaSessionId }
-    : { ...source }
+  const result: Record<string, unknown> =
+    caller?.kind === 'peer'
+      ? { ...source, [PEER_CALLER_KEY]: caller.address }
+      : caller?.orcaSessionId
+        ? { ...source, [CALLER_ORCA_SESSION_ID_KEY]: caller.orcaSessionId }
+        : { ...source }
   if (method === 'orchestration.federationImport' && Array.isArray(result.items)) {
     result.items = result.items.map((item: Record<string, unknown>) => {
       const { answerSenderReport: _answer, ...canonical } = item

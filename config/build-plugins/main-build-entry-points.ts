@@ -40,7 +40,7 @@ export const MAIN_BUILD_ENTRY_POINTS: Record<string, string> = {
     'src/main/worker-thread-child-process/worker-thread-child-process-entry.ts'
   ),
   // Usage scans synchronously walk histories/SQLite; keep them off the main loop.
-  'usage-scan-worker-entry': resolve('src/main/usage/usage-scan-worker-entry.ts'),
+  'usage-scan-worker-entry': resolve('src/main/usage/scan-worker/usage-scan-worker-entry.ts'),
   'workspace-space-scan-worker-entry': resolve(
     'src/main/workspaces/space-analysis/workspace-space-scan-worker-entry.ts'
   ),

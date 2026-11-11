@@ -70,7 +70,17 @@ describe('projectGroups IPC validation', () => {
     mockWindow.webContents.send.mockReset()
     resetProjectGroupMocks(reposMocks, { isGitRepo, getGitRepoRoot })
 
-    registerRepoHandlers(mockWindow as never, mockStore as never, {} as never)
+    registerRepoHandlers(
+      mockWindow as never,
+      mockStore as never,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: These IPC cases use only the metadata owner's enqueue method; other runtime handlers are not invoked.
+      {
+        repositoryForkBackfill: {
+          enqueue: vi.fn().mockResolvedValue(undefined),
+          resolve: vi.fn().mockResolvedValue(true)
+        }
+      } as never
+    )
   })
 
   const group = {
@@ -119,7 +129,11 @@ describe('projectGroups IPC validation', () => {
         mode: 'group'
       })
 
-      expect(result).toMatchObject({ importedCount: 0, failedCount: 1 })
+      expect(result).toMatchObject({
+        importedCount: 0,
+        failedCount: 1,
+        projects: [{ errorCode: 'not_in_scan' }]
+      })
       expect(mockStore.addRepo).not.toHaveBeenCalled()
     })
   })
