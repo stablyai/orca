@@ -6,18 +6,18 @@ import type { AppState } from '@/store/types'
 import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import { getIndexedRepoMap } from '@/store/repos/repository-catalog-index'
 import { getLiveAgentStatusByWorktreeId } from '@/lib/workspace/activity/worktree-activity-state'
-import { tabHasLivePty } from '../../../../shared/tab-has-live-pty'
+import { tabHasLivePty } from '../../../../../../shared/tab-has-live-pty'
 import { getWorktreeIdsWithStructuredChat } from '@/components/sidebar/worktree-list/listing/visible-worktree-activity-inputs'
 import {
   getRepoExecutionHostId,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../../../shared/execution-host'
-import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+} from '../../../../../../shared/execution-host'
+import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import {
   isIdleWorkspaceActivity,
   type WorkspaceActivityFacts
-} from '../../../../shared/sidebar-list/workspace-activity-facts'
+} from '../../../../../../shared/sidebar-list/workspace-activity-facts'
 
 /** The window's own activity facts, from the same store slices the sidebar filter reads. */
 export function readWindowWorkspaceActivityFacts(

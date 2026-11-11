@@ -16,7 +16,7 @@ import { activateWorkspaceTabPaletteResult } from './workspace-tab-palette-activ
 import {
   getClientHostedBrowserRowSelection,
   selectClientHostedBrowserRow
-} from '../../../pane-manager/client-hosted-browser-row-state'
+} from '../../../../runtime/browser/client-hosting/client-hosted-browser-row-state'
 
 const initialState = useAppStore.getInitialState()
 afterEach(() => useAppStore.setState(initialState, true))

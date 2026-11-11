@@ -1,5 +1,6 @@
 import { summarizeLatencySamples, type LatencyPercentiles } from './diagnostic-summary'
-import type { EchoObservation, KeystrokeSource } from './echo-instrumentation'
+import type { EchoObservation } from './echo-observation'
+import type { TypingInputSource } from './input-events'
 import {
   appendExactLatencySample,
   appendTypingLatencySample,
@@ -26,12 +27,12 @@ export type InputSourceLatency = {
   outputWritesPerInput: LatencyPercentiles
 }
 
-export type InputSourceBreakdown = Record<KeystrokeSource, InputSourceLatency> & {
+export type InputSourceBreakdown = Record<TypingInputSource, InputSourceLatency> & {
   imeCommitChars: LatencyPercentiles
 }
 
 export type InputSourceTally = {
-  recordInput: (source: KeystrokeSource, text: string) => void
+  recordInput: (source: TypingInputSource, text: string) => void
   addObservation: (observation: EchoObservation) => void
   breakdown: () => InputSourceBreakdown
 }
@@ -60,7 +61,7 @@ function summarizeSource(tally: SourceTally): InputSourceLatency {
 }
 
 export function createInputSourceTally(): InputSourceTally {
-  const bySource: Record<KeystrokeSource, SourceTally> = {
+  const bySource: Record<TypingInputSource, SourceTally> = {
     direct: emptySourceTally(),
     ime: emptySourceTally()
   }
