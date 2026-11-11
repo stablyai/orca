@@ -24,7 +24,10 @@ import {
   cloudWorkspaceActionGroups,
   type CloudWorkspaceAction
 } from '@/components/cloud-workspaces/cloud-workspace-action-groups'
-import type { CloudWorkspace } from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
+import {
+  formatWorkspaceNumber,
+  type CloudWorkspace
+} from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
 import { useCloudWorkspaceView } from './use-cloud-workspace-view'
 import { useCloudPanelActions } from './use-cloud-panel-actions'
 import { useCloudWorkspaceRecord } from './use-cloud-workspace-record'
@@ -194,7 +197,11 @@ export function CloudCopyWorkspaceLinkItem({
   return (
     <DropdownMenuItem onSelect={() => void copyCloudWorkspaceLink(workspace.id)}>
       <Link2 className="size-3.5" />
-      {t('auto.components.cloudWorkspaces.workspaceLinkOption', 'Workspace link')}
+      {workspace.number
+        ? t('auto.components.cloudWorkspaces.linkToNumber', 'Link to {{number}}', {
+            number: formatWorkspaceNumber(workspace.number)
+          })
+        : t('auto.components.cloudWorkspaces.workspaceLinkOption', 'Workspace link')}
     </DropdownMenuItem>
   )
 }
