@@ -13,8 +13,7 @@ function identity(row: SessionSearchFileRow | undefined, failedCommit = false): 
       row.sizeBytes,
       row.byteOffset,
       row.prefixHash,
-      row.dev,
-      row.ino,
+      row.identity,
       row.failCount + Number(failedCommit)
     ]
   )

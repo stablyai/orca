@@ -379,6 +379,41 @@ it('retains title-only work through admission refusal and wakes held-out publica
     await subject.settled()
     expect(title()).toEqual({ title: 'Delivered title' })
     expect(subject.status().phase).toBe('current')
+    const request = SessionSearchWorkerClient.prototype.request
+    let foreignCommit = false
+    const gate = vi
+      .spyOn(SessionSearchWorkerClient.prototype, 'request')
+      .mockImplementation(async function (this: SessionSearchWorkerClient, command) {
+        if (!foreignCommit && command.op === 'finish') {
+          foreignCommit = true
+          harness.write((db) =>
+            db
+              .prepare(
+                "INSERT OR REPLACE INTO meta(key,value) VALUES ('fixture_foreign_commit','1')"
+              )
+              .run()
+          )
+        }
+        return request.call(this, command)
+      })
+    try {
+      await appendFile(
+        index,
+        `${JSON.stringify({ id: CODEX_FIXTURE_SESSION_ID, thread_name: 'Cancelled then retried title' })}\n`
+      )
+      notifySessionSearchFileChange(index)
+      clock.advance(20_000)
+      await subject.settled()
+      expect(foreignCommit).toBe(true)
+      expect(title()).toEqual({ title: 'Delivered title' })
+      clock.advance(20_000)
+      await subject.settled()
+      expect(title()).toEqual({ title: 'Cancelled then retried title' })
+      expect(subject.status().phase).toBe('current')
+    } finally {
+      gate.mockRestore()
+    }
+
     expect(streams.mock.calls.filter(([readPath]) => readPath === path)).toHaveLength(0)
     expect(slices.mock.calls.filter(([readPath]) => readPath === path)).toHaveLength(0)
   } finally {

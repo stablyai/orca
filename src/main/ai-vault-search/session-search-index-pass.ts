@@ -120,10 +120,7 @@ export async function runSessionSearchIndexPass(
       const failed = store.fileRow(path)
       await queue.acknowledge(
         work,
-        (!!failed &&
-          failed.state === 'failed' &&
-          failed.failCount < SESSION_SEARCH_FAILURES_BEFORE_HELD_OUT) ||
-          !!published?.cancelled?.()
+        failed?.state !== 'failed' || failed.failCount < SESSION_SEARCH_FAILURES_BEFORE_HELD_OUT
       )
       consumed++
       continue
