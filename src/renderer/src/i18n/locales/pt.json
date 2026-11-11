@@ -19599,7 +19599,6 @@
           "signout": {
             "confirm": {
               "title": "Sair do Orca?",
-              "description": "Os artefatos e o Orca Relay ficarão indisponíveis até você entrar novamente. Seus projetos e worktrees locais não serão afetados.",
               "cancel": "Cancelar",
               "action": "Sair"
             }

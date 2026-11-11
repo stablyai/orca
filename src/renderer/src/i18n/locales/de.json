@@ -18413,7 +18413,6 @@
           "signout": {
             "confirm": {
               "title": "Von Orca abmelden?",
-              "description": "Artefakte und Orca Relay sind bis zur erneuten Anmeldung nicht verfügbar. Lokale Projekte und Worktrees sind davon nicht betroffen.",
               "cancel": "Abbrechen",
               "action": "Abmelden"
             }

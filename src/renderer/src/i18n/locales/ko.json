@@ -17691,7 +17691,6 @@
           "signout": {
             "confirm": {
               "title": "Orca에서 로그아웃할까요?",
-              "description": "이 기기의 Orca에서 로그아웃됩니다. 로컬 프로젝트와 워크트리에는 영향을 주지 않습니다.",
               "cancel": "취소",
               "action": "로그아웃"
             }
