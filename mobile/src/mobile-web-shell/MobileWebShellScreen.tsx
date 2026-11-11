@@ -37,6 +37,7 @@ import { useShellPageStorageRefresh } from './use-shell-page-storage-refresh'
 import { usePageHostSnapshot } from './use-page-host-snapshot'
 import { useReportedHostAreaServing } from './host-area-serving'
 import { isHostRouteOf } from './page-route-policy'
+import { isHomeRoute } from '../navigation/home-agents-route'
 import { nativeStackReturn } from './native-stack-return'
 import { useResponsiveLayout } from '../layout/responsive-layout'
 import { storageReadParamsSchema, type BridgeNativeVerb } from './bridge/bridge-native-verbs'
@@ -183,8 +184,8 @@ export function MobileWebShellScreen({
       })
       return
     }
-    // Host exits preserve notice params and replace cold deep links at either width.
-    if (isHostRouteOf(href, hostId)) {
+    // Host exits preserve notice params and replace cold deep links at either width; Home takes its params on the way back.
+    if (isHostRouteOf(href, hostId) || isHomeRoute(href)) {
       router.dismissTo(href)
       return
     }

@@ -6,7 +6,12 @@ import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
 import type { ConnectionState } from '../transport/connection/connection-state'
 import { agentDotState, agentRowTimeAt, type AgentDotState } from '../worktree/agent-row-display'
 import { flattenAgentRowLineage, type AgentRowNode } from '../worktree/agent-row-lineage'
-import type { HomeAgentEntry, HostWorktreeInfo } from '../worktree/home-worktree-info'
+import {
+  homeAgentEntries,
+  type HomeAgentEntry,
+  type HomeWorktreeSummary,
+  type HostWorktreeInfo
+} from '../worktree/home-worktree-info'
 import { agentListTitle } from './agent-list-row-text'
 
 export type AgentStatusGroup = 'needs-you' | 'working' | 'done' | 'idle'
@@ -179,6 +184,27 @@ export function countAgentsNeedingYouByHost(
     counts[row.hostId] = (counts[row.hostId] ?? 0) + 1
   }
   return counts
+}
+
+/** One desktop's agents needing the user, from its own list rows: the count Home's Agents tab shows for it. */
+export function countHostAgentsNeedingYou(
+  hostId: string,
+  connState: ConnectionState,
+  worktrees: readonly Pick<
+    HomeWorktreeSummary,
+    'worktreeId' | 'displayName' | 'repo' | 'branch' | 'agents' | 'isArchived'
+  >[],
+  now: number
+): number {
+  // Archived workspaces are hidden, as Home's read hides them.
+  const agents = homeAgentEntries(worktrees.filter((worktree) => worktree.isArchived !== true))
+  const input: AgentListInput = {
+    hosts: [{ id: hostId }],
+    hostStates: { [hostId]: connState },
+    worktreeInfo: { [hostId]: { hostId, totalWorktrees: 0, activeCount: 0, agents } },
+    now
+  }
+  return summarizeAgentListHosts(input)[0]?.needsYou ?? 0
 }
 
 export type AgentListHostSummary = Readonly<{

@@ -43,11 +43,14 @@ export function MobileHomeAgentsTab(props: {
   data: MobileHomeData
   bottomInset: number
   handlers: AgentListRowHandlers
+  /** The desktop the list is filtered to; Home holds it so a desktop's Agents button can set it. */
+  pickedHost: string | null
+  onPickHost: (hostId: string | null) => void
 }) {
   const t = useMobileTranslation()
   useMobileColorScheme()
   const { isWideLayout, contentMaxWidth } = useResponsiveLayout()
-  const { data } = props
+  const { data, pickedHost } = props
   const hosts = data.sortedHosts
   const stored = useSerializedStoredState(
     DEFAULT_AGENT_LIST_VIEW,
@@ -59,7 +62,6 @@ export function MobileHomeAgentsTab(props: {
   const view = stored.value
   const [searchOpen, setSearchOpen] = useState(false)
   const [query, setQuery] = useState('')
-  const [pickedHost, setPickedHost] = useState<string | null>(null)
   const [menu, setMenu] = useState<'closed' | 'options' | 'group-by'>('closed')
   const optionsRef = useRef<View>(null)
   // An unpaired desktop's filter falls back to every desktop.
@@ -264,7 +266,7 @@ export function MobileHomeAgentsTab(props: {
             hosts={hosts}
             selected={hostFilter}
             summaries={hostSummaries}
-            onSelect={setPickedHost}
+            onSelect={props.onPickHost}
           />
         </View>
       ) : null}

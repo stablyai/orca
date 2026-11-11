@@ -42,7 +42,12 @@ export type HostWorktreeInfo = {
   countsProvenAt?: number
 }
 
-export function homeAgentEntries(worktrees: readonly HomeWorktreeSummary[]): HomeAgentEntry[] {
+export function homeAgentEntries(
+  worktrees: readonly Pick<
+    HomeWorktreeSummary,
+    'worktreeId' | 'displayName' | 'repo' | 'branch' | 'agents'
+  >[]
+): HomeAgentEntry[] {
   return worktrees.flatMap((worktree) =>
     Array.isArray(worktree.agents)
       ? worktree.agents.map((agent) => ({

@@ -1,5 +1,5 @@
-import { useFocusEffect } from 'expo-router'
-import { useCallback, useState } from 'react'
+import { useFocusEffect, useLocalSearchParams } from 'expo-router'
+import { useCallback, useEffect, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Alert, BackHandler, View } from 'react-native'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
@@ -29,6 +29,8 @@ import type { HostCatalogEntry, HostProfile } from '../host-catalog/host-profile
 import { useOpenMobileHostEdit } from '../host-screen/use-open-mobile-host-edit'
 import { mobileConnectionPathLabel } from '../transport/connection/mobile-connection-path-label'
 import { newWorkspaceOverlayHref } from '../new-workspace/new-workspace-overlay-route'
+import { HOME_AGENTS_PARAM } from '../navigation/home-agents-route'
+import { firstParam } from '../navigation/route-param-reader'
 import { useMobileHomeData } from './use-mobile-home-data'
 import { useHomeSparePage } from './use-home-spare-page'
 import { HOME_TABS, type HomeTabId } from './tabs/home-tabs'
@@ -63,6 +65,7 @@ export function MobileHomeScreen() {
   // A tab mounts on first visit and then stays mounted, keeping its scroll and data.
   const [visitedTabs, setVisitedTabs] = useState<ReadonlySet<HomeTabId>>(() => new Set(['feed']))
   const [automationsHostId, setAutomationsHostId] = useState<string | null>(null)
+  const [agentsHostFilter, setAgentsHostFilter] = useState<string | null>(null)
   const [tabBarHeight, setTabBarHeight] = useState(0)
   const agentActions = useAgentListRowActions(
     tabBarHeight,
@@ -91,6 +94,18 @@ export function MobileHomeScreen() {
 
   // Stable handlers keep the memoized Feed sections and desktop rows from redrawing on every Home update.
   const { router, setHostCatalog } = data
+
+  // A desktop's Agents button opens this tab filtered to it; clearing the param lets the next tap open it again.
+  const params = useLocalSearchParams<{ [HOME_AGENTS_PARAM]?: string | string[] }>()
+  const agentsParam = firstParam(params[HOME_AGENTS_PARAM])
+  useEffect(() => {
+    if (agentsParam === '') {
+      return
+    }
+    setAgentsHostFilter(agentsParam)
+    selectTab('agents')
+    router.setParams({ [HOME_AGENTS_PARAM]: '' })
+  }, [agentsParam, router, selectTab])
   const seeAllAgents = useCallback(() => selectTab('agents'), [selectTab])
 
   const openHost = useCallback(
@@ -197,6 +212,8 @@ export function MobileHomeScreen() {
                     data={data}
                     bottomInset={contentBottom}
                     handlers={agentActions.handlers}
+                    pickedHost={agentsHostFilter}
+                    onPickHost={setAgentsHostFilter}
                   />
                 ) : id === 'usage' ? (
                   <MobileHomeUsageTab

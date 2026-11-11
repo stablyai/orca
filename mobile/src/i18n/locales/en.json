@@ -700,7 +700,10 @@
       "accounts": "Accounts",
       "tasks": "Tasks",
       "moreActions": "More actions",
-      "automations": "Automations"
+      "automations": "Automations",
+      "agents": "Agents",
+      "agentsNeedYou_one": "Agents, {{count}} needs you",
+      "agentsNeedYou_other": "Agents, {{count}} need you"
     },
     "hostScreenOverlays": {
       "deleteWorktree": "Delete Worktree",
