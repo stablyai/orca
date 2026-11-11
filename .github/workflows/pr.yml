@@ -928,7 +928,18 @@ jobs:
         background: true
         run: |
           bash .github/scripts/prepare-ubuntu-apt.sh
-          pnpm exec playwright-core install --with-deps webkit
+          if [ ! -f .github/scripts/use-ubuntu-apt-mirror.sh ]; then
+            pnpm exec playwright-core install --with-deps webkit
+            exit 0
+          fi
+          echo 'Installing WebKit and its dependencies through the primary route.'
+          if timeout --kill-after=10s 240 pnpm exec playwright-core install --with-deps webkit; then
+            exit 0
+          fi
+          echo 'WebKit installation did not complete; retrying with the Ubuntu mirror fallback.'
+          bash .github/scripts/use-ubuntu-apt-mirror.sh
+          bash .github/scripts/recover-ubuntu-dpkg.sh || true
+          timeout --kill-after=10s 360 pnpm exec playwright-core install --with-deps webkit
 
       # The entry lives in mobile/ so one React resolves; without this every RN import is nothing.
       - uses: ./.github/actions/install-mobile-dependencies
