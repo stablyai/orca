@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import type { OrcaCloudAgentsStatus } from '../../../../shared/orca-cloud-agents/orca-cloud-agents-wire'
 import type { OrcaCloudAgentAccountsState } from './orca-cloud-agent-accounts-store'
 import {
+  CLOUD_RUNNING_LIVE_READ_MS,
+  cloudRunningLiveReadDue,
   clearCloudRunningSignout,
   cloudRunningStrip,
   resetCloudRunningSignoutForTest,
@@ -155,5 +157,17 @@ describe('D13: only workspaces that run the agent on the person’s own account'
     expect(strip(accounts({ state: 'revoked' }), RUNNING, 1_000, 'tab:y', true)?.phase).toBe(
       'expired'
     )
+  })
+})
+
+describe('running-pane live read (RA-11f)', () => {
+  it('re-reads about every 30 s, so a revoke reaches the strip within ~30 s', () => {
+    expect(CLOUD_RUNNING_LIVE_READ_MS).toBe(30_000)
+    // A read from any caller within the last ~29 s counts; the poll skips.
+    expect(cloudRunningLiveReadDue(100_000, 110_000)).toBe(false)
+    expect(cloudRunningLiveReadDue(100_000, 128_999)).toBe(false)
+    // A poll old: the poll forces a fresh read (no 30 s cache skip at the boundary).
+    expect(cloudRunningLiveReadDue(100_000, 129_000)).toBe(true)
+    expect(cloudRunningLiveReadDue(100_000, 160_000)).toBe(true)
   })
 })

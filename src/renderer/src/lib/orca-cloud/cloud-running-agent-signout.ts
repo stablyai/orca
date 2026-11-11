@@ -12,6 +12,8 @@ import { installWindowVisibilityInterval } from '@/lib/window-visibility-interva
 import { orcaCloudAgentCoverage } from './orca-cloud-agent-accounts-model'
 import {
   ensureFreshOrcaCloudAgentAccounts,
+  orcaCloudAgentAccountsLoadedAt,
+  reloadOrcaCloudAgentAccounts,
   type OrcaCloudAgentAccountsState
 } from './orca-cloud-agent-accounts-store'
 
@@ -136,16 +138,29 @@ export function cloudRunningStrip(args: {
 
 let liveReaders = 0
 let stopInterval: (() => void) | null = null
-const LIVE_READ_MS = 60_000
+/** How soon a revoke shows on a running pane: the server pushes nothing, so the desktop re-reads. */
+export const CLOUD_RUNNING_LIVE_READ_MS = 30_000
+
+/** The poll forces a read once the last one (from any caller) is about a poll old. */
+export function cloudRunningLiveReadDue(loadedAt: number, now: number): boolean {
+  return now - loadedAt >= CLOUD_RUNNING_LIVE_READ_MS - 1_000
+}
 
 function readNow(): void {
   void ensureFreshOrcaCloudAgentAccounts().catch(() => undefined)
 }
 
+function pollNow(): void {
+  if (cloudRunningLiveReadDue(orcaCloudAgentAccountsLoadedAt(), Date.now())) {
+    void reloadOrcaCloudAgentAccounts().catch(() => undefined)
+  }
+}
+
 /**
- * While any running Orca Cloud agent pane is mounted, keep the account read fresh: on window focus
- * and at most once a minute while the window is visible (the read itself is cached for 30 s). The
- * desktop gets no push for a revoke, so this read is how the strip learns. One timer per window.
+ * While any running Orca Cloud agent pane is mounted, keep the account read fresh: on window focus,
+ * and every ~30 s while the window is visible (paused while hidden, slower behind another app), so
+ * a revoke flips the strip within about 30 s. The desktop gets no push for a revoke, so this read is
+ * how the strip learns. One timer per window.
  */
 export function useCloudRunningAccountReads(active: boolean): void {
   useEffect(() => {
@@ -156,8 +171,8 @@ export function useCloudRunningAccountReads(active: boolean): void {
     if (liveReaders === 1) {
       window.addEventListener('focus', readNow)
       stopInterval = installWindowVisibilityInterval({
-        run: readNow,
-        intervalMs: LIVE_READ_MS,
+        run: pollNow,
+        intervalMs: CLOUD_RUNNING_LIVE_READ_MS,
         slowWhileUnfocused: true
       })
       readNow()
