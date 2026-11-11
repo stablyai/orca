@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { openInMemoryRelayDatabase, type RelayDatabase } from './database/database.js'
-import { type EdgeAdmin, type EdgeAdminCallOptions, type EdgeAssignBody, type EdgeAssignResult } from './edge-admin-client.js'
+import type { EdgeAdmin, EdgeAdminCallOptions, EdgeAssignBody, EdgeAssignResult } from './edge-admin-client.js'
 import { EDGE_FENCE_RETRY_BASE_MS, retryPendingFences } from './edge-relay-fence.js'
 import { EDGE_CELL_ID, EdgeAssignments, type EdgeRelayConfig } from './edge-relay.js'
 
