@@ -145,6 +145,7 @@ export function transitionSessionSearchAuthority(
     }
   }
   if (command.kind === 'authority-open') {
+    catalog.inventory.open(command.scope, command.root)
     putAuthorityValue(catalog, `${command.scope}:authority-root`, 'root', command.root)
     return {}
   }

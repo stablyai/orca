@@ -1,5 +1,6 @@
 import type SyncDatabase from '../sqlite/sync-database'
 import type { SessionSearchCatalogPublications } from './session-search-catalog-publications'
+import { sessionSearchCandidateFacts } from './session-search-candidate-facts'
 
 export function selectSessionSearchCandidates(
   db: SyncDatabase,
@@ -10,11 +11,33 @@ export function selectSessionSearchCandidates(
   publications: SessionSearchCatalogPublications
 ): number {
   if (group.startsWith('antigravity:')) {
-    db.prepare(`UPDATE temp.search_candidates SET candidate = json_set(candidate,'$.file.aliasMtimeMs',
-        (SELECT max(mtime) FROM temp.search_candidates WHERE group_key = ?)) WHERE group_key = ?`).run(
-      group,
-      group
+    const mtime = Number(
+      db.prepare('SELECT max(mtime) AS n FROM temp.search_candidates WHERE group_key=?').get(group)
+        ?.n
     )
+    const facts = sessionSearchCandidateFacts(db)
+    const members = db
+      .prepare(
+        'SELECT key,fact_id,fact_revision FROM temp.search_candidates WHERE group_key=? ORDER BY key'
+      )
+      .iterate(group)
+    for (const member of members) {
+      const previous = { id: Number(member.fact_id), revision: Number(member.fact_revision) }
+      const candidate = facts.get(previous)
+      if (candidate.file.aliasMtimeMs === mtime) {
+        continue
+      }
+      const reference = facts.acquire({
+        ...candidate,
+        file: { ...candidate.file, aliasMtimeMs: mtime }
+      })
+      db.prepare('UPDATE temp.search_candidates SET fact_id=?,fact_revision=? WHERE key=?').run(
+        reference.id,
+        reference.revision,
+        String(member.key)
+      )
+      facts.reclaim(previous)
+    }
   }
   const hasSqlite =
     db

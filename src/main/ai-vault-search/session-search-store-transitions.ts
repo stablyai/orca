@@ -169,7 +169,6 @@ export async function transitionSessionSearchWork(
   queue: SessionSearchWorkCatalog,
   command: SessionSearchWorkCommand
 ): Promise<SessionSearchWorkResult> {
-  queue.attach(store)
   let work
   let works
   let eligibleThrough
@@ -197,7 +196,7 @@ export async function transitionSessionSearchWork(
       break
     case 'next':
       eligibleThrough = command.eligibleThrough ?? queue.eligibleThrough
-      works = queue.next(store.connection, eligibleThrough)
+      works = queue.next(eligibleThrough)
       break
     case 'stats':
       break

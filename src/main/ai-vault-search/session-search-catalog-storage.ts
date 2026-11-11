@@ -1,8 +1,10 @@
 import { initializeSessionSearchStorage } from './session-search-storage-bootstrap'
 import type SyncDatabase from '../sqlite/sync-database'
 import type { SessionSearchCatalogRow } from './session-search-catalog'
+import { sessionSearchInventoryStorage } from './session-search-inventory-storage'
 
 export class SessionSearchCatalogStorage {
+  readonly inventory: ReturnType<typeof sessionSearchInventoryStorage>
   constructor(protected readonly db: SyncDatabase) {
     initializeSessionSearchStorage(db)
     db.exec(`CREATE TEMP TABLE search_catalog (
@@ -29,12 +31,20 @@ export class SessionSearchCatalogStorage {
       CREATE TEMP TRIGGER search_catalog_readied AFTER UPDATE OF ready ON search_catalog BEGIN
         UPDATE search_catalog_counts SET runnable=runnable+NEW.ready-OLD.ready WHERE scope=NEW.scope;
       END;`)
+    this.inventory = sessionSearchInventoryStorage(db)
   }
 
-  protected read(where: string, values: string[]): SessionSearchCatalogRow[] {
+  protected read(scope: string, key: string): SessionSearchCatalogRow[] {
+    const owner = this.inventory.owner(scope)
+    if (owner) {
+      const row = this.inventory.get(owner, key)
+      return row ? [row] : []
+    }
     return this.db
-      .prepare(`SELECT key,value,parent,group_key,rank,ready,tie FROM temp.search_catalog ${where}`)
-      .all(...values)
+      .prepare(
+        'SELECT key,value,parent,group_key,rank,ready,tie FROM temp.search_catalog WHERE scope=? AND key=?'
+      )
+      .all(scope, key)
       .map((row) => this.decode(row))
   }
 

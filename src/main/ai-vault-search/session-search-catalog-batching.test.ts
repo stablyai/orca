@@ -26,6 +26,14 @@ it.each([40, 400])(
     const harness = await openSessionSearchIndexerHarness('ss-catalog-pages')
     const db = new SyncDatabase('')
     const catalog = new SessionSearchCatalog(db)
+    let transactions = 0
+    const exec = db.exec.bind(db)
+    const transactionTraffic = vi.spyOn(db, 'exec').mockImplementation((sql) => {
+      if (sql.startsWith('SAVEPOINT ')) {
+        transactions++
+      }
+      return exec(sql)
+    })
     let envelopes = 0,
       localRows = 0
     let invalidEnvelope:
@@ -77,6 +85,8 @@ it.each([40, 400])(
       // A single directory has fixed phase transitions; each page needs staging, preparation and acceptance, independent of its member count.
       const pages = Math.ceil(population / 256)
       expect(envelopes).toBeLessThanOrEqual(40 + 12 * pages)
+      // A bounded command can accept an input receipt and an owner page inside its outer transaction.
+      expect(transactions).toBeLessThanOrEqual(3 * (40 + 12 * pages))
       // Required comparisons and accepted observations visit each input only a fixed number of times locally.
       expect(localRows).toBeLessThanOrEqual(30 * population + 100)
       expect(invalidEnvelope).toBeUndefined()
@@ -84,6 +94,7 @@ it.each([40, 400])(
     const reset = () => {
       envelopes = 0
       localRows = 0
+      transactions = 0
       invalidEnvelope = undefined
       local.mockClear()
     }
@@ -95,11 +106,6 @@ it.each([40, 400])(
       await inventory.begin(false, args)
       expect(await drain()).toHaveLength(population)
       check()
-      const residual = () =>
-        db
-          .prepare('SELECT count(*) AS n FROM temp.search_catalog WHERE scope IN (?,?)')
-          .get('physical:batch-control:authority', 'physical:batch-control:authority-garbage')
-      expect(residual()).toEqual({ n: 0 })
       reset()
       await inventory.reconcile()
       expect(await drain()).toEqual([])
@@ -108,7 +114,6 @@ it.each([40, 400])(
       await inventory.invalidate(root)
       expect(await drain()).toEqual([])
       check()
-      expect(residual()).toEqual({ n: 0 })
       const metadata = join(harness.root, 'titles.jsonl')
       const observer = createSessionSearchJsonlDependency(
         metadata,
@@ -143,6 +148,7 @@ it.each([40, 400])(
       expect(await values()).toEqual([])
       expect(envelopes).toBe(0)
     } finally {
+      transactionTraffic.mockRestore()
       local.mockRestore()
       db.close()
       await harness.cleanup()
@@ -469,7 +475,7 @@ it.each([40, 400])(
           file: {
             path: join(prefix, `${String(population - index).padStart(4, '0')}.jsonl`),
             mtimeMs: 10000 - Math.floor(index / 4),
-            modifiedAt: '1970-01-01T00:00:10.000Z',
+            modifiedAt: new Date(10000 - Math.floor(index / 4)).toISOString(),
             sizeBytes: 20
           }
         }
@@ -487,6 +493,28 @@ it.each([40, 400])(
       queue.beginPass()
       const first = await queue.next()
       expect(first?.candidate.file.path).toBe(candidates[0].file.path)
+      await store.candidates({
+        kind: 'batch',
+        rows: [
+          {
+            candidate: {
+              ...candidates[0],
+              file: {
+                ...candidates[0].file,
+                mtimeMs: 20000,
+                modifiedAt: '1970-01-01T00:00:20.000Z'
+              }
+            },
+            root: prefix,
+            group: candidates[0].file.path,
+            alias: candidates[0].file.path,
+            sqlite: false,
+            preference: 0,
+            sourceOrder: 0
+          }
+        ]
+      })
+      expect((await queue.get(candidates[0].file.path))?.candidate).toEqual(candidates[0])
       queue.beginPass()
       expect(await queue.next()).toEqual(first)
       await queue.acknowledge(first!, true)

@@ -65,8 +65,8 @@ export function transitionSessionSearchInventory(
     return {}
   }
   const token = (path: string) => [
-    get(files, path)?.value ?? '',
-    get(`${command.scope}:dirty`, path)?.value ?? '',
+    decode<SessionSearchObservedFacts>(get(files, path))?.revision ?? 0,
+    decode<{ revision: number }>(get(`${command.scope}:dirty`, path))?.revision ?? 0,
     authority.authority(path)?.self ?? 0
   ]
   let filesDelta = 0,

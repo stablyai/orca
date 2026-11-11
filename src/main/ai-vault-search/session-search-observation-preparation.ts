@@ -59,14 +59,15 @@ export function prepareSessionSearchObservations(
         input.dirtyRevision !== undefined &&
         authorityValue<{ revision: number }>(dirty)?.revision !== input.dirtyRevision
       const previousToken = authorityValue<string>(get(observing, input.path))
-      const previous: [string, string, number] | undefined = previousToken
+      const previous: [number, number, number] | undefined = previousToken
         ? JSON.parse(previousToken)
         : undefined
       const reuse =
         input.dirtyRevision !== undefined &&
         previous &&
-        previous[0] === (get(files, input.path)?.value ?? '') &&
-        previous[1] === (dirty?.value ?? '') &&
+        previous[0] ===
+          (authorityValue<SessionSearchObservedFacts>(get(files, input.path))?.revision ?? 0) &&
+        previous[1] === (authorityValue<{ revision: number }>(dirty)?.revision ?? 0) &&
         authority.authority(input.path)?.self === previous[2]
       const revision = reuse ? previous[2] : catalog.nextRevision()
       const attempt =
@@ -86,8 +87,9 @@ export function prepareSessionSearchObservations(
         accepted: authorityValue<SessionSearchObservedFacts>(accepted),
         token: attempt
           ? JSON.stringify([
-              accepted?.value ?? '',
-              get(`${command.scope}:dirty`, input.path)?.value ?? '',
+              authorityValue<SessionSearchObservedFacts>(accepted)?.revision ?? 0,
+              authorityValue<{ revision: number }>(get(`${command.scope}:dirty`, input.path))
+                ?.revision ?? 0,
               revision
             ])
           : ''

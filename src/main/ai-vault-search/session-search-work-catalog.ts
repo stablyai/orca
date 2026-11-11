@@ -1,11 +1,13 @@
-import { SessionSearchCatalogClient } from './session-search-catalog-client'
 import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
 import { fileIdentity } from './storage/session-search-file-cursor'
 import { sessionSearchReadDecision } from './indexing/session-search-read-decision'
 import type SyncDatabase from '../sqlite/sync-database'
-import { sessionSearchCatalogPageRows } from './session-search-catalog-query'
 import type { SessionSearchCatalog } from './session-search-catalog'
 import { SESSION_SEARCH_CATALOG_PAGE_BYTES } from './session-search-catalog'
+import {
+  sessionSearchCandidateFacts,
+  type SessionSearchFactReference
+} from './session-search-candidate-facts'
 import type {
   SessionSearchFileRow,
   SessionSearchIndexStore
@@ -17,32 +19,23 @@ export type SessionSearchWork = {
   version: number
   metadata: boolean
 }
-type Queued = {
-  work: SessionSearchWork
-  lane: string
-  order: number
-  due: boolean
-  rank: number
-  deferred: boolean
-}
 
-/** A unique path's obligation lives in the writer even after it leaves the recent list. */
+/** Work and selection own independent immutable snapshots, including undiscovered foreground input. */
 export class SessionSearchWorkCatalog {
-  private catalog: SessionSearchCatalogClient<Queued> | undefined
   private version = 0
   private order = 0
   private chooseChanged = true
   private count = 0
   private due = 0
   revision = 0
+  constructor(
+    private readonly db: SyncDatabase,
+    private readonly catalog: SessionSearchCatalog
+  ) {
+    sessionSearchCandidateFacts(db)
+  }
   get eligibleThrough(): number {
     return this.order
-  }
-
-  attach(store: SessionSearchIndexStore): void {
-    this.catalog ??= new SessionSearchCatalogClient('read-work', (command) =>
-      store.catalog(command)
-    )
   }
   get size(): number {
     return this.count
@@ -50,7 +43,23 @@ export class SessionSearchWorkCatalog {
   get left(): number {
     return this.count - this.due
   }
-
+  private accept<T>(run: () => T): T {
+    return this.db.isTransaction ? run() : this.catalog.transaction('search_read_work_accept', run)
+  }
+  private entry(path: string) {
+    return this.db.prepare('SELECT * FROM temp.search_read_work WHERE path=?').get(path)
+  }
+  private reference(row: Record<string, unknown>): SessionSearchFactReference {
+    return { id: Number(row.fact_id), revision: Number(row.fact_revision) }
+  }
+  private project(row: Record<string, unknown>): SessionSearchWork {
+    return {
+      candidate: sessionSearchCandidateFacts(this.db).get(this.reference(row)),
+      version: Number(row.version),
+      force: row.force_read === 1,
+      metadata: row.metadata === 1
+    }
+  }
   async enqueue(
     candidate: SessionFileCandidate,
     store: SessionSearchIndexStore,
@@ -58,7 +67,6 @@ export class SessionSearchWorkCatalog {
     recent = true,
     metadata = false
   ): Promise<void> {
-    this.attach(store)
     const path = candidate.file.path
     const row = store.fileRow(path)
     const decision = sessionSearchReadDecision({
@@ -70,47 +78,56 @@ export class SessionSearchWorkCatalog {
     if (!force && !metadata && decision === 'skip') {
       return
     }
-    const existing = await this.catalog!.get(path)
-    const value: Queued = {
-      work: {
+    this.accept(() => {
+      const existing = this.entry(path)
+      const facts = sessionSearchCandidateFacts(this.db)
+      const previous = existing && this.reference(existing)
+      const selected = facts.selected(path, candidate.agent)
+      const reference = facts.acquire(
         candidate,
-        force: force || (existing?.work.force ?? false),
-        version: ++this.version,
-        metadata: metadata || (existing?.work.metadata ?? false)
-      },
-      lane: existing?.lane ?? (recent ? 'changed' : 'backlog'),
-      order: existing?.order ?? ++this.order,
-      due: row?.state === 'due',
-      deferred: false,
-      rank: -(candidate.file.aliasMtimeMs ?? candidate.file.mtimeMs)
-    }
-    await this.put(path, value)
-    this.revision++
-    this.count += existing ? 0 : 1
-    this.due += Number(value.due) - Number(existing?.due ?? false)
+        [previous, selected].filter((fact) => fact !== undefined)
+      )
+      const due = row?.state === 'due'
+      this.db
+        .prepare(`INSERT INTO temp.search_read_work
+        (path,fact_id,fact_revision,version,force_read,metadata,lane,rank,ordering,due,deferred)
+        VALUES (?,?,?,?,?,?,?,?,?,?,0) ON CONFLICT(path) DO UPDATE SET
+        fact_id=excluded.fact_id,fact_revision=excluded.fact_revision,version=excluded.version,
+        force_read=excluded.force_read,metadata=excluded.metadata,rank=excluded.rank,due=excluded.due,deferred=0`)
+        .run(
+          path,
+          reference.id,
+          reference.revision,
+          ++this.version,
+          Number(force || existing?.force_read === 1),
+          Number(metadata || existing?.metadata === 1),
+          String(existing?.lane ?? (recent ? 'changed' : 'backlog')),
+          -(candidate.file.aliasMtimeMs ?? candidate.file.mtimeMs),
+          Number(existing?.ordering ?? ++this.order),
+          Number(due)
+        )
+      this.revision++
+      this.count += Number(!existing)
+      this.due += Number(due) - Number(existing?.due === 1)
+      facts.reclaim(previous)
+    })
   }
-
   async hasPublicationDebt(path: string): Promise<boolean> {
     const work = await this.get(path)
     return !!work && (work.force || work.metadata)
   }
-
-  next(db: SyncDatabase, eligibleThrough = this.order): SessionSearchWork[] {
-    const lanes: ReturnType<typeof sessionSearchCatalogPageRows>[] = []
+  next(eligibleThrough = this.order): SessionSearchWork[] {
+    const lanes = (['changed', 'backlog'] as const).map((lane) =>
+      this.db
+        .prepare(`SELECT * FROM temp.search_read_work
+      WHERE lane='${lane}' AND (deferred=0 OR ordering<=?) ORDER BY rank,ordering,path LIMIT 256`)
+        .iterate(eligibleThrough)
+    )
     const works: SessionSearchWork[] = []
-    let bytes = 1024
-    let selected = this.chooseChanged ? 0 : 1
+    let bytes = 1024,
+      selected = this.chooseChanged ? 0 : 1
     const exhausted = [false, false]
     try {
-      for (const lane of ['changed', 'backlog'] as const) {
-        lanes.push(
-          sessionSearchCatalogPageRows(
-            db,
-            { kind: 'page', scope: 'read-work', orderRank: true, eligibleThrough, limit: 256 },
-            lane
-          )
-        )
-      }
       while (works.length < 256) {
         if (exhausted[selected]) {
           selected = 1 - selected
@@ -123,8 +140,7 @@ export class SessionSearchWorkCatalog {
           exhausted[selected] = true
           continue
         }
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this queue encoded its own catalog record.
-        const work = (JSON.parse(String(row.value.value)) as Queued).work
+        const work = this.project(row.value)
         const size = JSON.stringify(work).length * 2 + 64
         if (works.length && bytes + size > SESSION_SEARCH_CATALOG_PAGE_BYTES) {
           break
@@ -143,85 +159,70 @@ export class SessionSearchWorkCatalog {
     }
     return works
   }
-
   async get(path: string): Promise<SessionSearchWork | undefined> {
-    return (await this.catalog?.get(path))?.work
+    const row = this.entry(path)
+    return row && this.project(row)
   }
-
   async acknowledge(work: SessionSearchWork, retry: boolean): Promise<void> {
-    const path = work.candidate.file.path
-    const entry = await this.catalog!.get(path)
-    if (entry?.work.version !== work.version) {
-      return
-    }
-    this.chooseChanged = !this.chooseChanged
-    if (retry) {
-      await this.put(path, {
-        ...entry,
-        work,
-        lane: 'backlog',
-        order: ++this.order,
-        due: false,
-        deferred: true,
-        rank: this.order
-      })
-      this.due -= Number(entry.due)
-    } else {
-      await this.remove(path, false)
-    }
+    this.accept(() => {
+      const path = work.candidate.file.path
+      const entry = this.entry(path)
+      if (!entry || Number(entry.version) !== work.version) {
+        return
+      }
+      this.project(entry)
+      this.chooseChanged = !this.chooseChanged
+      if (retry) {
+        const order = ++this.order
+        this.db
+          .prepare(
+            `UPDATE temp.search_read_work SET force_read=?,metadata=?,lane='backlog',ordering=?,rank=?,due=0,deferred=1 WHERE path=? AND version=?`
+          )
+          .run(Number(work.force), Number(work.metadata), order, order, path, work.version)
+        this.due -= Number(entry.due === 1)
+      } else {
+        this.removeNow(path, false)
+      }
+    })
   }
-
   async remove(path: string, invalidate = true): Promise<void> {
-    const entry = await this.catalog?.get(path)
+    this.accept(() => this.removeNow(path, invalidate))
+  }
+  private removeNow(path: string, invalidate: boolean): void {
+    const entry = this.entry(path)
     if (!entry) {
       return
     }
-    await this.catalog!.delete(path)
+    this.db.prepare('DELETE FROM temp.search_read_work WHERE path=?').run(path)
     this.revision += Number(invalidate)
     this.count--
-    this.due -= Number(entry.due)
+    this.due -= Number(entry.due === 1)
+    sessionSearchCandidateFacts(this.db).reclaim(this.reference(entry))
   }
-
   rollbackPoint(): () => void {
     const count = this.count,
       due = this.due,
-      revision = this.revision
+      revision = this.revision,
+      chooseChanged = this.chooseChanged
     return () => {
       this.count = count
       this.due = due
       this.revision = revision
+      this.chooseChanged = chooseChanged
     }
   }
-
-  removeAccepted(catalog: SessionSearchCatalog, path: string): void {
-    const row = catalog.execute({ kind: 'get', scope: 'read-work', key: path }).rows?.[0]
-    if (!row) {
-      return
-    }
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the read queue encoded this connection-private row.
-    const entry = JSON.parse(row.value) as Queued
-    catalog.execute({ kind: 'delete', scope: 'read-work', key: path })
-    this.revision++
-    this.count--
-    this.due -= Number(entry.due)
+  removeAccepted(path: string): void {
+    this.accept(() => this.removeNow(path, true))
   }
-
   async rowChanged(path: string, row: SessionSearchFileRow | undefined): Promise<void> {
-    const entry = await this.catalog?.get(path)
-    if (!entry || entry.due === (row?.state === 'due')) {
-      return
-    }
-    const due = row?.state === 'due'
-    await this.put(path, { ...entry, due })
-    this.due += Number(due) - Number(entry.due)
-  }
-
-  private put(path: string, value: Queued): Promise<void> {
-    return this.catalog!.put(path, value, {
-      group: value.lane,
-      rank: value.rank,
-      tie: value.order,
-      ready: Number(!value.deferred)
+    this.accept(() => {
+      const entry = this.entry(path)
+      const due = row?.state === 'due'
+      if (!entry || (entry.due === 1) === due) {
+        return
+      }
+      this.db.prepare('UPDATE temp.search_read_work SET due=? WHERE path=?').run(Number(due), path)
+      this.due += Number(due) - Number(entry.due === 1)
     })
   }
 }

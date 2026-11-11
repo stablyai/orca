@@ -143,8 +143,10 @@ export class SessionSearchStore {
     return this.candidateCatalog?.hasPending ?? false
   }
   get catalogCandidates(): SessionSearchCatalogCandidates {
-    this.candidateCatalog ??= new SessionSearchCatalogCandidates(this.db, (path) =>
-      this.removeFile(path)
+    this.candidateCatalog ??= new SessionSearchCatalogCandidates(
+      this.db,
+      (path) => this.removeFile(path),
+      (run) => this.catalogStorage.transaction('search_candidate_accept', run)
     )
     return this.candidateCatalog
   }
@@ -152,7 +154,7 @@ export class SessionSearchStore {
     return transitionSessionSearchCandidates(this, command)
   }
   work(command: SessionSearchWorkCommand): Promise<SessionSearchWorkResult> {
-    this.workCatalog ??= new SessionSearchWorkCatalog()
+    this.workCatalog ??= new SessionSearchWorkCatalog(this.db, this.catalogStorage)
     return transitionSessionSearchWork(this, this.workCatalog, command)
   }
   onSourceWake(previous: SessionSearchFileRow, row: SessionSearchFileRow): void {
@@ -171,7 +173,7 @@ export class SessionSearchStore {
   }
 
   removeReadWork(path: string): void {
-    this.workCatalog?.removeAccepted(this.catalogStorage, path)
+    this.workCatalog?.removeAccepted(path)
   }
 
   validRemoval(path: string, receipt: SessionSearchRemovalReceipt): boolean {

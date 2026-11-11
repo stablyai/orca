@@ -1,3 +1,4 @@
+import { initializeSessionSearchCandidates } from './session-search-candidate-schema'
 import { selectSessionSearchCandidates } from './session-search-catalog-selection'
 import { SessionSearchCatalogPublications } from './session-search-catalog-publications'
 import type SyncDatabase from '../sqlite/sync-database'
@@ -5,6 +6,8 @@ import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
 import { sessionSearchCandidateAdmission } from './session-search-candidate-admission'
 import { readSessionSearchCandidateRows } from './session-search-candidate-rows'
 import { boundedSessionSearchPage } from './session-search-catalog-pages'
+import { putSessionSearchCandidate } from './session-search-candidate-entry'
+import { sessionSearchCandidateFacts } from './session-search-candidate-facts'
 
 import type {
   SessionSearchCatalogCandidate,
@@ -25,27 +28,13 @@ export class SessionSearchCatalogCandidates {
   private readonly publications: SessionSearchCatalogPublications
   constructor(
     private readonly db: SyncDatabase,
-    removeFile: (path: string) => boolean
+    removeFile: (path: string) => boolean,
+    private readonly accept?: (
+      run: () => SessionSearchCandidateResult
+    ) => SessionSearchCandidateResult
   ) {
     this.publications = new SessionSearchCatalogPublications(db, removeFile)
-    db.exec(`CREATE TEMP TABLE search_candidates (
-      key TEXT PRIMARY KEY, path TEXT NOT NULL, agent TEXT NOT NULL,
-      root TEXT NOT NULL, group_key TEXT NOT NULL, alias_key TEXT NOT NULL,
-      candidate TEXT NOT NULL, sqlite_source INTEGER NOT NULL,
-      preference INTEGER NOT NULL, source_order INTEGER NOT NULL, mtime REAL NOT NULL,
-      source_path TEXT NOT NULL,
-      selected INTEGER NOT NULL DEFAULT 0, required INTEGER NOT NULL DEFAULT 0,
-      force_read INTEGER NOT NULL DEFAULT 0, metadata INTEGER NOT NULL DEFAULT 0,
-      revision INTEGER NOT NULL DEFAULT 0, changed INTEGER NOT NULL DEFAULT 0
-    ) WITHOUT ROWID;
-    CREATE INDEX temp.search_candidate_path ON search_candidates(path,key);
-    CREATE INDEX temp.search_candidate_group ON search_candidates(group_key,key);
-    CREATE INDEX temp.search_candidate_alias ON search_candidates(group_key,alias_key,preference,key);
-    CREATE INDEX temp.search_candidate_rank ON search_candidates(group_key,sqlite_source,mtime DESC,source_order,key);
-    CREATE INDEX temp.search_candidate_changes ON search_candidates(changed,mtime DESC,key);
-    CREATE INDEX temp.search_candidate_source ON search_candidates(root,agent,group_key);
-    CREATE INDEX temp.search_candidate_seed ON search_candidates(root,agent,changed,mtime DESC,key);
-    `)
+    initializeSessionSearchCandidates(db)
   }
 
   rollbackPoint(): () => void {
@@ -60,6 +49,16 @@ export class SessionSearchCatalogCandidates {
     return this.pending > 0 || this.publications.hasPending
   }
   execute(command: SessionSearchCandidateCommand): SessionSearchCandidateResult {
+    if (
+      this.accept &&
+      !this.db.isTransaction &&
+      ['put', 'batch', 'remove', 'rerank'].includes(command.kind)
+    ) {
+      return this.accept(() => this.apply(command))
+    }
+    return this.apply(command)
+  }
+  private apply(command: SessionSearchCandidateCommand): SessionSearchCandidateResult {
     switch (command.kind) {
       case 'publication-step':
       case 'admit':
@@ -189,7 +188,10 @@ export class SessionSearchCatalogCandidates {
                   .prepare('SELECT changed FROM temp.search_candidates WHERE key = ?')
                   .get(row.key)?.changed ?? 0
               )
+              const facts = sessionSearchCandidateFacts(this.db)
+              const previous = facts.entry(row.key)
               this.db.prepare('DELETE FROM temp.search_candidates WHERE key = ?').run(row.key)
+              facts.reclaim(previous)
               this.select(row.group, row.alias, row.sqlite)
             }
           }
@@ -212,46 +214,9 @@ export class SessionSearchCatalogCandidates {
   }
 
   private put(row: SessionSearchCatalogCandidate): void {
-    const key = `${row.group}\0${row.candidate.agent}:${row.candidate.file.path}`
-    const previous = this.read('WHERE key = ?', [key])[0]
-    if (
-      previous &&
-      JSON.stringify(previous.candidate) === JSON.stringify(row.candidate) &&
-      previous.root === row.root &&
-      previous.alias === row.alias &&
-      previous.sqlite === row.sqlite &&
-      previous.preference === row.preference &&
-      previous.sourceOrder === row.sourceOrder &&
-      previous.sourcePath === (row.sourcePath ?? '')
-    ) {
-      return
-    }
-    this.db
-      .prepare(`INSERT INTO temp.search_candidates
-      (key,path,agent,root,group_key,alias_key,candidate,sqlite_source,preference,source_order,mtime,required,source_path)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(key) DO UPDATE SET
-      root=excluded.root,group_key=excluded.group_key,alias_key=excluded.alias_key,
-      candidate=excluded.candidate,sqlite_source=excluded.sqlite_source,
-      preference=excluded.preference,source_order=excluded.source_order,mtime=excluded.mtime,source_path=excluded.source_path`)
-      .run(
-        key,
-        row.candidate.file.path,
-        row.candidate.agent,
-        row.root,
-        row.group,
-        row.alias,
-        JSON.stringify(row.candidate),
-        Number(row.sqlite),
-        row.preference,
-        row.sourceOrder,
-        row.candidate.file.mtimeMs,
-        Number(previous?.required ?? false),
-        row.sourcePath ?? ''
-      )
-    this.select(row.group, row.alias, row.sqlite)
-    if (previous && (previous.group !== row.group || previous.alias !== row.alias)) {
-      this.select(previous.group, previous.alias, previous.sqlite)
-    }
+    putSessionSearchCandidate(this.db, row, (group, alias, sqlite) =>
+      this.select(group, alias, sqlite)
+    )
   }
 
   private select(group: string, alias: string, sqlite: boolean): void {

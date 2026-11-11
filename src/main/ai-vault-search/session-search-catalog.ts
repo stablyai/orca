@@ -2,6 +2,10 @@ import { sessionSearchCatalogPageRows } from './session-search-catalog-query'
 import type SyncDatabase from '../sqlite/sync-database'
 import { transitionSessionSearchCatalog } from './session-search-catalog-transition'
 import { SessionSearchCatalogStorage } from './session-search-catalog-storage'
+import {
+  releaseSessionSearchCatalog,
+  releaseSessionSearchInventory
+} from './session-search-catalog-release'
 
 export const SESSION_SEARCH_CATALOG_PAGE_ROWS = 256
 export const SESSION_SEARCH_CATALOG_PAGE_BYTES = 256 * 1024
@@ -113,7 +117,9 @@ export class SessionSearchCatalog extends SessionSearchCatalogStorage {
       throw new Error('Session catalog request exceeds page budget')
     }
     this.touched.clear()
-    const result = this.execute(command)
+    const result = ['get', 'get-page', 'page', 'count', 'frontier-snapshot'].includes(command.kind)
+      ? this.execute(command)
+      : this.transaction('search_catalog_accept', () => this.execute(command))
     return {
       ...result,
       scopeCounts: [...this.touched].map((scope) => {
@@ -134,6 +140,14 @@ export class SessionSearchCatalog extends SessionSearchCatalogStorage {
     }
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the exhaustive specialized dispatcher returned every non-base operation above.
     const base = command as SessionSearchCatalogBaseCommand
+    if (
+      (base.kind === 'release' ||
+        base.kind === 'release-prefix' ||
+        base.kind === 'release-parent') &&
+      this.inventory.owner(base.scope)
+    ) {
+      return releaseSessionSearchInventory(this, base)
+    }
     switch (base.kind) {
       case 'release-parent':
         this.db
@@ -145,7 +159,7 @@ export class SessionSearchCatalog extends SessionSearchCatalogStorage {
         let bytes = 1024,
           processed = 0
         for (const key of base.keys) {
-          const row = this.read('WHERE scope=? AND key=?', [base.scope, key])[0]
+          const row = this.read(base.scope, key)[0]
           const size = row ? this.bytes(row) : 0
           if (rows.length && bytes + size > SESSION_SEARCH_CATALOG_PAGE_BYTES) {
             break
@@ -160,7 +174,7 @@ export class SessionSearchCatalog extends SessionSearchCatalogStorage {
       }
       case 'get':
         return {
-          rows: this.read('WHERE scope = ? AND key = ?', [base.scope, base.key])
+          rows: this.read(base.scope, base.key)
         }
       case 'put': {
         if (base.rows.length > SESSION_SEARCH_CATALOG_PAGE_ROWS) {
@@ -173,7 +187,21 @@ export class SessionSearchCatalog extends SessionSearchCatalogStorage {
         if (base.rows.length > 1 && bytes > SESSION_SEARCH_CATALOG_PAGE_BYTES) {
           throw new Error('Session catalog batch exceeds byte budget')
         }
-        this.transaction('search_catalog_batch', () => {
+        const owner = this.inventory.owner(base.scope)
+        if (owner) {
+          const put = () => {
+            for (const row of base.rows) {
+              this.inventory.put(owner, row)
+            }
+          }
+          if (this.db.isTransaction) {
+            put()
+          } else {
+            this.transaction('search_inventory_page', put)
+          }
+          return {}
+        }
+        const put = () => {
           const insert = this.db.prepare(`INSERT INTO temp.search_catalog
             (scope,key,value,parent,group_key,rank,ready,tie) VALUES (?,?,?,?,?,?,?,?)
             ON CONFLICT(scope,key) DO UPDATE SET value=excluded.value,
@@ -191,7 +219,12 @@ export class SessionSearchCatalog extends SessionSearchCatalogStorage {
               row.tie ?? 0
             )
           }
-        })
+        }
+        if (this.db.isTransaction) {
+          put()
+        } else {
+          this.transaction('search_catalog_batch', put)
+        }
         return {}
       }
       case 'delete-page':
@@ -200,6 +233,10 @@ export class SessionSearchCatalog extends SessionSearchCatalogStorage {
         }
         return {}
       case 'delete':
+        if (this.inventory.owner(base.scope)) {
+          this.inventory.delete(this.inventory.owner(base.scope)!, base.key)
+          return {}
+        }
         this.db
           .prepare('DELETE FROM temp.search_catalog WHERE scope = ? AND key = ?')
           .run(base.scope, base.key)
@@ -208,21 +245,10 @@ export class SessionSearchCatalog extends SessionSearchCatalogStorage {
         this.db.prepare('DELETE FROM temp.search_catalog WHERE scope = ?').run(base.scope)
         return {}
       case 'release-scopes-page': {
-        const rows = this.db
-          .prepare(
-            'SELECT scope,key FROM temp.search_catalog WHERE scope=? OR (scope>=? AND scope<?) ORDER BY scope,key LIMIT 256'
-          )
-          .all(base.scope, `${base.scope}:`, `${base.scope}:\uffff`)
-        for (const row of rows) {
-          this.execute({ kind: 'delete', scope: String(row.scope), key: String(row.key) })
-        }
-        return { count: rows.length }
+        return releaseSessionSearchCatalog(this, base)
       }
       case 'release-scopes':
-        this.db
-          .prepare('DELETE FROM temp.search_catalog WHERE scope = ? OR (scope >= ? AND scope < ?)')
-          .run(base.scope, `${base.scope}:`, `${base.scope}:\uffff`)
-        return {}
+        return releaseSessionSearchCatalog(this, base)
       case 'release-prefix': {
         let count = 0
         this.db
