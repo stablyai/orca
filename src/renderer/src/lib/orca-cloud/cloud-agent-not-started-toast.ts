@@ -180,6 +180,27 @@ export function showCloudAgentNotStartedToast(
     Object.values(state.pendingWorktreeCreations ?? {}).some(
       (creation) => creation.status === 'creating' && creation.request.name === workspaceName
     )
+  // DS-p: the prompt is about a workspace that exists. It waits until the sandbox is up (the create
+  // moved past provisioning, or finished); a refused create (e.g. the team's running limit) never
+  // shows it, only its own error.
+  const creationFor = (state: ReturnType<typeof useAppStore.getState>) =>
+    Object.values(state.pendingWorktreeCreations ?? {}).find(
+      (creation) => creation.request.name === workspaceName
+    )
+  let sandboxUp = false
+  let sawCreation = false
+  const settle = (state: ReturnType<typeof useAppStore.getState>): 'up' | 'refused' | 'waiting' => {
+    const creation = creationFor(state)
+    if (creation) {
+      sawCreation = true
+      if (creation.status === 'error') {
+        return 'refused'
+      }
+      return creation.phase === 'fetching' || creation.phase === 'creating' ? 'up' : 'waiting'
+    }
+    // Gone from the pending list without an error: the workspace was created.
+    return sawCreation ? 'up' : 'waiting'
+  }
   let switchedAway = false
   const render = (): void => {
     const signIn = cloudAgentSignInView(agent, readOrcaCloudAgentAccounts().setups[agent])
@@ -225,18 +246,40 @@ export function showCloudAgentNotStartedToast(
     })
   }
   const update = (): void => {
+    if (!sandboxUp) {
+      return
+    }
     if (onlyWhenAway && !switchedAway) {
       toast.dismiss(TOAST_ID)
       return
     }
     render()
   }
-  update()
+  const checkCreation = (state: ReturnType<typeof useAppStore.getState>): boolean => {
+    if (sandboxUp) {
+      return true
+    }
+    const result = settle(state)
+    if (result === 'refused') {
+      toast.dismiss(TOAST_ID)
+      teardown?.()
+      return false
+    }
+    if (result === 'up') {
+      sandboxUp = true
+      update()
+    }
+    return true
+  }
+  checkCreation(useAppStore.getState())
 
   // The create activates the new workspace (first change); any later change means the user moved.
   let createdOn: string | null | undefined
   let starting = isStarting(useAppStore.getState())
   const stopWorkspace = useAppStore.subscribe((state, previous) => {
+    if (!checkCreation(state)) {
+      return
+    }
     const nowStarting = isStarting(state)
     if (nowStarting !== starting) {
       starting = nowStarting
