@@ -512,6 +512,7 @@ describe('remote browser authoritative page state', () => {
               if (typeof key === 'string' && /^\d+$/.test(key)) {
                 visits += 1
               }
+              // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy must forward array access unchanged while counting visits.
               return Reflect.get(target, key, receiver)
             }
           })
@@ -563,6 +564,7 @@ describe('remote browser authoritative page state', () => {
           if (typeof key === 'string' && /^\d+$/.test(key)) {
             visits += 1
           }
+          // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy must forward array access unchanged while counting visits.
           return Reflect.get(target, key, receiver)
         }
       })
