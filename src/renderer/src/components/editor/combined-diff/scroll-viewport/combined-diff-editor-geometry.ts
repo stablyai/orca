@@ -1,5 +1,6 @@
 import type { editor } from 'monaco-editor'
 import type { DiffSemanticPoint, DiffViewportItem } from './combined-diff-viewport-owner'
+import type { DiffNavigationCommand } from './combined-diff-viewport-anchor'
 
 export type CombinedEditorGeometry = {
   readonly item: DiffViewportItem
@@ -83,6 +84,13 @@ export function invalidateCombinedEditorGeometry(editor: editor.ICodeEditor): vo
   }
 }
 
+export function releaseCombinedEditorNavigation(editor: editor.ICodeEditor): void {
+  const geometry = bindings.get(editor)
+  if (geometry) {
+    geometry.item.owner.releaseItemNavigation(geometry.item)
+  }
+}
+
 export function scrollCombinedEditorBy(editor: editor.ICodeEditor, delta: number): boolean {
   const geometry = bindings.get(editor)
   if (!geometry) {
@@ -98,6 +106,7 @@ export function revealCombinedCommentZone(args: {
   node: HTMLElement
   controls: () => readonly HTMLElement[]
   focus?: () => void
+  command?: DiffNavigationCommand
 }): boolean {
   const geometry = bindings.get(args.editor)
   if (!geometry) {
@@ -106,7 +115,9 @@ export function revealCombinedCommentZone(args: {
   geometry.item.owner.reveal(
     geometry.item,
     () => geometry.zonePoint(args.id, args.node, args.controls),
-    args.focus
+    args.focus,
+    undefined,
+    args.command
   )
   return true
 }

@@ -173,6 +173,16 @@ describe('bulk clear diff comments', () => {
     })
   })
 
+  it('retires a removed note request without consuming a request owned by another note', async () => {
+    const store = createTestStore()
+    seed(store, [makeComment({ id: 'c1' }), makeComment({ id: 'c2' })])
+    store.getState().setScrollToDiffCommentId('c1')
+    await store.getState().deleteDiffComment(capturedOwner(store, WT), 'c2')
+    expect(store.getState().scrollToDiffCommentId).toBe('c1')
+    await store.getState().clearDiffComments(capturedOwner(store, WT))
+    expect(store.getState().scrollToDiffCommentId).toBeNull()
+  })
+
   it('does not clobber a later comment array identity when rollback runs', async () => {
     const store = createTestStore()
     const comments = [makeComment({ id: 'c1' })]

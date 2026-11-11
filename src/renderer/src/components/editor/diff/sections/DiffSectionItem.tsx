@@ -1,4 +1,5 @@
 import { NO_RESOURCE_EVIDENCE } from '@/lib/workspace/ownership/workspace-copy-owner'
+import { consumeDiffCommentScrollCommand } from '../../../diff-comments/diff-comment-scroll-command'
 import { useDiffCommentView } from '../../../diff-comments/use-diff-comment-owner'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { CombinedDiffEditorMount } from '../../combined-diff/scroll-viewport/CombinedDiffEditor'
@@ -59,7 +60,6 @@ export function DiffSectionItem({
   const deleteDiffComment = useAppStore((s) => s.deleteDiffComment)
   const updateDiffComment = useAppStore((s) => s.updateDiffComment)
   const scrollToDiffCommentId = useAppStore((s) => s.scrollToDiffCommentId)
-  const setScrollToDiffCommentId = useAppStore((s) => s.setScrollToDiffCommentId)
   const diffComments = useMemo(
     () => (allDiffComments ?? []).filter((c) => c.filePath === section.path && isDiffComment(c)),
     [allDiffComments, section.path]
@@ -143,7 +143,7 @@ export function DiffSectionItem({
           commentOwner ? updateDiffComment(commentOwner, id, body) : Promise.resolve(false)
       : undefined,
     pendingScrollCommentId: pendingScrollForThisSection,
-    onPendingScrollConsumed: () => setScrollToDiffCommentId(null)
+    onPendingScrollConsumed: consumeDiffCommentScrollCommand
   })
 
   useEffect(() => {

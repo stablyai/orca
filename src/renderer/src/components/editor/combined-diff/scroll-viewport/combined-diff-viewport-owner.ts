@@ -157,7 +157,7 @@ export class CombinedDiffViewportOwner {
   }
 
   retireItem(item: DiffViewportItem): void {
-    this.cancelItemNavigation(item)
+    this.releaseItemNavigation(item)
     this.geometry.forget(item)
   }
   private focusChanged(): void {
@@ -215,19 +215,14 @@ export class CombinedDiffViewportOwner {
     this.cancelNavigation()
     this.anchor.preserve(point, displacement)
   }
-  reveal(
-    item: DiffViewportItem,
-    resolve: () => DiffSemanticPoint | null,
-    focus?: () => void,
-    point?: DiffSemanticPoint
-  ): void {
-    this.anchor.reveal(item, resolve, focus, point)
+  reveal(...args: Parameters<CombinedDiffViewportAnchor['reveal']>): void {
+    this.anchor.reveal(...args)
   }
   cancelNavigation(): void {
     this.anchor.cancelNavigation()
   }
-  cancelItemNavigation(item: DiffViewportItem): void {
-    this.anchor.cancelItemNavigation(item)
+  releaseItemNavigation(item: DiffViewportItem): void {
+    this.anchor.releaseItemNavigation(item)
   }
 
   private reconcile(resetSlack = false): void {

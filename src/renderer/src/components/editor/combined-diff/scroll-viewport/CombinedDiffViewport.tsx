@@ -1,4 +1,4 @@
-import { observeCombinedDiffRowChrome } from './combined-diff-row-chrome'
+import { observeCombinedDiffRowContent } from './combined-diff-row-chrome'
 import {
   createContext,
   useContext,
@@ -59,28 +59,12 @@ function DiffViewportRow({
   children: ReactNode
 }): React.JSX.Element {
   const ref = useRef<HTMLDivElement>(null)
-  useLayoutEffect(
-    () => observeCombinedDiffRowChrome(item, ref.current?.firstElementChild ?? null),
-    [item]
-  )
   useLayoutEffect(() => {
     const node = ref.current!
     item.owner.setNode(item, node)
-    const observer = new ResizeObserver(() => {
-      if (item.binding || node.querySelector('[data-combined-diff-native]')) {
-        return
-      }
-      const content = node.firstElementChild
-      if (content instanceof HTMLElement) {
-        item.owner.measure(item, content.offsetHeight)
-      }
-    })
-    const content = node.firstElementChild
-    if (content) {
-      observer.observe(content)
-    }
+    const stopContent = observeCombinedDiffRowContent(item, node)
     return () => {
-      observer.disconnect()
+      stopContent()
       item.owner.setNode(item, null)
     }
   }, [item])

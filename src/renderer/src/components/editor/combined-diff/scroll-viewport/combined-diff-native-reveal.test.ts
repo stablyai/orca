@@ -319,6 +319,53 @@ describe('combined native reveal integration', () => {
     }
   })
 
+  it.each([
+    { contentWidth: 760, split: true, expectedTop: 1019 },
+    { contentWidth: 0, split: true, expectedTop: 1000 },
+    { contentWidth: 5, split: false, expectedTop: 1000 }
+  ])(
+    'preserves original deletion text with applied content layout $contentWidth / $split',
+    async ({ contentWidth, split, expectedTop }) => {
+      const fixture = await createNativeBindingFixture()
+      fixture.setSideBySide(split)
+      const model = fixture.original.getModel()!
+      const layout = fixture.original.getLayoutInfo()
+      vi.spyOn(fixture.original, 'getLayoutInfo').mockReturnValue({
+        ...layout,
+        width: contentWidth === 0 ? 40 : 800,
+        contentWidth
+      })
+      vi.spyOn(fixture.modified, 'getPositionAtVerticalOffset').mockReturnValue({
+        lineNumber: 1,
+        column: 1
+      })
+      try {
+        fixture.owner.input(1000)
+        model.pushEditOperations(
+          null,
+          [
+            {
+              range: { startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 1 },
+              text: 'inserted\n'
+            }
+          ],
+          () => null
+        )
+        fixture.owner.invalidate(fixture.item)
+        await nativeCommit()
+        expect(fixture.owner.getScrollTop()).toBe(expectedTop)
+        if (split && contentWidth > 0) {
+          expect(
+            28 + fixture.original.getTopForPosition(54, 1) - fixture.original.getScrollTop()
+          ).toBe(16)
+        }
+      } finally {
+        vi.restoreAllMocks()
+        fixture.dispose()
+      }
+    }
+  )
+
   it('lets an explicit reveal supersede input queued while the viewport was detached', async () => {
     const fixture = await createNativeBindingFixture()
     const host = document.createElement('div')

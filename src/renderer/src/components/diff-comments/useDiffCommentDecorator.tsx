@@ -8,6 +8,7 @@ import type { editor as monacoEditor } from 'monaco-editor'
 import { createRoot, type Root } from 'react-dom/client'
 import {
   invalidateCombinedEditorGeometry,
+  releaseCombinedEditorNavigation,
   isCombinedEditorBindingCurrent,
   onCombinedEditorUnbind
 } from '../editor/combined-diff/scroll-viewport/combined-diff-editor-geometry'
@@ -35,6 +36,7 @@ import {
 } from './diff-comment-view-zone-entry'
 import type { DiffCommentLineRange, DiffCommentLineTarget } from './diff-comment-line-range'
 import { useDiffCommentDraftZone, type DiffCommentDraft } from './diff-comment-draft-zone'
+import type { DiffCommentScrollCommand } from './diff-comment-scroll-command'
 
 export type { DiffCommentDraft }
 
@@ -68,7 +70,7 @@ type DecoratorArgs = {
   formatCommentPrompt?: (comment: DecoratedDiffComment) => string
   // Pending scroll-to-note id from the sidebar; decorator reveals the line and acks so the same id can be re-requested later.
   pendingScrollCommentId?: string | null
-  onPendingScrollConsumed?: () => void
+  onPendingScrollConsumed?: (id: string) => void
 }
 
 export function useDiffCommentDecorator({
@@ -117,7 +119,7 @@ export function useDiffCommentDecorator({
   // Stash the diff-zones effect's scrollToZone closure so the request-effect can invoke the latest version.
   const scrollToZoneRef = useRef<((commentId: string) => void) | null>(null)
   const scrollToZoneFrameRef = useRef<number | null>(null)
-  const combinedScrollRequestRef = useRef<object | null>(null)
+  const combinedScrollRequestRef = useRef<DiffCommentScrollCommand | null>(null)
 
   // Read current inline callbacks without tearing down zones on every parent render.
   const onDeleteCommentRef = useRef(onDeleteComment)
@@ -247,6 +249,7 @@ export function useDiffCommentDecorator({
     zonesRef.current = zones
 
     return onCombinedEditorUnbind(editor, () => {
+      releaseCombinedEditorNavigation(editor)
       // Clear zones synchronously; defer root unmounts until after React 19’s commit to avoid unmount-while-rendering warnings.
       const rootsToUnmount = Array.from(zones.values(), (z) => {
         z.lifetime.abort()
@@ -272,6 +275,7 @@ export function useDiffCommentDecorator({
         })
       }
       cancelScrollToZoneFrame()
+      combinedScrollRequestRef.current?.dispose()
       pendingScrollRef.current = null
       combinedScrollRequestRef.current = null
       scrollToZoneRef.current = null

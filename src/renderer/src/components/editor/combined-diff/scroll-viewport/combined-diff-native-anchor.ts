@@ -45,9 +45,22 @@ export class CombinedDiffNativeAnchor {
     if (top >= this.item.owner.root.clientHeight || top + item.renderedHeight <= 0) {
       return null
     }
-    const pane = this.context.editor.getModifiedEditor()
+    const root = this.context.editor.getContainerDomNode().firstElementChild
+    return (
+      this.capturePane(this.context.editor.getModifiedEditor(), edge, previous) ??
+      (root?.classList.contains('side-by-side')
+        ? this.capturePane(this.context.editor.getOriginalEditor(), edge, previous)
+        : null)
+    )
+  }
+
+  private capturePane(
+    pane: editor.ICodeEditor,
+    edge: number,
+    previous?: DiffSemanticPoint
+  ): DiffSemanticPoint | null {
     const model = pane.getModel()
-    if (!model) {
+    if (!model || pane.getLayoutInfo().contentWidth <= 0) {
       return null
     }
     const usable = this.usableInterval(pane)

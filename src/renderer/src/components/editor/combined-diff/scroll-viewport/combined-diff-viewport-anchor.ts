@@ -13,6 +13,13 @@ export type DiffSemanticPoint = {
   dispose(): void
 }
 type CommittedPoint = { point: DiffSemanticPoint; displacement: number }
+export type DiffNavigationCommand = {
+  readonly key: string
+  isCurrent(): boolean
+  release(): void
+  cancel(): void
+  dispose(): void
+}
 type AnchorContext = {
   invalidate(): void
   getIndex(): CombinedDiffExtentIndex
@@ -32,10 +39,11 @@ export class CombinedDiffViewportAnchor {
   private committed: CommittedPoint | null = null
   private readingDirty = false
   private pending: {
-    item: DiffViewportItem
-    resolve: () => DiffSemanticPoint | null
+    item?: DiffViewportItem
+    resolve?: () => DiffSemanticPoint | null
     focus?: () => void
     point?: DiffSemanticPoint
+    command?: DiffNavigationCommand
   } | null = null
   private imported: { anchor: DiffReadingAnchor | null; fallback: number } | null = null
   constructor(private readonly context: AnchorContext) {}
@@ -80,27 +88,53 @@ export class CombinedDiffViewportAnchor {
     item: DiffViewportItem,
     resolve: () => DiffSemanticPoint | null,
     focus?: () => void,
-    point?: DiffSemanticPoint
+    point?: DiffSemanticPoint,
+    command?: DiffNavigationCommand
   ): void {
-    this.cancelNavigation()
-    this.pending = { item, resolve, focus, point }
+    const previous = this.pending?.command
+    if (command && previous?.key === command.key && previous.isCurrent() && command.isCurrent()) {
+      this.releasePending(false)
+    } else {
+      this.cancelNavigation()
+    }
+    this.pending = { item, resolve, focus, point, command }
     this.context.invalidate()
   }
 
   cancelNavigation(): void {
-    this.pending?.point?.dispose()
-    this.pending = null
     this.imported = null
+    this.releasePending(true)
   }
-  cancelItemNavigation(item: DiffViewportItem): void {
+  releaseItemNavigation(item: DiffViewportItem): void {
     if (this.pending?.item === item) {
-      this.pending.point?.dispose()
-      this.pending = null
+      const command = this.pending.command
+      this.releasePending(false, Boolean(command))
+    }
+  }
+
+  private releasePending(cancel: boolean, retainCommand = false): void {
+    const pending = this.pending
+    this.pending = retainCommand && pending?.command ? { command: pending.command } : null
+    if (pending?.point === this.committed?.point && pending?.point) {
+      this.clearPoint()
+    } else {
+      pending?.point?.dispose()
+    }
+    pending?.command?.release()
+    if (!retainCommand) {
+      if (cancel) {
+        pending?.command?.cancel()
+      } else {
+        pending?.command?.dispose()
+      }
     }
   }
 
   reconcile(): (() => void) | undefined {
     let navigation: typeof this.pending = null
+    if (this.pending?.command && !this.pending.command.isCurrent()) {
+      this.releasePending(false)
+    }
     if (this.imported && !this.applyImport()) {
       return
     }
@@ -110,16 +144,17 @@ export class CombinedDiffViewportAnchor {
     const pending = this.pending
     if (
       pending &&
+      pending.item &&
       !pending.item.retired &&
       pending.item.binding &&
       pending.item.binding.readHeight() !== null
     ) {
-      const point = pending.point ?? pending.resolve()
+      const point = pending.point ?? pending.resolve?.()
       if (point) {
         pending.point = point
       }
       if (point?.isValid && !point.isValid()) {
-        this.cancelItemNavigation(pending.item)
+        this.releaseItemNavigation(pending.item)
       } else if (point) {
         const projected = point.project()
         if (projected !== null) {
@@ -262,7 +297,7 @@ export class CombinedDiffViewportAnchor {
     this.readingDirty = false
   }
   dispose(): void {
-    this.cancelNavigation()
+    this.releasePending(false)
     this.clearPoint()
     clearTimeout(this.directionTimer)
   }

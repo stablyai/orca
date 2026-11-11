@@ -282,7 +282,7 @@ export class CombinedDiffNativeBinding implements DiffViewportBinding {
       return
     }
     this.template.editor.stopHiddenRegionDrag()
-    this.item.owner.cancelItemNavigation(this.item)
+    this.item.owner.releaseItemNavigation(this.item)
     this.record.viewState = this.template.editor.saveViewState()
     for (const dispose of this.onUnbind) {
       dispose()

@@ -169,7 +169,12 @@ export async function createNativeBindingFixture(
   }
   const original = pane(true)
   const modified = pane(false)
+  const diffRoot = document.createElement('div')
+  const nativeRoot = document.createElement('div')
+  nativeRoot.className = 'monaco-diff-editor side-by-side'
+  diffRoot.append(nativeRoot)
   const rawDiff = {
+    getContainerDomNode: () => diffRoot,
     updateOptions: () => {},
     setModel: () => {},
     restoreViewState: () => {},
@@ -223,6 +228,7 @@ export async function createNativeBindingFixture(
     binding,
     modified,
     original,
+    setSideBySide: (enabled: boolean) => nativeRoot.classList.toggle('side-by-side', enabled),
     restoreItems,
     completeAlignment: () => {
       aligned = true
