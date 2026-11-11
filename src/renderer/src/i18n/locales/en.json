@@ -16744,7 +16744,7 @@
             "orcaCloudRenew": "Renew",
             "orcaCloudPaymentFailed": "Payment failed",
             "orcaCloudSignInButton": "Sign in",
-            "orcaCloudHosted": "Hosted sandbox",
+            "orcaCloudHosted": "Sandbox",
             "orcaCloudSpecs2": "{{value0}} vCPU · {{value1}} GB",
             "orcaCloudPlanEnded": "Your Team plan ended",
             "orcaCloudCapReached": "Spend cap reached",

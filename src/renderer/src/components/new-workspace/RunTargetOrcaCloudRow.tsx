@@ -53,13 +53,13 @@ function RowAction({
 }
 
 /**
- * "Hosted sandbox · 8 vCPU · 16 GB". The specs never split: below a 28rem container (the menu, or
+ * "Sandbox · 8 vCPU · 16 GB". The specs never split: below a 28rem container (the menu, or
  * the hint under the field) they drop out whole so "N sandbox hours left" keeps its room.
  */
 export function OrcaCloudSpecs({ t }: { t: Translate }): React.JSX.Element {
   return (
     <>
-      {t('auto.components.new.workspace.RunTargetCombobox.orcaCloudHosted', 'Hosted sandbox')}
+      {t('auto.components.new.workspace.RunTargetCombobox.orcaCloudHosted', 'Sandbox')}
       <span className="hidden whitespace-nowrap @[28rem]:inline">
         {' · '}
         {t(

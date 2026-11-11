@@ -56,7 +56,7 @@ export function isOrcaCloudSelection({
 }
 
 export function getOrcaCloudDetail(t: Translate = translate): string {
-  return `${t('auto.components.new.workspace.RunTargetCombobox.orcaCloudHosted', 'Hosted sandbox')} · ${t(
+  return `${t('auto.components.new.workspace.RunTargetCombobox.orcaCloudHosted', 'Sandbox')} · ${t(
     'auto.components.new.workspace.RunTargetCombobox.orcaCloudSpecs2',
     '{{value0}} vCPU · {{value1}} GB',
     {
