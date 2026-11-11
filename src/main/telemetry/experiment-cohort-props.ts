@@ -3,6 +3,12 @@ import type { Store } from '../persistence/loading-store/store'
 import { ensureChatUiLaunchTipCohort } from './chat-ui-launch-tip-cohort'
 import { ensureChatUiSwitchNoteCohort } from './chat-ui-switch-note-cohort'
 
+export function chatUiSwitchNoteCohortProps(
+  cohort: unknown
+): Partial<Pick<CommonProps, 'chat_ui_switch_note_v1'>> {
+  return cohort === 'control' || cohort === 'treatment' ? { chat_ui_switch_note_v1: cohort } : {}
+}
+
 export function experimentCohortProps(
   store: Store
 ): Pick<

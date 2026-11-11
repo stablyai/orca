@@ -8,7 +8,7 @@ import type { Store } from '../persistence/loading-store/store'
 import { consumeBurstToken, resetBurstCapsForSession } from './burst-cap'
 import { telemetryEventSampleRate } from './event-sampling'
 import * as protectedMilestones from './protected-milestones'
-import { experimentCohortProps } from './experiment-cohort-props'
+import { chatUiSwitchNoteCohortProps, experimentCohortProps } from './experiment-cohort-props'
 import { getCohortAtEmit } from './cohort-classifier'
 import { isConsentEnvOverridden, resolveConsent } from './consent'
 import * as postHogStart from './posthog-client-start'
@@ -212,11 +212,8 @@ export function track<N extends EventName>(name: N, props: EventProps<N>): boole
         ? { sample_rate: sampleRate }
         : {}
 
-  const switchCohort = settings.telemetry?.chatUiSwitchNoteCohort
   enqueueCapture(name, {
-    ...(['control', 'treatment'].includes(switchCohort ?? '') && {
-      chat_ui_switch_note_v1: switchCohort
-    }),
+    ...chatUiSwitchNoteCohortProps(settings.telemetry?.chatUiSwitchNoteCohort),
     ...result.props,
     ...mainOwnedProps
   })
