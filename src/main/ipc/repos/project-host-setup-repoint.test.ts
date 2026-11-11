@@ -59,7 +59,10 @@ describe('repointing a moved folder project through the setup handler', () => {
       kind: 'folder'
     } as Repo)
     mkdirSync(newPath)
-    registerProjectHostSetupHandlers(new BrowserWindow(), store)
+    registerProjectHostSetupHandlers(new BrowserWindow(), store, {
+      enqueueRepositoryMetadata: vi.fn(),
+      resolveRepositoryMetadata: vi.fn().mockResolvedValue(true)
+    })
     const setup = store.getProjectHostSetups().find((entry) => entry.repoId === 'repo-1')
 
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler's success payload always carries the updated repo row; only that member is asserted on.
