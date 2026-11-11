@@ -1,4 +1,3 @@
-import type * as SessionHostCapabilityModule from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
 import {
   DeliveryNoticesMock,
   type StructuredSessionMessageListProps
@@ -34,14 +33,6 @@ import {
 } from '../../conversation/slots/native-chat-mock-slot-types.test-support'
 
 type StopBackgroundTaskSpy = (sessionId: string, taskId?: string) => unknown
-
-vi.mock(
-  '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability',
-  async (importOriginal) => ({
-    ...(await importOriginal<typeof SessionHostCapabilityModule>()),
-    structuredAgentSessionHostSupports: async () => false
-  })
-)
 
 export function useProbeClock(): void {
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
