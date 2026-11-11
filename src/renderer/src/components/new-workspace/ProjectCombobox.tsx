@@ -2,9 +2,9 @@ import { ImeInput } from '@/lib/text-input/ime/ime-text-field'
 import React, { useCallback, useMemo, useRef, useState } from 'react'
 import { ChevronDown, FolderPlus } from 'lucide-react'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import type { NewWorkspaceProjectOption } from '@/lib/new-workspace-project-options'
+import type { NewWorkspaceProjectOption } from '@/lib/workspace/creation/new-workspace-project-options'
 import { useTranslate } from '@/i18n/use-translate'
 import {
   getAmbiguousProjectOptionIds,

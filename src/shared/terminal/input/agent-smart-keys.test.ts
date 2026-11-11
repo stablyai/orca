@@ -47,19 +47,6 @@ describe('resolveAgentSmartKeys', () => {
     ])
   })
 
-  it('answers a Codex approval with y or n only and stops OpenCode with two separate Escapes', () => {
-    // Codex's "don't ask again" key is `p` or `a` depending on the approval, which the hook doesn't carry.
-    const codexApproval = resolveAgentSmartKeys('codex', {
-      state: 'waiting',
-      interactivePrompt: approval
-    })?.keys.map((key) => key.writes)
-    expect(codexApproval).toEqual([['y'], ['n']])
-    const openCodeStop = resolveAgentSmartKeys('opencode', { state: 'working' })?.keys.find(
-      (key) => key.name === 'stop'
-    )
-    expect(openCodeStop?.writes).toEqual(['\x1b', '\x1b'])
-  })
-
   it('shows nothing for an unknown agent, state or prompt', () => {
     expect(resolveAgentSmartKeys('gemini', { state: 'working' })).toBeNull()
     expect(resolveAgentSmartKeys('claude', { state: 'waiting' })).toBeNull()

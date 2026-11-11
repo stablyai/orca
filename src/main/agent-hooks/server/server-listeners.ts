@@ -1,15 +1,11 @@
 import { cliWriterExecutionMatcher, type CliWriterExecutionMatches } from './cli-writer-observation'
-import { isTmuxInnerSubject } from '../../../shared/tmux-selected-status'
 import type {
   AgentStatusClearIpcPayload,
   AgentStatusIpcPayload
 } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { ClaudeStatusLineRateLimits } from '../../../shared/claude-statusline-rate-limits'
 import type { HookTransportInterferenceReport } from '../../../shared/agent-hook-listener/transport/agent-hook-transport-interference'
-import {
-  getLegacyStatusListingOrder,
-  type HookListenerState
-} from '../../../shared/agent-hook-listener/listener-state'
+import type { HookListenerState } from '../../../shared/agent-hook-listener/listener-state'
 import type {
   AgentHookAuthorityEvidence,
   AgentHookProviderSessionIdentity,
@@ -20,14 +16,10 @@ import type {
 } from './server-types'
 import { toAgentStatusIpcPayload } from './server-status-identity'
 import { AgentHookServerState } from './server-state'
-import { serializeAgentStatusSubject } from '../../../shared/agent-status/contracts/agent-status-subject'
-import { structuredStatusLegacyEvent } from './server-structured-status-row'
+import { combinedAgentStatusEntries } from './combined-agent-status-entries'
 import { PaneTimers } from './program-status/pane-timers'
 import { ProgramStatusFacetStore } from './program-status/facet-store'
 import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
-
-// Unassigned rows sort after the listing counter, which starts at 1.
-const UNORDERED_STATUS_ROW = Number.MAX_SAFE_INTEGER
 
 export abstract class AgentHookServerListeners extends AgentHookServerState {
   protected providerRowsByTab: Map<string, AgentStatusIpcPayload[]> | null = null
@@ -76,27 +68,17 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
     this.providerRowsByTab = null
   }
 
-  private combinedStatusEntries(): EnrichedAgentHookEventPayload[] {
-    const rows: { entry: EnrichedAgentHookEventPayload; order: number }[] = []
-    for (const [paneKey, entry] of this.state.lastStatusByPaneKey) {
-      rows.push({
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Main admits enriched legacy rows; shared listeners expose only the base event type.
-        entry: this.programStatusFacets.stitch(entry as EnrichedAgentHookEventPayload),
-        order: getLegacyStatusListingOrder(this.state, paneKey) ?? UNORDERED_STATUS_ROW
-      })
-    }
-    for (const parent of this.canonicalStatusStore.getParents()) {
-      if (!parent.status || isTmuxInnerSubject(parent.subject)) {
-        continue
-      }
-      rows.push({
-        entry: structuredStatusLegacyEvent(parent.status),
-        order:
-          this.canonicalListingOrder.get(serializeAgentStatusSubject(parent.subject)) ??
-          UNORDERED_STATUS_ROW
-      })
-    }
-    return rows.sort((a, b) => a.order - b.order).map(({ entry }) => entry)
+  private combinedStatusEntries(paneKey?: string): EnrichedAgentHookEventPayload[] {
+    return combinedAgentStatusEntries(
+      {
+        state: this.state,
+        programStatusFacets: this.programStatusFacets,
+        canonicalStatusStore: this.canonicalStatusStore,
+        canonicalSubjectsByPane: this.canonicalSubjectsByPane,
+        canonicalListingOrder: this.canonicalListingOrder
+      },
+      paneKey
+    )
   }
   /** Report repeated hook-body truncation once per process; fail-open handling otherwise hides it (#11217). */
   setTransportInterferenceListener(
@@ -246,6 +228,12 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
   /** Include metadata-only provider identities. */
   getProviderSessionIdentities(): AgentHookProviderSessionIdentity[] {
     return this.buildStatusChangeNotification().providerSessions
+  }
+
+  getPublicStatusSnapshotForPane(paneKey: string): AgentStatusIpcPayload[] {
+    return this.combinedStatusEntries(paneKey)
+      .filter((entry) => entry.providerSessionOnly !== true)
+      .map(toAgentStatusIpcPayload)
   }
 
   getStatusSnapshotForPane(paneKey: string): AgentStatusIpcPayload[] {

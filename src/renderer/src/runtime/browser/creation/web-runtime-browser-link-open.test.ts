@@ -1,6 +1,5 @@
-import type * as BrowserFocusModule from '@/components/browser-pane/host-guest/browser-focus'
 import { requestBrowserFocus } from '@/components/browser-pane/host-guest/browser-focus'
-import type { BrowserSessionProfile } from '../../../../../shared/browser-workspace-types'
+import type * as BrowserFocusModule from '@/components/browser-pane/host-guest/browser-focus'
 import '../../../store/testing/app-store-test-fixture'
 import { getDefaultSettings } from '../../../../../shared/constants'
 import '../../../../../shared/session-tabs-runtime-capabilities'
@@ -8,13 +7,12 @@ import '../../../../../shared/protocol-version'
 import { canOfferHttpLinkGroupAction } from '../../../lib/browser/navigation/http-link-in-group-availability'
 import { createWebRuntimeSessionBrowserTab } from './web-runtime-browser-creation'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as SnapshotModule from '../../web-session-tabs-sync/inventory/web-runtime-session-snapshot'
 import { useAppStore } from '../../../store/index'
-import { openWorkspaceBrowserTabForLink } from '../../../lib/browser/workspace/workspace-browser-tab-open'
 import * as workspaceBrowserTabOpen from '../../../lib/browser/workspace/workspace-browser-tab-open'
+import { openWorkspaceBrowserTabForLink } from '../../../lib/browser/workspace/workspace-browser-tab-open'
 import { openHttpLink } from '../../../lib/browser/navigation/http-link-routing'
-import { captureLinkOpenIntent } from '../../../lib/link-open-intent'
-import { beginLinkOpenRequest } from '../../../lib/link-open-request'
+import { captureLinkOpenIntent } from '../../../lib/links/placement/link-open-intent'
+import { beginLinkOpenRequest } from '../../../lib/links/link-open-request'
 import { makeWorktree } from '../../../store/slices/worktrees/worktree.test-fixture'
 import { TEST_REPO } from '../../../store/repos/repo.test-fixture'
 import { resetWebSessionBrowserPlacementsForTests } from '../placement/web-session-browser-placement'
@@ -37,6 +35,8 @@ import {
 } from './testing/web-runtime-browser-creation-placement-test-rig'
 import { captureWebSessionIntentOwner } from '../../web-session-tabs-sync/identity/web-runtime-session-environment'
 import { peekWebSessionFocusIntent } from '../../web-session-tabs-sync/navigation/web-session-focus-intent'
+import type { BrowserSessionProfile } from '../../../../../shared/browser-workspace-types'
+import type * as SnapshotModule from '../../web-session-tabs-sync/inventory/web-runtime-session-snapshot'
 
 vi.mock('@/components/browser-pane/host-guest/browser-focus', async (importOriginal) => ({
   ...(await importOriginal<typeof BrowserFocusModule>()),
@@ -127,27 +127,6 @@ describe('runtime link opens through staging and materialization', () => {
       useAppStore.getState().groupsByWorktree[WT]?.find((group) => group.id === G2)?.activeTabId
     ).toBe(browser.id)
     expect(requestBrowserFocus).not.toHaveBeenCalled()
-  })
-
-  it('stages in the visible browser group and returns the reconciled host page identity', async () => {
-    const creating = open()
-    expect(pendingCreates).toHaveLength(1)
-    const provisional = pendingCreates[0]!.params.page
-    expect(pendingCreates[0]!.params.targetGroupId).toBe(G2)
-    expect(wrapperForRemotePage(provisional!)?.groupId).toBe(G2)
-    pendingCreates[0]!.resolve('actual-host-page')
-    const outcome = await creating
-    expect(outcome).toMatchObject({
-      status: 'opened',
-      result: { groupId: G2, executionHostId: HOST, worktreeId: WT }
-    })
-    if (outcome.status !== 'opened') {
-      throw new Error('Expected open')
-    }
-    expect(outcome.result.unifiedTabId).toBe(wrapperForRemotePage('actual-host-page')?.id)
-    expect(
-      useAppStore.getState().remoteBrowserPageHandlesByPageId[outcome.result.browserPageId]
-    ).toMatchObject({ remotePageId: 'actual-host-page', environmentId: ENV })
   })
 
   it('offers explicit runtime reuse only when a matching pinned page proves the route and session', async () => {

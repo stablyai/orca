@@ -10,8 +10,8 @@ import { useAppStore } from '@/store'
 import { getRuntimeFileReadScope } from '@/runtime/files/runtime-file-routing'
 import { readEditorCsvFileContent } from './csv/csv-file-content'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import { requireRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
-import type { RuntimeWorkspaceFileRoute } from '@/lib/runtime-workspace-file-route'
+import { requireRuntimeTargetForFileOwner } from '@/lib/files/access/file-owner-runtime-target'
+import type { RuntimeWorkspaceFileRoute } from '@/lib/files/access/runtime-workspace-file-route'
 import {
   LOCAL_EXECUTION_HOST_ID,
   toRuntimeExecutionHostId,
@@ -27,7 +27,7 @@ import {
   restoredOwnerMigrationErrorMessage
 } from './migrate-restored-editor-file-owner'
 import { findRestoredEditorWorkspaceRuntimeOwner } from './restored-editor-workspace-runtime-owner'
-import { editorTabFileAccess, isClientLocalReadOnlyTab } from '@/lib/local-file-access'
+import { editorTabFileAccess, isClientLocalReadOnlyTab } from '@/lib/files/access/local-file-access'
 import { placeAbsoluteTab } from './absolute-tab-placement'
 import type { RuntimeFileReadArgs } from '@/runtime/files/runtime-file-client-types'
 import { stampCleanTabDiskBaseline } from './external-changes/editor-clean-tab-disk-baseline'

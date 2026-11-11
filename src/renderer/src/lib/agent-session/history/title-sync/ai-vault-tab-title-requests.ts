@@ -13,7 +13,8 @@ import type { TerminalTab } from '../../../../../../shared/workspace-layout/term
 import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import type { AppState } from '@/store/types'
 import type { AgentPaneConversationIdentity } from '@/store/slices/agent-status/agent-pane-conversation'
-import { collectLeafIdsInOrder } from '../../../../components/terminal-pane/layout/terminal-layout-leaf-traversal'
+import '../../../../components/terminal-pane/layout/terminal-layout-leaf-traversal'
+import { collectLayoutLeafIdsInOrder } from '../../../../../../shared/workspace-layout/terminal-pane-tree'
 import { getIndexedRepoMap } from '@/store/repos/repository-catalog-index'
 import { getIndexedWorktreeMap } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
@@ -178,7 +179,7 @@ export function collectAgentPaneConversations<Agent extends AgentType>(
       tabsById.set(tab.id, {
         ...tab,
         worktreeId,
-        ...(root ? { leafIds: new Set(collectLeafIdsInOrder(root)) } : {})
+        ...(root ? { leafIds: new Set(collectLayoutLeafIdsInOrder(root)) } : {})
       })
     }
   }

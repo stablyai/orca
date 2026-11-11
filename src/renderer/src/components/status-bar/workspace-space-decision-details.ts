@@ -33,6 +33,8 @@ export type WorkspaceDecisionDetails = {
   branchStatus: string | null
   reviewLabel: string | null
   issueLabel: string | null
+  /** Cache key of the shown linked issue; changes when the link or its owning host changes. */
+  issueCacheKey: string | null
   linearIssueLabel: string | null
 }
 
@@ -169,20 +171,19 @@ export function getWorkspaceDecisionDetails(
         ? `PR #${linkedPR}`
         : null
   const linkedIssue = workspaceRecord?.linkedIssue ?? null
-  const issue =
+  const issueCacheKey =
     linkedIssue && repo
-      ? inputs.issueCache[
-          getIssueCacheKey(
-            repo.path,
-            repo.id,
-            linkedIssue,
-            inputs.settings,
-            repo.connectionId,
-            ownerExecutionHostId,
-            true
-          )
-        ]?.data
+      ? getIssueCacheKey(
+          repo.path,
+          repo.id,
+          linkedIssue,
+          inputs.settings,
+          repo.connectionId,
+          ownerExecutionHostId,
+          true
+        )
       : null
+  const issue = issueCacheKey ? inputs.issueCache[issueCacheKey]?.data : null
   const issueLabel = linkedIssue
     ? issue
       ? `#${issue.number} ${issue.state}: ${issue.title}`
@@ -228,6 +229,7 @@ export function getWorkspaceDecisionDetails(
     branchStatus: getBranchStatus(inputs.remoteStatusesByWorktree[worktree.worktreeId], t),
     reviewLabel,
     issueLabel,
+    issueCacheKey,
     linearIssueLabel
   }
 }

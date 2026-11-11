@@ -1,10 +1,14 @@
+import {
+  getTerminalNoticeLifetime,
+  retireTerminalNoticeLifetime
+} from '../terminal-pane/provider-notices/terminal-notice-lifetime'
 import { useAppStore } from '@/store'
 import { closeWebRuntimeSessionTab } from '@/runtime/web-session-tabs-sync/actions/web-runtime-session-tab-lifecycle'
 import { isWebRuntimeSessionActive } from '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment'
 import { toHostSessionTabId } from '../../../../shared/workspace-layout/terminal-surface-id'
 import { getLatestWebSessionTabsPublicationEpoch } from '@/runtime/web-session-tabs-sync/tracking-lifecycle'
 import { resolveHostSessionTabIdForWebSessionTab } from '@/runtime/web-session-tabs-sync/tracking-mappings'
-import { resolveTerminalCloseRoute } from '@/lib/terminal-close-route'
+import { resolveTerminalCloseRoute } from '@/lib/workspace/ownership/terminal-close-route'
 import {
   guardPinnedTabClose,
   isUnifiedTabPinned,
@@ -219,6 +223,11 @@ export function closeTerminalTab(tabId: string, options: CloseTerminalTabOptions
     }
   }
 
+  // Proven lifecycle callers retain the old address after pane exit cleared its layout binding.
+  const exitedNotice =
+    storeReason === 'pty-exit' && options.lifecyclePtyId
+      ? getTerminalNoticeLifetime(options.lifecyclePtyId)
+      : undefined
   closeLocalTerminalTabState(terminalTabId, {
     reason: storeReason,
     ...(options?.captureRecentlyClosed !== undefined
@@ -230,6 +239,9 @@ export function closeTerminalTab(tabId: string, options: CloseTerminalTabOptions
       ? { precomputedRetirementPlan: options.precomputedRetirementPlan }
       : {})
   })
+  if (exitedNotice) {
+    retireTerminalNoticeLifetime(exitedNotice)
+  }
   if (
     !options?.preserveWorktreeSelection &&
     terminalCountBeforeClose <= 1 &&

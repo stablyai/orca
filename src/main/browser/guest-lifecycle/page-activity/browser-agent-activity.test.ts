@@ -90,6 +90,18 @@ describe('BrowserAgentActivity', () => {
     expect(sent).toEqual([])
   })
 
+  it("names the chat whose agent's CLI sent the command", () => {
+    const { activity, sent } = setup()
+    const chat = '11111111-1111-4111-8111-111111111111'
+    runWithActiveRpcCaller({ kind: 'local-cli' }, () => activity.beginCommand(PAGE), chat).end()
+    expect(sent.at(-1)?.data).toEqual({
+      browserPageId: PAGE,
+      worktreeId: 'wt-1',
+      active: true,
+      agentSessionId: chat
+    })
+  })
+
   it('clears the mark once the agent stays idle, and at once when the page closes', () => {
     const { activity, sent, agentCommand } = setup()
     agentCommand().end()

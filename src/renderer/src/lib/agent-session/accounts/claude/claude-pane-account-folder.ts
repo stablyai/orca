@@ -2,7 +2,7 @@ import type {
   ClaudeManagedAccount,
   ClaudeRateLimitAccountsState
 } from '../../../../../../shared/managed-account-types'
-import { getRendererAppPlatform } from '../../../renderer-app-platform'
+import { getRendererAppPlatform } from '../../../../app-shell/platform/renderer-app-platform'
 
 function normalizeFolder(path: string): string {
   const slashed = path.replace(/\\/g, '/').replace(/\/+$/, '')

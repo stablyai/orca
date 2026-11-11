@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import type { LucideProps } from 'lucide-react'
 import logo from '../../../../../../resources/logo.svg'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 
 export function OrcaLogoSettingsIcon({ className }: LucideProps): React.JSX.Element {
   return createElement('img', {

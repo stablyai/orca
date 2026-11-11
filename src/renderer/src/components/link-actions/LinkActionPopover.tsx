@@ -7,8 +7,8 @@ import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useClipboardTextCopyFeedback } from '@/hooks/clipboard/use-clipboard-text-copy-feedback'
 import { useTranslate } from '@/i18n/use-translate'
-import { BROWSER_TERMINAL_LINK_ACTIONS_SETTINGS_TARGET_ID } from '@/lib/settings-navigation-types'
-import { useAppStore } from '@/store'
+import { BROWSER_TERMINAL_LINK_ACTIONS_SETTINGS_TARGET_ID } from '@/components/settings/navigation/settings-navigation-types'
+import { useAppStore } from '@/store/index'
 import type { LinkAction, LinkActionRequest } from './link-action-request'
 
 type LinkActionPopoverProps<TRequest extends LinkActionRequest> = {

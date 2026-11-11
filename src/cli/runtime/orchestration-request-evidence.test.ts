@@ -26,3 +26,18 @@ describe('caller evidence on requests to another server', () => {
     ).toEqual({ agentSessionId: '11111111-1111-4111-8111-111111111111' })
   })
 })
+
+describe('caller evidence on browser commands', () => {
+  it('names the chat on this host, so its run can show the page it drove', () => {
+    const evidence = new OrchestrationRequestEvidence(CHAT)
+    const request = { mutation: false, requestId: undefined }
+    expect(
+      evidence.envelopeFor('browser.click', { ...request, remote: false })
+        .orchestrationCompatibilityEvidence
+    ).toEqual({ agentSessionId: '11111111-1111-4111-8111-111111111111' })
+    expect(
+      evidence.envelopeFor('browser.click', { ...request, remote: true })
+        .orchestrationCompatibilityEvidence
+    ).toBeUndefined()
+  })
+})

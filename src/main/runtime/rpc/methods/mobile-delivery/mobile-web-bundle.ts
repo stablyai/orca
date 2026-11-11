@@ -1,6 +1,9 @@
-/** Serve only this install's bundle over authenticated RPC: manifest, then chunks or advertised ranges.
+/** Serve only this install's bundle over authenticated RPC: manifest, then chunks or advertised ranges, and the page's language catalog.
  * Never proxy to SSH/relay execution hosts: the phone paired with this desktop.
  * Verify/read failures map to asset-changed without exposing host paths. */
+import { createHash } from 'node:crypto'
+import { readFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import {
   MOBILE_WEB_BUNDLE_BROTLI_RANGE_METHOD,
   MOBILE_WEB_BUNDLE_CHUNK_BYTES,
@@ -20,6 +23,12 @@ import {
   mobileWebBundleBrotliPath,
   type MobileWebBundleAsset
 } from '../../../../../shared/mobile-web-bundle/manifest-contract'
+import {
+  MOBILE_WEB_BUNDLE_LOCALE_CATALOG_METHOD,
+  MobileWebBundleLocaleCatalogParamsSchema,
+  type MobileWebBundleLocaleCatalogParams,
+  type MobileWebBundleLocaleCatalogResult
+} from '../../../../../shared/mobile-web-bundle/locale-catalog-contract'
 import {
   loadBundledMobileWebBundle,
   type BundledMobileWebBundle
@@ -41,8 +50,8 @@ function bundleError(code: MobileWebBundleErrorCode): InvalidArgumentError {
   return new InvalidArgumentError(code)
 }
 
-function requireBundle(): BundledMobileWebBundle {
-  const bundle = loadBundledMobileWebBundle()
+async function requireBundle(): Promise<BundledMobileWebBundle> {
+  const bundle = await loadBundledMobileWebBundle()
   if (!bundle) {
     throw bundleError('mobile_web_bundle_unavailable')
   }
@@ -52,6 +61,42 @@ function requireBundle(): BundledMobileWebBundle {
 function abortIfDisconnected(ctx: RpcContext): void {
   if (ctx.signal?.aborted) {
     throw new Error('client_disconnected')
+  }
+}
+
+/** Answer from the build's own catalog file, so the page reads the strings it was built with. */
+async function readLocaleCatalog(
+  params: MobileWebBundleLocaleCatalogParams,
+  ctx: RpcContext
+): Promise<MobileWebBundleLocaleCatalogResult> {
+  const bundle = await requireBundle()
+  const entry = bundle.manifest.catalogs?.find((catalog) => catalog.locale === params.locale)
+  if (!entry) {
+    throw bundleError('mobile_web_bundle_asset_unknown')
+  }
+  if (params.knownSha256 === entry.sha256) {
+    return { locale: entry.locale, sha256: entry.sha256, catalog: null }
+  }
+  // Its own budget, so a page's one catalog read never waits behind its shell's bundle download.
+  const release = acquireMobileWebBundleReadSlot(`catalog:${mobileWebBundleReadBucket(ctx)}`)
+  if (!release) {
+    throw bundleError('mobile_web_bundle_read_limited')
+  }
+  try {
+    abortIfDisconnected(ctx)
+    const bytes = await readFile(join(bundle.root, entry.path))
+    if (createHash('sha256').update(bytes).digest('hex') !== entry.sha256) {
+      throw bundleError('mobile_web_bundle_asset_changed')
+    }
+    const catalog: unknown = JSON.parse(bytes.toString('utf8'))
+    if (typeof catalog !== 'object' || catalog === null || Array.isArray(catalog)) {
+      throw bundleError('mobile_web_bundle_asset_changed')
+    }
+    return { locale: entry.locale, sha256: entry.sha256, catalog: { ...catalog } }
+  } catch (error) {
+    throw asContractError(error, entry.path)
+  } finally {
+    release()
   }
 }
 
@@ -112,7 +157,7 @@ async function readVerifiedWindow<T>(
   encode: (window: VerifiedWindow) => Promise<T>,
   sourceOf: (asset: MobileWebBundleAsset) => WindowSource = (asset) => asset
 ): Promise<T> {
-  const bundle = requireBundle()
+  const bundle = await requireBundle()
   // Check build before path: auto-update means restart from the manifest, not missing-asset.
   if (params.buildId !== bundle.manifest.buildId) {
     throw bundleError('mobile_web_bundle_build_changed')
@@ -167,7 +212,7 @@ export const MOBILE_WEB_BUNDLE_METHODS = [
     permission: 'workspace',
     params: null,
     handler: async (): Promise<MobileWebBundleManifestResult> => ({
-      manifest: requireBundle().manifest,
+      manifest: (await requireBundle()).manifest,
       chunkBytes: MOBILE_WEB_BUNDLE_CHUNK_BYTES,
       // Complete replies must arrive within the phone's stall budget even on slow relays.
       rangeBytes: MOBILE_WEB_BUNDLE_CHUNK_BYTES
@@ -201,5 +246,11 @@ export const MOBILE_WEB_BUNDLE_METHODS = [
     handler: (params, ctx): Promise<MobileWebBundleBrotliRangeResult> =>
       // The raw asset's hash still gates every window of its copy.
       readVerifiedWindow(ctx, params, MOBILE_WEB_BUNDLE_CHUNK_BYTES, rawWindowReply, brotliCopyOf)
+  }),
+  defineMethod({
+    name: MOBILE_WEB_BUNDLE_LOCALE_CATALOG_METHOD,
+    permission: 'workspace',
+    params: MobileWebBundleLocaleCatalogParamsSchema,
+    handler: readLocaleCatalog
   })
 ]

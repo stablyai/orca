@@ -286,6 +286,17 @@ describe('workspace.changed', () => {
       expect(events.emitEvent).toHaveBeenLastCalledWith('workspace.changed', {
         context: { branch: 'main', displayName: 'w', terminals: [] }
       })
+      // Same projected payload, different focused workspace: still a change.
+      source.resolveActiveWorktreeContext.mockResolvedValueOnce({
+        worktreeId: 'repo::/other',
+        path: '/w',
+        branch: 'refs/heads/main',
+        displayName: 'w'
+      })
+      source.listTerminals.mockResolvedValueOnce({ terminals: [] })
+      written()
+      await vi.advanceTimersByTimeAsync(20)
+      expect(events.emitEvent).toHaveBeenCalledTimes(3)
       stop()
     } finally {
       vi.useRealTimers()

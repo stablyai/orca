@@ -32,6 +32,7 @@ import {
   DesktopBrowserBridgeResultParams
 } from '../desktop-browser-bridge-protocol'
 import { MobileWebBundleChunkParamsSchema } from '../mobile-web-bundle/bundle-rpc-contract'
+import { MobileWebBundleLocaleCatalogParamsSchema } from '../mobile-web-bundle/locale-catalog-contract'
 import { OrcadMigrationBlobChunkRequestSchema } from '../orcad-migration/orcad-migration-blob-transfer'
 import { OrcadMigrationSnapshotChunkRequestSchema } from '../orcad-migration/orcad-migration-scrollback'
 import {
@@ -40,6 +41,7 @@ import {
 } from '../orcad-peer-desktops-contract'
 import { OrcadTerminalCensusParamsSchema } from '../orcad-terminal-census'
 import { CrewSubscribeParams } from '../orchestration/orchestration-crew'
+import { PeerRunCancelParams } from '../orchestration/remote-owned-wire'
 import { RegisterDeviceKeyParamsSchema } from '../remote-runtime/pairing/device-key-registration-contract'
 import { PairingCreateOfferParamsSchema } from '../remote-runtime/pairing/pairing-create-offer-contract'
 import { ExchangePairingTicketParamsSchema } from '../remote-runtime/pairing/ticket-exchange-contract'
@@ -983,6 +985,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'browser.storage.session.clear': ExpectUrlBrowserTarget,
   'browser.storage.session.get': StorageKey,
   'browser.storage.session.set': StorageKeyValue,
+  'browser.tabAnnotations': BrowserTarget,
   'browser.tabClose': TabClose,
   'browser.tabCreate': BrowserTabCreateParams,
   'browser.tabCurrent': TabCurrent,
@@ -1322,6 +1325,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'mobileRelay.projectSections': null,
   'mobileWeb.bundle.brotliRange': MobileWebBundleChunkParamsSchema,
   'mobileWeb.bundle.chunk': MobileWebBundleChunkParamsSchema,
+  'mobileWeb.bundle.localeCatalog': MobileWebBundleLocaleCatalogParamsSchema,
   'mobileWeb.bundle.manifest': null,
   'mobileWeb.bundle.range': MobileWebBundleChunkParamsSchema,
   'nativeChat.readSession': NativeChatSession,
@@ -1369,6 +1373,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'orchestration.peerMailAck': PeerMailAckParams,
   'orchestration.peerMailDeliver': PeerMailDeliverParams,
   'orchestration.peerMailPull': PeerMailPullParams,
+  'orchestration.peerRunCancel': PeerRunCancelParams,
   'orchestration.reply': ReplyParams,
   'orchestration.requestShow': RequestShowParams,
   'orchestration.reset': ResetParams,

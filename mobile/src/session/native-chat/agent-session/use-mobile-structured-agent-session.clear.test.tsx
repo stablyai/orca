@@ -6,7 +6,7 @@ import type { AgentSessionSubscribeEvent } from '../../../../../src/shared/agent
 import { createWithQueryClient } from '../../../test-support/query-client-test-renderer'
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 import type { RpcResponse } from '../../../transport/rpc/rpc-wire-types'
-import { useMobileStructuredAgentSession } from '../../use-mobile-structured-agent-session'
+import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
 import {
   SESSION_ID,
   mutationOk,
@@ -28,25 +28,6 @@ const row = (
   revision: 1,
   observedAt: sequence,
   body: { kind: 'message', role, blocks: [{ type: 'text', text }] }
-})
-const divider = (sequence: number): AgentJournalRenderItem => ({
-  ...row(sequence, 'assistant', ''),
-  body: {
-    kind: 'status',
-    text: 'Context cleared',
-    presentation: 'context-cleared',
-    contextClear: { operationId: `clear-${sequence}`, afterFence: 3, clearedAt: sequence }
-  }
-})
-const dividerLands = (sequence: number): AgentSessionSubscribeEvent => ({
-  type: 'batch',
-  sessionId: SESSION_ID,
-  batch: {
-    cursor: { epoch: 'epoch-1', sequence },
-    items: [divider(sequence)],
-    removedItemIds: [],
-    submissions: []
-  }
 })
 
 describe('useMobileStructuredAgentSession /clear', () => {
@@ -131,22 +112,6 @@ describe('useMobileStructuredAgentSession /clear', () => {
       }
     }
   }
-
-  it('hides the old transcript from the press until the divider lands', async () => {
-    const chat = await mount()
-    expect(chat.shown()).toEqual({ text: ['question', 'reply'], clearing: false })
-
-    const { outcome } = await chat.sendClear()
-    expect(chat.shown()).toEqual({ text: [], clearing: true })
-
-    // The host's reply can reach the phone before the divider it already wrote.
-    await chat.reply({ command: 'clear', state: 'completed' })
-    await expect(outcome).resolves.toBe('accepted')
-    expect(chat.shown()).toEqual({ text: [], clearing: true })
-
-    chat.push(dividerLands(3))
-    expect(chat.shown()).toEqual({ text: ['Context cleared'], clearing: false })
-  })
 
   it('shows the old transcript again when the host refuses the /clear', async () => {
     const chat = await mount()

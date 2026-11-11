@@ -1,4 +1,3 @@
-import type { structuredLaunchIntent } from './structured-session-launch-intent.test-fixture'
 import { afterEach, beforeEach, vi } from 'vitest'
 import { createTestStore, seedStore } from '@/store/testing/app-store-test-fixture'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
@@ -8,12 +7,13 @@ import { makeUnifiedTab, makeTabGroup } from '@/store/slices/tabs/tab-group.test
 import { drawTabsFromMain } from '@/store/slices/tabs/tabs-drawn-from-main.test-fixture'
 import type * as Frames from '@/store/slices/tabs/tabs-drawn-from-main.test-fixture'
 import { createGlobalSettingsFixture } from '../../../../../../shared/global-settings-test-fixture'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 import { registerStructuredSelectionCatalogStore } from '../../options/structured-agent-session-selection-controller'
+import type { structuredLaunchIntent } from './structured-session-launch-intent.test-fixture'
+import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 import type { AppState } from '@/store/types'
 import type { pasteDraftWhenAgentReady } from '../../messaging/paste/agent-paste-draft'
 import type { waitForAgentReady } from '../../messaging/paste/agent-ready-wait'
-import type { createStructuredAgentSessionLaunchIntent as create } from '../../../launch-structured-agent-session'
+import type { createStructuredAgentSessionLaunchIntent as create } from '../structured-agent-session-launch-intent'
 import type { launchStructuredAgentSession as launch } from '../structured-agent-session-launch-create-call'
 import type { refreshLocalStructuredSessionTabs as refreshTabs } from '@/runtime/local-structured-session-tabs-sync/inventory-refresh'
 import type { toast } from 'sonner'
@@ -81,7 +81,7 @@ function launchScenarioSettings(): GlobalSettings {
 
 vi.mock('@/hooks/useShortcutLabel', () => ({ useOptionalShortcutLabel: () => null }))
 vi.mock('@/store/index', async () =>
-  (await import('../../../launch-parity-renderer.test-fixture')).launchStoreModuleMock(owner)
+  (await import('../parity/launch-parity-renderer.test-fixture')).launchStoreModuleMock(owner)
 )
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (original) =>
   (
@@ -101,10 +101,7 @@ vi.mock('@/lib/agent-session/messaging/paste/agent-paste-draft', () => ({
 vi.mock('@/lib/agent-session/messaging/paste/agent-ready-wait', () => ({
   waitForAgentReady: mockWaitForAgentReady
 }))
-vi.mock('@/lib/telemetry', () => ({
-  track: vi.fn(),
-  tuiAgentToAgentKind: mockLaunchAgentKind
-}))
+vi.mock('@/diagnostics/telemetry/telemetry', () => ({ track: vi.fn() }))
 const mockLaunchAgentKind = vi.hoisted(() => (agent: string) => agent)
 vi.mock('../../../../../../shared/agent-kind', async (importOriginal) => ({
   ...(await importOriginal<typeof LaunchAgentKindModule>()),
@@ -144,12 +141,15 @@ vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-create-call'
   launchStructuredAgentSession: mockLaunchStructuredCodexSession
 }))
 
-vi.mock('@/lib/launch-structured-agent-session', () => ({
+vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-intent', () => ({
   createStructuredAgentSessionLaunchIntent: mockCreateStructuredCodexSessionLaunchIntent,
-  abandonStructuredAgentSessionLaunchIntent: vi.fn(),
   retryStructuredAgentSessionLaunchIntent: mockRetryStructuredAgentSessionLaunchIntent,
   launchStructuredAgentSession: mockLaunchStructuredCodexSession,
   ...launchErrorMocks
+}))
+
+vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-abandon', () => ({
+  abandonStructuredAgentSessionLaunchIntent: vi.fn()
 }))
 vi.mock('@/runtime/local-structured-session-tabs-sync/inventory-refresh', () => ({
   refreshLocalStructuredSessionTabs: mockRefreshLocalStructuredSessionTabs

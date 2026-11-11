@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import { dispatchZoomLevelChanged } from '@/lib/zoom-events'
+import { dispatchZoomLevelChanged } from '@/app-shell/chrome/zoom-events'
 import '@/lib/pane-manager/pane-tree-ops'
 import { safeFit } from '@/lib/pane-manager/pane-fit'
 import { overridePendingPaneMetricOptions } from '@/lib/pane-manager/pane-metric-options-deferral'

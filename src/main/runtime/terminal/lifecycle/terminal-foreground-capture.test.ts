@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { judgeTerminalForeground } from './terminal-foreground-group'
+import {
+  observePtyForeground,
+  resolvePtyForegroundMembers
+} from '../../../pty/process-retirement/pty-master-foreground-observation'
 import { readTerminalProcessRows } from '../../../pty/process-retirement/terminal-process-rows'
-import { resolvePtyForegroundMembers } from '../../../pty/process-retirement/pty-master-foreground-observation'
 import { readLaunchedAgentForeground } from '../wait/launched-agent-foreground'
 import { createAdapter } from '../../../daemon/providers/routing/testing/daemon-pty-router-test-fixture'
 import { DaemonPtyRouter } from '../../../daemon/providers/routing/daemon-pty-router'
@@ -10,8 +13,12 @@ const mocks = vi.hoisted(() => ({ runProcess: vi.fn() }))
 vi.mock('@orca/process-host', () => ({ runProcess: mocks.runProcess }))
 vi.mock('../../../../shared/libproc-process-table', () => ({ runPsInProcess: async () => null }))
 
-const rows = (pid: number) =>
+// Linux ps prefixes the sid column readPtyTerminalRows asks for there.
+const rows = (pid: number, withSid = process.platform === 'linux') =>
   `${pid} 1 ${pid} ${pid + 1} Ss -zsh\n${pid + 1} ${pid} ${pid + 1} ${pid + 1} S+ claude\n`
+    .split('\n')
+    .map((line) => (withSid && line ? `${pid} ${line}` : line))
+    .join('\n')
 const result = (stdout: string, outputTruncated = false) => ({
   code: 0,
   signal: null,
@@ -87,9 +94,10 @@ describe('fresh target foreground regressions', () => {
     expect(await readTerminalProcessRows(90300)).toBeNull()
   })
   it('keeps a capture whose blank-argv row sits outside the foreground group', async () => {
+    const blankOutside = `${process.platform === 'linux' ? '90400 ' : ''}90410 90400 90410 90401 S`
     mocks.runProcess
       .mockResolvedValueOnce(result('ttys904'))
-      .mockResolvedValueOnce(result(`${rows(90400)}90410 90400 90410 90401 S   \n`))
+      .mockResolvedValueOnce(result(`${rows(90400)}${blankOutside}\n`))
       .mockResolvedValueOnce(result('ttys904'))
     const captured = (await readTerminalProcessRows(90400)) ?? []
     expect(resolvePtyForegroundMembers(captured, 90401).verdict).toBe('observed')
@@ -97,5 +105,42 @@ describe('fresh target foreground regressions', () => {
     const blank = captured.map((row) => (row.pid === 90401 ? { ...row, command: '' } : row))
     expect(judgeTerminalForeground(blank, 90400, 'claude')).toBe('unknown')
     expect(resolvePtyForegroundMembers(blank, 90401).verdict).toBe('unverifiable')
+  })
+})
+
+// #39488: a `docker run -t` container holds its own private pts/0, so host `ps -t pts/0` lists its sleep beside
+// the terminal's shell and agent. Rows are the reporter's capture; columns follow what ps was asked for.
+const CONTAINER_SHARING_PTS = [
+  { sid: 58769, row: '58769 58768 58769 58769 Ss+ sleep 900' },
+  { sid: 58824, row: '58824 100 58824 58826 Ss+ /bin/sh -l' },
+  { sid: 58824, row: '58826 58824 58826 58826 S+ claude --print-output' }
+]
+
+describe('terminal foreground with a container holding the same pts number', () => {
+  it('observes the agent as foreground on Linux', async () => {
+    mocks.runProcess.mockReset()
+    const original = process.platform
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
+    try {
+      mocks.runProcess.mockImplementation(async ({ args }: { args: readonly string[] }) => {
+        const withSid = args.some((arg) => arg.startsWith('sid='))
+        return result(
+          `${CONTAINER_SHARING_PTS.map(({ sid, row }) => (withSid ? `${sid} ${row}` : row)).join('\n')}\n`
+        )
+      })
+      const owner = {
+        pid: 58824,
+        fd: 9,
+        ptsName: '/dev/pts/0',
+        getForegroundProcessGroup: (): number | null | undefined => 58826
+      }
+      await expect(observePtyForeground(owner, () => true)).resolves.toMatchObject({
+        verdict: 'observed',
+        foregroundKind: 'non-shell',
+        foregroundPgid: 58826
+      })
+    } finally {
+      Object.defineProperty(process, 'platform', { configurable: true, value: original })
+    }
   })
 })
