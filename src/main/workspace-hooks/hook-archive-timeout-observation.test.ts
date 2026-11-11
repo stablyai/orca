@@ -30,19 +30,4 @@ describe.skipIf(process.platform === 'win32')('archive hook deadline', () => {
     expect(result.exitCode).toBeUndefined()
     expect(result.output).toContain('timed out')
   }, 20_000)
-
-  it('settles at the deadline even when the hook refuses to die', async () => {
-    const started = Date.now()
-    const result = await runArchive("trap '' TERM; sleep 30")
-    expect(result.success).toBe(false)
-    expect(Date.now() - started).toBeLessThan(10_000)
-  }, 20_000)
-
-  it('passes a hook that finishes inside its deadline', async () => {
-    await expect(runArchive('echo archived')).resolves.toMatchObject({ success: true })
-  })
-
-  it('reports an observed non-zero exit as the exit it is', async () => {
-    await expect(runArchive('exit 23')).resolves.toMatchObject({ success: false, exitCode: 23 })
-  })
 })

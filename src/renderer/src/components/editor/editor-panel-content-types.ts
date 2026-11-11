@@ -2,7 +2,7 @@ import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type { EditorPanelContentLoadOptions } from './external-changes/useEditorPanelExternalContentEvents'
 import type { GitDiffResult } from '../../../../shared/git/diff/git-diff-compare-types'
-import type { CsvFilePreview } from './csv/csv-file-content'
+import type { CsvFilePreview } from './csv/preview/csv-file-content'
 import type { RuntimeFileReadArgs } from '@/runtime/files/runtime-file-client-types'
 
 /** Transient owner hydration/connection failure; retry instead of reading remote paths locally and latching access errors. */

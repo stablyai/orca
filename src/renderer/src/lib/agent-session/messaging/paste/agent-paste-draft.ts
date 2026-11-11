@@ -14,11 +14,9 @@ import { waitForAgentReady } from './agent-ready-wait'
 import { sendAgentDraftPasteContentNow } from './agent-draft-paste-content'
 import { agentDeliversDraftViaNativePrefill } from './agent-native-draft-prefill'
 import { waitForAgentDraftInputReady } from './agent-draft-readiness'
-import { isExpectedAgentProcess } from '../../../../../../shared/agent-status/process/agent-process-recognition'
+import { isAgentForegroundProcess } from '../../../../../../shared/agent-status/process/agent-process-recognition'
 
 // Bracketed paste keeps prompt insertion atomic; callers separately choose whether to submit with Enter.
-
-const POST_PASTE_SUBMIT_DELAY_MS = AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS
 
 // Budget PTY creation and composer readiness separately: slow spawn must neither consume composer grace nor delay failed-launch reporting (STA-3367).
 const PTY_SPAWN_TIMEOUT_MS = 8000
@@ -70,8 +68,8 @@ export async function pasteDraftWhenAgentReady(args: {
   if (!readiness.ready) {
     // Early readiness bytes may precede this observer; process/title ownership allows best-effort fallback, but Codex may still own a startup dialog or discard provisional input.
     const fallbackReady =
-      agentConfig && agent !== 'codex'
-        ? await waitForAgentReady(tabId, agentConfig.expectedProcess, { timeoutMs: 1000 })
+      agent && agent !== 'codex'
+        ? await waitForAgentReady(tabId, agent, { timeoutMs: 1000 })
         : { ready: false }
     if (!fallbackReady.ready) {
       onTimeout?.()
@@ -116,9 +114,7 @@ export async function pasteDraftToAgentPtyWhenReady(args: {
   const ready = await waitForAgentDraftInputReady(ptyId, budget, readySignal)
   if (!ready) {
     const fallbackReady =
-      agentConfig && agent !== 'codex'
-        ? await waitForExpectedAgentOnPty(ptyId, agentConfig.expectedProcess, 1000)
-        : false
+      agent && agent !== 'codex' ? await waitForAgentOnPty(ptyId, agent, 1000) : false
     if (!fallbackReady) {
       onTimeout?.()
       return false
@@ -181,7 +177,9 @@ async function sendBracketedPasteToAgent(args: {
       }
 
       // Defer Enter to the next turn so Claude processes bracketed-paste termination before submission.
-      await new Promise<void>((resolve) => window.setTimeout(resolve, POST_PASTE_SUBMIT_DELAY_MS))
+      await new Promise<void>((resolve) =>
+        window.setTimeout(resolve, AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS)
+      )
       const submitted = await sendRuntimePtyInputVerified(ptyId, '\r', inputKind)
 
       if (submitRetryDelayMs !== undefined) {
@@ -268,9 +266,9 @@ function waitForAgentDraftInputReadyOnTab(args: {
   })
 }
 
-async function waitForExpectedAgentOnPty(
+async function waitForAgentOnPty(
   ptyId: string,
-  expectedProcess: string,
+  agent: TuiAgent,
   timeoutMs: number
 ): Promise<boolean> {
   const deadline = Date.now() + timeoutMs
@@ -284,7 +282,7 @@ async function waitForExpectedAgentOnPty(
         return false
       }
       const foreground = process.foregroundProcess?.toLowerCase() ?? ''
-      if (isExpectedAgentProcess(foreground, expectedProcess)) {
+      if (isAgentForegroundProcess(foreground, agent)) {
         return true
       }
     } catch {

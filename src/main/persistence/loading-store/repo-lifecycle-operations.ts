@@ -7,7 +7,7 @@ import type { GhAccountBinding } from '../../../shared/github/account-binding'
 import {
   removeRepoFromHostWorkspaceSessions,
   removeRepoFromWorkspaceSession
-} from '../../orca-profiles/profile-project-session-state'
+} from '../../orca-profiles/project-transfer/profile-project-session-state'
 import {
   getRepoExecutionHostId,
   parseExecutionHostId,

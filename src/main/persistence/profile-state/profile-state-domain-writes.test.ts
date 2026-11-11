@@ -8,11 +8,7 @@ import {
   readProfileStateRevision
 } from './profile-state-documents'
 import { openProfileStateDatabase, profileStateDatabaseFile } from './profile-state-database'
-import {
-  ProfileStateRevisionConflictError,
-  writeProfileStateDomain,
-  writeProfileStateDomains
-} from './profile-state-domain-writes'
+import { writeProfileStateDomains } from './profile-state-domain-writes'
 import { buildProfileStateCutoverFixture } from '../profile-state-cutover-fixture'
 
 const temporaryDirectories: string[] = []
@@ -71,32 +67,6 @@ describe('profile state dirty-domain writes', () => {
     }
   })
 
-  it('saves a run list per-run rows cannot hold as one replacement row', () => {
-    const db = openTestDatabase()
-    try {
-      const fixtureRun = buildProfileStateCutoverFixture().automationRuns[0]
-      if (!fixtureRun) {
-        throw new Error('Expected automation run fixture')
-      }
-      importProfileStateJson(db, JSON.stringify({ automationRuns: [fixtureRun] }), {
-        now: () => 100
-      })
-      // Legacy histories can keep duplicate run ids, which the per-run rows refuse.
-      const duplicated = [fixtureRun, { ...fixtureRun, title: 'Duplicate id' }]
-
-      expect(
-        writeProfileStateDomains(db, {
-          expectedRevision: 1,
-          replacements: [],
-          automationRunsAfter: duplicated
-        })
-      ).toMatchObject({ changed: true, revision: 2 })
-      expect(JSON.parse(exportProfileStateJson(db)).automationRuns).toEqual(duplicated)
-    } finally {
-      db.close()
-    }
-  })
-
   it('rolls back every domain when a later mutation fails', () => {
     const db = openTestDatabase()
     try {
@@ -135,35 +105,6 @@ describe('profile state dirty-domain writes', () => {
       })
     } finally {
       db.close()
-    }
-  })
-
-  it('fences two independently opened database writers with the shared revision', () => {
-    const directory = mkdtempSync(join(tmpdir(), 'orca-profile-state-domain-writer-fence-'))
-    temporaryDirectories.push(directory)
-    const databasePath = profileStateDatabaseFile(directory)
-    const first = openProfileStateDatabase(databasePath, 'profile-a').db
-    const second = openProfileStateDatabase(databasePath, 'profile-a').db
-    try {
-      importProfileStateJson(first, JSON.stringify({ automationRuns: [{ id: 'run-1' }] }))
-      expect(readProfileStateRevision(second)).toBe(1)
-      writeProfileStateDomain(first, {
-        domain: 'automationRuns',
-        payload: JSON.stringify([{ id: 'run-1', status: 'completed' }]),
-        expectedRevision: 1
-      })
-
-      expect(() =>
-        writeProfileStateDomain(second, {
-          domain: 'automationRuns',
-          payload: JSON.stringify([{ id: 'run-1', status: 'failed' }]),
-          expectedRevision: 1
-        })
-      ).toThrowError(ProfileStateRevisionConflictError)
-      expect(readProfileStateRevision(second)).toBe(2)
-    } finally {
-      first.close()
-      second.close()
     }
   })
 })

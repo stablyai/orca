@@ -13,7 +13,7 @@ import {
 import type { SetupDecision } from '../../../../shared/worktree/create-types'
 import type { WorktreeCreationRequest } from '@/lib/workspace/creation/pending-worktree-creation'
 import { resolveComposerBranchNameOverrideForCreate } from '../composer-branch-selection'
-import { resolveFolderSetupSupported } from '@/lib/use-folder-setup-supported'
+import { resolveFolderSetupSupported } from '@/lib/workspace/creation/setup/folder-setup-support'
 import { translate } from '@/i18n/i18n'
 import { resolveWorktreeCreateBaseBranch } from '@/runtime/source-control/worktree-creation/worktree-create-base'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'

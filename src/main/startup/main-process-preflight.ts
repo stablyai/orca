@@ -75,9 +75,10 @@ import { setDefaultProxySessionResolver } from '../network/electron-default-prox
 import { initDataPath, getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
 import { applyMacPressAndHoldDefaultAtStartup } from '../window/desktop-integration/macos-press-and-hold-default'
 import { configureSessionParseCachePersistence } from '../ai-vault/parse-cache/session-parse-cache-persistence'
-import { initOrcaProfilePaths } from '../orca-profiles/profile-index-store'
-import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
-import { recoverPendingProfileProjectMoves } from '../orca-profiles/profile-project-move-intent'
+import '../orca-profiles/profile-index-store'
+// oxfmt-ignore
+import { getProfileUserDataPath, initOrcaProfilePaths } from '../orca-profiles/profile-storage-paths'
+import { recoverPendingProfileProjectMoves } from '../orca-profiles/project-transfer/profile-project-move-intent'
 import { initStatsPath } from '../stats/collector'
 import { initClaudeUsagePath } from '../claude-usage/store'
 import { initCodexUsagePath } from '../codex-usage/store'

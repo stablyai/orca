@@ -1,4 +1,4 @@
-import { useFolderSetupSupport } from '@/lib/use-folder-setup-supported'
+import { useFolderSetupSupport } from '@/lib/workspace/creation/setup/folder-setup-support'
 import type { DerivedComposerStateInput } from './composer-target-input-contracts'
 
 import { useMemo } from 'react'
