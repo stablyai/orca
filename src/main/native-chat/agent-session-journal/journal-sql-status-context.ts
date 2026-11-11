@@ -10,7 +10,11 @@ import type { JournalStatusItem, JournalStatusItemSelection } from './journal-st
 import { sqlJournalStatusItems } from './journal-sql-status-items'
 import { sqlFailedStatusItems, sqlHasStatusRequestItem } from './journal-sql-status-request-items'
 import { sqlStatusRelatedInputIds } from './journal-sql-status-inputs'
-import { journalDomainFullDisplaySql } from './journal-domain-stop-notes'
+import {
+  readJournalDomainStopStates,
+  resolveJournalDomainDisplay,
+  journalDomainDisplayTurnState
+} from './journal-domain-item-display'
 import type { JournalDomainSubmissionStoredFacts } from './journal-domain-submission-records'
 import {
   journalDomainInputForItem,
@@ -64,13 +68,23 @@ export class JournalSqlStatusContext {
   private current(id: string) {
     if (!this.items.has(id)) {
       const row = this.scope.db
-        .prepare(`SELECT payload_json,${journalDomainFullDisplaySql()} AS display_json,
+        .prepare(`SELECT payload_json,wire_version,wire_json,
         hidden,COALESCE(execution_owner,owner_fence) AS fence
         FROM journal_items WHERE session_id=? AND epoch=? AND item_id=?`)
         .get(...this.scope.prefix, id)
       if (row) {
         this.scope.examined(row)
+        const source = this.scope.decode<AgentJournalRenderItem>(row.payload_json)
+        const states = readJournalDomainStopStates(this.scope.db, this.scope, [id])
+        const displayed = resolveJournalDomainDisplay(
+          source,
+          row.wire_version,
+          row.wire_json,
+          journalDomainDisplayTurnState(source, states)
+        )
+        row.display_json = displayed === source ? row.payload_json : JSON.stringify(displayed)
       }
+
       this.items.set(
         id,
         row

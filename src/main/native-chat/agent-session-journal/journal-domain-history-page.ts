@@ -11,17 +11,15 @@ import {
   type AgentSessionHistoryResult
 } from '../../../shared/agent-session/agent-session-wire'
 import type {
-  AgentJournalRenderItem,
   AgentJournalSnapshot,
   AgentJournalSubmission
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   BOUNDED_FRAME_CONTENT_BUDGET_BYTES,
-  historyContentBytes,
   oversizedHistoryItem,
   resolveHistoryLimit,
-  submissionBytesByItemId,
-  type HistoryReader
+  type HistoryReader,
+  type HistoryItemForm
 } from '../agent-session-wire/publication/history/agent-session-history-page-bounds'
 import { buildAgentSessionHistoryPage } from '../agent-session-wire/publication/history/agent-session-history-page-result'
 import {
@@ -29,11 +27,7 @@ import {
   type QueuedImageHistoryPolicy
 } from '../agent-session-wire/publication/history/agent-session-queued-image-reader'
 import { JournalSqlScope } from './journal-sql-scope'
-import {
-  readJournalDomainSourceHeaders,
-  readJournalDomainSourceBody,
-  isJournalDomainSourceHeader
-} from './journal-domain-source-items'
+import { readJournalDomainSourceHeaders } from './journal-domain-source-items'
 import { journalContextEpoch } from './context-epochs/journal-context-epoch'
 import {
   latestTurnItem,
@@ -42,12 +36,12 @@ import {
   itemSubmissions
 } from './journal-domain-history-after'
 import { readJournalDomainHistoryRoster } from './journal-domain-history-roster'
+import { formJournalDomainHistoryGroups } from './journal-domain-history-groups'
 import {
   admitJournalDomainHistoryGroups,
   readJournalDomainHistoryEnvelope,
   journalDomainSequenceGroups,
-  selectJournalDomainHistoryWindow,
-  type JournalDomainHistoryHeader
+  selectJournalDomainHistoryWindow
 } from './journal-domain-history-window'
 
 export type JournalDomainHistoryRequest = Omit<AgentSessionHistoryRequest, 'direction'> & {
@@ -150,13 +144,14 @@ function readHistory(
       resolveHistoryLimit(request.limit),
       reader,
       latestTurnItem(db, head),
-      (ids) =>
+      (ids, forms) =>
         readJournalDomainHistorySnapshot(
           db,
           head,
           ids,
           queuedImageSourceIds(request),
-          reader.presentSubmission
+          reader.presentSubmission,
+          forms
         ),
       reset,
       request.reader?.queuedImages
@@ -201,9 +196,10 @@ function historyPage(
     ]
   }
   const window = selectJournalDomainHistoryWindow(db, where, prefix, end, limit, sources)
+  const forms = new Map<string, HistoryItemForm>()
   const admitted = request.reader?.queuedImages
     ? { groups: [...journalDomainSequenceGroups(window)], oversized: false }
-    : admitJournalDomainHistoryGroups(window, reader.budgetBytes)
+    : admitJournalDomainHistoryGroups(window, reader.budgetBytes, db, head, forms)
   const { groups, submissions } = admitted.oversized
     ? {
         groups: [
@@ -217,7 +213,7 @@ function historyPage(
           admitted.groups[0]!.map((header) => header.itemId)
         )
       }
-    : formHistoryGroups(db, head, admitted.groups, reader)
+    : formJournalDomainHistoryGroups(db, head, admitted.groups, reader, forms)
   const items = groups.toReversed().flat()
   const oldest = items[0]?.sequence ?? end
   const turn = latestTurnItem(db, head)
@@ -245,56 +241,6 @@ function historyPage(
     fence: request.fence,
     subagentRoster: readJournalDomainHistoryRoster(db, prefix, items)
   })
-}
-
-/** Form only positional candidates through the first exact non-fitting sequence group. */
-function formHistoryGroups(
-  db: Database.Database,
-  head: JournalDomainHistoryHead,
-  groups: readonly JournalDomainHistoryHeader[][],
-  reader: HistoryReaderForm
-): { groups: AgentJournalRenderItem[][]; submissions: AgentJournalSubmission[] } {
-  const body = db.prepare(
-    'SELECT COALESCE(wire_json,payload_json) AS wire_json FROM journal_items WHERE session_id=? AND epoch=? AND item_id=?'
-  )
-  const kept: AgentJournalRenderItem[][] = []
-  const submissions: AgentJournalSubmission[] = []
-  const ordinals = new Map<string, number>()
-  let total = 0
-  for (const group of groups) {
-    const sends = itemSubmissions(
-      db,
-      head,
-      group.map((header) => header.itemId),
-      reader.presentSubmission,
-      ordinals
-    )
-    const formed = group.map((header) =>
-      reader.form(
-        isJournalDomainSourceHeader(header)
-          ? readJournalDomainSourceBody(new JournalSqlScope(db, head.sessionId, head.epoch), header)
-          : JSON.parse(String(body.get(head.sessionId, head.epoch, header.itemId)!.wire_json))
-      )
-    )
-    const bytes = historyContentBytes(formed, [], submissionBytesByItemId(sends))
-    if (kept.length > 0 && total + bytes > reader.budgetBytes) {
-      break
-    }
-    kept.push(
-      formed.map(({ item }) => (bytes > reader.budgetBytes ? oversizedHistoryItem(item) : item))
-    )
-    submissions.push(...sends)
-    total += bytes
-    if (bytes > reader.budgetBytes) {
-      break
-    }
-  }
-  submissions.sort(
-    (a, b) =>
-      a.submittedAt - b.submittedAt ||
-      ordinals.get(a.clientMessageId)! - ordinals.get(b.clientMessageId)!
-  )
-  return { groups: kept, submissions }
 }
 
 function queuedImageSourceIds(request: JournalDomainHistoryRequest): string[] | undefined {

@@ -105,6 +105,7 @@ CREATE TABLE journal_items (
   subagent_row INTEGER NOT NULL DEFAULT 0,
   subagent_group_key TEXT,
   turn_marker INTEGER NOT NULL DEFAULT 0,
+  wire_version INTEGER,
   wire_bytes INTEGER,
   turn_item_id TEXT,
   queue_command_turn INTEGER NOT NULL DEFAULT 0,

@@ -5,6 +5,7 @@ import type {
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { JournalSqlPointRead, JournalSqlPointReadResult } from './journal-sql-point-read'
 import type { JournalSqlScope } from './journal-sql-scope'
+import { readJournalDomainItemDetail } from './journal-domain-item-presentation'
 import { journalContextEpoch } from './context-epochs/journal-context-epoch'
 import { readJournalDomainSubmissionBody } from './journal-domain-submission-records'
 import type { JournalHistoryOrigin } from './context-epochs/journal-history-origin'
@@ -96,8 +97,14 @@ export function readJournalDomainEntity(
     }
     case 'item':
     case 'item-detail': {
+      if (operation.kind === 'item-detail') {
+        return {
+          kind: operation.kind,
+          item: readJournalDomainItemDetail(db, scope, operation.itemId)
+        }
+      }
       const row = db
-        .prepare(`SELECT ${operation.kind === 'item-detail' ? 'COALESCE(detail_json,payload_json)' : 'payload_json'} AS payload_json FROM journal_items
+        .prepare(`SELECT payload_json FROM journal_items
         WHERE session_id=? AND epoch=? AND item_id=? AND hidden=0`)
         .get(...prefix, operation.itemId)
       const item: AgentJournalRenderItem | null = row ? JSON.parse(String(row.payload_json)) : null

@@ -1,4 +1,4 @@
-import { journalDomainFullDisplaySql } from './journal-domain-stop-notes'
+import { readJournalDomainDisplayedRow } from './journal-domain-item-display'
 import { createJournalForkWorkspace } from './journal-fork-workspace'
 import { JournalForkPresentation } from './journal-fork-presentation'
 import type Database from '../../sqlite/sync-database'
@@ -8,10 +8,7 @@ import {
   parseAgentJournalItemKey
 } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { savedRewindKeys } from '../../../shared/agent-session/lifecycle/agent-session-rewind'
-import type {
-  AgentJournalRenderItem,
-  AgentJournalSubmission
-} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { JournalReplacementItem } from './context-epochs/journal-epoch-replacement'
 import {
   omitForkPresentation,
@@ -247,7 +244,7 @@ export class JournalForkPreparation {
             continue
           }
           const row = this.db
-            .prepare(`SELECT header.rank,header.item_id,header.provider_key,${journalDomainFullDisplaySql('item')} AS payload_json
+            .prepare(`SELECT header.rank,header.item_id,header.provider_key,item.wire_version,item.wire_json,item.payload_json
             FROM temp.fork_headers header CROSS JOIN journal_items item
             WHERE header.rank>? AND (header.rank<? OR EXISTS(SELECT 1 FROM temp.fork_kept WHERE member=header.member))
               AND item.session_id=? AND item.epoch=? AND item.item_id=header.item_id
@@ -261,7 +258,11 @@ export class JournalForkPreparation {
             this.after = 0
             return { kind: 'progress', sourceReleased: true }
           }
-          const item: AgentJournalRenderItem = JSON.parse(String(row.payload_json))
+          const { item, payload } = readJournalDomainDisplayedRow(
+            this.db,
+            { sessionId: prefix[0], epoch: prefix[1] },
+            row
+          )
           const identity = parseAgentJournalItemKey(String(row.provider_key))
           if (!identity) {
             throw new Error('agent_session_fork:missing-identity')
@@ -275,7 +276,7 @@ export class JournalForkPreparation {
           )
           this.db
             .prepare('INSERT INTO temp.fork_bodies(rank,item_id,payload,mapped) VALUES(?,?,?,?)')
-            .run(row.rank, item.itemId, row.payload_json, mapped)
+            .run(row.rank, item.itemId, payload, mapped)
           this.edges = forkDependencies(item)
           if (omitForkPresentation(item.body)) {
             this.omit(item.itemId)

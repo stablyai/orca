@@ -5,8 +5,12 @@ import type {
 import type { AgentSessionForkedFrom } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import { journalContextEpoch } from './context-epochs/journal-context-epoch'
 import type { JournalSqlScope } from './journal-sql-scope'
-import { journalDomainFullDisplaySql } from './journal-domain-stop-notes'
-
+import { readJournalDomainClientItems } from './journal-domain-item-presentation'
+import {
+  readJournalDomainStopStates,
+  resolveJournalDomainDisplay,
+  journalDomainDisplayTurnState
+} from './journal-domain-item-display'
 export type JournalPublicationRead =
   | {
       kind: 'fork-marker-group'
@@ -50,11 +54,16 @@ export function readJournalDomainPublication(
         ])
       ]
       const rows = db
-        .prepare(`SELECT ${journalDomainFullDisplaySql('item')} AS payload_json FROM json_each(?) wanted
+        .prepare(`SELECT item.item_id,item.wire_version,item.wire_json,item.payload_json FROM json_each(?) wanted
         CROSS JOIN journal_items item INDEXED BY journal_items_visible_position
         WHERE item.session_id=? AND item.epoch=? AND item.hidden=0 AND item.sequence=wanted.value
         ORDER BY item.sequence,item.sequence_index,item.ordinal`)
         .all(JSON.stringify(sequences), ...prefix)
+      const states = readJournalDomainStopStates(
+        db,
+        scope,
+        rows.map((row) => String(row.item_id))
+      )
       return {
         kind: operation.kind,
         snapshot: {
@@ -63,7 +72,15 @@ export function readJournalDomainPublication(
             epoch: journalContextEpoch(scope.epoch, Number(head.context_boundary)),
             sequence: Number(head.last_sequence)
           },
-          items: rows.map((row) => scope.decode<AgentJournalRenderItem>(row.payload_json)),
+          items: rows.map((row) => {
+            const item = scope.decode<AgentJournalRenderItem>(row.payload_json)
+            return resolveJournalDomainDisplay(
+              item,
+              row.wire_version,
+              row.wire_json,
+              journalDomainDisplayTurnState(item, states)
+            )
+          }),
           submissions: []
         }
       }
@@ -71,15 +88,18 @@ export function readJournalDomainPublication(
     case 'projected-stop-notes': {
       const limit = Math.max(1, Math.min(128, Math.floor(operation.limit)))
       const rows = db
-        .prepare(`SELECT ordinal,COALESCE(wire_json,payload_json) AS payload_json FROM journal_items
+        .prepare(`SELECT ordinal,item_id FROM journal_items item
         INDEXED BY journal_items_original_stop_note
         WHERE session_id=? AND epoch=? AND hidden=0 AND original_stop_note_json IS NOT NULL
         AND ordinal>? ORDER BY ordinal LIMIT ?`)
         .all(...prefix, operation.afterOrdinal, limit)
       return {
         kind: operation.kind,
-        items: rows.flatMap((row) => {
-          const item = scope.decode<AgentJournalRenderItem>(row.payload_json)
+        items: readJournalDomainClientItems(
+          db,
+          scope,
+          rows.map((row) => String(row.item_id))
+        ).flatMap((item) => {
           return item.body.kind === 'status' && item.body.failure === undefined ? [item] : []
         }),
         nextOrdinal: rows.length === limit ? Number(rows.at(-1)!.ordinal) : null

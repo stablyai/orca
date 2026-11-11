@@ -7,7 +7,7 @@ import type { structuredAgentSessionStopNoteIdentity } from '../operations/struc
 import type { StructuredAgentSessionLogger } from '../host/structured-agent-session-logger'
 import type { StructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-current-work'
 
-export const STOP_NOTE_CANCELLATION_REQUESTED = 'Cancellation requested.'
+export { STOP_NOTE_CANCELLATION_REQUESTED } from '../../../../shared/agent-session/view/structured-agent-session-stop-note-identity'
 
 export function structuredAgentSessionStoppedTurnId(
   work: Pick<StructuredAgentSessionCurrentWork, 'activeTurnId'>,

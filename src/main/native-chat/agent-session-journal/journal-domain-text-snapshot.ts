@@ -46,11 +46,12 @@ export function writeJournalDomainTextSnapshot(
     )
   }
   const payload = JSON.stringify(item)
-  const { wireBytes, wireJson, detailJson } = journalDomainItemWire(item, payload)
-  db.prepare(`UPDATE journal_items SET payload_json=?,revision=?,wire_bytes=?,wire_json=?,detail_json=?,outline_source_json=?
+  const { wireVersion, wireBytes, wireJson, detailJson } = journalDomainItemWire(item, payload)
+  db.prepare(`UPDATE journal_items SET payload_json=?,revision=?,wire_version=?,wire_bytes=?,wire_json=?,detail_json=?,outline_source_json=?
     WHERE session_id=? AND epoch=? AND item_id=?`).run(
     payload,
     revision,
+    wireVersion,
     wireBytes,
     wireJson,
     detailJson,

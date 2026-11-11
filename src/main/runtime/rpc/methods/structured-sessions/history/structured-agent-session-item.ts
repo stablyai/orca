@@ -3,7 +3,7 @@
 import type { AgentJournalRenderItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { ItemParams } from '../../../../../../shared/rpc-contract/structured-agent-session-params'
 import { shortenedAgentJournalItem } from '../../../../../native-chat/agent-session-wire/publication/history/agent-session-item-wire-form'
-import { JOURNAL_ITEM_DETAIL_MAX_BYTES } from '../../../../../native-chat/agent-session-journal/journal-domain-history-metadata'
+import { JOURNAL_ITEM_DETAIL_MAX_BYTES } from '../../../../../native-chat/agent-session-journal/journal-domain-item-wire'
 import { defineMethod } from '../../../core'
 import { requireInstalledStructuredHost } from '../creation/structured-agent-session-gate'
 import { projectReceiptDeviceItem } from '../subscriptions/structured-agent-session-receipt-devices'

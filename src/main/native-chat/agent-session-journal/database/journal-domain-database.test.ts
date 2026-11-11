@@ -26,6 +26,7 @@ import {
 import { readMailWithdrawal } from '../writing/mail-withdrawal-receipts'
 import { structuredAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
 import { migrateJournalDomainSchema } from '../journal-domain-schema'
+import { JOURNAL_DOMAIN_SCHEMA_001 } from './journal-domain-schema-001'
 
 const cleanup: (() => void)[] = []
 afterEach(() => {
@@ -316,4 +317,35 @@ it('preserves positive person and historical system deletion evidence from impor
   expect(
     readMailWithdrawal(current, { ...attempt, operation_id: 'unattributed-card' }, 'epoch')
   ).toBe('unknown')
+})
+
+it('upgrades schema one atomically without trusting old forms or changing source bodies', () => {
+  const db = new Database(':memory:')
+  cleanup.push(() => db.close())
+  db.exec(JOURNAL_DOMAIN_SCHEMA_001.replace('  wire_version INTEGER,\n', ''))
+  db.pragma('user_version=1')
+  db.exec(`INSERT INTO journal_items(session_id,epoch,item_id,ordinal,revision,sequence,sequence_index,owner_fence,payload_json,placement_json)
+    VALUES('chat','epoch','item',0,1,1,0,1,'authoritative source','{}')`)
+  const pragma = db.pragma.bind(db)
+  const publication = vi.spyOn(db, 'pragma').mockImplementation((sql, ...args) => {
+    if (sql === 'user_version = 2') {
+      throw new Error('version publication failed')
+    }
+    return pragma(sql, ...args)
+  })
+  expect(() => migrateJournalDomainSchema(db)).toThrow('version publication failed')
+  publication.mockRestore()
+  expect(db.pragma('user_version', { simple: true })).toBe(1)
+  expect(() => db.prepare('SELECT wire_version FROM journal_items')).toThrow(/no such column/)
+  migrateJournalDomainSchema(db)
+  expect(db.pragma('user_version', { simple: true })).toBe(2)
+  expect(db.prepare('SELECT payload_json,wire_version FROM journal_items').get()).toEqual({
+    payload_json: 'authoritative source',
+    wire_version: null
+  })
+  migrateJournalDomainSchema(db)
+  expect(db.prepare('SELECT payload_json,wire_version FROM journal_items').get()).toEqual({
+    payload_json: 'authoritative source',
+    wire_version: null
+  })
 })

@@ -7,17 +7,21 @@ import type {
   AgentJournalSubmission
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { readAgentSessionForwardHistory } from '../agent-session-wire/publication/history/agent-session-history-forward-page'
-import type { HistoryReader } from '../agent-session-wire/publication/history/agent-session-history-page-bounds'
+import type {
+  HistoryReader,
+  HistoryItemForm
+} from '../agent-session-wire/publication/history/agent-session-history-page-bounds'
 import type { QueuedImageHistoryPolicy } from '../agent-session-wire/publication/history/agent-session-queued-image-reader'
 import type { JournalReadSince } from './journal-store-contracts'
-import type { JournalOutcomeReadRow, JournalReadRow } from './replay/journal-read-row'
+import type { JournalOutcomeReadRow } from './replay/journal-read-row'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   readJournalDomainSourceHeaders,
   readJournalDomainSourceBody
 } from './journal-domain-source-items'
 import { JournalSqlScope } from './journal-sql-scope'
-import { JOURNAL_DOMAIN_HISTORY_ITEM_BYTES } from './journal-domain-history-window'
+import { fittingJournalDomainEventCount } from './journal-domain-history-window'
+import { readJournalDomainClientItems } from './journal-domain-item-presentation'
 import { findSequenceGap, resolveJournalResume } from './replay/journal-cursor'
 import type { JournalDomainEventChanges } from './journal-domain-schema'
 import type { JournalDomainHistoryHead } from './journal-domain-history-page'
@@ -30,7 +34,7 @@ export function readJournalDomainForwardHistory(
   limit: number,
   reader: Pick<HistoryReader, 'form' | 'budgetBytes'>,
   latestTurn: AgentJournalRenderItem | null,
-  readSnapshot: (ids: Set<string>) => AgentJournalSnapshot,
+  readSnapshot: (ids: Set<string>, forms: Map<string, HistoryItemForm>) => AgentJournalSnapshot,
   reset: (
     reason: Extract<AgentSessionHistoryResult, { ok: false }>['reset']
   ) => AgentSessionHistoryResult,
@@ -39,9 +43,16 @@ export function readJournalDomainForwardHistory(
   // One bounded identity read serves the size admission and the builder's lookahead.
   const links = queuedImages && new Map(queuedImages.links)
   const since = cursor && readJournalDomainEvents(db, head, cursor, limit + 1, links)
+  const forms = new Map<string, HistoryItemForm>()
   const admitted =
     since?.ok && queuedImages === undefined
-      ? fittingEventCount(db, head, since.rows.slice(0, limit), reader.budgetBytes)
+      ? fittingJournalDomainEventCount(
+          db,
+          head,
+          since.rows.slice(0, limit),
+          reader.budgetBytes,
+          forms
+        )
       : limit
   let materialized: AgentJournalSnapshot | undefined
   return readAgentSessionForwardHistory(
@@ -64,7 +75,7 @@ export function readJournalDomainForwardHistory(
     admitted,
     reader,
     (ids) => {
-      materialized ??= readSnapshot(ids)
+      materialized ??= readSnapshot(ids, forms)
       return {
         ...materialized,
         items: materialized.items.filter((item) => ids.has(item.itemId)),
@@ -74,44 +85,6 @@ export function readJournalDomainForwardHistory(
       }
     }
   )
-}
-
-/** The longest event prefix whose touched rows' stored sizes fit, so excluded bodies are never read. */
-function fittingEventCount(
-  db: Database.Database,
-  head: JournalDomainHistoryHead,
-  rows: readonly JournalReadRow[],
-  budgetBytes: number
-): number {
-  const touched = rows.map((row) =>
-    row.kind === 'outcome'
-      ? [...row.itemIds, ...row.submissionIds.map(agentJournalSubmissionKey)]
-      : []
-  )
-  const sizes = new Map(
-    db
-      .prepare(`SELECT item.item_id, ${JOURNAL_DOMAIN_HISTORY_ITEM_BYTES} AS bytes FROM json_each(?) wanted
-        CROSS JOIN journal_items item
-        WHERE item.session_id=? AND item.epoch=? AND item.item_id=wanted.value AND item.hidden=0`)
-      .all(JSON.stringify([...new Set(touched.flat())]), head.sessionId, head.epoch)
-      .map((row) => [String(row.item_id), Number(row.bytes)])
-  )
-  const counted = new Set<string>()
-  let total = 0
-  let count = 0
-  for (const ids of touched) {
-    for (const id of ids) {
-      if (!counted.has(id)) {
-        counted.add(id)
-        total += sizes.get(id) ?? 0
-      }
-    }
-    if (count > 0 && total > budgetBytes) {
-      break
-    }
-    count += 1
-  }
-  return Math.max(count, 1)
 }
 
 function firstEvents(
@@ -227,10 +200,11 @@ export function itemSubmissions(
   head: JournalDomainHistoryHead,
   itemIds: readonly string[],
   present: (send: AgentJournalSubmission) => AgentJournalSubmission = (send) => send,
-  ordinals?: Map<string, number>
+  ordinals?: Map<string, number>,
+  byItem?: Map<string, AgentJournalSubmission[]>
 ): AgentJournalSubmission[] {
   return db
-    .prepare(`SELECT attempt.payload_json, attempt.ordinal FROM json_each(?) wanted
+    .prepare(`SELECT attempt.payload_json, attempt.ordinal, attempt.item_id FROM json_each(?) wanted
       CROSS JOIN journal_submission_attempts attempt
       WHERE attempt.session_id=? AND attempt.epoch=? AND attempt.current=1 AND attempt.item_id=wanted.value
       ORDER BY attempt.submitted_at, attempt.ordinal`)
@@ -238,6 +212,11 @@ export function itemSubmissions(
     .map((row) => {
       const send = present(JSON.parse(String(row.payload_json)))
       ordinals?.set(send.clientMessageId, Number(row.ordinal))
+      if (byItem) {
+        const group = byItem.get(String(row.item_id)) ?? []
+        group.push(send)
+        byItem.set(String(row.item_id), group)
+      }
       return send
     })
 }
@@ -247,20 +226,25 @@ export function readJournalDomainHistorySnapshot(
   head: JournalDomainHistoryHead,
   ids: ReadonlySet<string>,
   sourceIds: readonly string[] = [],
-  present?: (send: AgentJournalSubmission) => AgentJournalSubmission
+  present?: (send: AgentJournalSubmission) => AgentJournalSubmission,
+  forms?: Map<string, HistoryItemForm>
 ): AgentJournalSnapshot {
   const wanted = [...ids]
   return {
     sessionId: head.sessionId,
     cursor: head.cursor,
     items: [
-      ...db
-        .prepare(`SELECT COALESCE(item.wire_json,item.payload_json) AS payload_json FROM json_each(?) wanted
-        CROSS JOIN journal_items item
-        WHERE item.session_id=? AND item.epoch=? AND item.item_id=wanted.value AND item.hidden=0
-        ORDER BY item.sequence, item.sequence_index, item.ordinal`)
-        .all(JSON.stringify(wanted), head.sessionId, head.epoch)
-        .map((row) => JSON.parse(String(row.payload_json))),
+      ...readJournalDomainClientItems(
+        db,
+        head,
+        db
+          .prepare(`SELECT item.item_id FROM json_each(?) wanted
+        CROSS JOIN journal_items item WHERE item.session_id=? AND item.epoch=? AND item.item_id=wanted.value AND item.hidden=0
+        ORDER BY item.sequence,item.sequence_index,item.ordinal`)
+          .all(JSON.stringify(wanted), head.sessionId, head.epoch)
+          .map((row) => String(row.item_id)),
+        forms
+      ),
       ...readJournalDomainSourceHeaders(
         new JournalSqlScope(db, head.sessionId, head.epoch),
         sourceIds.filter((id) => ids.has(agentJournalSubmissionKey(id)))
@@ -279,8 +263,8 @@ export function latestTurnItem(
   head: JournalDomainHistoryHead
 ): AgentJournalRenderItem | null {
   const row = db
-    .prepare(`SELECT COALESCE(wire_json,payload_json) AS payload_json FROM journal_items WHERE session_id=? AND epoch=? AND hidden=0
+    .prepare(`SELECT item_id FROM journal_items item WHERE session_id=? AND epoch=? AND hidden=0
       AND turn_marker=1 ORDER BY sequence DESC, sequence_index DESC, ordinal DESC LIMIT 1`)
     .get(head.sessionId, head.epoch)
-  return row ? JSON.parse(String(row.payload_json)) : null
+  return row ? (readJournalDomainClientItems(db, head, [String(row.item_id)])[0] ?? null) : null
 }

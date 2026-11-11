@@ -1,3 +1,8 @@
+import { isStructuredAgentSessionStopNote } from '../../../../shared/agent-session/view/structured-agent-session-stop-note-identity'
+export {
+  isStructuredAgentSessionStopNote,
+  structuredAgentSessionStopNoteIdentity
+} from '../../../../shared/agent-session/view/structured-agent-session-stop-note-identity'
 import type { JournalWorkReader } from '../../agent-session-journal/journal-work-read'
 // Delivery opens command turns; provider receipts settle sends and translator frames end turns.
 // Running commands block input; the host ends refused commands or recovers exited children.
@@ -12,16 +17,12 @@ import {
   type AgentJournalDispatchRejection,
   type AgentSessionFailureWordsContext
 } from '../../../../shared/agent-session/failures/agent-session-failure-words'
-import {
-  agentJournalSubmissionKey,
-  parseAgentJournalItemKey
-} from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type {
   AgentJournalItemBody,
   AgentJournalMessageItem,
   AgentJournalSubmission
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import {
   agentSessionCompactCommandText,
   type AgentSessionConversationCommand
@@ -99,17 +100,6 @@ export function structuredAgentSessionCommandRunning(
 
 export function isStructuredAgentSessionCommandTurnId(turnId: string): boolean {
   return turnId.startsWith('compact:')
-}
-
-const STOP_NOTE_PREFIX = 'stop:'
-
-export function structuredAgentSessionStopNoteIdentity(stopKey: string): AgentJournalItemIdentity {
-  return { provider: 'orca', clientMessageId: `${STOP_NOTE_PREFIX}${stopKey}` }
-}
-
-export function isStructuredAgentSessionStopNote(itemId: string): boolean {
-  const identity = parseAgentJournalItemKey(itemId)
-  return identity?.provider === 'orca' && identity.clientMessageId.startsWith(STOP_NOTE_PREFIX)
 }
 
 /** Read Stop from the journal so cached state cannot outlive the command. */

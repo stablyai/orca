@@ -18,6 +18,7 @@ import { readJournalSqlPoint } from './journal-sql-point-read'
 import { JournalSqlScope } from './journal-sql-scope'
 import { JournalSqlStatusContext } from './journal-sql-status-context'
 import { removeJournalDomainItem } from './journal-domain-item-removal'
+import { refreshJournalDomainStopNotes } from './journal-domain-stop-notes'
 
 const close: (() => void)[] = []
 afterEach(() => close.splice(0).forEach((fn) => fn()))
@@ -252,4 +253,59 @@ it('imports an already interrupted Stop from the complete raw source even when i
       .prepare('SELECT turn_item_id,original_stop_note_json FROM journal_items WHERE item_id=?')
       .get(noteId)
   ).toEqual({ turn_item_id: turnId, original_stop_note_json: JSON.stringify(original) })
+})
+
+it('derives a stale Stop presentation from its owning turn before history admission', () => {
+  const { db, write, turn, display, item } = fixture()
+  turn('interrupted')
+  write('stop:turn-1', original, turnId)
+  db.prepare(`UPDATE journal_items SET wire_version=NULL,wire_bytes=99999999,
+    wire_json=payload_json,detail_json=payload_json WHERE item_id=?`).run(noteId)
+  expect(display()).toMatchObject({
+    item: { body: { kind: 'status', text: 'Cancellation requested.' } }
+  })
+  expect(
+    readJournalDomainHistoryPage(db, {
+      sessionId: 'chat',
+      direction: 'tail',
+      reader: { form: 'client', budgetBytes: 1024 }
+    }).page.items
+  ).toContainEqual(
+    expect.objectContaining({
+      itemId: noteId,
+      body: { kind: 'status', text: 'Cancellation requested.' }
+    })
+  )
+  const context = new JournalSqlStatusContext(new JournalSqlScope(db, 'chat', 'epoch'))
+  expect(context.displayed(noteId)?.body).toEqual({
+    kind: 'status',
+    text: 'Cancellation requested.'
+  })
+  expect(
+    readJournalSqlPoint(db, {
+      sessionId: 'chat',
+      operation: { kind: 'projected-stop-notes', afterOrdinal: -1, limit: 128 }
+    })
+  ).toMatchObject({
+    items: [{ itemId: noteId, body: { kind: 'status', text: 'Cancellation requested.' } }]
+  })
+  expect(
+    readJournalSqlPoint(db, {
+      sessionId: 'chat',
+      operation: { kind: 'fork-marker-group', boundary: { kind: 'item', itemId: noteId } }
+    })
+  ).toMatchObject({
+    snapshot: {
+      items: [{ itemId: noteId, body: { kind: 'status', text: 'Cancellation requested.' } }]
+    }
+  })
+  expect(item(noteId)?.body).toEqual(original)
+  // An ordinary owning-turn refresh repairs the stamp even when its displayed body is equal.
+  runJournalTransaction(db, () => refreshJournalDomainStopNotes(db, target, [turnId]))
+  expect(db.prepare('SELECT wire_version FROM journal_items WHERE item_id=?').get(noteId)).toEqual({
+    wire_version: 1
+  })
+  expect(display()).toMatchObject({
+    item: { body: { kind: 'status', text: 'Cancellation requested.' } }
+  })
 })

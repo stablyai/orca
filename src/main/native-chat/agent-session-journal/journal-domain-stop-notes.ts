@@ -1,9 +1,15 @@
+import {
+  readJournalDomainStopStates,
+  resolveJournalDomainDisplay,
+  journalDomainDisplayTurnState
+} from './journal-domain-item-display'
 import type Database from '../../sqlite/sync-database'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import { isStructuredAgentSessionStopNote } from '../agent-session-wire/operations/structured-agent-session-command-turn'
+import { isStructuredAgentSessionStopNote } from '../../../shared/agent-session/view/structured-agent-session-stop-note-identity'
 import { projectJournalStopNote } from './context-epochs/journal-stop-note-projection'
-import { journalDomainItemWire } from './journal-domain-history-metadata'
+import { journalDomainItemWire } from './journal-domain-item-wire'
 import { journalDomainOutlineSource } from './journal-domain-outline-source'
+import { AGENT_SESSION_ITEM_WIRE_VERSION } from '../agent-session-wire/publication/history/agent-session-item-presentation-contract'
 
 type Target = { sessionId: string; epoch: string }
 
@@ -39,12 +45,17 @@ export function refreshJournalDomainStopNotes(
 ): AgentJournalRenderItem[] {
   const prefix = [target.sessionId, target.epoch] as const
   const notes = db
-    .prepare(`SELECT item.payload_json, ${journalDomainFullDisplaySql('item')} AS display_json FROM json_each(?) wanted
+    .prepare(`SELECT item.item_id,item.payload_json,item.wire_version,item.wire_json AS display_json FROM json_each(?) wanted
       CROSS JOIN journal_items item
       WHERE item.session_id=? AND item.epoch=? AND item.hidden=0
         AND item.turn_item_id=wanted.value AND item.turn_item_id IS NOT NULL
         AND item.original_stop_note_json IS NOT NULL`)
     .all(JSON.stringify(turnItemIds), ...prefix)
+  const states = readJournalDomainStopStates(
+    db,
+    target,
+    notes.map((row) => String(row.item_id))
+  )
   const turn = db.prepare(`SELECT payload_json FROM journal_items
     WHERE session_id=? AND epoch=? AND item_id=?`)
   const get = (id: string): AgentJournalRenderItem | undefined => {
@@ -52,18 +63,28 @@ export function refreshJournalDomainStopNotes(
     return row ? JSON.parse(String(row.payload_json)) : undefined
   }
   const update =
-    db.prepare(`UPDATE journal_items SET wire_bytes=?,wire_json=?,detail_json=?,outline_source_json=?
+    db.prepare(`UPDATE journal_items SET wire_version=?,wire_bytes=?,wire_json=?,detail_json=?,outline_source_json=?
     WHERE session_id=? AND epoch=? AND item_id=?`)
   const changed: AgentJournalRenderItem[] = []
   for (const row of notes) {
     const source: AgentJournalRenderItem = JSON.parse(String(row.payload_json))
-    const prior: AgentJournalRenderItem = JSON.parse(String(row.display_json))
+    const prior: AgentJournalRenderItem =
+      row.wire_version === AGENT_SESSION_ITEM_WIRE_VERSION
+        ? resolveJournalDomainDisplay(source, row.wire_version, row.display_json, undefined)
+        : resolveJournalDomainDisplay(
+            source,
+            row.wire_version,
+            null,
+            journalDomainDisplayTurnState(source, states)
+          )
     const next = projectJournalStopNote(source, { get, has: (id) => get(id) !== undefined })
-    if (JSON.stringify(next.body) === JSON.stringify(prior.body)) {
+    const same = JSON.stringify(next.body) === JSON.stringify(prior.body)
+    if (same && row.wire_version === AGENT_SESSION_ITEM_WIRE_VERSION) {
       continue
     }
     const wire = journalDomainItemWire(source, String(row.payload_json), next)
     update.run(
+      wire.wireVersion,
       wire.wireBytes,
       wire.wireJson,
       wire.detailJson,
@@ -71,16 +92,9 @@ export function refreshJournalDomainStopNotes(
       ...prefix,
       next.itemId
     )
-    changed.push(next)
+    if (!same || row.wire_version !== AGENT_SESSION_ITEM_WIRE_VERSION) {
+      changed.push(next)
+    }
   }
   return changed
-}
-
-/** Full semantic readers use the saved Stop rewrite, never a normal shortened wire head. */
-export function journalDomainFullDisplaySql(alias = ''): string {
-  const p = alias ? `${alias}.` : ''
-  return `CASE WHEN ${p}original_stop_note_json IS NOT NULL AND ${p}wire_json IS NOT NULL
-    AND json_extract(${p}wire_json,'$.body.kind')='status'
-    AND json_type(${p}wire_json,'$.body.failure') IS NULL
-    THEN ${p}wire_json ELSE ${p}payload_json END`
 }

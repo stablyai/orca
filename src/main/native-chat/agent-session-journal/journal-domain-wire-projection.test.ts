@@ -1,4 +1,4 @@
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import {
   domainLifecycleFixture,
   lifecycleIdentity,
@@ -71,3 +71,83 @@ it('serves bounded history and detail without decoding originals, then replaces 
     readJournalDomainHistoryPage(f.db, { sessionId: 'chat', direction: 'tail' }).page.items[0]
   ).toMatchObject({ revision: 2, body: { output: { head: 'new result' } } })
 })
+
+it.each([null, 0])(
+  'recomputes a missing or stale client form and its admission size (%s)',
+  async (version) => {
+    const f = domainLifecycleFixture(cleanup)
+    for (const value of ['first', 'second']) {
+      await f.run({
+        kind: 'item',
+        identity: lifecycleIdentity(value),
+        options: lifecycleOptions,
+        body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: value }] }
+      })
+    }
+    const plans = vi.spyOn(f.db, 'prepare')
+    f.db
+      .prepare(`UPDATE journal_items SET wire_version=?,wire_bytes=99999999,
+    wire_json=json_set(payload_json,'$.body.blocks[0].text','stale cache'),
+    detail_json=json_set(payload_json,'$.body.blocks[0].text','stale cache')`)
+      .run(version)
+    const tail = readJournalDomainHistoryPage(f.db, {
+      sessionId: 'chat',
+      direction: 'tail',
+      reader: { form: 'client', budgetBytes: 4096 }
+    })
+    expect(tail.page.items).toMatchObject([
+      { itemId: 'orca:first', body: { blocks: [{ text: 'first' }] } },
+      { itemId: 'orca:second', body: { blocks: [{ text: 'second' }] } }
+    ])
+    expect(
+      readJournalDomainHistoryPage(f.db, {
+        sessionId: 'chat',
+        direction: 'after',
+        cursor: { epoch: 'epoch', sequence: 0 },
+        reader: { form: 'client', budgetBytes: 4096 }
+      }).page.items
+    ).toEqual(tail.page.items)
+    expect(
+      readJournalSqlPoint(f.db, {
+        sessionId: 'chat',
+        operation: { kind: 'item-detail', itemId: 'orca:first' }
+      })
+    ).toMatchObject({ item: { body: { blocks: [{ text: 'first' }] } } })
+    const setReads = [
+      ...new Set(
+        plans.mock.calls
+          .map(([sql]) => sql)
+          .filter(
+            (sql) =>
+              sql.includes('CROSS JOIN journal_items item') &&
+              sql.includes('item.item_id=wanted.value')
+          )
+      )
+    ]
+    plans.mockRestore()
+    expect(setReads.length).toBeGreaterThan(0)
+    for (const sql of setReads) {
+      const plan = f.db
+        .prepare(`EXPLAIN QUERY PLAN ${sql}`)
+        .all()
+        .map((row) => String(row.detail))
+        .join('\n')
+      expect(plan).toMatch(/SEARCH item USING INDEX sqlite_autoindex_journal_items_/)
+      if (!sql.includes('ORDER BY')) {
+        expect(plan).not.toContain('TEMP B-TREE')
+      }
+    }
+    f.db
+      .prepare(
+        `UPDATE journal_items SET wire_version=1,wire_bytes=NULL,wire_json=NULL,detail_json=NULL WHERE item_id='orca:second'`
+      )
+      .run()
+    expect(
+      readJournalDomainHistoryPage(f.db, {
+        sessionId: 'chat',
+        direction: 'tail',
+        reader: { form: 'client', budgetBytes: 4096 }
+      }).page.items
+    ).toEqual(tail.page.items)
+  }
+)
