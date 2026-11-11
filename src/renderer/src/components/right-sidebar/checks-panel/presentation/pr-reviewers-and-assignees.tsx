@@ -4,6 +4,7 @@ import { PRReviewersPanel } from '@/components/pull-request-page/reviewers/panel
 import { lookupGitHubWorkItemByOwnerRepoForSource } from '@/lib/work-items/github/github-work-item-source-lookup'
 import { getTaskPageRepoSourceContext } from '@/lib/work-items/task-repo-source-context'
 import type { Repo } from '../../../../../../shared/repo-types'
+import { getRepoHostIdentity } from '../../../../../../shared/repo-host-identity'
 import type {
   GitHubAssignableUser,
   PRInfo
@@ -14,10 +15,12 @@ type LoadedPRWorkItem = { key: string; item: GitHubWorkItem | null }
 
 export function ChecksPanelPRReviewersAndAssignees({
   repo,
-  pr
+  pr,
+  isRefreshing
 }: {
   repo: Repo
   pr: PRInfo
+  isRefreshing: boolean
 }): React.JSX.Element | null {
   const [loaded, setLoaded] = useState<LoadedPRWorkItem | null>(null)
   const [mutationCount, setMutationCount] = useState(0)
@@ -25,12 +28,15 @@ export function ChecksPanelPRReviewersAndAssignees({
   const owner = pr.prRepo?.owner
   const ownerRepo = pr.prRepo?.repo
   const host = pr.prRepo?.host
-  // Why: updatedAt moves when reviewers or assignees change, so the pane's existing PR refresh drives this fetch.
+  // Why: same-id repos can live on several hosts, so the key carries the host to keep their items apart.
   const requestKey =
-    owner && ownerRepo ? [repo.id, owner, ownerRepo, host, pr.number].join('\0') : null
+    owner && ownerRepo
+      ? [getRepoHostIdentity(repo), owner, ownerRepo, host, pr.number].join('\0')
+      : null
 
   useEffect(() => {
-    if (!requestKey || !owner || !ownerRepo) {
+    // Why: fetch after a manual refresh settles, and again when updatedAt moves on reviewer or assignee edits.
+    if (!requestKey || !owner || !ownerRepo || isRefreshing) {
       return
     }
     let cancelled = false
@@ -52,7 +58,7 @@ export function ChecksPanelPRReviewersAndAssignees({
       },
       () => {
         if (!cancelled) {
-          setLoaded((current) => (current?.key === requestKey ? current : null))
+          setLoaded(null)
         }
       }
     )
@@ -66,6 +72,7 @@ export function ChecksPanelPRReviewersAndAssignees({
     host,
     pr.number,
     pr.updatedAt,
+    isRefreshing,
     repo.id,
     repo.path,
     sourceContext,

@@ -212,7 +212,7 @@ export function ChecksPanelActiveContent({
       </div>
 
       {activeReview.provider === 'github' && pr && repo ? (
-        <ChecksPanelPRReviewersAndAssignees repo={repo} pr={pr} />
+        <ChecksPanelPRReviewersAndAssignees repo={repo} pr={pr} isRefreshing={isRefreshing} />
       ) : null}
 
       {shouldShowReviewTriageStrip && sourceControlAiActionsVisible && (
