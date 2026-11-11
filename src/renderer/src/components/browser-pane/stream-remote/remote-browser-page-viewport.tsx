@@ -24,6 +24,8 @@ import {
 } from './remote-browser-stream-status'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { RemoteBrowserRuntimeTarget } from './remote-browser-page-input-model'
+import { SandboxOnlyBrowserPageState } from './sandbox-only-browser-page-state'
+import { useSandboxOnlyBrowserPage } from './use-sandbox-only-browser-page'
 
 export function RemoteBrowserPageViewport({
   remoteViewportRef,
@@ -94,6 +96,30 @@ export function RemoteBrowserPageViewport({
   const remoteFailureUrl = loadError?.validatedUrl ?? browserTab.url
   const remoteFailureExternalUrl = resolveRemoteFailureExternalUrl(remoteFailureUrl)
   const showRemoteFailureOverlay = Boolean(loadError) && !isBlankBrowserUrl(remoteFailureUrl)
+  const sandboxOnly = useSandboxOnlyBrowserPage({
+    pageId: browserTab.id,
+    url: browserTab.url,
+    runtimeEnvironmentId: activeRuntimeEnvironmentId,
+    worktreeId
+  })
+
+  // Orca Cloud: no stream exists, so its placeholder and "does not support streaming" notice would mislead.
+  if (sandboxOnly.screencastSupported === false) {
+    return (
+      <div
+        ref={remoteViewportRef}
+        tabIndex={-1}
+        className="relative flex min-h-0 flex-1 flex-col bg-background"
+      >
+        <SandboxOnlyBrowserPageState
+          url={browserTab.url}
+          opening={sandboxOnly.opening}
+          error={sandboxOnly.error}
+          onOpenOnThisComputer={sandboxOnly.openOnThisComputer}
+        />
+      </div>
+    )
+  }
 
   return (
     <div
