@@ -3220,6 +3220,8 @@
     },
     "presentation": {
       "loadingTabs": "Carregando guias",
+      "oneTab": "1 guia",
+      "tabCount": "{{tabCount}} guias",
       "tapToRetry": "{{status}} — toque para tentar novamente"
     },
     "documentReaders": {
@@ -3238,10 +3240,6 @@
     },
     "usePrTextAction": {
       "updateFailed": "Falha ao atualizar o pull request."
-    },
-    "tabBar": {
-      "oneTab": "1 guia",
-      "tabCount": "{{count}} guias"
     }
   },
   "settings": {
