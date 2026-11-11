@@ -56,7 +56,8 @@ describe.each<CounterModel>(['counts sleep (macOS/Windows Node)', 'stops in slee
           'clearImmediate'
         ]
       })
-      vi.setSystemTime(new Date('2026-11-09T08:00:00-08:00'))
+      // Why: offset-less times are local, matching the schedule's local BYHOUR in any CI TZ.
+      vi.setSystemTime(new Date('2026-11-09T08:00:00'))
       countedSleep = 0
       clock = createAwakeClock({
         wallNow: () => Date.now(),
@@ -99,7 +100,7 @@ describe.each<CounterModel>(['counts sleep (macOS/Windows Node)', 'stops in slee
         workspaceId: 'r1::wt1',
         timezone: 'America/Los_Angeles',
         rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
-        dtstart: new Date('2026-11-08T00:00:00-08:00').getTime(),
+        dtstart: new Date('2026-11-08T00:00:00').getTime(),
         missedRunGraceMinutes: opts.graceMinutes ?? 720
       })
       const launch = vi.fn(async () => ({ workspaceId: 'wt-1', terminalSessionId: 'tab-1' }))
@@ -122,12 +123,12 @@ describe.each<CounterModel>(['counts sleep (macOS/Windows Node)', 'stops in slee
 
       // The machine sleeps through 09:00 and dark-wakes at 09:08:30 with no resume event.
       clock.suspend()
-      asleepUntil('2026-11-09T09:08:30-08:00')
+      asleepUntil('2026-11-09T09:08:30')
       await awakeFor(2_000)
       expect(statuses()).toEqual([])
 
       // Back to sleep, then a full wake at 09:19:37.
-      asleepUntil('2026-11-09T09:19:37-08:00')
+      asleepUntil('2026-11-09T09:19:37')
       clock.resume()
       await awakeFor(AUTOMATION_WAKE_SETTLE_MS - 1_000)
       expect(statuses()).toEqual([])
@@ -136,7 +137,7 @@ describe.each<CounterModel>(['counts sleep (macOS/Windows Node)', 'stops in slee
       await awakeFor(2_000)
       await vi.waitFor(() => expect(statuses()).toEqual(['dispatched']))
       expect(store.listAutomationRuns(automation.id)[0]!.scheduledFor).toBe(
-        new Date('2026-11-09T09:00:00-08:00').getTime()
+        new Date('2026-11-09T09:00:00').getTime()
       )
       expect(launch).toHaveBeenCalledOnce()
       service.stop()
@@ -145,7 +146,7 @@ describe.each<CounterModel>(['counts sleep (macOS/Windows Node)', 'stops in slee
     it('also waits after a sleep that no power event reported', async () => {
       const { launch, service, statuses } = await scheduledService({ tickMs: 1_000 })
 
-      asleepUntil('2026-11-09T09:08:30-08:00')
+      asleepUntil('2026-11-09T09:08:30')
       await awakeFor(2_000)
       expect(statuses()).toEqual([])
       expect(launch).not.toHaveBeenCalled()
@@ -160,7 +161,7 @@ describe.each<CounterModel>(['counts sleep (macOS/Windows Node)', 'stops in slee
 
       // Without the wait, the 09:01:01 tick would have launched this run inside its grace.
       clock.suspend()
-      asleepUntil('2026-11-09T09:00:01-08:00')
+      asleepUntil('2026-11-09T09:00:01')
       clock.resume()
       await awakeFor(TICK_MS)
       expect(statuses()).toEqual([])
@@ -168,7 +169,7 @@ describe.each<CounterModel>(['counts sleep (macOS/Windows Node)', 'stops in slee
       await awakeFor(TICK_MS)
       await vi.waitFor(() => expect(statuses()).toEqual(['dispatched']))
       expect(store.listAutomationRuns(automation.id)[0]!.scheduledFor).toBe(
-        new Date('2026-11-09T09:00:00-08:00').getTime()
+        new Date('2026-11-09T09:00:00').getTime()
       )
       service.stop()
     })
@@ -177,7 +178,7 @@ describe.each<CounterModel>(['counts sleep (macOS/Windows Node)', 'stops in slee
       const { launch, service, statuses } = await scheduledService({ graceMinutes: 0 })
 
       clock.suspend()
-      asleepUntil('2026-11-09T09:03:00-08:00')
+      asleepUntil('2026-11-09T09:03:00')
       clock.resume()
       await awakeFor(2 * TICK_MS)
       await vi.waitFor(() => expect(statuses()).toEqual(['skipped_missed']))
@@ -189,12 +190,12 @@ describe.each<CounterModel>(['counts sleep (macOS/Windows Node)', 'stops in slee
       const { service, statuses } = await scheduledService({ graceMinutes: 0 })
 
       clock.suspend()
-      asleepUntil('2026-11-09T09:00:01-08:00')
+      asleepUntil('2026-11-09T09:00:01')
       clock.resume()
       await awakeFor(TICK_MS)
       // Another short wake: back to sleep before settling, then a full wake.
       clock.suspend()
-      asleepUntil('2026-11-09T09:30:00-08:00')
+      asleepUntil('2026-11-09T09:30:00')
       clock.resume()
       await awakeFor(TICK_MS)
       expect(statuses()).toEqual([])
@@ -210,7 +211,7 @@ describe.each<CounterModel>(['counts sleep (macOS/Windows Node)', 'stops in slee
       })
 
       clock.suspend()
-      asleepUntil('2026-11-09T09:05:00-08:00')
+      asleepUntil('2026-11-09T09:05:00')
       clock.resume()
       await awakeFor(TICK_MS)
       expect(statuses()).toEqual([])
@@ -236,16 +237,16 @@ describe.each<CounterModel>(['counts sleep (macOS/Windows Node)', 'stops in slee
         workspaceId: 'r1::wt1',
         timezone: 'America/Los_Angeles',
         rrule: 'FREQ=DAILY;BYHOUR=23;BYMINUTE=0',
-        dtstart: new Date('2026-11-08T00:00:00-08:00').getTime()
+        dtstart: new Date('2026-11-08T00:00:00').getTime()
       })
 
       clock.suspend()
-      asleepUntil('2026-11-09T09:00:01-08:00')
+      asleepUntil('2026-11-09T09:00:01')
       clock.resume()
       await awakeFor(TICK_MS)
       store.updateAutomation(automation.id, { enabled: false })
       clock.suspend()
-      asleepUntil('2026-11-09T11:00:00-08:00')
+      asleepUntil('2026-11-09T11:00:00')
       clock.resume()
       await awakeFor(TICK_MS)
       store.updateAutomation(automation.id, { enabled: true })
@@ -259,7 +260,7 @@ describe.each<CounterModel>(['counts sleep (macOS/Windows Node)', 'stops in slee
     /** Holds today's 09:00 zero-grace occurrence: resume at 09:00:01, held by the 09:01:01 tick. */
     async function holdZeroGraceOccurrence() {
       clock.suspend()
-      asleepUntil('2026-11-09T09:00:01-08:00')
+      asleepUntil('2026-11-09T09:00:01')
       clock.resume()
       await awakeFor(TICK_MS)
     }
@@ -271,10 +272,7 @@ describe.each<CounterModel>(['counts sleep (macOS/Windows Node)', 'stops in slee
       automationId: string
     ) {
       const automation = store.listAutomations().find((entry) => entry.id === automationId)!
-      const run = store.createAutomationRun(
-        automation,
-        new Date('2026-11-08T09:00:00-08:00').getTime()
-      )
+      const run = store.createAutomationRun(automation, new Date('2026-11-08T09:00:00').getTime())
       await service.markDispatchResult({
         runId: run.id,
         status: 'dispatched',
@@ -440,7 +438,7 @@ describe.each<CounterModel>(['counts sleep (macOS/Windows Node)', 'stops in slee
         workspaceId: 'r1::wt1',
         timezone: 'America/Los_Angeles',
         rrule: 'FREQ=DAILY;BYHOUR=23;BYMINUTE=0',
-        dtstart: new Date('2026-11-08T00:00:00-08:00').getTime()
+        dtstart: new Date('2026-11-08T00:00:00').getTime()
       })
       await awakeFor(TICK_MS + 2 * AWAKE_CLOCK_HEARTBEAT_MS)
       expect(beats).toHaveBeenCalledTimes(2)
@@ -456,7 +454,7 @@ describe.each<CounterModel>(['counts sleep (macOS/Windows Node)', 'stops in slee
 
     it('runs an on-time occurrence on a machine that stayed awake', async () => {
       const { service, statuses } = await scheduledService()
-      await awakeFor(new Date('2026-11-09T09:00:30-08:00').getTime() - Date.now())
+      await awakeFor(new Date('2026-11-09T09:00:30').getTime() - Date.now())
       await vi.waitFor(() => expect(statuses()).toEqual(['dispatched']))
       service.stop()
     })
