@@ -181,6 +181,7 @@ done
 env -i HOME="$HOME" USER="$(id -un)" LANG=C.UTF-8 TERM=xterm-256color "${ca_env[@]}" \
   PATH="$ORCA_HOME/tools/bin:$ORCA_HOME/bin:$(dirname "$system_node"):/usr/local/bin:/usr/bin:/bin" \
   ORCA_USER_DATA="$HOME/.orcad-data" ORCA_SANDBOX_ID="$ORCA_SANDBOX_ID" "${managed_env[@]}" \
+  ORCA_HOST_MANAGED_LISTENER_PATHS="$ORCA_HOME" \
   NODE_COMPILE_CACHE="$ORCA_HOME/compile-cache" ORCA_ORCAD_STARTUP_QUALIFICATION_DIR="$ORCA_HOME/startup-qualification" \
   ORCA_SESSION_ENV_NAMES="${secret_names[*]}" "${agent_env[@]}" \
   setsid nohup "$node" "$ORCA_HOME/bin/orcad-boot" --code-cache "$ORCA_HOME/compile-cache/orcad-server.v8" \
