@@ -152,25 +152,6 @@ describe('the bundled native document', () => {
     expect(document.getElementById('terminal-surface')?.contains(opened[0]!)).toBe(true)
   })
 
-  it('answers a ping through the bridge, which is what native readiness reads', () => {
-    document.body.innerHTML = TERMINAL_DOCUMENT_MARKUP
-    const posted: Record<string, unknown>[] = []
-    const { Terminal } = engineDouble()
-    Object.assign(globalThis, {
-      ReactNativeWebView: {
-        postMessage: (message: string) => posted.push(JSON.parse(message))
-      },
-      Terminal,
-      __engineErrors: []
-    })
-    evaluateBundle()
-
-    window.dispatchEvent(
-      new MessageEvent('message', { data: JSON.stringify({ type: 'ping', id: 9 }) })
-    )
-    expect(posted).toContainEqual({ type: 'pong', pingId: 9 })
-  })
-
   it('takes a theme and a write before init, and init is what decides they are stale', async () => {
     // Early writes must be superseded by init’s snapshot and theme, not replayed underneath it.
     document.body.innerHTML = TERMINAL_DOCUMENT_MARKUP

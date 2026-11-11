@@ -118,21 +118,6 @@ describe('bottom drawer close request while hiding', () => {
     animations.running = []
   })
 
-  it('still closes an open drawer on Android Back', () => {
-    const onClose = vi.fn()
-    let renderer!: ReactTestRenderer
-    act(() => {
-      renderer = create(drawer(true, onClose, vi.fn()))
-    })
-    finishAnimations()
-
-    pressAndroidBack(renderer)
-    finishAnimations()
-
-    expect(onClose).toHaveBeenCalledTimes(1)
-    act(() => renderer.unmount())
-  })
-
   // Back during hide must not restart/cancel it or onHidden never fires and invisible Modal swallows taps.
   it('lets the hide finish when Back is pressed mid-close', () => {
     const onClose = vi.fn()

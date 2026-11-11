@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   createWorkerMaintenanceFixture,
   maintenanceBarrier
-} from './loading-store/profile-state-maintenance-fixture'
+} from './loading-store/profile-writing/profile-state-maintenance-fixture'
 
 vi.mock('../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: vi.fn(),

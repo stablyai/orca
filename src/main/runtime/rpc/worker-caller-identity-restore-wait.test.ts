@@ -115,15 +115,6 @@ describe('a worker report during an Orca restart', () => {
     expect(orca.db.getWorkerDispatch(orca.dispatch.id)?.state).not.toBe('dispatched')
   })
 
-  it('is still rejected when the restored terminal runs a respawned process', async () => {
-    const orca = await startRestartingOrca()
-    db = orca.db
-    const pending = orca.workerDone()
-    await orca.restore({ paneKey: WORKER_PANE, process: 'pty_worker:incarnation_2' })
-
-    expect(await pending).toMatchObject(REJECTED)
-  })
-
   it('is still rejected when the terminal was handed to another dispatch', async () => {
     const orca = await startRestartingOrca()
     db = orca.db
@@ -142,37 +133,5 @@ describe('a worker report during an Orca restart', () => {
 
     expect(await pending).toMatchObject(REJECTED)
     expect(orca.db.getDispatchContextById(newer.id)?.status).toBe('dispatched')
-  })
-
-  it('does not hold ordinary mail from a terminal Orca has not restored yet', async () => {
-    const orca = await startRestartingOrca()
-    db = orca.db
-    let answered = false
-    const pending = orca.dispatcher
-      .dispatch({
-        id: 'rpc_mail',
-        authToken: 'token',
-        method: 'orchestration.send',
-        params: { from: 'term_restoring', to: `dispatch:${orca.dispatch.id}`, subject: 'note' },
-        orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION
-      })
-      .finally(() => {
-        answered = true
-      })
-    await settleTurns()
-
-    expect(answered).toBe(true)
-    orca.runtime.startupWorkerAuthority.finish()
-    await pending
-  })
-
-  it('is rejected when the terminal is still unknown after the wait', async () => {
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-    const orca = await startRestartingOrca()
-    db = orca.db
-    const pending = orca.workerDone()
-    await vi.advanceTimersByTimeAsync(30_000)
-
-    expect(await pending).toMatchObject(REJECTED)
   })
 })

@@ -24,10 +24,10 @@ const ID_KINDS: ReadonlySet<OrchestrationSubjectKind> = new Set([
 ])
 
 /**
- * A paired Orca acts only inside the Run it coordinates here: every subject a call names must be in
- * that Run, and a collection read is narrowed to it before its query runs, so counts and cursors
- * stay right. Calls that act on this Orca as a whole are this Orca's own. Returns the params the
- * method runs with.
+ * A paired Orca changes only the Run it coordinates here: every subject a write names must be in
+ * that Run. Reads are not fenced, since the pairing already reads all of this Orca; a collection
+ * that names no Run reads the paired Orca's own, as a coordinator's does. Calls that act on this
+ * Orca as a whole are this Orca's own. Returns the params the method runs with.
  */
 export function checkPeerAccess<P>(
   access: OrchestrationMethodAccessDeclaration,
@@ -45,7 +45,7 @@ export function checkPeerAccess<P>(
   }
   const values: Record<string, unknown> =
     params && typeof params === 'object' ? { ...(params as Record<string, unknown>) } : {}
-  for (const [field, kind] of Object.entries(access.targets)) {
+  for (const [field, kind] of access.kind === 'reads' ? [] : Object.entries(access.targets)) {
     for (const subject of subjectsOf(values[field])) {
       const subjectRunId = kind && resolveSubjectRunId(db, kind, subject, peer)
       if (kind && subjectRunId !== runId && !(subjectRunId === undefined && ID_KINDS.has(kind))) {
@@ -57,15 +57,11 @@ export function checkPeerAccess<P>(
       }
     }
   }
-  if (access.collection) {
-    const runField = Object.entries(access.targets).find(([, kind]) => kind === 'run')?.[0]
-    if (!runField) {
-      throw new OrchestrationError(
-        'forbidden',
-        `This list spans every Run on this server, so ${label} cannot read it. No effects were applied.`,
-        NO_EFFECTS
-      )
-    }
+  const runField = access.collection
+    ? Object.entries(access.targets).find(([, kind]) => kind === 'run')?.[0]
+    : undefined
+  // The paired Orca's forwarded lists drop its own Run ID, which names nothing here.
+  if (runField && values[runField] === undefined) {
     values[runField] = runId
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the same params with at most the declared Run field set to a string, which every Run field accepts.

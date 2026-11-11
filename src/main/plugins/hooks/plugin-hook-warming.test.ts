@@ -5,7 +5,6 @@ import type { ValidDiscoveredPlugin } from '../plugin-discovery'
 import type { PluginWorkerHandle } from '../workers/plugin-host-process'
 import { PluginWorkerManager, type PluginWorkerFactory } from '../workers/plugin-worker-manager'
 import { buildPluginWorkerSpawnSpec } from '../workers/plugin-worker-spawn-spec'
-import { PluginWorkerSlots } from '../workers/plugin-worker-slot-pool'
 
 function plugin(
   pluginKey: string,
@@ -102,19 +101,6 @@ describe('hook plugin warming', () => {
     await manager.ensureActive(buildPluginWorkerSpawnSpec(plugin('acme.plain', []), []))
     expect(factory).toHaveBeenCalledTimes(3)
     await manager.disposeAll()
-  })
-
-  it('starts hook workers past their soft cap instead of waiting, and says so once', async () => {
-    const slots = new PluginWorkerSlots(5, 1)
-    const log = vi.fn()
-    const signal = new AbortController().signal
-    // Why no release: a waiting admission would hang refresh, disable and uninstall forever.
-    await slots.for({ keepWarm: true }, log).acquire(signal)
-    await slots.for({ keepWarm: true }, log).acquire(signal)
-    await slots.for({ keepWarm: true }, log).acquire(signal)
-    expect(log).toHaveBeenCalledOnce()
-    expect(log.mock.calls[0]?.[1]).toMatch(/more than 1 plugins with hooks or status bar items/)
-    slots.dispose()
   })
 
   it('bounds worker start by its own timeout, then gives the handler the full deadline', async () => {

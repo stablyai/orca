@@ -12,14 +12,14 @@ import {
   persistClaudeUsageSourceCache
 } from './persisted-source-cache'
 import { normalizeClaudeUsageSourceFiles } from './persisted-projection-validation'
-import { usageSourceCachePath } from '../usage/usage-source-cache-file'
+import { usageSourceCachePath } from '../usage/cache/usage-source-cache-file'
 
 import { ClaudeUsageStore, initClaudeUsagePath } from './store'
 import { listClaudeTranscriptFiles } from './transcript-file-discovery'
 import {
   scanClaudeUsageFilesViaWorker,
   splitUsageCacheFileViaWorker
-} from '../usage/usage-scan-worker-spawn'
+} from '../usage/scan-worker/usage-scan-worker-spawn'
 
 export async function createPersistedUsageTestFixture(getPath: Mock<() => string>) {
   const directory = await mkdtemp(join(tmpdir(), 'orca-claude-persisted-usage-'))
@@ -118,7 +118,13 @@ export async function createPersistedUsageTestFixture(getPath: Mock<() => string
     project,
     state,
     writeResumable,
-    createStore: () => new ClaudeUsageStore({ getRepos: () => [], getAllWorktreeMeta: () => ({}) }),
+    createStore: () =>
+      new ClaudeUsageStore({
+        getRepos: () => [],
+        getAllWorktreeMeta: () => ({}),
+        getRememberedWorktreeDisplayNames: () => new Map(),
+        whenLoaded: async () => {}
+      }),
     decodedSources: async () => {
       const read = await readClaudeUsageSourceCache(sourceRef)
       return normalizeClaudeUsageSourceFiles(read.sources, read.verifiedSources).processedFiles

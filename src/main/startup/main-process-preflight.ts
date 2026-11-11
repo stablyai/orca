@@ -75,9 +75,10 @@ import { setDefaultProxySessionResolver } from '../network/electron-default-prox
 import { initDataPath, getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
 import { applyMacPressAndHoldDefaultAtStartup } from '../window/desktop-integration/macos-press-and-hold-default'
 import { configureSessionParseCachePersistence } from '../ai-vault/parse-cache/session-parse-cache-persistence'
-import { initOrcaProfilePaths } from '../orca-profiles/profile-index-store'
-import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
-import { recoverPendingProfileProjectMoves } from '../orca-profiles/profile-project-move-intent'
+import '../orca-profiles/profile-index-store'
+// oxfmt-ignore
+import { getProfileUserDataPath, initOrcaProfilePaths } from '../orca-profiles/profile-storage-paths'
+import { recoverPendingProfileProjectMoves } from '../orca-profiles/project-transfer/profile-project-move-intent'
 import { initStatsPath } from '../stats/collector'
 import { initClaudeUsagePath } from '../claude-usage/store'
 import { initCodexUsagePath } from '../codex-usage/store'
@@ -85,10 +86,10 @@ import { initOpenCodeUsagePath } from '../opencode-usage/store'
 import { initMuseUsagePath } from '../muse-usage/store'
 import { registerDocPreviewSchemePrivileges } from '../browser/document-preview/doc-preview-protocol'
 import { PRIVILEGED_CUSTOM_SCHEMES } from './privileged-custom-schemes'
-import { startCrashpadCapture } from '../crash-reporting/crashpad-capture'
-import { CrashReportStore } from '../crash-reporting/crash-report-store'
-import { recordCrashBreadcrumb } from '../crash-reporting/crash-breadcrumb-store'
-import { getMainProcessLifecycleIdentity } from '../crash-reporting/main-process-lifecycle-identity'
+import { startCrashpadCapture } from '../crash-reporting/capture/crashpad-capture'
+import { CrashReportStore } from '../crash-reporting/reports/crash-report-store'
+import { recordCrashBreadcrumb } from '../crash-reporting/breadcrumbs/crash-breadcrumb-store'
+import { getMainProcessLifecycleIdentity } from '../crash-reporting/process-exits/main-process-lifecycle-identity'
 import {
   ensureVirtualDisplayForHeadlessServe,
   hasUsableLinuxDisplay,
@@ -103,8 +104,8 @@ import { mainProcessState as state } from './main-process-state'
 import { initializeSyntheticTitleRuntime } from './synthetic-title-runtime'
 import { initializeBrowserProcessUserAgent } from '../browser/identity/browser-process-user-agent'
 import { initializeBrowserIdentityModeStore } from '../browser/identity/mode/browser-identity-mode-store'
-import { acquireProfileStateRuntimeAdmission } from '../persistence/profile-state/profile-state-access'
-import { getActiveProfileStateLocation } from '../persistence/profile-state/profile-state-active-location'
+import { acquireProfileStateRuntimeAdmission } from '../persistence/profile-state/access/profile-state-access'
+import { getActiveProfileStateLocation } from '../persistence/profile-state/offline-access/profile-state-active-location'
 import {
   acquireDesktopProfileLockOrExplain,
   handleMainProcessPreflightFailure
