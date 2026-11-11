@@ -1,15 +1,16 @@
 import { useRef, useState } from 'react'
-import { FilePlus, Globe, Smartphone, TerminalSquare, type LucideIcon } from 'lucide-react'
+import { FilePlus, Globe, Smartphone, TerminalSquare } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
-import { useAppStore } from '../../store'
+import { useAppStore } from '../../store/index'
 import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import { useTranslate } from '@/i18n/use-translate'
 import {
   ensureClientCreationActionAllowed,
   showClientCreationActionError
-} from '@/lib/client-creation-action-error'
+} from '@/lib/workspace/creation/surface-policy/client-creation-action-error'
 import { openNewTerminalTabInWorkspace } from '@/store/terminals/terminal-active-workspace-creation'
-import { getWorkspaceClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
+import { getWorkspaceClientCreationActionPolicy } from '@/lib/workspace/creation/surface-policy/client-creation-action-policy'
 import { openMobileEmulatorTab } from '@/lib/simulator/launch/open-mobile-emulator-tab'
 import {
   ensureSimulatorTab,

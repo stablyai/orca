@@ -14,15 +14,16 @@ export function describeSyncCounts(ahead: number, behind: number): string {
   return `Pull ${behind}, push ${ahead}`
 }
 
-export function formatCountLabel(base: string, count: number): string {
-  return count > 0 ? `${base} (${count})` : base
+export function formatAheadStatus(ahead: number): string {
+  return `↑${ahead}`
 }
 
-export function formatSyncLabel(base: string, ahead: number, behind: number): string {
-  if (ahead === 0 && behind === 0) {
-    return base
-  }
-  return `${base} (↓${behind} ↑${ahead})`
+export function formatBehindStatus(behind: number): string {
+  return `↓${behind}`
+}
+
+export function formatSyncStatus(ahead: number, behind: number): string {
+  return `↓${behind} ↑${ahead}`
 }
 
 export function formatForcePushTitle(

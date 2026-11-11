@@ -1,13 +1,13 @@
 import { useRef, useState } from 'react'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 import { useMountedRef } from '../../../../hooks/useMountedRef'
-import {
-  terminalConfigImportSettingsUpdate,
-  type TerminalConfigImportFormat,
-  type TerminalConfigImportPreview,
-  type TerminalConfigImportSource
+import { terminalConfigImportSettingsUpdate } from '../../../../../../shared/terminal/appearance/terminal-config-import-preview'
+import type {
+  TerminalConfigImportFormat,
+  TerminalConfigImportPreview,
+  TerminalConfigImportSource
 } from '../../../../../../shared/terminal/appearance/terminal-config-import-preview'
-import { getSystemPrefersDark } from '@/lib/terminal-theme'
+import { getSystemPrefersDark } from '@/lib/terminal/appearance/terminal-theme'
+import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 
 export type UseTerminalConfigImportReturn = {
   format: TerminalConfigImportFormat

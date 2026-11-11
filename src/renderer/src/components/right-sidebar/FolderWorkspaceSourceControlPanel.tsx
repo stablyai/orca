@@ -4,7 +4,7 @@ import {
 } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import {
   selectFolderWorkspaces,
   selectWorktreesByRepo
@@ -13,7 +13,7 @@ import {
   getAttachedWorktreesForFolderWorkspace,
   attachedWorktreeOwnerKey
 } from './folder-workspace-attached-worktrees'
-import { resolveReviewRepository } from '@/lib/review-owner'
+import { resolveReviewRepository } from '@/lib/source-control/review/review-owner'
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { OverlayActivityOwner } from '@/components/ui/use-overlay-focus-scope'

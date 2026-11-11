@@ -1,5 +1,4 @@
 import { joinPath } from '@/lib/path'
-import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { areLocalWindowsWslPathAliases } from '../../../../../shared/cross-platform-path'
 import { externalChangePathKeyFor } from '@/store/slices/editor/buffers/editor-buffer-identity'
 import { isLocalWindowsDesktopClient } from '@/app-shell/chrome/desktop-window-chrome'
@@ -8,8 +7,9 @@ import {
   MAX_EDITOR_AUTO_SAVE_DELAY_MS,
   MIN_EDITOR_AUTO_SAVE_DELAY_MS
 } from '../../../../../shared/constants'
-import { clampNumber } from '@/lib/terminal-theme'
+import { clampNumber } from '@/lib/terminal/appearance/terminal-theme'
 import { isAutosavePausedForNonUtf8File } from './editor-non-utf8-autosave-pause'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 
 export const ORCA_EDITOR_QUIESCE_FILE_SAVES_EVENT = 'orca:editor-quiesce-file-saves'
 export const ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT = 'orca:editor-external-file-change'

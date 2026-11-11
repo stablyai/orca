@@ -2524,7 +2524,8 @@
     "tabStrip": {
       "checkingCapabilities": "Vérification des fonctionnalités de l'ordinateur — réessayez dans un instant",
       "newTab": "Nouvel onglet",
-      "quickCommandsUpdateRequired": "Mettez à jour Orca sur l'ordinateur pour utiliser les commandes rapides"
+      "quickCommandsUpdateRequired": "Mettez à jour Orca sur l'ordinateur pour utiliser les commandes rapides",
+      "tabStatus": "{{title}}, {{status}}"
     },
     "terminalActionSheetActions": {
       "clearTerminal": "Effacer le terminal",

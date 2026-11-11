@@ -8,8 +8,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { useAppStore } from '../../store'
-import type { SshConnectionStatus } from '../../../../shared/ssh-types'
+import { useAppStore } from '../../store/index'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
@@ -29,19 +28,20 @@ import { connectedHostCountLabel, moreSshHostsLabel } from './ssh-status-segment
 import { SshHostFindPopover } from './SshHostFindPopover'
 import { splitSshStatusMenuRows } from './ssh-status-menu-rows'
 import { SshTargetStatusRow } from './SshTargetStatusRow'
-import { syncSshConfigTargetsPassively } from '../../lib/ssh-config-passive-sync'
+import { syncSshConfigTargetsPassively } from '../../runtime/hosts/ssh/ssh-config-passive-sync'
 import { connectRuntimeHostAndReloadProjects } from './runtime-environment-explicit-connect'
 import {
   runtimeHostBlockedCopy,
   runtimeHostBlockedRecovery,
   runtimeHostConnectionDetail,
   runtimeHostStatusForOverall,
-  sshStatusForOverall,
-  type RuntimeHostBlockedRecovery
+  sshStatusForOverall
 } from './remote-host-connection-status'
+import type { RuntimeHostBlockedRecovery } from './remote-host-connection-status'
 import { runtimeHostConnectionStateForEntry } from '@/runtime/hosts/connections/runtime-host-connection-state'
 import { isConnectedRuntimeHostState } from '../../../../shared/remote-runtime/host-status/runtime-host-connection-state'
 import { RuntimeRepairDialog } from '../runtime-access/RuntimeRepairDialog'
+import type { SshConnectionStatus } from '../../../../shared/ssh-types'
 
 export function SshStatusSegment({
   compact,

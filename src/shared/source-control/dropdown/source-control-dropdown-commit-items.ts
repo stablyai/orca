@@ -1,6 +1,9 @@
 // Share commit blockers across Commit, Commit & Push, and Commit & Sync so disabled reasons agree.
 
-import type { CommitDisabledReason } from '../decisions/source-control-commit-eligibility'
+import {
+  COMMIT_MESSAGE_REQUIRED_REASON,
+  type CommitDisabledReason
+} from '../decisions/source-control-commit-eligibility'
 import type { DropdownItem } from './source-control-dropdown-item-types'
 import type { DropdownActionContext } from './source-control-dropdown-action-context'
 
@@ -26,6 +29,20 @@ export type CommitDropdownCopy = {
   commitThenPullPush: string
   // Eligibility compares the English reasons, so copy translates them only for display.
   commitDisabledReason: (reason: CommitDisabledReason) => string
+  commitDisabledStatus: (reason: CommitDisabledReason) => string
+  statusNotPublished: string
+  statusNoBranch: string
+}
+
+export function englishCommitDisabledStatus(reason: CommitDisabledReason): string {
+  switch (reason) {
+    case 'Resolve conflicts before committing':
+      return 'Conflicts'
+    case 'Stage at least one file to commit':
+      return 'Nothing staged'
+    case COMMIT_MESSAGE_REQUIRED_REASON:
+      return 'Needs message'
+  }
 }
 
 export const ENGLISH_COMMIT_DROPDOWN_COPY: CommitDropdownCopy = {
@@ -47,7 +64,10 @@ export const ENGLISH_COMMIT_DROPDOWN_COPY: CommitDropdownCopy = {
   publishBranchFirstToSync: 'Publish the branch first to sync commits',
   useCommitAndForcePush: 'Use Commit & Force Push — remote only has older copies of local commits',
   commitThenPullPush: 'Commit, then pull and push',
-  commitDisabledReason: (reason) => reason
+  commitDisabledReason: (reason) => reason,
+  commitDisabledStatus: englishCommitDisabledStatus,
+  statusNotPublished: 'Not published',
+  statusNoBranch: 'No branch'
 }
 
 export type CommitDropdownItems = {
@@ -77,11 +97,20 @@ export function buildCommitDropdownItems(
   } = ctx
   const commitDisabledTitle =
     commitDisabledReason === null ? null : copy.commitDisabledReason(commitDisabledReason)
+  const commitDisabledStatus =
+    commitDisabledReason === null ? undefined : copy.commitDisabledStatus(commitDisabledReason)
+  // Branch blockers outrank commit blockers, matching the title ladders below.
+  const branchBlockedStatus = publishBlockedByDetachedHead
+    ? copy.statusNoBranch
+    : !upstreamLoading && !hasUpstream
+      ? copy.statusNotPublished
+      : undefined
 
   const commit: DropdownItem = {
     kind: 'commit',
     label: copy.commit,
     title: commitDisabledTitle ?? copy.commitStagedChanges,
+    status: commitDisabledStatus,
     disabled: !canCommit
   }
 
@@ -108,6 +137,12 @@ export function buildCommitDropdownItems(
     kind: 'commit_push',
     label: shouldForcePushWithLease ? copy.commitForcePush : copy.commitPush,
     title: commitPushTitle,
+    status:
+      upstreamLoading || publishBlockedByPRLoading || publishBlockedByMergedPR
+        ? undefined
+        : !hasUpstream && hasOpenHostedReview && canPushLinkedReviewWithoutUpstream
+          ? commitDisabledStatus
+          : (branchBlockedStatus ?? commitDisabledStatus),
     // Match Push: without upstream, Commit & Push requires a known open-review head.
     disabled:
       globalBusy ||
@@ -145,6 +180,10 @@ export function buildCommitDropdownItems(
     kind: 'commit_sync',
     label: copy.commitSync,
     title: commitSyncTitle,
+    status:
+      upstreamLoading || publishBlockedByPRLoading || publishBlockedByMergedPR
+        ? undefined
+        : (branchBlockedStatus ?? commitDisabledStatus),
     disabled:
       globalBusy ||
       upstreamLoading ||
