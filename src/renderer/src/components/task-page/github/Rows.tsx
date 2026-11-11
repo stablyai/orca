@@ -2,7 +2,7 @@ import { getTaskPageRepoSourceContext } from '../../../lib/work-items/task-repo-
 import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { getWorkItemRepo } from '@/lib/work-items/work-item-repo-row'
 import { findGithubWorkItemWorkspaceAttachment } from '@/lib/work-items/github/github-work-item-workspace-attachment'
-import { getWorktreeAttachmentLabel } from '@/lib/worktree-attachment-label'
+import { getWorktreeAttachmentLabel } from '@/lib/workspace/display/worktree-attachment-label'
 import { formatPRDelta } from '../task-page-pr-delta-summary'
 import {
   isTaskPageGitHubDraftPR,

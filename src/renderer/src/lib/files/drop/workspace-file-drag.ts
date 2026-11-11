@@ -5,6 +5,7 @@ import {
   validateNativeFileDropPaths
 } from '../../../../../shared/file-import/native-file-drop'
 import { measureUtf8ByteLength } from '../../../../../shared/utf8-byte-limits'
+import { translate } from '@/i18n/i18n'
 import {
   isUnresolvedOwnerHostId,
   normalizeExecutionHostId,
@@ -290,7 +291,7 @@ export function getWorkspaceFileDragRejectionMessage(
   reason: WorkspaceFileDragRejectionReason
 ): string {
   if (reason === 'too-many-paths') {
-    return 'Drop contains too many paths.'
+    return translate('components.toastFallbacks.dropTooManyPaths', 'Drop contains too many paths.')
   }
-  return 'Drop path list is too large.'
+  return translate('components.toastFallbacks.dropPathsTooLarge', 'Drop path list is too large.')
 }

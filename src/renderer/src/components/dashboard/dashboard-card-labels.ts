@@ -1,15 +1,13 @@
 import { getAgentRowConversationName } from '../../../../shared/agent-status/presentation/agent-row-conversation-name'
 import { DASHBOARD_MAX_LABEL_LENGTH } from '../../../../shared/dashboard-snapshot'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
-import type { TerminalLayoutSnapshot } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { resolveAgentRowPaneLiveTitle } from './agent-row-pane-live-title'
+import { structuredChatTabById } from '@/lib/agent-session/tab-identity/structured-chat-tab-index'
+import { projectedStructuredChatTabName } from '@/runtime/native-chat/naming/structured-chat-tab-name'
+import type { StructuredChatTabNames } from '@/runtime/native-chat/naming/structured-chat-tab-name'
+import type { TerminalLayoutSnapshot } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { DashboardAgentRow } from './useDashboardData'
 import type { AppState } from '@/store/types'
-import { structuredChatTabById } from '@/lib/structured-chat-tab-index'
-import {
-  projectedStructuredChatTabName,
-  type StructuredChatTabNames
-} from '@/runtime/native-chat/naming/structured-chat-tab-name'
 
 export function rowTask(row: DashboardAgentRow): string {
   return (row.entry.orchestration?.taskTitle ?? '').trim() || (row.entry.prompt ?? '').trim()

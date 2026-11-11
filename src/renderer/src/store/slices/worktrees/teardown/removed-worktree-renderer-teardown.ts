@@ -17,7 +17,7 @@ import {
   flushPurgedWorkspaceEdits,
   type ConfirmedUnsavedDiscards
 } from './removed-workspace-unsaved-files'
-import { forgetDesktopCreatedServerTabsOf } from '@/lib/desktop-created-server-tabs'
+import { forgetDesktopCreatedServerTabsOf } from '@/store/workspace-layout/frames/desktop-created-server-tabs'
 import type { WorktreeStateBeforeRemoval } from './worktree-state-before-removal'
 
 /** After backend success: unregister browsers before other teardown, then dispose SSH relay only after terminals so mounted panes cannot hit a missing relay. */

@@ -3,7 +3,7 @@ import { AlertTriangle, Plus } from 'lucide-react'
 import { Button } from '../../../ui/button'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import { getRepositoryHookScriptTextareaRows } from '@/lib/script-textarea-rows'
+import { getRepositoryHookScriptTextareaRows } from '@/components/script-editor/rows/script-textarea-rows'
 import type {
   LocalCommandSourcePolicyNotice,
   LocalHookField

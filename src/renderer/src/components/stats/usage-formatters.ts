@@ -55,6 +55,17 @@ export function formatUpdatedAt(
   })
 }
 
+export function formatUnknownLocationLabel(label: string): string {
+  if (label === 'Unknown location') {
+    return translate('auto.components.stats.usageFormatters.unknownLocation', 'Unknown location')
+  }
+  return label
+}
+
+export function formatUsageProjectLabel(label: string): string {
+  return formatUnknownLocationLabel(label)
+}
+
 export function formatSessionTime(timestamp: string, intlLocale: string = getIntlLocale()): string {
   const parsed = new Date(timestamp)
   if (Number.isNaN(parsed.getTime())) {

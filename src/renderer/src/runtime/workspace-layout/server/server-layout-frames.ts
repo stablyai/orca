@@ -17,7 +17,7 @@ import {
   DESKTOP_CREATED_SERVER_TAB_HOLDS,
   forgetPublishedServerTabs,
   pruneDesktopCreatedServerTabs
-} from '@/lib/desktop-created-server-tabs'
+} from '@/store/workspace-layout/frames/desktop-created-server-tabs'
 import { serverHeldPanes, showServerLayoutHeldPanes } from './server-held-panes'
 import { createServerViewReport, onServerControlConnected } from './server-layout-view-report'
 import { openWorkspaceLayoutFrameSync } from '../frames/workspace-layout-frame-sync'

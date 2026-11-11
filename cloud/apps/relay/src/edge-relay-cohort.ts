@@ -50,18 +50,18 @@ export function edgeCohortBucketPermille(relayHostId: string): number {
 }
 
 // Mode off or down empties the cohort. Otherwise deny wins, then host allow, then region scope;
-// within the region, account allow or the rollout share.
+// within the region, account allow or the rollout share. Region 'any' skips the region scope.
 export function inEdgeCohort(
   config: EdgeRelayConfig,
   relayHostId: string,
-  region: RelayRegion | undefined,
+  region: RelayRegion | undefined | 'any',
   userId?: string
 ): boolean {
   const flags = config.control?.() ?? EDGE_CONTROL_DEFAULTS
   if (flags.mode !== 'on') { return false }
   if (config.denyHosts.has(relayHostId)) { return false }
   if (config.allowHosts.has(relayHostId)) { return true }
-  if (!config.regions.has(region ?? RELAY_DEFAULT_REGION)) { return false }
+  if (region !== 'any' && !config.regions.has(region ?? RELAY_DEFAULT_REGION)) { return false }
   if (userId !== undefined && config.allowUsers?.has(userId)) { return true }
   return edgeCohortBucketPermille(relayHostId) < edgeRolloutPermille(config.rolloutPercent, flags)
 }

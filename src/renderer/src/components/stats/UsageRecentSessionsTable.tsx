@@ -1,7 +1,7 @@
 import { Fragment, useState } from 'react'
 import { Button } from '../ui/button'
 import { translate } from '@/i18n/i18n'
-import { formatSessionTime, formatTokens } from './usage-formatters'
+import { formatSessionTime, formatTokens, formatUsageProjectLabel } from './usage-formatters'
 import { useIntlLocale } from '../../i18n/use-translate'
 
 type UsageRecentSession = {
@@ -102,7 +102,9 @@ export function UsageRecentSessionsTable<Row extends UsageRecentSession>({
                       formatSessionTime(row.lastActiveAt, intlLocale))
                     )}
                   </td>
-                  <td className="px-2 py-2 text-foreground">{row.projectLabel}</td>
+                  <td className="px-2 py-2 text-foreground">
+                    {formatUsageProjectLabel(row.projectLabel)}
+                  </td>
                   <td className="px-2 py-2 text-muted-foreground">
                     {row.model ?? unknownModel}
                     {getModelSuffix?.(row)}
