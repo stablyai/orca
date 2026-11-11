@@ -158,19 +158,17 @@ export function useAgentLaunchPickerInventorySource(
   )
   // Without a concrete workspace, CLI discovery can only ask this machine, so other hosts keep the seed.
   // SSH discovery has no route yet, so SSH workspaces keep it too.
-  const cliDiscoveryRuntime = (): RuntimeGitContext | null => {
-    const runtime = draftTarget.worktreeId
-      ? resolveWorktreeModelDiscoveryRuntime(store.getState(), draftTarget.worktreeId)
-      : target?.kind === 'local'
-        ? {
-            target,
-            prefs: store.getState().settings,
-            worktreeId: null,
-            worktreePath: repo?.path ?? ''
-          }
-        : null
-    return runtime?.connectionId ? null : runtime
-  }
+  const discoveryWorktreeId = draftTarget.worktreeId ?? null
+  const ownerRuntime =
+    discoveryWorktreeId || target?.kind === 'local'
+      ? resolveWorktreeModelDiscoveryRuntime(store.getState(), discoveryWorktreeId)
+      : null
+  const cliDiscoveryRuntime: RuntimeGitContext | null =
+    !ownerRuntime || ownerRuntime.connectionId
+      ? null
+      : discoveryWorktreeId
+        ? ownerRuntime
+        : { ...ownerRuntime, worktreePath: repo?.path ?? '' }
   const build = (defaults: AgentPickerDefaultSettings | null | undefined) =>
     model.state === 'settled'
       ? agentPickerEntriesFromRows(
@@ -181,7 +179,7 @@ export function useAgentLaunchPickerInventorySource(
           model.defaultTuiAgent
         ).map((entry) => ({
           ...entry,
-          ...((!target && !(agentPickerListsCliModels(entry) && cliDiscoveryRuntime())) ||
+          ...((!target && !(cliDiscoveryRuntime && agentPickerListsCliModels(entry))) ||
           !entry.surfaces.length ||
           (registeredAgents &&
             !registeredAgents.some(({ agent }) => agent === entry.agent) &&
@@ -217,8 +215,7 @@ export function useAgentLaunchPickerInventorySource(
     [key, open, fallback]
   )
   useEffect(() => {
-    const discoveryRuntime = cliDiscoveryRuntime()
-    if (!viewActive || !open || (!target && !discoveryRuntime) || model.state !== 'settled') {
+    if (!viewActive || !open || (!target && !cliDiscoveryRuntime) || model.state !== 'settled') {
       return
     }
     const controller = new AbortController()
@@ -251,8 +248,8 @@ export function useAgentLaunchPickerInventorySource(
                   : undefined
               },
         catalog: async (entry, waitForListing) =>
-          discoveryRuntime && agentPickerListsCliModels(entry)
-            ? readAgentPickerCliModelCatalog(entry.agent, discoveryRuntime)
+          cliDiscoveryRuntime && agentPickerListsCliModels(entry)
+            ? readAgentPickerCliModelCatalog(entry.agent, cliDiscoveryRuntime)
             : target
               ? callStructuredAgentSession<AgentSessionModelCatalogResult>(
                   target,

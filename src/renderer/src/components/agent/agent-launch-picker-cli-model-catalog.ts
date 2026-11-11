@@ -1,8 +1,5 @@
 import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session/agent-session-wire'
-import {
-  findCatalogModel,
-  getAgentSessionOptionCatalog
-} from '../../../../shared/agent-session/options/agent-session-option-catalog'
+import { getAgentSessionOptionCatalog } from '../../../../shared/agent-session/options/agent-session-option-catalog'
 import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import { agentPickerModelFromCatalogModel } from '../../../../shared/agent-launch/picker/agent-launch-picker-catalog'
 import {
@@ -26,25 +23,22 @@ export async function readAgentPickerCliModelCatalog(
   runtime: RuntimeGitContext
 ): Promise<AgentSessionModelCatalogResult> {
   const catalog = getAgentSessionOptionCatalog(agent)
-  const result = catalog ? await discoverRuntimeCommitMessageModels(runtime, agent) : null
-  // Only a real listing may replace the seed: the picker retires saved picks missing from it.
-  const discovered =
-    result?.success && result.catalogOrigin === 'probe'
-      ? catalogModelsFromModelDiscovery(agent, result)
-      : null
-  if (!catalog || !discovered) {
+  if (!catalog) {
     return { origin: 'unknown' }
   }
-  return {
-    origin: 'probe',
-    fetchedAt: Date.now(),
-    models: mergeDiscoveredCatalogModels(agent, catalog, discovered).map((model) =>
-      // Launch gives an unlisted model the catalog's generic options, so the picker offers the same.
-      agentPickerModelFromCatalogModel(
-        findCatalogModel(catalog, model.id)
-          ? model
-          : { ...model, options: catalog.unknownModelOptions ?? [] }
-      )
-    )
-  }
+  const result = await discoverRuntimeCommitMessageModels(runtime, agent)
+  // Only a real listing may replace the seed: the picker retires saved picks missing from it.
+  const discovered =
+    result.success && result.catalogOrigin === 'probe'
+      ? catalogModelsFromModelDiscovery(agent, result)
+      : null
+  return discovered
+    ? {
+        origin: 'probe',
+        fetchedAt: Date.now(),
+        models: mergeDiscoveredCatalogModels(agent, catalog, discovered).map(
+          agentPickerModelFromCatalogModel
+        )
+      }
+    : { origin: 'unknown' }
 }
