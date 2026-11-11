@@ -25,6 +25,7 @@ const mocks = vi.hoisted(() => {
     shutdownWorktreeBrowsers: vi.fn(),
     shutdownWorktreeTerminals: vi.fn<AppState['shutdownWorktreeTerminals']>(),
     notePredictiveWakeSlept: vi.fn(),
+    activateWorktreeFromSidebar: vi.fn(async () => ({ ok: true })),
     cloudIds: new Set<string>()
   }
 })
@@ -53,6 +54,9 @@ vi.mock('./sleep-worktree-sidebar-position', () => ({
   preserveSidebarWorktreePosition: () => () => {}
 }))
 vi.mock('./sleep-worktree-flow', () => ({ toastWorkspaceSleepOutcome: vi.fn() }))
+vi.mock('@/lib/workspace/activation/sidebar-worktree-activation', () => ({
+  activateWorktreeFromSidebar: mocks.activateWorktreeFromSidebar
+}))
 vi.mock('./browser-tab-sleep', () => ({
   sleepWorktreeBrowserTabs: vi.fn(),
   wakeWorktreeBrowserTabs: vi.fn()
@@ -137,6 +141,7 @@ describe('sleeping the workspace on screen', () => {
     expect(sleepReopened).not.toHaveBeenCalled()
     expect(resumeWorkspace).not.toHaveBeenCalled()
     expect(mocks.setActiveWorktree).not.toHaveBeenCalled()
+    expect(mocks.activateWorktreeFromSidebar).not.toHaveBeenCalled()
   })
 
   it('still leaves for Home when the workspace is not on Orca Cloud', async () => {
@@ -211,10 +216,9 @@ describe('sleeping the workspace on screen', () => {
     await flush()
     expect(sleepReopened).toHaveBeenCalledTimes(1)
     expect(mocks.selection.activeWorktreeId).toBe(CLOUD)
-    // Awake again: its panes may connect, and re-activating in place respawns them.
+    // Awake again: opened the ordinary way, which wakes the sandbox if main had already suspended it.
     expect(hasWorktreeSleepIntent(CLOUD)).toBe(false)
-    expect(mocks.setActiveWorktree).toHaveBeenCalledWith(CLOUD)
-    expect(resumeWorkspace).not.toHaveBeenCalled()
+    expect(mocks.activateWorktreeFromSidebar).toHaveBeenCalledWith(CLOUD)
   })
 
   it('Keep awake before main starts the sleep: stays selected and awake, never held', async () => {
@@ -232,6 +236,6 @@ describe('sleeping the workspace on screen', () => {
     await flush()
     expect(sleepReopened).toHaveBeenCalledTimes(2)
     expect(hasWorktreeSleepIntent(CLOUD)).toBe(false)
-    expect(mocks.setActiveWorktree).toHaveBeenCalledWith(CLOUD)
+    expect(mocks.activateWorktreeFromSidebar).toHaveBeenCalledWith(CLOUD)
   })
 })

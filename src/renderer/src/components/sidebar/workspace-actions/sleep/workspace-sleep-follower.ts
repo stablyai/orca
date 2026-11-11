@@ -21,6 +21,7 @@ import {
   subscribeWorktreeSleepView
 } from '@/lib/worktree-sleep-view'
 import { notePredictiveWakeSlept } from '@/lib/orca-cloud/cloud-predictive-wake'
+import { activateWorktreeFromSidebar } from '@/lib/workspace/activation/sidebar-worktree-activation'
 import type { HostTerminalStop } from '@/store/terminals/terminal-actions'
 import type { WorkspaceSleepNotice } from '../../../../../../shared/workspace-sleep'
 import { preserveSidebarWorktreePosition } from './sleep-worktree-sidebar-position'
@@ -155,6 +156,7 @@ export function followWorkspaceSleep(
   const entry = followed.get(worktreeId)
   followed.delete(worktreeId)
   entry?.stopWatchingReopen()
+  const keptAwake = isWorktreeKeptAwake(worktreeId)
   clearWorktreeKeptAwake(worktreeId)
   clearWorktreeGoingToSleep(worktreeId)
   if (!notice.slept) {
@@ -177,7 +179,11 @@ export function followWorkspaceSleep(
     }
     // Put the awake workspace back after a failed sleep, or one kept awake from the view:
     // re-activating it in place respawns its stopped panes. One the user left is not pulled back.
-    if ((!notice.slept || (entry?.stayed && reopened)) && entry?.selectionBeforeSleep) {
+    if (keptAwake && notice.slept && state.activeWorktreeId === worktreeId) {
+      // Keep awake can land after main already began suspending (it checks just before): open it
+      // the ordinary way, which re-activates it and wakes the sandbox only if it did go to sleep.
+      void activateWorktreeFromSidebar(worktreeId)
+    } else if ((!notice.slept || (entry?.stayed && reopened)) && entry?.selectionBeforeSleep) {
       const stillThere = entry.stayed
         ? state.activeWorktreeId === worktreeId
         : state.activeWorktreeId === null
