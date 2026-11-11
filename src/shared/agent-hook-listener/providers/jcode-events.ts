@@ -8,6 +8,8 @@ import { resolvePrompt, resolveToolState } from '../prompt-fields'
 import { extractToolFields, isNewTurnEvent } from '../provider-event-routing'
 import { readString } from '../tool-input-preview'
 import { isJcodeUserInputTool } from './jcode-tool-fields'
+import { isCachedJcodeHelperSession } from '../../jcode-helper-sessions'
+import type { AgentHookSource } from '../transport/agent-hook-relay'
 
 // Lifecycle mapping follows docs/reference/jcode-hook-events.md; idle session_start takes the early path.
 const JCODE_EVENT_STATES: Record<string, AgentStatusState> = {
@@ -66,4 +68,13 @@ export function normalizeJcodeEvent(
       ? true
       : snapshot.lastAssistantMessageIsToolOutput
   })
+}
+
+/** Jcode fires every swarm session's hooks with the requesting pane's key; a helper's must not
+ *  drive the pane's row. The verdict is read ahead of normalization by the hook owner preflight. */
+export function isJcodeHelperSessionHook(
+  source: AgentHookSource,
+  sessionId: string | undefined
+): boolean {
+  return source === 'jcode' && isCachedJcodeHelperSession(sessionId)
 }
