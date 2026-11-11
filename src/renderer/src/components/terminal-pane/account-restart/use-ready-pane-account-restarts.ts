@@ -6,6 +6,7 @@ import {
   selectReadyAccountRestartPtyIds
 } from './pane-account-restart-readiness'
 import {
+  beginCloudAgentRestart,
   failCloudAgentRestart,
   isForcedCloudAgentRestart,
   noteCloudAgentRestartLaunched
@@ -18,7 +19,12 @@ import {
   stopRemotePaneTerminalForRestart
 } from '@/lib/orca-cloud/cloud-pane-restart-stop'
 import type { AgentProviderSessionMetadata } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
-import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
+import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
+import {
+  isRemoteRuntimePtyId,
+  parseRemoteRuntimePtyId
+} from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
+import { isOrcaCloudEnvironmentId } from '@/lib/orca-cloud/orca-cloud-environment-id'
 import { buildFreshAccountRestartCommand } from '@/lib/agent-session/accounts/agent-account-restart-startup'
 import type { AccountRestartAgent } from '@/store/terminals/terminal-contracts'
 import type { usePaneAccountRestartStartup } from './use-pane-account-restart-startup'
@@ -73,10 +79,6 @@ export function useReadyPaneAccountRestarts({
 
 type ReadyRestartPane = { id: number; leafId: string }
 
-/**
- * Run each of this tab's queued account restarts that may run now. An RA-11 Restart clicked on the
- * Orca Cloud strip reports its outcome (launched, or failed) so the strip never vanishes silently.
- */
 function worktreeIdForTab(tabId: string): string | null {
   for (const [worktreeId, tabs] of Object.entries(useAppStore.getState().tabsByWorktree)) {
     if (tabs.some((tab) => tab.id === tabId)) {
@@ -86,6 +88,11 @@ function worktreeIdForTab(tabId: string): string | null {
   return null
 }
 
+/**
+ * Run each of this tab's queued account restarts that may run now. A restart on a paired (remote)
+ * pane, or one clicked on the Orca Cloud strip, reports its outcome (launched, or failed) so it never
+ * ends silently.
+ */
 export function runReadyPaneAccountRestarts<
   Startup extends { resumeProviderSession?: AgentProviderSessionMetadata }
 >(input: {
@@ -145,23 +152,37 @@ export function runReadyPaneAccountRestarts<
       continue
     }
     const launchedStartup = startup
+    const providerSession = launchedStartup.resumeProviderSession ?? null
+    // RA-11c: on a paired pane a reconnect alone reattaches to the running agent (the host hands back
+    // its live terminal), so every restart there takes the stop → resume → reconnect path, and an
+    // account-switch restart is tracked like a strip Restart: proof of a new PTY, else a failure.
+    const worktreeId = isRemoteRuntimePtyId(ptyId) ? worktreeIdForTab(args.tabId) : null
+    // Tracked (the strip shows "Restarting…" and a result) only where that strip lives: Orca Cloud.
+    const onOrcaCloud = isOrcaCloudEnvironmentId(
+      parseRemoteRuntimePtyId(ptyId)?.environmentId ?? ''
+    )
+    const tracked = forced || (worktreeId !== null && onOrcaCloud)
+    if (tracked && !forced) {
+      beginCloudAgentRestart(
+        makePaneKey(args.tabId, pane.leafId),
+        { agent, resumable: providerSession !== null, ptyId },
+        () => undefined
+      )
+    }
     const launch = (): void => {
-      if (forced) {
+      if (tracked) {
         noteCloudAgentRestartLaunched(ptyId)
       }
       // Why: one Claude switch restarts many panes at once; none was the one the user clicked.
       args.handleRestartPane(pane.id, launchedStartup, { focus: agent === 'codex' })
     }
-    const worktreeId = forced && isRemoteRuntimePtyId(ptyId) ? worktreeIdForTab(args.tabId) : null
     if (!worktreeId) {
       launch()
       continue
     }
-    // RA-11 on a paired pane: a reconnect alone reattaches to the running agent. Stop that one host
-    // terminal first (its exit is ours, not the pane's), then reconnect.
+    // Stop that one host terminal first (its exit is ours, not the pane's), then reconnect.
     const store = useAppStore.getState()
     store.suppressPtyExit(ptyId)
-    const providerSession = launchedStartup.resumeProviderSession ?? null
     void args
       .stopRemotePane(ptyId, worktreeId)
       .then(() =>
@@ -198,7 +219,12 @@ export function runReadyPaneAccountRestarts<
         (err: unknown) => {
           console.warn('[orca-cloud] restart could not relaunch the pane’s agent on its host:', err)
           useAppStore.getState().consumeSuppressedPtyExit(ptyId)
-          failCloudAgentRestart(ptyId)
+          // The host did not stop or relaunch it: the strip names that reason.
+          failCloudAgentRestart(ptyId, 'hostUnresponsive')
+          if (!forced && agent === 'codex') {
+            // The switch was answered on the old account: ask again rather than leave it silently stale.
+            useAppStore.getState().reopenCodexRestartPrompt(ptyId)
+          }
         }
       )
   }
