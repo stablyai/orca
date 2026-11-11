@@ -166,11 +166,11 @@
 1 src/main/codex/trust/identity/codex-trust-identity.ts
 1 src/main/codex/trust/toml/config-toml-project-trust.ts
 7 src/main/codex/trust/toml/config-toml-trust.ts
-2 src/main/computer/desktop-script-provider-paths.ts
-1 src/main/computer/macos-native-provider-client.ts
-3 src/main/computer/macos-native-provider-paths.ts
-5 src/main/computer/macos-native-provider-transport.ts
-1 src/main/computer/sidecar-client.ts
+2 src/main/computer/desktop-script/desktop-script-provider-paths.ts
+1 src/main/computer/macos-native/macos-native-provider-client.ts
+3 src/main/computer/macos-native/macos-native-provider-paths.ts
+5 src/main/computer/macos-native/macos-native-provider-transport.ts
+1 src/main/computer/sidecar-transport/sidecar-client.ts
 3 src/main/connector-cloud/connector-turn-events.ts
 1 src/main/copilot/hook-service.ts
 4 src/main/crash-reporting/capture/appimage-crashpad-handler-exit.ts
