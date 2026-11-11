@@ -68,7 +68,8 @@ describe('external worktree inbox', () => {
       hiddenExternal,
       detectedWorktree({ id: 'visible-scratch', ownership: 'agent-scratch', visible: true }),
       detectedWorktree({ id: 'orca-managed', ownership: 'orca-managed' }),
-      detectedWorktree({ id: 'checked-out', selectedCheckout: true })
+      detectedWorktree({ id: 'checked-out', selectedCheckout: true }),
+      detectedWorktree({ id: 'bare-storage', isBare: true })
     ])
 
     expect(getHiddenImportableExternalWorktrees(detected)).toEqual([hiddenScratch, hiddenExternal])

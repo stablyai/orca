@@ -167,13 +167,13 @@ function toWorkspaceRow(
 }
 
 type ListedRow = { identity: HostScopedWorktreeKey; hostId: ExecutionHostId }
-type ListedWorktree = Pick<Worktree, 'id' | 'repoId' | 'hostId'>
+type ListedWorktree = Pick<Worktree, 'id' | 'repoId' | 'hostId'> & Partial<Pick<Worktree, 'isBare'>>
 type ListedRepo = Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>
 
 /** Null for rows this host does not list, such as paired-server workspaces. */
 function listedRow(worktree: ListedWorktree, repo: ListedRepo | undefined): ListedRow | null {
   const hostId = worktree.hostId ?? (repo ? getRepoExecutionHostId(repo) : undefined)
-  if (!hostId || parseExecutionHostId(hostId)?.kind === 'runtime') {
+  if (worktree.isBare || !hostId || parseExecutionHostId(hostId)?.kind === 'runtime') {
     return null
   }
   // Match window ownership: stamp remote hosts always, local hosts only when metadata names one.

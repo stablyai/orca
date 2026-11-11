@@ -63,6 +63,7 @@ type FeedRowFields = Pick<
       | 'smartAt'
     >
   > &
+  Partial<Pick<Worktree, 'isBare'>> &
   SidebarFeedRowFacts &
   Pick<SidebarFeedWorkspace, 'legacyLineage'>
 
@@ -98,7 +99,7 @@ function readFeedRow(
     path: row.path,
     branch: row.branch,
     head: '',
-    isBare: false,
+    isBare: row.isBare ?? false,
     displayName: row.displayName,
     comment: '',
     linkedIssue: null,

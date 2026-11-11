@@ -8,7 +8,12 @@ type WorktreeValidityCatalog = {
   repos: readonly Pick<Repo, 'id'>[]
   worktreesByRepo: Readonly<Record<string, readonly Pick<Worktree, 'id'>[]>>
   detectedWorktreesByRepo?: Readonly<
-    Record<string, Pick<DetectedWorktreeListResult, 'authoritative'> | undefined>
+    Record<
+      string,
+      | (Pick<DetectedWorktreeListResult, 'authoritative'> &
+          Partial<Pick<DetectedWorktreeListResult, 'worktrees'>>)
+      | undefined
+    >
   >
 }
 
@@ -43,6 +48,11 @@ export function buildValidWorktreeIdsForSessionHydration(
   )
   const knownRepoIds = new Set(catalog.repos.map((repo) => repo.id))
   const detectedWorktreesByRepo = catalog.detectedWorktreesByRepo ?? {}
+  for (const detected of Object.values(detectedWorktreesByRepo)) {
+    for (const worktree of detected?.worktrees ?? []) {
+      validWorktreeIds.add(worktree.id)
+    }
+  }
   const repoIdsWithLoadedWorktrees = new Set(
     Object.entries(worktreesByRepo)
       // Metadata fallbacks can omit host-less/scratch rows and cannot prove deletion (#1158). Explicitly non-authoritative listings disqualify a repo; no detection entry preserves legacy loaded status.

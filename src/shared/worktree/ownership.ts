@@ -179,7 +179,8 @@ export function toDetectedWorktree(args: {
     ...args,
     worktreeVisibilitySourceMatcher: sourceMatcher
   })
-  const selectedCheckout = areRuntimePathsEqual(args.worktree.path, args.repo.path)
+  const selectedCheckout =
+    !args.worktree.isBare && areRuntimePathsEqual(args.worktree.path, args.repo.path)
   const isLegacyRepoForVisibility =
     args.isLegacyRepoForVisibility ?? isLegacyRepoForExternalWorktreeVisibility(args.repo)
   const visible = shouldShowWorktree({
@@ -203,7 +204,7 @@ export function toDetectedWorktree(args: {
 }
 
 export function applyMetadataFallbackVisibility(detected: DetectedWorktree): DetectedWorktree {
-  if (detected.ownership === 'agent-scratch' || detected.visibilitySource) {
+  if (detected.isBare || detected.ownership === 'agent-scratch' || detected.visibilitySource) {
     // Why: retain scratch policy, including explicit imports, while ordinary fallback fails open.
     return detected
   }

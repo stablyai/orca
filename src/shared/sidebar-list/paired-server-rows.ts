@@ -36,6 +36,7 @@ const PairedServerWorkspaceRowSchema = z
     repoId: z.string(),
     kind: z.enum(['git', 'folder']),
     path: z.string(),
+    isBare: z.boolean().optional().catch(undefined),
     branch: z.string(),
     displayName: z.string(),
     isArchived: z.boolean(),
@@ -126,6 +127,7 @@ export function pairedServerRowOfWorktree(
     isArchived: worktree.isArchived,
     isPinned: worktree.isPinned,
     isMainWorktree: worktree.isMainWorktree,
+    isBare: worktree.isBare,
     isUnread: worktree.isUnread,
     instanceId: worktree.instanceId,
     lineage: lineage
@@ -177,6 +179,7 @@ const ServerWorktreePsRowSchema = z.object({
   repoId: z.string(),
   workspaceKind: openEnum(['git', 'folder-workspace'], 'git').optional(),
   path: z.string().catch(''),
+  isBare: z.boolean().optional().catch(undefined),
   branch: z.string().catch(''),
   displayName: z.string().catch(''),
   isArchived: z.boolean().catch(false),

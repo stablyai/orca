@@ -1,3 +1,5 @@
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { BARE_WORKSPACE_LAUNCH_ERROR } from '../../../workspaces/catalog/workspace-git-storage'
 import { ensureStructuredAgentModelCatalogOwner } from '../model-catalog/structured-agent-model-catalog-wiring'
 import type { StructuredAgentModelCatalogDeps } from './structured-agent-runtime-registration-types'
 import { resolveStructuredCodexAccountKind } from '../environment/structured-agent-account-home'
@@ -21,6 +23,14 @@ import type { StructuredAgentSessionHostDeps } from '../../../native-chat/agent-
 import { OrcaRuntimeWithStartTuiIdleVisibleReadProbe } from '../../terminal/wait/terminal-wait-visible-probe'
 
 export abstract class RuntimeStructuredAgentHost extends OrcaRuntimeWithStartTuiIdleVisibleReadProbe {
+  protected async assertWorkspaceAcceptsLaunch(workspaceId: string): Promise<void> {
+    if (
+      await this.workspaceUsesBareGitStorage({ id: workspaceId, hostId: LOCAL_EXECUTION_HOST_ID })
+    ) {
+      throw new Error(BARE_WORKSPACE_LAUNCH_ERROR)
+    }
+  }
+
   /** Apply the host-owning desktop's account overlay to configured agent environment. */
   protected structuredAgentLaunchEnv(
     agent: StructuredAgentId,

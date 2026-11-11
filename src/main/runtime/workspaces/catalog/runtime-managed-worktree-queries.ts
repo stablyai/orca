@@ -80,7 +80,7 @@ export class RuntimeManagedWorktreeQueries {
         return false
       }
       if (routing.kind !== 'resolved' || !routing.repo) {
-        return !scopedRepo
+        return !worktree.isBare && !scopedRepo
       }
       if (
         scopedRepo &&
@@ -226,7 +226,7 @@ export class RuntimeManagedWorktreeQueries {
     const repo = routing.kind === 'resolved' ? routing.repo : undefined
     return repo
       ? this.toDetected(repo, worktree, matcher, defaultsSupported, settingsOverride).visible
-      : true
+      : !worktree.isBare
   }
 
   buildVisibilityMatchers(

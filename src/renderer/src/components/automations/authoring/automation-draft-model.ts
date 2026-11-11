@@ -13,7 +13,8 @@ import { extraAgentArgsErrorText } from './automation-extra-agent-args-error-cop
 export const AUTOMATION_DEFAULT_TIME = '09:00'
 
 export function getDefaultWorktree(worktrees: readonly Worktree[]): Worktree | null {
-  return worktrees.find((worktree) => worktree.isMainWorktree) ?? worktrees[0] ?? null
+  const checkouts = worktrees.filter((worktree) => !worktree.isBare)
+  return checkouts.find((worktree) => worktree.isMainWorktree) ?? checkouts[0] ?? null
 }
 
 export function formatTimeInput(hour: number, minute: number): string {

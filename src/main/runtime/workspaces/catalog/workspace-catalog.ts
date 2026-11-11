@@ -1,3 +1,7 @@
+import { workspaceRootIsBare } from '../../../workspaces/catalog/workspace-git-storage'
+import type { HostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
+import { isFolderRepo } from '../../../../shared/repo-kind'
+import { getLocalProjectWorktreeGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
 import { OrcaRuntimeWithReadKittyFile } from '../../files/paths/orca-runtime-read-kitty-file'
 import type { RuntimeWorkspaceRepoScanRefresh } from './workspace-repo-scan-refresh'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
@@ -281,6 +285,29 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
       })
     this.worktreeScanInFlight.set(scanScopeKey, { generation, runtimeKey, promise })
     return (await promise).result
+  }
+
+  protected async workspaceUsesBareGitStorage(target: HostWorktreeTarget): Promise<boolean> {
+    const parsed = splitWorktreeIdForFilesystem(target.id)
+    if (!parsed || !this.store) {
+      return false
+    }
+    const owners = this.store
+      .getRepos()
+      .filter((repo) => repo.id === parsed.repoId && getRepoExecutionHostId(repo) === target.hostId)
+    const repo = owners.length === 1 ? owners[0] : undefined
+    if (!repo || isFolderRepo(repo)) {
+      return false
+    }
+    const deps = this.repoWorktreeRowDeps()
+    const scan =
+      deps.getCachedSuccessfulScan?.(repo) ?? (await this.listRepoWorktreesForResolution(repo))
+    return workspaceRootIsBare(repo, parsed.worktreePath, {
+      ...(scan.ok ? { worktrees: scan.worktrees } : {}),
+      ...(target.hostId === LOCAL_EXECUTION_HOST_ID
+        ? getLocalProjectWorktreeGitOptions(this.requireStore(), repo)
+        : {})
+    })
   }
 
   listRepos(): Repo[] {

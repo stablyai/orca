@@ -352,3 +352,34 @@ describe('buildSidebarFeedRows nests a server’s workspace under its folder wor
     ).toEqual(['folder f-1@0 children=1', 'r::/r/c@1'])
   })
 })
+
+it('keeps bare storage out of local and paired rows, including parent synthesis', () => {
+  const repos = [repo('r'), repo('r', { executionHostId: 'runtime:a' })]
+  const bareId = 'r::/r/.bare'
+  const local = buildWorkspaceRows({
+    worktrees: [
+      worktree(bareId, { isBare: true, isMainWorktree: true }),
+      worktree('r::/r/main', { parentWorktreeId: bareId })
+    ],
+    folderWorkspaces: [],
+    repos,
+    lineageById: {}
+  })
+  const paired = [
+    { worktreeId: bareId, isBare: true, isMainWorktree: true },
+    { worktreeId: 'r::/r/main', parentWorktreeId: bareId }
+  ].flatMap((row) => normalizePairedServerRow('runtime:a', { repoId: 'r', ...row }) ?? [])
+  const built = buildSidebarFeedRows(
+    domains({
+      workspaces: local,
+      pairedServerHosts: new Map([['runtime:a', { freshness: 'live', host: null }]]),
+      pairedServerRows: new Map(paired.map((row) => [row.key, row]))
+    }),
+    catalog(repos),
+    view()
+  )
+  expect(outline(built.sectionRows).toSorted()).toEqual([
+    'local|r::/r/main@0',
+    'runtime:a|r::/r/main@0'
+  ])
+})

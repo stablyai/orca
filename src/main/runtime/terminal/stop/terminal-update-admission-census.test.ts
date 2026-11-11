@@ -6,6 +6,8 @@ import {
   ORCAD_UPDATE_ADMISSION_FENCE_MS,
   OrcadTerminalCensusParamsSchema
 } from '../../../../shared/orcad-terminal-census'
+import { TerminalHost } from '../../../daemon/terminal-host/terminal-host'
+import { listWorktreesSharedStrict } from '../../../git/worktrees/catalog/worktree-scan-cache'
 import { spawnWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 import { ORCAD_TERMINAL_CENSUS_METHODS } from '../../rpc/methods/orcad/orcad-terminal-census'
 import { TERMINAL_UPDATE_ADMISSION_CLOSED_MESSAGE } from './terminal-update-admission'
@@ -80,5 +82,44 @@ describe("an update's last terminal census", () => {
     await expect(
       runtime.acquireWorktreeTerminalSpawn(target, { reattachSessionId: 'pty-live' })
     ).rejects.toThrow(TERMINAL_UPDATE_ADMISSION_CLOSED_MESSAGE)
+  })
+})
+
+describe('bare storage terminal admission', () => {
+  it('refuses fresh creation and cannot recreate a saved session that exited before attachment', async () => {
+    const path = TEST_WORKTREE_ID.slice(TEST_WORKTREE_ID.indexOf('::') + 2)
+    vi.mocked(listWorktreesSharedStrict).mockResolvedValueOnce([
+      { path, head: '', branch: '', isBare: true, isMainWorktree: true }
+    ])
+    const runtime = new OrcaRuntimeService(store)
+    await expect(runtime.acquireWorktreeTerminalSpawn(target)).rejects.toThrow(
+      'This folder contains Git storage'
+    )
+    const spawnSubprocess = vi.fn(() => {
+      throw new Error('must not create')
+    })
+    const host = new TerminalHost({ spawnSubprocess })
+    let attachOnly = false
+    const release = await runtime.acquireWorktreeTerminalSpawn(target, {
+      reattachSessionId: 'exited-pane',
+      requireAttachOnly: () => {
+        attachOnly = true
+      }
+    })
+    try {
+      await expect(
+        host.createOrAttach({
+          sessionId: 'exited-pane',
+          cols: 80,
+          rows: 24,
+          attachOnly,
+          streamClient: { onData: vi.fn(), onExit: vi.fn() }
+        })
+      ).rejects.toThrow('Session not found: exited-pane')
+      expect(spawnSubprocess).not.toHaveBeenCalled()
+    } finally {
+      release()
+      await host.dispose()
+    }
   })
 })
