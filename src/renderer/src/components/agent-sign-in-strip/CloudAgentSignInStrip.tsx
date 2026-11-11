@@ -290,8 +290,11 @@ export function CloudAgentSignInStrip({
             </DropdownMenuContent>
           </DropdownMenu>
         ) : null}
-        {/* Renew is the whole action and the strip leaves on its own; Escape still cancels. */}
-        {!model.dismiss && (model.status === 'done' || primary?.action.kind === 'renew') ? null : (
+        {/* Renew and Restart are the whole action and the strip leaves on its own; Escape still cancels. */}
+        {!model.dismiss &&
+        (model.status === 'done' ||
+          primary?.action.kind === 'renew' ||
+          primary?.action.kind === 'restart') ? null : (
           <Button
             type="button"
             variant="ghost"

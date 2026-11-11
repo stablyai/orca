@@ -11,7 +11,8 @@ import {
   type CloudStripActions
 } from './CloudAgentSignInStrip'
 import { cloudAgentStripModel } from './cloud-agent-strip-model'
-import { cloudRunningStripModel } from './cloud-running-strip-model'
+import { cloudRestartAttemptModel, cloudRunningStripModel } from './cloud-running-strip-model'
+import type { CloudAgentRestartAttempt } from '@/lib/orca-cloud/cloud-agent-restart-attempt'
 import type { CloudRunningStrip } from '@/lib/orca-cloud/cloud-running-agent-signout'
 
 const noop = (): void => {}
@@ -30,7 +31,8 @@ function Pane({
   view = null,
   agent = 'claude',
   width = 900,
-  running
+  running,
+  restart
 }: {
   reason?: CloudAgentStripReason
   view?: AgentSignInGateView | null
@@ -38,16 +40,20 @@ function Pane({
   width?: number
   /** RA-11: the strip over a running agent instead of a held launch. */
   running?: CloudRunningStrip
+  /** RA-11: a Restart in flight, or one that failed. */
+  restart?: CloudAgentRestartAttempt
 }): React.JSX.Element {
-  const model = running
-    ? cloudRunningStripModel(running, translate)
-    : cloudAgentStripModel({
-        agent,
-        reason,
-        view,
-        hostLabel: translate('agentSignInStrip.sandbox', 'the sandbox'),
-        t: translate
-      })
+  const model = restart
+    ? cloudRestartAttemptModel(restart, translate)
+    : running
+      ? cloudRunningStripModel(running, translate)
+      : cloudAgentStripModel({
+          agent,
+          reason,
+          view,
+          hostLabel: translate('agentSignInStrip.sandbox', 'the sandbox'),
+          t: translate
+        })
   return (
     <div className="bg-background p-4">
       {/* Stands in for a terminal pane: its title row (split, close) stays above the strip. */}
@@ -160,4 +166,12 @@ export const runningRenewedFresh = fixture({
 export const runningRenewedNarrow = fixture({
   running: { phase: 'renewed', agent: 'claude', resumable: true },
   width: 520
+})
+/** RA-11 after Restart: the strip stays, spinner, button disabled, until the agent reports. */
+export const runningRestarting = fixture({
+  restart: { phase: 'restarting', agent: 'claude', resumable: true, ptyId: 'p', launchedAt: null }
+})
+/** RA-11: nothing relaunched in time. */
+export const runningRestartFailed = fixture({
+  restart: { phase: 'failed', agent: 'claude', resumable: true, ptyId: 'p', launchedAt: null }
 })

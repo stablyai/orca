@@ -2,6 +2,7 @@
 // sign-in expires. Same component, place and height as #315's pre-launch strip; the terminal keeps
 // running and refits below it, so its scrollback stays readable and selectable.
 import type React from 'react'
+import { useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useAppStore } from '@/store'
 import { useTranslate } from '@/i18n/use-translate'
@@ -19,19 +20,24 @@ import { isOrcaCloudEnvironmentId } from '@/lib/orca-cloud/orca-cloud-environmen
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import {
   clearCloudRunningSignout,
-  forceCloudAgentRestart,
   cloudRunningStrip,
   useCloudRunningAccountReads,
   useCloudRunningSignoutVersion,
   useWorkspaceUsesAccount
 } from '@/lib/orca-cloud/cloud-running-agent-signout'
 import {
+  beginCloudAgentRestart,
+  cloudAgentRestartAttempt,
+  dismissCloudAgentRestart,
+  settleCloudAgentRestart
+} from '@/lib/orca-cloud/cloud-agent-restart-attempt'
+import {
   CloudAgentSignInStrip,
   CloudStripLayer,
   cloudStripWidth,
   type CloudStripActions
 } from './CloudAgentSignInStrip'
-import { cloudRunningStripModel } from './cloud-running-strip-model'
+import { cloudRestartAttemptModel, cloudRunningStripModel } from './cloud-running-strip-model'
 
 function openAccounts(): void {
   const store = useAppStore.getState()
@@ -85,6 +91,60 @@ export function CloudRunningStripPortal({
   const hold = useCloudAgentHold(paneKey)
   const gate = useAgentSignInGate(paneKey)
   const held = hold !== null || gate !== null
+  const attempt = cloudAgentRestartAttempt(paneKey, revision)
+  // Success: the relaunched agent's first status. The entry seen when the new PTY was asked for is
+  // the old agent's (or none); any later entry is the relaunched one. No clocks: the host stamps it.
+  const launchEntryRef = useRef<{ launchedAt: number; entry: unknown } | null>(null)
+  const launchedAt = attempt?.phase === 'restarting' ? attempt.launchedAt : null
+  useEffect(() => {
+    if (launchedAt === null) {
+      launchEntryRef.current = null
+      return
+    }
+    if (launchEntryRef.current?.launchedAt !== launchedAt) {
+      launchEntryRef.current = { launchedAt, entry }
+      return
+    }
+    if (entry !== null && entry !== launchEntryRef.current.entry) {
+      settleCloudAgentRestart(paneKey)
+    }
+  }, [paneKey, launchedAt, entry])
+  const restart = (args: { agent: HostAgentSignInAgent; resumable: boolean }): void => {
+    if (!ptyId) {
+      return
+    }
+    // Never automatic: the person asked. The pane's own session resumes when it has one.
+    beginCloudAgentRestart(paneKey, { ...args, ptyId }, () =>
+      useAppStore.getState().queuePaneAccountRestarts([ptyId], args.agent)
+    )
+  }
+  // A Restart in flight (or failed) owns the strip even while the pane has no agent status.
+  if (attempt && cloud) {
+    const attemptActions: CloudStripActions = {
+      primary: (action) => {
+        if (action.kind === 'restart' && attempt.phase === 'failed') {
+          restart({ agent: attempt.agent, resumable: attempt.resumable })
+        }
+      },
+      submitCode: () => undefined,
+      pasteCode: () => undefined,
+      useCode: () => undefined,
+      useApiKey: () => undefined,
+      cancel: () => (attempt.phase === 'failed' ? dismissCloudAgentRestart(paneKey) : undefined)
+    }
+    return createPortal(
+      <CloudStripLayer>
+        <CloudAgentSignInStrip
+          model={cloudRestartAttemptModel(attempt, t)}
+          prompt={null}
+          width={cloudStripWidth(pane.container.clientWidth)}
+          actions={attemptActions}
+        />
+      </CloudStripLayer>,
+      pane.container,
+      `cloud-running-strip-${pane.id}`
+    )
+  }
   if (!running) {
     return null
   }
@@ -105,11 +165,8 @@ export function CloudRunningStripPortal({
     primary: (action) => {
       if (action.kind === 'renew') {
         openAccounts()
-      } else if (action.kind === 'restart' && ptyId) {
-        // Never automatic: the person asked. The pane's own session resumes when it has one.
-        forceCloudAgentRestart(ptyId)
-        useAppStore.getState().queuePaneAccountRestarts([ptyId], strip.agent)
-        clearCloudRunningSignout(paneKey)
+      } else if (action.kind === 'restart' && strip.phase === 'renewed') {
+        restart({ agent: strip.agent, resumable: strip.resumable })
       }
     },
     submitCode: () => undefined,

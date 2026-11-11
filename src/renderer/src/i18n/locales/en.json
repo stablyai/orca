@@ -28057,7 +28057,12 @@
     "renewedFresh": "Starts a new conversation.",
     "restart": "Restart",
     "dismiss": "Dismiss",
-    "renewedAnnounce": "{{agent}} sign-in renewed. Restart {{agent}} to use it."
+    "renewedAnnounce": "{{agent}} sign-in renewed. Restart {{agent}} to use it.",
+    "restarting": "Restarting {{agent}}…",
+    "restartingResume": "Picking up where you left off.",
+    "restartFailed": "Couldn’t restart {{agent}}",
+    "tryAgainDetail": "Try again.",
+    "restartFailedAnnounce": "Couldn’t restart {{agent}}. Try again."
   },
   "cloudAgentCheck": {
     "keyAgentSignedOut": "{{agent}} isn’t signed in.",

@@ -24,6 +24,11 @@ const signedOut = new Map<string, { agent: HostAgentSignInAgent; renewedAt: numb
 const listeners = new Set<() => void>()
 let version = 0
 
+/** Re-render the strips: this module's or the restart attempt's memory changed. */
+export function notifyCloudRunningStrips(): void {
+  notify()
+}
+
 function notify(): void {
   version += 1
   for (const listener of listeners) {
@@ -239,29 +244,9 @@ function readUsesAccount(key: string | null): boolean | null {
   return read && read !== 'pending' ? read.usesAccount : null
 }
 
-/**
- * RA-11 Restart the person clicked on a signed-out cloud pane. Its Claude reports 'blocked' after the
- * failed turn, which the account-restart path otherwise reads as mid-turn and waits on forever.
- */
-const forcedRestarts = new Set<string>()
-
-export function forceCloudAgentRestart(ptyId: string): void {
-  forcedRestarts.add(ptyId)
-}
-
-/** Whether a queued restart on this PTY was asked for on the RA-11 strip (and may run now). */
-export function isForcedCloudAgentRestart(ptyId: string, stillQueued: boolean): boolean {
-  if (!stillQueued) {
-    forcedRestarts.delete(ptyId)
-    return false
-  }
-  return forcedRestarts.has(ptyId)
-}
-
 /** Tests only. */
 export function resetCloudRunningSignoutForTest(): void {
   signedOut.clear()
   sourceReads.clear()
-  forcedRestarts.clear()
   notify()
 }

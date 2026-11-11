@@ -103,7 +103,14 @@ test('the pane’s split and close buttons stay hit-testable above the strip', a
 // RA-11 + #315 P2: the strip reserves its height; the terminal refits below it, so no row (and not
 // the last one) ever sits under the strip, held launch or running agent alike.
 test('the terminal starts below the strip and its last row stays visible', async ({ page }) => {
-  for (const id of ['needExpired', 'runningExpired', 'runningRenewed', 'runningExpiredCompact']) {
+  for (const id of [
+    'needExpired',
+    'runningExpired',
+    'runningRenewed',
+    'runningExpiredCompact',
+    'runningRestarting',
+    'runningRestartFailed'
+  ]) {
     await page.goto(`/fixtures.html?id=agent-sign-in-strip/CloudAgentSignInStrip:${id}`)
     await expect(page.locator('html')).toHaveAttribute('data-fixture-state', 'ready')
     const strip = await page.locator('[data-cloud-sign-in-strip]').boundingBox()
@@ -138,4 +145,25 @@ test('RA-11: state 1 offers Renew only; state 2 offers Restart and a dismiss cle
   }
   // Not stacked next to the pane's ×: the strip sits a whole title row lower.
   expect(dismiss.y).toBeGreaterThanOrEqual(close.y + close.height)
+})
+
+test('RA-11 Restart: "Restarting Claude…" keeps the strip with the button disabled; a failure offers Try again', async ({
+  page
+}) => {
+  await page.goto('/fixtures.html?id=agent-sign-in-strip/CloudAgentSignInStrip:runningRestarting')
+  await expect(page.locator('html')).toHaveAttribute('data-fixture-state', 'ready')
+  const strip = page.locator('[data-cloud-sign-in-strip]')
+  await expect(strip).toContainText('Restarting Claude…')
+  const busy = strip.getByRole('button', { name: 'Restart Claude' })
+  await expect(busy).toHaveAttribute('aria-disabled', 'true')
+  // Nothing to close while it runs: the strip leaves with a result.
+  await expect(strip.getByRole('button')).toHaveCount(1)
+  await page.goto(
+    '/fixtures.html?id=agent-sign-in-strip/CloudAgentSignInStrip:runningRestartFailed'
+  )
+  await expect(page.locator('html')).toHaveAttribute('data-fixture-state', 'ready')
+  await expect(strip).toContainText('Couldn’t restart Claude')
+  await expect(strip).toContainText('Try again.')
+  await expect(strip.getByRole('button', { name: 'Try again' })).toBeEnabled()
+  await expect(strip.getByRole('button', { name: 'Dismiss' })).toBeVisible()
 })
