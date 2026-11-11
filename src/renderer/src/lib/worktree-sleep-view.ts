@@ -5,6 +5,8 @@ import { useSyncExternalStore } from 'react'
 // one stays on screen read-only after its Sleep ("view-only": never wakes, only shows the copy).
 const goingToSleep = new Set<string>()
 const viewOnly = new Set<string>()
+// Main is suspending the VM (past its last reopen check): Keep awake can no longer work.
+const suspendCommitted = new Set<string>()
 // "Keep awake" pressed while the sleep runs, possibly before main's started notice. Not shown.
 const keptAwake = new Set<string>()
 const listeners = new Set<() => void>()
@@ -61,6 +63,24 @@ export function isWorktreeSleepViewHeld(worktreeId: string | null): boolean {
   return worktreeId !== null && viewOnly.has(worktreeId)
 }
 
+export function markWorktreeSuspendCommitted(worktreeId: string): void {
+  change(suspendCommitted, worktreeId, true)
+}
+
+export function clearWorktreeSuspendCommitted(worktreeId: string): void {
+  change(suspendCommitted, worktreeId, false)
+}
+
+export function isWorktreeSuspendCommitted(worktreeId: string): boolean {
+  return suspendCommitted.has(worktreeId)
+}
+
+export function useIsWorktreeSuspendCommitted(worktreeId: string | null): boolean {
+  return useSyncExternalStore(subscribeWorktreeSleepView, () =>
+    worktreeId === null ? false : suspendCommitted.has(worktreeId)
+  )
+}
+
 export function markWorktreeKeptAwake(worktreeId: string): void {
   keptAwake.add(worktreeId)
 }
@@ -87,5 +107,6 @@ export function resetWorktreeSleepViewForTests(): void {
   goingToSleep.clear()
   viewOnly.clear()
   keptAwake.clear()
+  suspendCommitted.clear()
   listeners.clear()
 }

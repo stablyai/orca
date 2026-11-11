@@ -13,7 +13,9 @@ import {
 import {
   clearWorktreeGoingToSleep,
   clearWorktreeKeptAwake,
+  clearWorktreeSuspendCommitted,
   isWorktreeKeptAwake,
+  markWorktreeSuspendCommitted,
   isWorktreeSleepViewHeld,
   markWorktreeKeptAwake,
   markWorktreeGoingToSleep,
@@ -94,6 +96,10 @@ export function followWorkspaceSleep(
     toastWorkspaceSleepOutcome(notice.outcome)
     return
   }
+  if (notice.phase === 'suspending') {
+    markWorktreeSuspendCommitted(worktreeId)
+    return
+  }
   if (notice.phase === 'started') {
     const previous = followed.get(worktreeId)
     previous?.stopWatchingReopen()
@@ -158,6 +164,7 @@ export function followWorkspaceSleep(
   entry?.stopWatchingReopen()
   const keptAwake = isWorktreeKeptAwake(worktreeId)
   clearWorktreeKeptAwake(worktreeId)
+  clearWorktreeSuspendCommitted(worktreeId)
   clearWorktreeGoingToSleep(worktreeId)
   if (!notice.slept) {
     // A failed sleep leaves the workspace awake: nothing is view-only any more.

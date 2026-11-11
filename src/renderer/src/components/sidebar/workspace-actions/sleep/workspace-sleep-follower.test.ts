@@ -67,6 +67,7 @@ import { forgetWorktreeSleepIntent, hasWorktreeSleepIntent } from '@/lib/worktre
 import {
   holdWorktreeSleepView,
   isWorktreeGoingToSleep,
+  isWorktreeSuspendCommitted,
   isWorktreeSleepViewHeld,
   releaseWorktreeSleepView,
   resetWorktreeSleepViewForTests
@@ -237,5 +238,16 @@ describe('sleeping the workspace on screen', () => {
     expect(sleepReopened).toHaveBeenCalledTimes(2)
     expect(hasWorktreeSleepIntent(CLOUD)).toBe(false)
     expect(mocks.activateWorktreeFromSidebar).toHaveBeenCalledWith(CLOUD)
+  })
+
+  it('marks the suspend committed when main says so, and clears it when the sleep ends', async () => {
+    started()
+    expect(isWorktreeSuspendCommitted(CLOUD)).toBe(false)
+    followWorkspaceSleep({ worktreeId: CLOUD, phase: 'suspending' })
+    expect(isWorktreeSuspendCommitted(CLOUD)).toBe(true)
+    // Never a reopen, never a wake: it only stops offering Keep awake.
+    expect(sleepReopened).not.toHaveBeenCalled()
+    await ended(true)
+    expect(isWorktreeSuspendCommitted(CLOUD)).toBe(false)
   })
 })

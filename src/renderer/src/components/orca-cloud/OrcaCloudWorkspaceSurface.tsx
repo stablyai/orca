@@ -34,7 +34,11 @@ import { useCloudVersionSkewNotice } from './use-cloud-version-skew-notice'
 import { CloudWorkspaceOfflineView } from './offline/CloudWorkspaceOfflineView'
 import { useCloudOfflineData } from './offline/use-cloud-offline-data'
 import { useCloudWorkspaceView } from './use-cloud-workspace-view'
-import { useIsWorktreeGoingToSleep, useIsWorktreeSleepViewHeld } from '@/lib/worktree-sleep-view'
+import {
+  useIsWorktreeGoingToSleep,
+  useIsWorktreeSleepViewHeld,
+  useIsWorktreeSuspendCommitted
+} from '@/lib/worktree-sleep-view'
 import { useWakeInput, useWakeInputNotices } from './use-wake-input'
 import { useWakeAttachHold } from './use-wake-attach-hold'
 import { clearWakeInput } from '@/components/terminal-pane/input/wake-input-buffer'
@@ -199,6 +203,8 @@ function CloudSurface({ workspaceId }: { workspaceId: string }): React.JSX.Eleme
   // Just put to sleep from here: stays on screen read-only, never woken by being shown.
   const viewOnly = useIsWorktreeSleepViewHeld(workspaceId) && !archived
   const goingToSleep = useIsWorktreeGoingToSleep(workspaceId) && viewOnly
+  // Past main's last reopen check Keep awake can't work: Wake to continue (an honest wake) instead.
+  const suspendCommitted = useIsWorktreeSuspendCommitted(workspaceId)
   const [archiveLoad, retryArchive] = useArchiveLoad(workspaceId, archived)
   const offline = useCloudOfflineData(workspaceId, (maybeAsleep || viewOnly) && !archived)
   const asleep = (Boolean(offline.snapshot?.asleep) && maybeAsleep) || viewOnly
@@ -389,7 +395,9 @@ function CloudSurface({ workspaceId }: { workspaceId: string }): React.JSX.Eleme
                 workspaceName={name}
                 now={Math.max(now, slowNow)}
                 goingToSleep={goingToSleep}
-                onKeepAwake={() => keepWorkspaceAwakeDuringSleep(workspaceId)}
+                onKeepAwake={
+                  suspendCommitted ? undefined : () => keepWorkspaceAwakeDuringSleep(workspaceId)
+                }
                 viewOnly={viewOnly}
                 headingRef={headingRef}
                 onWake={wake}

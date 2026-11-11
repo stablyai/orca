@@ -80,4 +80,11 @@ describe('the asleep view kept on screen after Sleep', () => {
     expect(getByRole('button', { name: 'Wake to continue' })).toBeTruthy()
     expect(container.textContent).not.toContain('Saving a read-only copy')
   })
+
+  it('once main commits the suspend (no Keep awake handler) offers Wake to continue instead', () => {
+    const { getByRole, queryByRole, props } = view({ goingToSleep: true, viewOnly: true })
+    expect(queryByRole('button', { name: 'Keep awake' })).toBeNull()
+    fireEvent.click(getByRole('button', { name: 'Wake to continue' }))
+    expect(props.onWake).toHaveBeenCalledTimes(1)
+  })
 })
