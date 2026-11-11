@@ -35,7 +35,7 @@ import {
   attachPluginFrameGuest,
   isPluginFramePartition,
   PLUGIN_FRAME_GUEST_RENDERER_ARGUMENTS
-} from '../plugins/panels/plugin-frame-guest-registry'
+} from '../plugins/panels/guest-isolation/plugin-frame-guest-registry'
 import { attachBrowserPasswordGuest } from '../browser-passwords/browser-password-guest-service'
 
 /** orca-preview is outside normal browser URL admission; require the doc partition and a main-minted user-preview grant. */
