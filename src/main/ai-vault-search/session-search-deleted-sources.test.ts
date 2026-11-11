@@ -1,5 +1,6 @@
 import './session-search-worker.test-fixture'
 import { mkdir, rm, writeFile } from 'node:fs/promises'
+import { createHook } from 'node:async_hooks'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { resetTranscriptConsumersForTests } from '../ai-vault/transcripts/session-transcript-consumers'
@@ -90,10 +91,10 @@ it('retires a synthetic row when the container it came from is gone', async () =
   })
 })
 
-function seedSearchableRows(population: number): string[] {
+function seedSearchableRows(population: number, directory = harness.claudeProjectDir): string[] {
   const paths: string[] = []
   for (let index = 0; index < population; index++) {
-    const path = join(harness.claudeProjectDir, `${String(index).padStart(4, '0')}.jsonl`)
+    const path = join(directory, `${String(index).padStart(4, '0')}.jsonl`)
     paths.push(path)
     const write = store.beginWrite(syntheticCandidate({ path }), 'replace', 0)!
     write.add({ role: 'user', text: 'retainedretirementneedle', timestamp: null })
@@ -284,6 +285,96 @@ it('retains queued retirement when its replacement handoff is rejected', async (
     expect(state.pending).toBe(false)
   } finally {
     handoff.mockRestore()
+    await state.close()
+  }
+})
+
+it.each([200, 2000])(
+  'keeps long-path retirement work linear for %s conversations',
+  async (population) => {
+    const directory = join(
+      harness.claudeProjectDir,
+      ...Array.from({ length: 17 }, () => 'd'.repeat(200))
+    )
+    seedSearchableRows(population, directory)
+    store.removeFile = SessionSearchStore.prototype.removeFile.bind(store)
+    const state = new SessionSearchPassState()
+    await state.prepare(store)
+    let promises = 0
+    const hook = createHook({
+      init: (_id, kind) => {
+        if (kind === 'PROMISE') {
+          promises++
+        }
+      }
+    })
+    try {
+      hook.enable()
+      await retireSessionSearchPassSources(
+        retirementArgs(state),
+        [harness.roots.claudeProjectsDir!],
+        new Set()
+      )
+      hook.disable()
+      expect(retainedRows()).toBe(0)
+      expect(state.pending).toBe(false)
+      // One advance, membership verdict, absence proof and release need at most sixteen async boundaries per input (four promise events each), plus fixed dispatch.
+      expect(promises).toBeLessThanOrEqual(64 * population + 2000)
+    } finally {
+      hook.disable()
+      await state.close()
+    }
+  }
+)
+
+it('keeps one unfinished retirement unit through repeated membership rejection', async () => {
+  seedSearchableRows(300)
+  store.removeFile = SessionSearchStore.prototype.removeFile.bind(store)
+  const state = new SessionSearchPassState()
+  await state.prepare(store)
+  const request = store.candidates.bind(store)
+  let refusing = true
+  const refusal = vi.spyOn(store, 'candidates').mockImplementation((command) => {
+    if (refusing && command.kind === 'unowned-page') {
+      return Promise.reject(new Error('fixture refused current retirement unit'))
+    }
+    return request(command)
+  })
+  let promises = 0
+  const hook = createHook({
+    init: (_id, kind) => {
+      if (kind === 'PROMISE') {
+        promises++
+      }
+    }
+  })
+  try {
+    for (let attempt = 0; attempt < 32; attempt++) {
+      promises = 0
+      hook.enable()
+      await expect(
+        retireSessionSearchPassSources(
+          retirementArgs(state),
+          [harness.roots.claudeProjectsDir!],
+          new Set()
+        )
+      ).rejects.toThrow('fixture refused current retirement unit')
+      hook.disable()
+      // A rejected page retains its 256 inputs; retry does not create another traversal per earlier rejection.
+      expect(promises).toBeLessThanOrEqual(64 * 256 + 2000)
+    }
+    expect(retainedRows()).toBe(300)
+    refusing = false
+    await retireSessionSearchPassSources(
+      retirementArgs(state),
+      [harness.roots.claudeProjectsDir!],
+      new Set()
+    )
+    expect(retainedRows()).toBe(0)
+    expect(state.pending).toBe(false)
+  } finally {
+    hook.disable()
+    refusal.mockRestore()
     await state.close()
   }
 })
