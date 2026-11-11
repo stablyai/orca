@@ -15,6 +15,7 @@ import {
   getAgentStatusSessionBoundaryHandlerSourceLines
 } from './agent-status-session-boundary-source'
 
+/** Source lines that register the status handlers and post each lifecycle change to Orca. */
 export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] {
   const sessionStartHandler =
     kind !== 'omp'
@@ -153,8 +154,23 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     "    post('agent_start')",
     '  })',
     '',
+    // OMP auto-learn announces its capture turn before agent_end, then runs it with no agent_start; it must not reopen a done pane.
+    '  let autolearnCapturesOutstanding = 0',
+    "  onStatus('autolearn_capture_start', () => {",
+    '    autolearnCapturesOutstanding += 1',
+    '  })',
+    '',
+    "  onStatus('autolearn_capture_end', () => {",
+    '    autolearnCapturesOutstanding = Math.max(0, autolearnCapturesOutstanding - 1)',
+    '  })',
+    '',
+    '  function isAutolearnCaptureWork(): boolean {',
+    '    return autolearnCapturesOutstanding > 0 && !isTurnInFlight()',
+    '  }',
+    '',
     `  onStatus('tool_execution_start', (event${ctxParam}) => {`,
     ...captureSessionMetadata,
+    '    if (isAutolearnCaptureWork()) return',
     "    post('tool_execution_start', {",
     '      tool_name: event.toolName,',
     '      tool_input: sanitizeStatusToolInput(event.args),',
@@ -163,6 +179,7 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     '',
     `  onStatus('tool_call', (event${ctxParam}) => {`,
     ...captureSessionMetadata,
+    '    if (isAutolearnCaptureWork()) return',
     "    post('tool_call', {",
     '      tool_name: event.toolName,',
     '      tool_input: sanitizeStatusToolInput(event.input),',
@@ -171,6 +188,7 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     '',
     `  onStatus('tool_execution_end', (event${ctxParam}) => {`,
     ...captureSessionMetadata,
+    '    if (isAutolearnCaptureWork()) return',
     "    post('tool_execution_end', {",
     '      tool_name: event.toolName,',
     '    })',
