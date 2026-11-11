@@ -240,23 +240,19 @@
     }
   },
   "browser": {
-    "passwords": {
-      "savePrompt": {
-        "open": "Aufforderung zum Speichern des Passworts",
-        "updateTitle": "Passwort aktualisieren?",
-        "saveTitle": "Passwort speichern?",
-        "username": "Benutzername",
-        "password": "Passwort",
-        "never": "Nie für diese Website",
-        "notNow": "Jetzt nicht",
-        "update": "Aktualisieren",
-        "save": "Speichern"
-      },
-      "fill": {
-        "noUsername": "(kein Benutzername)",
-        "title": "Gespeicherte Anmeldungen",
-        "otherLogins": "Weitere Anmeldungen auf dieser Website"
-      }
+    "googleCookieClear": {
+      "signInKeyword": "Anmeldung",
+      "unavailable": "Für dieses Profil auf dem ausgewählten Host nicht verfügbar.",
+      "explanation": "Google bindet Anmeldungen an den Browser, in dem sie erfolgt sind, daher importiert Orca keine Google-Cookies aus anderen Browsern. Wenn Google am falschen Konto hängt oder dich immer wieder abmeldet, lösche die Google-Cookies aus dem aktiven Profil und melde dich dann in Orca erneut bei Google an. Andere Websites bleiben angemeldet.",
+      "action": "Google-Cookies löschen…",
+      "confirmTitle": "Google-Cookies aus {{profile}} löschen?",
+      "confirmDescription": "Du wirst in Orcas Browser für dieses Profil von Google abgemeldet. Andere Websites bleiben angemeldet.",
+      "clear": "Löschen",
+      "cancel": "Abbrechen",
+      "cleared": "Google-Cookies aus {{profile}} gelöscht.",
+      "empty": "Keine Google-Cookies zum Löschen in {{profile}}.",
+      "remaining": "Einige Google-Cookies konnten nicht aus {{profile}} entfernt werden. Erneut versuchen.",
+      "unverified": "Google-Cookies von {{profile}} konnten nicht geprüft werden. Erneut versuchen."
     },
     "loadFailure": {
       "connectionNotSecure": "Die Verbindung ist nicht sicher",
@@ -473,6 +469,24 @@
         "imported_other": "{{count}} Cookies für {{domains}} importiert. Zur Verwendung die Seite neu laden.",
         "failed": "Cookie-Import fehlgeschlagen: {{reason}}"
       }
+    },
+    "passwords": {
+      "savePrompt": {
+        "open": "Aufforderung zum Speichern des Passworts",
+        "updateTitle": "Passwort aktualisieren?",
+        "saveTitle": "Passwort speichern?",
+        "username": "Benutzername",
+        "password": "Passwort",
+        "never": "Nie für diese Website",
+        "notNow": "Jetzt nicht",
+        "update": "Aktualisieren",
+        "save": "Speichern"
+      },
+      "fill": {
+        "noUsername": "(kein Benutzername)",
+        "title": "Gespeicherte Anmeldungen",
+        "otherLogins": "Weitere Anmeldungen auf dieser Website"
+      }
     }
   },
   "editor": {
@@ -668,6 +682,21 @@
         "sharper": "Schärfer",
         "terminalControlledHint": "Durch die Terminal-Oberfläche festgelegt.",
         "terminalControlledTooltip": "An die Terminal-Oberfläche angepasst. Zum Ändern „An Terminal-Oberfläche anpassen“ deaktivieren."
+      },
+      "editorTheme": {
+        "light": "Helles Editor-Design",
+        "lightDescription": "Farben für Code-Editor, Diff und Notebooks bei hellem App-Design.",
+        "dark": "Dunkles Editor-Design",
+        "darkDescription": "Farben für Code-Editor, Diff und Notebooks bei dunklem App-Design.",
+        "followApp": "Wie das App-Design",
+        "title": "Editor-Design",
+        "description": "Farben für Code-Editor, Diff und Notebooks unabhängig vom App-Design.",
+        "keyword": {
+          "editor": "Editor",
+          "code": "Code",
+          "monaco": "monaco",
+          "syntax": "Syntax"
+        }
       }
     },
     "browser": {
@@ -1910,6 +1939,46 @@
         "title": "Ordner auf Windows-Laufwerken auf diesem Computer hinzufügen",
         "descriptionWithPath": "{{value0}} befindet sich auf einem Windows-Laufwerk. Git in WSL meldet dort fälschlicherweise Änderungen an Zeilenenden, erkennt unter Windows vorgenommene Änderungen nicht und durchsucht das Laufwerk nur langsam.",
         "description": "Dieser Ordner befindet sich auf einem Windows-Laufwerk. Git in WSL meldet dort fälschlicherweise Änderungen an Zeilenenden, erkennt unter Windows vorgenommene Änderungen nicht und durchsucht das Laufwerk nur langsam."
+      },
+      "cli": {
+        "detail": {
+          "registerForWsl": "{{path}} registrieren, um Orca aus WSL zu verwenden.",
+          "registerForTerminal": "{{path}} registrieren, um Orca im Terminal zu verwenden.",
+          "registerForWindowsShell": "{{path}} registrieren, um Orca aus der Eingabeaufforderung oder PowerShell zu verwenden.",
+          "devLauncherOnly": "Der Entwicklungsmodus verwendet einen generierten Launcher nur zur Validierung.",
+          "differentLauncher": "{{path}} verweist auf einen anderen Launcher.",
+          "launcherMissing": "Der gebündelte CLI-Launcher fehlt in diesem Orca-Build.",
+          "noWslDistro": "Es ist keine WSL-Distribution verfügbar.",
+          "notOrcaLauncherScript": "{{path}} existiert, ist aber kein Orca-Launcher-Skript.",
+          "notOrcaSymlink": "{{path}} existiert, ist aber kein Orca-Symlink.",
+          "olderLauncher": "{{path}} enthält einen älteren Orca-Launcher.",
+          "platformUnsupported": "Die CLI-Registrierung ist auf dieser Plattform nicht implementiert.",
+          "readlinkPermissionDenied": "Orca hat keine Berechtigung, {{path}} zu prüfen. Prüfe die Berechtigungen des Pfads und seines übergeordneten Verzeichnisses und versuche es dann erneut.",
+          "registeredAt": "Registriert unter {{path}}.",
+          "registeredInDistroAt": "In {{distro}} unter {{path}} registriert.",
+          "registrationUnavailable": "Die CLI-Registrierung ist in diesem Build nicht verfügbar.",
+          "unreadableSymlink": "{{path}} kann nicht gelesen werden. Registriere erneut, um das Problem zu beheben.",
+          "windowsLauncherMissing": "Der Windows-Orca-CLI-Launcher fehlt.",
+          "windowsPathCheckFailed": "Der Orca-Launcher ist vorhanden, aber Orca konnte deinen Windows-Benutzer-PATH nicht prüfen.",
+          "windowsPathTimedOut": "Der Windows-PATH-Befehl hat nach {{ms}} ms das Zeitlimit überschritten.",
+          "wslCommandTimedOut": "Der WSL-Befehl hat nach {{ms}} ms das Zeitlimit überschritten.",
+          "wslDistroUnreachable": "Die WSL-Distribution ist nicht erreichbar. Erneut versuchen.",
+          "wslHomeUnresolved": "Das WSL-Home-Verzeichnis konnte nicht ermittelt werden.",
+          "wslInteropUnavailable": "Die WSL-Windows-Interoperabilität ist nicht verfügbar; Orca kann die Windows-CLI nicht aus WSL starten.",
+          "wslRegistrationUnavailable": "Die WSL-CLI-Registrierung ist nicht verfügbar.",
+          "wslWindowsOnly": "Die WSL-CLI-Registrierung ist nur unter Windows verfügbar."
+        }
+      },
+      "projectHostSetupOptions": {
+        "locationNotSet": "Projektverzeichnis nicht festgelegt"
+      },
+      "workspacePortScan": {
+        "serverSshUpdateRequired": "Aktualisieren Sie den Server, um Ports auf seinen SSH-Hosts anzuzeigen.",
+        "hostMismatch": "Der Server hat einen anderen Host als den dieses Arbeitsbereichs durchsucht."
+      },
+      "workspacePortBrowserOpen": {
+        "systemBrowserHint": "{{shortcut}}+Klick zum Öffnen im Systembrowser",
+        "tooltip": "{{label}}. {{hint}}"
       }
     },
     "hooks": {
@@ -2490,7 +2559,6 @@
         "23886c7eec": "Label hinzufügen",
         "7f7b89b631": "Schlagwörter: {{value0}}",
         "b2376d0179": "Mitglieder werden geladen",
-        "866316f22c": "Nicht zugewiesen",
         "b5675b0694": "Speichern",
         "ceeb8c6153": "Leeren",
         "fbb90300e2": "Benutzerdefinierte Schätzung",
@@ -3670,7 +3738,6 @@
               "f4c79cff5f": "Den unten angezeigten Fehler des Arbeitsbereichs prüfen und anschließend aktualisieren.",
               "ef90b21366": "Keine Ansichten gefunden",
               "c0a50f96a4": "Ansichten konnten nicht geladen werden",
-              "df4bd63c1d": "Nicht zugewiesen",
               "30402d2c6e": "Suche oder Aktualisierung versuchen.",
               "a2f31c4cd6": "Keine Linear-Projekte gefunden",
               "c9b6e9f90d": "Linear-Projekte konnten nicht geladen werden",
@@ -7310,6 +7377,19 @@
           "needsInput": "Eingabe erforderlich",
           "running": "Läuft",
           "idle": "Inaktiv"
+        },
+        "hostSection": {
+          "localWindows": "Lokaler Windows",
+          "localMac": "Lokaler Mac",
+          "localLinux": "Lokaler Linux",
+          "thisComputer": "Dieser Computer",
+          "host": "Host"
+        },
+        "workspaceBoardStatus": {
+          "todo": "Zu erledigen",
+          "inProgress": "In Bearbeitung",
+          "inReview": "In Prüfung",
+          "done": "Fertig"
         }
       },
       "shared": {
@@ -7376,6 +7456,21 @@
         }
       },
       "settings": {
+        "keep": {
+          "local": {
+            "main": {
+              "up": {
+                "to": {
+                  "date": {
+                    "setting": {
+                      "f4c23aee76": "Lokalen main-Branch aktuell halten"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
         "AccountsPane": {
           "locationSaveFailed": "Der Speicherort der Konten konnte nicht gespeichert werden. Versuche es erneut.",
           "dbb9626ed1": "Abbrechen",
@@ -7601,7 +7696,6 @@
           "5f5142a62a": "Vorheriges Symbol anzeigen"
         },
         "AppearancePane": {
-          "3057983501": "Nicht zugewiesen",
           "b707773a0d": "Wenn aktiviert, läuft Orca beim Schließen des Fensters im Infobereich weiter, statt beendet zu werden.",
           "0cd9b8228f": "Das im Dock und im Fensterwechsler angezeigte App-Symbol auswählen.",
           "61d842eca0": "Die Verknüpfung zu Orca Mobile in der Seitenleiste anzeigen. Sie bleibt über den Werkzeugkasten verfügbar.",
@@ -7728,6 +7822,9 @@
           "79209b37b9": "Falls der Cookie-Import nicht geeignet ist, kann Computer Use lokale Apps steuern und gegebenenfalls bestehende angemeldete Browser-Sitzungen nutzen. Den Orca Computer Use-Skill installieren; unter macOS sind zusätzlich Datenschutzberechtigungen erforderlich.",
           "333984cf90": "Bestehende Browser-Sitzung verwenden",
           "9895ed44de": "Computer Use öffnen"
+        },
+        "BrowserUseEnableSwitch": {
+          "ce4d6f80d8": "Browser-Nutzung durch Agenten aktivieren"
         },
         "BrowserUseExamples": {
           "1199258ace": "Kopieren",
@@ -8732,6 +8829,9 @@
           "14f1eb99d0": "Details beim Öffnen von „PR erstellen“ generieren",
           "d32b87e754": "Review-Vorlage verwenden, falls verfügbar",
           "981eae7e14": "Standardmäßig als Entwurf erstellen"
+        },
+        "RepositorySourceControlAiSection": {
+          "112f3b934f": "KI für die Quellcodeverwaltung"
         },
         "RuntimeAccessGrantList": {
           "sshAccessCaveat": "Ein Widerruf hier verhindert nicht, dass sich jemand mit SSH-Zugriff auf diesen Computer erneut koppelt. Um den Zugriff vollständig zu entziehen, muss der SSH-Zugriff entfernt werden.",
@@ -11899,12 +11999,12 @@
             "storage": "Daten im eigenen Speicherordner des Plugins speichern",
             "secrets": "Geheimnisse im eigenen verschlüsselten Tresor des Plugins speichern und lesen",
             "settingsOwn": "Die eigenen Einstellungen des Plugins lesen und ändern",
-            "agentsRead": "Benachrichtigungen, wenn sich der Agentenstatus ändert",
+            "agentsRead": "Benachrichtigung bei Änderungen des Agent-Status",
             "terminalRun": "Befehle in deinen Terminals ausführen, auch über SSH"
           },
           "decisionFailed": "Die Berechtigungsentscheidung konnte nicht gespeichert werden. Erneut versuchen.",
           "fullAccessWarning": "Vollzugriff: läuft wie ein normales Programm und kann deine Dateien lesen, das Netzwerk nutzen, andere Programme ausführen und Orca steuern, einschließlich deiner Terminals und Agenten.",
-          "uiWarning": "Führt den Code des Herausgebers in Orca aus, um seine Ansicht darzustellen. Orca zeigt, worauf er zugreifen kann, und fragt vor der Aktivierung."
+          "uiWarning": "Führt den Code des Herausgebers in Orca aus, um dessen Ansicht zu rendern. Orca zeigt, worauf er zugreifen kann, und fragt vor dem Aktivieren nach."
         },
         "PluginConsentProvenance": {
           "official": "Offiziell",
@@ -13068,7 +13168,7 @@
           "installed": "Installiert",
           "installing": "Wird installiert…",
           "reviewLabel": "{{value0}} prüfen und installieren",
-          "review": "Prüfen & installieren",
+          "review": "Prüfen und installieren",
           "retry": "Erneut versuchen"
         },
         "PluginContributionActionLanguage": {
@@ -13156,7 +13256,7 @@
           "commands": "Befehle & Panels",
           "catalogLabel": "Nach Katalog filtern",
           "editors": "Editoren",
-          "remoteVms": "Remote/VMs",
+          "remoteVms": "Remotes/VMs",
           "games": "Spiele",
           "agents": "Agenten",
           "integrations": "Integrationen"
@@ -13172,10 +13272,10 @@
           "noOtherAccess": "Kein weiterer Zugriff",
           "replacesShortcut": "{{value0}} ({{value1}}) ersetzt dein Tastenkürzel für {{value2}}.",
           "updatesKeepApproval": "Updates fragen nur bei neuem Zugriff erneut",
-          "fullAccessUpdates": "Updates können seinen Code ohne Nachfrage ändern",
-          "editsFileTypes": "Öffnet und bearbeitet {{value0}}-Dateien in Orca. Es kann die Dateien lesen, die es öffnet.",
-          "install": "Installieren & aktivieren",
-          "keepOff": "Deaktiviert lassen"
+          "fullAccessUpdates": "Updates können den Code ohne Nachfrage ändern",
+          "editsFileTypes": "Öffnet und bearbeitet {{value0}}-Dateien in Orca. Es kann die geöffneten Dateien lesen.",
+          "install": "Installieren und aktivieren",
+          "keepOff": "Ausgeschaltet lassen"
         },
         "PluginListEmptyStates": {
           "noFilterMatches": "Keine Plugins entsprechen diesen Filtern",
@@ -13335,10 +13435,10 @@
         },
         "PluginPageHero": {
           "screenshots": "Bildschirmfotos",
-          "openScreenshot": "Bildschirmfoto öffnen: {{value0}}",
+          "openScreenshot": "Screenshot öffnen: {{value0}}",
           "position": "{{value0}} von {{value1}}",
-          "previous": "Vorheriges Bildschirmfoto",
-          "next": "Nächstes Bildschirmfoto"
+          "previous": "Vorheriger Screenshot",
+          "next": "Nächster Screenshot"
         },
         "PluginContributionActionCommand": {
           "run": "Ausführen",
@@ -13399,27 +13499,6 @@
           "shownPluginCount_one": "{{count}} passendes Plugin angezeigt, einschließlich dieses Plugins",
           "shownPluginCount_other": "{{count}} passende Plugins angezeigt, einschließlich dieses Plugins",
           "samePublisher": "Weitere unter {{value0}} aufgeführte Plugins"
-        },
-        "RepositorySourceControlAiSection": {
-          "112f3b934f": "KI für die Quellcodeverwaltung"
-        },
-        "keep": {
-          "local": {
-            "main": {
-              "up": {
-                "to": {
-                  "date": {
-                    "setting": {
-                      "f4c23aee76": "Lokalen main-Branch aktuell halten"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        },
-        "BrowserUseEnableSwitch": {
-          "ce4d6f80d8": "Browser-Nutzung durch Agenten aktivieren"
         }
       },
       "right": {
@@ -18465,7 +18544,6 @@
         "status": "Status",
         "priority": "Priorität",
         "assignee": "Zuständige Person",
-        "unassigned": "Nicht zugewiesen",
         "labels": "Labels",
         "countSelected": "{{count}} ausgewählt",
         "partialCoverageMarker": "· teilweise",
@@ -18560,7 +18638,9 @@
         "failingChip": "{{value0}} fehlgeschlagen",
         "pendingChip": "{{value0}} ausstehend",
         "needsActionChip": "{{value0}} mit Handlungsbedarf",
-        "unresolvedChip": "{{value0}} ungelöst"
+        "unresolvedChip": "{{value0}} ungelöst",
+        "noChecks": "Keine Checks gefunden",
+        "passingSummary": "{{value0}} von {{value1}} Checks erfolgreich"
       },
       "BrowserPane": {
         "streamConnectionLost": "Die Verbindung zum entfernten Server wurde unterbrochen.",
@@ -20948,6 +21028,10 @@
     },
     "dictation": {
       "stoppedAfterSilenceSeconds": "Nach {{seconds}} Sekunden Stille gestoppt"
+    },
+    "toastFallbacks": {
+      "worktreeCreateFailed": "Worktree konnte nicht erstellt werden.",
+      "missingBaseBranchHelp": "Erstellen Sie einen ersten Commit (zum Beispiel auf main) oder wählen Sie unter „Erstellen von“ einen vorhandenen Branch aus und versuchen Sie es erneut."
     }
   },
   "dashboardPopout": {

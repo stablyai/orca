@@ -5,6 +5,7 @@ import { ProjectOptionDetail } from '@/components/new-workspace/ProjectComboboxR
 import { WorktreeHostContextBadge } from '@/components/sidebar/workspace-card/host/WorktreeHostContextBadge'
 import { useSidebarHostScopeOptions } from '@/components/sidebar/worktree-list/controls/use-sidebar-host-scope-options'
 import { useTranslate } from '@/i18n/use-translate'
+import { translateHostDisplayLabel } from '@/components/sidebar/execution-host-label'
 import { resolveWorktreeBranchLabel } from '@/lib/workspace/display/worktree-default-display-name'
 import { getHostContextLabel } from '../../../../../shared/worktree/host-context-labels'
 import {
@@ -319,7 +320,7 @@ export function ResumeOnRestartGroups({
   const ancestorsOf = useLineageAncestors(allWorkspaces)
   const { hostOptions } = useSidebarHostScopeOptions()
   const hostLabelById = useMemo(
-    () => new Map(hostOptions.map((host) => [host.id, host.label])),
+    () => new Map(hostOptions.map((host) => [host.id, translateHostDisplayLabel(host)])),
     [hostOptions]
   )
   const expansion = useResumeTreeExpansion()
