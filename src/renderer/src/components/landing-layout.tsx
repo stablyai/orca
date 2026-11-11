@@ -1,3 +1,4 @@
+import { FolderPlus, GitBranchPlus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { ShortcutKeyCombo } from './ShortcutKeyCombo'
 import type { ShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
@@ -60,6 +61,47 @@ export function LandingShortcutList({
           />
         </div>
       ))}
+    </div>
+  )
+}
+
+/**
+ * Home's two primary actions. Over the cloud list they sit as a top row aligned with it; in a
+ * narrow centre column (both side panels open) they shrink and stay on one row instead of
+ * stacking large buttons (JA-30). Needs an `@container` ancestor for the narrow case.
+ */
+export function LandingActions({
+  overCloudList,
+  addProjectLabel,
+  createLabel,
+  onAddProject,
+  onCreate
+}: {
+  overCloudList: boolean
+  addProjectLabel: string
+  createLabel: string
+  onAddProject: () => void
+  onCreate: () => void
+}): React.JSX.Element {
+  const buttonClass = cn(
+    LANDING_ACTION_BUTTON_CLASS,
+    overCloudList && '@max-[600px]:px-2.5 @max-[600px]:py-1 @max-[600px]:text-xs'
+  )
+  return (
+    <div
+      className={cn(
+        'flex items-center gap-2.5 flex-wrap',
+        overCloudList ? 'justify-start' : 'justify-center'
+      )}
+    >
+      <button className={buttonClass} onClick={onAddProject}>
+        <FolderPlus className="size-3.5" />
+        {addProjectLabel}
+      </button>
+      <button className={buttonClass} onClick={onCreate}>
+        <GitBranchPlus className="size-3.5" />
+        {createLabel}
+      </button>
     </div>
   )
 }

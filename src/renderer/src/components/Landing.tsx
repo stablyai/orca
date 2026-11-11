@@ -5,7 +5,7 @@ import {
 } from './cloud-workspaces/CloudWorkspacesHome'
 import { useCloudWorkspaceHighlight } from './cloud-workspaces/cloud-workspace-links'
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, ExternalLink, FolderPlus, GitBranchPlus, Star, X } from 'lucide-react'
+import { AlertTriangle, ExternalLink, Star, X } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { useAppStore } from '../store'
 import { isGitRepoKind } from '../../../shared/repo-kind'
@@ -23,7 +23,7 @@ import { useLandingPreflightRuntime } from './landing-preflight-runtime'
 import { useLandingOrcaStarState, type LandingStarState } from './landing-github-star-state'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 import {
-  LANDING_ACTION_BUTTON_CLASS,
+  LandingActions,
   LandingBrand,
   LandingShortcutList,
   type LandingShortcutItem
@@ -260,50 +260,43 @@ export default function Landing(): React.JSX.Element {
 
   return (
     <div className="scrollbar-sleek absolute inset-0 flex flex-col items-center overflow-y-auto bg-background">
-      {/* Centered when alone; with cloud workspaces below, a smaller brand block sits near the
-          top and the shortcut list steps aside so the list is the focus. */}
+      {/* Centered when alone. With the cloud list below, the list is the page (JA-30): no wordmark
+          or "select a workspace" line, just the primary actions as a top row aligned with it. */}
       <div
-        className={cn(
-          'flex w-full flex-col items-center',
-          cloudListPresent ? 'pt-[12vh]' : 'my-auto'
-        )}
+        className={cn('flex w-full flex-col items-center', cloudListPresent ? 'pt-8' : 'my-auto')}
       >
-        <div className="w-full max-w-lg px-6">
+        <div className={cn('w-full px-6', cloudListPresent ? '@container max-w-3xl' : 'max-w-lg')}>
           <div
             className={cn(
-              'flex flex-col items-center',
-              cloudListPresent ? 'gap-3 py-4' : 'gap-4 py-8'
+              'flex flex-col',
+              cloudListPresent ? 'items-start gap-3 pb-4' : 'items-center gap-4 py-8'
             )}
           >
-            <LandingBrand compact={cloudListPresent} />
+            {!cloudListPresent && <LandingBrand compact={false} />}
 
             {preflightIssues.length > 0 && (
               <PreflightBanner issues={preflightIssues} repos={repos} />
             )}
 
-            <p className="text-sm text-muted-foreground text-center">
-              {hasProjects
-                ? t(
-                    'auto.components.Landing.9c00bd4adf',
-                    'Select a workspace from the sidebar to begin.'
-                  )
-                : t('auto.components.Landing.cd21242762', 'Add a project to get started.')}
-            </p>
+            {/* With the cloud list showing, only the no-project hint stays: the list is what to pick. */}
+            {(!cloudListPresent || !hasProjects) && (
+              <p className="text-sm text-muted-foreground text-center">
+                {hasProjects
+                  ? t(
+                      'auto.components.Landing.9c00bd4adf',
+                      'Select a workspace from the sidebar to begin.'
+                    )
+                  : t('auto.components.Landing.cd21242762', 'Add a project to get started.')}
+              </p>
+            )}
 
-            <div className="flex items-center justify-center gap-2.5 flex-wrap">
-              <button className={LANDING_ACTION_BUTTON_CLASS} onClick={() => openModal('add-repo')}>
-                <FolderPlus className="size-3.5" />
-                {t('auto.components.Landing.f9eaa9e12d', 'Add project')}
-              </button>
-
-              <button
-                className={LANDING_ACTION_BUTTON_CLASS}
-                onClick={() => openModal('new-workspace-composer', { telemetrySource: 'unknown' })}
-              >
-                <GitBranchPlus className="size-3.5" />
-                {createActionLabel}
-              </button>
-            </div>
+            <LandingActions
+              overCloudList={cloudListPresent}
+              addProjectLabel={t('auto.components.Landing.f9eaa9e12d', 'Add project')}
+              createLabel={createActionLabel}
+              onAddProject={() => openModal('add-repo')}
+              onCreate={() => openModal('new-workspace-composer', { telemetrySource: 'unknown' })}
+            />
 
             {hasProjects ? <LandingCloudCard cloudWorkspacesPresent={cloudListPresent} /> : null}
 
