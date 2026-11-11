@@ -25,7 +25,7 @@ function layoutPaneTopBanners(pane: HTMLElement, leaving?: HTMLElement): void {
 }
 
 /** Reserves the banner's height at the top of its pane so the terminal refits below it. */
-function useReservePaneTopSpace(): React.RefObject<HTMLDivElement | null> {
+export function useReservePaneTopSpace(): React.RefObject<HTMLDivElement | null> {
   const ref = useRef<HTMLDivElement>(null)
   useLayoutEffect(() => {
     const banner = ref.current

@@ -1,0 +1,157 @@
+// RA-11: an Orca Cloud pane whose agent is already running when its Orca-account sign-in expires or
+// is revoked. State 1 ("expired") shows on every such pane; one Renew (S0) clears it everywhere and
+// the panes that showed it move to state 2 ("renewed": Restart, never automatic) until restarted,
+// dismissed, or the agent's next turn ends cleanly on its own. Decided from the Orca account (the
+// same read the build sheet uses), never from terminal output.
+import { useEffect, useSyncExternalStore } from 'react'
+import type { HostAgentSignInAgent } from '../../../../shared/host-agent-sign-in-status'
+import { agentTurnEndedUncleanly } from '../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
+import { orcaCloudAgentCoverage } from './orca-cloud-agent-accounts-model'
+import {
+  ensureFreshOrcaCloudAgentAccounts,
+  type OrcaCloudAgentAccountsState
+} from './orca-cloud-agent-accounts-store'
+
+export type CloudRunningStrip =
+  | { phase: 'expired'; agent: HostAgentSignInAgent }
+  | { phase: 'renewed'; agent: HostAgentSignInAgent; resumable: boolean }
+
+/** Panes that showed state 1, and when their account came back (state 2). */
+const signedOut = new Map<string, { agent: HostAgentSignInAgent; renewedAt: number | null }>()
+const listeners = new Set<() => void>()
+let version = 0
+
+function notify(): void {
+  version += 1
+  for (const listener of listeners) {
+    listener()
+  }
+}
+
+function subscribe(listener: () => void): () => void {
+  listeners.add(listener)
+  return () => listeners.delete(listener)
+}
+
+/** Re-renders when a pane's remembered state changes (dismiss, restart). */
+export function useCloudRunningSignoutVersion(): number {
+  return useSyncExternalStore(
+    subscribe,
+    () => version,
+    () => version
+  )
+}
+
+/** Forget a pane: dismissed, restarted, or its agent went away. */
+export function clearCloudRunningSignout(paneKey: string): void {
+  if (signedOut.delete(paneKey)) {
+    notify()
+  }
+}
+
+function isAccountAgent(agent: unknown): agent is HostAgentSignInAgent {
+  return agent === 'claude' || agent === 'codex'
+}
+
+/**
+ * What a running Orca Cloud pane shows, or null. `entry` is the pane's agent status (the agent is
+ * running); `held` is true while #315's launch hold or the per-workspace gate owns the pane.
+ */
+export function cloudRunningStrip(args: {
+  paneKey: string
+  entry:
+    | (Pick<
+        AgentStatusEntry,
+        'agentType' | 'state' | 'turnEndedAt' | 'mainAgent' | 'interrupted'
+      > & {
+        providerSession?: unknown
+      })
+    | null
+  accounts: Pick<OrcaCloudAgentAccountsState, 'load' | 'keyKinds'>
+  held: boolean
+  now: number
+}): CloudRunningStrip | null {
+  const { paneKey, entry, accounts } = args
+  const remembered = signedOut.get(paneKey)
+  const agent = entry?.agentType
+  if (args.held || !isAccountAgent(agent) || accounts.load.kind !== 'ready') {
+    return null
+  }
+  const coverage = orcaCloudAgentCoverage(agent, accounts.load.status, accounts.keyKinds[agent])
+  switch (coverage.kind) {
+    case 'expired':
+      if (!remembered || remembered.renewedAt !== null) {
+        signedOut.set(paneKey, { agent, renewedAt: null })
+      }
+      return { phase: 'expired', agent }
+    case 'account':
+    case 'key': {
+      if (!remembered) {
+        return null
+      }
+      const renewedAt = remembered.renewedAt ?? args.now
+      if (remembered.renewedAt === null) {
+        signedOut.set(paneKey, { agent, renewedAt })
+      }
+      // Recovered on its own: a turn that ended cleanly after the renewal needs no restart.
+      if (
+        entry &&
+        entry.state === 'done' &&
+        (entry.turnEndedAt ?? 0) > renewedAt &&
+        !agentTurnEndedUncleanly(entry)
+      ) {
+        signedOut.delete(paneKey)
+        return null
+      }
+      return { phase: 'renewed', agent, resumable: Boolean(entry?.providerSession) }
+    }
+    // Kill switch, never offered, not set up: nothing new on a running pane.
+    case 'killSwitch':
+    case 'unavailable':
+    case 'notSetUp':
+      return null
+  }
+}
+
+let liveReaders = 0
+let timer: ReturnType<typeof setInterval> | null = null
+const LIVE_READ_MS = 60_000
+
+function readNow(): void {
+  void ensureFreshOrcaCloudAgentAccounts().catch(() => undefined)
+}
+
+/**
+ * While any running Orca Cloud agent pane is mounted, keep the account read fresh: on window focus
+ * and at most once a minute (the read itself is cached for 30 s). One timer for the whole window.
+ */
+export function useCloudRunningAccountReads(active: boolean): void {
+  useEffect(() => {
+    if (!active) {
+      return
+    }
+    liveReaders += 1
+    if (liveReaders === 1) {
+      window.addEventListener('focus', readNow)
+      timer = setInterval(readNow, LIVE_READ_MS)
+      readNow()
+    }
+    return () => {
+      liveReaders -= 1
+      if (liveReaders === 0) {
+        window.removeEventListener('focus', readNow)
+        if (timer) {
+          clearInterval(timer)
+          timer = null
+        }
+      }
+    }
+  }, [active])
+}
+
+/** Tests only. */
+export function resetCloudRunningSignoutForTest(): void {
+  signedOut.clear()
+  notify()
+}

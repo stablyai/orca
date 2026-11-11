@@ -28048,7 +28048,16 @@
     "cancelSignIn": "Cancel sign-in",
     "copyAndOpen": "Copy code and open",
     "cancelledToast": "The agent didn’t start. The shell is still open.",
-    "expiredCompact": "{{agent}} sign-in expired"
+    "expiredCompact": "{{agent}} sign-in expired",
+    "runningExpiredDetail": "Renew to keep working. Your conversation is kept.",
+    "runningExpiredAnnounce": "Your {{agent}} sign-in expired. Renew to keep working. Your conversation is kept.",
+    "restartAgent": "Restart {{agent}}",
+    "renewed": "{{agent}} sign-in renewed",
+    "renewedResume": "Restart {{agent}} to pick up where you left off.",
+    "renewedFresh": "Starts a new conversation.",
+    "restart": "Restart",
+    "dismiss": "Dismiss",
+    "renewedAnnounce": "{{agent}} sign-in renewed. Restart {{agent}} to use it."
   },
   "cloudAgentCheck": {
     "keyAgentSignedOut": "{{agent}} isn’t signed in.",
