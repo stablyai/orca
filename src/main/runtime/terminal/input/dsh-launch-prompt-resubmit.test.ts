@@ -52,6 +52,7 @@ const DSH_TURN_STARTED = '\x1b]0;⠂ 🐋 \x07\x1b]7501;state=working:app=dsh-tu
 describe('a dsh launch prompt whose first Enter the launchpad refused', () => {
   afterEach(() => vi.useRealTimers())
 
+  /** Launches dsh on `screen`, answering Enter `acceptingEnter` times before the turn starts. */
   async function launchDsh(
     screen: string,
     acceptingEnter: number,
