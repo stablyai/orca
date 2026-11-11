@@ -4,6 +4,21 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // Which environments count as Orca Cloud in a test (the real check reads the runtime catalog).
+const rpc = vi.hoisted(() => ({
+  tail: [] as string[],
+  sends: [] as unknown[]
+}))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: async (_target: unknown, method: string, params: unknown) => {
+    if (method === 'terminal.read') {
+      return { terminal: { tail: rpc.tail } }
+    }
+    if (method === 'terminal.send') {
+      rpc.sends.push(params)
+    }
+    return {}
+  }
+}))
 const cloud = vi.hoisted(() => ({ ids: new Set<string>() }))
 vi.mock('@/lib/orca-cloud/orca-cloud-environment-id', () => ({
   isOrcaCloudEnvironmentId: (id: string) => cloud.ids.has(id)
@@ -14,7 +29,9 @@ import type { AgentStatusEntry } from '../../../../../shared/agent-status/contra
 import { resetCloudRunningSignoutForTest } from '@/lib/orca-cloud/cloud-running-agent-signout'
 import {
   beginCloudAgentRestart,
+  CLOUD_AGENT_FRESH_NOTICE_MS,
   CLOUD_AGENT_RESTART_TIMEOUT_MS,
+  cloudAgentRestartStartedFresh,
   cloudAgentRestartAttempt,
   resetCloudAgentRestartsForTest,
   settleCloudAgentRestart
@@ -310,6 +327,83 @@ describe('RA-11 Restart on a paired (remote) pane', () => {
       agent: 'claude',
       providerSession
     })
+    // A resume that worked never says it started fresh.
+    expect(cloudAgentRestartStartedFresh(PANE_KEY, 0)).toBe(false)
+  })
+
+  it('end to end: resume → "No conversation found" → one fresh relaunch → "Started a new conversation." once', async () => {
+    const { freshIfResumeFoundNothing: realBackstop } =
+      await import('@/lib/orca-cloud/cloud-pane-restart-stop')
+    rpc.tail = [
+      '$ claude --resume sess-tab-1',
+      'No conversation found with session ID: sess-tab-1',
+      '$ '
+    ]
+    rpc.sends = []
+    clickRemoteRestart()
+    const NEW = 'remote:env-1@@term_new'
+    const handleRestartPane = vi.fn(() => {
+      // The reconnect binds the pane to its new terminal.
+      useAppStore.setState({
+        terminalLayoutsByTabId: {
+          ...useAppStore.getState().terminalLayoutsByTabId,
+          [TAB]: {
+            root: { type: 'leaf', leafId: LEAF },
+            activeLeafId: LEAF,
+            expandedLeafId: null,
+            ptyIdsByLeafId: { [LEAF]: NEW }
+          }
+        }
+      })
+    })
+    runReadyPaneAccountRestarts({
+      panes: [{ id: 7, leafId: LEAF }],
+      ptyIdOf: () => REMOTE,
+      readyRestartPtyIds: selectReadyAccountRestartPtyIds(useAppStore.getState(), TAB),
+      tabId: TAB,
+      consumePendingPaneAccountRestart: useAppStore.getState().consumePendingPaneAccountRestart,
+      buildAccountRestartStartup: () => ({
+        command: 'claude',
+        resumeProviderSession: { key: 'session_id' as const, id: 'sess-tab-1' }
+      }),
+      handleRestartPane,
+      stopRemotePane: () => Promise.resolve(),
+      resumeRemotePane: () => Promise.resolve(),
+      freshIfResumeFoundNothing: (input) =>
+        realBackstop({ ...input, sleep: () => Promise.resolve() }),
+      buildFreshCommand: () => 'claude --dangerously-skip-permissions'
+    })
+    await vi.waitFor(() => expect(cloudAgentRestartStartedFresh(PANE_KEY, 0)).toBe(true))
+    expect(rpc.sends).toEqual([
+      { terminal: 'term_new', text: 'claude --dangerously-skip-permissions', enter: true }
+    ])
+    vi.advanceTimersByTime(CLOUD_AGENT_FRESH_NOTICE_MS)
+    expect(cloudAgentRestartStartedFresh(PANE_KEY, 0)).toBe(false)
+    expect(rpc.sends).toHaveLength(1)
+  })
+
+  it('a resume that found no conversation says "Started a new conversation." for 3 s, then clears', async () => {
+    clickRemoteRestart()
+    const handleRestartPane = vi.fn()
+    runReadyPaneAccountRestarts({
+      panes: [{ id: 7, leafId: LEAF }],
+      ptyIdOf: () => REMOTE,
+      readyRestartPtyIds: selectReadyAccountRestartPtyIds(useAppStore.getState(), TAB),
+      tabId: TAB,
+      consumePendingPaneAccountRestart: useAppStore.getState().consumePendingPaneAccountRestart,
+      buildAccountRestartStartup: () => ({
+        command: 'claude',
+        resumeProviderSession: { key: 'session_id' as const, id: 'sess-tab-1' }
+      }),
+      handleRestartPane,
+      stopRemotePane: () => Promise.resolve(),
+      resumeRemotePane: () => Promise.resolve(),
+      freshIfResumeFoundNothing: async () => true,
+      buildFreshCommand: () => 'claude'
+    })
+    await vi.waitFor(() => expect(cloudAgentRestartStartedFresh(PANE_KEY, 0)).toBe(true))
+    vi.advanceTimersByTime(CLOUD_AGENT_FRESH_NOTICE_MS)
+    expect(cloudAgentRestartStartedFresh(PANE_KEY, 0)).toBe(false)
   })
 
   it('a failed resume on the host shows the failure and never reconnects', async () => {

@@ -38,7 +38,20 @@ import {
   type CloudStripActions
 } from './CloudAgentSignInStrip'
 import { watchCloudAgentRestartPane } from '@/lib/orca-cloud/cloud-agent-restart-pane-watch'
-import { cloudRestartAttemptModel, cloudRunningStripModel } from './cloud-running-strip-model'
+import {
+  cloudRestartAttemptModel,
+  cloudRestartFreshModel,
+  cloudRunningStripModel
+} from './cloud-running-strip-model'
+
+const NO_ACTIONS: CloudStripActions = {
+  primary: () => undefined,
+  submitCode: () => undefined,
+  pasteCode: () => undefined,
+  useCode: () => undefined,
+  useApiKey: () => undefined,
+  cancel: () => undefined
+}
 
 function openAccounts(): void {
   const store = useAppStore.getState()
@@ -111,6 +124,21 @@ export function CloudRunningStripPortal({
       useAppStore.getState().queuePaneAccountRestarts([ptyId], args.agent)
     )
     watchCloudAgentRestartPane(paneKey, worktreeId, args.agent)
+  }
+  // RA-11e: a resume that found no conversation started fresh; say so for a moment, then clear.
+  if (cloud && cloudAgentRestartStartedFresh(paneKey, revision)) {
+    return createPortal(
+      <CloudStripLayer>
+        <CloudAgentSignInStrip
+          model={cloudRestartFreshModel(agent ?? 'claude', t)}
+          prompt={null}
+          width={cloudStripWidth(pane.container.clientWidth)}
+          actions={NO_ACTIONS}
+        />
+      </CloudStripLayer>,
+      pane.container,
+      `cloud-running-strip-${pane.id}`
+    )
   }
   // A Restart in flight (or failed) owns the strip even while the pane has no agent status.
   if (attempt && cloud) {

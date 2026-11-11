@@ -8,6 +8,7 @@ import {
 import {
   beginCloudAgentRestart,
   failCloudAgentRestart,
+  noteCloudAgentRestartFresh,
   isForcedCloudAgentRestart,
   noteCloudAgentRestartLaunched
 } from '@/lib/orca-cloud/cloud-agent-restart-attempt'
@@ -213,6 +214,12 @@ export function runReadyPaneAccountRestarts<
                   freshCommand: args.buildFreshCommand(agent, pane.leafId)
                 })
               )
+              .then((startedFresh) => {
+                if (startedFresh) {
+                  // Never claim the conversation came back when it didn't.
+                  noteCloudAgentRestartFresh(makePaneKey(args.tabId, pane.leafId))
+                }
+              })
               .catch((err: unknown) => console.warn('[orca-cloud] fresh fallback failed:', err))
           }
         },
