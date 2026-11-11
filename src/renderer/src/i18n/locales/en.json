@@ -23622,6 +23622,12 @@
     "cloudWorkspaces": {
       "emptyMineStartBody": "Start one and it keeps running while your laptop sleeps.",
       "newCloudWorkspace": "New cloud workspace"
+    },
+    "worktreeCreation": {
+      "pendingNativeChat": {
+        "sendBlockedFailedCloud": "Retry creating the workspace to send",
+        "sendBlockedHeldCloud": "Sends when the workspace is ready"
+      }
     }
   },
   "dashboardPopout": {
