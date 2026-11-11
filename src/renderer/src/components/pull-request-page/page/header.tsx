@@ -150,7 +150,7 @@ export function PullRequestPageHeader({
                 <Button
                   type="button"
                   onClick={onOpenOrUsePR}
-                  className="w-[180px] justify-center gap-1.5 whitespace-nowrap"
+                  className="min-w-[180px] justify-center gap-1.5 whitespace-nowrap"
                   aria-label={
                     hasAttachedWorkspace
                       ? t(
