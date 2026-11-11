@@ -295,12 +295,14 @@ type ContinueDeps = {
   offer?: (turn: ArmedTurn) => void
 }
 
+// Read the delivery helpers at call time: the cloud workspace store imports this module, so a
+// module-load read would bind (or, under a partial test mock, fail on) paste internals early.
 const defaultDeps: ContinueDeps = {
   now: Date.now,
   sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
-  ptyIdFor: getPtyIdForPaneKey,
-  send: sendFollowupPromptWhenAgentReady,
-  submit: sendBracketedPasteToRunningAgent,
+  ptyIdFor: (paneKey) => getPtyIdForPaneKey(paneKey),
+  send: (...args) => sendFollowupPromptWhenAgentReady(...args),
+  submit: (...args) => sendBracketedPasteToRunningAgent(...args),
   agentInForeground: agentOwnsTerminal,
   offer: (turn) => offerInterruptedTurnContinue(turn.paneKey, turn.turnKey)
 }

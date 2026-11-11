@@ -21,6 +21,10 @@ import {
 import type { Worktree } from '../../../../shared/worktree/types'
 import { EMPTY_SORTED_WORKTREES } from './worktree-jump-palette-model'
 import { buildWorktreeJumpPaletteDocumentIndex } from './worktree-jump-palette-document-index'
+import {
+  cloudNumberForWorktree,
+  useCloudWorkspaceIdentities
+} from '@/components/cloud-workspaces/cloud-workspace-identity'
 import { buildWorktreeJumpPaletteWorktreeMaps } from './worktree-jump-palette-worktree-maps'
 import type { WorktreeJumpPaletteWorktreesInput } from './worktree-jump-palette-worktrees-input'
 
@@ -216,6 +220,8 @@ export function useWorktreeJumpPaletteWorktrees({
       }),
     [workspaces, hostedReviewCache, prCache, repoByHostIdentity, settings]
   )
+  // Cloud workspaces are searchable by number (W-123); the cache changes only when numbers do.
+  const cloudIdentities = useCloudWorkspaceIdentities()
   const worktreeDocuments = useMemo(
     () =>
       buildWorktreeJumpPaletteDocumentIndex({
@@ -227,11 +233,13 @@ export function useWorktreeJumpPaletteWorktrees({
         prCache,
         issueCache,
         workspacePortScan,
-        checksReviewByWorktree
+        checksReviewByWorktree,
+        cloudNumberForWorktree: (worktree) => cloudNumberForWorktree(worktree, cloudIdentities)
       }),
     [
       workspaces,
       checksReviewByWorktree,
+      cloudIdentities,
       hostFilterActive,
       hostOptions,
       issueCache,

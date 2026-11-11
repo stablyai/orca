@@ -12,6 +12,7 @@ import { CloudWorkspaceHeader } from '../CloudWorkspaceHeader'
 import { asOfParts } from '../read-snapshot/cloud-read-snapshot-format'
 import { CloudReadPrLink } from '../read-snapshot/CloudReadPrLink'
 import { ChatPanel } from './CloudOfflineChatPanel'
+import { formatAsleepSince } from './CloudAsleepTerminalNotice'
 
 export type CloudOfflineViewProps = {
   snapshot: CloudOfflineSnapshot
@@ -125,8 +126,14 @@ export function CloudWorkspaceOfflineView(props: CloudOfflineViewProps): React.J
                   </p>
                 ) : (
                   <div className="flex flex-col gap-3">
-                    {snapshot.terminals.map((terminal) => {
-                      const title = terminal.title ?? terminal.handle
+                    {snapshot.terminals.map((terminal, index) => {
+                      // The tab's title, else "Terminal N": never the terminal's internal id (RA-13).
+                      const title =
+                        terminal.title && !terminal.title.startsWith('term_')
+                          ? terminal.title
+                          : t('components.orcaCloud.offline.terminalN', 'Terminal {{n}}', {
+                              n: index + 1
+                            })
                       return (
                         <figure
                           key={terminal.handle}
@@ -140,7 +147,8 @@ export function CloudWorkspaceOfflineView(props: CloudOfflineViewProps): React.J
                             </span>
                           </figcaption>
                           <pre
-                            className="max-h-72 overflow-auto scrollbar-sleek bg-background px-3 py-2 font-mono text-xs leading-5 text-foreground/90"
+                            // Greyed: this is what it printed before the sleep, not live output (JA-15).
+                            className="max-h-72 overflow-auto scrollbar-sleek bg-background px-3 py-2 font-mono text-xs leading-5 text-muted-foreground"
                             tabIndex={0}
                             aria-label={t(
                               'components.orcaCloud.offline.terminalOutput',
@@ -152,6 +160,24 @@ export function CloudWorkspaceOfflineView(props: CloudOfflineViewProps): React.J
                           >
                             {terminal.lines.join('\n')}
                           </pre>
+                          {snapshot.capturedAt !== null ? (
+                            <div
+                              data-cloud-asleep-divider=""
+                              className="flex items-center gap-2 border-t border-border px-3 py-1.5 text-[11px] text-muted-foreground"
+                            >
+                              <span className="h-px flex-1 bg-border" />
+                              <span>
+                                {t(
+                                  'orcaCloudWorkspace.terminal.asleepSince',
+                                  'Asleep since {{time}}',
+                                  {
+                                    time: formatAsleepSince(snapshot.capturedAt)
+                                  }
+                                )}
+                              </span>
+                              <span className="h-px flex-1 bg-border" />
+                            </div>
+                          ) : null}
                         </figure>
                       )
                     })}

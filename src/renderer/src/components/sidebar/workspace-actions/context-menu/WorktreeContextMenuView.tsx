@@ -10,7 +10,12 @@ import { Bell, BellOff, Pencil, Pin, PinOff, Unlink } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { WorktreeDeveloperMenu } from '../open/WorktreeDeveloperMenu'
 import { WorkspaceSleepMenuItems } from '../sleep/WorkspaceSleepMenuItems'
-import { CloudWorkspaceMenuItems } from '@/components/orca-cloud/CloudWorkspaceMenuItems'
+import {
+  CloudCopyWorkspaceLinkItem,
+  CloudWorkspaceMenuItems
+} from '@/components/orca-cloud/CloudWorkspaceMenuItems'
+import { useIsCloudWorkspace } from '@/lib/orca-cloud/orca-cloud-workspace-store'
+import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host'
 import { WorktreeOpenInAndSshSubMenus } from '../cloud-ssh/WorktreeOpenInAndSshSubMenus'
 import { WorkspaceVmLifecycleMenuItems } from '../sleep/WorkspaceVmLifecycleMenuItems'
 import { WorktreeCloudTransferMenuItem } from './WorktreeCloudTransferMenuItem'
@@ -77,6 +82,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
   } = model
   const t = useTranslate()
   usePrimeCloudEnvironmentIds()
+  const isCloud = useIsCloudWorkspace(worktree.id)
   const sleepItems = (
     <WorkspaceSleepMenuItems
       isMultiContext={isMultiContext}
@@ -169,7 +175,12 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
               replacesSleep={lineageDescendantCount === 0}
             />
           )}
-          {!isMultiContext && <CloudWorkspaceMenuItems worktreeId={worktree.id} />}
+          {!isMultiContext && (
+            <CloudWorkspaceMenuItems
+              worktreeId={worktree.id}
+              hostId={getWorktreeExecutionHostId(worktree, repo ?? undefined)}
+            />
+          )}
           {!isMultiContext && <WorktreeCloudTransferMenuItem worktreeId={worktree.id} />}
           {!isMultiContext && (
             <DropdownMenuItem onSelect={handleToggleRead} disabled={isDeleting}>
@@ -179,7 +190,8 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
                 : t('auto.components.sidebar.WorktreeContextMenu.f50603c6b2', 'Mark Unread')}
             </DropdownMenuItem>
           )}
-          <WorktreeContextMenuDeleteItems model={model} />
+          {/* Cloud rows end with Delete, alone (JA-14 Danger group); local rows keep it here. */}
+          {isCloud ? null : <WorktreeContextMenuDeleteItems model={model} />}
           <DropdownMenuSeparator />
           {!isMultiContext && (
             <>
@@ -210,9 +222,20 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
                 connectionId={repo?.connectionId ?? null}
                 disabled={isDeleting}
               />
-              <WorktreeCopySubMenu model={model} />
-              <WorktreeLineageSubMenu model={model} />
-              <WorktreeProjectGroupSubMenu model={model} />
+              <WorktreeCopySubMenu
+                model={model}
+                leading={
+                  isCloud ? (
+                    <CloudCopyWorkspaceLinkItem
+                      worktreeId={worktree.id}
+                      hostId={getWorktreeExecutionHostId(worktree, repo ?? undefined)}
+                    />
+                  ) : undefined
+                }
+              />
+              {/* Nesting and project groups are this computer's arrangement; not for cloud (JA-14). */}
+              {isCloud ? null : <WorktreeLineageSubMenu model={model} />}
+              {isCloud ? null : <WorktreeProjectGroupSubMenu model={model} />}
             </>
           )}
           {isMultiContext && hasAnyContextLineage ? (
@@ -228,6 +251,12 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
             <>
               <DropdownMenuSeparator />
               <WorktreeDeveloperMenu worktreeId={worktree.id} disabled={isDeleting} />
+            </>
+          ) : null}
+          {isCloud ? (
+            <>
+              <DropdownMenuSeparator />
+              <WorktreeContextMenuDeleteItems model={model} />
             </>
           ) : null}
         </DropdownMenuContent>

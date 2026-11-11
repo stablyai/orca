@@ -9,6 +9,7 @@
 //   GET    /v1/environments/:id/builds/:bid/events            -> ndjson stream (environment-builds.ts)
 //   POST   /v1/environments/:id/builds/:bid/cancel | /activate -> {build} | {environment}
 //   GET    /v1/environments/:id/staleness                     -> {staleness}
+import { deleteEnvironmentAndSnapshots } from './auto-environments'
 import type { SandboxCaller } from './auth'
 import {
   activateBuild,
@@ -163,16 +164,8 @@ export async function handleEnvironmentRoute(
           await cancelBuild(deps, caller, row).catch(() => undefined)
         }
       }
-      await db.prepare('UPDATE environments SET deleted_at = ?, active_build_id = NULL WHERE id = ?').bind(deps.now(), envId).run()
       // No kept window once deleted: every build snapshot goes (live workspaces run on their own disks).
-      const { results } = await db
-        .prepare(`SELECT * FROM environment_builds WHERE environment_id = ? AND snapshot_id IS NOT NULL AND snapshot_deleted_at IS NULL`)
-        .bind(envId)
-        .all<BuildRow>()
-      for (const row of results) {
-        await deps.provider.deleteSnapshot(row.snapshot_id!).catch(() => undefined)
-        await db.prepare('UPDATE environment_builds SET snapshot_deleted_at = ? WHERE id = ?').bind(deps.now(), row.id).run()
-      }
+      await deleteEnvironmentAndSnapshots(deps, envId)
       return json({ deleted: true })
     }
     return json({ error: 'not_found' }, 404)

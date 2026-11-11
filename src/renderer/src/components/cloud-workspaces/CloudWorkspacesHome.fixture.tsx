@@ -7,6 +7,12 @@ import {
   workspace
 } from './cloud-workspaces.test-fixture'
 import type { CloudReadSnapshotState } from '../../../../shared/cloud-workspaces/read-snapshot-state'
+import type { CloudWorkspacePrefsDocument } from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
+import { setPrefsAccount } from './cloud-workspace-prefs'
+import { getOrcaAccountKey } from '@/hooks/use-orca-account-key'
+import { writeHomeSwitches } from './cloud-workspaces-home-prefs'
+
+const FIXTURE_ACCOUNT = getOrcaAccountKey(AUTH_STATUS)
 
 const WIDTH = 760
 
@@ -27,6 +33,35 @@ export const teamList = defineFixture({
   },
   render: () => <CloudWorkspacesHome />,
   interact: () => waitFor(() => document.querySelector('[data-cloud-workspace-row]') !== null)
+})
+
+/** Synced prefs: two pins on top (pin order), Payments collapsed, rows in their manual order. */
+export const pinnedAndArranged = defineFixture({
+  width: WIDTH,
+  store: { orcaProfileAuthStatus: AUTH_STATUS },
+  setup: () => {
+    const rows = teamWorkspaces()
+    stubCloudWorkspacesApi(() => Promise.resolve({ ok: true, value: rows }))
+    const document: CloudWorkspacePrefsDocument = {
+      pinned: [rows[3]!.id, rows[0]!.id],
+      order: [rows[2]!.id],
+      sections: ['Payments'],
+      collapsed: []
+    }
+    Object.assign(window.api.cloudWorkspaces, {
+      getPrefs: () =>
+        Promise.resolve({ ok: true as const, value: { document, revision: 3, updatedAt: 1 } }),
+      putPrefs: (next: CloudWorkspacePrefsDocument) =>
+        Promise.resolve({
+          ok: true as const,
+          value: { document: next, revision: 4, updatedAt: 2 }
+        })
+    })
+    setPrefsAccount(`fixture:${Math.random()}`)
+  },
+  render: () => <CloudWorkspacesHome />,
+  interact: () =>
+    waitFor(() => document.querySelector('[data-cloud-workspace-group="pinned"]') !== null)
 })
 
 /** A link pointed at this row; Home rings it while it opens. */
@@ -186,4 +221,91 @@ export const withRoutinesEntry = defineFixture({
         document.querySelector('[data-cloud-workspace-row]') !== null &&
         [...document.querySelectorAll('button')].some((b) => b.textContent === 'Routines')
     )
+})
+
+/** Routine runs stay off Home; the Routine runs switch brings in-flight ones back, marked. */
+function stubWithRoutineRuns(): void {
+  writeHomeSwitches(FIXTURE_ACCOUNT, { running: false, archived: false, routines: false })
+  const rows = teamWorkspaces()
+  const run = workspace({
+    id: 'sbx_0000000000000000000000e1',
+    title: 'nightly-deps · run',
+    status: 'running',
+    fromRoutine: true,
+    routineName: 'nightly-deps',
+    section: null
+  })
+  stubCloudWorkspacesApi(() => Promise.resolve({ ok: true, value: rows }))
+  Object.assign(window.api.cloudWorkspaces, {
+    list: (query: { routines?: string }) =>
+      Promise.resolve(
+        query.routines === 'include'
+          ? {
+              ok: true as const,
+              value: [run, ...rows],
+              routineRuns: { routines: 2, hidden: 0, hiddenRunning: 0, hiddenComputeMs: 0 }
+            }
+          : {
+              ok: true as const,
+              value: rows,
+              routineRuns: {
+                routines: 2,
+                hidden: 1,
+                hiddenRunning: 1,
+                hiddenComputeMs: run.cost.computeMs
+              }
+            }
+      )
+  })
+}
+
+function routineSwitch(): HTMLElement | null {
+  return document.querySelector<HTMLElement>('[aria-label="Show routine runs"]')
+}
+
+/** A team without routines never sees the switch. */
+export const noRoutines = defineFixture({
+  width: WIDTH,
+  store: { orcaProfileAuthStatus: AUTH_STATUS },
+  setup: () => {
+    const rows = teamWorkspaces()
+    stubCloudWorkspacesApi(() =>
+      Promise.resolve({
+        ok: true,
+        value: rows,
+        routineRuns: { routines: 0, hidden: 0, hiddenRunning: 0, hiddenComputeMs: 0 }
+      })
+    )
+  },
+  render: () => <CloudWorkspacesHome />,
+  interact: () => waitFor(() => document.querySelector('[data-cloud-workspace-row]') !== null)
+})
+
+/** Default: routine runs are hidden; the switch says how many are running. */
+export const routineRunsHidden = defineFixture({
+  width: WIDTH,
+  store: { orcaProfileAuthStatus: AUTH_STATUS },
+  setup: stubWithRoutineRuns,
+  render: () => <CloudWorkspacesHome />,
+  interact: () =>
+    waitFor(
+      () =>
+        document.querySelector('[data-cloud-workspace-row]') !== null && routineSwitch() !== null
+    )
+})
+
+/** Switch on: the in-flight run is listed with the routine mark. */
+export const routineRunsShown = defineFixture({
+  width: WIDTH,
+  store: { orcaProfileAuthStatus: AUTH_STATUS },
+  setup: stubWithRoutineRuns,
+  render: () => <CloudWorkspacesHome />,
+  interact: async () => {
+    await waitFor(
+      () =>
+        document.querySelector('[data-cloud-workspace-row]') !== null && routineSwitch() !== null
+    )
+    routineSwitch()!.click()
+    await waitFor(() => document.querySelector('[aria-label="Routine run"]') !== null)
+  }
 })

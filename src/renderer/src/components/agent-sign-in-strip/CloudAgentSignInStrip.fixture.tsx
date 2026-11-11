@@ -6,6 +6,7 @@ import type { CloudAgentStripReason } from '@/lib/orca-cloud/cloud-agent-launch-
 import type { HostAgentSignInAgent } from '../../../../shared/host-agent-sign-in-status'
 import {
   CloudAgentSignInStrip,
+  CloudStripLayer,
   cloudStripWidth,
   type CloudStripActions
 } from './CloudAgentSignInStrip'
@@ -42,20 +43,33 @@ function Pane({
   })
   return (
     <div className="bg-background p-4">
-      {/* Stands in for a terminal pane: the strip overlays its top 56 px before the agent starts. */}
+      {/* Stands in for a terminal pane: its title row (split, close) stays above the strip. */}
       <div
+        data-strip-pane
         className="relative h-[220px] overflow-hidden rounded-md border border-border bg-background"
         style={{ width }}
       >
-        <div className="absolute inset-x-0 top-0 z-20">
+        <div className="pane-title-overlay-layer">
+          <div className="pane-title-bar" data-chromeless>
+            <div className="pane-title-actions ml-auto flex shrink-0 items-center gap-0">
+              <button type="button" className="pane-title-split-trigger" aria-label="Split pane">
+                ⊟
+              </button>
+              <button type="button" className="pane-title-close" aria-label="Close pane">
+                ×
+              </button>
+            </div>
+          </div>
+        </div>
+        <CloudStripLayer>
           <CloudAgentSignInStrip
             model={model}
             prompt={PROMPT}
             width={cloudStripWidth(width)}
             actions={ACTIONS}
           />
-        </div>
-        <pre className="absolute inset-x-0 bottom-0 top-14 p-3 font-mono text-xs text-muted-foreground">
+        </CloudStripLayer>
+        <pre className="absolute inset-x-0 bottom-0 top-20 p-3 font-mono text-xs text-muted-foreground">
           ~/acme/web $
         </pre>
       </div>
@@ -112,3 +126,5 @@ export const waitingNarrow = fixture({
   width: 640
 })
 export const needExpiredNarrow = fixture({ reason: 'accountExpired', width: 520 })
+/** Below 360 px: one line and Renew; the detail stays the region's description. */
+export const needExpiredCompact = fixture({ reason: 'accountExpired', width: 320 })

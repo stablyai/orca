@@ -4,9 +4,10 @@
 // offered: no hold here; the per-workspace sign-in (#40228's gate) runs and the strip shows it.
 import { useSyncExternalStore } from 'react'
 import type { HostAgentSignInAgent } from '../../../../shared/host-agent-sign-in-status'
-import { orcaCloudAgentCoverage } from './orca-cloud-agent-accounts-model'
+import { orcaCloudAgentCoverageFromAccounts } from './orca-cloud-agent-accounts-model'
 import {
   ensureFreshOrcaCloudAgentAccounts,
+  isOrcaCloudAgentAccountsFresh,
   readOrcaCloudAgentAccounts,
   subscribeOrcaCloudAgentAccounts,
   type OrcaCloudAgentAccountsState
@@ -19,10 +20,9 @@ export function cloudAgentStripReason(
   agent: HostAgentSignInAgent,
   accounts: Pick<OrcaCloudAgentAccountsState, 'load' | 'keyKinds'>
 ): CloudAgentStripReason | null {
-  if (accounts.load.kind !== 'ready') {
-    return null
-  }
-  switch (orcaCloudAgentCoverage(agent, accounts.load.status, accounts.keyKinds[agent]).kind) {
+  switch (orcaCloudAgentCoverageFromAccounts(agent, accounts)?.kind) {
+    case undefined:
+      return null
     case 'expired':
       return 'accountExpired'
     case 'killSwitch':
@@ -40,6 +40,16 @@ export type CloudAgentHold = {
   paneKey: string
   agent: HostAgentSignInAgent
   prompt: string | null
+}
+
+/** The hold key of a host-published tab (RA-1): its first pane shows the strip. */
+export function cloudTabHoldKey(tabId: string): string {
+  return `tab:${tabId}`
+}
+
+type HoldRequest = CloudAgentHold & {
+  /** The caller already read the account and decided to hold; skip the re-read. */
+  decided?: boolean
 }
 
 type Entry = CloudAgentHold & { release: (outcome: 'proceed' | 'cancel') => void }
@@ -83,12 +93,23 @@ const DECIDE_BUDGET_MS = 3_000
  */
 export function cloudAgentLaunchNeedsHold(agent: HostAgentSignInAgent): boolean | 'unknown' {
   const accounts = readOrcaCloudAgentAccounts()
-  if (accounts.load.kind === 'loading') {
+  // Only a fresh read decides at once: a stale "active" may miss a revoke since (RA-1), so it
+  // re-reads within the decide budget like a launch with nothing cached.
+  if (accounts.load.kind === 'loading' || !isOrcaCloudAgentAccountsFresh()) {
     return 'unknown'
   }
-  // A stale read refreshes in the background; the next launch uses it.
-  void ensureFreshOrcaCloudAgentAccounts().catch(() => undefined)
   return cloudAgentStripReason(agent, accounts) === 'accountExpired'
+}
+
+/** Hold or start, read within the decide budget when nothing is cached yet. */
+export async function cloudAgentLaunchDecision(
+  agent: HostAgentSignInAgent
+): Promise<'hold' | 'start'> {
+  const cached = cloudAgentLaunchNeedsHold(agent)
+  if (cached !== 'unknown') {
+    return cached ? 'hold' : 'start'
+  }
+  return (await reasonBeforeLaunch(agent)) === 'accountExpired' ? 'hold' : 'start'
 }
 
 async function reasonBeforeLaunch(
@@ -105,8 +126,11 @@ async function reasonBeforeLaunch(
  * key to fall back to; then it holds until Renew fixes it (every held pane goes together) or the
  * person cancels.
  */
-export async function holdCloudAgentLaunch(hold: CloudAgentHold): Promise<'proceed' | 'cancel'> {
-  if ((await reasonBeforeLaunch(hold.agent)) !== 'accountExpired') {
+export async function holdCloudAgentLaunch({
+  decided,
+  ...hold
+}: HoldRequest): Promise<'proceed' | 'cancel'> {
+  if (!decided && (await reasonBeforeLaunch(hold.agent)) !== 'accountExpired') {
     return 'proceed'
   }
   return new Promise((resolve) => {

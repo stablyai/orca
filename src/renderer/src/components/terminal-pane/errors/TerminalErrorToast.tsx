@@ -18,8 +18,10 @@ import {
 } from './terminal-spawn-error-display'
 import { isWslDistroHoldText } from '@/runtime/hosts/wsl/wsl-distro-hold-copy'
 import { isSshSignInRequiredTerminalError } from './terminal-ssh-sign-in-error'
+import { useCloudTerminalErrorOverride } from '@/components/orca-cloud/use-cloud-terminal-error-override'
 
 export function TerminalErrorToast({
+  worktreeId,
   error,
   resourceLimit = false,
   agentId,
@@ -30,6 +32,8 @@ export function TerminalErrorToast({
   onOpenNewTerminal,
   onClosePane
 }: {
+  /** Lets an asleep or waking Orca Cloud workspace replace this toast (see the cloud override). */
+  worktreeId?: string
   error: string
   /** Classified from separate source events before their display text is joined. */
   resourceLimit?: boolean
@@ -43,8 +47,9 @@ export function TerminalErrorToast({
   onOpenNewTerminal?: () => void
   /** Dismissing only hides the toast; the dead pane needs a way out from where the user is looking (#21342). */
   onClosePane?: () => void
-}): React.JSX.Element {
+}): React.JSX.Element | null {
   const t = useTranslate()
+  const cloudOverride = useCloudTerminalErrorOverride(worktreeId ?? '', error)
   // An SSH host state (reconnecting, or waiting for the user to sign in), not a bug to report.
   const ssh = isSshSignInRequiredTerminalError(error) || isSshReconnectOwnedTerminalError(error)
   // Why: the client's OS and shell describe neither the host nor its shell, and the renderer knows neither.
@@ -111,6 +116,9 @@ export function TerminalErrorToast({
     }
   }
 
+  if (cloudOverride === 'hide') {
+    return null
+  }
   return (
     <div
       data-terminal-error-toast

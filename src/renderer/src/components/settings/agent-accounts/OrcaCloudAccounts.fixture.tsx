@@ -151,6 +151,13 @@ export const removeConfirm = fixture({ claude: CLAUDE_ACTIVE, codex: CODEX_TEAM 
   confirmRemove: 'claude'
 })
 
+/** RA-5: Remove… from an expired row's ⋯ confirms like the active row. */
+export const expiredRemoveConfirm = fixture(
+  { claude: { kind: 'expired', keyKind: null, covered: false }, codex: CODEX_TEAM },
+  READY,
+  { confirmRemove: 'claude' }
+)
+
 export const killSwitch = fixture({
   claude: CLAUDE_ACTIVE,
   codex: { kind: 'killSwitch' }

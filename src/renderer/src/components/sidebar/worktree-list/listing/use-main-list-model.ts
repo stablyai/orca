@@ -9,11 +9,8 @@ import {
 } from '@/lib/sidebar-pending-layer'
 import { useSidebarListSession } from '@/lib/sidebar-list-session'
 import { readEndedCreations, subscribeEndedCreations } from '@/lib/sidebar-ended-creations'
-import {
-  readHiddenVmCheckouts,
-  subscribeHiddenVmCheckouts,
-  withoutHiddenVmCheckouts
-} from '@/lib/vm-create-hidden-checkouts'
+import { withoutHiddenVmCheckouts } from '@/lib/vm-create-hidden-checkouts'
+import { useSidebarHiddenCheckouts } from '@/lib/orca-cloud/use-sidebar-hidden-checkouts'
 import '../../../../../../shared/folder-workspaces/folder-workspace-execution-host'
 import { getFolderWorkspaceHostId } from '../../../../../../shared/folder-workspaces/folder-workspace-host-id'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
@@ -78,7 +75,7 @@ export function useMainSidebarListModel(args: SidebarListModelArgs): SidebarList
   const feed = useDesktopSidebarFeed()
   const pending = useSyncExternalStore(subscribeSidebarPendingLayer, readSidebarPendingLayer)
   const endedCreationIds = useSyncExternalStore(subscribeEndedCreations, readEndedCreations)
-  const hiddenVmCheckouts = useSyncExternalStore(subscribeHiddenVmCheckouts, readHiddenVmCheckouts)
+  const hiddenVmCheckouts = useSidebarHiddenCheckouts()
   const pendingCreationKeys = useAppStore(
     useShallow((s) => selectPendingWorktreeCreationKeys(s.pendingWorktreeCreations))
   )

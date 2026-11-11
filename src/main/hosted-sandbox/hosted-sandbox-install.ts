@@ -35,6 +35,12 @@ import {
 import { createHostedSessionRegistry, type HostedSessionRegistry } from './hosted-session-registry'
 import { registerCloudShareHandlers } from './hosted-sandbox-share-ipc'
 import { setHostedSessionSync } from './hosted-session-sync'
+import { orcaCloudAccountId } from '../../shared/hosted-sandbox/orca-cloud-account'
+import { setOrcaCloudActiveAccountResolver } from './orca-cloud-active-account'
+import { createCloudAccountBackfill } from './cloud-account-backfill'
+import { createCloudSandboxGonePrune } from './cloud-sandbox-gone-prune'
+import { retireGoneCloudSandbox } from './cloud-sandbox-gone-retire'
+import type { RemovedServerStore } from '../ipc/runtime-environments/runtime-environment-removal-cleanup'
 import { createUsageAlertRefreshScheduler } from '../billing/usage-alert-refresh'
 import { sendToTrustedUIRenderer } from '../ipc/ui'
 import { ORCA_BILLING_REFRESH_CHANNEL } from '../../shared/orca-billing'
@@ -55,6 +61,10 @@ import {
   installCloudMcpSync,
   registerCloudMcpSyncHandlers
 } from '../agent-mcp-sync/desktop/cloud-mcp-sync-ipc'
+import {
+  installCloudAgentConfigSync,
+  registerCloudAgentConfigSyncHandlers
+} from '../agent-config-sync/desktop/cloud-agent-config-sync-ipc'
 
 /** Capability Orca Cloud auth grants per account (stablyai/orca-cloud#689). */
 export const ORCA_CLOUD_SANDBOX_CAPABILITY = 'sandbox'
@@ -68,7 +78,9 @@ export function getHostedSandboxControlPlaneClient(): HostedSandboxControlPlaneC
 }
 
 /** `repos` is main's repo store: org-environment repo imports only read checkouts listed there. */
-export function installHostedSandbox(repos?: OrcaCloudEnvironmentRepoSource): void {
+export function installHostedSandbox(
+  repos?: OrcaCloudEnvironmentRepoSource & RemovedServerStore
+): void {
   // Idempotent; answers isConfigured() = false itself when this build has no control plane.
   registerOrcaCloudEnvironmentHandlers(repos ? { repos } : {})
   if (installed) {
@@ -79,6 +91,7 @@ export function installHostedSandbox(repos?: OrcaCloudEnvironmentRepoSource): vo
     restartHostedWorkspace(args.workspaceId)
   )
   registerCloudMcpSyncHandlers()
+  registerCloudAgentConfigSyncHandlers()
   const userDataPath = app.getPath('userData')
   const config = getHostedSandboxConfig(
     userDataPath,
@@ -92,10 +105,28 @@ export function installHostedSandbox(repos?: OrcaCloudEnvironmentRepoSource): vo
   const client = createHostedSandboxRecipeClient(config)
   const base = createHostedSandboxRecipeDriver(config, client)
   controlPlaneClient = client
+  // The team the sandbox token is minted for; creates are filed under it and lists scope to it.
+  const activeAccountId = (): string | null =>
+    orcaCloudAccountId(ensureActiveOrcaProfile(userDataPath).profile.cloud)
+  setOrcaCloudActiveAccountResolver(activeAccountId)
+  const gonePrune = createCloudSandboxGonePrune({
+    userDataPath,
+    activeAccountId,
+    get: (sandboxId) => client.get(sandboxId),
+    retire: (runtime) => retireGoneCloudSandbox(userDataPath, repos, runtime)
+  })
+  const accountBackfill = createCloudAccountBackfill({
+    userDataPath,
+    activeAccountId,
+    list: () => client.list(),
+    onListed: (account, listed) => gonePrune.observeList(account, listed),
+    relistMs: 10 * 60_000
+  })
   const mcpSync = installCloudMcpSync(userDataPath, {
     baseUrl: config.controlPlaneUrl,
     getAccessToken: config.getAccessToken
   })
+  const agentConfigSync = installCloudAgentConfigSync(userDataPath)
   // Dev rehearsals shorten idle sleep; packaged builds always use the provider's default.
   const idleOverride = app.isPackaged
     ? Number.NaN
@@ -122,9 +153,16 @@ export function installHostedSandbox(repos?: OrcaCloudEnvironmentRepoSource): vo
     userDataPath,
     driver,
     windows: () => BrowserWindow.getAllWindows(),
-    onConnected: (runtimeEnvironmentId) => void mcpSync.sync(runtimeEnvironmentId, 'connect'),
-    onRunningChange: (anyRunning) => usageRefresh.setRunning(anyRunning)
+    // Create and wake both connect: MCP servers, skills and commands follow this computer's.
+    onConnected: (runtimeEnvironmentId) => {
+      void mcpSync.sync(runtimeEnvironmentId, 'connect')
+      void agentConfigSync.sync(runtimeEnvironmentId, 'connect')
+    },
+    onRunningChange: (anyRunning) => usageRefresh.setRunning(anyRunning),
+    activeAccountId
   })
+  // Filing first, so a sandbox that just joined the active team gets its scheduler in this pass.
+  const syncSessions = (): Promise<void> => accountBackfill.run().finally(() => registry.sync())
   const workspaces = installHostedWorkspaceService({
     userDataPath,
     // Every status read also carries the control plane's idle-sleep minutes.
@@ -149,7 +187,8 @@ export function installHostedSandbox(repos?: OrcaCloudEnvironmentRepoSource): vo
     },
     windows: () => BrowserWindow.getAllWindows(),
     syncSessions: () => void registry.sync(),
-    stopSession: (environmentId) => registry.stopEnvironment(environmentId)
+    stopSession: (environmentId) => registry.stopEnvironment(environmentId),
+    activeAccountId
   })
   setHostedWorkspaceService(workspaces)
   const disposeTransfer = installCloudTransferHandlers({
@@ -183,7 +222,7 @@ export function installHostedSandbox(repos?: OrcaCloudEnvironmentRepoSource): vo
     beat = setTimeout(() => {
       // OOM in the guest is checked every other beat (~1 min) for running cloud workspaces.
       const oom = beats++ % 2 === 1 ? workspaces.pollOom() : Promise.resolve()
-      void Promise.all([registry.sync(), oom]).finally(() => schedule(30_000))
+      void Promise.all([syncSessions(), oom]).finally(() => schedule(30_000))
     }, ms)
     beat.unref?.()
   }
@@ -207,7 +246,8 @@ export function installHostedSandbox(repos?: OrcaCloudEnvironmentRepoSource): vo
   installed = { registry }
   registerCloudRemoteDesktopHandlers(client)
   registerOrcaCloudDeviceEnroller(createHostedSandboxDeviceEnroller(config))
-  setHostedSessionSync(() => void registry.sync())
+  // Also the team-switch nudge: the old team's schedulers stop and the new team's records file.
+  setHostedSessionSync(() => void syncSessions())
   schedule(0)
   app.once('will-quit', () => {
     if (beat) {
@@ -220,6 +260,7 @@ export function installHostedSandbox(repos?: OrcaCloudEnvironmentRepoSource): vo
     setHostedWorkspaceService(null)
     setCloudArchiveCheck(null)
     setCloudAsleepCheck(null)
+    setOrcaCloudActiveAccountResolver(null)
     offline.dispose()
     setCloudOfflineService(null)
   })

@@ -7,15 +7,20 @@ import {
   type OrcaBillingStatusResult
 } from '../../../../shared/orca-billing'
 import { usageAlertSentence } from '../../../../shared/orca-billing-usage-alerts'
-import { includedUsagePercent } from './plan-billing-format'
+import {
+  includedUsagePercent,
+  sandboxHoursAmount,
+  sandboxHoursLeft,
+  sandboxHoursUsed
+} from './plan-billing-format'
 import { isActivePlan } from './team/team-seat-math'
 
 /** The included-hours bar turns to the warning tone from this share of the month's hours. */
 export const INCLUDED_HOURS_WARNING_PERCENT = 90
 
-/** Hours as a plural count: one decimal, whole numbers without it (41.5, 78, 1). */
+/** Hours left as a plural count (41.5, 78, 1): the one rounding every surface uses (JA-07). */
 export function sandboxHoursCount(seconds: number): number {
-  return Math.round(Math.max(0, seconds) / 360) / 10
+  return sandboxHoursLeft(seconds)
 }
 
 export function includedUsageTone(entitlement: OrcaBillingEntitlement): 'default' | 'warning' {
@@ -43,7 +48,7 @@ export function sandboxHoursOverLine(
   entitlement: OrcaBillingEntitlement,
   t: Translate
 ): string | null {
-  const count = sandboxHoursCount(hoursOverIncludedSeconds(entitlement))
+  const count = sandboxHoursUsed(hoursOverIncludedSeconds(entitlement))
   if (count <= 0) {
     return null
   }
@@ -87,8 +92,8 @@ export function accountMenuUsageLines(
 /** "0.6 of 2 sandbox hours used": the trial's hours never reset, so no "this month". */
 export function trialHoursUsedLine(entitlement: OrcaBillingEntitlement, t: Translate): string {
   return t('auto.components.billing.trialHoursUsed', '{{used}} of {{count}} sandbox hours used', {
-    used: String(sandboxHoursCount(Math.min(entitlement.usedSeconds, entitlement.includedSeconds))),
-    count: sandboxHoursCount(entitlement.includedSeconds),
+    used: String(sandboxHoursUsed(Math.min(entitlement.usedSeconds, entitlement.includedSeconds))),
+    count: sandboxHoursAmount(entitlement.includedSeconds),
     defaultValue_one: '{{used}} of {{count}} sandbox hour used'
   })
 }

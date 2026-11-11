@@ -61,6 +61,7 @@ export const AgentLaunchPicker = memo(
     onOpenAgentSettings,
     defaultAgent,
     onSetDefault,
+    statusLabels,
     onPick
   }: {
     model: NewTabAgentMenuModel
@@ -88,6 +89,8 @@ export const AgentLaunchPicker = memo(
     /** The saved default; with onSetDefault, right-clicking an agent row offers "Set as default". */
     defaultAgent?: AgentPickerEntry['agent'] | 'blank' | null
     onSetDefault?: (agent: AgentPickerEntry['agent'] | 'blank') => void
+    /** A muted status per agent row, shown only inside the open menu (Orca Cloud: JA-22). */
+    statusLabels?: ReadonlyMap<AgentPickerEntry['agent'], string>
     onPick: (
       agent: AgentPickerEntry['agent'],
       draft?: AgentPickerDraft,
@@ -261,6 +264,7 @@ export const AgentLaunchPicker = memo(
                 onSelectAgent={selectAgent}
                 defaultAgent={defaultAgent}
                 onSetDefault={onSetDefault}
+                statusLabels={statusLabels}
                 runLaunch={runLaunch}
               />
             ) : (

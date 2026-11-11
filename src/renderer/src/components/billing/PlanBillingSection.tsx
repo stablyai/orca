@@ -1,11 +1,10 @@
 import { useState } from 'react'
-import { CreditCard, ExternalLink, RefreshCw } from 'lucide-react'
+import { ExternalLink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { InlineError } from '@/components/ui/inline-error'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { formatCents } from './plans/plans-pricing'
-import { cn } from '@/lib/utils'
 import {
   isOrcaCloudTrial,
   type OrcaBillingOpenResult,
@@ -23,6 +22,12 @@ import { useOrcaBillingStatus } from './use-orca-billing-status'
 import { useAppStore } from '@/store/index'
 import { usageAlertLevel } from '../../../../shared/orca-billing-usage-alerts'
 import { BILLING_CAPABILITY } from './register-plan-billing-menu-item'
+import { SettingsGroupHeader } from '@/components/settings/section-layout/SettingsGroup'
+import { PlanBillingUsageHistory } from './PlanBillingUsageHistory'
+import {
+  usePlanBillingUsageHistory,
+  type PlanBillingUsageState
+} from './use-plan-billing-usage-history'
 
 export function PlanBillingSection(): React.JSX.Element | null {
   const t = useTranslate()
@@ -34,8 +39,20 @@ export function PlanBillingSection(): React.JSX.Element | null {
   )
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<PlanBillingNotice | null>(null)
-  const [userRefreshing, setUserRefreshing] = useState(false)
   const [overageFailures, setOverageFailures] = useState(0)
+  const cloud = useAppStore((state) => state.orcaProfileAuthStatus?.cloud)
+  const entitlement = result?.status === 'ok' ? result.entitlement : null
+  const hasPlan =
+    entitlement !== null && entitlement.plan !== null && entitlement.status !== 'canceled'
+  // Re-read the history with every billing read (it re-reads on window focus).
+  const usage = usePlanBillingUsageHistory(
+    hasPlan && cloud
+      ? `${cloud.userId}:${cloud.activeOrgId ?? ''}|${entitlement.usedSeconds}`
+      : null,
+    cloud?.activeOrgId ?? null,
+    cloud?.userId ?? null,
+    entitlement?.canManageBilling === true
+  )
 
   const run = async (open: () => Promise<OrcaBillingOpenResult>): Promise<void> => {
     setBusy(true)
@@ -85,15 +102,12 @@ export function PlanBillingSection(): React.JSX.Element | null {
     <PlanBillingView
       result={result}
       loading={loading && (result !== null || billingFlagged)}
-      refreshing={userRefreshing}
       busy={busy}
       notice={notice}
-      onRefresh={() => {
-        // Spin only for a refresh the user asked for, and long enough to be seen (review M16).
-        setUserRefreshing(true)
-        refresh()
-        window.setTimeout(() => setUserRefreshing(false), 400)
-      }}
+      teamName={cloud?.activeOrgName ?? null}
+      usage={usage.state}
+      onRetryUsage={usage.retry}
+      onRefresh={refresh}
       onPortal={() => void run(() => window.api.orcaProfiles.billingOpenPortal())}
       overageFailures={overageFailures}
       onSetOverage={(args) => void setOverage(args)}
@@ -102,15 +116,21 @@ export function PlanBillingSection(): React.JSX.Element | null {
   )
 }
 
+const noop = (): void => {}
+
 export type PlanBillingNotice = { kind: 'error' | 'info'; text: string }
 
 export type PlanBillingViewProps = {
   result: OrcaBillingStatusResult | null
   loading: boolean
-  /** A user-requested refresh is running; background re-reads (window focus) never spin. */
-  refreshing?: boolean
   busy: boolean
   notice: PlanBillingNotice | null
+  /** The active team's name, for the "<Team> · Team plan" title. */
+  teamName?: string | null
+  /** The last 30 days; absent (fixtures without history) renders nothing. */
+  usage?: PlanBillingUsageState
+  onRetryUsage?: () => void
+  /** Re-reads the plan after a failed load (the page otherwise re-reads on window focus). */
   onRefresh: () => void
   onPortal: () => void
   onSetOverage: (args: OrcaBillingOverageArgs) => void
@@ -122,9 +142,11 @@ export type PlanBillingViewProps = {
 export function PlanBillingView({
   result,
   loading,
-  refreshing = false,
   busy,
   notice,
+  teamName = null,
+  usage,
+  onRetryUsage = noop,
   onRefresh,
   onPortal,
   onSetOverage,
@@ -151,20 +173,6 @@ export function PlanBillingView({
     return null
   }
 
-  // Settings › Orca Cloud › Plan & billing owns the title; the refresh sits with the plan it reloads.
-  const refreshButton = (
-    <Button
-      type="button"
-      variant="ghost"
-      size="icon-xs"
-      aria-disabled={refreshing || undefined}
-      onClick={refreshing ? undefined : onRefresh}
-      aria-label={t('auto.components.billing.refresh', 'Refresh plan')}
-    >
-      <RefreshCw className={cn(refreshing && 'motion-safe:animate-spin')} />
-    </Button>
-  )
-
   if (result.status === 'failed') {
     return (
       <div className="space-y-3">
@@ -190,25 +198,36 @@ export function PlanBillingView({
     <div className="space-y-4">
       <PaymentIssueNotice entitlement={entitlement} busy={busy} onUpdatePayment={onPortal} />
       {hasPlan ? (
-        <div className="space-y-4">
-          <div className="flex flex-wrap items-center gap-2">
-            <CreditCard className="size-4 text-muted-foreground" />
-            <p className="text-sm font-medium">{entitlement.planLabel}</p>
-            <span className="text-xs text-muted-foreground">
-              {entitlement.interval === 'year'
-                ? t('auto.components.billing.seatsAnnual', '{{count}} seats · Annual', {
-                    count: entitlement.seats,
-                    defaultValue_one: '{{count}} seat · Annual'
-                  })
-                : t('auto.components.billing.seatsMonthly', '{{count}} seats · Monthly', {
-                    count: entitlement.seats,
-                    defaultValue_one: '{{count}} seat · Monthly'
-                  })}
-            </span>
-            <PlanStatusBadge entitlement={entitlement} />
-            <span className="ml-auto">{refreshButton}</span>
+        <div className="space-y-6">
+          <div className="space-y-4">
+            <SettingsGroupHeader
+              className="px-0"
+              title={
+                teamName
+                  ? t('auto.components.billing.teamPlanTitle', '{{team}} · {{plan}} plan', {
+                      team: teamName,
+                      plan: entitlement.planLabel
+                    })
+                  : t('auto.components.billing.planTitle', '{{plan}} plan', {
+                      plan: entitlement.planLabel
+                    })
+              }
+              description={
+                entitlement.interval === 'year'
+                  ? t('auto.components.billing.seatsAnnual', '{{count}} seats · Annual', {
+                      count: entitlement.seats,
+                      defaultValue_one: '{{count}} seat · Annual'
+                    })
+                  : t('auto.components.billing.seatsMonthly', '{{count}} seats · Monthly', {
+                      count: entitlement.seats,
+                      defaultValue_one: '{{count}} seat · Monthly'
+                    })
+              }
+              action={<PlanStatusBadge entitlement={entitlement} />}
+            />
+            <UsageSummary entitlement={entitlement} />
           </div>
-          <UsageSummary entitlement={entitlement} />
+          {usage ? <PlanBillingUsageHistory state={usage} onRetry={onRetryUsage} /> : null}
           {/* Overage is moot while sandboxes are suspended for a failed payment. */}
           {entitlement.payment.suspendRunning ? null : (
             <OverageControls
@@ -273,12 +292,16 @@ export function PlanBillingView({
           </Button>
         ) : null}
         {hasPlan ? (
-          <Button type="button" variant="ghost" size="sm" onClick={onSeePlans}>
+          // Members have no other action here, so it gets the button's chrome (and its alignment).
+          <Button
+            type="button"
+            variant={entitlement.canManageBilling ? 'ghost' : 'outline'}
+            size="sm"
+            onClick={onSeePlans}
+          >
             {t('auto.components.billing.comparePlans', 'Compare plans')}
           </Button>
-        ) : (
-          <span className="ml-auto">{refreshButton}</span>
-        )}
+        ) : null}
       </div>
 
       {/* The payment alert already says who to ask; don't ask twice. */}

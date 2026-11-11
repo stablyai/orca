@@ -40,7 +40,7 @@ export type ProxiedRoute = {
   /** Extra headers set with the credential (e.g. an account id the client can't know). */
   extraHeaders?: () => Record<string, string>
   /** Sees the provider's status (e.g. a 401 revokes an account credential). Never sees the body. */
-  onUpstreamStatus?: (status: number) => void
+  onUpstreamStatus?: (status: number, request: { method: string; path: string }) => void
   /** Narrows where this credential may be used (member tokens: the workspace repository only). */
   pathAllowed?: (method: string, path: string) => boolean
   /** The reply must be a JSON object; only these top-level fields pass (no refresh token for the VM). */
@@ -167,7 +167,7 @@ export async function handleEgressProxy(request: Request, deps: EgressProxyDeps)
   console.log(
     JSON.stringify({ event: 'egress_swap', sandboxId: row.id, host, credential: route.label ?? route.header, status: upstream.status })
   )
-  route.onUpstreamStatus?.(upstream.status)
+  route.onUpstreamStatus?.(upstream.status, { method: request.method, path })
   if (route.keepResponseFields) {
     return onlyFields(upstream, route.keepResponseFields)
   }

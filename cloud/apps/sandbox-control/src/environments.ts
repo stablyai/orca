@@ -31,6 +31,12 @@ export type EnvironmentRow = {
   created_at: number
   updated_at: number
   deleted_at: number | null
+  /**
+   * 'org': made (or since edited) by an admin. 'auto': made by the first create of a repo no
+   * environment listed (auto-environments.ts); deleted after 14 days unused unless an admin edits it.
+   */
+  kind?: 'org' | 'auto'
+  last_used_at?: number | null
 }
 
 export class EnvironmentError extends Error {
@@ -223,10 +229,11 @@ export async function updateEnvironment(
     next.install_script !== row.install_script ||
     next.env_var_names !== row.env_var_names ||
     next.machine_size !== row.machine_size
+  // An admin's edit adopts an automatic environment: it stops expiring.
   const result = await db
     .prepare(
       `UPDATE environments SET name = ?, repos = ?, install_script = ?, env_var_names = ?, machine_size = ?,
-         revision = revision + ?, updated_by = ?, updated_at = ? WHERE id = ? AND revision = ?`
+         revision = revision + ?, updated_by = ?, updated_at = ?, kind = 'org' WHERE id = ? AND revision = ?`
     )
     .bind(next.name, next.repos, next.install_script, next.env_var_names, next.machine_size,
       buildInputsChanged ? 1 : 0, caller.userId, now, row.id, row.revision)
@@ -246,6 +253,8 @@ export type BootSource = {
   machineSize: MachineSize
   /** The build's snapshot only boots here, so the workspace is created here too. */
   region: string
+  /** An automatic environment (auto-environments.ts): the caller's machine size stands. */
+  auto?: boolean
 }
 
 type BootBuildRow = {
@@ -288,7 +297,12 @@ function bootFrom(build: BootBuildRow, repoUrl: string | null | undefined): Boot
 export async function resolveEnvironmentBoot(
   db: D1Database,
   accountId: string,
-  request: { repoUrl?: string | null; buildId?: string | null }
+  request: {
+    repoUrl?: string | null
+    buildId?: string | null
+    /** An automatic environment only boots in its build's region: an explicit other region skips it. */
+    region?: string | null
+  }
 ): Promise<BootSource | null> {
   if (request.buildId) {
     const build = await db
@@ -308,20 +322,25 @@ export async function resolveEnvironmentBoot(
   if (!wanted) {
     return null
   }
+  // An admin's environment that lists the repo wins over an automatic one.
   const { results } = await db
     .prepare(
-      `SELECT e.repos AS repos, b.* FROM environments e JOIN environment_builds b ON b.id = e.active_build_id
-       WHERE e.account_id = ? AND e.deleted_at IS NULL ORDER BY e.updated_at DESC`
+      `SELECT e.repos AS repos, e.kind AS kind, b.* FROM environments e JOIN environment_builds b ON b.id = e.active_build_id
+       WHERE e.account_id = ? AND e.deleted_at IS NULL ORDER BY (e.kind = 'org') DESC, e.updated_at DESC`
     )
     .bind(accountId)
-    .all<BootBuildRow & { repos: string }>()
+    .all<BootBuildRow & { repos: string; kind: string }>()
   for (const row of results) {
     if (!parseRepos(row).some((repo) => normalizeRepo(repo.url) === wanted)) {
       continue
     }
+    // An automatic environment is only a speed-up: an explicit other region skips it.
+    if (row.kind === 'auto' && request.region && request.region !== row.region) {
+      continue
+    }
     const source = bootFrom(row, request.repoUrl)
     if (source?.repoDir) {
-      return source
+      return row.kind === 'auto' ? { ...source, auto: true } : source
     }
   }
   return null

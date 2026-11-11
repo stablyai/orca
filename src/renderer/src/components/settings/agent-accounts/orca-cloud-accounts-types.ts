@@ -32,4 +32,6 @@ export type OrcaCloudAccountsViewProps = {
   /** Fixtures: open a row's Remove confirmation or a row-level save error. */
   initialConfirmRemove?: OrcaCloudAccountAgent
   initialRowError?: { agent: OrcaCloudAccountAgent; error: OrcaCloudAgentsErrorCode }
+  /** Inside Settings → Agent accounts the page's Orca Cloud part already titles it. */
+  hideHeader?: boolean
 }

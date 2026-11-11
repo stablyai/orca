@@ -29,6 +29,7 @@ import {
 import { isRecoveryReloadInFlight } from './main-window-lifecycle-flags'
 import { RELAY_HOST_CLOSE_REASON } from '../../shared/relay-host-close-reason'
 import { holdLaunchReconnectOptOuts } from '../ipc/ssh/ssh-host-user-disconnect'
+import { syncHostedSessions } from '../hosted-sandbox/hosted-session-sync'
 
 export function attachMainWindowCoreServices(
   window: BrowserWindow,
@@ -72,7 +73,7 @@ export function attachMainWindowCoreServices(
   // Server status probes start inside registerCoreHandlers; held hosts must be marked first.
   holdLaunchReconnectOptOuts(store.getSshTargets())
   registerAgentApiKeyHandlers(app.getPath('userData'))
-  registerCloudWorkspacesHandlers()
+  registerCloudWorkspacesHandlers({ removedServerStore: store })
   registerCloudApiHandlers()
   registerCloudSecretsHandlers(app.getPath('userData'))
   registerOrcaCloudAgentsHandlers(app.getPath('userData'))
@@ -118,6 +119,8 @@ export function attachMainWindowCoreServices(
         void state.desktopRelayInstaller?.authChanged()
         state.desktopRelayService?.authMutated()
         desktopConnectorCloud()?.accountChanged()
+        // A team switch moves Orca Cloud to another account: stop keeping the old team's sandboxes alive.
+        syncHostedSessions()
       },
       // Only sign-out fences paired phones; reasonless quit/relaunch must not look like logout.
       onBeforeOrcaProfileSignOut: () => {

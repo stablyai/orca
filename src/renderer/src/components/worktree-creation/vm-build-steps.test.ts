@@ -7,6 +7,7 @@ import { deriveVmBuildSteps } from './vm-build-steps'
 import { classifyVmBuildFailure } from './vm-build-failure'
 import { holdRunningSteps } from './use-minimum-running-steps'
 import { humanizeOrcaCloudLogLine } from './orca-cloud-build-log'
+import { cloneStageLabel, stepLabel } from './vm-build-sheet-copy'
 import type { Translate } from '@/i18n/use-translate'
 
 const base = {
@@ -277,6 +278,54 @@ describe('Orca Cloud clone step', () => {
         cloud: true
       })
     ).toEqual({ kind: 'cloneFailed', reason: 'clone_timeout' })
+  })
+
+  it('names the repository step once, from the boot plan, before it runs (PC-4)', () => {
+    const pendingStep = (...rows: [string, number][]) =>
+      deriveVmBuildSteps({ ...base, ...lines(...rows) }, 2000, { cloud: true })[1]
+    // Not known yet: no mode (the row shows a placeholder, never a guessed label).
+    expect(pendingStep(['[orca-cloud] provisioning', 1000])).toMatchObject({
+      state: 'pending'
+    })
+    expect(pendingStep(['[orca-cloud] provisioning', 1000])?.cloneMode).toBeUndefined()
+    expect(
+      pendingStep(['[orca-cloud] provisioning', 1000], ['[orca-cloud] plan-update', 1200])
+    ).toMatchObject({ state: 'pending', cloneMode: 'update' })
+    // The running step keeps the planned name.
+    const running = deriveVmBuildSteps(
+      {
+        ...base,
+        ...lines(
+          ['[orca-cloud] plan-update', 1200],
+          ['[orca-cloud] updating', 4000],
+          ['[orca-cloud] clone-progress 40 download', 4500]
+        )
+      },
+      5000,
+      { cloud: true }
+    )[1]
+    expect(running).toMatchObject({ state: 'running', cloneMode: 'update' })
+  })
+
+  it('a prebuilt repo (environment build) shows as an update, not a clone', () => {
+    const t: Translate = (_key, fallback) => fallback
+    const steps = deriveVmBuildSteps(
+      {
+        ...base,
+        ...lines(['[orca-cloud] updating', 4000], ['[orca-cloud] clone-progress 40 download', 4500])
+      },
+      5000,
+      { cloud: true }
+    )
+    expect(steps[1]).toMatchObject({
+      id: 'clone',
+      state: 'running',
+      percent: 40,
+      cloneMode: 'update'
+    })
+    expect(stepLabel(steps[1]!, true, t)).toBe('Update repository')
+    expect(cloneStageLabel(steps[1]!.stage, t, steps[1]!.cloneMode)).toBe('Fetching changes…')
+    expect(humanizeOrcaCloudLogLine('[orca-cloud] updating', t)).toBe('Updating the repository…')
   })
 
   it('shows counting (no frozen 0%) until git reports a percent', () => {

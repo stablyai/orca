@@ -15,7 +15,9 @@ import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import { repoLabel, type MemberDirectory } from './cloud-workspace-format'
+import type { CloudWorkspaceRoutineRuns } from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
 import { OrcaCloudTrialUsedUpBanner } from '../new-workspace/run-on/OrcaCloudTrialUsedUpNotice'
+import { CLOUD_ROUTINES_UI_ENABLED } from '../../../../shared/cloud-api/cloud-routines-ui'
 
 export const ANY = '__any'
 
@@ -32,6 +34,8 @@ export type CloudWorkspacesFilters = {
   archived: boolean
   /** Only sandboxes that are running now (where the team's running slots go). */
   running?: boolean
+  /** Also list workspaces routine runs started (hidden by default, like Conductor). */
+  routines?: boolean
 }
 
 export const INITIAL_CLOUD_WORKSPACE_FILTERS: CloudWorkspacesFilters = {
@@ -39,10 +43,11 @@ export const INITIAL_CLOUD_WORKSPACE_FILTERS: CloudWorkspacesFilters = {
   by: ANY,
   repo: ANY,
   archived: false,
-  running: false
+  running: false,
+  routines: false
 }
 
-/** Row 1: title, count and cost, refresh. Row 2: whose, by whom, which repo, archived. */
+/** Row 1: title, count and cost, refresh. Row 2: whose, by whom, which repo, running, routine runs, archived. */
 export function CloudWorkspacesToolbar({
   filters,
   onFiltersChange,
@@ -54,7 +59,8 @@ export function CloudWorkspacesToolbar({
   meta,
   metaStale,
   reading,
-  onRefresh
+  onRefresh,
+  routineRuns
 }: {
   filters: CloudWorkspacesFilters
   onFiltersChange: (next: Partial<CloudWorkspacesFilters>) => void
@@ -68,10 +74,13 @@ export function CloudWorkspacesToolbar({
   metaStale: boolean
   reading: boolean
   onRefresh: () => void
+  /** What the Routine runs switch hides; the switch exists only when the team has routines. */
+  routineRuns?: CloudWorkspaceRoutineRuns
 }): React.JSX.Element {
   const t = useTranslate()
   // Routines start cloud workspaces on their own, so they sit next to the list they fill.
-  const routinesAvailable = useOrcaCloudApiAvailable()
+  // Routines are parked (cloud-routines-ui.ts): no Routines entry and no Routine runs switch.
+  const routinesAvailable = useOrcaCloudApiAvailable() && CLOUD_ROUTINES_UI_ENABLED
   return (
     <div className="mb-2 flex flex-col gap-2">
       <div className="flex items-center gap-2">
@@ -175,22 +184,52 @@ export function CloudWorkspacesToolbar({
             ))}
           </SelectContent>
         </Select>
-        <label className="ml-auto flex h-7 cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
-          <Switch
-            checked={filters.running === true}
-            onCheckedChange={(running) => onFiltersChange({ running })}
-            aria-label={t('auto.components.cloudWorkspaces.showRunningOnly', 'Show running only')}
-          />
-          {t('auto.components.cloudWorkspaces.running', 'Running')}
-        </label>
-        <label className="flex h-7 cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
-          <Switch
-            checked={filters.archived}
-            onCheckedChange={(archived) => onFiltersChange({ archived })}
-            aria-label={t('auto.components.cloudWorkspaces.showArchived', 'Show archived')}
-          />
-          {t('auto.components.cloudWorkspaces.archived', 'Archived')}
-        </label>
+        {/* The switches wrap as one group, so none is left alone on a line of its own. */}
+        <div className="ml-auto flex items-center gap-2">
+          <label className="flex h-7 cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
+            <Switch
+              checked={filters.running === true}
+              onCheckedChange={(running) => onFiltersChange({ running })}
+              aria-label={t('auto.components.cloudWorkspaces.showRunningOnly', 'Show running only')}
+            />
+            {t('auto.components.cloudWorkspaces.running', 'Running')}
+          </label>
+          {CLOUD_ROUTINES_UI_ENABLED &&
+          ((routineRuns?.routines ?? 0) > 0 || filters.routines === true) ? (
+            <label className="flex h-7 cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
+              <Switch
+                checked={filters.routines === true}
+                onCheckedChange={(routines) => onFiltersChange({ routines })}
+                aria-label={t(
+                  'auto.components.cloudWorkspaces.showRoutineRuns',
+                  'Show routine runs'
+                )}
+              />
+              {/* Hidden runs that are running still use hours: say how many, so the total adds up. */}
+              {filters.routines !== true && (routineRuns?.hiddenRunning ?? 0) > 0 ? (
+                <span className="tabular-nums">
+                  {t(
+                    'auto.components.cloudWorkspaces.routineRunsHidden',
+                    'Routine runs · {{count}}',
+                    {
+                      count: routineRuns!.hiddenRunning
+                    }
+                  )}
+                </span>
+              ) : (
+                t('auto.components.cloudWorkspaces.routineRuns', 'Routine runs')
+              )}
+            </label>
+          ) : null}
+          <label className="flex h-7 cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
+            <Switch
+              checked={filters.archived}
+              onCheckedChange={(archived) => onFiltersChange({ archived })}
+              aria-label={t('auto.components.cloudWorkspaces.showArchived', 'Show archived')}
+            />
+            {t('auto.components.cloudWorkspaces.archived', 'Archived')}
+          </label>
+        </div>
       </div>
       {/* T4: the team's trial ran out; running sandboxes sleep until a plan starts. */}
       <OrcaCloudTrialUsedUpBanner />

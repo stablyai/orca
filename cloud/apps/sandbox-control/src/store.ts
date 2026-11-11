@@ -71,6 +71,8 @@ export type SandboxRow = {
   last_activity_at: number | null
   last_activity_by: string | null
   token_usd_micros: number | null
+  /** 0051: this workspace's number in its account (shown as W-123); null only on rows from before it. */
+  number?: number | null
 }
 
 export type WorkspaceVisibility = 'private' | 'team'
@@ -89,8 +91,25 @@ export const NO_SESSION: SessionFields & Pick<SandboxRow, 'orcad_endpoint'> = {
   usage_settled_at: null
 }
 
-/** Counted against the plan's concurrency limit. */
+/** Holding (or about to hold) a VM: capacity guardrails, retention and drains count these. */
 export const ACTIVE_STATUSES: readonly SandboxStatus[] = ['creating', 'running', 'resuming', 'suspending']
+
+/** A create this old never finished: its Worker was cut off, and the cron releases it (reconcile.ts). */
+export const CREATE_ABANDONED_MS = 5 * 60_000
+
+/**
+ * Counted against the plan's concurrency limits (team and per member). Not a sandbox going to sleep
+ * ('suspending' drains for up to 5 min after someone chose Sleep, and reads as asleep everywhere), and
+ * not a create abandoned more than CREATE_ABANDONED_MS ago: neither may refuse the next start.
+ */
+const START_GATE_STATUSES: readonly SandboxStatus[] = ['creating', 'running', 'resuming']
+
+function startGateFilter(now: number): { sql: string; binds: (string | number)[] } {
+  return {
+    sql: `status IN (${START_GATE_STATUSES.map(() => '?').join(', ')}) AND NOT (status = 'creating' AND updated_at < ?)`,
+    binds: [...START_GATE_STATUSES, now - CREATE_ABANDONED_MS]
+  }
+}
 
 export async function insertSandbox(
   db: D1Database,
@@ -101,18 +120,28 @@ export async function insertSandbox(
     Partial<Pick<SandboxRow, 'environment_id' | 'environment_build_id' | 'source_snapshot_id' | 'name' | 'repo_branch' | 'visibility' | 'section'>>,
   now: number
 ): Promise<SandboxRow> {
-  await db
-    .prepare(
-      `INSERT INTO sandboxes (id, account_id, user_id, workspace_id, provider, provider_name, status,
-         machine_size, region, generation, created_at, updated_at, repo_url, environment_id, environment_build_id,
-         source_snapshot_id, created_by, name, repo_branch, visibility, section, last_activity_at, last_activity_by)
-       VALUES (?, ?, ?, ?, ?, ?, 'creating', ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    )
-    .bind(row.id, row.account_id, row.user_id, row.workspace_id, row.provider, row.provider_name,
-      row.machine_size, row.region, now, now, row.repo_url, row.environment_id ?? null,
-      row.environment_build_id ?? null, row.source_snapshot_id ?? null, row.user_id, row.name ?? null,
-      row.repo_branch ?? null, row.visibility ?? 'private', row.section ?? null, now, row.user_id)
-    .run()
+  // One transaction: bump the account's counter, then take its value as this row's number (W-123).
+  // A failed insert rolls the bump back; a destroyed row keeps its number, so none is ever reused.
+  await db.batch([
+    db
+      .prepare(
+        `INSERT INTO org_workspace_counters (account_id, last_number) VALUES (?, 1)
+         ON CONFLICT (account_id) DO UPDATE SET last_number = last_number + 1`
+      )
+      .bind(row.account_id),
+    db
+      .prepare(
+        `INSERT INTO sandboxes (id, account_id, user_id, workspace_id, provider, provider_name, status,
+           machine_size, region, generation, created_at, updated_at, repo_url, environment_id, environment_build_id,
+           source_snapshot_id, created_by, name, repo_branch, visibility, section, last_activity_at, last_activity_by, number)
+         VALUES (?, ?, ?, ?, ?, ?, 'creating', ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+           (SELECT last_number FROM org_workspace_counters WHERE account_id = ?))`
+      )
+      .bind(row.id, row.account_id, row.user_id, row.workspace_id, row.provider, row.provider_name,
+        row.machine_size, row.region, now, now, row.repo_url, row.environment_id ?? null,
+        row.environment_build_id ?? null, row.source_snapshot_id ?? null, row.user_id, row.name ?? null,
+        row.repo_branch ?? null, row.visibility ?? 'private', row.section ?? null, now, row.user_id, row.account_id)
+  ])
   const inserted = await getSandbox(db, row.id)
   if (!inserted) {
     throw new Error('sandbox insert lost')
@@ -155,20 +184,27 @@ export async function listAccountSandboxes(db: D1Database, accountId: string): P
   return results
 }
 
-export async function countActiveSandboxes(db: D1Database, accountId: string): Promise<number> {
-  const placeholders = ACTIVE_STATUSES.map(() => '?').join(', ')
+/** Sandboxes that count against the account's concurrency limit at `now` (see START_GATE_STATUSES). */
+export async function countActiveSandboxes(db: D1Database, accountId: string, now: number): Promise<number> {
+  const gate = startGateFilter(now)
   const row = await db
-    .prepare(`SELECT COUNT(*) AS n FROM sandboxes WHERE account_id = ? AND status IN (${placeholders})`)
-    .bind(accountId, ...ACTIVE_STATUSES)
+    .prepare(`SELECT COUNT(*) AS n FROM sandboxes WHERE account_id = ? AND ${gate.sql}`)
+    .bind(accountId, ...gate.binds)
     .first<{ n: number }>()
   return row?.n ?? 0
 }
 
-export async function countActiveSandboxesForUser(db: D1Database, accountId: string, userId: string): Promise<number> {
-  const placeholders = ACTIVE_STATUSES.map(() => '?').join(', ')
+/** The same, for one member's per-member limit. */
+export async function countActiveSandboxesForUser(
+  db: D1Database,
+  accountId: string,
+  userId: string,
+  now: number
+): Promise<number> {
+  const gate = startGateFilter(now)
   const row = await db
-    .prepare(`SELECT COUNT(*) AS n FROM sandboxes WHERE account_id = ? AND user_id = ? AND status IN (${placeholders})`)
-    .bind(accountId, userId, ...ACTIVE_STATUSES)
+    .prepare(`SELECT COUNT(*) AS n FROM sandboxes WHERE account_id = ? AND user_id = ? AND ${gate.sql}`)
+    .bind(accountId, userId, ...gate.binds)
     .first<{ n: number }>()
   return row?.n ?? 0
 }

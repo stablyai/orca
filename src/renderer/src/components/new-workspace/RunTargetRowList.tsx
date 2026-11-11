@@ -34,6 +34,7 @@ export default function RunTargetRowList({
   onSelectRecipe,
   onSelectOrcaCloud,
   onOrcaCloudBlockedAction,
+  orcaCloudSetupAfterStart = false,
   onConnectHost,
   onSetLocation
 }: {
@@ -61,6 +62,8 @@ export default function RunTargetRowList({
   onSelectOrcaCloud: (recipe: EphemeralVmRecipeOption | null) => void
   /** Plans or billing, for an account that cannot start a sandbox. */
   onOrcaCloudBlockedAction: () => void
+  /** Picking Orca Cloud just picks it; setup comes after Start, so the row offers no fixes. */
+  orcaCloudSetupAfterStart?: boolean
   onConnectHost: (option: NeedsSetupProjectHostOption) => void
   onSetLocation: (option: NeedsSetupProjectHostOption) => void
 }): React.JSX.Element {
@@ -79,7 +82,9 @@ export default function RunTargetRowList({
               key={row.key}
               icon={<HostRowIcon hostId={row.option.hostId} />}
               label={row.option.label}
-              detail={row.option.path}
+              detail=""
+              // JA-10: no raw paths in the menu. The folder name, with the full path on hover.
+              detailNode={<span title={row.option.path}>{folderName(row.option.path)}</span>}
               armed={isArmed}
               current={row.option === selectedHost}
               optionId={optionId}
@@ -101,6 +106,7 @@ export default function RunTargetRowList({
               onArm={() => onArm(row.key, null)}
               onSelect={() => onSelectOrcaCloud(row.recipe)}
               onBlockedAction={onOrcaCloudBlockedAction}
+              setupAfterStart={orcaCloudSetupAfterStart}
             />
           )
         }
@@ -166,4 +172,10 @@ export default function RunTargetRowList({
       })}
     </>
   )
+}
+
+/** The last segment of a checkout path ("/Users/me/code/acme-web" → "acme-web"). */
+function folderName(path: string): string {
+  const parts = path.split(/[\\/]/).filter(Boolean)
+  return parts.at(-1) ?? path
 }

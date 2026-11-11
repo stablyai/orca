@@ -37,7 +37,8 @@ const cloudRows = [
   row('cloud-asleep', 'Support excalidraw files'),
   row('cloud-waking', 'Bump Electron'),
   row('cloud-unresponsive', 'Index rebuild'),
-  row('cloud-failed', 'Migrate billing')
+  // No branch yet (it never started): line 2 is the state word alone, no dangling separator.
+  { ...row('cloud-failed', 'Migrate billing'), branch: '', head: '' }
 ]
 const vmRows = [row('vm-suspended', 'Benchmark recipe VM')]
 

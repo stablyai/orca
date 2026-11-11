@@ -25,6 +25,8 @@ export type OrcaCloudAgentAccountsState = {
   load: OrcaCloudAgentAccountsLoad
   setups: OrcaCloudAgentSetups
   keyKinds: Record<OrcaCloudAccountAgent, AgentKeyKind | null>
+  /** Names (never values) of the Cloud secrets a new workspace gets; null until read (JA-22). */
+  cloudSecretNames?: ReadonlySet<string> | null
   /** The build sheet's R2 Set up: agents set up in turn; `index` is the one running now. */
   queue: { agents: readonly OrcaCloudAccountAgent[]; index: number }
 }
@@ -37,6 +39,7 @@ let state: OrcaCloudAgentAccountsState = {
   load: { kind: 'loading' },
   setups: IDLE_ORCA_CLOUD_AGENT_SETUPS,
   keyKinds: NO_KEYS,
+  cloudSecretNames: null,
   queue: NO_QUEUE
 }
 // Set once the queued agent's setup has left idle, so idle afterwards means it finished.
@@ -84,7 +87,10 @@ export async function reloadOrcaCloudAgentAccounts(): Promise<void> {
       : result.error === 'not_configured'
         ? { kind: 'unavailable' }
         : { kind: 'failed', error: result.error },
-    keyKinds: effective?.ok ? agentKeyKinds(effective.value.secrets) : state.keyKinds
+    keyKinds: effective?.ok ? agentKeyKinds(effective.value.secrets) : state.keyKinds,
+    cloudSecretNames: effective?.ok
+      ? new Set(effective.value.secrets.map((secret) => secret.name))
+      : state.cloudSecretNames
   })
 }
 
@@ -180,6 +186,11 @@ export function subscribeOrcaCloudAgentAccounts(listener: () => void): () => voi
 }
 
 /** Reads again when the last read is stale or missing, for a launch about to decide. */
+/** A ready read from within the last 30 s; older reads may miss a revoke (RA-1). */
+export function isOrcaCloudAgentAccountsFresh(): boolean {
+  return state.load.kind === 'ready' && Date.now() - loadedAt <= FRESH_MS
+}
+
 export async function ensureFreshOrcaCloudAgentAccounts(): Promise<OrcaCloudAgentAccountsState> {
   if (state.load.kind !== 'ready' || Date.now() - loadedAt > FRESH_MS) {
     await reloadOrcaCloudAgentAccounts()

@@ -1,9 +1,10 @@
 // Home: the org's cloud workspaces (registry on the control plane), filterable by who owns them,
 // which repo they are in, Mine/Team and archived, grouped by section, with live presence and cost.
+import { useHomeWorkspaces } from './cloud-workspace-local-titles'
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
+import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import type {
@@ -13,18 +14,16 @@ import type {
 } from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
 import { useOrgRoster } from '../billing/team/use-org-roster'
 import { CloudWorkspaceRow } from './CloudWorkspaceRow'
+import { CloudWorkspaceGroupView, rowDragProps } from './CloudWorkspaceGroup'
+import { useCloudWorkspaceArrangement } from './use-cloud-workspace-arrangement'
 import { NEW_SECTION } from './CloudWorkspaceRowMenu'
-import {
-  ANY,
-  CloudWorkspacesToolbar,
-  INITIAL_CLOUD_WORKSPACE_FILTERS,
-  type CloudWorkspacesFilters
-} from './CloudWorkspacesToolbar'
+import { ANY, CloudWorkspacesToolbar } from './CloudWorkspacesToolbar'
 import { EmptyState, ErrorState, NewSectionDialog, SkeletonRows } from './CloudWorkspacesStates'
+import { useCloudHomeFilters } from './use-cloud-home-filters'
 import { CloudWorkspaceConfirmDialog, type PendingConfirm } from './CloudWorkspaceConfirmDialog'
 import { CloudReadSnapshotSheet } from './CloudReadSnapshotSheet'
 import { useCloudReadPanel } from './use-cloud-read-panel'
-import { formatSandboxHours, sandboxHours, type MemberDirectory } from './cloud-workspace-format'
+import type { MemberDirectory } from './cloud-workspace-format'
 import { refreshCloudMessageSenders } from '@/lib/cloud-message-sender'
 import { describeError } from './cloud-workspace-errors'
 import { focusCloudChat } from './cloud-chat-focus'
@@ -77,20 +76,12 @@ export function CloudWorkspacesHome({
   highlightId?: string | null
 }): React.JSX.Element | null {
   const t = useTranslate()
-  const intlLocale = useIntlLocale()
   const cloud = useAppStore((s) => s.orcaProfileAuthStatus?.cloud)
   const available = useCloudWorkspacesAvailable()
   const orgId = cloud?.activeOrgId
   const selfId = cloud?.userId ?? null
   const account = useOrcaAccountKey()
-  const [filters, setFilters] = useState(INITIAL_CLOUD_WORKSPACE_FILTERS)
-  homeArchive.usePendingHomeFilters(setFilters)
-  // Owner and repo filters name the previous team's people and repos; a team switch starts over.
-  const [filtersAccount, setFiltersAccount] = useState(account)
-  if (filtersAccount !== account) {
-    setFiltersAccount(account)
-    setFilters(INITIAL_CLOUD_WORKSPACE_FILTERS)
-  }
+  const { filters, changeFilters } = useCloudHomeFilters(account)
   const [opening, setOpening] = useState<string | null>(null)
   const [now, setNow] = useState(() => Date.now())
   const [sectionFor, setSectionFor] = useState<CloudWorkspace | null>(null)
@@ -99,7 +90,11 @@ export function CloudWorkspacesHome({
   const signIn = useAppStore((s) => s.connectCurrentOrcaProfile)
   const scope = orgId ? filters.scope : 'mine'
   const { state, stale, reading, refresh, replace } = useCloudWorkspaces(
-    { scope, archived: filters.archived ? 'only' : 'exclude' },
+    {
+      scope,
+      archived: filters.archived ? 'only' : 'exclude',
+      ...(filters.routines ? { routines: 'include' as const } : {})
+    },
     Boolean(cloud),
     account
   )
@@ -110,24 +105,8 @@ export function CloudWorkspacesHome({
     []
   )
 
-  const changeFilters = useCallback((next: Partial<CloudWorkspacesFilters>) => {
-    setFilters((previous) => {
-      // A different list (scope or archived) has different owners and repos; start unfiltered.
-      const reset =
-        (next.scope !== undefined && next.scope !== previous.scope) ||
-        (next.archived !== undefined && next.archived !== previous.archived)
-      return { ...previous, ...(reset ? { by: ANY, repo: ANY } : {}), ...next }
-    })
-  }, [])
-
   // A workspace being deleted (or gone) is not something to open or manage; Home leaves it out.
-  const all = useMemo(
-    () =>
-      state.status === 'ready'
-        ? state.workspaces.filter((w) => w.status !== 'destroying' && w.status !== 'destroyed')
-        : [],
-    [state]
-  )
+  const all = useHomeWorkspaces(state.status === 'ready' ? state.workspaces : null)
   const { directory, canAdmin } = useMemberDirectory(orgId, all)
   const repos = useMemo(
     () => [...new Set(all.flatMap((w) => (w.repo ? [w.repo.url] : [])))].sort(),
@@ -154,16 +133,9 @@ export function CloudWorkspacesHome({
     [all, by, repo, highlightId, filters.running]
   )
   const highlighted = highlightId ? visible.find((w) => w.id === highlightId) : undefined
-  const groups = useMemo(() => {
-    const out = new Map<string, CloudWorkspace[]>()
-    for (const w of visible) {
-      const key = w.section ?? ''
-      out.set(key, [...(out.get(key) ?? []), w])
-    }
-    return [...out.entries()].sort(([a], [b]) =>
-      a === '' ? 1 : b === '' ? -1 : a.localeCompare(b)
-    )
-  }, [visible])
+  // Pinned first, then sections, in the order you arranged them on any of your devices.
+  const arrangement = useCloudWorkspaceArrangement(visible)
+  const { groups } = arrangement
   const members = useMemo(
     () =>
       [...directory.entries()].map(([userId, m]) => ({
@@ -175,7 +147,7 @@ export function CloudWorkspacesHome({
       })),
     [directory, selfId, t]
   )
-  const totalMs = visible.reduce((sum, w) => sum + w.cost.computeMs, 0)
+  const routineRuns = state.status === 'ready' ? state.routineRuns : undefined
 
   /** Opens the workspace, then (going to a teammate's chat) the chat they have in front. */
   const open = useCallback(
@@ -263,9 +235,11 @@ export function CloudWorkspacesHome({
       copyWorkspaceLink: (w: CloudWorkspace) => void copyCloudWorkspaceLink(w.id),
       goToChat: (w: CloudWorkspace, member: CloudWorkspacePresence) => void open(w, member.chatId),
       patch: (w: CloudWorkspace, change: CloudWorkspacePatch) => void patch(w, change),
+      setPinned: arrangement.pin,
+      move: arrangement.move,
       ...homeArchive.homeArchiveActions({ selfId, t, refresh, confirmArchive: setConfirm })
     }),
-    [open, patch, refresh, selfId, setReadingId, t]
+    [open, patch, refresh, selfId, setReadingId, t, arrangement.pin, arrangement.move]
   )
 
   // Nothing (not even a skeleton) until we know this build has a control plane and you are in.
@@ -286,23 +260,17 @@ export function CloudWorkspacesHome({
         metaStale={stale}
         meta={
           state.status === 'ready'
-            ? t('auto.components.cloudWorkspaces.listMeta2', '{{count}} workspaces · {{usage}}', {
+            ? // Why: no hours here. A sum over the listed workspaces isn't the team's month, and it
+              // disagreed with Plan & billing and the account menu (JA-07).
+              t('auto.components.cloudWorkspaces.listMetaCount', '{{count}} workspaces', {
                 count: visible.length,
-                usage: t(
-                  'auto.components.cloudWorkspaces.listSandboxHours',
-                  '{{hours}} sandbox hours used',
-                  {
-                    count: sandboxHours(totalMs),
-                    hours: formatSandboxHours(totalMs, intlLocale),
-                    defaultValue_one: '{{hours}} sandbox hour used'
-                  }
-                ),
-                defaultValue_one: '{{count}} workspace · {{usage}}'
+                defaultValue_one: '{{count}} workspace'
               })
             : null
         }
         reading={reading}
         onRefresh={refresh}
+        routineRuns={routineRuns}
       />
 
       <div
@@ -332,56 +300,54 @@ export function CloudWorkspacesHome({
           />
         )}
         {state.status === 'ready' &&
-          groups.map(([section, rows], index) => {
-            // Section names are free text (spaces), so the id uses the position instead.
-            const headingId = `cloud-workspaces-section-${index}`
-            const showHeading = groups.length > 1 || section !== ''
+          groups.map((group, index) => {
+            const sectionIndex = group.section
+              ? arrangement.shownSections.indexOf(group.section)
+              : -1
             return (
-              <div key={section || '—'} className="py-0.5">
-                {showHeading && (
-                  <h3
-                    id={headingId}
-                    className="px-3 py-2 text-2xs font-medium text-muted-foreground"
-                  >
-                    {section || t('auto.components.cloudWorkspaces.noSection', 'No section')}
-                    {/* The bare number is visual; screen readers get the counted phrase. */}
-                    <span aria-hidden className="ml-1.5 tabular-nums text-muted-foreground">
-                      {rows.length}
-                    </span>{' '}
-                    <span className="sr-only">
-                      {t('auto.components.cloudWorkspaces.sectionCount', '{{count}} workspaces', {
-                        count: rows.length,
-                        defaultValue_one: '{{count}} workspace'
-                      })}
-                    </span>
-                  </h3>
-                )}
-                <ul
-                  role="list"
-                  aria-labelledby={showHeading ? headingId : 'cloud-workspaces-heading'}
-                >
-                  {rows.map((w) => (
-                    <CloudWorkspaceRow
-                      key={w.id}
-                      workspace={w}
-                      directory={directory}
-                      selfId={selfId}
-                      canAdmin={canAdmin}
-                      sections={sections}
-                      members={members}
-                      opening={opening === w.id}
-                      highlighted={highlightId === w.id}
-                      now={now}
-                      actions={actions}
-                    />
-                  ))}
-                </ul>
-              </div>
+              <CloudWorkspaceGroupView
+                key={group.key}
+                group={group}
+                index={index}
+                showHeading={groups.length > 1 || group.kind !== 'none'}
+                canMoveUp={sectionIndex > 0}
+                canMoveDown={
+                  sectionIndex >= 0 && sectionIndex < arrangement.shownSections.length - 1
+                }
+                onToggleCollapsed={(collapsed) =>
+                  group.section && arrangement.toggleCollapsed(group.section, collapsed)
+                }
+                onMoveSection={(delta) =>
+                  group.section && arrangement.moveSection(group.section, delta)
+                }
+              >
+                {group.rows.map((w, rowIndex) => (
+                  <CloudWorkspaceRow
+                    key={w.id}
+                    workspace={w}
+                    directory={directory}
+                    selfId={selfId}
+                    canAdmin={canAdmin}
+                    sections={sections}
+                    members={members}
+                    opening={opening === w.id}
+                    highlighted={highlightId === w.id}
+                    now={now}
+                    actions={actions}
+                    arrangement={arrangement.arrangementFor(group, rowIndex)}
+                    dragProps={rowDragProps(arrangement.drag, group, w.id)}
+                    dragging={arrangement.drag.dragging?.id === w.id}
+                  />
+                ))}
+              </CloudWorkspaceGroupView>
             )
           })}
       </div>
 
       {/* Polite, so opening from a link is announced without stealing focus. */}
+      <div aria-live="polite" className="sr-only">
+        {arrangement.announcement}
+      </div>
       <div aria-live="polite" className="sr-only">
         {highlighted
           ? t('auto.components.cloudWorkspaces.openedFromLink', 'Opened from link: {{title}}', {

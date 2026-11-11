@@ -5,7 +5,7 @@
 # Everything printed here streams live to the desktop build log.
 #
 # Env from the control plane (validated there): ORCA_BUILD_REPOS (`<url>|<branch or empty>|<dir>|
-# <git auth header or empty>` lines: each private repo gets its own placeholder the egress swaps), ORCA_INSTALL_SCRIPT_B64, ORCA_LOCKFILES (space list), optional ORCA_GIT_EXTRAHEADER, plus
+# <git auth header or empty>` lines: each private repo gets its own placeholder the egress swaps), ORCA_INSTALL_SCRIPT_B64, ORCA_LOCKFILES (space list), optional ORCA_GIT_EXTRAHEADER and ORCA_CLONE_FILTER, plus
 # the org secrets the environment names. `::orca-step:: <name>` lines mark progress.
 # Exit codes: 10 clone, 20 install script, 30 recording the result.
 set -uo pipefail
@@ -39,7 +39,8 @@ while IFS='|' read -r url branch dir header; do
   echo "Cloning $url${branch:+ ($branch)}"
   rm -rf -- "$dest"
   # The clone's own error shows only when it really failed (an empty repo is recovered below).
-  if ! git "${git_auth[@]}" clone --quiet ${branch:+--branch "$branch"} -- "$url" "$dest" 2>"$OUT/clone.err"; then
+  # ORCA_CLONE_FILTER (automatic environments: blob:none) keeps history and trees, not every old blob.
+  if ! git "${git_auth[@]}" clone --quiet ${ORCA_CLONE_FILTER:+--filter="$ORCA_CLONE_FILTER"} ${branch:+--branch "$branch"} -- "$url" "$dest" 2>"$OUT/clone.err"; then
     refs=0
     git "${git_auth[@]}" ls-remote --exit-code -- "$url" >/dev/null 2>&1 || refs=$?
     if [ -n "$branch" ] && [ "$refs" -eq 2 ]; then

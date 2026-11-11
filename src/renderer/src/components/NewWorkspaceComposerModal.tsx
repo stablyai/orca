@@ -39,6 +39,8 @@ import { getFolderWorkspacePrimaryActionLabel } from '@/components/sidebar/works
 import { useAgentMenuObservation } from '@/components/tab-bar/use-new-tab-agent-menu-rows'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 import { useComposerCloudStart } from './new-workspace/run-on/use-composer-cloud-start'
+import { composerAgentSelection } from './new-workspace/composer-agent-cli'
+import { HiddenComposer, useCloudAutoStartReveal } from './new-workspace/composer-cloud-auto-start'
 
 // Keep Add Project’s clone/SSH machinery outside the composer entry render, matching App loading.
 const HostedAddRepoDialog = lazyWithRetry(
@@ -80,6 +82,18 @@ function ComposerModalBody({
     onClose()
   }, [onClose])
   const isSubmissionCancelled = useCallback(() => submitCancelledRef.current, [])
+  const visibleModalData = useCloudAutoStartReveal(modalData)
+  const body = (
+    <QuickTabBody
+      modalData={visibleModalData ?? modalData}
+      onClose={onClose}
+      isSubmissionCancelled={isSubmissionCancelled}
+      active
+    />
+  )
+  if (!visibleModalData) {
+    return <HiddenComposer>{body}</HiddenComposer>
+  }
 
   return (
     <Dialog open onOpenChange={(open) => !open && handleDismiss()}>
@@ -98,12 +112,7 @@ function ComposerModalBody({
           getWorkspaceComposerInitialFocusTarget(content)?.focus({ preventScroll: true })
         }}
       >
-        <QuickTabBody
-          modalData={modalData}
-          onClose={onClose}
-          isSubmissionCancelled={isSubmissionCancelled}
-          active
-        />
+        {body}
       </DialogContent>
     </Dialog>
   )
@@ -166,7 +175,7 @@ function QuickTabBody({
   const [quickAgentOverride, setQuickAgentOverride] = useState<TuiAgent | null | undefined>(
     modalData.recovery?.agent
   )
-  const { orcaCloud, orcaCloudModel, quickAgent, chipAgentIds, agentNotice } =
+  const { orcaCloud, orcaCloudModel, quickAgent, chipAgentIds, agentNotice, statusLabels } =
     useComposerQuickAgent(cardProps, settings, quickAgentOverride, setQuickAgentOverride)
   // Why keyed by agent: a pick repaired to another agent must not carry the old one's surface.
   const [quickAgentPick, setQuickAgentPick] = useState<
@@ -203,14 +212,18 @@ function QuickTabBody({
     [observation.contextKey, orcaCloud]
   )
 
+  // Orca Cloud with an agent that has no account there starts a plain terminal, never the agent's
+  // /login: the cloud hook sets this around one create (read before the first await).
+  const noAgentRef = useRef(false)
   const handleCreate = useCallback(async (): Promise<void> => {
+    const agent = noAgentRef.current ? null : quickAgent
     if (createDisabled) {
       return
     }
-    await submitQuick(quickAgent, {
+    await submitQuick(agent, {
       // Blank Terminal is the setup-only create: no agent, and no extra shell beside setup.
-      setupOnly: quickAgent === null,
-      launchChoice: launchSelection.choice,
+      setupOnly: agent === null,
+      ...(agent === null ? {} : { launchChoice: launchSelection.choice }),
       onLegacyPreparationFailure: (error) => {
         if (isSubmissionCancelled()) {
           return
@@ -266,6 +279,8 @@ function QuickTabBody({
     quickAgent,
     handleCreate,
     createDisabled,
+    quickAgentPick,
+    noAgentRef,
     recordCreatedRef,
     onClose
   })
@@ -304,14 +319,10 @@ function QuickTabBody({
   const isFolderWorkspaceTarget =
     cardProps.projectOptions.find((option) => option.id === cardProps.selectedProjectId)?.kind ===
     'project-group'
-  // An Orca Cloud sandbox is a whole workspace, not a local worktree.
-  const primaryActionLabel =
-    cloudStart.primaryActionLabel ??
-    (isFolderWorkspaceTarget
-      ? getFolderWorkspacePrimaryActionLabel(t)
-      : cardProps.selectedRepoIsGit && !orcaCloud
-        ? t('auto.components.NewWorkspaceComposerModal.createWorktree', 'Create worktree')
-        : t('auto.components.NewWorkspaceComposerModal.createWorkspace', 'Create workspace'))
+  // Run on never changes the button, and it matches the title for every target (design-squad).
+  const primaryActionLabel = isFolderWorkspaceTarget
+    ? getFolderWorkspacePrimaryActionLabel(t)
+    : t('auto.components.NewWorkspaceComposerModal.createWorkspace', 'Create workspace')
 
   // Let Radix own Escape for the topmost layer. This dialog auto-focuses input, so page-style blur-first handling swallowed its first Escape.
   const nestedDialogOpen = agentSettingsOpen || addProjectOpen || setLocationOpen
@@ -386,10 +397,11 @@ function QuickTabBody({
           agentMenuModel
             ? {
                 model: agentMenuModel,
-                selection: launchSelection,
+                selection: composerAgentSelection(launchSelection, orcaCloud),
                 surface: quickAgentSurface,
                 contextKey: observation.contextKey,
-                onPick: handleQuickAgentChange
+                onPick: handleQuickAgentChange,
+                statusLabels
               }
             : undefined
         }

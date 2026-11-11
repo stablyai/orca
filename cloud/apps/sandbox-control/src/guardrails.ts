@@ -1,7 +1,7 @@
 // Cost guardrails in front of every start (create, resume, rollover): the operator kill switch, a
 // global running cap, a per-account concurrency backstop (billing enforces the plan limit too) and a
 // per-account create rate limit. All are control-plane local, so a billing outage cannot lift them.
-import { ACTIVE_STATUSES } from './store'
+import { ACTIVE_STATUSES, countActiveSandboxes } from './store'
 
 export type GuardrailConfig = {
   /** Static kill switch from the deploy config (`SANDBOX_CREATES_DISABLED=true`). */
@@ -53,19 +53,14 @@ export function setKillSwitch(db: D1Database, on: boolean, now: number): Promise
   return setControlState(db, KILL_SWITCH, on ? 'on' : 'off', now)
 }
 
-async function countActive(db: D1Database, accountId?: string): Promise<number> {
+/** Every VM-holding sandbox, all accounts: the global capacity guardrail. */
+export async function countAllActive(db: D1Database): Promise<number> {
   const placeholders = ACTIVE_STATUSES.map(() => '?').join(', ')
   const row = await db
-    .prepare(
-      `SELECT COUNT(*) AS n FROM sandboxes WHERE status IN (${placeholders}) ${accountId ? 'AND account_id = ?' : ''}`
-    )
-    .bind(...ACTIVE_STATUSES, ...(accountId ? [accountId] : []))
+    .prepare(`SELECT COUNT(*) AS n FROM sandboxes WHERE status IN (${placeholders})`)
+    .bind(...ACTIVE_STATUSES)
     .first<{ n: number }>()
   return row?.n ?? 0
-}
-
-export function countAllActive(db: D1Database): Promise<number> {
-  return countActive(db)
 }
 
 /** Kill switch + global running cap; checked before billing is asked anything. */
@@ -84,10 +79,12 @@ export async function assertAccountCapacity(
   db: D1Database,
   config: GuardrailConfig,
   accountId: string,
-  limits: { seats?: number; maxConcurrentSandboxes?: number } = {}
+  limits: { seats?: number; maxConcurrentSandboxes?: number } = {},
+  now: number = Date.now()
 ): Promise<void> {
   const cap = limits.maxConcurrentSandboxes ?? config.maxActivePerSeat * Math.max(1, Math.floor(limits.seats ?? 1))
-  if ((await countActive(db, accountId)) >= cap) {
+  // The same count billing was given: a sandbox going to sleep or an abandoned create doesn't refuse a start.
+  if ((await countActiveSandboxes(db, accountId, now)) >= cap) {
     throw new GuardrailError('concurrency_limit')
   }
 }

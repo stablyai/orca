@@ -28,6 +28,7 @@ import {
   ORCAD_PORT,
   SHARE_PROXY_PORT,
   VmCommandError,
+  workspaceHostname,
   drainOrcad,
   runningOrcad,
   startOrcad,
@@ -96,6 +97,14 @@ export type LifecycleDeps = {
    * error after boot. Absent: no check.
    */
   publicRepoCheck?: (repoUrl: string) => Promise<boolean>
+  /**
+   * Automatic environments (auto-environments.ts): `ensure` after a create of a repo no environment
+   * lists, `touch` when a create booted from an automatic one. Absent: neither happens.
+   */
+  autoEnvironment?: {
+    ensure(accountId: string, repoUrl: string): Promise<unknown>
+    touch(environmentId: string): Promise<unknown>
+  }
   /** Work that may finish after the response (Worker ctx.waitUntil); absent means fire-and-forget. */
   background?: (work: Promise<unknown>) => void
   /** Best-effort side effects of a session starting or ending (workspace tokens, see api/settings.ts). */
@@ -156,8 +165,11 @@ export type Ready = {
   row: SandboxRow
   connection: OrcadReady
   timings?: Record<string, number>
-  /** The repo is still cloning in the VM (create with cloneInBackground); GET /clone reports it. */
-  cloning?: boolean
+  /**
+   * The repo is still being cloned ('clone') or, after an environment boot, brought up to date
+   * ('update') in the VM (create with cloneInBackground); GET /clone reports it.
+   */
+  cloning?: 'clone' | 'update'
 }
 
 /** Phase durations for one lifecycle call (logged + Server-Timing); counts only, no ids or secrets. */
@@ -310,8 +322,8 @@ export function guardrails(deps: LifecycleDeps): GuardrailConfig {
 export async function requireStart(deps: LifecycleDeps, accountId: string, userId: string, machineSize: MachineSize) {
   const [, runningSandboxes, runningSandboxesForUser] = await Promise.all([
     assertStartsOpen(deps.db, guardrails(deps)),
-    countActiveSandboxes(deps.db, accountId),
-    countActiveSandboxesForUser(deps.db, accountId, userId)
+    countActiveSandboxes(deps.db, accountId, deps.now()),
+    countActiveSandboxesForUser(deps.db, accountId, userId, deps.now())
   ])
   const decision = await deps.entitlements.checkStart({
     accountId,
@@ -326,10 +338,13 @@ export async function requireStart(deps: LifecycleDeps, accountId: string, userI
   if (!decision.allow) {
     throw new LifecycleError('entitlement_denied', decision.reason ?? 'denied')
   }
-  await assertAccountCapacity(deps.db, guardrails(deps), accountId, {
-    seats: decision.seats,
-    maxConcurrentSandboxes: decision.maxConcurrentSandboxes
-  })
+  await assertAccountCapacity(
+    deps.db,
+    guardrails(deps),
+    accountId,
+    { seats: decision.seats, maxConcurrentSandboxes: decision.maxConcurrentSandboxes },
+    deps.now()
+  )
 }
 
 function orcadEndpoint(state: ProviderSandboxState): string | null {
@@ -373,6 +388,8 @@ async function boot(
     options.timer.time('orcad', async () =>
       startOrcad(deps.provider, state, {
         sandboxId: row.id,
+        // The workspace's name, else its repo's: never the provider's per-boot VM id.
+        hostname: workspaceHostname(row.name ?? (row.repo_url ? parseGitHubRepo(row.repo_url)?.repo : null)),
         repo: options.repo,
         // Repos hosted outside github.com get no GitHub credential, not even the placeholder.
         githubPlaceholder: deps.config.egressProxyUrl && parseGitHubRepo(row.repo_url ?? '') ? githubPlaceholderToken(row) : undefined,
@@ -512,11 +529,13 @@ export async function createSandbox(
       ? await timer.time('environment', () =>
           resolveEnvironmentBoot(deps.db, caller.accountId, {
             repoUrl: request.repo?.url,
-            buildId: request.environmentBuildId
+            buildId: request.environmentBuildId,
+            region: request.region
           })
         )
       : null
-  const machineSize = source?.machineSize ?? request.machineSize
+  // An automatic environment is only the repo checked out: the caller's machine size stands.
+  const machineSize = source && !source.auto ? source.machineSize : request.machineSize
   await timer.time('entitlement', () => requireStart(deps, caller.accountId, caller.userId, machineSize))
   // A snapshot only boots in its own region: an environment build pins the region it was built in.
   const region = source?.region ?? request.region ?? deps.config.defaultRegion
@@ -538,12 +557,16 @@ export async function createSandbox(
     deps.background?.(refill)
   }
   const claimedAt = deps.now()
-  // An environment build carries the repo prebuilt: nothing clones, so nothing runs in the background.
-  const cloneInBackground = Boolean(request.repo && request.cloneInBackground && !source?.repoDir)
+  // In the background after ready: a clone, or (an environment build carries the repo prebuilt) a fetch
+  // of what changed since the build.
+  const cloning: Ready['cloning'] = request.repo && request.cloneInBackground ? (source?.repoDir ? 'update' : 'clone') : undefined
   const prelude: StartInputs['prelude'] = request.repo
     ? {
         script: WORKSPACE_PRELUDE_SCRIPT,
-        env: source?.repoDir ? { ORCA_ENV_REPO_DIR: source.repoDir } : cloneInBackground ? { ORCA_CLONE_BACKGROUND: '1' } : {}
+        env: {
+          ...(source?.repoDir ? { ORCA_ENV_REPO_DIR: source.repoDir } : {}),
+          ...(cloning ? { ORCA_CLONE_BACKGROUND: '1' } : {})
+        }
       }
     : undefined
   const id = pooled?.id ?? randomId()
@@ -587,6 +610,18 @@ export async function createSandbox(
       throw error
     }
   })
+  // The repo is reachable: the next create of it should find it prebuilt (auto-environments.ts).
+  if (request.repo && deps.autoEnvironment && !request.environmentBuildId && request.useEnvironment !== false) {
+    const work = source?.auto
+      ? deps.autoEnvironment.touch(source.environmentId)
+      : !source
+        ? deps.autoEnvironment.ensure(caller.accountId, request.repo.url)
+        : null
+    if (work) {
+      const settled = work.catch(() => undefined)
+      deps.background?.(settled)
+    }
+  }
   if (pooled) {
     try {
       const state = await timer.time('vm', () =>
@@ -594,7 +629,7 @@ export async function createSandbox(
       )
       const ready = await boot(deps, row, state, prep, { repo: request.repo, policyApplied: true, timer, billFrom: claimedAt, prelude })
       console.log(JSON.stringify({ event: 'lifecycle_timing', op: 'create', pooled: true, ms: timer.timings }))
-      return cloneInBackground ? { ...ready, cloning: true } : ready
+      return cloning ? { ...ready, cloning } : ready
     } catch (error) {
       // A pooled VM that will not take the session is discarded; the caller still gets a workspace.
       console.log(JSON.stringify({ event: 'pool_adopt_failed', error: String(error).slice(0, 200) }))
@@ -644,7 +679,7 @@ export async function createSandbox(
   try {
     const ready = await boot(deps, row, state, prep, { repo: request.repo, policyApplied: true, timer, prelude })
     console.log(JSON.stringify({ event: 'lifecycle_timing', op: 'create', fromBuild: source?.buildId ?? null, ms: timer.timings }))
-    return cloneInBackground ? { ...ready, cloning: true } : ready
+    return cloning ? { ...ready, cloning } : ready
   } catch (error) {
     await failAndRelease(deps, (await getSandbox(deps.db, row.id)) ?? row, createFailureReason(error))
     throw error

@@ -1,4 +1,6 @@
 import React, { useCallback, useMemo } from 'react'
+import { useIsCloudWorkspace } from '@/lib/orca-cloud/orca-cloud-workspace-store'
+import { useAsleepCloudWorkspace } from '@/components/orca-cloud/offline/use-asleep-cloud-workspace-id'
 import { useAppStore } from '@/store/index'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { getWorkspaceFileRevealOwner } from '@/lib/reveal-in-file-manager'
@@ -89,12 +91,16 @@ function FileExplorerFiles(): React.JSX.Element {
   const displayRootPath = getExplorerDisplayRootPath(worktreePath, rootChoice)
   const displayDepth = getExplorerDisplayDepth(worktreePath, displayRootPath)
   const isFilesViewActive = explorerView === 'files'
+  const asleepCloud = useAsleepCloudWorkspace()
   const visibleFilesWorktreePath = getVisibleFileExplorerWorktreePath({
     explorerView,
     rightSidebarOpen,
     worktreePath
   })
-  const repoName = activeRepo?.displayName ?? (worktreePath ? basename(worktreePath) : '')
+  // An Orca Cloud workspace's files are that workspace's, so the header names it, not its repo (RA-13).
+  const cloudName = useIsCloudWorkspace(activeWorktreeId) ? activeWorktree?.displayName : null
+  const repoName =
+    cloudName || activeRepo?.displayName || (worktreePath ? basename(worktreePath) : '')
   const activeRepoSupportsGit = activeRepo ? isGitRepoKind(activeRepo) : false
 
   const expanded = useMemo(() => activeExpandedDirs ?? new Set<string>(), [activeExpandedDirs])
@@ -286,26 +292,29 @@ function FileExplorerFiles(): React.JSX.Element {
             sparse={!!activeWorktree?.isSparse}
           />
         )}
-        <FileExplorerQueryStrip view={explorerView} onSelectView={setRightSidebarExplorerView}>
-          {/* Keep query rows mounted to preserve input selection when switching modes. */}
-          <div className="relative min-h-8">
-            <div hidden={explorerView !== 'files'}>
-              <FileExplorerNameFilter
-                query={nameFilterQuery}
-                scopeLabel={rootOptions?.find((option) => option.value === rootChoice)?.label}
-                loading={nameFilterFiles.loading}
-                onQueryChange={setNameFilterQuery}
-                onClear={handleClearNameFilter}
-              />
+        {/* Asleep Orca Cloud: nothing to filter or search; the body's Wake is the only action. */}
+        {!asleepCloud && (
+          <FileExplorerQueryStrip view={explorerView} onSelectView={setRightSidebarExplorerView}>
+            {/* Keep query rows mounted to preserve input selection when switching modes. */}
+            <div className="relative min-h-8">
+              <div hidden={explorerView !== 'files'}>
+                <FileExplorerNameFilter
+                  query={nameFilterQuery}
+                  scopeLabel={rootOptions?.find((option) => option.value === rootChoice)?.label}
+                  loading={nameFilterFiles.loading}
+                  onQueryChange={setNameFilterQuery}
+                  onClear={handleClearNameFilter}
+                />
+              </div>
+              <div hidden={explorerView !== 'search'}>
+                <SearchQueryRow {...searchPanel.queryRowProps} />
+              </div>
+              <div hidden={explorerView !== 'search'}>
+                <SearchFilters key={activeWorktreeId} {...searchPanel.filtersProps} />
+              </div>
             </div>
-            <div hidden={explorerView !== 'search'}>
-              <SearchQueryRow {...searchPanel.queryRowProps} />
-            </div>
-            <div hidden={explorerView !== 'search'}>
-              <SearchFilters key={activeWorktreeId} {...searchPanel.filtersProps} />
-            </div>
-          </div>
-        </FileExplorerQueryStrip>
+          </FileExplorerQueryStrip>
+        )}
         {/* Layer Files/Contents in one body slot to retain heavy virtualized panes at full height. */}
         <div className="relative min-h-0 flex-1 overflow-hidden">
           <FileExplorerFilesTreePane

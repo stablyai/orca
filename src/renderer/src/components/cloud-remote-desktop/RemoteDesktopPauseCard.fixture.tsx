@@ -50,7 +50,7 @@ export const pausedDisconnected = pauseFixture(
   'error'
 )
 export const pausedAsleep = pauseFixture(
-  'This sandbox is asleep. Wake it in Orca, then reconnect.',
+  'This workspace is asleep. Wake it in Orca, then reconnect.',
   'neutral'
 )
 export const pausedArchived = pauseFixture(

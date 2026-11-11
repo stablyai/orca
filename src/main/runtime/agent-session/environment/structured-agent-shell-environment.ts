@@ -1,4 +1,5 @@
 import { agentModelCatalogStore } from '../../../native-chat/agent-model-catalog/agent-model-catalog-store'
+import { applyCloudSessionEnv, liveCloudSessionEnv } from '../../secrets/cloud-session-env'
 import { resolveLoginShellEnvironment } from '../../../startup/login-shell-environment'
 import { refreshAtRestCommandContext } from '../../../native-chat/agent-session-wire/options/at-rest-command-context'
 import {
@@ -203,12 +204,16 @@ export function createStructuredAgentEnvironmentResolvers(
   if (!injected && sources.prewarm !== false) {
     void hostShellEnvironment().catch(() => {})
   }
-  const resolveBase = async (cachedOnly = false): Promise<Record<string, string>> =>
-    structuredAgentBaseEnvironment({
+  // Orca Cloud: the shell capture is from orcad's start; the live session env (secrets, account
+  // placeholders) is reread for every launch.
+  const resolveBase = async (cachedOnly = false): Promise<Record<string, string>> => {
+    const base = structuredAgentBaseEnvironment({
       shellEnv: await shellEnvironment(cachedOnly),
       policy: sources.resolveShellEnvironmentPolicy?.() ?? nativeChatShellEnvironmentPolicy(null),
       processEnv: sources.processEnvironment
     })
+    return applyCloudSessionEnv(base, await liveCloudSessionEnv(base))
+  }
   return {
     refreshAfterMissingProgram: injected
       ? async () => {}

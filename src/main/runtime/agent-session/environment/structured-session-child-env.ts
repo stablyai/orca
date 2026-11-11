@@ -4,6 +4,7 @@
  * Empty remote selectors to mask the parent env; explicit flags still work, and login profiles can re-export selectors.
  * Omit pane identity: hooks and mobile status assume a live PTY leaf. Resolve worker identity at every spawn, including recovery and clear. */
 
+import { cachedCloudSessionEnv } from '../../secrets/cloud-session-env'
 import { getAppEnvironment, hasAppEnvironment } from '../../../../shared/app-environment'
 import {
   ORCA_AGENT_SESSION_ID_ENV,
@@ -40,9 +41,14 @@ export function sealStructuredSessionChild(input: {
     : input.env
   const identity = childIdentity(input.sessionId, paired)
   const named = new Set([...Object.keys(identity.commandEnv), ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV])
+  // Orca Cloud: orcad's own env still holds values the live session env has since dropped (a revoked
+  // account placeholder, a deleted secret); the child must not inherit them.
+  const dropped = (cachedCloudSessionEnv(process.env)?.unset ?? []).filter(
+    (key) => !(key in paired)
+  )
   return {
     env: { ...identity.env, [ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV]: input.spawnToken },
-    envToDelete: input.inheritedEnvToDelete.filter((key) => !named.has(key)),
+    envToDelete: [...input.inheritedEnvToDelete, ...dropped].filter((key) => !named.has(key)),
     commandEnv: identity.commandEnv
   }
 }

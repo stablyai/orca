@@ -2,11 +2,9 @@
 // progress and OOM notices. Maps the renderer's workspace id to its Orca Cloud runtime record.
 import { failQueuedCloudPrompts } from './cloud-offline-seam'
 import { ipcMain, type BrowserWindow } from 'electron'
+import { listTeamCloudRuntimes } from './orca-cloud-active-account'
 import { HOSTED_ACCOUNT_CHANNELS, registerHostedAccountHandlers } from './hosted-account-ipc'
-import {
-  listEphemeralVmRuntimes,
-  updateEphemeralVmRuntimeStatus
-} from '../../shared/ephemeral-vm-runtime-store'
+import { updateEphemeralVmRuntimeStatus } from '../../shared/ephemeral-vm-runtime-store'
 import {
   ORCA_CLOUD_WORKSPACE_CHANNELS as CH,
   type CloudWakeProgressEvent,
@@ -61,8 +59,13 @@ export function installHostedWorkspaceService(deps: {
   /** Stop the lease scheduler of one environment (its session is about to be replaced). */
   stopSession: (environmentId: string) => void
   log?: (line: string) => void
+  /** The active team; OOM polling and the window's cloud ids skip every other team's sandbox. */
+  activeAccountId?: () => string | null
 }): HostedWorkspaceService {
   const log = deps.log ?? ((line: string) => console.error(line))
+  // Records this service reads on its own (not per a window's request) stay in the active team.
+  const activeCloudRuntimes = () =>
+    listTeamCloudRuntimes(deps.userDataPath, deps.activeAccountId?.())
   const wakeSources = new Map<string, CloudWakeSource>()
   // Wakes in flight per workspace, so every phase carries the source the first one named.
   const wakes = new Map<string, { source: CloudWakeSource; startedAt: number }>()
@@ -135,22 +138,13 @@ export function installHostedWorkspaceService(deps: {
     },
     async pollOom() {
       const live = new Set(
-        listEphemeralVmRuntimes(deps.userDataPath)
-          .filter(
-            (runtime) =>
-              runtime.recipe?.provider === 'orca-cloud' &&
-              runtime.status === 'running' &&
-              runtime.workspaceId
-          )
+        activeCloudRuntimes()
+          .filter((runtime) => runtime.status === 'running' && runtime.workspaceId)
           .map((runtime) => findCloudRuntime(deps.userDataPath, runtime.workspaceId!)?.sandboxId)
       )
       oom.prune(live)
-      for (const runtime of listEphemeralVmRuntimes(deps.userDataPath)) {
-        if (
-          runtime.recipe?.provider !== 'orca-cloud' ||
-          runtime.status !== 'running' ||
-          !runtime.workspaceId
-        ) {
+      for (const runtime of activeCloudRuntimes()) {
+        if (runtime.status !== 'running' || !runtime.workspaceId) {
           continue
         }
         const found = findCloudRuntime(deps.userDataPath, runtime.workspaceId)
@@ -182,8 +176,8 @@ export function installHostedWorkspaceService(deps: {
 
   service.dispose()
   ipcMain.handle(CH.listCloudWorkspaceIds, () =>
-    listEphemeralVmRuntimes(deps.userDataPath)
-      .filter((runtime) => runtime.recipe?.provider === 'orca-cloud' && runtime.workspaceId)
+    activeCloudRuntimes()
+      .filter((runtime) => runtime.workspaceId)
       .map((runtime) => runtime.workspaceId!)
   )
 

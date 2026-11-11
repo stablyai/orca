@@ -20,6 +20,7 @@ import {
   productName
 } from './orca-cloud-accounts-copy'
 import type { OrcaCloudAccountsActions } from './orca-cloud-accounts-types'
+import { RemoveConfirmRow } from './OrcaCloudRemoveRow'
 
 export function ActiveRow({
   agent,
@@ -52,46 +53,11 @@ export function ActiveRow({
   }
   if (confirmRemove) {
     return (
-      <RowShell
+      <RemoveConfirmRow
         agent={agent}
-        tone="warning"
-        title={t(
-          'orcaCloudAccounts.removeConfirm',
-          'Remove your {{product}} account from Orca? Cloud workspaces use the team key, or ask you to sign in.',
-          { product }
-        )}
-        actions={
-          <>
-            <Button
-              type="button"
-              variant="destructive"
-              size="sm"
-              disabled={busy}
-              aria-busy={busy || undefined}
-              autoFocus
-              onClick={() =>
-                void run(async () => {
-                  const error = await actions.remove(agent)
-                  if (!error) {
-                    setConfirmRemove(false)
-                  }
-                  return error
-                })
-              }
-            >
-              {t('orcaCloudAccounts.remove', 'Remove')}
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              disabled={busy}
-              onClick={() => setConfirmRemove(false)}
-            >
-              {t('orcaCloudAccounts.cancel', 'Cancel')}
-            </Button>
-          </>
-        }
+        actions={actions}
+        setConfirmRemove={setConfirmRemove}
+        setRowError={setRowError}
       />
     )
   }
@@ -99,7 +65,6 @@ export function ActiveRow({
     row.expiresAt !== null
       ? t('orcaCloudAccounts.renewsBy', 'Renews by {{date}}.', { date: formatDate(row.expiresAt) })
       : null
-  const kept = t('orcaCloudAccounts.activeDetail', 'Kept in your Orca account, never in a sandbox.')
   return (
     <RowShell
       agent={agent}
@@ -112,13 +77,11 @@ export function ActiveRow({
               key: keyPhrase(row.keyKind ?? 'team', t)
             })
       }
+      // Status is the title; the row adds only the expiry (JA-23). Where it's kept is in the heading's tooltip.
       detail={
-        <>
-          {kept}
-          {renews ? (
-            <span className={cn(row.expiring && 'text-status-warning-text')}> {renews}</span>
-          ) : null}
-        </>
+        renews ? (
+          <span className={cn(row.expiring && 'text-status-warning-text')}>{renews}</span>
+        ) : null
       }
       actions={
         <>

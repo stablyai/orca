@@ -16,7 +16,6 @@ import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import type { SettingsNavSection } from '@/lib/settings-navigation-types'
 import {
-  BadgeCheck,
   Blocks,
   Bot,
   CircleUserRound,
@@ -58,34 +57,25 @@ export function buildCapabilitySettingsSections(
       }),
       group: 'capabilities'
     },
-    // S0 + S3: the one place for agent sign-ins (Orca Cloud, this computer, your hosts); desktop only.
-    // Listed before the upstream "accounts" entry, which stays the account-switching page it links to.
-    ...(showDesktopOnlySettings && isOrcaCloudApiAvailable
-      ? [
-          {
-            id: 'agent-accounts',
-            title: t('settings.agentAccounts.title', 'Agent accounts'),
-            description: t(
-              'settings.agentAccounts.hubDescription',
-              'Where Claude and Codex are signed in: Orca Cloud, this computer and your hosts.'
-            ),
-            icon: BadgeCheck,
-            searchEntries: getAgentAccountsSearchEntries(),
-            group: 'capabilities' as const
-          }
-        ]
-      : []),
     {
       id: 'accounts',
-      title: t('auto.hooks.useSettingsNavigationMetadata.f70ac54d38', 'AI Provider Accounts'),
+      title: t('auto.hooks.useSettingsNavigationMetadata.f70ac54d38', 'Agent accounts'),
       description: t(
         'auto.hooks.useSettingsNavigationMetadata.b1c2f8b0ac',
-        'Optional account switching and usage setup for Claude, Codex, Gemini, OpenCode Go, MiniMax, and Grok.'
+        'Sign-ins, account switching and usage for Claude, Codex, Gemini, OpenCode Go, MiniMax, and Grok.'
       ),
       icon: UserCog,
-      searchEntries: getAccountsPaneSearchEntries(),
+      // Orca Cloud builds add the Hosts and Orca Cloud parts to this page, so it isn't optional there.
+      searchEntries: [
+        ...getAccountsPaneSearchEntries(),
+        ...(showDesktopOnlySettings && isOrcaCloudApiAvailable
+          ? getAgentAccountsSearchEntries()
+          : [])
+      ],
       group: 'capabilities',
-      badge: t('auto.hooks.useSettingsNavigationMetadata.7c79d3b7bf', 'Optional')
+      ...(showDesktopOnlySettings && isOrcaCloudApiAvailable
+        ? {}
+        : { badge: t('auto.hooks.useSettingsNavigationMetadata.7c79d3b7bf', 'Optional') })
     },
     // Desktop-owned vault: a web client can neither read nor fill it.
     ...(showDesktopOnlySettings
@@ -142,7 +132,7 @@ export function buildCapabilitySettingsSections(
       ? [
           {
             id: 'computer-use',
-            title: t('auto.hooks.useSettingsNavigationMetadata.b35e92364b', 'Computer Use'),
+            title: t('auto.hooks.useSettingsNavigationMetadata.b35e92364b', 'Computer use'),
             description: t(
               'auto.hooks.useSettingsNavigationMetadata.0059bd17f3',
               'Enable agents to control any app on your computer.'
@@ -177,11 +167,11 @@ export function buildSetupSettingsSections(
       ? [
           {
             id: 'orca-account',
-            title: t('auto.components.settings.orcaAccount.title', 'Orca Account'),
+            title: t('auto.components.settings.orcaAccount.title', 'Orca account'),
             description: isOrcaCloudApiAvailable
               ? t(
-                  'settings.orcaAccount.descriptionWithCloud',
-                  'Sign-in, plan, team and Orca Cloud settings.'
+                  'settings.orcaAccount.descriptionIdentity',
+                  'The Orca account you’re signed in with.'
                 )
               : t(
                   'auto.components.settings.orcaAccount.description',

@@ -59,7 +59,7 @@ export function buildWorkflowSettingsSections(
     },
     {
       id: 'share-skills',
-      title: t('auto.hooks.useSettingsNavigationMetadata.shareSkillsTitle', 'Share Skills'),
+      title: t('auto.hooks.useSettingsNavigationMetadata.shareSkillsTitle', 'Share skills'),
       description: t(
         'auto.hooks.useSettingsNavigationMetadata.shareSkillsDescription',
         'Share your skills with an unlisted link. Anyone who has it can install them.'
@@ -72,7 +72,7 @@ export function buildWorkflowSettingsSections(
     },
     {
       id: 'session-history',
-      title: t('sessionHistory.settings.title', 'Agent Session Search'),
+      title: t('sessionHistory.settings.title', 'Agent session search'),
       description: t(
         'sessionHistory.settings.description',
         'Search everything your agents have said and done, on this computer and on any paired Orca server.'
@@ -91,7 +91,7 @@ export function buildWorkflowSettingsSections(
     },
     {
       id: 'git',
-      title: t('auto.hooks.useSettingsNavigationMetadata.09607cb0fe', 'Git & Source Control'),
+      title: t('auto.hooks.useSettingsNavigationMetadata.09607cb0fe', 'Git & source control'),
       description: t(
         'auto.hooks.useSettingsNavigationMetadata.ab4b21b58e',
         'Branch naming, base refs, and Git AI Author.'
@@ -107,7 +107,7 @@ export function buildWorkflowSettingsSections(
     },
     {
       id: 'tasks',
-      title: t('auto.hooks.useSettingsNavigationMetadata.85f4fd7710', 'Task Sources'),
+      title: t('auto.hooks.useSettingsNavigationMetadata.85f4fd7710', 'Task sources'),
       description: t(
         'auto.hooks.useSettingsNavigationMetadata.tasksDescription',
         'Connect providers, install the Linear skill, and choose what appears in Tasks.'
@@ -129,7 +129,7 @@ export function buildWorkflowSettingsSections(
     },
     {
       id: 'quick-commands',
-      title: t('auto.hooks.useSettingsNavigationMetadata.3fc3db144f', 'Quick Commands'),
+      title: t('auto.hooks.useSettingsNavigationMetadata.3fc3db144f', 'Quick commands'),
       description: t(
         'auto.hooks.useSettingsNavigationMetadata.42ae40842f',
         'Saved terminal commands, scoped globally or per project.'
@@ -157,7 +157,7 @@ export function buildWorkflowSettingsSections(
       ? [
           {
             id: 'mobile-emulator',
-            title: t('auto.hooks.useSettingsNavigationMetadata.1e761cff2b', 'Mobile Emulator'),
+            title: t('auto.hooks.useSettingsNavigationMetadata.1e761cff2b', 'Mobile emulator'),
             description: t(
               'auto.hooks.useSettingsNavigationMetadata.3d65d3f1b9',
               'Configure mobile emulator support for Orca and coding agents.'
@@ -170,7 +170,7 @@ export function buildWorkflowSettingsSections(
       : []),
     {
       id: 'floating-workspace',
-      title: t('auto.hooks.useSettingsNavigationMetadata.65b19f5bde', 'Floating Workspace'),
+      title: t('auto.hooks.useSettingsNavigationMetadata.65b19f5bde', 'Floating workspace'),
       description: showDesktopOnlySettings
         ? t(
             'auto.hooks.useSettingsNavigationMetadata.2d0659f6f0',

@@ -1,9 +1,14 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import type React from 'react'
+import { cleanup, fireEvent, render as baseRender, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { OrcaCloudAccountRow } from '@/lib/orca-cloud/orca-cloud-agent-accounts-model'
 import type { OrcaCloudAgentsStatus } from '../../../../../shared/orca-cloud-agents/orca-cloud-agents-wire'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { OrcaCloudAccountsView, type OrcaCloudAccountsActions } from './OrcaCloudAccounts'
+
+// The policy line is a Radix tooltip (JA-23), which needs the provider the app mounts at its root.
+const render = (ui: React.ReactElement) => baseRender(ui, { wrapper: TooltipProvider })
 
 const STATUS: OrcaCloudAgentsStatus = {
   credentials: {
@@ -51,12 +56,17 @@ const NOT_SET_UP: OrcaCloudAccountRow = { kind: 'notSetUp', keyKind: null }
 describe('OrcaCloudAccountsView', () => {
   afterEach(cleanup)
 
-  it('always shows the policy line and starts setup per agent', () => {
+  it('keeps the policy visible, the storage note in a tooltip, and starts setup per agent', () => {
     const handlers = view({ claude: NOT_SET_UP, codex: { kind: 'notSetUp', keyKind: 'team' } })
+    // JA-23: the mandatory A1 sentence stays visible in the description, verbatim.
     expect(
       screen.getByText(
-        'Your Claude and ChatGPT accounts are used only in your own workspaces. Teammates never use them.'
+        /Your Claude and ChatGPT accounts are used only in your own workspaces\. Teammates never use them\./
       )
+    ).toBeTruthy()
+    // Where it's kept moves from every active row into one focusable info button.
+    expect(
+      screen.getByRole('button', { name: 'Kept in your Orca account, never in a sandbox.' })
     ).toBeTruthy()
     expect(screen.getByText('Not set up · using the team key')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Use my ChatGPT account' }))
@@ -116,6 +126,30 @@ describe('OrcaCloudAccountsView', () => {
     await waitFor(() =>
       expect(screen.getByText('Couldn’t save to your Orca account.')).toBeTruthy()
     )
+  })
+
+  it('offers Paste a token instead on the not-set-up Claude row only (RA-5)', () => {
+    const handlers = view({ claude: NOT_SET_UP, codex: NOT_SET_UP })
+    const paste = screen.getAllByRole('button', { name: 'Paste a token instead' })
+    expect(paste).toHaveLength(1)
+    fireEvent.click(paste[0])
+    expect(handlers.usePaste).toHaveBeenCalledOnce()
+  })
+
+  it('an expired row offers Renew and a ⋯ with Remove, which confirms first (RA-5)', async () => {
+    const handlers = view({
+      claude: { kind: 'expired', keyKind: null, covered: false },
+      codex: NOT_SET_UP
+    })
+    expect(screen.getByRole('button', { name: 'Renew' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /Sign in again/ })).toBeNull()
+    const menu = screen.getByRole('button', { name: 'Claude account options' })
+    fireEvent.pointerDown(menu, { button: 0, ctrlKey: false })
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Remove…' }))
+    const remove = await screen.findByRole('button', { name: 'Remove' })
+    expect(handlers.remove).not.toHaveBeenCalled()
+    fireEvent.click(remove)
+    await waitFor(() => expect(handlers.remove).toHaveBeenCalledWith('claude'))
   })
 
   it('shows the kill switch as info with no action, and signed out with Sign in', () => {

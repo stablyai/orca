@@ -5,8 +5,12 @@ import { listEphemeralVmRuntimes } from '../../shared/ephemeral-vm-runtime-store
 import { openSealedGrant } from '../../shared/cloud-workspaces/sealed-grant'
 import { errorMessage } from '../../shared/error-message'
 import type {
+  CloudWorkspaceLinkTarget,
+  CloudWorkspace,
   CloudWorkspaceListQuery,
   CloudWorkspacePatch,
+  CloudWorkspacePrefsDocument,
+  CloudWorkspaceRoutineRuns,
   OrgPrompts
 } from '../../shared/cloud-workspaces/cloud-workspaces-wire'
 import { environmentHandleFromRecipeResult } from '../environment-providers/environment-provider-recipe-adapter'
@@ -35,6 +39,11 @@ const MAX_PENDING_REPINS = 16
 
 export type CloudWorkspacesResult<T> =
   | { ok: true; value: T }
+  | { ok: false; error: string; reason?: string; status?: number; orgId?: string }
+
+/** A list read, plus what Home's Routine runs switch hides (absent from older control planes). */
+export type CloudWorkspaceListResult =
+  | { ok: true; value: CloudWorkspace[]; routineRuns?: CloudWorkspaceRoutineRuns }
   | { ok: false; error: string; reason?: string; status?: number }
 
 /** Where this desktop already has a cloud workspace locally (owner: the hosted runtime it created). */
@@ -49,7 +58,13 @@ async function wrap<T>(run: () => Promise<T>): Promise<CloudWorkspacesResult<T>>
     return { ok: true, value: await run() }
   } catch (error) {
     if (error instanceof CloudWorkspacesError) {
-      return { ok: false, error: error.code, reason: error.reason, status: error.status }
+      return {
+        ok: false,
+        error: error.code,
+        reason: error.reason,
+        status: error.status,
+        ...(error.orgId ? { orgId: error.orgId } : {})
+      }
     }
     return { ok: false, error: 'internal_error', reason: errorMessage(error).slice(0, 200) }
   }
@@ -163,13 +178,17 @@ export function createCloudWorkspacesService(deps: {
 
   return {
     available: true as const,
-    list: (query: CloudWorkspaceListQuery) =>
-      wrap(async () => {
-        const workspaces = await client.list(query)
+    list: async (query: CloudWorkspaceListQuery): Promise<CloudWorkspaceListResult> => {
+      let routineRuns: CloudWorkspaceRoutineRuns | undefined
+      const result = await wrap(async () => {
+        const page = await client.list(query)
+        routineRuns = page.routineRuns
         // Cheap when already registered; catches a sign-in or account switch since the last list.
         void reader?.register()
-        return workspaces
-      }),
+        return page.workspaces
+      })
+      return result.ok && routineRuns ? { ...result, routineRuns } : result
+    },
     /** Sign-out: revoke this device's reader key server-side (callers bound the wait). */
     revokeReaderKey: (timeoutMs: number) => reader?.revoke(timeoutMs) ?? Promise.resolve(),
     /**
@@ -196,14 +215,24 @@ export function createCloudWorkspacesService(deps: {
     get: (id: string) => wrap(() => client.get(id)),
     patch: (id: string, patch: CloudWorkspacePatch) =>
       wrap(async () => (await client.patch(id, patch)).workspace),
-    resolveLink: (workspaceId: string, chatId?: string | null) =>
-      wrap(() => client.resolveLink(workspaceId, chatId)),
+    resolveLink: (target: CloudWorkspaceLinkTarget, chatId?: string | null) =>
+      wrap(() => client.resolveLink(target, chatId)),
+    getPrefs: () => wrap(() => client.getPrefs()),
+    putPrefs: (document: CloudWorkspacePrefsDocument, revision: number) =>
+      wrap(() => client.putPrefs(document, revision, deps.clientId)),
+    getOrgSlug: (name?: string | null) => wrap(() => client.getOrgSlug(name)),
     listGrants: (id: string) => wrap(() => client.listGrants(id)),
     revokeGrant: (id: string, grantId: string) =>
       wrap(async () => void (await client.revokeGrant(id, grantId))),
     getOrgPrompts: () => wrap(() => client.getOrgPrompts()),
     putOrgPrompts: (document: OrgPrompts['document'], revision: number) =>
       wrap(() => client.putOrgPrompts(document, revision)),
+    teammateProfile: (userId: string, utcOffsetMin: number) =>
+      wrap(() => client.teammateProfile(userId, utcOffsetMin)),
+    poke: (userId: string) => wrap(() => client.poke(userId)),
+    pokeInbox: () => wrap(() => client.pokeInbox()),
+    setPokesEnabled: (enabled: boolean) => wrap(() => client.setPokesEnabled(enabled)),
+    markPokesSeen: (ids: string[]) => wrap(() => client.markPokesSeen(ids)),
     localWorkspaces: () => localWorkspaces(),
     noteSent: (id: string) => wrap(() => client.noteSent(id)),
     sleep: (id: string) => wrap(() => client.sleep(id)),

@@ -22,12 +22,15 @@ import type {
 } from './runtime-service'
 import { cleanupFailedEphemeralVmStart } from './failed-start-cleanup'
 import { renameLegacyOrcaCloudEnvironments } from './legacy-orca-cloud-environment-names'
+import { readOrcaCloudActiveAccountId } from '../hosted-sandbox/orca-cloud-active-account'
 
 export type EphemeralVmWriteAhead = {
   instanceId: string
   createdAt: number
   /** Set once the create command's process started; before that no VM can exist. */
   launched: boolean
+  /** Orca Cloud: the team the sandbox is created under, read once so a mid-create switch can't refile it. */
+  cloudAccountId?: string
 }
 
 // Creates owned by this process; any other `provisioning` record was orphaned by a crash or quit.
@@ -41,10 +44,13 @@ export function isEphemeralVmProvisionLive(instanceId: string): boolean {
 export function beginEphemeralVmProvisioning(
   args: ProvisionEphemeralVmRuntimeArgs
 ): EphemeralVmWriteAhead {
+  const cloudAccountId =
+    args.recipe.provider === 'orca-cloud' ? readOrcaCloudActiveAccountId() : null
   const writeAhead: EphemeralVmWriteAhead = {
     instanceId: `orca-${randomUUID()}`,
     createdAt: args.now ?? Date.now(),
-    launched: false
+    launched: false,
+    ...(cloudAccountId ? { cloudAccountId } : {})
   }
   if (args.recipe.checkoutMode) {
     assertEphemeralVmRuntimeCheckoutModeCanPersist(args.userDataPath, {
@@ -214,6 +220,7 @@ function baseRuntimeRecord(
     ...(args.projectId ? { projectId: args.projectId } : {}),
     ...(args.workspaceId ? { workspaceId: args.workspaceId } : {}),
     ...(args.workspaceName ? { workspaceName: args.workspaceName } : {}),
+    ...(writeAhead.cloudAccountId ? { cloudAccountId: writeAhead.cloudAccountId } : {}),
     cleanupStatus: args.recipe.destroyDisabled ? 'disabled' : 'not_started',
     ...(args.recipe.destroyDisabled ? { cleanupDisabled: true } : {}),
     createdAt: writeAhead.createdAt

@@ -15,6 +15,7 @@ import { SettingsGroupHeader } from '../section-layout/SettingsGroup'
 import { agentName } from './orca-cloud-accounts-copy'
 import type { OrcaCloudAccountsViewProps } from './orca-cloud-accounts-types'
 import { AccountRow } from './OrcaCloudAccountRow'
+import { OrcaCloudAccountsDescription } from './OrcaCloudAccountsDescription'
 
 export type {
   OrcaCloudAccountsActions,
@@ -78,7 +79,8 @@ export function OrcaCloudAccountsView({
   actions,
   now,
   initialConfirmRemove,
-  initialRowError
+  initialRowError,
+  hideHeader = false
 }: OrcaCloudAccountsViewProps): React.JSX.Element | null {
   const t = useTranslate()
   const announcement = rows ? setupAnnouncement(rows, t) : ''
@@ -148,23 +150,15 @@ export function OrcaCloudAccountsView({
   }
   return (
     <section id={ORCA_CLOUD_ACCOUNTS_SECTION_ID} className="space-y-3">
-      <SettingsGroupHeader
-        title={t('orcaCloudAccounts.title', 'Orca Cloud')}
-        description={t(
-          'orcaCloudAccounts.help',
-          'Set up once on this computer. Every cloud workspace uses it, including new, cloned and restarted ones.'
-        )}
-      />
+      {hideHeader ? null : (
+        <SettingsGroupHeader
+          title={t('orcaCloudAccounts.title', 'Orca Cloud')}
+          description={<OrcaCloudAccountsDescription />}
+        />
+      )}
       <div className="overflow-hidden rounded-xl border border-border bg-card/50 shadow-xs">
         {body}
       </div>
-      {/* Mandatory (spec §5 item 5): the A1 mitigation depends on this line. */}
-      <p className="px-1 text-xs text-muted-foreground">
-        {t(
-          'orcaCloudAccounts.policy',
-          'Your Claude and ChatGPT accounts are used only in your own workspaces. Teammates never use them.'
-        )}
-      </p>
       <p aria-live="polite" className="sr-only">
         {announcement}
       </p>

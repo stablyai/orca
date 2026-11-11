@@ -12,6 +12,7 @@ function Picker(props: {
   agent: TuiAgent
   disabled?: TuiAgent[]
   notice?: string
+  statusLabels?: ReadonlyMap<TuiAgent, string>
 }): React.JSX.Element {
   const model = orcaCloudAgentMenuModel({
     defaultTuiAgent: 'claude',
@@ -30,6 +31,7 @@ function Picker(props: {
           onSetDefault={noop}
           onSelectBlankTerminal={noop}
           onPick={noop}
+          statusLabels={props.statusLabels}
         />
         {props.notice ? <p className="text-xs text-muted-foreground">{props.notice}</p> : null}
       </div>
@@ -70,4 +72,45 @@ export const fallback = defineFixture({
       notice="Aider isn’t available on Orca Cloud yet, so Claude is selected."
     />
   )
+})
+
+/** JA-22: each row says whether a cloud workspace can run it as-is (inside the open menu only). */
+// No status means ready (design-squad): Claude, OpenCode and Copilot carry none here.
+const STATUS: ReadonlyMap<TuiAgent, string> = new Map<TuiAgent, string>([
+  ['codex', 'Not set up'],
+  ['gemini', 'Not set up'],
+  ['cursor', 'Not set up']
+])
+
+export const openWithStatus = defineFixture({
+  width: 480,
+  render: () => <Picker agent="claude" statusLabels={STATUS} />,
+  interact: open
+})
+
+/** Closed: nothing changes on the button (Neil). */
+export const closedWithStatus = defineFixture({
+  width: 480,
+  render: () => <Picker agent="claude" statusLabels={STATUS} />
+})
+
+/** Orca-account sign-in off here (prod today): Claude and Codex sign in per workspace. */
+export const openPerWorkspace = defineFixture({
+  width: 480,
+  render: () => (
+    <Picker
+      agent="claude"
+      statusLabels={
+        new Map<TuiAgent, string>([
+          ['claude', 'Signs in per workspace'],
+          ['codex', 'Signs in per workspace'],
+          ['opencode', 'Not set up'],
+          ['gemini', 'Not set up'],
+          ['cursor', 'Not set up'],
+          ['copilot', 'Not set up']
+        ])
+      }
+    />
+  ),
+  interact: open
 })

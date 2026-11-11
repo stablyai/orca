@@ -42,12 +42,19 @@ async function setup(overrides: Record<string, string> = {}) {
   const jwks = { keys: [{ ...(await exportJWK(publicKey)), kid: 'v1', alg: 'RS256' }] }
   const upstream: { url: string; headers: Headers }[] = []
   const reply = { status: 200 }
+  // The control plane's own auth check (count_tokens) before a 401 may revoke; default: the token is dead.
+  const check = { status: 401, body: JSON.stringify({ type: 'error', error: { type: 'authentication_error' } }), calls: 0 }
   const h = await createHarness(
     { SECRETS_KEK: KEK, EGRESS_PROXY_URL: PROXY_URL, SECRETS_EGRESS_PLACEHOLDERS: 'on', AGENT_ACCOUNTS_CLAUDE: 'on', ...overrides },
     {
       egressKeysForIssuer: () => createLocalJWKSet(jwks),
       credentials: { authorizationFor: async () => null },
       egressFetch: async (input, init) => {
+        if (String(input) === 'https://api.anthropic.com/v1/messages/count_tokens') {
+          check.calls++
+          expect(new Headers(init?.headers).get('authorization')).toBe(`Bearer ${SETUP_TOKEN}`)
+          return new Response(check.body, { status: check.status })
+        }
         upstream.push({ url: String(input), headers: new Headers(init?.headers) })
         return new Response('{}', { status: reply.status })
       }
@@ -79,7 +86,7 @@ async function setup(overrides: Record<string, string> = {}) {
     )
     return { status: response.status, body: await response.text() }
   }
-  return { h, as, lastEnv, proxied, upstream, reply }
+  return { h, as, lastEnv, proxied, upstream, reply, check }
 }
 
 describe('Orca-account credentials (D11)', () => {
@@ -181,11 +188,20 @@ describe('egress-time Source (D10) and shared workspaces (D13)', () => {
     await h.call('PUT', '/v1/agent-credentials/claude', { bearer: mia, body: { token: SETUP_TOKEN } })
     const created = await h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'ws-1', machineSize: 'standard' }, bearer: mia })
     const id: string = created.body.sandbox.id
+    const other = await h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'ws-2', machineSize: 'standard' }, bearer: mia })
+    const otherSession: string = other.body.sandbox.session.id
     reply.status = 401
     expect((await proxied(id, 'api.anthropic.com', { authorization: `Bearer orca-ph-claude-account-${id}` })).status).toBe(401)
-    expect((await h.call('GET', '/v1/agent-credentials', { bearer: mia })).body.claude.state).toBe('revoked')
+    // Confirmed by the control plane's own auth check (dead token), then revoked.
+    await vi.waitFor(async () => expect((await h.call('GET', '/v1/agent-credentials', { bearer: mia })).body.claude.state).toBe('revoked'))
     // Already off the account: no placeholder in new shells, and the proxy refuses with a clear reason.
     await vi.waitFor(() => expect(lastEnv(ENV_COMMAND).CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined())
+    // The person's other running workspace drops the dead placeholder too.
+    await vi.waitFor(() => {
+      const refreshed = h.vercel.commands.filter((c) => c.command === ENV_COMMAND && c.sessionId === otherSession)
+      expect(refreshed.length).toBeGreaterThan(0)
+      expect(decode(refreshed.at(-1)!.env.ORCA_SECRET_ENV).CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined()
+    })
     expect((await proxied(id, 'api.anthropic.com', { authorization: `Bearer orca-ph-claude-account-${id}` })).status).toBe(403)
   })
 
@@ -243,5 +259,128 @@ describe('secrets saved while a sandbox boots', () => {
     await h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'ws-1', machineSize: 'standard' }, bearer: mia })
     await new Promise((resolve) => setTimeout(resolve, 50))
     expect(h.vercel.commands.filter((c) => c.command === ENV_COMMAND)).toHaveLength(0)
+  })
+})
+
+describe('a provider 401 revokes only when confirmed', () => {
+  async function running() {
+    const ctx = await setup()
+    const mia = await ctx.as('mia')
+    await ctx.h.call('PUT', '/v1/agent-credentials/claude', { bearer: mia, body: { token: SETUP_TOKEN } })
+    const created = await ctx.h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'ws-1', machineSize: 'standard' }, bearer: mia })
+    const id: string = created.body.sandbox.id
+    const state = async () => (await ctx.h.call('GET', '/v1/agent-credentials', { bearer: mia })).body.claude.state
+    const send = () => ctx.proxied(id, 'api.anthropic.com', { authorization: `Bearer orca-ph-claude-account-${id}` })
+    const auditRows = async () =>
+      (await ctx.h.env.SANDBOX_DB.prepare('SELECT action, reason, upstream_path FROM agent_credential_audit').all()).results
+    return { ...ctx, id, state, send, auditRows }
+  }
+
+  it('a transient 401 whose auth check passes keeps the account (audited)', async () => {
+    const { reply, check, send, state, lastEnv, auditRows } = await running()
+    reply.status = 401
+    check.status = 200
+    check.body = '{"input_tokens":3}'
+    expect((await send()).status).toBe(401)
+    await vi.waitFor(async () => expect(await auditRows()).toEqual([{ action: 'kept', reason: 'check_passed', upstream_path: '/v1/messages' }]))
+    expect(await state()).toBe('active')
+    expect(lastEnv(START_COMMAND).CLAUDE_CODE_OAUTH_TOKEN).toMatch(/^orca-ph-claude-account-/)
+  })
+
+  it('a check that is not a definite auth failure keeps the account', async () => {
+    const cases: [number, string][] = [
+      [429, '{"type":"error","error":{"type":"rate_limit_error"}}'],
+      [500, 'oops'],
+      [401, '{"type":"error","error":{"type":"permission_error"}}']
+    ]
+    for (const [status, body] of cases) {
+      const { reply, check, send, state, auditRows } = await running()
+      reply.status = 401
+      check.status = status
+      check.body = body
+      await send()
+      await vi.waitFor(async () => expect((await auditRows())[0]).toMatchObject({ action: 'kept', reason: 'check_inconclusive' }))
+      expect(await state()).toBe('active')
+    }
+  })
+
+  it('checks at most once a minute per person: a burst of 401s makes one check', async () => {
+    const { reply, check, send, auditRows } = await running()
+    reply.status = 401
+    check.status = 200
+    check.body = '{}'
+    await Promise.all([send(), send(), send()])
+    await vi.waitFor(async () => expect(await auditRows()).toHaveLength(1))
+    await new Promise((resolve) => setTimeout(resolve, 30))
+    expect(check.calls).toBe(1)
+  })
+
+  it('requests that never carried the real credential never trigger a check', async () => {
+    const { reply, check, proxied, id, state } = await running()
+    reply.status = 401
+    // Wrong placeholder (another sandbox's) and no placeholder: refused before any swap.
+    expect((await proxied(id, 'api.anthropic.com', { authorization: 'Bearer orca-ph-claude-account-sbx_other' })).status).toBe(403)
+    expect((await proxied(id, 'api.anthropic.com', {})).status).toBe(403)
+    await new Promise((resolve) => setTimeout(resolve, 30))
+    expect(check.calls).toBe(0)
+    expect(await state()).toBe('active')
+  })
+
+  it('a confirmed dead token is revoked once and audited', async () => {
+    const { reply, send, state, auditRows } = await running()
+    reply.status = 401
+    await send()
+    await vi.waitFor(async () => expect(await state()).toBe('revoked'))
+    expect(await auditRows()).toEqual([{ action: 'revoked', reason: 'provider_401_confirmed_by_check', upstream_path: '/v1/messages' }])
+  })
+})
+
+describe('POST /v1/agent-credentials/claude/verify (pre-launch check)', () => {
+  it('a pass is remembered: the next calls answer without asking the provider', async () => {
+    const { h, as, check } = await setup()
+    const mia = await as('mia')
+    await h.call('PUT', '/v1/agent-credentials/claude', { bearer: mia, body: { token: SETUP_TOKEN } })
+    check.status = 200
+    check.body = '{"input_tokens":3}'
+    const first = await h.call('POST', '/v1/agent-credentials/claude/verify', { bearer: mia })
+    expect(first.body).toMatchObject({ claude: { state: 'active' }, checked: true })
+    expect(first.body.verifiedAt).toEqual(expect.any(Number))
+    const again = await h.call('POST', '/v1/agent-credentials/claude/verify', { bearer: mia })
+    expect(again.body).toMatchObject({ claude: { state: 'active' }, checked: false, verifiedAt: first.body.verifiedAt })
+    expect(check.calls).toBe(1)
+  })
+
+  it('a dead token is revoked (and audited); an inconclusive check keeps it', async () => {
+    const dead = await setup()
+    const mia = await dead.as('mia')
+    await dead.h.call('PUT', '/v1/agent-credentials/claude', { bearer: mia, body: { token: SETUP_TOKEN } })
+    const revoked = await dead.h.call('POST', '/v1/agent-credentials/claude/verify', { bearer: mia })
+    expect(revoked.body).toMatchObject({ claude: { state: 'revoked' }, checked: true, verifiedAt: null })
+    const rows = (await dead.h.env.SANDBOX_DB.prepare('SELECT action, reason FROM agent_credential_audit').all()).results
+    expect(rows).toEqual([{ action: 'revoked', reason: 'verify_confirmed_auth_failure' }])
+
+    const flaky = await setup()
+    const ada = await flaky.as('ada')
+    await flaky.h.call('PUT', '/v1/agent-credentials/claude', { bearer: ada, body: { token: SETUP_TOKEN } })
+    flaky.check.status = 529
+    flaky.check.body = '{"type":"error","error":{"type":"overloaded_error"}}'
+    const kept = await flaky.h.call('POST', '/v1/agent-credentials/claude/verify', { bearer: ada })
+    expect(kept.body).toMatchObject({ claude: { state: 'active' }, checked: true, verifiedAt: null })
+    // Rate limited: a second call within the minute doesn't ask again.
+    await flaky.h.call('POST', '/v1/agent-credentials/claude/verify', { bearer: ada })
+    expect(flaky.check.calls).toBe(1)
+  })
+
+  it('storing a new token forgets the old verification', async () => {
+    const { h, as, check } = await setup()
+    const mia = await as('mia')
+    await h.call('PUT', '/v1/agent-credentials/claude', { bearer: mia, body: { token: SETUP_TOKEN } })
+    check.status = 200
+    check.body = '{}'
+    await h.call('POST', '/v1/agent-credentials/claude/verify', { bearer: mia })
+    await h.call('PUT', '/v1/agent-credentials/claude', { bearer: mia, body: { token: SETUP_TOKEN } })
+    const after = await h.call('POST', '/v1/agent-credentials/claude/verify', { bearer: mia })
+    expect(after.body.checked).toBe(true)
+    expect(check.calls).toBe(2)
   })
 })
