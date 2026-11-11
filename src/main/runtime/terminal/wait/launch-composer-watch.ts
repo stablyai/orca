@@ -4,6 +4,7 @@ import type { LaunchedAgentForeground } from './launched-agent-foreground'
 import { readFreshComposerHold } from './launched-agent-composer-readiness'
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 import { buildTerminalWaitText } from './terminal-wait-tail-state'
+import { failOnLaunchedAgentExit, type LaunchedAgentExitRuntime } from './launched-agent-exit-watch'
 import {
   waitForWorktreeStartupDraft,
   type WorktreeStartupReadinessHost
@@ -71,20 +72,30 @@ export function watchLaunchComposer(
   watches: Map<string, Promise<boolean>>,
   host: FreshComposerPtyHost,
   ptyId: string,
-  agent: TuiAgent | null
+  agent: TuiAgent | null,
+  /** Settles the watch as soon as the launched agent exits back to its shell (no composer will come). */
+  exitRuntime?: LaunchedAgentExitRuntime
 ): void {
   // A new launch on a reused PTY id replaces its predecessor's watch.
   if (!agent || !SUBMIT_WAITS_FOR_LAUNCH_COMPOSER.has(agent)) {
     return
   }
   const stop = new AbortController()
-  const ready = waitForFreshComposerOnPty(
-    host,
-    ptyId,
-    agent,
-    resolveDraftPasteReadyTimeoutMs(agent),
-    { requireComposerMarker: false, stopOnDialog: true, stop }
-  ).then(
+  const waitForComposer = (signal?: AbortSignal): Promise<string | null> => {
+    signal?.addEventListener('abort', () => stop.abort(), { once: true })
+    return waitForFreshComposerOnPty(host, ptyId, agent, resolveDraftPasteReadyTimeoutMs(agent), {
+      requireComposerMarker: false,
+      stopOnDialog: true,
+      stop
+    })
+  }
+  const watched = exitRuntime
+    ? failOnLaunchedAgentExit(exitRuntime, ptyId, agent, undefined, waitForComposer).catch(
+        // The agent exited to its shell: there is no composer to wait for, so sends go to the shell now.
+        () => 'agent-exited'
+      )
+    : waitForComposer()
+  const ready = watched.then(
     // A startup dialog stops the watch: it takes the next input, so sends reach it as before.
     (readyPtyId) => readyPtyId !== null || stop.signal.aborted,
     () => false
