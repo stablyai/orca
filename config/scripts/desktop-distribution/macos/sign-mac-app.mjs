@@ -1,7 +1,6 @@
 import { createRequire } from 'node:module'
 
-// serve-sim runs these inside the simulator with `simctl spawn`, which hands them DYLD_ROOT_PATH;
-// the hardened runtime drops DYLD_* variables unless this entitlement allows them (#40509).
+// serve-sim launches these with `simctl spawn`, whose DYLD_ROOT_PATH the hardened runtime drops (#40509).
 const IOS_SIMULATOR_HELPER_PATHS = [
   '/node_modules/serve-sim/dist/simduo/serve-sim-duo-hid',
   '/node_modules/serve-sim/dist/simax/serve-sim-ax-settings'

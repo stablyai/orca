@@ -172,15 +172,9 @@ export function stripEmulatorTargetArgs(args: string[]): string[] {
 }
 
 function serveSimFailureMessage(output: string): string {
-  // An uncaught throw prints serve-sim's minified source line (which holds every CLI message) before
-  // the error, then a "Node.js v…" footer; only the error message says what failed.
-  if (/^Node\.js v\d/m.test(output)) {
-    const thrown = /^\w*Error: [\s\S]*?(?=^\s+at |^Node\.js v)/m.exec(output)
-    if (thrown) {
-      return thrown[0].trim()
-    }
-  }
-  return output.trim() || 'serve-sim command failed'
+  // Uncaught throws print serve-sim's minified source (every CLI message) first; keep the thrown error.
+  const thrown = /^\w*Error: [\s\S]*?(?=^\s+at |^Node\.js v)/m.exec(output)
+  return thrown?.[0].trim() || output.trim() || 'serve-sim command failed'
 }
 
 export async function execServeSimCommand(
