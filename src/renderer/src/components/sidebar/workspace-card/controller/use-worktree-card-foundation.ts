@@ -152,10 +152,12 @@ export function useWorktreeCardFoundation({
   })
   const conflictOperation = useAppStore((s) => s.gitConflictOperationByWorktree[worktree.id])
   const remoteBranchConflict = useAppStore((s) => s.remoteBranchConflictByWorktreeId[worktree.id])
-  const workspacePorts = useAppStore(
-    (s) =>
-      getWorkspacePortsByWorktreeId(s.workspacePortScan?.result).get(worktree.id) ??
-      EMPTY_WORKSPACE_PORTS
+  const workspacePorts = useAppStore((s) =>
+    // An asleep VM serves nothing: the last scan's ports would be a stale badge (JA-13).
+    s.ephemeralVmRuntimesByWorkspaceId?.[worktree.id]?.status === 'suspended'
+      ? EMPTY_WORKSPACE_PORTS
+      : (getWorkspacePortsByWorktreeId(s.workspacePortScan?.result).get(worktree.id) ??
+        EMPTY_WORKSPACE_PORTS)
   )
 
   // Avoid per-card host-qualified scans; twins use direct SSH status for this status-only chip.
