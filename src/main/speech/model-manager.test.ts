@@ -1,4 +1,12 @@
-import { existsSync, mkdirSync, mkdtempSync, rmSync, truncateSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  renameSync,
+  rmSync,
+  truncateSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -131,6 +139,11 @@ describe('ModelManager', () => {
       }
       await expect(failedSwap.downloadModel(modelId)).rejects.toThrow('ENOENT')
       expect(existsSync(`${modelDir}.previous`)).toBe(false)
+      expect((await failedSwap.getModelState(modelId)).needsUpdate).toBe(true)
+
+      // An interrupted swap leaves the old files only in .previous.
+      renameSync(modelDir, `${modelDir}.previous`)
+      await expect(failedSwap.downloadModel(modelId)).rejects.toThrow('ENOENT')
       expect((await failedSwap.getModelState(modelId)).needsUpdate).toBe(true)
     } finally {
       rmSync(dir, { recursive: true, force: true })

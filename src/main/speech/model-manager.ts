@@ -20,6 +20,7 @@ import { previousSpeechModelDir, swapInSpeechModelDir } from './speech-model-dir
 
 type DownloadHandle = {
   abort: () => void
+  settled: Promise<void>
 }
 
 type ProgressCallback = (modelId: string, progress: number) => void
@@ -173,13 +174,15 @@ export class ModelManager extends SpeechModelDownloadTransport {
     mkdirSync(stagingDir, { recursive: true })
     let aborted = false
     const abortController = new AbortController()
+    const settled = Promise.withResolvers<void>()
 
     const handle: DownloadHandle = {
       abort: () => {
         aborted = true
         // Abort immediately: stalled HTTPS may never deliver another chunk.
         abortController.abort()
-      }
+      },
+      settled: settled.promise
     }
     this.activeDownloads.set(modelId, handle)
 
@@ -205,14 +208,13 @@ export class ModelManager extends SpeechModelDownloadTransport {
       if (!aborted) {
         console.error('[speech] Model download failed:', modelId, err)
         this.updateState(modelId, 'error', undefined, String(err))
-      }
-      if (!aborted) {
         // Settings awaits real failures; cancellation stays quiet.
         throw err
       }
     } finally {
       this.activeDownloads.delete(modelId)
       removeModelDownloadStaging(stagingDir, legacyArchivePath)
+      settled.resolve()
     }
   }
 
@@ -233,7 +235,10 @@ export class ModelManager extends SpeechModelDownloadTransport {
     if (!manifest || !isLocalSpeechModel(manifest)) {
       throw new Error(`Model does not support deletion: ${modelId}`)
     }
+    const download = this.activeDownloads.get(modelId)
     this.cancelDownload(modelId)
+    // A swap already under way ignores cancel; deleting mid-swap could race its restore.
+    await download?.settled
     const modelDir = this.getModelDir(modelId)
     if (existsSync(modelDir)) {
       await rm(modelDir, { recursive: true, force: true })
