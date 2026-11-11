@@ -55,7 +55,7 @@ stampVersion('wsl-browser-network-relay.js', '.browser-network-version')
 console.log(`Built WSL browser network relay → ${outDir}/wsl-browser-network-relay.js`)
 
 await bundle(
-  'src/main/claude-accounts/claude-profile-wsl-entry.ts',
+  'src/main/claude-accounts/profiles/wsl/claude-profile-wsl-entry.ts',
   WSL_CLAUDE_PROFILE_HELPER_FILENAME
 )
 await bundle(

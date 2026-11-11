@@ -53,7 +53,7 @@ export const MAIN_BUILD_ENTRY_POINTS: Record<string, string> = {
   ),
   // Why: a first account setup can merge a large history tree with sync fs calls.
   'claude-profile-setup-worker-entry': resolve(
-    'src/main/claude-accounts/claude-profile-setup-worker-entry.ts'
+    'src/main/claude-accounts/profiles/setup/claude-profile-setup-worker-entry.ts'
   ),
   'profile-state-backup-worker-entry': resolve(
     'src/main/persistence/profile-state/backup/profile-state-backup-worker-entry.ts'
