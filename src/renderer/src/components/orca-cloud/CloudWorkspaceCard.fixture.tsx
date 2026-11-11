@@ -1,6 +1,8 @@
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { seedCloudSyncView } from '@/lib/orca-cloud/cloud-sync-store'
 import { setArchiveTtlDaysForTest } from '@/lib/orca-cloud/archive-ttl'
+import { seedCloudWorkspaceSnapshot } from '@/lib/orca-cloud/orca-cloud-workspace-store'
+import { CloudWorkspaceMark } from './CloudWorkspaceMark'
 import type { CloudStatusEntry } from '@/lib/orca-cloud/orca-cloud-workspace-store'
 import type { CloudDotState } from '@/lib/orca-cloud/orca-cloud-workspace-state'
 import {
@@ -8,6 +10,8 @@ import {
   type HostedWorkspaceStatus
 } from '../../../../shared/hosted-sandbox/hosted-sandbox-wire'
 import type { CloudSyncView } from '../../../../shared/cloud-sync/cloud-sync-contract'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { CloudWorkspaceStatusPanel, type CloudCardLayer } from './CloudWorkspaceStatusPanel'
 import type { CloudCardAttention } from './cloud-workspace-card-model'
 
@@ -65,15 +69,15 @@ const entry = (status: HostedWorkspaceStatus): CloudStatusEntry => ({
 })
 
 const FOLDER = '/Users/me/orca/cloud/Hello-World/fix-login-redirect'
-function syncView(id: string, mirror: boolean): CloudSyncView {
+function syncView(id: string, mirror: boolean, empty = false): CloudSyncView {
   const openPath = mirror ? FOLDER : `${FOLDER}/.context`
   return {
     workspaceId: id,
     choice: { context: true, mirror },
     folder: FOLDER,
     phase: 'synced',
-    files: mirror ? 1_204 : 12,
-    bytes: mirror ? 38_400_000 : 640_000,
+    files: empty ? 0 : mirror ? 1_204 : 12,
+    bytes: empty ? 0 : mirror ? 38_400_000 : 640_000,
     progress: null,
     lastSyncedAt: Date.now() - 2 * 60_000,
     editedHere: 0,
@@ -93,6 +97,7 @@ function card({
   id,
   state = 'running',
   mirror = false,
+  emptyContext = false,
   attention = null,
   layer = 'main',
   details = false
@@ -100,12 +105,13 @@ function card({
   id: string
   state?: CloudDotState
   mirror?: boolean
+  emptyContext?: boolean
   attention?: CloudCardAttention | null
   layer?: CloudCardLayer
   details?: boolean
 }) {
   // Seeded once, outside render: the card reads it through the same store as the live app.
-  seedCloudSyncView(syncView(id, mirror))
+  seedCloudSyncView(syncView(id, mirror, emptyContext))
   return defineFixture({
     width: 320,
     render: () => (
@@ -200,5 +206,79 @@ export const menuArchiveTooltip = defineFixture({
       .querySelector('[role="menu"]')
       ?.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', bubbles: true }))
     await new Promise((resolve) => setTimeout(resolve, 900))
+  }
+})
+
+/** Nothing in .context yet: "Synced · just now", not "0 files · 0 KB". */
+export const onComputerContextEmpty = card({
+  id: 'card-sync-empty',
+  layer: 'onComputer',
+  emptyContext: true
+})
+
+const placementRepo: Repo = {
+  id: 'hello-world',
+  path: '/Users/me/src/Hello-World',
+  displayName: 'Hello-World',
+  badgeColor: '',
+  addedAt: 1
+}
+const PLACEMENT_ID = 'hello-world::/home/ubuntu/orca/workspaces/Hello-World/fix-login-redirect'
+const placementWorktree: Worktree = {
+  id: PLACEMENT_ID,
+  repoId: placementRepo.id,
+  instanceId: 'fix-login-redirect',
+  path: '/home/ubuntu/orca/workspaces/Hello-World/fix-login-redirect',
+  displayName: 'fix-login-redirect',
+  branch: 'fix-login-redirect',
+  head: 'abc123',
+  isBare: false,
+  isMainWorktree: false,
+  comment: '',
+  linkedIssue: null,
+  linkedPR: null,
+  linkedLinearIssue: null,
+  isArchived: false,
+  isUnread: false,
+  isPinned: false,
+  sortOrder: 0,
+  lastActivityAt: 1
+}
+
+/** Opened from the sidebar: the card sits beside the sidebar, so the row it describes stays visible. */
+export const besideSidebar = defineFixture({
+  width: 720,
+  // The workspace record, so the card's first line (its name and accessible title) shows.
+  store: {
+    repos: [placementRepo],
+    worktreesByRepo: { [placementRepo.id]: [placementWorktree] }
+  },
+  setup: () => {
+    seedCloudWorkspaceSnapshot({
+      ids: new Set([PLACEMENT_ID]),
+      idsLoaded: true,
+      status: { [PLACEMENT_ID]: entry(running) }
+    })
+    seedCloudSyncView(syncView(PLACEMENT_ID, false))
+  },
+  render: () => (
+    <div className="flex h-[420px] bg-background">
+      <div
+        data-left-sidebar=""
+        className="w-64 shrink-0 border-e border-border bg-worktree-sidebar p-2"
+      >
+        <div className="flex items-center gap-2 rounded-md bg-muted/60 px-2 py-1.5 text-[13px]">
+          <CloudWorkspaceMark workspaceId={PLACEMENT_ID} />
+          <span className="truncate text-foreground">fix-login-redirect</span>
+          <span className="ms-auto rounded border border-border px-1 text-[10px] text-muted-foreground">
+            Orca Cloud
+          </span>
+        </div>
+      </div>
+    </div>
+  ),
+  interact: async (frame) => {
+    frame.querySelector<HTMLButtonElement>('[data-cloud-workspace-mark]')?.click()
+    await new Promise((resolve) => setTimeout(resolve, 400))
   }
 })

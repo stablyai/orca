@@ -95,6 +95,12 @@ export function cloudSyncStatusLine(view: CloudSyncView, t: T, now: number): str
   if (view.phase === 'starting' || (view.phase === 'copying' && !view.progress)) {
     return t('orcaCloudSync.syncing', 'Syncing…')
   }
+  if (view.phase === 'synced' && view.lastSyncedAt && view.files === 0) {
+    // Nothing to copy yet: "0 files · 0 KB" reads like a fault.
+    return t('orcaCloudSync.syncedEmpty', 'Synced · {{ago}}', {
+      ago: ago(t, view.lastSyncedAt, now)
+    })
+  }
   if (view.phase === 'synced' && view.lastSyncedAt) {
     const values = {
       files: t('orcaCloudSync.fileCount', '{{n}} files', {
@@ -270,6 +276,11 @@ export function CloudWorkspaceSyncSection({
         checked={view.choice.context}
         onCheckedChange={(next) => void choose({ context: next })}
       />
+      {on && !mirror && status ? (
+        <p className="-mt-1 tabular-nums text-muted-foreground" data-cloud-sync-status="context">
+          {status}
+        </p>
+      ) : null}
       <SyncRow
         switchRef={mirrorSwitch}
         label={t('orcaCloudSync.mirrorLabel', 'Mirror to this computer')}
@@ -281,7 +292,11 @@ export function CloudWorkspaceSyncSection({
         onCheckedChange={(next) => void choose({ mirror: next })}
       />
 
-      {on && status ? <p className="tabular-nums text-muted-foreground">{status}</p> : null}
+      {mirror && status ? (
+        <p className="-mt-1 tabular-nums text-muted-foreground" data-cloud-sync-status="mirror">
+          {status}
+        </p>
+      ) : null}
       {mirror ? (
         <div className="flex flex-col gap-1.5">
           <code

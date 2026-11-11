@@ -86,8 +86,8 @@ export function buildOrcaCloudSettingsSections(
       id: 'cloud-environments',
       title: t('settings.orcaCloud.environments.title', 'Cloud environments'),
       description: t(
-        'cloudEnvironment.descriptionTeam',
-        'Your team’s repos and install script, built once into a snapshot so every cloud workspace starts with dependencies installed.'
+        'cloudEnvironment.descriptionTeamSaved',
+        'Your team’s repos and install script, built once into a saved environment so every cloud workspace starts with dependencies installed.'
       ),
       icon: Boxes,
       searchEntries: getOrcaCloudEnvironmentsSearchEntries(),

@@ -1366,11 +1366,11 @@
       "environments": {
         "title": "Cloud environments",
         "unavailable": "Cloud environments aren’t available for this account yet.",
-        "searchDescription": "Repositories and install script built into a snapshot, and waking cloud workspaces before you open them.",
         "keywordSnapshot": "snapshot",
         "keywordInstall": "install script",
         "keywordWake": "wake",
-        "keywordSandbox": "sandbox"
+        "keywordSandbox": "sandbox",
+        "searchDescriptionSaved": "Repositories and install script built into a saved environment, and waking cloud workspaces before you open them."
       },
       "signedOut": {
         "reconnectTitle": "Sign in again",
@@ -26744,19 +26744,17 @@
       "empty": "No builds yet.",
       "aria": "Build history",
       "active": "Active",
-      "cannotCancel": "The snapshot is being saved; the build can no longer be canceled.",
       "cancel": "Cancel",
       "use": "Use this build",
-      "pruned": "Snapshot removed: only the newest 5 successful builds keep theirs.",
-      "title": "Builds"
+      "title": "Builds",
+      "cannotCancelSaving": "The environment is being saved; the build can no longer be canceled.",
+      "prunedEnvironment": "Saved environment removed: only the newest 5 successful builds keep theirs."
     },
     "log": {
       "lineCountTitle": "Lines of output",
       "loading": "Loading log…",
       "bootDone": "Sandbox started.",
       "booting": "Starting a fresh sandbox…",
-      "snapshotDone": "Snapshot saved.",
-      "snapshotting": "Saving the snapshot…",
       "noOutput": "No output.",
       "lostStatic": "Lost connection to the build log.",
       "reconnectingDetail": "Reconnecting… The build keeps running.",
@@ -26772,7 +26770,9 @@
       "copy": "Copy logs",
       "aria": "Build #{{number}} log",
       "jumpWithCount": "Jump to latest ({{total}} new)",
-      "jump": "Jump to latest"
+      "jump": "Jump to latest",
+      "environmentSaved": "Environment saved.",
+      "savingEnvironment": "Saving the environment…"
     },
     "stepStatus": {
       "running": "running",
@@ -26807,12 +26807,11 @@
     },
     "empty": {
       "title": "Create your environment",
-      "description": "Install your repos’ dependencies once, snapshot the sandbox, and every new cloud workspace starts ready to run in seconds.",
       "cta": "Create environment",
-      "memberAsk": "Ask an owner or admin to set it up."
+      "memberAsk": "Ask an owner or admin to set it up.",
+      "descriptionSaved": "Install your repos’ dependencies once, save the sandbox as an environment, and every new cloud workspace starts ready to run in seconds."
     },
     "loading": "Loading environment…",
-    "descriptionTeam": "Your team’s repos and install script, built once into a snapshot so every cloud workspace starts with dependencies installed.",
     "you": "You",
     "loadFailed": "Couldn’t load the cloud environment",
     "retry": "Try again",
@@ -26896,15 +26895,15 @@
       "clone": "Clone repositories",
       "install": "Run install script",
       "record": "Record environment",
-      "snapshot": "Save snapshot"
+      "saveEnvironment": "Save environment"
     },
     "status": {
       "starting": "Starting",
       "running": "Building",
-      "snapshotting": "Saving snapshot",
       "succeeded": "Ready",
       "failed": "Failed",
-      "canceled": "Canceled"
+      "canceled": "Canceled",
+      "savingEnvironment": "Saving environment"
     },
     "error": {
       "scriptFailed": "The install script stopped at a failing command.",
@@ -26912,13 +26911,13 @@
       "cloneFailedPlain": "A repository couldn’t be cloned. Check that the Orca GitHub app can access it and the branch exists.",
       "recordFailedPlain": "Orca couldn’t record the installed environment.",
       "timeout": "The build ran past its time limit.",
-      "snapshotFailed": "Saving the snapshot failed.",
       "runtimeRemoved": "The build sandbox was removed before it finished.",
       "bootFailed": "The build sandbox failed to start.",
       "bootTimeout": "The build sandbox took too long to start.",
       "vmLost": "Orca lost contact with the build sandbox.",
       "canceled": "The build was canceled.",
-      "unknownPlain": "Something went wrong during the build."
+      "unknownPlain": "Something went wrong during the build.",
+      "saveEnvironmentFailed": "Saving the environment failed."
     },
     "failedAtStep": "Build #{{number}} failed at {{step}}.",
     "failedPlain": "Build #{{number}} failed.",
@@ -26932,7 +26931,8 @@
       "fixClonePrompt": "The environment build failed while cloning {{repo}}. Fix the repository setup so the clone succeeds.",
       "aRepository": "a repository",
       "giveAccessFailed": "Couldn’t open GitHub. Try again in a moment."
-    }
+    },
+    "descriptionTeamSaved": "Your team’s repos and install script, built once into a saved environment so every cloud workspace starts with dependencies installed."
   },
   "cloudShare": {
     "openFailed": {
@@ -28511,6 +28511,7 @@
     "removalEdited_other": "{{count}} changed files on this computer will be removed.",
     "removeCopy": "Remove copy",
     "title": "On this computer",
+    "syncedEmpty": "Synced · {{ago}}",
     "contextLabel": ".context folder",
     "contextHelper": "Plans and screenshots from this workspace, synced to this computer.",
     "mirrorLabel": "Mirror to this computer",
