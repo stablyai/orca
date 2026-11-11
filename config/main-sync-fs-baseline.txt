@@ -296,10 +296,10 @@
 13 src/main/kimi/hook-service.ts
 3 src/main/kiro/hook-service.ts
 1 src/main/kiro/standalone-hooks.ts
-4 src/main/linear/linear-credential-paths.ts
-3 src/main/linear/linear-legacy-viewer-store.ts
-1 src/main/linear/linear-token-store.ts
-3 src/main/linear/linear-workspace-registry.ts
+4 src/main/linear/accounts/linear-credential-paths.ts
+3 src/main/linear/accounts/linear-legacy-viewer-store.ts
+1 src/main/linear/accounts/linear-token-store.ts
+3 src/main/linear/accounts/linear-workspace-registry.ts
 1 src/main/macos-permissions/macos-tcc-prompt-notice.ts
 3 src/main/managed-data-accounts/credential-capture.ts
 18 src/main/managed-data-accounts/profile-removal.ts

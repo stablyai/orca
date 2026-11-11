@@ -16,7 +16,7 @@ const connectedLinearWorkspaces = vi.hoisted(() => {
   const current: { id: string; organizationUrlKey: string }[] = []
   return { current }
 })
-vi.mock('../../linear/issue-context/client', async (importOriginal) => ({
+vi.mock('../../linear/issues/context/issue-context-resolution', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   getConnectedWorkspaces: () => connectedLinearWorkspaces.current
 }))
