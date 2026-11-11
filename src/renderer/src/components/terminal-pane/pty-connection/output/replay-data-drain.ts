@@ -19,6 +19,11 @@ import {
 } from '../reattach/cursor-agent-reattach-screen'
 
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
+import {
+  beginWakeScrollbackRestore,
+  finishWakeScrollbackRestore,
+  type WakeScrollbackRestore
+} from '@/lib/orca-cloud/cloud-wake-scrollback'
 
 export function bindReplayDataDrain(session: ConnectPanePtySession): void {
   session.sendFocusedReattachFocusInAfterReplay = (
@@ -110,7 +115,10 @@ export function bindReplayDataDrain(session: ConnectPanePtySession): void {
       // Relay replay may overlap painted output; eager replay decides earlier so metadata-only frames preserve saved scrollback.
       // Clear before source-grid resize to avoid reflowing history that replay immediately discards.
       let replayPayload = data
+      let preSleep: WakeScrollbackRestore | null = null
       if (clearBeforeReplay) {
+        // WAKE-SCROLLBACK: a woken cloud pane's pre-sleep output, put back once this snapshot painted.
+        preSleep = beginWakeScrollbackRestore(session.pane.leafId, session.pane.terminal)
         if (carriesNormalBuffer) {
           // Wait for queued alt-screen transitions before choosing replay’s target buffer.
           await waitForTerminalOutputParsed(session.pane.terminal)
@@ -160,6 +168,16 @@ export function bindReplayDataDrain(session: ConnectPanePtySession): void {
       await session.writeReplayDataAsync(replayPayload)
       if (!isCurrentPayload()) {
         continue
+      }
+      if (preSleep) {
+        await finishWakeScrollbackRestore(
+          preSleep,
+          session.pane.terminal,
+          session.writeReplayDataAsync
+        )
+        if (!isCurrentPayload()) {
+          continue
+        }
       }
       if (clearBeforeReplay || data.length > 0) {
         await session.writeReplayEpilogue(

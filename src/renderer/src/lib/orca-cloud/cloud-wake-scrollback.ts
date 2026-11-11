@@ -1,0 +1,225 @@
+// WAKE-SCROLLBACK: a cloud terminal pane keeps its pre-sleep output across a wake. Sleep reboots the
+// VM and the woken pane attaches to a new terminal whose snapshot replay erases scrollback; the
+// output the pane showed before the sleep is written back above a "Slept 14:02–14:31 · processes
+// stopped" divider, client-side only (nothing reaches the PTY), as rendered text + SGR.
+import { translate } from '@/i18n/i18n'
+import {
+  formatClock,
+  renderBufferRows,
+  sanitizeRestoredText,
+  type RestoreBuffer
+} from './cloud-wake-scrollback-render'
+
+type PendingHistory = {
+  /** Which sleep this is from (its start); one capture per sleep. */
+  sleptAt: number
+  /** Text + SGR (or plain text from the read-only copy); null until known, or when empty. */
+  text: string | null
+  /**
+   * The workspace left "asleep": the next clearing replay is the woken terminal's. Until then a
+   * replay (a cold restore while still asleep) must not take it.
+   */
+  armed: boolean
+}
+
+// Keyed by the pane's durable leaf id; cleared once restored, or when the pane goes away.
+const SGR = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, 'g')
+const pending = new Map<string, PendingHistory>()
+
+export type ScrollbackSource = {
+  rows: number
+  buffer: { normal: RestoreBuffer & { baseY: number } }
+}
+
+function lastTextRow(buffer: RestoreBuffer): number {
+  for (let y = buffer.length - 1; y >= 0; y--) {
+    const line = buffer.getLine(y)
+    for (let x = 0; line && x < line.length; x++) {
+      const chars = line.getCell(x)?.getChars() ?? ''
+      if (chars !== '' && chars !== ' ') {
+        return y
+      }
+    }
+  }
+  return -1
+}
+
+/**
+ * While asleep (or waking), before the new terminal attaches: keep the pane's normal-buffer output.
+ * A shell pane keeps its visible rows too (its last output is usually on screen); an agent or
+ * full-screen pane keeps only the scrollback above its screen, so no frozen TUI frame comes back.
+ * With nothing in the pane (never mounted, app or renderer restarted while asleep), the plain-text
+ * read-only copy saved at sleep stands in, uncoloured.
+ */
+export function captureWakeScrollback(
+  leafId: string,
+  terminal: ScrollbackSource,
+  options: {
+    /** When the workspace went to sleep; null when unknown (the first capture's time stands in). */
+    sleptAt: number | null
+    agentPane: boolean
+    maxRows: number
+    readOnlyCopy?: () => Promise<readonly string[] | null>
+  }
+): void {
+  const existing = pending.get(leafId)
+  if (existing && (options.sleptAt === null || existing.sleptAt === options.sleptAt)) {
+    return
+  }
+  const normal = terminal.buffer.normal
+  const end = options.agentPane ? normal.baseY : lastTextRow(normal) + 1
+  const text = renderBufferRows(normal, Math.max(0, end - options.maxRows), end)
+  const entry: PendingHistory = {
+    sleptAt: options.sleptAt ?? Date.now(),
+    armed: false,
+    text: text.replace(SGR, '').trim() === '' ? null : text
+  }
+  pending.set(leafId, entry)
+  if (entry.text !== null || !options.readOnlyCopy) {
+    return
+  }
+  void options
+    .readOnlyCopy()
+    .then((lines) => {
+      if (pending.get(leafId) !== entry || !lines) {
+        return
+      }
+      const kept = options.agentPane
+        ? lines.slice(0, Math.max(0, lines.length - terminal.rows))
+        : lines
+      const plain = kept.slice(-options.maxRows)
+      entry.text = plain.join('').trim() === '' ? null : plain.join('\r\n')
+    })
+    .catch(() => undefined)
+}
+
+/** The divider, dim, between the restored output and the woken terminal. */
+export function wakeDividerLine(sleptAt: number, wokeAt: number): string {
+  const label = translate(
+    'orcaCloudWorkspace.terminal.sleptDivider',
+    'Slept {{from}}–{{to}} · processes stopped',
+    { from: formatClock(sleptAt), to: formatClock(wokeAt) }
+  )
+  return `\x1b[0;2m── ${label} ──\x1b[0m`
+}
+
+/** The workspace is waking or live: these panes' next clearing replay restores their output. */
+export function armWakeScrollback(leafIds: Iterable<string>): void {
+  for (const id of leafIds) {
+    const entry = pending.get(id)
+    if (entry) {
+      entry.armed = true
+    }
+  }
+}
+
+/** The pane closed or its workspace was deleted. */
+export function forgetWakeScrollback(leafIds: Iterable<string>): void {
+  for (const id of leafIds) {
+    pending.delete(id)
+  }
+}
+
+type WokenTerminal = {
+  rows: number
+  buffer: {
+    active: RestoreBuffer & {
+      type: string
+      viewportY: number
+      baseY: number
+      cursorX: number
+      cursorY: number
+    }
+  }
+  scrollToLine: (line: number) => void
+}
+
+/** A restore started on the woken terminal's snapshot, finished once that snapshot painted. */
+export type WakeScrollbackRestore = {
+  /** The restored output (text + SGR only) and its divider. */
+  block: string
+  /** Where a person who had scrolled up was, or null when pinned to the bottom. */
+  scrolledTo: number | null
+}
+
+/**
+ * The woken terminal's snapshot is about to paint: takes (and forgets) the pane's armed restore.
+ * Null when there is none, or nothing to restore (then nothing is said either).
+ */
+export function beginWakeScrollbackRestore(
+  leafId: string,
+  terminal: WokenTerminal,
+  wokeAt = Date.now()
+): WakeScrollbackRestore | null {
+  const entry = pending.get(leafId)
+  if (!entry?.armed) {
+    return null
+  }
+  pending.delete(leafId)
+  if (entry.text === null) {
+    return null
+  }
+  const { viewportY, baseY } = terminal.buffer.active
+  return {
+    block: `\x1b[0m${sanitizeRestoredText(entry.text)}\x1b[0m\r\n${wakeDividerLine(entry.sleptAt, wokeAt)}`,
+    scrolledTo: viewportY < baseY ? viewportY : null
+  }
+}
+
+function rowHasText(buffer: RestoreBuffer, y: number): boolean {
+  const line = buffer.getLine(y)
+  for (let x = 0; line && x < line.length; x++) {
+    const chars = line.getCell(x)?.getChars() ?? ''
+    if (chars !== '' && chars !== ' ') {
+      return true
+    }
+  }
+  return false
+}
+
+/**
+ * The client-side rewrite once the snapshot painted: the restored output, the divider, then the
+ * woken screen's rows, with the cursor put back where the snapshot left it (relative moves only).
+ * Null on the alternate screen (a full-screen app owns the pane; its normal buffer is not shown).
+ */
+export function composeWakeRestore(block: string, terminal: WokenTerminal): string | null {
+  const active = terminal.buffer.active
+  if (active.type !== 'normal') {
+    return null
+  }
+  let last = active.cursorY
+  for (let row = terminal.rows - 1; row > active.cursorY; row--) {
+    if (rowHasText(active, active.baseY + row)) {
+      last = row
+      break
+    }
+  }
+  const screen = renderBufferRows(active, active.baseY, active.baseY + last + 1)
+  const up = last - active.cursorY
+  return `\x1b[2J\x1b[3J\x1b[H${block}\r\n${screen}\x1b[0m${up > 0 ? `\x1b[${up}A` : ''}\x1b[${active.cursorX + 1}G`
+}
+
+/**
+ * Writes the rewrite through `write` (the replay writer: client-side, under the replay guard;
+ * nothing reaches the PTY). Stays pinned to the bottom; a person who had scrolled up keeps their place.
+ */
+export async function finishWakeScrollbackRestore(
+  restore: WakeScrollbackRestore,
+  terminal: WokenTerminal,
+  write: (data: string) => Promise<void>
+): Promise<boolean> {
+  const data = composeWakeRestore(restore.block, terminal)
+  if (data === null) {
+    return false
+  }
+  await write(data)
+  if (restore.scrolledTo !== null) {
+    terminal.scrollToLine(restore.scrolledTo)
+  }
+  return true
+}
+
+/** Tests only. */
+export function resetWakeScrollbackForTests(): void {
+  pending.clear()
+}
