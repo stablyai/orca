@@ -17,7 +17,9 @@ vi.mock('../large-files/ImageDiffViewer', async () => {
   await chunk.loaded
   return { default: () => <div data-testid="image-diff" /> }
 })
-vi.mock('@monaco-editor/react', () => ({ DiffEditor: () => <div data-testid="monaco-diff" /> }))
+vi.mock('../../combined-diff/scroll-viewport/CombinedDiffEditor', () => ({
+  CombinedDiffEditor: () => <div data-testid="monaco-diff" />
+}))
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
 
 const props: ComponentProps<typeof DiffSectionBody> = {

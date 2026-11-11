@@ -5,6 +5,8 @@ import { editor, Range } from 'monaco-editor/esm/vs/editor/editor.api.js'
 describe('combined native nonvisual reading marker', () => {
   it('retargets one native marker without decoration events, tracks edits and retires permanently on flush/disposal', async () => {
     const model = editor.createModel('first\nanchor\nlast', 'plaintext')
+    // Initialize the lazy bracket provider before observing marker-only events.
+    model.getAllDecorations()
     let decorations = 0
     const listener = model.onDidChangeDecorations(() => decorations++)
     const point = model.createTrackedRange(
