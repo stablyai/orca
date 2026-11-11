@@ -42,7 +42,6 @@ export function buildLineageRowProjection(
 ) {
   const frames: LineageRowFrame[] = []
   const occurrencesByIdentity = new Map<string, number[]>()
-  const occurrencesByWorkspaceId = new Map<string, number[]>()
   const stack: number[] = []
   const close = (next: number) => {
     const index = stack.pop()!
@@ -130,13 +129,6 @@ export function buildLineageRowProjection(
       } else {
         occurrencesByIdentity.set(identity, [index])
       }
-      const id = getWorktreeIdFromHostIdentity(identity)
-      const sameId = occurrencesByWorkspaceId.get(id)
-      if (sameId) {
-        sameId.push(index)
-      } else {
-        occurrencesByWorkspaceId.set(id, [index])
-      }
     }
     frames.push(frame)
     if (isWorkspace) {
@@ -153,7 +145,7 @@ export function buildLineageRowProjection(
     const next = frames[index + 1]
     frame.after = next?.root === frame.root ? 0 : 6
   })
-  return { frames, occurrencesByIdentity, occurrencesByWorkspaceId }
+  return { frames, occurrencesByIdentity }
 }
 
 export function useDraggedSubtreeRanges(
@@ -190,15 +182,25 @@ export function useLineageRowProjection(args: {
   const activeFamilyRoots = useMemo(() => {
     const roots = new Set<number>()
     if (activeWorktreeId) {
-      const occurrences = activeWorkspaceExecutionHostId
-        ? projection.occurrencesByIdentity.get(
+      const addRoots = (occurrences: readonly number[]) => {
+        for (const index of occurrences) {
+          const root = projection.frames[index].root
+          if (projection.frames[root].end > root) {
+            roots.add(root)
+          }
+        }
+      }
+      if (activeWorkspaceExecutionHostId) {
+        addRoots(
+          projection.occurrencesByIdentity.get(
             composeWorktreeHostIdentity(activeWorkspaceExecutionHostId, activeWorktreeId)
-          )
-        : projection.occurrencesByWorkspaceId.get(activeWorktreeId)
-      for (const index of occurrences ?? []) {
-        const root = projection.frames[index].root
-        if (projection.frames[root].end > root) {
-          roots.add(root)
+          ) ?? []
+        )
+      } else {
+        for (const [identity, occurrences] of projection.occurrencesByIdentity) {
+          if (getWorktreeIdFromHostIdentity(identity) === activeWorktreeId) {
+            addRoots(occurrences)
+          }
         }
       }
     }

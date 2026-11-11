@@ -43,10 +43,6 @@ export function useWorktreeLineageDropCommit(args: {
   const { repoMap, worktreeMap, worktreeLineageById, worktreeDragGroups, keepsFolderParent } = args
   const worktrees = useAllWorktrees()
   const parentIdentities = useAppStore(selectSidebarLineageParentIdentities)
-  const groupMembers = useMemo(
-    () => new Map(worktreeDragGroups.map((group) => [group.key, new Set(group.worktreeIds)])),
-    [worktreeDragGroups]
-  )
   const folderParentOf = useCallback(
     (identity: string) => {
       const parent = parentIdentities?.get(identity)
@@ -65,16 +61,21 @@ export function useWorktreeLineageDropCommit(args: {
       sourceGroupKey: string
     ) => {
       const folders = new Set<string>()
+      let members: readonly string[] | undefined
       for (const copy of pickedCopies) {
         const identity = getWorktreeHostIdentity(copy)
         const parent = folderParentOf(identity)
-        if (parent && groupMembers.get(sourceGroupKey)?.has(identity)) {
-          folders.add(parent)
+        if (parent) {
+          members ??=
+            worktreeDragGroups.find((group) => group.key === sourceGroupKey)?.worktreeIds ?? []
+          if (members.includes(identity)) {
+            folders.add(parent)
+          }
         }
       }
       return captureGeometry(point, folders)
     },
-    [captureGeometry, folderParentOf, groupMembers]
+    [captureGeometry, folderParentOf, worktreeDragGroups]
   )
   const assignWorktreeParent = useAppStore((s) => s.assignWorktreeParent)
   const assignCrossStoreWorktreeParent = useAppStore((s) => s.assignCrossStoreWorktreeParent)
