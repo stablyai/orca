@@ -121,6 +121,7 @@ export function normalizeProfileProjectState(
   const {
     uiLanguagePortugueseMigrationApplied: _migrationApplied,
     nestedWorkerMaxDepthDefaultedToFour: _depthMigrated,
+    artifactSharingEnabled: _artifactSharingEnabled,
     ...settingsDefaults
   } = defaults.settings
   return rebuildRepoBackedProjectState({
