@@ -17,6 +17,7 @@ import { useKeyboardPersistingTaps } from '../../../platform/keyboard-persisting
 import { colors } from '../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import type { MobileNativeChatSendIntent } from './mobile-native-chat-send'
+import { useMobileDictationAutoSendWithdraw } from './use-mobile-native-chat-composer-auto-send'
 
 const FOLLOW_UP_ICON = { queue: ListEnd, steer: CornerDownRight } as const
 
@@ -32,6 +33,7 @@ export function MobileNativeChatSendButton({
 }): React.JSX.Element {
   const t = useMobileTranslation()
   const [open, setOpen] = useState(false)
+  const withdrawAutoSend = useMobileDictationAutoSendWithdraw()
   const label = {
     queue: t('chat.composer.sendQueue', 'Queue'),
     steer: t('chat.composer.sendSteer', 'Steer')
@@ -47,7 +49,16 @@ export function MobileNativeChatSendButton({
     <>
       <ComposerSendButton
         onPress={() => onSend()}
-        onLongPress={sendFollowUp?.offersChoice && canSend ? () => setOpen(true) : undefined}
+        // A hold is choosing how to send, so the dictation countdown must not send meanwhile.
+        onPressIn={withdrawAutoSend}
+        onLongPress={
+          sendFollowUp?.offersChoice && canSend
+            ? () => {
+                withdrawAutoSend()
+                setOpen(true)
+              }
+            : undefined
+        }
         canSend={canSend}
         label={t('chat.composer.sendMessage', 'Send message')}
       />

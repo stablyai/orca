@@ -6,12 +6,14 @@ import { COMPOSER_CONTROL_HIT_SLOP, composerInputStyles as styles } from './comp
 
 export function ComposerSendButton({
   onPress,
+  onPressIn,
   onLongPress,
   canSend,
   sending = false,
   label = 'Send'
 }: {
   onPress: () => void
+  onPressIn?: () => void
   /** A hold offers more ways to send; absent, a hold is a plain press. */
   onLongPress?: () => void
   canSend: boolean
@@ -33,6 +35,7 @@ export function ComposerSendButton({
         pressed && enabled && styles.pressed
       ]}
       onPress={onPress}
+      onPressIn={onPressIn}
       onLongPress={onLongPress}
       disabled={!enabled}
       hitSlop={COMPOSER_CONTROL_HIT_SLOP}
