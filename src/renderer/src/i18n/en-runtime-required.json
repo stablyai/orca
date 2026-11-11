@@ -2353,10 +2353,6 @@
     "overlay": {
       "pendingKeys_one": "{{count}} key waiting · it goes to the terminal when it’s up",
       "pendingKeys_other": "{{count}} keys waiting · they go to the terminal when it’s up"
-    },
-    "terminal": {
-      "asleep": "This workspace is asleep. Open it to wake it.",
-      "asleepNamed": "{{name}} is asleep. Open it to wake it."
     }
   },
   "pet": {
