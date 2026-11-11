@@ -4969,7 +4969,8 @@
       "deviceLabelConnected": "{{device}}, connected {{date}}"
     },
     "agent": {
-      "label": "Agent"
+      "label": "Agent",
+      "chipSelected": "{{agent}}, selected"
     },
     "started": {
       "title": "{{agent}} started with your prompt",
@@ -5055,7 +5056,8 @@
       "missing": "This workspace is gone or you no longer have access.",
       "signIn": "Sign in to Orca Cloud on this phone",
       "signInAction": "Sign in",
-      "unreachable": "Couldn’t reach Orca Cloud. Check your connection and try again."
+      "unreachable": "Couldn’t reach Orca Cloud. Check your connection and try again.",
+      "signInDetail": "This link opens a cloud workspace your team shared. Sign in to see it."
     },
     "action": {
       "openSession": "Open session",
@@ -5162,7 +5164,9 @@
         "asleep": "Nothing is deleted, and your files are safe."
       },
       "hours2": "Out of sandbox hours. Running sandboxes go to sleep and new ones can’t start.",
-      "cap2": "Spend cap reached. Running sandboxes go to sleep and new ones can’t start."
+      "cap2": "Spend cap reached. Running sandboxes go to sleep and new ones can’t start.",
+      "trialUsedUp": "Your trial is used up. Running sandboxes go to sleep and new ones can’t start.",
+      "trialUnavailable": "This account or team already used its trial."
     },
     "wake": {
       "slowQueued": "Taking longer than usual. Your files are safe. Your prompt sends as soon as it’s awake.",

@@ -7,6 +7,10 @@ import { z } from 'zod'
 import type { GitHubInstallation } from './github-app'
 
 const STATE_TTL_MS = 10 * 60_000
+/** Billing's cloud setup session ids (cloud-setup.ts): `cs_` + 22 base64url characters. */
+export const SETUP_SESSION_ID = /^cs_[A-Za-z0-9_-]{22}$/
+/** How long a pending org-install request waits for an owner's approval. */
+export const INSTALL_REQUEST_TTL_MS = 30 * 24 * 60 * 60_000
 
 export type GitHubConnectConfig = {
   appSlug: string
@@ -14,6 +18,31 @@ export type GitHubConnectConfig = {
   clientSecret: string
   stateSecret: string
   fetch?: typeof fetch
+  // N5: checks a just-installed installation against the GitHub identity carried in the state,
+  // with the App's own credentials. Null (or absent): fall back to GitHub's Authorize page.
+  verifyInstaller?: (installationId: number, user: { id: number; login: string }) => Promise<GitHubInstallation | null>
+}
+
+/**
+ * The installation if `user` may bind it: it is on their own account, or they are an active admin
+ * of its org. Reads GitHub with the App's credentials only (no user token needed).
+ */
+export async function installerFromIdentity(
+  minter: { getInstallation(id: number): Promise<GitHubInstallation | null>; orgMembership?: (id: number, org: string, login: string) => Promise<{ state: string; role: string; userId: number } | null> },
+  installationId: number,
+  user: { id: number; login: string }
+): Promise<GitHubInstallation | null> {
+  const installation = await minter.getInstallation(installationId)
+  if (!installation) {
+    return null
+  }
+  if (installation.account.type === 'User') {
+    return installation.account.id === user.id ? installation : null
+  }
+  const membership = await minter.orgMembership?.(installationId, installation.account.login, user.login)
+  return membership && membership.state === 'active' && membership.role === 'admin' && membership.userId === user.id
+    ? installation
+    : null
 }
 
 export type InstallationBinding = {
@@ -24,7 +53,8 @@ export type InstallationBinding = {
   github_account_type: string
   bound_by_user_id: string
   bound_by_github_user_id: number | null
-  method: 'oauth' | 'operator'
+  /** `request`: an org owner approved an install requested (OAuth-proven) by this GitHub user. */
+  method: 'oauth' | 'operator' | 'request' | 'idp'
   created_at: number
   revoked_at: number | null
 }
@@ -90,7 +120,16 @@ const StatePayload = z.object({
   e: z.number().int(),
   i: z.number().int().positive().optional(),
   // `user`: a member connecting their own GitHub identity (github-user-tokens.ts), not an install.
-  k: z.literal('user').optional()
+  k: z.literal('user').optional(),
+  // Cloud setup session waiting on this install (billing's cloud-setup.ts); the browser goes back to it.
+  s: z.string().regex(SETUP_SESSION_ID).optional(),
+  // owner/repo the install was started for (repo-access, install-request recording).
+  r: z.string().regex(/^[A-Za-z0-9-]+\/[A-Za-z0-9._-]+$/).max(200).optional(),
+  // GitHub sent the browser back with setup_action=request: a non-owner asked an org owner to install.
+  q: z.literal(1).optional(),
+  // N5: the GitHub identity Orca Cloud auth verified from the user's GitHub sign-in (billing's setup
+  // chain passes it). Lets the install bind without GitHub's separate Authorize page.
+  g: z.object({ id: z.number().int().positive(), l: z.string().regex(/^[A-Za-z0-9-]{1,39}$/) }).optional()
 })
 export type ConnectState = z.infer<typeof StatePayload>
 
@@ -138,14 +177,27 @@ export async function createConnectState(
   db: D1Database,
   secret: string,
   caller: { accountId: string; userId: string },
-  now: number
+  now: number,
+  context: {
+    setupSessionId?: string
+    repo?: { owner: string; repo: string }
+    githubUser?: { id: number; login: string }
+  } = {}
 ): Promise<string> {
   const nonce = Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, '0')).join('')
   await db
     .prepare('INSERT INTO github_connect_states (nonce, account_id, expires_at) VALUES (?, ?, ?)')
     .bind(nonce, caller.accountId, now + STATE_TTL_MS)
     .run()
-  return signState(secret, { n: nonce, a: caller.accountId, u: caller.userId, e: now + STATE_TTL_MS })
+  return signState(secret, {
+    n: nonce,
+    a: caller.accountId,
+    u: caller.userId,
+    e: now + STATE_TTL_MS,
+    ...(context.setupSessionId && SETUP_SESSION_ID.test(context.setupSessionId) ? { s: context.setupSessionId } : {}),
+    ...(context.repo ? { r: `${context.repo.owner}/${context.repo.repo}` } : {}),
+    ...(context.githubUser ? { g: { id: context.githubUser.id, l: context.githubUser.login } } : {})
+  })
 }
 
 /** Marks the nonce used; false when it was already used, unknown, or issued to another account. */
@@ -255,8 +307,144 @@ export function authorizeUrl(config: GitHubConnectConfig, origin: string, state:
   return url.toString()
 }
 
-export function installUrl(config: GitHubConnectConfig, state: string): string {
-  return `https://github.com/apps/${encodeURIComponent(config.appSlug)}/installations/new?state=${encodeURIComponent(state)}`
+/**
+ * GitHub App install page. With the owner's and the repository's numeric ids it opens on the
+ * permissions step with that account chosen and only that repository selected, using the two
+ * parameters GitHub documents for this page ("Migrating OAuth apps to GitHub Apps"):
+ * `/installations/new/permissions?suggested_target_id=<user or org id>&repository_ids[]=<repo id>`.
+ * suggested_target_id is required there and an omitted repository_ids[] means "All repositories",
+ * so without both ids we use the plain page and let the user pick (least privilege over one click).
+ * `state` is GitHub's documented install-URL parameter ("Sharing your GitHub App"). `target_id` is
+ * not a documented install-URL parameter, so it is never sent.
+ */
+export function installUrl(
+  config: GitHubConnectConfig,
+  state: string,
+  preselect?: { ownerId: number; repoId: number } | null
+): string {
+  const base = `https://github.com/apps/${encodeURIComponent(config.appSlug)}/installations/new`
+  if (preselect && Number.isSafeInteger(preselect.ownerId) && preselect.ownerId > 0 && Number.isSafeInteger(preselect.repoId) && preselect.repoId > 0) {
+    return `${base}/permissions?suggested_target_id=${preselect.ownerId}&repository_ids[]=${preselect.repoId}&state=${encodeURIComponent(state)}`
+  }
+  return `${base}?state=${encodeURIComponent(state)}`
+}
+
+// ---- installation requests (an org owner must approve) ----
+
+export type InstallRequestRow = {
+  id: string
+  account_id: string
+  user_id: string
+  github_user_id: number
+  github_login: string
+  owner_login: string
+  repo_url: string | null
+  setup_session_id: string | null
+  created_at: number
+  expires_at: number
+  resolved_at: number | null
+  installation_id: number | null
+}
+
+export async function recordInstallRequest(
+  db: D1Database,
+  request: { accountId: string; userId: string; githubUser: { id: number; login: string }; owner: string; repoUrl: string | null; setupSessionId: string | null },
+  now: number
+): Promise<void> {
+  const owner = request.owner.toLowerCase()
+  // One open request per account, requester and owner: a second Request click refreshes it.
+  await db
+    .prepare(
+      `UPDATE github_install_requests SET resolved_at = ? WHERE account_id = ? AND github_user_id = ? AND owner_login = ? AND resolved_at IS NULL`
+    )
+    .bind(now, request.accountId, request.githubUser.id, owner)
+    .run()
+  await db
+    .prepare(
+      `INSERT INTO github_install_requests (id, account_id, user_id, github_user_id, github_login, owner_login, repo_url,
+         setup_session_id, created_at, expires_at, resolved_at, installation_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL)`
+    )
+    .bind(
+      crypto.randomUUID(),
+      request.accountId,
+      request.userId,
+      request.githubUser.id,
+      request.githubUser.login,
+      owner,
+      request.repoUrl,
+      request.setupSessionId,
+      now,
+      now + INSTALL_REQUEST_TTL_MS
+    )
+    .run()
+}
+
+/** The account's open request for a GitHub owner, if any. */
+export async function openInstallRequest(db: D1Database, accountId: string, owner: string, now: number): Promise<InstallRequestRow | null> {
+  return db
+    .prepare(
+      `SELECT * FROM github_install_requests WHERE account_id = ? AND owner_login = ? AND resolved_at IS NULL AND expires_at > ?
+       ORDER BY created_at DESC LIMIT 1`
+    )
+    .bind(accountId, owner.toLowerCase(), now)
+    .first<InstallRequestRow>()
+}
+
+/**
+ * An org owner approved: GitHub's `installation.created` names the requester. Binds the new
+ * installation to every Orca account whose open request came from that same (OAuth-proven) GitHub
+ * user for that org, and resolves those requests. Returns the requests it resolved.
+ */
+export async function bindApprovedRequests(
+  db: D1Database,
+  installation: { id: number; account: { id: number; login: string; type: string } },
+  requesterGithubUserId: number,
+  now: number
+): Promise<InstallRequestRow[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT * FROM github_install_requests WHERE github_user_id = ? AND owner_login = ? AND resolved_at IS NULL AND expires_at > ?
+       ORDER BY created_at DESC LIMIT 20`
+    )
+    .bind(requesterGithubUserId, installation.account.login.toLowerCase(), now)
+    .all<InstallRequestRow>()
+  const resolved: InstallRequestRow[] = []
+  const seen = new Set<string>()
+  for (const request of results) {
+    if (!seen.has(request.account_id)) {
+      seen.add(request.account_id)
+      await bindInstallation(
+        db,
+        {
+          installation_id: installation.id,
+          account_id: request.account_id,
+          github_account_id: installation.account.id,
+          github_account_login: installation.account.login,
+          github_account_type: installation.account.type,
+          bound_by_user_id: request.user_id,
+          bound_by_github_user_id: requesterGithubUserId,
+          method: 'request'
+        },
+        now
+      )
+    }
+    await db
+      .prepare('UPDATE github_install_requests SET resolved_at = ?, installation_id = ? WHERE id = ?')
+      .bind(now, installation.id, request.id)
+      .run()
+    resolved.push(request)
+  }
+  return resolved
+}
+
+/** Accounts holding a live binding to an installation. */
+export async function boundAccounts(db: D1Database, installationId: number): Promise<string[]> {
+  const { results } = await db
+    .prepare('SELECT account_id FROM github_installations WHERE installation_id = ? AND revoked_at IS NULL LIMIT 50')
+    .bind(installationId)
+    .all<{ account_id: string }>()
+  return results.map((row) => row.account_id)
 }
 
 /**
@@ -270,7 +458,8 @@ export async function handleGitHubReturn(
   now: number
 ): Promise<
   | { redirect: string }
-  | { bound: string[]; denied: number }
+  | { bound: string[]; boundIds: { githubOwnerId: number; githubUserId: number }[]; denied: number; state: ConnectState }
+  | { requested: { owner: string }; state: ConnectState }
   | { error: string }
   | { userConnect: { a: string; u: string }; code: string }
 > {
@@ -281,10 +470,48 @@ export async function handleGitHubReturn(
   }
   const queryInstallation = Number(url.searchParams.get('installation_id') ?? NaN)
   const installationId = state.i ?? (Number.isSafeInteger(queryInstallation) && queryInstallation > 0 ? queryInstallation : undefined)
+  // GitHub's Request button (a member who isn't an org owner) returns with setup_action=request.
+  const requested = state.q === 1 || (url.searchParams.get('setup_action') === 'request' && !installationId)
   const code = url.searchParams.get('code') ?? ''
-  if (!/^[A-Za-z0-9_-]{8,128}$/.test(code)) {
+  const hasCode = /^[A-Za-z0-9_-]{8,128}$/.test(code)
+  if (!hasCode && state.g && installationId && !requested && state.k !== 'user' && config.verifyInstaller) {
+    // N5: the user signed in to Orca with GitHub; check that identity against the installation with
+    // the App's credentials and skip GitHub's Authorize page. Any doubt falls through to OAuth.
+    const installation = await config.verifyInstaller(installationId, { id: state.g.id, login: state.g.l }).catch(() => null)
+    if (installation) {
+      if (!(await consumeState(db, state, now))) {
+        return { error: 'state_used' }
+      }
+      await bindInstallation(
+        db,
+        {
+          installation_id: installation.id,
+          account_id: state.a,
+          github_account_id: installation.account.id,
+          github_account_login: installation.account.login,
+          github_account_type: installation.account.type,
+          bound_by_user_id: state.u,
+          bound_by_github_user_id: state.g.id,
+          method: 'idp'
+        },
+        now
+      )
+      console.log(JSON.stringify({ event: 'github_bind', method: 'idp', bound: 1, denied: 0 }))
+      return {
+        bound: [installation.account.login],
+        boundIds: [{ githubOwnerId: installation.account.id, githubUserId: state.g.id }],
+        denied: 0,
+        state
+      }
+    }
+  }
+  if (!hasCode) {
     // Carry the (still untrusted) installation id through OAuth; verification happens on return.
-    const carried = await signState(config.stateSecret, { ...state, ...(installationId ? { i: installationId } : {}) })
+    const carried = await signState(config.stateSecret, {
+      ...state,
+      ...(installationId ? { i: installationId } : {}),
+      ...(requested ? { q: 1 as const } : {})
+    })
     return { redirect: authorizeUrl(config, url.origin, carried) }
   }
   if (!(await consumeState(db, state, now))) {
@@ -295,6 +522,27 @@ export async function handleGitHubReturn(
     return { userConnect: { a: state.a, u: state.u }, code }
   }
   const result = await verifiedInstallations(config, code, installationId)
+  if (requested && !installationId) {
+    // Nothing is installed yet: remember who asked (OAuth-proven) so the owner's approval binds it.
+    const owner = state.r?.split('/')[0]
+    if (!owner) {
+      return { error: 'request_without_repo' }
+    }
+    await recordInstallRequest(
+      db,
+      {
+        accountId: state.a,
+        userId: state.u,
+        githubUser: result.githubUser,
+        owner,
+        repoUrl: `https://github.com/${state.r}`,
+        setupSessionId: state.s ?? null
+      },
+      now
+    )
+    console.log(JSON.stringify({ event: 'github_install_requested' }))
+    return { requested: { owner }, state }
+  }
   for (const installation of result.allowed) {
     await bindInstallation(
       db,
@@ -312,5 +560,11 @@ export async function handleGitHubReturn(
     )
   }
   console.log(JSON.stringify({ event: 'github_bind', bound: result.allowed.length, denied: result.denied.length }))
-  return { bound: result.allowed.map((i) => i.account.login), denied: result.denied.length }
+  return {
+    bound: result.allowed.map((i) => i.account.login),
+    // Numeric GitHub ids for billing's trial abuse keys (per GitHub owner and per GitHub user).
+    boundIds: result.allowed.map((i) => ({ githubOwnerId: i.account.id, githubUserId: i.githubUserId })),
+    denied: result.denied.length,
+    state
+  }
 }

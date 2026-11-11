@@ -36,6 +36,12 @@ export function CloudAgentPicker(props: {
           <Pressable
             key={id}
             accessibilityRole="radio"
+            // Name plus state, so the chip reads the same in any order the wrap puts it in.
+            accessibilityLabel={
+              checked
+                ? t('cloud.agent.chipSelected', '{{agent}}, selected', { agent: label })
+                : label
+            }
             accessibilityState={{ checked, disabled: props.disabled }}
             disabled={props.disabled}
             onPress={() => props.onChange(id)}

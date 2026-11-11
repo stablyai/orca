@@ -1,5 +1,14 @@
 import React from 'react'
-import { Archive, ArchiveRestore, Cloud, Laptop, Loader2, Moon, Play, RotateCw } from 'lucide-react'
+import {
+  Archive,
+  ArchiveRestore,
+  Cloud,
+  Loader2,
+  Monitor,
+  Moon,
+  Play,
+  RotateCw
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { InlineError } from '@/components/ui/inline-error'
 import { cloudWorkspaceMoved } from '@/lib/orca-cloud/orca-cloud-move-store'
@@ -25,6 +34,8 @@ import {
   type CloudStatusEntry
 } from '@/lib/orca-cloud/orca-cloud-workspace-store'
 import { CloudStateDot } from './CloudStateDot'
+import { CloudSecretsMissingNotice } from '../cloud-secrets-ask/CloudSecretsMissingNotice'
+import { CloudAgentsAndSecretsLink } from '../agent-host-panel/CloudAgentsAndSecretsLink'
 import { cloudStateDetail, cloudStateLabel } from './cloud-state-copy'
 
 export type CloudPanelActions = {
@@ -168,7 +179,17 @@ export function CloudWorkspaceStatusPanel({
     ? null
     : restarting
       ? t('orcaCloudWorkspace.detail.restarting', 'Orca resumes your agents after the restart.')
-      : cloudStateDetail(state, t)
+      : state === 'running'
+        ? // The control plane's idle timer; older control planes omit it (their timer is 15 min).
+          t(
+            'orcaCloudWorkspace.detail.sleepsWhenIdleMinutes',
+            'Sleeps in {{count}} minutes if idle',
+            {
+              count: status?.idleSleepMinutes ?? 15,
+              defaultValue_one: 'Sleeps in {{count}} minute if idle'
+            }
+          )
+        : cloudStateDetail(state, t)
   const showMeters = Boolean(metrics) && (state === 'running' || state === 'unresponsive')
   const showAgo = Boolean(entry?.fetchedAt && showUpdatedAgo(entry.fetchedAt, now))
   const hasActions = canArchive || canRestart || restarting || state === 'archived'
@@ -191,21 +212,32 @@ export function CloudWorkspaceStatusPanel({
             </span>
             <span className="inline-flex items-center gap-1.5 text-foreground">
               <CloudStateDot state={unavailable ? 'unknown' : state} size="md" />
-              {unavailable
-                ? t('orcaCloudWorkspace.statusUnavailable', 'Status unavailable')
-                : restarting
-                  ? t('orcaCloudWorkspace.state.restarting', 'Restarting')
-                  : cloudStateLabel(state, t)}
+              {unavailable ? (
+                t('orcaCloudWorkspace.statusUnavailable', 'Status unavailable')
+              ) : restarting ? (
+                t('orcaCloudWorkspace.state.restarting', 'Restarting')
+              ) : state === 'unknown' ? (
+                // Not yet read: a placeholder, not a word that reads like a state.
+                <>
+                  <Skeleton shape="small" className="h-3 w-14" aria-hidden="true" />
+                  <span className="sr-only">{cloudStateLabel(state, t)}</span>
+                </>
+              ) : (
+                cloudStateLabel(state, t)
+              )}
             </span>
           </div>
           {detail ? <p className="mt-0.5 text-muted-foreground">{detail}</p> : null}
         </div>
       </div>
 
+      {state === 'archived' ? null : <CloudSecretsMissingNotice workspaceId={workspaceId} />}
+      <CloudAgentsAndSecretsLink workspaceId={workspaceId} />
+
       {unavailable ? (
         <InlineError
           tone="neutral"
-          title={t('orcaCloudWorkspace.statusUnavailableDetail', 'Orca Cloud didn’t answer.')}
+          title={t('orcaCloudWorkspace.statusUnavailableTitle', 'Couldn’t get the sandbox status.')}
           retryLabel={t('orcaCloudWorkspace.tryAgain', 'Try again')}
           retrying={entry?.loading}
           onRetry={() => void refreshCloudWorkspaceStatus(workspaceId)}
@@ -309,13 +341,10 @@ export function CloudWorkspaceStatusPanel({
                 size="xs"
                 variant="ghost"
                 className="text-muted-foreground"
-                aria-label={t('orcaCloudWorkspace.moveToComputer', 'Move to this computer')}
                 {...busyProps(false, anyBusy, actions.onMoveToComputer)}
               >
-                <Laptop />
-                {moved
-                  ? t('orcaCloudWorkspace.moveAgain', 'Move again')
-                  : t('orcaCloudWorkspace.moveHere', 'Move here')}
+                <Monitor />
+                {t('orcaCloudWorkspace.moveToComputer', 'Move to this computer')}
               </Button>
             ) : null}
             {actions.onSleep && state === 'running' && !restarting ? (

@@ -1,5 +1,6 @@
 import React from 'react'
 
+import { WorktreeCardHostStateWord } from '../host/WorktreeCardHostMark'
 import { DetachedHeadBadge } from '@/components/DetachedHeadBadge'
 import CacheTimer from '../activity/CacheTimer'
 import { WorktreeHostContextBadge } from '../host/WorktreeHostContextBadge'
@@ -60,6 +61,8 @@ export function WorktreeCardMetaRow({
           ) : (
             <WorktreeHostContextBadge label={contextLabel ?? ''} />
           ))}
+
+        <WorktreeCardHostStateWord worktreeId={worktree.id} />
 
         {showIdentityInNewCard ? (
           <TruncatedSidebarLabel

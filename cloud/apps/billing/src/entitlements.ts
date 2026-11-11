@@ -14,6 +14,7 @@ import {
 } from './plans'
 import { accountSettings, currentSubscription, meteredSeconds, periodUsage, type SubscriptionRow } from './store'
 import { PAYMENT_FAILED_STATUSES } from './webhook'
+import { TRIAL_MAX_CONCURRENT_SANDBOXES, trialRow, trialState, type TrialState } from './trial'
 
 export type DenyReason =
   | 'no_subscription'
@@ -25,6 +26,9 @@ export type DenyReason =
   | 'machine_size_not_in_plan'
   | 'concurrency_limit'
   | 'member_concurrency_limit'
+  // One-time trial (trial.ts): its sandbox hours are used up, or this team can't have one.
+  | 'trial_used_up'
+  | 'trial_unavailable'
 
 export type Entitlement = {
   accountId: string
@@ -42,6 +46,11 @@ export type Entitlement = {
   /** Monthly allowance window the hours below count against. */
   usageWindow: { start: number; end: number } | null
   cancelAtPeriodEnd: boolean
+  /**
+   * The one-time trial while it is the account's plan (no subscription ever). Null otherwise: a
+   * subscription ends the trial for good. includedSeconds/usedSeconds below mirror it during a trial.
+   */
+  trial: TrialState | null
   includedSeconds: number
   usedSeconds: number
   remainingIncludedSeconds: number
@@ -92,6 +101,10 @@ export async function computeEntitlement(
   const spendCapCents = settings.spend_cap_cents ?? team.defaultSpendCapCents
   const overageBase = { optedIn: settings.overage_opt_in === 1, spendCapCents, centsPerHour: team.overageCentsPerHour }
   if (!subscription) {
+    const trialRecord = await trialRow(db, accountId)
+    if (trialRecord && trialRecord.revoked_at === null) {
+      return trialEntitlement(accountId, trialState(trialRecord), team, overageBase)
+    }
     return {
       accountId,
       plan: null,
@@ -104,6 +117,7 @@ export async function computeEntitlement(
       period: null,
       usageWindow: null,
       cancelAtPeriodEnd: false,
+      trial: null,
       includedSeconds: 0,
       usedSeconds: 0,
       remainingIncludedSeconds: 0,
@@ -117,9 +131,10 @@ export async function computeEntitlement(
         idleSleepMinutes: team.idleSleepMinutes
       },
       payment: { pastDueSince: null, graceEndsAt: null, suspendRunning: false },
-      suspendRunning: false,
+      // A revoked trial (GitHub identity reused): its running sandbox goes to sleep too.
+      suspendRunning: trialRecord !== null,
       canStartSandbox: false,
-      reason: 'no_subscription'
+      reason: trialRecord ? 'trial_unavailable' : 'no_subscription'
     }
   }
   const window = subscriptionWindow(subscription, now)
@@ -166,6 +181,7 @@ export async function computeEntitlement(
     period: { start: subscription.current_period_start, end: subscription.current_period_end },
     usageWindow: window,
     cancelAtPeriodEnd: subscription.cancel_at_period_end === 1,
+    trial: null,
     includedSeconds: included,
     usedSeconds: usage.usedSeconds,
     remainingIncludedSeconds: remaining,
@@ -185,6 +201,49 @@ export async function computeEntitlement(
     },
     payment: { pastDueSince, graceEndsAt, suspendRunning: graceExpired },
     suspendRunning: graceExpired || reason === 'included_hours_exhausted' || reason === 'overage_cap_reached',
+    canStartSandbox: reason === null,
+    reason
+  }
+}
+
+/** No card, no Stripe: the trial's hours, 1 sandbox at a time, never overage. */
+function trialEntitlement(
+  accountId: string,
+  trial: TrialState,
+  team: ReturnType<typeof planCatalog>['team'],
+  overageBase: { optedIn: boolean; spendCapCents: number; centsPerHour: number }
+): Entitlement {
+  const usedPercent = trial.includedSeconds > 0 ? (trial.usedSeconds / trial.includedSeconds) * 100 : 100
+  const warnings = team.warnAtPercent.filter((level) => usedPercent >= level)
+  const reason: DenyReason | null = trial.exhausted ? 'trial_used_up' : null
+  return {
+    accountId,
+    plan: null,
+    planLabel: null,
+    status: 'trial',
+    interval: null,
+    seats: 0,
+    members: null,
+    seatChange: null,
+    period: null,
+    usageWindow: null,
+    cancelAtPeriodEnd: false,
+    trial,
+    includedSeconds: trial.includedSeconds,
+    usedSeconds: trial.usedSeconds,
+    remainingIncludedSeconds: trial.remainingSeconds,
+    usageWarningPercent: warnings.length > 0 ? Math.max(...warnings) : null,
+    overageSeconds: 0,
+    overage: { ...overageBase, optedIn: false, active: false, spentCents: 0 },
+    limits: {
+      maxConcurrentSandboxes: TRIAL_MAX_CONCURRENT_SANDBOXES,
+      maxConcurrentSandboxesPerMember: TRIAL_MAX_CONCURRENT_SANDBOXES,
+      machineSizes: team.machineSizes,
+      idleSleepMinutes: team.idleSleepMinutes
+    },
+    payment: { pastDueSince: null, graceEndsAt: null, suspendRunning: false },
+    // Used up: running sandboxes go to sleep (snapshot kept) until a plan starts.
+    suspendRunning: trial.exhausted,
     canStartSandbox: reason === null,
     reason
   }

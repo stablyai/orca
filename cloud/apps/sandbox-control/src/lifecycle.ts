@@ -2,6 +2,7 @@
 // a forced stop before the provider's 24h cap, usage metering and write-ahead rows.
 import { accountProvider } from './account-providers'
 import { deleteAgentSourcesForSandbox } from './agent-sources'
+import { signOutAgentsBeforeDelete } from './agent-signout'
 import type { EntitlementClient, MachineSize } from './entitlements'
 import { parseGitHubRepo, type GitHubAppMinter } from './github-app'
 import {
@@ -18,12 +19,21 @@ import { ensureEntryPoints } from './golden-images'
 import { memberPlaceholder, type MemberGitIdentity } from './github-user-tokens'
 import { connectedMembers, memberGitConfigs } from './member-git'
 import type { RetentionConfig } from './retention'
-import type { ProviderSandboxState, SandboxProviderApi } from './sandbox-provider'
+import { ProviderError, type ProviderSandboxState, type SandboxProviderApi } from './sandbox-provider'
 import { egressAccountRoutes, egressSecretHosts, placeholderValues, secretPlaceholder } from './secret-egress'
 import { egressAllowHosts, sessionSecretEnv, type SessionSecrets } from './session-env'
 import type { Keyring } from './secrets-crypto'
 import { captureReadSnapshot, deleteReadSnapshot } from './read-snapshots'
-import { ORCAD_PORT, SHARE_PROXY_PORT, drainOrcad, runningOrcad, startOrcad, type OrcadReady, type StartInputs } from './sandbox-vm-commands'
+import {
+  ORCAD_PORT,
+  SHARE_PROXY_PORT,
+  VmCommandError,
+  drainOrcad,
+  runningOrcad,
+  startOrcad,
+  type OrcadReady,
+  type StartInputs
+} from './sandbox-vm-commands'
 import { WORKSPACE_PRELUDE_SCRIPT } from '../image/vm-scripts.generated'
 import { resolveEnvironmentBoot, type BootSource } from './environments'
 import { shareProxyKey } from './share-crypto'
@@ -129,6 +139,9 @@ export function goldenSnapshotIds(config: { goldenSnapshotId: string; goldenSnap
   return [config.goldenSnapshotId, ...Object.values(config.goldenSnapshots ?? {})]
 }
 
+/** A pooled VM whose boot failed this soon after the claim is retried once on a fresh VM. */
+export const POOL_RETRY_WITHIN_MS = 30_000
+
 export class LifecycleError extends Error {
   constructor(
     readonly code: 'not_found' | 'conflict' | 'entitlement_denied' | 'provider_unavailable',
@@ -139,7 +152,13 @@ export class LifecycleError extends Error {
   }
 }
 
-export type Ready = { row: SandboxRow; connection: OrcadReady; timings?: Record<string, number> }
+export type Ready = {
+  row: SandboxRow
+  connection: OrcadReady
+  timings?: Record<string, number>
+  /** The repo is still cloning in the VM (create with cloneInBackground); GET /clone reports it. */
+  cloning?: boolean
+}
 
 /** Phase durations for one lifecycle call (logged + Server-Timing); counts only, no ids or secrets. */
 export function phaseTimer(now: () => number = Date.now) {
@@ -390,6 +409,14 @@ async function boot(
     await syncMemberGit(deps, running, state.session.id)
   }
   await deps.hooks?.afterBoot?.(running, state.session.id).catch(() => undefined)
+  // Secrets saved while this VM booted missed prep's env; re-check once it is running (env-refresh.ts).
+  const refresh = await import('./env-refresh')
+  if (await refresh.envChangedSinceBoot(deps, running, prep.secrets.env).catch(() => false)) {
+    const work = refresh.refreshSandboxEnv(deps, running).catch(() => false)
+    if (deps.background) {
+      deps.background(work)
+    }
+  }
   return { row: running, connection, timings: options.timer.timings }
 }
 
@@ -455,6 +482,11 @@ export async function createSandbox(
     title?: string
     visibility?: 'private' | 'team'
     section?: string
+    /**
+     * The desktop shows the clone as its own step (GET /v1/sandboxes/:id/clone): the repo clones
+     * after ready instead of inside it. Older clients wait for the clone inside create.
+     */
+    cloneInBackground?: boolean
   },
   options: { pool?: boolean; fallback?: boolean } = {}
 ): Promise<Ready> {
@@ -506,8 +538,13 @@ export async function createSandbox(
     deps.background?.(refill)
   }
   const claimedAt = deps.now()
+  // An environment build carries the repo prebuilt: nothing clones, so nothing runs in the background.
+  const cloneInBackground = Boolean(request.repo && request.cloneInBackground && !source?.repoDir)
   const prelude: StartInputs['prelude'] = request.repo
-    ? { script: WORKSPACE_PRELUDE_SCRIPT, env: source?.repoDir ? { ORCA_ENV_REPO_DIR: source.repoDir } : {} }
+    ? {
+        script: WORKSPACE_PRELUDE_SCRIPT,
+        env: source?.repoDir ? { ORCA_ENV_REPO_DIR: source.repoDir } : cloneInBackground ? { ORCA_CLONE_BACKGROUND: '1' } : {}
+      }
     : undefined
   const id = pooled?.id ?? randomId()
   // Write-ahead row and the VM-independent prep (secrets, repo token) run together.
@@ -546,7 +583,7 @@ export async function createSandbox(
       return [inserted, prepared] as const
     } catch (error) {
       // Nothing booted for this row yet (a pooled VM goes with it): fail it before any VM work.
-      await failAndRelease(deps, inserted)
+      await failAndRelease(deps, inserted, createFailureReason(error))
       throw error
     }
   })
@@ -557,11 +594,16 @@ export async function createSandbox(
       )
       const ready = await boot(deps, row, state, prep, { repo: request.repo, policyApplied: true, timer, billFrom: claimedAt, prelude })
       console.log(JSON.stringify({ event: 'lifecycle_timing', op: 'create', pooled: true, ms: timer.timings }))
-      return ready
+      return cloneInBackground ? { ...ready, cloning: true } : ready
     } catch (error) {
       // A pooled VM that will not take the session is discarded; the caller still gets a workspace.
       console.log(JSON.stringify({ event: 'pool_adopt_failed', error: String(error).slice(0, 200) }))
-      await failAndRelease(deps, (await getSandbox(deps.db, row.id)) ?? row)
+      await failAndRelease(deps, (await getSandbox(deps.db, row.id)) ?? row, createFailureReason(error))
+      // A boot that ran long (the start command timed out) would only time out again on a fresh VM,
+      // doubling the wait the user sees: only a quick failure, which points at the pooled VM, retries.
+      if (deps.now() - claimedAt > POOL_RETRY_WITHIN_MS) {
+        throw error
+      }
       // Destroy can stop short (e.g. the provider's delete snapshot is still being written); the cron
       // finishes it. That row never held user data, so it lets go of the workspace now.
       await detachFromWorkspace(deps.db, row.id)
@@ -585,7 +627,7 @@ export async function createSandbox(
       })
     )
   } catch (error) {
-    await failAndRelease(deps, row)
+    await failAndRelease(deps, row, createFailureReason(error))
     // Only a create nothing pinned to a region moves on: no explicit region, no environment build.
     const fallback =
       options.fallback !== false && !request.region && !source && isRegionalFailure(error)
@@ -602,11 +644,25 @@ export async function createSandbox(
   try {
     const ready = await boot(deps, row, state, prep, { repo: request.repo, policyApplied: true, timer, prelude })
     console.log(JSON.stringify({ event: 'lifecycle_timing', op: 'create', fromBuild: source?.buildId ?? null, ms: timer.timings }))
-    return ready
+    return cloneInBackground ? { ...ready, cloning: true } : ready
   } catch (error) {
-    await failAndRelease(deps, (await getSandbox(deps.db, row.id)) ?? row)
+    await failAndRelease(deps, (await getSandbox(deps.db, row.id)) ?? row, createFailureReason(error))
     throw error
   }
+}
+
+/** last_error for a create that failed with `error`: the step that broke, never a message. */
+export function createFailureReason(error: unknown): string {
+  if (error instanceof VmCommandError) {
+    return error.code
+  }
+  if (error instanceof LifecycleError) {
+    return error.reason ?? error.code
+  }
+  if (error instanceof ProviderError) {
+    return `provider_${error.status}`
+  }
+  return 'create_failed'
 }
 
 async function assertRepoReachable(deps: LifecycleDeps, row: SandboxRow, prep: BootPrep): Promise<void> {
@@ -661,9 +717,12 @@ export async function suspendAccountRunning(deps: LifecycleDeps, accountId: stri
   return suspended
 }
 
-/** A create that never became usable is destroyed now; the cron retries if this also fails. */
-export async function failAndRelease(deps: LifecycleDeps, row: SandboxRow): Promise<void> {
-  const failed = await transition(deps.db, row, { status: 'failed', last_error: 'create_failed' }, deps.now())
+/**
+ * A create that never became usable is destroyed now; the cron retries if this also fails.
+ * `reason` lands in last_error, so a failed create says why (create_failed when nothing more is known).
+ */
+export async function failAndRelease(deps: LifecycleDeps, row: SandboxRow, reason = 'create_failed'): Promise<void> {
+  const failed = await transition(deps.db, row, { status: 'failed', last_error: reason }, deps.now())
   if (failed) {
     await destroySandbox(deps, failed).catch(() => undefined)
   }
@@ -830,6 +889,12 @@ export async function destroySandbox(deps: LifecycleDeps, row: SandboxRow): Prom
   await recordSessionEnd(deps.db, destroying, deps.now(), null, deps.now())
   if (settled !== destroying.usage_settled_at) {
     destroying = await claim(deps, destroying, { usage_settled_at: settled })
+  }
+  // A9: sign each agent out on the VM first (bounded, best effort; never blocks the delete). A
+  // suspended sandbox has no session and is never woken for it: its disk goes with the delete.
+  // A retried destroy already tried once, and its box may be gone: don't wait on it again.
+  if (destroying.session_id && row.status !== 'destroying') {
+    await signOutAgentsBeforeDelete(deps.provider, destroying.session_id, { sandboxId: row.id })
   }
   await deps.provider.deleteSandbox(destroying.provider_name)
   // Persistent sandboxes leave automatic snapshots behind delete; prove none survive.

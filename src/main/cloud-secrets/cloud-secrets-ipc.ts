@@ -8,11 +8,9 @@ import {
   type CloudSecretsResult,
   type CloudSecretsStatus
 } from '../../shared/cloud-secrets/cloud-secrets-wire'
-import { listEphemeralVmRuntimes } from '../../shared/ephemeral-vm-runtime-store'
-import { environmentHandleFromRecipeResult } from '../environment-providers/environment-provider-recipe-adapter'
 import { withCloudBuildDefaults } from '../cloud-build-defaults'
 import { getHostedSandboxConfig } from '../hosted-sandbox/hosted-sandbox-config'
-import { HOSTED_SANDBOX_DRIVER_ID } from '../hosted-sandbox/hosted-sandbox-driver'
+import { orcaCloudSandboxIdFor } from '../hosted-sandbox/orca-cloud-sandbox-id'
 import { getOrcaCloudAvailability } from '../hosted-sandbox/hosted-sandbox-install'
 import { isTuiAgent } from '../../shared/agent-launch/catalog/tui-agent-config'
 import {
@@ -29,6 +27,10 @@ import {
   createCloudSecretsClient,
   type CloudSecretsClient
 } from './cloud-secrets-client'
+import {
+  recordAgentApiKeyCloudWrite,
+  setAgentApiKeyCloudClient
+} from '../agent-api-keys/agent-api-key-cloud-connection'
 
 const Repo = z.string().trim().min(3).max(256)
 const Target = z.object({ scope: z.enum(CLOUD_SECRET_SCOPES), repo: Repo.optional() })
@@ -68,7 +70,8 @@ const CHANNELS = [
   'cloudSecrets:batch',
   'cloudSecrets:effective',
   'cloudSecrets:refreshEnv',
-  'cloudSecrets:saveDesktopKey'
+  'cloudSecrets:saveDesktopKey',
+  'cloudSecrets:workspaceSharing'
 ] as const
 
 async function attempt<T>(
@@ -87,18 +90,6 @@ async function attempt<T>(
   }
 }
 
-function sandboxIdFor(userDataPath: string, runtimeEnvironmentId: string): string | null {
-  const runtime = listEphemeralVmRuntimes(userDataPath).find(
-    (record) =>
-      record.runtimeEnvironmentId === runtimeEnvironmentId &&
-      record.recipe?.provider === 'orca-cloud'
-  )
-  const handle = runtime?.recipeResult
-    ? environmentHandleFromRecipeResult(runtime.recipeResult, HOSTED_SANDBOX_DRIVER_ID)
-    : null
-  return handle?.environmentId ?? null
-}
-
 export function registerCloudSecretsHandlers(userDataPath: string): void {
   setCloudDesktopKeysUserDataPath(userDataPath)
   // Packaged integration builds read no shell env; their control-plane URL is baked in.
@@ -113,6 +104,8 @@ export function registerCloudSecretsHandlers(userDataPath: string): void {
         getAccessToken: config.getAccessToken
       })
     : null
+  // Agent API keys saved while signed in are written to personal secrets through the same client.
+  setAgentApiKeyCloudClient(client)
   for (const channel of CHANNELS) {
     ipcMain.removeHandler(channel)
   }
@@ -177,14 +170,30 @@ export function registerCloudSecretsHandlers(userDataPath: string): void {
     if (valueError) {
       return { ok: false, error: valueError }
     }
-    return attempt(client, (c) => c.put({ scope: 'personal' }, envName, value))
+    const result = await attempt(client, (c) => c.put({ scope: 'personal' }, envName, value))
+    if (result.ok) {
+      // So Settings › Agent API keys shows it as saved in the Orca account.
+      await recordAgentApiKeyCloudWrite(agent, envName)
+    }
+    return result
+  })
+  // Reads the control plane only; never wakes the sandbox.
+  ipcMain.handle('cloudSecrets:workspaceSharing', (_event, raw: unknown) => {
+    const request = RefreshRequest.safeParse(raw)
+    if (!request.success) {
+      return invalid
+    }
+    const sandboxId = orcaCloudSandboxIdFor(userDataPath, request.data.runtimeEnvironmentId)
+    return sandboxId
+      ? attempt(client, (c) => c.workspaceSharing(sandboxId))
+      : { ok: false, error: 'not_found' }
   })
   ipcMain.handle('cloudSecrets:refreshEnv', (_event, raw: unknown) => {
     const request = RefreshRequest.safeParse(raw)
     if (!request.success) {
       return invalid
     }
-    const sandboxId = sandboxIdFor(userDataPath, request.data.runtimeEnvironmentId)
+    const sandboxId = orcaCloudSandboxIdFor(userDataPath, request.data.runtimeEnvironmentId)
     return sandboxId
       ? attempt(client, (c) => c.refreshEnv(sandboxId))
       : { ok: false, error: 'not_found' }

@@ -263,6 +263,13 @@ export function registerCloudWorkspacesHandlers(): void {
         ? s.revokeGrant(parsed.data.id, parsed.data.grantId)
         : INVALID
   })
+  for (const action of ['sleep', 'destroy'] as const) {
+    handle(`cloudWorkspaces:${action}`, async (args) => {
+      const parsed = z.object({ id: Id }).safeParse(args)
+      const s = await getService()
+      return !s ? NOT_CONFIGURED : parsed.success ? s[action](parsed.data.id) : INVALID
+    })
+  }
   handle(
     'cloudWorkspaces:localWorkspaces',
     async () => (await getService())?.localWorkspaces() ?? []

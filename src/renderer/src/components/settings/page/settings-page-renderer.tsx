@@ -12,6 +12,7 @@ import type { SettingsInteractionController } from './use-settings-interaction-c
 import type { SettingsRenderContext } from './settings-render-context'
 import {
   renderAccountsSettingsSection,
+  renderAgentAccountsSettingsSection,
   renderAgentApiKeysSettingsSection,
   renderAgentsSettingsSection,
   renderDesktopCapabilitySettingsSections,
@@ -63,6 +64,7 @@ import {
 } from './settings-advanced-section-renderers'
 import { renderProjectSettingsSections } from './settings-project-section-renderer'
 import { renderCloudApiSettingsSections } from './settings-cloud-api-section-renderers'
+import { renderOrcaCloudSettingsSections } from './settings-orca-cloud-section-renderers'
 import {
   SettingsHostScopePicker,
   shouldShowSettingsHostScopePicker
@@ -168,17 +170,19 @@ export function renderSettingsPage(
                     value={model.highlightedSettingsTarget?.id ?? null}
                   >
                     {renderAgentsSettingsSection(context, t)}
+                    {renderAgentAccountsSettingsSection(context, t)}
                     {renderAccountsSettingsSection(context, t)}
                     {renderAgentApiKeysSettingsSection(context, t)}
                     {renderOrchestrationSettingsSection(context, t)}
                     {renderLinearSettingsSection(context, t)}
                     {renderDesktopCapabilitySettingsSections(context, t)}
                     {renderOrcaAccountSettingsSection(context, t)}
-                    {renderCloudApiSettingsSections(context, t)}
                     {renderSetupGuideSettingsSection(context, t)}
                     {renderGeneralSettingsSection(context, t)}
                     {renderIntegrationsSettingsSection(context, t)}
                     {renderMobileSettingsSection(context, t)}
+                    {renderOrcaCloudSettingsSections(context, t)}
+                    {renderCloudApiSettingsSections(context, t)}
                     {renderAutomationsSettingsSection(context, t)}
                     {renderArtifactsSettingsSection(context, t)}
                     {renderShareSkillsSettingsSection(context, t)}

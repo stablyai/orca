@@ -7,7 +7,10 @@ import type { HostHeaderRow } from '../../../../../../shared/sidebar-list/host-s
 import { HostSectionHeaderMenu } from './HostSectionHeaderMenu'
 import { stopRepoHeaderMenuEvent } from './header-event-guards'
 import { getHostHeaderDetail } from './host-header-detail'
-import { getVmStateLabel, VmStateIcon } from '../../workspace-card/surface/WorktreeCardVmStateBadge'
+import { getVmStateLabel } from '../../workspace-card/surface/WorktreeCardVmStateBadge'
+import { HostGlyph, vmStateToDot } from '@/components/host-row-icon'
+import { cloudStateLabel } from '@/components/orca-cloud/cloud-state-copy'
+import { useIsOrcaCloudHost } from '@/components/orca-cloud/WorkspaceHostGlyph'
 
 function SectionMetricsBadge({ count }: { count: number }): React.JSX.Element {
   const t = useTranslate()
@@ -51,32 +54,30 @@ function HostHeaderHealthIcon({
   return null
 }
 
-/** A VM host's server glyph with its lifecycle as a corner badge, like an avatar's status dot. */
+/** A VM host's glyph (Box, or Cloud for Orca Cloud) with its lifecycle as a corner badge. */
 function VmHostIcon({
   state,
-  muted
+  isCloud
 }: {
   state: NonNullable<HostHeaderRow['vmState']>
-  muted: boolean
+  isCloud: boolean
 }): React.JSX.Element {
   const t = useTranslate()
-  const label = getVmStateLabel(state, t)
+  const label = isCloud ? cloudStateLabel(vmStateToDot(state), t) : getVmStateLabel(state, t)
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <span
-          className="relative inline-flex size-3.5 shrink-0"
+          className="inline-flex shrink-0"
           data-host-header-vm-state={state}
           aria-label={label}
           role="img"
         >
-          <Server
-            className={cn('size-3.5', muted ? 'text-muted-foreground/80' : 'text-muted-foreground')}
+          <HostGlyph
+            kind={isCloud ? 'orca-cloud' : 'recipe-vm'}
+            size={14}
+            state={vmStateToDot(state)}
           />
-          {/* The ring in the sidebar color cuts the badge out of the glyph so it reads at 8px. */}
-          <span className="absolute -right-1 -bottom-1 inline-flex size-2.5 items-center justify-center rounded-full bg-worktree-sidebar ring-1 ring-worktree-sidebar">
-            <VmStateIcon state={state} sizeClassName="size-2" />
-          </span>
         </span>
       </TooltipTrigger>
       <TooltipContent side="bottom" sideOffset={6}>
@@ -102,7 +103,8 @@ export function HostSectionHeader({
   const isDisconnected = row.health === 'disconnected'
   // A suspended VM is asleep on purpose: muted like disconnected, but never an error.
   const isSuspended = row.health === 'suspended'
-  const detail = getHostHeaderDetail(row, t)
+  const isCloudHost = useIsOrcaCloudHost(row.hostId)
+  const detail = getHostHeaderDetail(row, t, isCloudHost)
   return (
     <div className="px-2 pt-1">
       {/* Why: outlined card + server glyph marks hosts as machines, not mere groups. */}
@@ -131,7 +133,11 @@ export function HostSectionHeader({
         }}
       >
         {row.vmState ? (
-          <VmHostIcon state={row.vmState} muted={isSuspended} />
+          <VmHostIcon state={row.vmState} isCloud={isCloudHost} />
+        ) : isCloudHost ? (
+          <HostGlyph kind="orca-cloud" size={14} />
+        ) : row.kind === 'local' ? (
+          <HostGlyph kind="local" size={14} />
         ) : isDisconnected ? (
           <ServerOff className="size-3.5 shrink-0 text-muted-foreground/80" />
         ) : (
@@ -142,7 +148,8 @@ export function HostSectionHeader({
         <div className="flex min-w-0 flex-1 items-center gap-1.5">
           <span
             className={cn(
-              'min-w-0 truncate text-[12px] font-semibold leading-none',
+              // The host name wins over its detail: "Orca Cloud" stays whole, "1 running · 1 asleep" truncates.
+              'min-w-0 max-w-[70%] shrink-0 truncate text-[12px] font-semibold leading-none',
               isDisconnected || isSuspended ? 'text-muted-foreground' : 'text-foreground'
             )}
           >
@@ -151,7 +158,7 @@ export function HostSectionHeader({
           {detail ? (
             <span
               className={cn(
-                'shrink-0 truncate text-[10px] leading-none',
+                'min-w-0 truncate text-[10px] leading-none',
                 detail.isWarning ? 'text-destructive' : 'text-muted-foreground/70'
               )}
             >

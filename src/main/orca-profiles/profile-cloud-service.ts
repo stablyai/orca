@@ -68,8 +68,18 @@ export function getCurrentOrcaProfileAuthStatus(userDataPath: string): OrcaProfi
   return getOrcaProfileAuthStatusFromProfile(ensureActiveOrcaProfile(userDataPath), userDataPath)
 }
 
+/**
+ * Cloud setup sign-in: the authorize page shows the setup account step (A2), and once signed in
+ * the same browser tab continues to whatever `afterSignIn` returns (the setup session's URL).
+ */
+export type OrcaCloudSetupSignIn = {
+  authorizeParams: Record<string, string>
+  afterSignIn: () => Promise<string | null>
+}
+
 export async function connectCurrentOrcaProfile(
-  userDataPath: string
+  userDataPath: string,
+  setup?: OrcaCloudSetupSignIn
 ): Promise<ConnectCurrentOrcaProfileResult> {
   const active = ensureActiveOrcaProfile(userDataPath)
   if (isOrcaCloudDevAuthEnabled()) {
@@ -93,11 +103,14 @@ export async function connectCurrentOrcaProfile(
   const attempt = ++nextCloudConnectAttempt
   const browserWait = new AbortController()
   startOrcaCloudSignInProgress(attempt, () => browserWait.abort())
+  let finishBrowser: ((location: string | null) => void) | undefined
   try {
     const code = await beginOrcaCloudPkceFlow(configState.config, active.profile.id, {
       signal: browserWait.signal,
-      onAuthorizeUrl: (link) => setOrcaCloudSignInLink(attempt, link)
+      onAuthorizeUrl: (link) => setOrcaCloudSignInLink(attempt, link),
+      ...(setup ? { authorizeParams: setup.authorizeParams, holdBrowser: true } : {})
     })
+    finishBrowser = code.finishBrowser
     // The callback listener has closed, so its browser link is dead.
     setOrcaCloudSignInLink(attempt, null)
     if (attempt < linkedCloudConnectAttempt) {
@@ -107,7 +120,11 @@ export async function connectCurrentOrcaProfile(
       }
     }
     const exchange = await exchangeOrcaCloudAuthCode(configState.config, {
-      ...code,
+      code: code.code,
+      codeVerifier: code.codeVerifier,
+      nonce: code.nonce,
+      redirectUri: code.redirectUri,
+      state: code.state,
       localProfileId: active.profile.id
     })
     if (attempt < linkedCloudConnectAttempt) {
@@ -119,6 +136,11 @@ export async function connectCurrentOrcaProfile(
     signInCloudSession(active.profile.id, userDataPath, exchange)
     const list = linkOrcaProfileToCloud(active.profile.id, exchange.cloud, userDataPath)
     linkedCloudConnectAttempt = attempt
+    if (setup && finishBrowser) {
+      const next = await setup.afterSignIn().catch(() => null)
+      finishBrowser(next)
+      finishBrowser = undefined
+    }
     return {
       status: 'connected',
       auth: getCurrentOrcaProfileAuthStatus(userDataPath),
@@ -149,6 +171,7 @@ export async function connectCurrentOrcaProfile(
       error: message
     }
   } finally {
+    finishBrowser?.(null)
     endOrcaCloudSignInProgress(attempt)
   }
 }

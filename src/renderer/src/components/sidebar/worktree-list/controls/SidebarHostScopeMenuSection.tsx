@@ -34,7 +34,8 @@ type SidebarHostScopeMenuSectionProps = {
 
 function getHostMetadata(host: SidebarHostOption, t: Translate = translate): string {
   const healthLabel = getSidebarHostHealthLabel(host.health, host.blockedReason, t, host.vmState)
-  if (host.kind === 'local') {
+  // Local and Orca Cloud name themselves: "This computer", "1 running · 1 asleep".
+  if (host.kind === 'local' || host.orcaCloud) {
     return host.detail
   }
   if (host.kind === 'ssh') {

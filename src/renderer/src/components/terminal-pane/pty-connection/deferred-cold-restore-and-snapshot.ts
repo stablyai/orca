@@ -20,6 +20,7 @@ import { initializeHiddenOutputRestoreState } from './output-restore/hidden-outp
 
 import { bindReplayDataDrain } from './output/replay-data-drain'
 import { bindStartFreshSpawn } from './spawn/fresh-spawn-start'
+import { installCloudAgentCredentialGate } from './spawn/cloud-agent-credential-spawn-gate'
 
 import { bindFreshSpawnFollowReset } from './output/fresh-spawn-follow-reset'
 import { bindReplacedProcessInputModes } from './output/replaced-process-input-modes'
@@ -226,6 +227,7 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
   bindFreshSpawnFollowReset(session)
   bindReplacedProcessInputModes(session)
   bindStartFreshSpawn(session)
+  installCloudAgentCredentialGate(session)
   bindReplayDataDrain(session)
   session.replayDataCallback = (
     data: string,

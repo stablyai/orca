@@ -2502,7 +2502,6 @@
         "connectingHost": "連線中…",
         "connectHost": "連線",
         "setLocation": "設定專案位置",
-        "setLocationOnHost": "在 {{host}} 上設定專案位置",
         "setLocationTooltip": "選擇一個資料夾或將此專案複製到 {{host}} 上。",
         "addHost": "新增主機",
         "addSshHost": "新增 SSH 主機",

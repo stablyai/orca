@@ -76,3 +76,6 @@ export const parentOnAnotherMachine = defineFixture({
     await new Promise((resolve) => setTimeout(resolve, 200))
   }
 })
+
+/** Closed, for keyboard walks: Tab focus must not open the picker (DS-22). */
+export const parentPickerClosed = defineFixture({ ...parentOnAnotherMachine, interact: undefined })

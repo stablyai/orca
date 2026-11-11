@@ -2078,7 +2078,6 @@
         "hostConnectionFailed": "Connection failed",
         "defaultBranchUpdateFailed": "프로젝트 기본 브랜치를 업데이트할 수 없습니다. 다시 시도해 보세요.",
         "setLocation": "프로젝트 위치 설정",
-        "setLocationOnHost": "{{host}}에 프로젝트 위치 설정",
         "setLocationTooltip": "폴더를 선택하거나 이 프로젝트를 {{host}}에 복제하세요.",
         "connect": "연결",
         "reconnect": "다시 연결",

@@ -7,6 +7,9 @@ import { BrowserWebAuthnAccountDialog } from './components/browser-webauthn-acco
 import { BrowserExtensionInstallDialog } from './components/browser-extension-install-dialog'
 import { PlansDialogHost } from './components/billing/plans/PlansDialogHost'
 import { CloudMoveToComputerDialogMount } from './components/orca-cloud/CloudMoveToComputerDialogMount'
+import { CloudSecretsAskDialogHost } from './components/cloud-secrets-ask/CloudSecretsMissingNotice'
+import { AgentHostPanel } from './components/agent-host-panel/AgentHostPanel'
+import { SecretRequestUnseenNotifier } from './components/agent-pane/SecretRequestUnseenNotifier'
 import { TeamDialogHost } from './components/billing/team/TeamDialogHost'
 import { BrowserPagePrompts } from './components/browser-pane/browser-page-prompts'
 import { LinkRoutingPreferenceDialogProvider } from './components/link-routing-preference-dialog'
@@ -122,6 +125,9 @@ function App(): React.JSX.Element {
             <BrowserExtensionInstallDialog />
             <PlansDialogHost />
             <CloudMoveToComputerDialogMount />
+            <CloudSecretsAskDialogHost />
+            <AgentHostPanel />
+            <SecretRequestUnseenNotifier />
             <TeamDialogHost />
           </LinkRoutingPreferenceDialogProvider>
         </ConfirmationDialogProvider>

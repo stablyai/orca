@@ -210,7 +210,7 @@ export function AgentLaunchPickerMenu({
                 onSelect={onSelectBlankTerminal}
               >
                 <Terminal className="size-4" />
-                {t('auto.components.agent.AgentCombobox.986f946354', 'Blank Terminal')}
+                {t('auto.components.agent.AgentCombobox.986f946354', 'Blank terminal')}
               </DropdownMenuItem>
             </AgentDefaultContextMenu>
           ) : null}

@@ -18,6 +18,9 @@
       "migrations_dir": "migrations"
     }
   ],
+  // Same-account Workers cannot call each other over workers.dev (error 1042): the GitHub install URL
+  // for the setup chain goes to the control plane through this binding (SANDBOX_CONTROL_URL names the origin).
+  "services": [{ "binding": "SANDBOX_CONTROL", "service": "orca-sandbox-control-dev" }],
   // Retries Stripe meter reports that failed inline.
   "triggers": { "crons": ["*/10 * * * *"] },
   "vars": {
@@ -38,6 +41,9 @@
     // (secret MEMBERSHIP_SYNC_TOKEN must equal staging's ORCA_CLOUD_BILLING_MEMBERSHIP_TOKEN).
     "BILLING_STAGING_JWKS_URL": "https://auth-staging.onorca.dev/.well-known/jwks.json",
     "BILLING_STAGING_AUTH_ISSUER": "https://auth-staging.onorca.dev",
-    "AUTH_INTERNAL_URL": "https://auth-staging.onorca.dev"
+    "AUTH_INTERNAL_URL": "https://auth-staging.onorca.dev",
+    // Cloud setup sessions: pages on staging auth, GitHub install URLs from the dev control plane.
+    "CLOUD_SETUP_PAGES_URL": "https://auth-staging.onorca.dev",
+    "SANDBOX_CONTROL_URL": "https://orca-sandbox-control-dev.lovecast.workers.dev"
   }
 }

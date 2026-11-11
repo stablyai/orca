@@ -7,6 +7,8 @@ import { useAppStore } from '@/store/index'
 import { Button } from '../../../ui/button'
 import { AgentSkillSetupPanel } from '../../../skills/setup/AgentSkillSetupPanel'
 import { EphemeralVmRecipeRow } from './EphemeralVmRecipeRow'
+import { RecipeEnvForwardingNotice } from '../../../agent-host-panel/RecipeEnvForwardingWarning'
+import { ORCA_CLOUD_RECIPE_ID } from '../../../../../../shared/hosted-sandbox/orca-cloud-recipe-id'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { EPHEMERAL_VMS_SKILL_NAME } from '@/lib/skills/installation/agent-feature-skill-names'
@@ -308,6 +310,9 @@ export function EphemeralVmsPane(): React.JSX.Element {
             </div>
           )}
         </div>
+        {recipes.some(({ recipe }) => recipe.id !== ORCA_CLOUD_RECIPE_ID) ? (
+          <RecipeEnvForwardingNotice />
+        ) : null}
       </div>
     </div>
   )

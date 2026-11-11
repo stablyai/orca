@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils'
 import type { BuildLogBuffer } from './build-log-model'
 import { BuildHistoryList } from './BuildHistoryList'
 import { BuildLogViewer, type BuildLogStreamState } from './BuildLogViewer'
+import { BuildFailureActions } from './BuildFailureActions'
 import {
   isBuildInProgress,
   repoDisplayName,
@@ -31,7 +32,7 @@ function SubsectionTitle({
 }) {
   return (
     <div className="flex min-h-7 items-center justify-between gap-3">
-      <h4 className="text-[11px] font-semibold tracking-[0.05em] text-muted-foreground uppercase">
+      <h4 className="text-2xs font-semibold tracking-[0.05em] text-muted-foreground uppercase">
         {children}
       </h4>
       {action}
@@ -81,6 +82,10 @@ export type CloudEnvironmentPanelProps = {
   onActivate: (build: EnvironmentBuildView) => void
   onSelectBuild: (build: EnvironmentBuildView) => void
   onConfigureWithAgent: () => void
+  /** DS-40: set when the latest build failed in a way an agent can fix (install script, repo contents). */
+  onFixWithAgent: (() => void) | null
+  /** DS-40: set when the latest build's clone couldn't reach a repo; opens GitHub to give access. */
+  onGiveAccess: (() => void) | null
   /** Render the log viewer at a fixed clock (fixtures). */
   frozenNow?: number
 }
@@ -190,6 +195,16 @@ export function CloudEnvironmentPanel(props: CloudEnvironmentPanelProps): React.
           streamError={log.error}
           onRetryStream={log.onRetry}
           now={props.frozenNow}
+          failureActions={
+            canAdmin && selectedBuild.status === 'failed' && selectedBuild.id === builds[0]?.id ? (
+              <BuildFailureActions
+                building={starting || inProgress}
+                onTryAgain={props.onBuild}
+                onFixWithAgent={props.onFixWithAgent}
+                onGiveAccess={props.onGiveAccess}
+              />
+            ) : undefined
+          }
         />
       ) : null}
 

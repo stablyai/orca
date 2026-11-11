@@ -2078,7 +2078,6 @@
         "hostConnectionFailed": "接続に失敗しました",
         "defaultBranchUpdateFailed": "プロジェクトのデフォルトブランチを更新できませんでした。再試行。",
         "setLocation": "プロジェクトの場所を設定する",
-        "setLocationOnHost": "プロジェクトの場所を {{host}} に設定します",
         "setLocationTooltip": "フォルダーを選択するか、このプロジェクトを {{host}} に複製します。",
         "connect": "接続",
         "reconnect": "再接続",

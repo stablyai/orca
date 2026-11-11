@@ -47,9 +47,14 @@ export function describeError(
       const limit = sandboxLimitFromBilling(getLastBillingStatus())
       return limit
         ? t(
-            'auto.components.cloudWorkspaces.errorConcurrencyLimitCount2',
-            'Your team can run {{value0}} sandboxes at once ({{value1}} per seat). Put one to sleep or delete it, then try again.',
-            { value0: String(limit.team), value1: String(limit.perSeat) }
+            'auto.components.cloudWorkspaces.errorTeamSandboxLimit',
+            'Your team can run {{count}} sandboxes at once ({{perSeat}} per seat). Put one to sleep or delete it, then try again.',
+            {
+              count: limit.team,
+              perSeat: String(limit.perSeat),
+              defaultValue_one:
+                'Your team can run {{count}} sandbox at once ({{perSeat}} per seat). Put it to sleep or delete it, then try again.'
+            }
           )
         : t(
             'auto.components.cloudWorkspaces.errorConcurrencyLimit',
@@ -140,9 +145,13 @@ function describeSeatLimit(owner: CloudWorkspaceSeatOwner | undefined, t: Transl
   if (!owner || owner.self) {
     return perSeat
       ? t(
-          'auto.components.cloudWorkspaces.errorSeatLimitSelf',
-          'You already have {{value0}} sandboxes running, the most one seat can run. Put one to sleep or delete it, then try again.',
-          { value0: String(perSeat) }
+          'auto.components.cloudWorkspaces.errorSeatSandboxLimitSelf',
+          'You already have {{count}} sandboxes running, the most one seat can run. Put one to sleep or delete it, then try again.',
+          {
+            count: perSeat,
+            defaultValue_one:
+              'You already have {{count}} sandbox running, the most one seat can run. Put it to sleep or delete it, then try again.'
+          }
         )
       : t(
           'auto.components.cloudWorkspaces.errorMemberConcurrencyLimit',
@@ -153,9 +162,14 @@ function describeSeatLimit(owner: CloudWorkspaceSeatOwner | undefined, t: Transl
     owner.name ?? t('auto.components.cloudWorkspaces.seatOwnerFallback', 'The workspace owner')
   return perSeat
     ? t(
-        'auto.components.cloudWorkspaces.errorSeatLimitOwner',
-        '{{value0}} already has {{value1}} sandboxes running. This workspace runs on their seat, so ask them to put one to sleep, then try again.',
-        { value0: name, value1: String(perSeat) }
+        'auto.components.cloudWorkspaces.errorSeatSandboxLimitOwner',
+        '{{name}} already has {{count}} sandboxes running. This workspace runs on their seat, so ask them to put one to sleep, then try again.',
+        {
+          name,
+          count: perSeat,
+          defaultValue_one:
+            '{{name}} already has {{count}} sandbox running. This workspace runs on their seat, so ask them to put it to sleep, then try again.'
+        }
       )
     : t(
         'auto.components.cloudWorkspaces.errorSeatLimitOwnerNoCount',

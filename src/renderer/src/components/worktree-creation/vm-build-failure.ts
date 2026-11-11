@@ -28,6 +28,8 @@ export type VmBuildFailure =
   | { kind: 'provision'; error: string }
   /** The VM came up, but creating the workspace on it failed. */
   | { kind: 'create'; error: string }
+  /** Orca Cloud: the sandbox came up but cloning the repo failed; the sandbox was deleted. */
+  | { kind: 'cloneFailed'; reason: string }
 
 const ERROR_CODE_KINDS: Partial<Record<string, VmBuildAccountFailureKind>> = {
   cloudPlanRequired: 'plan',
@@ -69,6 +71,12 @@ export function classifyVmBuildFailure(args: {
   }
   if (error === null) {
     return null
+  }
+  if (entry.errorCode === 'cloudCloneFailed') {
+    return {
+      kind: 'cloneFailed',
+      reason: DENY_REASON.exec(entry.provisioningLog ?? '')?.[1] ?? 'clone_failed'
+    }
   }
   const coded = entry.errorCode ? ERROR_CODE_KINDS[entry.errorCode] : undefined
   if (coded === 'plan' || coded === 'concurrency') {
@@ -132,6 +140,26 @@ export function isBillingFailure(failure: VmBuildFailure | null): boolean {
       failure.kind === 'spendCap' ||
       failure.kind === 'payment')
   )
+}
+
+/**
+ * The raw error a user-authored recipe printed, for the card's Details disclosure. Orca Cloud never
+ * shows it. A recipe's terse exit message gets the build log's first error line after it.
+ */
+export function localRawError(
+  failure: VmBuildFailure | null,
+  firstErrorLine: string | null
+): string | null {
+  if (failure?.kind !== 'provision' && failure?.kind !== 'create') {
+    return null
+  }
+  const error = failure.error.trim()
+  const extra =
+    failure.kind === 'provision' && firstErrorLine && !error.includes(firstErrorLine)
+      ? firstErrorLine
+      : null
+  const text = [error, extra].filter(Boolean).join('\n\n')
+  return text === '' ? null : text
 }
 
 /** Refused before anything started: an account limit, not a broken build. */

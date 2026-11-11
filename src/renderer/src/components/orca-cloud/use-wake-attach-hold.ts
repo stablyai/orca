@@ -82,26 +82,39 @@ export function useWakeAttachHold(
     if (!holding) {
       return
     }
-    const since = Date.now()
+    // Only visible time counts toward the cap: a hidden window pauses this poll (and the pane's
+    // own re-attach), so time spent hidden must not turn a healthy wake into a stalled card.
+    let visibleMs = 0
+    let lastAt = Date.now()
+    const check = (): void => {
+      const attached = isAttached(workspaceId)
+      if (attached === false && visibleMs < WAKE_ATTACH_HOLD_MAX_MS) {
+        return
+      }
+      setTrack((current) => {
+        if (current.attempt !== attempt || !current.held) {
+          return current
+        }
+        return attached === false
+          ? {
+              ...current,
+              held: undefined,
+              stalled: { ...current.held, phase: 'failed', at: Date.now() }
+            }
+          : { ...current, held: undefined }
+      })
+    }
     return installWindowVisibilityInterval({
       run: () => {
-        const attached = isAttached(workspaceId)
-        const timedOut = Date.now() - since >= WAKE_ATTACH_HOLD_MAX_MS
-        if (attached === false && !timedOut) {
-          return
-        }
-        setTrack((current) => {
-          if (current.attempt !== attempt || !current.held) {
-            return current
-          }
-          return attached === false
-            ? {
-                ...current,
-                held: undefined,
-                stalled: { ...current.held, phase: 'failed', at: Date.now() }
-              }
-            : { ...current, held: undefined }
-        })
+        const now = Date.now()
+        visibleMs += now - lastAt
+        lastAt = now
+        check()
+      },
+      // Back from hidden (and the first run): restart the clock without crediting the gap.
+      runOnVisible: () => {
+        lastAt = Date.now()
+        check()
       },
       intervalMs: WAKE_ATTACH_POLL_MS
     })

@@ -4,7 +4,7 @@ import { translateSearchKeyword } from '../search/settings-search-keywords'
 
 export const getAgentApiKeysSearchEntries = createLocalizedCatalog(() => [
   {
-    title: translate('auto.components.settings.agentApiKeys.search.title', 'Agent API Keys'),
+    title: translate('settings.agentApiKeys.searchTitle', 'Agent API keys'),
     description: translate(
       'auto.components.settings.agentApiKeys.search.description',
       'Give agents an API key on every host or only some, without signing in on each machine.'

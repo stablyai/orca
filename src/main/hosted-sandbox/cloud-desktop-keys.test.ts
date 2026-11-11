@@ -126,3 +126,121 @@ describe('withHostAgentApiKeyLaunchEnv (SSH)', () => {
     })
   })
 })
+
+describe('withoutCarriedAgentCredentials (on the VM)', () => {
+  it('on an Orca Cloud VM, drops agent credentials a launch tries to set to anything but the session value', async () => {
+    const { withoutCarriedAgentCredentials } = await import('./cloud-desktop-keys')
+    const host = { ORCA_IS_CLOUD: '1', GEMINI_API_KEY: 'orca-ph-gemini-api-key-sbx1' }
+    expect(
+      withoutCarriedAgentCredentials(
+        {
+          GEMINI_API_KEY: 'AIzaSy-from-a-desktop',
+          OPENROUTER_API_KEY: 'sk-or-from-a-desktop',
+          CURSOR_API_KEY: 'key_from_a_desktop',
+          FOO: 'bar'
+        },
+        host
+      )
+    ).toEqual({ FOO: 'bar' })
+    // The session's own value (the stand-in) may be passed through unchanged.
+    expect(
+      withoutCarriedAgentCredentials({ GEMINI_API_KEY: 'orca-ph-gemini-api-key-sbx1' }, host)
+    ).toEqual({
+      GEMINI_API_KEY: 'orca-ph-gemini-api-key-sbx1'
+    })
+  })
+
+  it('changes nothing on any other host', async () => {
+    const { withoutCarriedAgentCredentials } = await import('./cloud-desktop-keys')
+    const env = { GEMINI_API_KEY: 'AIzaSy-local' }
+    expect(withoutCarriedAgentCredentials(env, {})).toBe(env)
+  })
+})
+
+describe('withHostAgentApiKeyEnv asks the host', () => {
+  it('sends no keys to a host that says it is an Orca Cloud VM, even one paired by hand', async () => {
+    const { setCloudDesktopKeysUserDataPath, withHostAgentApiKeyEnv } =
+      await import('./cloud-desktop-keys')
+    setCloudDesktopKeysUserDataPath('/u')
+    environments.set('env-tunnel', {
+      source: 'manual',
+      endpoints: [{ endpoint: 'wss://127.0.0.1:6768' }]
+    })
+    launchEnv = { CODEX_API_KEY: 'custom-name-real-key' }
+    const params = { launchAgent: 'codex', command: 'codex', env: { A: '1' } }
+    const cloudStatus = async () => ({
+      ok: true as const,
+      id: 's',
+      result: { capabilities: ['host.orca-cloud.v1'] },
+      _meta: { runtimeId: 'r' }
+    })
+    expect(await withHostAgentApiKeyEnv('env-tunnel', 'terminal.create', params, cloudStatus)).toBe(
+      params
+    )
+  })
+
+  it('sends keys to a host that says otherwise, and nothing when the host does not answer', async () => {
+    const { setCloudDesktopKeysUserDataPath, withHostAgentApiKeyEnv } =
+      await import('./cloud-desktop-keys')
+    setCloudDesktopKeysUserDataPath('/u')
+    environments.set('env-mac', {
+      source: 'manual',
+      endpoints: [{ endpoint: 'wss://192.168.1.4:6768' }]
+    })
+    environments.set('env-silent', {
+      source: 'manual',
+      endpoints: [{ endpoint: 'wss://192.168.1.5:6768' }]
+    })
+    launchEnv = { CODEX_API_KEY: 'custom-name-real-key' }
+    const params = { launchAgent: 'codex', command: 'codex', env: { A: '1' } }
+    const plainStatus = async () => ({
+      ok: true as const,
+      id: 's',
+      result: { capabilities: [] },
+      _meta: { runtimeId: 'r' }
+    })
+    expect(await withHostAgentApiKeyEnv('env-mac', 'terminal.create', params, plainStatus)).toEqual(
+      {
+        ...params,
+        env: { CODEX_API_KEY: 'custom-name-real-key', A: '1' }
+      }
+    )
+    const silent = async () => {
+      throw new Error('unreachable')
+    }
+    expect(await withHostAgentApiKeyEnv('env-silent', 'terminal.create', params, silent)).toBe(
+      params
+    )
+  })
+})
+
+describe('host answer cache', () => {
+  it('asks again after a "not cloud" answer, so a re-paired id that is now a cloud VM gets no keys', async () => {
+    const { setCloudDesktopKeysUserDataPath, withHostAgentApiKeyEnv } =
+      await import('./cloud-desktop-keys')
+    setCloudDesktopKeysUserDataPath('/u')
+    environments.set('env-repaired', {
+      source: 'manual',
+      endpoints: [{ endpoint: 'wss://10.0.0.9:6768' }]
+    })
+    launchEnv = { CODEX_API_KEY: 'custom-name-real-key' }
+    const params = { launchAgent: 'codex', command: 'codex', env: {} }
+    const answer = (caps: string[]) => async () => ({
+      ok: true as const,
+      id: 's',
+      result: { capabilities: caps },
+      _meta: { runtimeId: 'r' }
+    })
+    expect(
+      await withHostAgentApiKeyEnv('env-repaired', 'terminal.create', params, answer([]))
+    ).not.toBe(params)
+    expect(
+      await withHostAgentApiKeyEnv(
+        'env-repaired',
+        'terminal.create',
+        params,
+        answer(['host.orca-cloud.v1'])
+      )
+    ).toBe(params)
+  })
+})

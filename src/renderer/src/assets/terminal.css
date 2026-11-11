@@ -512,6 +512,19 @@
   height: calc(100% - var(--orca-pane-title-height) - var(--pane-padding-y, 4px));
 }
 
+/* Narrow panes: the always-on header actions would cover row one (the agent's own header line),
+   so reserve the title row like a titled pane does. Wider panes keep the chromeless overlap. */
+.pane {
+  container: orca-pane / inline-size;
+}
+
+@container orca-pane (max-width: 480px) {
+  .xterm-container {
+    margin-top: var(--orca-pane-title-height);
+    height: calc(100% - var(--orca-pane-title-height) - var(--pane-padding-y, 4px));
+  }
+}
+
 /* A pane-top banner takes real height: the terminal starts below it and refits. */
 .pane-top-banner {
   position: absolute;

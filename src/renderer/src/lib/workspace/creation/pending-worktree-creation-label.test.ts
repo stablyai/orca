@@ -46,3 +46,29 @@ it('speaks of a sandbox for Orca Cloud and keeps VM wording for bring-your-own r
   expect(label('orca-cloud', { status: 'running', startedAt: 1 })).toBe('Preparing environment…')
   expect(label(undefined)).toBe('Provisioning VM…')
 })
+
+it('the Orca Cloud sidebar line follows the clone step', () => {
+  const at = (provisioningLog: string) =>
+    getCreationProgressLabel(
+      {
+        status: 'creating',
+        phase: 'provisioning-vm',
+        indeterminate: false,
+        provisioningLog,
+        request: request({
+          ephemeralVmRecipe: {
+            sourceRepoId: 'r',
+            recipeId: 'cloud',
+            projectId: 'p',
+            provider: 'orca-cloud'
+          }
+        })
+      },
+      t
+    )
+  expect(at('[orca-cloud] provisioning\n')).toBe('Starting sandbox…')
+  expect(at('[orca-cloud] cloning\n[orca-cloud] clone-progress 40 download\n')).toBe(
+    'Cloning the repository…'
+  )
+  expect(at('[orca-cloud] cloning\n[orca-cloud] connecting\n')).toBe('Preparing environment…')
+})

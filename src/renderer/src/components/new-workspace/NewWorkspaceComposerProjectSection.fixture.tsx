@@ -89,17 +89,15 @@ const orcaCloudRecipe: EphemeralVmRecipeOption = {
 
 function ProjectAndHostPreview({
   folderOnly = false,
-  orcaCloud,
-  cloudSelected = false
+  orcaCloud
 }: {
   folderOnly?: boolean
   /** Offers Orca Cloud with this entitlement. */
   orcaCloud?: OrcaCloudRunTargetAccess
-  cloudSelected?: boolean
 }): React.JSX.Element {
   const [project, setProject] = useState(folderOnly ? 'folder' : 'orca')
   const [host, setHost] = useState('local')
-  const [recipe, setRecipe] = useState<string | null>(cloudSelected ? 'cloud' : null)
+  const [recipe, setRecipe] = useState<string | null>(null)
   return (
     <div className="space-y-4 rounded-xl border border-border bg-background p-4">
       <h1 className="text-base font-semibold">Create workspace</h1>
@@ -160,13 +158,19 @@ export const folderOnly = defineFixture({
 export const projectMenu = defineFixture({
   ...closed,
   interact: (frame) => {
-    frame.querySelector<HTMLInputElement>('[aria-label="Project"][role="combobox"]')?.focus()
+    // Focus alone never opens the list (DS-22); a click does.
+    const field = frame.querySelector<HTMLInputElement>('[aria-label="Project"][role="combobox"]')
+    field?.focus()
+    field?.click()
   }
 })
 export const hostMenu = defineFixture({
   ...closed,
   interact: (frame) => {
-    frame.querySelector<HTMLInputElement>('[aria-label="Run on"][role="combobox"]')?.focus()
+    // Focus alone never opens the list (DS-22); a click does.
+    const field = frame.querySelector<HTMLInputElement>('[aria-label="Run on"][role="combobox"]')
+    field?.focus()
+    field?.click()
   }
 })
 
@@ -201,72 +205,11 @@ export const hostMenuOrcaCloudLocked = defineFixture({
     />
   )
 })
-export const orcaCloudSelected = defineFixture({
-  ...closed,
-  render: () => <ProjectAndHostPreview orcaCloud={entitled} cloudSelected />
-})
-// The hint under Run on once Orca Cloud is committed but blocked (billing answered after the pick).
-export const orcaCloudSelectedNoPlan = defineFixture({
-  ...closed,
-  render: () => (
-    <ProjectAndHostPreview
-      orcaCloud={{ state: 'no-plan', lapsed: false, canManageBilling: true }}
-      cloudSelected
-    />
-  )
-})
-export const orcaCloudSelectedOutOfHoursMember = defineFixture({
-  ...closed,
-  render: () => (
-    <ProjectAndHostPreview
-      orcaCloud={{ state: 'out-of-hours', cause: 'hours', canManageBilling: false }}
-      cloudSelected
-    />
-  )
-})
-export const orcaCloudSelectedPaymentAdmin = defineFixture({
-  ...closed,
-  render: () => (
-    <ProjectAndHostPreview
-      orcaCloud={{ state: 'payment-issue', canManageBilling: true }}
-      cloudSelected
-    />
-  )
-})
-// DS-15: a member can't choose a plan or raise the cap, so the hint says who can and offers no fix.
-export const orcaCloudSelectedNoPlanMember = defineFixture({
-  ...closed,
-  render: () => (
-    <ProjectAndHostPreview
-      orcaCloud={{ state: 'no-plan', lapsed: false, canManageBilling: false }}
-      cloudSelected
-    />
-  )
-})
-export const orcaCloudSelectedCapMember = defineFixture({
-  ...closed,
-  render: () => (
-    <ProjectAndHostPreview
-      orcaCloud={{ state: 'out-of-hours', cause: 'cap', canManageBilling: false }}
-      cloudSelected
-    />
-  )
-})
 export const hostMenuOrcaCloudNoPlanMember = defineFixture({
   ...hostMenu,
   render: () => (
     <ProjectAndHostPreview
       orcaCloud={{ state: 'no-plan', lapsed: false, canManageBilling: false }}
-    />
-  )
-})
-// DS-16: back from a paid Checkout, the composer is open again with Orca Cloud picked and its hours.
-export const orcaCloudAfterCheckout = defineFixture({
-  ...closed,
-  render: () => (
-    <ProjectAndHostPreview
-      orcaCloud={{ state: 'entitled', remainingSeconds: 300 * 3600 }}
-      cloudSelected
     />
   )
 })

@@ -21,6 +21,12 @@ import { expiredArchives } from './workspace-lifecycle'
 import { ACTIVITY_CHECK_BEFORE_LAPSE_MS, ACTIVITY_RENEW_MS, decideFromActivity, readVmActivity } from './vm-activity'
 
 const STUCK_MS = 15 * 60_000
+/**
+ * A create's longest legitimate run is a 30 s pooled try, a VM create and the 120 s start command.
+ * Past this its Worker was cut off (the desktop gave up or disconnected): fail it and free the VM
+ * instead of leaving a billed 'creating' row for the full STUCK_MS.
+ */
+export const CREATE_STUCK_MS = 5 * 60_000
 /** The desktop rolls over at the deadline; the cron steps in only if it did not (provider cap is +10 min). */
 const FORCED_STOP_GRACE_MS = 5 * 60_000
 
@@ -74,12 +80,12 @@ export async function reconcile(deps: LifecycleDeps): Promise<ReconcileSummary> 
   }
   const now = deps.now()
   for (const row of await listByStatus(deps.db, ['creating', 'failed', 'destroying', 'suspending', 'resuming'])) {
-    if (now - row.updated_at < STUCK_MS) {
+    if (now - row.updated_at < (row.status === 'creating' ? CREATE_STUCK_MS : STUCK_MS)) {
       continue
     }
     await guard(async () => {
       if (row.status === 'creating') {
-        await failAndRelease(deps, row)
+        await failAndRelease(deps, row, 'create_abandoned')
         summary.released++
       } else if (row.status === 'failed' || row.status === 'destroying') {
         await destroySandbox(deps, row)

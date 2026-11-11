@@ -89,6 +89,15 @@ export function registerPlanBillingMenuItem(): () => void {
   const disposeReturn = globalThis.window?.api?.orcaProfiles?.onBillingReturn?.(() => {
     void refreshBillingSummary(true)
   })
+  // Main asks after a cloud workspace is created or woken, and every 30 min while one runs, so a
+  // team crossing a usage level mid-session is alerted. Billing-flagged accounts only.
+  const disposeRefreshRequest = globalThis.window?.api?.orcaProfiles?.onBillingRefreshRequested?.(
+    () => {
+      if (lastKey) {
+        void refreshBillingSummary(true)
+      }
+    }
+  )
   const unsubscribeAuth = useAppStore.subscribe(onAuth)
   onAuth()
 
@@ -99,5 +108,6 @@ export function registerPlanBillingMenuItem(): () => void {
     unsubscribeSummary()
     unsubscribeAuth()
     disposeReturn?.()
+    disposeRefreshRequest?.()
   }
 }

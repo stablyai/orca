@@ -1,6 +1,6 @@
 import { ImeInput } from '@/lib/text-input/ime/ime-text-field'
 import React, { useCallback, useMemo, useRef, useState } from 'react'
-import { ChevronDown, FolderPlus } from 'lucide-react'
+import { ChevronDown, FolderPlus, Github } from 'lucide-react'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -15,6 +15,16 @@ import { ProjectOptionMark, ProjectOptionRow } from './ProjectComboboxRow'
 import { useRecentProjectIds } from './use-recent-project-ids'
 import { isWithinComboboxRoot, useTypeAheadCombobox } from './use-type-ahead-combobox'
 import { COMBOBOX_FIELD_SHELL, COMBOBOX_POPOVER_SURFACE } from './type-ahead-combobox-styles'
+import type { OrcaCloudGitHubRepository } from '@/lib/orca-cloud/use-orca-cloud-github-repositories'
+import {
+  CLOUD_REPO_MORE_KEY,
+  CLOUD_REPO_SHOW_MORE_KEY,
+  cloudRepoKey,
+  commitCloudRow,
+  filterCloudRepos,
+  ProjectComboboxCloudSection,
+  useOpenOnSignal
+} from './ProjectComboboxCloudSection'
 
 type ProjectComboboxProps = {
   options: readonly NewWorkspaceProjectOption[]
@@ -26,6 +36,16 @@ type ProjectComboboxProps = {
   triggerClassName?: string
   invalid?: boolean
   describedBy?: string
+  /** D4: GitHub repositories with no clone here, listed while Orca Cloud is the Run on target. */
+  cloudRepos?: readonly OrcaCloudGitHubRepository[] | null
+  /** The picked cloud-only repository (owner/name); it replaces the project in the field. */
+  cloudRepoValue?: string | null
+  onCloudRepoSelected?: (fullName: string) => void
+  onMoreCloudAccess?: () => void
+  /** Present while GitHub has more repositories than are listed. */
+  onShowMoreCloudRepos?: (() => void) | null
+  /** Bumped to open the list at its cloud-only section ("Choose a GitHub repository"). */
+  openSignal?: number
 }
 
 const ADD_PROJECT_KEY = 'add-project'
@@ -41,7 +61,13 @@ export default function ProjectCombobox({
   placeholder = 'Choose project',
   triggerClassName,
   invalid = false,
-  describedBy
+  describedBy,
+  cloudRepos = null,
+  cloudRepoValue = null,
+  onCloudRepoSelected,
+  onMoreCloudAccess,
+  onShowMoreCloudRepos = null,
+  openSignal = 0
 }: ProjectComboboxProps): React.JSX.Element {
   const t = useTranslate()
   const [tooltipOpen, setTooltipOpen] = useState(false)
@@ -55,9 +81,14 @@ export default function ProjectCombobox({
         query,
         recentIds
       ).flatMap((section) => section.items.map((match) => match.option.id)),
+      ...(cloudRepos
+        ? filterCloudRepos(cloudRepos, query).map((repo) => cloudRepoKey(repo.fullName))
+        : []),
+      ...(cloudRepos && onShowMoreCloudRepos ? [CLOUD_REPO_SHOW_MORE_KEY] : []),
+      ...(cloudRepos && onMoreCloudAccess ? [CLOUD_REPO_MORE_KEY] : []),
       ...(onAddProject ? [ADD_PROJECT_KEY] : [])
     ],
-    [onAddProject, options, recentIds]
+    [cloudRepos, onAddProject, onMoreCloudAccess, onShowMoreCloudRepos, options, recentIds]
   )
   const {
     query,
@@ -86,54 +117,71 @@ export default function ProjectCombobox({
     () => sectionProjectOptions(matches, query, recentIds),
     [matches, query, recentIds]
   )
+  // "Choose a GitHub repository": open with the first cloud-only row armed (scrolled into view).
+  useOpenOnSignal(openSignal, () => {
+    inputRef.current?.focus()
+    setOpen(true)
+    if (cloudRepos?.[0]) {
+      arm(cloudRepoKey(cloudRepos[0].fullName))
+    }
+  })
   const ambiguous = useMemo(() => getAmbiguousProjectOptionIds(options), [options])
-  const selected = options.find((option) => option.id === value) ?? null
-  const committed = selected !== null && query.length === 0
+  const cloudMatches = useMemo(
+    () => (cloudRepos ? filterCloudRepos(cloudRepos, query) : []),
+    [cloudRepos, query]
+  )
+  // A picked cloud-only repository stands in for the project in the field (D4).
+  const selected = cloudRepoValue ? null : (options.find((option) => option.id === value) ?? null)
+  const committed = (selected !== null || cloudRepoValue !== null) && query.length === 0
+  const committedName = cloudRepoValue ?? selected?.displayName ?? ''
 
-  const commit = useCallback(
-    (key: string | null): void => {
-      if (key === null) {
-        return
-      }
+  const cloudRows = { cloudRepos, onShowMoreCloudRepos, onMoreCloudAccess, onCloudRepoSelected }
+  const commit = (key: string | null): void => {
+    if (key === null) {
+      return
+    }
+    // Show more keeps the list open: the next page appends in place.
+    const cloudRow = commitCloudRow(key, cloudRows)
+    if (cloudRow === 'kept-open') {
+      return
+    }
+    close()
+    if (cloudRow === 'handled') {
+      return
+    }
+    if (key === ADD_PROJECT_KEY) {
+      onAddProject?.()
+      return
+    }
+    onValueChange(key)
+    onValueSelected?.(key)
+  }
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>): void => {
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault()
+      setOpen(true)
+      moveArm(event.key === 'ArrowDown' ? 1 : -1)
+      return
+    }
+    if (event.key === 'Enter' && open) {
+      event.preventDefault()
+      commit(armedKey)
+      return
+    }
+    // Handle Escape even while closed to clear stranded queries; bubble only when there is no committed display to restore.
+    if (event.key === 'Escape' && (open || query.length > 0)) {
+      event.preventDefault()
+      event.stopPropagation()
       close()
-      if (key === ADD_PROJECT_KEY) {
-        onAddProject?.()
-        return
-      }
-      onValueChange(key)
-      onValueSelected?.(key)
-    },
-    [close, onAddProject, onValueChange, onValueSelected]
-  )
-
-  const handleKeyDown = useCallback(
-    (event: React.KeyboardEvent<HTMLInputElement>): void => {
-      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-        event.preventDefault()
-        setOpen(true)
-        moveArm(event.key === 'ArrowDown' ? 1 : -1)
-        return
-      }
-      if (event.key === 'Enter' && open) {
-        event.preventDefault()
-        commit(armedKey)
-        return
-      }
-      // Handle Escape even while closed to clear stranded queries; bubble only when there is no committed display to restore.
-      if (event.key === 'Escape' && (open || query.length > 0)) {
-        event.preventDefault()
-        event.stopPropagation()
-        close()
-        return
-      }
-      if (event.key === 'Backspace' && committed && selected) {
-        event.preventDefault()
-        setQuery(selected.displayName)
-        setOpen(true)
-      }
-    },
-    [armedKey, close, commit, committed, moveArm, open, query, selected, setOpen, setQuery]
-  )
+      return
+    }
+    if (event.key === 'Backspace' && committed) {
+      event.preventDefault()
+      setQuery(committedName)
+      setOpen(true)
+    }
+  }
 
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
@@ -154,6 +202,9 @@ export default function ProjectCombobox({
             >
               <span className="flex w-4 shrink-0 items-center justify-center">
                 {committed && selected ? <ProjectOptionMark option={selected} /> : null}
+                {committed && cloudRepoValue ? (
+                  <Github aria-hidden className="size-3.5 text-muted-foreground" />
+                ) : null}
               </span>
               <div className="relative min-w-0 flex-1 overflow-hidden">
                 <ImeInput
@@ -174,7 +225,6 @@ export default function ProjectCombobox({
                     setQuery(event.target.value)
                     setOpen(true)
                   }}
-                  onFocus={() => setOpen(true)}
                   onBlur={(event) => {
                     const next = event.relatedTarget
                     // A parent dialog's trap can refocus this field as a nested dialog mounts; Radix misses focus that leaves before the list mounts.
@@ -192,12 +242,12 @@ export default function ProjectCombobox({
                     committed && 'text-transparent caret-foreground'
                   )}
                 />
-                {committed && selected ? (
+                {committed ? (
                   <div
                     aria-hidden="true"
                     className="pointer-events-none absolute inset-0 flex min-w-0 items-center text-sm"
                   >
-                    <span className="truncate">{selected.displayName}</span>
+                    <span className="truncate">{committedName}</span>
                   </div>
                 ) : null}
               </div>
@@ -269,7 +319,7 @@ export default function ProjectCombobox({
               role="presentation"
               className="max-h-72 min-h-0 flex-1 overflow-y-auto p-1 scrollbar-sleek"
             >
-              {matches.length === 0 ? (
+              {matches.length === 0 && cloudMatches.length === 0 ? (
                 // Match row height so empty results stay visually neutral.
                 <p className="flex h-8 items-center justify-center px-2 text-sm text-muted-foreground">
                   {options.length === 0
@@ -310,6 +360,18 @@ export default function ProjectCombobox({
                   ))}
                 </div>
               ))}
+              {cloudRepos ? (
+                <ProjectComboboxCloudSection
+                  repos={cloudMatches}
+                  value={cloudRepoValue ? cloudRepoKey(cloudRepoValue) : null}
+                  armedKey={armedKey}
+                  armedId={`${listId}-armed`}
+                  onArm={arm}
+                  onCommit={commit}
+                  showMoreAccess={Boolean(onMoreCloudAccess)}
+                  showMoreRepos={Boolean(onShowMoreCloudRepos)}
+                />
+              ) : null}
             </div>
             {onAddProject ? (
               <div

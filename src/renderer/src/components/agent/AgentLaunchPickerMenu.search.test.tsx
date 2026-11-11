@@ -75,7 +75,7 @@ it('includes blank terminal in keyboard results and filters it for agent and mod
   const input = screen.getByRole('textbox')
   await user.click(input)
   await user.keyboard('{ArrowDown}')
-  expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Blank Terminal' }))
+  expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Blank terminal' }))
   await user.click(input)
   await user.type(input, 'shell{Enter}')
   expect(screen.getByLabelText('Selection').textContent).toBe('blank')
@@ -85,7 +85,7 @@ it('includes blank terminal in keyboard results and filters it for agent and mod
   await user.keyboard('{ArrowDown}')
   expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Custom command' }))
   await user.type(screen.getByRole('textbox'), 'codex')
-  expect(screen.queryByRole('menuitem', { name: 'Blank Terminal' })).toBeNull()
+  expect(screen.queryByRole('menuitem', { name: 'Blank terminal' })).toBeNull()
   await user.keyboard('{Enter}')
   expect(screen.getByLabelText('Selection').textContent).toBe('codex:')
 

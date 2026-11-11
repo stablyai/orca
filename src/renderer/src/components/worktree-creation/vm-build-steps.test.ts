@@ -194,3 +194,110 @@ describe('humanizeOrcaCloudLogLine', () => {
     expect(humanizeOrcaCloudLogLine('sandbox sbx_41d9 scheduled on pool p-use1-3', t)).toBeNull()
   })
 })
+
+describe('Orca Cloud clone step', () => {
+  const lines = (...rows: [string, number][]) => ({
+    provisioningLog: rows.map(([line]) => `${line}\n`).join(''),
+    provisioningLogStamps: rows.map(([, at]) => at)
+  })
+  const ids = (steps: { id: string }[]) => steps.map((step) => step.id)
+
+  it('runs as its own step with git percent and stage once the sandbox is up', () => {
+    const steps = deriveVmBuildSteps(
+      {
+        ...base,
+        ...lines(
+          ['[orca-cloud] provisioning', 1000],
+          ['[orca-cloud] cloning', 6000],
+          ['[orca-cloud] clone-progress 40 download', 9000]
+        )
+      },
+      12_000,
+      { cloud: true }
+    )
+    expect(ids(steps)).toEqual(['provision', 'clone', 'checks', 'create'])
+    expect(steps[0]).toMatchObject({ state: 'done', elapsedMs: 5000 })
+    expect(steps[1]).toMatchObject({
+      state: 'running',
+      elapsedMs: 6000,
+      percent: 40,
+      stage: 'download'
+    })
+    expect(steps[2]).toMatchObject({ state: 'pending' })
+  })
+
+  it('is done with its own time once the next phase starts, failed if the create failed mid-clone', () => {
+    const done = deriveVmBuildSteps(
+      {
+        ...base,
+        ...lines(
+          ['[orca-cloud] cloning', 6000],
+          ['[orca-cloud] clone-progress 95 checkout', 50_000],
+          ['[orca-cloud] connecting', 57_000]
+        )
+      },
+      58_000,
+      { cloud: true }
+    )
+    expect(done[1]).toMatchObject({ state: 'done', elapsedMs: 51_000, percent: null })
+
+    const failed = deriveVmBuildSteps(
+      {
+        ...base,
+        status: 'error',
+        errorAt: 20_000,
+        ...lines(['[orca-cloud] cloning', 6000], ['Orca Cloud: repo_unreachable', 19_000])
+      },
+      21_000,
+      { cloud: true }
+    )
+    expect(failed[0]).toMatchObject({ state: 'done' })
+    expect(failed[1]).toMatchObject({ state: 'failed', elapsedMs: 14_000 })
+  })
+
+  it('without clone lines (prebuilt environment) it is done with the sandbox; absent off cloud', () => {
+    const steps = deriveVmBuildSteps(
+      { ...base, environmentCheck: { status: 'running', startedAt: 6000 } },
+      7000,
+      { cloud: true }
+    )
+    expect(steps[1]).toMatchObject({ id: 'clone', state: 'done', elapsedMs: null })
+    expect(ids(deriveVmBuildSteps(base, 7000))).toEqual(['provision', 'checks', 'create'])
+  })
+
+  it('a clone failure names its cause', () => {
+    expect(
+      classifyVmBuildFailure({
+        entry: {
+          phase: 'provisioning-vm',
+          errorCode: 'cloudCloneFailed',
+          provisioningLog: '[orca-cloud] cloning\nOrca Cloud: clone_timeout\n'
+        },
+        error: 'x',
+        cloud: true
+      })
+    ).toEqual({ kind: 'cloneFailed', reason: 'clone_timeout' })
+  })
+
+  it('shows counting (no frozen 0%) until git reports a percent', () => {
+    const at = (...extra: [string, number][]) =>
+      deriveVmBuildSteps({ ...base, ...lines(['[orca-cloud] cloning', 6000], ...extra) }, 9000, {
+        cloud: true
+      })[1]
+    expect(at()).toMatchObject({ state: 'running', percent: null, stage: 'counting' })
+    expect(at(['[orca-cloud] clone-progress 0 download', 7000])).toMatchObject({
+      percent: null,
+      stage: 'counting'
+    })
+    expect(at(['[orca-cloud] clone-progress 12 download', 8000])).toMatchObject({
+      percent: 12,
+      stage: 'download'
+    })
+  })
+
+  it('progress lines stay out of the plain log', () => {
+    const t: Translate = (_key, fallback) => fallback
+    expect(humanizeOrcaCloudLogLine('[orca-cloud] cloning', t)).toBe('Cloning the repository…')
+    expect(humanizeOrcaCloudLogLine('[orca-cloud] clone-progress 40 download', t)).toBeNull()
+  })
+})

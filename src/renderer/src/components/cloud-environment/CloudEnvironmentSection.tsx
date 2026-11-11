@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import { InlineError } from '@/components/ui/inline-error'
-import { SettingsGroupHeader } from '@/components/settings/section-layout/SettingsGroup'
 import { useTranslate } from '@/i18n/use-translate'
 import {
   githubSlugForRepo,
@@ -12,6 +11,7 @@ import { useAppStore } from '@/store/index'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import type { OrcaOrgMember } from '../../../../shared/orca-profiles'
 import { stalenessBannerCopy } from './cloud-environment-copy'
+import { environmentFailureFix } from './environment-failure-fix'
 import type {
   EnvironmentBuildView,
   EnvironmentDraft,
@@ -30,9 +30,9 @@ import { useCloudEnvironment } from './use-cloud-environment'
 
 const LOG_TAIL_LINES = 80
 
-/** Hidden unless this build talks to an Orca Cloud control plane. */
-export function useOrcaCloudEnvironmentsConfigured(): boolean {
-  const [configured, setConfigured] = useState(false)
+/** Null until main answers, so a pane can show a placeholder instead of flashing "unavailable". */
+export function useOrcaCloudEnvironmentsAvailability(): boolean | null {
+  const [configured, setConfigured] = useState<boolean | null>(null)
   useEffect(() => {
     let disposed = false
     void window.api.orcaCloudEnvironments
@@ -42,7 +42,10 @@ export function useOrcaCloudEnvironmentsConfigured(): boolean {
           setConfigured(value)
         }
       })
-      .catch(() => undefined)
+      .catch(() => !disposed && setConfigured(false))
+    if (!window.api.orcaCloudEnvironments) {
+      setConfigured(false)
+    }
     return () => {
       disposed = true
     }
@@ -70,42 +73,22 @@ function useLocalRepoSuggestions(): {
   }, [repos])
 }
 
-/** Settings block: Orca Cloud environment (repos + install script → snapshot builds). */
+/** Settings block: Orca Cloud environment (repos + install script → snapshot builds).
+ *  The caller checks useOrcaCloudEnvironmentsAvailability first, so this never re-probes. */
 export function CloudEnvironmentSection({
   orgId,
   viewerUserId
 }: {
   orgId: string | null
   viewerUserId: string | null
-}): React.JSX.Element | null {
-  const t = useTranslate()
-  const configured = useOrcaCloudEnvironmentsConfigured()
-  if (!configured) {
-    return null
-  }
+}): React.JSX.Element {
+  // Settings › Orca Cloud › Cloud environments owns the title and description.
   return (
-    <section
-      className="space-y-4 border-t border-border/60 pt-5"
-      aria-labelledby="cloud-environment-title"
-    >
-      <SettingsGroupHeader
-        className="px-0"
-        title={
-          <span id="cloud-environment-title">
-            {t('cloudEnvironment.title', 'Cloud environment')}
-          </span>
-        }
-        description={t(
-          'cloudEnvironment.descriptionTeam',
-          'Your team’s repos and install script, built once into a snapshot so every cloud workspace starts with dependencies installed.'
-        )}
-      />
-      <CloudEnvironmentController
-        api={window.api.orcaCloudEnvironments}
-        orgId={orgId}
-        viewerUserId={viewerUserId}
-      />
-    </section>
+    <CloudEnvironmentController
+      api={window.api.orcaCloudEnvironments}
+      orgId={orgId}
+      viewerUserId={viewerUserId}
+    />
   )
 }
 
@@ -277,6 +260,19 @@ function CloudEnvironmentController({
       .then(() => setAgentLaunching(false))
   }
 
+  // DS-40: a failed latest build gets Fix with agent (install script, or repo contents that broke
+  // the clone) or Give access (the clone couldn't reach the repo); see environment-failure-fix.ts.
+  const failureFix = environmentFailureFix({
+    build: builds[0],
+    logLines:
+      builds[0] && builds[0].id === logBuild?.id
+        ? stream.buffer.lines.map((line) => line.plain)
+        : null,
+    environment,
+    repoId: agentRepo?.id ?? null,
+    t
+  })
+
   const activate = (build: EnvironmentBuildView): void => {
     void confirm({
       title: t('cloudEnvironment.activate.title', 'Use build #{{number}}?', {
@@ -344,6 +340,8 @@ function CloudEnvironmentController({
       onActivate={activate}
       onSelectBuild={(build) => setSelectedBuildId(build.id)}
       onConfigureWithAgent={configureWithAgent}
+      onFixWithAgent={failureFix.onFixWithAgent}
+      onGiveAccess={failureFix.onGiveAccess}
     />
   )
 }

@@ -1,10 +1,13 @@
 import { afterEach, expect, it, vi } from 'vitest'
 
-const handlers = new Map<string, () => unknown>()
+const handlers = new Map<string, (...args: unknown[]) => unknown>()
 const { openExternal } = vi.hoisted(() => ({ openExternal: vi.fn(async () => {}) }))
 
 vi.mock('electron', () => ({
-  ipcMain: { handle: (channel: string, handler: () => unknown) => handlers.set(channel, handler) },
+  ipcMain: {
+    handle: (channel: string, handler: (...args: unknown[]) => unknown) =>
+      handlers.set(channel, handler)
+  },
   shell: { openExternal }
 }))
 
@@ -17,12 +20,108 @@ afterEach(() => {
 })
 
 function register(installUrl: string, config = vi.fn(async () => ({ idleSleepMinutes: 15 }))) {
-  registerHostedAccountHandlers({
-    config,
-    connectGitHub: async () => ({ installUrl, authorizeUrl: installUrl })
-  })
+  registerHostedAccountHandlers(
+    {
+      config,
+      connectGitHub: async () => ({ installUrl, authorizeUrl: installUrl }),
+      githubRepoAccess: async () => ({ access: 'granted', owner: 'acme', repo: REPO }),
+      githubRepositories: async () => ({ repositories: [], nextCursor: null }),
+      create: unusedCreate
+    },
+    { repoIds: async () => null }
+  )
   return config
 }
+
+const REPO = 'https://github.com/acme/web'
+const unusedCreate = async (): Promise<never> => {
+  throw new Error('not called')
+}
+
+it('starts a sandbox that clones a GitHub-only repository (D4), and refuses anything else', async () => {
+  const create = vi.fn(async (body: { workspaceId: string; repo?: { url: string } }) => ({
+    sandbox: {
+      id: 'sbx_1',
+      workspaceId: body.workspaceId,
+      status: 'running' as const,
+      machineSize: 'standard' as const,
+      region: 'iad1',
+      session: null,
+      createdAt: 1
+    },
+    connection: { type: 'orca-server' as const, pairingCode: 'code', projectRoot: '/work' }
+  }))
+  registerHostedAccountHandlers(
+    {
+      config: async () => ({ idleSleepMinutes: 15 }),
+      connectGitHub: async () => ({ installUrl: REPO, authorizeUrl: REPO }),
+      githubRepoAccess: async () => ({ access: 'granted', owner: 'acme', repo: REPO }),
+      githubRepositories: async () => ({ repositories: [], nextCursor: null }),
+      create
+    },
+    { repoIds: async () => null }
+  )
+  expect(await handlers.get(CH.createFromGitHub)?.({}, { repoUrl: REPO })).toEqual({
+    ok: true,
+    value: { sandboxId: 'sbx_1' }
+  })
+  expect(create).toHaveBeenLastCalledWith({
+    workspaceId: expect.stringMatching(/^web-[0-9a-f]{8}$/),
+    machineSize: 'standard',
+    repo: { url: 'https://github.com/acme/web.git' }
+  })
+  expect(
+    await handlers.get(CH.createFromGitHub)?.({}, { repoUrl: 'https://gitlab.com/acme/web' })
+  ).toMatchObject({ ok: false })
+  expect(create).toHaveBeenCalledTimes(1)
+})
+const SESSION = 'cs_abcdefghijklmnopqrstuv'
+
+it('asks again with the repo and owner ids when access is missing, so GitHub preselects the repo', async () => {
+  const githubRepoAccess = vi.fn(async (query: { repoId?: number }) => ({
+    access: 'missing' as const,
+    owner: 'acme',
+    repo: REPO,
+    installUrl: query.repoId
+      ? 'https://github.com/apps/x/installations/new/permissions?suggested_target_id=50&repository_ids[]=7&state=s'
+      : 'https://github.com/apps/x/installations/new?state=s'
+  }))
+  const connectGitHub = vi.fn(async () => ({
+    installUrl: 'https://github.com/apps/x/installations/new?state=s',
+    authorizeUrl: 'https://github.com/login/oauth/authorize'
+  }))
+  registerHostedAccountHandlers(
+    {
+      config: async () => ({ idleSleepMinutes: 15 }),
+      connectGitHub,
+      githubRepoAccess,
+      githubRepositories: async () => ({ repositories: [], nextCursor: null }),
+      create: unusedCreate
+    },
+    { repoIds: async () => ({ repoId: 7, ownerId: 50 }) }
+  )
+  const answer = await handlers.get(CH.getRepoAccess)?.(
+    {},
+    { repoUrl: `${REPO}.git`, setupSessionId: SESSION }
+  )
+  expect(answer).toMatchObject({
+    ok: true,
+    value: { access: 'missing', installUrl: expect.stringContaining('repository_ids[]=7') }
+  })
+  expect(githubRepoAccess).toHaveBeenLastCalledWith({
+    repo: REPO,
+    setupSessionId: SESSION,
+    repoId: 7,
+    ownerId: 50
+  })
+  // Not GitHub: refused without a network call.
+  expect(
+    await handlers.get(CH.getRepoAccess)?.({}, { repoUrl: 'https://gitlab.com/acme/web' })
+  ).toMatchObject({ ok: false })
+  // Connect with a repo carries the ids and the session; a malformed session id is dropped.
+  await handlers.get(CH.connectGitHub)?.({}, { repoUrl: REPO, setupSessionId: 'nope' })
+  expect(connectGitHub).toHaveBeenLastCalledWith(undefined, { repo: REPO, repoId: 7, ownerId: 50 })
+})
 
 it('opens only a github.com page for Connect GitHub', async () => {
   register('https://github.com/apps/orca-cloud-dev/installations/new?state=x')

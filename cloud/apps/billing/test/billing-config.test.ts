@@ -12,7 +12,7 @@ describe('config: tax and plan catalog', () => {
       ['true', 'true']
     ] as const) {
       const h = await createHarness(flag ? { STRIPE_AUTOMATIC_TAX: flag } : {})
-      const token = await h.desktopToken({ sub: 'u1' })
+      const token = await h.desktopToken({ sub: 'u1', org: 'o1', orgRole: 'owner' })
       await h.call('POST', '/v1/billing/checkout', { body: { plan: 'team' }, headers: { authorization: `Bearer ${token}` } })
       const session = h.stripe.calls.find((call) => call.method === 'POST' && call.path === '/v1/checkout/sessions')!
       expect(session.form.get('automatic_tax[enabled]')).toBe(expected)
@@ -46,7 +46,9 @@ describe('config: tax and plan catalog', () => {
         defaultSpendCapCents: 5000,
         maxSpendCapCents: 500_000
       },
-      enterprise: { label: 'Enterprise', priceLabel: 'Custom', contactUrl: 'https://example.test/sales' }
+      enterprise: { label: 'Enterprise', priceLabel: 'Custom', contactUrl: 'https://example.test/sales' },
+      // No email on this token: no trial on offer.
+      trial: null
     })
     expect(entitlement.body.overage.spendCapCents).toBe(5000)
   })

@@ -53,7 +53,8 @@ export const BuildLogViewer = memo(function BuildLogViewer({
   streamError,
   onRetryStream,
   height = MAX_LOG_HEIGHT_PX,
-  now: fixedNow
+  now: fixedNow,
+  failureActions
 }: {
   build: EnvironmentBuildView
   buffer: BuildLogBuffer
@@ -64,6 +65,7 @@ export const BuildLogViewer = memo(function BuildLogViewer({
   height?: number
   /** Freeze the clock (fixtures). */
   now?: number
+  failureActions?: React.ReactNode
 }): React.JSX.Element {
   const t = useTranslate()
   const dark = useDocumentDarkTheme()
@@ -341,6 +343,7 @@ export const BuildLogViewer = memo(function BuildLogViewer({
           build={build}
           activeBuildNumber={activeBuildNumber}
           onShowError={buffer.orcaErrors.length > 0 ? showError : null}
+          actions={failureActions}
         />
       ) : null}
 

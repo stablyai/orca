@@ -62,6 +62,8 @@ export function createHostedSessionRegistry(deps: {
   log?: (line: string) => void
   /** Each time a running workspace's orcad is first reached in this app session (including after resume). */
   onConnected?: (runtimeEnvironmentId: string) => void
+  /** After each sync: whether any Orca Cloud workspace is recorded running. */
+  onRunningChange?: (anyRunning: boolean) => void
 }): HostedSessionRegistry {
   const running = new Map<string, Running>()
   const log = deps.log ?? ((line: string) => console.error(line))
@@ -216,6 +218,7 @@ export function createHostedSessionRegistry(deps: {
           stopEnvironment(environmentId)
         }
       }
+      deps.onRunningChange?.(live.size > 0)
     },
     stopEnvironment,
     async restartWorkspace(workspaceId) {

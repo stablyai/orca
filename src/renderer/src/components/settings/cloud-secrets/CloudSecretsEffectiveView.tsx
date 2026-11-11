@@ -1,19 +1,15 @@
-import { KeyRound, Layers } from 'lucide-react'
+import { Layers } from 'lucide-react'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import type {
   CloudSecretScope,
   CloudSecretsEffective
 } from '../../../../../shared/cloud-secrets/cloud-secrets-wire'
 import { Badge } from '../../ui/badge'
-import { CloudSecretVmBadge } from './CloudSecretVmBadge'
+import { CloudSecretChips } from './CloudSecretVmBadge'
 import { InlineError } from '../../ui/inline-error'
 import { Skeleton } from '../../ui/skeleton'
 import { CloudApiEmptyState } from '../cloud-api/cloud-api-parts'
-import {
-  cloudSecretKindLabel,
-  cloudSecretScopeLabel,
-  cloudSecretsErrorCopy
-} from './cloud-secrets-copy'
+import { cloudSecretScopeLabel, cloudSecretsErrorCopy } from './cloud-secrets-copy'
 import { maskedHint } from './CloudSecretList'
 import type { Loadable } from './use-cloud-secrets'
 
@@ -125,15 +121,9 @@ export function CloudSecretsEffectiveView({
               {secrets.map((secret) => (
                 <tr key={secret.name} className="align-middle">
                   <td className="px-3 py-2">
-                    <span className="flex min-w-0 items-center gap-2">
-                      <code className="truncate font-mono">{secret.name}</code>
-                      {secret.kind === 'agent_key' ? (
-                        <Badge variant="referenceLabel">
-                          <KeyRound />
-                          {cloudSecretKindLabel(secret.name, t)}
-                        </Badge>
-                      ) : null}
-                      <CloudSecretVmBadge name={secret.name} />
+                    <span className="flex min-w-0 flex-col items-start gap-1">
+                      <code className="font-mono break-all">{secret.name}</code>
+                      <CloudSecretChips name={secret.name} kind={secret.kind} />
                     </span>
                   </td>
                   <td className="px-3 py-2">

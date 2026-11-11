@@ -1,6 +1,9 @@
 // Loading, empty and error states for the cloud workspaces list, and the new-section dialog.
 import React, { useState } from 'react'
+import { Cloud, List } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { useAppStore } from '@/store'
+import { openNewCloudWorkspace } from '@/hooks/ipc-events/new-workspace-command'
 import {
   Dialog,
   DialogContent,
@@ -42,13 +45,21 @@ export function ErrorState({
     <InlineError
       className="m-1"
       title={describeInlineError(error, reason, t)}
-      retryLabel={
-        atLimit
-          ? t('auto.components.cloudWorkspaces.showCloudWorkspaces', 'Show cloud workspaces')
-          : t('orcaCloudWorkspace.tryAgain', 'Try again')
-      }
+      retryLabel={atLimit ? undefined : t('orcaCloudWorkspace.tryAgain', 'Try again')}
       retrying={retrying}
-      onRetry={atLimit ? () => openCloudWorkspacesHome() : onRetry}
+      onRetry={atLimit ? undefined : onRetry}
+      action={
+        atLimit ? (
+          <Button
+            variant="outline"
+            size="xs"
+            onClick={() => openCloudWorkspacesHome({ running: true })}
+          >
+            <List aria-hidden />
+            {t('auto.components.cloudWorkspaces.showCloudWorkspaces', 'Show cloud workspaces')}
+          </Button>
+        ) : undefined
+      }
     />
   )
 }
@@ -163,14 +174,27 @@ export function EmptyState({
         : [
             t('auto.components.cloudWorkspaces.emptyMineTitle', 'No cloud workspaces yet'),
             t(
-              'auto.components.cloudWorkspaces.emptyMineBody',
-              'Create one with Orca Cloud from New workspace. It keeps running while your laptop sleeps.'
+              'components.cloudWorkspaces.emptyMineStartBody',
+              'Start one and it keeps running while your laptop sleeps.'
             )
           ]
+  // Spec E3: an empty Mine or Team list offers a real button, not just copy.
+  const offerCreate = !filtered && !archived
   return (
     <div className="flex flex-col items-center gap-1 px-6 py-8 text-center">
       <p className="text-sm font-medium text-foreground">{title}</p>
       <p className="max-w-sm text-xs text-muted-foreground">{body}</p>
+      {offerCreate ? (
+        <Button
+          type="button"
+          size="sm"
+          className="mt-3"
+          onClick={() => openNewCloudWorkspace(useAppStore.getState(), 'unknown')}
+        >
+          <Cloud className="size-3.5" />
+          {t('components.cloudWorkspaces.newCloudWorkspace', 'New cloud workspace')}
+        </Button>
+      ) : null}
     </div>
   )
 }

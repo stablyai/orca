@@ -11,8 +11,7 @@ import {
   PanelLeft,
   Pencil,
   RotateCcw,
-  SquareArrowOutUpRight,
-  Trash2
+  SquareArrowOutUpRight
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -174,9 +173,17 @@ function failureActions(
         icon: <SquareArrowOutUpRight />,
         onClick: actions.onOpenAnyway
       }
-      // Hosted sandboxes have no recipe for an agent or the user to edit.
+      // Hosted sandboxes have no recipe for an agent or the user to edit. Checks rarely pass on a
+      // rerun without a change, so opening the sandbox to fix them in place leads. Two plain text
+      // buttons read as a choice between equals rather than a toolbar.
       return cloud
-        ? { primary: [retryChecks, openAnyway], more: [] }
+        ? {
+            primary: [
+              { ...openAnyway, icon: undefined },
+              { ...retryChecks, icon: undefined }
+            ],
+            more: []
+          }
         : { primary: [fix, retryChecks], more: [openAnyway, editRecipe] }
     }
     case 'provision':
@@ -260,6 +267,7 @@ function failureActions(
     case 'unavailable':
     case 'network':
     case 'create':
+    case 'cloneFailed':
       return { primary: [tryAgain], more: [] }
   }
 }
@@ -298,12 +306,12 @@ export function FailureActionRow({
   // Leaving a build that still holds a VM destroys it, so say so on the button.
   const destroys = vmKept
   return (
-    <div className="flex flex-wrap items-center gap-1.5">
+    <div className="flex flex-wrap items-center gap-2">
       {primary.map((action, index) => (
         <Button
           key={action.key}
           type="button"
-          size="xs"
+          size="sm"
           variant={index === 0 && !action.secondary ? 'default' : 'outline'}
           onClick={action.pending ? undefined : action.onClick}
           disabled={action.disabled}
@@ -317,7 +325,7 @@ export function FailureActionRow({
       {more.length > 0 ? (
         <DropdownMenu modal={false}>
           <DropdownMenuTrigger asChild>
-            <Button type="button" variant="ghost" size="xs">
+            <Button type="button" variant="ghost" size="sm">
               {t('auto.components.worktree.creation.VmBuildFailureCard.more', 'More')}
               <ChevronDown />
             </Button>
@@ -338,13 +346,12 @@ export function FailureActionRow({
       ) : null}
       <Button
         type="button"
-        // Leaving is the quiet way out; only deleting a running sandbox earns the destructive chip.
-        variant={destroys ? 'destructive-chip' : 'quiet'}
-        size="xs"
+        // Leaving is the quiet way out; deleting a running sandbox reads destructive, set apart on the right.
+        variant={destroys ? 'destructive-ghost' : 'quiet'}
+        size="sm"
         onClick={actions.onDismiss}
         className="ml-auto"
       >
-        {destroys ? <Trash2 /> : null}
         {destroys
           ? cloud
             ? t(

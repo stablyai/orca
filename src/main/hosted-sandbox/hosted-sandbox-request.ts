@@ -24,7 +24,12 @@ export type HostedSandboxRequest = <T>(
   method: 'GET' | 'POST' | 'PUT' | 'DELETE',
   path: string,
   schema: z.ZodType<T>,
-  init: { body?: unknown; kind: 'boot' | 'control'; signal?: AbortSignal }
+  init: {
+    body?: unknown
+    kind: 'boot' | 'control'
+    signal?: AbortSignal
+    features?: readonly string[]
+  }
 ) => Promise<T>
 
 /** One authenticated, schema-checked control-plane call; shared by every desktop client of it. */
@@ -39,7 +44,13 @@ export function createHostedSandboxRequest(
     method: 'GET' | 'POST' | 'PUT' | 'DELETE',
     path: string,
     schema: z.ZodType<T>,
-    init: { body?: unknown; kind: 'boot' | 'control'; signal?: AbortSignal }
+    init: {
+      body?: unknown
+      kind: 'boot' | 'control'
+      signal?: AbortSignal
+      /** Per-call opt-ins on top of the features every call sends. */
+      features?: readonly string[]
+    }
   ): Promise<T> {
     const timeoutSignal = AbortSignal.timeout(timeouts[init.kind])
     const signal = init.signal ? AbortSignal.any([init.signal, timeoutSignal]) : timeoutSignal
@@ -52,7 +63,12 @@ export function createHostedSandboxRequest(
           authorization: `Bearer ${token}`,
           accept: 'application/json',
           // This client's schemas know the `archived` status.
-          'x-orca-sandbox-features': 'archive,idle-minutes,wake-hints',
+          'x-orca-sandbox-features': [
+            'archive',
+            'idle-minutes',
+            'wake-hints',
+            ...(init.features ?? [])
+          ].join(','),
           ...(init.body === undefined ? {} : { 'content-type': 'application/json' })
         },
         body: init.body === undefined ? undefined : JSON.stringify(init.body),
@@ -115,6 +131,37 @@ const STATUS_CODES: Record<string, EnvironmentProviderErrorCode> = {
   internal_error: 'unavailable'
 }
 
+/**
+ * A refusal the control plane answered with an error body. Routes newer than the shared code list
+ * (e.g. the Codex broker's `broker_in_progress`) keep their own name here, so their clients can map it.
+ */
+export class HostedSandboxRefusalError extends EnvironmentProviderError {
+  readonly serverError: string | null
+  readonly httpStatus: number
+
+  constructor(
+    code: EnvironmentProviderErrorCode,
+    message: string,
+    reason: string | null,
+    serverError: string | null,
+    httpStatus: number
+  ) {
+    super(code, message, reason)
+    this.name = 'HostedSandboxRefusalError'
+    this.serverError = serverError
+    this.httpStatus = httpStatus
+  }
+}
+
+const SERVER_NAME = /^[a-z][a-z0-9_]{0,63}$/
+
+/** The `error` name of any error body, if it looks like a name (never free text). */
+function serverErrorName(payload: unknown): string | null {
+  const error =
+    typeof payload === 'object' && payload !== null && 'error' in payload ? payload.error : null
+  return typeof error === 'string' && SERVER_NAME.test(error) ? error : null
+}
+
 function errorFromResponse(status: number, payload: unknown): EnvironmentProviderError {
   const parsed = HostedSandboxErrorResponseSchema.safeParse(payload)
   if (parsed.success && parsed.data.error === 'entitlement_denied') {
@@ -125,18 +172,23 @@ function errorFromResponse(status: number, payload: unknown): EnvironmentProvide
   }
   if (parsed.success) {
     const code = STATUS_CODES[parsed.data.error] ?? 'unavailable'
-    return new EnvironmentProviderError(
+    return new HostedSandboxRefusalError(
       code,
       `Orca Cloud refused the request (${parsed.data.error}).`,
-      parsed.data.reason ?? null
+      parsed.data.reason ?? null,
+      parsed.data.error,
+      status
     )
   }
   if (status >= 300 && status < 400) {
     return new EnvironmentProviderError('invalid_response', 'Orca Cloud answered with a redirect.')
   }
-  return new EnvironmentProviderError(
+  return new HostedSandboxRefusalError(
     status === 401 || status === 403 ? 'unauthorized' : 'unavailable',
-    `Orca Cloud request failed (HTTP ${status}).`
+    `Orca Cloud request failed (HTTP ${status}).`,
+    null,
+    serverErrorName(payload),
+    status
   )
 }
 

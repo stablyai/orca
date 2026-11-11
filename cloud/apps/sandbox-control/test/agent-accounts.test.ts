@@ -1,5 +1,6 @@
 import { SignJWT, createLocalJWKSet, exportJWK, generateKeyPair } from 'jose'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { isSharedWorkspace } from '../src/account-providers'
 import { ENV_COMMAND, START_COMMAND } from '../src/sandbox-vm-commands'
 import { createHarness } from './harness'
 
@@ -94,6 +95,8 @@ describe('Orca-account credentials (D11)', () => {
     expect(put.status).toBe(200)
     expect(put.body.claude).toMatchObject({ state: 'active', label: 'mia@example.com' })
     expect(put.body.providerEnabled).toEqual({ claude: true, codex: false })
+    // Codex's flag was never turned on: `off`, which clients word differently from the kill switch.
+    expect(put.body.providerState).toEqual({ claude: 'on', codex: 'off' })
     expect(JSON.stringify(put.body)).not.toContain(SETUP_TOKEN)
     // Someone else sees nothing of Mia's.
     expect((await h.call('GET', '/v1/agent-credentials', { bearer: await as('bob') })).body.claude.state).toBe('none')
@@ -196,6 +199,49 @@ describe('egress-time Source (D10) and shared workspaces (D13)', () => {
     const env = lastEnv(START_COMMAND)
     expect(env.CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined()
     expect(env.ANTHROPIC_API_KEY).toBeUndefined()
-    expect((await h.call('GET', '/v1/agent-credentials', { bearer: mia })).body.providerEnabled.claude).toBe(false)
+    const view = (await h.call('GET', '/v1/agent-credentials', { bearer: mia })).body
+    expect(view.providerEnabled.claude).toBe(false)
+    expect(view.providerState.claude).toBe('disabled')
+  })
+})
+
+describe('D13 fails closed', () => {
+  it('treats any visibility other than private as shared', () => {
+    expect(isSharedWorkspace({ visibility: 'private' })).toBe(false)
+    expect(isSharedWorkspace({ visibility: 'team' })).toBe(true)
+    for (const visibility of ['', 'org', null, undefined] as unknown as string[]) {
+      expect(isSharedWorkspace({ visibility } as never)).toBe(true)
+    }
+  })
+})
+
+describe('secrets saved while a sandbox boots', () => {
+  it('reach the session once it is running (the build-sheet Secrets row saves mid-boot)', async () => {
+    const { h, as, lastEnv } = await setup()
+    const mia = await as('mia')
+    // Save a Personal secret after the boot resolved its env but before the sandbox is running: the
+    // secret's own refresh skips a sandbox that isn't running yet.
+    const original = h.vercel.runCommand.bind(h.vercel)
+    let saved = false
+    h.vercel.runCommand = async (sessionId, params) => {
+      const isStart = params.command === START_COMMAND || params.args?.[1]?.endsWith(`exec ${START_COMMAND}`)
+      if (isStart && !saved) {
+        saved = true
+        await h.call('PUT', '/v1/secrets/personal/W6_BOOT_SAVE', { bearer: mia, body: { value: 'boot-race-value' } })
+      }
+      return original(sessionId, params)
+    }
+    await h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'ws-1', machineSize: 'standard' }, bearer: mia })
+    expect(saved).toBe(true)
+    expect(lastEnv(START_COMMAND).W6_BOOT_SAVE).toBeUndefined()
+    await vi.waitFor(() => expect(lastEnv(ENV_COMMAND).W6_BOOT_SAVE).toBe('boot-race-value'))
+  })
+
+  it('leave an unchanged session alone', async () => {
+    const { h, as } = await setup()
+    const mia = await as('mia')
+    await h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'ws-1', machineSize: 'standard' }, bearer: mia })
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(h.vercel.commands.filter((c) => c.command === ENV_COMMAND)).toHaveLength(0)
   })
 })

@@ -148,13 +148,31 @@ export const HostedSandboxLeaseRequestSchema = z
 
 /** create, resume and rollover: the environment is up and orcad is ready to pair. */
 export const HostedSandboxReadyResponseSchema = z
-  .object({ sandbox: HostedSandboxViewSchema, connection: HostedSandboxConnectionSchema })
+  .object({
+    sandbox: HostedSandboxViewSchema,
+    connection: HostedSandboxConnectionSchema,
+    /** Create with feature `clone-progress`: the repo is still cloning; poll GET .../clone. */
+    clone: z
+      .object({ state: z.literal('running') })
+      .strict()
+      .optional()
+  })
   .strict()
 export type HostedSandboxReadyResponse = z.infer<typeof HostedSandboxReadyResponseSchema>
 
 export const HostedSandboxStatusResponseSchema = z
   .object({ sandbox: HostedSandboxViewSchema })
   .strict()
+
+/**
+ * DELETE answer. Only `id` and `status` decide whether a delete is confirmed, and fields added to the
+ * sandbox view later (archive state, sizes) must never turn a successful delete into a client error, so
+ * unknown keys are ignored here rather than rejected.
+ */
+export const HostedSandboxDestroyResponseSchema = z.object({
+  sandbox: z.object({ id: Id, status: z.enum(HOSTED_SANDBOX_STATUSES) })
+})
+export type HostedSandboxDestroyResponse = z.infer<typeof HostedSandboxDestroyResponseSchema>
 
 export const HostedSandboxListResponseSchema = z
   .object({ sandboxes: z.array(HostedSandboxViewSchema).max(1000) })

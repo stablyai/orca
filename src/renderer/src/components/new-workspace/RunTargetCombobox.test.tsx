@@ -96,6 +96,7 @@ function render(
   })
   act(() => {
     input().focus()
+    input().click()
   })
 }
 
@@ -269,5 +270,67 @@ describe('RunTargetCombobox', () => {
     expect(activeText()).toContain('Add host')
     press('Home')
     expect(activeText()).toContain('Local Mac')
+  })
+
+  it('tells screen readers what Enter does on rows whose action is not a Tab stop, and Enter does it', () => {
+    const needsSetup = (name: string, connect: boolean): ProjectHostSetupOption => ({
+      id: `needs-setup:ssh:${name}`,
+      kind: 'needs-setup',
+      projectId: 'p',
+      hostId: `ssh:${name}`,
+      label: name,
+      detail: 'Project location not set',
+      isAvailable: true,
+      attention: connect,
+      canSetLocation: true,
+      ...(connect ? { connectAction: { kind: 'ssh' as const, targetId: name } } : {})
+    })
+    const onConnectHost = vi.fn()
+    const onSetLocation = vi.fn()
+    act(() => {
+      root.render(
+        <TooltipProvider>
+          <RunTargetCombobox
+            hostOptions={[...hosts, needsSetup('devbox', false), needsSetup('gpu-box', true)]}
+            hostValue="mac"
+            hostExecutionHostId="local"
+            recipes={[cloud]}
+            orcaCloudAvailability="offered"
+            recipeValue={null}
+            onRecipeChange={vi.fn()}
+            onAddSshHost={() => {}}
+            onAddRemoteServer={vi.fn()}
+            onConnectHost={onConnectHost}
+            onSetLocation={onSetLocation}
+            orcaCloudAccess={{ state: 'signed-out' }}
+          />
+        </TooltipProvider>
+      )
+    })
+    act(() => {
+      input().focus()
+      input().click()
+    })
+    const description = (label: string): string | null | undefined => {
+      const row = [...container.querySelectorAll('[role="option"]')].find((option) =>
+        option.textContent?.startsWith(label)
+      )
+      const id = row?.getAttribute('aria-describedby')
+      return id ? document.getElementById(id)?.textContent : null
+    }
+    expect(description('devbox')).toBe('devbox, project location not set. Press Enter to set it.')
+    expect(description('gpu-box')).toBe('gpu-box, not connected. Press Enter to connect.')
+    expect(description('Orca Cloud')).toBe('Orca Cloud, signed out. Press Enter to sign in.')
+    // A ready host needs no hint: Enter just picks it.
+    expect(description('Local Mac')).toBeNull()
+
+    // Enter on the Connect row connects (it used to fall through to Set location).
+    for (let i = 0; i < 8 && !activeText()?.startsWith('gpu-box'); i++) {
+      press('ArrowDown')
+    }
+    expect(activeText()).toMatch(/^gpu-box/)
+    press('Enter')
+    expect(onConnectHost).toHaveBeenCalledWith(expect.objectContaining({ label: 'gpu-box' }))
+    expect(onSetLocation).not.toHaveBeenCalled()
   })
 })

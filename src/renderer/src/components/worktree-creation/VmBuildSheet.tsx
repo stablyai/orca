@@ -12,13 +12,15 @@ import { openPlansPage } from '@/components/billing/plans/plans-page-store'
 import { ORCA_BILLING_OVERAGE_SECTION_ID } from '@/components/new-workspace/orca-cloud-run-target-access'
 import type { PendingWorktreeCreation } from '@/lib/workspace/creation/pending-worktree-creation'
 import { toast } from 'sonner'
+import { OrcaCloudHoursChip } from '@/components/new-workspace/run-on/OrcaCloudHoursChip'
 import type { EnvironmentSetupFailureContext } from '../../../../shared/environment-setup-agent-prompt'
 import { formatEnvironmentDoctorChecks } from '../../../../shared/environment-doctor-types'
 import { VmBuildStepRow } from './VmBuildStepRow'
 import { firstBuildLogErrorLine, VmBuildLog } from './VmBuildLog'
 import { VmBuildFailureCard } from './VmBuildFailureCard'
 import { VmBuildAgentSignInRow } from './VmBuildAgentSignInRow'
-import { VmBuildCloudAgentStep } from '../cloud-agent-setup/VmBuildCloudAgentStep'
+import { VmBuildCloudAgentsRow } from './cloud-agents-row/VmBuildCloudAgentsRow'
+import { VmBuildSecretsRow } from '../cloud-secrets-ask/VmBuildSecretsRow'
 import { OrcaCloudQueuedPrompt } from '@/components/orca-cloud/OrcaCloudQueuedPrompt'
 import {
   classifyVmBuildFailure,
@@ -38,7 +40,7 @@ import {
   PUSH_TO_GITHUB_URL
 } from './vm-build-repo-actions'
 import { useVmBuildStepTimings, type VmBuildStepTimings } from './vm-build-timing'
-import { headerTitle, stepLabel, type SheetState } from './vm-build-sheet-copy'
+import { cloneStageLabel, headerTitle, stepLabel, type SheetState } from './vm-build-sheet-copy'
 import { humanizeOrcaCloudLogLine, latestOrcaCloudPhaseLabel } from './orca-cloud-build-log'
 
 const NO_STAMPS: readonly number[] = []
@@ -65,9 +67,11 @@ function fixContext(
   cloud: boolean,
   t: Translate
 ): EnvironmentSetupFailureContext {
+  const stepById = (id: VmBuildStep['id']): VmBuildStep =>
+    steps.find((candidate) => candidate.id === id) ?? steps[0]
   if (failure?.kind === 'checks') {
     return {
-      step: stepLabel(steps[1], cloud, t),
+      step: stepLabel(stepById('checks'), cloud, t),
       error: failure.problems
         .filter((check) => check.status === 'fail')
         .map((check) => check.message)
@@ -75,7 +79,11 @@ function fixContext(
       log: formatEnvironmentDoctorChecks(failure.problems).join('\n')
     }
   }
-  return { step: stepLabel(steps[0], cloud, t), error: error ?? '', log: entry.provisioningLog }
+  return {
+    step: stepLabel(stepById('provision'), cloud, t),
+    error: error ?? '',
+    log: entry.provisioningLog
+  }
 }
 
 /** The VM create sheet: a timed checklist, a failure card with one clear way forward, and the build log. */
@@ -91,7 +99,8 @@ export function VmBuildSheet({
   onReturnToComposer,
   onEditRecipe,
   agentSignInRow,
-  cloudAgentStep,
+  cloudAgentsRow,
+  secretsRow,
   stepTimings
 }: {
   creationId: string
@@ -108,8 +117,10 @@ export function VmBuildSheet({
   onEditRecipe: () => void
   /** Fixtures only: a fixed sign-in row in place of the live one. */
   agentSignInRow?: React.ReactNode
-  /** Fixtures only: a fixed "Add an agent" step (null for none) in place of the live one. */
-  cloudAgentStep?: React.ReactNode
+  /** Fixtures only: a fixed cloud Agents row (null for none) in place of the live one. */
+  cloudAgentsRow?: React.ReactNode
+  /** Fixtures only: a fixed Secrets row (null for none) in place of the live one. */
+  secretsRow?: React.ReactNode
   /** Fixtures only: measured step timings in place of the control plane's. */
   stepTimings?: VmBuildStepTimings
 }): React.JSX.Element {
@@ -135,7 +146,7 @@ export function VmBuildSheet({
   // Unknown roles get the owner's copy; only a known member is told to ask someone else.
   const canManageBilling =
     billing.result?.status !== 'ok' || billing.result.entitlement.canManageBilling
-  const derived = deriveVmBuildSteps(entry, now).map((step) =>
+  const derived = deriveVmBuildSteps(entry, now, { cloud }).map((step) =>
     nothingStarted(failure) && step.state === 'failed'
       ? { ...step, state: 'pending' as const, elapsedMs: null }
       : step
@@ -190,7 +201,11 @@ export function VmBuildSheet({
               ) : (
                 <AlertTriangle
                   aria-hidden
-                  className="size-4 text-destructive motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-90 motion-safe:duration-200"
+                  // Failed checks leave a running sandbox that needs a decision, not a broken start.
+                  className={cn(
+                    'size-4 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-90 motion-safe:duration-200',
+                    failure?.kind === 'checks' ? 'text-status-warning-text' : 'text-destructive'
+                  )}
                 />
               )}
             </span>
@@ -203,9 +218,12 @@ export function VmBuildSheet({
             >
               {headerTitle(state, cloud, t, failure?.kind === 'create')}
             </h2>
-            {gated ? null : (
+            {/* Orca Cloud: each step carries its own timer, so the header has none. */}
+            {gated || cloud ? null : (
               <span className="text-xs tabular-nums text-muted-foreground">{elapsedLabel}</span>
             )}
+            {/* O4: which sandbox hours this start spends, while it starts. */}
+            <OrcaCloudHoursChip enabled={cloud && building} />
           </div>
           {building ? (
             <Button type="button" variant="ghost" size="xs" onClick={onCancel}>
@@ -229,24 +247,35 @@ export function VmBuildSheet({
                   detail={
                     cloud && step.id === 'provision' && step.state === 'running'
                       ? latestOrcaCloudPhaseLabel(entry.provisioningLog ?? '', t)
-                      : null
+                      : step.id === 'clone' && step.state === 'running'
+                        ? cloneStageLabel(step.stage, t)
+                        : null
                   }
                   timing={timings[step.id] ?? null}
                   t={t}
                 />
               ))}
-              {cloudAgentStep !== undefined ? (
-                cloudAgentStep
-              ) : (
-                <VmBuildCloudAgentStep creationId={creationId} entry={entry} />
-              )}
+              {/* Orca Cloud: one fixed-height row from the Orca account, never a per-sandbox sign-in
+                  (spec §5b). Other VMs keep the host's own sign-in row. */}
+              {cloud ? (
+                cloudAgentsRow !== undefined ? (
+                  cloudAgentsRow
+                ) : (
+                  <VmBuildCloudAgentsRow creationId={creationId} entry={entry} />
+                )
+              ) : null}
               {agentSignInRow ??
-                (entry.vmEnvironmentId ? (
+                (!cloud && entry.vmEnvironmentId ? (
                   <VmBuildAgentSignInRow
                     creationId={creationId}
                     environmentId={entry.vmEnvironmentId}
                   />
                 ) : null)}
+              {secretsRow !== undefined ? (
+                secretsRow
+              ) : cloud ? (
+                <VmBuildSecretsRow entry={entry} />
+              ) : null}
             </ol>
           )}
 
@@ -290,7 +319,7 @@ export function VmBuildSheet({
               onOpenBilling: () => {
                 const store = useAppStore.getState()
                 store.openSettingsTarget({
-                  pane: 'orca-account',
+                  pane: 'cloud-billing',
                   repoId: null,
                   // "Turn on overage" / "Raise spend cap" land on the overage card itself; the
                   // payment notice is at the top of the section already.
@@ -302,7 +331,7 @@ export function VmBuildSheet({
               },
               onSignIn: signIn,
               // Your workspaces on Home, where you can put one to sleep or delete it.
-              onShowWorkspaces: () => openCloudWorkspacesHome(),
+              onShowWorkspaces: () => openCloudWorkspacesHome({ running: true }),
               onContactSupport: () => openAppHttpLink(SUPPORT_URL),
               onConnectGitHub: connectGitHub,
               onPushToGitHub: () => openAppHttpLink(PUSH_TO_GITHUB_URL)

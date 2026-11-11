@@ -35,7 +35,7 @@ const buttonVariants = cva(
         // Secondary text action that only takes the foreground colour on hover.
         quiet:
           'text-muted-foreground hover:bg-accent hover:text-foreground dark:hover:bg-accent/50',
-        link: 'text-primary underline-offset-4 hover:underline',
+        link: 'text-primary underline-offset-4 hover:underline focus-visible:underline',
         'menu-launch':
           'min-w-0 flex-1 justify-start rounded-l-[7px] rounded-r-none text-foreground',
         'menu-segment': 'rounded-l-none border-l border-border',
@@ -43,7 +43,10 @@ const buttonVariants = cva(
         'pane-title-close': 'pane-title-close',
         // The worktree card's "rename failed" chip, for a failure the user can open.
         'destructive-chip':
-          'border border-destructive/40 bg-destructive/10 text-destructive-text hover:bg-destructive/15 hover:text-destructive-text'
+          'border border-destructive/40 bg-destructive/10 text-destructive-text hover:bg-destructive/15 hover:text-destructive-text',
+        // A destructive way out set apart from the recovery actions (e.g. "Delete sandbox"): red text, no fill.
+        'destructive-ghost':
+          'text-destructive-text hover:bg-destructive/10 hover:text-destructive-text dark:hover:bg-destructive/15'
       },
       size: {
         default: 'h-9 px-4 py-2 has-[>svg]:px-3',

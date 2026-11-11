@@ -12,6 +12,8 @@ export {
 } from './hosted-sandbox-request'
 import {
   HostedSandboxDesktopResponseSchema,
+  HostedSandboxDestroyResponseSchema,
+  type HostedSandboxDestroyResponse,
   HostedSandboxConfigResponseSchema,
   HostedGithubConnectResponseSchema,
   type HostedSandboxConfigResponse,
@@ -32,6 +34,16 @@ import {
   type HostedSandboxReadyResponse,
   type HostedSandboxView
 } from '../../shared/hosted-sandbox/hosted-sandbox-wire'
+import {
+  HostedCloneStatusResponseSchema,
+  type HostedCloneStatus
+} from '../../shared/hosted-sandbox/hosted-clone-wire'
+import {
+  HostedGithubRepoAccessResponseSchema,
+  HostedGithubRepositoriesResponseSchema,
+  type HostedGithubRepoAccessResponse,
+  type HostedGithubRepositoriesResponse
+} from '../../shared/hosted-sandbox/hosted-github-wire'
 import type { z } from 'zod'
 
 type HostedGithubConnectResponse = z.infer<typeof HostedGithubConnectResponseSchema>
@@ -42,6 +54,8 @@ export type HostedSandboxControlPlaneClient = {
     signal?: AbortSignal
   ): Promise<HostedSandboxReadyResponse>
   get(sandboxId: string, signal?: AbortSignal): Promise<HostedSandboxView>
+  /** The background clone a create started (create answered with `clone`). */
+  cloneStatus(sandboxId: string, signal?: AbortSignal): Promise<HostedCloneStatus>
   list(signal?: AbortSignal): Promise<HostedSandboxView[]>
   /** `reason` 'idle' is the idle timer; 'user' (or none) is a sleep someone chose. */
   suspend(
@@ -52,7 +66,7 @@ export type HostedSandboxControlPlaneClient = {
   resume(sandboxId: string, signal?: AbortSignal): Promise<HostedSandboxReadyResponse>
   renewLease(sandboxId: string, extendMs: number, signal?: AbortSignal): Promise<HostedSandboxView>
   rollover(sandboxId: string, signal?: AbortSignal): Promise<HostedSandboxReadyResponse>
-  destroy(sandboxId: string, signal?: AbortSignal): Promise<HostedSandboxView>
+  destroy(sandboxId: string, signal?: AbortSignal): Promise<HostedSandboxDestroyResponse['sandbox']>
   /** Idempotent wake; `waitMs` (max 30s) long-polls until orcad is ready. */
   wake(sandboxId: string, waitMs: number, signal?: AbortSignal): Promise<HostedWakeResponse>
   /** Status panel: state, live VM metrics, uptime, cost so far. */
@@ -84,8 +98,31 @@ export type HostedSandboxControlPlaneClient = {
   startDesktop(sandboxId: string, signal?: AbortSignal): Promise<HostedSandboxDesktop>
   /** Product constants and measured timings (GET /v1/config). */
   config(signal?: AbortSignal): Promise<HostedSandboxConfigResponse>
-  /** Starts binding a GitHub App installation to the account; the browser finishes it. */
-  connectGitHub(signal?: AbortSignal): Promise<HostedGithubConnectResponse>
+  /**
+   * Starts binding a GitHub App installation to the account; the browser finishes it. With a repo,
+   * the install page preselects it (given its ids) and returns to the setup session afterwards.
+   */
+  connectGitHub(
+    signal?: AbortSignal,
+    target?: HostedGithubConnectTarget
+  ): Promise<HostedGithubConnectResponse>
+  /** Whether Orca Cloud can clone this https GitHub repository for the account. */
+  githubRepoAccess(
+    query: { repo: string; setupSessionId?: string; repoId?: number; ownerId?: number },
+    signal?: AbortSignal
+  ): Promise<HostedGithubRepoAccessResponse>
+  /** Repositories the account's GitHub installations reach (one page). */
+  githubRepositories(
+    cursor?: string | null,
+    signal?: AbortSignal
+  ): Promise<HostedGithubRepositoriesResponse>
+}
+
+export type HostedGithubConnectTarget = {
+  repo: string
+  setupSessionId?: string
+  repoId?: number
+  ownerId?: number
 }
 
 export function createHostedSandboxControlPlaneClient(
@@ -100,8 +137,17 @@ export function createHostedSandboxControlPlaneClient(
       call('POST', 'v1/sandboxes', HostedSandboxReadyResponseSchema, {
         body,
         kind: 'boot',
-        signal
+        signal,
+        // The repo clones after the sandbox is up; the driver shows it as its own step.
+        features: ['clone-progress']
       }),
+    cloneStatus: async (id, signal) =>
+      (
+        await call('GET', sandboxPath(id, '/clone'), HostedCloneStatusResponseSchema, {
+          kind: 'control',
+          signal
+        })
+      ).clone,
     get: async (id, signal) =>
       (
         await call('GET', sandboxPath(id), HostedSandboxStatusResponseSchema, {
@@ -144,7 +190,7 @@ export function createHostedSandboxControlPlaneClient(
       }),
     destroy: async (id, signal) =>
       (
-        await call('DELETE', sandboxPath(id), HostedSandboxStatusResponseSchema, {
+        await call('DELETE', sandboxPath(id), HostedSandboxDestroyResponseSchema, {
           kind: 'control',
           signal
         })
@@ -211,10 +257,36 @@ export function createHostedSandboxControlPlaneClient(
       ).desktop,
     config: (signal) =>
       call('GET', 'v1/config', HostedSandboxConfigResponseSchema, { kind: 'control', signal }),
-    connectGitHub: (signal) =>
+    connectGitHub: (signal, target) =>
       call('POST', 'v1/github/connect', HostedGithubConnectResponseSchema, {
+        ...(target ? { body: target } : {}),
+        kind: 'control',
+        signal
+      }),
+    githubRepoAccess: (query, signal) => {
+      const params = new URLSearchParams({ repo: query.repo })
+      if (query.setupSessionId) {
+        params.set('session', query.setupSessionId)
+      }
+      if (query.repoId) {
+        params.set('repoId', String(query.repoId))
+      }
+      if (query.ownerId) {
+        params.set('ownerId', String(query.ownerId))
+      }
+      return call('GET', `v1/github/repo-access?${params}`, HostedGithubRepoAccessResponseSchema, {
         kind: 'control',
         signal
       })
+    },
+    githubRepositories: (cursor, signal) =>
+      call(
+        'GET',
+        cursor
+          ? `v1/github/repositories?cursor=${encodeURIComponent(cursor)}`
+          : 'v1/github/repositories',
+        HostedGithubRepositoriesResponseSchema,
+        { kind: 'control', signal }
+      )
   }
 }

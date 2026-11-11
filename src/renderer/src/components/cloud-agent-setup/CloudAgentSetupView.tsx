@@ -139,7 +139,7 @@ export type CloudAgentSetupViewProps = {
   initialFailure?: CloudAgentSetupFailure | null
 }
 
-/** The ways Claude Code or Codex can get access in Orca Cloud with a key, plus sign-in in the dialog. */
+/** The ways Claude or Codex can get access in Orca Cloud with a key, plus sign-in in the dialog. */
 export function CloudAgentSetupView({
   readiness,
   canShare,
@@ -211,14 +211,14 @@ export function CloudAgentSetupView({
       tab: t('cloudAgentSetup.option.gateway', 'AI Gateway'),
       detail: t(
         'cloudAgentSetup.option.gatewayDetail',
-        'One Vercel AI Gateway key runs both Claude Code and Codex.'
+        'One Vercel AI Gateway key runs both Claude and Codex.'
       )
     },
     custom: {
       tab: t('cloudAgentSetup.option.custom', 'Custom provider'),
       detail: t(
         'cloudAgentSetup.option.customDetail',
-        'Any Anthropic-compatible endpoint, for Claude Code.'
+        'Any Anthropic-compatible endpoint, for Claude.'
       )
     }
   }

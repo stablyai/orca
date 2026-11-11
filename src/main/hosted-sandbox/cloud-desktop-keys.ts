@@ -9,6 +9,8 @@ import {
 import { withAgentApiKeyRuntimeEnv } from '../agent-api-keys/agent-api-key-runtime-call'
 import { isCloudSshAlias } from '../cloud-ssh/cloud-ssh-config'
 import { getSshTargetRegistryStore } from '../ssh/targets/ssh-target-registry'
+import { AGENT_CREDENTIAL_NAMES } from '../../shared/cloud-secrets/cloud-secret-rules'
+import { ORCA_CLOUD_HOST_RUNTIME_CAPABILITY } from '../../shared/hosted-sandbox/orca-cloud-host-capability'
 import { listEphemeralVmRuntimes } from '../../shared/ephemeral-vm-runtime-store'
 import { resolveEnvironment } from '../../shared/remote-runtime/host-store/runtime-environment-store'
 import { getConnectionExecutionHostId, toRuntimeExecutionHostId } from '../../shared/execution-host'
@@ -91,7 +93,49 @@ export async function withHostAgentApiKeyEnv(
   ) {
     return params
   }
-  return withAgentApiKeyRuntimeEnv(environmentId, method, params, readStatus)
+  const withKeys = await withAgentApiKeyRuntimeEnv(environmentId, method, params, readStatus)
+  if (withKeys === params) {
+    return params
+  }
+  // Keys would go out: ask the host itself whether it is an Orca Cloud VM (covers a hand-made
+  // pairing this desktop has no record of). An unanswered question sends nothing.
+  return (await hostSaysOrcaCloud(environmentId, readStatus)) === false ? withKeys : params
+}
+
+const HOST_KIND_TTL_MS = 60_000
+const hostKinds = new Map<string, { cloud: boolean; at: number }>()
+
+async function hostSaysOrcaCloud(
+  environmentId: string,
+  readStatus: Parameters<typeof withAgentApiKeyRuntimeEnv>[3]
+): Promise<boolean | null> {
+  const cached = hostKinds.get(environmentId)
+  if (cached && Date.now() - cached.at < HOST_KIND_TTL_MS) {
+    return cached.cloud
+  }
+  try {
+    const status = await readStatus()
+    const result: unknown = status.ok ? status.result : null
+    const capabilities =
+      result !== null &&
+      typeof result === 'object' &&
+      'capabilities' in result &&
+      Array.isArray(result.capabilities)
+        ? result.capabilities
+        : null
+    if (!capabilities) {
+      return null
+    }
+    const cloud = capabilities.includes(ORCA_CLOUD_HOST_RUNTIME_CAPABILITY)
+    // Only "cloud" is remembered: it can only withhold keys. A "not cloud" answer is asked again on
+    // the next launch, so a re-paired id that now points at a cloud VM is never sent keys from cache.
+    if (cloud) {
+      hostKinds.set(environmentId, { cloud, at: Date.now() })
+    }
+    return cloud
+  } catch {
+    return null
+  }
 }
 
 /**
@@ -123,4 +167,26 @@ export async function withHostAgentApiKeyLaunchEnv(
     return env
   }
   return withAgentApiKeyLaunchEnv(env, agent, getConnectionExecutionHostId(connectionId))
+}
+
+/**
+ * On an Orca Cloud VM (orcad runs with ORCA_IS_CLOUD=1, set by the image), a launch's env may not
+ * set an agent credential to anything but the value this session already has (a stand-in or the
+ * Cloud secret): a key carried in from a desktop, however the client is paired, is dropped here.
+ */
+export function withoutCarriedAgentCredentials(
+  env: Record<string, string> | undefined,
+  host: Readonly<Record<string, string | undefined>> = process.env
+): Record<string, string> | undefined {
+  if (!env || host.ORCA_IS_CLOUD !== '1') {
+    return env
+  }
+  let kept: Record<string, string> | undefined
+  for (const [name, value] of Object.entries(env)) {
+    if (AGENT_CREDENTIAL_NAMES.includes(name) && value !== host[name]) {
+      kept ??= { ...env }
+      delete kept[name]
+    }
+  }
+  return kept ?? env
 }

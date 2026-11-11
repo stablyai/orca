@@ -1,4 +1,4 @@
-import type React from 'react'
+import React from 'react'
 import { CircleAlert, Info, RotateCw } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from './button'
@@ -22,8 +22,12 @@ type InlineErrorProps = {
    *  (not announced) because it describes something that already happened. */
   layout?: 'inline' | 'toast' | 'strip-top' | 'strip-bottom' | 'line'
   /** A next step other than retry (e.g. "Sign in"), rendered inside the box after the text.
-   *  Pass an outline xs Button with a short verb-first label; never a primary button. */
+   *  Pass an outline xs Button with a short verb-first label; never a primary button. A card whose recovery is the main
+   *  content (e.g. the build-failure card) puts its own action row in children instead. */
   action?: React.ReactNode
+  /** Richer content under the detail, aligned with the text (a list of problems, a row of
+   *  actions). With children only the title and detail are announced; the rest is read on demand. */
+  children?: React.ReactNode
   className?: string
 }
 
@@ -42,9 +46,13 @@ function InlineError({
   density = 'default',
   layout = 'inline',
   action,
+  children,
   className
 }: InlineErrorProps): React.JSX.Element {
   const Icon = tone === 'error' ? CircleAlert : Info
+  const liveRole = tone === 'error' ? 'alert' : 'status'
+  // Why: announcing a whole card would read every button and list row along with the cause.
+  const announceTextOnly = React.Children.toArray(children).length > 0
   if (layout === 'line') {
     return (
       <p
@@ -68,7 +76,7 @@ function InlineError({
   }
   return (
     <div
-      role={tone === 'error' ? 'alert' : 'status'}
+      role={announceTextOnly ? undefined : liveRole}
       data-slot="inline-error"
       className={cn(
         // Wraps so a narrow box (e.g. a hint under a half-width field) puts its button under the text
@@ -81,7 +89,7 @@ function InlineError({
             : 'rounded-lg',
         density === 'compact' ? 'gap-2 px-2.5 py-2 text-xs' : 'gap-3 px-3 py-2.5 text-sm',
         layout === 'toast' && 'pr-9',
-        detail ? 'items-start' : 'items-center',
+        detail || announceTextOnly ? 'items-start' : 'items-center',
         tone === 'error'
           ? 'border-destructive/15 bg-destructive/5 dark:border-destructive/25'
           : 'border-border bg-muted/40',
@@ -91,24 +99,28 @@ function InlineError({
       <Icon
         className={cn(
           'size-4 shrink-0',
-          detail && 'mt-0.5',
+          (detail || announceTextOnly) && 'mt-0.5',
           tone === 'error' ? 'text-destructive' : 'text-muted-foreground'
         )}
         aria-hidden
       />
-      <div className="min-w-[10rem] flex-1 basis-0 space-y-0.5">
-        <p className="font-medium text-foreground">{title}</p>
-        {detail ? (
-          <p
-            className={cn(
-              'text-muted-foreground',
-              // Compact titles are already xs, so the detail steps down to keep the hierarchy.
-              density === 'compact' ? 'text-2xs' : 'text-xs'
-            )}
-          >
-            {detail}
-          </p>
-        ) : null}
+      <div className="min-w-[10rem] flex-1 basis-0">
+        <div role={announceTextOnly ? liveRole : undefined} className="space-y-0.5">
+          {/* A div, so a caller can pass a focusable heading as the title. */}
+          <div className="font-medium text-foreground">{title}</div>
+          {detail ? (
+            <p
+              className={cn(
+                'text-muted-foreground',
+                // Compact titles are already xs, so the detail steps down to keep the hierarchy.
+                density === 'compact' ? 'text-2xs' : 'text-xs'
+              )}
+            >
+              {detail}
+            </p>
+          ) : null}
+        </div>
+        {announceTextOnly ? <div className="mt-3 flex flex-col gap-3">{children}</div> : null}
       </div>
       {action ? (
         <div

@@ -115,3 +115,19 @@ export const archiveTeammateRunning = defineFixture({
       />
     )
 })
+
+/** Deleting a workspace from the team list (one this computer doesn't run): DS-07 copy. */
+export const deleteFromTeamList = defineFixture({
+  width: 640,
+  render: () =>
+    frame(
+      <CloudWorkspaceConfirmDialog
+        pending={{ kind: 'delete', workspace: workspace({ title: 'Checkout retries' }) }}
+        directory={DIRECTORY}
+        selfId={SELF_ID}
+        canAdmin
+        onCancel={() => {}}
+        onConfirm={() => {}}
+      />
+    )
+})

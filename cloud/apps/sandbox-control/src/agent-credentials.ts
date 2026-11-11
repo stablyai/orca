@@ -1,5 +1,5 @@
 // Account credentials for agents (agent-sources contract D11): one per person per agent, Personal only.
-//   GET    /v1/agent-credentials                  -> {claude, codex: {state, label?, expiresAt?}, providerEnabled}
+//   GET    /v1/agent-credentials                  -> {claude, codex: {state, label?, expiresAt?}, providerEnabled, providerState}
 //   PUT    /v1/agent-credentials/claude {token, label?, expiresAt?}   (flag S1; desktop main runs `claude setup-token`)
 //   DELETE /v1/agent-credentials/:agent
 // Values are never returned or logged. They leave the Worker only when the egress proxy swaps them into a
@@ -42,12 +42,24 @@ export class AgentCredentialError extends Error {
 /** The AAD every account credential is sealed with; the Codex lease refresher must reuse it exactly. */
 export const credentialBinding = (userId: string, agent: CredentialAgent): SecretBinding => ({ scope: 'account', ownerId: userId, name: agent })
 
+/**
+ * Why a provider is or isn't usable, so clients word it right: `off` = flag S1/S2 not on (never offered here),
+ * `disabled` = the operator kill switch on a launched provider (temporary).
+ */
+export type ProviderState = 'on' | 'off' | 'disabled'
+
+export function providerStates(env: Pick<Env, 'AGENT_ACCOUNTS_CLAUDE' | 'AGENT_ACCOUNTS_CLAUDE_DISABLED' | 'AGENT_ACCOUNTS_CODEX' | 'AGENT_ACCOUNTS_CODEX_DISABLED'>): Record<CredentialAgent, ProviderState> {
+  const state = (flag: string | undefined, disabled: string | undefined): ProviderState => (flag !== 'on' ? 'off' : disabled === '1' ? 'disabled' : 'on')
+  return {
+    claude: state(env.AGENT_ACCOUNTS_CLAUDE, env.AGENT_ACCOUNTS_CLAUDE_DISABLED),
+    codex: state(env.AGENT_ACCOUNTS_CODEX, env.AGENT_ACCOUNTS_CODEX_DISABLED)
+  }
+}
+
 /** Flags S1/S2 turn a provider on; the *_DISABLED switch turns it off again (kill switch, operator-only). */
 export function providerEnabled(env: Pick<Env, 'AGENT_ACCOUNTS_CLAUDE' | 'AGENT_ACCOUNTS_CLAUDE_DISABLED' | 'AGENT_ACCOUNTS_CODEX' | 'AGENT_ACCOUNTS_CODEX_DISABLED'>): Record<CredentialAgent, boolean> {
-  return {
-    claude: env.AGENT_ACCOUNTS_CLAUDE === 'on' && env.AGENT_ACCOUNTS_CLAUDE_DISABLED !== '1',
-    codex: env.AGENT_ACCOUNTS_CODEX === 'on' && env.AGENT_ACCOUNTS_CODEX_DISABLED !== '1'
-  }
+  const states = providerStates(env)
+  return { claude: states.claude === 'on', codex: states.codex === 'on' }
 }
 
 export function credentialState(row: Pick<CredentialRow, 'state' | 'expires_at'> | null, now: number): CredentialState {
@@ -129,7 +141,7 @@ export async function agentCredentialsView(db: D1Database, env: Env, userId: str
     const state = credentialState(row, now)
     return { state, ...(row?.label ? { label: row.label } : {}), ...(row?.expires_at ? { expiresAt: row.expires_at } : {}) }
   }
-  return { claude: view('claude'), codex: view('codex'), providerEnabled: providerEnabled(env) }
+  return { claude: view('claude'), codex: view('codex'), providerEnabled: providerEnabled(env), providerState: providerStates(env) }
 }
 
 // A Claude setup-token: `sk-ant-oat01-` then URL-safe characters. Shape-checked, never logged.

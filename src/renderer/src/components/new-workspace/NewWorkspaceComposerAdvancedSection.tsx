@@ -166,7 +166,7 @@ export function NewWorkspaceComposerAdvancedSection({
                   'auto.components.NewWorkspaceComposerCard.0ee17638fe',
                   'Workspace name'
                 )}
-                className="w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-1.5 text-sm shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                className="w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-1.5 text-sm shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-focus-ring focus-visible:ring-1 focus-visible:ring-focus-ring"
               />
             </div>
           ) : null}
@@ -191,7 +191,7 @@ export function NewWorkspaceComposerAdvancedSection({
                   'auto.components.NewWorkspaceComposerCard.branchNamePlaceholder',
                   'feature/my-branch'
                 )}
-                className="w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-1.5 text-sm shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                className="w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-1.5 text-sm shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-focus-ring focus-visible:ring-1 focus-visible:ring-focus-ring"
               />
             </div>
           ) : null}
@@ -218,7 +218,7 @@ export function NewWorkspaceComposerAdvancedSection({
               onPaste={handleNotePaste}
               placeholder={t('auto.components.NewWorkspaceComposerCard.090cfedeb4', 'Write a note')}
               rows={1}
-              className="w-full min-w-0 resize-none overflow-y-auto scrollbar-sleek rounded-md border border-input bg-transparent px-3 py-1.5 text-sm shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 [field-sizing:content] max-h-40"
+              className="w-full min-w-0 resize-none overflow-y-auto scrollbar-sleek rounded-md border border-input bg-transparent px-3 py-1.5 text-sm shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-focus-ring focus-visible:ring-1 focus-visible:ring-focus-ring [field-sizing:content] max-h-40"
             />
           </div>
 

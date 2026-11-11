@@ -131,7 +131,7 @@ export function EnvironmentForm({
                   <DropdownMenuItem key={project.repoId} onSelect={() => void readImports(project)}>
                     <span className="truncate">{project.displayName}</span>
                     {project.slug ? (
-                      <span className="ml-auto truncate pl-3 font-mono text-[11px] text-muted-foreground">
+                      <span className="ml-auto truncate pl-3 font-mono text-2xs text-muted-foreground">
                         {project.slug}
                       </span>
                     ) : null}

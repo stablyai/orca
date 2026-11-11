@@ -212,6 +212,9 @@ it('keeps the selector closed when a late creation dialog focuses before its tra
   )
   // Dialog autofocus lands on the field, so the composer trap records it as last focused.
   expect(document.activeElement).toBe(projectField())
+  // DS-22: focus alone never opens the list; a click does.
+  expect(document.querySelector('[role="listbox"]')).toBeNull()
+  await act(async () => projectField().click())
   expect(document.querySelector('[role="listbox"]')).not.toBeNull()
 
   await act(async () => {

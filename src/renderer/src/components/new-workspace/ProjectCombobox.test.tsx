@@ -76,6 +76,7 @@ function field(): HTMLInputElement {
 function openList(): void {
   act(() => {
     field().focus()
+    field().click()
   })
 }
 
@@ -167,5 +168,61 @@ describe('ProjectCombobox', () => {
 
     expect(onValueChange).toHaveBeenCalledWith('project-0')
     expect(onValueChange).not.toHaveBeenCalledWith('project-group:apps')
+  })
+
+  // Regression: D4's cloud-only rows once used a `github:` key prefix, which swallowed every
+  // GitHub project (ids are `github:<owner>/<repo>`) so picking one did nothing.
+  it('commits a GitHub project, with or without cloud-only repositories listed', () => {
+    for (const cloudRepos of [
+      null,
+      [{ fullName: 'acme/infra', url: 'https://github.com/acme/infra', private: true }]
+    ]) {
+      const onValueChange = vi.fn()
+      const onCloudRepoSelected = vi.fn()
+      act(() => {
+        renderField(
+          <ProjectCombobox
+            options={projects}
+            value={null}
+            onValueChange={onValueChange}
+            cloudRepos={cloudRepos}
+            onCloudRepoSelected={onCloudRepoSelected}
+          />
+        )
+      })
+      openList()
+      type('noqa')
+      act(() => {
+        field().dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+      })
+      expect(onValueChange).toHaveBeenCalledWith('github:stablyai/noqa')
+      expect(onCloudRepoSelected).not.toHaveBeenCalled()
+      type('')
+    }
+  })
+
+  it('commits a listed cloud-only repository through its own callback', () => {
+    const onValueChange = vi.fn()
+    const onCloudRepoSelected = vi.fn()
+    act(() => {
+      renderField(
+        <ProjectCombobox
+          options={projects}
+          value={null}
+          onValueChange={onValueChange}
+          cloudRepos={[
+            { fullName: 'acme/infra', url: 'https://github.com/acme/infra', private: true }
+          ]}
+          onCloudRepoSelected={onCloudRepoSelected}
+        />
+      )
+    })
+    openList()
+    type('infra')
+    act(() => {
+      field().dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    })
+    expect(onCloudRepoSelected).toHaveBeenCalledWith('acme/infra')
+    expect(onValueChange).not.toHaveBeenCalled()
   })
 })

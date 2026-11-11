@@ -209,7 +209,7 @@ export function LocationActionButton({
       onClick={onClick}
       className={cn(
         'flex min-h-[3.25rem] w-full items-center gap-3 rounded-md border border-border/70 bg-muted/20 px-3 py-2.5 text-left transition-colors',
-        'hover:bg-accent focus-visible:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none'
+        'hover:bg-accent focus-visible:bg-accent focus-visible:border-focus-ring focus-visible:ring-1 focus-visible:ring-focus-ring focus-visible:outline-none'
       )}
     >
       <span className="grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground">

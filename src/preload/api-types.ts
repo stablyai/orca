@@ -1,6 +1,8 @@
 import type { AgentApiKeysApi } from './api/agent-api-keys-bridge'
 import type { CloudApiBridge } from './api/cloud-api-bridge'
 import type { CloudSecretsApi } from './api/cloud-secrets-bridge'
+import type { OrcaCloudAgentsApi } from './api/orca-cloud-agents-bridge'
+import type { SshAgentSignInApi } from './api/ssh-agent-sign-in-bridge'
 import type {
   ClaudeAccountsApi,
   CodexAccountsApi,
@@ -189,6 +191,9 @@ export type PreloadApi = {
   cloudApi?: CloudApiBridge
   /** Desktop only: Orca Cloud secrets (personal, team, repo) injected into cloud workspaces. */
   cloudSecrets?: CloudSecretsApi
+  /** Orca Cloud agent accounts (S0): desktop only, states and codes only. */
+  orcaCloudAgents?: OrcaCloudAgentsApi
+  sshAgentSignIn?: SshAgentSignInApi
   /** COMPAT(legacy-relay-bridge): desktop-only, revisit 2027-01-15. */
   legacyRelayBridge?: LegacyRelayBridgeApi
   automations: AutomationsApi
