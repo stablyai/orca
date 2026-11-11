@@ -7,7 +7,7 @@ import { useOrcaProfileAuthStatusRefresh } from '@/hooks/use-orca-profile-auth-s
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { PlanBillingSection } from '../../billing/PlanBillingSection'
-import { TeamSettingsLink } from '../../billing/team/TeamSettingsLink'
+import { TeamPageBody } from '../../billing/team/TeamDialogHost'
 import {
   CloudEnvironmentSection,
   useOrcaCloudEnvironmentsAvailability
@@ -113,7 +113,19 @@ export function OrcaCloudTeamPane(): React.JSX.Element {
     <OrcaCloudAccountGate>
       {(account) =>
         account.billing ? (
-          <TeamSettingsLink orgId={account.orgId} orgName={account.orgName} />
+          // JA-17: members inline (invite field, then the table); seats and invoices stay on
+          // Plan & billing, linked. Remount per team so row state never carries over.
+          <TeamPageBody
+            key={account.orgId ?? 'none'}
+            arrival={null}
+            inline={{
+              onOpenPlanBilling: () => {
+                const store = useAppStore.getState()
+                store.openSettingsTarget({ pane: 'cloud-billing', repoId: null })
+                store.openSettingsPage()
+              }
+            }}
+          />
         ) : (
           <InlineError
             tone="neutral"
