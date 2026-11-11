@@ -10,6 +10,7 @@ import type { OrchestrationDb } from '../orchestration-db'
 import { runLifecycleWriteTransaction } from '../lifecycle-write-transaction-runner'
 import { notifyPeerMailQueued } from '../../federation/peer-mail/peer-mail-waiters'
 import { ORCHESTRATION_UNBOUND_RUN_ID as UNBOUND_RUN_ID } from '../../../../../shared/orchestration/orchestration-rpc-contract'
+import { MESSAGE_COLUMN_LIST } from '../row-column-lists'
 
 const MESSAGE_INSERT_SAVEPOINT = 'message_insert_batch'
 const WORKER_DONE_MESSAGE_SAVEPOINT = 'worker_done_message_commit'
@@ -86,7 +87,9 @@ export function insertMessage(this: OrchestrationDb, msg: MessageInsert): Messag
   // Mail filed in a peer Run is queued home by trigger in this statement.
   notifyPeerMailQueued(this.db)
   return exposeMessageTimestamps(
-    this.db.prepare('SELECT * FROM messages WHERE id = ?').get(id) as MessageRow
+    this.db
+      .prepare(`SELECT ${MESSAGE_COLUMN_LIST} FROM messages WHERE id = ?`)
+      .get(id) as MessageRow
   )
 }
 

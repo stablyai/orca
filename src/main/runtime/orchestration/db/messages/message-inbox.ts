@@ -2,6 +2,7 @@ import type { MessageType, MessageRow } from '../orchestration-records'
 import { exposeMessageTimestamps, exposeMessageListTimestamps } from '../utc-timestamp'
 import { addLifecycleRejectionMarker } from '../lifecycle-rejection-marker'
 import type { OrchestrationDb } from '../orchestration-db'
+import { MESSAGE_COLUMN_LIST } from '../row-column-lists'
 
 const MESSAGE_ID_UPDATE_BATCH_SIZE = 500
 const MESSAGE_MUTATION_SAVEPOINT = 'message_id_mutation'
@@ -151,9 +152,9 @@ export function getAllMessages(this: OrchestrationDb, toHandle: string, limit = 
 }
 
 export function getMessageById(this: OrchestrationDb, id: string): MessageRow | undefined {
-  const message = this.db.prepare('SELECT * FROM messages WHERE id = ?').get(id) as
-    | MessageRow
-    | undefined
+  const message = this.db
+    .prepare(`SELECT ${MESSAGE_COLUMN_LIST} FROM messages WHERE id = ?`)
+    .get(id) as MessageRow | undefined
   return message ? exposeMessageTimestamps(message) : undefined
 }
 

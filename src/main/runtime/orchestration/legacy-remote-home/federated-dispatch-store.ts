@@ -1,13 +1,16 @@
 import type { FederatedDispatchRow } from '../db/orchestration-records'
 import { OrchestrationError } from '../orchestration-error'
 import type { OrchestrationDb } from '../db/orchestration-db'
+import { FEDERATED_DISPATCH_COLUMN_LIST } from '../db/row-column-lists'
 
 export function getFederatedDispatch(
   this: OrchestrationDb,
   dispatchId: string
 ): FederatedDispatchRow | undefined {
   return this.db
-    .prepare('SELECT * FROM federated_dispatches WHERE dispatch_id = ?')
+    .prepare(
+      `SELECT ${FEDERATED_DISPATCH_COLUMN_LIST} FROM federated_dispatches WHERE dispatch_id = ?`
+    )
     .get(dispatchId) as FederatedDispatchRow | undefined
 }
 

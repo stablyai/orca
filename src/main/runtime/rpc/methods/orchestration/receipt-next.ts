@@ -66,7 +66,11 @@ export function withAnswerNext<T extends object>(receipt: T): T & { next: string
 /** A worker still runs and worker-list owes no action: each running worker's stop or exit sends mail. */
 async function awaitsWorkerReports(runtime: OrcaRuntimeService, runId: string): Promise<boolean> {
   const db = runtime.getOrchestrationDb()
-  const rows = db.listWorkerTerminalResources({ runId })
+  // Settled history projects to no action, so a long Run's past workers are never projected here.
+  const rows = db.listWorkerTerminalResources({
+    runId,
+    dispatchIds: db.listWorkerReportWaitCandidates(runId)
+  })
   const { workers } = await projectWorkerListFleet(runtime, rows, {
     limit: rows.length,
     completeProjection: true

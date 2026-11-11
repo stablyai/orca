@@ -3,6 +3,7 @@ import type { MutationReceiptRow } from '../orchestration-records'
 import { OrchestrationError } from '../../orchestration-error'
 import { ensureMutationReceiptCapacity } from './mutation-receipt-capacity'
 import type { OrchestrationDb } from '../orchestration-db'
+import { MUTATION_RECEIPT_COLUMN_LIST } from '../row-column-lists'
 
 export function getOrCreateLocalMutationCallerFingerprint(this: OrchestrationDb): string {
   if (this.localMutationCallerFingerprint) {
@@ -190,7 +191,7 @@ export function getMutationReceipt(
 ): MutationReceiptRow | undefined {
   return this.db
     .prepare(
-      `SELECT * FROM mutation_receipts
+      `SELECT ${MUTATION_RECEIPT_COLUMN_LIST} FROM mutation_receipts
        WHERE caller_fingerprint = ? AND request_id = ?`
     )
     .get(callerFingerprint, requestId) as MutationReceiptRow | undefined

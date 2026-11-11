@@ -9,7 +9,8 @@ import { defineOrchestrationMethod } from '../access/orchestration-method-access
 import {
   decodeWorkerListCursor,
   encodeWorkerListCursor,
-  type WorkerListCursor
+  type WorkerListCursor,
+  type WorkerListInventory
 } from './worker-list-cursor'
 import {
   createWorkerListSnapshot,
@@ -209,14 +210,16 @@ async function projectWorkerListPageWithFilteredSnapshot(
   })
   // Derive totals and counts from the same pinned membership; live filter scans can count rows the cursor cannot reach.
   const pinnedCount = filteredSnapshot?.dispatchIds.length
-  const inventory =
+  const inventory: WorkerListInventory =
     pinnedCount !== undefined && params.terminalState
       ? { total: pinnedCount, counts: { [params.terminalState]: pinnedCount } }
-      : db.countWorkerTerminalInventory({
-          runId: params.run,
-          terminalState: params.terminalState,
-          snapshot: args.snapshot
-        })
+      : snapshotCursor?.version !== 3 && snapshotCursor?.inventory
+        ? snapshotCursor.inventory
+        : db.countWorkerTerminalInventory({
+            runId: params.run,
+            terminalState: params.terminalState,
+            snapshot: args.snapshot
+          })
   const nextRow = pageRows.at(-1)
   fleet.page = {
     limit,
@@ -238,7 +241,8 @@ async function projectWorkerListPageWithFilteredSnapshot(
                       createdAt: nextRow.createdAt,
                       dispatchId: nextRow.dispatchId,
                       databaseId: nextRow.databaseId
-                    }
+                    },
+                    inventory
                   }
                 : {
                     version: 1,
@@ -247,7 +251,8 @@ async function projectWorkerListPageWithFilteredSnapshot(
                       createdAt: nextRow.createdAt,
                       dispatchId: nextRow.dispatchId,
                       databaseId: nextRow.databaseId
-                    }
+                    },
+                    inventory
                   }
             )
         : null

@@ -8,10 +8,11 @@ import { ORCHESTRATION_LEGACY_RUN_ID as LEGACY_RUN_ID } from '../../../../../sha
 import { LEGACY_CONTRACT_VERSION } from '../contract-constants'
 import { generateId } from '../generated-id'
 import type { OrchestrationDb } from '../orchestration-db'
+import { LEGACY_ADOPTION_COLUMN_LIST } from '../row-column-lists'
 
 export function getLegacyAdoption(this: OrchestrationDb): LegacyAdoptionRow | undefined {
   return this.db
-    .prepare('SELECT * FROM legacy_adoptions WHERE source_run_id = ?')
+    .prepare(`SELECT ${LEGACY_ADOPTION_COLUMN_LIST} FROM legacy_adoptions WHERE source_run_id = ?`)
     .get(LEGACY_RUN_ID) as LegacyAdoptionRow | undefined
 }
 
