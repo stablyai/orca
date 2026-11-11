@@ -80,18 +80,24 @@ export function cloudAgentSignInView(
           'Finish signing in to {{agent}} in your browser…',
           { agent: name }
         ),
-        ...(setup.canReopen
+        // Every phase has a button: an updated toast keeps the last one otherwise.
+        action: setup.canReopen
           ? {
-              action: {
-                label: translate('orcaCloudAccounts.openAgain', 'Open again'),
-                run: () => void api?.reopen({ agent })
-              }
+              label: translate('orcaCloudAccounts.openAgain', 'Open again'),
+              run: () => void api?.reopen({ agent })
             }
-          : {})
+          : {
+              label: translate('orcaCloudAccounts.cancel', 'Cancel'),
+              run: () => void api?.cancel({ agent })
+            }
       }
     case 'preparing':
       return {
-        message: translate('orcaCloudAccounts.preparing', 'Getting ChatGPT sign-in ready')
+        message: translate('orcaCloudAccounts.preparing', 'Getting ChatGPT sign-in ready'),
+        action: {
+          label: translate('orcaCloudAccounts.cancel', 'Cancel'),
+          run: () => void api?.cancel({ agent })
+        }
       }
     case 'device':
       return {
@@ -167,10 +173,6 @@ export function showCloudAgentNotStartedToast(
         ),
         run: () => void globalThis.window?.api?.orcaCloudAgents?.start({ agent })
       }
-    }
-    if (!view.action) {
-      // Sonner keeps an updated toast's old button: drop it so a stale action can't linger.
-      toast.dismiss(TOAST_ID)
     }
     toast.message(view.message, {
       id: TOAST_ID,
