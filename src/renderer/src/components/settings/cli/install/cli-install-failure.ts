@@ -1,5 +1,5 @@
 import type { CliInstallStatus } from '../../../../../../shared/cli-install-types'
-import { formatCliUserFacingDetail } from '@/lib/cli-emulator-user-facing-copy'
+import { formatCliUserFacingDetail } from '@/lib/cli/cli-user-facing-detail'
 
 // Why: Electron re-wraps a rejected `ipcMain.handle` as
 // `Error invoking remote method '<channel>': Error: <message>`, so the installer's

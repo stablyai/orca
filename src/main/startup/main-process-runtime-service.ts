@@ -203,6 +203,7 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
     )
   )
   browserSessionRegistry.onProfilesChanged = () => runtime.notifyBrowserProfilesChanged()
+  runtime.startupWorkerAuthority.begin()
   return runtime
 }
 
