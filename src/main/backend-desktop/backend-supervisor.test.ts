@@ -274,7 +274,8 @@ function startupFixture() {
     supervisor,
     frame,
     read,
-    request: (purpose = 'demand') => request({ sender, senderFrame: frame }, token, purpose)
+    request: (purpose = 'demand', contents = sender, requestToken = token) =>
+      request({ sender: contents, senderFrame: contents.mainFrame }, requestToken, purpose)
   }
 }
 
@@ -306,8 +307,9 @@ it('retries a rejected signal-free launch on new demand without replay or false 
   expect(rig.call).toHaveBeenCalledTimes(1)
   const notifications = frame.postMessage.mock.calls.slice()
   for (const child of children.slice(0, 4)) {
+    child.kill.mockClear()
     child.emit('spawn')
-    expect(child.kill).toHaveBeenCalled()
+    expect(child.kill).toHaveBeenCalledTimes(1)
     child.emit('message', ready)
     child.emit('exit', 1)
   }
@@ -345,7 +347,16 @@ it('rejects old requests when ownership changes across readiness instead of rero
   const oldRead = expect(read()).rejects.toThrow('Usage disconnected')
   const oldPort = expect(request()).rejects.toThrow('The document was replaced')
   children[0].emit('exit', 1)
-  const replacement = request()
+  const replacementFrame = { postMessage: vi.fn() }
+  const replacementSender = Object.assign(new EventEmitter(), {
+    id: 5,
+    mainFrame: replacementFrame,
+    isDestroyed: () => false,
+    getType: () => 'window',
+    getURL: () => 'file:///index.html'
+  })
+  const token = '55555555-5555-5555-5555-555555555555'
+  const replacement = request('demand', replacementSender, token)
   children[1].emit('message', ready)
   await oldRead
   await oldPort
@@ -353,7 +364,13 @@ it('rejects old requests when ownership changes across readiness instead of rero
   expect(rig.call).not.toHaveBeenCalled()
   expect(
     frame.postMessage.mock.calls.filter(([channel]) => channel === BACKEND_PORT_DELIVERY)
+  ).toHaveLength(0)
+  expect(
+    replacementFrame.postMessage.mock.calls.filter(([channel]) => channel === BACKEND_PORT_DELIVERY)
   ).toHaveLength(1)
+  expect(
+    children[1].postMessage.mock.calls.filter(([message]) => message.type === 'client')
+  ).toEqual([[{ type: 'client', token }, [{}]]])
   const stopped = supervisor.stop()
   children[1].emit('spawn')
   expect(children[1].kill).toHaveBeenCalled()
