@@ -4,7 +4,7 @@ import {
   type ExplorerRepositoryDemand
 } from './file-explorer-repository-paths'
 import type { RepositoryIgnoredPathSet } from '../../../../lib/source-control/paths/git-path-decoration'
-import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store/index'
 import { isDotfileRelativePath } from './file-explorer-entries'
 import type { DirCache, TreeNode } from './file-explorer-types'
@@ -231,17 +231,16 @@ export function useFileExplorerVisibleRowProjection(
     shouldDebounceIgnoredQuery,
     worktreePath
   })
-  const ownIgnoreRef = useRef(new Map<string, ReadonlyMap<string, boolean>>())
   const nextOwnIgnore = new Map(
     repositories?.sources.map((source) => [source.path, source.ignored])
   )
+  const [ownIgnore, setOwnIgnore] = useState(nextOwnIgnore)
   if (
-    nextOwnIgnore.size !== ownIgnoreRef.current.size ||
-    [...nextOwnIgnore].some(([path, ignored]) => ownIgnoreRef.current.get(path) !== ignored)
+    nextOwnIgnore.size !== ownIgnore.size ||
+    [...nextOwnIgnore].some(([path, ignored]) => ownIgnore.get(path) !== ignored)
   ) {
-    ownIgnoreRef.current = nextOwnIgnore
+    setOwnIgnore(nextOwnIgnore)
   }
-  const ownIgnore = ownIgnoreRef.current
   const ignoredSet = useMemo(() => {
     const set: RepositoryIgnoredPathSet = buildIgnoredSet(effectiveIgnoredPaths, worktreePath)
     if (ownIgnore.size) {

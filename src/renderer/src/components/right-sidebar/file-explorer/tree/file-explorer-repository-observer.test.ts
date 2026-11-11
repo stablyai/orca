@@ -51,7 +51,10 @@ it.each([100, 1000])(
           })
         }
         if (request.repositoryPaths![0] !== 'd0' || request.repositoryIntent !== 'status') {
-          await new Promise<void>((resolve) => setTimeout(resolve, 1))
+          await new Promise<void>((resolve) => {
+            // ast-grep-ignore: test-no-real-time-wait -- Fake time models an in-flight Git read; no wall-clock wait.
+            setTimeout(resolve, 1)
+          })
         }
         return [
           {

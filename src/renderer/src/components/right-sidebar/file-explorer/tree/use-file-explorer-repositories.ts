@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 import {
   useFileListOperationOwner,
   getFileExplorerOperationRoute
@@ -33,7 +33,7 @@ export function useFileExplorerRepositories(
   workspaceId: string | null,
   root: string | null,
   displayRoot: string | null,
-  tree: UseFileExplorerTreeResult,
+  tree: Pick<UseFileExplorerTreeResult, 'sourceWorkspaceId' | 'dirCache'>,
   expanded: ReadonlySet<string>,
   enabled: boolean,
   hasRootGitSource: boolean
@@ -69,8 +69,9 @@ export function useFileExplorerRepositories(
     expanded,
     hasRootGitSource
   ])
-  const frontierRef = useRef(frontier)
-  frontierRef.current = frontier
+  const applyInitialFrontier = useEffectEvent((instance: FileExplorerRepositoryObserver) => {
+    instance.setFrontier(frontier.candidates, frontier.dependencies, frontier.retainedSubtrees)
+  })
   useEffect(() => {
     const route = getFileExplorerOperationRoute(JSON.parse(ownerKey))
     if (!workspaceId || !root || !route) {
@@ -108,17 +109,13 @@ export function useFileExplorerRepositories(
     if (demand.current?.identity === identity) {
       instance.setDemand(demand.current.paths)
     }
-    instance.setFrontier(
-      frontierRef.current.candidates,
-      frontierRef.current.dependencies,
-      frontierRef.current.retainedSubtrees
-    )
+    applyInitialFrontier(instance)
     const environmentId = route.target.kind === 'environment' ? route.target.environmentId : null
     const unsubscribe = environmentId
       ? subscribeRuntimeHostContactRegained(environmentId, () => instance.invalidate())
       : undefined
-    const changed = (event: Event): void => {
-      const detail = (event as CustomEvent<WorktreeFileChangeEventDetail>).detail
+    const changed = (event: CustomEvent<WorktreeFileChangeEventDetail>): void => {
+      const detail = event.detail
       if (
         !detail ||
         (detail.runtimeEnvironmentId ?? null) !== environmentId ||

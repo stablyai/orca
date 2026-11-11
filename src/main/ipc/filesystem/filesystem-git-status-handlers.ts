@@ -88,7 +88,7 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
           const gitOptions = getLocalGitOptionsForWorkspaceRead(store, args.worktreePath)
           await assertWslUncPathRunning(args.worktreePath, gitOptions.wslDistro)
           const root = await resolveDesktopAuthorizedPath(args.worktreePath, store)
-          return getRepositoryStatuses(root, args, {
+          return await getRepositoryStatuses(root, args, {
             ...gitOptions,
             admissionTier: 'background',
             ...(controller ? { signal: controller.signal } : {})

@@ -74,11 +74,12 @@ it('keeps uncertain listing boundaries, heals under activity, and catches up rev
   observer.setVisible(true)
   await vi.advanceTimersByTimeAsync(1000)
   expect(sources.map((source) => source.path)).toEqual(['child'])
-  for (const cache of [
+  const uncertainCaches: Record<string, DirCache>[] = [
     {},
     { '/w': { ...root, children: [], error: 'offline' } },
     { '/w': { ...root, children: [], more: { after: { name: 'a', isDirectory: false } } } }
-  ]) {
+  ]
+  for (const cache of uncertainCaches) {
     apply(cache)
     expect(sources.map((source) => source.path)).toEqual(['child'])
   }

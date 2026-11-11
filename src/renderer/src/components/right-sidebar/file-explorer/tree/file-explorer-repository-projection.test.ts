@@ -132,7 +132,10 @@ it.each([100, 1000])(
     index.descendants([])
     let visits = 0
     const original = Set.prototype.add
-    const spy = vi.spyOn(Set.prototype, 'add').mockImplementation(function (value) {
+    const spy = vi.spyOn(Set.prototype, 'add').mockImplementation(function (
+      this: Set<string>,
+      value
+    ) {
       if (indexed.has(value)) {
         visits++
       }
@@ -152,7 +155,10 @@ it.each([100, 1000])(
     ).statusByRelativePath
     let ownershipChecks = 0
     const has = Set.prototype.has
-    const membership = vi.spyOn(Set.prototype, 'has').mockImplementation(function (value) {
+    const membership = vi.spyOn(Set.prototype, 'has').mockImplementation(function (
+      this: Set<string>,
+      value
+    ) {
       ownershipChecks++
       return has.call(this, value)
     })

@@ -22,7 +22,8 @@ function sameOwner(
         a.environmentId === b.environmentId &&
         a.executionHostId === b.executionHostId
       )
-    default:
+    case 'local':
+    case 'unresolved':
       return true
   }
 }

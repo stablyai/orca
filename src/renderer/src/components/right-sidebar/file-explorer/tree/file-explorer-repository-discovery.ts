@@ -69,7 +69,7 @@ export async function discoverExplorerRepositories(
       validation.settle(false)
       owner.validations.set(candidate.path, validation)
     }
-    let results
+    let results: Awaited<ReturnType<ExplorerRepositoryRead>>
     try {
       results = await owner.read(
         {

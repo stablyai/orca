@@ -26,7 +26,10 @@ it.each([1, 10])(
             },
             { once: true }
           )
-          await new Promise((resolve) => setTimeout(resolve, 1500))
+          await new Promise<void>((resolve) => {
+            // ast-grep-ignore: test-no-real-time-wait -- Fake time models an in-flight Git read; no wall-clock wait.
+            setTimeout(resolve, 1500)
+          })
           return [{ path: 'repo', kind: 'repository', ignoredPaths: first ? ['p00000'] : [] }]
         }
         return [
@@ -158,7 +161,10 @@ it.each([200, 2000])(
       async (request) => {
         if (request.repositoryIntent === 'ignored') {
           sent.push(request.repositoryQueryPaths!)
-          await new Promise((resolve) => setTimeout(resolve, 1))
+          await new Promise<void>((resolve) => {
+            // ast-grep-ignore: test-no-real-time-wait -- Fake time models an in-flight Git read; no wall-clock wait.
+            setTimeout(resolve, 1)
+          })
           return [{ path: 'repo', kind: 'repository', ignoredPaths: [] }]
         }
         return [
@@ -176,7 +182,10 @@ it.each([200, 2000])(
     let encodings = 0
     let encodedBytes = 0
     const encode = TextEncoder.prototype.encode
-    const spy = vi.spyOn(TextEncoder.prototype, 'encode').mockImplementation(function (input) {
+    const spy = vi.spyOn(TextEncoder.prototype, 'encode').mockImplementation(function (
+      this: TextEncoder,
+      input
+    ) {
       const result = encode.call(this, input)
       if (input?.startsWith(prefix)) {
         encodings++

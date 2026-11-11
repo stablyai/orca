@@ -103,7 +103,10 @@ it.each([1, 10])(
             start = resolve
           })
         }
-        await new Promise((resolve) => setTimeout(resolve, 10))
+        await new Promise<void>((resolve) => {
+          // ast-grep-ignore: test-no-real-time-wait -- Fake time models an in-flight Git read; no wall-clock wait.
+          setTimeout(resolve, 10)
+        })
         return [
           {
             path: 'repo',
@@ -123,7 +126,9 @@ it.each([1, 10])(
     // Count actual answer-map traversal, excluding token, tree and source maps.
     let copied = 0
     const entries = Map.prototype[Symbol.iterator]
-    vi.spyOn(Map.prototype, Symbol.iterator).mockImplementation(function* () {
+    vi.spyOn(Map.prototype, Symbol.iterator).mockImplementation(function* (
+      this: Map<string, unknown>
+    ) {
       for (const entry of entries.call(this)) {
         if (
           typeof entry[0] === 'string' &&
@@ -134,6 +139,7 @@ it.each([1, 10])(
         }
         yield entry
       }
+      return undefined
     })
     for (let index = 0; index < chunks; index++) {
       await act(() => vi.advanceTimersByTimeAsync(10))

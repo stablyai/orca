@@ -60,8 +60,8 @@ it.each([750, 7500])(
       }
     }
     const register = (target: typeof store): void => {
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: scoped IPC uses only these supplied catalog, runtime and notification methods.
       const context = createFilesystemHandlerContext(
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: scoped IPC uses only these supplied catalog, runtime and notification methods.
         target as never,
         undefined,
         createSenderScopedRequestCancellations(),

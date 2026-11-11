@@ -7,7 +7,7 @@ import {
 } from '../workspaces/execution-host/project-runtime-git-options'
 import { splitWorktreeId } from '../../shared/worktree/id'
 import type { Repo } from '../../shared/repo-types'
-import { WORKTREE_METADATA_DOMAINS } from '../persistence/loading-store/worktree-identity-metadata'
+import { WORKTREE_METADATA_DOMAINS } from '../persistence/profile-save-domains'
 
 const metadataIndexes = new WeakMap<RuntimeStore, { paths: Map<string, Set<string>> | null }>()
 

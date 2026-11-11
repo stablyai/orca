@@ -38,13 +38,13 @@ const owner = {
   executionHostId: 'runtime:test-host'
 } as const
 const expanded = new Set<string>()
-const tree = {
+const tree: Pick<UseFileExplorerTreeResult, 'sourceWorkspaceId' | 'dirCache'> = {
   sourceWorkspaceId: 'folder:w',
   dirCache: {
     '/w': { repositoryMarker: false, operationOwner: owner, children: [] },
     '/w/group/repo': { repositoryMarker: true, operationOwner: owner, children: [] }
   }
-} as unknown as UseFileExplorerTreeResult
+}
 
 function mountRepository() {
   return renderHook(() =>
@@ -90,7 +90,10 @@ it.each([1, 10])(
             },
             { once: true }
           )
-          await new Promise((resolve) => setTimeout(resolve, 500))
+          await new Promise<void>((resolve) => {
+            // ast-grep-ignore: test-no-real-time-wait -- Fake time models an in-flight Git read; no wall-clock wait.
+            setTimeout(resolve, 500)
+          })
           return {
             repositoryStatuses: [
               {
