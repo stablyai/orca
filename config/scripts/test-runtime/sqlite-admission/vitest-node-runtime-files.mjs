@@ -15,7 +15,6 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/ai-vault/session-scanner-unlimited-dedup.test.ts',
   // The parse cache persists through node:sqlite.
   'src/main/ai-vault/parse-cache/session-parse-cache-antigravity-upgrade.test.ts',
-  'src/main/ai-vault/parse-cache/session-parse-cache-large-scan.test.ts',
   'src/main/ai-vault/parse-cache/session-parse-cache-persistence.test.ts',
   'src/main/ai-vault/session-scanner-scope-cwd-facts.test.ts',
   'src/main/ai-vault/session-scanner-scope-walk.test.ts',
@@ -102,7 +101,6 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/workspaces/removal/local-worktree-removal-recovery-live.test.ts',
   'src/main/rate-limits/providers/codex/codex-rpc-worker-backpressure.test.ts',
   'src/main/computer/macos-native/macos-native-provider-client.test.ts',
-  'src/main/ai-vault-search/storage/session-search-schema.test.ts',
   'src/main/foreign-sqlite-readers/**/*.test.ts',
   'src/main/browser/*cookie*.test.ts',
   'src/main/browser/cookies/*cookie*.test.ts',

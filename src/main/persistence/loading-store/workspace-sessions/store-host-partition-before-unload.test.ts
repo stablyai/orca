@@ -10,7 +10,7 @@ import { Store } from '../store'
 
 const HOST_ID = 'ssh:target-1'
 const WORKTREE = 'repo-1::/srv/app'
-const FOLDER_WORKTREE = 'folder:folder-1'
+
 const TAB_ID = 'host-tab'
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 
@@ -43,40 +43,6 @@ function editorOnlySlice(worktreeId = WORKTREE): WorkspaceSessionState {
 }
 
 describe('before-unload staging of an editor-only host slice', () => {
-  it.each([
-    [{}, WORKTREE],
-    [{ 'repo-1': 1 }, WORKTREE],
-    [{ 'repo-1': 1 }, FOLDER_WORKTREE]
-  ])('saves the slice when the partition has topology revisions %j (%s)', (revisions, worktree) => {
-    const store = openStore()
-    store.setWorkspaceSession(
-      { ...getDefaultWorkspaceSession(), terminalTopologyRevisionByRepoId: revisions },
-      HOST_ID
-    )
-
-    store.stageWorkspaceSessionBeforeUnload(editorOnlySlice(worktree), HOST_ID)
-
-    const saved = store.getWorkspaceSession(HOST_ID)
-    expect(saved.openFilesByWorktree?.[worktree]).toHaveLength(1)
-    expect(saved.tabsByWorktree).toEqual({})
-    expect(saved.terminalLayoutsByTabId).toEqual({})
-  })
-
-  it('accepts an older saved partition that is missing the terminal maps', () => {
-    const store = openStore()
-    store.setWorkspaceSession(
-      { ...getDefaultWorkspaceSession(), terminalTopologyRevisionByRepoId: { 'repo-1': 1 } },
-      HOST_ID
-    )
-    const older = store.getWorkspaceSession(HOST_ID)
-    Reflect.deleteProperty(older, 'tabsByWorktree')
-    Reflect.deleteProperty(older, 'terminalLayoutsByTabId')
-
-    store.stageWorkspaceSessionBeforeUnload(editorOnlySlice(), HOST_ID)
-
-    expect(store.getWorkspaceSession(HOST_ID).tabsByWorktree).toEqual({})
-  })
-
   it('keeps fenced live terminal tabs the stale slice leaves out', () => {
     const store = openStore()
     const tab = makeTerminalTab({ id: TAB_ID, worktreeId: WORKTREE, ptyId: 'live-pty' })

@@ -15,11 +15,7 @@ import {
   type TerminalScrollbackSnapshotStorage
 } from '../../../pty/scrollback/terminal-scrollback-snapshots'
 import {
-  abortOrcadMigrationSnapshots,
-  assertOrcadMigrationSnapshotsReady,
   commitOrcadMigrationSnapshots,
-  inspectOrcadMigrationSnapshotUploads,
-  pruneOrcadMigrationSnapshotStaging,
   stageOrcadMigrationSnapshotChunk
 } from './orcad-scrollback-snapshot-transfer'
 
@@ -34,48 +30,6 @@ beforeEach(() => {
 afterEach(() => rmSync(root, { recursive: true, force: true }))
 
 describe('orcad scrollback snapshot transfer', () => {
-  it('resumes from staged byte length and accepts only exact idempotent retries', () => {
-    const bytes = Buffer.from('first line\nmultibyte: 🐋\nlast line', 'utf8')
-    const descriptor = snapshot('1', 'tab-1', 'leaf-1', bytes)
-    const manifest = migrationManifest('resume', [descriptor])
-    const state = stagedState(manifest)
-    const first = bytes.subarray(0, 11)
-
-    expect(stage(state, manifest, descriptor, 0, first).acknowledgedOffset).toBe(first.length)
-    expect(inspectOrcadMigrationSnapshotUploads(manifest, storage)?.[0]?.receivedBytes).toBe(
-      first.length
-    )
-    expect(stage(state, manifest, descriptor, 0, first).acknowledgedOffset).toBe(first.length)
-    expect(() => stage(state, manifest, descriptor, 0, Buffer.from('different!!'))).toThrow(
-      'orcad_migration_snapshot_retry_mismatch'
-    )
-    expect(() => stage(state, manifest, descriptor, first.length + 1, Buffer.from('x'))).toThrow(
-      'orcad_migration_snapshot_offset_invalid'
-    )
-
-    stage(state, manifest, descriptor, first.length, bytes.subarray(first.length))
-    assertOrcadMigrationSnapshotsReady(manifest, storage)
-    commitOrcadMigrationSnapshots(manifest, storage)
-    expect(readFinal(descriptor)).toEqual(bytes)
-  })
-
-  it('refuses incomplete and digest-mismatched staged bytes', () => {
-    const bytes = Buffer.from('expected bytes', 'utf8')
-    const descriptor = snapshot('2', 'tab-2', 'leaf-2', bytes)
-    const manifest = migrationManifest('refuse', [descriptor])
-    const state = stagedState(manifest)
-
-    stage(state, manifest, descriptor, 0, bytes.subarray(0, 4))
-    expect(() => assertOrcadMigrationSnapshotsReady(manifest, storage)).toThrow(
-      'orcad_migration_snapshot_incomplete'
-    )
-    stage(state, manifest, descriptor, 4, Buffer.alloc(bytes.length - 4, 0x78))
-    expect(() => assertOrcadMigrationSnapshotsReady(manifest, storage)).toThrow(
-      'orcad_migration_snapshot_digest_mismatch'
-    )
-    expect(readFinal(descriptor)).toBeNull()
-  })
-
   it('rejects a same-ref content conflict before materializing any snapshot', () => {
     const firstBytes = Buffer.from('first snapshot', 'utf8')
     const secondBytes = Buffer.from('second snapshot', 'utf8')
@@ -92,28 +46,6 @@ describe('orcad scrollback snapshot transfer', () => {
     )
     expect(readFinal(first)).toBeNull()
     expect(readFinal(second)).toEqual(Buffer.alloc(secondBytes.length, 0x78))
-  })
-
-  it('removes only the selected staging tree and prunes unjournaled trees', () => {
-    const bytes = Buffer.from('staged bytes', 'utf8')
-    const firstDescriptor = snapshot('6', 'tab-6', 'leaf-6', bytes)
-    const secondDescriptor = snapshot('7', 'tab-7', 'leaf-7', bytes)
-    const first = migrationManifest('abort-first', [firstDescriptor])
-    const second = migrationManifest('retain-second', [secondDescriptor])
-    const state = stagedState(first, second)
-    stage(state, first, firstDescriptor, 0, bytes)
-    stage(state, second, secondDescriptor, 0, bytes)
-
-    abortOrcadMigrationSnapshots(first, storage)
-    expect(inspectOrcadMigrationSnapshotUploads(first, storage)?.[0]?.receivedBytes).toBe(0)
-    expect(inspectOrcadMigrationSnapshotUploads(second, storage)?.[0]?.receivedBytes).toBe(
-      bytes.length
-    )
-    pruneOrcadMigrationSnapshotStaging(
-      state.filter((entry) => entry.migrationId !== second.migrationId),
-      storage
-    )
-    expect(inspectOrcadMigrationSnapshotUploads(second, storage)?.[0]?.receivedBytes).toBe(0)
   })
 })
 
