@@ -2,7 +2,7 @@ import {
   TerminalStreamOpcode,
   encodeTerminalStreamJson
 } from '../../../../../shared/terminal/stream/terminal-stream-protocol'
-import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from '../../../../../shared/terminal/replay/terminal-scrollback-policy'
+import { TERMINAL_MULTIPLEX_RECOVERY_SCROLLBACK_ROWS } from '../../../../../shared/terminal/stream/terminal-multiplex-flow-control'
 import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
 import { RemoteRuntimeTerminalMultiplexerBase } from '../streams/transport/remote-runtime-terminal-multiplexer-base'
 import {
@@ -65,8 +65,7 @@ export abstract class RemoteRuntimeTerminalSnapshotController extends RemoteRunt
       stream.streamId,
       TerminalStreamOpcode.SnapshotRequest,
       // Why history: the gap lost output, so a screen-only answer would leave the pane no history to show.
-      // A desktop pane keeps a local terminal's depth after a gap (N-02); the host caps by bytes.
-      encodeTerminalStreamJson({ scrollbackRows: DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT })
+      encodeTerminalStreamJson({ scrollbackRows: TERMINAL_MULTIPLEX_RECOVERY_SCROLLBACK_ROWS })
     )
     if (!sent) {
       // Transport is down; the reconnect path re-subscribes from scratch.
