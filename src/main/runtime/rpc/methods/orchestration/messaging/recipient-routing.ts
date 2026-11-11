@@ -205,8 +205,6 @@ export type SendRecipientWarning = {
     | 'recipient_unreachable'
     | 'recipient_ambiguous'
     | 'recipient_run_mismatch'
-    | 'recipient_delivery_held'
-    | 'recipient_delivery_unknown'
   recipient: string
   message: string
 }

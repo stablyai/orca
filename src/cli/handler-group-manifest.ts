@@ -134,7 +134,6 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
       'orchestration worker-show',
       'orchestration worker-read',
       'orchestration worker-stop',
-      'orchestration deny',
       'orchestration worker-abandon',
       'orchestration worker-release',
       'orchestration worker-keep-open',

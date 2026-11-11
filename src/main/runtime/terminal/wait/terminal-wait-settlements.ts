@@ -8,8 +8,7 @@ import {
 import type { AgentStatus } from '../../../../shared/agent-status/title/agent-title-core'
 import { detectExplicitIdleStatusFromTitle } from './terminal-wait-detection'
 import { buildTerminalWaitText } from './terminal-wait-tail-state'
-import { evaluateTuiIdle, type TuiIdleVerdict } from './tui-idle-evidence'
-import { terminalDeliveryRefusal } from './terminal-delivery-refusal'
+import { evaluateTuiIdle, isTuiIdleReadyVerdict, type TuiIdleVerdict } from './tui-idle-evidence'
 import { ptyTuiIdleEvidence } from './tui-idle-evidence-source'
 import { TUI_IDLE_QUIESCENCE_MS } from './terminal-idle-policy'
 import { USER_INPUT_HOLD_CAP_MS } from './claude-open-dialog-hold'
@@ -19,7 +18,6 @@ import {
 } from '../../../../shared/terminal/input/terminal-composer-draft'
 import { openCodeComposerHoldsDraft } from '../../../../shared/terminal/input/opencode-composer'
 import { isMailboxTerminalTakingInput } from '../../orchestration/mailbox/routing/mailbox-owner'
-import type { MailboxDeliveryHold } from '../../orchestration/mailbox/delivery-hold/mailbox-delivery-hold'
 
 const DIALOG_HOLD_RECHECK_MS = 2000
 
@@ -105,7 +103,7 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
       outputAt === null ? 0 : TUI_IDLE_QUIESCENCE_MS - (Date.now() - outputAt)
     // A dialog or draft lifts only when the user acts, so poll it slowly rather than at 20 Hz.
     const delay =
-      this.ptyDeliveryHold(ptyId) !== null || quietRemainingMs <= 0
+      this.isPtyHoldingDelivery(ptyId) || quietRemainingMs <= 0
         ? DIALOG_HOLD_RECHECK_MS
         : quietRemainingMs + 50
     const timer = setTimeout(() => {
@@ -121,48 +119,28 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
    *  steer text sent mid-turn, so only dialogs, drafts and unsettled terminals hold mail. Callers
    *  separately require live status evidence. */
   protected isAgentSettledForDelivery(ptyId: string): boolean {
-    return this.deliveryRefusal(ptyId) === null
-  }
-
-  /** Why delivery would hold mail for this worker terminal now, for a send receipt: the gate's own reason. */
-  readTerminalMailHold(terminalHandle: string): MailboxDeliveryHold | null {
-    const ptyId = this.getOrchestrationMailboxTerminalForHandle(terminalHandle)?.ptyId
-    const refusal = ptyId ? this.deliveryRefusal(ptyId) : null
-    return refusal === 'no-terminal' ? null : refusal
-  }
-
-  private deliveryRefusal(ptyId: string): MailboxDeliveryHold | 'no-terminal' | null {
     const pty = this.ptysById.get(ptyId)
-    if (!pty) {
-      return 'no-terminal'
+    if (!pty || this.isPtyHoldingDelivery(ptyId)) {
+      return false
     }
-    const hold = this.ptyDeliveryHold(ptyId)
-    if (hold) {
-      return { kind: hold }
-    }
-    const { verdict, readScreenInputVeto } = this.deliveryTuiVerdict(pty)
-    return terminalDeliveryRefusal({
-      verdict,
-      recognizedAgent: !!this.getPaneTerminalAgent(ptyId),
-      readScreenInputVeto
-    })
-  }
-
-  private deliveryTuiVerdict(pty: RuntimePtyWorktreeRecord) {
     const evidence = ptyTuiIdleEvidence(this.tuiIdleEvidenceSource, pty, () =>
       buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
     )
     // Why no blocked reader: a refusal here re-arms a recheck that a lingering tail prompt
     // would spin, so delivery keeps its own, blocked-blind, reading of the same ranking.
     const verdict = evaluateTuiIdle({ ...evidence, readTailBlockedReason: () => null })
-    return { verdict, readScreenInputVeto: evidence.readScreenInputVeto }
+    // The ranking vetoes overlays only on ready verdicts; an overlay refuses input mid-turn too.
+    // Only a recognized agent queues mid-turn text; an unknown program would read it as stdin.
+    return verdict.kind === 'working'
+      ? !!this.getPaneTerminalAgent(ptyId) && evidence.readScreenInputVeto() !== true
+      : isTuiIdleReadyVerdict(verdict)
   }
 
   /** An unsent draft would be submitted with the injected text; the cap bounds an abandoned or misread one.
    *  Typed text only: an agent's dim prompt suggestion is not the user's draft (#38015). */
-  private ptyDeliveryHold(ptyId: string): 'prompt' | 'draft' | 'restoring' | null {
+  private isPtyHoldingDelivery(ptyId: string): boolean {
     if (this.isPtyAwaitingUserInput(ptyId)) {
-      return 'prompt'
+      return true
     }
     const facts = this.terminalRunFacts
     const state = this.readWholeScreenModel(ptyId)
@@ -178,11 +156,11 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
       unattributed && (draft || restoring)
     )
     const holdSince = drivingInputAt ?? unattributedSince
-    const holding =
+    return (
       (draft || (unattributed && restoring)) &&
       holdSince !== null &&
       Date.now() - holdSince <= USER_INPUT_HOLD_CAP_MS
-    return holding ? (draft ? 'draft' : 'restoring') : null
+    )
   }
 
   // Why: OpenCode's composer has no prompt glyph, so only its own pane is read with its box layout.

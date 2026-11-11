@@ -1,6 +1,5 @@
 import type {
   AgentJournalApprovalItem,
-  AgentJournalPromptIntent,
   AgentJournalPromptOption,
   AgentJournalQuestionItem
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
@@ -28,19 +27,6 @@ const APPROVAL_DECISION_LABELS: Record<CodexApprovalDecision, string> = {
   acceptForSession: 'Allow for this session',
   decline: 'Deny',
   cancel: 'Stop'
-}
-
-// Cancel stops the turn, so it neither grants nor refuses just this call.
-const APPROVAL_DECISION_INTENTS: Partial<Record<CodexApprovalDecision, AgentJournalPromptIntent>> =
-  {
-    accept: 'allow_once',
-    acceptForSession: 'allow_always',
-    decline: 'reject_once'
-  }
-
-function codexApprovalOption(decision: CodexApprovalDecision): AgentJournalPromptOption {
-  const intent = APPROVAL_DECISION_INTENTS[decision]
-  return { id: decision, label: APPROVAL_DECISION_LABELS[decision], ...(intent ? { intent } : {}) }
 }
 
 const PENDING = {
@@ -80,7 +66,7 @@ export function codexApprovalOptions(params: unknown): AgentJournalPromptOption[
       )
     : []
   const decisions = offered.length > 0 ? offered : CODEX_APPROVAL_DECISIONS
-  return decisions.map(codexApprovalOption)
+  return decisions.map((decision) => ({ id: decision, label: APPROVAL_DECISION_LABELS[decision] }))
 }
 
 export function codexApprovalItem(input: {
@@ -127,9 +113,7 @@ function codexMcpToolApprovalItem(params: Record<string, unknown>): AgentJournal
     options: codexMcpToolApprovalDecisions(params).map((decision) => ({
       id: decision,
       // MCP cancel skips only this call and the turn continues, so it reads as Deny, not Stop.
-      label: APPROVAL_DECISION_LABELS[decision === 'cancel' ? 'decline' : decision],
-      // MCP cancel refuses this one call; the turn continues.
-      intent: decision === 'cancel' ? 'reject_once' : APPROVAL_DECISION_INTENTS[decision]
+      label: APPROVAL_DECISION_LABELS[decision === 'cancel' ? 'decline' : decision]
     })),
     resolution: { ...PENDING }
   }

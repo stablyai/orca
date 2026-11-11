@@ -17,8 +17,6 @@ import {
   type StructuredSessionTurnOutcome
 } from '../../turn-delivery/send-agent-turn'
 import { subscribeForRedrive } from './structured-session-journal-redrive'
-import { structuredAgentSessionSendBlock } from '../../../../native-chat/agent-session-wire/operations/structured-agent-session-send-preparation'
-import type { ChatMailAdmitFacts } from '../delivery-hold/mailbox-delivery-hold'
 import type { AgentSessionJournal } from '../../../../native-chat/agent-session-journal/journal-store'
 
 /** Names the dispatch a nudge belongs to on the operation row it writes. */
@@ -42,31 +40,6 @@ export async function readStructuredSessionGateFacts(
   // The host's projection of current work: an agent that ended is idle, whatever its rows say.
   const work = getStructuredAgentSessionHost()?.currentWork(sessionId)
   return structuredSessionGateFacts(snapshot.items, work?.scope)
-}
-
-/** The facts the pointer's admission and the chat's queue gate act on, read without sending. */
-export async function readStructuredMailAdmitFacts(
-  sessionId: string
-): Promise<ChatMailAdmitFacts | null> {
-  const host = getStructuredAgentSessionHost()
-  if (!host) {
-    return { attached: false }
-  }
-  try {
-    await host.journalCurrentRead(sessionId)
-  } catch (error) {
-    return (error as Error)?.message === AGENT_SESSION_NOT_ATTACHED.code
-      ? { attached: false }
-      : null
-  }
-  const block = structuredAgentSessionSendBlock(host.deps.store.getRecord(sessionId))
-  return {
-    attached: true,
-    fenced: (host.deps.store.getConversation(sessionId)?.currentFence ?? null) !== null,
-    refusal: block ? block.refusal.message : null,
-    // Agent mail queues behind a prompt the person must answer first (shouldQueueStructuredAgentSessionSend).
-    behindPrompt: host.currentWork(sessionId)?.hasActionablePrompt() === true
-  }
 }
 
 async function readSessionJournal(sessionId: string): Promise<AgentJournalSnapshot | null> {

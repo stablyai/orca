@@ -16,7 +16,6 @@ import {
   type WorkerTurnStopReason,
   type WorkerTurnStopReportDeps
 } from './worker-turn-stop-report'
-import type { WorkerApprovalPayload } from '../../../../../shared/orchestration/approvals/worker-approval-payload'
 
 export type TerminalWorkerTurnStopsDeps = WorkerTurnStopReportDeps & {
   readHookRow: (paneKey: string) => AgentStatusIpcPayload | null
@@ -24,8 +23,6 @@ export type TerminalWorkerTurnStopsDeps = WorkerTurnStopReportDeps & {
   getHandle: (paneKey: string) => string | null
   getProcessIncarnation: (handle: string) => string | null
   readScreen: (handle: string) => Promise<RuntimeTerminalRead>
-  /** The pane's open approval Orca can answer; taking it marks it reported. */
-  takeOpenApproval: (paneKey: string, dispatchId: string) => WorkerApprovalPayload | null
 }
 
 /** Report a terminal worker whose turn ended (or stopped at a prompt) while its Dispatch is open. */
@@ -76,11 +73,6 @@ export class TerminalWorkerTurnStops {
     if (!resolved) {
       return
     }
-    // One report per approval; the screen shows Claude's own reason for asking.
-    const approval =
-      reason === 'needs-input' && resolved.target.kind === 'local'
-        ? this.deps.takeOpenApproval(stop.paneKey, resolved.target.dispatch.id)
-        : null
     reportWorkerTurnStop(
       resolved.db,
       resolved.target,
@@ -89,8 +81,7 @@ export class TerminalWorkerTurnStops {
         stopKey: `${stop.paneKey}:${stop.row.stateStartedAt}`,
         turnStartedAt: stop.row.turnStartedAt,
         reason,
-        lastOutput,
-        ...(approval ? { approval } : {})
+        lastOutput
       },
       this.deps
     )
@@ -113,37 +104,29 @@ export class TerminalWorkerTurnStops {
     )
   }
 
-  private resolve(paneKey: string) {
-    return resolveTerminalWorkerDispatch(this.deps, paneKey)
+  private resolve(paneKey: string): {
+    db: OrchestrationDb
+    handle: string
+    target: WorkerTurnStopDispatch
+  } | null {
+    const db = this.deps.getDb()
+    const handle = db ? this.deps.getHandle(paneKey) : null
+    if (!db || !handle) {
+      return null
+    }
+    const dispatch = db.getActiveDispatchForTerminal(handle, paneKey)
+    if (dispatch) {
+      return { db, handle, target: { kind: 'local', dispatch } }
+    }
+    // A paired server holds its remote workers as attachments; their Dispatch lives at the Run home.
+    const attachment = db.findActiveRemoteAttachmentForPane(paneKey)
+    return attachment &&
+      db.isRemoteAttachmentProcessCurrent({
+        dispatchId: attachment.dispatch_id,
+        paneKey,
+        processIncarnation: this.deps.getProcessIncarnation(handle)
+      })
+      ? { db, handle, target: { kind: 'remote', attachment } }
+      : null
   }
-}
-
-/** The Dispatch a pane's worker runs now: its active local one, or the current remote attachment. */
-export function resolveTerminalWorkerDispatch(
-  deps: Pick<TerminalWorkerTurnStopsDeps, 'getDb' | 'getHandle' | 'getProcessIncarnation'>,
-  paneKey: string
-): {
-  db: OrchestrationDb
-  handle: string
-  target: WorkerTurnStopDispatch
-} | null {
-  const db = deps.getDb()
-  const handle = db ? deps.getHandle(paneKey) : null
-  if (!db || !handle) {
-    return null
-  }
-  const dispatch = db.getActiveDispatchForTerminal(handle, paneKey)
-  if (dispatch) {
-    return { db, handle, target: { kind: 'local', dispatch } }
-  }
-  // A paired server holds its remote workers as attachments; their Dispatch lives at the Run home.
-  const attachment = db.findActiveRemoteAttachmentForPane(paneKey)
-  return attachment &&
-    db.isRemoteAttachmentProcessCurrent({
-      dispatchId: attachment.dispatch_id,
-      paneKey,
-      processIncarnation: deps.getProcessIncarnation(handle)
-    })
-    ? { db, handle, target: { kind: 'remote', attachment } }
-    : null
 }

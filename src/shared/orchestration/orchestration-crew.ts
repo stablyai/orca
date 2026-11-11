@@ -1,6 +1,5 @@
 import { z } from 'zod'
 import { isPublicOrchestrationAddress } from './mailbox/orchestration-agent-reference'
-import { WorkerApprovalPayloadSchema } from './approvals/worker-approval-payload'
 
 export const CrewParty = z.string().refine(isPublicOrchestrationAddress)
 export const CrewSubscribeParams = z.object({ party: CrewParty })
@@ -22,10 +21,6 @@ export const CrewRow = z.object({
     })
     .optional(),
   pendingQuestion: z.object({ preview: z.string(), at: z.string() }).optional(),
-  /** This worker's permission prompts addressed to the viewing party, each as its newest message: open ones, and recent receipts. */
-  approvals: z
-    .array(z.object({ approval: WorkerApprovalPayloadSchema, at: z.string() }))
-    .optional(),
   sendAddress: CrewParty.optional(),
   openTarget: z
     .discriminatedUnion('kind', [
