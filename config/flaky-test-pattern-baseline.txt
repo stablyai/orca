@@ -531,12 +531,11 @@
 1 test-no-wall-clock:src/main/orcad/orcad-stale-lock-reclaim.test.ts
 3 test-no-wall-clock:src/main/orcad/orcad-stop-request-shutdown.integration.test.ts
 1 test-no-wall-clock:src/main/persistence/closed-terminal-tab-write-fence.test.ts
-1 test-no-wall-clock:src/main/persistence/loading-store/profile-state-temp-cleanup-lifetime.test.ts
-1 test-no-wall-clock:src/main/persistence/loading-store/pty-spawn-restore-durability.test.ts
-1 test-no-wall-clock:src/main/persistence/profile-state/profile-state-backup-rotation.test.ts
-2 test-no-wall-clock:src/main/persistence/profile-state/profile-state-backup-temporary-files.test.ts
-1 test-no-wall-clock:src/main/persistence/profile-state/profile-state-pre-migration-backup.test.ts
-1 test-no-wall-clock:src/main/persistence/profile-state/profile-state-section-repair.test.ts
+1 test-no-wall-clock:src/main/persistence/loading-store/profile-writing/profile-state-temp-cleanup-lifetime.test.ts
+1 test-no-wall-clock:src/main/persistence/profile-state/backup/profile-state-backup-rotation.test.ts
+1 test-no-wall-clock:src/main/persistence/profile-state/backup/profile-state-backup-temporary-files.test.ts
+1 test-no-wall-clock:src/main/persistence/profile-state/backup/profile-state-pre-migration-backup.test.ts
+1 test-no-wall-clock:src/main/persistence/profile-state/recovery/profile-state-section-repair.test.ts
 2 test-no-wall-clock:src/main/persistence/tracking-repos/persistence-deregistered-repo-residue.test.ts
 1 test-no-wall-clock:src/main/persistence/tracking-repos/worktree-metadata-normalization.test.ts
 2 test-no-wall-clock:src/main/provider-process/provider-group-orphan-guard.integration.test.ts
@@ -717,7 +716,6 @@
 1 test-timeout-needs-reason:src/main/orcad/orcad-stop-request-shutdown.integration.test.ts
 1 test-timeout-needs-reason:src/main/orcad/orcad-windows-conpty-breakaway.integration.test.ts
 1 test-timeout-needs-reason:src/main/persistence/applying-settings/persistence-source-control-ai-migration.test.ts
-1 test-timeout-needs-reason:src/main/persistence/profile-state/profile-state-writer-stall.electron.test.ts
 1 test-timeout-needs-reason:src/main/plugins/workers/plugin-worker-supervision.integration.test.ts
 2 test-timeout-needs-reason:src/main/providers/agent-foreground-process-git-bash.win32.test.ts
 1 test-timeout-needs-reason:src/main/providers/local-pty/local-pty-child-process-verdict.test.ts

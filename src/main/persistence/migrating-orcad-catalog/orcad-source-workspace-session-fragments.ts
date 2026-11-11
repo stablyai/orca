@@ -2,7 +2,7 @@ import { serializeOrcadMigrationValue } from '../../../shared/orcad-migration/or
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { mergeWorkspaceSessions } from '../../orca-profiles/project-transfer/profile-project-session-state'
 import { SESSION_FIELDS_PRUNED_BY_OWNER_KEY } from '../../orca-profiles/project-transfer/profile-project-session-field-disposition'
-import { withRequiredWorkspaceSessionMaps } from '../loading-store/session-host-partitions'
+import { withRequiredWorkspaceSessionMaps } from '../loading-store/workspace-sessions/session-host-partitions'
 
 export function sessionPartitions(
   state: {
