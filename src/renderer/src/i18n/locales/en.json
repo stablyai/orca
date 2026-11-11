@@ -9126,6 +9126,9 @@
           "3ebe650f74": "App name",
           "3743ed080c": "Set command",
           "f79084947b": "New app",
+          "fileExplorerClick": "Open files from File Explorer in",
+          "fileExplorerClickDescription": "Choose where a click on a file opens it. Workspaces the app cannot reach open in the Orca editor.",
+          "orcaEditor": "Orca editor",
           "d686e15816": "Open in apps"
         },
         "OrchestrationPane": {

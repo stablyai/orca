@@ -15,6 +15,7 @@ import type { InlineInput } from './file-explorer-inline-input-row'
 import type { TreeNode } from '../tree/file-explorer-types'
 import { useFileDuplicate } from './useFileDuplicate'
 import { useFileExplorerKeys } from '../selection/useFileExplorerKeys'
+import type { FileExplorerRowClick } from './useFileExplorerHandlers'
 import type { LocalPathOpenOwner } from '@/lib/files/os-open/local-path-open-guard'
 
 type UseFileExplorerNodeCommandsParams = {
@@ -37,7 +38,7 @@ type UseFileExplorerNodeCommandsParams = {
   requestDelete: (node: TreeNode) => void
   requestDeleteAll: (nodes: TreeNode[]) => void
   refreshDir: (dirPath: string) => Promise<void>
-  handleClick: (node: TreeNode) => void
+  handleClick: (node: TreeNode, rowClick?: FileExplorerRowClick) => void
   toggleDir: (worktreeId: string, dirPath: string) => void
   scrollToIndex: (index: number) => void
   pathOwner: LocalPathOpenOwner
@@ -125,7 +126,10 @@ export function useFileExplorerNodeCommands({
   const handleDuplicate = useFileDuplicate({ activeWorktreeId, worktreePath, refreshDir })
   const handleRowClick = useCallback(
     (node: TreeNode, event: React.MouseEvent<HTMLButtonElement>) => {
-      selectRowWithModifiers(node, event, handleClick)
+      // A keyboard-generated click has detail 0 and must not hand the file to the chosen app.
+      selectRowWithModifiers(node, event, (target) =>
+        handleClick(target, event.detail === 0 ? undefined : { repeated: event.detail >= 2 })
+      )
     },
     [handleClick, selectRowWithModifiers]
   )

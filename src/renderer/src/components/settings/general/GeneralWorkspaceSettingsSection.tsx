@@ -137,6 +137,7 @@ export function GeneralWorkspaceSettingsSection({
             <OpenInMenuEditor
               draftOwner={openInDraft}
               applications={settings.openInApplications}
+              fileExplorerApplicationId={settings.fileExplorerOpenInApplicationId}
               updateSettings={updateSettings}
             />
           </SearchableSetting>

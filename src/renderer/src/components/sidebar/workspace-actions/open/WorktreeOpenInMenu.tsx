@@ -143,7 +143,7 @@ export async function openWorktreePath(args: {
   openInApplicationId?: string
   command?: string
   subject?: 'workspace' | 'path'
-}): Promise<void> {
+}): Promise<boolean> {
   const owner = getLocalPathOpenOwnerForRoute({
     connectionId: args.connectionId,
     runtimeEnvironmentId: args.runtimeEnvironmentId,
@@ -153,7 +153,7 @@ export async function openWorktreePath(args: {
   if (args.target === 'file-manager') {
     if (isRevealOrEditorOpenBlocked(owner)) {
       showLocalPathOpenBlockedToast()
-      return
+      return false
     }
   } else {
     const capability = getExternalEditorOpenCapability({
@@ -171,11 +171,11 @@ export async function openWorktreePath(args: {
       } else {
         showOpenFailureToast({ ok: false, reason: 'remote-editor-unsupported' }, true)
       }
-      return
+      return false
     }
   }
   if (owner === 'unresolved') {
-    return
+    return false
   }
 
   const result =
@@ -190,6 +190,7 @@ export async function openWorktreePath(args: {
   if (!result.ok) {
     showOpenFailureToast(result, Boolean(editorConnectionId?.trim()), args.subject)
   }
+  return result.ok
 }
 
 function useOpenInWorktreePath({

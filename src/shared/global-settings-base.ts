@@ -9,6 +9,7 @@ import type { ExternalConversationSettings } from './external-conversation-setti
 import type { NativeChatGlobalSettings } from './native-chat/native-chat-appearance-settings'
 import type { NativeChatIdleStopSettings } from './native-chat/native-chat-idle-stop'
 import type { EditorTypographySettings } from './editor-typography-settings-types'
+import type { FileExplorerOpenInSettings } from './file-explorer-open-in-settings-types'
 import type { PluginAppearanceSettings } from './plugin-appearance-settings-types'
 import type { PluginFileTypeSuggestionSettings } from './plugins/contributions/plugin-file-type'
 import type { PluginUpdatePolicySettings } from './plugins/catalog/plugin-update-policy'
@@ -39,6 +40,7 @@ export type GlobalSettingsBase = AntigravityChatAuthSettings &
   BrowserExtensionGlobalSettings &
   PluginAppearanceSettings &
   EditorTypographySettings &
+  FileExplorerOpenInSettings &
   PluginFileTypeSuggestionSettings &
   PluginUpdatePolicySettings &
   PluginSystemSettings &
