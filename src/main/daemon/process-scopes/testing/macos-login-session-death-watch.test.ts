@@ -107,10 +107,8 @@ function createWatch(
 
 describe('MacosLoginSessionDeathWatch', () => {
   it('preserves the daemon when a short PAM rejection burst recovers after wake', async () => {
-    const readResolverHealth = vi.fn(async () => 'unhealthy' as const)
     const { watch, clock, onRetire, probe } = createWatch({
-      outcomes: [ACCEPTED, REJECTED, REJECTED, REJECTED, ACCEPTED],
-      readResolverHealth
+      outcomes: [ACCEPTED, REJECTED, REJECTED, REJECTED, ACCEPTED]
     })
     watch.start()
     await drainMicrotasks()
@@ -120,7 +118,6 @@ describe('MacosLoginSessionDeathWatch', () => {
     await clock.advance(10_000)
 
     expect(probe).toHaveBeenCalledTimes(4)
-    expect(readResolverHealth).not.toHaveBeenCalled()
     expect(onRetire).not.toHaveBeenCalled()
 
     watch.notifyClientActivity()
@@ -129,15 +126,12 @@ describe('MacosLoginSessionDeathWatch', () => {
     expect(probe).toHaveBeenCalledTimes(4)
     await clock.advance(1)
     expect(probe).toHaveBeenCalledTimes(5)
-    expect(readResolverHealth).not.toHaveBeenCalled()
     expect(onRetire).not.toHaveBeenCalled()
   })
 
   it('does not count a suspended timer gap as rejection evidence', async () => {
-    const readResolverHealth = vi.fn(async () => 'unhealthy' as const)
     const { watch, clock, onRetire, probe } = createWatch({
-      outcomes: [ACCEPTED, REJECTED, REJECTED, ACCEPTED],
-      readResolverHealth
+      outcomes: [ACCEPTED, REJECTED, REJECTED, ACCEPTED]
     })
     watch.start()
     await drainMicrotasks()
@@ -147,7 +141,6 @@ describe('MacosLoginSessionDeathWatch', () => {
     await clock.advance(0)
 
     expect(probe).toHaveBeenCalledTimes(3)
-    expect(readResolverHealth).not.toHaveBeenCalled()
     expect(onRetire).not.toHaveBeenCalled()
 
     await clock.advance(119_999)
@@ -168,8 +161,7 @@ describe('MacosLoginSessionDeathWatch', () => {
       .mockResolvedValueOnce(REJECTED)
       .mockReturnValueOnce(deferredProbe)
       .mockResolvedValueOnce(ACCEPTED)
-    const readResolverHealth = vi.fn(async () => 'unhealthy' as const)
-    const { watch, clock, onRetire } = createWatch({ probeLoginSession: probe, readResolverHealth })
+    const { watch, clock, onRetire } = createWatch({ probeLoginSession: probe })
     watch.start()
     await drainMicrotasks()
 
@@ -180,7 +172,6 @@ describe('MacosLoginSessionDeathWatch', () => {
     await drainMicrotasks()
 
     expect(probe).toHaveBeenCalledTimes(3)
-    expect(readResolverHealth).not.toHaveBeenCalled()
     expect(onRetire).not.toHaveBeenCalled()
 
     await clock.advance(119_999)
@@ -202,25 +193,41 @@ describe('MacosLoginSessionDeathWatch', () => {
     expect(onRetire).not.toHaveBeenCalled()
   })
 
+  it('retires a logged-out session three rejections and two minutes after the first one', async () => {
+    const { watch, clock, onRetire } = createWatch({
+      outcomes: [ACCEPTED, REJECTED, REJECTED, REJECTED, REJECTED]
+    })
+    watch.start()
+    await drainMicrotasks()
+    await clock.advance(239_999)
+    expect(onRetire).not.toHaveBeenCalled()
+    await clock.advance(1)
+    expect(onRetire).toHaveBeenCalledTimes(1)
+  })
+
   it.each(['healthy', 'unknown'] as const)(
-    'suppresses retirement while resolver health is %s, then retires on explicit degradation',
+    'runs no login probe while resolver health is %s, then retires once it degrades',
     async (initialResolverHealth) => {
       const { watch, clock, onRetire, probe, setResolverHealth } = createWatch({
-        outcomes: [ACCEPTED, REJECTED, REJECTED, REJECTED, REJECTED, REJECTED]
+        outcomes: [ACCEPTED, REJECTED, REJECTED, REJECTED, REJECTED]
       })
       setResolverHealth(initialResolverHealth)
       watch.start()
       await drainMicrotasks()
-      await clock.advance(120_000)
+      for (let i = 0; i < 5; i++) {
+        await clock.advance(120_000)
+      }
+      watch.notifyClientActivity()
+      watch.notifyPtyExit()
       await clock.advance(10_000)
-      await clock.advance(10_000)
-      await clock.advance(100_000) // Retirement still requires explicit resolver corroboration.
-      expect(onRetire).not.toHaveBeenCalled()
-      const probesAtSuppression = probe.mock.calls.length
+      expect(probe).toHaveBeenCalledTimes(1)
+
       setResolverHealth('unhealthy')
+      await clock.advance(115_000) // Next periodic check sees the dead resolver.
+      expect(probe).toHaveBeenCalledTimes(2)
       await clock.advance(119_999)
-      expect(probe).toHaveBeenCalledTimes(probesAtSuppression)
-      await clock.advance(1) // Suppressed states use the bounded periodic cadence.
+      expect(onRetire).not.toHaveBeenCalled()
+      await clock.advance(1)
       expect(onRetire).toHaveBeenCalledTimes(1)
     }
   )
