@@ -4,7 +4,13 @@ import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-
 import { translate } from '@/i18n/i18n'
 import { copyTerminalHandleForPane } from './terminal-handle-copy'
 import { runTerminalCopy, runTerminalIdentityCopy } from './terminal-copy-rejection-guards'
-import { readTerminalClipboardSelection } from './terminal-clipboard-selection-text'
+import {
+  readTerminalClipboardSelection,
+  terminalCopyTrimsGutter
+} from './terminal-clipboard-selection-text'
+import { getTerminalCommandBlockTracker } from '../emulation/commands/terminal-command-lifecycle'
+import { readTerminalBlockTextFromTerminal } from '../emulation/commands/terminal-command-block-tracker'
+import type { TerminalCommandBlockPart } from '../emulation/commands/terminal-command-block-text'
 import { useAppStore } from '@/store/index'
 import { fencedCode } from '../../editor/selection-copy'
 import { formatNativeChatQuote } from '../../native-chat/selection-quotes/native-chat-quote-selection'
@@ -16,6 +22,41 @@ export const copyTerminalPaneMenuSelection = async (pane: ManagedPane | null): P
   }
   await runTerminalCopy({
     selection: readTerminalClipboardSelection(pane.terminal),
+    writeClipboardText: window.api.ui.writeTerminalClipboardText,
+    // Radix restores the container, but xterm needs its textarea focused for typing (#592).
+    focus: () => pane.terminal.focus()
+  })
+}
+
+export const resolveMenuCommandBlock = (
+  pane: ManagedPane | null,
+  bufferRow: number | null
+): boolean => {
+  if (!pane || bufferRow === null) {
+    return false
+  }
+  const block = getTerminalCommandBlockTracker(pane.terminal)?.resolveBlockAtRow(bufferRow)
+  return block !== null && block !== undefined
+}
+
+export const copyTerminalPaneMenuCommandBlock = async (
+  pane: ManagedPane | null,
+  bufferRow: number | null,
+  part: TerminalCommandBlockPart
+): Promise<void> => {
+  if (!pane || bufferRow === null) {
+    return
+  }
+  const block = getTerminalCommandBlockTracker(pane.terminal)?.resolveBlockAtRow(bufferRow)
+  if (!block) {
+    return
+  }
+  const text =
+    readTerminalBlockTextFromTerminal(pane.terminal, block, part, {
+      trimGutter: terminalCopyTrimsGutter()
+    }) ?? ''
+  await runTerminalCopy({
+    selection: text,
     writeClipboardText: window.api.ui.writeTerminalClipboardText,
     // Radix restores the container, but xterm needs its textarea focused for typing (#592).
     focus: () => pane.terminal.focus()

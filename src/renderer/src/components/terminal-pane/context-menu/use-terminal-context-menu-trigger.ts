@@ -5,11 +5,14 @@ import type { TerminalPasteSource } from '../input/paste/terminal-paste-model'
 import { copyTerminalSelection } from '../clipboard/terminal-selection-copy'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/overlay-interaction/close-all-context-menus'
 import { createTerminalRightClickPasteCapture } from '../input/paste/create-terminal-right-click-paste-capture'
+import { getTerminalBufferPositionForMouseEvent } from '../input/pointer/terminal-mouse-buffer-position'
 
 type UseTerminalContextMenuTriggerDeps = {
   managerRef: React.RefObject<PaneManager | null>
   containerRef: React.RefObject<HTMLDivElement | null>
   contextPaneIdRef: React.RefObject<number | null>
+  /** 0-based absolute buffer row under the pointer, captured synchronously at menu open. */
+  menuBufferRowRef: React.RefObject<number | null>
   rightClickToPaste: boolean
   pasteResolvedPane: (
     source: Extract<TerminalPasteSource, 'context-menu' | 'right-click'>
@@ -30,6 +33,7 @@ export function useTerminalContextMenuTrigger({
   managerRef,
   containerRef,
   contextPaneIdRef,
+  menuBufferRowRef,
   rightClickToPaste,
   pasteResolvedPane
 }: UseTerminalContextMenuTriggerDeps): TerminalContextMenuTrigger {
@@ -65,6 +69,11 @@ export function useTerminalContextMenuTrigger({
         ? (manager.getPanes().find((pane) => pane.id === clickedPaneId) ?? null)
         : null
     contextPaneIdRef.current = clickedPane?.id ?? null
+    // Mouse helper returns 1-based rows; markers use 0-based buffer rows.
+    const bufferPosition = clickedPane
+      ? getTerminalBufferPositionForMouseEvent(clickedPane.terminal, event.nativeEvent)
+      : null
+    menuBufferRowRef.current = bufferPosition ? bufferPosition.y - 1 : null
 
     // Configured right-click copies selection or pastes; Ctrl+right-click preserves menu access.
     if (rightClickToPaste && !event.ctrlKey) {
