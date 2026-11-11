@@ -4,7 +4,7 @@
 # Merges the current private/cloud/integration into a throwaway worktree with your branch, then requires
 #   pnpm typecheck, the full pnpm lint suite (pre-commit hooks only lint staged files), and vitest for the tests your
 #   branch touched: changed *.test.ts(x), every test in the folder of each changed source, every test that imports a
-#   changed module, and each touched cloud/apps/* package's own suite. PREMERGE_FULL=1 runs the whole vitest suite.
+#   changed module, every test Vitest's module graph relates to the change (vitest --changed), and each touched cloud/apps/* package's own suite. PREMERGE_FULL=1 runs the whole vitest suite.
 # The merged copy of this script is what runs, so the gate is always integration's current one.
 # Prints "premerge OK" only when everything passes. Nothing here reads /tmp state. On macOS (no flock) wrap heavy runs
 # as /tmp/vdrv/heavy.sh 'config/scripts/cloud-integration/premerge-check.sh'.
@@ -113,6 +113,20 @@ else
         ;;
     esac
   done < <(git diff --name-only --diff-filter=AMR "$base"...HEAD -- 'src/*')
+  # (c) Vitest's own module graph: every test that transitively imports a changed file (`vitest list --changed`).
+  # Name matching alone missed #462's REG-5: the multiplex tests import an aggregator (methods/terminal/terminal) that
+  # imports the changed modules, one folder up.
+  if [[ -n "$(git diff --name-only "$base"...HEAD -- 'src/*')" ]]; then
+    node config/scripts/workspace-package-build/build-workspace-packages.mjs >/dev/null
+    node config/scripts/native-build/node-addons/ensure-native-runtime.mjs --runtime=node >/dev/null
+    graph=$(node config/scripts/test-runtime/execution-policy/run-vitest.mjs list --config config/vitest.config.ts \
+      --changed="$base" --filesOnly 2>/dev/null | sed -E 's/^\[[^]]*\] //' | grep -E '\.test\.(ts|tsx|mts|mjs|js)$' | sort -u || true)
+    n_graph=0
+    while IFS= read -r t; do
+      if [[ -n "$t" && -f "$t" ]]; then tests+=("$t"); n_graph=$((n_graph + 1)); fi
+    done <<<"$graph"
+    echo "premerge: module graph (vitest --changed=$base) adds $n_graph related test file(s)"
+  fi
   if ((${#tests[@]} > 0)); then
     # Skip files on the full-suite base list: they fail on upstream too (this Mac's environment), so they would only
     # block. Exact whole-line matches only (filter-base-list-tests.sh, unit-tested); repo paths have no spaces.
