@@ -258,6 +258,9 @@ export class RuntimeAutomationController {
     if (!targetChanged && patch.reuseSession && current.workspaceMode !== 'existing') {
       throw new Error('Session reuse requires an existing workspace target.')
     }
+    if (patch.onNoReusableSession && !(patch.reuseSession ?? current.reuseSession)) {
+      throw new Error('Skipping an unusable previous session requires session reuse.')
+    }
     const owner = current.bot ? { botId: current.bot.botId, current } : null
     return await this.webhooks.save(owner, patch.on, async (on) => {
       // Checked with the write, so a pass that read it earlier never overwrites a newer edit.
