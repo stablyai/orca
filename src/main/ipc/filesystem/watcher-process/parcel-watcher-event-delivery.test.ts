@@ -1,10 +1,74 @@
-import { describe, expect, it, vi } from 'vitest'
+import { setImmediate } from 'node:timers/promises'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { statMock } = vi.hoisted(() => ({ statMock: vi.fn() }))
 
 vi.mock('node:fs/promises', () => ({ stat: statMock }))
 
-import { createWatcherProcessEventDeliveryQueue } from './parcel-watcher-event-delivery'
+import {
+  createWatcherProcessEventDeliveryQueue,
+  prepareWatcherProcessEvents
+} from './parcel-watcher-event-delivery'
+
+describe('prepareWatcherProcessEvents', () => {
+  beforeEach(() => {
+    statMock.mockReset()
+  })
+
+  it('caps directory metadata stat work across concurrent roots in one child', async () => {
+    let activeStats = 0
+    let maxActiveStats = 0
+    statMock.mockImplementation(async () => {
+      activeStats++
+      maxActiveStats = Math.max(maxActiveStats, activeStats)
+      await setImmediate()
+      activeStats--
+      return { isDirectory: () => false }
+    })
+    const batches = Array.from({ length: 8 }, (_, rootIndex) =>
+      Array.from({ length: 16 }, (_, eventIndex) => ({
+        type: 'update' as const,
+        path: `/repo-${rootIndex}/file-${eventIndex}.ts`
+      }))
+    )
+
+    await Promise.all(
+      batches.map((events) =>
+        prepareWatcherProcessEvents(events, {
+          includeDirectoryMetadata: true,
+          maxEventsPerBatch: 200
+        })
+      )
+    )
+
+    expect(statMock).toHaveBeenCalledTimes(128)
+    expect(maxActiveStats).toBe(8)
+  })
+
+  it('stats each path once and skips paths deleted later in the same batch', async () => {
+    statMock.mockResolvedValue({ isDirectory: () => true })
+    const events = [
+      { type: 'create' as const, path: '/repo/dir' },
+      { type: 'update' as const, path: '/repo/dir' },
+      { type: 'update' as const, path: '/repo/gone' },
+      { type: 'delete' as const, path: '/repo/gone' },
+      { type: 'update' as const, path: '/repo/file' }
+    ]
+
+    const prepared = await prepareWatcherProcessEvents(events, { includeDirectoryMetadata: true })
+
+    expect(statMock).toHaveBeenCalledTimes(2)
+    expect(statMock).toHaveBeenCalledWith('/repo/dir')
+    expect(statMock).toHaveBeenCalledWith('/repo/file')
+    expect(prepared).toEqual([
+      { type: 'create', path: '/repo/dir', isDirectory: true },
+      { type: 'update', path: '/repo/dir', isDirectory: true },
+      { type: 'update', path: '/repo/gone' },
+      { type: 'delete', path: '/repo/gone' },
+      { type: 'update', path: '/repo/file', isDirectory: true }
+    ])
+  })
+})
 
 describe('watcher event queue flush', () => {
   it('waits for active delivery and the bounded pending overflow', async () => {

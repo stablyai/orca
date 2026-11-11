@@ -58,7 +58,27 @@ function main(): void {
   let activeSubscriptionCrawlId: number | null = null
   let subscriptionActivityRevision = 0
   let lastNativeCallbackAt = 0
+  let overflowCount = 0
+  const subscriptionChurn = new Map<number, number>()
   let nativeLifecycleTail = Promise.resolve()
+
+  const recordSubscriptionChurn = (id: number, weight: number): void => {
+    subscriptionChurn.set(id, (subscriptionChurn.get(id) ?? 0) + weight)
+  }
+
+  const consumeTopSubscriptionId = (): number | null => {
+    let topId: number | null = null
+    let topCount = 0
+    for (const [id, count] of subscriptionChurn) {
+      if (!liveSubscriptionIds.has(id) || count <= topCount) {
+        continue
+      }
+      topCount = count
+      topId = id
+    }
+    subscriptionChurn.clear()
+    return topId
+  }
 
   // Native subscribes run one at a time under runNativeWatcherLifecycleExclusive.
   const beginSubscriptionCrawl = (): void => {
@@ -90,6 +110,10 @@ function main(): void {
     const eventDelivery = createWatcherProcessEventDeliveryQueue(
       delivery,
       async (events) => {
+        if (events === null) {
+          overflowCount++
+          recordSubscriptionChurn(id, 10)
+        }
         await sendEventWithBackpressure(
           events === null ? { op: 'overflow', id } : { op: 'events', id, events }
         )
@@ -122,6 +146,7 @@ function main(): void {
             dir,
             (err, events) => {
               lastNativeCallbackAt = Date.now()
+              recordSubscriptionChurn(id, err ? 10 : Math.max(1, events.length))
               if (rootDeleted) {
                 return
               }
@@ -164,6 +189,7 @@ function main(): void {
       eventDeliveries.delete(id)
       subscriptions.delete(id)
       liveSubscriptionIds.delete(id)
+      subscriptionChurn.delete(id)
       if (stillOwned) {
         send({ op: 'subscribe-failed', id, message: errorMessage(err) })
       }
@@ -177,6 +203,7 @@ function main(): void {
     const pending = subscriptions.get(id)
     subscriptions.delete(id)
     liveSubscriptionIds.delete(id)
+    subscriptionChurn.delete(id)
     eventDeliveries.get(id)?.close()
     eventDeliveries.delete(id)
     try {
@@ -201,6 +228,7 @@ function main(): void {
     if (activeSubscriptionCrawlId === id) {
       subscriptions.delete(id)
       liveSubscriptionIds.delete(id)
+      subscriptionChurn.delete(id)
       eventDeliveries.get(id)?.close()
       eventDeliveries.delete(id)
       send({ op: 'cancel-requires-restart', id })
@@ -235,9 +263,30 @@ function main(): void {
       revision: subscriptionActivityRevision,
       liveSubscriptions: liveSubscriptionIds.size,
       pendingCrawlStartedAt,
-      lastNativeCallbackAt
+      activeCrawlSubscriptionId: activeSubscriptionCrawlId,
+      lastNativeCallbackAt,
+      overflowCount,
+      topSubscriptionId: consumeTopSubscriptionId()
     }),
-    (state) => send({ op: 'delivery-health', state })
+    (state) => send({ op: 'delivery-health', state }),
+    (fault) => {
+      if (fault.subscriptionId === null) {
+        return
+      }
+      if (fault.kind === 'crawl-wedged') {
+        send({
+          op: 'subscribe-failed',
+          id: fault.subscriptionId,
+          message: 'File watcher subscription crawl timed out'
+        })
+      } else {
+        send({
+          op: 'watch-error',
+          id: fault.subscriptionId,
+          message: 'File watcher resource storm detected'
+        })
+      }
+    }
   )
 
   // Process death releases watcher handles without crash-prone native teardown.

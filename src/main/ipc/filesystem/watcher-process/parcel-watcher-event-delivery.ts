@@ -34,10 +34,25 @@ async function statWatcherEventPath(eventPath: string, signal?: AbortSignal): Pr
   }
 }
 
+function sharedDirectoryStat(
+  eventPath: string,
+  directoryStatByPath: Map<string, Promise<boolean>>,
+  signal?: AbortSignal
+): Promise<boolean> {
+  const pending = directoryStatByPath.get(eventPath)
+  if (pending) {
+    return pending
+  }
+  const created = statWatcherEventPath(eventPath, signal)
+  directoryStatByPath.set(eventPath, created)
+  return created
+}
+
 async function mapWatcherEvent(
   event: ParcelWatcherEvent,
   includeDirectoryMetadata: boolean,
-  signal?: AbortSignal
+  signal: AbortSignal | undefined,
+  directoryStatByPath: Map<string, Promise<boolean>>
 ): Promise<WatcherProcessEvent> {
   signal?.throwIfAborted()
   if (!includeDirectoryMetadata || event.type === 'delete') {
@@ -45,7 +60,7 @@ async function mapWatcherEvent(
   }
   let isDirectory = false
   try {
-    isDirectory = await statWatcherEventPath(event.path, signal)
+    isDirectory = await sharedDirectoryStat(event.path, directoryStatByPath, signal)
   } catch {
     signal?.throwIfAborted()
     // Vanished paths still need parent invalidation; unknown metadata remains file-like.
@@ -65,8 +80,14 @@ export async function prepareWatcherProcessEvents(
   if (delivery?.includeDirectoryMetadata !== true) {
     return events.map((event) => ({ type: event.type, path: event.path }))
   }
+  // One stat per path; a later delete in this batch means the path is already gone.
+  const lastTypeByPath = new Map<string, ParcelWatcherEvent['type']>()
+  for (const event of events) {
+    lastTypeByPath.set(event.path, event.type)
+  }
+  const directoryStatByPath = new Map<string, Promise<boolean>>()
   return mapWithConcurrency(events, DIRECTORY_STAT_CONCURRENCY, (event) =>
-    mapWatcherEvent(event, true, signal)
+    mapWatcherEvent(event, lastTypeByPath.get(event.path) !== 'delete', signal, directoryStatByPath)
   )
 }
 
