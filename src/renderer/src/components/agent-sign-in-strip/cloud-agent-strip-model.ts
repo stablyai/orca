@@ -19,6 +19,12 @@ export type CloudStripPrimary =
   | { kind: 'useDeviceCode' }
   /** RA-11: restart the running agent in its pane, resuming its conversation when it can. */
   | { kind: 'restart' }
+  /** PC-3b: run the one-time Orca Cloud setup (S0) right from the pane. */
+  | { kind: 'setUpOnce' }
+  /** PC-3b: reopen the setup's browser page. */
+  | { kind: 'reopenSetup' }
+  /** PC-3b: the setup finished; start the held agent. */
+  | { kind: 'start' }
 
 export type CloudStripModel = {
   status: CloudStripStatus
@@ -32,7 +38,12 @@ export type CloudStripModel = {
   /** Device code shown inline (Copy beside it). */
   code: string | null
   /** The paste input replaces the primary. */
-  paste: { submitting: boolean; refusal: string | null } | null
+  paste: {
+    submitting: boolean
+    refusal: string | null
+    /** PC-3b: a setup-token is a secret: masked, with this label (default: the claude.ai code). */
+    secretLabel?: string
+  } | null
   /** "Other ways" under ⋯: the code fallback and the key path. */
   otherWays: boolean
   /** Already on a code: ⋯ offers the paste fallback and Cancel instead of "Use a code". */

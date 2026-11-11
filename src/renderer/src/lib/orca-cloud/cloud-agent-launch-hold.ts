@@ -1,7 +1,9 @@
 // Orca Cloud launches decided from the Orca account, never the sandbox (agent-sign-in redesign §13).
 // Ready: no hold. Expired or revoked with no key: the pane holds on the account-recovery strip
-// (S4-c, card 13) until Renew in S0 fixes it for every workspace. Kill switch or a provider never
-// offered: no hold here; the per-workspace sign-in (#40228's gate) runs and the strip shows it.
+// (S4-c, card 13) until Renew in S0 fixes it for every workspace. Not set up with no key (PC-3b):
+// the pane holds on the "Set up once" strip, which runs S0 inline and then offers "Start {{agent}}".
+// Kill switch or a provider never offered: no hold here; the per-workspace sign-in (#40228's gate)
+// runs and the strip shows it.
 import { useSyncExternalStore } from 'react'
 import type { HostAgentSignInAgent } from '../../../../shared/host-agent-sign-in-status'
 import { orcaCloudAgentCoverage } from './orca-cloud-agent-accounts-model'
@@ -37,10 +39,47 @@ export function cloudAgentStripReason(
   }
 }
 
+/** Why a launch is held: account recovery, or the one-time setup (PC-3b). */
+export type CloudAgentHoldReason = 'accountExpired' | 'notSetUp'
+
+/** The hold a launch needs from this accounts read; null starts it. */
+export function cloudAgentHoldReason(
+  agent: HostAgentSignInAgent,
+  accounts: Pick<OrcaCloudAgentAccountsState, 'load' | 'keyKinds'>
+): CloudAgentHoldReason | null {
+  if (accounts.load.kind !== 'ready') {
+    return null
+  }
+  switch (orcaCloudAgentCoverage(agent, accounts.load.status, accounts.keyKinds[agent]).kind) {
+    case 'expired':
+      return 'accountExpired'
+    case 'notSetUp':
+      return 'notSetUp'
+    case 'account':
+    case 'key':
+    case 'killSwitch':
+    case 'unavailable':
+      return null
+  }
+}
+
+/**
+ * For the composer (PC-3b): would a cloud launch of this agent hold right now? 'unknown' while the
+ * account read is loading; such a launch holds until the read answers, so creating with the agent
+ * never reaches the agent's own /login.
+ */
+export function cloudAgentLaunchHoldReason(
+  agent: HostAgentSignInAgent
+): CloudAgentHoldReason | 'unknown' | null {
+  const accounts = readOrcaCloudAgentAccounts()
+  return accounts.load.kind === 'loading' ? 'unknown' : cloudAgentHoldReason(agent, accounts)
+}
+
 export type CloudAgentHold = {
   paneKey: string
   agent: HostAgentSignInAgent
   prompt: string | null
+  reason: CloudAgentHoldReason
 }
 
 /** The hold key of a host-published tab (RA-1): its first pane shows the strip. */
@@ -48,7 +87,7 @@ export function cloudTabHoldKey(tabId: string): string {
   return `tab:${tabId}`
 }
 
-type HoldRequest = CloudAgentHold & {
+type HoldRequest = Omit<CloudAgentHold, 'reason'> & {
   /** The caller already read the account and decided to hold; skip the re-read. */
   decided?: boolean
 }
@@ -99,7 +138,7 @@ export function cloudAgentLaunchNeedsHold(agent: HostAgentSignInAgent): boolean 
   if (accounts.load.kind === 'loading' || !isOrcaCloudAgentAccountsFresh()) {
     return 'unknown'
   }
-  return cloudAgentStripReason(agent, accounts) === 'accountExpired'
+  return cloudAgentHoldReason(agent, accounts) !== null
 }
 
 /** Hold or start, read within the decide budget when nothing is cached yet. */
@@ -110,16 +149,24 @@ export async function cloudAgentLaunchDecision(
   if (cached !== 'unknown') {
     return cached ? 'hold' : 'start'
   }
-  return (await reasonBeforeLaunch(agent)) === 'accountExpired' ? 'hold' : 'start'
+  return (await holdReasonBeforeLaunch(agent)) !== null ? 'hold' : 'start'
 }
 
-async function reasonBeforeLaunch(
+// While the first read after app start is still loading, wait for it past the decide budget (up to
+// this cap) rather than start an agent that isn't set up into its own /login (PC-3b).
+const LOADING_CAP_MS = 15_000
+
+async function holdReasonBeforeLaunch(
   agent: HostAgentSignInAgent
-): Promise<CloudAgentStripReason | null> {
+): Promise<CloudAgentHoldReason | null> {
   const read = ensureFreshOrcaCloudAgentAccounts().catch(() => readOrcaCloudAgentAccounts())
-  const budget = new Promise<null>((resolve) => setTimeout(() => resolve(null), DECIDE_BUDGET_MS))
-  const accounts = await Promise.race([read, budget])
-  return accounts ? cloudAgentStripReason(agent, accounts) : null
+  const budget = (ms: number) => new Promise<null>((resolve) => setTimeout(() => resolve(null), ms))
+  const accounts =
+    (await Promise.race([read, budget(DECIDE_BUDGET_MS)])) ??
+    (readOrcaCloudAgentAccounts().load.kind === 'loading'
+      ? await Promise.race([read, budget(LOADING_CAP_MS - DECIDE_BUDGET_MS)])
+      : null)
+  return accounts ? cloudAgentHoldReason(agent, accounts) : null
 }
 
 /**
@@ -131,13 +178,20 @@ export async function holdCloudAgentLaunch({
   decided,
   ...hold
 }: HoldRequest): Promise<'proceed' | 'cancel'> {
-  if (!decided && (await reasonBeforeLaunch(hold.agent)) !== 'accountExpired') {
+  const reason = decided
+    ? (cloudAgentHoldReason(hold.agent, readOrcaCloudAgentAccounts()) ?? 'accountExpired')
+    : await holdReasonBeforeLaunch(hold.agent)
+  if (!reason) {
     return 'proceed'
   }
   return new Promise((resolve) => {
     const stop = subscribeOrcaCloudAgentAccounts(() => {
-      // Renewed (or a key now covers it): every pane held on this agent starts.
-      if (cloudAgentStripReason(hold.agent, readOrcaCloudAgentAccounts()) !== 'accountExpired') {
+      // Renewed (or a key now covers it): every pane held on recovery starts. A first-time setup
+      // waits for its "Start {{agent}}" click instead (PC-3b), so it never starts unasked.
+      if (
+        reason === 'accountExpired' &&
+        cloudAgentStripReason(hold.agent, readOrcaCloudAgentAccounts()) !== 'accountExpired'
+      ) {
         finish('proceed')
       }
     })
@@ -150,7 +204,7 @@ export async function holdCloudAgentLaunch({
       notify()
       resolve(outcome)
     }
-    holds.set(hold.paneKey, { ...hold, release: finish })
+    holds.set(hold.paneKey, { ...hold, reason, release: finish })
     notify()
   })
 }

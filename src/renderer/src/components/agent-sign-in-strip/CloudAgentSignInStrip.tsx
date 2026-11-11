@@ -222,7 +222,11 @@ export function CloudAgentSignInStrip({
             }}
           >
             <Input
-              aria-label={t('agentSignInStrip.pasteLabel', 'Code from claude.ai')}
+              aria-label={
+                model.paste.secretLabel ?? t('agentSignInStrip.pasteLabel', 'Code from claude.ai')
+              }
+              type={model.paste.secretLabel ? 'password' : undefined}
+              autoComplete={model.paste.secretLabel ? 'off' : undefined}
               aria-invalid={model.paste.refusal ? true : undefined}
               value={code}
               onChange={(event) => setCode(event.target.value)}

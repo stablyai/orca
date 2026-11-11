@@ -1,0 +1,146 @@
+// PC-3b: the Orca Cloud pane strip for an agent that isn't set up yet. The launch holds; "Set up
+// once" runs the same one-time setup as Settings › Accounts › Orca Cloud (S0) right in the pane,
+// and once it's saved the strip offers "Start {{agent}}". Pure: the strip renders what this returns.
+import type { Translate } from '@/i18n/use-translate'
+import { setupFailureCopy } from '@/components/settings/agent-accounts/orca-cloud-accounts-copy'
+import type { OrcaCloudAgentSetup } from '../../../../shared/orca-cloud-agents/orca-cloud-agents-wire'
+import type { HostAgentSignInAgent } from '../../../../shared/host-agent-sign-in-status'
+import { HOST_AGENT_SIGN_IN_AGENT_NAME } from '../../../../shared/host-agent-sign-in-status'
+import type { CloudStripModel } from './cloud-agent-strip-model'
+
+function base(agent: string, t: Translate): CloudStripModel {
+  const title = t('agentSignInStrip.notSetUp', '{{agent}} isn’t set up for Orca Cloud', { agent })
+  return {
+    status: 'need',
+    title,
+    compactTitle: t('agentSignInStrip.notSetUpCompact', '{{agent}} not set up', { agent }),
+    detail: t('agentSignInStrip.notSetUpDetail', 'Set up once. Every cloud workspace uses it.'),
+    description: null,
+    primary: {
+      label: t('agentSignInStrip.setUpOnce', 'Set up once'),
+      action: { kind: 'setUpOnce' }
+    },
+    code: null,
+    paste: null,
+    otherWays: false,
+    announcement: title
+  }
+}
+
+export function cloudAgentSetupStripModel(args: {
+  agent: HostAgentSignInAgent
+  setup: OrcaCloudAgentSetup
+  /** The Orca account (or a key) now covers the agent: offer to start it. */
+  ready: boolean
+  t: Translate
+}): CloudStripModel {
+  const { setup, t } = args
+  const agent = HOST_AGENT_SIGN_IN_AGENT_NAME[args.agent]
+  const need = base(agent, t)
+  if (args.ready) {
+    const title = t('agentSignInStrip.setUpDone', '{{agent}} is set up for Orca Cloud', { agent })
+    return {
+      ...need,
+      status: 'done',
+      title,
+      compactTitle: t('agentSignInStrip.setUpDoneCompact', '{{agent}} is set up', { agent }),
+      detail: t('agentSignInStrip.setUpDoneDetail', 'Every cloud workspace uses it from now on.'),
+      primary: {
+        label: t('agentSignInStrip.startAgent', 'Start {{agent}}', { agent }),
+        narrowLabel: t('agentSignInStrip.start', 'Start'),
+        action: { kind: 'start' }
+      },
+      announcement: t(
+        'agentSignInStrip.setUpDoneAnnounce',
+        '{{agent}} is set up. Start it when you’re ready.',
+        {
+          agent
+        }
+      )
+    }
+  }
+  switch (setup.phase) {
+    case 'idle':
+    case 'saved':
+      return need
+    case 'browser':
+      return {
+        ...need,
+        status: 'busy',
+        detail: t('agentSignInStrip.finishInBrowser', 'Finish in your browser'),
+        primary: setup.canReopen
+          ? {
+              label: t('agentSignInStrip.openAgain', 'Open again'),
+              action: { kind: 'reopenSetup' }
+            }
+          : null,
+        announcement: t(
+          'agentSignInStrip.waitingAnnounce',
+          'Waiting for you to approve in your browser.'
+        )
+      }
+    case 'preparing':
+    case 'saving':
+      return {
+        ...need,
+        status: 'busy',
+        detail:
+          setup.phase === 'saving'
+            ? t('agentSignInStrip.saving', 'Saving to your Orca account')
+            : t('agentSignInStrip.preparing', 'Getting sign-in ready'),
+        primary: null,
+        announcement:
+          setup.phase === 'saving'
+            ? t('agentSignInStrip.saving', 'Saving to your Orca account')
+            : t('agentSignInStrip.preparing', 'Getting sign-in ready')
+      }
+    case 'device':
+      return {
+        ...need,
+        title: t('agentSignInStrip.deviceTitle', 'Enter this code on auth.openai.com'),
+        detail: t(
+          'agentSignInStrip.deviceGuard',
+          'Only continue if you started this sign-in in Orca.'
+        ),
+        primary: {
+          label: t('agentSignInStrip.copyAndOpen', 'Copy code and open'),
+          action: { kind: 'copyAndOpen', url: setup.verificationUrl, code: setup.userCode }
+        },
+        code: setup.userCode,
+        announcement: t('agentSignInStrip.deviceAnnounce', 'Enter the code on auth.openai.com.')
+      }
+    case 'paste':
+      return {
+        ...need,
+        title: t('agentSignInStrip.pasteTokenTitle', 'Paste the token from claude setup-token'),
+        detail: t(
+          'agentSignInStrip.pasteTokenDetail',
+          'It’s saved to your Orca account, never to a sandbox.'
+        ),
+        primary: null,
+        paste: {
+          submitting: false,
+          refusal: null,
+          secretLabel: t('agentSignInStrip.setupTokenLabel', 'Claude setup-token')
+        },
+        announcement: t(
+          'agentSignInStrip.pasteTokenTitle',
+          'Paste the token from claude setup-token'
+        )
+      }
+    case 'failed': {
+      const copy = setupFailureCopy(args.agent, setup.error, t)
+      return {
+        ...need,
+        status: 'error',
+        title: copy.title,
+        detail: copy.detail ?? need.detail,
+        primary: {
+          label: t('agentSignInStrip.tryAgain', 'Try again'),
+          action: { kind: 'setUpOnce' }
+        },
+        announcement: copy.title
+      }
+    }
+  }
+}

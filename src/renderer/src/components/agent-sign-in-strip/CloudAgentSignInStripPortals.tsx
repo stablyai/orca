@@ -16,6 +16,7 @@ import {
 } from '@/lib/agent-sign-in/agent-sign-in-gate-store'
 import { abandonAgentSignIn } from '@/lib/agent-sign-in/agent-sign-in-gate'
 import {
+  cloudAgentHoldReason,
   cloudAgentStripReason,
   cloudTabHoldKey,
   readCloudAgentHold,
@@ -32,6 +33,8 @@ import {
   type CloudStripActions
 } from './CloudAgentSignInStrip'
 import { cloudAgentStripModel } from './cloud-agent-strip-model'
+import { cloudAgentSetupStripModel } from './cloud-agent-setup-strip-model'
+import { cloudSetupStripActions } from './cloud-setup-strip-actions'
 import { CloudRunningStripPortal } from './CloudRunningStripPortal'
 
 const ABANDON_CHECK_MS = 1_000
@@ -108,18 +111,43 @@ function CloudStripPortal({
     : (cloudAgentStripReason(agent, accounts) ?? 'paused') === 'notOffered'
       ? 'notOffered'
       : 'paused'
-  const model = cloudAgentStripModel({
-    agent,
-    reason,
-    view: hold ? null : (cloudGate?.view ?? null),
-    hostLabel: cloudGate?.hostLabel ?? t('agentSignInStrip.sandbox', 'the sandbox'),
-    t
-  })
   const gateActions = agentSignInCardActions(paneKey)
-  const actions: CloudStripActions = {
+  // PC-3b: a launch held because the agent isn't set up runs the one-time setup in the pane.
+  const setupHold = hold?.reason === 'notSetUp'
+  const setup = accounts.setups[agent]
+  const model = setupHold
+    ? cloudAgentSetupStripModel({
+        agent,
+        setup,
+        ready: accounts.load.kind === 'ready' && cloudAgentHoldReason(agent, accounts) === null,
+        t
+      })
+    : cloudAgentStripModel({
+        agent,
+        reason,
+        view: hold ? null : (cloudGate?.view ?? null),
+        hostLabel: cloudGate?.hostLabel ?? t('agentSignInStrip.sandbox', 'the sandbox'),
+        t
+      })
+  const holdActions: CloudStripActions | null = setupHold
+    ? cloudSetupStripActions({
+        agent,
+        holdKey: key,
+        setupRunning: setup.phase !== 'idle' && setup.phase !== 'saved' && setup.phase !== 'failed',
+        copyText: gateActions.copyText,
+        openLink: gateActions.openLink,
+        useApiKey: () => openSettings('cloud-secrets')
+      })
+    : null
+  const actions: CloudStripActions = holdActions ?? {
     primary: (action) => {
       // RA-11's restart belongs to the running-pane strip; a held launch never offers it.
-      if (action.kind === 'restart') {
+      if (
+        action.kind === 'restart' ||
+        action.kind === 'setUpOnce' ||
+        action.kind === 'reopenSetup' ||
+        action.kind === 'start'
+      ) {
         return
       }
       switch (action.kind) {

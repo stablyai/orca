@@ -11,6 +11,8 @@ import {
   type CloudStripActions
 } from './CloudAgentSignInStrip'
 import { cloudAgentStripModel } from './cloud-agent-strip-model'
+import { cloudAgentSetupStripModel } from './cloud-agent-setup-strip-model'
+import type { OrcaCloudAgentSetup } from '../../../../shared/orca-cloud-agents/orca-cloud-agents-wire'
 import { cloudRestartAttemptModel, cloudRunningStripModel } from './cloud-running-strip-model'
 import type { CloudAgentRestartAttempt } from '@/lib/orca-cloud/cloud-agent-restart-attempt'
 import type { CloudRunningStrip } from '@/lib/orca-cloud/cloud-running-agent-signout'
@@ -32,7 +34,8 @@ function Pane({
   agent = 'claude',
   width = 900,
   running,
-  restart
+  restart,
+  setUp
 }: {
   reason?: CloudAgentStripReason
   view?: AgentSignInGateView | null
@@ -42,18 +45,27 @@ function Pane({
   running?: CloudRunningStrip
   /** RA-11: a Restart in flight, or one that failed. */
   restart?: CloudAgentRestartAttempt
+  /** PC-3b: a launch held because the agent isn't set up for Orca Cloud yet. */
+  setUp?: { setup: OrcaCloudAgentSetup; ready?: boolean }
 }): React.JSX.Element {
-  const model = restart
-    ? cloudRestartAttemptModel(restart, translate)
-    : running
-      ? cloudRunningStripModel(running, translate)
-      : cloudAgentStripModel({
-          agent,
-          reason,
-          view,
-          hostLabel: translate('agentSignInStrip.sandbox', 'the sandbox'),
-          t: translate
-        })
+  const model = setUp
+    ? cloudAgentSetupStripModel({
+        agent,
+        setup: setUp.setup,
+        ready: setUp.ready ?? false,
+        t: translate
+      })
+    : restart
+      ? cloudRestartAttemptModel(restart, translate)
+      : running
+        ? cloudRunningStripModel(running, translate)
+        : cloudAgentStripModel({
+            agent,
+            reason,
+            view,
+            hostLabel: translate('agentSignInStrip.sandbox', 'the sandbox'),
+            t: translate
+          })
   return (
     <div className="bg-background p-4">
       {/* Stands in for a terminal pane: its title row (split, close) stays above the strip. */}
@@ -175,3 +187,26 @@ export const runningRestarting = fixture({
 export const runningRestartFailed = fixture({
   restart: { phase: 'failed', agent: 'claude', resumable: true, ptyId: 'p', launchedAt: null }
 })
+
+/** PC-3b: the launch holds; Set up once runs the one-time Orca Cloud setup in the pane. */
+export const notSetUp = fixture({ setUp: { setup: { phase: 'idle' } } })
+export const notSetUpCompact = fixture({ setUp: { setup: { phase: 'idle' } }, width: 320 })
+export const notSetUpBrowser = fixture({
+  setUp: { setup: { phase: 'browser', startedAt: 0, canReopen: true } }
+})
+export const notSetUpCodexDevice = fixture({
+  agent: 'codex',
+  setUp: {
+    setup: {
+      phase: 'device',
+      startedAt: 0,
+      userCode: 'K7QF-2XRM',
+      verificationUrl: 'https://auth.openai.com/codex/device',
+      expiresAt: 0
+    }
+  }
+})
+export const notSetUpPaste = fixture({ setUp: { setup: { phase: 'paste', reason: 'chosen' } } })
+export const notSetUpFailed = fixture({ setUp: { setup: { phase: 'failed', error: 'denied' } } })
+/** Set up finished: Start {{agent}} releases the held launch. */
+export const notSetUpDone = fixture({ setUp: { setup: { phase: 'saved' }, ready: true } })
