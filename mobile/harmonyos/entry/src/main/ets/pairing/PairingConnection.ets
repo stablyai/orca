@@ -37,9 +37,10 @@ export async function exchangePairingTicket(connection: PairingConnectionResult,
     log('配对码已换成本机独有 token');
     return newToken;
   }
+  let refusal = reply.errorCode === 'runtime_error' ? reply.errorMessage : reply.errorCode;
   if (['unknown_method', 'method_not_found', 'not_supported', 'forbidden', 'not_a_ticket', 'delegated_device',
     'ticket_already_exchanged', 'ticket_window_closed', 'ticket_exchange_pending', 'device_token_in_use', 'device_not_found']
-    .includes(reply.errorCode)) {
+    .includes(refusal)) {
     log('桌面未接受换票，继续使用扫码凭证');
     return ticket;
   }

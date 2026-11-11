@@ -346,6 +346,7 @@ struct PairScan {
       if (this.deadline >= 0) { clearTimeout(this.deadline); this.deadline = -1; }
       attempt.close();
       if (journal) { finishRelayPairing(hostId, pairingStartedAt); }
+      this.pendingPairingHostId = '';
       this.attempt = null;
       this.busy = false; this.updateCamera();
       if (!this.disposed && this.visible && navigationEpoch !== this.navigationEpoch

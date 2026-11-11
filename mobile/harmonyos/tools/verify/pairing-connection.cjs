@@ -157,6 +157,22 @@ test('ticket exchange keeps legacy and explicitly refused tickets but rejects am
     await exchangePairingTicket(connection, 'original-ticket', () => {}, remember),
     'original-ticket'
   )
+  connection.client.request = async () => ({
+    errorCode: 'runtime_error',
+    errorMessage: 'ticket_window_closed'
+  })
+  assert.equal(
+    await exchangePairingTicket(connection, 'original-ticket', () => {}, remember),
+    'original-ticket'
+  )
+  connection.client.request = async () => ({
+    errorCode: 'runtime_error',
+    errorMessage: 'storage_unavailable'
+  })
+  await assert.rejects(
+    exchangePairingTicket(connection, 'original-ticket', () => {}, remember),
+    /unresolved/
+  )
   connection.client.request = async () => new RpcSuccess(undefined)
   await assert.rejects(
     exchangePairingTicket(connection, 'original-ticket', () => {}, remember),
