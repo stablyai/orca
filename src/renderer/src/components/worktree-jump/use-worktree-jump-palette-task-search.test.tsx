@@ -47,8 +47,14 @@ it('publishes a fast source while a second is pending, then discards both after 
     complete = resolve
   })
   vi.mocked(createCmdJTaskSearchRequests).mockReturnValue([
-    { id: 'fast', provider: 'jira', hostLabel: 'Local', run: async () => [jiraTaskResult] },
-    { id: 'slow', provider: 'jira', hostLabel: 'Remote', run: () => slow }
+    {
+      id: 'fast',
+      provider: 'jira',
+      hostId: 'local',
+      hostLabel: 'Local',
+      run: async () => [jiraTaskResult]
+    },
+    { id: 'slow', provider: 'jira', hostId: 'ssh:remote', hostLabel: 'Remote', run: () => slow }
   ])
   const { result, rerender } = renderHook(useWorktreeJumpPaletteTaskSearch, { initialProps: input })
   await act(async () => vi.advanceTimersByTimeAsync(600))
@@ -58,6 +64,35 @@ it('publishes a fast source while a second is pending, then discards both after 
   expect(result.current.taskItems).toEqual([])
   rerender(input)
   expect(result.current.taskItems).toEqual([])
+})
+
+it('refreshes host labels without rerunning completed or pending searches', async () => {
+  let rejectPending: (error: Error) => void = () => {}
+  const pending = new Promise<(typeof jiraTaskResult)[]>((_, reject) => {
+    rejectPending = reject
+  })
+  const run = async () => [jiraTaskResult]
+  const runPending = () => pending
+  vi.mocked(createCmdJTaskSearchRequests).mockReturnValue([
+    { id: 'ok', provider: 'jira', hostId: 'local', hostLabel: 'Before', run },
+    { id: 'failed', provider: 'jira', hostId: 'local', hostLabel: 'Before', run: runPending }
+  ])
+  const host = {
+    id: 'local' as const,
+    label: 'Before',
+    detail: '',
+    kind: 'local' as const,
+    health: 'local' as const,
+    presence: 'local' as const
+  }
+  const { result, rerender } = renderHook(useWorktreeJumpPaletteTaskSearch, {
+    initialProps: { ...input, hostOptions: [host] }
+  })
+  await act(async () => vi.advanceTimersByTimeAsync(600))
+  rerender({ ...input, hostOptions: [{ ...host, label: 'After' }] })
+  await act(async () => rejectPending(new Error('unavailable')))
+  expect(result.current.taskItems[0].result.hostLabel).toBe('After')
+  expect(result.current.taskSearchFailures).toEqual(['jira · After'])
 })
 
 it('filters to open after pending edits apply: a pending reopen shows and a failure removes it', async () => {
@@ -87,6 +122,7 @@ it('filters to open after pending edits apply: a pending reopen shows and a fail
     {
       id: 'github',
       provider: 'github',
+      hostId: 'local',
       hostLabel: 'Local',
       run: async () =>
         [closed, open].map((item) =>

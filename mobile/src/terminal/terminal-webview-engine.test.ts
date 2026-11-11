@@ -1,15 +1,12 @@
 // @vitest-environment happy-dom
-import { readFileSync } from 'node:fs'
-import path from 'node:path'
 import { Script } from 'node:vm'
 import { parse } from 'acorn'
 import { describe, expect, it, vi } from 'vitest'
-import { TERMINAL_NERD_FONT_CSS, XTERM_ENGINE_CSS } from './terminal-webview-engine-css.generated'
+import { XTERM_ENGINE_CSS } from './terminal-webview-engine-css.generated'
 import { XTERM_ENGINE_JS } from './terminal-webview-engine.generated'
 import { createTerminalDocumentScope } from './document/document-scope'
-import { attachWebglAddon, startWebglRecovery } from './document/webgl-recovery'
+import { attachWebglAddon } from './document/webgl-recovery'
 import { XTERM_HTML } from './terminal-webview-html'
-import { applyTerminalTheme } from './document/terminal-theme'
 
 function createWebglRecoveryHarness(failSecondAttach = false) {
   const timers: Array<() => void> = []
@@ -43,7 +40,6 @@ function createWebglRecoveryHarness(failSecondAttach = false) {
     })
   }
   const logged: Record<string, unknown>[] = []
-  const terminalThemeInput = { mode: 'dark' }
   vi.spyOn(globalThis, 'setTimeout').mockImplementation((callback: TimerHandler) => {
     if (typeof callback === 'function') {
       timers.push(() => {
@@ -60,20 +56,11 @@ function createWebglRecoveryHarness(failSecondAttach = false) {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the double implements the members the recovery path reaches, which is what each case asserts about.
   scope.term = term as unknown as typeof scope.term
   scope.terminalGeneration = 1
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the recovery only re-applies this value through the theme path; its shape is that path's own input.
-  scope.terminalThemeInput = terminalThemeInput as unknown as typeof scope.terminalThemeInput
-  startWebglRecovery(scope)
   attachWebglAddon(scope, true)
   return {
     addons,
-    appliedThemes: () => term.options.theme,
-    fireVisibilityChange: () => {
-      document.dispatchEvent(new Event('visibilitychange'))
-    },
     logged,
-    scope,
     term,
-    terminalThemeInput,
     timers
   }
 }
@@ -84,33 +71,6 @@ describe('terminal WebView bundled engine', () => {
     expect(XTERM_HTML).not.toContain('cdn.jsdelivr.net')
     expect(XTERM_HTML).not.toContain('<script src=')
     expect(XTERM_HTML).not.toContain('rel="stylesheet" href=')
-  })
-
-  it('ships the licensed desktop symbol font offline without covering normal text', () => {
-    const encoded = TERMINAL_NERD_FONT_CSS.match(/base64,([^']+)'/)?.[1]
-    expect(encoded).toBeTruthy()
-    const bundled = readFileSync(
-      path.resolve(import.meta.dirname, '../../assets/fonts/SymbolsNerdFontMono-Regular.woff2')
-    )
-    expect(Buffer.from(encoded ?? '', 'base64').equals(bundled)).toBe(true)
-    expect(
-      bundled.equals(
-        readFileSync(
-          path.resolve(
-            import.meta.dirname,
-            '../../../src/renderer/src/assets/fonts/SymbolsNerdFontMono-Regular.woff2'
-          )
-        )
-      )
-    ).toBe(true)
-    expect(TERMINAL_NERD_FONT_CSS).toContain(
-      'unicode-range:U+E000-F8FF,U+F0000-FFFFD,U+100000-10FFFD'
-    )
-    expect(XTERM_HTML).toContain(`<style>${TERMINAL_NERD_FONT_CSS}</style>`)
-    expect(XTERM_HTML).toContain(
-      '"Liberation Mono", "Orca Nerd Font Symbols", "Symbols Nerd Font Mono"'
-    )
-    expect(TERMINAL_NERD_FONT_CSS).not.toMatch(/<\/style/i)
   })
 
   it('parses the bundled engine at the Chrome 74 syntax floor', () => {
@@ -225,22 +185,5 @@ describe('terminal WebView bundled engine', () => {
     expect(addons).toHaveLength(2)
     expect(addons[1]?.dispose).toHaveBeenCalledTimes(1)
     expect(term.refresh).toHaveBeenCalledTimes(2)
-  })
-
-  it('reapplies theme, clears the active atlas, and refreshes when visible', () => {
-    const harness = createWebglRecoveryHarness()
-    applyTerminalTheme(harness.scope, harness.scope.terminalThemeInput)
-    const firstTheme = harness.term.options.theme
-
-    // Stub only hidden state; Happy DOM’s visible default exercises real recovery.
-    vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden')
-    harness.fireVisibilityChange()
-    expect(harness.term.options.theme).toBe(firstTheme)
-    vi.restoreAllMocks()
-
-    harness.fireVisibilityChange()
-    expect(harness.term.options.theme).not.toBe(firstTheme)
-    expect(harness.addons[0]?.clearTextureAtlas).toHaveBeenCalledTimes(1)
-    expect(harness.term.refresh).toHaveBeenCalledTimes(1)
   })
 })

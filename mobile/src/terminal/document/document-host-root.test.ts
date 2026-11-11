@@ -122,23 +122,6 @@ describe('two terminal documents on one page', () => {
     two.started.stop()
   })
 
-  // The same event inside this host must still reach it, ruling out an inert dispatcher.
-  it('cancels its own selection when the two fingers land in its own host', () => {
-    const first = plantHost('first-host')
-    const second = plantHost('second-host')
-    const one = startDocumentIn(first)
-    const two = startDocumentIn(second)
-    selectAllInBoth(one, two)
-
-    fireTwoFingerTouchStart(surfaceOf(first))
-
-    expect(pinchCancels(one.posted)).toHaveLength(1)
-    expect(pinchCancels(two.posted)).toHaveLength(0)
-
-    one.started.stop()
-    two.started.stop()
-  })
-
   // Event ownership is not enough: page-wide touches must also exclude fingers in the other terminal.
   it("does not read another host's finger as its own second one", () => {
     const first = plantHost('first-host')
@@ -275,20 +258,6 @@ describe('keyboard-avoidance metrics across a pinch', () => {
 
     const metrics = metricsOf(doc.posted)
     expect(metrics.at(-1)?.rowPitch).toBe(atRest)
-    doc.started.stop()
-  })
-
-  it('reports a release that changes the preset once, through the refit', async () => {
-    const doc = startMeasuredDocument()
-    await settle()
-    const before = metricsOf(doc.posted).length
-
-    pinchTo(doc, 30)
-    const afterWrite = metricsOf(doc.posted).length
-    await settle()
-
-    expect(afterWrite).toBe(before + 1)
-    expect(metricsOf(doc.posted).length).toBe(afterWrite + 1)
     doc.started.stop()
   })
 

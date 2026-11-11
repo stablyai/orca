@@ -6,13 +6,13 @@ import { isBitbucketReviewCreationAuthenticated } from '../bitbucket/pull-reques
 import { isGiteaReviewCreationAuthenticated } from '../gitea/pull-request-creation'
 import { getEnterpriseGitHubRepoSlug } from '../github/github-enterprise-repository'
 import { acquire, ghExecFileAsync, release } from '../github/gh-utils'
-import { getProjectSlug } from '../gitlab/client'
+import { getProjectSlug } from '../gitlab/merge-requests/merge-request-lookup'
 import {
   acquire as acquireGlab,
-  glabExecFileAsync,
-  glabRepoExecOptions,
   release as releaseGlab
-} from '../gitlab/gl-utils'
+} from '../gitlab/requests/glab-request-admission'
+import { glabExecFileAsync } from '../git/command-runner/glab-exec-file'
+import { glabRepoExecOptions } from '../gitlab/projects/gitlab-project-ref-resolution'
 import { hostedReviewSshConnectionId } from './hosted-review-execution-host'
 import {
   getHostedReviewLocalGitOptions,

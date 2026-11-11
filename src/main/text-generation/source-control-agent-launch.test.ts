@@ -64,4 +64,30 @@ process.stdin.on('end', () => setTimeout(() => console.log(prompt.includes('READ
       lifetime: 'one-shot'
     })
   })
+
+  it('drops the agent session that launched Orca but keeps assignments in the command', async () => {
+    const agent = join(folder, 'session-agent.cjs')
+    writeFileSync(
+      agent,
+      `process.stdin.resume()
+process.stdin.on('end', () => console.log('Thread ' + (process.env.CODEX_THREAD_ID ?? 'unset') + ', effort ' + process.env.CLAUDE_EFFORT))
+`
+    )
+    vi.stubEnv('CODEX_THREAD_ID', 'parent-thread')
+    try {
+      await expect(
+        generateCommitMessageFromContext(
+          { branch: 'main', stagedSummary: 'M README.md', stagedPatch: '+test' },
+          {
+            agentId: 'custom',
+            model: '',
+            customAgentCommand: `CLAUDE_EFFORT=low "${process.execPath}" "${agent}"`
+          },
+          { kind: 'local', cwd: folder }
+        )
+      ).resolves.toMatchObject({ success: true, message: 'Thread unset, effort low' })
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
 })

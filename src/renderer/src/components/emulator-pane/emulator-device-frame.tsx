@@ -15,8 +15,6 @@ import {
   type StreamSize
 } from './emulator-device-frame-layout'
 import {
-  buildWheelGesturePoints,
-  clampEmulatorScreenPoint,
   buildEmulatorGesturePoint,
   mapClientPointToSimulatorScreen,
   resolveEmulatorWheelDelta,
@@ -33,8 +31,10 @@ import { scrcpyDeviceIdFromStreamUrl } from './emulator-scrcpy-stream-url'
 import { useEmulatorPaneSize } from './use-emulator-pane-size'
 import { useEmulatorScreenKeyboard } from './use-emulator-screen-keyboard'
 import { useEmulatorStreamWindowVisible } from './use-emulator-stream-window-visibility'
+import { useEmulatorWheelGesture } from './use-emulator-wheel-gesture'
 
 type EmulatorDeviceFrameProps = {
+  deviceId?: string
   previewUrl?: string
   wsUrl?: string
   streamKey?: string
@@ -49,14 +49,7 @@ type EmulatorDeviceFrameProps = {
   onStreamLost?: () => void
 }
 
-const MAX_GESTURE_SAMPLES = 32,
-  WHEEL_GESTURE_IDLE_MS = 80
-type PendingWheelGesture = {
-  end: EmulatorScreenPoint
-  live: boolean
-  start: EmulatorScreenPoint
-  timerId: number | null
-}
+const MAX_GESTURE_SAMPLES = 32
 
 type ScreenCoordinateEvent = Pick<
   PointerEvent<HTMLDivElement>,
@@ -64,6 +57,7 @@ type ScreenCoordinateEvent = Pick<
 >
 
 export function EmulatorDeviceFrame({
+  deviceId,
   previewUrl,
   wsUrl,
   streamKey,
@@ -82,7 +76,6 @@ export function EmulatorDeviceFrame({
   const liveTouchRef = useRef(false)
   const liveTouchEdgeRef = useRef<number | undefined>(undefined)
   const lastTouchPointRef = useRef<EmulatorScreenPoint | null>(null)
-  const wheelGestureRef = useRef<PendingWheelGesture | null>(null)
   const [streamError, setStreamError] = useState(false)
   const [streamSize, setStreamSize] = useState<StreamSize | null>(null)
   const [prevStream, setPrevStream] = useState({ previewUrl, streamKey })
@@ -94,7 +87,7 @@ export function EmulatorDeviceFrame({
   const canInteract = isLive && !loading && !streamError
   const scrcpyDeviceId = scrcpyDeviceIdFromStreamUrl(previewUrl)
   const controlStream = useEmulatorControlStream(wsUrl, canInteract, scrcpyDeviceId)
-  const { reportedOrientation, sendTouch } = controlStream
+  const { connected, reportedOrientation, sendTouch } = controlStream
   const visualStreamGeometry = useMemo(
     () => resolveVisualStreamGeometry(streamSize, visualOrientation, reportedOrientation),
     [reportedOrientation, streamSize, visualOrientation]
@@ -122,41 +115,16 @@ export function EmulatorDeviceFrame({
     [onGesture]
   )
 
-  const flushWheelGesture = useCallback(() => {
-    const pending = wheelGestureRef.current
-    wheelGestureRef.current = null
-    if (!pending) {
-      return
-    }
-    if (pending.timerId !== null) {
-      window.clearTimeout(pending.timerId)
-    }
-    if (pending.live) {
-      const end = clampEmulatorScreenPoint(pending.end)
-      void sendTouch({ ...end, type: 'end' })
-      return
-    }
-    const points = buildWheelGesturePoints(pending.start, pending.end)
-    if (points) {
-      sendGesturePoints(points)
-    }
-  }, [sendGesturePoints, sendTouch])
+  const { cancel: cancelWheelGesture, queue: queueWheelGesture } =
+    useEmulatorWheelGesture(sendTouch)
+  useEffect(cancelWheelGesture, [cancelWheelGesture, canInteract, connected, inputRotation, wsUrl])
 
   useEffect(
     () => () => {
-      const pending = wheelGestureRef.current
-      if (pending?.timerId != null) {
-        window.clearTimeout(pending.timerId)
-      }
-      if (pending?.live) {
-        const end = clampEmulatorScreenPoint(pending.end)
-        void sendTouch({ ...end, type: 'end' })
-      }
       const point = lastTouchPointRef.current
       if (liveTouchRef.current && point) {
         void sendTouch(buildEmulatorGesturePoint(point, 'end', liveTouchEdgeRef.current))
       }
-      wheelGestureRef.current = null
       liveTouchRef.current = false
       liveTouchEdgeRef.current = undefined
       lastTouchPointRef.current = null
@@ -169,6 +137,7 @@ export function EmulatorDeviceFrame({
       if (!canInteract || event.button !== 0) {
         return
       }
+      cancelWheelGesture()
       event.preventDefault()
       try {
         event.currentTarget.focus({ preventScroll: true })
@@ -190,7 +159,14 @@ export function EmulatorDeviceFrame({
         event.currentTarget.setPointerCapture(event.pointerId)
       } catch {}
     },
-    [canInteract, enableKeyboardCapture, inputRotation, mapEventToScreenPoint, sendTouch]
+    [
+      cancelWheelGesture,
+      canInteract,
+      enableKeyboardCapture,
+      inputRotation,
+      mapEventToScreenPoint,
+      sendTouch
+    ]
   )
 
   const handlePointerMove = useCallback(
@@ -314,28 +290,9 @@ export function EmulatorDeviceFrame({
         return
       }
       event.preventDefault()
-      const previous = wheelGestureRef.current
-      if (previous?.timerId != null) {
-        window.clearTimeout(previous.timerId)
-      }
-      const start = previous?.start ?? delta.start
-      const end = clampEmulatorScreenPoint(
-        previous
-          ? { x: previous.end.x + delta.delta.x, y: previous.end.y + delta.delta.y }
-          : { x: delta.start.x + delta.delta.x, y: delta.start.y + delta.delta.y }
-      )
-      const live = previous?.live ?? sendTouch({ ...start, type: 'begin' })
-      if (live) {
-        void sendTouch({ ...end, type: 'move' })
-      }
-      wheelGestureRef.current = {
-        start,
-        end,
-        live,
-        timerId: window.setTimeout(flushWheelGesture, WHEEL_GESTURE_IDLE_MS)
-      }
+      queueWheelGesture(delta)
     },
-    [canInteract, flushWheelGesture, inputRotation, sendTouch, visualStreamGeometry]
+    [canInteract, inputRotation, queueWheelGesture, visualStreamGeometry]
   )
 
   const handleStreamSize = useCallback((size: NonNullable<StreamSize>) => {
@@ -391,6 +348,7 @@ export function EmulatorDeviceFrame({
           }}
         >
           <EmulatorScreenSurface
+            deviceId={deviceId}
             frameLayout={frameLayout}
             isLive={isLive}
             keyboardCaptureActive={keyboardCaptureActive}
