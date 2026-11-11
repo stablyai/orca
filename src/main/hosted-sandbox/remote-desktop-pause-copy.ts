@@ -7,7 +7,7 @@ export function remoteDesktopPauseMessage(reason: RemoteDesktopPauseReason): str
     case 'asleep':
       return translateMain(
         'components.cloudRemoteDesktop.pageAsleep',
-        'This sandbox is asleep. Wake it in Orca, then reconnect.'
+        'This workspace is asleep. Wake it in Orca, then reconnect.'
       )
     case 'archived':
       return translateMain(
@@ -17,7 +17,7 @@ export function remoteDesktopPauseMessage(reason: RemoteDesktopPauseReason): str
     case 'starting':
       return translateMain(
         'components.cloudRemoteDesktop.pageStarting',
-        'The sandbox is starting or waking. Reconnect in a moment.'
+        'The workspace is starting or waking. Reconnect in a moment.'
       )
     case 'signed_out':
       return translateMain(

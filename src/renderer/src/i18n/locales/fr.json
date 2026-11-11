@@ -1140,8 +1140,7 @@
             "76deec8f58": "Échec du changement d'organisation",
             "7d4bc516ee": "Échec du changement de profil",
             "f518e89aa5": "Le projet existe déjà dans ce profil",
-            "f03ae7f27b": "Échec du transfert du projet",
-            "signInTimedOut": "La connexion a expiré"
+            "f03ae7f27b": "Échec du transfert du projet"
           }
         },
         "runtime": {
@@ -18395,7 +18394,6 @@
           "signout": {
             "confirm": {
               "title": "Se déconnecter d'Orca ?",
-              "description": "Les artifacts et Orca Relay seront indisponibles jusqu'à votre reconnexion. Vos projets et worktrees locaux ne seront pas affectés.",
               "cancel": "Annuler",
               "action": "Se déconnecter"
             }
@@ -20873,7 +20871,6 @@
       "startInTerminal": "Démarrer {{value0}} dans un terminal"
     },
     "newWorkspace": {
-      "agentOptional": "Agent (facultatif)",
       "createDescription": "Choisissez le projet et le nom de l'espace de travail. Sélectionnez un agent si vous souhaitez en démarrer un.",
       "directSetup": {
         "run": "Run setup",
