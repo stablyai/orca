@@ -3,7 +3,7 @@ import type { SessionSearchRemovalReceipt } from './session-search-observation-a
 import type { SessionSearchCatalogCandidate } from './session-search-catalog-candidates'
 import type { SessionSearchWorkResult } from './session-search-work-queue'
 import { sessionSearchRecordPages } from './session-search-catalog-pages'
-import type { SessionSearchIndexStore } from './session-search-store'
+import type { SessionSearchIndexStore } from './storage/session-search-store-types'
 import { SessionSearchCandidatePublications } from './session-search-candidate-publication'
 import { splitOpenCodeSqliteCandidate } from '../../shared/opencode-sqlite-session-path'
 import { basename, dirname, extname } from 'node:path'

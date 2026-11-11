@@ -1,22 +1,22 @@
 import './session-search-watcher.test-fixture'
-import { configureSessionSearchWorkerFixture } from './session-search-worker.test-fixture'
+import { configureSessionSearchWorkerFixture } from './worker/session-search-worker.test-fixture'
 import { join, resolve } from 'node:path'
 import { expect, it, vi } from 'vitest'
-import { SessionSearchIndexer } from './session-search-indexer'
-import { SessionSearchStore } from './session-search-store'
+import { SessionSearchIndexer } from './indexing/session-search-indexer'
+import { SessionSearchStore } from './storage/session-search-store'
 import { SessionSearchCandidateInventory } from './session-search-candidate-inventory'
-import { SessionSearchIndexConsumer } from './session-search-index-consumer'
-import { SessionSearchEngine } from './session-search-engine'
+import { SessionSearchIndexConsumer } from './indexing/session-search-index-consumer'
+import { SessionSearchEngine } from './query/session-search-engine'
 import {
   openSessionSearchIndexFile,
   syntheticCandidate,
   syntheticSession
-} from './session-search-index-test-fixture'
+} from './storage/session-search-index-test-fixture'
 import {
   FakeSessionSearchClock,
   openSessionSearchIndexerHarness,
   writeClaudeTranscript
-} from './session-search-indexer-test-fixture'
+} from './indexing/session-search-indexer-test-fixture'
 
 vi.mock('./session-search-filesystem', () => ({ sessionSearchRequiresPolling: async () => false }))
 

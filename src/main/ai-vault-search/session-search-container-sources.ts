@@ -2,7 +2,7 @@ import type {
   SessionSearchContainerAuthority,
   SessionSearchContainerOmission
 } from './session-search-container-transition'
-import { SessionSearchOperationError } from './session-search-worker-client'
+import { SessionSearchOperationError } from './worker/session-search-worker-client'
 import type { SessionSearchCatalogClient } from './session-search-catalog-client'
 import {
   recordSessionSearchCatalogCounts,
@@ -12,7 +12,7 @@ import { recordSessionScanIssue } from '../ai-vault/session-scan-issues'
 import { SessionObservationRetries } from '../ai-vault/session-observation-retries'
 import type { AiVaultScanIssue } from '../../shared/ai-vault/contracts/ai-vault-types'
 import type { FileWithMtime, SessionFileDiscovery } from '../ai-vault/session-scanner-types'
-import type { SessionSearchContainerProof } from './session-search-deleted-sources'
+import type { SessionSearchContainerProof } from './discovery/session-search-deleted-sources'
 import { sessionSearchRecordPages } from './session-search-catalog-pages'
 
 export type SessionSearchContainerPhysical = {

@@ -1,15 +1,15 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { SessionSearchCandidateInventory } from './session-search-candidate-inventory'
-import { SessionSearchIndexConsumer } from './session-search-index-consumer'
+import { SessionSearchIndexConsumer } from './indexing/session-search-index-consumer'
 import { SessionSearchWorkQueue } from './session-search-work-queue'
-import { SessionSearchEngine } from './session-search-engine'
-import { SessionSearchStore } from './session-search-store'
+import { SessionSearchEngine } from './query/session-search-engine'
+import { SessionSearchStore } from './storage/session-search-store'
 import {
   openSessionSearchIndexFile,
   syntheticCandidate,
   syntheticSession,
   type SessionSearchIndexFile
-} from './session-search-index-test-fixture'
+} from './storage/session-search-index-test-fixture'
 import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
 
 let index: SessionSearchIndexFile

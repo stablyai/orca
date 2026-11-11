@@ -1,6 +1,9 @@
 import { SessionSearchCatalogCredit } from './session-search-catalog-credit'
 import { createAiVaultScanCancelledError } from '../ai-vault/ai-vault-scan-cancellation'
-import type { SearchWorkerCommand, SearchWorkerResponse } from './session-search-worker-protocol'
+import type {
+  SearchWorkerCommand,
+  SearchWorkerResponse
+} from './worker/session-search-worker-protocol'
 
 type CatalogCommand = Extract<SearchWorkerCommand, { op: 'catalog' | 'candidates' | 'work' }>
 

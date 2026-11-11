@@ -1,4 +1,4 @@
-import './session-search-worker.test-fixture'
+import './worker/session-search-worker.test-fixture'
 import type { AiVaultScanIssue } from '../../shared/ai-vault/contracts/ai-vault-types'
 import { join } from 'node:path'
 import { afterEach, beforeEach, vi } from 'vitest'
@@ -69,14 +69,14 @@ vi.mock(
 import { resetSessionParseCacheForTests } from '../ai-vault/parse-cache/session-parse-cache-store'
 import { resetTranscriptConsumersForTests } from '../ai-vault/transcripts/session-transcript-consumers'
 import type SyncDatabase from '../sqlite/sync-database'
-import { SessionSearchEngine } from './session-search-engine'
-import { SessionSearchIndexer } from './session-search-indexer'
-import { openSessionSearchDatabase } from './session-search-schema'
+import { SessionSearchEngine } from './query/session-search-engine'
+import { SessionSearchIndexer } from './indexing/session-search-indexer'
+import { openSessionSearchDatabase } from './storage/session-search-schema'
 import {
   FakeSessionSearchClock,
   openSessionSearchIndexerHarness,
   type SessionSearchIndexerHarness
-} from './session-search-indexer-test-fixture'
+} from './indexing/session-search-indexer-test-fixture'
 
 export let harness: SessionSearchIndexerHarness
 export let clock: FakeSessionSearchClock

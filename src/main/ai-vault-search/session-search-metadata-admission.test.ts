@@ -1,4 +1,4 @@
-import './session-search-worker.test-fixture'
+import './worker/session-search-worker.test-fixture'
 import { notifySessionSearchFileChange } from './session-search-watcher.test-fixture'
 import { mkdir, stat, utimes, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
@@ -11,12 +11,12 @@ import {
   writeAntigravityTranscript
 } from '../ai-vault/session-scanner-test-fixtures'
 import SyncDatabase from '../sqlite/sync-database'
-import { SessionSearchIndexer } from './session-search-indexer'
+import { SessionSearchIndexer } from './indexing/session-search-indexer'
 import {
   FakeSessionSearchClock,
   openSessionSearchIndexerHarness,
   writeClaudeTranscript
-} from './session-search-indexer-test-fixture'
+} from './indexing/session-search-indexer-test-fixture'
 
 it('does not add a database-only Devin search wake and still enriches an admitted transcript read', async () => {
   const harness = await openSessionSearchIndexerHarness('ss-devin-admission')

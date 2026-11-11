@@ -1,15 +1,15 @@
-import './session-search-worker.test-fixture'
+import './worker/session-search-worker.test-fixture'
 import { appendFile, realpath } from 'node:fs/promises'
 import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
 import { FakeWatcherChild } from '../ipc/filesystem/watcher-process/parcel-watcher-process-test-child'
-import { SessionSearchIndexer } from './session-search-indexer'
+import { SessionSearchIndexer } from './indexing/session-search-indexer'
 import {
   claudeLines,
   FakeSessionSearchClock,
   openSessionSearchIndexerHarness,
   writeClaudeTranscript
-} from './session-search-indexer-test-fixture'
+} from './indexing/session-search-indexer-test-fixture'
 
 const { fork } = vi.hoisted(() => ({ fork: vi.fn() }))
 vi.mock('./session-search-watcher.test-fixture', () => ({

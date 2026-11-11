@@ -32,8 +32,8 @@
 1 src/main/opencode/legacy-plugin-acl-retry.ts
 2 src/main/orcad/node-pty-precondition.ts
 1 src/main/orcad/orcad-data-root-privacy.ts
-2 src/main/persistence/profile-state/profile-state-access-identity.ts
-1 src/main/persistence/profile-state/profile-state-recovery-copy.ts
+2 src/main/persistence/profile-state/access/profile-state-access-identity.ts
+1 src/main/persistence/profile-state/recovery/profile-state-recovery-copy.ts
 1 src/main/plugins/catalog/plugin-private-marketplace-ssh-shim.cjs
 1 src/main/pty/process-retirement/posix-pty-process-table.ts
 1 src/main/pty/shell-startup/pwsh.ts

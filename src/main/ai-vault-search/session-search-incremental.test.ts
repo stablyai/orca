@@ -1,5 +1,5 @@
 import { notifySessionSearchFileChange } from './session-search-watcher.test-fixture'
-import './session-search-worker.test-fixture'
+import './worker/session-search-worker.test-fixture'
 import { appendFile, mkdir, readFile, stat, utimes, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { expect, it, vi } from 'vitest'
@@ -9,17 +9,17 @@ import {
   CODEX_FIXTURE_SESSION_ID
 } from '../ai-vault/scanners/codex/session-scanner-codex-fixtures'
 import { subagentTranscriptsDirFor } from '../ai-vault/scanners/claude/session-scanner-subagent-transcripts'
-import { SessionSearchIndexer } from './session-search-indexer'
+import { SessionSearchIndexer } from './indexing/session-search-indexer'
 import {
   SessionSearchWorkerClient,
   SessionSearchOperationError
-} from './session-search-worker-client'
+} from './worker/session-search-worker-client'
 import {
   FakeSessionSearchClock,
   openSessionSearchIndexerHarness,
   writeClaudeTranscript,
   claudeLines
-} from './session-search-indexer-test-fixture'
+} from './indexing/session-search-indexer-test-fixture'
 
 vi.mock('./session-search-filesystem', () => ({ sessionSearchRequiresPolling: async () => false }))
 

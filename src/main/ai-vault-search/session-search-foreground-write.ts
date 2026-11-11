@@ -5,8 +5,8 @@ import type {
   TranscriptReadOutcome,
   TranscriptSessionIdentity
 } from '../ai-vault/transcripts/session-transcript-consumers'
-import type { SessionSearchFileWrite } from './session-search-index-writer'
-import type { SessionSearchStore } from './session-search-store'
+import type { SessionSearchFileWrite } from './storage/session-search-index-writer'
+import type { SessionSearchStore } from './storage/session-search-store'
 
 export type SessionSearchReadEvent =
   | { kind: 'message'; message: TranscriptMessage }

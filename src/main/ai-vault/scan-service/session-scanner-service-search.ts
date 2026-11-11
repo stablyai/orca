@@ -1,13 +1,13 @@
 import { withinSessionSearchDeadline } from '../../ai-vault-search/session-search-request-deadline'
-import type { SessionSearchIndexerOptions } from '../../ai-vault-search/session-search-indexer-options'
+import type { SessionSearchIndexerOptions } from '../../ai-vault-search/indexing/session-search-indexer-options'
 import { unavailableSessionSearchStatus } from '../../../shared/ai-vault/search/ai-vault-search-client'
 import { AiVaultSearchRequestSchema } from '../../../shared/ai-vault/search/ai-vault-search-contract'
 import { SessionSearchInstance } from '../../ai-vault-search/session-search-instance'
 import {
   sameSessionSearchRoots,
   type SessionSearchScanRoots
-} from '../../ai-vault-search/session-search-scan-roots'
-import { sessionSearchSqliteAvailable } from '../../ai-vault-search/session-search-sqlite-support'
+} from '../../ai-vault-search/discovery/session-search-scan-roots'
+import { isSqliteAvailable } from '../../sqlite/sync-database'
 import type {
   AiVaultServiceRequest,
   AiVaultServiceResultValue,
@@ -46,7 +46,7 @@ export class SessionScannerServiceSearch {
   }
 
   private async applySettings(init: AiVaultSessionSearchInit): Promise<void> {
-    if (!sessionSearchSqliteAvailable()) {
+    if (!isSqliteAvailable()) {
       return
     }
     if (this.instance && this.databasePath !== init.databasePath) {

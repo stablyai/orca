@@ -1,4 +1,7 @@
-import type { SessionSearchIndexStore, SessionSearchFileRow } from './session-search-store'
+import type {
+  SessionSearchIndexStore,
+  SessionSearchFileRow
+} from './storage/session-search-store-types'
 import {
   SessionSearchCatalogClient,
   type SessionSearchCatalogRequest

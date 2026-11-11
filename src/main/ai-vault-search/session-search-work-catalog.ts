@@ -1,12 +1,15 @@
 import { SessionSearchCatalogClient } from './session-search-catalog-client'
 import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
-import { fileIdentity } from './session-search-file-cursor'
-import { sessionSearchReadDecision } from './session-search-read-decision'
+import { fileIdentity } from './storage/session-search-file-cursor'
+import { sessionSearchReadDecision } from './indexing/session-search-read-decision'
 import type SyncDatabase from '../sqlite/sync-database'
 import { sessionSearchCatalogPageRows } from './session-search-catalog-query'
 import type { SessionSearchCatalog } from './session-search-catalog'
 import { SESSION_SEARCH_CATALOG_PAGE_BYTES } from './session-search-catalog'
-import type { SessionSearchFileRow, SessionSearchIndexStore } from './session-search-store'
+import type {
+  SessionSearchFileRow,
+  SessionSearchIndexStore
+} from './storage/session-search-store-types'
 
 export type SessionSearchWork = {
   candidate: SessionFileCandidate

@@ -5,7 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { getDefaultPersistedState } from '../../shared/constants'
 import { setSecretStore } from '../../shared/secret-store'
 import { recordRemoteLayoutFrame } from './remote-layout-snapshot-recorder'
-import { openProfileStateDatabaseReadOnly } from '../persistence/profile-state/profile-state-database'
+import { openProfileStateDatabaseReadOnly } from '../persistence/profile-state/database/profile-state-database'
 import { ProfileStateSqliteAuthority } from '../persistence/profile-state/profile-state-sqlite-authority'
 import { Store } from '../persistence/loading-store/store'
 

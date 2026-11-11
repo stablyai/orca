@@ -1,8 +1,11 @@
 import type { TranscriptReadStart } from '../ai-vault/transcripts/session-transcript-consumers'
-import type { SessionSearchFileWrite } from './session-search-index-writer'
-import type { SearchWorkerCommand, SearchWorkerResponse } from './session-search-worker-protocol'
+import type { SessionSearchFileWrite } from './storage/session-search-index-writer'
+import type {
+  SearchWorkerCommand,
+  SearchWorkerResponse
+} from './worker/session-search-worker-protocol'
 import type { SessionSearchReadEvent } from './session-search-foreground-write'
-import { EMPTY_CONTENT_HASH } from './session-search-content-hash'
+import { EMPTY_CONTENT_HASH } from './storage/session-search-content-hash'
 import { createAiVaultScanCancelledError } from '../ai-vault/ai-vault-scan-cancellation'
 
 export type SessionSearchForegroundTransport = {

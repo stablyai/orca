@@ -1,4 +1,4 @@
-import './session-search-worker.test-fixture'
+import './worker/session-search-worker.test-fixture'
 import {
   notifySessionSearchFileChange,
   notifySessionSearchOverflow
@@ -12,12 +12,12 @@ import {
   codexFixture,
   CODEX_FIXTURE_SESSION_ID
 } from '../ai-vault/scanners/codex/session-scanner-codex-fixtures'
-import { SessionSearchWorkerClient } from './session-search-worker-client'
-import { SessionSearchIndexer } from './session-search-indexer'
+import { SessionSearchWorkerClient } from './worker/session-search-worker-client'
+import { SessionSearchIndexer } from './indexing/session-search-indexer'
 import {
   FakeSessionSearchClock,
   openSessionSearchIndexerHarness
-} from './session-search-indexer-test-fixture'
+} from './indexing/session-search-indexer-test-fixture'
 
 it.each([40, 400])(
   'bounds one title append independently of %s index records and transcript owners',

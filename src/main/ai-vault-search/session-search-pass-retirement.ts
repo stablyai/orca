@@ -1,7 +1,7 @@
-import type { SessionSearchPassArgs } from './session-search-pass'
-import type { SessionSearchDegradedRoot } from './session-search-degraded-roots'
-import { sessionSearchEmptiedRoots, isUnderScanRoot } from './session-search-scan-roots'
-import { retireDeletedSessionSearchSources } from './session-search-deleted-sources'
+import type { SessionSearchPassArgs } from './indexing/session-search-pass'
+import type { SessionSearchDegradedRoot } from './discovery/session-search-degraded-roots'
+import { sessionSearchEmptiedRoots, isUnderScanRoot } from './discovery/session-search-scan-roots'
+import { retireDeletedSessionSearchSources } from './discovery/session-search-deleted-sources'
 
 export async function wakeSessionSearchPassRetirements(args: SessionSearchPassArgs): Promise<void> {
   if (args.full || args.purge) {

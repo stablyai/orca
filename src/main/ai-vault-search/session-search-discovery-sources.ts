@@ -9,7 +9,10 @@ import { SessionSearchContainerInventory } from './session-search-container-inve
 import type { SessionFileInventory } from '../ai-vault/session-file-inventory'
 import type { DiscoverSessionFilesArgs } from '../ai-vault/session-scanner-discovery'
 import type { SessionFileCandidate, SessionFileDiscovery } from '../ai-vault/session-scanner-types'
-import { sessionSearchPhysicalRoot, type SessionSearchScanRoots } from './session-search-scan-roots'
+import {
+  sessionSearchPhysicalRoot,
+  type SessionSearchScanRoots
+} from './discovery/session-search-scan-roots'
 
 type Root = {
   inventory: SessionFileInventory

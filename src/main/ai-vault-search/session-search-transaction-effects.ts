@@ -1,4 +1,4 @@
-import type { SessionSearchFileRow } from './session-search-store-types'
+import type { SessionSearchFileRow } from './storage/session-search-store-types'
 
 type EffectsFrame = { restore: () => void; wakes: Map<string, SessionSearchFileRow> }
 

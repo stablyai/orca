@@ -1,6 +1,9 @@
 import { asRecord } from '../ai-vault/session-scanner-record-value'
 import type SyncDatabase from '../sqlite/sync-database'
-import type { SessionSearchStateCounts, SessionSearchFileRow } from './session-search-store-types'
+import type {
+  SessionSearchStateCounts,
+  SessionSearchFileRow
+} from './storage/session-search-store-types'
 import { boundedSessionSearchPage } from './session-search-catalog-pages'
 
 export function readSessionSearchFileRows(

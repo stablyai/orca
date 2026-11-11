@@ -2,22 +2,22 @@ import {
   notifySessionSearchFileChange,
   notifySessionSearchOverflow
 } from './session-search-watcher.test-fixture'
-import './session-search-worker.test-fixture'
+import './worker/session-search-worker.test-fixture'
 import { join } from 'node:path'
 import { mkdir, writeFile } from 'node:fs/promises'
 import * as filesystem from '../native-chat/wsl-transcript-fs-access'
 import { expect, it, vi } from 'vitest'
-import { SessionSearchIndexer } from './session-search-indexer'
+import { SessionSearchIndexer } from './indexing/session-search-indexer'
 import {
   SessionSearchOperationError,
   SessionSearchWorkerClient
-} from './session-search-worker-client'
+} from './worker/session-search-worker-client'
 import {
   claudeLines,
   FakeSessionSearchClock,
   openSessionSearchIndexerHarness,
   writeClaudeTranscript
-} from './session-search-indexer-test-fixture'
+} from './indexing/session-search-indexer-test-fixture'
 
 vi.mock('./session-search-filesystem', () => ({ sessionSearchRequiresPolling: async () => false }))
 

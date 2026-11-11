@@ -1,7 +1,7 @@
 import type { TranscriptSessionIdentity } from '../ai-vault/transcripts/session-transcript-consumers'
-import type { SessionSearchFileWrite } from './session-search-index-writer'
-import type { SessionSearchStore } from './session-search-store'
-import type { SearchWorkerCommand } from './session-search-worker-protocol'
+import type { SessionSearchFileWrite } from './storage/session-search-index-writer'
+import type { SessionSearchStore } from './storage/session-search-store'
+import type { SearchWorkerCommand } from './worker/session-search-worker-protocol'
 
 export type SessionSearchPreparedWorkerWrite = {
   write: SessionSearchFileWrite

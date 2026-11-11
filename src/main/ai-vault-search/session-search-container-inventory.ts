@@ -1,12 +1,12 @@
 import { sessionSearchContainerSignature } from './session-search-container-signature'
-import { SessionSearchOperationError } from './session-search-worker-client'
+import { SessionSearchOperationError } from './worker/session-search-worker-client'
 import { sessionSearchRecordPages } from './session-search-catalog-pages'
 import { SessionSearchContainerRetirements } from './session-search-container-retirements'
 import { SessionSearchCatalogClient } from './session-search-catalog-client'
 import { throwIfAiVaultScanCancelled } from '../ai-vault/ai-vault-scan-cancellation'
 import type { AiVaultScanIssue } from '../../shared/ai-vault/contracts/ai-vault-types'
 import type { FileWithMtime, SessionFileDiscovery } from '../ai-vault/session-scanner-types'
-import { splitSyntheticSessionSource } from './session-search-synthetic-sources'
+import { splitSyntheticSessionSource } from './discovery/session-search-synthetic-sources'
 
 /** Source observations progress independently from the selected publication. */
 export class SessionSearchContainerInventory extends SessionSearchContainerRetirements {

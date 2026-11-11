@@ -1,5 +1,5 @@
 import { validSessionSearchContainerRemoval } from './session-search-container-transition'
-import { SESSION_SEARCH_FAILURES_BEFORE_HELD_OUT } from './session-search-read-decision'
+import { SESSION_SEARCH_FAILURES_BEFORE_HELD_OUT } from './indexing/session-search-read-decision'
 import { recordSessionSearchPrimaryFailure } from './session-search-primary-retries'
 import { wakeSessionSearchMetadataWrite } from './session-search-store-write'
 import { stepSessionSearchPublication } from './session-search-publication-step'
@@ -9,7 +9,7 @@ import type {
   SessionSearchCandidateCommand,
   SessionSearchCandidateResult
 } from './session-search-catalog-candidates'
-import type { SessionSearchStore } from './session-search-store'
+import type { SessionSearchStore } from './storage/session-search-store'
 
 function wakeFailedFile(store: SessionSearchStore, path: string): void {
   const previous = store.fileRow(path)

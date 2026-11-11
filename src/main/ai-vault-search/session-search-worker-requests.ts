@@ -3,7 +3,7 @@ import type {
   SearchWorkerCommand,
   SearchWorkerRequest,
   SearchWorkerResponse
-} from './session-search-worker-protocol'
+} from './worker/session-search-worker-protocol'
 
 export function listenForSessionSearchRequests(
   execute: (request: SearchWorkerRequest) => Promise<SearchWorkerResponse>,

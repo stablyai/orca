@@ -1,7 +1,8 @@
 import type { Dispatch, SetStateAction } from 'react'
 import type { MobileDisplayMode } from './mobile-terminal-model'
 
-/** Records a stream event's layout seq; false for a superseded `resized`. Fresh scrollback resets the mark or reconnect can blank the terminal. */
+/** Records a stream event's layout seq; false for a superseded `resized`. Each `subscribed` resets the mark;
+ * scrollback leaves it, because binary scrollback `seq` counts output bytes, not layout changes. */
 export function acceptTerminalLayoutSeq(
   marks: Map<string, number>,
   handle: string,
@@ -23,8 +24,10 @@ export function acceptTerminalLayoutSeq(
       return false
     }
     marks.set(handle, eventSeq)
-  } else if (eventSeq != null && data.type === 'scrollback') {
+  } else if (data.type === 'subscribed' && eventSeq != null) {
     marks.set(handle, eventSeq)
+  } else if (data.type === 'subscribed') {
+    marks.delete(handle)
   }
   return true
 }

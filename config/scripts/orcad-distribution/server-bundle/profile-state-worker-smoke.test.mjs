@@ -22,7 +22,9 @@ beforeAll(async () => {
     ['writer', 'backup'].map((role) =>
       build({
         entryPoints: [
-          resolve(`src/main/persistence/profile-state/profile-state-${role}-worker-entry.ts`)
+          resolve(
+            `src/main/persistence/profile-state/${role}/profile-state-${role}-worker-entry.ts`
+          )
         ],
         outfile: join(builtDirectory, `profile-state-${role}-worker-entry.js`),
         bundle: true,

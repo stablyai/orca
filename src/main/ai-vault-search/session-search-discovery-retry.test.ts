@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
 import * as filesystem from '../native-chat/wsl-transcript-fs-access'
 import { SessionSearchCatalog } from './session-search-catalog'
-import { openSessionSearchIndexerHarness } from './session-search-indexer-test-fixture'
+import { openSessionSearchIndexerHarness } from './indexing/session-search-indexer-test-fixture'
 
 it.each([40, 400])(
   'charges refused directory attempts to the expired %s-directory discovery budget',

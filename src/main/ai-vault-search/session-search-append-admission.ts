@@ -1,6 +1,6 @@
 import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
-import type { SessionSearchIndexStore } from './session-search-store'
-import { fileIdentity } from './session-search-file-cursor'
+import type { SessionSearchIndexStore } from './storage/session-search-store-types'
+import { fileIdentity } from './storage/session-search-file-cursor'
 
 export function sessionSearchAppendAdmission(
   store: SessionSearchIndexStore,

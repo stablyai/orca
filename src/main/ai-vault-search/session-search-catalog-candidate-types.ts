@@ -1,6 +1,6 @@
 import type { SessionSearchContainerRemoval } from './session-search-container-transition'
 import type { SessionSearchRemovalReceipt } from './session-search-observation-authority'
-import type { SessionSearchSnapshotRow } from './session-search-worker-protocol'
+import type { SessionSearchSnapshotRow } from './worker/session-search-worker-protocol'
 import type { SessionSearchWorkResult } from './session-search-work-queue'
 import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
 import type {

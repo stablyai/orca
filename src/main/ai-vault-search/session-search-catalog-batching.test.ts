@@ -11,13 +11,13 @@ import {
   FakeSessionSearchClock,
   openSessionSearchIndexerHarness,
   writeClaudeTranscript
-} from './session-search-indexer-test-fixture'
-import { SessionSearchWorkerClient } from './session-search-worker-client'
+} from './indexing/session-search-indexer-test-fixture'
+import { SessionSearchWorkerClient } from './worker/session-search-worker-client'
 import * as filesystem from '../native-chat/wsl-transcript-fs-access'
-import { SessionSearchIndexer } from './session-search-indexer'
-import { SessionSearchWorkerStore } from './session-search-worker-store'
+import { SessionSearchIndexer } from './indexing/session-search-indexer'
+import { SessionSearchWorkerStore } from './worker/session-search-worker-store'
 import { SessionSearchWorkQueue } from './session-search-work-queue'
-import { configureSessionSearchWorkerFixture } from './session-search-worker.test-fixture'
+import { configureSessionSearchWorkerFixture } from './worker/session-search-worker.test-fixture'
 import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
 
 it.each([40, 400])(

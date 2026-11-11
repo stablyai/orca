@@ -4,7 +4,7 @@ import {
   type SessionSearchContainerPhysical
 } from './session-search-container-sources'
 import type { SessionSearchContainerRemoval } from './session-search-container-transition'
-import { SessionSearchOperationError } from './session-search-worker-client'
+import { SessionSearchOperationError } from './worker/session-search-worker-client'
 import { throwIfAiVaultScanCancelled } from '../ai-vault/ai-vault-scan-cancellation'
 
 type Owner = {

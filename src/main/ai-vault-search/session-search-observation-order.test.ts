@@ -2,18 +2,18 @@ import {
   notifySessionSearchFileChange,
   notifySessionSearchOverflow
 } from './session-search-watcher.test-fixture'
-import './session-search-worker.test-fixture'
+import './worker/session-search-worker.test-fixture'
 import { rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
 import * as filesystem from '../native-chat/wsl-transcript-fs-access'
-import { SessionSearchWorkerClient } from './session-search-worker-client'
-import { SessionSearchIndexer } from './session-search-indexer'
+import { SessionSearchWorkerClient } from './worker/session-search-worker-client'
+import { SessionSearchIndexer } from './indexing/session-search-indexer'
 import {
   FakeSessionSearchClock,
   openSessionSearchIndexerHarness,
   writeClaudeTranscript
-} from './session-search-indexer-test-fixture'
+} from './indexing/session-search-indexer-test-fixture'
 
 it.each(['file', 'subtree'] as const)(
   'keeps a delivered %s change newer than an unfinished folder observation',

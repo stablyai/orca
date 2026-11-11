@@ -1,5 +1,8 @@
 import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
-import type { SessionSearchIndexStore, SessionSearchFileRow } from './session-search-store'
+import type {
+  SessionSearchIndexStore,
+  SessionSearchFileRow
+} from './storage/session-search-store-types'
 import type {
   SessionSearchCandidateCommand,
   SessionSearchCandidateResult

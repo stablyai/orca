@@ -1,6 +1,6 @@
-import type { SessionSearchStateCounts } from './session-search-store-types'
-import type { SessionSearchStore } from './session-search-store'
-import type { SessionSearchSnapshotRow } from './session-search-worker-protocol'
+import type { SessionSearchStateCounts } from './storage/session-search-store-types'
+import type { SessionSearchStore } from './storage/session-search-store'
+import type { SessionSearchSnapshotRow } from './worker/session-search-worker-protocol'
 import { boundedSessionSearchPage } from './session-search-catalog-pages'
 
 export function readSessionSearchSnapshotRows(

@@ -1,7 +1,7 @@
-import type { SessionSearchStore } from './session-search-store'
+import type { SessionSearchStore } from './storage/session-search-store'
 import { readSessionSearchSnapshotRows } from './session-search-snapshot-rows'
-import type { SessionSearchSnapshotRow } from './session-search-worker-protocol'
-import { fileIdentity } from './session-search-file-cursor'
+import type { SessionSearchSnapshotRow } from './worker/session-search-worker-protocol'
+import { fileIdentity } from './storage/session-search-file-cursor'
 
 /** A cleanup quantum captures existing debt and charges actual withdrawal failures in one owner. */
 export async function stepSessionSearchPublication(

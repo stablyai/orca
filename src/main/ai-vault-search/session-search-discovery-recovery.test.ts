@@ -1,4 +1,4 @@
-import './session-search-worker.test-fixture'
+import './worker/session-search-worker.test-fixture'
 import {
   notifySessionSearchFileChange,
   notifySessionSearchOverflow
@@ -9,18 +9,18 @@ import { expect, it, vi } from 'vitest'
 import * as filesystem from '../native-chat/wsl-transcript-fs-access'
 import * as parser from '../ai-vault/parse-cache/session-scanner-parse-cache'
 import * as policy from './session-search-filesystem'
-import { SessionSearchIndexer } from './session-search-indexer'
+import { SessionSearchIndexer } from './indexing/session-search-indexer'
 import {
   CODEX_ROLLOUT_FILE,
   codexRolloutLines,
   parseTranscript
-} from './session-search-transcript-fixtures'
+} from './indexing/session-search-transcript-fixtures'
 import {
   FakeSessionSearchClock,
   openSessionSearchIndexerHarness,
   writeClaudeTranscript,
   claudeLines
-} from './session-search-indexer-test-fixture'
+} from './indexing/session-search-indexer-test-fixture'
 
 it.each([100, 1000])(
   'reads only appended bytes after a late delivered update to a %s-turn transcript',

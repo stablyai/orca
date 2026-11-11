@@ -3,11 +3,11 @@ import type { SessionSearchCatalogCandidates } from './session-search-catalog-ca
 import type {
   SessionSearchIndexWriter,
   SessionSearchFileWrite
-} from './session-search-index-writer'
+} from './storage/session-search-index-writer'
 import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
 import type { TranscriptSessionIdentity } from '../ai-vault/transcripts/session-transcript-consumers'
 import type SyncDatabase from '../sqlite/sync-database'
-import type { SessionSearchFileRow } from './session-search-store-types'
+import type { SessionSearchFileRow } from './storage/session-search-store-types'
 
 function identity(row: SessionSearchFileRow | undefined, failedCommit = false): string {
   return JSON.stringify(
