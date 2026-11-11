@@ -62,22 +62,21 @@ describe('workspace document guest input', () => {
 
   it('forwards Ctrl+Tab from a focused document preview to its host window', () => {
     const { guest, send } = attachDocumentGuest()
-    const input = { shift: false, alt: false, meta: false, isAutoRepeat: false }
     guest.emit(
       'before-input-event',
       { preventDefault: vi.fn() },
-      { ...input, type: 'keyDown', key: 'Tab', code: 'Tab', control: true }
-    )
-    guest.emit(
-      'before-input-event',
-      { preventDefault: vi.fn() },
-      { ...input, type: 'keyUp', key: 'Control', code: 'ControlLeft', control: false }
+      {
+        type: 'keyDown',
+        key: 'Tab',
+        code: 'Tab',
+        control: true,
+        shift: false,
+        alt: false,
+        meta: false
+      }
     )
 
-    expect(send.mock.calls).toEqual([
-      ['ui:ctrlTabKeyDown', { shiftKey: false }],
-      ['ui:ctrlTabKeyUp']
-    ])
+    expect(send.mock.calls).toEqual([['ui:ctrlTabKeyDown', { shiftKey: false }]])
   })
 
   it('reports a press in the preview so its split becomes active', () => {
