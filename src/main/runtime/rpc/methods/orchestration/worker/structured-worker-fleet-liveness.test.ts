@@ -295,6 +295,21 @@ describe('worker-list liveness for chat-mode workers', () => {
     })
   })
 
+  it('discards settings when the runtime replaces the session host during the read', async () => {
+    const dispatchId = seed()
+    const host = installHost(record('codex'), true)
+    host.readOptions = async () => {
+      installHost(record('codex', { runtimeFence: 8 }), true)
+      return { models: [], current: { reportedModel: 'retired-host' } }
+    }
+    const runtime = { ensureStructuredAgentSessionHost: async () => {} }
+
+    expect(await readStructuredWorkerSettings(runtime, db, dispatchId)).toEqual({
+      kind: 'unknown',
+      reason: 'identity_changed'
+    })
+  })
+
   it('keeps at-rest and failed provider reads unknown', async () => {
     const dispatchId = seed()
     installHost(record('codex', { claimStatus: 'released' }), false)

@@ -113,6 +113,9 @@ export async function readStructuredWorkerSettings(
       return { kind: 'unknown', reason: 'not_live' }
     }
     const options = await host.readOptions(sessionId, { readsWithoutModel: true })
+    if (getStructuredAgentSessionHost() !== host) {
+      return { kind: 'unknown', reason: 'identity_changed' }
+    }
     const after = host.deps.store.getConversation(sessionId)
     const currentHold = holdStructuredWorker(identity, db)
     if (
