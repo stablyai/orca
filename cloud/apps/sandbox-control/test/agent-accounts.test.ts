@@ -181,11 +181,19 @@ describe('egress-time Source (D10) and shared workspaces (D13)', () => {
     await h.call('PUT', '/v1/agent-credentials/claude', { bearer: mia, body: { token: SETUP_TOKEN } })
     const created = await h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'ws-1', machineSize: 'standard' }, bearer: mia })
     const id: string = created.body.sandbox.id
+    const other = await h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'ws-2', machineSize: 'standard' }, bearer: mia })
+    const otherSession: string = other.body.sandbox.session.id
     reply.status = 401
     expect((await proxied(id, 'api.anthropic.com', { authorization: `Bearer orca-ph-claude-account-${id}` })).status).toBe(401)
     expect((await h.call('GET', '/v1/agent-credentials', { bearer: mia })).body.claude.state).toBe('revoked')
     // Already off the account: no placeholder in new shells, and the proxy refuses with a clear reason.
     await vi.waitFor(() => expect(lastEnv(ENV_COMMAND).CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined())
+    // The person's other running workspace drops the dead placeholder too.
+    await vi.waitFor(() => {
+      const refreshed = h.vercel.commands.filter((c) => c.command === ENV_COMMAND && c.sessionId === otherSession)
+      expect(refreshed.length).toBeGreaterThan(0)
+      expect(decode(refreshed.at(-1)!.env.ORCA_SECRET_ENV).CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined()
+    })
     expect((await proxied(id, 'api.anthropic.com', { authorization: `Bearer orca-ph-claude-account-${id}` })).status).toBe(403)
   })
 
