@@ -7,6 +7,7 @@ import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { createOrchestrationRpcHarness } from '../rpc-test-harness'
 import { createRootDispatch } from '../../../../orchestration/db/root-dispatch-test-fixture'
 import { resolveWorkerReporterIdentity } from '../../../../orchestration/workers/reports/reminted-worker-reporter'
+import { MessageWake } from '../../../../orchestration/mailbox/runtime-message-waiters'
 
 const STALE_HANDLE = 'term_exported-before-restart'
 const REMINTED_HANDLE = 'term_reissued-after-restart'
@@ -296,12 +297,41 @@ describe('restart-reissued worker handle across finished and federated Dispatche
         await importRemoteAnswer(askedId(asked))
         db.settleRemoteAttachmentInRelayTransaction(REMOTE_DISPATCH, 'succeeded')
         const next = db.createTask({ spec: 'next work in the same terminal' })
-        createRootDispatch(db, next.id, REMINTED_HANDLE, WORKER_PANE, undefined, INCARNATION)
+        const successor = createRootDispatch(
+          db,
+          next.id,
+          REMINTED_HANDLE,
+          WORKER_PANE,
+          undefined,
+          INCARNATION
+        )
+        db.insertMessage({
+          from: 'term_coord',
+          to: `dispatch:${successor.id}`,
+          subject: 'successor instructions',
+          body: 'New local instructions',
+          runId: successor.run_id
+        })
+        const successorUnread = () =>
+          db
+            .getUnreadMessages(`dispatch:${successor.id}`)
+            .some((m) => m.body === 'New local instructions')
 
-        const checked = await check().catch((error: unknown) => error)
-
-        expect(checkedBodies(checked)).not.toContain('Approved')
+        // Neither the old answer nor the successor's instructions, in any check mode.
+        await expect(check()).rejects.toMatchObject({ code: 'dispatch_inactive' })
+        await expect(
+          harness.call(
+            'orchestration.check',
+            { terminal: STALE_HANDLE, terminalPaneKey: WORKER_PANE, peek: true },
+            workerEnv()
+          )
+        ).rejects.toMatchObject({ code: 'dispatch_inactive' })
         expect(remoteAnswerUnread()).toBe(true)
+        expect(successorUnread()).toBe(true)
+
+        // The successor's own current handle still takes its instructions.
+        expect(checkedBodies(await check(REMINTED_HANDLE, ctx))).toContain('New local instructions')
+        expect(successorUnread()).toBe(false)
       })
     })
 
@@ -398,6 +428,265 @@ describe('restart-reissued worker handle across finished and federated Dispatche
         .run(REMOTE_DISPATCH)
 
       await expect(ask()).rejects.toMatchObject({ code: 'run_home_unreachable' })
+    })
+  })
+
+  describe('stale local check that recovery refuses', () => {
+    /** A working local worker whose coordinator has answered its question in its Dispatch mail. */
+    async function setupAnsweredLocalWorker(): Promise<{ dispatchId: string }> {
+      const { dispatchId } = setupLocalWorker()
+      const asked = await ask({ question: 'Proceed?', wait: false })
+      await harness.call(
+        'orchestration.reply',
+        { id: askedId(asked), body: 'Approved locally', from: 'term_coord' },
+        ctx
+      )
+      return { dispatchId }
+    }
+
+    const localAnswerUnread = (dispatchId: string) =>
+      db.getUnreadMessages(`dispatch:${dispatchId}`).some((m) => m.body === 'Approved locally')
+
+    it.each([
+      ['with its env pane', { terminalPaneKey: WORKER_PANE }],
+      ['by handle alone', {}]
+    ])(
+      'leaves the answer unread once the pane records a replacement process (%s)',
+      async (_label, paneParams) => {
+        const { dispatchId } = await setupAnsweredLocalWorker()
+        paneIncarnation = REPLACEMENT
+
+        await expect(
+          harness.call(
+            'orchestration.check',
+            { terminal: STALE_HANDLE, ...paneParams },
+            workerEnv()
+          )
+        ).rejects.toMatchObject({ code: 'dispatch_inactive' })
+        expect(localAnswerUnread(dispatchId)).toBe(true)
+      }
+    )
+
+    it('leaves the answer unread when the check carries no env evidence', async () => {
+      const { dispatchId } = await setupAnsweredLocalWorker()
+
+      await expect(check(STALE_HANDLE, ctx)).rejects.toMatchObject({ code: 'dispatch_inactive' })
+      expect(localAnswerUnread(dispatchId)).toBe(true)
+    })
+
+    it('does not take a reply that arrives after its process was replaced mid-wait', async () => {
+      const { dispatchId } = setupLocalWorker()
+      const run = db.getDispatchContextById(dispatchId)?.run_id
+      vi.spyOn(runtime, 'waitForMessage').mockImplementation(async () => {
+        // Same assignment, new process in the pane, then the delayed reply lands.
+        paneIncarnation = REPLACEMENT
+        db.insertMessage({
+          from: 'term_coord',
+          to: `dispatch:${dispatchId}`,
+          subject: 'late',
+          body: 'Delayed reply',
+          runId: run
+        })
+        return new MessageWake()
+      })
+
+      await expect(
+        harness.call(
+          'orchestration.check',
+          { terminal: STALE_HANDLE, terminalPaneKey: WORKER_PANE, wait: true },
+          workerEnv()
+        )
+      ).rejects.toMatchObject({ code: 'consumer_fenced' })
+      expect(
+        db.getUnreadMessages(`dispatch:${dispatchId}`).some((m) => m.body === 'Delayed reply')
+      ).toBe(true)
+    })
+
+    it('refuses when the process is replaced between recovery and the Dispatch lookup', async () => {
+      const { dispatchId } = await setupAnsweredLocalWorker()
+      const lookup = db.getActiveDispatchForIdentity.bind(db)
+      vi.spyOn(db, 'getActiveDispatchForIdentity').mockImplementation((handle, paneKey) => {
+        if (paneKey) {
+          paneIncarnation = REPLACEMENT
+        }
+        return lookup(handle, paneKey)
+      })
+
+      await expect(check()).rejects.toMatchObject({ code: 'consumer_fenced' })
+      expect(localAnswerUnread(dispatchId)).toBe(true)
+    })
+
+    it('takes a reply that arrives mid-wait while it is still the recovered process', async () => {
+      const { dispatchId } = setupLocalWorker()
+      const run = db.getDispatchContextById(dispatchId)?.run_id
+      vi.spyOn(runtime, 'waitForMessage').mockImplementation(async () => {
+        db.insertMessage({
+          from: 'term_coord',
+          to: `dispatch:${dispatchId}`,
+          subject: 'late',
+          body: 'Delayed reply',
+          runId: run
+        })
+        return new MessageWake()
+      })
+
+      const checked = await harness.call(
+        'orchestration.check',
+        { terminal: STALE_HANDLE, terminalPaneKey: WORKER_PANE, wait: true },
+        workerEnv()
+      )
+
+      expect(checkedBodies(checked)).toContain('Delayed reply')
+    })
+
+    it('still serves the current handle, with or without env evidence', async () => {
+      const { dispatchId } = await setupAnsweredLocalWorker()
+      paneIncarnation = REPLACEMENT
+      await expect(check()).rejects.toMatchObject({ code: 'dispatch_inactive' })
+
+      expect(checkedBodies(await check(REMINTED_HANDLE, ctx))).toContain('Approved locally')
+      expect(localAnswerUnread(dispatchId)).toBe(false)
+    })
+
+    it('still serves a legacy Dispatch that recorded no process by its pane', async () => {
+      setupRuntime()
+      const task = db.createTask({ spec: 'legacy worker without a recorded process' })
+      const legacy = createRootDispatch(db, task.id, STALE_HANDLE, WORKER_PANE)
+      db.insertMessage({
+        from: 'term_coord',
+        to: `dispatch:${legacy.id}`,
+        subject: 'legacy',
+        body: 'Legacy instructions',
+        runId: legacy.run_id
+      })
+
+      expect(checkedBodies(await check(STALE_HANDLE, ctx))).toContain('Legacy instructions')
+    })
+  })
+
+  describe('finished local question resumed across mixed finished histories', () => {
+    /** The handle ran a remote Dispatch, then a local one in the same pane and process; both finished. */
+    async function setupMixedFinishedHistory(): Promise<{ taskId: string; dispatchId: string }> {
+      setupFederatedWorker()
+      db.settleRemoteAttachmentInRelayTransaction(REMOTE_DISPATCH, 'succeeded')
+      const task = db.createTask({ spec: 'local work after the remote Dispatch finished' })
+      const dispatch = createRootDispatch(
+        db,
+        task.id,
+        STALE_HANDLE,
+        WORKER_PANE,
+        undefined,
+        INCARNATION
+      )
+      db.db
+        .prepare('UPDATE dispatch_contexts SET host_scope = ? WHERE id = ?')
+        .run(HOST_SCOPE, dispatch.id)
+      await send('worker_done', { taskId: task.id, dispatchId: dispatch.id, outcome: 'succeeded' })
+      expect(db.getTask(task.id)?.status).toBe('completed')
+      return { taskId: task.id, dispatchId: dispatch.id }
+    }
+
+    /** Its own question, asked through the current handle and answered by the coordinator. */
+    async function answeredQuestion(): Promise<string> {
+      const asked = await harness.call(
+        'orchestration.ask',
+        { from: REMINTED_HANDLE, question: 'One more thing?', timeoutMs: 1 },
+        ctx
+      )
+      const questionId = askedId(asked)
+      await harness.call(
+        'orchestration.reply',
+        { id: questionId, body: 'Specific local answer', from: 'term_coord' },
+        ctx
+      )
+      return questionId
+    }
+
+    const answerRead = (questionId: string) => {
+      const answer = db.getQuestion(questionId)?.answer_message_id
+      return answer ? db.getMessageById(answer)?.read : undefined
+    }
+
+    it('returns the specific answer through the stale handle and leaves the Task completed', async () => {
+      const { taskId, dispatchId } = await setupMixedFinishedHistory()
+      const questionId = await answeredQuestion()
+      expect(db.getQuestion(questionId)?.dispatch_id).toBe(dispatchId)
+      expect(answerRead(questionId)).toBe(0)
+
+      const resumed = await ask({ resume: questionId })
+
+      expect(JSON.stringify(resumed)).toContain('Specific local answer')
+      expect(answerRead(questionId)).toBe(1)
+      expect(db.getTask(taskId)?.status).toBe('completed')
+      expect(db.getDispatchContextById(dispatchId)?.status).toBe('completed')
+    })
+
+    it('still refuses a bare stale ask: no question selects either history', async () => {
+      await setupMixedFinishedHistory()
+
+      await expect(ask()).rejects.toMatchObject({ code: 'dispatch_inactive' })
+    })
+
+    it('refuses once the pane records a replacement process', async () => {
+      await setupMixedFinishedHistory()
+      const questionId = await answeredQuestion()
+      paneIncarnation = REPLACEMENT
+
+      await expect(ask({ resume: questionId })).rejects.toMatchObject({
+        code: 'dispatch_inactive'
+      })
+      expect(answerRead(questionId)).toBe(0)
+    })
+
+    it('refuses once another Dispatch owns the pane', async () => {
+      const { taskId } = await setupMixedFinishedHistory()
+      const questionId = await answeredQuestion()
+      const next = db.createTask({ spec: 'next work in the same terminal' })
+      createRootDispatch(db, next.id, REMINTED_HANDLE, WORKER_PANE, undefined, INCARNATION)
+
+      await expect(ask({ resume: questionId })).rejects.toThrow()
+      expect(answerRead(questionId)).toBe(0)
+      expect(db.getTask(taskId)?.status).toBe('completed')
+    })
+
+    it('does not let another Dispatch question select a recovery for this handle', async () => {
+      await setupMixedFinishedHistory()
+      // A question owned by another worker's Dispatch is not this handle's recorded history.
+      const other = db.createTask({ spec: 'another worker' })
+      const otherDispatch = createRootDispatch(
+        db,
+        other.id,
+        'term_other',
+        'tab_other:22222222-2222-4222-8222-222222222222',
+        undefined,
+        'other:inc'
+      )
+      const { question } = db.createQuestion({
+        runId: otherDispatch.run_id,
+        dispatchId: otherDispatch.id,
+        askerHandle: 'term_other',
+        question: 'Not yours',
+        options: [],
+        to: 'term_coord'
+      })
+
+      await expect(ask({ resume: question.message_id })).rejects.toMatchObject({
+        code: 'dispatch_inactive'
+      })
+    })
+
+    it('still resumes through the current handle', async () => {
+      const { taskId } = await setupMixedFinishedHistory()
+      const questionId = await answeredQuestion()
+
+      const resumed = await harness.call(
+        'orchestration.ask',
+        { from: REMINTED_HANDLE, resume: questionId, timeoutMs: 1 },
+        ctx
+      )
+
+      expect(JSON.stringify(resumed)).toContain('Specific local answer')
+      expect(db.getTask(taskId)?.status).toBe('completed')
     })
   })
 })

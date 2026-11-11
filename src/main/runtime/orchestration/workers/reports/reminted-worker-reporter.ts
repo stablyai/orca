@@ -29,7 +29,11 @@ type RecordedReporter = {
   hostScope: string | null
 }
 
-function recordedReporter(db: OrchestrationDb, handle: string): RecordedReporter | null {
+function recordedReporter(
+  db: OrchestrationDb,
+  handle: string,
+  candidateDispatchId: string | undefined
+): RecordedReporter | null {
   // Same order as admission: the handle's working Dispatch, else the last one it finished.
   const dispatch =
     db.getActiveDispatchForIdentity(handle) ?? db.getLatestDispatchForTerminal(handle)
@@ -60,8 +64,13 @@ function recordedReporter(db: OrchestrationDb, handle: string): RecordedReporter
       }
     : null
   if (local && remote) {
-    // One handle recorded in both stores: only a single working owner is unambiguous.
-    return local.active === remote.active ? null : local.active ? local : remote
+    // One handle recorded in both stores: only a single working owner is unambiguous, unless the
+    // request names a server-owned record of this handle's own local Dispatch. That only selects the
+    // candidate; every identity and custody check below still decides.
+    if (local.active !== remote.active) {
+      return local.active ? local : remote
+    }
+    return candidateDispatchId && candidateDispatchId === local.dispatchId ? local : null
   }
   return local ?? remote
 }
@@ -102,7 +111,12 @@ function ownsPaneNow(
 export function resolveRemintedWorkerReporter(
   runtime: RemintRuntime,
   db: OrchestrationDb,
-  args: { from: string; evidence: OrchestrationCompatibilityEvidence | undefined }
+  args: {
+    from: string
+    evidence: OrchestrationCompatibilityEvidence | undefined
+    /** A local Dispatch the request names through a server-owned record, such as its resumed question. */
+    candidateDispatchId?: string
+  }
 ): RemintedWorkerReporter | null {
   const { from, evidence } = args
   if (!from.startsWith('term_') || runtime.getTerminalPaneKey(from)) {
@@ -112,7 +126,7 @@ export function resolveRemintedWorkerReporter(
   if (evidence?.terminalHandle !== from || !evidence.paneKey) {
     return null
   }
-  const recorded = recordedReporter(db, from)
+  const recorded = recordedReporter(db, from, args.candidateDispatchId)
   if (
     !recorded?.paneKey ||
     !recorded.processIncarnation ||
@@ -144,6 +158,30 @@ export function resolveRemintedWorkerReporter(
 }
 
 /**
+ * A handle no terminal answers to (no pane and no process) whose own recorded Dispatch or attachment
+ * pinned a process. Only exact-incarnation recovery may speak for it; a headless terminal still has a
+ * process, and a legacy record without an incarnation pinned none.
+ */
+function isRecordedStaleWorkerHandle(
+  runtime: RemintRuntime,
+  db: OrchestrationDb,
+  from: string
+): boolean {
+  if (
+    !from.startsWith('term_') ||
+    runtime.getTerminalPaneKey(from) ||
+    runtime.getTerminalProcessIncarnation(from)
+  ) {
+    return false
+  }
+  const local = db.getActiveDispatchForIdentity(from) ?? db.getLatestDispatchForTerminal(from)
+  return Boolean(
+    local?.process_incarnation ||
+    db.findLatestRemoteAttachmentForTerminal(from)?.process_incarnation
+  )
+}
+
+/**
  * The pane and process a terminal reporter speaks for. Attested hook identity wins; otherwise the
  * declared handle's own terminal; otherwise, for a restart-reissued handle, its exact-incarnation remint.
  * The remint is re-resolved at admission so a process replaced or a pane taken after entry is refused.
@@ -162,8 +200,17 @@ export function resolveWorkerReporterIdentity(
       | undefined
     hasSessionCaller: boolean
     evidence: OrchestrationCompatibilityEvidence | undefined
+    candidateDispatchId?: string
   }
-): { paneKey: string | null; processIncarnation: () => string | null } {
+): {
+  paneKey: string | null
+  processIncarnation: () => string | null
+  /** The Dispatch a restart-reissued handle was recovered to at entry; the request stays pinned to it. */
+  recovered: RemintedWorkerReporter | null
+  /** A known stale worker handle that recovery could not prove: no weaker handle or pane lookup may
+   *  stand in for it. */
+  unrecoveredStaleWorker: () => boolean
+} {
   const { from } = args
   // Why: attested hook identity survives graph remount; caller params never supply lifecycle authority.
   const attested = args.authority?.terminalHandle === from ? args.authority : undefined
@@ -171,7 +218,11 @@ export function resolveWorkerReporterIdentity(
   const remint = () =>
     args.hasSessionCaller || attested || declaredPaneKey
       ? null
-      : resolveRemintedWorkerReporter(runtime, db, { from, evidence: args.evidence })
+      : resolveRemintedWorkerReporter(runtime, db, {
+          from,
+          evidence: args.evidence,
+          candidateDispatchId: args.candidateDispatchId
+        })
   const reminted = remint()
   // The re-read must still speak for the same Dispatch, pane and process that routing already used, so a
   // record rewritten to another incarnation after entry cannot carry the request over to it.
@@ -187,6 +238,13 @@ export function resolveWorkerReporterIdentity(
     paneKey: declaredPaneKey ?? reminted?.paneKey ?? null,
     processIncarnation: () =>
       attested?.processIncarnation ??
-      (reminted ? remintedAgain(reminted) : runtime.getTerminalProcessIncarnation(from))
+      (reminted ? remintedAgain(reminted) : runtime.getTerminalProcessIncarnation(from)),
+    recovered: reminted,
+    unrecoveredStaleWorker: () =>
+      !reminted &&
+      !args.hasSessionCaller &&
+      !attested &&
+      !declaredPaneKey &&
+      isRecordedStaleWorkerHandle(runtime, db, from)
   }
 }

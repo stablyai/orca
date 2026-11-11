@@ -91,20 +91,46 @@ export const ORCHESTRATION_CHECK_METHODS = [
         )
       }
 
+      // A known worker's stale handle that exact recovery refused must not fall back to a by-handle or
+      // pane lookup: that could read its replaced Dispatch's mail or a successor's instructions.
+      if (reporter.unrecoveredStaleWorker()) {
+        throw new OrchestrationError(
+          'dispatch_inactive',
+          `Terminal ${handle} no longer names a terminal, and its recorded worker process could not be recovered. Nothing was read.`
+        )
+      }
+      const { recovered } = reporter
+      // A recovered caller stays the exact Dispatch and process it was recovered as, at entry and after waits.
+      const recoveredLocalProcessCurrent = recovered
+        ? () =>
+            db.isDispatchProcessCurrent({
+              dispatchId: recovered.dispatchId,
+              paneKey: recovered.paneKey,
+              processIncarnation: reporter.processIncarnation()
+            })
+        : undefined
       const activeDispatch = db.getActiveDispatchForIdentity(handle, paneKey)
       // Why: reading another pane's Dispatch mail is wrong in every mode, so peek is fenced too.
       if (activeDispatch && !callerHoldsDispatchPane(activeDispatch, paneKey)) {
+        throw dispatchFenced()
+      }
+      if (
+        activeDispatch &&
+        recovered &&
+        (activeDispatch.id !== recovered.dispatchId || !recoveredLocalProcessCurrent?.())
+      ) {
         throw dispatchFenced()
       }
       const remoteAttachment =
         !activeDispatch && paneKey ? db.findActiveRemoteAttachmentForPane(paneKey) : undefined
       if (
         remoteAttachment &&
-        !db.isRemoteAttachmentProcessCurrent({
-          dispatchId: remoteAttachment.dispatch_id,
-          paneKey: paneKey ?? null,
-          processIncarnation: reporter.processIncarnation()
-        })
+        ((recovered && remoteAttachment.dispatch_id !== recovered.dispatchId) ||
+          !db.isRemoteAttachmentProcessCurrent({
+            dispatchId: remoteAttachment.dispatch_id,
+            paneKey: paneKey ?? null,
+            processIncarnation: reporter.processIncarnation()
+          }))
       ) {
         throw new OrchestrationError(
           'dispatch_inactive',
@@ -124,6 +150,7 @@ export const ORCHESTRATION_CHECK_METHODS = [
             activeDispatch,
             remoteAttachment,
             processIncarnation: reporter.processIncarnation,
+            recoveredLocalProcessCurrent,
             recordMutationReceipt,
             acknowledgeOnly: !params.wait
           })

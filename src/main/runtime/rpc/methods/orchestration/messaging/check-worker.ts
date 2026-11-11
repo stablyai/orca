@@ -30,6 +30,8 @@ export async function checkWorkerMailbox(args: {
   remoteAttachment: RemoteAttachment | undefined
   /** The caller's process, re-read at each fence; a restart-reissued handle supplies its recovered one. */
   processIncarnation?: () => string | null
+  /** A restart-reissued caller recovered to this local Dispatch: still its exact recorded process. */
+  recoveredLocalProcessCurrent?: () => boolean
   wakeTypes?: MessageType[]
   revalidateConsumer?: () => void
   deferDelivery?: () => boolean
@@ -89,8 +91,11 @@ export async function checkWorkerMailbox(args: {
     if (activeDispatch) {
       const current = db.getActiveDispatchForIdentity(handle, paneKey)
       if (current?.id === activeDispatch.id) {
-        // Re-attachment during awaits can retain the id while changing the pane.
-        if (callerHoldsDispatchPane(current, paneKey)) {
+        // Re-attachment during awaits can retain the id while changing the pane, or replace the process.
+        if (
+          callerHoldsDispatchPane(current, paneKey) &&
+          (args.recoveredLocalProcessCurrent?.() ?? true)
+        ) {
           return
         }
         throw dispatchFenced()

@@ -54,11 +54,14 @@ export const ORCHESTRATION_ASK_METHODS = [
       // Echo the clamped budget on every return so callers report time actually waited.
       const timeoutMs = clampOrchestrationAskTimeoutMs(params.timeoutMs)
       // A runtime restart can reissue a surviving worker PTY's handle; recover it by exact incarnation.
+      // A resumed question's server-owned Dispatch can select which of the handle's recorded histories
+      // to try, but recovery still proves that Dispatch's handle, pane, host, process and custody.
       const reporter = resolveWorkerReporterIdentity(runtime, db, {
         from,
         authority: undefined,
         hasSessionCaller: Boolean(orchestrationCaller),
-        evidence: orchestrationCompatibilityEvidence
+        evidence: orchestrationCompatibilityEvidence,
+        candidateDispatchId: params.resume ? db.getQuestion(params.resume)?.dispatch_id : undefined
       })
       const paneKey = reporter.paneKey ?? undefined
       if (!orchestrationCaller) {
