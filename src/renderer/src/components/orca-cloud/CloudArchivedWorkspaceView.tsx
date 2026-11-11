@@ -25,6 +25,7 @@ import {
 import type { CloudArchiveInfo } from '../../../../shared/hosted-sandbox/cloud-workspace-api'
 import type { HostedArchivePullRequest } from '../../../../shared/hosted-sandbox/hosted-sandbox-wire'
 import { CloudGitChanges } from './CloudGitChanges'
+import { ArchiveSnapshotTooltip } from './ArchiveSnapshotTooltip'
 import { CloudWorkspaceHeader } from './CloudWorkspaceHeader'
 import { FOCUS_RING } from './cloud-focus'
 
@@ -212,10 +213,23 @@ export function CloudArchivedWorkspaceView({
           title={workspaceName ?? t('orcaCloudWorkspace.archived.title', 'Archived workspace')}
           state="archived"
           stateLine={stateLine}
-          note={t(
-            'orcaCloudWorkspace.archived.readOnly',
-            'A read-only snapshot. Unarchive to open terminals and agents again.'
-          )}
+          note={
+            // "Snapshot" is defined, never bare: hover or focus shows the shared archive definition.
+            <ArchiveSnapshotTooltip keptUntil={expiresAt} side="bottom">
+              <span
+                tabIndex={0}
+                className={cn(
+                  'cursor-help rounded-sm underline decoration-dotted underline-offset-2',
+                  FOCUS_RING
+                )}
+              >
+                {t(
+                  'orcaCloudWorkspace.archived.readOnly',
+                  'A read-only snapshot. Unarchive to open terminals and agents again.'
+                )}
+              </span>
+            </ArchiveSnapshotTooltip>
+          }
           headingRef={headingRef}
           action={
             <Button

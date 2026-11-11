@@ -1,4 +1,5 @@
 import React, { useRef } from 'react'
+import { ArchiveSnapshotTooltip } from '@/components/orca-cloud/ArchiveSnapshotTooltip'
 import {
   Archive,
   ArchiveRestore,
@@ -359,10 +360,12 @@ export function CloudWorkspaceRowMenu({
               </DropdownMenuItem>
             ) : null}
             {w.archivedAt === null ? (
-              <DropdownMenuItem onSelect={() => actions.archive(w)}>
-                <Archive />
-                {t('auto.components.cloudWorkspaces.archive', 'Archive')}
-              </DropdownMenuItem>
+              <ArchiveSnapshotTooltip side="left">
+                <DropdownMenuItem onSelect={() => actions.archive(w)}>
+                  <Archive />
+                  {t('auto.components.cloudWorkspaces.archive', 'Archive')}
+                </DropdownMenuItem>
+              </ArchiveSnapshotTooltip>
             ) : (
               <DropdownMenuItem onSelect={() => actions.unarchive(w)}>
                 <ArchiveRestore />

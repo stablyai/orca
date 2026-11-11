@@ -1,4 +1,5 @@
 import { defineFixture } from '../../component-fixtures/component-fixture'
+import { setArchiveTtlDaysForTest } from '@/lib/orca-cloud/archive-ttl'
 import { CloudWorkspaceRow } from './CloudWorkspaceRow'
 import type { RowActions } from './CloudWorkspaceRowMenu'
 import {
@@ -159,5 +160,27 @@ export const privateMenu = defineFixture({
   interact: async (frame) => {
     openMenu(frame)
     await waitFor(() => document.querySelector('[data-slot="dropdown-menu-content"]'))
+  }
+})
+
+/** The row menu's Archive item focused: the shared snapshot definition beside it. */
+export const menuArchiveTooltip = defineFixture({
+  width: WIDTH,
+  setup: () => setArchiveTtlDaysForTest(30),
+  render: () => (
+    <div className="h-[420px]">
+      <Row />
+    </div>
+  ),
+  interact: async (frame) => {
+    openMenu(frame)
+    const content = await waitFor(() =>
+      document.querySelector<HTMLElement>('[data-slot="dropdown-menu-content"]')
+    )
+    // The menu focuses its content once it opens; then typeahead "a" moves keyboard focus to
+    // Archive, the way a keyboard user gets there, and focus opens its tooltip.
+    await new Promise((resolve) => setTimeout(resolve, 250))
+    content?.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', bubbles: true }))
+    await new Promise((resolve) => setTimeout(resolve, 300))
   }
 })

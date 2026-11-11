@@ -1,6 +1,7 @@
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import type { CloudDotState } from '@/lib/orca-cloud/orca-cloud-workspace-state'
+import { archiveSnapshotDefinition } from './archive-snapshot-copy'
 
 export function cloudStateLabel(state: CloudDotState, t: Translate = translate): string {
   switch (state) {
@@ -26,7 +27,12 @@ export function cloudStateLabel(state: CloudDotState, t: Translate = translate):
 }
 
 /** One line under the state in the status panel; null where the state says enough on its own. */
-export function cloudStateDetail(state: CloudDotState, t: Translate = translate): string | null {
+export function cloudStateDetail(
+  state: CloudDotState,
+  t: Translate = translate,
+  /** An archived workspace's kept-until date, for the snapshot definition. */
+  keptUntil?: number | null
+): string | null {
   switch (state) {
     case 'sleeping':
       return t(
@@ -44,10 +50,8 @@ export function cloudStateDetail(state: CloudDotState, t: Translate = translate)
         'Restart to recover. Files are kept and Orca resumes your agents after the restart.'
       )
     case 'archived':
-      return t(
-        'orcaCloudWorkspace.detail.archived',
-        'Kept as a snapshot. Unarchive to work in it again.'
-      )
+      // "Snapshot" is defined, never bare: the one shared archive definition.
+      return archiveSnapshotDefinition(t, { keptUntil })
     case 'failed':
       return t(
         'orcaCloudWorkspace.detail.startFailed',

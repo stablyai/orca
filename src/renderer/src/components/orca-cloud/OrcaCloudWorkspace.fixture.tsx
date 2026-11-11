@@ -419,19 +419,19 @@ function Archived({
   )
 }
 
-export const archivedView = defineFixture({
-  width: 820,
-  render: () => <Archived load={{ status: 'ready', archive }} />
-})
-export const archivedEmpty = defineFixture({
-  width: 820,
-  render: () => <Archived load={{ status: 'ready', archive: null }} />
-})
-export const archivedLoading = defineFixture({
-  width: 820,
-  render: () => <Archived load={{ status: 'loading' }} />
-})
-export const archivedError = defineFixture({
-  width: 820,
-  render: () => <Archived load={{ status: 'error', message: 'x' }} />
-})
+type ArchivedLoad = React.ComponentProps<typeof CloudArchivedWorkspaceView>['load']
+const archivedFixture = (load: ArchivedLoad, interact?: (frame: HTMLElement) => Promise<void>) =>
+  defineFixture({ width: 820, render: () => <Archived load={load} />, interact })
+
+export const archivedView = archivedFixture({ status: 'ready', archive })
+export const archivedEmpty = archivedFixture({ status: 'ready', archive: null })
+export const archivedLoading = archivedFixture({ status: 'loading' })
+export const archivedError = archivedFixture({ status: 'error', message: 'x' })
+/** The read-only note focused: "snapshot" defined with this workspace's own kept-until date. */
+export const archivedViewDefinition = archivedFixture(
+  { status: 'ready', archive },
+  async (frame) => {
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    frame.querySelector<HTMLElement>('[data-cloud-archived-view] p span[tabindex="0"]')?.focus()
+  }
+)

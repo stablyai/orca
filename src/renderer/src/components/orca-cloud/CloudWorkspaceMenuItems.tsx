@@ -1,4 +1,5 @@
 import React, { useContext } from 'react'
+import { ArchiveSnapshotTooltip } from './ArchiveSnapshotTooltip'
 import { toast } from 'sonner'
 import {
   Archive,
@@ -93,10 +94,12 @@ function CloudMenuRows({
         </DropdownMenuItem>
       ) : null}
       {has('archive') ? (
-        <DropdownMenuItem disabled={busy || view.state === 'waking'} onSelect={actions.onArchive}>
-          <Archive className="size-3.5" />
-          {t('orcaCloudWorkspace.archive', 'Archive')}
-        </DropdownMenuItem>
+        <ArchiveSnapshotTooltip side="left">
+          <DropdownMenuItem disabled={busy || view.state === 'waking'} onSelect={actions.onArchive}>
+            <Archive className="size-3.5" />
+            {t('orcaCloudWorkspace.archive', 'Archive')}
+          </DropdownMenuItem>
+        </ArchiveSnapshotTooltip>
       ) : null}
       {has('unarchive') ? (
         <DropdownMenuItem disabled={busy} onSelect={actions.onUnarchive}>
