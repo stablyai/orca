@@ -18,7 +18,7 @@ for (const [file, reason] of Object.entries(entries)) {
 export function isMainBlockingSource(file) {
   return (
     /\.[cm]?[jt]sx?$/.test(file) &&
-    !file.endsWith('.d.ts') &&
+    !/\.d\.[cm]?ts$/.test(file) &&
     !isTestOnlySourcePath(file) &&
     !Object.hasOwn(entries, file)
   )

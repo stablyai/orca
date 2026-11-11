@@ -1,7 +1,7 @@
 import ts from 'typescript-api'
 import { propertyName, unwrap } from '../module-requests/static-module-specifiers.mjs'
 
-const METHODS = new Set(['prepare', 'run', 'get', 'all', 'exec'])
+const METHODS = new Set(['prepare', 'run', 'get', 'all', 'iterate', 'exec'])
 const SQLITE_MODULE =
   /^(?:node:sqlite|better-sqlite3)$|(?:^|\/)(?:sync-database|sqlite-statement)(?:\.[cm]?[jt]s)?$/
 

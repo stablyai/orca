@@ -75,7 +75,7 @@ export function countBlockingApis(sources) {
     let ipc = 0
     function visit(node) {
       if (
-        file.startsWith('src/preload/') &&
+        (file.startsWith('src/preload/') || file.startsWith('src/shared/')) &&
         ts.isCallExpression(node) &&
         (ts.isPropertyAccessExpression(node.expression) ||
           ts.isElementAccessExpression(node.expression)) &&
@@ -84,7 +84,7 @@ export function countBlockingApis(sources) {
         ipc++
       }
       if (
-        file.startsWith('src/main/') &&
+        (file.startsWith('src/main/') || file.startsWith('src/shared/')) &&
         ts.isBinaryExpression(node) &&
         node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
         (ts.isPropertyAccessExpression(node.left) || ts.isElementAccessExpression(node.left)) &&

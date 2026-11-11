@@ -4,7 +4,10 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { main as fsMain } from './check-main-sync-fs-ratchet.mjs'
-import { collectSyncLaunchUses } from '../../process-boundaries/check-main-sync-spawn-ratchet.mjs'
+import {
+  collectSyncLaunchUses,
+  isRatchetedSourcePath
+} from '../../process-boundaries/check-main-sync-spawn-ratchet.mjs'
 import { countBlockingApis, main } from './check-main-blocking-api-ratchet.mjs'
 
 const file = 'src/main/consumer.ts'
@@ -47,9 +50,9 @@ describe('main blocking API ratchets', () => {
       const db = new ${ctor}('db')
       db.exec('schema')
       const statement = db.prepare('select')
-      statement.run(); statement.get(); statement.all()
+      statement.run(); statement.get(); statement.all(); for (const row of statement.iterate()) {}
       db.prepare('select').get()`)
-    ).toEqual({ compression: 0, crypto: 0, atomics: 0, sqlite: 8, ipc: 0 })
+    ).toEqual({ compression: 0, crypto: 0, atomics: 0, sqlite: 9, ipc: 0 })
   })
 
   it('guards typed SQL receivers without charging Map.get or async backup', () => {
@@ -97,6 +100,17 @@ describe('main blocking API ratchets', () => {
       ).ipc
     ).toBe(1)
     expect(counts("ipcMain.on('get', (event) => { event.returnValue = value })").ipc).toBe(1)
+    expect(counts("ipc.sendSync('get'); event.returnValue = value", 'src/shared/ipc.ts').ipc).toBe(
+      2
+    )
+  })
+
+  it.each(['ts', 'mts', 'cts'])('does not charge .d.%s declarations as executable code', (ext) => {
+    const declaration = `src/main/types.d.${ext}`
+    expect(isRatchetedSourcePath(declaration)).toBe(false)
+    expect(
+      counts("import { scryptSync } from 'crypto'; scryptSync('pw')", declaration).crypto
+    ).toBe(0)
   })
 
   it('exempts only an explicit entry, leaving shared worker dependencies guarded', () => {
