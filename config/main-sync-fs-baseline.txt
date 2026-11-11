@@ -419,8 +419,8 @@
 2 src/main/persistence/restoring-sessions/floating-workspace-normalization.ts
 1 src/main/persistence/tracking-repos/worktree-metadata-normalization.ts
 1 src/main/persistence/window-save-divergence.ts
-8 src/main/pi/legacy-omp-overlay-migration.ts
-5 src/main/pi/titlebar-extension-service.ts
+8 src/main/pi/managed-extensions/legacy-omp-overlay-migration.ts
+5 src/main/pi/managed-extensions/titlebar-extension-service.ts
 3 src/main/plugins/appearance/plugin-appearance-service.ts
 2 src/main/plugins/installation/plugin-install-staging.ts
 1 src/main/plugins/installation/plugin-install.ts
