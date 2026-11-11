@@ -14247,6 +14247,22 @@
             "buckets": "Gemini model buckets",
             "optional": "dropped when a placeholder inside is empty"
           }
+        },
+        "RepositoryRemoveProjectSection": {
+          "filesNoteVmRecipe": "VM recipes decide whether their environments and files are deleted.",
+          "filesNote": "Files stay on disk, so you can add it again later.",
+          "hostCount_one": "{{count}} host",
+          "hostCount_other": "{{count}} hosts",
+          "checkoutCount_one": "{{count}} checkout",
+          "checkoutCount_other": "{{count}} checkouts",
+          "terminalCount_one": "{{count}} open terminal",
+          "terminalCount_other": "{{count}} open terminals",
+          "removeButton": "Remove…",
+          "dialogTitle": "Remove {{name}}?",
+          "terminalWarning_one": "{{count}} open terminal in this project will be closed.",
+          "terminalWarning_other": "{{count}} open terminals in this project will be closed.",
+          "cancel": "Cancel",
+          "confirm": "Remove"
         }
       },
       "right": {

@@ -702,6 +702,16 @@
           "dailyWarning": "Daily builds ship straight from main with no test gate, and the Windows ones are unsigned. Keep a stable build handy.",
           "hourlyWarning": "Hourly builds ship straight from main with no test gate, and the Windows ones are unsigned. Keep a stable build handy."
         },
+        "RepositoryRemoveProjectSection": {
+          "checkoutCount_one": "{{count}} checkout",
+          "checkoutCount_other": "{{count}} checkouts",
+          "hostCount_one": "{{count}} host",
+          "hostCount_other": "{{count}} hosts",
+          "terminalCount_one": "{{count}} open terminal",
+          "terminalCount_other": "{{count}} open terminals",
+          "terminalWarning_one": "{{count}} open terminal in this project will be closed.",
+          "terminalWarning_other": "{{count}} open terminals in this project will be closed."
+        },
         "Settings": {
           "084d8fac5b": "Privacy & Security",
           "23931df7e8": "Remote Hosts",
