@@ -23,6 +23,7 @@ import {
   cloudSkillsRowStateLabel,
   cloudSkillsRowToggleable,
   cloudSkillsEntryCount,
+  cloudSkillsGroupOpen,
   cloudSkillsEntryKeys,
   cloudSkillsEntryKindLabel,
   cloudSkillsGroupRows,
@@ -123,9 +124,6 @@ function ItemRow({
   )
 }
 
-/** A Synced list longer than this starts collapsed; Not synced, the part to act on, never does. */
-const COLLAPSE_SYNCED_OVER = 10
-
 function Group({
   title,
   entries,
@@ -145,7 +143,10 @@ function Group({
   const headingId = useId()
   const listId = useId()
   const count = cloudSkillsEntryCount(entries)
-  const [open, setOpen] = useState(!collapsible || count <= COLLAPSE_SYNCED_OVER)
+  // Only the user's own click is remembered; otherwise the current count decides, so a list that
+  // grows past the limit after Sync now collapses like one that opened long.
+  const [choice, setChoice] = useState<boolean | null>(null)
+  const open = cloudSkillsGroupOpen(collapsible, count, choice)
   if (entries.length === 0) {
     return null
   }
@@ -160,7 +161,7 @@ function Group({
             className="-ml-1"
             aria-expanded={open}
             aria-controls={listId}
-            onClick={() => setOpen((value) => !value)}
+            onClick={() => setChoice(!open)}
           >
             {title} · {count}
             <ChevronRight
