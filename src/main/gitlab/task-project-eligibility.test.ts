@@ -25,6 +25,8 @@ vi.mock('../git/command-runner/gh-exec-file', async (importOriginal) => ({
 }))
 
 import { listMergeRequests } from './merge-request-list'
+import { isTaskRepositoryIneligible } from '../git/task-repository-eligibility'
+import { rememberGlabKnownHosts } from './gitlab-known-host-probe'
 import { listIssues } from './issues'
 import { _resetProjectRefCache, _resetKnownHostsCache } from './gitlab-project-ref-resolution'
 import { _resetRemoteNameListingCache } from '../git/remotes/remote-name-listing'
@@ -131,5 +133,10 @@ describe('GitLab task project admission', () => {
     expect(result.error).toBeUndefined()
     expect(result.items).toEqual([])
     expect(glab.mock.calls.filter(([args]) => args[0] !== 'auth')).toEqual([])
+  })
+
+  it('does not exclude GitHub tasks because glab remembers github.com', async () => {
+    rememberGlabKnownHosts(['github.com'])
+    await expect(isTaskRepositoryIneligible('/github', 'github')).resolves.toBe(false)
   })
 })

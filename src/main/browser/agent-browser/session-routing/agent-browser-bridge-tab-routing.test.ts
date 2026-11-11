@@ -60,6 +60,10 @@ vi.mock('../../cdp/commands/cdp-bridge', async () => {
 
 import { AgentBrowserBridge } from '../agent-browser-bridge'
 import {
+  getActiveRpcAgentSessionId,
+  runWithActiveRpcCaller
+} from '../../../runtime/rpc/rpc-active-caller'
+import {
   answerAgentBrowserCommands,
   mockBrowserManager,
   mockWebContents,
@@ -124,5 +128,52 @@ describe('AgentBrowserBridge', () => {
     await b.exec('snapshot -i', 'wt-1')
     await b.click('@e2', 'wt-1')
     expect(clickSessions).toEqual(['orca-tab-tab-a', 'orca-tab-tab-b'])
+  })
+
+  it("marks a tab switch queued behind another chat's command as the switching chat's", async () => {
+    const chatA = '11111111-1111-4111-8111-111111111111'
+    const chatB = '22222222-2222-4222-8222-222222222222'
+    const tabs = new Map([
+      ['tab-a', 1],
+      ['tab-b', 2]
+    ])
+    const worktrees = new Map([
+      ['tab-a', 'wt-1'],
+      ['tab-b', 'wt-1']
+    ])
+    const wc1 = mockWebContents(1)
+    const wc2 = mockWebContents(2)
+    webContentsFromIdMock.mockImplementation((id: number) => (id === 1 ? wc1 : wc2))
+    const marks: [string, string | undefined][] = []
+    const b = new AgentBrowserBridge(
+      mockBrowserManager(tabs, worktrees, {
+        beginAgentCommand: (pageId: string) => {
+          marks.push([pageId, getActiveRpcAgentSessionId()])
+          return { agent: true, run: (execute) => execute(), end: () => {} }
+        }
+      })
+    )
+    b.setActiveTab(1, 'wt-1')
+    const held: { releaseA?: () => void } = {}
+    answerAgentBrowserCommands(execFileMock, stdinWrites, (_command, cb) => {
+      const answer = (): void =>
+        cb(null, JSON.stringify({ success: true, data: { snapshot: '' } }), '')
+      if (held.releaseA) {
+        answer()
+      } else {
+        held.releaseA = answer
+      }
+    })
+    const inChat = <T>(chat: string, run: () => T): T =>
+      runWithActiveRpcCaller({ kind: 'local-cli' }, run, chat)
+
+    const snapshot = inChat(chatA, () => b.snapshot('wt-1'))
+    await vi.waitFor(() => expect(execFileMock).toHaveBeenCalled())
+    const tabSwitch = inChat(chatB, () => b.tabSwitch(undefined, 'wt-1', 'tab-b'))
+    held.releaseA?.()
+    await Promise.all([snapshot, tabSwitch])
+
+    expect(marks).toContainEqual(['tab-b', chatB])
+    expect(marks).not.toContainEqual(['tab-b', chatA])
   })
 })

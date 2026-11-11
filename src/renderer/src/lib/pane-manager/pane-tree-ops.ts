@@ -5,7 +5,7 @@ import type {
   PaneStyleOptions
 } from './pane-manager-types'
 import { createDivider, disposeDivider } from './pane-divider'
-import { disposeWebgl, attachWebgl } from './pane-webgl-renderer'
+import { disposeWebgl, attachWebgl } from './terminal-rendering/pane-webgl-renderer'
 import { safeFit } from './pane-fit'
 
 export {

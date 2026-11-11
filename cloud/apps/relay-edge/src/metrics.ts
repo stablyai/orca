@@ -2,6 +2,8 @@
 import type { Env } from './env'
 
 export type MetricEvent =
+  // label 'new' | 'rebind'; reason 'keepalive' | 'legacy' (took the keepalive offer or not);
+  // double2 = ms from the upgrade to activation (the desktop gives up a connect after 15 s).
   | 'control_active'
   | 'control_close'
   | 'phone_open'
@@ -26,7 +28,11 @@ export type MetricEvent =
   | 'control_upgrade'
   // Control closed 4401 for expired authorization: value = seconds since its last extending
   // refresh, label 'refreshed'; -1 and label 'never' when this socket never extended its token.
+  // double2 = seconds since the host's last inbound frame or keepalive, double3 = seconds since the
+  // control became active (-1 if unknown); reason 'keepalive' | 'legacy'.
   | 'auth_expired_close'
+  // Control closed for silence (deadControlMetric, host-relay-control.ts).
+  | 'silence_close'
   // Pre-auth socket refused by the per-source limiter: label 'phone' | 'data' | 'health'. Unpushed-host phones: 'not_on_edge'.
   | 'preauth_limited'
   | 'not_on_edge'

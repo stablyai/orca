@@ -1,5 +1,5 @@
 import { RELEASE_SYNCHRONIZED_OUTPUT } from '../../../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
-import { waitForTerminalOutputParsed } from '@/lib/pane-manager/pane-terminal-output-scheduler'
+import { waitForTerminalOutputParsed } from '@/lib/pane-manager/terminal-output/pane-terminal-output-scheduler'
 import { safeFit, safeFitAndThen } from '@/lib/pane-manager/pane-fit'
 import { getFitOverrideForPty } from '@/lib/pane-manager/mobile-fit-overrides'
 

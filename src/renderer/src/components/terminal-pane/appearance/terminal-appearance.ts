@@ -3,7 +3,10 @@ import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import { resolveTerminalFontWeights } from '../../../../../shared/terminal/appearance/terminal-fonts'
 import { resolveTerminalLigaturesEnabled } from '../../../../../shared/terminal/appearance/terminal-ligatures'
-import { resolvePaneStyleOptions, resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
+import {
+  resolvePaneStyleOptions,
+  resolveEffectiveTerminalAppearance
+} from '@/lib/terminal/appearance/terminal-theme'
 import { buildFontFamily } from '../../../../../shared/monospace-font-family'
 import { pluginFontFamilyWhenLoaded } from '@/store/plugins/appearance/plugin-fonts'
 import '@/lib/pane-manager/pane-tree-ops'
