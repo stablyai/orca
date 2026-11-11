@@ -134,6 +134,10 @@ export function HostSectionHeader({
       >
         {row.vmState ? (
           <VmHostIcon state={row.vmState} isCloud={isCloudHost} />
+        ) : isCloudHost ? (
+          <HostGlyph kind="orca-cloud" size={14} />
+        ) : row.kind === 'local' ? (
+          <HostGlyph kind="local" size={14} />
         ) : isDisconnected ? (
           <ServerOff className="size-3.5 shrink-0 text-muted-foreground/80" />
         ) : (
@@ -144,7 +148,8 @@ export function HostSectionHeader({
         <div className="flex min-w-0 flex-1 items-center gap-1.5">
           <span
             className={cn(
-              'min-w-0 truncate text-[12px] font-semibold leading-none',
+              // The host name wins over its detail: "Orca Cloud" stays whole, "1 running · 1 asleep" truncates.
+              'min-w-0 max-w-[70%] shrink-0 truncate text-[12px] font-semibold leading-none',
               isDisconnected || isSuspended ? 'text-muted-foreground' : 'text-foreground'
             )}
           >
@@ -153,7 +158,7 @@ export function HostSectionHeader({
           {detail ? (
             <span
               className={cn(
-                'shrink-0 truncate text-[10px] leading-none',
+                'min-w-0 truncate text-[10px] leading-none',
                 detail.isWarning ? 'text-destructive' : 'text-muted-foreground/70'
               )}
             >

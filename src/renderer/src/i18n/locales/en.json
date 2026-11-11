@@ -8087,6 +8087,10 @@
           "delete": "Delete workspace",
           "uncommitted_one": "{{count}} uncommitted change",
           "uncommitted_other": "{{count}} uncommitted changes"
+        },
+        "orcaCloudHost": {
+          "running": "{{count}} running",
+          "runningAsleep": "{{running}} running · {{asleep}} asleep"
         }
       },
       "shared": {
