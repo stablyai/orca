@@ -142,3 +142,130 @@ it.each(['unknown', 'throw'] as const)(
     observer.dispose()
   }
 )
+
+it.each([200, 2000])(
+  'encodes each finite byte-wave candidate once at %i normal long paths',
+  async (count) => {
+    vi.useFakeTimers()
+    const prefix = Array.from({ length: 30 }, () => 'a'.repeat(98)).join('/')
+    const paths = Array.from(
+      { length: count },
+      (_, index) => `repo/${prefix}/p${String(index).padStart(5, '0')}`
+    )
+    const sent: string[][] = []
+    let sources: readonly ExplorerRepositorySource[] = []
+    const observer = new FileExplorerRepositoryObserver(
+      async (request) => {
+        if (request.repositoryIntent === 'ignored') {
+          sent.push(request.repositoryQueryPaths!)
+          await new Promise((resolve) => setTimeout(resolve, 1))
+          return [{ path: 'repo', kind: 'repository', ignoredPaths: [] }]
+        }
+        return [
+          {
+            path: 'repo',
+            kind: 'repository',
+            status: { entries: [], conflictOperation: 'unknown' }
+          }
+        ]
+      },
+      (next) => {
+        sources = next
+      }
+    )
+    let encodings = 0
+    let encodedBytes = 0
+    const encode = TextEncoder.prototype.encode
+    const spy = vi.spyOn(TextEncoder.prototype, 'encode').mockImplementation(function (input) {
+      const result = encode.call(this, input)
+      if (input?.startsWith(prefix)) {
+        encodings++
+        encodedBytes += result.byteLength
+      }
+      return result
+    })
+    try {
+      observer.setFrontier([{ path: 'repo', marker: true }], ['repo'])
+      observer.setDemand(paths)
+      observer.setVisible(true)
+      await vi.advanceTimersByTimeAsync(0)
+      const lookahead = sent[0].length < count ? paths[sent[0].length] : undefined
+      observer.setDemand(paths.filter((path) => path !== paths.at(-1) && path !== lookahead))
+      observer.setDemand(paths.slice(0, -1))
+      await vi.advanceTimersByTimeAsync(5000)
+    } finally {
+      spy.mockRestore()
+    }
+    expect(encodings).toBe(count)
+    expect(encodedBytes).toBe(count * encode.call(new TextEncoder(), paths[0].slice(5)).byteLength)
+    expect(sources[0].ignored.size).toBe(count - 1)
+    const counts = new Map<string, number>()
+    for (const query of sent) {
+      expect(query.length).toBeLessThanOrEqual(2000)
+      expect(
+        query.reduce((sum, path) => sum + encode.call(new TextEncoder(), path).byteLength + 1, 0)
+      ).toBeLessThanOrEqual(1024 * 1024)
+      for (const path of query) {
+        counts.set(path, (counts.get(path) ?? 0) + 1)
+      }
+    }
+    expect(paths.slice(0, -1).every((path) => counts.get(path.slice(5)) === 1)).toBe(true)
+    observer.dispose()
+  }
+)
+
+it.each(['unknown', 'read-error'] as const)(
+  'keeps %s status retries scoped to their eligible input',
+  async (mode) => {
+    vi.useFakeTimers()
+    const calls: number[] = []
+    let recovered = false
+    let sources: readonly ExplorerRepositorySource[] = []
+    const observer = new FileExplorerRepositoryObserver(
+      async (request) => {
+        if (request.repositoryIntent === 'ignored') {
+          return [{ path: 'repo', kind: 'repository', ignoredPaths: ['keep'] }]
+        }
+        calls.push(Date.now())
+        return mode === 'unknown' && !recovered
+          ? [{ path: 'repo', kind: 'unknown' }]
+          : [
+              {
+                path: 'repo',
+                kind: 'repository',
+                status: {
+                  entries: [],
+                  conflictOperation: 'unknown',
+                  ...(!recovered ? { readError: 'busy' } : {})
+                }
+              }
+            ]
+      },
+      (next) => {
+        sources = next
+      }
+    )
+    observer.setFrontier([{ path: 'repo', marker: true }], ['repo'])
+    observer.setDemand(['repo/keep'])
+    observer.setVisible(true)
+    await vi.advanceTimersByTimeAsync(1000)
+    for (let index = 0; index < 61; index++) {
+      observer.invalidate(index % 2 ? 'repo/file' : 'repo/child-directory', index % 2 === 0)
+      await vi.advanceTimersByTimeAsync(1000)
+    }
+    if (mode === 'unknown') {
+      expect(calls).toHaveLength(2)
+      expect(calls[1] - calls[0]).toBeGreaterThanOrEqual(60_000)
+    } else {
+      expect(calls.length).toBeGreaterThanOrEqual(20)
+    }
+    expect(sources.map((source) => source.path)).toEqual(['repo'])
+    expect(sources[0].ignored.get('keep')).toBe(true)
+    recovered = true
+    const before = calls.length
+    observer.invalidate('repo/.git')
+    await vi.advanceTimersByTimeAsync(4000)
+    expect(calls.length).toBeGreaterThan(before)
+    observer.dispose()
+  }
+)

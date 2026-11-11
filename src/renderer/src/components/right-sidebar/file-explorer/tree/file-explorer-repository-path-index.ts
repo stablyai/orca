@@ -89,11 +89,18 @@ export function collectExplorerRepositoryInvalidation(
 ) {
   const directories = changes.filter((change) => change.directory || change.deleted)
   const affected = sourceIndex.descendants(directories.map((change) => change.path))
-  const ignoreOwners = new Set<string | undefined>()
+  const proofOwners = new Set(affected)
+  const ignoreOwners = new Set<string | undefined>(proofOwners)
   for (const { path } of changes) {
     const owner = explorerRepositoryOwner(sources, `${path}/`)
     if (owner !== undefined) {
       affected.add(owner)
+    }
+    const marker = /(?:^|\/)\.git(?:\/|$)/.exec(path)
+    const proofRoot = marker ? path.slice(0, marker.index) : undefined
+    if (proofRoot !== undefined && sources.has(proofRoot)) {
+      proofOwners.add(proofRoot)
+      ignoreOwners.add(proofRoot)
     }
     if (path.endsWith('/.gitignore') || path === '.gitignore' || path.includes('/.git/')) {
       ignoreOwners.add(owner)
@@ -110,6 +117,7 @@ export function collectExplorerRepositoryInvalidation(
     .map((change) => change.path)
   return {
     affected,
+    proofOwners,
     ignoreOwners,
     deleted: new Set(changes.filter((change) => change.deleted).map((change) => change.path)),
     discoveryCandidates: candidateIndex.related(discoveryPaths)

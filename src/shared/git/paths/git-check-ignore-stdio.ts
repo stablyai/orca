@@ -17,14 +17,21 @@ export function splitGitCheckIgnorePathsByStdinBytes(
   paths: readonly string[],
   maxBytes: number = GIT_CHECK_IGNORE_STDIN_CHUNK_BYTES
 ): string[][] {
+  return [...iterateGitCheckIgnorePathChunks(paths, maxBytes)]
+}
+
+export function* iterateGitCheckIgnorePathChunks(
+  paths: Iterable<string>,
+  maxBytes: number = GIT_CHECK_IGNORE_STDIN_CHUNK_BYTES,
+  maxPaths: number = Infinity
+): Generator<string[]> {
   const encoder = new TextEncoder()
-  const chunks: string[][] = []
   let chunk: string[] = []
   let chunkBytes = 0
   for (const path of paths) {
     const pathBytes = encoder.encode(path).byteLength + 1
-    if (chunk.length > 0 && chunkBytes + pathBytes > maxBytes) {
-      chunks.push(chunk)
+    if (chunk.length > 0 && (chunkBytes + pathBytes > maxBytes || chunk.length >= maxPaths)) {
+      yield chunk
       chunk = []
       chunkBytes = 0
     }
@@ -32,9 +39,8 @@ export function splitGitCheckIgnorePathsByStdinBytes(
     chunkBytes += pathBytes
   }
   if (chunk.length > 0) {
-    chunks.push(chunk)
+    yield chunk
   }
-  return chunks
 }
 
 export function parseGitCheckIgnorePaths(stdout: string): string[] {

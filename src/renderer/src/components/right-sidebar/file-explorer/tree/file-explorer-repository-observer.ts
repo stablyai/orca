@@ -62,20 +62,16 @@ export class FileExplorerRepositoryObserver {
         if (Date.now() < this.discoveryRetryAt) {
           return
         }
-        try {
-          const supported = await this.supports()
-          if (!this.current(generation, signal)) {
-            return
-          }
-          if (!supported) {
+        const supported = await Promise.resolve()
+          .then(() => this.supports())
+          .catch(() => undefined)
+        if (!this.current(generation, signal)) {
+          return
+        }
+        if (supported !== true) {
+          if (supported === false) {
             this.sources.forEach((_, path) => this.removeSource(path, false, true))
             this.emit()
-            this.discoveryRetryAt = Date.now() + 60_000
-            return
-          }
-        } catch {
-          if (!this.current(generation, signal)) {
-            return
           }
           this.discoveryRetryAt = Date.now() + 60_000
           return
@@ -227,7 +223,8 @@ export class FileExplorerRepositoryObserver {
       for (const source of this.sources.values()) {
         source.scheduler.pause()
         source.statusDirty = true
-        source.ignoredQueries.invalidate()
+        source.proofRetryAt = -Infinity
+        source.ignoredQueries.invalidate(this.visible)
       }
       if (this.visible) {
         this.discovery.resumeSafety()
@@ -241,7 +238,7 @@ export class FileExplorerRepositoryObserver {
   }
 
   invalidateChanges(changes: readonly ExplorerRepositoryChange[]): void {
-    const { affected, ignoreOwners, deleted, discoveryCandidates } =
+    const { affected, proofOwners, ignoreOwners, deleted, discoveryCandidates } =
       collectExplorerRepositoryInvalidation(
         changes,
         this.sources,
@@ -259,8 +256,11 @@ export class FileExplorerRepositoryObserver {
           ) || pruned
       }
       source.statusDirty = true
+      if (proofOwners.has(path)) {
+        source.proofRetryAt = -Infinity
+      }
       if (ignoreOwners.has(path)) {
-        source.ignoredQueries.invalidate()
+        source.ignoredQueries.invalidate(this.visible)
       }
       if (this.visible) {
         source.scheduler.signal()
@@ -292,12 +292,14 @@ export class FileExplorerRepositoryObserver {
       this.discovery.resumeSafety()
       for (const source of this.sources.values()) {
         source.statusDirty = true
-        source.ignoredQueries.invalidate()
+        source.proofRetryAt = -Infinity
+        source.ignoredQueries.invalidate(this.visible)
         source.scheduler.resumeSafety()
       }
     } else {
       this.discovery.pause()
       for (const source of this.sources.values()) {
+        source.ignoredQueries.suspend()
         source.scheduler.pause()
       }
     }

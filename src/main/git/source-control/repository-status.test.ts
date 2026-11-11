@@ -57,14 +57,15 @@ it('reads independent nested and linked repositories without walking up, and que
   await writeFile(join(outer, 'broken', '.git'), 'gitdir: missing\n')
 
   const probe = await getRepositoryStatuses(outer, {
-    repositoryPaths: ['nested', 'tracked-child', 'linked', 'plain'],
+    repositoryPaths: ['nested', 'tracked-child', 'linked', 'plain', 'broken'],
     repositoryIntent: 'probe'
   })
   expect(probe.repositoryStatuses).toEqual([
     { path: 'nested', kind: 'repository' },
     { path: 'tracked-child', kind: 'repository' },
     { path: 'linked', kind: 'repository' },
-    { path: 'plain', kind: 'absent' }
+    { path: 'plain', kind: 'absent' },
+    { path: 'broken', kind: 'repository' }
   ])
   const status = async (root: string, path: string) =>
     (await getRepositoryStatuses(root, { repositoryPaths: [path], repositoryIntent: 'status' }))

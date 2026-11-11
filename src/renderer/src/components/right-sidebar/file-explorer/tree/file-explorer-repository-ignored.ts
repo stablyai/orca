@@ -1,5 +1,5 @@
 import { GIT_REPOSITORY_IGNORE_BATCH_SIZE } from '../../../../../../shared/git/status/git-repository-status'
-import { splitGitCheckIgnorePathsByStdinBytes } from '../../../../../../shared/git/paths/git-check-ignore-stdio'
+import { iterateGitCheckIgnorePathChunks } from '../../../../../../shared/git/paths/git-check-ignore-stdio'
 import type { ExplorerRepositoryRead } from './file-explorer-repository-source'
 
 type Token = object
@@ -20,10 +20,12 @@ export class ExplorerRepositoryIgnoredQueries {
   private failures = new Map<string, FailedPath>()
   private controller = new AbortController()
   private active: { members: Map<string, Token>; controller: AbortController } | undefined
+  private working: Map<string, boolean> | undefined
   private epoch = 0
   private sweepAt = Infinity
   private retryAt = Infinity
   answers: ReadonlyMap<string, boolean> = new Map()
+  private published = this.answers
 
   constructor(
     private path: string,
@@ -47,6 +49,7 @@ export class ExplorerRepositoryIgnoredQueries {
         this.wave.delete(path)
         this.failures.delete(path)
         changed = answers.delete(path) || changed
+        this.working?.delete(path)
       }
     }
     let added = false
@@ -61,13 +64,15 @@ export class ExplorerRepositoryIgnoredQueries {
     if (changed) {
       this.answers = answers
     }
+    this.published = this.answers
     if (!paths.length) {
+      this.working = undefined
       this.controller.abort()
       this.controller = new AbortController()
       this.epoch++
       this.sweepAt = Infinity
     } else if (this.sweepAt === Infinity && !this.wave.size) {
-      this.sweepAt = Date.now() + 60_000
+      this.sweepAt = -Infinity
     }
     if (
       this.active &&
@@ -79,7 +84,23 @@ export class ExplorerRepositoryIgnoredQueries {
     return added
   }
 
-  invalidate(): void {
+  private commit(publish: boolean): void {
+    if (this.working) {
+      this.answers = this.working
+      this.working = undefined
+    }
+    if (publish && this.answers !== this.published) {
+      this.published = this.answers
+      this.owner.publish(this.answers)
+    }
+  }
+
+  suspend(): void {
+    this.commit(false)
+  }
+
+  invalidate(visible = true): void {
+    this.commit(visible)
     this.controller.abort()
     this.controller = new AbortController()
     this.epoch++
@@ -127,15 +148,21 @@ export class ExplorerRepositoryIgnoredQueries {
       }
     }
     this.wave = wave
-    while (wave.size && current()) {
-      const candidates: string[] = []
-      for (const path of wave.keys()) {
-        candidates.push(path)
-        if (candidates.length === GIT_REPOSITORY_IGNORE_BATCH_SIZE) {
-          break
-        }
+    const chunks = iterateGitCheckIgnorePathChunks(
+      wave.keys(),
+      undefined,
+      GIT_REPOSITORY_IGNORE_BATCH_SIZE
+    )
+    for (const names of chunks) {
+      if (!current()) {
+        break
       }
-      const query = splitGitCheckIgnorePathsByStdinBytes(candidates)[0]
+      const query = names.filter(
+        (path) => wave.has(path) && this.members.get(path) === wave.get(path)
+      )
+      if (!query.length) {
+        continue
+      }
       const members = new Map(query.map((path) => [path, wave.get(path)!]))
       const active = { members, controller: new AbortController() }
       this.active = active
@@ -170,7 +197,6 @@ export class ExplorerRepositoryIgnoredQueries {
       if (!current()) {
         break
       }
-      let answers: Map<string, boolean> | undefined
       for (const [path, token] of members) {
         if (wave.get(path) === token) {
           wave.delete(path)
@@ -180,17 +206,13 @@ export class ExplorerRepositoryIgnoredQueries {
         }
         if (ignored) {
           this.failures.delete(path)
-          if (this.answers.get(path) !== ignored.has(path)) {
-            answers ??= new Map(this.answers)
-            answers.set(path, ignored.has(path))
+          if ((this.working ?? this.answers).get(path) !== ignored.has(path)) {
+            this.working ??= new Map(this.answers)
+            this.working.set(path, ignored.has(path))
           }
         } else if (!querySignal.aborted) {
           this.failures.set(path, { token, dueAt: Date.now() + 60_000 })
         }
-      }
-      if (answers) {
-        this.answers = answers
-        this.owner.publish(answers)
       }
     }
     if (this.epoch !== epoch) {
@@ -209,6 +231,7 @@ export class ExplorerRepositoryIgnoredQueries {
       }
     }
     wave.clear()
+    this.commit(current())
     this.retimeFailures()
   }
 }

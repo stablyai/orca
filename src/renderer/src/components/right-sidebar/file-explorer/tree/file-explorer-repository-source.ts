@@ -29,6 +29,7 @@ export type ExplorerRepositoryRead = (
 ) => Promise<GitRepositoryStatus[] | undefined>
 export type ExplorerRepositorySourceState = ExplorerRepositorySource & {
   scheduler: GitStatusRefreshScheduler
+  proofRetryAt: number
   statusDirty: boolean
   query: string[]
   ignoredQueries: ExplorerRepositoryIgnoredQueries
@@ -69,6 +70,7 @@ export function createExplorerRepositorySource(
     latestEntries: EMPTY_ENTRIES,
     partial: false,
     ignored: new Map(),
+    proofRetryAt: -Infinity,
     statusDirty: true,
     query: [],
     ignoredQueries: new ExplorerRepositoryIgnoredQueries(path, {
@@ -88,7 +90,7 @@ export function createExplorerRepositorySource(
         }
         source.statusDirty ||= Date.now() >= statusValidation.dueAt()
         const generation = owner.generation()
-        if (source.statusDirty) {
+        if (source.statusDirty && Date.now() >= source.proofRetryAt) {
           source.statusDirty = false
           let validated = false
           try {
@@ -105,7 +107,13 @@ export function createExplorerRepositorySource(
                 owner.remove()
                 return
               }
+              if (result?.kind === 'unknown' && !result.status) {
+                source.proofRetryAt = Date.now() + 60_000
+              }
               const status = result?.status
+              if (status) {
+                source.proofRetryAt = -Infinity
+              }
               if (status && !status.readError) {
                 validated = true
                 statusValidation.settle(true)
@@ -145,7 +153,11 @@ export function createExplorerRepositorySource(
       {
         ...EXPLORER_REPOSITORY_SCHEDULER_OPTIONS,
         activityDebounceMs: 300,
-        nextSafetyAt: () => Math.min(statusValidation.dueAt(), source.ignoredQueries.nextAt())
+        nextSafetyAt: () =>
+          Math.min(
+            Math.max(statusValidation.dueAt(), source.proofRetryAt),
+            source.ignoredQueries.nextAt()
+          )
       }
     )
   }
