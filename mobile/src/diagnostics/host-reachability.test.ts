@@ -53,7 +53,7 @@ describe('testHostReachability', () => {
         ])
         const socket = sockets[0]
         socket?.onopen?.()
-        await expect(result).resolves.toBe(true)
+        await expect(result).resolves.toEqual({ reachable: true })
         expect(socket?.close).toHaveBeenCalledOnce()
       } finally {
         vi.unstubAllGlobals()
@@ -61,7 +61,7 @@ describe('testHostReachability', () => {
     }
   )
 
-  it('returns false without leaving timers when WebSocket rejects a malformed endpoint', async () => {
+  it('reports an unreachable host without leaving timers when WebSocket rejects a malformed endpoint', async () => {
     vi.useFakeTimers()
     vi.stubGlobal(
       'WebSocket',
@@ -73,7 +73,7 @@ describe('testHostReachability', () => {
     )
 
     try {
-      await expect(testHostReachability('not-a-url')).resolves.toBe(false)
+      await expect(testHostReachability('not-a-url')).resolves.toEqual({ reachable: false })
       expect(vi.getTimerCount()).toBe(0)
     } finally {
       vi.unstubAllGlobals()
@@ -81,3 +81,29 @@ describe('testHostReachability', () => {
     }
   })
 })
+
+it.each([
+  [403, { reachable: false, httpStatus: 403 }],
+  ['HTTP 403', { reachable: false }]
+])(
+  'reports only a numeric HTTP upgrade status from a failed probe (%s)',
+  async (status, expected) => {
+    let fail: ((event: unknown) => void) | undefined
+    vi.stubGlobal(
+      'WebSocket',
+      class {
+        set onerror(listener: (event: unknown) => void) {
+          fail = listener
+        }
+        close() {}
+      }
+    )
+    try {
+      const result = testHostReachability('wss://orca.example', { 'X-Proxy-Token': 'synthetic' })
+      fail?.({ httpStatus: status, message: 'synthetic credential echoed by proxy' })
+      await expect(result).resolves.toEqual(expected)
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  }
+)

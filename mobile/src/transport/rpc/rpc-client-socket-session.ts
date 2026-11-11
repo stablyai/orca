@@ -7,7 +7,8 @@ import { AUTH_REJECTED } from './rpc-client-authentication-retry'
 import { isStaleRpcSocketEvent, logRpcSocketClose } from './rpc-socket-close-evidence'
 import {
   describeSocketEvent,
-  redactSocketEndpoint
+  redactSocketEndpoint,
+  webSocketUpgradeStatus
 } from '../../diagnostics/connection/socket-event-debug'
 import {
   reportSocketDeadline,
@@ -156,22 +157,22 @@ export class RpcClientSocketSession {
       if (this.isStale('error')) {
         return
       }
-      if (this.options.omitNativeErrorDetails) {
-        console.log('[net] ws.onerror', {
-          message: 'Secure connection failed',
-          state: this.options.getState(),
-          attempt: this.options.getReconnectAttempt()
-        })
-        return
+      const httpStatus = webSocketUpgradeStatus(event)
+      if (httpStatus !== undefined) {
+        this.options.emitLog('warn', 'WebSocket upgrade rejected', `HTTP ${httpStatus}`)
       }
-      const error = event as { message?: string } | undefined
-      const description = describeSocketEvent(event)
+      const details = this.options.omitNativeErrorDetails ? null : describeSocketEvent(event)
       console.log('[net] ws.onerror', {
-        message: error?.message,
+        message: details
+          ? event && 'message' in event
+            ? event.message
+            : undefined
+          : 'Secure connection failed',
+        httpStatus,
         state: this.options.getState(),
         attempt: this.options.getReconnectAttempt(),
-        eventKeys: description.keys,
-        eventStr: description.json
+        eventKeys: details?.keys,
+        eventStr: details?.json
       })
     }
   }
