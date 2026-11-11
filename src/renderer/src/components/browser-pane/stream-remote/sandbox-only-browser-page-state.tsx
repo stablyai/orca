@@ -24,11 +24,16 @@ export function SandboxOnlyBrowserPageState({
 }: {
   url: string
   opening: boolean
-  error: string | null
+  /** The last open attempt failed; the button doubles as the retry. */
+  error: boolean
   onOpenOnThisComputer: () => void
 }): React.JSX.Element {
   const t = useTranslate()
   const canOpen = canOpenSandboxPageOnThisComputer(url)
+  const cantShow = t(
+    'auto.components.browser.pane.SandboxOnlyBrowserPage.cantShow',
+    "Orca can't show the sandbox's browser here yet."
+  )
   return (
     <div
       data-testid="sandbox-only-browser-page"
@@ -42,10 +47,12 @@ export function SandboxOnlyBrowserPageState({
         )}
       </div>
       <div className="max-w-sm text-xs leading-5 text-muted-foreground">
-        {t(
-          'auto.components.browser.pane.SandboxOnlyBrowserPage.body',
-          "Orca can't show the sandbox's browser here yet. Open the page on this computer to see it. Pages the agent signed in to will open signed out."
-        )}
+        {canOpen
+          ? t(
+              'auto.components.browser.pane.SandboxOnlyBrowserPage.body',
+              "Orca can't show the sandbox's browser here yet. Open the page on this computer to see it. Pages the agent signed in to will open signed out."
+            )
+          : cantShow}
       </div>
       {canOpen ? (
         <Button size="sm" onClick={onOpenOnThisComputer} disabled={opening}>
@@ -59,11 +66,14 @@ export function SandboxOnlyBrowserPageState({
           )}
         </div>
       )}
-      {error ? (
-        <div role="alert" className="max-w-sm text-xs leading-5 text-destructive">
-          {error}
-        </div>
-      ) : null}
+      <div role="status" aria-live="polite" className="max-w-sm text-xs leading-5 text-destructive">
+        {error && canOpen
+          ? t(
+              'auto.components.browser.pane.SandboxOnlyBrowserPage.openFailed',
+              "Couldn't open the page. Try again."
+            )
+          : null}
+      </div>
     </div>
   )
 }

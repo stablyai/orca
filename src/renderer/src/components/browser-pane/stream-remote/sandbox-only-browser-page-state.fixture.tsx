@@ -1,7 +1,7 @@
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { SandboxOnlyBrowserPageState } from './sandbox-only-browser-page-state'
 
-function Pane({ url, error = null }: { url: string; error?: string | null }): React.JSX.Element {
+function Pane({ url, error = false }: { url: string; error?: boolean }): React.JSX.Element {
   return (
     <div className="flex h-[420px] w-[720px] flex-col bg-background text-foreground">
       <div className="border-b border-border px-3 py-2 font-mono text-xs text-muted-foreground">
@@ -29,7 +29,5 @@ export const nonHttp = defineFixture({
 })
 export const openFailed = defineFixture({
   width: 740,
-  render: () => (
-    <Pane url="https://example.org/" error="Could not open the page on this computer." />
-  )
+  render: () => <Pane url="https://example.org/" error />
 })
