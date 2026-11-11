@@ -10,7 +10,8 @@ import {
   truncateToolDetail
 } from '../../../../shared/native-chat/tools/native-chat-tool-summary'
 import { isPlanApprovalSubject } from '../../../../shared/agent-session/agent-session-approval-subject'
-import { boundJournalPromptBody } from '../../../native-chat/agent-session-journal/journal-prompt-body-bounds'
+import { askOptionPreview } from '../../../../shared/native-chat/input/native-chat-ask-option-preview'
+import { boundJournalPromptBody } from '../../../native-chat/agent-session-journal/item-lifecycle/journal-prompt-body-bounds'
 import { claudeRecord, claudeText } from './claude-structured-item-translation'
 import { encodeClaudeQuestionOptionId } from './claude-structured-prompt-replies'
 import type { ClaudePendingPrompt } from '../../claude-prompt-registry'
@@ -77,16 +78,20 @@ function questionOptions(
   if (!Array.isArray(question.options)) {
     return []
   }
+  // Claude draws previews only on single-select questions.
+  const singleSelect = question.multiSelect !== true
   return question.options.flatMap((value, index) => {
     const option = claudeRecord(value)
     const label = claudeText(option?.label)
     const description = claudeText(option?.description)
+    const preview = singleSelect ? askOptionPreview(option) : null
     return label
       ? [
           {
             id: encodeClaudeQuestionOptionId(questionAddress, `choice-${index + 1}`),
             label,
-            ...(description ? { description } : {})
+            ...(description ? { description } : {}),
+            ...(preview ? { preview } : {})
           }
         ]
       : []

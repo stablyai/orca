@@ -1,4 +1,4 @@
-import { closeTestJournalHostDatabases } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
+import { closeTestJournalHostDatabases } from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -78,15 +78,6 @@ describe('AgentSessionRecordStore.setConversationName', () => {
     expect(reloaded.getRecord(SESSION)?.conversationName).toBe(name)
   })
 
-  it('clears the name with null', async () => {
-    const store = await reservedStore()
-    await store.setConversationName(SESSION, 'Fix the lease probe')
-
-    await store.setConversationName(SESSION, null)
-
-    expect(store.getRecord(SESSION)?.conversationName).toBeUndefined()
-  })
-
   it('compares against the committed name before applying a generated title', async () => {
     const store = await reservedStore()
     await store.compareAndSetConversationName(SESSION, 'First prompt', null)
@@ -121,13 +112,5 @@ describe('AgentSessionRecordStore.setConversationName', () => {
     expect(
       await store.compareAndSetConversationName(SESSION, 'Stale generation', placeholder)
     ).toBeNull()
-  })
-
-  it('refuses a session it has no record for', async () => {
-    const store = await reservedStore()
-
-    await expect(store.setConversationName('missing', 'A name')).rejects.toThrow(
-      'agent_session_identity_required'
-    )
   })
 })

@@ -217,7 +217,15 @@ export const PLUGIN_AUTHORING_HANDLERS: Record<string, CommandHandler> = {
     if (!report.valid) {
       throw invalidError(report)
     }
-    printPluginResult(ctx, report, [`${report.file}: ok`, ...formatGrants(report)].join('\n'))
+    printPluginResult(
+      ctx,
+      report,
+      [
+        `${report.file}: ok`,
+        ...(report.warnings ?? []).map((warning) => `warning: ${warning}`),
+        ...formatGrants(report)
+      ].join('\n')
+    )
   },
   'plugin inspect': async (ctx) => {
     const path = resolveLocalPluginPath(ctx, requirePluginPathArg(ctx, 'path'), 'inspect')

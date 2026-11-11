@@ -27,7 +27,8 @@ on:
       - 'config/scripts/*orcad*'
       - 'package.json'
       - 'pnpm-lock.yaml'
-      - 'src/main/ssh/orcad-*'
+      - 'src/main/ssh/migration-source/**'
+      - 'src/main/persistence/migrating-orcad-catalog/**'
       - 'src/main/managed-server/**'
       - 'src/packages/process-host/**'
       # Unit tests never run in this lane; only the real distro test below does.
@@ -99,14 +100,14 @@ jobs:
           fi
           git diff --name-only --no-renames -z HEAD^1 HEAD > "$RUNNER_TEMP/wsl-changed"
           git diff --name-only --no-renames --diff-filter=M -z HEAD^1 HEAD > "$RUNNER_TEMP/wsl-modified"
-          node config/scripts/wsl-orcad-qualification.mjs "$RUNNER_TEMP/wsl-changed" "$RUNNER_TEMP/wsl-modified"
+          node config/scripts/orcad-distribution/qualification/wsl-orcad-qualification.mjs "$RUNNER_TEMP/wsl-changed" "$RUNNER_TEMP/wsl-modified"
 
       - uses: ./.github/actions/build-mobile-web-bundle
       - name: Build the template
         run: |
           pnpm build:orcad-prebuilds
           pnpm build:orcad-prebuilds --require-slots linux-x64-glibc
-          node config/scripts/build-orcad-template.mjs --targets linux-x64-glibc
+          node config/scripts/orcad-distribution/template/build-orcad-template.mjs --targets linux-x64-glibc
       - uses: actions/upload-artifact@v7
         with:
           name: wsl-orcad-template

@@ -13,7 +13,7 @@ import type {
 } from '../../../src/shared/agent-session/journal/agent-session-journal-identity'
 import { codexProviderHandle } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import Database from '../../../src/main/sqlite/sync-database'
-import { journalDatabasePath } from '../../../src/main/native-chat/agent-session-journal/journal-host-database'
+import { journalDatabasePath } from '../../../src/main/native-chat/agent-session-journal/database/journal-host-database'
 import {
   closeTestJournalHostDatabase,
   createTrackedJournalOpener,
@@ -21,9 +21,9 @@ import {
   liveTestJournalRows,
   openTestJournalHostDatabase,
   SAVED_BY_NEWER_ORCA
-} from '../../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
-import type { JournalRow } from '../../../src/main/native-chat/agent-session-journal/journal-row-schema'
-import type { JournalReadRow } from '../../../src/main/native-chat/agent-session-journal/journal-read-row'
+} from '../../../src/main/native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import type { JournalRow } from '../../../src/main/native-chat/agent-session-journal/durable-rows/journal-row-schema'
+import type { JournalReadRow } from '../../../src/main/native-chat/agent-session-journal/replay/journal-read-row'
 import {
   importReleaseCheckoutModule,
   materializeReleaseCheckout,
@@ -36,7 +36,7 @@ import {
   applyJournalRow,
   createJournalReducerState,
   renderJournalState
-} from '../../../src/main/native-chat/agent-session-journal/journal-reducer'
+} from '../../../src/main/native-chat/agent-session-journal/projection/journal-reducer'
 
 // Old readers would truncate at unknown row kinds; encode Stop/Resume/reopen evidence in tombstones they understand.
 const BASELINE_REF = 'v1.4.218'

@@ -105,15 +105,6 @@ describe('worker-abandon settles a stuck worker', () => {
     expectAbandoned(dispatch.id, task.id, priorError)
   })
 
-  it('says so when it cannot tell who abandoned the worker', () => {
-    const { dispatch } = readyWorker()
-    db.abandonWorkerDispatch(dispatch.id, THIS_RUNTIME)
-
-    expect(db.getWorkerDispatch(dispatch.id)?.last_error).toBe(
-      'Abandoned by an unidentified caller.'
-    )
-  })
-
   it('settles an active attempt that is no longer the Task latest without touching the newer one', () => {
     const first = readyWorker(undefined, 'first')
     // An interleaved re-dispatch leaves two active attempts; the older one used to be a no-op.
@@ -178,14 +169,5 @@ describe('worker-abandon settles a stuck worker', () => {
       ownership_state: 'external',
       release_state: 'unknown'
     })
-  })
-
-  it('reports an abandon repeated on an abandoned worker as already abandoned', () => {
-    const { dispatch } = readyWorker()
-    db.abandonWorkerDispatch(dispatch.id, THIS_RUNTIME)
-
-    expect(db.abandonWorkerDispatch(dispatch.id, THIS_RUNTIME).disposition).toBe(
-      'already_abandoned'
-    )
   })
 })

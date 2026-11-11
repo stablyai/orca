@@ -21,6 +21,13 @@ export const REQUIRED_SCHEDULES = [
   'reject-peer-pending'
 ] as const
 
+// The sibling timeout (their default 30-second deadline, as the goldens record), the disconnect and the client
+// cutover all end these before their replies arrive.
+const SIBLING_INTERRUPTION_LATE_REPLIES: Readonly<Record<string, readonly string[]>> = {
+  'settings-workspace-context-fulfilled': ['preflight.check#1', 'linear.status#1', 'jira.status#1'],
+  'settings-task-hydration-fulfilled': ['preflight.check#1', 'linear.status#1', 'jira.status#1']
+}
+
 export function siblingSchedules(
   base: RecordingScenario,
   first: Completion,
@@ -35,10 +42,19 @@ export function siblingSchedules(
   const suffix = base.steps.slice(secondIndex + 1).filter((step) => !('checkpoint' in step))
   const checkpoint = { checkpoint: 'sibling-pending' }
   const rejected = (step: Completion): Completion => ({
-    complete: step.complete,
-    params: step.params,
-    reject: { message: `${step.complete} rejected`, deliveryUnknown: true }
+    ...step,
+    reply: undefined,
+    // The stable logical site names the request in every execution mode.
+    reject: { message: `${step.site ?? step.complete} rejected`, deliveryUnknown: true }
   })
+  // Only the declared replies the interruption has already ended arrive late; the rest stay live.
+  const lateAfterInterruption =
+    SIBLING_INTERRUPTION_LATE_REPLIES[base.lineage?.baseScenario ?? base.id] ?? []
+  const interruptedSuffix = suffix.map((step): ScenarioStep =>
+    'complete' in step && lateAfterInterruption.includes(step.site ?? step.complete)
+      ? { ...step, late: true }
+      : step
+  )
   const variants: Record<string, ScenarioStep[]> = {
     forward: [first, checkpoint, second],
     reverse: [second, checkpoint, first],
@@ -53,7 +69,15 @@ export function siblingSchedules(
     ...base,
     id: `${base.id}.${schedule}`,
     schedules: [schedule],
-    steps: [...prefix, ...steps, ...suffix, { checkpoint: 'settled' }]
+    ...(base.lineage ? { lineage: { ...base.lineage, schedule } } : {}),
+    steps: [
+      ...prefix,
+      ...steps,
+      ...(schedule === 'timeout' || schedule === 'disconnect' || schedule === 'client-cutover'
+        ? interruptedSuffix
+        : suffix),
+      { checkpoint: 'settled' }
+    ]
   }))
 }
 
@@ -61,7 +85,14 @@ export function bindCompletions(steps: readonly ScenarioStep[]): ScenarioStep[] 
   return steps.flatMap((step): ScenarioStep[] =>
     'complete' in step
       ? [
-          { bind: `lifecycle-${step.complete}`, request: step.complete, params: step.params },
+          {
+            bind: `lifecycle-${step.complete}`,
+            request: step.complete,
+            params: step.params,
+            site: step.site,
+            transport: step.transport,
+            optional: step.optional
+          },
           { ...step, complete: `lifecycle-${step.complete}` }
         ]
       : [step]
@@ -92,6 +123,15 @@ export function lifecycleSchedules(
           ...base,
           id: `${base.id}.${action}-${side}-${occurrence + 1}`,
           schedules: [`${action}-${side}-${occurrence + 1}`],
+          ...(base.lineage
+            ? {
+                lineage: {
+                  ...base.lineage,
+                  schedule: `${action}-${side}`,
+                  site: base.steps[index]?.site
+                }
+              }
+            : {}),
           steps: bindCompletions(steps)
         }
       }
@@ -112,13 +152,18 @@ export function interruptionSchedules(base: RecordingScenario): RecordingScenari
         ...base,
         id: `${base.id}.${interruption}`,
         schedules: [interruption],
+        ...(base.lineage ? { lineage: { ...base.lineage, schedule: interruption } } : {}),
         steps: [
           ...base.steps.slice(0, completion),
           interruption === 'timeout'
             ? { advance: 30_000 }
             : { action: interruption, id: interruption },
           { checkpoint: 'interrupted' },
-          ...base.steps.slice(completion)
+          // Each interruption ends the in-flight request (timed out, lost, or interrupted by the migration), so
+          // its scripted reply now arrives late.
+          ...base.steps
+            .slice(completion)
+            .map((step, index): ScenarioStep => (index === 0 ? { ...step, late: true } : step))
         ]
       }
     }))

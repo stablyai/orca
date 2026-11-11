@@ -1,63 +1,59 @@
+import { SourceControlTextActionAgentPicker } from '../../source-control/text-actions/SourceControlTextActionAgentPicker'
+import { hasOwnActionOverride } from './repository-source-control-ai-draft'
+import { readActionRecipeTextDraft } from './repository-source-control-ai-recipe-text'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
-import type { SourceControlActionId } from '../../../../../../shared/source-control-ai-actions'
+
 import { useRepositoryActionPickerInputs } from './use-repository-action-picker-inputs'
 import { shallow } from 'zustand/shallow'
 import { sameAgentLaunchPickerModel } from '../../../tab-bar/new-tab-agent-menu-model'
-import { selectSourceControlActionRecipe } from '../../../../../../shared/source-control-action-selection'
+import { selectSourceControlActionRecipe } from '../../../../../../shared/source-control/ai/recipes/source-control-action-selection'
 import type { RepositorySourceControlAiActionRowsProps } from './repository-source-control-ai-action-rows-props'
-import { sourceControlActionExecutionArgs } from '../../../../../../shared/source-control-action-launch-preferences'
+import { sourceControlActionExecutionArgs } from '../../../../../../shared/source-control/ai/recipes/source-control-action-launch-preferences'
 import type { useAgentMenuObservation } from '@/components/tab-bar/use-new-tab-agent-menu-rows'
 import type { NativeChatDefaultSettings } from '../../../../../../shared/structured-native-chat-launch-route'
 import {
   SourceControlActionAgentPickerView,
   sourceControlActionAgentPreview
-} from '../../SourceControlActionAgentPicker'
+} from '../../source-control/SourceControlActionAgentPicker'
 import { memo, useMemo, type JSX } from 'react'
-import { invalidateAgentPickerDrafts } from '../../../agent/AgentLaunchSetupButton'
-import { Terminal } from 'lucide-react'
+import { invalidateAgentPickerDrafts } from '../../../agent/agent-launch-picker-drafts'
+
+import { isCustomAgentId } from '../../../../../../shared/source-control/ai/generation/commit-message-agent-spec'
 
 import {
-  CUSTOM_AGENT_ID,
-  isCustomAgentId
-} from '../../../../../../shared/commit-message-agent-spec'
-
-import {
+  type SourceControlActionId,
   SOURCE_CONTROL_ACTION_IDS,
-  SOURCE_CONTROL_ACTION_LABELS
-} from '../../../../../../shared/source-control-ai-actions'
+  SOURCE_CONTROL_ACTION_LABELS,
+  resolveSourceControlActionCommandTemplate
+} from '../../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import { Input } from '../../../ui/input'
 import { Label } from '../../../ui/label'
-import { RepositorySourceControlAiActionSaveControls } from '../../RepositorySourceControlAiActionSaveControls'
+import { RepositorySourceControlAiActionSaveControls } from './RepositorySourceControlAiActionSaveControls'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../ui/select'
-import { AgentIcon } from '@/lib/agent-catalog'
 import { SourceControlActionVariableChips } from '../../../source-control/SourceControlActionVariableChips'
 import {
   getActionDescriptions,
   SOURCE_CONTROL_TEXT_ACTION_ID_SET,
-  getAgentCatalogForAction,
   getSourceControlActionAgentSupportText,
   getSourceControlActionAgentWarningText,
   getSourceControlAgentArgsPlaceholder
-} from '../../source-control-action-recipe-options'
+} from '../../source-control/source-control-action-recipe-options'
 import {
   ACTION_MODE_INHERIT,
   ACTION_MODE_OVERRIDE,
   DEFAULT_AGENT_VALUE,
-  actionAgentSelectValue,
   actionScopeLabel,
   agentArgsStateLabel,
   commandTemplateStateLabel,
   readInheritedAgentArgs,
-  readInheritedCommandTemplate,
   resolveAgentArgsPlaceholderAgent
 } from './repository-source-control-ai-labels'
-import { hasOwnActionOverride } from './repository-source-control-ai-draft'
 import { getRepositorySourceControlAiActionRecipeSectionId } from '../repository-settings-targets'
-import { translate } from '@/i18n/i18n'
-import { SourceControlActionOptionField } from '../../SourceControlActionOptionField'
-import { pickSourceControlLaunchAgent } from '../../../../../../shared/source-control-launch-agent-selection'
-import type { TuiAgent } from '../../../../../../shared/tui-agent'
-import { captureSourceControlActionSelection } from '../../../../../../shared/source-control-ai-operation-policy'
+import { useTranslate } from '@/i18n/use-translate'
+import { SourceControlActionOptionField } from '../../../agent/launch-settings/AgentChoiceOptionField'
+import { pickSourceControlLaunchAgent } from '../../../../../../shared/source-control/ai/source-control-launch-agent-selection'
+import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
+import { captureSourceControlActionSelection } from '../../../../../../shared/source-control/ai/source-control-ai-operation-policy'
 
 export function RepositorySourceControlAiActionRows(
   props: RepositorySourceControlAiActionRowsProps
@@ -70,8 +66,11 @@ const SelectedRepositoryActionRows = memo(
   function SelectedRepositoryActionRows({
     repoId,
     repoAi,
+    actionTextDrafts,
     source,
     defaultTuiAgent,
+    writeSourceControlAiSettings,
+    onActionTextModelChoice,
     onActionModeChange,
     onActionAgentChange,
     onActionLaunchPreferencesChange,
@@ -96,6 +95,7 @@ const SelectedRepositoryActionRows = memo(
     agentDefaultSurface: NativeChatDefaultSettings['agentDefaultSurface']
     nativeChatProviders: NativeChatDefaultSettings['nativeChatProviders']
   }): JSX.Element {
+    const t = useTranslate()
     useUiLanguageRevision()
     const selections = useMemo(
       () =>
@@ -119,9 +119,9 @@ const SelectedRepositoryActionRows = memo(
       [selections]
     )
     return (
-      <div className="space-y-3">
+      <div data-settings-row="" className="space-y-3 py-3">
         <Label className="text-xs font-medium">
-          {translate(
+          {t(
             'auto.components.settings.RepositorySourceControlAiActionRows.f0aa2cfaea',
             'Action recipes'
           )}
@@ -129,7 +129,10 @@ const SelectedRepositoryActionRows = memo(
         {SOURCE_CONTROL_ACTION_IDS.map((actionId) => {
           const hasOverride = hasOwnActionOverride(repoAi.actionOverrides, actionId)
           const override = repoAi.actionOverrides?.[actionId]
-          const inheritedTemplate = readInheritedCommandTemplate(source, actionId)
+          const inheritedTemplate = resolveSourceControlActionCommandTemplate(
+            source.actions,
+            actionId
+          )
           const inheritedAgentArgs = readInheritedAgentArgs(source, actionId)
           const templateValue =
             hasOverride && typeof override?.commandInputTemplate === 'string'
@@ -180,9 +183,12 @@ const SelectedRepositoryActionRows = memo(
                         defaultTuiAgent
                       )
                     ))
-          const agentOptions = getAgentCatalogForAction(actionId, effectiveAgent)
-          const agentWarningText = getSourceControlActionAgentWarningText(actionId, effectiveAgent)
-          const agentSupportText = getSourceControlActionAgentSupportText(actionId)
+          const agentWarningText = getSourceControlActionAgentWarningText(
+            actionId,
+            effectiveAgent,
+            t
+          )
+          const agentSupportText = getSourceControlActionAgentSupportText(actionId, t)
           const actionDirty = actionDirtyById[actionId]
           const isSavingAction = savingActionIds[actionId] === true
           const sectionId = getRepositorySourceControlAiActionRecipeSectionId(repoId, actionId)
@@ -224,13 +230,13 @@ const SelectedRepositoryActionRows = memo(
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value={ACTION_MODE_INHERIT}>
-                      {translate(
+                      {t(
                         'auto.components.settings.RepositorySourceControlAiActionRows.403876bb48',
                         'Use global'
                       )}
                     </SelectItem>
                     <SelectItem value={ACTION_MODE_OVERRIDE}>
-                      {translate(
+                      {t(
                         'auto.components.settings.RepositorySourceControlAiActionRows.1cd88d470a',
                         'Customize'
                       )}
@@ -241,7 +247,7 @@ const SelectedRepositoryActionRows = memo(
               <div className="grid min-w-0 grid-cols-1 items-start gap-3">
                 <div className="space-y-2">
                   <Label className="text-[11px] text-muted-foreground">
-                    {translate(
+                    {t(
                       'auto.components.settings.RepositorySourceControlAiActionRows.f4310cf63f',
                       'Agent'
                     )}
@@ -274,43 +280,26 @@ const SelectedRepositoryActionRows = memo(
                       }
                     />
                   ) : (
-                    <Select
-                      value={actionAgentSelectValue(effectiveAgent)}
-                      onValueChange={(value) => onActionAgentChange(actionId, value)}
-                      disabled={!hasOverride}
-                    >
-                      <SelectTrigger size="sm" className="h-8 w-full text-xs">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value={DEFAULT_AGENT_VALUE}>
-                          <span className="flex items-center gap-2">
-                            <Terminal className="size-3.5 text-muted-foreground" />
-                            {translate(
-                              'auto.components.settings.RepositorySourceControlAiActionRows.0ffb081b3a',
-                              'Use default agent'
-                            )}
-                          </span>
-                        </SelectItem>
-                        <SelectItem value={CUSTOM_AGENT_ID}>
-                          <span className="flex items-center gap-2">
-                            <Terminal className="size-3.5 text-muted-foreground" />
-                            {translate(
-                              'auto.components.settings.RepositorySourceControlAiActionRows.2b2f38652b',
-                              'Custom command'
-                            )}
-                          </span>
-                        </SelectItem>
-                        {agentOptions.map((agent) => (
-                          <SelectItem key={agent.id} value={agent.id}>
-                            <span className="flex items-center gap-2">
-                              <AgentIcon agent={agent.id} size={14} />
-                              {agent.label}
-                            </span>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <SourceControlTextActionAgentPicker
+                      actionId={actionId}
+                      agent={effectiveAgent ?? null}
+                      source={source}
+                      repoId={repoId}
+                      repoAi={repoAi}
+                      draft={{
+                        ...readActionRecipeTextDraft(repoAi, actionId),
+                        modelEdits: actionTextDrafts?.[actionId]?.modelEdits,
+                        commandInputTemplate: templateValue,
+                        agentArgs: override?.agentArgs ?? recipe.agentArgs ?? ''
+                      }}
+                      draftScope={draftScopes.get(actionId)}
+                      disabled={!hasOverride || isSavingAction}
+                      onAgentChange={(value) => onActionAgentChange(actionId, value)}
+                      onChange={(choice, agentArgs, edits) =>
+                        onActionTextModelChoice?.(actionId, choice, agentArgs, edits)
+                      }
+                      writeSourceControlAiSettings={writeSourceControlAiSettings}
+                    />
                   )}
                   {agentWarningText ? (
                     <p className="text-[11px] text-destructive">{agentWarningText}</p>
@@ -321,10 +310,7 @@ const SelectedRepositoryActionRows = memo(
                 <div className="flex min-w-0 flex-wrap items-start gap-3">
                   {!isLaunchAction ? (
                     <SourceControlActionOptionField
-                      label={translate(
-                        'auto.components.settings.AgentsPane.cfb3f35775',
-                        'Arguments'
-                      )}
+                      label={t('auto.components.settings.AgentsPane.cfb3f35775', 'Arguments')}
                     >
                       <Input
                         value={agentArgsValue}
@@ -339,7 +325,7 @@ const SelectedRepositoryActionRows = memo(
                 </div>
                 <div className="space-y-2">
                   <Label className="text-[11px] text-muted-foreground">
-                    {translate(
+                    {t(
                       'auto.components.settings.RepositorySourceControlAiActionRows.548a6e1281',
                       'Command template'
                     )}

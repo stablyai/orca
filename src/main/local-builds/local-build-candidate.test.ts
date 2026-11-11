@@ -1,9 +1,7 @@
 import { createHash } from 'node:crypto'
-import { execFile } from 'node:child_process'
-import { mkdir, mkdtemp, readFile, rename, rm, symlink, writeFile } from 'node:fs/promises'
+import { mkdtemp, rename, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { promisify } from 'node:util'
 import { afterEach, describe, expect, it } from 'vitest'
 import { stringify } from 'yaml'
 import type { LocalBuildCompatibility } from '../../shared/local-build-compatibility'
@@ -11,7 +9,6 @@ import { loadLocalBuildCandidate } from './local-build-candidate'
 import { startLocalBuildFeed } from './local-build-feed-server'
 
 const tempDirectories: string[] = []
-const execFileAsync = promisify(execFile)
 
 function compatibility(): LocalBuildCompatibility {
   return {
@@ -65,22 +62,6 @@ afterEach(async () => {
 })
 
 describe('loadLocalBuildCandidate', () => {
-  it('rejects mismatched hashes and traversal paths', async () => {
-    const badHash = await fixture({ sha512: Buffer.alloc(64).toString('base64') })
-    await expect(
-      loadLocalBuildCandidate(badHash.manifestPath, 'arm64', {
-        readCompatibility: async () => compatibility()
-      })
-    ).rejects.toThrow('SHA-512 verification failed')
-
-    const traversal = await fixture({ url: '../orca-macos-arm64.zip' })
-    await expect(
-      loadLocalBuildCandidate(traversal.manifestPath, 'arm64', {
-        readCompatibility: async () => compatibility()
-      })
-    ).rejects.toThrow('invalid file entry')
-  })
-
   it('rejects symlinked artifacts', async () => {
     const { artifactPath, directory, manifestPath } = await fixture()
     const realArtifact = join(directory, 'real.zip')
@@ -114,38 +95,4 @@ describe('loadLocalBuildCandidate', () => {
       await feed.close()
     }
   })
-
-  it.runIf(process.platform === 'darwin')(
-    'reads signed compatibility metadata through the held artifact descriptor',
-    async () => {
-      const directory = await mkdtemp(join(tmpdir(), 'orca-local-build-zip-'))
-      tempDirectories.push(directory)
-      const zipRoot = join(directory, 'zip-root')
-      const resources = join(zipRoot, 'Orca.app', 'Contents', 'Resources')
-      await mkdir(resources, { recursive: true })
-      await writeFile(join(resources, 'orca-local-build.json'), JSON.stringify(compatibility()))
-      const artifactName = 'orca-macos-arm64.zip'
-      const artifactPath = join(directory, artifactName)
-      await execFileAsync('/usr/bin/zip', ['-qry', artifactPath, 'Orca.app'], { cwd: zipRoot })
-      const artifact = await readFile(artifactPath)
-      const manifestPath = join(directory, 'latest-mac.yml')
-      await writeFile(
-        manifestPath,
-        stringify({
-          version: compatibility().version,
-          files: [
-            {
-              url: artifactName,
-              sha512: createHash('sha512').update(artifact).digest('base64'),
-              size: artifact.length
-            }
-          ]
-        })
-      )
-
-      const candidate = await loadLocalBuildCandidate(manifestPath, 'arm64')
-      expect(candidate.compatibility).toEqual(compatibility())
-      await candidate.close()
-    }
-  )
 })

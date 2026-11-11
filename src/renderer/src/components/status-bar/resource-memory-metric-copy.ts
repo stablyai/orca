@@ -1,5 +1,6 @@
 import type { ProcessMemoryMetric } from '../../../../shared/process-stats-types'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { usageTextColorClass } from './usage-roster-formatting'
 
 export type ResourceMemoryMetricCopy = {
@@ -8,15 +9,18 @@ export type ResourceMemoryMetricCopy = {
   description: string
 }
 
-export function getResourceMemoryMetricCopy(metric: ProcessMemoryMetric): ResourceMemoryMetricCopy {
+export function getResourceMemoryMetricCopy(
+  metric: ProcessMemoryMetric,
+  t: Translate = translate
+): ResourceMemoryMetricCopy {
   if (metric === 'footprint') {
     return {
-      columnLabel: translate('auto.components.status.bar.resource.memory.metric.memColumn', 'Mem'),
-      summaryLabel: translate(
+      columnLabel: t('auto.components.status.bar.resource.memory.metric.memColumn', 'Mem'),
+      summaryLabel: t(
         'auto.components.status.bar.resource.memory.metric.memorySummary',
         'Σ Memory'
       ),
-      description: translate(
+      description: t(
         'auto.components.status.bar.resource.memory.metric.footprintDescription',
         'Summed memory footprint, the same figure Activity Monitor shows: memory each process owns, including graphics memory. Pages shared between processes are not counted twice.'
       )
@@ -26,7 +30,7 @@ export function getResourceMemoryMetricCopy(metric: ProcessMemoryMetric): Resour
     return {
       columnLabel: 'WS',
       summaryLabel: 'Σ WS',
-      description: translate(
+      description: t(
         'auto.components.status.bar.resource.memory.metric.workingSetDescription',
         'Summed working set (WS): pages resident in RAM right now. Shared pages can appear in more than one process, and memory Windows has paged out is not counted here.'
       )
@@ -35,21 +39,23 @@ export function getResourceMemoryMetricCopy(metric: ProcessMemoryMetric): Resour
   return {
     columnLabel: 'RSS',
     summaryLabel: 'Σ RSS',
-    description: translate(
+    description: t(
       'auto.components.status.bar.resource.memory.metric.rssDescription',
       'Summed resident set size (RSS). Shared or aliased pages can appear in more than one process.'
     )
   }
 }
 
-/** No column of its own yet, so no `columnLabel`: the commit figure is a summary + tooltip. */
-export function getResourceCommitMetricCopy(): Omit<ResourceMemoryMetricCopy, 'columnLabel'> {
+/** Private bytes appear only in the summary. */
+export function getResourceCommitMetricCopy(
+  t: Translate = translate
+): Omit<ResourceMemoryMetricCopy, 'columnLabel'> {
   return {
-    summaryLabel: translate(
+    summaryLabel: t(
       'auto.components.status.bar.resource.memory.metric.privateSummary',
       'Σ Private'
     ),
-    description: translate(
+    description: t(
       'auto.components.status.bar.resource.memory.metric.privateBytesDescription',
       'Summed private bytes: memory these processes have committed, counted whether it is resident or paged out. This is what the host charges against its commit limit, so it keeps rising while the working set above shrinks under paging.'
     )

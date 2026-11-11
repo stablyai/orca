@@ -9,9 +9,18 @@ import {
 } from './workspace-session-write-listeners'
 import { ptyBindingGenerationOf } from './pty-binding-generations'
 import type { PartitionEditorViews } from './layout-editor-views'
+import type { ProfileSaveDomains } from '../profile-save-domains'
+import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 
 /** Undefined means any domain may have changed. */
 export type StateWriteListener = (dirtyDomains: readonly string[] | undefined) => void
+/** One host's worktree metadata row before and after a write. */
+export type WorktreeMetaWriteListener = (write: {
+  worktreeId: string
+  hostId: ExecutionHostId
+  previous: WorktreeMeta | undefined
+  next: WorktreeMeta
+}) => void
 
 const SAVE_DEBOUNCE_MS = 1_000
 const SAVE_MAX_WAIT_MS = 5_000
@@ -20,6 +29,7 @@ type WriteSchedulingOperationsRuntime = Pick<
   StoreRuntimeState,
   | 'activeViewPreference'
   | 'automationListProjectionCache'
+  | 'pendingAutomationRunsAfter'
   | 'dirtyProfileStateDomains'
   | 'firstPendingSaveAt'
   | 'pendingWrite'
@@ -31,6 +41,8 @@ type WriteSchedulingOperationsRuntime = Pick<
   | 'workspaceSessionWriteListeners'
   | 'workspaceSessionOperationListeners'
   | 'stateWriteListeners'
+  | 'worktreeMetaWriteListeners'
+  | 'workspaceMetadataCursor'
   | 'ptyBindingGenerations'
   | 'layoutEditorViews'
   | 'state'
@@ -88,11 +100,47 @@ export class WriteSchedulingOperations {
       runtime.stateWriteListeners.delete(listener)
     }
   }
+
+  /** The workspaceMetadata position a listing records when it reads metadata. */
+  getWorkspaceMetadataCursor(): { epoch: string; seq: number } {
+    const { epoch, seq } = this[writeSchedulingOperationsContext].runtime.workspaceMetadataCursor
+    return { epoch, seq }
+  }
+
+  /** Advances the position for one published record; call in the same turn as its metadata write. */
+  advanceWorkspaceMetadataCursor(): { epoch: string; seq: number } {
+    const cursor = this[writeSchedulingOperationsContext].runtime.workspaceMetadataCursor
+    cursor.seq += 1
+    return { epoch: cursor.epoch, seq: cursor.seq }
+  }
+
+  /** Observe each host-qualified worktree metadata write; callbacks must not throw, block or write. */
+  onWorktreeMetaWritten(listener: WorktreeMetaWriteListener): () => void {
+    const { runtime } = this[writeSchedulingOperationsContext]
+    runtime.worktreeMetaWriteListeners.add(listener)
+    return () => {
+      runtime.worktreeMetaWriteListeners.delete(listener)
+    }
+  }
 }
 
+/** Saves the rows of the domains a mutation changed. */
 export function scheduleSave(
   owner: WriteSchedulingOperations,
-  dirtyDomains?: readonly string[],
+  domains: ProfileSaveDomains,
+  writtenHostId?: ExecutionHostId
+): void {
+  scheduleDomainSave(owner, domains, writtenHostId)
+}
+
+/** Startup load, migration and maintenance resume only: their changes span the profile. */
+export function scheduleFullProfileSave(owner: WriteSchedulingOperations): void {
+  scheduleDomainSave(owner, undefined)
+}
+
+function scheduleDomainSave(
+  owner: WriteSchedulingOperations,
+  dirtyDomains: readonly string[] | undefined,
   writtenHostId?: ExecutionHostId
 ): void {
   const { runtime, writes } = owner[writeSchedulingOperationsContext]
@@ -101,6 +149,13 @@ export function scheduleSave(
     listener(dirtyDomains)
   }
   runtime.automationListProjectionCache = null
+  // A run list replaced outside the run-delta path saves as a whole row; an older pending delta is stale.
+  if (
+    dirtyDomains?.includes('automationRuns') &&
+    runtime.pendingAutomationRunsAfter !== runtime.state.automationRuns
+  ) {
+    runtime.pendingAutomationRunsAfter = undefined
+  }
   const trackedDomains = runtime.dirtyProfileStateDomains
   if (dirtyDomains === undefined) {
     runtime.dirtyProfileStateDomains = null

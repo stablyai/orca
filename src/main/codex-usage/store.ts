@@ -1,4 +1,4 @@
-import { codexOpenCodeTokenSessions } from '../usage/agent-token-usage'
+import { codexOpenCodeTokenSessions } from '../usage/reporting/token-usage/agent-token-usage'
 import { app } from 'electron'
 import { join } from 'node:path'
 import type {
@@ -11,7 +11,7 @@ import type {
   CodexUsageSnapshot,
   CodexUsageSummary
 } from '../../shared/codex-usage-types'
-import type { AutomationRunUsage } from '../../shared/automations-types'
+import type { AutomationRunUsage } from '../../shared/automations/history/automation-run'
 import type { Store } from '../persistence/loading-store/store'
 import type { CodexUsagePersistedState } from './types'
 import type { AutomationUsageLookupInput } from './codex-automation-run-attribution'
@@ -19,8 +19,8 @@ import { CODEX_USAGE_SCHEMA_VERSION, codexUsageProvider } from './codex-usage-pr
 import { resolveCodexAutomationRunUsage } from './codex-automation-run-attribution'
 import { buildRecentSessions } from './codex-usage-session-rows'
 import { buildBreakdown, buildDaily, buildSummary } from './codex-usage-rollup-projections'
-import { UsageProviderStoreLifecycle } from '../usage/usage-provider-store-lifecycle'
-import { splitUsageCacheFileViaWorker } from '../usage/usage-scan-worker-spawn'
+import { UsageProviderStoreLifecycle } from '../usage/provider-lifecycle/usage-provider-store-lifecycle'
+import { splitUsageCacheFileViaWorker } from '../usage/scan-worker/usage-scan-worker-spawn'
 
 const SCHEMA_VERSION = CODEX_USAGE_SCHEMA_VERSION
 

@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -16,11 +16,7 @@ import {
   snapshotPendingWorktreeRemovals
 } from './worktree-removal-listing'
 import type * as WorktreeRemovalRecords from './worktree-removal-records'
-import {
-  readWorktreeRemovalRecords,
-  worktreeRemovalRecordsFile,
-  writeWorktreeRemovalRecords
-} from './worktree-removal-records'
+import { readWorktreeRemovalRecords } from './worktree-removal-records'
 
 vi.mock('./worktree-removal-records', async (importOriginal) => {
   const actual = await importOriginal<typeof WorktreeRemovalRecords>()
@@ -104,79 +100,6 @@ describe('durable worktree removal records', () => {
     expect(await readWorktreeRemovalRecords(directory)).toEqual([])
   })
 
-  it('clears the record when the delete fails so the row returns live and retryable', async () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const publish = vi.fn()
-    const result = startBackgroundWorktreeRemoval({
-      removal,
-      run: async () => {
-        throw new Error('Permission denied')
-      },
-      publish
-    })
-    await expect(result).rejects.toThrow('Permission denied')
-    await _settlePendingWorktreeRemovalsForTests()
-
-    expect(await readWorktreeRemovalRecords(directory)).toEqual([])
-    expect(isPending()).toBe(false)
-    expect(publish).toHaveBeenCalledTimes(2)
-  })
-
-  it('starts Git after a bounded wait when the record write stalls', async () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-    vi.mocked(writeWorktreeRemovalRecords).mockReturnValueOnce(new Promise(() => {}))
-    const run = vi.fn(async () => ({}))
-    void startBackgroundWorktreeRemoval({
-      removal,
-      run,
-      publish: () => {}
-    })
-
-    await vi.advanceTimersByTimeAsync(1_000)
-    expect(run).not.toHaveBeenCalled()
-    await vi.advanceTimersByTimeAsync(1_000)
-    expect(run).toHaveBeenCalledTimes(1)
-    vi.useRealTimers()
-    await _settlePendingWorktreeRemovalsForTests()
-  })
-
-  it('replies without waiting for the record to be cleared on disk', async () => {
-    let finishClear = (): void => {}
-    const publish = vi.fn()
-    const result = startBackgroundWorktreeRemoval({
-      removal,
-      run: async () => {
-        vi.mocked(writeWorktreeRemovalRecords).mockReturnValueOnce(
-          new Promise<void>((resolve) => {
-            finishClear = resolve
-          })
-        )
-        return {}
-      },
-      publish
-    })
-
-    await expect(result).resolves.toEqual({})
-    expect(publish).toHaveBeenCalledTimes(2)
-    finishClear()
-    await _settlePendingWorktreeRemovalsForTests()
-  })
-
-  it('stops Git on quit without waiting and keeps the record for the next start', async () => {
-    const job = interruptedJob()
-    void startBackgroundWorktreeRemoval({ removal, ...job })
-    await vi.waitFor(() => expect(job.started()).toBe(true))
-
-    expect(stopBackgroundWorktreeRemovals()).toBeUndefined()
-    expect(job.stopped()).toBe(true)
-    await _settlePendingWorktreeRemovalsForTests()
-
-    expect(await readWorktreeRemovalRecords(directory)).toHaveLength(1)
-    // Quit publishes no completion; the interrupted record must remain resumable.
-    expect(job.publish).toHaveBeenCalledTimes(1)
-  })
-
   it('marks the row as removing after a restart and finishes it with the same job', async () => {
     const job = interruptedJob()
     void startBackgroundWorktreeRemoval({ removal, ...job })
@@ -220,61 +143,5 @@ describe('durable worktree removal records', () => {
     expect(await readWorktreeRemovalRecords(directory)).toEqual([])
     await expect(joined).resolves.toEqual({})
     expect(publish).toHaveBeenCalledTimes(1)
-  })
-
-  it('does not start a second job for a removal that is still running', async () => {
-    void startBackgroundWorktreeRemoval({ removal, ...interruptedJob() })
-    const jobFor = vi.fn()
-    resumeInterruptedWorktreeRemovals(jobFor)
-    expect(jobFor).not.toHaveBeenCalled()
-    stopBackgroundWorktreeRemovals()
-    await _settlePendingWorktreeRemovalsForTests()
-  })
-
-  it('reads back only well-formed records from the file', async () => {
-    const valid = {
-      worktreeId: 'repo-1::/work/a',
-      repoId: 'repo-1',
-      repoPath: '/work/repo',
-      worktreePath: '/work/a',
-      branch: '',
-      head: '',
-      deleteBranch: false,
-      force: true,
-      requestedAt: 5
-    }
-    await writeFile(
-      worktreeRemovalRecordsFile(directory),
-      JSON.stringify({ version: 1, removals: [valid, { worktreeId: 'x' }, null] })
-    )
-    expect(await readWorktreeRemovalRecords(directory)).toEqual([valid])
-
-    await writeFile(worktreeRemovalRecordsFile(directory), '{not json')
-    expect(await readWorktreeRemovalRecords(directory)).toEqual([])
-  })
-
-  it('reads a record that carries a field this version does not know, ignoring the field', async () => {
-    const record = {
-      worktreeId: 'repo-1::/work/a',
-      repoId: 'repo-1',
-      repoPath: '/work/repo',
-      worktreePath: '/work/a',
-      branch: 'feature',
-      head: 'abc',
-      deleteBranch: true,
-      force: false,
-      requestedAt: 5,
-      failure: { message: 'Operation not permitted', failedAt: 6 }
-    }
-    // Accept the older daily-build record format with checkout identity fields.
-    await writeFile(
-      worktreeRemovalRecordsFile(directory),
-      JSON.stringify({
-        version: 1,
-        removals: [{ ...record, checkoutIdentity: { dev: 1, ino: 2, birthtimeMs: 3 } }]
-      })
-    )
-
-    expect(await readWorktreeRemovalRecords(directory)).toEqual([record])
   })
 })

@@ -1,9 +1,9 @@
 // Translate old method params to pure layout commands; handlers resolve selectors/handles, apply changes and shape compatible replies.
 
 import type { RuntimeMobileSessionTabMove } from '../../runtime-session-contracts'
-import { isTerminalLeafId } from '../../stable-pane-id'
-import { isValidHostTerminalTabId } from '../../terminal-tab-id'
-import type { TerminalPaneSplitDirection } from '../../terminal-tab-types'
+import { isTerminalLeafId } from '../stable-pane-id'
+import { isValidHostTerminalTabId } from '../terminal-tab-id'
+import type { TerminalPaneSplitDirection } from '../terminal-tab-types'
 import { resolveSessionTabRow } from './old-client-session-tab-rows'
 import { tabOrderAnchor } from '../tab-order'
 import { collectLayoutLeafIdsInOrder, layoutContainsLeafId } from '../terminal-pane-tree'

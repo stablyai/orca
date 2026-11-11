@@ -9,8 +9,9 @@ test.describe('default browser cookie clearing', () => {
   test('remains available after clearing the default profile cookies', async ({
     orcaPage
   }, testInfo) => {
-    await orcaPage.evaluate(() => {
+    await orcaPage.evaluate(async () => {
       const state = window.__store!.getState()
+      await state.updateSettings({ uiLanguage: 'en' })
       state.openSettingsTarget({ pane: 'browser', repoId: null })
       state.openSettingsPage()
     })
@@ -18,7 +19,10 @@ test.describe('default browser cookie clearing', () => {
     const cookiesSection = orcaPage.locator('#browser-session-cookies')
     await expect(cookiesSection).toBeVisible({ timeout: 10_000 })
 
-    const clearButton = cookiesSection.locator('[data-testid="clear-default-cookies-button"]')
+    const clearButton = cookiesSection.getByRole('button', {
+      name: 'Clear default cookies',
+      exact: true
+    })
     // Why: data-type="success" is locale-independent and specific to the success path.
     const successToasts = orcaPage.locator('[data-sonner-toast][data-type="success"]')
 

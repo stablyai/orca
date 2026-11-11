@@ -1,5 +1,6 @@
-import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../agent-chat-permission-mode'
+import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../agent-launch/permissions/agent-chat-permission-mode'
 import { labelFromModelId } from '../../model-id-label'
+import { isCoveredModelAlias } from '../../model-alias-rows'
 import type {
   AgentSessionOptionCatalog,
   CatalogMidSessionApply,
@@ -88,7 +89,11 @@ function optionDescriptor(args: {
   const showDefault = !tracked && (cliStatesDefault || (mode === 'draft' && !modelIsCliDefault))
   const valueSource = tracked?.source ?? (showDefault ? 'default' : 'unknown')
   if (option.kind.type === 'select') {
-    const choices = choiceWithCurrent(option.kind.choices, tracked)
+    // Speed offers only the tiers the model lists, as Codex does; a config-only tier still runs.
+    const choices =
+      option.id === 'serviceTier'
+        ? [...option.kind.choices]
+        : choiceWithCurrent(option.kind.choices, tracked)
     if (choices.length <= 1) {
       return null
     }
@@ -222,10 +227,14 @@ export function nativeChatSessionOptionDescriptors(args: {
 }): SessionOptionDescriptor[] {
   const { catalog, models, mode, modelLabel, liveTransport, model } = args
   // Callers reconcile tracked models into choices first; the trigger must never show an unlisted selection.
-  const modelChoices = models.map(({ id, label, description }) => ({
+  // An alias whose versioned row is listed stays reachable by search, unless the chat is on it.
+  const modelChoices = models.map(({ id, label, description, resolvedModel }) => ({
     value: id,
     label,
-    ...(description ? { description } : {})
+    ...(description ? { description } : {}),
+    ...(id !== model.currentId && isCoveredModelAlias({ id, resolvedModel }, models)
+      ? { searchOnly: true as const }
+      : {})
   }))
   const modelAction = actionForApply(catalog.modelApply, model.tracked, mode, liveTransport)
   const snapshot: SessionOptionDescriptor[] = [

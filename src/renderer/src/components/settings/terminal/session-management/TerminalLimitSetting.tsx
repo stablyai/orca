@@ -2,23 +2,23 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   terminalLimitInputMaximum,
   type TerminalLimitStatus
-} from '../../../../../../shared/terminal-limit-policy'
+} from '../../../../../../shared/terminal/runtime-policy/terminal-limit-policy'
 import { Input } from '../../../ui/input'
 import { Button } from '../../../ui/button'
 import { SettingsRow } from '../../form-controls/SettingsFormControls'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
-import type { SettingsHostScope } from '../../settings-host-scope'
+import type { SettingsHostScope } from '../../host-scope/settings-host-scope'
 import { readTerminalLimit, saveTerminalLimit } from './terminal-limit-transport'
 import { useAppStore } from '@/store/index'
-import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status-connection-generation'
+import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status/runtime-status-connection-generation'
 import {
   captureHostIdentityFence,
   isHostIdentityFenceCurrent,
   type HostIdentityFence
-} from '@/store/host-catalog-fencing'
-import type { HostRoute } from '@/runtime/runtime-client-target'
-import { getIntlLocale, translate } from '@/i18n/i18n'
-import { runtimeHostContactForEntry } from '../../../../../../shared/runtime-host-contact'
+} from '@/runtime/rpc/environment-revisions/host-identity-fence'
+import type { HostRoute } from '@/runtime/rpc/targets/runtime-client-target'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
+import { runtimeHostContactForEntry } from '../../../../../../shared/remote-runtime/host-status/runtime-host-contact'
 import { getTerminalLimitSearchKeywords } from '../platform/terminal-advanced-platform-search'
 
 export function TerminalLimitSetting({ scope }: { scope: SettingsHostScope }): React.JSX.Element {
@@ -47,6 +47,8 @@ export function TerminalLimitSetting({ scope }: { scope: SettingsHostScope }): R
 }
 
 function TerminalLimitField({ scope }: { scope: SettingsHostScope }): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const route = useMemo<HostRoute>(() => ({ target: scope.target, at: 'local' }), [scope.target])
   const [status, setStatus] = useState<TerminalLimitStatus | null>()
   const [draft, setDraft] = useState<string | null>(null)
@@ -143,32 +145,32 @@ function TerminalLimitField({ scope }: { scope: SettingsHostScope }): React.JSX.
   }
 
   const unavailable = !scope.available
-    ? translate(
+    ? t(
         'settings.terminal.limit.disconnected',
         'This host is disconnected. Reconnect to view or change its terminal limit.'
       )
     : status === null
-      ? translate(
+      ? t(
           'settings.terminal.limit.unsupported',
           'This host’s terminal service does not support changing this limit yet.'
         )
       : status?.editable === false && status.source !== 'environment'
-        ? translate('settings.terminal.limit.unknown', 'Unavailable')
+        ? t('settings.terminal.limit.unknown', 'Unavailable')
         : status?.source === 'environment'
-          ? translate(
+          ? t(
               'settings.terminal.limit.environment',
               'This Orca instance has a terminal limit set by its environment. Remove the override on this host to edit it here.'
             )
           : null
-  const label = translate('settings.terminal.limit.label', 'Maximum running terminals')
+  const label = t('settings.terminal.limit.label', 'Maximum running terminals')
   return (
     <SearchableSetting
       title={label}
-      description={translate(
+      description={t(
         'settings.terminal.limit.description',
         'Limits your running terminals across projects on this host.'
       )}
-      keywords={getTerminalLimitSearchKeywords()}
+      keywords={getTerminalLimitSearchKeywords(t)}
     >
       <SettingsRow
         alignTop
@@ -177,22 +179,22 @@ function TerminalLimitField({ scope }: { scope: SettingsHostScope }): React.JSX.
         description={
           <>
             <span className="block">
-              {translate(
+              {t(
                 'settings.terminal.limit.description',
                 'Limits your running terminals across projects on this host.'
               )}
             </span>
             <span className="mt-2 block">
-              {translate('settings.terminal.limit.system', 'System PTY limit: {{value}}', {
+              {t('settings.terminal.limit.system', 'System PTY limit: {{value}}', {
                 value:
                   status === undefined && scope.available && !failed
                     ? '…'
-                    : (status?.systemPtyLimit?.toLocaleString(getIntlLocale()) ??
-                      translate('settings.terminal.limit.unknown', 'Unavailable'))
+                    : (status?.systemPtyLimit?.toLocaleString(intlLocale) ??
+                      t('settings.terminal.limit.unknown', 'Unavailable'))
               })}
             </span>
             <span className="block">
-              {translate(
+              {t(
                 'settings.terminal.limit.shared',
                 'Shared with other terminal apps. This is total capacity, not free slots.'
               )}
@@ -200,16 +202,16 @@ function TerminalLimitField({ scope }: { scope: SettingsHostScope }): React.JSX.
             {unavailable ? <span className="mt-2 block">{unavailable}</span> : null}
             {status?.savedUnreadable && !failed ? (
               <span className="mt-2 block" role="status">
-                {translate(
+                {t(
                   'settings.terminal.limit.savedUnreadable',
                   'Couldn’t read this host’s saved terminal limit. Using {{value}}. Enter a value and press Enter to replace it.',
-                  { value: status.maxTerminals.toLocaleString(getIntlLocale()) }
+                  { value: status.maxTerminals.toLocaleString(intlLocale) }
                 )}
               </span>
             ) : null}
             {failed ? (
               <span className="mt-2 block text-destructive" role="status">
-                {translate(
+                {t(
                   'settings.terminal.limit.failed',
                   'Couldn’t confirm the terminal limit. Try again.'
                 )}
@@ -222,7 +224,7 @@ function TerminalLimitField({ scope }: { scope: SettingsHostScope }): React.JSX.
                 size="xs"
                 onClick={() => setRetry((value) => value + 1)}
               >
-                {translate('settings.terminal.limit.retry', 'Retry')}
+                {t('settings.terminal.limit.retry', 'Retry')}
               </Button>
             ) : null}
           </>
@@ -261,7 +263,7 @@ function TerminalLimitField({ scope }: { scope: SettingsHostScope }): React.JSX.
               className="number-input-clean w-24 tabular-nums"
             />
             <span className="text-xs text-muted-foreground">
-              {translate('settings.terminal.limit.unit', 'terminals')}
+              {t('settings.terminal.limit.unit', 'terminals')}
             </span>
           </div>
         }

@@ -8,7 +8,7 @@ import type { OrcadMigrationCatalogReferenceAbortResult } from '../../../shared/
 import { isRecord } from '../../../shared/orcad-migration/orcad-migration-manifest-fields'
 import type { WslMoveCutover } from '../../../shared/wsl-move/wsl-move-cutover'
 import { createMigrationJournalDirectory } from '../migrating-orcad-catalog/migration-journal-directory'
-import type { OrcadMigrationDestinationCatalog } from '../../ssh/orcad-migration-cutover-coordinator'
+import type { OrcadMigrationDestinationCatalog } from '../../managed-server/migration/cutover/orcad-migration-cutover-coordinator'
 
 export type WslMoveOwedHostAbort = {
   migrationId: string

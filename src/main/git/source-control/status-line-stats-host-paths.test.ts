@@ -2,9 +2,9 @@
 import * as path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as FsPromises from 'node:fs/promises'
-import type * as BoundedFileReader from '../../../shared/node-bounded-file-reader'
-import type { GitStatusEntry } from '../../../shared/git-status-types'
-import { invalidateGitBranchLineTotalInFlight } from '../../../shared/git-branch-line-total'
+import type * as BoundedFileReader from '../../../shared/file-content/node-bounded-file-reader'
+import type { GitStatusEntry } from '../../../shared/git/status/git-status-types'
+import { invalidateGitBranchLineTotalInFlight } from '../../../shared/git/status/git-branch-line-total'
 
 const { lstatPaths, untrackedFiles } = vi.hoisted(() => ({
   lstatPaths: [] as string[],
@@ -33,7 +33,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   }
 })
 
-vi.mock('../../../shared/node-bounded-file-reader', async (importOriginal) => {
+vi.mock('../../../shared/file-content/node-bounded-file-reader', async (importOriginal) => {
   const actual = await importOriginal<typeof BoundedFileReader>()
   return {
     ...actual,

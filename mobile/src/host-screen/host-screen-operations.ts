@@ -1,5 +1,5 @@
-import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
-import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
+import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc/rpc-operation'
+import { rpcResultVariant } from '../transport/rpc/rpc-operation-result-reader'
 import {
   hostPlatformSchema,
   hostRepoCatalogSnapshotSchema,
@@ -83,6 +83,17 @@ export const worktreePinWrite = bindDeferredRpcOperation(
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
     read: rpcResultVariant('pin-written', hostScreenUnreadReplySchema)
+  })
+)
+
+// Rename reports refusal so the sheet can keep the text and offer Retry.
+export const worktreeDisplayNameWrite = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'worktree.set-display-name',
+    method: 'worktree.set',
+    acceptance: 'require-result-or-throw-message',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('display-name-written', hostScreenUnreadReplySchema)
   })
 )
 

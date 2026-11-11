@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { MobileHostedReviewEligibilityReply } from './hosted-review-reply-schema'
-import type { RpcClient } from '../transport/rpc-client'
-import type { ConnectionState } from '../transport/types'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import type { ConnectionState } from '../transport/connection/connection-state'
 import {
   fetchMobileHostedReviewEligibility,
   type MobileHostedReviewEligibilityInput

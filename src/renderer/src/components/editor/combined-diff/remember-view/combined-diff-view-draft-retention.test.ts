@@ -1,5 +1,5 @@
 import { afterEach, expect, it } from 'vitest'
-import type { DiffSection } from '../../diff-section-types'
+import type { DiffSection } from '../../diff/sections/diff-section-types'
 import {
   claimCombinedDiffView,
   clearCombinedDiffViewMemory,
@@ -32,8 +32,7 @@ function rememberView(index: number, section: Partial<DiffSection> = {}) {
       gitStatusSignature: '',
       sections,
       sectionHeights: {},
-      loadedIndices: [0],
-      sideBySide: false
+      loadedIndices: [0]
     }
   })
   return lease

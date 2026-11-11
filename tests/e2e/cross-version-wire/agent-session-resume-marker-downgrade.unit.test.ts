@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, test } from 'vitest'
-import { structuredAgentSessionWorkingAtStop } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-working-at-teardown'
+import { structuredAgentSessionWorkingAtStop } from '../../../src/main/native-chat/agent-session-wire/termination/structured-agent-session-working-at-teardown'
 import {
   journal,
   NOW,
@@ -10,12 +10,19 @@ import {
   SESSION,
   TEARDOWN_CURRENT,
   turnItem
-} from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-restart-resume-test-harness'
+} from '../../../src/main/native-chat/agent-session-wire/recovery/testing/structured-agent-session-restart-resume-test-harness'
 import { AgentSessionRecoveryCapsule } from '../../../src/main/runtime/agent-session/records/agent-session-recovery-capsule'
 import { importReleaseCheckoutModule, materializeReleaseCheckout } from './release-checkout'
+import { prepareReleaseFixtures } from './release-fixture-setup'
 
 // A release whose marker parser still requires the chat's newest message id.
 const BASELINE_REF = 'v1.4.211'
+const releaseCapsule = prepareReleaseFixtures([BASELINE_REF], async (ref) =>
+  importReleaseCheckoutModule(
+    await materializeReleaseCheckout(ref),
+    'src/main/runtime/agent-session-recovery-capsule.ts'
+  )
+)
 
 test('an older build reads the restart offer this build records at quit', async () => {
   const directory = mkdtempSync(join(tmpdir(), 'orca-resume-marker-downgrade-'))
@@ -40,11 +47,7 @@ test('an older build reads the restart offer this build records at quit', async 
     await new AgentSessionRecoveryCapsule(directory).record([marker], NOW)
 
     // The older build, after a downgrade, still lists it.
-    const checkout = await materializeReleaseCheckout(BASELINE_REF)
-    const baseline = await importReleaseCheckoutModule(
-      checkout,
-      'src/main/runtime/agent-session-recovery-capsule.ts'
-    )
+    const baseline = releaseCapsule(BASELINE_REF)
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the pinned release exports this class with the constructor and `list` called below; a missing one fails the test.
     const OldCapsule = baseline.AgentSessionRecoveryCapsule as new (directory: string) => {
       list: (now: number) => Promise<{ sessionId: string }[]>

@@ -3,9 +3,9 @@ import { ChevronDown, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
-import type { PrimaryAction } from '../../source-control-primary-action'
-import { PrimaryActionTooltip } from '../../source-control-primary-action-tooltip'
+import { cn } from '@/lib/class-names'
+import type { PrimaryAction } from '../review/source-control-primary-action-types'
+import { PrimaryActionTooltip } from '../review/source-control-primary-action-tooltip'
 
 export function CommitActionMenu({
   showComposer,

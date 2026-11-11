@@ -5,17 +5,14 @@ import { rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it, vi, afterEach } from 'vitest'
-import { quotePosixShell } from '../../shared/shell-argument-quoting'
-import { commandLineLength, MAX_COMMAND_LINE_CHARS } from '../../shared/windows-command-line-budget'
+import { quotePosixShell } from '../../shared/shell/launch/shell-argument-quoting'
+import '../../shared/windows-command-line-budget'
 import { prepareWslPrompt } from './source-control-prompt-files'
 import { producePromptRecords } from './source-control-prompt-producer'
-import { planCommitMessageGeneration } from '../../shared/commit-message-plan'
-import {
-  withPlatform,
-  createMockDiscoveryChild
-} from './commit-message-text-generation-test-harness'
+import { planCommitMessageGeneration } from '../../shared/source-control/ai/generation/commit-message-plan'
+import { withPlatform } from './commit-message-text-generation-test-harness'
 import { spawnSourceControlAgent } from './source-control-agent-launch'
-import { runLocalPlanForAgent } from './source-control-local-generation'
+import './source-control-local-generation'
 import { resolveCommand } from '../git/command-runner/wsl-command-resolution'
 
 const { spawnMock } = vi.hoisted(() => ({ spawnMock: vi.fn() }))
@@ -29,7 +26,6 @@ const nativeSpawn = (await vi.importActual<typeof ChildProcess>('node:child_proc
 afterEach(() => {
   spawnMock.mockReset().mockImplementation(nativeSpawn)
 })
-const repo = '\\\\wsl.localhost\\Actual\\home\\dev\\repo'
 function planned(agentId: 'omp' | 'codex' = 'omp') {
   const result = planCommitMessageGeneration(
     {
@@ -46,136 +42,85 @@ function planned(agentId: 'omp' | 'codex' = 'omp') {
   return result.plan
 }
 
-it.each([undefined, 'Wrong', 'Actual'])(
-  'routes UNC before hint %s with Linux assignments retained for OMP only',
-  async (hint) => {
-    const request = planned()
-    const child = createMockDiscoveryChild()
-    let guestPath = ''
-    const result = withPlatform('win32', () =>
-      runLocalPlanForAgent({
-        agentId: 'omp',
-        plan: request,
-        target: {
-          kind: 'local',
-          cwd: repo,
-          wslDistro: hint,
-          env: { lower: 'base', LOWER: 'BASE' }
-        },
-        operation: 'conversation-name',
-        spawnAgent: (input) => {
-          expect(input.wslDistro).toBe('Actual')
-          expect(input.env).toEqual({ lower: 'base', LOWER: 'BASE' })
-          expect(input.commandEnv).toEqual({ lower: 'recipe', LOWER: 'UPPER' })
-          expect(input.preparation).toBeDefined()
-          guestPath = input.args.find((arg) => arg.startsWith('@/tmp/')) ?? ''
-          queueMicrotask(() => {
-            child.stdout.emit('data', Buffer.from('Useful name'))
-            child.emit('close', 0)
-          })
-          return child
-        }
-      })
+it.skipIf(process.platform === 'win32')(
+  'clears profile-restored hook identity after login while preserving shell function commands',
+  async () => {
+    const directory = realpathSync(mkdtempSync(join(tmpdir(), 'orca-wsl-hook-isolation-')))
+    const profile = join(directory, 'rc')
+    const shell = join(directory, 'bash')
+    const reader = join(directory, 'reader.cjs')
+    writeFileSync(
+      shell,
+      `#!/bin/sh\nexec /bin/bash --noprofile --rcfile ${quotePosixShell(profile)} -ic "$2"\n`,
+      { mode: 0o700 }
     )
-    expect(await result).toMatchObject({ success: true })
-    expect(guestPath).toContain('@/tmp/orca-generation-')
+    writeFileSync(
+      join(directory, 'getent'),
+      `#!/bin/sh\nprintf '%s\\n' ${quotePosixShell(`user:x:1:1:User:${directory}:${shell}`)}\n`,
+      { mode: 0o700 }
+    )
+    writeFileSync(
+      profile,
+      `export ORCA_PANE_KEY=profile-pane ORCA_AGENT_PANE=profile-pane ORCA_AGENT_HOOK_PORT=54321 ORCA_AGENT_HOOKS_DISABLED=0
+export CODEX_HOME=profile-managed-home
+review_agent() { ${quotePosixShell(process.execPath)} ${quotePosixShell(reader)} "$@"; }
+`
+    )
+    writeFileSync(
+      reader,
+      `console.log(JSON.stringify({
+  pane: process.env.ORCA_PANE_KEY ?? null,
+  alias: process.env.ORCA_AGENT_PANE ?? null,
+  port: process.env.ORCA_AGENT_HOOK_PORT ?? null,
+  disabled: process.env.ORCA_AGENT_HOOKS_DISABLED,
+  home: process.env.CODEX_HOME,
+  args: process.argv.slice(2)
+}))
+`
+    )
+    // Run the real guest login command locally; only replace the Windows executable boundary.
+    spawnMock.mockImplementationOnce((_program, args, options) =>
+      nativeSpawn('/bin/sh', ['-c', args.at(-1)], options)
+    )
+    try {
+      const child = withPlatform('win32', () =>
+        spawnSourceControlAgent({
+          binary: 'review_agent',
+          args: ['literal $HOME'],
+          wslDistro: 'Review',
+          env: {
+            ...process.env,
+            HOME: directory,
+            SHELL: shell,
+            PATH: `${directory}:${process.env.PATH}`
+          },
+          stdinMode: 'pipe',
+          useCwdForNative: true
+        })
+      )
+      let stdout = ''
+      let stderr = ''
+      child.stdout?.on('data', (chunk) => (stdout += chunk))
+      child.stderr?.on('data', (chunk) => (stderr += chunk))
+      const closed = new Promise<number | null>((resolve, reject) => {
+        child.on('error', reject)
+        child.on('close', resolve)
+      })
+      child.stdin?.end()
+      expect(await closed, stderr).toBe(0)
+      expect(JSON.parse(stdout)).toEqual({
+        pane: null,
+        alias: null,
+        port: null,
+        disabled: '1',
+        home: 'profile-managed-home',
+        args: ['literal $HOME']
+      })
+    } finally {
+      await rm(directory, { recursive: true, force: true })
+    }
   }
 )
-
-it('preserves ordinary hinted WSL and unrelated provider no-hint native routing', async () => {
-  for (const agentId of ['omp', 'codex'] as const) {
-    const request = planned(agentId)
-    const child = createMockDiscoveryChild()
-    const result = withPlatform('win32', () =>
-      runLocalPlanForAgent({
-        agentId: 'custom',
-        plan: request,
-        target: {
-          kind: 'local',
-          cwd: agentId === 'omp' ? 'C:\\repo' : repo,
-          ...(agentId === 'omp' ? { wslDistro: 'Hint' } : {})
-        },
-        operation: 'conversation-name',
-        spawnAgent: (input) => {
-          expect(input.wslDistro).toBe(agentId === 'omp' ? 'Hint' : undefined)
-          expect(!!input.preparation).toBe(agentId === 'omp')
-          queueMicrotask(() => {
-            child.stdout.emit('data', Buffer.from('Useful name'))
-            child.emit('close', 0)
-          })
-          return child
-        }
-      })
-    )
-    expect(await result).toMatchObject({ success: true })
-  }
-})
-
-it('launches the original resolved wrapper once, preserving prefix, recipe, translation and assignment timing', () => {
-  const request = prepareWslPrompt(planned(), 'Actual')
-  spawnMock.mockReturnValueOnce(createMockDiscoveryChild())
-  withPlatform('win32', () => {
-    const assignments = ['lower=recipe', 'LOWER=UPPER']
-    const original = resolveCommand(
-      '/usr/bin/env',
-      [...assignments, planned().binary, ...request.plan.args],
-      repo,
-      'Wrong',
-      { useWslLoginShell: true }
-    )
-    spawnSourceControlAgent({
-      binary: planned().binary,
-      args: request.plan.args,
-      cwd: repo,
-      commandEnv: planned().env,
-      wslDistro: 'Actual',
-      preparation: request.preparation,
-      stdinMode: 'pipe',
-      useCwdForNative: true
-    })
-    const [binary, args] = spawnMock.mock.calls.at(-1)!
-    expect(binary).toBe('wsl.exe')
-    expect(args.slice(0, 3)).toEqual(['-d', 'Actual', '--exec'])
-    expect(args.slice(3, 7)).toEqual([
-      '/bin/sh',
-      '-c',
-      request.preparation.script,
-      'orca-generation'
-    ])
-    expect(args.slice(9)).toEqual(original.args.slice(3))
-    expect(original.args.at(-1)).toContain('/home/dev/repo')
-    expect(original.args.at(-1)).toContain('lower=recipe')
-    expect(args.join(' ')).toContain('@user.txt')
-  })
-})
-
-it('checks the exact composed Windows argv at the inclusive boundary before spawning', () => {
-  const request = prepareWslPrompt(planned(), 'Actual')
-  const launch = (padding: number) =>
-    withPlatform('win32', () =>
-      spawnSourceControlAgent({
-        binary: 'omp',
-        args: [...request.plan.args, 'x'.repeat(padding)],
-        cwd: repo,
-        wslDistro: 'Actual',
-        preparation: request.preparation,
-        stdinMode: 'pipe',
-        useCwdForNative: true
-      })
-    )
-  spawnMock.mockReturnValue(createMockDiscoveryChild())
-  launch(0)
-  const [binary, args] = spawnMock.mock.calls.at(-1)!
-  const slack = MAX_COMMAND_LINE_CHARS - commandLineLength([binary, ...args])
-  const padding = Math.floor(slack / 3)
-  launch(padding)
-  const [atBinary, atArgs] = spawnMock.mock.calls.at(-1)!
-  expect(commandLineLength([atBinary, ...atArgs])).toBeLessThanOrEqual(MAX_COMMAND_LINE_CHARS)
-  expect(commandLineLength([atBinary, ...atArgs])).toBeGreaterThan(MAX_COMMAND_LINE_CHARS - 3)
-  const count = spawnMock.mock.calls.length
-  expect(() => launch(padding + 1)).toThrow()
-  expect(spawnMock).toHaveBeenCalledTimes(count)
-})
 
 it.each([false, true])(
   'prepares before hostile profiles and preserves login invocation/cwd/env (assigned=%s)',

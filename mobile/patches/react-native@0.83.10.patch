@@ -114,3 +114,32 @@ diff --git a/Libraries/Text/TextInput/Multiline/RCTUITextView.mm b/Libraries/Tex
  - (void)dictationRecordingDidEnd
  {
    _dictationRecognizing = YES;
+diff --git a/Libraries/WebSocket/WebSocket.js b/Libraries/WebSocket/WebSocket.js
+index 36aafbb..92aa2d9 100644
+--- a/Libraries/WebSocket/WebSocket.js
++++ b/Libraries/WebSocket/WebSocket.js
+@@ -88,6 +88,8 @@ class WebSocket extends EventTarget {
+   _eventEmitter: NativeEventEmitter<WebSocketEventDefinitions>;
+   _subscriptions: Array<EventSubscription>;
+   _binaryType: ?BinaryType;
++  // Orca: opt-in per socket; binary messages arrive as {base64} so the app decodes them natively.
++  orcaBinaryAsBase64: boolean = false;
+ 
+   bufferedAmount: number;
+   extension: ?string;
+@@ -236,10 +238,13 @@ class WebSocket extends EventTarget {
+         if (ev.id !== this._socketId) {
+           return;
+         }
+-        let data: Blob | BlobData | ArrayBuffer | string = ev.data;
++        let data: Blob | BlobData | ArrayBuffer | string | {base64: string} =
++          ev.data;
+         switch (ev.type) {
+           case 'binary':
+-            data = base64.toByteArray(ev.data).buffer;
++            data = this.orcaBinaryAsBase64
++              ? {base64: ev.data}
++              : base64.toByteArray(ev.data).buffer;
+             break;
+           case 'blob':
+             data = BlobManager.createFromOptions(ev.data);

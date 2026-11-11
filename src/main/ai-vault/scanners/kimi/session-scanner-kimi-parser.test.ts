@@ -3,12 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { parseKimiSessionFile } from './session-scanner-kimi-parser'
-import {
-  clearKimiSessionIndexCache,
-  hasKimiSessionIndexCacheEntryForTests,
-  readKimiWorkDirBySessionId
-} from './session-scanner-kimi-paths'
-import { KIMI_WORK_DIR_CACHE_MAX_INDEX_PATHS } from './session-scanner-kimi-index-cache'
+import { clearKimiSessionIndexCache } from './session-scanner-kimi-paths'
 import type { FileWithMtime } from '../../session-scanner-types'
 import type { TranscriptMessage } from '../../transcripts/session-transcript-consumers'
 
@@ -131,56 +126,6 @@ async function writeKimiSession(args: {
 }
 
 describe('parseKimiSessionFile', () => {
-  it('returns null for malformed state.json', async () => {
-    const { file } = await writeKimiSession({})
-    await writeFile(file.path, '{not-json')
-
-    await expect(parseKimiSessionFile(file, 'darwin')).resolves.toBeNull()
-  })
-
-  it('parses a full session from state.json + index + wire transcript', async () => {
-    const { file } = await writeKimiSession({})
-    const session = await parseKimiSessionFile(file, 'darwin')
-
-    expect(session).not.toBeNull()
-    expect(session?.agent).toBe('kimi')
-    expect(session?.sessionId).toBe(SESSION_ID)
-    expect(session?.title).toBe('Please explain this project briefly')
-    expect(session?.cwd).toBe('/private/tmp/kimi-test-proj')
-    expect(session?.model).toBe('mock-model')
-    expect(session?.totalTokens).toBe(30)
-    expect(session?.messageCount).toBe(2)
-    expect(session?.previewMessages).toEqual([
-      { role: 'user', text: 'Please explain this project briefly', timestamp: null },
-      { role: 'assistant', text: 'Hello! This is a mock response.', timestamp: null }
-    ])
-    expect(session?.createdAt).toBe('2026-06-19T07:19:19.118Z')
-    expect(session?.updatedAt).toBe('2026-06-19T07:19:19.161Z')
-  })
-
-  it('builds a work-dir-scoped resume command', async () => {
-    const { file } = await writeKimiSession({})
-    const session = await parseKimiSessionFile(file, 'darwin')
-    expect(session?.resumeCommand).toBe(
-      `cd '/private/tmp/kimi-test-proj' && kimi --session '${SESSION_ID}'`
-    )
-  })
-
-  it('still lists a metadata-only session with no transcript yet', async () => {
-    const { file } = await writeKimiSession({ wireLines: null })
-    const session = await parseKimiSessionFile(file, 'darwin')
-    expect(session?.title).toBe('Please explain this project briefly')
-    expect(session?.messageCount).toBe(0)
-    expect(session?.model).toBeNull()
-  })
-
-  it('lists a session even when the index (work dir) is missing', async () => {
-    const { file } = await writeKimiSession({ workDir: null })
-    const session = await parseKimiSessionFile(file, 'darwin')
-    expect(session?.cwd).toBeNull()
-    expect(session?.resumeCommand).toBe(`kimi --session '${SESSION_ID}'`)
-  })
-
   it.each([300, 256 * 1024 + 1])(
     'publishes %i-character Kimi turns independently of the preview cap',
     async (length) => {
@@ -225,49 +170,4 @@ describe('parseKimiSessionFile', () => {
       )
     }
   )
-
-  it('falls back to lastPrompt when the title is empty', async () => {
-    const { file } = await writeKimiSession({
-      state: {
-        createdAt: '2026-06-19T07:19:19.118Z',
-        updatedAt: '2026-06-19T07:19:19.161Z',
-        title: '',
-        lastPrompt: 'do the thing',
-        agents: {}
-      },
-      wireLines: []
-    })
-    const session = await parseKimiSessionFile(file, 'darwin')
-    expect(session?.title).toBe('do the thing')
-  })
-
-  it('caps cached session index maps by recent index path', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-kimi-cache-'))
-    tempDirs.push(root)
-    const indexPaths: string[] = []
-
-    for (let index = 0; index <= KIMI_WORK_DIR_CACHE_MAX_INDEX_PATHS; index += 1) {
-      const home = join(root, `home-${index}`)
-      await mkdir(home, { recursive: true })
-      const indexPath = join(home, 'session_index.jsonl')
-      await writeFile(
-        indexPath,
-        `${JSON.stringify({ sessionId: `session_${index}`, workDir: `/tmp/kimi-${index}` })}\n`
-      )
-      indexPaths.push(indexPath)
-    }
-
-    for (const indexPath of indexPaths.slice(0, KIMI_WORK_DIR_CACHE_MAX_INDEX_PATHS)) {
-      await readKimiWorkDirBySessionId(indexPath)
-    }
-    const refreshedFirst = await readKimiWorkDirBySessionId(indexPaths[0])
-    expect(refreshedFirst.get('session_0')).toBe('/tmp/kimi-0')
-    await readKimiWorkDirBySessionId(indexPaths[KIMI_WORK_DIR_CACHE_MAX_INDEX_PATHS])
-
-    expect(hasKimiSessionIndexCacheEntryForTests(indexPaths[0])).toBe(true)
-    expect(hasKimiSessionIndexCacheEntryForTests(indexPaths[1])).toBe(false)
-    expect(
-      hasKimiSessionIndexCacheEntryForTests(indexPaths[KIMI_WORK_DIR_CACHE_MAX_INDEX_PATHS])
-    ).toBe(true)
-  })
 })

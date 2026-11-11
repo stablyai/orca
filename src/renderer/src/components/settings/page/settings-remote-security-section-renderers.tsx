@@ -1,29 +1,33 @@
 import { DeveloperPermissionsPane } from '../developer-permissions/DeveloperPermissionsPane'
 import { PrivacyPane } from '../privacy/PrivacyPane'
-import { RuntimeEnvironmentsPane } from '../RuntimeEnvironmentsPane'
-import { RuntimeServersHeaderActions } from '../runtime-servers-header-actions'
-import { RuntimeServersPageProvider } from '../runtime-servers-page-context'
-import { SshPane } from '../SshPane'
-import { SshHostsHeaderSlot, SshHostsHeaderSlotProvider } from '../ssh-hosts-header-slot'
+import { RuntimeEnvironmentsPane } from '../runtime-environments/catalog/RuntimeEnvironmentsPane'
+import { RuntimeServersHeaderActions } from '../runtime-environments/runtime-servers-header-actions'
+import { RuntimeServersPageProvider } from '../runtime-environments/runtime-servers-page-context'
+import { SshPane } from '../ssh/SshPane'
+import { SshHostsHeaderSlot, SshHostsHeaderSlotProvider } from '../ssh/ssh-hosts-header-slot'
 import { SettingsSection } from '../section-layout/SettingsSection'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import type { SettingsRenderContext } from './settings-render-context'
 
-export function renderServersSettingsSection(context: SettingsRenderContext): React.JSX.Element {
+export function renderServersSettingsSection(
+  context: SettingsRenderContext,
+  t: Translate = translate
+): React.JSX.Element {
   const { model, navigation, view } = context
   const mounted = view.isSectionMounted('servers')
   return (
     <RuntimeServersPageProvider>
       <SettingsSection
         id="servers"
-        title={translate('auto.components.settings.Settings.bd0181eeca', 'Remote Orca Servers')}
+        title={t('auto.components.settings.Settings.022effa46f', 'Remote Orca servers')}
         description={
           model.isWebClient
-            ? translate(
+            ? t(
                 'auto.components.settings.Settings.7686cb5c36',
                 'Connect this browser to a saved Orca server.'
               )
-            : translate(
+            : t(
                 'auto.components.settings.Settings.remoteServersDescription',
                 'Run Orca on another machine and work on it from here.'
               )
@@ -51,15 +55,18 @@ export function renderServersSettingsSection(context: SettingsRenderContext): Re
   )
 }
 
-export function renderSshSettingsSection(context: SettingsRenderContext): React.JSX.Element | null {
+export function renderSshSettingsSection(
+  context: SettingsRenderContext,
+  t: Translate = translate
+): React.JSX.Element | null {
   const { model, navigation, view } = context
   const mounted = view.isSectionMounted('ssh')
   return model.showDesktopOnlySettings ? (
     <SshHostsHeaderSlotProvider>
       <SettingsSection
         id="ssh"
-        title={translate('auto.components.settings.Settings.9b02492d1f', 'SSH Hosts')}
-        description={translate(
+        title={t('auto.components.settings.Settings.045db77e21', 'SSH hosts')}
+        description={t(
           'auto.components.settings.Settings.c2ee313198',
           'Use existing machines over SSH for files, terminals, Git, and workspaces.'
         )}
@@ -75,33 +82,40 @@ export function renderSshSettingsSection(context: SettingsRenderContext): React.
 }
 
 export function renderDeveloperPermissionsSettingsSection(
-  context: SettingsRenderContext
+  context: SettingsRenderContext,
+  t: Translate = translate
 ): React.JSX.Element | null {
   const { model, navigation, view } = context
   return model.showDesktopOnlySettings && model.isMac ? (
     <SettingsSection
       id="developer-permissions"
-      title={translate('auto.components.settings.Settings.65660d4548', 'macOS Permissions')}
-      description={translate(
+      grouped
+      title={t('auto.components.settings.Settings.65660d4548', 'macOS Permissions')}
+      description={t(
         'auto.components.settings.Settings.9b83cc62c2',
         'macOS privacy access for terminal-launched developer tools.'
       )}
       searchEntries={navigation.getSectionSearchEntries('developer-permissions')}
     >
       {view.isSectionMounted('developer-permissions') ? (
-        <DeveloperPermissionsPane highlightedSettingId={model.highlightedSettingsTargetId} />
+        <DeveloperPermissionsPane
+          highlightedSettingId={model.highlightedSettingsTarget?.id ?? null}
+        />
       ) : null}
     </SettingsSection>
   ) : null
 }
 
-export function renderPrivacySettingsSection(context: SettingsRenderContext): React.JSX.Element {
+export function renderPrivacySettingsSection(
+  context: SettingsRenderContext,
+  t: Translate = translate
+): React.JSX.Element {
   const { model, navigation, view } = context
   return (
     <SettingsSection
       id="privacy"
-      title={translate('auto.components.settings.Settings.d7e3f62d70', 'Privacy & Telemetry')}
-      description={translate(
+      title={t('auto.components.settings.Settings.742ca66ea6', 'Privacy & telemetry')}
+      description={t(
         'auto.components.settings.Settings.c1b43dc4e2',
         'Anonymous usage data and telemetry controls.'
       )}

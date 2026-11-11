@@ -1,3 +1,4 @@
+import { GENERAL_SETTING_ANCHORS } from './general-setting-anchors'
 import React, { useEffect, useId, useRef, useState } from 'react'
 import { FolderOpen, RotateCcw } from 'lucide-react'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
@@ -8,20 +9,22 @@ import {
   clearHostSettingOverride
 } from '../../../../../shared/host-setting-overrides'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
+import { normalizeWorkspaceDirInput } from '../../../../../shared/worktree/workspace-dir-input'
+import { isWindowsUserAgent } from '@/app-shell/platform/user-agent-platform'
 import { Button } from '../../ui/button'
 import { Input } from '../../ui/input'
 import { Label } from '../../ui/label'
 import { HostCombobox } from '../../host-picker/HostCombobox'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
-import { useSidebarHostScopeOptions } from '../../sidebar/use-sidebar-host-scope-options'
-import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
+import { useSidebarHostScopeOptions } from '../../sidebar/worktree-list/controls/use-sidebar-host-scope-options'
+import { isImeCompositionKeyDown } from '@/lib/text-input/ime/ime-composition-keyboard-event'
 import {
   buildHostScopeChoices,
   CLIENT_DEFAULT_SCOPE,
   isHostScope,
   type HostSettingScope
-} from '../host-scoped-setting-scope'
-import { translate } from '@/i18n/i18n'
+} from '../workspaces/directory/host-scoped-setting-scope'
+import { useTranslate } from '@/i18n/use-translate'
 
 type WorkspaceDirectorySettingProps = {
   settings: GlobalSettings
@@ -32,11 +35,12 @@ export function WorkspaceDirectorySetting({
   settings,
   updateSettings
 }: WorkspaceDirectorySettingProps): React.JSX.Element {
+  const t = useTranslate()
   const { hostOptions } = useSidebarHostScopeOptions()
   const [scope, setScope] = useState<HostSettingScope>(CLIENT_DEFAULT_SCOPE)
   const inputId = useId()
 
-  const clientDefaultLabel = translate(
+  const clientDefaultLabel = t(
     'auto.components.settings.WorkspaceDirectorySetting.1a2b3c4d5e',
     'Client default'
   )
@@ -89,7 +93,9 @@ export function WorkspaceDirectorySetting({
   }
 
   const commitDraftValue = (): void => {
-    const next = draftValueRef.current
+    // Show the value main will save, so a padded re-save of the saved path writes nothing.
+    const next = normalizeWorkspaceDirInput(draftValueRef.current, isWindowsUserAgent())
+    setDraft(next)
     if (next === value) {
       return
     }
@@ -140,31 +146,29 @@ export function WorkspaceDirectorySetting({
 
   return (
     <SearchableSetting
-      title={translate(
-        'auto.components.settings.GeneralWorkspaceSettingsSection.0e9fc0eadc',
-        'Workspace Directory'
+      id={GENERAL_SETTING_ANCHORS.folder}
+      title={t(
+        'auto.components.settings.GeneralWorkspaceSettingsSection.9d0ef6a2a6',
+        'Workspace directory'
       )}
-      description={translate(
+      description={t(
         'auto.components.settings.GeneralWorkspaceSettingsSection.a246f5ce6f',
         'Root directory where workspace folders are created.'
       )}
       keywords={['workspace', 'folder', 'path', 'worktree', 'host', 'override']}
-      className="space-y-2"
+      className="space-y-2 py-3"
     >
       <div className="flex items-center justify-between gap-2">
         <Label htmlFor={inputId}>
-          {translate(
-            'auto.components.settings.GeneralWorkspaceSettingsSection.0e9fc0eadc',
-            'Workspace Directory'
+          {t(
+            'auto.components.settings.GeneralWorkspaceSettingsSection.9d0ef6a2a6',
+            'Workspace directory'
           )}
         </Label>
         {showScopePicker && (
           <div className="flex items-center gap-1.5">
             <span className="text-xs text-muted-foreground">
-              {translate(
-                'auto.components.settings.WorkspaceDirectorySetting.2b3c4d5e6f',
-                'Apply to'
-              )}
+              {t('auto.components.settings.WorkspaceDirectorySetting.2b3c4d5e6f', 'Apply to')}
             </span>
             <HostCombobox
               value={activeScope}
@@ -218,21 +222,18 @@ export function WorkspaceDirectorySetting({
           className="shrink-0 gap-1.5"
         >
           <FolderOpen className="size-3.5" />
-          {translate(
-            'auto.components.settings.GeneralWorkspaceSettingsSection.5567191a6e',
-            'Browse'
-          )}
+          {t('auto.components.settings.GeneralWorkspaceSettingsSection.5567191a6e', 'Browse')}
         </Button>
       </div>
       {editingHost && (
         <div className="flex items-center justify-between gap-2">
           <p className="text-xs text-muted-foreground">
             {hasOverride
-              ? translate(
+              ? t(
                   'auto.components.settings.WorkspaceDirectorySetting.3c4d5e6f7a',
                   'Overrides client default'
                 )
-              : translate(
+              : t(
                   'auto.components.settings.WorkspaceDirectorySetting.4d5e6f7a8b',
                   'Inherits the client default'
                 )}
@@ -246,7 +247,7 @@ export function WorkspaceDirectorySetting({
               onClick={resetOverride}
             >
               <RotateCcw className="size-3.5" />
-              {translate('auto.components.settings.WorkspaceDirectorySetting.5e6f7a8b9c', 'Reset')}
+              {t('auto.components.settings.WorkspaceDirectorySetting.5e6f7a8b9c', 'Reset')}
             </Button>
           )}
         </div>
@@ -254,7 +255,7 @@ export function WorkspaceDirectorySetting({
       {/* Describe only the client-default resolver; host creation semantics differ. */}
       {!editingHost && (
         <p className="text-xs text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.settings.WorkspaceDirectorySetting.6f7a8b9cad',
             'Use a relative path (e.g. .orca/worktrees) for a per-project location, or an absolute path for one shared folder.'
           )}

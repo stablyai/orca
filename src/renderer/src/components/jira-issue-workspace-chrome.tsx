@@ -4,9 +4,9 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { JiraIssueAssigneeControl } from '@/components/jira-issue-assignee-control'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
-import type { TaskSourceContext } from '../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
 import { JiraIssueTransitionControl } from './jira-issue-transition-control'
-import { translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { formatUiRelativeTimeFromDate } from '@/i18n/relative-time-format'
 import type {
   JiraIssue,
@@ -27,6 +27,8 @@ export function JiraIssueWorkspaceHeader({
   onUse: (issue: JiraIssue) => void
   onClose: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   return (
     <div className="flex-none border-b border-border/50 bg-muted/30 px-4 py-3">
       <div className="flex items-start gap-3">
@@ -35,7 +37,7 @@ export function JiraIssueWorkspaceHeader({
             <span className="font-mono">{displayed.key}</span>
             {displayed.siteName ? <span>{displayed.siteName}</span> : null}
             <span>{displayed.project.key}</span>
-            <span>{formatUiRelativeTimeFromDate(displayed.updatedAt)}</span>
+            <span>{formatUiRelativeTimeFromDate(displayed.updatedAt, undefined, intlLocale)}</span>
             {issueLoading ? <LoaderCircle className="size-3 animate-spin" /> : null}
           </div>
           <h2 className="mt-1 text-[20px] font-semibold leading-tight text-foreground">
@@ -47,7 +49,7 @@ export function JiraIssueWorkspaceHeader({
           className="hidden shrink-0 gap-2 sm:inline-flex"
           size="sm"
         >
-          {translate('auto.components.JiraIssueWorkspace.2441be6f9f', 'Start workspace')}
+          {t('auto.components.JiraIssueWorkspace.2441be6f9f', 'Start workspace')}
           <ArrowRight className="size-4" />
         </Button>
         <Tooltip>
@@ -57,7 +59,7 @@ export function JiraIssueWorkspaceHeader({
               size="icon-sm"
               className="shrink-0"
               onClick={onClose}
-              aria-label={translate(
+              aria-label={t(
                 'auto.components.JiraIssueWorkspace.76513c7898',
                 'Close Jira issue preview'
               )}
@@ -66,7 +68,7 @@ export function JiraIssueWorkspaceHeader({
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom" sideOffset={6}>
-            {translate('auto.components.JiraIssueWorkspace.7a96985ca0', 'Close')}
+            {t('auto.components.JiraIssueWorkspace.7a96985ca0', 'Close')}
           </TooltipContent>
         </Tooltip>
       </div>
@@ -103,6 +105,7 @@ export function JiraIssueMetadataBar({
     optimistic?: Partial<JiraIssue>
   ) => Promise<JiraMutationResult>
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border/60 px-4 py-2.5">
       <JiraIssueTransitionControl
@@ -126,7 +129,7 @@ export function JiraIssueMetadataBar({
             className="rounded-md px-1.5 py-0.5 text-[11px] text-muted-foreground transition hover:bg-muted/40 disabled:opacity-50"
           >
             {displayed.priority?.name ??
-              translate('auto.components.JiraIssueWorkspace.51bed73f88', 'No priority')}
+              t('auto.components.JiraIssueWorkspace.51bed73f88', 'No priority')}
             {pendingField === 'priority' ? (
               <LoaderCircle className="ml-1 inline size-3 animate-spin" />
             ) : null}
@@ -140,7 +143,7 @@ export function JiraIssueMetadataBar({
             }
             className="flex w-full items-center rounded-sm px-2 py-1.5 text-left text-[12px] hover:bg-accent"
           >
-            {translate('auto.components.JiraIssueWorkspace.51bed73f88', 'No priority')}
+            {t('auto.components.JiraIssueWorkspace.51bed73f88', 'No priority')}
           </button>
           {priorities.map((priority) => (
             <button

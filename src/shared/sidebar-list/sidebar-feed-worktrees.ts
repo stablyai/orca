@@ -3,11 +3,15 @@ import {
   parseExecutionHostId,
   type ExecutionHostId
 } from '../execution-host'
-import type { FolderWorkspace } from '../folder-workspace-types'
-import { projectGroupIdFromRepoId } from '../folder-workspace-worktree'
+import type { FolderWorkspace } from '../folder-workspaces/folder-workspace-types'
+import { projectGroupIdFromRepoId } from '../folder-workspaces/folder-workspace-worktree'
 import { parseWorkspaceKey } from '../workspace-scope'
 import { getExecutionHostIdFromWorktreeHostIdentity } from '../worktree/host-qualified-identity'
-import type { WorktreeLineage } from '../worktree/lineage-types'
+import type {
+  CrossStoreWorkspaceLineage,
+  WorkspaceLineageEdge,
+  WorktreeLineage
+} from '../worktree/lineage-types'
 import type { Worktree } from '../worktree/types'
 import type { PairedServerWorkspaceRow } from './paired-server-rows'
 import type { WorkspaceRow } from './workspace-rows'
@@ -28,6 +32,12 @@ export type SidebarFeedWorkspace = {
   facts: SidebarFeedRowFacts
   /** Set on a folder row: the builder lists folder workspaces apart from worktrees. */
   folderWorkspace: FolderWorkspace | null
+  /** The row's saved parent in another Orca store, resolved over every store (sidebar-feed-rows.ts). */
+  crossStoreParent?: CrossStoreWorkspaceLineage
+  /** Its folder workspace parent in its own store. */
+  workspaceLineage?: WorkspaceLineageEdge
+  /** An older server's edge without instance ids, which only the phone nests by. */
+  legacyLineage?: { parentWorktreeId: string; source: 'no-instance-host' }
 }
 
 /** The fields both a host's own rows and a paired server's rows carry for the list. */
@@ -42,6 +52,8 @@ type FeedRowFields = Pick<
       | 'isUnread'
       | 'instanceId'
       | 'lineage'
+      | 'crossStoreParent'
+      | 'workspaceLineage'
       | 'workspaceStatus'
       | 'sortOrder'
       | 'manualOrder'
@@ -51,7 +63,8 @@ type FeedRowFields = Pick<
       | 'smartAt'
     >
   > &
-  SidebarFeedRowFacts
+  SidebarFeedRowFacts &
+  Pick<SidebarFeedWorkspace, 'legacyLineage'>
 
 function readFeedRow(
   identity: string,
@@ -118,7 +131,10 @@ function readFeedRow(
     identity,
     worktree,
     facts: { defaultBranch, automationCreated, cliCreated, detachedHead, creatorProvenance },
-    folderWorkspace: row.kind === 'folder' ? folderWorkspaceOf(worktree, ownerHostId) : null
+    folderWorkspace: row.kind === 'folder' ? folderWorkspaceOf(worktree, ownerHostId) : null,
+    ...(row.crossStoreParent ? { crossStoreParent: row.crossStoreParent } : {}),
+    ...(row.workspaceLineage ? { workspaceLineage: row.workspaceLineage } : {}),
+    ...(row.legacyLineage ? { legacyLineage: row.legacyLineage } : {})
   }
 }
 

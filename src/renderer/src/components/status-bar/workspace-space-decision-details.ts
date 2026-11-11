@@ -1,23 +1,23 @@
-import type {
-  AgentStatusEntry,
-  MigrationUnsupportedPtyEntry
-} from '../../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
+import type { MigrationUnsupportedPtyEntry } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import type { HostedReviewProvider } from '../../../../shared/hosted-review'
+import type { HostedReviewProvider } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { Repo } from '../../../../shared/repo-types'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { isGitHubPRSuppressed } from '../../../../shared/worktree/github-pr-suppression'
-import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-space-types'
-import { branchDisplayName } from '../sidebar/WorktreeCardHelpers'
-import { findRepoForHost } from '../../store/slices/repo-host-identity'
-import { getHostedReviewCacheKey } from '../../store/slices/hosted-review-cache-identity'
-import { issueCacheKey as getIssueCacheKey } from '../../store/github/cache-identity'
+import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-disk-space/workspace-space-types'
+import '../sidebar/workspace-card/activity/worktree-card-empty-inputs'
+import { branchDisplayName } from '../sidebar/workspace-card/identity/worktree-branch-display'
+import { findRepoForHost } from '../../store/repos/repo-host-identity'
+import { getHostedReviewCacheKey } from '../../store/slices/hosted-review/hosted-review-cache-identity'
+import { issueCacheKey as getIssueCacheKey } from '../../store/github/cache/cache-identity'
 import { countWorkspaceSpaceActiveAgents } from './workspace-space-presentation'
 import { getWorkspaceSpaceWorktreeIdentity } from './workspace-space-delete-selection'
 import { getWorkspaceSpaceBranchLabel } from './workspace-space-format'
 import { formatHostedReviewLabel } from './hosted-review-label'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 
 export type WorkspaceDecisionDetails = {
   isActive: boolean
@@ -33,6 +33,8 @@ export type WorkspaceDecisionDetails = {
   branchStatus: string | null
   reviewLabel: string | null
   issueLabel: string | null
+  /** Cache key of the shown linked issue; changes when the link or its owning host changes. */
+  issueCacheKey: string | null
   linearIssueLabel: string | null
 }
 
@@ -84,19 +86,20 @@ function countLiveTerminals(
 }
 
 function getBranchStatus(
-  status: { hasUpstream: boolean; ahead: number; behind: number } | undefined
+  status: { hasUpstream: boolean; ahead: number; behind: number } | undefined,
+  t: Translate = translate
 ): string | null {
   if (!status?.hasUpstream) {
     return null
   }
   if (status.ahead === 0 && status.behind === 0) {
-    return translate(
+    return t(
       'auto.components.status.bar.workspaceSpaceDecision.syncedWithUpstream',
       'Synced with upstream'
     )
   }
   if (status.ahead > 0 && status.behind > 0) {
-    return translate(
+    return t(
       'auto.components.status.bar.workspaceSpaceDecision.aheadAndBehind',
       '{{ahead}} ahead, {{behind}} behind',
       {
@@ -106,17 +109,18 @@ function getBranchStatus(
     )
   }
   return status.ahead > 0
-    ? translate('auto.components.status.bar.workspaceSpaceDecision.ahead', '{{ahead}} ahead', {
+    ? t('auto.components.status.bar.workspaceSpaceDecision.ahead', '{{ahead}} ahead', {
         ahead: status.ahead
       })
-    : translate('auto.components.status.bar.workspaceSpaceDecision.behind', '{{behind}} behind', {
+    : t('auto.components.status.bar.workspaceSpaceDecision.behind', '{{behind}} behind', {
         behind: status.behind
       })
 }
 
 export function getWorkspaceDecisionDetails(
   worktree: WorkspaceSpaceWorktree,
-  inputs: WorkspaceDecisionInputs
+  inputs: WorkspaceDecisionInputs,
+  t?: Translate
 ): WorkspaceDecisionDetails {
   const candidateWorkspaceRecord =
     inputs.worktreeRecord ?? inputs.worktreeMap.get(worktree.worktreeId)
@@ -135,7 +139,7 @@ export function getWorkspaceDecisionDetails(
     : inputs.gitStatusByWorktree[worktree.worktreeId]
   const branch = workspaceRecord
     ? branchDisplayName(workspaceRecord.branch)
-    : getWorkspaceSpaceBranchLabel(worktree)
+    : getWorkspaceSpaceBranchLabel(worktree, t)
   const repo = inputs.repos
     ? findRepoForHost(inputs.repos, worktree.repoId, {
         hostId: worktree.executionHostId,
@@ -162,25 +166,24 @@ export function getWorkspaceDecisionDetails(
   const linkedPR = workspaceRecord?.linkedPR ?? null
   const reviewLabel =
     hostedReview !== undefined && hostedReview !== null
-      ? formatHostedReviewLabel(hostedReview)
+      ? formatHostedReviewLabel(hostedReview, t)
       : linkedPR
         ? `PR #${linkedPR}`
         : null
   const linkedIssue = workspaceRecord?.linkedIssue ?? null
-  const issue =
+  const issueCacheKey =
     linkedIssue && repo
-      ? inputs.issueCache[
-          getIssueCacheKey(
-            repo.path,
-            repo.id,
-            linkedIssue,
-            inputs.settings,
-            repo.connectionId,
-            ownerExecutionHostId,
-            true
-          )
-        ]?.data
+      ? getIssueCacheKey(
+          repo.path,
+          repo.id,
+          linkedIssue,
+          inputs.settings,
+          repo.connectionId,
+          ownerExecutionHostId,
+          true
+        )
       : null
+  const issue = issueCacheKey ? inputs.issueCache[issueCacheKey]?.data : null
   const issueLabel = linkedIssue
     ? issue
       ? `#${issue.number} ${issue.state}: ${issue.title}`
@@ -223,9 +226,10 @@ export function getWorkspaceDecisionDetails(
     dirtyEditorBufferCount,
     browserTabCount: inputs.browserTabsByWorktree[worktree.worktreeId]?.length ?? 0,
     changedFileCount: gitEntries ? gitEntries.length : null,
-    branchStatus: getBranchStatus(inputs.remoteStatusesByWorktree[worktree.worktreeId]),
+    branchStatus: getBranchStatus(inputs.remoteStatusesByWorktree[worktree.worktreeId], t),
     reviewLabel,
     issueLabel,
+    issueCacheKey,
     linearIssueLabel
   }
 }

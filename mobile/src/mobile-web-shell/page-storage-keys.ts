@@ -121,7 +121,7 @@ const WORKSPACE_KEY_PREFIXES = [
   'orca:terminalDrafts:'
 ] as const
 
-function workspaceScopedKey(prefix: string, hostId: string, worktreeId: string): string {
+export function workspaceScopedKey(prefix: string, hostId: string, worktreeId: string): string {
   return `${prefix}${encodeURIComponent(hostId)}:${encodeURIComponent(worktreeId)}`
 }
 

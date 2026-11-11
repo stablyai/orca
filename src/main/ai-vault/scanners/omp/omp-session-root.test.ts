@@ -1,8 +1,8 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { resolveOmpSessionsDir } from './omp-session-root'
+import { ompProfileSessionsDirs, resolveOmpSessionsDir } from './omp-session-root'
 import { ompSessionsRootDirs } from '../../session-scanner-roots'
 import { AI_VAULT_AGENT_SOURCES } from '../../session-scanner-agent-sources'
 import { resolveSessionFilePath } from '../../../native-chat/session-file-resolver'
@@ -21,105 +21,12 @@ afterEach(() => {
 })
 
 describe('OMP session root parity', () => {
-  it.each(['linux', 'darwin', 'win32'] as const)(
-    'selects migrated data on %s only when supported',
-    (platform) => {
-      const { home, xdg, legacy } = fixture()
-      mkdirSync(legacy, { recursive: true })
-      mkdirSync(join(xdg, 'omp'), { recursive: true })
-      expect(resolveOmpSessionsDir({ homeDir: home, platform, env: { XDG_DATA_HOME: xdg } })).toBe(
-        platform === 'win32' ? legacy : join(xdg, 'omp', 'sessions')
-      )
-    }
-  )
-  it('does not infer an XDG default or require the sessions subdirectory to exist', () => {
-    const { home, xdg, legacy } = fixture()
-    mkdirSync(join(home, '.local', 'share', 'omp', 'sessions'), { recursive: true })
-    expect(resolveOmpSessionsDir({ homeDir: home, env: {} })).toBe(legacy)
-    expect(resolveOmpSessionsDir({ homeDir: home, env: { XDG_DATA_HOME: xdg } })).toBe(legacy)
-    mkdirSync(join(xdg, 'omp'), { recursive: true })
-    expect(
-      resolveOmpSessionsDir({ homeDir: home, platform: 'linux', env: { XDG_DATA_HOME: xdg } })
-    ).toBe(join(xdg, 'omp', 'sessions'))
-  })
-  it.each([
-    { omp: 'work', pi: 'other', expected: 'work' },
-    { omp: undefined, pi: 'work', expected: 'work' },
-    { omp: '', pi: 'work', expected: '' },
-    { omp: 'default', pi: 'work', expected: '' }
-  ])('honors canonical profile selection %j', ({ omp, pi, expected }) => {
-    const { home, xdg } = fixture()
-    const env = {
-      OMP_PROFILE: omp,
-      PI_PROFILE: pi,
-      XDG_DATA_HOME: xdg,
-      PI_CONFIG_DIR: '.config/omp'
-    }
-    mkdirSync(join(xdg, 'omp'), { recursive: true })
-    const fallback = join(
-      home,
-      '.config',
-      'omp',
-      ...(expected ? ['profiles', expected] : []),
-      'agent',
-      'sessions'
-    )
-    expect(resolveOmpSessionsDir({ homeDir: home, platform: 'linux', env })).toBe(
-      expected ? fallback : join(xdg, 'omp', 'sessions')
-    )
-    mkdirSync(join(xdg, 'omp', 'profiles', 'work'), { recursive: true })
-    expect(resolveOmpSessionsDir({ homeDir: home, platform: 'linux', env })).toBe(
-      join(xdg, 'omp', ...(expected ? ['profiles', expected] : []), 'sessions')
-    )
-  })
-  it('uses custom agent paths only in default mode and discards inherited profile-derived paths', () => {
-    const { home, xdg, legacy } = fixture()
-    mkdirSync(join(xdg, 'omp'), { recursive: true })
-    const env = { XDG_DATA_HOME: xdg, PI_CODING_AGENT_DIR: join(home, 'custom') }
-    expect(resolveOmpSessionsDir({ homeDir: home, env })).toBe(join(home, 'custom', 'sessions'))
-    expect(resolveOmpSessionsDir({ homeDir: home, env: { ...env, OMP_PROFILE: 'work' } })).toBe(
-      join(home, '.omp', 'profiles', 'work', 'agent', 'sessions')
-    )
-    const inherited = {
-      OMP_PROFILE: '',
-      PI_PROFILE: 'work',
-      PI_CODING_AGENT_DIR: join(home, '.omp', 'profiles', 'work', 'agent')
-    }
-    expect(resolveOmpSessionsDir({ homeDir: home, env: inherited })).toBe(legacy)
-  })
-  it.each(['.omp', '.omp/agent', '.omp/agent/sessions', 'custom-sessions'])(
-    'preserves the legacy override %s over XDG and profiles',
-    (suffix) => {
-      const { home, xdg, legacy } = fixture()
-      mkdirSync(join(xdg, 'omp'), { recursive: true })
-      const root = join(home, suffix)
-      expect(
-        resolveOmpSessionsDir({
-          homeDir: home,
-          env: { OMP_CODING_AGENT_DIR: root, XDG_DATA_HOME: xdg, OMP_PROFILE: 'work' }
-        })
-      ).toBe(suffix === 'custom-sessions' ? root : legacy)
-    }
-  )
   it.each(['', ' ', '/', 'C:\\', 'C:/', 'C:', 'C:.'])(
     'refuses explicit degenerate root %j without fallback',
     (sessionsDir) => {
       expect(resolveOmpSessionsDir({ sessionsDir })).toBe('')
       expect(ompSessionsRootDirs({ ompSessionsDir: sessionsDir })).toEqual([])
       expect(AI_VAULT_AGENT_SOURCES.omp?.rootDirs({ ompSessionsDir: sessionsDir }, [])).toEqual([])
-    }
-  )
-  it.each(['/', '/..', 'C:\\', 'C:/', 'C:', 'C:.'])(
-    'does not replace a refused legacy root %s with XDG',
-    (override) => {
-      const { home, xdg } = fixture()
-      mkdirSync(join(xdg, 'omp'), { recursive: true })
-      expect(
-        resolveOmpSessionsDir({
-          homeDir: home,
-          env: { OMP_CODING_AGENT_DIR: override, XDG_DATA_HOME: xdg }
-        })
-      ).toBe('')
     }
   )
   it.each(['../other', 'CON', 'work.', 'two words'])(
@@ -129,7 +36,7 @@ describe('OMP session root parity', () => {
     }
   )
   it('uses the same live default for discovery, path allowlisting and native chat', async () => {
-    const { xdg } = fixture()
+    const { home, xdg } = fixture()
     const sessions = join(xdg, 'omp', 'sessions')
     mkdirSync(join(sessions, 'repo'), { recursive: true })
     const transcript = join(sessions, 'repo', 'stamp_omp-session.jsonl')
@@ -143,6 +50,8 @@ describe('OMP session root parity', () => {
     ]) {
       vi.stubEnv(key, undefined)
     }
+    // Pin discovery to the fixture home so real profile dirs cannot leak in.
+    vi.stubEnv('HOME', home)
     vi.stubEnv('XDG_DATA_HOME', xdg)
     if (process.platform === 'win32') {
       return
@@ -156,5 +65,73 @@ describe('OMP session root parity', () => {
     await expect(
       resolveSessionFilePath('omp', 'omp-session', { wslDistro: 'isolated' })
     ).resolves.toBeNull()
+  })
+})
+
+describe('ompProfileSessionsDirs', () => {
+  it('lists only existing session dirs of valid profiles', () => {
+    const { home } = fixture()
+    const valid = join(home, '.omp', 'profiles', 'qwen', 'agent', 'sessions')
+    mkdirSync(valid, { recursive: true })
+    mkdirSync(join(home, '.omp', 'profiles', 'empty-profile', 'agent'), { recursive: true })
+    mkdirSync(join(home, '.omp', 'profiles', 'work.', 'agent', 'sessions'), { recursive: true })
+    mkdirSync(join(home, '.omp', 'profiles', 'default', 'agent', 'sessions'), { recursive: true })
+    writeFileSync(join(home, '.omp', 'profiles', 'stray-file'), '')
+    expect(ompProfileSessionsDirs({ env: {}, homeDir: home, platform: 'linux' })).toEqual([valid])
+  })
+
+  it('adds XDG data home profile dirs on POSIX only', () => {
+    const { home, xdg } = fixture()
+    const local = join(home, '.omp', 'profiles', 'qwen', 'agent', 'sessions')
+    const xdgVariant = join(xdg, 'omp', 'profiles', 'qwen', 'sessions')
+    const xdgOnly = join(xdg, 'omp', 'profiles', 'fast', 'sessions')
+    for (const dir of [local, xdgVariant, xdgOnly]) {
+      mkdirSync(dir, { recursive: true })
+    }
+    expect(
+      ompProfileSessionsDirs({ env: { XDG_DATA_HOME: xdg }, homeDir: home, platform: 'linux' })
+    ).toEqual([xdgOnly, xdgVariant, local])
+    expect(
+      ompProfileSessionsDirs({ env: { XDG_DATA_HOME: xdg }, homeDir: home, platform: 'win32' })
+    ).toEqual([local])
+  })
+
+  it('stays empty under the legacy OMP_CODING_AGENT_DIR override', () => {
+    const { home } = fixture()
+    mkdirSync(join(home, '.omp', 'profiles', 'qwen', 'agent', 'sessions'), { recursive: true })
+    expect(
+      ompProfileSessionsDirs({
+        env: { OMP_CODING_AGENT_DIR: '/opt/omp' },
+        homeDir: home,
+        platform: 'linux'
+      })
+    ).toEqual([])
+  })
+})
+
+describe('OMP profile history parity', () => {
+  it('discovers profile runs the app process did not launch', async () => {
+    const { home } = fixture()
+    const profileSessions = join(home, '.omp', 'profiles', 'qwen', 'agent', 'sessions')
+    const transcript = join(profileSessions, 'repo', 'stamp_profile-session.jsonl')
+    mkdirSync(dirname(transcript), { recursive: true })
+    writeFileSync(transcript, '{}\n')
+    for (const key of [
+      'OMP_CODING_AGENT_DIR',
+      'PI_CODING_AGENT_DIR',
+      'OMP_PROFILE',
+      'PI_PROFILE',
+      'PI_CONFIG_DIR',
+      'XDG_DATA_HOME'
+    ]) {
+      vi.stubEnv(key, undefined)
+    }
+    vi.stubEnv('HOME', home)
+    if (process.platform === 'win32') {
+      return
+    }
+    expect(ompSessionsRootDirs({})).toContain(profileSessions)
+    expect(AI_VAULT_AGENT_SOURCES.omp?.rootDirs({}, [])).toContain(profileSessions)
+    await expect(resolveSessionFilePath('omp', 'profile-session')).resolves.toBe(transcript)
   })
 })

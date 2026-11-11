@@ -7,9 +7,9 @@ import {
   type TerminalCustomTheme,
   type WarpThemeImportPreview,
   type WarpThemeImportSource
-} from '../../../../../../shared/terminal-custom-themes'
+} from '../../../../../../shared/terminal-themes/terminal-custom-themes'
 import { useMountedRef } from '../../../../hooks/useMountedRef'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export type ThemeImportMode = 'warp' | 'yaml'
 
@@ -36,6 +36,7 @@ export function useWarpThemeImport(
   updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>,
   settings: GlobalSettings | null
 ): UseWarpThemeImportReturn {
+  const t = useTranslate()
   const [open, setOpen] = useState(false)
   const [mode, setMode] = useState<ThemeImportMode>('warp')
   const [preview, setPreview] = useState<WarpThemeImportPreview | null>(null)
@@ -60,7 +61,7 @@ export function useWarpThemeImport(
       const message =
         err instanceof Error
           ? err.message
-          : translate('auto.components.settings.useWarpThemeImport.unknown_error', 'Unknown error')
+          : t('auto.components.settings.useWarpThemeImport.unknown_error', 'Unknown error')
       const failure: WarpThemeImportPreview = {
         found: false,
         themes: [],
@@ -128,7 +129,7 @@ export function useWarpThemeImport(
     const overflowCount = byId.size + newThemeCount - MAX_TERMINAL_CUSTOM_THEMES
     if (overflowCount > 0) {
       setApplyError(
-        translate(
+        t(
           'auto.components.settings.useWarpThemeImport.over_limit',
           'Importing these themes would exceed the {{value0}} custom terminal theme limit. Deselect {{value1}} new themes and try again.',
           {
@@ -154,11 +155,11 @@ export function useWarpThemeImport(
       })
       const count = selectedThemes.length
       toast.success(
-        translate(
-          'auto.components.settings.useWarpThemeImport.imported',
-          'Imported {{value0}} themes',
-          { value0: count, count, defaultValue_one: 'Imported {{value0}} theme' }
-        )
+        t('auto.components.settings.useWarpThemeImport.imported', 'Imported {{value0}} themes', {
+          value0: count,
+          count,
+          defaultValue_one: 'Imported {{value0}} theme'
+        })
       )
       // Reveal new themes that otherwise remain below the built-in list.
       setImportSignal((value) => value + 1)
@@ -167,7 +168,7 @@ export function useWarpThemeImport(
       const message =
         err instanceof Error
           ? err.message
-          : translate(
+          : t(
               'auto.components.settings.useWarpThemeImport.import_failed',
               'Failed to import themes'
             )

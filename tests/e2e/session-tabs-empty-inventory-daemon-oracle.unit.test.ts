@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { SubprocessHandle } from '../../src/main/daemon/session-subprocess-handle'
-import { TerminalHost } from '../../src/main/daemon/terminal-host'
+import type { SubprocessHandle } from '../../src/main/daemon/sessions/session-subprocess-handle'
+import { TerminalHost } from '../../src/main/daemon/terminal-host/terminal-host'
 
-vi.mock('../../src/renderer/src/store', () => ({
+vi.mock('../../src/renderer/src/store/index', () => ({
   useAppStore: {
     setState: vi.fn(),
     getState: vi.fn(() => ({ updateAgentStatusState: vi.fn() })),
@@ -10,14 +10,14 @@ vi.mock('../../src/renderer/src/store', () => ({
   }
 }))
 
-import { clearRuntimeEnvironmentConnectionGenerationsForTests } from '../../src/renderer/src/store/slices/runtime-status'
+import { clearRuntimeEnvironmentConnectionGenerations as clearRuntimeEnvironmentConnectionGenerationsForTests } from '../../src/renderer/src/store/slices/runtime-status/runtime-status-connection-generation'
 import {
   hasHostSessionMirrorHydrated,
   parkUntilHostSessionMirrorHydrates,
   resetHostSessionMirrorHydrationForTests
-} from '../../src/renderer/src/runtime/host-session-mirror-hydration'
-import { clearHostLiveTerminalProbesForTests } from '../../src/renderer/src/runtime/host-live-terminal-probe'
-import { replaceRuntimeEnvironmentRevisions } from '../../src/renderer/src/runtime/runtime-environment-revision'
+} from '../../src/renderer/src/runtime/web-session-tabs-sync/hydration/host-session-mirror-hydration'
+import { clearHostLiveTerminalProbesForTests } from '../../src/renderer/src/runtime/hosted-terminals/inventory/host-live-terminal-probe'
+import { replaceRuntimeEnvironmentRevisions } from '../../src/renderer/src/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { applyWebSessionTabsStorePatch } from '../../src/renderer/src/runtime/web-session-tabs-sync/store-patch'
 
 const ENVIRONMENT_ID = 'env-live-unpublished'

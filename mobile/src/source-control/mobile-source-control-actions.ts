@@ -1,14 +1,16 @@
-import { translate } from '../i18n/mobile-i18n'
-import type { Translate } from '../i18n/mobile-i18n'
+import { translate, type Translate } from '../i18n/mobile-i18n'
+
 import { mobileCommitDropdownCopy } from './mobile-commit-dropdown-copy'
 import { mobileRemoteDropdownCopy } from './mobile-remote-dropdown-copy'
-import type { GitConflictOperation } from '../../../src/shared/git-status-types'
-import { deriveDropdownActionContext } from '../../../src/shared/source-control-dropdown-action-context'
-import { buildCommitDropdownItems } from '../../../src/shared/source-control-dropdown-commit-items'
-import type { DropdownItem } from '../../../src/shared/source-control-dropdown-item-types'
-import { buildRemoteDropdownItems } from '../../../src/shared/source-control-dropdown-remote-items'
-import type { SourceControlCommitAreaPrimaryActionDecision } from '../../../src/shared/source-control-primary-action-decision'
-import type { SourceControlPrimaryActionDecisionInputs } from '../../../src/shared/source-control-primary-action-decision-types'
+import type { GitConflictOperation } from '../../../src/shared/git/status/git-status-types'
+import { deriveDropdownActionContext } from '../../../src/shared/source-control/dropdown/source-control-dropdown-action-context'
+import { buildCommitDropdownItems } from '../../../src/shared/source-control/dropdown/source-control-dropdown-commit-items'
+import type { DropdownItem } from '../../../src/shared/source-control/dropdown/source-control-dropdown-item-types'
+import { buildRemoteDropdownItems } from '../../../src/shared/source-control/dropdown/source-control-dropdown-remote-items'
+import type {
+  SourceControlCommitAreaPrimaryActionDecision,
+  SourceControlPrimaryActionDecisionInputs
+} from '../../../src/shared/source-control/decisions/source-control-primary-action-decision-types'
 
 // String identifiers keep native lucide imports out of this module.
 export type MobileSourceControlActionIcon =
@@ -29,6 +31,7 @@ export type MobileSourceControlAction = {
   iconKey: MobileSourceControlActionIcon
   disabled?: boolean
   hint?: string
+  status?: string
   loading?: boolean
   skipAutoClose?: boolean
   closeBeforePress?: boolean
@@ -82,7 +85,7 @@ export function buildMobileSourceControlActions(
   const busy = args.busyAction !== null
   const blockForce = (item: DropdownItem): DropdownItem =>
     args.forcePushBlockedReason
-      ? { ...item, disabled: true, title: args.forcePushBlockedReason }
+      ? { ...item, disabled: true, title: args.forcePushBlockedReason, status: undefined }
       : item
   const row = (
     item: DropdownItem,
@@ -96,6 +99,7 @@ export function buildMobileSourceControlActions(
     disabled: busy || item.disabled,
     // Mobile has no tooltips: show why a row is disabled, and always what Force Push replaces.
     hint: item.disabled || item.kind === 'force_push' ? item.title : undefined,
+    status: item.status,
     loading: args.busyAction === actionId,
     skipAutoClose: true,
     onPress

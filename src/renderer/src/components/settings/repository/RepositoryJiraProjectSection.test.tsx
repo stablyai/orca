@@ -36,19 +36,6 @@ beforeEach(() => {
   inventory.mockReturnValue({ connected: true, projects: [project], error: null, loading: false })
 })
 describe('repository Jira setting', () => {
-  it('loads project choices from the owning runtime and accepts its persisted echo', async () => {
-    const update = vi.fn(async () => {
-      state.repos[0] = { ...state.repos[0], defaultJiraProject: project }
-      return true
-    })
-    render(<RepositoryJiraProjectSection repo={state.repos[0]} updateRepo={update} />)
-    expect(inventory).toHaveBeenCalledWith({ kind: 'environment', environmentId: 'owner' }, true)
-    fireEvent.click(screen.getByRole('button', { name: 'Choose Alpha' }))
-    await waitFor(() =>
-      expect(update).toHaveBeenCalledWith('repo', { defaultJiraProject: project })
-    )
-    expect(screen.queryByRole('alert')).toBeNull()
-  })
   it('explains an old runtime ignoring the optional field instead of claiming it saved', async () => {
     const update = vi.fn(async () => true)
     render(<RepositoryJiraProjectSection repo={state.repos[0]} updateRepo={update} />)

@@ -26,20 +26,20 @@ const favouriteTransport: {
   resume: vi.fn()
 }))
 export { favouriteTransport }
-vi.mock('@/runtime/runtime-jira-favourite-filters-client', () => ({
+vi.mock('@/runtime/jira/runtime-jira-favourite-filters-client', () => ({
   jiraListFavouriteFiltersForTarget: favouriteTransport.catalogue
 }))
-vi.mock('@/runtime/runtime-jira-saved-filter-state', () => ({
+vi.mock('@/runtime/jira/runtime-jira-saved-filter-state', () => ({
   readJiraSavedFilterState: favouriteTransport.readSaved,
   mutateJiraSavedFilters: favouriteTransport.mutateSaved
 }))
-vi.mock('@/runtime/runtime-jira-quick-filter-state', () => ({
+vi.mock('@/runtime/jira/runtime-jira-quick-filter-state', () => ({
   readJiraQuickFilterState: favouriteTransport.readQuick
 }))
-vi.mock('@/runtime/runtime-jira-detail-client', () => ({
+vi.mock('@/runtime/jira/runtime-jira-detail-client', () => ({
   jiraListPrioritiesForTarget: vi.fn()
 }))
-vi.mock('@/runtime/runtime-jira-client', () => ({
+vi.mock('@/runtime/jira/runtime-jira-client', () => ({
   jiraGetProjectStatusOrder: vi.fn()
 }))
 

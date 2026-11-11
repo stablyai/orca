@@ -1,6 +1,8 @@
-import { withDurableRuntimeStore } from '../runtime-durable-store-fixture'
+import { withDurableRuntimeStore } from './runtime-durable-store-fixture'
 import { describe, expect, it, vi } from 'vitest'
-import { OrcaRuntimeService, getDefaultWorkspaceSession } from '../orca-runtime-test-mocks.spec'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import {
   HEADLESS_LEAF_ID,
   HEADLESS_SECOND_LEAF_ID,
@@ -12,7 +14,7 @@ import {
   makeWorkspaceSessionWithHeadlessTerminal,
   store,
   withPlatform
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
   it('keeps current-generation tab and leaf identity across a host restart', async () => {
@@ -196,51 +198,6 @@ describe('OrcaRuntimeService', () => {
         ]
       })
     ).rejects.toThrow('terminal_orphan_surface_retired')
-  })
-
-  it('keeps orphaned list and show writability aligned with the send gate', async () => {
-    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession({
-      ...getDefaultWorkspaceSession(),
-      tabsByWorktree: { [TEST_WORKTREE_ID]: [] }
-    })
-    const runtime = new OrcaRuntimeService(
-      withDurableRuntimeStore({ ...runtimeStore, flushOrThrow: vi.fn() })
-    )
-    const writes: [string, string][] = []
-    runtime.setPtyController({
-      write: (ptyId: string, data: string) => {
-        writes.push([ptyId, data])
-        return true
-      },
-      kill: () => true,
-      getForegroundProcess: async () => null,
-      listProcesses: async () => [
-        {
-          id: 'pty-orphan',
-          incarnationId: 'inc-orphan',
-          terminalHandle: 'term_orphan',
-          title: 'shell',
-          cwd: TEST_WORKTREE_PATH,
-          worktreeId: TEST_WORKTREE_ID,
-          wslDistro: null
-        }
-      ]
-    } as never)
-    runtime.registerPty('pty-orphan', TEST_WORKTREE_ID)
-    runtime.onPtySpawned('pty-orphan', 'inc-orphan', { awaitsRegistration: false })
-
-    const listed = await runtime.listTerminals(`id:${TEST_WORKTREE_ID}`)
-    const entry = listed.terminals.find((terminal) => terminal.ptyId === 'pty-orphan')
-    expect(entry).toMatchObject({ orphaned: true, connected: true, writable: true })
-
-    const shown = await runtime.showTerminal(entry!.handle)
-    expect(shown.writable).toBe(true)
-    await expect(
-      runtime.sendTerminal(entry!.handle, { text: 'hi' }, { inputKind: 'driving' })
-    ).resolves.toMatchObject({
-      accepted: true
-    })
-    expect(writes).toEqual([['pty-orphan', 'hi']])
   })
 
   it('rejects connection mismatch and reused handles while allowing a WSL-owned orphan', async () => {

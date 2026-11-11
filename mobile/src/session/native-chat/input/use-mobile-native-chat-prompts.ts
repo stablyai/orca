@@ -3,7 +3,7 @@ import {
   scanPendingAsks
 } from '../../../../../src/shared/native-chat/input/native-chat-ask'
 import { useMemo } from 'react'
-import type { AgentStatusEntry } from '../../../../../src/shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../../src/shared/agent-status/contracts/agent-status-types'
 import type { AskPrompt } from '../../../../../src/shared/native-chat/input/native-chat-ask-types'
 import {
   resolveNativeChatInteractivePromptCard,
@@ -14,12 +14,13 @@ import type { NativeChatMessage } from '../../../../../src/shared/native-chat/na
 import {
   useMobileStructuredAsyncQuestion,
   type MobileStructuredAskSession
-} from '../../use-mobile-structured-async-question'
+} from './use-mobile-structured-async-question'
 
 export type MobileNativeChatPrompts = {
   /** A terminal chat's approval; a structured chat's journal prompts are its own cards. */
   permission: ChatApproval | null
   ask: AskPrompt | null
+  answerPending?: boolean
   /** The host wait's start for a status-backed card; null for a transcript-only one. */
   waitStartedAt: number | null
   /** Set in a structured chat, whose ask is answered by a send rather than a terminal write. */
@@ -79,6 +80,7 @@ export function useMobileNativeChatPrompts(args: {
     return {
       permission: null,
       ask: enabled ? structuredAsk.ask : null,
+      answerPending: scan?.answerPending === true,
       waitStartedAt: null,
       structuredAnswer: structuredAsk.answer
     }

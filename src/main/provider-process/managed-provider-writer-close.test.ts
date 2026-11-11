@@ -35,7 +35,11 @@ it('retains irreversible delivery through explicit strict cleanup retries withou
   vi.useFakeTimers()
   const { managed, child } = fixture(true)
   const kill = vi.fn().mockResolvedValueOnce(true).mockResolvedValue(false)
-  const tree = createClaudeChildTreeReaper(child, { platform: 'win32', terminateWindowsTree: kill })
+  const tree = createClaudeChildTreeReaper(child, {
+    site: 'claude-structured-child-close',
+    platform: 'win32',
+    terminateWindowsTree: kill
+  })
   const first = managed.close(tree)
   await vi.advanceTimersByTimeAsync(15)
   expect(await first).toMatchObject({ root: 'live', killDelivered: true })

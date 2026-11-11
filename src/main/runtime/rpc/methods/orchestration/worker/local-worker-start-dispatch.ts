@@ -1,8 +1,8 @@
-import type { TuiAgent } from '../../../../../../shared/tui-agent'
-import type { WorkerStartModeReceipt } from '../../orchestration-worker-start-mode'
+import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
+import type { AgentLaunchModeReceipt as WorkerStartModeReceipt } from '../../../../../../shared/agent-launch/contracts/agent-launch-intent'
 import type { OrchestrationWorkerLaunchReceipt } from './worker-launch-preferences'
 import type { WorkerStartInput } from './worker-start-schema'
-import type { RunRow } from '../../../../orchestration/types'
+import type { RunRow } from '../../../../orchestration/db/orchestration-records'
 import type { startLocalWorker } from './local-worker-start'
 import { resolveDispatchCreator } from '../runs/dispatch-creator'
 
@@ -64,6 +64,7 @@ export function createLocalWorkerStartDispatch(
     requiredCreatorDispatchId: helperCreator?.id,
     taskId: existingTask?.id,
     taskSpec: params.spec,
+    adoptTaskId: params.adoptTaskId,
     taskTitle: params.taskTitle,
     taskDeps,
     // A helper's Task sits under its creator's Task, so the Run's Task tree shows who started it.

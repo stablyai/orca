@@ -3,7 +3,13 @@ import { isAbsolute, resolve } from 'node:path'
 import type { CommandHandler, HandlerContext } from '../dispatch'
 import { printPluginResult, requirePluginPathArg } from '../plugin-authoring/plugin-cli-output'
 import { RuntimeClientError, RuntimeRpcFailureError } from '../runtime/types'
-import { quoteCliCommandArgument } from '../shell-command-quote'
+import {
+  approvalFingerprintOf,
+  approvalRerunCommand,
+  nextStepsOf,
+  pendingApprovalsOf,
+  perPluginApprovalCommands
+} from './plugin-approval-rerun'
 import { isQualifiedPluginKey } from '../../shared/plugins/manifest/plugin-manifest'
 import type { PluginHostListEntry } from '../../shared/plugins/plugin-list-entry'
 
@@ -28,41 +34,6 @@ export function stringFlag(ctx: HandlerContext, name: string): string | undefine
   return typeof value === 'string' && value.trim() ? value.trim() : undefined
 }
 
-/** The caller's exact command with `--approve <fingerprint>`, so nothing else changes on re-run. */
-export function approvalRerunCommand(rawArgs: readonly string[], fingerprint: string): string {
-  const kept: string[] = []
-  for (let index = 0; index < rawArgs.length; index += 1) {
-    const arg = rawArgs[index]
-    if (arg === '--approve') {
-      index += 1
-      continue
-    }
-    if (arg.startsWith('--approve=')) {
-      continue
-    }
-    kept.push(arg)
-  }
-  return ['orca', ...kept, '--approve', fingerprint].map(quoteCliCommandArgument).join(' ')
-}
-
-function approvalFingerprintOf(data: unknown): string | null {
-  return typeof data === 'object' &&
-    data !== null &&
-    'approvalFingerprint' in data &&
-    typeof data.approvalFingerprint === 'string'
-    ? data.approvalFingerprint
-    : null
-}
-
-function nextStepsOf(data: unknown): string[] {
-  return typeof data === 'object' &&
-    data !== null &&
-    'nextSteps' in data &&
-    Array.isArray(data.nextSteps)
-    ? data.nextSteps.filter((step): step is string => typeof step === 'string')
-    : []
-}
-
 export function translatePluginRpcError(
   ctx: HandlerContext,
   method: string,
@@ -80,6 +51,14 @@ export function translatePluginRpcError(
     )
   }
   const fingerprint = approvalFingerprintOf(data)
+  const pending = pendingApprovalsOf(data)
+  if (APPROVAL_CODES.has(code) && fingerprint === null && pending.length > 0) {
+    const nextSteps = nextStepsOf(data).filter((step) => !step.startsWith('To approve '))
+    return new RuntimeClientError(code, message, {
+      ...(typeof data === 'object' ? data : {}),
+      nextSteps: [...nextSteps, ...perPluginApprovalCommands(ctx, pending)]
+    })
+  }
   if (!APPROVAL_CODES.has(code) || fingerprint === null || typeof data !== 'object') {
     return error
   }
@@ -137,7 +116,7 @@ export function devTargetParams(
     : { path: resolveHostPluginPath(ctx, target) }
 }
 
-function formatPluginRow(plugin: PluginHostListEntry): string {
+export function formatPluginRow(plugin: PluginHostListEntry): string {
   const tags = [plugin.execution, plugin.isDev ? 'dev' : null, plugin.official ? 'official' : null]
   return `${plugin.pluginKey} ${plugin.version}  ${plugin.status}  ${tags.filter(Boolean).join(', ')}${plugin.error ? `\n  ${plugin.error}` : ''}`
 }

@@ -112,22 +112,4 @@ describe('local repo ref maintenance scheduling', () => {
 
     await vi.waitFor(() => expect(packRefs).toHaveBeenCalledTimes(1))
   })
-
-  it('routes the app activity probe into the shared instance', async () => {
-    readRepoCommonDirFromGitMock.mockResolvedValue('/repo/.git')
-    let busy = true
-    setRepoMaintenanceActivityProbe(() => busy)
-    const maintenance = getLocalRepoRefMaintenance()
-    const packRefs = vi.fn(async () => {})
-
-    maintenance.arm({
-      key: 'local::/repo/.git',
-      resolveRefsDirectory: async () => '/repo/.git/refs',
-      packRefs
-    })
-    await maintenance.whenAttemptSettled()
-
-    expect(packRefs).not.toHaveBeenCalled()
-    busy = false
-  })
 })

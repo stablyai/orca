@@ -1,18 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import type { TerminalQuickCommand } from '../../../../../shared/terminal-quick-command-types'
-import { getTerminalQuickCommandScope } from '../../../../../shared/terminal-quick-commands'
+import type { TerminalQuickCommand } from '../../../../../shared/terminal/quick-commands/terminal-quick-command-types'
+import { getTerminalQuickCommandScope } from '../../../../../shared/terminal/quick-commands/terminal-quick-commands'
 import {
   createTerminalQuickCommandDraft,
   TerminalQuickCommandDialog
 } from '@/components/terminal-quick-commands/TerminalQuickCommandDialog'
-import { searchTerminalQuickCommands } from '@/lib/terminal-quick-command-search'
+import { searchTerminalQuickCommands } from '@/lib/terminal/quick-commands/terminal-quick-command-search'
 import { useAppStore } from '../../../store/index'
-import { getTerminalQuickCommandHostPromptMaxLength } from '@/lib/terminal-quick-command-host-prompt-limit'
+import { getTerminalQuickCommandHostPromptMaxLength } from '@/lib/terminal/quick-commands/terminal-quick-command-host-prompt-limit'
 import { Button } from '../../ui/button'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import { getSettingOwnershipSummary } from '../page/setting-ownership'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { QuickCommandsList } from './QuickCommandsList'
 import { QuickCommandsToolbar } from './QuickCommandsToolbar'
 import { GLOBAL_SCOPE_KEY } from './QuickCommandsScopeFilter'
@@ -88,13 +88,14 @@ export function QuickCommandsPane({
   settings,
   addCommandIntentSignal
 }: QuickCommandsPaneProps): React.JSX.Element {
+  const t = useTranslate()
   const repos = useAppStore((s) => s.repos)
   const activeRepoId = useAppStore((s) => s.activeRepoId)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   const runtimeStatuses = useAppStore((s) => s.runtimeStatusByEnvironmentId)
   const runtimeCommands = useAppStore((s) => s.runtimeTerminalQuickCommands)
   const loadRuntimeCommands = useAppStore((s) => s.loadRuntimeTerminalQuickCommands)
-  const ownership = getSettingOwnershipSummary('terminalQuickCommands')
+  const ownership = getSettingOwnershipSummary('terminalQuickCommands', t)
   const confirm = useConfirmationDialog()
   const [selectedHostId, setSelectedHostId] = useState<ExecutionHostId>(LOCAL_EXECUTION_HOST_ID)
   const selectedHost = parseExecutionHostId(selectedHostId)
@@ -250,16 +251,14 @@ export function QuickCommandsPane({
 
   const removeCommand = async (command: TerminalQuickCommand): Promise<void> => {
     const confirmed = await confirm({
-      title: translate(
-        'auto.components.settings.QuickCommandsPane.3edf3deaf8',
-        'Delete "{{value0}}"?',
-        { value0: command.label || 'Untitled' }
-      ),
-      description: translate(
+      title: t('auto.components.settings.QuickCommandsPane.3edf3deaf8', 'Delete "{{value0}}"?', {
+        value0: command.label || 'Untitled'
+      }),
+      description: t(
         'auto.components.settings.QuickCommandsPane.3d9dc558e8',
         'This quick command will be removed from your saved list.'
       ),
-      confirmLabel: translate('auto.components.settings.QuickCommandsPane.ec1ed99e70', 'Delete'),
+      confirmLabel: t('auto.components.settings.QuickCommandsPane.ec1ed99e70', 'Delete'),
       confirmVariant: 'destructive'
     })
     if (!confirmed) {
@@ -305,7 +304,7 @@ export function QuickCommandsPane({
 
       {selectedRuntimeCommandsAreCurrent && selectedRuntimeCommands?.supported === false ? (
         <div className="px-3 py-6 text-sm text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.settings.QuickCommandsPane.d59bd333c3',
             'Update this Orca server to manage its quick commands.'
           )}
@@ -315,7 +314,7 @@ export function QuickCommandsPane({
         !selectedRuntimeCommands.ready ? (
         <div className="flex items-center justify-between gap-3 rounded-md border border-border/60 px-3 py-3">
           <span className="text-sm text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.settings.QuickCommandsPane.f2bf411640',
               'Could not load commands from this host.'
             )}
@@ -329,14 +328,14 @@ export function QuickCommandsPane({
               void loadRuntimeCommands(selectedEnvironmentId, { force: true })
             }
           >
-            {translate('auto.components.settings.QuickCommandsPane.7ecfee5b8e', 'Retry')}
+            {t('auto.components.settings.QuickCommandsPane.7ecfee5b8e', 'Retry')}
           </Button>
         </div>
       ) : selectedEnvironmentId &&
         (!selectedRuntimeCommandsAreCurrent ||
           (selectedRuntimeCommands?.loading && !selectedRuntimeCommands.ready)) ? (
         <div className="px-3 py-6 text-sm text-muted-foreground">
-          {translate('auto.components.settings.QuickCommandsPane.601d6af51f', 'Loading commands…')}
+          {t('auto.components.settings.QuickCommandsPane.601d6af51f', 'Loading commands…')}
         </div>
       ) : (
         <>
@@ -346,7 +345,7 @@ export function QuickCommandsPane({
           ) ? (
             <div className="flex items-center justify-between gap-3 rounded-md border border-border/60 px-3 py-3">
               <span className="text-sm text-muted-foreground">
-                {translate(
+                {t(
                   'auto.components.settings.QuickCommandsPane.923ba89646',
                   'Could not refresh commands from this host. Showing the last loaded commands.'
                 )}
@@ -360,7 +359,7 @@ export function QuickCommandsPane({
                   void loadRuntimeCommands(selectedEnvironmentId, { force: true })
                 }
               >
-                {translate('auto.components.settings.QuickCommandsPane.7ecfee5b8e', 'Retry')}
+                {t('auto.components.settings.QuickCommandsPane.7ecfee5b8e', 'Retry')}
               </Button>
             </div>
           ) : null}

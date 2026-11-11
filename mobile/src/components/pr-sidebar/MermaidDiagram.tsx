@@ -5,7 +5,10 @@ import { colors, radii, spacing, typography, pressedStyle } from '../../theme/mo
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { readableMermaidFlowchartSvg } from '../../../../src/shared/mermaid-flowchart-contrast'
-import { readSvgIntrinsicSize, svgMarkupDataUri } from '../../../../src/shared/svg-document'
+import {
+  readSvgIntrinsicSize,
+  svgMarkupDataUri
+} from '../../../../src/shared/file-preview/svg-document'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { MobileNativeChatImageViewer } from '../../session/native-chat/visual/MobileNativeChatImageViewer'
 import { mermaidDiagramConfig } from './mermaid-diagram-config'

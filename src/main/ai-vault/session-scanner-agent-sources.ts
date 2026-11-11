@@ -2,15 +2,15 @@ import { homedir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { pathSegments } from './session-file-discovery'
 import { resolveAbsoluteDirOverride } from '../../shared/absolute-dir-override'
-import type { AiVaultAgent } from '../../shared/ai-vault-types'
-import type { AiVaultDeletableAgent } from '../../shared/ai-vault-session-deletion'
+import type { AiVaultAgent } from '../../shared/ai-vault/contracts/ai-vault-types'
+import type { AiVaultDeletableAgent } from '../../shared/ai-vault/contracts/ai-vault-session-deletion'
 import { resolveGrokSessionsDir } from '../../shared/grok-session-paths'
 import { resolveKiroHomeDir } from '../../shared/kiro-home'
 import { uniqueCodexSessionsDirs } from './scanners/codex/session-scanner-codex-paths'
 import {
   clineMessagesPathForMetadata,
   kiroTranscriptPathForMetadata
-} from '../../shared/ai-vault-session-log-resource'
+} from '../../shared/ai-vault/session-display/ai-vault-session-log-resource'
 import { isClineSessionMetadataPath } from './scanners/cline/session-scanner-cline-parser'
 import { cursorChatMetaPath } from './scanners/cursor/session-scanner-cursor-chat-meta'
 import { devinSessionsDbDependencyPath } from './scanners/devin/session-scanner-devin-db'
@@ -28,6 +28,7 @@ import {
   wslHomeSessionDirs
 } from './session-scanner-roots'
 import { getHermesHome } from '../hermes/hermes-default-home'
+import { isClaudeProjectBucketDirectory } from './scanners/claude/claude-project-dir-encoding'
 import { SUBAGENT_DIR_NAME } from './scanners/claude/session-scanner-subagent-transcripts'
 import type { AiVaultScanOptions } from './session-scanner-types'
 import { normalizeAgentSessionsDir, primeAgentSessionsDirFromEnv } from './session-scanner-values'
@@ -94,8 +95,8 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
         claudeProfileProjectsDirs: options.claudeProfileProjectsDirs
       }),
     extensions: ['.jsonl'],
-    // Read non-resumable task transcripts under their parent instead of duplicating History rows.
-    directoryPredicate: (name) => name !== SUBAGENT_DIR_NAME
+    // Subagent transcripts are read under their parent instead of duplicating History rows.
+    directoryPredicate: isClaudeProjectBucketDirectory
   },
   qoder: {
     rootDirs: (options, wslHomeDirs) =>
@@ -123,7 +124,11 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
         ...wslHomeSessionDirs('codex', wslHomeDirs),
         ...(options.additionalCodexSessionsDirs ?? [])
       ]),
-    extensions: ['.jsonl']
+    // Codex archives rollouts idle 7+ days as .jsonl.zst (#40312); only rollout-named archives.
+    extensions: ['.jsonl', '.zst'],
+    filePredicate: (filePath) =>
+      !filePath.toLowerCase().endsWith('.zst') ||
+      /^rollout-.+\.jsonl\.zst$/.test(basename(filePath))
   },
   gemini: {
     rootDirs: (options, wslHomeDirs) =>

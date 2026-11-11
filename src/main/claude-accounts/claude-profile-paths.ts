@@ -1,4 +1,4 @@
-import { lstatSync, mkdirSync, readFileSync, realpathSync } from 'node:fs'
+import { lstatSync, mkdirSync, readFileSync, realpathSync, unlinkSync } from 'node:fs'
 import * as hostPath from 'node:path'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import {
@@ -7,7 +7,7 @@ import {
 } from '../../shared/claude-profile-routing'
 import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
 import type { ExecutionHostId } from '../../shared/execution-host'
-import { writeFileAtomically } from '../codex-accounts/fs-utils'
+import { writeFileAtomically } from '../filesystem/atomic-file-publication'
 import { ClaudeProfileSurfaceError } from './claude-profile-report'
 
 /** Caller-relative `executionHostId` routes calls but must not be persisted. */
@@ -148,9 +148,26 @@ export function prepareClaudeProfileDirectory(
       'Claude profile belongs to another account or target'
     )
   }
+  let missingHome = false
+  try {
+    if (!lstatSync(profile.home).isDirectory()) {
+      throw new ClaudeProfileSurfaceError(
+        'invalid-profile',
+        'Claude profile home is not a directory'
+      )
+    }
+  } catch (error) {
+    if (!isDefinitiveAbsence(error)) {
+      throw error
+    }
+    missingHome = true
+  }
+  if (missingHome && marker !== null) {
+    unlinkSync(markerPath)
+  }
   mkdirSync(profile.home, { recursive: true, mode: 0o700 })
   return () => {
-    if (marker === null) {
+    if (marker === null || missingHome) {
       writeFileAtomically(markerPath, `${record}\n`, { mode: 0o600 })
     }
   }

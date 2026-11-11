@@ -3,7 +3,8 @@ import type {
   CatalogModel,
   CatalogOption
 } from './agent-session-option-catalog-types'
-import { agentChoiceCliApply } from '../../agent-choice-cli-apply'
+import { agentChoiceCliApply } from '../../agent-launch/choices/agent-choice-cli-apply'
+import { parseCursorModels } from '../../source-control/ai/generation/commit-message-model-parsers'
 
 export const GEMINI_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
   models: [
@@ -60,19 +61,13 @@ const CURSOR_THINKING: CatalogOption = {
   apply: { composedIntoModel: true }
 }
 
-function parseCursorModels(stdout: string): CatalogModel[] {
-  const seen = new Set<string>()
-  const models: CatalogModel[] = []
-  for (const line of stdout.split(/\r?\n/)) {
-    const match = line.trim().match(/^(?:[-*]\s+)?([a-z0-9][a-z0-9._-]*)(?:\s+\(.*\))?$/i)
-    const id = match?.[1]
-    if (!id || id.toLowerCase() === 'models' || seen.has(id)) {
-      continue
-    }
-    seen.add(id)
-    models.push({ id, label: id === 'auto' ? 'Auto' : id, options: [] })
-  }
-  return models
+function parseCursorCatalogModels(stdout: string): CatalogModel[] {
+  return parseCursorModels(stdout).map(({ id, label, isDefault }) => ({
+    id,
+    label,
+    ...(isDefault ? { isDefault } : {}),
+    options: []
+  }))
 }
 
 export const CURSOR_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
@@ -117,5 +112,5 @@ export const CURSOR_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
     const fast = values.fastMode === true ? '-fast' : ''
     return `${modelId}${effort}${fast}`
   },
-  listModels: { command: 'cursor-agent models', parse: parseCursorModels }
+  listModels: { command: 'cursor-agent models', parse: parseCursorCatalogModels }
 }

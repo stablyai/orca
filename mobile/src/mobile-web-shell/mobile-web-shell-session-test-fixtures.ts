@@ -16,6 +16,7 @@ import type {
   MobileWebShellStep
 } from './mobile-web-shell-session-contract'
 import type { MobileWebShellUpdateFailureCause } from './mobile-web-shell-update-failure'
+import { CHECKING } from './mobile-web-shell-gates'
 
 export function gates(overrides: Partial<MobileWebShellGates> = {}): MobileWebShellGates {
   return {
@@ -109,6 +110,8 @@ export const CACHED_BELOW_HOST_FLOOR: CachedGeneration = {
   compat: { ...CACHED.compat, runtimeProtocolVersion: 0 }
 }
 
+export const DOCUMENT_FAILED = { type: 'shell-failed', reason: 'document-load-failed' } as const
+
 // Default result events to the current flow; stale-result tests pin their superseded flow explicitly.
 type PendingEvent<E = MobileWebShellSessionEvent> = E extends { flow: number }
   ? Omit<E, 'flow'> & { readonly flow?: number }
@@ -154,13 +157,18 @@ export function started(overrides: Partial<MobileWebShellGates> = {}): MobileWeb
   return run(createMobileWebShellSession(ROUTE), { type: 'gates-changed', gates: gates(overrides) })
 }
 
-export function afterCacheRead(generation: CachedGeneration | null): MobileWebShellStep {
-  return run(started().session, { type: 'cache-read', generation })
+// The desktop's manifest decides with this generation on disk: no cache, or one that could not open at once (outside the host's window, route not served).
+export function awaitingManifest(generation: CachedGeneration | null): MobileWebShellStep {
+  const session = started().session
+  return {
+    session: { ...session, cached: generation, state: CHECKING },
+    effects: [{ kind: 'read-manifest' }]
+  }
 }
 
 export function readySession(): MobileWebShellStep {
   return run(
-    afterCacheRead(CACHED).session,
+    awaitingManifest(CACHED).session,
     { type: 'manifest-read', manifest: MANIFEST },
     {
       type: 'activated',

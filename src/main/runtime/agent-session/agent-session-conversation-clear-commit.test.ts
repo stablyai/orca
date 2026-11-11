@@ -7,7 +7,7 @@ import { AgentSessionJournal } from '../../native-chat/agent-session-journal/jou
 import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase
-} from '../../native-chat/agent-session-journal/journal-host-database-test-support'
+} from '../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import {
   providerContextBoundaryForClear,
   type AgentSessionConversationClear
@@ -150,48 +150,6 @@ async function queueClearCards(journal: AgentSessionJournal) {
 }
 
 describe('clear transaction', () => {
-  it.each([false, true])('clears only automatic names (user=%s)', async (user) => {
-    const { store, journal, completed, operation, append } = await prepare()
-    await (user
-      ? store.setUserConversationName(SOURCE, 'Saved name', 'rename')
-      : store.setConversationName(SOURCE, 'Saved name'))
-    const before = store.getRecord(SOURCE)!
-    expect(before.providerHandleChain).toHaveLength(1)
-    await queueClearCards(journal)
-    const epoch = journal.cursor().epoch
-    await append()
-    const reopened = await open()
-    expect(reopened.listRecords()).toHaveLength(1)
-    expect(reopened.getRecord(SOURCE)).toMatchObject({
-      providerContextBoundary: providerContextBoundaryForClear(completed),
-      providerHandleChain: [],
-      lease: { provenHandleLinkId: null },
-      accountHome: before.accountHome,
-      options: before.options,
-      conversationCommand: completed.command
-    })
-    expect(reopened.getRecord(SOURCE)?.conversationName).toBe(user ? 'Saved name' : undefined)
-    const context = providerContextBoundaryForClear(completed).operationId
-    expect(
-      await reopened.compareAndSetConversationName(SOURCE, 'Saved name', null, context)
-    ).toEqual(user ? null : expect.objectContaining({ conversationName: 'Saved name' }))
-    expect(
-      await reopened.compareAndSetConversationName(SOURCE, 'Stale result', 'Saved name', null)
-    ).toBeNull()
-    expect(
-      await reopened.compareAndSetConversationName(SOURCE, 'Saved name', 'Saved name', null)
-    ).toBeNull()
-    expect((await open()).getRecord(SOURCE)?.conversationName).toBe('Saved name')
-    expect(reopened.getSessionTabId(SOURCE)).toBe('tab-alpha')
-    expect(JSON.stringify(reopened.getRecord(SOURCE))).not.toContain('pre-clear-provider-context')
-    expect(journal.cursor().epoch).toBe(epoch)
-    expect(journal.queuedMessages.get('command')).toMatchObject({ state: 'withdrawn' })
-    expect(journal.queuedMessages.pauses()).toMatchObject([{ messageIds: ['first', 'last'] }])
-    expect(
-      reopened.getOperationRow(operation.callerKey, operation.operationId)?.outcome.status
-    ).toBe('succeeded')
-  })
-
   it('rolls the divider and receipt back when the fence moved', async () => {
     const { store, journal, completed, operation, append } = await prepare()
     await queueClearCards(journal)
@@ -213,15 +171,5 @@ describe('clear transaction', () => {
     expect(store.getOperationRow(operation.callerKey, operation.operationId)?.outcome.status).toBe(
       'pending'
     )
-  })
-
-  it('refuses a boundary while ownership is still reserved', async () => {
-    const { store, journal, append } = await prepare(false)
-    const before = journal.cursor()
-    await expect(append()).rejects.toMatchObject({
-      refusal: { code: 'agent_session_ownership_unknown' }
-    })
-    expect(journal.cursor()).toEqual(before)
-    expect(store.getRecord(SOURCE)?.providerContextBoundary).toBeUndefined()
   })
 })

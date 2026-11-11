@@ -85,6 +85,10 @@ export class LazyWorkerThreadHost<TResponse> {
     }
   }
 
+  retired(): Promise<void> {
+    return this.retiring ?? Promise.resolve()
+  }
+
   scheduleIdleTeardown(): void {
     this.clearIdleTimer()
     if (!this.worker) {

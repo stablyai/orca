@@ -3,10 +3,10 @@ import { createPortal } from 'react-dom'
 import { PanelBottom, PanelRight, SquareArrowOutUpRight, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { ResizeHandle } from '@/components/tab-group/TabGroupSplitNodeTree'
-import { browserDevToolsDockFraction } from '../../../../../shared/browser-devtools-dock'
+import { browserDevToolsDockFraction } from '../../../../../shared/browser/devtools/browser-devtools-dock'
 import { acquireWebviewsDragPassthrough } from '../host-guest/webview-drag-passthrough'
 import { useBrowserDevToolsDockBounds } from './use-browser-devtools-dock-bounds'
 import { useBrowserDevToolsDockPageFlex } from './browser-devtools-docked-pages'
@@ -41,6 +41,7 @@ export function BrowserDevToolsDock({
 }: {
   browserPageId: string
 }): React.JSX.Element {
+  const t = useTranslate()
   const layout = useAppStore((s) => s.browserDevToolsDock)
   const setLayout = useAppStore((s) => s.setBrowserDevToolsDock)
   const [placeholder, setPlaceholder] = useState<HTMLDivElement | null>(null)
@@ -67,7 +68,7 @@ export function BrowserDevToolsDock({
     releaseDragRef.current = null
   }, [])
   const nextSide = layout.side === 'bottom' ? 'right' : 'bottom'
-  const title = translate('auto.components.browser.pane.BrowserPane.devToolsTitle', 'DevTools')
+  const title = t('auto.components.browser.pane.BrowserPane.devToolsTitle', 'DevTools')
 
   return (
     <>
@@ -88,21 +89,15 @@ export function BrowserDevToolsDock({
           <DockAction
             label={
               nextSide === 'right'
-                ? translate(
-                    'auto.components.browser.pane.BrowserPane.devToolsDockRight',
-                    'Dock to right'
-                  )
-                : translate(
-                    'auto.components.browser.pane.BrowserPane.devToolsDockBottom',
-                    'Dock to bottom'
-                  )
+                ? t('auto.components.browser.pane.BrowserPane.devToolsDockRight', 'Dock to right')
+                : t('auto.components.browser.pane.BrowserPane.devToolsDockBottom', 'Dock to bottom')
             }
             onClick={() => setLayout({ ...layout, side: nextSide })}
           >
             {nextSide === 'right' ? <PanelRight /> : <PanelBottom />}
           </DockAction>
           <DockAction
-            label={translate(
+            label={t(
               'auto.components.browser.pane.BrowserPane.devToolsUndock',
               'Open in separate window'
             )}
@@ -111,10 +106,7 @@ export function BrowserDevToolsDock({
             <SquareArrowOutUpRight />
           </DockAction>
           <DockAction
-            label={translate(
-              'auto.components.browser.pane.BrowserPane.devToolsClose',
-              'Close DevTools'
-            )}
+            label={t('auto.components.browser.pane.BrowserPane.devToolsClose', 'Close DevTools')}
             onClick={() => void window.api.browser.closeDevTools({ browserPageId })}
           >
             <X />

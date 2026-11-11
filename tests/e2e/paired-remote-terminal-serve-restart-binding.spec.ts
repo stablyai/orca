@@ -2,14 +2,14 @@
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
-import { getHistorySessionDirName } from '../../src/main/daemon/history-paths'
-import { LOG_HEADER_BYTES } from '../../src/main/daemon/terminal-history-log'
+import { getHistorySessionDirName } from '../../src/main/daemon/history/storage/history-paths'
+import { LOG_HEADER_BYTES } from '../../src/main/daemon/history/storage/terminal-history-log'
 import { profileStateDatabaseFile } from '../../src/main/persistence/profile-state/profile-state-database'
 import { ProfileStateSqliteAuthority } from '../../src/main/persistence/profile-state/profile-state-sqlite-authority'
 import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../src/shared/orca-profiles'
 import type { RuntimeMobileSessionTabsResult } from '../../src/shared/runtime-types'
 import { toRemoteRuntimePtyId } from '../../src/shared/remote-runtime/remote-runtime-pty-id'
-import { toWebTerminalSurfaceTabId } from '../../src/shared/terminal-surface-id'
+import { toWebTerminalSurfaceTabId } from '../../src/shared/workspace-layout/terminal-surface-id'
 import { expect, test } from './helpers/orca-app'
 import {
   launchHeadlessPairedRuntimeHost,
@@ -119,7 +119,7 @@ test('SQLite candidate retains a remote automation run across serve restart', as
       'automation.runNow',
       { id: automation.result.automation.id }
     )
-    expect(['dispatching', 'dispatched']).toContain(run.result.run.status)
+    expect(run.result.run.status).toBe('pending')
 
     const beforeRestart = await host.client.call<{ runs: { id: string }[] }>('automation.runs', {
       automationId: automation.result.automation.id

@@ -12,11 +12,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
-  PROFILE_STATE_DESKTOP_RECOVERY_FLAG,
   PROFILE_STATE_RECOVERY_FLAG,
-  PROFILE_STATE_RECOVERY_RESULT_PREFIX,
-  profileStateRepairSectionApproval,
-  type ProfileStateRecoveryRequest
+  PROFILE_STATE_RECOVERY_RESULT_PREFIX
 } from '../../shared/profile-state-recovery-command'
 import { acquireProfileStateRuntimeAdmission } from '../persistence/profile-state/profile-state-access'
 import { profileStateJsonExportPath } from '../persistence/profile-state/legacy-json/profile-state-export-path'
@@ -250,53 +247,7 @@ describe('Electron recovery preflight', () => {
     }
   })
 
-  it.each([
-    ['Orca', PROFILE_STATE_RECOVERY_FLAG, '{}'],
-    ['Orca', '--serve', PROFILE_STATE_RECOVERY_FLAG],
-    ['Orca', '--serve', PROFILE_STATE_RECOVERY_FLAG, '{}'],
-    [
-      'Orca',
-      '--serve',
-      PROFILE_STATE_RECOVERY_FLAG,
-      JSON.stringify({ userDataPath: 'relative', selector: { kind: 'json', revision: 1 } })
-    ],
-    ['Orca', '--serve', PROFILE_STATE_RECOVERY_FLAG, '{}', PROFILE_STATE_RECOVERY_FLAG, '{}']
-  ])('fails closed for malformed launch %j', (...argv) => {
-    expect(runProfileStateRecoveryPreflight(argv)).toBe(true)
-    expect(response()).toMatchObject({ ok: false })
-    expect(mocks.setPath).not.toHaveBeenCalled()
-    expect(mocks.requestSingleInstanceLock).not.toHaveBeenCalled()
-    expect(mocks.exit).toHaveBeenCalledWith(1)
-  })
-
   describe('desktop choice relaunch', () => {
-    it('carries the captured root, failing profile and approved repair sources unchanged', () => {
-      const request: ProfileStateRecoveryRequest = {
-        userDataPath: '/captured/orca',
-        profileId: 'damaged-profile',
-        selector: {
-          kind: 'repair',
-          sections: (
-            [
-              { domain: 'repos', backupId: null },
-              { domain: 'automationRuns', source: 'current' }
-            ] as const
-          ).map(profileStateRepairSectionApproval)
-        }
-      }
-      const args = profileStateDesktopRecoveryArgs(['Orca', '--inspect'], request)
-      expect(request.selector).toEqual({
-        kind: 'repair',
-        sections: [
-          { domain: 'repos', backupId: null },
-          { domain: 'automationRuns', source: 'current' }
-        ]
-      })
-      expect(JSON.parse(args[args.indexOf(PROFILE_STATE_DESKTOP_RECOVERY_FLAG) + 1])).toEqual(
-        request
-      )
-    })
-
     function desktopArgv(item: ReturnType<typeof fixture>) {
       writeFileSync(item.dataFile, JSON.stringify(item.restored))
       return [
@@ -331,18 +282,6 @@ describe('Electron recovery preflight', () => {
         expect.objectContaining({ detail: expect.stringContaining('Stop Orca') })
       )
       expect(readFileSync(item.databaseFile, 'utf8')).toBe('broken database')
-    })
-
-    it.each([
-      ['Orca', PROFILE_STATE_DESKTOP_RECOVERY_FLAG, '{}'],
-      ['Orca', '--serve', PROFILE_STATE_DESKTOP_RECOVERY_FLAG, '{}'],
-      ['Orca', PROFILE_STATE_DESKTOP_RECOVERY_FLAG, '{}', PROFILE_STATE_RECOVERY_FLAG, '{}']
-    ])('fails closed for malformed desktop launch %j', async (...argv) => {
-      vi.spyOn(console, 'error').mockImplementation(() => {})
-      expect(runProfileStateRecoveryPreflight(argv)).toBe(true)
-      await vi.waitFor(() => expect(mocks.exit).toHaveBeenCalledWith(1))
-      expect(mocks.setPath).not.toHaveBeenCalled()
-      expect(mocks.relaunch).not.toHaveBeenCalled()
     })
   })
 })

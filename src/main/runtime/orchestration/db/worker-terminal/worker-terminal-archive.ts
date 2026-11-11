@@ -5,7 +5,7 @@ import {
   type WorkerTerminalArchiveRow,
   type WorkerTerminalArchiveStatus,
   type WorkerTerminalRetainedReason
-} from '../../worker-terminal-ownership'
+} from '../../terminal-authority/release/worker-terminal-ownership'
 import { OrchestrationError } from '../../orchestration-error'
 import type { OrchestrationDb } from '../orchestration-db'
 

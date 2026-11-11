@@ -4,7 +4,7 @@ import { test, expect } from './helpers/orca-app'
 import { SIDEBAR_INPUTS_BUILD } from './helpers/sidebar-inputs-build'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { repoIconId } from '../../src/main/runtime/sidebar-inputs/repo-icon-data-urls'
-import { readRasterImageDimensions } from '../../src/shared/raster-image-dimensions'
+import { readRasterImageDimensions } from '../../src/shared/file-preview/raster-image-dimensions'
 
 test.skip(
   !SIDEBAR_INPUTS_BUILD,

@@ -11,7 +11,7 @@ import {
 } from '../../../shared/desktop-browser-bridge-protocol'
 import type { RpcResponse } from '../../runtime/rpc/core'
 import { runInRemoteCliBrowserScope } from '../../runtime/desktop-browser-bridge/remote-cli-browser-scope'
-import { parseCdpKeyEvent } from '../cdp-keyboard-us-layout'
+import { parseCdpKeyEvent } from '../cdp/input/cdp-keyboard-us-layout'
 
 export type DesktopBrowserBridgeOutcome =
   | { ok: true; result: unknown }
@@ -30,6 +30,8 @@ export type DesktopBrowserBridgeAuditEntry = {
 
 export type DesktopBrowserBridgeExecutorDeps = {
   environmentId: string
+  /** The SSH host the bridge serves; its tabs say it is controlling them. */
+  targetId: string
   hostLabel: string
   /** Resolve host ownership via the renderer, which also knows unmounted pages. */
   resolveWorkspace(scope: {
@@ -98,7 +100,8 @@ export async function executeDesktopBrowserBridgeRequest(
       signal,
       (webContentsId) =>
         deps.isHostBrowsingRouted() && deps.isGuestRoutedThroughHost(webContentsId),
-      hostRevoked
+      hostRevoked,
+      { targetId: deps.targetId, hostLabel: deps.hostLabel }
     )
     if (!response.ok) {
       deps.audit({ ...audit, outcome: 'failed', code: response.error.code })
@@ -251,24 +254,5 @@ function urlOrigin(value: unknown): string | null {
     return new URL(value).origin
   } catch {
     return null
-  }
-}
-
-// Routed tabs can still display local files; those remain off-limits to hosts.
-// Allow chrome-error: so hosts can navigate away from failed loads.
-const HOST_REACHABLE_DOCUMENT_PROTOCOLS = new Set([
-  'http:',
-  'https:',
-  'about:',
-  'blob:',
-  'data:',
-  'chrome-error:'
-])
-
-export function isHostReachableDocument(url: string): boolean {
-  try {
-    return HOST_REACHABLE_DOCUMENT_PROTOCOLS.has(new URL(url).protocol)
-  } catch {
-    return url === ''
   }
 }

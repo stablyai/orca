@@ -1,16 +1,17 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Button } from '../../ui/button'
 import { Minus, Plus, RotateCcw } from 'lucide-react'
-import { applyUIZoom } from '@/lib/ui-zoom'
+import { applyUIZoom } from '@/app-shell/chrome/ui-zoom'
 import {
   UI_ZOOM_STEP as ZOOM_STEP,
   UI_ZOOM_MIN as ZOOM_MIN,
   UI_ZOOM_MAX as ZOOM_MAX,
   zoomLevelToPercent
 } from '../../../../../shared/ui-zoom-level'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function UIZoomControl(): React.JSX.Element {
+  const t = useTranslate()
   const [zoomLevel, setZoomLevel] = useState(() => window.api.ui.getZoomLevel())
 
   useEffect(() => {
@@ -55,7 +56,7 @@ export function UIZoomControl(): React.JSX.Element {
         className="ml-1 gap-1.5"
       >
         <RotateCcw className="size-3" />
-        {translate('auto.components.settings.UIZoomControl.c2c64b24d0', 'Reset')}
+        {t('auto.components.settings.UIZoomControl.c2c64b24d0', 'Reset')}
       </Button>
     </div>
   )

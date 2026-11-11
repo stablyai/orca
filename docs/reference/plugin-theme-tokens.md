@@ -43,7 +43,7 @@ Every key an app theme may set in `tokens` (see [plugin themes](plugin-themes.md
 | `--worktree-sidebar-accent-foreground` | Text on `--worktree-sidebar-accent` | no | same as `--sidebar-accent-foreground` |
 | `--worktree-sidebar-border` | Workspace sidebar borders | no | same as `--sidebar-border` |
 | `--worktree-sidebar-ring` | Focus rings in the workspace sidebar | no | same as `--sidebar-ring` |
-| `--worktree-sidebar-active` | The current workspace row; may be translucent, it paints over `--worktree-sidebar` | no | a translucent wash of `--worktree-sidebar-foreground` |
+| `--worktree-sidebar-active` | The current workspace row; may be translucent, it paints over `--worktree-sidebar` | no | light: `--worktree-sidebar-foreground` at 8% opacity; dark: `--worktree-sidebar-foreground` at 10% opacity |
 | `--worktree-sidebar-active-border` | Border of the current workspace row | no | a mix of `--worktree-sidebar-border` |
 | `--host-badge` | Execution-host badge on workspaces (for example `Local`, an SSH host) | no | light: same as `--accent`; dark: `--accent` at 80% opacity |
 | `--host-badge-foreground` | Text on `--host-badge` | no | same as `--muted-foreground` |
@@ -56,7 +56,14 @@ Every key an app theme may set in `tokens` (see [plugin themes](plugin-themes.md
 | `--split-divider` | Divider between split tab groups | no | Orca's built-in color |
 | `--split-divider-hover` | Split divider while hovered or dragged | no | Orca's built-in color |
 | `--chat-user-message` | Your messages in chat; may be translucent, it paints over the chat | no | `--foreground` mixed lightly into the chat background |
-| `--text-link` | Links in Markdown previews and editors | no | Orca's built-in color |
+| `--chat-bold-foreground` | Bold text in chat messages | no | the color of chat headings |
+| `--chat-muted-foreground` | Secondary chat text: tool rows, status lines, timestamps and hunk headers | no | `--muted-foreground` as chat paints it |
+| `--chat-inline-code` | Inline code in chat; may be translucent, it paints over the chat | no | `--foreground` mixed lightly into the chat background |
+| `--chat-inline-code-foreground` | Inline code text in chat | no | `--foreground` mixed 85% into the chat background |
+| `--chat-code-block` | Code blocks, tool output and diffs in chat; may be translucent, it paints over the chat | no | `--foreground` mixed lightly into the chat background |
+| `--chat-selection` | Selected text in chat; may be translucent, it paints over the chat | no | `--text-link` (else Orca's link blue) mixed into the chat background, up to 30% light and 40% dark, as deep as keeps selected text 4.5:1 (never under 15%) |
+| `--chat-selection-foreground` | Text inside a chat selection | no | same as `--foreground` |
+| `--text-link` | Links in Markdown previews, editors and agent chat | no | Orca's built-in color |
 | `--diff-added` | Added-line hue: Monaco overview ruler and chat diff text | no | same as `--git-decoration-added` |
 | `--diff-added-background` | Added lines in diffs | no | light: `--diff-added` at 13% opacity; dark: `--diff-added` at 16% opacity |
 | `--diff-added-emphasis` | Added characters within a changed line | no | light: `--diff-added` at 15% opacity; dark: `--diff-added` at 20% opacity |

@@ -1,10 +1,10 @@
 import { basename } from 'node:path'
-import type { AiVaultScanIssue } from '../../../../../shared/ai-vault-types'
+import type { AiVaultScanIssue } from '../../../../../shared/ai-vault/contracts/ai-vault-types'
 import { isWslUncPath } from '../../../../../shared/wsl-paths'
 import {
   aiVaultScanIssueText,
   type AiVaultScanIssueText
-} from '../../../../../shared/ai-vault-scan-issue-copy'
+} from '../../../../../shared/ai-vault/scanning/ai-vault-scan-issue-copy'
 import SyncDatabase from '../../../../sqlite/sync-database'
 import { classifySqliteReadFailure } from '../../../../sqlite/sqlite-read-failure'
 import { errorMessage } from '../../../session-scanner-values'

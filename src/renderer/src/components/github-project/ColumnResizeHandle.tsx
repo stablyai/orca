@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { MIN_COLUMN_WIDTH } from './column-widths'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type Props = {
   fieldId: string
@@ -18,6 +18,7 @@ export default function ColumnResizeHandle({
   nextWidth,
   onResize
 }: Props): React.JSX.Element {
+  const t = useTranslate()
   const [dragging, setDragging] = useState(false)
   const handleRef = useRef<HTMLDivElement | null>(null)
   const dragRef = useRef<{
@@ -69,7 +70,7 @@ export default function ColumnResizeHandle({
       ref={handleRef}
       role="separator"
       aria-orientation="vertical"
-      aria-label={translate(
+      aria-label={t(
         'auto.components.github.project.ColumnResizeHandle.1304289353',
         'Resize column'
       )}

@@ -1,6 +1,6 @@
 import { useId } from 'react'
 import { ChevronDown } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '../../ui/button'
 
 type PluginListGroupProps = {
@@ -34,6 +34,7 @@ export function PluginListGroup({
   layout = 'list',
   children
 }: PluginListGroupProps): React.JSX.Element {
+  const t = useTranslate()
   const headingId = useId()
   return (
     <section
@@ -74,7 +75,7 @@ export function PluginListGroup({
           // Why full width: a small trailing link under a card grid read as the end of the list.
           <Button variant="outline" size="sm" className="mt-4 w-full" onClick={onShowAll}>
             <ChevronDown />
-            {translate(
+            {t(
               'auto.components.pluginCatalog.PluginListGroup.showAllTotal',
               'Show all {{value0}} plugins',
               { value0: totalCount }
@@ -84,13 +85,9 @@ export function PluginListGroup({
           <div className="border-t border-border px-2 py-1.5">
             <Button variant="ghost" size="xs" onClick={onShowAll}>
               <ChevronDown />
-              {translate(
-                'auto.components.pluginCatalog.PluginListGroup.showAll',
-                'Show {{value0}} more',
-                {
-                  value0: hiddenCount
-                }
-              )}
+              {t('auto.components.pluginCatalog.PluginListGroup.showAll', 'Show {{value0}} more', {
+                value0: hiddenCount
+              })}
             </Button>
           </div>
         )

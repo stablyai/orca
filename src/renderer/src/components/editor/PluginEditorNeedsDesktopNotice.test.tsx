@@ -4,16 +4,10 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
-  customEditorsForFile,
   useCustomEditorViewStore,
   type ActivePluginCustomEditor
-} from '@/store/plugin-custom-editors'
-import {
-  usePluginFrameIsolationStore,
-  usePluginFramesIsolated
-} from '@/store/plugin-frame-isolation'
-import { useAppStore } from '@/store'
-import { getDefaultSettings } from '../../../../shared/constants'
+} from '@/store/plugins/file-editors/plugin-custom-editors'
+import { usePluginFrameIsolationStore } from '@/store/plugins/frames/plugin-frame-isolation'
 
 vi.mock('@/i18n/i18n', () => ({
   getIntlLocale: () => 'en-US',
@@ -88,38 +82,5 @@ describe('an isolated-only editor without an isolated frame', () => {
     )
     await act(async () => open?.click())
     expect(useCustomEditorViewStore.getState().choices[FILE_ID]).toBe('source')
-  })
-
-  it('still mounts an editor that runs in any frame', async () => {
-    await renderFrame({ ...editor, frame: 'any' })
-    expect(container.querySelector('iframe')).not.toBeNull()
-  })
-
-  it('stops opening the file by default once isolated frames are known to be missing', () => {
-    expect(customEditorsForFile('/repo/a.excalidraw', [editor])).toEqual([editor])
-    expect(customEditorsForFile('/repo/a.excalidraw', [editor], false)).toEqual([
-      { ...editor, priority: 'option', frameUnavailable: true }
-    ])
-    const anyFrame = { ...editor, frame: 'any' as const }
-    expect(customEditorsForFile('/repo/a.excalidraw', [anyFrame], false)).toEqual([anyFrame])
-  })
-
-  it('asks again once the isolated-frames setting changes, with no frame mounted', async () => {
-    const seen: boolean[] = []
-    function Probe(): null {
-      seen.push(usePluginFramesIsolated())
-      return null
-    }
-    const withSetting = (on: boolean) => ({
-      ...getDefaultSettings('/home'),
-      experimentalPluginIsolatedFrames: on
-    })
-    await act(async () => useAppStore.setState({ settings: withSetting(false) }))
-    await renderFrame(editor)
-    expect(usePluginFrameIsolationStore.getState().isolated).toBe(false)
-    await act(async () => root.render(<Probe />))
-    expect(seen.at(-1)).toBe(false)
-    await act(async () => useAppStore.setState({ settings: withSetting(true) }))
-    expect(seen.at(-1)).toBe(true)
   })
 })

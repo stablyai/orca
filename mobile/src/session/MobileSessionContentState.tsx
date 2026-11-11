@@ -2,8 +2,10 @@ import { useEffect, useState } from 'react'
 import { CircleAlert, SquareTerminal } from 'lucide-react-native'
 import { MobileOfflineState, MobileStateView } from '../components/MobileStateView'
 import { describeLoadError } from '../components/load-error-description'
+import { formatOfflineAsOfTime } from '../components/offline-as-of-time'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import type { ConnectionState } from '../transport/types'
+import type { ConnectionState } from '../transport/connection/connection-state'
+import { useLastSessionTabsAt } from './tabs/mobile-session-last-tabs'
 
 // Tab hydration retries on its own; past this a person needs to know it stalled and how to nudge it.
 const TABS_STALL_MS = 12_000
@@ -12,6 +14,7 @@ const TABS_STALL_MS = 12_000
 export function MobileSessionContentState({
   connState,
   hostName,
+  lastTabs,
   loading,
   creating,
   createError,
@@ -21,6 +24,8 @@ export function MobileSessionContentState({
 }: {
   connState: ConnectionState
   hostName: string | null
+  /** The workspace whose remembered strip is drawn above this body, if any. */
+  lastTabs: { hostId: string; worktreeId: string } | null
   loading: boolean
   creating: boolean
   createError: string
@@ -41,7 +46,11 @@ export function MobileSessionContentState({
   }, [loading, attempt])
 
   if (connState === 'disconnected' || connState === 'reconnecting') {
-    return <MobileOfflineState hostName={hostName} onReconnect={onReconnect} />
+    return lastTabs ? (
+      <OfflineUnderLastTabs hostName={hostName} lastTabs={lastTabs} onReconnect={onReconnect} />
+    ) : (
+      <MobileOfflineState hostName={hostName} onReconnect={onReconnect} />
+    )
   }
   if (connState !== 'connected') {
     return (
@@ -84,6 +93,33 @@ export function MobileSessionContentState({
       message={createFailure?.message}
       details={createFailure?.details}
       action={{ label: t('session.activeContent.createTab', 'Create Tab'), onPress: onCreateTab }}
+    />
+  )
+}
+
+// The strip above is the last one the host accepted; the body says once when that was.
+function OfflineUnderLastTabs({
+  hostName,
+  lastTabs,
+  onReconnect
+}: {
+  hostName: string | null
+  lastTabs: { hostId: string; worktreeId: string }
+  onReconnect: (() => void) | null
+}) {
+  const t = useMobileTranslation()
+  const asOf = useLastSessionTabsAt(lastTabs.hostId, lastTabs.worktreeId)
+  return (
+    <MobileOfflineState
+      hostName={hostName}
+      message={
+        asOf === null
+          ? undefined
+          : t('session.contentState.tabsAsOf', 'Tabs as of {{time}}', {
+              time: formatOfflineAsOfTime(asOf)
+            })
+      }
+      onReconnect={onReconnect}
     />
   )
 }

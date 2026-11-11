@@ -4,7 +4,7 @@ import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 
 export const getTerminalDarkThemeSearchEntries = createLocalizedCatalog(() => [
   {
-    title: translate('auto.components.settings.terminal.search.ec07ce9b02', 'Dark Theme'),
+    title: translate('auto.components.settings.terminal.search.ee9665265e', 'Dark theme'),
     description: translate(
       'auto.components.settings.terminal.search.13f6310dd3',
       'Choose the terminal theme used in dark mode.'
@@ -19,7 +19,7 @@ export const getTerminalDarkThemeSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
-    title: translate('auto.components.settings.terminal.search.8987db7ff2', 'Dark Divider Color'),
+    title: translate('auto.components.settings.terminal.search.88f3d1cec0', 'Dark divider color'),
     description: translate(
       'auto.components.settings.terminal.search.9c32726f47',
       'Controls the split divider line between panes in dark mode.'
@@ -35,7 +35,10 @@ export const getTerminalDarkThemeSearchEntries = createLocalizedCatalog(() => [
 
 export const getTerminalThemeTargetSearchEntries = createLocalizedCatalog(() => [
   {
-    title: translate('auto.components.settings.terminal.search.theme_target.title', 'Theme Mode'),
+    title: translate(
+      'auto.components.settings.terminal.search.theme_target.329882bdda',
+      'Theme mode'
+    ),
     keywords: [
       ...translateSearchKeyword('auto.components.settings.terminal.search.f66a7cf715', 'terminal'),
       ...translateSearchKeyword('auto.components.settings.terminal.search.0ce176909a', 'theme'),
@@ -83,7 +86,7 @@ export const getTerminalLightThemeSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
-    title: translate('auto.components.settings.terminal.search.1d89457764', 'Light Theme'),
+    title: translate('auto.components.settings.terminal.search.e4d3288a81', 'Light theme'),
     description: translate(
       'auto.components.settings.terminal.search.1dee533bd9',
       'Choose the theme used when Orca is in light mode.'
@@ -98,7 +101,7 @@ export const getTerminalLightThemeSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
-    title: translate('auto.components.settings.terminal.search.595b97b446', 'Light Divider Color'),
+    title: translate('auto.components.settings.terminal.search.18a9f63aff', 'Light divider color'),
     description: translate(
       'auto.components.settings.terminal.search.77d9f9cd55',
       'Controls the split divider line between panes in light mode.'
@@ -154,6 +157,27 @@ export const getTerminalWarpImportSearchEntries = createLocalizedCatalog(() => [
         'auto.components.settings.terminal.search.warp_import.keyword_legacy_title',
         'Import themes from Warp'
       )
+    ]
+  }
+])
+
+export const getClaudeCodeThemeSyncSearchEntry = createLocalizedCatalog(() => [
+  {
+    title: translate(
+      'components.settings.terminal.claudeCodeThemeSync.9353305ea6',
+      'Match Claude Code to terminal theme'
+    ),
+    description: translate(
+      'components.settings.terminal.claudeCodeThemeSync.description',
+      'Claude Code on this computer uses your terminal colors and follows theme changes live, including outside Orca. Turning this off restores your previous Claude Code theme. Picking a theme in Claude Code stops the sync.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.terminal.search.0ce176909a', 'theme'),
+      ...translateSearchKeyword(
+        'components.settings.terminal.claudeCodeThemeSync.claude',
+        'claude'
+      ),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.674b7c8436', 'color')
     ]
   }
 ])

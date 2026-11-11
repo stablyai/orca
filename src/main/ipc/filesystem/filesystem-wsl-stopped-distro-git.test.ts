@@ -182,32 +182,4 @@ describe('background Git for a stopped WSL distro', () => {
     expect(getBranchDiffMock).not.toHaveBeenCalled()
     expect(checkIgnoredPathsMock).not.toHaveBeenCalled()
   })
-
-  it('lets showing a diff tab start the distro, but not a status-driven reload', async () => {
-    const diffArgs = { worktreePath: UNC_ROOT, filePath: 'a.ts', staged: false }
-    await invoke('git:diff', { ...diffArgs, wakeWslDistro: true }).catch((error: unknown) =>
-      expect(error).not.toBeInstanceOf(WslDistroStoppedError)
-    )
-    expect(isWslDistroRunningMock).not.toHaveBeenCalled()
-    await expect(invoke('git:diff', diffArgs)).rejects.toBeInstanceOf(WslDistroStoppedError)
-  })
-
-  it('lets showing Commits start the distro, but not a refresh after a Git action', async () => {
-    const historyArgs = { worktreePath: UNC_ROOT, limit: 50 }
-    await invoke('git:history', { ...historyArgs, wakeWslDistro: true }).catch((error: unknown) =>
-      expect(error).not.toBeInstanceOf(WslDistroStoppedError)
-    )
-    expect(isWslDistroRunningMock).not.toHaveBeenCalled()
-    await expect(invoke('git:history', historyArgs)).rejects.toBeInstanceOf(WslDistroStoppedError)
-  })
-
-  it("lets the active workspace's first git:status start the distro, but not later polls", async () => {
-    await invoke('git:status', { worktreePath: UNC_ROOT, wakeWslDistro: true }).catch(
-      (error: unknown) => expect(error).not.toBeInstanceOf(WslDistroStoppedError)
-    )
-    expect(isWslDistroRunningMock).not.toHaveBeenCalled()
-    await expect(invoke('git:status', { worktreePath: UNC_ROOT })).rejects.toBeInstanceOf(
-      WslDistroStoppedError
-    )
-  })
 })

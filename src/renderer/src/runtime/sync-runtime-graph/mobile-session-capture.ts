@@ -1,15 +1,14 @@
-import {
-  collectLeafIdsInOrder,
-  serializePaneTree
-} from '@/components/terminal-pane/layout-serialization'
+import '../../components/terminal-pane/layout/terminal-layout-leaf-traversal'
+import { collectLayoutLeafIdsInOrder } from '../../../../shared/workspace-layout/terminal-pane-tree'
+import { serializePaneTree } from '@/components/terminal-pane/layout/terminal-layout-dom-serialization'
 import type { AppState } from '@/store/types'
 import type { MobileSessionWorktreeInputs, MountedTerminalSurfaceCapture } from './types'
 import { EMPTY_NARROWED_BY_KEY, jsonContentEquals } from './graph-state'
 import {
   findRegisteredTerminalTab,
   type RegisteredTerminalTab
-} from '../mounted-terminal-tab-registry'
-import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
+} from '../hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
+import { isTerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
 
 export function narrowRecordByKeys<T>(
   source: Record<string, T> | undefined,
@@ -59,7 +58,7 @@ function captureMountedTerminalSurface(
   const effectiveLeafIds =
     paneLeafIds.length > 0
       ? paneLeafIds
-      : collectLeafIdsInOrder(savedLayout?.root).filter(isTerminalLeafId)
+      : collectLayoutLeafIdsInOrder(savedLayout?.root).filter(isTerminalLeafId)
   const numericPaneIdByLeafId = new Map<string, number | null>()
   const ptyIdByNumericPaneId = new Map<number, string | null>()
   for (const leafId of effectiveLeafIds) {

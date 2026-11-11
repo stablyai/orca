@@ -17,7 +17,7 @@ import type {
   AgentJournalToolCallEnding,
   AgentJournalToolCallState
 } from '../agent-session/journal/agent-session-journal-types'
-import type { AgentType } from '../agent-status-types'
+import type { AgentType } from '../agent-status/contracts/agent-status-types'
 import type { NativeChatToolMetadata } from './tools/native-chat-tool-identity'
 import type { AgentMessageSource } from '../agent-session/agent-session-message-source'
 
@@ -56,6 +56,8 @@ export type NativeChatTextBlock = {
   failure?: AgentSessionFailureFact
   /** On the line about a reply Orca's own stop cut off: why, and the turn it cut. */
   orcaStop?: AgentSessionOrcaStop & { turnItemId?: string }
+  /** On the "Forked from" divider: the source chat it links to. */
+  forkedFrom?: { sessionId: string }
   /** On a usage-limit line: the turn the limit ended, which its Continue picks up. */
   usageLimitTurnItemId?: string
 }
@@ -240,6 +242,9 @@ export type NativeChatMessage = AgentJournalProducerLinkage & {
   queued?: true
   /** Client-only terminal echo placement relative to the current streaming reply. */
   pendingSend?: 'active' | 'queued'
+  /** Client-derived submission facts; never persisted and independent of transcript placement. */
+  deliveryState?: 'pending' | 'unknown'
+  queuedMessageId?: string
   /** Unsent rows belong to no turn. Draw at journal position, or after the conversation when unplaced. */
   unsent?: true
   /** This client's send, made while the chat read Stopping, that the host has not recorded yet. */

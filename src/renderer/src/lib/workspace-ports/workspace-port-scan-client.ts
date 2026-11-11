@@ -1,9 +1,10 @@
-import { callRuntimeRpc, runtimeEnvironmentSupportsCapability } from '@/runtime/runtime-rpc-client'
-import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
+import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import { callHostRoute } from '@/runtime/host-route-call'
-import type { HostRoute } from '@/runtime/runtime-client-target'
-import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
+import { callHostRoute } from '@/runtime/rpc/calls/host-route-call'
+import type { HostRoute } from '@/runtime/rpc/targets/runtime-client-target'
+import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
 import type {
   WorkspacePort,
   WorkspacePortHostScanResult,
@@ -14,9 +15,16 @@ import type {
 } from '../../../../shared/workspace-ports'
 import { normalizeExecutionHostId } from '../../../../shared/execution-host'
 import { WORKSPACE_PORTS_HOST_SCOPED_RUNTIME_CAPABILITY } from '../../../../shared/workspace-ports-runtime-capabilities'
+import { translate } from '@/i18n/i18n'
 
 export const WORKSPACE_PORTS_SERVER_SSH_UPDATE_REASON =
   'Update the server to see ports on its SSH hosts.'
+// Why: call-time so the reason follows the UI language instead of the module's first evaluation.
+const workspacePortsServerSshUpdateReason = (): string =>
+  translate(
+    'auto.lib.workspacePortScan.serverSshUpdateRequired',
+    'Update the server to see ports on its SSH hosts.'
+  )
 const WORKSPACE_PORT_RPC_TIMEOUT_MS = 15_000
 
 const WORKSPACE_PORT_PLATFORMS = new Set<NodeJS.Platform | 'unknown'>([
@@ -159,7 +167,7 @@ export async function scanWorkspacePortsOnExecutionHost(
       WORKSPACE_PORTS_HOST_SCOPED_RUNTIME_CAPABILITY
     ))
   ) {
-    return unavailableHostScan(host.executionHostId, WORKSPACE_PORTS_SERVER_SSH_UPDATE_REASON)
+    return unavailableHostScan(host.executionHostId, workspacePortsServerSshUpdateReason())
   }
   let response: unknown
   try {
@@ -171,7 +179,7 @@ export async function scanWorkspacePortsOnExecutionHost(
     )
   } catch (error) {
     if (isMethodNotFound(error)) {
-      return unavailableHostScan(host.executionHostId, WORKSPACE_PORTS_SERVER_SSH_UPDATE_REASON)
+      return unavailableHostScan(host.executionHostId, workspacePortsServerSshUpdateReason())
     }
     throw error
   }
@@ -182,7 +190,10 @@ export async function scanWorkspacePortsOnExecutionHost(
   if (typeof scannedHostId !== 'string' || normalizeExecutionHostId(scannedHostId) !== expected) {
     return unavailableHostScan(
       host.executionHostId,
-      'The server scanned a different host than this workspace runs on.'
+      translate(
+        'auto.lib.workspacePortScan.hostMismatch',
+        'The server scanned a different host than this workspace runs on.'
+      )
     )
   }
   return { ...scan, executionHostId: scannedHostId }
@@ -207,7 +218,7 @@ export async function killWorkspacePortOnExecutionHost(
     )
   } catch (error) {
     if (isMethodNotFound(error)) {
-      return { ok: false, reason: WORKSPACE_PORTS_SERVER_SSH_UPDATE_REASON }
+      return { ok: false, reason: workspacePortsServerSshUpdateReason() }
     }
     throw error
   }
