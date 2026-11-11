@@ -8,7 +8,8 @@ export const WATCHER_IGNORE_DIRS: string[] = [
   '.cache',
   'target',
   '.venv',
-  '__pycache__'
+  '__pycache__',
+  '.worktrees'
 ]
 
 // FSEvents rejects all exclusions above eight paths; regex filtering covers the remaining names at every depth.
