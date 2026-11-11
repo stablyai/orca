@@ -10,7 +10,7 @@ import type { Repo } from '../../../../../../shared/repo-types'
 import type { RightSidebarExplorerView } from '../../../../../../shared/ui-chrome-types'
 import { FileExplorerTreeStatus } from './FileExplorerTreeStatus'
 import { CloudAsleepFilesPanel } from '@/components/orca-cloud/offline/CloudAsleepFilesPanel'
-import { useAsleepCloudWorkspaceId } from '@/components/orca-cloud/offline/use-asleep-cloud-workspace-id'
+import { useAsleepCloudWorkspace } from '@/components/orca-cloud/offline/use-asleep-cloud-workspace-id'
 import { FileExplorerVirtualRows } from '../panel/FileExplorerVirtualRows'
 import { canShowAddAsProjectAction } from '../navigation/file-explorer-add-project-action'
 import type { FileExplorerNameFilterProjectionSource } from './file-explorer-name-filter-projection'
@@ -135,9 +135,9 @@ export function FileExplorerFilesTreePane({
       ? t('auto.components.right.sidebar.FileExplorer.2f4483d6c4', 'No files match this filter')
       : undefined
   // An asleep Orca Cloud workspace has no tree to read: its saved changes and Wake, not an error.
-  const asleepCloudId = useAsleepCloudWorkspaceId()
-  if (asleepCloudId) {
-    return <CloudAsleepFilesPanel workspaceId={asleepCloudId} />
+  const asleepCloud = useAsleepCloudWorkspace()
+  if (asleepCloud) {
+    return <CloudAsleepFilesPanel workspaceId={asleepCloud.id} waking={asleepCloud.waking} />
   }
 
   return (

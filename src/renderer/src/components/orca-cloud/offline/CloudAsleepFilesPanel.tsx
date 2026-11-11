@@ -1,5 +1,5 @@
 import React from 'react'
-import { Play } from 'lucide-react'
+import { Loader2, Play } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useNow } from '@/hooks/use-now'
 import { useTranslate } from '@/i18n/use-translate'
@@ -15,12 +15,24 @@ import type { CloudOfflineSnapshot } from '../../../../../shared/hosted-sandbox/
  * (from its read snapshot or this computer's cache), read-only and labeled as such, then Wake for
  * the full view. With no snapshot, a neutral note and Wake.
  */
-export function CloudAsleepFilesPanel({ workspaceId }: { workspaceId: string }): React.JSX.Element {
+export function CloudAsleepFilesPanel({
+  workspaceId,
+  waking = false
+}: {
+  workspaceId: string
+  /** Opening an asleep workspace wakes it: the files arrive when it is up, nothing to press. */
+  waking?: boolean
+}): React.JSX.Element {
   const t = useTranslate()
   const { snapshot } = useCloudOfflineData(workspaceId, true)
   const now = useNow(30_000)
   const git = snapshot?.git ?? null
-  const wake = (
+  const wake = waking ? (
+    <span className="inline-flex items-center gap-1.5 text-muted-foreground" role="status">
+      <Loader2 className="size-3 motion-safe:animate-spin" aria-hidden="true" />
+      {t('orcaCloudWorkspace.files.waking', 'Waking… the files show when it’s up.')}
+    </span>
+  ) : (
     <Button size="xs" variant="outline" onClick={() => void wakeCloudWorkspace(workspaceId)}>
       <Play />
       {t('orcaCloudWorkspace.wake', 'Wake')}

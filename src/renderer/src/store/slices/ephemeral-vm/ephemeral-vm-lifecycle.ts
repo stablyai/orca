@@ -20,6 +20,8 @@ export type EphemeralVmWorkspaceRuntime = Pick<
   canSuspend: boolean
   /** Orca Cloud workspace booted from an org environment build (dependencies preinstalled). */
   environmentBuildId?: string
+  /** The project the workspace was started for; files it there while its runtime is asleep. */
+  projectId?: string
 }
 
 /** The environment build an Orca Cloud recipe result records, if any. */
@@ -89,6 +91,7 @@ export function projectEphemeralVmWorkspaceRuntimes(
       workspaceId: record.workspaceId,
       status: record.status,
       ...(record.runtimeEnvironmentId ? { runtimeEnvironmentId: record.runtimeEnvironmentId } : {}),
+      ...(record.projectId ? { projectId: record.projectId } : {}),
       ...(environmentBuildIdOf(record) ? { environmentBuildId: environmentBuildIdOf(record) } : {}),
       ...(failure ? { failure } : {}),
       // Records without a snapshot resolve the recipe from the repo at suspend time.
