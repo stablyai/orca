@@ -1,5 +1,4 @@
-// PC-3b: every host-tab agent launch holds on Orca Cloud when the account isn't set up or expired.
-import { launchAgentInWebHostTabWithCloudHold as launchAgentInWebHostTab } from '@/lib/orca-cloud/cloud-web-host-launch-hold'
+import { launchAgentInWebHostTab } from '@/lib/agent-session/launch/new-tab/launch-agent-web-host-tab'
 import { useAppStore } from '@/store'
 import { tabHasLivePty } from '../../../shared/tab-has-live-pty'
 import { createWebRuntimeSessionTerminal } from '@/runtime/hosted-terminals/creation/web-runtime-terminal-creation'
