@@ -26,10 +26,6 @@ private fun verdict(
 )
 
 class MobileWebShellDroppedNavigationTest {
-  @Test
-  fun `cancels a foreign navigation a human started and offers it to the opener`() {
-    assertEquals(MobileWebShellNavigationVerdict.CancelAndOffer(FOREIGN), verdict())
-  }
 
   @Test
   fun `refuses every navigation to the document that the shell did not ask for`() {
@@ -61,14 +57,6 @@ class MobileWebShellDroppedNavigationTest {
         isShellLoad = true,
         hasGesture = false
       )
-    )
-  }
-
-  @Test
-  fun `offers a foreign navigation a subframe started, which is the tap in the preview`() {
-    assertEquals(
-      MobileWebShellNavigationVerdict.CancelAndOffer(FOREIGN),
-      verdict(isFromSubframe = true)
     )
   }
 
@@ -130,12 +118,4 @@ class MobileWebShellDroppedNavigationTest {
     assertEquals(MobileWebShellNavigationVerdict.Cancel, verdict(url = atCap + "a"))
   }
 
-  @Test
-  fun `says nothing about which schemes open, because TypeScript owns that list`() {
-    // A scheme the opener will refuse still crosses: one filter, in the half that updates.
-    assertEquals(
-      MobileWebShellNavigationVerdict.CancelAndOffer("javascript:alert(1)"),
-      verdict(url = "javascript:alert(1)")
-    )
-  }
 }

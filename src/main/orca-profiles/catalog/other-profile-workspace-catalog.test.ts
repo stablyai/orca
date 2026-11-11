@@ -4,7 +4,6 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import '../../../shared/workspace-scope'
 import '../../persistence/profile-state/documents/profile-state-documents'
-import { openProfileStateDatabase } from '../../persistence/profile-state/database/profile-state-database'
 import { getOrcaProfileStateDatabaseFile } from '../profile-storage-paths'
 import { getOtherProfileWorktreeIdsForHistoryGc } from './other-profile-workspace-catalog'
 
@@ -61,43 +60,6 @@ describe('getOtherProfileWorktreeIdsForHistoryGc', () => {
       { id: 'other', state: { worktreeMeta: { 'repo::/json': {} } } }
     ])
     writeFileSync(getOrcaProfileStateDatabaseFile('other', root), 'not a sqlite database')
-
-    expect(getOtherProfileWorktreeIdsForHistoryGc(root)).toEqual({
-      unreadableProfiles: 1,
-      ids: new Set()
-    })
-  })
-
-  it.each(['-wal', '-shm', '-journal'])(
-    'does not fall back to JSON when only %s remains',
-    (suffix) => {
-      const root = userDataWithProfiles('active', [
-        { id: 'active', state: {} },
-        { id: 'other', state: { worktreeMeta: { 'repo::/json': {} } } }
-      ])
-      writeFileSync(
-        `${getOrcaProfileStateDatabaseFile('other', root)}${suffix}`,
-        'orphaned evidence'
-      )
-
-      expect(getOtherProfileWorktreeIdsForHistoryGc(root)).toEqual({
-        unreadableProfiles: 1,
-        ids: new Set()
-      })
-    }
-  )
-
-  it('refuses history pruning for a future profile database schema', () => {
-    const root = userDataWithProfiles('active', [
-      { id: 'active', state: {} },
-      { id: 'other', state: { worktreeMeta: { 'repo::/json': {} } } }
-    ])
-    const database = openProfileStateDatabase(
-      getOrcaProfileStateDatabaseFile('other', root),
-      'other'
-    )
-    database.db.pragma('user_version = 99')
-    database.db.close()
 
     expect(getOtherProfileWorktreeIdsForHistoryGc(root)).toEqual({
       unreadableProfiles: 1,

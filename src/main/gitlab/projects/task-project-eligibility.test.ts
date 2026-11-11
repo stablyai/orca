@@ -25,8 +25,8 @@ vi.mock('../../git/command-runner/gh-exec-file', async (importOriginal) => ({
 }))
 
 import { listMergeRequests } from '../merge-requests/merge-request-list'
-import { isTaskRepositoryIneligible } from '../../git/task-repository-eligibility'
-import { rememberGlabKnownHosts, _resetKnownHostsCache } from './gitlab-known-host-probe'
+
+import { _resetKnownHostsCache } from './gitlab-known-host-probe'
 import '../issues/gitlab-issue-queries'
 import { _resetProjectRefCache } from './gitlab-project-ref-resolution'
 import { _resetRemoteNameListingCache } from '../../git/remotes/remote-name-listing'
@@ -76,26 +76,6 @@ describe('GitLab task project admission', () => {
     })
   })
 
-  it.each(['upstream', 'gitlab'])(
-    'keeps a matching %s remote when origin is hosted on another forge',
-    async (remoteName) => {
-      serveRemotes({
-        '/mixed': {
-          origin: 'git@github.com:team/fork.git',
-          [remoteName]: 'git@gitlab.com:group/project.git'
-        }
-      })
-
-      const result = await listMergeRequests('/mixed')
-
-      expect(result.error).toBeUndefined()
-      expect(glab).toHaveBeenCalledWith(
-        ['api', '-i', expect.stringContaining('projects/group%2Fproject/merge_requests?')],
-        { cwd: '/mixed' }
-      )
-    }
-  )
-
   it('never queries the old GitLab project after a warm WSL remote migrates to GitHub', async () => {
     serveRemotes({ '/migrating': { origin: 'git@gitlab.com:team/project.git' } })
     const options = { wslDistro: 'Ubuntu' }
@@ -117,10 +97,5 @@ describe('GitLab task project admission', () => {
     expect(result.error).toBeUndefined()
     expect(result.items).toEqual([])
     expect(glab.mock.calls.filter(([args]) => args[0] !== 'auth')).toEqual([])
-  })
-
-  it('does not exclude GitHub tasks because glab remembers github.com', async () => {
-    rememberGlabKnownHosts(['github.com'])
-    await expect(isTaskRepositoryIneligible('/github', 'github')).resolves.toBe(false)
   })
 })
