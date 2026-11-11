@@ -503,8 +503,7 @@
 3 test-no-wall-clock:src/main/managed-server/install/remote-node-runtime-store-gc.test.ts
 1 test-no-wall-clock:src/main/native-chat/agent-session-attachments/agent-session-attachment-sweep.test.ts
 1 test-no-wall-clock:src/main/observability/bundle.test.ts
-1 test-no-wall-clock:src/main/opencode/opencode-launch-model-context-supervision.test.ts
-1 test-no-wall-clock:src/main/opencode/overlay-dir-gc.test.ts
+1 test-no-wall-clock:src/main/opencode/status-hooks/overlay-dir-gc.test.ts
 2 test-no-wall-clock:src/main/orca-profiles/cloud-auth/profile-cloud-service-connect-overlap.test.ts
 2 test-no-wall-clock:src/main/orca-profiles/cloud-auth/profile-cloud-service-sign-out-connect-race.test.ts
 2 test-no-wall-clock:src/main/orcad/orcad-artifact-cache-retention.test.ts
@@ -595,7 +594,6 @@
 3 test-no-wall-clock:src/renderer/src/components/activity/activity-auto-mark-read-loop.react185.test.tsx
 2 test-no-wall-clock:src/renderer/src/components/artifacts/ArtifactCollection.test.tsx
 1 test-no-wall-clock:src/renderer/src/components/browser-pane/assemble-chrome/browser-workspace-pane.adoption-chrome.test.tsx
-2 test-no-wall-clock:src/renderer/src/components/dashboard/useLiveDashboardSnapshot.test.ts
 3 test-no-wall-clock:src/renderer/src/components/native-chat/conversation/turns/NativeChatResolvedView.turn-status.test.tsx
 2 test-no-wall-clock:src/renderer/src/components/native-chat/tools/tasks/NativeChatStructuredSessionStatus.test.tsx
 1 test-no-wall-clock:src/renderer/src/components/sidebar/workspace-card/review/use-workspace-reference-details.test.tsx

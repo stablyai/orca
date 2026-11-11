@@ -15,7 +15,7 @@ import {
 import { resolveWslExecutablePath } from '../wsl/execution/wsl-executable-path'
 import { buildWindowsCommandInvocation } from './windows-command-invocation'
 import { terminateClaudeProcess } from './claude-login-process-termination'
-import { stripInheritedClaudeSessionEnv } from '../../shared/agent-launch/startup/claude-parent-session-env'
+import { stripInheritedAgentSessionEnv } from '../../shared/agent-launch/startup/parent-agent-session-env'
 
 const MAX_COMMAND_OUTPUT_CHARS = 4_000
 const CLAUDE_AUTH_DENIED_PATTERN =
@@ -250,7 +250,7 @@ function resolveClaudeInvocation(
   browser: string | undefined
 ): ClaudeSpawnConfig {
   const inheritedEnv = { ...process.env }
-  stripInheritedClaudeSessionEnv(inheritedEnv)
+  stripInheritedAgentSessionEnv(inheritedEnv)
   const spawnConfig = interactiveLogin
     ? {
         command: interactiveLogin.command,
