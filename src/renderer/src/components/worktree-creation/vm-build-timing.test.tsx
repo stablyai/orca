@@ -18,11 +18,11 @@ beforeEach(() => {
 })
 afterEach(cleanup)
 
-const t: Translate = (_key, fallback, params) =>
-  fallback.replace(
-    '{{seconds}}',
-    String((params as { seconds?: number } | undefined)?.seconds ?? '')
-  )
+const t: Translate = (_key, fallback, params) => {
+  const seconds =
+    params && typeof params === 'object' && 'seconds' in params ? String(params.seconds) : ''
+  return fallback.replace('{{seconds}}', seconds)
+}
 
 it('hints from this computer’s own end-to-end starts, once there are enough of them (JA-11)', () => {
   for (const [index, ms] of [6100, 5200, 7000, 6400].entries()) {
