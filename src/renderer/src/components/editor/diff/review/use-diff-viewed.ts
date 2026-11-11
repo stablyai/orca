@@ -111,6 +111,11 @@ export function useDiffViewed(
       setDiffReviewed(key, null)
       return
     }
+    // Null signature means an over-limit or binary-too-large diff; the combined
+    // viewer rejects such marks, so the individual viewer must not persist one.
+    if (signature === null) {
+      return
+    }
     setPending(true)
     await requestViewedMark({
       file,
@@ -134,5 +139,9 @@ export function useDiffViewed(
       }
     })
   }
-  return { viewed, disabled: !eligible || !owner || !key || pending, toggle }
+  return {
+    viewed,
+    disabled: !eligible || !owner || !key || pending || (!viewed && signature === null),
+    toggle
+  }
 }
