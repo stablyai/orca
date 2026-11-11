@@ -45,6 +45,7 @@ import {
   CreateParams,
   CreateSupportParams,
   HistoryParams,
+  WorkStateParams,
   RewindParams,
   SendParams,
   SleepWorkspaceParams,
@@ -190,6 +191,16 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
         ctx
       )
     }
+  }),
+  // Waiters poll this instead of history, so each check costs no transcript work.
+  defineMethod({
+    name: 'agentSession.workState',
+    permission: 'workspace',
+    params: WorkStateParams,
+    handler: async (params, ctx) =>
+      (await requireInstalledHost(ctx, params.sessionId)).backgroundTasks.workState(
+        params.sessionId
+      )
   }),
   STRUCTURED_AGENT_SESSION_SUBSCRIBE_METHOD,
   defineMethod({
