@@ -110,14 +110,11 @@ export function devBillingFaultAccess(): OrcaCloudRunTargetAccess | null {
   } catch {
     return null
   }
-  switch (fault) {
-    case 'out-of-hours':
-      return { state: 'out-of-hours', cause: 'hours', canManageBilling: true }
-    case 'payment-issue':
-      return { state: 'payment-issue', canManageBilling: true }
-    case 'lapsed':
-      return { state: 'no-plan', lapsed: true, canManageBilling: true }
-    default:
-      return null
-  }
+  return (fault && DEV_BILLING_FAULTS.get(fault)) || null
 }
+
+const DEV_BILLING_FAULTS = new Map<string, OrcaCloudRunTargetAccess>([
+  ['out-of-hours', { state: 'out-of-hours', cause: 'hours', canManageBilling: true }],
+  ['payment-issue', { state: 'payment-issue', canManageBilling: true }],
+  ['lapsed', { state: 'no-plan', lapsed: true, canManageBilling: true }]
+])
