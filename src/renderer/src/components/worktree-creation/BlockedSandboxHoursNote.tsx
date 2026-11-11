@@ -33,16 +33,16 @@ export function BlockedSandboxHoursNote({
           'Asleep. It isn’t using sandbox hours.'
         )
       : sandbox === 'sleeping'
-        ? t(
-            'auto.components.worktree.creation.BlockedSandboxHoursNote.sleeping',
-            'Putting the sandbox to sleep…'
-          )
+        ? t('auto.components.worktree.creation.BlockedSandboxHoursNote.sleeping', 'Going to sleep…')
         : sleepsAt === undefined
           ? null
           : t(
               'auto.components.worktree.creation.BlockedSandboxHoursNote.sleepsIn',
-              'Sleeps in {{count}} min if unused',
-              { count: minutesUntilSleep(sleepsAt, now) }
+              'Sleeps in {{count}} minutes if unused.',
+              {
+                count: minutesUntilSleep(sleepsAt, now),
+                defaultValue_one: 'Sleeps in {{count}} minute if unused.'
+              }
             )
   if (!text) {
     return null

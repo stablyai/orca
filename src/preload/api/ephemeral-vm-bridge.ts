@@ -57,7 +57,6 @@ export const ephemeralVmApi = {
     return () => ipcRenderer.removeListener(EPHEMERAL_VM_RUNTIMES_CHANGED_CHANNEL, listener)
   },
   suspendRuntime: (args) => ipcRenderer.invoke('ephemeralVm:suspendRuntime', args),
-  suspendRuntime: (args) => ipcRenderer.invoke('ephemeralVm:suspendRuntime', args),
   cleanup: (args) => ipcRenderer.invoke('ephemeralVm:cleanup', args),
   preflightCloudDelete: (args) => ipcRenderer.invoke('ephemeralVm:preflightCloudDelete', args),
   stopCleanup: (args) => ipcRenderer.invoke('ephemeralVm:stopCleanup', args),

@@ -117,11 +117,6 @@ export type EphemeralVmApi = {
    * failed environment check). Optional: the web client has no VM lifecycle.
    */
   suspendRuntime?: (args: { runtimeId: string }) => Promise<{ ok: boolean; error?: string }>
-  /**
-   * Orca Cloud: puts a sandbox that never became a workspace to sleep (a create blocked on a
-   * failed environment check). Optional: the web client has no VM lifecycle.
-   */
-  suspendRuntime?: (args: { runtimeId: string }) => Promise<{ ok: boolean; error?: string }>
   cleanup: (args: { runtimeId: string }) => Promise<EphemeralVmRuntimeRecord>
   /** Orca Cloud: before Delete drops the row, prove the signed-in identity can reach the sandbox. */
   preflightCloudDelete?: (args: {
