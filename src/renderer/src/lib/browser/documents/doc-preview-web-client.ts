@@ -1,5 +1,5 @@
 import { translate } from '@/i18n/i18n'
-import { isPairedWebClientWindow } from '../../desktop-window-chrome'
+import { isPairedWebClientWindow } from '../../../app-shell/chrome/desktop-window-chrome'
 
 /** The document preview is a desktop webview; a paired web client has no window to host it in. */
 export function webClientDocPreviewRefusal(): {

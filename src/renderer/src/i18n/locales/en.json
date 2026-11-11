@@ -1052,6 +1052,7 @@
       "defaultSurfaceSetAllChat": "Set all to Chat",
       "defaultSurfaceSetAllTerminal": "Set all to Terminal",
       "sameAsChoice": "Same as {{agent}} · {{choice}}",
+      "modelListFallback": "Built-in list. Orca could not get a model list from this host.",
       "chatUnavailableOnWindows": "{{value0}} Chat isn't available on Windows yet, so {{value0}} opens in a terminal on this host. Chats on a macOS or Linux host still work.",
       "undetectedCommandHint": "If the {{agent}} CLI is installed outside PATH, enter the full path to its executable on this host."
     },
@@ -2266,7 +2267,8 @@
         "setupAgentStartupPolicySaveFailed": "Failed to save setup startup behavior.",
         "5f3d2c8a1b": "Failed to resolve MR base.",
         "dropPartiallyAttached_one": "{{failureCount}} of {{count}} item could not be attached.",
-        "dropPartiallyAttached_other": "{{failureCount}} of {{count}} items could not be attached."
+        "dropPartiallyAttached_other": "{{failureCount}} of {{count}} items could not be attached.",
+        "folderSetupSupportCheckFailed": "Couldn't confirm whether this host runs folder setup scripts. Try again."
       },
       "useGlobalFileDrop": {
         "38c9f034ff": "Failed to upload dropped files.",
@@ -2287,6 +2289,7 @@
       "useIpcEvents": {
         "0e3cf53060": "Browser tab {{value0}} not found",
         "2f6637fe6c": "Browser tab {{value0}} is pinned",
+        "unsent_notes_close_canceled": "Browser tab {{value0}} has unsent notes, and the user kept it open",
         "a8d2bf8e9e": "No active browser tab to close",
         "f000b2ff76": "No active worktree",
         "7a64b31991": "Local terminal creation is unavailable while a remote runtime is active",
@@ -4510,7 +4513,9 @@
             "0d1963f4a6": "This tab is pinned. Are you sure you want to close it?",
             "dont_ask_again": "Don't ask again for pinned tabs",
             "0b38ee2f86": "Cancel",
-            "c337c9d75c": "Close"
+            "c337c9d75c": "Close",
+            "unsent_notes_title": "Discard unsent notes?",
+            "unsent_notes_description": "This tab has notes you haven't sent. Closing it discards them."
           },
           "TerminalSshReconnectOverlay": {
             "authFailed": "Authentication failed for {{value0}}. Connect again to continue this terminal session.",
@@ -11188,11 +11193,9 @@
             "fbfd2386e8": "archive script",
             "4c17787d7b": "archive",
             "8655e3387b": "hooks",
-            "acd1157f0c": "Local and shared scripts that run before a worktree is archived.",
             "491b05d6e6": "setup command",
             "a31b43a7f8": "setup script",
             "5590388dfa": "setup",
-            "baaf70bb37": "Local and shared scripts that run after a new worktree is created.",
             "d73fb47b45": ".claude/mcp.json",
             "db11b337c4": ".claude.json",
             "26f42fe773": ".cursor/mcp.json",
@@ -11766,7 +11769,7 @@
         },
         "agent-workspace-trust-copy": {
           "title": "Trust the folder when Orca starts an agent",
-          "description": "Agents Orca starts can skip their \"Do you trust this folder?\" prompt, so the project's agent hooks and settings run right away. Orca asks once per repository the first time you start an agent there, and you can change the answer in that repository's settings. Turn this off to let agents always ask. An agent that asks while running without you watching, such as an orchestration worker, an automation or an agent started from your phone, waits until you answer in its terminal. Folders already trusted stay trusted."
+          "description": "Agents Orca starts can skip their \"Do you trust this folder?\" prompt, so the project's agent hooks and settings run right away. You can turn this off for one repository in that repository's settings. Turn this off to let agents always ask. An agent that asks while running without you watching, such as an orchestration worker, an automation or an agent started from your phone, waits until you answer in its terminal. Folders already trusted stay trusted."
         },
         "agent-generated-tab-title-copy": {
           "19ad21615a": "Auto-generate tab titles",
@@ -12085,7 +12088,11 @@
           "deleteAnywayClicked": "Delete Anyway clicked"
         },
         "EphemeralVmRecipeRow": {
-          "useInWorkspace": "Use in workspace"
+          "useInWorkspace": "Use in workspace",
+          "envLimited": "Scripts only receive the variables listed in passEnv, plus PATH, HOME and similar basics.",
+          "envNamesMore": "{{names}} +{{count}} more",
+          "envExposedAllowlist": "Scripts run on this computer and receive these credentials from passEnv: {{names}}.",
+          "envExposedAll": "Scripts run on this computer with your full environment, including {{names}}. Set passEnv on the recipe to pass only what it needs."
         },
         "EphemeralVmRuntimesSection": {
           "cleanupFailed": "Cleanup failed",
@@ -14967,7 +14974,28 @@
                   "titleManualForcePush_other": "Force push {{count}} local commits with lease to update {{upstreamName}}.",
                   "titleUnpublishedForcePushBranch": "Force push this branch with lease and set an upstream if needed.",
                   "titleUnpublishedForcePushCount_one": "Force push {{count}} branch commit with lease and set an upstream if needed.",
-                  "titleUnpublishedForcePushCount_other": "Force push {{count}} branch commits with lease and set an upstream if needed."
+                  "titleUnpublishedForcePushCount_other": "Force push {{count}} branch commits with lease and set an upstream if needed.",
+                  "statusConflicts": "Conflicts",
+                  "statusNothingStaged": "Nothing staged",
+                  "statusNeedsMessage": "Needs message",
+                  "statusNotPublished": "Not published",
+                  "statusNoBranch": "No branch",
+                  "statusUpToDate": "Up to date",
+                  "statusSetsUpstream": "Sets upstream",
+                  "statusMayFail": "May fail",
+                  "statusPublished": "Published",
+                  "statusStashFirst": "Stash first",
+                  "statusReplaces": "Replaces ↓{{behind}}",
+                  "statusCommitFirst": "Commit first",
+                  "statusReviewOpen": "{{shortLabel}} open",
+                  "statusSignIn": "Sign in",
+                  "statusBaseNotOnRemote": "Base not on remote",
+                  "statusDefaultBranch": "Default branch",
+                  "statusForkUnsupported": "Fork unsupported",
+                  "statusPushFirst": "Push first",
+                  "statusForcePushFirst": "Force push first",
+                  "statusSyncFirst": "Sync first",
+                  "statusUnsupported": "Unsupported"
                 }
               },
               "primary": {
@@ -18870,6 +18898,8 @@
           "reloaded": "Reloaded"
         },
         "FolderWorkspaceSourceControl": {
+          "changeCount_one": "{{count}} change",
+          "changeCount_other": "{{count}} changes",
           "openWorktree": "Open this worktree",
           "reconnect": "Reconnect to see this worktree’s changes."
         },
@@ -19603,14 +19633,10 @@
         }
       },
       "agent-workspace-trust-decision": {
-        "prompt-title": "Trust {{repo}} for agents?",
-        "prompt-description": "Agents like Claude Code and Codex ask \"Do you trust this folder?\" before they load the project's own agent settings and hooks, which can run commands. Orca can answer yes for you in every worktree of this repository.",
-        "prompt-remembered": "Orca remembers your answer for this repository. You can change it in the repository's settings.",
         "trust-repository": "Trust repository",
         "let-agents-ask": "Let agents ask",
         "setting-title": "Agent Folder Trust",
         "setting-description": "Whether agents Orca starts in this repository's worktrees skip their \"Do you trust this folder?\" prompt and load the project's agent settings and hooks right away.",
-        "setting-undecided": "Not decided yet. Orca will ask the next time you start an agent here.",
         "setting-global-off": "Folder trust is turned off in Agents settings, so agents always ask.",
         "keyword-trust": "trust",
         "keyword-hooks": "hooks"
@@ -21635,6 +21661,15 @@
       },
       "repositoryHooks": {
         "availableEnvVars": "Available environment variables"
+      },
+      "RepositoryHooksSection": {
+        "folderRunPolicyDescription": "Default behavior when a new workspace is created.",
+        "folderTitle": "Workspace hooks",
+        "folderDescription": "Scripts that run in this folder when a workspace is created or removed. Every workspace shares the folder. Local scripts are stored on this machine; `orca.yaml` scripts are shared with your team.",
+        "folderSetupDescription": "Local and shared scripts that run after a new workspace is created.",
+        "folderArchiveDescription": "Local and shared scripts that run before a workspace is removed.",
+        "folderSetupFieldDescription": "Runs after a new workspace is created; create child worktrees, install deps, copy env files.",
+        "folderArchiveFieldDescription": "Runs before a workspace is removed."
       }
     },
     "agentChildRow": {

@@ -1,6 +1,6 @@
 import type { OrcaRuntimeService } from '../orca-runtime'
 import { captureStructuredAgentCliSource } from '../../native-chat/structured-agent-cli-source'
-import type { OrchestrationSessionCaller } from '../orchestration/addressing/orchestration-caller-identity'
+import type { OrchestrationEntryCaller } from '../orchestration/addressing/orchestration-caller-identity'
 import { isRegistrationFencedUnsubscribe, type RpcContext, type RpcRequest } from './core'
 import { resolveRpcCallerIdentity } from './rpc-caller-identity'
 import type { RpcCallerScope } from './rpc-caller-scope'
@@ -41,7 +41,7 @@ export function rpcContextFromTransport(
   runtime: OrcaRuntimeService,
   request: RpcRequest,
   options: RpcDispatchStreamingOptions | undefined,
-  orchestrationCaller: OrchestrationSessionCaller | undefined,
+  orchestrationCaller: OrchestrationEntryCaller | undefined,
   params?: unknown
 ): RpcContext {
   return {

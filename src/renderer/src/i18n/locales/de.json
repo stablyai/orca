@@ -868,6 +868,7 @@
       "defaultSurfaceSetAllChat": "Alle auf Chat setzen",
       "defaultSurfaceSetAllTerminal": "Alle auf Terminal setzen",
       "sameAsChoice": "Wie {{agent}} · {{choice}}",
+      "modelListFallback": "Integrierte Liste. Orca konnte von diesem Host keine Modellliste abrufen.",
       "chatUnavailableOnWindows": "{{value0}} Chat ist unter Windows noch nicht verfügbar, daher öffnet sich {{value0}} auf diesem Host in einem Terminal. Chats auf einem macOS- oder Linux-Host funktionieren weiterhin.",
       "undetectedCommandHint": "Wenn die {{agent}}-CLI außerhalb von PATH installiert ist, gib den vollständigen Pfad zu ihrer ausführbaren Datei auf diesem Host ein."
     },
@@ -10733,11 +10734,9 @@
             "fbfd2386e8": "Archivierungsskript",
             "4c17787d7b": "Archivieren",
             "8655e3387b": "Hooks",
-            "acd1157f0c": "Lokale und gemeinsame Skripte, die vor dem Archivieren eines Worktrees ausgeführt werden.",
             "491b05d6e6": "Einrichtungsbefehl",
             "a31b43a7f8": "Einrichtungsskript",
             "5590388dfa": "Einrichtung",
-            "baaf70bb37": "Lokale und gemeinsame Skripte, die nach dem Erstellen eines neuen Worktrees ausgeführt werden.",
             "d73fb47b45": ".claude/mcp.json",
             "db11b337c4": ".claude.json",
             "26f42fe773": ".cursor/mcp.json",
@@ -11309,7 +11308,7 @@
         },
         "agent-workspace-trust-copy": {
           "title": "Dem Ordner vertrauen, wenn Orca einen Agenten startet",
-          "description": "Von Orca gestartete Agenten können die Abfrage „Do you trust this folder?“ überspringen, sodass die Agenten-Hooks und Einstellungen des Projekts sofort ausgeführt werden. Orca fragt einmal pro Repository beim ersten Agentenstart dort nach; die Antwort lässt sich in den Einstellungen dieses Repositorys ändern. Ausgeschaltet fragen Agenten immer selbst nach. Ein Agent, der unbeaufsichtigt läuft und nachfragt, etwa ein Orchestrierungs-Worker, eine Automatisierung oder ein vom Smartphone gestarteter Agent, wartet, bis die Frage in seinem Terminal beantwortet wird. Bereits als vertrauenswürdig eingestufte Ordner bleiben vertrauenswürdig."
+          "description": "Von Orca gestartete Agenten können die Abfrage „Do you trust this folder?“ überspringen, sodass die Agenten-Hooks und Einstellungen des Projekts sofort ausgeführt werden. In den Einstellungen eines Repositorys lässt sich das für dieses Repository ausschalten. Ausgeschaltet fragen Agenten immer selbst nach. Ein Agent, der unbeaufsichtigt läuft und nachfragt, etwa ein Orchestrierungs-Worker, eine Automatisierung oder ein vom Smartphone gestarteter Agent, wartet, bis die Frage in seinem Terminal beantwortet wird. Bereits als vertrauenswürdig eingestufte Ordner bleiben vertrauenswürdig."
         },
         "agent-generated-tab-title-copy": {
           "19ad21615a": "Tab-Titel automatisch generieren",
@@ -18989,14 +18988,10 @@
         }
       },
       "agent-workspace-trust-decision": {
-        "prompt-title": "Dem Repository {{repo}} für Agenten vertrauen?",
-        "prompt-description": "Agenten wie Claude Code und Codex fragen „Do you trust this folder?“, bevor sie die eigenen Agenten-Einstellungen und Hooks des Projekts laden, die Befehle ausführen können. Orca kann diese Frage in jedem Worktree dieses Repositorys automatisch mit Ja beantworten.",
-        "prompt-remembered": "Orca merkt sich die Antwort für dieses Repository. Sie lässt sich in den Einstellungen des Repositorys ändern.",
         "trust-repository": "Dem Repository vertrauen",
         "let-agents-ask": "Agenten fragen lassen",
         "setting-title": "Ordnervertrauen für Agenten",
         "setting-description": "Legt fest, ob von Orca gestartete Agenten in den Worktrees dieses Repositorys die Abfrage „Do you trust this folder?“ überspringen und die Agenten-Einstellungen und Hooks des Projekts sofort laden.",
-        "setting-undecided": "Noch nicht entschieden. Orca fragt beim nächsten Agentenstart hier nach.",
         "setting-global-off": "Das Ordnervertrauen ist in den Agenten-Einstellungen ausgeschaltet, daher fragen Agenten immer nach.",
         "keyword-trust": "vertrauen",
         "keyword-hooks": "Hooks"

@@ -3,6 +3,7 @@ import { ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/class-names'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
+import { useSourceControlScope } from '../panel/worktree-scope'
 
 export function SectionHeader({
   label,
@@ -23,22 +24,27 @@ export function SectionHeader({
   actions?: React.ReactNode
 }): React.JSX.Element {
   const t = useTranslate()
+  // Folder cards keep the gap above the first file equal to the one below the last.
+  const compact = useSourceControlScope() !== null
   // Share the rounded container so hover styling spans the whole row.
   return (
-    <div className="pl-1 pr-3 pt-3 pb-1">
+    <div className={cn('pl-1 pr-3 pt-3', compact ? 'pb-0' : 'pb-1')}>
       <div className="group/section flex items-center gap-x-1 rounded-md pr-1 hover:bg-accent hover:text-accent-foreground">
         <Button
           type="button"
           variant="ghost"
-          size="xs"
-          className="h-auto min-h-6 min-w-0 flex-1 justify-start gap-x-1 gap-y-0 py-0.5 text-left font-semibold uppercase tracking-wider text-foreground/70 group-hover/section:text-accent-foreground"
+          size={compact ? 'chip' : 'xs'}
+          className={cn(
+            'h-auto min-w-0 flex-1 justify-start text-left',
+            compact ? 'min-h-4' : 'min-h-6'
+          )}
           onClick={onToggle}
           aria-expanded={!isCollapsed}
         >
           <ChevronDown
             className={cn('size-3.5 shrink-0 transition-transform', isCollapsed && '-rotate-90')}
           />
-          <span className="min-w-0 flex-1">
+          <span className="min-w-0 flex-1 text-xs font-semibold uppercase tracking-wider text-foreground/70 group-hover/section:text-accent-foreground">
             <span className="flex min-w-0 items-center gap-1">
               <span className="min-w-0 truncate" title={label}>
                 {label}
@@ -59,7 +65,9 @@ export function SectionHeader({
             )}
           </span>
         </Button>
-        <div className="ml-auto flex shrink-0 items-center justify-end">{actions}</div>
+        <div className={cn('ml-auto flex shrink-0 items-center justify-end', compact && '-my-1')}>
+          {actions}
+        </div>
       </div>
     </div>
   )

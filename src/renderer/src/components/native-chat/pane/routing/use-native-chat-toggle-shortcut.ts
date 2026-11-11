@@ -4,7 +4,7 @@ import { matchesRecentTabSwitcherChord } from '../../../../../../shared/window-s
 import {
   globalShortcutTargetYields,
   findPluginCommandForKeybinding
-} from '@/lib/plugin-command-keybindings'
+} from '@/lib/plugins/commands/plugin-command-keybindings'
 import { getKeybindingContext } from '../../../terminal-workspace-model'
 import {
   ModifierDoubleTapDetector,

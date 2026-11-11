@@ -860,6 +860,7 @@
       "defaultSurfaceSetAllChat": "Tümünü Sohbet yap",
       "defaultSurfaceSetAllTerminal": "Tümünü Terminal yap",
       "sameAsChoice": "{{agent}} ile aynı · {{choice}}",
+      "modelListFallback": "Yerleşik liste. Orca bu ana makineden model listesi alamadı.",
       "chatUnavailableOnWindows": "{{value0}} Chat henüz Windows'ta kullanılamıyor, bu nedenle {{value0}} bu ana makinede bir terminalde açılır. macOS veya Linux ana makinesindeki sohbetler çalışmaya devam eder.",
       "undetectedCommandHint": "{{agent}} CLI, PATH dışında kuruluysa bu ana makinedeki yürütülebilir dosyanın tam yolunu girin."
     },
@@ -10717,11 +10718,9 @@
             "fbfd2386e8": "arşiv betiği",
             "4c17787d7b": "arşiv",
             "8655e3387b": "hook'lar",
-            "acd1157f0c": "Bir worktree arşivlenmeden önce çalışan yerel ve paylaşılan betikler.",
             "491b05d6e6": "kurulum komutu",
             "a31b43a7f8": "kurulum betiği",
             "5590388dfa": "kurulum",
-            "baaf70bb37": "Yeni bir worktree oluşturulduktan sonra çalışan yerel ve paylaşılan betikler.",
             "d73fb47b45": ".claude/mcp.json",
             "db11b337c4": ".claude.json",
             "26f42fe773": ".cursor/mcp.json",
@@ -11293,7 +11292,7 @@
         },
         "agent-workspace-trust-copy": {
           "title": "Orca bir ajan başlattığında klasöre güven",
-          "description": "Orca'nın başlattığı ajanlar \"Bu klasöre güveniyor musunuz?\" sorusunu atlayabilir; böylece projenin ajan kancaları ve ayarları hemen çalışır. Orca her repository için orada ilk kez bir ajan başlattığınızda bir kez sorar; yanıtı o repository'nin ayarlarından değiştirebilirsiniz. Ajanların her zaman sorması için bunu kapatın. Orkestrasyon çalışanı, otomasyon veya telefonunuzdan başlatılan bir ajan gibi gözetiminiz dışında çalışırken soru soran bir ajan, terminalinde yanıt verene kadar bekler. Zaten güvenilen klasörlere güvenilmeye devam edilir."
+          "description": "Orca'nın başlattığı ajanlar \"Bu klasöre güveniyor musunuz?\" sorusunu atlayabilir; böylece projenin ajan kancaları ve ayarları hemen çalışır. Bunu bir repository için o repository'nin ayarlarından kapatabilirsiniz. Ajanların her zaman sorması için bunu kapatın. Orkestrasyon çalışanı, otomasyon veya telefonunuzdan başlatılan bir ajan gibi gözetiminiz dışında çalışırken soru soran bir ajan, terminalinde yanıt verene kadar bekler. Zaten güvenilen klasörlere güvenilmeye devam edilir."
         },
         "agent-generated-tab-title-copy": {
           "19ad21615a": "Sekme başlıklarını otomatik oluştur",
@@ -18973,14 +18972,10 @@
         }
       },
       "agent-workspace-trust-decision": {
-        "prompt-title": "{{repo}} ajanlar için güvenilir olsun mu?",
-        "prompt-description": "Claude Code ve Codex gibi ajanlar, projenin komut çalıştırabilen kendi ajan ayarlarını ve kancalarını yüklemeden önce \"Bu klasöre güveniyor musunuz?\" diye sorar. Orca, bu repository'nin tüm worktree'lerinde sizin yerinize evet diyebilir.",
-        "prompt-remembered": "Orca bu repository için verdiğiniz yanıtı hatırlar. Yanıtı repository ayarlarından değiştirebilirsiniz.",
         "trust-repository": "Repository'ye güven",
         "let-agents-ask": "Ajanlar sorsun",
         "setting-title": "Ajan Klasör Güveni",
         "setting-description": "Orca'nın bu repository'nin worktree'lerinde başlattığı ajanların \"Bu klasöre güveniyor musunuz?\" sorusunu atlayıp projenin ajan ayarlarını ve kancalarını hemen yükleyip yüklemeyeceği.",
-        "setting-undecided": "Henüz karar verilmedi. Burada bir sonraki ajan başlatışınızda Orca soracak.",
         "setting-global-off": "Klasör güveni Ajanlar ayarlarında kapalı olduğundan ajanlar her zaman sorar.",
         "keyword-trust": "güven",
         "keyword-hooks": "kancalar"

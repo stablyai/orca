@@ -3,7 +3,7 @@ import {
   forceRepaintThroughRenderPause,
   isSynchronizedOutputHeld,
   requestFullViewportPresent
-} from './terminal-render-pause-release'
+} from './terminal-rendering/terminal-render-pause-release'
 import { retainTerminalReplayFrame } from './terminal-replay-frame'
 
 // Why a cap: a fit deferred until reveal (or a stuck parse) must never leave a live pane unpainted.
