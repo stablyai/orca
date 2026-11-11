@@ -10,6 +10,7 @@ import {
   describeRoutineTrigger,
   formatCountdown,
   formatKeyPrefix,
+  formatRelativeFromNow,
   formatRunDuration,
   presetForScopes,
   scopesForPreset,
@@ -63,6 +64,15 @@ describe('formatting', () => {
         timezone: 'America/New_York'
       })
     ).toMatch(/^Weekdays at 9:00.* E[SD]T$/)
+  })
+
+  it('says "just now" for the last minute, not "this minute"', () => {
+    const now = 1_000_000_000
+    expect(formatRelativeFromNow(now - 3_000, now, 'en')).toBe('just now')
+    expect(formatRelativeFromNow(now - 59_000, now, 'en')).toBe('just now')
+    expect(formatRelativeFromNow(now - 5 * 60_000, now, 'en')).toBe('5 minutes ago')
+    // Future times (next scheduled run) keep Intl wording.
+    expect(formatRelativeFromNow(now + 10 * 60_000, now, 'en')).toBe('in 10 minutes')
   })
 
   it('offers the local zone first', () => {

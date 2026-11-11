@@ -8,13 +8,17 @@ import { vmBuildFailureCopy } from './vm-build-failure-copy'
 import { InlineError } from '@/components/ui/inline-error'
 import { translate } from '@/i18n/i18n'
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.useRealTimers()
+})
 
 const actions = (): VmBuildFailureActions => ({
   onFixWithAgent: vi.fn(),
   onRetry: vi.fn(),
   onEditRecipe: vi.fn(),
   onOpenAnyway: vi.fn(),
+  onStartAgain: vi.fn(),
   onDismiss: vi.fn(),
   onSeePlans: vi.fn(),
   onOpenBilling: vi.fn(),
@@ -116,23 +120,31 @@ it("keeps Use this computer instead beside an owner's billing fix", () => {
   expect(buttons.slice(0, 2)).toEqual(['Raise spend cap', 'Use this computer instead'])
 })
 
-const CHECKS: VmBuildFailure = {
+// The card counts down from the real clock; pin it so the minutes read the same every run.
+const FIXED_NOW = 1_700_000_000_000
+
+const FATAL: VmBuildFailure = {
   kind: 'checks',
   problems: [
-    { id: 'tool.pnpm', category: 'tools', status: 'fail', message: 'pnpm is missing.' },
-    { id: 'agent.claude', category: 'agents', status: 'warn', message: 'Claude is signed out.' },
-    { id: 'git.push', category: 'git', status: 'fail', message: 'Push was refused.' }
-  ]
+    {
+      id: 'environment.doctor',
+      category: 'workspace',
+      status: 'fail',
+      message: 'The environment checks could not finish: unreachable'
+    }
+  ],
+  sleepsAt: FIXED_NOW + 5 * 60_000
 }
 
-it('counts only failed checks in the title and leads with Open anyway on a running sandbox', () => {
-  const handlers = actions()
-  render(
+function cloudCard(failure: VmBuildFailure, handlers: VmBuildFailureActions, vmKept = true) {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(FIXED_NOW)
+  return (
     <div data-vm-build-sheet>
       <VmBuildFailureCard
-        failure={CHECKS}
+        failure={failure}
         cloud
-        vmKept
+        vmKept={vmKept}
         firstErrorLine={null}
         canFixWithAgent={false}
         canManageBilling
@@ -143,14 +155,34 @@ it('counts only failed checks in the title and leads with Open anyway on a runni
       />
     </div>
   )
+}
+
+it('Orca Cloud: an unusable sandbox leads with Start again and says when it sleeps', () => {
+  const handlers = actions()
+  render(cloudCard(FATAL, handlers))
   const alert = screen.getByRole('alert')
-  expect(alert.textContent).toContain('The sandbox is up, but 2 environment checks failed')
-  // The check rows are read on demand, not announced with the cause.
-  expect(alert.textContent).not.toContain('pnpm is missing')
+  expect(alert.textContent).toContain('This sandbox can’t open your workspace')
+  expect(screen.getByText('Orca couldn’t reach the sandbox.')).toBeTruthy()
+  // Never "until you choose": the sandbox stops spending hours on its own.
+  expect(screen.getByText('Sleeps in 5 minutes if unused.')).toBeTruthy()
   const buttons = screen.getAllByRole('button').map((button) => button.textContent?.trim())
-  expect(buttons).toEqual(['Open anyway', 'Run checks again', 'Delete sandbox'])
-  fireEvent.click(screen.getByRole('button', { name: 'Open anyway' }))
-  expect(handlers.onOpenAnyway).toHaveBeenCalledOnce()
+  expect(buttons).toEqual(['Start again', 'Run checks again', 'Delete sandbox'])
+  fireEvent.click(screen.getByRole('button', { name: 'Start again' }))
+  expect(handlers.onStartAgain).toHaveBeenCalledOnce()
+})
+
+it('Orca Cloud: once asleep, checking again is gone and the card says it uses no hours', () => {
+  render(cloudCard({ ...FATAL, sandbox: 'asleep' }, actions()))
+  expect(screen.getByText('Asleep. It isn’t using sandbox hours.')).toBeTruthy()
+  const buttons = screen.getAllByRole('button').map((button) => button.textContent?.trim())
+  expect(buttons).toEqual(['Start again', 'Delete sandbox'])
+})
+
+it('Orca Cloud: a sandbox deleted instead of slept leaves nothing to delete', () => {
+  render(cloudCard({ ...FATAL, sandbox: 'deleted' }, actions(), false))
+  expect(screen.getByRole('alert').textContent).toContain('The sandbox was deleted.')
+  const buttons = screen.getAllByRole('button').map((button) => button.textContent?.trim())
+  expect(buttons).toEqual(['Start again', 'Dismiss'])
 })
 
 it('reads an account limit as a neutral notice rather than an error', () => {
@@ -170,16 +202,18 @@ it('says nothing was created only when no sandbox is left running', () => {
   expect(kept).toContain('delete the sandbox')
 })
 
-it('uses the singular for one failed check and names warnings-only runs as needing attention', () => {
-  const context = { cloud: true, canManageBilling: true, repoName: 'acme/web' }
-  const one: VmBuildFailure = { kind: 'checks', problems: CHECKS.problems.slice(0, 2) }
-  const copy = vmBuildFailureCopy(one, context, translate)
-  expect(copy.title).toBe('The sandbox is up, but 1 environment check failed')
-  expect(copy.body).toContain('fix them')
-  const warningOnly: VmBuildFailure = { kind: 'checks', problems: CHECKS.problems.slice(1, 2) }
-  const warned = vmBuildFailureCopy(warningOnly, context, translate)
-  expect(warned.title).toBe('The sandbox is up, but some environment checks need attention')
-  expect(warned.body).toContain('fix it inside')
+it('recipe VMs keep counting failed checks in the title', () => {
+  const context = { cloud: false, canManageBilling: true, repoName: 'acme/web' }
+  const problems: VmBuildFailure = {
+    kind: 'checks',
+    problems: [
+      { id: 'tool.pnpm', category: 'tools', status: 'fail', message: 'pnpm is missing.' },
+      { id: 'disk.free', category: 'disk', status: 'warn', message: 'Low disk.' }
+    ]
+  }
+  expect(vmBuildFailureCopy(problems, context, translate).title).toBe(
+    'The VM is up, but 1 environment check failed'
+  )
 })
 
 it('keeps InlineError announcing the whole box without children, and only the text with them', () => {

@@ -75,7 +75,13 @@ export function sandboxView(row: SandboxRow, archivedAware = false) {
   }
 }
 
-export function readyView(row: SandboxRow, connection: OrcadReady, cloning = false) {
+export function readyView(
+  row: SandboxRow,
+  connection: OrcadReady,
+  cloning?: 'clone' | 'update',
+  /** The client knows `mode` (feature `repo-update`); older ones show an update as a clone. */
+  updateAware = false
+) {
   return {
     sandbox: sandboxView(row),
     connection: {
@@ -84,7 +90,9 @@ export function readyView(row: SandboxRow, connection: OrcadReady, cloning = fal
       projectRoot: connection.projectRoot
     },
     // Only for a create that asked (feature `clone-progress`): the repo is still cloning.
-    ...(cloning ? { clone: { state: 'running' as const } } : {})
+    ...(cloning
+      ? { clone: { state: 'running' as const, ...(cloning === 'update' && updateAware ? { mode: 'update' as const } : {}) } }
+      : {})
   }
 }
 

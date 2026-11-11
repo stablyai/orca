@@ -1,60 +1,58 @@
-// Composer glue for "Start in Orca Cloud": the setup rows, the primary button's label and action,
-// setup instead of a build that billing or GitHub would refuse, the start on its own once setup
-// finishes (O4), the draft on disk (N7), and where each project last started (O5).
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { toast } from 'sonner'
+// Composer glue for Orca Cloud (composer-redo). Picking Orca Cloud changes nothing else in the
+// dialog: Start either creates the workspace (everything is set up) or saves the draft, closes the
+// dialog and opens the full-page setup, which starts the prompt by itself when done. Also: where
+// each project last started (O5), the remembered default (D7) and GitHub-only repositories (D4).
+import { useCallback, useEffect, useMemo } from 'react'
 import { useAppStore } from '@/store/index'
-import { claimOrcaCloudTrial } from '@/components/billing/claim-trial'
-import { translate } from '@/i18n/i18n'
-import type {
-  ProjectHostSetupOption,
-  ReadyProjectHostSetupOption
-} from '@/lib/project-host-setup-options'
+import { clearCloudStartDraft, saveCloudStartDraft } from '@/lib/orca-cloud/cloud-start-draft'
 import {
-  clearCloudStartDraft,
-  readCloudStartDraft,
-  saveCloudStartDraft
-} from '@/lib/orca-cloud/cloud-start-draft'
-import { getCloudSetupStarter } from '@/lib/orca-cloud/cloud-setup-session-seam'
+  getCloudSetupPageRequest,
+  openCloudSetupPage
+} from '@/lib/orca-cloud/cloud-setup-page-store'
+import {
+  armCloudCreateIdempotency,
+  consumeCloudCreateIntent,
+  startCloudCreate
+} from '@/lib/orca-cloud/cloud-create-intent'
 import { recordSuccessfulRunOn } from '@/lib/orca-cloud/run-on-memory'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
 import { ORCA_CLOUD_RECIPE_ID } from '../../../../../shared/hosted-sandbox/orca-cloud-recipe-id'
 import type { OrcaCloudAvailability } from '../../../../../shared/orca-yaml-hook-types'
 import { useOrcaCloudRunTargetAccess } from '../orca-cloud-billing-cache'
 import type { OrcaCloudRunTargetAccess } from '../orca-cloud-run-target-access'
-import { getCloudPrimaryLabel, setupActionFor, showGitHubGrantedToast } from './cloud-start-actions'
-import {
-  getCloudPrimaryAction,
-  getOpenSetupSteps,
-  getOrcaCloudSegmentState,
-  isCloudSetupPanelVisible
-} from './cloud-start-model'
-import { getOrcaCloudStartToast } from './orca-cloud-hours-copy'
+import type { ComposerModalData } from '../composer-modal-data'
+import { getOrcaCloudSegmentState } from './cloud-start-model'
 import { useCloudStartSteps } from './use-cloud-start-steps'
-import { useSetupAutoStart } from './use-setup-auto-start'
-import {
-  setupViewExtras,
-  useComposerSetupTracker,
-  useSwitchTeamSteps
-} from '../cloud-setup/use-cloud-setup-tracker'
+import { useSwitchTeamSteps } from '../cloud-setup/use-cloud-setup-tracker'
+import { cloudSetupRequired } from '../../orca-cloud-setup/cloud-setup-page-model'
 import { useRunOnDefault } from './use-run-on-default'
 import { useCloudOnlyCreate, useCloudOnlyRepo } from './use-cloud-only-repo'
 import type { CloudStartView } from './cloud-start-view'
+import { showCloudAgentNotStartedToast } from '@/lib/orca-cloud/cloud-agent-not-started-toast'
+import { isOrcaCloudAccountAgent } from '../../../../../shared/orca-cloud-agents/orca-cloud-agents-wire'
 
 export type { CloudStartView } from './cloud-start-view'
+
+/** The workspace started without its agent: the one prompt to set it up (design-squad journey). */
+function showAgentNotStartedToast(agent: string | null, workspaceName: string): void {
+  if (isOrcaCloudAccountAgent(agent)) {
+    showCloudAgentNotStartedToast(agent, workspaceName)
+  }
+}
 
 export function useCloudStartComposer({
   active,
   availability,
   selectedRecipeId,
   setRecipeId,
-  hostOptions,
-  onHostChange,
   repoId,
   prompt,
   agent,
   initialTargetFixed,
+  autoStartIntent = null,
+  createReady = true,
+  composerSnapshot,
   onCreate: createWorkspace,
+  onCreateWithoutAgent,
   onClose,
   accessOverride
 }: {
@@ -62,26 +60,31 @@ export function useCloudStartComposer({
   availability: OrcaCloudAvailability
   selectedRecipeId: string | null
   setRecipeId: ((recipeId: string | null) => void) | undefined
-  hostOptions: readonly ProjectHostSetupOption[]
-  onHostChange: ((setupId: string) => void) | undefined
   repoId: string
   prompt: string
   agent: string | null
   /** The composer was opened on an explicit target (Landing card, a recovery). */
   initialTargetFixed: boolean
+  /**
+   * Reopened by the setup page once everything is done: the Create press's intent, submitted once
+   * the form is ready (and only if nothing has used it yet).
+   */
+  autoStartIntent?: string | null
+  /** The composer's own create would run now (project picked, agent resolved). */
+  createReady?: boolean
+  /** The composer as it is now, for the setup page's Back and its auto-start. */
+  composerSnapshot: () => ComposerModalData
   onCreate: () => void
-  /** Closes the composer once a cloud-only repository has started (D4). */
+  /** The same create with no agent launched (the agent has no Orca Cloud account yet). */
+  onCreateWithoutAgent?: () => void
+  /** Closes the composer (setup moves to its page; a cloud-only repository started, D4). */
   onClose?: () => void
   /** Fixtures pin the account's access. */
   accessOverride?: OrcaCloudRunTargetAccess
 }): {
   view: CloudStartView | null
-  primaryActionLabel: string | null
   /** Replaces the plain create while Orca Cloud is selected. */
   onPrimary: (() => void) | null
-  primaryDisabled: boolean
-  /** False while the primary runs setup or the local fallback instead of a plain create. */
-  primaryIsCreate: boolean
   /** Call from the composer's onCreated: only a successful start is remembered. */
   recordCreated: () => void
 } {
@@ -96,66 +99,42 @@ export function useCloudStartComposer({
     cloudOffered: segment === 'enabled',
     signedIn: availability !== 'needs-sign-in' && access.state !== 'signed-out'
   })
-  const onCreate = useCloudOnlyCreate({
-    cloudOnly,
-    createWorkspace,
-    prompt,
-    agent,
-    profileId,
-    hoursToast: getOrcaCloudStartToast(access, translate, navigator.language),
-    onClose
-  })
-  const [startedSessionId, setSetupSessionId] = useState<string | null>(null)
-  // A composer reopened after setup (e.g. the Checkout return) resumes its saved draft: derived,
-  // not copied into state, so it is right on the first render.
-  const restoredDraft = useMemo(
-    () => (active && cloudSelected ? readCloudStartDraft(profileId) : null),
-    [active, cloudSelected, profileId]
-  )
-  const [restoreDone, setRestoreDone] = useState(false)
-  const restored = restoredDraft !== null && restoredDraft.repoId === repoId && !restoreDone
-  const setupSessionId = startedSessionId ?? (restored ? restoredDraft.setupSessionId : null)
-  const [startedHere, setSetupStarted] = useState(false)
-  const setupStarted = startedHere || restored
-  const setupStartedRef = useRef(setupStarted)
-  const onCreateRef = useRef(onCreate)
-  useEffect(() => {
-    setupStartedRef.current = setupStarted
-    onCreateRef.current = onCreate
-  }, [onCreate, setupStarted])
-  const {
-    steps: rowSteps,
-    session,
-    openInstall
-  } = useCloudStartSteps({
+  const { steps: rowSteps } = useCloudStartSteps({
     availability,
     access,
     repoId,
     agent,
     cloudSelected,
-    setupSessionId,
-    githubOverride: cloudOnly.githubStep,
-    onGranted: (repoName) => {
-      // D2: an owner approved on GitHub. Setup already running starts by itself; otherwise ask.
-      if (setupStartedRef.current) {
-        return
-      }
-      showGitHubGrantedToast(repoName, () => onCreateRef.current())
-    }
+    setupSessionId: null,
+    githubOverride: cloudOnly.githubStep
   })
-  // B2: on the personal account while a team the user is on has a plan, switch instead of buying.
-  const { steps, held: switchTeam } = useSwitchTeamSteps(rowSteps, cloudSelected && !session)
-  const action = getCloudPrimaryAction(steps)
-  const panelVisible = cloudSelected && isCloudSetupPanelVisible(steps)
-
-  const localOption = useMemo(
-    () =>
-      hostOptions.find(
-        (option): option is ReadyProjectHostSetupOption =>
-          option.kind === 'ready' && option.hostId === LOCAL_EXECUTION_HOST_ID
-      ) ?? null,
-    [hostOptions]
-  )
+  const { steps, held: switchTeam } = useSwitchTeamSteps(rowSteps, cloudSelected)
+  const setupNeeded = cloudSetupRequired(steps, { teamSwitch: switchTeam !== null })
+  // The agent has no Orca Cloud account (the user skipped setting it up): never launch it into its
+  // /login. Start a plain terminal and say how to set the agent up once.
+  const agentUnset =
+    cloudSelected && steps.some((step) => step.id === 'agent' && step.state === 'optional')
+  const onCreateRaw = useCloudOnlyCreate({
+    cloudOnly,
+    createWorkspace,
+    prompt,
+    agent: agentUnset ? null : agent,
+    profileId,
+    onClose
+  })
+  const onCreate = useCallback(() => {
+    if (!agentUnset) {
+      onCreateRaw()
+      return
+    }
+    // A GitHub-only start already leaves the agent out (above); a local project's create skips it.
+    if (cloudOnly.picked || !onCreateWithoutAgent) {
+      onCreateRaw()
+    } else {
+      onCreateWithoutAgent()
+    }
+    showAgentNotStartedToast(agent, prompt)
+  }, [agent, agentUnset, cloudOnly.picked, onCreateRaw, onCreateWithoutAgent, prompt])
 
   const { markTouched } = useRunOnDefault({
     active,
@@ -172,95 +151,55 @@ export function useCloudStartComposer({
     setRecipeId?.(ORCA_CLOUD_RECIPE_ID)
   }, [markTouched, setRecipeId])
 
-  // "Use this computer instead": switch, then submit once the switch has rendered.
-  const localSubmitPendingRef = useRef(false)
-  const useThisComputer = useCallback(() => {
-    if (!localOption) {
-      return
-    }
-    markTouched()
-    localSubmitPendingRef.current = true
-    setRecipeId?.(null)
-    onHostChange?.(localOption.id)
-  }, [localOption, markTouched, onHostChange, setRecipeId])
-  useEffect(() => {
-    if (localSubmitPendingRef.current && !cloudSelected) {
-      localSubmitPendingRef.current = false
-      createWorkspace()
-    }
-  }, [cloudSelected, createWorkspace])
-
-  // O4: setup started here (or its restored draft) starts by itself once every row is done.
-  const startAfterSetup = useCallback(() => {
-    setSetupStarted(false)
-    setRestoreDone(true)
-    onCreate()
-  }, [onCreate])
-  const allSet = useSetupAutoStart({
-    armed: setupStarted && cloudSelected,
-    done: action === 'start' || session?.finished === true,
-    setupSessionId,
-    onStart: startAfterSetup
-  })
-
-  // The draft survives the browser trip and a quit; it is cleared once a workspace starts.
-  const runSetup = useCallback(() => {
-    const draft = {
-      prompt,
-      repoId,
-      agent,
-      target: 'orca-cloud' as const,
-      setupSessionId,
-      createdAt: Date.now()
-    }
-    saveCloudStartDraft(profileId, draft)
-    setSetupStarted(true)
-    const open = getOpenSetupSteps(steps)
-    // D1: GitHub is the only thing missing, so its install page is the whole trip.
-    if (open.length > 0 && open.every((step) => step.id === 'github' || step.id === 'agent')) {
-      void openInstall()
-      return
-    }
-    const startSession = getCloudSetupStarter()
-    const fallback = setupActionFor(steps, access, availability)
-    if (!startSession) {
-      fallback?.()
-      return
-    }
-    // One browser trip for every missing step; the session id rides on the draft across a quit.
-    void startSession({ repoId, needs: open.map((step) => step.id) })
-      .then((opened) => {
-        if (!opened) {
-          fallback?.()
-          return
-        }
-        setSetupSessionId(opened.sessionId)
-        saveCloudStartDraft(profileId, { ...draft, setupSessionId: opened.sessionId })
+  // Start with setup still open: the dialog closes and the page takes over, prompt kept (N6).
+  const openSetup = useCallback(
+    (intentId: string) => {
+      saveCloudStartDraft(profileId, {
+        prompt,
+        repoId,
+        agent,
+        target: 'orca-cloud',
+        setupSessionId: null,
+        createdAt: Date.now()
       })
-      .catch(() => fallback?.())
-  }, [access, agent, availability, openInstall, profileId, prompt, repoId, setupSessionId, steps])
+      openCloudSetupPage({
+        prompt,
+        repoId,
+        agent,
+        availability,
+        cloudOnlyRepo: cloudOnly.picked?.fullName ?? null,
+        composer: composerSnapshot(),
+        intentId
+      })
+      onClose?.()
+    },
+    [agent, availability, cloudOnly.picked, composerSnapshot, onClose, profileId, prompt, repoId]
+  )
 
-  // B1: only the trial is missing. Claiming it is the whole setup; the billing cache then reads
-  // entitled and the auto-start above submits. A personal account needs a team first: setup trip.
-  const startTrial = useCallback(() => {
-    setSetupStarted(true)
-    void claimOrcaCloudTrial().then((result) => {
-      if (result.status !== 'ok') {
-        runSetup()
-      }
-    })
-  }, [runSetup])
+  // Reopened by the setup page: submit once the account and form are ready. Anything still open
+  // (a race, a revoked grant) leaves the composer for the user, never a second trip on its own.
+  // One Create press is one server create (P0): the intent is consumed here or nowhere.
+  const stepsSettled = !steps.some((step) => step.state === 'loading' && step.id !== 'agent')
+  useEffect(() => {
+    if (!autoStartIntent || !cloudSelected || !createReady || !stepsSettled || setupNeeded) {
+      return
+    }
+    if (consumeCloudCreateIntent(autoStartIntent)) {
+      armCloudCreateIdempotency(autoStartIntent)
+      onCreate()
+    }
+  }, [autoStartIntent, cloudSelected, createReady, onCreate, setupNeeded, stepsSettled])
 
-  const trip = { cloudSelected, setupStarted, allSet, session, steps, access, availability }
-  const tracker = useComposerSetupTracker({
-    ...trip,
-    profileId,
-    readyToStart: action === 'start',
-    sessionId: setupSessionId,
-    runSetup,
-    // Ends the trip here; the tracker hook also clears the draft's session id.
-    onCancel: () => [setSetupStarted(false), setRestoreDone(true), setSetupSessionId(null)]
-  })
+  const onCloudPrimary = useCallback(
+    () =>
+      startCloudCreate({
+        setupOpen: getCloudSetupPageRequest() !== null,
+        setupNeeded,
+        openSetup,
+        create: () => onCreate()
+      }),
+    [onCreate, openSetup, setupNeeded]
+  )
 
   const recordCreated = useCallback(() => {
     if (!repoId) {
@@ -271,58 +210,23 @@ export function useCloudStartComposer({
       return
     }
     clearCloudStartDraft(profileId)
-    // O4: the start always says which hours it spends.
-    const message = getOrcaCloudStartToast(access, translate, navigator.language)
-    if (message) {
-      toast.message(message)
-    }
-  }, [access, cloudSelected, profileId, repoId])
+    // PC-5: no "Using sandbox hours" toast on start; hours live in billing (Neil: noise).
+  }, [cloudSelected, profileId, repoId])
 
-  // Orca Cloud isn't the target (or this build has none): the composer's own create runs.
-  const plainCreate = {
-    primaryActionLabel: null,
-    onPrimary: null,
-    primaryDisabled: false,
-    primaryIsCreate: true,
-    recordCreated
+  const view = useMemo<CloudStartView | null>(
+    () =>
+      segment === 'hidden'
+        ? null
+        : {
+            onSelectOrcaCloud,
+            onUserPick: markTouched,
+            cloudOnly,
+            folderProject: cloudOnly.folderProject
+          },
+    [cloudOnly, markTouched, onSelectOrcaCloud, segment]
+  )
+  if (!view || !cloudSelected) {
+    return { view, onPrimary: null, recordCreated }
   }
-  if (segment === 'hidden') {
-    return { view: null, ...plainCreate }
-  }
-  const view: CloudStartView = {
-    steps,
-    panelVisible: panelVisible || allSet,
-    allSet,
-    onSelectOrcaCloud,
-    onUserPick: markTouched,
-    cloudOnly,
-    folderProject: cloudOnly.folderProject,
-    ...setupViewExtras(switchTeam, tracker),
-    ...(panelVisible && localOption && action !== 'useThisComputer' && !cloudOnly.picked
-      ? { onUseThisComputer: useThisComputer }
-      : {})
-  }
-  if (!cloudSelected) {
-    return { view, ...plainCreate }
-  }
-  const onPrimary = switchTeam
-    ? () => undefined
-    : action === 'start'
-      ? onCreate
-      : action === 'useThisComputer'
-        ? useThisComputer
-        : action === 'checking'
-          ? () => undefined
-          : action === 'startTrial'
-            ? startTrial
-            : runSetup
-  return {
-    view,
-    primaryActionLabel: getCloudPrimaryLabel(allSet || switchTeam ? 'start' : action),
-    onPrimary,
-    primaryDisabled:
-      action === 'checking' || allSet || (action === 'useThisComputer' && !localOption),
-    primaryIsCreate: action === 'start',
-    recordCreated
-  }
+  return { view, onPrimary: onCloudPrimary, recordCreated }
 }

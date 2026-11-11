@@ -16,6 +16,7 @@ import {
   setCloudReaderKeyRevoker
 } from '../cloud-workspaces/cloud-reader-key-store'
 import type { ReaderKeyAccess } from '../cloud-workspaces/cloud-read-snapshot-reader'
+import { registerTeamPresenceHandlers } from './cloud-workspaces-team-presence'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
 import type { CloudReadSnapshotState } from '../../shared/cloud-workspaces/read-snapshot-state'
 import type { CloudWorkspace } from '../../shared/cloud-workspaces/cloud-workspaces-wire'
@@ -29,7 +30,8 @@ const ListQuery = z
     by: z.string().max(128).optional(),
     repo: z.string().max(2048).optional(),
     section: z.string().max(64).optional(),
-    archived: z.enum(['exclude', 'include', 'only']).optional()
+    archived: z.enum(['exclude', 'include', 'only']).optional(),
+    routines: z.enum(['exclude', 'include']).optional()
   })
   .strict()
 const Patch = z
@@ -316,6 +318,7 @@ export function registerCloudWorkspacesHandlers(): void {
         ? s.putOrgPrompts(parsed.data.document, parsed.data.revision)
         : INVALID
   })
+  registerTeamPresenceHandlers(handle, getService)
   // Handlers are re-registered per main window; the quit hook must only be added once.
   if (!quitHookInstalled) {
     quitHookInstalled = true
