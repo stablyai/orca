@@ -212,11 +212,8 @@ function QuickTabBody({
     [observation.contextKey, orcaCloud]
   )
 
-  // Orca Cloud with an agent that has no account there starts a plain terminal, never the agent's
-  // /login: the cloud hook sets this around one create (read before the first await).
-  const noAgentRef = useRef(false)
   const handleCreate = useCallback(async (): Promise<void> => {
-    const agent = noAgentRef.current ? null : quickAgent
+    const agent = quickAgent
     if (createDisabled) {
       return
     }
@@ -280,7 +277,6 @@ function QuickTabBody({
     handleCreate,
     createDisabled,
     quickAgentPick,
-    noAgentRef,
     recordCreatedRef,
     onClose
   })

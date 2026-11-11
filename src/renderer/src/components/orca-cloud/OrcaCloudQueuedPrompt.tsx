@@ -11,6 +11,9 @@ import {
   vmCreationPromptIsDraft
 } from '@/lib/workspace/creation/vm-creation-queued-prompt'
 import { tuiAgentDisplayName } from '../../../../shared/agent-launch/catalog/tui-agent-display-names'
+import { isOrcaCloudAccountAgent } from '../../../../shared/orca-cloud-agents/orca-cloud-agents-wire'
+import { cloudAgentHoldReason } from '@/lib/orca-cloud/cloud-agent-launch-hold'
+import { useOrcaCloudAgentAccounts } from '@/lib/orca-cloud/orca-cloud-agent-accounts-store'
 
 export type OrcaCloudQueuedPromptViewProps = {
   agentName: string
@@ -20,7 +23,44 @@ export type OrcaCloudQueuedPromptViewProps = {
   editable: boolean
   /** The prompt is typed into the agent unsent rather than sent. */
   draft?: boolean
+  /** The agent isn't set up for Orca Cloud: its launch, and so this prompt, wait for that (PC-3b). */
+  held?: boolean
   onQueue: (text: string) => void
+}
+
+type Translate = ReturnType<typeof useTranslate>
+
+/** The queued prompt's heading: when, and whether, it goes to the agent. */
+function queuedTitle(
+  t: Translate,
+  agent: string,
+  { held, editable, draft }: { held: boolean; editable: boolean; draft: boolean }
+): string {
+  if (held) {
+    return t(
+      'auto.components.orcaCloud.QueuedPrompt.held',
+      'First prompt for {{agent}} · Sends once {{agent}} is set up',
+      { agent }
+    )
+  }
+  if (editable) {
+    return draft
+      ? t(
+          'auto.components.orcaCloud.QueuedPrompt.draftQueued',
+          'Draft for {{agent}}, typed in when ready',
+          { agent }
+        )
+      : t(
+          'auto.components.orcaCloud.QueuedPrompt.queuedUntilReady',
+          'First prompt for {{agent}} · Sends when the workspace is ready',
+          { agent }
+        )
+  }
+  return draft
+    ? t('auto.components.orcaCloud.QueuedPrompt.drafting', 'Ready as a draft in {{agent}}', {
+        agent
+      })
+    : t('auto.components.orcaCloud.QueuedPrompt.sending', 'Sending to {{agent}} next', { agent })
 }
 
 /** Queue the agent's first prompt while the workspace builds; it starts with it once ready. */
@@ -29,6 +69,7 @@ export function OrcaCloudQueuedPromptView({
   prompt,
   editable,
   draft: isDraftDelivery = false,
+  held = false,
   onQueue
 }: OrcaCloudQueuedPromptViewProps): React.JSX.Element | null {
   const t = useTranslate()
@@ -141,25 +182,7 @@ export function OrcaCloudQueuedPromptView({
       <Clock3 className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
       <div className="min-w-0 flex-1">
         <p className="text-xs font-medium text-foreground">
-          {editable && isDraftDelivery
-            ? t(
-                'auto.components.orcaCloud.QueuedPrompt.draftQueued',
-                'Draft for {{agent}}, typed in when ready',
-                { agent: agentName }
-              )
-            : editable
-              ? t('auto.components.orcaCloud.QueuedPrompt.queued', 'Queued for {{agent}}', {
-                  agent: agentName
-                })
-              : isDraftDelivery
-                ? t(
-                    'auto.components.orcaCloud.QueuedPrompt.drafting',
-                    'Ready as a draft in {{agent}}',
-                    { agent: agentName }
-                  )
-                : t('auto.components.orcaCloud.QueuedPrompt.sending', 'Sending to {{agent}} next', {
-                    agent: agentName
-                  })}
+          {queuedTitle(t, agentName, { held, editable, draft: isDraftDelivery })}
         </p>
         <p className="mt-0.5 line-clamp-3 text-xs whitespace-pre-wrap break-words text-muted-foreground">
           {prompt}
@@ -186,15 +209,20 @@ export function OrcaCloudQueuedPrompt({
   creationId: string
 }): React.JSX.Element | null {
   const entry = useAppStore((state) => state.pendingWorktreeCreations[creationId])
-  if (!entry?.request.ephemeralVmRecipe || entry.request.agent === null) {
+  const agent = entry?.request.agent ?? null
+  const accountAgent = isOrcaCloudAccountAgent(agent) ? agent : null
+  const accounts = useOrcaCloudAgentAccounts(accountAgent !== null)
+  if (!entry?.request.ephemeralVmRecipe || agent === null) {
     return null
   }
+  const held = accountAgent !== null && cloudAgentHoldReason(accountAgent, accounts) === 'notSetUp'
   return (
     <OrcaCloudQueuedPromptView
       key={creationId}
       agentName={tuiAgentDisplayName(entry.request.agent) ?? entry.request.agent}
       prompt={vmCreationFirstPrompt(entry)}
       draft={vmCreationPromptIsDraft(entry)}
+      held={held}
       editable={canQueueVmCreationPrompt(entry)}
       onQueue={(text) => queueVmCreationPrompt(creationId, text)}
     />
