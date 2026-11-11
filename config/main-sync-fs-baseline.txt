@@ -261,7 +261,8 @@
 3 src/main/grok/grok-hook-owners.ts
 4 src/main/grok/grok-hook-symlink-cleanup-marker.ts
 4 src/main/grok/hook-service.ts
-4 src/main/hang-watchdog/hang-detection-marker.ts
+8 src/main/hang-watchdog/hang-detection-marker.ts
+4 src/main/hang-watchdog/hang-incident-snapshot.ts
 1 src/main/hang-watchdog/hang-watchdog-worker-path.ts
 1 src/main/hang-watchdog/previous-hang-detection.ts
 1 src/main/hermes/hermes-default-home.ts
