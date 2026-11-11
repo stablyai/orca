@@ -46,6 +46,7 @@ type WorkspaceTabPaletteActivationState = Pick<
   | 'setActiveFile'
   | 'setActiveTab'
   | 'setActiveTabType'
+  | 'terminalLayoutsByTabId'
   | 'unifiedTabsByWorktree'
   | 'worktreesByRepo'
 >
@@ -136,16 +137,19 @@ export function activateWorkspaceTabPaletteResult(
   state.activateTab(result.tabId, { worktreeId: result.worktreeId })
 
   if (result.contentType === 'terminal') {
+    // Why: the palette already took focus, so a tab-wide focus or host activation picks the first split pane.
+    const activeLeafId = state.terminalLayoutsByTabId[result.entityId]?.activeLeafId ?? null
     if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
       void activateWebRuntimeSessionTab({
         worktreeId: result.worktreeId,
         tabId: result.entityId,
-        environmentId: runtimeEnvironmentId
+        environmentId: runtimeEnvironmentId,
+        leafId: activeLeafId
       })
     }
     state.setActiveTab(result.entityId)
     state.setActiveTabType('terminal', result.worktreeId)
-    focusTerminalTabSurface(result.entityId)
+    focusTerminalTabSurface(result.entityId, activeLeafId)
     return { status: 'activated' }
   }
 

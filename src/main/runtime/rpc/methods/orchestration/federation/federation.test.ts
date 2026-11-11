@@ -9,6 +9,7 @@ import '../../../../orchestration/db/messages/mailbox-routing-page'
 import '../../../../orchestration/db/dispatch-row-writer'
 import '../../../../orchestration/db/attempt-outcome-projection'
 import type { OrchestrationEnvironmentTransport } from '../../../../orchestration/federation/environment-transport'
+import { attachmentHostCapabilities } from './federation-peer-capabilities.test-support'
 import { RpcDispatcher } from '../../../dispatcher'
 import { ORCHESTRATION_METHODS } from '../orchestration'
 import { createFederationWorkerStartRequest as startRequest } from './federation-request.test-support'
@@ -36,7 +37,7 @@ describe('orchestration federation', () => {
       runtime: workerRuntime,
       methods: ORCHESTRATION_METHODS
     })
-    workerCapabilities = [...(workerRuntime.getStatus().capabilities ?? [])]
+    workerCapabilities = attachmentHostCapabilities(workerRuntime)
     workerPeerFingerprint = 'windows_peer_fingerprint'
     const transport: OrchestrationEnvironmentTransport = {
       resolve: () => {
