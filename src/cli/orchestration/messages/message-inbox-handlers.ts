@@ -18,6 +18,13 @@ import { withReceiptNext } from '../receipt-next-text'
 import { printOrchestrationResult } from '../agent-view'
 import { formatMessageViewText, toMessageView, type MessageView } from './message-agent-views'
 
+type InboxResult = {
+  messages: MessageSummary[]
+  count: number
+  scope?: string
+  runBinding?: string | null
+}
+
 export const ORCHESTRATION_INBOX_HANDLERS: Record<string, CommandHandler> = {
   'orchestration reply': async (ctx) => {
     const { flags, client, cwd, json } = ctx
@@ -60,38 +67,42 @@ export const ORCHESTRATION_INBOX_HANDLERS: Record<string, CommandHandler> = {
   'orchestration inbox': async ({ flags, client, json }) => {
     const full = flags.has('full')
     const run = getPresentStringFlag(flags, 'run')
-    const result = await client.call<{
-      messages: MessageSummary[]
-      count: number
-    }>('orchestration.inbox', {
+    const explicitTerminal = getPresentStringFlag(flags, 'terminal')
+    // Why: the call must go out even without a resolvable terminal, so an old runtime is caught by the scope check below.
+    const terminal = explicitTerminal ?? (run ? process.env.ORCA_TERMINAL_HANDLE : undefined)
+    const result = await client.call<InboxResult>('orchestration.inbox', {
       limit: getOptionalPositiveIntegerFlag(flags, 'limit'),
-      terminal: getPresentStringFlag(flags, 'terminal'),
+      terminal,
+      terminalPaneKey:
+        run && !explicitTerminal ? process.env.ORCA_PANE_KEY || undefined : undefined,
       run
     })
-    // Why: a server older than v1.4.257 (reachable via --environment) drops `run` and returns every Run's mail.
-    if (run && result.result.messages.some((message) => message.run_id !== run)) {
+    if (run && result.result.scope !== `messages addressed to Run ${run}`) {
       throw new RuntimeClientError(
         'incompatible_runtime',
-        'This server ignores --run. Update Orca on it, or use --terminal run:<run_id>.'
+        'The running Orca runtime does not support Run-scoped inbox reads. Update or restart Orca and try again.'
       )
     }
     if (!full) {
       printOrchestrationResult(result, json, {
-        fields: (value): { messages: MessageView[] } => ({
+        // An empty answer still says which inbox it read, matching the --full receipt.
+        fields: (value): { messages: MessageView[]; scope?: string; runBinding?: string } => ({
           messages: value.messages.map((message) =>
             inboxRowView(toMessageView(message, { recipient: true }))
-          )
+          ),
+          ...(value.scope ? { scope: value.scope } : {}),
+          ...(value.runBinding ? { runBinding: value.runBinding } : {})
         }),
         text: (fields) =>
           fields.messages.length === 0
-            ? 'No messages.'
+            ? emptyInboxText(fields.scope, fields.runBinding)
             : fields.messages.map((view) => formatMessageViewText(view)).join('\n\n')
       })
       return
     }
     printResult(result, json, (value) => {
       if (value.count === 0) {
-        return 'No messages.'
+        return emptyInboxText(value.scope, value.runBinding ?? undefined)
       }
       return value.messages
         .map((message) => {
@@ -114,6 +125,15 @@ export const ORCHESTRATION_INBOX_HANDLERS: Record<string, CommandHandler> = {
 }
 
 const INBOX_BODY_PREVIEW_CHARS = 200
+
+/** An empty inbox names what it read; only an unscoped read stays generic. */
+function emptyInboxText(scope?: string, runBinding?: string): string {
+  if (!scope) {
+    return 'No messages.'
+  }
+  const binding = runBinding ? ` Current Run binding: ${runBinding}.` : ''
+  return `No ${scope}.${binding}`
+}
 
 // A sender can put anything under an id key; only short strings are ids.
 function isShortId(value: unknown): boolean {

@@ -76,7 +76,9 @@ export const InboxParams = z.object({
   // Filter inbox by handle to agree with check --all.
   terminal: OptionalString,
   // Only this Run's mail; a paired Orca's inbox is always narrowed to its Run.
-  run: OptionalString
+  run: OptionalString,
+  // Pane identity of the reading terminal; survives handle reminting while a Run stays bound to the pane.
+  terminalPaneKey: OptionalString
 })
 
 export const TaskCreateParams = z.object({
