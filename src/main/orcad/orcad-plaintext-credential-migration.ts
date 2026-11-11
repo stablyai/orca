@@ -10,7 +10,7 @@ import {
   getWorkspaceTokenDir,
   getWorkspaceTokenPath,
   LEGACY_WORKSPACE_ID
-} from '../linear/linear-credential-paths'
+} from '../linear/accounts/linear-credential-paths'
 import { getTokenDir as getJiraTokenDir } from '../jira/site-credential-store'
 import { getSecretPath as getBitbucketSecretPath } from '../bitbucket/credential-store'
 import { getOpenAiKeyPath } from '../speech/openai-api-key-store'

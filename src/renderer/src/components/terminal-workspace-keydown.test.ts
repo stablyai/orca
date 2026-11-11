@@ -84,7 +84,7 @@ vi.mock('./terminal-agent-tab-shortcut', async (importOriginal) => {
   return { ...actual, resolveTerminalAgentTabShortcut: mocks.resolveAgentShortcut }
 })
 vi.mock('@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab', () => ({
-  launchAgentInNewTab: mocks.launchAgentInNewTab
+  launchAgentInNewTabWithOutcome: mocks.launchAgentInNewTab
 }))
 
 vi.mock('./terminal/terminal-tab-actions', () => ({ closeTerminalTab: mocks.closeTerminalTab }))

@@ -5,7 +5,8 @@ import {
   openDesktopStructuredSession
 } from '@/lib/agent-session/open/activate-ai-vault-structured-session'
 import { insertUnifiedTabAfterAnchor } from '@/lib/workspace/tabs/unified-tab-anchor-insertion'
-import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
+
+import { createNonSecureContextUuid } from '../../../../../../shared/non-secure-context-uuid'
 import {
   captureNativeChatComposerFocusIntent,
   requestNativeChatComposerFocus
@@ -137,7 +138,7 @@ function resumeInPlaceOf(
     session,
     rowAgent,
     here.workspaceId,
-    newAgentLaunchRequestId(),
+    createNonSecureContextUuid(),
     {
       afterTabId: here.tabId,
       // Why: the focus request is the one call every launch path makes once the new tab exists.

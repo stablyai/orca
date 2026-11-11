@@ -31,12 +31,11 @@ import type {
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { NativeChatLaunchPromptDelivery } from '../prompt/native-chat-launch-prompt-delivery'
 import type { StructuredAgentLaunchOptions } from '../structured-agent-session-launch-callers'
-import type { AgentLaunchRequestId } from './agent-launch-request-id'
 
 export type AgentLaunchSurface = 'chat' | 'terminal'
 
 export type AgentSessionLaunchRequest = AgentLaunchRouteArgs & {
-  requestId: AgentLaunchRequestId
+  requestId: string
   requestedSurface?: AgentLaunchSurface
   selectedExecutionHostId?: ExecutionHostId
   resumeFrom?: StructuredAgentSessionResumeSource
@@ -56,7 +55,7 @@ export type AgentSessionLaunchVerdict = Pick<
 > & {
   route: AgentLaunchRoute
   requestedSurface?: AgentLaunchSurface
-  requestId: AgentLaunchRequestId
+  requestId: string
   agent: TuiAgent
   worktreeId?: string
   executionHostId?: ExecutionHostId
