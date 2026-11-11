@@ -21,6 +21,7 @@ import {
   isAgentSessionOperationOutcomeUnknown
 } from '../../terminal/launch/runtime-agent-launch-resolution'
 import { AgentLaunchUnbuildableError } from '../../terminal/launch/runtime-agent-terminal-startup'
+import { PaneLaunchArgsMemory } from './pane-launch-args-memory'
 
 export abstract class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSessionExecutionNamespace {
   abstract resolveWorkspaceTerminalStartupCwd(
@@ -44,13 +45,17 @@ export abstract class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithG
     connectionId?: string | null
   ): Promise<RuntimeTerminalCreate | null>
 
+  private readonly paneLaunchArgs = new PaneLaunchArgsMemory()
+
   async createAgentSession(
-    request: RuntimeCreateAgentSessionRequest,
+    requested: RuntimeCreateAgentSessionRequest,
     caller: RuntimeAgentSessionRpcCaller = {}
   ): Promise<RuntimeCreateAgentSessionResult> {
     if (!this.store) {
       throw new Error('runtime_unavailable')
     }
+    // RA-11d: a bare relaunch of a pane reuses the args its original launch used.
+    const request = this.paneLaunchArgs.apply(requested)
     const now = Date.now()
     const operationTimestamp = parseAgentSessionOperationTimestamp(request.clientOperationId)
     if (

@@ -49,6 +49,25 @@ export abstract class OrcaRuntimeWithStopExactTerminalsForWorktree extends OrcaR
     const livePtyIds = this.getLivePtyIdsForWorktree(worktree.id, refreshedPtyLiveness)
     const targetOnly = opts.targetOnly === true
     const expectedIsLive = [...expected].every((ptyId) => livePtyIds.has(ptyId))
+    // Idempotent target stop: the PTY already gone (an earlier stop killed its shell) still reaps whatever
+    // carries its id, so a retry after a survivor can finish the job instead of failing forever.
+    if (targetOnly && !expectedIsLive) {
+      const ptyId = [...expected][0] ?? ''
+      const survivors = await killPtyStragglers(ptyId)
+      if (survivors.length > 0) {
+        throw Object.assign(new Error('terminal_exact_stop_failed'), {
+          ptyId,
+          reason: 'agent_survived',
+          survivorPids: survivors
+        })
+      }
+      return {
+        stopped: 0,
+        stoppedPtyIds: [ptyId],
+        livePtyIds: [...livePtyIds].sort(),
+        postStopVerified: true
+      }
+    }
     if (targetOnly ? !expectedIsLive : !setsEqual(livePtyIds, expected)) {
       const error = Object.assign(new Error('terminal_stop_pty_set_mismatch'), {
         livePtyIds: [...livePtyIds].sort(),
