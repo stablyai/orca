@@ -191,6 +191,38 @@ export function renderCodexAccountsSection(
                 )}
                 {t('auto.components.settings.AccountsPane.7e9977b560', 'Add account')}
               </Button>
+              <Button
+                variant="outline"
+                size="xs"
+                onClick={() => {
+                  void (async () => {
+                    // Folder pick is separate from the mutation so canceling the dialog does not toast.
+                    const sourceHomePath = await window.api.shell.pickDirectory({})
+                    if (!sourceHomePath) {
+                      return
+                    }
+                    await runCodexAccountAction('importing', () =>
+                      window.api.codexAccounts.importExistingHome({
+                        sourceHomePath,
+                        runtime: accountRuntime.runtime,
+                        wslDistro: accountRuntime.wslDistro
+                      })
+                    )
+                  })()
+                }}
+                disabled={
+                  // Import copies a host-visible CODEX_HOME; remote scopes and WSL slots are unsupported.
+                  isRemoteAccountScope ||
+                  accountRuntime.runtime === 'wsl' ||
+                  codexAction !== 'idle' ||
+                  wslCapabilitiesLoading ||
+                  accountRuntimeUnavailable
+                }
+                className="gap-1.5"
+              >
+                {codexAction === 'importing' ? <Loader2 className="size-3 animate-spin" /> : null}
+                {t('auto.components.settings.AccountsPane.importCodexHome', 'Import CODEX_HOME')}
+              </Button>
               {/* Follow the running addition; hide Cancel only when its server prompt already offers it. */}
               {codexAction === 'adding' && !accountAdditionShownInPrompt('codex', accountOwner) ? (
                 <Button
