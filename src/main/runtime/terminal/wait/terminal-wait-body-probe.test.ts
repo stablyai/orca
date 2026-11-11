@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { isKnownReadyPromptSettled } from './terminal-wait-detection'
 import { shouldProbeVisibleScreen } from './terminal-wait'
-import { visibleProbeReady } from './terminal-wait-visible-probe'
+import { visibleProbeReady, visibleProbeReadsScreen } from './terminal-wait-visible-probe'
 
 // Qoder 1.1.67's idle composer as `terminal read` shows it.
 const QODER_IDLE_SCREEN = [
@@ -49,7 +49,8 @@ describe('tui-idle body probe', () => {
         screenRule: false,
         snapshotText: QODER_IDLE_SCREEN.join('\n'),
         restoredLines: QODER_IDLE_SCREEN,
-        hasOutputClock: true
+        hasOutputClock: true,
+        working: false
       })
     ).toBe(true)
   })
@@ -62,9 +63,30 @@ describe('tui-idle body probe', () => {
         screenRule: false,
         snapshotText: trustScreen.join('\n'),
         restoredLines: trustScreen,
-        hasOutputClock: true
+        hasOutputClock: true,
+        working: false
       })
     ).toBe(false)
+  })
+
+  it('keeps a working Qoder turn from settling on its composer', () => {
+    expect(
+      visibleProbeReady({
+        agent: 'qoder',
+        screenRule: false,
+        snapshotText: QODER_IDLE_SCREEN.join('\n'),
+        restoredLines: QODER_IDLE_SCREEN,
+        hasOutputClock: true,
+        working: true
+      })
+    ).toBe(false)
+  })
+
+  it('reads a real screen for body-read agents', () => {
+    expect(visibleProbeReadsScreen('qoder', false)).toBe(true)
+    expect(visibleProbeReadsScreen('qoder-cn', false)).toBe(true)
+    expect(visibleProbeReadsScreen('amp', false)).toBe(false)
+    expect(visibleProbeReadsScreen('claude', true)).toBe(true)
   })
 
   it('keeps the settled-preview rule for agents without body rules', () => {
@@ -75,7 +97,8 @@ describe('tui-idle body probe', () => {
         screenRule: false,
         snapshotText: text,
         restoredLines: [text],
-        hasOutputClock: true
+        hasOutputClock: true,
+        working: false
       })
     ).toBe(isKnownReadyPromptSettled(text))
   })
