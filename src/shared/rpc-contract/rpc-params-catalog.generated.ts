@@ -310,6 +310,11 @@ import {
   StartImageUpload
 } from './clipboard/clipboard-params'
 import {
+  TerminalFileUploadAppendParams,
+  TerminalFileUploadIdParams,
+  TerminalFileUploadStartParams
+} from './clipboard/terminal-file-upload-params'
+import {
   ComputerCapabilitiesParams,
   ComputerPermissionsStatusParams
 } from './computer/computer-params'
@@ -2069,6 +2074,10 @@ export const RPC_PARAMS_BY_METHOD = {
   'terminalDaemon.restartSevered': TerminalDaemonRestartSeveredParams,
   'terminalDaemon.setLimit': TerminalLimitUpdateParams,
   'terminalDaemon.severedStatus': null,
+  'terminalFileUpload.abort': TerminalFileUploadIdParams,
+  'terminalFileUpload.append': TerminalFileUploadAppendParams,
+  'terminalFileUpload.commit': TerminalFileUploadIdParams,
+  'terminalFileUpload.start': TerminalFileUploadStartParams,
   'ui.get': null,
   'ui.getJiraQuickFilters': null,
   'ui.getJiraSavedFilters': null,
