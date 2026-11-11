@@ -19,10 +19,10 @@ import {
   createElectronHomeIsolation
 } from './helpers/electron-home-isolation'
 import { ensureTerminalVisible, waitForSessionReady } from './helpers/store'
-import { openProfileStateDatabaseReadOnly } from '../../src/main/persistence/profile-state/profile-state-database'
-import { readProfileStateSnapshot } from '../../src/main/persistence/profile-state/profile-state-documents'
-import { acquireProfileStateMaintenance } from '../../src/main/persistence/profile-state/profile-state-access'
-import { rollbackProfileState } from '../../src/main/persistence/profile-state/profile-state-recovery-command'
+import { openProfileStateDatabaseReadOnly } from '../../src/main/persistence/profile-state/database/profile-state-database'
+import { readProfileStateSnapshot } from '../../src/main/persistence/profile-state/documents/profile-state-documents'
+import { acquireProfileStateMaintenance } from '../../src/main/persistence/profile-state/access/profile-state-access'
+import { rollbackProfileState } from '../../src/main/persistence/profile-state/recovery/profile-state-recovery-command'
 import { profileStateJsonExportPaths } from '../../src/main/persistence/profile-state/legacy-json/profile-state-export-path'
 import type { ProfileStateRecoverySelector } from '../../src/shared/profile-state-recovery-command'
 import {

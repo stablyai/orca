@@ -7,7 +7,7 @@ import {
   getExecutionHostIdFromWorktreeHostIdentity,
   isWorktreeHostIdentity
 } from '../../../shared/worktree/host-qualified-identity'
-import { pruneUnreferencedWorktreeIdentityMeta } from '../loading-store/worktree-identity-metadata'
+import { pruneUnreferencedWorktreeIdentityMeta } from '../loading-store/worktree-metadata/worktree-identity-metadata'
 import {
   createOrcadMigrationSourceScope,
   orcadMigrationOwnerMatchesScope,
