@@ -277,6 +277,11 @@ test('CLI splits an exact cold-parked tab without stealing the active tab or foc
   await waitForTabParked(orcaPage, targetTabId, { parkDelayMs: PARKING_DELAY_MS })
   expect(await readActiveUiContext(orcaPage)).toEqual(contextBefore)
 
+  await testInfo.attach('parked-cli-split-focus-preserved.png', {
+    body: await orcaPage.screenshot(),
+    contentType: 'image/png'
+  })
+
   await activateTerminalTab(orcaPage, worktreeId, targetTabId)
   await waitForActiveTerminalManager(orcaPage, 30_000)
   const revealed = await waitForPaneIdentitySnapshot(orcaPage, 2)
