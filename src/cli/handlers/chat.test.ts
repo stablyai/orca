@@ -34,10 +34,6 @@ function historyPage(
   })
 }
 
-function workState(fields: Record<string, unknown>) {
-  return ok({ working: false, actionablePrompt: false, ...fields })
-}
-
 function item(body: unknown) {
   return { itemId: 'i', revision: 1, sequence: 1, observedAt: 1, body }
 }
@@ -93,7 +89,7 @@ afterEach(() => {
 describe('chat send', () => {
   it('fences a queued message to the chat it read', async () => {
     const client = fakeClient([
-      workState({ fence: 7 }),
+      historyPage([], 7),
       ok({
         ok: true,
         replayed: false,
@@ -123,7 +119,7 @@ describe('chat send', () => {
 
   it('reports a host refusal as an error instead of a sent message', async () => {
     const client = fakeClient([
-      workState({ fence: 2 }),
+      historyPage([], 2),
       ok({
         ok: false,
         refusal: { code: 'agent_session_fence_mismatch', message: 'The chat restarted.' }
@@ -137,7 +133,7 @@ describe('chat send', () => {
   it('with --wait, waits for its queued message to run and returns that turn', async () => {
     vi.useFakeTimers()
     const client = fakeClient([
-      workState({ fence: 7, working: true }),
+      historyPage([], 7, { working: true }),
       ok({
         ok: true,
         replayed: false,
@@ -149,9 +145,13 @@ describe('chat send', () => {
         }
       }),
       // The earlier turn ended, but the queued message has not been handed to the agent yet.
-      workState({ fence: 7, queuedMessageIds: ['q-1'], nextQueuedMessageId: 'q-1' }),
-      workState({ fence: 7, working: true, queuedMessageIds: [] }),
-      workState({ fence: 7, queuedMessageIds: [] }),
+      historyPage([], 7, {
+        working: false,
+        queuedMessages: [{ messageId: 'q-1' }],
+        nextQueuedMessageId: 'q-1'
+      }),
+      historyPage([], 7, { working: true, queuedMessages: [] }),
+      historyPage([], 7, { working: false, queuedMessages: [], actionablePromptIds: [] }),
       historyPage([
         item({ kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Earlier' }] }),
         item({ kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'Old reply' }] }),

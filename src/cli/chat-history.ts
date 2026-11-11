@@ -2,7 +2,6 @@ import type {
   AgentSessionHistoryPage,
   AgentSessionHistoryResult
 } from '../shared/agent-session/agent-session-wire'
-import type { AgentSessionWorkState } from '../shared/agent-session/agent-session-work-state'
 import { AGENT_SESSION_HISTORY_MAX_LIMIT } from '../shared/agent-session/agent-session-wire'
 import {
   AGENT_SESSION_UNATTACHED_REFUSAL_CODE,
@@ -57,45 +56,8 @@ export async function readTranscript(
   return { ...response, result: { session, entries, cursor: page.window.newest, truncated } }
 }
 
-/** Older hosts' history pages may omit `working`. */
-export type ChatWorkState = Omit<AgentSessionWorkState, 'working'> & { working?: boolean }
-
-/** One command's reads of the facts a send or wait decides from. Hosts without
- *  `agentSession.workState` answer from a history page for the rest of the command. */
-export function chatWorkStateReader(
-  client: RuntimeClient,
-  session: string
-): () => Promise<ChatWorkState> {
-  let historyOnly = false
-  return async () => {
-    if (!historyOnly) {
-      try {
-        const response = await client.call<AgentSessionWorkState>('agentSession.workState', {
-          sessionId: session
-        })
-        return response.result
-      } catch (error) {
-        if (!(error instanceof RuntimeClientError && error.code === 'method_not_found')) {
-          throw explainChatRefusal(error, session, 'read')
-        }
-        historyOnly = true
-      }
-    }
-    const { page } = (await readHistory(client, session, 1)).result
-    return {
-      ...(page.working !== undefined ? { working: page.working } : {}),
-      actionablePrompt: (page.actionablePromptIds?.length ?? 0) > 0,
-      ...(page.queuedMessages !== undefined
-        ? { queuedMessageIds: (page.queuedMessages ?? []).map((m) => m.messageId) }
-        : {}),
-      nextQueuedMessageId: page.nextQueuedMessageId ?? null,
-      ...(page.fence !== undefined ? { fence: page.fence } : {})
-    }
-  }
-}
-
-export function requireWorkingFlag(state: { working?: boolean }): void {
-  if (state.working === undefined) {
+export function requireWorkingFlag(page: AgentSessionHistoryPage): void {
+  if (page.working === undefined) {
     throw new RuntimeClientError(
       'incompatible_runtime',
       'This Orca host does not report when a chat is working, so it cannot wait. Update Orca on the host.'
@@ -105,26 +67,26 @@ export function requireWorkingFlag(state: { working?: boolean }): void {
 
 // Settled means no running turn or unanswered send, or a question/approval waiting for the user.
 export async function waitForChat(
-  readWorkState: () => Promise<ChatWorkState>,
+  client: RuntimeClient,
+  session: string,
   timeoutMs: number | undefined,
   queuedMessageId?: string
 ): Promise<ChatSettled> {
   const deadline = timeoutMs === undefined ? Infinity : Date.now() + timeoutMs
   for (;;) {
-    const state = await readWorkState()
-    requireWorkingFlag(state)
-    if (state.actionablePrompt) {
+    const { page } = (await readHistory(client, session, 1)).result
+    requireWorkingFlag(page)
+    if ((page.actionablePromptIds?.length ?? 0) > 0) {
       return 'blocked'
     }
     // Between turns the host names its next automatic send while working is briefly false.
     const sendsNext = structuredAgentSessionQueueSendsNext(
-      state.nextQueuedMessageId,
-      state.working === true
+      page.nextQueuedMessageId,
+      page.working === true
     )
-    if (!state.working && !sendsNext) {
+    if (!page.working && !sendsNext) {
       // Still queued with nothing running or about to send: stopped, failed or held across a reopen.
-      const held =
-        queuedMessageId !== undefined && state.queuedMessageIds?.includes(queuedMessageId) === true
+      const held = page.queuedMessages?.some((m) => m.messageId === queuedMessageId) === true
       return held ? 'held' : 'done'
     }
     if (Date.now() >= deadline) {

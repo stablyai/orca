@@ -17,9 +17,9 @@ import { AGENT_STATUS_STATES } from '../../shared/agent-status/contracts/agent-s
 import { readInjectedAgentSessionId } from '../../shared/agent-session/lifecycle/agent-session-caller-env'
 import {
   DEFAULT_READ_LIMIT,
-  chatWorkStateReader,
   explainChatRefusal,
   formatSettled,
+  readHistory,
   readSettledTurn,
   readTranscript,
   requireWorkingFlag,
@@ -122,7 +122,7 @@ export const CHAT_HANDLERS: Record<string, CommandHandler> = {
   'chat wait': async ({ flags, client, json }) => {
     const session = readSession(flags, client)
     const timeoutMs = getOptionalPositiveIntegerFlag(flags, 'timeout-ms')
-    const settled = await waitForChat(chatWorkStateReader(client, session), timeoutMs)
+    const settled = await waitForChat(client, session, timeoutMs)
     printResult(await readSettledTurn(client, session, settled), json, formatSettled)
   },
   'chat send': async ({ flags, client, cwd, json }) => {
@@ -146,12 +146,11 @@ export const CHAT_HANDLERS: Record<string, CommandHandler> = {
         AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY
       ) === true
     // The send is fenced to the session's current runtime, so a restarted chat refuses it.
-    const readWorkState = chatWorkStateReader(client, session)
-    const state = await readWorkState()
+    const { page } = (await readHistory(client, session, 1)).result
     if (wait) {
-      requireWorkingFlag(state)
+      requireWorkingFlag(page)
     }
-    const { fence } = state
+    const { fence } = page
     if (fence === undefined) {
       throw new RuntimeClientError(
         'agent_session_not_running',
@@ -189,7 +188,7 @@ export const CHAT_HANDLERS: Record<string, CommandHandler> = {
       return
     }
     const queuedId = 'queued' in value ? value.queued.messageId : undefined
-    const settled = await waitForChat(readWorkState, timeoutMs, queuedId)
+    const settled = await waitForChat(client, session, timeoutMs, queuedId)
     const turn = await readSettledTurn(client, session, settled)
     printResult({ ...turn, result: { ...sent, ...turn.result } }, json, formatSettled)
   }
