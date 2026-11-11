@@ -22,7 +22,13 @@ export function stepLabel(step: CloudSetupStep, t: Translate): string {
   }
 }
 
-type StepCopy = { title: string; lead: string | null; note?: string | null }
+export type StepCopy = {
+  title: string
+  lead: string | null
+  note?: string | null
+  /** A gentle option under the lead, set apart in muted italics (the agent step's skip hint). */
+  aside?: string | null
+}
 
 function trialHours(step: CloudSetupStep): string | null {
   return step.trialSeconds ? String(Math.round((step.trialSeconds / 3600) * 10) / 10) : null
@@ -30,8 +36,7 @@ function trialHours(step: CloudSetupStep): string | null {
 
 export function currentStepCopy(
   flow: Pick<CloudSetupPageModel, 'current' | 'action'>,
-  t: Translate,
-  agentLabel: string | null
+  t: Translate
 ): StepCopy {
   const step = flow.current
   const detail = step
@@ -146,16 +151,6 @@ export function currentStepCopy(
             'Orca Cloud needs a Team plan. Only owners and admins can choose one.'
           )
       }
-    case 'agent':
-      return {
-        title: agentLabel
-          ? t('cloudSetupPage.agent.title', 'Sign in to {{agent}} once', { agent: agentLabel })
-          : t('cloudSetupPage.agent.titleGeneric', 'Sign in to your agent once'),
-        lead: t(
-          'cloudSetupPage.agent.lead',
-          'Save your agent sign-in to your Orca account and every cloud workspace uses it. You can also skip this and sign in inside the workspace.'
-        )
-      }
     case 'checking':
       return {
         title: t('cloudSetupPage.checking.title', 'Checking your Orca Cloud account…'),
@@ -165,6 +160,48 @@ export function currentStepCopy(
       return {
         title: t('cloudSetupPage.done.title', 'All set'),
         lead: t('cloudSetupPage.done.lead', 'Starting your cloud workspace…')
+      }
+  }
+}
+
+/** A finished step revisited from the stepper or Back: what it settled, in one calm line. */
+export function doneStepCopy(
+  step: CloudSetupStep,
+  t: Translate,
+  agentLabel: string | null
+): StepCopy {
+  switch (step.id) {
+    case 'account':
+      return {
+        title: t('cloudSetupPage.done.accountTitle', 'You’re signed in'),
+        lead: t('cloudSetupPage.done.accountLead', 'Your Orca account is ready for Orca Cloud.')
+      }
+    case 'team':
+      return {
+        title: t('cloudSetupPage.done.teamTitle', 'Team selected'),
+        lead: step.detail ?? null
+      }
+    case 'plan':
+      return {
+        title:
+          step.detail === 'trial' || step.need === 'trial'
+            ? t('cloudSetupPage.done.trialTitle', 'Your trial is on')
+            : t('cloudSetupPage.done.planTitle', 'Your team has Orca Cloud'),
+        lead: null
+      }
+    case 'github':
+      return {
+        title: t('cloudSetupPage.done.githubTitle', 'Orca Cloud can reach this repository'),
+        lead: null
+      }
+    case 'agent':
+      return {
+        title: agentLabel
+          ? t('cloudSetupPage.done.agentTitle', '{{agent}} is set up for Orca Cloud', {
+              agent: agentLabel
+            })
+          : t('cloudSetupPage.done.agentTitleGeneric', 'Your agent is set up for Orca Cloud'),
+        lead: null
       }
   }
 }

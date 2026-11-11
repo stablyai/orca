@@ -323,6 +323,12 @@ export function getCreationProgressLabel(
   }
   if (entry.phase === 'provisioning-vm') {
     if (entry.environmentCheck?.status === 'failed') {
+      // Orca Cloud stops only on an unusable sandbox; the row says what the card says.
+      if (entry.request.ephemeralVmRecipe?.provider === 'orca-cloud') {
+        return entry.environmentCheck.sandbox === 'asleep'
+          ? t('auto.lib.pendingWorktreeCreation.cloudBlockedAsleep', 'Asleep')
+          : t('auto.lib.pendingWorktreeCreation.cloudCouldNotOpen', 'Couldn’t open')
+      }
       return t('auto.lib.pendingWorktreeCreation.vmChecksFailed', 'Environment checks failed')
     }
     // Glossary: an Orca Cloud machine is a sandbox; "VM" stays only for bring-your-own recipes.

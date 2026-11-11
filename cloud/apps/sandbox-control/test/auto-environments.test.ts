@@ -105,6 +105,21 @@ describe('automatic environments', () => {
     expect(environments().filter((row) => row.kind === 'auto')).toHaveLength(2)
   })
 
+  it('boot-plan says clone before the environment exists and update after (PC-4)', async () => {
+    const { h, settle, finishBuild } = await setup()
+    const plan = async () => (await h.call('GET', `/v1/sandboxes/boot-plan?repo=${encodeURIComponent(REPO)}`)).body
+    expect(await plan()).toEqual({ repo: 'clone' })
+    await h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'w1', machineSize: 'standard', repo: { url: REPO } } })
+    await settle()
+    expect(await plan()).toEqual({ repo: 'clone' })
+    await finishBuild()
+    expect(await plan()).toEqual({ repo: 'update' })
+    // Another account's environment is never theirs to boot.
+    expect((await h.call('GET', `/v1/sandboxes/boot-plan?repo=${encodeURIComponent(REPO)}`, { as: 'bob' })).body).toEqual({
+      repo: 'clone'
+    })
+  })
+
   it('goes after 14 days unused, with its snapshot', async () => {
     const { h, settle, environments, finishBuild } = await setup()
     await h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'w1', machineSize: 'standard', repo: { url: REPO } } })

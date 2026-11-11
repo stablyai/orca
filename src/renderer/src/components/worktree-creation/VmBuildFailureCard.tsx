@@ -112,13 +112,7 @@ export function VmBuildFailureCard({
             {visible.kind === 'checks' ? (
               <ul className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-3 gap-y-2">
                 {visible.problems.map((check, index) => (
-                  <CheckRow
-                    key={check.id}
-                    check={check}
-                    index={index}
-                    cloud={cloud}
-                    t={t}
-                  />
+                  <CheckRow key={check.id} check={check} index={index} cloud={cloud} t={t} />
                 ))}
               </ul>
             ) : null}

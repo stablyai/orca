@@ -28,6 +28,8 @@ export type PrepareEphemeralVmWorkspaceTargetArgs = {
   branch?: string
   ref?: string
   provisionId?: string
+  /** Orca Cloud: the Create press's key (one press, one sandbox). */
+  idempotencyKey?: string
   setupExistingFolder: (
     args: ProjectHostSetupExistingFolderArgs
   ) => Promise<ProjectHostSetupResult | null>
@@ -62,7 +64,8 @@ export async function prepareEphemeralVmWorkspaceTarget(
     workspaceName: args.workspaceName,
     ...(args.branch ? { branch: args.branch } : {}),
     ...(args.ref ? { ref: args.ref } : {}),
-    ...(args.provisionId ? { provisionId: args.provisionId } : {})
+    ...(args.provisionId ? { provisionId: args.provisionId } : {}),
+    ...(args.idempotencyKey ? { idempotencyKey: args.idempotencyKey } : {})
   })
   if (!provisioned.ok) {
     return {

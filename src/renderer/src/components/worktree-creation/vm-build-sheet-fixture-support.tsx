@@ -115,4 +115,3 @@ export const CLOUD_FAILED_LOG = [
   'Orca Cloud refused the request (provider_unavailable).'
 ].join('\n')
 export const FAILED_LOG = `${LOG}\nError: snapshot snap_7f2c not found`
-

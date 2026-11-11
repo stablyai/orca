@@ -1313,6 +1313,10 @@
         "unavailableCount_one": "{{count}} unavailable",
         "unavailableCount_other": "{{count}} unavailable"
       },
+      "teammates": {
+        "daySandboxHours_one": "{{hours}} sandbox hour",
+        "daySandboxHours_other": "{{hours}} sandbox hours"
+      },
       "terminal": {
         "pane": {
           "TerminalErrorToast": {
@@ -2127,14 +2131,10 @@
       "cloudHours": {
         "planChip_one": "{{hours}} sandbox hour left",
         "planChip_other": "{{hours}} sandbox hours left",
-        "planToast_one": "Using sandbox hours · {{hours}} sandbox hour left",
-        "planToast_other": "Using sandbox hours · {{hours}} sandbox hours left",
         "trialChip_one": "Trial · {{hours}} sandbox hour left",
         "trialChip_other": "Trial · {{hours}} sandbox hours left",
         "trialOffered_one": "Trial · {{hours}} sandbox hour left · No card needed",
-        "trialOffered_other": "Trial · {{hours}} sandbox hours left · No card needed",
-        "trialToast_one": "Using sandbox hours · {{hours}} sandbox hour left in your trial",
-        "trialToast_other": "Using sandbox hours · {{hours}} sandbox hours left in your trial"
+        "trialOffered_other": "Trial · {{hours}} sandbox hours left · No card needed"
       },
       "cloudSetup": {
         "trialOffer_one": "{{hours}} sandbox hour to try Orca Cloud",
