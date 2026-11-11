@@ -18,6 +18,7 @@ import type * as HostAgentSignInClient from '@/runtime/provider-accounts/sign-in
 import type { PublicKnownRuntimeEnvironment } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { makeTabWithIds } from '@/components/activity/ActivityPrototypePage-test-fixtures'
 import DashboardAgentRow from '@/components/dashboard/DashboardAgentRow'
+import { openOrcaCloudAgentAccounts } from '@/components/new-workspace/OrcaCloudAgentSetupRow'
 import { _resetCloudAgentAccountActiveSinceForTest } from '@/lib/orca-cloud/cloud-agent-account-active-since'
 import { CompactAgentRow } from './worktree-card-compact-agent-row'
 
@@ -434,16 +435,18 @@ describe.each([
     expect(focusTooltip(text)?.textContent).toBe('Renew in Settings → Agent accounts')
   })
 
-  it('clicking the text opens Agent accounts, not the pane', () => {
+  it('clicking the text opens Agent accounts (the composer\'s "Set up once" target), not the pane', () => {
+    // The target is whatever the composer's "Set up once" opens; settings may move it.
+    openOrcaCloudAgentAccounts()
+    const setUpOnceTarget = useAppStore.getState().settingsNavigationTarget
+    useAppStore.setState({ settingsNavigationTarget: null })
     const onActivate = vi.fn()
     const [, text] = statusButtons(render(makeAgent(CLOUD_WORKTREE, true), onActivate))
     click(text)
     expect(onActivate).not.toHaveBeenCalled()
     expect(useAppStore.getState().activeView).toBe('settings')
-    expect(useAppStore.getState().settingsNavigationTarget).toMatchObject({
-      pane: 'agent-accounts',
-      sectionId: 'orca-cloud'
-    })
+    expect(useAppStore.getState().settingsNavigationTarget).toEqual(setUpOnceTarget)
+    expect(setUpOnceTarget).toMatchObject({ sectionId: 'orca-cloud' })
   })
 
   it('clicking the dot opens Agent accounts too', () => {
