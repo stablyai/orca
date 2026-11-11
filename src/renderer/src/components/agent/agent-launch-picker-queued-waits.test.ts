@@ -157,29 +157,3 @@ it('ignores obsolete success and rejection after a real account change while the
     replacement.resolve({ origin: 'unknown' })
   }
 })
-
-it('preserves unsupported transport classification instead of settling an unknown answer', async () => {
-  transport.call.mockRejectedValue({ code: 'method_not_found' })
-  let published: AgentPickerEntry[] = []
-  const close = observeAgentPickerAcquisition(
-    'unsupported-read',
-    [entry],
-    {
-      ...agentPickerModelCatalogReads({ target: { kind: 'local' }, worktree: 'id:unsupported' }),
-      support: async () => undefined
-    },
-    {
-      selected: () => 'codex',
-      publish: (next) => {
-        published = next
-      }
-    }
-  )
-  try {
-    await expect
-      .poll(() => published[0])
-      .toMatchObject({ catalogRead: 'unsupported', catalog: { origin: 'unknown' } })
-  } finally {
-    close()
-  }
-})

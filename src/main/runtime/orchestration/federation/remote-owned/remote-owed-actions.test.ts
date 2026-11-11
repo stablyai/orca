@@ -30,9 +30,10 @@ import type {
 } from '../environment-transport'
 import { resendOwedRemoteActions, sendOwedRemoteStop } from './remote-owed-actions'
 
+const retry = vi.hoisted(() => ({ delayMs: 5 }))
 vi.mock('../relay/federation-relay-scheduler', async (original) => ({
   ...(await original<object>()),
-  federationRelayRetryDelayMs: () => 5
+  federationRelayRetryDelayMs: () => retry.delayMs
 }))
 
 const COORDINATOR_PANE = 'tab_coord:11111111-1111-4111-8111-111111111111'
@@ -62,7 +63,8 @@ describe('what the coordinating Orca owes a paired server', () => {
   const createTransport = (
     sent: Sent[],
     answers: Record<string, Answer[]>,
-    pulls: unknown[][]
+    pulls: unknown[][],
+    pullParams: unknown[]
   ): OrchestrationEnvironmentTransport => ({
     resolve: () => server,
     hasEnvironment: () => true,
@@ -77,6 +79,7 @@ describe('what the coordinating Orca owes a paired server', () => {
         return ok({ capabilities: [ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY] })
       }
       if (method === 'orchestration.peerMailPull') {
+        pullParams.push(params)
         await new Promise((resolve) => setImmediate(resolve))
         return ok({ items: pulls.shift() ?? [] })
       }
@@ -95,14 +98,17 @@ describe('what the coordinating Orca owes a paired server', () => {
     }
   })
   let pulls: unknown[][]
+  let pullParams: unknown[]
 
   beforeEach(() => {
     sent = []
     answers = {}
     pulls = []
+    pullParams = []
+    retry.delayMs = 5
     db = new OrchestrationDb(':memory:')
     runtime = new OrcaRuntimeService(null, undefined, {
-      orchestrationEnvironmentTransport: createTransport(sent, answers, pulls)
+      orchestrationEnvironmentTransport: createTransport(sent, answers, pulls, pullParams)
     })
     vi.spyOn(runtime, 'readMachineName').mockReturnValue('Mac A')
     runtime.setOrchestrationDb(db)
@@ -328,33 +334,33 @@ describe('what the coordinating Orca owes a paired server', () => {
   })
 
   describe('S8 pull loop', () => {
-    it('acknowledges what it imported before an unreadable item, and never that item', async () => {
-      startedOnB()
-      const state = (seq: number, payload?: string) => ({
-        conversationId: link.conversation_id,
-        sequence: seq,
-        messageId: `state_${seq}`,
-        kind: 'worker_state',
-        payload:
-          payload ??
-          JSON.stringify({
-            v: 1,
-            id: `state_${seq}`,
-            homeRunId: run.id,
-            peerRunId: 'run_on_b',
-            dispatch: {
-              id: 'ctx_b1',
-              taskId: 'task_t',
-              status: 'dispatched',
-              workerState: 'ready',
-              lastFailure: null,
-              agent: null
-            },
-            task: { status: 'dispatched', result: null },
-            correctedUnobservedPrompt: false,
-            removed: null
-          })
-      })
+    const state = (seq: number, payload?: string) => ({
+      conversationId: link.conversation_id,
+      sequence: seq,
+      messageId: `state_${seq}`,
+      kind: 'worker_state',
+      payload:
+        payload ??
+        JSON.stringify({
+          v: 1,
+          id: `state_${seq}`,
+          homeRunId: run.id,
+          peerRunId: 'run_on_b',
+          dispatch: {
+            id: 'ctx_b1',
+            taskId: 'task_t',
+            status: 'dispatched',
+            workerState: 'ready',
+            lastFailure: null,
+            agent: null
+          },
+          task: { status: 'dispatched', result: null },
+          correctedUnobservedPrompt: false,
+          removed: null
+        })
+    })
+
+    function otherConversation() {
       const otherRun = db.createRun({
         objective: 'Other',
         coordinatorHandle: null,
@@ -366,6 +372,12 @@ describe('what the coordinating Orca owes a paired server', () => {
         conversationId: other.conversation_id,
         payload: state(7).payload.replace(run.id, otherRun.id)
       }
+      return { other, otherItem }
+    }
+
+    it('acknowledges what it imported before an unreadable item, and never that item', async () => {
+      startedOnB()
+      const { other, otherItem } = otherConversation()
       pulls.push([state(1), { ...state(2), kind: 'worker_future' }, state(3), otherItem])
       answers['orchestration.peerMailAck'] = [{ result: { acknowledged: 1 } }]
       runtime.ensureOrchestrationFederationRelay()
@@ -385,6 +397,26 @@ describe('what the coordinating Orca owes a paired server', () => {
       expect(getRemoteRunLink(db, link.conversation_id)).toMatchObject({
         last_imported_sequence: 1,
         last_error: expect.stringContaining('kind worker_future')
+      })
+    })
+
+    it("keeps reading the server's other conversations while an unreadable one waits out its own backoff", async () => {
+      retry.delayMs = 10_000
+      startedOnB()
+      const { other, otherItem } = otherConversation()
+      pulls.push([{ ...state(1), kind: 'worker_future' }], [otherItem])
+      answers['orchestration.peerMailAck'] = [{ result: { acknowledged: 1 } }]
+      runtime.ensureOrchestrationFederationRelay()
+      await vi.waitFor(() =>
+        expect(sent.some((s) => s.method === 'orchestration.peerMailAck')).toBe(true)
+      )
+      runtime.stopOrchestrationFederationRelay()
+      expect(sent.find((s) => s.method === 'orchestration.peerMailAck')?.params).toEqual({
+        acknowledgments: [{ conversationId: other.conversation_id, throughSequence: 7 }]
+      })
+      expect(pullParams[1]).toMatchObject({
+        holdBack: [link.conversation_id],
+        waitMs: expect.toSatisfy((ms: number) => ms > 0 && ms <= 10_000)
       })
     })
   })
