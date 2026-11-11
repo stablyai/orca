@@ -251,6 +251,39 @@ it('heals each input from its own validation and backs off failed attempts witho
   observer.dispose()
 })
 
+function discoveryCache(count: number): Record<string, DirCache> {
+  const operationOwner = { kind: 'local' } as const
+  return {
+    '/w': {
+      operationOwner,
+      children: Array.from({ length: count }, (_, index) => ({
+        name: `d${index}`,
+        path: `/w/d${index}`,
+        relativePath: `d${index}`,
+        isDirectory: true,
+        depth: 0,
+        operationOwner
+      }))
+    },
+    '/w/d0': { operationOwner, children: [] }
+  }
+}
+
+function applyDiscoveryCache(
+  observer: FileExplorerRepositoryObserver,
+  cache: Record<string, DirCache>
+): void {
+  const frontier = buildExplorerRepositoryFrontier(
+    '/w',
+    '/w',
+    cache,
+    new Set(),
+    { kind: 'local' },
+    true
+  )
+  observer.setFrontier(frontier.candidates, frontier.dependencies, frontier.retainedSubtrees)
+}
+
 it('discards invalidated in-flight discovery proof while healthy siblings and later batches progress', async () => {
   vi.useFakeTimers()
   const probes: string[][] = []
@@ -280,17 +313,18 @@ it('discards invalidated in-flight discovery proof while healthy siblings and la
       sources = next
     }
   )
-  const candidates = Array.from({ length: 101 }, (_, index) => ({ path: `d${index}` }))
-  observer.setFrontier(
-    candidates,
-    candidates.map((candidate) => candidate.path)
-  )
+  const cache = discoveryCache(101)
+  applyDiscoveryCache(observer, cache)
   observer.setVisible(true)
   try {
     await vi.advanceTimersByTimeAsync(1000)
     expect(probes).toHaveLength(1)
     expect(probes[0]).toHaveLength(100)
     observer.invalidateChanges([{ path: 'd1/.git', kind: 'update', directory: false }])
+    applyDiscoveryCache(observer, {
+      ...cache,
+      '/w/unrelated': { operationOwner: { kind: 'local' }, children: [] }
+    })
     release(probes[0].map((path) => ({ path, kind: 'repository' })))
     await vi.advanceTimersByTimeAsync(0)
     expect(probes).toHaveLength(2)
@@ -308,3 +342,62 @@ it('discards invalidated in-flight discovery proof while healthy siblings and la
     observer.dispose()
   }
 })
+
+it.each(['resolve', 'reject'] as const)(
+  'retries canceled discovery after frontier rewrapping and %s settlement before reveal',
+  async (settlement) => {
+    vi.useFakeTimers()
+    let sources: readonly ExplorerRepositorySource[] = []
+    const probes: string[][] = []
+    let resolveOld!: (results: GitRepositoryStatus[]) => void
+    let rejectOld!: (error: Error) => void
+    const observer = new FileExplorerRepositoryObserver(
+      async (request) => {
+        if (request.repositoryIntent === 'probe') {
+          probes.push(request.repositoryPaths!)
+          if (probes.length === 1) {
+            return await new Promise<GitRepositoryStatus[]>((resolve, reject) => {
+              resolveOld = resolve
+              rejectOld = reject
+            })
+          }
+          return request.repositoryPaths!.map((path) => ({ path, kind: 'repository' }))
+        }
+        return [
+          {
+            path: request.repositoryPaths![0],
+            kind: 'repository',
+            status: { entries: [], conflictOperation: 'unknown' }
+          }
+        ]
+      },
+      (next) => {
+        sources = next
+      }
+    )
+    const cache = discoveryCache(1)
+    applyDiscoveryCache(observer, cache)
+    observer.setVisible(true)
+    try {
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(probes).toEqual([['d0']])
+      applyDiscoveryCache(observer, { ...cache })
+      observer.setVisible(false)
+      if (settlement === 'resolve') {
+        resolveOld([{ path: 'd0', kind: 'repository' }])
+      } else {
+        rejectOld(new Error('canceled'))
+      }
+      await vi.advanceTimersByTimeAsync(0)
+      expect(sources).toHaveLength(0)
+      applyDiscoveryCache(observer, discoveryCache(0))
+      applyDiscoveryCache(observer, cache)
+      observer.setVisible(true)
+      await vi.advanceTimersByTimeAsync(4000)
+      expect(probes).toEqual([['d0'], ['d0']])
+      expect(sources.map((source) => source.path)).toEqual(['d0'])
+    } finally {
+      observer.dispose()
+    }
+  }
+)

@@ -32,7 +32,10 @@ export async function discoverExplorerRepositories(
     }
     const batch = candidates
       .slice(start, start + GIT_REPOSITORY_PROBE_BATCH_SIZE)
-      .filter((candidate) => owner.candidates().get(candidate.path) === candidate)
+      .flatMap((candidate) => {
+        const current = owner.candidates().get(candidate.path)
+        return current && !owner.hasSource(candidate.path) ? [current] : []
+      })
     const unresolved: ExplorerRepositoryCandidate[] = []
     const created: string[] = []
     for (const candidate of batch) {
@@ -74,6 +77,17 @@ export async function discoverExplorerRepositories(
       owner.validations.set(candidate.path, validation)
       admitted.set(candidate, validation)
     }
+    const releaseCanceled = (): void => {
+      for (const [candidate, validation] of admitted) {
+        if (
+          owner.candidates().has(candidate.path) &&
+          owner.validations.get(candidate.path) === validation
+        ) {
+          owner.evidence.delete(candidate.path)
+          owner.validations.delete(candidate.path)
+        }
+      }
+    }
     let results: Awaited<ReturnType<ExplorerRepositoryRead>>
     try {
       results = await owner.read(
@@ -85,17 +99,14 @@ export async function discoverExplorerRepositories(
       )
     } catch {
       if (signal.aborted) {
-        for (const [candidate, validation] of admitted) {
-          if (
-            owner.candidates().get(candidate.path) === candidate &&
-            owner.validations.get(candidate.path) === validation
-          ) {
-            owner.evidence.delete(candidate.path)
-          }
-        }
+        releaseCanceled()
         return
       }
       continue
+    }
+    if (signal.aborted) {
+      releaseCanceled()
+      return
     }
     if (!owner.current()) {
       return
@@ -108,7 +119,7 @@ export async function discoverExplorerRepositories(
     for (const [candidate, validation] of admitted) {
       const result = byPath.get(candidate.path)
       if (
-        owner.candidates().get(candidate.path) !== candidate ||
+        !owner.candidates().has(candidate.path) ||
         owner.validations.get(candidate.path) !== validation ||
         !result ||
         result.kind === 'unknown'
