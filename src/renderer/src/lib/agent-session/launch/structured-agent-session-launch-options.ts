@@ -14,9 +14,10 @@ import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
 import {
   getStructuredLaunchStateBySessionId,
-  subscribeStructuredAgentLaunchStatus
-} from './structured-agent-session-launch-registry'
-import type { StructuredLaunchState } from './structured-agent-session-launch-registry'
+  subscribeStructuredAgentLaunchStatus,
+  type StructuredLaunchState
+} from './structured-agent-session-launch-state-store'
+
 import {
   agentSessionRefusalFailure,
   agentSessionThrownFailure

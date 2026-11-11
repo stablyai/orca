@@ -108,6 +108,10 @@ vi.mock('../network/proxy-settings', () => ({
 vi.mock('../network/electron-proxy-request-guard', () => ({
   installElectronProxyRequestGuard: vi.fn()
 }))
+vi.mock('../browser/extensions/browser-extension-startup', () => ({
+  initializeBrowserExtensionSupport: vi.fn(),
+  switchBrowserExtensionSupport: vi.fn()
+}))
 vi.mock('../network/electron-proxy-credentials', () => ({ handleElectronProxyLogin: vi.fn() }))
 vi.mock('../hang-watchdog/main-thread-hang-watchdog', () => ({
   installMainThreadHangWatchdog: vi.fn()

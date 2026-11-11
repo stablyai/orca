@@ -19,7 +19,10 @@ import {
   sendStructuredAgentSessionMessage
 } from '@/components/native-chat/session/structured/delivery/structured-agent-session-message-sender'
 import { getStructuredAgentSessionPendingSends } from '@/components/native-chat/session/structured/delivery/structured-agent-session-pending-sends'
-import { relaunchFailedStructuredAgentSessionWithMessage } from './structured-agent-session-launch-message'
+import {
+  relaunchFailedStructuredAgentSessionWithMessage,
+  sendMessageToStartingStructuredAgentSession
+} from './structured-agent-session-launch-message'
 import { clearNativeChatComposerDraftsForTests as clearNativeChatDraftCacheForTests } from '@/components/native-chat/drafts/native-chat-draft-reset'
 import { readNativeChatDraftCache } from '@/components/native-chat/drafts/native-chat-draft-views'
 import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/drafts/native-chat-draft-scope'
@@ -362,5 +365,58 @@ describe('a message sent to a chat whose start failed', () => {
     )
     expect(getStructuredAgentSessionPendingSends(failed.sessionId)).toEqual([])
     expect(mocks.callRuntimeRpc).not.toHaveBeenCalled()
+  })
+})
+
+describe('a message sent while the chat is still starting', () => {
+  beforeEach(() => {
+    vi.resetAllMocks()
+    localStorage.clear()
+    resetStructuredAgentLaunchPersistenceForTests()
+    resetStructuredAgentLaunchRegistryForTests()
+    resetStructuredAgentSessionSendsForTests()
+    clearNativeChatDraftCacheForTests()
+    vi.mocked(refreshLocalStructuredSessionTabs).mockResolvedValue([
+      publishedSnapshot(failed.sessionId)
+    ])
+    mocks.callRuntimeRpc.mockResolvedValue({
+      ok: true,
+      value: { submission: { dispatchState: 'accepted' } }
+    })
+  })
+
+  it('shows it as sent at once and delivers it, queued, once the chat exists', async () => {
+    let publish = (_receipt: Receipt): void => {}
+    mocks.createIntent.mockReturnValueOnce(failed)
+    mocks.launch.mockReturnValueOnce(new Promise<Receipt>((resolve) => (publish = resolve)))
+    startStructuredAgentLaunch(WORKTREE_ID, 'codex', { requestId: 'request-1' })
+    expect(getStructuredAgentSessionLaunchLifecycle(WORKTREE_ID, failed.sessionId)).toBe('pending')
+
+    const delivery = sendMessageToStartingStructuredAgentSession(
+      WORKTREE_ID,
+      failed.sessionId,
+      'typed while it starts'
+    )
+    expect(delivery).not.toBeNull()
+    expect(getStructuredAgentSessionPendingSends(failed.sessionId).map((e) => e.phase)).toEqual([
+      'sending'
+    ])
+    // One message holds the slot until the chat exists.
+    expect(
+      sendMessageToStartingStructuredAgentSession(WORKTREE_ID, failed.sessionId, 'second')
+    ).toBeNull()
+    expect(mocks.callRuntimeRpc).not.toHaveBeenCalled()
+
+    publish({ sessionId: failed.sessionId, fence: 1 })
+    await expect(delivery).resolves.toEqual({ delivered: true, failureNotified: false })
+    expect(mocks.callRuntimeRpc).toHaveBeenCalledWith(
+      { kind: 'local' },
+      'agentSession.send',
+      expect.objectContaining({
+        body: expect.objectContaining({
+          blocks: [{ type: 'text', text: 'typed while it starts' }]
+        })
+      })
+    )
   })
 })
