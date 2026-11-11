@@ -1,3 +1,4 @@
+import { installBrowserGuestMetadata } from '../../navigation/browser-guest-metadata'
 import { BROWSING_GUEST_POLICY } from './browser-guest-policy-profile'
 import { webContents } from 'electron'
 import type { BrowserGuestPolicy } from './browser-guest-policy-profile'
@@ -54,6 +55,31 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
     guest.on('did-navigate-in-page', inPageNavigation)
     guest.on('devtools-closed', invalidate)
     guest.on('devtools-opened', invalidate)
+    const disposeMetadata = this.offscreenGuestIds.has(guest.id)
+      ? () => {}
+      : installBrowserGuestMetadata({
+          guest,
+          resolveOwner: () => this.tabIdByWebContentsId.get(guest.id),
+          readLoadError: () => this.loadErrorsByGuestId.get(guest.id) ?? null,
+          hasCertificateFailure: () =>
+            this.certificateTrustController?.hasFailureForGuest(guest.id) ?? false,
+          reportErrorPage: () => {
+            const attemptedUrl =
+              this.pendingNavigationByGuestId.get(guest.id)?.currentUrl ?? 'about:blank'
+            const loadError = this.buildLoadError(
+              -1,
+              'This site could not be reached.',
+              attemptedUrl
+            )
+            this.loadErrorsByGuestId.set(guest.id, loadError)
+            this.forwardOrQueueGuestLoadFailure(guest.id, loadError)
+          },
+          send: (state) =>
+            this.resolveRendererForBrowserTab(state.browserPageId)?.send(
+              'browser:guest-metadata',
+              state
+            )
+        })
     const forwardAudioState = (
       event: Electron.Event<Electron.WebContentsAudioStateChangedEventParams>
     ): void => {
@@ -84,6 +110,7 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
         disposePopupPolicy,
         disposeNavigationPolicy,
         disposeDiscardProtection,
+        disposeMetadata,
         () => guest.off('did-stop-loading', invalidate),
         () => guest.off('did-navigate', invalidate),
         () => guest.off('did-navigate-in-page', inPageNavigation),

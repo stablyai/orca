@@ -1,3 +1,4 @@
+import { guestNavigationMethods } from '../browser-manager-test-harness'
 import { afterEach, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => ({
@@ -25,7 +26,7 @@ import {
 
 class DocumentGuest extends DestroyedGuestTestContents {
   readonly mainFrame = { frames: [], send: vi.fn<(channel: string, generation: string) => void>() }
-  readonly navigationHistory = { length: () => 1 }
+  readonly navigationHistory = { ...guestNavigationMethods().navigationHistory, length: () => 1 }
   audible = true
 
   constructor(

@@ -1,3 +1,4 @@
+import type { BrowserGuestMetadata } from '../../../shared/browser/guest-lifecycle/browser-guest-metadata'
 import type { BrowserSessionCookieApi } from './browser-session-cookie-api'
 import type { BrowserGuestDiscardApi } from '../../../shared/browser/guest-lifecycle/browser-guest-discard-protection'
 import type { BrowserDevToolsDockBounds } from '../../../shared/browser/devtools/browser-devtools-dock'
@@ -85,6 +86,11 @@ export type BrowserApi = {
       request: BrowserClientPageRendererRequest
     ) => BrowserClientPageRendererOutcome | Promise<BrowserClientPageRendererOutcome>
   ) => () => void
+  getGuestMetadata: (args: {
+    browserPageId: string
+    webContentsId: number
+  }) => Promise<BrowserGuestMetadata | null | undefined>
+  onGuestMetadata: (callback: (state: BrowserGuestMetadata) => void) => () => void
   registerGuest: (args: {
     browserPageId: string
     workspaceId: string
@@ -93,13 +99,7 @@ export type BrowserApi = {
     webContentsId: number
   }) => Promise<boolean>
   isGuestRegistered: (args: { browserPageId: string; webContentsId: number }) => Promise<boolean>
-  repairGuestRegistration: (args: {
-    browserPageId: string
-    workspaceId: string
-    worktreeId: string
-    sessionProfileId?: string | null
-    webContentsId: number
-  }) => Promise<boolean>
+  repairGuestRegistration: BrowserApi['registerGuest']
   unregisterGuest: (args: {
     browserPageId: string
     webContentsId?: number

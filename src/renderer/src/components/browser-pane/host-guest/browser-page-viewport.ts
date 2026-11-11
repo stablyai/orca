@@ -1,6 +1,7 @@
 import { setBrowserGuestVisible } from './browser-guest-activity'
 
 // Keep guests in stable overlay-slot parents across chrome unmounts; Electron destroys them on DOM removal/reparenting.
+import { retireBrowserGuestMetadata } from './browser-guest-metadata-cache'
 
 const slotViewportRoots = new Map<string, HTMLDivElement>()
 
@@ -36,6 +37,12 @@ const MAX_REMEMBERED_BROWSER_PAGE_INSETS = 512
 
 const slotRootListeners = new Map<string, Set<() => void>>()
 
+function retireViewportGuests(root: HTMLElement): void {
+  for (const webview of root.querySelectorAll<Electron.WebviewTag>('webview')) {
+    retireBrowserGuestMetadata(webview)
+  }
+}
+
 function notifySlotRootListeners(workspaceTabId: string): void {
   for (const listener of slotRootListeners.get(workspaceTabId) ?? []) {
     listener()
@@ -46,12 +53,19 @@ export function registerBrowserOverlaySlotViewport(
   workspaceTabId: string,
   element: HTMLDivElement | null
 ): void {
+  const previous = slotViewportRoots.get(workspaceTabId)
   if (element) {
     slotViewportRoots.set(workspaceTabId, element)
+    if (previous && previous !== element) {
+      retireViewportGuests(previous)
+    }
     notifySlotRootListeners(workspaceTabId)
     return
   }
   slotViewportRoots.delete(workspaceTabId)
+  if (previous) {
+    retireViewportGuests(previous)
+  }
   // Subscribers outlive the root; notify them on removal so they can observe its replacement.
   notifySlotRootListeners(workspaceTabId)
 }
@@ -95,6 +109,7 @@ export function ensureBrowserPageViewport(
       return existing
     }
     // Why: a remounted slot strands this shell after Electron destroys its detached guest (STA-3228).
+    retireViewportGuests(existing.shell)
     existing.shell.remove()
     browserPageViewports.delete(browserPageId)
   }
@@ -255,6 +270,7 @@ export function subscribeBrowserPageViewportScroll(
 export function removeBrowserPageViewport(browserPageId: string): void {
   const viewport = browserPageViewports.get(browserPageId)
   if (viewport) {
+    retireViewportGuests(viewport.shell)
     viewport.shell.remove()
     browserPageViewports.delete(browserPageId)
   }

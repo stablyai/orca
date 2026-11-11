@@ -1,4 +1,11 @@
+import { guestNavigationMethods } from '../../../../../main/browser/guest-lifecycle/manager/browser-manager-test-harness'
 import { vi } from 'vitest'
+import type { BrowserGuestMetadata } from '../../../../../shared/browser/guest-lifecycle/browser-guest-metadata'
+import { readBrowserGuestMetadata } from '../../../../../main/browser/guest-lifecycle/navigation/browser-guest-metadata'
+import {
+  acceptBrowserGuestMetadata,
+  clearBrowserGuestMetadata
+} from './browser-guest-metadata-cache'
 import {
   DestroyedGuestTestContents,
   DestroyedGuestTestManager
@@ -16,6 +23,7 @@ import {
 import { registeredWebContentsIds, webviewRegistry } from './webview-registry'
 import { closePersistentBrowserPage } from './browser-webview-disposal'
 import { releaseBrowserPageMount } from './browser-page-mount-admission'
+import { registerBrowserOverlaySlotViewport } from './browser-page-viewport'
 
 export class ProfileTestGuest extends DestroyedGuestTestContents {
   readonly hostWebContents = { id: 99 }
@@ -34,6 +42,7 @@ export class ProfileTestGuest extends DestroyedGuestTestContents {
   })
   readonly loadURL = vi.fn(() => this.load)
   readonly navigationHistory = {
+    ...guestNavigationMethods().navigationHistory,
     getAllEntries: () => [{ url: this.getURL(), title: this.getTitle() }],
     getActiveIndex: () => 0,
     restore: vi.fn((args: { entries: { url: string; title?: string }[]; index: number }) => {
@@ -42,6 +51,9 @@ export class ProfileTestGuest extends DestroyedGuestTestContents {
     })
   }
   isLoading(): boolean {
+    return this.loading
+  }
+  isLoadingMainFrame(): boolean {
     return this.loading
   }
   isDevToolsOpened(): boolean {
@@ -64,6 +76,24 @@ export class ProfileTestGuest extends DestroyedGuestTestContents {
 
 export function installProfileNativeFixture(native: Map<number, Electron.WebContents>) {
   const manager = new DestroyedGuestTestManager()
+  const roots = new Map<string, HTMLDivElement>()
+  let delayMetadata = false
+  const pendingMetadata: BrowserGuestMetadata[] = []
+  const deliverMetadata = (state: BrowserGuestMetadata): void => {
+    if (delayMetadata) {
+      pendingMetadata.push(state)
+    } else {
+      acceptBrowserGuestMetadata(state)
+    }
+  }
+  const host = Object.assign(new DestroyedGuestTestContents(99), {
+    send: (channel: string, state: BrowserGuestMetadata) => {
+      if (channel === 'browser:guest-metadata') {
+        deliverMetadata(state)
+      }
+    }
+  })
+  native.set(99, host.asWebContents())
   const pageIds = new Set<string>()
   const guests = new Map<string, ProfileTestGuest>()
   const creations: string[] = []
@@ -142,6 +172,12 @@ export function installProfileNativeFixture(native: Map<number, Electron.WebCont
   }
   const create = vi.spyOn(document, 'createElement').mockImplementation(createProfileElement)
   const api = {
+    getGuestMetadata: async (args: { browserPageId: string; webContentsId: number }) => {
+      const guest = native.get(args.webContentsId)
+      return guest && manager.getGuestWebContentsId(args.browserPageId) === guest.id
+        ? readBrowserGuestMetadata(guest)
+        : null
+    },
     preparePageAttach: async (args: { browserPageId: string; partition: string; url: string }) => {
       preparations.push(args)
       pageIds.add(args.browserPageId)
@@ -196,11 +232,26 @@ export function installProfileNativeFixture(native: Map<number, Electron.WebCont
   }
   return {
     manager,
+    mountViewport(id: string) {
+      const root = document.createElement('div')
+      document.body.appendChild(root)
+      roots.set(id, root)
+      registerBrowserOverlaySlotViewport(id, root)
+    },
     guests,
     creations,
     preparations,
     unregistrations,
     api,
+    metadata: (guest: ProfileTestGuest) => readBrowserGuestMetadata(guest.asWebContents()),
+    deliverMetadata,
+    pauseMetadata() {
+      delayMetadata = true
+    },
+    flushMetadata() {
+      delayMetadata = false
+      pendingMetadata.splice(0).forEach(deliverMetadata)
+    },
     pauseLoads() {
       autoFinish = false
     },
@@ -227,6 +278,12 @@ export function installProfileNativeFixture(native: Map<number, Electron.WebCont
       registeredWebContentsIds.clear()
       webviewRegistry.clear()
       native.clear()
+      clearBrowserGuestMetadata()
+      for (const [id, root] of roots) {
+        registerBrowserOverlaySlotViewport(id, null)
+        root.remove()
+      }
+      roots.clear()
     }
   }
 }

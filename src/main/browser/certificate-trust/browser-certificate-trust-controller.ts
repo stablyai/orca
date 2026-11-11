@@ -145,6 +145,18 @@ export class BrowserCertificateTrustController {
     this.requestGuard.revokeForCommittedNavigation(webContentsId, url)
   }
 
+  hasFailureForGuest(webContentsId: number): boolean {
+    const pending = this.pendingByGuestId.get(webContentsId)
+    if (!pending) {
+      return false
+    }
+    if (pending.expiresAt <= this.now()) {
+      this.clearPending(webContentsId, true)
+      return false
+    }
+    return true
+  }
+
   getFailure(browserPageId: string): BrowserCertificateFailure | null {
     this.pruneExpired()
     for (const pending of this.pendingByGuestId.values()) {

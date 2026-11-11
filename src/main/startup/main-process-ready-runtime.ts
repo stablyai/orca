@@ -38,7 +38,7 @@ import { loadWorktreeRemovalRecordsForStore } from './worktree-removal-records-l
 import { runAfterFirstWindowShown } from './first-window-deferral'
 import { startSpeechModelWarmup } from '../speech/speech-model-warmup'
 import { logStartupMilestone } from './startup-diagnostics'
-import { refreshInstalledOpenCodeStatusPlugins } from '../opencode/opencode-status-plugin-startup-refresh'
+import { refreshInstalledOpenCodeStatusPlugins } from '../opencode/status-hooks/opencode-status-plugin-startup-refresh'
 import { pruneDesktopOrcadArtifactCache } from '../orcad/orcad-artifact-cache-retention'
 import { runGatedWslMoveDesktopRewritePass } from '../persistence/moving-wsl-projects/desktop-state/wsl-move-desktop-rewrite'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'

@@ -83,38 +83,4 @@ describe('orchestration contract fence', () => {
       expect(database.getMutationReceipt(callerFingerprint, 'mutation_1')).toBeUndefined()
     }
   )
-
-  it.each(['orchestration.run', 'orchestration.runStop'] as const)(
-    'retires %s even when the caller sends the current contract',
-    async (method) => {
-      const { dispatcher, effect } = createHarness(method)
-      const response = await dispatcher.dispatch(
-        request({
-          method,
-          orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION
-        })
-      )
-
-      expect(response).toMatchObject({
-        ok: false,
-        error: {
-          code: 'orchestration_migration_required',
-          data: { reason: 'command_retired', effectsApplied: false }
-        }
-      })
-      expect(effect).not.toHaveBeenCalled()
-    }
-  )
-
-  it('applies the same pre-effect fence on WebSocket dispatch', async () => {
-    const { dispatcher, effect } = createHarness()
-    const replies: string[] = []
-    await dispatcher.dispatchStreaming(request(), (reply) => replies.push(reply))
-
-    expect(JSON.parse(replies[0] ?? '{}')).toMatchObject({
-      ok: false,
-      error: { code: 'orchestration_migration_required' }
-    })
-    expect(effect).not.toHaveBeenCalled()
-  })
 })

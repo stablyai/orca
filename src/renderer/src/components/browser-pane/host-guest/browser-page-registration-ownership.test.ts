@@ -102,7 +102,6 @@ function createSession(
     onUpdatePageStateRef: ref(update),
     setGuestRecoveryGeneration: vi.fn(),
     focusAddressBarNow: () => false,
-    syncNavigationState: vi.fn(),
     syncBrowserAnnotationViewportBridge: sync
   })
   const result = {

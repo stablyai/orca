@@ -108,10 +108,7 @@ import { registerBrowserRequestIpcBridge } from '@/hooks/ipc-events/browser-requ
 import BrowserPane from '../assemble-chrome/browser-workspace-pane'
 import { useBrowserPageWebviewLifecycle } from './use-browser-page-webview-lifecycle'
 import { useBrowserPageWebviewPartition } from './use-browser-page-webview-partition'
-import {
-  ensureBrowserPageViewport,
-  registerBrowserOverlaySlotViewport
-} from './browser-page-viewport'
+import { ensureBrowserPageViewport } from './browser-page-viewport'
 import { installBrowserGuestPageRetention } from './browser-guest-page-retention'
 import { verifiedPartitionByRoute } from '../ssh-workspace-browser-verified-routes'
 import {
@@ -198,13 +195,6 @@ function Workspace({ id, active = true }: { id: string; active?: boolean }) {
 let fixture: ReturnType<typeof installProfileNativeFixture>
 let main: TabsDrawnFromMain
 let unsubscribers: (() => void)[]
-const roots = new Map<string, HTMLDivElement>()
-function mountViewport(id: string) {
-  const root = document.createElement('div')
-  document.body.appendChild(root)
-  roots.set(id, root)
-  registerBrowserOverlaySlotViewport(id, root)
-}
 async function settle() {
   await act(async () => {
     await main.settle()
@@ -220,7 +210,7 @@ async function workspace(size = 3) {
     mocks.store!.getState().createBrowserPage(tab.id, 'https://example.test', { activate: false })
   }
   await settle()
-  mountViewport(tab.id)
+  fixture.mountViewport(tab.id)
   return { id: tab.id, pages: mocks.store!.getState().browserPagesByWorkspace[tab.id] }
 }
 beforeEach(async () => {
@@ -288,11 +278,6 @@ afterEach(async () => {
   unsubscribers.forEach((unsubscribe) => unsubscribe())
   await fixture.close()
   main.close()
-  for (const [id, root] of roots) {
-    registerBrowserOverlaySlotViewport(id, null)
-    root.remove()
-  }
-  roots.clear()
 })
 
 it('keeps cold profile siblings absent, preserves live agent ownership and wakes a disposed cold shell on demand', async () => {
@@ -313,7 +298,7 @@ it('keeps cold profile siblings absent, preserves live agent ownership and wakes
   await settle()
   const before = fixture.creations.length
   const oldHeld = fixture.guests.get(h.id)!
-  const oldHeldElement = webviewRegistry.get(h.id)!
+  const oldHeldMetadata = fixture.metadata(oldHeld)!
   fixture.pauseLoads()
   act(() =>
     mocks.profileRequest!({
@@ -336,7 +321,7 @@ it('keeps cold profile siblings absent, preserves live agent ownership and wakes
       replacement: true
     })
   ).toBe(false)
-  oldHeldElement.dispatchEvent(new Event('did-stop-loading'))
+  fixture.deliverMetadata(oldHeldMetadata)
   expect(fixture.manager.getGuestWebContentsId(h.id)).toBe(replacementHeld.id)
   expect(isBrowserPageMountAdmitted(h.id)).toBe(true)
   await act(async () => {
@@ -537,7 +522,7 @@ it('closes a cold and an accepted pending lifecycle through actual cleanup', asy
   mocks.store!.setState((state) => ({
     repos: state.repos.map((repo) => ({ ...repo, executionHostId: 'local' }))
   }))
-  mountViewport(fresh.id)
+  fixture.mountViewport(fresh.id)
   render(<Workspace id={fresh.id} />)
   await settle()
   expect(
@@ -566,7 +551,8 @@ it('preserves unresolved hidden loads and wakes a retired admission while anothe
   expect(fixture.guests.get(a.id)).toBe(aGuest)
   expect(fixture.guests.get(b.id)).toBe(bGuest)
   expect(fixture.creations).toHaveLength(initialCount)
-  // Main completion precedes the renderer's stop event: admission is still live.
+  // Native completion precedes its queued metadata publication to the renderer.
+  fixture.pauseMetadata()
   aGuest.finish()
   await waitForBrowserPageReady(a.id, aGuest.asWebContents())
   await act(async () => {
@@ -588,6 +574,7 @@ it('preserves unresolved hidden loads and wakes a retired admission while anothe
   expect(isBrowserPageMountAdmitted(a.id)).toBe(false)
   expect(isBrowserPageMountAdmitted(b.id)).toBe(true)
   expect(fixture.creations).toHaveLength(initialCount)
+  fixture.flushMetadata()
   act(() => admitBrowserPageMount(a.id))
   await act(async () => {
     await main.settle()

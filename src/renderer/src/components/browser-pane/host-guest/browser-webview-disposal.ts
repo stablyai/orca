@@ -1,3 +1,4 @@
+import { retireBrowserGuestMetadata } from './browser-guest-metadata-cache'
 import { clearLiveBrowserUrl } from '../describe-page/live-browser-url-registry'
 import {
   clearBrowserPageViewportPresetSize,
@@ -43,6 +44,11 @@ function removePersistentWebview(
         })
       : undefined
   ).catch(() => {})
+  try {
+    retireBrowserGuestMetadata(webview, webContentsId)
+  } catch {
+    // Metadata subscribers cannot prevent the native guest terminal.
+  }
   moveFocusToRendererBeforeWebviewDetach(webview)
   webview.remove()
   if (webviewRegistry.get(browserTabId) === webview) {

@@ -1,4 +1,5 @@
 import { clearLiveBrowserUrl } from '../describe-page/live-browser-url-registry'
+import { retireBrowserGuestMetadata } from './browser-guest-metadata-cache'
 import {
   registerBrowserGuestActivity,
   unregisterBrowserGuestActivity,
@@ -264,10 +265,17 @@ export function discardPersistentWebview(
     return false
   }
   setBrowserGuestResourceRetired(browserTabId, webContentsId, true)
+  try {
+    retireBrowserGuestMetadata(webview, webContentsId)
+  } catch {
+    // Metadata subscribers cannot prevent the native guest terminal.
+  }
   webview.remove()
-  unregisterPersistentWebview(browserTabId)
-  registeredWebContentsIds.delete(browserTabId)
-  clearLiveBrowserUrl(browserTabId)
+  if (webviewRegistry.get(browserTabId) === webview) {
+    unregisterPersistentWebview(browserTabId)
+    registeredWebContentsIds.delete(browserTabId)
+    clearLiveBrowserUrl(browserTabId)
+  }
   void window.api.browser
     .acknowledgeGuestRemoval({ browserPageId: browserTabId, webContentsId })
     .then((destroyed) => {

@@ -1,3 +1,4 @@
+import { guestNavigationMethods } from '../browser-manager-test-harness'
 import { EventEmitter } from 'node:events'
 import { vi } from 'vitest'
 import { invokeGuestDiscard } from './browser-guest-sync-reply-test-fixture'
@@ -61,6 +62,7 @@ export class EligibilityGuest extends DestroyedGuestTestContents {
   })
   readonly loadURL = () => this.load
   readonly navigationHistory = {
+    ...guestNavigationMethods().navigationHistory,
     length: () => 1,
     getActiveIndex: () => 0,
     getAllEntries: () => [{ url: this.getURL(), title: 'Clean' }],
@@ -72,6 +74,9 @@ export class EligibilityGuest extends DestroyedGuestTestContents {
     return false
   }
   isLoading(): boolean {
+    return this.loading
+  }
+  isLoadingMainFrame(): boolean {
     return this.loading
   }
   isDevToolsOpened(): boolean {

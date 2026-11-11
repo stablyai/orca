@@ -1,3 +1,4 @@
+import { readBrowserGuestMetadata } from '../../browser/guest-lifecycle/navigation/browser-guest-metadata'
 import { ipcMain, webContents } from 'electron'
 import {
   browserCertificateTrustController,
@@ -57,6 +58,7 @@ export function registerBrowserHandlers(store: BrowserPasswordsSettingsSource): 
   resetGrabModeState()
   ipcMain.removeHandler('browser:registerGuest')
   ipcMain.removeHandler('browser:isGuestRegistered')
+  ipcMain.removeHandler('browser:getGuestMetadata')
   ipcMain.removeHandler('browser:repairGuestRegistration')
   ipcMain.removeHandler('browser:unregisterGuest')
   ipcMain.removeHandler('browser:activeTabChanged')
@@ -112,6 +114,30 @@ export function registerBrowserHandlers(store: BrowserPasswordsSettingsSource): 
 
   ipcMain.handle('browser:registerGuest', (event, args: BrowserGuestArgs) =>
     registerGuest(event, args, false)
+  )
+
+  ipcMain.handle(
+    'browser:getGuestMetadata',
+    (event, args: { browserPageId: string; webContentsId: number }) => {
+      if (
+        !isTrustedBrowserRenderer(event.sender) ||
+        typeof args?.webContentsId !== 'number' ||
+        typeof args.browserPageId !== 'string'
+      ) {
+        return undefined
+      }
+      const guest = webContents.fromId(args.webContentsId)
+      if (!guest || guest.isDestroyed()) {
+        return null
+      }
+      if (
+        guest.hostWebContents?.id !== event.sender.id ||
+        browserManager.getGuestWebContentsId(args.browserPageId) !== guest.id
+      ) {
+        return undefined
+      }
+      return readBrowserGuestMetadata(guest)
+    }
   )
 
   // Block SSH webview mounting until its proxy-verified partition is ready.

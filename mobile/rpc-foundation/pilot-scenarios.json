@@ -16916,81 +16916,6 @@
       ]
     },
     {
-      "id": "browser-dialog-accepted",
-      "operation": "browser.page-commands",
-      "family": "browser.dialog",
-      "sites": [
-        "mobile/src/browser/use-mobile-browser-request.ts",
-        "mobile/src/browser/use-mobile-browser-commands.ts"
-      ],
-      "schedules": [],
-      "steps": [
-        {
-          "action": "mount",
-          "id": "mount"
-        },
-        {
-          "action": "dialog",
-          "id": "dialog"
-        },
-        {
-          "complete": "browser.dialogAccept#1",
-          "params": {
-            "page": "page-1",
-            "worktree": "id:worktree-1"
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "accepted": true
-            }
-          }
-        },
-        {
-          "checkpoint": "dismissed"
-        }
-      ]
-    },
-    {
-      "id": "browser-dialog-dismissed",
-      "operation": "browser.page-commands",
-      "family": "browser.dialog",
-      "sites": [
-        "mobile/src/browser/use-mobile-browser-request.ts",
-        "mobile/src/browser/use-mobile-browser-commands.ts"
-      ],
-      "schedules": [],
-      "steps": [
-        {
-          "action": "mount",
-          "id": "mount"
-        },
-        {
-          "action": "dialog",
-          "id": "dialog",
-          "args": {
-            "accept": false
-          }
-        },
-        {
-          "complete": "browser.dialogDismiss#1",
-          "params": {
-            "page": "page-1",
-            "worktree": "id:worktree-1"
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "dismissed": true
-            }
-          }
-        },
-        {
-          "checkpoint": "dismissed"
-        }
-      ]
-    },
-    {
       "id": "aivault-resume-prepare-repin",
       "operation": "aiVault.resume-preparation",
       "family": "aiVault.resume-preparation",
@@ -17440,36 +17365,6 @@
       ]
     },
     {
-      "id": "clipboard-image-upload-start-refused",
-      "operation": "clipboard.image-upload",
-      "family": "clipboard.image-upload",
-      "sites": ["mobile/src/files/attachments/mobile-clipboard-image.ts"],
-      "schedules": [],
-      "steps": [
-        {
-          "action": "remote",
-          "id": "remote"
-        },
-        {
-          "complete": "clipboard.startImageUpload#1",
-          "params": {
-            "connectionId": "connection-1",
-            "expectedBase64Length": 32
-          },
-          "reply": {
-            "ok": false,
-            "error": {
-              "code": "too_large",
-              "message": "Image is too large"
-            }
-          }
-        },
-        {
-          "checkpoint": "start-refused"
-        }
-      ]
-    },
-    {
       "id": "clipboard-image-attachment-upload-refused",
       "operation": "clipboard.image-terminal-attachment",
       "family": "clipboard.image-attachment",
@@ -17579,25 +17474,6 @@
       ]
     },
     {
-      "id": "clipboard-image-attachment-cancelled",
-      "operation": "clipboard.image-terminal-attachment",
-      "family": "clipboard.image-attachment",
-      "sites": [
-        "mobile/src/files/attachments/mobile-image-attachment.ts",
-        "mobile/src/files/attachments/mobile-clipboard-image.ts"
-      ],
-      "schedules": [],
-      "steps": [
-        {
-          "action": "cancelled",
-          "id": "cancelled"
-        },
-        {
-          "checkpoint": "no-wire"
-        }
-      ]
-    },
-    {
       "id": "clipboard-image-attachment-blocked-before-send",
       "operation": "clipboard.image-terminal-attachment",
       "family": "clipboard.image-attachment",
@@ -17650,78 +17526,6 @@
         },
         {
           "checkpoint": "blocked"
-        }
-      ]
-    },
-    {
-      "id": "clipboard-image-attachment-anonymous",
-      "operation": "clipboard.image-terminal-attachment",
-      "family": "clipboard.image-attachment",
-      "sites": [
-        "mobile/src/files/attachments/mobile-image-attachment.ts",
-        "mobile/src/files/attachments/mobile-clipboard-image.ts"
-      ],
-      "schedules": [],
-      "steps": [
-        {
-          "action": "anonymous",
-          "id": "anonymous"
-        },
-        {
-          "complete": "clipboard.startImageUpload#1",
-          "params": {
-            "connectionId": "connection-1",
-            "expectedBase64Length": 32
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "uploadId": "upload-1"
-            }
-          }
-        },
-        {
-          "complete": "clipboard.appendImageUploadChunk#1",
-          "params": {
-            "uploadId": "upload-1",
-            "offset": 0,
-            "contentBase64": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "received": 32
-            }
-          }
-        },
-        {
-          "complete": "clipboard.commitImageUpload#1",
-          "params": {
-            "uploadId": "upload-1"
-          },
-          "reply": {
-            "ok": true,
-            "result": "/tmp/img.png"
-          }
-        },
-        {
-          "complete": "terminal.send#1",
-          "params": {
-            "terminal": "terminal-1",
-            "text": "\u001b[200~/tmp/img.png\u001b[201~ ",
-            "enter": false
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "send": {
-                "accepted": false
-              }
-            }
-          }
-        },
-        {
-          "checkpoint": "rejected"
         }
       ]
     },
@@ -17952,76 +17756,6 @@
         },
         {
           "checkpoint": "stopped"
-        }
-      ]
-    },
-    {
-      "id": "native-chat-image-paste-trailing-image",
-      "operation": "nativeChat.image-paste",
-      "family": "nativeChat.image-paste",
-      "sites": ["mobile/src/session/native-chat/composer/mobile-native-chat-image-send.ts"],
-      "schedules": [],
-      "steps": [
-        {
-          "action": "trailing",
-          "id": "trailing"
-        },
-        {
-          "complete": "terminal.read#1",
-          "params": {
-            "terminal": "terminal-1",
-            "screen": true,
-            "limit": 1
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "terminal": {}
-            }
-          }
-        },
-        {
-          "complete": "terminal.send#1",
-          "params": {
-            "terminal": "terminal-1",
-            "text": "\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b",
-            "enter": false,
-            "client": {
-              "id": "device-token-1",
-              "type": "mobile"
-            }
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "send": {
-                "accepted": true
-              }
-            }
-          }
-        },
-        {
-          "complete": "terminal.send#2",
-          "params": {
-            "terminal": "terminal-1",
-            "text": "\u001b[200~@/tmp/a.png\u001b[201~",
-            "enter": false,
-            "client": {
-              "id": "device-token-1",
-              "type": "mobile"
-            }
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "send": {
-                "accepted": true
-              }
-            }
-          }
-        },
-        {
-          "checkpoint": "pasted"
         }
       ]
     },
@@ -20672,59 +20406,6 @@
       ]
     },
     {
-      "id": "native-chat-image-upload-single",
-      "operation": "nativeChat.image-upload",
-      "family": "nativeChat.image-upload",
-      "sites": ["mobile/src/session/native-chat/composer/mobile-native-chat-image-attachment.ts"],
-      "schedules": [],
-      "steps": [
-        {
-          "action": "normal",
-          "id": "normal"
-        },
-        {
-          "complete": "clipboard.startImageUpload#1",
-          "params": {
-            "connectionId": "connection-1",
-            "expectedBase64Length": 32
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "uploadId": "upload-1"
-            }
-          }
-        },
-        {
-          "complete": "clipboard.appendImageUploadChunk#1",
-          "params": {
-            "uploadId": "upload-1",
-            "offset": 0,
-            "contentBase64": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "received": 32
-            }
-          }
-        },
-        {
-          "complete": "clipboard.commitImageUpload#1",
-          "params": {
-            "uploadId": "upload-1"
-          },
-          "reply": {
-            "ok": true,
-            "result": "/tmp/img-1.png"
-          }
-        },
-        {
-          "checkpoint": "uploaded"
-        }
-      ]
-    },
-    {
       "id": "native-chat-image-upload-two",
       "operation": "nativeChat.image-upload",
       "family": "nativeChat.image-upload",
@@ -20878,22 +20559,6 @@
         },
         {
           "checkpoint": "partial"
-        }
-      ]
-    },
-    {
-      "id": "native-chat-image-upload-cancelled",
-      "operation": "nativeChat.image-upload",
-      "family": "nativeChat.image-upload",
-      "sites": ["mobile/src/session/native-chat/composer/mobile-native-chat-image-attachment.ts"],
-      "schedules": [],
-      "steps": [
-        {
-          "action": "cancelled",
-          "id": "cancelled"
-        },
-        {
-          "checkpoint": "no-wire"
         }
       ]
     },

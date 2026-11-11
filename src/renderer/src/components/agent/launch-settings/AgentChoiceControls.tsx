@@ -1,3 +1,4 @@
+import { modelMenuOptions } from '../../../../../shared/agent-session/options/model-menu-options'
 import type {
   AgentChoicePatch,
   AgentDedicatedChoices
@@ -88,8 +89,20 @@ export function AgentChoiceFields({
     liveCatalog && liveCatalog.origin !== 'unknown' && liveCatalog.models.length
       ? { agent, catalog: liveCatalog, terminal: {} }
       : null
+  const menu =
+    live && catalog && agent !== 'antigravity'
+      ? modelMenuOptions(live.catalog, {
+          agent,
+          surface: 'terminal',
+          seed: catalog,
+          newLaunch: true,
+          seedsModel: false,
+          saved: { ...(selected?.model ? { model: selected.model } : {}), ...selected?.options }
+        })
+      : undefined
+  const effort = menu?.descriptors.find(({ id }) => id === 'effort')
   const listedModels = live
-    ? agentPickerModels(live).filter(({ hidden }) => !hidden)
+    ? (menu?.rows ?? agentPickerModels(live)).filter((row) => !('hidden' in row && row.hidden))
     : (catalog?.models ?? [])
   const unlistedModel =
     selected?.model && !(live ? listedModels.some(({ id }) => id === selected.model) : model)
@@ -98,6 +111,12 @@ export function AgentChoiceFields({
   const liveEffort = live
     ? agentPickerEntryOptions(live, selected?.model, 'terminal').find(({ id }) => id === 'effort')
     : undefined
+  const effortKind =
+    menu && selected?.model
+      ? effort?.kind.type === 'select'
+        ? { ...effort.kind, defaultValue: '' }
+        : undefined
+      : liveEffort?.kind
   const options = sourceControlActionOptions(agent, selected?.model ?? '').flatMap((row) => {
     // CLI carrier mappings remain available to Args badges without advertising a mode control.
     if (
@@ -110,7 +129,7 @@ export function AgentChoiceFields({
       return [row]
     }
     // A listed model with no reasoning levels gets no effort menu.
-    return liveEffort ? [{ ...row, option: { ...row.option, kind: liveEffort.kind } }] : []
+    return effortKind ? [{ ...row, option: { ...row.option, kind: effortKind } }] : []
   })
   const defaultLabel = t('settings.sourceControl.actionModel.effortDefault', 'Default')
   return (
@@ -165,7 +184,7 @@ export function AgentChoiceFields({
             row={layout === 'rows'}
             hint={sourceControlActionRouteHint(route, t)}
             value={current ?? AGENT_DEFAULT_VALUE}
-            disabled={disabled}
+            disabled={disabled || (option.id === 'effort' && effort?.settable === false)}
             onOpenChange={onOpenChange}
             choices={[
               {

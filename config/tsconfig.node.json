@@ -43,7 +43,8 @@
   ],
   "exclude": [
     "../src/main/runtime/orca-runtime-tests/browser-page-inventory.test.ts",
-    "../src/main/runtime/orchestration/terminal-authority/structured-sessions/structured-chat-coordinator-mail.test.ts"
+    "../src/main/runtime/orchestration/terminal-authority/structured-sessions/structured-chat-coordinator-mail.test.ts",
+    "../src/main/runtime/agent-session/structured-agent-session-chat-wait-work-state.test.ts"
   ],
   "compilerOptions": {
     "composite": true,

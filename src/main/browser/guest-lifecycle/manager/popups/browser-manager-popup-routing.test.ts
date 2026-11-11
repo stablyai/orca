@@ -47,6 +47,7 @@ import {
   PAGE_INITIATED_TAB_WINDOW_MS
 } from '../../popups/browser-page-initiated-tab-budget'
 import {
+  guestNavigationMethods,
   rendererWebContentsId,
   resetBrowserManagerMocks,
   resetBrowserManagerState
@@ -79,6 +80,7 @@ describe('browserManager', () => {
     vi.useFakeTimers()
     const rendererSendMock = vi.fn()
     const guest = {
+      ...guestNavigationMethods(),
       id: 144,
       isDestroyed: vi.fn(() => false),
       isCrashed: vi.fn(() => false),
@@ -167,6 +169,7 @@ describe('browserManager', () => {
   it('shares the page-initiated tab budget across the whole opener popup tree', () => {
     const rendererSendMock = vi.fn()
     const guest = {
+      ...guestNavigationMethods(),
       id: 150,
       isDestroyed: vi.fn(() => false),
       isCrashed: vi.fn(() => false),
@@ -209,6 +212,7 @@ describe('browserManager', () => {
     const openNamedChild = (index: number): WindowOpenHandler => {
       const childSetWindowOpenHandlerMock = vi.fn()
       const child = {
+        ...guestNavigationMethods(),
         id: 1500 + index,
         isDestroyed: vi.fn(() => false),
         isCrashed: vi.fn(() => false),
