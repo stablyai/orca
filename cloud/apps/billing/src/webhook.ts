@@ -3,7 +3,8 @@
 import type { Env } from './env'
 import { planForPrice } from './plans'
 import { allowsLiveMode, type StripeClient, type StripeSubscription } from './stripe'
-import { accountForCustomer, claimEvent, customerFor, finishEvent, upsertSubscription } from './store'
+import { accountForCustomer, claimEvent, currentSubscription, customerFor, finishEvent, upsertSubscription } from './store'
+import { retireOverageItem } from './overage'
 import { splitSecrets, verifyStripeSignature } from './webhook-signature'
 
 const MAX_BODY_BYTES = 512 * 1024
@@ -112,6 +113,15 @@ export async function syncSubscription(env: Env, stripe: StripeClient, subscript
     // Membership comes from auth, not Stripe: keep the stored count.
     member_count: null
   })
+  if (overageItemId) {
+    // An opted-out account's overage item goes once the period it was used in has been invoiced.
+    const stored = await currentSubscription(db, accountId)
+    if (stored?.stripe_subscription_id === subscription.id) {
+      await retireOverageItem(env, stripe, stored, now).catch((error: unknown) => {
+        console.error(JSON.stringify({ error: 'retire_overage_item', message: error instanceof Error ? error.message.slice(0, 200) : '' }))
+      })
+    }
+  }
 }
 
 export async function handleStripeWebhook(env: Env, stripe: StripeClient, request: Request, now: number): Promise<Response> {
