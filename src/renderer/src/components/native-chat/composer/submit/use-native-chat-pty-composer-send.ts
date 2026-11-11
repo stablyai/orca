@@ -108,10 +108,14 @@ export function useNativeChatPtyComposerSend(args: {
         return false
       }
       let pendingId: string | undefined
+      const writeOptions = {
+        ...launchSendOptions,
+        ...(classification === 'chat' ? { requireWriteSettlement: true as const } : {})
+      }
       const sendOptions =
         args.agent === 'claude' && classification === 'chat'
           ? {
-              ...launchSendOptions,
+              ...writeOptions,
               onWriteRejected: () => {
                 if (pendingId) {
                   args.optimisticSendOutcome?.reject(pendingId)
@@ -123,7 +127,7 @@ export function useNativeChatPtyComposerSend(args: {
                 }
               }
             }
-          : launchSendOptions
+          : writeOptions
       let pendingHandle: NativeChatSendHandle | null = null
       // Why: slash-like text must not silently drop its attached images.
       if (classification !== 'chat' && imagePaths.length === 0) {

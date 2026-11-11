@@ -6,6 +6,8 @@ import { useNativeChatPtyComposerSend } from './composer/submit/use-native-chat-
 import { sendNativeChatMessage } from './session/terminal/send/native-chat-runtime-send'
 import { track } from '@/diagnostics/telemetry/telemetry'
 import type { NativeChatPtySubmissionOutcome } from './session/terminal/send/native-chat-pty-send-queue'
+import { resetNativeChatPtySendQueuesForTests } from './session/terminal/send/native-chat-pty-send-queue'
+import { sendRuntimePtyInputVerified } from '@/runtime/hosted-terminals/input/runtime-terminal-verified-input'
 
 vi.mock('@/diagnostics/telemetry/telemetry', () => ({
   track: vi.fn(),
@@ -14,12 +16,22 @@ vi.mock('@/diagnostics/telemetry/telemetry', () => ({
 vi.mock('../../store/index', () => ({
   useAppStore: { getState: () => ({ clearNativeChatLaunchDraft: () => {} }) }
 }))
-vi.mock('./session/terminal/send/native-chat-runtime-send', () => ({
-  sendNativeChatMessage: vi.fn()
+vi.mock(import('./session/terminal/send/native-chat-runtime-send'), async (importOriginal) => {
+  const runtime = await importOriginal()
+  return { ...runtime, sendNativeChatMessage: vi.fn(runtime.sendNativeChatMessage) }
+})
+vi.mock('@/runtime/hosted-terminals/input/runtime-terminal-input-send', () => ({
+  sendRuntimePtyInput: vi.fn()
+}))
+vi.mock('@/runtime/hosted-terminals/input/runtime-terminal-verified-input', () => ({
+  sendRuntimePtyInputVerified: vi.fn()
 }))
 
 afterEach(() => {
   cleanup()
+  resetNativeChatPtySendQueuesForTests()
+  vi.useRealTimers()
+  vi.mocked(sendNativeChatMessage).mockReset()
   vi.clearAllMocks()
 })
 
@@ -50,6 +62,23 @@ function composerArgs(overrides: Partial<SendArgs>): SendArgs {
 
 const followUps = () =>
   vi.mocked(track).mock.calls.filter(([name]) => name === 'native_chat_follow_up_sent')
+
+it('does not use refused PTY writes as predecessor evidence for a later send', async () => {
+  vi.useFakeTimers()
+  vi.mocked(sendRuntimePtyInputVerified).mockResolvedValueOnce(false).mockResolvedValue(true)
+  const hook = renderHook(() =>
+    useNativeChatPtyComposerSend(composerArgs({ recallSource: { messages: [] } }))
+  )
+  await act(async () => {
+    expect(hook.result.current()).toBe(true)
+    await vi.runAllTimersAsync()
+  })
+  await act(async () => {
+    expect(hook.result.current()).toBe(true)
+    await vi.runAllTimersAsync()
+  })
+  expect(followUps()).toEqual([])
+})
 
 it('counts a successfully retried PTY follow-up only after submission', async () => {
   const delivery = Promise.withResolvers<NativeChatPtySubmissionOutcome>()

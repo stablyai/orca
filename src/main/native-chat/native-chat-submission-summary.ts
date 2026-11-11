@@ -3,6 +3,7 @@ import type { AgentJournalCursor } from '../../shared/agent-session/journal/agen
 import type { AgentJournalSnapshot } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { projectStructuredAgentSessionMessages } from '../../shared/agent-session/view/structured-agent-session-message-projection'
 import { isConfirmedNativeChatUserSubmission } from '../../shared/native-chat/native-chat-submission-evidence'
+import { prepareNativeChatMessages } from '../../shared/native-chat/transcript/native-chat-message-preparation'
 import { readNativeChatTranscriptTail } from './transcript-tail-reader'
 
 export function structuredChatSubmissionSummary(
@@ -57,7 +58,10 @@ export async function ptyChatSubmissionSummary(
         messages = messages.slice(0, index + 1)
       }
     }
-    if (anchored && messages.some(isConfirmedNativeChatUserSubmission)) {
+    if (
+      anchored &&
+      prepareNativeChatMessages(messages, args.agent).some(isConfirmedNativeChatUserSubmission)
+    ) {
       return { hasPriorSubmission: true }
     }
     if (

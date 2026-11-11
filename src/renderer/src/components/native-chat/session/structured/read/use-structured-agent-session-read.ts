@@ -1,10 +1,11 @@
-import { useAppStore } from '@/store'
-import { subscribeRuntimeHostContactRegained } from '@/runtime/hosts/connections/runtime-host-contact-regained'
 import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import { notifyStructuredAttentionView } from '@/attention/agent-subject-read-actions'
 import { structuredAttentionReadObservation } from '../../attention/structured-attention-read-observation'
 import type { RuntimeClientTarget } from '../../../../../../../shared/runtime-client-target'
-import { getStructuredAgentSessionReadOwner } from './structured-agent-session-read-owner'
+import {
+  activateStructuredAgentSessionReadOwner,
+  getStructuredAgentSessionReadOwner
+} from './structured-agent-session-read-owner'
 import type { StructuredAgentSessionReadSnapshot } from './structured-agent-session-read-owner-contract'
 
 function useReadOwnerSnapshot(
@@ -37,11 +38,7 @@ export function useStructuredAgentSessionRead(args: {
 
   useEffect(() => {
     if (isVisible) {
-      return owner.activate({
-        getState: useAppStore.getState,
-        subscribeRetryNow: (retry) =>
-          environmentId ? subscribeRuntimeHostContactRegained(environmentId, retry) : () => {}
-      })
+      return activateStructuredAgentSessionReadOwner(owner, environmentId)
     }
     return undefined
   }, [isVisible, owner, environmentId])

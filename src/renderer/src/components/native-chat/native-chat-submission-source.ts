@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from 'react'
+import { useCallback, useMemo } from 'react'
 import { getConsentState } from '@/diagnostics/telemetry/telemetry'
 import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
@@ -8,7 +8,10 @@ import type { AgentType } from '../../../../shared/agent-status/contracts/agent-
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { UseNativeChatLiveSessionArgs } from './session/terminal/read/native-chat-live-session-contract'
 import type { StructuredAgentSessionState } from '../../../../shared/agent-session/structured-agent-session-reducer'
-import { getStructuredAgentSessionReadOwner } from './session/structured/read/structured-agent-session-read-owner'
+import {
+  activateStructuredAgentSessionReadOwner,
+  getStructuredAgentSessionReadOwner
+} from './session/structured/read/structured-agent-session-read-owner'
 import { readNativeChatStructuredSubmissionDelivery } from './telemetry/native-chat-structured-submission-delivery'
 
 export type NativeChatSubmissionSource = {
@@ -24,12 +27,21 @@ export function structuredChatSubmissionSource(
 ): NativeChatSubmissionSource {
   return {
     key: JSON.stringify([args.target, args.sessionId, state.epoch]),
-    readDelivery: (clientMessageId, signal) =>
-      readNativeChatStructuredSubmissionDelivery(
-        getStructuredAgentSessionReadOwner(args.sessionId, args.target),
-        clientMessageId,
-        signal
-      ),
+    readDelivery: async (clientMessageId, signal) => {
+      if (signal.aborted) {
+        return false
+      }
+      const owner = getStructuredAgentSessionReadOwner(args.sessionId, args.target)
+      const deactivate = activateStructuredAgentSessionReadOwner(
+        owner,
+        args.target.kind === 'environment' ? args.target.environmentId : null
+      )
+      try {
+        return await readNativeChatStructuredSubmissionDelivery(owner, clientMessageId, signal)
+      } finally {
+        deactivate()
+      }
+    },
     readPriorSubmission: (signal) =>
       readStructuredChatPriorSubmission({
         ...args,
@@ -74,25 +86,16 @@ export function ptyChatSubmissionSource(
 const SUBMISSION_HISTORY_TIMEOUT_MS = 5_000
 
 function createSubmissionHistory(key: string) {
-  let controller = new AbortController()
   let priorSubmission: Promise<boolean> | undefined
   return {
     key,
     submissionHistory: new Map<string, Promise<boolean>>(),
-    start: () => {
-      if (controller.signal.aborted) {
-        controller = new AbortController()
-        priorSubmission = undefined
-      }
-      const activeController = controller
-      return () => activeController.abort()
-    },
     read: (source: NativeChatSubmissionSource | undefined) => {
-      if (!source || controller.signal.aborted) {
+      if (!source) {
         return Promise.resolve(false)
       }
       if (!priorSubmission) {
-        priorSubmission = source.readPriorSubmission(controller.signal).catch(() => false)
+        priorSubmission = source.readPriorSubmission().catch(() => false)
       }
       return priorSubmission
     },
@@ -101,12 +104,10 @@ function createSubmissionHistory(key: string) {
       clientMessageId: string,
       signal: AbortSignal
     ) => {
-      if (!source?.readDelivery || controller.signal.aborted) {
+      if (!source?.readDelivery) {
         return Promise.resolve(false)
       }
-      return source
-        .readDelivery(clientMessageId, AbortSignal.any([signal, controller.signal]))
-        .catch(() => false)
+      return source.readDelivery(clientMessageId, signal).catch(() => false)
     }
   }
 }
@@ -121,7 +122,6 @@ export function useNativeChatSubmissionHistory(key: string): {
   ) => Promise<boolean>
 } {
   const state = useMemo(() => createSubmissionHistory(key), [key])
-  useEffect(() => state.start(), [state])
   const readPriorSubmission = useCallback(
     (source: NativeChatSubmissionSource | undefined) => state.read(source),
     [state]
@@ -168,7 +168,7 @@ export async function readStructuredChatPriorSubmission(args: {
     args.target,
     'agentSession.submissionSummary',
     { sessionId: args.sessionId, before: args.before },
-    { signal, suppressFeatureInteraction: true }
+    { signal }
   )
   return !signal.aborted && result.hasPriorSubmission
 }
@@ -198,7 +198,7 @@ export async function readPtyChatPriorSubmission(args: {
       transcriptPath: args.transcriptPath ?? undefined,
       anchorId: anchor
     },
-    { signal, suppressFeatureInteraction: true }
+    { signal }
   )
   return !signal.aborted && result.hasPriorSubmission
 }

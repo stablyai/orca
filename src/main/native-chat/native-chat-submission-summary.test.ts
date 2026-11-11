@@ -114,3 +114,33 @@ it('scans a long transcript before its captured anchor without counting the new 
     await rm(directory, { recursive: true, force: true })
   }
 })
+
+it('finds a custom skill before the anchor while excluding catalog commands and later prompts', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'orca-skill-submission-summary-'))
+  try {
+    const transcriptPath = join(directory, 'transcript.jsonl')
+    const line = (id: string, role: 'user' | 'assistant', text: string) =>
+      JSON.stringify({ type: role, uuid: id, message: { role, content: text } })
+    const skill = line(
+      'custom-skill',
+      'user',
+      '<command-name>/review-design</command-name><command-args>the composer</command-args>'
+    )
+    const tail = Array.from({ length: 600 }, (_, index) =>
+      line(`assistant-${index}`, 'assistant', 'Conversation')
+    )
+    const args = {
+      agent: 'claude',
+      sessionId: 'conversation',
+      transcriptPath,
+      anchorId: 'assistant-599'
+    }
+    const command = line('compact', 'user', '<command-name>/compact</command-name>')
+    await writeFile(transcriptPath, `${[command, ...tail, skill].join('\n')}\n`)
+    expect((await ptyChatSubmissionSummary(args)).hasPriorSubmission).toBe(false)
+    await writeFile(transcriptPath, `${[skill, ...tail].join('\n')}\n`)
+    expect((await ptyChatSubmissionSummary(args)).hasPriorSubmission).toBe(true)
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+})

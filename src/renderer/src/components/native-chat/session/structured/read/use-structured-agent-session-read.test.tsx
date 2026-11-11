@@ -23,6 +23,10 @@ vi.mock(
 )
 
 import { useStructuredAgentSessionRead } from './use-structured-agent-session-read'
+import {
+  structuredChatSubmissionSource,
+  useNativeChatSubmissionHistory
+} from '../../../native-chat-submission-source'
 import { getStructuredAgentSessionReadOwner } from './structured-agent-session-read-owner'
 import {
   findStructuredAgentSessionReadOwner,
@@ -79,6 +83,75 @@ describe('useStructuredAgentSessionRead history window', () => {
     vi.clearAllMocks()
     resetStructuredAgentSessionReadOwnersForTests()
     mocks.subscribe.mockResolvedValue({ unsubscribe: vi.fn() })
+  })
+
+  it('confirms a queued submission after its view hides and unmounts', async () => {
+    mocks.call.mockResolvedValueOnce({ ok: true, page: page('tail', [], false) })
+    const view = renderHook(
+      ({ isVisible }) => ({
+        read: useStructuredAgentSessionRead({
+          sessionId: 'session-a',
+          target: LOCAL_TARGET,
+          isVisible
+        }),
+        history: useNativeChatSubmissionHistory('session-a')
+      }),
+      { initialProps: { isVisible: true } }
+    )
+    await waitFor(() => expect(view.result.current.read.state.status).toBe('ready'))
+    const emit: (event: AgentSessionSubscribeEvent) => void = mocks.subscribe.mock.calls[0][2]
+    act(() =>
+      emit({
+        type: 'snapshot',
+        sessionId: 'session-a',
+        fence: 1,
+        page: {
+          ...page('tail', [], false),
+          queuedMessages: [
+            {
+              messageId: 'queued-send',
+              position: 1,
+              body: { kind: 'message', role: 'user', blocks: [] },
+              state: 'waiting'
+            }
+          ]
+        }
+      })
+    )
+    const delivery = view.result.current.history.readSubmissionDelivery(
+      structuredChatSubmissionSource(
+        { sessionId: 'session-a', target: LOCAL_TARGET },
+        view.result.current.read.state,
+        true
+      ),
+      'queued-send',
+      new AbortController().signal
+    )
+    view.rerender({ isVisible: false })
+    view.unmount()
+    emit({
+      type: 'snapshot',
+      sessionId: 'session-a',
+      fence: 1,
+      page: {
+        ...page('tail', [], false),
+        queuedMessages: [],
+        submissions: [
+          {
+            clientMessageId: 'handoff',
+            queuedMessageId: 'queued-send',
+            fence: 1,
+            payloadFingerprint: 'payload',
+            dispatchState: 'accepted',
+            providerItemId: null,
+            reason: null,
+            submittedAt: 1,
+            resolvedAt: 2
+          }
+        ]
+      }
+    })
+    expect(await delivery).toBe(true)
   })
 
   it('keeps a row removed when its upsert and removal arrive within one streaming window', async () => {

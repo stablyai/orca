@@ -31,7 +31,7 @@ export function sendNativeChatMessageWithImageAttachments(
     return sendNativeChatMessage(ptyId, text, options)
   }
   const trimmedText = text.trim()
-  if (options?.onWriteRejected) {
+  if (options?.requireWriteSettlement || options?.onWriteRejected || options?.onDeliverySettled) {
     const writes = agentImagePasteWrites(
       agent,
       imagePaths.map((path) => buildNativeChatImagePasteBytes(agentImagePastePath(agent, path))),

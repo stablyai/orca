@@ -13,9 +13,10 @@ export function sendNativeChatObservedWrites(
   options: NativeChatSendOptions & { stopOnUnconfirmed?: boolean; settleDelayMs?: number }
 ) {
   // Dismiss answer cards only after provider acknowledgment.
-  const writeOptions = options.onDeliverySettled
-    ? ({ requireWriteSettlement: true } as const)
-    : undefined
+  const writeOptions =
+    options.requireWriteSettlement || options.onDeliverySettled
+      ? ({ requireWriteSettlement: true } as const)
+      : undefined
   return enqueueNativeChatPtySend(
     ptyId,
     writes.reduce((total, write) => total + write.delayBeforeMs, 0) +
