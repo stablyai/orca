@@ -2524,7 +2524,8 @@
     "tabStrip": {
       "checkingCapabilities": "Verificando os recursos do desktop — tente novamente em instantes",
       "newTab": "Nova aba",
-      "quickCommandsUpdateRequired": "Atualize o desktop para usar comandos rápidos"
+      "quickCommandsUpdateRequired": "Atualize o desktop para usar comandos rápidos",
+      "tabStatus": "{{title}}, {{status}}"
     },
     "terminalActionSheetActions": {
       "clearTerminal": "Limpar Terminal",
