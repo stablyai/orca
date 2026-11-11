@@ -5741,7 +5741,7 @@
         "PendingWorktreeRow": {
           "af21e953d1": "Cancelar creación del worktree",
           "188f6922a0": "Cancelar",
-          "creatingWorkspace": "Creando workspace…",
+          "creatingWorkspace": "Creando espacio de trabajo…",
           "creationFailed": "Error al crear"
         },
         "ProjectGroupDeleteDialog": {

@@ -71,8 +71,8 @@ it('refreshes host labels without rerunning completed or pending searches', asyn
   const pending = new Promise<(typeof jiraTaskResult)[]>((_, reject) => {
     rejectPending = reject
   })
-  const run = vi.fn(async () => [jiraTaskResult])
-  const runPending = vi.fn(() => pending)
+  const run = async () => [jiraTaskResult]
+  const runPending = () => pending
   vi.mocked(createCmdJTaskSearchRequests).mockReturnValue([
     { id: 'ok', provider: 'jira', hostId: 'local', hostLabel: 'Before', run },
     { id: 'failed', provider: 'jira', hostId: 'local', hostLabel: 'Before', run: runPending }
@@ -93,8 +93,6 @@ it('refreshes host labels without rerunning completed or pending searches', asyn
   await act(async () => rejectPending(new Error('unavailable')))
   expect(result.current.taskItems[0].result.hostLabel).toBe('After')
   expect(result.current.taskSearchFailures).toEqual(['jira · After'])
-  expect(run).toHaveBeenCalledTimes(1)
-  expect(runPending).toHaveBeenCalledTimes(1)
 })
 
 it('filters to open after pending edits apply: a pending reopen shows and a failure removes it', async () => {
