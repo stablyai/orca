@@ -51,13 +51,14 @@ describe('commands about a worker a paired server owns', () => {
   let paired: boolean
   let pullFailures: number
   let sequence = 0
-  let server: OrchestrationWorkerServer = {
+  const DEV_B: OrchestrationWorkerServer = {
     environmentId: 'env_b',
     name: 'devB',
     peerFingerprint: 'host_b',
     homePeerFingerprint: 'cred_a',
     pairingRevision: 1
   }
+  let server = DEV_B
 
   const transport = (): OrchestrationEnvironmentTransport => ({
     resolve: () => server,
@@ -130,7 +131,7 @@ describe('commands about a worker a paired server owns', () => {
   })
 
   beforeEach(() => {
-    server = { ...server, pairingRevision: 1 }
+    server = { ...DEV_B }
     sent = []
     answers = {}
     whileSending = async () => undefined
@@ -669,44 +670,28 @@ describe('commands about a worker a paired server owns', () => {
       worktree: 'new-top-level'
     })
     expect(fresh.ok ? undefined : fresh.error.message).toBeUndefined()
-  })
-
-  it("lists a Run's workers on its server by the server's Run after a re-pair closed the link", async () => {
-    const { taskId, runId } = await startOnB()
-    importState(runId, taskId, 1, {
-      status: 'dispatched',
-      workerState: 'ready',
-      taskStatus: 'dispatched'
-    })
-    server = { ...server, homePeerFingerprint: 'cred_a_new', pairingRevision: 2 }
-    await call('orchestration.workerRead', { dispatch: 'ctx_b1' })
-    // A refused start opens the Run's next link, which no server Run answers for yet.
-    await call('orchestration.taskUpdate', {
-      id: taskId,
-      status: 'ready',
-      callerTerminalHandle: 'term_coord'
-    })
-    const refused = await call('orchestration.workerStart', {
+    // Only that server is refused: the same Task starts on another one as it does today.
+    server = { ...server, environmentId: 'env_c', name: 'devC', peerFingerprint: 'host_c' }
+    answers['orchestration.workerStart'] = [started('ctx_c1')]
+    const elsewhere = await call('orchestration.workerStart', {
       from: 'term_coord',
-      on: 'devB',
+      on: 'devC',
       task: taskId,
       worktree: 'new-top-level'
     })
-    expect(refused.ok).toBe(false)
-    answers['orchestration.workerList'] = [
-      {
-        result: {
-          workers: [{ dispatchId: 'ctx_b1', runId: 'run_on_b' }],
-          page: { total: 1, hasMore: false, nextCursor: null }
-        }
-      }
-    ]
+    expect(elsewhere.ok ? undefined : elsewhere.error.message).toBeUndefined()
+  })
+
+  it('says plainly that a re-pair ended the listing of its Run on the server', async () => {
+    const { runId } = await startOnB()
+    server = { ...server, homePeerFingerprint: 'cred_a_new', pairingRevision: 2 }
+    await call('orchestration.workerRead', { dispatch: 'ctx_b1' })
 
     const listed = await call('orchestration.workerList', { on: 'devB', run: runId })
-    expect(listed.ok ? undefined : listed.error).toBeUndefined()
-    expect(sent.findLast((s) => s.method === 'orchestration.workerList')?.params).toMatchObject({
-      run: 'run_on_b'
-    })
+    expect(listed.ok ? undefined : listed.error.message).toBe(
+      "devB was re-paired; workers started before that are no longer listed here. worker-show still shows them from this computer's record."
+    )
+    expect(sent.map((s) => s.method)).not.toContain('orchestration.workerList')
   })
 
   it("readies the Task here when the server's restart lost its worker, even after a stop it never proved", async () => {

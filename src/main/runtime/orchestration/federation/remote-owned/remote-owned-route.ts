@@ -26,6 +26,7 @@ import { callRemoteOwnedServer } from './remote-owned-calls'
 import { remoteForwardKey, type RemoteForwardKey } from './remote-forward-caller'
 import { inServerTerms, serverNeverAnswered } from './remote-owned-answers'
 import { remoteWorkerShow, remoteServerName } from './remote-owned-reads'
+import { OrchestrationError } from '../../orchestration-error'
 import { explainRemoteServerFailure } from './remote-server-unreachable'
 import { serverOwnsPlacedWorkers, startRemoteOwnedWorker } from './remote-owned-start'
 import { settleUnansweredAbandon, stopRemoteWorker } from './remote-owned-stop'
@@ -148,34 +149,37 @@ async function routeServerCall(
   }
   if (request.method === 'orchestration.workerList') {
     const runId = stringField(values, 'run')
-    // A Run lists what it placed there, by the server's Run for its latest link that started one,
-    // even once a re-pair closed it; the server reads it as any read. No Run lists the server as a whole.
-    const link = runId ? latestLinkFor(db, runId, server.environmentId) : undefined
-    if (runId && !link?.peer_run_id) {
+    // A Run lists what it placed there, as its coordinator; no Run lists the server as a whole.
+    const link = runId ? runLinkFor(db, runId, server.environmentId, 'open') : undefined
+    if (runId && !link) {
+      if (runLinkFor(db, runId, server.environmentId, 'closed')) {
+        throw repairedListError(server.name)
+      }
       return {
         handled: true,
         result: emptyWorkerListPage(numberField(values, 'limit') ?? ORCHESTRATION_FLEET_PAGE_MAX)
       }
     }
-    const params = {
-      ...paramsForServer(access, values),
-      ...(link ? { run: link.peer_run_id } : {})
-    }
+    const forwarded = paramsForServer(access, values)
     try {
-      const answer = await runtime.callOrchestrationWorkerServer(
-        server.environmentId,
-        request.method,
-        params,
-        READ_TIMEOUT_MS,
-        undefined,
-        { expectedEnvironmentPairingRevision: server.pairingRevision }
-      )
-      return { handled: true, result: inServerTerms(answer, { server: server.name, link }) }
+      return {
+        handled: true,
+        result: link
+          ? await forwardToLink(runtime, { link }, request.method, access, values)
+          : await runtime.callOrchestrationWorkerServer(
+              server.environmentId,
+              request.method,
+              forwarded,
+              READ_TIMEOUT_MS,
+              undefined,
+              { expectedEnvironmentPairingRevision: server.pairingRevision }
+            )
+      }
     } catch (error) {
-      throw inServerTerms(
-        explainRemoteServerFailure(error, { server: server.name, method: request.method, params }),
-        { server: server.name, link }
-      )
+      if (error instanceof OrchestrationError && error.code === 'server_pairing_changed') {
+        throw repairedListError(server.name)
+      }
+      throw error
     }
   }
   {
@@ -286,19 +290,24 @@ function seedNamedDispatches(db: OrchestrationDb, link: RemoteRunLinkRow, answer
   })
 }
 
-function latestLinkFor(
+function runLinkFor(
   db: OrchestrationDb,
   runId: string,
-  environmentId: string
+  environmentId: string,
+  state: 'open' | 'closed'
 ): RemoteRunLinkRow | undefined {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over this table returns exactly its row shape.
   return db.db
-    .prepare(
-      `SELECT * FROM remote_run_links
-       WHERE run_id = ? AND environment_id = ? AND peer_run_id IS NOT NULL
-       ORDER BY rowid DESC LIMIT 1`
-    )
-    .get(runId, environmentId) as RemoteRunLinkRow | undefined
+    .prepare('SELECT * FROM remote_run_links WHERE run_id = ? AND environment_id = ? AND state = ?')
+    .get(runId, environmentId, state) as RemoteRunLinkRow | undefined
+}
+
+function repairedListError(serverName: string): OrchestrationError {
+  return new OrchestrationError(
+    'server_pairing_changed',
+    `${serverName} was re-paired; workers started before that are no longer listed here. worker-show still shows them from this computer's record.`,
+    { server: serverName }
+  )
 }
 
 /** A retry of a start this Orca already took on today's path stays there, whatever the server runs now. */
