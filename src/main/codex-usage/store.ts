@@ -13,7 +13,7 @@ import type {
 } from '../../shared/codex-usage-types'
 import type { AutomationRunUsage } from '../../shared/automations/history/automation-run'
 import type { UsageWorktreeSource } from '../usage/worktree-attribution/usage-worktree-metadata'
-import type { CodexUsagePersistedState } from './types'
+import type { CodexUsageDailyAggregate, CodexUsagePersistedState } from './types'
 import type { AutomationUsageLookupInput } from './codex-automation-run-attribution'
 import { CODEX_USAGE_SCHEMA_VERSION, codexUsageProvider } from './codex-usage-provider'
 import { resolveCodexAutomationRunUsage } from './codex-automation-run-attribution'
@@ -94,6 +94,11 @@ export class CodexUsageStore extends UsageProviderStoreLifecycle<
       scan: codexUsageProvider.scan,
       splitCacheFile: splitUsageCacheFileViaWorker
     })
+  }
+
+  /** Rollups from the last completed scan; callers must await whenLoaded() first. */
+  getDailyAggregates(): readonly CodexUsageDailyAggregate[] {
+    return this.state.dailyAggregates
   }
 
   getSnapshot(

@@ -13,7 +13,7 @@ import type {
 } from '../../shared/claude-usage-types'
 import type { AutomationRunUsage } from '../../shared/automations/history/automation-run'
 import type { UsageWorktreeSource } from '../usage/worktree-attribution/usage-worktree-metadata'
-import type { ClaudeUsagePersistedState } from './types'
+import type { ClaudeUsageDailyAggregate, ClaudeUsagePersistedState } from './types'
 import {
   scanClaudeUsageFilesViaWorker,
   splitUsageCacheFileViaWorker
@@ -97,6 +97,11 @@ export class ClaudeUsageStore extends UsageProviderStoreLifecycle<
       scan: scanClaudeUsageFilesViaWorker,
       splitCacheFile: splitUsageCacheFileViaWorker
     })
+  }
+
+  /** Rollups from the last completed scan; callers must await whenLoaded() first. */
+  getDailyAggregates(): readonly ClaudeUsageDailyAggregate[] {
+    return this.state.dailyAggregates
   }
 
   getSnapshot(

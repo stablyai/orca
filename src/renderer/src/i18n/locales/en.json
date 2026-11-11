@@ -5861,7 +5861,8 @@
           "85457c02fe": "Claude",
           "b2cf4310ce": "Overview",
           "grokUsageTab": "Grok",
-          "trackingSince": "Tracking since {{value0}}"
+          "trackingSince": "Tracking since {{value0}}",
+          "publishUsage": "Publish usage"
         },
         "UsageOverviewPane": {
           "33f7b043d2": "Providers",
@@ -5991,6 +5992,40 @@
           "notScannedYet": "Not scanned yet",
           "updatedAt": "Updated {{time}}",
           "unknownLocation": "Unknown location"
+        },
+        "ToknPublishCard": {
+          "errorNetwork": "Could not reach tokn. Orca tries again within the hour.",
+          "errorRateLimited": "tokn asked Orca to wait. Orca tries again within the hour.",
+          "errorRejected": "tokn did not accept the upload: {{detail}}",
+          "errorServer": "tokn could not store the upload. Orca tries again within the hour.",
+          "errorSignedOut": "This computer was signed out of tokn. Connect again to keep publishing.",
+          "connectTimedOut": "Sign-in timed out. Connect again to retry.",
+          "connectFailed": "Could not connect to tokn: {{error}}",
+          "connectedAs": "Connected as @{{handle}}",
+          "description": "Publish your daily Claude Code and Codex totals to a profile and leaderboard on toknhq.com.",
+          "waitingForBrowser": "Waiting for browser",
+          "cancel": "Cancel",
+          "syncNow": "Sync now",
+          "disconnect": "Disconnect",
+          "connect": "Connect tokn",
+          "statusConnected": "Connected",
+          "statusNotConnected": "Not connected",
+          "privacy": "Uploads one total per day and model: requests, tokens, and estimated cost. Never prompts, code, file paths, or project names. Covers all Claude Code and Codex usage Orca tracks on this computer.",
+          "lastSynced_one": "Last synced {{time}} · {{count}} row stored",
+          "lastSynced_other": "Last synced {{time}} · {{count}} rows stored",
+          "notSyncedYet": "Not synced yet",
+          "rowsRejected_one": " · {{count}} row not accepted",
+          "rowsRejected_other": " · {{count}} rows not accepted",
+          "trackingOff": "Claude and Codex usage tracking are off, so there is nothing to publish yet.",
+          "enableTracking": "Turn on tracking",
+          "viewProfile": "View profile"
+        },
+        "ToknUploadPreview": {
+          "trigger": "Preview upload",
+          "loading": "Reading tracked usage",
+          "empty": "No tracked usage to upload yet.",
+          "summary_one": "{{count}} row from {{first}} to {{last}}, sent to {{endpoint}}",
+          "summary_other": "{{count}} rows from {{first}} to {{last}}, sent to {{endpoint}}"
         }
       },
       "sparse": {

@@ -8,6 +8,8 @@ import { GrokUsagePane } from './GrokUsagePane'
 import { OpenCodeUsagePane } from './OpenCodeUsagePane'
 import { MuseUsagePane } from './MuseUsagePane'
 import { UsageOverviewPane } from './UsageOverviewPane'
+import { ToknPublishCard } from './ToknPublishCard'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { Button } from '../ui/button'
 import {
   DropdownMenu,
@@ -224,6 +226,16 @@ export function StatsPane(): React.JSX.Element {
           )}
         </div>
       </div>
+
+      {/* Publishing signs in through this computer's browser and reads its local usage stores. */}
+      {isWebClientLocation() ? null : (
+        <div className="space-y-3">
+          <h3 className="text-sm font-semibold text-foreground">
+            {t('auto.components.stats.StatsPane.publishUsage', 'Publish usage')}
+          </h3>
+          <ToknPublishCard />
+        </div>
+      )}
     </div>
   )
 }

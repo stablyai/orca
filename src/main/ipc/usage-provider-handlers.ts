@@ -3,6 +3,7 @@ import type { ClaudeUsageStore } from '../claude-usage/store'
 import type { CodexUsageStore } from '../codex-usage/store'
 import type { OpenCodeUsageStore } from '../opencode-usage/store'
 import type { MuseUsageStore } from '../muse-usage/store'
+import { registerToknHandlers } from './tokn'
 
 type UsageProviderStores = {
   claudeUsage: ClaudeUsageStore
@@ -75,4 +76,6 @@ export function registerUsageProviderHandlers(stores: UsageProviderStores): void
   registerProviderHandlers('codexUsage', stores.codexUsage)
   registerProviderHandlers('openCodeUsage', stores.openCodeUsage)
   registerProviderHandlers('museUsage', stores.museUsage)
+  // tokn publishing reads the same local stores, so it registers with them.
+  registerToknHandlers({ claude: stores.claudeUsage, codex: stores.codexUsage })
 }

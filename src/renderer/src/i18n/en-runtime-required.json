@@ -1092,6 +1092,16 @@
         }
       },
       "stats": {
+        "ToknPublishCard": {
+          "lastSynced_one": "Last synced {{time}} · {{count}} row stored",
+          "lastSynced_other": "Last synced {{time}} · {{count}} rows stored",
+          "rowsRejected_one": " · {{count}} row not accepted",
+          "rowsRejected_other": " · {{count}} rows not accepted"
+        },
+        "ToknUploadPreview": {
+          "summary_one": "{{count}} row from {{first}} to {{last}}, sent to {{endpoint}}",
+          "summary_other": "{{count}} rows from {{first}} to {{last}}, sent to {{endpoint}}"
+        },
         "UsageOverviewPane": {
           "sessionCount_one": "{{formatted}} session",
           "sessionCount_other": "{{formatted}} sessions"
