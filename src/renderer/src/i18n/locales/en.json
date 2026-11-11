@@ -8114,12 +8114,12 @@
         },
         "DeleteCloudWorkspace": {
           "title": "Delete {{name}}?",
-          "body": "Deletes the sandbox and its disk, including chats, terminals and uncommitted changes. This can't be undone. To keep a snapshot, archive it instead.",
           "cancel": "Cancel",
           "archiveInstead": "Archive instead",
           "delete": "Delete workspace",
           "uncommitted_one": "{{count}} uncommitted change",
-          "uncommitted_other": "{{count}} uncommitted changes"
+          "uncommitted_other": "{{count}} uncommitted changes",
+          "bodyNoSnapshot": "Deletes the sandbox and its disk, including chats, terminals and uncommitted changes. This can't be undone."
         },
         "orcaCloudHost": {
           "running": "{{count}} running",
@@ -20976,7 +20976,6 @@
         "connected": "{{value0}} is connected. Its projects are in the sidebar.",
         "copyFailed": "Couldn't copy the link. Try again.",
         "copyLink": "Copy link",
-        "copyWorkspaceLink": "Copy workspace link",
         "emptyArchivedBody": "Archived cloud workspaces show up here.",
         "emptyArchivedTitle": "No archived workspaces",
         "emptyFilteredBody": "Try another owner or repository.",
@@ -21074,7 +21073,6 @@
         "viewAsleep": "View read-only copy",
         "routines": "Routines",
         "archiveConfirmTitle": "Archive {{name}}?",
-        "archiveConfirmBody": "{{owner}}'s agents in this workspace will stop. Files are kept and it can be unarchived.",
         "archiveBusy": "This workspace is still starting or going to sleep. Nothing was changed. Try again in a moment.",
         "showCloudWorkspaces": "Show cloud workspaces",
         "deleteConfirmTitle": "Delete {{name}}?",
@@ -21119,7 +21117,11 @@
         "restartElsewhere": "Restart it from the computer that created it.",
         "makePrivateSidebar": "Teammates’ devices are disconnected. Only the owner will be able to open it.",
         "shareFailed": "Couldn’t change who can open it. Try again.",
-        "workspaceLinkOption": "Workspace link"
+        "workspaceLinkOption": "Workspace link",
+        "copyLinkToTerminal": "Copy link to this terminal",
+        "copyLinkToChat": "Copy link to this chat",
+        "linkToNumber": "Link to {{number}}",
+        "archiveConfirmStops": "{{owner}}'s agents in this workspace will stop."
       },
       "orcaCloud": {
         "QueuedPrompt": {
@@ -26958,7 +26960,6 @@
       "since": "Archived {{when}}",
       "keptUntilShort": "kept until {{date}}",
       "title": "Archived workspace",
-      "readOnly": "A read-only snapshot. Unarchive to open terminals and agents again.",
       "unarchiving": "Unarchiving…",
       "loadFailed": "Couldn’t load the archive details.",
       "nothing": "Nothing was captured.",
@@ -27040,18 +27041,30 @@
     "detail": {
       "restartKeeps": "Restart keeps your files; agents resume.",
       "restarting": "Orca resumes your agents after the restart.",
-      "archived": "Kept as a snapshot. Unarchive to work in it again.",
       "waking": "Waking…",
       "asleepSafe": "Your files and chats are safe. Opening it wakes it.",
       "restartToRecover": "Restart to recover. Files are kept and Orca resumes your agents after the restart.",
       "startFailed": "The sandbox couldn’t start. Nothing was lost.",
-      "wakeFailed": "Couldn’t wake the sandbox. Your files and chats are safe.",
-      "sleepsWhenIdleMinutes_one": "Sleeps in {{count}} minute if idle",
-      "sleepsWhenIdleMinutes_other": "Sleeps in {{count}} minutes if idle"
+      "wakeFailed": "Couldn’t wake the sandbox. Your files and chats are safe."
     },
     "restarting": "Restarting…",
     "restart": "Restart",
-    "sandboxTitle": "Sandbox",
+    "card": {
+      "sleepsIn_one": "Sleeps in {{count}} min if idle",
+      "sleepsIn_other": "Sleeps in {{count}} min if idle",
+      "asOf": "As of {{time}}",
+      "usage": "CPU {{cpu}}% · Memory {{used}} / {{total}} GB",
+      "syncOff": "Off",
+      "syncError": "Couldn’t sync",
+      "mirroringAndContext": "Mirroring · .context synced",
+      "mirroring": "Mirroring",
+      "contextSynced": ".context synced",
+      "more": "More actions",
+      "details": "Details",
+      "hideDetails": "Hide details",
+      "totalSandboxHours": "Total sandbox hours",
+      "delete": "Delete"
+    },
     "statusUnavailable": "Status unavailable",
     "loading": "Loading status",
     "cpu": "CPU",
@@ -27112,7 +27125,6 @@
     "archivedWorkspace": "Archived the workspace",
     "archivedDetail": "It goes to sleep and stays browsable: PRs, last changes and files.",
     "tryAgain": "Try again",
-    "sandboxHoursUsedLabel": "Sandbox hours used",
     "sleep": "Sleep",
     "thisWorkspace": "This workspace",
     "sleepFailedNamed": "Couldn’t put {{name}} to sleep",
@@ -27163,7 +27175,13 @@
     },
     "archivedDetailLocalEdits_one": "It goes to sleep and stays browsable: PRs, last changes and files. {{count}} changed file on this computer will be removed.",
     "archivedDetailLocalEdits_other": "It goes to sleep and stays browsable: PRs, last changes and files. {{count}} changed files on this computer will be removed.",
-    "archivedDetailLocalCopy": "It goes to sleep and stays browsable: PRs, last changes and files. The copy on this computer is removed too."
+    "archivedDetailLocalCopy": "It goes to sleep and stays browsable: PRs, last changes and files. The copy on this computer is removed too.",
+    "archiveSnapshot": {
+      "definitionUntil": "Archive keeps a snapshot of this workspace (its files, chats and terminal history) until {{date}}, then deletes it. Unarchive it from its menu before then. Like a sleeping workspace, it doesn’t use sandbox hours.",
+      "definition": "Archive keeps a snapshot of this workspace (its files, chats and terminal history) for 30 days, then deletes it. Unarchive it from its menu before then. Like a sleeping workspace, it doesn’t use sandbox hours.",
+      "archivedUntil": "A read-only snapshot of its files, chats and terminal history. Unarchive before {{date}} to open terminals and agents again; after that it’s deleted.",
+      "archived": "A read-only snapshot of its files, chats and terminal history. Unarchive within 30 days of archiving to open terminals and agents again; after that it’s deleted."
+    }
   },
   "cloudAgentSetup": {
     "loading": "Checking what agents can use…",
@@ -28494,9 +28512,9 @@
     "removeCopy": "Remove copy",
     "title": "On this computer",
     "contextLabel": ".context folder",
-    "contextDescription": "Plans and screenshots from this workspace",
+    "contextHelper": "Plans and screenshots from this workspace, synced to this computer.",
     "mirrorLabel": "Mirror to this computer",
-    "mirrorDescription": "A read-only copy of the workspace files, kept up to date while it runs. Skips files in .gitignore.",
+    "mirrorHelper": "A read-only copy of this workspace’s files, kept up to date while it runs.",
     "openFolder": "Open folder",
     "copied": "Copied",
     "copyPath": "Copy path",

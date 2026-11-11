@@ -2393,9 +2393,9 @@
     },
     "archivedDetailLocalEdits_one": "It goes to sleep and stays browsable: PRs, last changes and files. {{count}} changed file on this computer will be removed.",
     "archivedDetailLocalEdits_other": "It goes to sleep and stays browsable: PRs, last changes and files. {{count}} changed files on this computer will be removed.",
-    "detail": {
-      "sleepsWhenIdleMinutes_one": "Sleeps in {{count}} minute if idle",
-      "sleepsWhenIdleMinutes_other": "Sleeps in {{count}} minutes if idle"
+    "card": {
+      "sleepsIn_one": "Sleeps in {{count}} min if idle",
+      "sleepsIn_other": "Sleeps in {{count}} min if idle"
     },
     "idleSleptMinutes_one": "{{name}} slept after {{count}} minute idle",
     "idleSleptMinutes_other": "{{name}} slept after {{count}} minutes idle",

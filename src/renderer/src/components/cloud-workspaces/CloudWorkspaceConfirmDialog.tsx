@@ -1,6 +1,7 @@
 // Confirmation for row actions that take something away from people: making a shared workspace
 // private (teammates' computers are disconnected), handing ownership to someone else, and archiving
 // a teammate's running workspace (their agents stop).
+import { useArchiveSnapshotDefinition } from '@/components/orca-cloud/ArchiveSnapshotTooltip'
 import React, { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import {
@@ -116,6 +117,8 @@ export function CloudWorkspaceConfirmDialog({
         : t('auto.components.cloudWorkspaces.reassignTitle', 'Make {{name}} the owner?', {
             name: memberName(directory, pending.ownerUserId, selfId, t)
           })
+  // What archive keeps, until when, and that it costs no sandbox hours (one shared definition).
+  const archiveDefinition = useArchiveSnapshotDefinition()
   const losesManagement = pending.kind === 'owner' && w.ownerUserId === selfId && !canAdmin
   // Destructive for someone else (their agents stop, or you lose access): focus starts on Cancel.
   const focusCancel = losesManagement || pending.kind === 'archive' || pending.kind === 'delete'
@@ -129,17 +132,18 @@ export function CloudWorkspaceConfirmDialog({
           ) : pending.kind === 'delete' ? (
             <DialogDescription>
               {t(
-                'auto.components.sidebar.DeleteCloudWorkspace.body',
-                "Deletes the sandbox and its disk, including chats, terminals and uncommitted changes. This can't be undone. To keep a snapshot, archive it instead."
+                'auto.components.sidebar.DeleteCloudWorkspace.bodyNoSnapshot',
+                "Deletes the sandbox and its disk, including chats, terminals and uncommitted changes. This can't be undone."
               )}
             </DialogDescription>
           ) : pending.kind === 'archive' ? (
             <DialogDescription>
               {t(
-                'auto.components.cloudWorkspaces.archiveConfirmBody',
-                "{{owner}}'s agents in this workspace will stop. Files are kept and it can be unarchived.",
+                'auto.components.cloudWorkspaces.archiveConfirmStops',
+                "{{owner}}'s agents in this workspace will stop.",
                 { owner: memberName(directory, w.ownerUserId, selfId, t) }
-              )}
+              )}{' '}
+              {archiveDefinition}
             </DialogDescription>
           ) : (
             <DialogDescription>

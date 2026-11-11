@@ -4,6 +4,7 @@ import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import DeleteWorktreeDialog from './DeleteWorktreeDialog'
 import { seedCloudWorkspaceSnapshot } from '@/lib/orca-cloud/orca-cloud-workspace-store'
+import { setArchiveTtlDaysForTest } from '@/lib/orca-cloud/archive-ttl'
 
 const repo: Repo = {
   id: 'orca-plugins',
@@ -85,4 +86,30 @@ export const cloudWorkspace = defineFixture({
       <DeleteWorktreeDialog />
     </div>
   )
+})
+
+/** Waits for an element the dialog renders after mount, then focuses it (opens its tooltip). */
+async function focusWhenShown(find: () => HTMLElement | null | undefined): Promise<void> {
+  const deadline = performance.now() + 3000
+  let el = find()
+  while (!el && performance.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    el = find()
+  }
+  el?.focus()
+}
+
+/** "Archive instead" focused: the shared snapshot definition (until today + the archive TTL). */
+export const cloudWorkspaceArchiveTooltip = defineFixture({
+  ...cloudWorkspace,
+  setup: () => {
+    setArchiveTtlDaysForTest(30)
+    return seedCloudWorkspaceSnapshot({ ids: new Set([worktree.id]), idsLoaded: true })
+  },
+  interact: () =>
+    focusWhenShown(() =>
+      [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find((button) =>
+        button.textContent?.includes('Archive instead')
+      )
+    )
 })

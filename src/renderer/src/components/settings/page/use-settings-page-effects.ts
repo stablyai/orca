@@ -15,6 +15,7 @@ import {
 } from '../navigation/settings-project-list'
 import type { SettingsStoreModel } from './use-settings-store-model'
 import type { SettingsInteractionController } from './use-settings-interaction-controller'
+import { setSettingsActiveSection } from '../host-scope/settings-active-section'
 import {
   getSettingsSectionId,
   SHORTCUTS_ESCAPE_CONFIRM_TOAST_ID,
@@ -58,6 +59,11 @@ export function useSettingsPageEffects(
     searchInputRef,
     shortcutsEscapeConfirmUntilRef
   } = interactions
+
+  useEffect(() => {
+    setSettingsActiveSection(activeSectionId)
+    return () => setSettingsActiveSection(null)
+  }, [activeSectionId])
 
   useEffect(() => {
     if (activeSectionId !== 'general') {

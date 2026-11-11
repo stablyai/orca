@@ -25,6 +25,7 @@ import {
 import type { CloudArchiveInfo } from '../../../../shared/hosted-sandbox/cloud-workspace-api'
 import type { HostedArchivePullRequest } from '../../../../shared/hosted-sandbox/hosted-sandbox-wire'
 import { CloudGitChanges } from './CloudGitChanges'
+import { archivedSnapshotLine } from './archive-snapshot-copy'
 import { CloudWorkspaceHeader } from './CloudWorkspaceHeader'
 import { FOCUS_RING } from './cloud-focus'
 
@@ -212,10 +213,8 @@ export function CloudArchivedWorkspaceView({
           title={workspaceName ?? t('orcaCloudWorkspace.archived.title', 'Archived workspace')}
           state="archived"
           stateLine={stateLine}
-          note={t(
-            'orcaCloudWorkspace.archived.readOnly',
-            'A read-only snapshot. Unarchive to open terminals and agents again.'
-          )}
+          // The snapshot defined inline, with this workspace's own deletion date.
+          note={archivedSnapshotLine(t, expiresAt)}
           headingRef={headingRef}
           action={
             <Button

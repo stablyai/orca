@@ -91,6 +91,7 @@ function panel(
             entry={entry(state === 'sleeping' ? asleep : running)}
             pending={undefined}
             actions={actions}
+            initialLayer="onComputer"
           />
         </div>
       )

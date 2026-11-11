@@ -1,4 +1,5 @@
 import React, { useRef } from 'react'
+import { ArchiveSnapshotTooltip } from '@/components/orca-cloud/ArchiveSnapshotTooltip'
 import {
   Archive,
   ArchiveRestore,
@@ -12,11 +13,13 @@ import {
   FolderPlus,
   Link2,
   Lock,
+  MessageSquare,
   MoreHorizontal,
   Pin,
   PinOff,
   Play,
   RotateCw,
+  SquareTerminal,
   UserRoundCog,
   Users
 } from 'lucide-react'
@@ -37,10 +40,11 @@ import {
 import { formatOptionalPrimaryShortcutLabel } from '@/hooks/useShortcutLabel'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
-import type {
-  CloudWorkspace,
-  CloudWorkspacePatch,
-  CloudWorkspacePresence
+import {
+  formatWorkspaceNumber,
+  type CloudWorkspace,
+  type CloudWorkspacePatch,
+  type CloudWorkspacePresence
 } from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
 import { MemberAvatar } from './CloudMemberAvatars'
 import { openTeammateProfile } from '../teammates/teammate-profile-store'
@@ -55,9 +59,12 @@ export type RowActions = {
   open: (w: CloudWorkspace) => void
   /** Asleep: the read-only copy it saved when it went to sleep (never wakes it). */
   read: (w: CloudWorkspace) => void
-  /** The link to the chat you have in front when this workspace is in front, else the workspace. */
+  /** The workspace's link (W-number), the same as ⌘⌥⇧L and the tab-bar chip. */
   copyLink: (w: CloudWorkspace) => void
+  /** The link to the chat or terminal you have focused in it (only offered while it is in front). */
   copyWorkspaceLink: (w: CloudWorkspace) => void
+  /** What is focused in this workspace right now, if it is the one in front. */
+  focusedItem?: (w: CloudWorkspace) => 'chat' | 'terminal' | null
   /** One-time jump: open the workspace on the chat this teammate has in front. */
   goToChat: (w: CloudWorkspace, member: CloudWorkspacePresence) => void
   patch: (w: CloudWorkspace, patch: CloudWorkspacePatch) => void
@@ -124,6 +131,8 @@ export function CloudWorkspaceRowMenu({
   const t = useTranslate()
   const keybindings = useAppStore((state) => state.keybindings)
   const copyShortcut = formatOptionalPrimaryShortcutLabel('cloudWorkspace.copyLink', keybindings)
+  // Read when the menu renders (it re-renders on open), not kept: focus moves between opens.
+  const focused = open ? (actions.focusedItem?.(w) ?? null) : null
   const teammatesHere = canOpen
     ? presentMembers(w.presence, selfId).filter((p) => p.userId !== selfId)
     : []
@@ -224,13 +233,24 @@ export function CloudWorkspaceRowMenu({
         )}
         <DropdownMenuItem onSelect={() => actions.copyLink(w)}>
           <Link2 />
-          {t('auto.components.cloudWorkspaces.copyLink', 'Copy link')}
+          {w.number
+            ? t('auto.components.cloudWorkspaces.copyLinkTo', 'Copy link to {{number}}', {
+                number: formatWorkspaceNumber(w.number)
+              })
+            : t('auto.components.cloudWorkspaces.copyLink', 'Copy link')}
           {copyShortcut ? <DropdownMenuShortcut>{copyShortcut}</DropdownMenuShortcut> : null}
         </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => actions.copyWorkspaceLink(w)}>
-          <Link2 />
-          {t('auto.components.cloudWorkspaces.copyWorkspaceLink', 'Copy workspace link')}
-        </DropdownMenuItem>
+        {focused ? (
+          <DropdownMenuItem onSelect={() => actions.copyWorkspaceLink(w)}>
+            {focused === 'terminal' ? <SquareTerminal /> : <MessageSquare />}
+            {focused === 'terminal'
+              ? t(
+                  'auto.components.cloudWorkspaces.copyLinkToTerminal',
+                  'Copy link to this terminal'
+                )
+              : t('auto.components.cloudWorkspaces.copyLinkToChat', 'Copy link to this chat')}
+          </DropdownMenuItem>
+        ) : null}
         {w.ownerUserId !== selfId && (
           <DropdownMenuItem onSelect={() => openTeammateProfile(w.ownerUserId)}>
             <MemberAvatar userId={w.ownerUserId} directory={directory} selfId={selfId} size="sm" />
@@ -359,10 +379,12 @@ export function CloudWorkspaceRowMenu({
               </DropdownMenuItem>
             ) : null}
             {w.archivedAt === null ? (
-              <DropdownMenuItem onSelect={() => actions.archive(w)}>
-                <Archive />
-                {t('auto.components.cloudWorkspaces.archive', 'Archive')}
-              </DropdownMenuItem>
+              <ArchiveSnapshotTooltip side="left">
+                <DropdownMenuItem onSelect={() => actions.archive(w)}>
+                  <Archive />
+                  {t('auto.components.cloudWorkspaces.archive', 'Archive')}
+                </DropdownMenuItem>
+              </ArchiveSnapshotTooltip>
             ) : (
               <DropdownMenuItem onSelect={() => actions.unarchive(w)}>
                 <ArchiveRestore />

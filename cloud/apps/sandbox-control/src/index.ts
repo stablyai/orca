@@ -165,6 +165,7 @@ import { ArchiveRequestSchema } from './sandbox-vm-inspect'
 import {
   restoreArchivedToSleeping,
   archiveSandbox,
+  DEFAULT_ARCHIVE_TTL_MS,
   readArchive,
   restartSandbox,
   unarchiveSandbox,
@@ -1266,8 +1267,13 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
     if (url.pathname === '/v1/config' && request.method === 'GET') {
       // Public product constants (no auth): every client reads these instead of hardcoding them.
       const createTiming = await cachedCreateTiming(env.SANDBOX_DB, (deps.now ?? Date.now)())
+      const config = workspaceConfig(env, deps)
       return Response.json(
-        { idleSleepMinutes: workspaceConfig(env, deps).idleSleepMinutes ?? ORCA_CLOUD_IDLE_SLEEP_MINUTES, ...(createTiming ? { createTiming } : {}) },
+        {
+          idleSleepMinutes: config.idleSleepMinutes ?? ORCA_CLOUD_IDLE_SLEEP_MINUTES,
+          archiveTtlDays: Math.round((config.archiveTtlMs ?? DEFAULT_ARCHIVE_TTL_MS) / 86_400_000),
+          ...(createTiming ? { createTiming } : {})
+        },
         { headers: { 'cache-control': 'public, max-age=300' } }
       )
     }

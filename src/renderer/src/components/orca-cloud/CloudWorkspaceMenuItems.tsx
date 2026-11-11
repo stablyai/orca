@@ -1,4 +1,5 @@
 import React, { useContext } from 'react'
+import { ArchiveSnapshotTooltip } from './ArchiveSnapshotTooltip'
 import { toast } from 'sonner'
 import {
   Archive,
@@ -24,7 +25,10 @@ import {
   cloudWorkspaceActionGroups,
   type CloudWorkspaceAction
 } from '@/components/cloud-workspaces/cloud-workspace-action-groups'
-import type { CloudWorkspace } from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
+import {
+  formatWorkspaceNumber,
+  type CloudWorkspace
+} from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
 import { useCloudWorkspaceView } from './use-cloud-workspace-view'
 import { useCloudPanelActions } from './use-cloud-panel-actions'
 import { useCloudWorkspaceRecord } from './use-cloud-workspace-record'
@@ -93,10 +97,12 @@ function CloudMenuRows({
         </DropdownMenuItem>
       ) : null}
       {has('archive') ? (
-        <DropdownMenuItem disabled={busy || view.state === 'waking'} onSelect={actions.onArchive}>
-          <Archive className="size-3.5" />
-          {t('orcaCloudWorkspace.archive', 'Archive')}
-        </DropdownMenuItem>
+        <ArchiveSnapshotTooltip side="left">
+          <DropdownMenuItem disabled={busy || view.state === 'waking'} onSelect={actions.onArchive}>
+            <Archive className="size-3.5" />
+            {t('orcaCloudWorkspace.archive', 'Archive')}
+          </DropdownMenuItem>
+        </ArchiveSnapshotTooltip>
       ) : null}
       {has('unarchive') ? (
         <DropdownMenuItem disabled={busy} onSelect={actions.onUnarchive}>
@@ -194,7 +200,11 @@ export function CloudCopyWorkspaceLinkItem({
   return (
     <DropdownMenuItem onSelect={() => void copyCloudWorkspaceLink(workspace.id)}>
       <Link2 className="size-3.5" />
-      {t('auto.components.cloudWorkspaces.workspaceLinkOption', 'Workspace link')}
+      {workspace.number
+        ? t('auto.components.cloudWorkspaces.linkToNumber', 'Link to {{number}}', {
+            number: formatWorkspaceNumber(workspace.number)
+          })
+        : t('auto.components.cloudWorkspaces.workspaceLinkOption', 'Workspace link')}
     </DropdownMenuItem>
   )
 }
