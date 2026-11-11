@@ -281,7 +281,8 @@ export function ClientHostedBrowserPagePane({
     setAddressBarValueFromPage
   ])
 
-  const showFailureOverlay = !attachmentError && Boolean(browserTab.loadError)
+  const unavailable = Boolean(attachmentError) || restoredPageUnrecovered
+  const showFailureOverlay = !unavailable && Boolean(browserTab.loadError)
 
   const markup = useClientHostedBrowserMarkup({
     webviewRef,
@@ -289,7 +290,7 @@ export function ClientHostedBrowserPagePane({
     runtimeEnvironmentId,
     placement,
     isActive,
-    unavailable: Boolean(attachmentError) || restoredPageUnrecovered,
+    unavailable,
     showFailureOverlay
   })
 
@@ -371,7 +372,7 @@ export function ClientHostedBrowserPagePane({
               onRetry={() => reload.runReloadTrigger('reload')}
             />
           ) : null}
-          {attachmentError || restoredPageUnrecovered ? (
+          {unavailable ? (
             <ClientHostedBrowserUnavailableNotice
               runtimeEnvironmentId={runtimeEnvironmentId}
               worktreeId={worktreeId}
