@@ -7,7 +7,7 @@ import {
   upsertEphemeralVmRuntime
 } from '../../shared/ephemeral-vm-runtime-store'
 
-const sent = vi.hoisted(() => [] as string[])
+const sent = vi.hoisted((): string[] => [])
 vi.mock('electron', () => ({
   app: { getPath: () => tmpdir() },
   BrowserWindow: {
