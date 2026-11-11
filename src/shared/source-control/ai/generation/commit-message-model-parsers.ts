@@ -1,3 +1,4 @@
+import { stripAnsiEscapeSequences } from '../../../ansi-escape-sequences'
 import { parseClaudeModelList } from '../../../claude-model-list-probe'
 import { labelFromModelId } from '../../../model-id-label'
 import type { CommitMessageModel, ThinkingLevel } from './commit-message-agent-spec'
@@ -203,16 +204,18 @@ export function parseCursorModels(stdout: string): CommitMessageModel[] {
 export function parseAntigravityModels(stdout: string): CommitMessageModel[] {
   const models: CommitMessageModel[] = []
   for (const rawLine of iterateModelOutputLines(stdout)) {
-    const line = rawLine.trim()
-    const separator = line.indexOf('\t')
-    const id = (separator === -1 ? line : line.slice(0, separator)).trim()
-    const label = separator === -1 ? id : line.slice(separator + 1).trim()
+    const line = stripAnsiEscapeSequences(rawLine).trim()
+    const tab = line.indexOf('\t')
+    const columns = tab === -1 ? /^(\S+)\s{2,}(.+)$/.exec(line) : null
+    const id = (tab !== -1 ? line.slice(0, tab) : (columns?.[1] ?? line)).trim()
+    const label = tab !== -1 ? line.slice(tab + 1).trim() : (columns?.[2]?.trim() ?? id)
+    const separated = tab !== -1 || columns !== null
     // Older agy versions list display names; current versions emit id<TAB>label.
     if (
       !id ||
       !label ||
-      (separator === -1 && !/^.+ \((?:low|medium|high|thinking)\)$/i.test(id)) ||
-      (separator !== -1 && (/\s/.test(id) || /^(?:id|model)$/i.test(id)))
+      (!separated && !/^.+ \((?:low|medium|high|xhigh|max|thinking)\)$/i.test(id)) ||
+      (separated && (/\s/.test(id) || /^(?:id|model)$/i.test(id)))
     ) {
       continue
     }

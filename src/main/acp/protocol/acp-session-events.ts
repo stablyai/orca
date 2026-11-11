@@ -31,3 +31,38 @@ export function readAcpSessionEvent(params: unknown): AcpSessionEvent | null {
     ? { kind: 'known', notification: parsed.data }
     : { kind: 'unrecognized', sessionId: envelope.data.sessionId, raw: envelope.data }
 }
+
+/** Route an incoming or synthesized ACP notification frame to session listeners or the extension handler. */
+export function deliverAcpNotificationFrame(
+  method: string,
+  params: unknown,
+  listeners: ReadonlySet<(event: AcpSessionEvent) => void>,
+  onExtension: ((method: string, params: unknown) => void) | undefined,
+  diagnose: (message: string) => void,
+  state: { reportedAnomaly: boolean }
+): void {
+  if (method !== 'session/update') {
+    try {
+      onExtension?.(method, params)
+    } catch (error) {
+      diagnose(`ACP extension listener failed: ${String(error)}`)
+    }
+    return
+  }
+  const event = readAcpSessionEvent(params)
+  if (!event) {
+    diagnose('Ignored invalid ACP session update envelope')
+    return
+  }
+  if (event.kind === 'unrecognized' && !state.reportedAnomaly) {
+    state.reportedAnomaly = true
+    diagnose('Forwarded unrecognized ACP session update')
+  }
+  for (const listener of listeners) {
+    try {
+      listener(event)
+    } catch (error) {
+      diagnose(`ACP event listener failed: ${String(error)}`)
+    }
+  }
+}

@@ -425,7 +425,7 @@
       "defaultSurfaceSetAllTerminal": "すべてターミナルにする",
       "sameAsChoice": "{{agent}} と同じ · {{choice}}",
       "modelListFallback": "組み込みのリストです。Orca はこのホストからモデル一覧を取得できませんでした。",
-      "chatUnavailableOnWindows": "{{value0}} Chat はまだ Windows では利用できないため、このホストでは {{value0}} がターミナルで開きます。macOS または Linux ホストでのチャットは引き続き利用できます。",
+      "chatUnavailableOnWindows": "Windows では {{value0}} Chat は agy で動作します。agy をインストールまたは更新し、個人の Google アカウントでサインインしてください。Chat が Google Cloud アカウントに設定されている場合は、設定で「個人」を選択してください。それまでは {{value0}} はターミナルで開きます。",
       "undetectedCommandHint": "{{agent}} CLI が PATH 以外にインストールされている場合、このホスト上の実行ファイルのフルパスを入力してください。"
     },
     "followSymlinkedDirectoriesKeywords": {
@@ -3772,7 +3772,7 @@
             "cliTag": "(CLI)",
             "terminalListNeedsServerUpdate": "ターミナル Agent を一覧表示するには、このサーバーの Orca を更新してください",
             "terminalListFailed": "このワークスペースのターミナル Agent を一覧表示できませんでした",
-            "chatNotOnWindows": "Windows ではまだチャットを利用できません"
+            "chatNotOnWindows": "agy の設定を確認"
           },
           "RecentTabSwitcher": {
             "329638ff6f": "タブの切り替え",
@@ -19550,7 +19550,7 @@
         "turnWorking": "このチャットの Agent が作業中です。ターンが終わってからブランチを切り替えてください。",
         "worktree": "ワークツリー"
       },
-      "explicitChatWindows": "この Agent のチャットはまだ Windows では利用できません。ターミナルで開いてください。",
+      "explicitChatWindows": "Windows ではこのチャットは agy で動作します。agy をインストールまたは更新し、個人の Google アカウントでサインインしてください。Chat が Google Cloud アカウントに設定されている場合は、設定で「個人」を選択してください。その後もう一度試すか、ターミナルで開いてください。",
       "fork": {
         "action": "この応答から分岐",
         "pending": "このチャットを分岐中…",

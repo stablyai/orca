@@ -79,13 +79,40 @@ export async function observeStructuredAgentLaunch(
   )
 }
 
+/** Whether a new chat would start on the host's own program, as its account home selects one. */
+export async function structuredAgentHostAlternativeReady(
+  agent: string,
+  runtime: LaunchSettingsRuntime,
+  refreshShellOnMiss = false
+): Promise<boolean> {
+  const program = structuredAgentRuntimeMetadata(agent)?.chatProgram
+  if (!program?.hostAlternative) {
+    return false
+  }
+  const settings = runtime.requireStore().getSettings()
+  const askedAt = Date.now()
+  const env = await resolveHostStructuredAgentLaunchEnvironment(agent, settings)
+  if (await program.hostAlternative(env, settings).catch(() => false)) {
+    return true
+  }
+  if (!refreshShellOnMiss) {
+    return false
+  }
+  await refreshHostAgentBaseEnvironmentAfterMiss(askedAt)
+  const refreshed = await resolveHostStructuredAgentLaunchEnvironment(agent, settings)
+  return program.hostAlternative(refreshed, settings).catch(() => false)
+}
+
 /** Admission's answer in the workspace `cwd` names: only a too-old or unstartable binary keeps the
- *  terminal. */
+ *  terminal, or, where Orca installs no release, a host program that cannot serve the chat. */
 export async function structuredAgentSupportsLaunch(
   agent: string,
   cwd: () => Promise<string>,
   runtime: LaunchSettingsRuntime
 ): Promise<boolean> {
+  if (structuredAgentRuntimeMetadata(agent)?.chatProgram?.onlyHostAlternative?.()) {
+    return structuredAgentHostAlternativeReady(agent, runtime, true)
+  }
   try {
     const release = await observeStructuredAgentLaunch(agent, cwd, runtime, true)
     return release === null || launchableRelease(release)
@@ -118,9 +145,13 @@ export async function resolveHostStructuredAgentLaunchEnvironment(
 export async function structuredAgentHostLaunchSources(
   agent: StructuredAgentId,
   runtime: Pick<LaunchSupportRuntime, 'requireStore'> & {
-    resolveStructuredAgentAccountHome(agent: StructuredAgentId): Promise<AgentSessionAccountHome>
+    resolveStructuredAgentAccountHome(
+      agent: StructuredAgentId,
+      purpose?: 'read' | 'identity'
+    ): Promise<AgentSessionAccountHome>
   },
-  signal: AbortSignal
+  signal: AbortSignal,
+  purpose: 'read' | 'identity' = 'read'
 ): Promise<{
   accountHome: AgentSessionAccountHome
   env: Record<string, string>
@@ -142,7 +173,7 @@ export async function structuredAgentHostLaunchSources(
     release()
   }
   return {
-    accountHome: await runtime.resolveStructuredAgentAccountHome(agent),
+    accountHome: await runtime.resolveStructuredAgentAccountHome(agent, purpose),
     env: await environment.resolveAgentEnvironment(agent),
     commandSettings: settings,
     // The chat host's own state root (ensureStructuredAgentSessionHost).

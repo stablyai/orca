@@ -6,6 +6,7 @@ import type { AntigravityNativeCredential } from './native-credential-codec'
 import { createAntigravityHostCredentialBackend } from './native-credential-backend'
 import { createAntigravityWslCredentialBackend } from './native-wsl-credentials'
 import { resolveWslDefaultDistro } from '../wsl/discovery/wsl-default-distro'
+import { expireAntigravityHostAcpChecks } from './antigravity-host-acp'
 import {
   AntigravityAccountService,
   type AntigravityCredentialBackend
@@ -26,7 +27,8 @@ export function setAntigravityNativeCredentialChangeListener(listener: () => voi
 // agy's own token refreshes keep the refresh token and must not discard the usage they produce;
 // a new refresh token is a fresh sign-in, even to the same account, and must clear a sign-in hold.
 function reportingCredentialChanges(
-  backend: AntigravityCredentialBackend
+  backend: AntigravityCredentialBackend,
+  homePath?: string
 ): AntigravityCredentialBackend {
   let lastSeen: AntigravityNativeCredential | null | undefined
   return {
@@ -40,6 +42,7 @@ function reportingCredentialChanges(
           lastSeen.refreshToken !== current.refreshToken ||
           !isSameAntigravityLogin(lastSeen, current))
       ) {
+        expireAntigravityHostAcpChecks(homePath)
         credentialChangeListener()
       }
       lastSeen = current
@@ -59,15 +62,17 @@ export function getAntigravityAccountVaultPath(wslDistro?: string): string {
 function createService(
   backend: AntigravityCredentialBackend,
   vaultPath: string,
-  target: RateLimitRuntimeTarget = ANTIGRAVITY_USAGE_HOST_TARGET
+  target: RateLimitRuntimeTarget = ANTIGRAVITY_USAGE_HOST_TARGET,
+  homePath?: string
 ) {
-  const reporting = reportingCredentialChanges(backend)
+  const reporting = reportingCredentialChanges(backend, homePath)
   return new AntigravityAccountService(
     createEncryptedAntigravityAccountStore(vaultPath, reporting.parse),
     reporting,
     undefined,
     undefined,
-    target
+    target,
+    homePath
   )
 }
 
@@ -102,9 +107,12 @@ export async function getAntigravityAccountService(
   if (target.wslDistro) {
     throw new Error('An Antigravity host account target cannot name a WSL distro.')
   }
+  const homePath = getAppEnvironment().getPath('home')
   service ??= createService(
-    createAntigravityHostCredentialBackend(getAppEnvironment().getPath('home')),
-    getAntigravityAccountVaultPath()
+    createAntigravityHostCredentialBackend(homePath),
+    getAntigravityAccountVaultPath(),
+    ANTIGRAVITY_USAGE_HOST_TARGET,
+    homePath
   )
   return service
 }

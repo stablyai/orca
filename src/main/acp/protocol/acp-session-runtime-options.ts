@@ -1,11 +1,25 @@
-import type { InitializeRequest, ClientCapabilities } from '../generated/acp-protocol.generated'
+import type {
+  InitializeRequest,
+  ClientCapabilities,
+  PromptResponse
+} from '../generated/acp-protocol.generated'
 import type { AcpPeerHandlers, AcpRequestContext } from '../transport/acp-json-rpc-peer'
 import type { AcpPeerOptions } from '../transport/acp-peer-limits'
 import type { AcpPermissionHandler } from './acp-permission-requests'
 
+export type AcpPromptTurnTracker = {
+  attach(sessionId: string, emit: (method: string, params: unknown) => void): void
+  beginPrompt(): Promise<void> | void
+  finishPrompt(response: PromptResponse): Promise<PromptResponse> | PromptResponse
+  abortPrompt(): Promise<void> | void
+  beforeNotification(method: string, params: unknown): boolean
+  dispose(): void
+}
+
 export type AcpSessionRuntimeOptions = {
   /** OMP's typed busy refusal confirms this prompt never ran. */
   retryBusyPrompts?: boolean
+  turnTracker?: AcpPromptTurnTracker
   clientInfo?: InitializeRequest['clientInfo']
   clientCapabilities?: Pick<ClientCapabilities, 'elicitation' | '_meta'>
   peer?: AcpPeerOptions

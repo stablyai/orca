@@ -1,7 +1,10 @@
 import { OPENCODE_LAUNCH_OPTION_CATALOG } from './agent-session-option-catalog-opencode'
 import { CODEBUDDY_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-codebuddy'
 import type { AgentType } from '../../agent-status/contracts/agent-status-types'
-import { ANTIGRAVITY_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-antigravity'
+import {
+  ANTIGRAVITY_LAUNCH_OPTION_CATALOG,
+  ANTIGRAVITY_SESSION_OPTION_CATALOG
+} from './agent-session-option-catalog-antigravity'
 import {
   CLAUDE_SESSION_OPTION_CATALOG,
   CODEX_SESSION_OPTION_CATALOG
@@ -89,12 +92,17 @@ export function sessionOptionValueIsValid(value: unknown): value is SessionOptio
   return typeof value === 'string' || typeof value === 'boolean'
 }
 
+/** Return the terminal/worker launch option catalog for `agent`, overriding chat catalogs where terminal flags differ. */
 export function getAgentSessionOptionLaunchCatalog(
   agent: AgentType
 ): AgentSessionOptionCatalog | null {
-  return agent === 'opencode'
-    ? OPENCODE_LAUNCH_OPTION_CATALOG
-    : agent === 'pi'
-      ? PI_LAUNCH_OPTION_CATALOG
-      : getAgentSessionOptionCatalog(agent)
+  if (agent === 'opencode') {
+    return OPENCODE_LAUNCH_OPTION_CATALOG
+  }
+  if (agent === 'pi') {
+    return PI_LAUNCH_OPTION_CATALOG
+  }
+  return agent === 'antigravity'
+    ? ANTIGRAVITY_LAUNCH_OPTION_CATALOG
+    : getAgentSessionOptionCatalog(agent)
 }

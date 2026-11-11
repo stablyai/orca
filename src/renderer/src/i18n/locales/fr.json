@@ -683,7 +683,7 @@
       "defaultSurfaceSetAllTerminal": "Tout mettre en Terminal",
       "sameAsChoice": "Identique à {{agent}} · {{choice}}",
       "modelListFallback": "Liste intégrée. Orca n’a pas pu obtenir de liste de modèles depuis cet hôte.",
-      "chatUnavailableOnWindows": "{{value0}} Chat n’est pas encore disponible sous Windows : {{value0}} s’ouvre donc dans un terminal sur cet hôte. Les chats sur un hôte macOS ou Linux fonctionnent toujours.",
+      "chatUnavailableOnWindows": "Sous Windows, {{value0}} Chat s’exécute avec agy. Installez ou mettez à jour agy et connectez-vous avec un compte Google personnel ; si Chat est configuré avec un compte Google Cloud, choisissez Personnel dans Réglages. D’ici là, {{value0}} s’ouvre dans un terminal.",
       "undetectedCommandHint": "Si la CLI {{agent}} est installée hors de PATH, saisissez le chemin complet de son exécutable sur cet hôte."
     },
     "followSymlinkedDirectoriesKeywords": {
@@ -4107,7 +4107,7 @@
             "agentsLoading": "Chargement des agents",
             "terminalListNeedsServerUpdate": "Mettez à jour Orca sur ce serveur pour lister les agents de terminal",
             "terminalListFailed": "Impossible de lister les agents de terminal de cet espace de travail",
-            "chatNotOnWindows": "Pas encore de chat sous Windows"
+            "chatNotOnWindows": "Vérifier la configuration d’agy"
           },
           "RecentTabSwitcher": {
             "329638ff6f": "Changer d'onglet",
@@ -20328,7 +20328,7 @@
         "turnWorking": "L’agent de ce chat est en cours d’exécution. Changez de branche une fois son tour terminé.",
         "worktree": "Worktree"
       },
-      "explicitChatWindows": "Le chat de cet agent n’est pas encore disponible sous Windows. Ouvrez-le plutôt dans un terminal.",
+      "explicitChatWindows": "Sous Windows, ce chat s’exécute avec agy. Installez ou mettez à jour agy et connectez-vous avec un compte Google personnel ; si Chat est configuré avec un compte Google Cloud, choisissez Personnel dans Réglages. Réessayez ensuite ou ouvrez-le plutôt dans un terminal.",
       "fork": {
         "action": "Créer une branche à partir de cette réponse",
         "pending": "Création d’une branche de cette conversation…",

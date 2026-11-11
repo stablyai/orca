@@ -42,7 +42,8 @@ export function refreshedWithoutIdToken(generation: number, refreshToken = 'refr
   })
 }
 
-export function harness(initial: string | null = credential('a')) {
+/** Build an in-memory Antigravity account service harness with controllable native credentials. */
+export function harness(initial: string | null = credential('a'), homePath?: string) {
   let native = initial
   let vault: AntigravityAccountVault = { accounts: [], selectedAccountId: null }
   const store: AntigravityAccountStore = {
@@ -69,7 +70,14 @@ export function harness(initial: string | null = credential('a')) {
     store,
     backend,
     lookupIdentity,
-    service: new AntigravityAccountService(store, backend, Date.now, lookupIdentity),
+    service: new AntigravityAccountService(
+      store,
+      backend,
+      Date.now,
+      lookupIdentity,
+      undefined,
+      homePath
+    ),
     setNative: (contents: string | null) => {
       native = contents
     },

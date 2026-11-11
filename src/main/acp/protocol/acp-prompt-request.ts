@@ -1,7 +1,9 @@
 import { delayUnlessAborted } from '../../../shared/abort-aware-delay'
 import { AcpAgentError } from '../transport/acp-errors'
 import type { PromptResponse } from '../generated/acp-protocol.generated'
+import type { AcpPromptTurnTracker } from './acp-session-runtime-options'
 
+/** Check whether an ACP RPC failure represents a retryable `session_busy` refusal. */
 function sessionBusy(error: unknown): boolean {
   return (
     error instanceof AcpAgentError &&
@@ -25,7 +27,11 @@ export class AcpPromptRequest {
     return this.waiting
   }
 
-  async run(request: () => Promise<PromptResponse>): Promise<PromptResponse> {
+  /** Execute `request`, coordinating turn-tracker lifecycle and `session_busy` retries. */
+  async run(
+    request: () => Promise<PromptResponse>,
+    tracker?: AcpPromptTurnTracker
+  ): Promise<PromptResponse> {
     if (this.active) {
       throw new Error('ACP prompt already in progress')
     }
@@ -42,8 +48,27 @@ export class AcpPromptRequest {
         }
         try {
           this.waiting = false
-          return await request()
+          const preparing = tracker?.beginPrompt()
+          if (preparing) {
+            await preparing
+            if (this.closedWith || active.signal.aborted) {
+              const aborting = tracker?.abortPrompt()
+              if (aborting) {
+                await aborting
+              }
+              if (this.closedWith) {
+                throw this.closedWith
+              }
+              return { stopReason: 'cancelled' }
+            }
+          }
+          const res = await request()
+          return tracker ? await tracker.finishPrompt(res) : res
         } catch (error) {
+          const aborting = tracker?.abortPrompt()
+          if (aborting) {
+            await aborting
+          }
           if (!this.retryBusy || !sessionBusy(error)) {
             throw error
           }
@@ -58,10 +83,12 @@ export class AcpPromptRequest {
     }
   }
 
+  /** Abort any waiting or preparing prompt turn. */
   cancel(): void {
     this.active?.abort()
   }
 
+  /** Permanently close the prompt runner with `error` and abort any active prompt. */
   close(error: Error): void {
     this.closedWith = error
     this.cancel()

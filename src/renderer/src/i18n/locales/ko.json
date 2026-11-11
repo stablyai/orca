@@ -425,7 +425,7 @@
       "defaultSurfaceSetAllTerminal": "모두 터미널로 설정",
       "sameAsChoice": "{{agent}}와 동일 · {{choice}}",
       "modelListFallback": "기본 제공 목록입니다. Orca가 이 호스트에서 모델 목록을 가져오지 못했습니다.",
-      "chatUnavailableOnWindows": "{{value0}} Chat은 아직 Windows에서 사용할 수 없으므로 이 호스트에서는 {{value0}}이(가) 터미널에서 열립니다. macOS 또는 Linux 호스트의 채팅은 계속 사용할 수 있습니다.",
+      "chatUnavailableOnWindows": "Windows에서는 {{value0}} Chat이 agy로 실행됩니다. agy를 설치하거나 업데이트하고 개인 Google 계정으로 로그인하세요. Chat이 Google Cloud 계정으로 설정되어 있다면 설정에서 개인을 선택하세요. 그 전까지는 {{value0}}이(가) 터미널에서 열립니다.",
       "undetectedCommandHint": "{{agent}} CLI가 PATH 외부에 설치되어 있다면 이 호스트의 실행 파일 전체 경로를 입력하세요."
     },
     "followSymlinkedDirectoriesKeywords": {
@@ -3769,7 +3769,7 @@
             "chatCheckFailed": "채팅 가능 여부를 확인할 수 없습니다.",
             "terminalListNeedsServerUpdate": "터미널 에이전트를 나열하려면 이 서버의 Orca를 업데이트하세요",
             "terminalListFailed": "이 워크스페이스의 터미널 에이전트를 나열할 수 없습니다",
-            "chatNotOnWindows": "Windows에서는 아직 채팅 불가"
+            "chatNotOnWindows": "agy 설정 확인"
           },
           "RecentTabSwitcher": {
             "329638ff6f": "탭 전환",
@@ -19547,7 +19547,7 @@
         "turnWorking": "이 채팅의 에이전트가 작업 중입니다. 턴이 끝난 후 브랜치를 전환하세요.",
         "worktree": "작업 트리"
       },
-      "explicitChatWindows": "이 에이전트의 채팅은 아직 Windows에서 사용할 수 없습니다. 대신 터미널에서 여세요.",
+      "explicitChatWindows": "Windows에서는 이 채팅이 agy로 실행됩니다. agy를 설치하거나 업데이트하고 개인 Google 계정으로 로그인하세요. Chat이 Google Cloud 계정으로 설정되어 있다면 설정에서 개인을 선택하세요. 그런 다음 다시 시도하거나 터미널에서 여세요.",
       "fork": {
         "action": "이 응답에서 분기",
         "pending": "이 채팅 분기 중…",

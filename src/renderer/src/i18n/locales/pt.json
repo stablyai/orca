@@ -1804,7 +1804,7 @@
       "defaultSurfaceSetAllTerminal": "Definir todos como Terminal",
       "sameAsChoice": "Igual a {{agent}} · {{choice}}",
       "modelListFallback": "Lista integrada. O Orca não conseguiu obter uma lista de modelos deste host.",
-      "chatUnavailableOnWindows": "O {{value0}} Chat ainda não está disponível no Windows, então o {{value0}} abre em um terminal neste host. Chats em um host macOS ou Linux continuam funcionando.",
+      "chatUnavailableOnWindows": "No Windows, o {{value0}} Chat é executado pelo agy. Instale ou atualize o agy e entre com uma conta pessoal do Google; se o Chat estiver configurado com uma conta do Google Cloud, escolha Pessoal nas Configurações. Até lá, o {{value0}} abre em um terminal.",
       "undetectedCommandHint": "Se a CLI do {{agent}} estiver instalada fora do PATH, informe o caminho completo do executável neste host.",
       "permissionMixed": "Misto",
       "choiceChipTooltip": "Adicionado por {{choice}}. Remova-o para usar o padrão.",
@@ -17620,7 +17620,7 @@
             "agentsLoading": "Carregando agentes",
             "terminalListNeedsServerUpdate": "Atualize o Orca neste servidor para listar os agentes de terminal",
             "terminalListFailed": "Não foi possível listar os agentes de terminal deste espaço de trabalho",
-            "chatNotOnWindows": "Ainda sem chat no Windows"
+            "chatNotOnWindows": "Verifique a configuração do agy"
           },
           "TabWorkspaceLayoutMenuSection": {
             "right": "Direita",
@@ -21715,7 +21715,7 @@
         "turnWorking": "O agente deste chat está trabalhando. Troque de branch quando o turno dele terminar.",
         "worktree": "Worktree"
       },
-      "explicitChatWindows": "O chat deste agente ainda não está disponível no Windows. Abra-o em um terminal.",
+      "explicitChatWindows": "No Windows, este chat é executado pelo agy. Instale ou atualize o agy e entre com uma conta pessoal do Google; se o Chat estiver configurado com uma conta do Google Cloud, escolha Pessoal nas Configurações. Depois tente novamente ou abra-o em um terminal.",
       "fork": {
         "action": "Criar ramificação a partir desta resposta",
         "hostUnsupported": "Este host executa uma versão antiga do Orca. Atualize o Orca no host e tente novamente.",

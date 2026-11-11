@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { homedir } from 'node:os'
 import type { AntigravityAccountState } from '../../shared/antigravity-account-types'
 import type {
   AntigravityAccountUsage,
@@ -21,6 +22,7 @@ import {
   type AntigravityNativeCredential
 } from './native-credential-codec'
 import { fetchGoogleIdentity } from './google-userinfo-identity'
+import { expireAntigravityHostAcpChecks } from './antigravity-host-acp'
 import type {
   AntigravityAccountStore,
   AntigravityAccountVault,
@@ -60,7 +62,8 @@ export class AntigravityAccountService {
     private readonly backend: AntigravityCredentialBackend,
     private readonly now: () => number = Date.now,
     private readonly lookupIdentity = fetchGoogleIdentity,
-    private readonly target: RateLimitRuntimeTarget = ANTIGRAVITY_USAGE_HOST_TARGET
+    private readonly target: RateLimitRuntimeTarget = ANTIGRAVITY_USAGE_HOST_TARGET,
+    private readonly homePath: string = homedir()
   ) {}
 
   listAccounts(): Promise<AntigravityAccountState> {
@@ -107,7 +110,9 @@ export class AntigravityAccountService {
       if (!selected) {
         throw new Error('Antigravity account was not found.')
       }
-      if (!current || !this.matches(selected, current)) {
+      const credentialChanged = !current || !this.matches(selected, current)
+      const switched = credentialChanged || vault.selectedAccountId !== id
+      if (credentialChanged) {
         await this.backend.write(selected.credentials, current?.contents ?? null)
       }
       const readback = await this.backend.read()
@@ -125,6 +130,9 @@ export class AntigravityAccountService {
       latest.selectedAccountId = id
       this.updateSnapshot(latest, readback)
       this.store.write(latest)
+      if (switched && this.target.runtime === 'host') {
+        expireAntigravityHostAcpChecks(this.homePath)
+      }
       return this.state({ vault: latest, current: readback })
     })
   }
