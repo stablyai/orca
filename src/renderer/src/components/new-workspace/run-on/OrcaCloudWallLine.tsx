@@ -18,7 +18,7 @@ export function OrcaCloudWallLine({ wall }: { wall: OrcaCloudWallNotice }): Reac
         // statusAction pads its label by px-1; the wrapper's -mx-1 puts the text flush-left.
         <div className="-mx-1">
           <Button type="button" variant="link" size="statusAction" onClick={wall.action.run}>
-            {wall.action.label}
+            <span className="underline underline-offset-4">{wall.action.label}</span>
           </Button>
         </div>
       ) : (

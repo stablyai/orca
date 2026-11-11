@@ -26,3 +26,11 @@ export const noGitHubRepositories = defineFixture({
     </Column>
   )
 })
+// Keyboard: the link shows its focus ring.
+export const focused = defineFixture({
+  ...withGitHubRepositories,
+  interact: async (frame: HTMLElement) => {
+    frame.querySelector<HTMLButtonElement>('button')?.focus()
+    await new Promise((resolve) => setTimeout(resolve, 100))
+  }
+})

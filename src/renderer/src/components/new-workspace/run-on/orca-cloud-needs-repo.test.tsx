@@ -33,6 +33,7 @@ describe('Orca Cloud on a plain-folder project (RR-c1)', () => {
     const { getByRole } = render(
       <NewWorkspaceComposerFooter
         onCreate={onCreate}
+        createError={null}
         createDisabled
         creating={false}
         primaryActionLabel="Create workspace"

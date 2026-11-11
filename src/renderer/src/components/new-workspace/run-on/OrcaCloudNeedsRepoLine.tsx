@@ -39,9 +39,12 @@ export function OrcaCloudNeedsRepoLine({
           size="statusAction"
           onClick={hasRepos ? onChooseRepository : onAddRepository}
         >
-          {hasRepos
-            ? t('components.newWorkspace.cloudOnly.chooseRepository', 'Choose repository')
-            : t('components.newWorkspace.cloudOnly.addRepository', 'Add a GitHub repository')}
+          {/* Reads as a link at rest, not only on hover (design-squad). */}
+          <span className="underline underline-offset-4">
+            {hasRepos
+              ? t('components.newWorkspace.cloudOnly.chooseRepository', 'Choose repository')
+              : t('components.newWorkspace.cloudOnly.addRepository', 'Add a GitHub repository')}
+          </span>
         </Button>
       </div>
     </div>
