@@ -1,23 +1,14 @@
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
-import { buildNativeChatFolderTrustPrompt } from '../../../../shared/native-chat/input/native-chat-approval-envelope'
 import type { HeadlessEmulator } from '../../../daemon/emulation/headless-emulator'
-import { findTerminalWaitBlockedSignal } from '../../agent-state-rules/blocked-text-layer'
 import type { LaunchedAgentForeground } from '../wait/launched-agent-foreground'
+import { startupDialogPrompt, startupDialogReason } from './startup-dialog-screen'
 
-// Cell-diff painters (Claude's Ink) replace spaces with cursor moves, so match one word, not the phrase.
-const TRUST_KEYWORD_RE = /trust/i
-const TRUST_KEYWORD_CARRY_CHARS = 'trust'.length - 1
+// Cell-diff painters (Claude's Ink) replace spaces with cursor moves, so match one key-row word, not the phrase.
+const TRUST_KEYWORD_RE = /trust|confirm|continue|skip/i
+const TRUST_KEYWORD_CARRY_CHARS = 'continue'.length - 1
 const TRUST_DIALOG_PAINT_BYTES = 4096
-// A live dialog ends on its key footer with the trust choice just above; quoted dialog text in a reply does not.
-const TRUST_DIALOG_FOOTER_RE =
-  /^(?:enter to confirm \u00b7 esc to cancel|enter continue \u00b7 esc quit)$/
-const TRUST_DIALOG_CHOICE_RE =
-  /^(?:[\u276f\u203a]\s*)?(?:\d+\.\s*)?(?:yes, i trust this folder|trust and continue)$/
-const TRUST_DIALOG_CHOICE_ROWS = 6
-const TRUST_DIALOG_CURSOR_RE = /^[\u276f\u203a]/
 /** Screen reads while our row is up are throttled to this; a working agent's output cannot hold the row. */
 const TRUST_DIALOG_READ_INTERVAL_MS = 400
 // Claude repaints without sync markers, so a resize clear read before its redraw is not proof the dialog left.
@@ -28,12 +19,12 @@ type PaneScan = {
   /** Output still allowed to finish painting a dialog whose keyword was seen. */
   pendingBytes: number
   resolvingAgent?: boolean
-  /** Receipt stamp of the agentless card that locks Send while the agent is identified. */
-  holdReceivedAt?: number
   /** The waiting row we published, identified by its receipt stamp like hook-silence rechecks. */
   owned?: { agent: 'claude' | 'codex'; receivedAt: number }
-  /** Keys our card sends; republished when the terminal moves the cursor. */
-  trustKeys?: string | null
+  /** The card we published; republished when the terminal moves the cursor. */
+  prompt?: string
+  /** An unaimable card seen once; it replaces ours only if the next read still shows it. */
+  unaimedPrompt?: string
   misses: number
   outputSinceRead?: boolean
   readTimer?: ReturnType<typeof setTimeout>
@@ -41,8 +32,7 @@ type PaneScan = {
 
 type TrustDialogStatusDeps = {
   getPaneAgent: (ptyId: string) => TuiAgent | null
-  /** Names a hand-typed agent for this dialog only; null when launch/foreground evidence already owns the pane. */
-  identifyUnownedAgent: (ptyId: string) => Promise<TerminalAgent | null | undefined> | null
+  refreshForegroundAgent: (ptyId: string) => Promise<unknown>
   readLaunchedAgentForeground: (ptyId: string, agent: TuiAgent) => Promise<LaunchedAgentForeground>
   /** The PTY's current screen model; replaced on renderer-snapshot recovery, undefined once gone. */
   getEmulator: (ptyId: string) => HeadlessEmulator | undefined
@@ -51,39 +41,7 @@ type TrustDialogStatusDeps = {
   publish: (ptyId: string, payload: ParsedAgentStatusPayload) => void
 }
 
-function visibleLines(emulator: HeadlessEmulator): string[] {
-  return emulator
-    .getVisibleLines()
-    .map((line) => line.trim().toLowerCase())
-    .filter(Boolean)
-}
-
-function isTrustDialogOnScreen(emulator: HeadlessEmulator): boolean {
-  const lines = visibleLines(emulator)
-  if (
-    !TRUST_DIALOG_FOOTER_RE.test(lines.at(-1) ?? '') ||
-    !lines.slice(-TRUST_DIALOG_CHOICE_ROWS, -1).some((line) => TRUST_DIALOG_CHOICE_RE.test(line))
-  ) {
-    return false
-  }
-  const reason = findTerminalWaitBlockedSignal(lines.join('\n'))?.reason
-  return reason === 'agent-trust-workspace' || reason === 'codex-trust-workspace'
-}
-
-/** Arrow keys from the highlighted choice to the trust choice, then Return; null when the layout is not the known two-choice one. */
-function trustChoiceKeys(emulator: HeadlessEmulator): string | null {
-  const choices = visibleLines(emulator).slice(-TRUST_DIALOG_CHOICE_ROWS, -1)
-  const cursor = choices.findIndex((line) => TRUST_DIALOG_CURSOR_RE.test(line))
-  const trust = choices.findIndex((line) => TRUST_DIALOG_CHOICE_RE.test(line))
-  // Rows between the two choices may be wrapped text, not choices, so only adjacent rows are trusted.
-  if (cursor === -1 || trust === -1 || Math.abs(trust - cursor) > 1) {
-    return null
-  }
-  const arrow = trust > cursor ? '\x1b[B' : '\x1b[A'
-  return `${arrow.repeat(Math.abs(trust - cursor))}\r`
-}
-
-/** Projects a Claude/Codex folder-trust dialog into the pane's status row; hooks only start after trust. */
+/** Projects a Claude/Codex startup dialog (folder trust, MCP servers, updates…) into the pane's status row; hooks only start after it. */
 export class TrustDialogStatusObserver {
   private readonly panes = new Map<string, PaneScan>()
 
@@ -116,7 +74,7 @@ export class TrustDialogStatusObserver {
     if (pane.pendingBytes <= 0 || pane.resolvingAgent || emulator.isSynchronizedOutput) {
       return
     }
-    if (!isTrustDialogOnScreen(emulator)) {
+    if (!startupDialogReason(emulator)) {
       pane.pendingBytes -= chunk.length
       return
     }
@@ -126,61 +84,16 @@ export class TrustDialogStatusObserver {
       this.publishWaiting(ptyId, pane, agent, emulator)
       return
     }
-    this.hold(ptyId, pane, emulator)
-    this.identifyAndPublish(ptyId, pane)
-  }
-
-  // An agent typed into a shell paints its dialog before the foreground-process probe names it.
-  private identifyAndPublish(ptyId: string, pane: PaneScan): void {
+    // An agent typed into a shell paints its dialog before the foreground-process probe names it.
     pane.resolvingAgent = true
-    const resolved = (identified?: TerminalAgent | null) => {
+    const resolved = () => {
       pane.resolvingAgent = false
       const current = this.deps.getEmulator(ptyId)
-      if (this.panes.get(ptyId) !== pane || !current || !isTrustDialogOnScreen(current)) {
-        this.release(ptyId, pane)
-        return
+      if (this.panes.get(ptyId) === pane && current && startupDialogReason(current)) {
+        this.publishWaiting(ptyId, pane, this.deps.getPaneAgent(ptyId), current)
       }
-      const agent = identified ?? this.deps.getPaneAgent(ptyId)
-      // A timed-out probe answers undefined; a static dialog repaints nothing to rescan on, so retry
-      // until it leaves. A later probe reads the shared scan's cached answer.
-      if (identified === undefined && !agent) {
-        pane.resolvingAgent = true
-        setTimeout(
-          () => this.identifyAndPublish(ptyId, pane),
-          TRUST_DIALOG_READ_INTERVAL_MS
-        ).unref?.()
-        return
-      }
-      this.publishWaiting(ptyId, pane, agent, current)
-      if (!pane.owned) {
-        this.release(ptyId, pane)
-      }
-      pane.holdReceivedAt = undefined
     }
-    void Promise.resolve(this.deps.identifyUnownedAgent(ptyId)).then(resolved, () => resolved())
-  }
-
-  private hold(ptyId: string, pane: PaneScan, emulator: HeadlessEmulator): void {
-    const before = this.deps.readStatus(ptyId)
-    if (before?.observation?.origin === 'hook' && !before.providerSessionOnly) {
-      return
-    }
-    this.deps.publish(ptyId, {
-      state: 'waiting',
-      prompt: '',
-      interactivePrompt: buildNativeChatFolderTrustPrompt(trustChoiceKeys(emulator))
-    })
-    pane.holdReceivedAt = this.deps.readStatus(ptyId)?.receivedAt
-  }
-
-  /** Clears the agentless hold unless a writer replaced it; only Claude and Codex keep a card. */
-  private release(ptyId: string, pane: PaneScan): void {
-    const receivedAt = pane.holdReceivedAt
-    pane.holdReceivedAt = undefined
-    const row = this.deps.readStatus(ptyId)
-    if (receivedAt !== undefined && row?.state === 'waiting' && row.receivedAt === receivedAt) {
-      this.deps.publish(ptyId, { state: 'done', prompt: '', sessionBoundary: true })
-    }
+    void this.deps.refreshForegroundAgent(ptyId).then(resolved, resolved)
   }
 
   forget(ptyId: string): void {
@@ -191,8 +104,9 @@ export class TrustDialogStatusObserver {
   private publishWaiting(
     ptyId: string,
     pane: PaneScan,
-    agent: TerminalAgent | null,
-    emulator: HeadlessEmulator
+    agent: TuiAgent | null,
+    emulator: HeadlessEmulator,
+    read?: { prompt: string }
   ): void {
     // Only Claude's and Codex's dialogs are verified to precede their hooks and repaint without flicker.
     if (agent !== 'claude' && agent !== 'codex') {
@@ -202,14 +116,17 @@ export class TrustDialogStatusObserver {
     if (before?.observation?.origin === 'hook' && !before.providerSessionOnly) {
       return
     }
-    // Chat views answer this card; without it a sent message's Return picks the highlighted "No, exit".
-    const keys = trustChoiceKeys(emulator)
-    pane.trustKeys = keys
+    // Chat views answer or lock on this card; without it a sent message's Return picks the highlighted choice.
+    const card = read ?? startupDialogPrompt(emulator, agent)
+    if (!card) {
+      return
+    }
+    pane.prompt = card.prompt
     this.deps.publish(ptyId, {
       state: 'waiting',
       agentType: agent,
       prompt: '',
-      interactivePrompt: buildNativeChatFolderTrustPrompt(keys)
+      interactivePrompt: card.prompt
     })
     const row = this.deps.readStatus(ptyId)
     if (row?.state === 'waiting' && row.agentType === agent) {
@@ -254,7 +171,8 @@ export class TrustDialogStatusObserver {
     if (emulator.isSynchronizedOutput) {
       return true
     }
-    if (!isTrustDialogOnScreen(emulator)) {
+    const card = startupDialogPrompt(emulator, owned.agent)
+    if (!card) {
       pane.misses += 1
       if (pane.misses < TRUST_DIALOG_CLEAR_AFTER_MISSES) {
         return true
@@ -263,9 +181,12 @@ export class TrustDialogStatusObserver {
       return false
     }
     pane.misses = 0
-    const keys = trustChoiceKeys(emulator)
-    if (keys !== pane.trustKeys) {
-      this.publishWaiting(ptyId, pane, owned.agent, emulator)
+    // A mid-repaint read cannot aim; a stale aimed card would send old arrows, so a steady unaimed one replaces it.
+    const awaitingSteadyRead =
+      card.prompt !== pane.prompt && !card.aimed && pane.unaimedPrompt !== card.prompt
+    pane.unaimedPrompt = awaitingSteadyRead ? card.prompt : undefined
+    if (card.prompt !== pane.prompt && !awaitingSteadyRead) {
+      this.publishWaiting(ptyId, pane, owned.agent, emulator, card)
       owned = pane.owned ?? owned
     }
     // A killed agent can leave its frame above the shell prompt; only a proven shell foreground settles it.
@@ -277,7 +198,7 @@ export class TrustDialogStatusObserver {
       this.settle(ptyId, owned)
       return false
     }
-    return pane.outputSinceRead
+    return pane.outputSinceRead || awaitingSteadyRead
   }
 
   private settle(ptyId: string, owned: NonNullable<PaneScan['owned']>): void {

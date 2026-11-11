@@ -19,7 +19,9 @@ const PIECES: Record<keyof typeof COPY, (values?: { value0: string }) => string>
     translate('components.native-chat.approval.folderTrust.hint', COPY.folderTrustHint),
   trustFolder: () =>
     translate('components.native-chat.approval.folderTrust.trust', COPY.trustFolder),
-  exit: () => translate('components.native-chat.approval.folderTrust.exit', COPY.exit)
+  exit: () => translate('components.native-chat.approval.folderTrust.exit', COPY.exit),
+  startupMenuTitle: (values) =>
+    translate('components.native-chat.approval.startupMenu.title', COPY.startupMenuTitle, values)
 }
 
 export const sayNativeChatApprovalTranslated: NativeChatApprovalSay = (id, values) =>

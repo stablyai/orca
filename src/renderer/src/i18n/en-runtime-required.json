@@ -1605,6 +1605,9 @@
           "refineHint": "Refine plan closes the review so you can send what to change.",
           "reviewTitle": "Review proposed plan"
         },
+        "startupMenu": {
+          "title": "{{value0}} is waiting for a choice in the terminal"
+        },
         "title": "Allow {{value0}}?"
       },
       "ask": {

@@ -27,6 +27,8 @@ export type NativeChatApprovalCardProps = {
   /** A choice is being delivered: the options wait for its answer. */
   isSubmitting?: boolean
   shouldFocus?: boolean
+  /** Shown when the card has no options: only the terminal can answer it. */
+  onOpenTerminal?: () => void
 }
 
 /** PTY options are literal replies; structured options are journal ids. Style the first option as primary. */
@@ -36,7 +38,8 @@ export function NativeChatApprovalCard({
   onCancel,
   onCollapse,
   isSubmitting = false,
-  shouldFocus = false
+  shouldFocus = false,
+  onOpenTerminal
 }: NativeChatApprovalCardProps): React.JSX.Element {
   const t = useTranslate()
   const cardRef = useRef<HTMLDivElement>(null)
@@ -175,6 +178,15 @@ export function NativeChatApprovalCard({
                   {opt.label}
                 </button>
               ))}
+              {approval.options.length === 0 && onOpenTerminal ? (
+                <button
+                  type="button"
+                  onClick={onOpenTerminal}
+                  className="rounded-md bg-primary px-4 py-1.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  {t('components.native-chat.question.openTerminal', 'Answer in terminal')}
+                </button>
+              ) : null}
             </div>
           </div>
         </div>

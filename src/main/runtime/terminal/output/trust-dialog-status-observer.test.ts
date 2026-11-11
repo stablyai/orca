@@ -100,88 +100,6 @@ describe('TrustDialogStatusObserver', () => {
     expect(published).toEqual(expected)
   })
 
-  // Native Claude typed into a shell: its foreground name is its version until a scan reads its argv.
-  it('publishes the trust card for hand-typed native Claude without storing its identity', async () => {
-    const { runtime, published, recording, write } = await pane(
-      'claude-dialog-trust-workspace',
-      'claude',
-      {
-        launchAgent: undefined,
-        confirmedForegroundProcess: 'claude'
-      }
-    )
-    await write(recording)
-    // The agentless hold, then the identified card.
-    expect(published).toEqual(['waiting', 'waiting'])
-    expect(runtime['ptysById'].get(TRANSCRIPT_PANE_PTY_ID)?.foregroundAgent).not.toBe('claude')
-  })
-
-  it('retries hand-typed Claude identification after the probe times out', async () => {
-    const { runtime, published, recording, write } = await pane(
-      'claude-dialog-trust-workspace',
-      'claude',
-      { launchAgent: undefined, confirmedForegroundProcess: 'claude' }
-    )
-    vi.spyOn(runtime['ptyForegroundAgent'], 'identifyUnowned').mockReturnValueOnce(
-      Promise.resolve(undefined)
-    )
-    await write(recording)
-    await vi.advanceTimersByTimeAsync(2_000)
-    // The agentless hold, then the identified card.
-    expect(published).toEqual(['waiting', 'waiting'])
-  })
-
-  it('still publishes when the shared probe answers after every retry window', async () => {
-    const { runtime, published, recording, write } = await pane(
-      'claude-dialog-trust-workspace',
-      'claude',
-      { launchAgent: undefined, confirmedForegroundProcess: 'claude' }
-    )
-    const probe = vi.spyOn(runtime['ptyForegroundAgent'], 'identifyUnowned')
-    for (let i = 0; i < 6; i++) {
-      probe.mockReturnValueOnce(Promise.resolve(undefined))
-    }
-    await write(recording)
-    await vi.advanceTimersByTimeAsync(5_000)
-    // The agentless hold, then the identified card.
-    expect(published).toEqual(['waiting', 'waiting'])
-  })
-
-  // Why: Send is otherwise unlocked while the probe runs, and a chat message would type into the dialog.
-  it('holds the composer with the card while a hand-typed agent is still being identified', async () => {
-    const { runtime, rows, published, prompts, recording, write } = await pane(
-      'claude-dialog-trust-workspace',
-      'claude',
-      { launchAgent: undefined, confirmedForegroundProcess: 'claude' }
-    )
-    let answer: (agent: 'claude' | null) => void = () => {}
-    vi.spyOn(runtime['ptyForegroundAgent'], 'identifyUnowned').mockReturnValueOnce(
-      new Promise((resolve) => (answer = resolve))
-    )
-    await write(recording)
-    const card = parseInteractivePrompt(prompts[0])
-    expect(published).toEqual(['waiting'])
-    expect(card?.kind === 'approval' && card.approval.holdsComposer).toBe(true)
-
-    answer('claude')
-    await vi.advanceTimersByTimeAsync(0)
-    expect([...rows.values()].at(-1)?.agentType).toBe('claude')
-  })
-
-  it('releases the held composer when the dialog belongs to no Claude or Codex', async () => {
-    const { runtime, published, recording, write } = await pane(
-      'claude-dialog-trust-workspace',
-      'claude',
-      { launchAgent: undefined, confirmedForegroundProcess: null }
-    )
-    vi.spyOn(runtime['ptyForegroundAgent'], 'identifyUnowned').mockReturnValueOnce(
-      Promise.resolve(null)
-    )
-    await write(recording)
-    await vi.advanceTimersByTimeAsync(2_000)
-    expect(published).toEqual(['waiting', 'done'])
-  })
-
   // Keys verified against Claude Code 2.1.316: digits do nothing, Down+Enter trusts, Enter alone exits.
   it.each([
     ['claude-dialog-trust-workspace', 'claude', '\x1b[B\r'],
@@ -210,17 +128,6 @@ describe('TrustDialogStatusObserver', () => {
     expect(card?.kind === 'approval' && card.approval.options[0]?.send).toBe('\x1b[A\r')
   })
 
-  it('drops the trust choice when a repaint hides the highlight', async () => {
-    const { prompts, recording, write } = await pane('codex-0-158-0-trustprompt', 'codex')
-    await write(recording)
-    await write('\x1b[9;1H\x1b[2K  1. Trust and continue')
-    await vi.advanceTimersByTimeAsync(1_000)
-    const card = parseInteractivePrompt(prompts.at(-1), undefined, 'codex')
-    expect(card?.kind === 'approval' && card.approval.options).toEqual([
-      { label: 'Exit', send: '\x1b' }
-    ])
-  })
-
   // A send would still hit the highlighted choice, so the card keeps Exit and locks terminal sends.
   it('offers only Exit when no highlighted choice is visible', async () => {
     const { prompts, recording, write } = await pane('codex-0-158-0-trustprompt', 'codex')
@@ -229,6 +136,118 @@ describe('TrustDialogStatusObserver', () => {
     expect(card?.kind === 'approval' && card.approval.options).toEqual([
       { label: 'Exit', send: '\x1b' }
     ])
+  })
+
+  const UP = '\x1b[A'
+  const DOWN = '\x1b[B'
+  // Keys verified against Claude Code 2.1.316 with a scratch config: arrows move the highlight, Enter picks it.
+  it.each([
+    [
+      'claude-2-1-316-startup-mcp-server',
+      'New MCP server found in this project: scratch-echo',
+      [
+        ['Use this MCP server', `${UP}${UP}\r`],
+        ['Use this and all future MCP servers in this project', `${UP}\r`],
+        ['Continue without using this MCP server', '\r']
+      ]
+    ],
+    [
+      'claude-2-1-316-startup-mcp-server-narrow',
+      'New MCP server found in this project: scratch-echo',
+      [
+        ['Use this MCP server', `${UP}${UP}\r`],
+        ['Use this and all future MCP servers in this project', `${UP}\r`],
+        ['Continue without using this MCP server', '\r']
+      ]
+    ],
+    // A wrapped choice reads as an extra row, so the arrows cannot be aimed.
+    [
+      'claude-2-1-316-startup-mcp-server-wrapped',
+      'New MCP server found in this project: scratch-echo',
+      []
+    ],
+    [
+      'claude-2-1-316-startup-api-key',
+      'Detected a custom API key in your environment',
+      [
+        ['Yes', `${UP}\r`],
+        ['No (recommended)', '\r']
+      ]
+    ],
+    [
+      'claude-2-1-316-startup-bypass-permissions',
+      'WARNING: Claude Code running in Bypass Permissions mode',
+      [
+        ['No, exit', '\r'],
+        ['Yes, I accept', `${DOWN}\r`]
+      ]
+    ],
+    [
+      'claude-2-1-316-startup-external-imports',
+      'Allow external CLAUDE.md file imports?',
+      [
+        ['No, disable external imports', '\r'],
+        ['Yes, allow external imports', `${DOWN}\r`]
+      ]
+    ]
+  ])('offers %s a card with its own choices', async (name, description, choices) => {
+    const { published, prompts, recording, write } = await pane(name)
+    await write(recording, 1)
+    await vi.advanceTimersByTimeAsync(2_000)
+    expect(published).toEqual(['waiting'])
+    const card = parseInteractivePrompt(prompts[0], undefined, 'claude')
+    expect(card?.kind === 'approval' && card.approval).toEqual({
+      title: 'Claude is waiting for a choice in the terminal',
+      description,
+      options: choices.map(([label, send]) => ({ label, send }))
+    })
+  })
+
+  // Codex's startup menu keys are not verified, so its card only locks Send and points at the terminal.
+  it.each(['codex-0158-update-available-dialog', 'codex-0158-hooks-review-dialog'])(
+    'offers %s a card without answers',
+    async (name) => {
+      const { published, prompts, recording, write } = await pane(name, 'codex')
+      await write(recording, 1)
+      expect(published).toEqual(['waiting'])
+      const card = parseInteractivePrompt(prompts[0], undefined, 'codex')
+      expect(card?.kind === 'approval' && card.approval).toEqual({
+        title: 'Codex is waiting for a choice in the terminal',
+        options: []
+      })
+    }
+  )
+
+  it('leaves a ready Claude composer alone', async () => {
+    const { published, recording, write } = await pane('claude-2-1-316-default-labelled-blurred')
+    await write(recording, 1)
+    await vi.advanceTimersByTimeAsync(2_000)
+    expect(published).toEqual([])
+  })
+
+  it('re-aims the startup card when the highlight moves in the terminal', async () => {
+    const { prompts, recording, write } = await pane('claude-2-1-316-startup-mcp-server')
+    await write(recording)
+    // Up in the terminal: Claude repaints its choices with the cursor on the middle row.
+    await write(
+      '\x1b[9;1H\x1b[2K  ❯ Use this and all future MCP servers in this project' +
+        '\x1b[10;1H\x1b[2K    Continue without using this MCP server'
+    )
+    await vi.advanceTimersByTimeAsync(1_000)
+    const card = parseInteractivePrompt(prompts.at(-1), undefined, 'claude')
+    expect(card?.kind === 'approval' && card.approval.options.map((option) => option.send)).toEqual(
+      [`${UP}\r`, '\r', `${DOWN}\r`]
+    )
+  })
+
+  // A stale aimed card would send its old arrows from wherever the terminal moved the highlight.
+  it('drops the startup card answers once the highlight stays unaimable', async () => {
+    const { prompts, recording, write } = await pane('claude-2-1-316-startup-mcp-server')
+    await write(recording)
+    await write('\x1b[10;1H\x1b[2K    Continue without using this MCP server')
+    await vi.advanceTimersByTimeAsync(2_000)
+    const card = parseInteractivePrompt(prompts.at(-1), undefined, 'claude')
+    expect(card?.kind === 'approval' && card.approval.options).toEqual([])
   })
 
   it('ignores the dialog wording quoted in ordinary output', async () => {
@@ -306,11 +325,11 @@ describe('TrustDialogStatusObserver', () => {
     // The shell prompt lands inside the stale frame, so the screen still shows the dialog.
     await write('user@host repo $ ')
     await vi.advanceTimersByTimeAsync(2_000)
-    // The prompt pushes the choices apart, so the card falls back to Exit-only but stays waiting.
-    expect(published).toEqual(['waiting', 'waiting'])
+    // The prompt can leave the trust choice unaimable, which re-publishes the card; it must not settle.
+    expect(published).not.toContain('done')
     foreground.mockResolvedValue('shell')
     await write(' ')
     await vi.advanceTimersByTimeAsync(1_000)
-    expect(published).toEqual(['waiting', 'waiting', 'done'])
+    expect(published.at(-1)).toBe('done')
   })
 })

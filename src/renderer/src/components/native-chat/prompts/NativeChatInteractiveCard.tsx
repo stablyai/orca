@@ -172,6 +172,7 @@ export function NativeChatInteractiveCard({
       isSubmitting={submitting}
       onChoose={choose}
       onCollapse={onCollapse}
+      onOpenTerminal={onAnswerInTerminal}
     />
   )
 }
