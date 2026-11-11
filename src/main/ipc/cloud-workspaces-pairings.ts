@@ -23,6 +23,10 @@ import {
 } from './runtime-environments/runtime-environment-removal-cleanup'
 import { invalidateRuntimeEnvironmentTransport } from './runtime-environments/runtime-environments'
 import { publishRuntimeEnvironmentCatalogChanged } from './runtime-environments/runtime-environment-catalog-broadcast'
+import { listEphemeralVmRuntimes } from '../../shared/ephemeral-vm-runtime-store'
+import { environmentHandleFromRecipeResult } from '../environment-providers/environment-provider-recipe-adapter'
+import { HOSTED_SANDBOX_DRIVER_ID } from '../hosted-sandbox/hosted-sandbox-driver'
+import { retireGoneCloudSandbox } from '../hosted-sandbox/cloud-sandbox-gone-retire'
 
 const Id = z.string().regex(/^sbx_[0-9a-f]{24}$/)
 const GrantId = z.string().regex(/^grt_[0-9a-f]{24}$/)
@@ -35,6 +39,32 @@ export type CloudWorkspacesPairings = {
   updateBindings: (
     change: (current: Record<string, Binding>) => Record<string, Binding>
   ) => Promise<void>
+  /** The sandbox was deleted from here: its pairing and this desktop's own record go now (LC-2). */
+  settleDeleted: (sandboxId: string) => Promise<void>
+}
+
+const RETIRED_STATUSES = new Set(['cleaned', 'cleanup_pending'])
+
+/**
+ * This desktop's own record of a sandbox deleted from Home or the API: retired the way the
+ * sidebar's Delete retires it, so its row never lingers as "Orca Cloud · Couldn't start" (LC-2).
+ */
+async function retireOwnedRecords(
+  sandboxId: string,
+  removedServerStore: RemovedServerStore | undefined
+): Promise<void> {
+  const userDataPath = app.getPath('userData')
+  for (const runtime of listEphemeralVmRuntimes(userDataPath)) {
+    if (runtime.recipe?.provider !== 'orca-cloud' || RETIRED_STATUSES.has(runtime.status)) {
+      continue
+    }
+    const handle = runtime.recipeResult
+      ? environmentHandleFromRecipeResult(runtime.recipeResult, HOSTED_SANDBOX_DRIVER_ID)
+      : null
+    if (handle?.driverState.sandboxId === sandboxId || handle?.environmentId === sandboxId) {
+      await retireGoneCloudSandbox(userDataPath, removedServerStore, runtime)
+    }
+  }
 }
 
 const bindingsFile = () => join(app.getPath('userData'), 'cloud-workspaces-environments.json')
@@ -136,6 +166,12 @@ export function createCloudWorkspacesPairings(
     },
     log: (line) => console.warn(line)
   })
-  pairings = { prune, readBindings, updateBindings }
+  const settleDeleted = async (sandboxId: string): Promise<void> => {
+    await prune.forget(sandboxId).catch(() => undefined)
+    await retireOwnedRecords(sandboxId, removedServerStore).catch((error: unknown) =>
+      console.warn('[cloud-workspaces] could not retire a deleted sandbox record', error)
+    )
+  }
+  pairings = { prune, readBindings, updateBindings, settleDeleted }
   return pairings
 }

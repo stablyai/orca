@@ -14,6 +14,7 @@ import {
 import { setCloudReaderKeyRevoker } from '../cloud-workspaces/cloud-reader-key-store'
 import { profileReaderKey, profileReadPins } from '../cloud-workspaces/cloud-read-profile-access'
 import { setCloudPairingVerifiedListener } from '../cloud-workspaces/cloud-pairing-seam'
+import { requestCloudGonePrune } from '../hosted-sandbox/cloud-gone-prune-request'
 import { registerTeamPresenceHandlers } from './cloud-workspaces-team-presence'
 import { registerCloudWorkspacePrefsHandlers } from './cloud-workspaces-prefs'
 import type { CloudReadSnapshotState } from '../../shared/cloud-workspaces/read-snapshot-state'
@@ -146,7 +147,7 @@ const INVALID = { ok: false as const, error: 'invalid_request' }
 export function registerCloudWorkspacesHandlers(
   options: { removedServerStore?: RemovedServerStore } = {}
 ): void {
-  const { prune, readBindings, updateBindings } = createCloudWorkspacesPairings(
+  const { prune, readBindings, updateBindings, settleDeleted } = createCloudWorkspacesPairings(
     getService,
     options.removedServerStore
   )
@@ -162,9 +163,10 @@ export function registerCloudWorkspacesHandlers(
       return !s ? NOT_CONFIGURED : INVALID
     }
     const result = await s.list(query.data)
-    // Each successful refresh also checks this device's pairings (throttled, in the background).
+    // Each successful refresh also checks this device's pairings and own records (throttled).
     if (result.ok) {
       void prune.run()
+      void requestCloudGonePrune()
     }
     return result
   })
@@ -236,9 +238,9 @@ export function registerCloudWorkspacesHandlers(
       return !s ? NOT_CONFIGURED : INVALID
     }
     const result = await s.destroy(parsed.data.id)
-    // Deleted from here: its pairing, server and projects go now, not at the next list.
+    // Deleted from here: its pairing or own record, server and projects go now (LC-1, LC-2).
     if (result.ok) {
-      await prune.forget(parsed.data.id).catch(() => undefined)
+      await settleDeleted(parsed.data.id)
     }
     return result
   })
