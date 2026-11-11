@@ -1,3 +1,4 @@
+import { antigravityModelSelection } from '../../agent-session/options/antigravity-model-efforts'
 import { modelMenuOptions } from '../../agent-session/options/model-menu-options'
 import { listedModelDescribing } from '../../agent-session/options/structured-agent-session-listed-model'
 import {
@@ -20,15 +21,33 @@ import type { AgentPickerEntry, AgentPickerModel, AgentPickerSurface } from './a
 
 type ModelMenuEntry = Pick<AgentPickerEntry, 'agent' | 'catalog'> &
   Partial<
-    Pick<AgentPickerEntry, 'defaultSurface' | 'textGeneration' | 'catalogRead' | 'coherentCatalog'>
+    Pick<
+      AgentPickerEntry,
+      | 'defaultSurface'
+      | 'textGeneration'
+      | 'catalogRead'
+      | 'coherentCatalog'
+      | 'terminalCatalog'
+      | 'terminalCatalogRead'
+    >
   >
+
+export function agentPickerSurfaceCatalog(entry: ModelMenuEntry, surface: AgentPickerSurface) {
+  return entry.agent === 'antigravity' && surface === 'terminal' && !entry.textGeneration
+    ? {
+        ...entry,
+        catalog: entry.terminalCatalog ?? { origin: 'unknown' as const },
+        catalogRead: entry.terminalCatalogRead
+      }
+    : entry
+}
 
 export function agentPickerOptions(
   agent: TuiAgent,
   model: string | undefined,
   surface: AgentPickerSurface
 ) {
-  return sourceControlActionOptions(agent, model ?? '')
+  return sourceControlActionOptions(agent, model ?? '', surface)
     .filter(({ route }) => route === null || route === (surface === 'chat' ? 'chats' : 'terminals'))
     .map(({ option }) => option)
 }
@@ -52,18 +71,22 @@ export function agentPickerEntryOptions(
         ]
       : []
   }
+  const catalog = agentPickerSurfaceCatalog(entry, surface).catalog
   let options = agentPickerOptions(entry.agent, model, surface)
   const rows = agentPickerModels(entry, surface)
   const composer = agentPickerUsesComposerModelMenu(entry, surface)
-  const live = composer
-    ? model
-      ? listedModelDescribing(rows, undefined, model)
-      : rows.find((row) => row.isDefault)
-    : rows.find((row) => row.id === model || (model === undefined && row.isDefault))
+  const live =
+    entry.agent === 'antigravity' && surface === 'terminal'
+      ? antigravityModelSelection(rows, model)?.row
+      : composer
+        ? model
+          ? listedModelDescribing(rows, undefined, model)
+          : rows.find((row) => row.isDefault)
+        : rows.find((row) => row.id === model || (model === undefined && row.isDefault))
   if (composer && !live && model) {
     return []
   }
-  if (entry.catalog.origin === 'unknown' || !live) {
+  if (catalog.origin === 'unknown' || !live) {
     return options.filter(
       (option) => option.kind.type !== 'select' || option.kind.choices.length > 0
     )
@@ -72,13 +95,13 @@ export function agentPickerEntryOptions(
     options = createClaudeCatalogOptions({
       effortLevelIds: live.efforts.map((choice) => choice.value),
       supportsFastMode:
-        live.supportsFastMode === true && entry.catalog.fastModeSupport?.supported !== false
+        live.supportsFastMode === true && catalog.fastModeSupport?.supported !== false
     })
   }
   if (surface === 'chat' || entry.agent === 'codex') {
     const dynamic = discoveredModel(
       live,
-      entry.catalog.fastModeSupport?.supported !== false,
+      catalog.fastModeSupport?.supported !== false,
       entry.agent
     ).options
     if (entry.agent === 'codex') {
@@ -141,8 +164,9 @@ export function agentPickerModels(
   surface: AgentPickerSurface = entry.defaultSurface ?? 'terminal'
 ): AgentPickerModel[] {
   if (!agentPickerUsesComposerModelMenu(entry, surface)) {
-    if (entry.catalog.origin !== 'unknown') {
-      return entry.catalog.models
+    const catalog = agentPickerSurfaceCatalog(entry, surface).catalog
+    if (catalog.origin !== 'unknown') {
+      return catalog.models
     }
     return (getAgentSessionOptionLaunchCatalog(entry.agent)?.models ?? []).map(
       agentPickerModelFromCatalogModel

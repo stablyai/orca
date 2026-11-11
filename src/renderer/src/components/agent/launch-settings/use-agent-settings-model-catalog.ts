@@ -17,6 +17,7 @@ import { subscribeHostAgentLaunchSettings } from '@/runtime/agent-launch-setting
 import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
 import { structuredAgentSessionHostKey } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
 import { useAppStore } from '@/store'
+import { readAntigravityHostTerminalCatalog } from '@/runtime/terminal/terminal-model-discovery-client'
 
 const SETTINGS_LAUNCH = { newLaunch: true, seedsModel: true }
 
@@ -28,7 +29,12 @@ export function useAgentSettingsModelCatalog(
   const key = target ? `${structuredAgentSessionHostKey(target)}\u0000${agent}` : null
   // Same array until one changes: a new account or command lists different models.
   const accountSettings = useAppStore(
-    useShallow((state) => HOST_MODEL_CATALOG_ACCOUNT_SETTINGS.map((name) => state.settings?.[name]))
+    useShallow((state) => [
+      ...HOST_MODEL_CATALOG_ACCOUNT_SETTINGS.map((name) => state.settings?.[name]),
+      ...(agent === 'antigravity'
+        ? [state.settings?.terminalWindowsShell, state.settings?.terminalWindowsWslDistro]
+        : [])
+    ])
   )
   // A host can change account with no setting changing here, such as a paired host reconnecting.
   const readGeneration = (): number => (target ? hostModelCatalogGeneration(target) : 0)
@@ -68,11 +74,15 @@ export function useAgentSettingsModelCatalog(
     // Not recorded in the new-chat snapshot: an account answer there would drop newer workspace answers.
     // Old hosts refuse waitForListing, so wait only once the host says a listing is running.
     const read = (wait: boolean): void => {
-      void callStructuredAgentSession<AgentSessionModelCatalogResult>(
-        readTarget,
-        'agentSession.modelCatalog',
-        wait ? { agent, waitForListing: true } : { agent }
-      )
+      const listing =
+        agent === 'antigravity'
+          ? readAntigravityHostTerminalCatalog(readTarget)
+          : callStructuredAgentSession<AgentSessionModelCatalogResult>(
+              readTarget,
+              'agentSession.modelCatalog',
+              wait ? { agent, waitForListing: true } : { agent }
+            )
+      void listing
         .then((catalog) => {
           if (stale) {
             return
@@ -104,7 +114,7 @@ export function useAgentSettingsModelCatalog(
   // Why not the snapshot once answered: it serves new chats, so it refuses workspace-scoped lists.
   const catalog = settled
     ? settled.catalog && withoutUnprovenNewLaunchDefault(settled.catalog)
-    : target
+    : target && agent !== 'antigravity'
       ? readHostModelCatalogSnapshot(target, agent, SETTINGS_LAUNCH)
       : undefined
   const listed = catalog && catalog.origin !== 'unknown' && catalog.models.length > 0

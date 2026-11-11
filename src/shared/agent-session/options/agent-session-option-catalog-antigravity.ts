@@ -51,9 +51,7 @@ export const ANTIGRAVITY_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
   unknownModelOptions: [ANTIGRAVITY_EFFORT]
 }
 
-// Why: agy's terminal model ids already name their effort, and a second `--effort` that doesn't
-// match makes the TUI silently start its default model. Terminals offer no effort (no choices);
-// an effort already saved still launches as saved. Chat keeps the per-model effort menu.
+// Terminal effort choices come from the CLI listing; saved pairs still compile literally.
 export const ANTIGRAVITY_LAUNCH_OPTION_CATALOG: AgentSessionOptionCatalog = {
   supportsWorkerLaunchPreferences: true,
   models: [],

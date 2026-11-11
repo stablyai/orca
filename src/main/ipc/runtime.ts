@@ -1,3 +1,4 @@
+import { registerTerminalModelDiscoveryHandler } from './terminal-model-discovery'
 import { BrowserWindow, ipcMain } from 'electron'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type {
@@ -28,6 +29,7 @@ function boundTerminalFitRestore(pending: Promise<boolean>): Promise<boolean> {
 }
 
 export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
+  registerTerminalModelDiscoveryHandler(runtime)
   const pendingTerminalFitRestores = new Map<string, Promise<boolean>>()
   const desktopSenders = new DesktopRuntimeSenderLifecycle(runtime)
   ipcMain.removeHandler('runtime:syncWindowGraph')

@@ -6,9 +6,17 @@ import { resetHostModelCatalogSnapshotsForTests } from '@/runtime/native-chat/mo
 import { useAppStore } from '@/store'
 import { TooltipProvider } from '../../ui/tooltip'
 import { AgentLaunchChoiceEditor } from './AgentLaunchChoiceEditor'
+import { groupAntigravityModelEfforts } from '../../../../../shared/agent-session/options/antigravity-model-efforts'
+import { SourceControlActionModelPicker } from '../../settings/source-control/SourceControlActionModelPicker'
 
 const call = vi.hoisted(() => vi.fn())
 const menus = vi.hoisted(() => new Map<string, string[]>())
+const select = vi.hoisted(() => new Map<string, (value: string) => void>())
+const terminalRead = vi.hoisted(() => vi.fn())
+
+vi.mock('@/runtime/terminal/terminal-model-discovery-client', () => ({
+  readAntigravityHostTerminalCatalog: terminalRead
+}))
 
 vi.mock('@/runtime/native-chat/requests/structured-agent-session-call', () => ({
   callStructuredAgentSession: call
@@ -16,11 +24,14 @@ vi.mock('@/runtime/native-chat/requests/structured-agent-session-call', () => ({
 vi.mock('./AgentChoiceMenu', () => ({
   AgentChoiceMenu: ({
     label,
-    choices
+    choices,
+    onChange
   }: {
     label: string
     choices: readonly { value: string }[]
+    onChange: (value: string) => void
   }) => {
+    select.set(label, onChange)
     menus.set(
       label,
       choices.map(({ value }) => value)
@@ -70,7 +81,9 @@ describe('AgentLaunchChoiceEditor model list', () => {
 
   beforeEach(() => {
     call.mockReset()
+    terminalRead.mockReset()
     menus.clear()
+    select.clear()
     resetHostModelCatalogSnapshotsForTests()
   })
   afterEach(() => {
@@ -98,5 +111,64 @@ describe('AgentLaunchChoiceEditor model list', () => {
     await waitFor(() => expect(menus.get('Model')).toEqual(['__agent_default__', 'gpt-wrapped']))
     await act(async () => answerOlder(LISTED))
     expect(menus.get('Model')).toEqual(['__agent_default__', 'gpt-wrapped'])
+  })
+
+  it('shows CLI-grouped Antigravity models and efforts in agent Settings while preserving a saved variant', async () => {
+    terminalRead.mockResolvedValue({
+      origin: 'probe',
+      models: groupAntigravityModelEfforts([
+        { id: 'gemini-3.8-flash-high', label: 'Gemini 3.8 Flash (High)' },
+        { id: 'gemini-3.8-flash-medium', label: 'Gemini 3.8 Flash (Medium)' },
+        { id: 'gemini-3.8-flash-low', label: 'Gemini 3.8 Flash (Low)' },
+        { id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6 (Thinking)' }
+      ])
+    })
+    useAppStore.setState({ settings: getDefaultSettings('') })
+    const save = vi.fn()
+    render(
+      <TooltipProvider>
+        <AgentLaunchChoiceEditor
+          agent="antigravity"
+          label="Antigravity"
+          choices={{ model: 'gemini-3.8-flash-medium', options: { effort: 'low' } }}
+          userArgs=""
+          permission={undefined}
+          catalogTarget={HOST}
+          save={save}
+        />
+      </TooltipProvider>
+    )
+    await waitFor(() =>
+      expect(menus.get('Model')).toEqual([
+        '__agent_default__',
+        'gemini-3.8-flash',
+        'claude-sonnet-4-6',
+        'gemini-3.8-flash-medium'
+      ])
+    )
+    expect(menus.get('Reasoning effort')).toEqual(['__agent_default__', 'low', 'medium', 'high'])
+    expect(call).not.toHaveBeenCalled()
+    expect(terminalRead).toHaveBeenCalledWith(HOST)
+    expect(save).not.toHaveBeenCalled()
+    act(() => select.get('Reasoning effort')?.('high'))
+    await waitFor(() =>
+      expect(save).toHaveBeenCalledWith(
+        { model: 'gemini-3.8-flash', options: { effort: 'high' } },
+        ''
+      )
+    )
+  })
+
+  it('keeps the mixed-route source-control effort control for saved Antigravity actions', () => {
+    render(
+      <TooltipProvider>
+        <SourceControlActionModelPicker
+          agent="antigravity"
+          value={{ agentId: 'antigravity', model: 'saved-model', options: { effort: 'low' } }}
+          onChange={() => {}}
+        />
+      </TooltipProvider>
+    )
+    expect(menus.get('Reasoning effort')).toEqual(['__agent_default__', 'low', 'medium', 'high'])
   })
 })

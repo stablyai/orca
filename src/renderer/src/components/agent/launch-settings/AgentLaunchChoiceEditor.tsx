@@ -107,6 +107,7 @@ export function AgentLaunchChoiceEditor({
       <div className="space-y-2">
         <AgentChoiceFields
           agent={agent}
+          surface="terminal"
           value={choices}
           disabled={pending}
           layout="rows"

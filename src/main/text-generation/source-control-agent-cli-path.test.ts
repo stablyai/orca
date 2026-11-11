@@ -1,9 +1,20 @@
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { quotePosixShell } from '../../shared/shell/launch/shell-argument-quoting'
-import { generateConversationNameFromContext } from './commit-message-text-generation'
+import {
+  discoverCommitMessageModelsLocal,
+  generateConversationNameFromContext
+} from './commit-message-text-generation'
 
 const homes: string[] = []
 
@@ -67,5 +78,41 @@ describe.runIf(process.platform !== 'win32')('chat naming CLI discovery', () => 
     )
 
     expect(result).toMatchObject({ success: true, name: 'Project CLI' })
+  })
+})
+
+describe.runIf(process.platform !== 'win32')('terminal discovery launch context', () => {
+  it('runs a cwd-sensitive CLI with the configured terminal account environment', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-agy-discovery-'))
+    homes.push(root)
+    const workspace = join(root, 'workspace')
+    mkdirSync(workspace)
+    const cwd = realpathSync(workspace)
+    const agy = join(root, 'agy')
+    writeFileSync(
+      agy,
+      '#!/bin/sh\nif [ "$PWD" = "$EXPECTED_CWD" ] && [ "$HOME" = "$USERPROFILE" ]; then printf "gemini-3.8-flash-low\tFlash (Low)\\n"; else printf "wrong-account\tWrong account\\n"; fi\n'
+    )
+    chmodSync(agy, 0o755)
+    const result = await discoverCommitMessageModelsLocal(
+      'antigravity',
+      { HOME: join(root, 'account-A'), PATH: '/usr/bin:/bin' },
+      agy,
+      {
+        uncached: true,
+        cwd,
+        useCwdForNative: true,
+        agentEnv: {
+          HOME: join(root, 'account-B'),
+          USERPROFILE: join(root, 'account-B'),
+          EXPECTED_CWD: cwd
+        }
+      }
+    )
+    expect(result).toMatchObject({
+      success: true,
+      catalogOrigin: 'probe',
+      models: [{ id: 'gemini-3.8-flash-low' }]
+    })
   })
 })

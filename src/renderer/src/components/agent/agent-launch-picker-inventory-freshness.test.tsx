@@ -185,3 +185,58 @@ it('reloads paired launch defaults when reopening while the old catalog request 
     await act(async () => catalog.reject(new Error('closed catalog')))
   }
 })
+
+it('forwards a prospective paired repo and explicit launch cwd to terminal discovery', async () => {
+  useAppStore.setState({
+    settings: getDefaultSettings('/synthetic'),
+    repos: [
+      {
+        ...TEST_REPO,
+        id: 'agy-repo',
+        path: '/remote/repo',
+        executionHostId: 'runtime:agy-destination'
+      }
+    ]
+  })
+  transport.defaults.mockResolvedValue(undefined)
+  transport.rpc.mockResolvedValue({
+    success: true,
+    catalogOrigin: 'probe',
+    models: [
+      { id: 'gemini-3.8-flash-low', label: 'Flash (Low)' },
+      { id: 'gemini-3.8-flash-high', label: 'Flash (High)' }
+    ]
+  })
+  const model: NewTabAgentMenuModel = {
+    state: 'settled',
+    rows: [{ agent: 'antigravity', kind: 'cli' }],
+    detection: { ...detection, detectedIds: ['antigravity'] },
+    pickerContext: {
+      workspace: {
+        kind: 'git-worktree',
+        repoId: 'agy-repo',
+        executionHostId: 'runtime:agy-destination'
+      },
+      launchCwd: '/remote/requested-cwd',
+      executionHostId: 'runtime:agy-destination',
+      settings: {},
+      key: 'agy-prospective'
+    }
+  }
+  const hook = renderHook(() => useAgentLaunchPickerInventory(undefined, model, true))
+  await waitFor(() => expect(hook.result.current[0].terminalCatalogRead).toBe('settled'))
+  expect(transport.rpc).toHaveBeenCalledWith(
+    { kind: 'environment', environmentId: 'agy-destination' },
+    'agent.discoverTerminalModels',
+    {
+      agentId: 'antigravity',
+      repo: 'agy-repo',
+      repoHostId: 'runtime:agy-destination',
+      cwd: '/remote/requested-cwd'
+    },
+    expect.anything()
+  )
+  expect(hook.result.current[0].terminalCatalog).toMatchObject({
+    models: [{ id: 'gemini-3.8-flash' }]
+  })
+})

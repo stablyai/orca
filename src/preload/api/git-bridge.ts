@@ -1,3 +1,4 @@
+import type { TerminalModelDiscoveryParams } from '../../shared/rpc-contract/agent-model-discovery-params'
 import type {
   GitCommitAction,
   GitCommitActionResult
@@ -190,6 +191,8 @@ export const gitApi = {
     sourceControlAi?: unknown
     agentCmdOverrides?: Record<string, string>
   }) => ipcRenderer.invoke('git:generateCommitMessage', args),
+  discoverTerminalModels: (args: TerminalModelDiscoveryParams) =>
+    ipcRenderer.invoke('agent:discoverTerminalModels', args),
   discoverCommitMessageModels: (args: {
     agentId: string
     worktreePath?: string

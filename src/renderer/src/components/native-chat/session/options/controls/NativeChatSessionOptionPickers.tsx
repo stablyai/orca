@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, useState } from 'react'
+import { memo, useEffect, useState } from 'react'
 import { ChevronDown, SlidersHorizontal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -132,7 +132,7 @@ function PickerTrigger(props: {
 }
 
 function SessionOptionPopover(props: {
-  demandModelCatalog?: () => void
+  demandModelCatalog?: SessionOptionsSurface['demandModelCatalog']
   model: SessionOptionDescriptor
   options: readonly SessionOptionDescriptor[]
   isWorking: boolean
@@ -163,12 +163,10 @@ function SessionOptionPopover(props: {
       setRequestedOptionId(props.request.id === model.id ? null : props.request.id)
     }
   }
-  const wasOpen = useRef(false)
   useEffect(() => {
-    if (open && !wasOpen.current) {
-      demandModelCatalog?.()
+    if (open) {
+      return demandModelCatalog?.()
     }
-    wasOpen.current = open
   }, [open, demandModelCatalog])
   const focusReturn = useNativeChatPickerFocusReturn(props.focusComposer)
   const modelTitle = t('components.native-chat.composer.model', 'Model')

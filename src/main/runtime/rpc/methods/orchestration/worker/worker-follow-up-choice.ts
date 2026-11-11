@@ -19,7 +19,6 @@ import type { WorkerTerminalResourceRow } from '../../../../orchestration/termin
 import { getStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { resolveStructuredWorkerIdentity } from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
 import { earlierWork, parseStartOptions } from './worker-earlier-work'
-import { launchCatalogOffersEffort } from '../../../../../../shared/agent-launch/choices/agent-launch-model-preferences'
 import {
   reopenWorkerChat,
   reopenWorkerTerminal,
@@ -109,12 +108,7 @@ export async function chooseWorkerFollowUpPlacement(
     worktreeId,
     agent: options.agent,
     ...(options.model ? { model: options.model } : {}),
-    // Why: a saved effort this agent's launches no longer take must not block its follow-up.
-    ...(options.model &&
-    options.effort &&
-    launchCatalogOffersEffort(options.agent, options.model, options.effort)
-      ? { effort: options.effort }
-      : {}),
+    ...(options.effort ? { effort: options.effort } : {}),
     earlierWork: earlierWork(db, latest)
   }
 }

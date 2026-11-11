@@ -25275,5 +25275,11 @@
       "notGitRepository": "Not a valid Git repository",
       "importFailed": "Repository could not be imported"
     }
+  },
+  "agents": {
+    "terminalModels": {
+      "connectionUnavailable": "Terminal model discovery is unavailable on this connection.",
+      "workspaceRequired": "Terminal model discovery requires a workspace on this host."
+    }
   }
 }

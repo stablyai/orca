@@ -1,3 +1,9 @@
+import { newWorktreeLaunchScope } from '../terminal/launch/agent-launch-scope-runtime'
+import { discoverTerminalModels } from '../terminal/catalog/runtime-terminal-model-discovery'
+import { prospectiveFolderModelTarget } from '../terminal/catalog/prospective-folder-model-target'
+import type { RuntimeRepoSelector } from './catalog/runtime-repo-selector'
+import type { TerminalModelDiscoveryParams } from '../../../shared/rpc-contract/agent-model-discovery-params'
+import type { ResolvedTerminalWorkspaceLaunchTarget } from '../terminal/launch/terminal-workspace-launch-target'
 import type { OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree } from '../terminal/launch/terminal-workspace-scope'
 import type { OrcaRuntimeWithTransitionGraphReloadToTerminalState } from '../session-graph/session-graph-authority'
 import type { ResolvedWorktree } from './catalog/runtime-worktree-path-identity'
@@ -35,6 +41,41 @@ export abstract class RuntimeWorkspaceFileTargets extends RuntimeMarkdownTabOper
   ): ReturnType<
     OrcaRuntimeWithTransitionGraphReloadToTerminalState['resolveFolderWorkspaceLaunchScope']
   >
+
+  abstract resolveTerminalWorkspaceReadTarget(
+    selector: string
+  ): Promise<ResolvedTerminalWorkspaceLaunchTarget>
+
+  async discoverTerminalModels(
+    worktree?: string,
+    agentId = '',
+    options?: Pick<TerminalModelDiscoveryParams, 'folder' | 'cwd' | 'uncached'> & {
+      repo?: RuntimeRepoSelector
+    }
+  ) {
+    return discoverTerminalModels(
+      {
+        store: this.requireStore(),
+        resolveTarget: async () =>
+          options?.folder
+            ? prospectiveFolderModelTarget(this.requireStore(), options.folder)
+            : options?.repo
+              ? {
+                  scope: newWorktreeLaunchScope(
+                    await this.showRepo(options.repo),
+                    this.requireStore().getSettings()
+                  ),
+                  managedWorktree: null
+                }
+              : this.resolveTerminalWorkspaceReadTarget(worktree ?? 'floating'),
+        ...(worktree || options?.repo || options?.folder ? {} : { hostGlobal: true }),
+        ...(options?.cwd ? { cwd: options.cwd } : {}),
+        ...(options?.uncached ? { uncached: true } : {}),
+        environment: this.accounts.getCommitMessageAgentEnvironment()
+      },
+      agentId
+    )
+  }
 
   // Route by worktree host before repo id: same-id host twins and runtime-nested targets cannot use this client's arbitrary repo row (#11163).
   protected async resolveRuntimeGitTarget(worktreeSelector: string): Promise<{

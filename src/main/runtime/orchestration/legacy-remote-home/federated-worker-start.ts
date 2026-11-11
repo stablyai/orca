@@ -1,4 +1,5 @@
 import type { FederatedWorkerStartRequest } from './federated-worker-start-request'
+import { assertRemoteAntigravityEffort } from '../../terminal/catalog/antigravity-remote-terminal-effort'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { RuntimeStatus } from '../../../../shared/runtime-session-contracts'
 import {
@@ -41,7 +42,10 @@ import {
   workerLaunchAgent
 } from '../workers/launch/worker-launch-observation'
 
-export async function startFederatedWorker(args: FederatedWorkerStartRequest): Promise<unknown> {
+export async function startFederatedWorker(
+  args: FederatedWorkerStartRequest,
+  validateNewEffort = false
+): Promise<unknown> {
   const { params, runtime, db, task, orchestrationMutation } = args
   const recordStart = prepareWorkerStartCard(runtime, args.callerSession)
   if (!isWorkerStartTimeoutWithinTimerLimit(params.timeoutMs)) {
@@ -111,6 +115,10 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
           serverName: server.name
         })
       : undefined
+  if (validateNewEffort && !params.terminal) {
+    await assertRemoteAntigravityEffort(runtime, params, server, budgets.preflightTimeoutMs)
+  }
+
   const supportsControlMail = status.capabilities?.includes(
     ORCHESTRATION_FEDERATION_CONTROL_MAIL_RUNTIME_CAPABILITY
   )

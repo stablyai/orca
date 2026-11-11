@@ -109,7 +109,7 @@ export type NativeChatSessionOptionSettingsMutation =
   | { type: 'clear-model-if-missing'; agent: AgentType; availableModelIds: readonly string[] }
 
 export type SessionOptionsSurface = {
-  demandModelCatalog?: () => void
+  demandModelCatalog?: () => void | (() => void)
   /** Live local admission for a structured action, before consuming its composer trigger. */
   admits?: (id: string, value: SessionOptionValue) => boolean
   getSnapshot(): SessionOptionDescriptor[]

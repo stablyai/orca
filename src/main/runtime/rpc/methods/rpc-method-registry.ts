@@ -1,3 +1,4 @@
+import { AGENT_MODEL_DISCOVERY_METHODS } from './terminal/agent-model-discovery'
 import { STATUS_METHODS } from './host-management/status'
 import { SIDEBAR_INPUT_METHODS } from './sidebar-inputs/sidebar-inputs'
 import { ORCAD_TERMINAL_CENSUS_METHODS } from './orcad/orcad-terminal-census'
@@ -103,6 +104,7 @@ export const ALL_RPC_METHODS = [
   ...STRUCTURED_AGENT_SESSION_AGENTS_METHODS,
   ...MANAGED_RUNTIME_INSTALL_METHODS,
   ...AGENT_LAUNCH_METHODS,
+  ...AGENT_MODEL_DISCOVERY_METHODS,
   ...CONNECTOR_METHODS,
   ...TERMINAL_METHODS,
   ...TERMINAL_ORPHAN_METHODS,

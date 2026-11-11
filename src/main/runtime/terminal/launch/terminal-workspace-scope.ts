@@ -16,10 +16,7 @@ import {
 import { resolveRuntimeBrowserNetworkExecutionHost } from '../../browser/network/runtime-browser-network-execution-host'
 import { resolveLocalProjectRuntimeForWorktreeId } from '../../../workspaces/execution-host/local-project-runtime-resolution'
 import { getRegisteredSshState } from '../../../ssh/targets/ssh-target-registry'
-import {
-  resolveWorktreeHostRouting,
-  resolveWorktreeLaunchHost
-} from '../../workspaces/catalog/worktree-launch-host-repo'
+import { resolveWorktreeHostRouting } from '../../workspaces/catalog/worktree-launch-host-repo'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ResolvedWorktree } from '../../workspaces/catalog/runtime-worktree-path-identity'
@@ -29,7 +26,6 @@ import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-
 import { resolveTerminalStartupCwd } from '../../../../shared/shell/launch/terminal-startup-cwd'
 
 import type { ResolvedTerminalWorkspaceLaunchTarget } from './terminal-workspace-launch-target'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { homedir } from 'node:os'
 import { getExplicitWorktreeIdSelector } from '../../workspaces/catalog/runtime-worktree-selection'
 import { getRepoIdFromWorktreeId, worktreeIdsEqual } from '../../../../shared/worktree/id'
@@ -37,7 +33,7 @@ import { WORKTREE_ID_SEPARATOR } from '../../../../shared/terminal/pty/lifecycle
 import { getPtyExecutionHost } from '../../../../shared/terminal/pty/lifecycle/terminal-execution-host'
 import { WorktreeIdRequiresFullPathError } from '../../workspaces/lineage/worktree-id-requires-full-path-error'
 import { triggerTerminalSpawnPushTargetMaterialization } from './runtime-terminal-spawn-push-target-materialization'
-import { resolveCreatedWorktreeTerminalTarget } from './runtime-created-worktree-terminal-target'
+import { resolveTerminalWorkspaceTarget } from './terminal-workspace-target-resolution'
 const AGENT_HOOK_RUNTIME_ENV_KEYS = [
   'ORCA_AGENT_HOOK_PORT',
   'ORCA_AGENT_HOOK_TOKEN',
@@ -156,65 +152,69 @@ export abstract class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktr
     resolvedFolder?: FolderWorkspace,
     checkPath = true
   ): Promise<ResolvedTerminalWorkspaceLaunchTarget> {
-    if (isFloatingWorkspaceSelector(selector)) {
-      // Why no managed worktree: the floating sentinel has no repo or worktree record behind it.
-      return {
-        scope: {
-          id: FLOATING_TERMINAL_WORKTREE_ID,
-          path: await this.resolveFloatingWorkspacePath(),
-          connectionId: null,
-          repo: null,
-          folderWorkspace: null
-        },
-        managedWorktree: null
-      }
-    }
-
-    const folderScope = await this.resolveFolderWorkspaceLaunchScope(
+    const target = await this.resolveTerminalWorkspaceTarget(
       selector,
+      createdWorktree,
       options,
+      resolvedWorktree,
       resolvedFolder,
-      checkPath
+      checkPath,
+      isFloatingWorkspaceSelector(selector) ? await this.resolveFloatingWorkspacePath() : undefined
     )
-    if (folderScope) {
-      return {
-        scope: folderScope,
-        managedWorktree: this.folderWorkspaceToResolvedWorktree(folderScope.folderWorkspace)
-      }
+    const worktree = target.managedWorktree
+    if (worktree && !target.scope.folderWorkspace) {
+      triggerTerminalSpawnPushTargetMaterialization(
+        worktree.path,
+        worktree.pushTarget,
+        target.scope.repo,
+        this.store,
+        worktree.repoId,
+        worktree.id
+      )
     }
+    return target
+  }
 
-    const workspaceSelector = selector.startsWith('id:') ? selector.slice(3) : selector
-    const parsed = parseWorkspaceKey(workspaceSelector)
-    const worktreeSelector = parsed?.type === 'worktree' ? `id:${parsed.worktreeId}` : selector
-    const worktree =
-      resolvedWorktree ??
-      resolveCreatedWorktreeTerminalTarget(this.store, selector, createdWorktree) ??
-      (await this.resolveGitWorktreeSelector(worktreeSelector))
-    // Repo ids are host-blind; resolve the worktree owner or refuse as unresolved rather than spawn locally with a remote cwd (#11163).
-    const resolution = resolveWorktreeLaunchHost(this.store?.getRepos() ?? [], worktree)
-    if (resolution.kind === 'ambiguous') {
-      throw new Error('worktree_execution_host_unresolved')
-    }
-    // Metadata only (display name, hook settings); the routing decision is `resolution.connectionId`.
-    const repo = resolution.repo ?? this.store?.getRepo(worktree.repoId) ?? null
-    triggerTerminalSpawnPushTargetMaterialization(
-      worktree.path,
-      worktree.pushTarget,
-      repo,
-      this.store,
-      worktree.repoId,
-      worktree.id
-    )
-    return {
-      scope: {
-        id: worktree.id,
-        path: worktree.path,
-        connectionId: resolution.connectionId,
-        repo,
-        folderWorkspace: null
+  async resolveTerminalWorkspaceReadTarget(
+    selector: string
+  ): Promise<ResolvedTerminalWorkspaceLaunchTarget> {
+    return resolveTerminalWorkspaceTarget(
+      {
+        store: this.store,
+        resolveFolder: (selector, options, folder, check) =>
+          this.resolveFolderWorkspaceLaunchScope(selector, options, folder, check),
+        folderWorktree: (folder) => this.folderWorkspaceToResolvedWorktree(folder),
+        resolveWorktree: (selector) => this.resolveGitWorktreeReadSelector(selector)
       },
-      managedWorktree: worktree
-    }
+      selector
+    )
+  }
+
+  private resolveTerminalWorkspaceTarget(
+    selector: string,
+    createdWorktree?: Worktree,
+    options: { wslUserAct?: boolean } = {},
+    resolvedWorktree?: ResolvedWorktree,
+    resolvedFolder?: FolderWorkspace,
+    checkPath = true,
+    preparedFloatingPath?: string
+  ): Promise<ResolvedTerminalWorkspaceLaunchTarget> {
+    return resolveTerminalWorkspaceTarget(
+      {
+        store: this.store,
+        resolveFolder: (selector, options, folder, check) =>
+          this.resolveFolderWorkspaceLaunchScope(selector, options, folder, check),
+        folderWorktree: (folder) => this.folderWorkspaceToResolvedWorktree(folder),
+        resolveWorktree: (selector) => this.resolveGitWorktreeSelector(selector)
+      },
+      selector,
+      createdWorktree,
+      options,
+      resolvedWorktree,
+      resolvedFolder,
+      checkPath,
+      preparedFloatingPath
+    )
   }
 
   protected buildTerminalWorkspaceEnv(

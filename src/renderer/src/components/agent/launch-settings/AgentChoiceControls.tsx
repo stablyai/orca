@@ -6,6 +6,7 @@ import type {
 import { reconcileAgentChoiceArgs } from '../../../../../shared/agent-launch/choices/agent-choice-reconciliation'
 import {
   findCatalogModel,
+  getAgentSessionOptionCatalog,
   getAgentSessionOptionLaunchCatalog
 } from '../../../../../shared/agent-session/options/agent-session-option-catalog'
 import {
@@ -22,6 +23,7 @@ import {
 import { AgentChoiceMenu } from './AgentChoiceMenu'
 import { sourceControlActionRouteHint } from './agent-choice-route-hint'
 import { useTranslate } from '@/i18n/use-translate'
+import { antigravityTerminalChoicePatch } from '../../../../../shared/agent-session/options/antigravity-model-efforts'
 
 const AGENT_DEFAULT_VALUE = '__agent_default__'
 
@@ -35,6 +37,7 @@ export type AgentChoiceControlsProps = {
   layout?: 'stacked' | 'contents' | 'rows'
   /** The host's own list; without a listing the fields keep the release's seed models. */
   liveCatalog?: AgentSessionModelCatalogResult
+  surface?: 'chat' | 'terminal'
   /** Tells the reader this list is the release's, because the host gave none. */
   usesSeedModels?: boolean
   onChange: (value: AgentDedicatedChoices | undefined) => void
@@ -72,6 +75,7 @@ export function AgentChoiceFields({
   defaultLabels,
   layout = 'stacked',
   liveCatalog,
+  surface,
   usesSeedModels,
   onSelect
 }: Omit<AgentChoiceControlsProps, 'onChange'> & {
@@ -82,12 +86,23 @@ export function AgentChoiceFields({
   if (!agent || !picksModel) {
     return null
   }
-  const catalog = picksModel ? getAgentSessionOptionLaunchCatalog(agent) : null
+  const menuSurface = surface ?? (agent === 'antigravity' ? 'chat' : 'terminal')
+  const catalog =
+    agent === 'antigravity' && menuSurface === 'chat'
+      ? getAgentSessionOptionCatalog(agent)
+      : getAgentSessionOptionLaunchCatalog(agent)
   const selected = value
   const model = catalog && selected?.model ? findCatalogModel(catalog, selected.model) : undefined
   const live =
     liveCatalog && liveCatalog.origin !== 'unknown' && liveCatalog.models.length
-      ? { agent, catalog: liveCatalog, terminal: {} }
+      ? {
+          agent,
+          catalog: liveCatalog,
+          terminal: {},
+          ...(agent === 'antigravity' && menuSurface === 'terminal'
+            ? { terminalCatalog: liveCatalog }
+            : {})
+        }
       : null
   const menu =
     live && catalog && agent !== 'antigravity'
@@ -102,14 +117,16 @@ export function AgentChoiceFields({
       : undefined
   const effort = menu?.descriptors.find(({ id }) => id === 'effort')
   const listedModels = live
-    ? (menu?.rows ?? agentPickerModels(live)).filter((row) => !('hidden' in row && row.hidden))
+    ? (menu?.rows ?? agentPickerModels(live, menuSurface)).filter(
+        (row) => !('hidden' in row && row.hidden)
+      )
     : (catalog?.models ?? [])
   const unlistedModel =
     selected?.model && !(live ? listedModels.some(({ id }) => id === selected.model) : model)
       ? selected.model
       : undefined
   const liveEffort = live
-    ? agentPickerEntryOptions(live, selected?.model, 'terminal').find(({ id }) => id === 'effort')
+    ? agentPickerEntryOptions(live, selected?.model, menuSurface).find(({ id }) => id === 'effort')
     : undefined
   const effortKind =
     menu && selected?.model
@@ -117,20 +134,35 @@ export function AgentChoiceFields({
         ? { ...effort.kind, defaultValue: '' }
         : undefined
       : liveEffort?.kind
-  const options = sourceControlActionOptions(agent, selected?.model ?? '').flatMap((row) => {
-    // CLI carrier mappings remain available to Args badges without advertising a mode control.
-    if (
-      (!model && row.option.category === 'mode') ||
-      (optionIds && !optionIds.includes(row.option.id))
-    ) {
-      return []
+  const options = sourceControlActionOptions(agent, selected?.model ?? '', surface).flatMap(
+    (row) => {
+      // CLI carrier mappings remain available to Args badges without advertising a mode control.
+      if (
+        (!model && row.option.category === 'mode') ||
+        (optionIds && !optionIds.includes(row.option.id))
+      ) {
+        return []
+      }
+      if (
+        row.option.id !== 'effort' ||
+        (!live && !(agent === 'antigravity' && surface === 'terminal'))
+      ) {
+        return [row]
+      }
+      // A listed model with no reasoning levels gets no effort menu.
+      return effortKind ? [{ ...row, option: { ...row.option, kind: effortKind } }] : []
     }
-    if (!live || row.option.id !== 'effort') {
-      return [row]
-    }
-    // A listed model with no reasoning levels gets no effort menu.
-    return effortKind ? [{ ...row, option: { ...row.option, kind: effortKind } }] : []
-  })
+  )
+  const select = (patch: AgentChoicePatch) =>
+    onSelect(
+      agent === 'antigravity' && surface === 'terminal'
+        ? antigravityTerminalChoicePatch(
+            liveCatalog?.origin !== 'unknown' ? (liveCatalog?.models ?? []) : [],
+            selected ?? {},
+            patch
+          )
+        : patch
+    )
   const defaultLabel = t('settings.sourceControl.actionModel.effortDefault', 'Default')
   return (
     <div className={layout === 'contents' ? 'contents' : 'grid min-w-0 grid-cols-1 gap-2'}>
@@ -151,7 +183,7 @@ export function AgentChoiceFields({
             ...listedModels.map(({ id, label }) => ({ value: id, label })),
             ...(unlistedModel ? [{ value: unlistedModel, label: unlistedModel }] : [])
           ]}
-          onChange={(model) => onSelect({ model: model === AGENT_DEFAULT_VALUE ? null : model })}
+          onChange={(model) => select({ model: model === AGENT_DEFAULT_VALUE ? null : model })}
         />
       ) : null}
       {catalog?.models.length && usesSeedModels ? (
@@ -204,7 +236,7 @@ export function AgentChoiceFields({
                       option.kind,
                       option.kind.type === 'boolean' ? next === 'true' : next
                     )
-              onSelect({ options: { [option.id]: encoded } })
+              select({ options: { [option.id]: encoded } })
             }}
           />
         )

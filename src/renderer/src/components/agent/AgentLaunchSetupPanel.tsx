@@ -1,3 +1,8 @@
+import {
+  agentLaunchDisplayModel,
+  agentLaunchSetupChoiceChips,
+  savedEffortChip
+} from './agent-launch-setup-choice-chips'
 import { AgentLaunchTextModelDefault } from './AgentLaunchTextModelDefault'
 import { textActionArgumentsOwnModel } from '../../../../shared/agent-launch/picker/agent-launch-picker-text-action'
 import type { AgentLaunchSetupPanelProps } from './AgentLaunchSetupButton'
@@ -20,7 +25,6 @@ import {
   CommandItem
 } from '@/components/ui/command'
 import { useTranslate } from '@/i18n/use-translate'
-import { agentModelChoiceChips } from './launch-settings/agent-model-choice-chips'
 import { isScreenSubmitShortcut } from '@/lib/keyboard/screen-submit-shortcut'
 import { isImeOwnedKeyboardEvent } from '@/lib/text-input/ime/ime-composition-keyboard-event'
 import { AgentDefaultArgsInput } from './launch-settings/AgentLaunchDefaultsEditor'
@@ -48,6 +52,7 @@ import { agentPickerEffectiveChoices } from '../../../../shared/agent-launch/pic
 import type { AgentPickerSurface } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import {
   agentPickerModels,
+  agentPickerSurfaceCatalog,
   agentPickerEntryOptions,
   agentPickerPermissions
 } from '../../../../shared/agent-launch/picker/agent-launch-picker-catalog'
@@ -91,12 +96,18 @@ export function AgentLaunchSetupPanel({
       ? models.find((model) => model.isDefault)?.id
       : undefined)
   // Settled with nothing chosen still lets the user pick; nothing is checked and the agent keeps its own default.
-  const { hasModels, catalogPending, catalogMessage } = catalogOf(entry, models, currentModel, mode)
-  const modelInArguments = textActionArgumentsOwnModel(entry, draft)
-  const modelDisabled = disabled || defaultsPending || catalogPending
-  const modelRows = agentLaunchSetupModelRows(
+  const { hasModels, catalogPending, catalogMessage } = catalogOf(
+    { ...entry, ...agentPickerSurfaceCatalog(entry, draft.surface) },
     models,
     currentModel,
+    mode
+  )
+  const modelInArguments = textActionArgumentsOwnModel(entry, draft)
+  const modelDisabled = disabled || defaultsPending || catalogPending
+  const displayModel = agentLaunchDisplayModel(entry, draft, models, currentModel)
+  const modelRows = agentLaunchSetupModelRows(
+    models,
+    displayModel,
     modelQuery,
     legacy,
     modelInArguments
@@ -142,22 +153,8 @@ export function AgentLaunchSetupPanel({
   }
   const use = (surface: AgentPickerSurface) =>
     mode === 'select' ? handleUse(surface) : footer.current?.launch(surface)
-  const choiceChips = agentModelChoiceChips(
-    entry.agent,
-    entry.label,
-    argumentsView.choices,
-    (patch) => {
-      const key =
-        patch.model !== undefined
-          ? 'model'
-          : patch.permissionMode !== undefined
-            ? 'permissionMode'
-            : Object.keys(patch.options ?? {})[0]
-      editDraft({ kind: 'remove-chip', key })
-      return agentPickerPanelArguments(entry, getDraft() ?? draft).text
-    },
-    argumentsView.context
-  )
+  const choiceChips = agentLaunchSetupChoiceChips(entry, draft, editDraft, getDraft)
+
   const rowGroups = agentLaunchSetupRowGroups(optionRows, mode === 'launch')
   // Launch leaves Permissions and Arguments to Agent settings; select mode edits a saved setup.
   const editsDefaults = mode === 'select' && !entry.textGeneration
@@ -251,7 +248,7 @@ export function AgentLaunchSetupPanel({
               </CommandItem>
             ) : null}
             {modelRows.rows.map((model) => {
-              const current = model.unlisted || (currentModel === model.id && !modelInArguments)
+              const current = model.unlisted || (displayModel === model.id && !modelInArguments)
               return (
                 <CommandItem
                   key={model.id}
@@ -291,6 +288,7 @@ export function AgentLaunchSetupPanel({
       <div className="grid min-w-0 grid-cols-1 gap-2.5 border-t border-border px-3 pt-2.5 pb-1">
         {mode === 'launch' && renderOptions([...rowGroups.level, ...rowGroups.speed], 'inline')}
         {renderOptions(rowGroups.rest)}
+        {savedEffortChip(entry, draft, models, currentModel, choiceChips, disabled)}
         {editsDefaults ? (
           <div>
             <AgentPermissionMenu
