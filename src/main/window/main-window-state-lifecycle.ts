@@ -1,4 +1,4 @@
-import { app, type BrowserWindow, type Event } from 'electron'
+import { app, screen, type BrowserWindow, type Event, type Rectangle } from 'electron'
 import type { Store } from '../persistence/loading-store/store'
 import { uiZoomFactorFromLevel } from '../../shared/ui-zoom-level'
 import { isWindowlessLaunch, showWindowWithoutStealingFocus } from './foreground-activation-policy'
@@ -15,10 +15,11 @@ export type MainWindowStateLifecycle = {
 export function installMainWindowStateLifecycle(args: {
   mainWindow: BrowserWindow
   revealOnDidFinishLoad: boolean
+  savedFullScreen: boolean
   savedMaximized: boolean
   store: Store | null
 }): MainWindowStateLifecycle {
-  const { mainWindow, revealOnDidFinishLoad, savedMaximized, store } = args
+  const { mainWindow, revealOnDidFinishLoad, savedFullScreen, savedMaximized, store } = args
   mainWindow.webContents.on('dom-ready', () => {
     const level = store?.getUI().uiZoomLevel ?? 0
     mainWindow.webContents.setZoomLevel(level)
@@ -30,6 +31,8 @@ export function installMainWindowStateLifecycle(args: {
 
   // Electron 41/macOS reemits ready-to-show for webview creation; run initial maximize only once (#591).
   let handledInitialReadyToShow = false
+  // Launch restore calls maximize then setFullScreen; ignore the unmaximize that transition emits.
+  let restoringFullScreen = false
   let initialRevealFallbackTimer: ReturnType<typeof setTimeout> | null =
     process.platform === 'win32' || process.platform === 'linux'
       ? setTimeout(() => {
@@ -62,7 +65,15 @@ export function installMainWindowStateLifecycle(args: {
     if (isWindowlessLaunch()) {
       return
     }
-    if (savedMaximized) {
+    // Reapply fullscreen after the pre-fullscreen maximize state so leaving it returns there.
+    if (savedFullScreen) {
+      restoringFullScreen = true
+      if (savedMaximized) {
+        mainWindow.maximize()
+      }
+      mainWindow.setFullScreen(true)
+      restoringFullScreen = false
+    } else if (savedMaximized) {
       mainWindow.maximize()
     }
     showWindowWithoutStealingFocus(mainWindow)
@@ -82,7 +93,12 @@ export function installMainWindowStateLifecycle(args: {
     }
     boundsTimer = setTimeout(() => {
       boundsTimer = null
-      if (windowClosing || mainWindow.isDestroyed() || mainWindow.isFullScreen()) {
+      if (
+        windowClosing ||
+        mainWindow.isDestroyed() ||
+        mainWindow.isFullScreen() ||
+        restoringFullScreen
+      ) {
         return
       }
       // Persist maximized state and bounds atomically, including near-minimum rejection.
@@ -92,6 +108,10 @@ export function installMainWindowStateLifecycle(args: {
         return
       }
       const bounds = mainWindow.getBounds()
+      // A fullscreen transition can resize to the display frame before isFullScreen() is true.
+      if (boundsMatchNativeFullScreenFrame(bounds)) {
+        return
+      }
       // Reject teardown's shrink-to-minimum bounds even after freeze races; default next launch (#1269).
       if (bounds.width <= MIN_WIDTH || bounds.height <= MIN_HEIGHT) {
         console.warn('[window] Skipping persist of near-minimum windowBounds:', bounds)
@@ -129,7 +149,14 @@ export function installMainWindowStateLifecycle(args: {
       return
     }
     mainWindow.webContents.send('window:maximize-changed', false)
+    if (restoringFullScreen || mainWindow.isFullScreen()) {
+      return
+    }
     const bounds = mainWindow.getBounds()
+    // macOS emits unmaximize while entering native fullscreen and getBounds() is already the display frame.
+    if (boundsMatchNativeFullScreenFrame(bounds)) {
+      return
+    }
     // Teardown unmaximize can emit minimum bounds; apply the same persistence guard.
     if (bounds.width <= MIN_WIDTH || bounds.height <= MIN_HEIGHT) {
       console.warn('[window] Skipping unmaximize-time persist of near-min bounds:', bounds)
@@ -140,10 +167,12 @@ export function installMainWindowStateLifecycle(args: {
   })
 
   mainWindow.on('enter-full-screen', () => {
+    store?.updateUI({ windowFullScreen: true })
     mainWindow.webContents.send('window:fullscreen-changed', true)
   })
 
   mainWindow.on('leave-full-screen', () => {
+    store?.updateUI({ windowFullScreen: false })
     mainWindow.webContents.send('window:fullscreen-changed', false)
   })
 
@@ -156,5 +185,21 @@ export function installMainWindowStateLifecycle(args: {
     freezeBoundsOnQuit,
     isWindowClosing: () => windowClosing,
     resumeBoundsPersistence
+  }
+}
+
+function boundsMatchNativeFullScreenFrame(bounds: Rectangle): boolean {
+  try {
+    return screen.getAllDisplays().some((display) => {
+      const frame = display.bounds
+      return (
+        bounds.x === frame.x &&
+        bounds.y === frame.y &&
+        bounds.width === frame.width &&
+        bounds.height === frame.height
+      )
+    })
+  } catch {
+    return false
   }
 }

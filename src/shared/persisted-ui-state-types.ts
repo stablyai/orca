@@ -220,6 +220,8 @@ export type PersistedUIState = {
   windowBounds?: { x: number; y: number; width: number; height: number } | null
   /** Whether the window was maximized when it was last closed. */
   windowMaximized?: boolean
+  /** Whether the window was in native fullscreen when it was last closed. */
+  windowFullScreen?: boolean
   /** Dashboard popout bounds, independent of main-window bounds. */
   dashboardPopoutBounds?: { x: number; y: number; width: number; height: number } | null
   /** Migrate legacy recent→smart once so later activity-based recent selections survive. */
