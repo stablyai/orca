@@ -86,3 +86,27 @@ describe('synthetic title BEL', () => {
     expect(bellCount()).toBe(3)
   })
 })
+
+describe('Cursor synthetic titles', () => {
+  beforeEach(() => {
+    ingestSyntheticTitleFrame.mockClear()
+    stopSyntheticTitleSpinner(PANE)
+  })
+
+  it('leaves the working title to cursor-agent and still writes the ready title', () => {
+    // cursor-agent animates `<chat> - ⏳ Working` itself; a frame per tool hook made the tab flicker (STA-14266).
+    for (let i = 0; i < 3; i += 1) {
+      driveSyntheticTitleFromHookStatus({
+        paneKey: PANE,
+        payload: { state: 'working', agentType: 'cursor', toolName: 'Shell' }
+      })
+    }
+    expect(ingestSyntheticTitleFrame).not.toHaveBeenCalled()
+
+    driveSyntheticTitleFromHookStatus({
+      paneKey: PANE,
+      payload: { state: 'done', agentType: 'cursor' }
+    })
+    expect(ingestSyntheticTitleFrame).toHaveBeenCalledWith(`pty:${PANE}`, '\x1b]0;Cursor ready\x07')
+  })
+})
