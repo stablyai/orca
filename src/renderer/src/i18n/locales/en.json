@@ -1408,11 +1408,10 @@
         "chatgpt": "chatgpt",
         "setupToken": "setup-token"
       },
-      "title": "Agent accounts",
-      "hubDescription": "Where Claude and Codex are signed in: Orca Cloud, this computer and your hosts.",
       "pageDescription": "Sign-ins, account switching and usage for your agents.",
       "thisComputer": "This computer",
-      "selectedHost": "Selected host"
+      "selectedHost": "Selected host",
+      "hostsTitle": "Hosts"
     }
   },
   "menu": {

@@ -22,6 +22,8 @@ export type AgentAccountsOverviewProps = {
   /** True until the host list is known (first render only). */
   loading?: boolean
   signedOutOfOrca: boolean
+  /** Inside Settings → Agent accounts the page's Hosts part already titles it. */
+  hideHeader?: boolean
   /** "Checked 4 hosts. 2 need attention." after the first pass; empty before. */
   summary: string
   onOpenRow: (row: OverviewRow) => void
@@ -113,7 +115,7 @@ export function AgentAccountsOverview(props: AgentAccountsOverviewProps): React.
   return (
     <section aria-labelledby={titleId} className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="min-w-0">
+        <div className={props.hideHeader ? 'sr-only' : 'min-w-0'}>
           <h3 id={titleId} className="text-sm font-medium text-foreground">
             {t('agentAccountsOverview.title', 'Sign-ins by host')}
           </h3>
@@ -123,12 +125,6 @@ export function AgentAccountsOverview(props: AgentAccountsOverviewProps): React.
               'Where Claude and Codex are signed in, and which key they use. Orca never copies a sign-in between machines.'
             )}
           </p>
-          {/* One Sign in button lives in the Orca Cloud card above; this is only a muted note. */}
-          {props.signedOutOfOrca ? (
-            <p className="text-xs text-muted-foreground">
-              {t('agentAccountsOverview.signedOutNote', 'Sign in to Orca to see Orca Cloud here.')}
-            </p>
-          ) : null}
         </div>
         <SettingsSegmentedControl
           size="sm"
@@ -146,6 +142,12 @@ export function AgentAccountsOverview(props: AgentAccountsOverviewProps): React.
           ]}
         />
       </div>
+      {/* The page's one Sign in button is in the Orca Cloud part; this is only a muted note. */}
+      {props.signedOutOfOrca ? (
+        <p className="px-1 text-xs text-muted-foreground">
+          {t('agentAccountsOverview.signedOutNote', 'Sign in to Orca to see Orca Cloud here.')}
+        </p>
+      ) : null}
       <div className="overflow-hidden rounded-xl border border-border bg-card/50 shadow-xs">
         {props.loading ? (
           <div aria-busy="true" className="flex flex-col gap-3 p-4">
