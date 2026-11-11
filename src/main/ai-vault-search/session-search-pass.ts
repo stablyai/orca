@@ -269,7 +269,10 @@ export async function runSessionSearchPass(
     return {
       rootsWithFiles,
       degradedRoots: mergeDegradedRoots(
-        scanIssueDegradedRoots(roots, issues),
+        scanIssueDegradedRoots(
+          [...roots, ...state.discovery.containers.issueRoots(issues)],
+          issues
+        ),
         degraded,
         unlistable
       ),

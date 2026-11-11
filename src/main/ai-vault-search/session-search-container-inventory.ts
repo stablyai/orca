@@ -14,7 +14,7 @@ export class SessionSearchContainerInventory extends SessionSearchContainerRetir
     key: string,
     paths: readonly string[],
     read: (paths: readonly string[], limit: number) => Promise<SessionFileDiscovery>,
-    _issues: readonly AiVaultScanIssue[],
+    issues: readonly AiVaultScanIssue[],
     signal?: AbortSignal,
     enumerationComplete = true
   ): Promise<SessionFileDiscovery> {
@@ -165,7 +165,14 @@ export class SessionSearchContainerInventory extends SessionSearchContainerRetir
         this.retries.delete(retryKey)
       }
       if (full && !complete) {
-        this.retries.fail(retryKey)
+        this.retries.fail(
+          retryKey,
+          false,
+          issues.find(
+            (issue) =>
+              issue.path === path && issue.agent === key.split(':', 1)[0] && issue.kind !== 'notice'
+          )
+        )
       }
       if (!stable && physical.authority?.state !== 'unknown') {
         await this.setAuthority(key, path, physical, 'unknown')

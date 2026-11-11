@@ -84,6 +84,7 @@ export type SessionSearchCatalogResult = SessionSearchDirtyResult &
     invalidProof?: boolean
     authority?: SessionSearchContainerAuthority
     accepted?: boolean
+    membership?: boolean[]
     scopeCounts?: [string, number, number][]
     rows?: SessionSearchCatalogRow[]
     count?: number

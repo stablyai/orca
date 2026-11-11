@@ -20,11 +20,15 @@ export type SessionSearchRetirement = {
   degradedRoots: SessionSearchDegradedRoot[]
 }
 
-export type SessionSearchContainerProof = (
-  container: string,
-  id: string,
+export type SessionSearchContainerProofInput = {
+  path: string
+  container: string
+  id: string
   agent?: string | null
-) => Promise<boolean | null>
+}
+export type SessionSearchContainerProof = (
+  inputs: readonly SessionSearchContainerProofInput[]
+) => Promise<(path: string) => boolean | null>
 
 export type SessionSearchRetirementArgs = {
   store: SessionSearchIndexStore
@@ -70,6 +74,15 @@ export async function retireDeletedSessionSearchSources(
   }
   const degraded = new Map<string, string>()
   await store.prepareCoverage?.(paths.slice(0, 256))
+  const enumerated =
+    typeof args.enumeratedContainers === 'function'
+      ? await args.enumeratedContainers(
+          paths.slice(0, 256).flatMap((path) => {
+            const synthetic = splitSyntheticSessionSource(path)
+            return synthetic ? [{ path, ...synthetic, agent: store.fileRow(path)?.agent }] : []
+          })
+        )
+      : args.enumeratedContainers
   for (const [index, path] of paths.entries()) {
     // Synthetic paths name entries inside containers, not filesystem objects.
     const synthetic = splitSyntheticSessionSource(path)
@@ -92,8 +105,9 @@ export async function retireDeletedSessionSearchSources(
       ? await proveSyntheticSource(
           synthetic,
           containerProof,
-          args.enumeratedContainers,
-          store.fileRow(path)?.agent
+          enumerated,
+          store.fileRow(path)?.agent,
+          path
         )
       : containerProof
     if (proof.verdict === 'gone') {
@@ -164,14 +178,15 @@ async function proveSource(
 async function proveSyntheticSource(
   synthetic: { container: string; id: string },
   containerProof: SessionSearchSourceVerdict,
-  enumerated?: ReadonlyMap<string, ReadonlySet<string>> | SessionSearchContainerProof,
-  agent?: string | null
+  enumerated?: ReadonlyMap<string, ReadonlySet<string>> | ((path: string) => boolean | null),
+  agent?: string | null,
+  path = ''
 ): Promise<SessionSearchSourceVerdict> {
   if (containerProof.verdict !== 'present') {
     return containerProof
   }
   if (typeof enumerated === 'function') {
-    const present = await enumerated(synthetic.container, synthetic.id, agent)
+    const present = enumerated(path)
     return present === null
       ? {
           verdict: 'unverifiable',

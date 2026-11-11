@@ -143,7 +143,7 @@ it.each([40, 400])(
               : 'outcomes' in input
                 ? input.outcomes.length
                 : 'keys' in input
-                  ? input.keys.length
+                  ? (input.keys?.length ?? 0)
                   : 0)
         )
       }, 0)

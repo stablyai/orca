@@ -12,6 +12,8 @@ import { recordSessionScanIssue } from '../ai-vault/session-scan-issues'
 import { SessionObservationRetries } from '../ai-vault/session-observation-retries'
 import type { AiVaultScanIssue } from '../../shared/ai-vault/contracts/ai-vault-types'
 import type { FileWithMtime, SessionFileDiscovery } from '../ai-vault/session-scanner-types'
+import type { SessionSearchContainerProof } from './session-search-deleted-sources'
+import { sessionSearchRecordPages } from './session-search-catalog-pages'
 
 export type SessionSearchContainerPhysical = {
   files: SessionSearchCatalogClient<{
@@ -67,25 +69,87 @@ export class SessionSearchContainerSources {
       return result
     }
   }
-  readonly proofs = async (
-    container: string,
-    id: string,
-    agent?: string | null
-  ): Promise<boolean | null> => {
-    const physical =
-      this.acceptedProofs.get(`${agent}:${container}`) ?? this.acceptedProofs.get(container)
-    if (physical?.proof === undefined) {
-      return null
-    }
-    let after: string | undefined
-    do {
-      const page = await physical.files.page({ group: id, after })
-      if (page.rows.some(({ value }) => value.epoch === physical.proof)) {
-        return true
+  readonly proofs: SessionSearchContainerProof = async (inputs) => {
+    const groups = new Map<SessionSearchContainerPhysical, (typeof inputs)[number][]>()
+    const verdicts = new Map<
+      string,
+      {
+        physical: SessionSearchContainerPhysical
+        key: string
+        authority: SessionSearchContainerAuthority
+        present: boolean
       }
-      after = page.after
-    } while (after !== undefined)
-    return false
+    >()
+    for (const input of inputs) {
+      const physical =
+        this.acceptedProofs.get(`${input.agent}:${input.container}`) ??
+        this.acceptedProofs.get(input.container)
+      if (physical?.proof === undefined || physical.authority?.state !== 'full') {
+        continue
+      }
+      const group = groups.get(physical) ?? []
+      group.push(input)
+      groups.set(physical, group)
+    }
+    for (const [physical, group] of groups) {
+      const authority = physical.authority!
+      const input = {
+        kind: 'container-drain' as const,
+        scope: physical.files.scope,
+        limit: 256,
+        proof: authority
+      }
+      const overhead =
+        JSON.stringify({
+          op: 'catalog',
+          command: { ...input, keys: [] },
+          catalogPage: {
+            runtimeEpoch: Number.MAX_VALUE,
+            sourceId: input.scope,
+            observationEpoch: Number.MAX_VALUE,
+            pageSequence: Number.MAX_VALUE
+          }
+        }).length *
+          2 +
+        1024
+      for (const page of sessionSearchRecordPages(group, overhead)) {
+        const result = await physical.files.transition({ ...input, keys: page.map(({ id }) => id) })
+        if (!result.accepted) {
+          continue
+        }
+        for (const [index, row] of page.entries()) {
+          const present = result.membership?.[index]
+          if (typeof present === 'boolean') {
+            verdicts.set(row.path, {
+              physical,
+              authority,
+              key: `${row.agent}:${row.container}`,
+              present
+            })
+          }
+        }
+      }
+    }
+    return (path) => {
+      const value = verdicts.get(path)
+      if (
+        !value ||
+        this.acceptedProofs.get(value.key) !== value.physical ||
+        value.physical.authority !== value.authority ||
+        value.physical.proof !== value.authority.epoch
+      ) {
+        return null
+      }
+      return value.present
+    }
+  }
+
+  issueRoots(issues: AiVaultScanIssue[]): string[] {
+    this.retries.report(issues)
+    return [
+      ...[...this.pathLists.values()].flatMap((list) => list.issues.map((issue) => issue.path)),
+      ...[...this.families.values()].flatMap((family) => [...family.physical.keys()])
+    ]
   }
 
   begin(full: boolean, recentLimit: number): void {
@@ -153,7 +217,11 @@ export class SessionSearchContainerSources {
     if (complete) {
       this.retries.delete(key)
     } else {
-      this.retries.fail(key)
+      this.retries.fail(
+        key,
+        false,
+        ownIssues.find((issue) => issue.kind !== 'notice')
+      )
     }
     return result
   }

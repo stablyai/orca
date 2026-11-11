@@ -29,7 +29,13 @@ export type SessionSearchContainerCommand =
       proof?: number
       authorityRevision: number
     }
-  | { kind: 'container-drain'; scope: string; limit: number }
+  | {
+      kind: 'container-drain'
+      scope: string
+      limit: number
+      keys?: string[]
+      proof?: SessionSearchContainerAuthority
+    }
   | {
       kind: 'container-ack'
       scope: string
@@ -101,6 +107,7 @@ export function transitionSessionSearchContainer(
   invalidProof?: boolean
   authority?: SessionSearchContainerAuthority
   accepted?: boolean
+  membership?: boolean[]
 } {
   if (command.kind === 'container-ack') {
     for (const receipt of command.receipts) {
@@ -142,6 +149,25 @@ export function transitionSessionSearchContainer(
       ]
     })
     return { authority: next, accepted: true }
+  }
+  if (command.kind === 'container-drain' && command.keys) {
+    if (
+      !authority ||
+      authority.state !== 'full' ||
+      !command.proof ||
+      authority.revision !== command.proof.revision ||
+      authority.incarnation !== command.proof.incarnation ||
+      authority.epoch !== command.proof.epoch
+    ) {
+      return { accepted: false }
+    }
+    const membership = catalog.connection.prepare(
+      "SELECT 1 FROM temp.search_catalog INDEXED BY search_catalog_group WHERE scope=? AND group_key=? AND json_extract(value,'$.epoch')=? LIMIT 1"
+    )
+    return {
+      accepted: true,
+      membership: command.keys.map((id) => !!membership.get(command.scope, id, authority.epoch!))
+    }
   }
   if (command.kind !== 'container-drain' && command.authorityRevision !== authority?.revision) {
     return { authority, accepted: false }

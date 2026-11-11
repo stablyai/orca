@@ -571,7 +571,9 @@ it.each(['absent', 'positive', 'released'] as const)(
     changed.close()
     const request = SessionSearchWorkerClient.prototype.request
     let block = true,
-      rejected = false
+      rejected = false,
+      fullFault = false,
+      faulted = false
     const handoff = vi
       .spyOn(SessionSearchWorkerClient.prototype, 'request')
       .mockImplementation(async function (this: SessionSearchWorkerClient, command) {
@@ -583,6 +585,19 @@ it.each(['absent', 'positive', 'released'] as const)(
         ) {
           rejected = true
           throw new SessionSearchOperationError('fixture omission transfer refused')
+        }
+        if (
+          fullFault &&
+          !faulted &&
+          command.op === 'catalog' &&
+          command.command.kind === 'container-retire' &&
+          command.command.authority === 'full'
+        ) {
+          faulted = true
+          if (successor === 'absent') {
+            await request.call(this, command)
+          }
+          throw new SessionSearchOperationError('fixture full authority response refused')
         }
         return request.call(this, command)
       })
@@ -621,7 +636,9 @@ it.each(['absent', 'positive', 'released'] as const)(
         await rm(dbPath())
       }
       unavailable = false
+      fullFault = successor !== 'released'
       await subject.reconcile({ full: true })
+      expect(faulted).toBe(successor !== 'released')
       await finishPendingObservation(subject)
       expect(openEngine().search({ query: 'owedoldneedle' }).hits).toHaveLength(
         successor === 'positive' ? 1 : 0

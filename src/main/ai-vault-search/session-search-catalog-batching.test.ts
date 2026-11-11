@@ -536,3 +536,44 @@ it.each([40, 400])(
     }
   }
 )
+
+it('answers complete current membership and refuses a superseded source proof', () => {
+  const db = new SyncDatabase('')
+  const catalog = new SessionSearchCatalog(db)
+  const scope = 'container:membership'
+  try {
+    const proof = catalog.response({
+      kind: 'container-retire',
+      scope,
+      agent: 'opencode',
+      authority: 'full',
+      epoch: 2
+    }).authority!
+    for (const [path, epoch] of [
+      ['/history/a-old', 1],
+      ['/history/z-current', 2]
+    ] as const) {
+      catalog.response({
+        kind: 'container-apply',
+        scope,
+        epoch,
+        full: true,
+        authorityRevision: proof.revision,
+        rows: [{ file: { path, mtimeMs: 10, modifiedAt: '2025-01-01T00:00:00Z' }, id: 'shared' }]
+      })
+    }
+    const command = {
+      kind: 'container-drain' as const,
+      scope,
+      limit: 256,
+      keys: ['shared', 'absent'],
+      proof
+    }
+    expect(catalog.response(command)).toMatchObject({ accepted: true, membership: [true, false] })
+    expect(
+      catalog.response({ ...command, proof: { ...proof, revision: proof.revision + 1 } })
+    ).toMatchObject({ accepted: false })
+  } finally {
+    db.close()
+  }
+})

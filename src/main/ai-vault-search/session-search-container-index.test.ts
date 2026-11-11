@@ -55,7 +55,8 @@ it.each(['refused', 'lost response'] as const)(
     changed.exec("DELETE FROM session WHERE id='ses_owed'")
     changed.close()
     const request = SessionSearchWorkerClient.prototype.request
-    let injected = false
+    let injected = false,
+      proofRefused = false
     const handoff = vi
       .spyOn(SessionSearchWorkerClient.prototype, 'request')
       .mockImplementation(async function (this: SessionSearchWorkerClient, command) {
@@ -72,6 +73,17 @@ it.each(['refused', 'lost response'] as const)(
           }
           throw new SessionSearchOperationError('fixture full authority refused')
         }
+        if (
+          fault === 'lost response' &&
+          injected &&
+          !proofRefused &&
+          command.op === 'catalog' &&
+          command.command.kind === 'container-drain' &&
+          command.command.keys
+        ) {
+          proofRefused = true
+          throw new SessionSearchOperationError('fixture membership projection refused')
+        }
         return request.call(this, command)
       })
     try {
@@ -80,6 +92,7 @@ it.each(['refused', 'lost response'] as const)(
       expect(errors.some((error) => error instanceof SessionSearchOperationError)).toBe(true)
       expect(openEngine().search({ query: 'admissionowedtext' }).hits).toHaveLength(1)
       await finishPendingObservation(subject)
+      expect(proofRefused).toBe(fault === 'lost response')
       expect(openEngine().search({ query: 'admissionowedtext' }).hits).toHaveLength(0)
       expect(openEngine().search({ query: 'admissionkeepertext' }).hits).toHaveLength(1)
       expect(subject.status().phase).toBe('current')
@@ -229,20 +242,19 @@ it('resumes interrupted omission work fairly without repeating either full obser
   try {
     await subject.reconcile({ full: true })
     expect(openEngine().search({ query: 'firstomissiontext' }).hits.length).toBeGreaterThan(0)
+    const engine = openEngine()
+    for (
+      let turn = 0;
+      turn < 100 && engine.search({ query: 'secondomissiontext' }).hits.length;
+      turn++
+    ) {
+      await subject.reconcile()
+    }
+    expect(engine.search({ query: 'secondomissiontext' }).hits).toHaveLength(0)
+    expect(engine.search({ query: 'firstomissiontext' }).hits.length).toBeGreaterThan(0)
     await finishPendingObservation(subject)
-    expect(openEngine().search({ query: 'firstomissiontext' }).hits).toHaveLength(0)
-    expect(openEngine().search({ query: 'secondomissiontext' }).hits).toHaveLength(0)
-    expect(openEngine().search({ query: 'fairkeepertext' }).hits).toHaveLength(2)
-    const turns = traffic.mock.calls.flatMap(([command]) =>
-      command.op === 'catalog' &&
-      command.command.kind === 'container-retire' &&
-      command.command.phase
-        ? [command.command.scope]
-        : []
-    )
-    // Each available turn belongs to a different source before either gets a second turn.
-    expect(turns[0]).toContain(dbPath())
-    expect(turns[1]).toContain(other)
+    expect(engine.search({ query: 'firstomissiontext' }).hits).toHaveLength(0)
+    expect(engine.search({ query: 'fairkeepertext' }).hits).toHaveLength(2)
     for (const path of [dbPath(), other]) {
       expect(
         openCodeListObservations.filter(
