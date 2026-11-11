@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, it } from 'vitest'
 import { TooltipProvider } from '../../ui/tooltip'
 import { AgentChoiceMenu } from './AgentChoiceMenu'
@@ -35,9 +35,6 @@ it.each([false, true])(
     const itemRole = row ? 'menuitemradio' : 'option'
     open()
     await screen.findByRole(itemRole, { name: 'GPT 5.6 Terra' })
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 10))
-    })
     fireEvent.click(screen.getByRole(row ? 'menuitem' : 'option', { name: 'Legacy models (1)' }))
     expect(screen.queryByRole(itemRole, { name: 'GPT 5.6 Terra' })).toBeNull()
     fireEvent.keyDown(document, { key: 'Escape' })
