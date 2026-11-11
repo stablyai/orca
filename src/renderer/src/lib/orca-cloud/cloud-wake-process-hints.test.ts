@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   captureWakeProcessHint,
+  cursorBelowLastText,
   detectForegroundCommand,
   dismissWakeProcessHint,
   endsAtShellPrompt,
@@ -58,6 +59,36 @@ describe('detectForegroundCommand', () => {
     expect(detectForegroundCommand(['neil@sbx ~/app> pnpm dev', 'ready'])).toEqual({
       command: 'pnpm dev'
     })
+  })
+
+  // WAKE-RERUN (cut 68321452c97c): `sleep 900` prints nothing, so its prompt line is the last text.
+  it('a silent command still running (cursor below its prompt line) is offered', () => {
+    const tail = ['ubuntu@ik-wake:~/orca/workspaces/Hello-World/ik-wake$ sleep 900', '']
+    expect(detectForegroundCommand(tail, { cursorBelowText: true })).toEqual({
+      command: 'sleep 900'
+    })
+    expect(wakeHintForPane(tail, { cursorBelowText: true })).toEqual({ command: 'sleep 900' })
+  })
+
+  it('a half-typed command (cursor still on the prompt line) offers nothing', () => {
+    const tail = ['ubuntu@sbx:~/project$ git st']
+    expect(detectForegroundCommand(tail, { cursorBelowText: false })).toBeNull()
+    expect(detectForegroundCommand(tail)).toBeNull()
+    expect(detectForegroundCommand(['ubuntu@sbx:~$ '], { cursorBelowText: true })).toBeNull()
+  })
+
+  it('a finished silent command (`true`, then a fresh prompt) offers nothing', () => {
+    const tail = ['ubuntu@sbx:~/project$ true', 'ubuntu@sbx:~/project$ ']
+    expect(detectForegroundCommand(tail, { cursorBelowText: false })).toBeNull()
+    // Even read with the cursor below, the last text is a bare prompt: nothing was running.
+    expect(detectForegroundCommand(tail, { cursorBelowText: true })).toBeNull()
+  })
+
+  it('a silent agent launch or launch script is still never offered', () => {
+    expect(detectForegroundCommand(['$ claude'], { cursorBelowText: true })).toBeNull()
+    expect(
+      detectForegroundCommand(['$ . /tmp/orca-launch-3f9a.sh'], { cursorBelowText: true })
+    ).toBeNull()
   })
 
   it('returns null when no prompt line is readable', () => {
@@ -165,6 +196,33 @@ describe('wake process hints', () => {
     expect(endsAtShellPrompt(['No conversation found', 'ubuntu@sbx:~$ ', ''])).toBe(true)
     expect(endsAtShellPrompt(['> Try "fix lint"', '  ? for shortcuts'])).toBe(false)
     expect(endsAtShellPrompt([])).toBe(false)
+  })
+
+  // WAKE-RERUN: the pane as integration-keeper left it, `sleep 900` typed and Enter pressed.
+  const xterm = (lines: string[], cursorRow: number) => ({
+    buffer: {
+      active: {
+        length: lines.length,
+        baseY: 0,
+        cursorY: cursorRow,
+        getLine: (index: number) => ({ translateToString: () => lines[index] ?? '' })
+      }
+    }
+  })
+  const sleeping = ['ubuntu@ik-wake:~/Hello-World/ik-wake$ sleep 900', '', '', '']
+
+  it('reads whether the cursor sat below the last text (Enter pressed) or on it (half-typed)', () => {
+    expect(cursorBelowLastText(xterm(sleeping, 1))).toBe(true)
+    expect(cursorBelowLastText(xterm(sleeping, 0))).toBe(false)
+    expect(cursorBelowLastText(xterm(['', ''], 1))).toBe(false)
+  })
+
+  it('a shell pane running a silent command captures Rerun with that command', () => {
+    const pane = xterm(sleeping, 1)
+    captureWakeProcessHint('leaf-shell', readTerminalTail(pane), {
+      cursorBelowText: cursorBelowLastText(pane)
+    })
+    expect(getWakeProcessHint('leaf-shell')).toEqual({ command: 'sleep 900' })
   })
 
   it('reads the tail of an xterm buffer', () => {

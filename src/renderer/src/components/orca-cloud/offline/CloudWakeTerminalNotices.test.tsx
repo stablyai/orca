@@ -4,6 +4,14 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { CloudAsleepTerminalNotice, formatAsleepSince } from './CloudAsleepTerminalNotice'
 import { CloudWokeProcessesNotice, truncateMiddle } from './CloudWokeProcessesNotice'
 import { noteUserInputForPane } from '@/components/terminal-pane/input/pane-user-input'
+import {
+  captureWakeProcessHint,
+  cursorBelowLastText,
+  getWakeProcessHint,
+  readTerminalTail,
+  resetWakeProcessHintsForTests
+} from '@/lib/orca-cloud/cloud-wake-process-hints'
+import { cloudWokeActionFor, runCloudWokeAction } from '@/lib/orca-cloud/cloud-wake-hint-action'
 
 vi.mock('../cloud-workspace-actions', () => ({ wakeCloudWorkspace: vi.fn() }))
 vi.mock('@/i18n/use-translate', () => ({
@@ -53,6 +61,51 @@ describe('CloudAsleepTerminalNotice', () => {
 })
 
 describe('CloudWokeProcessesNotice', () => {
+  // WAKE-RERUN (cut 68321452c97c): a shell pane running `sleep 900` woke with no bar.
+  it('a shell pane that was running a silent `sleep 900` wakes to Rerun sleep 900', () => {
+    resetWakeProcessHintsForTests()
+    const lines = ['ubuntu@ik-wake:~/Hello-World/ik-wake$ sleep 900', '', '']
+    const pane = {
+      buffer: {
+        active: {
+          length: lines.length,
+          baseY: 0,
+          // Enter was pressed: the cursor sits on the row below the command.
+          cursorY: 1,
+          getLine: (index: number) => ({ translateToString: () => lines[index] ?? '' })
+        }
+      }
+    }
+    // Asleep: the pane's pre-sleep screen is captured the way the recovery portal does it.
+    captureWakeProcessHint('leaf-shell', readTerminalTail(pane), {
+      agentType: null,
+      alternateScreen: false,
+      cursorBelowText: cursorBelowLastText(pane)
+    })
+    // Awake: the strip the portal renders for that hint.
+    const hint = getWakeProcessHint('leaf-shell')
+    expect(hint).toEqual({ command: 'sleep 900' })
+    const sendInput = vi.fn()
+    render(
+      <CloudWokeProcessesNotice
+        action={cloudWokeActionFor(hint!)}
+        onAction={() =>
+          runCloudWokeAction(hint!, {
+            tabId: 'tab-1',
+            leafId: 'leaf-shell',
+            worktreeId: 'wt-1',
+            sendInput
+          })
+        }
+        onDismiss={vi.fn()}
+      />
+    )
+    expect(screen.getByText('Woke up · processes stopped while asleep')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: /Rerun sleep 900/ }))
+    expect(sendInput).toHaveBeenCalledWith('sleep 900\r')
+    resetWakeProcessHintsForTests()
+  })
+
   it('never reruns by itself; Rerun sends only when clicked', () => {
     const onRerun = vi.fn()
     render(

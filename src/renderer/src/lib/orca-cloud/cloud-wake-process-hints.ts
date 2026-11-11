@@ -21,6 +21,11 @@ export type WakePaneFacts = {
   agentType?: string | null
   /** A full-screen app (vim, htop, an alternate-screen TUI) owned the pane. */
   alternateScreen?: boolean
+  /**
+   * The cursor sat below the last line of text: Enter was pressed on that line. Tells a silent
+   * running command (`sleep 900`, its prompt line the last text) from a half-typed one.
+   */
+  cursorBelowText?: boolean
 }
 
 // A shell prompt line: something short, then a prompt mark, then the typed command.
@@ -56,12 +61,20 @@ function isIdlePrompt(line: string): boolean {
  * like a prompt, or the pane shows a TUI (an agent's input box is typed text, not a command): we
  * only offer Rerun for a shell command we can read back exactly (JA-15).
  */
-export function detectForegroundCommand(lines: readonly string[]): WakeShellCommand | null {
+export function detectForegroundCommand(
+  lines: readonly string[],
+  options: { cursorBelowText?: boolean | undefined } = {}
+): WakeShellCommand | null {
   const trimmed = lines.map((line) => line.replace(/\s+$/, ''))
   const last = lastTextRow(trimmed)
-  // Empty, or idle at a prompt (with or without a half-typed line): nothing was running.
-  if (last < 0 || isIdlePrompt(trimmed[last]!)) {
+  if (last < 0) {
     return null
+  }
+  if (isIdlePrompt(trimmed[last]!)) {
+    // A prompt line with a command and the cursor already below it: submitted, and still running
+    // without output so far (WAKE-RERUN). Otherwise idle, or a half-typed line: nothing ran.
+    const silent = options.cursorBelowText ? promptCommand(trimmed[last]!) : null
+    return silent === null || TUI_CHROME.test(trimmed[last]!) ? null : rerunnable(silent)
   }
   for (let index = last; index >= 0; index--) {
     const line = trimmed[index]!
@@ -69,22 +82,27 @@ export function detectForegroundCommand(lines: readonly string[]): WakeShellComm
       return null
     }
     const command = index < last ? promptCommand(line) : null
-    if (command === null) {
-      continue
+    if (command !== null) {
+      return rerunnable(command)
     }
-    // An agent launched from the shell owns the screen below it: rerunning it is not "restart the
-    // dev server", and what it drew is not shell output.
-    if (
-      !command ||
-      command.length > MAX_COMMAND_LENGTH ||
-      ORCA_LAUNCH_SCRIPT.test(command) ||
-      recognizeAgentLaunchCommand(command)
-    ) {
-      return null
-    }
-    return { command }
   }
   return null
+}
+
+/**
+ * The command as a Rerun, or null. An agent launched from the shell owns the screen below it:
+ * rerunning it is not "restart the dev server", and what it drew is not shell output.
+ */
+function rerunnable(command: string): WakeShellCommand | null {
+  if (
+    !command ||
+    command.length > MAX_COMMAND_LENGTH ||
+    ORCA_LAUNCH_SCRIPT.test(command) ||
+    recognizeAgentLaunchCommand(command)
+  ) {
+    return null
+  }
+  return { command }
 }
 
 /** The tail ends at an idle shell prompt: nothing (no agent, no process) is running in the pane. */
@@ -110,7 +128,9 @@ export function wakeHintForPane(
   lines: readonly string[],
   facts: WakePaneFacts = {}
 ): WakeProcessHint | null {
-  const shell = facts.alternateScreen ? null : detectForegroundCommand(lines)
+  const shell = facts.alternateScreen
+    ? null
+    : detectForegroundCommand(lines, { cursorBelowText: facts.cursorBelowText })
   if (shell) {
     return shell
   }
@@ -140,6 +160,20 @@ export function readTerminalTail(terminal: TailSource, count = 200): string[] {
     lines.push(buffer.getLine(index)?.translateToString(true) ?? '')
   }
   return lines
+}
+
+type CursorSource = TailSource & {
+  buffer: TailSource['buffer'] & {
+    active: TailSource['buffer']['active'] & { baseY: number; cursorY: number }
+  }
+}
+
+/** The cursor is on a row below the last line of text in the tail `readTerminalTail` reads. */
+export function cursorBelowLastText(terminal: CursorSource, count = 200): boolean {
+  const buffer = terminal.buffer.active
+  const start = Math.max(0, buffer.length - count)
+  const last = lastTextRow(readTerminalTail(terminal, count))
+  return last >= 0 && buffer.baseY + buffer.cursorY > start + last
 }
 
 type ViewportSource = TailSource & {
