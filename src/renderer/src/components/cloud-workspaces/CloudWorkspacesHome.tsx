@@ -15,14 +15,9 @@ import type {
 import { useOrgRoster } from '../billing/team/use-org-roster'
 import { CloudWorkspaceRow } from './CloudWorkspaceRow'
 import { NEW_SECTION } from './CloudWorkspaceRowMenu'
-import {
-  ANY,
-  CloudWorkspacesToolbar,
-  INITIAL_CLOUD_WORKSPACE_FILTERS,
-  type CloudWorkspacesFilters
-} from './CloudWorkspacesToolbar'
+import { ANY, CloudWorkspacesToolbar } from './CloudWorkspacesToolbar'
 import { EmptyState, ErrorState, NewSectionDialog, SkeletonRows } from './CloudWorkspacesStates'
-import { readShowRoutineRuns, writeShowRoutineRuns } from './cloud-workspaces-home-prefs'
+import { useCloudHomeFilters } from './use-cloud-home-filters'
 import { CloudWorkspaceConfirmDialog, type PendingConfirm } from './CloudWorkspaceConfirmDialog'
 import { CloudReadSnapshotSheet } from './CloudReadSnapshotSheet'
 import { useCloudReadPanel } from './use-cloud-read-panel'
@@ -85,19 +80,7 @@ export function CloudWorkspacesHome({
   const orgId = cloud?.activeOrgId
   const selfId = cloud?.userId ?? null
   const account = useOrcaAccountKey()
-  // The Routine runs switch is remembered per account; every other filter starts fresh.
-  const initialFilters = (key: string): CloudWorkspacesFilters => ({
-    ...INITIAL_CLOUD_WORKSPACE_FILTERS,
-    routines: readShowRoutineRuns(key)
-  })
-  const [filters, setFilters] = useState(() => initialFilters(account))
-  homeArchive.usePendingHomeFilters(setFilters)
-  // Owner and repo filters name the previous team's people and repos; a team switch starts over.
-  const [filtersAccount, setFiltersAccount] = useState(account)
-  if (filtersAccount !== account) {
-    setFiltersAccount(account)
-    setFilters(initialFilters(account))
-  }
+  const { filters, changeFilters } = useCloudHomeFilters(account)
   const [opening, setOpening] = useState<string | null>(null)
   const [now, setNow] = useState(() => Date.now())
   const [sectionFor, setSectionFor] = useState<CloudWorkspace | null>(null)
@@ -119,23 +102,6 @@ export function CloudWorkspacesHome({
   useEffect(
     () => installWindowVisibilityInterval({ run: () => setNow(Date.now()), intervalMs: 30_000 }),
     []
-  )
-
-  const changeFilters = useCallback(
-    (next: Partial<CloudWorkspacesFilters>) => {
-      if (next.routines !== undefined) {
-        writeShowRoutineRuns(account, next.routines)
-      }
-      setFilters((previous) => {
-        // A different list (scope or archived) has different owners and repos; start unfiltered.
-        // Routine runs only add rows, so the owner/repo picks stay.
-        const reset =
-          (next.scope !== undefined && next.scope !== previous.scope) ||
-          (next.archived !== undefined && next.archived !== previous.archived)
-        return { ...previous, ...(reset ? { by: ANY, repo: ANY } : {}), ...next }
-      })
-    },
-    [account]
   )
 
   // A workspace being deleted (or gone) is not something to open or manage; Home leaves it out.
