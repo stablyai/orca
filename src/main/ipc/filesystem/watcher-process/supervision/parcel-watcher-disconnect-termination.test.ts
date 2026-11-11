@@ -1,7 +1,9 @@
 import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { RUNTIME_FILE_WATCH_CANCEL_TIMEOUT_MS as WATCHER_PROCESS_CANCEL_TIMEOUT_MS } from '../../../../../shared/file-watch/runtime-file-watch-limits'
-import { RUNTIME_FILE_WATCH_EXIT_DEADLINE_MS as WATCHER_PROCESS_EXIT_DEADLINE_MS } from '../../../../../shared/file-watch/runtime-file-watch-limits'
+import {
+  RUNTIME_FILE_WATCH_CANCEL_TIMEOUT_MS as WATCHER_PROCESS_CANCEL_TIMEOUT_MS,
+  RUNTIME_FILE_WATCH_EXIT_DEADLINE_MS as WATCHER_PROCESS_EXIT_DEADLINE_MS
+} from '../../../../../shared/file-watch/runtime-file-watch-limits'
 
 const { existsSyncMock, forkMock, mkdtempSyncMock, rmSyncMock } = vi.hoisted(() => ({
   existsSyncMock: vi.fn(),
