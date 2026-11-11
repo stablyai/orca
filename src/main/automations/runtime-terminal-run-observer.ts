@@ -9,6 +9,7 @@ import {
   automationRunFailure,
   type AutomationRunFailure
 } from '../../shared/automations/history/automation-run-failure-copy'
+import { replayAutomationRunCompletionAttribution } from '../../shared/automations/automation-agent-session-attribution'
 import {
   judgeHeldRunTurn,
   judgeIdleRun,
@@ -86,10 +87,20 @@ function observationOf(
   judged: JudgedRun | null
 ): AutomationRunCompletionObservation {
   if (verdict.kind === 'completed') {
+    const completionAttribution = judged
+      ? replayAutomationRunCompletionAttribution({
+          rows: judged.run.terminalPaneKey
+            ? judged.evidence.getAgentStatusRowsForPane(judged.run.terminalPaneKey)
+            : [],
+          terminalPtyId: judged.run.terminalPtyId,
+          terminalPaneKey: judged.run.terminalPaneKey
+        })
+      : undefined
     return {
       status: 'completed',
       outputSnapshot: completedSnapshot(tail, judged),
-      error: null
+      error: null,
+      ...(completionAttribution ? { completionAttribution } : {})
     }
   }
   const { kind: _kind, ...failure } = verdict
