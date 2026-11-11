@@ -23,7 +23,11 @@ import { museHookService } from '../../muse/hook-service'
 import { openClaudeHookService } from '../../openclaude/hook-service'
 import { zcodeHookService } from '../../zcode/hook-service'
 
-export type ManagedAgentHookInstallOptions = { userInitiated?: boolean; cliVersion?: string }
+export type ManagedAgentHookInstallOptions = {
+  userInitiated?: boolean
+  cliVersion?: string
+  retirePermissionRequest?: boolean
+}
 export type ManagedAgentHookInstaller = readonly [
   HookInstallAgent,
   (
@@ -42,7 +46,14 @@ export type ManagedAgentHookAsyncRemover = readonly [
 export type ManagedAgentHookStatusReader = readonly [HookInstallAgent, () => AgentHookInstallStatus]
 
 export const MANAGED_AGENT_HOOK_INSTALLERS: readonly ManagedAgentHookInstaller[] = [
-  ['claude', (options) => claudeHookService.install({ claudeVersion: options?.cliVersion })],
+  [
+    'claude',
+    (options) =>
+      claudeHookService.install({
+        claudeVersion: options?.cliVersion,
+        retirePermissionRequest: options?.retirePermissionRequest
+      })
+  ],
   ['openclaude', () => openClaudeHookService.install()],
   ['codex', () => codexHookService.reconcileHooks()],
   ['gemini', () => geminiHookService.install()],

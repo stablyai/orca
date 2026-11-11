@@ -13,6 +13,7 @@ import {
   isAgentStatusHooksEnabledForAgent
 } from '../../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import { probeClaudeCliVersion } from '../../claude/claude-hook-event-versions'
+import { permissionGuardSkipInUse } from '../../../shared/agent-launch/permissions/agent-permission-guard-skip'
 import { detectLocalManagedAgentCliPresence } from './local-agent-cli-presence'
 import {
   MANAGED_AGENT_HOOK_ASYNC_REMOVERS,
@@ -25,7 +26,15 @@ import {
 } from './managed-agent-hook-registry'
 
 type ManagedHookSettings = Partial<
-  Pick<GlobalSettings, 'agentCmdOverrides' | 'agentStatusHooksEnabled' | 'disabledTuiAgents'>
+  Pick<
+    GlobalSettings,
+    | 'agentCmdOverrides'
+    | 'agentStatusHooksEnabled'
+    | 'disabledTuiAgents'
+    | 'agentPermissionDefault'
+    | 'agentPermissionOverrides'
+    | 'agentDefaultEnv'
+  >
 > | null
 
 type InstallOptions = {
@@ -191,7 +200,8 @@ export async function installManagedAgentHooks(
     results.push(
       await runInstaller(entry, options.onInstallError, {
         ...(options.userInitiated !== undefined ? { userInitiated: options.userInitiated } : {}),
-        ...(cliVersion ? { cliVersion } : {})
+        ...(cliVersion ? { cliVersion } : {}),
+        retirePermissionRequest: permissionGuardSkipInUse(settings)
       })
     )
   }

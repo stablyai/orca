@@ -6,6 +6,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { isAgentStatusHooksEnabledForAgent } from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
+import { permissionGuardSkipInUse } from '../../shared/agent-launch/permissions/agent-permission-guard-skip'
 import {
   CLAUDE_INJECTED_CONFIG_DIR_ENV,
   CLAUDE_PROFILE_POINTER_ENV,
@@ -52,6 +53,9 @@ export type ClaudeProfileRouterSettings = Pick<
   | 'activeClaudeManagedAccountIdsByRuntime'
   | 'agentStatusHooksEnabled'
   | 'disabledTuiAgents'
+  | 'agentPermissionDefault'
+  | 'agentPermissionOverrides'
+  | 'agentDefaultEnv'
 >
 
 /** Mirror the settings selection to a pointer file for Claude in existing terminals. */
@@ -248,7 +252,8 @@ export class ClaudeProfileRouter {
       userHome: this.userHome,
       userConfigDir: this.userConfigDir(),
       hooks,
-      claudeVersion: claudeVersion ?? undefined
+      claudeVersion: claudeVersion ?? undefined,
+      retirePermissionRequest: permissionGuardSkipInUse(this.args.getSettings())
     })
     if (report.outcome === 'prepared') {
       await getClaudeAgentViewService(this.args.dataRoot).prepareProfile(profile.home)

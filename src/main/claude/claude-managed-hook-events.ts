@@ -108,17 +108,22 @@ export type ClaudeManagedHookPlan = {
 }
 
 export function getClaudeManagedHookPlan(
-  claudeVersion: string | null | undefined
+  claudeVersion: string | null | undefined,
+  // Claude Code ignores the guard-skip variable while any PermissionRequest hook is set.
+  retirePermissionRequest = false
 ): ClaudeManagedHookPlan {
+  const retired = (event: ManagedHookEvent) =>
+    retirePermissionRequest && event.eventName === 'PermissionRequest'
   const install = CLAUDE_MANAGED_EVENTS.filter(
     (event) =>
+      !retired(event) &&
       claudeKnowsHookEvent(claudeVersion, event.eventName) &&
       (!('installFrom' in event) || claudeVersionReaches(claudeVersion, event.installFrom))
   )
   // A failed version probe must not retire entries installed using a known version.
   const retire =
     parseClaudeCliVersion(claudeVersion) === null
-      ? []
+      ? CLAUDE_MANAGED_EVENTS.filter(retired)
       : CLAUDE_MANAGED_EVENTS.filter((event) => !install.includes(event))
   return {
     install,
