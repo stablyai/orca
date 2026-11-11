@@ -71,12 +71,13 @@ export class FederationRelayScheduler {
     this.pullForwardToBase(dispatchId, chain)
   }
 
-  /** A server that just verified is worth retrying at the base cadence. */
+  /** A server that just verified is worth retrying, and watching, at the base cadence. */
   resetEnvironment(environmentId: string): void {
     for (const dispatchId of this.dispatchesByEnvironment.get(environmentId) ?? []) {
       const chain = this.chains.get(dispatchId)
       if (chain) {
         chain.failures = 0
+        wake(chain)
         this.syncSoon(dispatchId, chain)
       }
     }
