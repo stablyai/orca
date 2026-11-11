@@ -135,6 +135,10 @@ export type ClaudeSession = {
   fastModePerSessionOptIn?: boolean
   /** Mutation sequence of the last model report; newer writes outrank it. */
   reportedModelMutation: number
+  /** A saved model pick no turn of this process has carried; its reports predate the pick. */
+  modelPickAwaitingTurn?: string
+  /** `dispatchSequence` at the last model write; that turn's replies predate the pick. */
+  modelMutationDispatch?: number
   /** Options whose recorded value the provider reported, not merely accepted. */
   confirmedOptions: Set<string>
   /** Inputs carried by launch or accepted controls, independent of provider reports. */

@@ -37,7 +37,8 @@ const STORE_REWRITES: Record<
   (scope: WslMoveRendererRewriteScope) => Promise<void>
 > = {
   'quick-open-history': async (scope) => {
-    const { copyQuickOpenHistoryScopes } = await import('../../quick-open-file-history')
+    const { copyQuickOpenHistoryScopes } =
+      await import('../../files/search/quick-open-file-history')
     copyQuickOpenHistoryScopes((key) => hostQuickOpenHistoryScope(key, scope))
   },
   'file-view-preferences': async (scope) => {
@@ -45,7 +46,7 @@ const STORE_REWRITES: Record<
       await Promise.all([
         import('../../../components/editor/file-view-preference-storage'),
         import('../../../components/editor/pdf-scale-preference-storage'),
-        import('../../../components/editor/csv/csv-column-width-preferences')
+        import('../../../components/editor/csv/grid/columns/csv-column-width-preferences')
       ])
     copyFileViewPreferences(PDF_SCALE_PREFERENCES_STORAGE_KEY, (key) =>
       hostFileViewPreferenceKey(key, scope)

@@ -7,26 +7,26 @@ import {
   applyRepoTerminalThemeOverride,
   resolvePaneStyleOptions,
   resolveEffectiveTerminalAppearance
-} from '@/lib/terminal-theme'
+} from '@/lib/terminal/appearance/terminal-theme'
 import type { RepoTerminalThemeOverrides } from '../../../../../shared/repo-terminal-theme'
-import { buildFontFamily } from '@/lib/monospace-font-family'
+import { buildFontFamily } from '../../../../../shared/monospace-font-family'
 import { pluginFontFamilyWhenLoaded } from '@/store/plugins/appearance/plugin-fonts'
-import '@/lib/pane-manager/pane-tree-ops'
-import { safeFit, safeFitAndThen } from '@/lib/pane-manager/pane-fit'
+import '@/lib/pane-manager/pane-layout/pane-tree-ops'
+import { safeFit, safeFitAndThen } from '@/lib/pane-manager/terminal-fit/pane-fit'
 
-import { canApplyPaneMetricOptions } from '@/lib/pane-manager/pane-fit-measurability'
+import { canApplyPaneMetricOptions } from '@/lib/pane-manager/terminal-fit/pane-fit-measurability'
 import {
   applyOrDeferPaneMetricOptions,
   paneMetricOptionsAlreadySettled
-} from '@/lib/pane-manager/pane-metric-options-deferral'
+} from '@/lib/pane-manager/terminal-fit/pane-metric-options-deferral'
 import {
   normalizeTerminalFastScrollSensitivity,
   normalizeTerminalScrollSensitivity,
   resolveTerminalCursorInactiveStyle,
   resolveTerminalScrollOnUserInput
 } from '@/lib/pane-manager/pane-terminal-options'
-import { getFitOverrideForPty } from '@/lib/pane-manager/mobile-fit-overrides'
-import { setTerminalCursorBlinkOption } from '@/lib/pane-manager/pane-cursor-blink-suspension'
+import { getFitOverrideForPty } from '@/lib/pane-manager/terminal-fit/mobile-fit-overrides'
+import { setTerminalCursorBlinkOption } from '@/lib/pane-manager/pane-focus/pane-cursor-blink-suspension'
 import type { PtyTransport } from '../pty-transport/pty-transport-types'
 import type { EffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/detect-option-as-alt'
 import type { TerminalViewAttributes } from '../../../../../shared/terminal/protocol/queries/terminal-view-attributes'
@@ -40,7 +40,7 @@ import { normalizeTerminalLineHeight } from '../../../../../shared/terminal/appe
 import { maybePushMode2031Flip } from '../emulation/terminal-mode-2031-replies'
 import { resolveTerminalMinimumContrastRatio } from '../../../../../shared/terminal-themes/terminal-contrast-correction'
 import { resolveTerminalInlineImagesEnabled } from '../../../../../shared/terminal/images/terminal-inline-images-settings'
-import { windowBackdropActive } from '@/lib/window-backdrop'
+import { windowBackdropActive } from '@/app-shell/appearance/window-backdrop'
 import { getTerminalFontSizeOverride } from './terminal-font-size-overrides'
 
 // Why shared: main composes the same theme from persisted settings to pre-load hidden PTYs.

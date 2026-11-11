@@ -20,7 +20,7 @@ import {
   type WorktreeCreateAgentLaunch
 } from './agent-launch-request'
 import { isAgentLaunchReplayUnsupportedRefusal } from '../../../src/shared/agent-launch/contracts/agent-launch-replay-refusal'
-import { structuredSessionOperationId } from '../session/structured-session-operation-id'
+import { structuredSessionOperationId } from '../session/native-chat/agent-session/structured-session-operation-id'
 import { WORKTREE_CREATE_TIMEOUT_MS } from './workspace-create-timeout'
 import type { WorkspaceCreateParams } from './workspace-create-params'
 import type {
@@ -35,7 +35,12 @@ import {
 // Branches and remote PRs outlive worktrees and escape local preflight dedupe; retry host collision errors with numeric suffixes.
 export type WorktreeCreateResult =
   | { worktreeId: string; name: string; warning?: string }
-  | { error: string }
+  /** `replayed`: the refusal answered a resend after a lost reply, so the first send may have created it. */
+  | { error: string; replayed?: true }
+
+export type WorktreeCreateParent = Required<
+  Pick<WorkspaceCreateParams, 'parentWorkspace' | 'parentWorkspaceOrigin'>
+>
 
 export type CreateWorktreeWithNameRetryArgs = {
   client: RpcClient
@@ -46,6 +51,8 @@ export type CreateWorktreeWithNameRetryArgs = {
   branchIntentSupported?: boolean | Promise<boolean>
   agentLaunch?: WorktreeCreateAgentLaunch
   maxAttempts?: number
+  /** The workspace the new worktree is attached to, on every attempt. */
+  parent?: WorktreeCreateParent
   mintMutationId?: () => string
   mintLaunchOperationId?: () => string
 }
@@ -62,11 +69,12 @@ export async function createWorktreeWithNameRetry(
   const mintMutationId = args.mintMutationId ?? defaultWorktreeCreateMutationId
   const mintLaunchOperationId = args.mintLaunchOperationId ?? structuredSessionOperationId
   let lastError: string | null = null
+  let lastReplayed = false
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     const candidateName = args.nameWasGenerated
       ? getGeneratedWorktreeCreateRetryCandidate(baseName, attempt)
       : getClientWorktreeCreateCandidate(baseName, attempt)
-    const candidateParams = buildParams(candidateName, attempt)
+    const candidateParams = { ...buildParams(candidateName, attempt), ...args.parent }
     if (attempt === 0 && candidateParams.branchIntent) {
       if ((await args.branchIntentSupported) !== true) {
         return {
@@ -90,6 +98,7 @@ export async function createWorktreeWithNameRetry(
       worktreeCreateIdempotency
     )
     let response = sent.response
+    let replayed = sent.replayed
     if (
       !response.ok &&
       !sent.replayed &&
@@ -100,9 +109,15 @@ export async function createWorktreeWithNameRetry(
     ) {
       // Method refusal can mean the client advertisement lagged the probe; downgrade permanently for this create.
       launch = null
-      response = (
-        await sendWorktreeCreateResilient(client, null, null, params, worktreeCreateIdempotency)
-      ).response
+      const fallback = await sendWorktreeCreateResilient(
+        client,
+        null,
+        null,
+        params,
+        worktreeCreateIdempotency
+      )
+      response = fallback.response
+      replayed = fallback.replayed
     }
     // Ledger refusal may follow creation; never retry unnamed. Inspect raw refusal messages for legacy collision handling.
     if (response.ok) {
@@ -118,7 +133,10 @@ export async function createWorktreeWithNameRetry(
       break
     }
     lastError = response.error.message
+    lastReplayed = replayed
+    // A replayed refusal may follow a create whose reply was lost; another name could be a second worktree.
     if (
+      replayed ||
       candidateParams.branchIntent === 'open-existing-v2' ||
       launch?.replay ||
       !isRetryableWorktreeCreateConflict(lastError ?? '')
@@ -128,7 +146,9 @@ export async function createWorktreeWithNameRetry(
   }
   return {
     error:
-      lastError ?? translate('tasks.worktreeCreateRetry.createFailed', 'Failed to create workspace')
+      lastError ??
+      translate('tasks.worktreeCreateRetry.createFailed', 'Failed to create workspace'),
+    ...(lastReplayed ? { replayed: true as const } : {})
   }
 }
 

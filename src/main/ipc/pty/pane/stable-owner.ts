@@ -1,4 +1,4 @@
-import { persistFreshPaneBinding } from '../spawn-commit-binding'
+import { persistFreshPaneBinding } from './fresh-pane-binding'
 import { rollbackWorkspaceSessionAfterFailedAsyncWrite } from '../../../persistence/restoring-sessions/workspace-session-write-rollback'
 import { cloneWorkspaceSessionState } from '../../../persistence/restoring-sessions/session-owner-fields'
 import { toSshExecutionHostId } from '../../../../shared/execution-host'
@@ -14,7 +14,7 @@ import type {
 import { getPtySshConnectionId } from '../provider/registry'
 import { ptyIncarnationById } from '../provider/ownership-state'
 import type { ReplacedPaneOwner } from './replaced-pane-owner'
-import { spawnCommitBindingOrigin } from '../../../persistence/loading-store/pty-binding-span'
+import { spawnCommitBindingOrigin } from '../../../persistence/loading-store/terminal-bindings/pty-binding-span'
 
 export type StablePaneOwner = {
   handle?: string

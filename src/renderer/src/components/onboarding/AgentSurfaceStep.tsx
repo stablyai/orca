@@ -8,7 +8,7 @@ import {
   type LucideIcon
 } from 'lucide-react'
 import { Trans } from 'react-i18next'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { i18n } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
@@ -50,7 +50,7 @@ export function AgentSurfaceStep({
           )}
           note={t(
             'components.onboarding.agentSurface.chat.terminalFallback',
-            'Agents without chat support, and SSH or WSL projects, still open in a terminal.'
+            'Agents without chat support and folders opened through SSH or WSL on this computer still open in a terminal.'
           )}
           warning={
             noChatAgentDetected

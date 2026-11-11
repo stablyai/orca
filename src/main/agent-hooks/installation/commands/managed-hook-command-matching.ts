@@ -6,9 +6,7 @@ import {
 import type { HookCommandConfig, HookDefinition } from '../configuration/hook-config-schema'
 
 // Match script names so reinstalls sweep entries from old and parallel installations.
-export function createManagedCommandMatcher(
-  scriptFileName: string
-): (command: string | undefined) => boolean {
+export function createManagedCommandMatcher(scriptFileName: string): (command: unknown) => boolean {
   const scriptStem = scriptFileName.replace(/\.(?:cmd|ps1|sh)$/, '')
   // Sweep every platform suffix after a platform switch.
   const needles = [
@@ -19,8 +17,9 @@ export function createManagedCommandMatcher(
   ]
   // The native executable selects its provider through argv[1].
   const nativeHook = `agent-hooks/${WINDOWS_NATIVE_HOOK_EXECUTABLE_NAME} ${getWindowsNativeHookAgent(scriptFileName)} `
+  // hooks.json is user-editable, so a command may not be a string.
   return (command) => {
-    if (!command) {
+    if (typeof command !== 'string' || !command) {
       return false
     }
     const decodedCommand = decodePowerShellEncodedCommand(command)

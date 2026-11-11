@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import type { UseMobileDictationResult } from '../hooks/mobile-dictation-session-state'
 import { useAccessibilityAnnouncer } from '../platform/accessibility-announcer'
 import { dictationAnnounceCopy } from './mobile-dictation-announce-copy'
-import { dictationFailureReason } from './mobile-dictation-controls-copy'
+import { dictationKeptFailureCause } from './mobile-dictation-controls-copy'
 
 // Finishing is said only when it is slow.
 const FINISHING_ANNOUNCE_DELAY_MS = 1000
@@ -102,7 +102,7 @@ export function useMobileDictationAnnouncements(
 
   useEffect(() => {
     if (failure) {
-      say(dictationAnnounceCopy.stoppedKept(dictationFailureReason(failure)))
+      say(dictationAnnounceCopy.stoppedKept(dictationKeptFailureCause(failure)))
     }
   }, [failure, say])
 

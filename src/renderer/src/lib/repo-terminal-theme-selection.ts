@@ -5,7 +5,7 @@ import type { RepoTerminalThemeOverrides } from '../../../shared/repo-terminal-t
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import { getApplicableRepoTerminalTheme } from './repo-terminal-theme-availability'
-import { getResolvedExecutionHostIdForWorktree } from './resolved-worktree-execution-host'
+import { getResolvedExecutionHostIdForWorktree } from './workspace/ownership/resolved-worktree-execution-host'
 import {
   findIndexedRepoOwnerForHost,
   resolveIndexedRepoOwner

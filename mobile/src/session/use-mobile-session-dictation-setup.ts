@@ -9,6 +9,11 @@ import {
 } from '../dictation/mobile-dictation-setup'
 import type { MobileSessionFeedbackCapabilitiesModel } from './use-mobile-session-feedback-capabilities'
 import type { DictationTerm } from '../../../src/shared/dictation-dictionary'
+import {
+  DEFAULT_STOP_AFTER_SILENCE_SECONDS,
+  stopAfterSilenceSeconds,
+  type StopAfterSilenceSeconds
+} from '../../../src/shared/dictation-silence-stop'
 
 // The computer's dictation settings as this session reads them: mic shown, mode, filler switch, and whether setup is needed first.
 export function useMobileSessionDictationSetup(scope: MobileSessionFeedbackCapabilitiesModel) {
@@ -19,6 +24,9 @@ export function useMobileSessionDictationSetup(scope: MobileSessionFeedbackCapab
   // The host's filler switch and this worktree's terms, kept from its last setup read; fillers on until one says otherwise.
   const [removeFillerWords, setRemoveFillerWords] = useState(true)
   const [dictationTerms, setDictationTerms] = useState<DictationTerm[] | undefined>(undefined)
+  const [silenceSeconds, setSilenceSeconds] = useState<StopAfterSilenceSeconds>(
+    DEFAULT_STOP_AFTER_SILENCE_SECONDS
+  )
   // Only a host setup read sets this; while false, the host's start refusal decides (older hosts, first tap before the read).
   const dictationNeedsSetupRef = useRef(false)
 
@@ -35,6 +43,7 @@ export function useMobileSessionDictationSetup(scope: MobileSessionFeedbackCapab
         setDictationMode(setup.dictationMode)
         setRemoveFillerWords(setup.removeFillerWords !== false)
         setDictationTerms(setup.dictationTerms)
+        setSilenceSeconds(stopAfterSilenceSeconds(setup))
         setDictationEnabled(!dictationMicHidden(setup))
         dictationNeedsSetupRef.current = dictationNeedsSetup(setup)
       }
@@ -70,6 +79,7 @@ export function useMobileSessionDictationSetup(scope: MobileSessionFeedbackCapab
     phoneDictation,
     removeFillerWords,
     dictationTerms,
+    silenceSeconds,
     dictationNeedsSetupRef,
     closeDictationSetup,
     refreshDictationMode

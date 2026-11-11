@@ -16601,7 +16601,7 @@
       "id": "notifications-push-registered",
       "operation": "notifications.push-registration",
       "family": "notifications.push-registration",
-      "sites": ["mobile/src/notifications/push-registration.ts"],
+      "sites": ["mobile/src/notifications/mobile-push-registration-operations.ts"],
       "schedules": [],
       "steps": [
         {
@@ -16650,7 +16650,7 @@
       "id": "notifications-push-gateway-rejected",
       "operation": "notifications.push-registration",
       "family": "notifications.push-registration",
-      "sites": ["mobile/src/notifications/push-registration.ts"],
+      "sites": ["mobile/src/notifications/mobile-push-registration-operations.ts"],
       "schedules": [],
       "steps": [
         {
@@ -18029,7 +18029,7 @@
       "id": "native-chat-write-accepted",
       "operation": "nativeChat.terminal-write",
       "family": "nativeChat.terminal-write",
-      "sites": ["mobile/src/session/native-chat/mobile-native-chat-send.ts"],
+      "sites": ["mobile/src/session/native-chat/composer/mobile-native-chat-send.ts"],
       "schedules": [],
       "steps": [
         {
@@ -18065,7 +18065,7 @@
       "id": "native-chat-write-rejected",
       "operation": "nativeChat.terminal-write",
       "family": "nativeChat.terminal-write",
-      "sites": ["mobile/src/session/native-chat/mobile-native-chat-send.ts"],
+      "sites": ["mobile/src/session/native-chat/composer/mobile-native-chat-send.ts"],
       "schedules": [],
       "steps": [
         {
@@ -18101,7 +18101,7 @@
       "id": "native-chat-write-delivery-unknown",
       "operation": "nativeChat.terminal-write",
       "family": "nativeChat.terminal-write",
-      "sites": ["mobile/src/session/native-chat/mobile-native-chat-send.ts"],
+      "sites": ["mobile/src/session/native-chat/composer/mobile-native-chat-send.ts"],
       "schedules": [],
       "steps": [
         {
@@ -18133,7 +18133,7 @@
       "id": "native-chat-write-clear-line",
       "operation": "nativeChat.terminal-write",
       "family": "nativeChat.terminal-write",
-      "sites": ["mobile/src/session/native-chat/mobile-native-chat-send.ts"],
+      "sites": ["mobile/src/session/native-chat/composer/mobile-native-chat-send.ts"],
       "schedules": [],
       "steps": [
         {
@@ -18169,7 +18169,7 @@
       "id": "native-chat-write-typed-command",
       "operation": "nativeChat.terminal-write",
       "family": "nativeChat.terminal-write",
-      "sites": ["mobile/src/session/native-chat/mobile-native-chat-send.ts"],
+      "sites": ["mobile/src/session/native-chat/composer/mobile-native-chat-send.ts"],
       "schedules": [],
       "steps": [
         {
@@ -18840,7 +18840,9 @@
       "id": "structured-launch-unsupported",
       "operation": "agentSession.structured-launch",
       "family": "agentSession.structured-launch",
-      "sites": ["mobile/src/session/mobile-structured-agent-session-launch.ts"],
+      "sites": [
+        "mobile/src/session/native-chat/agent-session/mobile-structured-agent-session-launch.ts"
+      ],
       "schedules": [],
       "steps": [
         {
@@ -18870,7 +18872,9 @@
       "id": "structured-launch-support-refused",
       "operation": "agentSession.structured-launch",
       "family": "agentSession.structured-launch",
-      "sites": ["mobile/src/session/mobile-structured-agent-session-launch.ts"],
+      "sites": [
+        "mobile/src/session/native-chat/agent-session/mobile-structured-agent-session-launch.ts"
+      ],
       "schedules": [],
       "steps": [
         {
@@ -18900,7 +18904,9 @@
       "id": "structured-launch-created",
       "operation": "agentSession.structured-launch",
       "family": "agentSession.structured-launch",
-      "sites": ["mobile/src/session/mobile-structured-agent-session-launch.ts"],
+      "sites": [
+        "mobile/src/session/native-chat/agent-session/mobile-structured-agent-session-launch.ts"
+      ],
       "schedules": [],
       "steps": [
         {
@@ -18951,7 +18957,9 @@
       "id": "structured-launch-definitive-refusal",
       "operation": "agentSession.structured-launch",
       "family": "agentSession.structured-launch",
-      "sites": ["mobile/src/session/mobile-structured-agent-session-launch.ts"],
+      "sites": [
+        "mobile/src/session/native-chat/agent-session/mobile-structured-agent-session-launch.ts"
+      ],
       "schedules": [],
       "steps": [
         {
@@ -19003,7 +19011,9 @@
       "id": "structured-launch-replays-dropped-create",
       "operation": "agentSession.structured-launch",
       "family": "agentSession.structured-launch",
-      "sites": ["mobile/src/session/mobile-structured-agent-session-launch.ts"],
+      "sites": [
+        "mobile/src/session/native-chat/agent-session/mobile-structured-agent-session-launch.ts"
+      ],
       "schedules": [],
       "steps": [
         {
@@ -19443,7 +19453,7 @@
       "id": "native-chat-stop-accepted",
       "operation": "session.native-chat-stop",
       "family": "session.native-chat-stop",
-      "sites": ["mobile/src/session/native-chat/use-mobile-native-chat-stop.ts"],
+      "sites": ["mobile/src/session/native-chat/composer/use-mobile-native-chat-stop.ts"],
       "schedules": [],
       "steps": [
         {
@@ -19504,7 +19514,7 @@
       "id": "native-chat-stop-both-rejected",
       "operation": "session.native-chat-stop",
       "family": "session.native-chat-stop",
-      "sites": ["mobile/src/session/native-chat/use-mobile-native-chat-stop.ts"],
+      "sites": ["mobile/src/session/native-chat/composer/use-mobile-native-chat-stop.ts"],
       "schedules": [],
       "steps": [
         {
@@ -19562,7 +19572,7 @@
       "id": "native-chat-stop-delivery-unknown",
       "operation": "session.native-chat-stop",
       "family": "session.native-chat-stop",
-      "sites": ["mobile/src/session/native-chat/use-mobile-native-chat-stop.ts"],
+      "sites": ["mobile/src/session/native-chat/composer/use-mobile-native-chat-stop.ts"],
       "schedules": [],
       "steps": [
         {
@@ -19962,7 +19972,7 @@
         "mobile/src/source-control/review/use-mobile-diff-review-comment-actions.ts",
         "mobile/src/source-control/review/use-mobile-diff-review-git-actions.ts",
         "mobile/src/source-control/review/use-mobile-diff-review-send-actions.ts",
-        "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
+        "mobile/src/session/native-chat/composer/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
       "steps": [
@@ -20039,7 +20049,7 @@
         "mobile/src/source-control/review/use-mobile-diff-review-comment-actions.ts",
         "mobile/src/source-control/review/use-mobile-diff-review-git-actions.ts",
         "mobile/src/source-control/review/use-mobile-diff-review-send-actions.ts",
-        "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
+        "mobile/src/session/native-chat/composer/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
       "steps": [
@@ -20117,7 +20127,7 @@
         "mobile/src/source-control/review/use-mobile-diff-review-comment-actions.ts",
         "mobile/src/source-control/review/use-mobile-diff-review-git-actions.ts",
         "mobile/src/source-control/review/use-mobile-diff-review-send-actions.ts",
-        "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
+        "mobile/src/session/native-chat/composer/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
       "steps": [
@@ -20152,7 +20162,7 @@
         "mobile/src/source-control/review/use-mobile-diff-review-comment-actions.ts",
         "mobile/src/source-control/review/use-mobile-diff-review-git-actions.ts",
         "mobile/src/source-control/review/use-mobile-diff-review-send-actions.ts",
-        "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
+        "mobile/src/session/native-chat/composer/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
       "steps": [
@@ -20188,7 +20198,7 @@
         "mobile/src/source-control/review/use-mobile-diff-review-comment-actions.ts",
         "mobile/src/source-control/review/use-mobile-diff-review-git-actions.ts",
         "mobile/src/source-control/review/use-mobile-diff-review-send-actions.ts",
-        "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
+        "mobile/src/session/native-chat/composer/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
       "steps": [
@@ -20224,7 +20234,7 @@
         "mobile/src/source-control/review/use-mobile-diff-review-comment-actions.ts",
         "mobile/src/source-control/review/use-mobile-diff-review-git-actions.ts",
         "mobile/src/source-control/review/use-mobile-diff-review-send-actions.ts",
-        "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
+        "mobile/src/session/native-chat/composer/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
       "steps": [
@@ -20280,7 +20290,7 @@
         "mobile/src/source-control/review/use-mobile-diff-review-comment-actions.ts",
         "mobile/src/source-control/review/use-mobile-diff-review-git-actions.ts",
         "mobile/src/source-control/review/use-mobile-diff-review-send-actions.ts",
-        "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
+        "mobile/src/session/native-chat/composer/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
       "steps": [
@@ -21035,7 +21045,7 @@
       "id": "codex-reset-credit-consumed",
       "operation": "accounts.codex-reset-credit",
       "family": "components.codex-reset-credit",
-      "sites": ["mobile/src/components/codex-reset-credit.ts"],
+      "sites": ["mobile/src/accounts/usage/codex-reset-credit.ts"],
       "schedules": [],
       "deviceStore": {},
       "steps": [
@@ -24889,7 +24899,7 @@
         "mobile/src/source-control/review/use-mobile-diff-review-comment-actions.ts",
         "mobile/src/source-control/review/use-mobile-diff-review-git-actions.ts",
         "mobile/src/source-control/review/use-mobile-diff-review-send-actions.ts",
-        "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
+        "mobile/src/session/native-chat/composer/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
       "steps": [
@@ -24944,7 +24954,7 @@
         "mobile/src/source-control/review/use-mobile-diff-review-comment-actions.ts",
         "mobile/src/source-control/review/use-mobile-diff-review-git-actions.ts",
         "mobile/src/source-control/review/use-mobile-diff-review-send-actions.ts",
-        "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
+        "mobile/src/session/native-chat/composer/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
       "steps": [
@@ -25018,7 +25028,9 @@
       "id": "structured-agent-session-created",
       "operation": "agentSession.structured-launch",
       "family": "agentSession.structured-create",
-      "sites": ["mobile/src/session/mobile-structured-agent-session-launch.ts"],
+      "sites": [
+        "mobile/src/session/native-chat/agent-session/mobile-structured-agent-session-launch.ts"
+      ],
       "schedules": [],
       "steps": [
         {

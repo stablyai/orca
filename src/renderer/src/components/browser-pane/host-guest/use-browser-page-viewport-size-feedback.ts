@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { getUIZoomFactor } from '@/lib/ui-zoom'
+import { getUIZoomFactor } from '@/app-shell/chrome/ui-zoom'
 import { browserPageZoomLevelToFactor } from '../../../../../shared/browser-page-zoom'
 
 export type BrowserPageViewportSize = { width: number; height: number }

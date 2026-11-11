@@ -26,7 +26,7 @@ import {
   applyRepoTerminalThemeOverride,
   getBuiltinTheme,
   resolveEffectiveTerminalAppearance
-} from './terminal-theme'
+} from './terminal/appearance/terminal-theme'
 
 type AppearanceSettings = Pick<
   GlobalSettings,

@@ -1,4 +1,4 @@
-import { endComposition } from '@/lib/ime-composition-event.test-support'
+import { endComposition } from '@/lib/text-input/ime/ime-composition-event.test-support'
 import { changePrompt, promptValue } from '../editor/native-chat-prompt-editor.test-support'
 // @vitest-environment happy-dom
 

@@ -99,8 +99,9 @@ export abstract class DaemonPtyConnectionLifecycle extends DaemonPtyEventSubscri
       return
     }
     if (previous) {
-      // Recheck capabilities for each incarnation: the replacement may support getSize.
+      // Recheck capabilities for each incarnation: the replacement may support them.
       this.getSizeUnsupported = false
+      this.focusLossReportRejected = false
     }
     this.lastAuthenticatedIdentity = { ...current }
     this.exactDaemonIncarnation = exactDaemonIncarnationForPidRecord(current, this.pidRecord)

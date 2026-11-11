@@ -45,10 +45,6 @@ export function clearConfiguredWorktreeSharedDirectoriesCacheForTests(): void {
   configuredSharedDirectoriesByRepoPath.clear()
 }
 
-export function getConfiguredWorktreeSharedDirectoriesCacheSizeForTests(): number {
-  return configuredSharedDirectoriesByRepoPath.size
-}
-
 /** Configured link candidates; pair with findExistingWorktreeSymlinkPaths to preserve user-owned regular files. */
 export function getWorktreeSharedLinkPaths(repo: Pick<Repo, 'path' | 'symlinkPaths'>): string[] {
   return Array.from(

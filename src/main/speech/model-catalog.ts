@@ -163,6 +163,8 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     languages: SENSE_VOICE_DICTATION_LANGUAGES,
     ...getSpeechModelErrorRates('sense-voice-zh-en-ja-ko-yue'),
     licence: 'FunASR Model License',
+    // Turbo scores better here but is 3.5x the download and takes seconds per phrase on a CPU.
+    suggestedFor: ['zh', 'ja', 'ko', 'yue'],
     sampleRate: 16000,
     streaming: false
   },

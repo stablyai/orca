@@ -19,7 +19,7 @@ import {
   groupNativeChatFoldUnitMembers,
   type NativeChatFoldUnit as Unit
 } from '../../../../../src/shared/native-chat/transcript/native-chat-fold-units'
-import { finishMobileNativeChatMessages } from '../mobile-native-chat-render-data'
+import { finishMobileNativeChatMessages } from './mobile-native-chat-render-data'
 
 // A tail harness row that is its own image unit and no roster member leaves every earlier unit as it was.
 function staysInTail(harness: NativeChatMessage): boolean {

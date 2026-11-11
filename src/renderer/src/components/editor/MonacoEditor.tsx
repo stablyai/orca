@@ -8,9 +8,10 @@ import { monacoTypographyOptions } from '@/lib/editor/appearance/editor-typograp
 import { useEditorTypography } from '@/hooks/use-editor-typography'
 import { useContextualCopySetup } from './useContextualCopySetup'
 import { MonacoGutterContextMenu } from './MonacoGutterContextMenu'
-import { isLinuxUserAgent } from '../../lib/user-agent-platform'
+import { isLinuxUserAgent } from '../../app-shell/platform/user-agent-platform'
 import { MAX_TOKENIZATION_LINE_LENGTH } from '@/lib/monaco-languages/monarch-embed-entry-budget'
 import { buildFileEditorWordWrapOptions } from './file-editor-word-wrap-options'
+import { resolveFileEditorMinimapEnabled } from '../../../../shared/editor/editor-typography'
 import { toEditorModelUri } from './model-lifetime/identity/editor-model-uri'
 import { getEditorModelOwnerKey } from './model-lifetime/identity/editor-model-owner'
 import {
@@ -302,7 +303,7 @@ export default function MonacoEditor({
           // This global option also affects diff and Peek; it is defense in depth, not protection from Monarch embedding recursion below the cap.
           maxTokenizationLineLength: MAX_TOKENIZATION_LINE_LENGTH,
           // Monaco 0.55 forcibly disables diff sub-editor minimaps; only file editors honor this setting.
-          minimap: { enabled: settings?.editorMinimapEnabled ?? false },
+          minimap: { enabled: resolveFileEditorMinimapEnabled(settings) },
           scrollBeyondLastLine: false,
           ...PLUGIN_SYNTAX_EDITOR_OPTIONS,
           ...buildFileEditorWordWrapOptions(editorWordWrap),

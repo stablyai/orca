@@ -2,8 +2,9 @@
 
 import { Terminal } from '@xterm/xterm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
-import { getBuiltinTheme } from '@/lib/terminal-theme'
+import type { PaneManager } from '@/lib/pane-manager/pane-manager'
+import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
+import { getBuiltinTheme } from '@/lib/terminal/appearance/terminal-theme'
 import type { RepoTerminalThemeOverrides } from '../../../../shared/repo-terminal-theme'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'

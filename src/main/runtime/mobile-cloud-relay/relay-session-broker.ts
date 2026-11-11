@@ -19,6 +19,7 @@ import { relayIdentityKey } from './relay-auth-identity'
 import { RelayOriginPool } from './relay-origin-pool'
 import { RelayRegionRefresh } from './relay-region-refresh'
 import { relayRenewalDelayMs } from './relay-renewal-jitter'
+import { RelayWallClockTimer } from './relay-wall-clock-timer'
 
 export class RelaySessionBroker {
   private readonly options: RelaySessionBrokerOptions
@@ -26,11 +27,12 @@ export class RelaySessionBroker {
   private readonly originPool: RelayOriginPool
   private readonly regionRefresh: RelayRegionRefresh | null
   private authorization: RelayAuthorization | null = null
-  private refreshTimer: ReturnType<typeof setTimeout> | null = null
+  private readonly refreshTimer: RelayWallClockTimer
   private closed = false
 
   private constructor(options: RelaySessionBrokerOptions) {
     this.options = options
+    this.refreshTimer = new RelayWallClockTimer(options.now)
     this.relayHostId = deriveRelayHostId(options.keypair.publicKey)
     this.originPool = new RelayOriginPool({
       directorUrl: options.authConfig.relayDirectorUrl,
@@ -199,10 +201,7 @@ export class RelaySessionBroker {
     }
     const publishOffline = this.options.isCurrent()
     this.closed = true
-    if (this.refreshTimer) {
-      clearTimeout(this.refreshTimer)
-      this.refreshTimer = null
-    }
+    this.refreshTimer.cancel()
     this.originPool.closeNow(hostCloseReason)
     this.regionRefresh?.close()
     if (publishOffline) {
@@ -259,11 +258,10 @@ export class RelaySessionBroker {
     const now = (this.options.now ?? Date.now)()
     const random = this.options.random ?? Math.random
     const delay = relayRenewalDelayMs(authorization.expiresAt, now, random)
-    this.refreshTimer = setTimeout(() => void this.refreshAuthorization(), delay)
+    this.refreshTimer.schedule(delay, () => void this.refreshAuthorization())
   }
 
   private async refreshAuthorization(): Promise<void> {
-    this.refreshTimer = null
     try {
       const refresh = await this.options.refreshAccessToken()
       this.assertCurrent()
@@ -287,9 +285,9 @@ export class RelaySessionBroker {
       const now = (this.options.now ?? Date.now)()
       if (!this.closed && this.options.isCurrent() && now <= expiry + 60_000) {
         const random = this.options.random ?? Math.random
-        this.refreshTimer = setTimeout(
-          () => void this.refreshAuthorization(),
-          5_000 + Math.floor(random() * 10_001)
+        this.refreshTimer.schedule(
+          5_000 + Math.floor(random() * 10_001),
+          () => void this.refreshAuthorization()
         )
         return
       }

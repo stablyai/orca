@@ -6,12 +6,12 @@ import type {
 import type { AESEncryptionKey } from 'expo-crypto'
 import { Directory, Paths } from 'expo-file-system'
 import { AppState } from 'react-native'
-import { createExpoGenerationFileSystem } from '../mobile-web-shell/generation-store-file-system'
-import { loadStoredHostProfiles } from '../transport/hosts/host-metadata-store'
+import { createExpoGenerationFileSystem } from '../mobile-web-shell/generations/generation-store-file-system'
+import { loadStoredHostProfiles } from '../host-catalog/host-metadata-store'
 import {
   readPairingKeychainItem,
   writePairingKeychainItem
-} from '../transport/hosts/pairing-keychain'
+} from '../host-credentials/pairing-keychain'
 import {
   createRootIndex,
   DEVICE_STORE_CAPS,
@@ -260,18 +260,22 @@ let processStore: DeviceStore | null = null
 let started = false
 
 export function processDeviceStore(): DeviceStore {
-  processStore ??= createDeviceStore({
-    fileSystem: createExpoGenerationFileSystem(),
-    roots: {
+  if (processStore === null) {
+    const roots = {
       cache: new Directory(Paths.cache, 'orca-store', 'v1').uri,
       draft: new Directory(Paths.document, 'orca-drafts', 'v1').uri
-    },
-    keychain: {
-      read: () => readPairingKeychainItem(DEVICE_STORE_KEY_ITEM),
-      write: (hexKey) => writePairingKeychainItem(DEVICE_STORE_KEY_ITEM, hexKey)
-    },
-    loadPairedHostIds: async () => (await loadStoredHostProfiles())?.map((host) => host.id) ?? null
-  })
+    }
+    processStore = createDeviceStore({
+      fileSystem: createExpoGenerationFileSystem(roots.cache),
+      roots,
+      keychain: {
+        read: () => readPairingKeychainItem(DEVICE_STORE_KEY_ITEM),
+        write: (hexKey) => writePairingKeychainItem(DEVICE_STORE_KEY_ITEM, hexKey)
+      },
+      loadPairedHostIds: async () =>
+        (await loadStoredHostProfiles())?.map((host) => host.id) ?? null
+    })
+  }
   return processStore
 }
 

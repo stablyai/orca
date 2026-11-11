@@ -11,7 +11,7 @@ import type { LayoutLiveContext } from './terminal-pane-admission'
 import {
   resolveHostId,
   type SessionHostPartitionOperations
-} from '../loading-store/session-host-partitions'
+} from '../loading-store/workspace-sessions/session-host-partitions'
 import type {
   DurableProfileStateMutation,
   StoreRuntimeState
@@ -32,7 +32,7 @@ import { raisingBindingGenerations } from './layout-command-binding-generations'
 import {
   keepPartitionEditorViews,
   partitionEditorViewsOf
-} from '../loading-store/layout-editor-views'
+} from '../loading-store/workspace-sessions/layout-editor-views'
 import { assignWorkspaceSessionPartition } from './terminal-topology-membership'
 import {
   repairDuplicatePtyPanesMutation,

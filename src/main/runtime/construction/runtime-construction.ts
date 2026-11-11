@@ -1,7 +1,7 @@
 import { collectSavedStructuredAgentSessionIds } from '../agent-session/lifecycle/saved-structured-agent-session-restoration'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import type {
-  RuntimeConstructionBindings,
+  RuntimeConstructionBindings as Bindings,
   RuntimeConstructionDependencies
 } from './runtime-construction-dependencies'
 import type { OrcaRuntimeWithRuntimeId as IdentityState } from './runtime-identity-state'
@@ -54,11 +54,7 @@ import { configureAiVaultSessionSources } from '../../ai-vault/cached-session-li
 import { configureHostReadableTranscriptPathSources } from '../../native-chat/host-readable-transcript-path'
 import { createEphemeralAgentSessionClaimSigner } from '../agent-session/ownership/agent-session-claim-identity'
 import { registerConptyDa1OverrideInstaller } from '../terminal/output/terminal-model-query-authority'
-import {
-  getTerminalViewAttributesForScope,
-  registerTerminalViewAttributesApplier
-} from '../terminal/view/terminal-view-attribute-store'
-import { resolvePtyViewAttributeScope } from '../pty-view-attribute-scope'
+import { registerScopedTerminalViewAttributesApplier } from '../pty-view-attribute-scope'
 import { RuntimeMachineName } from '../hosts/platform-probe/runtime-machine-name'
 import { setPRConflictSummaryRemoteFetches } from '../../github/conflict-summary'
 import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from '../../../shared/terminal/replay/terminal-scrollback-policy'
@@ -79,11 +75,11 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
   declare protected readonly attestAgentHookCompatibilityAuthorityFn: HostServices['attestAgentHookCompatibilityAuthorityFn']
   declare protected readonly retireAgentHookCompatibilityAuthorityFn: HostServices['retireAgentHookCompatibilityAuthorityFn']
   declare protected readonly readHookCliWriterObservationFn:
-    | RuntimeConstructionBindings['readHookCliWriterObservation']
+    | Bindings['readHookCliWriterObservation']
     | null
   declare protected readonly checkHookAgentPresenceFn: HostServices['checkHookAgentPresenceFn']
   declare readonly subscribeAgentProviderSessionChangesFn:
-    | RuntimeConstructionBindings['subscribeAgentProviderSessionChanges']
+    | Bindings['subscribeAgentProviderSessionChanges']
     | null
   declare protected readonly reconcileAgentStatusForEndedProcessFn: HostServices['reconcileAgentStatusForEndedProcessFn']
   declare protected readonly forgetHookAgentExitFn: HostServices['forgetHookAgentExitFn']
@@ -119,14 +115,14 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
 
   readonly workspaceSleepPlatform: WorkspaceSleepPlatform | null
 
-  protected readonly getAgentStatusSnapshotForPaneFn:
-    | RuntimeConstructionBindings['getAgentStatusSnapshotForPane']
-    | null
+  declare protected readonly getAgentStatusSnapshotForPaneFn: HostServices['getAgentStatusSnapshotForPaneFn']
+
+  protected readonly publicPaneStatusFn?: Bindings['getPublicAgentStatusSnapshotForPane']
 
   /** The agent's full final reply for that finished lead turn; status rows carry only a capped preview. */
-  readonly getAcceptedAgentReply: RuntimeConstructionBindings['getAcceptedAgentReply']
+  readonly getAcceptedAgentReply: Bindings['getAcceptedAgentReply']
   /** Synchronous on every hook status row change, including clears. */
-  readonly subscribeAgentStatusRowChanges: RuntimeConstructionBindings['subscribeAgentStatusRowChanges']
+  readonly subscribeAgentStatusRowChanges: Bindings['subscribeAgentStatusRowChanges']
 
   protected readonly machineName = new RuntimeMachineName(
     () => this.store?.getSettings?.().machineName
@@ -257,6 +253,7 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
     }
     this.getAgentStatusSnapshotFn = deps?.getAgentStatusSnapshot ?? null
     this.getAgentStatusSnapshotForPaneFn = deps?.getAgentStatusSnapshotForPane ?? null
+    this.publicPaneStatusFn = deps?.getPublicAgentStatusSnapshotForPane
     this.structuredAgentStatusSinkFn = deps?.structuredAgentStatusSink ?? null
     this.readObservedAgentStatusPaneIdentityFn =
       deps?.readObservedAgentStatusPaneIdentity ?? (() => ({ kind: 'unobserved' }))
@@ -305,25 +302,8 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
     this.onTerminalSideEffects = deps?.onTerminalSideEffects ?? null
     // ConPTY spawn marks can follow emulator creation; retrofit DA1 (terminal-query-authority.md).
     registerConptyDa1OverrideInstaller((ptyId) => this.ensureNativeWindowsConptyDa1Override(ptyId))
-    // Why: a renderer attribute push must reach already-live emulators too —
-    // cursor options for DECRQSS/DECRQM parity plus the per-PTY OSC color
-    // override reset a theme apply implies (terminal-query-authority.md
-    // §View-attribute bridge). Each PTY resolves its own repo-or-global
-    // snapshot before and after the push, so only PTYs whose palette a theme
-    // change moved lose their OSC SET overlays — never one whose base main
-    // merely learned (late worktree registration, first map arrival).
-    registerTerminalViewAttributesApplier((push) => {
-      for (const [ptyId, state] of this.headlessTerminals) {
-        const scope = resolvePtyViewAttributeScope(ptyId, this.ptysById.get(ptyId))
-        const attributes = getTerminalViewAttributesForScope(scope)
-        if (attributes) {
-          state.emulator.applyPushedViewAttributes(
-            attributes,
-            push.kind === 'theme-change' ? push.resolveBefore(scope) : null
-          )
-        }
-      }
-    })
+    // Apply renderer changes to live emulators too, per PTY's repo-or-global scope.
+    registerScopedTerminalViewAttributesApplier(this.headlessTerminals, this.ptysById)
     // Conflict previews and create refreshes must queue through one fetch owner.
     setPRConflictSummaryRemoteFetches(this.remoteFetches)
   }

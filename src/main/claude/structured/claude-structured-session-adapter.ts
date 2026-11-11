@@ -18,6 +18,7 @@ import { supportsClaudeStructuredLocation } from './launch/claude-structured-loc
 import * as claudeOptions from './launch/claude-structured-options'
 import { dispatchClaudeMessage } from './launch/claude-structured-message-options'
 import { readClaudeStructuredSessionOptions } from './launch/claude-structured-session-options'
+import { noteClaudeModelPick } from './claude-structured-execution-observations'
 import {
   ClaudeAcquisitionRegistry,
   type ClaudeSession,
@@ -30,6 +31,7 @@ import { claudeStoppedRequestEndWait } from '../claude-request-end-wait'
 import {
   finishClaudeCloseAfterExit,
   drainClaudeObservedExits,
+  liveClaudeSession,
   observeClaudeSessionExit,
   settleClaudeUnexpectedExit,
   type ClaudeExitLifecycle
@@ -230,6 +232,12 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
       deps: this.deps,
       emit: (session, event) => this.emit(session, event)
     })
+  noteOptionPick: NonNullable<StructuredAgentSessionAdapter['noteOptionPick']> = (input) => {
+    const session = this.sessions.get(input.sessionId)
+    if (session?.fence === input.fence && input.key === 'model' && input.value) {
+      noteClaudeModelPick(session, input.value)
+    }
+  }
   readOptions = (input: { sessionId: string; fence: number }) =>
     readClaudeStructuredSessionOptions(this.session(input.sessionId))
   releaseAcquisition = (input: ClaudeReleaseRequest): Promise<boolean> => {
@@ -296,15 +304,6 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
   }
 
   private session(sessionId: string): ClaudeSession {
-    const session = this.sessions.get(sessionId)
-    if (!session) {
-      // A child that just exited is named by its own diagnostic, not by its absence.
-      throw (
-        this.exits.get(sessionId)?.error ??
-        this.settledExitErrors.get(sessionId) ??
-        new Error(`no live claude stream-json session for ${sessionId}`)
-      )
-    }
-    return session
+    return liveClaudeSession(this.exitLifecycle, sessionId)
   }
 }

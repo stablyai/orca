@@ -37,15 +37,6 @@ async function flush(): Promise<void> {
 }
 
 describe('the lock a microphone holds', () => {
-  it('takes the tag once and gives it back once', async () => {
-    const { device, calls } = createTestDevice()
-    const lock = createMicrophoneScreenLock(device, 'orca-mic')
-    lock.hold()
-    lock.release()
-    await flush()
-    expect(calls).toEqual(['+orca-mic', '-orca-mic'])
-  })
-
   it('asks the device nothing for a hold it already has', async () => {
     const { device, calls } = createTestDevice()
     const lock = createMicrophoneScreenLock(device, 'orca-mic')

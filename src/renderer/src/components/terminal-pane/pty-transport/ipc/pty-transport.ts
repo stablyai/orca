@@ -181,6 +181,8 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       }
     },
 
+    isHoldingInput: () => !destroyed && preconnectInputBuffer?.isBuffering() === true,
+
     abandonPreconnectInput() {
       dropPreconnectInput('its pending connection was abandoned')
     },

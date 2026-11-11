@@ -15,7 +15,7 @@ import {
   getAvailableTerminalThemeOptions,
   getTerminalTheme,
   resolveEffectiveTerminalAppearance
-} from '@/lib/terminal-theme'
+} from '@/lib/terminal/appearance/terminal-theme'
 import { translate } from '@/i18n/i18n'
 import { getRepositoryTerminalThemeSectionId } from './repository/repository-settings-targets'
 import { getSettingOwnershipSummary } from './page/setting-ownership'

@@ -2,7 +2,7 @@ import * as React from 'react'
 import * as RadioGroupPrimitive from 'radix-ui/radio-group'
 import { cva, type VariantProps } from 'class-variance-authority'
 import { Circle } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 
 const radioGroupVariants = cva('', {
   variants: {

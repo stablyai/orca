@@ -1,14 +1,14 @@
-import type { CSSProperties } from 'react'
 import {
   DEFAULT_TERMINAL_DIVIDER_DARK,
   applyRepoTerminalThemeOverride,
   normalizeColor,
   resolveEffectiveTerminalAppearance
-} from '@/lib/terminal-theme'
+} from '@/lib/terminal/appearance/terminal-theme'
 import {
   isTerminalBackgroundLight,
   resolveOpaqueTerminalBackground
 } from '../../../../../shared/terminal-themes/terminal-title-contrast'
+import type { CSSProperties } from 'react'
 import type { TerminalPaneMobileController } from '../controller/use-terminal-pane-mobile-actions'
 
 export function resolveTerminalPaneAppearance({

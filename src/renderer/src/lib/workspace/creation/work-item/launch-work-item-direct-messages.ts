@@ -7,7 +7,7 @@ import {
 import { getAgentLabel } from '../../../agent-catalog/agent-catalog'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 
-import '@/lib/new-workspace'
+import '@/lib/workspace/creation/new-workspace'
 import { isGitLabIssueUrl } from '../../../../../../shared/new-workspace/workspace-source'
 import { translate } from '@/i18n/i18n'
 

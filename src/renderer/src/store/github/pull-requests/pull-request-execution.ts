@@ -1,4 +1,4 @@
-import { capturePRCheckContract } from '@/lib/pr-check-observation-contract'
+import { capturePRCheckContract } from '@/lib/source-control/checks/pr-check-observation-contract'
 import type { StateCreator } from 'zustand'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import type { AppState } from '../../types'

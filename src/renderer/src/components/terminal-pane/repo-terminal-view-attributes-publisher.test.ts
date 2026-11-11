@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getBuiltinTheme } from '@/lib/terminal-theme'
+import { getBuiltinTheme } from '@/lib/terminal/appearance/terminal-theme'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { RepoTerminalViewAttributesPayload } from '../../../../shared/terminal/protocol/queries/terminal-view-attributes'
