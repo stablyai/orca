@@ -42,6 +42,9 @@ let cwd: string
 
 beforeEach(async () => {
   cwd = await mkdtemp(join(tmpdir(), 'orca-editor-shot-'))
+  // The default shots dir walks up from cwd to the nearest plugin folder or repo root. Mark cwd
+  // as a repo root so whatever sits above the shared temp dir can never redirect the PNG.
+  await mkdir(join(cwd, '.git'))
   vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
 })
 

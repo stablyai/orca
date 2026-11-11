@@ -163,7 +163,7 @@ function Trailing({
     case 'expired':
       return (
         <Button type="button" size="xs" onClick={actions.setUp}>
-          {t('vmBuildAgents.signInAgain', 'Sign in again')}
+          {t('vmBuildAgents.renew', 'Renew')}
         </Button>
       )
     case 'killSwitch':

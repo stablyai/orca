@@ -61,6 +61,11 @@ export const EphemeralVmRuntimeRecordSchema = z.object({
   connectionMode: EphemeralVmRuntimeConnectionModeSchema.optional(),
   runtimeEnvironmentId: z.string().min(1).optional(),
   sshTargetId: z.string().min(1).optional(),
+  /**
+   * Orca Cloud only: the control-plane account that owns the sandbox (`org:<id>` or `user:<id>`,
+   * see orcaCloudAccountId). Lists and keep-alive scope to the active team by it; absent until known.
+   */
+  cloudAccountId: z.string().min(1).max(256).optional(),
   status: EphemeralVmRuntimeStatusSchema,
   cleanupStatus: EphemeralVmCleanupStatusSchema,
   cleanupDisabled: z.boolean().optional(),
@@ -114,6 +119,7 @@ export type EphemeralVmRuntimeStatusPatch = {
   connectionMode?: EphemeralVmRuntimeRecord['connectionMode'] | null
   runtimeEnvironmentId?: string
   sshTargetId?: string | null
+  cloudAccountId?: string
   recipeResult?: EphemeralVmRuntimeRecord['recipeResult']
   updatedAt?: number
 }

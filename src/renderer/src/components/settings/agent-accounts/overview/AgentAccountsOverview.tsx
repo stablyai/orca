@@ -22,10 +22,14 @@ export type AgentAccountsOverviewProps = {
   /** True until the host list is known (first render only). */
   loading?: boolean
   signedOutOfOrca: boolean
+  /** Inside Settings → Agent accounts the page's Hosts part already titles it. */
+  hideHeader?: boolean
   /** "Checked 4 hosts. 2 need attention." after the first pass; empty before. */
   summary: string
   onOpenRow: (row: OverviewRow) => void
   onAction: (row: OverviewRow, action: OverviewAction) => void
+  /** Fixtures only: the filter the list opens on. */
+  initialFilter?: 'all' | 'attention'
 }
 
 function actionLabel(action: OverviewAction, t: Translate): string {
@@ -97,15 +101,18 @@ function HostHeader({ row }: { row: OverviewRow }): React.JSX.Element {
   return (
     <span className="flex min-w-0 items-center gap-2">
       <HostGlyph kind={GLYPH[row.kind]} size={14} />
-      <span className="truncate text-foreground">{name}</span>
-      {detail ? <span className="shrink-0 text-xs text-muted-foreground">{detail}</span> : null}
+      {/* The name keeps room for "Orca Cloud"; the muted detail gives way first (RA-5). */}
+      <span className="min-w-[6rem] truncate text-foreground">{name}</span>
+      {detail ? (
+        <span className="min-w-0 truncate text-xs text-muted-foreground">{detail}</span>
+      ) : null}
     </span>
   )
 }
 
 export function AgentAccountsOverview(props: AgentAccountsOverviewProps): React.JSX.Element {
   const t = useTranslate()
-  const [filter, setFilter] = useState<'all' | 'attention'>('all')
+  const [filter, setFilter] = useState<'all' | 'attention'>(props.initialFilter ?? 'all')
   const attention = props.rows.filter((row) => row.attention).length
   const shown = filter === 'attention' ? props.rows.filter((row) => row.attention) : props.rows
   const onlyLocal = !props.loading && props.rows.every((row) => row.kind === 'local')
@@ -113,7 +120,7 @@ export function AgentAccountsOverview(props: AgentAccountsOverviewProps): React.
   return (
     <section aria-labelledby={titleId} className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="min-w-0">
+        <div className={props.hideHeader ? 'sr-only' : 'min-w-0'}>
           <h3 id={titleId} className="text-sm font-medium text-foreground">
             {t('agentAccountsOverview.title', 'Sign-ins by host')}
           </h3>
@@ -123,12 +130,6 @@ export function AgentAccountsOverview(props: AgentAccountsOverviewProps): React.
               'Where Claude and Codex are signed in, and which key they use. Orca never copies a sign-in between machines.'
             )}
           </p>
-          {/* One Sign in button lives in the Orca Cloud card above; this is only a muted note. */}
-          {props.signedOutOfOrca ? (
-            <p className="text-xs text-muted-foreground">
-              {t('agentAccountsOverview.signedOutNote', 'Sign in to Orca to see Orca Cloud here.')}
-            </p>
-          ) : null}
         </div>
         <SettingsSegmentedControl
           size="sm"
@@ -146,6 +147,12 @@ export function AgentAccountsOverview(props: AgentAccountsOverviewProps): React.
           ]}
         />
       </div>
+      {/* The page's one Sign in button is in the Orca Cloud part; this is only a muted note. */}
+      {props.signedOutOfOrca ? (
+        <p className="px-1 text-xs text-muted-foreground">
+          {t('agentAccountsOverview.signedOutNote', 'Sign in to Orca to see Orca Cloud here.')}
+        </p>
+      ) : null}
       <div className="overflow-hidden rounded-xl border border-border bg-card/50 shadow-xs">
         {props.loading ? (
           <div aria-busy="true" className="flex flex-col gap-3 p-4">
@@ -153,6 +160,10 @@ export function AgentAccountsOverview(props: AgentAccountsOverviewProps): React.
               <Skeleton key={line} shape="small" className="h-3 w-3/5" />
             ))}
           </div>
+        ) : shown.length === 0 ? (
+          <p role="status" className="px-4 py-3 text-sm text-muted-foreground">
+            {t('agentAccountsOverview.nothingNeedsAttention', 'Nothing needs attention.')}
+          </p>
         ) : (
           <table className="w-full table-fixed border-collapse text-start">
             <thead>

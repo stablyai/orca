@@ -6,12 +6,12 @@ import { closeAgentHostPanel } from './agent-host-panel-store'
 
 const TARGET = {
   accounts: { pane: 'accounts' },
-  agentAccounts: { pane: 'agent-accounts', sectionId: 'orca-cloud' },
+  agentAccounts: { pane: 'accounts', sectionId: 'orca-cloud' },
   agentApiKeys: { pane: 'agent-api-keys' },
   cloudSecrets: { pane: 'cloud-secrets' },
   customEnvironments: { pane: 'servers' },
   // S3 (Settings › Agent accounts) is the overview across hosts.
-  allHosts: { pane: 'agent-accounts' }
+  allHosts: { pane: 'accounts', sectionId: 'accounts-hosts' }
 } as const satisfies Record<AgentHostFooterLink, { pane: string; sectionId?: string }>
 
 export function openAgentHostSettings(link: AgentHostFooterLink): void {

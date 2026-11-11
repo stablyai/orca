@@ -12,7 +12,6 @@ import type { SettingsInteractionController } from './use-settings-interaction-c
 import type { SettingsRenderContext } from './settings-render-context'
 import {
   renderAccountsSettingsSection,
-  renderAgentAccountsSettingsSection,
   renderAgentApiKeysSettingsSection,
   renderAgentsSettingsSection,
   renderDesktopCapabilitySettingsSections,
@@ -65,6 +64,7 @@ import {
 import { renderProjectSettingsSections } from './settings-project-section-renderer'
 import { renderCloudApiSettingsSections } from './settings-cloud-api-section-renderers'
 import { renderOrcaCloudSettingsSections } from './settings-orca-cloud-section-renderers'
+import { orcaCloudAgentAccountsParts } from './settings-orca-cloud-agent-accounts-sections'
 import {
   SettingsHostScopePicker,
   shouldShowSettingsHostScopePicker
@@ -170,8 +170,11 @@ export function renderSettingsPage(
                     value={model.highlightedSettingsTarget?.id ?? null}
                   >
                     {renderAgentsSettingsSection(context, t)}
-                    {renderAgentAccountsSettingsSection(context, t)}
-                    {renderAccountsSettingsSection(context, t)}
+                    {renderAccountsSettingsSection(
+                      context,
+                      t,
+                      orcaCloudAgentAccountsParts(context, t)
+                    )}
                     {renderAgentApiKeysSettingsSection(context, t)}
                     {renderOrchestrationSettingsSection(context, t)}
                     {renderLinearSettingsSection(context, t)}
