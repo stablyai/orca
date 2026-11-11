@@ -131,27 +131,29 @@ function SetupStepper({
 function BrowserWaiting({ flow }: { flow: CloudSetupFlow }): React.JSX.Element {
   const t = useTranslate()
   return (
-    <div className="flex flex-wrap items-center gap-2" role="status">
+    // N-10: the status line, then its actions, flush-left. The bordered action leads so its edge
+    // lines up with the copy above (a ghost button's padding would indent it).
+    <div className="flex flex-col items-start gap-3" role="status">
       <span className="flex items-center gap-2 text-sm text-muted-foreground">
         <LoaderCircle className="size-4 motion-safe:animate-spin" aria-hidden />
         {t('cloudSetupPage.waitingBrowser', 'Waiting for your browser…')}
       </span>
-      <span className="ms-auto flex items-center gap-2">
-        {flow.signingIn ? (
-          <Button type="button" variant="ghost" size="sm" onClick={flow.cancelSignIn}>
-            {t('cloudSetupPage.cancelSignIn', 'Cancel')}
-          </Button>
-        ) : null}
+      <span className="flex flex-wrap items-center gap-2">
+        <Button type="button" variant="outline" size="sm" onClick={flow.reopenBrowser}>
+          {t('cloudSetupPage.reopenBrowser', 'Reopen browser')}
+          <ExternalLink aria-hidden />
+        </Button>
         {flow.copyLink ? (
           <Button type="button" variant="ghost" size="sm" onClick={flow.copyLink}>
             <Copy aria-hidden />
             {t('cloudSetupPage.copyLink', 'Copy link')}
           </Button>
         ) : null}
-        <Button type="button" variant="outline" size="sm" onClick={flow.reopenBrowser}>
-          {t('cloudSetupPage.reopenBrowser', 'Reopen browser')}
-          <ExternalLink aria-hidden />
-        </Button>
+        {flow.signingIn ? (
+          <Button type="button" variant="ghost" size="sm" onClick={flow.cancelSignIn}>
+            {t('cloudSetupPage.cancelSignIn', 'Cancel')}
+          </Button>
+        ) : null}
       </span>
     </div>
   )
@@ -409,7 +411,8 @@ export function CloudSetupPage({
           />
         ) : null}
 
-        <div className="mt-6 flex justify-end">
+        {/* Actions sit flush-left under the copy they act on (N-10). */}
+        <div className="mt-6 flex">
           {viewed ? (
             <Button type="button" onClick={() => setViewing(null)}>
               {t('cloudSetupPage.continue', 'Continue')}
