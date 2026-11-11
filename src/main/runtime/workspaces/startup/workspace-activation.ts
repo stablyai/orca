@@ -249,7 +249,18 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
 
   /** Hold submits to a fresh launch of `agent` until its composer is up (launch-composer-watch.ts). */
   watchLaunchComposer(ptyId: string, agent: TuiAgent | null): void {
-    watchLaunchComposer(this.launchComposerReadyByPtyId, this.freshComposerPtyHost(), ptyId, agent)
+    watchLaunchComposer(
+      this.launchComposerReadyByPtyId,
+      this.freshComposerPtyHost(),
+      ptyId,
+      agent,
+      {
+        readLaunchedAgentForeground: (id, launched) =>
+          this.readLaunchedAgentForeground(id, launched),
+        subscribeToTerminalData: (id, listener) => this.subscribeToTerminalData(id, listener),
+        readRecentTerminalOutput: (id) => this.readRecentTerminalOutput(id)
+      }
+    )
   }
 
   private freshComposerPtyHost(): FreshComposerPtyHost {
