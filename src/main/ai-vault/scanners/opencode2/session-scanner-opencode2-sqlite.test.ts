@@ -150,6 +150,47 @@ it('captures the full transcript while keeping list previews bounded', async () 
   )
 })
 
+it('captures a session whose stored tool state exceeds 64 MiB when its decoded text is small (#28791)', async () => {
+  const { db, path } = createTempDb()
+  applyOpenCode2Schema(db)
+  insertSession(db, { id: 'heavy', directory: '/repo', timeCreated: 1000, timeUpdated: 2000 })
+  insertMessage(db, {
+    id: 'tool',
+    sessionId: 'heavy',
+    type: 'assistant',
+    seq: 0,
+    timeCreated: 1000,
+    data: JSON.stringify({
+      content: [
+        {
+          type: 'tool',
+          name: 'write',
+          state: {
+            status: 'completed',
+            input: { filePath: '/repo/a.txt', content: 'x'.repeat(65 * 1024 * 1024) },
+            content: [{ type: 'text', text: 'Wrote file successfully.' }]
+          }
+        }
+      ]
+    })
+  })
+  insertMessage(db, {
+    id: 'reply',
+    sessionId: 'heavy',
+    type: 'assistant',
+    seq: 1,
+    timeCreated: 1001,
+    data: JSON.stringify({ text: 'Done' })
+  })
+  db.close()
+  const capture = await captureOpenCode2SqliteSession({
+    dbPath: path,
+    sessionId: 'heavy',
+    platform: 'darwin'
+  })
+  expect(capture.messages.at(-1)?.text).toBe('Done')
+})
+
 it('keeps session metadata readable but refuses a complete capture when ordering columns are missing', async () => {
   const { db, path } = createTempDb()
   applyOpenCode2Schema(db)

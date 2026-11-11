@@ -9,7 +9,7 @@ import type {
   RateLimitRuntimeTarget
 } from '../../shared/rate-limit-types'
 import type { Store } from '../persistence/loading-store/store'
-import { profileStateWriterFailureOutcome } from '../persistence/profile-state/profile-state-writer-errors'
+import { profileStateWriterFailureOutcome } from '../persistence/profile-state/writer/profile-state-writer-errors'
 
 export type CodexResetCreditAttempt = {
   expectedScope: CodexResetCreditExpectedScope

@@ -138,3 +138,55 @@ it('lists an agent named by the query before other agents’ model setups', () =
   fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Enter' })
   expect(launch).toHaveBeenCalledWith({ agent: 'codex', kind: 'cli' }, undefined)
 })
+
+it('matches Antigravity and its model setups via the AGY acronym', async () => {
+  const codex: AgentPickerEntry = {
+    agent: 'codex',
+    label: 'Codex',
+    rows: [{ agent: 'codex', kind: 'cli' }],
+    surfaces: ['terminal'],
+    defaultSurface: 'terminal',
+    terminal: {},
+    structured: {},
+    catalog: { origin: 'probe', fetchedAt: 1, models: [] }
+  }
+  const antigravity: AgentPickerEntry = {
+    ...codex,
+    agent: 'antigravity',
+    label: 'Antigravity',
+    rows: [{ agent: 'antigravity', kind: 'cli' }],
+    catalog: {
+      origin: 'probe',
+      fetchedAt: 1,
+      models: [{ id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro', isDefault: false, efforts: [] }]
+    }
+  }
+  const launch = vi.fn()
+  const user = userEvent.setup()
+  render(
+    <DropdownMenu defaultOpen modal={false}>
+      <DropdownMenuTrigger>Open</DropdownMenuTrigger>
+      <DropdownMenuContent>
+        <AgentLaunchPickerMenu entries={[codex, antigravity]} runLaunch={launch} />
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+  await user.type(screen.getByRole('textbox'), 'AGY')
+  expect(screen.getAllByRole('menuitem').map((item) => item.textContent)).toEqual([
+    expect.stringContaining('Antigravity')
+  ])
+  await user.keyboard('{Enter}')
+  expect(launch).toHaveBeenCalledWith({ agent: 'antigravity', kind: 'cli' }, undefined)
+
+  launch.mockClear()
+  await user.click(screen.getByRole('button', { name: 'Open' }))
+  await user.type(screen.getByRole('textbox'), 'AGY Gemini{Enter}')
+  expect(launch).toHaveBeenCalledWith(
+    { agent: 'antigravity', kind: 'cli', executionHostId: undefined },
+    expect.objectContaining({
+      agent: 'antigravity',
+      choices: { model: 'gemini-2.5-pro' }
+    }),
+    antigravity
+  )
+})

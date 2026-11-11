@@ -1,5 +1,5 @@
 import '../../../../shared/git/admission/git-admission-state'
-import '../../../crash-reporting/main-process-lifecycle-identity'
+import '../../../crash-reporting/process-exits/main-process-lifecycle-identity'
 import { join } from 'node:path'
 import {
   assertAgentSkillSharingAllowed,

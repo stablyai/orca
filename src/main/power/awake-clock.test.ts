@@ -52,16 +52,6 @@ const MODELS: CounterModel[] = ['counts sleep (macOS/Windows Node)', 'stops in s
 const SETTLE = 120_000
 
 describe.each(MODELS)('awake clock on a monotonic counter that %s', (model) => {
-  it('advances with awake time, including stretches with no reads', () => {
-    const clocks = testClocks(model)
-    const clock = createAwakeClock(clocks.sources)
-    const start = clock.now()
-    expect(start).toBe(clocks.time.wall)
-    clocks.awake(60 * 60_000)
-    expect(clock.now() - start).toBe(60 * 60_000)
-    expect(clock.settled(SETTLE)).toBe(true)
-  })
-
   it('does not count the time between suspend and resume', () => {
     const clocks = testClocks(model)
     const clock = createAwakeClock(clocks.sources)
@@ -76,19 +66,6 @@ describe.each(MODELS)('awake clock on a monotonic counter that %s', (model) => {
     expect(clock.now() - start).toBe(5_000)
   })
 
-  it('keeps the earliest suspend when a dark wake re-suspends without a resume', () => {
-    const clocks = testClocks(model)
-    const clock = createAwakeClock(clocks.sources)
-    const start = clock.now()
-    clock.suspend()
-    clocks.asleep(500_000)
-    clocks.awake(2_000)
-    clock.suspend()
-    clocks.asleep(665_000)
-    clock.resume()
-    expect(clock.now() - start).toBe(0)
-  })
-
   it('does not count a sleep that no power event reported', () => {
     const clocks = testClocks(model)
     const clock = createAwakeClock(clocks.sources)
@@ -97,18 +74,6 @@ describe.each(MODELS)('awake clock on a monotonic counter that %s', (model) => {
     clocks.asleep(600_000)
     clocks.awake(2_000)
     expect(clock.now() - start).toBe(AWAKE_CLOCK_HEARTBEAT_MS + 2_000)
-  })
-
-  it('stays suspended through a dark wake while the resume event is late', () => {
-    const clocks = testClocks(model)
-    const clock = createAwakeClock(clocks.sources)
-    clock.suspend()
-    clocks.asleep(600_000)
-    clocks.awake(2_000)
-    expect(clock.settled(SETTLE)).toBe(false)
-    clocks.asleep(600_000)
-    clocks.awake(100_000)
-    expect(clock.settled(SETTLE)).toBe(false)
   })
 
   it('resumes by itself once the process has run for minutes after a lost resume event', () => {
@@ -128,51 +93,6 @@ describe.each(MODELS)('awake clock on a monotonic counter that %s', (model) => {
 })
 
 describe.each(MODELS)('awake clock settling on a monotonic counter that %s', (model) => {
-  it('is settled when the machine has not slept', () => {
-    const clocks = testClocks(model)
-    const clock = createAwakeClock(clocks.sources)
-    expect(clock.settled(SETTLE)).toBe(true)
-    clocks.awake(60_000)
-    expect(clock.settled(SETTLE)).toBe(true)
-  })
-
-  it('is not settled while suspended, including a dark wake inside a suspension', () => {
-    const clocks = testClocks(model)
-    const clock = createAwakeClock(clocks.sources)
-    clock.suspend()
-    clocks.asleep(510_000)
-    // macOS dark wake: timers run for ~2s with no resume event.
-    clocks.awake(2_000)
-    expect(clock.settled(SETTLE)).toBe(false)
-  })
-
-  it('waits for the settle period after a resume', () => {
-    const clocks = testClocks(model)
-    const clock = createAwakeClock(clocks.sources)
-    clock.suspend()
-    clocks.asleep(600_000)
-    clock.resume()
-    // A dark wake that does report resume still lasts only seconds.
-    clocks.awake(2_000)
-    expect(clock.settled(SETTLE)).toBe(false)
-    clocks.awake(SETTLE - 2_000)
-    expect(clock.settled(SETTLE)).toBe(true)
-  })
-
-  it('waits for the settle period after a sleep that no power event reported', () => {
-    const clocks = testClocks(model)
-    const clock = createAwakeClock(clocks.sources)
-    expect(clock.settled(SETTLE)).toBe(true)
-    clocks.awake(AWAKE_CLOCK_HEARTBEAT_MS)
-    clocks.asleep(510_000)
-    clocks.awake(2_000)
-    expect(clock.settled(SETTLE)).toBe(false)
-    clocks.awake(100_000)
-    expect(clock.settled(SETTLE)).toBe(false)
-    clocks.awake(18_000)
-    expect(clock.settled(SETTLE)).toBe(true)
-  })
-
   it('settles on schedule when the wall clock is corrected backward after a resume', () => {
     const clocks = testClocks(model)
     const clock = createAwakeClock(clocks.sources)

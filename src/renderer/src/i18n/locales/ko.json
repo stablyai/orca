@@ -7388,10 +7388,6 @@
             "modeAriaLabel": "에이전트 대시보드 열기 모드",
             "modeInWindow": "윈도우 내",
             "modePopout": "팝업"
-          },
-          "browserExtensions": {
-            "copy": "로컬 브라우저 프로필에 설정 › 브라우저 › 확장 프로그램을 추가합니다.",
-            "toggleLabel": "브라우저 확장 프로그램 켜기/끄기"
           }
         },
         "FloatingWorkspacePane": {
@@ -9510,13 +9506,6 @@
               "inWindow": "창 내부",
               "worktrees": "작업 트리",
               "eaf17a7214": "에이전트 대시보드"
-            },
-            "browserExtensions": {
-              "title": "브라우저 확장 프로그램",
-              "description": "비밀번호 관리자 같은 Chrome 확장 프로그램을 Orca 브라우저 탭에서 실행합니다.",
-              "extension": "확장 프로그램",
-              "chrome": "크롬",
-              "password": "비밀번호 관리자"
             }
           }
         },
@@ -11902,7 +11891,7 @@
               "tokenHint": "리포지토리, 프로젝트 및 워크스페이스 액세스 토큰은 일치하는 Bitbucket 설정 페이지에서 생성되며 PR에 대한 읽기 액세스 권한이 필요합니다.",
               "basicHint": "귀하의 계정에 대한 Atlassian API 토큰을 생성한 다음 이를 소유한 이메일 주소와 페어링하세요.",
               "scopesTitle": "다음 Bitbucket API 토큰 범위를 선택하세요:",
-              "scopeUser": "계정 확인",
+              "scopeUser": "계정 이름 표시",
               "scopeRepository": "빌드 상태 읽기",
               "scopeReadPullRequest": "PR 읽기",
               "scopeWritePullRequest": "PR 생성",
@@ -16912,13 +16901,10 @@
         },
         "AutomationDetail": {
           "host": "호스트",
-          "a1d52c2189": "사용 범위",
-          "449fc83bf7": "토큰",
           "401f40ae79": "예상 경비",
           "a7c312430d": "마지막 실행",
           "2df8970cd5": "에이전트",
           "e353ab9516": "사전 확인",
-          "620b22145e": "유예 시간",
           "15ea446b93": "세션",
           "5405a09b1f": "실행 위치",
           "2f8baf5360": "다음에서 생성",
@@ -16928,7 +16914,6 @@
           "1f6026358e": "자동화 삭제",
           "d79452fb30": "자동화 재개",
           "91a4155e95": "자동화 일시 중지",
-          "4b1ea02d2e": "자동화 편집",
           "2fb1605beb": "지금 실행",
           "221916d93c": "agent 작업 예약을 시작하려면 자동화를 만드세요.",
           "b09b2384fd": "일시중지됨",
@@ -16938,7 +16923,6 @@
           "noGrace": "유예 없음",
           "graceMinutes_other": "{{count}}분",
           "graceHours_other": "{{count}}시간",
-          "usageCoverageRuns_other": "실행 {{known}}/{{count}}회",
           "usageUnavailable": "사용할 수 없음",
           "noRuns": "실행 없음",
           "projectDefault": "프로젝트 기본값",
@@ -18549,7 +18533,6 @@
           "browsePlugins": "플러그인 둘러보기",
           "browseThemePlugins": "테마 플러그인 둘러보기",
           "colorMode": "색상 모드",
-          "colorModeCaption": "라이트, 다크 또는 OS 설정 따르기.",
           "darkLook": "다크 룩",
           "darkLooks": "다크 룩",
           "lightLook": "라이트 룩",
@@ -18565,10 +18548,8 @@
           "slotLabel": "편집할 룩",
           "sourceBuiltIn": "기본 제공",
           "sourceCommunity": "터미널 팔레트",
-          "themes": "테마",
-          "themesCaption": "선택 사항. 앱 테마와 터미널 팔레트로 더 꾸며 보세요."
-        },
-        "subtitle": "라이트 또는 다크를 고르고, 원하면 테마도 선택하세요. 둘 다 설정에서 언제든 바꿀 수 있습니다."
+          "themes": "테마"
+        }
       },
       "integrations": {
         "capabilities": {
