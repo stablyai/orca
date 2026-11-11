@@ -14982,7 +14982,15 @@
                   "statusStashFirst": "Stash first",
                   "statusReplaces": "Replaces ↓{{behind}}",
                   "statusCommitFirst": "Commit first",
-                  "statusReviewOpen": "{{shortLabel}} open"
+                  "statusReviewOpen": "{{shortLabel}} open",
+                  "statusSignIn": "Sign in",
+                  "statusBaseNotOnRemote": "Base not on remote",
+                  "statusDefaultBranch": "Default branch",
+                  "statusForkUnsupported": "Fork unsupported",
+                  "statusPushFirst": "Push first",
+                  "statusForcePushFirst": "Force push first",
+                  "statusSyncFirst": "Sync first",
+                  "statusUnsupported": "Unsupported"
                 }
               },
               "primary": {
