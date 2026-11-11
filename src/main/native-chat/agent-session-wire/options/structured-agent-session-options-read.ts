@@ -138,6 +138,7 @@ export async function readStructuredAgentSessionOptions(
   const contextFloor = floor ? { contextFloor: floor } : {}
   const restingOptions = await atRest()
   const recovery = await readStructuredSessionRecovery(session, context, sessionId)
+  const defaultModel = await readStructuredAgentSessionDefaultModel(context.deps, sessionId)
   if (live && usesModelSpecificAcpEfforts(agent)) {
     options = {
       ...options,
@@ -247,7 +248,6 @@ export async function readStructuredAgentSessionOptions(
       current.serviceTier = projected.options.serviceTier
     }
   }
-  const defaultModel = await readStructuredAgentSessionDefaultModel(context.deps, sessionId)
   return {
     ...options,
     ...recovery,

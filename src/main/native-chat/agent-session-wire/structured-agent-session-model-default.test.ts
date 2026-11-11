@@ -353,31 +353,50 @@ it('accepts null only for a model reset and rejects undefined', () => {
   )
 })
 
-it('retires a live model report captured before resetting to the configured default', async () => {
-  await rig.dispose()
-  rig = await createQueuedMessageTestRig({ agent: 'claude' })
-  catalog(true)
-  expect(await pick('model', 'picked-model')).toMatchObject({ ok: true })
-  rig.host.deps.adapter.readOptions = async () => ({
-    models: [],
-    current: { model: 'picked-model', reportedModel: 'previous-model' }
-  })
-  const journal = rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
-  await appendUsageLimitedTurn(journal, NOW, 'quota')
-  const loading = Promise.withResolvers<void>()
-  const released = Promise.withResolvers<undefined>()
-  rig.host.deps.resolveLaunchEnv = () => {
-    loading.resolve()
-    return released.promise
+it.each(['recovery', 'configured default'] as const)(
+  'retires a live model report when reset during %s',
+  async (waitingFor) => {
+    await rig.dispose()
+    rig = await createQueuedMessageTestRig({ agent: 'claude' })
+    const readCatalog = catalog(true)
+    expect(await pick('model', 'picked-model')).toMatchObject({ ok: true })
+    rig.host.deps.adapter.readOptions = async () => ({
+      models: [],
+      current: { model: 'picked-model', reportedModel: 'previous-model' }
+    })
+    const journal = rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
+    await appendUsageLimitedTurn(journal, NOW, 'quota')
+    const loading = Promise.withResolvers<void>()
+    const released = Promise.withResolvers<undefined>()
+    if (waitingFor === 'recovery') {
+      rig.host.deps.resolveLaunchEnv = () => {
+        loading.resolve()
+        return released.promise
+      }
+    } else {
+      rig.host.deps.modelCatalog!.read = async (params) => {
+        if (params.savedOnly && params.requireConfiguredDefault) {
+          loading.resolve()
+          await released.promise
+        }
+        return readCatalog()
+      }
+    }
+    const answer = rig.host.readOptions(SESSION)
+    await loading.promise
+    try {
+      expect(await pick('model', null)).toMatchObject({
+        ok: true,
+        value: { options: { model: 'configured-model' } }
+      })
+      expect(effectiveAgentSessionOptions(rig.store.getRecord(SESSION)!)).toMatchObject({
+        model: 'configured-model'
+      })
+    } finally {
+      released.resolve(undefined)
+    }
+    const { current } = await answer
+    expect(current.model).toBe('configured-model')
+    expect(current.reportedModel).toBeUndefined()
   }
-  const answer = rig.host.readOptions(SESSION)
-  await loading.promise
-  try {
-    expect(await pick('model', null)).toMatchObject({ ok: true })
-  } finally {
-    released.resolve(undefined)
-  }
-  const { current } = await answer
-  expect(current.model).toBe('configured-model')
-  expect(current.reportedModel).toBeUndefined()
-})
+)
