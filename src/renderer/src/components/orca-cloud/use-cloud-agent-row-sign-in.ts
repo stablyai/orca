@@ -52,7 +52,7 @@ export function useCloudAgentRowSignIn(
   const candidate = isCloudRowSignInCandidate({
     agentType: agent.agentType,
     dotState,
-    sessionBoundary: agent.entry.sessionBoundary,
+    entry: agent.entry,
     isChildRow: agent.childRow !== undefined
   })
   const worktreeId = agent.tab.worktreeId

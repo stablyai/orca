@@ -75,6 +75,7 @@ function accounts(
   }
 }
 
+/** `true`: only SessionStart has reported. `false`: a turn ran and ended (history and turn end). */
 function makeAgent(worktreeId: string, sessionBoundary: boolean): DashboardAgentRowData {
   return {
     paneKey: 'tab-1:leaf-1',
@@ -86,8 +87,31 @@ function makeAgent(worktreeId: string, sessionBoundary: boolean): DashboardAgent
       prompt: '',
       state: 'done',
       stateStartedAt: 1000,
-      stateHistory: [],
+      stateHistory: sessionBoundary ? [] : [{ state: 'working', prompt: '', startedAt: 600 }],
+      ...(sessionBoundary ? {} : { turnEndedAt: 1000 }),
       sessionBoundary,
+      paneKey: 'tab-1:leaf-1',
+      updatedAt: 1000
+    }
+  }
+}
+
+/** The row a real cloud workspace mirrors from its host (m4air "crayfish"): no sessionBoundary. */
+function makeMirroredAgent(worktreeId: string): DashboardAgentRowData {
+  return {
+    paneKey: 'tab-1:leaf-1',
+    tab: makeTabWithIds('tab-1', worktreeId),
+    agentType: 'claude',
+    state: 'done',
+    startedAt: 500,
+    entry: {
+      prompt: '',
+      state: 'done',
+      stateStartedAt: 1000,
+      stateHistory: [],
+      agentType: 'claude',
+      launchAttested: true,
+      mirroredEvidenceReceivedAt: 1500,
       paneKey: 'tab-1:leaf-1',
       updatedAt: 1000
     }
@@ -176,6 +200,39 @@ describe('CompactAgentRow on an Orca Cloud workspace whose agent is not signed i
     expect(container.textContent).toContain('Done - Claude')
     expect(container.textContent).not.toContain('Needs sign-in')
   })
+
+  it('shows Needs sign-in for the row mirrored from the cloud host (no sessionBoundary)', () => {
+    const container = renderRow(makeMirroredAgent(CLOUD_WORKTREE))
+    expect(container.textContent).toContain('Needs sign-in - Claude')
+    expect(container.textContent).not.toContain('Done')
+  })
+
+  it('keeps Done for a mirrored row with a finished turn', () => {
+    const mirrored = makeMirroredAgent(CLOUD_WORKTREE)
+    const container = renderRow({
+      ...mirrored,
+      entry: {
+        ...mirrored.entry,
+        stateHistory: [{ state: 'working', prompt: '', startedAt: 600 }],
+        turnEndedAt: 1000
+      }
+    })
+    expect(container.textContent).toContain('Done - Claude')
+  })
+
+  it('keeps Done for a mirrored row once the prompt ran', () => {
+    const mirrored = makeMirroredAgent(CLOUD_WORKTREE)
+    const container = renderRow({
+      ...mirrored,
+      entry: { ...mirrored.entry, prompt: 'Fix the login redirect' }
+    })
+    expect(container.textContent).not.toContain('Needs sign-in')
+  })
+
+  it('leaves the same mirrored shape on a local workspace unchanged', () => {
+    const container = renderRow(makeMirroredAgent(LOCAL_WORKTREE))
+    expect(container.textContent).toContain('Done - Claude')
+  })
 })
 
 function renderFullRow(agent: DashboardAgentRowData, onActivate = () => {}): HTMLElement {
@@ -211,6 +268,10 @@ describe('DashboardAgentRow (full row) on an Orca Cloud workspace', () => {
   it('keeps Done for a covered agent idle after a turn', () => {
     setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'active' }))
     expect(fullRowLabel(renderFullRow(makeAgent(CLOUD_WORKTREE, false)))).toBe('Done')
+  })
+
+  it('shows Needs sign-in for the row mirrored from the cloud host', () => {
+    expect(fullRowLabel(renderFullRow(makeMirroredAgent(CLOUD_WORKTREE)))).toBe('Needs sign-in')
   })
 
   it('leaves a local workspace unchanged', () => {

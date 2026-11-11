@@ -3,6 +3,7 @@
 // instead of "Done", using the Orca account's Agent accounts and the sandbox's own sign-in report.
 import type { AgentDotState } from '@/components/AgentStateDot'
 import type { Translate } from '@/i18n/use-translate'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import {
   HOST_AGENT_SIGN_IN_AGENTS,
   type HostAgentSignInAgent,
@@ -17,6 +18,31 @@ export function cloudRowSignInAgent(agentType: string): HostAgentSignInAgent | n
   return HOST_AGENT_SIGN_IN_AGENTS.find((agent) => agent === agentType) ?? null
 }
 
+/** The entry fields that show whether this session has finished a turn. */
+export type CloudRowTurnEvidence = Pick<
+  AgentStatusEntry,
+  'sessionBoundary' | 'prompt' | 'lastAssistantMessage' | 'stateHistory' | 'turnEndedAt'
+>
+
+/**
+ * True when nothing shows a finished turn. A local hook row says so with `sessionBoundary`. A row
+ * mirrored from a cloud host can arrive without it: once the agent's title is newer than the
+ * SessionStart hook (or the hook goes stale), the host projects a bare title-derived `done`
+ * (runtime-mobile-agent-status-builder's last branch). So an empty prompt, no reply, no history
+ * and no turn end count too.
+ */
+export function hasNoFinishedTurn(entry: CloudRowTurnEvidence): boolean {
+  if (entry.sessionBoundary === true) {
+    return true
+  }
+  return (
+    !entry.prompt?.trim() &&
+    !entry.lastAssistantMessage?.trim() &&
+    (entry.stateHistory?.length ?? 0) === 0 &&
+    entry.turnEndedAt === undefined
+  )
+}
+
 /**
  * Only a row that has not finished a turn this session can be waiting on sign-in: a finished
  * turn proves the agent reached its provider, so its Done stays.
@@ -24,14 +50,14 @@ export function cloudRowSignInAgent(agentType: string): HostAgentSignInAgent | n
 export function isCloudRowSignInCandidate(row: {
   agentType: string
   dotState: AgentDotState
-  sessionBoundary: boolean | undefined
+  entry: CloudRowTurnEvidence
   isChildRow: boolean
 }): boolean {
   return (
     !row.isChildRow &&
-    row.sessionBoundary === true &&
     (row.dotState === 'done' || row.dotState === 'idle') &&
-    cloudRowSignInAgent(row.agentType) !== null
+    cloudRowSignInAgent(row.agentType) !== null &&
+    hasNoFinishedTurn(row.entry)
   )
 }
 
