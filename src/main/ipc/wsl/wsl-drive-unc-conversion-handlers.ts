@@ -15,7 +15,7 @@ import { readProfileProjectTransferState } from '../../orca-profiles/project-tra
 import { getOrcaProfileListState } from '../../orca-profiles/profile-index-store'
 import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-paths'
 import type { Store } from '../../persistence/loading-store/store'
-import { pauseWslMoveScope } from '../../persistence/moving-wsl-projects/wsl-move-driver-pause'
+import { pauseWslMoveScope } from '../../persistence/moving-wsl-projects/execution/wsl-move-driver-pause'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { quitProcess } from '../../startup/process-quit-request'
 import { startWslDriveUncConversion } from '../../wsl/filesystem/wsl-drive-unc-conversion-run'
