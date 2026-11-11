@@ -32,7 +32,7 @@ vi.mock('../../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_
 
 const frozen = vi.hoisted(() => ({ workspaces: new Set<string>() }))
 vi.mock(
-  '../../../../persistence/moving-wsl-projects/wsl-move-scope-guard',
+  '../../../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard',
   async (importOriginal) => ({
     ...(await importOriginal<object>()),
     isWslMoveWorkspaceSessionFrozen: (workspace: string) => frozen.workspaces.has(workspace)

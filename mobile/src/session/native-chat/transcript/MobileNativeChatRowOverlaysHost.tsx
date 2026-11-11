@@ -5,7 +5,7 @@ import { triggerMediumImpact } from '../../../platform/haptics'
 import { MobileNativeChatImageViewer } from '../visual/MobileNativeChatImageViewer'
 import { MobileImageViewerActions } from '../visual/MobileImageViewerActions'
 import { MobileNativeChatMessageActionsSheet } from './MobileNativeChatMessageActionsSheet'
-import { MobileLinkActionSheet } from '../../MobileLinkActionSheet'
+import { MobileLinkActionSheet } from './MobileLinkActionSheet'
 import { MarkdownLinkHandlerContext } from '../../../components/markdown-link-handler'
 import {
   MobileNativeChatRowOverlaysContext,

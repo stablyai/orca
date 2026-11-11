@@ -15,6 +15,19 @@ describe('Claude child process environment', () => {
           Anthropic_Custom_Headers: 'Authorization: inherited',
           claude_code_child_session: '1',
           CLAUDE_CODE_SESSION_ID: 'inherited-session',
+          ClaudeCode: '1',
+          Claude_Code_Bridge_Session_Id: 'inherited-bridge',
+          Claude_Code_Host_Session_Id: 'inherited-host',
+          Claude_Code_Session_Attended: '1',
+          Claude_Code_Messaging_Socket: 'parent-socket',
+          Claude_Code_Messaging_Token: 'parent-token',
+          Claude_Code_Execpath: 'parent-claude',
+          Claude_Code_Entrypoint: 'parent-client',
+          Claude_Code_Desktop_App_Version: 'parent-desktop',
+          Claude_Effort: 'parent-effort',
+          Claude_Pid: '123',
+          Claude_Agent_Sdk_Version: 'parent-sdk',
+          CLAUDE_CODE_HTTP_PROXY: 'http://configured-proxy',
           SAFE_VALUE: 'preserved'
         }
       }
@@ -23,6 +36,7 @@ describe('Claude child process environment', () => {
     expect(env).toEqual({
       ANTHROPIC_AUTH_TOKEN: 'configured-token',
       Claude_Code_Session_Id: 'configured-session',
+      CLAUDE_CODE_HTTP_PROXY: 'http://configured-proxy',
       SAFE_VALUE: 'preserved'
     })
   })
@@ -35,27 +49,8 @@ describe('Claude child process environment', () => {
       PATH: 'C:\\launch'
     })
     expect(buildClaudeChildProcessEnv(configured, { platform: 'linux', inheritedEnv })).toEqual({
-      ...inheritedEnv,
+      Path: 'C:\\inherited',
       ...configured
     })
-  })
-
-  it('can strip child-session stamps reintroduced by a full SDK launch overlay', () => {
-    expect(
-      buildClaudeChildProcessEnv(
-        {
-          CLAUDE_CODE_CHILD_SESSION: 'configured-child-session',
-          CLAUDE_CODE_SESSION_ID: 'configured-session',
-          CLAUDE_CODE_BRIDGE_SESSION_ID: 'configured-bridge-session'
-        },
-        {
-          scrubConfiguredChildSessionStamps: true,
-          inheritedEnv: {
-            CLAUDE_CODE_CHILD_SESSION: 'inherited-child-session',
-            SAFE_VALUE: 'preserved'
-          }
-        }
-      )
-    ).toEqual({ SAFE_VALUE: 'preserved' })
   })
 })

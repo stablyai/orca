@@ -132,6 +132,8 @@ export const ExplicitEnsure = z
   .object({
     kind: z.literal('explicit'),
     resumeOrigin: z.literal('saved').optional(),
+    /** The pane a saved restore resumes; `placement` names the pane it opens in. */
+    restoreSourcePaneKey: z.string().min(1).max(300).optional(),
     worktree: WorktreeSelector,
     agent: z.enum(RESUMABLE_TUI_AGENTS),
     providerSession: ProviderSession,

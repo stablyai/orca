@@ -9,7 +9,7 @@ import {
 } from '@/components/ui/command'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { SparsePreset } from '../../../../shared/worktree/create-types'
 
 type SparsePresetChooserProps = {

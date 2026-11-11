@@ -20,7 +20,7 @@ vi.mock('../connection/runtime-status-probe', () => ({
 vi.mock('../connection/host-logical-client', () => ({
   openHostLogicalClient: (...args: unknown[]) => openHostLogicalClientMock(...args)
 }))
-vi.mock('./host-store', () => ({
+vi.mock('../../host-catalog/host-store', () => ({
   loadHosts: () => loadHostsMock()
 }))
 vi.mock('../../diagnostics/connection/connection-revival-triggers', () => ({

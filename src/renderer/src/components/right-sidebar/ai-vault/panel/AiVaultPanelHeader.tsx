@@ -1,4 +1,4 @@
-import { ImeInput } from '@/lib/ime-text-field'
+import { ImeInput } from '@/lib/text-input/ime/ime-text-field'
 import type { KeyboardEvent, ReactNode, Ref } from 'react'
 import { LoaderCircle, RefreshCw, Search, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'

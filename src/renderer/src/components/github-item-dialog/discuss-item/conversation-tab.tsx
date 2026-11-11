@@ -1,12 +1,12 @@
 import React, { useCallback, useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import {
   filterPRCommentsByAudience,
   getPRCommentAudienceCounts,
   type PRCommentAudienceFilter
 } from '../../../../../shared/source-control/review-comments/pr-comment-audience'
-import { usePRBotAuthorOverrides } from '@/lib/pr-bot-author-overrides'
+import { usePRBotAuthorOverrides } from '@/lib/source-control/review/pr-bot-author-overrides'
 import { groupPRComments } from '../../../../../shared/source-control/review-comments/pr-comment-groups'
 import {
   getCommentReplyTargetCandidates,
@@ -17,10 +17,10 @@ import {
   canPostPRReviewThreadReply
 } from '@/components/right-sidebar/checks-panel/comments/pr-comments-ai-launch-ack'
 import { buildPRCommentConversationReplyBody } from '@/components/right-sidebar/checks-panel/comments/pr-comment-fixing-reply-body'
-import { useAppStore } from '@/store'
-import { canUseGitHubRepoContext } from '@/lib/github-source-runtime-context'
+import { useAppStore } from '@/store/index'
+import { canUseGitHubRepoContext } from '@/lib/work-items/github/github-source-runtime-context'
 import { getGitHubMutationTarget } from '@/components/github/github-work-item-mutation-target'
-import { taskSourceRuntimeTarget } from '@/lib/task-source-runtime-target'
+import { taskSourceRuntimeTarget } from '@/lib/work-items/task-source-runtime-target'
 import { githubCommentImageUploadAddress } from '@/components/github/github-comment-image-upload-address'
 import {
   resolveGitHubBodyDraft,
@@ -57,7 +57,7 @@ import { GHCommentComposer } from './gh-comment-composer'
 import { ConversationTabDescription } from './conversation-tab-description'
 import { ConversationTabActivity } from './conversation-tab-activity'
 import { ConversationTabPRSidebar } from './conversation-tab-pr-sidebar'
-import { codeHostErrorText } from '@/lib/code-host-error-copy'
+import { codeHostErrorText } from '@/lib/source-control/remote/code-host-error-copy'
 
 export function ConversationTab({
   item,

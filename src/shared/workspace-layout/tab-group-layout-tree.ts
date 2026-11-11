@@ -96,12 +96,19 @@ export function removeGroupLayoutLeaf(
   return { ...root, first, second }
 }
 
+/** Builds a record from `previous` with one entry set, or deleted for null; the renderer passes its seam helper. */
+export type ReplaceRecordEntries = <V>(
+  previous: Readonly<Record<string, V>>,
+  replacements: Iterable<readonly [key: string, value: V | null]>
+) => Record<string, V>
+
 export function collapseGroupLayout(
   layoutByWorktree: Record<string, TabGroupLayoutNode>,
   activeGroupIdByWorktree: Record<string, string>,
   worktreeId: string,
   groupId: string,
-  fallbackGroupId?: string | null
+  fallbackGroupId: string | null | undefined,
+  replaceEntries: ReplaceRecordEntries
 ): {
   layoutByWorktree: Record<string, TabGroupLayoutNode>
   activeGroupIdByWorktree: Record<string, string>
@@ -110,20 +117,31 @@ export function collapseGroupLayout(
   if (!currentLayout) {
     return { layoutByWorktree, activeGroupIdByWorktree }
   }
-  const siblingId = findSiblingGroupId(currentLayout, groupId)
-  const collapsed = removeGroupLayoutLeaf(currentLayout, groupId)
-  const nextLayoutByWorktree = { ...layoutByWorktree }
-  if (collapsed) {
-    nextLayoutByWorktree[worktreeId] = collapsed
-  } else {
-    delete nextLayoutByWorktree[worktreeId]
-  }
+  const collapsed = collapseWorktreeGroupLayout(
+    currentLayout,
+    activeGroupIdByWorktree[worktreeId],
+    groupId,
+    fallbackGroupId
+  )
   return {
-    layoutByWorktree: nextLayoutByWorktree,
-    activeGroupIdByWorktree: {
-      ...activeGroupIdByWorktree,
-      [worktreeId]: siblingId ?? fallbackGroupId ?? activeGroupIdByWorktree[worktreeId]
-    }
+    layoutByWorktree: replaceEntries(layoutByWorktree, [[worktreeId, collapsed.layout]]),
+    activeGroupIdByWorktree: replaceEntries(activeGroupIdByWorktree, [
+      [worktreeId, collapsed.activeGroupId]
+    ])
+  }
+}
+
+/** collapseGroupLayout's values for its one worktree: a null layout deletes the entry. */
+export function collapseWorktreeGroupLayout<A extends string | undefined>(
+  currentLayout: TabGroupLayoutNode,
+  currentActiveGroupId: A,
+  groupId: string,
+  fallbackGroupId?: string | null
+): { layout: TabGroupLayoutNode | null; activeGroupId: string | A } {
+  return {
+    layout: removeGroupLayoutLeaf(currentLayout, groupId),
+    activeGroupId:
+      findSiblingGroupId(currentLayout, groupId) ?? fallbackGroupId ?? currentActiveGroupId
   }
 }
 

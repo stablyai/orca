@@ -27,7 +27,7 @@ import {
 } from '../src/notifications/push-receive'
 import { startPushTokenSync } from '../src/notifications/push-registration'
 import { ensureDesktopNotificationChannel } from '../src/notifications/desktop-notification-channel'
-import { loadHostCatalog } from '../src/transport/hosts/host-store'
+import { loadHostCatalog } from '../src/host-catalog/host-store'
 import { usePairingLinks } from '../src/navigation/use-pairing-links'
 import { consumeInitialLaunchIntent } from '../src/navigation/initial-launch-intent'
 import { recoverMobileRelayPairing } from '../src/pairing/mobile-relay-pairing-recovery'

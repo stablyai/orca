@@ -15,11 +15,11 @@ import { browserSiteDisplayController } from '../browser/site-settings/display/b
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
 import { getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
 import { getAppEnvironment } from '../../shared/app-environment'
-import { loadWslMoveFence } from '../persistence/moving-wsl-projects/wsl-move-scope-guard'
-import { startWslMoveStartup } from '../persistence/moving-wsl-projects/wsl-move-startup'
+import { loadWslMoveFence } from '../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
+import { startWslMoveStartup } from '../persistence/moving-wsl-projects/startup/wsl-move-startup'
 import { startWslHostsPolicyLiveUpdates } from '../wsl/host-lifecycle/wsl-hosts-policy-live-update'
 import { runPendingWslDriveUncConversions } from '../wsl/filesystem/wsl-drive-unc-conversion-startup'
-import { createProfileStateStoreForStartup } from '../persistence/profile-state/profile-state-startup-authority'
+import { createProfileStateStoreForStartup } from '../persistence/profile-state/startup/profile-state-startup-authority'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { initializeBrowserClientHostId } from '../browser/client-hosts/lifecycle/browser-client-host-id'
 import { scheduleSecretProtectionGapReport } from '../host/deferred-secret-protection-report'
@@ -61,7 +61,7 @@ import { updateGpuAccelerationAboutPanel } from './gpu-lifecycle'
 import {
   logWslCliReconciliationResults,
   reconcileManagedWslCliRegistrations
-} from '../cli/wsl-cli-registration-reconciliation'
+} from '../cli/wsl/wsl-cli-registration-reconciliation'
 import { createWslCliReconciliationStartupBarrier } from './wsl-cli-reconciliation-startup-barrier'
 import { agentHookServer } from '../agent-hooks/server/agent-hook-server'
 import { isAgentStatusHooksEnabled } from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
@@ -269,8 +269,8 @@ export async function initializeReadyFoundation(): Promise<void> {
         )
       }
     }
-    if ('experimentalBrowserExtensions' in updates) {
-      void switchBrowserExtensionSupport(settings.experimentalBrowserExtensions === true)
+    if ('browserExtensionsEnabled' in updates) {
+      void switchBrowserExtensionSupport(settings.browserExtensionsEnabled !== false)
     }
     if ('showMenuBarIcon' in updates) {
       // Store owns settings mutations; sync every menu-bar toggle through this listener.
@@ -299,7 +299,7 @@ export async function initializeReadyFoundation(): Promise<void> {
   registerDocPreviewGrantHandlers()
   // Session setup needs the extension support decision before loading profiles.
   initializeBrowserExtensionSupport({
-    enabled: store.getSettings().experimentalBrowserExtensions === true,
+    enabled: store.getSettings().browserExtensionsEnabled !== false,
     savedBrowserTabs: store
   })
   // Desktop webviews and runtime commands share sessions; initialize without waiting for renderer IPC.

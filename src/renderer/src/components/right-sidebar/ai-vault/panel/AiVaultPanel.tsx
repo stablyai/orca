@@ -38,6 +38,7 @@ import { useAiVaultPanelSearch } from '../search/use-ai-vault-search'
 import { useAiVaultPanelSearchSessions } from '../search/ai-vault-search-session'
 import { aiVaultSearchScopeIdentity } from '../search/ai-vault-search-scope-identity'
 import { AiVaultPanelSearch } from '../search/AiVaultPanelSearch'
+import { useAiVaultResumeCatalogs } from '../session-actions/use-ai-vault-resume-catalogs'
 import { useAiVaultPanelSessionResume } from '../session-actions/use-ai-vault-panel-session-resume'
 import { AiVaultScanProgressStrip } from '../scanning/AiVaultScanProgressStrip'
 import { useAiVaultScanProgress } from '../scanning/ai-vault-scan-progress-store'
@@ -108,6 +109,7 @@ export default function AiVaultPanel({
   } = usePersistedAiVaultViewOptions(initialAgents)
   const { executionHostScope, onExecutionHostScopeChange, hostScopeOptions } =
     useAiVaultPanelHostScope(activeWorktreeId ?? null, resumeTargetState)
+  useAiVaultResumeCatalogs(executionHostScope)
   const activeWorktreePath = activeWorktree?.path ?? null
   // Why: AI Vault ownership is cwd-based, so we must consider live worktrees across all repos.
   const activeWorktreePaths = useMemo(
@@ -232,8 +234,8 @@ export default function AiVaultPanel({
     hideEmptySessions
   })
   const searchHitHostLabels = useMemo(
-    () => (searching ? aiVaultSearchHitHostLabels(filteredSessions, hostScopeOptions) : null),
-    [filteredSessions, hostScopeOptions, searching]
+    () => (searching ? aiVaultSearchHitHostLabels(filteredSessions, hostScopeOptions, t) : null),
+    [filteredSessions, hostScopeOptions, searching, t]
   )
 
   useAiVaultPanelHandle(ref, {

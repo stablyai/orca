@@ -542,13 +542,47 @@
       "meterOnPhone": "Recording, {{duration}}, on this phone",
       "meterOn": "Recording, {{duration}}, on {{computer}}",
       "meterOnComputer": "Recording, {{duration}}, on the computer",
-      "meter": "Recording, {{duration}}"
+      "meter": "Recording, {{duration}}",
+      "discard": "Discard recording",
+      "retry": "Retry dictation",
+      "retryShort": "Retry"
     },
     "status": {
       "finishingOn": "Finishing on {{computer}}",
       "finishingOnComputer": "Finishing on the computer",
       "movedTo": "Moved to {{computer}}",
       "movedToComputer": "Moved to the computer"
+    },
+    "failure": {
+      "recordingKept": "Recording kept",
+      "connectionLost": "Connection lost",
+      "connectionSlow": "Connection too slow",
+      "phoneStopped": "Stopped on this phone",
+      "stopped": "Dictation stopped"
+    },
+    "announce": {
+      "typedInto": "Typed into {{target}}",
+      "insertedIn": "Inserted in {{target}}",
+      "listeningOnPhone": "Listening. Transcribing on this phone.",
+      "listeningOn": "Listening. Transcribing on {{computer}}.",
+      "listeningOnComputer": "Listening. Transcribing on the computer.",
+      "finishing": "Finishing.",
+      "inserted": "Inserted.",
+      "cancelled": "Dictation cancelled.",
+      "movedTo": "This phone stopped transcribing. Continuing on {{computer}}.",
+      "movedToComputer": "This phone stopped transcribing. Continuing on the computer.",
+      "stoppedKept": "Dictation stopped. {{reason}}. Your recording is kept.",
+      "stoppedKeptGeneric": "Dictation stopped. Your recording is kept.",
+      "stillListening": "Still listening."
+    },
+    "pill": {
+      "open": "Open",
+      "listening": "Listening",
+      "starting": "Starting",
+      "finishing": "Finishing",
+      "stopped": "Dictation stopped",
+      "label": "Dictation to {{target}}, {{duration}}",
+      "hint": "Double-tap to go back"
     }
   },
   "home": {
@@ -635,8 +669,8 @@
       "openAccountsHint": "Opens this desktop’s accounts",
       "emptyTitle": "No usage yet"
     },
-    "needsYou": {
-      "heading": "Needs you",
+    "activeAgents": {
+      "heading": "Active",
       "seeAll": "See all agents"
     }
   },
@@ -794,6 +828,8 @@
   "webShell": {
     "shellStateScreen": {
       "isolationUnavailable": "This device's WebView is too old to open the workspace safely.",
+      "isolationUnavailableAndroid": "Orca needs Android System WebView or Chrome 101 or newer. Update it from the Play Store, or pick a newer one in Developer options > WebView implementation.",
+      "webViewInUse": "This device has {{name}} {{version}}.",
       "downloadFailed": "The latest app could not be downloaded from this host.",
       "hostProfileUnreadable": "Could not read this host on your device. Try again.",
       "statusUnreadable": "Could not read this host's status. Go back and reopen it.",
@@ -1464,6 +1500,15 @@
     },
     "offlineAsOfTime": {
       "yesterday": "yesterday, {{time}}"
+    },
+    "newWorkspaceCreateSubmit": {
+      "uncertainFolderCreate": "This worktree may have been created. Check the folder before creating another.",
+      "uncertainCreate": "This workspace may have been created. Check your workspaces before creating another.",
+      "folderCreateBusy": "A worktree in this repository is still being created or checked. It shows in the folder once it lands."
+    },
+    "smartRailRow": {
+      "title": "Smart rail",
+      "subtitle": "Shows keys for what your agent is doing"
     }
   },
   "pullRequest": {
@@ -2371,8 +2416,8 @@
       "insertFailedCopied": "Couldn't insert dictation, so it was copied to the clipboard",
       "insertFailed": "Couldn't insert dictation",
       "inserted": "Dictation inserted",
-      "stoppedAfterSilence": "Stopped after a minute of silence",
-      "stoppedAtCloudLimit": "Dictation stopped at the 10-minute cloud limit."
+      "stoppedAtCloudLimit": "Dictation stopped at the 10-minute cloud limit.",
+      "stoppedAfterSilenceSeconds": "Stopped after {{seconds}} seconds of silence"
     },
     "quickCommandLaunch": {
       "editBeforeRunning": "Edit this quick command before running it",
@@ -2623,6 +2668,10 @@
       "modelUnavailable": "{{agent}} couldn't use {{detail}}. Pick another model and send again.",
       "modelUnavailableUpdate": "{{agent}} couldn't use {{detail}}. Update {{agent}} to {{minimumVersion}} or later to keep it after a restart, or pick another model and send again.",
       "modelNotSelected": "{{agent}} has no model selected. Check your model selection and {{agent}} sign-in, then send again.",
+      "providerUnavailable": "{{agent}} couldn't respond because the service is busy. Pick another model, or wait a little and send again.",
+      "providerSafetyStopped": "{{agent}} stopped this response after a safety check. Review your request and send again.",
+      "providerResponseFailed": "{{agent}} couldn't finish this response. Open Details for more information.",
+      "selectedModel": "the selected model",
       "providerRejected": "{{agent}} didn't accept this message.",
       "providerRejectedQuoted": "{{agent}} didn't accept this message: {{detail}}.",
       "attachmentEmpty": "An image on this message is empty, so the message was not sent.",
@@ -2868,6 +2917,25 @@
     },
     "usePrTextAction": {
       "updateFailed": "Failed to update pull request."
+    },
+    "smartKeys": {
+      "always": "Always",
+      "answer": "Answer",
+      "background": "Background",
+      "cancel": "Cancel",
+      "confirm": "Confirm",
+      "edit": "Edit",
+      "history": "History",
+      "keyLabel": "{{word}}, sends {{combo}}",
+      "mode": "Mode",
+      "no": "No",
+      "queue": "Queue",
+      "reject": "Reject",
+      "rewind": "Rewind",
+      "sendNow": "Send now",
+      "skip": "Skip",
+      "stop": "Stop",
+      "yes": "Yes"
     }
   },
   "chat": {
@@ -2909,7 +2977,12 @@
       "skip": "Skip",
       "step": "Step {{step}}",
       "other": "Other…",
-      "answerPlaceholder": "Type your answer"
+      "answerPlaceholder": "Type your answer",
+      "optionPreview": "{{option}} preview",
+      "previewPosition": "{{current}} of {{total}}",
+      "chosen": "Chosen",
+      "chooseThis": "Choose this",
+      "viewPreview": "View"
     },
     "permission": {
       "reason": "Reason: ",
@@ -3322,6 +3395,7 @@
       "unsupported": "This host runs an older Orca. Update Orca on the host, then try again."
     },
     "hostOutage": {
+      "offlineAsOf": "{{host}} is offline · as of {{time}}",
       "reconnecting": "{{hostName}} is reconnecting…",
       "stopped": "{{hostName}} is stopped. Start it on your computer.",
       "server": "The server",
@@ -3397,7 +3471,12 @@
       "commitThenPullPush": "Commit, then pull and push",
       "resolveConflicts": "Resolve conflicts before committing",
       "stageFile": "Stage at least one file to commit",
-      "enterMessage": "Enter a commit message to commit"
+      "enterMessage": "Enter a commit message to commit",
+      "statusConflicts": "Conflicts",
+      "statusNothingStaged": "Nothing staged",
+      "statusNeedsMessage": "Needs message",
+      "statusNotPublished": "Not published",
+      "statusNoBranch": "No branch"
     },
     "createPrAction": {
       "createReview": "Create {{titleLabel}}",
@@ -3474,7 +3553,15 @@
       "nothingToPushTo": "Nothing to push to {{upstreamName}}",
       "nothingToForcePushTo": "Nothing to force push to {{upstreamName}}",
       "rebaseFromNamedBase": "Rebase from {{baseRef}}",
-      "rebaseWithLatestFrom": "Rebase current branch with latest commits from {{baseRef}}"
+      "rebaseWithLatestFrom": "Rebase current branch with latest commits from {{baseRef}}",
+      "statusUpToDate": "Up to date",
+      "statusSetsUpstream": "Sets upstream",
+      "statusNotPublished": "Not published",
+      "statusNoBranch": "No branch",
+      "statusMayFail": "May fail",
+      "statusPublished": "Published",
+      "statusStashFirst": "Stash first",
+      "statusReplaces": "Replaces ↓{{behind}}"
     },
     "actions": {
       "createPr": "Create PR",
@@ -3619,7 +3706,17 @@
       "emptyTitle": "No attached worktrees yet",
       "emptyCopy": "Worktrees created from this workspace will show up here.",
       "statusUnavailable": "Unavailable",
-      "backToFolder": "Back to folder"
+      "backToFolder": "Back to folder",
+      "createSection": "Create a worktree",
+      "createIn": "Create a worktree in {{repo}}",
+      "created": "Created worktree {{name}} in {{repo}}",
+      "createdNamed": "Created worktree {{name}}",
+      "createFailed": "Could not create a worktree in {{repo}}.",
+      "loadReposRetry": "Load repositories",
+      "setupChoiceTitle": "Retry without setup?",
+      "setupChoiceMessage": "Orca couldn't confirm the last create in {{repo}}. Retrying it needs a setup choice; it will be created without running the repository's setup.",
+      "setupChoiceSkip": "Retry without setup",
+      "checking": "A worktree from {{repo}} may already have been created. Checking the folder…"
     },
     "hostedReviewCopy": {
       "updatingBranch": "Updating branch...",
@@ -4464,6 +4561,12 @@
       "createFailed": "Failed to create workspace"
     },
     "hostedMerge": {
+      "confirmGitHubMerge": "Merge PR #{{number}}?",
+      "confirmGitHubSquash": "Squash and merge PR #{{number}}?",
+      "confirmGitHubRebase": "Rebase and merge PR #{{number}}?",
+      "confirmGitLabMerge": "Merge merge request #{{number}}?",
+      "confirmGitLabSquash": "Squash and merge merge request #{{number}}?",
+      "confirmGitLabRebase": "Rebase and merge merge request #{{number}}?",
       "merged": "Merged",
       "closed": "Closed",
       "conflicts": "Conflicts",

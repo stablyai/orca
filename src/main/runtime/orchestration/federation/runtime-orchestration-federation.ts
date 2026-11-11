@@ -20,15 +20,15 @@ import { OrchestrationError } from '../orchestration-error'
 import {
   clearFederationAckCheckpoints,
   releaseFederationAckCheckpoint
-} from './synchronization/federation-ack-checkpoints'
-import { syncFederatedDispatch } from './synchronization/federation-sync'
+} from '../legacy-remote-home/federation-ack-checkpoints'
+import { syncFederatedDispatch } from '../legacy-remote-home/federation-sync'
+import { FederationAcknowledgmentRecovery } from '../legacy-remote-home/federation-acknowledgment-recovery'
 import type { OrchestrationDb } from '../db/orchestration-db'
 import type { FederationRuntime } from './federation-runtime'
 import {
   FederationRelayScheduler,
   type FederationRelayTickOutcome
 } from './relay/federation-relay-scheduler'
-import { FederationAcknowledgmentRecovery } from './relay/federation-acknowledgment-recovery'
 
 export class RuntimeOrchestrationFederation {
   private readonly relays = new FederationRelayScheduler((dispatchId) => this.relayTick(dispatchId))

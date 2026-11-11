@@ -33,6 +33,7 @@
     "@xterm/addon-webgl": "0.20.0-beta.329",
     "@xterm/xterm": "6.1.0-beta.336",
     "buffer": "^6.0.3",
+    "diff": "8.0.4",
     "expo": "^55.0.31",
     "expo-alternate-app-icons": "8.0.0",
     "expo-build-properties": "^55.0.18",

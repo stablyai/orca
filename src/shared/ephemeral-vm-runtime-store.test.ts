@@ -1,7 +1,8 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { removeTempDirs } from './testing/remove-temp-dirs.test-support'
+import { afterEach, describe, expect, it } from 'vitest'
 import { encodePairingOffer } from './remote-runtime/pairing/pairing'
 import { PAIRING_OFFER_VERSION } from './remote-runtime/pairing/mobile-relay-pairing-offer'
 import {
@@ -47,20 +48,9 @@ function runtimeRecord(
 
 describe('ephemeral VM runtime store', () => {
   const tempDirs: string[] = []
-  const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
 
-  beforeEach(() => {
-    // Why: secure-file has dedicated ACL coverage; this suite focuses on store semantics.
-    Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
-  })
-
-  afterEach(() => {
-    if (originalPlatform) {
-      Object.defineProperty(process, 'platform', originalPlatform)
-    }
-    for (const dir of tempDirs.splice(0)) {
-      rmSync(dir, { recursive: true, force: true })
-    }
+  afterEach(async () => {
+    await removeTempDirs(tempDirs.splice(0))
   })
 
   function makeUserDataPath(): string {
@@ -102,6 +92,23 @@ describe('ephemeral VM runtime store', () => {
       updatedAt: 4_000
     })
     expect(recovered.cleanupLastError).toBeUndefined()
+  })
+
+  it('records a lifecycle failure with an empty message instead of rejecting the write', () => {
+    const userDataPath = makeUserDataPath()
+    const record = upsertEphemeralVmRuntime(userDataPath, runtimeRecord())
+
+    const failed = updateEphemeralVmRuntimeStatus(userDataPath, record.id, {
+      status: 'resume_failed',
+      lifecycleLastError: { error: '' }
+    })
+    expect(failed).toMatchObject({ status: 'resume_failed', lifecycleLastError: 'Unknown error.' })
+
+    const resumed = updateEphemeralVmRuntimeStatus(userDataPath, record.id, {
+      status: 'running',
+      lifecycleLastError: null
+    })
+    expect(resumed.lifecycleLastError).toBeUndefined()
   })
 
   it('rejects an oversized write without publishing a partial runtime record', () => {

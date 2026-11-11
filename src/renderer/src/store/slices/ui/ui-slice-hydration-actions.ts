@@ -1,3 +1,4 @@
+import { normalizeStatusBarUsageFormat } from '../../../../../shared/status-bar-usage-format'
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
 import type { AppState } from '../../types'
 import { normalizeRightSidebarRoute } from '../right-sidebar/right-sidebar-route'
@@ -41,7 +42,7 @@ import { isReleaseChannel } from '../../../../../shared/release-channel'
 import {
   filterSetupScriptPromptDismissalsToValidRepos,
   sanitizeSetupScriptPromptDismissals
-} from '../../../lib/setup-script-prompt'
+} from '../../../runtime/repo-hooks/setup-script-prompt'
 import { isBundledPetId, DEFAULT_PET_ID } from '../../../components/pet/pet-models'
 import { getRepoHostIdentity } from '../../../../../shared/repo-host-identity'
 import {
@@ -64,6 +65,7 @@ import {
   sanitizeExplorerPreferences,
   sanitizeWorkspaceCleanupDismissals,
   sanitizePersistedSidebarWidth,
+  sanitizeActivityBarPosition,
   hydratedUIPartialMatchesState,
   clampPetSize
 } from './ui-slice-hydration-sanitizers'
@@ -124,6 +126,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           sidebarOpen: typeof ui.sidebarOpen === 'boolean' ? ui.sidebarOpen : true,
           rightSidebarOpen: typeof ui.rightSidebarOpen === 'boolean' ? ui.rightSidebarOpen : true,
           ...normalizeRightSidebarRoute(ui.rightSidebarTab, ui.rightSidebarExplorerView),
+          activityBarPosition: sanitizeActivityBarPosition(ui.activityBarPosition),
           groupBy: (ui.groupBy as UISlice['groupBy'] | 'parent') === 'parent' ? 'repo' : ui.groupBy,
           sortBy,
           // Why: main-process getUI() already normalized this (defaulting to 'manual'); read it through without migrating.
@@ -189,6 +192,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           statusBarVisible: ui.statusBarVisible ?? true,
           usagePercentageDisplay: normalizeUsagePercentageDisplay(ui.usagePercentageDisplay),
           statusBarUsageMode: normalizeStatusBarUsageMode(ui.statusBarUsageMode),
+          statusBarUsageFormat: normalizeStatusBarUsageFormat(ui.statusBarUsageFormat),
           // Why: default true so existing users see the pet on first enabling the flag; only an explicit Hide persists false.
           petVisible: ui.petVisible ?? ui.sidekickVisible ?? true,
           petSize: clampPetSize(ui.petSize ?? ui.sidekickSize ?? PET_SIZE_DEFAULT, {

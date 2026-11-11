@@ -14,7 +14,7 @@ import {
 } from '../../../persistence/persistence-test-harness'
 import { Store } from '../../../persistence/loading-store/store'
 import { stageOrcadMigrationDestination } from './orcad-migration-cutover-coordinator'
-import { listOrcadMigrationSourceCutovers } from '../../../persistence/migrating-orcad-catalog/orcad-migration-cutover-journal'
+import { listOrcadMigrationSourceCutovers } from '../../../persistence/migrating-orcad-catalog/cutover-journals/orcad-migration-cutover-journal'
 import { fakeOrcadMigrationDestination } from './testing/orcad-migration-destination-fake'
 import { fenceOrcadMigrationSource } from '../../../ssh/migration-source/orcad-migration-source-fence'
 import { releaseUnreachableOrcadSetup } from './orcad-unreachable-setup-release'

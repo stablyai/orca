@@ -14,6 +14,7 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import { spawnInAdmittedPane, withdrawRuntimePane } from './runtime-pane-admission'
 import { UNMEASURED_PTY_SIZE } from '../../../ipc/pty/pty-first-size'
 import { resolveLaunchCommandPaneAgent } from './runtime-agent-launch-resolution'
+import { recordFreshLaunch } from './launch-evidence'
 // Rejected splits need only a quick teardown verdict before fallback kill; unreachable hosts must not stall rejection.
 const REJECTED_SPLIT_PTY_STOP_TIMEOUT_MS = 2_000
 
@@ -129,6 +130,9 @@ export abstract class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeW
       )
       createdPty.runtimeSessionOwned = pty.runtimeSessionOwned
       createdPty.launchCommandAgent = resolveLaunchCommandPaneAgent(opts.command)
+      if (!result.isReattach) {
+        recordFreshLaunch(createdPty)
+      }
       this.watchLaunchComposer(result.id, createdPty.launchCommandAgent)
       this.setPairedRendererSessionOwnership(
         createdPty.ptyId,

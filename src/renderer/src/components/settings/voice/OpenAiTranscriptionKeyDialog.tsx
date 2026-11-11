@@ -40,8 +40,8 @@ export function OpenAiTranscriptionKeyDialog({
         <DialogHeader>
           <DialogTitle>
             {t(
-              'auto.components.settings.OpenAiTranscriptionKeyDialog.439e91879e',
-              'OpenAI Transcription'
+              'auto.components.settings.OpenAiTranscriptionKeyDialog.bf1ff9c891',
+              'OpenAI transcription'
             )}
           </DialogTitle>
           <DialogDescription>
@@ -53,7 +53,7 @@ export function OpenAiTranscriptionKeyDialog({
         </DialogHeader>
         <div className="space-y-2">
           <Label htmlFor="openai-speech-api-key">
-            {t('auto.components.settings.OpenAiTranscriptionKeyDialog.16015322f9', 'API Key')}
+            {t('auto.components.settings.OpenAiTranscriptionKeyDialog.c3dfb3840e', 'API key')}
           </Label>
           <Input
             id="openai-speech-api-key"
@@ -86,12 +86,12 @@ export function OpenAiTranscriptionKeyDialog({
         <DialogFooter>
           {configured && (
             <Button variant="outline" disabled={pending} onClick={onClear}>
-              {t('auto.components.settings.OpenAiTranscriptionKeyDialog.07b26f2742', 'Clear Key')}
+              {t('auto.components.settings.OpenAiTranscriptionKeyDialog.be6c3f2eba', 'Clear key')}
             </Button>
           )}
           <Button disabled={pending || !apiKeyDraft.trim()} onClick={onSave}>
             {pending ? <Loader2 className="size-4 animate-spin" /> : null}
-            {t('auto.components.settings.OpenAiTranscriptionKeyDialog.fa83512e48', 'Save Key')}
+            {t('auto.components.settings.OpenAiTranscriptionKeyDialog.bce1b6d18a', 'Save key')}
           </Button>
         </DialogFooter>
       </DialogContent>

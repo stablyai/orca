@@ -108,6 +108,34 @@ describe('edge evacuation under runtime control', () => {
     h.evacuation.stop()
   })
 
+  it('leaves region scope to the assign path: a stored preference outside it drains nobody', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const flags: EdgeControlFlags = { mode: 'on', rolloutPermille: 1000 }
+    const h = await harness({ control: () => flags })
+    // On the edge by its ask (no region, or us-central1); its stored preference says otherwise.
+    await h.insert(hostId(1))
+    await h.prefer(hostId(1), 'asia-east2')
+    await h.insert(hostId(2))
+    expect(await h.evacuation.sweep()).toBe(0)
+    expect(h.admin.drained).toEqual([])
+    // Leaving the cohort still drains, whatever the stored region.
+    flags.rolloutPermille = 0
+    expect(await h.evacuation.sweep()).toBe(2)
+    expect(h.admin.drained.sort()).toEqual([hostId(1), hostId(2)])
+  })
+
+  it('reports an edge row above the leave ceiling (the ceiling was set too low) and still drains it', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const flags: EdgeControlFlags = { mode: 'on', rolloutPermille: 0, leaveCeilingPermille: 0 }
+    const h = await harness({ control: () => flags })
+    await h.insert(hostId(1))
+    expect(await h.evacuation.sweep()).toBe(1)
+    expect(errors.mock.calls.map((call) => String(call[0]))).toContain(
+      JSON.stringify({ event: 'orca_relay_edge_row_above_ceiling' })
+    )
+  })
+
   it(`sends at most ${EDGE_EVACUATION_CONCURRENCY} drains at once`, async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     const h = await harness()

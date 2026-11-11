@@ -17,7 +17,7 @@ import { checkRuntimeHooks, type HookCheckResult } from '@/runtime/repo-hooks/ru
 import { loadHostStructuredAgents } from '@/runtime/native-chat/agent-catalogs/host-structured-agents'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { Automation } from '../../../../shared/automations/automation-definition'
-import type { AutomationDraft } from './AutomationEditorDialog'
+import type { AutomationDraft } from './authoring/AutomationEditorDialog'
 import {
   AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY as LIST_HOST_SCOPE,
   AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY as OWNER_FENCING,

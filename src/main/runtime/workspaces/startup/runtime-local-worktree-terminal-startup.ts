@@ -23,7 +23,7 @@ import type {
   WorktreeTerminalProvisioningArgs
 } from './runtime-worktree-terminal-provisioning'
 
-type Ports = {
+export type RuntimeLocalWorktreeTerminalPorts = {
   canSpawn: boolean
   provisionInBackground?: () => boolean
   createTerminal: (
@@ -76,7 +76,7 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
   promisedAgentChat?: boolean
   draftPaste?: WorktreeStartupDraftPaste
   warning?: string
-  ports: Ports
+  ports: RuntimeLocalWorktreeTerminalPorts
 }): Promise<RuntimeLocalWorktreeTerminalStartupResult> {
   const { request, repo, worktree, defaultTabs, startup, ports } = args
   let { setup } = args

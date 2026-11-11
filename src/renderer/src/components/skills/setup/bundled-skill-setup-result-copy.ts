@@ -8,7 +8,11 @@ import {
   type BundledSkillOutcomeText
 } from '../../../../../shared/bundled-skill-summary'
 import { collapseHomePath } from '../../../../../shared/bundled-skill-locations'
-import { leaveReasonText, locationPlaceLabel, skillOutcomeText } from '../skill-plan-op-copy'
+import {
+  leaveReasonText,
+  locationPlaceLabel,
+  skillOutcomeText
+} from '../freshness/skill-plan-op-copy'
 import {
   bundledSkillSetupResultHeadline,
   type BundledSkillSetupChanges
