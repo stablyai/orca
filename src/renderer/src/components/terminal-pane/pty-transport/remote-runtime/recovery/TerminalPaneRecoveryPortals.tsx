@@ -238,6 +238,7 @@ export function TerminalPaneRecoveryPortals({
           return createPortal(
             <CloudWokeProcessesNotice
               command={wokeHint.command}
+              paneLeafId={pane.leafId}
               onRerun={() => {
                 dismissWakeProcessHint(pane.leafId)
                 paneTransportsRef.current

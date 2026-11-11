@@ -5,10 +5,14 @@ import { useTranslate } from '@/i18n/use-translate'
 import { getIntlLocale } from '@/i18n/i18n'
 import { wakeCloudWorkspace } from '../cloud-workspace-actions'
 
-export function formatAsleepSince(at: number): string {
-  return new Intl.DateTimeFormat(getIntlLocale(), { hour: 'numeric', minute: '2-digit' }).format(
-    new Date(at)
-  )
+/** "3:10 PM" today; "Nov 10, 3:10 PM" once it has been asleep across a day boundary. */
+export function formatAsleepSince(at: number, now = Date.now()): string {
+  const sameDay = new Date(at).toDateString() === new Date(now).toDateString()
+  return new Intl.DateTimeFormat(getIntlLocale(), {
+    ...(sameDay ? {} : { month: 'short', day: 'numeric' }),
+    hour: 'numeric',
+    minute: '2-digit'
+  }).format(new Date(at))
 }
 
 /**

@@ -26967,7 +26967,11 @@
       "recentCommits": "Recent commits"
     },
     "terminal": {
-      "asleepHistoryKept": "This workspace is asleep. Your terminal history is kept."
+      "asleepHistoryKept": "This workspace is asleep. Your terminal history is kept.",
+      "asleepSince": "Asleep since {{time}}",
+      "rerun": "Rerun {{command}}",
+      "rerunLabel": "Rerun",
+      "wokeProcessesStopped": "Woke up · processes stopped while asleep"
     }
   },
   "cloudAgentSetup": {
