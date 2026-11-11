@@ -3,6 +3,8 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { main as fsMain } from './check-main-sync-fs-ratchet.mjs'
+import { collectSyncLaunchUses } from '../../process-boundaries/check-main-sync-spawn-ratchet.mjs'
 import { countBlockingApis, main } from './check-main-blocking-api-ratchet.mjs'
 
 const file = 'src/main/consumer.ts'
@@ -37,6 +39,7 @@ describe('main blocking API ratchets', () => {
     ["import DB from 'better-sqlite3'", 'DB'],
     ["import DB from '../sqlite/sync-database'", 'DB'],
     ["const { DatabaseSync: DB } = require('node:sqlite')", 'DB'],
+    ["const { DatabaseSync: DB } = process.getBuiltinModule('node:sqlite')", 'DB'],
     ["import * as sqlite from 'node:sqlite'", 'sqlite.DatabaseSync']
   ])('guards SQLite constructors and statement work: %s', (load, ctor) => {
     expect(
@@ -60,6 +63,30 @@ describe('main blocking API ratchets', () => {
         db.exec('schema'); statement.run(); cache.get('key')
       }`)
     ).toEqual({ compression: 0, crypto: 0, atomics: 0, sqlite: 4, ipc: 0 })
+  })
+
+  it('guards constructor properties and namespace SQLite types', () => {
+    expect(
+      counts(`import type * as sqlite from 'node:sqlite'
+      class Owner {
+        constructor(private readonly db: sqlite.DatabaseSync, private readonly statement: sqlite.StatementSync) {}
+        query() { this.db.prepare('select').get(); this.statement.run() }
+      }
+      function query(db: sqlite.DatabaseSync, statement: sqlite.StatementSync) { db.exec('sql'); statement.get() }
+    `).sqlite
+    ).toBe(5)
+  })
+
+  it('guards callable better-sqlite3 construction and modern builtin subprocess loads', () => {
+    expect(
+      counts(
+        `import Database from 'better-sqlite3'; const db = Database('test'); db.exec('sql'); db.prepare('sql').get()`
+      ).sqlite
+    ).toBe(4)
+    expect(
+      collectSyncLaunchUses(file, `process.getBuiltinModule('node:child_process').execSync('test')`)
+        .count
+    ).toBe(1)
   })
 
   it('guards synchronous preload requests and main replies', () => {
@@ -101,8 +128,22 @@ describe('main blocking API ratchets', () => {
     }
     execFileSync('git', ['init', '--quiet'], { cwd: root })
     execFileSync('git', ['add', '.'], { cwd: root })
+    mkdirSync(path.join(root, 'src/main/daemon'), { recursive: true })
+    const daemon = path.join(root, 'src/main/daemon/daemon-entry.ts')
+    writeFileSync(daemon, "import { statSync } from 'node:fs'; statSync('file')")
+    writeFileSync(
+      path.join(root, 'config/main-sync-fs-baseline.txt'),
+      '1 src/main/daemon/daemon-entry.ts\n'
+    )
+    execFileSync('git', ['add', '.'], { cwd: root })
     const error = vi.spyOn(console, 'error').mockImplementation(() => {})
     vi.spyOn(console, 'log').mockImplementation(() => {})
+    expect(fsMain(root)).toBe(0)
+    writeFileSync(
+      daemon,
+      "import { statSync } from 'node:fs'; statSync('file'); statSync('another')"
+    )
+    expect(fsMain(root)).toBe(1)
     expect(main(root)).toBe(1)
     expect(error.mock.calls.flat().join('\n')).toContain('Move CPU or SQL work to a worker')
     main(root, '--prune')

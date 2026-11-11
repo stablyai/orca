@@ -1,16 +1,20 @@
 # Legacy synchronous sqlite uses per file; counts may only go DOWN.
 # Only explicit worker/utility entry files are exempt; their imports remain guarded.
+3 src/main/ai-vault-search/query/session-search-engine.ts
+5 src/main/ai-vault-search/query/session-search-postings.ts
+7 src/main/ai-vault-search/query/session-search-retrieval.ts
 2 src/main/ai-vault-search/query/session-search-snippet.ts
 2 src/main/ai-vault-search/query/session-search-source-presence.ts
 2 src/main/ai-vault-search/query/session-search-typo-repair.ts
+10 src/main/ai-vault-search/storage/session-search-file-records.ts
 8 src/main/ai-vault-search/storage/session-search-index-generation.ts
-6 src/main/ai-vault-search/storage/session-search-index-writer.ts
+17 src/main/ai-vault-search/storage/session-search-index-writer.ts
 10 src/main/ai-vault-search/storage/session-search-message-rows.ts
 3 src/main/ai-vault-search/storage/session-search-query-schema.ts
 17 src/main/ai-vault-search/storage/session-search-retention-delete.ts
 13 src/main/ai-vault-search/storage/session-search-schema.ts
 16 src/main/ai-vault-search/storage/session-search-store.ts
-13 src/main/ai-vault-search/storage/session-search-tool-purge.ts
+26 src/main/ai-vault-search/storage/session-search-tool-purge.ts
 8 src/main/ai-vault-search/storage/session-search-write-buffer.ts
 19 src/main/ai-vault/parse-cache/session-parse-cache-database.ts
 13 src/main/ai-vault/parse-cache/session-scope-cwds-table.ts
@@ -76,6 +80,7 @@
 3 src/main/rate-limits/providers/opencode-go/opencode-go-api-key-source.ts
 2 src/main/runtime/agent-session/records/agent-session-record-lineage.ts
 34 src/main/runtime/agent-session/records/agent-session-record-rows.ts
+22 src/main/runtime/orchestration/db/dispatch-context/presentation-completion-source.ts
 6 src/main/runtime/orchestration/db/dispatch-row-writer.ts
 1 src/main/runtime/orchestration/db/federation/federated-stub-home-run-backfill.ts
 9 src/main/runtime/orchestration/db/lifecycle-transition.ts
@@ -89,6 +94,7 @@
 14 src/main/runtime/orchestration/db/schema/structured-worker-orca-session-backfill.ts
 5 src/main/runtime/orchestration/db/worker-dispatch/worker-dispatch-settlement.ts
 4 src/main/runtime/orchestration/workers/lifecycle/context-only-dispatch-release.ts
+3 src/main/sqlite/node-sqlite-statement.ts
 19 src/main/sqlite/row-cache/keyed-json-row-cache.ts
 5 src/main/sqlite/sync-database.ts
 8 src/main/sqlite/versioned-cache-database.ts

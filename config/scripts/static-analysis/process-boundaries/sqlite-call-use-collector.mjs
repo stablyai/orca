@@ -13,6 +13,7 @@ export function countSqliteCalls(file, contents) {
   }
   const types = new Set()
   const constructors = new Set()
+  const callableConstructors = new Set()
   const receivers = new Set(file.endsWith('/sqlite/sync-database.ts') ? ['this'] : [])
   const declarations = []
   const calls = []
@@ -33,6 +34,9 @@ export function countSqliteCalls(file, contents) {
         types.add(clause.name.text)
         if (!clause.isTypeOnly) {
           constructors.add(clause.name.text)
+          if (node.moduleSpecifier.text === 'better-sqlite3') {
+            callableConstructors.add(clause.name.text)
+          }
         }
       }
       const named = clause?.namedBindings
@@ -56,13 +60,17 @@ export function countSqliteCalls(file, contents) {
       ts.isVariableDeclaration(node) &&
       node.initializer &&
       ts.isCallExpression(node.initializer) &&
-      key(node.initializer.expression) === 'require' &&
+      ['require', 'process.getBuiltinModule'].includes(key(node.initializer.expression)) &&
+      node.initializer.arguments[0] &&
       ts.isStringLiteral(node.initializer.arguments[0]) &&
       SQLITE_MODULE.test(node.initializer.arguments[0].text)
     ) {
       if (ts.isIdentifier(node.name)) {
         types.add(node.name.text)
         constructors.add(node.name.text)
+        if (node.initializer.arguments[0].text === 'better-sqlite3') {
+          callableConstructors.add(node.name.text)
+        }
       } else if (ts.isObjectBindingPattern(node.name)) {
         for (const element of node.name.elements) {
           if (
@@ -96,7 +104,8 @@ export function countSqliteCalls(file, contents) {
     }
     const name = node.typeName.getText(source)
     return (
-      types.has(name.split('.')[0]) && (!name.includes('.') || /\.(Database|Statement)$/.test(name))
+      types.has(name.split('.')[0]) &&
+      (!name.includes('.') || /\.(Database|Statement|DatabaseSync|StatementSync)$/.test(name))
     )
   }
   function instance(node) {
@@ -109,6 +118,9 @@ export function countSqliteCalls(file, contents) {
     }
     if (ts.isNewExpression(node)) {
       return constructor(node.expression)
+    }
+    if (ts.isCallExpression(node) && callableConstructors.has(key(node.expression))) {
+      return true
     }
     if (
       ts.isCallExpression(node) &&
@@ -125,10 +137,15 @@ export function countSqliteCalls(file, contents) {
       if (!ts.isIdentifier(node.name) || !(sqliteType(node.type) || instance(node.initializer))) {
         continue
       }
-      const name = ts.isPropertyDeclaration(node) ? `this.${node.name.text}` : node.name.text
-      if (!receivers.has(name)) {
-        receivers.add(name)
-        changed = true
+      const names = [ts.isPropertyDeclaration(node) ? `this.${node.name.text}` : node.name.text]
+      if (ts.isParameter(node) && ts.isParameterPropertyDeclaration(node, node.parent)) {
+        names.push(`this.${node.name.text}`)
+      }
+      for (const name of names) {
+        if (!receivers.has(name)) {
+          receivers.add(name)
+          changed = true
+        }
       }
     }
   }
@@ -136,6 +153,9 @@ export function countSqliteCalls(file, contents) {
     const target = unwrap(node.expression)
     if (ts.isNewExpression(node)) {
       return constructor(target)
+    }
+    if (callableConstructors.has(key(target))) {
+      return true
     }
     return (
       (ts.isPropertyAccessExpression(target) || ts.isElementAccessExpression(target)) &&

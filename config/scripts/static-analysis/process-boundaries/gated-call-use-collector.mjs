@@ -126,7 +126,11 @@ export function createGatedCallCollector(families, ratchetName) {
       const loads =
         ts.isCallExpression(node) &&
         (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
-          (ts.isIdentifier(node.expression) && node.expression.text === 'require'))
+          (ts.isIdentifier(node.expression) && node.expression.text === 'require') ||
+          (ts.isPropertyAccessExpression(node.expression) &&
+            ts.isIdentifier(node.expression.expression) &&
+            node.expression.expression.text === 'process' &&
+            node.expression.name.text === 'getBuiltinModule'))
       const specifier = loads ? literalString(node.arguments[0]) : null
       return specifier === null ? null : gatedSymbolsFor(file, specifier)
     }
