@@ -36,7 +36,16 @@ const strip = (
   now = 1_000,
   paneKey = 'tab:a',
   usesAccount: boolean | null = true
-) => cloudRunningStrip({ paneKey, entry, accounts: account, held: false, now, usesAccount })
+) =>
+  cloudRunningStrip({
+    paneKey,
+    entry,
+    accounts: account,
+    held: false,
+    now,
+    usesAccount,
+    revision: 0
+  })
 
 describe('cloudRunningStrip (RA-11)', () => {
   beforeEach(resetCloudRunningSignoutForTest)
@@ -107,7 +116,8 @@ describe('cloudRunningStrip (RA-11)', () => {
         accounts: accounts({ state: 'revoked' }),
         held: true,
         now: 1,
-        usesAccount: true
+        usesAccount: true,
+        revision: 0
       })
     ).toBeNull()
     expect(strip(accounts({ state: 'revoked' }), { ...RUNNING, agentType: 'gemini' })).toBeNull()

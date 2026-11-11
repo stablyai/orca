@@ -78,6 +78,11 @@ export function cloudRunningStrip(args: {
    * workspace or a key-sourced one, null while unread or unreadable (then no strip: fail quiet).
    */
   usesAccount: boolean | null
+  /**
+   * useCloudRunningSignoutVersion(): passed in so a dismiss or restart (which only changes this
+   * module's memory) re-decides; the React Compiler memoizes this call on its inputs.
+   */
+  revision: number
 }): CloudRunningStrip | null {
   const { paneKey, entry, accounts } = args
   const remembered = signedOut.get(paneKey)
@@ -192,10 +197,12 @@ export function useWorkspaceUsesAccount(
   retryToken: number
 ): boolean | null {
   const key = runtimeEnvironmentId && agent ? `${runtimeEnvironmentId}:${agent}` : null
-  useSyncExternalStore(
+  // Through the store snapshot, never a plain map read: the React Compiler would memoize that read
+  // on `key` and keep the first (unread) answer for good.
+  const usesAccount = useSyncExternalStore(
     subscribe,
-    () => version,
-    () => version
+    () => readUsesAccount(key),
+    () => null
   )
   useEffect(() => {
     if (!wanted || !key || !runtimeEnvironmentId || !agent) {
@@ -224,6 +231,10 @@ export function useWorkspaceUsesAccount(
       .then((result) => settle(result.ok ? workspaceUsesAccount(result.value, agent) : null))
       .catch(() => settle(null))
   }, [wanted, key, runtimeEnvironmentId, agent, retryToken])
+  return usesAccount
+}
+
+function readUsesAccount(key: string | null): boolean | null {
   const read = key ? sourceReads.get(key) : undefined
   return read && read !== 'pending' ? read.usesAccount : null
 }

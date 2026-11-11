@@ -50,7 +50,7 @@ export function CloudRunningStripPortal({
 }): React.JSX.Element | null {
   const t = useTranslate()
   const paneKey = makePaneKey(tabId, pane.leafId)
-  useCloudRunningSignoutVersion()
+  const revision = useCloudRunningSignoutVersion()
   const ptyId = useAppStore(
     (state) => state.terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId?.[pane.leafId] ?? null
   )
@@ -95,7 +95,8 @@ export function CloudRunningStripPortal({
     accounts,
     held,
     now: orcaCloudAgentAccountsLoadedAt(),
-    usesAccount
+    usesAccount,
+    revision
   })
   if (!strip) {
     return null
