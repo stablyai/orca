@@ -123,7 +123,10 @@ import {
   createAgentSessionCreateOperation,
   withAgentSessionCreateOperationId
 } from '@/runtime/hosted-terminals/creation/agent-launch/agent-session-create-operation'
-import { replaceFitOverridePtyId, setFitOverride } from '@/lib/pane-manager/mobile-fit-overrides'
+import {
+  replaceFitOverridePtyId,
+  setFitOverride
+} from '@/lib/pane-manager/terminal-fit/mobile-fit-overrides'
 import { replaceDriverPtyId, setDriverForPty } from '@/lib/pane-manager/mobile-driver-state'
 import {
   isWebTerminalSurfaceTabId,
@@ -4150,6 +4153,8 @@ export function createRemoteRuntimePtyTransport(
     ownsRecovery() {
       return !destroyed && !terminalEnded && recoveryBlocksIo()
     },
+
+    isHoldingInput: shouldHoldInput,
 
     hasUndeliveredInput() {
       return (

@@ -186,7 +186,8 @@ export async function executeWorktreeRemoval(
         canonicalWorktreePath,
         repo,
         undefined,
-        localWorktreeGitOptions
+        localWorktreeGitOptions,
+        { identity: { worktreeId: args.worktreeId } }
       )
       archiveHookOverride = gateWorktreeRemovalOnArchiveHook({
         worktreePath: canonicalWorktreePath,

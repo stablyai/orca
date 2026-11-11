@@ -187,6 +187,7 @@ export type WorktreeSlice = {
       heldChatAttachments?: PendingWorktreeCreation['heldChatAttachments']
       heldChatSkills?: PendingWorktreeCreation['heldChatSkills']
       chatInputHandedOff?: boolean
+      chatHandedOffAt?: number
     }
   ) => void
   /** Drop pending/active creation; VM cleanup applies to cancellation/dismissal, never successful handoff. */

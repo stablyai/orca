@@ -5,7 +5,7 @@ import type { Store } from '../persistence/loading-store/store'
 import {
   createWorkerMaintenanceFixture,
   maintenanceBarrier
-} from '../persistence/loading-store/profile-state-maintenance-fixture'
+} from '../persistence/loading-store/profile-writing/profile-state-maintenance-fixture'
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({

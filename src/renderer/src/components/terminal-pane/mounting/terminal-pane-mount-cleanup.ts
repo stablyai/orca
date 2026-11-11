@@ -1,3 +1,4 @@
+import { getTerminalNoticeLifetime } from '../provider-notices/terminal-notice-lifetime'
 import { captureNotificationTransportOwner } from '@/attention/notification-subject-owner'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { TerminalPaneLifecycleRefs } from './use-terminal-pane-lifecycle-refs'
@@ -78,7 +79,10 @@ export function cleanupTerminalPaneMount(args: {
       const binding = panePtyBindingsRef.current.get(pane.id) as
         | { isUntouchedFreshSpawnPty?: (candidate: string) => boolean }
         | undefined
+      const noticePtyId =
+        ptyId ?? currentStore.terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId?.[pane.leafId]
       return {
+        noticeLifetime: noticePtyId ? getTerminalNoticeLifetime(noticePtyId) : undefined,
         ptyId,
         workspaceOwner: captureNotificationTransportOwner(paneTransportsRef.current.get(pane.id)),
         paneId: pane.id,

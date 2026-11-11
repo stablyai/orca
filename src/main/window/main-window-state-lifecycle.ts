@@ -1,7 +1,11 @@
 import { app, type BrowserWindow, type Event } from 'electron'
 import type { Store } from '../persistence/loading-store/store'
 import { uiZoomFactorFromLevel } from '../../shared/ui-zoom-level'
-import { isWindowlessLaunch, showWindowWithoutStealingFocus } from './foreground-activation-policy'
+import {
+  isBackgroundLaunch,
+  isWindowlessLaunch,
+  showWindowWithoutStealingFocus
+} from './foreground-activation-policy'
 import { MIN_HEIGHT, MIN_WIDTH, syncTrafficLightPosition } from './main-window-visual-lifecycle'
 
 export type MainWindowStateLifecycle = {
@@ -16,9 +20,10 @@ export function installMainWindowStateLifecycle(args: {
   mainWindow: BrowserWindow
   revealOnDidFinishLoad: boolean
   savedMaximized: boolean
+  savedFullScreen: boolean
   store: Store | null
 }): MainWindowStateLifecycle {
-  const { mainWindow, revealOnDidFinishLoad, savedMaximized, store } = args
+  const { mainWindow, revealOnDidFinishLoad, savedMaximized, savedFullScreen, store } = args
   mainWindow.webContents.on('dom-ready', () => {
     const level = store?.getUI().uiZoomLevel ?? 0
     mainWindow.webContents.setZoomLevel(level)
@@ -66,6 +71,10 @@ export function installMainWindowStateLifecycle(args: {
       mainWindow.maximize()
     }
     showWindowWithoutStealingFocus(mainWindow)
+    // Fullscreen needs a shown window; after maximize so leaving it returns there. Background launches must not take a Space.
+    if (savedFullScreen && !isBackgroundLaunch()) {
+      mainWindow.setFullScreen(true)
+    }
   }
   mainWindow.on('ready-to-show', revealInitialWindow)
   if (revealOnDidFinishLoad === true) {
@@ -129,6 +138,10 @@ export function installMainWindowStateLifecycle(args: {
       return
     }
     mainWindow.webContents.send('window:maximize-changed', false)
+    // macOS emits unmaximize when a launch-maximized window enters fullscreen; keep the pre-fullscreen state.
+    if (mainWindow.isFullScreen()) {
+      return
+    }
     const bounds = mainWindow.getBounds()
     // Teardown unmaximize can emit minimum bounds; apply the same persistence guard.
     if (bounds.width <= MIN_WIDTH || bounds.height <= MIN_HEIGHT) {
@@ -140,10 +153,16 @@ export function installMainWindowStateLifecycle(args: {
   })
 
   mainWindow.on('enter-full-screen', () => {
+    if (!windowClosing) {
+      store?.updateUI({ windowFullScreen: true })
+    }
     mainWindow.webContents.send('window:fullscreen-changed', true)
   })
 
   mainWindow.on('leave-full-screen', () => {
+    if (!windowClosing) {
+      store?.updateUI({ windowFullScreen: false })
+    }
     mainWindow.webContents.send('window:fullscreen-changed', false)
   })
 

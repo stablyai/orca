@@ -1,6 +1,5 @@
 import React from 'react'
-import type { ActiveRightSidebarTab } from '../../../../shared/ui-chrome-types'
-import type { ActivityBarPosition } from '@/store/slices/editor/types/open-file'
+import type { ActiveRightSidebarTab, ActivityBarPosition } from '../../../../shared/ui-chrome-types'
 import type { CheckStatus as CoarseCheckStatus } from '../../../../shared/github/pull-request-types'
 type CheckStatus = CoarseCheckStatus | 'cancelled'
 import { cn } from '@/lib/class-names'

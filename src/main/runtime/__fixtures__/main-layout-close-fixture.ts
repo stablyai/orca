@@ -7,7 +7,7 @@ import type {
 } from '../../../shared/workspace-layout/workspace-layout-command-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import type { DurableProfileStateMutation } from '../../persistence/loading-store/store-runtime-state'
-import { resolveHostId } from '../../persistence/loading-store/session-host-partitions'
+import { resolveHostId } from '../../persistence/loading-store/workspace-sessions/session-host-partitions'
 import { applyCommandToSession } from '../../persistence/terminal-topology/terminal-pane-admission'
 import {
   isTerminalClose,

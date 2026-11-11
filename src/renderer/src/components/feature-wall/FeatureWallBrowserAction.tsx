@@ -5,7 +5,6 @@ import { useOnboardingSkillRuntime } from '@/hooks/skills/runtime/use-onboarding
 import { FeatureSetupInlineTerminal } from '../onboarding/FeatureSetupInlineTerminal'
 import { buildAgentFeatureSkillInstallCommand } from '@/lib/skills/installation/agent-feature-install-commands'
 import { buildSkillCommandForRuntime } from '../../lib/skills/runtime/skill-runtime-command'
-import type { OnboardingFeatureSetupRuntimeContext } from '../onboarding/onboarding-feature-setup-runtime'
 import { useCallback, useState } from 'react'
 import { ArrowUpRight, Download, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -22,14 +21,15 @@ import {
 import { BundledSkillInstallStatus } from '../skills/setup/BundledSkillInstallStatus'
 import {
   onboardingFeatureSetupRunTelemetry,
-  runOnboardingFeatureSetup,
-  type OnboardingFeatureSetupSelection
+  runOnboardingFeatureSetup
 } from '../onboarding/onboarding-feature-setup'
+import type { OnboardingFeatureSetupSelection } from '../onboarding/onboarding-feature-setup'
 import {
   promptForSetupGuideProject,
   useSetupTargetWorktree
 } from './FeatureWallSetupWorkflowActions'
-import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
+import { getClientCreationActionPolicy } from '@/lib/workspace/creation/surface-policy/client-creation-action-policy'
+import type { OnboardingFeatureSetupRuntimeContext } from '../onboarding/onboarding-feature-setup-runtime'
 
 export function BrowserAction(props: { done: boolean }): React.JSX.Element {
   const t = useTranslate()

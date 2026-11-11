@@ -182,7 +182,7 @@ import {
   openWorktreeCreatePathClaim,
   type WorktreeCreatePathClaim
 } from '../workspaces/creation/worktree-create-in-flight'
-import { isWslMoveWorktreeBlocked } from '../persistence/moving-wsl-projects/wsl-move-background-backoff'
+import { isWslMoveWorktreeBlocked } from '../persistence/moving-wsl-projects/orchestration/wsl-move-background-backoff'
 import {
   hostWorktreeTarget,
   type HostWorktreeTarget

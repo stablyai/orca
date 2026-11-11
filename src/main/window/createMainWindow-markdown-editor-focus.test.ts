@@ -15,7 +15,7 @@ vi.mock('../browser/guest-lifecycle/manager/browser-manager', async () =>
 
 import { createMainWindow } from './createMainWindow'
 import { ipcMain } from 'electron'
-import { resetExpectedTeardownStateForTest } from '../crash-reporting/expected-teardown-state'
+import { resetExpectedTeardownStateForTest } from '../crash-reporting/process-exits/expected-teardown-state'
 import {
   browserWindowMock,
   buildFromTemplateMock,

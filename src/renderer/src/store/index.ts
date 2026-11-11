@@ -1,3 +1,4 @@
+import { registerTerminalNoticeShutdownReader } from '@/components/terminal-pane/pty-transport/delivery/pty-notice-exit'
 import { registerStructuredSelectionCatalogStore } from '@/lib/agent-session/options/structured-agent-session-selection-controller'
 import { canOfferHttpLinkGroupAction } from '@/lib/browser/navigation/http-link-in-group-availability'
 import { create, type StateCreator } from 'zustand'
@@ -160,6 +161,10 @@ export const useAppStore = create<AppState>()(
     ),
     import.meta.env.DEV || e2eConfig.exposeStore
   )
+)
+
+registerTerminalNoticeShutdownReader(
+  (ptyId) => (useAppStore.getState().pendingPtyShutdownIds[ptyId] ?? 0) > 0
 )
 
 for (const install of STORE_OBSERVER_INSTALLERS) {

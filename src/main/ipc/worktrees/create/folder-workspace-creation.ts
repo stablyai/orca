@@ -8,6 +8,11 @@ import type { CreateWorktreeArgsWithSystemProvenance } from '../ipc-context-sche
 import { getFolderWorkspaceInstanceId, mergeFolderWorkspace } from '../folder-workspace-model'
 import { resolveWorktreeCreateDisplayNameRequest } from '../../worktree-display-name'
 import { hostWorktreeTargetForRepo } from '../../../persistence/host-qualified-worktree-meta'
+import {
+  isPreparedFolderSetup,
+  prepareFolderWorktreeSetup
+} from '../../../runtime/workspaces/creation/runtime-folder-worktree-setup'
+import { getLocalProjectWorktreeGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
 
 /** Metadata a new folder-project workspace gets, shared by folder workspaces and Perforce copies. */
 export function folderWorkspaceCreateMeta(
@@ -65,16 +70,34 @@ export function folderWorkspaceCreateMeta(
   }
 }
 
-export function createFolderWorkspace(
+export async function createFolderWorkspace(
   args: CreateWorktreeArgsWithSystemProvenance,
   repo: Repo,
   store: Store
-): CreateWorktreeResult {
+): Promise<CreateWorktreeResult> {
+  const now = Date.now()
   const instanceId = randomUUID()
   const worktreeId = getFolderWorkspaceInstanceId(repo, instanceId)
   const meta = store.setWorktreeMeta(hostWorktreeTargetForRepo(worktreeId, repo), {
     instanceId,
-    ...folderWorkspaceCreateMeta(args, repo, store, Date.now())
+    ...folderWorkspaceCreateMeta(args, repo, store, now)
   })
-  return { worktree: mergeFolderWorkspace(repo, worktreeId, meta) }
+  const worktree = mergeFolderWorkspace(repo, worktreeId, meta)
+  // The window opens the Setup tab from `setup`, as for a new worktree.
+  const prepared = await prepareFolderWorktreeSetup({
+    // A desktop create is the user's act, as for a new worktree.
+    request: { ...args, wslUserAct: true },
+    repo,
+    worktree,
+    settings: store.getSettings(),
+    runtimeTarget: () => getLocalProjectWorktreeGitOptions(store, repo),
+    shouldUseSetupRunner: true
+  })
+  const setup = isPreparedFolderSetup(prepared) ? prepared : undefined
+  return {
+    worktree,
+    ...(setup?.setup ? { setup: setup.setup } : {}),
+    ...(setup?.setupTrustMismatch ? { setupTrustMismatch: setup.setupTrustMismatch } : {}),
+    ...(prepared?.warning ? { warning: prepared.warning } : {})
+  }
 }
