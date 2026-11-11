@@ -13,6 +13,8 @@ const DEFAULT_MAX_FILES = 64
 const NEWLINE = 0x0a
 
 type TrackedFile = {
+  /** Device and inode: a file replaced at the same path is read again from the start. */
+  identity: string
   offset: number
   partial: Buffer[]
   partialBytes: number
@@ -20,8 +22,9 @@ type TrackedFile = {
   facts: ClaudeSessionStatusFacts
 }
 
-function trackFile(): TrackedFile {
+function trackFile(identity: string): TrackedFile {
   return {
+    identity,
     offset: 0,
     partial: [],
     partialBytes: 0,
@@ -86,10 +89,11 @@ export function createClaudeSessionStatusReader(maxFiles = DEFAULT_MAX_FILES): {
       return null
     }
     try {
-      const { size } = await handle.stat()
+      const { size, dev, ino } = await handle.stat()
+      const identity = `${dev}:${ino}`
       let file = files.get(filePath)
-      if (!file || size < file.offset) {
-        file = trackFile()
+      if (!file || file.identity !== identity || size < file.offset) {
+        file = trackFile(identity)
         files.set(filePath, file)
       }
       const buffer = Buffer.allocUnsafe(READ_CHUNK_BYTES)
