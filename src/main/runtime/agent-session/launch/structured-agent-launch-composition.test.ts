@@ -42,7 +42,13 @@ describe('structured launch checkout admission', () => {
         env: {},
         inheritedEnvToDelete: []
       }))
-      const identity = { sessionId: 'chat' } as AgentSessionJournalIdentity
+      const identity: AgentSessionJournalIdentity = {
+        sessionId: 'chat',
+        workspaceId: 'repo::/project/.bare',
+        hostId: 'local',
+        agent: definition.agent,
+        providerHandle: null
+      }
       await expect(
         composeStructuredLaunch(definition, sources, part)({ identity, spawnToken: 'test-spawn' })
       ).rejects.toThrow('bare storage')

@@ -30,12 +30,13 @@ const repo: Repo = {
   badgeColor: 'blue',
   addedAt: 1
 }
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: precheck only passes this store to mocked scan and Git option readers.
-const storeFor = (entry: Automation) =>
-  ({
+const storeFor = (entry: Automation) => {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: precheck only reads these members and passes the store to mocked option readers.
+  return {
     listAutomations: () => [entry],
     listAutomationRuns: () => [{ id: 'run', trigger: 'scheduled' }]
-  }) as Store
+  } as Store
+}
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this entry point reads only these automation fields.
 const automation = {
   id: 'automation',

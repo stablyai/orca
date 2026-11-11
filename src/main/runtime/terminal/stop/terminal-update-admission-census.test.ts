@@ -136,6 +136,7 @@ it('launch classification never starts or waits for full scans at fleet scale', 
   const repo = store.getRepos()[0]!
   const key = `${repo.id}\0local`
   const scan = vi.spyOn(
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the spy observes the existing protected runtime method without changing its implementation.
     runtime as unknown as { listRepoWorktreesForResolution: (...args: unknown[]) => unknown },
     'listRepoWorktreesForResolution'
   )
