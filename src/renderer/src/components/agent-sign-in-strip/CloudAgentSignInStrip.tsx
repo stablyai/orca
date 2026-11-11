@@ -7,6 +7,7 @@ import {
   CircleAlert,
   CircleCheck,
   CircleDashed,
+  Info,
   Loader2,
   MoreHorizontal,
   TriangleAlert,
@@ -99,6 +100,9 @@ function StatusSlot({ status }: { status: CloudStripStatus }): React.JSX.Element
   switch (status) {
     case 'need':
       return <CircleDashed aria-hidden className={cn(base, 'text-muted-foreground')} />
+    // Not set up yet (or pasting the setup token): neutral, like the agent sheet; nothing is loading.
+    case 'setup':
+      return <Info aria-hidden className={cn(base, 'text-muted-foreground')} />
     case 'warning':
       return <TriangleAlert aria-hidden className={cn(base, 'text-status-warning-text')} />
     case 'busy':
@@ -137,6 +141,10 @@ export function CloudAgentSignInStrip({
   const sectionRef = useRef<HTMLElement | null>(null)
   const width = useLiveStripWidth(sectionRef, initialWidth)
   const compact = width === 'compact'
+  // The detail leaves the line when there's no room for it beside the title: below 360 px, and on the
+  // paste step under ~560 px (its input takes the space). It stays the region's description and the
+  // title's tooltip.
+  const quietDetail = compact || (model.paste !== null && width === 'tiny')
   const t = useTranslate()
   const titleId = React.useId()
   const detailId = React.useId()
@@ -164,17 +172,21 @@ export function CloudAgentSignInStrip({
     >
       <StatusSlot status={model.status} />
       <div data-strip-text className="flex min-w-0 flex-col">
-        <span id={titleId} className="truncate text-[13px] leading-5 font-medium">
-          {compact ? (model.compactTitle ?? model.title) : model.title}
-        </span>
-        {/* Below 360 px the detail leaves the line but stays the region's description. */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span id={titleId} className="truncate text-[13px] leading-5 font-medium">
+              {compact ? (model.compactTitle ?? model.title) : model.title}
+            </span>
+          </TooltipTrigger>
+          {quietDetail && model.detail ? <TooltipContent>{model.detail}</TooltipContent> : null}
+        </Tooltip>
         <Tooltip>
           <TooltipTrigger asChild>
             <span
               id={detailId}
               className={cn(
                 'truncate text-xs leading-4 text-muted-foreground',
-                compact && 'sr-only'
+                quietDetail && 'sr-only'
               )}
             >
               {model.detail}

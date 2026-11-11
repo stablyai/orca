@@ -67,7 +67,9 @@ export function cloudRestartAttemptModel(
       title,
       compactTitle: title,
       // Neutral while it runs: a recorded session may turn out to have no conversation (RA-11e).
-      detail: attempt.resumable ? '' : t('agentSignInStrip.renewedFresh', 'Starts a new conversation.'),
+      detail: attempt.resumable
+        ? ''
+        : t('agentSignInStrip.renewedFresh', 'Starts a new conversation.'),
       // The spinner and the words are the whole state: no button to click twice.
       primary: null,
       noClose: true,

@@ -168,3 +168,20 @@ test('RA-11 Restart: "Restarting Claude…" is the spinner and words only; a fai
   await expect(strip.getByRole('button', { name: 'Try again' })).toBeEnabled()
   await expect(strip.getByRole('button', { name: 'Dismiss' })).toBeVisible()
 })
+
+test('PC-3b: not set up is neutral (no loading ring), and a narrow paste strip keeps one line', async ({
+  page
+}) => {
+  await page.goto('/fixtures.html?id=agent-sign-in-strip/CloudAgentSignInStrip:notSetUp')
+  await expect(page.locator('html')).toHaveAttribute('data-fixture-state', 'ready')
+  const strip = page.locator('[data-cloud-sign-in-strip]')
+  await expect(strip.locator('svg.lucide-info')).toHaveCount(1)
+  await expect(strip.locator('svg.lucide-circle-dashed')).toHaveCount(0)
+  await page.goto('/fixtures.html?id=agent-sign-in-strip/CloudAgentSignInStrip:notSetUpPasteTiny')
+  await expect(page.locator('html')).toHaveAttribute('data-fixture-state', 'ready')
+  const detail = strip.locator('[data-strip-text] > span').nth(1)
+  // Not on the line (no truncated "never to a sand…"), still the region's description.
+  await expect(detail).toHaveClass(/sr-only/)
+  await expect(detail).toContainText('never to a sandbox')
+  await expect(strip.locator('svg.lucide-info')).toHaveCount(1)
+})
