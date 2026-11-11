@@ -32,16 +32,30 @@ export abstract class OrcaRuntimeWithApplyMobileDisplayMode extends OrcaRuntimeW
           }
         }
       } else {
-        // Nothing was fitted or held — emit a mode-change resize event so
-        // the mobile client still learns the toggle landed.
+        const renderer = this.lastRendererSizes.get(ptyId)
         const size = this.getTerminalSize(ptyId)
-        this.notifyTerminalResize(ptyId, {
-          cols: size?.cols ?? 0,
-          rows: size?.rows ?? 0,
-          displayMode: 'desktop',
-          reason: 'mode-change',
-          seq: this.layouts.get(ptyId)?.seq
-        })
+        if (renderer && size && (size.cols !== renderer.cols || size.rows !== renderer.rows)) {
+          this.freshSubscribeGuard.add(ptyId)
+          try {
+            await this.enqueueLayout(ptyId, {
+              kind: 'desktop',
+              cols: renderer.cols,
+              rows: renderer.rows
+            })
+          } finally {
+            this.freshSubscribeGuard.delete(ptyId)
+          }
+        } else {
+          // Nothing was fitted or held — emit a mode-change resize event so
+          // the mobile client still learns the toggle landed.
+          this.notifyTerminalResize(ptyId, {
+            cols: size?.cols ?? 0,
+            rows: size?.rows ?? 0,
+            displayMode: 'desktop',
+            reason: 'mode-change',
+            seq: this.layouts.get(ptyId)?.seq
+          })
+        }
       }
     } else {
       // Auto fits only a measured subscriber that has not yet been fitted.

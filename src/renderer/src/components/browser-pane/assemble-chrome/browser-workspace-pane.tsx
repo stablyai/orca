@@ -31,6 +31,10 @@ import {
   isBrowserPageMountAdmitted,
   useAnyBrowserPageMountAdmission
 } from '../host-guest/browser-page-mount-admission'
+import {
+  reclaimAllMobileSurfacesToDesktop,
+  scheduleRestoredTerminalRefit
+} from '../../terminal-pane/viewport/terminal-fit-restore'
 
 export default function BrowserPane({
   browserTab,
@@ -112,6 +116,24 @@ export default function BrowserPane({
       throw new Error('Could not reclaim browser control')
     }
   }, [activeBrowserPageId])
+
+  const reclaimAllForDesktop = useCallback(async (): Promise<void> => {
+    const { restored, hadTargets } = await reclaimAllMobileSurfacesToDesktop(
+      {
+        activeRuntimeEnvironmentId:
+          activeRuntimeEnvironmentId ??
+          useAppStore.getState().settings?.activeRuntimeEnvironmentId ??
+          null
+      },
+      activeBrowserPageId ? [activeBrowserPageId] : []
+    )
+    if (!restored && hadTargets) {
+      throw new Error('Could not reclaim mobile surfaces')
+    }
+    if (restored || hadTargets) {
+      scheduleRestoredTerminalRefit()
+    }
+  }, [activeBrowserPageId, activeRuntimeEnvironmentId])
 
   if (activeBrowserRuntimeEnvironmentId) {
     const environmentHandle =
@@ -213,6 +235,7 @@ export default function BrowserPane({
               <BrowserMobileDriverOverlay
                 driver={activeBrowserDriver}
                 onTakeBack={reclaimActiveBrowserForDesktop}
+                onTakeBackAll={reclaimAllForDesktop}
               />
             </div>
           )}

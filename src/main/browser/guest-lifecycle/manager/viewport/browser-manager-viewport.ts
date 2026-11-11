@@ -68,6 +68,14 @@ export abstract class BrowserManagerViewport extends BrowserManagerDevTools {
     }
   }
 
+  async restoreViewportAfterScreencast(browserTabId: string): Promise<boolean> {
+    const preset = this.viewportPresetByTabId.get(browserTabId)?.requested ?? null
+    if (!preset) {
+      return false
+    }
+    return await this.setViewportOverride(browserTabId, preset)
+  }
+
   async setAnnotationViewportBridge(
     browserTabId: string,
     options: BrowserAnnotationViewportBridgeOptions,

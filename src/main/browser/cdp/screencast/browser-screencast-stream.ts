@@ -80,7 +80,12 @@ export async function startBrowserScreencast(
     return changed
   }
 
-  const deviceMetrics = createBrowserScreencastDeviceMetrics(webContents, dbg, options)
+  const deviceMetrics = createBrowserScreencastDeviceMetrics(
+    webContents,
+    dbg,
+    options,
+    () => guestViewSize
+  )
   const framePacer = createBrowserScreencastFramePacer({ dbg, options, isClosed, isStopping })
   const snapshotCapture = createBrowserScreencastSnapshotCapture({
     webContents,

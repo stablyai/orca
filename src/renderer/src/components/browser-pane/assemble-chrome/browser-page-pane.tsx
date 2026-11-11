@@ -9,11 +9,9 @@ import '../../../../../shared/constants'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/browser/browser-blank-page'
 import { normalizeExternalBrowserUrl } from '../../../../../shared/browser-url'
 import { getLiveBrowserUrl } from '../describe-page/live-browser-url-registry'
-import { getBrowserViewportPreset } from '../../../../../shared/browser-viewport-presets'
 import {
   ensureBrowserPageViewport,
-  scrollBrowserPageViewport,
-  setBrowserPageViewportPresetSize
+  scrollBrowserPageViewport
 } from '../host-guest/browser-page-viewport'
 import { isBrowserPagePanePaintable } from '../host-guest/browser-page-paintability'
 import { getShareableBrowserArtifactFile } from '../describe-page/browser-artifact-upload'
@@ -41,6 +39,7 @@ import { useBrowserPageWebviewUrlSync } from '../navigate/use-browser-page-webvi
 import { useBrowserPageZoomFeedback } from '../host-guest/use-browser-page-zoom-feedback'
 import { useBrowserPageViewportScrollReporting } from '../host-guest/use-browser-page-viewport-scroll-reporting'
 import { BrowserPageDevToolsDock } from '../devtools-dock/BrowserDevToolsDock'
+import { useBrowserPageRemoteDriveRestore } from '../host-guest/use-browser-page-remote-drive-restore'
 import { useBrowserPageViewportSizeFeedback } from '../host-guest/use-browser-page-viewport-size-feedback'
 
 export function BrowserPagePane({
@@ -71,13 +70,6 @@ export function BrowserPagePane({
   useLayoutEffect(() => {
     containerRef.current = pageViewportContainer
   }, [pageViewportContainer])
-  useLayoutEffect(() => {
-    const preset = getBrowserViewportPreset(browserTab.viewportPresetId ?? null)
-    setBrowserPageViewportPresetSize(
-      browserTab.id,
-      preset ? { width: preset.width, height: preset.height } : null
-    )
-  }, [browserTab.id, browserTab.viewportPresetId])
   useBrowserPageViewportScrollReporting(
     browserTab.id,
     pageViewportScroller,
@@ -98,6 +90,13 @@ export function BrowserPagePane({
   }, [browserTab.id, pageViewportScroller])
   const chromeHeaderRef = useRef<HTMLDivElement | null>(null)
   const webviewRef = useRef<Electron.WebviewTag | null>(null)
+  useBrowserPageRemoteDriveRestore({
+    browserTabId: browserTab.id,
+    viewportPresetId: browserTab.viewportPresetId ?? null,
+    isMobileDriven,
+    isRemotelyViewed,
+    webviewRef
+  })
   const addressBarInputRef = useRef<HTMLInputElement | null>(null)
   const dismissAddressBarSuggestionsRef = useRef<(() => void) | null>(null)
   const addressBarValueRef = useRef(browserTab.url)

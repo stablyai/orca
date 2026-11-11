@@ -94,6 +94,16 @@ export function getBrowserMobileDrivenPageIds(
   return mobileDrivenPageIds
 }
 
+export function getMobileDrivenBrowserPageIds(): string[] {
+  const mobileDrivenPageIds: string[] = []
+  for (const [browserPageId, driver] of driverByBrowserPageId) {
+    if (driver.kind === 'mobile') {
+      mobileDrivenPageIds.push(browserPageId)
+    }
+  }
+  return mobileDrivenPageIds
+}
+
 export function useBrowserMobileDriverForAny(
   browserPageIds: readonly (string | null | undefined)[]
 ): boolean {

@@ -4,7 +4,20 @@ import {
   getRemoteRuntimePtyEnvironmentId,
   getRemoteRuntimeTerminalHandle
 } from '@/runtime/hosted-terminals/identity/remote-runtime-pty-owner'
-import { restoreTerminalFitToDesktop, restoreTerminalFitsToDesktop } from './terminal-fit-restore'
+import { setDriverForBrowserPage } from '@/lib/pane-manager/browser-mobile-driver-state'
+import { hydrateDrivers } from '@/lib/pane-manager/mobile-driver-state'
+import { setFitOverride } from '@/lib/pane-manager/mobile-fit-overrides'
+import {
+  registerLivePaneManager,
+  registerLivePanePtySizeReasserter,
+  unregisterLivePaneManager
+} from '@/lib/pane-manager/pane-manager-registry'
+import {
+  reclaimAllMobileSurfacesToDesktop,
+  restoreTerminalFitToDesktop,
+  restoreTerminalFitsToDesktop,
+  scheduleRestoredTerminalRefit
+} from './terminal-fit-restore'
 
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
   callRuntimeRpc: vi.fn()
@@ -16,17 +29,24 @@ vi.mock('@/runtime/hosted-terminals/identity/remote-runtime-pty-owner', () => ({
 }))
 
 const restoreTerminalFit = vi.fn()
+const reclaimBrowserForDesktop = vi.fn()
 
 describe('terminal-fit-restore', () => {
   beforeEach(() => {
     restoreTerminalFit.mockReset()
+    reclaimBrowserForDesktop.mockReset()
+    hydrateDrivers([])
+    setFitOverride('pty-agent', 'desktop-fit', 0, 0)
+    setDriverForBrowserPage('browser-page-1', { kind: 'idle' })
+    setDriverForBrowserPage('browser-page-2', { kind: 'idle' })
     vi.mocked(callRuntimeRpc).mockReset()
     vi.mocked(getRemoteRuntimePtyEnvironmentId).mockReset()
     vi.mocked(getRemoteRuntimeTerminalHandle).mockReset()
     vi.stubGlobal('window', {
       api: {
         runtime: {
-          restoreTerminalFit
+          restoreTerminalFit,
+          reclaimBrowserForDesktop
         }
       }
     })
@@ -100,6 +120,71 @@ describe('terminal-fit-restore', () => {
       await expect(pending).resolves.toBe(false)
       expect(vi.getTimerCount()).toBe(0)
     } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('reclaims both held/split mobile terminals and mobile-driven browser pages together', async () => {
+    vi.mocked(getRemoteRuntimeTerminalHandle).mockReturnValue(null)
+    setFitOverride('pty-agent', 'mobile-fit', 48, 24)
+    hydrateDrivers([{ ptyId: 'pty-shell-split', driver: { kind: 'mobile', clientId: 'phone-1' } }])
+    setDriverForBrowserPage('browser-page-1', { kind: 'mobile', clientId: 'phone-1' })
+
+    restoreTerminalFit.mockResolvedValue({ restored: true })
+    reclaimBrowserForDesktop.mockResolvedValue({ reclaimed: true })
+
+    const outcome = await reclaimAllMobileSurfacesToDesktop(undefined, ['browser-page-2'])
+
+    expect(outcome).toEqual({
+      restored: true,
+      hadTargets: true,
+      restoredTerminals: true,
+      reclaimedBrowsers: true
+    })
+    expect(restoreTerminalFit).toHaveBeenCalledTimes(2)
+    expect(restoreTerminalFit).toHaveBeenCalledWith('pty-agent')
+    expect(restoreTerminalFit).toHaveBeenCalledWith('pty-shell-split')
+    expect(reclaimBrowserForDesktop).toHaveBeenCalledTimes(2)
+    expect(reclaimBrowserForDesktop).toHaveBeenCalledWith('browser-page-1')
+    expect(reclaimBrowserForDesktop).toHaveBeenCalledWith('browser-page-2')
+  })
+
+  it('reasserts terminal PTY sizes after main resize-suppression expires on restore refit', async () => {
+    vi.useFakeTimers()
+    const fitAllPanes = vi.fn()
+    const refreshAllPanes = vi.fn()
+    const reassertPtySize = vi.fn()
+    const manager = {
+      resetWebglTextureAtlases: vi.fn(),
+      fitAllPanes,
+      refreshAllPanes
+    }
+    const rafCallbacks: FrameRequestCallback[] = []
+    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
+      rafCallbacks.push(cb)
+      return rafCallbacks.length
+    })
+    registerLivePaneManager(manager)
+    const unregisterReasserter = registerLivePanePtySizeReasserter(reassertPtySize)
+
+    try {
+      scheduleRestoredTerminalRefit()
+      for (const cb of rafCallbacks) {
+        cb(16)
+      }
+      expect(fitAllPanes).toHaveBeenCalledTimes(1)
+      expect(reassertPtySize).not.toHaveBeenCalled()
+
+      await vi.advanceTimersByTimeAsync(100)
+      expect(fitAllPanes).toHaveBeenCalledTimes(2)
+      expect(reassertPtySize).not.toHaveBeenCalled()
+
+      await vi.advanceTimersByTimeAsync(450)
+      expect(fitAllPanes).toHaveBeenCalledTimes(3)
+      expect(reassertPtySize).toHaveBeenCalledTimes(1)
+    } finally {
+      unregisterReasserter()
+      unregisterLivePaneManager(manager)
       vi.useRealTimers()
     }
   })
