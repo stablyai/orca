@@ -67,13 +67,8 @@ describe('Jcode swarm workers sharing the coordinator pane', () => {
     state = createHookListenerState()
   })
 
-  afterEach(() => {
-    vi.unstubAllEnvs()
-    rmSync(home, { recursive: true, force: true })
-  })
-
-  it("keeps the coordinator's row while its inline worker starts and finishes a turn", async () => {
-    // Jcode saves `id` then `parent_id` first; the worker is saved before it runs.
+  // Jcode saves `id` then `parent_id` first; the worker is saved before it runs.
+  function writeSessionFiles(): void {
     for (const [id, parentId] of [
       [ROOT, null],
       [WORKER, ROOT]
@@ -83,6 +78,15 @@ describe('Jcode swarm workers sharing the coordinator pane', () => {
         JSON.stringify({ id, parent_id: parentId, title: 'captured', messages: [] })
       )
     }
+  }
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    rmSync(home, { recursive: true, force: true })
+  })
+
+  it("keeps the coordinator's row while its inline worker starts and finishes a turn", async () => {
+    writeSessionFiles()
 
     const results: unknown[] = []
     for (const payload of capturedHooks) {
@@ -100,5 +104,51 @@ describe('Jcode swarm workers sharing the coordinator pane', () => {
     const row = state.lastStatusByPaneKey.get(PANE_KEY)
     expect(row?.payload.state).toBe('working')
     expect(row?.providerSession?.id).toBe(ROOT)
+  })
+  it("shows an inline worker's permission request on the coordinator's row until it settles", async () => {
+    writeSessionFiles()
+    const run = async (payload: Record<string, string>) => {
+      await checkHookOwnerPresence(
+        state,
+        'jcode',
+        { paneKey: PANE_KEY, payload },
+        'production',
+        () => Promise.resolve()
+      )
+      return normalizeAndAccept(state, 'jcode', payload)
+    }
+    for (const payload of capturedHooks.slice(0, 5)) {
+      await run(payload)
+    }
+    // request_permission's schema (jcode tool/ambient.rs) in the captured pre_tool/post_tool shape.
+    const permission = {
+      cwd: CWD,
+      session_id: WORKER,
+      tool_call_id: 'toolu_01PermissionRequestWorker',
+      tool_input:
+        '{"action":"push","description":"Push the worker branch","rationale":"The fix is ready","wait":true}',
+      tool_name: 'request_permission'
+    }
+
+    const waiting = await run({ ...permission, event: 'pre_tool' })
+    expect(waiting?.payload).toMatchObject({
+      state: 'waiting',
+      toolName: 'request_permission',
+      interactivePrompt:
+        '{"action":"push","description":"Push the worker branch","rationale":"The fix is ready","wait":true}'
+    })
+    expect(waiting?.providerSession?.id).toBe(ROOT)
+
+    const answered = await run({ ...permission, event: 'post_tool', status: 'ok' })
+    expect(answered?.payload.state).toBe('working')
+    expect(answered?.payload.interactivePrompt).toBeUndefined()
+    expect(answered?.providerSession?.id).toBe(ROOT)
+    expect(await run(capturedHooks[5])).toBeNull()
+
+    // Answered after the coordinator's turn ended: the row rests again without a second "finished".
+    await run({ cwd: CWD, event: 'turn_end', session_id: ROOT, status: 'ok' })
+    expect((await run({ ...permission, event: 'pre_tool' }))?.payload.state).toBe('waiting')
+    const rested = await run({ ...permission, event: 'post_tool', status: 'ok' })
+    expect(rested?.payload).toMatchObject({ state: 'done', sessionBoundary: true })
   })
 })
