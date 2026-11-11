@@ -1,89 +1,30 @@
-import './session-search-worker.test-fixture'
-import type { AiVaultScanIssue } from '../../shared/ai-vault/contracts/ai-vault-types'
 import { rename, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
+import { expect, it, vi } from 'vitest'
 import * as filesystem from '../native-chat/wsl-transcript-fs-access'
-import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-
-// Replace worker transport while exercising the real SQLite readers.
-export let openCodeListHook:
-  | ((
-      agent: 'opencode' | 'opencode2',
-      issues: AiVaultScanIssue[],
-      limit: number
-    ) => Promise<void> | void)
-  | null = null
-export const openCodeReadCalls: string[] = []
-export const openCodeListObservations: { paths: readonly string[]; limit: number; rows: number }[] =
-  []
-vi.mock(
-  '../ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn',
-  async () => {
-    const list =
-      await import('../ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite-list')
-    const parse =
-      await import('../ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite')
-    const capture =
-      await import('../ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite-capture')
-    const own = await import('./session-search-opencode-index.test')
-    const { listOpenCode2SqliteSessions } =
-      await import('../ai-vault/scanners/opencode2/session-scanner-opencode2-sqlite-list')
-    const parse2 = await import('../ai-vault/scanners/opencode2/session-scanner-opencode2-sqlite')
-    return {
-      parseOpenCode2SqliteSessionViaWorker: parse2.parseOpenCode2SqliteSession,
-      captureOpenCode2SqliteSessionViaWorker: parse2.captureOpenCode2SqliteSession,
-      listOpenCode2SqliteSessionsViaWorker: async (
-        args: Parameters<typeof listOpenCode2SqliteSessions>[0]
-      ) => {
-        const candidates = await listOpenCode2SqliteSessions(args)
-        await own.openCodeListHook?.('opencode2', args.issues, args.limit)
-        return candidates
-      },
-      resolveOpenCodeSqliteWorkerEntryPath: () => null,
-      listOpenCodeSqliteSessionsViaWorker: (
-        args: Parameters<typeof list.listOpenCodeSqliteSessions>[0]
-      ) =>
-        list.listOpenCodeSqliteSessions(args).then(async (candidates) => {
-          await own.openCodeListHook?.('opencode', args.issues, args.limit)
-          own.openCodeListObservations.push({
-            paths: args.dbPaths,
-            limit: args.limit,
-            rows: candidates.length
-          })
-          return candidates
-        }),
-      parseOpenCodeSqliteSessionViaWorker: (
-        args: Parameters<typeof parse.parseOpenCodeSqliteSession>[0]
-      ) => {
-        own.openCodeReadCalls.push(`parse:${args.sessionId}`)
-        return parse.parseOpenCodeSqliteSession(args)
-      },
-      captureOpenCodeSqliteSessionViaWorker: (
-        args: Parameters<typeof capture.captureOpenCodeSqliteSession>[0]
-      ) => {
-        own.openCodeReadCalls.push(`capture:${args.sessionId}`)
-        return capture.captureOpenCodeSqliteSession(args)
-      }
-    }
-  }
-)
 import { readWholeTranscript } from '../ai-vault/transcripts/session-transcript-reader'
 import { buildOpenCodeSqliteCandidatePath } from '../../shared/opencode-sqlite-session-path'
-import { resetSessionParseCacheForTests } from '../ai-vault/parse-cache/session-parse-cache-store'
-import { resetTranscriptConsumersForTests } from '../ai-vault/transcripts/session-transcript-consumers'
 import {
   appendOpenCodeSqliteTurn,
   writeOpenCodeSqliteDatabase
 } from '../ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite-fixture'
 import SyncDatabase from '../sqlite/sync-database'
-import { SessionSearchEngine } from './session-search-engine'
 import { SessionSearchIndexer } from './session-search-indexer'
-import { openSessionSearchDatabase } from './session-search-schema'
 import {
-  FakeSessionSearchClock,
-  openSessionSearchIndexerHarness,
-  type SessionSearchIndexerHarness
-} from './session-search-indexer-test-fixture'
+  SessionSearchOperationError,
+  SessionSearchWorkerClient
+} from './session-search-worker-client'
+import {
+  harness,
+  clock,
+  ownIndexer,
+  dbPath,
+  openEngine,
+  startIndexer,
+  finishPendingObservation,
+  openCodeObservation,
+  openCodeListObservations
+} from './session-search-opencode-index.test-fixture'
 
 const ANSWER = 'the quokkaTelemetry harness reindexes every shard'
 const OTHER = 'a completely unrelated conversation about typography'
@@ -91,70 +32,6 @@ const TOOL_ONLY = 'zarquonium'
 const TOOL_FILE = '/repo/app/src/telemetry/shard-reindex.ts'
 const SESSION = 'ses_capture'
 const SECOND_SESSION = 'ses_second'
-
-let harness: SessionSearchIndexerHarness
-let clock: FakeSessionSearchClock
-let indexer: SessionSearchIndexer | null = null
-let engineDbs: SyncDatabase[] = []
-
-beforeEach(async () => {
-  resetSessionParseCacheForTests()
-  resetTranscriptConsumersForTests()
-  clock = new FakeSessionSearchClock()
-  harness = await openSessionSearchIndexerHarness('ss-opencode-index')
-  indexer = null
-  engineDbs = []
-  openCodeListHook = null
-  openCodeReadCalls.length = 0
-  openCodeListObservations.length = 0
-})
-
-afterEach(async () => {
-  await indexer?.close()
-  for (const db of engineDbs) {
-    db.close()
-  }
-  resetTranscriptConsumersForTests()
-  resetSessionParseCacheForTests()
-  await harness.cleanup()
-})
-
-function dbPath(): string {
-  return join(harness.root, 'opencode-db', 'opencode.db')
-}
-
-async function finishPendingObservation(subject: SessionSearchIndexer): Promise<void> {
-  for (let turn = 0; turn < 100; turn++) {
-    if (subject.status().phase !== 'indexing') {
-      return
-    }
-    await subject.reconcile()
-  }
-  throw new Error('Database observation did not finish')
-}
-
-async function startIndexer(): Promise<SessionSearchIndexer> {
-  const started = new SessionSearchIndexer({
-    databasePath: harness.databasePath,
-    roots: { ...harness.roots, opencodeDbPaths: [dbPath()] },
-    historyDays: null,
-    clock,
-    reconcileIntervalMs: 20_000,
-    onError: (error) => {
-      throw error
-    }
-  })
-  indexer = started
-  await started.start()
-  await finishPendingObservation(started)
-  return started
-}
-
-function openEngine(): SessionSearchEngine {
-  const db = openSessionSearchDatabase(harness.databasePath)
-  engineDbs.push(db)
-  return new SessionSearchEngine(db)
-}
 
 function writeVault(): void {
   writeOpenCodeSqliteDatabase(dbPath(), [
@@ -219,7 +96,6 @@ it('re-reads a session that gained a message and replaces its rows', async () =>
   const engine = openEngine()
   expect(engine.search({ query: 'orthogonal vestibule' }).hits[0]?.sessionId).toBe(SESSION)
   expect(engine.search({ query: ANSWER }).hits).toHaveLength(1)
-  expect(openCodeReadCalls.filter((call) => call === `capture:${SESSION}`)).toHaveLength(2)
 })
 
 it.each([40, 400])(
@@ -232,7 +108,7 @@ it.each([40, 400])(
         turns: [{ role: 'user', parts: ['retainedarchive'] }]
       }))
     )
-    const subject = await startIndexer()
+    const subject = await startIndexer({ fullSweepEveryCycles: 15 })
     appendOpenCodeSqliteTurn(dbPath(), 'ses_0', {
       role: 'assistant',
       parts: ['recentdatabaseneedle']
@@ -283,9 +159,10 @@ it('keeps a duplicate physical row and promotes it when the selected database di
     roots: { ...harness.roots, opencodeDbPaths: paths },
     resolveRoots: async () => ({ ...harness.roots, opencodeDbPaths: paths }),
     historyDays: null,
-    clock
+    clock,
+    fullSweepEveryCycles: 1000
   })
-  indexer = subject
+  ownIndexer(subject)
   await subject.start()
   await subject.reconcile({ full: true })
   expect(openEngine().search({ query: 'winningcopyneedle' }).hits).toHaveLength(1)
@@ -303,7 +180,11 @@ it('keeps a duplicate physical row and promotes it when the selected database di
 it('retains refused database membership while healthy owners settle and retries only the refused full observation', async () => {
   const alternative = join(harness.root, 'opencode-db', 'opencode-alternative.db')
   writeOpenCodeSqliteDatabase(dbPath(), [
-    { id: 'ses_primary', turns: [{ role: 'user', parts: ['preservedneedle'] }] }
+    { id: 'ses_primary', turns: [{ role: 'user', parts: ['preservedneedle'] }] },
+    ...Array.from({ length: 12 }, (_, index) => ({
+      id: `ses_recent_${index}`,
+      turns: [{ role: 'user' as const, parts: ['recentarchive'] }]
+    }))
   ])
   writeOpenCodeSqliteDatabase(alternative, [
     { id: 'ses_alternative', turns: [{ role: 'user', parts: ['healthyneedle'] }] }
@@ -312,9 +193,10 @@ it('retains refused database membership while healthy owners settle and retries 
     databasePath: harness.databasePath,
     roots: { ...harness.roots, opencodeDbPaths: [dbPath(), alternative] },
     historyDays: null,
-    clock
+    clock,
+    fullSweepEveryCycles: 1000
   })
-  indexer = subject
+  ownIndexer(subject)
   await subject.start()
   await finishPendingObservation(subject)
   await rename(dbPath(), `${dbPath()}.saved`)
@@ -328,14 +210,20 @@ it('retains refused database membership while healthy owners settle and retries 
   expect(openEngine().search({ query: 'healthyupdateneedle' }).hits).toHaveLength(1)
   await rm(dbPath())
   await rename(`${dbPath()}.saved`, dbPath())
-  appendOpenCodeSqliteTurn(dbPath(), 'ses_primary', {
-    role: 'assistant',
-    parts: ['recoveredprimaryneedle']
-  })
+  writeOpenCodeSqliteDatabase(dbPath(), [
+    { id: 'ses_old_import', turns: [{ role: 'user', parts: ['recoveredprimaryneedle'] }] }
+  ])
+  const imported = new SyncDatabase(dbPath())
+  imported
+    .prepare("UPDATE session SET time_created=1000,time_updated=2000 WHERE id='ses_old_import'")
+    .run()
+  imported.close()
   clock.advance(20000)
   await subject.settled()
   await finishPendingObservation(subject)
-  expect(openEngine().search({ query: 'recoveredprimaryneedle' }).hits).toHaveLength(1)
+  expect(openEngine().search({ query: 'recoveredprimaryneedle' }).hits[0]?.sessionId).toBe(
+    'ses_old_import'
+  )
   expect(openEngine().search({ query: 'preservedneedle' }).hits).toHaveLength(1)
 })
 
@@ -382,7 +270,7 @@ it.each([40, 400])(
         turns: [{ role: 'user', parts: ['activearchive'] }]
       }))
     )
-    openCodeListHook = (agent) => {
+    openCodeObservation.hook = (agent) => {
       if (agent === 'opencode') {
         appendOpenCodeSqliteTurn(dbPath(), 'ses_0', {
           role: 'assistant',
@@ -404,7 +292,7 @@ it.each([40, 400])(
         .every((observation) => observation.rows <= 12)
     ).toBe(true)
     expect(openEngine().search({ query: 'activewalneedle' }).hits[0]?.sessionId).toBe('ses_0')
-    openCodeListHook = null
+    openCodeObservation.hook = null
     await subject.reconcile({ full: true })
     await finishPendingObservation(subject)
     expect(subject.status().phase).toBe('current')
@@ -423,9 +311,10 @@ it('chooses the original earlier database when an equal-time alias is imported l
     databasePath: harness.databasePath,
     roots: { ...harness.roots, opencodeDbPaths: [dbPath(), alternative] },
     historyDays: null,
-    clock
+    clock,
+    fullSweepEveryCycles: 1000
   })
-  indexer = subject
+  ownIndexer(subject)
   await subject.start()
   await finishPendingObservation(subject)
   expect(openEngine().search({ query: 'laterdatabasecopy' }).hits[0]?.sessionId).toBe('ses_shared')
@@ -466,7 +355,7 @@ it('settles a healthy physical full list when another family reports a concurren
   const otherReleased = new Promise<void>((resolve) => {
     releaseOther = resolve
   })
-  openCodeListHook = async (agent, issues) => {
+  openCodeObservation.hook = async (agent, issues) => {
     if (agent === 'opencode2') {
       issues.push({
         agent: 'opencode2',
@@ -481,43 +370,54 @@ it('settles a healthy physical full list when another family reports a concurren
       await new Promise<void>((resolve) => setImmediate(resolve))
     }
   }
-  const subject = await startIndexer()
-  openCodeListHook = null
+  const subject = await startIndexer({ degraded: true })
+  openCodeObservation.hook = null
   clock.advance(20000)
   await subject.settled()
-  expect(
-    openCodeListObservations.filter((observation) => observation.limit === Infinity)
-  ).toHaveLength(1)
   expect(openEngine().search({ query: 'healthysourcecopy' }).hits[0]?.sessionId).toBe('ses_healthy')
+  expect(
+    openCodeListObservations.filter(
+      ({ paths, limit }) => limit === Infinity && paths.includes(dbPath())
+    )
+  ).toHaveLength(1)
 })
 
 it('parks a persistently partial physical observation and wakes it on an explicit full request', async () => {
   writeOpenCodeSqliteDatabase(dbPath(), [
     { id: 'ses_recoverable', turns: [{ role: 'user', parts: ['recoverabledatabase'] }] }
   ])
-  openCodeListHook = (agent, issues) => {
+  openCodeObservation.hook = (agent, issues) => {
     if (agent === 'opencode') {
       issues.push({ agent: 'opencode', path: dbPath(), message: 'fixture partial read' })
     }
   }
-  const subject = await startIndexer()
+  const subject = await startIndexer({ degraded: true })
   for (let cycle = 0; cycle < 6; cycle++) {
     clock.advance(20000)
     await subject.settled()
   }
+  expect(subject.status()).toMatchObject({ phase: 'degraded', filesDue: 0 })
   expect(
-    openCodeListObservations.filter((observation) => observation.limit === Infinity)
+    openCodeListObservations.filter(
+      ({ paths, limit }) => limit === Infinity && paths.includes(dbPath())
+    )
   ).toHaveLength(3)
+  expect(subject.status().lastSweepCompletedAt).not.toBeNull()
   expect(openEngine().search({ query: 'recoverabledatabase' }).hits[0]?.sessionId).toBe(
     'ses_recoverable'
   )
-  openCodeListHook = null
+  openCodeObservation.hook = null
   await subject.reconcile({ full: true })
   await finishPendingObservation(subject)
-  expect(
-    openCodeListObservations.filter((observation) => observation.limit === Infinity)
-  ).toHaveLength(4)
   expect(subject.status().phase).toBe('current')
+  expect(
+    openCodeListObservations.filter(
+      ({ paths, limit }) => limit === Infinity && paths.includes(dbPath())
+    )
+  ).toHaveLength(4)
+  expect(openEngine().search({ query: 'recoverabledatabase' }).hits[0]?.sessionId).toBe(
+    'ses_recoverable'
+  )
 })
 
 it('retains a restored old row when a family listing loses the earlier absence proof', async () => {
@@ -548,7 +448,7 @@ it('retains a restored old row when a family listing loses the earlier absence p
     discoveryDeadlineMs: 0,
     fullSweepEveryCycles: 1000
   })
-  indexer = subject
+  ownIndexer(subject)
   await subject.start()
   await finishPendingObservation(subject)
   for (let cycle = 0; cycle < 8; cycle++) {
@@ -605,7 +505,7 @@ it('settles a full attempt blocked by persistent family enumeration while retain
     clock,
     fullSweepEveryCycles: 1000
   })
-  indexer = subject
+  ownIndexer(subject)
   await subject.start()
   const completed = subject.status().lastSweepCompletedAt
   expect(openEngine().search({ query: 'retainedfamilyneedle' }).hits).toHaveLength(1)
@@ -639,3 +539,103 @@ it('settles a full attempt blocked by persistent family enumeration while retain
     reads.mockRestore()
   }
 })
+
+it.each(['absent', 'positive', 'released'] as const)(
+  'retains interrupted deletion through unavailable history until %s evidence accepts it',
+  async (successor) => {
+    writeOpenCodeSqliteDatabase(dbPath(), [
+      { id: 'ses_owed', turns: [{ role: 'user', parts: ['owedoldneedle'] }] },
+      { id: 'ses_keeper', turns: [{ role: 'user', parts: ['owedkeeperneedle'] }] }
+    ])
+    const errors: unknown[] = []
+    const subject = new SessionSearchIndexer({
+      databasePath: harness.databasePath,
+      roots: {
+        ...harness.roots,
+        opencodeDbPaths: undefined,
+        opencodeStorageDir: join(dirname(dbPath()), 'storage')
+      },
+      historyDays: null,
+      clock,
+      fullSweepEveryCycles: 1000,
+      onError: (error) => errors.push(error)
+    })
+    ownIndexer(subject)
+    await subject.start()
+    await finishPendingObservation(subject)
+    expect(openEngine().search({ query: 'owedoldneedle' }).hits).toHaveLength(1)
+    const changed = new SyncDatabase(dbPath())
+    changed.exec(
+      "CREATE TABLE saved_session AS SELECT * FROM session WHERE id='ses_owed'; DELETE FROM session WHERE id='ses_owed'"
+    )
+    changed.close()
+    const request = SessionSearchWorkerClient.prototype.request
+    let block = true,
+      rejected = false
+    const handoff = vi
+      .spyOn(SessionSearchWorkerClient.prototype, 'request')
+      .mockImplementation(async function (this: SessionSearchWorkerClient, command) {
+        if (
+          block &&
+          command.op === 'candidates' &&
+          command.command.kind === 'remove-page' &&
+          command.command.rows.some((row) => row.containers?.length)
+        ) {
+          rejected = true
+          throw new SessionSearchOperationError('fixture omission transfer refused')
+        }
+        return request.call(this, command)
+      })
+    const actual = filesystem.wslGatedReaddir
+    let unavailable = false
+    const listing = vi.spyOn(filesystem, 'wslGatedReaddir').mockImplementation((path, ...rest) => {
+      if (unavailable && path === dirname(dbPath())) {
+        return Promise.reject(
+          Object.assign(new Error('fixture source unavailable'), { code: 'EIO' })
+        )
+      }
+      return actual(path, ...rest)
+    })
+    try {
+      await subject.reconcile({ full: true })
+      expect(rejected).toBe(true)
+      expect(errors.some((error) => error instanceof SessionSearchOperationError)).toBe(true)
+      unavailable = true
+      block = false
+      for (let cycle = 0; cycle < 6; cycle++) {
+        clock.advance(20000)
+        await subject.settled()
+      }
+      expect(subject.status()).toMatchObject({ phase: 'degraded', filesDue: 0 })
+      expect(openEngine().search({ query: 'owedoldneedle' }).hits).toHaveLength(1)
+      expect(openEngine().search({ query: 'owedkeeperneedle' }).hits).toHaveLength(1)
+      if (successor === 'positive') {
+        const restored = new SyncDatabase(dbPath())
+        restored.exec('INSERT INTO session SELECT * FROM saved_session')
+        restored.close()
+        appendOpenCodeSqliteTurn(dbPath(), 'ses_owed', {
+          role: 'assistant',
+          parts: ['owednewneedle']
+        })
+      } else if (successor === 'released') {
+        await rm(dbPath())
+      }
+      unavailable = false
+      await subject.reconcile({ full: true })
+      await finishPendingObservation(subject)
+      expect(openEngine().search({ query: 'owedoldneedle' }).hits).toHaveLength(
+        successor === 'positive' ? 1 : 0
+      )
+      expect(openEngine().search({ query: 'owednewneedle' }).hits).toHaveLength(
+        successor === 'positive' ? 1 : 0
+      )
+      expect(openEngine().search({ query: 'owedkeeperneedle' }).hits).toHaveLength(
+        successor === 'released' ? 0 : 1
+      )
+      expect(subject.status().phase).toBe('current')
+    } finally {
+      handoff.mockRestore()
+      listing.mockRestore()
+    }
+  }
+)

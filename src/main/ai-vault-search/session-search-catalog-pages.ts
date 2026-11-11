@@ -22,15 +22,18 @@ export function boundedSessionSearchPage<T, R>(
   return page
 }
 
-export function* sessionSearchRecordPages<T>(records: Iterable<T>): Generator<T[]> {
+export function* sessionSearchRecordPages<T>(
+  records: Iterable<T>,
+  overheadBytes = 1024
+): Generator<T[]> {
   let page: T[] = []
-  let bytes = 1024
+  let bytes = overheadBytes
   for (const record of records) {
     const size = JSON.stringify(record).length * 2 + 64
     if (page.length && (page.length === PAGE_ROWS || bytes + size > PAGE_BYTES)) {
       yield page
       page = []
-      bytes = 1024
+      bytes = overheadBytes
     }
     page.push(record)
     bytes += size

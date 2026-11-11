@@ -166,13 +166,23 @@ export async function runSessionSearchPass(
       state.discovery.removed,
       { ...args.roots, signal },
       new Set(),
-      state.discovery.removedCandidates,
+      new Map(),
       false,
-      new Set(),
-      state.discovery.containers.removalReceipts
+      new Set()
     )
     await accept([], false, update)
-    await state.discovery.containers.acknowledgeRetirements()
+    await state.discovery.containers.continueRetirements(
+      async (agents, receipts) => {
+        const work = await state.candidates.remove(new Set(), agents, new Map(), receipts)
+        if (work) {
+          state.queue.update(work)
+          await state.retire.refresh()
+        }
+        await accept([], true)
+      },
+      args.discoveryOverdue ?? (() => false),
+      signal
+    )
     if (!state.discovery.pending) {
       state.recovering = false
     }

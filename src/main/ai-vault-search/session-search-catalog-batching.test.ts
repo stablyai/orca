@@ -387,6 +387,11 @@ it.each([40, 400])(
     const harness = await openSessionSearchIndexerHarness('ss-read-fairness')
     const clock = new FakeSessionSearchClock()
     clock.costPerNowMs = 1000
+    harness.roots.claudeProjectsDir = join(
+      harness.root,
+      ...Array.from({ length: 8 }, () => 'p'.repeat(90)),
+      'claude-projects'
+    )
     const subject = new SessionSearchIndexer({
       databasePath: harness.databasePath,
       roots: harness.roots,
@@ -396,10 +401,7 @@ it.each([40, 400])(
       discoveryDeadlineMs: Infinity,
       fullSweepEveryCycles: 1000
     })
-    const directory = join(
-      harness.claudeProjectDir,
-      ...Array.from({ length: 8 }, () => 'p'.repeat(90))
-    )
+    const directory = join(harness.roots.claudeProjectsDir!, 'project')
     const hits = () =>
       harness.read((db) =>
         db

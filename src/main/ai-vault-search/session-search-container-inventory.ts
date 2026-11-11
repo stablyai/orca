@@ -1,7 +1,7 @@
 import { sessionSearchContainerSignature } from './session-search-container-signature'
 import { SessionSearchOperationError } from './session-search-worker-client'
 import { sessionSearchRecordPages } from './session-search-catalog-pages'
-import { SessionSearchContainerSources } from './session-search-container-sources'
+import { SessionSearchContainerRetirements } from './session-search-container-retirements'
 import { SessionSearchCatalogClient } from './session-search-catalog-client'
 import { throwIfAiVaultScanCancelled } from '../ai-vault/ai-vault-scan-cancellation'
 import type { AiVaultScanIssue } from '../../shared/ai-vault/contracts/ai-vault-types'
@@ -9,7 +9,7 @@ import type { FileWithMtime, SessionFileDiscovery } from '../ai-vault/session-sc
 import { splitSyntheticSessionSource } from './session-search-synthetic-sources'
 
 /** Source observations progress independently from the selected publication. */
-export class SessionSearchContainerInventory extends SessionSearchContainerSources {
+export class SessionSearchContainerInventory extends SessionSearchContainerRetirements {
   async discover(
     key: string,
     paths: readonly string[],
@@ -65,6 +65,10 @@ export class SessionSearchContainerInventory extends SessionSearchContainerSourc
         await this.setAuthority(key, path, physical, 'unknown')
       }
       const retryKey = `${key}:${path}`
+      if (before.identity === '' && before.known && family.discovery) {
+        await this.release(key, path, family, physical)
+        continue
+      }
       if (physical.retiring && before.known && before.identity !== '') {
         await this.setAuthority(key, path, physical, 'unknown', undefined, true)
         physical.retirement = undefined
@@ -85,16 +89,11 @@ export class SessionSearchContainerInventory extends SessionSearchContainerSourc
         physical.fullDue = true
         this.retries.wake(retryKey)
       }
-      if (before.identity === '' && before.known && family.discovery) {
-        await this.release(key, path, family, physical)
-        continue
-      }
       if (
         physical.retirement &&
         physical.authority?.state !== 'unknown' &&
         physical.authority?.revision === physical.retirement.authority
       ) {
-        await this.advanceRetirement(key, family, physical)
         continue
       }
       const full =
@@ -106,17 +105,37 @@ export class SessionSearchContainerInventory extends SessionSearchContainerSourc
       throwIfAiVaultScanCancelled(signal)
       const epoch = full ? ++physical.epoch : 0
       let currentCount = 0
-      for (const files of sessionSearchRecordPages(discovery.files)) {
-        currentCount += files.length
+      const input = {
+        kind: 'container-apply' as const,
+        scope: physical.files.scope,
+        epoch,
+        full,
+        proof: this.acceptedProofs.has(proofKey) ? physical.proof : undefined,
+        authorityRevision: physical.authority!.revision
+      }
+      const overhead =
+        JSON.stringify({
+          op: 'catalog',
+          command: { ...input, rows: [] },
+          catalogPage: {
+            runtimeEpoch: Number.MAX_VALUE,
+            sourceId: input.scope,
+            observationEpoch: Number.MAX_VALUE,
+            pageSequence: Number.MAX_VALUE
+          }
+        }).length *
+          2 +
+        1024
+      const rows = (function* () {
+        for (const file of discovery.files) {
+          yield { file, id: splitSyntheticSessionSource(file.path)?.id ?? '' }
+        }
+      })()
+      for (const page of sessionSearchRecordPages(rows, overhead)) {
+        currentCount += page.length
         const result = await physical.files.transition({
-          kind: 'container-apply',
-          scope: physical.files.scope,
-          rows: files.map((file) => ({
-            file,
-            id: splitSyntheticSessionSource(file.path)?.id ?? ''
-          })),
-          epoch,
-          full,
+          ...input,
+          rows: page,
           proof: this.acceptedProofs.has(proofKey) ? physical.proof : undefined,
           authorityRevision: physical.authority!.revision
         })
@@ -131,8 +150,6 @@ export class SessionSearchContainerInventory extends SessionSearchContainerSourc
       const complete = discovery.complete !== false
       const stable = complete && before.known && after.known && before.signature === after.signature
       if (full && complete) {
-        physical.fullDue = before.known && after.known && before.identity !== after.identity
-        this.retries.delete(retryKey)
         // Empty also means an unknown schema under the existing reader contract.
         if (stable && currentCount) {
           if (enumerationComplete) {
@@ -142,9 +159,10 @@ export class SessionSearchContainerInventory extends SessionSearchContainerSourc
           }
           if (physical.authority?.state === 'full') {
             physical.retirement = { authority: physical.authority.revision, phase: 'raw' }
-            await this.advanceRetirement(key, family, physical)
           }
         }
+        physical.fullDue = before.known && after.known && before.identity !== after.identity
+        this.retries.delete(retryKey)
       }
       if (full && !complete) {
         this.retries.fail(retryKey)
@@ -182,13 +200,11 @@ export class SessionSearchContainerInventory extends SessionSearchContainerSourc
       }
     }
     family.discovery ??= await read([], this.recentLimit)
-    await this.drainRetirements()
     const discovery = { ...family.discovery, files: changes, sourceOrder: family.sourceOrder }
     this.deliveries.set(discovery, deliveries)
     return discovery
   }
   async end(): Promise<void> {
-    await this.drainRetirements()
     for (const root of this.pathLists.keys()) {
       if (!this.seenPathLists.has(root)) {
         this.pathLists.delete(root)
@@ -247,6 +263,6 @@ export class SessionSearchContainerInventory extends SessionSearchContainerSourc
     this.families.clear()
     this.retries.clear()
     this.acceptedProofs.clear()
-    this.removed.clear()
+    this.clearRetirements()
   }
 }

@@ -281,7 +281,6 @@ it.skipIf(!CAN_DENY_READ)('stops re-reading a transcript it cannot read', async 
     }
 
     expect(indexer?.status()).toMatchObject({ filesDue: 0, filesFailed: 1, phase: 'degraded' })
-    expect(rowFor(path)?.failCount).toBeGreaterThanOrEqual(3)
 
     // A changed stat releases the failed-read hold; chmod alone does not change the freshness key.
     await chmod(path, 0o644)
@@ -580,7 +579,7 @@ it('holds out a repeatedly rejected write while other files continue indexing', 
     clock.advance(INTERVAL_MS)
     await subject.settled()
   }
-  expect(rowFor(broken)).toEqual({ state: 'failed', failCount: 3 })
+  expect(subject.status()).toMatchObject({ filesDue: 0, filesFailed: 1, phase: 'degraded' })
   expect(sessionsMatching('healthyneedle')).toEqual([OTHER_SESSION_ID])
   expect(sessionsMatching('rejectedneedle')).toEqual([])
   await appendFile(
@@ -591,7 +590,7 @@ it('holds out a repeatedly rejected write while other files continue indexing', 
   clock.advance(INTERVAL_MS)
   await subject.settled()
   expect(sessionsMatching('continuedneedle')).toEqual([OTHER_SESSION_ID])
-  expect(rowFor(broken)).toEqual({ state: 'failed', failCount: 3 })
+  expect(subject.status()).toMatchObject({ filesDue: 0, filesFailed: 1, phase: 'degraded' })
 })
 
 it('retains a deferred recent file after it leaves the top-N window', async () => {

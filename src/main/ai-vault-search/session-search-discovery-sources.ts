@@ -79,7 +79,6 @@ export class SessionSearchDiscoverySources {
   protected recentLimit = 12
   protected seen = new Set<string>()
   readonly removed = new Set<string>()
-  readonly removedCandidates = this.containers.removed
   readonly enumeratedContainers = this.containers.proofs
 
   constructor(entryPath?: string) {
