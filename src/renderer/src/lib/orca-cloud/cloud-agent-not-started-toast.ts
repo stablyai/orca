@@ -6,18 +6,12 @@
 // - "Set up Claude once" runs the S0 sign-in right from the toast: Claude via setup-token in the
 //   browser, Codex via a device code. The toast shows progress and errors, with Try again.
 // - It clears itself as soon as the account turns active.
-import { toast } from 'sonner'
+import { hideCloudToast, showCloudToast } from '@/components/orca-cloud/cloud-toast-stack'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
-import { openOrcaCloudAgentAccounts } from '@/components/new-workspace/OrcaCloudAgentSetupRow'
-import {
-  agentName,
-  setupFailureCopy
-} from '@/components/settings/agent-accounts/orca-cloud-accounts-copy'
-import type {
-  OrcaCloudAccountAgent,
-  OrcaCloudAgentSetup
-} from '../../../../shared/orca-cloud-agents/orca-cloud-agents-wire'
+import { agentName } from '@/components/settings/agent-accounts/orca-cloud-accounts-copy'
+import type { OrcaCloudAccountAgent } from '../../../../shared/orca-cloud-agents/orca-cloud-agents-wire'
+import { cloudAgentSignInView, type ToastView } from './cloud-agent-sign-in-view'
 import { orcaCloudAgentCoverageFromAccounts } from './orca-cloud-agent-accounts-model'
 import {
   readOrcaCloudAgentAccounts,
@@ -64,100 +58,6 @@ export function cloudAgentNotStartedMessage(
 export function isCloudAgentCovered(agent: OrcaCloudAccountAgent): boolean {
   const coverage = orcaCloudAgentCoverageFromAccounts(agent, readOrcaCloudAgentAccounts())
   return coverage?.kind === 'account' || coverage?.kind === 'key'
-}
-
-type ToastView = {
-  message: string
-  description?: string
-  action?: { label: string; run: () => void }
-}
-
-function deviceHost(url: string): string {
-  try {
-    return new URL(url).hostname
-  } catch {
-    return url
-  }
-}
-
-/** What the toast says while the S0 sign-in runs; null while it is idle (the plain prompt). */
-export function cloudAgentSignInView(
-  agent: OrcaCloudAccountAgent,
-  setup: OrcaCloudAgentSetup
-): ToastView | null {
-  const api = globalThis.window?.api?.orcaCloudAgents
-  const name = agentName(agent, translate)
-  switch (setup.phase) {
-    case 'idle':
-    case 'saved':
-      return null
-    case 'browser':
-      return {
-        message: translate(
-          'components.newWorkspace.cloudStart.signInBrowser',
-          'Finish signing in to {{agent}} in your browser…',
-          { agent: name }
-        ),
-        // Every phase has a button: an updated toast keeps the last one otherwise.
-        action: setup.canReopen
-          ? {
-              label: translate('orcaCloudAccounts.openAgain', 'Open again'),
-              run: () => void api?.reopen({ agent })
-            }
-          : {
-              label: translate('orcaCloudAccounts.cancel', 'Cancel'),
-              run: () => void api?.cancel({ agent })
-            }
-      }
-    case 'preparing':
-      return {
-        message: translate('orcaCloudAccounts.preparing', 'Getting ChatGPT sign-in ready'),
-        action: {
-          label: translate('orcaCloudAccounts.cancel', 'Cancel'),
-          run: () => void api?.cancel({ agent })
-        }
-      }
-    case 'device':
-      return {
-        message: translate(
-          'components.newWorkspace.cloudStart.signInDevice',
-          'Enter {{code}} at {{host}} to sign in to {{agent}}.',
-          { code: setup.userCode, host: deviceHost(setup.verificationUrl), agent: name }
-        ),
-        action: {
-          label: translate('components.newWorkspace.cloudStart.copyCode', 'Copy code'),
-          run: () => void window.api.ui.writeClipboardText(setup.userCode).catch(() => {})
-        }
-      }
-    case 'paste':
-      // The token goes in Settings' masked field, never in a toast.
-      return {
-        message: translate(
-          'components.newWorkspace.cloudStart.signInPaste',
-          'Paste the {{agent}} setup token in Settings to finish.',
-          { agent: name }
-        ),
-        action: {
-          label: translate('components.newWorkspace.cloudStart.openSettings', 'Open Settings'),
-          run: openOrcaCloudAgentAccounts
-        }
-      }
-    case 'saving':
-      return {
-        message: translate('components.newWorkspace.cloudStart.signInSaving', 'Saving…')
-      }
-    case 'failed': {
-      const copy = setupFailureCopy(agent, setup.error, translate)
-      return {
-        message: copy.title,
-        ...(copy.detail ? { description: copy.detail } : {}),
-        action: {
-          label: translate('orcaCloudAccounts.tryAgain', 'Try again'),
-          run: () => void api?.start({ agent })
-        }
-      }
-    }
-  }
 }
 
 /** A create counts as this toast's when it started at most this long before the toast was asked for. */
@@ -235,41 +135,50 @@ export function showCloudAgentNotStartedToast(
           'Set up {{agent}} once',
           { agent: name }
         ),
+        primary: true,
         run: () => void globalThis.window?.api?.orcaCloudAgents?.start({ agent })
       }
     }
-    toast.message(view.message, {
-      id: TOAST_ID,
-      ...(view.description ? { description: view.description } : {}),
-      // Persistent (PC-3): it stays until the user acts on it, closes it, or the account is active.
-      duration: Number.POSITIVE_INFINITY,
-      closeButton: true,
-      ...(view.action
-        ? {
-            action: {
-              label: view.action.label,
-              onClick: (event: { preventDefault: () => void }) => {
-                // Keep the toast: it turns into the sign-in's progress.
-                event.preventDefault()
-                view.action?.run()
-              }
-            }
+    // The shared cloud toast (DS-q): same chrome as the push notice, and as an action-required
+    // prompt it sits on top of the stack. Updating the same id keeps its place and state.
+    showCloudToast(
+      TOAST_ID,
+      {
+        priority: 'action',
+        lines: [
+          {
+            key: 'agent',
+            text: view.message,
+            ...(view.description ? { description: view.description } : {}),
+            ...(view.action
+              ? {
+                  action: {
+                    label: view.action.label,
+                    primary: view.action.primary === true,
+                    // Keeps the toast: it turns into the sign-in's progress.
+                    onClick: () => view.action?.run()
+                  }
+                }
+              : {})
           }
-        : {}),
-      // A close by the user ends it; a hide on returning to the workspace (onlyWhenAway) doesn't.
-      onDismiss: () => {
-        if (!onlyWhenAway || switchedAway) {
-          teardown?.()
+        ]
+      },
+      {
+        // Only a close by the user ends it; a hide on returning to the workspace doesn't.
+        onDismiss: () => {
+          if (!onlyWhenAway || switchedAway) {
+            teardown?.()
+          }
         }
       }
-    })
+    )
   }
   const update = (): void => {
     if (!sandboxUp) {
       return
     }
     if (onlyWhenAway && !switchedAway) {
-      toast.dismiss(TOAST_ID)
+      hideCloudToast(TOAST_ID)
       return
     }
     render()
@@ -280,7 +189,7 @@ export function showCloudAgentNotStartedToast(
     }
     const result = settle(state)
     if (result === 'refused') {
-      toast.dismiss(TOAST_ID)
+      hideCloudToast(TOAST_ID)
       teardown?.()
       return false
     }
@@ -320,7 +229,7 @@ export function showCloudAgentNotStartedToast(
   let lastPhase = readOrcaCloudAgentAccounts().setups[agent].phase
   const stopAccounts = subscribeOrcaCloudAgentAccounts(() => {
     if (isCloudAgentCovered(agent)) {
-      toast.dismiss(TOAST_ID)
+      hideCloudToast(TOAST_ID)
       teardown?.()
       return
     }
