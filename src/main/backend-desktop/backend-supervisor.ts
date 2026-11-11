@@ -1,15 +1,5 @@
-import {
-  app,
-  BrowserWindow,
-  ipcMain,
-  MessageChannelMain,
-  utilityProcess,
-  type WebContents,
-  type WebFrameMain
-} from 'electron'
-import { join } from 'node:path'
+import { app, ipcMain, MessageChannelMain, utilityProcess, type WebContents } from 'electron'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
-import { pathToFileURL } from 'node:url'
 import { BackendPortRpc } from '../../shared/backend-port-rpc'
 import {
   BACKEND_CONNECTION_CHANGED,
@@ -25,24 +15,27 @@ import {
 } from '../worker-threads/worker-thread-entry-path'
 import { ManagedOrcadEventWindow } from '../managed-server/lifecycle/orcad-managed-event-window'
 import { ORCAD_SHUTDOWN_DEADLINE_MS } from '../orcad/orcad-stop-deadlines'
-import { isRendererDocumentNavigation } from '../window/renderer-document-navigation'
-import { createBackendDesktopCapabilities } from './backend-desktop-capabilities'
+import {
+  createBackendDesktopCapabilities,
+  trustsBackendRenderer,
+  trackBackendDocument,
+  type BackendDocument
+} from './backend-desktop-capabilities'
 import type { UsageWorktreeSource } from '../usage/worktree-attribution/usage-worktree-metadata'
 
 export { captureBackendBootstrap } from './backend-bootstrap'
 import { capturedBootstrap } from './backend-bootstrap'
 
-type Document = { contents: WebContents; frame: WebFrameMain; token: string; retire(): void }
-
 export class BackendSupervisor {
   private child: ReturnType<typeof utilityProcess.fork> | null = null
   private control: BackendPortRpc | null = null
   private ready: Promise<void> | null = null
+  private disposeFailedStartup?: () => void
   private desiredRunning = true
   private exited: Promise<void> = Promise.resolve()
   private restartTimer: ReturnType<typeof setTimeout> | undefined
   private readonly failures = new ManagedOrcadEventWindow(10 * 60_000, Date.now)
-  private readonly documents = new Map<number, Document>()
+  private readonly documents = new Map<number, BackendDocument>()
   private stopping?: Promise<void>
 
   private readonly retireRenderer = (_event: unknown, contents: WebContents): void =>
@@ -64,57 +57,37 @@ export class BackendSupervisor {
           throw new Error('Invalid backend connection request.')
         }
         const { sender, senderFrame } = event
-        if (!senderFrame || senderFrame !== sender.mainFrame || !this.trusts(sender)) {
+        if (!senderFrame || senderFrame !== sender.mainFrame || !trustsBackendRenderer(sender)) {
           throw new Error('This document cannot connect to Orca.')
         }
-        this.documents.get(sender.id)?.retire()
-        const document: Document = {
-          contents: sender,
-          frame: senderFrame,
+        const document = trackBackendDocument(
+          this.documents,
+          sender,
+          senderFrame,
           token,
-          retire: () => {}
-        }
-        const retire = (): void => {
-          if (this.documents.get(sender.id) !== document) {
-            return
-          }
-          this.documents.delete(sender.id)
-          this.child?.postMessage({ type: 'retire', token: document.token })
-          sender.off('did-frame-navigate', navigation)
-          sender.off('destroyed', retire)
-        }
-        const navigation = (
-          _event: unknown,
-          _url: string,
-          _httpCode: number,
-          _httpStatus: string,
-          mainFrame: boolean
-        ): void => {
-          if (mainFrame) {
-            retire()
-          }
-        }
-        document.retire = retire
-        this.documents.set(sender.id, document)
-        sender.on('did-frame-navigate', navigation)
-        sender.once('destroyed', retire)
+          (retiredToken) => this.child?.postMessage({ type: 'retire', token: retiredToken })
+        )
         if (!this.desiredRunning) {
           throw new Error('Orca is shutting down.')
         }
         const ready = purpose === 'recovery' ? this.ready : this.ensureReady(true)
+        const child = this.child
         if (!ready) {
           throw new Error('Usage is unavailable. Try refreshing the usage view.')
         }
         await ready
         if (
           this.documents.get(sender.id) !== document ||
+          !this.desiredRunning ||
+          !child ||
+          this.child !== child ||
           sender.isDestroyed() ||
           sender.mainFrame !== senderFrame
         ) {
           throw new Error('The document was replaced before Orca connected.')
         }
         const { port1, port2 } = new MessageChannelMain()
-        this.child!.postMessage({ type: 'client', token: document.token }, [port1])
+        child.postMessage({ type: 'client', token: document.token }, [port1])
         senderFrame.postMessage(BACKEND_PORT_DELIVERY, { token: document.token }, [port2])
         return document.token
       }
@@ -125,9 +98,14 @@ export class BackendSupervisor {
   automationClient(provider: 'claudeUsage' | 'codexUsage'): AutomationUsageClient {
     return {
       getAutomationRunUsage: async (input) => {
-        await this.ensureReady(true)
+        const ready = this.ensureReady(true)
+        const control = this.control
+        await ready
+        if (!this.desiredRunning || !control || this.control !== control) {
+          throw new Error('Usage disconnected. Try again after it reconnects.')
+        }
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The private usage service returns its typed automation result for this provider method.
-        return (await this.control!.call(`${provider}:getAutomationRunUsage`, input)) as Awaited<
+        return (await control.call(`${provider}:getAutomationRunUsage`, input)) as Awaited<
           ReturnType<AutomationUsageClient['getAutomationRunUsage']>
         >
       }
@@ -161,23 +139,6 @@ export class BackendSupervisor {
     return this.stopping
   }
 
-  private trusts(contents: WebContents): boolean {
-    if (
-      contents.isDestroyed() ||
-      contents.getType() !== 'window' ||
-      !BrowserWindow.fromWebContents(contents)
-    ) {
-      return false
-    }
-    const layout = currentWorkerEntryLayout(__dirname)
-    const roots = process.env.ELECTRON_RENDERER_URL
-      ? [process.env.ELECTRON_RENDERER_URL]
-      : ['index.html', 'space.html', 'popout.html'].map(
-          (name) => pathToFileURL(join(layout.moduleDir, '../renderer', name)).href
-        )
-    return roots.some((root) => isRendererDocumentNavigation(root, contents.getURL()))
-  }
-
   private notify(connected: boolean, unavailable = false): void {
     for (const document of this.documents.values()) {
       if (!document.contents.isDestroyed() && document.contents.mainFrame === document.frame) {
@@ -189,6 +150,9 @@ export class BackendSupervisor {
   private async ensureReady(explicit: boolean): Promise<void> {
     if (!this.desiredRunning) {
       throw new Error('Orca is shutting down.')
+    }
+    if (explicit) {
+      this.disposeFailedStartup?.()
     }
     if (this.ready) {
       return this.ready
@@ -219,6 +183,9 @@ export class BackendSupervisor {
     let childPid = child.pid
     child.once('spawn', () => {
       childPid = child.pid
+      if (this.child !== child || !this.desiredRunning) {
+        child.kill()
+      }
     })
     let incarnation: string | undefined
     let settleExit!: () => void
@@ -226,8 +193,31 @@ export class BackendSupervisor {
       settleExit = resolve
     })
     let failed!: (error: Error) => void
+    let settled = false
+    let disposed = false
     const ready = new Promise<void>((resolve, reject) => {
-      failed = reject
+      failed = (error) => {
+        if (settled) {
+          return
+        }
+        settled = true
+        if (this.child === child && this.ready === ready) {
+          this.disposeFailedStartup = () => {
+            disposed = true
+            const control = this.control
+            this.child = null
+            this.control = null
+            this.ready = null
+            this.disposeFailedStartup = undefined
+            clearTimeout(startupDeadline)
+            control?.close()
+            try {
+              child.kill()
+            } catch {}
+          }
+        }
+        reject(error)
+      }
       child.on(
         'message',
         (message: {
@@ -236,7 +226,7 @@ export class BackendSupervisor {
           capabilities?: string[]
           incarnation?: string
         }) => {
-          if (this.child !== child) {
+          if (this.child !== child || settled || !this.desiredRunning) {
             return
           }
           if (
@@ -245,12 +235,13 @@ export class BackendSupervisor {
             message.capabilities?.includes('usage')
           ) {
             incarnation = message.incarnation
+            settled = true
             clearTimeout(startupDeadline)
             resolve()
             this.notify(true)
           }
           if (message.type === 'failed') {
-            reject(new Error('Usage could not start. Try refreshing the usage view.'))
+            failed(new Error('Usage could not start. Try refreshing the usage view.'))
             child.kill()
           }
         }
@@ -274,7 +265,7 @@ export class BackendSupervisor {
         pid: childPid ?? null,
         incarnation: incarnation ?? null,
         exitCode: code,
-        expected: !this.desiredRunning
+        expected: disposed || !this.desiredRunning
       })
       clearTimeout(startupDeadline)
       failed(new Error('Usage disconnected. Try again after it reconnects.'))
@@ -283,6 +274,7 @@ export class BackendSupervisor {
         this.control = null
         this.child = null
         this.ready = null
+        this.disposeFailedStartup = undefined
         if (this.desiredRunning) {
           this.failures.record('backend')
         }

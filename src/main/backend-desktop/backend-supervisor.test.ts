@@ -232,3 +232,131 @@ it('retires only the exited renderer document and rejects its pending port deliv
   child.emit('exit', 0)
   await stopped
 })
+
+function startupFixture() {
+  const children: (EventEmitter & {
+    postMessage: ReturnType<typeof vi.fn>
+    kill: ReturnType<typeof vi.fn>
+  })[] = []
+  rig.fork.mockImplementation(() => {
+    const child = Object.assign(new EventEmitter(), {
+      postMessage: vi.fn(),
+      kill: vi.fn(() => false)
+    })
+    children.push(child)
+    return child
+  })
+  const supervisor = new BackendSupervisor({
+    getRepos: () => [],
+    getAllWorktreeMeta: () => ({}),
+    getRememberedWorktreeDisplayNames: () => new Map(),
+    whenLoaded: async () => {}
+  })
+  const frame = { postMessage: vi.fn() }
+  const sender = Object.assign(new EventEmitter(), {
+    id: 4,
+    mainFrame: frame,
+    isDestroyed: () => false,
+    getType: () => 'window',
+    getURL: () => 'file:///index.html'
+  })
+  const request = rig.handle.mock.calls.find(([channel]) => channel === BACKEND_PORT_REQUEST)?.[1]
+  const token = '44444444-4444-4444-4444-444444444444'
+  const read = () =>
+    supervisor.automationClient('claudeUsage').getAutomationRunUsage({
+      worktreeId: null,
+      terminalSessionId: null,
+      startedAt: null,
+      completedAt: null
+    })
+  return {
+    children,
+    supervisor,
+    frame,
+    read,
+    request: (purpose = 'demand') => request({ sender, senderFrame: frame }, token, purpose)
+  }
+}
+
+it('retries a rejected signal-free launch on new demand without replay or false retirement', async () => {
+  vi.useFakeTimers()
+  const { children, supervisor, frame, read, request } = startupFixture()
+  const ready = { type: 'ready', protocol: 1, capabilities: ['usage'] }
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const demand = expect(read()).rejects.toThrow('Usage is still unavailable')
+    const joined = expect(request('recovery')).rejects.toThrow('Usage is still unavailable')
+    await vi.advanceTimersByTimeAsync(30_000)
+    await demand
+    await joined
+    children[attempt].emit('message', ready)
+    expect(frame.postMessage).not.toHaveBeenCalledWith(BACKEND_CONNECTION_CHANGED, {
+      connected: true,
+      unavailable: false
+    })
+    await expect(request('recovery')).rejects.toThrow('Usage is still unavailable')
+    expect(children).toHaveLength(attempt + 1)
+    expect(rig.call).not.toHaveBeenCalled()
+  }
+  const retry = read()
+  const port = request()
+  children[4].emit('message', ready)
+  rig.call.mockResolvedValueOnce({ inputTokens: 42 })
+  await expect(retry).resolves.toEqual({ inputTokens: 42 })
+  await port
+  expect(rig.call).toHaveBeenCalledTimes(1)
+  const notifications = frame.postMessage.mock.calls.slice()
+  for (const child of children.slice(0, 4)) {
+    child.emit('spawn')
+    expect(child.kill).toHaveBeenCalled()
+    child.emit('message', ready)
+    child.emit('exit', 1)
+  }
+  expect(frame.postMessage.mock.calls).toEqual(notifications)
+  const { recordDurableCrashBreadcrumb } =
+    await import('../crash-reporting/breadcrumbs/durable-crash-breadcrumb')
+  expect(recordDurableCrashBreadcrumb).toHaveBeenLastCalledWith('backend_process_exited', {
+    pid: null,
+    incarnation: null,
+    exitCode: 1,
+    expected: true
+  })
+  // A rejection after successful readiness cannot turn that owner into a failed startup.
+  children[4].emit('error', new Error('late error'))
+  rig.call.mockResolvedValueOnce({ inputTokens: 43 })
+  await expect(read()).resolves.toEqual({ inputTokens: 43 })
+  expect(children).toHaveLength(5)
+  const stopped = supervisor.stop()
+  let quit = false
+  void stopped.then(() => {
+    quit = true
+  })
+  await Promise.resolve()
+  expect(quit).toBe(false)
+  children[4].emit('exit', 0)
+  await stopped
+  await expect(read()).rejects.toThrow('Orca is shutting down')
+  expect(children).toHaveLength(5)
+})
+
+it('rejects old requests when ownership changes across readiness instead of rerouting them', async () => {
+  const { children, supervisor, frame, read, request } = startupFixture()
+  const ready = { type: 'ready', protocol: 1, capabilities: ['usage'] }
+  children[0].emit('message', ready)
+  const oldRead = expect(read()).rejects.toThrow('Usage disconnected')
+  const oldPort = expect(request()).rejects.toThrow('The document was replaced')
+  children[0].emit('exit', 1)
+  const replacement = request()
+  children[1].emit('message', ready)
+  await oldRead
+  await oldPort
+  await replacement
+  expect(rig.call).not.toHaveBeenCalled()
+  expect(
+    frame.postMessage.mock.calls.filter(([channel]) => channel === BACKEND_PORT_DELIVERY)
+  ).toHaveLength(1)
+  const stopped = supervisor.stop()
+  children[1].emit('spawn')
+  expect(children[1].kill).toHaveBeenCalled()
+  children[1].emit('exit', 0)
+  await stopped
+})
