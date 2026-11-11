@@ -2165,19 +2165,6 @@
       "cloudSetup": {
         "trialOffer_one": "{{hours}} sandbox hour to try Orca Cloud",
         "trialOffer_other": "{{hours}} sandbox hours to try Orca Cloud"
-      },
-      "cloudStart": {
-        "agentNotStartedIn": "{{agent}} isn’t set up for Orca Cloud, so it didn’t start in {{workspace}}.",
-        "agentNotStartedShort": "{{agent}} isn’t set up for Orca Cloud, so it didn’t start.",
-        "agentWillNotStartIn": "{{agent}} isn’t set up for Orca Cloud, so it won’t start in {{workspace}}.",
-        "agentWillNotStartShort": "{{agent}} isn’t set up for Orca Cloud, so it won’t start.",
-        "copyCode": "Copy code",
-        "openSettings": "Open Settings",
-        "setUpAgentOnce": "Set up {{agent}} once",
-        "signInBrowser": "Finish signing in to {{agent}} in your browser…",
-        "signInDevice": "Enter {{code}} at {{host}} to sign in to {{agent}}.",
-        "signInPaste": "Paste the {{agent}} setup token in Settings to finish.",
-        "signInSaving": "Saving…"
       }
     },
     "onboarding": {
