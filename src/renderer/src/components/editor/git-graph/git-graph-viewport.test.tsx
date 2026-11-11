@@ -20,7 +20,8 @@ it('keeps visible geometry through hidden panes, fractional scroll, resize, appe
   vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockImplementation(function (
     this: HTMLElement
   ) {
-    return Number.parseFloat((this.firstElementChild as HTMLElement)?.style.height ?? '0') + 48
+    const child = this.firstElementChild
+    return Number.parseFloat(child instanceof HTMLElement ? child.style.height : '0') + 48
   })
   vi.stubGlobal(
     'ResizeObserver',
@@ -47,7 +48,7 @@ it('keeps visible geometry through hidden panes, fractional scroll, resize, appe
   }
   const render = (count: number) => act(async () => root.render(<Pane count={count} />))
   const rows = () => Array.from(host.querySelectorAll<HTMLElement>('[data-row]'))
-  const scroll = () => host.firstElementChild as HTMLElement
+  const scroll = () => host.querySelector<HTMLElement>(':scope > div')!
   try {
     await render(100)
     expect(rows()).toHaveLength(0)
