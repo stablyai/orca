@@ -111,7 +111,12 @@ export function useNativeChatComposerEditSession({
     },
     [editSession, setNotice, acceptsText]
   )
-  const sendOrQueue = useSendAfterDictation(root, sendMessage, isEditing ? null : autoSendTo)
+  // A held Send would refuse the countdown's send, so none starts and a running one ends.
+  const sendOrQueue = useSendAfterDictation(
+    root,
+    sendMessage,
+    isEditing || saveHeld ? null : autoSendTo
+  )
   const send = useCallback(
     (intent?: NativeChatComposerSendIntent) => {
       if (!editSession) {
