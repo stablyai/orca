@@ -136,6 +136,9 @@ describe('accepted saved browser page inventory', () => {
       send: (channel: string, payload: { browserPageId: string; worktreeId: string }) => {
         if (channel === 'browser:activateView') {
           activated.push(payload)
+          if (!workspace.pageIds.includes(payload.browserPageId)) {
+            return
+          }
           live.set(payload.browserPageId, 31)
           queueMicrotask(() =>
             resolveTabRegistrationWaiters(payload.browserPageId, TEST_WORKTREE_ID)
@@ -155,7 +158,15 @@ describe('accepted saved browser page inventory', () => {
     expect(activated).toEqual([{ browserPageId: 'A' }])
     expect([...live.keys()]).toEqual(['C', 'A'])
     expect(bridge.tabSwitch).toHaveBeenCalledWith(undefined, undefined, 'A')
-    await expect(runtime.browserTabSwitch({ page: 'arbitrary' })).rejects.toThrow('out of range')
+    vi.useFakeTimers()
+    const rejected = expect(runtime.browserTabSwitch({ page: 'arbitrary' })).rejects.toThrow(
+      'Tab registration timed out'
+    )
+    await vi.advanceTimersByTimeAsync(8_000)
+    await rejected
+    expect([...live.keys()]).toEqual(['C', 'A'])
+    expect((await list()).tabs.map((tab) => tab.browserPageId)).toEqual(['C', 'A', 'B'])
+    expect(bridge.tabSwitch).not.toHaveBeenCalledWith(undefined, undefined, 'arbitrary')
   })
 
   it('keeps every worktree selected page ahead of saved siblings in global index switching', async () => {

@@ -19,10 +19,12 @@ function renderUrlSync(guestUrl: () => string): {
   unmount: () => void
 } {
   const updates: [string, BrowserTabPageState][] = []
-  const webview = Object.assign(document.createElement('webview'), {
+  const element = Object.assign(document.createElement('webview'), {
     getURL: () => guestUrl(),
     src: ''
-  }) as unknown as Electron.WebviewTag
+  })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this DOM fixture supplies the dataset, events and URL access read by synchronization.
+  const webview = element as unknown as Electron.WebviewTag
   const view = renderHook(() =>
     useBrowserPageWebviewUrlSync({
       browserTabId: 'tab-1',

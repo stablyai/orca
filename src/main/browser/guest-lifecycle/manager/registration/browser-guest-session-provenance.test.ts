@@ -30,6 +30,8 @@ const browsingSession = {
   on: vi.fn(),
   removeListener: vi.fn()
 }
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this session fixture supplies every policy and request listener exercised here.
+const nativeSession = browsingSession as unknown as Electron.Session
 vi.mock('electron', () => ({
   session: { fromPartition: () => browsingSession },
   app: { getPath: () => '/downloads' },
@@ -200,9 +202,9 @@ it('certifies default-profile GET commits through the installed request policy, 
   }
   try {
     exercise('clean')
-    installBrowserSessionRequestLifecycle(browsingSession as unknown as Electron.Session)
+    installBrowserSessionRequestLifecycle(nativeSession)
     exercise('clean')
-    removeBrowserSessionRequestLifecycle(browsingSession as unknown as Electron.Session)
+    removeBrowserSessionRequestLifecycle(nativeSession)
     exercise('clean')
     for (const mode of [
       'POST',
@@ -219,9 +221,6 @@ it('certifies default-profile GET commits through the installed request policy, 
       exercise(mode)
     }
   } finally {
-    clearBrowserSessionPartitionPolicies(
-      profile.partition,
-      browsingSession as unknown as Electron.Session
-    )
+    clearBrowserSessionPartitionPolicies(profile.partition, nativeSession)
   }
 })
