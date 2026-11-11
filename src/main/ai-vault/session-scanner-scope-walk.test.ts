@@ -168,6 +168,27 @@ describe('scanAiVaultSessions — scope before the recency cap', () => {
     }
   )
 
+  it('lists the live rollout when another account home holds only its archive', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-zst-homes-'))
+    tempRoots.push(root)
+    const homeA = join(root, 'codex-accounts', 'a', 'home', 'sessions')
+    const homeB = join(root, 'codex-accounts', 'b', 'home', 'sessions')
+    const archived = await writeRollout(homeA, 'moved', '/repo', '11')
+    await writeFile(`${archived}.zst`, zstdCompressSync(await readFile(archived)))
+    await rm(archived)
+    const live = await writeRollout(homeB, 'moved', '/repo', '11')
+
+    const result = await scanAiVaultSessions({
+      ...isolatedScanRoots(root),
+      additionalCodexSessionsDirs: [homeA, homeB],
+      platform: 'darwin'
+    })
+
+    expect(
+      result.sessions.filter((session) => session.agent === 'codex').map((s) => s.filePath)
+    ).toEqual([live])
+  })
+
   it('lists an older in-scope Codex session once across hardlinked homes', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-scope-walk-'))
     tempRoots.push(root)

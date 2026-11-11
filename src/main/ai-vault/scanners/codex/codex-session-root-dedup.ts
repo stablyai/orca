@@ -20,6 +20,12 @@ function codexRolloutAliasName(fileName: string): string {
   return fileName.endsWith('.zst') ? fileName.slice(0, -'.zst'.length) : fileName
 }
 
+/** Returns null when both or neither alias is archived; otherwise whether `filePath` is the live one. */
+function codexLiveAliasBeats(filePath: string, bestPath: string): boolean | null {
+  const archived = filePath.endsWith('.zst')
+  return archived === bestPath.endsWith('.zst') ? null : !archived
+}
+
 export function codexRolloutHardlinkIdentity(file: {
   dev?: number
   ino?: number
@@ -178,8 +184,12 @@ export async function dedupeCodexRolloutCopyAliases<T>(
       const filePath = accessors.getFilePath(candidate)
       const rank = codexSessionRootRank(accessors.getCodexHome(candidate))
       const best = bestById.get(id)
-      // A plain twin sorts before its .zst archive, so the live file wins within a home.
-      if (!best || rank < best.rank || (rank === best.rank && filePath < best.filePath)) {
+      if (
+        !best ||
+        rank < best.rank ||
+        (rank === best.rank &&
+          (codexLiveAliasBeats(filePath, best.filePath) ?? filePath < best.filePath))
+      ) {
         bestById.set(id, { candidate, rank, filePath })
       }
     }
@@ -210,9 +220,9 @@ export function codexSessionAliasBeats(candidate: AiVaultSession, best: AiVaultS
   if (candidateRank !== bestRank) {
     return candidateRank < bestRank
   }
-  const candidateArchived = candidate.filePath.endsWith('.zst')
-  if (candidateArchived !== best.filePath.endsWith('.zst')) {
-    return !candidateArchived
+  const live = codexLiveAliasBeats(candidate.filePath, best.filePath)
+  if (live !== null) {
+    return live
   }
   const candidateTime = sessionSortTime(candidate)
   const bestTime = sessionSortTime(best)
