@@ -49,6 +49,7 @@ export const CATALOG: Feature[] = [
   { id: 'life.read-asleep-access', section: S.life, feature: 'Read-while-asleep access control: removed member loses access at once (keys deleted), private workspace is owner-only', conductor: 'Org access to server-held chats', owner: 'gap-read-asleep', priority: 'P0', better: 'End-to-end encrypted; server holds only ciphertext' },
   { id: 'life.read-asleep-phone', section: S.life, feature: 'Phone shows "Latest from this workspace" for a sleeping workspace without waking it', conductor: 'iOS app reads server-held chats', owner: 'gap-read-asleep', priority: 'P1' },
   { id: 'local.checkpoints', section: S.acct, feature: 'Per-turn code checkpoints: revert restores files and chat together', conductor: '0.19 (Claude), 0.44 (Codex) checkpoints', owner: 'gap-checkpoints', priority: 'P0' },
+  { id: 'cloud.checkpoints', section: S.life, feature: 'Per-turn checkpoints in a cloud workspace: Rewind restores files and chat on a real VM, after sleep/wake, rollover and an orcad restart (live/checkpoints-vm.ts, no model spend)', conductor: '0.19 (Claude), 0.44 (Codex) checkpoints in cloud', owner: 'checkpoints-vm', priority: 'P0' },
   // 1. Substrate
   { id: 'sub.create', section: S.sub, feature: 'Hosted microVM per workspace, one call / one click', conductor: '0.78 GA', owner: 'core', priority: 'P0' },
   { id: 'sub.size', section: S.sub, feature: 'Machine size: Standard 8 vCPU / 16 GB (Conductor parity)', conductor: 'Fixed 8 vCPU / 16 GB', owner: 'core', priority: 'P0' },
