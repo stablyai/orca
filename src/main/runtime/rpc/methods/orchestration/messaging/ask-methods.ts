@@ -13,6 +13,7 @@ import {
 import { resolveOrchestrationParty } from '../../../../orchestration/addressing/orchestration-party'
 import { assertLifecycleCallerIsNotAnotherParty } from './lifecycle-caller-fence'
 import { assertWorkerCanReport } from '../../../../orchestration/workers/reports/worker-report-admission'
+import { resolveWorkerReporterIdentity } from '../../../../orchestration/workers/reports/reminted-worker-reporter'
 import { finishedWorkerDispatch, refuseFinishedRemoteWorker } from './finished-worker-mail'
 import { isDispatchAssignee } from '../../../../orchestration/db/dispatch-context/dispatch-lookup'
 import {
@@ -52,7 +53,14 @@ export const ORCHESTRATION_ASK_METHODS = [
       const from = params.from ?? 'unknown'
       // Echo the clamped budget on every return so callers report time actually waited.
       const timeoutMs = clampOrchestrationAskTimeoutMs(params.timeoutMs)
-      const paneKey = runtime.getTerminalPaneKey(from) ?? undefined
+      // A runtime restart can reissue a surviving worker PTY's handle; recover it by exact incarnation.
+      const reporter = resolveWorkerReporterIdentity(runtime, db, {
+        from,
+        attested: undefined,
+        hasSessionCaller: Boolean(orchestrationCaller),
+        evidence: orchestrationCompatibilityEvidence
+      })
+      const paneKey = reporter.paneKey ?? undefined
       if (!orchestrationCaller) {
         assertLifecycleCallerIsNotAnotherParty(runtime, {
           from,
@@ -107,7 +115,7 @@ export const ORCHESTRATION_ASK_METHODS = [
             db.isDispatchProcessCurrent({
               dispatchId: workingDispatch.id,
               paneKey: paneKey ?? null,
-              processIncarnation: runtime.getTerminalProcessIncarnation(from)
+              processIncarnation: reporter.processIncarnation()
             })
         })
       }
