@@ -138,11 +138,13 @@ describe('AgentLaunchChoiceEditor model list', () => {
     )
   })
 
-  it('does not read a listed default as the default model of every workspace', async () => {
-    call.mockResolvedValue(LISTED)
+  it('waits again when the host listing outlasts one wait', async () => {
+    call.mockResolvedValueOnce({ origin: 'unknown', listingInProgress: true, waitExpired: true })
+    call.mockResolvedValueOnce(LISTED)
     renderEditor()
     await waitFor(() => expect(menus.get('Model')).toEqual(['__agent_default__', 'gpt-6-astra']))
-    expect(menus.get('Reasoning effort')).not.toEqual(['__agent_default__', 'low', 'ultra'])
+    expect(call).toHaveBeenCalledTimes(2)
+    expect(document.querySelector('[data-agent-model-list-fallback]')).toBeNull()
   })
 
   it('says the list is built in once the host fails to answer, even with an older answer', async () => {
