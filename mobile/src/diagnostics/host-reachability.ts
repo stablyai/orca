@@ -1,3 +1,4 @@
+import { webSocketUpgradeStatus } from './connection/socket-event-debug'
 import { isTailscaleEndpoint } from '../../../src/shared/remote-runtime/remote-runtime-tailscale-hint'
 import {
   createEndpointAuthSocket,
@@ -5,27 +6,29 @@ import {
   type EndpointAuthHeaders
 } from '../transport/endpoint-auth-headers'
 
+export type HostReachability = { reachable: true } | { reachable: false; httpStatus?: number }
+
 const HOST_REACHABILITY_TIMEOUT_MS = 4000
 
 // Probe reachability without completing the encrypted runtime handshake.
 export async function testHostReachability(
   endpoint: string,
   endpointAuthHeaders: EndpointAuthHeaders | null = null
-): Promise<boolean> {
+): Promise<HostReachability> {
   return new Promise((resolve) => {
     let ws: WebSocket
     try {
       const headers = edgeAuthHeadersForEndpoint(endpoint, endpointAuthHeaders)
       ws = headers ? createEndpointAuthSocket(endpoint, headers) : new WebSocket(endpoint)
     } catch {
-      resolve(false)
+      resolve({ reachable: false })
       return
     }
 
     let settled = false
     let timeout: ReturnType<typeof setTimeout> | null = null
 
-    const finish = (reachable: boolean, closeSocket: boolean): void => {
+    const finish = (result: HostReachability): void => {
       if (settled) {
         return
       }
@@ -34,26 +37,25 @@ export async function testHostReachability(
         clearTimeout(timeout)
         timeout = null
       }
-      if (closeSocket) {
-        try {
-          ws.close()
-        } catch {
-          // The probe is already complete; close failures should not change the diagnostic result.
-        }
+      try {
+        ws.close()
+      } catch {
+        // The probe is already complete; close failures should not change the diagnostic result.
       }
-      resolve(reachable)
+      resolve(result)
     }
 
     timeout = setTimeout(() => {
-      finish(false, true)
+      finish({ reachable: false })
     }, HOST_REACHABILITY_TIMEOUT_MS)
 
     ws.onopen = () => {
-      finish(true, true)
+      finish({ reachable: true })
     }
 
-    ws.onerror = () => {
-      finish(false, true)
+    ws.onerror = (event) => {
+      const httpStatus = webSocketUpgradeStatus(event)
+      finish({ reachable: false, httpStatus })
     }
   })
 }

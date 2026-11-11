@@ -30,7 +30,7 @@ function Harness() {
 beforeEach(() => {
   dependencies.loadHosts.mockReset().mockResolvedValue([host])
   dependencies.prime.mockReset().mockResolvedValue(headers)
-  dependencies.probe.mockReset().mockResolvedValue(true)
+  dependencies.probe.mockReset().mockResolvedValue({ reachable: true })
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }))
 })
 afterEach(() => {
@@ -102,7 +102,7 @@ it.each(['clear', 'replace'] as const)(
 it.each(['clear', 'replace'] as const)(
   'discards a completed probe overlapping %s',
   async (kind) => {
-    let finishProbe: (reachable: boolean) => void = () => {}
+    let finishProbe: (probe: { reachable: boolean }) => void = () => {}
     dependencies.probe.mockReturnValueOnce(new Promise((resolve) => (finishProbe = resolve)))
     await act(async () => {
       renderer = create(createElement(Harness))
@@ -121,7 +121,7 @@ it.each(['clear', 'replace'] as const)(
       markHostCredentialWrite(host.id)
     }
     await act(async () => {
-      finishProbe(true)
+      finishProbe({ reachable: true })
       await running
     })
     expect(diagnostics?.checks.some((check) => check.label === host.name)).toBe(false)

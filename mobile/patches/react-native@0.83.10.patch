@@ -115,9 +115,18 @@ diff --git a/Libraries/Text/TextInput/Multiline/RCTUITextView.mm b/Libraries/Tex
  {
    _dictationRecognizing = YES;
 diff --git a/Libraries/WebSocket/WebSocket.js b/Libraries/WebSocket/WebSocket.js
-index 36aafbbbab176cbeee8cd9fcb72bf155253438c7..de700e67e743988812558dcbfff2c2f0f7faa68a 100644
+index 36aafbbbab176cbeee8cd9fcb72bf155253438c7..a0e61d8ecb6a0990985bb332392e49594e9b8bc0 100644
 --- a/Libraries/WebSocket/WebSocket.js
 +++ b/Libraries/WebSocket/WebSocket.js
+@@ -64,7 +64,7 @@ type WebSocketEventDefinitions = {
+     | {type: 'text', id: number, data: string}
+     | {type: 'blob', id: number, data: BlobData},
+   ],
+-  websocketFailed: [{id: number, message: string}],
++  websocketFailed: [{id: number, message: string, httpStatus?: number}],
+ };
+ 
+ /**
 @@ -88,6 +88,8 @@ class WebSocket extends EventTarget {
    _eventEmitter: NativeEventEmitter<WebSocketEventDefinitions>;
    _subscriptions: Array<EventSubscription>;
@@ -183,11 +192,32 @@ index 36aafbbbab176cbeee8cd9fcb72bf155253438c7..de700e67e743988812558dcbfff2c2f0
              break;
            case 'blob':
              data = BlobManager.createFromOptions(ev.data);
+@@ -275,7 +293,11 @@ class WebSocket extends EventTarget {
+           return;
+         }
+         this.readyState = this.CLOSED;
+-        this.dispatchEvent(new Event('error'));
++        const error = new Event('error');
++        if (ev.httpStatus != null) {
++          Object.defineProperty(error, 'httpStatus', {value: ev.httpStatus});
++        }
++        this.dispatchEvent(error);
+         this.dispatchEvent(
+           new CloseEvent('close', {
+             code: CLOSE_ABNORMAL,
 diff --git a/React/CoreModules/RCTWebSocketModule.mm b/React/CoreModules/RCTWebSocketModule.mm
-index 5d95b90bca818a75a925a6a8b4b786b11d1a9355..9d6bb6148633770c1aae618d3d3eedf1c25c5a3e 100644
+index 5d95b90bca818a75a925a6a8b4b786b11d1a9355..b1db70a5d0dba036af85f9e128b73f30a65c499c 100644
 --- a/React/CoreModules/RCTWebSocketModule.mm
 +++ b/React/CoreModules/RCTWebSocketModule.mm
-@@ -48,6 +48,18 @@ @implementation RCTWebSocketModule {
+@@ -12,6 +12,7 @@
+ #import <FBReactNativeSpec/FBReactNativeSpec.h>
+ #import <React/RCTConvert.h>
+ #import <React/RCTUtils.h>
++#import <CFNetwork/CFNetwork.h>
+ #import <SocketRocket/SRWebSocket.h>
+ 
+ #import "CoreModulesPlugins.h"
+@@ -48,6 +49,18 @@ @implementation RCTWebSocketModule {
  
  RCT_EXPORT_MODULE()
  
@@ -206,8 +236,25 @@ index 5d95b90bca818a75a925a6a8b4b786b11d1a9355..9d6bb6148633770c1aae618d3d3eedf1
  - (dispatch_queue_t)methodQueue
  {
    return dispatch_get_main_queue();
+@@ -179,8 +192,14 @@ - (void)webSocket:(SRWebSocket *)webSocket didFailWithError:(NSError *)error
+   NSNumber *socketID = [webSocket reactTag];
+   _contentHandlers[socketID] = nil;
+   _sockets[socketID] = nil;
+-  NSDictionary *body =
+-      @{@"message" : error.localizedDescription ?: @"Undefined, error is nil", @"id" : socketID ?: @(-1)};
++  NSMutableDictionary *body = [@{
++    @"message" : error.localizedDescription ?: @"Undefined, error is nil",
++    @"id" : socketID ?: @(-1)
++  } mutableCopy];
++  CFHTTPMessageRef response = webSocket.receivedHTTPHeaders;
++  if (response != NULL) {
++    body[@"httpStatus"] = @(CFHTTPMessageGetResponseStatusCode(response));
++  }
+   [self sendEventWithName:@"websocketFailed" body:body];
+ }
+ 
 diff --git a/ReactAndroid/src/main/java/com/facebook/react/modules/websocket/WebSocketModule.kt b/ReactAndroid/src/main/java/com/facebook/react/modules/websocket/WebSocketModule.kt
-index b7752d1692837791e831370b9f7089f561f93b77..9db65da6fbed371a07122ab5f386cab112316328 100644
+index b7752d1692837791e831370b9f7089f561f93b77..8137faaf20e987eca4e76317f12007a8d288b1f7 100644
 --- a/ReactAndroid/src/main/java/com/facebook/react/modules/websocket/WebSocketModule.kt
 +++ b/ReactAndroid/src/main/java/com/facebook/react/modules/websocket/WebSocketModule.kt
 @@ -40,6 +40,9 @@ import okio.ByteString
@@ -234,6 +281,30 @@ index b7752d1692837791e831370b9f7089f561f93b77..9db65da6fbed371a07122ab5f386cab1
      val client = okHttpBuilder.build()
  
      val builder = Request.Builder().tag(id).url(url)
+@@ -165,7 +175,7 @@ public class WebSocketModule(context: ReactApplicationContext) :
+           }
+ 
+           override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+-            notifyWebSocketFailed(id, t.message)
++            notifyWebSocketFailed(id, t.message, response?.code)
+           }
+ 
+           override fun onMessage(webSocket: WebSocket, text: String) {
+@@ -327,10 +337,13 @@ public class WebSocketModule(context: ReactApplicationContext) :
+     }
+   }
+ 
+-  private fun notifyWebSocketFailed(id: Int, message: String?) {
++  private fun notifyWebSocketFailed(id: Int, message: String?, httpStatus: Int? = null) {
+     val params = buildReadableMap {
+       put("id", id)
+       put("message", message)
++      if (httpStatus != null) {
++        put("httpStatus", httpStatus)
++      }
+     }
+     sendEvent("websocketFailed", params)
+   }
 diff --git a/src/private/specs_DEPRECATED/modules/NativeWebSocketModule.js b/src/private/specs_DEPRECATED/modules/NativeWebSocketModule.js
 index e48223552a7da3d4ac478286c8aeead70e43dad2..b6e09c168bd8fde56fe2c3a0c922a84e3a7d04a5 100644
 --- a/src/private/specs_DEPRECATED/modules/NativeWebSocketModule.js
