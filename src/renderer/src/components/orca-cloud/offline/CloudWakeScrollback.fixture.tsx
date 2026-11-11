@@ -119,7 +119,13 @@ export const agentPaneScrollbackOnly = defineFixture({
             '  ? for shortcuts'
           ].join('\r\n'),
           agentPane: true,
-          after: '\x1b[2m(Claude relaunching…)\x1b[0m'
+          // Fixture stand-in for the relaunched Claude's own screen (the app writes no such text).
+          after: [
+            '╭───────────────────────────────╮',
+            '│ ✻ Welcome back to Claude Code │',
+            '╰───────────────────────────────╯',
+            '> '
+          ].join('\r\n')
         }
       ]}
     />

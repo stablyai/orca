@@ -4,7 +4,7 @@
 // stopped" divider, client-side only (nothing reaches the PTY), as rendered text + SGR.
 import { translate } from '@/i18n/i18n'
 import {
-  formatClock,
+  formatSleptRange,
   renderBufferRows,
   sanitizeRestoredText,
   type RestoreBuffer
@@ -97,8 +97,8 @@ export function captureWakeScrollback(
 export function wakeDividerLine(sleptAt: number, wokeAt: number): string {
   const label = translate(
     'orcaCloudWorkspace.terminal.sleptDivider',
-    'Slept {{from}}–{{to}} · processes stopped',
-    { from: formatClock(sleptAt), to: formatClock(wokeAt) }
+    'Slept {{range}} · processes stopped',
+    { range: formatSleptRange(sleptAt, wokeAt) }
   )
   return `\x1b[0;2m── ${label} ──\x1b[0m`
 }
@@ -178,6 +178,13 @@ function rowHasText(buffer: RestoreBuffer, y: number): boolean {
 }
 
 /**
+ * Appended to the snapshot's own clear when a restore follows: holds rendering (DEC 2026) from that
+ * clear until the rewrite, so no frame shows a blank pane or the woken prompt without its history.
+ */
+export const HOLD_RENDER_UNTIL_RESTORED = '\x1b[?2026h'
+const RELEASE_RENDER = '\x1b[?2026l'
+
+/**
  * The client-side rewrite once the snapshot painted: the restored output, the divider, then the
  * woken screen's rows, with the cursor put back where the snapshot left it (relative moves only).
  * Null on the alternate screen (a full-screen app owns the pane; its normal buffer is not shown).
@@ -209,10 +216,11 @@ export async function finishWakeScrollbackRestore(
   write: (data: string) => Promise<void>
 ): Promise<boolean> {
   const data = composeWakeRestore(restore.block, terminal)
+  // Always release the render hold, restored or not.
+  await write(`${data ?? ''}${RELEASE_RENDER}`)
   if (data === null) {
     return false
   }
-  await write(data)
   if (restore.scrolledTo !== null) {
     terminal.scrollToLine(restore.scrolledTo)
   }

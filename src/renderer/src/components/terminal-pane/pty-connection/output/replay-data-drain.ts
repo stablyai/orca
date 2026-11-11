@@ -22,6 +22,7 @@ import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 import {
   beginWakeScrollbackRestore,
   finishWakeScrollbackRestore,
+  HOLD_RENDER_UNTIL_RESTORED,
   type WakeScrollbackRestore
 } from '@/lib/orca-cloud/cloud-wake-scrollback'
 
@@ -131,10 +132,14 @@ export function bindReplayDataDrain(session: ConnectPanePtySession): void {
             carriesHistory === true
           )
           replayPayload = image.payload
-          await session.writeReplayDataAsync(image.preamble)
+          await session.writeReplayDataAsync(
+            preSleep ? `${image.preamble}${HOLD_RENDER_UNTIL_RESTORED}` : image.preamble
+          )
         } else {
           // Reconnect can sever DEC 2026 mid-frame; clear-screen does not release its latch, leaving replay invisible until timeout.
-          await session.writeReplayDataAsync(`${RELEASE_SYNCHRONIZED_OUTPUT}\x1b[2J\x1b[3J\x1b[H`)
+          await session.writeReplayDataAsync(
+            `${RELEASE_SYNCHRONIZED_OUTPUT}\x1b[2J\x1b[3J\x1b[H${preSleep ? HOLD_RENDER_UNTIL_RESTORED : ''}`
+          )
         }
         if (!isCurrentPayload()) {
           continue

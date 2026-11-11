@@ -218,7 +218,16 @@ export function sanitizeRestoredText(text: string): string {
   return out
 }
 
-/** "14:02" in the person's locale. */
-export function formatClock(at: number, locale?: string): string {
-  return new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' }).format(at)
+/**
+ * "2:02–2:31 PM" / "11:50 AM–12:10 PM" / "14:02–14:31": the locale's short times, no leading zero,
+ * a shared AM/PM said once; across days each side keeps its weekday ("Mon 11:50 PM–Tue 12:10 AM").
+ */
+export function formatSleptRange(from: number, to: number, locale?: string): string {
+  const sameDay = new Date(from).toDateString() === new Date(to).toDateString()
+  const format = new Intl.DateTimeFormat(locale, {
+    hour: 'numeric',
+    minute: '2-digit',
+    ...(sameDay ? {} : { weekday: 'short' })
+  })
+  return format.formatRange(Math.min(from, to), to).replace(/\s*[–-]\s*/u, '–')
 }
