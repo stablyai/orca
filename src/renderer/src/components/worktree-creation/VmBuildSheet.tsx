@@ -275,6 +275,7 @@ export function VmBuildSheet({
                         : null
                   }
                   timing={timings[step.id] ?? null}
+                  stopped={failure !== null}
                   t={t}
                   waitedMs={steps.find((candidate) => candidate.id === 'provision')?.elapsedMs ?? 0}
                 />

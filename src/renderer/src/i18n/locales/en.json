@@ -4251,7 +4251,8 @@
             "cloneCounting": "Counting objects…",
             "updateCloud": "Update repository",
             "updateFetching": "Fetching changes…",
-            "repositoryPending": "Repository"
+            "repositoryPending": "Repository",
+            "getRepository": "Get repository"
           },
           "VmBuildFailureCard": {
             "createFailedTitle": "Couldn’t create workspace",

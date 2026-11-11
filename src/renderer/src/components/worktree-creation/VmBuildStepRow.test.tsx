@@ -44,6 +44,16 @@ it('names the repository row once: no label guessed, a placeholder only after 15
   expect(container.textContent).toContain('Update repository')
 })
 
+it('names an undecided repository step neutrally once the start has failed (N-12)', () => {
+  const { container } = render(
+    <ol>
+      <VmBuildStepRow step={pendingClone()} cloud detail={null} timing={null} stopped t={t} />
+    </ol>
+  )
+  expect(container.textContent).toContain('Get repository')
+  expect(container.querySelector('[data-slot="skeleton"]')).toBeNull()
+})
+
 it('shows the placeholder at once when the create has already waited past 150 ms (no blank row)', () => {
   const { container } = render(
     <ol>
