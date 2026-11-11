@@ -352,13 +352,12 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
       </SettingsGroup>
 
       {showVoiceControlSection && (
-        <>
-          <Separator />
+        <SettingsGroup title={t('components.settings.voice.voiceControl.title', 'Voice Control')}>
           <VoiceControlSettingsSection
             voiceSettings={voiceSettings}
             onUpdateVoiceSettings={updateVoiceSettings}
           />
-        </>
+        </SettingsGroup>
       )}
 
       <OpenAiCompatibleProviderDialog

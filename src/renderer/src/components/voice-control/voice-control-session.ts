@@ -4,7 +4,7 @@
  * ephemeral credential it minted); raw audio never touches the bridge, which sidesteps
  * the contextBridge typed-array zeroing entirely.
  */
-import { e2eConfig } from '@/lib/e2e-config'
+import { e2eConfig } from '@/app-shell/startup/e2e-config'
 import {
   classifyControlTranscriptEvent,
   isInputAudioCommittedEvent,

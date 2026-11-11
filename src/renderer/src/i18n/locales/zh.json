@@ -20460,6 +20460,9 @@
         "advanced": {
           "title": "高级"
         },
+        "voiceControl": {
+          "title": "语音控制"
+        },
         "setup": {
           "savedMicrophone": "你的麦克风"
         },

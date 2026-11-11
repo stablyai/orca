@@ -20653,6 +20653,9 @@
         "advanced": {
           "title": "Avanzado"
         },
+        "voiceControl": {
+          "title": "Control de voz"
+        },
         "setup": {
           "savedMicrophone": "Tu micrófono"
         },

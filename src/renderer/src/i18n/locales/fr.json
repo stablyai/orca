@@ -21000,6 +21000,9 @@
         "advanced": {
           "title": "Avancé"
         },
+        "voiceControl": {
+          "title": "Contrôle vocal"
+        },
         "setup": {
           "savedMicrophone": "Votre micro"
         },

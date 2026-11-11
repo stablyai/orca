@@ -22138,6 +22138,9 @@
         "advanced": {
           "title": "Advanced"
         },
+        "voiceControl": {
+          "title": "Voice Control"
+        },
         "setup": {
           "savedMicrophone": "Your microphone"
         },

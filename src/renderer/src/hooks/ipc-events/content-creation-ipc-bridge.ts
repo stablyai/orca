@@ -3,10 +3,8 @@ import {
   isManualSimulatorLaunchPending,
   rememberPrelaunchedSimulatorSession
 } from '@/lib/simulator/launch/simulator-launch-coordination'
-import {
-  createFloatingWorkspaceBrowserTab,
-  isFloatingWorkspacePanelFocused
-} from '@/lib/floating-workspace-terminal-actions'
+import { createFloatingWorkspaceBrowserTab } from '@/components/floating-terminal/floating-workspace-tab-creation'
+import { isFloatingWorkspacePanelFocused } from '@/components/floating-terminal/floating-workspace-terminal-actions'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { toast } from 'sonner'
 import { useAppStore } from '../../store'

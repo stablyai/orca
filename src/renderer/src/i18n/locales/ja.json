@@ -20148,6 +20148,9 @@
         "advanced": {
           "title": "詳細設定"
         },
+        "voiceControl": {
+          "title": "音声コントロール"
+        },
         "setup": {
           "savedMicrophone": "選択したマイク"
         },

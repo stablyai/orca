@@ -20145,6 +20145,9 @@
         "advanced": {
           "title": "고급"
         },
+        "voiceControl": {
+          "title": "음성 제어"
+        },
         "setup": {
           "savedMicrophone": "선택한 마이크"
         },
