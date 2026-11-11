@@ -181,8 +181,9 @@ export function useDocumentAppearance(): void {
   }, [pluginThemesLoaded, paintsBackground, surfaceOpacity, themeBackground])
 
   useEffect(() => {
-    applySidebarGlass(sidebarOpacity)
-  }, [sidebarOpacity])
+    // Why: the material stays until restart, so drop glass as soon as terminals go opaque.
+    applySidebarGlass(surfaceOpacity < 1 ? sidebarOpacity : 1)
+  }, [sidebarOpacity, surfaceOpacity])
 
   const reduceMotion = usePrefersReducedMotion()
   const video =
