@@ -18,7 +18,10 @@ import type * as HostAgentSignInClient from '@/runtime/provider-accounts/sign-in
 import type { PublicKnownRuntimeEnvironment } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { makeTabWithIds } from '@/components/activity/ActivityPrototypePage-test-fixtures'
 import DashboardAgentRow from '@/components/dashboard/DashboardAgentRow'
-import { openOrcaCloudAgentAccounts } from '@/components/new-workspace/OrcaCloudAgentSetupRow'
+import {
+  closeOrcaCloudSignInSheet,
+  isOrcaCloudSignInSheetOpen
+} from '@/components/settings/agent-accounts/sign-in-sheet/orca-cloud-sign-in-sheet-store'
 import { _resetCloudAgentAccountActiveSinceForTest } from '@/lib/orca-cloud/cloud-agent-account-active-since'
 import { CompactAgentRow } from './worktree-card-compact-agent-row'
 
@@ -435,26 +438,24 @@ describe.each([
     expect(focusTooltip(text)?.textContent).toBe('Renew in Settings → Agent accounts')
   })
 
-  it('clicking the text opens Agent accounts (the composer\'s "Set up once" target), not the pane', () => {
-    // The target is whatever the composer's "Set up once" opens; settings may move it.
-    openOrcaCloudAgentAccounts()
-    const setUpOnceTarget = useAppStore.getState().settingsNavigationTarget
-    useAppStore.setState({ settingsNavigationTarget: null })
+  // JA-04 (#349): "Set up once" opens the focused "Agents in Orca Cloud" sheet, not Settings.
+  it('clicking the text opens the Orca Cloud sign-in sheet (the composer\'s "Set up once" target), not the pane', () => {
+    closeOrcaCloudSignInSheet()
     const onActivate = vi.fn()
     const [, text] = statusButtons(render(makeAgent(CLOUD_WORKTREE, true), onActivate))
     click(text)
     expect(onActivate).not.toHaveBeenCalled()
-    expect(useAppStore.getState().activeView).toBe('settings')
-    expect(useAppStore.getState().settingsNavigationTarget).toEqual(setUpOnceTarget)
-    expect(setUpOnceTarget).toMatchObject({ sectionId: 'orca-cloud' })
+    expect(isOrcaCloudSignInSheetOpen()).toBe(true)
+    expect(useAppStore.getState().activeView).toBe('terminal')
   })
 
-  it('clicking the dot opens Agent accounts too', () => {
+  it('clicking the dot opens the sign-in sheet too', () => {
+    closeOrcaCloudSignInSheet()
     const onActivate = vi.fn()
     const [dot] = statusButtons(render(makeAgent(CLOUD_WORKTREE, true), onActivate))
     click(dot)
     expect(onActivate).not.toHaveBeenCalled()
-    expect(useAppStore.getState().activeView).toBe('settings')
+    expect(isOrcaCloudSignInSheetOpen()).toBe(true)
   })
 
   it('still activates the pane when the rest of the row is clicked', () => {
