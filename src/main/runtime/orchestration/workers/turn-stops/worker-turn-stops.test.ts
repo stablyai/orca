@@ -14,6 +14,7 @@ import '../../db/dispatch-row-writer'
 import '../../db/attempt-outcome-projection'
 import { createRootDispatch } from '../../db/root-dispatch-test-fixture'
 import { TerminalWorkerTurnStops } from './terminal-worker-turn-stops'
+import { reportWorkerTurnStop } from './worker-turn-stop-report'
 
 const PANE = makePaneKey('tab-worker', '11111111-1111-4111-8111-111111111111')
 const HANDLE = 'term_worker'
@@ -109,6 +110,7 @@ describe('terminal worker turn stops', () => {
     await settle()
     expect(ctx.mail()).toHaveLength(0)
   })
+
   it('never mails a capability or credential carried in why a worker went away', () => {
     const ctx = setup()
     const capability = 'dcap_0123456789abcdefghijKLMN'
@@ -176,7 +178,6 @@ describe('terminal worker turn stops', () => {
     stop('turn-3', after)
     expect(ctx.mail()).toHaveLength(2)
   })
-
 })
 
 describe('chat worker turn stops', () => {
