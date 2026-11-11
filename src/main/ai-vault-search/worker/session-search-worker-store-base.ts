@@ -67,11 +67,7 @@ export class SessionSearchWorkerStoreBase extends SessionSearchCursorSnapshot {
     private readonly onFileChanged: (path: string) => void = () => undefined
   ) {
     super()
-    this.client = new SessionSearchWorkerClient(
-      (response) => this.update(response),
-      undefined,
-      true
-    )
+    this.client = new SessionSearchWorkerClient(this.update.bind(this), undefined, true)
   }
   get catalogEpoch(): number {
     return this.client.epoch

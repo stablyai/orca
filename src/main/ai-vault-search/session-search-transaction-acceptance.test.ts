@@ -31,7 +31,7 @@ it.each(['dirty', 'input-receipts'])(
       data: { path, suffix, signal: signal.buffer },
       prelude: `
         const { workerData } = require('node:worker_threads');
-        const { SessionSearchStore } = require(${JSON.stringify(resolve('src/main/ai-vault-search/session-search-store.ts'))});
+        const { SessionSearchStore } = require(${JSON.stringify(resolve('src/main/ai-vault-search/storage/session-search-store.ts'))});
         const catalog = SessionSearchStore.prototype.catalog;
         SessionSearchStore.prototype.catalog = async function(command) {
           if (command.kind !== 'input-invalidate' || command.path !== workerData.path || Atomics.compareExchange(new Int32Array(workerData.signal), 0, 1, 0) !== 1) return catalog.call(this, command);

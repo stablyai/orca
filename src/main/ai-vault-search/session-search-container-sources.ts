@@ -3,9 +3,9 @@ import type {
   SessionSearchContainerOmission
 } from './session-search-container-transition'
 import { SessionSearchOperationError } from './worker/session-search-worker-client'
-import type { SessionSearchCatalogClient } from './session-search-catalog-client'
 import {
   recordSessionSearchCatalogCounts,
+  type SessionSearchCatalogClient,
   type SessionSearchCatalogRequest
 } from './session-search-catalog-client'
 import { recordSessionScanIssue } from '../ai-vault/session-scan-issues'

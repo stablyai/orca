@@ -128,7 +128,7 @@ async function startAfterASweep(
   const settled = transcriptPath(SETTLED_SESSION_ID)
   await writeClaudeTranscript(settled, ['a conversation from before'], SETTLED_SESSION_ID)
   // Recency uses real file mtimes rather than the fake retention clock.
-  const ahead = new Date(Date.now() + 3_600_000)
+  const ahead = new Date((await stat(settled)).mtimeMs + 3_600_000)
   await utimes(settled, ahead, ahead)
   await newIndexer(overrides).start()
 }
@@ -285,7 +285,7 @@ it.skipIf(!CAN_DENY_READ)('stops re-reading a transcript it cannot read', async 
 
     // A changed stat releases the failed-read hold; chmod alone does not change the freshness key.
     await chmod(path, 0o644)
-    const later = new Date(Date.now() + 60_000)
+    const later = new Date((await stat(path)).mtimeMs + 60_000)
     await utimes(path, later, later)
     notifySessionSearchFileChange(path)
     await nextCycle()
