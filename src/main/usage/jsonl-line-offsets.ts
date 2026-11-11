@@ -1,7 +1,11 @@
 /** Resume after complete JSONL lines using raw byte offsets; readline hides terminators and would miscount CRLF transcripts. */
-import { createReadStream } from 'node:fs'
 import { isResumablePrefixLength, type JsonlFileReader } from './jsonl-file-checkpoint'
 import { readJsonlSnapshotRange, releaseJsonlReadStream } from './jsonl-file-snapshot'
+import { WslJsonlFileHandle } from './jsonl-file-access'
+import {
+  openTranscriptReadStream,
+  WSL_TRANSCRIPT_READ_CHUNK_BYTES
+} from '../native-chat/wsl-transcript-fs-access'
 
 const LINE_FEED = 0x0a
 const CARRIAGE_RETURN = 0x0d
@@ -39,13 +43,26 @@ async function* readJsonlChunks(
     }
     return
   }
+  if (reader?.handle instanceof WslJsonlFileHandle) {
+    for (let position = startOffset; position < reader.stats.size;) {
+      const length = Math.min(WSL_TRANSCRIPT_READ_CHUNK_BYTES, reader.stats.size - position)
+      const buffer = Buffer.allocUnsafe(length)
+      const { bytesRead } = await reader.handle.read(buffer, 0, length, position)
+      if (bytesRead === 0) {
+        break
+      }
+      position += bytesRead
+      yield buffer.subarray(0, bytesRead)
+    }
+    return
+  }
   const stream = reader
     ? reader.handle.createReadStream({
         start: startOffset,
         end: reader.stats.size - 1,
         autoClose: false
       })
-    : createReadStream(filePath, { start: startOffset })
+    : openTranscriptReadStream(filePath, { start: startOffset }, 'scan')
   try {
     for await (const chunk of stream) {
       yield Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)

@@ -3,6 +3,7 @@ import type { CodexUsageDailyAggregate, CodexUsageSession } from '../codex-usage
 import type { OpenCodeUsageDailyAggregate, OpenCodeUsageSession } from '../opencode-usage/types'
 import type { MuseUsageDailyAggregate, MuseUsageSession } from '../muse-usage/types'
 import type { UsageScanWorktreeRef } from './usage-provider-contract'
+import type { CodexUsageSourceDiscovery } from '../codex-usage/codex-usage-sources'
 import type {
   UsageCacheSplitRequest,
   UsageCacheSplitResult,
@@ -26,6 +27,7 @@ export type UsageScanWorkerScanBody =
   | {
       operation: 'scan'
       providerId: 'codex'
+      sourceDiscovery?: CodexUsageSourceDiscovery
       worktrees: UsageScanWorktreeRef[]
       sourceCache: UsageSourceCacheRef
     }

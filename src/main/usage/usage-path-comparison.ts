@@ -1,4 +1,14 @@
 import { posix, win32 } from 'node:path'
+import {
+  foldWslUncPathCaseInsensitiveParts,
+  parseWslUncPath,
+  wslUncDrivePathToWindows
+} from '../../shared/wsl-paths'
+
+function windowsDriveAlias(pathValue: string): string {
+  const wsl = parseWslUncPath(pathValue)
+  return wsl ? (wslUncDrivePathToWindows(pathValue, wsl.distro) ?? pathValue) : pathValue
+}
 
 export function looksLikeWindowsPath(pathValue: string): boolean {
   return /^[A-Za-z]:[\\/]/.test(pathValue) || pathValue.startsWith('\\\\')
@@ -6,6 +16,11 @@ export function looksLikeWindowsPath(pathValue: string): boolean {
 
 /** Key for grouping by location: slash/case differences must not fragment one folder into many. */
 export function normalizeComparablePath(pathValue: string, platform = process.platform): string {
+  pathValue = windowsDriveAlias(pathValue)
+  const wslKey = foldWslUncPathCaseInsensitiveParts(pathValue)
+  if (wslKey) {
+    return wslKey
+  }
   const normalized = pathValue.replace(/\\/g, '/')
   return platform === 'win32' || looksLikeWindowsPath(pathValue)
     ? normalized.toLowerCase()
@@ -13,6 +28,7 @@ export function normalizeComparablePath(pathValue: string, platform = process.pl
 }
 
 export function normalizeFsPath(pathValue: string, platform = process.platform): string {
+  pathValue = windowsDriveAlias(pathValue)
   if (platform === 'win32' || looksLikeWindowsPath(pathValue)) {
     return win32.normalize(win32.resolve(pathValue))
   }

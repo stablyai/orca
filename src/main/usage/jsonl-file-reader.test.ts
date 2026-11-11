@@ -78,7 +78,8 @@ describe('pinned small JSONL reader', () => {
         return read(buffer, offset, Math.min(length, 2), position)
       })
       .mockImplementationOnce(async (...args) => {
-        const result = await read(...args)
+        const [buffer, offset, length, position] = positionalReadArgs(args)
+        const result = await read(buffer, offset, length, position)
         return { ...result, bytesRead: 0 }
       })
 
@@ -92,7 +93,8 @@ describe('pinned small JSONL reader', () => {
     await collect(active)
     const read = active.handle.read.bind(active.handle)
     vi.spyOn(active.handle, 'read').mockImplementationOnce(async (...args) => {
-      const result = await read(...args)
+      const [buffer, offset, length, position] = positionalReadArgs(args)
+      const result = await read(buffer, offset, length, position)
       return { ...result, bytesRead: 0 }
     })
 

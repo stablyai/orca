@@ -3,7 +3,7 @@ import { scanOpenCodeUsageDatabasesViaWorker } from '../usage/usage-scan-worker-
 import type { OpenCodeUsageDailyAggregate, OpenCodeUsageSession } from './types'
 
 // Invalidate older caches: merge migrated rows per column, normalize input and preserve cache writes.
-export const OPENCODE_USAGE_SCHEMA_VERSION = 7
+export const OPENCODE_USAGE_SCHEMA_VERSION = 8
 
 export const openCodeUsageProvider = {
   id: 'opencode',

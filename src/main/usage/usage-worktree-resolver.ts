@@ -1,9 +1,10 @@
-import { realpath } from 'node:fs/promises'
 import { posix, win32 } from 'node:path'
 import { areWorktreePathsEqual } from '../git/worktrees/catalog/worktree-path-comparison'
 import { canonicalizeUsageWorktreePaths } from './usage-worktree-canonicalizer'
 import { looksLikeWindowsPath, normalizeFsPath } from './usage-path-comparison'
 import type { UsageScanWorktreeRef } from './usage-provider-contract'
+import { parseWslUncPath } from '../../shared/wsl-paths'
+import { wslGatedRealpath } from '../native-chat/wsl-transcript-fs-access'
 
 type CanonicalizedUsageWorktreeRef = UsageScanWorktreeRef & { canonicalPath: string }
 
@@ -11,6 +12,22 @@ type CanonicalizedUsageWorktreeRef = UsageScanWorktreeRef & { canonicalPath: str
 export type UsageWorktreeResolver = (cwd: string) => UsageScanWorktreeRef | null
 
 function isContainingPath(candidatePath: string, targetPath: string): boolean {
+  const candidateWsl = parseWslUncPath(candidatePath)
+  const targetWsl = parseWslUncPath(targetPath)
+  if (candidateWsl || targetWsl) {
+    if (
+      !candidateWsl ||
+      !targetWsl ||
+      candidateWsl.distro.toLowerCase() !== targetWsl.distro.toLowerCase()
+    ) {
+      return false
+    }
+    const relative = posix.relative(candidateWsl.linuxPath, targetWsl.linuxPath)
+    return (
+      relative === '' ||
+      (relative !== '..' && !relative.startsWith('../') && !posix.isAbsolute(relative))
+    )
+  }
   const useWin32 = looksLikeWindowsPath(candidatePath) || looksLikeWindowsPath(targetPath)
   const relativePath = useWin32
     ? win32.relative(candidatePath, targetPath)
@@ -34,7 +51,7 @@ function isContainingPath(candidatePath: string, targetPath: string): boolean {
 
 async function canonicalizePath(pathValue: string): Promise<string> {
   try {
-    return normalizeFsPath(await realpath(pathValue))
+    return normalizeFsPath(await wslGatedRealpath(pathValue))
   } catch {
     return normalizeFsPath(pathValue)
   }

@@ -1,4 +1,5 @@
 import { claudeProfileTranscriptDirs } from '../claude-usage/transcript-file-discovery'
+import { discoverWslCodexUsageSources } from '../codex-usage/codex-wsl-session-sources'
 import { existsSync } from 'node:fs'
 import type { Worker } from 'node:worker_threads'
 import { spawnWorkerThread } from '../worker-threads/worker-thread-spawn'
@@ -66,14 +67,20 @@ export function scanClaudeUsageFilesViaWorker(
   )
 }
 
-export function scanCodexUsageFilesViaWorker(
+export async function scanCodexUsageFilesViaWorker(
   worktrees: UsageScanWorktreeRef[],
   sourceCache: UsageSourceCacheRef
 ): Promise<{
   sessions: CodexUsageSession[]
   dailyAggregates: CodexUsageDailyAggregate[]
 }> {
-  return scanCodexUsageOnWorker((body) => getSharedClient().scan(body), worktrees, sourceCache)
+  const sourceDiscovery = await discoverWslCodexUsageSources()
+  return scanCodexUsageOnWorker(
+    (body) =>
+      getSharedClient().scan(body.providerId === 'codex' ? { ...body, sourceDiscovery } : body),
+    worktrees,
+    sourceCache
+  )
 }
 
 export function scanOpenCodeUsageDatabasesViaWorker(

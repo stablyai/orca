@@ -1,6 +1,5 @@
-import { join } from 'node:path'
+import { join, win32 } from 'node:path'
 import { existsSync } from 'node:fs'
-import { realpath, readdir, stat } from 'node:fs/promises'
 import {
   getOrcaManagedCodexHomePath,
   getSystemCodexHomePath
@@ -9,12 +8,16 @@ import { getCodexAccountHomeSessionDirectories } from '../codex/history/rollouts
 import { getLegacyCopiedCodexSessionBridgeScanPreference } from '../codex/history/bridges/codex-session-bridge'
 import { normalizeFsPath } from '../usage/usage-path-comparison'
 import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
+import { parseWslUncPath, wslUncDrivePathToWindows } from '../../shared/wsl-paths'
+import { wslGatedReaddir, wslGatedRealpath } from '../native-chat/wsl-transcript-fs-access'
+import { readJsonlFileSnapshot } from '../usage/jsonl-file-snapshot'
+import type { CodexUsageSourceDiscovery } from './codex-usage-sources'
 
 const YIELD_EVERY_DISCOVERY_ENTRIES = 100
 
 export async function canonicalizePath(pathValue: string): Promise<string> {
   try {
-    const resolved = await realpath(pathValue)
+    const resolved = await wslGatedRealpath(pathValue)
     return normalizeFsPath(resolved)
   } catch {
     return normalizeFsPath(pathValue)
@@ -29,7 +32,7 @@ async function walkJsonlFiles(
   dirPath: string,
   progress: { entriesVisited: number } = { entriesVisited: 0 }
 ): Promise<string[]> {
-  const entries = await readdir(dirPath, { withFileTypes: true }).catch((error: unknown) => {
+  const entries = await wslGatedReaddir(dirPath, 'scan').catch((error: unknown) => {
     if (isDefinitiveAbsence(error)) {
       return []
     }
@@ -42,7 +45,9 @@ async function walkJsonlFiles(
     if (progress.entriesVisited % YIELD_EVERY_DISCOVERY_ENTRIES === 0) {
       await yieldToEventLoop()
     }
-    const fullPath = join(dirPath, entry.name)
+    const fullPath = parseWslUncPath(dirPath)
+      ? win32.join(dirPath, entry.name)
+      : join(dirPath, entry.name)
     if (entry.isDirectory()) {
       appendDiscoveredFiles(files, await walkJsonlFiles(fullPath, progress))
       continue
@@ -81,21 +86,55 @@ function hasLegacyCopiedSessionBridgeMarkers(): boolean {
 }
 
 export async function listCodexSessionFiles(): Promise<string[]> {
+  return (await discoverCodexSessionFiles()).files
+}
+
+export async function discoverCodexSessionFiles(
+  sourceDiscovery?: CodexUsageSourceDiscovery
+): Promise<{
+  files: string[]
+  sourceDistroByPath: Map<string, string>
+  complete: boolean
+}> {
   const files: string[] = []
+  const sourceDistroByPath = new Map<string, string>()
+  let complete = sourceDiscovery?.complete ?? true
   for (const dirPath of getCodexSessionDirectories()) {
     appendDiscoveredFiles(files, await walkJsonlFiles(dirPath))
   }
-  return dedupeCodexSessionFileAliases(files, hasLegacyCopiedSessionBridgeMarkers())
+  for (const source of sourceDiscovery?.sources ?? []) {
+    try {
+      const discovered = await walkJsonlFiles(source.directory)
+      appendDiscoveredFiles(files, discovered)
+      for (const path of discovered) {
+        sourceDistroByPath.set(path, source.distro)
+      }
+    } catch {
+      complete = false
+    }
+  }
+  return {
+    files: await dedupeCodexSessionFileAliases(
+      files,
+      hasLegacyCopiedSessionBridgeMarkers(),
+      sourceDistroByPath
+    ),
+    sourceDistroByPath,
+    complete
+  }
 }
 
 async function dedupeCodexSessionFileAliases(
   files: string[],
-  hasLegacyBridgeMarkers: boolean
+  hasLegacyBridgeMarkers: boolean,
+  sourceDistroByPath: ReadonlyMap<string, string>
 ): Promise<string[]> {
   const excludedAliases = new Set<string>()
   if (hasLegacyBridgeMarkers) {
     for (const [index, filePath] of files.entries()) {
-      const legacyCopyBridge = getLegacyCopiedCodexSessionBridgeScanPreference(filePath)
+      const legacyCopyBridge = parseWslUncPath(filePath)
+        ? null
+        : getLegacyCopiedCodexSessionBridgeScanPreference(filePath)
       if ((index + 1) % YIELD_EVERY_DISCOVERY_ENTRIES === 0) {
         await yieldToEventLoop()
       }
@@ -115,7 +154,10 @@ async function dedupeCodexSessionFileAliases(
 
   const seenAliases = new Set<string>()
   const uniqueFiles: string[] = []
-  for (const [index, filePath] of [...new Set(files)].sort().entries()) {
+  const ordered = [...new Set(files)].sort((left, right) =>
+    compareCodexSourcePriority(left, right, sourceDistroByPath)
+  )
+  for (const [index, filePath] of ordered.entries()) {
     const aliasKey = await getCodexSessionFileAliasKey(filePath)
     if (excludedAliases.has(aliasKey)) {
       continue
@@ -139,12 +181,25 @@ async function getCodexSessionFileAliasKey(filePath: string): Promise<string> {
 async function getPhysicalFileAliasKey(filePath: string): Promise<string> {
   try {
     // Windows file IDs can exceed the precision of JavaScript numbers.
-    const fileStat = await stat(filePath, { bigint: true })
+    const fileStat = await readJsonlFileSnapshot(filePath)
     if (fileStat.ino !== 0n) {
-      return `${fileStat.dev}:${fileStat.ino}`
+      const wsl = parseWslUncPath(filePath)
+      const distro =
+        wsl && !wslUncDrivePathToWindows(filePath, wsl.distro) ? wsl.distro.toLowerCase() : null
+      return `${distro ? `wsl:${distro}:` : ''}${fileStat.dev}:${fileStat.ino}`
     }
   } catch {}
   return `path:${await canonicalizePath(filePath)}`
+}
+
+export function compareCodexSourcePriority(
+  left: string,
+  right: string,
+  sourceDistroByPath: ReadonlyMap<string, string>
+): number {
+  const leftWsl = sourceDistroByPath.has(left) || parseWslUncPath(left) !== null
+  const rightWsl = sourceDistroByPath.has(right) || parseWslUncPath(right) !== null
+  return Number(rightWsl) - Number(leftWsl) || (left < right ? -1 : left > right ? 1 : 0)
 }
 
 export function getLegacySourceSkipBytesByPath(
@@ -156,6 +211,9 @@ export function getLegacySourceSkipBytesByPath(
     return sourceSkipBytesByPath
   }
   for (const filePath of files) {
+    if (parseWslUncPath(filePath)) {
+      continue
+    }
     const legacyCopyBridge = getLegacyCopiedCodexSessionBridgeScanPreference(filePath)
     if (!legacyCopyBridge || legacyCopyBridge.sourceSkipBytes === null) {
       continue

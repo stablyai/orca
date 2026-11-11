@@ -1,10 +1,11 @@
 export type WslTranscriptFsProcessCall =
   | { operation: 'access'; path: string }
-  | { operation: 'stat' | 'lstat' | 'readdir'; path: string }
+  | { operation: 'stat' | 'lstat' | 'readdir' | 'realpath' | 'snapshot'; path: string }
   // Keep open separate so Exclude removes its whole union member.
   | { operation: 'open'; path: string }
   | { operation: 'readfile'; path: string; encoding: BufferEncoding }
   | { operation: 'read'; handleId: number; position: number; length: number }
+  | { operation: 'handleSnapshot'; handleId: number }
   | { operation: 'close'; handleId: number }
 
 export type WslTranscriptFsProcessRequest = WslTranscriptFsProcessCall & { id: number }
@@ -12,8 +13,16 @@ export type WslTranscriptFsProcessRequest = WslTranscriptFsProcessCall & { id: n
 /** Handles pin a process; only other calls may reuse pooled children. */
 export type WslTranscriptFsReusableProcessCall = Exclude<
   WslTranscriptFsProcessCall,
-  { operation: 'open' | 'read' | 'close' }
+  { operation: 'open' | 'read' | 'handleSnapshot' | 'close' }
 >
+
+export type WslTranscriptFileSnapshot = {
+  dev: bigint
+  ino: bigint
+  size: bigint
+  mtimeNs: bigint
+  ctimeNs: bigint
+}
 
 export type WslTranscriptFsDirent = {
   name: string

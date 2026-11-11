@@ -1,13 +1,17 @@
 import { createUsageWorktreeResolver } from '../usage/usage-worktree-resolver'
 import {
   getLegacySourceSkipBytesByPath,
-  listCodexSessionFiles,
+  discoverCodexSessionFiles,
+  compareCodexSourcePriority,
   yieldToEventLoop
 } from './codex-session-file-discovery'
 import type { CodexUsageWorktreeRef } from './codex-usage-event-attribution'
 import { codexUsageAggregation } from './codex-usage-aggregation'
 import { getProcessedFileInfo, parseCodexUsageFile } from './codex-rollout-file-parse'
 import { resolveCodexRolloutResume } from './codex-rollout-resume-state'
+import type { CodexUsageSourceDiscovery } from './codex-usage-sources'
+import { parseWslUncPath } from '../../shared/wsl-paths'
+import { normalizeComparablePath } from '../usage/usage-path-comparison'
 import type {
   CodexUsageDailyAggregate,
   CodexUsageParseResumeState,
@@ -28,19 +32,45 @@ type CodexRolloutResumePlan = {
 export async function scanCodexUsageFiles(
   worktrees: CodexUsageWorktreeRef[],
   previousProcessedFiles: CodexUsagePersistedFile[],
-  onFilesScanned?: (count: number) => void
+  onFilesScanned?: (count: number) => void,
+  sourceDiscovery?: CodexUsageSourceDiscovery
 ): Promise<{
   processedFiles: CodexUsagePersistedFile[]
   sessions: CodexUsageSession[]
   dailyAggregates: CodexUsageDailyAggregate[]
 }> {
-  const files = await listCodexSessionFiles()
+  const discovery = await discoverCodexSessionFiles(sourceDiscovery)
+  if (
+    !discovery.complete &&
+    ((sourceDiscovery?.sources.length ?? 0) > 0 ||
+      worktrees.some((worktree) => parseWslUncPath(worktree.path)) ||
+      previousProcessedFiles.some((file) => file.sourceDistro || parseWslUncPath(file.path)))
+  ) {
+    throw new Error(
+      'WSL Codex usage discovery is unavailable; the previous usage snapshot was preserved.'
+    )
+  }
+  const { files, sourceDistroByPath } = discovery
+  const discoveredPaths = new Set(files)
   const previousByPath = new Map(previousProcessedFiles.map((file) => [file.path, file]))
+  const retained = previousProcessedFiles.filter((file) => {
+    if (discoveredPaths.has(file.path) || !(file.sourceDistro || parseWslUncPath(file.path))) {
+      return false
+    }
+    return (
+      !discovery.complete ||
+      !sourceDiscovery?.wslHomes.some((home) => {
+        const path = normalizeComparablePath(file.path)
+        const root = normalizeComparablePath(home).replace(/\/+$/, '')
+        return path.startsWith(`${root}/`)
+      })
+    )
+  })
   // Share the per-cwd attribution cache across all files in this scan.
   const resolveWorktree = await createUsageWorktreeResolver(worktrees)
   const legacySourceSkipBytesByPath = getLegacySourceSkipBytesByPath(files)
 
-  const currentPaths = new Set(files)
+  const currentPaths = new Set([...files, ...retained.map((file) => file.path)])
   // Deleted owners release copied records; reparse only forks that deferred those claims.
   const lostOwnerPath = previousProcessedFiles.some(
     (file) =>
@@ -50,6 +80,10 @@ export async function scanCodexUsageFiles(
   )
 
   const reusedByPath = new Map<string, CodexUsagePersistedFile>()
+  for (const file of retained) {
+    reusedByPath.set(file.path, file)
+  }
+
   const resumeByPath = new Map<string, CodexRolloutResumePlan>()
   const pathsToParse: string[] = []
   for (const [index, filePath] of files.entries()) {
@@ -98,7 +132,7 @@ export async function scanCodexUsageFiles(
 
   // Forks copy usage records; retained claims and sorted-path parsing prevent double-counting.
   const eventOwnerByKey = new Map<string, string>()
-  for (const filePath of files) {
+  for (const filePath of currentPaths) {
     const retained = previousByPath.get(filePath)
     for (const eventKey of retained?.ownedEventKeys ?? []) {
       // First retained claim wins so conflicting projections stay deterministic.
@@ -109,6 +143,7 @@ export async function scanCodexUsageFiles(
   }
 
   const parsedByPath = new Map<string, CodexUsagePersistedFile>()
+  const displacedNativeOwners = new Set<string>()
   let lostOwnerKeys = lostOwnerPath
   const parseAndPublish = async (
     filePath: string,
@@ -116,14 +151,25 @@ export async function scanCodexUsageFiles(
   ): Promise<void> => {
     const previous =
       parsedByPath.get(filePath) ?? reusedByPath.get(filePath) ?? previousByPath.get(filePath)
+    const sourceDistro = sourceDistroByPath.get(filePath) ?? parseWslUncPath(filePath)?.distro
     const processed = await parseCodexUsageFile(filePath, resolveWorktree, {
+      sourceDistro,
       legacySourceSkipBytes: legacySourceSkipBytesByPath.get(filePath) ?? 0,
       resume,
       canClaimEventKey: (eventKey) => {
         const owner = eventOwnerByKey.get(eventKey)
-        return owner === undefined || owner === filePath
+        return (
+          owner === undefined ||
+          owner === filePath ||
+          (sourceDistro !== undefined && !sourceDistroByPath.has(owner) && !parseWslUncPath(owner))
+        )
       },
       commitEventKey: (eventKey) => {
+        const owner = eventOwnerByKey.get(eventKey)
+        if (owner !== undefined && owner !== filePath) {
+          displacedNativeOwners.add(owner)
+          resumeByPath.delete(owner)
+        }
         eventOwnerByKey.set(eventKey, filePath)
       }
     })
@@ -136,8 +182,10 @@ export async function scanCodexUsageFiles(
     }
     reusedByPath.delete(filePath)
     parsedByPath.set(filePath, processed)
+    displacedNativeOwners.delete(filePath)
   }
 
+  pathsToParse.sort((left, right) => compareCodexSourcePriority(left, right, sourceDistroByPath))
   for (const [index, filePath] of pathsToParse.entries()) {
     await parseAndPublish(filePath, resumeByPath.get(filePath))
 
@@ -149,11 +197,11 @@ export async function scanCodexUsageFiles(
   }
 
   // A replaced owner can release records that an unchanged fork previously deferred.
-  while (lostOwnerKeys) {
+  while (lostOwnerKeys || displacedNativeOwners.size > 0) {
     lostOwnerKeys = false
     for (const [index, filePath] of files.entries()) {
       const current = parsedByPath.get(filePath) ?? reusedByPath.get(filePath)
-      if (current?.hasDeferredClaims) {
+      if (current?.hasDeferredClaims || displacedNativeOwners.has(filePath)) {
         await parseAndPublish(filePath)
         onFilesScanned?.(1)
       }
@@ -166,7 +214,7 @@ export async function scanCodexUsageFiles(
   const processedFiles: CodexUsagePersistedFile[] = []
   const sessionsById = new Map<string, CodexUsageSession>()
   const dailyByKey = new Map<string, CodexUsageDailyAggregate>()
-  for (const filePath of files) {
+  for (const filePath of currentPaths) {
     const processed = reusedByPath.get(filePath) ?? parsedByPath.get(filePath)
     if (!processed) {
       continue

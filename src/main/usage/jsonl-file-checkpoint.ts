@@ -1,6 +1,6 @@
-import { createReadStream } from 'node:fs'
-import { open, type FileHandle } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
+import { openTranscriptReadStream } from '../native-chat/wsl-transcript-fs-access'
+import { openJsonlFileHandle, type JsonlFileHandle } from './jsonl-file-access'
 import {
   readJsonlFileSnapshot,
   readJsonlHandleSnapshot,
@@ -25,7 +25,7 @@ export type JsonlFileCheckpoint = {
 
 export type JsonlFileReader = {
   path: string
-  handle: FileHandle
+  handle: JsonlFileHandle
   stats: JsonlFileSnapshot
   snapshotCheckpoint: JsonlFileCheckpoint | null
   snapshotChunks: Buffer[] | null
@@ -67,7 +67,7 @@ async function readWindowDigest(
     return `${buffer.length}:${hash.digest('hex')}`
   }
   const range = { start, end: endExclusive - 1 }
-  const stream = createReadStream(filePath, range)
+  const stream = openTranscriptReadStream(filePath, range, 'scan')
   try {
     for await (const chunk of stream) {
       const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
@@ -111,7 +111,7 @@ export function jsonlPhysicalFileId(stats: {
 
 export async function openJsonlFileReader(filePath: string): Promise<JsonlFileReader> {
   while (true) {
-    const handle = await open(filePath, 'r')
+    const handle = await openJsonlFileHandle(filePath)
     let retained = false
     try {
       const stats = await readJsonlHandleSnapshot(handle)

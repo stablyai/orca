@@ -1,4 +1,6 @@
 import type {
+  WslTranscriptFileSnapshot,
+  WslTranscriptFsProcessCall,
   WslTranscriptFsProcessResponse,
   WslTranscriptFsReusableProcessCall
 } from './wsl-transcript-fs-process-protocol'
@@ -75,6 +77,23 @@ export class WslTranscriptFsProcessClient {
     length: number,
     signal: AbortSignal
   ): Promise<Buffer> {
+    return this.runHandleOperation(handle, { operation: 'read', position, length }, signal)
+  }
+
+  snapshot(
+    handle: WslTranscriptFsProcessHandle,
+    signal: AbortSignal
+  ): Promise<WslTranscriptFileSnapshot> {
+    return this.runHandleOperation(handle, { operation: 'handleSnapshot' }, signal)
+  }
+
+  private async runHandleOperation<T>(
+    handle: WslTranscriptFsProcessHandle,
+    request:
+      | Omit<Extract<WslTranscriptFsProcessCall, { operation: 'read' }>, 'handleId'>
+      | { operation: 'handleSnapshot' },
+    signal: AbortSignal
+  ): Promise<T> {
     signal.throwIfAborted()
     const state = this.handles.get(handle)
     if (!state) {
@@ -87,12 +106,7 @@ export class WslTranscriptFsProcessClient {
       this.pool.park(slot)
       throw processHandleUnavailableError(handle, this.faultedHandles)
     }
-    return this.send<Buffer>(
-      slot,
-      { operation: 'read', handleId: state.handleId, position, length },
-      signal,
-      'pinned'
-    )
+    return this.send<T>(slot, { ...request, handleId: state.handleId }, signal, 'pinned')
   }
 
   close(handle: WslTranscriptFsProcessHandle): Promise<void> {

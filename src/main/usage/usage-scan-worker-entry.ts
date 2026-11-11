@@ -99,7 +99,8 @@ async function runScan(
       const result = await scanCodexUsageFiles(
         request.worktrees,
         await readUsageSourceCache<CodexUsagePersistedFile>(request.sourceCache),
-        onFilesScanned
+        onFilesScanned,
+        request.sourceDiscovery
       )
       await persistSourceCache(request.sourceCache, result.processedFiles)
       return {

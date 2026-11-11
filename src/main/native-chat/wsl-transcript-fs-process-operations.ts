@@ -1,7 +1,17 @@
-import { access, lstat, open, readdir, readFile, stat, type FileHandle } from 'node:fs/promises'
+import {
+  access,
+  lstat,
+  open,
+  readdir,
+  readFile,
+  realpath,
+  stat,
+  type FileHandle
+} from 'node:fs/promises'
 import type { Dirent } from 'node:fs'
 import {
   invalidTranscriptHandleError,
+  type WslTranscriptFileSnapshot,
   type WslTranscriptFsDirent,
   type WslTranscriptFsProcessRequest
 } from './wsl-transcript-fs-process-protocol'
@@ -33,6 +43,10 @@ export class WslTranscriptFsProcessOperations {
         return stat(request.path)
       case 'lstat':
         return lstat(request.path)
+      case 'realpath':
+        return realpath(request.path)
+      case 'snapshot':
+        return this.snapshot(await stat(request.path, { bigint: true }))
       case 'readdir':
         return (await readdir(request.path, { withFileTypes: true })).map(serializeDirent)
       case 'readfile':
@@ -52,12 +66,29 @@ export class WslTranscriptFsProcessOperations {
         const { bytesRead } = await handle.read(buffer, 0, request.length, request.position)
         return buffer.subarray(0, bytesRead)
       }
+      case 'handleSnapshot': {
+        const handle = this.handles.get(request.handleId)
+        if (!handle) {
+          throw invalidTranscriptHandleError()
+        }
+        return this.snapshot(await handle.stat({ bigint: true }))
+      }
       case 'close': {
         const handle = this.handles.get(request.handleId)
         this.handles.delete(request.handleId)
         await handle?.close()
         return true
       }
+    }
+  }
+
+  private snapshot(stats: WslTranscriptFileSnapshot): WslTranscriptFileSnapshot {
+    return {
+      dev: stats.dev,
+      ino: stats.ino,
+      size: stats.size,
+      mtimeNs: stats.mtimeNs,
+      ctimeNs: stats.ctimeNs
     }
   }
 }
