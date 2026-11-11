@@ -21,6 +21,7 @@ import { recoverPendingSkillTransactions } from '../skills/transaction-state/ski
 import { initCohortClassifier } from '../telemetry/cohort-classifier'
 import { initOnboardingCohortClassifier } from '../telemetry/onboarding-cohort-classifier'
 import { StatsCollector } from '../stats/collector'
+import { UsageWorktreeHistory } from '../usage/worktree-attribution/usage-worktree-history'
 import { feedAgentSessionStats } from '../stats/agent-session-stats-feed'
 import { installRepoMaintenanceIdleGate } from '../workspaces/catalog/repo-maintenance-idle-gate'
 import { mainProcessState as state } from './main-process-state'
@@ -143,7 +144,12 @@ export function initializeMainProcessObservers(): void {
   initOnboardingCohortClassifier(store)
   state.stats = new StatsCollector()
   feedAgentSessionStats(state.stats, agentHookServer)
-  state.backend = new BackendSupervisor(store)
+  const usageWorktrees = new UsageWorktreeHistory(
+    store,
+    join(getCanonicalUserDataPath(), 'orca-usage-worktree-history.json')
+  )
+  state.usageWorktreeHistory = usageWorktrees
+  state.backend = new BackendSupervisor(usageWorktrees)
   state.claudeUsage = state.backend.automationClient('claudeUsage')
   state.codexUsage = state.backend.automationClient('codexUsage')
 }

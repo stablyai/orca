@@ -3,6 +3,7 @@ import type { AutomationUsageClient } from '../../shared/backend-service-contrac
 import { type BrowserWindow, type Tray, app } from 'electron'
 import type { Store } from '../persistence/loading-store/store'
 import type { StatsCollector } from '../stats/collector'
+import type { UsageWorktreeHistory } from '../usage/worktree-attribution/usage-worktree-history'
 import type { CodexAccountService } from '../codex-accounts/service'
 import type { CodexRuntimeHomeService } from '../codex-accounts/runtime-home-service'
 import type { ClaudeAccountService } from '../claude-accounts/service'
@@ -86,6 +87,8 @@ export const mainProcessState = {
   profileStateAdmission: createInitialProfileStateAdmission(),
   stats: null as StatsCollector | null,
   ...createInitialBackendServices(),
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: widens the null slot assigned by main-process-observers.
+  usageWorktreeHistory: null as UsageWorktreeHistory | null,
   codexAccounts: null as CodexAccountService | null,
   codexRuntimeHome: null as CodexRuntimeHomeService | null,
   codexSessionMigration: null as ReturnType<typeof createCodexSessionMigrationScheduler> | null,

@@ -49,7 +49,7 @@ beforeEach(() => {
 })
 afterEach(() => vi.unstubAllEnvs())
 
-describe('independent pane Claude environments', () => {
+describe('independent pane agent session environments', () => {
   it('canonicalizes explicit Windows stamps for old receivers and keeps caller deletions authoritative', () => {
     const platform = process.platform
     Object.defineProperty(process, 'platform', { value: 'win32' })
@@ -81,6 +81,22 @@ describe('independent pane Claude environments', () => {
       Object.defineProperty(process, 'platform', { value: platform })
     }
   })
+
+  it.each(['local', 'daemon'])(
+    '%s panes drop the launching Codex task identity but keep user Codex settings',
+    (provider) => {
+      vi.stubEnv('CODEX_THREAD_ID', 'parent-thread')
+      vi.stubEnv('CODEX_WINDOWS_REGISTERED_CORE', '1')
+      vi.stubEnv('CODEX_HOME', '/home/user/.codex')
+      const pane =
+        provider === 'local'
+          ? buildInheritedLocalPtyEnvironment({}, [])
+          : createDaemonPtyEnvironment({ sessionId: 'pane', cols: 80, rows: 24, env: {} })
+      expect(pane.CODEX_THREAD_ID).toBeUndefined()
+      expect(pane.CODEX_WINDOWS_REGISTERED_CORE).toBeUndefined()
+      expect(pane.CODEX_HOME).toBe('/home/user/.codex')
+    }
+  )
 
   it.each(['local', 'daemon'])(
     '%s owns stamps only from the pane overlay through final preparation',

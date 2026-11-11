@@ -27,7 +27,7 @@ import { ManagedOrcadEventWindow } from '../managed-server/lifecycle/orcad-manag
 import { ORCAD_SHUTDOWN_DEADLINE_MS } from '../orcad/orcad-stop-deadlines'
 import { isRendererDocumentNavigation } from '../window/renderer-document-navigation'
 import { createBackendDesktopCapabilities } from './backend-desktop-capabilities'
-import type { Store } from '../persistence/loading-store/store'
+import type { UsageWorktreeSource } from '../usage/worktree-attribution/usage-worktree-metadata'
 
 export { captureBackendBootstrap } from './backend-bootstrap'
 import { capturedBootstrap } from './backend-bootstrap'
@@ -48,7 +48,7 @@ export class BackendSupervisor {
   private readonly retireRenderer = (_event: unknown, contents: WebContents): void =>
     this.documents.get(contents.id)?.retire()
 
-  constructor(private readonly store: Pick<Store, 'getRepos' | 'getAllWorktreeMeta'>) {
+  constructor(private readonly store: UsageWorktreeSource) {
     if (!capturedBootstrap) {
       throw new Error('Backend paths were not captured during preflight.')
     }

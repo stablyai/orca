@@ -235,7 +235,10 @@ function installWillQuitHandler(): void {
     const sshShutdown = Promise.resolve(finalSaves).then((saves) => saves.sshShutdown)
     const storeFlush = Promise.resolve(finalSaves).then((saves) => saves.storeFlush)
     const watcherShutdown = Promise.resolve(finalSaves).then((saves) => saves.watcherShutdown)
-    const usageCacheFlush = state.backend?.stop() ?? Promise.resolve()
+    const usageCacheFlush = Promise.all([
+      state.backend?.stop(),
+      state.usageWorktreeHistory?.flush()
+    ]).then(() => {})
     disposeDesktopBrowserBridge()
     const browserClientHostShutdown = shutdownPairedRuntimeBrowserClientHosts()
     const skillUploadShutdown = state.runtime?.disposeSkillUploadSessions() ?? Promise.resolve()

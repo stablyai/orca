@@ -64,7 +64,12 @@ it('keeps ready-generated recovery behind owner backoff and the cap, then admits
     children.push(child)
     return child
   })
-  const supervisor = new BackendSupervisor({ getRepos: () => [], getAllWorktreeMeta: () => ({}) })
+  const supervisor = new BackendSupervisor({
+    getRepos: () => [],
+    getAllWorktreeMeta: () => ({}),
+    getRememberedWorktreeDisplayNames: () => new Map(),
+    whenLoaded: async () => {}
+  })
   const frame = { postMessage: vi.fn() }
   const sender = Object.assign(new EventEmitter(), {
     id: 2,
@@ -141,7 +146,12 @@ it('publishes terminal unavailability on the third death and preserves explicit 
     children.push(child)
     return child
   })
-  const supervisor = new BackendSupervisor({ getRepos: () => [], getAllWorktreeMeta: () => ({}) })
+  const supervisor = new BackendSupervisor({
+    getRepos: () => [],
+    getAllWorktreeMeta: () => ({}),
+    getRememberedWorktreeDisplayNames: () => new Map(),
+    whenLoaded: async () => {}
+  })
   const frame = { postMessage: vi.fn() }
   const sender = Object.assign(new EventEmitter(), {
     id: 1,
@@ -181,7 +191,12 @@ it('publishes terminal unavailability on the third death and preserves explicit 
 it('retires only the exited renderer document and rejects its pending port delivery', async () => {
   const child = Object.assign(new EventEmitter(), { postMessage: vi.fn(), kill: vi.fn() })
   rig.fork.mockReturnValue(child)
-  const supervisor = new BackendSupervisor({ getRepos: () => [], getAllWorktreeMeta: () => ({}) })
+  const supervisor = new BackendSupervisor({
+    getRepos: () => [],
+    getAllWorktreeMeta: () => ({}),
+    getRememberedWorktreeDisplayNames: () => new Map(),
+    whenLoaded: async () => {}
+  })
   const frame = { postMessage: vi.fn() }
   const sender = Object.assign(new EventEmitter(), {
     id: 3,
