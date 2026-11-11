@@ -8911,7 +8911,14 @@
           "prAutoRefreshMinimal": "Minimal",
           "prAutoRefreshOff": "Off",
           "prAutoRefreshTitle": "PR Auto-Refresh",
-          "prAutoRefreshDescription": "How often this host re-reads pull request and checks status on a timer. Default refreshes the selected workspace every minute and other visible ones every 2 minutes; Reduced uses 5 and 10 minutes; Minimal uses 10 and 20 minutes; Off only refreshes when you select a workspace, push, return to the window, or refresh manually. On a server, this also limits how often connected clients can make it refresh."
+          "prAutoRefreshDescription": "How often pull request and checks status is re-read on a timer. Selecting a workspace, pushing, returning to the window and refreshing manually always read at once. On a server, this also caps how often connected clients can make it refresh.",
+          "prAutoRefreshEveryMinute": "every minute",
+          "prAutoRefreshEveryMinutes": "every {{minutes}} min",
+          "prAutoRefreshHint": "{{mode}}: about {{open}} for the open workspace and {{visible}} for other visible ones.",
+          "prAutoRefreshHintOff": "{{mode}}: no timed refresh. Orca still reads when you select a workspace, push, return to the window or refresh manually.",
+          "prAutoRefreshHostNote": "Applies to {{host}} and every client connected to it.",
+          "prAutoRefreshReading": "Reading the current setting from {{host}}…",
+          "prAutoRefreshUnknownHost": "the selected server"
         },
         "HiddenExperimentalGroup": {
           "7c4e18d2f6": "Arms the bold-glitch capture gestures on this machine: {{samplingShortcut}} starts a sampling burst; {{captureShortcut}} captures pane evidence to disk.",

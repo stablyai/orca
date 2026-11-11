@@ -7,14 +7,11 @@ import {
   type PRAutoRefreshCadence
 } from '../../../../../shared/review-refresh-policy'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
+import { useAppStateValue } from '@/store/retained-views/app-state-view'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import { SearchableSetting } from '../section-layout/SearchableSetting'
-import { SettingsRow, SettingsSegmentedControl } from '../form-controls/SettingsFormControls'
-import {
-  getPRAutoRefreshDescription,
-  getPRAutoRefreshTitle,
-  PR_AUTO_REFRESH_KEYWORDS
-} from './pr-auto-refresh-search'
+import type { SettingsHostScope } from '../host-scope/settings-host-scope'
+import { PRAutoRefreshControl } from './PRAutoRefreshControl'
 
 type HostCadence = { environmentId: string; cadence: PRAutoRefreshCadence }
 
@@ -29,7 +26,7 @@ function usePRAutoRefreshHostCadence(
   cadence: PRAutoRefreshCadence | null
   update: (cadence: PRAutoRefreshCadence) => Promise<void>
 } {
-  const environmentId = target.kind === 'environment' ? target.environmentId : null
+  const environmentId = runtimeTargetEnvironmentId(target)
   const [remote, setRemote] = useState<HostCadence | null>(null)
 
   useEffect(() => {
@@ -94,69 +91,35 @@ function usePRAutoRefreshHostCadence(
 }
 
 export function PRAutoRefreshSetting({
-  target,
+  hostScope,
   settings,
   updateSettings
 }: {
-  target: RuntimeClientTarget
+  /** The host chosen at the top of Settings; its timers (and its clients') are what change. */
+  hostScope: SettingsHostScope
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>
 }): React.JSX.Element {
   const t = useTranslate()
-  const title = getPRAutoRefreshTitle(t)
-  const description = getPRAutoRefreshDescription(t)
-  const { cadence, update } = usePRAutoRefreshHostCadence(target, settings, updateSettings, t)
-
+  const environmentId = runtimeTargetEnvironmentId(hostScope.target)
+  const remoteHostName = useAppStateValue((state) =>
+    environmentId
+      ? (state.runtimeEnvironments.find((entry) => entry.id === environmentId)?.name ??
+        t('auto.components.settings.GitPane.prAutoRefreshUnknownHost', 'the selected server'))
+      : null
+  )
+  const { cadence, update } = usePRAutoRefreshHostCadence(
+    hostScope.target,
+    settings,
+    updateSettings,
+    t
+  )
   return (
-    <SearchableSetting
-      title={title}
-      description={description}
-      keywords={PR_AUTO_REFRESH_KEYWORDS}
-      className="max-w-none"
-    >
-      <SettingsRow
-        label={title}
-        description={description}
-        alignTop
-        control={
-          <SettingsSegmentedControl<PRAutoRefreshCadence>
-            value={cadence ?? 'default'}
-            onChange={(next) => {
-              if (cadence !== null && next !== cadence) {
-                void update(next)
-              }
-            }}
-            ariaLabel={title}
-            size="sm"
-            options={[
-              {
-                value: 'default',
-                label: t('auto.components.settings.GitPane.prAutoRefreshDefault', 'Default'),
-                // Unknown until the remote host answers.
-                disabled: cadence === null
-              },
-              {
-                value: 'reduced',
-                label: t('auto.components.settings.GitPane.prAutoRefreshReduced', 'Reduced'),
-                // Unknown until the remote host answers.
-                disabled: cadence === null
-              },
-              {
-                value: 'minimal',
-                label: t('auto.components.settings.GitPane.prAutoRefreshMinimal', 'Minimal'),
-                // Unknown until the remote host answers.
-                disabled: cadence === null
-              },
-              {
-                value: 'off',
-                label: t('auto.components.settings.GitPane.prAutoRefreshOff', 'Off'),
-                // Unknown until the remote host answers.
-                disabled: cadence === null
-              }
-            ]}
-          />
-        }
-      />
-    </SearchableSetting>
+    <PRAutoRefreshControl
+      cadence={cadence}
+      onChange={(next) => void update(next)}
+      remoteHostName={remoteHostName}
+      disabled={!hostScope.available}
+    />
   )
 }

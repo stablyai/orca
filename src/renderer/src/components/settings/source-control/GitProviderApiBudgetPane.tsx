@@ -5,7 +5,7 @@ import { matchesSettingsSearch } from '../search/settings-search'
 import { GitHubRateLimitPanel } from '../../github/github-rate-limit-display'
 import { GitLabRateLimitPanel } from '../../gitlab/gitlab-rate-limit-display'
 import { useTranslate } from '@/i18n/use-translate'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { SettingsHostScope } from '../host-scope/settings-host-scope'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import { PRAutoRefreshSetting } from './PRAutoRefreshSetting'
 import { prAutoRefreshMatchesSearch } from './pr-auto-refresh-search'
@@ -13,18 +13,19 @@ import { prAutoRefreshMatchesSearch } from './pr-auto-refresh-search'
 type GitProviderApiBudgetPaneProps = {
   settingsSearchQuery?: string
   /** The host chosen at the top of Settings; budgets come from that host's CLI. */
-  target: RuntimeClientTarget
+  hostScope: SettingsHostScope
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>
 }
 
 export function GitProviderApiBudgetPane({
   settingsSearchQuery,
-  target,
+  hostScope,
   settings,
   updateSettings
 }: GitProviderApiBudgetPaneProps): React.JSX.Element | null {
   const t = useTranslate()
+  const target = hostScope.target
   const storeSearchQuery = useAppStore((s) => s.settingsSearchQuery)
   const searchQuery = settingsSearchQuery ?? storeSearchQuery
 
@@ -32,7 +33,7 @@ export function GitProviderApiBudgetPane({
     prAutoRefreshMatchesSearch(searchQuery, t) ? (
       <PRAutoRefreshSetting
         key="pr-auto-refresh"
-        target={target}
+        hostScope={hostScope}
         settings={settings}
         updateSettings={updateSettings}
       />
