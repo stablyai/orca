@@ -213,8 +213,8 @@ export function LocalWorkspacePortsPanel({
   )
 
   const { activePorts, otherWorkspacePorts, externalPorts } = useMemo(
-    () => getLocalWorkspacePortSections(displayScan, activeRepoId, activeWorktree?.id),
-    [activeRepoId, activeWorktree?.id, displayScan]
+    () => getLocalWorkspacePortSections(displayScan, activeRepoId, activeWorktree?.id, isSandbox),
+    [activeRepoId, activeWorktree?.id, displayScan, isSandbox]
   )
 
   const showPortSections = shouldShowLocalWorkspacePortSections(displayScan, {

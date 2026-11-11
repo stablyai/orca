@@ -8,6 +8,7 @@ import {
   Globe,
   Loader2,
   MessageSquare,
+  Monitor,
   Search,
   Smartphone,
   TerminalSquare
@@ -279,6 +280,8 @@ function getActionPresentation(
     const icon =
       option.option.kind === 'new-browser' ? (
         <Globe className="size-3.5 shrink-0" aria-hidden="true" />
+      ) : option.option.kind === 'open-remote-desktop' ? (
+        <Monitor className="size-3.5 shrink-0" aria-hidden="true" />
       ) : option.option.kind === 'new-markdown' ? (
         <FilePlus className="size-3.5 shrink-0" aria-hidden="true" />
       ) : option.option.kind === 'new-plugin-file' ? (

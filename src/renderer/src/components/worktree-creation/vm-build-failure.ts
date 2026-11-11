@@ -22,7 +22,13 @@ export type VmBuildAccountFailureKind =
   | 'snapshotMissing'
 
 export type VmBuildFailure =
-  | { kind: 'checks'; problems: readonly EnvironmentDoctorCheck[] }
+  | {
+      kind: 'checks'
+      problems: readonly EnvironmentDoctorCheck[]
+      /** Orca Cloud: when the unused sandbox sleeps, and what became of it after. */
+      sleepsAt?: number
+      sandbox?: 'sleeping' | 'asleep' | 'deleted'
+    }
   | { kind: VmBuildAccountFailureKind }
   /** The VM did not come up; the raw error is shown only for user-authored recipes. */
   | { kind: 'provision'; error: string }
@@ -67,7 +73,12 @@ export function classifyVmBuildFailure(args: {
   const { entry, error, cloud } = args
   const check = entry.environmentCheck
   if (check?.status === 'failed') {
-    return { kind: 'checks', problems: (check.checks ?? []).filter((c) => c.status !== 'pass') }
+    return {
+      kind: 'checks',
+      problems: (check.checks ?? []).filter((c) => c.status !== 'pass'),
+      ...(check.sleepsAt !== undefined ? { sleepsAt: check.sleepsAt } : {}),
+      ...(check.sandbox ? { sandbox: check.sandbox } : {})
+    }
   }
   if (error === null) {
     return null

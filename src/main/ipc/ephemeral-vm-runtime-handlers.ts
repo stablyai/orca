@@ -11,6 +11,7 @@ import {
 import type { EphemeralVmRuntimeRecord } from '../../shared/ephemeral-vm-runtimes'
 import { cleanupOwnedEphemeralVmRuntime } from '../ephemeral-vm/owned-runtime-cleanup'
 import { stopEphemeralVmRuntimeCleanup } from '../ephemeral-vm/runtime-cleanup-control'
+import { suspendEphemeralVmRuntime } from '../ephemeral-vm/runtime-service'
 import {
   buildEphemeralVmRecipeCleanupCommand,
   buildEphemeralVmRecipeCleanupPayload
@@ -118,6 +119,7 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
   ipcMain.removeHandler('ephemeralVm:attachWorkspace')
   ipcMain.removeHandler('ephemeralVm:listRuntimes')
   ipcMain.removeHandler('ephemeralVm:cleanup')
+  ipcMain.removeHandler('ephemeralVm:suspendRuntime')
   ipcMain.removeHandler('ephemeralVm:preflightCloudDelete')
   ipcMain.removeHandler('ephemeralVm:stopCleanup')
   ipcMain.removeHandler('ephemeralVm:forgetRuntime')
@@ -156,6 +158,32 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
     'ephemeralVm:cleanup',
     async (_event, args: { runtimeId: string }): Promise<EphemeralVmRuntimeRecord> => {
       return cleanupOwnedEphemeralVmRuntime(store, app.getPath('userData'), args.runtimeId)
+    }
+  )
+
+  // A create blocked on a failed environment check holds a sandbox no workspace owns yet, so the
+  // window's idle sleep never sees it. The build sheet sleeps it after a few unused minutes.
+  ipcMain.handle(
+    'ephemeralVm:suspendRuntime',
+    async (_event, args: { runtimeId: string }): Promise<{ ok: boolean; error?: string }> => {
+      const userDataPath = app.getPath('userData')
+      const runtimeId = String(args?.runtimeId ?? '')
+      const runtime = listEphemeralVmRuntimes(userDataPath).find((entry) => entry.id === runtimeId)
+      if (!runtime || runtime.workspaceId || runtime.recipe?.provider !== 'orca-cloud') {
+        return { ok: false, error: 'Not a sandbox waiting on its create.' }
+      }
+      try {
+        const context = getRuntimeRecipeContext(store, userDataPath, runtimeId)
+        const result = await suspendEphemeralVmRuntime({
+          userDataPath,
+          repoPath: context.repoPath,
+          recipe: context.recipe,
+          runtimeId
+        })
+        return result.ok ? { ok: true } : { ok: false, error: result.error }
+      } catch (error) {
+        return { ok: false, error: error instanceof Error ? error.message : String(error) }
+      }
     }
   )
 

@@ -15,13 +15,9 @@ import type {
 import { useOrgRoster } from '../billing/team/use-org-roster'
 import { CloudWorkspaceRow } from './CloudWorkspaceRow'
 import { NEW_SECTION } from './CloudWorkspaceRowMenu'
-import {
-  ANY,
-  CloudWorkspacesToolbar,
-  INITIAL_CLOUD_WORKSPACE_FILTERS,
-  type CloudWorkspacesFilters
-} from './CloudWorkspacesToolbar'
+import { ANY, CloudWorkspacesToolbar } from './CloudWorkspacesToolbar'
 import { EmptyState, ErrorState, NewSectionDialog, SkeletonRows } from './CloudWorkspacesStates'
+import { useCloudHomeFilters } from './use-cloud-home-filters'
 import { CloudWorkspaceConfirmDialog, type PendingConfirm } from './CloudWorkspaceConfirmDialog'
 import { CloudReadSnapshotSheet } from './CloudReadSnapshotSheet'
 import { useCloudReadPanel } from './use-cloud-read-panel'
@@ -84,14 +80,7 @@ export function CloudWorkspacesHome({
   const orgId = cloud?.activeOrgId
   const selfId = cloud?.userId ?? null
   const account = useOrcaAccountKey()
-  const [filters, setFilters] = useState(INITIAL_CLOUD_WORKSPACE_FILTERS)
-  homeArchive.usePendingHomeFilters(setFilters)
-  // Owner and repo filters name the previous team's people and repos; a team switch starts over.
-  const [filtersAccount, setFiltersAccount] = useState(account)
-  if (filtersAccount !== account) {
-    setFiltersAccount(account)
-    setFilters(INITIAL_CLOUD_WORKSPACE_FILTERS)
-  }
+  const { filters, changeFilters } = useCloudHomeFilters(account)
   const [opening, setOpening] = useState<string | null>(null)
   const [now, setNow] = useState(() => Date.now())
   const [sectionFor, setSectionFor] = useState<CloudWorkspace | null>(null)
@@ -100,7 +89,11 @@ export function CloudWorkspacesHome({
   const signIn = useAppStore((s) => s.connectCurrentOrcaProfile)
   const scope = orgId ? filters.scope : 'mine'
   const { state, stale, reading, refresh, replace } = useCloudWorkspaces(
-    { scope, archived: filters.archived ? 'only' : 'exclude' },
+    {
+      scope,
+      archived: filters.archived ? 'only' : 'exclude',
+      ...(filters.routines ? { routines: 'include' as const } : {})
+    },
     Boolean(cloud),
     account
   )
@@ -110,16 +103,6 @@ export function CloudWorkspacesHome({
     () => installWindowVisibilityInterval({ run: () => setNow(Date.now()), intervalMs: 30_000 }),
     []
   )
-
-  const changeFilters = useCallback((next: Partial<CloudWorkspacesFilters>) => {
-    setFilters((previous) => {
-      // A different list (scope or archived) has different owners and repos; start unfiltered.
-      const reset =
-        (next.scope !== undefined && next.scope !== previous.scope) ||
-        (next.archived !== undefined && next.archived !== previous.archived)
-      return { ...previous, ...(reset ? { by: ANY, repo: ANY } : {}), ...next }
-    })
-  }, [])
 
   // A workspace being deleted (or gone) is not something to open or manage; Home leaves it out.
   const all = useHomeWorkspaces(state.status === 'ready' ? state.workspaces : null)
@@ -170,7 +153,11 @@ export function CloudWorkspacesHome({
       })),
     [directory, selfId, t]
   )
-  const totalMs = visible.reduce((sum, w) => sum + w.cost.computeMs, 0)
+  const routineRuns = state.status === 'ready' ? state.routineRuns : undefined
+  // Hidden routine runs leave the count but not the hours: they are still the team's usage.
+  const totalMs =
+    visible.reduce((sum, w) => sum + w.cost.computeMs, 0) +
+    (filters.routines ? 0 : (routineRuns?.hiddenComputeMs ?? 0))
 
   /** Opens the workspace, then (going to a teammate's chat) the chat they have in front. */
   const open = useCallback(
@@ -298,6 +285,7 @@ export function CloudWorkspacesHome({
         }
         reading={reading}
         onRefresh={refresh}
+        routineRuns={routineRuns}
       />
 
       <div
