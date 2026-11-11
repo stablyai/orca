@@ -132,6 +132,12 @@ export type Env = {
 
   /** Operator routes (/v1/internal/*): kill switch, drain, bindings. Secret, >= 32 chars; unset = no routes. */
   OPERATOR_TOKEN?: string
+  /**
+   * Auth's bearer for POST /v1/internal/org-members/removed only (PropelAuth offboarding and
+   * Orca-side removals). Secret, >= 32 chars; lets auth push removals without holding the
+   * operator token. The operator token is still accepted on that route.
+   */
+  MEMBER_REMOVED_TOKEN?: string
   /** `true` refuses every create/resume/rollover (static kill switch; the D1 flag is the runtime one). */
   SANDBOX_CREATES_DISABLED?: string
   /** Warm pool size (pool.ts); unset or 0 = off. */
