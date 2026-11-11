@@ -17179,7 +17179,10 @@
         },
         "AutomationPromptDisclosure": {
           "showLess": "收起",
-          "showMore": "显示更多"
+          "showMore": "显示更多",
+          "copied": "已复制",
+          "copyFailed": "复制失败",
+          "copyPrompt": "复制提示"
         },
         "AutomationDetail": {
           "host": "主机",
@@ -17214,7 +17217,12 @@
           "precheckNone": "无",
           "migrate": "迁移",
           "migrateNotice": "{{host}} 已升级为新的远程主机。请迁移此自动化以继续运行。",
-          "needsMigration": "需要迁移"
+          "needsMigration": "需要迁移",
+          "repeats": "重复",
+          "missedRunGrace": "错过运行宽限期",
+          "execution": "执行",
+          "notRunYet": "尚未运行",
+          "usageDetail_other": "{{tokens}} Token · 已报告 {{known}}/{{count}} 次运行"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "取消",

@@ -16891,7 +16891,10 @@
         },
         "AutomationPromptDisclosure": {
           "showLess": "折りたたむ",
-          "showMore": "さらに表示"
+          "showMore": "さらに表示",
+          "copied": "コピーしました",
+          "copyFailed": "コピーに失敗しました",
+          "copyPrompt": "プロンプトをコピー"
         },
         "AutomationDetail": {
           "host": "ホスト",
@@ -16926,7 +16929,12 @@
           "precheckNone": "なし",
           "migrate": "移行",
           "migrateNotice": "{{host}} は新しいリモートホストにアップグレードされました。実行を続けるには、この自動化を移行してください。",
-          "needsMigration": "移行が必要"
+          "needsMigration": "移行が必要",
+          "repeats": "繰り返し",
+          "missedRunGrace": "実行漏れの猶予時間",
+          "execution": "実行",
+          "notRunYet": "未実行",
+          "usageDetail_other": "{{tokens}} トークン · {{known}}/{{count}} 回の実行を報告済み"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "キャンセル",

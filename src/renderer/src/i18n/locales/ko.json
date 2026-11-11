@@ -16888,7 +16888,10 @@
         },
         "AutomationPromptDisclosure": {
           "showLess": "접기",
-          "showMore": "더 보기"
+          "showMore": "더 보기",
+          "copied": "복사됨",
+          "copyFailed": "복사하지 못함",
+          "copyPrompt": "프롬프트 복사"
         },
         "AutomationDetail": {
           "host": "호스트",
@@ -16923,7 +16926,12 @@
           "precheckNone": "없음",
           "migrate": "마이그레이션",
           "migrateNotice": "{{host}}이(가) 새 원격 호스트로 업그레이드되었습니다. 계속 실행하려면 이 자동화를 마이그레이션하세요.",
-          "needsMigration": "마이그레이션 필요"
+          "needsMigration": "마이그레이션 필요",
+          "repeats": "반복",
+          "missedRunGrace": "누락된 실행 유예 시간",
+          "execution": "실행",
+          "notRunYet": "아직 실행되지 않음",
+          "usageDetail_other": "토큰 {{tokens}} · 실행 {{known}}/{{count}}회 보고됨"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "취소",
