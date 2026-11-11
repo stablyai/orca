@@ -1,5 +1,6 @@
 import React, { useEffect, useId, useRef, useState } from 'react'
 import { GitPullRequestArrow, Loader2, Play, TriangleAlert, X } from 'lucide-react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
@@ -153,13 +154,11 @@ function usePushRecheck(
 
 /**
  * What the environment check found that didn't need to stop the create: one line per problem, one
- * action each, each dismissible. Sits with the workspace's other notices, top right.
+ * action each, each dismissible. It joins the app's toast stack (DS-o), so it stacks with other
+ * toasts (newest on top, same right edge) instead of floating beside them. Shown while its
+ * workspace is the active one; leaving the workspace (or its sleep) takes it down again.
  */
-export function CloudSetupNotices({
-  workspaceId
-}: {
-  workspaceId: string
-}): React.JSX.Element | null {
+export function CloudSetupNoticesDock({ workspaceId }: { workspaceId: string }): null {
   const environmentId = useAppStore(
     (state) => state.ephemeralVmRuntimesByWorkspaceId?.[workspaceId]?.runtimeEnvironmentId
   )
@@ -170,31 +169,44 @@ export function CloudSetupNotices({
     environmentId,
     notices.some((notice) => notice.kind === 'push')
   )
-  if (!record || notices.length === 0) {
-    return null
-  }
-  return (
-    <CloudSetupNoticesView
-      record={record}
-      notices={notices}
-      installing={push.installing}
-      onInstall={() => record.repoUrl && push.startInstall(record.repoUrl)}
-      onRunSetup={(noticeId) => void runCloudSetupScript(workspaceId, record, noticeId)}
-      onDismiss={(noticeId) => dismissCloudSetupNotice(record.environmentId, noticeId)}
-    />
+  const toastId = environmentId ? cloudSetupToastId(environmentId) : null
+  const shown = Boolean(record) && notices.length > 0
+  // Re-rendering the same id updates the toast in place (installing state, a dismissed line).
+  useEffect(() => {
+    if (!toastId) {
+      return
+    }
+    if (!record || !shown) {
+      toast.dismiss(toastId)
+      return
+    }
+    toast.custom(
+      () => (
+        <CloudSetupNoticesView
+          record={record}
+          notices={notices}
+          installing={push.installing}
+          onInstall={() => record.repoUrl && push.startInstall(record.repoUrl)}
+          onRunSetup={(noticeId) => void runCloudSetupScript(workspaceId, record, noticeId)}
+          onDismiss={(noticeId) => dismissCloudSetupNotice(record.environmentId, noticeId)}
+        />
+      ),
+      { id: toastId, duration: Infinity, unstyled: true, dismissible: false }
+    )
+  })
+  useEffect(
+    () => () => {
+      if (toastId) {
+        toast.dismiss(toastId)
+      }
+    },
+    [toastId]
   )
+  return null
 }
 
-/** Bottom right, above the floating-terminal button: top right would cover the prompt's first row. */
-export function CloudSetupNoticesDock({ workspaceId }: { workspaceId: string }): React.JSX.Element {
-  return (
-    <div
-      data-cloud-surface=""
-      className="pointer-events-none absolute right-3 bottom-14 z-30 flex flex-col items-end gap-2"
-    >
-      <CloudSetupNotices workspaceId={workspaceId} />
-    </div>
-  )
+export function cloudSetupToastId(environmentId: string): string {
+  return `cloud-setup:${environmentId}`
 }
 
 export function CloudSetupNoticesView({
@@ -219,7 +231,7 @@ export function CloudSetupNoticesView({
       role="status"
       aria-labelledby={labelId}
       data-cloud-notice="setup"
-      className="pointer-events-auto w-[26rem] max-w-[calc(100%-1.5rem)] rounded-lg border border-border bg-card text-card-foreground shadow-[0_8px_24px_rgba(0,0,0,0.12)] dark:shadow-[0_8px_24px_rgba(0,0,0,0.4)] motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-1"
+      className="w-[var(--width,356px)] max-w-full rounded-lg border border-border bg-card font-sans text-card-foreground shadow-[0_8px_24px_rgba(0,0,0,0.12)] dark:shadow-[0_8px_24px_rgba(0,0,0,0.4)]"
     >
       <h2 id={labelId} className="sr-only">
         {t('orcaCloud.setupNotices.label', 'Workspace setup')}
