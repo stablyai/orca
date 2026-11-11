@@ -22,7 +22,10 @@ type TwinRepoStore = Pick<RuntimeStore, 'getWorkspaceSession' | 'getWorkspaceSes
 
 const WORKTREE_KEYED_FIELDS = new Set(
   Object.entries(WORKSPACE_SESSION_FIELD_OWNERSHIP)
-    .filter(([, ownership]) => ownership === 'worktreeKeyed')
+    .filter(
+      (entry): entry is [keyof WorkspaceSessionState, 'worktreeKeyed'] =>
+        entry[1] === 'worktreeKeyed'
+    )
     .map(([field]) => field)
 )
 
@@ -32,7 +35,7 @@ export function partitionHoldsWorktree(
 ): boolean {
   const workspaceKey = worktreeWorkspaceKey(worktreeId)
   for (const field of WORKTREE_KEYED_FIELDS) {
-    const record: unknown = session?.[field as keyof WorkspaceSessionState]
+    const record: unknown = session?.[field]
     if (
       typeof record === 'object' &&
       record !== null &&
