@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RelayConfig } from './config.js'
 import { openInMemoryRelayDatabase, type RelayDatabase } from './database/database.js'
+import type { EdgeControlFlags } from './edge-relay-control.js'
+import { edgeCohortBucketPermille } from './edge-relay-cohort.js'
 import { EdgeAssignments, type EdgeRelayConfig } from './edge-relay.js'
 
 const fakes = vi.hoisted(() => ({
@@ -52,7 +54,7 @@ function config(): RelayConfig {
   }
 }
 
-async function harness(options: { seeded?: boolean } = {}) {
+async function harness(options: { seeded?: boolean; control?: () => EdgeControlFlags } = {}) {
   const database = await openInMemoryRelayDatabase()
   databases.push(database)
   const edgeConfig: EdgeRelayConfig = {
@@ -60,7 +62,8 @@ async function harness(options: { seeded?: boolean } = {}) {
     rolloutPercent: 0,
     allowHosts: new Set([COHORT_HOST]),
     denyHosts: new Set(),
-    regions: new Set(['us-central1'])
+    regions: new Set(['us-central1']),
+    ...(options.control ? { control: options.control } : {})
   }
   const edge = new EdgeAssignments(database, edgeConfig)
   if (options.seeded !== false) { await edge.ensureEdgeCell() }
@@ -126,5 +129,25 @@ describe('director routes with the relay edge', () => {
     const response = await h.resolve(COHORT_HOST)
     expect(await response.json()).toMatchObject({ cellUrl: 'https://us-c1.relay.example.test' })
     expect(await h.edge.edgeAssignment({ userId: 'user-1', relayHostId: COHORT_HOST })).toBeNull()
+  })
+
+  it('skips the edge row read for hosts above the leave ceiling, on assign and resolve', async () => {
+    const flags: EdgeControlFlags = { mode: 'on', rolloutPermille: 0, leaveCeilingPermille: 10 }
+    const h = await harness({ control: () => flags })
+    vi.spyOn(h.edge, 'pushes', 'get').mockReturnValue(true)
+    const leave = vi.spyOn(h.edge, 'leaveEdge').mockResolvedValue(false)
+    const read = vi.spyOn(h.edge, 'edgeAssignment')
+    const hosts = ['outsidehost00001', 'outsidehost00002', 'outsidehost00003', 'outsidehost00004']
+    const [above, other] = hosts.filter((host) => edgeCohortBucketPermille(host) >= 10)
+    expect((await h.assign(above!)).status).toBe(200)
+    await h.resolve(above!)
+    expect(leave).not.toHaveBeenCalled()
+    expect(read).not.toHaveBeenCalled()
+    // Without a ceiling every host reads, as before.
+    delete flags.leaveCeilingPermille
+    expect((await h.assign(other!)).status).toBe(200)
+    await h.resolve(other!)
+    expect(leave).toHaveBeenCalledTimes(1)
+    expect(read).toHaveBeenCalledTimes(1)
   })
 })
