@@ -15,12 +15,10 @@ const contracts = [
   'src/shared/native-chat/tools/native-chat-tool-pairing.performance.test.ts',
   'src/main/codex-usage/codex-rollout-file-lifetime.test.ts',
   'src/main/codex-usage/scanner-incremental-append.test.ts',
-  'src/main/usage/jsonl-file-reader.test.ts',
-  'src/main/usage/jsonl-file-snapshot.test.ts',
+  'src/main/usage/source-input/jsonl/jsonl-file-reader.test.ts',
   'config/scripts/static-analysis/oxlint-contracts/app-store-performance-plugin.test.mjs',
   'config/scripts/static-analysis/oxlint-contracts/quadratic-buffer-concat-plugin.test.mjs',
-  'src/main/claude-usage/scanner-incremental-append.test.ts',
-  'src/main/claude-usage/store-checkpoint-persistence.test.ts'
+  'src/main/claude-usage/scanner-incremental-append.test.ts'
 ]
 for (const contract of contracts) {
   if (!existsSync(resolve(contract))) {
