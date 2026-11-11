@@ -142,6 +142,8 @@ export type AcpDialect = {
     tool: AgentJournalToolCallItem
   ): AcpBackgroundTaskUpdate[]
   toolSubagents?(update: ToolCallUpdate, tool: AgentJournalToolCallItem): AcpSubagentUpdate[]
+  /** Work this call left running after its reply; the agent reports it only while a prompt is open. */
+  toolBackgroundJob?(update: ToolCallUpdate): 'running' | 'settled' | undefined
   /** A child-session notice supplies only its outcome; the translator owns membership and replay. */
   subagentSessionEnd?(method: string, params: unknown): 'completed' | 'stopped' | undefined
   notification?(method: string, params: unknown, at: number): AcpDialectNotification | undefined

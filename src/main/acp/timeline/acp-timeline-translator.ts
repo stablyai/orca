@@ -19,6 +19,7 @@ import { acpTurnEndEvents, AcpPromptTurns } from './acp-prompt-turns'
 import { translateAcpRequest } from '../requests/acp-timeline-requests'
 import { ACP_SUBSTANTIVE_UPDATES, acpSessionUpdate } from './acp-session-update'
 import { AcpSubagents } from './acp-subagents'
+import { AcpRunningBackgroundJobs } from './acp-running-background-jobs'
 import { AcpChildSessions } from './acp-child-sessions'
 import { AcpTimelineOwnership } from './acp-timeline-ownership'
 import { AcpTurnFailures } from './acp-turn-failures'
@@ -44,6 +45,8 @@ export class AcpTimelineTranslator {
   private readonly backgroundTasks: AcpBackgroundTaskTimeline
   /** Drained by the lane in journal order. */
   readonly subagents = new AcpSubagents()
+  /** Read by the idle stop; replayed history never reaches it. */
+  readonly backgroundJobs = new AcpRunningBackgroundJobs()
   readonly children: AcpChildSessions
   private readonly ownership: AcpTimelineOwnership
   private readonly started = new BoundedMap<string, true>({ maxEntries: 128 })
@@ -256,6 +259,7 @@ export class AcpTimelineTranslator {
           dialect: this.dialect,
           backgroundTasks: this.backgroundTasks,
           subagents: this.subagents,
+          backgroundJobs: this.backgroundJobs,
           messageKey,
           scope: owner.scope
         })
