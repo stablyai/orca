@@ -19,6 +19,10 @@ export const FILE_DOC_PREVIEW_RUNTIME_CAPABILITY = 'files.readDocPreview' as con
 export const TERMINAL_ARTIFACT_CHUNK_RUNTIME_CAPABILITY =
   'files.readTerminalArtifactChunk.v1' as const
 
+// Why: older hosts drop `offset` and write slices in arrival order, so only this lets slices overlap.
+export const FILE_WRITE_CHUNK_AT_OFFSET_RUNTIME_CAPABILITY =
+  'files.writeBase64Chunk.offset.v1' as const
+
 export const FILES_RUNTIME_CAPABILITIES = [
   'files.pathsExist',
   'files.resolve-terminal-path.cross-workspace.v1',
@@ -31,5 +35,6 @@ export const FILES_RUNTIME_CAPABILITIES = [
   FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY,
   STAGED_FILE_SAVE_RUNTIME_CAPABILITY,
   FILE_REPLACE_WITH_UPLOAD_RUNTIME_CAPABILITY,
-  TERMINAL_ARTIFACT_CHUNK_RUNTIME_CAPABILITY
+  TERMINAL_ARTIFACT_CHUNK_RUNTIME_CAPABILITY,
+  FILE_WRITE_CHUNK_AT_OFFSET_RUNTIME_CAPABILITY
 ] as const

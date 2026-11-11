@@ -98,7 +98,7 @@ export const FILE_MUTATION_METHODS = [
         params.worktree,
         params.relativePath,
         params.contentBase64,
-        params.append === true,
+        params.offset ?? params.append === true,
         ...sshMutationArguments(params)
       )
   }),

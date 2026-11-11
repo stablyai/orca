@@ -30,6 +30,18 @@ describe('createLocalFilesystemProvider', () => {
     await expect(provider().writeFileBase64(file, '')).rejects.toMatchObject({ code: 'EEXIST' })
   })
 
+  it('writes offset chunks in any order, only into the file the first chunk created', async () => {
+    const file = join(root, 'upload.tmp')
+    const write = (text: string, position: boolean | number) =>
+      provider().writeFileBase64Chunk(file, Buffer.from(text).toString('base64'), position)
+    await expect(write('ghi', 6)).rejects.toMatchObject({ code: 'ENOENT' })
+    await write('abc', false)
+    await write('ghi', 6)
+    await write('def', 3)
+    await write('def', 3)
+    expect(await readFile(file, 'utf8')).toBe('abcdefghi')
+  })
+
   // Why: creating symlinks needs elevated rights on Windows runners.
   it.skipIf(process.platform === 'win32')(
     'renames, copies and deletes a symlink itself rather than its target',

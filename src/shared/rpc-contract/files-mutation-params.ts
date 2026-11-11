@@ -50,7 +50,9 @@ export const FileWriteBase64 = FileMutationOpen.extend({
 })
 
 export const FileWriteBase64Chunk = FileWriteBase64.extend({
-  append: z.boolean().optional()
+  append: z.boolean().optional(),
+  // Writes in place into the existing file, so overlapping slices may land in any order.
+  offset: z.number().int().nonnegative().optional()
 })
 
 export const FileRename = WorktreeSelector.extend({

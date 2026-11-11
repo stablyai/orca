@@ -1,4 +1,14 @@
-import { constants, copyFile, lstat, mkdir, readdir, rm, stat, writeFile } from 'node:fs/promises'
+import {
+  constants,
+  copyFile,
+  lstat,
+  mkdir,
+  open,
+  readdir,
+  rm,
+  stat,
+  writeFile
+} from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { throwIfSignalAborted, waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import {
@@ -61,6 +71,25 @@ export type LocalFilesystemProvider = Required<
     ): Promise<FileWriteResult>
   }
 
+/** Never creates the file: a slice that lands after the upload's cleanup must not bring it back. */
+async function writeExistingFileAt(path: string, content: Buffer, offset: number): Promise<void> {
+  const handle = await open(path, 'r+')
+  try {
+    let written = 0
+    while (written < content.byteLength) {
+      const { bytesWritten } = await handle.write(
+        content,
+        written,
+        content.byteLength - written,
+        offset + written
+      )
+      written += bytesWritten
+    }
+  } finally {
+    await handle.close()
+  }
+}
+
 /** Build per call so path authorization uses the current store. */
 export function createLocalFilesystemProvider(
   options: LocalFilesystemProviderOptions
@@ -74,11 +103,19 @@ export function createLocalFilesystemProvider(
     windowsFsPath(
       await resolveAuthorizedPath(path, options.requireStore(), { preserveSymlink: true })
     )
-  const writeBase64 = async (filePath: string, contentBase64: string, append: boolean) => {
+  const writeBase64 = async (
+    filePath: string,
+    contentBase64: string,
+    position: boolean | number
+  ) => {
     const content = Buffer.from(contentBase64, 'base64')
     const authorizedPath = await authorize(filePath)
+    if (typeof position === 'number') {
+      await writeExistingFileAt(authorizedPath, content, position)
+      return
+    }
     await mkdir(dirname(authorizedPath), { recursive: true })
-    await writeFile(authorizedPath, content, { flag: append ? 'a' : 'wx' })
+    await writeFile(authorizedPath, content, { flag: position ? 'a' : 'wx' })
   }
   const writeTextFile = async (
     filePath: string,
