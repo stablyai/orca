@@ -1,3 +1,4 @@
+import type { SessionSearchRemovalReceipt } from './session-search-observation-authority'
 import type { SessionSearchSnapshotRow } from './session-search-worker-protocol'
 import type { SessionSearchWorkResult } from './session-search-work-queue'
 import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
@@ -32,7 +33,10 @@ export type SessionSearchCandidateCommand =
     }
   | { kind: 'contested'; rows: { group: string; path: string }[] }
   | { kind: 'remove'; path: string; agents?: string[] }
-  | { kind: 'remove-page'; rows: { path: string; agents?: string[] }[] }
+  | {
+      kind: 'remove-page'
+      rows: { path: string; agents?: string[]; observation?: SessionSearchRemovalReceipt }[]
+    }
   | { kind: 'unowned-page'; rows: { path: string; agent?: string | null }[] }
   | { kind: 'path'; path: string; agent?: string | null }
   | { kind: 'group'; group: string; after?: string }
@@ -40,8 +44,8 @@ export type SessionSearchCandidateCommand =
   | { kind: 'rerank'; root: string; agent: string; order: [string, number][]; after?: string }
   | { kind: 'consumed'; key: string; revision: number }
   | SessionSearchPublicationCommand
-  | { kind: 'require'; path: string; reason?: 'force' | 'metadata' }
-  | { kind: 'acknowledge'; path: string; agent: string; revision: string }
+  | { kind: 'require'; path: string; reason?: 'force' | 'metadata'; delivered?: boolean }
+  | { kind: 'acknowledge'; path: string; agent: string; revision: string; metadataOnly?: boolean }
 export type SessionSearchCandidateRow = SessionSearchCatalogCandidate & {
   key: string
   selected: boolean

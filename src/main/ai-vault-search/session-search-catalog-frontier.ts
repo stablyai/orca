@@ -1,11 +1,24 @@
 import { sessionSearchRecordPages } from './session-search-catalog-pages'
-import type { SessionSearchCatalogClient } from './session-search-catalog-client'
+import {
+  SessionSearchCatalogClient,
+  recordSessionSearchCatalogCounts
+} from './session-search-catalog-client'
 
-type Entry<T> = { value: T; order: number }
+type Entry<T> = { value: T; order: number; revision: number }
 
 /** Only the active head is projected; queued directory and cleanup work stays on disk. */
 export class SessionSearchCatalogFrontier<T> {
   constructor(private readonly catalog: SessionSearchCatalogClient<Entry<T>>) {}
+
+  get waking(): boolean {
+    return this.wakes.size > 0
+  }
+  private get wakes() {
+    return new SessionSearchCatalogClient<unknown>(`${this.catalog.scope}:wake`, this.catalog.send)
+  }
+  async wake(): Promise<void> {
+    await this.catalog.transition({ kind: 'frontier-wake', scope: this.catalog.scope })
+  }
 
   get size(): number {
     return this.catalog.size
@@ -40,11 +53,23 @@ export class SessionSearchCatalogFrontier<T> {
     }
   }
   async movePageTo(target: SessionSearchCatalogFrontier<T>): Promise<void> {
-    await this.catalog.transition({
+    const result = await this.catalog.transition({
       kind: 'frontier-move',
       scope: this.catalog.scope,
       target: target.catalog.scope
     })
+    recordSessionSearchCatalogCounts(target.catalog.send, result)
+  }
+  async receipts(limit = 256) {
+    const page = await this.catalog.page({ group: '', orderRank: true, limit })
+    return page.rows.map(({ key, value }) => ({
+      key,
+      value: value.value,
+      revision: value.revision
+    }))
+  }
+  async acknowledge(receipts: { key: string; revision: number }[]): Promise<void> {
+    await this.catalog.transition({ kind: 'frontier-ack', scope: this.catalog.scope, receipts })
   }
   async firstPage(limit = 256): Promise<readonly (readonly [string, T])[]> {
     const page = await this.catalog.page({ group: '', orderRank: true, limit })

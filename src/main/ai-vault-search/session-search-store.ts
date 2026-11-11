@@ -1,5 +1,11 @@
+import { admitSessionSearchStoreWrite } from './session-search-store-write'
+import {
+  validSessionSearchRemoval,
+  type SessionSearchRemovalReceipt
+} from './session-search-observation-authority'
 import {
   transitionSessionSearchCandidates,
+  requireSessionSearchCandidateReason,
   transitionSessionSearchWork
 } from './session-search-store-transitions'
 import { SessionSearchWorkCatalog } from './session-search-work-catalog'
@@ -122,7 +128,6 @@ export class SessionSearchStore {
     return this.candidateCatalog?.hasPending ?? false
   }
   get catalogCandidates(): SessionSearchCatalogCandidates {
-    this.scratch ??= new SessionSearchCatalog(this.db)
     this.candidateCatalog ??= new SessionSearchCatalogCandidates(this.db, (path) =>
       this.removeFile(path)
     )
@@ -135,9 +140,18 @@ export class SessionSearchStore {
     this.workCatalog ??= new SessionSearchWorkCatalog()
     return transitionSessionSearchWork(this, this.workCatalog, command)
   }
+  private get scratchCatalog(): SessionSearchCatalog {
+    this.scratch ??= new SessionSearchCatalog(this.db, (path, reason) =>
+      requireSessionSearchCandidateReason(this, path, reason)
+    )
+    return this.scratch
+  }
   async catalog(command: SessionSearchCatalogCommand) {
-    this.scratch ??= new SessionSearchCatalog(this.db)
-    return this.scratch.response(command)
+    return this.scratchCatalog.response(command)
+  }
+
+  validRemoval(path: string, receipt: SessionSearchRemovalReceipt): boolean {
+    return !!this.scratch && validSessionSearchRemoval(this.scratch, path, receipt)
   }
 
   fileRow(path: string): SessionSearchFileRow | undefined {
@@ -170,7 +184,8 @@ export class SessionSearchStore {
     previousByteOffset: number,
     identity?: () => TranscriptSessionIdentity | null,
     _indexing?: boolean,
-    _signal?: AbortSignal
+    _signal?: AbortSignal,
+    metadataOnly = false
   ): SessionSearchFileWrite | null {
     if (
       this.closed ||
@@ -179,46 +194,17 @@ export class SessionSearchStore {
       return null
     }
     try {
-      const admission = this.candidateCatalog?.admission(candidate)
-      if (admission?.allowed === false) {
-        return null
-      }
-      const write = this.writer.beginWrite(candidate, mode, previousByteOffset, identity)
-      if (!write) {
-        return null
-      }
-      const valid = () =>
-        !this.candidateCatalog ||
-        this.candidateCatalog.admission(candidate).revision === (admission?.revision ?? '')
-      return {
-        ...write,
-        add: (message) => {
-          if (valid()) {
-            write.add(message)
-          }
-        },
-        addPrepared: (rows, hash) => {
-          if (valid()) {
-            write.addPrepared?.(rows, hash)
-          }
-        },
-        commit: (outcome) => {
-          if (!valid()) {
-            write.discard()
-            return false
-          }
-          const accepted = write.commit(outcome)
-          if (accepted && admission) {
-            this.candidateCatalog?.execute({
-              kind: 'acknowledge',
-              path: candidate.file.path,
-              agent: candidate.agent,
-              revision: admission.revision
-            })
-          }
-          return accepted
-        }
-      }
+      return admitSessionSearchStoreWrite(
+        this.db,
+        this.writer,
+        this.candidateCatalog,
+        candidate,
+        mode,
+        previousByteOffset,
+        identity,
+        metadataOnly,
+        () => this.fileRow(candidate.file.path)
+      )
     } catch (error) {
       this.reportWriteFailure(error)
       return null

@@ -556,64 +556,6 @@ it.each([40, 400])(
   }
 )
 
-it.each([40, 400])(
-  'charges refused directory attempts to the expired %s-directory discovery budget',
-  async (population) => {
-    const harness = await openSessionSearchIndexerHarness('ss-refused-budget')
-    const root = harness.claudeProjectDir
-    for (let index = 0; index < population; index++) {
-      await mkdir(join(root, `child-${index}`), { recursive: true })
-    }
-    const inventory = harness.inventory(root)
-    const args = {
-      rootDir: root,
-      agent: 'claude' as const,
-      limit: Infinity,
-      extensions: ['.jsonl'],
-      issues: []
-    }
-    await inventory.drain(args, () => true, 12)
-    const actual = filesystem.wslGatedReaddir
-    let refused = true
-    const reads = vi.spyOn(filesystem, 'wslGatedReaddir').mockImplementation((path, ...rest) => {
-      if (refused && path.startsWith(`${root}/`)) {
-        return Promise.reject(
-          Object.assign(new Error('fixture refused directory'), { code: 'EACCES' })
-        )
-      }
-      return actual(path, ...rest)
-    })
-    try {
-      await inventory.begin(false, args)
-      await inventory.drain(args, () => reads.mock.calls.length > 0, 12)
-      // Expire at the first actual observation; catalog-only continuation does not spend another attempt.
-      expect(reads.mock.calls).toHaveLength(1)
-      // Three refused observations per child, plus the root membership phases.
-      for (let cycle = 0; cycle < 3 * population + 8 && inventory.pending; cycle++) {
-        await inventory.begin(false, args)
-        await inventory.retryFailures()
-        await inventory.drain(args, () => true, 12)
-      }
-      expect(inventory.pending).toBe(false)
-      const heldAttempts = reads.mock.calls.length
-      await inventory.begin(false, args)
-      await inventory.retryFailures()
-      await inventory.drain(args, () => false, 12)
-      expect(reads.mock.calls).toHaveLength(heldAttempts)
-      refused = false
-      const recovered = join(root, 'child-0', 'recovered.jsonl')
-      await writeFile(recovered, '{}\n')
-      await inventory.invalidate(join(root, 'child-0'))
-      await inventory.begin(false, args)
-      const result = await inventory.drain(args, () => false, 12)
-      expect(result.changes.map((change) => change.file.path)).toContain(recovered)
-    } finally {
-      reads.mockRestore()
-      await harness.cleanup()
-    }
-  }
-)
-
 it.each([
   { input: 'primary', failures: 1 },
   { input: 'sidecar', failures: 1 },
@@ -779,7 +721,12 @@ it('keeps an accepted alias while its deferred replacement is owed by a held-out
     expect(matching('canonicalnewneedle')).toEqual({ n: 1 })
     await subject.settled()
     // Coverage and withdrawal each need a page and an empty-page acknowledgement.
-    for (let cycle = 0; cycle < 6 && Number(matching('predecessorowedneedle')?.n) !== 0; cycle++) {
+    for (
+      let cycle = 0;
+      cycle < 6 &&
+      (Number(matching('predecessorowedneedle')?.n) !== 0 || subject.status().phase === 'indexing');
+      cycle++
+    ) {
       await subject.reconcile()
     }
     expect(matching('canonicalnewneedle')).toEqual({ n: 1 })

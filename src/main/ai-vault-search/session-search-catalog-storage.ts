@@ -12,8 +12,11 @@ export class SessionSearchCatalogStorage {
       ) WITHOUT ROWID;
       CREATE INDEX temp.search_catalog_key ON search_catalog(key,scope);
       CREATE INDEX temp.search_catalog_parent ON search_catalog(scope,parent,key);
+      CREATE INDEX temp.search_catalog_parent_epoch ON search_catalog(scope,parent,group_key,key);
+      CREATE INDEX temp.search_catalog_ready_queue ON search_catalog(scope,ready,rank,tie,key);
       CREATE INDEX temp.search_catalog_group ON search_catalog(scope,group_key,key);
       CREATE INDEX temp.search_catalog_queue ON search_catalog(scope,group_key,rank,tie,key);
+      CREATE INDEX temp.search_catalog_revision ON search_catalog(scope,group_key,tie,key);
       CREATE INDEX temp.search_catalog_ready ON search_catalog(scope,ready,key);
       CREATE TEMP TABLE search_catalog_counts(scope TEXT PRIMARY KEY, n INTEGER NOT NULL, runnable INTEGER NOT NULL) WITHOUT ROWID;
       CREATE TEMP TRIGGER search_catalog_added AFTER INSERT ON search_catalog BEGIN

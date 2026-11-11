@@ -1,3 +1,4 @@
+import { wakeSessionSearchMetadataWrite } from './session-search-store-write'
 import { stepSessionSearchPublication } from './session-search-publication-step'
 import type { SessionSearchWorkCatalog } from './session-search-work-catalog'
 import type { SessionSearchWorkCommand, SessionSearchWorkResult } from './session-search-work-queue'
@@ -6,6 +7,26 @@ import type {
   SessionSearchCandidateResult
 } from './session-search-catalog-candidates'
 import type { SessionSearchStore } from './session-search-store'
+
+export function requireSessionSearchCandidateReason(
+  store: SessionSearchStore,
+  path: string,
+  reason: 'force' | 'metadata'
+): boolean {
+  const selected = store.catalogCandidates
+    .execute({ kind: 'path', path })
+    .rows.some((row) => row.selected)
+  if (selected) {
+    if (
+      reason === 'metadata' &&
+      wakeSessionSearchMetadataWrite(store.connection, path, store.fileRow(path))
+    ) {
+      store.setFileState(path, 'current')
+    }
+    store.catalogCandidates.execute({ kind: 'require', path, reason, delivered: true })
+  }
+  return selected
+}
 
 export async function transitionSessionSearchCandidates(
   store: SessionSearchStore,
@@ -34,6 +55,9 @@ export async function transitionSessionSearchCandidates(
   }
   if (command.kind === 'remove-page') {
     for (const row of command.rows) {
+      if (row.observation && !store.validRemoval(row.path, row.observation)) {
+        continue
+      }
       store.catalogCandidates.execute({ kind: 'remove', ...row })
       const agent = store.fileRow(row.path)?.agent
       if (store.catalogCandidates.execute({ kind: 'path', path: row.path, agent }).rows.length) {
@@ -56,11 +80,27 @@ export async function transitionSessionSearchCandidates(
     return store.catalogCandidates.execute(command)
   }
   for (const receipt of command.rows) {
-    const row = store.catalogCandidates.entry(receipt.key)
+    let row = store.catalogCandidates.entry(receipt.key)
     if (!row || row.revision !== receipt.revision) {
       continue
     }
     if (row.selected) {
+      const debt = (
+        await store.catalog({
+          kind: 'get',
+          scope: 'discovery-metadata',
+          key: row.candidate.file.path
+        })
+      ).rows?.[0]
+      if (debt) {
+        requireSessionSearchCandidateReason(store, row.candidate.file.path, 'metadata')
+        row = store.catalogCandidates.entry(receipt.key)!
+        await store.catalog({
+          kind: 'ack-values',
+          scope: 'discovery-metadata',
+          rows: [{ key: debt.key, value: debt.value }]
+        })
+      }
       await store.work({
         kind: 'enqueue',
         candidate: row.candidate,
@@ -78,7 +118,7 @@ export async function transitionSessionSearchCandidates(
     store.catalogCandidates.execute({
       kind: 'consumed',
       key: receipt.key,
-      revision: receipt.revision
+      revision: row.revision
     })
   }
   const work = await store.work({ kind: 'stats' })

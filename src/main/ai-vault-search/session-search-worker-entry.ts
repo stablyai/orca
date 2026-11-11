@@ -12,8 +12,10 @@ import { withSpan, setActiveSink } from '../observability/tracer'
 import { SessionSearchStore, type SessionSearchStateCounts } from './session-search-store'
 import { SessionSearchEngine } from './session-search-engine'
 import { createSessionSearchService } from './session-search-service'
-import type { SessionSearchFileWrite } from './session-search-index-writer'
-import type { TranscriptSessionIdentity } from '../ai-vault/transcripts/session-transcript-consumers'
+import {
+  beginSessionSearchWorkerWrite,
+  type SessionSearchPreparedWorkerWrite
+} from './session-search-worker-write'
 import type {
   SearchWorkerRequest,
   SearchWorkerResponse,
@@ -42,10 +44,7 @@ let counts: SessionSearchStateCounts = {
   sessionsByAgent: {}
 }
 const foregroundWrites = new Map<number, SessionSearchForegroundWrite>()
-const writes = new Map<
-  number,
-  { write: SessionSearchFileWrite; identity: TranscriptSessionIdentity | null }
->()
+const writes = new Map<number, SessionSearchPreparedWorkerWrite>()
 
 const rows = (path?: string, after?: string) => readSessionSearchSnapshotRows(store, path, after)
 function resetCoverage(): void {
@@ -166,20 +165,11 @@ async function execute({ id, command: c }: SearchWorkerRequest): Promise<SearchW
           counts
         }
       }
-      let identity: TranscriptSessionIdentity | null = null
-      const write = store.beginWrite(c.candidate, c.mode, c.offset, () => identity)
-      if (write) {
-        writes.set(c.handle, {
-          write,
-          get identity() {
-            return identity
-          },
-          set identity(value) {
-            identity = value
-          }
-        })
+      const entry = beginSessionSearchWorkerWrite(store, c)
+      if (entry) {
+        writes.set(c.handle, entry)
       }
-      accepted = write !== null
+      accepted = entry !== null
       break
     }
     case 'batch': {

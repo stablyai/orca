@@ -114,7 +114,7 @@ export class SessionSearchDiscoveryInventory
         if (change.force) {
           forced.add(change.file.path)
         }
-        if (metadataFacts.has(change.file.path)) {
+        if (change.metadata || metadataFacts.has(change.file.path)) {
           metadata.add(change.file.path)
         }
       }
@@ -128,14 +128,14 @@ export class SessionSearchDiscoveryInventory
         }
       }
       for (const observer of root.dependencies.values()) {
-        await observer.removeFiles(delta.removed)
+        await observer.removeFiles(delta.removed, delta.removalReceipts)
       }
       for (const path of delta.removed) {
         if (!this.acceptRemoved) {
           this.removed.add(path)
         }
       }
-      await this.acceptRemoved?.(delta.removed)
+      await this.acceptRemoved?.(delta.removed, delta.removalReceipts)
       if (this.accept && delta.changes.length) {
         await this.accept(
           {
@@ -146,7 +146,11 @@ export class SessionSearchDiscoveryInventory
           forced,
           metadata
         )
-        await this.metadataDebt!.deletePage(paths)
+        await this.metadataDebt!.transition({
+          kind: 'ack-values',
+          scope: this.metadataDebt!.scope,
+          rows: [...metadataFacts].map(([key, value]) => ({ key, value: JSON.stringify(value) }))
+        })
       } else if (!this.accept) {
         await root.inventory.acknowledge(delta.receipts)
         return {

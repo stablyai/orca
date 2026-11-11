@@ -38,6 +38,7 @@ export type TranscriptSessionIdentity = {
 }
 
 export type TranscriptReadStart = {
+  metadataOnly?: boolean
   candidate: SessionFileCandidate
   indexing?: boolean
   signal?: AbortSignal

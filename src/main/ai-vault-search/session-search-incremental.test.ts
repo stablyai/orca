@@ -284,7 +284,7 @@ it('preserves delivered equal-stat rewrites while Claude and Codex roots drain t
   }
 })
 
-it('publishes title-only metadata changes and retries a refused publication', async () => {
+it('retains title-only work through admission refusal and wakes held-out publication on a newer title', async () => {
   const harness = await openSessionSearchIndexerHarness('ss-title-publication')
   const clock = new FakeSessionSearchClock()
   const fixture = codexFixture()
@@ -297,6 +297,19 @@ it('publishes title-only metadata changes and retries a refused publication', as
     historyDays: null,
     clock
   })
+  const actualStat = filesystem.wslGatedStat
+  let refuseAdmission = false
+  const probe = vi.spyOn(filesystem, 'wslGatedStat').mockImplementation((observed, ...rest) => {
+    if (refuseAdmission && observed === path) {
+      refuseAdmission = false
+      return Promise.reject(
+        Object.assign(new Error('fixture refused primary admission'), { code: 'EACCES' })
+      )
+    }
+    return actualStat(observed, ...rest)
+  })
+  const streams = vi.spyOn(filesystem, 'openTranscriptReadStream')
+  const slices = vi.spyOn(filesystem, 'readTranscriptSlice')
   const title = () =>
     harness.read((db) => db.prepare("SELECT title FROM sessions WHERE agent='codex'").get())
   try {
@@ -308,6 +321,21 @@ it('publishes title-only metadata changes and retries a refused publication', as
     )
     await subject.start()
     expect(title()).toEqual({ title: 'Original title' })
+    streams.mockClear()
+    slices.mockClear()
+    refuseAdmission = true
+    await writeFile(
+      index,
+      `${JSON.stringify({ id: CODEX_FIXTURE_SESSION_ID, thread_name: 'Admission recovered title' })}\n`
+    )
+    notifySessionSearchFileChange(index)
+    clock.advance(20_000)
+    await subject.settled()
+    expect(title()).toEqual({ title: 'Original title' })
+    clock.advance(20_000)
+    await subject.settled()
+    expect(title()).toEqual({ title: 'Admission recovered title' })
+
     harness.write((db) =>
       db.exec(
         "CREATE TRIGGER refuse_title BEFORE UPDATE ON sessions BEGIN SELECT RAISE(ABORT, 'refused fixture metadata'); END"
@@ -320,14 +348,43 @@ it('publishes title-only metadata changes and retries a refused publication', as
     notifySessionSearchFileChange(index)
     clock.advance(20_000)
     await subject.settled()
-    expect([blockedClaude, blockedCodex, observedClaude]).toEqual([true, true, true])
-    expect(title()).toEqual({ title: 'Original title' })
+    expect(title()).toEqual({ title: 'Admission recovered title' })
     harness.write((db) => db.exec('DROP TRIGGER refuse_title'))
     clock.advance(20_000)
     await subject.settled()
-    expect([blockedClaude, blockedCodex, observedClaude]).toEqual([true, true, true])
     expect(title()).toEqual({ title: 'Changed title' })
+    harness.write((db) =>
+      db.exec(
+        "CREATE TRIGGER refuse_title BEFORE UPDATE ON sessions BEGIN SELECT RAISE(ABORT, 'refused fixture metadata'); END"
+      )
+    )
+    await appendFile(
+      index,
+      `${JSON.stringify({ id: CODEX_FIXTURE_SESSION_ID, thread_name: 'Held title' })}\n`
+    )
+    notifySessionSearchFileChange(index)
+    for (let cycle = 0; cycle < 4; cycle++) {
+      clock.advance(20_000)
+      await subject.settled()
+    }
+    expect(subject.status().phase).toBe('current')
+    expect(title()).toEqual({ title: 'Changed title' })
+    harness.write((db) => db.exec('DROP TRIGGER refuse_title'))
+    await appendFile(
+      index,
+      `${JSON.stringify({ id: CODEX_FIXTURE_SESSION_ID, thread_name: 'Delivered title' })}\n`
+    )
+    notifySessionSearchFileChange(index)
+    clock.advance(20_000)
+    await subject.settled()
+    expect(title()).toEqual({ title: 'Delivered title' })
+    expect(subject.status().phase).toBe('current')
+    expect(streams.mock.calls.filter(([readPath]) => readPath === path)).toHaveLength(0)
+    expect(slices.mock.calls.filter(([readPath]) => readPath === path)).toHaveLength(0)
   } finally {
+    probe.mockRestore()
+    streams.mockRestore()
+    slices.mockRestore()
     await subject.close()
     await harness.cleanup()
   }

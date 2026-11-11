@@ -12,7 +12,10 @@ import {
   type SessionParseStats
 } from '../ai-vault/parse-cache/session-scanner-parse-cache'
 import { fileIdentity } from './session-search-file-cursor'
-import { sessionSearchReadDecision } from './session-search-read-decision'
+import {
+  sessionSearchReadDecision,
+  SESSION_SEARCH_FAILURES_BEFORE_HELD_OUT
+} from './session-search-read-decision'
 import type { SessionSearchIndexStore } from './session-search-store'
 import type { SessionSearchWork, SessionSearchWorkQueue } from './session-search-work-queue'
 
@@ -58,11 +61,13 @@ export async function runSessionSearchIndexPass(
       : undefined
     if (
       work.metadata &&
+      !work.force &&
       row?.agent &&
       row.prefixHash &&
       row.byteOffset !== undefined &&
       row.byteOffset !== null &&
-      row.state === 'current' &&
+      (row.state === 'current' ||
+        (row.state === 'failed' && row.failCount < SESSION_SEARCH_FAILURES_BEFORE_HELD_OUT)) &&
       row.mtimeMs === candidate.file.mtimeMs &&
       row.sizeBytes === candidate.file.sizeBytes &&
       entry?.foldSession !== undefined &&
@@ -90,6 +95,7 @@ export async function runSessionSearchIndexPass(
         mode: 'append',
         previousByteOffset: row.byteOffset,
         indexing: true,
+        metadataOnly: true,
         signal: options.signal
       })
       if (consumer) {
@@ -111,9 +117,26 @@ export async function runSessionSearchIndexPass(
           continue
         }
       }
+      const failed = store.fileRow(path)
+      await queue.acknowledge(
+        work,
+        (!!failed &&
+          failed.state === 'failed' &&
+          failed.failCount < SESSION_SEARCH_FAILURES_BEFORE_HELD_OUT) ||
+          !!published?.cancelled?.()
+      )
+      consumed++
+      continue
     }
     // Equal-stat writes and dependency edits cannot use coverage of the old input as a skip gate.
-    if (work.force && row) {
+    if (
+      work.force &&
+      row &&
+      row.mtimeMs === candidate.file.mtimeMs &&
+      (row.sizeBytes === null ||
+        candidate.file.sizeBytes === undefined ||
+        row.sizeBytes === candidate.file.sizeBytes)
+    ) {
       store.setFileState(path, 'due')
       await store.flush?.()
       row = store.fileRow(path)

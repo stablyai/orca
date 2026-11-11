@@ -1,4 +1,7 @@
-import { retireSessionSearchPassSources } from './session-search-pass-retirement'
+import {
+  retireSessionSearchPassSources,
+  wakeSessionSearchPassRetirements
+} from './session-search-pass-retirement'
 import type { SessionSearchPassState } from './session-search-pass-state'
 export { SessionSearchPassState } from './session-search-pass-state'
 import type { AiVaultScanIssue } from '../../shared/ai-vault/contracts/ai-vault-types'
@@ -66,14 +69,7 @@ export async function runSessionSearchPass(
   if (args.full) {
     state.needsRetirement = true
   }
-  if (args.full || args.purge) {
-    while (state.parkedRetire.size) {
-      await state.parkedRetire.movePageTo(state.retire)
-      if (args.discoveryOverdue?.()) {
-        break
-      }
-    }
-  }
+  await wakeSessionSearchPassRetirements(args)
   return withCursorChatMetaScan(async () => {
     const accept = async (
       discoveries: Parameters<typeof state.candidates.update>[0],
@@ -123,12 +119,12 @@ export async function runSessionSearchPass(
       discoveryLane = accepted
       return accepted
     }
-    state.discovery.onRemoved((paths) =>
+    state.discovery.onRemoved((paths, observations) =>
       serializeDiscovery(async () => {
         if (!paths.length) {
           return
         }
-        const work = await state.candidates.remove(new Set(paths))
+        const work = await state.candidates.remove(new Set(paths), new Map(), observations)
         if (work) {
           state.queue.update(work)
           await state.retire.refresh()
@@ -169,7 +165,12 @@ export async function runSessionSearchPass(
           await state.queue.acknowledge(work, false)
           return undefined
         }
-        const observation = await state.discovery.observeForRead(candidate, rootDir, args.roots)
+        const observation = await state.discovery.observeForRead(
+          candidate,
+          rootDir,
+          args.roots,
+          !!work.metadata && !work.force
+        )
         if (observation === null) {
           return work
         }
@@ -187,7 +188,8 @@ export async function runSessionSearchPass(
           { ...args.roots, signal },
           observation.force ? new Set([path]) : new Set(),
           new Map(),
-          true
+          true,
+          observation.metadata ? new Set([path]) : new Set()
         )
         state.queue.update(
           await state.candidates.admitChanges(refreshed.receipts, !args.full, state.recovering)

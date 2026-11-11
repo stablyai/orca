@@ -1,3 +1,5 @@
+import type { SessionSearchRetryCommand } from './session-search-retry-transition'
+import type { SessionSearchAuthorityCommand } from './session-search-observation-authority'
 import type {
   SessionSearchDirtyCommand,
   SessionSearchDirtyResult
@@ -26,6 +28,8 @@ export type SessionSearchCatalogRow = {
   tie?: number
 }
 export type SessionSearchCatalogCommand =
+  | SessionSearchRetryCommand
+  | SessionSearchAuthorityCommand
   | SessionSearchDirtyCommand
   | SessionSearchDependencyFanoutCommand
   | SessionSearchDirectoryFrontierCommand
@@ -53,12 +57,17 @@ export type SessionSearchCatalogCommand =
       group?: string
       ready?: number
       orderRank?: boolean
+      orderRevision?: boolean
+      throughRevision?: number
+      beforeRank?: number
       limit?: number
       prefix?: string
     }
 export type SessionSearchCatalogResult = SessionSearchDirtyResult &
   SessionSearchInventoryResult &
   SessionSearchDirectoryResult & {
+    directoryProtected?: boolean
+    observationEpoch?: number
     dependencyMore?: boolean
     invalidProof?: boolean
     scopeCounts?: [string, number, number][]

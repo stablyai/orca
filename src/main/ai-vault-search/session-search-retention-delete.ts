@@ -24,7 +24,8 @@ export async function deleteExpiredSearchFiles(
     while (!closed()) {
       const expired = db
         .prepare('SELECT path FROM files WHERE path > ? AND mtime_ms < ? ORDER BY path LIMIT 256')
-        .all(after, cutoffMs) as { path: string }[]
+        .all(after, cutoffMs)
+        .map((row) => ({ path: String(row.path) }))
       if (!expired.length) {
         break
       }

@@ -38,7 +38,7 @@ export function recordSessionSearchCatalogCounts(
 export class SessionSearchCatalogClient<T> {
   constructor(
     readonly scope: string,
-    private readonly send: SessionSearchCatalogRequest
+    readonly send: SessionSearchCatalogRequest
   ) {
     if (!counts.has(send)) {
       counts.set(send, new Map())
@@ -102,9 +102,19 @@ export class SessionSearchCatalogClient<T> {
     })
   }
 
-  async putPage(rows: SessionSearchCatalogRow[]): Promise<void> {
+  async putPage(
+    rows: SessionSearchCatalogRow[],
+    directory?: { scope: string; path: string; epoch: number }
+  ): Promise<void> {
     let batch: SessionSearchCatalogRow[] = []
-    let bytes = 1024
+    const send = (page: SessionSearchCatalogRow[]) =>
+      this.request(
+        directory
+          ? { kind: 'directory-stage', ...directory, rows: page }
+          : { kind: 'put', scope: this.scope, rows: page }
+      )
+    const overhead = 1024 + JSON.stringify([this.scope, directory]).length * 2
+    let bytes = overhead
     for (const row of rows) {
       const size = JSON.stringify(row).length * 2 + 64
       if (
@@ -112,15 +122,15 @@ export class SessionSearchCatalogClient<T> {
         (batch.length === SESSION_SEARCH_CATALOG_PAGE_ROWS ||
           bytes + size > SESSION_SEARCH_CATALOG_PAGE_BYTES)
       ) {
-        await this.request({ kind: 'put', scope: this.scope, rows: batch })
+        await send(batch)
         batch = []
-        bytes = 1024
+        bytes = overhead
       }
       batch.push(row)
       bytes += size
     }
     if (batch.length) {
-      await this.request({ kind: 'put', scope: this.scope, rows: batch })
+      await send(batch)
     }
   }
 

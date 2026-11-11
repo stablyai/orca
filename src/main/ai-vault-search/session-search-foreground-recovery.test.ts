@@ -119,4 +119,4 @@ it('publishes a cold foreground read and preserves accepted messages across cold
     await store?.retired()
     await rm(root, { recursive: true, force: true })
   }
-}, 30_000)
+})

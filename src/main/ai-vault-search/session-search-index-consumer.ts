@@ -115,7 +115,8 @@ export class SessionSearchIndexConsumer implements TranscriptConsumer {
             resume.byteOffset,
             start.identity,
             start.indexing,
-            signal
+            signal,
+            start.metadataOnly
           )
         : this.store.beginWrite(
             candidate,
@@ -123,7 +124,8 @@ export class SessionSearchIndexConsumer implements TranscriptConsumer {
             start.previousByteOffset,
             start.identity,
             start.indexing,
-            signal
+            signal,
+            start.metadataOnly
           )
     if (!write) {
       publication?.release()

@@ -42,6 +42,7 @@ export type SearchWorkerCommand =
   | { op: 'open'; path: string; reader: boolean; cutoff: number | null; runtimeEpoch?: number }
   | {
       op: 'begin'
+      metadataOnly?: boolean
       handle: number
       candidate: SessionFileCandidate
       mode: 'append' | 'replace'

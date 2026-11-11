@@ -144,7 +144,7 @@ export class SessionSearchCatalogCandidates {
         return { ...this.result([]), ...result }
       }
       case 'require':
-        this.require(command.path, command.reason)
+        this.require(command.path, command.reason, command.delivered)
         return this.result([])
       case 'acknowledge': {
         const row = this.read('WHERE path = ? AND agent = ? LIMIT 1', [
@@ -154,7 +154,7 @@ export class SessionSearchCatalogCandidates {
         if (row && this.admission(row.candidate).revision === command.revision) {
           this.db
             .prepare(
-              'UPDATE temp.search_candidates SET required = 0,force_read=0,metadata=0 WHERE path = ? AND agent = ? AND selected = 1'
+              `UPDATE temp.search_candidates SET required = ${command.metadataOnly ? 'force_read' : '0'},force_read=${command.metadataOnly ? 'force_read' : '0'},metadata=0 WHERE path = ? AND agent = ? AND selected = 1`
             )
             .run(command.path, command.agent)
           this.dirtyPath(command.path)

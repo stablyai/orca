@@ -1,3 +1,5 @@
+import type { SessionSearchRemovalReceipt } from './session-search-observation-authority'
+import { sessionSearchRecordPages } from './session-search-catalog-pages'
 import {
   SessionSearchCatalogClient,
   type SessionSearchCatalogRequest
@@ -110,8 +112,15 @@ export class SessionSearchDependencyInventory {
       })
     )
   }
-  async removeFiles(paths: string[]): Promise<void> {
-    await this.keys.deletePage(paths)
+  async removeFiles(
+    paths: string[],
+    observations?: ReadonlyMap<string, SessionSearchRemovalReceipt>
+  ): Promise<void> {
+    for (const rows of sessionSearchRecordPages(
+      paths.map((path) => ({ path, observation: observations?.get(path) }))
+    )) {
+      await this.keys.transition({ kind: 'dependency-remove', scope: this.keys.scope, rows })
+    }
   }
   async removeFile(path: string): Promise<void> {
     await this.keys.delete(path)

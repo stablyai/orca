@@ -236,3 +236,42 @@ it('retains a newer same-file rewrite when an older read and candidate page fini
   expect(hits('latestversionneedle')).toBe(1)
   expect(hits('originalversionneedle')).toBe(0)
 })
+
+it('keeps content owed when a newer rewrite arrives during a title-only publication', async () => {
+  await inventory.update([discover([first])], new Set(), {})
+  finish(first, 'originalbodyneedle')
+  await inventory.requirePublication(first.file.path, 'metadata')
+  const metadata = new SessionSearchIndexConsumer(store, undefined, inventory).beginRead({
+    candidate: first,
+    mode: 'append',
+    previousByteOffset: 100,
+    metadataOnly: true
+  })!
+  expect(metadata).not.toBeNull()
+  // The metadata read is already in flight when the equal-stat primary change is delivered.
+  await inventory.requirePublication(first.file.path, 'force')
+  await metadata.finish({
+    session: syntheticSession({
+      agent: 'opencode',
+      filePath: first.file.path,
+      title: 'staletitleneedle'
+    }),
+    byteOffset: 100,
+    incomplete: false
+  })
+  expect(hits('originalbodyneedle')).toBe(1)
+  expect(hits('staletitleneedle')).toBe(0)
+  // Content-free publication remains refused until a matching content read succeeds.
+  expect(
+    new SessionSearchIndexConsumer(store, undefined, inventory).beginRead({
+      candidate: first,
+      mode: 'append',
+      previousByteOffset: 100,
+      metadataOnly: true
+    })
+  ).toBeNull()
+  finish(first, 'rewrittenbodyneedle')
+  await settle()
+  expect(hits('rewrittenbodyneedle')).toBe(1)
+  expect(hits('originalbodyneedle')).toBe(0)
+})

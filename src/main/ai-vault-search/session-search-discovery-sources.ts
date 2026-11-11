@@ -1,3 +1,4 @@
+import type { SessionSearchRemovalReceipt } from './session-search-observation-authority'
 import {
   SessionSearchCatalogClient,
   type SessionSearchCatalogRequest
@@ -26,9 +27,14 @@ export class SessionSearchDiscoverySources {
   protected readonly owner = new AbortController()
   protected readonly watchers: SessionSearchRootWatchers
   protected request: SessionSearchCatalogRequest | undefined
-  protected metadataDebt: SessionSearchCatalogClient<true> | undefined
-  protected acceptRemoved: ((paths: readonly string[]) => Promise<void>) | undefined
-  onRemoved(accept: (paths: readonly string[]) => Promise<void>): void {
+  protected metadataDebt: SessionSearchCatalogClient<number> | undefined
+  protected acceptRemoved:
+    | ((
+        paths: readonly string[],
+        observations?: ReadonlyMap<string, SessionSearchRemovalReceipt>
+      ) => Promise<void>)
+    | undefined
+  onRemoved(accept: NonNullable<SessionSearchDiscoverySources['acceptRemoved']>): void {
     this.acceptRemoved = accept
   }
   protected accept:
@@ -137,14 +143,20 @@ export class SessionSearchDiscoverySources {
   async observeForRead(
     candidate: SessionFileCandidate,
     logicalRoot: string,
-    roots: SessionSearchScanRoots
+    roots: SessionSearchScanRoots,
+    metadataOnly = false
   ) {
     const root = await this.fileOwner(candidate, logicalRoot, roots)
     if (!root) {
       return null
     }
     const path = candidate.file.path
-    const change = await root.inventory.observeForRead(path, root.args, this.recentLimit)
+    const change = await root.inventory.observeForRead(
+      path,
+      root.args,
+      this.recentLimit,
+      metadataOnly
+    )
     if (change) {
       for (const observer of root.dependencies.values()) {
         await observer.addFile(path)

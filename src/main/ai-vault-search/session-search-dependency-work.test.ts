@@ -117,6 +117,8 @@ it.each([40, 400])(
         .filter(
           ([command]) =>
             command.op === 'catalog' &&
+            (command.command.scope.startsWith(`dependency:codex:${root}:`) ||
+              command.command.scope.startsWith(`physical:codex:${root}`)) &&
             (command.command.kind === 'dependency-fanout' ||
               command.command.kind === 'dependency-deliver' ||
               command.command.kind === 'dirty-page' ||

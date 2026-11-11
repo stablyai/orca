@@ -22,6 +22,9 @@ type Walk = {
   reconcile: boolean
   phase: 'load' | 'files' | 'children' | 'entries' | 'remove-files' | 'remove-children'
   after?: string
+  epoch?: number
+  cutoff?: number
+  origin?: number
 }
 type Entry = { directory: boolean; file: boolean }
 
@@ -34,6 +37,8 @@ export class SessionInventoryDirectoryWalks {
   protected readonly walks: SessionSearchCatalogFrontier<Walk>
   protected readonly cancellations: SessionSearchCatalogClient<unknown>
   protected readonly trailing: SessionSearchCatalogClient<true>
+  protected readonly authority: SessionSearchCatalogClient<unknown>
+  protected readonly garbage: SessionSearchCatalogClient<unknown>
   protected readonly failures: SessionSearchCatalogRetries
   protected readonly removedDirectories = new Set<string>()
   protected readonly request: SessionSearchCatalogRequest
@@ -47,6 +52,8 @@ export class SessionInventoryDirectoryWalks {
       recordSessionSearchCatalogCounts(this.request, result)
       return result
     }
+    this.authority = new SessionSearchCatalogClient(`${scope}:authority`, this.request)
+    this.garbage = new SessionSearchCatalogClient(`${scope}:authority-garbage`, this.request)
     this.directories = new SessionSearchCatalogClient(`${scope}:directories`, this.request)
     this.entries = new SessionSearchCatalogClient(`${scope}:directory-input`, this.request)
     this.cancellations = new SessionSearchCatalogClient(`${scope}:cancellations`, this.request)
@@ -80,7 +87,12 @@ export class SessionInventoryDirectoryWalks {
       child = dirname(child)
     }
   }
-  protected async schedule(path: string, reconcile = false, remove = false): Promise<void> {
+  protected async schedule(
+    path: string,
+    reconcile = false,
+    remove = false,
+    cutoff?: number
+  ): Promise<void> {
     if (!isInsideSessionRoot(this.root, path)) {
       return
     }
@@ -91,7 +103,8 @@ export class SessionInventoryDirectoryWalks {
       path,
       depth: rel ? rel.split(/[\\/]/).length : 0,
       reconcile,
-      remove
+      remove,
+      cutoff
     })
   }
 
@@ -106,7 +119,9 @@ export class SessionInventoryDirectoryWalks {
         return
       }
       try {
-        await this.request({ kind: 'release-parent', scope: this.entries.scope, parent: walk.path })
+        walk.epoch = (
+          await this.request({ kind: 'directory-begin', scope: this.scope, path: walk.path })
+        ).observationEpoch!
         const entries = await wslGatedReaddir(walk.path, 'scan', args.signal)
         args.onDirectoryEntries?.(walk.path, entries)
         // The filesystem returns one indivisible directory; release it before loading another.
@@ -123,25 +138,49 @@ export class SessionInventoryDirectoryWalks {
                 },
                 { parent: walk.path }
               )
-            )
+            ),
+            { scope: this.scope, path: walk.path, epoch: walk.epoch }
           )
         }
+        await this.request({
+          kind: 'directory-seal',
+          scope: this.scope,
+          path: walk.path,
+          epoch: walk.epoch
+        })
         await this.failures.delete(walk.path)
         walk.phase = 'files'
       } catch (error) {
         throwIfAiVaultScanCancelled(args.signal)
         if (isMissingTranscriptPathError(error)) {
           await this.failures.delete(walk.path)
+          await this.request({
+            kind: 'directory-seal',
+            scope: this.scope,
+            path: walk.path,
+            epoch: walk.epoch!
+          })
           walk.phase = 'remove-files'
         } else {
           await this.issue(walk.path, error, args)
-          await this.walks.delete(walk.path)
+          await this.finishWalk(walk.path, walk.epoch)
           return
         }
       }
     }
+    if (walk.epoch === undefined) {
+      walk.epoch = (
+        await this.request({
+          kind: 'directory-begin',
+          scope: this.scope,
+          path: walk.path,
+          cutoff: walk.cutoff
+        })
+      ).observationEpoch!
+    }
     const page = await this.request({
       kind: 'directory-step',
+      epoch: walk.epoch,
       scope: this.scope,
       path: walk.path,
       phase: walk.phase,
@@ -160,9 +199,10 @@ export class SessionInventoryDirectoryWalks {
     } else if (walk.phase === 'children' || walk.phase === 'remove-children') {
       if (!walk.after) {
         if (walk.phase === 'remove-children') {
-          await this.directories.delete(walk.path)
-          this.removedDirectories.add(walk.path)
-          await this.finishWalk(walk.path)
+          const removed = await this.finishWalk(walk.path, walk.epoch, true)
+          if (removed) {
+            this.removedDirectories.add(walk.path)
+          }
           return
         }
         walk.phase = 'entries'
@@ -174,18 +214,23 @@ export class SessionInventoryDirectoryWalks {
       }
       await this.observations.observePage(files, args, limit)
       if (!walk.after) {
-        await this.finishWalk(walk.path)
+        await this.finishWalk(walk.path, walk.epoch)
         return
       }
     }
     await this.walks.set(walk.path, walk)
   }
-  protected async finishWalk(path: string): Promise<void> {
+  protected async finishWalk(path: string, epoch?: number, remove = false): Promise<boolean> {
+    const result =
+      epoch === undefined
+        ? undefined
+        : await this.request({ kind: 'directory-end', scope: this.scope, path, epoch, remove })
     await this.walks.delete(path)
-    if (await this.trailing.get(path)) {
+    if (result?.directoryProtected || (await this.trailing.get(path))) {
       await this.trailing.delete(path)
       await this.schedule(path)
     }
+    return !result?.directoryProtected
   }
   protected accepts(path: string, args: DiscoverSessionFilesArgs): boolean {
     return isInsideSessionRoot(this.root, path) && isDiscoverableSessionFile(args, this.root, path)

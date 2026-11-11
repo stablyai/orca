@@ -14,12 +14,14 @@ export class SessionSearchPassState {
   queue = new SessionSearchWorkQueue()
   retirement: AsyncIterator<SessionSearchFileRow> | null = null
   private catalog: SessionSearchCatalogRequest | undefined
+  private readonly request: SessionSearchCatalogRequest = (command) => this.catalog!(command)
   retire = this.retirementFrontier('retirement')
   parkedRetire = this.retirementFrontier('parked-retirement')
   private retirementFrontier(scope: string) {
     return new SessionSearchCatalogFrontier(
-      new SessionSearchCatalogClient<{ value: string; order: number }>(scope, (command) =>
-        this.catalog!(command)
+      new SessionSearchCatalogClient<{ value: string; order: number; revision: number }>(
+        scope,
+        this.request
       )
     )
   }
@@ -55,7 +57,8 @@ export class SessionSearchPassState {
       this.queue.size > 0 ||
       this.candidates.pendingPublications ||
       this.retirement !== null ||
-      this.retire.size > 0
+      this.retire.size > 0 ||
+      this.parkedRetire.waking
     )
   }
   close(): Promise<void> {

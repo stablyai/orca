@@ -1,11 +1,5 @@
-import { transitionSessionSearchDirty } from './session-search-dirty-transition'
-import { transitionSessionSearchDependencyFanout } from './session-search-dependency-fanout'
-import { transitionSessionSearchDirectoryFrontier } from './session-search-directory-frontier'
-import { transitionSessionSearchFrontier } from './session-search-frontier-transition'
-import { transitionSessionSearchContainer } from './session-search-container-transition'
-import { transitionSessionSearchDependency } from './session-search-dependency-transition'
-import { transitionSessionSearchDirectory } from './session-search-directory-transition'
-import { transitionSessionSearchInventory } from './session-search-inventory-transition'
+import type SyncDatabase from '../sqlite/sync-database'
+import { transitionSessionSearchCatalog } from './session-search-catalog-transition'
 import { SessionSearchCatalogStorage } from './session-search-catalog-storage'
 
 export const SESSION_SEARCH_CATALOG_PAGE_ROWS = 256
@@ -26,6 +20,12 @@ export type {
 export class SessionSearchCatalog extends SessionSearchCatalogStorage {
   private readonly touched = new Set<string>()
   private revision = 0
+  constructor(
+    db: SyncDatabase,
+    readonly requireReason?: (path: string, reason: 'force' | 'metadata') => boolean
+  ) {
+    super(db)
+  }
   nextRevision(): number {
     return ++this.revision
   }
@@ -69,66 +69,20 @@ export class SessionSearchCatalog extends SessionSearchCatalogStorage {
       })
     }
   }
+  get connection(): SyncDatabase {
+    return this.db
+  }
   private apply(command: SessionSearchCatalogCommand): SessionSearchCatalogResult {
+    const transitioned = transitionSessionSearchCatalog(this, command)
+    if (transitioned) {
+      return transitioned
+    }
     switch (command.kind) {
-      case 'container-apply':
-      case 'container-drain':
-      case 'container-ack':
-      case 'container-retirement-ack':
-      case 'container-retire':
-        return transitionSessionSearchContainer(this, command)
-      case 'dirty-page':
-        return transitionSessionSearchDirty(this, command)
-      case 'dependency-deliver':
-      case 'dependency-fanout':
-      case 'dependency-discard':
-        return transitionSessionSearchDependencyFanout(this, command)
-      case 'dependency-step':
-        return transitionSessionSearchDependency(this, command)
-      case 'directory-schedule':
-      case 'directory-cancel-step':
-        return transitionSessionSearchDirectoryFrontier(this, command)
-      case 'directory-step':
-        return transitionSessionSearchDirectory(this, command)
       case 'release-parent':
         this.db
           .prepare('DELETE FROM temp.search_catalog WHERE scope=? AND parent=?')
           .run(command.scope, command.parent)
         return {}
-      case 'frontier-set':
-      case 'frontier-set-page':
-      case 'frontier-move':
-        return transitionSessionSearchFrontier(this, command)
-      case 'observe-prepare':
-      case 'observe-apply':
-      case 'observe-ack':
-      case 'forget-files': {
-        const records =
-          command.kind === 'observe-prepare'
-            ? command.inputs
-            : command.kind === 'observe-apply'
-              ? command.outcomes
-              : command.kind === 'observe-ack'
-                ? command.receipts
-                : command.paths
-        if (
-          records.length > 256 ||
-          (records.length > 1 && JSON.stringify(command).length * 2 > 256 * 1024)
-        ) {
-          throw new Error('Session observation exceeds page budget')
-        }
-        this.db.exec('SAVEPOINT search_inventory_transition')
-        try {
-          const result = transitionSessionSearchInventory(this, command)
-          this.db.exec('RELEASE search_inventory_transition')
-          return result
-        } catch (error) {
-          this.db.exec(
-            'ROLLBACK TO search_inventory_transition; RELEASE search_inventory_transition'
-          )
-          throw error
-        }
-      }
       case 'get-page': {
         const rows: SessionSearchCatalogRow[] = []
         let bytes = 1024,
@@ -260,11 +214,19 @@ export class SessionSearchCatalog extends SessionSearchCatalogStorage {
             values.push(value)
           }
         }
+        if (command.throughRevision !== undefined) {
+          conditions.push('tie <= ?')
+          values.push(command.throughRevision)
+        }
+        if (command.beforeRank !== undefined) {
+          conditions.push('rank <= ?')
+          values.push(command.beforeRank)
+        }
         const rows: SessionSearchCatalogRow[] = []
         let bytes = 1024
         const iterator = this.db
           .prepare(`SELECT key,value,parent,group_key,rank,ready,tie FROM temp.search_catalog
-            WHERE ${conditions.join(' AND ')} ORDER BY ${command.orderRank ? 'rank,tie,key' : 'key'} LIMIT ?`)
+            WHERE ${conditions.join(' AND ')} ORDER BY ${command.orderRevision ? 'tie,key' : command.orderRank ? 'rank,tie,key' : 'key'} LIMIT ?`)
           .iterate(
             ...values,
             Math.max(
@@ -287,5 +249,6 @@ export class SessionSearchCatalog extends SessionSearchCatalogStorage {
         return { rows, after: rows.at(-1)?.key }
       }
     }
+    throw new Error('Unsupported session catalog command')
   }
 }

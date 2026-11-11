@@ -1,8 +1,7 @@
 import type { AiVaultScanIssue } from '../../shared/ai-vault/contracts/ai-vault-types'
 import { SESSION_INPUT_FAILURES_BEFORE_HELD_OUT } from '../ai-vault/session-observation-retries'
-import { isInsideSessionRoot } from '../ai-vault/session-file-discovery'
 import { recordSessionScanIssue, SCAN_ISSUE_LIMIT } from '../ai-vault/session-scan-issues'
-import type { SessionSearchCatalogClient } from './session-search-catalog-client'
+import { SessionSearchCatalogClient } from './session-search-catalog-client'
 
 type Debt = { failures: number; attempted: number; force: boolean; issue?: AiVaultScanIssue }
 
@@ -18,7 +17,10 @@ export class SessionSearchCatalogRetries {
     return this.catalog.size
   }
   get pending(): boolean {
-    return this.catalog.readySize > 0
+    return (
+      this.catalog.readySize > 0 ||
+      new SessionSearchCatalogClient(`${this.catalog.scope}:wakes`, this.catalog.send).size > 0
+    )
   }
   async begin(wake = false): Promise<void> {
     this.generation++
@@ -30,10 +32,7 @@ export class SessionSearchCatalogRetries {
     return (await this.catalog.get(path))?.force ?? false
   }
   async requireRead(path: string): Promise<void> {
-    const debt = await this.catalog.get(path)
-    if (debt && !debt.force) {
-      await this.put(path, { ...debt, force: true })
-    }
+    await this.catalog.transition({ kind: 'retry-require', scope: this.catalog.scope, path })
   }
   async heldOut(path: string): Promise<boolean> {
     return this.held(await this.catalog.get(path))
@@ -43,45 +42,23 @@ export class SessionSearchCatalogRetries {
     return !debt || (!this.held(debt) && debt.attempted !== this.generation)
   }
   async fail(path: string, force = false, issue?: AiVaultScanIssue): Promise<void> {
-    const previous = await this.catalog.get(path)
-    const debt = {
-      failures: (previous?.failures ?? 0) + 1,
-      attempted: this.generation,
-      force: force || (previous?.force ?? false),
-      issue: issue ?? previous?.issue
-    }
-    await this.put(path, debt)
+    await this.catalog.transition({
+      kind: 'retry-fail',
+      scope: this.catalog.scope,
+      path,
+      force,
+      issue,
+      generation: this.generation
+    })
   }
   async wake(path?: string): Promise<void> {
-    let after: string | undefined
-    do {
-      const page = await this.catalog.page({ after, prefix: path })
-      for (const { key, value } of page.rows) {
-        if (path === undefined || isInsideSessionRoot(path, key)) {
-          await this.put(key, { ...value, failures: 0 })
-        }
-      }
-      after = page.after
-    } while (after !== undefined)
-  }
-  async delete(path: string): Promise<void> {
-    const debt = await this.catalog.get(path)
-    if (!debt) {
+    if (!this.catalog.size) {
       return
     }
-    await this.catalog.delete(path)
+    await this.catalog.transition({ kind: 'retry-wake', scope: this.catalog.scope, prefix: path })
   }
-  async *runnable(): AsyncGenerator<readonly [string, boolean]> {
-    let after: string | undefined
-    do {
-      const page = await this.catalog.page({ after, ready: 1 })
-      for (const { key, value } of page.rows) {
-        if (value.attempted !== this.generation) {
-          yield [key, value.force]
-        }
-      }
-      after = page.after
-    } while (after !== undefined)
+  async delete(path: string): Promise<void> {
+    await this.catalog.transition({ kind: 'retry-remove', scope: this.catalog.scope, path })
   }
   async report(issues: AiVaultScanIssue[]): Promise<void> {
     let after: string | undefined
@@ -105,11 +82,5 @@ export class SessionSearchCatalogRetries {
   }
   private held(debt: Debt | undefined): boolean {
     return (debt?.failures ?? 0) >= SESSION_INPUT_FAILURES_BEFORE_HELD_OUT
-  }
-  private put(path: string, debt: Debt): Promise<void> {
-    return this.catalog.put(path, debt, {
-      group: debt.issue ? 'issue' : '',
-      ready: Number(!this.held(debt))
-    })
   }
 }

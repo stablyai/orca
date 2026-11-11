@@ -1,8 +1,19 @@
 import type { SessionSearchPassArgs } from './session-search-pass'
 import type { SessionSearchDegradedRoot } from './session-search-degraded-roots'
-import { sessionSearchEmptiedRoots } from './session-search-scan-roots'
-import { isUnderScanRoot } from './session-search-scan-roots'
+import { sessionSearchEmptiedRoots, isUnderScanRoot } from './session-search-scan-roots'
 import { retireDeletedSessionSearchSources } from './session-search-deleted-sources'
+
+export async function wakeSessionSearchPassRetirements(args: SessionSearchPassArgs): Promise<void> {
+  if (args.full || args.purge) {
+    await args.state.parkedRetire.wake()
+  }
+  while (args.state.parkedRetire.waking) {
+    await args.state.parkedRetire.movePageTo(args.state.retire)
+    if (args.discoveryOverdue?.()) {
+      break
+    }
+  }
+}
 
 export async function retireSessionSearchPassSources(
   args: SessionSearchPassArgs,
@@ -25,10 +36,9 @@ export async function retireSessionSearchPassSources(
   let consumedRetirements = 0
   do {
     const paths: string[] = []
-    const queued = await state.retire.firstPage(
-      Math.min(256, availableRetirements - consumedRetirements)
-    )
-    paths.push(...queued.map(([path]) => path))
+    const remaining = availableRetirements - consumedRetirements
+    const queued = remaining > 0 ? await state.retire.receipts(Math.min(256, remaining)) : []
+    paths.push(...queued.map(({ key }) => key))
     consumedRetirements += queued.length
     const inspected = []
     while (state.retirement && paths.length + inspected.length < 256) {
@@ -61,7 +71,7 @@ export async function retireSessionSearchPassSources(
       directoryLimit: 512,
       signal
     })
-    await state.retire.deletePage(queued.map(([path]) => path))
+    await state.retire.acknowledge(queued)
     await state.retire.setPage(retirement.unchecked.map((path) => [path, path] as const))
     const emptied = (path: string) => [...emptiedRoots].some((root) => isUnderScanRoot(path, root))
     await state.retire.setPage(

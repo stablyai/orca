@@ -1,3 +1,4 @@
+import type { SessionSearchRemovalReceipt } from '../ai-vault-search/session-search-observation-authority'
 import { SessionInventoryDirectoryWalks } from './session-file-inventory-walk'
 import { dirname } from 'node:path'
 import { wslGatedStat } from '../native-chat/wsl-transcript-fs-access'
@@ -16,6 +17,7 @@ export class SessionFileInventory extends SessionInventoryDirectoryWalks {
   private reconciling = false
   private initialized = false
   private chooseDirty = true
+  private args: DiscoverSessionFilesArgs | undefined
 
   get fileCount(): number {
     return this.observations.count
@@ -46,6 +48,8 @@ export class SessionFileInventory extends SessionInventoryDirectoryWalks {
   }
   get pending(): boolean {
     return (
+      this.authority.readySize > 0 ||
+      this.garbage.size > 0 ||
       this.observations.delivery.size > 0 ||
       this.walking ||
       this.dirty.size > 0 ||
@@ -54,6 +58,10 @@ export class SessionFileInventory extends SessionInventoryDirectoryWalks {
     )
   }
   async begin(wake: boolean, args: DiscoverSessionFilesArgs): Promise<void> {
+    this.args = args
+    if (!this.initialized) {
+      await this.request({ kind: 'authority-open', scope: this.scope, root: this.root })
+    }
     await this.failures.begin(wake)
     await this.observations.failures.begin(wake)
     await this.failures.report(args.issues)
@@ -82,11 +90,17 @@ export class SessionFileInventory extends SessionInventoryDirectoryWalks {
     await this.schedule(this.root, true)
   }
   async invalidate(path: string, force = true, wake = true): Promise<void> {
-    if (wake) {
-      await this.failures.wake(path)
-      await this.observations.failures.wake(path)
+    if (!wake) {
+      await this.dirty.set(path, ((await this.dirty.get(path)) ?? false) || force)
+      return
     }
-    await this.dirty.set(path, ((await this.dirty.get(path)) ?? false) || force)
+    await this.request({
+      kind: 'input-invalidate',
+      scope: this.scope,
+      path,
+      force,
+      subtree: this.args ? !this.accepts(path, this.args) : true
+    })
   }
   async pollRecent(args: DiscoverSessionFilesArgs, limit: number): Promise<void> {
     // eslint-disable-next-line unicorn/no-useless-spread -- Observing a file refreshes this bounded map's iteration order.
@@ -99,8 +113,20 @@ export class SessionFileInventory extends SessionInventoryDirectoryWalks {
   hasPublicationDebt(path: string): Promise<boolean> {
     return this.observations.failures.force(path)
   }
-  async observeForRead(path: string, args: DiscoverSessionFilesArgs, limit: number) {
-    const file = await this.observations.observe(path, args, false, limit, true)
+  async observeForRead(
+    path: string,
+    args: DiscoverSessionFilesArgs,
+    limit: number,
+    metadataOnly = false
+  ) {
+    const file = await this.observations.observe(
+      path,
+      args,
+      false,
+      limit,
+      !metadataOnly,
+      metadataOnly
+    )
     const change = this.observations.changes.get(path)
     this.observations.changes.delete(path)
     const delivery = await this.observations.delivery.get(path)
@@ -108,6 +134,7 @@ export class SessionFileInventory extends SessionInventoryDirectoryWalks {
       ? {
           file,
           force: change?.force || delivery?.force || false,
+          metadata: change?.metadata || delivery?.metadata,
           changed: change !== undefined || !!delivery,
           receipt: delivery ? { path, revision: delivery.revision } : undefined
         }
@@ -121,6 +148,7 @@ export class SessionFileInventory extends SessionInventoryDirectoryWalks {
     changes: SessionFileChange[]
     removed: string[]
     removedDirectories: string[]
+    removalReceipts: ReadonlyMap<string, SessionSearchRemovalReceipt>
     receipts: { path: string; revision: number }[]
   }> {
     if (!this.initialized) {
@@ -128,7 +156,11 @@ export class SessionFileInventory extends SessionInventoryDirectoryWalks {
     }
     let consumed = 0
     while (
-      (this.cancellations.size || this.dirty.size || this.walks.size) &&
+      (this.cancellations.size ||
+        this.dirty.size ||
+        this.walks.size ||
+        this.authority.readySize ||
+        this.garbage.size) &&
       (consumed === 0 || !overdue()) &&
       this.observations.changes.size +
         this.observations.removed.size +
@@ -142,12 +174,14 @@ export class SessionFileInventory extends SessionInventoryDirectoryWalks {
       } else if (this.dirty.size && (!this.walks.size || this.chooseDirty)) {
         this.chooseDirty = false
         await this.drainDirty(args, recentLimit)
-      } else {
+      } else if (this.walks.size) {
         this.chooseDirty = true
         const entry = await this.walks.firstEntry()
         if (entry) {
           await this.drainWalk(entry[1], args, recentLimit)
         }
+      } else {
+        await this.request({ kind: 'authority-cleanup', scope: this.scope })
       }
     }
     if (!this.walks.size && !this.cancellations.size) {
@@ -157,6 +191,7 @@ export class SessionFileInventory extends SessionInventoryDirectoryWalks {
         await this.reconcile()
       }
     }
+    await this.request({ kind: 'authority-cleanup', scope: this.scope })
     const page = await this.observations.delivery.page()
     const result = {
       changes: page.rows.flatMap(({ value }) =>
@@ -164,12 +199,21 @@ export class SessionFileInventory extends SessionInventoryDirectoryWalks {
           ? [
               {
                 file: { ...value.file, modifiedAt: new Date(value.file.mtimeMs).toISOString() },
-                force: value.force
+                force: value.force,
+                metadata: value.metadata
               }
             ]
           : []
       ),
       removed: page.rows.filter(({ value }) => value.removed).map(({ key }) => key),
+      removalReceipts: new Map(
+        page.rows
+          .filter(({ value }) => value.removed)
+          .map(({ key, value }) => [
+            key,
+            { scope: this.scope, revision: value.revision, authority: value.authority! }
+          ])
+      ),
       receipts: page.rows.map(({ key, value }) => ({ path: key, revision: value.revision })),
       removedDirectories: [...this.removedDirectories]
     }
@@ -193,8 +237,16 @@ export class SessionFileInventory extends SessionInventoryDirectoryWalks {
       if (this.accepts(path, args) || !isInsideSessionRoot(this.root, path)) {
         continue
       }
+      const revision = (await this.request({ kind: 'authority-probe', scope: this.scope, path }))
+        .observationEpoch!
       try {
         const stat = await wslGatedStat(path, 'scan', args.signal)
+        if (
+          (await this.request({ kind: 'authority-probe-end', scope: this.scope, path, revision }))
+            .invalidProof
+        ) {
+          continue
+        }
         await this.failures.delete(path)
         if (stat.isDirectory()) {
           await ((await this.walks.has(path)) ? this.trailing.put(path, true) : this.schedule(path))
@@ -203,8 +255,14 @@ export class SessionFileInventory extends SessionInventoryDirectoryWalks {
         }
       } catch (error) {
         throwIfAiVaultScanCancelled(args.signal)
+        if (
+          (await this.request({ kind: 'authority-probe-end', scope: this.scope, path, revision }))
+            .invalidProof
+        ) {
+          continue
+        }
         if (isMissingTranscriptPathError(error)) {
-          await this.schedule(path, false, true)
+          await this.schedule(path, false, true, revision)
           await this.schedule(dirname(path))
         } else {
           await this.issue(path, error, args)
@@ -213,11 +271,11 @@ export class SessionFileInventory extends SessionInventoryDirectoryWalks {
     }
   }
   async retryFailures(): Promise<void> {
-    for await (const [path] of this.failures.runnable()) {
-      await this.schedule(path, true)
-    }
-    for await (const [path, force] of this.observations.failures.runnable()) {
-      await this.invalidate(path, force, false)
-    }
+    await this.request({
+      kind: 'retry-admit',
+      scope: this.scope,
+      root: this.root,
+      generation: this.failures.epoch
+    })
   }
 }

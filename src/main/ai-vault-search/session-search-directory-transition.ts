@@ -1,9 +1,14 @@
+import {
+  sessionSearchDirectoryEpoch,
+  newerSessionSearchInput
+} from './session-search-observation-authority'
 import type { SessionSearchCatalog } from './session-search-catalog'
 import { dirname } from 'node:path'
 import { transitionSessionSearchInventory } from './session-search-inventory-transition'
 
 export type SessionSearchDirectoryCommand = {
   kind: 'directory-step'
+  epoch: number
   scope: string
   path: string
   phase: 'files' | 'children' | 'entries' | 'remove-files' | 'remove-children'
@@ -12,6 +17,7 @@ export type SessionSearchDirectoryCommand = {
   depth: number
 }
 export type SessionSearchDirectoryResult = {
+  invalidProof?: boolean
   directoryPage?: { key: string; directory: boolean }[]
   removedFiles?: string[]
 }
@@ -21,6 +27,10 @@ export function transitionSessionSearchDirectory(
   catalog: SessionSearchCatalog,
   command: SessionSearchDirectoryCommand
 ): SessionSearchDirectoryResult & { after?: string } {
+  const epoch = sessionSearchDirectoryEpoch(catalog, command.scope, command.path)
+  if (!epoch?.sealed || epoch.revision !== command.epoch) {
+    return { invalidProof: true }
+  }
   const entries = `${command.scope}:directory-input`
   const files = `${command.scope}:files`
   const directories = `${command.scope}:directories`
@@ -30,31 +40,56 @@ export function transitionSessionSearchDirectory(
   const incoming = (key: string): { file?: boolean; directory?: boolean } => {
     const row = get(entries, key)
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: staged directory entries are encoded by the scanner's matching scope.
-    return row ? (JSON.parse(row.value) as { file?: boolean; directory?: boolean }) : {}
+    return row?.group === String(command.epoch)
+      ? (JSON.parse(row.value) as { file?: boolean; directory?: boolean })
+      : {}
   }
   if (command.phase === 'files' || command.phase === 'remove-files') {
     const result = page(files)
     const removed = (result.rows ?? [])
       .filter(({ key }) => command.phase === 'remove-files' || !incoming(key).file)
       .map(({ key }) => key)
-    transitionSessionSearchInventory(catalog, {
+    const accepted = transitionSessionSearchInventory(catalog, {
       kind: 'forget-files',
       scope: command.scope,
-      paths: removed
+      paths: removed,
+      cutoff: epoch.cutoff
     })
-    return { removedFiles: removed, after: result.after }
+    if ((accepted.removedFiles?.length ?? 0) < removed.length) {
+      catalog.execute({
+        kind: 'directory-schedule',
+        scope: command.scope,
+        path: command.path,
+        depth: command.depth,
+        reconcile: true,
+        trailing: true
+      })
+    }
+    return { removedFiles: accepted.removedFiles, after: result.after }
   }
   if (command.phase === 'children' || command.phase === 'remove-children') {
     const result = page(directories)
     for (const row of result.rows ?? []) {
       if (command.phase === 'remove-children' || !incoming(row.key).directory) {
+        if (newerSessionSearchInput(catalog, command.scope, row.key, epoch.cutoff)) {
+          catalog.execute({
+            kind: 'directory-schedule',
+            scope: command.scope,
+            path: row.key,
+            depth: command.depth + 1,
+            reconcile: true,
+            trailing: true
+          })
+          continue
+        }
         catalog.execute({
           kind: 'directory-schedule',
           scope: command.scope,
           path: row.key,
           depth: command.depth + 1,
           reconcile: false,
-          remove: true
+          remove: true,
+          cutoff: epoch.cutoff
         })
       }
     }
@@ -64,6 +99,9 @@ export function transitionSessionSearchDirectory(
   const result = page(entries)
   const output: NonNullable<SessionSearchDirectoryResult['directoryPage']> = []
   for (const row of result.rows ?? []) {
+    if (row.group !== String(command.epoch)) {
+      continue
+    }
     const value = incoming(row.key)
     if (value.directory) {
       const known = get(directories, row.key)

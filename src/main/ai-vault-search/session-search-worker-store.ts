@@ -1,9 +1,9 @@
 import { sessionSearchForegroundTransfer } from './session-search-foreground-transfer'
-import type { TranscriptReadStart } from '../ai-vault/transcripts/session-transcript-consumers'
 import { SELF_CONTAINED_TRANSCRIPT_AGENTS } from './session-search-index-consumer'
 import { ownRetainedString } from '../../shared/own-retained-string'
 import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
 import type {
+  TranscriptReadStart,
   TranscriptMessage,
   TranscriptReadOutcome,
   TranscriptSessionIdentity
@@ -69,7 +69,8 @@ export class SessionSearchWorkerStore extends SessionSearchWorkerStoreBase {
     offset: number,
     identity?: () => TranscriptSessionIdentity | null,
     indexing = false,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    metadataOnly = false
   ): SessionSearchFileWrite | null {
     if (
       !this.acceptingReads ||
@@ -128,7 +129,7 @@ export class SessionSearchWorkerStore extends SessionSearchWorkerStoreBase {
           return { id: 0, accepted: false }
         })
     }
-    void post({ op: 'begin', handle, candidate, mode, offset })
+    void post({ op: 'begin', metadataOnly, handle, candidate, mode, offset })
     const discard = () => {
       cancelled = true
       this.bytes -= size

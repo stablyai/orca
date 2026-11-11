@@ -1,7 +1,16 @@
+import {
+  validSessionSearchRemoval,
+  type SessionSearchRemovalReceipt
+} from './session-search-observation-authority'
 import type { SessionSearchCatalog } from './session-search-catalog'
 import { invalidateSessionSearchPhysical } from './session-search-dirty-transition'
 
 export type SessionSearchDependencyFanoutCommand =
+  | {
+      kind: 'dependency-remove'
+      scope: string
+      rows: { path: string; observation?: SessionSearchRemovalReceipt }[]
+    }
   | { kind: 'dependency-deliver'; scope: string; keys: string[] }
   | {
       kind: 'dependency-fanout'
@@ -16,6 +25,14 @@ export function transitionSessionSearchDependencyFanout(
   catalog: SessionSearchCatalog,
   command: SessionSearchDependencyFanoutCommand
 ) {
+  if (command.kind === 'dependency-remove') {
+    for (const row of command.rows) {
+      if (!row.observation || validSessionSearchRemoval(catalog, row.path, row.observation)) {
+        catalog.execute({ kind: 'delete', scope: command.scope, key: row.path })
+      }
+    }
+    return {}
+  }
   const delivered = `${command.scope}:delivered`
   const put = (scope: string, key: string, value: unknown, ready = 0, group = '') =>
     catalog.execute({
@@ -50,9 +67,12 @@ export function transitionSessionSearchDependencyFanout(
       continue
     }
     for (const owner of owners.rows ?? []) {
-      invalidateSessionSearchPhysical(catalog, command.physical, owner.key, true)
       if (command.metadata) {
-        put('discovery-metadata', owner.key, true)
+        if (!catalog.requireReason?.(owner.key, 'metadata')) {
+          put('discovery-metadata', owner.key, catalog.nextRevision())
+        }
+      } else {
+        invalidateSessionSearchPhysical(catalog, command.physical, owner.key, true)
       }
     }
     remaining -= owners.rows?.length ?? 0

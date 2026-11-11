@@ -1,4 +1,4 @@
-import { mkdir, rm, writeFile } from 'node:fs/promises'
+import { mkdir, rm, writeFile, utimes } from 'node:fs/promises'
 import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
 import SyncDatabase from '../sqlite/sync-database'
@@ -18,7 +18,6 @@ import {
 import { SessionSearchWorkerClient } from './session-search-worker-client'
 import * as filesystem from '../native-chat/wsl-transcript-fs-access'
 import { SessionSearchIndexer } from './session-search-indexer'
-import { utimes } from 'node:fs/promises'
 
 it.each([40, 400])(
   'batches discovery and replacement metadata for %s retained files',

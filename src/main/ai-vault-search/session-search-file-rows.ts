@@ -1,10 +1,6 @@
 import { asRecord } from '../ai-vault/session-scanner-record-value'
 import type SyncDatabase from '../sqlite/sync-database'
-import type {
-  SessionSearchStateCounts,
-  SessionSearchFileState,
-  SessionSearchFileRow
-} from './session-search-store-types'
+import type { SessionSearchStateCounts, SessionSearchFileRow } from './session-search-store-types'
 import { boundedSessionSearchPage } from './session-search-catalog-pages'
 
 export function readSessionSearchFileRows(
@@ -73,10 +69,7 @@ export function* iterateSessionSearchFileRows(
 }
 
 export function readSessionSearchStateCounts(db: SyncDatabase): SessionSearchStateCounts {
-  const rows = db.prepare('SELECT state, count(*) AS n FROM files GROUP BY state').all() as {
-    state: SessionSearchFileState
-    n: number
-  }[]
+  const rows = db.prepare('SELECT state, count(*) AS n FROM files GROUP BY state').all()
   const counts: SessionSearchStateCounts = {
     current: 0,
     due: 0,
@@ -85,7 +78,9 @@ export function readSessionSearchStateCounts(db: SyncDatabase): SessionSearchSta
     messages: 0
   }
   for (const row of rows) {
-    counts[row.state] = Number(row.n)
+    if (row.state === 'current' || row.state === 'due' || row.state === 'failed') {
+      counts[row.state] = Number(row.n)
+    }
   }
   counts.messages = Number(asRecord(db.prepare('SELECT count(*) AS n FROM messages').get())?.n ?? 0)
   return counts

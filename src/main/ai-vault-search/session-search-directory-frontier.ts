@@ -1,3 +1,12 @@
+import {
+  recordSessionSearchRetry,
+  type SessionSearchRetryDebt
+} from './session-search-retry-transition'
+import {
+  endSessionSearchDirectory,
+  newerSessionSearchInput,
+  putAuthorityValue
+} from './session-search-observation-authority'
 import { dirname, sep } from 'node:path'
 import type { SessionSearchCatalog, SessionSearchCatalogRow } from './session-search-catalog'
 
@@ -9,6 +18,8 @@ export type SessionSearchDirectoryFrontierCommand =
       depth: number
       reconcile: boolean
       remove?: boolean
+      cutoff?: number
+      trailing?: boolean
     }
   | { kind: 'directory-cancel-step'; scope: string }
 type Cancellation = { path: string; depth: number; cutoff: number; after?: string }
@@ -31,15 +42,20 @@ export function transitionSessionSearchDirectoryFrontier(
   if (command.kind === 'directory-schedule') {
     if (command.remove) {
       if (!get(cancellations, command.path)) {
+        const cutoff = command.cutoff ?? catalog.nextRevision()
+        putAuthorityValue(catalog, `${command.scope}:removal-epochs`, command.path, true, cutoff)
         set(cancellations, command.path, {
           path: command.path,
           depth: command.depth,
-          cutoff: catalog.nextRevision()
+          cutoff
         })
       }
       return {}
     }
     if (get(walks, command.path)) {
+      if (command.trailing) {
+        putAuthorityValue(catalog, `${command.scope}:trailing`, command.path, true)
+      }
       return {}
     }
     let child = command.path
@@ -58,7 +74,8 @@ export function transitionSessionSearchDirectoryFrontier(
       path: command.path,
       depth: command.depth,
       reconcile: command.reconcile,
-      phase: 'load'
+      phase: 'load',
+      origin: catalog.nextRevision()
     })
     return {}
   }
@@ -73,9 +90,40 @@ export function transitionSessionSearchDirectoryFrontier(
   if (!state || !first) {
     return {}
   }
+  if (newerSessionSearchInput(catalog, command.scope, state.path, state.cutoff)) {
+    catalog.execute({ kind: 'delete', scope: cancellations, key: first.key })
+    catalog.execute({ kind: 'delete', scope: `${command.scope}:removal-epochs`, key: first.key })
+    transitionSessionSearchDirectoryFrontier(catalog, {
+      kind: 'directory-schedule',
+      scope: command.scope,
+      path: state.path,
+      depth: state.depth,
+      reconcile: true,
+      trailing: true
+    })
+    return {}
+  }
   const remove = (row: SessionSearchCatalogRow | undefined) => {
-    if (row && (frontier(row)?.revision ?? 0) <= state.cutoff) {
+    if (!row) {
+      return
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: walks own this encoded frame and its original scheduling authority.
+    const frame = JSON.parse(row.value).value as { origin?: number; epoch?: number }
+    if ((frame.origin ?? frontier(row)?.revision ?? 0) <= state.cutoff) {
+      if (frame.epoch !== undefined) {
+        endSessionSearchDirectory(catalog, command.scope, row.key, frame.epoch)
+      }
       catalog.execute({ kind: 'delete', scope: walks, key: row.key })
+      const debt = get(`${command.scope}:refusals`, row.key)
+      if (debt?.ready) {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the refusal owner encoded this scratch debt.
+        recordSessionSearchRetry(
+          catalog,
+          `${command.scope}:refusals`,
+          row.key,
+          JSON.parse(debt.value) as SessionSearchRetryDebt
+        )
+      }
     }
   }
   if (state.after === undefined) {
@@ -100,8 +148,12 @@ export function transitionSessionSearchDirectoryFrontier(
         path: state.path,
         depth: state.depth,
         reconcile: false,
-        phase: 'remove-files'
+        phase: 'remove-files',
+        cutoff: state.cutoff,
+        origin: state.cutoff
       })
+    } else {
+      catalog.execute({ kind: 'delete', scope: `${command.scope}:removal-epochs`, key: first.key })
     }
   }
   return { processed: (page.rows?.length ?? 0) + Number(state.after === undefined) }

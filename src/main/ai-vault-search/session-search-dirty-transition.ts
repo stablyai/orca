@@ -1,7 +1,10 @@
+import { recordSessionSearchInput } from './session-search-observation-authority'
 import type { SessionSearchCatalog, SessionSearchCatalogRow } from './session-search-catalog'
 import type { SessionSearchObservationDebt } from './session-search-inventory-transition'
 
-export type SessionSearchDirtyCommand = { kind: 'dirty-page'; scope: string }
+export type SessionSearchDirtyCommand =
+  | { kind: 'dirty-page'; scope: string }
+  | { kind: 'input-invalidate'; scope: string; path: string; force: boolean; subtree?: boolean }
 export type SessionSearchDirtyResult = { dirtyInputs?: { path: string; force: boolean }[] }
 type Entry = { value: boolean; revision: number }
 function entry(row: SessionSearchCatalogRow | undefined): Entry | undefined {
@@ -12,9 +15,17 @@ export function invalidateSessionSearchPhysical(
   catalog: SessionSearchCatalog,
   scope: string,
   path: string,
-  force: boolean
+  force: boolean,
+  delivered = true,
+  subtree = false
 ) {
-  for (const suffix of ['refusals', 'file-refusals']) {
+  if (delivered) {
+    recordSessionSearchInput(catalog, scope, path)
+    if (force) {
+      catalog.requireReason?.(path, 'force')
+    }
+  }
+  for (const suffix of delivered ? ['refusals', 'file-refusals'] : []) {
     const debtScope = `${scope}:${suffix}`
     const row = catalog.execute({ kind: 'get', scope: debtScope, key: path }).rows?.[0]
     if (row) {
@@ -23,8 +34,19 @@ export function invalidateSessionSearchPhysical(
       catalog.execute({
         kind: 'put',
         scope: debtScope,
-        rows: [{ ...row, value: JSON.stringify({ ...debt, failures: 0 }), ready: 1 }]
+        rows: [
+          {
+            ...row,
+            value: JSON.stringify({ ...debt, failures: 0, attempted: -1 }),
+            ready: 1,
+            tie: catalog.nextRevision()
+          }
+        ]
       })
+      catalog.execute({ kind: 'delete', scope: `${debtScope}:eligible`, key: path })
+    }
+    if (subtree) {
+      catalog.execute({ kind: 'retry-wake', scope: debtScope, prefix: path })
     }
   }
   const dirty = `${scope}:dirty`
@@ -41,6 +63,17 @@ export function transitionSessionSearchDirty(
   catalog: SessionSearchCatalog,
   command: SessionSearchDirtyCommand
 ): SessionSearchDirtyResult {
+  if (command.kind === 'input-invalidate') {
+    invalidateSessionSearchPhysical(
+      catalog,
+      command.scope,
+      command.path,
+      command.force,
+      true,
+      command.subtree
+    )
+    return {}
+  }
   const scope = `${command.scope}:dirty`,
     expansion = `${command.scope}:dirty-expansion`
   const page = catalog.execute({ kind: 'page', scope, group: '', orderRank: true })

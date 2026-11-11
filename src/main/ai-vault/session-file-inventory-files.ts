@@ -15,7 +15,7 @@ import { recordSessionScanIssue } from './session-scan-issues'
 import { retainRecentSessionFile } from './session-file-observation'
 import { sidecarEnrichesWithoutReparse } from './parse-cache/session-scanner-sidecar-enrichment'
 
-export type SessionFileChange = { file: FileWithMtime; force: boolean }
+export type SessionFileChange = { file: FileWithMtime; force: boolean; metadata?: boolean }
 
 /** Accepted file facts and retry debt survive both directory epochs and delivered events. */
 export class SessionInventoryFiles {
@@ -26,8 +26,10 @@ export class SessionInventoryFiles {
   readonly delivery: SessionSearchCatalogClient<{
     file?: Omit<FileWithMtime, 'modifiedAt'>
     force: boolean
+    metadata?: boolean
     removed?: boolean
     revision: number
+    authority?: number
   }>
   readonly failures: SessionSearchCatalogRetries
   get count(): number {
@@ -52,12 +54,15 @@ export class SessionInventoryFiles {
     args: DiscoverSessionFilesArgs,
     force: boolean,
     limit: number,
-    readOwed = false
+    readOwed = false,
+    metadataOwed = false
   ) {
-    return (await this.observePage([{ path, force, readOwed }], args, limit)).get(path)
+    return (await this.observePage([{ path, force, readOwed, metadataOwed }], args, limit)).get(
+      path
+    )
   }
   async observePage(
-    inputs: { path: string; force: boolean; readOwed?: boolean }[],
+    inputs: { path: string; force: boolean; readOwed?: boolean; metadataOwed?: boolean }[],
     args: DiscoverSessionFilesArgs,
     limit: number
   ): Promise<Map<string, FileWithMtime>> {
@@ -143,7 +148,11 @@ export class SessionInventoryFiles {
       for (const observation of accepted.observations ?? []) {
         const file = observation.file!
         if (observation.changed) {
-          this.changes.set(observation.path, { file, force: observation.force })
+          this.changes.set(observation.path, {
+            file,
+            force: observation.force,
+            metadata: observation.metadata
+          })
         }
         retainRecentSessionFile(this.recent, file, limit)
         if (observation.readable) {

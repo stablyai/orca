@@ -1,3 +1,4 @@
+import type { SessionSearchRemovalReceipt } from './session-search-observation-authority'
 import type { SessionSearchCatalogCandidate } from './session-search-catalog-candidates'
 import type { SessionSearchWorkResult } from './session-search-work-queue'
 import { sessionSearchRecordPages } from './session-search-catalog-pages'
@@ -75,12 +76,14 @@ export class SessionSearchCandidateInventory extends SessionSearchCandidatePubli
   }
   async remove(
     paths: ReadonlySet<string>,
-    agents: ReadonlyMap<string, ReadonlySet<string>> = new Map()
+    agents: ReadonlyMap<string, ReadonlySet<string>> = new Map(),
+    observations: ReadonlyMap<string, SessionSearchRemovalReceipt> = new Map()
   ) {
     let work
     const rows = [...new Set([...paths, ...agents.keys()])].map((path) => ({
       path,
-      agents: paths.has(path) ? undefined : [...agents.get(path)!]
+      agents: paths.has(path) ? undefined : [...agents.get(path)!],
+      observation: observations.get(path)
     }))
     for (const page of sessionSearchRecordPages(rows)) {
       for (const row of page) {
