@@ -21,6 +21,7 @@ import { JournalSqlScope } from './journal-sql-scope'
 import { JournalSqlBatch } from './journal-sql-batch'
 import { seedJournalForkSource } from './journal-fork-source.test-fixture'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { captureJournalMetadataPlans } from './journal-domain-metadata-plan.test-fixture'
 
 it('releases a WAL-pressured capture before staging and leaves no visible fork after a pre-install crash', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'orca-sql-fork-'))
@@ -137,6 +138,10 @@ it('releases a WAL-pressured capture before staging and leaves no visible fork a
       'codex:source:T1:140'
     )!
     expect(boundary).not.toBeNull()
+    const assertPlans = captureJournalMetadataPlans(
+      reader,
+      'SELECT item_id,sequence,sequence_index,ordinal,turn_item_id,'
+    )
     preparation = new JournalForkPreparation(reader, {
       source: {
         sessionId: 'source-chat',
@@ -170,6 +175,7 @@ it('releases a WAL-pressured capture before staging and leaves no visible fork a
       }
     }
     expect(reader.isTransaction).toBe(false)
+    assertPlans()
     const released = writer.prepare('PRAGMA wal_checkpoint(PASSIVE)').get()!
     expect(Number(released.checkpointed)).toBe(Number(released.log))
     const output: JournalReplacementItem[] = []

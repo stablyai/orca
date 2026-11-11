@@ -16,6 +16,7 @@ import {
   type JournalDomainHistoryRequest
 } from './journal-domain-history-page'
 import { insertJournalDomainQueueRow } from './journal-domain-queue-rows'
+import { captureJournalMetadataPlans } from './journal-domain-metadata-plan.test-fixture'
 
 const cleanup: (() => void)[] = []
 afterEach(() => {
@@ -71,7 +72,8 @@ const sequences = (result: AgentSessionHistoryResult) =>
   result.page.items.map((item) => item.sequence)
 
 it('pages a chat of almost only subagent rows in bounded, gap-free pages', () => {
-  const { seedItem, head, read } = history()
+  const { db, seedItem, head, read } = history()
+  const assertPlans = captureJournalMetadataPlans(db, 'SELECT item_id, sequence,')
   seedItem({
     ...text(1, ''),
     body: {
@@ -101,6 +103,7 @@ it('pages a chat of almost only subagent rows in bounded, gap-free pages', () =>
   }
   expect(sizes).toEqual([80, 80, 80, 61])
   expect(seen).toEqual(Array.from({ length: 301 }, (_, index) => index + 1))
+  assertPlans()
 })
 
 it('keeps revised naming items at their visible history position and removes obsolete names', async () => {
@@ -392,6 +395,7 @@ it('keeps visible rows first and retained sources in relation order across a who
 
 it('catches up with the current revision, placement and submission, not the replayed metadata', async () => {
   const { db, commit, seedSend, read } = history()
+  const assertPlans = captureJournalMetadataPlans(db, 'SELECT item_id, sequence,')
   seedSend()
   db.exec(`INSERT INTO journal_submission_attempts(session_id,epoch,message_id,attempt_sequence,
     attempt_index,current,item_id,ordinal,submitted_at,accepted_sequence,fingerprint,
@@ -433,6 +437,7 @@ it('catches up with the current revision, placement and submission, not the repl
     'orca:assistant',
     'orca:child'
   ])
+  expect(assertPlans().some((sql) => sql.includes('root=1'))).toBe(true)
 })
 
 it('resets a cursor below the pruned boundary or across a gap, and resumes at the boundary', () => {
