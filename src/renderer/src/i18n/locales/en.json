@@ -1404,8 +1404,8 @@
       "orcaCloud": "Orca Cloud"
     },
     "orcaAccount": {
-      "descriptionAccount": "Sign in to Orca and see which account and team you use.",
-      "descriptionIdentity": "The Orca account you’re signed in with."
+      "descriptionIdentity": "The Orca account you’re signed in with.",
+      "descriptionAccount": "Sign in to Orca and see which account and team you use."
     },
     "agentAccounts": {
       "searchTitle": "Agent accounts",
@@ -1773,6 +1773,7 @@
             "33290e88ed": "Failed to connect profile",
             "9fcb07a796": "Profile connected",
             "2f6c78a039": "Failed to refresh profile auth",
+            "a37b5e6d37": "Signed out of profile",
             "83600521e7": "Failed to sign out",
             "76deec8f58": "Failed to switch organization",
             "7d4bc516ee": "Failed to switch profile",
@@ -20806,6 +20807,7 @@
           "sandboxHoursLeftResets_other": "{{count}} sandbox hours left · resets {{date}}",
           "vpWakeBody3": "Idle sandboxes sleep to save sandbox hours and wake with your files as you left them."
         },
+        "capLabel2": "Monthly spend cap",
         "capSaved": "Saved",
         "checkout": {
           "attention2": "Stripe needs one more step",
@@ -20945,8 +20947,7 @@
           "formerMembers_other": "{{count}} former members",
           "deletedWorkspaces_one": "Deleted workspace",
           "deletedWorkspaces_other": "{{count}} deleted workspaces"
-        },
-        "capLabel2": "Monthly spend cap"
+        }
       },
       "ports": {
         "RuntimePortAutoForwarder": {
@@ -23708,10 +23709,10 @@
     "billing": {
       "overage": {
         "capHint2": "{{rate}} per sandbox hour after your included hours, billed by the minute.",
-        "turnOff": "Turn off overage",
         "memberOn4": "Overage is on, up to your {{cap}} spend cap. Ask an owner or admin to change this.",
         "memberOff4": "Off until an owner or admin turns it on. Ask an owner or admin to change this.",
-        "offStatus2": "Overage is off. Running sandboxes go to sleep and new ones can’t start when your team runs out of sandbox hours."
+        "offStatus2": "Overage is off. Running sandboxes go to sleep and new ones can’t start when your team runs out of sandbox hours.",
+        "turnOff": "Turn off overage"
       },
       "overageUsed": "{{value0}} of {{value1}} used",
       "capZero2": "Set a spend cap above $0, or turn overage off."
@@ -28510,10 +28511,5 @@
     "overLimit": "The mirror is limited to {{size}}. Larger files and anything past the limit aren’t copied.",
     "tooLarge": "Files over {{size}} aren’t copied.",
     "removal": "The copy on this computer is removed too."
-  },
-  "store": {
-    "orcaProfiles": {
-      "signedOut": "Signed out of Orca"
-    }
   }
 }

@@ -28,4 +28,45 @@ describe('usePlanBillingUsageHistory', () => {
     })
     expect(result.current.state.status).toBe('failed')
   })
+
+  it('fails after 15 s from mount when the account key never arrives, and Try again waits again', async () => {
+    const { result } = renderHook(() => usePlanBillingUsageHistory(null, null, null, false))
+    expect(result.current.state.status).toBe('loading')
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(USAGE_HISTORY_TIMEOUT_MS - 100)
+    })
+    expect(result.current.state.status).toBe('loading')
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200)
+    })
+    expect(result.current.state.status).toBe('failed')
+    act(() => result.current.retry())
+    expect(result.current.state.status).toBe('loading')
+  })
+
+  it('shows the chart when the key arrives late and the read answers', async () => {
+    const history = {
+      days: [{ start: 0, seconds: 3600 }],
+      totalSeconds: 3600,
+      yourSeconds: 3600,
+      members: null,
+      sandboxes: null
+    }
+    Object.assign(window.api.orcaProfiles, {
+      billingUsageHistory: () => Promise.resolve({ status: 'ok' as const, history })
+    })
+    const initialProps: { key: string | null } = { key: null }
+    const { result, rerender } = renderHook(
+      ({ key }: { key: string | null }) => usePlanBillingUsageHistory(key, null, null, false),
+      { initialProps }
+    )
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5_000)
+    })
+    rerender({ key: 'acct|1' })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    expect(result.current.state.status).toBe('ok')
+  })
 })

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { OrcaBillingUsageHistory } from '../../../../shared/orca-billing'
 import type { CloudWorkspace } from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
 import { useTranslate } from '@/i18n/use-translate'
@@ -37,6 +37,25 @@ export function usePlanBillingUsageHistory(
   >(null)
   const [workspaces, setWorkspaces] = useState<CloudWorkspace[] | null>(null)
   const roster = useOrgRoster(canSeeBreakdown ? orgId : null)
+  // The chart's own clock: 15 s from when it mounts (or Try again, or a switch to another account)
+  // to an answer, even if the read can't start yet because the account key hasn't arrived.
+  const [waitExpired, setWaitExpired] = useState(false)
+  const [accountEpoch, setAccountEpoch] = useState(0)
+  const lastAccount = useRef<string | null>(null)
+  const account = readKey?.split('|')[0] ?? null
+  useEffect(() => {
+    if (account && lastAccount.current && account !== lastAccount.current) {
+      setAccountEpoch((epoch) => epoch + 1)
+    }
+    if (account) {
+      lastAccount.current = account
+    }
+  }, [account])
+  useEffect(() => {
+    setWaitExpired(false)
+    const timer = setTimeout(() => setWaitExpired(true), USAGE_HISTORY_TIMEOUT_MS)
+    return () => clearTimeout(timer)
+  }, [attempt, accountEpoch])
 
   useEffect(() => {
     if (!readKey) {
@@ -99,7 +118,7 @@ export function usePlanBillingUsageHistory(
   const sameAccount =
     read !== null && readKey !== null && read.key.split('|')[0] === readKey.split('|')[0]
   if (!read || !sameAccount) {
-    return { state: { status: 'loading' }, retry }
+    return { state: { status: waitExpired ? 'failed' : 'loading' }, retry }
   }
   if (!('history' in read)) {
     return { state: { status: 'failed' }, retry }
