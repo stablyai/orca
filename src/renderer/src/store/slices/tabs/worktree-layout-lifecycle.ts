@@ -6,7 +6,7 @@ import { editorPlacementsInContentOwners } from '@/lib/workspace/persistence/wor
 import { isEditorTabContentType } from '../editor/tabs/editor-tab-content-type'
 import { buildActiveSurfacePatch } from './tabs-surface'
 import type { AppState } from '../../types'
-export { renameWorktreeLayoutKeys } from './rename-worktree-layout'
+import './rename-worktree-layout'
 import { omitRecordKeys } from '../worktrees/teardown/record-key-omission'
 import { recordDraft, tabBucketDraft } from '../../keyed-record-transitions'
 import { collapseEmptiedKeptGroups, type GroupLayoutDrafts } from './collapse-emptied-kept-groups'

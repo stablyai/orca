@@ -1,43 +1,45 @@
 import { useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-// Share Settings/Cmd+J visibility without Settings pane UI imports; an architecture test enforces this boundary.
-// Share Settings/Cmd+J visibility without Settings pane UI imports; an architecture test enforces this boundary.
 import {
   getRuntimeEnvironmentsSearchEntry,
   getWebRuntimeEnvironmentsSearchEntry
 } from '@/components/settings/runtime-environments/catalog/runtime-environments-search'
 import { getTerminalPaneSearchEntries } from '@/components/settings/terminal/terminal-search'
-import { isMacUserAgent, isWindowsUserAgent } from '@/lib/user-agent-platform'
+import { isMacUserAgent, isWindowsUserAgent } from '@/app-shell/platform/user-agent-platform'
 import { useLinearProviderConnected } from '@/hooks/useLinearProviderConnected'
-import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
-import type { SettingsNavSection } from '@/lib/settings-navigation-types'
-import { isWebClientLocation } from '@/lib/web-client-location'
+import { getClientCreationActionPolicy } from '@/lib/workspace/creation/surface-policy/client-creation-action-policy'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import {
   isWindowsTerminalCapabilityHost,
   useWindowsTerminalCapabilities
-} from '@/lib/windows-terminal-capabilities'
+} from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
 import { defaultScopeHost } from '@/runtime/hosts/selection/default-creation-host'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { useProjectHostSetupProjection } from '@/store/projects/use-project-host-setup-projection'
 import {
   useChatSettingsOwnPermissions,
   useStructuredAgentSessionHostQueuesMessages
 } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
-import type { ProjectGroupingModel } from '../../../shared/project-section-grouping'
-import type { Repo } from '../../../shared/repo-types'
 import {
   buildCapabilitySettingsSections,
   buildSetupSettingsSections
 } from './settings-navigation-capability-sections'
-import type { SettingsNavigationBuildOptions } from './settings-navigation-build-options'
 import { buildInterfaceSettingsSections } from './settings-navigation-interface-sections'
 import { buildRemoteSettingsSections } from './settings-navigation-remote-sections'
 import { buildWorkflowSettingsSections } from './settings-navigation-workflow-sections'
 import { useWindowsTerminalCapabilityOwnerKey } from './useWindowsTerminalCapabilityOwnerKey'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
-import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { useTranslate } from '@/i18n/use-translate'
+import type { Translate } from '@/i18n/use-translate'
+import type { SettingsNavSection } from '@/components/settings/navigation/settings-navigation-types'
+import type { ProjectGroupingModel } from '../../../shared/project-section-grouping'
+import type { Repo } from '../../../shared/repo-types'
+import type { SettingsNavigationBuildOptions } from './settings-navigation-build-options'
 
-export { isWebClientLocation } from '@/lib/web-client-location'
+// Share Settings/Cmd+J visibility without Settings pane UI imports; an architecture test enforces this boundary.
+// Share Settings/Cmd+J visibility without Settings pane UI imports; an architecture test enforces this boundary.
+
+export { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 
 export function buildSettingsNavigationMetadata(
   {

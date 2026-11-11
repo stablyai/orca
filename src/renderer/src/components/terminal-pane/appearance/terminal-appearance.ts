@@ -3,8 +3,11 @@ import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import { resolveTerminalFontWeights } from '../../../../../shared/terminal/appearance/terminal-fonts'
 import { resolveTerminalLigaturesEnabled } from '../../../../../shared/terminal/appearance/terminal-ligatures'
-import { resolvePaneStyleOptions, resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
-import { buildFontFamily } from '@/lib/monospace-font-family'
+import {
+  resolvePaneStyleOptions,
+  resolveEffectiveTerminalAppearance
+} from '@/lib/terminal/appearance/terminal-theme'
+import { buildFontFamily } from '../../../../../shared/monospace-font-family'
 import { pluginFontFamilyWhenLoaded } from '@/store/plugins/appearance/plugin-fonts'
 import '@/lib/pane-manager/pane-tree-ops'
 import { safeFit, safeFitAndThen } from '@/lib/pane-manager/pane-fit'
@@ -31,23 +34,9 @@ import { normalizeTerminalLineHeight } from '../../../../../shared/terminal/appe
 import { maybePushMode2031Flip } from '../emulation/terminal-mode-2031-replies'
 import { resolveTerminalMinimumContrastRatio } from '../../../../../shared/terminal-themes/terminal-contrast-correction'
 import { resolveTerminalInlineImagesEnabled } from '../../../../../shared/terminal/images/terminal-inline-images-settings'
-import { windowBackdropActive } from '@/lib/window-backdrop'
-import { contrastRatio, over, type Rgba } from '../../../../../shared/color/rgba-contrast'
+import { windowBackdropActive } from '@/app-shell/appearance/window-backdrop'
+import { contrastRatio, hexToRgb, over, type Rgba } from '../../../../../shared/color/rgba-contrast'
 import { getTerminalFontSizeOverride } from './terminal-font-size-overrides'
-
-function hexToRgb(hex: string): Rgba {
-  let clean = hex.replace('#', '')
-  if (clean.length === 3) {
-    clean = clean
-      .split('')
-      .map((c) => c + c)
-      .join('')
-  }
-  const r = Number.parseInt(clean.slice(0, 2), 16)
-  const g = Number.parseInt(clean.slice(2, 4), 16)
-  const b = Number.parseInt(clean.slice(4, 6), 16)
-  return [r, g, b, 1]
-}
 
 export function hexToRgba(hex: string, alpha: number): string {
   const [r, g, b] = hexToRgb(hex)

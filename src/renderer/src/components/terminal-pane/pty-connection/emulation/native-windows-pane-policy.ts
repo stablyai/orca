@@ -3,7 +3,7 @@ import {
   isLocalNativeWindowsConpty,
   resolveWindowsShellOverride
 } from '@/lib/pane-manager/windows-pty-compatibility'
-import { CLIENT_PLATFORM } from '@/lib/new-workspace'
+import { CLIENT_PLATFORM } from '@/lib/workspace/creation/new-workspace'
 import { resolveLatestAgentDoneStartedAt } from '../notifications/agent-done-started-at'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 

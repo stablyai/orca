@@ -9,14 +9,14 @@ import {
 import {
   AgentLaunchChoiceCancelled,
   acquireAgentLaunchChoices
-} from '../../host-chat-program-acquisition'
+} from '../../agent-session/launch/inventory/host-chat-program-acquisition'
 import { toast } from 'sonner'
 import {
   ensureDetectedAgentsForRepo,
   ensureDetectedAgentsForWorktree,
   type RepoHostFields
 } from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
-import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
+import { focusTerminalTabSurface } from '@/components/terminal-pane/input/focus/focus-terminal-tab-surface'
 import type { ProspectiveWorkspace } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { worktreeLaunchWorkspace } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { findGithubPrWorkspaceAttachment } from '@/lib/work-items/github/github-work-item-workspace-attachment'

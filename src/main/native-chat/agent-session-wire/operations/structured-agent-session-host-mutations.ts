@@ -50,7 +50,10 @@ import { openWithReadyStructuredAgentSessionChild } from './structured-agent-ses
 
 import type { StructuredAgentSessionCaller } from '../host/structured-agent-session-host-types'
 import '../options/structured-agent-session-options-read'
-import { recordStructuredAgentSessionOptionIntent } from '../options/structured-agent-session-option-intent'
+import {
+  noteStructuredAgentSessionOptionPick,
+  recordStructuredAgentSessionOptionIntent
+} from '../options/structured-agent-session-option-intent'
 import { confirmIdleStructuredAgentSessionOption } from '../options/structured-agent-session-idle-option'
 
 export function sendStructuredAgentSessionTurn(
@@ -235,18 +238,28 @@ export async function setStructuredAgentSessionOption(
       conversationWrite: true,
       run: async (ctx) => {
         if (params.value === null) {
-          return resetStructuredAgentSessionModel(
+          const reset = await resetStructuredAgentSessionModel(
             context.deps,
             ctx,
             Boolean((await context.conversation(ctx.sessionId)).child),
             params.key
           )
+          if (reset.ok) {
+            noteStructuredAgentSessionOptionPick(
+              context,
+              ctx,
+              { key: 'model', value: reset.value.options?.model ?? '' },
+              true
+            )
+          }
+          return reset
         }
         const input = { key: params.key, value: params.value }
         const picked = await recordStructuredAgentSessionOptionIntent(context.deps, ctx, input, {
           readsWithoutModel: caller.readsOptionsWithoutModel !== false
         })
         if (picked.ok) {
+          noteStructuredAgentSessionOptionPick(context, ctx, input, !noChoice)
           confirmIdleStructuredAgentSessionOption(context, ctx, input)
         }
         return picked

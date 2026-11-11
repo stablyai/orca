@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import type { SettingsNavGroup } from '@/lib/settings-navigation-types'
+import type { SettingsNavGroup } from '@/components/settings/navigation/settings-navigation-types'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import type { SettingsStoreModel } from './use-settings-store-model'

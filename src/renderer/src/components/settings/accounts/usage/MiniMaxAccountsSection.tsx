@@ -1,6 +1,6 @@
 import { ExternalLink, ShieldCheck } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { FeatureInteractionId } from '../../../../../../shared/feature-interaction-catalog'
 import type { ProviderRateLimits } from '../../../../../../shared/rate-limit-types'
 import { Label } from '../../../ui/label'

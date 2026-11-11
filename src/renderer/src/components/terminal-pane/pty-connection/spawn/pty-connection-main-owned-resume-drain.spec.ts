@@ -59,7 +59,8 @@ export function registerMainOwnedResumeDrainTests(
         owner,
         onDeferredCwdSpawnFailed
       } = await mainOwnedResumeFixture()
-      const { getPaneSpawnDeferral } = await import('@/lib/pane-spawn-deferral-registry')
+      const { getPaneSpawnDeferral } =
+        await import('@/components/terminal-pane/session-restore/spawn-deferral/pane-spawn-deferral-registry')
       expect(mainResume).toHaveBeenCalledTimes(1)
       expect(attach.mock.calls, 'main-helper call-through spy').toHaveLength(1)
       const [session, , startup, options] = attach.mock.calls[0]

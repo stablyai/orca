@@ -8,8 +8,11 @@ import {
 } from '../../../../../shared/plugins/artifacts/plugin-terminal-theme-artifact'
 import { useEffect } from 'react'
 import { createPluginContentListStore } from '../catalog/plugin-content-list-store'
-import { refreshedTerminalPluginPalettes } from '../../../lib/terminal-plugin-palettes'
-import { applyPluginAppTheme, readCachedPluginAppTheme } from '../../../lib/document-theme'
+import { refreshedTerminalPluginPalettes } from '../../../lib/terminal/themes/terminal-plugin-palettes'
+import {
+  applyPluginAppTheme,
+  readCachedPluginAppTheme
+} from '../../../app-shell/appearance/document-theme'
 import { useAppStore } from '../../index'
 import { useSettingsDarkTheme } from '@/hooks/use-document-dark-theme'
 import { pluginAppThemeSlotUpdate } from '../../../../../shared/plugin-theme-settings'

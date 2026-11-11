@@ -5,7 +5,7 @@ import { INITIAL_MODE_2031_REPLY_SCAN_STATE } from '../../../../../shared/termin
 import { waitForTerminalOutputParsed } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { executeTerminalStartupCommandPaste } from '../input/paste/terminal-startup-command-paste'
 import { resolveTerminalPasteRuntime } from '../input/paste/terminal-paste-runtime'
-import { CLIENT_PLATFORM } from '@/lib/new-workspace'
+import { CLIENT_PLATFORM } from '@/lib/workspace/creation/new-workspace'
 import { recordPaneWakeThroughLayoutOwner } from '@/store/terminals/terminal-sleep-layout-owner'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
 

@@ -1549,12 +1549,12 @@
       "hostDefaults": "Padrões para novos agentes no host selecionado.",
       "save": "Salvar",
       "clearDefault": "Limpar agente padrão",
-      "autoUnsupported": "O modo Automático requer uma versão mais recente do Orca neste host.",
+      "autoUnsupported": "Aprovar por mim requer uma versão mais recente do Orca neste host.",
       "permissionsDescription": "O que os agentes podem fazer sem pedir sua aprovação. Agentes com argumentos de inicialização personalizados os mantêm.",
       "permissionsAutoDescription": "<agents>Agentes compatíveis</agents> aprovam ações seguras por conta própria.",
       "permissionsMixed": "A maioria dos agentes usa {{mode}}. Escolher um modo redefine as exceções marcadas, exceto argumentos personalizados.",
       "permissionsMixedNoMajority": "Os agentes usam configurações diferentes. Escolher um modo aplica a configuração a todos.",
-      "permissionsSearchDescription": "Inicie agentes com permissões Manual, Automático ou Yolo.",
+      "permissionsSearchDescription": "Escolha Aprovar por mim, Acesso total ou as configurações de permissão próprias de cada agente.",
       "otherAgentsPermissions": "Outros agentes",
       "otherAgentsPermissionsLabel": "Permissões para outros agentes",
       "customArgsBadge": "Personalizado",
@@ -1583,6 +1583,7 @@
       "permissionOwnDescription": "Terminais e chats seguem as configurações de permissão próprias do agente.",
       "permissionOwnShort": "Configurações próprias",
       "permissionWithoutAuto": "Agentes sem Aprovar por mim",
+      "permissionMixed": "Misto",
       "permissionSurfaceDifference": "Os terminais usam as configurações próprias do agente; novos chats usam {{mode}}.",
       "permissionSameAsAll": "Igual a todos os agentes",
       "permissionChipRemove": "Remover {{flag}} e usar as configurações próprias de {{agent}}",
@@ -1627,6 +1628,7 @@
       "defaultSurfaceSetAllChat": "Definir todos como Chat",
       "defaultSurfaceSetAllTerminal": "Definir todos como Terminal",
       "sameAsChoice": "Igual a {{agent}} · {{choice}}",
+      "modelListFallback": "Lista integrada. O Orca não conseguiu obter uma lista de modelos deste host.",
       "chatUnavailableOnWindows": "O {{value0}} Chat ainda não está disponível no Windows, então o {{value0}} abre em um terminal neste host. Chats em um host macOS ou Linux continuam funcionando.",
       "undetectedCommandHint": "Se a CLI do {{agent}} estiver instalada fora do PATH, informe o caminho completo do executável neste host."
     },
@@ -4422,11 +4424,9 @@
             "fbfd2386e8": "script de arquivamento",
             "4c17787d7b": "arquivar",
             "8655e3387b": "hooks",
-            "acd1157f0c": "Scripts locais e compartilhados executados antes de uma worktree ser arquivada.",
             "491b05d6e6": "comando de configuração",
             "a31b43a7f8": "script de configuração",
             "5590388dfa": "configuração",
-            "baaf70bb37": "Scripts locais e compartilhados executados após a criação de uma nova worktree.",
             "d73fb47b45": ".claude/mcp.json",
             "db11b337c4": ".claude.json",
             "26f42fe773": ".cursor/mcp.json",
@@ -6471,13 +6471,9 @@
           "cd9fe37556": "Permissão do microfone concedida",
           "openAiKeyName": "Sua chave de transcrição da OpenAI",
           "dictationModeAuto": "Automático",
-          "dictationModesWithAutoDescription": "Automático: mantenha {{shortcut}} pressionado para ditar até soltar, ou toque para iniciar e parar. Manter pressionado: dite enquanto mantém {{shortcut}} pressionado. Alternar: pressione {{shortcut}} uma vez para iniciar e novamente para parar.",
           "speechGpuLabel": "Usar GPU",
-          "speechGpuDescription": "Reconhece a fala na placa de vídeo quando ela funciona e na CPU quando falha. Desative se o ditado travar ou reiniciar o computador.",
-          "updateToFasterVersion": "Atualizar para a versão mais rápida ({{value0}} MB)",
           "c5ea32143e": "Modelo de Voz",
-          "ba4a900d1d": "Modo de Ditado",
-          "0121960365": "Ativar Ditado por Voz"
+          "ba4a900d1d": "Modo de Ditado"
         },
         "NotificationsPane": {
           "2772d2f257": "Ignora notificações quando a worktree que as acionou já está visível.",
@@ -6584,16 +6580,20 @@
               "vocabularyTitle": "Vocabulário",
               "vocabularyDescription": "Nomes e termos de código que o ditado escreve do seu jeito, para você ou para um repositório.",
               "vocabularyKeyword": "dicionário",
-              "b3920972d4": "Descarregar modelo de voz",
               "7f5a2416a6": "Modelo de Voz",
               "9d83747eae": "Idioma do ditado",
-              "a5fb30e4da": "Ativar Ditado por Voz",
               "ffaa3efe7c": "Transcrição da OpenAI",
               "c7a7eaa0da": "Remover hesitações",
               "d0c230c061": "Modo de Ditado",
               "silenceStopTitle": "Parar após silêncio",
               "silenceStopDescription": "Escolha por quanto tempo o ditado continua ouvindo quando você para de falar.",
-              "silenceStopKeyword": "silêncio"
+              "silenceStopKeyword": "silêncio",
+              "dictationTitle": "Ditado",
+              "shortcutTitle": "Atalho",
+              "shortcutDescription": "A tecla que inicia o ditado.",
+              "shortcutKeyword": "teclado",
+              "keepLoadedTitle": "Manter modelo carregado",
+              "gpuKeyword": "placa de vídeo"
             }
           }
         },
@@ -8033,7 +8033,6 @@
           "systemDefault": "Padrão do sistema",
           "unavailable": "indisponível",
           "label": "Microfone",
-          "description": "Dispositivo de entrada usado para ditado por voz. O padrão do sistema segue a configuração de microfone do SO.",
           "accessHint": "Permita o acesso ao microfone para listar dispositivos de entrada.",
           "allowAccess": "Permitir acesso",
           "noMicrophoneFound": "Nenhum microfone foi encontrado. Conecte um e tente novamente.",
@@ -8718,7 +8717,7 @@
         },
         "agent-workspace-trust-copy": {
           "title": "Confiar na pasta quando o Orca iniciar um agente",
-          "description": "Os agentes iniciados pelo Orca podem pular a pergunta “Você confia nesta pasta?”, para que os hooks e configurações de agentes do projeto sejam executados imediatamente. O Orca pergunta uma vez por repositório, na primeira vez que você inicia um agente nele, e você pode alterar a resposta nas configurações desse repositório. Desative para que os agentes sempre perguntem. Um agente que pergunta enquanto é executado sem sua supervisão, como um worker de orquestração, uma automação ou um agente iniciado pelo celular, espera até você responder no terminal dele. As pastas já confiáveis continuam confiáveis."
+          "description": "Os agentes iniciados pelo Orca podem pular a pergunta “Você confia nesta pasta?”, para que os hooks e configurações de agentes do projeto sejam executados imediatamente. Você pode desativar isso para um repositório nas configurações desse repositório. Desative para que os agentes sempre perguntem. Um agente que pergunta enquanto é executado sem sua supervisão, como um worker de orquestração, uma automação ou um agente iniciado pelo celular, espera até você responder no terminal dele. As pastas já confiáveis continuam confiáveis."
         },
         "MachineNameField": {
           "label": "Nome da máquina",
@@ -10138,6 +10137,10 @@
                   "archived": {
                     "title": "Repositório arquivado",
                     "body": "Este repositório está arquivado, então o Orca não está atualizando o status de {{reviewLabel}}."
+                  },
+                  "host_off": {
+                    "title": "O host WSL está desligado",
+                    "body": "O Orca atualiza o status de {{reviewLabel}} pelo host WSL deste projeto, que está desligado. Reconecte-o para atualizar."
                   },
                   "not_git": {
                     "title": "Não é um repositório Git",
@@ -20014,14 +20017,10 @@
         }
       },
       "agent-workspace-trust-decision": {
-        "prompt-title": "Confiar em {{repo}} para agentes?",
-        "prompt-description": "Agentes como Claude Code e Codex perguntam “Você confia nesta pasta?” antes de carregar as configurações e hooks de agentes do próprio projeto, que podem executar comandos. O Orca pode responder sim por você em todas as worktrees deste repositório.",
-        "prompt-remembered": "O Orca lembra sua resposta para este repositório. Você pode alterá-la nas configurações do repositório.",
         "trust-repository": "Confiar no repositório",
         "let-agents-ask": "Deixar os agentes perguntarem",
         "setting-title": "Confiança de Pasta para Agentes",
         "setting-description": "Define se os agentes que o Orca inicia nas worktrees deste repositório pulam a pergunta “Você confia nesta pasta?” e carregam imediatamente as configurações e hooks de agentes do projeto.",
-        "setting-undecided": "Ainda não decidido. O Orca vai perguntar na próxima vez que você iniciar um agente aqui.",
         "setting-global-off": "A confiança de pasta está desativada nas configurações de Agentes, então os agentes sempre perguntam.",
         "keyword-trust": "confiança",
         "keyword-hooks": "hooks"
@@ -21620,55 +21619,34 @@
       },
       "voice": {
         "dictationLanguage": {
-          "ignored": "{{model}} só transcreve os idiomas para os quais foi criado, por isso ignora esta configuração.",
           "unsupported": "{{model}} não suporta {{language}}, por isso detecta o idioma sozinho.",
-          "description": "O idioma que você fala. Com Detectar automaticamente, o modelo o identifica a cada vez.",
           "auto": "Detectar automaticamente",
-          "a9df191aba": "Idioma do ditado"
+          "rated": "O idioma que você fala. A qualidade é avaliada para ele.",
+          "alwaysUses": "O idioma que você fala. {{model}} sempre usa {{language}}.",
+          "detectsItself": "O idioma que você fala. {{model}} o detecta sozinho."
         },
         "modelUnload": {
-          "description": "Quanto tempo o modelo local fica na memória depois que você para de ditar. Enquanto está carregado, o ditado começa na hora; “Imediatamente” libera a memória, então cada ditado espera o modelo carregar.",
-          "cloud": "Modelos na nuvem rodam nos servidores do provedor, então nada fica carregado aqui.",
-          "never": "Nunca",
-          "immediately": "Imediatamente",
-          "94afd37271": "Descarregar modelo de voz"
+          "cloud": "Modelos na nuvem rodam nos servidores do provedor, então nada fica carregado aqui."
         },
         "fillerWords": {
-          "description": "Remove sons como “hã” e “hum” do texto ditado, conforme o idioma do ditado.",
-          "0134406785": "Remover hesitações"
+          "0134406785": "Remover hesitações",
+          "short": "Remove “hã” e “hum”."
         },
-        "sectionDescription": "Fale em vez de digitar em qualquer painel. A fala é reconhecida neste computador, a menos que você escolha um modelo na nuvem.",
         "input": {
           "title": "Entrada",
           "shortcut": "Atalho",
-          "shortcutDescription": "Inicia o ditado no painel em foco.",
-          "changeShortcut": "Alterar"
+          "changeShortcut": "Alterar",
+          "description": "Segue a configuração do sistema, a menos que você escolha um.",
+          "missing": "{{microphone}} não está conectado. Usando o padrão do sistema até ele voltar."
         },
         "language": {
           "title": "Idioma"
-        },
-        "cleanup": {
-          "title": "Limpeza"
         },
         "advanced": {
           "title": "Avançado"
         },
         "setup": {
-          "downloadingDescription": "Você pode sair desta página. O ditado funciona quando o download terminar.",
-          "title": "Configurar o ditado",
-          "pickModel": "Fale em vez de digitar em qualquer painel. Baixe um modelo de voz abaixo para começar; modelos neste computador mantêm seu áudio aqui.",
-          "microphoneMissingTitle": "{{microphone}} não está conectado",
-          "microphoneMissingDescription": "O ditado usa o microfone padrão do sistema até ele voltar.",
-          "changeMicrophone": "Trocar microfone",
-          "onTitle": "O ditado está ativado",
-          "onLocal": "Pressione {{shortcut}} em qualquer painel. {{model}} roda neste computador.",
-          "onCloud": "Pressione {{shortcut}} em qualquer painel. {{model}} roda na nuvem.",
-          "offTitle": "O ditado está desativado",
-          "offDescription": "Ative para ditar com {{shortcut}} em qualquer painel.",
-          "savedMicrophone": "Seu microfone",
-          "description": "Fale em vez de digitar em qualquer painel. A fala é reconhecida neste computador, então seu áudio fica aqui.",
-          "setUp": "Configurar",
-          "asksForMicrophone": "O Orca vai pedir acesso ao microfone."
+          "savedMicrophone": "Seu microfone"
         },
         "quality": {
           "unsupported": "Não suporta seu idioma",
@@ -21677,29 +21655,34 @@
           "fair": "Razoável",
           "good": "Boa",
           "veryGood": "Muito boa",
-          "excellent": "Excelente",
-          "characterErrorRate": "{{percent}}% de erro por caractere",
-          "wordErrorRate": "{{percent}}% de erro por palavra",
-          "librispeech": "Teste: LibriSpeech (fala lida), {{clips}} clipes, medido em {{date}}.",
-          "fleurs": "Teste: FLEURS (fala lida), {{clips}} clipes, medido em {{date}}.",
-          "bench": "Benchmark do Orca em um Mac com Apple silicon.",
-          "label": "Qualidade: {{word}}"
+          "excellent": "Excelente"
         },
         "models": {
           "retired": "Não é mais oferecido. Exclua para liberar espaço.",
           "sendsToOpenAi": "Envia seu áudio para a OpenAI.",
           "delete": "Excluir",
-          "cancelDownload": "Cancelar download",
           "inUse": "Em uso",
           "use": "Usar",
           "setUpCloud": "Configurar",
           "download": "Baixar",
           "cloud": "Nuvem",
-          "description": "A qualidade é avaliada para {{language}}. Passe o cursor sobre uma avaliação para ver o teste.",
           "where": "Onde os modelos rodam",
           "local": "Neste computador",
-          "cloudDescription": "Modelos na nuvem enviam seu áudio ao provedor. Os deste computador o mantêm aqui.",
-          "sendsToCompatible": "Envia seu áudio para o serviço que você configurou."
+          "sendsToCompatible": "Envia seu áudio para o serviço que você configurou.",
+          "downloadingProgress": "Baixando, {{done}} de {{total}} MB ({{percent}}%)",
+          "needsUpdate": "Precisa de um download único para o mecanismo mais rápido.",
+          "recommended": "Recomendado",
+          "columnModel": "Modelo",
+          "columnQuality": "Qualidade",
+          "columnSize": "Tamanho",
+          "about": {
+            "parakeetV3": "Rápido. {{languages}} idiomas europeus.",
+            "parakeetV2": "Rápido. Só inglês, e o mais preciso nele.",
+            "whisperTiny": "O menor download. Bom para experimentar o ditado.",
+            "whisperTurbo": "Mais idiomas, cerca de 100. Lento sem GPU.",
+            "senseVoice": "Rápido. Para chinês, japonês e coreano.",
+            "nemotron": "{{languages}} idiomas, incluindo árabe, hindi e japonês."
+          }
         },
         "vocabulary": {
           "title": "Vocabulário",
@@ -21736,9 +21719,36 @@
           "heardFailed": "{{model}} não conseguiu transcrever a gravação."
         },
         "silenceStop": {
-          "title": "Parar após silêncio",
-          "description": "Para de ouvir depois desse tempo em silêncio. Nunca enquanto você segura o atalho.",
-          "off": "Desativado"
+          "off": "Desativado",
+          "label": "Parar após silêncio",
+          "short": "Encerra o ditado quando você para de falar."
+        },
+        "pageDescription": "Fale em vez de digitar em qualquer painel.",
+        "dictation": {
+          "label": "Ditado",
+          "ready": "Pressione {{shortcut}} em qualquer painel.",
+          "off": "Ative para ditar com {{shortcut}} em qualquer painel.",
+          "noModel": "Baixe um modelo de voz abaixo para começar. Ele roda neste computador, então seu áudio fica aqui.",
+          "downloading": "Funciona quando o download de {{model}} terminar.",
+          "needsUpdate": "Atualize {{model}} abaixo para continuar ditando."
+        },
+        "mode": {
+          "label": "Modo",
+          "auto": "Toque em {{shortcut}} para iniciar e parar, ou segure enquanto fala.",
+          "hold": "Fale enquanto segura {{shortcut}}.",
+          "toggle": "Pressione {{shortcut}} para iniciar e de novo para parar."
+        },
+        "words": {
+          "title": "Palavras"
+        },
+        "gpu": {
+          "description": "Desative se o ditado travar o computador."
+        },
+        "keepLoaded": {
+          "label": "Manter modelo carregado",
+          "description": "O ditado começa na hora enquanto ele estiver carregado.",
+          "always": "Sempre",
+          "never": "Nunca"
         }
       },
       "repositoryHooks": {
@@ -23384,7 +23394,7 @@
     "catalogInstall": "Instale {{agent}} neste host para carregar seus modelos e reabra o seletor de agentes.",
     "catalogUnresolved": "Os modelos de {{agent}} não foram carregados. Feche e reabra o seletor de agentes para tentar novamente.",
     "catalogEmpty": "{{agent}} não tem modelos disponíveis.",
-    "search": "Buscar agentes e configurações…",
+    "search": "Pesquisar, por exemplo, Opus 5.5…",
     "configure": "Configurar {{agent}}",
     "arguments": "Argumentos",
     "argumentsHint": "Aplica-se apenas às inicializações pela CLI.",
@@ -23970,7 +23980,7 @@
     "unsupportedDescription": "A Apple não oferece suporte ao macOS {{macos}} neste Mac.",
     "unknownDescription": "Não foi possível confirmar uma atualização para este Mac. O guia de compatibilidade da Apple pode ajudar.",
     "whyTitle": "Por que isso está mudando?",
-    "whyIntro": "Atualizamos o Electron, a base do Orca, para trazer:",
+    "whyIntro": "Atualizamos partes da base do Orca, como o Electron e o mecanismo de voz no dispositivo, para trazer:",
     "whySecurity": "Correções contínuas de segurança do Electron e do Chromium.",
     "whyPerformance": "Inicialização mais rápida e chamadas mais eficientes às APIs nativas.",
     "whySystemApis": "Suporte às APIs atuais de notificações do macOS e ao armazenamento seguro nas Chaves.",
@@ -24045,29 +24055,23 @@
     "createBranchFailed": "O Orca não conseguiu criar a branch. Verifique este repositório em um terminal e tente novamente."
   },
   "speechModelUpdate": {
-    "updateTitle": "Atualize seu modelo de voz",
-    "updateDescription": "O ditado agora usa um mecanismo mais rápido. {{model}} precisa de um download único ({{size}} MB) antes que você possa ditar novamente.",
     "update": "Atualizar",
-    "replacedTitle": "Seu modelo de voz foi substituído",
-    "replacedDescription": "{{old}} não funciona no novo mecanismo de voz. {{model}} o substitui ({{size}} MB).",
-    "downloadReplacement": "Baixar {{model}}",
-    "later": "Mais tarde",
-    "dismiss": "Fechar",
-    "updatingTitle": "Atualizando {{model}}",
-    "downloadingTitle": "Baixando {{model}}",
-    "downloadingDescription": "Você pode continuar trabalhando. O ditado volta quando isso terminar.",
-    "progress": "{{done}} de {{total}} MB",
     "cancel": "Cancelar",
-    "doneTitle": "O ditado está pronto",
-    "doneDescription": "{{model}} foi atualizado. Os arquivos antigos foram removidos.",
-    "doneRetiredDescription": "{{model}} está pronto. Os arquivos antigos de {{old}} ainda estão no disco.",
-    "keep": "Manter",
-    "deleteOld": "Excluir modelo antigo",
-    "deleteFailed": "Não foi possível excluir {{model}}.",
-    "updateFailedTitle": "Não foi possível atualizar {{model}}",
-    "downloadFailedTitle": "Não foi possível baixar {{model}}",
-    "failedAtDescription": "O download parou em {{mb}} MB. Verifique sua conexão e tente novamente.",
-    "failedDescription": "O download parou. Verifique sua conexão e tente novamente.",
-    "tryAgain": "Tentar novamente"
+    "pill": {
+      "updateNotice": "O ditado mais rápido está pronto para instalar",
+      "retiredNotice": "O ditado agora usa um modelo de fala mais rápido",
+      "install": "Instalar",
+      "installTooltip": "Download único · {{size}} MB",
+      "downloading": "Configurando o ditado",
+      "downloadingTooltip": "{{done}} de {{size}} MB",
+      "ready": "O ditado está pronto. Pressione <kbd></kbd>",
+      "readyNoShortcut": "O ditado está pronto.",
+      "failed": "O download parou. Verifique sua conexão.",
+      "tryAgain": "Tentar novamente",
+      "deleteOld": "Excluir modelo antigo",
+      "deleteFailed": "Falha ao excluir {{model}}.",
+      "dismiss": "Dispensar",
+      "cancelDownload": "Cancelar download"
+    }
   }
 }

@@ -32,12 +32,13 @@ import { structuredAgentSessionImmediatePermission } from './structured-agent-se
 import type { StructuredAgentSessionMutationContext } from '../operations/structured-agent-session-mutation-context'
 import { readStructuredSessionRecovery } from '../recovery/structured-agent-session-recovery-read'
 import { fillUnknownModelEfforts } from '../../../../shared/agent-session/options/agent-session-model-efforts'
+import { structuredAgentSessionModelPicks } from './structured-agent-session-option-intent'
 
 /** A live child's own answer, or the answer at rest; the goal, usage and rewind either way. */
 export async function readStructuredAgentSessionOptions(
   context: Pick<
     StructuredAgentSessionMutationContext,
-    'deps' | 'serialize' | 'openConversation' | 'conversation'
+    'deps' | 'serialize' | 'openConversation' | 'conversation' | 'sessions'
   > &
     Partial<Pick<StructuredAgentSessionMutationContext, 'deliveryOrder'>>,
   sessionId: string,
@@ -73,6 +74,7 @@ export async function readStructuredAgentSessionOptions(
         child && child.phase !== 'starting'
           ? await adapter.readOptions?.({ sessionId, fence: child.fence })
           : undefined
+      const modelPicks = child ? structuredAgentSessionModelPicks(child) : 0
       const scope = () =>
         structuredAgentSessionCatalogScopeOwned(
           context.deps,
@@ -95,7 +97,8 @@ export async function readStructuredAgentSessionOptions(
         records,
         session,
         child,
-        options: observed ?? null
+        options: observed ?? null,
+        modelPicks
       }
     })
   let started = await readCurrent(true)
@@ -134,6 +137,7 @@ export async function readStructuredAgentSessionOptions(
   const floor = session.journal.context.floor()
   const contextFloor = floor ? { contextFloor: floor } : {}
   const restingOptions = await atRest()
+  const recovery = await readStructuredSessionRecovery(session, context, sessionId)
   if (live && usesModelSpecificAcpEfforts(agent)) {
     options = {
       ...options,
@@ -161,12 +165,17 @@ export async function readStructuredAgentSessionOptions(
   const model = saved.model ?? (options.current.model || selected.current.model || displayDefault)
   const projected = live?.projectCurrent?.({ ...saved, ...(model ? { model } : {}) })
   const reportedEffort = projected?.confirmed?.includes('effort') ? projected.effort : undefined
-  const reportedModel = live
-    ? (options.current.reportedModel ??
-      (agent === 'claude' && options.current.confirmed?.includes('model')
-        ? options.current.model
-        : undefined))
-    : undefined
+  // After every await: a pick or a replaced child since the live read retires its report.
+  const reportedModel =
+    live &&
+    started.kind === 'live' &&
+    context.sessions.get(sessionId)?.child === started.child &&
+    started.modelPicks === structuredAgentSessionModelPicks(started.child)
+      ? (options.current.reportedModel ??
+        (agent === 'claude' && options.current.confirmed?.includes('model')
+          ? options.current.model
+          : undefined))
+      : undefined
   const current = {
     ...selected.current,
     ...options.current,
@@ -239,7 +248,6 @@ export async function readStructuredAgentSessionOptions(
     }
   }
   const defaultModel = await readStructuredAgentSessionDefaultModel(context.deps, sessionId)
-  const recovery = await readStructuredSessionRecovery(session, context, sessionId)
   return {
     ...options,
     ...recovery,
@@ -263,7 +271,7 @@ export async function readStructuredAgentSessionOptions(
       ...current,
       ...(record?.defaultModelOptions !== undefined ? { modelDefault: true } : {}),
       acceptedInputSources,
-      ...(reportedModel ? { reportedModel } : {}),
+      reportedModel,
       ...(reportedEffort !== undefined ? { reportedEffort } : {}),
       defaulted,
       confirmed,

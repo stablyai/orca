@@ -1,4 +1,5 @@
-import { collectLeafIdsInOrder } from '../../components/terminal-pane/layout/terminal-layout-leaf-traversal'
+import '../../components/terminal-pane/layout/terminal-layout-leaf-traversal'
+import { collectLayoutLeafIdsInOrder } from '../../../../shared/workspace-layout/terminal-pane-tree'
 import { serializePaneTree } from '@/components/terminal-pane/layout/terminal-layout-dom-serialization'
 import type { AppState } from '@/store/types'
 import type { MobileSessionWorktreeInputs, MountedTerminalSurfaceCapture } from './types'
@@ -57,7 +58,7 @@ function captureMountedTerminalSurface(
   const effectiveLeafIds =
     paneLeafIds.length > 0
       ? paneLeafIds
-      : collectLeafIdsInOrder(savedLayout?.root).filter(isTerminalLeafId)
+      : collectLayoutLeafIdsInOrder(savedLayout?.root).filter(isTerminalLeafId)
   const numericPaneIdByLeafId = new Map<string, number | null>()
   const ptyIdByNumericPaneId = new Map<number, string | null>()
   for (const leafId of effectiveLeafIds) {

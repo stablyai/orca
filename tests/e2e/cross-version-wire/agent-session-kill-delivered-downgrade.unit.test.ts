@@ -8,7 +8,7 @@ import {
   agentSessionLeasePossiblyWriting
 } from '../../../src/shared/agent-session/lifecycle/agent-session-lease-adjudication'
 import { agentSessionRecordFixture } from '../../../src/shared/agent-session/lifecycle/agent-session-record.test-fixture'
-import { agentModelCatalogReleasedOwner } from '../../../src/main/native-chat/agent-model-catalog/agent-model-catalog-snapshot'
+import { agentModelCatalogReleasedOwner } from '../../../src/main/native-chat/agent-model-catalog/agent-model-catalog-read-scope'
 import {
   closeTestJournalHostDatabase,
   openTestJournalHostDatabase

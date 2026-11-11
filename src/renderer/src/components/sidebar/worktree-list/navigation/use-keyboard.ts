@@ -1,4 +1,4 @@
-import { textFieldClaimsActionKey } from '@/lib/file-search-shortcut-policy'
+import { textFieldClaimsActionKey } from '@/lib/keyboard/text-field-shortcut-policy'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type React from 'react'
 import { useAppStore } from '@/store'

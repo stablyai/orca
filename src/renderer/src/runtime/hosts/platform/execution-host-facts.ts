@@ -1,28 +1,23 @@
-import {
-  getRepoExecutionHostId,
-  parseExecutionHostId,
-  type ParsedExecutionHost,
-  type ExecutionHostId
-} from '../../../../../shared/execution-host'
-import type { ProjectExecutionRuntimeResolution } from '../../../../../shared/execution-host/project-execution-runtime'
+import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../../shared/execution-host'
+import type { ParsedExecutionHost, ExecutionHostId } from '../../../../../shared/execution-host'
 import { lastVerifiedRuntimeStatus } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { runtimeHostContactForEntry } from '../../../../../shared/remote-runtime/host-status/runtime-host-contact'
-import type { AgentStartupShell } from '../../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { resolveHostAgentStartupShell } from '../../../../../shared/windows-terminal-shell'
 import { isWslUncPath } from '../../../../../shared/wsl-paths'
-import type { AppState } from '@/store/types'
 import {
   getConnectionIdForWorktreeCopy,
   getConnectionIdFromState
 } from '../../../lib/workspace/ownership/connection-owner-resolution'
-import { getLocalProjectExecutionRuntimeContext } from '../../../lib/local-preflight-context'
-import { CLIENT_PLATFORM } from '../../../lib/new-workspace'
+import { getLocalProjectExecutionRuntimeContext } from '../preflight/local-preflight-context'
+import { CLIENT_PLATFORM } from '../../../lib/workspace/creation/new-workspace'
 import {
   getExecutionHostIdForWorktree,
   getResourceExecutionHostIdForWorktree,
   runtimeEnvironmentIdOrLocalUnlessTwin
 } from '../../../lib/workspace/ownership/worktree-runtime-owner'
-
+import type { ProjectExecutionRuntimeResolution } from '../../../../../shared/execution-host/project-execution-runtime'
+import type { AgentStartupShell } from '../../../../../shared/agent-launch/startup/tui-agent-startup-shell'
+import type { AppState } from '@/store/types'
 import type { ExecutionHostPlatformFact } from './execution-host-platform-fact'
 
 type HostFactsState = Pick<

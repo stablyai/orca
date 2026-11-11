@@ -5,8 +5,8 @@ import {
   ORCHESTRATION_ENABLED_STORAGE_KEY,
   ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY,
   notifyOrchestrationSetupStateChanged
-} from '@/lib/orchestration-setup-state'
-import { useAppStore } from '@/store'
+} from '@/components/orchestration/setup/orchestration-setup-state'
+import { useAppStore } from '@/store/index'
 import { ChatUiHereTipDialog } from './ChatUiHereTipDialog'
 import {
   setAgentDefaultSurfaceFromFeatureTip,
@@ -24,7 +24,7 @@ import {
   trackOrcaCliFeatureTipSetupResult
 } from './feature-tip-telemetry'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { isWebClientLocation } from '@/lib/web-client-location'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { useTranslate } from '@/i18n/use-translate'
 import { SessionSearchTipDialog } from './SessionSearchTipDialog'
 import { useSessionSearchTipSetup } from './use-session-search-tip-setup'

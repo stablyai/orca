@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, truncateSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, truncateSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -71,6 +71,58 @@ describe('ModelManager', () => {
         status: 'not-downloaded',
         needsUpdate: true
       })
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('keeps the old files after a cancelled or failed update, so the update is offered again', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'orca-model-manager-'))
+    try {
+      const modelId = 'parakeet-tdt-0.6b-v2-int8'
+      const manager = new ModelManager(dir, openElectronSpeechDownloadRequest)
+      const modelDir = manager.getModelDir(modelId)
+      mkdirSync(modelDir, { recursive: true })
+      for (const [name, size] of [
+        ['encoder.int8.onnx', 652_184_296],
+        ['decoder.int8.onnx', 7_257_753],
+        ['joiner.int8.onnx', 1_739_080],
+        ['tokens.txt', 9_384]
+      ] as const) {
+        writeFileSync(join(modelDir, name), '')
+        truncateSync(join(modelDir, name), size)
+      }
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the test stubs the protected file download step.
+      const internals = manager as unknown as {
+        downloadModelFiles: (
+          manifest: unknown,
+          stagingDir: string,
+          modelId: string,
+          isAborted: () => boolean,
+          signal: AbortSignal
+        ) => Promise<void>
+      }
+
+      internals.downloadModelFiles = (_manifest, _stagingDir, _modelId, _isAborted, signal) =>
+        new Promise((_, reject) => {
+          signal.addEventListener('abort', () => reject(new Error('aborted')))
+        })
+      const cancelled = manager.downloadModel(modelId)
+      manager.cancelDownload(modelId)
+      await expect(cancelled).resolves.toBeUndefined()
+      expect((await manager.getModelState(modelId)).needsUpdate).toBe(true)
+
+      const failed = new ModelManager(dir, openElectronSpeechDownloadRequest)
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: as above.
+      ;(failed as unknown as typeof internals).downloadModelFiles = async () => {
+        throw new Error('network down')
+      }
+      await expect(failed.downloadModel(modelId)).rejects.toThrow('network down')
+      expect(existsSync(`${modelDir}.partial`)).toBe(false)
+      const state = await new ModelManager(dir, openElectronSpeechDownloadRequest).getModelState(
+        modelId
+      )
+      expect(state.needsUpdate).toBe(true)
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }

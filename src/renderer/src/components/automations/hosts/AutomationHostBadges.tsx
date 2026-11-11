@@ -2,7 +2,7 @@ import React from 'react'
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { AutomationHostCatalogEntry } from './automation-host-catalog-types'
 import { hostScopeDescriptor } from './automation-host-scope-descriptors'
 import {

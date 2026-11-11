@@ -1,4 +1,4 @@
-import { BUNDLED_SYMBOLS_FONT_FAMILY } from '../monospace-font-family'
+import { BUNDLED_SYMBOLS_FONT_FAMILY } from '../../../../shared/monospace-font-family'
 import { resetAndRefreshAllTerminalWebglAtlases } from './pane-manager-registry'
 
 let watching = false

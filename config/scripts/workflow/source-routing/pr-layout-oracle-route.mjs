@@ -25,7 +25,7 @@ const LAYOUT_ORACLE_PREFIXES = [
   'src/renderer/src/store/workspace-layout/workspace-layout-cache',
   'src/renderer/src/components/terminal-pane/',
   'src/renderer/src/components/agent-session-continuation/AgentSessionContinuationMenuItem.tsx',
-  'src/renderer/src/components/orchestration-crew/WorkerAutoCloseBanner.tsx',
+  'src/renderer/src/components/terminal-pane/worker-lifetime/WorkerAutoCloseBanner.tsx',
   'src/renderer/src/attention/orca-window-foreground-focus.ts',
   'src/renderer/src/attention/notification-workspace-labels.ts',
   'src/renderer/src/lib/agent-session/identity/pane-agent-session-id.ts',

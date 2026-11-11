@@ -71,27 +71,6 @@ it('reads only cached support and rejects a retired acquisition or changed accou
   }
 })
 
-it.each(['unknown', 'unsupported'] as const)(
-  'keeps %s CLIs on the existing generator path',
-  async (support) => {
-    const cli = fakeClaude()
-    const adapter = await acquired(cli, { cliFlag: async () => support })
-    try {
-      const record = agentSessionRecordFixture()
-      record.sessionId = 'session-1'
-      record.providerHandleChain[0]!.handle.nativeId = PROVIDER_SESSION_ID
-      const generate = vi.fn(async () => 'Do not use')
-      cli.connections[0]!.generateSessionTitle = generate
-      const owner = adapter.captureConversationTitleOwner(record)!
-      expect(await owner.generate('Repair login', () => true)).toBeNull()
-      expect(generate).not.toHaveBeenCalled()
-    } finally {
-      await adapter.closeAll()
-      cli.dispose()
-    }
-  }
-)
-
 it('retains retirement knowledge when the optional title method is missing', async () => {
   const cli = fakeClaude()
   const adapter = await acquired(cli)

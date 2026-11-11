@@ -1052,6 +1052,7 @@
       "defaultSurfaceSetAllChat": "Set all to Chat",
       "defaultSurfaceSetAllTerminal": "Set all to Terminal",
       "sameAsChoice": "Same as {{agent}} · {{choice}}",
+      "modelListFallback": "Built-in list. Orca could not get a model list from this host.",
       "chatUnavailableOnWindows": "{{value0}} Chat isn't available on Windows yet, so {{value0}} opens in a terminal on this host. Chats on a macOS or Linux host still work.",
       "undetectedCommandHint": "If the {{agent}} CLI is installed outside PATH, enter the full path to its executable on this host."
     },
@@ -1833,6 +1834,9 @@
             "creation": {
               "f3785eddc2": "New Browser Tab"
             }
+          },
+          "availability": {
+            "web": "The floating workspace runs on your own computer, so it is only available in the Orca desktop app."
           }
         }
       },
@@ -2263,7 +2267,8 @@
         "setupAgentStartupPolicySaveFailed": "Failed to save setup startup behavior.",
         "5f3d2c8a1b": "Failed to resolve MR base.",
         "dropPartiallyAttached_one": "{{failureCount}} of {{count}} item could not be attached.",
-        "dropPartiallyAttached_other": "{{failureCount}} of {{count}} items could not be attached."
+        "dropPartiallyAttached_other": "{{failureCount}} of {{count}} items could not be attached.",
+        "folderSetupSupportCheckFailed": "Couldn't confirm whether this host runs folder setup scripts. Try again."
       },
       "useGlobalFileDrop": {
         "38c9f034ff": "Failed to upload dropped files.",
@@ -2284,6 +2289,7 @@
       "useIpcEvents": {
         "0e3cf53060": "Browser tab {{value0}} not found",
         "2f6637fe6c": "Browser tab {{value0}} is pinned",
+        "unsent_notes_close_canceled": "Browser tab {{value0}} has unsent notes, and the user kept it open",
         "a8d2bf8e9e": "No active browser tab to close",
         "f000b2ff76": "No active worktree",
         "7a64b31991": "Local terminal creation is unavailable while a remote runtime is active",
@@ -4507,7 +4513,9 @@
             "0d1963f4a6": "This tab is pinned. Are you sure you want to close it?",
             "dont_ask_again": "Don't ask again for pinned tabs",
             "0b38ee2f86": "Cancel",
-            "c337c9d75c": "Close"
+            "c337c9d75c": "Close",
+            "unsent_notes_title": "Discard unsent notes?",
+            "unsent_notes_description": "This tab has notes you haven't sent. Closing it discards them."
           },
           "TerminalSshReconnectOverlay": {
             "authFailed": "Authentication failed for {{value0}}. Connect again to continue this terminal session.",
@@ -9864,13 +9872,9 @@
           "cd9fe37556": "Microphone permission granted",
           "openAiKeyName": "Your OpenAI transcription key",
           "dictationModeAuto": "Auto",
-          "dictationModesWithAutoDescription": "Auto: hold {{shortcut}} to dictate until you let go, or tap it to start and stop. Hold: dictate while {{shortcut}} is held. Toggle: press {{shortcut}} once to start, again to stop.",
           "speechGpuLabel": "Use GPU",
-          "speechGpuDescription": "Recognize speech on the graphics card when it works, and on the CPU when it fails. Turn off if dictation freezes or restarts your computer.",
-          "updateToFasterVersion": "Update to the faster version ({{value0}} MB)",
           "c5ea32143e": "Speech model",
-          "ba4a900d1d": "Dictation Mode",
-          "0121960365": "Enable Voice Dictation"
+          "ba4a900d1d": "Dictation Mode"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "Remove {{value0}}",
@@ -11189,11 +11193,9 @@
             "fbfd2386e8": "archive script",
             "4c17787d7b": "archive",
             "8655e3387b": "hooks",
-            "acd1157f0c": "Local and shared scripts that run before a worktree is archived.",
             "491b05d6e6": "setup command",
             "a31b43a7f8": "setup script",
             "5590388dfa": "setup",
-            "baaf70bb37": "Local and shared scripts that run after a new worktree is created.",
             "d73fb47b45": ".claude/mcp.json",
             "db11b337c4": ".claude.json",
             "26f42fe773": ".cursor/mcp.json",
@@ -11705,16 +11707,20 @@
               "vocabularyTitle": "Vocabulary",
               "vocabularyDescription": "Names and code terms dictation spells your way, for you or for one repo.",
               "vocabularyKeyword": "dictionary",
-              "b3920972d4": "Unload speech model",
               "7f5a2416a6": "Speech model",
               "9d83747eae": "Dictation language",
-              "a5fb30e4da": "Enable voice dictation",
               "ffaa3efe7c": "OpenAI transcription",
               "c7a7eaa0da": "Remove filler words",
               "d0c230c061": "Dictation mode",
               "silenceStopTitle": "Stop after silence",
               "silenceStopDescription": "Choose how long dictation keeps listening when you stop talking.",
-              "silenceStopKeyword": "silence"
+              "silenceStopKeyword": "silence",
+              "dictationTitle": "Dictation",
+              "shortcutTitle": "Shortcut",
+              "shortcutDescription": "The key that starts dictation.",
+              "shortcutKeyword": "keyboard",
+              "keepLoadedTitle": "Keep model loaded",
+              "gpuKeyword": "graphics card"
             }
           }
         },
@@ -11763,7 +11769,7 @@
         },
         "agent-workspace-trust-copy": {
           "title": "Trust the folder when Orca starts an agent",
-          "description": "Agents Orca starts can skip their \"Do you trust this folder?\" prompt, so the project's agent hooks and settings run right away. Orca asks once per repository the first time you start an agent there, and you can change the answer in that repository's settings. Turn this off to let agents always ask. An agent that asks while running without you watching, such as an orchestration worker, an automation or an agent started from your phone, waits until you answer in its terminal. Folders already trusted stay trusted."
+          "description": "Agents Orca starts can skip their \"Do you trust this folder?\" prompt, so the project's agent hooks and settings run right away. You can turn this off for one repository in that repository's settings. Turn this off to let agents always ask. An agent that asks while running without you watching, such as an orchestration worker, an automation or an agent started from your phone, waits until you answer in its terminal. Folders already trusted stay trusted."
         },
         "agent-generated-tab-title-copy": {
           "19ad21615a": "Auto-generate tab titles",
@@ -12682,7 +12688,6 @@
           "systemDefault": "System default",
           "unavailable": "unavailable",
           "label": "Microphone",
-          "description": "Input device used for voice dictation. System default follows the OS microphone setting.",
           "accessHint": "Allow microphone access to list input devices.",
           "allowAccess": "Allow access",
           "noMicrophoneFound": "No microphone was found. Connect one, then try again.",
@@ -13783,7 +13788,8 @@
           "worktreeRemoved": "When a workspace is removed",
           "agentStatusChanged": "When an agent’s status changes",
           "detail": "Background code runs",
-          "workspaceChanged": "When you switch workspace or its terminals change"
+          "workspaceChanged": "When you switch workspace or its terminals change",
+          "editorTypographyChanged": "When the editor font or zoom changes"
         },
         "pluginInstallAction": {
           "installed": "{{value0}} installed",
@@ -14699,6 +14705,10 @@
                     "title": "Repository archived",
                     "body": "This repository is archived, so Orca is not refreshing {{reviewLabel}} status."
                   },
+                  "host_off": {
+                    "title": "WSL host is off",
+                    "body": "Orca refreshes {{reviewLabel}} status through this project’s WSL host, which is off. Reconnect it to refresh."
+                  },
                   "not_git": {
                     "title": "Not a Git repository",
                     "body": "Orca could not treat this folder as a Git repository for {{reviewLabel}} status."
@@ -14960,7 +14970,28 @@
                   "titleManualForcePush_other": "Force push {{count}} local commits with lease to update {{upstreamName}}.",
                   "titleUnpublishedForcePushBranch": "Force push this branch with lease and set an upstream if needed.",
                   "titleUnpublishedForcePushCount_one": "Force push {{count}} branch commit with lease and set an upstream if needed.",
-                  "titleUnpublishedForcePushCount_other": "Force push {{count}} branch commits with lease and set an upstream if needed."
+                  "titleUnpublishedForcePushCount_other": "Force push {{count}} branch commits with lease and set an upstream if needed.",
+                  "statusConflicts": "Conflicts",
+                  "statusNothingStaged": "Nothing staged",
+                  "statusNeedsMessage": "Needs message",
+                  "statusNotPublished": "Not published",
+                  "statusNoBranch": "No branch",
+                  "statusUpToDate": "Up to date",
+                  "statusSetsUpstream": "Sets upstream",
+                  "statusMayFail": "May fail",
+                  "statusPublished": "Published",
+                  "statusStashFirst": "Stash first",
+                  "statusReplaces": "Replaces ↓{{behind}}",
+                  "statusCommitFirst": "Commit first",
+                  "statusReviewOpen": "{{shortLabel}} open",
+                  "statusSignIn": "Sign in",
+                  "statusBaseNotOnRemote": "Base not on remote",
+                  "statusDefaultBranch": "Default branch",
+                  "statusForkUnsupported": "Fork unsupported",
+                  "statusPushFirst": "Push first",
+                  "statusForcePushFirst": "Force push first",
+                  "statusSyncFirst": "Sync first",
+                  "statusUnsupported": "Unsupported"
                 }
               },
               "primary": {
@@ -18863,6 +18894,8 @@
           "reloaded": "Reloaded"
         },
         "FolderWorkspaceSourceControl": {
+          "changeCount_one": "{{count}} change",
+          "changeCount_other": "{{count}} changes",
           "openWorktree": "Open this worktree",
           "reconnect": "Reconnect to see this worktree’s changes."
         },
@@ -19596,14 +19629,10 @@
         }
       },
       "agent-workspace-trust-decision": {
-        "prompt-title": "Trust {{repo}} for agents?",
-        "prompt-description": "Agents like Claude Code and Codex ask \"Do you trust this folder?\" before they load the project's own agent settings and hooks, which can run commands. Orca can answer yes for you in every worktree of this repository.",
-        "prompt-remembered": "Orca remembers your answer for this repository. You can change it in the repository's settings.",
         "trust-repository": "Trust repository",
         "let-agents-ask": "Let agents ask",
         "setting-title": "Agent Folder Trust",
         "setting-description": "Whether agents Orca starts in this repository's worktrees skip their \"Do you trust this folder?\" prompt and load the project's agent settings and hooks right away.",
-        "setting-undecided": "Not decided yet. Orca will ask the next time you start an agent here.",
         "setting-global-off": "Folder trust is turned off in Agents settings, so agents always ask.",
         "keyword-trust": "trust",
         "keyword-hooks": "hooks"
@@ -21454,22 +21483,18 @@
       },
       "voice": {
         "dictationLanguage": {
-          "ignored": "{{model}} only transcribes the languages it was built for, so it ignores this setting.",
           "unsupported": "{{model}} doesn't support {{language}}, so it detects the language itself.",
-          "description": "The language you speak. Auto-detect lets the model work it out each time.",
           "auto": "Auto-detect",
-          "a9df191aba": "Dictation language"
+          "rated": "The language you speak. Quality is rated for it.",
+          "alwaysUses": "The language you speak. {{model}} always uses {{language}}.",
+          "detectsItself": "The language you speak. {{model}} detects it by itself."
         },
         "modelUnload": {
-          "description": "How long the on-device model stays in memory after you stop dictating. While it is loaded, dictation starts at once; “Immediately” frees the memory, so each dictation waits for the model to load.",
-          "cloud": "Cloud models run on the provider’s servers, so nothing stays loaded here.",
-          "never": "Never",
-          "immediately": "Immediately",
-          "94afd37271": "Unload speech model"
+          "cloud": "Cloud models run on the provider’s servers, so nothing stays loaded here."
         },
         "fillerWords": {
-          "description": "Drops sounds like “um” and “uh” from dictated text, in the dictation language.",
-          "0134406785": "Remove filler words"
+          "0134406785": "Remove filler words",
+          "short": "Drops “um” and “uh”."
         },
         "openAiCompatible": {
           "updateFailed": "Could not update the provider",
@@ -21489,38 +21514,21 @@
           "removeLabel": "Remove OpenAI-compatible provider",
           "setUp": "Set up"
         },
-        "sectionDescription": "Talk instead of typing in any pane. Speech is recognized on this computer unless you pick a cloud model.",
         "input": {
           "title": "Input",
           "shortcut": "Shortcut",
-          "shortcutDescription": "Starts dictation in the focused pane.",
-          "changeShortcut": "Change"
+          "changeShortcut": "Change",
+          "missing": "{{microphone}} isn’t connected. Using the system default until it’s back.",
+          "description": "Follows your system setting unless you pick one."
         },
         "language": {
           "title": "Language"
-        },
-        "cleanup": {
-          "title": "Cleanup"
         },
         "advanced": {
           "title": "Advanced"
         },
         "setup": {
-          "downloadingDescription": "You can leave this page. Dictation works once the download finishes.",
-          "title": "Set up dictation",
-          "pickModel": "Talk instead of typing in any pane. Download a speech model below to start; models on this computer keep your audio here.",
-          "microphoneMissingTitle": "{{microphone}} isn’t connected",
-          "microphoneMissingDescription": "Dictation uses the system default microphone until it’s back.",
-          "changeMicrophone": "Change Microphone",
-          "onTitle": "Dictation is on",
-          "onLocal": "Press {{shortcut}} in any pane. {{model}} runs on this computer.",
-          "onCloud": "Press {{shortcut}} in any pane. {{model}} runs in the cloud.",
-          "offTitle": "Dictation is off",
-          "offDescription": "Turn it on to dictate with {{shortcut}} in any pane.",
-          "savedMicrophone": "Your microphone",
-          "description": "Talk instead of typing in any pane. Speech is recognized on this computer, so your audio stays here.",
-          "setUp": "Set up",
-          "asksForMicrophone": "Orca will ask for microphone access."
+          "savedMicrophone": "Your microphone"
         },
         "quality": {
           "unsupported": "Doesn’t support your language",
@@ -21529,29 +21537,34 @@
           "fair": "Fair",
           "good": "Good",
           "veryGood": "Very good",
-          "excellent": "Excellent",
-          "characterErrorRate": "{{percent}}% character error rate",
-          "wordErrorRate": "{{percent}}% word error rate",
-          "librispeech": "Test: LibriSpeech read speech, {{clips}} clips, measured {{date}}.",
-          "fleurs": "Test: FLEURS read speech, {{clips}} clips, measured {{date}}.",
-          "bench": "Orca’s benchmark on a Mac with Apple silicon.",
-          "label": "Quality: {{word}}"
+          "excellent": "Excellent"
         },
         "models": {
           "retired": "No longer offered. Delete it to free up space.",
           "sendsToOpenAi": "Sends your audio to OpenAI.",
           "sendsToCompatible": "Sends your audio to the service you set up.",
           "delete": "Delete",
-          "cancelDownload": "Cancel download",
           "inUse": "In use",
           "use": "Use",
           "setUpCloud": "Set up",
           "download": "Download",
           "cloud": "Cloud",
-          "description": "Quality is rated for {{language}}. Hover a rating to see the test behind it.",
           "where": "Where models run",
           "local": "On this computer",
-          "cloudDescription": "Cloud models send your audio to the provider. Models on this computer keep it here."
+          "downloadingProgress": "Downloading, {{done}} of {{total}} MB ({{percent}}%)",
+          "needsUpdate": "Needs a one-time download for the faster engine.",
+          "recommended": "Recommended",
+          "columnModel": "Model",
+          "columnQuality": "Quality",
+          "columnSize": "Size",
+          "about": {
+            "parakeetV3": "Fast. {{languages}} European languages.",
+            "parakeetV2": "Fast. English only, and the most accurate at it.",
+            "whisperTiny": "Smallest download. Good for trying dictation out.",
+            "whisperTurbo": "Most languages, about 100. Slow without a GPU.",
+            "senseVoice": "Fast. For Chinese, Japanese and Korean.",
+            "nemotron": "{{languages}} languages, including Arabic, Hindi and Japanese."
+          }
         },
         "vocabulary": {
           "title": "Vocabulary",
@@ -21589,12 +21602,48 @@
         },
         "silenceStop": {
           "off": "Off",
-          "title": "Stop After Silence",
-          "description": "Stops listening once you’ve been quiet this long. Never while you hold the shortcut."
+          "label": "Stop after silence",
+          "short": "Ends dictation when you stop talking."
+        },
+        "pageDescription": "Talk instead of typing in any pane.",
+        "dictation": {
+          "needsUpdate": "Update {{model}} below to keep dictating.",
+          "downloading": "Works once {{model}} finishes downloading.",
+          "noModel": "Download a speech model below to start. It runs on this computer, so your audio stays here.",
+          "ready": "Press {{shortcut}} in any pane.",
+          "off": "Turn on to dictate with {{shortcut}} in any pane.",
+          "label": "Dictation"
+        },
+        "mode": {
+          "label": "Mode",
+          "auto": "Tap {{shortcut}} to start and stop, or hold it while you talk.",
+          "hold": "Talk while you hold {{shortcut}}.",
+          "toggle": "Press {{shortcut}} to start, and again to stop."
+        },
+        "keepLoaded": {
+          "always": "Always",
+          "never": "Never",
+          "label": "Keep model loaded",
+          "description": "Dictation starts at once while it’s loaded."
+        },
+        "words": {
+          "title": "Words"
+        },
+        "gpu": {
+          "description": "Turn off if dictation freezes your computer."
         }
       },
       "repositoryHooks": {
         "availableEnvVars": "Available environment variables"
+      },
+      "RepositoryHooksSection": {
+        "folderRunPolicyDescription": "Default behavior when a new workspace is created.",
+        "folderTitle": "Workspace hooks",
+        "folderDescription": "Scripts that run in this folder when a workspace is created or removed. Every workspace shares the folder. Local scripts are stored on this machine; `orca.yaml` scripts are shared with your team.",
+        "folderSetupDescription": "Local and shared scripts that run after a new workspace is created.",
+        "folderArchiveDescription": "Local and shared scripts that run before a workspace is removed.",
+        "folderSetupFieldDescription": "Runs after a new workspace is created; create child worktrees, install deps, copy env files.",
+        "folderArchiveFieldDescription": "Runs before a workspace is removed."
       }
     },
     "agentChildRow": {
@@ -21812,15 +21861,19 @@
     },
     "tabGroup": {
       "splitPaneLanding": {
+        "agents": "Agents",
         "browser": "Browser",
         "chooseAgent": "Choose agent",
         "closePane": "Close pane",
-        "goToFile": "Go to file",
-        "heading": "Open in this pane",
+        "files": "Files",
+        "keyboardHint": "↑↓ Enter to open · → agents · / to search",
         "markdown": "Markdown",
         "mobileEmulator": "Mobile emulator",
+        "new": "New",
         "newAgent": "New Agent",
-        "reopenClosedTab": "Reopen closed tab",
+        "newNamedAgent": "New {{agent}} agent",
+        "noMatches": "No matches",
+        "searchPlaceholder": "Open agent, terminal, or file…",
         "terminal": "Terminal"
       }
     },
@@ -24741,29 +24794,23 @@
     "failed": "Couldn’t stop {{host}}. Turn off its browser control in Settings > SSH."
   },
   "speechModelUpdate": {
-    "updateTitle": "Update your speech model",
-    "updateDescription": "Dictation now runs on a faster engine. {{model}} needs a one-time download ({{size}} MB) before you can dictate again.",
     "update": "Update",
-    "replacedTitle": "Your speech model was replaced",
-    "replacedDescription": "{{old}} can't run on the new speech engine. {{model}} replaces it ({{size}} MB).",
-    "downloadReplacement": "Download {{model}}",
-    "later": "Later",
-    "dismiss": "Dismiss",
-    "updatingTitle": "Updating {{model}}",
-    "downloadingTitle": "Downloading {{model}}",
-    "downloadingDescription": "You can keep working. Dictation is back when this finishes.",
-    "progress": "{{done}} of {{total}} MB",
     "cancel": "Cancel",
-    "doneTitle": "Dictation is ready",
-    "doneDescription": "{{model}} is updated. The old files were removed.",
-    "doneRetiredDescription": "{{model}} is set up. The old {{old}} files are still on disk.",
-    "keep": "Keep",
-    "deleteOld": "Delete old model",
-    "deleteFailed": "Failed to delete {{model}}.",
-    "updateFailedTitle": "Couldn't update {{model}}",
-    "downloadFailedTitle": "Couldn't download {{model}}",
-    "failedAtDescription": "The download stopped at {{mb}} MB. Check your connection and try again.",
-    "failedDescription": "The download stopped. Check your connection and try again.",
-    "tryAgain": "Try again"
+    "pill": {
+      "updateNotice": "Faster dictation is ready to install",
+      "retiredNotice": "Dictation moved to a faster speech model",
+      "install": "Install",
+      "installTooltip": "One-time download · {{size}} MB",
+      "downloading": "Setting up dictation",
+      "downloadingTooltip": "{{done}} of {{size}} MB",
+      "ready": "Dictation is ready. Press <kbd></kbd>",
+      "readyNoShortcut": "Dictation is ready.",
+      "failed": "Download stopped. Check your connection.",
+      "tryAgain": "Try again",
+      "deleteOld": "Delete old model",
+      "deleteFailed": "Failed to delete {{model}}.",
+      "dismiss": "Dismiss",
+      "cancelDownload": "Cancel download"
+    }
   }
 }

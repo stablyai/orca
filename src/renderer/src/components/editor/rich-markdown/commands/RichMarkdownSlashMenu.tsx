@@ -1,7 +1,7 @@
 import React from 'react'
 import type { Editor } from '@tiptap/react'
 import { Search } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { runSlashCommand } from './rich-markdown-slash-commands'
 import type {
   SlashCommand,

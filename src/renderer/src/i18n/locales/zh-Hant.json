@@ -765,12 +765,12 @@
       "defaultOpensAsCli": "CLI",
       "save": "儲存",
       "clearDefault": "清除預設代理程式",
-      "autoUnsupported": "此主機上的 Orca 需更新至較新版本才能使用自動模式。",
+      "autoUnsupported": "使用「替我核准」需要此主機上較新版本的 Orca。",
       "permissionsDescription": "設定代理程式無須詢問即可執行的操作範圍。已自訂啟動參數的代理程式會保留這些參數。",
       "permissionsAutoDescription": "<agents>支援的代理程式</agents>會自行核准安全的操作。",
       "permissionsMixed": "大多數代理程式使用 {{mode}}。選擇模式會重設已標記的例外，但保留自訂參數。",
       "permissionsMixedNoMajority": "各代理程式使用不同的設定。選擇模式後會套用至所有代理程式。",
-      "permissionsSearchDescription": "以手動、自動或 Yolo 權限啟動代理程式。",
+      "permissionsSearchDescription": "選擇「替我核准」、「完整存取權」或各代理程式自身的權限設定。",
       "otherAgentsPermissions": "其他代理程式",
       "otherAgentsPermissionsLabel": "其他代理程式的權限",
       "customArgsBadge": "自訂",
@@ -793,6 +793,7 @@
       "permissionOwnDescription": "終端機和聊天依照代理程式自身的權限設定。",
       "permissionOwnShort": "自身設定",
       "permissionWithoutAuto": "未使用「代為核准」的代理程式",
+      "permissionMixed": "混合",
       "permissionSurfaceDifference": "終端機使用代理程式自身的設定；新聊天使用 {{mode}}。",
       "permissionSameAsAll": "與所有代理程式相同",
       "permissionChipRemove": "移除 {{flag}} 並使用 {{agent}} 自身的設定",
@@ -832,6 +833,7 @@
       "defaultSurfaceSetAllChat": "全部設為聊天",
       "defaultSurfaceSetAllTerminal": "全部設為終端機",
       "sameAsChoice": "與 {{agent}} 相同 · {{choice}}",
+      "modelListFallback": "內建清單。Orca 無法從此主機取得模型清單。",
       "chatUnavailableOnWindows": "{{value0}} Chat 尚不支援 Windows，因此 {{value0}} 會在此主機的終端機中開啟。macOS 或 Linux 主機上的聊天仍可正常使用。",
       "undetectedCommandHint": "如果 {{agent}} CLI 安裝在 PATH 之外，請輸入其在此主機上的可執行檔完整路徑。"
     },
@@ -9245,13 +9247,9 @@
           "cd9fe37556": "已授予麥克風權限",
           "openAiKeyName": "您的 OpenAI 轉錄金鑰",
           "dictationModeAuto": "自動",
-          "dictationModesWithAutoDescription": "自動：按住 {{shortcut}} 聽寫，放開即停止；輕按則開始或停止。按住：按住 {{shortcut}} 期間進行聽寫。切換：按一次 {{shortcut}} 開始，再按一次停止。",
           "speechGpuLabel": "使用 GPU",
-          "speechGpuDescription": "顯示卡可用時在顯示卡上辨識語音，失敗時改用 CPU。如果聽寫導致電腦當機或重新啟動，請關閉。",
-          "updateToFasterVersion": "更新到更快的版本（{{value0}} MB）",
           "c5ea32143e": "語音模型",
-          "ba4a900d1d": "聽寫模式",
-          "0121960365": "啟用語音聽寫"
+          "ba4a900d1d": "聽寫模式"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "刪除 {{value0}}",
@@ -10557,11 +10555,9 @@
             "fbfd2386e8": "封存指令碼",
             "4c17787d7b": "封存",
             "8655e3387b": "鉤子",
-            "acd1157f0c": "在封存工作樹之前執行的本機和共用指令碼。",
             "491b05d6e6": "設定命令",
             "a31b43a7f8": "設定指令碼",
             "5590388dfa": "設定",
-            "baaf70bb37": "建立新工作樹後執行的本機和共用指令碼。",
             "d73fb47b45": ".claude/mcp.json",
             "db11b337c4": ".claude.json",
             "26f42fe773": ".cursor/mcp.json",
@@ -11071,16 +11067,20 @@
               "vocabularyTitle": "詞彙",
               "vocabularyDescription": "聽寫依你的寫法拼寫的名稱和程式碼術語，可用於個人或某個儲存庫。",
               "vocabularyKeyword": "詞典",
-              "b3920972d4": "卸載語音模型",
               "7f5a2416a6": "語音模型",
               "9d83747eae": "聽寫語言",
-              "a5fb30e4da": "啟用語音聽寫",
               "ffaa3efe7c": "OpenAI 轉錄",
               "c7a7eaa0da": "移除語氣詞",
               "d0c230c061": "聽寫模式",
               "silenceStopTitle": "靜音後停止",
               "silenceStopDescription": "選擇你停止說話後聽寫還會繼續聽多久。",
-              "silenceStopKeyword": "靜音"
+              "silenceStopKeyword": "靜音",
+              "dictationTitle": "聽寫",
+              "shortcutTitle": "快速鍵",
+              "shortcutDescription": "開始聽寫的按鍵。",
+              "shortcutKeyword": "鍵盤",
+              "keepLoadedTitle": "保持模型載入",
+              "gpuKeyword": "顯示卡"
             }
           }
         },
@@ -11129,7 +11129,7 @@
         },
         "agent-workspace-trust-copy": {
           "title": "Orca 啟動代理程式時信任該資料夾",
-          "description": "Orca 啟動的代理程式可以略過「是否信任此資料夾？」的詢問，因此專案的代理程式鉤子和設定會立即執行。Orca 會在每個存放庫中首次啟動代理程式時詢問一次，你可以在該存放庫的設定中變更回答。關閉此項可讓代理程式一律自行詢問。在你沒有看著時執行的代理程式（例如編排工作行程、自動化以及從手機啟動的代理程式）若發出詢問，會一直等待，直到你在它的終端機中作答。已信任的資料夾仍保持信任。"
+          "description": "Orca 啟動的代理程式可以略過「是否信任此資料夾？」的詢問，因此專案的代理程式鉤子和設定會立即執行。你可以在某個存放庫的設定中為該存放庫關閉此項。關閉此項可讓代理程式一律自行詢問。在你沒有看著時執行的代理程式（例如編排工作行程、自動化以及從手機啟動的代理程式）若發出詢問，會一直等待，直到你在它的終端機中作答。已信任的資料夾仍保持信任。"
         },
         "agent-generated-tab-title-copy": {
           "19ad21615a": "自動產生分頁標題",
@@ -12037,7 +12037,6 @@
           "systemDefault": "系統預設",
           "unavailable": "不可用",
           "label": "麥克風",
-          "description": "用於語音聽寫的輸入裝置，系統預設會跟隨作業系統的麥克風設定。",
           "accessHint": "允許麥克風存取以列出輸入裝置。",
           "allowAccess": "允許存取",
           "noMicrophoneFound": "沒有找到麥克風。請接上麥克風，然後重試。",
@@ -13970,6 +13969,10 @@
                   "archived": {
                     "title": "存放庫已封存",
                     "body": "此存放庫已封存，Orca 不會重新整理 {{reviewLabel}} 狀態。"
+                  },
+                  "host_off": {
+                    "title": "WSL 主機已關閉",
+                    "body": "Orca 透過此專案的 WSL 主機重新整理 {{reviewLabel}} 狀態，但主機已關閉。請重新連線以更新狀態。"
                   },
                   "not_git": {
                     "title": "不是 Git 存放庫",
@@ -18724,14 +18727,10 @@
         }
       },
       "agent-workspace-trust-decision": {
-        "prompt-title": "要為代理程式信任 {{repo}} 嗎？",
-        "prompt-description": "Claude Code 和 Codex 等代理程式在載入專案自帶的代理程式設定和鉤子（可以執行命令）之前，會詢問「是否信任此資料夾？」。Orca 可以在此存放庫的每個工作樹中替你回答「是」。",
-        "prompt-remembered": "Orca 會記住你對此存放庫的回答。你可以在存放庫設定中變更。",
         "trust-repository": "信任存放庫",
         "let-agents-ask": "讓代理程式詢問",
         "setting-title": "代理程式資料夾信任",
         "setting-description": "Orca 在此存放庫的工作樹中啟動的代理程式是否略過「是否信任此資料夾？」的詢問，並立即載入專案的代理程式設定和鉤子。",
-        "setting-undecided": "尚未決定。下次你在這裡啟動代理程式時，Orca 會詢問。",
         "setting-global-off": "已在代理程式設定中關閉資料夾信任，因此代理程式一律會詢問。",
         "keyword-trust": "信任",
         "keyword-hooks": "鉤子"
@@ -20333,55 +20332,34 @@
       },
       "voice": {
         "dictationLanguage": {
-          "ignored": "{{model}} 只能轉寫它支援的語言，因此會忽略此設定。",
           "unsupported": "{{model}} 不支援{{language}}，因此會自動偵測語言。",
-          "description": "你說的語言。選擇自動偵測時，模型每次都會自行判斷語言。",
           "auto": "自動偵測",
-          "a9df191aba": "聽寫語言"
+          "rated": "你說的語言。品質依此語言評分。",
+          "alwaysUses": "你說的語言。{{model}} 一律使用{{language}}。",
+          "detectsItself": "你說的語言。{{model}} 會自動辨識。"
         },
         "modelUnload": {
-          "description": "停止聽寫後本機模型在記憶體中保留多久。模型已載入時，聽寫會立即開始；選擇「立即」會釋放記憶體，因此每次聽寫都要等待模型載入。",
-          "cloud": "雲端模型在服務商的伺服器上執行，因此這裡不會載入任何內容。",
-          "never": "從不",
-          "immediately": "立即",
-          "94afd37271": "卸載語音模型"
+          "cloud": "雲端模型在服務商的伺服器上執行，因此這裡不會載入任何內容。"
         },
         "fillerWords": {
-          "description": "依聽寫語言，從聽寫文字中移除「嗯」「呃」之類的語氣詞。",
-          "0134406785": "移除語氣詞"
+          "0134406785": "移除語氣詞",
+          "short": "移除「嗯」和「呃」。"
         },
-        "sectionDescription": "在任何面板中用說話取代打字。除非你選擇雲端模型，否則語音都在這台電腦上辨識。",
         "input": {
           "title": "輸入",
           "shortcut": "快捷鍵",
-          "shortcutDescription": "在目前聚焦的面板中開始聽寫。",
-          "changeShortcut": "變更"
+          "changeShortcut": "變更",
+          "description": "除非你另選，否則跟隨系統設定。",
+          "missing": "{{microphone}} 未連接。在它重新連接前使用系統預設裝置。"
         },
         "language": {
           "title": "語言"
-        },
-        "cleanup": {
-          "title": "清理"
         },
         "advanced": {
           "title": "進階"
         },
         "setup": {
-          "downloadingDescription": "你可以離開此頁面。下載完成後即可使用聽寫。",
-          "title": "設定聽寫",
-          "pickModel": "在任何面板中用說話取代打字。先在下方下載一個語音模型；本機模型會把你的音訊留在這台電腦上。",
-          "microphoneMissingTitle": "{{microphone}} 未連接",
-          "microphoneMissingDescription": "在它重新連接前，聽寫會使用系統預設麥克風。",
-          "changeMicrophone": "更換麥克風",
-          "onTitle": "聽寫已開啟",
-          "onLocal": "在任何面板中按 {{shortcut}}。{{model}} 在這台電腦上執行。",
-          "onCloud": "在任何面板中按 {{shortcut}}。{{model}} 在雲端執行。",
-          "offTitle": "聽寫已關閉",
-          "offDescription": "開啟後，可在任何面板中按 {{shortcut}} 聽寫。",
-          "savedMicrophone": "你的麥克風",
-          "description": "在任何面板中用說話取代打字。語音在這台電腦上辨識，你的音訊不會離開這裡。",
-          "setUp": "設定",
-          "asksForMicrophone": "Orca 會要求麥克風權限。"
+          "savedMicrophone": "你的麥克風"
         },
         "quality": {
           "unsupported": "不支援你的語言",
@@ -20390,29 +20368,34 @@
           "fair": "普通",
           "good": "良好",
           "veryGood": "很好",
-          "excellent": "優秀",
-          "characterErrorRate": "字元錯誤率 {{percent}}%",
-          "wordErrorRate": "詞錯誤率 {{percent}}%",
-          "librispeech": "測試：LibriSpeech（朗讀語音），{{clips}} 段音訊，測於 {{date}}。",
-          "fleurs": "測試：FLEURS（朗讀語音），{{clips}} 段音訊，測於 {{date}}。",
-          "bench": "Orca 在 Apple 晶片 Mac 上的基準測試。",
-          "label": "品質：{{word}}"
+          "excellent": "優秀"
         },
         "models": {
           "retired": "已不再提供。刪除即可釋放空間。",
           "sendsToOpenAi": "會把你的音訊傳送給 OpenAI。",
           "delete": "刪除",
-          "cancelDownload": "取消下載",
           "inUse": "使用中",
           "use": "使用",
           "setUpCloud": "設定",
           "download": "下載",
           "cloud": "雲端",
-          "description": "品質依{{language}}評定。將指標停在評分上可查看所用測試。",
           "where": "模型執行位置",
           "local": "這台電腦",
-          "cloudDescription": "雲端模型會把你的音訊傳送給服務商。本機模型會把音訊留在這台電腦上。",
-          "sendsToCompatible": "會把你的音訊傳送到你設定的服務。"
+          "sendsToCompatible": "會把你的音訊傳送到你設定的服務。",
+          "downloadingProgress": "正在下載，{{done}} / {{total}} MB（{{percent}}%）",
+          "needsUpdate": "需要為更快的引擎下載一次。",
+          "recommended": "推薦",
+          "columnModel": "模型",
+          "columnQuality": "品質",
+          "columnSize": "大小",
+          "about": {
+            "parakeetV3": "速度快。支援 {{languages}} 種歐洲語言。",
+            "parakeetV2": "速度快。僅支援英語，英語最準確。",
+            "whisperTiny": "下載最小。適合試用聽寫。",
+            "whisperTurbo": "語言最多，約 100 種。沒有 GPU 時較慢。",
+            "senseVoice": "速度快。適用於中文、日語和韓語。",
+            "nemotron": "{{languages}} 種語言，包括阿拉伯語、印地語和日語。"
+          }
         },
         "vocabulary": {
           "title": "詞彙",
@@ -20449,9 +20432,36 @@
           "heardFailed": "{{model}} 無法轉寫這段錄音。"
         },
         "silenceStop": {
-          "title": "靜音後停止",
-          "description": "安靜這麼久後停止聽寫。按住快捷鍵時從不停止。",
-          "off": "關閉"
+          "off": "關閉",
+          "label": "靜音後停止",
+          "short": "你停止說話時結束聽寫。"
+        },
+        "pageDescription": "在任何面板中用說話取代打字。",
+        "dictation": {
+          "label": "聽寫",
+          "ready": "在任何面板中按 {{shortcut}}。",
+          "off": "開啟後，可在任何面板中按 {{shortcut}} 聽寫。",
+          "noModel": "在下方下載一個語音模型即可開始。它在這台電腦上執行，音訊不會離開這裡。",
+          "downloading": "{{model}} 下載完成後即可使用。",
+          "needsUpdate": "在下方更新 {{model}} 以繼續聽寫。"
+        },
+        "mode": {
+          "label": "模式",
+          "auto": "輕按 {{shortcut}} 開始和停止，或說話時按住。",
+          "hold": "按住 {{shortcut}} 時說話。",
+          "toggle": "按 {{shortcut}} 開始，再按一次停止。"
+        },
+        "words": {
+          "title": "詞語"
+        },
+        "gpu": {
+          "description": "如果聽寫導致電腦當機，請關閉。"
+        },
+        "keepLoaded": {
+          "label": "保持模型載入",
+          "description": "模型載入期間，聽寫會立即開始。",
+          "always": "一律",
+          "never": "永不"
         }
       },
       "repositoryHooks": {
@@ -21106,8 +21116,8 @@
       "open": "開啟工作區",
       "occupied": "已在 {{path}} 中簽出",
       "remote": "遠端",
-      "statusFailed": "Orca 無法讀取此簽出的變更。請先重新整理原始碼控制再切換。",
-      "statusUnknown": "切換前請先讀取此簽出的變更。",
+      "statusFailed": "Orca 無法讀取目前工作目錄的變更。請先重新整理原始碼管理再切換。",
+      "statusUnknown": "切換前請先讀取目前工作目錄的變更。",
       "conflict": "切換分支前，請完成或中止 {{operation}}。",
       "dirty_one": "切換分支前，請提交或捨棄 {{count}} 個已變更的檔案。",
       "dirty_other": "切換分支前，請提交或捨棄 {{count}} 個已變更的檔案。",
@@ -23241,7 +23251,7 @@
     "argumentsTerminalHint": "僅適用於終端機（CLI）啟動",
     "searchAgentModels": "搜尋 {{agent}} 模型…",
     "legacyModelCount": "{{total}} 個模型",
-    "search": "搜尋代理和設定…",
+    "search": "搜尋，例如 Opus 5.5…",
     "configure": "設定 {{agent}}",
     "arguments": "引數",
     "argumentsHint": "僅適用於 CLI 啟動。",
@@ -23273,7 +23283,7 @@
     "unsupportedDescription": "Apple 不支援在此 Mac 上執行 macOS {{macos}}。",
     "unknownDescription": "無法確認此 Mac 是否可以升級。請參考 Apple 的相容性指南。",
     "whyTitle": "為什麼要進行這項變更？",
-    "whyIntro": "我們更新了 Orca 賴以執行的 Electron，以提供：",
+    "whyIntro": "我們更新了 Orca 的部分基礎元件，例如 Electron 和裝置上的語音引擎，以提供：",
     "whySecurity": "來自 Electron 和 Chromium 的持續安全性修正。",
     "whyPerformance": "更快的啟動速度和更有效率的原生 API 呼叫。",
     "whySystemApis": "支援目前的 macOS 通知 API 和安全的鑰匙圈儲存。",
@@ -23348,29 +23358,23 @@
     "createBranchFailed": "Orca 無法建立分支。請在終端機中檢查此儲存庫，然後重試。"
   },
   "speechModelUpdate": {
-    "updateTitle": "更新你的語音模型",
-    "updateDescription": "聽寫現在使用更快的引擎。{{model}} 需要下載一次（{{size}} MB）才能再次聽寫。",
     "update": "更新",
-    "replacedTitle": "你的語音模型已被取代",
-    "replacedDescription": "{{old}} 無法在新的語音引擎上執行。{{model}} 將取代它（{{size}} MB）。",
-    "downloadReplacement": "下載 {{model}}",
-    "later": "稍後",
-    "dismiss": "關閉",
-    "updatingTitle": "正在更新 {{model}}",
-    "downloadingTitle": "正在下載 {{model}}",
-    "downloadingDescription": "你可以繼續工作。完成後即可再次使用聽寫。",
-    "progress": "{{done}} / {{total}} MB",
     "cancel": "取消",
-    "doneTitle": "聽寫已就緒",
-    "doneDescription": "{{model}} 已更新。舊檔案已移除。",
-    "doneRetiredDescription": "{{model}} 已設定完成。舊的 {{old}} 檔案仍在磁碟上。",
-    "keep": "保留",
-    "deleteOld": "刪除舊模型",
-    "deleteFailed": "無法刪除 {{model}}。",
-    "updateFailedTitle": "無法更新 {{model}}",
-    "downloadFailedTitle": "無法下載 {{model}}",
-    "failedAtDescription": "下載在 {{mb}} MB 時中斷。請檢查連線後再試一次。",
-    "failedDescription": "下載已中斷。請檢查連線後再試一次。",
-    "tryAgain": "再試一次"
+    "pill": {
+      "updateNotice": "更快的語音輸入已可安裝",
+      "retiredNotice": "語音輸入已改用更快的語音模型",
+      "install": "安裝",
+      "installTooltip": "一次性下載 · {{size}} MB",
+      "downloading": "正在設定語音輸入",
+      "downloadingTooltip": "{{done}} / {{size}} MB",
+      "ready": "語音輸入已就緒。按下 <kbd></kbd>",
+      "readyNoShortcut": "語音輸入已就緒。",
+      "failed": "下載已中斷。請檢查網路連線。",
+      "tryAgain": "重試",
+      "deleteOld": "刪除舊模型",
+      "deleteFailed": "無法刪除 {{model}}。",
+      "dismiss": "關閉",
+      "cancelDownload": "取消下載"
+    }
   }
 }

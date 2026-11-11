@@ -1,6 +1,6 @@
 import React from 'react'
 import type { VirtualItem } from '@tanstack/react-virtual'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type {
   WorkspaceStatus,
   WorkspaceStatusDefinition

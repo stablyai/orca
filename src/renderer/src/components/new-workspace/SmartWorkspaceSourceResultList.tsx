@@ -3,7 +3,7 @@ import { isIntegrationCredentialDecryptionError } from '../../../../shared/integ
 import { Button } from '@/components/ui/button'
 import { CommandGroup, CommandItem, CommandList } from '@/components/ui/command'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { getSmartWorkspaceEmptyHint } from '../../../../shared/new-workspace/smart-workspace-source-results'
 import { RowIcon, RowLabel } from './smart-workspace-source-row-content'
 import type { RowEntry } from './smart-workspace-name-field-model'

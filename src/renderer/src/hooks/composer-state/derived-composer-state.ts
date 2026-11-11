@@ -1,7 +1,11 @@
+import { useFolderSetupSupport } from '@/lib/use-folder-setup-supported'
 import type { DerivedComposerStateInput } from './composer-target-input-contracts'
 
 import { useMemo } from 'react'
-import { normalizeSparseDirectoryLines, sparseDirectoriesMatch } from '@/lib/sparse-paths'
+import {
+  normalizeSparseDirectoryLines,
+  sparseDirectoriesMatch
+} from '@/lib/directory-input/sparse-paths'
 import {
   parseGitHubIssueOrPRNumber,
   parseGitHubIssueOrPRLink
@@ -14,7 +18,7 @@ import {
   getWorkspaceSeedName,
   DEFAULT_ISSUE_COMMAND_TEMPLATE,
   renderIssueCommandTemplate
-} from '@/lib/new-workspace'
+} from '@/lib/workspace/creation/new-workspace'
 import { getSetupConfig } from '../../../../shared/orca-hook-setup-config'
 import { deriveWorkspaceSetupState } from '@/lib/workspace/creation/setup/workspace-setup-preparation'
 import type { SparsePreset } from '../../../../shared/worktree/create-types'
@@ -119,14 +123,18 @@ export function useDerivedComposerState(input: DerivedComposerStateInput) {
 
   const currentYamlHooks = checkedHooksContextKey === selectedRepoHookContextKey ? yamlHooks : null
 
+  const setupSupport = useFolderSetupSupport(selectedRepo)
+  const setupSupported = setupSupport === 'supported'
   const setupConfig = useMemo(
-    () => (selectedRepoIsGit ? getSetupConfig(selectedRepo, currentYamlHooks) : null),
-    [currentYamlHooks, selectedRepo, selectedRepoIsGit]
+    () => (selectedRepo && setupSupported ? getSetupConfig(selectedRepo, currentYamlHooks) : null),
+    [currentYamlHooks, selectedRepo, setupSupported]
   )
   const isSetupCheckPending =
-    selectedRepoIsGit &&
-    Boolean(selectedRepoHookContextKey) &&
-    checkedHooksContextKey !== selectedRepoHookContextKey
+    setupSupport === 'pending' ||
+    (setupSupported &&
+      Boolean(selectedRepo) &&
+      Boolean(selectedRepoHookContextKey) &&
+      checkedHooksContextKey !== selectedRepoHookContextKey)
   const {
     setupPolicy,
     requiresExplicitSetupChoice,
@@ -136,7 +144,7 @@ export function useDerivedComposerState(input: DerivedComposerStateInput) {
     selectedRepo,
     setupConfig,
     setupDecision,
-    selectedRepoIsGit,
+    setupSupport !== 'unsupported',
     isSetupCheckPending
   )
   const linkedWorkItemProvider = linkedWorkItem ? getWorkspaceSourceProvider(linkedWorkItem) : null
@@ -239,6 +247,7 @@ export function useDerivedComposerState(input: DerivedComposerStateInput) {
     effectiveLinkedPR,
     currentYamlHooks,
     setupConfig,
+    setupSupport,
     setupPolicy,
     linkedWorkItemProvider,
     requiresExplicitSetupChoice,

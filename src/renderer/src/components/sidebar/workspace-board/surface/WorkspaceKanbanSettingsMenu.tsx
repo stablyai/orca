@@ -9,7 +9,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { Switch } from '@/components/ui/switch'
 import type { WorkspaceStatusDefinition } from '../../../../../../shared/worktree/types'
 import { getWorkspaceStatusVisualMeta } from '../../workspace-status/presentation/workspace-status'

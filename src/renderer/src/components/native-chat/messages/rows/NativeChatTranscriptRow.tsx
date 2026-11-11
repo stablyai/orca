@@ -1,5 +1,5 @@
 import { memo, useContext } from 'react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import { MessageRow, type NativeChatDeliveryNotice } from './NativeChatMessageRow'
 import { NativeChatResolutionReceipt } from '../../prompts/NativeChatResolutionReceipt'
@@ -48,12 +48,15 @@ export type NativeChatTranscriptRowContext = {
 export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
   slot,
   context,
-  newRowsMarker
+  newRowsMarker,
+  newRowsMarkerBelow = false
 }: {
   slot: NativeChatTranscriptSlot
   context: NativeChatTranscriptRowContext
   /** The "New" marker, when it draws in this row. */
   newRowsMarker?: NativeChatNewRowsMarkerState
+  /** The "New" marker opens the next row: left-side, so this row's actions keep their own height. */
+  newRowsMarkerBelow?: boolean
 }): React.JSX.Element {
   // Offered only on the conversation's own turn-opening prompts (`nativeChatRowOffersRewind`).
   const rewind = useContext(NativeChatRewindContext)
@@ -105,7 +108,8 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
   ) : null
   return (
     // The negative margin shortens the measured row, which is what moves the next one up.
-    // A row whose actions hang into the gap keeps it whole, so they never cover the next row.
+    // A row that holds its response's actions keeps the gap whole: they stay in flow above the
+    // agent's next step (`actionsHang` is unset there), which then sits a full gap below them.
     <div
       className={cn(
         'flex flex-col gap-5',
@@ -141,6 +145,8 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
           trailingRun={slot.trailingRun}
           continuesTurn={slot.continuesTurn}
           endsResponse={slot.endsResponse}
+          latestResponse={slot.latestResponse === true}
+          actionsHang={slot.actionsHang === true && !newRowsMarkerBelow}
           onScrollMessageToTop={context.onScrollMessageToTop}
           deliveryNotice={deliveryNotice}
           subagentRoster={slot.subagentRoster}

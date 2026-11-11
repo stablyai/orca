@@ -4,6 +4,7 @@ import type { PluginKillListEntry } from '../../shared/plugins/catalog/plugin-ki
 import type { PluginDesktopFrameServices } from './workers/plugin-host-method-bindings'
 import type { PluginStatusBarState } from './status-bar/plugin-status-bar-state'
 import type { PluginAppearanceService } from './appearance/plugin-appearance-service'
+import type { PluginEditorTypographySource } from './appearance/plugin-editor-typography'
 
 export type PluginServiceOptions = {
   userDataPath: string
@@ -25,4 +26,6 @@ export type PluginServiceOptions = {
   /** Desktop main only: what `statusBar.update` writes for the windows' status bars. */
   statusBar?: PluginStatusBarState
   appearance?: PluginAppearanceService
+  /** What `editor.readTypography` answers; absent where no profile settings are loaded. */
+  editorTypography?: PluginEditorTypographySource
 }

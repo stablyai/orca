@@ -5,7 +5,7 @@ import {
 } from '../../../../../../shared/repo-badge-color'
 import { Label } from '../../../ui/label'
 import { ColorPicker } from '../../../ui/color-picker'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 
 type RepositoryIconColorSectionProps = {

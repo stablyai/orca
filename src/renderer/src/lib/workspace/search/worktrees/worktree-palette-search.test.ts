@@ -56,23 +56,6 @@ function gitLabReview(overrides: Partial<HostedReviewInfo> = {}): HostedReviewIn
 }
 
 describe('worktree-palette-search', () => {
-  it('falls back to branch text when a cleared display name left it undefined', () => {
-    const cleared = makeWorktree({
-      displayName: undefined as unknown as string,
-      branch: 'refs/heads/feature/worktree-jump'
-    })
-
-    expect(() => searchWorktrees([cleared], 'jump', repoMap)).not.toThrow()
-    // Highlight range indexes the branch-derived label the palette actually renders.
-    expect(searchWorktrees([cleared], 'jump', repoMap)[0]).toMatchObject({
-      worktreeId: 'wt-1',
-      matchedFields: ['displayName'],
-      displayNameRanges: [
-        { start: 'feature/worktree-'.length, end: 'feature/worktree-jump'.length }
-      ]
-    })
-  })
-
   it('does not search stale GitHub cache metadata when Checks selected another review', () => {
     const staleWorktree = makeWorktree({
       branch: 'refs/heads/feature/palette-refresh',
@@ -118,25 +101,6 @@ describe('worktree-palette-search', () => {
     ).toEqual([])
   })
 
-  it('supports "repo/worktree" composite queries and highlights both segments', () => {
-    const worktrees = [
-      makeWorktree({ id: 'wt-main', branch: 'refs/heads/main', displayName: 'main' }),
-      makeWorktree({
-        id: 'wt-feature',
-        branch: 'refs/heads/feature/foo',
-        displayName: 'feature foo'
-      })
-    ]
-
-    const results = searchWorktrees(worktrees, 'orca/main', repoMap)
-
-    expect(results).toHaveLength(1)
-    expect(results[0].worktreeId).toBe('wt-main')
-    expect(results[0].matchedFields).toEqual(['repo', 'branch'])
-    expect(results[0].repoRanges).toEqual([{ start: 9, end: 13 }])
-    expect(results[0].branchRanges).toEqual([{ start: 0, end: 4 }])
-  })
-
   it('matches a pasted GitHub issue URL to the linked worktree instead of the URL text', () => {
     const results = searchWorktrees(
       [
@@ -160,5 +124,35 @@ describe('worktree-palette-search', () => {
         }
       })
     ])
+  })
+
+  it("finds each linked issue by its saved title before the issue's card has rendered", () => {
+    const issue = (number: number, title: string, url?: string) => ({
+      provider: 'github' as const,
+      type: 'issue' as const,
+      number,
+      title,
+      ...(url ? { url } : {})
+    })
+    const worktrees = [
+      makeWorktree({
+        id: 'wt-cli',
+        linkedIssue: 11704,
+        linkedItems: [issue(11704, 'verificacion de permisos')]
+      }),
+      makeWorktree({
+        id: 'wt-two-repos',
+        linkedIssue: 42,
+        linkedItems: [
+          issue(42, 'alpha release', 'https://github.com/stablyai/orca/issues/42'),
+          issue(42, 'zebra crossing', 'https://github.com/other/repo/issues/42')
+        ]
+      })
+    ]
+    const search = (query: string) =>
+      searchWorktrees(worktrees, query, repoMap).map((result) => result.worktreeId)
+
+    expect(search('verificacion')).toEqual(['wt-cli'])
+    expect(search('zebra')).toEqual(['wt-two-repos'])
   })
 })

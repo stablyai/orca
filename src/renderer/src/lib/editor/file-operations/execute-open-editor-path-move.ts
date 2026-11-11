@@ -15,7 +15,7 @@ import {
   editorMoveOwnerFromContext,
   isOpenFileOnMoveOwner
 } from '@/lib/editor/file-operations/open-editor-move-owner'
-import { documentFolderAccess } from '@/lib/local-file-access'
+import { documentFolderAccess } from '@/lib/files/access/local-file-access'
 import { contentRekeyOutcome } from '@/runtime/workspace-layout/intents/layout-owner-content-rekeys'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
 

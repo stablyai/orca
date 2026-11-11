@@ -39,7 +39,7 @@ function preview(body: string): string {
 export function buildCrewSnapshot(
   address: string,
   deps: CrewReadDependencies,
-  host = createCrewHostDerivation(deps, deps.now ?? Date.now())
+  host = createCrewHostDerivation(deps)
 ): OrchestrationCrewSnapshot {
   deps = { ...host.deps, now: deps.now }
   const db = deps.db

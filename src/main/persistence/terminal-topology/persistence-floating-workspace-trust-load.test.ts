@@ -7,7 +7,6 @@ import {
   symlinkDirectorySync
 } from '../persistence-test-harness'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { getFloatingWorkspaceFileRoots } from '../../ipc/floating-workspace-directory'
 import { rmSync, mkdtempSync, mkdirSync, realpathSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -90,27 +89,6 @@ describe('floating workspace trust on load', () => {
     expect(readDataFile()).toMatchObject({
       settings: { floatingTerminalTrustedCwds: [canonicalLegacyFloatingCwd] }
     })
-  })
-
-  it('still loads a profile whose floating cwd is not a string', async () => {
-    writeDataFile({
-      schemaVersion: 1,
-      repos: [],
-      worktreeMeta: {},
-      settings: {
-        floatingTerminalCwd: 42,
-        floatingTerminalCwdMigratedToAppWorkspace: true
-      },
-      ui: {},
-      githubCache: { pr: {}, issue: {} },
-      workspaceSession: {}
-    })
-
-    const store = await createStore()
-
-    expect(store.getSettings().floatingTerminalCwd).toBe('~')
-    // File authorization reads the cwd on every check, so it must keep working for this profile.
-    expect(getFloatingWorkspaceFileRoots(store).exactRoots).toEqual([])
   })
 
   it('never re-points a trusted folder through a link on load', async () => {

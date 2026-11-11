@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { _resetWritePipelineHealthForTests } from './terminal-write-pipeline-health'
 import { writeXtermParseBarrier } from './xterm-parse-barrier'
 
-vi.mock('@/lib/e2e-config', () => ({ e2eConfig: { exposeStore: false } }))
+vi.mock('@/app-shell/startup/e2e-config', () => ({ e2eConfig: { exposeStore: false } }))
 
 type Terminal = HeadlessTerminal | BrowserTerminal
 const terminals: Terminal[] = []

@@ -9,9 +9,12 @@ import {
   getCommentBodySubmitState,
   hasBoundedCommentBodyText
 } from '@/lib/source-control/review/comments/comment-body-submit-state'
-import { getScreenSubmitShortcutLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
+import {
+  getScreenSubmitShortcutLabel,
+  isScreenSubmitShortcut
+} from '@/lib/keyboard/screen-submit-shortcut'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../shared/non-secure-context-uuid'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { linearAddIssueComment } from '@/runtime/linear/runtime-linear-issue-client'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'

@@ -4,7 +4,7 @@ import { takeCurrentTerminalDeliveryCredit } from '@/lib/pane-manager/terminal-d
 import { nativeWindowsRewriteNeedsFollowupRenderRefresh } from '@/lib/pane-manager/terminal-complex-script'
 import { writeTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { forceFullViewportPresent } from '@/lib/pane-manager/terminal-render-pause-release'
-import { CLIENT_PLATFORM } from '@/lib/new-workspace'
+import { CLIENT_PLATFORM } from '@/lib/workspace/creation/new-workspace'
 
 import { FOREGROUND_SYNCHRONIZED_FRAME_INTERACTIVE_WINDOW_MS } from './foreground-output-budgets'
 import { scanSynchronizedOutput } from '../../../../../../shared/terminal/protocol/escape/terminal-synchronized-output-scan'

@@ -174,10 +174,11 @@ export function renderDesktopCapabilitySettingsSections(
 
       <SettingsSection
         id="voice"
+        grouped
         title={t('auto.components.settings.Settings.5063bb47a5', 'Voice')}
         description={t(
-          'components.settings.voice.sectionDescription',
-          'Talk instead of typing in any pane. Speech is recognized on this computer unless you pick a cloud model.'
+          'components.settings.voice.pageDescription',
+          'Talk instead of typing in any pane.'
         )}
         searchEntries={navigation.getSectionSearchEntries('voice')}
       >

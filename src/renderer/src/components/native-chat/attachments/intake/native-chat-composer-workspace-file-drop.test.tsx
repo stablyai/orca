@@ -9,7 +9,7 @@ import {
   WORKSPACE_FILE_PATHS_MIME,
   WORKSPACE_FILE_PATH_MIME,
   writeWorkspaceFileDragSource
-} from '@/lib/workspace-file-drag'
+} from '@/lib/files/drop/workspace-file-drag'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 
 import type { NativeChatComposerInput } from '../../composer/editor/native-chat-composer-input'

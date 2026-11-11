@@ -10,7 +10,7 @@ import {
   getActivityThreadTaskTitle,
   getActivityThreadWorkspaceTitle,
   resolveActivityThreadStatusPreview
-} from '@/lib/activity-thread-display'
+} from '@/lib/workspace/activity/activity-thread-display'
 import { formatUiRelativeTime } from '@/i18n/relative-time-format'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'

@@ -1,6 +1,6 @@
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 import { writeForegroundTerminalChunk } from '@/lib/pane-manager/pane-terminal-foreground-render-settle'
-import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
+import { recordRendererCrashBreadcrumb } from '@/diagnostics/crash-reporting/crash-breadcrumb-recorder'
 import { ensureArabicShapingJoinerForText } from '@/lib/pane-manager/terminal-arabic-shaping-joiner'
 import { isXtermInstanceDisposed } from '@/lib/pane-manager/xterm-instance-disposed'
 import {

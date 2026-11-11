@@ -1,4 +1,4 @@
-import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
+import { recordRendererCrashBreadcrumb } from '@/diagnostics/crash-reporting/crash-breadcrumb-recorder'
 
 // WriteBuffer._innerWrite does not catch completion throws; they skip rescheduling while write() only rearms empty queues, permanently freezing output/input despite a live shell (#2836). Pinned against xterm 6.1.0-beta.287 in xterm-write-buffer-stall.repro.test.ts.
 const MAX_REPORTS_PER_CONTEXT = 5
