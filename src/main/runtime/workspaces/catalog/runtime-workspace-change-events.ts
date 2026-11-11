@@ -3,6 +3,7 @@ import type { AutomationsChangedPayload } from '../../../../shared/runtime-clien
 import { wakeFolderRepoGitUpgradeWatch } from '../../../ipc/folder-repo-git-upgrade-wake'
 import { runWorktreeChangeInvalidators } from '../../../ipc/worktrees/listing/worktree-change-invalidators'
 import type { WorktreeSortOrderUpdate } from '../../../../shared/worktree/sort-order-update'
+import type { WorkspaceMetadataSet } from '../../../../shared/worktree/workspace-metadata-set'
 import { NativeChatLaunchDraftOwner } from '../../agent-session/launch/native-chat-launch-draft-owner'
 
 export abstract class RuntimeWorkspaceChangeEvents extends NativeChatLaunchDraftOwner {
@@ -33,6 +34,12 @@ export abstract class RuntimeWorkspaceChangeEvents extends NativeChatLaunchDraft
         ? { sortOrders: options.sortOrders }
         : {})
     })
+  }
+
+  /** One workspace's metadata, addressed: clients patch that row instead of refetching its repo. Interim transport for the record. */
+  publishWorkspaceMetadataSet(set: WorkspaceMetadataSet): void {
+    this.notifier?.workspaceMetadataSet?.(set)
+    this.emitClientEvent({ type: 'workspaceMetadataSet', ...set })
   }
 
   /** Unlike coarse repoId-only changes, lifecycle events name the workspace; removals resolve only id/path before teardown. */

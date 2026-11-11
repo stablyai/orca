@@ -2450,7 +2450,8 @@
     "tabStrip": {
       "checkingCapabilities": "正在檢查桌面版支援的功能，請稍後再試",
       "newTab": "新分頁",
-      "quickCommandsUpdateRequired": "需更新桌面版才能使用快速命令"
+      "quickCommandsUpdateRequired": "需更新桌面版才能使用快速命令",
+      "tabStatus": "{{title}}，{{status}}"
     },
     "terminalActionSheetActions": {
       "clearTerminal": "清除終端機",

@@ -116,6 +116,43 @@ describe('relay edge fence after a host leaves', () => {
   })
 })
 
+describe('relay edge fence over a same-epoch conflict', () => {
+  it('fences once more one epoch above a conflict at its epoch, and never bumps over a stale answer', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const h = await harness()
+    h.edge.answers = ['conflict', 'applied']
+    expect(await h.assignments.fenceAway({ userId: USER, relayHostId: HOST }, 'us-c1', 9)).toBe(true)
+    expect(h.edge.calls.map((call) => call.body.assignmentEpoch)).toEqual([9, 10])
+    expect(h.edge.calls.every((call) => call.body.cellId === 'us-c1')).toBe(true)
+    expect(logged(warn, 'orca_relay_edge_fence_above_conflict')).toEqual([
+      { event: 'orca_relay_edge_fence_above_conflict', outcome: 'applied', assignmentEpoch: 10 }
+    ])
+    expect(await h.pending()).toEqual([])
+    // Stale: the edge holds a newer epoch (the host may be back there); no bump, recorded for retry.
+    h.edge.calls = []
+    h.edge.answers = ['stale']
+    expect(await h.assignments.fenceAway({ userId: USER, relayHostId: HOST }, 'us-c1', 11)).toBe(false)
+    expect(h.edge.calls.map((call) => call.body.assignmentEpoch)).toEqual([11])
+  })
+
+  it('a pending fence retried into a same-epoch conflict lands one epoch above the row', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const h = await harness()
+    await h.placeRow('us-c1', 7)
+    h.edge.answers = ['down', 'down', 'down', 'down', 'down', 'down', 'down', 'down', 'down', 'down']
+    expect(await h.assignments.fenceAway({ userId: USER, relayHostId: HOST }, 'us-c1', 7)).toBe(false)
+    expect(await h.pending()).toHaveLength(1)
+    h.edge.calls = []
+    h.edge.answers = ['conflict', 'applied']
+    h.clock.now += 60_000
+    await h.retry()
+    expect(h.edge.calls.map((call) => call.body.assignmentEpoch)).toEqual([7, 8])
+    expect(await h.pending()).toEqual([])
+  })
+})
+
 describe('relay edge pending fence retries', () => {
   it('re-fences to the current row, not the recorded one, and clears the record once it lands', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
