@@ -25,41 +25,16 @@ import { cloudSetupRequired } from '../../orca-cloud-setup/cloud-setup-page-mode
 import { useRunOnDefault } from './use-run-on-default'
 import { useCloudOnlyCreate, useCloudOnlyRepo } from './use-cloud-only-repo'
 import type { CloudStartView } from './cloud-start-view'
-import { openOrcaCloudAgentAccounts } from '../OrcaCloudAgentSetupRow'
-import { agentName } from '../../settings/agent-accounts/orca-cloud-accounts-copy'
+import { showCloudAgentNotStartedToast } from '@/lib/orca-cloud/cloud-agent-not-started-toast'
 import { isOrcaCloudAccountAgent } from '../../../../../shared/orca-cloud-agents/orca-cloud-agents-wire'
 
 export type { CloudStartView } from './cloud-start-view'
 
-/** The workspace started without its agent: one clear way to set the agent up for next time. */
-function showAgentNotStartedToast(agent: string | null): void {
-  const name = isOrcaCloudAccountAgent(agent) ? agentName(agent, translate) : null
-  toast.message(
-    name
-      ? translate(
-          'components.newWorkspace.cloudStart.agentNotStarted',
-          '{{agent}} isn’t set up for Orca Cloud, so it didn’t start. The workspace has a terminal.',
-          { agent: name }
-        )
-      : translate(
-          'components.newWorkspace.cloudStart.agentNotStartedGeneric',
-          'Your agent isn’t set up for Orca Cloud, so it didn’t start. The workspace has a terminal.'
-        ),
-    {
-      action: {
-        label: name
-          ? translate(
-              'components.newWorkspace.cloudStart.setUpAgentOnce',
-              'Set up {{agent}} once',
-              {
-                agent: name
-              }
-            )
-          : translate('components.newWorkspace.cloudStart.setUpAgentOnceGeneric', 'Set up once'),
-        onClick: openOrcaCloudAgentAccounts
-      }
-    }
-  )
+/** The workspace started without its agent: the one prompt to set it up (design-squad journey). */
+function showAgentNotStartedToast(agent: string | null, workspaceName: string): void {
+  if (isOrcaCloudAccountAgent(agent)) {
+    showCloudAgentNotStartedToast(agent, workspaceName)
+  }
 }
 
 export function useCloudStartComposer({
@@ -157,8 +132,8 @@ export function useCloudStartComposer({
     } else {
       onCreateWithoutAgent()
     }
-    showAgentNotStartedToast(agent)
-  }, [agent, agentUnset, cloudOnly.picked, onCreateRaw, onCreateWithoutAgent])
+    showAgentNotStartedToast(agent, prompt)
+  }, [agent, agentUnset, cloudOnly.picked, onCreateRaw, onCreateWithoutAgent, prompt])
 
   const { markTouched } = useRunOnDefault({
     active,

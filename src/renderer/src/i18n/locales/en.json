@@ -23237,10 +23237,9 @@
         "folderDetail": "Orca Cloud starts from a GitHub repository. This project is a folder on this computer."
       },
       "cloudStart": {
-        "agentNotStarted": "{{agent}} isn’t set up for Orca Cloud, so it didn’t start. The workspace has a terminal.",
-        "agentNotStartedGeneric": "Your agent isn’t set up for Orca Cloud, so it didn’t start. The workspace has a terminal.",
         "setUpAgentOnce": "Set up {{agent}} once",
-        "setUpAgentOnceGeneric": "Set up once"
+        "agentNotStartedShort": "{{agent}} isn’t set up for Orca Cloud, so it didn’t start.",
+        "agentNotStartedIn": "{{agent}} isn’t set up for Orca Cloud, so it didn’t start in {{workspace}}."
       }
     },
     "JiraIssueWorkspace": {
