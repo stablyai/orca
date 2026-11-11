@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import type { RawListeningPort } from './local-workspace-port-scan-state'
 
 /** Colon-separated install roots whose binaries are the host's own services (e.g. a sandbox image's tools). */
@@ -28,14 +29,15 @@ export function hostManagedListenerConfig(
 
 /**
  * Listeners the host runs itself: this server process, a program started from a managed root
- * (checked on argv[0] and argv[1], so `python3 /root/bin/tool` counts too), or a declared platform
- * port whose owner is invisible. A pid-less listener on any other port (a root-run postgres or
+ * (checked on argv[0] and argv[1], so `python3 /root/bin/tool` counts too) or its direct child, or a
+ * declared platform port whose owner is invisible. A pid-less listener on any other port (a root-run postgres or
  * Docker-published port) is still the user's.
  */
 export function isHostManagedListener(
   port: Pick<RawListeningPort, 'pid' | 'commandLine' | 'port'>,
   config: HostManagedListenerConfig,
-  serverPid: number = process.pid
+  serverPid: number = process.pid,
+  readParent: (pid: number) => ParentProcess | undefined = readLinuxParentProcess
 ): boolean {
   if (port.pid === undefined) {
     return config.unownedPorts.has(port.port)
@@ -43,12 +45,46 @@ export function isHostManagedListener(
   if (port.pid === serverPid) {
     return true
   }
-  if (config.roots.length === 0 || !port.commandLine) {
+  if (config.roots.length === 0) {
     return false
   }
-  return port.commandLine
+  if (startedFromRoot(port.commandLine, config.roots)) {
+    return true
+  }
+  // A managed tool's direct child (agent-browser's Chrome DevTools port). The server itself is
+  // excluded as a parent: it spawns the user's terminals.
+  const parent = readParent(port.pid)
+  return (
+    parent !== undefined &&
+    parent.pid !== serverPid &&
+    startedFromRoot(parent.commandLine, config.roots)
+  )
+}
+
+export type ParentProcess = { pid: number; commandLine: string }
+
+function startedFromRoot(commandLine: string | undefined, roots: readonly string[]): boolean {
+  return (commandLine ?? '')
     .trim()
     .split(/\s+/)
     .slice(0, 2)
-    .some((token) => config.roots.some((root) => token === root || token.startsWith(`${root}/`)))
+    .some((token) => roots.some((root) => token === root || token.startsWith(`${root}/`)))
+}
+
+function readLinuxParentProcess(pid: number): ParentProcess | undefined {
+  if (process.platform !== 'linux') {
+    return undefined
+  }
+  try {
+    // /proc/<pid>/stat: "pid (comm) state ppid ..."; comm may contain spaces or parens.
+    const stat = readFileSync(`/proc/${pid}/stat`, 'utf8')
+    const ppid = Number(stat.slice(stat.lastIndexOf(')') + 2).split(' ')[1])
+    if (!Number.isInteger(ppid) || ppid <= 1) {
+      return undefined
+    }
+    const commandLine = readFileSync(`/proc/${ppid}/cmdline`, 'utf8').split('\0').join(' ').trim()
+    return { pid: ppid, commandLine }
+  } catch {
+    return undefined
+  }
 }
