@@ -145,6 +145,76 @@ describe('Tasks lists kept on the phone', () => {
     expect(setError).not.toHaveBeenCalled()
   })
 
+  it('shows the spinner for a new search instead of the previous search rows', async () => {
+    const issue: TaskItem = {
+      key: 'github:repo-1:21204',
+      provider: 'github',
+      title: '[Feature]: Expose browser tabs',
+      subtitle: 'orca #21204',
+      status: 'open',
+      updatedAt: '2026-11-10T06:51:00.000Z',
+      source: {
+        id: 'issue-21204',
+        type: 'issue',
+        number: 21204,
+        title: '[Feature]: Expose browser tabs',
+        state: 'open',
+        url: 'https://github.com/stablyai/orca/issues/21204',
+        labels: [],
+        updatedAt: '2026-11-10T06:51:00.000Z',
+        author: 'octocat',
+        repoId: 'repo-1'
+      }
+    }
+    const openIssues = { provider: 'github', kind: 'issues', query: 'is:issue is:open', repos: '' }
+    const bugSearch = { ...openIssues, query: 'is:issue is:open [Bug]' }
+    const setLoading = vi.fn()
+    const cache: { current?: ReturnType<typeof useTaskListCache> } = {}
+    function Probe() {
+      cache.current = useTaskListCache({
+        hostId: HOST,
+        items: [issue],
+        jiraConnection: {
+          connected: false,
+          sites: [],
+          selection: null,
+          credentialError: null,
+          unavailableReason: null
+        },
+        provider: 'github',
+        taskUiReady: true,
+        setItems: vi.fn(),
+        setError: vi.fn(),
+        setGithubPages: vi.fn(),
+        setGithubCurrentPage: vi.fn(),
+        setGithubRepoSources: vi.fn(),
+        setGithubSourceErrors: vi.fn(),
+        setGithubSourceFallbacks: vi.fn(),
+        setGithubCountedTotalPages: vi.fn(),
+        setLoading,
+        setTaskListSettled: vi.fn()
+      })
+      return null
+    }
+    await act(async () => {
+      create(
+        createElement(QueryClientProvider, { client: new QueryClient() }, createElement(Probe))
+      )
+      await vi.runAllTimersAsync()
+    })
+    act(() => cache.current!.shown('github', openIssues))
+
+    act(() => cache.current!.begin(bugSearch, 'github'))
+    expect(setLoading).toHaveBeenCalledWith(true)
+    expect(cache.current!.revalidating).toBe(false)
+
+    act(() => cache.current!.shown('github', bugSearch))
+    setLoading.mockClear()
+    act(() => cache.current!.begin(bugSearch, 'github'))
+    expect(setLoading).not.toHaveBeenCalled()
+    expect(cache.current!.revalidating).toBe(true)
+  })
+
   it('keeps agent launch commands and hook trust out of the stored hydration', async () => {
     const store = memoryStore(HOST)
     await storeFromEarlierLaunch(store, [

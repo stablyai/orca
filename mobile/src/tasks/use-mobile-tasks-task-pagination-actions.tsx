@@ -150,7 +150,7 @@ export function useMobileTasksTaskPaginationActions(model: TaskListLoadingModel)
     !githubCountedTotalPages &&
     (provenPageLimit === null || githubPages.length < provenPageLimit) &&
     hasRepoWithFullPage(githubPages.at(-1) ?? [], githubPerRepoLimit)
-  // Kept or previous-filter pages stand in while the list re-reads; paging from them would mix filters.
+  // A filter's kept pages stand in while it re-reads; paging from them would mix old and new rows.
   const githubCanShowPagination =
     !revalidating &&
     (githubTotalPages > 1 || (githubPages.length > 0 && githubCanLoadUncountedNextPage))
