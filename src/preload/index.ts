@@ -92,9 +92,11 @@ import { cursorAccountsApi } from './api/cursor-accounts-bridge'
 import { sshApi } from './api/ssh-bridge'
 import { plainSshTerminalApi } from './api/plain-ssh-terminal-bridge'
 import { runtimeDownloadsApi } from './api/runtime-downloads-bridge'
+import { cloudSyncApi } from './api/cloud-sync-bridge'
 import { agentApiKeysApi } from './api/agent-api-keys-bridge'
 import { cloudApiBridge } from './api/cloud-api-bridge'
 import { cloudSecretsApi } from './api/cloud-secrets-bridge'
+import { localCommandsApi } from './api/local-commands-bridge'
 import { orcaCloudAgentsApi } from './api/orca-cloud-agents-bridge'
 import { sshAgentSignInApi } from './api/ssh-agent-sign-in-bridge'
 import { legacyRelayBridgeApi } from './api/legacy-relay-bridge-api'
@@ -209,9 +211,11 @@ const api = {
   ssh: sshApi,
   plainSsh: plainSshTerminalApi,
   runtimeDownloads: runtimeDownloadsApi,
+  cloudSync: cloudSyncApi,
   agentApiKeys: agentApiKeysApi,
   cloudApi: cloudApiBridge,
   cloudSecrets: cloudSecretsApi,
+  localCommands: localCommandsApi,
   orcaCloudAgents: orcaCloudAgentsApi,
   sshAgentSignIn: sshAgentSignInApi,
   legacyRelayBridge: legacyRelayBridgeApi,

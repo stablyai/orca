@@ -23,6 +23,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
+import { useReservePaneTopSpace } from '../terminal-pane/appearance/pane-top-banner/PaneTopWarningBanner'
 import type {
   CloudStripModel,
   CloudStripPrimary,
@@ -69,11 +70,15 @@ function useLiveStripWidth(
  * buttons stay visible and clickable while it shows (RA-1). The pane and its fixture share it.
  */
 export function CloudStripLayer({ children }: { children: React.ReactNode }): React.JSX.Element {
+  // A pane-top banner (RA-11): the pane reserves its height and the terminal refits below it, so
+  // no row sits under the strip. The spacer keeps it below a chromeless pane's title-row buttons.
+  const ref = useReservePaneTopSpace()
   return (
-    <div
-      data-cloud-strip-layer
-      className="absolute inset-x-0 top-[var(--orca-pane-title-height,24px)] z-20"
-    >
+    <div ref={ref} data-cloud-strip-layer className="pane-top-banner">
+      <div
+        aria-hidden
+        className="pointer-events-none h-[var(--orca-pane-title-height,24px)] [.pane[data-has-title]_&]:hidden"
+      />
       {children}
     </div>
   )
@@ -217,7 +222,11 @@ export function CloudAgentSignInStrip({
             }}
           >
             <Input
-              aria-label={t('agentSignInStrip.pasteLabel', 'Code from claude.ai')}
+              aria-label={
+                model.paste.secretLabel ?? t('agentSignInStrip.pasteLabel', 'Code from claude.ai')
+              }
+              type={model.paste.secretLabel ? 'password' : undefined}
+              autoComplete={model.paste.secretLabel ? 'off' : undefined}
               aria-invalid={model.paste.refusal ? true : undefined}
               value={code}
               onChange={(event) => setCode(event.target.value)}
@@ -237,6 +246,10 @@ export function CloudAgentSignInStrip({
         {primary ? (
           <Button
             type="button"
+            // The short label still names what it does for a screen reader.
+            aria-label={
+              (width === 'tiny' || compact) && primary.narrowLabel ? primary.label : undefined
+            }
             size="xs"
             variant={model.status === 'error' ? 'outline' : 'default'}
             aria-busy={primary.busy || undefined}
@@ -281,13 +294,17 @@ export function CloudAgentSignInStrip({
             </DropdownMenuContent>
           </DropdownMenu>
         ) : null}
-        {/* Renew is the whole action and the strip leaves on its own; Escape still cancels. */}
-        {model.status === 'done' || primary?.action.kind === 'renew' ? null : (
+        {/* Renew and Restart are the whole action and the strip leaves on its own; Escape still cancels. */}
+        {model.noClose ||
+        (!model.dismiss &&
+          (model.status === 'done' ||
+            primary?.action.kind === 'renew' ||
+            primary?.action.kind === 'restart')) ? null : (
           <Button
             type="button"
             variant="ghost"
             size="icon-xs"
-            aria-label={t('agentSignInStrip.cancel', 'Cancel sign-in (Esc)')}
+            aria-label={model.dismiss ?? t('agentSignInStrip.cancel', 'Cancel sign-in (Esc)')}
             onClick={actions.cancel}
           >
             <X aria-hidden />

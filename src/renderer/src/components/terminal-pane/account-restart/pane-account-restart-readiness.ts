@@ -1,5 +1,7 @@
 import type { AppState } from '@/store/types'
 import { isClaudePaneMidTurn } from '@/lib/agent-session/accounts/claude/claude-session-account-move'
+// RA-11: a Restart clicked on the Orca Cloud sign-in strip runs even though Claude reports 'blocked'.
+import { isForcedCloudAgentRestart } from '@/lib/orca-cloud/cloud-agent-restart-attempt'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 
 /** PTYs whose queued account restart can run now: Codex at once, this tab's Claude once its turn ends. */
@@ -8,7 +10,10 @@ export function selectReadyAccountRestartPtyIds(state: AppState, tabId: string):
   const ready = Object.keys(pending).filter((ptyId) => pending[ptyId] === 'codex')
   const ptyIdsByLeafId = state.terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId ?? {}
   for (const [leafId, ptyId] of Object.entries(ptyIdsByLeafId)) {
-    if (pending[ptyId] === 'claude' && !isClaudePaneMidTurn(state, makePaneKey(tabId, leafId))) {
+    if (
+      pending[ptyId] === 'claude' &&
+      (!isClaudePaneMidTurn(state, makePaneKey(tabId, leafId)) || isForcedCloudAgentRestart(ptyId))
+    ) {
       ready.push(ptyId)
     }
   }
@@ -25,6 +30,7 @@ export function isAccountRestartReady(
   const queued = state.pendingPaneAccountRestarts[ptyId]
   return (
     queued === 'codex' ||
-    (queued === 'claude' && !isClaudePaneMidTurn(state, makePaneKey(tabId, leafId)))
+    (queued === 'claude' &&
+      (!isClaudePaneMidTurn(state, makePaneKey(tabId, leafId)) || isForcedCloudAgentRestart(ptyId)))
   )
 }

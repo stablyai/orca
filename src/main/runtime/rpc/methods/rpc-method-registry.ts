@@ -35,6 +35,7 @@ import { COMPUTER_METHODS } from './computer/computer'
 import { SESSION_TAB_METHODS } from './session-tabs/session-tabs'
 import { NATIVE_CHAT_METHODS } from './native-chat/native-chat'
 import { FILE_METHODS } from './files/files'
+import { FILE_STAT_MANY_METHODS } from './files/files-stat-many-methods'
 import { GIT_METHODS } from './source-control/git/git'
 import { GITHUB_METHODS } from './source-control/github/github'
 import { GITLAB_METHODS } from './source-control/gitlab/gitlab'
@@ -48,6 +49,7 @@ import { RECIPE_VM_WAKE_METHODS } from './host-management/recipe-vm-wake'
 import { ORCA_CLOUD_DEVICE_ENROLLMENT_METHODS } from './orca-cloud/orca-cloud-device-enrollment'
 import { CLOUD_SSH_METHODS } from './cloud-ssh/cloud-ssh-methods'
 import { SECRET_REQUEST_METHODS } from './secrets/secret-requests'
+import { LOCAL_COMMAND_METHODS } from './local-commands/local-command-methods'
 import { ENVIRONMENT_DOCTOR_METHODS } from './host-management/environment-doctor'
 import { CLOUD_ENVIRONMENT_METHODS_RPC } from './cloud-environments/cloud-environments'
 import { SPEECH_METHODS } from './speech/speech'
@@ -140,6 +142,7 @@ export const ALL_RPC_METHODS = [
   ...(ORCA_LAYOUT_OWNER_IS_MAIN ? [...LAYOUT_APPLY_METHODS, ...LAYOUT_VIEW_REPORT_METHODS] : []),
   ...NATIVE_CHAT_METHODS,
   ...FILE_METHODS,
+  ...FILE_STAT_MANY_METHODS,
   ...GIT_METHODS,
   ...GITHUB_METHODS,
   ...GITLAB_METHODS,
@@ -152,6 +155,7 @@ export const ALL_RPC_METHODS = [
   ...RECIPE_VM_WAKE_METHODS,
   ...ORCA_CLOUD_DEVICE_ENROLLMENT_METHODS,
   ...SECRET_REQUEST_METHODS,
+  ...LOCAL_COMMAND_METHODS,
   ...CLOUD_SSH_METHODS,
   ...ENVIRONMENT_DOCTOR_METHODS,
   ...CLOUD_ENVIRONMENT_METHODS_RPC,

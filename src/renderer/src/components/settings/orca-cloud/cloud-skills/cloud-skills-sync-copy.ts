@@ -178,7 +178,69 @@ export function cloudSkillsRowToggleable(row: AgentConfigSyncRow): boolean {
   return !key || !FIXED_SKIPS.has(key)
 }
 
-export type CloudSkillsEntry = { row: AgentConfigSyncRow; copies: AgentConfigSyncRow[] }
+export type CloudSkillsEntry = {
+  row: AgentConfigSyncRow
+  /** The same skill (same name and content) in the other agent's folder: shown on this row. */
+  twins: AgentConfigSyncRow[]
+  copies: AgentConfigSyncRow[]
+}
+
+/** Rows a group's count covers: the entry, its twins and its copies. */
+export function cloudSkillsEntryCount(entries: readonly CloudSkillsEntry[]): number {
+  return entries.reduce((sum, entry) => sum + 1 + entry.twins.length + entry.copies.length, 0)
+}
+
+/** Keys one row's switch changes: the row and its twins. */
+export function cloudSkillsEntryKeys(entry: CloudSkillsEntry): string[] {
+  return [entry.row.key, ...entry.twins.map((twin) => twin.key)]
+}
+
+/** "Claude skill, Codex skill" for a row that stands for both agents' copies. */
+export function cloudSkillsEntryKindLabel(
+  entry: CloudSkillsEntry,
+  t: Translate = translate
+): string {
+  return (
+    [entry.row, ...entry.twins]
+      // Claude first, then Codex, whatever order the folders were read in.
+      .sort(
+        (a, b) =>
+          Number(agentOfKind(a.kind) !== 'claude') - Number(agentOfKind(b.kind) !== 'claude')
+      )
+      .map((row) => cloudSkillsKindLabel(row, t))
+      .join(', ')
+  )
+}
+
+/** One skill installed for both agents (identical content, same state) reads as one row. */
+function mergeTwins(entries: CloudSkillsEntry[]): CloudSkillsEntry[] {
+  const merged: CloudSkillsEntry[] = []
+  const byKey = new Map<string, CloudSkillsEntry>()
+  for (const entry of entries) {
+    const { row } = entry
+    const twinKey =
+      isSkillKind(row.kind) && row.digest
+        ? [
+            row.scope,
+            row.name,
+            row.digest,
+            row.state,
+            row.state === 'synced' ? '' : (row.outcome ?? row.skipReason ?? '')
+          ].join('\0')
+        : null
+    const host = twinKey ? byKey.get(twinKey) : undefined
+    if (host && agentOfKind(host.row.kind) !== agentOfKind(row.kind)) {
+      host.twins.push(row)
+      host.copies.push(...entry.copies)
+      continue
+    }
+    if (twinKey && !host) {
+      byKey.set(twinKey, entry)
+    }
+    merged.push(entry)
+  }
+  return merged
+}
 export type CloudSkillsGroups = {
   synced: CloudSkillsEntry[]
   pending: CloudSkillsEntry[]
@@ -202,7 +264,11 @@ export function cloudSkillsGroupRows(rows: readonly AgentConfigSyncRow[]): Cloud
     if (row.convertedFrom && originals.has(row.convertedFrom)) {
       continue
     }
-    const entry = { row, copies: (copies.get(row.key) ?? []).sort(byName) }
+    const entry: CloudSkillsEntry = {
+      row,
+      twins: [],
+      copies: (copies.get(row.key) ?? []).sort(byName)
+    }
     const group =
       row.state === 'synced'
         ? groups.synced
@@ -211,6 +277,9 @@ export function cloudSkillsGroupRows(rows: readonly AgentConfigSyncRow[]): Cloud
           : groups.notSynced
     group.push(entry)
   }
+  groups.synced = mergeTwins(groups.synced)
+  groups.pending = mergeTwins(groups.pending)
+  groups.notSynced = mergeTwins(groups.notSynced)
   // Ones a switch can turn back on come before skips nothing here can fix.
   groups.notSynced.sort(
     (a, b) =>

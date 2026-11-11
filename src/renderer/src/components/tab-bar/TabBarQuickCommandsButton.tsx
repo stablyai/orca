@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { Play } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { getTerminalQuickCommandHostPromptMaxLength } from '@/lib/terminal-quick-command-host-prompt-limit'
@@ -23,9 +23,15 @@ import {
   type HostedTerminalQuickCommand,
   useTerminalQuickCommandHosts
 } from '@/hooks/use-terminal-quick-command-hosts'
-import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host'
 import { useProjectHostSetupProjection } from '@/store/projects/use-project-host-setup-projection'
 import { terminalQuickCommandMatchesWorkspaceProject } from '@/lib/terminal-quick-command-project-scope'
+import { useCloudSuggestedRunCommands } from '@/hooks/use-cloud-suggested-run-commands'
+import { isOrcaCloudRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/orca-cloud-environment-name'
 
 type TabBarQuickCommandsButtonProps = {
   worktreeId: string
@@ -45,6 +51,27 @@ export function TabBarQuickCommandsButton({
   const { executionHostId, hosts, refreshRemoteHost, remoteHostLoadFailed, remoteHostPending } =
     useTerminalQuickCommandHosts(worktreeId)
   const confirm = useConfirmationDialog()
+  // A cloud workspace's only host is its sandbox; its package.json scripts are suggested there.
+  const cloudEnvironmentId = useAppStore((state) => {
+    const parsed = parseExecutionHostId(executionHostId)
+    if (parsed?.kind !== 'runtime') {
+      return null
+    }
+    const environment = state.runtimeEnvironments.find((e) => e.id === parsed.environmentId)
+    return environment && isOrcaCloudRuntimeEnvironment(environment) ? environment.id : null
+  })
+  const cloudHost =
+    cloudEnvironmentId && hosts.length === 1 && hosts[0].hostId === executionHostId
+      ? { hostId: hosts[0].hostId, label: hosts[0].label, environmentId: cloudEnvironmentId }
+      : null
+  const { commands: suggestedCommands, refresh: refreshSuggestions } = useCloudSuggestedRunCommands(
+    worktreeId,
+    cloudHost
+  )
+  const handleMenuOpen = useCallback((): void => {
+    refreshRemoteHost()
+    refreshSuggestions()
+  }, [refreshRemoteHost, refreshSuggestions])
   // Floating terminals have a synthetic workspace ID without a repo; never treat that sentinel as a run target.
   const repoId = useMemo(() => {
     if (worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
@@ -77,8 +104,19 @@ export function TabBarQuickCommandsButton({
         repoList.push(entry)
       }
     }
+    // Suggested scripts the user hasn't already saved as a command (same command line).
+    const saved = new Set(
+      [...repoList, ...globalList].map((entry) =>
+        'command' in entry.command ? entry.command.command.trim() : ''
+      )
+    )
+    for (const entry of suggestedCommands) {
+      if ('command' in entry.command && !saved.has(entry.command.command)) {
+        repoList.push(entry)
+      }
+    }
     return { repoCommands: repoList, globalCommands: globalList }
-  }, [executionHostId, hosts, projectHostSetupProjection.setups, repoId])
+  }, [executionHostId, hosts, projectHostSetupProjection.setups, repoId, suggestedCommands])
 
   const recentId = recentByGroup[groupId] ?? null
   // Prefer group history across scopes, then the first repo command, then a global command.
@@ -168,6 +206,8 @@ export function TabBarQuickCommandsButton({
             <button
               type="button"
               onClick={() => addRepoCommand(defaultHostId)}
+              // A package.json added since the last read turns this into the suggestions menu.
+              onPointerEnter={refreshSuggestions}
               className="my-auto flex h-7 shrink-0 items-center gap-1 rounded-md px-1.5 text-muted-foreground hover:bg-accent/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               aria-label={t(
                 'auto.components.tab.bar.TabBarQuickCommandsButton.8f1e971966',
@@ -210,7 +250,7 @@ export function TabBarQuickCommandsButton({
         addHosts={hosts}
         hostLoadFailed={remoteHostLoadFailed}
         hostOwnershipPending={remoteHostPending}
-        onMenuOpen={refreshRemoteHost}
+        onMenuOpen={handleMenuOpen}
         onAddCommand={addRepoCommand}
         onEditCommand={(entry) =>
           setEditor({ mode: 'edit', command: entry.command, hostId: entry.hostId })

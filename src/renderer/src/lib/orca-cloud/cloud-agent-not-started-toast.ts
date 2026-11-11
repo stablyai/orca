@@ -6,18 +6,12 @@
 // - "Set up Claude once" runs the S0 sign-in right from the toast: Claude via setup-token in the
 //   browser, Codex via a device code. The toast shows progress and errors, with Try again.
 // - It clears itself as soon as the account turns active.
-import { toast } from 'sonner'
+import { hideCloudToast, showCloudToast } from '@/components/orca-cloud/cloud-toast-stack'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
-import { openOrcaCloudAgentAccounts } from '@/components/new-workspace/OrcaCloudAgentSetupRow'
-import {
-  agentName,
-  setupFailureCopy
-} from '@/components/settings/agent-accounts/orca-cloud-accounts-copy'
-import type {
-  OrcaCloudAccountAgent,
-  OrcaCloudAgentSetup
-} from '../../../../shared/orca-cloud-agents/orca-cloud-agents-wire'
+import { agentName } from '@/components/settings/agent-accounts/orca-cloud-accounts-copy'
+import type { OrcaCloudAccountAgent } from '../../../../shared/orca-cloud-agents/orca-cloud-agents-wire'
+import { cloudAgentSignInView, type ToastView } from './cloud-agent-sign-in-view'
 import { orcaCloudAgentCoverageFromAccounts } from './orca-cloud-agent-accounts-model'
 import {
   readOrcaCloudAgentAccounts,
@@ -66,103 +60,12 @@ export function isCloudAgentCovered(agent: OrcaCloudAccountAgent): boolean {
   return coverage?.kind === 'account' || coverage?.kind === 'key'
 }
 
-type ToastView = {
-  message: string
-  description?: string
-  action?: { label: string; run: () => void }
-}
-
-function deviceHost(url: string): string {
-  try {
-    return new URL(url).hostname
-  } catch {
-    return url
-  }
-}
-
-/** What the toast says while the S0 sign-in runs; null while it is idle (the plain prompt). */
-export function cloudAgentSignInView(
-  agent: OrcaCloudAccountAgent,
-  setup: OrcaCloudAgentSetup
-): ToastView | null {
-  const api = globalThis.window?.api?.orcaCloudAgents
-  const name = agentName(agent, translate)
-  switch (setup.phase) {
-    case 'idle':
-    case 'saved':
-      return null
-    case 'browser':
-      return {
-        message: translate(
-          'components.newWorkspace.cloudStart.signInBrowser',
-          'Finish signing in to {{agent}} in your browser…',
-          { agent: name }
-        ),
-        // Every phase has a button: an updated toast keeps the last one otherwise.
-        action: setup.canReopen
-          ? {
-              label: translate('orcaCloudAccounts.openAgain', 'Open again'),
-              run: () => void api?.reopen({ agent })
-            }
-          : {
-              label: translate('orcaCloudAccounts.cancel', 'Cancel'),
-              run: () => void api?.cancel({ agent })
-            }
-      }
-    case 'preparing':
-      return {
-        message: translate('orcaCloudAccounts.preparing', 'Getting ChatGPT sign-in ready'),
-        action: {
-          label: translate('orcaCloudAccounts.cancel', 'Cancel'),
-          run: () => void api?.cancel({ agent })
-        }
-      }
-    case 'device':
-      return {
-        message: translate(
-          'components.newWorkspace.cloudStart.signInDevice',
-          'Enter {{code}} at {{host}} to sign in to {{agent}}.',
-          { code: setup.userCode, host: deviceHost(setup.verificationUrl), agent: name }
-        ),
-        action: {
-          label: translate('components.newWorkspace.cloudStart.copyCode', 'Copy code'),
-          run: () => void window.api.ui.writeClipboardText(setup.userCode).catch(() => {})
-        }
-      }
-    case 'paste':
-      // The token goes in Settings' masked field, never in a toast.
-      return {
-        message: translate(
-          'components.newWorkspace.cloudStart.signInPaste',
-          'Paste the {{agent}} setup token in Settings to finish.',
-          { agent: name }
-        ),
-        action: {
-          label: translate('components.newWorkspace.cloudStart.openSettings', 'Open Settings'),
-          run: openOrcaCloudAgentAccounts
-        }
-      }
-    case 'saving':
-      return {
-        message: translate('components.newWorkspace.cloudStart.signInSaving', 'Saving…')
-      }
-    case 'failed': {
-      const copy = setupFailureCopy(agent, setup.error, translate)
-      return {
-        message: copy.title,
-        ...(copy.detail ? { description: copy.detail } : {}),
-        action: {
-          label: translate('orcaCloudAccounts.tryAgain', 'Try again'),
-          run: () => void api?.start({ agent })
-        }
-      }
-    }
-  }
-}
+/** A create counts as this toast's when it started at most this long before the toast was asked for. */
+const CREATION_MATCH_SLACK_MS = 5_000
 
 export function showCloudAgentNotStartedToast(
   agent: OrcaCloudAccountAgent,
-  workspaceName: string,
+  requestedName: string,
   {
     onlyWhenAway = false
   }: {
@@ -175,18 +78,55 @@ export function showCloudAgentNotStartedToast(
 ): void {
   teardown?.()
   const name = agentName(agent, translate)
+  const askedAt = Date.now()
+  // The create this prompt is about: the one with the requested name, else the newest create started
+  // around this call (the name is often generated later, e.g. an empty name becomes "chinook").
+  // Once found it is followed by id, and its real name is the one the toast shows.
+  let creationId: string | null = null
+  let workspaceName = requestedName.trim()
+  const creationFor = (state: ReturnType<typeof useAppStore.getState>) => {
+    const creations = Object.values(state.pendingWorktreeCreations ?? {})
+    if (creationId) {
+      return creations.find((creation) => creation.creationId === creationId)
+    }
+    const found =
+      creations.find((creation) => workspaceName && creation.request.name === workspaceName) ??
+      creations
+        .filter((creation) => creation.startedAt >= askedAt - CREATION_MATCH_SLACK_MS)
+        .sort((a, b) => b.startedAt - a.startedAt)[0]
+    if (found) {
+      creationId = found.creationId
+      workspaceName = found.request.name.trim() || workspaceName
+    }
+    return found
+  }
   // The workspace this prompt is about is still being created (its sandbox is starting).
   const isStarting = (state: ReturnType<typeof useAppStore.getState>): boolean =>
-    Object.values(state.pendingWorktreeCreations ?? {}).some(
-      (creation) => creation.status === 'creating' && creation.request.name === workspaceName
-    )
+    creationFor(state)?.status === 'creating'
+  // DS-p: the prompt is about a workspace that exists. It waits until the sandbox is up (the create
+  // moved past provisioning, or finished); a refused create (e.g. the team's running limit) never
+  // shows it, only its own error.
+  let sandboxUp = false
+  let sawCreation = false
+  const settle = (state: ReturnType<typeof useAppStore.getState>): 'up' | 'refused' | 'waiting' => {
+    const creation = creationFor(state)
+    if (creation) {
+      sawCreation = true
+      if (creation.status === 'error') {
+        return 'refused'
+      }
+      return creation.phase === 'fetching' || creation.phase === 'creating' ? 'up' : 'waiting'
+    }
+    // Gone from the pending list without an error: the workspace was created.
+    return sawCreation ? 'up' : 'waiting'
+  }
   let switchedAway = false
   const render = (): void => {
     const signIn = cloudAgentSignInView(agent, readOrcaCloudAgentAccounts().setups[agent])
     const view: ToastView = signIn ?? {
       message: cloudAgentNotStartedMessage(
         name,
-        switchedAway && workspaceName.trim() ? workspaceName : null,
+        switchedAway && workspaceName ? workspaceName : null,
         { starting: isStarting(useAppStore.getState()) }
       ),
       action: {
@@ -195,48 +135,79 @@ export function showCloudAgentNotStartedToast(
           'Set up {{agent}} once',
           { agent: name }
         ),
+        primary: true,
         run: () => void globalThis.window?.api?.orcaCloudAgents?.start({ agent })
       }
     }
-    toast.message(view.message, {
-      id: TOAST_ID,
-      ...(view.description ? { description: view.description } : {}),
-      // Persistent (PC-3): it stays until the user acts on it, closes it, or the account is active.
-      duration: Number.POSITIVE_INFINITY,
-      closeButton: true,
-      ...(view.action
-        ? {
-            action: {
-              label: view.action.label,
-              onClick: (event: { preventDefault: () => void }) => {
-                // Keep the toast: it turns into the sign-in's progress.
-                event.preventDefault()
-                view.action?.run()
-              }
-            }
+    // The shared cloud toast (DS-q): same chrome as the push notice, and as an action-required
+    // prompt it sits on top of the stack. Updating the same id keeps its place and state.
+    showCloudToast(
+      TOAST_ID,
+      {
+        priority: 'action',
+        lines: [
+          {
+            key: 'agent',
+            text: view.message,
+            ...(view.description ? { description: view.description } : {}),
+            ...(view.action
+              ? {
+                  action: {
+                    label: view.action.label,
+                    primary: view.action.primary === true,
+                    // Keeps the toast: it turns into the sign-in's progress.
+                    onClick: () => view.action?.run()
+                  }
+                }
+              : {})
           }
-        : {}),
-      // A close by the user ends it; a hide on returning to the workspace (onlyWhenAway) doesn't.
-      onDismiss: () => {
-        if (!onlyWhenAway || switchedAway) {
-          teardown?.()
+        ]
+      },
+      {
+        // Only a close by the user ends it; a hide on returning to the workspace doesn't.
+        onDismiss: () => {
+          if (!onlyWhenAway || switchedAway) {
+            teardown?.()
+          }
         }
       }
-    })
+    )
   }
   const update = (): void => {
+    if (!sandboxUp) {
+      return
+    }
     if (onlyWhenAway && !switchedAway) {
-      toast.dismiss(TOAST_ID)
+      hideCloudToast(TOAST_ID)
       return
     }
     render()
   }
-  update()
+  const checkCreation = (state: ReturnType<typeof useAppStore.getState>): boolean => {
+    if (sandboxUp) {
+      return true
+    }
+    const result = settle(state)
+    if (result === 'refused') {
+      hideCloudToast(TOAST_ID)
+      teardown?.()
+      return false
+    }
+    if (result === 'up') {
+      sandboxUp = true
+      update()
+    }
+    return true
+  }
+  checkCreation(useAppStore.getState())
 
   // The create activates the new workspace (first change); any later change means the user moved.
   let createdOn: string | null | undefined
   let starting = isStarting(useAppStore.getState())
   const stopWorkspace = useAppStore.subscribe((state, previous) => {
+    if (!checkCreation(state)) {
+      return
+    }
     const nowStarting = isStarting(state)
     if (nowStarting !== starting) {
       starting = nowStarting
@@ -258,7 +229,7 @@ export function showCloudAgentNotStartedToast(
   let lastPhase = readOrcaCloudAgentAccounts().setups[agent].phase
   const stopAccounts = subscribeOrcaCloudAgentAccounts(() => {
     if (isCloudAgentCovered(agent)) {
-      toast.dismiss(TOAST_ID)
+      hideCloudToast(TOAST_ID)
       teardown?.()
       return
     }

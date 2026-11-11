@@ -3,6 +3,7 @@ import type { WorkspacePort } from '../../../../shared/workspace-ports'
 import type { RuntimePortForward } from '../../../../shared/runtime-port-forwards'
 import { LocalPortSection } from './local-port-section'
 import { RuntimeForwardedPortsSection } from './runtime-forwarded-ports-section'
+import { SharedLinksList } from './cloud-share/shared-links-list'
 import {
   RuntimePortForwardStatus,
   type RuntimePortForwardRowState
@@ -112,6 +113,25 @@ function Panel({ empty = false }: { empty?: boolean }): React.JSX.Element {
 
 export const allStates = defineFixture({ width: 300, render: () => <Panel /> })
 export const noPorts = defineFixture({ width: 300, render: () => <Panel empty /> })
+/** Orca Cloud with no ports: one inline empty line under Active Workspace, then Shared links; no centered empty state. */
+export const cloudNoPorts = defineFixture({
+  width: 300,
+  render: () => (
+    <div className="w-[280px] bg-background text-foreground">
+      <Panel empty />
+      <SharedLinksList
+        status="ready"
+        shares={[]}
+        now={0}
+        onShare={() => {}}
+        onRetry={() => {}}
+        onCopy={async () => true}
+        onOpen={() => {}}
+        onRevoke={async () => true}
+      />
+    </div>
+  )
+})
 export const hostOffline = defineFixture({
   width: 300,
   render: () => (

@@ -1,8 +1,17 @@
 import React, { useContext } from 'react'
 import { toast } from 'sonner'
-import { Archive, ArchiveRestore, Link2, Lock, RotateCw, Users } from 'lucide-react'
+import {
+  Archive,
+  ArchiveRestore,
+  HardDriveDownload,
+  Link2,
+  Lock,
+  RotateCw,
+  Users
+} from 'lucide-react'
 import { DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import { useTranslate } from '@/i18n/use-translate'
+import { isCloudSyncAvailable, requestCloudSyncFocus } from '@/lib/orca-cloud/cloud-sync-store'
 import {
   ConfirmationDialogContext,
   type ConfirmationDialogContextValue
@@ -75,6 +84,12 @@ function CloudMenuRows({
         <DropdownMenuItem disabled={busy} onSelect={actions.onRestart}>
           <RotateCw className="size-3.5" />
           {t('orcaCloudWorkspace.restart', 'Restart')}
+        </DropdownMenuItem>
+      ) : null}
+      {isCloudSyncAvailable() && view.state !== 'archived' ? (
+        <DropdownMenuItem onSelect={() => requestCloudSyncFocus(worktreeId)}>
+          <HardDriveDownload className="size-3.5" />
+          {t('orcaCloudSync.menuItem', 'Mirror to this computer…')}
         </DropdownMenuItem>
       ) : null}
       {has('archive') ? (

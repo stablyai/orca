@@ -1,7 +1,5 @@
-import React, { useEffect, useId, useRef, useState } from 'react'
-import { GitPullRequestArrow, Loader2, Play, TriangleAlert, X } from 'lucide-react'
-import { toast } from 'sonner'
-import { Button } from '@/components/ui/button'
+import React, { useEffect, useRef, useState } from 'react'
+import { GitPullRequestArrow, Loader2, Play } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { environmentCheckCopy } from '@/components/worktree-creation/environment-check-copy'
@@ -19,6 +17,7 @@ import {
   repoSlug,
   runCloudSetupScript
 } from '@/lib/orca-cloud/cloud-setup-notice-actions'
+import { hideCloudToast, showCloudToast, type CloudToastView } from './cloud-toast-stack'
 
 // After Install: GitHub's webhook usually lands within seconds, then the owner may take a while.
 const FAST_POLL_MS = 2_000
@@ -152,13 +151,54 @@ function usePushRecheck(
   }
 }
 
+/** The notices as a shared cloud toast view (DS-q chrome: ⚠ warnings, outline actions). */
+export function cloudSetupNoticesView(
+  record: Pick<CloudSetupNoticesRecord, 'repoUrl' | 'environmentId'>,
+  notices: readonly CloudSetupNotice[],
+  t: Translate,
+  handlers: {
+    installing: boolean
+    install: () => void
+    runSetup: (noticeId: string) => void
+    dismiss: (noticeId: string) => void
+  }
+): CloudToastView {
+  return {
+    priority: 'warning',
+    label: t('orcaCloud.setupNotices.label', 'Workspace setup'),
+    lines: notices.map((notice) => {
+      const line = cloudSetupNoticeLine(notice, record, t, {
+        install: handlers.install,
+        runSetup: () => handlers.runSetup(notice.id),
+        installing: handlers.installing
+      })
+      return {
+        key: notice.id,
+        text: line.text,
+        ...(line.action
+          ? {
+              action: {
+                label: line.action.label,
+                icon: line.action.icon,
+                onClick: line.action.run,
+                ...(line.action.pending ? { pending: true } : {})
+              }
+            }
+          : {}),
+        onDismissLine: () => handlers.dismiss(notice.id)
+      }
+    })
+  }
+}
+
 /**
  * What the environment check found that didn't need to stop the create: one line per problem, one
- * action each, each dismissible. It joins the app's toast stack (DS-o), so it stacks with other
- * toasts (newest on top, same right edge) instead of floating beside them. Shown while its
- * workspace is the active one; leaving the workspace (or its sleep) takes it down again.
+ * action each, each dismissible. It is one of the shared cloud toasts (DS-o/DS-q): it stacks with
+ * the others, a warning below any action-required prompt. Shown while its workspace is the active
+ * one; leaving the workspace (or its sleep) takes it down again.
  */
 export function CloudSetupNoticesDock({ workspaceId }: { workspaceId: string }): null {
+  const t = useTranslate()
   const environmentId = useAppStore(
     (state) => state.ephemeralVmRuntimesByWorkspaceId?.[workspaceId]?.runtimeEnvironmentId
   )
@@ -171,34 +211,30 @@ export function CloudSetupNoticesDock({ workspaceId }: { workspaceId: string }):
   )
   const toastId = environmentId ? cloudSetupToastId(environmentId) : null
   const shown = Boolean(record) && notices.length > 0
-  // Re-rendering the same id updates the toast in place (installing state, a dismissed line).
+  // Showing the same id again updates the toast in place (installing state, a dismissed line).
   useEffect(() => {
     if (!toastId) {
       return
     }
     if (!record || !shown) {
-      toast.dismiss(toastId)
+      hideCloudToast(toastId)
       return
     }
-    cancelPendingDismiss(toastId)
-    toast.custom(
-      () => (
-        <CloudSetupNoticesView
-          record={record}
-          notices={notices}
-          installing={push.installing}
-          onInstall={() => record.repoUrl && push.startInstall(record.repoUrl)}
-          onRunSetup={(noticeId) => void runCloudSetupScript(workspaceId, record, noticeId)}
-          onDismiss={(noticeId) => dismissCloudSetupNotice(record.environmentId, noticeId)}
-        />
-      ),
-      { id: toastId, duration: Infinity, unstyled: true, dismissible: false }
+    cancelPendingHide(toastId)
+    showCloudToast(
+      toastId,
+      cloudSetupNoticesView(record, notices, t, {
+        installing: push.installing,
+        install: () => record.repoUrl && push.startInstall(record.repoUrl),
+        runSetup: (noticeId) => void runCloudSetupScript(workspaceId, record, noticeId),
+        dismiss: (noticeId) => dismissCloudSetupNotice(record.environmentId, noticeId)
+      })
     )
   })
   useEffect(
     () => () => {
       if (toastId) {
-        dismissSoon(toastId)
+        hideSoon(toastId)
       }
     },
     [toastId]
@@ -206,108 +242,29 @@ export function CloudSetupNoticesDock({ workspaceId }: { workspaceId: string }):
   return null
 }
 
-// A remount (StrictMode, a re-keyed surface) re-shows the toast in the same tick. Sonner applies a
-// dismiss a frame later, after that re-show, so dismiss only once nothing has claimed the id back.
-const pendingDismiss = new Map<string, ReturnType<typeof setTimeout>>()
+// A remount (StrictMode, a re-keyed surface) shows the toast again in the same tick, so take it down
+// only once nothing has claimed the id back.
+const pendingHide = new Map<string, ReturnType<typeof setTimeout>>()
 
-function dismissSoon(toastId: string): void {
-  cancelPendingDismiss(toastId)
-  pendingDismiss.set(
+function hideSoon(toastId: string): void {
+  cancelPendingHide(toastId)
+  pendingHide.set(
     toastId,
     setTimeout(() => {
-      pendingDismiss.delete(toastId)
-      toast.dismiss(toastId)
+      pendingHide.delete(toastId)
+      hideCloudToast(toastId)
     }, 0)
   )
 }
 
-function cancelPendingDismiss(toastId: string): void {
-  const timer = pendingDismiss.get(toastId)
+function cancelPendingHide(toastId: string): void {
+  const timer = pendingHide.get(toastId)
   if (timer !== undefined) {
     clearTimeout(timer)
-    pendingDismiss.delete(toastId)
+    pendingHide.delete(toastId)
   }
 }
 
 export function cloudSetupToastId(environmentId: string): string {
   return `cloud-setup:${environmentId}`
-}
-
-export function CloudSetupNoticesView({
-  record,
-  notices,
-  installing,
-  onInstall,
-  onRunSetup,
-  onDismiss
-}: {
-  record: Pick<CloudSetupNoticesRecord, 'repoUrl'>
-  notices: readonly CloudSetupNotice[]
-  installing: boolean
-  onInstall: () => void
-  onRunSetup: (noticeId: string) => void
-  onDismiss: (noticeId: string) => void
-}): React.JSX.Element {
-  const t = useTranslate()
-  const labelId = useId()
-  return (
-    <section
-      role="status"
-      aria-labelledby={labelId}
-      data-cloud-notice="setup"
-      className="w-[var(--width,356px)] max-w-full rounded-lg border border-border bg-card font-sans text-card-foreground shadow-[0_8px_24px_rgba(0,0,0,0.12)] dark:shadow-[0_8px_24px_rgba(0,0,0,0.4)]"
-    >
-      <h2 id={labelId} className="sr-only">
-        {t('orcaCloud.setupNotices.label', 'Workspace setup')}
-      </h2>
-      <ul className="divide-y divide-border">
-        {notices.map((notice) => {
-          const line = cloudSetupNoticeLine(notice, record, t, {
-            install: onInstall,
-            runSetup: () => onRunSetup(notice.id),
-            installing
-          })
-          return (
-            <li
-              key={notice.id}
-              data-cloud-setup-notice={notice.kind}
-              className="flex items-start gap-2.5 px-3 py-2.5"
-            >
-              <TriangleAlert
-                aria-hidden
-                className="mt-0.5 size-3.5 shrink-0 text-status-warning-text"
-              />
-              {/* The sentence reads first; its one action sits under it so neither gets squeezed. */}
-              <div className="flex min-w-0 flex-1 flex-col items-start gap-2">
-                <p className="text-xs leading-5 text-foreground">{line.text}</p>
-                {line.action ? (
-                  <Button
-                    type="button"
-                    size="xs"
-                    variant="outline"
-                    onClick={line.action.pending ? undefined : line.action.run}
-                    aria-disabled={line.action.pending || undefined}
-                    aria-busy={line.action.pending || undefined}
-                  >
-                    {line.action.icon}
-                    {line.action.label}
-                  </Button>
-                ) : null}
-              </div>
-              <Button
-                type="button"
-                size="icon-xs"
-                variant="quiet"
-                className="-mr-1 shrink-0"
-                aria-label={t('orcaCloud.setupNotices.dismiss', 'Dismiss')}
-                onClick={() => onDismiss(notice.id)}
-              >
-                <X />
-              </Button>
-            </li>
-          )
-        })}
-      </ul>
-    </section>
-  )
 }

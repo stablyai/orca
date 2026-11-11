@@ -154,4 +154,12 @@ describe('useTerminalQuickCommandHosts', () => {
       expect(testState.loadRuntimeTerminalQuickCommands).toHaveBeenCalledWith('build')
     }
   )
+
+  it('an Orca Cloud workspace offers only its sandbox, even before its commands load (JA-31)', async () => {
+    testState.runtimeEnvironments = [{ id: 'build', name: 'Hello-World sandbox abcd1234' }]
+    Object.assign(testState.runtimeEnvironments[0], { source: 'ephemeral-vm' })
+    await act(async () => root.render(createElement(Probe)))
+    expect(renderedHosts.map((host) => host.hostId)).toEqual(['runtime:build'])
+    expect(renderedHosts[0]?.commands).toEqual([])
+  })
 })

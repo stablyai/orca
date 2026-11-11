@@ -24,6 +24,10 @@ import { resolveResumeLaunchRecipe } from '../../../../../shared/agent-launch/ch
 import type { AccountRestartAgent } from '@/store/terminals/terminal-contracts'
 import type { ProjectExecutionRuntimeResolution } from '../../../../../shared/execution-host/project-execution-runtime'
 import { resolveAgentLaunchCommand } from '../../../../../shared/agent-launch/startup/tui-agent-launch-command'
+import {
+  isOrcaCloudPane,
+  withOrcaCloudSessionEnv
+} from '@/lib/orca-cloud/cloud-restart-session-env'
 import { resolveStartupShell } from '../../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 
 export type AgentAccountRestartStartup = {
@@ -131,10 +135,21 @@ export function buildPaneAccountRestartStartup(
   ) {
     return null
   }
-  return resume ?? (agent === 'codex' ? buildCodexAccountRestartStartup(args) : null)
+  // RA-11: on Orca Cloud a Claude pane with no session to resume starts a new conversation.
+  const fresh = agent === 'codex' || isOrcaCloudPane(args)
+  const startup = resume ?? (fresh ? buildFreshAccountRestartStartup(agent, args) : null)
+  // Orca Cloud: refresh the shell's session env first, so a renewed account reaches the agent.
+  return startup ? withOrcaCloudSessionEnv(startup, args) : null
 }
 
 export function buildCodexAccountRestartStartup(
+  args: AccountRestartTarget
+): AgentAccountRestartStartup {
+  return buildFreshAccountRestartStartup('codex', args)
+}
+
+function buildFreshAccountRestartStartup(
+  agent: AccountRestartAgent,
   args: AccountRestartTarget
 ): AgentAccountRestartStartup {
   const state = useAppStore.getState()
@@ -144,7 +159,7 @@ export function buildCodexAccountRestartStartup(
     getLocalProjectExecutionRuntimeContext(state, args.worktreeId)
   )
   const command = resolveAgentLaunchCommand({
-    agent: 'codex',
+    agent,
     cmdOverrides: state.settings?.agentCmdOverrides ?? {},
     platform: target.platform,
     agentHostPlatform: target.agentHostPlatform,
@@ -156,7 +171,7 @@ export function buildCodexAccountRestartStartup(
   return {
     command: command.command,
     startupCommandDelivery: 'shell-ready',
-    launchAgent: 'codex'
+    launchAgent: agent
   }
 }
 

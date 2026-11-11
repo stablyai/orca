@@ -29,7 +29,10 @@ export function createAgentLaunchCallerEvidence(
 
 const AGENT_LAUNCH_METHODS: ReadonlySet<string> = new Set(['agent.launch', 'agent.launchReplay'])
 /** Methods where orcad names the calling terminal (and its agent) from the shell's launch evidence. */
-const TERMINAL_CALLER_METHODS: ReadonlySet<string> = new Set(['secrets.request'])
+const TERMINAL_CALLER_METHODS: ReadonlySet<string> = new Set([
+  'secrets.request',
+  'localCommands.request'
+])
 
 /** The caller evidence one request carries, read from this process's environment once. */
 export class OrchestrationRequestEvidence {

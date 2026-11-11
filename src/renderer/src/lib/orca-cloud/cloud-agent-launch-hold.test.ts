@@ -2,6 +2,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { OrcaCloudAgentsStatus } from '../../../../shared/orca-cloud-agents/orca-cloud-agents-wire'
 import {
+  cloudAgentHoldReason,
+  cloudAgentLaunchHoldReason,
   cloudAgentLaunchNeedsHold,
   cloudAgentStripReason,
   holdCloudAgentLaunch,
@@ -95,5 +97,45 @@ describe('cloud agent launch hold', () => {
     await vi.waitFor(() => expect(readCloudAgentHold('tab:c')).not.toBeNull())
     releaseCloudAgentHold('tab:c', 'cancel')
     await expect(held).resolves.toBe('cancel')
+  })
+
+  it('holds a launch whose agent is not set up (PC-3b), and waits for Start, never starting unasked', async () => {
+    setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'none' }))
+    expect(cloudAgentHoldReason('claude', accounts({ state: 'none' }))).toBe('notSetUp')
+    expect(cloudAgentLaunchHoldReason('claude')).toBe('notSetUp')
+    expect(cloudAgentLaunchNeedsHold('claude')).toBe(true)
+    const held = holdCloudAgentLaunch({ paneKey: 'tab:d', agent: 'claude', prompt: 'go' })
+    await vi.waitFor(() =>
+      expect(readCloudAgentHold('tab:d')).toMatchObject({ reason: 'notSetUp' })
+    )
+    // Set up finishes: the strip offers Start; the launch still waits for it.
+    setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'active' }))
+    // Let any subscriber run (zero-delay yields); the hold must still be waiting for Start.
+    for (let i = 0; i < 3; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    }
+    expect(readCloudAgentHold('tab:d')).not.toBeNull()
+    releaseCloudAgentHold('tab:d', 'proceed')
+    await expect(held).resolves.toBe('proceed')
+  })
+
+  it('a key covering the agent never holds it as not set up', () => {
+    expect(cloudAgentHoldReason('claude', accounts({ state: 'none' }, {}, true))).toBeNull()
+  })
+
+  it('tells the composer the hold is unknown while the account read is loading', () => {
+    setOrcaCloudAgentAccountsStateForTest({
+      ...accounts({ state: 'none' }),
+      load: { kind: 'loading' }
+    })
+    expect(cloudAgentLaunchHoldReason('claude')).toBe('unknown')
+  })
+
+  it('a decided hold whose account is already covered starts at once', async () => {
+    setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'active' }))
+    await expect(
+      holdCloudAgentLaunch({ paneKey: 'tab:e', agent: 'claude', prompt: null, decided: true })
+    ).resolves.toBe('proceed')
+    expect(readCloudAgentHold('tab:e')).toBeNull()
   })
 })

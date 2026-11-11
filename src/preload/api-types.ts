@@ -1,6 +1,7 @@
 import type { AgentApiKeysApi } from './api/agent-api-keys-bridge'
 import type { CloudApiBridge } from './api/cloud-api-bridge'
 import type { CloudSecretsApi } from './api/cloud-secrets-bridge'
+import type { LocalCommandsApi } from './api/local-commands-bridge'
 import type { OrcaCloudAgentsApi } from './api/orca-cloud-agents-bridge'
 import type { SshAgentSignInApi } from './api/ssh-agent-sign-in-bridge'
 import type {
@@ -74,6 +75,7 @@ import type { SpeechApi } from './api/speech-api'
 import type { SshApi } from './api/ssh-api'
 import type { PlainSshTerminalApi } from './api/plain-ssh-terminal-bridge'
 import type { RuntimeDownloadsApi } from './api/runtime-downloads-bridge'
+import type { CloudSyncApi } from '../shared/cloud-sync/cloud-sync-contract'
 import type { LegacyRelayBridgeApi } from './api/legacy-relay-bridge-api'
 import type { DiagnosticsApi, MemoryApi, StatsApi, TelemetryApi } from './api/telemetry-api'
 import type { UiCommandEventApi } from './api/ui-command-event-api'
@@ -185,12 +187,16 @@ export type PreloadApi = {
   plainSsh?: PlainSshTerminalApi
   /** Desktop only: streams files and folders from a paired runtime host to this machine. */
   runtimeDownloads?: RuntimeDownloadsApi
+  /** Desktop only: Orca Cloud workspace files synced to this computer (.context and the mirror). */
+  cloudSync?: CloudSyncApi
   /** Desktop only: the API keys Orca hands to agent launches. */
   agentApiKeys?: AgentApiKeysApi
   /** Desktop only: Orca Cloud API keys, org settings and routines (hosted builds). */
   cloudApi?: CloudApiBridge
   /** Desktop only: Orca Cloud secrets (personal, team, repo) injected into cloud workspaces. */
   cloudSecrets?: CloudSecretsApi
+  /** Desktop only: commands agents in cloud workspaces ask to run on this computer. */
+  localCommands?: LocalCommandsApi
   /** Orca Cloud agent accounts (S0): desktop only, states and codes only. */
   orcaCloudAgents?: OrcaCloudAgentsApi
   sshAgentSignIn?: SshAgentSignInApi

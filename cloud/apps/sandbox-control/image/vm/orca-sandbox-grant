@@ -38,8 +38,9 @@ offer="$(ORCA_USER_DATA_PATH="$DATA" timeout 30 "$node" "$cli" pair --json --rot
 # This workspace's read-snapshot signer (public half), so the paired device pins it; best effort.
 signer="$("$node" "$ORCA_HOME/bin/orca-read-snapshot.cjs" --signer-public-key 2>/dev/null || true)"
 # The offer goes to the sealer on stdin (never argv or disk); only the sealed form is printed.
+# Granted devices are listed so orcad can keep owner-only features (local commands) from them.
 printf '%s' "$offer" | ORCA_GRANT_ID="$ORCA_GRANT_ID" ORCA_GRANT_RECIPIENT_KEY="$ORCA_GRANT_RECIPIENT_KEY" ORCA_READ_SIGNER="$signer" \
-  "$node" -e '
+  ORCA_GRANT_LEDGER="$STATE/grant-devices" "$node" -e '
 const crypto = require("node:crypto")
 let input = ""
 process.stdin.on("data", (c) => (input += c)).on("end", () => {
@@ -48,6 +49,7 @@ process.stdin.on("data", (c) => (input += c)).on("end", () => {
     console.error("offer unavailable")
     process.exit(1)
   }
+  if (process.env.ORCA_GRANT_LEDGER) require("node:fs").appendFileSync(process.env.ORCA_GRANT_LEDGER, res.deviceId + "\n", { mode: 0o600 })
   const recipient = Buffer.from(process.env.ORCA_GRANT_RECIPIENT_KEY, "base64")
   if (recipient.length !== 32) { console.error("bad key length"); process.exit(2) }
   const recipientKey = crypto.createPublicKey({ key: { kty: "OKP", crv: "X25519", x: recipient.toString("base64url") }, format: "jwk" })
