@@ -13159,7 +13159,7 @@
               "tokenHint": "Repository, project, and workspace access tokens are created from the matching Bitbucket settings page and need read access to pull requests.",
               "basicHint": "Create an Atlassian API token for your account, then pair it with the email address that owns it.",
               "scopesTitle": "Select these Bitbucket API token scopes:",
-              "scopeUser": "Verify your account",
+              "scopeUser": "Show your account name",
               "scopeRepository": "Read build statuses",
               "scopeReadPullRequest": "Read pull requests",
               "scopeWritePullRequest": "Create pull requests",
@@ -19984,6 +19984,9 @@
           "pipelinePending": "Pipeline pending",
           "pipelineUnresolved": "Pipeline unresolved"
         }
+      },
+      "NewWorkspaceComposerFooter": {
+        "create": "Create"
       }
     },
     "i18n": {
@@ -20168,7 +20171,6 @@
           "browsePlugins": "Browse plugins",
           "browseThemePlugins": "Browse theme plugins",
           "colorMode": "Color mode",
-          "colorModeCaption": "Light, dark, or follow your OS.",
           "darkLook": "Dark look",
           "darkLooks": "Dark looks",
           "lightLook": "Light look",
@@ -20184,10 +20186,9 @@
           "slotLabel": "Look to edit",
           "sourceBuiltIn": "Built in",
           "sourceCommunity": "Terminal palette",
-          "themes": "Theme",
-          "themesCaption": "Optional. Go further with app themes and terminal palettes."
+          "themes": "Theme"
         },
-        "subtitle": "Choose light or dark, then optionally a theme. Change either any time in Settings."
+        "changeAnyTime": "Change any time in Settings."
       },
       "integrations": {
         "capabilities": {
@@ -20939,6 +20940,15 @@
         "reason": "Reason",
         "needsAccess": "Needs access to",
         "needsNewerOrca": "This request needs a newer version of Orca.",
+        "folderTrust": {
+          "title": "Trust this folder?",
+          "hint": "The agent asks before it can read, edit and run files in this folder.",
+          "trust": "Trust folder",
+          "exit": "Exit"
+        },
+        "startupMenu": {
+          "title": "{{value0}} is waiting for a choice in the terminal"
+        },
         "plan": {
           "file": "Plan file",
           "reviewTitle": "Review proposed plan",
@@ -21047,7 +21057,8 @@
       "fileLinks": {
         "notFound": "File not found: {{value0}}",
         "unverifiable": "Couldn't check {{value0}}: {{value1}}",
-        "unresolved": "Couldn't resolve {{value0}} in this workspace"
+        "unresolved": "Couldn't resolve {{value0}} in this workspace",
+        "folderUnavailable": "This computer can't open the folder {{value0}}"
       },
       "contextUsage": {
         "label": "Context {{used}} of {{window}} tokens, {{percent}}% used",

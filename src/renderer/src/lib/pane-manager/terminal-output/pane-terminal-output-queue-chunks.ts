@@ -1,4 +1,4 @@
-import { flattenRetainedSlice } from '@/lib/flatten-retained-slice'
+import { flattenRetainedSlice } from '@/lib/terminal/output/flatten-retained-slice'
 import { resolveSynchronizedOutputSafeSplit } from '../../../../../shared/terminal/protocol/escape/terminal-synchronized-output-scan'
 import type {
   QueueEntry,

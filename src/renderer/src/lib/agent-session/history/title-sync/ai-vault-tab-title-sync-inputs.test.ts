@@ -8,10 +8,8 @@ import * as stablePaneIds from '../../../../../../shared/workspace-layout/stable
 import { replaceRecordEntries } from '@/store/keyed-record-transitions'
 import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 import { aiVaultTitleSyncInputsChanged } from './ai-vault-tab-title-sync-inputs'
-import {
-  collectAgentPaneConversations,
-  collectAiVaultTitleRequests
-} from './ai-vault-tab-title-requests'
+import { collectAgentPaneConversations } from '../../identity/pane-agent-conversations'
+import { collectAiVaultTitleRequests } from './ai-vault-tab-title-requests'
 
 afterEach(() => vi.restoreAllMocks())
 

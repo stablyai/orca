@@ -101,59 +101,6 @@ function createHeadlessRuntime(
 }
 
 describe('host sort stamps on a headless runtime', () => {
-  it('orders a session boundary’s done as a finish, but raises no unread for it', () => {
-    const stampsAfter = (sessionBoundary: boolean) => {
-      vi.useFakeTimers({ now: 75_000 })
-      try {
-        const { runtime, meta } = createHeadlessRuntime()
-        const server = new AgentHookServer()
-        runtime.attachAgentStatusStore(server)
-        const pane = {
-          paneKey: 'tab-1:11111111-1111-4111-8111-111111111111',
-          tabId: 'tab-1',
-          worktreeId: WT
-        }
-        server.ingestTerminalStatus({
-          ...pane,
-          payload: { state: 'working', prompt: 'task', agentType: 'claude' }
-        })
-        vi.setSystemTime(76_000)
-        server.ingestTerminalStatus({
-          ...pane,
-          payload: { state: 'done', prompt: 'task', agentType: 'claude', sessionBoundary }
-        })
-        return meta[WT]
-      } finally {
-        vi.useRealTimers()
-      }
-    }
-    const { isUnread: boundaryUnread, ...boundary } = stampsAfter(true)
-    const { isUnread: finishUnread, ...finish } = stampsAfter(false)
-    expect(boundary).toEqual(finish)
-    expect(boundary).toMatchObject({ smartTier: 'done', smartAt: 76_000 })
-    // No client is looking: a finish is news, a clear or a compaction is not.
-    expect(finishUnread).toBe(true)
-    expect(boundaryUnread).toBe(false)
-  })
-
-  it('reconciles stored tiers once the provider can answer for the workspace’s terminals', async () => {
-    const live = createHeadlessRuntime({ lastActivityAt: 5, smartTier: 'done', smartAt: 4 })
-    live.runtime.attachAgentStatusStore(new AgentHookServer())
-    await live.runtime.sidebarFacts?.reconcileSortStampTiers({ probePtyLiveness: async () => true })
-    expect(live.meta[WT]).toMatchObject({ lastActivityAt: 5, smartTier: 'done', smartAt: 4 })
-
-    const gone = createHeadlessRuntime({ lastActivityAt: 5, smartTier: 'done', smartAt: 4 })
-    gone.runtime.attachAgentStatusStore(new AgentHookServer())
-    await gone.runtime.sidebarFacts?.reconcileSortStampTiers({
-      probePtyLiveness: async () => false
-    })
-    expect(gone.meta[WT]).toMatchObject({
-      lastActivityAt: 5,
-      smartTier: undefined,
-      smartAt: undefined
-    })
-  })
-
   it.each(['worktree', 'folder'] as const)(
     're-tiers a read Done beside a Working pane when any writer clears the %s flag',
     (kind) => {

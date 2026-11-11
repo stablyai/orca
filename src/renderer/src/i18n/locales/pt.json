@@ -6540,7 +6540,7 @@
               "tokenHint": "Tokens de acesso de repositório, projeto e espaço de trabalho são criados na página de configurações correspondente do Bitbucket e precisam de acesso de leitura a pull requests.",
               "basicHint": "Crie um token de API da Atlassian para sua conta e depois combine-o com o endereço de e-mail que o possui.",
               "scopesTitle": "Selecione estes escopos do token de API do Bitbucket:",
-              "scopeUser": "Verificar sua conta",
+              "scopeUser": "Mostrar o nome da sua conta",
               "scopeRepository": "Ler status de build",
               "scopeReadPullRequest": "Ler pull requests",
               "scopeWritePullRequest": "Criar pull requests",
@@ -20557,7 +20557,6 @@
           "browsePlugins": "Explorar plugins",
           "browseThemePlugins": "Explorar plugins de temas",
           "colorMode": "Modo de cor",
-          "colorModeCaption": "Claro, escuro ou igual ao sistema.",
           "darkLook": "Visual escuro",
           "darkLooks": "Visuais escuros",
           "lightLook": "Visual claro",
@@ -20573,10 +20572,8 @@
           "slotLabel": "Visual a editar",
           "sourceBuiltIn": "Integrado",
           "sourceCommunity": "Paleta do terminal",
-          "themes": "Tema",
-          "themesCaption": "Opcional. Vá além com temas do app e paletas do terminal."
-        },
-        "subtitle": "Escolha claro ou escuro e, se quiser, um tema. Altere ambos quando quiser em Configurações."
+          "themes": "Tema"
+        }
       },
       "integrations": {
         "capabilities": {

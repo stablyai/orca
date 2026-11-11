@@ -24,7 +24,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/class-names'
-import { preventOutsideDismissWhenDirty } from '@/lib/outside-dismiss-guard'
+import { preventOutsideDismissWhenDirty } from '@/lib/overlay-interaction/outside-dismiss-guard'
 import {
   createLinearApiKeyDialogState,
   resolveLinearApiKeyDialogState

@@ -1591,9 +1591,18 @@
       "approval": {
         "allow": "Allow",
         "deny": "Deny",
+        "folderTrust": {
+          "exit": "Exit",
+          "hint": "The agent asks before it can read, edit and run files in this folder.",
+          "title": "Trust this folder?",
+          "trust": "Trust folder"
+        },
         "plan": {
           "refineHint": "Refine plan closes the review so you can send what to change.",
           "reviewTitle": "Review proposed plan"
+        },
+        "startupMenu": {
+          "title": "{{value0}} is waiting for a choice in the terminal"
         },
         "title": "Allow {{value0}}?"
       },

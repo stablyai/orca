@@ -12312,7 +12312,7 @@
               "tokenHint": "存放庫、專案與工作區的存取權杖須在對應的 Bitbucket 設定頁面建立，並具備 PR 讀取權限。",
               "basicHint": "為您的帳戶建立 Atlassian API 權杖，再搭配該帳戶的電子郵件地址使用。",
               "scopesTitle": "請選擇下列 Bitbucket API 權杖範圍：",
-              "scopeUser": "驗證您的帳戶",
+              "scopeUser": "顯示您的帳戶名稱",
               "scopeRepository": "讀取建置狀態",
               "scopeReadPullRequest": "讀取 PR",
               "scopeWritePullRequest": "建立 PR",
@@ -18951,7 +18951,6 @@
           "browsePlugins": "瀏覽外掛程式",
           "browseThemePlugins": "瀏覽主題外掛程式",
           "colorMode": "色彩模式",
-          "colorModeCaption": "淺色、深色或跟隨系統。",
           "darkLook": "深色外觀",
           "darkLooks": "深色外觀",
           "lightLook": "淺色外觀",
@@ -18967,10 +18966,8 @@
           "slotLabel": "要編輯的外觀",
           "sourceBuiltIn": "內建",
           "sourceCommunity": "終端機調色盤",
-          "themes": "主題",
-          "themesCaption": "選用。使用 App 主題和終端機調色盤進一步自訂。"
-        },
-        "subtitle": "選擇淺色或深色，也可以再選一個主題。兩者都能隨時在設定中變更。"
+          "themes": "主題"
+        }
       },
       "integrations": {
         "capabilities": {

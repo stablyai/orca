@@ -12489,7 +12489,7 @@
               "tokenHint": "Zugriffstoken für Repositorys, Projekte und Arbeitsbereiche werden auf der jeweiligen Bitbucket-Einstellungsseite erstellt und benötigen Lesezugriff auf Pull Requests.",
               "basicHint": "Einen Atlassian-API-Token für das Konto erstellen und mit der zugehörigen E-Mail-Adresse kombinieren.",
               "scopesTitle": "Diese Bitbucket-API-Token-Bereiche auswählen:",
-              "scopeUser": "Konto bestätigen",
+              "scopeUser": "Kontonamen anzeigen",
               "scopeRepository": "Build-Status lesen",
               "scopeReadPullRequest": "Pull Requests lesen",
               "scopeWritePullRequest": "Pull Requests erstellen",
@@ -19209,7 +19209,6 @@
           "browsePlugins": "Plugins durchsuchen",
           "browseThemePlugins": "Design-Plugins durchsuchen",
           "colorMode": "Farbmodus",
-          "colorModeCaption": "Hell, dunkel oder wie dein System.",
           "darkLook": "Dunkler Look",
           "darkLooks": "Dunkle Looks",
           "lightLook": "Heller Look",
@@ -19225,10 +19224,8 @@
           "slotLabel": "Zu bearbeitender Look",
           "sourceBuiltIn": "Integriert",
           "sourceCommunity": "Terminal-Palette",
-          "themes": "Design",
-          "themesCaption": "Optional. Geh weiter mit App-Designs und Terminal-Paletten."
-        },
-        "subtitle": "Wähle hell oder dunkel und optional ein Design. Beides kannst du jederzeit in den Einstellungen ändern."
+          "themes": "Design"
+        }
       },
       "integrations": {
         "capabilities": {
