@@ -24,7 +24,10 @@ export function noteCloudCreatePhase(
   if (phase === 'provision-start' || !startedAt.has(creationId)) {
     startedAt.set(creationId, now)
     if (startedAt.size > MAX_TRACKED_CREATES) {
-      startedAt.delete(startedAt.keys().next().value as string)
+      const oldest = startedAt.keys().next()
+      if (!oldest.done) {
+        startedAt.delete(oldest.value)
+      }
     }
   }
   const since = now - (startedAt.get(creationId) ?? now)

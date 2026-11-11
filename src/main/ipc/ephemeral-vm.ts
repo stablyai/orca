@@ -260,7 +260,7 @@ export function registerEphemeralVmHandlers(store: Store, pluginService?: Plugin
               warnings: getEphemeralVmRecipeResultWarnings(result.start.result)
             }
           } catch (error) {
-            return failAfterStart(error)
+            return await failAfterStart(error)
           }
         }
 
@@ -272,7 +272,7 @@ export function registerEphemeralVmHandlers(store: Store, pluginService?: Plugin
             source: 'ephemeral-vm'
           })
         } catch (error) {
-          return failAfterStart(error)
+          return await failAfterStart(error)
         }
         const runtime = requireEphemeralVmRecipeResult(
           updateEphemeralVmRuntimeStatus(app.getPath('userData'), result.runtime.id, {
