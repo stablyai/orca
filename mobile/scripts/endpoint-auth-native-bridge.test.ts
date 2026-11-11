@@ -93,6 +93,14 @@ function nativeSocketConstructor(
 }
 
 describe('credential socket native bridge', () => {
+  it('uses existing portable directories for Android source build parent projects', () => {
+    const settings = readFileSync(requireNative.resolve('./settings.gradle.kts'), 'utf8')
+    for (const project of [':packages', ':packages:react-native']) {
+      expect(settings).toContain(`project("${project}").projectDir = file(".")`)
+    }
+    expect(settings).not.toContain('file("/tmp")')
+  })
+
   it('resolves native source paths without Prefab option delimiters', () => {
     const source = realpathSync(requireNative.resolve('./ReactAndroid/build.gradle.kts'))
     expect(source).not.toContain('=')
