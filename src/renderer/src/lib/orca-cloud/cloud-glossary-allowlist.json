@@ -117,12 +117,12 @@
     "path": "src/renderer/src/components/orca-cloud/use-cloud-terminal-error-override.ts",
     "line": 13,
     "term": "VM",
-    "reason": "Matcher for older builds' saved terminal errors so they stay hidden; never displayed"
+    "reason": "match pattern for older builds' saved terminal errors; never rendered"
   },
   {
     "path": "src/renderer/src/components/orca-cloud/use-cloud-terminal-error-override.ts",
     "line": 14,
     "term": "VM",
-    "reason": "Matcher for older builds' saved terminal errors so they stay hidden; never displayed"
+    "reason": "match pattern for older builds' saved terminal errors; never rendered"
   }
 ]
