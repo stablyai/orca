@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { pasteDraftWhenAgentReady, sendBracketedPasteToRunningAgent } from './agent-paste-draft'
+import {
+  pasteDraftWhenAgentReady,
+  sendBracketedPasteToRunningAgent,
+  submitPromptToAgentPty
+} from './agent-paste-draft'
 import {
   AGENT_DRAFT_PASTE_CHUNK_MAX_BYTES,
   AGENT_DRAFT_PASTE_DIRECT_MAX_BYTES,
@@ -24,6 +28,7 @@ const testState = vi.hoisted(() => ({
   subscribeToPtyData: vi.fn(),
   replayPreHandlerPtyData: vi.fn(),
   isRemoteRuntimePtyId: vi.fn(),
+  getPtyKittyKeyboardFlags: vi.fn(),
   sendRuntimePtyInputVerified: vi.fn(),
   inspectRuntimeTerminalProcess: vi.fn(),
   subscribeToRuntimeTerminalData: vi.fn()
@@ -68,11 +73,17 @@ vi.mock('@/runtime/hosted-terminals/streams/runtime-terminal-data-subscription',
   subscribeToRuntimeTerminalData: testState.subscribeToRuntimeTerminalData
 }))
 
+vi.mock('@/components/terminal-pane/input/keyboard/terminal-pty-kitty-keyboard-flags', () => ({
+  getPtyKittyKeyboardFlags: testState.getPtyKittyKeyboardFlags
+}))
+
 const DECSET_BRACKETED_PASTE = '\x1b[?2004h'
 const CODEX_COMPOSER_PROMPT_RENDER = '\x1b[1m›\x1b[0m Ask Codex to do anything'
 const CODEX_DYNAMIC_COMPOSER_PROMPT_RENDER = '\x1b[?1049h\x1b[1m›\x1b[0m Implement {feature}'
 const ISSUE_URL = 'https://github.com/stablyai/orca/issues/123'
 const PASTED_ISSUE_URL = `\x1b[200~${ISSUE_URL}\x1b[201~`
+const ENTER_SUBMIT_INPUT = '\r'
+const CODEX_SUBMIT_INPUT = '\x1b[13;5u'
 const CODEX_SUBMIT_RETRY_DELAY_MS = TUI_AGENT_CONFIG.codex.submitRetryDelayMs ?? 0
 
 describe('pasteDraftWhenAgentReady', () => {
@@ -101,6 +112,8 @@ describe('pasteDraftWhenAgentReady', () => {
     testState.replayPreHandlerPtyData.mockReset()
     testState.isRemoteRuntimePtyId.mockReset()
     testState.isRemoteRuntimePtyId.mockReturnValue(false)
+    testState.getPtyKittyKeyboardFlags.mockReset()
+    testState.getPtyKittyKeyboardFlags.mockReturnValue(0)
     testState.sendRuntimePtyInputVerified.mockReset()
     testState.sendRuntimePtyInputVerified.mockResolvedValue(true)
     testState.inspectRuntimeTerminalProcess.mockReset()
@@ -144,7 +157,11 @@ describe('pasteDraftWhenAgentReady', () => {
     expect(testState.sendRuntimePtyInputVerified).toHaveBeenCalledWith('pty-1', PASTED_ISSUE_URL)
     await vi.advanceTimersByTimeAsync(POST_PASTE_SUBMIT_DELAY_MS + CODEX_SUBMIT_RETRY_DELAY_MS)
     await expect(promise).resolves.toBe(true)
-    expect(testState.sendRuntimePtyInputVerified).toHaveBeenNthCalledWith(2, 'pty-1', '\r')
+    expect(testState.sendRuntimePtyInputVerified).toHaveBeenNthCalledWith(
+      2,
+      'pty-1',
+      ENTER_SUBMIT_INPUT
+    )
     expect(testState.unsubscribe).toHaveBeenCalledTimes(1)
     expect(vi.getTimerCount()).toBe(0)
   })
@@ -203,6 +220,98 @@ describe('pasteDraftWhenAgentReady', () => {
     expect(writes.indexOf('\r')).toBe(1)
     expect(writes.at(2)).toBe('\x1b[200~')
     expect(writes.at(-1)).toBe('\x1b[201~')
+  })
+
+  it('falls back to Enter when configured Codex Ctrl+Enter has no Kitty keyboard proof', async () => {
+    testState.appState.settings = { agentPostPasteSubmitInputs: { codex: 'ctrl-enter' } }
+    const promise = submitPromptToAgentPty({
+      tabId: 'tab-1',
+      ptyId: 'pty-1',
+      content: ISSUE_URL,
+      agent: 'codex'
+    })
+
+    await flushMicrotasks()
+    await vi.advanceTimersByTimeAsync(POST_PASTE_SUBMIT_DELAY_MS + CODEX_SUBMIT_RETRY_DELAY_MS)
+
+    await expect(promise).resolves.toBe(true)
+    expect(testState.sendRuntimePtyInputVerified).toHaveBeenNthCalledWith(
+      1,
+      'pty-1',
+      PASTED_ISSUE_URL
+    )
+    expect(testState.sendRuntimePtyInputVerified).toHaveBeenNthCalledWith(
+      2,
+      'pty-1',
+      ENTER_SUBMIT_INPUT
+    )
+    expect(testState.sendRuntimePtyInputVerified).toHaveBeenNthCalledWith(
+      3,
+      'pty-1',
+      ENTER_SUBMIT_INPUT
+    )
+  })
+
+  it('uses configured Codex Ctrl+Enter for exact PTY submits with Kitty keyboard proof', async () => {
+    testState.appState.settings = { agentPostPasteSubmitInputs: { codex: 'ctrl-enter' } }
+    testState.getPtyKittyKeyboardFlags.mockReturnValue(1)
+    const promise = submitPromptToAgentPty({
+      tabId: 'tab-1',
+      ptyId: 'pty-1',
+      content: ISSUE_URL,
+      agent: 'codex'
+    })
+
+    await flushMicrotasks()
+    await vi.advanceTimersByTimeAsync(POST_PASTE_SUBMIT_DELAY_MS + CODEX_SUBMIT_RETRY_DELAY_MS)
+
+    await expect(promise).resolves.toBe(true)
+    expect(testState.getPtyKittyKeyboardFlags).toHaveBeenCalledWith('pty-1')
+    expect(testState.sendRuntimePtyInputVerified).toHaveBeenNthCalledWith(
+      1,
+      'pty-1',
+      PASTED_ISSUE_URL
+    )
+    expect(testState.sendRuntimePtyInputVerified).toHaveBeenNthCalledWith(
+      2,
+      'pty-1',
+      CODEX_SUBMIT_INPUT
+    )
+    expect(testState.sendRuntimePtyInputVerified).toHaveBeenNthCalledWith(
+      3,
+      'pty-1',
+      CODEX_SUBMIT_INPUT
+    )
+  })
+
+  it('streams large running-agent drafts as bounded bracketed chunks before submit', async () => {
+    const content = 'x'.repeat(
+      AGENT_DRAFT_PASTE_DIRECT_MAX_BYTES + AGENT_DRAFT_PASTE_CHUNK_MAX_BYTES + 7
+    )
+    const promise = sendBracketedPasteToRunningAgent({
+      ptyId: 'pty-1',
+      content
+    })
+
+    await flushMicrotasks(20)
+
+    const calls = testState.sendRuntimePtyInputVerified.mock.calls
+    expect(calls.at(0)).toEqual(['pty-1', '\x1b[200~'])
+    expect(calls.at(-1)?.[1]).toBe('\x1b[201~')
+    expect(
+      calls
+        .slice(1, -1)
+        .map((call) => call[1])
+        .join('')
+    ).toBe(content)
+    for (const call of calls.slice(1, -1)) {
+      expect(String(call[1]).length).toBeLessThanOrEqual(AGENT_DRAFT_PASTE_CHUNK_MAX_BYTES)
+    }
+
+    await vi.advanceTimersByTimeAsync(50)
+
+    await expect(promise).resolves.toBe(true)
+    expect(testState.sendRuntimePtyInputVerified).toHaveBeenLastCalledWith('pty-1', '\r')
   })
 
   it('closes bracketed paste and does not submit when a chunked draft write is rejected', async () => {
