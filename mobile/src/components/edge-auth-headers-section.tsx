@@ -41,11 +41,13 @@ export function useEdgeAuthHeaders() {
     JSON.stringify({ ok: true, headers: {} })
   )
   const [storedAuthCount, setStoredAuthCount] = useState(0)
+  const [authLoaded, setAuthLoaded] = useState(false)
   const authNormalized = useMemo(() => normalizeEndpointAuthHeaders(authRows), [authRows])
   const authChanged = authNormalized.ok && JSON.stringify(authNormalized) !== initialAuthJson
 
   const loadAuthForHost = useCallback(
     async (hostId: string, endpoint: string, isCurrent?: () => boolean) => {
+      setAuthLoaded(false)
       setAuthRows([newEdgeAuthRow()])
       setInitialAuthJson(JSON.stringify({ ok: true, headers: {} }))
       setStoredAuthCount(0)
@@ -65,6 +67,7 @@ export function useEdgeAuthHeaders() {
       setAuthRows(rows)
       setInitialAuthJson(JSON.stringify(normalizeEndpointAuthHeaders(rows)))
       setStoredAuthCount(entries.length)
+      setAuthLoaded(true)
     },
     []
   )
@@ -87,6 +90,7 @@ export function useEdgeAuthHeaders() {
     authNormalized,
     authChanged,
     storedAuthCount,
+    authLoaded,
     loadAuthForHost,
     persistAuthChanges
   }
