@@ -118,6 +118,7 @@ export function screenModuleMocks(dependencies: ScreenDependencies) {
       router: { replace: vi.fn() },
       useRouter: () => ({
         push: dependencies.push,
+        dismissTo: dependencies.dismissTo,
         back: dependencies.back,
         canGoBack: () => dependencies.canGoBack
       }),

@@ -27,6 +27,7 @@ export type ScreenDependencies = {
   appStateListeners: Set<(state: string) => void>
   openUrl: Mock
   push: Mock
+  dismissTo: Mock
   back: Mock
   canGoBack: boolean
   rootState: NativeStackState | undefined
@@ -86,6 +87,7 @@ export function createScreenDependencies(): ScreenDependencies {
     appStateListeners: new Set(),
     openUrl: vi.fn(),
     push: vi.fn(),
+    dismissTo: vi.fn(),
     back: vi.fn(),
     canGoBack: true,
     rootState: undefined,
@@ -136,6 +138,8 @@ export function resetScreenDependencies(dependencies: ScreenDependencies): void 
   dependencies.pageReady = false
   dependencies.pageFrame = 'pending'
   dependencies.routeGrants = DEFAULT_ROUTE_GRANTS
+  dependencies.push.mockReset()
+  dependencies.dismissTo.mockReset()
   dependencies.back.mockReset()
   dependencies.openUrl.mockReset()
   dependencies.openUrl.mockImplementation(() => Promise.resolve(true))

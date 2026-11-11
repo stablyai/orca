@@ -75,9 +75,13 @@ export type PendingHostStackNavigation = Readonly<{
 export const HOST_SESSION_ROUTE = '[hostId]/session/[worktreeId]'
 const HOST_INDEX_ROUTE = '[hostId]/index'
 
-// A session keeps its host's list beneath it so Back lands there; other targets take the list's place.
-function opensOverHostList(target: HostStackRouteTarget): boolean {
+function isSessionRoute(target: HostStackRouteTarget): boolean {
   return target.name === HOST_SESSION_ROUTE
+}
+
+// Keep the host list beneath a session only when opening inside the host document; direct opens take its place.
+function keepsHostListBeneath(target: HostStackRouteTarget, openInHostDocument: boolean): boolean {
+  return openInHostDocument && isSessionRoute(target)
 }
 
 const SETTLED_NAVIGATION: HostStackNavigationController = {
@@ -183,7 +187,7 @@ export function navigateToHostStackRoute(
     return SETTLED_NAVIGATION
   }
   // The host screen opens the session inside its document when the page it activates can, else pushes it as before.
-  const href = openInHostDocument && opensOverHostList(target) ? sessionOpenHref(target) : null
+  const href = keepsHostListBeneath(target, openInHostDocument) ? sessionOpenHref(target) : null
   // useLocalSearchParams decodes every value once more, which would undo the target's own escapes.
   const open = href === null ? null : encodeURIComponent(href)
   const inThisHost = hostState?.key && hostParamMatches(focused?.params?.hostId, hostId)
@@ -197,7 +201,7 @@ export function navigateToHostStackRoute(
     return SETTLED_NAVIGATION
   }
   // Already inside this host: pushing the host route again would stack a second list.
-  if (opensOverHostList(target) && inThisHost) {
+  if (isSessionRoute(target) && inThisHost) {
     navigation.dispatch({ type: 'PUSH', target: hostState.key, payload: target })
     return SETTLED_NAVIGATION
   }
@@ -255,13 +259,15 @@ function openWhenHostStackCommits(
         dispose()
         if (latest) {
           const href = hostStackRouteHref(latest[0])
-          return void (opensOverHostList(latest[0]) ? router.push(href) : router.replace(href))
+          return void (keepsHostListBeneath(latest[0], latest[1])
+            ? router.push(href)
+            : router.replace(href))
         }
       }
       return
     }
     dispose()
-    if (latest && opensOverHostList(latest[0])) {
+    if (latest && keepsHostListBeneath(latest[0], latest[1])) {
       navigateToHostStackRoute(navigation, router, hostId, ...latest)
     } else if (latest) {
       navigation.dispatch({

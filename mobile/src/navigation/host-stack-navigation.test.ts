@@ -104,9 +104,43 @@ describe('host stack navigation', () => {
     harness.setState(committedHostState('host/one'))
 
     expect(harness.navigation.dispatch).toHaveBeenCalledTimes(1)
-    expect(harness.navigation.dispatch).toHaveBeenCalledWith(
-      expect.objectContaining({ payload: OTHER_TARGET })
+    expect(harness.navigation.dispatch).toHaveBeenCalledWith({
+      type: 'REPLACE',
+      target: '/h',
+      source: 'host-index',
+      payload: OTHER_TARGET
+    })
+  })
+
+  it('replaces the host list when opening a session directly from Home and pushes when already inside that host', () => {
+    const fromHome = navigationHarness({ index: 0, routes: [{ name: 'index' }] })
+    const push = vi.fn()
+    navigateToHostStackRoute(
+      fromHome.navigation,
+      { push, replace: vi.fn() },
+      'host/one',
+      OTHER_TARGET
     )
+    fromHome.setState(committedHostState('host/one'))
+
+    expect(push).toHaveBeenCalledWith('/h/host%2Fone')
+    expect(fromHome.navigation.dispatch.mock.calls).toEqual([
+      [{ type: 'REPLACE', target: '/h', source: 'host-index', payload: OTHER_TARGET }]
+    ])
+
+    const inHost = navigationHarness(committedHostState('host/one'))
+    const inHostPush = vi.fn()
+    navigateToHostStackRoute(
+      inHost.navigation,
+      { push: inHostPush, replace: vi.fn() },
+      'host/one',
+      OTHER_TARGET
+    )
+
+    expect(inHostPush).not.toHaveBeenCalled()
+    expect(inHost.navigation.dispatch.mock.calls).toEqual([
+      [{ type: 'PUSH', target: '/h', payload: OTHER_TARGET }]
+    ])
   })
 
   describe('a session opened inside its host document', () => {

@@ -183,8 +183,11 @@ export function MobileWebShellScreen({
       })
       return
     }
-    // Host exits preserve notice params and replace cold deep links at either width.
+    // Host exits preserve notice params and replace cold deep links at either width; plain session exits pop back to their opener when the host list was skipped.
     if (isHostRouteOf(href, hostId)) {
+      if (replace && !/[?#]/.test(href) && popShellStack() !== 'nothing-to-pop') {
+        return
+      }
       router.dismissTo(href)
       return
     }
