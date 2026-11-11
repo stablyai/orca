@@ -2667,7 +2667,6 @@
       "Terminal": {
         "73768427cf": "閉じる",
         "f82e9f02df": "キャンセル",
-        "7958465754": "プロセスが実行中のターミナルがあります。このままウィンドウを閉じますか?",
         "2fa9c69ff3": "ウィンドウを閉じますか?",
         "cd51e28d8b": "保存",
         "0037b21794": "保存しないでください",
@@ -11894,7 +11893,7 @@
               "tokenHint": "リポジトリ、プロジェクト、ワークスペースのアクセストークンは、一致する Bitbucket 設定ページから作成され、PR への読み取りアクセスが必要です。",
               "basicHint": "アカウントの Atlassian API トークンを作成し、それを所有する電子メールアドレスと組み合わせます。",
               "scopesTitle": "次の Bitbucket API トークンのスコープを選択してください:",
-              "scopeUser": "アカウントの確認",
+              "scopeUser": "アカウント名の表示",
               "scopeRepository": "ビルドステータスの読み取り",
               "scopeReadPullRequest": "PR の読み取り",
               "scopeWritePullRequest": "PR の作成",
@@ -16904,13 +16903,10 @@
         },
         "AutomationDetail": {
           "host": "ホスト",
-          "a1d52c2189": "使用範囲",
-          "449fc83bf7": "トークン",
           "401f40ae79": "推定費用",
           "a7c312430d": "最後の実行",
           "2df8970cd5": "Agent",
           "e353ab9516": "事前チェック",
-          "620b22145e": "グレース",
           "15ea446b93": "セッション",
           "5405a09b1f": "実行場所",
           "2f8baf5360": "から作成",
@@ -16920,7 +16916,6 @@
           "1f6026358e": "オートメーションの削除",
           "d79452fb30": "自動化を再開する",
           "91a4155e95": "自動化を一時停止する",
-          "4b1ea02d2e": "オートメーションの編集",
           "2fb1605beb": "今すぐ実行",
           "221916d93c": "自動化を作成して、Agent の作業のスケジュール設定を開始します。",
           "b09b2384fd": "一時停止中",
@@ -16930,7 +16925,6 @@
           "noGrace": "猶予なし",
           "graceMinutes_other": "{{count}} 分",
           "graceHours_other": "{{count}} 時間",
-          "usageCoverageRuns_other": "{{known}}/{{count}} 回の実行",
           "usageUnavailable": "利用不可",
           "noRuns": "実行なし",
           "projectDefault": "プロジェクトのデフォルト",
@@ -18541,7 +18535,6 @@
           "browsePlugins": "プラグインを見る",
           "browseThemePlugins": "テーマプラグインを見る",
           "colorMode": "カラーモード",
-          "colorModeCaption": "ライト、ダーク、または OS に合わせる。",
           "darkLook": "ダークルック",
           "darkLooks": "ダークルック",
           "lightLook": "ライトルック",
@@ -18557,10 +18550,8 @@
           "slotLabel": "編集するルック",
           "sourceBuiltIn": "組み込み",
           "sourceCommunity": "ターミナルパレット",
-          "themes": "テーマ",
-          "themesCaption": "任意。アプリテーマやターミナルパレットでさらにカスタマイズできます。"
-        },
-        "subtitle": "ライトかダークを選び、必要ならテーマも選びましょう。どちらも設定からいつでも変更できます。"
+          "themes": "テーマ"
+        }
       },
       "integrations": {
         "capabilities": {

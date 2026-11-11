@@ -10,10 +10,13 @@ import type {
   MuseUsageSnapshot,
   MuseUsageSummary
 } from '../../shared/muse-usage-types'
-import type { Store } from '../persistence/loading-store/store'
-import { UsageProviderStoreLifecycle } from '../usage/usage-provider-store-lifecycle'
-import { splitUsageCacheFileViaWorker } from '../usage/usage-scan-worker-spawn'
-import { filterUsageDaily, filterUsageSessions } from '../usage/usage-scope-filters'
+import type { UsageWorktreeSource } from '../usage/worktree-attribution/usage-worktree-metadata'
+import { UsageProviderStoreLifecycle } from '../usage/provider-lifecycle/usage-provider-store-lifecycle'
+import { splitUsageCacheFileViaWorker } from '../usage/scan-worker/usage-scan-worker-spawn'
+import {
+  filterUsageDaily,
+  filterUsageSessions
+} from '../usage/reporting/range-query/usage-scope-filters'
 import { museUsageProvider } from './muse-usage-provider'
 import { getDefaultMuseUsageState, normalizeMuseUsageState } from './persisted-state-normalization'
 import {
@@ -40,7 +43,7 @@ export class MuseUsageStore extends UsageProviderStoreLifecycle<
   MuseUsagePersistedState,
   'hasAnyMuseData'
 > {
-  constructor(store: Pick<Store, 'getRepos' | 'getAllWorktreeMeta'>) {
+  constructor(store: UsageWorktreeSource) {
     super(store, {
       logTag: '[muse-usage]',
       resolveCacheFile: getMuseUsageFile,

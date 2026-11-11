@@ -6,7 +6,7 @@ import type {
   GitHubPRRefreshSkippedReason,
   PRRefreshOutcome
 } from '../../shared/github/pull-request-refresh-types'
-import { recordCoalescedCrashBreadcrumb } from '../crash-reporting/crash-breadcrumb-store'
+import { recordCoalescedCrashBreadcrumb } from '../crash-reporting/breadcrumbs/crash-breadcrumb-store'
 import { prRefreshRenderers } from './pr-refresh-renderer-port'
 
 // `aliases`: every checkout the read stood for (one read can serve several linked to the same PR).

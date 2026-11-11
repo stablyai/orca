@@ -7,7 +7,8 @@ import {
   View,
   type PanResponderInstance,
   type StyleProp,
-  type ViewStyle
+  type ViewStyle,
+  type HostInstance
 } from 'react-native'
 import { ArrowUp, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
@@ -70,7 +71,7 @@ type MobileBrowserPaneViewProps = {
   setAddressValue: Dispatch<SetStateAction<string>>
   setKeyboardValue: Dispatch<SetStateAction<string>>
   setLayout: Dispatch<SetStateAction<BrowserTouchLayout | null>>
-  setRootViewRef: (view: View | null) => void
+  setRootViewRef: (view: HostInstance | null) => void
   tab: MobileBrowserTab
   togglePointerModifier: (modifier: BrowserPointerModifier) => void
   zoom: BrowserZoomState

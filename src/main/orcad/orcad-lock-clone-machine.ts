@@ -3,7 +3,7 @@ import { statSync } from 'node:fs'
 import process from 'node:process'
 import { ORCA_MACHINE_NAME_ENV } from '../../shared/orcad-managed-launch-env'
 import type { OrcadPeerMachine } from './orcad-lock-holder-locality'
-import { currentLinuxBootStartedAtMs } from '../persistence/profile-state/profile-state-access-identity'
+import { currentLinuxBootStartedAtMs } from '../persistence/profile-state/access/profile-state-access-identity'
 
 const CLONE_MACHINE_ID_HINT =
   'Machines cloned from one image share /etc/machine-id, so Orca cannot tell them apart. If the Orca ' +

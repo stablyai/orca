@@ -18,6 +18,7 @@ import {
 import { AgentBrowserBridgeQueue } from '../command-queue/agent-browser-bridge-queue'
 import { assertRemoteCliPageAccess } from '../../routing/input-ownership/remote-cli-page-admission'
 import { agentBrowserSnapshotArgs } from '../protocol/agent-browser-snapshot-arguments'
+import { getBrowserPasskeyRequest } from '../../webauthn/browser-passkey-requests'
 
 export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQueue {
   async snapshot(
@@ -41,7 +42,8 @@ export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQ
         ...result,
         browserPageId: target.browserPageId,
         url: wc.getURL(),
-        title: wc.getTitle()
+        title: wc.getTitle(),
+        passkeyRequest: getBrowserPasskeyRequest(wc.id)
       }
     })
   }

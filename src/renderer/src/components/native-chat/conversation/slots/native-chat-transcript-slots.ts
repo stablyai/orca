@@ -9,6 +9,8 @@ import {
   nativeChatTurnFoldRow
 } from '../../../../../../shared/native-chat/transcript/native-chat-turn-fold'
 import { nativeChatRowRendersContent } from '../../../../../../shared/native-chat/transcript/native-chat-row-content'
+import { nativeChatGeneratedImageAnswers } from '../../../../../../shared/native-chat/transcript/native-chat-generated-image-answers'
+import { nativeChatMarkdownImageSources } from '../../markdown/native-chat-markdown-image-sources'
 import {
   estimateNativeChatRowHeight,
   nativeChatRowContentMetrics
@@ -27,7 +29,11 @@ import {
   type NativeChatSubagentEntriesSlot,
   type NativeChatSubagentSectionSlot
 } from '../../subagents/native-chat-subagent-section-slots'
-import { nativeChatRowSpeaksOrActs } from '../../../../../../shared/native-chat/native-chat-trailing-run'
+import { isGeneratedImageOperation } from '../../../../../../shared/native-chat/native-chat-generated-image'
+import {
+  nativeChatRowRendersProse,
+  nativeChatRowSpeaksOrActs
+} from '../../../../../../shared/native-chat/native-chat-trailing-run'
 import { nativeChatTranscriptWorkRuns } from '../../tools/runs/native-chat-transcript-work-runs'
 import {
   nativeChatAgentRowHasImages,
@@ -109,7 +115,8 @@ export function buildNativeChatTranscript(
   forkPoint: NativeChatSideChatForkPoint | null
 } {
   const {
-    messages,
+    messages: sourceMessages,
+    imageSources = nativeChatMarkdownImageSources,
     unresolvedRowIds,
     typography,
     turnKeys,
@@ -127,18 +134,24 @@ export function buildNativeChatTranscript(
     tailRowBelow = false,
     forkOffer
   } = input
+  const settledTurnKeys = new Set(
+    Object.entries(turnStatuses.completedByTurn)
+      .filter(([, status]) => status.workedSeconds != null)
+      .map(([turnKey]) => turnKey)
+  )
+  const messages = nativeChatGeneratedImageAnswers(
+    sourceMessages,
+    turnKeys,
+    settledTurnKeys,
+    imageSources
+  )
   // Share row rendering facts with fold selection so answer detection agrees with visible prose.
   const foldRows = messages.map((message, index) =>
     nativeChatTurnFoldRow(message, turnKeys[index], receipts.has(message.id))
   )
   // Liveness follows the turn frontier, not a call’s stale running flag.
-  const trailingRunIndex = foldRows.findLastIndex((row, index) =>
-    nativeChatRowSpeaksOrActs(messages[index]!, row.rendersProse, receipts)
-  )
-  const settledTurnKeys = new Set(
-    Object.entries(turnStatuses.completedByTurn)
-      .filter(([, status]) => status.workedSeconds != null)
-      .map(([turnKey]) => turnKey)
+  const trailingRunIndex = messages.findLastIndex((message) =>
+    nativeChatRowSpeaksOrActs(message, nativeChatRowRendersProse(message), receipts)
   )
   const { foldedRows, foldableTurnKeys } = nativeChatTurnFold({
     rows: foldRows,
@@ -252,7 +265,10 @@ export function buildNativeChatTranscript(
     if (!slot.drawsMessage || slot.message.role !== 'assistant') {
       continue
     }
-    if (nativeChatAgentRowWords(slot.message, t).length > 0) {
+    if (
+      !slot.message.blocks.some(isGeneratedImageOperation) &&
+      nativeChatAgentRowWords(slot.message, t).length > 0
+    ) {
       lastWordsByTurn.set(slot.turnKey, slot)
     } else if (nativeChatAgentRowHasImages(slot.message, t)) {
       lastImageByTurn.set(slot.turnKey, slot)

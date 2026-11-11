@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { getManagedEventHook } from './hook-settings'
+import { getManagedEventHook } from './claude-managed-event-hook'
 
 vi.mock('electron', () => ({ app: { getPath: () => '/tmp/userData' } }))
 

@@ -95,6 +95,7 @@ function notification(
         subtitle: null,
         body: '',
         categoryIdentifier: null,
+        threadIdentifier: null,
         sound: 'default',
         data
       }

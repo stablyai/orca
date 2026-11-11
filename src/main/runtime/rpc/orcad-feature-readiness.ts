@@ -1,3 +1,5 @@
+import { waitForStartupPhases } from './startup-phase-wait'
+
 /**
  * Startup phases an orcad host finishes after its first RPC could arrive. A method that needs one
  * declares it (`requires`); the dispatcher waits a bounded time, then refuses retryably. Hosts that
@@ -41,37 +43,13 @@ export class OrcadFeatureReadiness {
    * 'ready' once every feature is open; 'timeout' if any is still closed after `timeoutMs`;
    * 'aborted' as soon as any signal aborts (the client went away).
    */
-  async waitFor(
+  waitFor(
     features: readonly OrcadFeature[],
     timeoutMs: number,
     signals: readonly (AbortSignal | undefined)[] = []
   ): Promise<'ready' | 'timeout' | 'aborted'> {
-    const live = signals.filter((signal): signal is AbortSignal => signal !== undefined)
-    if (live.some((signal) => signal.aborted)) {
-      return 'aborted'
-    }
     const waits = features.flatMap((feature) => this.pending.get(feature)?.opened ?? [])
-    if (waits.length === 0) {
-      return 'ready'
-    }
-    let timer: ReturnType<typeof setTimeout> | undefined
-    const cleanups: (() => void)[] = []
-    const settled = new Promise<'timeout' | 'aborted'>((resolve) => {
-      timer = setTimeout(() => resolve('timeout'), timeoutMs)
-      for (const signal of live) {
-        const onAbort = (): void => resolve('aborted')
-        signal.addEventListener('abort', onAbort, { once: true })
-        cleanups.push(() => signal.removeEventListener('abort', onAbort))
-      }
-    })
-    try {
-      return await Promise.race([Promise.all(waits).then(() => 'ready' as const), settled])
-    } finally {
-      clearTimeout(timer)
-      for (const cleanup of cleanups) {
-        cleanup()
-      }
-    }
+    return waitForStartupPhases(waits, timeoutMs, signals)
   }
 }
 

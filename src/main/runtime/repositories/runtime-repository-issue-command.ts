@@ -8,7 +8,7 @@ import {
 import { isFolderRepo } from '../../../shared/repo-kind'
 import { joinWorktreeRelativePath } from '../files/paths/runtime-relative-paths'
 import type { RuntimeStore } from '../construction/runtime-store-contract'
-import { assertWslMoveRepoWritable } from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
+import { assertWslMoveRepoWritable } from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 
 type RuntimeRepositoryIssueCommandDeps = {
   resolveRepo: (selector: string) => Promise<Repo>

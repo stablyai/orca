@@ -29,7 +29,7 @@ import '../setup/workspace-setup-preparation'
 import type { AppState } from '@/store/types'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { ProjectLaunchContext } from '../../../../../../shared/rpc-contract/preflight-params'
-import type { AgentLaunchRequestId } from '../../../agent-session/launch/routing/agent-launch-request-id'
+
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { GitHubPrStartPoint } from '../../../../../../shared/worktree/types'
@@ -81,7 +81,7 @@ export function resolveDirectLaunchOwnerRow(
 
 /** Freeze the prospective verdict before create; the actual-agent path handles older hosts. */
 export async function planDirectWorkItemLaunch(args: {
-  requestId: AgentLaunchRequestId
+  requestId: string
   prospectiveAgent: TuiAgent | null
   projectContext?: ProjectLaunchContext
   repoId: string

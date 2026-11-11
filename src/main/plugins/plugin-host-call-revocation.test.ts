@@ -5,9 +5,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { PluginService } from './plugin-service'
 import { getUserPluginsDir } from './plugin-discovery'
 import { installPluginFromLocalPath } from './installation/plugin-install'
-import type { PluginRuntimeDelegate } from './workers/plugin-host-service-bindings'
-import type { PluginDesktopFrameServices } from './workers/plugin-host-method-bindings'
-import { executePluginHostCall } from './workers/plugin-host-methods'
+import type { PluginRuntimeDelegate } from './workers/host-api/plugin-host-service-bindings'
+import type { PluginDesktopFrameServices } from './workers/host-api/plugin-host-method-bindings'
+import { executePluginHostCall } from './workers/host-api/plugin-host-methods'
 import type { PluginKillListEntry } from '../../shared/plugins/catalog/plugin-kill-list'
 
 vi.mock('electron', () => ({ ipcMain: { handle() {}, on() {} } }))

@@ -174,7 +174,7 @@ export const mobileSessionFrameStyles = themedStyleSheet(() => ({
     overflow: 'hidden'
   },
   terminalPane: {
-    ...StyleSheet.absoluteFillObject
+    ...StyleSheet.absoluteFill
   },
   terminalPaneHidden: {
     opacity: 0
