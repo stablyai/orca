@@ -3,7 +3,7 @@ import type {
   TerminalPaneLayoutNode
 } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import { isTerminalLeafId } from '../../../../../shared/workspace-layout/stable-pane-id'
-import { readSplitRatio } from '@/lib/pane-manager/pane-split-ratio'
+import { readSplitRatio } from '@/lib/pane-manager/pane-layout/pane-split-ratio'
 import { SPLIT_RATIO_TOLERANCE } from '../../../../../shared/workspace-layout/terminal-pane-tree'
 
 export function getLayoutChildNodes(split: HTMLElement): HTMLElement[] {

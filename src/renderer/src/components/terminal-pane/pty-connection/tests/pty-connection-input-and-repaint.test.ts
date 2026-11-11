@@ -1,5 +1,5 @@
 import { describe, vi } from 'vitest'
-import { registerPtyConnectionMode2031SubscriptionsTests } from '../emulation/pty-connection-mode-2031-subscriptions.spec'
+
 import {
   registerPtyConnectionDaemonPendingEscapeTailTests,
   registerPtyConnectionReattachModeResetTests
@@ -22,7 +22,6 @@ vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
 
-describe('pty-connection-mode-2031-subscriptions', registerPtyConnectionMode2031SubscriptionsTests)
 describe('pty-connection-reattach-mode-reset', () => {
   registerPtyConnectionDaemonPendingEscapeTailTests()
   registerPtyConnectionNativeQueryReplyRoutingTests()

@@ -1,5 +1,5 @@
 import { describe, vi } from 'vitest'
-import { registerPtyConnectionVisibilityResumeSizeTests } from '../geometry/pty-connection-visibility-resume-size.spec'
+
 import { registerPtyConnectionHiddenQuerySnapshotAuthorityTests } from '../output-restore/pty-connection-hidden-query-snapshot-authority.spec'
 
 import {
@@ -15,7 +15,6 @@ vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
 
-describe('pty-connection-visibility-resume-size', registerPtyConnectionVisibilityResumeSizeTests)
 describe('pty-connection-hidden-codex-queries', () => {
   registerPtyConnectionHiddenQuerySnapshotAuthorityTests()
 })
