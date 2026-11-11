@@ -20,6 +20,11 @@ import {
 } from '../../agent-state-rules/agent-state-rules-engine'
 import { evaluateHookTurn, type TuiIdleHookTurn } from './tui-idle-hook-lane'
 
+/** Agents whose titles can precede input readiness, so only a composer/body read can settle them. */
+export function isBodyReadinessAgent(agent: TuiAgent | null | undefined): boolean {
+  return agent === 'qoder' || agent === 'qoder-cn' || agent === 'hermes'
+}
+
 /** Rank authoritative hooks, blocked tail, strong/quiet readiness, first-party working, then sustained weak readiness.
  * Name-only idle is also emitted mid-turn (#6011); weak verdicts need a rendered-screen poll, and screen vetoes override every ready tier.
  * Derive from retained evidence: graph sync rebuilds leaves and would drop separate provenance fields. */
@@ -204,7 +209,7 @@ function rankTuiIdleEvidence(input: TuiIdleEvaluationInput): TuiIdleVerdict {
       : { kind: 'pending', quietForeground: 'closed', recheckAt: blockedAt }
   }
   // Qoder's title and Hermes's session-start hook can precede input readiness; require the composer.
-  if (input.agent === 'qoder' || input.agent === 'qoder-cn' || input.agent === 'hermes') {
+  if (isBodyReadinessAgent(input.agent)) {
     if (
       hasFreshWorkingFirstPartyStatus(input.firstPartyStatus) ||
       input.record.lastAgentStatus === 'working'
