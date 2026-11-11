@@ -17,6 +17,7 @@ import {
 } from '../permissions/tui-agent-permission-choice'
 import type { TuiAgent } from '../catalog/tui-agent'
 import type { AgentPickerEntry, AgentPickerModel, AgentPickerSurface } from './agent-launch-picker'
+import { legacyAgentModelIds } from '../../legacy-agent-models'
 
 type ModelMenuEntry = Pick<AgentPickerEntry, 'agent' | 'catalog'> &
   Partial<
@@ -142,13 +143,16 @@ export function agentPickerModels(
 ): AgentPickerModel[] {
   if (!agentPickerUsesComposerModelMenu(entry, surface)) {
     if (entry.catalog.origin !== 'unknown') {
-      return entry.catalog.models
+      return withLegacyModels(entry.agent, entry.catalog.models)
     }
-    return (getAgentSessionOptionLaunchCatalog(entry.agent)?.models ?? []).map(
-      agentPickerModelFromCatalogModel
+    return withLegacyModels(
+      entry.agent,
+      (getAgentSessionOptionLaunchCatalog(entry.agent)?.models ?? []).map(
+        agentPickerModelFromCatalogModel
+      )
     )
   }
-  return agentPickerModelMenu(entry, surface).rows
+  return withLegacyModels(entry.agent, agentPickerModelMenu(entry, surface).rows)
 }
 
 /** Terminal discovery is a separate change; these menus keep their existing catalog policy. */
@@ -169,4 +173,11 @@ export function agentPickerModelFromCatalogModel(model: CatalogModel): AgentPick
       option.id === 'effort' && option.kind.type === 'select' ? option.kind.choices : []
     )
   }
+}
+
+function withLegacyModels(agent: TuiAgent, models: AgentPickerModel[]): AgentPickerModel[] {
+  const legacy = legacyAgentModelIds(agent, models)
+  return legacy.size
+    ? models.map((model) => (legacy.has(model.id) ? { ...model, isLegacy: true } : model))
+    : models
 }

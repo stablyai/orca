@@ -215,6 +215,7 @@ function modelOptionSnapshot(state: StructuredAgentSessionOptionState): SessionO
     models.length === 0
       ? []
       : nativeChatSessionOptionDescriptors({
+          agent: state.record.agent,
           catalog,
           models,
           mode: 'live',

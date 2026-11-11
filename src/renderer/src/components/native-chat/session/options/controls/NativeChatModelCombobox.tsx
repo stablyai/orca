@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { Check } from 'lucide-react'
+import { Check, ChevronLeft, ChevronRight } from 'lucide-react'
 import {
   Command,
   CommandEmpty,
@@ -47,6 +47,9 @@ export function NativeChatModelCombobox({
   const searchLabel = t('components.native-chat.composer.searchModels', 'Search models…')
   const search = useRef<HTMLInputElement>(null)
   const [query, setQuery] = useState('')
+  const [legacy, setLegacy] = useState(false)
+  const searching = Boolean(query.trim())
+  const legacyCount = choices.filter((choice) => choice.legacy).length
   return (
     <Command
       surface="inline"
@@ -75,8 +78,17 @@ export function NativeChatModelCombobox({
         </CommandEmpty>
         <NativeChatSessionOptionWriteGroup busy={busy}>
           <CommandGroup>
+            {legacy && !searching ? (
+              <CommandItem value="__back__" onSelect={() => setLegacy(false)}>
+                <ChevronLeft className="size-3.5 text-muted-foreground" />
+                {t('agentPicker.legacyModels', 'Legacy models')}
+              </CommandItem>
+            ) : null}
             {choices
-              .filter((choice) => !choice.searchOnly || query.trim())
+              .filter(
+                (choice) =>
+                  searching || choice.value === currentValue || Boolean(choice.legacy) === legacy
+              )
               .map((choice) => {
                 const label = nativeChatSessionChoiceLabel(choice, say)
                 const current = choice.value === currentValue
@@ -105,6 +117,17 @@ export function NativeChatModelCombobox({
                   </CommandItem>
                 )
               })}
+            {!legacy && !searching && legacyCount > 0 ? (
+              <CommandItem value="__legacy__" onSelect={() => setLegacy(true)}>
+                <span className="flex min-w-0 flex-col">
+                  <span>{t('agentPicker.legacyModels', 'Legacy models')}</span>
+                  <span className="text-muted-foreground">
+                    {t('agentPicker.legacyModelCount', '{{total}} models', { total: legacyCount })}
+                  </span>
+                </span>
+                <ChevronRight className="ml-auto size-3.5 text-muted-foreground" />
+              </CommandItem>
+            ) : null}
           </CommandGroup>
         </NativeChatSessionOptionWriteGroup>
       </CommandList>
