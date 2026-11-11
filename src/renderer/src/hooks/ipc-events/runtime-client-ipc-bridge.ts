@@ -1,8 +1,8 @@
 import '@/store/slices/linear/linear-issue-read'
 import { consumeLinearIssueRead } from '@/store/slices/linear/linear-issue-read-lifecycle'
-import { applyHostWorktreeTerminalSleepState } from '@/components/terminal-pane/pty-transport/shutdown/pty-shutdown-exit-deferral'
 import { dispatchTerminalSideEffectBatch } from '@/components/terminal-pane/pty-transport/output/terminal-side-effect-facts-handler'
-import { emitAutomationsChangedWindowEvent } from '@/lib/automations-changed-window-event'
+import { emitAutomationsChangedWindowEvent } from '@/components/automations/events/automations-changed-window-event'
+import { applyHostWorkspaceRowEvent } from './worktree-metadata-set-events'
 import { applyNativeChatLaunchDraftResolved } from '@/runtime/native-chat/launch-drafts/native-chat-launch-draft-runtime-resolution'
 import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import {
@@ -22,7 +22,7 @@ import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtim
 import { getRepoExecutionHostId, toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import type { RuntimeClientEvent } from '../../../../shared/runtime-client-events'
 import { navigationTargetsClients } from '../../../../shared/runtime-navigation'
-import { useAppStore } from '../../store'
+import { useAppStore } from '../../store/index'
 import { invalidateRemoteWorktreeLineage } from '../../store/slices/worktrees/metadata/worktree-lineage-readiness'
 import {
   adoptFromEndpoint,
@@ -111,8 +111,7 @@ export function registerRuntimeClientIpcBridge(
         )
       return
     }
-    if (event.type === 'worktreeTerminalSleepState') {
-      applyHostWorktreeTerminalSleepState(environmentId, event)
+    if (applyHostWorkspaceRowEvent(environmentId, event)) {
       return
     }
     if (event.type === 'terminalSideEffects') {
@@ -237,7 +236,7 @@ export function registerRuntimeClientIpcBridge(
   const runtimeClientEventsSync = createRuntimeClientEventsSync({
     getDesiredEnvironmentIds: () => getRuntimeClientEventEnvironmentIds(useAppStore.getState()),
     getSubscriptionKey: (environmentId) => buildRuntimeClientEventEnvironmentKey([environmentId]),
-    subscribe: (environmentId, onEvent, onError, isCurrent) => {
+    subscribe: (environmentId, onEvent, onError, isCurrent, onClose) => {
       const sshGeneration = getEnvironmentSshStateGeneration(environmentId)
       const runtimeGeneration = getRuntimeEnvironmentConnectionGeneration(environmentId)
       const runtimeRevision = getRuntimeEnvironmentRevision(environmentId)
@@ -272,10 +271,10 @@ export function registerRuntimeClientIpcBridge(
               useAppStore.getState().markEnvironmentSshStateStale(environmentId),
             hydrateEnvironmentSshState: () =>
               hydrateRuntimeEnvironmentSshState(environmentId, { force: true }),
-            sync: runtimeClientEventsSync.sync
+            sync: () => runtimeClientEventsSync.sync([environmentId])
           })
         },
-        { hostsBrowserPages: hostsBrowserPagesFor(environmentId) }
+        { hostsBrowserPages: hostsBrowserPagesFor(environmentId), onClose }
       )
       return subscription
     },

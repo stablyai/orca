@@ -1,5 +1,4 @@
 import { admitTerminalNoticeLifetime } from '../../provider-notices/terminal-notice-lifetime'
-import { resolveAgentWorkspaceTrustOwner } from '../../../../../../shared/agent-launch/permissions/agent-workspace-trust-decision'
 import { terminalLaunchFacts } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { readTerminalSpawnDeferral } from '../../../../../../shared/terminal/pty/admission/spawn-admission-contract'
 import { isRuntimeOwnedSshTargetId } from '../../../../../../shared/execution-host'
@@ -20,7 +19,6 @@ import type { IpcPtySessionHandlers } from './ipc-pty-session-handlers'
 import { isSshSessionGoneError } from '../host-ownership/ssh-session-gone-verdict'
 import { spawnIpcPty } from './ipc-pty-spawn-request'
 import { settleAgentLaunchPaneStart } from '@/lib/agent-session/launch/pane/agent-launch-pane-start'
-import { awaitAgentWorkspaceTrustDecision } from '../../../agent-workspace-trust/agent-workspace-trust-decision-prompt'
 import type { IpcPtyTransportOptions, PtyConnectResult, PtyTransport } from '../pty-transport-types'
 
 const SSH_PTY_CONNECTION_MISMATCH_MARKER = 'belongs to SSH connection'
@@ -83,31 +81,12 @@ export async function connectIpcPty(
         return
       }
     }
-    // A fresh agent launch in an undecided repo waits for the user's trust answer.
-    const trustDecision =
-      admittedSessionId || (options.command ?? transportOptions.command) === undefined
-        ? null
-        : awaitAgentWorkspaceTrustDecision({
-            launchAgent: options.launchAgent ?? transportOptions.launchAgent,
-            workspaceId: resolveAgentWorkspaceTrustOwner(transportOptions),
-            connectionId: transportOptions.connectionId
-          })
-    // Bounded: an unanswered prompt releases with today's default (agent-workspace-trust-decision-prompt).
-    const trustAnswer = trustDecision ? await trustDecision : null
-    if (trustDecision && context.isDestroyed()) {
-      return
-    }
     if (options.shouldContinue && !options.shouldContinue()) {
       return
     }
     // Fence before spawning: redeployed relays recycle IDs, so earlier buffered state belongs to a previous PTY lifetime.
     const priorIncarnationFence = currentPreHandlerPtySequence()
-    const spawnResult = await spawnIpcPty(
-      transportOptions,
-      options,
-      admittedSessionId,
-      trustAnswer === 'agent-asks'
-    )
+    const spawnResult = await spawnIpcPty(transportOptions, options, admittedSessionId)
     settleAgentLaunchPaneStart(transportOptions.tabId, transportOptions.leafId, spawnResult.id)
     // Any resolved spawn or cold restore is live under this id, even if this transport was destroyed meanwhile.
     markTerminalProviderSessionBound(spawnResult.id)

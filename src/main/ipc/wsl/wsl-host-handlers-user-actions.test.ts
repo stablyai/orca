@@ -81,8 +81,7 @@ function register(): void {
 }
 
 describe('WSL host IPC: the user Add and Remove (D3a)', () => {
-  // Removes are reported by the host service itself (see wsl-host-service.test.ts), so both the
-  // sidebar and Settings paths count; here the service is mocked and only the Add is the IPC's.
+  // The service is mocked; only Add reporting belongs to these IPC cases.
   afterEach(() => {
     vi.unstubAllEnvs()
     service.add.mockClear()

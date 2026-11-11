@@ -41,7 +41,8 @@ const USER_VISIBLE_FUNCTION_NAMES = new Set([
   'confirm',
   'prompt',
   'showError',
-  'showToast'
+  'showToast',
+  'toast'
 ])
 const USER_VISIBLE_OBJECT_METHODS = new Set([
   'error',

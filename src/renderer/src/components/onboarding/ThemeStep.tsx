@@ -5,21 +5,19 @@ import { toast } from 'sonner'
 import { track } from '@/diagnostics/telemetry/telemetry'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { GhosttyDiscoveryRow } from './GhosttyDiscoveryRow'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { DiscoveryStatusEmitted } from '../../../../shared/onboarding-state-types'
 import { i18n, translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { ThemeSlotControl, useThemeLooks } from './ThemeLookGallery'
 import { ThemeLookCarousel, openThemePluginDirectory } from './ThemeLookCarousel'
 import { ThemeModeTiles } from './ThemeModeTiles'
-import type { ThemeLook, ThemeLookBase } from './onboarding-theme-looks'
 import { themeLookSettingsUpdate } from './onboarding-theme-look-settings'
-import {
-  terminalConfigImportSettingsUpdate,
-  type TerminalConfigImportPreview
-} from '../../../../shared/terminal/appearance/terminal-config-import-preview'
-import { getSystemPrefersDark } from '@/lib/terminal-theme'
+import { terminalConfigImportSettingsUpdate } from '../../../../shared/terminal/appearance/terminal-config-import-preview'
+import type { TerminalConfigImportPreview } from '../../../../shared/terminal/appearance/terminal-config-import-preview'
+import { getSystemPrefersDark } from '@/lib/terminal/appearance/terminal-theme'
 import { useSystemPrefersDark } from '@/hooks/theme/use-system-prefers-dark'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { DiscoveryStatusEmitted } from '../../../../shared/onboarding-state-types'
+import type { ThemeLook, ThemeLookBase } from './onboarding-theme-looks'
 
 type ThemeStepProps = {
   theme: GlobalSettings['theme']

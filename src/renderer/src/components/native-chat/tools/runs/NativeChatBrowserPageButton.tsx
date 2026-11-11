@@ -62,7 +62,7 @@ function BrowserPageButton({
 }): React.JSX.Element | null {
   const t = useTranslate()
   const owner = useNativeChatVisualOwner()
-  const latest = useLastBrowserAgentActivity(owner?.worktreeId ?? null)
+  const latest = useLastBrowserAgentActivity(owner?.worktreeId ?? null, owner?.sessionId ?? null)
   // A call appears before its command reaches the browser, so only later activity is its own.
   const [baseline, setBaseline] = useState(() => startRun(runCallId))
   if (baseline.runCallId !== runCallId) {

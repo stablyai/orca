@@ -30,7 +30,7 @@ The acceptance scenario pairs an implementer with a reviewer: the implementer se
 
 ## Deferred
 
-Dedicated mobile link controls, cross-host links, multiple peers, file-write collision detection, editable live roles are outside this slice. Mobile preserves link attribution and ordinary chat participation. Existing orchestration Runs/Dispatches keep their own lifecycle authority.
+Dedicated mobile link controls, cross-host links, file-write collision detection and editable live roles are outside this slice. Mobile preserves link attribution and ordinary chat participation. Existing orchestration Runs/Dispatches keep their own lifecycle authority.
 
 An unconfirmed delivery can be marked reviewed only by the desktop owner after checking the recipient chat. This cancels that outbox event without changing its original operation, reserves no send, and leaves the link paused. Resume admits later messages only. A late receipt for the reviewed event cannot resend it.
 

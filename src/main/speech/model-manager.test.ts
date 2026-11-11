@@ -1,4 +1,12 @@
-import { existsSync, mkdirSync, mkdtempSync, rmSync, truncateSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  renameSync,
+  rmSync,
+  truncateSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -123,6 +131,19 @@ describe('ModelManager', () => {
         modelId
       )
       expect(state.needsUpdate).toBe(true)
+
+      const failedSwap = new ModelManager(dir, openElectronSpeechDownloadRequest)
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: as above.
+      ;(failedSwap as unknown as typeof internals).downloadModelFiles = async (_m, stagingDir) => {
+        rmSync(stagingDir, { recursive: true, force: true })
+      }
+      await expect(failedSwap.downloadModel(modelId)).rejects.toThrow('ENOENT')
+      expect((await failedSwap.getModelState(modelId)).needsUpdate).toBe(true)
+
+      // An interrupted swap leaves the old files only in .previous.
+      renameSync(modelDir, `${modelDir}.previous`)
+      await expect(failedSwap.downloadModel(modelId)).rejects.toThrow('ENOENT')
+      expect((await failedSwap.getModelState(modelId)).needsUpdate).toBe(true)
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }

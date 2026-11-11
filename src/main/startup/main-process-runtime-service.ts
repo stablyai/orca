@@ -1,4 +1,5 @@
 import { wireRecipeWorkspaceRemoval } from '../ephemeral-vm/recipe-workspace-removal-wiring'
+import { wireGitHubIssueLinkTitleFill } from '../github/github-issue-link-title-wiring'
 import {
   applySessionSearchSettingsChange,
   installChildSessionSearchService
@@ -159,6 +160,9 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
     recordDurableCrashBreadcrumb('agent_state_rules_active', rules)
   )
   wireRecipeWorkspaceRemoval(runtime, store, () => app.getPath('userData'))
+  // Each host titles its own workspaces' untitled GitHub issue links once, when they are linked.
+  const disposeIssueLinkTitleFill = wireGitHubIssueLinkTitleFill(store, runtime)
+  app.once('will-quit', disposeIssueLinkTitleFill)
   state.runtime = runtime
   // Opening a recipe VM's workspace from a client wakes the VM through the runtime's one owner.
   registerRecipeVmWaker({
@@ -199,6 +203,7 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
     )
   )
   browserSessionRegistry.onProfilesChanged = () => runtime.notifyBrowserProfilesChanged()
+  runtime.startupWorkerAuthority.begin()
   return runtime
 }
 

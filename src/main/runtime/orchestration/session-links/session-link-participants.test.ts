@@ -13,7 +13,7 @@ vi.mock('../../../native-chat/agent-session-wire/host/structured-agent-session-r
 }))
 afterEach(() => vi.restoreAllMocks())
 
-it('offers a registered Gemini chat through the existing mail reach rules, excluding unavailable or closed chats', async () => {
+it('offers registered agents through mail reach, excluding unavailable or closed chats', async () => {
   const { host } = hostTestState()
   await attach()
   await host.deps.store.setSessionTabVisibility(SESSION, true, 'tab-gemini')
@@ -38,6 +38,14 @@ it('offers a registered Gemini chat through the existing mail reach rules, exclu
   })
   expect(await sessionLinkCandidates(runtime)).toMatchObject([
     { sessionId: SESSION, agent: 'gemini', directory: '/projects/acme/app' }
+  ])
+  gemini.provider = 'antigravity'
+  registration.mockReturnValue({
+    ...registered,
+    definition: { ...registered.definition, agent: 'antigravity' }
+  })
+  expect(await sessionLinkCandidates(runtime)).toMatchObject([
+    { sessionId: SESSION, agent: 'antigravity', directory: '/projects/acme/app' }
   ])
   registration.mockReturnValue(null)
   expect(await sessionLinkCandidates(runtime)).toEqual([])

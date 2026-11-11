@@ -23,7 +23,15 @@ export async function writeProfileStateInWorker(
         runtime.dirtyProfileStateDomains.add(domain)
       }
     }
-    runtime.pendingAutomationRunsAfter ??= automationRuns
+    if (automationRuns === undefined || runtime.pendingAutomationRunsAfter !== undefined) {
+      return
+    }
+    // A run list replaced while this write was in flight is newer; save it as a whole row instead.
+    if (automationRuns === runtime.state.automationRuns) {
+      runtime.pendingAutomationRunsAfter = automationRuns
+    } else {
+      runtime.dirtyProfileStateDomains?.add('automationRuns')
+    }
   }
 
   try {

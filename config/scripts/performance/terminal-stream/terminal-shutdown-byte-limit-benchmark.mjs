@@ -43,7 +43,7 @@ const layoutFunctions = layoutAst.statements.filter(
 )
 assert.equal(layoutFunctions.length, layoutNames.length)
 const layoutSubset = `import { isTerminalLeafId } from ${JSON.stringify(path.resolve('src/shared/workspace-layout/stable-pane-id.ts'))};
-import { readSplitRatio } from '@/lib/pane-manager/pane-split-ratio';
+import { readSplitRatio } from '@/lib/pane-manager/pane-layout/pane-split-ratio';
 import { SPLIT_RATIO_TOLERANCE } from ${JSON.stringify(path.resolve('src/shared/workspace-layout/terminal-pane-tree.ts'))};
 ${layoutFunctions.map((node) => node.getText(layoutAst)).join('\n')}`
 

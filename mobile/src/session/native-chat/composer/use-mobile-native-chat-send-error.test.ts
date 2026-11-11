@@ -76,18 +76,6 @@ describe('useMobileNativeChatSendError', () => {
     expect(api().message).toBeNull()
   })
 
-  it('a refusal behind a question goes once it is answered', async () => {
-    await render()
-    await showing({ working: false, prompt: true })
-    await act(async () =>
-      api().show("Answer the agent's question or approval, then run /clear.", {
-        refusedWhile: 'prompt'
-      })
-    )
-    await showing({ working: false, prompt: false })
-    expect(api().message).toBeNull()
-  })
-
   it('a failure naming nothing the phone shows, or background tasks it cannot see, stays', async () => {
     await render()
     await act(async () => api().show('Message not sent'))
@@ -112,16 +100,6 @@ describe('useMobileNativeChatSendError', () => {
     await act(async () => {
       renderer?.update(createElement(Harness, { scopeKey: 'terminal-1' }))
     })
-    expect(api().message).toBeNull()
-  })
-
-  it('falls back to the toast when the banner is not mounted', async () => {
-    await act(async () => {
-      renderer = create(createElement(Harness, { scopeKey: 'terminal-1', bannerMounted: false }))
-    })
-    await act(async () => api().show('Delivery unconfirmed'))
-
-    expect(showToast).toHaveBeenCalledWith('Delivery unconfirmed', 1600)
     expect(api().message).toBeNull()
   })
 

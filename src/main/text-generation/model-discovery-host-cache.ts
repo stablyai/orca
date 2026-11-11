@@ -12,7 +12,8 @@ import type { DiscoverCommitMessageModelsResult } from './source-control-text-ge
 const ACCOUNT_DIR_VAR: Partial<Record<TuiAgent, string>> = {
   omp: PRIMARY_AGENT_DIR_ENV_BY_KIND.omp,
   grok: 'GROK_HOME',
-  codex: 'CODEX_HOME'
+  codex: 'CODEX_HOME',
+  cursor: 'CURSOR_CONFIG_DIR'
 }
 const TTL_MS = 10 * 60_000
 const MAX_ENTRIES = 32
@@ -48,7 +49,7 @@ export type ModelDiscoveryCacheInput = {
   options: CommitMessageModelDiscoveryLocalOptions
 }
 
-/** Runs the probe; a probe-confirmed OMP, Grok or Codex list is reused for 10 min. */
+/** Runs the probe; a probe-confirmed OMP, Grok, Codex or Cursor list is reused for 10 min. */
 export function discoverModelsWithHostCache(
   input: ModelDiscoveryCacheInput,
   probe: () => Promise<DiscoverCommitMessageModelsResult>

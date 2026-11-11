@@ -183,7 +183,7 @@ export function SortableTabContextMenu({
       {onWorkTogether ? (
         <ContextMenuItem onSelect={onWorkTogether}>
           <Link2 className="size-3.5 shrink-0" />
-          {translate('components.sessionLink.workTogether', 'Work together…')}
+          {t('components.sessionLink.workTogether', 'Work together…')}
         </ContextMenuItem>
       ) : null}
       <TabSessionSurfaceSwitchMenuItems
