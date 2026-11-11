@@ -105,33 +105,3 @@ export type MobileStructuredAgentSessionArgs = {
   // Accepted queued actions retire the route’s failure banner.
   onActionResolved?: () => void
 }
-
-import type { MobileStructuredAgentMutate } from './use-mobile-structured-agent-mutation'
-
-export type MobileStructuredAgentOptionsArgs = {
-  modelCatalogCache?:
-    | import('../input/use-mobile-host-model-catalog-upgrade').HostModelCatalogCache
-    | null
-  agent: string | null
-  client: RpcClient | null
-  sessionId: string | null
-  enabled: boolean
-  fence: number | null
-  mutate: MobileStructuredAgentMutate
-  onOptionError?: (message: string) => void
-  optionStamp?: string
-  turnId: string | null
-  hasTurn?: boolean
-  unloadedTurnRevisions: number | undefined
-  hostSupport: Pick<
-    StructuredAgentSessionHostSupport,
-    | 'permissionModes'
-    | 'permissionOwn'
-    | 'coherentModelCatalog'
-    | 'statusFeed'
-    | 'defaultModel'
-    | 'modelEffortDiscovery'
-    | 'sendSelection'
-    | 'sendOptions'
-  > | null
-}

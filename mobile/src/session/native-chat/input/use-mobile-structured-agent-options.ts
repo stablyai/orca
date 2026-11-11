@@ -1,4 +1,4 @@
-import type { MobileStructuredAgentOptionsArgs } from '../agent-session/mobile-structured-agent-session-contract'
+import type { MobileStructuredAgentOptionsArgs } from './mobile-structured-agent-options-contract'
 import {
   mobileStructuredModelDefaultSnapshot,
   useMobileStructuredModelDefault
