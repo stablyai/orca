@@ -269,8 +269,8 @@ export async function initializeReadyFoundation(): Promise<void> {
         )
       }
     }
-    if ('experimentalBrowserExtensions' in updates) {
-      void switchBrowserExtensionSupport(settings.experimentalBrowserExtensions === true)
+    if ('browserExtensionsEnabled' in updates) {
+      void switchBrowserExtensionSupport(settings.browserExtensionsEnabled !== false)
     }
     if ('showMenuBarIcon' in updates) {
       // Store owns settings mutations; sync every menu-bar toggle through this listener.
@@ -299,7 +299,7 @@ export async function initializeReadyFoundation(): Promise<void> {
   registerDocPreviewGrantHandlers()
   // Session setup needs the extension support decision before loading profiles.
   initializeBrowserExtensionSupport({
-    enabled: store.getSettings().experimentalBrowserExtensions === true,
+    enabled: store.getSettings().browserExtensionsEnabled !== false,
     savedBrowserTabs: store
   })
   // Desktop webviews and runtime commands share sessions; initialize without waiting for renderer IPC.

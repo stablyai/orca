@@ -1,12 +1,12 @@
 import { replaceTabBuckets, replaceRecordEntries } from '@/store/keyed-record-transitions'
 import { getFirstTerminalTabOwnerWorktreeId } from './terminal-tab-owner-index'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
-import { hasWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
-import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
+import { hasWorktreeSleepIntent } from '@/lib/workspace/sleep/worktree-sleep-intent'
 import {
   consumePendingActivationSpawn,
   getPendingActivationSpawnCount
 } from './terminal-pty-identities'
+import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 
 export function createTerminalPtyReleaseActions(
   set: TerminalStoreSet,

@@ -29,6 +29,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { FilterToggleRow } from './FilterToggleRow'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
+import { isUnassignedShortcutLabel } from '@/i18n/unassigned-label'
 import { searchRepos } from '@/lib/workspace/catalog/repo-search'
 import { clearSidebarFilters, selectSidebarFilterState } from './sidebar-filter-actions'
 import { useWorkspaceOptionsFilterBadge } from './workspace-options-menu-items'
@@ -185,7 +186,7 @@ const SidebarFilter = React.memo(function SidebarFilter({
           label={t('auto.components.sidebar.SidebarFilter.638a2d221d', 'Hide sleeping')}
           checked={!showSleepingWorkspaces}
           onChange={(hideSleeping) => setShowSleepingWorkspaces(!hideSleeping)}
-          shortcutLabel={sleepingShortcut === 'Unassigned' ? undefined : sleepingShortcut}
+          shortcutLabel={isUnassignedShortcutLabel(sleepingShortcut) ? undefined : sleepingShortcut}
         />
         {/* Show the exemption only while its parent sleeping-workspace filter can use it. */}
         {!showSleepingWorkspaces && (

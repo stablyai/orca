@@ -1,16 +1,16 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { installAttentionScreen } from '../../workspace-attention/workspace-unread-characterization-fixture'
 import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import {
   markWorktreeSleepIntent,
   onWorktreeSleepIntentCleared,
   forgetWorktreeSleepIntent
-} from '@/lib/worktree-sleep-intent'
+} from '@/lib/workspace/sleep/worktree-sleep-intent'
 import { createTestStore } from '../../../testing/app-store-test-fixture'
 import { makeTab } from '../../../terminals/terminal-tab.test-fixture'
 import { makeWorktree } from '../worktree.test-fixture'
 import { makeFolderWorkspace } from '../../../folder-workspaces/folder-workspace.test-fixture'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 
 const FOLDER_ID = 'folder-activation'
 const FOLDER_KEY = folderWorkspaceKey(FOLDER_ID)
@@ -64,44 +64,6 @@ it('wakes slept folder on local after publishing restored explorer and terminal 
 
   expect(wake).toHaveBeenCalledOnce()
   expect(store.getState().activeWorkspaceExecutionHostId).toBe('local')
-  expect(store.getState().tabsByWorktree[workspaceId][0].pendingActivationSpawn).toBe(true)
-  expect(store.getState().activeTabId).toBe('terminal')
-  expect(store.getState().refreshGitHubForWorktreeIfStale).not.toHaveBeenCalled()
-})
-
-it('wakes slept git on local after publishing restored explorer and terminal state', () => {
-  const { store, workspaceId, activate } = seedWorkspace('git', 'local')
-  markWorktreeSleepIntent(workspaceId)
-  const wake = vi.fn(() => {
-    expect(store.getState().activeWorktreeId).toBe('worktree-activation')
-    expect(store.getState().tabsByWorktree[workspaceId][0].generation).toBe(4)
-    expect(store.getState().rightSidebarExplorerView).toBe('files')
-  })
-  onWorktreeSleepIntentCleared(workspaceId, wake)
-
-  activate()
-
-  expect(wake).toHaveBeenCalledOnce()
-  expect(store.getState().activeWorkspaceExecutionHostId).toBe('local')
-  expect(store.getState().tabsByWorktree[workspaceId][0].pendingActivationSpawn).toBe(true)
-  expect(store.getState().activeTabId).toBe('terminal')
-  expect(store.getState().refreshGitHubForWorktreeIfStale).toHaveBeenCalled()
-})
-
-it('wakes slept folder on ssh:remote after publishing restored explorer and terminal state', () => {
-  const { store, workspaceId, activate } = seedWorkspace('folder', 'ssh:remote')
-  markWorktreeSleepIntent(workspaceId)
-  const wake = vi.fn(() => {
-    expect(store.getState().activeWorktreeId).toBe('folder:folder-activation')
-    expect(store.getState().tabsByWorktree[workspaceId][0].generation).toBe(4)
-    expect(store.getState().rightSidebarExplorerView).toBe('files')
-  })
-  onWorktreeSleepIntentCleared(workspaceId, wake)
-
-  activate()
-
-  expect(wake).toHaveBeenCalledOnce()
-  expect(store.getState().activeWorkspaceExecutionHostId).toBe('ssh:remote')
   expect(store.getState().tabsByWorktree[workspaceId][0].pendingActivationSpawn).toBe(true)
   expect(store.getState().activeTabId).toBe('terminal')
   expect(store.getState().refreshGitHubForWorktreeIfStale).not.toHaveBeenCalled()

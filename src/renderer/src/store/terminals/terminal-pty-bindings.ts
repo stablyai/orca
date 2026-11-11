@@ -6,14 +6,14 @@ import {
   toRemoteRuntimePtyId
 } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { isTerminalTabPresent } from './terminal-tab-retirement'
-import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 import {
   consumePendingActivationSpawn,
   getPendingActivationSpawnCount
 } from './terminal-pty-identities'
 import { omitUnverifiedPtyLossTabIds } from './terminal-unverified-pty-loss'
-import { clearWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
+import { clearWorktreeSleepIntent } from '@/lib/workspace/sleep/worktree-sleep-intent'
 import { omitDisownedPtyIds } from './terminal-disowned-pty-sources'
+import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 
 export function createTerminalPtyBindingActions(
   set: TerminalStoreSet,

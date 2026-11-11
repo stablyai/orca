@@ -1,3 +1,4 @@
+import { TERMINAL_TAB_PARK_FLIP_WINDOW_MS } from '../../../src/renderer/src/components/terminal-pane/parking/verdict/terminal-park-verdict-flip-telemetry'
 import type { Page } from '@stablyai/playwright-test'
 import { expect } from '@stablyai/playwright-test'
 import { getActiveTabId } from './store'
@@ -5,7 +6,8 @@ import { waitForActiveTerminalManager, waitForPaneIdentitySnapshot } from './ter
 
 function resolveParkWaitTimeoutMs(parkDelayMs?: number): number {
   const delay = parkDelayMs ?? (Number(process.env.ORCA_E2E_TERMINAL_PARKING_DELAY_MS) || 500)
-  return Math.max(20_000, delay * 10)
+  // A split can legitimately pin its remounted view for one damping window.
+  return Math.max(TERMINAL_TAB_PARK_FLIP_WINDOW_MS + delay * 2, delay * 10)
 }
 
 // PaneManager unregisters on unmount, making its absence the observable parking signal.
