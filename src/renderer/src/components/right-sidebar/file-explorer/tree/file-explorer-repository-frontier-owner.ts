@@ -74,6 +74,7 @@ export class ExplorerRepositoryFrontier {
   }
 
   commit(cache: Readonly<Record<string, DirCache>>, paths: readonly string[], reset = false): void {
+    const previous = this.current
     this.current = cache
     if (reset) {
       this.reset = true
@@ -82,7 +83,9 @@ export class ExplorerRepositoryFrontier {
     } else {
       for (const path of paths) {
         const relative = relativePathInsideRoot(this.root, path)
-        if (relative !== null) {
+        const before = this.valid(previous[path]) ? previous[path] : undefined
+        const after = this.valid(cache[path]) ? cache[path] : undefined
+        if (relative !== null && before !== after) {
           this.consumer.invalidate(relative)
         }
         if (this.consumed[path] === cache[path]) {

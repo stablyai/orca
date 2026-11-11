@@ -444,3 +444,54 @@ it.each([20, 200])(
     fixture.unmount()
   }
 )
+
+it('keeps unknown discovery backoff across repeated unreadable cache updates', async () => {
+  vi.useFakeTimers()
+  supports.mockResolvedValue(true)
+  const probes: string[][] = []
+  let recovered = false
+  read.mockImplementation(async (_route, request: GitRepositoryStatusRequest) => {
+    probes.push(request.repositoryPaths!)
+    return { repositoryStatuses: [{ path: 'folder', kind: recovered ? 'absent' : 'unknown' }] }
+  })
+  const store = new FileExplorerDirectoryCache()
+  store.update(() => ({
+    dirCache: {
+      '/w': { operationOwner: owner, children: [node('folder', true)] },
+      '/w/folder': { operationOwner: owner, children: [], error: 'offline' }
+    },
+    changedPaths: [],
+    sourceWorkspaceId: 'folder:w',
+    reset: true
+  }))
+  const expanded = new Set<string>()
+  const fixture = renderHook(() =>
+    useFileExplorerRepositories(
+      'folder:w',
+      '/w',
+      '/w',
+      { dirCacheStore: store },
+      expanded,
+      true,
+      true
+    )
+  )
+  await act(() => vi.advanceTimersByTimeAsync(1000))
+  for (let index = 0; index < 10; index++) {
+    act(() =>
+      store.update((previous) => ({
+        dirCache: {
+          ...previous,
+          '/w/folder': { operationOwner: owner, children: [], error: `offline-${index}` }
+        },
+        changedPaths: ['/w/folder']
+      }))
+    )
+    await act(() => vi.advanceTimersByTimeAsync(1000))
+  }
+  expect(probes).toEqual([['folder']])
+  recovered = true
+  await act(() => vi.advanceTimersByTimeAsync(60_000))
+  expect(probes).toEqual([['folder'], ['folder']])
+  fixture.unmount()
+})
