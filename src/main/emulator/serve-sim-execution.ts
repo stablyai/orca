@@ -171,6 +171,18 @@ export function stripEmulatorTargetArgs(args: string[]): string[] {
   return stripped
 }
 
+function serveSimFailureMessage(output: string): string {
+  // An uncaught throw prints serve-sim's minified source line (which holds every CLI message) before
+  // the error, then a "Node.js v…" footer; only the error line says what failed.
+  if (/^Node\.js v\d/m.test(output)) {
+    const thrown = /^\w*Error: .+$/m.exec(output)
+    if (thrown) {
+      return thrown[0]
+    }
+  }
+  return output.trim() || 'serve-sim command failed'
+}
+
 export async function execServeSimCommand(
   executable: ServeSimExecutable,
   args: string[],
@@ -198,9 +210,9 @@ export async function execServeSimCommand(
     )
   }
   if (result.code !== 0 || result.timedOut) {
-    const message = result.stdout || result.stderr || 'serve-sim command failed'
+    const message = serveSimFailureMessage(result.stdout || result.stderr)
     // Why: serve-sim also says "not running" for a missing camera helper; that needs its own message.
-    if (/no serve-sim server/i.test(message)) {
+    if (/^no serve-sim server/im.test(message)) {
       throw new EmulatorError(
         'emulator_no_active',
         'No active emulator for this worktree — use orca emulator devices/attach or open the pane'
