@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import React from 'react'
+import { useAppStore } from '@/store'
 import { useRepoSshGate } from '@/hooks/use-repo-ssh-gate'
 import {
   CircleX,
@@ -7,10 +8,12 @@ import {
   Eye,
   FolderInput,
   FolderTree,
+  Moon,
   Plus,
   // `Shapes` is lucide-react's own export name; exempted in config/oxlint-anti-slop.json.
   Shapes,
   SlidersHorizontal,
+  Sun,
   Trash2
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -32,6 +35,8 @@ import { WslMoveProjectMenuItem } from '@/components/wsl-move/WslMoveProjectMenu
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { WorktreeVisibilityDefaults } from '../../../../../../shared/global-settings-types'
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
+import { getRepoHostIdentityForParts } from '../../../../../../shared/repo-host-identity'
 import { isGitRepoKind } from '../../../../../../shared/repo-kind'
 import {
   effectiveExternalWorktreeVisibility,
@@ -93,6 +98,10 @@ export const RepoHeaderProjectActionsMenu = React.memo(function RepoHeaderProjec
   const t = useTranslate()
   // Memoized: subscribe so a language change still repaints its labels.
   useTranslation()
+  const hiddenProjectKeys = useAppStore((state) => state.hideSleepingProjectKeys)
+  const setHiddenProjectKeys = useAppStore((state) => state.setHideSleepingProjectKeys)
+  const projectKey = getRepoHostIdentityForParts(repo.id, getRepoExecutionHostId(repo))
+  const sleepingHidden = hiddenProjectKeys.includes(projectKey)
   return (
     <DropdownMenu modal={false}>
       <Tooltip>
@@ -149,6 +158,21 @@ export const RepoHeaderProjectActionsMenu = React.memo(function RepoHeaderProjec
             {getWorktreeVisibilityMenuLabel(repo, actions.getWorktreeVisibilityDefaults(repo), t)}
           </DropdownMenuItem>
         ) : null}
+        <DropdownMenuItem
+          onSelect={() => {
+            const keys = useAppStore.getState().hideSleepingProjectKeys
+            setHiddenProjectKeys(
+              keys.includes(projectKey)
+                ? keys.filter((key) => key !== projectKey)
+                : [...keys, projectKey]
+            )
+          }}
+        >
+          {sleepingHidden ? <Sun className="size-3.5" /> : <Moon className="size-3.5" />}
+          {sleepingHidden
+            ? t('sidebar.projectSleeping.show', 'Show sleeping worktrees')
+            : t('sidebar.projectSleeping.hide', 'Hide sleeping worktrees')}
+        </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => actions.onCreateGroupFromRepo(repo)}>
           {/* Not FolderPlus: that now means "Add project" in the sidebar header above. */}
           <FolderTree className="size-3.5" />

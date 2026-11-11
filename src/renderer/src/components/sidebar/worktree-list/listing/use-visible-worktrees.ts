@@ -69,6 +69,7 @@ export function useVisibleSidebarWorktrees(args: {
   const { filterState, sortBy, sortedIds, repoMap, worktreeLineageById, defaultHostId } = args
   const {
     showSleepingWorkspaces,
+    hideSleepingProjectKeys,
     filterRepoIds,
     hideDefaultBranchWorkspace,
     hideAutomationGeneratedWorkspaces,
@@ -79,10 +80,11 @@ export function useVisibleSidebarWorktrees(args: {
     visibleWorkspaceHostIds,
     workspaceHostScope
   } = filterState
+  const filterSleeping = !showSleepingWorkspaces || (hideSleepingProjectKeys?.length ?? 0) > 0
   const worktreesByRepo = useAppStore((s) => selectWorktreesByRepo(s))
-  const agentStatusEpoch = useAppStore((s) => (!showSleepingWorkspaces ? s.agentStatusEpoch : 0))
+  const agentStatusEpoch = useAppStore((s) => (filterSleeping ? s.agentStatusEpoch : 0))
   // Opt-out lists must skip the clock so they cannot evict the sample shared by live lists.
-  const agentStatusNow = showSleepingWorkspaces ? 0 : getAgentStatusEpochNow(agentStatusEpoch)
+  const agentStatusNow = filterSleeping ? getAgentStatusEpochNow(agentStatusEpoch) : 0
   const selectPairedDevices = useMemo(
     () => createSidebarPairedDeviceIdsSelector(hideWorkspacesFromOtherDevices),
     [hideWorkspacesFromOtherDevices]
@@ -90,17 +92,17 @@ export function useVisibleSidebarWorktrees(args: {
   const pairedDeviceIdsByEnvironment = useAppStore(selectPairedDevices)
   const lineageParentIdentities = useAppStore(selectSidebarLineageParentIdentities)
 
-  const needsActivityMaps = !showSleepingWorkspaces || sortBy === 'smart'
+  const needsActivityMaps = filterSleeping || sortBy === 'smart'
   const tabsByWorktree = useAppStore((s) =>
     needsActivityMaps ? getVisibleWorktreeTerminalActivityTabs(s.tabsByWorktree) : null
   )
   const ptyIdsByTabId = useAppStore((s) => (needsActivityMaps ? s.ptyIdsByTabId : null))
   const browserTabsByWorktree = useAppStore((s) =>
-    !showSleepingWorkspaces ? getVisibleWorktreeBrowserActivityTabs(s.browserTabsByWorktree) : null
+    filterSleeping ? getVisibleWorktreeBrowserActivityTabs(s.browserTabsByWorktree) : null
   )
   const worktreeIdsWithStructuredChat = useAppStore((s) =>
     getStructuredChatWorktreeIds(
-      showSleepingWorkspaces,
+      !filterSleeping,
       s.unifiedTabsByWorktree,
       s.structuredChatSleptAtByPaneKey
     )
@@ -109,12 +111,12 @@ export function useVisibleSidebarWorktrees(args: {
   // Recompute on epoch, not every hook ping; key on the epoch too since ticks can share a millisecond sample.
   const [selectLiveAgentWorktreeIds] = useState(createLiveAgentWorktreeIdsSelector)
   const worktreeIdsWithLiveAgent = useAppStore((s) =>
-    showSleepingWorkspaces
-      ? EMPTY_WORKTREE_ID_SET
-      : selectLiveAgentWorktreeIds(s, tabsByWorktree, agentStatusNow)
+    filterSleeping
+      ? selectLiveAgentWorktreeIds(s, tabsByWorktree, agentStatusNow)
+      : EMPTY_WORKTREE_ID_SET
   )
   const sleepingSweepExemptWorktreeIds = useSleepingSweepRetention({
-    enabled: !showSleepingWorkspaces,
+    enabled: filterSleeping,
     worktreesByRepo,
     tabsByWorktree,
     ptyIdsByTabId,
@@ -128,6 +130,7 @@ export function useVisibleSidebarWorktrees(args: {
     const visible = computeVisibleWorktrees(worktreesByRepo, sortedIds, {
       filterRepoIds,
       showSleepingWorkspaces,
+      hideSleepingProjectKeys,
       tabsByWorktree,
       ptyIdsByTabId,
       browserTabsByWorktree,
@@ -162,6 +165,7 @@ export function useVisibleSidebarWorktrees(args: {
     sleepingSweepExemptWorktreeIds,
     filterRepoIds,
     showSleepingWorkspaces,
+    hideSleepingProjectKeys,
     hideDefaultBranchWorkspace,
     hideAutomationGeneratedWorkspaces,
     hideCliCreatedWorkspaces,

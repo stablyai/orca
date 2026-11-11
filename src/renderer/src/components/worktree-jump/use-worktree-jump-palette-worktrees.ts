@@ -39,6 +39,7 @@ export function useWorktreeJumpPaletteWorktrees({
   hideDetachedHeadWorkspaces,
   hideWorkspacesFromOtherDevices,
   showSleepingWorkspaces,
+  hideSleepingProjectKeys,
   alwaysShowDefaultBranchWorkspace,
   ptyIdsByTabId,
   browserTabsByWorktree,
@@ -65,6 +66,7 @@ export function useWorktreeJumpPaletteWorktrees({
   workspacePortScan
 }: WorktreeJumpPaletteWorktreesInput) {
   const hasQuery = paletteSearchQuery.length > 0
+  const filterSleeping = !showSleepingWorkspaces || hideSleepingProjectKeys.length > 0
   const isLoading = repos.length > 0 && Object.keys(worktreesByRepo).length === 0
   const worktreeIdsWithLiveAgent = useMemo(
     () =>
@@ -84,7 +86,7 @@ export function useWorktreeJumpPaletteWorktrees({
     [hideWorkspacesFromOtherDevices, runtimeEnvironments, runtimeStatusByEnvironmentId]
   )
   const worktreeIdsWithStructuredChat = getStructuredChatWorktreeIds(
-    showSleepingWorkspaces,
+    !filterSleeping,
     unifiedTabsByWorktree,
     structuredChatSleptAtByPaneKey
   )
@@ -93,7 +95,8 @@ export function useWorktreeJumpPaletteWorktrees({
     const visible = filterWorkspaceRows(
       workspaces,
       {
-        hideSleepingWorkspaces: !showSleepingWorkspaces,
+        hideSleepingWorkspaces: filterSleeping,
+        hideSleepingProjectKeys,
         alwaysShowDefaultBranchWorkspace,
         hideDefaultBranchWorkspace,
         hideAutomationGeneratedWorkspaces,
@@ -125,11 +128,12 @@ export function useWorktreeJumpPaletteWorktrees({
     hideDefaultBranchWorkspace,
     hideDetachedHeadWorkspaces,
     hideWorkspacesFromOtherDevices,
+    hideSleepingProjectKeys,
+    filterSleeping,
     pairedDeviceIdsByEnvironment,
     ptyIdsByTabId,
     repoMap,
     defaultHostId,
-    showSleepingWorkspaces,
     tabsByWorktree,
     worktreeIdsWithLiveAgent,
     worktreeIdsWithStructuredChat

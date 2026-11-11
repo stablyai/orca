@@ -91,6 +91,7 @@ export const UI_STATE_GLOBAL_FIELDS = [
   'projectOrderBy',
   'showActiveOnly',
   'hideSleepingWorkspaces',
+  'hideSleepingProjectKeys',
   'showSleepingWorkspaces',
   'showInactiveWorkspaces',
   'hideDefaultBranchWorkspace',

@@ -31,6 +31,8 @@ export function useVisibleWorkspaceKanbanWorktreeIds({
 }: UseVisibleWorkspaceKanbanWorktreeIdsParams): ReadonlySet<string> {
   const worktreesByRepo = useAppStore((s) => selectWorktreesByRepo(s))
   const showSleepingWorkspaces = useAppStore((s) => s.showSleepingWorkspaces)
+  const hideSleepingProjectKeys = useAppStore((s) => s.hideSleepingProjectKeys)
+  const filterSleeping = !showSleepingWorkspaces || hideSleepingProjectKeys.length > 0
   const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
   const hideAutomationGeneratedWorkspaces = useAppStore((s) => s.hideAutomationGeneratedWorkspaces)
   const hideCliCreatedWorkspaces = useAppStore((s) => s.hideCliCreatedWorkspaces)
@@ -49,27 +51,27 @@ export function useVisibleWorkspaceKanbanWorktreeIds({
   const visibleWorkspaceHostIds = useAppStore((s) => s.visibleWorkspaceHostIds)
   const settings = useAppStore((s) => s.settings)
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
-  const tabsByWorktree = useAppStore((s) => (!showSleepingWorkspaces ? s.tabsByWorktree : null))
-  const ptyIdsByTabId = useAppStore((s) => (!showSleepingWorkspaces ? s.ptyIdsByTabId : null))
+  const tabsByWorktree = useAppStore((s) => (filterSleeping ? s.tabsByWorktree : null))
+  const ptyIdsByTabId = useAppStore((s) => (filterSleeping ? s.ptyIdsByTabId : null))
   const browserTabsByWorktree = useAppStore((s) =>
-    !showSleepingWorkspaces ? s.browserTabsByWorktree : null
+    filterSleeping ? s.browserTabsByWorktree : null
   )
   const worktreeIdsWithStructuredChat = useAppStore((s) =>
     getStructuredChatWorktreeIds(
-      showSleepingWorkspaces,
+      !filterSleeping,
       s.unifiedTabsByWorktree,
       s.structuredChatSleptAtByPaneKey
     )
   )
-  const agentStatusEpoch = useAppStore((s) => (!showSleepingWorkspaces ? s.agentStatusEpoch : 0))
+  const agentStatusEpoch = useAppStore((s) => (filterSleeping ? s.agentStatusEpoch : 0))
   // Skip the shared clock for opt-out boards so they cannot evict the live-board sample.
-  const agentStatusNow = showSleepingWorkspaces ? 0 : getAgentStatusEpochNow(agentStatusEpoch)
+  const agentStatusNow = filterSleeping ? getAgentStatusEpochNow(agentStatusEpoch) : 0
   // Recompute on epoch, not every hook ping; key on the epoch too since ticks can share a millisecond sample.
   const [selectLiveAgentWorktreeIds] = useState(createLiveAgentWorktreeIdsSelector)
   const worktreeIdsWithLiveAgent = useAppStore((s) =>
-    showSleepingWorkspaces
-      ? EMPTY_WORKTREE_ID_SET
-      : selectLiveAgentWorktreeIds(s, tabsByWorktree, agentStatusNow)
+    filterSleeping
+      ? selectLiveAgentWorktreeIds(s, tabsByWorktree, agentStatusNow)
+      : EMPTY_WORKTREE_ID_SET
   )
 
   return useMemo(() => {
@@ -79,6 +81,7 @@ export function useVisibleWorkspaceKanbanWorktreeIds({
       computeVisibleWorktrees(worktreesByRepo, sortedIds, {
         filterRepoIds,
         showSleepingWorkspaces,
+        hideSleepingProjectKeys,
         tabsByWorktree,
         ptyIdsByTabId,
         browserTabsByWorktree,
@@ -120,6 +123,8 @@ export function useVisibleWorkspaceKanbanWorktreeIds({
     runtimeEnvironments,
     runtimeStatusByEnvironmentId,
     showSleepingWorkspaces,
+    hideSleepingProjectKeys,
+    filterSleeping,
     tabsByWorktree,
     worktreeIdsWithLiveAgent,
     worktreeIdsWithStructuredChat,

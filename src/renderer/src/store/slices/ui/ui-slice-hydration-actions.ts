@@ -133,6 +133,9 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           showActiveOnly: false,
           // Why: ignore older positive-form keys so old profiles start from the new default (sleeping workspaces visible).
           showSleepingWorkspaces: !(ui.hideSleepingWorkspaces ?? DEFAULT_HIDE_SLEEPING_WORKSPACES),
+          hideSleepingProjectKeys: Array.isArray(ui.hideSleepingProjectKeys)
+            ? ui.hideSleepingProjectKeys.filter((key) => typeof key === 'string')
+            : [],
           workspaceHostScope: normalizeExecutionHostScope(ui.workspaceHostScope),
           visibleWorkspaceHostIds: normalizeHydratedVisibleWorkspaceHostIds(ui),
           workspaceHostOrder: normalizeExecutionHostOrder(ui.workspaceHostOrder),

@@ -1,4 +1,5 @@
 import type { ExecutionHostId } from '../execution-host'
+import { getRepoHostIdentityForParts } from '../repo-host-identity'
 import type { PersistedUIState } from '../persisted-ui-state-types'
 import {
   isHiddenByKindSwitch,
@@ -9,6 +10,8 @@ import {
 /** Persisted Workspace options filters shared across surfaces. */
 export type WorkspaceRowFilters = WorkspaceKindSwitches & {
   hideSleepingWorkspaces: boolean
+  /** Host-qualified projects whose sleeping workspaces are hidden locally. */
+  hideSleepingProjectKeys?: readonly string[]
   /** Keeps each project's main workspace out of the "Hide sleeping" sweep. Absent means on (#8873). */
   alwaysShowDefaultBranchWorkspace?: boolean
   hideWorkspacesFromOtherDevices: boolean
@@ -90,6 +93,7 @@ function buildWorkspaceRowPredicate<Row>(
 ): (row: Row) => boolean {
   const repoIds = filters.filterRepoIds.length > 0 ? new Set(filters.filterRepoIds) : null
   const hostIds = filters.visibleHostIds ? new Set(filters.visibleHostIds) : null
+  const hiddenProjectKeys = new Set(filters.hideSleepingProjectKeys ?? [])
   return (row) => {
     if (read.isArchived(row)) {
       return false
@@ -113,8 +117,12 @@ function buildWorkspaceRowPredicate<Row>(
       return false
     }
     // Explicit hides still win; the exemption covers only the sleeping sweep.
+    const rowHostId = read.hostId(row)
+    const projectHidden =
+      rowHostId !== null &&
+      hiddenProjectKeys.has(getRepoHostIdentityForParts(read.repoId(row), rowHostId))
     return (
-      !filters.hideSleepingWorkspaces ||
+      (!filters.hideSleepingWorkspaces && !projectHidden) ||
       isSleepingSweepExempt(read.isMainWorktree(row), filters.alwaysShowDefaultBranchWorkspace) ||
       !read.isSleeping(row)
     )

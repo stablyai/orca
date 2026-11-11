@@ -25,6 +25,7 @@ const ptyId = 'remote:pty-1'
 const args: Parameters<typeof useVisibleSidebarWorktrees>[0] = {
   filterState: {
     showSleepingWorkspaces: false,
+    hideSleepingProjectKeys: [],
     filterRepoIds: [],
     hideDefaultBranchWorkspace: false,
     hideAutomationGeneratedWorkspaces: false,

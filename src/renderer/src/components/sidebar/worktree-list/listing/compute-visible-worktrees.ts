@@ -16,6 +16,7 @@ import { getLineageAncestorIndex, getSortedWorktreeRankIndex } from './visible-w
 export type VisibleWorktreeOptions = {
   filterRepoIds: readonly string[]
   showSleepingWorkspaces: boolean
+  hideSleepingProjectKeys?: readonly string[]
   tabsByWorktree: Record<string, Pick<TerminalTab, 'id'>[]> | null
   ptyIdsByTabId: Record<string, string[]> | null
   browserTabsByWorktree?: Record<string, { id: string }[]> | null

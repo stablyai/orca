@@ -134,6 +134,7 @@ export function usePersistedUIWriter(): void {
       sortBy: s.sortBy,
       projectOrderBy: s.projectOrderBy,
       showSleepingWorkspaces: s.showSleepingWorkspaces,
+      hideSleepingProjectKeys: s.hideSleepingProjectKeys,
       workspaceHostScope: s.workspaceHostScope,
       visibleWorkspaceHostIds: s.visibleWorkspaceHostIds,
       hideDefaultBranchWorkspace: s.hideDefaultBranchWorkspace,

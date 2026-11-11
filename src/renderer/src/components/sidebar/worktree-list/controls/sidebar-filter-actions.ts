@@ -9,6 +9,7 @@ import type { ExecutionHostId, ExecutionHostScope } from '../../../../../../shar
 
 export type SidebarFilterState = {
   showSleepingWorkspaces: boolean
+  hideSleepingProjectKeys?: readonly string[]
   filterRepoIds: readonly string[]
   hideDefaultBranchWorkspace: boolean
   hideAutomationGeneratedWorkspaces: boolean
@@ -24,6 +25,7 @@ export type SidebarFilterState = {
 export function sidebarWorkspaceRowFilters(state: SidebarFilterState): WorkspaceRowFilters {
   return {
     hideSleepingWorkspaces: !state.showSleepingWorkspaces,
+    hideSleepingProjectKeys: state.hideSleepingProjectKeys,
     alwaysShowDefaultBranchWorkspace: state.alwaysShowDefaultBranchWorkspace,
     hideDefaultBranchWorkspace: state.hideDefaultBranchWorkspace,
     hideAutomationGeneratedWorkspaces: state.hideAutomationGeneratedWorkspaces,
@@ -44,6 +46,7 @@ export function selectSidebarFilterState(
 ): Pick<AppState, keyof SidebarFilterState> {
   return {
     showSleepingWorkspaces: state.showSleepingWorkspaces,
+    hideSleepingProjectKeys: state.hideSleepingProjectKeys,
     filterRepoIds: state.filterRepoIds,
     hideDefaultBranchWorkspace: state.hideDefaultBranchWorkspace,
     hideAutomationGeneratedWorkspaces: state.hideAutomationGeneratedWorkspaces,
@@ -57,12 +60,16 @@ export function selectSidebarFilterState(
 }
 
 export function sidebarHasActiveFilters(state: SidebarFilterState): boolean {
-  return activeWorkspaceRowFilterKeys(sidebarWorkspaceRowFilters(state)).length > 0
+  return (
+    activeWorkspaceRowFilterKeys(sidebarWorkspaceRowFilters(state)).length > 0 ||
+    (state.hideSleepingProjectKeys?.length ?? 0) > 0
+  )
 }
 
 export type SidebarFilterSetters = Pick<
   AppState,
   | 'setShowSleepingWorkspaces'
+  | 'setHideSleepingProjectKeys'
   | 'setAlwaysShowDefaultBranchWorkspace'
   | 'setHideDefaultBranchWorkspace'
   | 'setHideAutomationGeneratedWorkspaces'
@@ -80,6 +87,7 @@ const RESET_SIDEBAR_FILTER: Record<
 > = {
   hideSleepingWorkspaces: (store) =>
     store.setShowSleepingWorkspaces(!NO_WORKSPACE_ROW_FILTERS.hideSleepingWorkspaces),
+  hideSleepingProjectKeys: (store) => store.setHideSleepingProjectKeys([]),
   alwaysShowDefaultBranchWorkspace: (store) =>
     store.setAlwaysShowDefaultBranchWorkspace(
       NO_WORKSPACE_ROW_FILTERS.alwaysShowDefaultBranchWorkspace !== false
@@ -104,6 +112,9 @@ const RESET_SIDEBAR_FILTER: Record<
 
 /** Reset only active filters so an unfiltered click performs no writes. */
 export function clearSidebarFilters(state: SidebarFilterState, store: SidebarFilterSetters): void {
+  if (state.hideSleepingProjectKeys?.length) {
+    store.setHideSleepingProjectKeys([])
+  }
   for (const key of activeWorkspaceRowFilterKeys(sidebarWorkspaceRowFilters(state))) {
     RESET_SIDEBAR_FILTER[key](store)
   }

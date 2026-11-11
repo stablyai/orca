@@ -18,6 +18,7 @@ export function buildVisibleWorktreeOptionsFromState(
   return {
     filterRepoIds: state.filterRepoIds,
     showSleepingWorkspaces: state.showSleepingWorkspaces,
+    hideSleepingProjectKeys: state.hideSleepingProjectKeys,
     tabsByWorktree: state.tabsByWorktree,
     ptyIdsByTabId: state.ptyIdsByTabId,
     browserTabsByWorktree: state.browserTabsByWorktree,
