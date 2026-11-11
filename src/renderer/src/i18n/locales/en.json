@@ -23709,10 +23709,10 @@
     "billing": {
       "overage": {
         "capHint2": "{{rate}} per sandbox hour after your included hours, billed by the minute.",
-        "memberOn4": "Overage is on, up to your {{cap}} spend cap. Ask an owner or admin to change this.",
-        "memberOff4": "Off until an owner or admin turns it on. Ask an owner or admin to change this.",
         "offStatus2": "Overage is off. Running sandboxes go to sleep and new ones can’t start when your team runs out of sandbox hours.",
-        "turnOff": "Turn off overage"
+        "turnOff": "Turn off overage",
+        "memberOn5": "Overage is on, up to your {{cap}} spend cap.",
+        "memberOff5": "Off until an owner or admin turns it on."
       },
       "overageUsed": "{{value0}} of {{value1}} used",
       "capZero2": "Set a spend cap above $0, or turn overage off."

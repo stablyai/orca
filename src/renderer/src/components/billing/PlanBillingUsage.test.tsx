@@ -73,7 +73,7 @@ describe('spend cap field', () => {
     )
     expect(screen.queryByLabelText('Monthly spend cap')).toBeNull()
     expect(
-      screen.getByText('Overage is on, up to your $40 spend cap. Ask an owner or admin to change this.')
+      screen.getByText('Overage is on, up to your $40 spend cap.')
     ).toBeTruthy()
     expect(screen.queryByText(/alerted in Orca/)).toBeNull()
   })
@@ -177,7 +177,7 @@ it('gives members an outlined Compare plans and the off line', () => {
   )
   expect(
     screen.getByText(
-      'Off until an owner or admin turns it on. Ask an owner or admin to change this.'
+      'Off until an owner or admin turns it on.'
     )
   ).toBeTruthy()
   expect(screen.getByRole('button', { name: 'Compare plans' }).className).toMatch(/border/)

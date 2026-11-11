@@ -192,13 +192,13 @@ export function OverageControls({
         <p className="text-xs text-muted-foreground tabular-nums">
           {overage.optedIn
             ? t(
-                'components.billing.overage.memberOn4',
-                'Overage is on, up to your {{cap}} spend cap. Ask an owner or admin to change this.',
+                'components.billing.overage.memberOn5',
+                'Overage is on, up to your {{cap}} spend cap.',
                 { cap: formatCents(overage.spendCapCents, locale) }
               )
             : t(
-                'components.billing.overage.memberOff4',
-                'Off until an owner or admin turns it on. Ask an owner or admin to change this.'
+                'components.billing.overage.memberOff5',
+                'Off until an owner or admin turns it on.'
               )}
         </p>
         {overage.optedIn ? spent : null}
@@ -381,7 +381,10 @@ export function OverageControls({
             }
           }}
         >
-          {t('components.billing.overage.turnOff', 'Turn off overage')}
+          {/* Reads as a link at rest, not only on hover (design-squad, as RR-c1). */}
+          <span className="underline underline-offset-4">
+            {t('components.billing.overage.turnOff', 'Turn off overage')}
+          </span>
         </Button>
       </SettingsDisabledControlTooltip>
       {alertsNote}
