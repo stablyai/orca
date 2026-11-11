@@ -127,8 +127,13 @@ export type AcpLaunchSpec = {
   args(input: { fullAccess: boolean; pluginDir: string | null }): string[]
   /** Applied after the account and user environment. */
   env: Readonly<Record<string, string>>
-  /** Scrubs inherited Orca plumbing and returns keys to omit entirely. */
-  scrubEnvironment?(env: Record<string, string>, inherited: NodeJS.ProcessEnv): string[]
+  /** Scrubs inherited Orca plumbing and returns keys to omit entirely. `chosen` names the variables
+   *  the user set for this agent. */
+  scrubEnvironment?(
+    env: Record<string, string>,
+    inherited: NodeJS.ProcessEnv,
+    chosen: readonly string[]
+  ): string[]
   dialect: AcpDialect
   loginCommand: readonly string[]
   /** Selects an advertised method using the execution host's environment; undefined leaves it signed out. */
@@ -216,7 +221,7 @@ function openCodeLaunchSpec(
     args: () => ['acp'],
     // Disable unsupported question forms: 1.x waits forever; 2.x drops them.
     env: { OPENCODE_CLIENT: 'acp', OPENCODE_ENABLE_QUESTION_TOOL: 'false' },
-    scrubEnvironment: scrubOpenCodeAcpEnvironment,
+    scrubEnvironment: (env, inherited) => scrubOpenCodeAcpEnvironment(env, inherited),
     dialect: OPENCODE_ACP_DIALECT,
     historyCatchUp: 'user-message-id',
     loginCommand: agentSessionSignInFor(row.agent)?.loginCommand ?? [],

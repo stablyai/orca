@@ -170,11 +170,10 @@ async function readAcpLaunchInvocation(
   assertStructuredAgentResolutionCurrent(deps.operation)
   const base = await deps.resolveEnvironment()
   assertStructuredAgentResolutionCurrent(deps.operation)
-  const env: Record<string, string> = spec.account.environment(accountHome, {
-    ...base,
-    ...deps.resolveLaunchEnv?.(spec.agent)
-  })
-  const envToDelete = spec.scrubEnvironment?.(env, deps.inheritedEnv ?? process.env) ?? []
+  const launchEnv = deps.resolveLaunchEnv?.(spec.agent) ?? {}
+  const env = spec.account.environment(accountHome, { ...base, ...launchEnv })
+  const chosen = Object.keys(launchEnv)
+  const envToDelete = spec.scrubEnvironment?.(env, deps.inheritedEnv ?? process.env, chosen) ?? []
   Object.assign(env, spec.env)
   const invocation = resolveAcpLaunchCommand(spec, env, {
     ...deps,

@@ -21,7 +21,8 @@ export async function chatNamingAgentTarget(
   const spec = acpLaunchSpecFor(record.provider)
   if (spec) {
     env = spec.account.environment(record.accountHome, env)
-    const deleted = spec.scrubEnvironment?.(env, process.env) ?? []
+    const chosen = Object.keys(resolveTuiAgentLaunchEnv(record.provider, settings))
+    const deleted = spec.scrubEnvironment?.(env, process.env, chosen) ?? []
     const targetEnv: NodeJS.ProcessEnv = { ...env }
     for (const key of deleted) {
       targetEnv[key] = undefined
