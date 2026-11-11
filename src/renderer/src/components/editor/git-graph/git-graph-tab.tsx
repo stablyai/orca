@@ -202,7 +202,10 @@ export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
                           />
                         </div>
                         <div className="min-w-0 overflow-hidden">
-                          <GitHistoryGraphSvg viewModel={viewModel} />
+                          <GitHistoryGraphSvg
+                            viewModel={viewModel}
+                            visibleWidth={draftGraphWidth}
+                          />
                         </div>
                         <button
                           className="min-w-0 truncate pr-3 text-left"
