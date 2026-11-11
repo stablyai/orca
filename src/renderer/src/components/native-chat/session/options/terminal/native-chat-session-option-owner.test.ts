@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
 import type { Repo } from '../../../../../../../shared/repo-types'
 import type { Worktree } from '../../../../../../../shared/worktree/types'
+import { createGlobalSettingsFixture } from '../../../../../../../shared/global-settings-test-fixture'
 import { makeTab } from '../../../../../store/terminals/terminal-tab.test-fixture'
 import { useNativeChatSessionOptionOwner } from './native-chat-session-option-owner'
 
@@ -124,12 +125,13 @@ describe('terminal option owner catalog invalidation', () => {
       // One listing pass per new immutable catalog, independent of mounted consumers.
       expect(worktreeCatalogEnumerations).toBe(1)
       expect(terminalCatalogEnumerations).toBe(1)
-      expect(repoRowsRead).toBe(count)
+      // Three existing GitHub cache passes plus one shared owner-index pass.
+      expect(repoRowsRead).toBe(4 * count)
       expect(renders).toEqual(Array.from({ length: count }, () => 0))
-      act(() => useAppStore.setState({ settings: { ...useAppStore.getState().settings } }))
+      act(() => useAppStore.setState({ settings: createGlobalSettingsFixture() }))
       expect(worktreeCatalogEnumerations).toBe(1)
       expect(terminalCatalogEnumerations).toBe(1)
-      expect(repoRowsRead).toBe(count)
+      expect(repoRowsRead).toBe(4 * count)
       expect(renders).toEqual(Array.from({ length: count }, () => 0))
 
       act(() =>
