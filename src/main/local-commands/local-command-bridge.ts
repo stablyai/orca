@@ -16,17 +16,19 @@ import {
   LocalCommandRequestedEventSchema,
   LocalCommandSettledEventSchema,
   displayText,
-  localCommandRefusal,
-  requestIdOf,
-  type LocalCommandWorkspacePolicy
+  requestIdOf
 } from './local-command-request-checks'
+import { createLocalCommandWorkspacePolicy } from './local-command-workspace-policy'
 import { runApprovedLocalCommand, type RequestBase } from './local-command-run'
+import {
+  LOCAL_COMMAND_DESKTOP_LIMITS,
+  createLocalCommandRequestLimits
+} from './local-command-request-limits'
 
 export type { LocalCloudWorkspaceRef, LocalCommandBridgeDeps } from './local-command-bridge-types'
 
 /** A person can't have read a prompt this fresh: an allow that lands sooner is refused. */
 export const LOCAL_COMMAND_MIN_DECISION_MS = 600
-const POLICY_TTL_MS = 30_000
 const HANDLED_LIMIT = 500
 
 type PendingPrompt = {
@@ -52,10 +54,13 @@ export function createLocalCommandBridge(deps: LocalCommandBridgeDeps) {
   const setTimer = deps.setTimer ?? defaultTimer
   const log = deps.log ?? ((message: string) => console.info(`[local-commands] ${message}`))
   const pending = new Map<string, PendingPrompt>()
-  // Request ids this computer already acted on; a replay after reconnect is never answered twice.
+  // Environment + request ids this computer already acted on; a replay is never answered twice.
   const handled = new Set<string>()
-  const policyCache = new Map<string, { at: number; value: LocalCommandWorkspacePolicy | null }>()
-  const labels = new Map<string, string>()
+  const limits = createLocalCommandRequestLimits()
+  // The prompt in front and since when: a queued one gets its own read delay when it moves up.
+  let front: { id: string; since: number } | null = null
+  const policy = createLocalCommandWorkspacePolicy({ ...deps, now })
+  const { labelOf, policyOf, refusalOf } = policy
   const attachments = createLocalCommandAttachments({
     subscribe: deps.subscribe,
     setTimer,
@@ -65,43 +70,30 @@ export function createLocalCommandBridge(deps: LocalCommandBridgeDeps) {
       if (type === 'requested') {
         void onRequested(environmentId, sandboxId, event)
       } else if (type === 'settled') {
-        onSettled(event)
+        onSettled(environmentId, event)
       }
     }
   })
-
-  const labelOf = (sandboxId: string): string => labels.get(sandboxId) ?? sandboxId
 
   function audit(entry: Omit<LocalCommandAuditEntry, 'at' | 'workspaceLabel'>): void {
     deps.audit.append({ at: now(), workspaceLabel: labelOf(entry.sandboxId), ...entry })
   }
 
   function publishPrompts(): void {
-    deps.publishPrompts([...pending.values()].map((p) => p.prompt))
+    const prompts = [...pending.values()].map((p) => p.prompt)
+    const firstId = prompts[0]?.id ?? null
+    if (firstId !== front?.id) {
+      front = firstId ? { id: firstId, since: now() } : null
+    }
+    deps.publishPrompts(prompts)
   }
 
-  async function policyOf(
-    sandboxId: string,
-    fresh: boolean
-  ): Promise<LocalCommandWorkspacePolicy | null> {
-    const cached = policyCache.get(sandboxId)
-    if (!fresh && cached && now() - cached.at < POLICY_TTL_MS) {
-      return cached.value
+  /** Refused without asking; a flood of refusals is logged once a minute. */
+  function refuse(environmentId: string, base: RequestBase, detail: string): void {
+    if (limits.shouldLogRefusal(base.sandboxId, now())) {
+      audit({ ...base, command: base.command.slice(0, 1000), outcome: 'refused', detail })
     }
-    const value = await deps.readPolicy(sandboxId).catch(() => null)
-    policyCache.set(sandboxId, { at: now(), value })
-    if (value?.title) {
-      labels.set(sandboxId, value.title)
-    }
-    return value
-  }
-
-  async function refusalOf(sandboxId: string): Promise<string | null> {
-    const setting = deps.settings.workspace(sandboxId)
-    if (!deps.supported || !setting?.enabled) {
-      return localCommandRefusal(deps.supported, setting, null)
-    }
-    return localCommandRefusal(deps.supported, setting, await policyOf(sandboxId, true))
+    decline(environmentId, base.requestId, 'not_allowed')
   }
 
   async function settle(
@@ -122,17 +114,18 @@ export function createLocalCommandBridge(deps: LocalCommandBridgeDeps) {
 
   async function onRequested(environmentId: string, sandboxId: string, raw: unknown) {
     const requestId = requestIdOf(raw)
-    if (!requestId || handled.has(requestId) || pending.has(requestId)) {
+    const key = `${environmentId}\0${requestId}`
+    if (!requestId || handled.has(key) || pending.has(requestId)) {
       return
     }
-    handled.add(requestId)
+    handled.add(key)
     if (handled.size > HANDLED_LIMIT) {
       handled.delete(handled.values().next().value!)
     }
     const parsed = LocalCommandRequestedEventSchema.safeParse(raw)
     if (!parsed.success) {
-      audit({ requestId, sandboxId, command: '', cwd: null, agent: null, outcome: 'refused' })
-      decline(environmentId, requestId, 'not_allowed')
+      const blank = { requestId, sandboxId, command: '', cwd: null, agent: null }
+      refuse(environmentId, blank, 'The request was malformed or had hidden characters.')
       return
     }
     const event = parsed.data
@@ -143,25 +136,28 @@ export function createLocalCommandBridge(deps: LocalCommandBridgeDeps) {
       cwd: event.cwd,
       agent: displayText(event.agent, 64)
     }
+    const waiting = [...pending.values()].filter((p) => p.prompt.sandboxId === sandboxId).length
+    if (
+      waiting >= LOCAL_COMMAND_DESKTOP_LIMITS.pendingPerWorkspace ||
+      !limits.admitRequest(sandboxId, now())
+    ) {
+      refuse(environmentId, base, 'Too many requests from this workspace.')
+      return
+    }
     const refusal = await refusalOf(sandboxId)
     if (refusal) {
-      audit({ ...base, outcome: 'refused', detail: refusal })
-      decline(environmentId, requestId, 'not_allowed')
+      refuse(environmentId, base, refusal)
       return
     }
     const cwd = await deps.resolveCwd(event.cwd)
     if (!cwd) {
-      audit({ ...base, outcome: 'refused', detail: 'The folder does not exist on this computer.' })
-      if ((await settle(environmentId, { requestId, outcome: 'started' }))?.accepted) {
-        await settle(environmentId, {
-          requestId,
-          outcome: 'failed',
-          message: `The folder ${event.cwd ?? '~'} does not exist on the person's computer.`
-        })
-      }
+      refuse(environmentId, base, 'The folder does not exist on this computer.')
       return
     }
-    if (deps.settings.findRule(sandboxId, event.command, cwd)) {
+    if (
+      deps.settings.findRule(sandboxId, event.command, cwd, now()) &&
+      limits.admitAutoRun(sandboxId, now())
+    ) {
       await runApproved(environmentId, { ...base, cwd }, event.timeoutSec, 'auto-allowed')
       return
     }
@@ -173,7 +169,7 @@ export function createLocalCommandBridge(deps: LocalCommandBridgeDeps) {
       id: requestId,
       sandboxId,
       workspaceLabel: labelOf(sandboxId),
-      shared: policyCache.get(sandboxId)?.value?.shared ?? false,
+      shared: policy.cached(sandboxId)?.shared ?? false,
       command: event.command,
       cwd,
       timeoutSec: event.timeoutSec,
@@ -189,9 +185,13 @@ export function createLocalCommandBridge(deps: LocalCommandBridgeDeps) {
         publishPrompts()
       }
     }, windowMs)
+    const firstWaiting = pending.size === 0
     pending.set(requestId, { prompt, environmentId, shownAt: now(), timer })
     publishPrompts()
-    deps.onPromptAdded?.(prompt)
+    // One banner per burst: further prompts queue behind the first.
+    if (firstWaiting) {
+      deps.onPromptAdded?.(prompt)
+    }
   }
 
   const runApproved = (
@@ -199,14 +199,16 @@ export function createLocalCommandBridge(deps: LocalCommandBridgeDeps) {
     base: RequestBase & { cwd: string },
     timeoutSec: number,
     outcome: 'allowed-once' | 'always-allowed' | 'auto-allowed'
-  ): Promise<void> =>
-    runApprovedLocalCommand(
+  ): Promise<void> => {
+    limits.runStarted(base.sandboxId)
+    return runApprovedLocalCommand(
       { settle, execute: deps.execute, audit },
       environmentId,
       base,
       timeoutSec,
       outcome
-    )
+    ).finally(() => limits.runEnded(base.sandboxId))
+  }
 
   function closePrompt(id: string, entry: PendingPrompt): RequestBase & { cwd: string } {
     entry.timer.cancel()
@@ -222,10 +224,11 @@ export function createLocalCommandBridge(deps: LocalCommandBridgeDeps) {
     }
   }
 
-  function onSettled(raw: unknown): void {
+  function onSettled(environmentId: string, raw: unknown): void {
     const parsed = LocalCommandSettledEventSchema.safeParse(raw)
     const entry = parsed.success ? pending.get(parsed.data.requestId) : undefined
-    if (!parsed.success || !entry) {
+    // Only the workspace that asked can close its own prompt.
+    if (!parsed.success || !entry || entry.environmentId !== environmentId) {
       return
     }
     const base = closePrompt(parsed.data.requestId, entry)
@@ -240,9 +243,7 @@ export function createLocalCommandBridge(deps: LocalCommandBridgeDeps) {
     const enabled = new Set(deps.supported ? deps.settings.enabledSandboxIds() : [])
     const desired = new Map<string, string>()
     for (const workspace of deps.listWorkspaces()) {
-      if (!labels.has(workspace.sandboxId)) {
-        labels.set(workspace.sandboxId, workspace.fallbackLabel)
-      }
+      policy.noteFallbackLabel(workspace.sandboxId, workspace.fallbackLabel)
       if (enabled.has(workspace.sandboxId) && workspace.runtimeEnvironmentId) {
         desired.set(workspace.sandboxId, workspace.runtimeEnvironmentId)
       }
@@ -264,7 +265,8 @@ export function createLocalCommandBridge(deps: LocalCommandBridgeDeps) {
       if (!entry) {
         return { ok: false, error: 'not_found' }
       }
-      if (decision !== 'deny' && now() - entry.shownAt < LOCAL_COMMAND_MIN_DECISION_MS) {
+      const visibleSince = front?.id === id ? front.since : now()
+      if (decision !== 'deny' && now() - visibleSince < LOCAL_COMMAND_MIN_DECISION_MS) {
         return { ok: false, error: 'too_soon' }
       }
       const base = closePrompt(id, entry)

@@ -20,7 +20,14 @@ afterEach(() => {
   }
 })
 
-function setup(options: { policy?: LocalCommandWorkspacePolicy | null; enabled?: boolean } = {}) {
+function setup(
+  options: {
+    policy?: LocalCommandWorkspacePolicy | null
+    enabled?: boolean
+    /** Runs stay in flight until release() is called. */
+    holdRuns?: boolean
+  } = {}
+) {
   const dir = mkdtempSync(join(tmpdir(), 'local-commands-'))
   dirs.push(dir)
   let clock = 10_000
@@ -34,6 +41,7 @@ function setup(options: { policy?: LocalCommandWorkspacePolicy | null; enabled?:
   let prompts: LocalCommandPrompt[] = []
   let onEvent: (event: unknown) => void = () => {}
   const timers: (() => void)[] = []
+  const held: (() => void)[] = []
   const bridge = createLocalCommandBridge({
     settings,
     audit,
@@ -56,6 +64,9 @@ function setup(options: { policy?: LocalCommandWorkspacePolicy | null; enabled?:
     resolveCwd: async (cwd) => (cwd === '/missing' ? null : '/Users/me'),
     execute: async ({ command, cwd }) => {
       executed.push({ command, cwd })
+      if (options.holdRuns) {
+        await new Promise<void>((resolve) => held.push(resolve))
+      }
       return {
         exitCode: 0,
         signal: null,
@@ -96,8 +107,25 @@ function setup(options: { policy?: LocalCommandWorkspacePolicy | null; enabled?:
       expect(prompts.length + settled.length + executed.length).toBeGreaterThan(0)
     })
   }
+  // Sends a request with its own id and lets the bridge's async checks finish.
+  const send = async (id: string, overrides: Record<string, unknown> = {}): Promise<void> => {
+    onEvent({
+      type: 'requested',
+      requestId: id,
+      command: 'xcrun simctl list',
+      cwd: null,
+      timeoutSec: 60,
+      reason: null,
+      agent: null,
+      expiresInMs: 300_000,
+      ...overrides
+    })
+    await new Promise((resolve) => setTimeout(resolve, 5))
+  }
   return {
     bridge,
+    send,
+    release: () => held.splice(0).forEach((resolve) => resolve()),
     settings,
     audit,
     settled,
@@ -181,5 +209,25 @@ describe('local command bridge', () => {
       error: 'not_allowed'
     })
     expect(t.executed).toEqual([])
+  })
+
+  it('stops asking after three waiting prompts from one workspace', async () => {
+    const t = setup()
+    for (let index = 0; index < 5; index += 1) {
+      await t.send(`lc_flood${String(index).padStart(14, '0')}`)
+    }
+    expect(t.prompts()).toHaveLength(3)
+    expect(t.settled.filter((s) => s.outcome === 'declined')).toHaveLength(2)
+    expect(t.executed).toEqual([])
+  })
+
+  it('runs an always-allowed command one at a time and asks about the next one', async () => {
+    const t = setup({ holdRuns: true })
+    t.settings.addRule(SANDBOX, 'xcrun simctl list', '/Users/me', 1)
+    await t.send('lc_rule00000000000000001')
+    await t.send('lc_rule00000000000000002')
+    expect(t.executed).toHaveLength(1)
+    expect(t.prompts().map((p) => p.id)).toEqual(['lc_rule00000000000000002'])
+    t.release()
   })
 })

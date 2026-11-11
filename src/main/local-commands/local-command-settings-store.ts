@@ -9,6 +9,8 @@ import {
 } from '../../shared/local-commands/local-command-contract'
 
 const MAX_RULES = 200
+/** A saved approval lapses; the person sees the command again after this long. */
+export const LOCAL_COMMAND_RULE_TTL_MS = 30 * 24 * 60 * 60_000
 const SandboxId = z.string().regex(/^sbx_[0-9a-f]{24}$/)
 
 const WorkspaceSettingSchema = z.object({
@@ -69,7 +71,12 @@ export class LocalCommandSettingsStore {
   setEnabled(sandboxId: string, enabled: boolean, sharedAllowed: boolean, now: number): void {
     const next = this.read()
     if (enabled) {
+      const previous = next.workspaces[sandboxId]
       next.workspaces[sandboxId] = { enabled, sharedAllowed, updatedAt: now }
+      // Rules approved while only the owner could prompt the agent don't carry over to a shared one.
+      if (sharedAllowed && !previous?.sharedAllowed) {
+        next.rules = next.rules.filter((rule) => rule.sandboxId !== sandboxId)
+      }
     } else {
       // Turning it off also forgets this workspace's "Always allow" rules: the next time it is on,
       // every command is asked about again.
@@ -79,28 +86,32 @@ export class LocalCommandSettingsStore {
     this.write(next)
   }
 
-  rules(): LocalCommandRule[] {
-    return [...this.read().rules]
+  /** Rules still in force (expired ones are kept on disk until the next write drops them). */
+  rules(now: number): LocalCommandRule[] {
+    return this.read().rules.filter((rule) => now - rule.createdAt < LOCAL_COMMAND_RULE_TTL_MS)
   }
 
-  /** Exact match only: same workspace, same characters, same resolved folder. */
-  findRule(sandboxId: string, command: string, cwd: string): LocalCommandRule | null {
+  /** Exact match only: same workspace, same characters, same resolved folder, not expired. */
+  findRule(sandboxId: string, command: string, cwd: string, now: number): LocalCommandRule | null {
     return (
-      this.read().rules.find(
+      this.rules(now).find(
         (rule) => rule.sandboxId === sandboxId && rule.command === command && rule.cwd === cwd
       ) ?? null
     )
   }
 
   addRule(sandboxId: string, command: string, cwd: string, now: number): LocalCommandRule {
-    const existing = this.findRule(sandboxId, command, cwd)
+    const existing = this.findRule(sandboxId, command, cwd, now)
     if (existing) {
       return existing
     }
     const next = this.read()
     const rule: LocalCommandRule = { id: randomUUID(), sandboxId, command, cwd, createdAt: now }
     // Oldest first out at the cap; a forgotten rule only means one more prompt.
-    next.rules = [...next.rules, rule].slice(-MAX_RULES)
+    next.rules = [
+      ...next.rules.filter((r) => now - r.createdAt < LOCAL_COMMAND_RULE_TTL_MS),
+      rule
+    ].slice(-MAX_RULES)
     this.write(next)
     return rule
   }

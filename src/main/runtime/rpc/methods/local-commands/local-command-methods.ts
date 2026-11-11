@@ -18,6 +18,7 @@ import {
   type LocalCommandBroker
 } from '../../../local-commands/local-command-broker'
 import { isCloudWorkspaceOrcad } from '../../../secrets/session-env-names'
+import { isGrantedDevice } from '../../../local-commands/grant-device-ledger'
 import { defineMethod, defineStreamingMethod, type RpcContext } from '../../core'
 import { isAgentRpcCaller } from '../../rpc-caller-identity'
 import { resolveSecretRequestCaller } from '../secrets/secret-requests'
@@ -28,21 +29,30 @@ export type LocalCommandMethodDeps = {
   /** Only a cloud workspace's orcad relays; a desktop's own runtime refuses. */
   enabled: () => boolean
   callerTerminal: (ctx: RpcContext) => string | null
+  /** Devices paired through a grant (teammates, other computers) never take requests. */
+  isGrantedDevice: (originDeviceId: string) => boolean
 }
 
 const defaultDeps: LocalCommandMethodDeps = {
   broker: getLocalCommandBroker,
   enabled: () => isCloudWorkspaceOrcad(),
-  callerTerminal: verifiedCallerTerminalHandle
+  callerTerminal: verifiedCallerTerminalHandle,
+  isGrantedDevice: (originDeviceId) => isGrantedDevice(originDeviceId)
 }
 
-/** A paired desktop, proven by its socket: never the agent's CLI, never a phone. */
-function requireDesktopDevice(ctx: RpcContext): { deviceId: string; connectionId: string } {
+/** The owner's paired desktop, proven by its socket: never the agent's CLI, a phone, or a device
+ *  paired through a grant (a teammate's computer must not see, claim or answer requests). */
+function requireOwnerDesktop(
+  ctx: RpcContext,
+  deps: LocalCommandMethodDeps
+): { deviceId: string; connectionId: string } {
   if (
     ctx.clientKind !== 'runtime' ||
     ctx.caller?.kind !== 'paired-device' ||
     !ctx.pairedDeviceId ||
-    !ctx.connectionId
+    !ctx.pairedDeviceOriginId ||
+    !ctx.connectionId ||
+    deps.isGrantedDevice(ctx.pairedDeviceOriginId)
   ) {
     throw new LocalCommandError(LOCAL_COMMAND_ERRORS.forbidden)
   }
@@ -99,7 +109,7 @@ export function createLocalCommandMethods(deps: LocalCommandMethodDeps = default
       permission: 'workspace',
       params: LocalCommandSettleParamsSchema,
       handler: async (params, ctx): Promise<LocalCommandSettleResult> => {
-        const { deviceId } = requireDesktopDevice(ctx)
+        const { deviceId } = requireOwnerDesktop(ctx, deps)
         return broker().settle(deviceId, params)
       }
     }),
@@ -108,7 +118,7 @@ export function createLocalCommandMethods(deps: LocalCommandMethodDeps = default
       permission: 'workspace',
       params: LocalCommandAttachParamsSchema,
       handler: async (_params, ctx, emit) => {
-        const { deviceId, connectionId } = requireDesktopDevice(ctx)
+        const { deviceId, connectionId } = requireOwnerDesktop(ctx, deps)
         const relay = broker()
         await new Promise<void>((resolve) => {
           const subscriptionId = `local-commands-${connectionId}-${++attachSeq}`

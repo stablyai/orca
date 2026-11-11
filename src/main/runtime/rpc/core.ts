@@ -126,6 +126,8 @@ export type RpcContext = {
   pairedDeviceId?: string
   // Delegated phones use their parent desktop's workspaces.
   pairedDeviceParentId?: string
+  // The pairing offer this device came from (a device-key fork keeps its offer's id).
+  pairedDeviceOriginId?: string
   // Host-assigned transport identity; absent means the caller could not be established.
   caller?: RpcCallerIdentity
   // Only phones receive truncated payloads; undefined in-process callers remain unclipped.

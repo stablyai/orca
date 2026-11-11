@@ -64,7 +64,8 @@ export function LocalCommandApprovalDialogView({
   waitingCount,
   ready,
   busy,
-  onDecide
+  onDecide,
+  onTurnOff
 }: {
   prompt: LocalCommandPrompt
   /** Other requests queued behind this one. */
@@ -72,9 +73,28 @@ export function LocalCommandApprovalDialogView({
   ready: boolean
   busy: boolean
   onDecide: (decision: LocalCommandDecision) => void
+  /** Denies this request and turns local commands off for the workspace. */
+  onTurnOff: () => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const disabled = !ready || busy
+  // A long command must be scrolled to its end before it can be allowed: nothing stays out of view.
+  const [readToEnd, setReadToEnd] = useState(false)
+  const checkReadToEnd = useCallback((box: HTMLElement | null) => {
+    if (box && box.scrollTop + box.clientHeight >= box.scrollHeight - 2) {
+      setReadToEnd(true)
+    }
+  }, [])
+  // The dialog portal mounts after this component's first effect, so measure when the box attaches.
+  const commandRef = useCallback(
+    (box: HTMLPreElement | null) => {
+      if (box) {
+        requestAnimationFrame(() => checkReadToEnd(box))
+      }
+    },
+    [checkReadToEnd]
+  )
+  const disabled = !ready || busy || !readToEnd
+  const lineCount = prompt.command.split('\n').length
   return (
     <DialogContent
       surface="security"
@@ -91,17 +111,11 @@ export function LocalCommandApprovalDialogView({
           {t('localCommands.prompt.title', 'Run a command on this computer?')}
         </DialogTitle>
         <DialogDescription className="text-xs">
-          {prompt.agent
-            ? t(
-                'localCommands.prompt.bodyAgent',
-                '{{agent}} in the cloud workspace {{workspace}} asks to run this command here. Allow it only if you understand what it does.',
-                { agent: prompt.agent, workspace: prompt.workspaceLabel }
-              )
-            : t(
-                'localCommands.prompt.body',
-                'An agent in the cloud workspace {{workspace}} asks to run this command here. Allow it only if you understand what it does.',
-                { workspace: prompt.workspaceLabel }
-              )}
+          {t(
+            'localCommands.prompt.body',
+            'An agent in the cloud workspace {{workspace}} asks to run this command here. Allow it only if you understand what it does.',
+            { workspace: prompt.workspaceLabel }
+          )}
         </DialogDescription>
       </DialogHeader>
 
@@ -118,11 +132,19 @@ export function LocalCommandApprovalDialogView({
 
       <div className="space-y-2 rounded-md border border-border/70 bg-muted/35 px-3 py-2">
         <div>
-          <div className="mb-1 text-2xs font-medium uppercase tracking-wider text-muted-foreground">
-            {t('localCommands.prompt.commandLabel', 'Command')}
+          <div className="mb-1 flex items-baseline justify-between gap-2 text-2xs font-medium uppercase tracking-wider text-muted-foreground">
+            <span>{t('localCommands.prompt.commandLabel', 'Command')}</span>
+            {lineCount > 1 ? (
+              <span className="normal-case tracking-normal">
+                {t('localCommands.prompt.lines', '{{count}} lines', { count: lineCount })}
+              </span>
+            ) : null}
           </div>
           <pre
-            className="max-h-48 overflow-auto whitespace-pre-wrap break-all font-mono text-xs text-foreground scrollbar-sleek"
+            ref={commandRef}
+            onScroll={(event) => checkReadToEnd(event.currentTarget)}
+            tabIndex={0}
+            className="max-h-48 overflow-auto whitespace-pre-wrap break-all font-mono text-xs text-foreground scrollbar-sleek focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-focus-ring"
             data-testid="local-command-text"
           >
             <MarkedText text={prompt.command} />
@@ -156,7 +178,19 @@ export function LocalCommandApprovalDialogView({
         </p>
       ) : null}
 
+      {!readToEnd ? (
+        <p className="text-xs text-foreground">
+          {t(
+            'localCommands.prompt.scrollToEnd',
+            'Scroll to the end of the command before you allow it.'
+          )}
+        </p>
+      ) : null}
+
       <p className="text-xs text-muted-foreground">
+        {prompt.agent
+          ? `${t('localCommands.prompt.agent', 'From {{agent}}', { agent: prompt.agent })} · `
+          : null}
         {timeoutLabel(prompt.timeoutSec, t)}
         {' · '}
         {t(
@@ -166,6 +200,15 @@ export function LocalCommandApprovalDialogView({
         {waitingCount > 0
           ? ` · ${t('localCommands.prompt.waiting', '{{count}} more waiting', { count: waitingCount })}`
           : null}
+        {' · '}
+        <button
+          type="button"
+          className="underline underline-offset-2 hover:text-foreground focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-focus-ring disabled:opacity-50"
+          disabled={busy}
+          onClick={onTurnOff}
+        >
+          {t('localCommands.prompt.turnOff', 'Turn off for this workspace')}
+        </button>
       </p>
 
       <DialogFooter>
@@ -253,6 +296,15 @@ export function LocalCommandApprovalDialogHost(): React.JSX.Element | null {
     [currentId, ready]
   )
 
+  const turnOff = useCallback(() => {
+    const api = window.api.localCommands
+    if (!api || !current) {
+      return
+    }
+    decide('deny')
+    void api.setEnabled({ sandboxId: current.sandboxId, enabled: false }).catch(() => {})
+  }, [current, decide])
+
   if (!current) {
     return null
   }
@@ -272,6 +324,7 @@ export function LocalCommandApprovalDialogHost(): React.JSX.Element | null {
         ready={ready}
         busy={busy}
         onDecide={decide}
+        onTurnOff={turnOff}
       />
     </Dialog>
   )

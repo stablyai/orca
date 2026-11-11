@@ -28083,7 +28083,11 @@
       "waiting": "{{count}} more waiting",
       "deny": "Deny",
       "alwaysAllow": "Always allow this command",
-      "allowOnce": "Allow once"
+      "allowOnce": "Allow once",
+      "lines": "{{count}} lines",
+      "scrollToEnd": "Scroll to the end of the command before you allow it.",
+      "agent": "From {{agent}}",
+      "turnOff": "Turn off for this workspace"
     },
     "settings": {
       "notOwner": "Only the workspace owner can turn this on.",

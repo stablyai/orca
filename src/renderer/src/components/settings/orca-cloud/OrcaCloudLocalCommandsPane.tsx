@@ -293,34 +293,41 @@ export function OrcaCloudLocalCommandsPane(): React.JSX.Element {
       }
       const enabling = !row.enabled
       let allowShared = false
-      if (enabling && row.shared) {
-        allowShared = await confirm({
+      const confirmShared = (): Promise<boolean> =>
+        confirm({
           title: t(
             'localCommands.settings.sharedConfirmTitle',
             'Allow commands from a shared workspace?'
           ),
           description: t(
             'localCommands.settings.sharedConfirmBody',
-            'Teammates can message the agent in {{workspace}}, so their messages can also lead to requests to run commands on this computer. You still approve every command.',
+            'Teammates can message the agent in {{workspace}}, so their messages can also lead to requests to run commands on this computer. You still approve each one, and commands you always allowed before are cleared.',
             { workspace: row.label }
           ),
           confirmLabel: t('localCommands.settings.sharedConfirmAction', 'Turn on'),
           surface: 'security',
           initialFocus: 'cancel'
         })
-        if (!allowShared) {
-          return
-        }
+      if (enabling && row.shared && !(allowShared = await confirmShared())) {
+        return
       }
       setPendingSandboxId(row.sandboxId)
       setError(null)
       try {
-        const result = await api.setEnabled({
+        let result = await api.setEnabled({
           sandboxId: row.sandboxId,
           enabled: enabling,
           allowShared
         })
-        if (!result.ok) {
+        // Sharing wasn't known when the row rendered: ask now, then try once more.
+        if (!result.ok && result.error === 'shared_needs_confirmation' && (await confirmShared())) {
+          result = await api.setEnabled({
+            sandboxId: row.sandboxId,
+            enabled: true,
+            allowShared: true
+          })
+        }
+        if (!result.ok && result.error !== 'shared_needs_confirmation') {
           setError(
             result.error === 'not_owner'
               ? t(

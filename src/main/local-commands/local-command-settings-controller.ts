@@ -76,7 +76,7 @@ export function createLocalCommandSettingsController(deps: LocalCommandSettingsC
       return {
         available: deps.supported,
         workspaces,
-        rules: deps.settings.rules().map((rule) => ({
+        rules: deps.settings.rules(now()).map((rule) => ({
           ...rule,
           workspaceLabel: deps.bridge.labelOf(rule.sandboxId)
         }))

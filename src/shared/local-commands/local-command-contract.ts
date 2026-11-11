@@ -12,6 +12,8 @@ export const LOCAL_COMMANDS_ATTACH_METHOD = 'localCommands.attach'
 export const LOCAL_COMMANDS_SETTLE_METHOD = 'localCommands.settle'
 
 export const LOCAL_COMMAND_MAX_COMMAND_CHARS = 4000
+/** More lines than a person reads in one prompt is refused rather than scrolled past. */
+export const LOCAL_COMMAND_MAX_LINES = 20
 export const LOCAL_COMMAND_MAX_CWD_CHARS = 1024
 export const LOCAL_COMMAND_REASON_MAX = 200
 export const LOCAL_COMMAND_DEFAULT_TIMEOUT_SEC = 120
@@ -28,10 +30,11 @@ export const LOCAL_COMMAND_MAX_PER_HOUR = 60
 const RequestId = z.string().regex(/^lc_[A-Za-z0-9_-]{16,64}$/)
 
 // Characters that can hide or reorder what a person reads: C0/C1 controls (tab and newline are
-// shown as they are), bidi overrides and isolates, zero-width and invisible formatting, separators.
+// shown as they are), bidi overrides and isolates, zero-width and invisible formatting, lookalike
+// spaces, combining marks and separators.
 const HIDDEN_CHARS =
   // oxlint-disable-next-line no-control-regex, no-misleading-character-class -- SAFETY: matching control and invisible characters is the point.
-  /[\u0000-\u0008\u000B-\u001F\u007F-\u009F\u00AD\u061C\u115F\u1160\u180E\u200B-\u200F\u2028-\u202E\u2060-\u206F\u3164\uFE00-\uFE0F\uFEFF\uFFF9-\uFFFB]|\uDB40[\uDC00-\uDC7F]/
+  /[\u0000-\u0008\u000B-\u001F\u007F-\u00A0\u00AD\u0300-\u036F\u061C\u115F\u1160\u180E\u2000-\u200F\u2028-\u202F\u205F-\u206F\u3000\u3164\uFE00-\uFE0F\uFEFF\uFFF9-\uFFFB]|\uDB40[\uDC00-\uDC7F]/
 
 /** True when the text holds a character that could make the shown command differ from the run one. */
 export function hasHiddenCharacters(text: string): boolean {
@@ -63,6 +66,7 @@ export const LocalCommandText = z
   .max(LOCAL_COMMAND_MAX_COMMAND_CHARS)
   .refine((value) => value.trim().length > 0, 'empty_command')
   .refine((value) => !hasHiddenCharacters(value), 'hidden_characters')
+  .refine((value) => value.split('\n').length <= LOCAL_COMMAND_MAX_LINES, 'too_many_lines')
 
 /** Absolute, or ~ for the person's home folder. A single line. */
 export const LocalCommandCwd = z

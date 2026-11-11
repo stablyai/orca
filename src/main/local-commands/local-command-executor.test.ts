@@ -66,4 +66,16 @@ describe.skipIf(!localCommandsSupported())('local command executor', () => {
     expect(await resolveLocalCommandCwd('~/nope', home)).toBeNull()
     expect(await resolveLocalCommandCwd('relative/path', home)).toBeNull()
   })
+
+  it('reports soon after the shell exits even if a detached process holds its output open', async () => {
+    const result = await executeLocalCommand({
+      command: `perl -MPOSIX -e 'setsid(); sleep 30' & echo done`,
+      cwd: tmpdir(),
+      timeoutSec: 20,
+      env: buildLocalCommandEnv(undefined)
+    })
+    expect(result.stdout).toBe('done\n')
+    expect(result.timedOut).toBe(false)
+    expect(result.durationMs).toBeLessThan(5_000)
+  })
 })

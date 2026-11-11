@@ -63,7 +63,10 @@ export type LocalCommandAuditEntry = {
   requestId: string
   sandboxId: string
   workspaceLabel: string
+  /** The first 1,000 characters for a longer command; then the length and hash identify it. */
   command: string
+  commandLength?: number
+  commandSha256?: string
   cwd: string | null
   agent: string | null
   outcome: LocalCommandAuditOutcome

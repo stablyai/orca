@@ -26,6 +26,7 @@ export const request = defineFixture({
         ready
         busy={false}
         onDecide={() => {}}
+        onTurnOff={() => {}}
       />
     </Dialog>
   )
@@ -50,6 +51,7 @@ export const longSharedQueued = defineFixture({
         ready
         busy={false}
         onDecide={() => {}}
+        onTurnOff={() => {}}
       />
     </Dialog>
   )
@@ -69,6 +71,7 @@ export const lookalikeCharacters = defineFixture({
         ready={false}
         busy={false}
         onDecide={() => {}}
+        onTurnOff={() => {}}
       />
     </Dialog>
   )

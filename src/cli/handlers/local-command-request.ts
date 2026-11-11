@@ -148,6 +148,12 @@ export function explainLocalCommandError(error: unknown): unknown {
       'The command contains control or invisible characters, which are never run. Use plain text.'
     )
   }
+  if (/too_many_lines/.test(error.message)) {
+    return new RuntimeClientError(
+      'invalid_argument',
+      'The command has more than 20 lines. Ask for something shorter, or a script the person can read.'
+    )
+  }
   if (/cwd_not_absolute/.test(error.message)) {
     return new RuntimeClientError(
       'invalid_argument',

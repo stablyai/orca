@@ -8,6 +8,8 @@ import {
 } from '../../shared/local-commands/local-command-contract'
 
 const KILL_GRACE_MS = 3_000
+/** After the shell exits, how long its output may keep draining before the result is reported. */
+const RESULT_GRACE_MS = 1_000
 const FALLBACK_PATH = '/usr/bin:/bin:/usr/sbin:/sbin'
 /** Names copied from this app's own environment; nothing else is passed (no tokens, keys, sockets). */
 const PASSTHROUGH = ['USER', 'LOGNAME', 'TMPDIR', 'LANG', 'LC_ALL', 'LC_CTYPE'] as const
@@ -153,23 +155,24 @@ export function executeLocalCommand(
     running.add(child)
     child.stdout?.on('data', (chunk: Buffer) => stdout.push(chunk))
     child.stderr?.on('data', (chunk: Buffer) => stderr.push(chunk))
-    let killTimer: ReturnType<typeof setTimeout> | null = null
-    const timeout = setTimeout(() => {
-      timedOut = true
-      killGroup(child, 'SIGTERM')
-      killTimer = setTimeout(() => killGroup(child, 'SIGKILL'), KILL_GRACE_MS)
-    }, input.timeoutSec * 1000)
-    const finish = (exitCode: number | null, signal: NodeJS.Signals | null): void => {
-      clearTimeout(timeout)
-      if (killTimer) {
-        clearTimeout(killTimer)
+    const timers: ReturnType<typeof setTimeout>[] = []
+    let exit: { code: number | null; signal: NodeJS.Signals | null } | null = null
+    let settled = false
+    const finish = (): void => {
+      if (settled) {
+        return
       }
+      settled = true
+      timers.forEach(clearTimeout)
       running.delete(child)
-      // A command that exited may have left children in its group; they don't outlive the request.
+      // Children left in its group don't outlive the request, and a process that escaped the group
+      // can't hold the result open through an inherited pipe.
       killGroup(child, 'SIGKILL')
+      child.stdout?.destroy()
+      child.stderr?.destroy()
       resolve({
-        exitCode,
-        signal,
+        exitCode: exit?.code ?? null,
+        signal: exit?.signal ?? null,
         timedOut,
         durationMs: Date.now() - startedAt,
         stdout: stdout.text(),
@@ -179,11 +182,37 @@ export function executeLocalCommand(
         stderrBytes: stderr.bytes
       })
     }
+    timers.push(
+      setTimeout(() => {
+        timedOut = true
+        killGroup(child, 'SIGTERM')
+        timers.push(setTimeout(() => killGroup(child, 'SIGKILL'), KILL_GRACE_MS))
+      }, input.timeoutSec * 1000),
+      // Whatever holds the pipes, the result is reported shortly after the hard stop.
+      setTimeout(
+        () => {
+          timedOut = true
+          finish()
+        },
+        input.timeoutSec * 1000 + KILL_GRACE_MS + RESULT_GRACE_MS
+      )
+    )
     child.once('error', (error) => {
-      clearTimeout(timeout)
-      running.delete(child)
-      reject(error)
+      if (!settled) {
+        settled = true
+        timers.forEach(clearTimeout)
+        running.delete(child)
+        reject(error)
+      }
     })
-    child.once('close', finish)
+    child.once('exit', (code, signal) => {
+      exit = { code, signal }
+      // Let buffered output drain, then report even if a leftover process keeps the pipe open.
+      timers.push(setTimeout(finish, RESULT_GRACE_MS))
+    })
+    child.once('close', (code, signal) => {
+      exit ??= { code, signal }
+      finish()
+    })
   })
 }
