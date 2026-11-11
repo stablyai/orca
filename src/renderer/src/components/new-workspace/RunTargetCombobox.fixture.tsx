@@ -350,3 +350,18 @@ export const composerLapsedPreflight = defineFixture({
   },
   interact: open
 })
+// The composer's Run on column is narrow (~300px): "Orca Cloud" stays whole, the reason wraps.
+export const composerOutOfHoursPreflightNarrow = defineFixture({
+  width: 320,
+  render: () => {
+    preflight(true)
+    return (
+      <Preview
+        composer
+        recipes={withCloud}
+        access={{ state: 'out-of-hours', cause: 'hours', canManageBilling: true }}
+      />
+    )
+  },
+  interact: open
+})
