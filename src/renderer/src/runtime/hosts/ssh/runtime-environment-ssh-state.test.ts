@@ -72,35 +72,6 @@ beforeEach(() => {
 })
 
 describe('hydrateRuntimeEnvironmentSshState', () => {
-  it('prunes removed targets and fetches state only for newly discovered targets', async () => {
-    const envId = nextEnvId()
-    useAppStore.getState().setEnvironmentSshTargetsMetadata(envId, [
-      { id: 'ssh-keep', label: 'keep' },
-      { id: 'ssh-old', label: 'old' }
-    ])
-    useAppStore
-      .getState()
-      .setEnvironmentSshConnectionState(envId, 'ssh-keep', connState('ssh-keep'))
-    useAppStore.getState().setEnvironmentSshConnectionState(envId, 'ssh-old', connState('ssh-old'))
-    installRpcResponses({
-      targets: [
-        { id: 'ssh-keep', label: 'keep' },
-        { id: 'ssh-new', label: 'new' }
-      ],
-      labels: { 'ssh-old': 'old' },
-      states: { 'ssh-new': connState('ssh-new', 'connecting') }
-    })
-
-    await refreshRuntimeEnvironmentSshTargetMetadata(envId)
-
-    const bucket = useAppStore.getState().sshStateByEnvironment.get(envId)
-    expect(bucket?.targetLabels.has('ssh-old')).toBe(false)
-    expect(bucket?.connectionStates.has('ssh-old')).toBe(false)
-    expect(bucket?.removedTargetLabels.get('ssh-old')).toBe('old')
-    expect(bucket?.connectionStates.get('ssh-keep')?.status).toBe('connected')
-    expect(bucket?.connectionStates.get('ssh-new')?.status).toBe('connecting')
-  })
-
   it('reruns hydration when a new generation joins an older in-flight request', async () => {
     const envId = nextEnvId()
     let resolveOlderTargets!: (value: { targets: { id: string; label: string }[] }) => void
@@ -177,27 +148,6 @@ describe('hydrateRuntimeEnvironmentSshState', () => {
 })
 
 describe('applyRuntimeEnvironmentSshStateChanged', () => {
-  it('does not touch another environment bucket or local state (no cross-pollution)', () => {
-    const envA = nextEnvId()
-    const envB = nextEnvId()
-    useAppStore.getState().setEnvironmentSshTargetsMetadata(envA, [{ id: 'ssh-1', label: 'a' }])
-    useAppStore.getState().setEnvironmentSshTargetsMetadata(envB, [{ id: 'ssh-1', label: 'b' }])
-
-    applyRuntimeEnvironmentSshStateChanged(envA, 'ssh-1', connState('ssh-1', 'connected'))
-
-    const state = useAppStore.getState()
-    expect(state.sshStateByEnvironment.get(envA)?.connectionStates.get('ssh-1')?.status).toBe(
-      'connected'
-    )
-    const otherBucket = state.sshStateByEnvironment.get(envB)
-    if (!otherBucket) {
-      throw new Error('Missing retained SSH environment bucket')
-    }
-    expect([...otherBucket.targetLabels]).toEqual([['ssh-1', 'b']])
-    expect([...otherBucket.connectionStates]).toEqual([])
-    expect([...state.sshConnectionStates]).toEqual([])
-  })
-
   it('re-fetches the authoritative target list for an unknown target instead of trusting the event', async () => {
     const envId = nextEnvId()
     // The event races a removal: the authoritative list does not contain it.

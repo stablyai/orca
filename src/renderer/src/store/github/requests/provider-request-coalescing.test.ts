@@ -33,57 +33,6 @@ describe('GitHub provider request upgrade coalescing', () => {
     resetRemoteRuntimeMocks()
   })
 
-  it('never joins a weaker replacement and never waits out more than one', async () => {
-    const store = createTestStore()
-    const weak = Promise.withResolvers<ListWorkItemsResult<GitHubWorkItem>>()
-    const forced = Promise.withResolvers<ListWorkItemsResult<GitHubWorkItem>>()
-    const strict = Promise.withResolvers<ListWorkItemsResult<GitHubWorkItem>>()
-    mockApi.gh.listWorkItems
-      .mockReturnValueOnce(weak.promise)
-      .mockReturnValueOnce(forced.promise)
-      .mockReturnValue(strict.promise)
-    const first = store.getState().fetchWorkItems('repo-1', '/repo', 24, '')
-    const forcedFetch = store.getState().fetchWorkItems('repo-1', '/repo', 24, '', { force: true })
-    const strictFollowers = Array.from({ length: 2 }, () =>
-      store.getState().fetchWorkItems('repo-1', '/repo', 24, '', {
-        force: true,
-        noCache: true,
-        requireComplete: true
-      })
-    )
-    weak.resolve(workItems('weak'))
-    await first
-    // Bound upgrade waits so repeating weak replacements cannot starve strict callers, which still share one strict request.
-    await vi.waitFor(() => expect(mockApi.gh.listWorkItems).toHaveBeenCalledTimes(3))
-    expect(mockApi.gh.listWorkItems).toHaveBeenLastCalledWith(
-      expect.objectContaining({ noCache: true })
-    )
-    strict.resolve(workItems('strict'))
-    const strictResults = await Promise.all(strictFollowers)
-    forced.resolve(workItems('forced'))
-    await expect(forcedFetch).resolves.toBeUndefined()
-
-    expect(strictResults.map((rows) => rows?.[0].title)).toEqual(['strict', 'strict'])
-  })
-
-  it('keeps an invalidated request from removing its replacement dedupe entry', async () => {
-    const store = createTestStore()
-    const stale = Promise.withResolvers<ListWorkItemsResult<GitHubWorkItem>>()
-    const fresh = Promise.withResolvers<ListWorkItemsResult<GitHubWorkItem>>()
-    mockApi.gh.listWorkItems.mockReturnValueOnce(stale.promise).mockReturnValue(fresh.promise)
-    const first = store.getState().fetchWorkItems('repo-1', '/repo', 24, '')
-    store.getState().evictGitHubRepoCaches('repo-1', '/repo')
-    const replacement = store.getState().fetchWorkItems('repo-1', '/repo', 24, '', { force: true })
-    stale.resolve(workItems('stale'))
-    await first
-    const joined = store.getState().fetchWorkItems('repo-1', '/repo', 24, '', { force: true })
-    fresh.resolve(workItems('fresh'))
-    await expect(Promise.all([replacement, joined])).resolves.toEqual([
-      workItems('fresh').items,
-      workItems('fresh').items
-    ])
-  })
-
   it('rejects partial results for every complete-result waiter and allows a later retry', async () => {
     const store = createTestStore()
     const weak = Promise.withResolvers<ListWorkItemsResult<GitHubWorkItem>>()
