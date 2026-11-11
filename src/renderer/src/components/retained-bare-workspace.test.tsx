@@ -28,6 +28,7 @@ import { getResolvedExecutionHostIdForWorktree } from '@/lib/workspace/ownership
 import { stoppedWorkspaceListing } from './retained-bare-workspace.test-fixture'
 import { mergeFetchedWorktrees } from '@/store/slices/worktrees/listing/fetched-worktree-merge'
 import { replaceRecordEntries } from '@/store/keyed-record-transitions'
+import { ensureSimulatorTab } from '@/lib/simulator/tabs/ensure-simulator-tab'
 
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
   callRuntimeRpc: vi.fn(async () => undefined)
@@ -537,7 +538,7 @@ it('preserves unresolved browser ownership after restoring hostless content besi
       .createUnifiedTabInSplit(
         listed.id,
         'terminal',
-        { sourceGroupId: 'twin-group', splitDirection: 'horizontal' },
+        { sourceGroupId: 'twin-group', splitDirection: 'right' },
         { id: 'unqualified-split', entityId: 'unqualified-split' }
       )
   })
@@ -566,4 +567,52 @@ it('preserves unresolved browser ownership after restoring hostless content besi
     .getState()
     .createUnifiedTab(listed.id, 'terminal', { id: 'local-tab', entityId: 'local-tab' })
   expect(local.executionHostId).toBe('local')
+})
+
+it('reuses an unresolved simulator without claiming a host or adopting a scoped twin', () => {
+  Object.defineProperty(window, 'api', { configurable: true, value: apiProxy() })
+  const remote = { ...checkout, hostId: 'ssh:other' as const }
+  useAppStore.setState(
+    {
+      ...initialState,
+      settings: { ...initialState.settings, mobileEmulatorEnabled: true },
+      repos: [TEST_REPO],
+      worktreesByRepo: { repo1: [checkout, remote] },
+      activeWorktreeId: checkout.id,
+      activeWorkspaceExecutionHostId: null,
+      groupsByWorktree: {
+        [checkout.id]: [
+          { id: 'sim-group', worktreeId: checkout.id, tabOrder: [], activeTabId: null }
+        ]
+      },
+      activeGroupIdByWorktree: { [checkout.id]: 'sim-group' }
+    },
+    true
+  )
+  const first = ensureSimulatorTab(checkout.id, { targetGroupId: 'sim-group', surfacePane: false })
+  const second = ensureSimulatorTab(checkout.id, { targetGroupId: 'sim-group', surfacePane: false })
+  expect(first).not.toBeNull()
+  expect(second).toBe(first)
+  const unresolved = useAppStore.getState().unifiedTabsByWorktree[checkout.id]
+  expect(unresolved).toHaveLength(1)
+  expect(unresolved[0].executionHostId).toBeUndefined()
+  const scoped = ensureSimulatorTab(checkout.id, {
+    targetGroupId: 'sim-group',
+    surfacePane: false,
+    executionHostId: 'ssh:other'
+  })
+  expect(scoped).not.toBe(first)
+  expect(
+    ensureSimulatorTab(checkout.id, {
+      targetGroupId: 'sim-group',
+      surfacePane: false,
+      executionHostId: 'ssh:other'
+    })
+  ).toBe(scoped)
+  expect(ensureSimulatorTab(checkout.id, { targetGroupId: 'sim-group', surfacePane: false })).toBe(
+    first
+  )
+  expect(
+    useAppStore.getState().unifiedTabsByWorktree[checkout.id].map((tab) => tab.executionHostId)
+  ).toEqual([undefined, 'ssh:other'])
 })
