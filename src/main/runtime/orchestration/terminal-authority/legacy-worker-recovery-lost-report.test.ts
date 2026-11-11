@@ -47,7 +47,7 @@ describe('a worker whose terminal is gone after a restart', () => {
       terminalOwnership: 'created'
     })
     db.markWorkerDispatchReady(dispatch.id)
-    return { runId: run.id, dispatchId: dispatch.id }
+    return { runId: run.id, dispatchId: dispatch.id, taskId: task.id }
   }
 
   function recover(notify = vi.fn()) {
@@ -68,7 +68,7 @@ describe('a worker whose terminal is gone after a restart', () => {
   }
 
   it('tells the coordinator once that it is lost, with its last output', async () => {
-    const { runId, dispatchId } = runningWorker()
+    const { runId, dispatchId, taskId } = runningWorker()
     const { persistence, plan, notify, lostWorkers } = recover()
     // A second pass over the same candidate must not repeat the alert.
     persistence.reconcileMissing(plan.candidates[0]!, lostWorkers)
@@ -79,6 +79,9 @@ describe('a worker whose terminal is gone after a restart', () => {
     expect(mail.map((message) => message.subject)).toEqual(['Worker lost without reporting'])
     expect(mail[0]?.body).toContain('is gone (its terminal was gone when Orca restarted)')
     expect(mail[0]?.body).toContain('gh pr checks 596 --watch')
+    // Recovery puts the Task back to ready, which --retry-of refuses.
+    expect(db.getTask(taskId)?.status).toBe('ready')
+    expect(mail[0]?.body).toContain(`orchestration worker-start --task ${taskId}\``)
     expect(notify).toHaveBeenCalledTimes(1)
   })
 })

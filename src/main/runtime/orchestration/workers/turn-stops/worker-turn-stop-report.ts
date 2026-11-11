@@ -71,12 +71,17 @@ function isWorkerGone(reason: WorkerTurnStopReason): boolean {
   return reason === 'exited' || reason === 'lost'
 }
 
-function describeStop(
-  stop: WorkerTurnStop,
-  task: string,
-  dispatchId: string,
-  chatCoordinator = false
-): string {
+/** `task` labels the Task for a reader; `taskId` goes into commands. */
+type StopContext = {
+  task: string
+  taskId: string
+  dispatchId: string
+  chatCoordinator?: boolean
+  taskReady?: boolean
+}
+
+function describeStop(stop: WorkerTurnStop, context: StopContext): string {
+  const { task, dispatchId } = context
   // Agent prose and failure text can echo its injected capability; mail must never carry it.
   const redact = (text: string | undefined) => text && replaceDispatchCapabilities(text).value
   // Failure text (a remote selector, a URL) can also carry credentials.
@@ -97,7 +102,7 @@ function describeStop(
   const output = redact(stop.lastOutput)?.trim()
   return [
     what,
-    ...describeNextStep(stop, task, dispatchId, chatCoordinator),
+    ...describeNextStep(stop, context),
     ...(leftover ? [`Left behind: ${leftover}.`] : []),
     ...(stop.reason === 'finished'
       ? [
@@ -121,9 +126,7 @@ function describeStop(
 // The reader runs its own CLI build, so name the subcommand, never an executable.
 function describeNextStep(
   stop: WorkerTurnStop,
-  task: string,
-  dispatchId: string,
-  chatCoordinator: boolean
+  { taskId, dispatchId, chatCoordinator, taskReady }: StopContext
 ): string[] {
   if (stop.settled === 'circuit_broken') {
     return [
@@ -131,8 +134,10 @@ function describeNextStep(
     ]
   }
   if (stop.settled === 'failed') {
+    // A Task Orca put back to ready starts afresh; --retry-of takes only a failed or blocked one.
+    const start = `orchestration worker-start --task ${taskId}${taskReady ? '' : ` --retry-of ${dispatchId}`}`
     return [
-      `Its Dispatch is closed as failed. Retry it with your Orca CLI's \`orchestration worker-start --task ${task} --retry-of ${dispatchId}\` and the same placement and agent, or tell the user.`
+      `Its Dispatch is closed as failed. Start it again with your Orca CLI's \`${start}\` and the same placement and agent, or tell the user.`
     ]
   }
   if (isWorkerGone(stop.reason)) {
@@ -215,12 +220,13 @@ export function reportWorkerTurnStop(
         mailbox: () => dispatchReportMailbox(db, dispatch),
         describe: (task) => ({
           subject,
-          body: describeStop(
-            stop,
+          body: describeStop(stop, {
             task,
-            dispatch.id,
-            deps.isChatMailbox?.(dispatchReportMailbox(db, dispatch)) === true
-          )
+            taskId: dispatch.task_id,
+            dispatchId: dispatch.id,
+            chatCoordinator: deps.isChatMailbox?.(dispatchReportMailbox(db, dispatch)) === true,
+            taskReady: db.getTask(dispatch.task_id)?.status === 'ready'
+          })
         }),
         payload: { taskId: dispatch.task_id, ...payload }
       },
@@ -244,7 +250,11 @@ export function reportWorkerTurnStop(
       payload: JSON.stringify({
         from: stop.from,
         subject,
-        body: describeStop(stop, attachment.task_id, dispatchId),
+        body: describeStop(stop, {
+          task: attachment.task_id,
+          taskId: attachment.task_id,
+          dispatchId
+        }),
         type: 'escalation',
         priority: 'high',
         threadId: null,
