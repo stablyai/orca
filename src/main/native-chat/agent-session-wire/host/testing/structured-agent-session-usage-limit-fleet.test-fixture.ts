@@ -4,7 +4,10 @@ import { hostTestRestingOptionsRecord } from './structured-agent-session-host-te
 import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
 import { RestartContinuationSupersededError } from '../../recovery/structured-agent-session-restart-continuation'
 import { StructuredAgentSessionUsageLimitContinue } from '../../recovery/structured-agent-session-usage-limit-continue'
-import { usageLimitAccountSources } from '../../../../runtime/agent-session/installation/usage-limit-account-usage'
+import {
+  usageLimitAccountSources,
+  type UsageLimitAccountSourceDeps
+} from '../../../../runtime/agent-session/installation/usage-limit-account-usage'
 
 export const HOUR = 60 * 60 * 1000
 
@@ -40,14 +43,20 @@ export type FleetSources = {
 }
 
 /** The production account sources over fake owners; a test replaces their objects to move them. */
-export function fakeAccountSources(sources: FleetSources) {
+export function fakeAccountSources(
+  sources: FleetSources,
+  /** A real rate-limit service in place of the fake reading owner. */
+  rateLimits?: UsageLimitAccountSourceDeps['rateLimits']
+) {
   let suspension: { reached: () => void; gate: Promise<void> } | undefined
   const production = usageLimitAccountSources({
-    rateLimits: () => ({
-      usageReadingAccount: () => sources.reading,
-      usageReading: () => sources.limits,
-      requestUsageReading: () => {}
-    }),
+    rateLimits:
+      rateLimits ??
+      (() => ({
+        usageReadingAccount: () => sources.reading,
+        usageReading: () => sources.limits,
+        requestUsageReading: () => {}
+      })),
     settings: () => sources.settings,
     shellEnvironment: async () => {
       const env = sources.shellEnv
@@ -84,13 +93,16 @@ export function usageLimitFleet(options: {
   sources: FleetSources
   /** After a send passed admission. */
   dispatching?: (id: string) => void
+  rateLimits?: UsageLimitAccountSourceDeps['rateLimits']
+  /** How many of the chats are shown now; all by default. */
+  shown?: () => number
 }) {
   const { sources } = options
   let clock = options.now
   const ids = Array.from({ length: options.count }, (_, index) => `chat-${index}`)
   const calls = { launchHome: 0, reader: 0 }
   const dispatched: string[] = []
-  const { production, suspendNextShellRead } = fakeAccountSources(sources)
+  const { production, suspendNextShellRead } = fakeAccountSources(sources, options.rateLimits)
   const record = (id: string) => ({
     ...hostTestRestingOptionsRecord(id),
     provider: options.provider,
@@ -118,7 +130,7 @@ export function usageLimitFleet(options: {
       },
       store: {
         hostId: 'local',
-        listVisibleSessionIds: () => ids,
+        listVisibleSessionIds: () => ids.slice(0, options.shown?.() ?? ids.length),
         isSessionTabVisible: () => true,
         cancelUsageLimitContinue: async (id) => record(id),
         getRecord: record

@@ -40,11 +40,34 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
     return this.state[provider]
   }
 
-  /** An automatic, non-forced read of one provider that waits out its Retry-After. */
-  requestUsageReading(provider: 'claude' | 'codex'): void {
-    if (this.isRetryAfterActive(this.state[provider])) {
+  /** When an automatic read of each provider was last admitted. */
+  private readonly automaticReadingAt: Partial<Record<'claude' | 'codex', number>> = {}
+
+  /** An automatic, non-forced read of one provider's selected account. It waits out Retry-After
+   *  and the failure backoff the poller keeps; with `notWithinMs` it also waits while a reading
+   *  or an admitted automatic read of that account is that recent, however many callers ask. */
+  requestUsageReading(provider: 'claude' | 'codex', options: { notWithinMs?: number } = {}): void {
+    const limits = this.state[provider]
+    const now = Date.now()
+    if (this.isFetching || this.isRetryAfterActive(limits)) {
       return
     }
+    if (limits?.status === 'error' && !this.failureRetryDue(provider, now)) {
+      return
+    }
+    if (options.notWithinMs !== undefined) {
+      const checkedAt = limits?.status === 'ok' ? this.providerCheckedAt(provider, limits) : null
+      const last = Math.max(
+        this.automaticReadingAt[provider] ?? Number.NEGATIVE_INFINITY,
+        checkedAt ?? Number.NEGATIVE_INFINITY
+      )
+      if (now - last < options.notWithinMs) {
+        return
+      }
+    }
+    this.automaticReadingAt[provider] = now
+    // Starts the failure clock as the poller's own retries do.
+    this.lastActiveFailureRetryAtByProvider[provider] = now
     void (provider === 'claude' ? this.fetchClaudeOnly() : this.fetchCodexOnly()).catch(() => {})
   }
 

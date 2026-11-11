@@ -6,6 +6,7 @@ import { fetchZcodeRateLimits } from '../providers/zcode/zcode-usage-fetcher'
 import { fetchOpenCodeGoUsage } from '../providers/opencode-go/opencode-go-usage-source-selection'
 import {
   errorProvider,
+  flushMicrotasks,
   okProvider,
   resetRateLimitProviderMocks
 } from './rate-limit-service-test-harness'
@@ -129,5 +130,17 @@ describe('RateLimitService', () => {
     expect(state.opencodeGo?.status).toBe('error')
     expect(state.opencodeGo?.session).toBeNull()
     expect(state.opencodeGo?.error).toBe('No workspace ID found')
+  })
+
+  it('keeps automatic usage readings inside a failing provider backoff', async () => {
+    vi.mocked(fetchCodexRateLimits).mockResolvedValue(errorProvider('codex', 'probe failed'))
+    const service = new RateLimitService()
+    service.requestUsageReading('codex')
+    await flushMicrotasks(20)
+    expect(vi.mocked(fetchCodexRateLimits)).toHaveBeenCalledTimes(1)
+    // That failure starts the backoff the poller keeps; an automatic read waits it out.
+    service.requestUsageReading('codex')
+    await flushMicrotasks(20)
+    expect(vi.mocked(fetchCodexRateLimits)).toHaveBeenCalledTimes(1)
   })
 })

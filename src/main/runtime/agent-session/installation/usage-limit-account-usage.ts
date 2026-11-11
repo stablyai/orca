@@ -152,7 +152,8 @@ export function usageLimitAccountSources(deps: UsageLimitAccountSourceDeps): {
             service.usageReadingAccount(provider) === reading
               ? service.usageReading(provider)
               : null,
-          refresh: () => service.requestUsageReading(provider)
+          refresh: (notWithinMs) =>
+            service.requestUsageReading(provider, notWithinMs === undefined ? {} : { notWithinMs })
         }
       }
     }

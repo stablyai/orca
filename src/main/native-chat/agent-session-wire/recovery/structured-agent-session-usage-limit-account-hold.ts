@@ -20,8 +20,9 @@ export type UsageLimitAccountUsage = {
   key: string
   /** The reading now, or null once it no longer describes this account. */
   read: () => ProviderRateLimits | null
-  /** A non-forced fetch that keeps the poller's own Retry-After. */
-  refresh: () => void
+  /** A non-forced fetch that keeps the poller's Retry-After and failure backoff; with
+   *  `notWithinMs`, at most one per account that often, however many chats ask. */
+  refresh: (notWithinMs?: number) => void
 }
 
 /** Where a launch would bill: a hold never outlives the scope it was taken in. */
@@ -52,8 +53,6 @@ type Hold = {
   /** When the newest reading that put spending into effect was taken; only later room releases. */
   spentSeenAt?: number
   refreshedFor?: number
-  /** When a pass last asked for a reading while the reset was unknown. */
-  unknownAskedAt?: number
   /** When a due send of this held reset first found no reading to wait for. */
   bootstrapSince?: { reset: number; at: number }
 }
@@ -66,7 +65,7 @@ type AttributionHost = Pick<
 const GRACE_MS = 15_000
 /** How long a due send waits for a fresh reading before it goes on the reset it has. */
 const READING_WAIT_MS = 120_000
-/** How often an unknown reset asks for a reading; only one with room can end it. */
+/** How often an account with an unknown reset is asked for a reading; only room can end it. */
 const UNKNOWN_RESET_ASK_MS = 10 * 60_000
 
 /** Derived each pass from the polled reading; nothing is saved. A hold only grows for its cut and account. */
@@ -274,14 +273,12 @@ export class UsageLimitAccountHolds {
     const hold = this.verdict(id, cut, now)
     const record = this.holds.get(id)
     const scope = this.scopes.get(id)
-    // The poller may be idle (unfocused, no viewer), and only a reading with room ends this.
-    if (hold.unknownReset && record && scope?.account) {
-      if (now - (record.unknownAskedAt ?? Number.NEGATIVE_INFINITY) >= UNKNOWN_RESET_ASK_MS) {
-        record.unknownAskedAt = now
-        scope.account.refresh()
-      }
+    if (hold.unknownReset) {
+      // The poller may be idle (unfocused, no viewer), and only a reading with room ends this.
+      scope?.account?.refresh(UNKNOWN_RESET_ASK_MS)
+      return false
     }
-    if (hold.unknownReset || now < Math.max(hold.resetsAt + GRACE_MS, notBefore)) {
+    if (now < Math.max(hold.resetsAt + GRACE_MS, notBefore)) {
       return false
     }
     const refresh = scope?.account?.refresh ?? scope?.bootstrap
