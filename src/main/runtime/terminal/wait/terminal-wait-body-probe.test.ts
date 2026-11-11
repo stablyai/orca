@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { isKnownReadyPromptSettled } from './terminal-wait-detection'
 import { shouldProbeVisibleScreen } from './terminal-wait'
-import { visibleProbeReady, visibleProbeReadsScreen } from './terminal-wait-visible-probe'
+import {
+  visibleProbeNeedsRetry,
+  visibleProbeReady,
+  visibleProbeReadsScreen
+} from './terminal-wait-visible-probe'
 
 // Qoder 1.1.67's idle composer as `terminal read` shows it.
 const QODER_IDLE_SCREEN = [
@@ -87,6 +91,13 @@ describe('tui-idle body probe', () => {
     expect(visibleProbeReadsScreen('qoder-cn', false)).toBe(true)
     expect(visibleProbeReadsScreen('amp', false)).toBe(false)
     expect(visibleProbeReadsScreen('claude', true)).toBe(true)
+  })
+
+  it('retries only while a body-read agent is working and time remains', () => {
+    expect(visibleProbeNeedsRetry('qoder', true, 5_000)).toBe(true)
+    expect(visibleProbeNeedsRetry('qoder', true, 1_000)).toBe(false)
+    expect(visibleProbeNeedsRetry('qoder', false, 5_000)).toBe(false)
+    expect(visibleProbeNeedsRetry('amp', true, 5_000)).toBe(false)
   })
 
   it('keeps the settled-preview rule for agents without body rules', () => {
