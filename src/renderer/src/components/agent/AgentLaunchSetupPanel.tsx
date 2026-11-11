@@ -9,7 +9,8 @@ import {
 } from './agent-launch-setup-option-rows'
 import { useRef, useState } from 'react'
 import { useSetupModelHighlight } from './use-setup-model-highlight'
-import { Check, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react'
+import { AgentPickerLegacyModelsToggle } from './AgentPickerLegacyModelsToggle'
+import { Check, ChevronDown, ChevronRight } from 'lucide-react'
 import { getAgentSessionOptionLaunchCatalog } from '../../../../shared/agent-session/options/agent-session-option-catalog'
 import {
   Command,
@@ -72,7 +73,7 @@ export function AgentLaunchSetupPanel({
     }
   }
   const [modelQuery, setModelQuery] = useState('')
-  const [legacy, setLegacy] = useState(false)
+  const [legacyExpanded, setLegacyExpanded] = useState(false)
   const [argumentsOpen, setArgumentsOpen] = useState(entry.defaultSurface === 'terminal')
   const argumentsKnown = agentPickerArgumentsKnown(entry, draft)
   const effective = agentPickerEffectiveChoices(entry, draft)
@@ -98,7 +99,7 @@ export function AgentLaunchSetupPanel({
     models,
     currentModel,
     modelQuery,
-    legacy,
+    legacyExpanded,
     modelInArguments
   )
   const modelList = useRef<HTMLDivElement>(null)
@@ -162,7 +163,28 @@ export function AgentLaunchSetupPanel({
   // Launch leaves Permissions and Arguments to Agent settings; select mode edits a saved setup.
   const editsDefaults = mode === 'select' && !entry.textGeneration
   const note = agentLaunchSetupArgumentsNote(entry.label, options, !seed?.modelApply.cli?.length)
-  const legacyCount = models.filter((model) => model.isLegacy && !model.hidden).length
+  const renderModelRow = (model: (typeof modelRows.rows)[number]) => {
+    const current = model.unlisted || (currentModel === model.id && !modelInArguments)
+    return (
+      <CommandItem
+        key={model.id}
+        value={model.id}
+        keywords={[model.label]}
+        disabled={modelDisabled}
+        data-current={current}
+        onSelect={() => {
+          if (!model.unlisted) {
+            editDraft({ kind: 'choice', patch: { model: model.id } })
+          }
+        }}
+      >
+        {model.label}
+        <span className="ml-auto flex size-3.5 shrink-0 items-center justify-center">
+          {current ? <Check className="size-3.5 text-muted-foreground" /> : null}
+        </span>
+      </CommandItem>
+    )
+  }
   return (
     <div
       className="flex w-full flex-col"
@@ -244,47 +266,14 @@ export function AgentLaunchSetupPanel({
               modelInArguments={modelInArguments}
               onSelect={editDraft}
             />
-            {legacy && !modelQuery ? (
-              <CommandItem value="__back__" disabled={disabled} onSelect={() => setLegacy(false)}>
-                <ChevronLeft className="size-3.5 text-muted-foreground" />
-                {t('agentPicker.legacyModels', 'Legacy models')}
-              </CommandItem>
-            ) : null}
-            {modelRows.rows.map((model) => {
-              const current = model.unlisted || (currentModel === model.id && !modelInArguments)
-              return (
-                <CommandItem
-                  key={model.id}
-                  value={model.id}
-                  keywords={[model.label]}
-                  disabled={modelDisabled}
-                  data-current={current}
-                  onSelect={() => {
-                    if (!model.unlisted) {
-                      editDraft({ kind: 'choice', patch: { model: model.id } })
-                    }
-                  }}
-                >
-                  {model.label}
-                  <span className="ml-auto flex size-3.5 shrink-0 items-center justify-center">
-                    {current ? <Check className="size-3.5 text-muted-foreground" /> : null}
-                  </span>
-                </CommandItem>
-              )
-            })}
-            {!legacy && !modelQuery && legacyCount > 0 ? (
-              <CommandItem value="__legacy__" disabled={disabled} onSelect={() => setLegacy(true)}>
-                <span className="flex min-w-0 flex-col">
-                  <span>{t('agentPicker.legacyModels', 'Legacy models')}</span>
-                  <span className="text-muted-foreground">
-                    {t('agentPicker.legacyModelCount', '{{total}} models', {
-                      total: legacyCount
-                    })}
-                  </span>
-                </span>
-                <ChevronRight className="ml-auto size-3.5 text-muted-foreground" />
-              </CommandItem>
-            ) : null}
+            {modelRows.rows.map(renderModelRow)}
+            <AgentPickerLegacyModelsToggle
+              total={modelRows.legacyCount}
+              expanded={legacyExpanded}
+              disabled={disabled}
+              onToggle={() => setLegacyExpanded((expanded) => !expanded)}
+            />
+            {modelRows.legacyRows.map(renderModelRow)}
           </CommandGroup>
         </CommandList>
       </Command>

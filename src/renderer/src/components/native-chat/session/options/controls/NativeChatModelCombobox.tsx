@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { Check, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Check } from 'lucide-react'
 import {
   Command,
   CommandEmpty,
@@ -15,6 +15,7 @@ import { nativeChatSessionChoiceLabel } from '../../../../../../../shared/native
 import { sayNativeChatSessionOptionTranslated as say } from './native-chat-session-option-labels-text'
 import { NativeChatSessionOptionChoiceBody } from './NativeChatSessionOptionChoiceBody'
 import { NativeChatSessionOptionWriteGroup } from './NativeChatSessionOptionWriteGroup'
+import { AgentPickerLegacyModelsToggle } from '../../../../agent/AgentPickerLegacyModelsToggle'
 
 type NativeChatModelComboboxProps = {
   choices: readonly SessionOptionSelectChoice[]
@@ -47,9 +48,39 @@ export function NativeChatModelCombobox({
   const searchLabel = t('components.native-chat.composer.searchModels', 'Search models…')
   const search = useRef<HTMLInputElement>(null)
   const [query, setQuery] = useState('')
-  const [legacy, setLegacy] = useState(false)
+  const [legacyExpanded, setLegacyExpanded] = useState(false)
   const searching = Boolean(query.trim())
-  const legacyCount = choices.filter((choice) => choice.legacy).length
+  const folded = (choice: SessionOptionSelectChoice) =>
+    !searching && Boolean(choice.legacy) && choice.value !== currentValue
+  const legacyChoices = choices.filter(folded)
+  const renderChoice = (choice: SessionOptionSelectChoice) => {
+    const label = nativeChatSessionChoiceLabel(choice, say)
+    const current = choice.value === currentValue
+    return (
+      <CommandItem
+        key={choice.value}
+        value={choice.value}
+        keywords={[label, choice.description ?? '']}
+        selection="palette"
+        disabled={readOnly}
+        aria-current={current || undefined}
+        onSelect={() => {
+          if (!current) {
+            onSelect(choice.value)
+          }
+        }}
+      >
+        <NativeChatSessionOptionChoiceBody
+          label={label}
+          description={nativeChatModelDescription(choice.value, choice.description, t)}
+        />
+        {/* Reserve the check slot so selecting a model cannot rewrap its label. */}
+        <span className="ml-auto flex size-3.5 shrink-0 items-center justify-center">
+          {current ? <Check className="size-3.5 text-muted-foreground" /> : null}
+        </span>
+      </CommandItem>
+    )
+  }
   return (
     <Command
       surface="inline"
@@ -78,56 +109,13 @@ export function NativeChatModelCombobox({
         </CommandEmpty>
         <NativeChatSessionOptionWriteGroup busy={busy}>
           <CommandGroup>
-            {legacy && !searching ? (
-              <CommandItem value="__back__" onSelect={() => setLegacy(false)}>
-                <ChevronLeft className="size-3.5 text-muted-foreground" />
-                {t('agentPicker.legacyModels', 'Legacy models')}
-              </CommandItem>
-            ) : null}
-            {choices
-              .filter(
-                (choice) =>
-                  searching || choice.value === currentValue || Boolean(choice.legacy) === legacy
-              )
-              .map((choice) => {
-                const label = nativeChatSessionChoiceLabel(choice, say)
-                const current = choice.value === currentValue
-                return (
-                  <CommandItem
-                    key={choice.value}
-                    value={choice.value}
-                    keywords={[label, choice.description ?? '']}
-                    selection="palette"
-                    disabled={readOnly}
-                    aria-current={current || undefined}
-                    onSelect={() => {
-                      if (!current) {
-                        onSelect(choice.value)
-                      }
-                    }}
-                  >
-                    <NativeChatSessionOptionChoiceBody
-                      label={label}
-                      description={nativeChatModelDescription(choice.value, choice.description, t)}
-                    />
-                    {/* Reserve the check slot so selecting a model cannot rewrap its label. */}
-                    <span className="ml-auto flex size-3.5 shrink-0 items-center justify-center">
-                      {current ? <Check className="size-3.5 text-muted-foreground" /> : null}
-                    </span>
-                  </CommandItem>
-                )
-              })}
-            {!legacy && !searching && legacyCount > 0 ? (
-              <CommandItem value="__legacy__" onSelect={() => setLegacy(true)}>
-                <span className="flex min-w-0 flex-col">
-                  <span>{t('agentPicker.legacyModels', 'Legacy models')}</span>
-                  <span className="text-muted-foreground">
-                    {t('agentPicker.legacyModelCount', '{{total}} models', { total: legacyCount })}
-                  </span>
-                </span>
-                <ChevronRight className="ml-auto size-3.5 text-muted-foreground" />
-              </CommandItem>
-            ) : null}
+            {choices.filter((choice) => !folded(choice)).map(renderChoice)}
+            <AgentPickerLegacyModelsToggle
+              total={legacyChoices.length}
+              expanded={legacyExpanded}
+              onToggle={() => setLegacyExpanded((expanded) => !expanded)}
+            />
+            {legacyExpanded ? legacyChoices.map(renderChoice) : null}
           </CommandGroup>
         </NativeChatSessionOptionWriteGroup>
       </CommandList>
