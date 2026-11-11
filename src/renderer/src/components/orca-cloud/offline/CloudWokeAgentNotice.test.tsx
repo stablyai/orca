@@ -28,10 +28,20 @@ vi.stubGlobal(
 const paneKey = 'tab-1:leaf-1'
 const asleepAt = 1_000_000
 
-function setAgentRow(row: Partial<AgentStatusEntry>): void {
-  useAppStore.setState({
-    agentStatusByPaneKey: { [paneKey]: { agentType: 'claude', ...row } as AgentStatusEntry }
-  })
+function setAgentRow(
+  row: Pick<AgentStatusEntry, 'evidenceObservedAt'> & { updatedAt?: number }
+): void {
+  const entry: AgentStatusEntry = {
+    state: 'done',
+    prompt: '',
+    stateStartedAt: asleepAt,
+    paneKey,
+    stateHistory: [],
+    agentType: 'claude',
+    ...(row.evidenceObservedAt === undefined ? {} : { evidenceObservedAt: row.evidenceObservedAt }),
+    updatedAt: row.updatedAt ?? asleepAt
+  }
+  useAppStore.setState({ agentStatusByPaneKey: { [paneKey]: entry } })
 }
 
 /** A pane whose screen the test controls: at a shell prompt or not, and when it redraws. */

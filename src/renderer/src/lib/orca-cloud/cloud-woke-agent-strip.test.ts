@@ -68,11 +68,11 @@ describe('the woke-up strip on an agent pane (RA-WAKE)', () => {
   })
 
   it("a reconnect's restamped delivery time is not evidence of a relaunch", () => {
-    const replayed = {
+    const replayed: Pick<AgentStatusEntry, 'evidenceObservedAt' | 'updatedAt'> = {
       updatedAt: asleepAt + 60_000,
       evidenceObservedAt: asleepAt - 5_000
-    } as AgentStatusEntry
+    }
     expect(agentEvidenceAt(replayed)).toBe(asleepAt - 5_000)
-    expect(agentEvidenceAt({ updatedAt: asleepAt + 60_000 } as AgentStatusEntry)).toBeNull()
+    expect(agentEvidenceAt({ evidenceObservedAt: undefined })).toBeNull()
   })
 })

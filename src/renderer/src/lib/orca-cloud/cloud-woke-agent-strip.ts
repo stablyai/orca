@@ -26,7 +26,9 @@ export type WokeAgentStripState = 'relaunched' | 'waiting' | 'watching' | 'resta
  * The agent's own evidence time (its hook events), never the delivery stamp: a reconnect replays
  * the pre-sleep row with a fresh `updatedAt`, which would read as a relaunch.
  */
-export function agentEvidenceAt(entry: AgentStatusEntry | null | undefined): number | null {
+export function agentEvidenceAt(
+  entry: Pick<AgentStatusEntry, 'evidenceObservedAt'> | null | undefined
+): number | null {
   return entry?.evidenceObservedAt ?? null
 }
 
