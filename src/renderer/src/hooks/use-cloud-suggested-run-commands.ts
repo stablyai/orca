@@ -2,7 +2,7 @@
 // lint, test and friends from package.json, run with the package manager the project declares.
 // Suggestions run like saved quick commands but are not saved; nothing is offered when the file is
 // missing or unreadable.
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useAppStore } from '@/store'
 import { findWorktreeById } from '@/store/github/refresh/worktree-refresh'
 import { readRuntimeFileContent } from '@/runtime/files/reads/runtime-file-read-client'
@@ -57,19 +57,41 @@ export function suggestedRunCommands(
   })
 }
 
-/** Suggestions for one cloud workspace; [] until read, and for anything that isn't cloud. */
+const EMPTY: HostedTerminalQuickCommand[] = []
+
+/** Same suggestions (same command lines): keep the old array so the menu doesn't re-render. */
+function sameSuggestions(
+  a: readonly HostedTerminalQuickCommand[],
+  b: readonly HostedTerminalQuickCommand[]
+): boolean {
+  const line = (entry: HostedTerminalQuickCommand): string =>
+    `${entry.key}\0${'command' in entry.command ? entry.command.command : ''}`
+  return a.length === b.length && a.every((entry, index) => line(entry) === line(b[index]))
+}
+
+/**
+ * Suggestions for one cloud workspace; [] until read, and for anything that isn't cloud.
+ * package.json can change any time (a new script, a file created mid-session), so it is read
+ * again by `refresh` (the Run menu calls it on open and on hover) and when the window regains
+ * focus, not only when the tab bar mounts (LC2-P3).
+ */
 export function useCloudSuggestedRunCommands(
   worktreeId: string,
   cloudHost: { hostId: ExecutionHostId; label: string; environmentId: string } | null
-): HostedTerminalQuickCommand[] {
-  const [commands, setCommands] = useState<HostedTerminalQuickCommand[]>([])
+): { commands: HostedTerminalQuickCommand[]; refresh: () => void } {
+  const [commands, setCommandsRaw] = useState<HostedTerminalQuickCommand[]>(EMPTY)
+  const [generation, setGeneration] = useState(0)
+  const refresh = useCallback(() => setGeneration((value) => value + 1), [])
+  const setCommands = useCallback((next: HostedTerminalQuickCommand[]) => {
+    setCommandsRaw((previous) => (sameSuggestions(previous, next) ? previous : next))
+  }, [])
   const worktreePath = useAppStore((state) => findWorktreeById(state, worktreeId)?.path ?? null)
   const hostId = cloudHost?.hostId ?? null
   const label = cloudHost?.label ?? ''
   const environmentId = cloudHost?.environmentId ?? null
   useEffect(() => {
     if (!hostId || !environmentId || !worktreePath) {
-      setCommands([])
+      setCommands(EMPTY)
       return
     }
     let cancelled = false
@@ -100,6 +122,13 @@ export function useCloudSuggestedRunCommands(
     return () => {
       cancelled = true
     }
-  }, [environmentId, hostId, label, worktreeId, worktreePath])
-  return commands
+  }, [environmentId, generation, hostId, label, setCommands, worktreeId, worktreePath])
+  useEffect(() => {
+    if (!hostId) {
+      return
+    }
+    window.addEventListener('focus', refresh)
+    return () => window.removeEventListener('focus', refresh)
+  }, [hostId, refresh])
+  return { commands, refresh }
 }
