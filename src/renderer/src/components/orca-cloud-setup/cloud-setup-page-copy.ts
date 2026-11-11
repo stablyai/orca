@@ -12,9 +12,8 @@ export function stepLabel(step: CloudSetupStep, t: Translate): string {
     case 'team':
       return t('cloudSetupPage.step.team', 'Team')
     case 'plan':
-      return step.need === 'trial'
-        ? t('cloudSetupPage.step.trial', 'Trial')
-        : t('cloudSetupPage.step.plan', 'Plan')
+      // Always "Plan", as on the web (DS-b): a trial is how the plan step gets done, not a step.
+      return t('cloudSetupPage.step.plan', 'Plan')
     case 'github':
       return t('cloudSetupPage.step.github', 'GitHub')
     case 'agent':

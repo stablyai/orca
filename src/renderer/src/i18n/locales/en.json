@@ -28276,8 +28276,7 @@
       "agent": "Agent",
       "github": "GitHub",
       "plan": "Plan",
-      "team": "Team",
-      "trial": "Trial"
+      "team": "Team"
     },
     "stepCurrent": "current step",
     "stepDone": "done",

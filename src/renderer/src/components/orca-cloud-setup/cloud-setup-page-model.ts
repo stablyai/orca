@@ -92,12 +92,28 @@ export function cloudSetupPageModel(
   rows: readonly CloudSetupStep[],
   { teamSwitch = false }: { teamSwitch?: boolean } = {}
 ): CloudSetupPageModel {
-  const steps = rows.filter((step) => step.id !== 'agent')
+  const steps = withTeamStep(rows.filter((step) => step.id !== 'agent'))
   const current = steps.find((step) => step.state !== 'done') ?? null
   if (!current) {
     return { steps, current: null, action: 'done' }
   }
   return { steps, current, action: actionForStep(current, { teamSwitch }) }
+}
+
+/**
+ * The web's stepper (stablyai/orca-cloud#730, DS-b) always lists Team right after Account, so the
+ * count never changes: a team made for you at sign-in ticks with Account. The rows only carry a
+ * Team step while a team switch is needed; otherwise it is added here, done once signed in.
+ */
+function withTeamStep(steps: readonly CloudSetupStep[]): readonly CloudSetupStep[] {
+  const accountIndex = steps.findIndex((step) => step.id === 'account')
+  if (accountIndex === -1 || steps.some((step) => step.id === 'team')) {
+    return steps
+  }
+  const account = steps[accountIndex]!
+  const team: CloudSetupStep =
+    account.state === 'done' ? { id: 'team', state: 'done' } : { id: 'team', state: 'pending' }
+  return [...steps.slice(0, accountIndex + 1), team, ...steps.slice(accountIndex + 1)]
 }
 
 /** Needs that a browser trip (setup session) can cover, from the current step on. */
