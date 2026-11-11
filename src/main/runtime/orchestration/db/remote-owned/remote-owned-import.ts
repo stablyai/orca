@@ -7,10 +7,14 @@ import { OrchestrationError } from '../../orchestration-error'
 import type { MessageType } from '../orchestration-records'
 import type { OrchestrationDb } from '../orchestration-db'
 import { presentImportedPeerItem } from '../../mailbox/formatting/imported-peer-item-presentation'
-import { reconcileTaskAfterDispatchInterruption } from '../dispatch-context/task-dispatch-reconciliation'
+import {
+  reconcileTaskAfterDispatchInterruption,
+  settleTaskAfterLostWorker
+} from '../dispatch-context/task-dispatch-reconciliation'
 import { runLifecycleWriteTransaction } from '../lifecycle-write-transaction-runner'
 import {
   abandonRemoteDispatchStop,
+  isRemoteDispatchTerminal,
   recordRemoteDispatchReport,
   recordRemoteDispatchState
 } from './remote-dispatch-records'
@@ -229,6 +233,16 @@ function importWorkerState(
   }
   // The Task here follows the server's Task through the ordinary owner's Task half, unless this
   // Orca already settled it for this attempt: the first result stands.
+  // The server's restart recovery lost its worker and readied its Task: as the local rule does,
+  // the Task here is ready for a fresh start. Ready is no result, so it applies even if settled here.
+  if (
+    task.status === 'ready' &&
+    isRemoteDispatchTerminal(record) &&
+    currentRemoteAttempt(db, dispatch.taskId)?.dispatch_id === dispatch.id
+  ) {
+    settleTaskAfterLostWorker(db, dispatch.taskId, 'ready')
+    return undefined
+  }
   if (record.task_settled_here) {
     return undefined
   }

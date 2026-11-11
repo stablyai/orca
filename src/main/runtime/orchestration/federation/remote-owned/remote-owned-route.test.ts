@@ -634,13 +634,100 @@ describe('commands about a worker a paired server owns', () => {
       status: 'failed',
       result: 'The pairing with devB was re-made. Its worker may still run there.'
     })
-    expect(getRemotePlacement(db, taskId)).toBeUndefined()
     // As a local worker's failure, the Run's coordinator is told.
     expect(
       db.db
         .prepare(`SELECT type, body FROM messages WHERE to_handle = ? AND type = 'escalation'`)
         .get(`run:${runId}`)
     ).toMatchObject({ body: expect.stringContaining('The pairing with devB was re-made.') })
+  })
+
+  it('fails the Task a worker held when its pairing is re-made, with no call through its link', async () => {
+    const { taskId, runId } = await startOnB()
+    runtime.ensureOrchestrationFederationRelay(runId)
+    server = { ...server, homePeerFingerprint: 'cred_a_new', pairingRevision: 2 }
+
+    await vi.waitFor(() =>
+      expect(db.getTask(taskId)).toMatchObject({
+        status: 'failed',
+        result: 'The pairing with devB was re-made. Its worker may still run there.'
+      })
+    )
+  })
+
+  it('refuses here to start a Task placed through an earlier pairing, and a new Task starts there', async () => {
+    const { taskId } = await startOnB()
+    server = { ...server, homePeerFingerprint: 'cred_a_new', pairingRevision: 2 }
+    await call('orchestration.workerRead', { dispatch: 'ctx_b1' })
+    await call('orchestration.taskUpdate', {
+      id: taskId,
+      status: 'ready',
+      callerTerminalHandle: 'term_coord'
+    })
+    const startsBefore = sent.filter((s) => s.method === 'orchestration.workerStart').length
+
+    answers['orchestration.workerStart'] = [started('ctx_b2')]
+    const again = await call('orchestration.workerStart', {
+      from: 'term_coord',
+      on: 'devB',
+      task: taskId,
+      worktree: 'new-top-level'
+    })
+    expect(again.ok ? undefined : again.error.message).toBe(
+      `Task ${taskId} was placed through a pairing with devB that was re-made or removed; create a new task to run it there. No effects were applied.`
+    )
+    expect(sent.filter((s) => s.method === 'orchestration.workerStart')).toHaveLength(startsBefore)
+
+    const fresh = await call('orchestration.workerStart', {
+      from: 'term_coord',
+      on: 'devB',
+      spec: 'build it again',
+      worktree: 'new-top-level'
+    })
+    expect(fresh.ok ? undefined : fresh.error.message).toBeUndefined()
+  })
+
+  it("lists a Run's workers on its server by the server's Run after a re-pair closed the link", async () => {
+    const { taskId, runId } = await startOnB()
+    importState(runId, taskId, 1, {
+      status: 'dispatched',
+      workerState: 'ready',
+      taskStatus: 'dispatched'
+    })
+    server = { ...server, homePeerFingerprint: 'cred_a_new', pairingRevision: 2 }
+    await call('orchestration.workerRead', { dispatch: 'ctx_b1' })
+    answers['orchestration.workerList'] = [
+      {
+        result: {
+          workers: [{ dispatchId: 'ctx_b1', runId: 'run_on_b' }],
+          page: { total: 1, hasMore: false, nextCursor: null }
+        }
+      }
+    ]
+
+    const listed = await call('orchestration.workerList', { on: 'devB', run: runId })
+    expect(listed.ok ? undefined : listed.error).toBeUndefined()
+    expect(sent.findLast((s) => s.method === 'orchestration.workerList')?.params).toMatchObject({
+      run: 'run_on_b'
+    })
+  })
+
+  it("readies the Task here when the server's restart lost its worker, even after a stop it never proved", async () => {
+    const { taskId, runId } = await startOnB()
+    importState(runId, taskId, 1, {
+      status: 'dispatched',
+      workerState: 'ready',
+      taskStatus: 'dispatched'
+    })
+    await call('orchestration.workerStop', { dispatch: 'ctx_b1' })
+    expect(db.getTask(taskId)?.status).toBe('blocked')
+
+    importState(runId, taskId, 2, {
+      status: 'failed',
+      workerState: 'abandoned',
+      taskStatus: 'ready'
+    })
+    expect(db.getTask(taskId)?.status).toBe('ready')
   })
 
   it('fails the Task a worker held once its server is removed from this Orca', async () => {

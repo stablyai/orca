@@ -23,7 +23,11 @@ import {
   type RemoteDispatchRow
 } from './remote-dispatch-records'
 import { getOpenRemoteRunLink, type RemoteRunLinkRow } from './remote-run-links'
-import { getLiveRemotePlacement, type RemotePlacementRow } from './remote-placement-hold'
+import {
+  getLiveRemotePlacement,
+  refuseTaskOfClosedPairing,
+  type RemotePlacementRow
+} from './remote-placement-hold'
 import { writtenRow } from './written-row'
 
 export type { RemotePlacementRow }
@@ -51,6 +55,8 @@ export function reserveRemotePlacement(
     link: RemoteRunLinkRow
     taskId: string
     requestKey: string
+    /** The server as this Orca names it, for the refusal of a Task an earlier pairing placed there. */
+    serverName?: string
     create?: TaskCreation
     retryOf?: string
   }
@@ -88,6 +94,7 @@ export function reserveRemotePlacement(
         runId: link.run_id
       })
     }
+    refuseTaskOfClosedPairing(db, task.id, link, params.serverName ?? link.environment_id)
     claimTaskForStart(db, task, { retryOf: params.retryOf, onServer: link.environment_id })
     db.db
       .prepare(
@@ -297,10 +304,7 @@ export function remoteHoldOnTask(
     return { dispatchId: placement.dispatch_id, active: true, liveWorker: true }
   }
   const attempt = currentRemoteAttempt(db, taskId)
-  if (!attempt) {
-    return undefined
-  }
-  if (attempt.task_settled_here) {
+  if (!attempt || attempt.task_settled_here) {
     return undefined
   }
   // The server owns the Task until its result has come home: a finished worker whose Task here is

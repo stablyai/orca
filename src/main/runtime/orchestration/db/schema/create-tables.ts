@@ -20,6 +20,9 @@ export function createTables(this: OrchestrationDb): void {
       this.db.exec(`ALTER TABLE remote_placements DROP COLUMN ${column}`)
     }
   }
+  if (!this.hasColumn('remote_run_links', 'server_name')) {
+    this.db.exec('ALTER TABLE remote_run_links ADD COLUMN server_name TEXT')
+  }
   if (!this.hasColumn('remote_dispatches', 'task_settled_here')) {
     this.db.exec(
       'ALTER TABLE remote_dispatches ADD COLUMN task_settled_here INTEGER NOT NULL DEFAULT 0'

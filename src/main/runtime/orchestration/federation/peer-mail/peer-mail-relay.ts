@@ -10,6 +10,7 @@ import { peerMailLocalRecipient } from './peer-mail-delivery'
 import { presentImportedPeerItem } from '../../mailbox/formatting/imported-peer-item-presentation'
 import { importRemoteOwnedItem } from '../../db/remote-owned/remote-owned-import'
 import {
+  closeRemoteRunLinksOfChangedPairing,
   closeRemoteRunLinksOfRemovedServer,
   dueRemoteResendsNow,
   getRemoteRunLink,
@@ -154,6 +155,14 @@ export class PeerMailRelay {
   }
 
   private async pullOnce(environmentId: string, loop: Loop): Promise<void> {
+    // A re-pair is noticed here, not only by the next call through a link: its held Tasks fail now.
+    const server = this.runtime.resolveOrchestrationWorkerServer(environmentId)
+    closeRemoteRunLinksOfChangedPairing(
+      loop.db,
+      remoteServerPin(server),
+      server.name,
+      (handle, type) => this.runtime.notifyMessageArrived(handle, type)
+    )
     this.resendOwed(environmentId, loop)
     const response = await this.runtime
       .callOrchestrationWorkerServer(

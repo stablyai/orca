@@ -38,12 +38,16 @@ function remoteWorkerServer(
   }
 }
 
-/** The paired server's name; one removed from this Orca since keeps its environment ID. */
-export function remoteServerName(runtime: ReadsRuntime, environmentId: string): string {
+/** The paired server's name; one removed from this Orca since keeps the name a link recorded, else its environment ID. */
+export function remoteServerName(
+  runtime: ReadsRuntime,
+  environmentId: string,
+  recorded?: string | null
+): string {
   try {
     return runtime.resolveOrchestrationWorkerServer(environmentId).name
   } catch {
-    return environmentId
+    return recorded ?? environmentId
   }
 }
 
@@ -55,11 +59,14 @@ export function remoteServerName(runtime: ReadsRuntime, environmentId: string): 
  */
 export function remoteWorkerShow(runtime: ReadsRuntime, record: RemoteDispatchRow) {
   const link = getRemoteRunLink(runtime.getOrchestrationDb(), record.conversation_id)
-  const server = remoteWorkerServer(record, link?.state, (id) => remoteServerName(runtime, id))
+  const server = remoteWorkerServer(record, link?.state, (id) =>
+    remoteServerName(runtime, id, link?.server_name)
+  )
   const heard = server.repaired
     ? undefined
     : runtime.getPeerServerAnswerStatus(record.environment_id)
   const reachable = heard?.unreachableSince ? false : heard?.answeredAt ? true : undefined
+  const closedBecause = link?.state === 'closed' ? link.last_error : null
   const owedStop = record.stop_owed
     ? ` A stop is owed; this Orca sends it when ${server.name} answers.`
     : ''
@@ -88,7 +95,7 @@ export function remoteWorkerShow(runtime: ReadsRuntime, record: RemoteDispatchRo
     observation: {
       status: 'unverifiable' as const,
       exactWorker: false,
-      reason: `${recordNote(server, heard)} Its output is kept only on ${server.name}.${owedStop}`
+      reason: `${recordNote(server, heard, closedBecause)} Its output is kept only on ${server.name}.${owedStop}`
     },
     server: {
       ...server,
@@ -100,9 +107,15 @@ export function remoteWorkerShow(runtime: ReadsRuntime, record: RemoteDispatchRo
   }
 }
 
-function recordNote(server: RemoteWorkerServer, heard: PeerServerAnswerStatus | undefined): string {
+function recordNote(
+  server: RemoteWorkerServer,
+  heard: PeerServerAnswerStatus | undefined,
+  closedBecause: string | null
+): string {
   if (server.repaired) {
-    return `The pairing with ${server.name} was re-made, so it no longer reports this worker here; this is ${server.name}'s state as of ${server.asOf}.`
+    // Why the link closed (a re-made pairing, or the server removed), as recorded when it closed.
+    const why = closedBecause ?? `The pairing with ${server.name} was re-made.`
+    return `${why} It no longer reports this worker here; this is ${server.name}'s state as of ${server.asOf}.`
   }
   const state = `${server.name}'s state as of ${server.asOf}.`
   const ago = heard?.answeredAt

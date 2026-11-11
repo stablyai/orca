@@ -11,6 +11,8 @@ CREATE TABLE IF NOT EXISTS remote_run_links (
   home_fingerprint         TEXT NOT NULL,
   pairing_revision         INTEGER,
   peer_run_id              TEXT,
+  -- The server's name when the link was made, for a server removed from this Orca since.
+  server_name              TEXT,
   state                    TEXT NOT NULL DEFAULT 'open'
     CHECK(state IN ('open', 'cancel_owed', 'closed')),
   cancel_key               TEXT,

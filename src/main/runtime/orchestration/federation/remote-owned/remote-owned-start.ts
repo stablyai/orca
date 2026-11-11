@@ -98,6 +98,7 @@ export async function startRemoteOwnedWorker(
     link,
     taskId,
     requestKey: forward.key,
+    serverName: server.name,
     retryOf: params.retryOf,
     create: existingTask
       ? undefined

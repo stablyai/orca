@@ -682,7 +682,7 @@ describe('remote-owned records on the coordinating Orca', () => {
       ).toThrow(`Task ${task.id} cannot retry from Dispatch ${d1.dispatch.id}.`)
     })
 
-    it('reclaims a same-key retry under the new link after a re-pair', () => {
+    it('refuses to place a Task again on a server whose pairing was re-made since it was placed', () => {
       placeTask('task_t', 'k')
       const next = openRemoteRunLink(db, run.id, {
         ...SERVER,
@@ -690,16 +690,17 @@ describe('remote-owned records on the coordinating Orca', () => {
         pairingRevision: 2
       })
       db.updateTaskStatus('task_t', 'ready')
-      const retried = reserveRemotePlacement(db, {
-        link: next,
-        taskId: 'task_t',
-        requestKey: 'k'
-      })
-      expect(retried.placement).toMatchObject({
-        conversation_id: next.conversation_id,
-        state: 'reserved'
-      })
-      expect(retried.task.status).toBe('dispatched')
+      expect(() =>
+        reserveRemotePlacement(db, {
+          link: next,
+          taskId: 'task_t',
+          requestKey: 'k',
+          serverName: 'devB'
+        })
+      ).toThrow(
+        'Task task_t was placed through a pairing with devB that was re-made or removed; create a new task to run it there.'
+      )
+      expect(db.getTask('task_t')?.status).toBe('ready')
     })
 
     it("takes the server's corrected failure text", () => {

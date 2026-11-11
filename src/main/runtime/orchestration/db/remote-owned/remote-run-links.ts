@@ -25,6 +25,7 @@ export type RemoteRunLinkRow = {
   cancel_retry_at: number | null
   last_imported_sequence: number
   last_error: string | null
+  server_name: string | null
   created_at: string
 }
 
@@ -104,8 +105,9 @@ export function openRemoteRunLink(
       db.db
         .prepare(
           `INSERT INTO remote_run_links (
-             conversation_id, run_id, environment_id, peer_fingerprint, home_fingerprint, pairing_revision
-           ) VALUES (?, ?, ?, ?, ?, ?)`
+             conversation_id, run_id, environment_id, peer_fingerprint, home_fingerprint, pairing_revision,
+             server_name
+           ) VALUES (?, ?, ?, ?, ?, ?, ?)`
         )
         .run(
           conversationId,
@@ -113,7 +115,8 @@ export function openRemoteRunLink(
           pin.environment_id,
           pin.peer_fingerprint,
           pin.home_fingerprint,
-          pin.pairing_revision
+          pin.pairing_revision,
+          server.name
         )
       link = getRemoteRunLink(db, conversationId)
     }
@@ -162,7 +165,8 @@ export const OWE_REMOTE_RUN_CANCELS_SQL = `
 
 /**
  * The server can no longer answer for this link's work (its pairing was re-made, or it was removed): nothing more is sent for it, each Task it held fails here
- * through the ordinary Task half with the reason, and its placements go.
+ * through the ordinary Task half with the reason. Its placements stay, holding nothing, so a start
+ * there of one of its Tasks is refused here.
  */
 export function closeRemoteRunLink(
   db: OrchestrationDb,
@@ -207,7 +211,6 @@ export function closeRemoteRunLink(
         notify
       )
     }
-    db.db.prepare('DELETE FROM remote_placements WHERE conversation_id = ?').run(conversationId)
     db.db
       .prepare(
         `UPDATE remote_run_links SET state = 'closed', last_error = ?
@@ -224,6 +227,29 @@ export function closeRemoteRunLink(
   } catch (error) {
     rollbackLifecycleWriteTransaction(db.db, transaction)
     throw error
+  }
+}
+
+/** Every open link to this server made under an earlier pairing: none of their work answers here now. */
+export function closeRemoteRunLinksOfChangedPairing(
+  db: OrchestrationDb,
+  server: RemoteServerPin,
+  serverName: string,
+  notify: (handle: string, messageType: string) => void
+): void {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over this table returns exactly its row shape.
+  const links = db.db
+    .prepare(`SELECT * FROM remote_run_links WHERE environment_id = ? AND state = 'open'`)
+    .all(server.environment_id) as RemoteRunLinkRow[]
+  for (const link of links) {
+    if (!remoteRunLinkPinMatches(link, server)) {
+      closeRemoteRunLink(
+        db,
+        link.conversation_id,
+        `The pairing with ${serverName} was re-made.`,
+        notify
+      )
+    }
   }
 }
 

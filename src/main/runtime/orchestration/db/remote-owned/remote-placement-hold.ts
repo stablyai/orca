@@ -1,5 +1,7 @@
+import { OrchestrationError } from '../../orchestration-error'
 import type { TaskStatus } from '../orchestration-records'
 import type { OrchestrationDb } from '../orchestration-db'
+import type { RemoteRunLinkRow } from './remote-run-links'
 
 export type RemotePlacementRow = {
   task_id: string
@@ -35,4 +37,30 @@ export function getLiveRemotePlacement(
 /** A start claimed the Task here: no attempt on a server speaks for it any more. */
 export function retireRemotePlacement(db: OrchestrationDb, taskId: string): void {
   db.db.prepare('DELETE FROM remote_placements WHERE task_id = ?').run(taskId)
+}
+
+/**
+ * A Task placed on this server through a link its re-made or removed pairing closed is still held
+ * there under that link's Run, which this pairing cannot reach; the Task is not reused there.
+ */
+export function refuseTaskOfClosedPairing(
+  db: OrchestrationDb,
+  taskId: string,
+  link: RemoteRunLinkRow,
+  serverName: string
+): void {
+  const earlier = db.db
+    .prepare(
+      `SELECT 1 FROM remote_placements placement
+       JOIN remote_run_links earlier ON earlier.conversation_id = placement.conversation_id
+       WHERE placement.task_id = ? AND earlier.state = 'closed' AND earlier.peer_fingerprint = ?`
+    )
+    .get(taskId, link.peer_fingerprint)
+  if (earlier) {
+    throw new OrchestrationError(
+      'task_not_startable',
+      `Task ${taskId} was placed through a pairing with ${serverName} that was re-made or removed; create a new task to run it there. No effects were applied.`,
+      { taskId, effectsApplied: false }
+    )
+  }
 }

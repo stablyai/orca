@@ -148,27 +148,26 @@ async function routeServerCall(
   }
   if (request.method === 'orchestration.workerList') {
     const runId = stringField(values, 'run')
-    // A Run lists what it placed there, as its coordinator; no Run lists the server as a whole.
-    const link = runId ? openLinkFor(db, runId, server.environmentId) : undefined
-    if (runId && !link) {
+    // A Run lists what it placed there, under its latest link even once a re-pair closed it: the
+    // server reads it as any read, by its own Run's ID. No Run lists the server as a whole.
+    const link = runId ? latestLinkFor(db, runId, server.environmentId) : undefined
+    if (runId && !link?.peer_run_id) {
       return {
         handled: true,
         result: emptyWorkerListPage(numberField(values, 'limit') ?? ORCHESTRATION_FLEET_PAGE_MAX)
       }
     }
-    const forwarded = paramsForServer(access, values)
+    const answer = await runtime.callOrchestrationWorkerServer(
+      server.environmentId,
+      request.method,
+      { ...paramsForServer(access, values), ...(link ? { run: link.peer_run_id } : {}) },
+      READ_TIMEOUT_MS,
+      undefined,
+      { expectedEnvironmentPairingRevision: server.pairingRevision }
+    )
     return {
       handled: true,
-      result: link
-        ? await forwardToLink(runtime, { link }, request.method, access, values)
-        : await runtime.callOrchestrationWorkerServer(
-            server.environmentId,
-            request.method,
-            forwarded,
-            READ_TIMEOUT_MS,
-            undefined,
-            { expectedEnvironmentPairingRevision: server.pairingRevision }
-          )
+      result: link ? inServerTerms(answer, { server: server.name, link }) : answer
     }
   }
   {
@@ -279,7 +278,7 @@ function seedNamedDispatches(db: OrchestrationDb, link: RemoteRunLinkRow, answer
   })
 }
 
-function openLinkFor(
+function latestLinkFor(
   db: OrchestrationDb,
   runId: string,
   environmentId: string
@@ -287,7 +286,8 @@ function openLinkFor(
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over this table returns exactly its row shape.
   return db.db
     .prepare(
-      `SELECT * FROM remote_run_links WHERE run_id = ? AND environment_id = ? AND state = 'open'`
+      `SELECT * FROM remote_run_links WHERE run_id = ? AND environment_id = ?
+       ORDER BY rowid DESC LIMIT 1`
     )
     .get(runId, environmentId) as RemoteRunLinkRow | undefined
 }
