@@ -98,9 +98,9 @@ export function noteAiVaultScanReading(signal: AbortSignal | undefined): void {
   reporter?.workChanged()
 }
 
-/** Transcript bytes read instead of served from the parse cache. */
+/** Transcript bytes read from disk, by parses and scope cwd probes. */
 export function noteAiVaultScanContentRead(signal: AbortSignal | undefined, bytes: number): void {
-  const reporter = signal ? reporters.get(signal) : undefined
+  const reporter = signal && bytes > 0 ? reporters.get(signal) : undefined
   reporter?.tally.noteContentRead(bytes)
   reporter?.workChanged()
 }

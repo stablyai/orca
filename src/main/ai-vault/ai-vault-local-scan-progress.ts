@@ -71,9 +71,10 @@ export function startLocalAiVaultScanProgress(
     startedAt: now(),
     settledAt: null
   }
+  const visible = (): boolean => current.contentBytesRead >= SHOWN_AFTER_CONTENT_BYTES
   let shown = latest.get(scanKey) ?? null
   const publishShown = (): void => {
-    const next = current.contentBytesRead >= SHOWN_AFTER_CONTENT_BYTES ? current : fallback
+    const next = visible() ? current : fallback
     if (next !== shown) {
       shown = next
       publish(scanKey, next)
@@ -96,7 +97,7 @@ export function startLocalAiVaultScanProgress(
       if (currentScans.get(scanKey)?.handle === handle) {
         currentScans.delete(scanKey)
         // A scan that stayed quiet leaves no partial strip the user never saw.
-        publish(scanKey, fallback ?? (shown === current ? { ...current, settledAt: now() } : null))
+        publish(scanKey, fallback ?? (visible() ? { ...current, settledAt: now() } : null))
       }
     }
   }

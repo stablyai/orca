@@ -1,4 +1,5 @@
 import type { AiVaultAgent } from '../../shared/ai-vault/contracts/ai-vault-types'
+import { noteAiVaultScanContentRead } from './ai-vault-scan-progress'
 import {
   openTranscriptReadStream,
   readTranscriptSlice,
@@ -79,6 +80,7 @@ async function readDocumentCwd(
   if (content === null) {
     return null
   }
+  noteAiVaultScanContentRead(signal, Buffer.byteLength(content))
   try {
     return { cwd: cwdOf(content) }
   } catch {
@@ -174,7 +176,7 @@ export function scopeWalksAgentFiles(
   return (scopePaths?.length ?? 0) > 0 && (kind === 'read' || kind === 'parse')
 }
 
-export const HEAD_READ_BYTES = 8 * 1024
+const HEAD_READ_BYTES = 8 * 1024
 const HEAD_WIDENED_READ_BYTES = 64 * 1024
 
 /** Null means unknown, requiring a full parse; it never proves the transcript is out of scope. */
@@ -203,6 +205,7 @@ export async function readTranscriptHeadCwd(
       }
       return null
     }
+    noteAiVaultScanContentRead(signal, head.length)
     const lines = head.toString('utf8').split(/\r?\n/)
     // A slice shorter than asked ended at EOF, so its last line is complete too.
     const complete = head.length < length ? lines : lines.slice(0, -1)

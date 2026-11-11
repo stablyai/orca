@@ -2,10 +2,13 @@ import { existsSync, readdirSync, renameSync, rmSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { isTransientSqliteContention } from '../../sqlite/sqlite-read-failure'
 import SyncDatabase from '../../sqlite/sync-database'
-import { removeVersionedCacheDatabase } from '../../sqlite/versioned-cache-database'
+import {
+  removeVersionedCacheDatabase,
+  storedCacheSchemaVersion
+} from '../../sqlite/versioned-cache-database'
 import { SESSION_PARSE_CACHE_SCHEMA_VERSION } from './session-parse-cache-database'
 
-// Builds before per-version files used this name, and still do.
+// The name before per-version files; older builds still write it.
 const UNVERSIONED_NAME = 'session-parse-cache.sqlite'
 const CACHE_FILE_NAME = /^session-parse-cache(?:\.v\d+)?\.sqlite$/
 // Builds on other schema versions (a downgrade, or dev and installed builds) share userData; keep the latest one warm.
@@ -27,18 +30,13 @@ export function adoptUnversionedSessionParseCache(directory: string, path: strin
   try {
     rmSync(staging, { force: true })
     const db = new SyncDatabase(unversioned, { readonly: true })
-    let copied = false
     try {
-      const row = db.prepare("SELECT value FROM meta WHERE key = 'schema_version'").get()
-      if (row?.value === String(SESSION_PARSE_CACHE_SCHEMA_VERSION)) {
+      if (storedCacheSchemaVersion(db) === SESSION_PARSE_CACHE_SCHEMA_VERSION) {
         db.prepare('VACUUM INTO ?').run(staging)
-        copied = true
+        renameSync(staging, path)
       }
     } finally {
       db.close()
-    }
-    if (copied) {
-      renameSync(staging, path)
     }
   } catch {
     // Unreadable or busy: this version starts cold and the old file is pruned like any other.
@@ -71,7 +69,7 @@ export function pruneOtherSessionParseCacheVersions(directory: string, path: str
   }
 }
 
-// Leaving WAL needs every other connection closed; unlinking a live file would strand its build's writes.
+// Leaving WAL needs every other connection closed; sidecar files alone outlive read-only opens and crashes.
 function openElsewhere(path: string): boolean {
   try {
     const db = new SyncDatabase(path)
