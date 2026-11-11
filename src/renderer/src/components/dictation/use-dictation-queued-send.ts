@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import { useAppStore } from '@/store'
-import { dictationAutoSendDelayMs } from '../../../../shared/constants'
+import { dictationAutoSendDelayMs } from '../../../../shared/dictation-auto-send'
 import {
   canStartDictation,
   isDictationUnderway,

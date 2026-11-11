@@ -2,7 +2,7 @@ import type { VoiceSettings } from '../../../../../shared/speech-types'
 import {
   DICTATION_AUTO_SEND_DELAYS_MS,
   dictationAutoSendDelayMs
-} from '../../../../../shared/constants'
+} from '../../../../../shared/dictation-auto-send'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { uiNumberFormat } from '@/i18n/ui-intl-formatters'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select'
