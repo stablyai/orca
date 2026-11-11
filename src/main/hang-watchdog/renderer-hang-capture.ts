@@ -52,10 +52,10 @@ function reconcile(snapshot: Map<number, number> | null): void {
     }
   }
 }
-function publish(episode: Episode, status: RendererHangRecord['status']): void {
+function publish(episode: Episode, status: RendererHangRecord['status']): Promise<void> {
   const stacks = topHangStacks(episode.candidates, episode.record.validSamples)
   episode.record = { ...episode.record, stacks, status }
-  publishRendererHang(getCanonicalUserDataPath(), episode.record)
+  return publishRendererHang(getCanonicalUserDataPath(), episode.record)
 }
 function stopEpisode(contentsId: number, id: string): void {
   const episode = episodes.get(contentsId)
@@ -165,11 +165,7 @@ function settle(key: string, requestId: number, raw: unknown, rejected: boolean)
   }
 }
 
-function request(
-  contentsId: number,
-  episodeId: string,
-  snapshot?: Map<number, number> | null
-): void {
+function request(contentsId: number, episodeId: string): void {
   const episode = episodes.get(contentsId)
   if (!episode || episode.record.id !== episodeId) {
     return
@@ -198,7 +194,10 @@ function request(
     stopEpisode(contentsId, episodeId)
     return
   }
-  const metrics = episode.identity ? null : snapshot
+  const metrics = episode.identity ? null : snapshotProcesses()
+  if (!episode.identity) {
+    reconcile(metrics)
+  }
   if (episode.identity && (episode.identity.rph !== rph || episode.identity.pid !== pid)) {
     stopEpisode(contentsId, episodeId)
     return
@@ -249,8 +248,6 @@ export function startRendererHangCapture(window: BrowserWindow): { stop: () => v
       }
     })
   }
-  const snapshot = snapshotProcesses()
-  reconcile(snapshot)
   const detectedAt = Date.now()
   const id = `${process.pid}:${detectedAt}:${contentsId}`
   const episode: Episode = {
@@ -267,8 +264,7 @@ export function startRendererHangCapture(window: BrowserWindow): { stop: () => v
     candidates: []
   }
   episodes.set(contentsId, episode)
-  publish(episode, 'collecting')
-  request(contentsId, id, snapshot)
+  void publish(episode, 'collecting').then(() => request(contentsId, id))
   // Logical expiry leaves the single physical request/anchor owned until settlement or death.
   if (episodes.get(contentsId) === episode) {
     episode.deadlineTimer = setTimeout(() => stopEpisode(contentsId, id), 5000)
