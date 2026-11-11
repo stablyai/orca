@@ -9,7 +9,7 @@ import type {
   OrcaBillingEntitlement,
   OrcaBillingOverageArgs
 } from '../../../../shared/orca-billing'
-import { formatHours, includedUsagePercent } from './plan-billing-format'
+import { formatHours, formatHoursUsed, includedUsagePercent } from './plan-billing-format'
 import {
   includedUsageTone,
   sandboxHoursLeftLine,
@@ -79,7 +79,7 @@ export function UsageSummary({
             'auto.components.billing.sandboxHoursUsedMonth',
             '{{value0}} of {{value1}} sandbox hours used this month',
             {
-              value0: formatHours(Math.min(entitlement.usedSeconds, entitlement.includedSeconds)),
+              value0: formatHoursUsed(Math.min(entitlement.usedSeconds, entitlement.includedSeconds)),
               value1: formatHours(entitlement.includedSeconds)
             }
           )}

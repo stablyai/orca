@@ -1,3 +1,4 @@
+import { selectAwakeBrowserTabsByWorktree } from '@/components/sidebar/workspace-actions/sleep/browser-tab-sleep'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { useRepoById } from '@/store/repos/use-repository-catalog'
@@ -107,7 +108,11 @@ export function useWorktreeContextMenuModel({
     selectMenuScopedMap(menuOpen, s.ptyIdsByTabId, EMPTY_PTY_IDS_BY_TAB_ID)
   )
   const browserTabsByWorktree = useAppStore((s) =>
-    selectMenuScopedMap(menuOpen, s.browserTabsByWorktree, EMPTY_BROWSER_TABS_BY_WORKTREE)
+    selectMenuScopedMap(
+      menuOpen,
+      selectAwakeBrowserTabsByWorktree(s),
+      EMPTY_BROWSER_TABS_BY_WORKTREE
+    )
   )
   const unifiedTabsByWorktree = useAppStore((s) =>
     selectMenuScopedMap(menuOpen, s.unifiedTabsByWorktree, EMPTY_UNIFIED_TABS_BY_WORKTREE)

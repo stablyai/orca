@@ -12,9 +12,13 @@ export function registerOrcaProfileAuthIpcBridge(unsubs: (() => void)[]): void {
   if (typeof api?.onSignInProgressChanged === 'function') {
     // Why: a sign-in can already be in flight when this window loads; a later event or teardown wins.
     let ignoreSnapshot = false
-    const unsubscribe = api.onSignInProgressChanged((progress) => {
+    const unsubscribe = api.onSignInProgressChanged((progress, end) => {
       ignoreSnapshot = true
-      useAppStore.setState({ orcaProfileSignInProgress: progress })
+      // A new sign-in (or one that finished) clears the "didn't finish" note; a timeout sets it.
+      useAppStore.setState({
+        orcaProfileSignInProgress: progress,
+        orcaProfileSignInEnd: end ?? null
+      })
     })
     unsubs.push(() => {
       ignoreSnapshot = true

@@ -23,9 +23,12 @@ const PERSONAL_VALUE = '__personal__'
  * which re-scopes billing, seats and the Team page.
  */
 export function SidebarTeamSubmenu({
-  authStatus
+  authStatus,
+  usage = null
 }: {
   authStatus: OrcaProfileAuthStatus | null
+  /** The active plan's hours (and its usage alert), shown on the team row because they're the team's. */
+  usage?: { hoursLeft: string; warning: string | null } | null
 }): React.JSX.Element | null {
   const t = useTranslate()
   const pendingOrgId = usePendingTeamSwitch()
@@ -68,8 +71,18 @@ export function SidebarTeamSubmenu({
         }
       >
         {activeName ? <ChevronsUpDown className="size-3.5" /> : <User className="size-3.5" />}
-        <span className="min-w-0 flex-1 truncate">
-          {activeName ?? t('auto.components.sidebar.teamSwitcher.personal', 'Personal account')}
+        <span className="flex min-w-0 flex-1 flex-col">
+          <span className="truncate">
+            {activeName ?? t('auto.components.sidebar.teamSwitcher.personal', 'Personal account')}
+          </span>
+          {usage ? (
+            <span className="truncate text-xs text-muted-foreground tabular-nums">
+              {usage.hoursLeft}
+            </span>
+          ) : null}
+          {usage?.warning ? (
+            <span className="text-xs text-foreground text-pretty">{usage.warning}</span>
+          ) : null}
         </span>
       </DropdownMenuSubTrigger>
       <DropdownMenuSubContent className="w-60">

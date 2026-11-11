@@ -175,7 +175,7 @@ describe('remote desktop page driver', () => {
     failMint('asleep')
     guest.ask('ticket')
     await flush()
-    expect(guest.calls.at(-2)).toContain('This sandbox is asleep.')
+    expect(guest.calls.at(-2)).toContain('This workspace is asleep.')
     // Open remote desktop again: main wakes the paused page.
     registerRemoteDesktopSession(
       {

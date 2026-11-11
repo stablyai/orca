@@ -1778,7 +1778,7 @@
             "7d4bc516ee": "Failed to switch profile",
             "f518e89aa5": "Project already exists in that profile",
             "f03ae7f27b": "Failed to transfer project",
-            "signInTimedOut": "Sign-in timed out"
+            "signInDidNotFinish": "Sign-in didn’t finish. Try again."
           }
         },
         "runtime": {
@@ -19979,9 +19979,9 @@
           "signout": {
             "confirm": {
               "title": "Sign out of Orca?",
-              "description": "Artifacts and Orca Relay will be unavailable until you sign in again. Your local projects and worktrees won't be affected.",
               "cancel": "Cancel",
-              "action": "Sign out"
+              "action": "Sign out",
+              "description2": "You'll lose access to your cloud workspaces until you sign in again. Local workspaces aren't affected."
             }
           }
         }
@@ -20415,7 +20415,9 @@
         "copied": "Sign-in link copied",
         "copyFailed": "Could not copy the link.",
         "signingIn": "Signing in…",
-        "cancel": "Cancel"
+        "cancel": "Cancel",
+        "didNotFinish": "Sign-in didn’t finish. Try again.",
+        "reopenBrowser": "Reopen browser"
       },
       "plainSshTerminal": {
         "open": "Open plain SSH terminal",
@@ -20987,10 +20989,6 @@
         "inRepo": "In {{value0}}",
         "justNow": "just now",
         "linkNotFound": "This link points to a private workspace, another team, or a workspace that was deleted.",
-        "listMeta2_one": "{{count}} workspace · {{usage}}",
-        "listMeta2_other": "{{count}} workspaces · {{usage}}",
-        "listSandboxHours_one": "{{hours}} sandbox hour used",
-        "listSandboxHours_other": "{{hours}} sandbox hours used",
         "loading": "Loading cloud workspaces",
         "makeOwner": "Make owner",
         "makePrivate": "Make private",
@@ -21099,7 +21097,13 @@
         "pinLimit": "You can pin up to {{count}} workspaces. Unpin one first.",
         "pinnedName": "Pinned {{name}}",
         "unpinnedName": "Unpinned {{name}}",
-        "otherWorkspaces": "Other workspaces"
+        "otherWorkspaces": "Other workspaces",
+        "listMetaCount_one": "{{count}} workspace",
+        "listMetaCount_other": "{{count}} workspaces",
+        "restartElsewhere": "Restart it from the computer that created it.",
+        "makePrivateSidebar": "Teammates’ devices are disconnected. Only the owner will be able to open it.",
+        "shareFailed": "Couldn’t change who can open it. Try again.",
+        "workspaceLinkOption": "Workspace link"
       },
       "orcaCloud": {
         "QueuedPrompt": {
@@ -23488,7 +23492,7 @@
       "retry": "Try again",
       "notCloudTitle": "Remote desktop is only available in cloud workspaces.",
       "notCloudDetail": "Create a cloud workspace to run apps with a screen.",
-      "asleepTitle": "This sandbox is asleep.",
+      "asleepTitle": "This workspace is asleep.",
       "asleepDetail": "Wake it to open the remote desktop. Your files are safe.",
       "notInstalledTitle": "This sandbox doesn’t have a remote desktop yet.",
       "notInstalledDetail": "It was created before remote desktop was available. New cloud workspaces include it. Your files are safe.",
@@ -23498,21 +23502,21 @@
       "forwardFailedDetail": "The desktop is running in the sandbox. Your files are safe.",
       "unavailableTitle": "Couldn’t start the remote desktop.",
       "unavailableDetail": "Orca Cloud didn’t respond in time. Your files are safe.",
-      "wake": "Wake sandbox",
+      "wake": "Wake workspace",
       "signIn": "Sign in",
       "createWorkspace": "Create workspace",
       "slowDetail": "The first start in a sandbox can take up to a minute.",
       "dismiss": "Dismiss",
       "openMenuItem": "Open remote desktop",
-      "startingTitle": "The sandbox is still starting or waking.",
+      "startingTitle": "The workspace is still starting or waking.",
       "archivedTitle": "This workspace is archived.",
       "archivedDetail": "Unarchive it to open the remote desktop. Your files are safe.",
       "startingDetail": "Try again in a moment. Your files are safe.",
       "keyboardCaptured": "Keys go to the remote desktop. Press <kbd>{{chord}}</kbd> to use Orca shortcuts.",
       "keyboardReleased": "Orca shortcuts are back. Click the desktop to type in it.",
-      "pageAsleep": "This sandbox is asleep. Wake it in Orca, then reconnect.",
+      "pageAsleep": "This workspace is asleep. Wake it in Orca, then reconnect.",
       "pageArchived": "This workspace is archived. Unarchive it in Orca, then reconnect.",
-      "pageStarting": "The sandbox is starting or waking. Reconnect in a moment.",
+      "pageStarting": "The workspace is starting or waking. Reconnect in a moment.",
       "pageSignedOut": "You’re signed out of Orca Cloud. Sign in, then reconnect.",
       "pageDisconnected": "The remote desktop disconnected. Your files are safe.",
       "reconnect": "Reconnect",
@@ -27046,10 +27050,10 @@
       "unavailable": "Orca Cloud isn’t reachable right now. Try again in a moment.",
       "generic": "Something went wrong. Try again."
     },
-    "restartConfirmTitle": "Restart sandbox?",
+    "restartConfirmTitle": "Restart workspace?",
     "restartConfirm": "Running agents stop and resume after the restart. Your files are kept.",
-    "restartFailed": "Couldn’t restart the sandbox",
-    "restarted": "Sandbox restarted",
+    "restartFailed": "Couldn’t restart the workspace",
+    "restarted": "Workspace restarted",
     "restartedDetail": "Orca resumes your agents after the restart.",
     "archiveFailed": "Couldn’t archive the workspace",
     "undo": "Undo",
@@ -27118,6 +27122,12 @@
       "waking": "Waking… the files show when it’s up.",
       "noChangesAtSleep": "No files had changed when this workspace went to sleep · {{time}}",
       "noChangesAtSleepNoTime": "No files had changed when this workspace went to sleep",
+      "unarchiveForAll": "Unarchive the workspace to browse all its files.",
+      "archived": "Files aren’t available while the workspace is archived.",
+      "changedAtArchive": "Changed files when this workspace was archived · {{time}}",
+      "changedAtArchiveNoTime": "Changed files when this workspace was archived",
+      "noChangesAtArchive": "No files had changed when this workspace was archived · {{time}}",
+      "noChangesAtArchiveNoTime": "No files had changed when this workspace was archived",
       "changedTitle": "Changed files",
       "moreChanged": "+{{count}} more",
       "recentCommitsOn": "Recent commits on {{branch}}",
@@ -27952,7 +27962,7 @@
     "useChatGPT": "Use my ChatGPT account",
     "notSetUpKey": "Not set up · using {{key}}",
     "notSetUp": "Not set up",
-    "notSetUpDetail": "One sign-in on this computer. Then every cloud workspace can use it.",
+    "notSetUpDetail": "One sign-in. Then every cloud workspace can use it.",
     "tryAgain": "Try again",
     "expired": "Your {{agent}} sign-in expired",
     "expiredDetail": "Cloud workspaces use {{key}} until you renew. Nothing else changed.",
@@ -28070,7 +28080,6 @@
     "openRow": "Open agent accounts for {{host}}",
     "emptyTitle": "Only this computer so far",
     "emptyDetail": "When you add an SSH host, pair a machine or start a cloud workspace, its sign-ins show up here.",
-    "footnote": "“Signed in” means the host confirmed it in the last minute. Orca Cloud comes from your Orca account, so there’s nothing to check per sandbox. Orca doesn’t wake a sandbox just to check sign-ins.",
     "summary": "Checked {{count}} hosts. {{attention}} need attention.",
     "cell": {
       "signedIn": "Signed in",
@@ -28196,7 +28205,8 @@
     "signIn": {
       "lead": "Orca Cloud runs your agents in a cloud workspace, so they keep going with your laptop closed. Sign in or create an account in your browser. We’ll make a team for you.",
       "note": "New teams get a trial with no card needed. This page picks up each step on its own.",
-      "title": "Sign in to Orca"
+      "title": "Sign in to Orca",
+      "didNotFinish": "Sign-in didn’t finish. Try again."
     },
     "starting": "Starting…",
     "step": {
@@ -28228,7 +28238,8 @@
     "exited": "Orca Cloud setup closed. Your draft is kept.",
     "header": "Setting up Orca Cloud",
     "headerFor": "Setting up Orca Cloud for {{name}}",
-    "resumeDraft": "Open draft"
+    "resumeDraft": "Open draft",
+    "cancelSignIn": "Cancel"
   },
   "orcaCloudSignInSheet": {
     "title": "Agents in Orca Cloud",
@@ -28300,6 +28311,13 @@
       "synced": "Synced",
       "pending": "Not synced yet",
       "skipped": "Not synced"
+    }
+  },
+  "orcaCloudAgentPicker": {
+    "status": {
+      "notSetUp": "Not set up",
+      "perWorkspace": "Signs in per workspace",
+      "notAvailable": "Not available in cloud"
     }
   },
   "orcaCloudSync": {

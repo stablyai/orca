@@ -2126,8 +2126,7 @@
             "76deec8f58": "Falha ao alternar organização",
             "7d4bc516ee": "Falha ao alternar perfil",
             "f518e89aa5": "O projeto já existe nesse perfil",
-            "f03ae7f27b": "Falha ao transferir o projeto",
-            "signInTimedOut": "O tempo para entrar expirou"
+            "f03ae7f27b": "Falha ao transferir o projeto"
           }
         },
         "runtime": {
@@ -19599,7 +19598,6 @@
           "signout": {
             "confirm": {
               "title": "Sair do Orca?",
-              "description": "Os artefatos e o Orca Relay ficarão indisponíveis até você entrar novamente. Seus projetos e worktrees locais não serão afetados.",
               "cancel": "Cancelar",
               "action": "Sair"
             }

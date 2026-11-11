@@ -1,6 +1,7 @@
 import type { OrcaBillingStatusResult } from '../../../../shared/orca-billing'
 import { openPlansPage } from '@/components/billing/plans/plans-page-store'
 import { useAppStore } from '@/store/index'
+import { sandboxHoursLeft } from '@/components/billing/plan-billing-format'
 import {
   cancelOrcaCloudSelectionAfterSignIn,
   requestOrcaCloudSelectionAfterSignIn
@@ -153,14 +154,10 @@ function openOverageSettings(): void {
   state.openSettingsPage()
 }
 
-/** Whole hours from 10 up, one decimal below so the last hours stay legible. */
+/** Hours left in tenths, rounded down: the one rule shared with Plan & billing. */
 export function getOrcaCloudHoursLeft(remainingSeconds: number): number {
-  const hours = remainingSeconds / 3600
-  if (hours >= 10) {
-    return Math.floor(hours)
-  }
-  // The last few minutes read 0.1 rather than a misleading 0 while starts are still allowed.
-  return remainingSeconds > 0 ? Math.max(0.1, Math.floor(hours * 10) / 10) : 0
+  // Why: the same rounding as Plan & billing and the account menu, so every surface agrees (JA-07).
+  return sandboxHoursLeft(remainingSeconds)
 }
 
 /** Whether a create on Orca Cloud can start now (or may: still loading or unknown). */

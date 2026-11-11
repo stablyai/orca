@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { useOrcaCloudAgentPickerStatusLabels } from '@/lib/orca-cloud/orca-cloud-agent-picker-status'
 import { useAppStore } from '@/store/index'
 import { agentChoicePending } from '@/lib/host-chat-program'
 import { useAgentsOfferedForLaunch } from '@/lib/host-chat-program-acquisition'
@@ -82,5 +83,7 @@ export function useComposerQuickAgent(
   // Orca Cloud adds nothing to the dialog (Neil): an agent it can't run falls back silently; the
   // picker shows what will start.
   const agentNotice: string | undefined = undefined
-  return { orcaCloud, orcaCloudModel, quickAgent, chipAgentIds, agentNotice }
+  // JA-22: inside the open menu only, which image agents a cloud workspace can run as-is.
+  const statusLabels = useOrcaCloudAgentPickerStatusLabels(orcaCloud)
+  return { orcaCloud, orcaCloudModel, quickAgent, chipAgentIds, agentNotice, statusLabels }
 }

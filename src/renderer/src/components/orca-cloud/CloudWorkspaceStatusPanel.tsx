@@ -328,6 +328,20 @@ export function CloudWorkspaceStatusPanel({
 
       {state === 'archived' ? null : <CloudWorkspaceSyncSection workspaceId={workspaceId} />}
 
+      {showFooter && actions.onMoveToComputer && canArchive && !restarting ? (
+        // Its own row (DS-l): beside Sleep, Archive and Restart it pushed them out of the popover.
+        <div className="-mb-1 flex">
+          <Button
+            size="xs"
+            variant="ghost"
+            className="-ml-2"
+            {...busyProps(false, anyBusy, actions.onMoveToComputer)}
+          >
+            <Monitor />
+            {t('orcaCloudWorkspace.moveToComputer', 'Move to this computer')}
+          </Button>
+        </div>
+      ) : null}
       {showFooter ? (
         <div className="flex min-h-6 items-center justify-between gap-2 whitespace-nowrap">
           {/* Not a live region: a ticking "ago" would announce itself every few seconds. */}
@@ -338,18 +352,8 @@ export function CloudWorkspaceStatusPanel({
                 })
               : null}
           </span>
-          <div className="flex shrink-0 items-center gap-1">
-            {actions.onMoveToComputer && canArchive && !restarting ? (
-              <Button
-                size="xs"
-                variant="ghost"
-                className="text-muted-foreground"
-                {...busyProps(false, anyBusy, actions.onMoveToComputer)}
-              >
-                <Monitor />
-                {t('orcaCloudWorkspace.moveToComputer', 'Move to this computer')}
-              </Button>
-            ) : null}
+          {/* Wraps rather than clips: every action stays reachable at any panel width (DS-l). */}
+          <div className="flex min-w-0 flex-wrap items-center justify-end gap-1">
             {actions.onSleep && state === 'running' && !restarting ? (
               <Button
                 size="xs"

@@ -4,7 +4,7 @@ import { useHomeWorkspaces } from './cloud-workspace-local-titles'
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
+import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import type {
@@ -23,7 +23,7 @@ import { useCloudHomeFilters } from './use-cloud-home-filters'
 import { CloudWorkspaceConfirmDialog, type PendingConfirm } from './CloudWorkspaceConfirmDialog'
 import { CloudReadSnapshotSheet } from './CloudReadSnapshotSheet'
 import { useCloudReadPanel } from './use-cloud-read-panel'
-import { formatSandboxHours, sandboxHours, type MemberDirectory } from './cloud-workspace-format'
+import type { MemberDirectory } from './cloud-workspace-format'
 import { refreshCloudMessageSenders } from '@/lib/cloud-message-sender'
 import { describeError } from './cloud-workspace-errors'
 import { focusCloudChat } from './cloud-chat-focus'
@@ -76,7 +76,6 @@ export function CloudWorkspacesHome({
   highlightId?: string | null
 }): React.JSX.Element | null {
   const t = useTranslate()
-  const intlLocale = useIntlLocale()
   const cloud = useAppStore((s) => s.orcaProfileAuthStatus?.cloud)
   const available = useCloudWorkspacesAvailable()
   const orgId = cloud?.activeOrgId
@@ -149,10 +148,6 @@ export function CloudWorkspacesHome({
     [directory, selfId, t]
   )
   const routineRuns = state.status === 'ready' ? state.routineRuns : undefined
-  // Hidden routine runs leave the count but not the hours: they are still the team's usage.
-  const totalMs =
-    visible.reduce((sum, w) => sum + w.cost.computeMs, 0) +
-    (filters.routines ? 0 : (routineRuns?.hiddenComputeMs ?? 0))
 
   /** Opens the workspace, then (going to a teammate's chat) the chat they have in front. */
   const open = useCallback(
@@ -265,18 +260,11 @@ export function CloudWorkspacesHome({
         metaStale={stale}
         meta={
           state.status === 'ready'
-            ? t('auto.components.cloudWorkspaces.listMeta2', '{{count}} workspaces · {{usage}}', {
+            ? // Why: no hours here. A sum over the listed workspaces isn't the team's month, and it
+              // disagreed with Plan & billing and the account menu (JA-07).
+              t('auto.components.cloudWorkspaces.listMetaCount', '{{count}} workspaces', {
                 count: visible.length,
-                usage: t(
-                  'auto.components.cloudWorkspaces.listSandboxHours',
-                  '{{hours}} sandbox hours used',
-                  {
-                    count: sandboxHours(totalMs),
-                    hours: formatSandboxHours(totalMs, intlLocale),
-                    defaultValue_one: '{{hours}} sandbox hour used'
-                  }
-                ),
-                defaultValue_one: '{{count}} workspace · {{usage}}'
+                defaultValue_one: '{{count}} workspace'
               })
             : null
         }
