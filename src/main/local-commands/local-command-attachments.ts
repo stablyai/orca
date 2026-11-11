@@ -5,6 +5,12 @@ export type LocalCommandSubscription = { close: () => void }
 
 export type LocalCommandTimer = (run: () => void, ms: number) => { cancel: () => void }
 
+export const defaultLocalCommandTimer: LocalCommandTimer = (run, ms) => {
+  const handle = setTimeout(run, ms)
+  handle.unref?.()
+  return { cancel: () => clearTimeout(handle) }
+}
+
 type Attachment = {
   environmentId: string
   subscription: LocalCommandSubscription | null

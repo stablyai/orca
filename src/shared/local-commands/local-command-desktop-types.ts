@@ -20,6 +20,10 @@ export type LocalCommandPrompt = {
   agent: string | null
   /** Lookalike letters can make a command read as something else. */
   hasNonAscii: boolean
+  /** Downloads or builds a script and runs it (`curl … | sh`). */
+  pipesToShell: boolean
+  /** Only Allow once is offered: lookalikes, pipe-to-shell, sudo or command substitution. */
+  alwaysAllowBlocked: boolean
   /** Epoch ms on this computer's clock. */
   expiresAt: number
 }

@@ -1,6 +1,6 @@
+import { assessLocalCommandRisk } from '../../shared/local-commands/local-command-risk'
 import {
   LOCAL_COMMAND_APPROVAL_WINDOW_MS,
-  hasNonAsciiCharacters,
   type LocalCommandDeclineReason,
   type LocalCommandSettleParams,
   type LocalCommandSettleResult
@@ -10,13 +10,17 @@ import type {
   LocalCommandDecision,
   LocalCommandPrompt
 } from '../../shared/local-commands/local-command-desktop-types'
-import { createLocalCommandAttachments, type LocalCommandTimer } from './local-command-attachments'
-import type { LocalCommandBridgeDeps } from './local-command-bridge-types'
+import {
+  createLocalCommandAttachments,
+  defaultLocalCommandTimer
+} from './local-command-attachments'
+import type { LocalCommandBridgeDeps, PendingPrompt } from './local-command-bridge-types'
 import {
   LocalCommandRequestedEventSchema,
   LocalCommandSettledEventSchema,
   displayText,
-  requestIdOf
+  requestIdOf,
+  type LocalCommandRequestedEventInput
 } from './local-command-request-checks'
 import { createLocalCommandWorkspacePolicy } from './local-command-workspace-policy'
 import { runApprovedLocalCommand, type RequestBase } from './local-command-run'
@@ -31,19 +35,6 @@ export type { LocalCloudWorkspaceRef, LocalCommandBridgeDeps } from './local-com
 export const LOCAL_COMMAND_MIN_DECISION_MS = 600
 const HANDLED_LIMIT = 500
 
-type PendingPrompt = {
-  prompt: LocalCommandPrompt
-  environmentId: string
-  shownAt: number
-  timer: { cancel: () => void }
-}
-
-const defaultTimer: LocalCommandTimer = (run, ms) => {
-  const handle = setTimeout(run, ms)
-  handle.unref?.()
-  return { cancel: () => clearTimeout(handle) }
-}
-
 /**
  * This computer's side of local commands: attaches to each cloud workspace the person turned on,
  * re-checks every request against its own rules, asks the person, runs and reports, and records
@@ -51,12 +42,14 @@ const defaultTimer: LocalCommandTimer = (run, ms) => {
  */
 export function createLocalCommandBridge(deps: LocalCommandBridgeDeps) {
   const now = deps.now ?? Date.now
-  const setTimer = deps.setTimer ?? defaultTimer
+  const setTimer = deps.setTimer ?? defaultLocalCommandTimer
   const log = deps.log ?? ((message: string) => console.info(`[local-commands] ${message}`))
   const pending = new Map<string, PendingPrompt>()
   // Environment + request ids this computer already acted on; a replay is never answered twice.
   const handled = new Set<string>()
   const limits = createLocalCommandRequestLimits()
+  // Requests per workspace that passed the limits and are still being checked.
+  const checking = new Map<string, number>()
   // The prompt in front and since when: a queued one gets its own read delay when it moves up.
   let front: { id: string; since: number } | null = null
   const policy = createLocalCommandWorkspacePolicy({ ...deps, now })
@@ -136,7 +129,10 @@ export function createLocalCommandBridge(deps: LocalCommandBridgeDeps) {
       cwd: event.cwd,
       agent: displayText(event.agent, 64)
     }
-    const waiting = [...pending.values()].filter((p) => p.prompt.sandboxId === sandboxId).length
+    // Counted with requests still being checked, so a burst can't all pass before any is queued.
+    const waiting =
+      [...pending.values()].filter((p) => p.prompt.sandboxId === sandboxId).length +
+      (checking.get(sandboxId) ?? 0)
     if (
       waiting >= LOCAL_COMMAND_DESKTOP_LIMITS.pendingPerWorkspace ||
       !limits.admitRequest(sandboxId, now())
@@ -144,6 +140,20 @@ export function createLocalCommandBridge(deps: LocalCommandBridgeDeps) {
       refuse(environmentId, base, 'Too many requests from this workspace.')
       return
     }
+    checking.set(sandboxId, (checking.get(sandboxId) ?? 0) + 1)
+    try {
+      await checkAndQueue(environmentId, event, base)
+    } finally {
+      checking.set(sandboxId, (checking.get(sandboxId) ?? 1) - 1)
+    }
+  }
+
+  async function checkAndQueue(
+    environmentId: string,
+    event: LocalCommandRequestedEventInput,
+    base: RequestBase
+  ): Promise<void> {
+    const { requestId, sandboxId } = base
     const refusal = await refusalOf(sandboxId)
     if (refusal) {
       refuse(environmentId, base, refusal)
@@ -165,6 +175,7 @@ export function createLocalCommandBridge(deps: LocalCommandBridgeDeps) {
     if (windowMs <= 0) {
       return
     }
+    const risk = assessLocalCommandRisk(event.command, cwd)
     const prompt: LocalCommandPrompt = {
       id: requestId,
       sandboxId,
@@ -175,7 +186,9 @@ export function createLocalCommandBridge(deps: LocalCommandBridgeDeps) {
       timeoutSec: event.timeoutSec,
       reason: displayText(event.reason, 200),
       agent: base.agent,
-      hasNonAscii: hasNonAsciiCharacters(event.command) || hasNonAsciiCharacters(cwd),
+      hasNonAscii: risk.nonAscii,
+      pipesToShell: risk.pipesToShell,
+      alwaysAllowBlocked: risk.alwaysAllowBlocked,
       expiresAt: now() + windowMs
     }
     const timer = setTimer(() => {
@@ -264,6 +277,9 @@ export function createLocalCommandBridge(deps: LocalCommandBridgeDeps) {
       const entry = pending.get(id)
       if (!entry) {
         return { ok: false, error: 'not_found' }
+      }
+      if (decision === 'always-allow' && entry.prompt.alwaysAllowBlocked) {
+        return { ok: false, error: 'always_allow_blocked' }
       }
       const visibleSince = front?.id === id ? front.since : now()
       if (decision !== 'deny' && now() - visibleSince < LOCAL_COMMAND_MIN_DECISION_MS) {

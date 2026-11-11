@@ -34,7 +34,7 @@ const RequestId = z.string().regex(/^lc_[A-Za-z0-9_-]{16,64}$/)
 // spaces, combining marks and separators.
 const HIDDEN_CHARS =
   // oxlint-disable-next-line no-control-regex, no-misleading-character-class -- SAFETY: matching control and invisible characters is the point.
-  /[\u0000-\u0008\u000B-\u001F\u007F-\u00A0\u00AD\u0300-\u036F\u061C\u115F\u1160\u180E\u2000-\u200F\u2028-\u202F\u205F-\u206F\u3000\u3164\uFE00-\uFE0F\uFEFF\uFFF9-\uFFFB]|\uDB40[\uDC00-\uDC7F]/
+  /[\u0000-\u0008\u000B-\u001F\u007F-\u00A0\u00AD\u0300-\u036F\u061C\u115F\u1160\u1680\u180E\u1AB0-\u1AFF\u1DC0-\u1DFF\u2000-\u200F\u2028-\u202F\u205F-\u206F\u20D0-\u20FF\u2800\u3000\u3164\uFE00-\uFE0F\uFE20-\uFE2F\uFEFF\uFFA0\uFFF9-\uFFFB]|\uDB40[\uDC00-\uDC7F]/
 
 /** True when the text holds a character that could make the shown command differ from the run one. */
 export function hasHiddenCharacters(text: string): boolean {

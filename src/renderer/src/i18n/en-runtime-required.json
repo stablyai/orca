@@ -2318,6 +2318,9 @@
     "liveTerminals_other": "{{count}} live terminals will reconnect after restart."
   },
   "localCommands": {
+    "audit": {
+      "resultExit": "Exit {{code}}"
+    },
     "prompt": {
       "bodyAgent": "{{agent}} in the cloud workspace {{workspace}} asks to run this command here. Allow it only if you understand what it does.",
       "timeoutMinutes_one": "Stops after {{count}} minute",

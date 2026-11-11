@@ -40,8 +40,8 @@ const defaultDeps: LocalCommandMethodDeps = {
   isGrantedDevice: (originDeviceId) => isGrantedDevice(originDeviceId)
 }
 
-/** The owner's paired desktop, proven by its socket: never the agent's CLI, a phone, or a device
- *  paired through a grant (a teammate's computer must not see, claim or answer requests). */
+/** A paired desktop, proven by its socket: never the agent's CLI, a phone, or a device paired through
+ *  a grant (best effort, see grant-device-ledger.ts). The desktop re-checks ownership itself. */
 function requireOwnerDesktop(
   ctx: RpcContext,
   deps: LocalCommandMethodDeps

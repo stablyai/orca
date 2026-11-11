@@ -46,3 +46,10 @@ export type LocalCommandBridgeDeps = {
   setTimer?: LocalCommandTimer
   log?: (message: string) => void
 }
+
+export type PendingPrompt = {
+  prompt: LocalCommandPrompt
+  environmentId: string
+  shownAt: number
+  timer: { cancel: () => void }
+}

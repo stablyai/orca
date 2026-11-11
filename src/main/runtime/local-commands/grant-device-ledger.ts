@@ -4,7 +4,9 @@ import { join } from 'node:path'
 
 /** Written by /opt/orca/bin/orca-sandbox-grant: one device id per line for every offer minted for a
  *  teammate's (or any granted) device. The workspace owner's own desktop pairs from the VM's first
- *  offer and is never listed. */
+ *  offer and is never listed. Best effort only: anything with a shell as the VM user can mint an
+ *  unlisted offer or edit this file. It keeps an ordinary teammate's Orca from seeing or answering
+ *  requests; the person's computer is protected by its own desktop checks, not by this. */
 export function grantDeviceLedgerPath(home = homedir()): string {
   return join(home, '.orca-sandbox', 'grant-devices')
 }

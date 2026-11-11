@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
 import { writeFileAtomically } from '../filesystem/atomic-file-publication'
+import { assessLocalCommandRisk } from '../../shared/local-commands/local-command-risk'
 import {
   LOCAL_COMMAND_MAX_COMMAND_CHARS,
   LOCAL_COMMAND_MAX_CWD_CHARS
@@ -100,7 +101,10 @@ export class LocalCommandSettingsStore {
     )
   }
 
-  addRule(sandboxId: string, command: string, cwd: string, now: number): LocalCommandRule {
+  addRule(sandboxId: string, command: string, cwd: string, now: number): LocalCommandRule | null {
+    if (assessLocalCommandRisk(command, cwd).alwaysAllowBlocked) {
+      return null
+    }
     const existing = this.findRule(sandboxId, command, cwd, now)
     if (existing) {
       return existing

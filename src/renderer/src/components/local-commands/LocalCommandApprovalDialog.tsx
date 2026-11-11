@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { TriangleAlert } from 'lucide-react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -9,11 +10,16 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
+import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
+import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
 import type {
   LocalCommandDecision,
   LocalCommandPrompt
 } from '../../../../shared/local-commands/local-command-desktop-types'
+import { LocalCommandText } from './LocalCommandText'
 
 /** Matches main's floor: a click or Enter that lands before a person could read the prompt is ignored. */
 const READ_DELAY_MS = 600
@@ -30,33 +36,6 @@ function timeoutLabel(seconds: number, t: ReturnType<typeof useTranslate>): stri
     count: seconds,
     defaultValue_one: 'Stops after {{count}} second'
   })
-}
-
-/** Letters outside printable ASCII are tinted and named, so a lookalike can't pass for the real one. */
-function MarkedText({ text }: { text: string }): React.JSX.Element {
-  const parts: React.ReactNode[] = []
-  let plain = ''
-  let index = 0
-  for (const char of text) {
-    if (/[\t\n\x20-\x7e]/.test(char)) {
-      plain += char
-      continue
-    }
-    if (plain) {
-      parts.push(plain)
-      plain = ''
-    }
-    const code = `U+${char.codePointAt(0)!.toString(16).toUpperCase().padStart(4, '0')}`
-    parts.push(
-      <mark key={index++} title={code} className="rounded-sm bg-destructive/20 text-destructive">
-        {char}
-      </mark>
-    )
-  }
-  if (plain) {
-    parts.push(plain)
-  }
-  return <>{parts}</>
 }
 
 export function LocalCommandApprovalDialogView({
@@ -97,6 +76,7 @@ export function LocalCommandApprovalDialogView({
   const lineCount = prompt.command.split('\n').length
   return (
     <DialogContent
+      role="alertdialog"
       surface="security"
       className="max-w-lg sm:max-w-lg"
       showCloseButton={false}
@@ -144,10 +124,17 @@ export function LocalCommandApprovalDialogView({
             ref={commandRef}
             onScroll={(event) => checkReadToEnd(event.currentTarget)}
             tabIndex={0}
+            aria-label={
+              lineCount > 1
+                ? t('localCommands.prompt.commandBoxLines', 'Command, {{count}} lines', {
+                    count: lineCount
+                  })
+                : t('localCommands.prompt.commandLabel', 'Command')
+            }
             className="max-h-48 overflow-auto whitespace-pre-wrap break-all font-mono text-xs text-foreground scrollbar-sleek focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-focus-ring"
             data-testid="local-command-text"
           >
-            <MarkedText text={prompt.command} />
+            <LocalCommandText text={prompt.command} />
           </pre>
         </div>
         <div>
@@ -155,11 +142,20 @@ export function LocalCommandApprovalDialogView({
             {t('localCommands.prompt.folderLabel', 'Folder')}
           </div>
           <p className="break-all font-mono text-xs text-foreground">
-            <MarkedText text={prompt.cwd} />
+            <LocalCommandText text={prompt.cwd} />
           </p>
         </div>
       </div>
 
+      {prompt.pipesToShell ? (
+        <p className="flex items-start gap-2 text-xs text-foreground">
+          <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-destructive" />
+          {t(
+            'localCommands.prompt.pipeToShell',
+            "This downloads a script and runs it. You won't see what it does before it runs."
+          )}
+        </p>
+      ) : null}
       {prompt.hasNonAscii ? (
         <p className="flex items-start gap-2 text-xs text-foreground">
           <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-destructive" />
@@ -178,6 +174,11 @@ export function LocalCommandApprovalDialogView({
         </p>
       ) : null}
 
+      {prompt.alwaysAllowBlocked ? (
+        <p className="text-xs text-muted-foreground">
+          {t('localCommands.prompt.alwaysAllowBlocked', "This command can't be always allowed.")}
+        </p>
+      ) : null}
       {!readToEnd ? (
         <p className="text-xs text-foreground">
           {t(
@@ -189,7 +190,9 @@ export function LocalCommandApprovalDialogView({
 
       <p className="text-xs text-muted-foreground">
         {prompt.agent
-          ? `${t('localCommands.prompt.agent', 'From {{agent}}', { agent: prompt.agent })} · `
+          ? `${t('localCommands.prompt.agent', 'From {{agent}}', {
+              agent: getAgentLabel(prompt.agent as TerminalAgent)
+            })} · `
           : null}
         {timeoutLabel(prompt.timeoutSec, t)}
         {' · '}
@@ -220,9 +223,25 @@ export function LocalCommandApprovalDialogView({
         >
           {t('localCommands.prompt.deny', 'Deny')}
         </Button>
-        <Button variant="outline" disabled={disabled} onClick={() => onDecide('always-allow')}>
-          {t('localCommands.prompt.alwaysAllow', 'Always allow this command')}
-        </Button>
+        {prompt.alwaysAllowBlocked ? null : (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                disabled={disabled}
+                onClick={() => onDecide('always-allow')}
+              >
+                {t('localCommands.prompt.alwaysAllow', 'Always allow this command')}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top" sideOffset={4}>
+              {t(
+                'localCommands.prompt.alwaysAllowScope',
+                'Runs without asking again, only this exact command in this workspace and folder. What it runs can still change, such as a script the agent edits.'
+              )}
+            </TooltipContent>
+          </Tooltip>
+        )}
         <Button disabled={disabled} onClick={() => onDecide('allow-once')}>
           {t('localCommands.prompt.allowOnce', 'Allow once')}
         </Button>
@@ -302,7 +321,19 @@ export function LocalCommandApprovalDialogHost(): React.JSX.Element | null {
       return
     }
     decide('deny')
-    void api.setEnabled({ sandboxId: current.sandboxId, enabled: false }).catch(() => {})
+    void api
+      .setEnabled({ sandboxId: current.sandboxId, enabled: false })
+      .catch(() => ({ ok: false }))
+      .then((result) => {
+        if (!result.ok) {
+          toast.error(
+            translate(
+              'localCommands.prompt.turnOffFailed',
+              'Couldn’t turn off local commands. Turn them off in Settings → Orca Cloud → Commands on this computer.'
+            )
+          )
+        }
+      })
   }, [current, decide])
 
   if (!current) {

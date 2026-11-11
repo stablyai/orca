@@ -62,8 +62,11 @@ function resultLabel(entry: LocalCommandAuditEntry, t: Translate): string | null
   if (entry.signal) {
     return t('localCommands.audit.resultSignal', 'Stopped ({{signal}})', { signal: entry.signal })
   }
+  if (entry.exitCode === 0) {
+    return t('localCommands.audit.resultFinished', 'Finished')
+  }
   if (typeof entry.exitCode === 'number') {
-    return t('localCommands.audit.resultExit', 'Exit {{code}}', { code: entry.exitCode })
+    return t('localCommands.audit.resultFailed', 'Failed (exit {{code}})', { code: entry.exitCode })
   }
   return null
 }

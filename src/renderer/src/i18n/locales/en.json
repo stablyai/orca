@@ -28087,7 +28087,12 @@
       "lines": "{{count}} lines",
       "scrollToEnd": "Scroll to the end of the command before you allow it.",
       "agent": "From {{agent}}",
-      "turnOff": "Turn off for this workspace"
+      "turnOff": "Turn off for this workspace",
+      "commandBoxLines": "Command, {{count}} lines",
+      "pipeToShell": "This downloads a script and runs it. You won't see what it does before it runs.",
+      "alwaysAllowBlocked": "This command can't be always allowed.",
+      "alwaysAllowScope": "Runs without asking again, only this exact command in this workspace and folder. What it runs can still change, such as a script the agent edits.",
+      "turnOffFailed": "Couldn’t turn off local commands. Turn them off in Settings → Orca Cloud → Commands on this computer."
     },
     "settings": {
       "notOwner": "Only the workspace owner can turn this on.",
@@ -28134,7 +28139,9 @@
       "resultTimedOut": "Timed out",
       "resultSignal": "Stopped ({{signal}})",
       "resultExit": "Exit {{code}}",
-      "noCommand": "(unreadable request)"
+      "noCommand": "(unreadable request)",
+      "resultFinished": "Finished",
+      "resultFailed": "Failed (exit {{code}})"
     },
     "notification": {
       "title": "Run a command on this computer?",
