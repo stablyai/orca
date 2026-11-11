@@ -26,6 +26,9 @@ export function assertJournalMetadataPlan(db: Database.Database, sql: string): v
   const details = plan.map((row) => String(row.detail)).join('\n')
   expect(details).toMatch(/SEARCH (?:item|journal_items) USING INDEX journal_items_/)
   expect(details).not.toContain('TEMP B-TREE')
+  if (sql.includes('AND turn_marker=1 ORDER BY')) {
+    expect(details).toContain('SEARCH item USING INDEX journal_items_turn_marker')
+  }
   const root = db
     .prepare("SELECT rootpage FROM sqlite_master WHERE name='journal_items'")
     .get()!.rootpage

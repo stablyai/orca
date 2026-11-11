@@ -288,7 +288,7 @@ export function latestTurnItem(
   head: JournalDomainHistoryHead
 ): AgentJournalRenderItem | null {
   const row = db
-    .prepare(`SELECT item_id FROM journal_items item WHERE session_id=? AND epoch=? AND hidden=0
+    .prepare(`SELECT item_id FROM journal_items item INDEXED BY journal_items_turn_marker WHERE session_id=? AND epoch=? AND hidden=0
       AND turn_marker=1 ORDER BY sequence DESC, sequence_index DESC, ordinal DESC LIMIT 1`)
     .get(head.sessionId, head.epoch)
   return row ? (readJournalDomainClientItems(db, head, [String(row.item_id)])[0] ?? null) : null

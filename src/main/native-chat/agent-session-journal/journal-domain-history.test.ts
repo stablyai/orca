@@ -73,7 +73,7 @@ const sequences = (result: AgentSessionHistoryResult) =>
 
 it('pages a chat of almost only subagent rows in bounded, gap-free pages', () => {
   const { db, seedItem, head, read } = history()
-  const assertPlans = captureJournalMetadataPlans(db, 'SELECT item_id, sequence,')
+  const assertPlans = captureJournalMetadataPlans(db, 'SELECT item_id')
   seedItem({
     ...text(1, ''),
     body: {
