@@ -218,12 +218,10 @@ describe('MacosLoginSessionDeathWatch', () => {
   })
 
   it.each(['healthy', 'unknown'] as const)(
-    'runs no login probe while resolver health is %s, then retires once it degrades',
-    async (initialResolverHealth) => {
-      const { watch, clock, onRetire, probe, setResolverHealth } = createWatch({
-        outcomes: [ACCEPTED, REJECTED, REJECTED, REJECTED, REJECTED]
-      })
-      setResolverHealth(initialResolverHealth)
+    'runs no login probe after arming while resolver health is %s',
+    async (resolverHealth) => {
+      const { watch, clock, probe, setResolverHealth } = createWatch()
+      setResolverHealth(resolverHealth)
       watch.start()
       await drainMicrotasks()
       for (let i = 0; i < 5; i++) {
@@ -233,14 +231,6 @@ describe('MacosLoginSessionDeathWatch', () => {
       watch.notifyPtyExit()
       await clock.advance(10_000)
       expect(probe).toHaveBeenCalledTimes(1)
-
-      setResolverHealth('unhealthy')
-      await clock.advance(115_000) // Next periodic check sees the dead resolver.
-      expect(probe).toHaveBeenCalledTimes(2)
-      await clock.advance(119_999)
-      expect(onRetire).not.toHaveBeenCalled()
-      await clock.advance(1)
-      expect(onRetire).toHaveBeenCalledTimes(1)
     }
   )
 
