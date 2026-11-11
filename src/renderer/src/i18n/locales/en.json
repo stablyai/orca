@@ -14424,6 +14424,7 @@
             "unavailable": "Your keys appear here once Orca Cloud is reachable.",
             "emptyTitle": "No Orca API keys yet",
             "emptyBody": "Create a key to start workspaces, message agents and run routines from scripts, CI or any MCP client.",
+            "emptyBodyNoRoutines": "Create a key to start workspaces and message agents from scripts, CI or any MCP client.",
             "listLabel": "Orca API keys",
             "customScopeCount_one": "Custom · {{count}} scope",
             "customScopeCount_other": "Custom · {{count}} scopes",
@@ -23242,7 +23243,9 @@
         "signInBrowser": "Finish signing in to {{agent}} in your browser…",
         "signInDevice": "Enter {{code}} at {{host}} to sign in to {{agent}}.",
         "signInPaste": "Paste the {{agent}} setup token in Settings to finish.",
-        "signInSaving": "Saving…"
+        "signInSaving": "Saving…",
+        "agentWillNotStartShort": "{{agent}} isn’t set up for Orca Cloud, so it won’t start.",
+        "agentWillNotStartIn": "{{agent}} isn’t set up for Orca Cloud, so it won’t start in {{workspace}}."
       }
     },
     "JiraIssueWorkspace": {

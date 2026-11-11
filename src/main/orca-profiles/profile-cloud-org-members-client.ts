@@ -40,6 +40,19 @@ function normalizeTimestamp(value: unknown): number {
   return Date.now()
 }
 
+// The renderer loads this image, so only a plain https URL from auth is kept.
+function optionalPictureUrl(value: unknown): string | undefined {
+  if (typeof value !== 'string' || value.length > 2048) {
+    return undefined
+  }
+  try {
+    const url = new URL(value)
+    return url.protocol === 'https:' && !url.username && !url.password ? url.toString() : undefined
+  } catch {
+    return undefined
+  }
+}
+
 function normalizeMember(value: unknown): OrcaOrgMember | null {
   if (!value || typeof value !== 'object') {
     return null
@@ -54,6 +67,9 @@ function normalizeMember(value: unknown): OrcaOrgMember | null {
     userId: userId ?? null,
     email,
     displayName: optionalString(record.displayName),
+    ...(optionalPictureUrl(record.pictureUrl)
+      ? { pictureUrl: optionalPictureUrl(record.pictureUrl) }
+      : {}),
     role: normalizeRole(record.role, 'member')
   }
 }
@@ -74,7 +90,7 @@ function normalizePendingInvite(value: unknown): OrcaOrgPendingInvite | null {
   }
 }
 
-function normalizeRoster(value: unknown): OrcaOrgMembersRoster {
+export function normalizeRoster(value: unknown): OrcaOrgMembersRoster {
   if (!value || typeof value !== 'object') {
     throw new Error('invalid_orca_org_members_roster')
   }
