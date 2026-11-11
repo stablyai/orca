@@ -234,14 +234,17 @@ function QuickTabBody({
     [observation.contextKey, orcaCloud]
   )
 
-  const handleCreate = useCallback(async (): Promise<void> => {
+  // `withoutAgent`: Orca Cloud with an agent that has no account there starts a plain terminal
+  // instead of dropping the user into the agent's /login.
+  const handleCreate = useCallback(async (options?: { withoutAgent?: boolean }): Promise<void> => {
     if (createDisabled) {
       return
     }
-    await submitQuick(quickAgent, {
+    const agent = options?.withoutAgent ? null : quickAgent
+    await submitQuick(agent, {
       // Blank Terminal is the setup-only create: no agent, and no extra shell beside setup.
-      setupOnly: quickAgent === null,
-      launchChoice: launchSelection.choice,
+      setupOnly: agent === null,
+      ...(agent === null ? {} : { launchChoice: launchSelection.choice }),
       onLegacyPreparationFailure: (error) => {
         if (isSubmissionCancelled()) {
           return

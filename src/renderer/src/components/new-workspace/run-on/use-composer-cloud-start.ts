@@ -29,7 +29,7 @@ export function useComposerCloudStart({
   modalData: ComposerModalData
   cardProps: ComposerCardState
   quickAgent: string | null
-  handleCreate: () => Promise<void>
+  handleCreate: (options?: { withoutAgent?: boolean }) => Promise<void>
   createDisabled: boolean
   composerSnapshot: () => ComposerModalData
   /** The composer's onCreated calls this: only a start that happened is remembered. */
@@ -39,6 +39,10 @@ export function useComposerCloudStart({
   // The latest handleCreate, never a ref copied after render: a submit right after an edit must
   // see that edit.
   const runCreate = useCallback(() => void handleCreate(), [handleCreate])
+  const runCreateWithoutAgent = useCallback(
+    () => void handleCreate({ withoutAgent: true }),
+    [handleCreate]
+  )
   const cloudStart = useCloudStartComposer({
     active,
     availability: cardProps.orcaCloudAvailability ?? 'unavailable',
@@ -54,6 +58,7 @@ export function useComposerCloudStart({
     createReady: !createDisabled,
     composerSnapshot,
     onCreate: runCreate,
+    onCreateWithoutAgent: runCreateWithoutAgent,
     onClose
   })
   useEffect(() => {

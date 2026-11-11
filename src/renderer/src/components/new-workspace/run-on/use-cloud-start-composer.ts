@@ -25,8 +25,38 @@ import { cloudSetupRequired } from '../../orca-cloud-setup/cloud-setup-page-mode
 import { useRunOnDefault } from './use-run-on-default'
 import { useCloudOnlyCreate, useCloudOnlyRepo } from './use-cloud-only-repo'
 import type { CloudStartView } from './cloud-start-view'
+import { openOrcaCloudAgentAccounts } from '../OrcaCloudAgentSetupRow'
+import { agentName } from '../../settings/agent-accounts/orca-cloud-accounts-copy'
+import { isOrcaCloudAccountAgent } from '../../../../../shared/orca-cloud-agents/orca-cloud-agents-wire'
 
 export type { CloudStartView } from './cloud-start-view'
+
+/** The workspace started without its agent: one clear way to set the agent up for next time. */
+function showAgentNotStartedToast(agent: string | null): void {
+  const name = isOrcaCloudAccountAgent(agent) ? agentName(agent, translate) : null
+  toast.message(
+    name
+      ? translate(
+          'components.newWorkspace.cloudStart.agentNotStarted',
+          '{{agent}} isn’t set up for Orca Cloud, so it didn’t start. The workspace has a terminal.',
+          { agent: name }
+        )
+      : translate(
+          'components.newWorkspace.cloudStart.agentNotStartedGeneric',
+          'Your agent isn’t set up for Orca Cloud, so it didn’t start. The workspace has a terminal.'
+        ),
+    {
+      action: {
+        label: name
+          ? translate('components.newWorkspace.cloudStart.setUpAgentOnce', 'Set up {{agent}} once', {
+              agent: name
+            })
+          : translate('components.newWorkspace.cloudStart.setUpAgentOnceGeneric', 'Set up once'),
+        onClick: openOrcaCloudAgentAccounts
+      }
+    }
+  )
+}
 
 export function useCloudStartComposer({
   active,
@@ -41,6 +71,7 @@ export function useCloudStartComposer({
   createReady = true,
   composerSnapshot,
   onCreate: createWorkspace,
+  onCreateWithoutAgent,
   onClose,
   accessOverride
 }: {
@@ -60,6 +91,8 @@ export function useCloudStartComposer({
   /** The composer as it is now, for the setup page's Back and its auto-start. */
   composerSnapshot: () => ComposerModalData
   onCreate: () => void
+  /** The same create with no agent launched (the agent has no Orca Cloud account yet). */
+  onCreateWithoutAgent?: () => void
   /** Closes the composer (setup moves to its page; a cloud-only repository started, D4). */
   onClose?: () => void
   /** Fixtures pin the account's access. */
@@ -82,15 +115,6 @@ export function useCloudStartComposer({
     cloudOffered: segment === 'enabled',
     signedIn: availability !== 'needs-sign-in' && access.state !== 'signed-out'
   })
-  const onCreate = useCloudOnlyCreate({
-    cloudOnly,
-    createWorkspace,
-    prompt,
-    agent,
-    profileId,
-    hoursToast: getOrcaCloudStartToast(access, translate, navigator.language),
-    onClose
-  })
   const { steps: rowSteps } = useCloudStartSteps({
     availability,
     access,
@@ -105,6 +129,32 @@ export function useCloudStartComposer({
     teamSwitch: switchTeam !== null,
     agentSkipped: isCloudSetupAgentSkipped(agent)
   })
+  // The agent has no Orca Cloud account (the user skipped setting it up): never launch it into its
+  // /login. Start a plain terminal and say how to set the agent up once.
+  const agentUnset =
+    cloudSelected && steps.some((step) => step.id === 'agent' && step.state === 'optional')
+  const onCreateRaw = useCloudOnlyCreate({
+    cloudOnly,
+    createWorkspace,
+    prompt,
+    agent: agentUnset ? null : agent,
+    profileId,
+    hoursToast: getOrcaCloudStartToast(access, translate, navigator.language),
+    onClose
+  })
+  const onCreate = useCallback(() => {
+    if (!agentUnset) {
+      onCreateRaw()
+      return
+    }
+    // A GitHub-only start already leaves the agent out (above); a local project's create skips it.
+    if (cloudOnly.picked || !onCreateWithoutAgent) {
+      onCreateRaw()
+    } else {
+      onCreateWithoutAgent()
+    }
+    showAgentNotStartedToast(agent)
+  }, [agent, agentUnset, cloudOnly.picked, onCreateRaw, onCreateWithoutAgent])
 
   const { markTouched } = useRunOnDefault({
     active,
