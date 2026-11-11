@@ -89,13 +89,9 @@ function CloudMenuRows({
           {t('orcaCloudWorkspace.unarchive', 'Unarchive')}
         </DropdownMenuItem>
       ) : null}
-      {workspace ? (
+      {workspace && (has('share') || has('makePrivate')) ? (
         <>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={() => void copyCloudWorkspaceLink(workspace.id)}>
-            <Link2 className="size-3.5" />
-            {t('auto.components.cloudWorkspaces.copyWorkspaceLink', 'Copy workspace link')}
-          </DropdownMenuItem>
           {has('share') ? (
             <DropdownMenuItem
               onSelect={() => void setVisibility(workspace, 'team', { reload, t, confirm })}
@@ -165,4 +161,25 @@ async function setVisibility(
         )
   )
   reload()
+}
+
+/** "Workspace link", first in the sidebar's Copy submenu for a cloud workspace (JA-14). */
+export function CloudCopyWorkspaceLinkItem({
+  worktreeId,
+  hostId
+}: {
+  worktreeId: string
+  hostId?: string | null
+}): React.JSX.Element | null {
+  const t = useTranslate()
+  const { workspace } = useCloudWorkspaceRecord(worktreeId, hostId ?? null)
+  if (!workspace) {
+    return null
+  }
+  return (
+    <DropdownMenuItem onSelect={() => void copyCloudWorkspaceLink(workspace.id)}>
+      <Link2 className="size-3.5" />
+      {t('auto.components.cloudWorkspaces.workspaceLinkOption', 'Workspace link')}
+    </DropdownMenuItem>
+  )
 }
