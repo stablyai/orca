@@ -4,10 +4,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // Which environments count as Orca Cloud in a test (the real check reads the runtime catalog).
-const rpc = vi.hoisted(() => ({
-  tail: [] as string[],
-  sends: [] as unknown[]
-}))
+const rpc = vi.hoisted(() => {
+  const state: { tail: string[]; sends: unknown[] } = { tail: [], sends: [] }
+  return state
+})
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
   callRuntimeRpc: async (_target: unknown, method: string, params: unknown) => {
     if (method === 'terminal.read') {

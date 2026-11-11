@@ -2942,8 +2942,6 @@
         "519c3587f3": "Add to project",
         "openAttachedWorkspace": "Open workspace attached to issue",
         "openWorkspace": "Open workspace",
-        "startedFresh": "Started a new conversation.",
-        "startedFreshDetail": "{{agent}} had nothing to pick up.",
         "openOnLinear": "Open on Linear",
         "moreWorkspaceActions": "More issue workspace actions",
         "startNewWorkspace": "Start new workspace",
@@ -2986,8 +2984,6 @@
         "commentTooLarge": "Comment is too large to submit safely.",
         "openAttachedWorkspace": "Open workspace attached to issue",
         "openWorkspace": "Open workspace",
-        "startedFresh": "Started a new conversation.",
-        "startedFreshDetail": "{{agent}} had nothing to pick up.",
         "moreWorkspaceActions": "More issue workspace actions",
         "startNewWorkspace": "Start new workspace",
         "setEstimate": "Set estimate",
@@ -14642,9 +14638,7 @@
             "more": "Show older runs",
             "pr": "Pull request",
             "comment": "Comment",
-            "openWorkspace": "Open workspace",
-            "startedFresh": "Started a new conversation.",
-            "startedFreshDetail": "{{agent}} had nothing to pick up."
+            "openWorkspace": "Open workspace"
           },
           "new": "New routine",
           "listTitle": "Your routines",
@@ -19558,8 +19552,6 @@
           "terminalOnPairedServer": "Run terminal is on the paired server.",
           "terminalUnavailable": "Run terminal is unavailable.",
           "openWorkspace": "Open workspace",
-          "startedFresh": "Started a new conversation.",
-          "startedFreshDetail": "{{agent}} had nothing to pick up.",
           "workspaceAvailable": "Workspace is available.",
           "snapshotSaved": "Snapshot saved",
           "showingSnapshot": "Showing saved run snapshot.",
@@ -22767,8 +22759,6 @@
           "notMeasured": "Not measured",
           "openWorkspaceNamed": "Open {{value0}}",
           "openWorkspace": "Open workspace",
-          "startedFresh": "Started a new conversation.",
-          "startedFreshDetail": "{{agent}} had nothing to pick up.",
           "workspaceStatus": "Workspace status: {{value0}}",
           "measuringSizesProgress": "Scanning {{value0}}/{{value1}}",
           "measuringSizes": "Scanning sizes",
@@ -23593,7 +23583,9 @@
         "readOnly": "Read-only",
         "terminalOutput": "Saved output of {{title}}",
         "noGit": "No source control state was saved.",
-        "terminalN": "Terminal {{n}}"
+        "terminalN": "Terminal {{n}}",
+        "keepAwake": "Keep awake",
+        "savingCopy": "Saving a read-only copy of chats, terminals and changes…"
       },
       "read": {
         "wakeToContinue": "Wake to continue",
@@ -23635,7 +23627,8 @@
         "wakingElapsed": "Waking… {{elapsed}}",
         "staleCopy": "Orca Cloud sent an older copy than the one you last saw, so it isn’t shown. Wake the workspace to see it as it is now.",
         "keychainUnavailable": "Orca can’t open the saved copy because this computer’s keychain isn’t available. Wake the workspace to see it.",
-        "keychainLinux": "Or set up a keyring (like GNOME Keyring) and reopen Orca."
+        "keychainLinux": "Or set up a keyring (like GNOME Keyring) and reopen Orca.",
+        "justNow": "just now"
       }
     },
     "runtimeDownload": {
@@ -26984,7 +26977,8 @@
       "failed": "Couldn’t start",
       "unknown": "Checking…",
       "starting": "Starting",
-      "wakeFailed": "Couldn’t wake"
+      "wakeFailed": "Couldn’t wake",
+      "goingToSleep": "Going to sleep…"
     },
     "unarchive": "Unarchive",
     "change": {
@@ -27144,7 +27138,8 @@
       "changedTitle": "Changed files",
       "moreChanged": "+{{count}} more",
       "recentCommitsOn": "Recent commits on {{branch}}",
-      "recentCommits": "Recent commits"
+      "recentCommits": "Recent commits",
+      "goingToSleep": "Going to sleep… The read-only copy shows here when it’s done."
     },
     "terminal": {
       "asleepHistoryKept": "This workspace is asleep. Your terminal history is kept.",
@@ -28179,13 +28174,13 @@
     "dismiss": "Dismiss",
     "renewedAnnounce": "{{agent}} sign-in renewed. Restart {{agent}} to use it.",
     "restarting": "Restarting {{agent}}…",
+    "startedFresh": "Started a new conversation.",
+    "startedFreshDetail": "{{agent}} had nothing to pick up.",
     "restartFailed": "Couldn’t restart {{agent}}",
     "restartHostUnresponsive": "The workspace didn’t respond.",
     "restartFailedAnnounce": "Couldn’t restart {{agent}}. Try again.",
     "restartFailedIn": "Couldn’t restart {{agent}} in {{workspace}}.",
     "openWorkspace": "Open workspace",
-    "startedFresh": "Started a new conversation.",
-    "startedFreshDetail": "{{agent}} had nothing to pick up.",
     "notSetUp": "{{agent}} isn’t set up for Orca Cloud",
     "notSetUpCompact": "{{agent}} not set up",
     "notSetUpDetail": "Set up once. Every cloud workspace uses it.",
