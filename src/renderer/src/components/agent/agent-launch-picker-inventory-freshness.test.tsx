@@ -21,12 +21,17 @@ vi.mock('@/runtime/agent-launch-settings/agent-launch-settings-transport', () =>
   readHostAgentLaunchDefaults: transport.defaults
 }))
 const initial = useAppStore.getState()
+const previousApi = Object.getOwnPropertyDescriptor(window, 'api')
 afterEach(() => {
   cleanup()
   useAppStore.setState(initial, true)
   resetHostStructuredAgentsForTests()
   vi.resetAllMocks()
-  vi.unstubAllGlobals()
+  if (previousApi) {
+    Object.defineProperty(window, 'api', previousApi)
+  } else {
+    Reflect.deleteProperty(window, 'api')
+  }
 })
 const detection: UseDetectedAgentsResult = {
   detectedIds: ['codex'],
@@ -82,7 +87,10 @@ it('reads a paired unknown-platform catalog before launch defaults and keeps it 
 })
 
 it('reads the structured host list for a local UNC workspace instead of gating on its terminal route', async () => {
-  vi.stubGlobal('window', { api: { platform: { get: () => ({ platform: 'win32' }) } } })
+  Object.defineProperty(window, 'api', {
+    configurable: true,
+    value: { platform: { get: () => ({ platform: 'win32' }) } }
+  })
   useAppStore.setState({
     settings: getDefaultSettings('/synthetic'),
     repos: [

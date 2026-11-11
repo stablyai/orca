@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
+import { resetHostModelCatalogSnapshotsForTests } from '@/runtime/native-chat/model-catalogs/host-model-catalog-snapshots'
 import { useAgentModelMenu } from './use-agent-model-menu'
 const mocks = vi.hoisted(() => ({ call: vi.fn() }))
 vi.mock('@/runtime/native-chat/requests/structured-agent-session-call', () => ({
@@ -12,6 +13,7 @@ const source = {
 }
 afterEach(() => {
   cleanup()
+  resetHostModelCatalogSnapshotsForTests()
   mocks.call.mockReset()
 })
 
@@ -70,6 +72,7 @@ it('keeps an unread closed control idle and shows the placeholder only after ope
     ({ open }) => useAgentModelMenu('codex', { model: 'saved-only' }, source, open),
     { initialProps: { open: false } }
   )
+  await act(async () => {})
   expect(hook.result.current.status).toBe('builtin')
   expect(hook.result.current.readOutcome).toBeUndefined()
   expect(hook.result.current.descriptors.find(({ id }) => id === 'model')?.kind).toMatchObject({
@@ -81,5 +84,7 @@ it('keeps an unread closed control idle and shows the placeholder only after ope
   expect(hook.result.current.status).toBe('listing')
   expect(hook.result.current.fallbackAfterFailure).toBe(false)
   hook.unmount()
-  pending.resolve({ origin: 'unknown' })
+  await act(async () => {
+    pending.resolve({ origin: 'unknown' })
+  })
 })

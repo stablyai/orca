@@ -42,6 +42,7 @@ export function useAgentModelMenu(
   useEffect(() => {
     const source = latestSource()
     if (!source) {
+      setDisplay((previous) => (previous.key === key ? previous : { key }))
       return
     }
     let cycle: AbortController | undefined
