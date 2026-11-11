@@ -185,12 +185,12 @@ vi.mock('../claude-usage/store')
 vi.mock('../codex-usage/store')
 vi.mock('../opencode-usage/store')
 vi.mock('../browser/document-preview/doc-preview-protocol')
-vi.mock('../crash-reporting/crashpad-capture')
-vi.mock('../crash-reporting/crash-report-store')
-vi.mock('../crash-reporting/crash-breadcrumb-store')
-vi.mock('../crash-reporting/durable-crash-breadcrumb')
-vi.mock('../crash-reporting/gpu-crash-diagnostics')
-vi.mock('../crash-reporting/main-process-lifecycle-identity')
+vi.mock('../crash-reporting/capture/crashpad-capture')
+vi.mock('../crash-reporting/reports/crash-report-store')
+vi.mock('../crash-reporting/breadcrumbs/crash-breadcrumb-store')
+vi.mock('../crash-reporting/breadcrumbs/durable-crash-breadcrumb')
+vi.mock('../crash-reporting/capture/gpu-crash-diagnostics')
+vi.mock('../crash-reporting/process-exits/main-process-lifecycle-identity')
 vi.mock('./ensure-virtual-display', () => ({
   ensureVirtualDisplayForHeadlessServe: vi.fn(),
   hasUsableLinuxDisplay: () => true,

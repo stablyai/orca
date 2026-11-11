@@ -24,7 +24,7 @@ vi.mock('node:fs/promises', async (importOriginal) => ({
   ...(await importOriginal<typeof NodeFsPromises>()),
   readFile: readFileMock
 }))
-vi.mock('../../crash-reporting/self-initiated-tree-kill-log', () => ({
+vi.mock('../../crash-reporting/process-exits/self-initiated-tree-kill-log', () => ({
   recordSelfInitiatedTreeKill: recordSelfInitiatedTreeKillMock
 }))
 vi.mock('@orca/process-host', () => ({

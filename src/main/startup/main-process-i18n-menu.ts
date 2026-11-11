@@ -7,7 +7,7 @@ import {
 } from '../menu/register-app-menu'
 import { zoomDashboardPopoutIfFocused } from '../window/dashboard-popout-window'
 import { zoomWorkspaceSpaceWindowIfFocused } from '../window/workspace-space-window'
-import { recordCrashBreadcrumb } from '../crash-reporting/crash-breadcrumb-store'
+import { recordCrashBreadcrumb } from '../crash-reporting/breadcrumbs/crash-breadcrumb-store'
 import { mainProcessState as state } from './main-process-state'
 import {
   getAppMenuQuitHandlers,

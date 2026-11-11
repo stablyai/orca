@@ -84,7 +84,7 @@ export async function call(
 }
 
 export async function openChat(sessionId: string): Promise<FakeConnection> {
-  const attached = await host.attach({ callerKey: 'test-surface' }, attachParams(sessionId))
+  const attached = await host.attach({ callerKey: 'test-surface' }, attachParams(sessionId, root))
   expect(attached, JSON.stringify(attached)).toMatchObject({ ok: true })
   await host.setSessionTabVisibility(sessionId, true)
   threadBySession.set(sessionId, codex.connections.at(-1)!.threadId!)

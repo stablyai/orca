@@ -4,7 +4,7 @@ import { isLinkedIssueNumber } from '../../shared/source-control/ai/recipes/sour
 import type { WorkspaceLinkedItem } from '../../shared/worktree/types'
 import type { GitRuntimeOptions } from '../git/git-runtime-options'
 import { getIssue as getGitHubIssue } from '../github/issues'
-import { getIssue as getGitLabIssue } from '../gitlab/issues'
+import { getIssue as getGitLabIssue } from '../gitlab/issues/gitlab-issue-queries'
 
 export type PullRequestLinkedIssueMeta = {
   linkedIssue?: number | null

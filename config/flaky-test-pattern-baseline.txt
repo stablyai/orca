@@ -12,8 +12,8 @@
 1 test-no-in-test-import-actual:src/main/daemon/history/storage/testing/terminal-history-permissions.test.ts
 1 test-no-in-test-import-actual:src/main/git/command-runner/spawned-command-tree-kill.test.ts
 1 test-no-in-test-import-actual:src/main/ipc/filesystem/filesystem-content-search-cancellation.test.ts
-1 test-no-in-test-import-actual:src/main/linear/client.test.ts
-1 test-no-in-test-import-actual:src/main/linear/linear-description-images.test.ts
+1 test-no-in-test-import-actual:src/main/linear/accounts/linear-account-client.test.ts
+1 test-no-in-test-import-actual:src/main/linear/issues/linear-description-images.test.ts
 1 test-no-in-test-import-actual:src/main/omp/omp-session-cwd-lookup.test.ts
 1 test-no-in-test-import-actual:src/main/orcad/electron-serve-provider-selection.test.ts
 1 test-no-in-test-import-actual:src/main/pty/scrollback/overlay-mirror.test.ts
@@ -38,7 +38,6 @@
 1 test-no-polling-loop:src/main/claude/structured/claude-structured-real-cli-stop-task.test.ts
 5 test-no-polling-loop:src/main/claude/structured/claude-structured-real-cli.test.ts
 1 test-no-polling-loop:src/main/claude/structured/launch/claude-structured-real-cli-options.test.ts
-3 test-no-polling-loop:src/main/cli/packaged-cli-assets.test.ts
 1 test-no-polling-loop:src/main/codex/hooks/reconciliation/codex-hook-toggle-off-wins.test.ts
 1 test-no-polling-loop:src/main/codex/structured/launch/codex-structured-real-cli-command-env.test.ts
 1 test-no-polling-loop:src/main/daemon/providers/adapter/testing/daemon-self-retirement-respawn.test.ts
@@ -170,14 +169,12 @@
 2 test-no-real-time-wait:src/main/claude/structured/claude-structured-real-cli-stop-task.test.ts
 5 test-no-real-time-wait:src/main/claude/structured/claude-structured-real-cli.test.ts
 1 test-no-real-time-wait:src/main/claude/structured/launch/claude-structured-real-cli-options.test.ts
-3 test-no-real-time-wait:src/main/cli/packaged-cli-assets.test.ts
 3 test-no-real-time-wait:src/main/codex/hooks/installation/hook-service-concurrent-launch-install.test.ts
 1 test-no-real-time-wait:src/main/codex/hooks/reconciliation/codex-hook-reconcile.test.ts
 1 test-no-real-time-wait:src/main/codex/hooks/reconciliation/codex-hook-toggle-off-wins.test.ts
 1 test-no-real-time-wait:src/main/codex/structured/launch/codex-structured-real-cli-command-env.test.ts
 1 test-no-real-time-wait:src/main/codex/structured/turns/codex-structured-turn-open-wait.test.ts
 1 test-no-real-time-wait:src/main/codex/trust/hooks/codex-hook-hash-lookup.test.ts
-1 test-no-real-time-wait:src/main/computer/macos-computer-use-permission-status.test.ts
 1 test-no-real-time-wait:src/main/daemon/executable-host/windows/testing/daemon-host-file-hash-cache.test.ts
 4 test-no-real-time-wait:src/main/daemon/providers/adapter/testing/daemon-pty-adapter-history-checkpoints.test.ts
 2 test-no-real-time-wait:src/main/daemon/providers/adapter/testing/daemon-pty-adapter-history-recovery.test.ts
@@ -202,7 +199,6 @@
 1 test-no-real-time-wait:src/main/git/worktrees/creation/worktree-configured-paths-concurrency.test.ts
 1 test-no-real-time-wait:src/main/git/worktrees/removal/remove-worktree-branch-cleanup.test.ts
 1 test-no-real-time-wait:src/main/git/worktrees/removal/worktree-prune-guard.test.ts
-1 test-no-real-time-wait:src/main/gitlab/work-item-details.test.ts
 1 test-no-real-time-wait:src/main/grok/grok-hook-stdin-no-eof.test.ts
 1 test-no-real-time-wait:src/main/ipc/filesystem/watcher-process/parcel-watcher-shallow-file-subscription.test.ts
 1 test-no-real-time-wait:src/main/ipc/filesystem/watcher-process/rebinding-file-watch-noise.test.ts
@@ -471,8 +467,7 @@
 3 test-no-wall-clock:src/main/claude/structured/claude-structured-real-cli-stop-task.test.ts
 10 test-no-wall-clock:src/main/claude/structured/claude-structured-real-cli.test.ts
 3 test-no-wall-clock:src/main/claude/structured/launch/claude-structured-real-cli-options.test.ts
-1 test-no-wall-clock:src/main/cli/appimage-generation-lease.test.ts
-6 test-no-wall-clock:src/main/cli/packaged-cli-assets.test.ts
+1 test-no-wall-clock:src/main/cli/appimage/appimage-generation-lease.test.ts
 1 test-no-wall-clock:src/main/codex-accounts/legacy-wsl-runtime-auth-drain-rollback-script.test.ts
 6 test-no-wall-clock:src/main/codex/app-server/codex-app-server-client.test.ts
 1 test-no-wall-clock:src/main/codex/structured/catalog/codex-usage-limits.test.ts
@@ -788,7 +783,7 @@
 1 test-timeout-needs-reason:tests/e2e/headless-serve-chat-tab-placement.spec.ts
 1 test-timeout-needs-reason:tests/e2e/headless-serve-cli-terminal-retention-parity.spec.ts
 1 test-timeout-needs-reason:tests/e2e/headless-serve-mobile-markdown.spec.ts
-3 test-timeout-needs-reason:tests/e2e/headless-serve-mobile-native-chat-identity.spec.ts
+1 test-timeout-needs-reason:tests/e2e/headless-serve-mobile-native-chat-identity.spec.ts
 4 test-timeout-needs-reason:tests/e2e/helpers/electron-process-shutdown.unit.test.ts
 1 test-timeout-needs-reason:tests/e2e/host-parked-pane-remote-viewer.spec.ts
 2 test-timeout-needs-reason:tests/e2e/host-terminal-agent-phone-push.spec.ts
@@ -837,7 +832,6 @@
 2 test-timeout-needs-reason:tests/e2e/paired-host-usage-credentials.spec.ts
 7 test-timeout-needs-reason:tests/e2e/paired-instant-browser-tab.spec.ts
 1 test-timeout-needs-reason:tests/e2e/paired-mobile-desktop-mirror-files-git-review.spec.ts
-1 test-timeout-needs-reason:tests/e2e/paired-mobile-desktop-mirror-server-browser.spec.ts
 1 test-timeout-needs-reason:tests/e2e/paired-mobile-desktop-mirror-workspace-visibility.spec.ts
 2 test-timeout-needs-reason:tests/e2e/paired-mobile-desktop-mirror.spec.ts
 1 test-timeout-needs-reason:tests/e2e/paired-mobile-desktop-tab-composition.spec.ts
@@ -866,7 +860,7 @@
 1 test-timeout-needs-reason:tests/e2e/paired-remote-terminal-probe-gap-recovery.spec.ts
 1 test-timeout-needs-reason:tests/e2e/paired-remote-terminal-reconnect-idle-frame.spec.ts
 1 test-timeout-needs-reason:tests/e2e/paired-remote-terminal-retention-memory.spec.ts
-2 test-timeout-needs-reason:tests/e2e/paired-remote-terminal-serve-restart-binding.spec.ts
+1 test-timeout-needs-reason:tests/e2e/paired-remote-terminal-serve-restart-binding.spec.ts
 1 test-timeout-needs-reason:tests/e2e/paired-remote-terminal-stall-recovery.spec.ts
 2 test-timeout-needs-reason:tests/e2e/paired-remote-terminal-truncated-tail-first-paint.spec.ts
 1 test-timeout-needs-reason:tests/e2e/paired-remote-terminal-wide-viewport.spec.ts
@@ -879,7 +873,7 @@
 1 test-timeout-needs-reason:tests/e2e/paired-two-client-emptied-workspace-reseed.spec.ts
 1 test-timeout-needs-reason:tests/e2e/paired-usage-owner-placeholders.spec.ts
 1 test-timeout-needs-reason:tests/e2e/paired-worktree-activation-isolation.spec.ts
-5 test-timeout-needs-reason:tests/e2e/persisted-session-production-upgrade.spec.ts
+3 test-timeout-needs-reason:tests/e2e/persisted-session-production-upgrade.spec.ts
 1 test-timeout-needs-reason:tests/e2e/pr11346-selected-runtime-add.spec.ts
 1 test-timeout-needs-reason:tests/e2e/profile-state-automatic-backup-recovery.spec.ts
 3 test-timeout-needs-reason:tests/e2e/relay-region-correction.unit.test.ts

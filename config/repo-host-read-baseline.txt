@@ -26,7 +26,7 @@
 2 src/main/orca-profiles/project-transfer/profile-project-transfer-payload.ts
 1 src/main/orca-profiles/project-transfer/profile-project-worktree-identity.ts
 1 src/main/persistence/leasing-ssh-ptys/ssh-target-reassignment.ts
-1 src/main/persistence/migrating-orcad-catalog/orcad-source-ownership.ts
+1 src/main/persistence/migrating-orcad-catalog/source/catalog/orcad-source-ownership.ts
 2 src/main/persistence/restoring-sessions/folder-scope-migration.ts
 1 src/main/persistence/restoring-sessions/tab-terminal-pane-binding-repair.ts
 1 src/main/persistence/tracking-repos/local-worktree-metadata-scan-expectation.ts
