@@ -12,7 +12,7 @@ import {
   FAKE_AGENT_WINDOWS_SHELL
 } from './helpers/fake-agent-command-override'
 import { RuntimeClient } from '../../src/cli/runtime-client'
-import { ORCHESTRATION_ENABLED_STORAGE_KEY } from '../../src/renderer/src/lib/orchestration-setup-state'
+import { ORCHESTRATION_ENABLED_STORAGE_KEY } from '../../src/renderer/src/components/orchestration/setup/orchestration-setup-state'
 import type { TuiAgent } from '../../src/shared/agent-launch/catalog/tui-agent'
 
 const fakeCliDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-worker-launch-defaults-'))
