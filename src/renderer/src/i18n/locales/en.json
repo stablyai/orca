@@ -20609,7 +20609,6 @@
         "overageNoPlan": "Overage needs an active plan.",
         "resets": "Hours reset {{value0}}",
         "overageTitle": "Overage",
-        "overageSpent": "{{value0}} of {{value1}} monthly cap spent",
         "saveCap": "Save",
         "monthly": "Monthly",
         "annual": "Annual",
@@ -20806,7 +20805,6 @@
           "sandboxHoursLeftResets_other": "{{count}} sandbox hours left · resets {{date}}",
           "vpWakeBody3": "Idle sandboxes sleep to save sandbox hours and wake with your files as you left them."
         },
-        "capLabel2": "Monthly spend cap",
         "capSaved": "Saved",
         "checkout": {
           "attention2": "Stripe needs one more step",
@@ -20917,9 +20915,6 @@
         "teamPlanTitle": "{{team}} · {{plan}} plan",
         "planTitle": "{{plan}} plan",
         "overage": {
-          "capHint": "{{rate}} per sandbox hour after your included hours, billed by the minute. $0 keeps overage off.",
-          "memberOn": "On, up to {{cap}} a month.",
-          "memberOff2": "Off. Ask an owner or admin to turn it on.",
           "turnOn": "Turn on with a {{cap}} cap"
         },
         "usage": {
@@ -23707,6 +23702,18 @@
         "sendBlockedFailedCloud": "Retry creating the workspace to send",
         "sendBlockedHeldCloud": "Sends when the workspace is ready"
       }
+    },
+    "billing": {
+      "overage": {
+        "capHint2": "{{rate}} per sandbox hour after your included hours, billed by the minute.",
+        "memberOn3": "Overage is on, up to {{cap}} a month. Ask an owner or admin to change this.",
+        "memberOff3": "Overage is off. Work stops when sandbox hours run out. Ask an owner or admin to change this.",
+        "offStatus": "Overage is off. Work stops when sandbox hours run out.",
+        "turnOff": "Turn off overage"
+      },
+      "overageUsed": "{{value0}} of {{value1}} used",
+      "overageCapLabel": "Monthly overage cap",
+      "capZero": "Set a cap above $0, or turn overage off."
     }
   },
   "dashboardPopout": {
