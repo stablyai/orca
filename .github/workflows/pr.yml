@@ -790,15 +790,7 @@ jobs:
         id: shells
         background: true
         run: |
-          # Per-connection limits complement the whole-command apt deadlines below.
-          sudo tee /etc/apt/apt.conf.d/99-orca-shell-contracts >/dev/null <<'APTCONF'
-          Acquire::http::Timeout "15";
-          Acquire::https::Timeout "15";
-          Acquire::Retries "1";
-          APTCONF
-          # Unrelated runner repositories may fail refresh; installing zsh must still succeed.
-          timeout 120 sudo apt-get update || true
-          timeout 300 sudo apt-get install -y zsh
+          bash .github/scripts/install-ubuntu-apt-packages.sh zsh
           # A fixed 4.x release meets the contract without tracking package-repository updates.
           case "$(uname -m)" in
             aarch64) arch=aarch64 sha=57349f0111728c64b703a84e611aa97ff4d1fa8466385d64e67bd5bc3ffa49fc ;;

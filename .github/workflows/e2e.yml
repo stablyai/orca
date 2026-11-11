@@ -123,6 +123,10 @@ jobs:
             exit 0
           fi
           read -r -a packages <<< "$ORCA_E2E_APT_PACKAGES"
+          if [ -f .github/scripts/install-ubuntu-apt-packages.sh ]; then
+            bash .github/scripts/install-ubuntu-apt-packages.sh "${packages[@]}"
+            exit 0
+          fi
           if [ -f .github/scripts/prepare-ubuntu-apt.sh ]; then
             bash .github/scripts/prepare-ubuntu-apt.sh
           else
