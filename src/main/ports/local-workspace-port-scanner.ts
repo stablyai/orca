@@ -8,7 +8,7 @@ import {
   reconcileAdvertisedUrls
 } from './local-workspace-port-attribution'
 import { scanPlatformListeningPorts } from './local-workspace-platform-port-scanner'
-import { hostManagedListenerRoots, isHostManagedListener } from './host-managed-listeners'
+import { hostManagedListenerConfig, isHostManagedListener } from './host-managed-listeners'
 import {
   getWorkspacePortScanCooldown,
   isWorkspacePortScanCommandTimeout,
@@ -41,10 +41,10 @@ export async function scanWorkspacePorts(
       worktrees,
       options.requireMetadata
     )
-    const roots = hostManagedListenerRoots()
+    const hostManaged = hostManagedListenerConfig()
     const managed = new Set(
       rawPorts
-        .filter((port) => isHostManagedListener(port, roots))
+        .filter((port) => isHostManagedListener(port, hostManaged))
         .map((port) => `${port.host}:${port.port}:${port.pid ?? 'unknown'}`)
     )
     // Orca's own listeners (runtime socket, hook server) run with a workspace in their command line but are not its servers.

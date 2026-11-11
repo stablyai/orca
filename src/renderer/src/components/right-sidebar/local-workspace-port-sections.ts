@@ -4,16 +4,14 @@ export function getLocalWorkspacePortSections(
   scan: { ports: WorkspacePort[] } | null | undefined,
   activeRepoId: string | null | undefined,
   activeWorktreeId: string | null | undefined,
-  /** Orca Cloud: the sandbox's own services (and root listeners nobody here started) are not the user's ports. */
+  /** Orca Cloud: the sandbox's own services (marked host-managed by the host) are not the user's ports. */
   hideHostServices = false
 ): {
   activePorts: WorkspacePort[]
   otherWorkspacePorts: WorkspacePort[]
   externalPorts: WorkspacePort[]
 } {
-  const ports = (scan?.ports ?? []).filter(
-    (port) => !hideHostServices || (port.hostManaged !== true && port.pid !== undefined)
-  )
+  const ports = (scan?.ports ?? []).filter((port) => !hideHostServices || port.hostManaged !== true)
   return {
     activePorts: ports.filter(
       (port) =>
