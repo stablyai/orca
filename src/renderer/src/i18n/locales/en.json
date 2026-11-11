@@ -28002,7 +28002,6 @@
     "openRow": "Open agent accounts for {{host}}",
     "emptyTitle": "Only this computer so far",
     "emptyDetail": "When you add an SSH host, pair a machine or start a cloud workspace, its sign-ins show up here.",
-    "footnote": "“Signed in” means the host confirmed it in the last minute. Orca Cloud comes from your Orca account, so there’s nothing to check per sandbox. Orca doesn’t wake a sandbox just to check sign-ins.",
     "summary": "Checked {{count}} hosts. {{attention}} need attention.",
     "cell": {
       "signedIn": "Signed in",
