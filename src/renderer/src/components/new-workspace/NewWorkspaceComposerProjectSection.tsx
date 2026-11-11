@@ -1,11 +1,10 @@
-import React, { useState } from 'react'
+import React from 'react'
 import { FolderPlus, LoaderCircle, PlugZap } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import ProjectCombobox from '@/components/new-workspace/ProjectCombobox'
 import RunTargetCombobox from '@/components/new-workspace/RunTargetCombobox'
 import { ORCA_CLOUD_RECIPE_ID } from '../../../../shared/hosted-sandbox/orca-cloud-recipe-id'
-import { OrcaCloudAgentSetupRow } from './OrcaCloudAgentSetupRow'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import { getSelectedNewWorkspaceProjectOptionId } from '@/lib/new-workspace-project-options'
@@ -15,15 +14,7 @@ import type {
   NewWorkspaceComposerCardProps
 } from './new-workspace-composer-card-props'
 import { EMPTY_PROJECT_OPTIONS } from './new-workspace-composer-card-props'
-import { OrcaCloudSelectionHint } from './OrcaCloudSelectionHint'
-import RunOnSegmentedControl from './run-on/RunOnSegmentedControl'
-import { RunOnHintLine } from './run-on/RunOnHintLine'
-import { OrcaCloudSetupPanel } from './run-on/OrcaCloudSetupPanel'
-import { CloudSetupBrowserTracker } from './cloud-setup/CloudSetupBrowserTracker'
-import { isOrcaCloudRecipe, isOrcaCloudSelection } from './run-target-options'
-import { useOrcaCloudRunTargetAccess } from './orca-cloud-billing-cache'
 import type { OrcaCloudRunTargetAccess } from './orca-cloud-run-target-access'
-import { FolderGitHubActions } from './run-on/FolderGitHubActions'
 
 type NewWorkspaceComposerProjectSectionProps = Pick<
   NewWorkspaceComposerCardProps,
@@ -46,26 +37,25 @@ type NewWorkspaceComposerProjectSectionProps = Pick<
   | 'ephemeralVmRecipeError'
   | 'orcaCloudAvailability'
   | 'cloudStart'
-> &
-  Partial<Pick<NewWorkspaceComposerCardProps, 'quickAgent'>> & {
-    disabled?: boolean
-    projectDescriptionId: string
-    onAddProject: () => void
-    focusNameInput: () => void
-    shouldShowRunTargetPicker: boolean
-    projectHostSetupOptions: NewWorkspaceComposerCardProps['projectHostSetupOptions']
-    ephemeralVmRecipes: EphemeralVmRecipeOption[]
-    handleProjectHostSetupChange: (setupId: string) => void
-    handleAddSshHost: () => void
-    handleAddRemoteServer: () => void
-    handleConnectRunTargetHost: (option: NeedsProjectHostOption) => Promise<void>
-    handleSetLocation: (option: NeedsProjectHostOption) => void
-    sshStatusLabel: string
-    connectButtonLabel: string
-    selectedProjectName: string
-    /** Fixtures pin Orca Cloud entitlement; the app reads it from billing. */
-    orcaCloudAccess?: OrcaCloudRunTargetAccess
-  }
+> & {
+  disabled?: boolean
+  projectDescriptionId: string
+  onAddProject: () => void
+  focusNameInput: () => void
+  shouldShowRunTargetPicker: boolean
+  projectHostSetupOptions: NewWorkspaceComposerCardProps['projectHostSetupOptions']
+  ephemeralVmRecipes: EphemeralVmRecipeOption[]
+  handleProjectHostSetupChange: (setupId: string) => void
+  handleAddSshHost: () => void
+  handleAddRemoteServer: () => void
+  handleConnectRunTargetHost: (option: NeedsProjectHostOption) => Promise<void>
+  handleSetLocation: (option: NeedsProjectHostOption) => void
+  sshStatusLabel: string
+  connectButtonLabel: string
+  selectedProjectName: string
+  /** Fixtures pin Orca Cloud entitlement; the app reads it from billing. */
+  orcaCloudAccess?: OrcaCloudRunTargetAccess
+}
 
 export function NewWorkspaceComposerProjectSection({
   disabled = false,
@@ -102,7 +92,6 @@ export function NewWorkspaceComposerProjectSection({
   connectButtonLabel,
   selectedProjectName,
   orcaCloudAccess,
-  quickAgent = null,
   cloudStart = null
 }: NewWorkspaceComposerProjectSectionProps): React.JSX.Element {
   // D4 rows: while Orca Cloud is picked, and for a folder, which can only start from GitHub.
@@ -110,15 +99,12 @@ export function NewWorkspaceComposerProjectSection({
     selectedEphemeralVmRecipeId === ORCA_CLOUD_RECIPE_ID || cloudStart?.folderProject
       ? cloudStart?.cloudOnly
       : undefined
-  const [pickerSignal, setPickerSignal] = useState(0)
   const t = useTranslate()
-  const orcaCloudOffered = shouldShowRunTargetPicker && ephemeralVmRecipes.some(isOrcaCloudRecipe)
-  // Shared with the picker; mounting the composer prefetches it so the row rarely shows a skeleton.
-  const fetchedOrcaCloudAccess = useOrcaCloudRunTargetAccess(orcaCloudOffered && !orcaCloudAccess)
   return (
     <fieldset disabled={disabled} className="space-y-1">
-      {/* Run on as segments needs the full width, so it sits under the project (spec E1). */}
-      <div className={cn('grid gap-3', shouldShowRunTargetPicker && !cloudStart && 'grid-cols-2')}>
+      {/* One row, two equal columns: Project | Run on. Picking a target never changes the rows
+          below it, so the dialog keeps its height (composer-redo). */}
+      <div className={cn('grid gap-3', shouldShowRunTargetPicker && 'grid-cols-2')}>
         <div className="min-w-0 space-y-1">
           <div className="flex h-5 items-center justify-between gap-2">
             <label className="text-xs font-medium text-muted-foreground">
@@ -169,7 +155,6 @@ export function NewWorkspaceComposerProjectSection({
                 cloudOnly?.pick(fullName)
                 cloudStart?.onSelectOrcaCloud()
               }}
-              openSignal={pickerSignal}
               onMoreCloudAccess={cloudOnly?.moreAccess}
               onShowMoreCloudRepos={cloudOnly?.showMore ?? null}
               placeholder={
@@ -200,96 +185,37 @@ export function NewWorkspaceComposerProjectSection({
             <label className="flex h-5 min-w-0 items-center truncate text-xs font-medium text-muted-foreground">
               {t('auto.components.NewWorkspaceComposerCard.runOn', 'Run on')}
             </label>
-            {cloudStart ? (
-              <RunOnSegmentedControl
-                cloudOnlyRepo={Boolean(cloudOnly?.picked)}
-                hostOptions={projectHostSetupOptions ?? []}
-                hostValue={selectedProjectHostSetupId ?? null}
-                hostExecutionHostId={selectedRepoExecutionHostId}
-                onHostChange={handleProjectHostSetupChange}
-                recipes={ephemeralVmRecipes}
-                recipeValue={selectedEphemeralVmRecipeId}
-                onRecipeChange={onEphemeralVmRecipeChange}
-                onAddSshHost={handleAddSshHost}
-                onAddRemoteServer={handleAddRemoteServer}
-                onConnectHost={handleConnectRunTargetHost}
-                onSetLocation={handleSetLocation}
-                orcaCloudAvailability={orcaCloudAvailability}
-                {...(orcaCloudAccess ? { orcaCloudAccess } : {})}
-                onSelectOrcaCloud={cloudStart.onSelectOrcaCloud}
-                onUserPick={cloudStart.onUserPick}
-              />
-            ) : (
-              <RunTargetCombobox
-                hostOptions={projectHostSetupOptions ?? []}
-                hostValue={selectedProjectHostSetupId ?? null}
-                hostExecutionHostId={selectedRepoExecutionHostId}
-                onHostChange={handleProjectHostSetupChange}
-                recipes={ephemeralVmRecipes}
-                recipeValue={selectedEphemeralVmRecipeId}
-                onRecipeChange={onEphemeralVmRecipeChange}
-                onAddSshHost={handleAddSshHost}
-                onAddRemoteServer={handleAddRemoteServer}
-                onConnectHost={handleConnectRunTargetHost}
-                onSetLocation={handleSetLocation}
-                orcaCloudAvailability={orcaCloudAvailability}
-                {...(orcaCloudAccess ? { orcaCloudAccess } : {})}
-              />
-            )}
+            <RunTargetCombobox
+              hostOptions={projectHostSetupOptions ?? []}
+              hostValue={selectedProjectHostSetupId ?? null}
+              hostExecutionHostId={selectedRepoExecutionHostId}
+              onHostChange={(setupId) => {
+                cloudStart?.onUserPick()
+                handleProjectHostSetupChange(setupId)
+              }}
+              recipes={ephemeralVmRecipes}
+              recipeValue={selectedEphemeralVmRecipeId}
+              onRecipeChange={(recipeId) => {
+                cloudStart?.onUserPick()
+                onEphemeralVmRecipeChange?.(recipeId)
+              }}
+              onAddSshHost={handleAddSshHost}
+              onAddRemoteServer={handleAddRemoteServer}
+              onConnectHost={handleConnectRunTargetHost}
+              onSetLocation={handleSetLocation}
+              orcaCloudAvailability={orcaCloudAvailability}
+              {...(orcaCloudAccess ? { orcaCloudAccess } : {})}
+              // Setup happens after Start, on its own page: picking Orca Cloud just picks it.
+              {...(cloudStart ? { onSelectOrcaCloud: cloudStart.onSelectOrcaCloud } : {})}
+            />
             {ephemeralVmRecipeError ? (
               <p className="whitespace-pre-line text-[11px] text-destructive">
                 {ephemeralVmRecipeError}
               </p>
-            ) : cloudStart && selectedEphemeralVmRecipeId !== ORCA_CLOUD_RECIPE_ID ? (
-              <RunOnHintLine
-                hostOptions={projectHostSetupOptions ?? []}
-                selectedHostId={selectedProjectHostSetupId ?? null}
-                recipes={ephemeralVmRecipes}
-                selectedRecipeId={selectedEphemeralVmRecipeId}
-                orcaCloudAvailability={orcaCloudAvailability}
-              />
-            ) : orcaCloudOffered && !cloudStart?.panelVisible ? (
-              <OrcaCloudSelectionHint
-                access={orcaCloudAccess ?? fetchedOrcaCloudAccess}
-                visible={isOrcaCloudSelection({ ephemeralVmRecipes, selectedEphemeralVmRecipeId })}
-              />
             ) : null}
           </div>
         ) : null}
       </div>
-      {cloudStart?.tracker && selectedEphemeralVmRecipeId === ORCA_CLOUD_RECIPE_ID ? (
-        // A6: the browser trip is open; the same rows tick in place, with X1 errors.
-        <CloudSetupBrowserTracker
-          {...cloudStart.tracker}
-          steps={cloudStart.steps}
-          rowActions={cloudStart.rowActions}
-        />
-      ) : cloudStart?.panelVisible && selectedEphemeralVmRecipeId === ORCA_CLOUD_RECIPE_ID ? (
-        // The panel's own Agent row (G) comes from the same model as the standalone one below.
-        <OrcaCloudSetupPanel
-          steps={cloudStart.steps}
-          allSet={cloudStart.allSet}
-          rowActions={
-            cloudStart.folderProject && !cloudOnly?.picked
-              ? {
-                  github: (
-                    <FolderGitHubActions
-                      canChoose={Boolean(cloudOnly?.repos?.length)}
-                      onChooseRepository={() => setPickerSignal((n) => n + 1)}
-                      onAddProject={onAddProject}
-                    />
-                  )
-                }
-              : cloudStart.rowActions
-          }
-        />
-      ) : // Agent row (cloud-start G) without the panel: links to the one-time setup; never blocks Start.
-      selectedEphemeralVmRecipeId === ORCA_CLOUD_RECIPE_ID ? (
-        <OrcaCloudAgentSetupRow
-          agent={quickAgent}
-          access={orcaCloudAccess ?? fetchedOrcaCloudAccess}
-        />
-      ) : null}
       {!shouldShowRunTargetPicker && ephemeralVmRecipeError ? (
         <p className="whitespace-pre-line text-2xs text-destructive">{ephemeralVmRecipeError}</p>
       ) : null}

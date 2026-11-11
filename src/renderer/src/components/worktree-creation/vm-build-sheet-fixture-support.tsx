@@ -7,8 +7,6 @@ import { formatElapsedTime } from './worktree-creation-clock'
 import type { VmBuildStepTimings } from './vm-build-timing'
 import { useAppStore } from '@/store'
 import type { Repo } from '../../../../shared/repo-types'
-import { IDLE_ORCA_CLOUD_AGENT_SETUPS } from '../../../../shared/orca-cloud-agents/orca-cloud-agents-wire'
-import { setOrcaCloudAgentAccountsStateForTest } from '@/lib/orca-cloud/orca-cloud-agent-accounts-store'
 
 export const LOG_LINES = [
   'Creating sandbox from snapshot snap_7f2c…',
@@ -58,7 +56,7 @@ export function sheet(
   error: string | null,
   now: number,
   agentSignInRow?: React.ReactNode,
-  options: { cloudAgentsRow?: React.ReactNode; secretsRow?: React.ReactNode } = {}
+  options: { secretsRow?: React.ReactNode } = {}
 ) {
   return (
     <div className="bg-background p-3">
@@ -75,7 +73,6 @@ export function sheet(
         onEditRecipe={() => {}}
         agentSignInRow={agentSignInRow}
         stepTimings={FIXTURE_STEP_TIMINGS}
-        cloudAgentsRow={options.cloudAgentsRow ?? null}
         secretsRow={options.secretsRow ?? null}
       />
     </div>
@@ -118,27 +115,3 @@ export const CLOUD_FAILED_LOG = [
   'Orca Cloud refused the request (provider_unavailable).'
 ].join('\n')
 export const FAILED_LOG = `${LOG}\nError: snapshot snap_7f2c not found`
-
-/**
- * The Orca account as the cloud build sheet reads it, fixed for a fixture so nothing calls the bridge
- * (the harness's catch-all mock resolves to undefined): Claude set up through the account, or not.
- */
-export function seedCloudAgentAccounts(claude: 'active' | 'none'): void {
-  setOrcaCloudAgentAccountsStateForTest({
-    load: {
-      kind: 'ready',
-      status: {
-        credentials: {
-          claude: { state: claude },
-          codex: { state: 'none' },
-          providerEnabled: { claude: true, codex: true },
-          providerState: { claude: 'on', codex: 'on' }
-        },
-        sources: { defaults: {}, coveredByKey: { claude: false, codex: false } }
-      }
-    },
-    setups: IDLE_ORCA_CLOUD_AGENT_SETUPS,
-    keyKinds: { claude: null, codex: null },
-    queue: { agents: [], index: 0 }
-  })
-}

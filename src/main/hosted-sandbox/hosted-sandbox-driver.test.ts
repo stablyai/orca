@@ -205,6 +205,24 @@ describe('waitForClone', () => {
     expect(destroyed).toEqual([])
   })
 
+  it('an environment boot reports its fetch as an update', async () => {
+    const { client } = fakeClient([
+      { state: 'running', percent: 30, stage: 'download' },
+      { state: 'done' }
+    ])
+    const progress: unknown[] = []
+    await waitForClone(
+      client,
+      'sbx_1',
+      { onProgress: (p) => progress.push(p) },
+      { pollMs: 0, mode: 'update' }
+    )
+    expect(progress).toEqual([
+      { phase: 'updating' },
+      { phase: 'updating', percent: 30, message: 'download' }
+    ])
+  })
+
   it('a failed clone deletes the sandbox and fails with its reason', async () => {
     const { client, destroyed } = fakeClient([{ state: 'failed', reason: 'repo_unreachable' }])
     const error = await rejection(waitForClone(client, 'sbx_1', {}, { pollMs: 0 }))

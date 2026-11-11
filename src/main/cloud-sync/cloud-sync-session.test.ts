@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { CloudSyncState } from '../../shared/cloud-sync/cloud-sync-contract'
 import { createFakeVm, VM_ROOT, type FakeVm } from './cloud-sync-fake-vm.test-support'
-import { createCloudSyncSession } from './cloud-sync-session'
+import { createCloudSyncSession, safetyIntervalMs } from './cloud-sync-session'
 import { createCloudSyncStore, type CloudSyncChoice } from './cloud-sync-store'
 
 const dirs: string[] = []
@@ -215,5 +215,14 @@ describe('cloud sync session', () => {
     await session.stop()
     expect(vm.openWatches()).toBe(0)
     expect(await readFile(join(folder, '.context/plan.md'), 'utf8')).toBe('p')
+  })
+})
+
+describe('safetyIntervalMs', () => {
+  it('re-checks small folders every 30 s and large mirrors at most every 10 min', () => {
+    expect(safetyIntervalMs(0)).toBe(30_000)
+    expect(safetyIntervalMs(21)).toBe(30_000)
+    expect(safetyIntervalMs(2_000)).toBe(60_000)
+    expect(safetyIntervalMs(100_000)).toBe(600_000)
   })
 })

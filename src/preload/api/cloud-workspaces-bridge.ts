@@ -27,6 +27,12 @@ export const cloudWorkspacesApi = {
   getOrgPrompts: () => ipcRenderer.invoke('cloudWorkspaces:getOrgPrompts'),
   putOrgPrompts: (document, revision) =>
     ipcRenderer.invoke('cloudWorkspaces:putOrgPrompts', { document, revision }),
+  teammateProfile: (userId, utcOffsetMin) =>
+    ipcRenderer.invoke('cloudWorkspaces:teammateProfile', { userId, utcOffsetMin }),
+  poke: (userId) => ipcRenderer.invoke('cloudWorkspaces:poke', { userId }),
+  pokeInbox: () => ipcRenderer.invoke('cloudWorkspaces:pokeInbox'),
+  setPokesEnabled: (enabled) => ipcRenderer.invoke('cloudWorkspaces:setPokesEnabled', { enabled }),
+  markPokesSeen: (ids) => ipcRenderer.invoke('cloudWorkspaces:markPokesSeen', { ids }),
   onOpenLink: (callback) => {
     const listener = (_event: Electron.IpcRendererEvent, link: string): void => callback(link)
     ipcRenderer.on('ui:openCloudWorkspaceLink', listener)

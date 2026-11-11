@@ -37,7 +37,7 @@ export function getRemoteDesktopQuickAction(): CmdJQuickAction {
     title: translate('components.cloudRemoteDesktop.openMenuItem', 'Open remote desktop'),
     description: translate(
       'components.cloudRemoteDesktop.paletteDescription',
-      'Open the sandbox’s desktop in a browser tab.'
+      'Open the sandbox’s desktop in a tab.'
     ),
     icon: Monitor,
     verbKeywords: [

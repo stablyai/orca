@@ -99,6 +99,53 @@ const schemas: Record<string, object> = {
       preview: { type: ['string', 'null'], description: 'Last few lines of the session' }
     }
   },
+  NewSession: {
+    type: 'object',
+    properties: {
+      handle: { type: 'string', description: 'Session handle (term_…): pass as `session` to send_message' },
+      workspaceId: { type: 'string' },
+      agent: { type: 'string', enum: [...AGENTS] },
+      model: { type: ['string', 'null'] },
+      effort: { type: ['string', 'null'] },
+      name: { type: ['string', 'null'] }
+    }
+  },
+  Attachment: {
+    type: 'object',
+    properties: {
+      id: { type: 'string', description: 'att_… — pass in a message\'s `attachments`' },
+      workspaceId: { type: 'string' },
+      filename: { type: 'string', description: 'Sanitized file name' },
+      contentType: { type: 'string' },
+      byteSize: { type: 'integer' },
+      path: { type: 'string', description: 'Where the file is on the workspace disk (outside the repo)' },
+      createdAt: { type: 'integer' }
+    }
+  },
+  AgentModels: {
+    type: 'object',
+    properties: {
+      id: { type: 'string', enum: [...AGENTS] },
+      label: { type: 'string' },
+      default: { type: 'boolean', description: 'The agent used when none is given' },
+      defaultModel: { type: ['string', 'null'], description: "Null: the agent CLI's own default" },
+      models: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            label: { type: 'string' },
+            description: { type: ['string', 'null'] },
+            default: { type: 'boolean' },
+            efforts: { type: 'array', items: { type: 'string' }, description: 'Values for `effort`; empty when the model takes none' },
+            defaultEffort: { type: ['string', 'null'] },
+            fastMode: { type: 'boolean' }
+          }
+        }
+      }
+    }
+  },
   Routine: {
     type: 'object',
     properties: {
@@ -212,6 +259,14 @@ const ROUTINE_BODY = obj(
 export const OPERATIONS: Record<string, Record<string, Op>> = {
   '/v1/me': {
     get: { tags: ['Account'], summary: 'Who the token acts as', responses: { 200: { description: 'Caller', schema: obj({ accountId: { type: 'string' }, userId: { type: 'string' }, role: { type: 'string' }, scopes: { type: 'array', items: { type: 'string' } } }) } } }
+  },
+  '/v1/models': {
+    get: {
+      tags: ['Agents'],
+      summary: 'Agents and models a session can run',
+      description: 'Every agent CLI a cloud workspace ships, with the models, effort levels, defaults and fast-mode support the model picker knows. Pass `agent`, `model` and `effort` when creating a session. A model id newer than this list is passed to the agent CLI as is.',
+      responses: { 200: { description: 'Agents', schema: obj({ agents: { type: 'array', items: ref('AgentModels') } }) } }
+    }
   },
   '/v1/api-keys': {
     get: { tags: ['API keys'], sessionOnly: true, summary: 'List Orca API keys', description: 'Owners and admins see every key on the team; members see their own.', responses: { 200: { description: 'Keys', schema: list('keys', 'ApiKey') } } },
@@ -341,6 +396,39 @@ export const OPERATIONS: Record<string, Record<string, Op>> = {
   '/v1/workspaces/{id}/archive': {
     post: { tags: ['Workspaces'], scope: 'workspaces:write', summary: 'Archive: sleep and hide from default lists', params: [WS], responses: { 200: { description: 'Archived', schema: one('workspace', 'Workspace') } } }
   },
+  '/v1/workspaces/{id}/unarchive': {
+    post: {
+      tags: ['Workspaces'],
+      scope: 'workspaces:write',
+      summary: 'Unarchive: back in default lists and running again',
+      description: 'Owner only. Idempotent: a workspace that is not archived is returned unchanged.',
+      params: [WS],
+      responses: { 200: { description: 'Running', schema: one('workspace', 'Workspace') } }
+    }
+  },
+  '/v1/workspaces/{id}/rename': {
+    post: {
+      tags: ['Workspaces'],
+      scope: 'workspaces:write',
+      summary: 'Rename a workspace',
+      description: 'Changes the display name everywhere (desktop Home, phone, API). The git branch is not renamed.',
+      params: [WS],
+      body: obj({ name: { type: 'string', minLength: 1, maxLength: 100 } }, ['name']),
+      responses: { 200: { description: 'Renamed', schema: one('workspace', 'Workspace') } }
+    }
+  },
+  '/v1/workspaces/{id}/attachments': {
+    post: {
+      tags: ['Agents'],
+      scope: 'messages:write',
+      summary: 'Upload a file for an agent',
+      description:
+        'Puts a file on the workspace disk (outside the repo) and returns its id; pass up to 10 ids as `attachments` when sending a message or creating a session, and the agent is told where each file is. Send the raw bytes (`--data-binary @file`, the file\'s Content-Type, `?filename=`; up to 25 MB) or JSON `{filename, contentType, data}` with base64 data (up to 5 MB, what MCP clients use). A sleeping workspace is woken first.',
+      params: [WS, { name: 'filename', in: 'query', description: 'File name, for raw uploads', schema: { type: 'string' } }],
+      body: obj({ filename: { type: 'string' }, contentType: { type: 'string' }, data: { type: 'string', contentEncoding: 'base64' } }, ['filename', 'data']),
+      responses: { 201: { description: 'Uploaded', schema: one('attachment', 'Attachment') }, 413: 'File too large' }
+    }
+  },
   '/v1/workspaces/{id}/messages': {
     get: { tags: ['Agents'], scope: 'workspaces:read', summary: 'Recent messages sent to this workspace', params: [WS], responses: { 200: { description: 'Messages', schema: list('messages', 'Message') } } },
     post: {
@@ -349,7 +437,15 @@ export const OPERATIONS: Record<string, Record<string, Op>> = {
       summary: 'Send a message to an agent',
       description: 'Queues the message and returns 202 at once. A sleeping workspace is woken first. Without `session` a new agent session starts with the text as its prompt; with `session` the text is typed into that session. Poll the message for `delivered`.',
       params: [WS],
-      body: obj({ text: { type: 'string', maxLength: 32000 }, agent: { type: 'string', enum: [...AGENTS] }, session: { type: 'string' } }, ['text']),
+      body: obj(
+        {
+          text: { type: 'string', maxLength: 32000 },
+          agent: { type: 'string', enum: [...AGENTS] },
+          session: { type: 'string' },
+          attachments: { type: 'array', maxItems: 10, items: { type: 'string' }, description: 'Attachment ids from POST /attachments' }
+        },
+        ['text']
+      ),
       responses: { 202: { description: 'Queued', schema: one('message', 'Message') } }
     }
   },
@@ -357,7 +453,50 @@ export const OPERATIONS: Record<string, Record<string, Op>> = {
     get: { tags: ['Agents'], scope: 'workspaces:read', summary: 'Delivery status of a message', params: [WS, idParam('messageId', 'Message id')], responses: { 200: { description: 'Message', schema: one('message', 'Message') } } }
   },
   '/v1/workspaces/{id}/sessions': {
-    get: { tags: ['Agents'], scope: 'workspaces:read', summary: 'Agent sessions in a running workspace', params: [WS], responses: { 200: { description: 'Sessions (empty while sleeping)', schema: obj({ workspaceStatus: { type: 'string' }, sessions: { type: 'array', items: ref('Session') } }) } } }
+    get: { tags: ['Agents'], scope: 'workspaces:read', summary: 'Agent sessions in a running workspace', params: [WS], responses: { 200: { description: 'Sessions (empty while sleeping)', schema: obj({ workspaceStatus: { type: 'string' }, sessions: { type: 'array', items: ref('Session') } }) } } },
+    post: {
+      tags: ['Agents'],
+      scope: 'messages:write',
+      summary: 'Start a new agent session (a new chat)',
+      description:
+        'Starts another agent session in the workspace, waking it first if it sleeps, and returns its handle once the agent is up. Optional: `model` and `effort` (see GET /v1/models; a known model with an effort it does not take answers 400), `name`, and a first `message` with `attachments`. Without `message` the agent waits for send_message.',
+      params: [WS],
+      body: obj({
+        agent: { type: 'string', enum: [...AGENTS], default: 'claude' },
+        model: { type: 'string' },
+        effort: { type: 'string', description: 'Requires model' },
+        name: { type: 'string', maxLength: 100 },
+        message: { type: 'string', maxLength: 32000 },
+        attachments: { type: 'array', maxItems: 10, items: { type: 'string' }, description: 'Requires message' }
+      }),
+      responses: { 201: { description: 'Started', schema: one('session', 'NewSession') } }
+    }
+  },
+  '/v1/workspaces/{id}/sessions/{handle}/cancel': {
+    post: {
+      tags: ['Agents'],
+      scope: 'messages:write',
+      summary: "Stop the agent's current turn",
+      description: "Interrupts the running turn (an Escape, as a person would press) and drops this session's queued messages. Nothing is interrupted while the workspace sleeps; queued messages are still dropped.",
+      params: [WS, idParam('handle', 'Session handle (term_…)')],
+      responses: {
+        200: {
+          description: 'Canceled',
+          schema: obj({ workspaceId: { type: 'string' }, session: { type: 'string' }, interrupted: { type: 'boolean' }, canceledQueuedMessages: { type: 'integer' } })
+        }
+      }
+    }
+  },
+  '/v1/workspaces/{id}/sessions/{handle}/rename': {
+    post: {
+      tags: ['Agents'],
+      scope: 'messages:write',
+      summary: 'Rename an agent session',
+      description: 'Sets the session (tab) title the desktop and phone show. 409 while the workspace sleeps.',
+      params: [WS, idParam('handle', 'Session handle (term_…)')],
+      body: obj({ name: { type: 'string', minLength: 1, maxLength: 100 } }, ['name']),
+      responses: { 200: { description: 'Renamed', schema: obj({ session: obj({ handle: { type: 'string' }, workspaceId: { type: 'string' }, name: { type: 'string' } }) }) } }
+    }
   },
   '/v1/workspaces/{id}/sessions/{handle}': {
     get: {
@@ -503,7 +642,15 @@ curl -X DELETE ${o}/v1/workspaces/$ID       -H "Authorization: Bearer $ORCA_API_
 <p>Point any MCP client at <code>${o}/mcp</code> (Streamable HTTP). Clients that support OAuth register themselves and open an approval page in the browser: approve with a one-time code from Orca → Settings → Orca API keys → <i>Approve an app</i>, or with one of your API keys. The app never gets more than that key may do. Clients without OAuth can send an API key as a bearer token.</p>
 <pre>claude mcp add --transport http orca-cloud ${o}/mcp
 claude mcp add --transport http orca-cloud ${o}/mcp --header "Authorization: Bearer $ORCA_API_KEY"</pre>
-<p>Tools: whoami, list_projects, list_workspaces, get_workspace, create_workspace, sleep_workspace, wake_workspace, archive_workspace, destroy_workspace, send_message, get_message, list_sessions, read_session, list_routines, run_routine. They use the same scopes, rate limits and audit log as the REST API.</p>
+<p>Tools: whoami, list_models, list_projects, list_workspaces, get_workspace, create_workspace, rename_workspace, sleep_workspace, wake_workspace, archive_workspace, unarchive_workspace, destroy_workspace, create_session, list_sessions, read_session, rename_session, cancel_session, upload_attachment, send_message, get_message, list_routines, run_routine. They use the same scopes, rate limits and audit log as the REST API.</p>
+<p>There is no SQL search over transcripts. Chats are end-to-end encrypted on the workspace's own disk, so the control plane cannot read them to index. Use <code>read_session</code> to see what an agent did.</p>
+<h2>New chat, files, stop</h2>
+<pre>curl -s ${o}/v1/models -H "Authorization: Bearer $ORCA_API_KEY"
+curl -s ${o}/v1/workspaces/$ID/attachments?filename=bug.png -H "Authorization: Bearer $ORCA_API_KEY" \\
+  -H 'content-type: image/png' --data-binary @bug.png
+curl -s ${o}/v1/workspaces/$ID/sessions -H "Authorization: Bearer $ORCA_API_KEY" -H 'content-type: application/json' \\
+  -d '{"agent":"codex","model":"gpt-5.5","effort":"high","message":"Fix what the screenshot shows","attachments":["att_…"]}'
+curl -X POST ${o}/v1/workspaces/$ID/sessions/$HANDLE/cancel -H "Authorization: Bearer $ORCA_API_KEY"</pre>
 <h2>Limits and errors</h2>
 <div class="grid">
 <div class="card"><b>Rate limits</b>120 requests/min per key, 30 messages/min per user, 10 workspace creates/min per team. 429 responses carry <code>Retry-After</code>.</div>

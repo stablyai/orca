@@ -3,11 +3,28 @@ import { CircleSlash } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { Translate } from '@/i18n/use-translate'
 import { Progress } from '@/components/ui/progress'
+import { Skeleton } from '@/components/ui/skeleton'
 import { StepIcon } from './WorktreeSetupSteps'
 import type { VmBuildStep } from './vm-build-steps'
 import { typicalStepSeconds, type VmBuildStepTiming } from './vm-build-timing'
 import { formatElapsedTime } from './worktree-creation-clock'
 import { stepLabel, stepStateLabel } from './vm-build-sheet-copy'
+
+/** The boot plan usually answers within this; only a slower answer shows the placeholder. */
+const PLACEHOLDER_DELAY_MS = 150
+
+/** True once `active` has held for `delayMs` (the row's mode is unknown only once per create). */
+function useDelayedFlag(active: boolean, delayMs: number): boolean {
+  const [due, setDue] = React.useState(false)
+  React.useEffect(() => {
+    if (!active) {
+      return
+    }
+    const timer = window.setTimeout(() => setDue(true), delayMs)
+    return () => window.clearTimeout(timer)
+  }, [active, delayMs])
+  return active && due
+}
 
 /** One timed row of the build checklist; the failure card, not the row, carries the red. */
 export function VmBuildStepRow({
@@ -29,6 +46,8 @@ export function VmBuildStepRow({
   // A live percent already says how far along the step is.
   const hint = step.state === 'running' && step.percent === null ? timing : null
   const slow = hint !== null && step.elapsedMs !== null && step.elapsedMs > hint.p95Ms
+  const modeUnknown = cloud && step.id === 'clone' && step.state === 'pending' && !step.cloneMode
+  const placeholderDue = useDelayedFlag(modeUnknown, PLACEHOLDER_DELAY_MS)
 
   return (
     <li
@@ -48,7 +67,27 @@ export function VmBuildStepRow({
             (step.state === 'pending' || step.skipped) && 'text-muted-foreground'
           )}
         >
-          {stepLabel(step, cloud, t)}
+          {modeUnknown ? (
+            // Clone or update is decided in a moment (boot plan): a placeholder, never a guessed label.
+            // Usually decided within ~150 ms, so the placeholder shows only after that (no blink).
+            <>
+              <span className="sr-only">
+                {t(
+                  'auto.components.worktree.creation.VmBuildSheet.repositoryPending',
+                  'Repository'
+                )}
+              </span>
+              {placeholderDue ? (
+                <Skeleton className="inline-block h-3 w-28 align-middle" />
+              ) : (
+                <span aria-hidden className="invisible">
+                  {'\u00a0'}
+                </span>
+              )}
+            </>
+          ) : (
+            stepLabel(step, cloud, t)
+          )}
         </span>
         <span className="sr-only">
           {step.skipped

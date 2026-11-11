@@ -131,7 +131,9 @@ export const HostedSandboxCreateRequestSchema = z
       .regex(/^bld_[0-9a-f]{8,40}$/)
       .optional(),
     /** Default true: boot from the active build of the org environment that lists the repo. */
-    useEnvironment: z.boolean().optional()
+    useEnvironment: z.boolean().optional(),
+    /** The workspace's name, so lists show it instead of an untitled sandbox. */
+    title: z.string().trim().min(1).max(120).optional()
   })
   .strict()
 export type HostedSandboxCreateRequest = z.infer<typeof HostedSandboxCreateRequestSchema>
@@ -153,7 +155,11 @@ export const HostedSandboxReadyResponseSchema = z
     connection: HostedSandboxConnectionSchema,
     /** Create with feature `clone-progress`: the repo is still cloning; poll GET .../clone. */
     clone: z
-      .object({ state: z.literal('running') })
+      .object({
+        state: z.literal('running'),
+        /** Booted from an environment build: only what changed since it is fetched (feature `repo-update`). */
+        mode: z.literal('update').optional()
+      })
       .strict()
       .optional()
   })

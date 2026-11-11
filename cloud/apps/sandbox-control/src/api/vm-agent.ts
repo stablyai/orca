@@ -78,14 +78,28 @@ async function orca(provider: SandboxProviderApi, sessionId: string, args: strin
 
 const LaunchResult = z.object({ outcome: z.object({ kind: z.string(), handle: z.string().optional() }).loose() }).loose()
 
-/** Starts a new agent session with `prompt` in the workspace; returns its terminal handle. */
-export async function launchAgent(provider: SandboxProviderApi, sessionId: string, agent: AgentId, prompt: string): Promise<string> {
-  const result = LaunchResult.safeParse(
-    await orca(provider, sessionId, ['agent', 'launch', '--agent', agent, '--worktree', `path:${PROJECT_ROOT}`, '--surface', 'terminal', `--prompt=${prompt}`], {
-      prepare: true,
-      timeoutMs: 90_000
-    })
-  )
+/**
+ * Starts a new agent session in the workspace, optionally with a first prompt and a model/effort
+ * pick (the CLI maps them onto the agent's own flags); returns its terminal handle.
+ */
+export async function launchAgent(
+  provider: SandboxProviderApi,
+  sessionId: string,
+  agent: AgentId,
+  prompt: string | null,
+  options: { model?: string; effort?: string } = {}
+): Promise<string> {
+  const args = ['agent', 'launch', '--agent', agent, '--worktree', `path:${PROJECT_ROOT}`, '--surface', 'terminal']
+  if (options.model) {
+    args.push(`--model=${options.model}`)
+    if (options.effort) {
+      args.push(`--effort=${options.effort}`)
+    }
+  }
+  if (prompt) {
+    args.push(`--prompt=${prompt}`)
+  }
+  const result = LaunchResult.safeParse(await orca(provider, sessionId, args, { prepare: true, timeoutMs: 90_000 }))
   const handle = result.success ? result.data.outcome.handle : undefined
   if (!handle) {
     throw new VmAgentError('agent_launch_failed')
@@ -96,6 +110,19 @@ export async function launchAgent(provider: SandboxProviderApi, sessionId: strin
 /** Types `text` into a running agent session and submits it. */
 export async function sendToSession(provider: SandboxProviderApi, sessionId: string, handle: string, text: string): Promise<void> {
   await orca(provider, sessionId, ['terminal', 'send', '--terminal', handle, `--text=${text}`, '--enter'], { timeoutMs: 60_000 })
+}
+
+/**
+ * Stops the agent's current turn: one Escape, which the shipped agent CLIs treat as "interrupt"
+ * and which never quits an idle agent (Ctrl+C can, on a second press). Raw byte, no Enter.
+ */
+export async function interruptSession(provider: SandboxProviderApi, sessionId: string, handle: string): Promise<void> {
+  await orca(provider, sessionId, ['terminal', 'send', '--terminal', handle, '--text=\u001b'], { timeoutMs: 30_000 })
+}
+
+/** Renames an agent session (its terminal tab title, which the desktop and phone show too). */
+export async function renameSession(provider: SandboxProviderApi, sessionId: string, handle: string, title: string): Promise<void> {
+  await orca(provider, sessionId, ['terminal', 'rename', '--terminal', handle, `--title=${title}`], { timeoutMs: 30_000 })
 }
 
 const TerminalList = z.object({

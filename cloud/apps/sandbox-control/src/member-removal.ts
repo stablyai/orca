@@ -8,6 +8,7 @@ import type { LifecycleDeps } from './lifecycle'
 import { memberChangeTime, recordMemberChange } from './member-changes'
 import { revokeMemberReaderKeys } from './read-snapshots'
 import { disableMemberRoutines } from './routines/runs'
+import { forgetMemberPokes } from './team-presence'
 
 export type MemberRemoval = {
   keysRevoked: number
@@ -41,6 +42,8 @@ export async function removeMember(
   const devicesRevoked = await revokeMemberDeviceSessions(life.db, accountId, userId, now)
   // No device of theirs can open a sleeping workspace's read snapshot again (wrapped keys deleted).
   const readerKeysRevoked = await revokeMemberReaderKeys(life.db, accountId, userId, now)
+  // Their Pokes opt-in goes (it doubles as proof of membership for receiving one).
+  await forgetMemberPokes(life.db, accountId, userId, now)
   const grants = await revokeGrantsForMember(life, accountId, userId)
   // Routines run with their creator's secrets: a departed member's stop, and nothing of theirs keeps running.
   const routines = await disableMemberRoutines({ life }, accountId, userId)

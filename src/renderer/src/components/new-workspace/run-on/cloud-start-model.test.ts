@@ -1,54 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import {
-  cloudSetupNeedsGitHub,
   deriveCloudSetupSteps,
-  getCloudPrimaryAction,
   getOrcaCloudSegmentState,
-  getRunOnSegment,
-  isCloudSetupPanelVisible,
   resolveDefaultRunOn,
+  type CloudSetupStep,
   withReachableGitHub
 } from './cloud-start-model'
+import {
+  cloudSetupPageModel,
+  cloudSetupRequired,
+  sessionNeedsFrom
+} from '../../orca-cloud-setup/cloud-setup-page-model'
 
-describe('Run on segment', () => {
-  it('maps the committed target to a segment', () => {
-    expect(
-      getRunOnSegment({
-        orcaCloudSelected: true,
-        otherRecipeSelected: false,
-        selectedHostIsLocal: true
-      })
-    ).toBe('orca-cloud')
-    expect(
-      getRunOnSegment({
-        orcaCloudSelected: false,
-        otherRecipeSelected: true,
-        selectedHostIsLocal: true
-      })
-    ).toBe('other')
-    expect(
-      getRunOnSegment({
-        orcaCloudSelected: false,
-        otherRecipeSelected: false,
-        selectedHostIsLocal: false
-      })
-    ).toBe('other')
-    expect(
-      getRunOnSegment({
-        orcaCloudSelected: false,
-        otherRecipeSelected: false,
-        selectedHostIsLocal: true
-      })
-    ).toBe('local')
-    expect(
-      getRunOnSegment({
-        orcaCloudSelected: false,
-        otherRecipeSelected: false,
-        selectedHostIsLocal: null
-      })
-    ).toBeNull()
-  })
-
+describe('Orca Cloud availability', () => {
   it('keeps Orca Cloud visible but disabled when it cannot be reached (X2)', () => {
     expect(getOrcaCloudSegmentState('unreachable')).toBe('unreachable')
     expect(getOrcaCloudSegmentState('unavailable')).toBe('hidden')
@@ -58,17 +22,29 @@ describe('Run on segment', () => {
   })
 })
 
-describe('setup rows and the primary label', () => {
+describe('setup rows and the setup page', () => {
+  const page = (steps: Parameters<typeof cloudSetupPageModel>[0]) =>
+    cloudSetupPageModel(steps, { agentSkipped: true }).action
+
   it('starts directly when the account is entitled', () => {
     const steps = deriveCloudSetupSteps({
       availability: 'offered',
       access: { state: 'entitled', remainingSeconds: 3600 }
     })
-    expect(isCloudSetupPanelVisible(steps)).toBe(false)
-    expect(getCloudPrimaryAction(steps)).toBe('start')
+    expect(cloudSetupRequired(steps, { agentSkipped: true })).toBe(false)
+    expect(page(steps)).toBe('done')
   })
 
-  it('signed out: one setup trip ("Set up and start"), plan checked after sign-in', () => {
+  it('an agent with no account opens the page until it is skipped once', () => {
+    const steps = deriveCloudSetupSteps({
+      availability: 'offered',
+      access: { state: 'entitled', remainingSeconds: 3600 }
+    })
+    expect(cloudSetupRequired(steps)).toBe(true)
+    expect(cloudSetupPageModel(steps).action).toBe('agent')
+  })
+
+  it('signed out: sign-in first, plan checked after sign-in', () => {
     const steps = deriveCloudSetupSteps({
       availability: 'needs-sign-in',
       access: { state: 'loading' }
@@ -78,49 +54,57 @@ describe('setup rows and the primary label', () => {
       ['plan', 'pending'],
       ['agent', 'optional']
     ])
-    expect(isCloudSetupPanelVisible(steps)).toBe(true)
-    expect(getCloudPrimaryAction(steps)).toBe('setUpAndStart')
+    expect(page(steps)).toBe('sign-in')
   })
 
-  it('owner without a plan: "Choose plan and start"; lapsed: "Renew and start"', () => {
+  it('owner without a plan chooses one in the browser; lapsed renews there', () => {
     const noPlan = deriveCloudSetupSteps({
       availability: 'needs-capability',
       access: { state: 'no-plan', lapsed: false, canManageBilling: true }
     })
-    expect(getCloudPrimaryAction(noPlan)).toBe('choosePlanAndStart')
+    expect(page(noPlan)).toBe('choose-plan')
     const lapsed = deriveCloudSetupSteps({
-      availability: 'needs-capability',
+      availability: 'offered',
       access: { state: 'no-plan', lapsed: true, canManageBilling: true }
     })
-    expect(getCloudPrimaryAction(lapsed)).toBe('renewAndStart')
+    expect(page(lapsed)).toBe('choose-plan')
+    expect(lapsed.find((s) => s.id === 'plan')?.need).toBe('renew-plan')
   })
 
-  it('a member who cannot fix it gets "Use this computer instead" and no agent row', () => {
+  it('a member who cannot fix billing is told to ask an owner, with no agent row', () => {
     const steps = deriveCloudSetupSteps({
       availability: 'needs-capability',
       access: { state: 'no-plan', lapsed: false, canManageBilling: false }
     })
     expect(steps.some((s) => s.id === 'agent')).toBe(false)
-    expect(getCloudPrimaryAction(steps)).toBe('useThisComputer')
+    expect(page(steps)).toBe('ask-owner')
     const outOfHours = deriveCloudSetupSteps({
       availability: 'offered',
       access: { state: 'out-of-hours', cause: 'hours', canManageBilling: false }
     })
-    expect(getCloudPrimaryAction(outOfHours)).toBe('useThisComputer')
+    expect(page(outOfHours)).toBe('ask-owner')
   })
 
-  it('a missing GitHub grant alone reads "Give access and start"', () => {
+  it('an owner out of hours fixes it in billing', () => {
+    const steps = deriveCloudSetupSteps({
+      availability: 'offered',
+      access: { state: 'out-of-hours', cause: 'hours', canManageBilling: true }
+    })
+    expect(page(steps)).toBe('fix-billing')
+  })
+
+  it('a missing GitHub grant alone is the GitHub step', () => {
     expect(
-      getCloudPrimaryAction([
+      page([
         { id: 'account', state: 'done' },
         { id: 'plan', state: 'done' },
         { id: 'github', state: 'needed', need: 'github', canFix: true },
         { id: 'agent', state: 'optional' }
       ])
-    ).toBe('giveAccessAndStart')
+    ).toBe('github-install')
   })
 
-  it('a team that can still get its trial just starts (B1); setup grants it with no card', () => {
+  it('a team that can still get its trial claims it in the app (B1)', () => {
     const steps = deriveCloudSetupSteps({
       availability: 'offered',
       access: { state: 'no-plan', lapsed: false, canManageBilling: false, trialOfferSeconds: 7200 }
@@ -129,23 +113,21 @@ describe('setup rows and the primary label', () => {
     expect(plan).toMatchObject({ need: 'trial', trialSeconds: 7200, canFix: true })
     // Members aren't blocked from the trial: the agent row stays.
     expect(steps.some((s) => s.id === 'agent')).toBe(true)
-    expect(getCloudPrimaryAction(steps)).toBe('startTrial')
-    // An included trial isn't a task: no panel, the hint line carries it.
-    expect(isCloudSetupPanelVisible(steps)).toBe(false)
+    expect(page(steps)).toBe('start-trial')
   })
 
-  it('trial used up: owner "Choose plan and start"; member runs on this computer (T2, C1)', () => {
+  it('trial used up: owner chooses a plan; member asks an owner (T2, C1)', () => {
     const owner = deriveCloudSetupSteps({
       availability: 'offered',
       access: { state: 'no-plan', lapsed: false, canManageBilling: true, trialUsedUp: true }
     })
     expect(owner.find((s) => s.id === 'plan')?.need).toBe('trial-used-up')
-    expect(getCloudPrimaryAction(owner)).toBe('choosePlanAndStart')
+    expect(page(owner)).toBe('choose-plan')
     const member = deriveCloudSetupSteps({
       availability: 'offered',
       access: { state: 'no-plan', lapsed: false, canManageBilling: false, trialUsedUp: true }
     })
-    expect(getCloudPrimaryAction(member)).toBe('useThisComputer')
+    expect(page(member)).toBe('ask-owner')
   })
 
   it('signed out: the trial row is included and GitHub is checked up front (A1)', () => {
@@ -156,17 +138,18 @@ describe('setup rows and the primary label', () => {
     })
     expect(steps.map((s) => s.id)).toEqual(['account', 'plan', 'github', 'agent'])
     expect(steps.find((s) => s.id === 'plan')?.need).toBe('trial')
-    expect(getCloudPrimaryAction(steps)).toBe('setUpAndStart')
+    expect(sessionNeedsFrom(steps)).toEqual(['account', 'plan', 'github'])
+    expect(page(steps)).toBe('sign-in')
   })
 
-  it('GitHub waiting on an owner blocks the start, so ⌘↵ runs locally (D2)', () => {
+  it('GitHub waiting on an owner: the page waits and starts on its own (D2)', () => {
     const steps = deriveCloudSetupSteps({
       availability: 'offered',
       access: { state: 'entitled', remainingSeconds: 3600 },
       github: { id: 'github', state: 'pending', need: 'github', blocksStart: true }
     })
-    expect(isCloudSetupPanelVisible(steps)).toBe(true)
-    expect(getCloudPrimaryAction(steps)).toBe('useThisComputer')
+    expect(cloudSetupRequired(steps, { agentSkipped: true })).toBe(true)
+    expect(page(steps)).toBe('github-waiting')
   })
 
   it('no GitHub remote outranks account and plan rows (D3)', () => {
@@ -176,21 +159,36 @@ describe('setup rows and the primary label', () => {
       github: { id: 'github', state: 'failed', need: 'github', blocksStart: true }
     })
     expect(steps.map((s) => s.id)).toEqual(['github'])
-    expect(getCloudPrimaryAction(steps)).toBe('useThisComputer')
+    expect(page(steps)).toBe('needs-repository')
   })
 
-  it('a GitHub check still running holds the start (D1 cache miss)', () => {
-    const steps = deriveCloudSetupSteps({
+  it('checks while GitHub or billing are still being read', () => {
+    const github = deriveCloudSetupSteps({
       availability: 'offered',
       access: { state: 'entitled', remainingSeconds: 3600 },
       github: { id: 'github', state: 'loading' }
     })
-    expect(getCloudPrimaryAction(steps)).toBe('checking')
+    expect(page(github)).toBe('checking')
+    const billing = deriveCloudSetupSteps({ availability: 'offered', access: { state: 'loading' } })
+    expect(page(billing)).toBe('checking')
   })
 
-  it('waits while billing is still being read', () => {
-    const steps = deriveCloudSetupSteps({ availability: 'offered', access: { state: 'loading' } })
-    expect(getCloudPrimaryAction(steps)).toBe('checking')
+  it('B2: a team switch is its own step and always opens the page', () => {
+    const steps: CloudSetupStep[] = [
+      { id: 'account', state: 'done' },
+      { id: 'team', state: 'needed' }
+    ]
+    expect(cloudSetupRequired(steps, { teamSwitch: true })).toBe(true)
+    expect(cloudSetupPageModel(steps, { teamSwitch: true }).action).toBe('switch-team')
+  })
+
+  it('a still-loading agent row never holds a ready start', () => {
+    const steps: CloudSetupStep[] = [
+      { id: 'account', state: 'done' },
+      { id: 'plan', state: 'done' },
+      { id: 'agent', state: 'loading' }
+    ]
+    expect(cloudSetupRequired(steps)).toBe(false)
   })
 })
 
@@ -266,23 +264,11 @@ describe('withReachableGitHub', () => {
       { id: 'plan', state: 'done', detail: 'subscription' },
       { id: 'github', state: 'done' }
     ])
-    expect(getCloudPrimaryAction([...withReachableGitHub([...session], true)])).toBe('start')
+    expect(cloudSetupPageModel([...withReachableGitHub([...session], true)]).action).toBe('done')
   })
 
   it('leaves the rows alone while the repository is still unreachable', () => {
     const steps = [...session]
     expect(withReachableGitHub(steps, false)).toBe(steps)
-  })
-})
-
-describe('cloudSetupNeedsGitHub', () => {
-  it('counts GitHub access the browser visit gives, not an approval, a missing remote or a check', () => {
-    expect(cloudSetupNeedsGitHub([{ id: 'github', state: 'needed', need: 'github' }])).toBe(true)
-    expect(cloudSetupNeedsGitHub([{ id: 'github', state: 'active' }])).toBe(true)
-    expect(cloudSetupNeedsGitHub([{ id: 'github', state: 'done' }])).toBe(false)
-    expect(cloudSetupNeedsGitHub([{ id: 'github', state: 'loading' }])).toBe(false)
-    expect(
-      cloudSetupNeedsGitHub([{ id: 'github', state: 'pending', need: 'github', blocksStart: true }])
-    ).toBe(false)
   })
 })

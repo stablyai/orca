@@ -32,6 +32,7 @@ type ToolDef<T extends z.ZodObject> = {
 // Ids go into URL paths: restrict them so a tool argument can never address another route.
 const Id = (what: string) => z.string().regex(/^[A-Za-z0-9_-]{1,64}$/, `a ${what} id`).describe(`The ${what} id.`)
 const WorkspaceId = z.object({ workspaceId: Id('workspace') }).strict()
+const SessionHandle = z.string().regex(/^term_[A-Za-z0-9-]{1,80}$/).describe('Session handle (term_…) from list_sessions, create_session or a message.')
 const Agent = z.enum(AGENTS).describe(`Agent CLI to run: ${AGENTS.join(', ')} (claude, Claude Code, is the default).`)
 const MAX_WAIT_SECONDS = 45
 
@@ -91,6 +92,14 @@ export const TOOLS = [
     input: z.object({}).strict(),
     annotations: read('Who am I'),
     run: async (_args, api) => fromApi(await api('GET', '/v1/me'))
+  }),
+  tool({
+    name: 'list_models',
+    description:
+      'Lists the coding agents a cloud workspace runs (claude, codex, opencode, gemini, cursor, copilot) and, for each, the model ids, effort levels, defaults and fast-mode support. Pass agent, model and effort to create_session.',
+    input: z.object({}).strict(),
+    annotations: read('List agents and models'),
+    run: async (_args, api) => fromApi(await api('GET', '/v1/models'))
   }),
   tool({
     name: 'list_projects',
@@ -154,6 +163,13 @@ export const TOOLS = [
       )
   }),
   tool({
+    name: 'rename_workspace',
+    description: 'Renames a workspace (the name shown on desktop Home, the phone and in list_workspaces). The git branch keeps its name.',
+    input: z.object({ workspaceId: Id('workspace'), name: z.string().trim().min(1).max(100).describe('New display name.') }).strict(),
+    annotations: { title: 'Rename workspace', readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    run: async (args, api) => fromApi(await api('POST', `/v1/workspaces/${args.workspaceId}/rename`, { name: args.name }))
+  }),
+  tool({
     name: 'sleep_workspace',
     description: 'Puts a running workspace to sleep: its files are kept and no sandbox hours are used until wake_workspace. Running agents are interrupted.',
     input: WorkspaceId,
@@ -175,11 +191,65 @@ export const TOOLS = [
     run: async (args, api) => fromApi(await api('POST', `/v1/workspaces/${args.workspaceId}/archive`))
   }),
   tool({
+    name: 'unarchive_workspace',
+    description: 'Restores an archived workspace: it is back in default lists and its sandbox is started again with its files intact. A workspace that is not archived is returned unchanged.',
+    input: WorkspaceId,
+    annotations: { title: 'Unarchive workspace', readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+    run: async (args, api) => fromApi(await api('POST', `/v1/workspaces/${args.workspaceId}/unarchive`))
+  }),
+  tool({
     name: 'destroy_workspace',
     description: 'Deletes a workspace and its sandbox for good. Uncommitted and unpushed work in it is lost. This cannot be undone.',
     input: WorkspaceId,
     annotations: { title: 'Delete workspace', readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
     run: async (args, api) => fromApi(await api('DELETE', `/v1/workspaces/${args.workspaceId}`))
+  }),
+  tool({
+    name: 'create_session',
+    description:
+      'Starts a new agent session (a new chat) in an existing workspace, waking it first if it sleeps, and returns its handle once the agent is up. Optionally pick the model and effort (see list_models), name it, and give it a first `message` (with `attachments` from upload_attachment). Continue it with send_message and `session` = the handle.',
+    input: z
+      .object({
+        workspaceId: Id('workspace'),
+        agent: Agent.optional(),
+        model: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:/@[\]-]{0,127}$/).optional().describe('Model id from list_models (default: the agent\'s own default).'),
+        effort: z.string().regex(/^[a-z]{2,16}$/).optional().describe('Effort level the model takes (list_models); needs `model`.'),
+        name: z.string().trim().min(1).max(100).optional().describe('Session (tab) title.'),
+        message: z.string().min(1).max(32_000).optional().describe('First prompt. Without it the agent starts idle.'),
+        attachments: z.array(Id('attachment')).min(1).max(10).optional().describe('Attachment ids from upload_attachment; needs `message`.')
+      })
+      .strict(),
+    annotations: { title: 'Start agent session', readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+    run: async ({ workspaceId, ...body }, api) => fromApi(await api('POST', `/v1/workspaces/${workspaceId}/sessions`, body))
+  }),
+  tool({
+    name: 'cancel_session',
+    description: "Stops an agent's current turn in a session (like pressing Escape) and drops any of that session's messages still queued. The session stays open for the next send_message.",
+    input: z.object({ workspaceId: Id('workspace'), session: SessionHandle }).strict(),
+    annotations: { title: 'Cancel agent turn', readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+    run: async (args, api) => fromApi(await api('POST', `/v1/workspaces/${args.workspaceId}/sessions/${args.session}/cancel`))
+  }),
+  tool({
+    name: 'rename_session',
+    description: 'Renames an agent session (the tab title the desktop and phone show). The workspace must be running.',
+    input: z.object({ workspaceId: Id('workspace'), session: SessionHandle, name: z.string().trim().min(1).max(100).describe('New title.') }).strict(),
+    annotations: { title: 'Rename agent session', readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    run: async (args, api) => fromApi(await api('POST', `/v1/workspaces/${args.workspaceId}/sessions/${args.session}/rename`, { name: args.name }))
+  }),
+  tool({
+    name: 'upload_attachment',
+    description:
+      'Uploads a file (base64, up to 5 MB) to a workspace for an agent to read, e.g. a screenshot or log. Returns an attachment id; pass it in `attachments` to send_message or create_session and the agent is told where the file is. The file sits outside the repo, so it is never committed.',
+    input: z
+      .object({
+        workspaceId: Id('workspace'),
+        filename: z.string().min(1).max(255).describe('File name, e.g. bug.png.'),
+        contentType: z.string().max(127).optional().describe('MIME type, e.g. image/png.'),
+        data: z.string().min(1).describe('The file bytes, base64-encoded.')
+      })
+      .strict(),
+    annotations: { title: 'Upload attachment', readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+    run: async ({ workspaceId, ...body }, api) => fromApi(await api('POST', `/v1/workspaces/${workspaceId}/attachments`, body))
   }),
   tool({
     name: 'send_message',
@@ -191,6 +261,7 @@ export const TOOLS = [
         text: z.string().min(1).max(32_000).describe('The message or task for the agent.'),
         agent: Agent.optional(),
         session: z.string().regex(/^term_[A-Za-z0-9-]{1,80}$/).optional().describe('Session handle to continue (from list_sessions or a previous message).'),
+        attachments: z.array(Id('attachment')).min(1).max(10).optional().describe('Attachment ids from upload_attachment.'),
         waitSeconds: z.number().int().min(0).max(MAX_WAIT_SECONDS).optional().describe(`How long to wait for delivery (0-${MAX_WAIT_SECONDS}, default 20).`)
       })
       .strict(),
@@ -199,7 +270,8 @@ export const TOOLS = [
       const response = await api('POST', `/v1/workspaces/${args.workspaceId}/messages`, {
         text: args.text,
         ...(args.agent ? { agent: args.agent } : {}),
-        ...(args.session ? { session: args.session } : {})
+        ...(args.session ? { session: args.session } : {}),
+        ...(args.attachments ? { attachments: args.attachments } : {})
       })
       if (!response.ok) {
         return fromApi(response)

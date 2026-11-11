@@ -38,8 +38,15 @@ import {
 
 export type { WatchSubscribe, WatchSubscription }
 
-/** Safety net for anything the watch missed. */
-const FULL_PASS_INTERVAL_MS = 10 * 60_000
+/**
+ * Safety net for anything the watch missed. The VM's watcher can miss a directory created along
+ * with its parent (`mkdir -p .context/shots`), so small folders are re-checked often (a few
+ * calls each) and large mirrors less often: 30 ms per file, between 30 s and 10 min.
+ */
+const SAFETY_TICK_MS = 30_000
+export function safetyIntervalMs(files: number): number {
+  return Math.min(10 * 60_000, Math.max(SAFETY_TICK_MS, files * 30))
+}
 const WATCH_RETRY_MIN_MS = 5_000
 const WATCH_RETRY_MAX_MS = 5 * 60_000
 
@@ -69,6 +76,7 @@ export function createCloudSyncSession(deps: CloudSyncSessionDeps) {
   let watchRetryMs = WATCH_RETRY_MIN_MS
   let watchRetryTimer: ReturnType<typeof setTimeout> | null = null
   let safetyTimer: ReturnType<typeof setInterval> | null = null
+  let lastFullPassAt = 0
   const abort = new AbortController()
   let state: CloudSyncState = emptySyncState(deps.workspaceId, deps.folder, choice, 'starting')
   const changes = createChangeBatcher({
@@ -136,6 +144,7 @@ export function createCloudSyncSession(deps: CloudSyncSessionDeps) {
   }
 
   async function fullPass(): Promise<void> {
+    lastFullPassAt = now()
     const { selector } = await ensureWorktree()
     const current = await loadIndex()
     const limits = limitsFor(choice)
@@ -282,7 +291,11 @@ export function createCloudSyncSession(deps: CloudSyncSessionDeps) {
       await loadIndex()
       await requestFullPass()
       await openWatch()
-      safetyTimer = setInterval(() => void requestFullPass(), FULL_PASS_INTERVAL_MS)
+      safetyTimer = setInterval(() => {
+        if (now() - lastFullPassAt >= safetyIntervalMs(state.files)) {
+          void requestFullPass()
+        }
+      }, SAFETY_TICK_MS)
       safetyTimer.unref?.()
     },
     /** This computer woke, or the connection came back: anything may have changed meanwhile. */

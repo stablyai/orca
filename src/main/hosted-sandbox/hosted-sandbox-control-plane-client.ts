@@ -35,6 +35,7 @@ import {
   type HostedSandboxView
 } from '../../shared/hosted-sandbox/hosted-sandbox-wire'
 import {
+  HostedBootPlanResponseSchema,
   HostedCloneStatusResponseSchema,
   type HostedCloneStatus
 } from '../../shared/hosted-sandbox/hosted-clone-wire'
@@ -51,9 +52,13 @@ type HostedGithubConnectResponse = z.infer<typeof HostedGithubConnectResponseSch
 export type HostedSandboxControlPlaneClient = {
   create(
     body: HostedSandboxCreateRequest,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    /** Idempotency-Key: one per user intent; a repeat returns the first create's sandbox (24 h). */
+    idempotencyKey?: string
   ): Promise<HostedSandboxReadyResponse>
   get(sandboxId: string, signal?: AbortSignal): Promise<HostedSandboxView>
+  /** Whether a create of `repoUrl` would clone it or update a prebuilt copy (environment build). */
+  bootPlan(repoUrl: string, signal?: AbortSignal): Promise<'clone' | 'update'>
   /** The background clone a create started (create answered with `clone`). */
   cloneStatus(sandboxId: string, signal?: AbortSignal): Promise<HostedCloneStatus>
   list(signal?: AbortSignal): Promise<HostedSandboxView[]>
@@ -133,14 +138,25 @@ export function createHostedSandboxControlPlaneClient(
     `v1/sandboxes/${encodeURIComponent(id)}${suffix}`
 
   return {
-    create: (body, signal) =>
+    create: (body, signal, idempotencyKey) =>
       call('POST', 'v1/sandboxes', HostedSandboxReadyResponseSchema, {
         body,
         kind: 'boot',
         signal,
+        ...(idempotencyKey ? { headers: { 'idempotency-key': idempotencyKey } } : {}),
         // The repo clones after the sandbox is up; the driver shows it as its own step.
-        features: ['clone-progress']
+        // An environment boot reports its incremental fetch as an update (`clone.mode`).
+        features: ['clone-progress', 'repo-update']
       }),
+    bootPlan: async (repoUrl, signal) =>
+      (
+        await call(
+          'GET',
+          `v1/sandboxes/boot-plan?repo=${encodeURIComponent(repoUrl)}`,
+          HostedBootPlanResponseSchema,
+          { kind: 'control', signal }
+        )
+      ).repo,
     cloneStatus: async (id, signal) =>
       (
         await call('GET', sandboxPath(id, '/clone'), HostedCloneStatusResponseSchema, {

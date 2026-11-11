@@ -8,6 +8,13 @@ export function environmentCheckCopy(
   cloud = false
 ): { message: string; remediation: string | null } {
   const p = check.params ?? {}
+  if (cloud) {
+    const fatal = cloudFatalCheckMessage(check, t)
+    if (fatal) {
+      // The card's body carries the one way forward (Start again), so no per-row fix.
+      return { message: fatal, remediation: null }
+    }
+  }
   switch (check.code) {
     case 'gitMissing':
       return {
@@ -78,6 +85,14 @@ export function environmentCheckCopy(
         }
       }
       break
+    case 'setupNotRun':
+      return {
+        message: t(
+          'auto.components.worktree.creation.environmentCheckCopy.setupNotRun',
+          'Setup script hasn’t run yet.'
+        ),
+        remediation: null
+      }
     case 'diskVeryLow':
     case 'diskLow':
       if (p.free) {
@@ -105,6 +120,37 @@ export function environmentCheckCopy(
       break
   }
   return { message: check.message, remediation: check.remediation ?? null }
+}
+
+/** Orca Cloud's create-stopping checks in plain words; null for every other check. */
+function cloudFatalCheckMessage(check: EnvironmentDoctorCheck, t: Translate): string | null {
+  if (check.status !== 'fail') {
+    return null
+  }
+  switch (check.id) {
+    case 'environment.doctor':
+      return t(
+        'auto.components.worktree.creation.environmentCheckCopy.cloudUnreachable',
+        'Orca couldn’t reach the sandbox.'
+      )
+    case 'workspace.path':
+      return t(
+        'auto.components.worktree.creation.environmentCheckCopy.cloudRepoMissing',
+        'The repository isn’t in the sandbox.'
+      )
+    case 'git.repo':
+      return t(
+        'auto.components.worktree.creation.environmentCheckCopy.cloudRepoUnreadable',
+        'Git can’t read the repository in the sandbox.'
+      )
+    case 'tool.git':
+      return t(
+        'auto.components.worktree.creation.environmentCheckCopy.cloudGitMissing',
+        'git isn’t installed in the sandbox.'
+      )
+    default:
+      return null
+  }
 }
 
 export function environmentCheckBadge(

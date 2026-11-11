@@ -7,6 +7,7 @@ import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard
 export type TabCreateMenuOptionKind =
   | 'go-to-simulator'
   | 'new-browser'
+  | 'open-remote-desktop'
   | 'new-markdown'
   | 'new-simulator'
   | 'new-terminal'
@@ -40,6 +41,8 @@ export type TabCreateMenuOptionsContext = {
   hasOpenMarkdown: boolean
   hasSimulator: boolean
   simulatorIsGoTo: boolean
+  /** Orca Cloud workspaces: open the sandbox's desktop, or go to its tab when it is open. */
+  remoteDesktop?: { isGoTo: boolean } | null
   terminalOnly: boolean
   windowsShellEntries?: readonly { label: string; shell: BuiltInWindowsTerminalShell }[]
 }
@@ -125,6 +128,23 @@ export function buildTabCreateMenuOptions(
         t('auto.components.tab.bar.tab.create.menu.options.6d0e6a4b7a', 'new browser'),
         t('auto.components.tab.bar.tab.create.menu.options.c87ad57785', 'browser tab'),
         t('auto.components.tab.bar.tab.create.menu.options.cce7ef1d2c', 'web')
+      ]
+    })
+  }
+
+  if (context.remoteDesktop) {
+    const label = context.remoteDesktop.isGoTo
+      ? t('components.cloudRemoteDesktop.goToTabMenuItem', 'Go to Remote Desktop')
+      : t('components.cloudRemoteDesktop.openTabMenuItem', 'Open Remote Desktop')
+    options.push({
+      id: 'open-remote-desktop',
+      kind: 'open-remote-desktop',
+      label,
+      keywords: [
+        t('components.cloudRemoteDesktop.verbs.remoteDesktop', 'remote desktop'),
+        t('components.cloudRemoteDesktop.verbs.openDesktop', 'open desktop'),
+        t('components.cloudRemoteDesktop.verbs.vnc', 'vnc'),
+        t('components.cloudRemoteDesktop.verbs.screen', 'screen')
       ]
     })
   }

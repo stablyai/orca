@@ -170,7 +170,7 @@ export function createHostedSandboxStepProvider(
         message?: string
       }) =>
         onStderr?.(
-          phase === 'cloning' && percent !== undefined
+          (phase === 'cloning' || phase === 'updating') && percent !== undefined
             ? `[orca-cloud] clone-progress ${percent} ${message === 'checkout' ? 'checkout' : 'download'}\n`
             : `[orca-cloud] ${phase}\n`
         )
@@ -182,6 +182,8 @@ export function createHostedSandboxStepProvider(
           {
             // One create attempt = one sandbox: a retried attempt reuses the instance id.
             workspaceId: context.instanceId ?? context.workspaceId ?? 'workspace',
+            ...(context.workspaceName ? { workspaceName: context.workspaceName } : {}),
+            ...(context.idempotencyKey ? { idempotencyKey: context.idempotencyKey } : {}),
             machineSize: 'standard',
             ...(repoUrl
               ? { repo: { url: repoUrl, ...(context.branch ? { ref: context.branch } : {}) } }

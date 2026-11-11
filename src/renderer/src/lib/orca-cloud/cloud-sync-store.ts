@@ -101,11 +101,16 @@ export function seedCloudSyncView(view: CloudSyncView): void {
 /** "Mirror to this computer…" from the workspace menu: the popover opens on the sync section. */
 const focusRequests = new Set<string>()
 const focusListeners = new Set<() => void>()
+/** Lets the workspace menu finish closing (it hands focus back to its trigger) before the popover opens. */
+const MENU_CLOSE_SETTLE_MS = 150
+
 export function requestCloudSyncFocus(workspaceId: string): void {
-  focusRequests.add(workspaceId)
-  for (const listener of focusListeners) {
-    listener()
-  }
+  setTimeout(() => {
+    focusRequests.add(workspaceId)
+    for (const listener of focusListeners) {
+      listener()
+    }
+  }, MENU_CLOSE_SETTLE_MS)
 }
 export function takeCloudSyncFocus(workspaceId: string): boolean {
   return focusRequests.delete(workspaceId)
