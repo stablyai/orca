@@ -5,6 +5,7 @@ import { installWindowVisibilityInterval } from '@/lib/window-visibility-interva
 import { useIsSleepingWorktree } from '@/components/sidebar/workspace-actions/sleep/use-worktree-sleep-state'
 import {
   deriveCloudDotState,
+  isWakeReadyAfterRead,
   visibleOom,
   type CloudDotState
 } from '@/lib/orca-cloud/orca-cloud-workspace-state'
@@ -68,7 +69,11 @@ export function useCloudWorkspaceView(workspaceId: string): CloudWorkspaceView {
     : 'unknown'
   return {
     isCloud,
-    state: derived === 'running' && vmSuspended ? 'sleeping' : derived,
+    // A ready wake newer than the reads beats a VM record that hasn't caught up yet.
+    state:
+      derived === 'running' && vmSuspended && !isWakeReadyAfterRead(wake, entry?.status)
+        ? 'sleeping'
+        : derived,
     entry,
     wake,
     oom: visibleOom(oomEvent, oomDismissed),

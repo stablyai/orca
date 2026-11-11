@@ -43,6 +43,18 @@ export function isWakeFailedFresh(wake: CloudWakeProgressEvent | undefined, now:
  * Priority: an in-flight wake beats everything (the user just asked for it), then the
  * control plane's state; the desktop's own sleep record only before the first status read.
  */
+/**
+ * Main said this wake is ready after the last status read (and, for the local VM record, before
+ * it is re-read): those reads are stale. Nothing may show the workspace asleep from them, on the
+ * way in (pill still "Connecting…") or out (#408); only a newer read, or a failed wake, can.
+ */
+export function isWakeReadyAfterRead(
+  wake: CloudWakeProgressEvent | undefined,
+  status: HostedWorkspaceStatus | null | undefined
+): boolean {
+  return wake?.phase === 'ready' && (!status || status.checkedAt < wake.at)
+}
+
 export function deriveCloudDotState(input: {
   status: HostedWorkspaceStatus | null
   wake: CloudWakeProgressEvent | undefined
@@ -65,7 +77,7 @@ export function deriveCloudDotState(input: {
   // Main said this wake is ready after the last status read: that read (still "sleeping" or
   // "waking" until the re-read lands) is stale, and the VM answers. Without this the row read
   // "Asleep" for a moment after the workspace went live.
-  if (wake?.phase === 'ready' && (!status || status.checkedAt < wake.at)) {
+  if (isWakeReadyAfterRead(wake, status)) {
     return 'running'
   }
   // The control plane is the truth for the VM; the desktop's own sleep record only fills in
