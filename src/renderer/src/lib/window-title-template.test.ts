@@ -34,14 +34,32 @@ describe('renderWindowTitle', () => {
     ).toBe('orca [ENG-42]')
   })
 
+  it('keeps brackets with the filled value they wrap', () => {
+    expect(
+      renderWindowTitle('${repo} [${issueKey}] ${tab}', { repo: 'tools', issueKey: 'ABC-1' })
+    ).toBe('tools [ABC-1]')
+    expect(renderWindowTitle('${tab} [${issueKey}]', { issueKey: 'ABC-1' })).toBe('[ABC-1]')
+    expect(renderWindowTitle('${repo} (${branch}) ${tab}', { repo: 'tools', tab: 'claude' })).toBe(
+      'tools claude'
+    )
+    const grouped = '${repo} [${branch} ${issueKey}]'
+    expect(renderWindowTitle(grouped, { repo: 'tools', issueKey: 'ENG-42' })).toBe('tools [ENG-42]')
+    expect(renderWindowTitle(grouped, { repo: 'tools', branch: 'main' })).toBe('tools [main]')
+    expect(renderWindowTitle(grouped, { repo: 'tools' })).toBe('tools')
+    expect(
+      renderWindowTitle('${repo} ([${branch}] ${issueKey})', { repo: 'tools', issueKey: 'ENG-42' })
+    ).toBe('tools (ENG-42)')
+  })
+
   it('strips control and bidi characters and caps long values', () => {
     expect(renderWindowTitle('${tab}', { tab: 'build\u202Eexe.txt\u0007' })).toBe('buildexe.txt')
-    expect(renderWindowTitle('${tab}', { tab: 'x'.repeat(200) })).toBe(`${'x'.repeat(120)}…`)
+    expect(renderWindowTitle('${tab}', { tab: 'x'.repeat(200) })).toBe(`${'x'.repeat(117)}…`)
   })
 
   it('keeps unknown variables literal', () => {
     expect(renderWindowTitle('${branch}${separator}${nope}', { branch: 'feature/x' })).toBe(
       'feature/x — ${nope}'
     )
+    expect(renderWindowTitle('${repo} ${nope} ${tab}', { repo: 'tools' })).toBe('tools ${nope}')
   })
 })

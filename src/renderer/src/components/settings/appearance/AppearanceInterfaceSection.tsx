@@ -5,7 +5,6 @@ import { UIZoomControl } from './UIZoomControl'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { ReduceVisualEffectsSetting } from './ReduceVisualEffectsSetting'
 import { WindowTitleSetting } from './WindowTitleSetting'
-import { getWindowTitleEntries } from './appearance-window-title-search'
 import { getReduceVisualEffectsEntries } from './appearance-reduce-visual-effects-search'
 import { SettingsGroupDisclosure } from '../section-layout/SettingsGroupDisclosure'
 import { SettingsSearchableSelect } from '../form-controls/SettingsSearchableSelect'
@@ -17,6 +16,7 @@ import { SettingsRow, SettingsSwitchRow } from '../form-controls/SettingsFormCon
 import { DEFAULT_APP_FONT_FAMILY } from '../../../../../shared/app-lifecycle/appearance/app-font-family'
 import {
   APPEARANCE_EDITOR_THEME_SETTING_ID,
+  getAppearanceAdvancedEntries,
   getCodeEditorThemeEntries,
   getThemeEntries,
   getTitlebarEntries,
@@ -105,13 +105,7 @@ export function AppearanceInterfaceSection({
   const typographyEntry = getTypographyEntries()[0]
   const zoomEntry = getZoomEntries()[0]
   const reduceVisualEffectsEntry = getReduceVisualEffectsEntries()[0]
-  const advancedEntries = [
-    ...getTitlebarEntries(),
-    ...getWindowTitleEntries(),
-    ...getReduceVisualEffectsEntries(),
-    ...getSystemTrayEntries({ showSystemTray: isDesktopWindows }),
-    ...getMenuBarIconEntries({ showMenuBarIcon: isDesktopMac })
-  ]
+  const advancedEntries = getAppearanceAdvancedEntries({ isDesktopWindows, isDesktopMac })
   const showAdvanced = !isSearching || matchesSettingsSearch(searchQuery, advancedEntries)
 
   return (
