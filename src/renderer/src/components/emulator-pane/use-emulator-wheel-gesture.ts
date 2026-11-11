@@ -1,16 +1,13 @@
 import { useCallback, useEffect, useRef } from 'react'
 import {
-  buildWheelGesturePoints,
   resolveWheelGestureStep,
   type EmulatorGesturePoint,
   type EmulatorScreenPoint
 } from './emulator-screen-gesture'
 
 type WheelGesture = {
-  start: EmulatorScreenPoint
   end: EmulatorScreenPoint
   remaining: EmulatorScreenPoint
-  live: boolean
   moveTimer: number | null
   endTimer: number | null
   tailFrames: number
@@ -19,29 +16,13 @@ type WheelGesture = {
 
 type WheelInput = { start: EmulatorScreenPoint; delta: EmulatorScreenPoint }
 
-export function useEmulatorWheelGesture(
-  sendTouch: (point: EmulatorGesturePoint) => boolean,
-  onGesture: (points: EmulatorGesturePoint[]) => void
-): {
+export function useEmulatorWheelGesture(sendTouch: (point: EmulatorGesturePoint) => boolean): {
   cancel: () => void
   queue: (input: WheelInput) => void
 } {
   const gestureRef = useRef<WheelGesture | null>(null)
-  const endSegment = useCallback(
-    (gesture: WheelGesture) => {
-      if (gesture.live) {
-        sendTouch({ ...gesture.end, type: 'end' })
-      } else {
-        const points = buildWheelGesturePoints(gesture.start, gesture.end, 1e-9)
-        if (points) {
-          onGesture(points)
-        }
-      }
-    },
-    [onGesture, sendTouch]
-  )
 
-  const finish = useCallback(() => {
+  const release = useCallback(() => {
     const gesture = gestureRef.current
     gestureRef.current = null
     if (!gesture) {
@@ -53,8 +34,9 @@ export function useEmulatorWheelGesture(
     if (gesture.endTimer !== null) {
       window.clearTimeout(gesture.endTimer)
     }
-    endSegment(gesture)
-  }, [endSegment])
+    sendTouch({ ...gesture.end, type: 'end' })
+  }, [sendTouch])
+  useEffect(() => release, [release])
 
   const advance = useCallback(
     function advanceWheelGesture() {
@@ -79,14 +61,16 @@ export function useEmulatorWheelGesture(
       })
       if (!segment) {
         gesture.moveTimer = null
-        gesture.endTimer = window.setTimeout(finish, 80)
+        gesture.endTimer = window.setTimeout(release, 80)
         return
       }
       if (segment.start.x !== gesture.end.x || segment.start.y !== gesture.end.y) {
-        endSegment(gesture)
-        gesture.start = segment.start
+        sendTouch({ ...gesture.end, type: 'end' })
+        if (!sendTouch({ ...segment.start, type: 'begin' })) {
+          gestureRef.current = null
+          return
+        }
         gesture.end = segment.start
-        gesture.live = sendTouch({ ...segment.start, type: 'begin' })
         gesture.firstMove = true
       } else {
         gesture.firstMove = false
@@ -101,51 +85,30 @@ export function useEmulatorWheelGesture(
           y: gesture.remaining.y - (segment.end.y - segment.start.y)
         }
         gesture.end = segment.end
-        if (gesture.live) {
-          sendTouch({ ...segment.end, type: 'move' })
-        }
+        sendTouch({ ...segment.end, type: 'move' })
       }
       if (Math.hypot(gesture.remaining.x, gesture.remaining.y) < 1e-9) {
         gesture.moveTimer = null
-        gesture.endTimer = window.setTimeout(finish, 80)
+        gesture.endTimer = window.setTimeout(release, 80)
       } else {
         gesture.moveTimer = window.setTimeout(advanceWheelGesture, 16)
       }
     },
-    [endSegment, finish, sendTouch]
+    [release, sendTouch]
   )
-
-  const cancel = useCallback(() => {
-    const gesture = gestureRef.current
-    gestureRef.current = null
-    if (!gesture) {
-      return
-    }
-    if (gesture.moveTimer !== null) {
-      window.clearTimeout(gesture.moveTimer)
-    }
-    if (gesture.endTimer !== null) {
-      window.clearTimeout(gesture.endTimer)
-    }
-    if (gesture.live) {
-      sendTouch({ ...gesture.end, type: 'end' })
-    }
-  }, [sendTouch])
-  useEffect(() => cancel, [cancel])
 
   const queue = useCallback(
     ({ start, delta }: WheelInput) => {
       let gesture = gestureRef.current
       if (!gesture) {
         const segment = resolveWheelGestureStep(start, delta)
-        if (!segment) {
+        // Without a live control socket there is no finger to drive; drop the input.
+        if (!segment || !sendTouch({ ...segment.start, type: 'begin' })) {
           return
         }
         gesture = {
-          start: segment.start,
           end: segment.start,
           remaining: { x: 0, y: 0 },
-          live: sendTouch({ ...segment.start, type: 'begin' }),
           moveTimer: null,
           endTimer: null,
           tailFrames: 0,
@@ -172,5 +135,5 @@ export function useEmulatorWheelGesture(
     },
     [advance, sendTouch]
   )
-  return { cancel, queue }
+  return { cancel: release, queue }
 }

@@ -46,14 +46,6 @@ const DOM_DELTA_PAGE = 2
 export const HID_EDGE_BOTTOM = 3
 const HOME_INDICATOR_BAND_NORM = 0.93
 
-function clampUnit(value: number): number {
-  return Math.max(0, Math.min(1, value))
-}
-
-export function clampEmulatorScreenPoint(point: EmulatorScreenPoint): EmulatorScreenPoint {
-  return { x: clampUnit(point.x), y: clampUnit(point.y) }
-}
-
 export function resolveEmulatorHomeIndicatorEdge(
   point: EmulatorScreenPoint,
   rotation: StreamRotation = 0
@@ -260,20 +252,4 @@ export function resolveWheelGestureStep(
       y: fraction === yFraction ? (delta.y < 0 ? 0.12 : 0.88) : start.y + delta.y * fraction
     }
   }
-}
-
-export function buildWheelGesturePoints(
-  start: EmulatorScreenPoint,
-  end: EmulatorScreenPoint,
-  minDistance = 0.01
-): EmulatorGesturePoint[] | null {
-  const clampedEnd = clampEmulatorScreenPoint(end)
-  if (Math.hypot(clampedEnd.x - start.x, clampedEnd.y - start.y) < minDistance) {
-    return null
-  }
-  return [
-    { ...start, type: 'begin' },
-    { x: (start.x + clampedEnd.x) / 2, y: (start.y + clampedEnd.y) / 2, type: 'move' },
-    { ...clampedEnd, type: 'end' }
-  ]
 }
