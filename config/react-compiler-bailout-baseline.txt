@@ -110,7 +110,6 @@
 1 src/renderer/src/components/editor/editor-header-file-rename.ts
 1 src/renderer/src/components/editor/external-changes/ExternalFileChangeCompareDialog.tsx
 1 src/renderer/src/components/editor/git-graph/git-graph-filter.tsx
-1 src/renderer/src/components/editor/git-graph/git-graph-tab.tsx
 1 src/renderer/src/components/editor/markdown-preview/render-tree/use-markdown-preview-components.tsx
 1 src/renderer/src/components/editor/markdown-preview/review/MarkdownPreviewAnnotationComposer.tsx
 1 src/renderer/src/components/editor/markdown-preview/surface/MarkdownPreview.tsx
