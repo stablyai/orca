@@ -88,6 +88,43 @@ async function startGoalTurn(): Promise<void> {
   await rig.host.flushStreamedEvents(SESSION)
 }
 
+it('keeps a Steered card that changes the speed tier queued until the running turn ends', async () => {
+  const first = await rig.workingSend()
+  await rig.settleAccepted(first, 'first')
+  native.activeTurnIds = new Set(['turn-first'])
+  const turn = { provider: 'codex' as const, threadId: THREAD, turnId: 'turn-first', ordinal: 99 }
+  const scope = { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+  rig.providerEvents().appendItem(
+    turn,
+    {
+      kind: 'turn',
+      turnId: 'turn-first',
+      state: 'running',
+      userItemId: `codex:${THREAD}:turn-first:0`
+    },
+    scope
+  )
+  await rig.host.flushStreamedEvents(SESSION)
+  const priority = { model: 'gpt-ran', effort: 'high', serviceTier: 'priority' }
+  const card = rig.send('Answer on the priority tier', undefined, { carried: priority })
+  expect(await card.result).toMatchObject({ ok: true, value: { queued: { state: 'waiting' } } })
+
+  expect(await rig.sendNow(card.id)).toMatchObject({
+    ok: false,
+    refusal: { code: 'agent_session_operation_invalid', details: { reason: 'turnActive' } }
+  })
+  expect(await rig.drafts()).toEqual([{ messageId: card.id, state: 'waiting' }])
+  expect(await rig.handoff(card.id)).toBeUndefined()
+
+  native.activeTurnIds = new Set()
+  rig
+    .providerEvents()
+    .appendItem(turn, { kind: 'turn', turnId: 'turn-first', state: 'completed' }, scope)
+  await rig.host.flushStreamedEvents(SESSION)
+  await eventually(() => expect(rig.dispatch).toHaveBeenCalledTimes(2))
+  expect(rig.dispatch.mock.calls[1]?.[0].executionOptions).toEqual(priority)
+})
+
 it('holds a Plan choice until the goal turn ends', async () => {
   const choices = { model: 'gpt-ran', effort: 'high', interactionMode: 'plan' }
   await startGoalTurn()
