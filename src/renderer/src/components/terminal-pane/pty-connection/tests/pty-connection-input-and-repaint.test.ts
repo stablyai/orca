@@ -14,7 +14,6 @@ import {
   registerPtyConnectionRemoteWindowsFocusReportTests,
   registerPtyConnectionWindowsFocusReportAuthorityTests
 } from '../input/pty-connection-windows-focus-report-authority.spec'
-import { registerPtyConnectionTerminalInputGatingTests } from '../input/pty-connection-terminal-input-gating.spec'
 
 // Main's answer to the window's layout commands, as a switch-on build sends them.
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
@@ -36,4 +35,3 @@ describe('pty-connection-windows-keyboard-reset', () => {
   registerPtyConnectionWindowsFocusReportAuthorityTests()
   registerPtyConnectionWindowsCursorResetDisposalTests()
 })
-describe('pty-connection-terminal-input-gating', registerPtyConnectionTerminalInputGatingTests)

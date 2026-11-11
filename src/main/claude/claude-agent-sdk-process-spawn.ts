@@ -1,3 +1,4 @@
+import { withOrcaClaudeChatEntrypoint } from '../../shared/agent-launch/startup/claude-chat-entrypoint'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
 import type { SpawnOptions as ClaudeAgentSdkSpawnOptions } from '@anthropic-ai/claude-agent-sdk'
@@ -70,7 +71,7 @@ export function createClaudeCodeProcessSpawn(
         {
           spawnImpl,
           platform,
-          inheritedEnv: definedEnv(options.env),
+          inheritedEnv: withOrcaClaudeChatEntrypoint(definedEnv(options.env), platform),
           site: 'claude-stream-json-teardown',
           policy: (supervised) => claudeChildClosePolicy(supervised, platform),
           acceptClose: claudeChildCloseProven

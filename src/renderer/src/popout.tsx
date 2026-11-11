@@ -4,7 +4,6 @@ import './diagnostics/react-commits/react-commit-cascade-observer'
 import './assets/main.css'
 
 import { StrictMode, useEffect } from 'react'
-import { useTranslation } from 'react-i18next'
 import { DashboardPopoutRoot } from './components/dashboard-popout/DashboardPopoutRoot'
 import { RecoverableRenderErrorBoundary } from './components/error-boundaries/RecoverableRenderErrorBoundary'
 import { installRendererCrashDiagnostics } from './diagnostics/crash-reporting/crash-diagnostics'
@@ -106,7 +105,9 @@ function PopoutSettingsSync(): null {
 
 function PopoutRoot(): React.JSX.Element {
   const t = useTranslate()
-  useTranslation()
+  useEffect(() => {
+    document.title = t('auto.main.window.dashboard.popout.window.title', 'Orca Agent Dashboard')
+  }, [t])
   return (
     <RecoverableRenderErrorBoundary
       boundaryId="dashboard-popout.root"

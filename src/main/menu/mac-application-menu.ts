@@ -1,3 +1,5 @@
+import { labeledAppMenuRole } from './labeled-app-menu-role'
+
 export function createMacApplicationMenu(items: {
   label: string
   checkForUpdates: Electron.MenuItemConstructorOptions
@@ -7,15 +9,15 @@ export function createMacApplicationMenu(items: {
   return {
     label: items.label,
     submenu: [
-      { role: 'about' },
+      labeledAppMenuRole('about', 'menu.about', 'About Orca'),
       items.checkForUpdates,
       items.settings,
       { type: 'separator' },
-      { role: 'services' },
+      labeledAppMenuRole('services', 'menu.services', 'Services'),
       { type: 'separator' },
-      { role: 'hide' },
-      { role: 'hideOthers' },
-      { role: 'unhide' },
+      labeledAppMenuRole('hide', 'menu.hide', 'Hide Orca'),
+      labeledAppMenuRole('hideOthers', 'menu.hideOthers', 'Hide Others'),
+      labeledAppMenuRole('unhide', 'menu.unhide', 'Show All'),
       { type: 'separator' },
       ...(Array.isArray(items.quit) ? items.quit : [items.quit])
     ]

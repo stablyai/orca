@@ -125,7 +125,7 @@ describe('pre-handler PTY buffer', () => {
     bufferPreHandlerPtyExit(EXIT_PTY_ID, 3)
     drainPreHandlerPtyExit(EXIT_PTY_ID, onExit)
     expect(data).toEqual(['reattach output'])
-    expect(onExit).toHaveBeenCalledWith(3)
+    expect(onExit).toHaveBeenCalledWith(3, undefined)
   })
 
   it('consumes a drained exit even when its handler throws', () => {
@@ -226,7 +226,7 @@ describe('pre-handler PTY buffer', () => {
     // Data first: draining the exit transfers ownership and clears the buffered bytes with it.
     drainPreHandlerPtyData(RECYCLED_PTY_ID, data)
     drainPreHandlerPtyExit(RECYCLED_PTY_ID, exit)
-    expect(exit).toHaveBeenCalledWith(1)
+    expect(exit).toHaveBeenCalledWith(1, undefined)
     expect(data).toHaveBeenCalledWith('startup bytes', undefined)
   })
 
@@ -253,7 +253,7 @@ describe('pre-handler PTY buffer', () => {
 
     const exit = vi.fn()
     drainPreHandlerPtyExit(RECYCLED_PTY_ID, exit)
-    expect(exit).toHaveBeenCalledWith(1)
+    expect(exit).toHaveBeenCalledWith(1, FRESH_INCARNATION_ID)
   })
 
   // Missing incarnation is unknown, preserving old-host and synthetic relay-exit fence behavior.
@@ -294,7 +294,7 @@ describe('pre-handler PTY buffer', () => {
     const exit = vi.fn()
     expect(hasPreHandlerPtyExit(RECYCLED_PTY_ID)).toBe(true)
     drainPreHandlerPtyExit(RECYCLED_PTY_ID, exit)
-    expect(exit).toHaveBeenCalledWith(1)
+    expect(exit).toHaveBeenCalledWith(1, FRESH_INCARNATION_ID)
   })
 
   it('replaces a duplicate exit for the same lifetime instead of crowding out another lifetime', () => {
@@ -306,7 +306,7 @@ describe('pre-handler PTY buffer', () => {
 
     const exit = vi.fn()
     drainPreHandlerPtyExit(RECYCLED_PTY_ID, exit)
-    expect(exit).toHaveBeenCalledWith(9)
+    expect(exit).toHaveBeenCalledWith(9, FRESH_INCARNATION_ID)
   })
 
   // Reads enforce lifetime filtering even for eager background launches that never invoke explicit discard.
@@ -343,6 +343,6 @@ describe('pre-handler PTY buffer', () => {
 
     const exit = vi.fn()
     drainPreHandlerPtyExit(RECYCLED_PTY_ID, exit)
-    expect(exit).toHaveBeenCalledWith(3)
+    expect(exit).toHaveBeenCalledWith(3, undefined)
   })
 })
