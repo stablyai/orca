@@ -68,12 +68,38 @@ function refuse(reason: Parameters<typeof agentSessionCheckpointRefusalMessage>[
   throw new Error(agentSessionCheckpointRefusalMessage(reason))
 }
 
+// Repo discovery is a git spawn; a send pays it before its turn starts, so it runs once per folder.
+// A folder that isn't a repo is re-checked after a minute, so a later `git init` is picked up.
+const NOT_A_REPO_RECHECK_MS = 60_000
+const discovered = new Map<string, Promise<CheckpointRepo> | { notRepoUntil: number }>()
+function openCached(directory: string): Promise<CheckpointRepo> {
+  const known = discovered.get(directory)
+  if (known && 'then' in known) {
+    return known
+  }
+  if (known && Date.now() < known.notRepoUntil) {
+    return Promise.reject(new WorktreeCheckpointError('not-a-repo', `${directory} is not a repo.`))
+  }
+  const opening = openCheckpointRepo(directory)
+  discovered.set(directory, opening)
+  opening.catch((error: unknown) => {
+    if (discovered.get(directory) !== opening) {
+      return
+    }
+    if (error instanceof WorktreeCheckpointError && error.reason === 'not-a-repo') {
+      discovered.set(directory, { notRepoUntil: Date.now() + NOT_A_REPO_RECHECK_MS })
+    } else {
+      discovered.delete(directory)
+    }
+  })
+  return opening
+}
+
 /** Something else in the workspace that may write files: a terminal agent, say. */
 /** Gets the worktree root the restore would write. */
 export type AgentSessionWorkspaceBusy = (root: string) => Promise<boolean>
 
 export function createAgentSessionCheckpoints(deps: AgentSessionCheckpointsDeps) {
-  const open = deps.openRepo ?? ((directory: string) => openCheckpointRepo(directory))
   const repoFor = async (sessionId: string): Promise<CheckpointRepo | null> => {
     const record = deps.record(sessionId)
     // WSL worktrees route git through another filesystem; their temp index paths don't map.
@@ -82,7 +108,7 @@ export function createAgentSessionCheckpoints(deps: AgentSessionCheckpointsDeps)
     }
     const directory =
       record.launchDirectory ?? (await deps.resolveWorkspacePath?.(record.location.workspaceId))
-    return directory ? open(directory) : null
+    return directory ? (deps.openRepo ? deps.openRepo(directory) : openCached(directory)) : null
   }
 
   const captureTurn = async (
@@ -119,6 +145,8 @@ export function createAgentSessionCheckpoints(deps: AgentSessionCheckpointsDeps)
       })
     } catch (error) {
       if (!(error instanceof WorktreeCheckpointError && error.reason === 'not-a-repo')) {
+        // The folder may have moved or been recreated; rediscover on the next send.
+        discovered.clear()
         deps.logger.warn('[agent-session] turn checkpoint skipped', {
           scope: 'checkpoint-capture',
           sessionId,

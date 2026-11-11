@@ -59,14 +59,17 @@ let codex: ReturnType<typeof fakeCodex>
 let socket: UnixSocketTransport | undefined
 let runId: string
 let finishTurns = true
-let rejectNextTurn = false
+/** Refuses the turn/start whose input carries this text; aimed at one task, so a turn another
+ *  chat starts later (the coordinator's own first turn can land after `agent launch` returns)
+ *  can't consume it. */
+let rejectTurnContaining: string | null = null
 const dispatches: string[] = []
 const requests: RpcRequest[] = []
 
 beforeEach(async () => {
   resetProviderFaults()
   finishTurns = true
-  rejectNextTurn = false
+  rejectTurnContaining = null
   rig = await authorityProfile([])
   await mkdir(join(root, 'codex-home'))
   rig.profile.updateSettings({
@@ -89,8 +92,12 @@ beforeEach(async () => {
     const connection = await codex.openConnection(...args)
     const request = connection.request.bind(connection)
     connection.request = async (method, params) => {
-      if (method === 'turn/start' && rejectNextTurn) {
-        rejectNextTurn = false
+      if (
+        method === 'turn/start' &&
+        rejectTurnContaining !== null &&
+        JSON.stringify(params).includes(rejectTurnContaining)
+      ) {
+        rejectTurnContaining = null
         throw new CodexAppServerRequestError('turn/start', -32000, 'Task refused', 'Task refused')
       }
       const response = await request(method, params)
@@ -349,7 +356,7 @@ it.each(['worker-release', 'retry-of'] as const)(
   'keeps a refused first task inspectable across identity reload until %s releases it',
   async (cleanup) => {
     const coordinator = await launch()
-    rejectNextTurn = true
+    rejectTurnContaining = 'Refused fixture task'
     const receipt = await cli([
       'orchestration',
       'worker-start',
