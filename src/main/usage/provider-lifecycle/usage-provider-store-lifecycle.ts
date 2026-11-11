@@ -113,7 +113,7 @@ export abstract class UsageProviderStoreLifecycle<
         return this.getScanState()
       }
     }
-    if (this.stopping) {
+    if (this.stopping || !this.state.scanState.enabled) {
       return this.getScanState()
     }
     await this.runScan(catalog)

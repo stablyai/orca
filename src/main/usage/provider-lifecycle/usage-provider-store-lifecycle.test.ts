@@ -264,4 +264,56 @@ describe('UsageProviderStoreLifecycle', () => {
       scanState: { enabled: true, lastScanError: null }
     })
   })
+
+  it.each([
+    { waitingOn: 'catalog', sessions: [{ id: 'prior' }], completedAt: 12_000 },
+    { waitingOn: 'scanner', sessions: [{ id: 'fresh' }], completedAt: NOW }
+  ])(
+    'preserves disable while waiting on $waitingOn',
+    async ({ waitingOn, sessions, completedAt }) => {
+      const cacheFile = join(tempDirectory, `disable-${waitingOn}.json`)
+      const entered = Promise.withResolvers<void>()
+      const release = Promise.withResolvers<void>()
+      const readCatalog = async () => {
+        if (waitingOn === 'catalog') {
+          entered.resolve()
+          await release.promise
+        }
+        return { repoIds: [], worktreesByRepo: [] }
+      }
+      scan.mockImplementationOnce(async () => {
+        if (waitingOn === 'scanner') {
+          entered.resolve()
+          await release.promise
+        }
+        return { sessions: [{ id: 'fresh' }], dailyAggregates: [] }
+      })
+      const store = new TestUsageStore(cacheFile, scan, split, capture, readCatalog)
+      stores.push(store)
+      await store.whenLoaded()
+      store.replaceState(
+        makeState({
+          sessions: [{ id: 'prior' }],
+          scanState: { enabled: true, lastScanCompletedAt: 12_000 }
+        })
+      )
+      const refresh = store.refresh(true)
+      await entered.promise
+      await store.setEnabled(false)
+      release.resolve()
+      await expect(refresh).resolves.toMatchObject({
+        enabled: false,
+        isScanning: false,
+        lastScanCompletedAt: completedAt,
+        lastScanError: null
+      })
+      expect(store.getState().sessions).toEqual(sessions)
+      await store.flush()
+      expect(JSON.parse(readFileSync(cacheFile, 'utf8'))).toMatchObject({
+        sessions,
+        scanState: { enabled: false, lastScanCompletedAt: completedAt, lastScanError: null }
+      })
+      expect(capture).not.toHaveBeenCalled()
+    }
+  )
 })
