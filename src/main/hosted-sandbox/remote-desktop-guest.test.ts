@@ -31,6 +31,8 @@ class FakeGuest extends EventEmitter {
   private waiters: ((answer: string) => void)[] = []
   connectAnswer = 'connecting'
   pasteAnswer = true
+  /** What window.orcaDesktop.state() answers (main watches a handed-over ticket connect). */
+  pageState: unknown = true
 
   getURL(): string {
     return this.url
@@ -54,6 +56,9 @@ class FakeGuest extends EventEmitter {
     }
     if (code.includes('orcaDesktop.paste(')) {
       return this.pasteAnswer
+    }
+    if (code.includes('orcaDesktop.state()')) {
+      return this.pageState
     }
     return true
   }
@@ -236,7 +241,7 @@ describe('remote desktop page driver', () => {
     guest.emit('focus')
     expect(events.at(-1)).toEqual({
       kind: 'state',
-      state: { browserPageId: 'page-1', desktop: true, captured: true }
+      state: { browserPageId: 'page-1', desktop: true, captured: true, connection: 'connecting' }
     })
     guest.key({ type: 'keyDown', key: 'Control', control: true })
     guest.key({ type: 'keyDown', key: 'Meta', control: true, meta: true })
@@ -270,7 +275,91 @@ describe('remote desktop page driver', () => {
     expect(isRemoteDesktopGuest(asWebContents(guest))).toBe(false)
     expect(events.at(-1)).toEqual({
       kind: 'state',
-      state: { browserPageId: 'page-1', desktop: false, captured: false }
+      state: { browserPageId: 'page-1', desktop: false, captured: false, connection: 'none' }
     })
+  })
+
+  it('reports connected once the page says its session is up', async () => {
+    const { guest, events } = setup()
+    guest.pageState = 'connected'
+    await flush()
+    guest.ask('ticket')
+    await flush()
+    expect(events.at(-1)).toEqual({
+      kind: 'state',
+      state: { browserPageId: 'page-1', desktop: true, captured: false, connection: 'connected' }
+    })
+  })
+
+  it('reports a pause with its reason, so the tab can show the asleep state', async () => {
+    const { guest, events, failMint } = setup()
+    await flush()
+    guest.ask('ticket')
+    await flush()
+    failMint('asleep')
+    guest.ask('ticket')
+    await flush()
+    expect(events.at(-1)).toEqual({
+      kind: 'state',
+      state: {
+        browserPageId: 'page-1',
+        desktop: true,
+        captured: false,
+        connection: 'paused',
+        reason: 'asleep'
+      }
+    })
+  })
+
+  it('reports no session for a desktop page this computer has no forward for (restored tab)', async () => {
+    resetRemoteDesktopSessionsForTest()
+    const guest = new FakeGuest()
+    const events: unknown[] = []
+    const stop = setupRemoteDesktopGuest({
+      browserPageId: 'page-3',
+      guest: asWebContents(guest),
+      notify: (event) => events.push(event),
+      sleep: async () => {}
+    })
+    await flush()
+    expect(guest.calls).toEqual([])
+    expect(events).toEqual([
+      {
+        kind: 'state',
+        state: { browserPageId: 'page-3', desktop: false, captured: false, connection: 'none' }
+      }
+    ])
+    stop()
+  })
+
+  it('drops to no session when the forward closed under a page that needs a new ticket', async () => {
+    resetRemoteDesktopSessionsForTest()
+    let live = true
+    registerRemoteDesktopSession(
+      {
+        environmentId: 'env-1',
+        localPort: 6081,
+        path: 'vnc.html',
+        mint: async () => ({ ok: true, ticket: ticket(9), expiresAt: FAR_FUTURE }),
+        isLive: () => live
+      },
+      { ticket: ticket(1), expiresAt: FAR_FUTURE }
+    )
+    const guest = new FakeGuest()
+    const events: { kind: string; state?: { connection: string } }[] = []
+    setupRemoteDesktopGuest({
+      browserPageId: 'page-4',
+      guest: asWebContents(guest),
+      notify: (event) => events.push(event),
+      sleep: async () => {}
+    })
+    await flush()
+    guest.ask('ticket')
+    await flush()
+    live = false // the sandbox slept: its forward closed
+    guest.ask('ticket')
+    await flush()
+    expect(events.at(-1)?.state?.connection).toBe('none')
+    expect(isRemoteDesktopGuest(asWebContents(guest))).toBe(false)
   })
 })

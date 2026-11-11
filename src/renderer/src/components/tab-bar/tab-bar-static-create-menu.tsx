@@ -1,5 +1,5 @@
 import React from 'react'
-import { FilePlus, FileText, Globe, Smartphone, TerminalSquare } from 'lucide-react'
+import { FilePlus, FileText, Globe, Monitor, Smartphone, TerminalSquare } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { DropdownMenuItem, DropdownMenuShortcut } from '@/components/ui/dropdown-menu'
 import { MobileEmulatorTabIntroCallout } from '../emulator-pane/MobileEmulatorTabIntroCallout'
@@ -14,6 +14,10 @@ import {
 } from './use-tab-bar-runtime-model'
 import type { TabBarProps } from './tab-bar-props'
 import { resolveWindowsShellLaunchTarget } from './windows-shell-launch'
+import {
+  openOrGoToRemoteDesktop,
+  useRemoteDesktopTabEntry
+} from '@/lib/cloud-remote-desktop/remote-desktop-tab'
 
 export function TabBarStaticCreateMenu({
   groupId,
@@ -116,6 +120,19 @@ export function TabBarStaticCreateMenu({
         <DropdownMenuShortcut>{newBrowserShortcut}</DropdownMenuShortcut>
       </DropdownMenuItem>
     ) : null
+  const remoteDesktop = useRemoteDesktopTabEntry(props.worktreeId)
+  const remoteDesktopMenuItem =
+    !terminalOnly && remoteDesktop.available ? (
+      <DropdownMenuItem
+        onSelect={() => openOrGoToRemoteDesktop(props.worktreeId)}
+        className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
+      >
+        <Monitor className="size-4 text-muted-foreground" />
+        {remoteDesktop.isGoTo
+          ? t('components.cloudRemoteDesktop.goToTabMenuItem', 'Go to Remote Desktop')
+          : t('components.cloudRemoteDesktop.openTabMenuItem', 'Open Remote Desktop')}
+      </DropdownMenuItem>
+    ) : null
   const newSimulatorMenuItem =
     !terminalOnly && mobileEmulatorEnabled && mobileEmulatorCreationEnabled && onNewSimulatorTab ? (
       workspaceHasSimulatorTab ? (
@@ -199,6 +216,7 @@ export function TabBarStaticCreateMenu({
       {openMarkdownMenuItem}
       {defaultTerminalMenuItems}
       {newBrowserMenuItem}
+      {remoteDesktopMenuItem}
       {newSimulatorMenuItem}
       {mobileEmulatorIntroMenuBlock}
     </>
@@ -206,6 +224,7 @@ export function TabBarStaticCreateMenu({
     <>
       {defaultTerminalMenuItems}
       {newBrowserMenuItem}
+      {remoteDesktopMenuItem}
       {newMarkdownMenuItem}
       {pluginNewFileMenuItems}
       {openMarkdownMenuItem}
