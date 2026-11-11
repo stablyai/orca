@@ -107,6 +107,8 @@ A user-managed Cloudflare Tunnel or reverse proxy can provide a connection witho
 
 The browser link retains proxy routing parameters. Choose routing parameter names other than `pairing`, `pair`, `code`, and `token`, which Orca reserves for importing legacy browser links.
 
+For browser access, route the web client's hostname or path prefix to the same Orca server for both the page and its assets. Browsers drop the page's query parameters when loading relative assets. For example, a proxy that serves `/orca/web-index.html?route=red` must also send requests for `/orca/assets/...` to that server.
+
 The public endpoint uses TLS, while the local connector can reach Orca over loopback HTTP. Keep the existing Orca pairing and access grants enabled. If your tunnel has additional authentication, each client must be able to complete that authentication before opening its WebSocket; browser login pages do not authenticate native clients automatically.
 
 [Cloudflare Quick Tunnels](https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/) are useful for temporary testing, but their hostnames change each time the connector starts and they have no uptime guarantee. After a hostname change, generate a new access link for new clients and update existing clients' endpoint configuration. Use a stable named tunnel for ongoing access. Keep access links private and revoke test grants when finished.
