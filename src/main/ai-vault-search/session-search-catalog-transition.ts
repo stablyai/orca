@@ -18,6 +18,7 @@ export function transitionSessionSearchCatalog(
   catalog: SessionSearchCatalog,
   command: SessionSearchCatalogCommand
 ): SessionSearchCatalogResult | undefined {
+  // oxlint-disable-next-line typescript/switch-exhaustiveness-check -- Specialized transitions dispatch their owned commands; the catalog handles base commands.
   switch (command.kind) {
     case 'retry-fail':
     case 'retry-remove':

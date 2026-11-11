@@ -1,6 +1,5 @@
-import './session-search-watcher.test-fixture'
-import './session-search-worker.test-fixture'
 import { notifySessionSearchFileChange } from './session-search-watcher.test-fixture'
+import './session-search-worker.test-fixture'
 import { appendFile, mkdir, readFile, stat, utimes, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { expect, it, vi } from 'vitest'

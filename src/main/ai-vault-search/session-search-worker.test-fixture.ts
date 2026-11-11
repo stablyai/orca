@@ -6,11 +6,14 @@ import { resolve } from 'node:path'
 import { vi } from 'vitest'
 import { spawnWorkerThread } from '../worker-threads/worker-thread-spawn'
 
-const control = vi.hoisted(() => ({
-  prelude: '',
-  data: undefined as unknown,
-  onResponse: undefined as ((response: SearchWorkerResponse) => void) | undefined
-}))
+const control = vi.hoisted(() => {
+  const state: {
+    prelude: string
+    data: unknown
+    onResponse: ((response: SearchWorkerResponse) => void) | undefined
+  } = { prelude: '', data: undefined, onResponse: undefined }
+  return state
+})
 
 export function configureSessionSearchWorkerFixture(options?: {
   prelude: string

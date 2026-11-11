@@ -1,4 +1,7 @@
-import './session-search-watcher.test-fixture'
+import {
+  notifySessionSearchFileChange,
+  notifySessionSearchOverflow
+} from './session-search-watcher.test-fixture'
 import './session-search-worker.test-fixture'
 import { rm } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -6,10 +9,6 @@ import { expect, it, vi } from 'vitest'
 import * as filesystem from '../native-chat/wsl-transcript-fs-access'
 import { SessionSearchWorkerClient } from './session-search-worker-client'
 import { SessionSearchIndexer } from './session-search-indexer'
-import {
-  notifySessionSearchFileChange,
-  notifySessionSearchOverflow
-} from './session-search-watcher.test-fixture'
 import {
   FakeSessionSearchClock,
   openSessionSearchIndexerHarness,

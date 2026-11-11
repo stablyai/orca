@@ -1,4 +1,7 @@
-import './session-search-watcher.test-fixture'
+import {
+  notifySessionSearchFileChange,
+  notifySessionSearchOverflow
+} from './session-search-watcher.test-fixture'
 import './session-search-worker.test-fixture'
 import { join } from 'node:path'
 import { mkdir, writeFile } from 'node:fs/promises'
@@ -9,10 +12,6 @@ import {
   SessionSearchOperationError,
   SessionSearchWorkerClient
 } from './session-search-worker-client'
-import {
-  notifySessionSearchFileChange,
-  notifySessionSearchOverflow
-} from './session-search-watcher.test-fixture'
 import {
   claudeLines,
   FakeSessionSearchClock,
