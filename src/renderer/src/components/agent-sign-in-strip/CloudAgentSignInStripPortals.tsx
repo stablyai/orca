@@ -54,7 +54,7 @@ export function useCloudGatePaneKeys(controller: TerminalPaneController): Readon
   return new Set(joined ? joined.split('\u0000') : [])
 }
 
-function openSettings(pane: 'agent-accounts' | 'cloud-secrets', sectionId?: string): void {
+function openSettings(pane: 'accounts' | 'cloud-secrets', sectionId?: string): void {
   const store = useAppStore.getState()
   store.openSettingsTarget({ pane, repoId: null, ...(sectionId ? { sectionId } : {}) })
   store.openSettingsPage()
@@ -115,7 +115,7 @@ function CloudStripPortal({
     primary: (action) => {
       switch (action.kind) {
         case 'renew':
-          openSettings('agent-accounts', 'orca-cloud')
+          openSettings('accounts', 'orca-cloud')
           return
         case 'signIn':
           gateActions.signIn()
