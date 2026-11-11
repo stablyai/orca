@@ -10,22 +10,24 @@ vi.mock('@/lib/desktop-window-chrome', () => ({ isPairedWebClientWindow: () => f
 import { useAppStore } from '@/store/index'
 import { seedCloudWorkspaceSnapshot } from '@/lib/orca-cloud/orca-cloud-workspace-store'
 import { useClaudeThemeSyncOffer } from './claude-theme-sync-offer'
+import { getDefaultSettings } from '../../../../../../shared/constants'
+import { makeTerminalTab } from '../../../worktree-jump/worktree-jump-palette-test-fixtures'
 
 const initial = useAppStore.getState()
 
-function seed(active: { id: string; host: string | null }): void {
+type State = ReturnType<typeof useAppStore.getState>
+
+function seed(active: { id: string; host: State['activeWorkspaceExecutionHostId'] }): void {
+  const settings = initial.settings ?? getDefaultSettings('/home/test')
   useAppStore.setState({
-    settings: {
-      ...initial.settings,
-      claudeCodeThemeSyncOffer: 'pending'
-    } as typeof initial.settings,
-    updateSettings: vi.fn(async () => undefined) as unknown as typeof initial.updateSettings,
+    settings: { ...settings, claudeCodeThemeSyncOffer: 'pending' },
+    updateSettings: vi.fn<State['updateSettings']>(async () => undefined),
     activeWorktreeId: active.id,
-    activeWorkspaceExecutionHostId: active.host as typeof initial.activeWorkspaceExecutionHostId,
+    activeWorkspaceExecutionHostId: active.host,
     activePendingCreationId: null,
     tabsByWorktree: {
-      [active.id]: [{ id: 'tab-1', launchAgent: 'claude' }]
-    } as unknown as typeof initial.tabsByWorktree
+      [active.id]: [{ ...makeTerminalTab('tab-1', active.id, 'Claude'), launchAgent: 'claude' }]
+    }
   })
 }
 
