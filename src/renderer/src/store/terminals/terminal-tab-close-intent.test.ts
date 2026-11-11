@@ -1,19 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import type * as AgentStatusModule from '@/lib/agent-status'
-import {
-  TEST_REPO,
-  createTestStore,
-  makeTab,
-  makeWorktree,
-  seedStore
-} from '../slices/store-test-helpers'
-import { createStoreCascadesMockApi } from '../slices/store-cascades-test-harness'
-import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
+import type * as AgentStatusModule from '@/lib/agent-status/aggregation/worktree-agent-status'
+import { TEST_REPO } from '../repos/repo.test-fixture'
+import { createTestStore, seedStore } from '../testing/app-store-test-fixture'
+import { makeTab } from './terminal-tab.test-fixture'
+import { makeWorktree } from '../slices/worktrees/worktree.test-fixture'
+import { createStoreCascadesMockApi } from '../testing/app-store-cascade-api.test-fixture'
+import { layoutApplyTestTransport } from '@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
 
@@ -43,12 +40,14 @@ vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
 }))
 
-vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
+vi.mock('@/components/terminal-pane/pty-transport/delivery/pty-dispatcher', () => ({}))
+
+vi.mock('@/components/terminal-pane/pty-transport/shutdown/pty-shutdown-data-suspension', () => ({
   restorePtyDataHandlersAfterFailedShutdown: vi.fn(),
   unregisterPtyDataHandlers: vi.fn<() => unknown[]>(() => [])
 }))
 
-vi.mock('@/lib/agent-status', async (importOriginal) => ({
+vi.mock('@/lib/agent-status/aggregation/worktree-agent-status', async (importOriginal) => ({
   ...(await importOriginal<typeof AgentStatusModule>()),
   detectAgentStatusFromTitle: vi.fn().mockReturnValue(null)
 }))

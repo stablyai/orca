@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import type { GitHubProjectOwnerType } from '../../../src/shared/github/project-types'
 import { hostUnionArms, salvagedOptional, salvagingArray } from '../../../src/shared/zod-salvage'
 import {

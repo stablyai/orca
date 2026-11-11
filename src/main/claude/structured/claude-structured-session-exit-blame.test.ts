@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { StructuredAgentSessionEventSink } from '../../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import type { StructuredAgentSessionEventSink } from '../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import type { ClaudeStructuredSessionEvent } from './claude-structured-session-state'
 import {
   adapterFor,
@@ -8,7 +8,7 @@ import {
   PROVIDER_SESSION_ID
 } from './claude-structured-session-test-support'
 import { claudeStreamJsonExitError } from '../claude-stream-json-exit-error'
-import { structuredAgentSessionStartFailureFact } from '../../native-chat/agent-session-wire/structured-agent-session-failure-text'
+import { structuredAgentSessionStartFailureFact } from '../../native-chat/agent-session-wire/startup/structured-agent-session-failure-text'
 import {
   providerSpawnAbsence,
   withProviderSpawnAbsence

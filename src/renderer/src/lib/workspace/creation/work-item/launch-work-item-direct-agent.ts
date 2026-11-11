@@ -1,0 +1,160 @@
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/non-secure-context-uuid'
+import type {
+  AgentStartedTelemetry,
+  FreshWorkspaceAgentLaunch
+} from '@/lib/workspace/creation/worktree-startup-payload'
+import { toast } from 'sonner'
+import { track } from '@/diagnostics/telemetry/telemetry'
+import { tuiAgentToAgentKind } from '../../../../../../shared/agent-kind'
+import {
+  buildAgentDraftLaunchPlan,
+  buildAgentStartupPlan,
+  type AgentStartupPlan
+} from '../../../../../../shared/agent-launch/startup/tui-agent-startup'
+import type { SleepingAgentLaunchConfig } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { LaunchSource } from '../../../../../../shared/telemetry-property-schemas'
+import type { StartupCommandDelivery } from '../../../../../../shared/agent-launch/startup/codex-startup-delivery'
+import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
+import type { AgentStartupShell } from '../../../../../../shared/agent-launch/startup/tui-agent-startup-shell'
+import type { AgentLaunchProfileSettings } from '../../../../../../shared/agent-launch/choices/tui-agent-launch-defaults'
+import { resolveAgentStartupPlanInputs } from '../../../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
+import { translate } from '@/i18n/i18n'
+
+export function buildDirectWorkItemAgentStartupPlan(args: {
+  agent: TuiAgent | null
+  agentArgs?: string | null
+  sessionOptions?: Readonly<Record<string, string>>
+  sessionOptionsYieldToAgentArgs?: true
+  draftContent: string
+  promptDelivery: 'draft' | 'submit-after-ready'
+  settings:
+    | ({ agentCmdOverrides?: Partial<Record<TuiAgent, string>> } & AgentLaunchProfileSettings)
+    | null
+    | undefined
+  launchPlatform: NodeJS.Platform
+  /** Unset keeps the platform default: PowerShell on win32, POSIX elsewhere. */
+  shell?: AgentStartupShell
+  /** Why: SSH remotes deploy the CLI shim as plain `orca`, so the Linux-only
+   * `orca-ide` rename must not be applied for remote launches. */
+  isRemote?: boolean
+}): {
+  startupPlan: AgentStartupPlan | null
+  draftLaunchedNatively: boolean
+  startupPlanFailed: boolean
+} {
+  if (args.agent === null) {
+    return { startupPlan: null, draftLaunchedNatively: false, startupPlanFailed: false }
+  }
+
+  const startupInputs = resolveAgentStartupPlanInputs({
+    agent: args.agent,
+    settings: args.settings ?? {},
+    agentArgs: args.agentArgs,
+    sessionOptions: args.sessionOptions,
+    sessionOptionsYieldToAgentArgs: args.sessionOptionsYieldToAgentArgs,
+    platform: args.launchPlatform,
+    shell: args.shell,
+    isRemote: args.isRemote ?? false
+  })
+  const draftLaunchPlan =
+    args.promptDelivery === 'submit-after-ready'
+      ? null
+      : buildAgentDraftLaunchPlan({
+          ...startupInputs,
+          draft: args.draftContent
+        })
+
+  if (draftLaunchPlan) {
+    return {
+      startupPlan: {
+        agent: draftLaunchPlan.agent,
+        launchCommand: draftLaunchPlan.launchCommand,
+        expectedProcess: draftLaunchPlan.expectedProcess,
+        followupPrompt: null,
+        launchConfig: draftLaunchPlan.launchConfig,
+        ...(draftLaunchPlan.sessionOptions
+          ? { sessionOptions: draftLaunchPlan.sessionOptions }
+          : {}),
+        ...(draftLaunchPlan.startupCommandDelivery
+          ? { startupCommandDelivery: draftLaunchPlan.startupCommandDelivery }
+          : {}),
+        ...(draftLaunchPlan.env ? { env: draftLaunchPlan.env } : {})
+      },
+      draftLaunchedNatively: true,
+      startupPlanFailed: false
+    }
+  }
+
+  const startupPlan = buildAgentStartupPlan({
+    ...startupInputs,
+    prompt: '',
+    allowEmptyPromptLaunch: true,
+    ...(args.promptDelivery === 'submit-after-ready' ? { suppressStartupUpdatePrompt: true } : {})
+  })
+  if (startupPlan && args.promptDelivery === 'draft') {
+    startupPlan.draftPrompt = args.draftContent
+  }
+  return {
+    startupPlan,
+    draftLaunchedNatively: false,
+    startupPlanFailed: startupPlan === null
+  }
+}
+
+export function buildDirectWorkItemStartupOpts(
+  agent: TuiAgent | null,
+  plan: AgentStartupPlan | null,
+  launchSource: LaunchSource,
+  freshAgentLaunch?: FreshWorkspaceAgentLaunch
+): {
+  startup?: {
+    command: string
+    freshAgentLaunch?: FreshWorkspaceAgentLaunch
+    launchToken?: string
+    env?: Record<string, string>
+    launchConfig?: SleepingAgentLaunchConfig
+    launchAgent?: TuiAgent
+    draftPrompt?: string
+    sessionOptions?: AgentStartupPlan['sessionOptions']
+    startupCommandDelivery?: StartupCommandDelivery
+    telemetry?: AgentStartedTelemetry
+  }
+} {
+  if (!plan) {
+    return {}
+  }
+  const telemetry: AgentStartedTelemetry | null =
+    agent === null
+      ? null
+      : { agent_kind: tuiAgentToAgentKind(agent), launch_source: launchSource, request_kind: 'new' }
+  return {
+    startup: {
+      command: plan.launchCommand,
+      ...(freshAgentLaunch
+        ? { freshAgentLaunch, launchToken: (plan.launchToken ??= createBrowserUuid()) }
+        : {}),
+      ...(plan.env ? { env: plan.env } : {}),
+      launchConfig: plan.launchConfig,
+      ...(plan.sessionOptions ? { sessionOptions: plan.sessionOptions } : {}),
+      ...(agent ? { launchAgent: agent } : {}),
+      ...(plan.draftPrompt ? { draftPrompt: plan.draftPrompt } : {}),
+      ...(plan.startupCommandDelivery
+        ? { startupCommandDelivery: plan.startupCommandDelivery }
+        : {}),
+      ...(telemetry ? { telemetry } : {})
+    }
+  }
+}
+
+/** Timeout notice for the post-launch paste; the workspace itself is ready. */
+export function notifyDirectWorkItemAgentStartTimeout(agent: TuiAgent, submit: boolean): void {
+  toast.message(
+    translate(
+      'auto.lib.launch.work.item.direct.agent.ceeeb509b5',
+      'Agent took too long to start. The workspace is ready — paste the {{value0}} when the agent is idle.',
+      { value0: submit ? 'prompt' : 'work item context' }
+    )
+  )
+  // Process-startup timeout has no v1 telemetry slot; unknown counts signal when to add one.
+  track('agent_error', { error_class: 'unknown', agent_kind: tuiAgentToAgentKind(agent) })
+}

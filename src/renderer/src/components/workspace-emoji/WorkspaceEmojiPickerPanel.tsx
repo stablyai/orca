@@ -7,12 +7,10 @@ import {
   CommandItem,
   CommandList
 } from '@/components/ui/command'
-import { translate } from '@/i18n/i18n'
-import { getWorkspaceEmojiPickerDefaults } from '@/lib/workspace-emoji-picker-defaults'
-import {
-  searchWorkspaceEmojiShortcodes,
-  type WorkspaceEmojiSuggestion
-} from '@/lib/workspace-emoji-shortcodes'
+import { useTranslate } from '@/i18n/use-translate'
+import { getWorkspaceEmojiPickerDefaults } from '@/lib/workspace/display/workspace-emoji-picker-defaults'
+import { searchWorkspaceEmojiShortcodes } from '@/lib/workspace/display/workspace-emoji-shortcodes'
+import type { StandardEmojiShortcodeEntry } from '../../../../shared/emoji-shortcode-catalog'
 
 const SEARCH_LIMIT = 50
 
@@ -24,8 +22,9 @@ type WorkspaceEmojiPickerPanelProps = {
 export function WorkspaceEmojiPickerPanel({
   onPick
 }: WorkspaceEmojiPickerPanelProps): React.JSX.Element {
+  const t = useTranslate()
   const [query, setQuery] = useState('')
-  const items = useMemo<readonly WorkspaceEmojiSuggestion[]>(
+  const items = useMemo<readonly StandardEmojiShortcodeEntry[]>(
     () =>
       query.trim()
         ? searchWorkspaceEmojiShortcodes(query, SEARCH_LIMIT)
@@ -49,19 +48,16 @@ export function WorkspaceEmojiPickerPanel({
       <CommandInput
         value={query}
         onValueChange={setQuery}
-        placeholder={translate(
+        placeholder={t(
           'auto.components.settings.RepositoryIconPicker.searchEmojiPlaceholder',
           'Search emoji'
         )}
       />
       {/* Why: the default 400px list is too tall for a popover anchored to a small text field. */}
       <CommandList style={{ maxHeight: 240 }}>
-        <CommandEmpty>{translate('workspace.links.noEmojiFound', 'No emoji found')}</CommandEmpty>
+        <CommandEmpty>{t('workspace.links.noEmojiFound', 'No emoji found')}</CommandEmpty>
         <CommandGroup
-          heading={translate(
-            'auto.components.new.workspace.SmartWorkspaceNameField.emoji',
-            'Emoji'
-          )}
+          heading={t('auto.components.new.workspace.SmartWorkspaceNameField.emoji', 'Emoji')}
         >
           {items.map((item) => (
             <CommandItem

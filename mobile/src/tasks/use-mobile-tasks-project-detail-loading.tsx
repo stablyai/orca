@@ -1,5 +1,5 @@
 import type { ItemDetailLoadingModel } from './use-mobile-tasks-item-detail-loading'
-import { useEffect } from './mobile-tasks-dependencies'
+import { useEffect, useLayoutEffect } from './mobile-tasks-dependencies'
 import {
   editableProjectFields,
   projectFieldDraftValue,
@@ -8,7 +8,29 @@ import {
 } from './mobile-tasks-legacy-foundation'
 import { githubProjectRowDetailRead } from './mobile-task-project-board-operations'
 
-export function useMobileTasksProjectDetailLoading(model: ItemDetailLoadingModel) {
+export function useMobileTasksProjectDetailLoading<
+  Model extends Pick<
+    ItemDetailLoadingModel,
+    | 'activeGitHubProjectHost'
+    | 'client'
+    | 'githubProjectTable'
+    | 'projectRowDetailRefreshSeq'
+    | 'projectRowItem'
+    | 'setExpandedPrFilePath'
+    | 'setPrFileCommentDrafts'
+    | 'resetPrFiles'
+    | 'setProjectBodyDraft'
+    | 'setProjectEditingCommentDraft'
+    | 'setProjectEditingCommentId'
+    | 'setProjectFieldDrafts'
+    | 'setProjectReviewersDraft'
+    | 'setProjectRowDetail'
+    | 'setProjectRowDetailError'
+    | 'setProjectRowDetailLoading'
+    | 'setProjectTitleDraft'
+    | 'tasksSupported'
+  >
+>(model: Model) {
   const {
     activeGitHubProjectHost,
     client,
@@ -17,10 +39,8 @@ export function useMobileTasksProjectDetailLoading(model: ItemDetailLoadingModel
     projectRowItem,
     setExpandedPrFilePath,
     setPrFileCommentDrafts,
-    setPrFileContents,
-    setPrFileLoadingPath,
+    resetPrFiles,
     setProjectBodyDraft,
-    setProjectCommentDraft,
     setProjectEditingCommentDraft,
     setProjectEditingCommentId,
     setProjectFieldDrafts,
@@ -31,45 +51,42 @@ export function useMobileTasksProjectDetailLoading(model: ItemDetailLoadingModel
     setProjectTitleDraft,
     tasksSupported
   } = model
+  useLayoutEffect(() => {
+    resetPrFiles()
+  }, [projectRowItem, client, projectRowDetailRefreshSeq, resetPrFiles])
+  // Keyed on row id: field edits, merges and reconnects hand over a new object for the same row.
+  // The comment box is not reset: it is kept per row in its draft row.
+  const projectRowId = projectRowItem?.id ?? null
+  useEffect(() => {
+    setProjectTitleDraft(projectRowItem?.content.title ?? '')
+    setProjectBodyDraft(projectRowItem?.content.body ?? '')
+    setProjectEditingCommentId(null)
+    setProjectEditingCommentDraft('')
+    setProjectReviewersDraft('')
+    setExpandedPrFilePath(null)
+    setPrFileCommentDrafts({})
+    setProjectFieldDrafts(
+      projectRowItem
+        ? Object.fromEntries(
+            editableProjectFields(githubProjectTable).map((field) => [
+              field.id,
+              projectFieldDraftValue(projectRowItem, field)
+            ])
+          )
+        : {}
+    )
+  }, [projectRowId])
+
   useEffect(() => {
     if (!projectRowItem) {
       setProjectRowDetail(null)
       setProjectRowDetailLoading(false)
       setProjectRowDetailError('')
-      setProjectTitleDraft('')
-      setProjectBodyDraft('')
-      setProjectCommentDraft('')
-      setProjectEditingCommentId(null)
-      setProjectEditingCommentDraft('')
-      setProjectReviewersDraft('')
-      setExpandedPrFilePath(null)
-      setPrFileContents({})
-      setPrFileLoadingPath(null)
-      setPrFileCommentDrafts({})
-      setProjectFieldDrafts({})
       return
     }
 
     const type = projectRowType(projectRowItem)
     const slug = splitRepositorySlug(projectRowItem.content.repository)
-    setProjectTitleDraft(projectRowItem.content.title)
-    setProjectBodyDraft(projectRowItem.content.body ?? '')
-    setProjectCommentDraft('')
-    setProjectEditingCommentId(null)
-    setProjectEditingCommentDraft('')
-    setProjectReviewersDraft('')
-    setExpandedPrFilePath(null)
-    setPrFileContents({})
-    setPrFileLoadingPath(null)
-    setPrFileCommentDrafts({})
-    setProjectFieldDrafts(
-      Object.fromEntries(
-        editableProjectFields(githubProjectTable).map((field) => [
-          field.id,
-          projectFieldDraftValue(projectRowItem, field)
-        ])
-      )
-    )
     setProjectRowDetail(null)
     setProjectRowDetailError('')
 
@@ -132,15 +149,9 @@ export function useMobileTasksProjectDetailLoading(model: ItemDetailLoadingModel
     return () => {
       stale = true
     }
-  }, [
-    activeGitHubProjectHost,
-    client,
-    githubProjectTable,
-    projectRowDetailRefreshSeq,
-    projectRowItem,
-    tasksSupported
-  ])
+  }, [activeGitHubProjectHost, client, projectRowDetailRefreshSeq, projectRowItem, tasksSupported])
   return model
 }
 
-export type ProjectDetailLoadingModel = ReturnType<typeof useMobileTasksProjectDetailLoading>
+export type ProjectDetailLoadingModel = ItemDetailLoadingModel &
+  ReturnType<typeof useMobileTasksProjectDetailLoading>

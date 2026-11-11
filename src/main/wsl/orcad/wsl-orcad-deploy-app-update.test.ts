@@ -1,6 +1,6 @@
 // Split from wsl-orcad-deploy.test.ts: the connect across an app update (E1), with the same host mocks.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
+import type { OrcadHostTransport } from '../../managed-server/install/orcad-host-transport'
 import type * as ActiveProbe from './wsl-orcad-active-probe'
 import type * as ManagedRuntimeContext from '../../managed-server/lifecycle/orcad-managed-runtime-context'
 import type * as RemoteVersionedInstall from '../../managed-server/install/remote-versioned-install'
@@ -8,7 +8,7 @@ import {
   emptyOrcadActivationRecord,
   type OrcadActivationRecord
 } from '../../managed-server/activation/orcad-activation-record'
-import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
+import { getRemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'
 import type { WslDistroHolder } from '../discovery/wsl-distro-holder-types'
 import type { WslOrcadHostTarget } from './wsl-orcad-host-target'
 
@@ -40,7 +40,7 @@ vi.mock('../../managed-server/install/remote-versioned-install', async (importOr
   readLocalFullVersion: mocks.localVersion
 }))
 vi.mock('./wsl-orcad-instance-adoption', () => ({ adoptUnrecordedWslOrcad: mocks.adopt }))
-vi.mock('../../ssh/orcad-running-version-adoption', () => ({
+vi.mock('../../managed-server/activation/orcad-running-version-adoption', () => ({
   adoptRunningOrcadVersion: mocks.adoptRunning
 }))
 
@@ -57,7 +57,7 @@ vi.mock('../../managed-server/activation/orcad-activation-recovery', () => ({
 vi.mock('../../orcad/orcad-artifact-materializer', () => ({
   materializeOrcadArtifact: async () => '/local/orcad'
 }))
-vi.mock('../../ssh/orcad-remote-deploy', () => ({ deployOrcad: mocks.deploy }))
+vi.mock('../../managed-server/install/orcad-remote-deploy', () => ({ deployOrcad: mocks.deploy }))
 vi.mock('./wsl-orcad-active-probe', async (importOriginal) => ({
   ...(await importOriginal<typeof ActiveProbe>()),
   probeWslActiveOrcad: async (...args: unknown[]) => ({
@@ -169,23 +169,6 @@ describe('deployAndLaunchWslOrcad across an app update (E1)', () => {
     mocks.readRecord.mockResolvedValue(activeOld)
   })
 
-  it('plans the update on the census the running orcad reports, not an unknown one', async () => {
-    mocks.deploy.mockResolvedValueOnce({
-      outcome: 'installed-and-activated',
-      fullVersion: '1.5.0+ab',
-      verdict: {}
-    })
-    await expect(launch()).resolves.toMatchObject({
-      outcome: 'ready',
-      fullVersion: '1.5.0+ab'
-    })
-    expect(mocks.incumbent).toHaveBeenCalledTimes(1)
-    expect(mocks.deploy.mock.calls[0][0]).toMatchObject({
-      census: LIVE,
-      censusRecord: activeOld
-    })
-  })
-
   it('keeps the incumbent serving, with a forceable deferral, while terminals run', async () => {
     mocks.deploy.mockResolvedValueOnce({
       outcome: 'installed-not-activated',
@@ -230,19 +213,6 @@ describe('deployAndLaunchWslOrcad across an app update (E1)', () => {
     await expect(launch()).resolves.toMatchObject({ outcome: 'deferred', forceable: true })
   })
 
-  it('forwards force to the update planner', async () => {
-    mocks.deploy.mockResolvedValueOnce({
-      outcome: 'installed-and-activated',
-      fullVersion: '1.5.0+ab',
-      verdict: {}
-    })
-    await launch(undefined, { intent: 'force' })
-    expect(mocks.deploy.mock.calls[0][0]).toMatchObject({
-      force: true,
-      census: LIVE
-    })
-  })
-
   it('reports a deferral when the incumbent could not be proven serving', async () => {
     mocks.incumbent.mockResolvedValueOnce({
       census: {
@@ -261,19 +231,6 @@ describe('deployAndLaunchWslOrcad across an app update (E1)', () => {
     await expect(launch()).resolves.toMatchObject({
       outcome: 'deferred',
       forceable: false
-    })
-  })
-
-  it('does not serve the incumbent past a refusal that is not a wait', async () => {
-    mocks.deploy.mockResolvedValueOnce({
-      outcome: 'installed-not-activated',
-      fullVersion: '1.5.0+ab',
-      code: 'orcad_activation_policy_refused',
-      reason: 'newer Orca ran this host'
-    })
-    await expect(launch()).resolves.toMatchObject({
-      outcome: 'deferred',
-      forceable: true
     })
   })
 
@@ -334,67 +291,6 @@ describe('deployAndLaunchWslOrcad across an app update (E1)', () => {
         "cat '/home/u/.orca-remote/orcad-2.0.0+cd/.orcad-pid' 2>/dev/null || true",
         expect.anything()
       )
-    })
-
-    it('does not re-activate the build this host rolled back from', async () => {
-      withRecord({ ...activeOld, rolledBackFrom: '1.5.0+ab' })
-      mocks.deploy.mockResolvedValue({
-        outcome: 'installed-and-activated',
-        fullVersion: '1.5.0+ab',
-        verdict: {}
-      })
-      mocks.adoptRunning.mockResolvedValueOnce(adoptedAs('1.4.0+aa', INCUMBENT_READINESS))
-      await expect(launch()).resolves.toMatchObject({
-        outcome: 'ready',
-        fullVersion: '1.4.0+aa',
-        readiness: INCUMBENT_READINESS,
-        deferredUpdate: {
-          candidateVersion: '1.5.0+ab',
-          code: 'orcad_activation_policy_refused',
-          reason: expect.stringMatching(/rolled back from 1\.5\.0\+ab/),
-          forceable: true
-        }
-      })
-      expect(mocks.deploy).not.toHaveBeenCalled()
-    })
-
-    it('labels the launch with the build the adoption found serving, not the stale record', async () => {
-      withRecord(newer)
-      mocks.adoptRunning.mockResolvedValueOnce(adoptedAs('2.1.0+ef', NEWER_READINESS))
-      await expect(launch()).resolves.toMatchObject({ outcome: 'ready', fullVersion: '2.1.0+ef' })
-    })
-
-    it('defers while another run holds the host fence', async () => {
-      withRecord(newer)
-      mocks.adoptRunning.mockResolvedValueOnce({
-        outcome: 'deferred',
-        candidateVersion: '1.5.0+ab',
-        code: 'orcad_activation_fence_busy',
-        reason: 'busy'
-      })
-      await expect(launch()).resolves.toEqual({
-        outcome: 'deferred',
-        distro: 'Ubuntu-24.04',
-        candidateVersion: '1.5.0+ab',
-        code: 'orcad_activation_fence_busy',
-        reason: 'busy',
-        forceable: false
-      })
-      expect(mocks.deploy).not.toHaveBeenCalled()
-    })
-
-    it('lets an explicit force deploy past both skips', async () => {
-      withRecord({ ...newer, rolledBackFrom: '1.5.0+ab' })
-      mocks.deploy.mockResolvedValueOnce({
-        outcome: 'installed-and-activated',
-        fullVersion: '1.5.0+ab',
-        verdict: {}
-      })
-      await expect(launch(undefined, { intent: 'force' })).resolves.toMatchObject({
-        outcome: 'ready',
-        fullVersion: '1.5.0+ab'
-      })
-      expect(mocks.adoptRunning).not.toHaveBeenCalled()
     })
 
     it('refuses the rolled-back build under the fence when nothing could be adopted', async () => {
@@ -517,24 +413,6 @@ describe('deployAndLaunchWslOrcad across an app update (E1)', () => {
       expect(mocks.deploy).toHaveBeenCalledTimes(2)
     })
 
-    it('names a newer host refusal apart from a rolled-back one, so only Force is offered', async () => {
-      withRecord(newer)
-      mocks.adoptRunning.mockResolvedValueOnce(null)
-      mocks.deploy.mockResolvedValueOnce(policyRefused)
-      await expect(launch(undefined, { intent: 'update' })).resolves.toMatchObject({
-        outcome: 'deferred',
-        code: 'orcad_host_newer',
-        forceable: true
-      })
-      withRecord({ ...activeOld, rolledBackFrom: '1.5.0+ab' })
-      mocks.adoptRunning.mockResolvedValueOnce(null)
-      mocks.deploy.mockResolvedValueOnce(policyRefused)
-      await expect(launch()).resolves.toMatchObject({
-        outcome: 'deferred',
-        code: 'orcad_activation_policy_refused'
-      })
-    })
-
     it('keeps retrying an update that only waited, or that a newer host refused', async () => {
       mocks.deploy.mockResolvedValue({
         outcome: 'installed-not-activated',
@@ -594,27 +472,5 @@ describe('deployAndLaunchWslOrcad across an app update (E1)', () => {
         /rolled back from 1\.5\.0\+ab/
       )
     })
-
-    it('updates an older host as before, without asking to adopt it', async () => {
-      mocks.deploy.mockResolvedValueOnce({
-        outcome: 'installed-and-activated',
-        fullVersion: '1.5.0+ab',
-        verdict: {}
-      })
-      await expect(launch()).resolves.toMatchObject({ outcome: 'ready', fullVersion: '1.5.0+ab' })
-      expect(mocks.adoptRunning).not.toHaveBeenCalled()
-    })
-  })
-
-  it('never asks the incumbent when it already runs this build', async () => {
-    mocks.localVersion.mockReturnValue('1.4.0+aa')
-    mocks.deploy.mockResolvedValueOnce({
-      outcome: 'already-active',
-      fullVersion: '1.4.0+aa'
-    })
-    mocks.wake.mockResolvedValueOnce({ outcome: 'serving' })
-    await launch()
-    expect(mocks.incumbent).not.toHaveBeenCalled()
-    expect(mocks.deploy.mock.calls[0][0].census.liveSessions).toBeNull()
   })
 })

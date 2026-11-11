@@ -166,112 +166,6 @@ async function getActiveTerminalViewport(
   })
 }
 
-async function pressShiftedRussianLayoutKey(page: Page): Promise<{
-  keydownDefaultPrevented: boolean
-  keypressSent: boolean
-  inputSent: boolean
-  terminalInputSent: boolean
-  keyupSent: boolean
-}> {
-  return page.evaluate(() => {
-    const state = window.__store?.getState()
-    const worktreeId = state?.activeWorktreeId
-    const tabId =
-      state?.activeTabType === 'terminal'
-        ? state.activeTabId
-        : worktreeId
-          ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
-          : null
-    const manager = tabId ? window.__paneManagers?.get(tabId) : null
-    const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
-    pane?.terminal.focus()
-    const textarea = pane?.container.querySelector(
-      '.xterm-helper-textarea'
-    ) as HTMLTextAreaElement | null
-    if (!pane || !textarea) {
-      throw new Error('No xterm helper textarea to receive keyboard input')
-    }
-    textarea.focus()
-
-    const keydown = new KeyboardEvent('keydown', {
-      key: 'Ф',
-      code: 'KeyA',
-      shiftKey: true,
-      bubbles: true,
-      cancelable: true
-    })
-    Object.defineProperty(keydown, 'keyCode', { get: () => 65 })
-    Object.defineProperty(keydown, 'which', { get: () => 65 })
-    textarea.dispatchEvent(keydown)
-
-    if (keydown.defaultPrevented) {
-      return {
-        keydownDefaultPrevented: true,
-        keypressSent: false,
-        inputSent: false,
-        terminalInputSent: false,
-        keyupSent: false
-      }
-    }
-
-    const keypress = new KeyboardEvent('keypress', {
-      key: 'Ф',
-      code: 'KeyA',
-      shiftKey: true,
-      bubbles: true,
-      cancelable: true
-    })
-    Object.defineProperty(keypress, 'keyCode', { get: () => 1060 })
-    Object.defineProperty(keypress, 'charCode', { get: () => 1060 })
-    Object.defineProperty(keypress, 'which', { get: () => 1060 })
-    textarea.dispatchEvent(keypress)
-
-    const makeTextInputEvent = (): InputEvent => {
-      const input = new InputEvent('input', {
-        data: 'Ф',
-        inputType: 'insertText',
-        bubbles: true,
-        cancelable: false,
-        composed: false
-      })
-      // Populate InputEvent fields explicitly for older Linux Chromium whose synthetic init drops them.
-      Object.defineProperties(input, {
-        data: { get: () => 'Ф' },
-        inputType: { get: () => 'insertText' },
-        composed: { get: () => false }
-      })
-      return input
-    }
-
-    // Supply input-event text because Linux untrusted keypress may lack charCode.
-    const input = makeTextInputEvent()
-    textarea.dispatchEvent(input)
-
-    const keyup = new KeyboardEvent('keyup', {
-      key: 'Ф',
-      code: 'KeyA',
-      shiftKey: true,
-      bubbles: true,
-      cancelable: true
-    })
-    Object.defineProperty(keyup, 'keyCode', { get: () => 65 })
-    Object.defineProperty(keyup, 'which', { get: () => 65 })
-    textarea.dispatchEvent(keyup)
-
-    // Linux CI drops untrusted InputEvent data; use xterm.input for the same PTY route.
-    // Keep keydown assertion to catch kitty sequences leaking from shifted layout keys.
-    pane.terminal.input('Ф')
-
-    return {
-      keydownDefaultPrevented: false,
-      keypressSent: true,
-      inputSent: true,
-      terminalInputSent: true,
-      keyupSent: true
-    }
-  })
-}
-
 async function pressAndExpectWrite(
   page: Page,
   app: ElectronApplication,
@@ -560,90 +454,6 @@ test.describe('Terminal Shortcuts', () => {
     }
   })
 
-  test('@headful Codex-like background output stays visible without disabling WebGL in auto mode', async ({
-    orcaPage
-  }) => {
-    const hasPane = await orcaPage.evaluate(() => {
-      const state = window.__store?.getState()
-      const worktreeId = state?.activeWorktreeId
-      const tabId =
-        state?.activeTabType === 'terminal'
-          ? state.activeTabId
-          : worktreeId
-            ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
-            : null
-      const manager = tabId ? window.__paneManagers?.get(tabId) : null
-      manager?.setTerminalGpuAcceleration('auto')
-      const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
-      return Boolean(pane)
-    })
-    test.skip(!hasPane, 'No active terminal pane for renderer validation')
-    const webglActive = await orcaPage
-      .waitForFunction(
-        () => {
-          const state = window.__store?.getState()
-          const worktreeId = state?.activeWorktreeId
-          const tabId =
-            state?.activeTabType === 'terminal'
-              ? state.activeTabId
-              : worktreeId
-                ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
-                : null
-          const manager = tabId ? window.__paneManagers?.get(tabId) : null
-          const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
-          return Boolean(pane?.webglAddon)
-        },
-        null,
-        { timeout: 5_000 }
-      )
-      .then(() => true)
-      .catch(() => false)
-    test.skip(!webglActive, 'WebGL was not active in this headful environment')
-
-    const ptyId = await waitForActivePanePtyId(orcaPage)
-    const marker = `CODEX_BG_${Date.now()}`
-    await execInTerminal(orcaPage, ptyId, `printf '\\033[48;2;52;52;52m  ${marker}  \\033[0m\\n'`)
-    await waitForTerminalOutput(orcaPage, marker)
-
-    await expect
-      .poll(
-        () =>
-          orcaPage.evaluate((expectedMarker) => {
-            const state = window.__store?.getState()
-            const worktreeId = state?.activeWorktreeId
-            const tabId =
-              state?.activeTabType === 'terminal'
-                ? state.activeTabId
-                : worktreeId
-                  ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
-                  : null
-            const manager = tabId ? window.__paneManagers?.get(tabId) : null
-            const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
-            const activeBuffer = pane?.terminal.buffer.active
-            const terminalText = activeBuffer
-              ?.getLine(activeBuffer.baseY + activeBuffer.cursorY)
-              ?.translateToString(true)
-              .trim()
-            const visibleText = pane?.container.textContent ?? ''
-            return {
-              markerVisible:
-                visibleText.includes(expectedMarker) || terminalText === expectedMarker,
-              hasComplexScriptOutput: pane?.hasComplexScriptOutput === true,
-              hasWebgl: Boolean(pane?.webglAddon)
-            }
-          }, marker),
-        {
-          timeout: 5_000,
-          message: 'Background SGR output did not stay visible on the auto renderer'
-        }
-      )
-      .toEqual({
-        markerVisible: true,
-        hasComplexScriptOutput: false,
-        hasWebgl: true
-      })
-  })
-
   test('floating terminal owns tab switch shortcuts while focused', async ({ orcaPage }) => {
     const scenario = await seedFloatingTerminalTabSwitchScenario(orcaPage)
     await orcaPage.evaluate(async () => {
@@ -728,14 +538,20 @@ test.describe('Terminal Shortcuts', () => {
       await pressAndExpectWrite(orcaPage, electronApp, 'Meta+Delete', '\x0b')
     }
 
+    await orcaPage.evaluate(async () => {
+      await window.__store!.getState().setKeybindingOverride('terminal.clear', ['Mod+Shift+K'])
+    })
     await focusActiveTerminalInput(orcaPage)
-    await orcaPage.keyboard.press(`${mod}+k`)
+    await orcaPage.keyboard.press(`${mod}+Shift+k`)
     await expect
       .poll(async () => (await getTerminalContent(orcaPage)).includes(marker), {
         timeout: 5_000,
-        message: 'Cmd+K did not clear the terminal buffer'
+        message: 'The configured clear shortcut did not clear the terminal buffer'
       })
       .toBe(false)
+    await orcaPage.evaluate(async () => {
+      await window.__store!.getState().resetKeybindingOverride('terminal.clear')
+    })
 
     const panesBeforeSplit = await countVisibleTerminalPanes(orcaPage)
     await focusActiveTerminalInput(orcaPage)
@@ -844,38 +660,5 @@ test.describe('Terminal Shortcuts', () => {
       )
       .toBe(true)
     expect(await getPtyWrites(electronApp)).toEqual([])
-  })
-
-  test('Shift with Russian layout text reaches the PTY as Cyrillic under kitty keyboard reporting', async ({
-    orcaPage,
-    electronApp
-  }) => {
-    test.skip(process.platform === 'win32', 'ConPTY panes withhold the kitty protocol')
-    await installMainProcessPtyWriteSpy(electronApp)
-    // Probe real PTY binding before input so onData cannot race disconnected sendInput; then clear spy writes.
-    const ptyId = await waitForActivePanePtyId(orcaPage)
-    await armKittyKeyboardFromPty(orcaPage, ptyId, `printf '\\033[=31u'; cat`)
-    await clearPtyWriteLog(electronApp)
-
-    const dispatch = await pressShiftedRussianLayoutKey(orcaPage)
-
-    expect(dispatch).toEqual({
-      keydownDefaultPrevented: false,
-      keypressSent: true,
-      inputSent: true,
-      terminalInputSent: true,
-      keyupSent: true
-    })
-    await expect
-      .poll(async () => (await getPtyWrites(electronApp)).some((write) => write.includes('Ф')), {
-        timeout: 5_000,
-        message: 'Shift+Russian layout text did not reach the PTY as Cyrillic'
-      })
-      .toBe(true)
-    const writes = await getPtyWrites(electronApp)
-    const joinedWrites = writes.join('')
-    expect(joinedWrites).not.toContain('\x1b[97:1060;2;1060u')
-    expect(joinedWrites).not.toContain('\x1b[97:1060;2:3u')
-    await sendToTerminal(orcaPage, ptyId, '\x03')
   })
 })

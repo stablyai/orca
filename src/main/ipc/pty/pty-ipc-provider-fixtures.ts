@@ -19,7 +19,7 @@ export type ObservableDaemonProviderDouble = {
   setPtyBackgrounded: Mock
   shutdown: Mock
   getBufferSnapshot: Mock
-  emitData: (id: string, data: string) => void
+  emitData: (id: string, data: string, extra?: { sequenceChars?: number }) => void
   emitExit: (id: string, code?: number) => void
   emitDataGap: (id: string, droppedChars: number) => void
 }
@@ -174,7 +174,8 @@ export function createPtyIpcProviderFixtures(ctx: { mainWindow: unknown }) {
       setPtyBackgrounded,
       shutdown,
       getBufferSnapshot,
-      emitData: (id: string, data: string) => dataHandler?.({ id, data }),
+      emitData: (id: string, data: string, extra?: { sequenceChars?: number }) =>
+        dataHandler?.({ id, data, ...extra }),
       emitExit: (id: string, code = 0) => exitHandler?.({ id, code }),
       emitDataGap: (id: string, droppedChars: number) =>
         backgroundStreamHandler?.({ id, kind: 'dataGap', droppedChars })
@@ -256,6 +257,7 @@ export function createPtyIpcProviderFixtures(ctx: { mainWindow: unknown }) {
       createPreAllocatedTerminalHandle: vi.fn(() => 'term_recovered'),
       registerPreAllocatedHandleForPty: vi.fn(),
       registerPty: vi.fn(),
+      reflowHeadlessTerminalToPtyGrid: vi.fn(),
       ...runtimeOverrides
     }
     registerPtyHandlers(mainWindow as never, runtime as never)

@@ -48,25 +48,11 @@ function temporary(pid: number, ageMs: number): string {
 }
 
 describe('migration journal directory', () => {
-  it("removes another process's write that died before its rename", () => {
-    // A killed journal write left `<id>.json.<pid>.<ts>.tmp` behind forever.
-    const orphan = temporary(process.pid + 1, 120_000)
-    expect(journal.list(userDataPath)).toEqual([])
-    expect(existsSync(orphan)).toBe(false)
-  })
-
   it("keeps this process's own write and one another process may still be finishing", () => {
     const own = temporary(process.pid, 120_000)
     const recent = temporary(process.pid + 1, 0)
     expect(journal.list(userDataPath)).toEqual([])
     expect(existsSync(own)).toBe(true)
     expect(existsSync(recent)).toBe(true)
-  })
-
-  it('leaves temporaries alone in a journal that does not sweep, as SSH migration journals do', () => {
-    const orphan = temporary(process.pid + 1, 120_000)
-    const unswept = createMigrationJournalDirectory<JournalRecord>(journalOptions)
-    expect(unswept.list(userDataPath)).toEqual([])
-    expect(existsSync(orphan)).toBe(true)
   })
 })

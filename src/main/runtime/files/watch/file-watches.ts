@@ -10,16 +10,17 @@ import {
 } from '../file-target'
 import type { RuntimeFileCommandHost } from '../file-command-host'
 import { stat } from 'node:fs/promises'
-import type { DirEntry, FsChangeEvent } from '../../../../shared/filesystem-entry-types'
-import { sortDirEntries } from '../../../../shared/file-name-sort'
-import { resolveAuthorizedPath } from '../../../ipc/filesystem/filesystem-auth'
+import type { DirEntry } from '../../../../shared/file-listing/directory-entry'
+import type { FsChangeEvent } from '../../../../shared/file-watch/filesystem-change-event'
+import { sortDirEntries } from '../../../../shared/file-listing/file-name-sort'
+import { resolveAuthorizedPath } from '../../../ipc/filesystem/access/filesystem-auth'
 import { resolveRuntimeAuthorizedPath } from '../chat-scratch-file-root'
 import { WindowsRuntimeWatchPool } from './windows-runtime-watch-pool'
-import { beginWatcherInstall } from '../../../ipc/watcher-removal-gate'
+import { beginWatcherInstall } from '../../../workspaces/removal/watcher-removal-gate'
 import {
   closeFileExplorerWatcherInWatcherProcess,
   watchFileExplorerInWatcherProcess
-} from '../../file-watcher-host'
+} from './file-watcher-host'
 
 type RuntimeFileWatchHost = Pick<
   RuntimeFileCommandHost,

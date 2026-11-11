@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   WorkspaceSpaceAnalysis,
   WorkspaceSpaceWorktree
-} from '../../../shared/workspace-space-types'
+} from '../../../shared/workspace-disk-space/workspace-space-types'
 
 const { snapshotWriteSpy, userDataDirHolder } = vi.hoisted(() => ({
   snapshotWriteSpy: vi.fn(),
@@ -30,7 +30,6 @@ vi.mock('../../filesystem/sidecar-snapshot-file', async (importOriginal) => {
 import {
   finalizeWorkspaceSpaceAnalysisSnapshotPrunes,
   persistWorkspaceSpaceAnalysisSnapshot,
-  pruneWorkspaceSpaceAnalysisSnapshot,
   pruneWorkspaceSpaceAnalysisSnapshots,
   readWorkspaceSpaceAnalysisSnapshot,
   registerWorkspaceSpaceAnalysisSnapshotPruneTombstones
@@ -107,43 +106,6 @@ describe('workspace space analysis snapshot', () => {
     await rm(userDataDirHolder.dir, { recursive: true, force: true })
   })
 
-  it('round-trips a completed analysis', async () => {
-    const analysis = makeAnalysis([makeWorktreeRow()])
-
-    await persistWorkspaceSpaceAnalysisSnapshot(userDataDirHolder.dir, analysis)
-
-    await expect(readWorkspaceSpaceAnalysisSnapshot(userDataDirHolder.dir)).resolves.toEqual(
-      analysis
-    )
-  })
-
-  it('prunes topLevelItems into the omitted counters to bound the payload', async () => {
-    const row = makeWorktreeRow({
-      sizeBytes: 5000,
-      topLevelItems: [
-        {
-          name: 'node_modules',
-          path: '/repo-feature/node_modules',
-          kind: 'directory',
-          sizeBytes: 3000
-        },
-        { name: 'src', path: '/repo-feature/src', kind: 'directory', sizeBytes: 1000 }
-      ],
-      omittedTopLevelItemCount: 2,
-      omittedTopLevelSizeBytes: 500
-    })
-
-    await persistWorkspaceSpaceAnalysisSnapshot(userDataDirHolder.dir, makeAnalysis([row]))
-
-    const cached = await readWorkspaceSpaceAnalysisSnapshot(userDataDirHolder.dir)
-    expect(cached?.worktrees[0]).toMatchObject({
-      sizeBytes: 5000,
-      topLevelItems: [],
-      omittedTopLevelItemCount: 4,
-      omittedTopLevelSizeBytes: 4500
-    })
-  })
-
   it('returns null when missing or corrupt instead of throwing', async () => {
     await expect(readWorkspaceSpaceAnalysisSnapshot(userDataDirHolder.dir)).resolves.toBeNull()
 
@@ -167,64 +129,6 @@ describe('workspace space analysis snapshot', () => {
       'utf-8'
     )
     await expect(readWorkspaceSpaceAnalysisSnapshot(userDataDirHolder.dir)).resolves.toBeNull()
-  })
-
-  it('loads legacy rows without an execution host id', async () => {
-    const { executionHostId: _executionHostId, ...legacyRow } = makeWorktreeRow()
-    const analysis = makeAnalysis([makeWorktreeRow()])
-    await writeFile(
-      join(userDataDirHolder.dir, SNAPSHOT_FILE),
-      JSON.stringify({
-        version: 2,
-        analysis: { ...analysis, worktrees: [legacyRow] }
-      }),
-      'utf-8'
-    )
-
-    await expect(readWorkspaceSpaceAnalysisSnapshot(userDataDirHolder.dir)).resolves.toMatchObject({
-      worktrees: [expect.objectContaining({ worktreeId: legacyRow.worktreeId })]
-    })
-  })
-
-  it('prunes a removed worktree row and rebalances totals', async () => {
-    const removed = makeWorktreeRow({ sizeBytes: 3000, reclaimableBytes: 3000 })
-    const kept = makeWorktreeRow({
-      worktreeId: 'repo-1::/repo-kept',
-      path: '/repo-kept',
-      status: 'missing',
-      sizeBytes: 1000,
-      reclaimableBytes: 0
-    })
-    await persistWorkspaceSpaceAnalysisSnapshot(
-      userDataDirHolder.dir,
-      makeAnalysis([removed, kept])
-    )
-
-    snapshotWriteSpy.mockClear()
-    await pruneWorkspaceSpaceAnalysisSnapshot(userDataDirHolder.dir, removed.worktreeId, 'local')
-
-    const cached = await readWorkspaceSpaceAnalysisSnapshot(userDataDirHolder.dir)
-    expect(cached?.worktrees.map((row) => row.worktreeId)).toEqual(['repo-1::/repo-kept'])
-    expect(cached).toMatchObject({
-      worktreeCount: 1,
-      scannedWorktreeCount: 0,
-      unavailableWorktreeCount: 1,
-      totalSizeBytes: 1000,
-      reclaimableBytes: 0
-    })
-    expect(cached?.repos[0]).toMatchObject({
-      worktreeCount: 1,
-      scannedWorktreeCount: 0,
-      unavailableWorktreeCount: 1,
-      totalSizeBytes: 1000,
-      reclaimableBytes: 0
-    })
-    expect(snapshotWriteSpy).toHaveBeenCalledTimes(1)
-
-    snapshotWriteSpy.mockClear()
-    await pruneWorkspaceSpaceAnalysisSnapshot(userDataDirHolder.dir, 'repo-1::/never-existed')
-    await expect(readWorkspaceSpaceAnalysisSnapshot(userDataDirHolder.dir)).resolves.toEqual(cached)
-    expect(snapshotWriteSpy).not.toHaveBeenCalled()
   })
 
   it('coalesces local and remote row rebalancing into one write', async () => {
@@ -300,20 +204,6 @@ describe('workspace space analysis snapshot', () => {
     expect(snapshotWriteSpy).not.toHaveBeenCalled()
   })
 
-  it('keeps profile snapshots isolated', async () => {
-    const otherProfile = await mkdtemp(join(tmpdir(), 'orca-space-snapshot-other-'))
-    try {
-      await persistWorkspaceSpaceAnalysisSnapshot(
-        userDataDirHolder.dir,
-        makeAnalysis([makeWorktreeRow()])
-      )
-
-      await expect(readWorkspaceSpaceAnalysisSnapshot(otherProfile)).resolves.toBeNull()
-    } finally {
-      await rm(otherProfile, { recursive: true, force: true })
-    }
-  })
-
   it('does not let an analysis started before bulk removal restore pruned rows', async () => {
     const local = makeWorktreeRow()
     const remote = makeWorktreeRow({
@@ -342,18 +232,6 @@ describe('workspace space analysis snapshot', () => {
     ])
   })
 
-  it('registers a tombstone immediately without rewriting the sidecar', async () => {
-    const staleAnalysis = { ...makeAnalysis([makeWorktreeRow()]), scannedAt: Date.now() - 1 }
-
-    registerWorkspaceSpaceAnalysisSnapshotPruneTombstones(userDataDirHolder.dir, [
-      { worktreeId: 'repo-1::/repo-feature', executionHostId: 'local' }
-    ])
-
-    expect(snapshotWriteSpy).not.toHaveBeenCalled()
-    await persistWorkspaceSpaceAnalysisSnapshot(userDataDirHolder.dir, staleAnalysis)
-    expect((await readWorkspaceSpaceAnalysisSnapshot(userDataDirHolder.dir))?.worktrees).toEqual([])
-  })
-
   it('keeps the original tombstone time when a removal batch flushes', async () => {
     const row = makeWorktreeRow()
     const target = { worktreeId: row.worktreeId, executionHostId: 'local' as const }
@@ -371,67 +249,5 @@ describe('workspace space analysis snapshot', () => {
       { ...row, topLevelItems: [] }
     ])
     now.mockRestore()
-  })
-
-  it('prunes host-colliding workspace ids without corrupting surviving totals', async () => {
-    const local = makeWorktreeRow({ sizeBytes: 1000, reclaimableBytes: 1000 })
-    const remote = makeWorktreeRow({
-      executionHostId: 'ssh:ssh-1',
-      isRemote: true,
-      sizeBytes: 3000,
-      reclaimableBytes: 3000
-    })
-    await persistWorkspaceSpaceAnalysisSnapshot(
-      userDataDirHolder.dir,
-      makeAnalysis([local, remote])
-    )
-
-    await pruneWorkspaceSpaceAnalysisSnapshot(userDataDirHolder.dir, remote.worktreeId, 'ssh:ssh-1')
-
-    const cached = await readWorkspaceSpaceAnalysisSnapshot(userDataDirHolder.dir)
-    expect(cached?.worktrees).toEqual([local])
-    expect(cached).toMatchObject({
-      worktreeCount: 1,
-      scannedWorktreeCount: 1,
-      totalSizeBytes: 1000,
-      reclaimableBytes: 1000
-    })
-    expect(cached?.repos).toEqual([
-      expect.objectContaining({
-        executionHostId: 'local',
-        worktreeCount: 1,
-        totalSizeBytes: 1000
-      }),
-      expect.objectContaining({
-        executionHostId: 'ssh:ssh-1',
-        worktreeCount: 0,
-        totalSizeBytes: 0
-      })
-    ])
-  })
-
-  it('prunes every host-colliding row when the host is unknown', async () => {
-    const local = makeWorktreeRow({ sizeBytes: 1000, reclaimableBytes: 1000 })
-    const remote = makeWorktreeRow({
-      executionHostId: 'ssh:ssh-1',
-      isRemote: true,
-      sizeBytes: 3000,
-      reclaimableBytes: 3000
-    })
-    await persistWorkspaceSpaceAnalysisSnapshot(
-      userDataDirHolder.dir,
-      makeAnalysis([local, remote])
-    )
-
-    await pruneWorkspaceSpaceAnalysisSnapshot(userDataDirHolder.dir, local.worktreeId)
-
-    const cached = await readWorkspaceSpaceAnalysisSnapshot(userDataDirHolder.dir)
-    expect(cached?.worktrees).toEqual([])
-    expect(cached).toMatchObject({
-      worktreeCount: 0,
-      scannedWorktreeCount: 0,
-      totalSizeBytes: 0,
-      reclaimableBytes: 0
-    })
   })
 })

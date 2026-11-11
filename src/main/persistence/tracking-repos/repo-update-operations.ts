@@ -4,7 +4,7 @@ import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { RepoHostTarget } from '../../../shared/repo-host-identity'
 import { getRepoExecutionHostId } from '../../../shared/execution-host'
 import { isLegacyRepoForExternalWorktreeVisibility } from '../../../shared/external-worktree-visibility'
-import { normalizeRepoSourceControlAiOverrides } from '../../../shared/source-control-ai'
+import { normalizeRepoSourceControlAiOverrides } from '../../../shared/source-control/ai/settings/source-control-ai-repo-settings'
 import { normalizeWorktreeVisibilitySourcePreferences } from '../../../shared/worktree/visibility-sources'
 import type { GhAccountBinding } from '../../../shared/github/account-binding'
 import { invalidateGhAccountTokenCache } from '../../github/gh-account-token'
@@ -94,25 +94,28 @@ export class RepoUpdatePersistenceOperations {
         | 'upstream'
         | 'gitRemoteIdentity'
         | 'hookSettings'
+        | 'editorFormatter'
         | 'worktreeBaseRef'
         | 'worktreeBasePath'
         | 'kind'
         | 'folderUpgradeGitRootPath'
         | 'executionHostId'
         | 'symlinkPaths'
+        | 'dictationTerms'
         | 'issueSourcePreference'
         | 'defaultJiraProject'
         | 'forkSyncMode'
+        | 'agentWorkspaceTrust'
         | 'externalWorktreeVisibilityPromptDismissedAt'
         | 'externalWorktreeInboxBaselinePaths'
         | 'importedExternalWorktreePaths'
         | 'customWorktreeVisibilitySources'
         | 'worktreeVisibilitySourcePreferences'
         | 'projectGroupId'
-        | 'projectGroupOrder'
         | 'projectHostSetupMethod'
       >
     > & {
+      projectGroupOrder?: number | null
       externalWorktreeVisibility?: Repo['externalWorktreeVisibility'] | null
       agentWorktreeVisibility?: Repo['agentWorktreeVisibility'] | null
       sourceControlAi?: Repo['sourceControlAi'] | null
@@ -166,7 +169,10 @@ export class RepoUpdatePersistenceOperations {
         sanitizedUpdates.projectGroupId = null
       }
     }
-    if (
+    if (sanitizedUpdates.projectGroupOrder === null) {
+      delete repo.projectGroupOrder
+      delete sanitizedUpdates.projectGroupOrder
+    } else if (
       'projectGroupOrder' in sanitizedUpdates &&
       (typeof sanitizedUpdates.projectGroupOrder !== 'number' ||
         !Number.isFinite(sanitizedUpdates.projectGroupOrder))

@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import type {
   ManagedRuntimeInstallState,
   ManagedRuntimeOperation
@@ -27,18 +28,19 @@ const STEP_PHASES: readonly ManagedRuntimeOperation['phase'][] = [
   'verifying'
 ]
 
-function stepLabels(): string[] {
+function stepLabels(t: Translate = translate): string[] {
   return [
-    translate('components.managed-runtime.stepDownload', 'Download'),
-    translate('components.managed-runtime.stepUnpack', 'Unpack'),
-    translate('components.managed-runtime.stepCheck', 'Check')
+    t('components.managed-runtime.stepDownload', 'Download'),
+    t('components.managed-runtime.stepUnpack', 'Unpack'),
+    t('components.managed-runtime.stepCheck', 'Check')
   ]
 }
 
 function runningCard(
   operation: ManagedRuntimeOperation,
   agent: string,
-  cancelling: boolean
+  cancelling: boolean,
+  t: Translate = translate
 ): ManagedRuntimeInstallCard | null {
   const current = STEP_PHASES.indexOf(operation.phase)
   if (current === -1) {
@@ -48,25 +50,25 @@ function runningCard(
   const percent = current === 0 && total ? Math.min(100, (done / total) * 100) : null
   const detail =
     current === 1
-      ? translate('components.managed-runtime.unpackingDetail', 'Unpacking the runtime')
+      ? t('components.managed-runtime.unpackingDetail', 'Unpacking the runtime')
       : current === 2
-        ? translate('components.managed-runtime.checkingDetail', 'Checking the downloaded runtime')
+        ? t('components.managed-runtime.checkingDetail', 'Checking the downloaded runtime')
         : total === null
-          ? translate('components.managed-runtime.downloading', 'Downloading {{done}} MB.', {
+          ? t('components.managed-runtime.downloading', 'Downloading {{done}} MB.', {
               done: megabytes(done)
             })
-          : translate('components.managed-runtime.progressOf', '{{done}} of {{total}} MB', {
+          : t('components.managed-runtime.progressOf', '{{done}} of {{total}} MB', {
               done: megabytes(done),
               total: megabytes(total)
             })
-  const cancellingText = translate('components.managed-runtime.cancelling', 'Cancelling…')
+  const cancellingText = t('components.managed-runtime.cancelling', 'Cancelling…')
   const title = cancelling
     ? cancellingText
     : current === 0
-      ? translate('components.managed-runtime.downloadingTitle', 'Downloading {{agent}}', { agent })
+      ? t('components.managed-runtime.downloadingTitle', 'Downloading {{agent}}', { agent })
       : current === 1
-        ? translate('components.managed-runtime.unpackingTitle', 'Unpacking {{agent}}', { agent })
-        : translate('components.managed-runtime.checkingTitle', 'Checking the download')
+        ? t('components.managed-runtime.unpackingTitle', 'Unpacking {{agent}}', { agent })
+        : t('components.managed-runtime.checkingTitle', 'Checking the download')
   return {
     tone: 'running',
     title,
@@ -76,16 +78,14 @@ function runningCard(
       detail,
       percentText: percent === null ? null : `${Math.round(percent)}%`
     },
-    steps: stepLabels().map((label, index) => ({
+    steps: stepLabels(t).map((label, index) => ({
       label,
       state: index < current ? 'done' : index === current ? 'current' : 'todo'
     })),
     hint: null,
     action: {
       kind: 'cancel',
-      label: cancelling
-        ? cancellingText
-        : translate('components.managed-runtime.cancelShort', 'Cancel'),
+      label: cancelling ? cancellingText : t('components.managed-runtime.cancelShort', 'Cancel'),
       operationId: operation.id
     }
   }
@@ -95,29 +95,30 @@ function offerDetail(
   state: ManagedRuntimeInstallState,
   agent: string,
   hero: boolean,
-  size: string | null
+  size: string | null,
+  t: Translate = translate
 ): string | null {
   if (state.damaged) {
-    return translate('components.managed-runtime.damaged', 'This copy of {{agent}} is damaged.', {
+    return t('components.managed-runtime.damaged', 'This copy of {{agent}} is damaged.', {
       agent
     })
   }
   if (!hero) {
     return size === null
       ? null
-      : translate(
+      : t(
           'components.managed-runtime.stripSize',
           '{{size}} MB download on the computer running this chat',
           { size }
         )
   }
   return size === null
-    ? translate(
+    ? t(
         'components.managed-runtime.heroBodyNoSize',
         "One-time download. It's shared by {{agent}} chats on the computer running this chat.",
         { agent }
       )
-    : translate(
+    : t(
         'components.managed-runtime.heroBody',
         "One-time {{size}} MB download. It's shared by {{agent}} chats on the computer running this chat.",
         { size, agent }
@@ -128,23 +129,24 @@ function offerCard(
   state: ManagedRuntimeInstallState,
   agent: string,
   hero: boolean,
-  size: string | null
+  size: string | null,
+  t: Translate = translate
 ): ManagedRuntimeInstallCard {
   const title = hero
-    ? translate('components.managed-runtime.installTitle', 'Install {{agent}} to start chatting', {
+    ? t('components.managed-runtime.installTitle', 'Install {{agent}} to start chatting', {
         agent
       })
-    : translate('components.managed-runtime.continueTitle', 'Install {{agent}} to continue', {
+    : t('components.managed-runtime.continueTitle', 'Install {{agent}} to continue', {
         agent
       })
   const label = hero
-    ? translate('components.managed-runtime.install', 'Install {{agent}}', { agent })
-    : translate('components.managed-runtime.installShort', 'Install')
-  const hint = translate('components.managed-runtime.settingsHint', 'Also in Settings › Agents')
+    ? t('components.managed-runtime.install', 'Install {{agent}}', { agent })
+    : t('components.managed-runtime.installShort', 'Install')
+  const hint = t('components.managed-runtime.settingsHint', 'Also in Settings › Agents')
   return {
     tone: 'offer',
     title,
-    detail: offerDetail(state, agent, hero, size),
+    detail: offerDetail(state, agent, hero, size, t),
     progress: null,
     steps: null,
     hint: hero ? hint : null,
@@ -157,10 +159,11 @@ export function managedRuntimeInstallCard(
   state: ManagedRuntimeInstallState,
   agent: string,
   layout: ManagedRuntimeInstallLayout,
-  cancelling = false
+  cancelling = false,
+  t: Translate = translate
 ): ManagedRuntimeInstallCard {
   const { operation } = state
-  const running = operation ? runningCard(operation, agent, cancelling) : null
+  const running = operation ? runningCard(operation, agent, cancelling, t) : null
   if (running) {
     return running
   }
@@ -168,15 +171,15 @@ export function managedRuntimeInstallCard(
   const size = state.downloadBytes ? String(Math.ceil(state.downloadBytes / 1_000_000)) : null
   const sizeHint =
     hero && size !== null
-      ? translate('components.managed-runtime.downloadSize', '{{size}} MB download.', { size })
+      ? t('components.managed-runtime.downloadSize', '{{size}} MB download.', { size })
       : null
   const install = (label: string): ManagedRuntimeInstallAction => ({ kind: 'install', label })
-  const retry = translate('components.managed-runtime.retry', 'Retry installation')
+  const retry = t('components.managed-runtime.retry', 'Retry installation')
   if (operation?.kind === 'install' && operation.phase === 'cancelled') {
     return {
       tone: 'cancelled',
-      title: translate('components.managed-runtime.cancelledTitle', 'Installation cancelled'),
-      detail: translate('components.managed-runtime.cancelledBody', 'Nothing was installed.'),
+      title: t('components.managed-runtime.cancelledTitle', 'Installation cancelled'),
+      detail: t('components.managed-runtime.cancelledBody', 'Nothing was installed.'),
       progress: null,
       steps: null,
       hint: sizeHint,
@@ -186,22 +189,22 @@ export function managedRuntimeInstallCard(
   if (operation?.kind === 'install' && operation.phase === 'failed') {
     return {
       tone: 'failed',
-      title: translate('components.managed-runtime.failedTitle', "Couldn't install {{agent}}", {
+      title: t('components.managed-runtime.failedTitle', "Couldn't install {{agent}}", {
         agent
       }),
       detail:
         operation.error ??
-        translate('components.managed-runtime.failed', 'Installation failed. Try again.'),
+        t('components.managed-runtime.failed', 'Installation failed. Try again.'),
       progress: null,
       steps: null,
       hint: sizeHint,
-      action: install(translate('components.managed-runtime.tryAgain', 'Try again'))
+      action: install(t('components.managed-runtime.tryAgain', 'Try again'))
     }
   }
   if (!state.available) {
     return {
       tone: 'offer',
-      title: translate(
+      title: t(
         'components.managed-runtime.unavailable',
         '{{agent}} is not available on this host.',
         { agent }
@@ -213,5 +216,5 @@ export function managedRuntimeInstallCard(
       action: null
     }
   }
-  return offerCard(state, agent, hero, size)
+  return offerCard(state, agent, hero, size, t)
 }

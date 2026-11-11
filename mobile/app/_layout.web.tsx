@@ -5,7 +5,7 @@ import { SafeAreaFrameContext, SafeAreaInsetsContext } from 'react-native-safe-a
 import { ZERO_SAFE_AREA_INSETS } from '../src/mobile-web-shell/bridge/bridge-safe-area-insets'
 import { DetailCardHostProvider } from '../src/components/detail-card-host'
 import { SideSafeArea } from '../src/layout/side-safe-area'
-import { usePageBridgeClient } from '../src/transport/client-context.web'
+import { usePageBridgeClient } from '../src/transport/connection/client-context.web'
 import { colors } from '../src/theme/mobile-theme'
 import { themedStyleSheet } from '../src/theme/themed-styles'
 import { useMobileColorScheme } from '../src/theme/use-mobile-color-scheme'

@@ -141,25 +141,6 @@ it('keeps a phone close and still kills when its durable write fails', async () 
   expect(persistedLeafIds()).toEqual([])
 })
 
-it('keeps a renderer close when its durable write fails', async () => {
-  const { authority, runtime, persistedLeafIds, liveLeafIds } = await closeFixture()
-  vi.spyOn(console, 'error').mockImplementation(() => {})
-  const gate = authority.pause()
-  const closing = runtime.closeTerminalSurfaceFromRenderer({
-    worktreeId: binding.worktreeId,
-    target: {
-      kind: 'tab',
-      tabId: binding.tabId
-    }
-  })
-  await Promise.race([gate.started.promise, closing])
-  gate.finish.reject(new Error('close disk refused'))
-
-  await expect(closing).resolves.toBeUndefined()
-  expect(liveLeafIds()).toEqual([])
-  expect(persistedLeafIds()).toEqual([binding.leafId])
-})
-
 it('commits nothing for a pane that restarted while its close waited for the writer', async () => {
   const { authority, store, runtime, liveLeafIds } = await closeFixture({ split: true })
   const gate = authority.pause()

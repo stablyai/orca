@@ -6,8 +6,11 @@
  */
 import type { OrcadActivationRecord } from '../../managed-server/activation/orcad-activation-record'
 import { wakeExpectedOrcadUnderOneFence } from '../../managed-server/lifecycle/orcad-managed-wake'
-import type { OrcadDeployOptions, OrcadDeployResult } from '../../ssh/orcad-remote-deploy'
-import type { OrcadSlotOptions } from '../../ssh/orcad-recovery-slot'
+import type {
+  OrcadDeployOptions,
+  OrcadDeployResult
+} from '../../managed-server/install/orcad-remote-deploy'
+import type { OrcadSlotOptions } from '../../managed-server/activation/orcad-recovery-slot'
 
 type DeployExtra = Pick<OrcadDeployOptions, 'preRead' | 'sameVersionFencedByCaller'>
 

@@ -9,7 +9,7 @@ import type {
   WatcherProcessSubscription,
   WatcherProcessSubscriptionRecord
 } from './parcel-watcher-process-subscription'
-import { RUNTIME_FILE_WATCH_CANCEL_TIMEOUT_MS } from '../../../../shared/runtime-file-watch-limits'
+import { RUNTIME_FILE_WATCH_CANCEL_TIMEOUT_MS } from '../../../../shared/file-watch/runtime-file-watch-limits'
 
 export type PendingWatcherUnsubscribe = (error?: Error) => void
 

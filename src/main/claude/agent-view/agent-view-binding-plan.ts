@@ -1,5 +1,5 @@
-import type { HooksConfig } from '../../agent-hooks/installer-utils'
-import { isPlainObject } from '../../agent-hooks/hooks-json-read'
+import type { HooksConfig } from '../../agent-hooks/installation/configuration/hook-config-schema'
+import { isPlainObject } from '../../agent-hooks/installation/configuration/hooks-json-read'
 import { claudeAgentViewChord, serializeClaudeAgentViewBindings } from './agent-view-keybindings'
 import {
   CLAUDE_AGENT_VIEW_COMMAND,

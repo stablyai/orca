@@ -1,6 +1,6 @@
 import { renderCommand } from '../../orchestration-mutation-recovery'
 import { resolveOrchestrationCliExecutable } from '../../runtime/orchestration-recovery-command'
-import type { LegacyCompatibilityResult } from '../../../shared/orchestration-check-output'
+import type { LegacyCompatibilityResult } from '../../../shared/orchestration/mailbox/orchestration-check-output'
 import type { OrchestrationAgentView } from './agent-view'
 import { withReceiptNext } from './receipt-next-text'
 

@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 
 /** The iPhone Duo key rail: terminal keys the shell draws in a side inset strip for the page. */
 

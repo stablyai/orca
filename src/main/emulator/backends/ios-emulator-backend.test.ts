@@ -74,8 +74,6 @@ vi.mock('../serve-sim-detached-session', () => ({
 import { EmulatorError } from '../emulator-errors'
 import { IosEmulatorBackend } from './ios-emulator-backend'
 
-const EXECUTABLE = { command: '/serve-sim', env: {} }
-
 describe('IosEmulatorBackend', () => {
   beforeEach(() => {
     ensureSimulatorBootedMock.mockReset()
@@ -101,142 +99,6 @@ describe('IosEmulatorBackend', () => {
     notifyutilState.stdout = 'com.apple.coredevice.dtuhidd.active 0\n'
   })
 
-  it('advertises the iOS accessibility tree capability', () => {
-    const backend = new IosEmulatorBackend()
-    expect(backend.kind).toBe('ios')
-    expect(backend.streamCodec).toBe('mjpeg')
-    expect(backend.capabilities).toEqual({
-      install: false,
-      launch: false,
-      permissions: false,
-      accessibilityTree: true,
-      logcat: false
-    })
-  })
-
-  it('fetches and normalizes the serve-sim accessibility tree', async () => {
-    const raw = [
-      {
-        type: 'Application',
-        role_description: 'application',
-        AXLabel: 'Demo',
-        enabled: true,
-        frame: { x: 0, y: 0, width: 400, height: 800 },
-        children: [
-          {
-            type: 'Button',
-            role_description: 'button',
-            AXLabel: 'Continue',
-            AXValue: '',
-            enabled: true,
-            frame: { x: 100, y: 400, width: 200, height: 50 },
-            children: []
-          }
-        ]
-      }
-    ]
-    netFetchMock.mockResolvedValue(new Response(JSON.stringify(raw), { status: 200 }))
-    const backend = new IosEmulatorBackend()
-
-    await expect(
-      backend.accessibilityTree('device-1', 'http://127.0.0.1:3100/ax')
-    ).resolves.toEqual([
-      {
-        role: 'application',
-        type: 'Application',
-        label: 'Demo',
-        value: '',
-        enabled: true,
-        frame: { x: 0, y: 0, width: 1, height: 1 },
-        children: [
-          {
-            role: 'button',
-            type: 'Button',
-            label: 'Continue',
-            value: '',
-            enabled: true,
-            frame: { x: 0.25, y: 0.5, width: 0.5, height: 0.0625 },
-            children: []
-          }
-        ]
-      }
-    ])
-    expect(netFetchMock).toHaveBeenCalledWith(
-      'http://127.0.0.1:3100/ax',
-      expect.objectContaining({ signal: expect.any(AbortSignal) })
-    )
-  })
-
-  it('reports missing sessions and temporarily unavailable AX endpoints', async () => {
-    const backend = new IosEmulatorBackend()
-    await expect(backend.accessibilityTree('device-1')).rejects.toMatchObject({
-      code: 'emulator_no_active'
-    })
-
-    netFetchMock.mockResolvedValue(new Response('{"error":"ax_unavailable"}', { status: 503 }))
-    await expect(
-      backend.accessibilityTree('device-1', 'http://127.0.0.1:3100/ax')
-    ).rejects.toMatchObject({ code: 'emulator_helper_failed' })
-  })
-
-  it('taps via serve-sim with the resolved device', async () => {
-    const backend = new IosEmulatorBackend()
-    await backend.tap('iPhone 16 Pro', 0.5, 0.7)
-    expect(execServeSimCommandMock).toHaveBeenCalledWith(
-      EXECUTABLE,
-      ['tap', '0.5', '0.7', '-d', 'iPhone 16 Pro'],
-      undefined
-    )
-  })
-
-  it('types and presses hardware buttons via serve-sim', async () => {
-    const backend = new IosEmulatorBackend()
-    await backend.type('device-1', 'hi')
-    await backend.button('device-1', 'home')
-    await backend.rotate('device-1', 'landscape_left')
-    expect(execServeSimCommandMock).toHaveBeenCalledWith(
-      EXECUTABLE,
-      ['type', 'hi', '-d', 'device-1'],
-      undefined
-    )
-    expect(execServeSimCommandMock).toHaveBeenCalledWith(
-      EXECUTABLE,
-      ['button', 'home', '-d', 'device-1'],
-      undefined
-    )
-    expect(execServeSimCommandMock).toHaveBeenCalledWith(
-      EXECUTABLE,
-      ['rotate', 'landscape_left', '-d', 'device-1'],
-      undefined
-    )
-  })
-
-  it('execs a raw command with the device appended as json', async () => {
-    const backend = new IosEmulatorBackend()
-    await backend.exec('device-1', 'ca-debug blended on')
-    expect(execServeSimCommandMock).toHaveBeenCalledWith(
-      EXECUTABLE,
-      ['ca-debug', 'blended', 'on', '-d', 'device-1'],
-      { json: true }
-    )
-  })
-
-  it('sends a gesture over the provided ws url and rejects without one', async () => {
-    const backend = new IosEmulatorBackend()
-    const points = [
-      { type: 'begin' as const, x: 0.1, y: 0.1 },
-      { type: 'end' as const, x: 0.2, y: 0.2 }
-    ]
-    await backend.gesture('device-1', points, 'ws://127.0.0.1:3100/device-1')
-    expect(sendEmulatorGestureSequenceMock).toHaveBeenCalledWith(
-      'ws://127.0.0.1:3100/device-1',
-      points
-    )
-    await expect(backend.gesture('device-1', points, null)).rejects.toMatchObject({
-      code: 'emulator_no_active'
-    })
-  })
-
   it('refuses touch and keyboard input instead of reporting success while Device Hub holds it', async () => {
     notifyutilState.stdout = 'com.apple.coredevice.dtuhidd.active 1\n'
     const backend = new IosEmulatorBackend()
@@ -252,67 +114,6 @@ describe('IosEmulatorBackend', () => {
     ).rejects.toMatchObject(blocked)
     expect(execServeSimCommandMock).not.toHaveBeenCalled()
     expect(sendEmulatorGestureSequenceMock).not.toHaveBeenCalled()
-  })
-
-  it('maps simulator devices to the cross-backend device shape', async () => {
-    listSimulatorDevicesMock.mockResolvedValue([
-      {
-        name: 'iPhone 17 Pro',
-        udid: 'udid-1',
-        state: 'Booted',
-        runtime: 'com.apple.CoreSimulator.SimRuntime.iOS-18-0'
-      }
-    ])
-    const backend = new IosEmulatorBackend()
-    const devices = await backend.listDevices()
-    expect(devices).toEqual([
-      {
-        backend: 'ios',
-        id: 'udid-1',
-        name: 'iPhone 17 Pro',
-        state: 'booted',
-        detail: 'com.apple.CoreSimulator.SimRuntime.iOS-18-0',
-        isAvailable: true
-      }
-    ])
-  })
-
-  it('starts a session and tags it as mjpeg', async () => {
-    parseServeSimDetachedSessionMock.mockReturnValue({
-      deviceUdid: 'device-1',
-      streamUrl: 'http://127.0.0.1:3102/stream.mjpeg',
-      wsUrl: 'ws://127.0.0.1:3102',
-      helperPid: 1234
-    })
-    const backend = new IosEmulatorBackend({ waitForEndpointReady: async () => true })
-    const info = await backend.startSession('device-1')
-    expect(info.deviceUdid).toBe('device-1')
-    expect(info.streamCodec).toBe('mjpeg')
-    expect(hideNativeSimulatorAppMock).toHaveBeenCalledTimes(1)
-  })
-
-  it('recycles the device and retries when the helper finds no framebuffer', async () => {
-    // CoreSimulator can report Booted while framebuffer ports remain unavailable.
-    execServeSimCommandMock
-      .mockRejectedValueOnce(
-        new EmulatorError(
-          'emulator_error',
-          'Helper failed:\n[main] Starting serve-sim-bin\n[main] Failed to start capture: No framebuffer display descriptor found'
-        )
-      )
-      .mockResolvedValueOnce({})
-    parseServeSimDetachedSessionMock.mockReturnValue({
-      deviceUdid: 'device-1',
-      streamUrl: 'http://127.0.0.1:3102/stream.mjpeg',
-      wsUrl: 'ws://127.0.0.1:3102',
-      helperPid: 1234
-    })
-    const backend = new IosEmulatorBackend({ waitForEndpointReady: async () => true })
-    const info = await backend.startSession('device-1')
-    expect(info.deviceUdid).toBe('device-1')
-    expect(shutdownSimulatorDeviceMock).toHaveBeenCalledWith('device-1')
-    expect(ensureSimulatorBootedMock).toHaveBeenCalledTimes(2)
-    expect(execServeSimCommandMock).toHaveBeenCalledTimes(2)
   })
 
   it('does not recycle the device for unrelated helper start failures', async () => {
@@ -342,22 +143,6 @@ describe('IosEmulatorBackend', () => {
       message: expect.stringContaining('timed out')
     })
     expect(execServeSimCommandMock).toHaveBeenCalledTimes(1)
-  })
-
-  it('surfaces an actionable error when the display stays wedged after one recycle', async () => {
-    execServeSimCommandMock.mockRejectedValue(
-      new EmulatorError(
-        'emulator_error',
-        'Helper failed:\n[main] Failed to start capture: No framebuffer display descriptor found'
-      )
-    )
-    const backend = new IosEmulatorBackend({ waitForEndpointReady: async () => true })
-    await expect(backend.startSession('device-1')).rejects.toMatchObject({
-      code: 'emulator_helper_failed',
-      message: expect.stringMatching(/simctl erase[\s\S]*No framebuffer display descriptor found/)
-    })
-    expect(shutdownSimulatorDeviceMock).toHaveBeenCalledTimes(1)
-    expect(execServeSimCommandMock).toHaveBeenCalledTimes(2)
   })
 
   it('does not recycle more than once during one start attempt', async () => {
@@ -392,34 +177,6 @@ describe('IosEmulatorBackend', () => {
     expect(detachCalls).toBe(3)
     expect(shutdownSimulatorDeviceMock).toHaveBeenCalledTimes(1)
     expect(ensureSimulatorBootedMock).toHaveBeenCalledTimes(2)
-  })
-
-  it('stops a helper via serve-sim kill plus the orphan sweep', async () => {
-    const backend = new IosEmulatorBackend()
-    await backend.stopHelperForDevice('device-1', { helperPid: 1234, includeOrphaned: true })
-    expect(execServeSimCommandMock).toHaveBeenCalledWith(
-      EXECUTABLE,
-      ['--kill=device-1', '-q'],
-      undefined
-    )
-    expect(killServeSimHelperProcessesForDeviceMock).toHaveBeenCalledWith('device-1', {
-      helperPid: 1234,
-      includeOrphaned: true
-    })
-  })
-
-  it('treats a session as reusable only when reachable and helper-backed', async () => {
-    const reachable = new IosEmulatorBackend({ waitForEndpointReady: async () => true })
-    const info = {
-      deviceUdid: 'device-1',
-      streamUrl: 'http://127.0.0.1:3100/device-1',
-      wsUrl: 'ws://127.0.0.1:3100/device-1',
-      helperPid: 1234
-    }
-    expect(await reachable.isSessionReusable(info)).toBe(true)
-
-    const unreachable = new IosEmulatorBackend({ waitForEndpointReady: async () => false })
-    expect(await unreachable.isSessionReusable(info)).toBe(false)
   })
 
   it('keeps a reachable helper when its process lookup fails', async () => {

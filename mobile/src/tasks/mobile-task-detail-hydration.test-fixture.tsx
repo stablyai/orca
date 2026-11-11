@@ -1,8 +1,8 @@
 import { createElement, useState } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { createFakeRpcClient, type SentRequest } from '../mobile-web-shell/bridge-host-test-fakes'
-import type { RpcClient } from '../transport/rpc-client'
-import type { RpcResponse } from '../transport/types'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
 import type { ActionableTaskItem, TaskItem } from './mobile-tasks-project-workspace-types'
 import type { DetailPayload, GitLabWorkItem } from './mobile-tasks-provider-detail-types'
 import { useMobileTasksItemDetailLoading } from './use-mobile-tasks-item-detail-loading'
@@ -24,7 +24,8 @@ export const SUCCESS_CHECKS = {
   passed: 1,
   failed: 0,
   pending: 0,
-  neutral: 0
+  neutral: 0,
+  cancelled: 0
 } as const
 
 export function gitlabItem(
@@ -148,6 +149,7 @@ export async function mountDetail(
       detailRequestItem: selection.detailRequestItem,
       client,
       detailRefreshSeq,
+      detailRefreshRequested: { current: false },
       hydrateActionItem: selection.hydrateActionItem,
       setItems,
       setDetailPayload,

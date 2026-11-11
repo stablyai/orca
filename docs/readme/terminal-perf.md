@@ -30,7 +30,7 @@ Pass Playwright arguments after `--`, for example
   (change with `--report <path>` or `ORCA_E2E_TERMINAL_PERF_REPORT_PATH`).
 - A summary table on stdout (`test:e2e:terminal-perf:summarize <report>`).
 - A budget check (`test:e2e:terminal-perf:check-report <report>`); budgets live
-  in `config/scripts/terminal-perf-report-budgets.mjs`.
+  in `config/scripts/performance/terminal-reporting/terminal-perf-report-budgets.mjs`.
 - `test-results/terminal-perf-impact-report.html`
   (`ORCA_E2E_TERMINAL_PERF_HTML_REPORT_PATH`).
 

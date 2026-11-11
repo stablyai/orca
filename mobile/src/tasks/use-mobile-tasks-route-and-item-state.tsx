@@ -1,10 +1,9 @@
+import { useMobileTasksSelection } from './github-task-identity'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import {
   type GitHubIssueSourceError,
   type GitHubIssueSourceFallback,
   type GitHubRepoSlugCacheEntry,
-  type RpcClient,
-  type TaskProvider,
-  normalizeVisibleTaskProviders,
   useHostClient,
   useHostRepoList,
   useMemo,
@@ -18,7 +17,11 @@ import {
   useSafeAreaInsets,
   useState
 } from './mobile-tasks-dependencies'
-import { newTabRepoListRead } from '../session/mobile-session-read-operations'
+import {
+  type TaskProvider,
+  normalizeVisibleTaskProviders
+} from '../../../src/shared/work-items/task-providers'
+import { newTabRepoListRead } from '../session/agent-launch/mobile-runtime-repo-operations'
 import { useHostProtocolGates } from '../components/host-protocol-gates-context'
 import { useTaskHostRepos } from './use-task-host-repos'
 import {
@@ -43,11 +46,11 @@ import {
   type TaskItem,
   type TaskResumeState,
   type TaskSort,
-  type TasksSupportState,
-  getTaskPresetQuery
+  type TasksSupportState
 } from './mobile-tasks-legacy-foundation'
+import { getTaskPresetQuery } from '../../../src/shared/work-items/task-preset-query'
 import { useMobileTasksItemState } from './use-mobile-tasks-item-state'
-import { useMobileTasksItemSelection } from './use-mobile-tasks-item-selection'
+import { useTaskCommentDraft, useTaskCreateDraft } from './task-draft-rows'
 import { useMobileJiraConnectionState } from './use-mobile-jira-connection-state'
 import type { JiraIssueFilter } from '../../../src/shared/jira/jira-types'
 
@@ -163,8 +166,8 @@ export function useMobileTasksRouteAndItemState() {
   const [showGitHubPagePicker, setShowGitHubPagePicker] = useState(false)
   const [showCreateTask, setShowCreateTask] = useState(false)
   const [showCreateTargetPicker, setShowCreateTargetPicker] = useState(false)
-  const [createTitle, setCreateTitle] = useState('')
-  const [createBody, setCreateBody] = useState('')
+  const { createTitle, setCreateTitle, createBody, setCreateBody } =
+    useTaskCreateDraft(showCreateTask)
   const [createRepoId, setCreateRepoId] = useState<string | null>(null)
   const [createTeamId, setCreateTeamId] = useState<string | null>(null)
   const [linearTeams, setLinearTeams] = useState<LinearTeam[]>([])
@@ -178,7 +181,13 @@ export function useMobileTasksRouteAndItemState() {
     client: null
   })
   const [error, setError] = useState('')
-  const itemSelection = useMobileTasksItemSelection()
+  const itemState = useMobileTasksItemState()
+  const itemSelection = useMobileTasksSelection(
+    client,
+    itemState.readDetailPayload,
+    itemState.reconcilePrFileConnection
+  )
+  const [itemCommentDraft, setItemCommentDraft] = useTaskCommentDraft(itemSelection.actionItem)
   const [mergeMethodTaskItem, setMergeMethodTaskItem] = useState<
     Extract<TaskItem, { provider: 'github' }> | Extract<TaskItem, { provider: 'gitlab' }> | null
   >(null)
@@ -188,7 +197,6 @@ export function useMobileTasksRouteAndItemState() {
     useState<PendingProjectGitHubMerge | null>(null)
   const [pendingHostedStateChange, setPendingHostedStateChange] =
     useState<PendingHostedStateChange | null>(null)
-  const itemState = useMobileTasksItemState()
   return {
     hostId,
     taskSource,
@@ -354,7 +362,9 @@ export function useMobileTasksRouteAndItemState() {
     setPendingProjectGitHubMerge,
     pendingHostedStateChange,
     setPendingHostedStateChange,
-    ...itemState
+    ...itemState,
+    itemCommentDraft,
+    setItemCommentDraft
   }
 }
 

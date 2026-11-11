@@ -2,16 +2,17 @@ import { z } from 'zod'
 import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../shared/agent-session/journal/agent-session-journal-identity'
-import { legacyItemBody } from '../native-chat/agent-session-journal/journal-legacy-import'
-import { decodePiSessionEntryLine } from '../native-chat/agent-session-journal/journal-pi-active-branch'
-import { journalLifecycleItemMutation } from '../native-chat/agent-session-journal/journal-row-builders'
-import type { StructuredAgentSessionTransitionJournal } from '../native-chat/agent-session-wire/structured-agent-session-transition'
+import { legacyItemBody } from '../native-chat/agent-session-journal/history-import/journal-legacy-import'
+import { decodePiSessionEntryLine } from '../native-chat/agent-session-journal/history-import/journal-pi-active-branch'
+import '../native-chat/agent-session-journal/writing/journal-row-builders'
+import { journalLifecycleItemMutation } from '../native-chat/agent-session-journal/writing/journal-lifecycle-mutation'
+import type { StructuredAgentSessionTransitionJournal } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-transition'
 import {
   continuedOutsideNotice,
   continuedOutsideRecordId,
   createHistoryCatchUpBatch,
   type HistoryCatchUpPlan
-} from '../native-chat/agent-session-wire/structured-agent-session-history-catch-up'
+} from '../native-chat/agent-session-wire/acquisition/structured-agent-session-history-catch-up'
 
 const piEntrySchema = z.looseObject({
   id: z.string().min(1),

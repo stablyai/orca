@@ -1332,6 +1332,7 @@
           "activeTabType",
           "publicationEpoch",
           "snapshotVersion",
+          "tabGroupLayout",
           "tabGroups",
           "tabs",
           "type",

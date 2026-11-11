@@ -1,11 +1,11 @@
-import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup'
+import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup/workspace-cleanup'
 import {
   isPathInsideOrEqual,
   normalizeRuntimePathForComparison
 } from '../../../../shared/cross-platform-path'
-import type { WorkspaceCleanupFailure } from '@/store/slices/workspace-cleanup'
+import type { WorkspaceCleanupFailure } from '@/store/slices/workspace-cleanup/workspace-cleanup-removal'
 import { translate } from '@/i18n/i18n'
-import { getWorkspaceCleanupCandidateHostId } from '../../../../shared/workspace-cleanup-host-identity'
+import { getWorkspaceCleanupCandidateHostId } from '../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
 
 // Ancestor skips remain provisional while blockers remove; authoritative settlement hardens or lifts them.
 export type SkippedWorkspaceCleanupAncestor = {

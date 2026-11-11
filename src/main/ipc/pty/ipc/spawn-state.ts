@@ -1,13 +1,13 @@
 import type { PtySpawnSizeSeed } from '../spawn-options-assembly'
 import type { StartupCwdFallback } from '../../../../shared/startup-cwd-fallback'
-import type { PtyRegistrationClaim } from '../../../runtime/runtime-terminal-state-records'
+import type { PtyRegistrationClaim } from '../../../runtime/terminal/records/runtime-terminal-state-records'
 import type { PaneSpawnOperation } from '../pane/pane-spawn-operation'
 import type {
   IPtyProvider,
   PtySpawnOptions,
   PtySpawnResult
 } from '../../../providers/pty-provider-contract'
-import type { CodexPaneHomeRoute } from '../../../codex/codex-pane-account-registry'
+import type { CodexPaneHomeRoute } from '../../../codex/configuration/homes/codex-pane-account-registry-types'
 import type { CodexAccountSelectionTarget } from '../../../codex-accounts/runtime-selection'
 import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { ResumeSpawnAdmission } from '../host-env/saved-resume-admission'

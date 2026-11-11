@@ -1,4 +1,4 @@
-import type { WorkerTerminalResourceRow } from '../../worker-terminal-ownership'
+import type { WorkerTerminalResourceRow } from '../../terminal-authority/release/worker-terminal-ownership'
 import { OrchestrationError } from '../../orchestration-error'
 import { isEquivalentPaneKey } from '../pane-key-match'
 import { createPreviousCustodianLookup } from './worker-custody-read'

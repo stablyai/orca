@@ -1,102 +1,88 @@
-import type { AddWorktreeOptions } from '../../../git/worktree-operation-options'
-import { discardPreparedWorktree } from '../../../git/worktree-create-preparation'
-import { WorktreePreparationLockOwnershipError } from '../../../git/worktree-preparation-lock'
-import { isOrphanedWorktreeError } from '../../../ipc/worktree-logic'
+import { worktreePreparationGit } from '../../../git/worktrees/creation/worktree-create-git-executor'
 import { trackPreparationWork } from '../worktree-create-concurrency'
+import { blockedWslDistroForPath } from '../../../wsl/filesystem/wsl-unc-access-gate'
 import type { PreparationEntry } from './worktree-create-preparation-pool'
 
-// Retry live-owner discard failures on later preparations; stale cleanup only reclaims dead owners.
-const PREPARATION_DISCARD_ATTEMPT_LIMIT = 3
-
-export type PreparationDiscardTarget = {
-  hostKey: string
-  repoPath: string
-  preparedPath: string
-  lockReason: string
-  options: AddWorktreeOptions
-}
-
-const pendingDiscards = new Map<string, PreparationDiscardTarget & { attempts: number }>()
+const obligations = new Map<string, PreparationEntry>()
 const inFlightDiscards = new Set<Promise<unknown>>()
 
 export function preparationHostKey(repoPathKey: string, wslDistro: string): string {
   return `${repoPathKey}\0${wslDistro}`
 }
 
-export async function discardPreparationEntry(entry: PreparationEntry): Promise<void> {
-  await entry.ready.catch(() => {})
-  if (!entry.checkoutStarted) {
-    return
-  }
-  // Claim cleanup before yielding so queued refresh failures cannot discard the same checkout.
-  entry.checkoutStarted = false
-  await discardPreparationWithRetry({
-    hostKey: preparationHostKey(entry.repoPathKey, entry.wslDistro),
-    repoPath: entry.repoPath,
-    preparedPath: entry.preparedPath,
-    lockReason: entry.lockReason,
-    options: entry.options
+function obligationKey(entry: PreparationEntry): string {
+  return `${preparationHostKey(entry.repoPathKey, entry.wslDistro)}\0${entry.preparedPath}`
+}
+
+export function preparationCapacityUsed(): number {
+  return obligations.size
+}
+
+export function registerPreparationObligation(entry: PreparationEntry): void {
+  const key = obligationKey(entry)
+  obligations.set(key, entry)
+  entry.operation.setDisposalOwner({
+    current: () => obligations.get(key) === entry,
+    before: async () => !(await blockedWslDistroForPath(entry.repoPath, entry.options.wslDistro)),
+    schedule: (run) => {
+      const work = trackPreparationWork(worktreePreparationGit.run(run))
+      trackPreparationDiscard(work)
+      return work
+    },
+    disposed: () => {
+      if (obligations.get(key) === entry) {
+        obligations.delete(key)
+      }
+    }
   })
 }
 
-/** Let test reset await detached discards before clearing the registry. */
-export function trackPreparationDiscard(work: Promise<void>): void {
-  inFlightDiscards.add(work)
-  void work.finally(() => inFlightDiscards.delete(work))
+export function releasePreparationObligation(entry: PreparationEntry): void {
+  const key = obligationKey(entry)
+  if (obligations.get(key) !== entry) {
+    return
+  }
+  obligations.delete(key)
+  entry.operation.release()
 }
 
-function pendingKey(target: PreparationDiscardTarget): string {
-  return `${target.hostKey}\0${target.preparedPath}`
-}
-
-async function runDiscard(target: PreparationDiscardTarget, attempts: number): Promise<void> {
-  try {
-    await discardPreparedWorktree(
-      target.repoPath,
-      target.preparedPath,
-      target.options,
-      target.lockReason
-    )
-  } catch (error) {
-    // Checkout failure may already have removed the registration; do not retry missing or foreign entries.
-    if (error instanceof WorktreePreparationLockOwnershipError || isOrphanedWorktreeError(error)) {
-      return
-    }
-    // Bounded: a path that never becomes removable must not tax every later preparation.
-    if (attempts >= PREPARATION_DISCARD_ATTEMPT_LIMIT) {
-      console.warn(
-        `[worktree-create] prepared checkout could not be discarded in ${attempts} attempts; ${target.preparedPath} stays registered until this process exits`,
-        error
-      )
-      return
-    }
-    pendingDiscards.set(pendingKey(target), { ...target, attempts })
+export async function discardPreparationEntry(entry: PreparationEntry): Promise<void> {
+  if (!entry.checkoutStarted) {
+    return
+  }
+  // Claim submission before yielding; the capacity owner survives this claim.
+  entry.checkoutStarted = false
+  if (obligations.get(obligationKey(entry)) === entry) {
+    await entry.operation.discard()
   }
 }
 
-/** Record failed discards for bounded retries. */
-export function discardPreparationWithRetry(
-  target: PreparationDiscardTarget,
-  attempts = 1
-): Promise<void> {
-  // Claim the record so an overlapping retry pass cannot run the same discard twice.
-  pendingDiscards.delete(pendingKey(target))
-  const discard = trackPreparationWork(runDiscard(target, attempts))
-  trackPreparationDiscard(discard)
-  return discard
+export function trackPreparationDiscard(work: Promise<void>): void {
+  inFlightDiscards.add(work)
+  void work.then(
+    () => inFlightDiscards.delete(work),
+    () => inFlightDiscards.delete(work)
+  )
 }
 
-export function retryPendingPreparationDiscards(hostKey: string): Promise<void> {
-  const pending = [...pendingDiscards.values()].filter((target) => target.hostKey === hostKey)
+export function retryPendingPreparationDiscards(hostKey?: string): Promise<void> {
   return Promise.all(
-    pending.map(({ attempts, ...target }) => discardPreparationWithRetry(target, attempts + 1))
+    [...obligations.values()]
+      .filter(
+        (entry) =>
+          entry.operation.needsDiscardRetry &&
+          (!hostKey || preparationHostKey(entry.repoPathKey, entry.wslDistro) === hostKey)
+      )
+      .map((entry) => entry.operation.discard())
   ).then(() => undefined)
 }
 
-/** Settle background discards before clearing their registry. */
 export async function resetPendingPreparationDiscardsForTests(): Promise<void> {
   while (inFlightDiscards.size > 0) {
-    await Promise.all(inFlightDiscards)
+    await Promise.allSettled(inFlightDiscards)
   }
-  pendingDiscards.clear()
+  for (const entry of obligations.values()) {
+    entry.operation.release()
+  }
+  obligations.clear()
 }

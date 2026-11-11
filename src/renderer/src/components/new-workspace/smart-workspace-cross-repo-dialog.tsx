@@ -9,10 +9,12 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import type { SmartWorkspaceNameFieldController } from './use-smart-workspace-name-field-controller'
 
 export function renderSmartWorkspaceCrossRepoDialog(
-  controller: SmartWorkspaceNameFieldController
+  controller: SmartWorkspaceNameFieldController,
+  t: Translate = translate
 ): React.JSX.Element {
   const {
     crossRepoPrompt,
@@ -43,10 +45,7 @@ export function renderSmartWorkspaceCrossRepoDialog(
         </DialogHeader>
         <DialogFooter className="min-w-0 sm:flex-wrap">
           <Button variant="outline" onClick={dismissCrossRepoPrompt}>
-            {translate(
-              'auto.components.new.workspace.SmartWorkspaceNameField.6859e2896c',
-              'Cancel'
-            )}
+            {t('auto.components.new.workspace.SmartWorkspaceNameField.6859e2896c', 'Cancel')}
           </Button>
           <Button
             variant="outline"
@@ -54,7 +53,7 @@ export function renderSmartWorkspaceCrossRepoDialog(
             onClick={() => void handleUseCurrentRepo()}
           >
             <span className="min-w-0 truncate">
-              {translate(
+              {t(
                 'auto.components.new.workspace.SmartWorkspaceNameField.keepRepo',
                 'Keep {{name}}',
                 { name: selectedRepo?.displayName ?? crossRepoSwitchFallbackLabel }
@@ -67,7 +66,7 @@ export function renderSmartWorkspaceCrossRepoDialog(
               onClick={() => void acceptGitHubLink(crossRepoPrompt.matchingRepo!)}
             >
               <span className="min-w-0 truncate">
-                {translate(
+                {t(
                   'auto.components.new.workspace.SmartWorkspaceNameField.switchToRepo',
                   'Switch to {{name}}',
                   { name: crossRepoPrompt.matchingRepo.displayName }
@@ -76,7 +75,7 @@ export function renderSmartWorkspaceCrossRepoDialog(
             </Button>
           ) : allowCrossRepoProjectAdd ? (
             <Button onClick={() => void handleAddMatchingRepo()}>
-              {translate(
+              {t(
                 'auto.components.new.workspace.SmartWorkspaceNameField.e57c53727c',
                 'Add project...'
               )}

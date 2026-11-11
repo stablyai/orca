@@ -10,6 +10,8 @@ export type DictationMeterAnalyzerState = DictationMeterState & {
   noiseFloor: number
   smoothedLevel: number
   clippingUntil: number
+  /** The `now` of the last chunk measured as speech; 0 until then. */
+  lastSpeechAt: number
 }
 
 export const DEFAULT_DICTATION_METER: DictationMeterState = {
@@ -17,6 +19,9 @@ export const DEFAULT_DICTATION_METER: DictationMeterState = {
   isSpeaking: false,
   isClipping: false
 }
+
+// Desktop and phone both feed the analyzer one window this long; its smoothing is tuned to it.
+export const DICTATION_METER_WINDOW_MS = 50
 
 const CLIPPING_THRESHOLD = 0.98
 const CLIPPING_HOLD_MS = 500
@@ -32,14 +37,17 @@ export function createDictationMeterAnalyzerState(): DictationMeterAnalyzerState
     lastUpdatedAt: 0,
     noiseFloor: 0.008,
     smoothedLevel: 0,
-    clippingUntil: Number.NEGATIVE_INFINITY
+    clippingUntil: Number.NEGATIVE_INFINITY,
+    lastSpeechAt: 0
   }
 }
 
-function measureDictationAudioChunk(samples: Float32Array): {
+export type DictationAudioLevel = {
   rms: number
   peak: number
-} {
+}
+
+export function measureDictationAudioChunk(samples: Float32Array): DictationAudioLevel {
   if (samples.length === 0) {
     return { rms: 0, peak: 0 }
   }
@@ -62,7 +70,14 @@ export function analyzeDictationAudioChunk(
   now: number,
   previous: DictationMeterAnalyzerState
 ): DictationMeterAnalyzerState {
-  const { rms, peak } = measureDictationAudioChunk(samples)
+  return analyzeDictationAudioLevel(measureDictationAudioChunk(samples), now, previous)
+}
+
+export function analyzeDictationAudioLevel(
+  { rms, peak }: DictationAudioLevel,
+  now: number,
+  previous: DictationMeterAnalyzerState
+): DictationMeterAnalyzerState {
   const noiseFloor = Math.max(
     0.004,
     previous.noiseFloor * 0.96 + Math.min(rms, previous.noiseFloor * 2) * 0.04
@@ -71,16 +86,18 @@ export function analyzeDictationAudioChunk(
   const smoothing = rawLevel > previous.smoothedLevel ? 0.58 : 0.2
   const smoothedLevel = previous.smoothedLevel + (rawLevel - previous.smoothedLevel) * smoothing
   const clippingUntil = peak >= CLIPPING_THRESHOLD ? now + CLIPPING_HOLD_MS : previous.clippingUntil
+  const isSpeaking = smoothedLevel >= 0.1 || peak >= 0.18
 
   return {
     level: smoothedLevel,
     peak,
-    isSpeaking: smoothedLevel >= 0.1 || peak >= 0.18,
+    isSpeaking,
     isClipping: now <= clippingUntil,
     lastUpdatedAt: now,
     noiseFloor,
     smoothedLevel,
-    clippingUntil
+    clippingUntil,
+    lastSpeechAt: isSpeaking ? now : previous.lastSpeechAt
   }
 }
 

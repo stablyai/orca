@@ -1,14 +1,12 @@
-import { NativeChatSessionGate } from './NativeChatSessionGate'
+import { NativeChatSessionGate } from './host-access/NativeChatSessionGate'
 import { NativeChatStructuredSession } from './NativeChatStructuredSession'
 import { NativeChatResolvedView } from './NativeChatResolvedView'
-import { useNativeChatStatusEntry } from './use-native-chat-status-entry'
+import { useNativeChatStatusEntry } from './session/status/use-native-chat-status-entry'
 import type { NativeChatViewProps } from './native-chat-view-types'
-import { NativeChatPaneFileDropSurface } from './NativeChatPaneFileDropSurface'
-import { NativeChatVisualOwnerProvider } from './native-chat-visual-owner'
-import { NativeChatFileLinkExistenceProvider } from './use-native-chat-file-link-existence'
-import { NativeChatMarkdownImageOwnerProvider } from './native-chat-markdown-image-owner'
-
-export type { NativeChatViewProps } from './native-chat-view-types'
+import { NativeChatPaneFileDropSurface } from './attachments/intake/NativeChatPaneFileDropSurface'
+import { NativeChatVisualOwnerProvider } from './media/visuals/native-chat-visual-owner'
+import { NativeChatFileLinkExistenceProvider } from './links/actions/use-native-chat-file-link-existence'
+import { NativeChatMarkdownImageOwnerProvider } from './media/images/native-chat-markdown-image-owner'
 
 export default function NativeChatView(props: NativeChatViewProps): React.JSX.Element {
   return (

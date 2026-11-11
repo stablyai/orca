@@ -4,7 +4,7 @@ import {
   isFileNameFilterQueryTooLarge,
   pathMatchesFileNameFilterTokens,
   splitFileNameFilterTokens
-} from '../../../shared/file-name-filter-tokens'
+} from '../../../shared/file-listing/file-name-filter-tokens'
 import type { FilesystemHandlerContext } from './filesystem-handler-context'
 import { registerFilesystemContentSearchHandler } from './filesystem-content-search-handler'
 

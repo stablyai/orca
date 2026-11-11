@@ -8,7 +8,7 @@ import { stopStructuredAgentSessionRuntime } from './structured-agent-session-ru
 import {
   openStructuredCodexRpcHarness,
   type StructuredCodexRpcHarness
-} from '../structured-codex-session-rpc-test-harness'
+} from '../rpc/methods/structured-sessions/structured-codex-session-rpc-test-harness'
 
 const CREDENTIAL = 'paired-bearer-credential-0f3c9a71'
 const DEVICE = 'device-7d2e41'

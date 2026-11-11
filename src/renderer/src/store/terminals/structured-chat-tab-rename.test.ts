@@ -1,13 +1,15 @@
+import type * as StructuredAgentSessionHostSupport from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-support'
 import { toast } from 'sonner'
 import { createTerminalTabAppearanceActions } from './terminal-tab-appearance'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Tab } from '../../../../shared/tab-types'
-import { createTestStore, makeWorktree, seedStore } from '../slices/store-test-helpers'
-import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
+import { createTestStore, seedStore } from '../testing/app-store-test-fixture'
+import { makeWorktree } from '../slices/worktrees/worktree.test-fixture'
+import { layoutApplyTestTransport } from '@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import type * as SessionClient from '@/runtime/structured-agent-session-client'
+
 import { routeTerminalTabChangesThroughLayoutOwner } from './terminal-tab-layout-owner-actions'
-import { makeFolderWorkspace } from '../slices/worktrees-slice-test-fixtures'
+import { makeFolderWorkspace } from '../folder-workspaces/folder-workspace.test-fixture'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 
 const { hostRename, hostSavesNames } = vi.hoisted(() => ({
@@ -18,9 +20,9 @@ const { hostRename, hostSavesNames } = vi.hoisted(() => ({
   hostSavesNames: vi.fn(async () => true)
 }))
 
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => {
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) => {
   const client = (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
   return {
     ...client,
@@ -31,10 +33,13 @@ vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => {
   }
 })
 
-vi.mock('@/runtime/structured-agent-session-client', async (importOriginal) => ({
-  ...(await importOriginal<typeof SessionClient>()),
-  supportsStructuredAgentSessionRename: hostSavesNames
-}))
+vi.mock(
+  '../../runtime/native-chat/host-capabilities/structured-agent-session-host-support',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof StructuredAgentSessionHostSupport>()),
+    supportsStructuredAgentSessionRename: hostSavesNames
+  })
+)
 
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }

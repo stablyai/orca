@@ -12,7 +12,11 @@ type BrowserAgentCursorSink = {
 type BrowserAgentActivityMark = { pageId: string; revision: number }
 
 const activePageIds = new Set<string>()
-const lastActivityByWorktree = new Map<string, BrowserAgentActivityMark>()
+/** The SSH host driving a page through the desktop browser bridge, by its label. */
+const controllerHostByPage = new Map<string, string>()
+/** Activity no chat claimed: older CLIs, remote hosts and terminal agents. */
+const lastUnclaimedActivityByWorktree = new Map<string, BrowserAgentActivityMark>()
+const lastActivityByChatSession = new Map<string, BrowserAgentActivityMark>()
 const lastCursorByPage = new Map<string, BrowserAgentCursorEvent>()
 const sinksByPage = new Map<string, BrowserAgentCursorSink>()
 const listeners = new Set<() => void>()
@@ -34,16 +38,27 @@ function subscribe(listener: () => void): () => void {
 export function setBrowserAgentPageActive(
   browserPageId: string,
   active: boolean,
-  worktreeId: string | null
+  worktreeId: string | null,
+  controllerHostLabel?: string,
+  agentSessionId?: string
 ): void {
   if (active) {
     revision += 1
     activePageIds.add(browserPageId)
-    if (worktreeId) {
-      lastActivityByWorktree.set(worktreeId, { pageId: browserPageId, revision })
+    if (controllerHostLabel) {
+      controllerHostByPage.set(browserPageId, controllerHostLabel)
+    } else {
+      controllerHostByPage.delete(browserPageId)
+    }
+    const mark = { pageId: browserPageId, revision }
+    if (agentSessionId) {
+      lastActivityByChatSession.set(agentSessionId, mark)
+    } else if (worktreeId) {
+      lastUnclaimedActivityByWorktree.set(worktreeId, mark)
     }
   } else {
     activePageIds.delete(browserPageId)
+    controllerHostByPage.delete(browserPageId)
     lastCursorByPage.delete(browserPageId)
   }
   sinksByPage.get(browserPageId)?.setActive(active)
@@ -87,11 +102,31 @@ export function useBrowserAgentDrivesAnyPage(
   return useSyncExternalStore(subscribe, drives, drives)
 }
 
-/** What an agent in this worktree drove most recently, while this window has been open. */
+/** The SSH host controlling any of these pages, or null when none is (or a local agent is). */
+export function useBrowserAgentControllerHost(
+  browserPageIds: readonly (string | null | undefined)[]
+): string | null {
+  const read = (): string | null => {
+    for (const id of browserPageIds) {
+      const host = id != null && activePageIds.has(id) ? controllerHostByPage.get(id) : undefined
+      if (host) {
+        return host
+      }
+    }
+    return null
+  }
+  return useSyncExternalStore(subscribe, read, read)
+}
+
+/** What this chat's agent drove most recently; until it has claimed any, what an unclaimed agent in its worktree did. */
 export function useLastBrowserAgentActivity(
-  worktreeId: string | null
+  worktreeId: string | null,
+  chatSessionId: string | null
 ): BrowserAgentActivityMark | null {
+  // A chat that claimed activity names itself on this host, so unclaimed activity is another agent's.
   const read = (): BrowserAgentActivityMark | null =>
-    worktreeId ? (lastActivityByWorktree.get(worktreeId) ?? null) : null
+    (chatSessionId ? lastActivityByChatSession.get(chatSessionId) : undefined) ??
+    (worktreeId ? lastUnclaimedActivityByWorktree.get(worktreeId) : undefined) ??
+    null
   return useSyncExternalStore(subscribe, read, read)
 }

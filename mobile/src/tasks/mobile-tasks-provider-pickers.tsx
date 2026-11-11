@@ -1,18 +1,10 @@
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
-import {
-  PickerModal,
-  View,
-  Text,
-  Pressable,
-  ScrollView,
-  type TaskProvider
-} from './mobile-tasks-dependencies'
+import { PickerModal, View, Text, Pressable, ScrollView } from './mobile-tasks-dependencies'
+import type { TaskProvider } from '../../../src/shared/work-items/task-providers'
 import { BottomDrawer } from '../components/bottom-drawer/BottomDrawer'
 import {
   normalizeGitHubPreset,
-  getTaskPresetQuery,
   githubKindFromQuery,
-  scopeGitHubTaskSearch,
   normalizeLinearFilter,
   repositoryCount,
   getRepoBadgeColor,
@@ -20,6 +12,8 @@ import {
   issueSourceSlug,
   GITHUB_KIND_OPTIONS
 } from './mobile-tasks-legacy-foundation'
+import { getTaskPresetQuery } from '../../../src/shared/work-items/task-preset-query'
+import { scopeGitHubTaskSearch } from '../../../src/shared/work-items/task-github-search'
 import { LIST_LEADING_INSET, ListGroup, ListRow } from '../components/list/ListGroup'
 import { styles } from './mobile-tasks-legacy-styles'
 import { normalizeJiraFilter } from './mobile-jira-issue-filters'
@@ -341,6 +335,8 @@ export function renderMobileTasksPagePicker(model: ConnectionPresentationModel) 
     <BottomDrawer
       visible={taskUiReady && showGitHubPagePicker}
       onClose={() => setShowGitHubPagePicker(false)}
+      // The page list scrolls itself; a drawer ScrollView around it would nest same-axis scrolling.
+      contentScrollable={false}
     >
       <View style={styles.sheetHeader}>
         <Text style={styles.sheetTitle}>{t('tasks.providerPickers.pages', 'GitHub Pages')}</Text>

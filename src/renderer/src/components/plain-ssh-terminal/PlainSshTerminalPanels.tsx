@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { Minus, SquareTerminal, X } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
-import { cn } from '@/lib/utils'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { cn } from '@/lib/class-names'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
@@ -13,14 +14,14 @@ import {
 } from '@/ssh/plain-ssh-terminal-panels'
 import { PlainSshTerminalView, type PlainSshTerminalPhase } from './PlainSshTerminalView'
 
-export function plainSshUnmanagedNotice(): string {
-  return translate(
+export function plainSshUnmanagedNotice(t: Translate = translate): string {
+  return t(
     'auto.components.plainSshTerminal.unmanaged',
     'Plain SSH — unmanaged. Not an Orca workspace: agents and tabs here aren’t tracked, and this terminal isn’t restored. Closing it ends the SSH session.'
   )
 }
 
-function phaseText(phase: PlainSshTerminalPhase): string | null {
+function phaseText(phase: PlainSshTerminalPhase, t: Translate = translate): string | null {
   switch (phase.kind) {
     case 'opening':
     case 'open':
@@ -29,12 +30,12 @@ function phaseText(phase: PlainSshTerminalPhase): string | null {
       return phase.message
     case 'ended':
       return phase.signal
-        ? translate(
+        ? t(
             'auto.components.plainSshTerminal.endedBySignal',
             'ssh was stopped (signal {{signal}}). Close this window when you’re done reading.',
             { signal: phase.signal }
           )
-        : translate(
+        : t(
             'auto.components.plainSshTerminal.ended',
             'ssh exited with code {{code}}. Close this window when you’re done reading.',
             { code: phase.exitCode }
@@ -65,11 +66,12 @@ function HeaderIconButton({
 
 /** A non-modal window over Orca; minimized windows wait in a strip at the bottom right. */
 function PlainSshTerminalCard({ panel }: { panel: PlainSshPanel }): React.JSX.Element {
+  const t = useTranslate()
   const [phase, setPhase] = useState<PlainSshTerminalPhase>({ kind: 'opening' })
-  const message = phaseText(phase)
+  const message = phaseText(phase, t)
   return (
     <section
-      aria-label={translate('auto.components.plainSshTerminal.title', 'Plain SSH · {{host}}', {
+      aria-label={t('auto.components.plainSshTerminal.title', 'Plain SSH · {{host}}', {
         host: panel.label
       })}
       data-plain-ssh-terminal={panel.targetId}
@@ -84,25 +86,25 @@ function PlainSshTerminalCard({ panel }: { panel: PlainSshPanel }): React.JSX.El
       <header className="flex items-center gap-2 border-b border-border px-3 py-2">
         <SquareTerminal className="size-4 shrink-0 text-muted-foreground" />
         <div className="min-w-0 flex-1 truncate text-sm font-semibold">
-          {translate('auto.components.plainSshTerminal.title', 'Plain SSH · {{host}}', {
+          {t('auto.components.plainSshTerminal.title', 'Plain SSH · {{host}}', {
             host: panel.label
           })}
         </div>
         <HeaderIconButton
-          label={translate('auto.components.plainSshTerminal.minimize', 'Minimize')}
+          label={t('auto.components.plainSshTerminal.minimize', 'Minimize')}
           onClick={() => minimizePlainSshPanel(panel.targetId)}
         >
           <Minus />
         </HeaderIconButton>
         <HeaderIconButton
-          label={translate('auto.components.plainSshTerminal.close', 'Close and end session')}
+          label={t('auto.components.plainSshTerminal.close', 'Close and end session')}
           onClick={() => removePlainSshPanel(panel.targetId)}
         >
           <X />
         </HeaderIconButton>
       </header>
       <p className="border-b border-border bg-muted px-3 py-1.5 text-xs text-status-warning">
-        {plainSshUnmanagedNotice()}
+        {plainSshUnmanagedNotice(t)}
       </p>
       {message ? (
         <p className="px-3 py-1.5 text-xs text-destructive [overflow-wrap:anywhere]">{message}</p>
@@ -123,6 +125,7 @@ function PlainSshTerminalCard({ panel }: { panel: PlainSshPanel }): React.JSX.El
 }
 
 export function PlainSshTerminalPanels(): React.JSX.Element | null {
+  const t = useTranslate()
   const panels = usePlainSshPanels()
   if (panels.length === 0) {
     return null
@@ -144,7 +147,7 @@ export function PlainSshTerminalPanels(): React.JSX.Element | null {
               onClick={() => showPlainSshPanel(panel.targetId, panel.label)}
             >
               <SquareTerminal />
-              {translate('auto.components.plainSshTerminal.title', 'Plain SSH · {{host}}', {
+              {t('auto.components.plainSshTerminal.title', 'Plain SSH · {{host}}', {
                 host: panel.label
               })}
             </Button>

@@ -31,7 +31,7 @@ import {
 } from './wsl-drive-unc-project-scope'
 import { wslUncDrivePathToWindows } from '../../../shared/wsl-paths'
 import { rewriteWslDriveUncState, wslDriveUncRewriteRoots } from './wsl-drive-unc-state-rewrite'
-import type { WindowsDriveMount } from '../../runtime/wsl-guest-drive-mountinfo'
+import type { WindowsDriveMount } from './wsl-guest-drive-mountinfo'
 
 export type WslDriveUncConversionRunDeps = Pick<
   WslDriveProjectDeps,

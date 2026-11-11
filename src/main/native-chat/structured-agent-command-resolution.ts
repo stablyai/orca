@@ -2,7 +2,7 @@ import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import { homedir } from 'node:os'
 import { delimiter, isAbsolute, resolve as resolvePath } from 'node:path'
 import type { GlobalSettings } from '../../shared/global-settings-types'
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import {
   resolveCliCommand,
   resolveExecutableCommand
@@ -10,11 +10,12 @@ import {
 import {
   hasExplicitTuiLaunchCommand,
   structuredAgentCommandPlan
-} from '../../shared/tui-agent-launch-command-override'
+} from '../../shared/agent-launch/startup/tui-agent-launch-command-override'
+import './agent-session-wire/providers/structured-agent-session-adapter'
 import {
   AgentSessionPreSpawnError,
   isAgentSessionPreSpawnError
-} from './agent-session-wire/structured-agent-session-adapter'
+} from './agent-session-wire/providers/structured-agent-session-adapter-errors'
 import { guestNativePathEnv, resolveGuestNativeProgram } from '../ipc/wsl-guest-windows-drive-path'
 
 export type StructuredAgentResolutionOperation = {

@@ -1,4 +1,4 @@
-import type { ParsedTaskQuery } from '../../../../shared/task-query'
+import type { ParsedTaskQuery } from '../../../../shared/work-items/task-query'
 // Creation order aligns rich PR rows with numbered Search API issue pages.
 export const WORK_ITEM_NUMBER_SORT_QUALIFIER = 'sort:created-desc'
 

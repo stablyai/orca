@@ -1,7 +1,7 @@
 import type { Dispatch, SetStateAction } from 'react'
 
 import { translate } from '@/i18n/i18n'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import type { TaskPageGitHubMutationIntent } from '@/components/task-page/github/task-page-github-work-item-mutation-patches'
 import {
@@ -16,7 +16,7 @@ import type {
 } from '../../../../../shared/github/pull-request-types'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import type { Repo } from '../../../../../shared/repo-types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import type { TaskPageGitHubWorkItemMutationRunner } from '../linear/task-page-linear-jira-list-model'
 import { buildRequestedReviewUsers } from './task-page-github-review-model'
 

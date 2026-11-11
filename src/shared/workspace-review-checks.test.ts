@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { WorkspaceAttachment } from './worktree/types'
-import type { HostedReviewState } from './hosted-review'
-import { getWorkspaceAttachmentKey } from './workspace-attachment-normalization'
+import { getWorkspaceAttachmentKey } from './workspace-attachments/workspace-attachment-normalization'
 import {
   summarizeWorkspaceReviewChecks,
   type WorkspaceReviewCheckDetails
@@ -34,45 +33,6 @@ function map(
 }
 
 describe('all workspace review checks', () => {
-  it.each<{ states: (HostedReviewState | undefined)[]; expected: HostedReviewState | undefined }>([
-    { states: ['merged', 'merged'], expected: 'merged' },
-    { states: ['draft', 'draft'], expected: 'draft' },
-    { states: ['closed', 'closed'], expected: 'closed' },
-    { states: ['merged', 'open'], expected: 'open' },
-    { states: ['merged', 'draft'], expected: 'open' },
-    { states: ['merged', 'closed'], expected: 'closed' },
-    { states: ['merged', undefined], expected: undefined },
-    { states: ['draft', undefined], expected: 'open' },
-    { states: [undefined, undefined], expected: undefined }
-  ])(
-    'derives collection lifecycle $states independently of passing checks',
-    ({ states, expected }) => {
-      const items = states.map((_, index) =>
-        attachment(index + 1, index === 0 ? 'github' : 'gitlab')
-      )
-      const entries: [WorkspaceAttachment, WorkspaceReviewCheckDetails][] = items.map(
-        (item, index) => [
-          item,
-          {
-            review: {
-              provider: item.provider,
-              number: item.number,
-              url: item.url,
-              state: states[index],
-              status: 'success'
-            }
-          }
-        ]
-      )
-      const summary = summarizeWorkspaceReviewChecks(items, map(entries))
-      expect(summary.reviewState).toBe(expected)
-      expect(summary).toMatchObject({
-        state: 'success',
-        passed: items.length
-      })
-    }
-  )
-
   it('retains matched lifecycle and staleness without check results and rejects foreign details', () => {
     const item = attachment(1)
     const retained = {

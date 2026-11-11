@@ -1,7 +1,7 @@
 import type { ClassifiedError } from '../../../../shared/classified-error'
 import { classifyGitHubUnavailable } from '../../../../shared/github/api-availability'
-import { parseTaskQuery, type ParsedTaskQuery } from '../../../../shared/task-query'
-import { sortWorkItemsByNumber } from '../../../../shared/work-items'
+import { parseTaskQuery, type ParsedTaskQuery } from '../../../../shared/work-items/task-query'
+import { sortWorkItemsByNumber } from '../../../../shared/work-items/work-item-order'
 import {
   classifyListIssuesError,
   classifyListPrsError,

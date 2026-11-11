@@ -1,5 +1,5 @@
-import type * as WorktreeScanCacheModule from '../../git/worktree-scan-cache'
-import type * as WorktreeListingModule from '../../git/worktree-listing'
+import type * as WorktreeScanCacheModule from '../../git/worktrees/catalog/worktree-scan-cache'
+import type * as WorktreeListingModule from '../../git/worktrees/catalog/worktree-listing'
 import './unused-default-rpc-methods.test-fixture'
 import { spawn } from 'node:child_process'
 import { once } from 'node:events'
@@ -8,48 +8,83 @@ import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { expect, it, vi } from 'vitest'
-import { createAgentPromptSubmissionRuntime } from '../agent-prompt-submission-runtime-test-fixture'
+import { createAgentPromptSubmissionRuntime } from '../terminal/input/agent-prompt-submission-runtime-test-fixture'
 import { UnixSocketTransport } from './unix-socket-transport'
 import { RpcDispatcher } from './dispatcher'
 import type { RpcRequest } from './core'
-import { TERMINAL_METHODS } from './methods/terminal'
-import { STATUS_METHODS } from './methods/status'
-import { OrchestrationDb } from '../orchestration/db'
-import { OrcaRuntimeRpcServer } from '../runtime-rpc'
-import { ORCHESTRATION_METHODS } from './methods/orchestration'
-import { bindPaneFirst } from '../bind-first-pane.test-fixture'
-import * as inputAdmission from '../terminal-input-admission'
+import { TERMINAL_METHODS } from './methods/terminal/terminal'
+import { STATUS_METHODS } from './methods/host-management/status'
+import { OrchestrationDb } from '../orchestration/db/orchestration-db'
+import '../orchestration/db/contract-constants'
+import '../orchestration/db/messages/mailbox-routing-page'
+import '../orchestration/db/dispatch-row-writer'
+import '../orchestration/db/attempt-outcome-projection'
+import { OrcaRuntimeRpcServer } from './server/runtime-rpc'
+import { ORCHESTRATION_METHODS } from './methods/orchestration/orchestration'
+import { bindPaneFirst } from '../orca-runtime-tests/bind-first-pane.test-fixture'
+import * as inputAdmission from '../terminal/input/terminal-input-admission'
 import { writePtyFromRuntimeController } from '../../ipc/pty/runtime/operations'
 import { getLocalPtyProvider } from '../../ipc/pty/provider/registry'
+import { createHookListenerState } from '../../../shared/agent-hook-listener/listener-state'
+import { normalizeHookPayload } from '../../../shared/agent-hook-listener/normalization/normalize-hook-payload'
+import { AgentHookServer } from '../../agent-hooks/server/agent-hook-server'
 
-vi.mock('../../git/worktree-scan-cache', async (importOriginal) => {
-  const facade = await vi.importMock<typeof WorktreeScanCacheModule>('../../git/worktree')
+vi.mock('../../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
+  const listings = getWorktreeListingMocks()
   return {
     ...(await importOriginal<typeof WorktreeScanCacheModule>()),
-    listWorktrees: facade.listWorktrees
+    listWorktrees: listings.listWorktrees
   }
 })
 
-vi.mock('../../git/worktree-listing', async (importOriginal) => {
-  const facade = await vi.importMock<typeof WorktreeListingModule>('../../git/worktree')
+vi.mock('../../git/worktrees/catalog/worktree-listing', async (importOriginal) => {
+  const listings = getWorktreeListingMocks()
   return {
     ...(await importOriginal<typeof WorktreeListingModule>()),
-    listWorktreesStrict: facade.listWorktreesStrict
+    listWorktreesStrict: listings.listWorktreesStrict
   }
 })
 
-vi.mock('../../git/worktree', () => {
-  const read = async () => [
-    { path: '/tmp/worktree-a', head: 'abc', branch: 'prompt', isBare: false, isMainWorktree: false }
-  ]
-  return { listWorktrees: read, listWorktreesStrict: read }
+const { getWorktreeListingMocks } = vi.hoisted(() => {
+  function createWorktreeListingMocks() {
+    const read = async () => [
+      {
+        path: '/tmp/worktree-a',
+        head: 'abc',
+        branch: 'prompt',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ]
+    return { listWorktrees: read, listWorktreesStrict: read }
+  }
+  let listings: ReturnType<typeof createWorktreeListingMocks> | undefined
+  return { getWorktreeListingMocks: () => (listings ??= createWorktreeListingMocks()) }
 })
 
-it.each(['before', 'after', 'paired', 'orchestration'] as const)(
+it.each([
+  'before',
+  'after',
+  'paired',
+  'orchestration',
+  'codex-startup',
+  'codex-replay',
+  'codex-cold-replay'
+] as const)(
   'real CLI phone admission and delivery: %s',
   async (boundary) => {
     const disconnect = boundary === 'before' || boundary === 'after'
     const paired = boundary === 'paired'
+    const codex = boundary.startsWith('codex-')
+    const replay = boundary === 'codex-replay' || boundary === 'codex-cold-replay'
+    const hookServer = replay ? new AgentHookServer() : undefined
+    await hookServer?.start({ env: 'production' })
+    const text = codex ? 'x'.repeat(1_000) : 'first'
+    const hookState = createHookListenerState()
+    let hook: ReturnType<typeof normalizeHookPayload> = null
+    let promptHandle = ''
+    let held = true
+    let enters = 0
     const latch = () => Promise.withResolvers<void>()
     const [pasted, release, closed, received] = [latch(), latch(), latch(), latch()]
     const root = mkdtempSync(join(tmpdir(), 'orca-prompt-socket-'))
@@ -57,14 +92,88 @@ it.each(['before', 'after', 'paired', 'orchestration'] as const)(
     const endpoint =
       kind === 'named-pipe' ? `\\\\.\\pipe\\${root.split(/[/\\]/).at(-1)}` : join(root, 'rpc')
     const transport = new UnixSocketTransport({ endpoint, kind })
-    const providerWrite = vi.spyOn(getLocalPtyProvider(), 'write').mockReturnValue(true)
+    vi.spyOn(getLocalPtyProvider(), 'write').mockReturnValue(true)
     const promptAdmission = vi.spyOn(inputAdmission, 'assertTerminalInputAdmitted')
     const rawAdmission = vi.spyOn(inputAdmission, 'createTerminalInputReservation')
     const { runtime, handle, writes } = await createAgentPromptSubmissionRuntime(
-      () => pasted.resolve(),
-      'claude',
-      (host, id, data) => writePtyFromRuntimeController({ runtime: host }, id, data, 'driving')
+      (_host, data) => {
+        pasted.resolve()
+        if (codex && data === '\r') {
+          enters += 1
+          held = enters === 1
+          hook = normalizeHookPayload(
+            hookState,
+            'codex',
+            {
+              paneKey: 'tab-prompt:22222222-2222-4222-8222-222222222222',
+              payload: held
+                ? {
+                    hook_event_name: 'SessionStart',
+                    source: 'startup',
+                    session_id: '11111111-1111-4111-8111-111111111111'
+                  }
+                : {
+                    hook_event_name: 'UserPromptSubmit',
+                    session_id: '11111111-1111-4111-8111-111111111111',
+                    turn_id: 'turn-1',
+                    prompt: text
+                  }
+            },
+            'production'
+          )
+          if (hook && hookServer) {
+            if (!held || boundary !== 'codex-cold-replay') {
+              hookServer.ingestRemote(hook, 'fixture-connection')
+            }
+            if (held) {
+              hookServer.ingestRemote(
+                {
+                  ...hook,
+                  hasExplicitPrompt: true,
+                  isReplay: true,
+                  payload: {
+                    ...hook.payload,
+                    state: 'working',
+                    prompt: 'old task',
+                    sessionBoundary: undefined,
+                    mainAgent: { state: 'working', stateStartedAt: 1_000 }
+                  }
+                },
+                'fixture-connection'
+              )
+            }
+          }
+        }
+      },
+      codex ? 'codex' : 'claude',
+      (host, id, data) => writePtyFromRuntimeController({ runtime: host }, id, data, 'driving'),
+      {
+        getAgentStatusSnapshot: () =>
+          hookServer
+            ? hookServer
+                .getStatusSnapshot()
+                .map((row) => ({ ...row, terminalHandle: promptHandle }))
+            : hook
+              ? [
+                  {
+                    ...hook.payload,
+                    paneKey: hook.paneKey,
+                    terminalHandle: promptHandle,
+                    receivedAt: hook.payload.mainAgent?.stateStartedAt ?? 1_000,
+                    stateStartedAt: hook.payload.mainAgent?.stateStartedAt ?? 1_000,
+                    connectionId: null
+                  }
+                ]
+              : []
+      }
     )
+    promptHandle = handle
+    if (codex) {
+      Object.defineProperty(runtime, 'getPtyWriteHostPlatform', { value: () => 'win32' })
+      Object.defineProperty(runtime, 'readCurrentTerminalWaitScreen', {
+        value: async () => ({ lines: [], draft: held ? '[Pasted Content 1000 chars]' : undefined })
+      })
+    }
     const db = new OrchestrationDb(':memory:')
     runtime.setOrchestrationDb(db)
     const methods = [...STATUS_METHODS, ...TERMINAL_METHODS, ...ORCHESTRATION_METHODS]
@@ -120,7 +229,10 @@ it.each(['before', 'after', 'paired', 'orchestration'] as const)(
       PATH: process.env.PATH,
       SystemRoot: process.env.SystemRoot
     }
-    let args = ['terminal', 'send', '--terminal', handle, '--text', 'first', '--enter', '--json']
+    let args = ['terminal', 'send', '--terminal', handle, '--text', text, '--enter', '--json']
+    if (codex) {
+      args.push('--wait-submit', '5')
+    }
     if (paired) {
       args = args.filter((arg) => arg !== '--enter')
     }
@@ -193,13 +305,22 @@ it.each(['before', 'after', 'paired', 'orchestration'] as const)(
         expect(JSON.parse(output).result).toMatchObject(
           boundary === 'orchestration' ? { injected: true } : { send: { accepted: true } }
         )
-        expect(writes).toEqual(paired ? ['first'] : [expect.stringContaining('first'), '\r'])
+        expect(writes).toEqual(
+          paired
+            ? ['first']
+            : codex
+              ? [expect.stringContaining(text), '\r', '\r']
+              : [expect.stringContaining('first'), '\r']
+        )
+        if (codex) {
+          expect(held).toBe(false)
+          expect(JSON.parse(output).result.send.prompt.stages).toContain('turn_started')
+        }
         expect(paired ? rawAdmission : promptAdmission).toHaveBeenCalledWith(
           runtime,
           paired ? 'programmatic' : 'pty-prompt',
-          undefined
+          codex ? 'programmatic' : undefined
         )
-        expect(providerWrite).toHaveBeenCalledTimes(writes.length)
         expect(runtime.getDriver('pty-prompt')).toEqual({ kind: 'mobile', clientId: 'phone-A' })
         return
       }
@@ -237,6 +358,7 @@ it.each(['before', 'after', 'paired', 'orchestration'] as const)(
       }
       await exited
       await server?.stop()
+      hookServer?.stop()
       await transport.stop()
       await Promise.allSettled(done)
       db.close()

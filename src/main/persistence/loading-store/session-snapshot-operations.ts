@@ -2,46 +2,30 @@ import type { PersistedState } from '../../../shared/persisted-state-types'
 import type {
   WorkspaceSessionPatch,
   WorkspaceSessionState
-} from '../../../shared/workspace-session-state-types'
+} from '../../../shared/workspace-session/workspace-session-state-types'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
-import { pruneWorkspaceSessionBrowserHistory } from '../../../shared/workspace-session-browser-history'
+import { pruneWorkspaceSessionBrowserHistory } from '../../../shared/workspace-session/workspace-session-browser-history'
 
 import { workspaceSessionPatchNeedsFullNormalization } from './terminal-session-cleanup'
 
 import { setLocalWorkspaceSession } from './workspace-session-snapshot-publication'
-import type { StoreRuntimeState } from './store-runtime-state'
-import type { SessionHostPartitionOperations } from './session-host-partitions'
 import type { TerminalBindingRecoveryOperations } from './terminal-binding-recovery'
-import type { WriteSchedulingOperations } from './write-scheduling'
 import {
+  sessionSnapshotOperationsContext,
+  type SessionSnapshotOperationsContext,
+  type SessionSnapshotOperationsRuntime
+} from './session-snapshot-operations-context'
+
+import {
+  type SessionHostPartitionOperations,
   resolveHostId,
   setHostWorkspaceSession,
   withRequiredWorkspaceSessionMaps
 } from './session-host-partitions'
 import { dropClosedTerminalTabs } from '../closed-terminal-tab-write-fence'
 import { keepWslMoveFrozenSessionsForStore } from '../moving-wsl-projects/wsl-move-session-freeze'
-import { scheduleSave } from './write-scheduling'
+import { type WriteSchedulingOperations, scheduleSave } from './write-scheduling'
 import { orderTerminalRowsByTabGroups } from '../../../shared/workspace-layout/terminal-row-order'
-
-type SessionSnapshotOperationsRuntime = Pick<
-  StoreRuntimeState,
-  | 'durableMutationPhase'
-  | 'pendingSnapshotFileWork'
-  | 'profileMaintenancePending'
-  | 'quitFlushStarted'
-  | 'state'
-  | 'terminalScrollbackSnapshotStorage'
-  | 'retainedScrollbackRefsByMigrationId'
-  | 'writesFrozen'
->
-
-const sessionSnapshotOperationsContext = Symbol('SessionSnapshotOperations')
-type SessionSnapshotOperationsContext = {
-  runtime: SessionSnapshotOperationsRuntime
-  sessions: SessionHostPartitionOperations
-  bindingRecovery: TerminalBindingRecoveryOperations
-  scheduling: WriteSchedulingOperations
-}
 
 export class SessionSnapshotOperations {
   readonly [sessionSnapshotOperationsContext]: SessionSnapshotOperationsContext
@@ -143,8 +127,4 @@ export class SessionSnapshotOperations {
       throw new Error('Profile maintenance or finalization is blocking new terminal snapshot work')
     }
   }
-}
-
-export function getSessionSnapshotOperationsContext(owner: SessionSnapshotOperations) {
-  return owner[sessionSnapshotOperationsContext]
 }

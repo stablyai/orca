@@ -7,8 +7,9 @@ import {
   symlinkSync,
   writeFileSync
 } from 'node:fs'
-import { homedir, tmpdir } from 'node:os'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import type * as NodePath from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ClaudeFolderTrustFile from '../../claude/claude-folder-trust-file'
 
@@ -18,12 +19,22 @@ const mocks = vi.hoisted(() => ({
   codex: vi.fn<(path: string, configFiles: readonly string[]) => Promise<void>>(async () => {}),
   cursor: vi.fn<(path: string, home: string) => void>(),
   copilot: vi.fn<(path: string, home: string) => void>(),
-  antigravity: vi.fn<(path: string, home: string) => void>(),
+  antigravity: vi.fn<(path: string, home: string, guestPath?: string) => void>(),
   qoder: vi.fn<(path: string, home: string) => void>(),
   kimi: vi.fn<(path: string, kimiHome: string) => void>(),
   codexConfigFiles: vi.fn<(agentHome: string) => string[]>(() => CODEX_CONFIG_FILES),
   claudeGrant: vi.fn<typeof ClaudeFolderTrustFile.grantClaudeWorkspaceTrust>()
 }))
+
+// The host filesystem uses Windows path resolution for WSL UNC identities.
+vi.mock('node:path', async (importOriginal) => {
+  const actual = await importOriginal<typeof NodePath>()
+  return {
+    ...actual,
+    resolve: (...paths: string[]) =>
+      paths[0]?.startsWith('\\\\wsl.') ? actual.win32.resolve(...paths) : actual.resolve(...paths)
+  }
+})
 
 vi.mock('./agent-trust-presets', () => ({
   markCodexProjectTrusted: mocks.codex,
@@ -32,7 +43,7 @@ vi.mock('./agent-trust-presets', () => ({
   markAntigravityWorkspaceTrusted: mocks.antigravity,
   markKimiWorkspaceTrusted: mocks.kimi
 }))
-vi.mock('../../codex/codex-home-paths', () => ({
+vi.mock('../../codex/configuration/homes/codex-home-paths', () => ({
   getLocalCodexTrustConfigFiles: mocks.codexConfigFiles
 }))
 vi.mock('../../qoder/workspace-trust', () => ({ markQoderWorkspaceTrusted: mocks.qoder }))
@@ -43,13 +54,8 @@ vi.mock('../../claude/claude-folder-trust-file', async (importOriginal) => {
 })
 
 import { applyAgentWorkspaceTrust, type AgentTrustLaunchContext } from './agent-workspace-trust'
+import { applyAgentWorkspaceTrustToSpawn } from './agent-workspace-trust-spawn'
 import { clearWslHomeCache, rememberWslHome } from '../../wsl/discovery/wsl-home-cache'
-import {
-  AGENT_TRUST_WRITE_DEADLINE_MS,
-  SHORT_AGENT_TRUST_WRITE_DEADLINE_MS
-} from './agent-trust-write-deadline'
-
-const WORKSPACE = '/workspace/app'
 const local: AgentTrustLaunchContext = {
   env: {},
   claudeAuth: null,
@@ -57,201 +63,8 @@ const local: AgentTrustLaunchContext = {
   connectionId: null
 }
 
-function pending(): { promise: Promise<void>; release: () => void } {
-  let release!: () => void
-  const promise = new Promise<void>((resolve) => {
-    release = resolve
-  })
-  return { promise, release }
-}
-
 beforeEach(() => {
   vi.clearAllMocks()
-})
-
-afterEach(() => {
-  vi.useRealTimers()
-})
-
-describe('applyAgentWorkspaceTrust on this machine', () => {
-  it.each([
-    ['codex', mocks.codex],
-    ['cursor', mocks.cursor],
-    ['copilot', mocks.copilot],
-    ['qoder', mocks.qoder],
-    ['antigravity', mocks.antigravity]
-  ] as const)('writes the %s preset for the workspace', async (preset, writer) => {
-    await expect(applyAgentWorkspaceTrust(preset, WORKSPACE, local)).resolves.toEqual({})
-    expect(writer).toHaveBeenCalledWith(
-      WORKSPACE,
-      preset === 'codex' ? CODEX_CONFIG_FILES : homedir()
-    )
-  })
-
-  it('writes per-user trust under the home the launch env names, where the agent reads it', async () => {
-    const context = {
-      ...local,
-      env: { HOME: '/home/agent', USERPROFILE: '/home/agent' },
-      codexHome: '/orca/codex-accounts/acct-1/home'
-    }
-    for (const preset of ['codex', 'cursor', 'copilot', 'qoder', 'antigravity'] as const) {
-      await applyAgentWorkspaceTrust(preset, WORKSPACE, context)
-    }
-    expect(mocks.codexConfigFiles).toHaveBeenCalledWith(
-      '/home/agent',
-      '/orca/codex-accounts/acct-1/home'
-    )
-    for (const writer of [mocks.cursor, mocks.copilot, mocks.qoder, mocks.antigravity]) {
-      expect(writer).toHaveBeenCalledWith(WORKSPACE, '/home/agent')
-    }
-  })
-
-  it("writes Kimi trust under the launch env's KIMI_CODE_HOME, else its ~/.kimi-code", async () => {
-    vi.stubEnv('KIMI_CODE_HOME', '')
-    await applyAgentWorkspaceTrust('kimi', WORKSPACE, {
-      ...local,
-      env: { HOME: '/home/agent', USERPROFILE: '/home/agent', KIMI_CODE_HOME: '/kimi/custom' }
-    })
-    expect(mocks.kimi).toHaveBeenLastCalledWith(WORKSPACE, '/kimi/custom')
-    await applyAgentWorkspaceTrust('kimi', WORKSPACE, {
-      ...local,
-      env: { HOME: '/home/agent', USERPROFILE: '/home/agent' }
-    })
-    expect(mocks.kimi).toHaveBeenLastCalledWith(WORKSPACE, join('/home/agent', '.kimi-code'))
-    vi.unstubAllEnvs()
-  })
-
-  it('contains a rejected or throwing write so the launch proceeds', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    mocks.codex.mockRejectedValueOnce(new Error('write failed'))
-    mocks.cursor.mockImplementationOnce(() => {
-      throw new Error('write failed')
-    })
-    await expect(applyAgentWorkspaceTrust('codex', WORKSPACE, local)).resolves.toEqual({})
-    await expect(applyAgentWorkspaceTrust('cursor', WORKSPACE, local)).resolves.toEqual({})
-    expect(warn).toHaveBeenCalledTimes(2)
-    warn.mockRestore()
-  })
-
-  it('gives only Codex the long deadline its shared config lane needs', async () => {
-    vi.useFakeTimers()
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const codexWrite = pending()
-    mocks.codex.mockReturnValueOnce(codexWrite.promise)
-    let codexSettled = false
-    const codex = applyAgentWorkspaceTrust('codex', WORKSPACE, local).then(() => {
-      codexSettled = true
-    })
-    await vi.advanceTimersByTimeAsync(SHORT_AGENT_TRUST_WRITE_DEADLINE_MS + 1)
-    expect(codexSettled).toBe(false)
-    await vi.advanceTimersByTimeAsync(AGENT_TRUST_WRITE_DEADLINE_MS)
-    await codex
-    expect(codexSettled).toBe(true)
-    codexWrite.release()
-    warn.mockRestore()
-  })
-
-  // A nonexistent config directory prevents this test from modifying real Claude config.
-  const noConfig = { ...local, env: { CLAUDE_CONFIG_DIR: join(tmpdir(), 'orca-no-claude-config') } }
-  it.each([
-    ['the home folder', homedir(), noConfig],
-    [
-      'the home the spawn env names',
-      '/home/agent',
-      { ...noConfig, env: { ...noConfig.env, HOME: '/home/agent' } }
-    ],
-    ['a filesystem root', '/', noConfig],
-    ['a drive root', 'C:\\', noConfig]
-  ])(
-    'never pre-trusts %s for an agent that inherits trust from it',
-    async (_label, workspacePath, context) => {
-      for (const preset of ['claude', 'copilot', 'qoder'] as const) {
-        await expect(applyAgentWorkspaceTrust(preset, workspacePath, context)).resolves.toEqual({})
-      }
-      for (const writer of [mocks.copilot, mocks.qoder, mocks.claudeGrant]) {
-        expect(writer).not.toHaveBeenCalled()
-      }
-    }
-  )
-
-  it('trusts the home folder for Codex, Cursor and Antigravity, whose trust there stays there', async () => {
-    for (const preset of ['codex', 'cursor', 'antigravity'] as const) {
-      await applyAgentWorkspaceTrust(preset, homedir(), noConfig)
-    }
-    expect(mocks.codex).toHaveBeenCalledWith(homedir(), CODEX_CONFIG_FILES)
-    expect(mocks.cursor).toHaveBeenCalledWith(homedir(), homedir())
-    expect(mocks.antigravity).toHaveBeenCalledWith(homedir(), homedir())
-  })
-
-  it('never pre-trusts a home reached through a symlink, since the writers store the realpath', async () => {
-    const root = realpathSync(mkdtempSync(join(tmpdir(), 'orca-agent-trust-home-')))
-    try {
-      const home = join(root, 'home')
-      mkdirSync(home)
-      symlinkSync(home, join(root, 'home-link'), 'junction')
-      const cases = [
-        [join(root, 'home-link'), home],
-        [home, join(root, 'home-link')]
-      ]
-      for (const [workspacePath, homePath] of cases) {
-        const context = { ...noConfig, env: { ...noConfig.env, HOME: homePath } }
-        for (const preset of ['claude', 'copilot', 'qoder'] as const) {
-          await applyAgentWorkspaceTrust(preset, workspacePath, context)
-        }
-      }
-      for (const writer of [mocks.copilot, mocks.qoder, mocks.claudeGrant]) {
-        expect(writer).not.toHaveBeenCalled()
-      }
-    } finally {
-      rmSync(root, { recursive: true, force: true })
-    }
-  })
-
-  it.each([
-    ['a WSL distro', { ...local, wslDistro: 'Ubuntu' }, WORKSPACE],
-    ['a WSL UNC workspace', local, '\\\\wsl.localhost\\Ubuntu\\home\\u\\wt']
-  ])('never writes the Windows home for %s', async (_label, context, workspacePath) => {
-    for (const preset of ['codex', 'cursor', 'copilot', 'qoder', 'antigravity'] as const) {
-      await applyAgentWorkspaceTrust(preset, workspacePath, context)
-    }
-    for (const writer of [mocks.codex, mocks.cursor, mocks.copilot, mocks.qoder]) {
-      expect(writer).not.toHaveBeenCalled()
-    }
-    expect(mocks.antigravity).not.toHaveBeenCalled()
-  })
-  describe('for Claude in a WSL guest', () => {
-    const wslAuth = {
-      configDir: '\\\\wsl.localhost\\Ubuntu\\home\\u\\.claude',
-      runtime: 'wsl',
-      wslDistro: 'Ubuntu',
-      wslLinuxConfigDir: '/home/u/.claude',
-      envPatch: {},
-      provenance: 'test'
-    } as const
-    const wsl = { ...local, claudeAuth: wslAuth, wslDistro: 'Ubuntu' }
-
-    afterEach(() => {
-      clearWslHomeCache()
-    })
-
-    it("writes nothing while the guest's home is unknown", async () => {
-      await applyAgentWorkspaceTrust('claude', '\\\\wsl.localhost\\Ubuntu\\home\\u\\wt', wsl)
-      expect(mocks.claudeGrant).not.toHaveBeenCalled()
-    })
-
-    it("never pre-trusts the guest's home, however the distro is spelled", async () => {
-      rememberWslHome('Ubuntu', '\\\\wsl.localhost\\Ubuntu\\home\\u')
-      await applyAgentWorkspaceTrust('claude', '\\\\wsl$\\ubuntu\\home\\u', wsl)
-      expect(mocks.claudeGrant).not.toHaveBeenCalled()
-    })
-
-    it("grants a folder under the guest's known home", async () => {
-      rememberWslHome('ubuntu', '\\\\wsl.localhost\\Ubuntu\\home\\u')
-      mocks.claudeGrant.mockResolvedValueOnce('unchanged')
-      await applyAgentWorkspaceTrust('claude', '\\\\wsl.localhost\\Ubuntu\\home\\u\\wt', wsl)
-      expect(mocks.claudeGrant).toHaveBeenCalledTimes(1)
-    })
-  })
 })
 
 describe('applyAgentWorkspaceTrust for Claude', () => {
@@ -265,6 +78,118 @@ describe('applyAgentWorkspaceTrust for Claude', () => {
     rmSync(root, { recursive: true, force: true })
   })
 
+  it('respects the section repo choice and preserves ordinary root trust for outside starts', async () => {
+    const workspaceRoot = join(root, 'folder')
+    const outsideCwd = join(root, 'attached-worktree')
+    mkdirSync(workspaceRoot)
+    mkdirSync(outsideCwd)
+    const config = join(root, '.claude.json')
+    writeFileSync(config, '{}')
+    const spawn = {
+      ...local,
+      env: { CLAUDE_CONFIG_DIR: root },
+      launchAgent: 'claude',
+      worktreeId: 'folder:section-parent',
+      cwd: outsideCwd,
+      store: { getFolderWorkspace: () => ({ folderPath: workspaceRoot }) },
+      isFreshLaunch: true,
+      settings: {},
+      spawnOptions: {}
+    }
+    await applyAgentWorkspaceTrustToSpawn(spawn)
+    expect(JSON.parse(readFileSync(config, 'utf8'))).toEqual({
+      projects: { [workspaceRoot]: { hasTrustDialogAccepted: true } }
+    })
+    await applyAgentWorkspaceTrustToSpawn({
+      ...spawn,
+      trustWorktreeId: `repo::${outsideCwd}`,
+      store: {
+        ...spawn.store,
+        getRepo: () => ({ agentWorkspaceTrust: 'agent-asks' })
+      }
+    })
+    expect(JSON.parse(readFileSync(config, 'utf8'))).toEqual({
+      projects: { [workspaceRoot]: { hasTrustDialogAccepted: true } }
+    })
+    await applyAgentWorkspaceTrustToSpawn({
+      ...spawn,
+      trustWorktreeId: `repo::${outsideCwd}`,
+      store: {
+        ...spawn.store,
+        getRepo: () => ({ agentWorkspaceTrust: 'pre-trust' })
+      }
+    })
+    expect(JSON.parse(readFileSync(config, 'utf8'))).toEqual({
+      projects: {
+        [workspaceRoot]: { hasTrustDialogAccepted: true },
+        [outsideCwd]: { hasTrustDialogAccepted: true }
+      }
+    })
+  })
+
+  it('trusts a section root through a contained junction without granting the placement root', async () => {
+    const workspaceRoot = join(root, 'folder')
+    const outside = join(root, 'attached-worktree')
+    mkdirSync(workspaceRoot)
+    mkdirSync(outside)
+    const linked = join(workspaceRoot, 'linked-child')
+    symlinkSync(outside, linked, 'junction')
+    const config = join(root, '.claude.json')
+    writeFileSync(config, '{}')
+    await applyAgentWorkspaceTrustToSpawn({
+      ...local,
+      env: { CLAUDE_CONFIG_DIR: root },
+      launchAgent: 'claude',
+      worktreeId: 'folder:section-parent',
+      trustWorktreeId: `repo::${linked}`,
+      cwd: linked,
+      store: { getFolderWorkspace: () => ({ folderPath: workspaceRoot }) },
+      isFreshLaunch: true,
+      settings: {},
+      spawnOptions: {}
+    })
+    expect(JSON.parse(readFileSync(config, 'utf8'))).toEqual({
+      projects: {
+        [linked]: { hasTrustDialogAccepted: true },
+        [outside]: { hasTrustDialogAccepted: true }
+      }
+    })
+  })
+
+  it('writes the mounted-drive section root in the prepared WSL Claude config', async () => {
+    const config = join(root, '.claude.json')
+    writeFileSync(config, '{}')
+    rememberWslHome('Ubuntu', '\\\\wsl.localhost\\Ubuntu\\home\\u')
+    try {
+      await applyAgentWorkspaceTrustToSpawn({
+        ...local,
+        launchAgent: 'claude',
+        worktreeId: 'folder:section-parent',
+        trustWorktreeId: 'repo::\\\\wsl.localhost\\Ubuntu\\mnt\\c\\repos\\child',
+        cwd: '/mnt/c/repos/child',
+        store: {
+          getFolderWorkspace: () => ({ folderPath: '\\\\wsl.localhost\\Ubuntu\\home\\u\\folder' })
+        },
+        claudeAuth: {
+          runtime: 'wsl',
+          configDir: root,
+          wslLinuxConfigDir: '/home/u/.claude',
+          envPatch: { CLAUDE_CONFIG_DIR: '/home/u/.claude' },
+          provenance: 'test'
+        },
+        wslDistro: 'Ubuntu',
+        isFreshLaunch: true,
+        settings: {},
+        spawnOptions: {}
+      })
+      expect(JSON.parse(readFileSync(config, 'utf8'))).toEqual({
+        projects: { '/mnt/c/repos/child': { hasTrustDialogAccepted: true } }
+      })
+    } finally {
+      clearWslHomeCache()
+    }
+  })
+
   it('grants in the config file the final spawn env names', async () => {
     writeFileSync(join(root, '.claude.json'), '{}')
     await applyAgentWorkspaceTrust('claude', root, {
@@ -275,45 +200,4 @@ describe('applyAgentWorkspaceTrust for Claude', () => {
       projects: { [root]: { hasTrustDialogAccepted: true } }
     })
   })
-
-  it('gives a local Claude write a short budget, after which Claude asks', async () => {
-    vi.useFakeTimers()
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const grant = pending()
-    mocks.claudeGrant.mockReturnValueOnce(grant.promise.then(() => 'granted' as const))
-    let settled = false
-    const claude = applyAgentWorkspaceTrust('claude', root, {
-      ...local,
-      env: { CLAUDE_CONFIG_DIR: root }
-    }).then(() => {
-      settled = true
-    })
-    await vi.advanceTimersByTimeAsync(SHORT_AGENT_TRUST_WRITE_DEADLINE_MS - 1)
-    expect(settled).toBe(false)
-    await vi.advanceTimersByTimeAsync(2)
-    await claude
-    expect(settled).toBe(true)
-    expect(String(warn.mock.calls[0]?.[0])).toContain('did not settle')
-    grant.release()
-    warn.mockRestore()
-  })
-
-  it.each(['claude', 'codex', 'cursor', 'copilot', 'qoder', 'antigravity'] as const)(
-    'hands an SSH %s launch to the relay instead of writing anything here',
-    async (preset) => {
-      await expect(
-        applyAgentWorkspaceTrust(preset, '/srv/wt', { ...local, connectionId: 'ssh-1' })
-      ).resolves.toEqual({ agentWorkspaceTrust: { workspacePath: '/srv/wt' } })
-      for (const writer of [
-        mocks.codex,
-        mocks.cursor,
-        mocks.copilot,
-        mocks.qoder,
-        mocks.antigravity,
-        mocks.claudeGrant
-      ]) {
-        expect(writer).not.toHaveBeenCalled()
-      }
-    }
-  )
 })

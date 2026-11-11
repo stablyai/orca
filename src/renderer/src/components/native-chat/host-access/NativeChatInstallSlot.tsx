@@ -1,0 +1,115 @@
+import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
+import {
+  managedRuntimeInstallCard,
+  type ManagedRuntimeInstallLayout
+} from '@/components/managed-runtime/managed-runtime-install-card'
+import {
+  useManagedRuntimeInstall,
+  type ManagedRuntimeInstallObservation
+} from '@/runtime/hosts/installation/use-managed-runtime-install'
+import type { ManagedRuntimeInstallState } from '../../../../../shared/managed-runtime-install'
+import { NativeChatInstallStrip } from './NativeChatInstallStrip'
+import { useStructuredAgentSessionHostProgram } from '../session/status/structured-agent-session-status-hooks'
+import type { NativeChatStructuredViewProps } from '../native-chat-view-types'
+
+export type NativeChatInstallSlotState =
+  | { kind: 'none' }
+  /** The first status read is out: the composer stays, its sends held until the host answers. */
+  | { kind: 'reserved' }
+  | {
+      kind: 'install'
+      observation: Extract<ManagedRuntimeInstallObservation, { kind: 'active' }>
+      state: ManagedRuntimeInstallState
+      layout: ManagedRuntimeInstallLayout
+    }
+
+export type NativeChatInstallSlotInstall = Extract<NativeChatInstallSlotState, { kind: 'install' }>
+
+const NONE: NativeChatInstallSlotState = { kind: 'none' }
+const RESERVED: NativeChatInstallSlotState = { kind: 'reserved' }
+
+/** Reserve unknown readiness with an editable composer and held sends; missing runtimes show installation, while read failures leave it alone. */
+export function useNativeChatInstallSlot(
+  props: Pick<NativeChatStructuredViewProps, 'target' | 'agent' | 'isVisible' | 'sessionId'>,
+  agentLabel: string,
+  layout: ManagedRuntimeInstallLayout
+): {
+  slot: NativeChatInstallSlotState
+  sendBlockedReason: string | null
+  unavailableHint: string | undefined
+} {
+  const t = useTranslate()
+  const hostProgram = useStructuredAgentSessionHostProgram(props.sessionId, props.target)
+  const slot = nativeChatInstallSlotState(
+    useManagedRuntimeInstall(props.target, props.agent, props.isVisible && !hostProgram),
+    layout,
+    hostProgram
+  )
+  const unavailableHint =
+    slot.kind === 'install'
+      ? managedRuntimeInstallCard(slot.state, agentLabel, slot.layout, undefined, t).title
+      : undefined
+  return {
+    slot,
+    sendBlockedReason: unavailableHint ?? installSlotSendBlockedReason(slot, agentLabel, t),
+    unavailableHint
+  }
+}
+
+/** A chat running the host's own program needs no managed install, whatever its state. */
+export function nativeChatInstallSlotState(
+  observation: ManagedRuntimeInstallObservation,
+  layout: ManagedRuntimeInstallLayout,
+  hostProgram: boolean
+): NativeChatInstallSlotState {
+  if (hostProgram || observation.kind === 'inactive') {
+    return NONE
+  }
+  if (observation.kind === 'pending') {
+    return RESERVED
+  }
+  const { snapshot } = observation
+  if (snapshot.kind === 'readFailed') {
+    return NONE
+  }
+  if (snapshot.kind === 'unknown') {
+    return RESERVED
+  }
+  return snapshot.state.source === null
+    ? { kind: 'install', observation, state: snapshot.state, layout }
+    : NONE
+}
+
+/** Send stays held until the host says it can run this agent. */
+function installSlotSendBlockedReason(
+  slot: NativeChatInstallSlotState,
+  agentLabel: string,
+  t: Translate = translate
+): string | null {
+  return slot.kind === 'none'
+    ? null
+    : t(
+        'components.native-chat.install.checking',
+        'Checking whether {{agent}} is ready on this host…',
+        { agent: agentLabel }
+      )
+}
+
+/** Setup stays reachable whenever the empty pane is not showing the hero. */
+export function NativeChatInstallSlot(props: {
+  slot: NativeChatInstallSlotState
+  agentLabel: string
+}): React.JSX.Element | null {
+  const { slot } = props
+  if (slot.kind !== 'install' || slot.layout !== 'strip') {
+    return null
+  }
+  return (
+    <div className="min-h-0 shrink overflow-hidden bg-chat-pane">
+      <div className="mx-auto w-full max-w-(--chat-content-max-width) px-3 pt-2 pb-1 sm:px-4">
+        <NativeChatInstallStrip slot={slot} agentLabel={props.agentLabel} />
+      </div>
+    </div>
+  )
+}

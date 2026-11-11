@@ -207,7 +207,7 @@ test.describe('Linear URL workspace entry', () => {
     }
     await expect(input).not.toHaveAttribute('aria-busy', 'true')
     await input.press('Enter')
-    await expect(dialog.locator('[data-agent-combobox-root="true"][role="combobox"]')).toBeFocused()
+    await expect(dialog.getByRole('button', { name: 'Select agent', exact: true })).toBeFocused()
   })
 
   test('pasting into Cmd+J previews the Linear issue and opens the linked composer', async ({

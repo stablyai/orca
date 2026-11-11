@@ -2,7 +2,7 @@ import { computerUseErrorRecoveryData } from '../shared/computer-use-error-recov
 import {
   matchAutomationOwnerConflict,
   stripAutomationOwnerConflictCode
-} from '../shared/automation-owner-conflict'
+} from '../shared/automations/ownership/automation-owner-conflict'
 import { automationOwnerConflictRecovery } from './automation-owner-conflict-recovery'
 import { worktreeSelectorRecovery } from './worktree-selector-recovery'
 import { ambiguousWorkspaceChoices, selectorAmbiguityRecovery } from './selector-ambiguity-recovery'
@@ -27,14 +27,13 @@ type ContextRecovery = { nextSteps: readonly string[] } & Record<string, unknown
 const STALE_HANDLE_SERVER_HINT =
   'Terminal handles belong to the Orca server that issued them. If this handle came from a paired server (for example `orca terminal list --environment <server>`), pass the same --environment <server> to this command.'
 
-function contextRecovery(
-  code: string | undefined,
-  context: CliErrorContext
-): ContextRecovery | undefined {
+function contextRecovery(error: unknown, context: CliErrorContext): ContextRecovery | undefined {
+  const code = cliErrorCode(error)
   if (code === 'selector_not_found' && context.worktreeSelector) {
     return worktreeSelectorRecovery(context.worktreeSelector)
   }
-  if (code === 'selector_ambiguous') {
+  // No selector can name one of two folders sharing an id; only the error's repair step applies.
+  if (code === 'selector_ambiguous' && !isDuplicateFolderIdData(errorData(error))) {
     return selectorAmbiguityRecovery({
       repo: context.repoSelector,
       worktree: context.worktreeSelector,
@@ -50,6 +49,10 @@ function contextRecovery(
     return { nextSteps: [STALE_HANDLE_SERVER_HINT] }
   }
   return undefined
+}
+
+function isDuplicateFolderIdData(data: unknown): boolean {
+  return data !== null && typeof data === 'object' && 'duplicateFolderId' in data
 }
 
 function errorData(error: unknown): unknown {
@@ -70,7 +73,7 @@ export function formatCliError(error: unknown, context: CliErrorContext = {}): s
   const message = readableWslDistroCliRefusal(
     error instanceof Error ? error.message : String(error)
   )
-  const selector = contextRecovery(cliErrorCode(error), context)
+  const selector = contextRecovery(error, context)
   const workspaceChoices =
     error instanceof RuntimeClientError &&
     !(error instanceof RuntimeRpcFailureError) &&
@@ -148,7 +151,7 @@ function formatRuntimeUnavailableError(message: string, data: unknown): string {
 const JSON_LINES_COMMANDS = new Set(['plugin dev watch'])
 
 export function reportCliError(error: unknown, json: boolean, context: CliErrorContext = {}): void {
-  const selector = contextRecovery(cliErrorCode(error), context)
+  const selector = contextRecovery(error, context)
   const concise = context.conciseOrchestration
   if (json) {
     const response = cliErrorJsonResponse(error, context, selector)
@@ -307,7 +310,7 @@ function localCliErrorData(error: unknown, context: CliErrorContext): unknown {
   if (sidecarExit) {
     return sidecarExit
   }
-  const selector = contextRecovery(cliErrorCode(error), context)
+  const selector = contextRecovery(error, context)
   // Error-specific recovery takes precedence over the generic fallback.
   if (error instanceof RuntimeClientError && error.data !== undefined) {
     return mergeContextRecovery(error.data, selector)

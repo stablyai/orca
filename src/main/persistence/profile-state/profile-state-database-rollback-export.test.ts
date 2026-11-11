@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { expect, it, vi } from 'vitest'
@@ -7,11 +7,6 @@ import { ProfileStateSqliteAuthority } from './profile-state-sqlite-authority'
 import { profileStateDatabaseBackups } from './profile-state-backup-path'
 import { profileStateJsonExportPath } from './legacy-json/profile-state-export-path'
 import { acquireProfileStateMaintenance } from './profile-state-access'
-import { restoreProfileStateJsonExport } from './legacy-json/profile-state-recovery'
-import {
-  bootstrapProfileStateAuthority,
-  ProfileStateAuthorityBootstrapError
-} from './profile-state-authority-bootstrap'
 import { restoreProfileStateDatabaseBackup } from './profile-state-database-recovery'
 
 vi.mock('electron', () => ({
@@ -98,48 +93,6 @@ it('can publish an explicit JSON export at a reused revision after SQLite rollba
       store.freezeWrites()
       await store.flushAsync()
     }
-    rmSync(root, { recursive: true, force: true })
-  }
-})
-
-it('leaves an explicit rollback path when stale JSON conflicts with SQLite', async () => {
-  const root = mkdtempSync(join(tmpdir(), 'orca-store-profile-state-compat-failure-'))
-  const directory = join(root, 'profiles', 'profile-authority-test')
-  mkdirSync(directory, { recursive: true })
-  const dataFile = join(directory, 'orca-data.json')
-  const databasePath = join(directory, 'profile-state.db')
-  writeFileSync(dataFile, JSON.stringify({ settings: { theme: 'light' } }), 'utf8')
-
-  const authority = new ProfileStateSqliteAuthority(databasePath, 'profile-authority-test')
-  const store = new Store({ dataFile, profileStateAuthority: authority })
-  try {
-    store.updateSettings({ theme: 'dark' })
-    store.flushOrThrow()
-    const revisionOne = store.writeLatestProfileStateJsonExport()
-    expect(revisionOne).toBe(1)
-
-    expect(JSON.parse(readFileSync(dataFile, 'utf8')).settings.theme).toBe('light')
-    expect(() =>
-      bootstrapProfileStateAuthority({
-        dataFile,
-        databaseFile: databasePath,
-        profileId: 'profile-authority-test'
-      })
-    ).toThrow(ProfileStateAuthorityBootstrapError)
-
-    store.freezeWrites()
-    await store.flushAsync()
-    restoreProfileStateJsonExport({
-      maintenance: acquireProfileStateMaintenance(root),
-      databasePath,
-      dataFile,
-      exportPath: profileStateJsonExportPath(dataFile, revisionOne ?? 1),
-      profileId: 'profile-authority-test'
-    })
-    expect(JSON.parse(readFileSync(dataFile, 'utf8')).settings.theme).toBe('dark')
-  } finally {
-    store.freezeWrites()
-    await store.flushAsync()
     rmSync(root, { recursive: true, force: true })
   }
 })

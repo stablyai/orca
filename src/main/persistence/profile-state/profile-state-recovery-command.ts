@@ -29,7 +29,7 @@ import { writeVersionedProfileStateExport } from './legacy-json/profile-state-ve
 import { readProfileStateDomain } from './profile-state-domain-reader'
 import { repairProfileStateSections } from './profile-state-section-repair'
 import { isRecord } from './profile-state-document-validation'
-import { profileHasPendingProjectMove } from '../../orca-profiles/profile-project-move-record'
+import { profileHasPendingProjectMove } from '../../orca-profiles/project-transfer/profile-project-move-record'
 import {
   invalidateHttp1CompatibilityMarker,
   writeHttp1CompatibilityMarker

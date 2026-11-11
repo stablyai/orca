@@ -1,0 +1,209 @@
+// @vitest-environment happy-dom
+
+import { act } from 'react'
+import { createRoot } from 'react-dom/client'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { NativeChatQuestionCard } from './NativeChatQuestionCard'
+
+import type { AskPrompt } from '../../../../../shared/native-chat/input/native-chat-ask-types'
+
+// Answers must use option indices; labels can be duplicated and a non-first choice must retain its position.
+
+let container: HTMLDivElement
+let root: ReturnType<typeof createRoot>
+
+beforeEach(() => {
+  container = document.createElement('div')
+  document.body.appendChild(container)
+  root = createRoot(container)
+})
+
+afterEach(() => {
+  act(() => root.unmount())
+  container.remove()
+  vi.useRealTimers()
+})
+
+function pressKey(init: KeyboardEventInit, target: EventTarget = document.body): KeyboardEvent {
+  const event = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init })
+  act(() => {
+    target.dispatchEvent(event)
+  })
+  return event
+}
+
+const tabsOrSpaces: AskPrompt = {
+  questions: [
+    {
+      question: 'Do you prefer tabs or spaces?',
+      header: 'Indent',
+      multiSelect: false,
+      options: [{ label: 'Tabs' }, { label: 'Spaces' }]
+    }
+  ]
+}
+
+describe('NativeChatQuestionCard', () => {
+  it('arrows past a title checkbox into the multiline answer and leaves only at its text edges', () => {
+    container.setAttribute('data-native-chat-root', 'true')
+    act(() => {
+      root.render(
+        <NativeChatQuestionCard
+          prompt={{
+            questions: [{ ...tabsOrSpaces.questions[0]!, question: '- [ ] Tabs or spaces?' }]
+          }}
+          onAnswer={() => {}}
+          onCancel={() => {}}
+          freeTextInputs={[{ multiline: true }]}
+          shouldFocus
+        />
+      )
+    })
+    const field = container.querySelector('textarea')!
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!
+      setter.call(field, 'first\nlast')
+      field.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    const rows = container.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')
+    field.setSelectionRange(0, 0)
+    act(() => rows[1]!.focus())
+    pressKey({ key: 'ArrowDown' }, rows[1]!)
+    expect(document.activeElement).toBe(field)
+    expect([field.selectionStart, field.selectionEnd]).toEqual([10, 10])
+    const pressAt = (start: number, end: number, key: string): boolean => {
+      act(() => field.focus())
+      field.setSelectionRange(start, end)
+      return pressKey({ key }, field).defaultPrevented
+    }
+
+    expect(pressAt(3, 3, 'ArrowUp')).toBe(false)
+    expect(pressAt(0, 0, 'ArrowDown')).toBe(false)
+    expect(pressAt(0, 10, 'ArrowDown')).toBe(false)
+    expect(document.activeElement).toBe(field)
+    expect(pressAt(0, 0, 'ArrowUp')).toBe(true)
+    expect(document.activeElement).toBe(rows[1])
+    expect(pressAt(10, 10, 'ArrowDown')).toBe(true)
+    expect(document.activeElement).toBe(rows[0])
+  })
+
+  it('shows a picked preview, keeps it on a second click, and confirms the digit-named option with Enter', () => {
+    vi.useFakeTimers()
+    container.setAttribute('data-native-chat-root', 'true')
+    const onAnswer = vi.fn()
+    act(() => {
+      root.render(
+        <NativeChatQuestionCard
+          prompt={{
+            questions: [
+              {
+                question: 'Which layout?',
+                multiSelect: false,
+                options: [
+                  { label: 'Sidebar', preview: '| nav | main |' },
+                  { label: 'Top bar', preview: '| nav |\n| main |' }
+                ]
+              }
+            ]
+          }}
+          onAnswer={onAnswer}
+          onCancel={() => {}}
+          shouldFocus
+        />
+      )
+    })
+    const rows = container.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')
+    act(() => rows[0]!.focus())
+    pressKey({ key: '2' }, rows[0]!)
+    act(() => rows[1]!.click())
+    act(() => vi.runAllTimers())
+    expect(container.querySelector('pre')?.textContent).toBe('| nav |\n| main |')
+    expect(document.activeElement).toBe(rows[1])
+    expect(onAnswer).not.toHaveBeenCalled()
+    pressKey({ key: 'ArrowUp' }, rows[1]!)
+    pressKey({ key: '2' }, rows[0]!)
+    expect(document.activeElement).toBe(rows[1])
+    pressKey({ key: 'Enter' }, rows[1]!)
+    expect(onAnswer).toHaveBeenCalledWith([{ indices: [1], other: '' }])
+  })
+
+  it('preserves equivalent prompt answers but clears replacement answers and pending advance', () => {
+    vi.useFakeTimers()
+    const onAnswer = vi.fn()
+    const render = (prompt: AskPrompt): void => {
+      act(() =>
+        root.render(
+          <NativeChatQuestionCard prompt={prompt} onAnswer={onAnswer} onCancel={() => {}} />
+        )
+      )
+    }
+    render(tabsOrSpaces)
+    act(() => container.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')[1]!.click())
+    render({ questions: [...tabsOrSpaces.questions] })
+    expect(
+      container.querySelectorAll('button[aria-pressed]')[1]?.getAttribute('aria-pressed')
+    ).toBe('true')
+    render({
+      questions: [{ ...tabsOrSpaces.questions[0]!, question: 'Replacement question' }]
+    })
+    expect(
+      container.querySelectorAll('button[aria-pressed]')[1]?.getAttribute('aria-pressed')
+    ).toBe('false')
+    act(() => vi.runAllTimers())
+    expect(onAnswer).not.toHaveBeenCalled()
+    expect(container.textContent).toContain('Replacement question')
+  })
+
+  it('clears old multiline input and returns to the first question when a prompt shrinks', () => {
+    const onAnswer = vi.fn()
+    const render = (prompt: AskPrompt): void => {
+      act(() =>
+        root.render(
+          <NativeChatQuestionCard prompt={prompt} onAnswer={onAnswer} onCancel={() => {}} />
+        )
+      )
+    }
+    render({
+      questions: [
+        ...tabsOrSpaces.questions,
+        { ...tabsOrSpaces.questions[0]!, question: 'Second question' }
+      ]
+    })
+    const field = container.querySelector('textarea')!
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(
+        field,
+        'stale answer'
+      )
+      field.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    const next = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent?.trim() === 'Next'
+    )!
+    act(() => next.click())
+    expect(container.textContent).toContain('Second question')
+    render({ questions: [{ ...tabsOrSpaces.questions[0]!, question: 'Only question' }] })
+    expect(container.textContent).toContain('Only question')
+    expect(container.querySelector('textarea')?.value).toBe('')
+    expect(onAnswer).not.toHaveBeenCalled()
+    render({ questions: [] })
+    expect(container.textContent).toBe('')
+  })
+
+  it('submits retained selections after a structurally equivalent rerender', () => {
+    vi.useFakeTimers()
+    const onAnswer = vi.fn()
+    const render = (prompt: AskPrompt): void => {
+      act(() =>
+        root.render(
+          <NativeChatQuestionCard prompt={prompt} onAnswer={onAnswer} onCancel={() => {}} />
+        )
+      )
+    }
+    render(tabsOrSpaces)
+    act(() => container.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')[1]!.click())
+    render({ questions: tabsOrSpaces.questions.map((question) => ({ ...question })) })
+    act(() => vi.runAllTimers())
+    expect(onAnswer).toHaveBeenCalledWith([{ indices: [1], other: '' }])
+  })
+})

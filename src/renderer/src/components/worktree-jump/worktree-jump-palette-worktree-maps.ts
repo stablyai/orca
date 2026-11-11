@@ -1,5 +1,5 @@
 import type { Worktree } from '../../../../shared/worktree/types'
-import { getPaletteWorktreeIdentity } from '@/lib/palette-repo-resolution'
+import { getPaletteWorktreeIdentity } from '@/lib/workspace/search/palette-repo-resolution'
 
 export function buildWorktreeJumpPaletteWorktreeMaps(worktrees: readonly Worktree[]): {
   worktreeMap: Map<string, Worktree>

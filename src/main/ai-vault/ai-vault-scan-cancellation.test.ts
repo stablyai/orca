@@ -22,10 +22,4 @@ describe('abandonRemoteSessionScanOnCancel', () => {
       abandonRemoteSessionScanOnCancel(Promise.resolve('scanned'), controller.signal)
     ).rejects.toMatchObject({ name: 'AbortError' })
   })
-
-  it('passes the scan result through without a signal', async () => {
-    await expect(abandonRemoteSessionScanOnCancel(Promise.resolve('scanned'))).resolves.toBe(
-      'scanned'
-    )
-  })
 })

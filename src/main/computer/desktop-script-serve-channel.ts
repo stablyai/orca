@@ -1,14 +1,7 @@
 import { StringDecoder } from 'node:string_decoder'
-import type {
-  PipedChildProcess,
-  PipedProcessSpawner,
-  PipedProcessSpec
-} from '@orca/process-host/process-spec'
+import type { ChildProcessWithoutNullStreams } from 'node:child_process'
+import type { PipedProcessSpawner, PipedProcessSpec } from '@orca/process-host/process-spec'
 import { ownRetainedString } from '../../shared/own-retained-string'
-
-export type RuntimeChildProcess = PipedChildProcess
-
-export type RuntimeProcessSpawn = PipedProcessSpawner
 
 /** UTF-16 units, not bytes — this bounds the buffer, it is not a payload contract. */
 const MAX_RESPONSE_CHARS = 20 * 1024 * 1024
@@ -30,7 +23,7 @@ export class DesktopScriptServeChannel {
   private closed = false
 
   constructor(
-    private readonly child: RuntimeChildProcess,
+    private readonly child: ChildProcessWithoutNullStreams,
     private readonly handlers: ServeChannelHandlers
   ) {
     const onStdout = (chunk: Buffer | string): void => this.readStdout(chunk)
@@ -135,7 +128,7 @@ export class DesktopScriptServeChannel {
 
 export function startServeChannel(
   spec: PipedProcessSpec,
-  spawn: RuntimeProcessSpawn,
+  spawn: PipedProcessSpawner,
   handlers: ServeChannelHandlers
 ): DesktopScriptServeChannel {
   return new DesktopScriptServeChannel(spawn(spec), handlers)

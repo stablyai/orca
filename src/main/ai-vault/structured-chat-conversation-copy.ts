@@ -1,11 +1,11 @@
 import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
-import { agentForksThroughChat } from '../../shared/agent-resume-argv'
+import { agentForksThroughChat } from '../../shared/agent-launch/startup/agent-resume-argv'
 import { agentSessionProviderHandleChainHead } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import type {
   AiVaultPrepareSessionResumeArgs,
   AiVaultPrepareSessionResumeResult
-} from '../../shared/ai-vault-resume-preparation'
-import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
+} from '../../shared/ai-vault/resume/ai-vault-resume-preparation'
+import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { isAiVaultAgent } from './session-list-result-validation'
 import { findResumeOwnership } from './structured-session-ownership'
 

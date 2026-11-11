@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
-import { NativeChatTextAttachmentPreview } from '@/components/native-chat/NativeChatTextAttachmentPreview'
+import { NativeChatTextAttachmentPreview } from '@/components/native-chat/media/text/NativeChatTextAttachmentPreview'
 import { AgentSessionAttachmentStore } from '../../src/main/native-chat/agent-session-attachments/agent-session-attachment-store'
 import { createFilesystemHandlerContext } from '../../src/main/ipc/filesystem/filesystem-handler-context'
 import { registerFilesystemDownloadHandlers } from '../../src/main/ipc/filesystem/filesystem-download-handlers'
@@ -26,7 +26,9 @@ vi.mock('electron', () => ({
       mocks.handlers.set(name, handler)
   }
 }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.rpc }))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: mocks.rpc
+}))
 vi.mock('sonner', () => ({ toast: { success: vi.fn() } }))
 afterEach(cleanup)
 

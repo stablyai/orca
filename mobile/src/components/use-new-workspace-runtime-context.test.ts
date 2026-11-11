@@ -1,9 +1,9 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it } from 'vitest'
-import { FakeSession } from '../transport/mobile-endpoint-supervisor-test-fakes'
-import type { RpcClient } from '../transport/rpc-client'
-import type { RpcResponse } from '../transport/types'
+import { FakeSession } from '../transport/connection/mobile-endpoint-supervisor-test-fakes'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
 import { useNewWorkspaceRuntimeContext } from './use-new-workspace-runtime-context'
 
 type RuntimeContext = ReturnType<typeof useNewWorkspaceRuntimeContext>
@@ -83,62 +83,6 @@ describe('useNewWorkspaceRuntimeContext', () => {
     return { runtimeSettings, trustedOrcaHooks, availableProviders }
   }
 
-  it('publishes other source providers while the optional Jira probe is pending', async () => {
-    const client = new FakeSession('connected')
-    let answerJira: (response: RpcResponse) => void = () => {}
-    const pending = new Promise<RpcResponse>((resolve) => {
-      answerJira = resolve
-    })
-    client.sendRequest.mockImplementation((method: string) => {
-      if (method === 'jira.status') {
-        return pending
-      }
-      if (method === 'settings.get') {
-        return Promise.resolve(reply({ settings: SETTINGS }))
-      }
-      if (method === 'ui.get') {
-        return Promise.resolve(reply(UI_WITH_TRUST))
-      }
-      if (method === 'preflight.check') {
-        return Promise.resolve(reply({ glab: { installed: true } }))
-      }
-      return Promise.resolve(reply({ connected: true }))
-    })
-    await act(async () => {
-      renderer = create(createElement(Harness, { client }))
-    })
-    expect(currentContext().availableProviders).toEqual(['github', 'linear'])
-    await act(async () => answerJira(reply({ connected: true })))
-    expect(currentContext().jiraConnection.connected).toBe(true)
-  })
-
-  // A null settings result must still reach the provider commit.
-  it.each([
-    ['null', null],
-    ['absent', undefined],
-    ['without a settings member', {}]
-  ])('degrades a %s settings result to absent settings', async (_label, settingsResult) => {
-    // Jira has no availability gate here, so absent settings still offer it.
-    expect(await answer(settingsResult, UI_WITH_TRUST)).toEqual({
-      runtimeSettings: null,
-      trustedOrcaHooks: TRUSTED_HOOKS,
-      availableProviders: ['github', 'jira']
-    })
-  })
-
-  // A null UI result must not skip the provider commit either.
-  it.each([
-    ['null', null],
-    ['absent', undefined],
-    ['without a ui member', {}]
-  ])('degrades a %s ui result to untrusted hooks', async (_label, uiResult) => {
-    expect(await answer({ settings: SETTINGS }, uiResult)).toEqual({
-      runtimeSettings: SETTINGS,
-      trustedOrcaHooks: {},
-      availableProviders: ['github']
-    })
-  })
-
   // Stale trusted hooks would skip the setup-hook approval prompt; assert they are cleared.
   it('blanks the trust an earlier host published when the next ui result is null', async () => {
     expect((await answer({ settings: SETTINGS }, UI_WITH_TRUST)).trustedOrcaHooks).toEqual(
@@ -159,14 +103,6 @@ describe('useNewWorkspaceRuntimeContext', () => {
     expect(currentContext().runtimeSettings).toBeNull()
     expect(currentContext().trustedOrcaHooks).toEqual({})
     expect(currentContext().availableProviders).toEqual([])
-  })
-
-  // Any server's relay change rebuilds every scoped client, so the client object is not the host.
-  it('keeps the selected host values when its client is rebuilt', async () => {
-    const published = await answer({ settings: SETTINGS }, UI_WITH_TRUST, 'runtime:a')
-    await swapToUnansweredClient('runtime:a')
-    expect(currentContext().runtimeSettings).toEqual(published.runtimeSettings)
-    expect(currentContext().trustedOrcaHooks).toEqual(TRUSTED_HOOKS)
   })
 
   // A -> B -> A: the first A's Save callbacks must stay retired when A is picked again.

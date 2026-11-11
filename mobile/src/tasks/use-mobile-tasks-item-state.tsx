@@ -4,16 +4,29 @@ import {
   type DetailPayload,
   groupDetailComments
 } from './mobile-tasks-legacy-foundation'
-import { useMemo, useRef, useState } from './mobile-tasks-dependencies'
+import { useCallback, useMemo, useRef, useState } from './mobile-tasks-dependencies'
+import type { SetStateAction } from 'react'
 
 export function useMobileTasksItemState() {
-  const [detailPayload, setDetailPayload] = useState<DetailPayload | null>(null)
+  const acceptedDetail = useRef<DetailPayload | null>(null)
+  const [detailPayload, publishDetailPayload] = useState<DetailPayload | null>(null)
+  const setDetailPayload = useCallback((update: SetStateAction<DetailPayload | null>) => {
+    const next = typeof update === 'function' ? update(acceptedDetail.current) : update
+    acceptedDetail.current = next
+    publishDetailPayload(next)
+  }, [])
+  const readDetailPayload = useCallback(() => acceptedDetail.current, [])
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailError, setDetailError] = useState('')
   const [detailRefreshSeq, setDetailRefreshSeq] = useState(0)
+  // Set only by the user's explicit Refresh and consumed by the load it starts; other reloads read ordinarily.
+  const detailRefreshRequested = useRef(false)
+  const requestDetailRefresh = useCallback(() => {
+    detailRefreshRequested.current = true
+    setDetailRefreshSeq((current) => current + 1)
+  }, [])
   const [itemTitleDraft, setItemTitleDraft] = useState('')
   const [itemBodyDraft, setItemBodyDraft] = useState('')
-  const [itemCommentDraft, setItemCommentDraft] = useState('')
   const [itemAddLabelsDraft, setItemAddLabelsDraft] = useState('')
   const [itemRemoveLabelsDraft, setItemRemoveLabelsDraft] = useState('')
   const [itemAddAssigneesDraft, setItemAddAssigneesDraft] = useState('')
@@ -29,6 +42,47 @@ export function useMobileTasksItemState() {
   const [expandedPrFilePath, setExpandedPrFilePath] = useState<string | null>(null)
   const [prFileContents, setPrFileContents] = useState<Record<string, GitHubPRFileContents>>({})
   const [prFileLoadingPath, setPrFileLoadingPath] = useState<string | null>(null)
+  const fileRequest = useRef<{ reload: () => void } | null>(null)
+  const interruptedFileRequest = useRef<{ reload: () => void } | null>(null)
+  const resetPrFiles = useCallback(() => {
+    fileRequest.current = null
+    interruptedFileRequest.current = null
+    setPrFileContents({})
+    setPrFileLoadingPath(null)
+    setExpandedPrFilePath(null)
+  }, [])
+  // Every connection change retires the open file read but keeps accepted contents and expansion; once connected it reads again.
+  const reconcilePrFileConnection = useCallback((connected: boolean) => {
+    if (fileRequest.current) {
+      interruptedFileRequest.current = fileRequest.current
+      fileRequest.current = null
+      setPrFileLoadingPath(null)
+    }
+    if (!connected) {
+      return
+    }
+    const interrupted = interruptedFileRequest.current
+    interruptedFileRequest.current = null
+    interrupted?.reload()
+  }, [])
+  const beginFileLoad = useCallback(
+    (path: string, canObserve: () => boolean, reload: () => void) => {
+      const request = { reload }
+      fileRequest.current = request
+      interruptedFileRequest.current = null
+      setPrFileLoadingPath(path)
+      return {
+        canPublish: () => fileRequest.current === request && canObserve(),
+        finish: () => {
+          if (fileRequest.current === request) {
+            fileRequest.current = null
+            setPrFileLoadingPath(null)
+          }
+        }
+      }
+    },
+    []
+  )
   const [prFileCommentDrafts, setPrFileCommentDrafts] = useState<Record<string, string>>({})
   const [copiedLinkKey, setCopiedLinkKey] = useState<string | null>(null)
   const copiedLinkResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -42,18 +96,19 @@ export function useMobileTasksItemState() {
   return {
     detailPayload,
     setDetailPayload,
+    readDetailPayload,
     detailLoading,
     setDetailLoading,
     detailError,
     setDetailError,
     detailRefreshSeq,
     setDetailRefreshSeq,
+    detailRefreshRequested,
+    requestDetailRefresh,
     itemTitleDraft,
     setItemTitleDraft,
     itemBodyDraft,
     setItemBodyDraft,
-    itemCommentDraft,
-    setItemCommentDraft,
     itemAddLabelsDraft,
     setItemAddLabelsDraft,
     itemRemoveLabelsDraft,
@@ -83,7 +138,9 @@ export function useMobileTasksItemState() {
     prFileContents,
     setPrFileContents,
     prFileLoadingPath,
-    setPrFileLoadingPath,
+    beginFileLoad,
+    resetPrFiles,
+    reconcilePrFileConnection,
     prFileCommentDrafts,
     setPrFileCommentDrafts,
     copiedLinkKey,

@@ -1,8 +1,8 @@
 import type {
   AiVaultAgent,
-  AiVaultFirstUserPromptResult,
-  AiVaultSession
-} from '../../shared/ai-vault-types'
+  AiVaultSession,
+  AiVaultFirstUserPromptResult as ReadAiVaultFirstUserPromptResult
+} from '../../shared/ai-vault/contracts/ai-vault-types'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/execution-host'
 import { wslGatedStat } from '../native-chat/wsl-transcript-fs-access'
 import { parseAgentSessionFile } from './session-scanner-agent-parser'
@@ -25,8 +25,6 @@ export type ReadAiVaultFirstUserPromptArgs = {
   codexHome?: string | null
   wslOpenCodeReaders?: readonly OpenCodeWslRuntime[]
 }
-
-export type ReadAiVaultFirstUserPromptResult = AiVaultFirstUserPromptResult
 
 /** Reparse one transcript with full first-prompt capture instead of listing preview limits. */
 export async function readAiVaultFirstUserPrompt(

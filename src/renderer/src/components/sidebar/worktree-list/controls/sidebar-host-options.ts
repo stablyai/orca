@@ -1,0 +1,271 @@
+import { shallow } from 'zustand/shallow'
+import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { Repo } from '../../../../../../shared/repo-types'
+import type { WorkspaceHostScope } from '../../../../../../shared/ui-chrome-types'
+import {
+  ALL_EXECUTION_HOSTS_SCOPE,
+  LOCAL_EXECUTION_HOST_ID,
+  toRuntimeExecutionHostId,
+  type ExecutionHostId
+} from '../../../../../../shared/execution-host'
+import { buildExecutionHostRegistry } from '../../../../../../shared/execution-host/execution-host-registry'
+import type {
+  EphemeralVmHostLifecycle,
+  ExecutionHostHealth,
+  ExecutionHostVmState
+} from '../../../../../../shared/execution-host/execution-host-health'
+import type { ExecutionHostRegistryEntry } from '../../../../../../shared/execution-host/execution-host-registry-entry'
+
+import { getExecutionHostHealthLabel } from '@/runtime/hosts/display/runtime-host-copy'
+import { pickerExecutionHosts } from '../../../../../../shared/execution-host/managed-orcad-execution-host'
+import { getCheckedHostRows } from '../../../../../../shared/workspace-view/workspace-host-visibility'
+import type { RuntimeCompatVerdict } from '../../../../../../shared/protocol-compat'
+import type { SshConnectionState, SshConnectionStatus } from '../../../../../../shared/ssh-types'
+import { translateHostDisplayLabel } from '../../execution-host-label'
+import {
+  isWslHostRuntimeEnvironment,
+  type PublicKnownRuntimeEnvironment
+} from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
+import type {
+  RuntimeEnvironmentStatus,
+  RuntimeHostBlockedReason
+} from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
+import type { WslHostStatus } from '../../../../../../shared/wsl-host-types'
+import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
+import { sshConnectFailureText } from '@/ssh/ssh-host-server-status-copy'
+import {
+  getWslHostRowDetail,
+  getWslHostRowHealth,
+  getWslHostRowServerFilesMissingDetail,
+  getWslHostRowTurnedOffDetail
+} from '../../wsl-host-row-status'
+
+export type SidebarHostOption = {
+  id: ExecutionHostId
+  label: string
+  isDefaultLocalLabel?: boolean
+  detail: string
+  kind: 'local' | 'ssh' | 'runtime'
+  health: ExecutionHostHealth
+  presence: 'local' | 'configured' | 'project' | 'active'
+  /** Why a failed SSH host failed, as Settings → SSH Hosts says it; host pickers show it. */
+  failureReason?: string
+  // Host menus need the compatibility verdict to explain version skew.
+  compatibility?: RuntimeCompatVerdict
+  blockedReason?: RuntimeHostBlockedReason
+  /** The VM lifecycle behind a VM-backed host, when it rather than transport explains health. */
+  vmState?: ExecutionHostVmState
+  // Host headers use this status to describe authentication requirements.
+  connectionStatus?: SshConnectionStatus
+  aliasHostIds?: readonly ExecutionHostId[]
+  mergedIntoHostId?: ExecutionHostId
+  /** Set on a WSL host's row: the distro its Orca server runs in. */
+  wslDistro?: string
+  /** Why a listed WSL host cannot run: the experiment is off, or this build lacks its server files. */
+  wslUnavailable?: 'turned-off' | 'server-files-missing'
+}
+
+export type SidebarHostScopeOption = {
+  id: WorkspaceHostScope
+  label: string
+  detail: string
+  health: ExecutionHostHealth | 'mixed'
+  vmState?: ExecutionHostVmState
+}
+
+export function buildSidebarHostOptions(
+  args: {
+    repos: readonly Pick<Repo, 'connectionId' | 'executionHostId'>[]
+    sshTargetLabels: ReadonlyMap<string, string>
+    sshConnectionStates?: ReadonlyMap<string, SshConnectionState>
+    settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
+    // Reuse live server status for compatibility and health without re-probing.
+    runtimeStatusByEnvironmentId?: ReadonlyMap<string, RuntimeEnvironmentStatus>
+    runtimeEnvironments?: readonly Pick<
+      PublicKnownRuntimeEnvironment,
+      'id' | 'name' | 'source' | 'orcadDeployment'
+    >[]
+    // Apply display-label overrides consistently across sidebar host controls.
+    hostLabelOverrides?: ReadonlyMap<ExecutionHostId, string>
+    wslHostStatuses?: Readonly<Record<string, WslHostStatus>>
+    /** False keeps WSL hosts' rows but marks them turned off. */
+    wslHostsEnabled?: boolean
+    /** True keeps WSL hosts' rows but marks them unable to run in this build. */
+    wslHostServerFilesMissing?: boolean
+    ephemeralVmHosts?: readonly EphemeralVmHostLifecycle[]
+  },
+  t?: Translate
+): SidebarHostOption[] {
+  const configuredSshTargetIds = new Set(args.sshTargetLabels.keys())
+  const projectSshTargetIds = new Set<string>()
+  for (const repo of args.repos) {
+    if (repo.connectionId?.trim()) {
+      projectSshTargetIds.add(repo.connectionId.trim())
+    }
+    if (repo.executionHostId?.startsWith('ssh:')) {
+      projectSshTargetIds.add(decodeURIComponent(repo.executionHostId.slice('ssh:'.length)))
+    }
+  }
+  const wslDistroByHostId = new Map<ExecutionHostId, { environmentId: string; distro: string }>()
+  for (const environment of args.runtimeEnvironments ?? []) {
+    if (isWslHostRuntimeEnvironment(environment)) {
+      wslDistroByHostId.set(toRuntimeExecutionHostId(environment.id), {
+        environmentId: environment.id,
+        distro: environment.orcadDeployment.distro
+      })
+    }
+  }
+  const activeRuntimeHostId = args.settings?.activeRuntimeEnvironmentId?.trim()
+    ? toRuntimeExecutionHostId(args.settings.activeRuntimeEnvironmentId.trim())
+    : null
+  return buildExecutionHostRegistry({
+    repos: args.repos,
+    settings: args.settings,
+    sshTargetLabels: args.sshTargetLabels,
+    sshConnectionStates: args.sshConnectionStates,
+    runtimeEnvironments: args.runtimeEnvironments,
+    runtimeStatusByEnvironmentId: args.runtimeStatusByEnvironmentId,
+    hostLabelOverrides: args.hostLabelOverrides,
+    ephemeralVmHosts: args.ephemeralVmHosts
+  }).map((host) => {
+    if (host.kind === 'local') {
+      return {
+        ...host,
+        isDefaultLocalLabel: host.isDefaultLocalLabel,
+        presence: 'local'
+      }
+    }
+    if (host.kind === 'ssh') {
+      const targetId = decodeURIComponent(host.id.slice('ssh:'.length))
+      const state = args.sshConnectionStates?.get(targetId)
+      // Disconnected hosts remain listed when configured or still referenced by projects.
+      return {
+        ...host,
+        ...(host.health === 'error' && state
+          ? { failureReason: sshConnectFailureText(state, state.error?.trim() || host.detail, t) }
+          : {}),
+        presence: configuredSshTargetIds.has(targetId)
+          ? 'configured'
+          : projectSshTargetIds.has(targetId)
+            ? 'project'
+            : 'active'
+      }
+    }
+    const wsl = wslDistroByHostId.get(host.id)
+    const status = wsl ? args.wslHostStatuses?.[wsl.environmentId] : undefined
+    return {
+      ...host,
+      ...(wsl && args.wslHostServerFilesMissing === true
+        ? {
+            wslDistro: wsl.distro,
+            wslUnavailable: 'server-files-missing' as const,
+            detail: getWslHostRowServerFilesMissingDetail(t),
+            health: 'disconnected' as const
+          }
+        : wsl && args.wslHostsEnabled === false
+          ? {
+              wslDistro: wsl.distro,
+              wslUnavailable: 'turned-off' as const,
+              detail: getWslHostRowTurnedOffDetail(t),
+              health: 'disconnected' as const
+            }
+          : wsl
+            ? {
+                wslDistro: wsl.distro,
+                detail: getWslHostRowDetail(status, t),
+                health: getWslHostRowHealth(host.health, status)
+              }
+            : {}),
+      presence: host.id === activeRuntimeHostId ? 'active' : 'project'
+    }
+  })
+}
+
+export function sidebarHostDisplayLabel(host: SidebarHostOption, t: Translate = translate): string {
+  return translateHostDisplayLabel(host, t)
+}
+
+export function shouldShowHostScopeControls(hosts: readonly SidebarHostOption[]): boolean {
+  return pickerExecutionHosts(hosts).some((host) => host.id !== LOCAL_EXECUTION_HOST_ID)
+}
+
+export function buildSidebarHostScopeOptions(
+  allHosts: readonly SidebarHostOption[],
+  t: Translate = translate
+): SidebarHostScopeOption[] {
+  const hosts = pickerExecutionHosts(allHosts)
+  return [
+    {
+      id: ALL_EXECUTION_HOSTS_SCOPE,
+      label: t('auto.components.sidebar.sidebarHostOptions.3e102f111c', 'All hosts'),
+      detail: hosts.map((host) => translateHostDisplayLabel(host, t)).join(', '),
+      health: 'mixed'
+    },
+    ...hosts.map((host) => ({
+      id: host.id,
+      label: translateHostDisplayLabel(host, t),
+      detail: host.detail,
+      health: host.health,
+      ...(host.vmState ? { vmState: host.vmState } : {})
+    }))
+  ]
+}
+
+export function getSidebarHostVisibilityLabel(
+  visibleHostIds: readonly ExecutionHostId[] | null | undefined,
+  hosts: readonly SidebarHostOption[],
+  t: Translate = translate
+): string {
+  const rows = pickerExecutionHosts(hosts)
+  const checkedRows = visibleHostIds ? getCheckedHostRows(rows, visibleHostIds) : rows
+  if (checkedRows.length === rows.length) {
+    return t('auto.components.sidebar.sidebarHostOptions.3e102f111c', 'All hosts')
+  }
+  if (checkedRows.length === 1) {
+    return translateHostDisplayLabel(checkedRows[0], t)
+  }
+  if (checkedRows.length === 0) {
+    return t('auto.components.sidebar.sidebarHostOptions.hosts', 'Hosts')
+  }
+  return t('auto.components.sidebar.sidebarHostOptions.visibleHosts', '{{count}} hosts', {
+    count: checkedRows.length,
+    defaultValue_one: '{{count}} host'
+  })
+}
+
+export function getSidebarHostHealthLabel(
+  health: SidebarHostScopeOption['health'],
+  blockedReason?: RuntimeHostBlockedReason,
+  t: Translate = translate,
+  vmState?: ExecutionHostVmState
+): string {
+  return health === 'mixed'
+    ? t('runtime.health.mixed', 'Mixed')
+    : getExecutionHostHealthLabel(health, blockedReason, t, vmState)
+}
+
+// Diagnostics do not change host choices; retain every other exposed registry field.
+export function sidebarHostSemantics(host: SidebarHostOption & ExecutionHostRegistryEntry) {
+  const { remoteControlState, ...option } = host
+  return {
+    ...option,
+    remoteControlState: remoteControlState && {
+      state: remoteControlState.state,
+      lastError: remoteControlState.lastError,
+      lastClose: remoteControlState.lastClose,
+      lastCloseCause: remoteControlState.lastCloseCause
+    }
+  }
+}
+
+export function createSidebarHostLabelsSelector() {
+  let result = new Map<ExecutionHostId, string>()
+  return (hosts: readonly SidebarHostOption[]): ReadonlyMap<ExecutionHostId, string> => {
+    const next = new Map(hosts.map((host) => [host.id, translateHostDisplayLabel(host)]))
+    if (!shallow(result, next)) {
+      result = next
+    }
+    return result
+  }
+}

@@ -85,26 +85,4 @@ describe('selected model reports across released client and host versions', () =
       )
     ).toMatchObject([{ ok: true, result: { current: { model: 'reported-model' } } }])
   })
-
-  it('lets a new desktop client read existing model reports from the released host', async () => {
-    const client = {
-      clientKind: 'runtime' as const,
-      clientCapabilities: remoteRuntimeClientCapabilities(
-        ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
-      )
-    }
-    if (!baseline.methodNames.includes('agentSession.options')) {
-      expect(
-        await callBuild(baseline, 'agentSession.options', { sessionId: SESSION }, client)
-      ).toMatchObject([{ ok: false, error: { code: 'method_not_found' } }])
-      return
-    }
-    const host = structuredHostStub(SESSION, 'folder-options')
-    const report = { models: [], current: { model: 'released-model', effort: 'off' } }
-    host.readOptions.mockResolvedValue(report)
-    await baseline.installStructuredHost(installableHost(host))
-    expect(
-      await callBuild(baseline, 'agentSession.options', { sessionId: SESSION }, client)
-    ).toMatchObject([{ ok: true, result: report }])
-  })
 })

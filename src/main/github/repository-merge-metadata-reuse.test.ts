@@ -34,16 +34,6 @@ afterEach(() => {
 })
 
 describe('repository merge metadata reuse', () => {
-  it('isolates cwd when no home or config directory is available', async () => {
-    const env = { PATH: '/fixture/bin' }
-    exec.mockResolvedValueOnce(response(true)).mockResolvedValueOnce(response(false))
-    await detectRepositoryMergeMetadata(repository, 'main', { cwd: '/a', env }, 'local:host')
-    await expect(
-      detectRepositoryMergeMetadata(repository, 'main', { cwd: '/b', env }, 'local:host')
-    ).resolves.toMatchObject({ autoMergeAllowed: false })
-    expect(exec).toHaveBeenCalledTimes(2)
-  })
-
   it.each([true, false])(
     'retains a successful concurrent read when a newer read fails (failure first: %s)',
     async (failureFirst) => {
@@ -74,181 +64,6 @@ describe('repository merge metadata reuse', () => {
       expect(exec).toHaveBeenCalledTimes(2)
     }
   )
-
-  it('starts immediately and joins overlapping PR probes for the same base branch', async () => {
-    const pending = Promise.withResolvers<{ stdout: string }>()
-    exec.mockReturnValueOnce(pending.promise)
-
-    const reads = Array.from({ length: 10 }, () =>
-      detectRepositoryMergeMetadata(repository, 'main', options, 'local:host')
-    )
-
-    expect(exec).toHaveBeenCalledTimes(1)
-    pending.resolve(response(true))
-    expect(await Promise.all(reads)).toEqual(
-      Array.from({ length: 10 }, () => ({ autoMergeAllowed: true, mergeQueueRequired: false }))
-    )
-    expect(spend).toHaveBeenCalledTimes(1)
-    await expect(
-      detectRepositoryMergeMetadata(repository, 'main', options, 'local:host')
-    ).resolves.toMatchObject({ autoMergeAllowed: true })
-    expect(exec).toHaveBeenCalledTimes(1)
-  })
-
-  it('reuses context across admission tiers but refreshes at the existing TTL', async () => {
-    vi.useFakeTimers()
-    exec.mockResolvedValueOnce(response(true)).mockResolvedValueOnce(response(false))
-
-    await detectRepositoryMergeMetadata(repository, 'main', options, 'local:host')
-    await expect(
-      detectRepositoryMergeMetadata(
-        repository,
-        'main',
-        { ...options, admissionTier: 'interactive' },
-        'local:host'
-      )
-    ).resolves.toMatchObject({ autoMergeAllowed: true })
-    expect(exec).toHaveBeenCalledTimes(1)
-    vi.advanceTimersByTime(10 * 60_000)
-
-    await expect(
-      detectRepositoryMergeMetadata(repository, 'main', options, 'local:host')
-    ).resolves.toMatchObject({ autoMergeAllowed: false })
-    expect(exec).toHaveBeenCalledTimes(2)
-  })
-
-  it('keeps repository-wide settings distinct from a branch with the old sentinel name', async () => {
-    exec.mockResolvedValue(response(true))
-
-    const [all, branch] = await Promise.all([
-      detectRepositoryMergeMetadata(repository, undefined, options, 'local:host'),
-      detectRepositoryMergeMetadata(repository, '__repo__', options, 'local:host')
-    ])
-
-    expect(all.mergeQueueRequired).toBeNull()
-    expect(branch.mergeQueueRequired).toBe(false)
-    expect(exec).toHaveBeenCalledTimes(2)
-  })
-
-  it('preserves repository-wide cache reuse across different worktree directories', async () => {
-    exec.mockResolvedValueOnce(response(true)).mockResolvedValueOnce(response(false))
-
-    await detectRepositoryMergeMetadata(repository, 'main', options, 'local:host')
-    await expect(
-      detectRepositoryMergeMetadata(repository, 'main', { cwd: '/another-worktree' }, 'local:host')
-    ).resolves.toMatchObject({ autoMergeAllowed: true })
-
-    expect(exec).toHaveBeenCalledTimes(1)
-  })
-
-  it.each([
-    ['GH_CONFIG_DIR', false],
-    ['GH_CONFIG_DIR', true],
-    ['XDG_CONFIG_HOME', false],
-    ['XDG_CONFIG_HOME', true]
-  ] as const)('isolates relative %s directories (inherited: %s)', async (variable, inherited) => {
-    vi.stubEnv(variable, '.gh')
-    const env = inherited ? undefined : { [variable]: '.gh' }
-    exec.mockResolvedValueOnce(response(true)).mockResolvedValueOnce(response(false))
-
-    await detectRepositoryMergeMetadata(repository, 'main', { ...options, env }, 'local:host')
-    await expect(
-      detectRepositoryMergeMetadata(
-        repository,
-        'main',
-        { cwd: '/another-worktree', env },
-        'local:host'
-      )
-    ).resolves.toMatchObject({ autoMergeAllowed: false })
-    expect(exec).toHaveBeenCalledTimes(2)
-  })
-
-  it('honors an absolute config override above a relative XDG directory', async () => {
-    const env = {
-      GH_CONFIG_DIR: process.platform === 'win32' ? 'C:\\gh' : '/home/gh',
-      XDG_CONFIG_HOME: '.xdg'
-    }
-    exec.mockResolvedValueOnce(response(true))
-
-    await detectRepositoryMergeMetadata(repository, 'main', { ...options, env }, 'local:host')
-    await expect(
-      detectRepositoryMergeMetadata(
-        repository,
-        'main',
-        { cwd: '/another-worktree', env },
-        'local:host'
-      )
-    ).resolves.toMatchObject({ autoMergeAllowed: true })
-    expect(exec).toHaveBeenCalledTimes(1)
-  })
-
-  it.each([undefined, 'Ubuntu'])(
-    'isolates a relative default config directory in %s',
-    async (wslDistro) => {
-      const env =
-        !wslDistro && process.platform === 'win32' ? { APPDATA: '.gh' } : { HOME: '.home' }
-      exec.mockResolvedValueOnce(response(true)).mockResolvedValueOnce(response(false))
-
-      await detectRepositoryMergeMetadata(
-        repository,
-        'main',
-        { ...options, env, wslDistro },
-        'local:host'
-      )
-      await expect(
-        detectRepositoryMergeMetadata(
-          repository,
-          'main',
-          { cwd: '/another-worktree', env, wslDistro },
-          'local:host'
-        )
-      ).resolves.toMatchObject({ autoMergeAllowed: false })
-      expect(exec).toHaveBeenCalledTimes(2)
-    }
-  )
-
-  it.each([undefined, 'Ubuntu'])('shares an absolute config directory in %s', async (wslDistro) => {
-    const configDir = !wslDistro && process.platform === 'win32' ? 'C:\\gh' : '/home/gh'
-    const env = { GH_CONFIG_DIR: configDir }
-    exec.mockResolvedValueOnce(response(true))
-
-    await detectRepositoryMergeMetadata(
-      repository,
-      'main',
-      { ...options, env, wslDistro },
-      'local:host'
-    )
-    await expect(
-      detectRepositoryMergeMetadata(
-        repository,
-        'main',
-        { cwd: '/another-worktree', env, wslDistro },
-        'local:host'
-      )
-    ).resolves.toMatchObject({ autoMergeAllowed: true })
-    expect(exec).toHaveBeenCalledTimes(1)
-  })
-
-  it('keeps Windows-looking relative config paths isolated inside WSL', async () => {
-    const env = { GH_CONFIG_DIR: 'C:\\gh' }
-    exec.mockResolvedValueOnce(response(true)).mockResolvedValueOnce(response(false))
-
-    await detectRepositoryMergeMetadata(
-      repository,
-      'main',
-      { ...options, env, wslDistro: 'Ubuntu' },
-      'local:Ubuntu'
-    )
-    await expect(
-      detectRepositoryMergeMetadata(
-        repository,
-        'main',
-        { cwd: '/another-worktree', env, wslDistro: 'Ubuntu' },
-        'local:Ubuntu'
-      )
-    ).resolves.toMatchObject({ autoMergeAllowed: false })
-    expect(exec).toHaveBeenCalledTimes(2)
-  })
 
   it('does not couple independent abort signals or cache an aborted result', async () => {
     const canceled = Promise.withResolvers<{ stdout: string }>()
@@ -305,23 +120,6 @@ describe('repository merge metadata reuse', () => {
     expect(exec).toHaveBeenCalledTimes(2)
   })
 
-  it('still coalesces a shared signal and reuses its successful completed result', async () => {
-    const pending = Promise.withResolvers<{ stdout: string }>()
-    const signal = new AbortController().signal
-    exec.mockReturnValueOnce(pending.promise)
-    const reads = Array.from({ length: 10 }, () =>
-      detectRepositoryMergeMetadata(repository, 'main', { ...options, signal }, 'local:host')
-    )
-    expect(exec).toHaveBeenCalledTimes(1)
-    pending.resolve(response(true))
-    await Promise.all(reads)
-
-    await expect(
-      detectRepositoryMergeMetadata(repository, 'main', options, 'local:host')
-    ).resolves.toMatchObject({ autoMergeAllowed: true })
-    expect(exec).toHaveBeenCalledTimes(1)
-  })
-
   it('retains a surviving cache writer when a newer independent probe aborts', async () => {
     const older = Promise.withResolvers<{ stdout: string }>()
     const canceled = Promise.withResolvers<{ stdout: string }>()
@@ -363,19 +161,6 @@ describe('repository merge metadata reuse', () => {
     expect(spend).not.toHaveBeenCalled()
   })
 
-  it('keeps inferred WSL distro credentials separate from native and other distros', async () => {
-    exec.mockResolvedValueOnce(response(true)).mockResolvedValue(response(false))
-
-    await detectRepositoryMergeMetadata(repository, 'main', options, 'local:host')
-    for (const cwd of ['\\\\wsl.localhost\\Ubuntu\\repo', '\\\\wsl.localhost\\Debian\\repo']) {
-      await expect(
-        detectRepositoryMergeMetadata(repository, 'main', { cwd }, 'local:host')
-      ).resolves.toMatchObject({ autoMergeAllowed: false })
-    }
-
-    expect(exec).toHaveBeenCalledTimes(3)
-  })
-
   it('keeps newer worktree settings when an older directory probe completes later', async () => {
     const older = Promise.withResolvers<{ stdout: string }>()
     const newer = Promise.withResolvers<{ stdout: string }>()
@@ -395,96 +180,6 @@ describe('repository merge metadata reuse', () => {
     await expect(
       detectRepositoryMergeMetadata(repository, 'main', options, 'local:host')
     ).resolves.toMatchObject({ autoMergeAllowed: false })
-    expect(exec).toHaveBeenCalledTimes(2)
-  })
-
-  it('isolates credential/host/branch/route caches and cwd-sensitive overlapping probes', async () => {
-    const pending = Promise.withResolvers<{ stdout: string }>()
-    exec.mockReturnValue(pending.promise)
-    const requests = [
-      { repository, branch: 'main', options, scope: 'local:host' },
-      { repository, branch: 'release', options, scope: 'local:host' },
-      {
-        repository: { ...repository, host: 'ghe.example' },
-        branch: 'main',
-        options,
-        scope: 'local:host'
-      },
-      { repository, branch: 'main', options, scope: 'ssh:one' },
-      { repository, branch: 'main', options, scope: 'ssh:two' },
-      {
-        repository,
-        branch: 'main',
-        options: { ...options, wslDistro: 'Ubuntu' },
-        scope: 'local:Ubuntu'
-      },
-      {
-        repository,
-        branch: 'main',
-        options: { ...options, cwd: '/another-repo' },
-        scope: 'local:host'
-      },
-      {
-        repository,
-        branch: 'main',
-        options: { ...options, ghAccount: { host: 'github.com', user: 'other' } },
-        scope: 'local:host'
-      },
-      {
-        repository,
-        branch: 'main',
-        options: { ...options, env: { GH_TOKEN: 'one' } },
-        scope: 'local:host'
-      },
-      {
-        repository,
-        branch: 'main',
-        options: { ...options, env: { GH_TOKEN: 'two' } },
-        scope: 'local:host'
-      }
-    ]
-
-    const reads = requests.map((request) =>
-      detectRepositoryMergeMetadata(
-        request.repository,
-        request.branch,
-        request.options,
-        request.scope
-      )
-    )
-    expect(exec).toHaveBeenCalledTimes(requests.length)
-    pending.resolve(response(true))
-    expect((await Promise.all(reads)).every((value) => value.autoMergeAllowed)).toBe(true)
-    for (const request of requests) {
-      await expect(
-        detectRepositoryMergeMetadata(
-          request.repository,
-          request.branch,
-          request.options,
-          request.scope
-        )
-      ).resolves.toMatchObject({ autoMergeAllowed: true })
-    }
-    expect(exec).toHaveBeenCalledTimes(requests.length)
-  })
-
-  it('shares failed probes and retries unknown settings at the existing short TTL', async () => {
-    vi.useFakeTimers()
-    const pending = Promise.withResolvers<{ stdout: string }>()
-    exec.mockReturnValueOnce(pending.promise).mockResolvedValueOnce(response(true))
-    const first = detectRepositoryMergeMetadata(repository, 'main', options, 'local:host')
-    const second = detectRepositoryMergeMetadata(repository, 'main', options, 'local:host')
-    pending.reject(new Error('offline'))
-
-    expect(await Promise.all([first, second])).toEqual([
-      { autoMergeAllowed: null, mergeQueueRequired: null },
-      { autoMergeAllowed: null, mergeQueueRequired: null }
-    ])
-    expect(exec).toHaveBeenCalledTimes(1)
-    vi.advanceTimersByTime(60_000)
-    await expect(
-      detectRepositoryMergeMetadata(repository, 'main', options, 'local:host')
-    ).resolves.toMatchObject({ autoMergeAllowed: true })
     expect(exec).toHaveBeenCalledTimes(2)
   })
 

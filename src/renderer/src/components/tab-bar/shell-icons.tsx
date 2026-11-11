@@ -1,6 +1,6 @@
 import React from 'react'
 import { WINDOWS_GIT_BASH_SHELL } from '../../../../shared/windows-terminal-shell'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import gitForWindowsLogoUrl from '../../../../../resources/gwindows_logo.svg?url'
 
 // Use distinct shell tiles in the strip and create menu so PowerShell, CMD, Git Bash and WSL remain recognizable.
@@ -42,6 +42,7 @@ function CmdIcon({ size = 14 }: { size?: number }): React.JSX.Element {
 }
 
 function WslIcon({ size = 14 }: { size?: number }): React.JSX.Element {
+  const t = useTranslate()
   // A WSL text tile stays legible at 14px where a Tux silhouette does not.
   return (
     <svg
@@ -61,7 +62,7 @@ function WslIcon({ size = 14 }: { size?: number }): React.JSX.Element {
         fill="#1F1F1F"
         fontFamily="system-ui, -apple-system, sans-serif"
       >
-        {translate('auto.components.tab.bar.shell.icons.e9b2e70613', 'WSL')}
+        {t('auto.components.tab.bar.shell.icons.e9b2e70613', 'WSL')}
       </text>
     </svg>
   )

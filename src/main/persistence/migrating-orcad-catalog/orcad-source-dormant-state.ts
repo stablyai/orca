@@ -15,12 +15,14 @@ import { collectOrcadMigrationSourceAutomationState } from './orcad-source-autom
 import { collectOrcadMigrationSourceWorkspaceSession } from './orcad-source-workspace-session'
 import {
   createOrcadMigrationExportScope,
+  orcadMigrationMayMoveChild,
   orcadMigrationOwnerMatchesScope,
   unqualifyOrcadMigrationOwnerKey
 } from './orcad-source-scope'
 import { collectOrcadMigrationSourceClientState } from './orcad-source-client-state'
 import { inspectOrcadSourceWorktreeMetadata } from './orcad-source-worktree-metadata'
 import { compareKeys } from './orcad-source-key-order'
+import { assertNoCrossStoreLinkedWorkspaceInMove } from '../../../shared/worktree/cross-store-lineage-move-refusal'
 
 export const ORCAD_MIGRATION_TRANSFERRED_DORMANT_KINDS = [
   'worktree-metadata',
@@ -75,6 +77,9 @@ export function collectOrcadMigrationSourceDormantState(
   daemonHistoryLeaf?: (tabId: string, leafId: string) => boolean
 ): OrcadMigrationSourceDormantInspection {
   const scope = createOrcadMigrationExportScope({ source, catalog, repos: state.repos })
+  assertNoCrossStoreLinkedWorkspaceInMove(state, (childKey) =>
+    orcadMigrationMayMoveChild(state, childKey, scope)
+  )
   const blockedCounts = emptyBlockedCounts()
   const destinationRepos = catalog.repositories.map(toOrcadDestinationRepository)
   const setupByRepoId = new Map(

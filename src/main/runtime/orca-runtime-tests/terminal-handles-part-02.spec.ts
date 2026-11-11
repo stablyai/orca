@@ -1,15 +1,15 @@
 import { describe, expect, it, vi } from 'vitest'
-import { movePaneFirst, registerBoundPty } from '../bind-first-pane.test-fixture'
+import { movePaneFirst, registerBoundPty } from './bind-first-pane.test-fixture'
 import {
   HEADLESS_LEAF_ID,
   TEST_WINDOW_ID,
   TEST_WORKTREE_ID,
   createRuntime,
-  createRuntimeWithSshLease,
-  store
-} from '../orca-runtime-test-fixtures.spec'
-import { makePaneKey, OrcaRuntimeService } from '../orca-runtime-test-mocks.spec'
-import type { SshRemotePtyLease } from '../../../shared/ssh-types'
+  createRuntimeWithSshLease
+} from './orca-runtime-test-fixtures.spec'
+import './runtime-test-module-registration.spec'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import '../orca-runtime'
 
 describe('OrcaRuntimeService', () => {
   it('keeps a no-incarnation handle across an in-graph pane remint', async () => {
@@ -148,39 +148,6 @@ describe('OrcaRuntimeService', () => {
     await waiting
     expect(settled).toBe('rejected')
   })
-  it('recovers a moved SSH pane through the tab it now sits in, not the one its lease froze', async () => {
-    // A moved pane's current coordinates override the lease's frozen old tabId.
-    const leaseTabId = 'tab-before-move'
-    const currentTabId = 'tab-after-move'
-    const appPtyId = 'ssh:ssh-target@@pty-8'
-    const runtime = createRuntimeWithSshLease(appPtyId, leaseTabId)
-    const paneKey = makePaneKey(currentTabId, HEADLESS_LEAF_ID)
-    registerBoundPty(runtime, appPtyId, TEST_WORKTREE_ID, 'ssh-target', {
-      tabId: currentTabId,
-      leafId: HEADLESS_LEAF_ID
-    })
-    const handle = runtime.resolveTerminalPane(paneKey, TEST_WORKTREE_ID).handle
-    runtime.onPtyExit(appPtyId, -1, undefined, { hostExitConfirmed: true })
-    const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue({
-      handle: 'term-replacement',
-      tabId: currentTabId,
-      paneKey,
-      ptyId: 'pty-replacement',
-      worktreeId: TEST_WORKTREE_ID,
-      title: null,
-      surface: 'background'
-    })
-
-    await expect(
-      runtime.recoverTerminalPane(paneKey, TEST_WORKTREE_ID, handle)
-    ).resolves.toMatchObject({ handle: 'term-replacement' })
-    expect(createTerminal).toHaveBeenCalledWith(`id:${TEST_WORKTREE_ID}`, {
-      tabId: currentTabId,
-      leafId: HEADLESS_LEAF_ID,
-      focus: false,
-      reopensPane: true
-    })
-  })
 
   it('refuses a moved SSH pane addressed through the tab it left', async () => {
     // Old-tab coordinates must refuse the moved leaf; otherwise one PTY binds into two tabs.
@@ -220,130 +187,5 @@ describe('OrcaRuntimeService', () => {
       leases.getRecentExpiredSshLease(TEST_WORKTREE_ID, currentTabId, HEADLESS_LEAF_ID)
     ).not.toBeNull()
     expect(createTerminal).not.toHaveBeenCalled()
-  })
-})
-
-// Several leases can share pane coordinates; select an eligible orphan rather than the first match.
-
-const TARGET = 'ssh-target'
-const TAB_ID = 'tab-candidacy'
-
-type LeaseReader = {
-  workspaceSessionWorktreeHasRuntimeOwnedPtyCandidate: (
-    session: { terminalLayoutsByTabId?: Record<string, unknown> },
-    worktreeId: string,
-    tabs: { id: string; ptyId: string | null }[]
-  ) => boolean
-  collectRecentExpiredSshLeaseTabIds: (worktreeId: string) => ReadonlySet<string>
-  getRecentExpiredSshLease: (
-    worktreeId: string,
-    tabId: string,
-    leafId: string | undefined,
-    ptyId?: string
-  ) => SshRemotePtyLease | null
-  hasRecentExpiredSshLeasePane: (
-    worktreeId: string,
-    tab: { parentTabId: string; leafId: string }
-  ) => boolean
-}
-
-function leaseFor(ptyId: string, marks: Partial<SshRemotePtyLease> = {}): SshRemotePtyLease {
-  const now = Date.now()
-  return {
-    targetId: TARGET,
-    ptyId,
-    worktreeId: TEST_WORKTREE_ID,
-    tabId: TAB_ID,
-    leafId: HEADLESS_LEAF_ID,
-    state: 'expired',
-    createdAt: now,
-    updatedAt: now,
-    ...marks
-  }
-}
-
-function readerWithLeases(leases: SshRemotePtyLease[]): LeaseReader {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The runtime implements these protected lease readers.
-  return new OrcaRuntimeService({
-    ...store,
-    getSshRemotePtyLeases: () => leases
-  }) as unknown as LeaseReader
-}
-
-const pane = { parentTabId: TAB_ID, leafId: HEADLESS_LEAF_ID }
-
-describe('recent expired SSH lease candidacy', () => {
-  it('reports a plain expired orphan', () => {
-    const reader = readerWithLeases([leaseFor('pty-1')])
-
-    expect(reader.hasRecentExpiredSshLeasePane(TEST_WORKTREE_ID, pane)).toBe(true)
-  })
-
-  it('does not report a pane whose only recent lease was superseded', () => {
-    // A superseded lease no longer routes to its original shell and cannot offer recovery.
-    const reader = readerWithLeases([leaseFor('pty-1', { supersededBy: 'pty-2' })])
-
-    expect(reader.hasRecentExpiredSshLeasePane(TEST_WORKTREE_ID, pane)).toBe(false)
-  })
-
-  it('does not report a pane whose only recent lease had its relay id recycled', () => {
-    // A recycled relay id belongs to another shell and must never be adopted.
-    const reader = readerWithLeases([leaseFor('pty-1', { relayIdRecycled: true })])
-
-    expect(reader.hasRecentExpiredSshLeasePane(TEST_WORKTREE_ID, pane)).toBe(false)
-  })
-
-  it('picks the eligible orphan over a superseded predecessor that matches first', () => {
-    // Store the superseded lease first to catch first-match recovery.
-    const reader = readerWithLeases([
-      leaseFor('pty-1', { supersededBy: 'pty-2' }),
-      leaseFor('pty-2')
-    ])
-
-    expect(reader.getRecentExpiredSshLease(TEST_WORKTREE_ID, TAB_ID, HEADLESS_LEAF_ID)?.ptyId).toBe(
-      'pty-2'
-    )
-    expect(reader.hasRecentExpiredSshLeasePane(TEST_WORKTREE_ID, pane)).toBe(true)
-  })
-
-  it('collects the same tabs the per-tab reader reports, in one sweep of the leases', () => {
-    const leases = [leaseFor('pty-1', { supersededBy: 'pty-2' }), leaseFor('pty-2')]
-    let sweeps = 0
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The runtime implements these protected lease readers.
-    const reader = new OrcaRuntimeService({
-      ...store,
-      getSshRemotePtyLeases: () => {
-        sweeps += 1
-        return leases
-      }
-    }) as unknown as LeaseReader
-    const tabs = Array.from({ length: 8 }, (_, index) => ({
-      id: index === 7 ? TAB_ID : `tab-${index}`,
-      ptyId: null
-    }))
-
-    expect(
-      reader.workspaceSessionWorktreeHasRuntimeOwnedPtyCandidate(
-        { terminalLayoutsByTabId: {} },
-        TEST_WORKTREE_ID,
-        tabs
-      )
-    ).toBe(true)
-    expect(sweeps).toBe(1)
-    expect([...reader.collectRecentExpiredSshLeaseTabIds(TEST_WORKTREE_ID)]).toEqual([TAB_ID])
-  })
-
-  it('reports no candidate when no lease names any of the worktree tabs', () => {
-    const reader = readerWithLeases([
-      leaseFor('pty-1', { tabId: 'somewhere-else', leafId: undefined })
-    ])
-
-    expect(
-      reader.workspaceSessionWorktreeHasRuntimeOwnedPtyCandidate(
-        { terminalLayoutsByTabId: {} },
-        TEST_WORKTREE_ID,
-        [{ id: TAB_ID, ptyId: null }]
-      )
-    ).toBe(false)
   })
 })

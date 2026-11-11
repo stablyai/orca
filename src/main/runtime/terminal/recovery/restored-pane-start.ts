@@ -2,7 +2,7 @@
 
 import { isPtyIdMintedForAnotherWorkspace } from './foreign-pane-bindings'
 import type { RuntimeMobileSessionCreateTerminalResult as CreatedTerminal } from '../../../../shared/runtime-session-contracts'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 
 export type StartedPty = Pick<CreatedTerminal, 'startupCwdFallback'> & { id: string }
 export type RestoredPane = { worktreeId: string; tabId: string; leafId: string }

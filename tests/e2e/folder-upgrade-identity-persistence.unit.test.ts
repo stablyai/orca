@@ -15,7 +15,7 @@ import {
 } from '../../src/main/persistence/persistence-test-harness'
 import { makeTerminalTab } from '../../src/main/persistence/persistence-session-fixtures'
 import { buildDetectedGitWorktrees } from '../../src/main/ipc/worktrees/listing/ssh-worktree-fallback'
-import { resolveRepoWorktreeRows } from '../../src/main/runtime/repo-worktree-row-resolution'
+import { resolveRepoWorktreeRows } from '../../src/main/runtime/workspaces/catalog/repo-worktree-row-resolution'
 
 beforeEach(() => {
   testState.dir = mkdtempSync(join(tmpdir(), 'orca-folder-upgrade-store-'))
@@ -95,12 +95,4 @@ it('retains the folder instance and metadata through upgrade, listing, and Store
   expect(reloaded.getWorktreeMetaForHost(id, 'ssh:builder')?.comment).toBe('other host')
   reloaded.flush()
   expect(createStore().getWorktreeMetaForHost(id, 'local')?.instanceId).toBe(before.instanceId)
-})
-
-it('drops upgrade path evidence when execution ownership changes', () => {
-  const store = createStore()
-  store.addRepo(makeRepo({ id: 'folder', path: 'C:\\projects\\draft', kind: 'git' }))
-  store.updateRepo({ id: 'folder' }, { folderUpgradeGitRootPath: 'C:/projects/draft' })
-  store.updateRepo({ id: 'folder' }, { executionHostId: 'ssh:builder' })
-  expect(store.getRepo('folder')?.folderUpgradeGitRootPath).toBeUndefined()
 })

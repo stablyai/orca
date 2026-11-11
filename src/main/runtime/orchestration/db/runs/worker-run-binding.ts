@@ -1,11 +1,11 @@
-import type { DispatchContextRow } from '../../types'
+import type { DispatchContextRow } from '../orchestration-records'
 import { OrchestrationError } from '../../orchestration-error'
-import { isSelfCreatedDispatch } from '../dispatch-depth'
+import { isSelfCreatedDispatch } from '../dispatch-creator-evaluation'
 import type { OrchestrationDb } from '../orchestration-db'
 import {
   mailboxAddressOf,
   type OrchestrationCoordinatorKey
-} from '../../orchestration-caller-identity'
+} from '../../addressing/orchestration-caller-identity'
 
 const WORKER_MAIL_ROUTE =
   'Your mail arrives through plain `orchestration check` (no --run); report with `orchestration send`.'

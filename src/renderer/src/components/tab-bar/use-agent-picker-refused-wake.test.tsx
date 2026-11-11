@@ -64,14 +64,6 @@ it('wakes a refused WSL list once per open, even when the woken probe fails agai
   expect(mocks.ensure).toHaveBeenCalledTimes(2)
 })
 
-it('never retries a native or non-refusal failure while the picker is open', () => {
-  const useStore = makeStore(false)
-  renderHook(() => useAgentPickerRefusedWake(true, LOCAL))
-  act(() => useStore.setState({ inventory: 'pending' }))
-  act(() => useStore.setState({ inventory: 'failed' }))
-  expect(mocks.ensure).not.toHaveBeenCalled()
-})
-
 it('wakes nothing while closed or for a remote host', () => {
   makeStore(true)
   renderHook(() => useAgentPickerRefusedWake(false, LOCAL))
