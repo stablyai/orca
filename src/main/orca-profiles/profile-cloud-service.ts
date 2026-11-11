@@ -39,6 +39,7 @@ import {
 import { getOrcaProfileAuthStatusFromProfile } from './profile-cloud-auth-status'
 import { selectCloudOrg } from './profile-cloud-org-selection'
 import {
+  cancelOrcaCloudSignIn,
   endOrcaCloudSignInProgress,
   setOrcaCloudSignInLink,
   startOrcaCloudSignInProgress
@@ -53,7 +54,8 @@ let linkedCloudConnectAttempt = 0
 function invalidateOutstandingCloudConnectAttempts(): void {
   nextCloudConnectAttempt += 1
   linkedCloudConnectAttempt = nextCloudConnectAttempt
-  endOrcaCloudSignInProgress()
+  // Also closes the pending loopback listener, so a late browser callback has nowhere to land.
+  cancelOrcaCloudSignIn()
 }
 
 function activeAuth(
@@ -100,23 +102,27 @@ export async function connectCurrentOrcaProfile(
   }
 
   const attempt = ++nextCloudConnectAttempt
-  const browserWait = new AbortController()
-  startOrcaCloudSignInProgress(attempt, () => browserWait.abort())
+  // Cancel (or a newer attempt) aborts this one at any stage before the session is saved.
+  const attemptAbort = new AbortController()
+  const cancelled = (): ConnectCurrentOrcaProfileResult => ({
+    status: 'cancelled',
+    auth: getCurrentOrcaProfileAuthStatus(userDataPath)
+  })
+  const stale = (): boolean => attempt < linkedCloudConnectAttempt || attemptAbort.signal.aborted
+  let end: 'timed-out' | undefined
+  startOrcaCloudSignInProgress(attempt, () => attemptAbort.abort())
   let finishBrowser: ((location: string | null) => void) | undefined
   try {
     const code = await beginOrcaCloudPkceFlow(configState.config, active.profile.id, {
-      signal: browserWait.signal,
+      signal: attemptAbort.signal,
       onAuthorizeUrl: (link) => setOrcaCloudSignInLink(attempt, link),
       ...(setup ? { authorizeParams: setup.authorizeParams, holdBrowser: true } : {})
     })
     finishBrowser = code.finishBrowser
     // The callback listener has closed, so its browser link is dead.
     setOrcaCloudSignInLink(attempt, null)
-    if (attempt < linkedCloudConnectAttempt) {
-      return {
-        status: 'cancelled',
-        auth: getCurrentOrcaProfileAuthStatus(userDataPath)
-      }
+    if (stale()) {
+      return cancelled()
     }
     const exchange = await exchangeOrcaCloudAuthCode(configState.config, {
       code: code.code,
@@ -126,11 +132,8 @@ export async function connectCurrentOrcaProfile(
       state: code.state,
       localProfileId: active.profile.id
     })
-    if (attempt < linkedCloudConnectAttempt) {
-      return {
-        status: 'cancelled',
-        auth: getCurrentOrcaProfileAuthStatus(userDataPath)
-      }
+    if (stale()) {
+      return cancelled()
     }
     signInCloudSession(active.profile.id, userDataPath, exchange)
     const list = linkOrcaProfileToCloud(active.profile.id, exchange.cloud, userDataPath)
@@ -148,21 +151,17 @@ export async function connectCurrentOrcaProfile(
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    if (message === 'orca_cloud_auth_timeout' && attempt === nextCloudConnectAttempt) {
-      return {
-        status: 'timed-out',
-        auth: getCurrentOrcaProfileAuthStatus(userDataPath)
-      }
+    if (!stale() && message === 'orca_cloud_auth_timeout' && attempt === nextCloudConnectAttempt) {
+      end = 'timed-out'
+      return { status: 'timed-out', auth: getCurrentOrcaProfileAuthStatus(userDataPath) }
     }
-    if (
-      message === 'orca_cloud_auth_timeout' ||
-      message === 'orca_cloud_auth_denied' ||
-      message === 'orca_cloud_auth_cancelled'
-    ) {
-      return {
-        status: 'cancelled',
-        auth: getCurrentOrcaProfileAuthStatus(userDataPath)
-      }
+    const stopped = [
+      'orca_cloud_auth_timeout',
+      'orca_cloud_auth_denied',
+      'orca_cloud_auth_cancelled'
+    ]
+    if (attemptAbort.signal.aborted || stopped.includes(message)) {
+      return cancelled()
     }
     return {
       status: 'failed',
@@ -171,7 +170,7 @@ export async function connectCurrentOrcaProfile(
     }
   } finally {
     finishBrowser?.(null)
-    endOrcaCloudSignInProgress(attempt)
+    endOrcaCloudSignInProgress(attempt, end)
   }
 }
 

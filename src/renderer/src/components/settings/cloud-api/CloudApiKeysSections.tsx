@@ -274,7 +274,7 @@ function ActorLabel({
   return mine ? (
     <>{sentence}</>
   ) : (
-    <PersonSentence sentence={sentence} name={entry.actor.userName} id={personId} />
+    <PersonSentence sentence={sentence} name={entry.actor.userName} id={personId} idInTooltip />
   )
 }
 

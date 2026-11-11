@@ -51,6 +51,10 @@ export function formatKeyPrefix(prefix: string): string {
 }
 
 export function formatRelativeFromNow(timestamp: number, now: number, intlLocale?: string): string {
+  // Under a minute ago reads "just now", like the other cloud screens (not Intl's "this minute").
+  if (timestamp <= now && now - timestamp < 60_000) {
+    return translate('auto.components.cloudWorkspaces.justNow', 'just now')
+  }
   return formatUiRelativeTime(timestamp - now, intlLocale)
 }
 

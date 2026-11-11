@@ -35,7 +35,9 @@ export function selectWorktreeActivityStatuses(
       worktreeId,
       resolveWorktreeStatus({
         tabs: statusInputs.tabsByWorktree[worktreeId] ?? EMPTY_TABS,
-        browserTabs: statusInputs.browserTabsByWorktree[worktreeId] ?? EMPTY_BROWSER_TABS,
+        browserTabs: statusInputs.asleepBrowserWorktreeIds?.[worktreeId]
+          ? EMPTY_BROWSER_TABS
+          : (statusInputs.browserTabsByWorktree[worktreeId] ?? EMPTY_BROWSER_TABS),
         hasStructuredChat: hasAwakeStructuredChat(
           statusInputs.unifiedTabsByWorktree[worktreeId],
           statusInputs.structuredChatSleptAtByPaneKey

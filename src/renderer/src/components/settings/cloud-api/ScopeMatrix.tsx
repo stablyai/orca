@@ -1,6 +1,7 @@
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import type { CloudApiScope } from '../../../../../shared/cloud-api/cloud-api-types'
 import { SettingsSegmentedControl } from '../form-controls/SettingsFormControls'
+import { CLOUD_ROUTINES_UI_ENABLED } from '../../../../../shared/cloud-api/cloud-routines-ui'
 
 export type ScopeLevel = 'none' | 'read' | 'write'
 
@@ -75,54 +76,58 @@ export function ScopeMatrix({
   const adminOnly = t('auto.components.settings.cloudApi.matrix.adminOnly', 'Team admins only')
   return (
     <div className="grid gap-1 rounded-lg border border-border/70 p-2" role="group">
-      {SCOPE_RESOURCES.map((resource) => {
-        const labelId = `scope-matrix-${resource.id}`
-        const canRead = Boolean(resource.read && available.includes(resource.read))
-        const canWrite = Boolean(resource.write && available.includes(resource.write))
-        const locked = !canRead && !canWrite
-        return (
-          <div key={resource.id} className="flex items-center justify-between gap-3 px-1 py-1">
-            <span id={labelId} className="min-w-0 truncate text-sm">
-              {resourceLabel(resource.id, t)}
-              {locked ? (
-                <span className="ml-1.5 text-xs text-muted-foreground">· {adminOnly}</span>
-              ) : null}
-            </span>
-            <SettingsSegmentedControl<ScopeLevel>
-              size="sm"
-              ariaLabelledBy={labelId}
-              value={levelOf(resource, scopes)}
-              onChange={(level) => onChange(withLevel(resource, scopes, level))}
-              options={[
-                {
-                  value: 'none' as const,
-                  label: t('auto.components.settings.cloudApi.matrix.none', 'None')
-                },
-                {
-                  value: 'read' as const,
-                  label: t('auto.components.settings.cloudApi.matrix.read', 'Read'),
-                  disabled: !canRead,
-                  tooltip: resource.read ? (canRead ? undefined : adminOnly) : undefined
-                },
-                {
-                  value: 'write' as const,
-                  label:
-                    resource.id === 'messages'
-                      ? t('auto.components.settings.cloudApi.matrix.send', 'Send')
-                      : t('auto.components.settings.cloudApi.matrix.write', 'Write'),
-                  disabled: !canWrite
-                }
-              ].filter((option) =>
-                option.value === 'read'
-                  ? Boolean(resource.read)
-                  : option.value === 'write'
-                    ? Boolean(resource.write)
-                    : true
-              )}
-            />
-          </div>
-        )
-      })}
+      {/* Routines are parked (cloud-routines-ui.ts): their scopes stay in the API and in Full
+          access, but Custom doesn't offer a row for a feature the desktop no longer shows. */}
+      {SCOPE_RESOURCES.filter((r) => CLOUD_ROUTINES_UI_ENABLED || r.id !== 'routines').map(
+        (resource) => {
+          const labelId = `scope-matrix-${resource.id}`
+          const canRead = Boolean(resource.read && available.includes(resource.read))
+          const canWrite = Boolean(resource.write && available.includes(resource.write))
+          const locked = !canRead && !canWrite
+          return (
+            <div key={resource.id} className="flex items-center justify-between gap-3 px-1 py-1">
+              <span id={labelId} className="min-w-0 truncate text-sm">
+                {resourceLabel(resource.id, t)}
+                {locked ? (
+                  <span className="ml-1.5 text-xs text-muted-foreground">· {adminOnly}</span>
+                ) : null}
+              </span>
+              <SettingsSegmentedControl<ScopeLevel>
+                size="sm"
+                ariaLabelledBy={labelId}
+                value={levelOf(resource, scopes)}
+                onChange={(level) => onChange(withLevel(resource, scopes, level))}
+                options={[
+                  {
+                    value: 'none' as const,
+                    label: t('auto.components.settings.cloudApi.matrix.none', 'None')
+                  },
+                  {
+                    value: 'read' as const,
+                    label: t('auto.components.settings.cloudApi.matrix.read', 'Read'),
+                    disabled: !canRead,
+                    tooltip: resource.read ? (canRead ? undefined : adminOnly) : undefined
+                  },
+                  {
+                    value: 'write' as const,
+                    label:
+                      resource.id === 'messages'
+                        ? t('auto.components.settings.cloudApi.matrix.send', 'Send')
+                        : t('auto.components.settings.cloudApi.matrix.write', 'Write'),
+                    disabled: !canWrite
+                  }
+                ].filter((option) =>
+                  option.value === 'read'
+                    ? Boolean(resource.read)
+                    : option.value === 'write'
+                      ? Boolean(resource.write)
+                      : true
+                )}
+              />
+            </div>
+          )
+        }
+      )}
     </div>
   )
 }
