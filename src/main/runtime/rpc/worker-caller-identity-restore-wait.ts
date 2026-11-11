@@ -28,7 +28,8 @@ export function waitForRestoredWorkerCallerIdentity(
     params && typeof params === 'object' && !Array.isArray(params)
       ? (params as Record<string, unknown>)[callerField]
       : undefined
-  if (typeof handle !== 'string' || !handle) {
+  // A long-poll check would spend this wait from the CLI's request budget; its handler re-resolves anyway.
+  if (typeof handle !== 'string' || !handle || (params as { wait?: unknown }).wait === true) {
     return null
   }
   if (

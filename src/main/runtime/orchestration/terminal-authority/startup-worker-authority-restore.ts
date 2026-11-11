@@ -1,3 +1,5 @@
+import { waitForStartupPhases } from '../../rpc/startup-phase-wait'
+
 // Long enough for a desktop renderer to reattach its terminals; well inside the CLI's 60 s request timeout.
 export const STARTUP_IDENTITY_WAIT_MS = 30_000
 // A host whose restore never reports back (no window, renderer crash) stops holding callers.
@@ -45,31 +47,14 @@ export class StartupWorkerAuthorityRestore {
     signals: readonly (AbortSignal | undefined)[],
     timeoutMs = STARTUP_IDENTITY_WAIT_MS
   ): Promise<void> {
-    const pending = this.pending
-    if (!pending) {
-      return
-    }
-    const live = signals.filter((signal): signal is AbortSignal => signal !== undefined)
-    let timer: ReturnType<typeof setTimeout> | undefined
-    const cleanups: (() => void)[] = []
-    const bounded = new Promise<void>((resolve, reject) => {
-      timer = setTimeout(resolve, timeoutMs)
-      for (const signal of live) {
-        if (signal.aborted) {
-          reject(new Error('runtime_unavailable'))
-        }
-        const onAbort = (): void => reject(new Error('runtime_unavailable'))
-        signal.addEventListener('abort', onAbort, { once: true })
-        cleanups.push(() => signal.removeEventListener('abort', onAbort))
-      }
-    })
-    try {
-      await Promise.race([pending.done, bounded])
-    } finally {
-      clearTimeout(timer)
-      for (const cleanup of cleanups) {
-        cleanup()
-      }
+    const outcome = await waitForStartupPhases(
+      this.pending ? [this.pending.done] : [],
+      timeoutMs,
+      signals
+    )
+    // The caller left: never run its handler (a retried mutation would run twice).
+    if (outcome === 'aborted') {
+      throw new Error('runtime_unavailable')
     }
   }
 }
