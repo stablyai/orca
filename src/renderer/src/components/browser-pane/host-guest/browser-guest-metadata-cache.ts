@@ -15,6 +15,7 @@ type GuestMetadataEntry = {
 const guests = new Map<number, GuestMetadataEntry>()
 const listeners = new Map<number, Set<Listener>>()
 const initialReads = new Map<number, Promise<void>>()
+const guestRetirements = new WeakMap<Electron.WebviewTag, () => void>()
 
 function notifyGuest(id: number, entry: GuestMetadataEntry, state: BrowserGuestMetadata): void {
   listeners.get(id)?.forEach((listener) => {
@@ -24,12 +25,18 @@ function notifyGuest(id: number, entry: GuestMetadataEntry, state: BrowserGuestM
   })
 }
 
-function retireGuest(id: number): void {
+function retireGuest(id: number, expected?: GuestMetadataEntry): void {
   const entry = guests.get(id)
+  if (expected && entry !== expected) {
+    return
+  }
+  const subscribers = listeners.get(id)
   guests.delete(id)
   initialReads.delete(id)
+  listeners.delete(id)
   entry?.stopObserving?.()
-  listeners.get(id)?.forEach((listener) => listener(null))
+  subscribers?.forEach((listener) => listener(null))
+  subscribers?.clear()
 }
 
 function observeGuestDeath(
@@ -40,9 +47,32 @@ function observeGuestDeath(
   if (entry.stopObserving) {
     return
   }
-  const onDestroyed = (): void => retireGuest(id)
+  guestRetirements.get(webview)?.()
+  const onDestroyed = (): void => retireGuest(id, entry)
   webview.addEventListener('destroyed', onDestroyed)
-  entry.stopObserving = () => webview.removeEventListener('destroyed', onDestroyed)
+  guestRetirements.set(webview, onDestroyed)
+  entry.stopObserving = () => {
+    webview.removeEventListener('destroyed', onDestroyed)
+    if (guestRetirements.get(webview) === onDestroyed) {
+      guestRetirements.delete(webview)
+    }
+    delete entry.stopObserving
+  }
+}
+
+export function retireBrowserGuestMetadata(
+  webview: Electron.WebviewTag,
+  knownId?: number | null
+): void {
+  const retire = guestRetirements.get(webview)
+  if (retire) {
+    retire()
+    return
+  }
+  const id = knownId ?? readBrowserGuestId(webview)
+  if (id !== null) {
+    retireGuest(id)
+  }
 }
 
 function refreshGuest(id: number, browserPageId: string): void {
@@ -141,9 +171,10 @@ export function issueBrowserGuestNavigation<T>(
   if (id === null) {
     return result
   }
-  const previous = guests.get(id)
   const receipt = {}
-  const entry: GuestMetadataEntry = { ...previous, applicable: false, presentationRequest: receipt }
+  const entry = guests.get(id) ?? { applicable: false }
+  entry.applicable = false
+  entry.presentationRequest = receipt
   guests.set(id, entry)
   observeGuestDeath(id, webview, entry)
   initialReads.delete(id)
@@ -179,10 +210,10 @@ export function browserGuestPreservesRequestedDocument(
 }
 
 export function clearBrowserGuestMetadata(): void {
-  for (const entry of guests.values()) {
-    entry.stopObserving?.()
+  // oxlint-disable-next-line unicorn/no-useless-spread -- Terminal callbacks may create successor entries.
+  for (const id of [...guests.keys()]) {
+    retireGuest(id)
   }
-  guests.clear()
   initialReads.clear()
 }
 
@@ -230,7 +261,7 @@ export function subscribeBrowserGuestMetadata(
     }
     guestId = id
     const onState: Listener = (state) => {
-      if (readBrowserGuestId(webview) === id && (!state || state.browserPageId === browserPageId)) {
+      if (!state || (readBrowserGuestId(webview) === id && state.browserPageId === browserPageId)) {
         listener(state)
       }
     }
@@ -242,7 +273,7 @@ export function subscribeBrowserGuestMetadata(
     subscribers.add(onState)
     unsubscribe = () => {
       subscribers.delete(onState)
-      if (!subscribers.size) {
+      if (!subscribers.size && listeners.get(id) === subscribers) {
         listeners.delete(id)
       }
     }
