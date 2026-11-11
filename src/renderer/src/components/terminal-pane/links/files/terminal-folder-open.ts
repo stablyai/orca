@@ -1,6 +1,7 @@
 import { useAppStore } from '@/store/index'
 import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
-import { getRelativePathInsideRoot } from '@/lib/path'
+import { getRelativePathInsideRoot, joinPath } from '@/lib/path'
+import { isWorkspaceSelected } from '@/lib/workspace/ownership/active-workspace-host'
 import {
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
@@ -18,7 +19,8 @@ function revealFolderInWorktree(
   executionHostId: ExecutionHostId,
   folderPath: string
 ): boolean {
-  if (useAppStore.getState().activeWorktreeId !== worktreeId) {
+  // Why the host too: workspace IDs repeat across hosts, so a same-ID local twin is not the owner.
+  if (!isWorkspaceSelected(useAppStore.getState(), { worktreeId, executionHostId })) {
     if (activateAndRevealWorkspace(worktreeId, { executionHostId }) === false) {
       return false
     }
@@ -67,9 +69,15 @@ export async function openDetectedFolder(args: FolderOpenArgs): Promise<void> {
     return
   }
   // Why: this computer's OS can't open an SSH or paired folder; the workspace explorer reads through its host.
+  const relativePath = getRelativePathInsideRoot(folderPath, args.worktreePath)
+  // Why the root's spelling: explorer rows join on the root's separator, and a chat link may differ.
   if (
-    getRelativePathInsideRoot(folderPath, args.worktreePath) !== null &&
-    revealFolderInWorktree(args.worktreeId, args.sourceHostId, folderPath)
+    relativePath !== null &&
+    revealFolderInWorktree(
+      args.worktreeId,
+      args.sourceHostId,
+      joinPath(args.worktreePath, relativePath)
+    )
   ) {
     return
   }

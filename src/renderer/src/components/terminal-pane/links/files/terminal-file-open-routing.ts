@@ -210,7 +210,12 @@ export function openDetectedFilePath(
         hostWorkspaceFile,
         sourceHostId: sourceFileHostId,
         openWithSystemDefault: canOpenWithSystemDefault,
-        onFailure: (failure) => deps.onOpenFailure?.(failure)
+        onFailure: (failure) => {
+          // Why: the OS open is awaited, so a newer click may own the toast by now.
+          if (isCurrentRequest()) {
+            deps.onOpenFailure?.(failure)
+          }
+        }
       })
       return
     }
