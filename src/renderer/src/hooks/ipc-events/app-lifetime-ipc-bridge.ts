@@ -19,6 +19,7 @@ import { registerBrowserStateIpcBridge } from './browser-state-ipc-bridge'
 import { registerContentCreationIpcBridge } from './content-creation-ipc-bridge'
 import { registerDirectSshStateIpcBridge } from './direct-ssh-state-ipc-bridge'
 import { registerEphemeralVmLifecycleIpcBridge } from './ephemeral-vm-lifecycle-ipc-bridge'
+import { installLeaveOutOfTeamCloudWorkspace } from '@/lib/orca-cloud/leave-out-of-team-cloud-workspace'
 import { registerMobileAndTerminalCloseIpcBridge } from './mobile-terminal-close-ipc-bridge'
 import { registerMobileDriverIpcBridge } from './mobile-driver-ipc-bridge'
 import { registerOrcaProfileAuthIpcBridge } from './orca-profile-auth-ipc-bridge'
@@ -93,6 +94,8 @@ export function installAppLifetimeIpcEvents(): () => void {
   registerBackgroundWorktreeRemovalBridge(unsubs)
   registerWslHostIpcBridge(unsubs)
   registerEphemeralVmLifecycleIpcBridge(unsubs)
+  // After a team switch, the old team's open cloud workspace leaves the main pane.
+  unsubs.push(installLeaveOutOfTeamCloudWorkspace(useAppStore))
   registerProjectCatalogIpcBridge(
     unsubs,
     worktreeRuntime.worktreeChangeRefreshQueue,
