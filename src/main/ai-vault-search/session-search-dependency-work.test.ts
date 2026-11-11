@@ -4,6 +4,7 @@ import {
   notifySessionSearchOverflow
 } from './session-search-watcher.test-fixture'
 import { appendFile, mkdir, writeFile } from 'node:fs/promises'
+import { zstdCompressSync } from 'node:zlib'
 import { dirname, join } from 'node:path'
 import { expect, it, vi } from 'vitest'
 import * as filesystem from '../native-chat/wsl-transcript-fs-access'
@@ -44,12 +45,14 @@ it.each([40, 400])(
     try {
       await mkdir(root, { recursive: true })
       for (const id of ids) {
-        const path = join(root, fixture.fileName.replace(CODEX_FIXTURE_SESSION_ID, id))
-        transcripts.add(path)
-        await writeFile(
-          path,
-          `${fixture.seedLines.join('\n').replaceAll(CODEX_FIXTURE_SESSION_ID, id)}\n`
+        const archived = id === ids[0]
+        const path = join(
+          root,
+          fixture.fileName.replace(CODEX_FIXTURE_SESSION_ID, id) + (archived ? '.zst' : '')
         )
+        transcripts.add(path)
+        const text = `${fixture.seedLines.join('\n').replaceAll(CODEX_FIXTURE_SESSION_ID, id)}\n`
+        await writeFile(path, archived ? zstdCompressSync(Buffer.from(text)) : text)
       }
       await writeFile(index, records.join(''))
       await subject.start()

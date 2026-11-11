@@ -1,5 +1,4 @@
 import { admitSessionSearchPrimaryFailures } from './session-search-primary-retries'
-import { wakeSessionSearchPrimaryFailures } from './session-search-dirty-transition'
 import { isInsideSessionRoot } from '../ai-vault/session-file-discovery'
 import { relative } from 'node:path'
 import { SESSION_INPUT_FAILURES_BEFORE_HELD_OUT } from '../ai-vault/session-observation-retries'
@@ -11,7 +10,10 @@ import {
   putAuthorityValue,
   rearmSessionSearchAuthority
 } from './session-search-observation-authority'
-import { invalidateSessionSearchPhysical } from './session-search-dirty-transition'
+import {
+  invalidateSessionSearchPhysical,
+  wakeSessionSearchPrimaryFailures
+} from './session-search-dirty-transition'
 
 export type SessionSearchRetryDebt = {
   failures: number

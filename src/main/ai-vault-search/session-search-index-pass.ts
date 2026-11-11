@@ -63,7 +63,6 @@ export async function runSessionSearchIndexPass(
       work.metadata &&
       !work.force &&
       row?.agent &&
-      row.prefixHash &&
       row.byteOffset !== undefined &&
       row.byteOffset !== null &&
       (row.state === 'current' ||
@@ -102,7 +101,7 @@ export async function runSessionSearchIndexPass(
         await consumer.finish({
           session,
           byteOffset: row.byteOffset,
-          prefixHash: row.prefixHash,
+          prefixHash: row.prefixHash ?? undefined,
           incomplete: false
         })
         await store.flush?.()
