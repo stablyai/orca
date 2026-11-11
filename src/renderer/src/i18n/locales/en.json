@@ -19006,6 +19006,14 @@
                 }
               }
             }
+          },
+          "SandboxOnlyBrowserPage": {
+            "title": "Your agent opened this page in the sandbox",
+            "body": "Orca can't show the sandbox's browser here yet. Open the page on this computer to see it. Pages the agent signed in to will open signed out.",
+            "open": "Open on this computer",
+            "sandboxOnly": "This page can only be viewed in the sandbox.",
+            "cantShow": "Orca can't show the sandbox's browser here yet.",
+            "openFailed": "Couldn't open the page. Try again."
           }
         },
         "webauthn": {
