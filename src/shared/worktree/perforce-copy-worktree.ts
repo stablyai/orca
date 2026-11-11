@@ -50,6 +50,18 @@ export function getPerforceCopyName(path: string): string | null {
   return match?.[1] ?? null
 }
 
+/** The folder a copy worktree path mirrors (`D:\ws.wt\copy-1\Game` → `D:\ws\Game`), or null. */
+export function getPerforceCopySourcePath(path: string): string | null {
+  const match = /^(.*?[^\\/])\.wt([\\/])[A-Za-z0-9-]{1,24}(?:[\\/](.*))?$/i.exec(
+    trimTrailingSeparators(path)
+  )
+  if (!match) {
+    return null
+  }
+  const [, sourceRoot, separator, inside] = match
+  return inside ? `${sourceRoot}${separator}${inside}` : sourceRoot
+}
+
 // Why: deleting a copy also deletes its Perforce client, changelists and possibly shelves, so it goes
 // through the Perforce copy confirmation, which shows exactly that, never a generic worktree delete.
 export const PERFORCE_COPY_GENERIC_REMOVAL_MESSAGE =

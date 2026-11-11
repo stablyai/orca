@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   getPerforceCopyName,
+  getPerforceCopySourcePath,
   getPerforceCopyWorktreeId,
   isPerforceCopyPath,
   isPerforceCopyWorktreeIdForRepo
@@ -34,5 +35,12 @@ describe('Perforce copy worktree ids', () => {
   it('reads the copy name from the copy path', () => {
     expect(getPerforceCopyName('D:\\ws.wt\\copy-1\\Game')).toBe('copy-1')
     expect(getPerforceCopyName('D:\\ws')).toBeNull()
+  })
+
+  it('maps a copy path back to the folder it mirrors', () => {
+    expect(getPerforceCopySourcePath('D:\\ws.wt\\copy-1')).toBe('D:\\ws')
+    expect(getPerforceCopySourcePath('D:\\ws.wt\\copy-1\\Game\\')).toBe('D:\\ws\\Game')
+    expect(getPerforceCopySourcePath('/home/me/ws.wt/copy-1/Game')).toBe('/home/me/ws/Game')
+    expect(getPerforceCopySourcePath('D:\\ws\\Game')).toBeNull()
   })
 })

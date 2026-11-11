@@ -1,6 +1,7 @@
 import { posix, win32 } from 'node:path'
 import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
 import { getRepoSshConnectionId } from '../../shared/execution-host'
+import { isFolderRepo } from '../../shared/repo-kind'
 import type { Repo } from '../../shared/repo-types'
 import type {
   WorkspaceCopyListEntry,
@@ -9,6 +10,7 @@ import type {
 import { splitWorktreeId } from '../../shared/worktree/id'
 import {
   getPerforceCopyName,
+  getPerforceCopySourcePath,
   getPerforceCopyWorktreeId,
   isPerforceCopyWorktreeIdForRepo
 } from '../../shared/worktree/perforce-copy-worktree'
@@ -106,6 +108,37 @@ export function syncCopyWorktrees(
     }
   }
   return changed
+}
+
+/**
+ * Syncs the copies of each folder project whose Perforce copy layout holds `path`, so a copy another
+ * tool made since the last sync can be addressed by its folder at once. A folder that is not a
+ * Perforce workspace fails its sync, and a failed sync counts as nothing adopted, which leaves the
+ * caller's not-found answer standing.
+ */
+export async function adoptCopyAtPath(
+  path: string,
+  repos: readonly Repo[],
+  syncCopies: (repo: Repo) => Promise<unknown>
+): Promise<boolean> {
+  const source = getPerforceCopySourcePath(path)
+  if (!source) {
+    return false
+  }
+  const owners = repos.filter(
+    (repo) =>
+      isFolderRepo(repo) &&
+      win32.normalize(repo.path).toLowerCase() === win32.normalize(source).toLowerCase()
+  )
+  let adopted = false
+  for (const repo of owners) {
+    const synced = await syncCopies(repo).then(
+      () => true,
+      () => false
+    )
+    adopted ||= synced
+  }
+  return adopted
 }
 
 export function copyWorktreeIdForName(

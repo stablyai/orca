@@ -5,6 +5,7 @@ import type { WorkspaceCopyListResult } from '../../shared/perforce/workspace-co
 import type { HostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import {
+  adoptCopyAtPath,
   copyWorktreePath,
   syncCopyWorktrees,
   type CopyWorktreeStore
@@ -123,5 +124,30 @@ describe('syncCopyWorktrees', () => {
     )
     expect(changed).toBe(true)
     expect(Object.keys(meta)).toEqual([orphaned])
+  })
+})
+
+describe('adoptCopyAtPath', () => {
+  const PERFORCE = { ...REPO, vcs: 'perforce' } as const
+  const GAME = { ...PERFORCE, id: 'repo-2', path: join(ROOT, 'Game') }
+  const GIT_GAME = { ...GAME, id: 'repo-3', kind: 'git' } as const
+
+  it('syncs only the folder project the copy folder mirrors', async () => {
+    const synced: string[] = []
+    const sync = async (repo: Repo): Promise<void> => void synced.push(repo.id)
+    await expect(
+      adoptCopyAtPath(join(COPIES, 'copy-9', 'game'), [REPO, PERFORCE, GAME, GIT_GAME], sync)
+    ).resolves.toBe(true)
+    expect(synced).toEqual(['repo-2'])
+  })
+
+  it('adopts nothing for a path outside the copy layout or a failed sync', async () => {
+    const failing = async (): Promise<void> => {
+      throw new Error('p4 unreachable')
+    }
+    await expect(adoptCopyAtPath(join(ROOT, 'Game'), [GAME], async () => {})).resolves.toBe(false)
+    await expect(adoptCopyAtPath(join(COPIES, 'copy-9', 'Game'), [GAME], failing)).resolves.toBe(
+      false
+    )
   })
 })
