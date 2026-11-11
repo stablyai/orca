@@ -17182,7 +17182,7 @@
           "showMore": "显示更多",
           "copied": "已复制",
           "copyFailed": "复制失败",
-          "copyPrompt": "复制提示"
+          "copyPrompt": "复制提示词"
         },
         "AutomationDetail": {
           "host": "主机",
