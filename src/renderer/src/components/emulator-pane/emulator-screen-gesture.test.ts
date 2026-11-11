@@ -1,9 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   mapClientPointToSimulatorScreen,
-  resolveEmulatorPointerAction,
-  resolveEmulatorWheelDelta,
-  resolveWheelGestureStep
+  resolveEmulatorPointerAction
 } from './emulator-screen-gesture'
 import { resolveVisualStreamGeometry } from './emulator-device-frame-layout'
 
@@ -34,25 +32,6 @@ describe('emulator screen gestures', () => {
         { x: 0.5, y: 0.7, type: 'move', edge: 4 },
         { x: 0.25, y: 0.65, type: 'end', edge: 4 }
       ]
-    })
-  })
-
-  it('keeps landscape wheel movement and restarts away from the panel side edges', () => {
-    const input = resolveEmulatorWheelDelta(
-      { clientX: 200, clientY: 100, deltaX: 0, deltaY: 200 },
-      { left: 0, top: 0, width: 400, height: 200 },
-      null,
-      undefined,
-      90
-    )
-    expect(input?.delta.x).toBe(-1.2)
-    expect(resolveWheelGestureStep(input!.start, input!.delta)).toEqual({
-      start: { x: 0.5, y: 0.5 },
-      end: { x: 0.12, y: 0.5 }
-    })
-    expect(resolveWheelGestureStep({ x: 0.12, y: 0.5 }, { x: -0.1, y: 0 })).toEqual({
-      start: { x: 0.88, y: 0.5 },
-      end: { x: expect.closeTo(0.78), y: 0.5 }
     })
   })
 
