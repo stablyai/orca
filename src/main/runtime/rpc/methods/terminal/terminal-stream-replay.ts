@@ -1,7 +1,11 @@
-import type { TerminalReplyQuerySequence } from '../../../../../shared/terminal-reply-query-scan'
+import {
+  EMPTY_TERMINAL_REPLY_QUERY_SCAN_STATE,
+  scanTerminalReplyQuerySequences,
+  type TerminalReplyQuerySequence
+} from '../../../../../shared/terminal/protocol/queries/terminal-reply-query-scan'
+import type { PublishedTerminalOutput } from '../../../terminal/output/terminal-published-output-ring'
 import {
   iterateTerminalOutputFrameChunks,
-  sliceTerminalOutputSourceRanges,
   type TerminalOutputFrameChunk,
   type TerminalOutputMeta
 } from '../../terminal-output-frame-chunks'
@@ -9,7 +13,7 @@ import {
   measureTerminalStreamByteLength,
   terminalStreamByteLength
 } from '../../terminal-stream-byte-length'
-import { TERMINAL_MULTIPLEX_PENDING_MAX_BYTES } from '../../../../../shared/terminal-multiplex-flow-control'
+import { TERMINAL_MULTIPLEX_PENDING_MAX_BYTES } from '../../../../../shared/terminal/stream/terminal-multiplex-flow-control'
 import type { TerminalMultiplexStream, TerminalOutputChunk } from './terminal-stream-types'
 
 export function appendPendingMultiplexOutput(
@@ -58,12 +62,7 @@ export function getOutputAfterSnapshotSeq(
     bytes: chunk.bytes,
     meta: {
       ...chunk.meta,
-      rawLength: chunk.meta.rawLength - offset,
-      sourceRanges: sliceTerminalOutputSourceRanges(
-        chunk.meta.sourceRanges,
-        offset,
-        chunk.data.length
-      )
+      rawLength: chunk.meta.rawLength - offset
     }
   }
 }
@@ -91,43 +90,89 @@ export function stripSnapshotBoundaryQuerySuffixes(
   return output + data.slice(offset)
 }
 
+/** Joins a resume gap into one chunk ending at its last seq, without the reply queries the desktop already answered.
+ * Color-scheme subscribe/withdraw are mode state, not queries, so they stay. */
+export function buildResumeGapChunk(output: PublishedTerminalOutput[]): TerminalOutputChunk | null {
+  const last = output.at(-1)
+  if (!last) {
+    return null
+  }
+  const joined = output.map((chunk) => chunk.data).join('')
+  const { queries } = scanTerminalReplyQuerySequences(
+    joined,
+    0,
+    EMPTY_TERMINAL_REPLY_QUERY_SCAN_STATE
+  )
+  let data = ''
+  let offset = 0
+  for (const query of queries) {
+    if (query.data === '\x1b[?2031h' || query.data === '\x1b[?2031l') {
+      continue
+    }
+    data += joined.slice(offset, query.startSeq)
+    offset = query.endSeq
+  }
+  data += joined.slice(offset)
+  const rawLength = output.reduce((total, chunk) => total + chunk.rawLength, 0)
+  const cwd = output.findLast((chunk) => chunk.cwd !== undefined)?.cwd
+  return {
+    data,
+    bytes: terminalStreamByteLength(data),
+    meta: {
+      seq: last.seq,
+      rawLength,
+      ...(data.length !== rawLength || output.some((chunk) => chunk.transformed)
+        ? { transformed: true }
+        : {}),
+      // The batcher sends this as a Metadata frame, as it did for each live chunk.
+      ...(cwd !== undefined ? { cwd } : {})
+    }
+  }
+}
+
 export function appendAckPendingOutput(
   stream: TerminalMultiplexStream,
-  chunk: TerminalOutputFrameChunk
-): void {
+  chunk: TerminalOutputFrameChunk,
+  maxBytes: number
+): TerminalOutputFrameChunk[] {
   stream.ackPendingOutput.push(chunk)
   stream.ackPendingOutputBytes += chunk.bytes.byteLength
-  let omittedChunkCount = 0
-  while (
-    stream.ackPendingOutputBytes > TERMINAL_MULTIPLEX_PENDING_MAX_BYTES &&
-    omittedChunkCount < stream.ackPendingOutput.length
-  ) {
-    stream.ackPendingOutputBytes -= stream.ackPendingOutput[omittedChunkCount]!.bytes.byteLength
-    omittedChunkCount += 1
-  }
-  if (omittedChunkCount > 0) {
-    stream.ackPendingOutput.splice(0, omittedChunkCount)
-    stream.ackPendingOutputOverflowed = true
-  }
+  const trimmed = trimHeadToBudget(
+    stream.ackPendingOutput,
+    stream.ackPendingOutputBytes,
+    (pending) => pending.bytes.byteLength,
+    maxBytes
+  )
+  stream.ackPendingOutputBytes = trimmed.bytes
+  stream.ackPendingOutputOverflowed ||= trimmed.overflowed
+  return trimmed.omitted
 }
 
 export function trimPendingOutputToBudget(
   pendingOutput: TerminalOutputChunk[],
   pendingOutputBytes: number
 ): { bytes: number; overflowed: boolean } {
-  let omittedChunkCount = 0
-  while (
-    pendingOutputBytes > TERMINAL_MULTIPLEX_PENDING_MAX_BYTES &&
-    omittedChunkCount < pendingOutput.length
-  ) {
-    const chunk = pendingOutput[omittedChunkCount]
-    pendingOutputBytes -= chunk.bytes
-    omittedChunkCount += 1
+  return trimHeadToBudget(
+    pendingOutput,
+    pendingOutputBytes,
+    (chunk) => chunk.bytes,
+    TERMINAL_MULTIPLEX_PENDING_MAX_BYTES
+  )
+}
+
+function trimHeadToBudget<T>(
+  items: T[],
+  bytes: number,
+  sizeOf: (item: T) => number,
+  maxBytes: number
+): { bytes: number; overflowed: boolean; omitted: T[] } {
+  let omittedCount = 0
+  while (bytes > maxBytes && omittedCount < items.length) {
+    bytes -= sizeOf(items[omittedCount]!)
+    omittedCount += 1
   }
-  if (omittedChunkCount > 0) {
-    pendingOutput.splice(0, omittedChunkCount)
-  }
-  return { bytes: pendingOutputBytes, overflowed: omittedChunkCount > 0 }
+  const omitted = omittedCount > 0 ? items.splice(0, omittedCount) : []
+  return { bytes, overflowed: omittedCount > 0, omitted }
 }
 
 export function trimPendingOutputCoveredBySnapshot(
@@ -173,7 +218,7 @@ export function* iterateTerminalStreamTextPayloads(
   if (!data) {
     return
   }
-  for (const chunk of iterateTerminalOutputFrameChunks(data)) {
+  for (const chunk of iterateTerminalOutputFrameChunks(data, undefined, 'text')) {
     yield chunk.bytes
   }
 }
@@ -182,7 +227,7 @@ export function isTerminalReadPayloadIncomplete(read: {
   truncated: boolean
   limited?: boolean
 }): boolean {
-  // Why: a limited preview is an incomplete payload even when the retained buffer wasn't truncated.
+  // Limited preview is incomplete even when retained history was not truncated.
   return read.truncated || read.limited === true
 }
 

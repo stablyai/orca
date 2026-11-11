@@ -1,31 +1,6 @@
-/**
- * E2E regression test for the reattach mouse-mode leak fixed alongside #7329.
- *
- * Why this suite exists:
- *   A TUI that armed mouse tracking (?1000/1002/1003 + SGR 1006/1016) and died
- *   uncleanly never emits the disable sequence. The daemon's private-mode
- *   tracker keeps the mode and buildRehydrateSequences re-arms it on every
- *   reattach, but POST_REPLAY_REATTACH_RESET used to clear cursor/focus/kitty
- *   state and NOT mouse modes. A plain shell in the reattached pane then echoed
- *   every pointer-motion report (`<35;col;rowM`) as literal text.
- *
- * What it covers (full stack, no mocks):
- *   - First launch arms the leak for real: a fixture writes the enable sequence
- *     to stdout and exits, and the live pane is asserted to enter mouse-reporting
- *     mode (the byte flow the daemon's tracker also records and re-arms).
- *   - After a warm reattach, the renderer terminal ends with mouse reporting
- *     DISARMED: mouseTrackingMode is 'none', the enable-mouse-events class is
- *     gone, and real pointer motion produces zero mouse reports.
- *   - A positive control re-arms the same modes and confirms the motion probe
- *     does observe reports, so the "zero reports" assertion cannot pass vacuously.
- *
- * What it does NOT cover:
- *   - That the daemon's buildRehydrateSequences re-arms the mode on reattach —
- *     locked by repro-7329-remote-snapshot-corruption.test.ts against the real
- *     serializer + xterm. This suite proves the reset half end to end.
- *   - Live-agent panes keeping mouse via POST_REPLAY_LIVE_AGENT_REATTACH_RESET
- *     (unit-tested in pty-connection.test.ts).
- */
+// #7329: unproven TUI death retains mouse modes in host rehydrate, but ordinary reattach must disarm them before shell use.
+// Keep a real arming process alive across restart (no OSC 133;D grounding); require no tracking/class/motion reports after replay.
+// Re-arm as a positive control. Serializer re-arm is pinned by repro-7329-remote-snapshot-corruption.test.ts; live-agent preservation by pty-connection.test.ts.
 
 import { existsSync, readFileSync } from 'node:fs'
 import type { ElectronApplication } from '@stablyai/playwright-test'
@@ -34,6 +9,7 @@ import { TEST_REPO_PATH_FILE } from './global-setup'
 import {
   discoverActivePtyId,
   execInTerminal,
+  sendToTerminal,
   waitForActiveTerminalManager,
   waitForActivePanePtyId,
   waitForPaneCount,
@@ -42,16 +18,13 @@ import {
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
 
-// Why: quit→relaunch against the same userDataDir relies on the daemon
-// surviving the first close; serial keeps the shared profile from competing
-// with other Electron instances for the same lock.
+// Serialize the shared-profile quit/relaunch so the surviving daemon and Electron lock have no competing app.
 test.describe.configure({ mode: 'serial' })
 
 test.describe('reattach mouse-mode leak', () => {
   test('warm reattach disarms mouse modes a killed TUI left armed', async (// oxlint-disable-next-line no-empty-pattern -- Playwright's second fixture arg is testInfo; the first must be an object destructure to opt out of the default fixture set.
   {}, testInfo) => {
-    // Why: arms the leak with a POSIX `printf` builtin; the reset logic under
-    // test is platform-agnostic, so skipping Windows here loses no coverage.
+    // The arming fixture uses POSIX printf; reset logic itself is platform-independent.
     test.skip(process.platform === 'win32', 'Uses a POSIX printf to arm mouse reporting')
 
     const repoPath = readFileSync(TEST_REPO_PATH_FILE, 'utf-8').trim()
@@ -65,7 +38,6 @@ test.describe('reattach mouse-mode leak', () => {
     let secondApp: ElectronApplication | null = null
 
     try {
-      // ── First launch: arm the leak through the real daemon ─────────────
       const firstLaunch = await session.launch()
       firstApp = firstLaunch.app
       await attachRepoAndOpenTerminal(firstLaunch.page, repoPath)
@@ -83,11 +55,7 @@ test.describe('reattach mouse-mode leak', () => {
       await waitForPaneCount(firstLaunch.page, 1, 30_000)
       const ptyId = await discoverActivePtyId(firstLaunch.page)
 
-      // Gate on real command execution before arming: the `$((21+21))` result
-      // only appears if the shell evaluated it (the echoed command text shows
-      // the expression, not `42`). Some sandboxed CI/dev runners spawn a PTY
-      // that echoes input but never execs a shell; skip there rather than fail,
-      // matching the pane-manager guard above — there is nothing to arm.
+      // Require arithmetic command execution, beyond echo; skip sandbox PTYs with no executing shell rather than misdiagnose reset.
       await execInTerminal(firstLaunch.page, ptyId, 'echo ORCA_MOUSE_READY_$((21+21))')
       const shellExecutes = await waitForTerminalOutput(
         firstLaunch.page,
@@ -98,18 +66,10 @@ test.describe('reattach mouse-mode leak', () => {
         .catch(() => false)
       test.skip(!shellExecutes, 'PTY shell does not execute commands in this environment')
 
-      // Arm mouse tracking exactly as a TUI would, then let the shell foreground
-      // return — the disable is never sent, so the daemon's tracker keeps the
-      // mode and re-arms it on reattach. printf is a shell builtin (no external
-      // binary), and its typed argument is literal backslashes, so only real
-      // execution emits the ESC bytes that arm xterm below.
-      await execInTerminal(firstLaunch.page, ptyId, `printf '\\033[?1003h\\033[?1006h'`)
+      // printf’s literal backslashes arm xterm only on execution; keep the process alive so OSC 133;D cannot ground modes before reattach.
+      await execInTerminal(firstLaunch.page, ptyId, `printf '\\033[?1003h\\033[?1006h'; sleep 120`)
 
-      // Precondition: the printf armed real mouse reporting in the live
-      // pane (proving the leak's byte flow reached the terminal). The daemon's
-      // tracker sees the same output stream and re-arms this mode on every
-      // reattach — the rehydrate half is locked by the repro-7329 unit test; this
-      // suite proves the reattach reset disarms it end to end.
+      // Require live mouse arming before restart; repro-7329 units pin host rehydrate, while this arm pins reset.
       await expect
         .poll(
           async () =>
@@ -134,12 +94,10 @@ test.describe('reattach mouse-mode leak', () => {
         )
         .toBe('any')
 
-      // Why: app.close flushes beforeunload, but the daemon is a detached fork
-      // so the PTY (and its armed mouse mode) survives for the warm reattach.
+      // app.close saves/disconnects but leaves the detached daemon’s PTY and armed modes alive.
       await session.close(firstApp)
       firstApp = null
 
-      // ── Second launch: reattach must disarm the leaked modes ────────────
       const secondLaunch = await session.launch()
       secondApp = secondLaunch.app
       await waitForSessionReady(secondLaunch.page)
@@ -149,12 +107,8 @@ test.describe('reattach mouse-mode leak', () => {
       await waitForPaneCount(secondLaunch.page, 1, 30_000)
       // Live output is released only after reattach replay has finished.
       const reattachedPtyId = await waitForActivePanePtyId(secondLaunch.page)
-      await execInTerminal(secondLaunch.page, reattachedPtyId, 'echo ORCA_REATTACHED_$((21+21))')
-      await waitForTerminalOutput(secondLaunch.page, 'ORCA_REATTACHED_42', 15_000)
 
-      // The reattach replay re-arms mouse via rehydrate, then the reset must
-      // clear it. Poll until it settles to 'none' (times out if the reset
-      // regresses to not touching mouse modes).
+      // Poll for reset after rehydrate re-arms the still-running program’s modes.
       await expect
         .poll(
           async () =>
@@ -178,12 +132,13 @@ test.describe('reattach mouse-mode leak', () => {
         )
         .toBe('none')
 
-      // Behavioral proof + positive control: real pointer motion must produce
-      // no reports post-reattach, but the same probe DOES observe reports once
-      // mouse mode is re-armed — so the "zero reports" result is not vacuous.
+      await sendToTerminal(secondLaunch.page, reattachedPtyId, '\x03')
+      await execInTerminal(secondLaunch.page, reattachedPtyId, 'echo ORCA_REATTACHED_$((21+21))')
+      await waitForTerminalOutput(secondLaunch.page, 'ORCA_REATTACHED_42', 15_000)
+
+      // Require no motion reports after reattach, then re-arm and require reports from the same probe.
       const probe = await secondLaunch.page.evaluate(async () => {
-        // An SGR mouse report is `ESC [ < params (M|m)`; the `ESC [ <` prefix is
-        // unambiguous, so substring matching avoids a control-char regex.
+        // Match unambiguous ESC [ < report prefix without a control-character regex.
         const isMouseReport = (data: string): boolean => data.includes('\x1b[<')
         const state = window.__store?.getState()
         const worktreeId = state?.activeWorktreeId
@@ -235,10 +190,7 @@ test.describe('reattach mouse-mode leak', () => {
           await new Promise<void>((resolve) =>
             pane.terminal.write('\x1b[?1003h\x1b[?1006h', () => resolve())
           )
-          // Why: xterm binds the enable-mouse-events class AND the motion
-          // listener together in one _handleProtocolChange pass, so poll a bounded
-          // number of frames — dispatching motion each round — until arming takes
-          // rather than reading a single frame that can precede the binding.
+          // Poll frames with motion because class/listener binding shares an async protocol-change pass.
           let classAfterArm = false
           let armedReports = 0
           for (let attempt = 0; attempt < 40 && armedReports === 0; attempt += 1) {
@@ -259,11 +211,9 @@ test.describe('reattach mouse-mode leak', () => {
         }
       })
 
-      // Post-reattach the pane is fully disarmed.
       expect(probe.afterReattach.mode).toBe('none')
       expect(probe.afterReattach.hasEnableMouseClass).toBe(false)
       expect(probe.afterReattach.reports).toBe(0)
-      // Positive control proves the motion probe genuinely detects reports.
       expect(probe.classAfterArm).toBe(true)
       expect(probe.armedReports).toBeGreaterThan(0)
     } finally {

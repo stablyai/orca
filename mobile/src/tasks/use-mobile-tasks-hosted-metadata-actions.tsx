@@ -1,13 +1,41 @@
+import { githubTaskKey, sameGitHubTask, requireGitHubTaskTarget } from './github-task-identity'
 import type { GitlabGithubStatusActionsModel } from './use-mobile-tasks-gitlab-github-status-actions'
 import { useCallback } from './mobile-tasks-dependencies'
-import { type TaskItem, isSuccess } from './mobile-tasks-legacy-foundation'
+import type { TaskItem } from './mobile-tasks-legacy-foundation'
+import {
+  githubPullRequestUpdate,
+  gitlabIssueUpdate,
+  gitlabMergeRequestUpdate
+} from './mobile-task-item-state-operations'
 
-export function useMobileTasksHostedMetadataActions(model: GitlabGithubStatusActionsModel) {
+export type useMobileTasksHostedMetadataActionsInput = Pick<
+  GitlabGithubStatusActionsModel,
+  | 'claimPublication'
+  | 'actionItem'
+  | 'detailPayload'
+  | 'client'
+  | 'captureTaskListRefresh'
+  | 'mutatingStatus'
+  | 'setActionItem'
+  | 'setDetailPayload'
+  | 'setError'
+  | 'setItemAddAssigneesDraft'
+  | 'setItemAddLabelsDraft'
+  | 'setItemRemoveAssigneesDraft'
+  | 'setItemRemoveLabelsDraft'
+  | 'setItems'
+  | 'tryBeginMutation'
+>
+
+export function useMobileTasksHostedMetadataActions<
+  Model extends useMobileTasksHostedMetadataActionsInput
+>(model: Model) {
   const {
+    claimPublication,
     client,
     detailPayload,
-    loadTasks,
-    mutatingStatus,
+    captureTaskListRefresh,
+    tryBeginMutation,
     setActionItem,
     setDetailPayload,
     setError,
@@ -15,29 +43,34 @@ export function useMobileTasksHostedMetadataActions(model: GitlabGithubStatusAct
     setItemAddLabelsDraft,
     setItemRemoveAssigneesDraft,
     setItemRemoveLabelsDraft,
-    setItems,
-    setMutatingStatus
+    setItems
   } = model
   const updateGitHubPullRequestMetadata = useCallback(
     async (
       item: Extract<TaskItem, { provider: 'github' }>,
       updates: { title?: string; body?: string }
     ): Promise<void> => {
-      if (!client || mutatingStatus || item.source.type !== 'pr') {
+      if (!client || item.source.type !== 'pr') {
         return
       }
       const nextTitle = updates.title?.trim()
       if (updates.title !== undefined && !nextTitle) {
         return
       }
-      setMutatingStatus(true)
+      const finish = tryBeginMutation()
+      if (!finish) {
+        return
+      }
+      const refreshList = captureTaskListRefresh()
       setError('')
+      const isCurrent = claimPublication(item)
       try {
-        const response = await client.sendRequest(
-          'github.updatePR',
+        const reply = await githubPullRequestUpdate.request(
+          client,
           {
             repo: `id:${item.source.repoId}`,
             prNumber: item.source.number,
+            prRepo: requireGitHubTaskTarget(item.source).repository,
             updates: {
               ...(nextTitle !== undefined ? { title: nextTitle } : {}),
               ...(updates.body !== undefined ? { body: updates.body } : {})
@@ -45,16 +78,17 @@ export function useMobileTasksHostedMetadataActions(model: GitlabGithubStatusAct
           },
           { timeoutMs: 30_000 }
         )
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const result = response.result as { ok?: boolean; error?: string }
+        const result = githubPullRequestUpdate.interpret(reply)
         if (result.ok === false) {
           throw new Error(result.error ?? 'Failed to update GitHub pull request')
         }
+        refreshList()
+        if (!isCurrent()) {
+          return
+        }
         if (nextTitle !== undefined) {
           setActionItem((current) =>
-            current?.provider === 'github' && current.source.id === item.source.id
+            sameGitHubTask(current, item)
               ? {
                   ...current,
                   title: nextTitle,
@@ -64,7 +98,7 @@ export function useMobileTasksHostedMetadataActions(model: GitlabGithubStatusAct
           )
           setItems((current) =>
             current.map((candidate) =>
-              candidate.provider === 'github' && candidate.source.id === item.source.id
+              sameGitHubTask(candidate, item)
                 ? {
                     ...candidate,
                     title: nextTitle,
@@ -76,17 +110,21 @@ export function useMobileTasksHostedMetadataActions(model: GitlabGithubStatusAct
         }
         if (updates.body !== undefined) {
           setDetailPayload((current) =>
-            current?.provider === 'github' ? { ...current, body: updates.body ?? '' } : current
+            current?.provider === 'github' && current.targetKey === githubTaskKey(item.source)
+              ? { ...current, body: updates.body ?? '' }
+              : current
           )
         }
-        await loadTasks({ silent: true })
       } catch (err) {
+        if (!isCurrent()) {
+          return
+        }
         setError(err instanceof Error ? err.message : 'Failed to update GitHub pull request')
       } finally {
-        setMutatingStatus(false)
+        finish()
       }
     },
-    [client, loadTasks, mutatingStatus]
+    [claimPublication, client, captureTaskListRefresh, tryBeginMutation]
   )
 
   const updateGitLabIssueMetadata = useCallback(
@@ -101,39 +139,49 @@ export function useMobileTasksHostedMetadataActions(model: GitlabGithubStatusAct
         removeAssignees?: string[]
       }
     ): Promise<void> => {
-      if (!client || mutatingStatus) {
+      if (!client) {
         return
       }
-      setMutatingStatus(true)
+      const finish = tryBeginMutation()
+      if (!finish) {
+        return
+      }
+      const refreshList = captureTaskListRefresh()
       setError('')
       try {
-        const method = item.source.type === 'issue' ? 'gitlab.updateIssue' : 'gitlab.updateMR'
-        const params =
+        const updated =
           item.source.type === 'issue'
-            ? {
-                repo: `id:${item.source.repoId}`,
-                number: item.source.number,
-                updates,
-                projectRef: item.source.projectRef
-              }
-            : {
-                repo: `id:${item.source.repoId}`,
-                iid: item.source.number,
-                projectRef: item.source.projectRef,
-                updates: {
-                  title: updates.title,
-                  body: updates.body,
-                  addLabels: updates.addLabels,
-                  removeLabels: updates.removeLabels
-                }
-              }
-        const response = await client.sendRequest(method, params, { timeoutMs: 30_000 })
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const result = response.result as { ok?: boolean; error?: string }
-        if (result.ok === false) {
-          throw new Error(result.error ?? 'Failed to update GitLab item')
+            ? gitlabIssueUpdate.interpret(
+                await gitlabIssueUpdate.request(
+                  client,
+                  {
+                    repo: `id:${item.source.repoId}`,
+                    number: item.source.number,
+                    updates,
+                    projectRef: item.source.projectRef
+                  },
+                  { timeoutMs: 30_000 }
+                )
+              )
+            : gitlabMergeRequestUpdate.interpret(
+                await gitlabMergeRequestUpdate.request(
+                  client,
+                  {
+                    repo: `id:${item.source.repoId}`,
+                    iid: item.source.number,
+                    projectRef: item.source.projectRef,
+                    updates: {
+                      title: updates.title,
+                      body: updates.body,
+                      addLabels: updates.addLabels,
+                      removeLabels: updates.removeLabels
+                    }
+                  },
+                  { timeoutMs: 30_000 }
+                )
+              )
+        if (updated.ok === false) {
+          throw new Error(updated.error ?? 'Failed to update GitLab item')
         }
         const nextLabels = [
           ...new Set([
@@ -203,16 +251,17 @@ export function useMobileTasksHostedMetadataActions(model: GitlabGithubStatusAct
           setItemAddAssigneesDraft('')
           setItemRemoveAssigneesDraft('')
         }
-        await loadTasks({ silent: true })
+        refreshList()
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to update GitLab item')
       } finally {
-        setMutatingStatus(false)
+        finish()
       }
     },
-    [client, detailPayload, loadTasks, mutatingStatus]
+    [claimPublication, client, detailPayload, captureTaskListRefresh, tryBeginMutation]
   )
   return Object.assign(model, { updateGitHubPullRequestMetadata, updateGitLabIssueMetadata })
 }
 
-export type HostedMetadataActionsModel = ReturnType<typeof useMobileTasksHostedMetadataActions>
+export type HostedMetadataActionsModel = GitlabGithubStatusActionsModel &
+  ReturnType<typeof useMobileTasksHostedMetadataActions>

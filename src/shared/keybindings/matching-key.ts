@@ -1,11 +1,12 @@
-import type { KeybindingInput, ModifierToken, ParsedKeybinding } from './types'
-import { getKeybindingPlatform } from './definitions'
-import { hasModifier } from './parser'
+import type { KeybindingActionId, KeybindingInput, ModifierToken, ParsedKeybinding } from './types'
+import { DIGIT_INDEX_KEY_PATTERN, getKeybindingPlatform, isDigitIndexActionId } from './definitions'
+import { hasModifier, parseKeybinding } from './parser'
 import {
   canFallBackToPhysicalCode,
   logicalKeyTokenFromInput,
   physicalCodeKeyTokenFromInput,
   numpadCodeKeyTokenFromInput,
+  shouldUseMacOptionComposedCaptureFallback,
   isPunctuationKeyToken
 } from './input'
 
@@ -22,6 +23,13 @@ export function platformModifiers(
   }
 }
 
+// Why: '+' and '_' need Shift on US keyboards but not on others (German '+', AZERTY '_'), so Shift is how the layout spells them.
+const SHIFT_AGNOSTIC_KEY_TOKENS = new Set(['Plus', 'Underscore'])
+
+export function isShiftAgnosticKeyToken(key: string): boolean {
+  return SHIFT_AGNOSTIC_KEY_TOKENS.has(key)
+}
+
 export function modifierStateMatches(
   parsed: ParsedKeybinding,
   input: KeybindingInput,
@@ -32,7 +40,7 @@ export function modifierStateMatches(
     hasModifier(input, 'meta') === expected.meta &&
     hasModifier(input, 'control') === expected.control &&
     hasModifier(input, 'alt') === expected.alt &&
-    hasModifier(input, 'shift') === expected.shift
+    (isShiftAgnosticKeyToken(parsed.key) || hasModifier(input, 'shift') === expected.shift)
   )
 }
 
@@ -90,7 +98,11 @@ export function digitKeyMatches(
   if (logicalKey && logicalKey.length === 1 && logicalKey >= '0' && logicalKey <= '9') {
     return logicalKey === digit
   }
-  return canFallBackToPhysicalCode(input, platform) && input.code === `Digit${digit}`
+  const macOptionDigit =
+    logicalKey === null && shouldUseMacOptionComposedCaptureFallback(input, platform)
+  return (
+    (canFallBackToPhysicalCode(input, platform) || macOptionDigit) && input.code === `Digit${digit}`
+  )
 }
 
 export function semanticPunctuationKey(input: KeybindingInput): string | null {
@@ -184,4 +196,44 @@ export function resolveModifierToken(
     case 'Shift':
       return 'shift'
   }
+}
+
+export function keybindingConflictIdentityForParsed(
+  parsed: ParsedKeybinding,
+  platform: NodeJS.Platform
+): string {
+  if (parsed.doubleTapModifier) {
+    return `DoubleTap:${resolveModifierToken(parsed.doubleTapModifier, platform)}`
+  }
+  const modifiers = platformModifiers(parsed, platform)
+  return [
+    modifiers.meta ? 'Meta' : '',
+    modifiers.control ? 'Control' : '',
+    modifiers.alt ? 'Alt' : '',
+    modifiers.shift && !isShiftAgnosticKeyToken(parsed.key) ? 'Shift' : '',
+    parsed.key
+  ].join('+')
+}
+
+export function getKeybindingConflictIdentity(binding: string, platform: NodeJS.Platform): string {
+  const parsed = parseKeybinding(binding)
+  return parsed ? keybindingConflictIdentityForParsed(parsed, platform) : binding
+}
+
+export function keybindingConflictIdentities(
+  actionId: KeybindingActionId,
+  binding: string,
+  platform: NodeJS.Platform
+): readonly string[] {
+  const exact = getKeybindingConflictIdentity(binding, platform)
+  if (!isDigitIndexActionId(actionId)) {
+    return [exact]
+  }
+  const parsed = parseKeybinding(binding)
+  if (!parsed || parsed.doubleTapModifier || !DIGIT_INDEX_KEY_PATTERN.test(parsed.key)) {
+    return [exact]
+  }
+  return Array.from({ length: 9 }, (_, index) =>
+    keybindingConflictIdentityForParsed({ ...parsed, key: String(index + 1) }, platform)
+  )
 }

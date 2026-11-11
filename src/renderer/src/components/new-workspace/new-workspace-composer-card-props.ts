@@ -1,23 +1,29 @@
+import type {
+  AgentPickerDraft,
+  AgentPickerEntry
+} from '../../../../shared/agent-launch/picker/agent-launch-picker'
+import type { AgentComboboxSurfaceRows } from '@/components/agent/agent-combobox-surface-items'
+import type { ComposerAgentRows } from '@/hooks/composer-state/composer-agent-rows-target'
 import type RepoCombobox from '@/components/repo/RepoCombobox'
-import type { NewWorkspaceProjectOption } from '@/lib/new-workspace-project-options'
+import type { NewWorkspaceProjectOption } from '@/lib/workspace/creation/new-workspace-project-options'
 import type {
   NeedsSetupProjectHostOption,
   ProjectHostSetupOption
-} from '@/lib/project-host-setup-options'
-import type { SetupConfig } from '@/lib/new-workspace'
-import type { WorkspaceCreateErrorDisplay } from '@/lib/workspace-create-error-format'
-import type { SmartNameMode } from '@/components/new-workspace/smart-workspace-source-results'
-import type SmartWorkspaceNameField from '@/components/new-workspace/SmartWorkspaceNameField'
-import type { SmartWorkspaceNameSelection } from '@/components/new-workspace/SmartWorkspaceNameField'
+} from '@/lib/workspace/creation/project-host-setup-options'
+import type { SetupConfig } from '../../../../shared/orca-hook-setup-config'
+import type { WorkspaceCreateErrorDisplay } from '@/lib/workspace/creation/workspace-create-error-format'
+import type { SmartNameMode } from '../../../../shared/new-workspace/smart-workspace-source-results'
+import type SmartWorkspaceNameField from './SmartWorkspaceNameField'
+import type { SmartWorkspaceNameSelection } from '@/components/new-workspace/smart-workspace-name-field-model'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
-import type { JiraIssue } from '../../../../shared/jira-types'
+import type { JiraIssue } from '../../../../shared/jira/jira-types'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
 import type { OrcaHooks, SetupAgentStartupPolicy } from '../../../../shared/orca-yaml-hook-types'
 import type { SparsePreset } from '../../../../shared/worktree/create-types'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
-import type { TaskSourceContext } from '../../../../shared/task-source-context'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 
 export type RepoOption = React.ComponentProps<typeof RepoCombobox>['repos'][number]
@@ -30,12 +36,26 @@ export const EMPTY_EPHEMERAL_VM_RECIPES: EphemeralVmRecipeOption[] = []
 export type NewWorkspaceComposerCardProps = {
   contextualTourSource?: string
   containerClassName?: string
+  contentClassName?: string
+  selectedRepoPath?: string | null
+  onNativeFileDrop?: (paths: string[], isCurrent: () => boolean) => Promise<void>
   composerRef?: React.RefObject<HTMLDivElement | null>
   onComposerNodeChange?: (node: HTMLDivElement | null) => void
   nameInputRef?: React.RefObject<HTMLInputElement | null>
   quickAgent: TuiAgent | null
-  onQuickAgentChange: (agent: TuiAgent | null) => void
+  agentSurfaceRows?: AgentComboboxSurfaceRows
+  agentPickerDraft?: AgentPickerDraft
+  agentSetupDisabled?: boolean
+  onQuickAgentChange: (
+    agent: TuiAgent | null,
+    surface?: AgentComboboxSurfaceRows['surface'],
+    draft?: AgentPickerDraft,
+    entry?: AgentPickerEntry
+  ) => void
+  /** Where the quick agent would start; null keeps the picker's plain agent list. */
+  agentRows?: ComposerAgentRows | null
   eligibleRepos: readonly RepoOption[]
+  selectedRepo?: RepoOption | null
   repoId: string
   projectOptions?: NewWorkspaceProjectOption[]
   selectedProjectId?: string | null
@@ -62,6 +82,9 @@ export type NewWorkspaceComposerCardProps = {
   onNameValueChange: (value: string) => void
   branchNameOverride: string | undefined
   onBranchNameOverrideChange: (value: string | undefined) => void
+  baseBranch?: string
+  onBaseBranchChange?: (value: string | undefined) => void
+  startFromResetHint?: string | null
   parentWorktreeId?: string | null
   onParentWorktreeIdChange?: (value: string | null) => void
   selectedRepoExecutionHostId?: ExecutionHostId | null
@@ -71,14 +94,17 @@ export type NewWorkspaceComposerCardProps = {
   onSmartGitLabItemSelect: (item: GitLabWorkItem) => void
   onSmartBranchSelect: (refName: string, localBranchName: string) => void
   onSmartNameModeChange?: (mode: SmartNameMode) => void
+  smartNameMode?: SmartNameMode
   onSmartLinearIssueSelect: (issue: LinearIssue) => void
   onSmartJiraIssueSelect?: (issue: JiraIssue, sourceContext: TaskSourceContext) => void
   onOpenJiraSettings?: () => void
   smartNameSelection: SmartWorkspaceNameSelection | null
   onClearSmartNameSelection: () => void
+  reuseEligibleBranch?: string | null
   canReuseSelectedBranch: boolean
   reuseSelectedBranch: boolean
   onReuseSelectedBranchChange: (next: boolean) => void
+  onOpenSelectedBranchWorkspace?: () => void
   showCreateMultiple?: boolean
   createMultiple?: boolean
   onCreateMultipleChange?: (next: boolean) => void
@@ -86,8 +112,10 @@ export type NewWorkspaceComposerCardProps = {
   smartNameJiraSourceContext?: TaskSourceContext | null
   forkPushWarning: string | null
   detectedAgentIds: Set<TuiAgent> | null
-  onOpenAgentSettings: () => void
+  onOpenAgentSettings: (invoker: HTMLButtonElement) => void
   advancedOpen: boolean
+  setupChoiceRevealRequest: number
+  onSetupChoiceRevealed: () => void
   onToggleAdvanced: () => void
   createDisabled: boolean
   projectError: string | null

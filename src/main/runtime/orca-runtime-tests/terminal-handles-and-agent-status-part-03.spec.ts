@@ -1,13 +1,15 @@
 import { describe, expect, it, vi } from 'vitest'
-import { OrcaRuntimeService } from '../orca-runtime-test-mocks.spec'
-import type { TerminalLayoutSnapshot } from '../orca-runtime-test-mocks.spec'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { electronMocks } from '../orca-runtime-test-mocks/setup.spec'
+import type { TerminalLayoutSnapshot } from '../../../shared/workspace-layout/terminal-tab-types'
 import {
   TEST_WORKTREE_ID,
   TEST_WORKTREE_PATH,
   antigravityPromptBeforeModelReadyScreen,
   antigravityReadyScreen,
   store
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
   it('allows non-Claude foreground agents after preserved Claude agents management evidence', async () => {
@@ -51,40 +53,6 @@ describe('OrcaRuntimeService', () => {
     await expect(runtime.isTerminalRunningAgent(handle)).resolves.toBe(false)
   })
 
-  it('does not use stale runtime-created PTY status when a neutral PTY title exists', async () => {
-    const runtime = new OrcaRuntimeService(store)
-    runtime.setPtyController({
-      spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null
-    })
-    runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
-    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
-      command: 'claude',
-      title: 'zsh'
-    })
-    const pty = (
-      runtime as unknown as {
-        ptysById: Map<
-          string,
-          {
-            lastAgentStatus: 'working' | null
-          }
-        >
-      }
-    ).ptysById.get('pty-bg')
-    expect(pty).toBeDefined()
-    if (!pty) {
-      throw new Error('expected runtime PTY record')
-    }
-    pty.lastAgentStatus = 'working'
-    runtime.setPtyController(null)
-
-    await expect(runtime.isTerminalRunningAgent(handle)).resolves.toBe(false)
-  })
-
   it('recognizes ready prompt evidence even with a stale Claude agents title', async () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
@@ -109,50 +77,6 @@ describe('OrcaRuntimeService', () => {
     await expect(runtime.isTerminalRunningAgent(handle)).resolves.toBe(true)
   })
 
-  it('recognizes runtime-created Codex PTY handles from the ready prompt', async () => {
-    const runtime = new OrcaRuntimeService(store)
-    runtime.setPtyController({
-      spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null
-    })
-    runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
-    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
-      command: 'codex',
-      title: 'worker'
-    })
-
-    runtime.onPtyData(
-      'pty-bg',
-      ['OpenAI Codex', 'Model: gpt-5.4', 'Directory: /tmp/worktree-a'].join('\n'),
-      100
-    )
-
-    await expect(runtime.isTerminalRunningAgent(handle)).resolves.toBe(true)
-  })
-
-  it('recognizes runtime-created Antigravity PTY handles from the ready prompt', async () => {
-    const runtime = new OrcaRuntimeService(store)
-    runtime.setPtyController({
-      spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null
-    })
-    runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
-    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
-      command: 'agy',
-      title: 'worker'
-    })
-
-    runtime.onPtyData('pty-bg', antigravityReadyScreen(), 100)
-
-    await expect(runtime.isTerminalRunningAgent(handle)).resolves.toBe(true)
-  })
-
   it('recognizes Antigravity ready tails with the prompt before the model line', async () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
@@ -171,41 +95,6 @@ describe('OrcaRuntimeService', () => {
     runtime.onPtyData('pty-bg', antigravityPromptBeforeModelReadyScreen(), 100)
 
     await expect(runtime.isTerminalRunningAgent(handle)).resolves.toBe(true)
-  })
-
-  it('recognizes live leaf Antigravity terminals from the ready prompt', async () => {
-    const runtime = new OrcaRuntimeService(store)
-    runtime.setPtyController({
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null
-    })
-    runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, {
-      tabs: [
-        {
-          tabId: 'tab-1',
-          worktreeId: TEST_WORKTREE_ID,
-          title: 'Terminal',
-          activeLeafId: 'pane:1',
-          layout: null
-        }
-      ],
-      leaves: [
-        {
-          tabId: 'tab-1',
-          worktreeId: TEST_WORKTREE_ID,
-          leafId: 'pane:1',
-          paneRuntimeId: 1,
-          ptyId: 'pty-1',
-          paneTitle: null
-        }
-      ]
-    })
-    runtime.onPtyData('pty-1', antigravityReadyScreen(), 100)
-    const [terminal] = (await runtime.listTerminals()).terminals
-
-    await expect(runtime.isTerminalRunningAgent(terminal.handle)).resolves.toBe(true)
   })
 
   it('does not recognize partial Antigravity startup output as an agent', async () => {
@@ -230,36 +119,6 @@ describe('OrcaRuntimeService', () => {
         'user@example.com (Antigravity Business)',
         'Gemini 3.5 Flash (High)'
       ].join('\n'),
-      100
-    )
-
-    await expect(runtime.isTerminalRunningAgent(handle)).resolves.toBe(false)
-  })
-
-  it('rejects a later Antigravity header with a prompt but no model line', async () => {
-    const runtime = new OrcaRuntimeService(store)
-    runtime.setPtyController({
-      spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null
-    })
-    runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
-    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
-      command: 'agy',
-      title: 'worker'
-    })
-
-    runtime.onPtyData(
-      'pty-bg',
-      [
-        antigravityReadyScreen(),
-        '\nAntigravity CLI 1.0.4\n',
-        'user@example.com (Antigravity Business)\n',
-        '~/orca/workspaces/orca/agy-dispatch-issue\n',
-        '>\n'
-      ].join(''),
       100
     )
 
@@ -354,48 +213,6 @@ describe('OrcaRuntimeService', () => {
     const [terminal] = (await runtime.listTerminals()).terminals
 
     await expect(runtime.isTerminalRunningAgent(terminal.handle)).resolves.toBe(false)
-  })
-
-  it('keeps mobile terminal surfaces visible while their leaf handle is pending', async () => {
-    const runtime = new OrcaRuntimeService(store)
-    runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, {
-      tabs: [],
-      leaves: [],
-      mobileSessionTabs: [
-        {
-          worktree: TEST_WORKTREE_ID,
-          publicationEpoch: 'epoch-1',
-          snapshotVersion: 1,
-          activeGroupId: 'group-1',
-          activeTabId: 'tab-1::pane:1',
-          activeTabType: 'terminal',
-          tabs: [
-            {
-              type: 'terminal',
-              id: 'tab-1::pane:1',
-              parentTabId: 'tab-1',
-              leafId: 'pane:1',
-              title: 'Terminal 1',
-              isActive: true
-            }
-          ]
-        }
-      ]
-    })
-
-    const result = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
-
-    expect(result.tabs).toEqual([
-      expect.objectContaining({
-        type: 'terminal',
-        id: 'tab-1::pane:1',
-        parentTabId: 'tab-1',
-        leafId: 'pane:1',
-        status: 'pending-handle',
-        terminal: null
-      })
-    ])
   })
 
   it('keeps mobile terminal surfaces pending while a live leaf has no PTY', async () => {
@@ -552,7 +369,7 @@ describe('OrcaRuntimeService', () => {
     ])
   })
 
-  it('omits stale browser session tabs that no longer have live webContents', async () => {
+  it('keeps renderer browser tabs without live webContents but filters stale headless tabs', async () => {
     const runtime = new OrcaRuntimeService(store)
     const tabList = vi.fn(() => ({
       tabs: [
@@ -566,6 +383,7 @@ describe('OrcaRuntimeService', () => {
       ]
     }))
     runtime.setAgentBrowserBridge({ tabList } as never)
+    electronMocks.BrowserWindow.fromId.mockReturnValue({ isDestroyed: () => false })
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, {
       tabs: [],
@@ -573,7 +391,7 @@ describe('OrcaRuntimeService', () => {
       mobileSessionTabs: [
         {
           worktree: TEST_WORKTREE_ID,
-          publicationEpoch: 'epoch-1',
+          publicationEpoch: 'renderer-epoch-1',
           snapshotVersion: 1,
           activeGroupId: 'group-1',
           activeTabId: 'browser-unified-stale',
@@ -614,14 +432,51 @@ describe('OrcaRuntimeService', () => {
     expect(result.tabs).toEqual([
       expect.objectContaining({
         type: 'browser',
+        id: 'browser-unified-stale',
+        browserPageId: 'browser-page-stale',
+        url: 'about:blank',
+        title: 'Dead Browser',
+        isActive: true
+      }),
+      expect.objectContaining({
+        type: 'browser',
         id: 'browser-unified-live',
         browserPageId: 'browser-page-live',
         url: 'https://live.example/',
         title: 'Live Browser',
-        isActive: true
+        isActive: false
       })
     ])
-    expect(result.activeTabId).toBe('browser-unified-live')
+    expect(result.activeTabId).toBe('browser-unified-stale')
     expect(result.activeTabType).toBe('browser')
+
+    const rendererSnapshot = runtime['mobileSessionTabsByWorktree'].get(TEST_WORKTREE_ID)!
+    expect([...runtime['collectPublicMobileSessionTabIds'](rendererSnapshot)]).toEqual([
+      'browser-unified-stale',
+      'browser-workspace-stale',
+      'browser-unified-live',
+      'browser-workspace-live'
+    ])
+
+    const headlessSnapshot = { ...rendererSnapshot, publicationEpoch: 'headless:epoch-1' }
+    runtime['mobileSessionTabsByWorktree'].set(TEST_WORKTREE_ID, headlessSnapshot)
+    const headlessResult = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+
+    expect(headlessResult.tabs).toEqual([
+      expect.objectContaining({
+        type: 'browser',
+        id: 'browser-unified-live',
+        browserPageId: 'browser-page-live',
+        url: 'https://live.example/',
+        title: 'Live Browser',
+        isActive: false
+      })
+    ])
+    expect(headlessResult.activeTabId).toBeNull()
+    expect(headlessResult.activeTabType).toBeNull()
+    expect([...runtime['collectPublicMobileSessionTabIds'](headlessSnapshot)]).toEqual([
+      'browser-unified-live',
+      'browser-workspace-live'
+    ])
   })
 })

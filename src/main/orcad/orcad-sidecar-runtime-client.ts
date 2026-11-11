@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { findTransport, type RuntimeMetadata } from '../../shared/runtime-bootstrap'
 import { BROWSER_UNAVAILABLE_ERROR_CODE } from '../../shared/runtime-types'
 import { BrowserError } from '../browser/browser-error'
+import { daemonSocketDirIsTrusted } from '../daemon/endpoint/publication/daemon-socket-endpoint-path'
 const SIDECAR_MAX_RESPONSE_BYTES = 64 * 1024 * 1024
 
 const RuntimeResponse = z.discriminatedUnion('ok', [
@@ -28,6 +29,13 @@ export async function sendOrcadSidecarRequest(
     throw new BrowserError(
       BROWSER_UNAVAILABLE_ERROR_CODE,
       'Electron browser sidecar has no local RPC transport.'
+    )
+  }
+  // A relocated socket lives in shared /tmp; never send the auth token to a planted listener.
+  if (transport.kind === 'unix' && !daemonSocketDirIsTrusted(transport.endpoint)) {
+    throw new BrowserError(
+      BROWSER_UNAVAILABLE_ERROR_CODE,
+      'Electron browser sidecar socket directory is not private to this user.'
     )
   }
   return await new Promise((resolve, reject) => {
@@ -79,6 +87,10 @@ export async function sendOrcadSidecarRequest(
         finish(new BrowserError('browser_error', 'Electron browser sidecar response is too large.'))
         return
       }
+      // Avoid repeatedly flattening partial-line buffers.
+      if (!chunk.includes('\n')) {
+        return
+      }
       let newline = buffer.indexOf('\n')
       while (newline !== -1 && !settled) {
         const line = buffer.slice(0, newline)
@@ -112,7 +124,8 @@ export async function sendOrcadSidecarRequest(
           return
         }
         if (!parsed.data.ok) {
-          finish(new BrowserError(parsed.data.error.code, parsed.data.error.message))
+          const { code, message, data } = parsed.data.error
+          finish(new BrowserError(code, message, data))
           return
         }
         finish(null, parsed.data.result)

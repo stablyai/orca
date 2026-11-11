@@ -1,0 +1,65 @@
+name: Unit plan
+
+# Full runs need only a matrix; shadow import-graph analysis belongs after tests.
+on:
+  workflow_call:
+    inputs:
+      selection_mode:
+        description: Shadow validates selection; selected applies it only to draft PRs.
+        required: false
+        default: shadow
+        type: string
+      defer_shadow:
+        description: Emit the full matrix without dependencies; the caller owns the selected-draft exception.
+        default: false
+        type: boolean
+
+    outputs:
+      shards:
+        description: JSON array of shard assignments for the unit matrix.
+        value: ${{ jobs.plan.outputs.shards }}
+      selection_planned:
+        description: Whether a selection plan artifact was uploaded for shards to download.
+        value: ${{ jobs.plan.outputs.selection_planned }}
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    runs-on: ${{ inputs.defer_shadow && 'ubuntu-slim' || 'ubuntu-24.04' }}
+    timeout-minutes: 5
+    env:
+      DEFER_SHADOW: ${{ inputs.defer_shadow }}
+    outputs:
+      shards: ${{ steps.plan.outputs.shards }}
+      selection_planned: ${{ !inputs.defer_shadow }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 2
+          sparse-checkout: ${{ inputs.defer_shadow && '/config/scripts/ci/unit-selection/ci-unit-matrix.mjs' || '' }}
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - uses: ./.github/actions/install-node-dependencies
+        if: env.DEFER_SHADOW != 'true'
+      - name: Plan unit selection
+        id: plan
+        env:
+          ORCA_UNIT_SELECTION_MODE: ${{ inputs.selection_mode }}
+          ORCA_PULL_REQUEST_DRAFT: ${{ github.event.pull_request.draft }}
+          # Twelve 4-vCPU hosted shards match the old 8-vCPU wall time; the repository variable can request 2 to 16.
+          ORCA_UNIT_FULL_SHARD_COUNT: ${{ vars.ORCA_UNIT_FULL_SHARD_COUNT || '12' }}
+        run: |
+          if [ "$DEFER_SHADOW" = true ]; then
+            node config/scripts/ci/unit-selection/ci-unit-matrix.mjs
+          else
+            node config/scripts/ci/unit-selection/ci-unit-plan.mjs
+          fi
+      - uses: actions/upload-artifact@v7
+        if: env.DEFER_SHADOW != 'true'
+        continue-on-error: true
+        with:
+          name: unit-selection-attempt-${{ github.run_attempt }}
+          path: ci-shards/unit-selection.json
+          retention-days: 14

@@ -1,7 +1,36 @@
+import type { CodexUsageRawUsage } from './codex-usage-token-delta'
+
+/** Store long-context subsets as counts so pricing changes can reprice history without rescanning. */
+export type CodexLongContextTokens = {
+  longContextInputTokens: number
+  longContextCachedInputTokens: number
+  longContextOutputTokens: number
+}
+
 export type CodexUsageProcessedFile = {
   path: string
   mtimeMs: number
   size: number
+  /** Absent in older caches; identifies the file that produced this projection. */
+  physicalFileId?: string | null
+  ctimeMs?: number
+}
+
+export type CodexUsageParseResumeState = {
+  /** Offset after the last newline; partial trailing rows must be read again. */
+  parsedBytes: number
+  /** Digest before parsedBytes; headDigest also detects rewrites that preserve this boundary. */
+  boundaryDigest: string
+  /** Detects leading-record rewrites that preserve the boundary window. */
+  headDigest: string
+  /** dev:ino or null; inode reuse means this alone cannot detect rotation. */
+  physicalFileId: string | null
+  sessionId: string
+  sessionCwd: string | null
+  currentCwd: string | null
+  currentModel: string | null
+  currentTurnId?: string | null
+  previousTotals: CodexUsageRawUsage | null
 }
 
 export type CodexUsageLocationBreakdown = {
@@ -16,7 +45,7 @@ export type CodexUsageLocationBreakdown = {
   reasoningOutputTokens: number
   totalTokens: number
   hasInferredPricing: boolean
-}
+} & CodexLongContextTokens
 
 export type CodexUsageModelBreakdown = {
   modelKey: string
@@ -28,7 +57,7 @@ export type CodexUsageModelBreakdown = {
   outputTokens: number
   reasoningOutputTokens: number
   totalTokens: number
-}
+} & CodexLongContextTokens
 
 export type CodexUsageLocationModelBreakdown = {
   locationKey: string
@@ -43,7 +72,7 @@ export type CodexUsageLocationModelBreakdown = {
   reasoningOutputTokens: number
   totalTokens: number
   hasInferredPricing: boolean
-}
+} & CodexLongContextTokens
 
 export type CodexUsageSession = {
   sessionId: string
@@ -65,7 +94,7 @@ export type CodexUsageSession = {
   locationBreakdown: CodexUsageLocationBreakdown[]
   modelBreakdown: CodexUsageModelBreakdown[]
   locationModelBreakdown: CodexUsageLocationModelBreakdown[]
-}
+} & CodexLongContextTokens
 
 export type CodexUsageDailyAggregate = {
   day: string
@@ -81,19 +110,17 @@ export type CodexUsageDailyAggregate = {
   reasoningOutputTokens: number
   totalTokens: number
   hasInferredPricing: boolean
-}
+} & CodexLongContextTokens
 
 export type CodexUsagePersistedFile = CodexUsageProcessedFile & {
   sessions: CodexUsageSession[]
   dailyAggregates: CodexUsageDailyAggregate[]
-  /** Event keys this file counted. Resumed/forked rollouts copy earlier
-   *  token_count records into new files; ownership keeps each record counted
-   *  by exactly one cached file across incremental scans. */
+  /** Persisted ownership prevents forked copies from counting the same usage record twice. */
   ownedEventKeys: string[]
-  /** True when this file saw events already claimed by another file. When that
-   *  owner disappears, only deferred files need reparse to reclaim — not the
-   *  entire rollout corpus. */
+  /** Reparse these deferred claims if another file releases their ownership. */
   hasDeferredClaims: boolean
+  /** Absent in older caches; null disables parsing from a saved checkpoint. */
+  parseResumeState?: CodexUsageParseResumeState | null
 }
 
 export type CodexUsagePersistedState = {
@@ -113,9 +140,7 @@ export type CodexUsagePersistedState = {
 export type CodexUsageParsedEvent = {
   sessionId: string
   timestamp: string
-  /** Raw-record identity (timestamp + token tuples) used to dedupe the same
-   *  token_count record copied across fork/resume rollout files. Session id is
-   *  omitted because forks rewrite session_meta while copying the record. */
+  /** Timestamp and usage tuples, excluding session IDs that forks rewrite. */
   eventKey: string
   model: string | null
   cwd: string | null
@@ -125,7 +150,7 @@ export type CodexUsageParsedEvent = {
   outputTokens: number
   reasoningOutputTokens: number
   totalTokens: number
-}
+} & CodexLongContextTokens
 
 export type CodexUsageAttributedEvent = CodexUsageParsedEvent & {
   day: string

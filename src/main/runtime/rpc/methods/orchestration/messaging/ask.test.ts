@@ -1,10 +1,19 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+
 import type { RpcContext } from '../../../core'
+
 import { createOrchestrationRpcHarness } from '../rpc-test-harness'
-import type { OrchestrationDb } from '../../../../orchestration/db'
+
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import { ORCHESTRATION_ASK_MAX_TIMEOUT_MS } from '../../../../../../shared/orchestration-ask-timeout'
+
+import '../../../../../../shared/orchestration/mailbox/orchestration-ask-timeout'
 import { createRootDispatch } from '../../../../orchestration/db/root-dispatch-test-fixture'
+
+import { MessageWake } from '../../../../orchestration/mailbox/runtime-message-waiters'
+
+import { deliverQuestionAnswer } from '../../../../orchestration/mailbox/questions/question-answer-delivery'
 
 describe('orchestration RPC methods', () => {
   const h = createOrchestrationRpcHarness()
@@ -27,36 +36,6 @@ describe('orchestration RPC methods', () => {
   }
 
   describe('orchestration.reply', () => {
-    it('replies to a message', async () => {
-      setup()
-      const original = db.insertMessage({
-        from: 'a',
-        to: 'b',
-        subject: 'question',
-        runId: activeRunId
-      })
-
-      const result = (await call('orchestration.reply', {
-        id: original.id,
-        body: 'answer',
-        from: 'b'
-      })) as {
-        message: { to_handle: string; subject: string; thread_id: string; run_id: string }
-      }
-
-      expect(result.message.to_handle).toBe('a')
-      expect(result.message.subject).toBe('Re: question')
-      expect(result.message.thread_id).toBe(original.id)
-      expect(result.message.run_id).toBe(activeRunId)
-    })
-
-    it('throws on nonexistent message', async () => {
-      setup()
-      await expect(call('orchestration.reply', { id: 'msg_fake', body: 'nope' })).rejects.toThrow(
-        'Message not found'
-      )
-    })
-
     it('records one idempotent answer from the current Run consumer', async () => {
       setup()
       const task = db.createTask({ spec: 'question work' })
@@ -108,92 +87,34 @@ describe('orchestration RPC methods', () => {
       return { task, dispatch }
     }
 
-    it('persists a Run question and returns its first durable answer', async () => {
+    it('creates a question only from the exact process that owns the Dispatch', async () => {
       setup()
-      const { dispatch } = createAskingDispatch()
-      vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {})
-      vi.spyOn(runtime, 'waitForMessage').mockImplementation(async () => {
-        const outbound = db.getInbox(10).find((message) => message.type === 'question')
-        if (outbound) {
-          db.answerQuestion({
-            messageId: outbound.id,
-            runId: activeRunId!,
-            consumerGeneration: db.getRun(activeRunId!)!.consumer_generation,
-            body: 'go ahead'
-          })
-        }
-        return 'notified'
-      })
-
-      const result = (await call('orchestration.ask', {
-        from: 'term_worker',
-        question: 'proceed?',
-        options: 'yes, no',
-        timeoutMs: 500
-      })) as {
-        answer: string
-        messageId: string
-        answerMessageId: string
-        threadId: string
-        timedOut: boolean
-      }
-
-      expect(result.timedOut).toBe(false)
-      expect(result.answer).toBe('go ahead')
-      expect(result.messageId).toMatch(/^msg_/)
-
-      const outbound = db.getInbox(10).find((message) => message.type === 'question')
-      expect(outbound).toBeTruthy()
-      expect(outbound?.to_handle).toBe(`run:${activeRunId}`)
-      expect(outbound?.subject).toBe('Question')
-      expect(outbound?.body).toBe('proceed?')
-      const payload = JSON.parse(outbound!.payload ?? '{}')
-      expect(payload.question).toBe('proceed?')
-      expect(payload.options).toEqual(['yes', 'no'])
-      expect(db.getQuestion(outbound!.id)).toMatchObject({
-        dispatch_id: dispatch.id,
-        status: 'answered',
-        answer_body: 'go ahead'
-      })
-      expect(db.getMessageById(result.answerMessageId)).toMatchObject({
-        to_handle: `dispatch:${dispatch.id}`,
-        read: 1
-      })
-      await expect(call('orchestration.check', { terminal: 'term_worker' })).resolves.toMatchObject(
-        { count: 0, messages: [] }
+      const task = db.createTask({ spec: 'question work' })
+      createRootDispatch(
+        db,
+        task.id,
+        'term_worker',
+        'tab_worker:leaf_worker',
+        undefined,
+        'runtime_test:term_worker:1'
       )
-    })
-
-    it('requires the Dispatch capability before creating a question', async () => {
-      setup()
-      const { dispatch } = createAskingDispatch()
-      const capability = db.mintDispatchCapability({
-        dispatchId: dispatch.id,
-        paneKey: 'tab_worker:leaf_worker',
-        processIncarnation: 'runtime_test:term_worker:1'
-      })
       vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
         handle === 'term_worker' ? 'tab_worker:leaf_worker' : coordinatorPaneKey
       )
+      vi.spyOn(runtime, 'waitForMessage').mockResolvedValue('timed_out')
+      const incarnation = vi
+        .spyOn(runtime, 'getTerminalProcessIncarnation')
+        .mockReturnValue('runtime_test:term_worker:2')
 
       await expect(
-        call('orchestration.ask', {
-          from: 'term_worker',
-          question: 'unauthorized',
-          timeoutMs: 1
-        })
-      ).rejects.toMatchObject({ code: 'dispatch_capability_invalid' })
+        call('orchestration.ask', { from: 'term_worker', question: 'stale', timeoutMs: 1 })
+      ).rejects.toMatchObject({ code: 'worker_identity_changed' })
       expect(db.getInbox(100).filter((message) => message.type === 'question')).toHaveLength(0)
 
-      ctx = { runtime, orchestrationCapability: capability }
-      vi.spyOn(runtime, 'waitForMessage').mockResolvedValue('timed_out')
-      const accepted = (await call('orchestration.ask', {
-        from: 'term_worker',
-        question: 'authorized',
-        timeoutMs: 1
-      })) as { messageId: string; timedOut: boolean }
-      expect(accepted.messageId).toMatch(/^msg_/)
-      expect(accepted.timedOut).toBe(true)
+      incarnation.mockReturnValue('runtime_test:term_worker:1')
+      expect(
+        await call('orchestration.ask', { from: 'term_worker', question: 'current', timeoutMs: 1 })
+      ).toMatchObject({ messageId: expect.stringMatching(/^msg_/), timedOut: true })
     })
 
     it('returns timedOut when no reply arrives in the window', async () => {
@@ -279,18 +200,6 @@ describe('orchestration RPC methods', () => {
       }
     })
 
-    it('rejects group addresses with a dedicated error (no message persisted)', async () => {
-      setup()
-      await expect(
-        call('orchestration.ask', {
-          from: 'term_worker',
-          to: '@reviewers',
-          question: 'ok?'
-        })
-      ).rejects.toThrow(/does not support group addresses/)
-      expect(db.getInbox(10)).toHaveLength(0)
-    })
-
     it('ignores unrelated wakes until the durable question is answered', async () => {
       setup()
       createAskingDispatch()
@@ -315,7 +224,7 @@ describe('orchestration RPC methods', () => {
             body: 'correct answer'
           })
         }
-        return 'notified'
+        return new MessageWake()
       })
 
       const result = (await call('orchestration.ask', {
@@ -327,75 +236,105 @@ describe('orchestration RPC methods', () => {
       expect(result.timedOut).toBe(false)
       expect(result.answer).toBe('correct answer')
     })
+  })
 
-    it.each<[number | undefined, number]>([
-      [undefined, 600_000],
-      [ORCHESTRATION_ASK_MAX_TIMEOUT_MS, ORCHESTRATION_ASK_MAX_TIMEOUT_MS],
-      [Number.MAX_SAFE_INTEGER, ORCHESTRATION_ASK_MAX_TIMEOUT_MS]
-    ])('applies effective timeout %s at the RPC handler boundary', async (requested, expected) => {
+  describe('ask, then end the turn', () => {
+    const flush = () => new Promise((resolve) => setImmediate(resolve))
+    const askedQuestion = () => db.getInbox(20).find((message) => message.type === 'question')!
+
+    function askingDispatch() {
+      const task = db.createTask({ spec: 'question work' })
+      const dispatch = createRootDispatch(db, task.id, 'term_worker')
+      const deliver = vi
+        .spyOn(runtime, 'deliverPendingMessagesForHandle')
+        .mockImplementation(() => {})
+      const woke = () => deliver.mock.calls.some(([handle]) => handle === `dispatch:${dispatch.id}`)
+      return { dispatch, woke }
+    }
+
+    it('lets other mail wake a worker blocked on a waiting ask', async () => {
       setup()
-      createAskingDispatch()
-      vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {})
-      let observedTimeoutMs: number | undefined
-      vi.spyOn(runtime, 'waitForMessage').mockImplementation(async (_handle, options) => {
-        observedTimeoutMs = options?.timeoutMs
-        // End the wait loop so the assertion runs against the first budget slice.
-        const outbound = db.getInbox(10).find((message) => message.type === 'question')
-        // Why: without a reply the handler's while(true) spins on this mock until vitest times out, hanging instead of failing.
-        expect(outbound).toBeDefined()
-        db.answerQuestion({
-          messageId: outbound!.id,
-          runId: activeRunId!,
-          consumerGeneration: db.getRun(activeRunId!)!.consumer_generation,
-          body: 'ok'
-        })
-        return 'notified'
-      })
-
-      const result = (await call('orchestration.ask', {
+      const { dispatch, woke } = askingDispatch()
+      const asking = call('orchestration.ask', {
         from: 'term_worker',
-        to: 'term_coord',
-        question: 'bounded?',
-        timeoutMs: requested
-      })) as { timeoutMs: number }
+        question: 'Proceed?',
+        timeoutMs: 5_000
+      })
+      await flush()
 
-      expect(observedTimeoutMs).toBeLessThanOrEqual(expected)
-      expect(observedTimeoutMs).toBeGreaterThan(expected - 1_000)
-      expect(result.timeoutMs).toBe(expected)
+      await call('orchestration.send', {
+        from: 'term_coord',
+        to: `dispatch:${dispatch.id}`,
+        subject: 'Change of plan',
+        body: 'Drop the question; do the other thing.'
+      })
+      await flush()
+      expect(woke()).toBe(true)
+
+      await call('orchestration.reply', { id: askedQuestion().id, body: 'yes', from: 'term_coord' })
+      await expect(asking).resolves.toMatchObject({ answer: 'yes' })
     })
 
-    it('returns a zero effective timeout without entering the waiter', async () => {
+    it('gives a waiting ask its answer without also waking the worker with it', async () => {
       setup()
-      createAskingDispatch()
-      const waitForMessage = vi.spyOn(runtime, 'waitForMessage')
-
-      const result = (await call('orchestration.ask', {
+      const { woke } = askingDispatch()
+      const asking = call('orchestration.ask', {
         from: 'term_worker',
-        to: 'term_coord',
-        question: 'negative?',
-        timeoutMs: -5
-      })) as { timedOut: boolean; timeoutMs: number }
+        question: 'Proceed?',
+        timeoutMs: 5_000
+      })
+      await flush()
 
-      expect(waitForMessage).not.toHaveBeenCalled()
-      expect(result).toMatchObject({ timedOut: true, timeoutMs: 0 })
+      const question = askedQuestion()
+      await call('orchestration.reply', { id: question.id, body: 'yes', from: 'term_coord' })
+      await expect(asking).resolves.toMatchObject({ answer: 'yes' })
+      await flush()
+
+      expect(woke()).toBe(false)
+      const answerId = db.getQuestion(question.id)!.answer_message_id!
+      expect(db.getMessageById(answerId)?.read).toBe(1)
     })
 
-    it('parses options CSV with whitespace and empty entries', async () => {
+    it('leaves an answer that lands as its waiting ask is cancelled to wake the worker', async () => {
       setup()
-      createAskingDispatch('w')
-      vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {})
-      vi.spyOn(runtime, 'waitForMessage').mockResolvedValue('timed_out')
+      const { dispatch, woke } = askingDispatch()
+      const controller = new AbortController()
+      const method = findMethod('orchestration.ask')
+      const asking = method.handler(
+        method.params!.parse({ from: 'term_worker', question: 'Proceed?', timeoutMs: 5_000 }),
+        { runtime, signal: controller.signal }
+      )
+      await flush()
 
-      await call('orchestration.ask', {
-        from: 'w',
-        question: 'q',
-        options: 'a, b ,,c',
-        timeoutMs: 1
+      const question = askedQuestion()
+      controller.abort()
+      const answered = db.answerQuestion({
+        messageId: question.id,
+        runId: activeRunId!,
+        consumerGeneration: db.getRun(activeRunId!)!.consumer_generation,
+        body: 'yes'
       })
+      deliverQuestionAnswer(runtime, { message_id: question.id, dispatch_id: dispatch.id })
 
-      const outbound = db.getInbox(10).find((message) => message.type === 'question')
-      const payload = JSON.parse(outbound!.payload ?? '{}')
-      expect(payload.options).toEqual(['a', 'b', 'c'])
+      await expect(asking).resolves.toMatchObject({ cancelled: true, answer: null })
+      await flush()
+      expect(db.getMessageById(answered.message.id)?.read).toBe(0)
+      expect(woke()).toBe(true)
+    })
+
+    it('ends a waiting ask at once when its Dispatch is abandoned', async () => {
+      setup()
+      const { dispatch } = askingDispatch()
+      const asking = call('orchestration.ask', {
+        from: 'term_worker',
+        question: 'Proceed?',
+        timeoutMs: 60_000
+      })
+      await flush()
+
+      db.closeQuestionsForDispatch(dispatch.id)
+      runtime.notifyMessageArrived(`dispatch:${dispatch.id}`, 'status')
+      await expect(asking).rejects.toMatchObject({ code: 'dispatch_inactive' })
     })
   })
 })

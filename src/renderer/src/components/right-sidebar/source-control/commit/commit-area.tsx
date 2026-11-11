@@ -5,19 +5,22 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator
 } from '@/components/ui/dropdown-menu'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
-import { hasExpandedCommitFailureDetails, summarizeCommitFailure } from './commit-failure-summary'
-import { isCommitMessageFieldDisabled } from '../../source-control-commit-eligibility'
+import { useTranslate } from '@/i18n/use-translate'
+import { cn } from '@/lib/class-names'
+import {
+  hasExpandedCommitFailureDetails,
+  summarizeCommitFailure
+} from '../../../../../../shared/source-control/recovery/source-control-commit-failure'
+import { isCommitMessageFieldDisabled } from '../../../../../../shared/source-control/decisions/source-control-commit-eligibility'
 import { CommitActionMenu } from './commit-action-menu'
 import type { CommitAreaProps } from './commit-area-types'
 import { CommitMessageComposer } from './commit-message-composer'
 import { CommitNotices } from './commit-notices'
 import { getCommitMessageTextareaRows } from './commit-message-rows'
-import type { PrimaryAction } from '../../source-control-primary-action'
+import type { PrimaryAction } from '../review/source-control-primary-action-types'
 import { getSourceControlRecoveryFailureKindLabel } from '../sync/push-recovery'
 
-// Why: directional icons per action; Pull stays icon-less (down-arrow read as download/save). Hoisted out of render to avoid per-render alloc.
+// Omit Pull's icon because a down arrow reads as download/save; hoist the map to avoid render allocations.
 const PRIMARY_ICONS: Partial<
   Record<
     PrimaryAction['kind'],
@@ -77,9 +80,10 @@ export function CommitArea({
   onPrimaryAction,
   onDropdownAction
 }: CommitAreaProps): React.JSX.Element {
-  // Why: cap at 12 rows so a pasted multi-page message doesn't push the Commit button off-screen (textarea scrolls internally past that).
+  const t = useTranslate()
+  // Cap rows so long messages scroll internally instead of pushing Commit offscreen.
   const rows = getCommitMessageTextareaRows(commitMessage)
-  // Why: only spin the primary when its label matches the running op; mismatched background ops (Fetch) keep it off. Commit spins via isCommitting instead.
+  // Spin the primary only for its matching operation; Fetch uses the chevron and commits use isCommitting.
   const primaryHostsRemoteOperation =
     primaryAction.kind === inFlightRemoteOpKind ||
     (primaryAction.kind === 'push' && inFlightRemoteOpKind === 'force_push')
@@ -88,10 +92,14 @@ export function CommitArea({
       ? isCreatingPr
       : primaryAction.kind === 'commit'
         ? isCommitting
-        : isRemoteOperationActive && primaryHostsRemoteOperation
-  // Why: spin the chevron when the primary doesn't host the in-flight op (e.g. Fetch), since the click is otherwise silent — no toast until failure, no count change on a no-op fetch.
+        : isRemoteOperationActive &&
+          primaryHostsRemoteOperation &&
+          !primaryAction.isWaitingForRemoteOperation
+  // Spin the chevron for operations absent from the primary; otherwise no-op Fetch has no immediate feedback.
   const showChevronSpinner =
-    (isCommitting || isCreatingPr || isRemoteOperationActive) && !showSpinner
+    (isCommitting || isCreatingPr || isRemoteOperationActive) &&
+    !showSpinner &&
+    !primaryAction.isWaitingForRemoteOperation
   const commitFailureSummary = useMemo(
     () => (commitError ? summarizeCommitFailure(commitError) : null),
     [commitError]
@@ -129,83 +137,80 @@ export function CommitArea({
     .filter(Boolean)
     .join(' ')
 
-  // Why: config errors are surfaced by the generation dialog, so entry-point visibility only follows the feature toggle.
-  // Why: Create PR intent owns generation, so a second composer spinner would stack on the primary spinner.
+  // The feature toggle owns visibility; dialogs report config errors, and Create PR intent owns its generation spinner.
   const showGenerate = showComposer && sourceControlAiActionsVisible && !isCreatePrIntentInFlight
   let generateTooltip: string | undefined
   if (isGenerating) {
-    generateTooltip = translate(
+    generateTooltip = t(
       'auto.components.right.sidebar.source.control.commit.area.cc5739bd1d',
       'Generating commit message…'
     )
   } else if (isCommitting) {
-    generateTooltip = translate(
+    generateTooltip = t(
       'auto.components.right.sidebar.source.control.commit.area.4cbd0cd9d2',
       'Commit in progress…'
     )
   } else if (stagedCount === 0) {
-    generateTooltip = translate(
+    generateTooltip = t(
       'auto.components.right.sidebar.source.control.commit.area.e7876a2bde',
       'Stage at least one file to generate a message.'
     )
   } else if (hasMessage) {
-    generateTooltip = translate(
+    generateTooltip = t(
       'auto.components.right.sidebar.source.control.commit.area.0904be2505',
       'Clear the message to regenerate.'
     )
   } else if (!aiAgentConfigured) {
-    generateTooltip = translate(
+    generateTooltip = t(
       'auto.components.right.sidebar.source.control.commit.area.1ea9ba37aa',
       'Pick an agent in Settings -> Git -> Source Control AI.'
     )
   }
   const isGenerateDisabled =
     isGenerating || isCommitting || stagedCount === 0 || hasMessage || hasUnresolvedConflicts
-  const moreCommitAndRemoteActionsLabel = translate(
+  const moreCommitAndRemoteActionsLabel = t(
     'auto.components.right.sidebar.SourceControl.cc199ccc5f',
     'More commit and remote actions'
   )
-  const moreActionsLabel = translate(
-    'auto.components.right.sidebar.SourceControl.4d6e1fd7f3',
-    'More actions'
-  )
   const dropdownMenuContent = (
-    <DropdownMenuContent align="end" className="min-w-[14rem]">
+    <DropdownMenuContent align="end" className="w-58 max-w-[calc(100vw-1rem)]">
       {dropdownItems.map((entry) =>
         entry.kind === 'separator' ? (
           <DropdownMenuSeparator key={entry.id} />
         ) : (
-          <Tooltip key={entry.kind}>
-            <TooltipTrigger asChild>
-              <div className="block">
-                <DropdownMenuItem
-                  disabled={entry.disabled}
-                  title={entry.title}
-                  variant={entry.variant}
-                  className="w-full"
-                  onSelect={(event) => {
-                    if (entry.disabled) {
-                      event.preventDefault()
-                      return
-                    }
-                    onDropdownAction(entry.kind)
-                  }}
-                >
-                  <span className="flex min-w-0 flex-col">
-                    <span>{entry.label}</span>
-                    {entry.hint ? (
-                      <span className="truncate text-[10px] text-muted-foreground">
-                        {entry.hint}
-                      </span>
-                    ) : null}
-                  </span>
-                </DropdownMenuItem>
-              </div>
-            </TooltipTrigger>
-            <TooltipContent side="left" sideOffset={8} className="max-w-72">
-              {entry.title}
-            </TooltipContent>
-          </Tooltip>
+          <DropdownMenuItem
+            key={entry.kind}
+            className="min-h-7"
+            aria-disabled={entry.disabled || undefined}
+            aria-description={entry.title}
+            variant={entry.variant}
+            textValue={entry.label}
+            onSelect={(event) => {
+              if (entry.disabled) {
+                event.preventDefault()
+                return
+              }
+              onDropdownAction(entry.kind)
+            }}
+          >
+            <span className={cn('min-w-0 truncate', entry.idle && 'text-muted-foreground')}>
+              {entry.label}
+            </span>
+            {entry.status && (
+              <span
+                className={cn(
+                  'ml-auto shrink-0 pl-3 text-2xs whitespace-nowrap tabular-nums',
+                  entry.statusTone === 'warning'
+                    ? 'text-status-warning-text'
+                    : entry.statusTone === 'active'
+                      ? 'text-foreground'
+                      : 'text-muted-foreground'
+                )}
+              >
+                {entry.status}
+              </span>
+            )}
+          </DropdownMenuItem>
         )
       )}
     </DropdownMenuContent>
@@ -235,7 +240,6 @@ export function CommitArea({
         showSpinner={showSpinner}
         showChevronSpinner={showChevronSpinner}
         moreCommitAndRemoteActionsLabel={moreCommitAndRemoteActionsLabel}
-        moreActionsLabel={moreActionsLabel}
         dropdownMenuContent={dropdownMenuContent}
         onPrimaryAction={onPrimaryAction}
       />

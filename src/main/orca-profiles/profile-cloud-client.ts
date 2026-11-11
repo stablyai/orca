@@ -35,9 +35,7 @@ type CapabilityRefreshResponse = {
 }
 
 export class OrcaCloudRequestError extends Error {
-  // Why: `errorCode` carries the server's JSON `{error}` discriminator (e.g.
-  // 'already_member', 'cannot_remove_self') so callers can distinguish the
-  // precise 4xx cause without re-reading the response body.
+  // Preserve the server error discriminator so callers can distinguish business 4xx outcomes.
   constructor(
     public readonly statusCode: number,
     public readonly errorCode?: string
@@ -159,22 +157,33 @@ function normalizeSessionResponse(value: unknown): OrcaCloudSessionExchangeRespo
 
 const CLOUD_REQUEST_TIMEOUT_MS = 30_000
 
-// Why: refresh tokens rotate, so an aborted refresh is ambiguous — the server
-// may have rotated ours before the reply was lost, and the only recovery is a
-// replay the server reads as reuse. One long attempt beats a short attempt plus
-// a replayed retry.
-const CLOUD_REFRESH_TIMEOUT_MS = 60_000
+// Two attempts plus the replay delay must settle inside the server's 60s rotation grace.
+const CLOUD_REFRESH_TIMEOUT_MS = 20_000
 
 type PostJsonOptions = {
   accessToken?: string
   timeoutMs?: number
 }
 
-// Only a status line proves the server rejected the request without consuming
-// what was in it. Everything else — an abort, a dropped socket, a 200 we could
-// not parse — leaves a rotating credential possibly already spent.
+// Without an explicit rejection, a rotating credential may already be spent.
 export function isAmbiguousCloudRequestFailure(error: unknown): boolean {
   return !(error instanceof OrcaCloudRequestError)
+}
+
+// Proxies, CDNs and gateways answer with HTML; only the auth server's JSON carries a verdict.
+async function readCloudErrorCode(response: Response): Promise<string | undefined> {
+  if (!response.headers.get('content-type')?.toLowerCase().includes('application/json')) {
+    await cancelUnreadResponseBody(response)
+    return undefined
+  }
+  try {
+    const body: unknown = await response.json()
+    return body && typeof body === 'object' && 'error' in body && typeof body.error === 'string'
+      ? body.error
+      : undefined
+  } catch {
+    return undefined
+  }
 }
 
 async function postJson<T>(url: string, body: unknown, options?: PostJsonOptions): Promise<T> {
@@ -185,15 +194,12 @@ async function postJson<T>(url: string, body: unknown, options?: PostJsonOptions
       ...(options?.accessToken ? { authorization: `Bearer ${options.accessToken}` } : {})
     },
     body: JSON.stringify(body),
-    // Why: these are fixed first-party token endpoints; following a redirect
-    // would re-send refresh tokens/code verifiers to another origin, and a
-    // stalled server must not hang the renderer's awaited IPC call forever.
+    // Redirects could leak rotating credentials; timeout bounds renderer IPC waits.
     redirect: 'error',
     signal: AbortSignal.timeout(options?.timeoutMs ?? CLOUD_REQUEST_TIMEOUT_MS)
   })
   if (!response.ok) {
-    await cancelUnreadResponseBody(response)
-    throw new OrcaCloudRequestError(response.status)
+    throw new OrcaCloudRequestError(response.status, await readCloudErrorCode(response))
   }
   return (await response.json()) as T
 }
@@ -251,10 +257,8 @@ export async function createOrcaCloudProfile(
   return normalizeSessionResponse(
     await postJson(
       config.profileEndpoint,
-      {
-        orgId: args.orgId,
-        name: args.name
-      },
+      // The refresh token proves the long-lived sign-in, not just a short-lived access token.
+      { orgId: args.orgId, name: args.name, refreshToken: session.refreshToken },
       { accessToken: session.accessToken }
     )
   )

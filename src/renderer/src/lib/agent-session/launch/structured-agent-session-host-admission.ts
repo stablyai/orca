@@ -1,0 +1,162 @@
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
+import {
+  isAgentSessionCreateAdmissionRefusal,
+  isDefinitiveAgentSessionCreateRefusal
+} from '../../../../../shared/agent-session/failures/agent-session-definitive-refusal'
+import type { AgentSessionRefusalReference } from '../../../../../shared/agent-session/failures/agent-session-wire-refusals'
+import { readAgentSessionErrorRefusal } from '../../../../../shared/agent-session/failures/agent-session-write-failure'
+import { STRUCTURED_AGENT_SESSION_RESUME_WRITER_ADMISSION_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/structured-agent-session-surface-capabilities'
+import { parseStructuredLaunchSeedOptions } from '../../../../../shared/native-chat/input/native-chat-session-option-defaults'
+import { hasRuntimeRpcErrorCode } from '../../../../../shared/runtime-rpc-error-code'
+import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
+import { structuredAgentSessionHostCapabilityState } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-support'
+
+/** The host answers a worktree selector it cannot resolve yet with this rather than a verdict. */
+const SELECTOR_NOT_RESOLVABLE_CODE = 'selector_not_found'
+
+/**
+ * A worktree is not resolvable for a beat after `createWorktree` resolves, so a probe fired
+ * immediately after creation fails instead of answering. Measured window: under ~250ms. These
+ * delays cover it with margin and bound the wait when the selector is genuinely absent.
+ */
+const CREATE_SUPPORT_RETRY_DELAYS_MS: readonly number[] = [50, 150, 300]
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function runtimeErrorCode(error: unknown): string {
+  if (error && typeof error === 'object' && 'code' in error && typeof error.code === 'string') {
+    return error.code
+  }
+  return 'runtime_unavailable'
+}
+
+/** The owning host's answer to "can you run this chat here?", asked before anything is created.
+ *  An admitting host also names the saved selection create will seed, when it is new enough to. */
+export type StructuredLaunchAdmission =
+  | {
+      kind: 'admitted'
+      seedOptions?: Readonly<Record<string, string>>
+      /** For a resume: whether the host also checked the conversation's other writers (checked),
+       *  predates that question (legacy), or could not say which (unknown). */
+      writers?: ResumeWritersAnswer
+    }
+  | { kind: 'declined'; reason?: string }
+  | { kind: 'unreachable' }
+  /** The host still could not resolve the workspace after the retries: not yet, rather than no. */
+  | { kind: 'workspace-unresolved' }
+  /** The host would refuse this resume at create, e.g. another terminal runs the conversation. */
+  | { kind: 'refused'; refusal: AgentSessionRefusalReference }
+
+/** A resume asks the host about the conversation's other writers too, apart from the panes the
+ *  caller closes before create. */
+export type StructuredLaunchResumeAdmission = {
+  providerSessionId: string
+  closingPaneKeys?: readonly string[]
+}
+
+export type ResumeWritersAnswer = 'checked' | 'legacy' | 'unknown'
+
+export type HostCreateSupport =
+  | Exclude<StructuredLaunchAdmission, { kind: 'unreachable' }>
+  | { kind: 'unreachable'; code: string; message: string; error: unknown }
+
+/**
+ * Whether the executing host supports creating this session, retrying only while the host cannot
+ * yet resolve the worktree. "Could not answer" and "answered no" are different states and only the
+ * second is a verdict. A paired server's call is bounded by the runtime RPC client's timeout; this
+ * machine's call has none.
+ */
+export async function askHostCreateSupport(
+  target: RuntimeClientTarget,
+  worktree: string,
+  agent: TuiAgent,
+  resumeFrom?: StructuredLaunchResumeAdmission
+): Promise<HostCreateSupport> {
+  // An older host's strict params reject the field, and one whose capabilities could not be read
+  // may be older: both get the plain question, and create still refuses, only later. The answer
+  // says which, so only a caller about to act irreversibly withholds it on an unread capability.
+  const capability = resumeFrom
+    ? await structuredAgentSessionHostCapabilityState(
+        target,
+        STRUCTURED_AGENT_SESSION_RESUME_WRITER_ADMISSION_RUNTIME_CAPABILITY
+      )
+    : undefined
+  const asksWriters = capability === 'supported'
+  const writers: { writers?: ResumeWritersAnswer } = capability
+    ? { writers: asksWriters ? 'checked' : capability === 'unknown' ? 'unknown' : 'legacy' }
+    : {}
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      const support = await callStructuredAgentSession<{
+        supported: boolean
+        reason?: string
+        seedOptions?: unknown
+      }>(target, 'agentSession.createSupport', {
+        worktree,
+        agent,
+        ...(asksWriters ? { resumeFrom } : {})
+      })
+      if (support.supported !== true) {
+        return {
+          kind: 'declined',
+          ...(typeof support.reason === 'string' && support.reason.trim()
+            ? { reason: support.reason }
+            : {})
+        }
+      }
+      const seedOptions = parseStructuredLaunchSeedOptions(support.seedOptions)
+      return { kind: 'admitted', ...(seedOptions ? { seedOptions } : {}), ...writers }
+    } catch (error) {
+      if (hasRuntimeRpcErrorCode(error, SELECTOR_NOT_RESOLVABLE_CODE)) {
+        const retryDelayMs = CREATE_SUPPORT_RETRY_DELAYS_MS[attempt]
+        if (retryDelayMs === undefined) {
+          return { kind: 'workspace-unresolved' }
+        }
+        await delay(retryDelayMs)
+        continue
+      }
+      const refusal = readAgentSessionErrorRefusal(error)
+      if (refusal && isAgentSessionCreateAdmissionRefusal(refusal)) {
+        return { kind: 'refused', refusal }
+      }
+      const code = runtimeErrorCode(error)
+      if (isDefinitiveAgentSessionCreateRefusal(code)) {
+        return { kind: 'declined' }
+      }
+      const message = error instanceof Error ? error.message : String(error)
+      return { kind: 'unreachable', code, message, error }
+    }
+  }
+}
+
+/** How long a launch on this machine waits for its answer before anything shows. Past it the
+ *  launch treats the host as unable to answer, and the chat's own create keeps asking. */
+export const LOCAL_ADMISSION_WAIT_MS = 3_000
+
+/** Asks a host to admit a chat before the client commits any of it. */
+export async function admitStructuredLaunchOnHost(
+  target: RuntimeClientTarget,
+  worktree: string,
+  agent: TuiAgent,
+  resumeFrom?: StructuredLaunchResumeAdmission
+): Promise<StructuredLaunchAdmission> {
+  const asked = askHostCreateSupport(target, worktree, agent, resumeFrom).then(
+    (support): StructuredLaunchAdmission =>
+      support.kind === 'unreachable' ? { kind: 'unreachable' } : support
+  )
+  if (target.kind !== 'local') {
+    return asked
+  }
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timedOut = new Promise<StructuredLaunchAdmission>((resolve) => {
+    timer = setTimeout(() => resolve({ kind: 'unreachable' }), LOCAL_ADMISSION_WAIT_MS)
+  })
+  try {
+    return await Promise.race([asked, timedOut])
+  } finally {
+    clearTimeout(timer)
+  }
+}

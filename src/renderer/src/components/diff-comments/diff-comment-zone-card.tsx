@@ -1,13 +1,19 @@
+import type { GitHubImageIntake } from '@/components/github/use-github-image-uploads'
+import type { DiffCommentOwner } from '@/store/slices/diff-comments/diff-comment-owner'
 import type { RefObject } from 'react'
 import type { Root } from 'react-dom/client'
-import { getDiffCommentLineLabel } from '@/lib/diff-comment-compat'
-import { formatDiffComments } from '@/lib/diff-comments-format'
+import { formatDiffComments } from '../../../../shared/diff-comments-format'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import type { DiffCommentDeliverySnapshot } from '@/store/slices/diffComments'
+import type { DiffCommentDeliverySnapshot } from '@/store/slices/diff-comments/create-diff-comments-slice'
 import { DiffCommentCard } from './DiffCommentCard'
+import { DiffCommentDraftCard } from './DiffCommentDraftCard'
 import type { DecoratedDiffComment } from './decorated-diff-comment'
-import { NotesSendMenu, type NotesSendMenuScope } from '../editor/NotesSendMenu'
+import {
+  NotesSendMenu,
+  type NotesSendMenuScope
+} from '../editor/review-note-delivery/NotesSendMenu'
 import { translate } from '@/i18n/i18n'
+import { TranslationScopeProvider } from '@/i18n/translation-scope-provider'
 
 export function getRenderSignature(
   comment: DecoratedDiffComment,
@@ -38,13 +44,15 @@ function getSingleCommentSendScopes(
         'This note'
       ),
       notes: comment.sentAt ? [] : [comment],
-      prompt: formatCommentPrompt ? formatCommentPrompt(comment) : formatDiffComments([comment])
+      formatPrompt: () =>
+        formatCommentPrompt ? formatCommentPrompt(comment) : formatDiffComments([comment])
     }
   ]
 }
 
 // Callbacks arrive as refs so the rendered props keep the decorator's identity semantics.
 export type DiffCommentZoneCardContext = {
+  owner: DiffCommentOwner | null
   worktreeId: string
   filePath: string
   activeGroupId: string
@@ -53,7 +61,7 @@ export type DiffCommentZoneCardContext = {
   onDeleteCommentRef: RefObject<(commentId: string) => void>
   onUpdateCommentRef: RefObject<((commentId: string, body: string) => Promise<boolean>) | undefined>
   clearDeliveredDiffComments: (
-    worktreeId: string,
+    owner: DiffCommentOwner,
     comments: readonly DiffCommentDeliverySnapshot[]
   ) => Promise<boolean>
 }
@@ -62,6 +70,7 @@ export function renderDiffCommentZoneCard(
   root: Root,
   comment: DecoratedDiffComment,
   {
+    owner,
     worktreeId,
     filePath,
     activeGroupId,
@@ -74,47 +83,103 @@ export function renderDiffCommentZoneCard(
 ): void {
   root.render(
     // View zones are separate React roots outside the app root, so App.tsx context providers don't reach them.
-    <TooltipProvider delayDuration={400}>
-      <DiffCommentCard
-        lineNumber={comment.lineNumber}
-        startLine={comment.startLine}
-        label={comment.author ? getDiffCommentLineLabel(comment).toLowerCase() : undefined}
-        body={comment.body}
-        sentAt={comment.sentAt}
-        author={comment.author}
-        createdAtLabel={comment.createdAtLabel}
-        url={comment.url}
-        onDelete={
-          comment.canDelete === false ? undefined : () => onDeleteCommentRef.current(comment.id)
-        }
-        onSubmitEdit={
-          onUpdateCommentRef.current && comment.canEdit !== false
-            ? async (body) => {
-                const fn = onUpdateCommentRef.current
-                if (!fn) {
-                  return false
+    <TranslationScopeProvider>
+      <TooltipProvider>
+        <DiffCommentCard
+          lineNumber={comment.lineNumber}
+          startLine={comment.startLine}
+          body={comment.body}
+          sentAt={comment.sentAt}
+          author={comment.author}
+          createdAtLabel={comment.createdAtLabel}
+          url={comment.url}
+          onDelete={
+            comment.canDelete === false ? undefined : () => onDeleteCommentRef.current(comment.id)
+          }
+          onSubmitEdit={
+            onUpdateCommentRef.current && comment.canEdit !== false
+              ? async (body) => {
+                  const fn = onUpdateCommentRef.current
+                  if (!fn) {
+                    return false
+                  }
+                  return fn(comment.id, body)
                 }
-                return fn(comment.id, body)
-              }
-            : undefined
-        }
-        onContentResize={() => resizeZone(comment.id)}
-        observeRenderedSize
-        headerActions={
-          worktreeId && comment.author === undefined ? (
-            <NotesSendMenu
-              worktreeId={worktreeId}
-              groupId={activeGroupId}
-              modeIdParts={['diff-comment-note', worktreeId, filePath, comment.id]}
-              scopes={getSingleCommentSendScopes(comment, formatCommentPrompt)}
-              targetModeLabel="This note"
-              triggerClassName="orca-diff-comment-edit"
-              disabledTooltip="Note already sent"
-              onDelivered={(notes) => void clearDeliveredDiffComments(worktreeId, notes)}
-            />
-          ) : null
-        }
-      />
-    </TooltipProvider>
+              : undefined
+          }
+          onContentResize={() => resizeZone(comment.id)}
+          observeRenderedSize
+          headerActions={
+            worktreeId && comment.author === undefined ? (
+              <NotesSendMenu
+                owner={owner}
+                worktreeId={worktreeId}
+                groupId={activeGroupId}
+                modeIdParts={['diff-comment-note', worktreeId, filePath, comment.id]}
+                scopes={getSingleCommentSendScopes(comment, formatCommentPrompt)}
+                targetModeLabel={translate(
+                  'auto.components.diff.comments.useDiffCommentDecorator.995fa28b50',
+                  'This note'
+                )}
+                triggerClassName="orca-diff-comment-edit"
+                disabledTooltip={translate(
+                  'auto.components.diff.comments.diffCommentZoneCard.noteAlreadySent',
+                  'Note already sent'
+                )}
+                onDelivered={(notes) => void (owner && clearDeliveredDiffComments(owner, notes))}
+              />
+            ) : null
+          }
+        />
+      </TooltipProvider>
+    </TranslationScopeProvider>
+  )
+}
+
+export type DiffCommentDraftCardContext = {
+  imageUploadAddress?: GitHubImageIntake['address']
+  placeholder?: string
+  submitLabel?: string
+  submittingLabel?: string
+  initialBody?: string
+  onBodyChange?: (body: string) => void
+  resizeZone: () => void
+  onCancel: () => void
+  onSubmit: (body: string) => Promise<boolean>
+}
+
+export function renderDiffCommentDraftCard(
+  root: Root,
+  draft: { lineNumber: number; startLine?: number },
+  {
+    imageUploadAddress,
+    placeholder,
+    submitLabel,
+    submittingLabel,
+    initialBody,
+    onBodyChange,
+    resizeZone,
+    onCancel,
+    onSubmit
+  }: DiffCommentDraftCardContext
+): void {
+  root.render(
+    <TranslationScopeProvider>
+      <TooltipProvider>
+        <DiffCommentDraftCard
+          imageUploadAddress={imageUploadAddress}
+          lineNumber={draft.lineNumber}
+          startLine={draft.startLine}
+          placeholder={placeholder}
+          submitLabel={submitLabel}
+          submittingLabel={submittingLabel}
+          initialBody={initialBody}
+          onBodyChange={onBodyChange}
+          onCancel={onCancel}
+          onSubmit={onSubmit}
+          onContentResize={resizeZone}
+        />
+      </TooltipProvider>
+    </TranslationScopeProvider>
   )
 }

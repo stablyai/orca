@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, rmSync } from 'node:fs'
-import { writeFileAtomically } from './fs-utils'
+import { writeFileAtomically } from '../filesystem/atomic-file-publication'
 import type {
   CodexSharedRuntimeAuthPendingProvenance,
   CodexSharedRuntimeAuthProvenance,
@@ -203,7 +203,7 @@ export abstract class CodexRuntimeHomeAuthProvenance extends CodexRuntimeHomeAut
       ) {
         return parsed as CodexSystemDefaultSnapshot
       }
-      // Why: pre-PR snapshots stored raw auth.json; treat objects lacking an authJson wrapper as legacy so upgraders don't lose their auth.
+      // Accept legacy raw-auth snapshots so upgrades retain credentials.
       if (
         parsed &&
         typeof parsed === 'object' &&

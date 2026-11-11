@@ -16,6 +16,7 @@ import {
 } from './linear-issue-query-documents'
 import type { LinearClientForWorkspace } from './client'
 import type { LinearListFilter } from './linear-issue-listing'
+import { linearConnectionHasNextPage } from './issue-context/pagination'
 
 export async function mapIssueForWorkspace(
   entry: LinearClientForWorkspace,
@@ -67,9 +68,16 @@ export function mapRawIssueForWorkspace(
       name: issue.team?.name ?? '',
       key: issue.team?.key ?? ''
     },
+    project: issue.project
+      ? {
+          id: issue.project.id,
+          name: issue.project.name,
+          url: issue.project.url ?? undefined,
+          color: issue.project.color ?? undefined
+        }
+      : undefined,
     labels: labelNodes.map((label) => label.name),
-    // Why: labelIds drives full-replace updates. Keep Linear's complete id
-    // list even when display label nodes are paginated.
+    // Full-replace writes need all label IDs, even when display nodes are paginated.
     labelIds: issue.labelIds ?? labelNodes.map((label) => label.id),
     assignee: issue.assignee
       ? {
@@ -97,13 +105,12 @@ export async function readIssueConnectionPages(
   let hasMore = false
 
   while (items.length < limit) {
-    // Why: Linear caps connection pages at 50, so larger Orca reads must walk
-    // cursors instead of asking for the whole expanded limit in one request.
+    // Walk capped backend pages to satisfy larger read limits.
     const first = Math.min(LINEAR_ISSUE_API_PAGE_SIZE_MAX, limit - items.length)
     const connection = await loadConnection(after ? { first, after } : { first })
     const nodes = connection?.nodes ?? []
     items.push(...nodes.map((issue) => mapRawIssueForWorkspace(entry, issue)))
-    hasMore = Boolean(connection?.pageInfo?.hasNextPage)
+    hasMore = linearConnectionHasNextPage(connection)
 
     const nextCursor = connection?.pageInfo?.endCursor ?? undefined
     if (!hasMore || !nextCursor || nextCursor === after || nodes.length === 0) {
@@ -127,8 +134,7 @@ export function getListIssueConnectionLoader(
 ): LinearIssueConnectionLoader {
   const orderBy = 'updatedAt'
   const variables = { orderBy }
-  // Why: apply attribute + team filters in GraphQL variables before the first-N
-  // cursor walk so pagination hasMore matches the filtered set.
+  // Filter before pagination so hasMore describes matching issues.
   const filterInput = buildLinearListIssueFilter({
     filter,
     teamId: options?.teamId,

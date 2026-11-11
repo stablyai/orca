@@ -1,118 +1,37 @@
-/**
- * The mount rig for AutomationsPage tests: child stand-ins, the preload API
- * double, and the per-test store reset.
- *
- * The presentational children are stood in for because what these tests check
- * is the data flow into them, not their markup — asserting on the real picker,
- * badges, and empty states would test the wrong layer. The stand-ins record the
- * props they were handed so a test can read them back.
- *
- * The `vi.mock` calls live here rather than in each test file: they must run
- * before `./AutomationsPage` is imported, which importing this module first
- * guarantees.
- */
+import type {
+  ListPanelProps,
+  EditorDialogProps,
+  DeleteDialogProps
+} from './automations-page-child-props.test-fixture'
+import { resetHostStructuredAgentsForTests } from '@/runtime/native-chat/agent-catalogs/host-structured-agents'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
+/** Record child props to test page orchestration rather than presentation. Import this harness first so shared vi.mock registrations precede AutomationsPage loading. */
 
 import { act, createElement, StrictMode, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, type Mock, vi } from 'vitest'
-import type { Automation, AutomationRun } from '../../../../shared/automations-types'
+
+import type { Automation } from '../../../../shared/automations/automation-definition'
+import type { AutomationRun } from '../../../../shared/automations/history/automation-run'
+
 import {
   AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY as LIST_HOST_SCOPE,
   AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY as OWNER_FENCING,
   AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY as CREATE_IDEMPOTENCY
-} from '../../../../shared/protocol-version'
-import type { AppState } from '@/store'
-import type { AutomationHostCatalogEntry } from './automation-host-catalog-types'
-import type { AutomationHostCatalogView } from './use-automation-host-catalog'
-import type { AutomationCreateDestinationControl } from './use-automation-create-destination'
-import type { ExternalAutomationListEntry } from './external-automation-list-entries'
-import type { AutomationListRow } from './automation-list-row-identity'
-import type { AutomationListViewItem } from './automation-list-view'
-import { resetAutomationCapabilityProbes } from './automation-scoped-list-client'
+} from '../../../../shared/automations/automation-runtime-capabilities'
+import type { AppState } from '@/store/types'
+
+import { AutomationDestinationField } from './authoring/AutomationDestinationField'
+import { TooltipProvider } from '@/components/ui/tooltip'
+
+import { resetAutomationCapabilityProbes } from './hosts/automation-capability-probe'
 import {
   addRuntimeProject as addRuntimeProjectFixture,
-  RUNTIME_REPO_ID as RUNTIME_REPO_ID_FIXTURE,
-  RUNTIME_WORKSPACE_ID as RUNTIME_WORKSPACE_ID_FIXTURE,
   selfScopedList
 } from './automations-page-runtime-fixtures'
 
-export const RUNTIME_REPO_ID = RUNTIME_REPO_ID_FIXTURE
-export const RUNTIME_WORKSPACE_ID = RUNTIME_WORKSPACE_ID_FIXTURE
-
-export type ListPanelProps = {
-  sortedListItems: readonly AutomationListViewItem[]
-  selectedExternal: ExternalAutomationListEntry | null
-  openEditExternalDialog: (
-    manager: ExternalAutomationListEntry['manager'],
-    job: ExternalAutomationListEntry['job'],
-    scope: ExternalAutomationListEntry['scope']
-  ) => void
-  externalActionKey: string | null
-  requestExternalAction: (
-    manager: ExternalAutomationListEntry['manager'],
-    job: ExternalAutomationListEntry['job'],
-    action: 'run' | 'pause' | 'resume' | 'delete',
-    scope: ExternalAutomationListEntry['scope']
-  ) => void
-  hasListItems: boolean
-  hasFilteredListItems: boolean
-  selectedRowKey: string | null
-  selectedExternalKey: string | null
-  hostCatalog: AutomationHostCatalogView
-  searchCounts: { hostRowCount: number; visibleRowCount: number; searchActive: boolean }
-  externalManagersUncheckedNotice: string | null
-  isActionEnabled: (row: AutomationListRow, action: string) => boolean
-  onSelectHost: (filter: unknown) => void
-  selectAutomationRow: (rowKey: string | null) => void
-  selectExternalKey: (entryKey: string | null) => void
-  onOpenDetail: () => void
-  onRefresh: () => void
-  runNow: (row: AutomationListRow) => void
-  openEditDialog: (row: AutomationListRow) => void
-  toggleAutomation: (row: AutomationListRow) => void
-  requestDeleteAutomation: (row: AutomationListRow) => void
-  openCreateDialog: () => void
-  canCreateAutomation: boolean
-}
-
-export type DetailPaneProps = {
-  selected: Automation | null
-  selectedHostEntry: AutomationHostCatalogEntry | null
-  selectedRuns: AutomationRun[]
-  selectedRunsNotice: { message: string } | null
-  runNow: (automation: Automation) => void
-  toggleAutomation: (automation: Automation) => void
-  requestDeleteAutomation: (automation: Automation) => void
-  openEditDialog: (automation: Automation) => void
-  fetchExternalAutomationRuns: (input: {
-    scope: ExternalAutomationListEntry['scope']
-    manager: ExternalAutomationListEntry['manager']
-    job: ExternalAutomationListEntry['job']
-    page: number
-    pageSize: number
-  }) => Promise<unknown>
-}
-
-export type EditorDialogProps = {
-  open: boolean
-  isEditing: boolean
-  createDestination?: AutomationCreateDestinationControl
-  editDestination?: AutomationCreateDestinationControl
-  notice?: { message: string; recovery: string | null } | null
-  onNoticeRecover?: (action: string) => void
-  repos?: { id: string }[]
-  draft?: { projectId: string; workspaceId: string }
-  onSave: () => void
-  onDraftChange: (updater: (current: unknown) => unknown) => void
-}
-
-export type DeleteDialogProps = {
-  deleteTarget: Automation | null
-  onConfirm: () => void
-}
-
 type AutomationsPageMocks = {
-  state: Record<string, unknown>
+  state: AutomationsPageFixtureState
   repoMap: Map<string, unknown>
   worktreeMap: Map<string, unknown>
   listPanel: ListPanelProps | null
@@ -128,10 +47,9 @@ type AutomationsPageMocks = {
   setPendingRunNavigation: Mock
 }
 
-// Not `vi.hoisted`: the mock factories below only close over this, and a hoisted
-// binding cannot be exported.
+// Mock factories only close over this exported binding; vi.hoisted bindings cannot be exported.
 export const mocks: AutomationsPageMocks = {
-  state: {},
+  state: { repos: [], projectHostSetups: [], worktreesByRepo: {} },
   repoMap: new Map<string, unknown>(),
   worktreeMap: new Map<string, unknown>(),
   listPanel: null,
@@ -147,24 +65,25 @@ export const mocks: AutomationsPageMocks = {
   setPendingRunNavigation: vi.fn()
 }
 
-vi.mock('@/store', () => {
+vi.mock('@/store/index', () => {
   const useAppStore = (selector: (state: Partial<AppState>) => unknown): unknown =>
     selector(mocks.state as Partial<AppState>)
   useAppStore.getState = (): Partial<AppState> => mocks.state as Partial<AppState>
   return { useAppStore }
 })
 
-vi.mock('@/store/selectors', () => ({
-  useRepoMap: () => mocks.repoMap,
+vi.mock('@/store/repos/use-repository-catalog', () => ({
+  useRepoMap: () => mocks.repoMap
+}))
+vi.mock('@/store/slices/worktrees/listing/use-worktree-catalog', () => ({
   useWorktreeMap: () => mocks.worktreeMap
 }))
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  callRuntimeRpc: (...args: unknown[]) => mocks.callRuntimeRpc(...args),
-  getRuntimeEnvironmentStatus: (...args: unknown[]) => mocks.getRuntimeEnvironmentStatus(...args),
-  // Matches the real matcher's contract: the code is a `: <token>` message tail.
-  hasRuntimeRpcErrorCode: (error: unknown, code: string) =>
-    error instanceof Error && error.message.trimEnd().endsWith(`: ${code}`)
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: (...args: unknown[]) => mocks.callRuntimeRpc(...args)
+}))
+vi.mock('@/runtime/rpc/compatibility/runtime-compatibility-probe', () => ({
+  getRuntimeEnvironmentStatus: (...args: unknown[]) => mocks.getRuntimeEnvironmentStatus(...args)
 }))
 
 vi.mock('sonner', () => ({
@@ -175,7 +94,7 @@ vi.mock('sonner', () => ({
   }
 }))
 
-vi.mock('@/lib/window-visibility-interval', () => ({
+vi.mock('@/lib/window-activity/window-visibility-interval', () => ({
   installWindowVisibilityInterval: () => () => undefined
 }))
 
@@ -184,24 +103,26 @@ vi.mock('@/components/contextual-tours/use-contextual-tour', () => ({
 }))
 
 vi.mock('@/components/ui/tooltip', () => ({
+  TooltipProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
   Tooltip: ({ children }: { children: ReactNode }) => <>{children}</>,
   TooltipTrigger: ({ children }: { children: ReactNode }) => <>{children}</>,
   TooltipContent: () => null
 }))
 
-vi.mock('@/runtime/runtime-hooks-client', () => ({
+vi.mock('@/runtime/repo-hooks/runtime-hooks-client', () => ({
   checkRuntimeHooks: vi.fn(async () => ({ hooks: null, ok: true }))
 }))
 
-vi.mock('@/lib/ensure-hooks-confirmed', () => ({
-  ensureHooksConfirmed: vi.fn(async () => 'inherit')
+vi.mock('@/runtime/repo-hooks/ensure-hooks-confirmed', () => ({
+  ensureHooksConfirmed: vi.fn(async () => 'inherit'),
+  ensureHooksApproved: vi.fn(async () => ({ decision: 'run' }))
 }))
 
-vi.mock('@/lib/worktree-activation', () => ({
+vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorktree: vi.fn()
 }))
 
-vi.mock('./AutomationsListPanel', () => ({
+vi.mock('./listing/AutomationsListPanel', () => ({
   AutomationsListPanel: (props: ListPanelProps) => {
     const selectAutomationRow = (rowKey: string | null): void => {
       props.selectAutomationRow(rowKey)
@@ -211,6 +132,7 @@ vi.mock('./AutomationsListPanel', () => ({
     return (
       <div data-testid="list-panel">
         <button aria-label="Refresh automations" onClick={props.onRefresh} />
+        <button onClick={props.onOpenRuns}>Runs</button>
         {props.sortedListItems.map((item) =>
           item.kind === 'local' ? (
             <button
@@ -242,7 +164,7 @@ vi.mock('./AutomationsListPanel', () => ({
   }
 }))
 
-vi.mock('./AutomationsDetailPane', () => ({
+vi.mock('./details/AutomationsDetailPane', () => ({
   AutomationsDetailPane: (props: DetailPaneProps) => {
     mocks.detailPane = props
     return (
@@ -254,14 +176,26 @@ vi.mock('./AutomationsDetailPane', () => ({
   }
 }))
 
-vi.mock('./AutomationEditorDialog', () => ({
+vi.mock('./authoring/AutomationEditorDialog', () => ({
   AutomationEditorDialog: (props: EditorDialogProps) => {
     mocks.editorDialog = props
-    return <div data-testid="editor-dialog">{props.open ? 'open' : 'closed'}</div>
+    return (
+      <div data-testid="editor-dialog">
+        {props.open ? 'open' : 'closed'}
+        {props.open && props.editDestination ? (
+          <TooltipProvider>
+            <AutomationDestinationField control={props.editDestination} />
+            <button data-testid="editor-save" disabled={!props.canSave} onClick={props.onSave}>
+              Save changes
+            </button>
+          </TooltipProvider>
+        ) : null}
+      </div>
+    )
   }
 }))
 
-vi.mock('./AutomationDeleteDialogs', () => ({
+vi.mock('./authoring/AutomationDeleteDialogs', () => ({
   AutomationDeleteDialog: (props: DeleteDialogProps) => {
     mocks.deleteDialog = props
     return null
@@ -270,7 +204,13 @@ vi.mock('./AutomationDeleteDialogs', () => ({
 }))
 
 import AutomationsPage from './AutomationsPage'
-import { makeAutomation, makeRun, makeStoreState } from './automations-page-fixtures'
+import {
+  makeAutomation,
+  makeRun,
+  makeStoreState,
+  type AutomationsPageFixtureState,
+  type DetailPaneProps
+} from './automations-page-fixtures'
 
 function mockGroup<K extends string>(...names: K[]): Record<K, Mock> {
   return Object.fromEntries(names.map((name) => [name, vi.fn()])) as Record<K, Mock>
@@ -286,9 +226,6 @@ export const api = {
     'runNow',
     'listScoped',
     'listExternalManagerForOwner',
-    'listExternalRunsForOwner',
-    'createExternalForOwner',
-    'updateExternalForOwner',
     'runExternalActionForOwner',
     'retainExternalScopes'
   ),
@@ -313,8 +250,7 @@ export const RUNTIME_SELF_FILTER = {
   }
 }
 
-/** The local authority's automation RPC surface, served from the same programmable
- *  `api.automations` mocks; an environment target answers from `runtimeHost()` state. */
+/** Serve desktop-local RPCs from the programmable API mocks and runtime-target RPCs from runtimeHost state. */
 async function answerAutomationRpc(
   target: unknown,
   method: string,
@@ -381,8 +317,7 @@ export async function renderPage(options?: { strict?: boolean }): Promise<{
   roots.push(root)
   const rerender = async (): Promise<void> => {
     await act(async () => {
-      // Strict mounts double-invoke effects the way the dev app does, which is
-      // where a dispose-without-revive lifecycle bug becomes visible.
+      // StrictMode doubles effects to expose dispose-without-revive controller bugs.
       const page = options?.strict
         ? createElement(StrictMode, null, createElement(AutomationsPage))
         : createElement(AutomationsPage)
@@ -414,13 +349,15 @@ export function rows(container: HTMLElement, testId: string): string[] {
   )
 }
 
-/** Registers the reset both page test files depend on; call once per file. */
+/** Registers the per-case store reset and renderer cleanup for the current suite. */
 export function installAutomationsPageHarness(): void {
   beforeEach(() => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
     vi.clearAllMocks()
+    setLocalRuntimeCapabilitiesForTests([])
     // Confirmed capabilities are module-level and must not leak between tests.
     resetAutomationCapabilityProbes()
+    resetHostStructuredAgentsForTests()
     // A prior test's wholesale mockImplementation must not leak forward.
     mocks.callRuntimeRpc.mockReset()
     mocks.callRuntimeRpc.mockImplementation(answerAutomationRpc)
@@ -430,6 +367,7 @@ export function installAutomationsPageHarness(): void {
     mocks.deleteDialog = null
     const fixtures = makeStoreState()
     mocks.state = fixtures.state
+    mocks.state.folderWorkspaces = []
     mocks.state.setAutomationHostFilter = mocks.setAutomationHostFilter
     mocks.repoMap = fixtures.repoMap
     mocks.worktreeMap = fixtures.worktreeMap
@@ -456,5 +394,6 @@ export function installAutomationsPageHarness(): void {
       roots.splice(0).forEach((root) => root.unmount())
     })
     document.body.innerHTML = ''
+    setLocalRuntimeCapabilitiesForTests(null)
   })
 }

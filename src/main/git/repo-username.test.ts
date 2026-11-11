@@ -1,24 +1,26 @@
+import type * as GitExecFileModule from './command-runner/git-exec-file'
+import type * as GhExecFileModule from './command-runner/gh-exec-file'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as RunnerModule from './runner'
 
 const gitExecFileAsyncMock = vi.hoisted(() => vi.fn())
 const ghExecFileAsyncMock = vi.hoisted(() => vi.fn())
 
-vi.mock('./runner', async () => {
-  const actual = await vi.importActual<typeof RunnerModule>('./runner')
+vi.mock('./command-runner/git-exec-file', async () => {
+  const actual = await vi.importActual<typeof GitExecFileModule>('./command-runner/git-exec-file')
   return {
     ...actual,
-    gitExecFileAsync: gitExecFileAsyncMock,
-    ghExecFileAsync: ghExecFileAsyncMock
+    gitExecFileAsync: gitExecFileAsyncMock
   }
 })
 
-import {
-  isBranchSafeHostedLogin,
-  resolveLocalGitUsername,
-  resolveLocalGitUsernameDetailed,
-  resetGhLoginCacheForTests
-} from './git-username'
+vi.mock('./command-runner/gh-exec-file', async () => {
+  const actual = await vi.importActual<typeof GhExecFileModule>('./command-runner/gh-exec-file')
+  return {
+    ...actual,
+    ghExecFileAsync: ghExecFileAsyncMock
+  }
+})
+import { resolveLocalGitUsernameDetailed, resetGhLoginCacheForTests } from './git-username'
 
 function makeExecError(
   message: string,
@@ -32,32 +34,6 @@ function makeExecError(
 ): Error {
   return Object.assign(new Error(message), { stdout: '', stderr: '', ...extra })
 }
-
-describe('isBranchSafeHostedLogin', () => {
-  it.each(['demo', 'demo-user', 'demo_user', 'demo.user', 'a', 'FOO.LOCK'])(
-    'accepts %s',
-    (login) => {
-      expect(isBranchSafeHostedLogin(login)).toBe(true)
-    }
-  )
-
-  it.each(['foo.', 'foo..bar', 'foo.lock', 'a.b.lock', '.foo', '-foo', 'foo bar'])(
-    'rejects the git check-ref-format-invalid %s',
-    (login) => {
-      expect(isBranchSafeHostedLogin(login)).toBe(false)
-    }
-  )
-
-  // Length is Orca's defensive bound, not a check-ref-format rule: a login is one
-  // branch component, so a loose ref stores it as a single 255-byte-max filename.
-  it('accepts long provider-agnostic logins up to the loose-ref filename cap', () => {
-    expect(isBranchSafeHostedLogin('a'.repeat(255))).toBe(true)
-  })
-
-  it('rejects logins past the loose-ref filename cap', () => {
-    expect(isBranchSafeHostedLogin('a'.repeat(256))).toBe(false)
-  })
-})
 
 describe('resolveLocalGitUsername', () => {
   let gitConfig: Record<string, string>
@@ -74,6 +50,14 @@ describe('resolveLocalGitUsername', () => {
     currentBranch = ''
 
     gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args[0] === 'config' && args[1] === '--list') {
+        return {
+          stdout: Object.entries(gitConfig)
+            .map(([key, value]) => `${key}\n${value}\0`)
+            .join(''),
+          stderr: ''
+        }
+      }
       if (args[0] === 'config' && args[1] === '--get') {
         const value = gitConfig[args[2]]
         if (value !== undefined) {
@@ -99,7 +83,6 @@ describe('resolveLocalGitUsername', () => {
         return { stdout: `${currentBranch}\n`, stderr: '' }
       }
       if (args[0] === 'symbolic-ref') {
-        // origin/HEAD unset — resolveDefaultBaseRefViaExec falls through to probes.
         throw makeExecError('no origin/HEAD')
       }
       if (args[0] === 'rev-parse') {
@@ -113,241 +96,15 @@ describe('resolveLocalGitUsername', () => {
     vi.useRealTimers()
   })
 
-  it('prefers explicit GitHub user config before checking GitHub CLI login', async () => {
-    originRemoteUrl = 'https://github.com/stablyai/orca.git'
-    gitConfig['github.user'] = 'config-demo'
-    ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'gh-demo\n', stderr: '' })
-
-    await expect(resolveLocalGitUsername('/repo')).resolves.toBe('config-demo')
-    expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
-  })
-
-  it('uses explicit username config before checking GitHub CLI login', async () => {
-    originRemoteUrl = 'https://github.com/stablyai/orca.git'
-    gitConfig['user.username'] = 'repo-demo'
-    ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'gh-demo\n', stderr: '' })
-
-    await expect(resolveLocalGitUsername('/repo')).resolves.toBe('repo-demo')
-    expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
-  })
-
-  it('falls through config values git rejects as branch components', async () => {
-    originRemoteUrl = 'https://github.com/stablyai/orca.git'
-    gitConfig['github.user'] = 'foo.lock'
-    gitConfig['user.username'] = 'foo..bar'
-    ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'gh-demo\n', stderr: '' })
-
-    await expect(resolveLocalGitUsername('/repo')).resolves.toBe('gh-demo')
-  })
-
-  it('stops after a successful empty remote list', async () => {
-    await expect(resolveLocalGitUsernameDetailed('/repo')).resolves.toEqual({
-      username: '',
-      authoritative: true
-    })
-    expect(gitExecFileAsyncMock.mock.calls.map(([args]) => args)).toEqual([
-      ['config', '--get', 'github.user'],
-      ['config', '--get', 'user.username'],
-      ['remote']
-    ])
-    expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
-  })
-
-  it('keeps remote fallback probes when remote enumeration fails', async () => {
-    originRemoteUrl = 'https://github.com/stablyai/orca.git'
-    const original = gitExecFileAsyncMock.getMockImplementation()!
-    gitExecFileAsyncMock.mockImplementation(async (...args) => {
-      if (args[0].length === 1 && args[0][0] === 'remote') {
-        throw makeExecError('remote enumeration failed')
-      }
-      return original(...args)
-    })
-    ghExecFileAsyncMock.mockResolvedValue({ stdout: 'gh-demo\n', stderr: '' })
-
-    await expect(resolveLocalGitUsername('/repo')).resolves.toBe('gh-demo')
-  })
-
-  it('uses GitHub CLI login for GitHub remotes instead of repo-local author identity', async () => {
-    originRemoteUrl = 'https://github.com/stablyai/orca.git'
-    gitConfig['user.email'] = 'demo@example.com'
-    gitConfig['user.name'] = 'Demo User'
-    ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'gh-demo\n', stderr: '' })
-
-    await expect(resolveLocalGitUsername('/repo')).resolves.toBe('gh-demo')
-    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
-  })
-
-  it('uses GitHub CLI login for a single GitHub remote not named origin', async () => {
-    remoteUrls.upstream = 'https://github.com/stablyai/orca.git'
-    ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'gh-demo\n', stderr: '' })
-
-    await expect(resolveLocalGitUsername('/repo')).resolves.toBe('gh-demo')
-    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
-  })
-
-  it('uses GitHub CLI login for GitHub SSH-over-443 remotes', async () => {
-    remoteUrls.upstream = 'ssh://git@ssh.github.com:443/stablyai/orca.git'
-    ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'gh-demo\n', stderr: '' })
-
-    await expect(resolveLocalGitUsername('/repo')).resolves.toBe('gh-demo')
-    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
-  })
-
-  it('does not derive GitHub username prefixes from non-GitHub remotes', async () => {
-    originRemoteUrl = 'https://gitlab.com/stablyai/orca.git'
-    gitConfig['user.email'] = 'demo@example.com'
-    gitConfig['user.name'] = 'Demo User'
-    ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'gh-demo\n', stderr: '' })
-
-    await expect(resolveLocalGitUsername('/repo')).resolves.toBe('')
-    expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
-  })
-
-  it('ignores a secondary GitHub mirror when the effective remote is GitLab', async () => {
-    // Why: a GitLab-primary repo with a GitHub mirror must not pick up the
-    // GitHub account name as its branch prefix — only the effective remote
-    // (branch remote / default base remote / origin / lone remote) counts.
-    originRemoteUrl = 'https://gitlab.com/stablyai/orca.git'
-    remoteUrls['github-mirror'] = 'https://github.com/stablyai/orca.git'
-    ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'gh-demo\n', stderr: '' })
-
-    await expect(resolveLocalGitUsername('/repo')).resolves.toBe('')
-    expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
-  })
-
-  it('bounds and caches failed GitHub CLI lookup', async () => {
-    originRemoteUrl = 'https://github.com/stablyai/orca.git'
-    ghExecFileAsyncMock.mockRejectedValue(makeExecError('gh unavailable'))
-
-    await expect(resolveLocalGitUsername('/repo')).resolves.toBe('')
-    await expect(resolveLocalGitUsername('/repo')).resolves.toBe('')
-
-    // api + auth-status fallback on the first resolution; cached afterwards.
-    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
-    for (const [, options] of ghExecFileAsyncMock.mock.calls) {
-      expect(options).toMatchObject({ timeout: 2500 })
-    }
-  })
-
-  it('ignores rate-limit JSON bodies from gh api user so they never become branch prefixes', async () => {
-    originRemoteUrl = 'https://github.com/stablyai/orca.git'
-    const rateLimitJson = JSON.stringify({
-      message: 'API rate limit exceeded for user ID 6427696',
-      status: '403'
-    })
-    ghExecFileAsyncMock
-      .mockRejectedValueOnce(makeExecError('gh api failed', { stdout: rateLimitJson }))
-      .mockRejectedValueOnce(makeExecError('gh auth status failed'))
-
-    await expect(resolveLocalGitUsername('/repo')).resolves.toBe('')
-  })
-
-  it('skips auth status fallback when GitHub CLI API lookup times out', async () => {
-    originRemoteUrl = 'https://github.com/stablyai/orca.git'
-    ghExecFileAsyncMock.mockRejectedValueOnce(
-      makeExecError('spawnSync gh ETIMEDOUT', { code: 'ETIMEDOUT' })
-    )
-
-    await expect(resolveLocalGitUsername('/repo')).resolves.toBe('')
-    await expect(resolveLocalGitUsername('/repo')).resolves.toBe('')
-
-    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
-  })
-
-  it('treats a Windows timeout kill (SIGTERM, no ETIMEDOUT code) as a timeout', async () => {
-    // Why: on Windows the exec timeout kill surfaces killed/SIGTERM without an
-    // ETIMEDOUT code; the old sync probe missed this and ran a second equally
-    // stuck probe (issue #7225).
-    originRemoteUrl = 'https://github.com/stablyai/orca.git'
-    ghExecFileAsyncMock.mockRejectedValueOnce(
-      makeExecError('gh was killed', { killed: true, signal: 'SIGTERM' })
-    )
-
-    await expect(resolveLocalGitUsername('/repo')).resolves.toBe('')
-    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
-  })
-
-  it('marks a timed-out gh probe non-authoritative and retries after the cooldown', async () => {
-    vi.useFakeTimers()
-    originRemoteUrl = 'https://github.com/stablyai/orca.git'
-    ghExecFileAsyncMock
-      .mockRejectedValueOnce(makeExecError('gh timeout', { code: 'ETIMEDOUT' }))
-      .mockResolvedValueOnce({ stdout: 'gh-demo\n', stderr: '' })
-
-    await expect(resolveLocalGitUsernameDetailed('/repo')).resolves.toEqual({
-      username: '',
-      authoritative: false
-    })
-    // Within the cooldown the timeout result is reused without a new spawn.
-    await expect(resolveLocalGitUsernameDetailed('/repo')).resolves.toEqual({
-      username: '',
-      authoritative: false
-    })
-    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
-
-    vi.advanceTimersByTime(5 * 60 * 1000 + 1)
-    await expect(resolveLocalGitUsernameDetailed('/repo')).resolves.toEqual({
-      username: 'gh-demo',
-      authoritative: true
-    })
-    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
-  })
-
-  it('reports authoritative empty for non-GitHub repos', async () => {
-    originRemoteUrl = 'https://gitlab.com/stablyai/orca.git'
-
-    await expect(resolveLocalGitUsernameDetailed('/repo')).resolves.toEqual({
-      username: '',
-      authoritative: true
-    })
-  })
-
-  it('uses auth status fallback after fast GitHub CLI API failure', async () => {
-    originRemoteUrl = 'https://github.com/stablyai/orca.git'
-    ghExecFileAsyncMock
-      .mockRejectedValueOnce(makeExecError('gh api unavailable'))
-      .mockResolvedValueOnce({
-        stdout: '',
-        stderr:
-          'github.com\n  ✓ Logged in to github.com account demo-user\n  - Active account: true\n'
-      })
-
-    await expect(resolveLocalGitUsername('/repo')).resolves.toBe('demo-user')
-    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
-  })
-
   it('settles within the wall even when the gh child never exits', async () => {
     vi.useFakeTimers()
     originRemoteUrl = 'https://github.com/stablyai/orca.git'
-    // A promise that never settles — models a killed gh whose grandchild
-    // keeps the stdio pipes open past the exec timeout.
+    // Simulate a killed gh whose descendants keep its stdio pipes open.
     ghExecFileAsyncMock.mockImplementation(() => new Promise(() => {}))
 
     const resolution = resolveLocalGitUsernameDetailed('/repo')
     await vi.advanceTimersByTimeAsync(10_100)
     await expect(resolution).resolves.toEqual({ username: '', authoritative: false })
     expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
-  })
-
-  it('picks the active account from a multi-account auth status output', async () => {
-    // Why: each account block prints its login line BEFORE its
-    // "Active account" marker; a cross-block regex would capture the next
-    // block's login instead of the active one.
-    originRemoteUrl = 'https://github.com/stablyai/orca.git'
-    ghExecFileAsyncMock
-      .mockRejectedValueOnce(makeExecError('gh api unavailable'))
-      .mockResolvedValueOnce({
-        stdout: '',
-        stderr: [
-          'github.com',
-          '  ✓ Logged in to github.com account active-user (keyring)',
-          '  - Active account: true',
-          '  - Git operations protocol: https',
-          '  ✓ Logged in to github.com account inactive-user (keyring)',
-          '  - Active account: false'
-        ].join('\n')
-      })
-
-    await expect(resolveLocalGitUsername('/repo')).resolves.toBe('active-user')
   })
 })

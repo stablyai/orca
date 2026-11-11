@@ -1,11 +1,15 @@
-import type { ConnectionLogStore } from '../transport/connection-log-buffer'
-import type { ConnectionLogEntry, HostProfile } from '../transport/types'
-import type { RpcClientContextValue } from '../transport/rpc-client-context-contract'
+import type { ConnectionLogStore } from './connection/connection-log-buffer'
+import type { ConnectionLogEntry } from './connection/connection-log-types'
+import type { HostProfile } from '../host-catalog/host-profile'
+import type { RpcClientContextValue } from '../transport/connection/rpc-client-context-contract'
+
+/** Route identity token: compared by reference to detect navigating away and back, never read. */
+export type DiagnosticsRouteKey = Record<string, never>
 
 export type DiagnosticsHostSelection = {
   hostId: string
   requestedHostId: string | undefined
-  routeKey?: object
+  routeKey?: DiagnosticsRouteKey
 }
 
 export type DiagnosticsSubmissionState = 'sending' | 'sent' | 'failed'
@@ -29,7 +33,7 @@ export function resolveDiagnosticsHostId(
   hosts: readonly HostProfile[],
   requestedHostId: string | undefined,
   manualSelection: DiagnosticsHostSelection | null,
-  routeKey?: object
+  routeKey?: DiagnosticsRouteKey
 ): string | null {
   const selected = manualSelection
   if (selected && selected.requestedHostId === requestedHostId && selected.routeKey === routeKey) {

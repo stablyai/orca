@@ -1,0 +1,32 @@
+id: native-chat-no-arbitrary-font-size-tsx
+valid:
+  - 'export const X = () => <p className="text-sm text-xs text-2xs text-3xs" />'
+  - 'export const X = () => <pre className="font-mono text-chat-code" />'
+  - 'export const X = () => <p className="text-[var(--git-decoration-added)]" />'
+  - 'export const X = () => <p className="min-h-[26px] max-w-[80%]" />'
+invalid:
+  - 'export const X = () => <p className="truncate text-[13px]" />'
+  - 'export const X = () => <p className="text-[0.8125rem]" />'
+  - 'export const X = () => <p className="sm:text-[11px]" />'
+  - "export const X = () => <p className={cn(a && 'text-[12px]')} />"
+  - 'export const X = () => <p className={`flex ${a} text-[12px]`} />'
+---
+id: native-chat-no-arbitrary-font-size
+valid:
+  - "const ROW = 'flex text-[var(--size)]'"
+invalid:
+  - "const ROW = 'flex text-[10px]'"
+---
+id: native-chat-no-softened-foreground-tsx
+valid:
+  - 'export const X = () => <p className="text-chat-foreground text-foreground" />'
+  - 'export const X = () => <p className="text-destructive/80" />'
+invalid:
+  - 'export const X = () => <p className="text-foreground/85" />'
+  - 'export const X = () => <p className="hover:!text-foreground/70" />'
+---
+id: native-chat-no-weakened-focus-ring-tsx
+valid:
+  - 'export const X = () => <button className="focus-visible:ring-2 focus-visible:ring-ring" />'
+invalid:
+  - 'export const X = () => <button className="focus-visible:ring-2 focus-visible:ring-ring/70" />'

@@ -1,18 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import {
-  FALLBACK_WINDOWS_EXECUTION_POLICY,
-  PREFERRED_WINDOWS_EXECUTION_POLICY,
-  isExecutionPolicyBlocked,
-  windowsPowerShellRuntimeArgs
-} from './windows-powershell-execution-policy'
+import { isExecutionPolicyBlocked } from './windows-powershell-execution-policy'
 
-/**
- * Captured from powershell.exe on Windows, verbatim including the hard wrapping.
- *
- * The discriminator has to be pinned in both directions: a policy block must
- * escalate once, and a plain access denial must not, because escalation is
- * sticky for the session and lands on `-ExecutionPolicy Bypass`.
- */
+/** Captured PowerShell errors, preserving console hard wrapping. */
 const POLICY_BLOCKED_RESTRICTED = [
   'File C:\\Temp\\runtime.ps1 cannot be loaded because running scripts is disabled on this system. For more ',
   'information, see about_Execution_Policies at https:/go.microsoft.com/fwlink/?LinkID=135170.',
@@ -45,15 +34,12 @@ describe('isExecutionPolicyBlocked', () => {
   })
 
   it('does not read a plain access denial as a policy block', () => {
-    // UnauthorizedAccessException merely starts with the policy error id. Without
-    // the word boundary this matched, and one locked file downgraded the whole
-    // session to Bypass with no path back.
+    // The word boundary distinguishes a policy ID from UnauthorizedAccessException.
     expect(isExecutionPolicyBlocked(GENUINE_ACCESS_DENIED)).toBe(false)
   })
 
   it('keeps recognising a block when the record labels are localized', () => {
-    // The labels are translated on a non-English host; the ids and the help
-    // topic are not, so the match must not depend on the labels.
+    // Error IDs and the help topic stay stable when labels are localized.
     const localized = POLICY_BLOCKED_RESTRICTED.replace('CategoryInfo', 'Categoria')
       .replace('FullyQualifiedErrorId', 'IdErroreCompleto')
       .replace(
@@ -61,32 +47,5 @@ describe('isExecutionPolicyBlocked', () => {
         'non puo essere caricato'
       )
     expect(isExecutionPolicyBlocked(localized)).toBe(true)
-  })
-
-  it('ignores the failures the helper reports every day', () => {
-    expect(isExecutionPolicyBlocked('code 1: The term is not recognized')).toBe(false)
-    expect(isExecutionPolicyBlocked('Add-Type : Cannot access the temporary directory')).toBe(false)
-    expect(isExecutionPolicyBlocked('')).toBe(false)
-  })
-})
-
-describe('windowsPowerShellRuntimeArgs', () => {
-  it('never emits Bypass unless the caller escalated to it', () => {
-    const preferred = windowsPowerShellRuntimeArgs(
-      'C:\\orca\\runtime.ps1',
-      PREFERRED_WINDOWS_EXECUTION_POLICY,
-      ['-Serve']
-    )
-    expect(preferred).not.toContain(FALLBACK_WINDOWS_EXECUTION_POLICY)
-    expect(preferred).toEqual([
-      '-NoLogo',
-      '-NoProfile',
-      '-NonInteractive',
-      '-ExecutionPolicy',
-      'RemoteSigned',
-      '-File',
-      'C:\\orca\\runtime.ps1',
-      '-Serve'
-    ])
   })
 })

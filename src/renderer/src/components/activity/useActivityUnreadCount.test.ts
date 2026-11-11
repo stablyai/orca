@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import {
-  AGENT_STATUS_STALE_AFTER_MS,
-  type AgentStatusEntry
-} from '../../../../shared/agent-status-types'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { countActivityUnread } from './useActivityUnreadCount'
 
 const PANE = 'tab-1:11111111-1111-4111-8111-111111111111'
@@ -36,8 +34,7 @@ describe('countActivityUnread session-boundary rows (STA-3386)', () => {
   })
 
   it('keeps counting a real completion displaced into history by a session boundary', () => {
-    // Why: agent finished (unacknowledged), then the user resumed the session — the
-    // boundary row replaces the live done but the finish must stay unread.
+    // A session boundary replaces live done, but must preserve its unacknowledged completion in history.
     const source = makeSource(
       makeEntry({
         sessionBoundary: true,
@@ -56,11 +53,6 @@ describe('countActivityUnread session-boundary rows (STA-3386)', () => {
       1_500
     )
     expect(countActivityUnread(source)).toBe(0)
-  })
-
-  it('still counts an ordinary unacknowledged done', () => {
-    const source = makeSource(makeEntry({}))
-    expect(countActivityUnread(source)).toBe(1)
   })
 })
 

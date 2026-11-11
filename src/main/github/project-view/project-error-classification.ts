@@ -1,57 +1,70 @@
-// Why: turns raw gh stderr/stdout into the typed GitHubProjectViewError the
-// renderer can act on (auth vs scope vs rate limit vs drift), shared by the
-// project-view read and mutation paths.
+import type { OptionalProjectItemField } from './project-view-cache'
 import type { GitHubProjectViewError } from '../../../shared/github/project-result-types'
 import { githubProjectHost } from '../../../shared/github/project-identity'
 
-export type GhGraphqlErrorShape = {
+export type GhGraphqlError = {
   type?: string
   message?: string
   path?: (string | number)[]
-  extensions?: { code?: string }
+  extensions?: { code?: string; fieldName?: string; typeName?: string }
 }
 
-export function extractGraphqlErrors(stderr: string, stdout: string): GhGraphqlErrorShape[] {
-  // `gh api graphql` prints the response JSON to stdout even on GraphQL
-  // errors, and the stderr carries a summary. Try stdout first; if parsing
-  // fails, fall back to stderr.
+export function extractGraphqlErrors(stderr: string, stdout: string): GhGraphqlError[] {
+  // GraphQL errors can arrive as JSON on stdout even with nonzero exit; try it before stderr.
   const sources = [stdout, stderr]
   for (const src of sources) {
     if (!src) {
       continue
     }
     try {
-      const parsed = JSON.parse(src) as { errors?: GhGraphqlErrorShape[] }
+      const parsed: { errors?: GhGraphqlError[] } = JSON.parse(src)
       if (parsed.errors && parsed.errors.length > 0) {
         return parsed.errors
       }
     } catch {
-      // not JSON — continue
+      // Try the next diagnostic stream.
     }
   }
   return []
 }
 
-export function errorsIndicateParentField(errors: GhGraphqlErrorShape[], stderr: string): boolean {
-  const lower = stderr.toLowerCase()
-  // Preview-header shape: gh returns a 4xx with "preview" in the message.
-  if (lower.includes('preview') && lower.includes('parent')) {
-    return true
+export function unsupportedItemFieldsFromErrors(
+  errors: GhGraphqlError[],
+  stderr: string
+): OptionalProjectItemField[] {
+  const unsupported = new Set<OptionalProjectItemField>()
+  if (/preview/i.test(stderr) && /\bparent\b/i.test(stderr)) {
+    unsupported.add('parent')
   }
-  return errors.some((e) => {
-    const type = (e.type ?? '').toUpperCase()
-    if (type === 'FIELD_NOT_FOUND' || type === 'UNDEFINED_FIELD' || type === 'FIELD_ERRORS') {
-      const tail = e.path?.at(-1)
-      if (tail === 'parent') {
-        return true
-      }
-      // FIELD_ERRORS often omits `path`; match on message for the parent field.
-      if ((e.message ?? '').toLowerCase().includes('parent')) {
-        return true
+  for (const error of errors) {
+    const code = (error.type ?? error.extensions?.code ?? '').replace(/_/g, '').toUpperCase()
+    const message = error.message ?? ''
+    const missing =
+      /doesn't exist|does not exist|cannot query field|unknown field|undefined field|no such type/i.test(
+        message
+      )
+    if (
+      !['FIELDNOTFOUND', 'UNDEFINEDFIELD', 'FIELDERRORS', 'UNDEFINEDTYPE'].includes(code) &&
+      !(code === '' && missing)
+    ) {
+      continue
+    }
+    for (const field of ['parent', 'subIssuesSummary', 'linkedPullRequests'] as const) {
+      const name = field === 'linkedPullRequests' ? 'ProjectV2ItemFieldPullRequestValue' : field
+      if (
+        error.path?.at(-1) === name ||
+        error.extensions?.fieldName === name ||
+        error.extensions?.typeName === name ||
+        message
+          .toLowerCase()
+          .split(/[^a-z0-9_]+/)
+          .includes(name.toLowerCase())
+      ) {
+        unsupported.add(field)
       }
     }
-    return false
-  })
+  }
+  return [...unsupported]
 }
 
 export function classifyProjectError(
@@ -63,7 +76,6 @@ export function classifyProjectError(
   const s = stderr.toLowerCase()
   const selectedHost = githubProjectHost(host)
 
-  // Auth
   if (
     s.includes('authentication required') ||
     s.includes('not logged in') ||
@@ -71,10 +83,10 @@ export function classifyProjectError(
   ) {
     return {
       type: 'auth_required',
-      message: `Sign in to GitHub to load project tasks. Run \`gh auth login --hostname ${selectedHost}\`.`
+      message: `Sign in to GitHub to load project tasks. Run \`gh auth login --hostname ${selectedHost}\`.`,
+      host: selectedHost
     }
   }
-  // Scope
   if (
     s.includes('missing required scope') ||
     s.includes('your token has not been granted') ||
@@ -82,19 +94,14 @@ export function classifyProjectError(
   ) {
     return {
       type: 'scope_missing',
-      message: `GitHub project access needs additional scopes. Run \`gh auth refresh --hostname ${selectedHost} -s project -s read:org -s repo\`.`
+      message: `GitHub project access needs additional scopes. Run \`gh auth refresh --hostname ${selectedHost} -s project -s read:org -s repo\`.`,
+      host: selectedHost
     }
   }
-  // Rate limit
   if (s.includes('rate limit') || s.includes('api rate limit exceeded')) {
     return { type: 'rate_limited', message: 'GitHub rate limit hit. Try again in a few minutes.' }
   }
-  // Network — checked BEFORE not_found because DNS failures surface as
-  // "could not resolve host", which would otherwise be partially matched by
-  // the not_found branch's "could not resolve" check. Substring matching here
-  // is a one-way trapdoor: a real GraphQL "Could not resolve to a User…"
-  // error always contains "to a", so we tighten the not_found check below to
-  // require that token.
+  // DNS could-not-resolve-host overlaps missing-object wording; classify it before not-found.
   if (
     s.includes('timeout') ||
     s.includes('no such host') ||
@@ -104,30 +111,30 @@ export function classifyProjectError(
   ) {
     return { type: 'network_error', message: 'Network error — check your connection.' }
   }
-  // Not found
   if (
     s.includes('http 404') ||
     errors.some((e) => (e.type ?? '').toUpperCase() === 'NOT_FOUND') ||
-    // Why: GitHub uses "to an" for vowel-leading types ("to an Issue", "to
-    // an Organization") and "to a" otherwise. The previous singular-only
-    // check missed the "an" variants when gh emits only the stderr summary
-    // without a structured GraphQL error array. See bug-scan finding 3.
+    // GitHub uses to an for vowel-leading object types such as Issue and Organization.
     /could not resolve to an? /.test(s)
   ) {
     const firstNotFound = errors.find((e) => (e.type ?? '').toUpperCase() === 'NOT_FOUND')
     return {
       type: 'not_found',
       message: 'Project or view not found.',
+      reason: 'project_or_view_not_found',
       details: firstNotFound
         ? { path: firstNotFound.path, code: firstNotFound.extensions?.code }
         : undefined
     }
   }
-  // Validation
   if (s.includes('http 422') || s.includes('validation failed')) {
-    return { type: 'validation_error', message: `Invalid request — ${stderr.trim()}` }
+    return {
+      type: 'validation_error',
+      message: `Invalid request — ${stderr.trim()}`,
+      reason: 'request_invalid',
+      detail: stderr.trim()
+    }
   }
-  // GraphQL error with structured info
   if (errors.length > 0) {
     const first = errors[0]
     return {
@@ -136,9 +143,7 @@ export function classifyProjectError(
       details: { path: first.path, code: first.extensions?.code }
     }
   }
-  // Why: don't leak full stderr to the UI — it can include verbose request
-  // dumps with header diagnostics. Truncate to the first non-empty line and
-  // cap length so unexpected diagnostics stay readable but bounded.
+  // Bound unexpected diagnostics instead of exposing full request dumps.
   const firstLine =
     stderr
       .split('\n')
@@ -147,7 +152,9 @@ export function classifyProjectError(
   const safe = firstLine.length > 200 ? `${firstLine.slice(0, 200)}…` : firstLine
   return {
     type: 'unknown',
-    message: safe ? `GitHub request failed: ${safe}` : 'GitHub request failed.'
+    message: safe ? `GitHub request failed: ${safe}` : 'GitHub request failed.',
+    reason: 'request_failed',
+    ...(safe ? { detail: safe } : {})
   }
 }
 
@@ -155,14 +162,15 @@ export function driftError(
   reason: string,
   details?: { path?: (string | number)[]; code?: string }
 ): GitHubProjectViewError {
-  return { type: 'schema_drift', message: `Could not read this project view: ${reason}.`, details }
+  return {
+    type: 'schema_drift',
+    message: `Could not read this project view: ${reason}.`,
+    detail: reason,
+    details
+  }
 }
 
-// Why: the rate-limit circuit breaker short-circuits before we spawn `gh`
-// when the cached snapshot says we're below the safety floor. Synthesize the
-// same `rate_limited` error shape as the post-hoc classifier so the UI path
-// is unchanged. We DO NOT fail open here when there's no cached snapshot —
-// rateLimitGuard already handles that case (returns `blocked:false`).
+// Shape pre-spawn breaker failures like classified rate limits; the guard already handles missing snapshots.
 export function rateLimitedError(blocked: {
   remaining: number
   limit: number
@@ -172,6 +180,7 @@ export function rateLimitedError(blocked: {
   const mins = Math.ceil(resetIn / 60)
   return {
     type: 'rate_limited',
-    message: `GitHub rate limit nearly exhausted (${blocked.remaining}/${blocked.limit} left). Resets in ~${mins}m.`
+    message: `GitHub rate limit nearly exhausted (${blocked.remaining}/${blocked.limit} left). Resets in ~${mins}m.`,
+    rateLimit: { remaining: blocked.remaining, limit: blocked.limit, resetMinutes: mins }
   }
 }

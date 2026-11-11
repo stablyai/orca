@@ -1,8 +1,5 @@
-// Why: `ghExecFileAsync` (WSL-aware, retry-enabled) is the single spawn site
-// for gh calls. The legacy plain `execFileAsync` is NOT used here — routing
-// every gh call through the runner gives us transient-5xx retry, WSL path
-// translation, and a single hook point for future quota tracking.
 import { acquire, release } from '../gh-utils'
+import { isGitHubOwnerSlug } from '../../../shared/github/owner-slug'
 import { extractExecError, ghExecFileAsync } from '../../git/runner'
 import {
   repositoryRateLimitGuard,
@@ -17,7 +14,7 @@ import {
   classifyProjectError,
   driftError,
   rateLimitedError,
-  type GhGraphqlErrorShape
+  type GhGraphqlError
 } from './project-error-classification'
 
 export {
@@ -30,12 +27,10 @@ export {
 }
 export type { RateLimitBucketKind }
 
-/** gh exec routing shared by the project-view read/write paths. `host` pins
- *  GHES requests to the enterprise server via the runner's host qualifier. */
+/** Project View uses ambient login, independently of Repo.ghAccount; pin Enterprise hosts explicitly. */
 export type ProjectGhExecOptions = { cwd?: string; host?: string }
 
-// Why: owner/project-addressed calls carry only a host (no repo slug), so they
-// can't reuse githubHostExecOptions — mirror its host pinning for that shape.
+// Owner/project calls have no repository slug, so pin their host directly.
 export function projectGhExecOptions(host: string | undefined): ProjectGhExecOptions {
   return { host: githubProjectHost(host) }
 }
@@ -50,27 +45,20 @@ export async function projectHostAuthenticationError(
   ) {
     return null
   }
-  // Why: never target an unconfigured pasted host with gh; ambient
-  // GH_ENTERPRISE_TOKEN credentials could otherwise be sent to that server.
+  // Verify pasted hosts before sending ambient Enterprise credentials.
   return {
     type: 'auth_required',
-    message: `GitHub CLI is not authenticated to ${selectedHost}. Run gh auth login --hostname ${selectedHost}.`
+    message: `GitHub CLI is not authenticated to ${selectedHost}. Run gh auth login --hostname ${selectedHost}.`,
+    host: selectedHost
   }
 }
 
-// ─── Slug validation ──────────────────────────────────────────────────
-
-// Why: GitHub usernames/org logins disallow `_`, `.`, leading `-`. Repo names
-// are looser — they allow leading `_`, `.`, `-` (`.` and `..` reserved). We
-// validate each separately so untrusted Project row data (`nameWithOwner`)
-// can't become an arbitrary REST path while still accepting realistic repo
-// names like `_internal` or `.github`.
-const OWNER_SLUG_RE = /^[A-Za-z0-9][A-Za-z0-9-]*$/
+// Shared owner rules differ from repo names; validate both before interpolating authenticated REST paths.
 const REPO_SLUG_RE = /^[A-Za-z0-9._-]+$/
 const REPO_SLUG_RESERVED = new Set(['.', '..'])
 
 export function isValidOwnerSlug(value: unknown): value is string {
-  return typeof value === 'string' && value.length > 0 && OWNER_SLUG_RE.test(value)
+  return isGitHubOwnerSlug(value)
 }
 
 export function isValidRepoSlug(value: unknown): value is string {
@@ -92,7 +80,10 @@ export function assertSlug(
       ok: false,
       error: {
         type: 'validation_error',
-        message: `Invalid ${field}: "${String(value)}" is not a valid GitHub slug.`
+        message: `Invalid ${field}: "${String(value)}" is not a valid GitHub slug.`,
+        reason: 'invalid_slug',
+        detail: field,
+        value: String(value)
       }
     }
   }
@@ -108,7 +99,9 @@ export function assertPositiveInt(
       ok: false,
       error: {
         type: 'validation_error',
-        message: `Invalid ${field}: must be a positive integer.`
+        message: `Invalid ${field}: must be a positive integer.`,
+        reason: 'invalid_positive_integer',
+        detail: field
       }
     }
   }
@@ -130,8 +123,6 @@ export function validateSlugArgs(
   return { ok: true }
 }
 
-// ─── Low-level gh api graphql invocation ───────────────────────────────
-
 export type GraphqlVars = Record<string, string | number | boolean>
 
 export async function runGraphql<T>(
@@ -146,15 +137,12 @@ export async function runGraphql<T>(
   if (authError) {
     return { ok: false, error: authError, raw: { stderr: '', stdout: '' } }
   }
-  // Why: GHES traffic runs against its own quota — only github.com requests
-  // consult/debit the shared snapshot.
+  // Enterprise traffic has separate quota from the shared github.com snapshot.
   const guard = repositoryRateLimitGuard({ host: exec?.host }, 'graphql')
   if (guard.blocked) {
     return { ok: false, error: rateLimitedError(guard), raw: { stderr: '', stdout: '' } }
   }
-  // Why: build argv as an array. `-f` for strings (including numbers passed
-  // as strings), `-F` coerces to typed. We use `-f` uniformly and coerce in
-  // the query via Int! casts, because `gh` can confuse empty strings.
+  // Use typed -F for numbers/booleans and literal -f for strings, including empty strings.
   const args: string[] = ['api', 'graphql', '-f', `query=${query}`]
   for (const [k, v] of Object.entries(vars)) {
     if (typeof v === 'number' || typeof v === 'boolean') {
@@ -172,7 +160,7 @@ export async function runGraphql<T>(
       ...(exec?.host ? { host: exec.host } : {})
     })
     try {
-      const parsed = JSON.parse(stdout) as { data?: T; errors?: GhGraphqlErrorShape[] }
+      const parsed: { data?: T; errors?: GhGraphqlError[] } = JSON.parse(stdout)
       if (parsed.errors && parsed.errors.length > 0) {
         return {
           ok: false,
@@ -198,8 +186,7 @@ export async function runGraphql<T>(
       }
     }
   } catch (err) {
-    // gh executable failures (non-zero exit). Read stderr/stdout from the
-    // exec rejection's explicit fields — `err.message` may truncate stderr.
+    // Explicit streams preserve diagnostics that Error.message may truncate.
     const { stderr, stdout: maybeStdout } = extractExecError(err)
     return {
       ok: false,
@@ -221,8 +208,7 @@ export async function runRest<T>(
   if (authError) {
     return { ok: false, error: authError }
   }
-  // Why: GHES traffic runs against its own quota — only github.com requests
-  // consult/debit the shared snapshot.
+  // Enterprise traffic has separate quota from the shared github.com snapshot.
   const guard = repositoryRateLimitGuard({ host: options?.host }, bucket)
   if (guard.blocked) {
     return { ok: false, error: rateLimitedError(guard) }
@@ -235,11 +221,7 @@ export async function runRest<T>(
       ...(cwd ? { cwd } : {}),
       ...(options?.host ? { host: options.host } : {})
     })
-    // Why: 204/empty-body endpoints (DELETE label, DELETE comment) return no
-    // body. Treat empty stdout as success rather than misclassifying the
-    // unparseable response as 'unknown' — which the caller would otherwise
-    // need to special-case and risks masking real failures whose stderr the
-    // classifier also tags as 'unknown'.
+    // Successful DELETE endpoints can return no body; do not misclassify empty stdout as a parse failure.
     if (options?.expectEmpty && stdout.trim() === '') {
       return { ok: true, data: undefined as T }
     }
@@ -248,7 +230,12 @@ export async function runRest<T>(
     } catch {
       return {
         ok: false,
-        error: { type: 'unknown', message: `Unexpected REST response: ${stderr.trim()}` }
+        error: {
+          type: 'unknown',
+          message: `Unexpected REST response: ${stderr.trim()}`,
+          reason: 'unexpected_rest_response',
+          detail: stderr.trim()
+        }
       }
     }
   } catch (err) {

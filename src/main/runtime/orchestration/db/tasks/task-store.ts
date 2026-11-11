@@ -1,17 +1,17 @@
 import type Database from '../../../../sqlite/sync-database'
-import type { TaskStatus, TaskRow } from '../../types'
-import { buildOrchestrationTaskDisplayMetadata } from '../../../../../shared/orchestration-task-display'
+import type { TaskStatus, TaskRow } from '../orchestration-records'
+import { buildOrchestrationTaskDisplayMetadata } from '../../../../../shared/orchestration/orchestration-task-display'
 import { generateId } from '../generated-id'
 import type { TaskRuntimeLineageRow } from '../run-list-page'
 import type { OrchestrationDb } from '../orchestration-db'
 import { transitionLifecycleWithDb } from '../lifecycle-transition'
 import { selectColumns, TASK_COLUMNS } from '../row-column-lists'
 
-// ── Tasks ──
-
 export function createTask(
   this: OrchestrationDb,
   task: {
+    /** Set only for a Task placed on a paired server: one ID for it here and there, from the start's retry key. */
+    id?: string
     spec: string
     taskTitle?: string
     displayName?: string
@@ -41,7 +41,7 @@ export function createTask(
       throw new Error(`Dependency task ${depId} must belong to run ${runId}`)
     }
   }
-  const id = generateId('task')
+  const id = task.id ?? generateId('task')
   const depsJson = JSON.stringify(task.deps ?? [])
   const display = buildOrchestrationTaskDisplayMetadata({
     spec: task.spec,
@@ -85,11 +85,10 @@ export function createTask(
   return this.db.prepare(`SELECT ${TASK_COLUMN_LIST} FROM tasks WHERE id = ?`).get(id) as TaskRow
 }
 
-// Why wildcard-free: SyncDatabase refuses to cache any statement containing `*`, so a `SELECT *`
-// here recompiles on every call — including the hot dispatch lookups and the coordinator poll.
+// Explicit projections make hot task lookups and coordinator polls cacheable.
 const TASK_COLUMN_LIST = selectColumns(TASK_COLUMNS)
 
-// Why: hoisted and wildcard-free so the per-publish lineage lookup hits the SyncDatabase statement cache.
+// Hoist the explicit lineage query to reuse its statement-cache entry.
 const TASK_RUNTIME_LINEAGE_SQL = `SELECT ${selectColumns(TASK_COLUMNS, 't')},
          creator.id AS creator_dispatch_id,
          creator.run_id AS creator_dispatch_run_id,
@@ -107,7 +106,7 @@ const TASK_RUNTIME_LINEAGE_SQL = `SELECT ${selectColumns(TASK_COLUMNS, 't')},
        )
        WHERE t.id = ?`
 
-// Why: return the active creator Dispatch proof with the Task read; runtime still owns pane/process currency.
+// Read creator Dispatch proof with the Task; runtime still verifies current pane/process identity.
 export function getTask(this: OrchestrationDb, id: string): TaskRow | undefined
 export function getTask(
   this: OrchestrationDb,
@@ -159,7 +158,7 @@ export function listTasks(
     .all() as TaskRow[]
 }
 
-// Why: the correlated indexed lookup avoids materializing every retained Dispatch before filtering Tasks.
+// Use an indexed correlated lookup instead of materializing every retained Dispatch.
 export function listTasksWithDispatch(
   this: OrchestrationDb,
   filter?: {
@@ -207,11 +206,12 @@ export function listTasksWithDispatch(
   })[]
 }
 
-// Why: runs in the status-update transaction, so a completed task never leaves its ready children unpromoted.
+// Promote children inside the completion transaction so ready work cannot be stranded.
 export function promoteReadyTasks(this: OrchestrationDb, completedTaskId: string): void {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the tasks schema supplies the same TEXT id/deps columns as TaskRow.
   const candidates = this.db
-    .prepare(`SELECT ${TASK_COLUMN_LIST} FROM tasks WHERE status = 'pending'`)
-    .all() as TaskRow[]
+    .prepare("SELECT id, deps FROM tasks WHERE status = 'pending'")
+    .all() as Pick<TaskRow, 'id' | 'deps'>[]
 
   for (const task of candidates) {
     const deps: string[] = JSON.parse(task.deps)

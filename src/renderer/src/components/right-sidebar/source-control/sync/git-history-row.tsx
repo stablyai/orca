@@ -1,12 +1,15 @@
 import React from 'react'
 import { ChevronDown } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
-import type { GitHistoryItem, GitHistoryItemRef } from '../../../../../../shared/git-history'
-import type { GitHistoryItemViewModel } from '../../../../../../shared/git-history-graph'
+import { cn } from '@/lib/class-names'
+import type {
+  GitHistoryItem,
+  GitHistoryItemRef
+} from '../../../../../../shared/git/history/git-history-types'
+import type { GitHistoryItemViewModel } from '../../../../../../shared/git/history/git-history-graph'
 import { GitHistoryGraphSvg, graphColor } from './git-history-graph-svg'
-import { dedupeRemoteTrackingRefs } from '../../../../../../shared/git-history-ref-display'
-import { translate } from '@/i18n/i18n'
+import { dedupeRemoteTrackingRefs } from '../../../../../../shared/git/history/git-history-ref-display'
+import { useTranslate } from '@/i18n/use-translate'
 
 function GitHistoryRefBadge({ itemRef }: { itemRef: GitHistoryItemRef }): React.JSX.Element {
   const refLabel = itemRef.category ? `${itemRef.name} (${itemRef.category})` : itemRef.name
@@ -52,17 +55,14 @@ export const GitHistoryRow = React.forwardRef<HTMLElement, GitHistoryRowProps>(
     },
     ref
   ): React.JSX.Element {
+    const t = useTranslate()
     const item = viewModel.historyItem
     const isBoundaryNode =
       viewModel.kind === 'incoming-changes' || viewModel.kind === 'outgoing-changes'
-    // Expanding to an inline file list is the primary click; opening the combined
-    // diff stays reachable from the expanded list. Fall back to open-all when no
-    // expand handler is wired so the row still does something useful.
+    // Prefer inline expansion; retain open-all as fallback when no expansion handler exists.
     const canExpand = !isBoundaryNode && Boolean(onToggleExpand)
     const canOpenCommit = !isBoundaryNode && Boolean(onOpenCommit)
     const isInteractive = canExpand || canOpenCommit
-    // A local branch and its own remote-tracking ref at the same commit are
-    // redundant, so collapse the pair to one pill.
     const refs = dedupeRemoteTrackingRefs(item.references ?? [], { preserveRefIds })
     const visibleRefs = refs.slice(0, 2)
     const hiddenRefs = refs.slice(2)
@@ -154,17 +154,17 @@ export const GitHistoryRow = React.forwardRef<HTMLElement, GitHistoryRowProps>(
         aria-label={
           canExpand
             ? expanded
-              ? translate(
+              ? t(
                   'auto.components.right.sidebar.GitHistoryRow.4a8d9e0c1f',
                   'Hide files in commit {{value0}}: {{value1}}',
                   { value0: item.displayId ?? item.id, value1: item.subject }
                 )
-              : translate(
+              : t(
                   'auto.components.right.sidebar.GitHistoryRow.2f9c41ab07',
                   'Show files in commit {{value0}}: {{value1}}',
                   { value0: item.displayId ?? item.id, value1: item.subject }
                 )
-            : translate(
+            : t(
                 'auto.components.right.sidebar.GitHistoryPanel.8232c8b2f2',
                 'Open commit {{value0}}: {{value1}}',
                 { value0: item.displayId ?? item.id, value1: item.subject }

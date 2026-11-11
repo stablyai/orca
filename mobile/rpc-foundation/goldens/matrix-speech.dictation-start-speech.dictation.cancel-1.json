@@ -1,0 +1,595 @@
+{
+  "goldenFormatVersion": 6,
+  "operation": "speech.desktop-start",
+  "family": "speech.dictation-start",
+  "namedDeltas": [],
+  "values": {
+    "0b8b17cc7b58": {
+      "name": "speech.dictation.cancel#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "speech.dictation.cancel"
+        },
+        {
+          "name": "params",
+          "value": {
+            "dictationId": "dictation-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "2e3b79ca68ce": {
+      "name": "speech.dictation.cancel#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "speech.dictation.cancel"
+        },
+        {
+          "name": "params",
+          "value": {
+            "dictationId": "dictation-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "32caef6aa162": {
+      "name": "speech.dictation.cancel#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "speech.dictation.cancel"
+        },
+        {
+          "name": "params",
+          "value": {
+            "dictationId": "dictation-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true
+        }
+      }
+    },
+    "4c42677aca21": {
+      "name": "speech.dictation.start#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "speech.dictation.start"
+        },
+        {
+          "name": "params",
+          "value": {
+            "dictationId": "dictation-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "started": true
+          }
+        }
+      }
+    },
+    "5699810cc2a2": {
+      "name": "speech.dictation.cancel#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "speech.dictation.cancel"
+        },
+        {
+          "name": "params",
+          "value": {
+            "dictationId": "dictation-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "6f5a48ebce0e": {
+      "name": "speech.dictation.cancel#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "speech.dictation.cancel"
+        },
+        {
+          "name": "params",
+          "value": {
+            "dictationId": "dictation-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "7ed3d39f0607": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": false
+    },
+    "9ab91ee194b8": {
+      "name": "speech.dictation.cancel#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "speech.dictation.cancel"
+        },
+        {
+          "name": "params",
+          "value": {
+            "dictationId": "dictation-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "cancelled": true
+          }
+        }
+      }
+    },
+    "a7ddd021010a": {
+      "name": "speech.dictation.start#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"speech.dictation.start\",\"params\":{\"dictationId\":\"dictation-1\"}}"
+    },
+    "b20560e60f90": {
+      "name": "speech.dictation.cancel#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "speech.dictation.cancel"
+        },
+        {
+          "name": "params",
+          "value": {
+            "dictationId": "dictation-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "b90df4b1e290": {
+      "name": "speech.dictation.cancel#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "speech.dictation.cancel"
+        },
+        {
+          "name": "params",
+          "value": {
+            "dictationId": "dictation-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "ce9cbc8837fa": {
+      "name": "speech.dictation.cancel#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"speech.dictation.cancel\",\"params\":{\"dictationId\":\"dictation-1\"}}"
+    },
+    "d0501bb1dd67": {
+      "name": "speech.dictation.cancel#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "speech.dictation.cancel"
+        },
+        {
+          "name": "params",
+          "value": {
+            "dictationId": "dictation-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "d80561ce52f2": {
+      "name": "speech.dictation.cancel#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "speech.dictation.cancel"
+        },
+        {
+          "name": "params",
+          "value": {
+            "dictationId": "dictation-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "df38de088787": {
+      "name": "speech.dictation.cancel#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "speech.dictation.cancel"
+        },
+        {
+          "name": "params",
+          "value": {
+            "dictationId": "dictation-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "e0fcd8f8c1a9": {
+      "activeId": {
+        "$rpc": "null"
+      },
+      "idle": false,
+      "started": false
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "matrix-speech.dictation-start-speech.dictation.cancel-1",
+    "checkpoints": [
+      {
+        "id": "speech-desktop-start-superseded.normal:stale-start-cancelled",
+        "observation": {
+          "sender": ["4c42677aca21", "9ab91ee194b8"],
+          "payloads": ["a7ddd021010a", "ce9cbc8837fa"],
+          "settlements": {
+            "supersede": "eb79a9b3682a",
+            "start": "7ed3d39f0607"
+          },
+          "state": "e0fcd8f8c1a9",
+          "effects": []
+        }
+      },
+      {
+        "id": "speech-desktop-start-superseded.result-absent:stale-start-cancelled",
+        "observation": {
+          "sender": ["4c42677aca21", "32caef6aa162"],
+          "payloads": ["a7ddd021010a", "ce9cbc8837fa"],
+          "settlements": {
+            "supersede": "eb79a9b3682a",
+            "start": "7ed3d39f0607"
+          },
+          "state": "e0fcd8f8c1a9",
+          "effects": []
+        }
+      },
+      {
+        "id": "speech-desktop-start-superseded.result-null:stale-start-cancelled",
+        "observation": {
+          "sender": ["4c42677aca21", "6f5a48ebce0e"],
+          "payloads": ["a7ddd021010a", "ce9cbc8837fa"],
+          "settlements": {
+            "supersede": "eb79a9b3682a",
+            "start": "7ed3d39f0607"
+          },
+          "state": "e0fcd8f8c1a9",
+          "effects": []
+        }
+      },
+      {
+        "id": "speech-desktop-start-superseded.inner-ok-missing:stale-start-cancelled",
+        "observation": {
+          "sender": ["4c42677aca21", "df38de088787"],
+          "payloads": ["a7ddd021010a", "ce9cbc8837fa"],
+          "settlements": {
+            "supersede": "eb79a9b3682a",
+            "start": "7ed3d39f0607"
+          },
+          "state": "e0fcd8f8c1a9",
+          "effects": []
+        }
+      },
+      {
+        "id": "speech-desktop-start-superseded.inner-false-string-error:stale-start-cancelled",
+        "observation": {
+          "sender": ["4c42677aca21", "d0501bb1dd67"],
+          "payloads": ["a7ddd021010a", "ce9cbc8837fa"],
+          "settlements": {
+            "supersede": "eb79a9b3682a",
+            "start": "7ed3d39f0607"
+          },
+          "state": "e0fcd8f8c1a9",
+          "effects": []
+        }
+      },
+      {
+        "id": "speech-desktop-start-superseded.inner-false-object-error:stale-start-cancelled",
+        "observation": {
+          "sender": ["4c42677aca21", "5699810cc2a2"],
+          "payloads": ["a7ddd021010a", "ce9cbc8837fa"],
+          "settlements": {
+            "supersede": "eb79a9b3682a",
+            "start": "7ed3d39f0607"
+          },
+          "state": "e0fcd8f8c1a9",
+          "effects": []
+        }
+      },
+      {
+        "id": "speech-desktop-start-superseded.outer-refused:stale-start-cancelled",
+        "observation": {
+          "sender": ["4c42677aca21", "0b8b17cc7b58"],
+          "payloads": ["a7ddd021010a", "ce9cbc8837fa"],
+          "settlements": {
+            "supersede": "eb79a9b3682a",
+            "start": "7ed3d39f0607"
+          },
+          "state": "e0fcd8f8c1a9",
+          "effects": []
+        }
+      },
+      {
+        "id": "speech-desktop-start-superseded.outer-refused-no-message:stale-start-cancelled",
+        "observation": {
+          "sender": ["4c42677aca21", "b90df4b1e290"],
+          "payloads": ["a7ddd021010a", "ce9cbc8837fa"],
+          "settlements": {
+            "supersede": "eb79a9b3682a",
+            "start": "7ed3d39f0607"
+          },
+          "state": "e0fcd8f8c1a9",
+          "effects": []
+        }
+      },
+      {
+        "id": "speech-desktop-start-superseded.method-not-found:stale-start-cancelled",
+        "observation": {
+          "sender": ["4c42677aca21", "b20560e60f90"],
+          "payloads": ["a7ddd021010a", "ce9cbc8837fa"],
+          "settlements": {
+            "supersede": "eb79a9b3682a",
+            "start": "7ed3d39f0607"
+          },
+          "state": "e0fcd8f8c1a9",
+          "effects": []
+        }
+      },
+      {
+        "id": "speech-desktop-start-superseded.transport-rejection:stale-start-cancelled",
+        "observation": {
+          "sender": ["4c42677aca21", "d80561ce52f2"],
+          "payloads": ["a7ddd021010a", "ce9cbc8837fa"],
+          "settlements": {
+            "supersede": "eb79a9b3682a",
+            "start": "7ed3d39f0607"
+          },
+          "state": "e0fcd8f8c1a9",
+          "effects": []
+        }
+      },
+      {
+        "id": "speech-desktop-start-superseded.transport-rejection-no-message:stale-start-cancelled",
+        "observation": {
+          "sender": ["4c42677aca21", "2e3b79ca68ce"],
+          "payloads": ["a7ddd021010a", "ce9cbc8837fa"],
+          "settlements": {
+            "supersede": "eb79a9b3682a",
+            "start": "7ed3d39f0607"
+          },
+          "state": "e0fcd8f8c1a9",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

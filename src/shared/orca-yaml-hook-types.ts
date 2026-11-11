@@ -2,7 +2,6 @@ export type SetupRunPolicy = 'ask' | 'run-by-default' | 'skip-by-default'
 export type SetupAgentStartupPolicy = 'start-immediately' | 'wait-for-setup'
 export type HookCommandSourcePolicy = 'shared-only' | 'local-only' | 'run-both'
 
-// ─── Hooks (orca.yaml) ──────────────────────────────────────────────
 export type OrcaHooks = {
   scripts: {
     setup?: string // Runs after worktree is created
@@ -17,8 +16,7 @@ export type OrcaHooks = {
 }
 
 export type OrcaWorktreeDefaults = {
-  // Why: shared (symlinked) rather than copied — large rebuildable dirs like
-  // node_modules should be one install serving every worktree.
+  // Share large rebuildable directories such as node_modules across worktrees instead of copying installs.
   sharedDirectories?: string[]
 }
 
@@ -40,7 +38,16 @@ export type OrcaVmRecipe = {
   resume?: string
   destroy?: string
   destroyDisabled?: boolean
+  // Per-mode wall-clock limits; orca.yaml accepts one number for every mode or a per-mode map.
+  timeoutSeconds?: OrcaVmRecipeTimeoutSeconds
+  // Opt-in allowlist of Orca's environment variables the scripts receive (plus a safe base set).
+  // Omitted means scripts inherit the full environment.
+  passEnv?: string[]
 }
+
+export type OrcaVmRecipeLifecycleMode = 'create' | 'suspend' | 'resume' | 'destroy'
+
+export type OrcaVmRecipeTimeoutSeconds = Partial<Record<OrcaVmRecipeLifecycleMode, number>>
 
 export type OrcaVmRecipeDiagnostic = {
   index: number
@@ -49,8 +56,7 @@ export type OrcaVmRecipeDiagnostic = {
 }
 
 export type RepoHookSettings = {
-  // Why: persisted data may still include the old mode field from the earlier
-  // hook UI. Keep it in the shape so existing local state reads without a migration.
+  // Retain the old hook-UI mode so persisted state reads without migration.
   mode: 'auto' | 'override'
   setupRunPolicy?: SetupRunPolicy
   setupAgentStartupPolicy?: SetupAgentStartupPolicy
@@ -64,6 +70,8 @@ export type RepoHookSettings = {
 export type PersistedTrustedOrcaHookEntry = {
   contentHash: string
   approvedAt: number
+  /** Earlier approvals, newest first, so switching between branches' scripts doesn't re-prompt. */
+  previousContentHashes?: string[]
 }
 
 export type PersistedTrustedOrcaHookRepo = {

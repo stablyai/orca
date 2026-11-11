@@ -1,3 +1,4 @@
+import { migrateActionPermissionArgs } from '../../../shared/source-control/ai/recipes/source-control-action-permission-lift'
 import { homedir } from 'node:os'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type {
@@ -7,20 +8,21 @@ import type {
 import type { Repo } from '../../../shared/repo-types'
 import { getDefaultPersistedState } from '../../../shared/constants'
 import { migrateExternalWorktreeVisibilityDefaults } from '../../../shared/external-worktree-visibility'
-import {
-  mergeLegacyCommitMessageAiIntoSourceControlAi,
-  sourceControlAiSettingsFromLegacy
-} from '../../../shared/source-control-ai'
+import { mergeLegacyCommitMessageAiIntoSourceControlAi } from '../../../shared/source-control/ai/settings/source-control-ai-legacy-reconciliation'
+import { sourceControlAiSettingsFromLegacy } from '../../../shared/source-control/ai/settings/source-control-ai-settings'
 import {
   normalizeOsc52ClipboardDefaultOn,
   osc52ClipboardDefaultOnOverridesPersistedOff
 } from '../../../shared/osc52-clipboard-settings'
+import { splitLegacyTerminalColorOverrides } from '../../../shared/terminal-themes/terminal-color-overrides'
+import { migrateWindowsTerminalFontWeight } from '../../../shared/terminal/appearance/terminal-font-weight-windows-regular'
 import {
   migrateTerminalScrollbackRows,
   migrateTerminalTuiScrollSensitivityDefault
 } from '../applying-settings/terminal-settings-migrations'
 import {
   canonicalizePersistedFloatingWorkspaceDirectory,
+  canonicalTrustedFloatingTerminalCwd,
   normalizeFloatingWorkspaceTrustedCwds
 } from '../restoring-sessions/floating-workspace-normalization'
 
@@ -32,6 +34,7 @@ export type PreparedLoadedTerminalSettings = {
     changed: boolean
   }
   migratedTerminalScrollback: { rows: number; needsSave: boolean }
+  migratedTerminalFontWeight: ReturnType<typeof migrateWindowsTerminalFontWeight>
   migratedTerminalTuiScrollSensitivity: {
     settings: Pick<
       GlobalSettings,
@@ -46,6 +49,7 @@ export type PreparedLoadedTerminalSettings = {
     GlobalSettings,
     'terminalAllowOsc52Clipboard' | 'terminalAllowOsc52ClipboardDefaultedOnForAllUsers'
   >
+  migratedTerminalColorOverrides: ReturnType<typeof splitLegacyTerminalColorOverrides>
   migratedFloatingTerminalCwd: GlobalSettings['floatingTerminalCwd']
   migratedFloatingTerminalTrustedCwds: GlobalSettings['floatingTerminalTrustedCwds']
   osc52ClipboardNoticePending: boolean
@@ -55,7 +59,6 @@ export function prepareLoadedTerminalSettings(
   parsed: PersistedState,
   markNeedsSave: () => void
 ): PreparedLoadedTerminalSettings {
-  // Merge with defaults in case new fields were added
   const homeDir = homedir()
   const defaults = getDefaultPersistedState(homeDir)
   const migratedExternalVisibility = migrateExternalWorktreeVisibilityDefaults(
@@ -76,6 +79,13 @@ export function prepareLoadedTerminalSettings(
   ) {
     markNeedsSave()
   }
+  const migratedTerminalFontWeight = migrateWindowsTerminalFontWeight(
+    parsed.settings,
+    process.platform
+  )
+  if (Object.keys(migratedTerminalFontWeight).length > 0) {
+    markNeedsSave()
+  }
   const migratedTerminalTuiScrollSensitivity = migrateTerminalTuiScrollSensitivityDefault(
     parsed.settings
   )
@@ -90,13 +100,30 @@ export function prepareLoadedTerminalSettings(
     markNeedsSave()
   }
   const legacyCommitMessageAi = parsed.settings?.commitMessageAi
-  const migratedSourceControlAi = rawSourceControlAiMissing
+  const sourceBeforeNormalization = rawSourceControlAiMissing
     ? sourceControlAiSettingsFromLegacy(legacyCommitMessageAi ?? defaults.settings.commitMessageAi)
-    : mergeLegacyCommitMessageAiIntoSourceControlAi(
-        parsed.settings?.sourceControlAi,
-        legacyCommitMessageAi
-      )
-  // Why (issue #903): old 'true' default broke non-US Option-layer chars; flip 'true'→'auto' once so the layout probe decides.
+    : rawSourceControlAi
+  const sourceActions = {
+    ...sourceBeforeNormalization.launchActionDefaults,
+    ...sourceBeforeNormalization.actions
+  }
+  const actions = migrateActionPermissionArgs(sourceActions)
+  if (actions !== sourceActions) {
+    markNeedsSave()
+  }
+  const sourceWithActions = { ...sourceBeforeNormalization, actions }
+  const migratedSourceControlAi = rawSourceControlAiMissing
+    ? sourceWithActions
+    : mergeLegacyCommitMessageAiIntoSourceControlAi(sourceWithActions, legacyCommitMessageAi)
+  migratedExternalVisibility.repos = migratedExternalVisibility.repos.map((repo) => {
+    const actionOverrides = migrateActionPermissionArgs(repo.sourceControlAi?.actionOverrides)
+    if (actionOverrides === repo.sourceControlAi?.actionOverrides) {
+      return repo
+    }
+    markNeedsSave()
+    return { ...repo, sourceControlAi: { ...repo.sourceControlAi, actionOverrides } }
+  })
+  // Legacy Option-as-Alt true broke non-US characters; let the layout probe choose once.
   const rawOptionAsAlt = parsed.settings?.terminalMacOptionAsAlt
   const alreadyMigrated = parsed.settings?.terminalMacOptionAsAltMigrated === true
   const migratedOptionAsAlt: 'auto' | 'true' | 'false' | 'left' | 'right' = alreadyMigrated
@@ -106,11 +133,11 @@ export function prepareLoadedTerminalSettings(
       : rawOptionAsAlt
   const floatingTerminalDefaultedForAllUsers =
     parsed.settings?.floatingTerminalDefaultedForAllUsers === true
-  // Why: early builds persisted the old off default; flip only unmigrated profiles so a later opt-out survives reload.
+  // Flip the old persisted off default once; retain later opt-outs.
   const migratedFloatingTerminalEnabled = floatingTerminalDefaultedForAllUsers
     ? (parsed.settings?.floatingTerminalEnabled ?? true)
     : true
-  // Why: the old off default persisted `false` for every profile, indistinguishable from a real opt-out — flip unmigrated profiles once (#10567).
+  // Legacy off values conflate default and opt-out; migrate only unstamped profiles.
   const migratedOsc52Clipboard = normalizeOsc52ClipboardDefaultOn(parsed.settings)
   const osc52ClipboardNoticePending =
     osc52ClipboardDefaultOnOverridesPersistedOff(parsed.settings) ||
@@ -118,10 +145,14 @@ export function prepareLoadedTerminalSettings(
   if (parsed.settings?.terminalAllowOsc52ClipboardDefaultedOnForAllUsers !== true) {
     markNeedsSave()
   }
+  const migratedTerminalColorOverrides = splitLegacyTerminalColorOverrides(parsed.settings)
+  if (parsed.settings?.terminalColorOverridesSplit !== true) {
+    markNeedsSave()
+  }
   const floatingTerminalCwdMigrated =
     parsed.settings?.floatingTerminalCwdMigratedToAppWorkspace === true
-  // Why: an earlier migration wrote '' for the notes dir; floating terminals still open at home, notes use a separate IPC.
-  const migratedFloatingTerminalCwd = floatingTerminalCwdMigrated
+  // Repair the old empty notes-directory migration; terminal cwd and notes now resolve separately.
+  const configuredFloatingTerminalCwd = floatingTerminalCwdMigrated
     ? !parsed.settings?.floatingTerminalCwd
       ? defaults.settings.floatingTerminalCwd
       : parsed.settings.floatingTerminalCwd
@@ -148,7 +179,7 @@ export function prepareLoadedTerminalSettings(
       homeDir
     )
     if (canonicalLegacyCwd && !migratedFloatingTerminalTrustedCwds.includes(canonicalLegacyCwd)) {
-      // Why: pre-grant profiles with an explicit Floating Workspace cwd already showed intent; migrate only that legacy value.
+      // An explicitly configured legacy floating cwd establishes prior trust.
       migratedFloatingTerminalTrustedCwds.push(canonicalLegacyCwd)
       normalizedFloatingTerminalTrustedCwds.changed = true
     }
@@ -156,15 +187,29 @@ export function prepareLoadedTerminalSettings(
   if (normalizedFloatingTerminalTrustedCwds.changed) {
     markNeedsSave()
   }
+  // Why: settings are raw JSON here; a malformed cwd falls back to the default instead of failing reads.
+  const migratedFloatingTerminalCwd =
+    typeof configuredFloatingTerminalCwd === 'string'
+      ? canonicalTrustedFloatingTerminalCwd(
+          configuredFloatingTerminalCwd,
+          migratedFloatingTerminalTrustedCwds,
+          homeDir
+        )
+      : defaults.settings.floatingTerminalCwd
+  if (migratedFloatingTerminalCwd !== configuredFloatingTerminalCwd) {
+    markNeedsSave()
+  }
   return {
     defaults,
     migratedExternalVisibility,
     migratedTerminalScrollback,
+    migratedTerminalFontWeight,
     migratedTerminalTuiScrollSensitivity,
     migratedSourceControlAi,
     migratedOptionAsAlt,
     migratedFloatingTerminalEnabled,
     migratedOsc52Clipboard,
+    migratedTerminalColorOverrides,
     migratedFloatingTerminalCwd,
     migratedFloatingTerminalTrustedCwds,
     osc52ClipboardNoticePending

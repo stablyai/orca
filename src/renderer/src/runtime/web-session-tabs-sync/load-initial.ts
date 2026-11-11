@@ -1,10 +1,9 @@
 import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import { useAppStore } from '../../store'
-import { getRuntimeEnvironmentRevision } from '../runtime-environment-revision'
-import { recoverWebSessionTerminalOrphansBeforeApply } from '../web-session-terminal-orphan-recovery'
+import { getRuntimeEnvironmentRevision } from '../rpc/environment-revisions/runtime-environment-revision'
+import { recoverMirroredTerminalOrphansBeforeApply } from './mirror-terminal-orphan-recovery'
 import {
-  beginWebSessionTabsSnapshotRecovery,
   isSessionTabsListAllResult,
   recordReceivedWebSessionTabsSnapshot,
   shouldApplyRecoveredWebSessionTabsSnapshot
@@ -22,6 +21,7 @@ import {
 } from './state'
 import { applyWebSessionTabsSnapshots } from './snapshot-api'
 import { applyWebSessionTabsStorePatch } from './store-patch'
+import { applyReceivedAgentSenderPublications } from './received-agent-sender-publications'
 import { isHostMirroredWorktree } from './visibility-types'
 
 export type InitialSessionTabsLoadArgs = {
@@ -32,7 +32,6 @@ export type InitialSessionTabsLoadArgs = {
   isCurrent: () => boolean
 }
 
-/** Perform the one-shot inventory fetch used to seed the mirror deterministically. */
 export function loadInitialWebSessionTabs({
   environmentId,
   expectedEnvironmentConnectionGeneration,
@@ -87,91 +86,86 @@ export function loadInitialWebSessionTabs({
           'bootstrap'
         )
       )
-      const finishRecoveries = result.snapshots.map((snapshot, index) =>
-        beginWebSessionTabsSnapshotRecovery(
-          environmentId,
-          snapshot.worktree,
-          receivedFrames[index]!
-        )
-      )
-      try {
-        const recovered = await Promise.all(
-          result.snapshots.map((snapshot) =>
-            recoverWebSessionTerminalOrphansBeforeApply(
-              useAppStore.getState(),
-              snapshot,
-              environmentId,
-              {
-                expectedEnvironmentPairingRevision,
-                expectedRuntimeId: runtimeId,
-                getCurrentState: () => useAppStore.getState()
-              }
-            )
+      applyReceivedAgentSenderPublications(environmentId, result.snapshots, runtimeId)
+      const recovered = await Promise.all(
+        result.snapshots.map((snapshot) =>
+          recoverMirroredTerminalOrphansBeforeApply(
+            useAppStore.getState(),
+            snapshot,
+            environmentId,
+            {
+              expectedEnvironmentPairingRevision,
+              expectedRuntimeId: runtimeId,
+              getCurrentState: () => useAppStore.getState()
+            }
           )
         )
-        if (
-          !isCurrent() ||
-          getRuntimeEnvironmentRevision(environmentId) !== expectedEnvironmentPairingRevision
-        ) {
-          return
-        }
-        const initialInventorySuperseded =
-          (latestReceivedSessionTabsInventoryFrameByEnvironment.get(environmentId) ?? 0) >
-          requestReceivedFrame
-        const applicable = recovered.filter(
-          (snapshot, index): snapshot is RuntimeMobileSessionTabsResult =>
-            snapshot !== null &&
-            !initialInventorySuperseded &&
-            shouldApplyRecoveredWebSessionTabsSnapshot(
-              environmentId,
-              snapshot,
-              receivedFrames[index]!,
-              runtimeId
-            )
-        )
-        const decisions = applicable.map((snapshot) =>
-          decideWebSessionTabsSnapshot(snapshot, environmentId, runtimeId)
-        )
-        const freshSnapshots = applicable.filter((_snapshot, index) => decisions[index]!.apply)
-        const initialInventoryStillCurrent =
-          latestReceivedSessionTabsFrameByEnvironment.get(environmentId) === requestReceivedFrame &&
-          (latestReceivedSessionTabsInventoryFrameByEnvironment.get(environmentId) ?? 0) <=
-            requestReceivedFrame
-        settleHydration = applyWebSessionTabsStorePatch(
-          (state) => applyWebSessionTabsSnapshots(state, freshSnapshots, environmentId),
-          {
-            frames: applicable.map((snapshot, index) => ({
-              environmentId,
-              worktreeId: snapshot.worktree,
-              decision: decisions[index]!,
-              expectedEnvironmentConnectionGeneration,
-              expectedEnvironmentPairingRevision,
-              expectedTrackingGeneration
-            })),
-            ...(initialInventoryStillCurrent
-              ? {
-                  fullInventory: {
-                    environmentId,
-                    authoritative: result.authoritative === true,
-                    expectedEnvironmentConnectionGeneration,
-                    expectedEnvironmentPairingRevision,
-                    expectedTrackingGeneration,
-                    // Why: a workspace the mirror never writes is not part of the
-                    // inventory the environment-wide verdict has to account for.
-                    publishedSnapshotCount: result.snapshots.filter((snapshot) =>
-                      isHostMirroredWorktree(snapshot.worktree)
-                    ).length
-                  }
-                }
-              : {})
-          },
-          applicable
-        )
-      } finally {
-        for (const finishRecovery of finishRecoveries) {
-          finishRecovery()
-        }
+      )
+      if (
+        !isCurrent() ||
+        getRuntimeEnvironmentRevision(environmentId) !== expectedEnvironmentPairingRevision
+      ) {
+        return
       }
+      const initialInventorySuperseded =
+        (latestReceivedSessionTabsInventoryFrameByEnvironment.get(environmentId) ?? 0) >
+        requestReceivedFrame
+      const applicable = recovered.filter(
+        (snapshot, index): snapshot is RuntimeMobileSessionTabsResult =>
+          snapshot !== null &&
+          !initialInventorySuperseded &&
+          shouldApplyRecoveredWebSessionTabsSnapshot(
+            environmentId,
+            snapshot,
+            receivedFrames[index]!,
+            runtimeId
+          )
+      )
+      const decisions = applicable.map((snapshot) =>
+        decideWebSessionTabsSnapshot(snapshot, environmentId, runtimeId)
+      )
+      const freshSnapshots = applicable.filter((_snapshot, index) => decisions[index]!.apply)
+      const initialInventoryStillCurrent =
+        latestReceivedSessionTabsFrameByEnvironment.get(environmentId) === requestReceivedFrame &&
+        (latestReceivedSessionTabsInventoryFrameByEnvironment.get(environmentId) ?? 0) <=
+          requestReceivedFrame
+      settleHydration = applyWebSessionTabsStorePatch(
+        (state, changedAgentPaneKeys) =>
+          applyWebSessionTabsSnapshots(
+            state,
+            freshSnapshots,
+            environmentId,
+            undefined,
+            changedAgentPaneKeys
+          ),
+        {
+          frames: applicable.map((snapshot, index) => ({
+            environmentId,
+            worktreeId: snapshot.worktree,
+            source: snapshot,
+            decision: decisions[index]!,
+            expectedEnvironmentConnectionGeneration,
+            expectedEnvironmentPairingRevision,
+            expectedTrackingGeneration
+          })),
+          ...(initialInventoryStillCurrent
+            ? {
+                fullInventory: {
+                  environmentId,
+                  authoritative: result.authoritative === true,
+                  expectedEnvironmentConnectionGeneration,
+                  expectedEnvironmentPairingRevision,
+                  expectedTrackingGeneration,
+                  // Workspaces the mirror never writes contribute no evidence to the environment-wide verdict.
+                  publishedSnapshotCount: result.snapshots.filter((snapshot) =>
+                    isHostMirroredWorktree(snapshot.worktree)
+                  ).length
+                }
+              }
+            : {})
+        },
+        applicable
+      )
     })
     .catch((error) => {
       if (isCurrent()) {

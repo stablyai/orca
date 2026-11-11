@@ -1,9 +1,9 @@
-import { Check, Search, Trash2 } from 'lucide-react'
+import { Check, Trash2 } from 'lucide-react'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { formatBytes } from './workspace-space-format'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { WorkspaceSpaceSortKey } from './workspace-space-presentation'
 import type { useWorkspaceSpaceManagerPanel } from './use-workspace-space-manager-panel'
 
@@ -14,6 +14,7 @@ export function WorkspaceSpaceManagerToolbar({
 }: {
   model: WorkspaceSpaceManagerModel
 }): React.JSX.Element {
+  const t = useTranslate()
   const {
     allVisibleSelected,
     deleteSelected,
@@ -32,22 +33,24 @@ export function WorkspaceSpaceManagerToolbar({
   } = model
   return (
     <>
-      {hasRows ? (
-        <div className="sticky top-0 z-10 -mx-1 flex flex-wrap items-center justify-between gap-2 rounded-md border border-border/70 bg-background/95 px-3 py-2 shadow-xs backdrop-blur">
+      {selectedDeletableIds.length > 0 ? (
+        <div className="flex items-center justify-between gap-2 rounded-md border border-border/70 bg-background/95 px-2 py-1 shadow-xs">
           <div className="min-w-0 text-xs text-muted-foreground">
             <span className="font-medium text-foreground">
-              {selectedDeletableIds.length}{' '}
-              {translate(
-                'auto.components.status.bar.WorkspaceSpaceManagerPanel.65402b7192',
-                'selected'
+              {t(
+                'auto.components.status.bar.WorkspaceSpaceManagerPanel.selectedCount',
+                '{{count}} selected',
+                { count: selectedDeletableIds.length, defaultValue_one: '{{count}} selected' }
               )}
             </span>
             <span className="mx-1.5">·</span>
             <span>
-              {formatBytes(selectedReclaimableBytes)}{' '}
-              {translate(
-                'auto.components.status.bar.WorkspaceSpaceManagerPanel.0cb1501ccf',
-                'reclaimable'
+              {t(
+                'auto.components.status.bar.WorkspaceSpaceManagerPanel.reclaimableSize',
+                '{{size}} reclaimable',
+                {
+                  size: formatBytes(selectedReclaimableBytes)
+                }
               )}
             </span>
           </div>
@@ -59,10 +62,7 @@ export function WorkspaceSpaceManagerToolbar({
               disabled={selectedDeletableIds.length === 0}
               className="!px-3"
             >
-              {translate(
-                'auto.components.status.bar.WorkspaceSpaceManagerPanel.e4a12c455b',
-                'Clear'
-              )}
+              {t('auto.components.status.bar.WorkspaceSpaceManagerPanel.e4a12c455b', 'Clear')}
             </Button>
             <Button
               variant="destructive"
@@ -72,7 +72,7 @@ export function WorkspaceSpaceManagerToolbar({
               className="min-w-[9.5rem] gap-1.5 !px-3.5"
             >
               <Trash2 className="size-3.5" />
-              {translate(
+              {t(
                 'auto.components.status.bar.WorkspaceSpaceManagerPanel.5caccea440',
                 'Delete selected'
               )}
@@ -82,17 +82,16 @@ export function WorkspaceSpaceManagerToolbar({
       ) : null}
 
       {hasRows ? (
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative min-w-[16rem] flex-1">
-            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+        <div className="flex min-w-0 items-center gap-2">
+          <div className="min-w-0 flex-1">
             <Input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder={translate(
+              placeholder={t(
                 'auto.components.status.bar.WorkspaceSpaceManagerPanel.6f8f6a6b04',
                 'Filter workspaces'
               )}
-              className="pl-9"
+              className="h-8"
             />
           </div>
 
@@ -100,33 +99,24 @@ export function WorkspaceSpaceManagerToolbar({
             value={sortKey}
             onValueChange={(value) => selectSortKey(value as WorkspaceSpaceSortKey)}
           >
-            <SelectTrigger className="w-36">
+            <SelectTrigger size="sm" className="w-28">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="size">
-                {translate(
-                  'auto.components.status.bar.WorkspaceSpaceManagerPanel.33aef3e9cc',
-                  'Size'
-                )}
+                {t('auto.components.status.bar.WorkspaceSpaceManagerPanel.33aef3e9cc', 'Size')}
               </SelectItem>
               <SelectItem value="name">
-                {translate(
-                  'auto.components.status.bar.WorkspaceSpaceManagerPanel.243287ac60',
-                  'Name'
-                )}
+                {t('auto.components.status.bar.WorkspaceSpaceManagerPanel.243287ac60', 'Name')}
               </SelectItem>
               <SelectItem value="repo">
-                {translate(
+                {t(
                   'auto.components.status.bar.WorkspaceSpaceManagerPanel.81f14d9924',
                   'Repository'
                 )}
               </SelectItem>
               <SelectItem value="activity">
-                {translate(
-                  'auto.components.status.bar.WorkspaceSpaceManagerPanel.d7ac56452e',
-                  'Activity'
-                )}
+                {t('auto.components.status.bar.WorkspaceSpaceManagerPanel.d7ac56452e', 'Activity')}
               </SelectItem>
             </SelectContent>
           </Select>
@@ -135,21 +125,15 @@ export function WorkspaceSpaceManagerToolbar({
             variant={onlyDeletable ? 'secondary' : 'outline'}
             size="sm"
             onClick={() => setOnlyDeletable((current) => !current)}
-            className="w-32"
-            aria-label={translate(
+            className="w-24"
+            aria-label={t(
               'auto.components.status.bar.WorkspaceSpaceManagerPanel.81aaf1de65',
               'Show only deletable workspaces'
             )}
           >
             {onlyDeletable
-              ? translate(
-                  'auto.components.status.bar.WorkspaceSpaceManagerPanel.b2f82ed5ae',
-                  'Deletable'
-                )
-              : translate(
-                  'auto.components.status.bar.WorkspaceSpaceManagerPanel.ef890d31b9',
-                  'All'
-                )}
+              ? t('auto.components.status.bar.WorkspaceSpaceManagerPanel.b2f82ed5ae', 'Deletable')
+              : t('auto.components.status.bar.WorkspaceSpaceManagerPanel.ef890d31b9', 'All')}
           </Button>
 
           <Button
@@ -157,14 +141,14 @@ export function WorkspaceSpaceManagerToolbar({
             size="sm"
             onClick={toggleVisibleSelection}
             disabled={visibleDeletableIds.length === 0}
-            className="w-32 gap-1.5"
+            className="w-24"
             aria-label={
               allVisibleSelected
-                ? translate(
+                ? t(
                     'auto.components.status.bar.WorkspaceSpaceManagerPanel.697d60c456',
                     'Clear visible selection'
                   )
-                : translate(
+                : t(
                     'auto.components.status.bar.WorkspaceSpaceManagerPanel.1d0f8300d1',
                     'Select visible deletable workspaces'
                   )
@@ -172,14 +156,8 @@ export function WorkspaceSpaceManagerToolbar({
           >
             <Check className="size-3.5" />
             {allVisibleSelected
-              ? translate(
-                  'auto.components.status.bar.WorkspaceSpaceManagerPanel.e4a12c455b',
-                  'Clear'
-                )
-              : translate(
-                  'auto.components.status.bar.WorkspaceSpaceManagerPanel.f39d291997',
-                  'Select'
-                )}
+              ? t('auto.components.status.bar.WorkspaceSpaceManagerPanel.e4a12c455b', 'Clear')
+              : t('auto.components.status.bar.WorkspaceSpaceManagerPanel.f39d291997', 'Select')}
           </Button>
         </div>
       ) : null}

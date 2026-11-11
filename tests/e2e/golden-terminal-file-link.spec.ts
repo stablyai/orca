@@ -122,8 +122,7 @@ test('opens a terminal file link and observes an external edit @golden', async (
   const original = readFileSync(filePath, 'utf8')
   const resolvedDestination =
     process.platform === 'win32' ? filePath.replaceAll('\\', '/') : filePath
-  // Why: Mac/Windows tmp paths soft-wrap across xterm rows; locateLink only
-  // indexOf's each physical row, so print a cwd-relative path that stays on one.
+  // Print a short relative path: locateLink searches physical rows, while macOS/Windows temp paths can soft-wrap.
   const printedPath = './package.json'
   const changedMarker = `golden-external-edit-${Date.now()}`
 
@@ -202,7 +201,7 @@ test('opens a terminal file link and observes an external edit @golden', async (
   }
 })
 
-test('reuses a terminal file link already open in a sibling workspace @golden', async ({
+test('opens a terminal file link a sibling workspace holds in the clicked workspace @golden', async ({
   orcaPage
 }) => {
   test.setTimeout(180_000)
@@ -246,11 +245,16 @@ test('reuses a terminal file link already open in a sibling workspace @golden', 
 
   await ensureTerminalVisible(orcaPage)
   await waitForActiveTerminalManager(orcaPage, 30_000)
-  await orcaPage.evaluate(() => {
+  await orcaPage.evaluate((sourceWorktreeId) => {
     const state = window.__store?.getState()
     state?.setSidebarOpen(false)
     state?.setRightSidebarOpen(false)
-  })
+    // Restore worktree activation after sidebar close or Landing may remount with terminal.cols at zero.
+    if (state && state.activeWorktreeId !== sourceWorktreeId) {
+      state.setActiveWorktree(sourceWorktreeId)
+    }
+  }, sourceWorktreeId)
+  await ensureTerminalVisible(orcaPage)
   await expect
     .poll(
       () =>
@@ -304,8 +308,8 @@ test('reuses a terminal file link already open in a sibling workspace @golden', 
           activeWorktreeId: rendered.activeWorktreeId
         }
       },
-      { timeout: 20_000, message: 'sibling workspace never rendered the linked file' }
+      { timeout: 20_000, message: 'clicked workspace never rendered the linked file' }
     )
-    .toEqual({ filePath: canonicalFileIdentity(filePath), activeWorktreeId: sibling.id })
+    .toEqual({ filePath: canonicalFileIdentity(filePath), activeWorktreeId: sourceWorktreeId })
   await expect(orcaPage.getByText('Loading...', { exact: true })).toHaveCount(0)
 })

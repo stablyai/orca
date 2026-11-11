@@ -17,9 +17,11 @@ import {
   type ProjectRef
 } from './gl-utils'
 import { encodedProject } from './project-path-encoding'
+import { gitLabRunTimes } from './gitlab-run-times'
 import { withProjectRef } from './merge-request-project-resolution'
+import { codeHostFailure, classifiedFailure } from '../../shared/code-host-failure-copy'
 
-// Why: a large or slow job log outlives the runner's 30s default; the renderer bounds the call.
+// Large traces need more than the runner default; the renderer also bounds the call.
 const JOB_TRACE_EXEC_TIMEOUT_MS = 60_000
 
 function mapRetriedPipelineJob(
@@ -29,8 +31,11 @@ function mapRetriedPipelineJob(
     name?: string
     stage?: string
     status?: string
+    allow_failure?: boolean
     web_url?: string
     duration?: number | null
+    started_at?: string | null
+    finished_at?: string | null
   },
   fallbackJobId: number
 ): GitLabPipelineJob {
@@ -40,8 +45,10 @@ function mapRetriedPipelineJob(
     name: data.name ?? '',
     stage: data.stage ?? '',
     status: data.status ?? '',
+    ...(typeof data.allow_failure === 'boolean' ? { allowFailure: data.allow_failure } : {}),
     webUrl: data.web_url ?? '',
-    duration: typeof data.duration === 'number' ? data.duration : null
+    duration: typeof data.duration === 'number' ? data.duration : null,
+    ...gitLabRunTimes(data)
   }
 }
 
@@ -75,17 +82,16 @@ export async function getJobTrace(
         return { ok: true, trace: stdout }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
-        // A job with no log is an empty log, not a failure: surfacing the 404 would
-        // pin an error on the Checks row for a job canceled before it started.
+        // Jobs canceled before starting can 404 with no trace; present an empty log.
         if (isMissingJobLogError(msg)) {
           return { ok: true, trace: '' }
         }
-        return { ok: false, error: classifyJobLogError(msg).message }
+        return classifiedFailure(classifyJobLogError(msg))
       } finally {
         release()
       }
     },
-    { ok: false, error: 'Could not resolve GitLab project for this repository' },
+    codeHostFailure('gitlab.projectUnresolved'),
     localGitOptions
   )
 }
@@ -123,12 +129,12 @@ export async function retryJob(
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
-        return { ok: false, error: classifyGlabError(msg).message }
+        return classifiedFailure(classifyGlabError(msg))
       } finally {
         release()
       }
     },
-    { ok: false, error: 'Could not resolve GitLab project for this repository' },
+    codeHostFailure('gitlab.projectUnresolved'),
     localGitOptions
   )
 }

@@ -1,5 +1,8 @@
+import { withDurableRuntimeStore } from './runtime-durable-store-fixture'
 import { describe, expect, it, vi } from 'vitest'
-import { OrcaRuntimeService, getDefaultWorkspaceSession } from '../orca-runtime-test-mocks.spec'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import {
   HEADLESS_LEAF_ID,
   HEADLESS_SECOND_LEAF_ID,
@@ -11,7 +14,7 @@ import {
   makeWorkspaceSessionWithHeadlessTerminal,
   store,
   withPlatform
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
   it('keeps current-generation tab and leaf identity across a host restart', async () => {
@@ -64,7 +67,7 @@ describe('OrcaRuntimeService', () => {
     const afterRestart = await restarted.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
     const listed = await restarted.listTerminals(`id:${TEST_WORKTREE_ID}`)
     restarted.onPtyData('persisted-pty', 'after restart\n', 1)
-    await restarted.sendTerminal('term_current', { text: 'input' })
+    await restarted.sendTerminal('term_current', { text: 'input' }, { inputKind: 'driving' })
     await restarted.updateRemoteDesktopViewer('persisted-pty', 'viewer', 'client', 132, 41)
 
     expect(beforeRestart.tabs[0]).toMatchObject({
@@ -108,7 +111,9 @@ describe('OrcaRuntimeService', () => {
       terminalTopologyRevisionByRepoId: { [TEST_REPO_ID]: 7 }
     }
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(session)
-    const runtime = new OrcaRuntimeService({ ...runtimeStore, flushOrThrow: vi.fn() } as never)
+    const runtime = new OrcaRuntimeService(
+      withDurableRuntimeStore({ ...runtimeStore, flushOrThrow: vi.fn() })
+    )
     runtime.setPtyController({
       write: () => true,
       kill: () => true,
@@ -143,45 +148,56 @@ describe('OrcaRuntimeService', () => {
     ).rejects.toThrow('terminal_topology_conflict')
   })
 
-  it('keeps orphaned list and show writability aligned with the send gate', async () => {
-    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession({
+  // The client's retirement proofs die with a host restart; the close record does not.
+  it('refuses to adopt an orphan under a tab the user closed', async () => {
+    const session = {
       ...getDefaultWorkspaceSession(),
-      tabsByWorktree: { [TEST_WORKTREE_ID]: [] }
-    })
-    const runtime = new OrcaRuntimeService({ ...runtimeStore, flushOrThrow: vi.fn() } as never)
-    const writes: [string, string][] = []
+      tabsByWorktree: { [TEST_WORKTREE_ID]: [] },
+      terminalTopologyRevisionByRepoId: { [TEST_REPO_ID]: 7 },
+      closedTerminalTabTombstonesByTabId: {
+        'tab-closed': {
+          closedAt: Date.now(),
+          worktreeId: TEST_WORKTREE_ID,
+          reason: 'user' as const
+        }
+      }
+    }
+    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(session)
+    const runtime = new OrcaRuntimeService(
+      withDurableRuntimeStore({ ...runtimeStore, flushOrThrow: vi.fn() })
+    )
     runtime.setPtyController({
-      write: (ptyId: string, data: string) => {
-        writes.push([ptyId, data])
-        return true
-      },
+      write: () => true,
       kill: () => true,
       getForegroundProcess: async () => null,
       listProcesses: async () => [
         {
-          id: 'pty-orphan',
-          incarnationId: 'inc-orphan',
-          terminalHandle: 'term_orphan',
+          id: 'pty-closed',
+          incarnationId: 'inc-closed',
+          terminalHandle: 'term_closed',
           title: 'shell',
           cwd: TEST_WORKTREE_PATH,
           worktreeId: TEST_WORKTREE_ID,
           wslDistro: null
         }
       ]
-    } as never)
-    runtime.registerPty('pty-orphan', TEST_WORKTREE_ID)
-    runtime.onPtySpawned('pty-orphan', 'inc-orphan', { awaitsRegistration: false })
-
-    const listed = await runtime.listTerminals(`id:${TEST_WORKTREE_ID}`)
-    const entry = listed.terminals.find((terminal) => terminal.ptyId === 'pty-orphan')
-    expect(entry).toMatchObject({ orphaned: true, connected: true, writable: true })
-
-    const shown = await runtime.showTerminal(entry!.handle)
-    expect(shown.writable).toBe(true)
-    await expect(runtime.sendTerminal(entry!.handle, { text: 'hi' })).resolves.toMatchObject({
-      accepted: true
     })
-    expect(writes).toEqual([['pty-orphan', 'hi']])
+
+    await expect(
+      runtime.adoptTerminalOrphans({
+        worktree: `id:${TEST_WORKTREE_ID}`,
+        expectedTopologyRevision: 7,
+        claims: [
+          {
+            terminal: 'term_closed',
+            ptyId: 'pty-closed',
+            incarnationId: 'inc-closed',
+            tabId: 'tab-closed',
+            leafId: HEADLESS_LEAF_ID
+          }
+        ]
+      })
+    ).rejects.toThrow('terminal_orphan_surface_retired')
   })
 
   it('rejects connection mismatch and reused handles while allowing a WSL-owned orphan', async () => {
@@ -190,7 +206,9 @@ describe('OrcaRuntimeService', () => {
         ...getDefaultWorkspaceSession(),
         tabsByWorktree: { [TEST_WORKTREE_ID]: [] }
       })
-      return new OrcaRuntimeService({ ...runtimeStore, flushOrThrow: vi.fn() } as never)
+      return new OrcaRuntimeService(
+        withDurableRuntimeStore({ ...runtimeStore, flushOrThrow: vi.fn() })
+      )
     }
     const ownerMismatch = makeRuntime()
     ownerMismatch.registerPty('pty-wrong-owner', TEST_WORKTREE_ID, 'ssh-other-host')
@@ -282,25 +300,27 @@ describe('OrcaRuntimeService', () => {
           ...getDefaultWorkspaceSession(),
           tabsByWorktree: { [TEST_WORKTREE_ID]: [] }
         })
-        const wsl = new OrcaRuntimeService({
-          ...runtimeStore,
-          flushOrThrow: vi.fn(),
-          getProjects: () => [
-            {
-              id: 'project-wsl',
-              displayName: 'WSL',
-              badgeColor: 'blue',
-              sourceRepoIds: [TEST_REPO_ID],
-              localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' },
-              createdAt: 1,
-              updatedAt: 1
-            }
-          ],
-          getSettings: () => ({
-            ...store.getSettings(),
-            localWindowsRuntimeDefault: { kind: 'windows-host' }
+        const wsl = new OrcaRuntimeService(
+          withDurableRuntimeStore({
+            ...runtimeStore,
+            flushOrThrow: vi.fn(),
+            getProjects: () => [
+              {
+                id: 'project-wsl',
+                displayName: 'WSL',
+                badgeColor: 'blue',
+                sourceRepoIds: [TEST_REPO_ID],
+                localWindowsRuntimePreference: { kind: 'wsl' as const, distro: 'Ubuntu' },
+                createdAt: 1,
+                updatedAt: 1
+              }
+            ],
+            getSettings: () => ({
+              ...store.getSettings(),
+              localWindowsRuntimeDefault: { kind: 'windows-host' as const }
+            })
           })
-        } as never)
+        )
         wsl.registerPty('pty-wsl', TEST_WORKTREE_ID, null, undefined, true)
         wsl.onPtySpawned('pty-wsl', 'inc-wsl', { awaitsRegistration: false })
         wsl.setPtyController({
@@ -356,7 +376,9 @@ describe('OrcaRuntimeService', () => {
       tabsByWorktree: { [TEST_WORKTREE_ID]: [] }
     }
     const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(session)
-    const runtime = new OrcaRuntimeService({ ...runtimeStore, flushOrThrow: vi.fn() } as never)
+    const runtime = new OrcaRuntimeService(
+      withDurableRuntimeStore({ ...runtimeStore, flushOrThrow: vi.fn() })
+    )
     const processes = [
       ['pty-left', 'inc-left', 'term_left'],
       ['pty-right', 'inc-right', 'term_right'],

@@ -1,14 +1,6 @@
 import type { TerminalSlice, TerminalStoreSet } from './terminal-state'
 
-/**
- * Session-scoped record of PTY ids a reachable relay disowned.
- *
- * Main raises it solely on the branch where the relay replied about that exact id, never on a lost
- * link, a timeout or an identity mismatch (docs/reference/ssh-execution-boundary.md). It is not
- * `exited` — a restarted relay disowns ids it never minted — but it is the only signal strong
- * enough to let a reconnect retire the binding and respawn, which leaks the old process rather than
- * killing it. Every other absence signal the client holds is `unverifiable` and licenses nothing.
- */
+/** Only reachable relay’s exact-ID disown reply permits retiring binding/respawning; it is weaker than exited (restarted relays forget IDs) and may leak old processes. Lost links/timeouts/mismatches remain unverifiable (ssh-execution-boundary.md). Session-only. */
 export function createTerminalDisownedPtySourceActions(
   set: TerminalStoreSet
 ): Pick<TerminalSlice, 'markPtySourceDisowned'> {
@@ -16,7 +8,7 @@ export function createTerminalDisownedPtySourceActions(
     markPtySourceDisowned: (ptyId) => {
       set((state) =>
         state.disownedPtyIds[ptyId]
-          ? {}
+          ? state
           : { disownedPtyIds: { ...state.disownedPtyIds, [ptyId]: true } }
       )
     }
@@ -37,17 +29,4 @@ export function omitDisownedPtyIds(
     delete next[ptyId]
   }
   return next ?? records
-}
-
-/**
- * True when a recorded id still names a PTY this client may reattach to.
- *
- * Why the record and not the id's shape: a relay renumbers from `pty-1` after a redeploy, so the id
- * alone cannot say which relay generation minted it. Only the host's own answer can.
- */
-export function isPtyBindingStillAddressable(
-  ptyId: string | null | undefined,
-  disownedPtyIds: Readonly<Record<string, true>> | undefined
-): boolean {
-  return Boolean(ptyId) && !disownedPtyIds?.[ptyId as string]
 }

@@ -1,10 +1,9 @@
 import { CLAUDE_AUTH_ENV_VARS, applyClaudeEnvPatch } from '../claude-accounts/environment'
-
-const CLAUDE_CHILD_SESSION_STAMP_ENV_KEYS = [
-  'CLAUDE_CODE_CHILD_SESSION',
-  'CLAUDE_CODE_SESSION_ID',
-  'CLAUDE_CODE_BRIDGE_SESSION_ID'
-] as const
+import { stripInheritedClaudeSessionEnv } from '../../shared/agent-launch/startup/claude-parent-session-env'
+import {
+  LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV,
+  NATIVE_CHAT_SCRATCH_DIR_ENV
+} from '../native-chat/native-chat-visuals-delivery'
 
 function cloneProcessEnv(source: NodeJS.ProcessEnv): Record<string, string> {
   const env: Record<string, string> = {}
@@ -16,11 +15,12 @@ function cloneProcessEnv(source: NodeJS.ProcessEnv): Record<string, string> {
   return env
 }
 
-function stripClaudeChildSessionStamps(
+function stripEnvKeys(
   env: Record<string, string>,
+  keys: readonly string[],
   platform: NodeJS.Platform
 ): Record<string, string> {
-  for (const key of CLAUDE_CHILD_SESSION_STAMP_ENV_KEYS) {
+  for (const key of keys) {
     for (const envKey of Object.keys(env)) {
       if (envKey === key || (platform === 'win32' && envKey.toUpperCase() === key)) {
         delete env[envKey]
@@ -35,7 +35,6 @@ export function buildClaudeChildProcessEnv(
   options: {
     inheritedEnv?: NodeJS.ProcessEnv
     platform?: NodeJS.Platform
-    scrubConfiguredChildSessionStamps?: boolean
   } = {}
 ): Record<string, string> {
   const inheritedEnv = options.inheritedEnv ?? process.env
@@ -61,9 +60,16 @@ export function buildClaudeChildProcessEnv(
       }
     }
   }
-  if (options.scrubConfiguredChildSessionStamps) {
-    return stripClaudeChildSessionStamps({ ...env, ...configuredEnv }, platform)
+  // Only the launch names a chat's scratch folder: an inherited one belongs to another chat.
+  stripEnvKeys(env, [NATIVE_CHAT_SCRATCH_DIR_ENV, LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV], platform)
+  // Windows env names are case-insensitive, so a launch key replaces a differently cased inherited twin.
+  if (platform === 'win32') {
+    stripEnvKeys(
+      env,
+      Object.keys(configuredEnv).map((key) => key.toUpperCase()),
+      platform
+    )
   }
-  stripClaudeChildSessionStamps(env, platform)
+  stripInheritedClaudeSessionEnv(env, { platform })
   return { ...env, ...configuredEnv }
 }

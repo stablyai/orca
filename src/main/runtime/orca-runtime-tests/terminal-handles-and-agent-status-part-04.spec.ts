@@ -1,13 +1,9 @@
+import type { AdoptStablePaneArgs, AdoptStablePaneResult } from '../../ipc/pty/ipc/spawn-types'
 import { describe, expect, it, vi } from 'vitest'
-import { OrcaRuntimeService } from '../orca-runtime-test-mocks.spec'
-import {
-  HEADLESS_LEAF_ID,
-  TEST_WORKTREE_ID,
-  TEST_WORKTREE_PATH,
-  createRuntime,
-  store,
-  syncSinglePty
-} from '../orca-runtime-test-fixtures.spec'
+import { committingSpawn } from './bind-first-pane.test-fixture'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { HEADLESS_LEAF_ID, TEST_WORKTREE_ID, store } from './orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
   it('does not let the active browser webContents steal session focus from terminals', async () => {
@@ -77,64 +73,6 @@ describe('OrcaRuntimeService', () => {
         type: 'terminal',
         id: 'terminal-tab::pane:1',
         isActive: true
-      })
-    ])
-  })
-
-  it('publishes terminal surface agent status for paired web clients', async () => {
-    const runtime = new OrcaRuntimeService(store)
-    const leafId = '11111111-1111-4111-8111-111111111111'
-    const hostPaneKey = `tab-1:${leafId}`
-    runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, {
-      tabs: [],
-      leaves: [],
-      mobileSessionTabs: [
-        {
-          worktree: TEST_WORKTREE_ID,
-          publicationEpoch: 'epoch-1',
-          snapshotVersion: 1,
-          activeGroupId: 'group-1',
-          activeTabId: `tab-1::${leafId}`,
-          activeTabType: 'terminal',
-          tabs: [
-            {
-              type: 'terminal',
-              id: `tab-1::${leafId}`,
-              parentTabId: 'tab-1',
-              leafId,
-              title: 'codex [working]',
-              agentStatus: {
-                state: 'working',
-                prompt: 'fix parity',
-                updatedAt: 1_700_000_000_000,
-                stateStartedAt: 1_699_999_999_000,
-                agentType: 'codex',
-                paneKey: hostPaneKey,
-                terminalTitle: 'codex [working]',
-                stateHistory: []
-              },
-              isActive: true
-            }
-          ]
-        }
-      ]
-    })
-
-    const result = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
-
-    expect(result.tabs).toEqual([
-      expect.objectContaining({
-        type: 'terminal',
-        id: `tab-1::${leafId}`,
-        status: 'pending-handle',
-        terminal: null,
-        agentStatus: expect.objectContaining({
-          state: 'working',
-          prompt: 'fix parity',
-          agentType: 'codex',
-          paneKey: hostPaneKey
-        })
       })
     ])
   })
@@ -261,203 +199,12 @@ describe('OrcaRuntimeService', () => {
     }
   )
 
-  it('preserves authoritative OMP identity for Pi-compatible remote terminal snapshots', async () => {
-    const runtime = new OrcaRuntimeService(store)
-    const leafId = '11111111-1111-4111-8111-111111111111'
-    const hostPaneKey = `tab-1:${leafId}`
-    runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, {
-      tabs: [],
-      leaves: [],
-      mobileSessionTabs: [
-        {
-          worktree: TEST_WORKTREE_ID,
-          publicationEpoch: 'epoch-1',
-          snapshotVersion: 1,
-          activeGroupId: 'group-1',
-          activeTabId: `tab-1::${leafId}`,
-          activeTabType: 'terminal',
-          tabs: [
-            {
-              type: 'terminal',
-              id: `tab-1::${leafId}`,
-              parentTabId: 'tab-1',
-              leafId,
-              title: '\u280b Pi',
-              launchAgent: 'omp',
-              agentStatus: {
-                state: 'working',
-                prompt: 'fix parity',
-                updatedAt: 1_700_000_000_000,
-                stateStartedAt: 1_699_999_999_000,
-                agentType: 'pi',
-                paneKey: hostPaneKey,
-                terminalTitle: '\u280b Pi',
-                stateHistory: []
-              },
-              isActive: true
-            }
-          ]
-        }
-      ]
-    })
-
-    const result = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
-
-    expect(result.tabs[0]).toEqual(
-      expect.objectContaining({
-        type: 'terminal',
-        title: '\u280b OMP',
-        launchAgent: 'omp',
-        agentStatus: expect.objectContaining({
-          state: 'working',
-          agentType: 'omp',
-          paneKey: hostPaneKey,
-          terminalTitle: '\u280b OMP'
-        })
-      })
-    )
-  })
-
-  it('normalizes a remote OMP title without republishing omitted launch identity', async () => {
-    const spawn = vi.fn().mockResolvedValue({ id: 'pty-omp' })
-    const runtime = new OrcaRuntimeService(store)
-    runtime.setPtyController({
-      spawn,
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null
-    })
-    runtime.attachWindow(1)
-
-    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
-      command: 'omp',
-      launchAgent: 'omp',
-      title: 'OMP',
-      activate: true
-    })
-    const spawnCall = spawn.mock.calls[0]?.[0]
-    expect(spawnCall).toEqual(
-      expect.objectContaining({
-        tabId: expect.any(String),
-        leafId: expect.any(String)
-      })
-    )
-    const { tabId, leafId } = spawnCall as { tabId: string; leafId: string }
-
-    runtime.syncWindowGraph(1, {
-      tabs: [
-        {
-          tabId,
-          worktreeId: TEST_WORKTREE_ID,
-          title: '\u280b π - tmp',
-          activeLeafId: leafId,
-          layout: null
-        }
-      ],
-      leaves: [
-        {
-          tabId,
-          worktreeId: TEST_WORKTREE_ID,
-          leafId,
-          paneRuntimeId: 1,
-          ptyId: 'pty-omp',
-          paneTitle: '\u280b π - tmp'
-        }
-      ],
-      mobileSessionTabs: [
-        {
-          worktree: TEST_WORKTREE_ID,
-          publicationEpoch: 'epoch-1',
-          snapshotVersion: 1,
-          activeGroupId: null,
-          activeTabId: `${tabId}::${leafId}`,
-          activeTabType: 'terminal',
-          tabs: [
-            {
-              type: 'terminal',
-              id: `${tabId}::${leafId}`,
-              parentTabId: tabId,
-              leafId,
-              ptyId: 'pty-omp',
-              title: '\u280b π - tmp',
-              isActive: true
-            }
-          ]
-        }
-      ]
-    })
-
-    const result = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
-
-    expect(result.tabs[0]).toEqual(
-      expect.objectContaining({
-        type: 'terminal',
-        title: '\u280b OMP - tmp'
-      })
-    )
-    expect(result.tabs[0]).not.toHaveProperty('launchAgent')
-  })
-
-  it('skips the foreground-process probe when the PTY launch agent is already known', async () => {
-    // Why: foregroundAgent is only a fallback when launchAgent is unknown, so probing a launched agent burns a relay round-trip without changing the resolved owner.
-    const getForegroundProcess = vi.fn(async () => 'omp')
-    const runtime = new OrcaRuntimeService(store)
-    runtime.setPtyController({
-      spawn: vi.fn().mockResolvedValue({ id: 'pty-omp' }),
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess
-    })
-    runtime.attachWindow(1)
-    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
-      command: 'omp',
-      launchAgent: 'omp',
-      title: 'OMP',
-      activate: true
-    })
-
-    runtime.onPtyData('pty-omp', '\x1b]0;⠋ OMP\x07working\n', 100)
-    runtime.onPtyData('pty-omp', '\x1b]0;OMP ready\x07idle\n', 200)
-
-    expect(getForegroundProcess).not.toHaveBeenCalled()
-  })
-
-  it('probes the foreground process only on a status transition for unknown launch agents', async () => {
-    const getForegroundProcess = vi.fn(async () => 'omp')
-    const runtime = createRuntime()
-    runtime.setPtyController({
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess
-    })
-    syncSinglePty(runtime, 'pty-bg')
-    // Why: each probe dedups while in-flight; settle it before the next frame to prove the gate, not the dedup, suppresses extra probes.
-    const settleProbe = (): Promise<void> => new Promise((resolve) => setImmediate(resolve))
-
-    // Two working frames (spinner churn) collapse to a single status transition.
-    runtime.onPtyData('pty-bg', '\x1b]0;⠋ OMP\x07alpha\n', 100)
-    runtime.onPtyData('pty-bg', '\x1b]0;⠊ OMP\x07bravo\n', 200)
-    await settleProbe()
-    expect(getForegroundProcess).toHaveBeenCalledTimes(1)
-
-    // Transition to idle is a second distinct status, so it probes again.
-    runtime.onPtyData('pty-bg', '\x1b]0;OMP ready\x07charlie\n', 300)
-    await settleProbe()
-    expect(getForegroundProcess).toHaveBeenCalledTimes(2)
-
-    // A repeated idle frame is not a transition, so it does not probe again.
-    runtime.onPtyData('pty-bg', '\x1b]0;OMP ready\x07delta\n', 400)
-    await settleProbe()
-    expect(getForegroundProcess).toHaveBeenCalledTimes(2)
-  })
-
   it('normalizes Pi-compatible mobile session status to OMP for an unknown-launch foreground omp PTY', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-typed-omp' })
     const getForegroundProcess = vi.fn(async () => 'omp')
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
-      spawn,
+      spawn: committingSpawn(runtime, spawn),
       write: () => true,
       kill: () => true,
       getForegroundProcess
@@ -490,7 +237,12 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('preserves host metadata when terminal.create adopts a stable pane owner', async () => {
-    const adoptStablePane = vi.fn().mockResolvedValue(null)
+    const adoptStablePane = vi.fn(
+      async (args: AdoptStablePaneArgs): Promise<AdoptStablePaneResult | null> => {
+        await args.spawnFresh?.({ mustExist: false })
+        return null
+      }
+    )
     const spawn = vi.fn(async (opts: { adoptedStablePane?: { owner: { handle?: string } } }) =>
       opts.adoptedStablePane
         ? {
@@ -526,6 +278,7 @@ describe('OrcaRuntimeService', () => {
       launchAgent: 'claude'
     })
     adoptStablePane.mockResolvedValueOnce({
+      materialized: true,
       result: { id: 'pty-stable-owner', isReattach: true },
       owner: {
         handle: first.handle,
@@ -557,21 +310,17 @@ describe('OrcaRuntimeService', () => {
         launchAgent: 'claude'
       })
     ])
-    expect(spawn.mock.calls[1]?.[0]).toMatchObject({
-      command: "claude 'replacement'",
-      adoptedStablePane: expect.anything()
-    })
-    expect(spawn.mock.calls[1]?.[0]).not.toMatchObject({
-      command: expect.stringContaining('--teammate-mode')
-    })
+    expect(spawn).toHaveBeenCalledOnce()
   })
 
   it('releases a stable-pane claim when creation aborts before provider spawn', async () => {
     const releaseClaim = vi.fn()
     const spawn = vi.fn()
+    const adoptStablePane = vi.fn()
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
       claimStablePaneCreate: vi.fn(() => releaseClaim),
+      adoptStablePane,
       spawn,
       write: () => true,
       kill: () => true,
@@ -589,6 +338,34 @@ describe('OrcaRuntimeService', () => {
     ).rejects.toThrow('client_disconnected')
 
     expect(spawn).not.toHaveBeenCalled()
+    expect(adoptStablePane).not.toHaveBeenCalled()
     expect(releaseClaim).toHaveBeenCalledOnce()
+  })
+
+  it('refuses before spawning when the client disconnects during pane adoption', async () => {
+    const abort = new AbortController()
+    const spawn = vi.fn()
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      adoptStablePane: vi.fn(async (args: AdoptStablePaneArgs) => {
+        abort.abort()
+        await args.spawnFresh?.({ mustExist: false })
+        return null
+      }),
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    await expect(
+      runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
+        tabId: 'disconnected-during-adopt',
+        leafId: HEADLESS_LEAF_ID,
+        signal: abort.signal
+      })
+    ).rejects.toThrow('client_disconnected')
+
+    expect(spawn).not.toHaveBeenCalled()
   })
 })

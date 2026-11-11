@@ -1,12 +1,12 @@
 import { basename } from '@/lib/path'
-import type { GitBranchChangeEntry } from '../../../../../../shared/git-diff-compare-types'
-import type { DiffSection } from '../../diff-section-types'
+import type { GitBranchChangeEntry } from '../../../../../../shared/git/diff/git-diff-compare-types'
+import type { DiffSection } from '../../diff/sections/diff-section-types'
 import { isClipboardTextByteLengthOverLimit } from '../../../../../../shared/clipboard-text'
 import {
   buildSourceControlTree,
   compactSourceControlTree,
   flattenSourceControlTree
-} from '@/components/right-sidebar/source-control-tree'
+} from '../../../../../../shared/source-control/listing/source-control-tree'
 import {
   getCombinedDiffFileTreeSectionKey,
   isGitStatusEntry,
@@ -45,10 +45,7 @@ function getEntrySearchText(entry: CombinedDiffFileTreeEntry): string {
     .toLowerCase()
 }
 
-/**
- * Applies filters that describe the file set itself. Viewed state is deliberately not included:
- * section loading changes viewed flags without changing the tree's path structure.
- */
+/** Exclude volatile viewed flags from structural filtering so section loads cannot rebuild the path tree. */
 export function getCombinedDiffFileTreeEntriesMatchingStaticFilters({
   entries,
   query,
@@ -66,7 +63,7 @@ export function getCombinedDiffFileTreeEntriesMatchingStaticFilters({
     return entries
   }
   return entries.filter((entry) => {
-    if (excludedExtensions.has(getEntryExtension(entry))) {
+    if (excludedExtensions.size > 0 && excludedExtensions.has(getEntryExtension(entry))) {
       return false
     }
     return normalizedQuery.length === 0 || getEntrySearchText(entry).includes(normalizedQuery)

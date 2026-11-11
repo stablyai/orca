@@ -1,6 +1,6 @@
+import { getHostedMergeLabel } from './mobile-hosted-check-status'
 import { projectRowType } from './mobile-tasks-item-mapping'
 import type {
-  HostedReviewItem,
   HostedReviewMergeMethod,
   PendingHostedMerge,
   PendingHostedStateChange,
@@ -13,6 +13,8 @@ import type {
   GitHubPRReviewerRow,
   GitHubWorkItem
 } from './mobile-tasks-provider-detail-types'
+import { GITHUB_PR_MERGE_METHOD_I18N_KEYS } from '../../../src/shared/github/pull-request-merge-methods'
+import { translate } from '../i18n/mobile-i18n'
 
 export const LINEAR_PRIORITY_LABELS: Record<number, string> = {
   0: 'None',
@@ -131,61 +133,64 @@ export function hostedBranchSummary(item: TaskItem): { head: string; base: strin
   return null
 }
 
-export function getGitHubMergeLabel(item: GitHubWorkItem): string {
-  if (item.mergeable === undefined && item.mergeStateStatus === undefined) {
-    return 'Merge'
-  }
-  if (item.state === 'merged') {
-    return 'Merged'
-  }
-  if (item.state === 'closed') {
-    return 'Closed'
-  }
-  if (item.mergeable === 'CONFLICTING') {
-    return 'Conflicts'
-  }
-  if (item.mergeStateStatus === 'BEHIND') {
-    return 'Behind'
-  }
-  if (item.mergeStateStatus === 'BLOCKED') {
-    return 'Blocked'
-  }
-  if (item.mergeable === 'MERGEABLE' || item.mergeStateStatus === 'CLEAN') {
-    return 'Able to merge'
-  }
-  return 'Unknown'
+export function getGitHubMergeLabel(item: GitHubWorkItem): string | null {
+  return getHostedMergeLabel(item)
 }
 
 export function getHostedReviewMergeMethodLabel(method: HostedReviewMergeMethod): string {
-  if (method === 'squash') {
-    return 'Squash and merge'
-  }
-  if (method === 'rebase') {
-    return 'Rebase and merge'
-  }
-  return 'Create merge commit'
+  return translate(
+    GITHUB_PR_MERGE_METHOD_I18N_KEYS[method],
+    method === 'squash'
+      ? 'Squash and merge'
+      : method === 'rebase'
+        ? 'Rebase and merge'
+        : 'Create merge commit'
+  )
 }
 
-export function hostedReviewMergeTargetLabel(item: HostedReviewItem): string {
-  return item.provider === 'gitlab' ? 'merge request' : 'PR'
+function mergeConfirmMessage(
+  provider: 'github' | 'gitlab',
+  method: HostedReviewMergeMethod,
+  number: number | null
+): string {
+  if (provider === 'gitlab') {
+    if (method === 'squash') {
+      return translate(
+        'tasks.hostedMerge.confirmGitLabSquash',
+        'Squash and merge merge request #{{number}}?',
+        { number }
+      )
+    }
+    if (method === 'rebase') {
+      return translate(
+        'tasks.hostedMerge.confirmGitLabRebase',
+        'Rebase and merge merge request #{{number}}?',
+        { number }
+      )
+    }
+    return translate('tasks.hostedMerge.confirmGitLabMerge', 'Merge merge request #{{number}}?', {
+      number
+    })
+  }
+  if (method === 'squash') {
+    return translate('tasks.hostedMerge.confirmGitHubSquash', 'Squash and merge PR #{{number}}?', {
+      number
+    })
+  }
+  if (method === 'rebase') {
+    return translate('tasks.hostedMerge.confirmGitHubRebase', 'Rebase and merge PR #{{number}}?', {
+      number
+    })
+  }
+  return translate('tasks.hostedMerge.confirmGitHubMerge', 'Merge PR #{{number}}?', { number })
 }
 
 export function getHostedMergeConfirmMessage(pending: PendingHostedMerge): string {
-  const target = hostedReviewMergeTargetLabel(pending.item)
-  if (pending.method === 'squash') {
-    return `Squash and merge ${target} #${pending.item.source.number}?`
-  }
-  const action = pending.method === 'rebase' ? 'Rebase and merge' : 'Merge'
-  return `${action} ${target} #${pending.item.source.number}?`
+  return mergeConfirmMessage(pending.item.provider, pending.method, pending.item.source.number)
 }
 
 export function getProjectGitHubMergeConfirmMessage(pending: PendingProjectGitHubMerge): string {
-  const number = pending.row.content.number
-  if (pending.method === 'squash') {
-    return `Squash and merge PR #${number}?`
-  }
-  const action = pending.method === 'rebase' ? 'Rebase and merge' : 'Merge'
-  return `${action} PR #${number}?`
+  return mergeConfirmMessage('github', pending.method, pending.row.content.number)
 }
 
 export function hostedStateChangeAction(nextState: PendingHostedStateChange['nextState']): string {

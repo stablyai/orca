@@ -1,56 +1,61 @@
 import { useEffect, useRef, useState } from 'react'
+import { Trans } from 'react-i18next'
 import { ChevronDown, CircleAlert, Copy, RefreshCw } from 'lucide-react'
-import { cn } from '../../lib/utils'
+import { cn } from '../../lib/class-names'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible'
-import type { MobileNetworkInterface } from '../settings/mobile-network-interface-selection'
+import type { PairingNetworkInterface } from '../../../../shared/pairing-address-auto-selection'
 import { NetworkInterfacePicker } from './NetworkInterfacePicker'
-import { MobilePairingConnectionOptions } from '../settings/MobilePairingConnectionOptions'
-import { MobileRelayBetaNotice } from '../settings/MobileRelayBetaNotice'
+import { MobilePairingConnectionOptions } from './pairing/MobilePairingConnectionOptions'
+import { MobileRelayBetaNotice } from './pairing/MobileRelayBetaNotice'
+import { MachineNameField } from '../machine-identity/MachineNameField'
 import { MobileRelayMintFailureNotice } from './mobile-relay-mint-failure-notice'
 import { WindowsFirewallNotice } from './WindowsFirewallNotice'
-import type { MobilePairingConnectionMode } from '../../../../shared/mobile-pairing-connection-mode'
-import type { MobileRelayMintFailure } from '../../../../shared/mobile-relay-mint-failure'
-import { translate } from '@/i18n/i18n'
+import type { MobilePairingConnectionMode } from '../../../../shared/remote-runtime/pairing/mobile-pairing-connection-mode'
+import type { MobileRelayMintFailure } from '../../../../shared/remote-runtime/relay/mobile-relay-mint-failure'
+import { i18n, translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 
 /** Why: one full sentence per device kind so translators own word order and punctuation. */
-function pairDeviceHeading(): string {
+function pairDeviceHeading(t: Translate = translate): string {
   const ua = navigator.userAgent
   if (ua.includes('Mac')) {
-    return translate('auto.components.mobile.MobileHero.pairThisMac', 'Pair this Mac.')
+    return t('auto.components.mobile.MobileHero.pairThisMac', 'Pair this Mac.')
   }
   if (ua.includes('Windows')) {
-    return translate('auto.components.mobile.MobileHero.pairThisPc', 'Pair this PC.')
+    return t('auto.components.mobile.MobileHero.pairThisPc', 'Pair this PC.')
   }
-  return translate('auto.components.mobile.MobileHero.pairThisComputer', 'Pair this computer.')
+  return t('auto.components.mobile.MobileHero.pairThisComputer', 'Pair this computer.')
 }
 
-/** Short copy for the QR frame when no image can be shown. */
-function emptyPairingQrMessage(args: {
-  relayMintFailure: MobileRelayMintFailure | null
-  canGeneratePairing: boolean
-  connectionMode: MobilePairingConnectionMode
-  pairingQrError: boolean
-  pairingUrl: string | null
-}): string {
+function emptyPairingQrMessage(
+  args: {
+    relayMintFailure: MobileRelayMintFailure | null
+    canGeneratePairing: boolean
+    connectionMode: MobilePairingConnectionMode
+    pairingQrError: boolean
+    pairingUrl: string | null
+  },
+  t: Translate = translate
+): string {
   if (args.relayMintFailure != null) {
-    return translate('auto.components.mobile.MobileHero.noRelayCode', 'No pairing code available')
+    return t('auto.components.mobile.MobileHero.noRelayCode', 'No pairing code available')
   }
   if (!args.canGeneratePairing && args.connectionMode === 'automatic') {
-    return translate(
+    return t(
       'auto.components.mobile.MobileHero.qrSignInRequired',
       'Sign in to create a Relay pairing code'
     )
   }
   if (args.pairingQrError && args.pairingUrl != null) {
-    return translate(
+    return t(
       'auto.components.mobile.MobileHero.qrRenderFailed',
       'QR couldn’t be rendered — copy the code below'
     )
   }
   if (!args.canGeneratePairing) {
-    return translate('auto.components.mobile.MobileHero.noPairingCode', 'No pairing code available')
+    return t('auto.components.mobile.MobileHero.noPairingCode', 'No pairing code available')
   }
-  return translate(
+  return t(
     'auto.components.mobile.MobileHero.qrGeneratePrompt',
     'Generate a pairing code to continue'
   )
@@ -96,7 +101,7 @@ export function MobileHeroPairingStep({
   onRegeneratePairing: () => void
   canGeneratePairing: boolean
   onCopyPairingCode: () => void
-  networkInterfaces: readonly MobileNetworkInterface[]
+  networkInterfaces: readonly PairingNetworkInterface[]
   customAddresses: readonly string[]
   selectedAddress: string | undefined
   selectedAddressIsCustom: boolean
@@ -107,6 +112,7 @@ export function MobileHeroPairingStep({
   onRefreshNetworkInterfaces: () => void
   refreshingNetworkInterfaces: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   const pairingLayoutStyle =
     pairQrSize == null
       ? undefined
@@ -118,18 +124,20 @@ export function MobileHeroPairingStep({
   const pairingWasReadyRef = useRef(pairingUrl != null && !pairLoading)
   const usingRelay = connectionMode === 'automatic'
   const [networkDisclosureOpen, setNetworkDisclosureOpen] = useState(false)
-  // A custom address is a deliberate override: show the row outright rather than
-  // behind a trigger that could not collapse it anyway.
+  // Show custom addresses directly; their pinned row cannot be collapsed by a disclosure trigger.
   const networkDisclosurePinned = selectedAddressIsCustom
   const emptyQrMessage =
     !pairLoading && pairQrDataUrl == null
-      ? emptyPairingQrMessage({
-          relayMintFailure,
-          canGeneratePairing,
-          connectionMode,
-          pairingQrError,
-          pairingUrl
-        })
+      ? emptyPairingQrMessage(
+          {
+            relayMintFailure,
+            canGeneratePairing,
+            connectionMode,
+            pairingQrError,
+            pairingUrl
+          },
+          t
+        )
       : null
 
   useEffect(() => {
@@ -144,7 +152,7 @@ export function MobileHeroPairingStep({
   const networkRow = (
     <div className="mp-network-row">
       <span className="mp-network-label">
-        {translate('auto.components.mobile.MobileHero.dfd2aa9d5d', 'Network')}
+        {t('auto.components.mobile.MobileHero.dfd2aa9d5d', 'Network')}
       </span>
       <NetworkInterfacePicker
         networkInterfaces={networkInterfaces}
@@ -163,14 +171,8 @@ export function MobileHeroPairingStep({
         className={cn('mp-network-refresh', refreshingNetworkInterfaces && 'is-spinning')}
         onClick={onRefreshNetworkInterfaces}
         disabled={refreshingNetworkInterfaces}
-        aria-label={translate(
-          'auto.components.mobile.MobileHero.85067b9e06',
-          'Refresh network interfaces'
-        )}
-        title={translate(
-          'auto.components.mobile.MobileHero.85067b9e06',
-          'Refresh network interfaces'
-        )}
+        aria-label={t('auto.components.mobile.MobileHero.85067b9e06', 'Refresh network interfaces')}
+        title={t('auto.components.mobile.MobileHero.85067b9e06', 'Refresh network interfaces')}
       >
         <RefreshCw className="size-3.5" />
       </button>
@@ -186,17 +188,21 @@ export function MobileHeroPairingStep({
         <div className="mp-eyebrow-row">
           <div className="mp-step-num">2</div>
           <span className="mp-eyebrow">
-            {translate('auto.components.mobile.MobileHero.3960f5c339', 'Step 2 of 2')}
+            {t('auto.components.mobile.MobileHero.3960f5c339', 'Step 2 of 2')}
           </span>
         </div>
-        <h2 className="mp-h2">{pairDeviceHeading()}</h2>
+        <h2 className="mp-h2">{pairDeviceHeading(t)}</h2>
         <p className="mp-lead-sm">
-          {translate('auto.components.mobile.MobileHero.d1495e5e64', 'Open Orca Mobile, tap')}{' '}
-          <strong>
-            {translate('auto.components.mobile.MobileHero.3aa7bb2d8b', 'Pair Desktop')}
-          </strong>
-          {translate('auto.components.mobile.MobileHero.2f077ef4eb', ', and scan the code.')}
+          <Trans
+            i18n={i18n}
+            defaults={t(
+              'auto.components.mobile.MobileHero.openAppAndScan',
+              'Open Orca Mobile, tap <strong>Pair Desktop</strong>, and scan the code.'
+            )}
+            components={{ strong: <strong /> }}
+          />
         </p>
+        <MachineNameField id="mobile-hero-machine-name" className="mp-pairing-machine" />
       </div>
       <div className="mp-pairing-relay">
         <MobilePairingConnectionOptions
@@ -224,13 +230,13 @@ export function MobileHeroPairingStep({
           {pairQrDataUrl ? (
             <img
               src={pairQrDataUrl}
-              alt={translate('auto.components.mobile.MobileHero.27735e5f4e', 'Pairing QR')}
+              alt={t('auto.components.mobile.MobileHero.27735e5f4e', 'Pairing QR')}
               className={cn(pairLoading && 'mp-qr-refreshing')}
             />
           ) : null}
           {pairLoading ? (
             <span className="mp-qr-loading">
-              {translate('auto.components.mobile.MobileHero.65b3f2e8bc', 'Generating…')}
+              {t('auto.components.mobile.MobileHero.65b3f2e8bc', 'Generating…')}
             </span>
           ) : null}
           {emptyQrMessage != null ? (
@@ -241,7 +247,7 @@ export function MobileHeroPairingStep({
         </div>
         <span className="sr-only" role="status" aria-live="polite">
           {pairQrDataUrl != null && !pairLoading
-            ? translate('auto.components.mobile.MobileHero.pairingCodeReady', 'Pairing code ready')
+            ? t('auto.components.mobile.MobileHero.pairingCodeReady', 'Pairing code ready')
             : ''}
         </span>
         {relayMintFailure == null ? (
@@ -252,10 +258,10 @@ export function MobileHeroPairingStep({
             disabled={pairLoading || !canGeneratePairing}
           >
             {pairLoading
-              ? translate('auto.components.mobile.MobileHero.65b3f2e8bc', 'Generating…')
+              ? t('auto.components.mobile.MobileHero.65b3f2e8bc', 'Generating…')
               : pairQrDataUrl
-                ? translate('auto.components.mobile.MobileHero.e59a252eca', 'Regenerate code')
-                : translate('auto.components.mobile.MobileHero.a6cffbbb0b', 'Generate code')}
+                ? t('auto.components.mobile.MobileHero.e59a252eca', 'Regenerate code')
+                : t('auto.components.mobile.MobileHero.a6cffbbb0b', 'Generate code')}
           </button>
         ) : null}
         {pairingQrError ? (
@@ -265,7 +271,7 @@ export function MobileHeroPairingStep({
           >
             <CircleAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden />
             <span className="min-w-0">
-              {translate(
+              {t(
                 'auto.components.mobile.MobileHero.pairingQrError',
                 'This pairing code couldn’t be rendered as a QR code. Copy it into Orca Mobile instead.'
               )}
@@ -275,9 +281,7 @@ export function MobileHeroPairingStep({
       </div>
       <div className="mp-pairing-controls">
         {usingRelay && !networkDisclosurePinned ? (
-          // Why: Relay is the default path; this only configures the LAN/Tailscale
-          // endpoint the phone prefers when nearby. Noun phrasing + muted style so
-          // it reads as an alternative, not a mode switch next to "Copy pairing code".
+          // Relay stays primary; this disclosure configures its optional nearby LAN/Tailscale endpoint.
           <Collapsible
             open={networkDisclosureOpen}
             onOpenChange={setNetworkDisclosureOpen}
@@ -285,7 +289,7 @@ export function MobileHeroPairingStep({
           >
             <CollapsibleTrigger asChild>
               <button type="button" className="mp-disclosure-trigger">
-                {translate(
+                {t(
                   'auto.components.mobile.MobileHero.directAddressDisclosure',
                   'Also use a faster local path'
                 )}
@@ -298,13 +302,10 @@ export function MobileHeroPairingStep({
               </button>
             </CollapsibleTrigger>
             <CollapsibleContent>
-              {/* The row's own 18px gap moves to the Collapsible so the spacing
-                  below stays identical whether the disclosure is open. `!` is
-                  required: mobile-page.css is unlayered and so outranks Tailwind's
-                  utilities layer on specificity ties. */}
+              {/* Move the gap to the disclosure; ! overrides unlayered mobile-page.css, which outranks Tailwind utilities. */}
               <div className="mt-2 space-y-2 [&>.mp-network-row]:mb-0!">
                 <p className="mp-disclosure-hint">
-                  {translate(
+                  {t(
                     'auto.components.mobile.MobileHero.directAddressHint',
                     'Optional. Pick the Wi‑Fi or Tailscale address your phone should use when nearby — usually faster than Relay. Relay still works when you’re away.'
                   )}
@@ -319,7 +320,7 @@ export function MobileHeroPairingStep({
 
         <div className="mp-inline-actions">
           <span className="mp-action-divider">
-            {translate('auto.components.mobile.MobileHero.4c1df4eba7', "Can't scan?")}
+            {t('auto.components.mobile.MobileHero.4c1df4eba7', "Can't scan?")}
           </span>
           <button
             ref={copyPairingCodeRef}
@@ -329,7 +330,7 @@ export function MobileHeroPairingStep({
             disabled={!pairingUrl || pairLoading}
           >
             <Copy className="size-3.5" />
-            {translate('auto.components.mobile.MobileHero.010dddcf27', 'Copy pairing code')}
+            {t('auto.components.mobile.MobileHero.010dddcf27', 'Copy pairing code')}
           </button>
         </div>
         <WindowsFirewallNotice

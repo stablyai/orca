@@ -1,17 +1,24 @@
+import type { ProfileSaveDomains } from '../profile-save-domains'
+import { WORKSPACE_SESSION_DOMAINS } from '../workspace-session-domains'
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import type { ProjectGroup } from '../../../shared/project-group-types'
+import type {
+  ProjectGroup,
+  ProjectGroupMutation,
+  ProjectGroupUpdate
+} from '../../../shared/project-group-types'
 import {
   createProjectGroup,
   getProjectGroupSubtreeIds,
   normalizeProjectGroupName
 } from '../../../shared/project-groups'
+import { getNextRootProjectOrder } from '../../../shared/root-project-order'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
-import { removeWorkspaceSessionOwner } from '../restoring-sessions/session-owner-removal'
+import { removeWorkspaceSessionOwnersEverywhere } from '../restoring-sessions/session-owner-removal'
 
 export type ProjectGroupMutationOperations = {
   state: PersistedState
-  scheduleSave: () => void
-  removeWorkspaceLineageForFolderParent: (folderWorkspaceId: string) => void
+  scheduleSave: (domains: ProfileSaveDomains) => void
+  removeWorkspaceLineageForRemovedFolder: (folderWorkspaceId: string) => void
   pruneMobileClientTabSelections: (matchesWorktreeId: (worktreeId: string) => boolean) => void
 }
 
@@ -22,12 +29,12 @@ export class ProjectGroupPersistenceOperations {
     return this.operations.state
   }
 
-  private scheduleSave(): void {
-    this.operations.scheduleSave()
+  private scheduleSave(domains: ProfileSaveDomains): void {
+    this.operations.scheduleSave(domains)
   }
 
-  private removeWorkspaceLineageForFolderParent(folderWorkspaceId: string): void {
-    this.operations.removeWorkspaceLineageForFolderParent(folderWorkspaceId)
+  private removeWorkspaceLineageForRemovedFolder(folderWorkspaceId: string): void {
+    this.operations.removeWorkspaceLineageForRemovedFolder(folderWorkspaceId)
   }
 
   private pruneMobileClientTabSelections(matchesWorktreeId: (worktreeId: string) => boolean): void {
@@ -48,7 +55,7 @@ export class ProjectGroupPersistenceOperations {
     createdFrom: ProjectGroup['createdFrom']
   }): ProjectGroup {
     let maxOrder = -1
-    // Why: persisted group lists can be large enough to exceed spread limits.
+    // Large persisted lists can exceed spread argument limits.
     for (const existingGroup of this.state.projectGroups ?? []) {
       maxOrder = Math.max(maxOrder, existingGroup.tabOrder)
     }
@@ -56,19 +63,44 @@ export class ProjectGroupPersistenceOperations {
       ...input,
       tabOrder: maxOrder + 1
     })
+    const rootProjectOrder = !group.parentGroupId
+      ? getNextRootProjectOrder(this.state.repos, this.state.projectGroups ?? [])
+      : undefined
+    if (rootProjectOrder !== undefined) {
+      group.rootProjectOrder = rootProjectOrder
+    }
     this.state.projectGroups = [...(this.state.projectGroups ?? []), group]
-    this.scheduleSave()
+    this.scheduleSave(['projectGroups'])
     return group
   }
 
-  updateProjectGroup(
-    groupId: string,
-    updates: Partial<Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color'>>
-  ): ProjectGroup | null {
+  updateProjectGroup(groupId: string, updates: ProjectGroupUpdate): ProjectGroup | null {
     const group = (this.state.projectGroups ?? []).find((entry) => entry.id === groupId)
     if (!group) {
       return null
     }
+    this.applyGroupUpdate(group, updates)
+    this.scheduleSave(['projectGroups'])
+    return group
+  }
+
+  updateProjectGroups(mutations: readonly ProjectGroupMutation[]): ProjectGroup[] | null {
+    const byId = new Map((this.state.projectGroups ?? []).map((group) => [group.id, group]))
+    if (mutations.some(({ groupId }) => !byId.has(groupId))) {
+      return null
+    }
+    const updated = mutations.map(({ groupId, updates }) => {
+      const group = byId.get(groupId)!
+      this.applyGroupUpdate(group, updates)
+      return group
+    })
+    if (updated.length > 0) {
+      this.scheduleSave(['projectGroups'])
+    }
+    return updated
+  }
+
+  private applyGroupUpdate(group: ProjectGroup, updates: ProjectGroupUpdate): void {
     if (updates.name !== undefined) {
       group.name = normalizeProjectGroupName(updates.name, group.name)
     }
@@ -78,12 +110,18 @@ export class ProjectGroupPersistenceOperations {
     if (updates.tabOrder !== undefined && Number.isFinite(updates.tabOrder)) {
       group.tabOrder = updates.tabOrder
     }
+    if (updates.rootProjectOrder === null) {
+      delete group.rootProjectOrder
+    } else if (
+      updates.rootProjectOrder !== undefined &&
+      Number.isFinite(updates.rootProjectOrder)
+    ) {
+      group.rootProjectOrder = updates.rootProjectOrder
+    }
     if (updates.color !== undefined) {
       group.color = typeof updates.color === 'string' ? updates.color : null
     }
     group.updatedAt = Date.now()
-    this.scheduleSave()
-    return group
   }
 
   deleteProjectGroup(groupId: string): boolean {
@@ -95,7 +133,7 @@ export class ProjectGroupPersistenceOperations {
     if ((this.state.projectGroups?.length ?? 0) === before) {
       return false
     }
-    // Why: groups are sidebar organization only, so deleting one ungroups its repos rather than deleting them.
+    // Sidebar grouping does not own repos; ungroup them rather than delete them.
     this.state.repos = this.state.repos.map((repo) =>
       repo.projectGroupId && deletedGroupIds.has(repo.projectGroupId)
         ? { ...repo, projectGroupId: null }
@@ -105,18 +143,24 @@ export class ProjectGroupPersistenceOperations {
     for (const workspace of this.state.folderWorkspaces ?? []) {
       if (deletedGroupIds.has(workspace.projectGroupId)) {
         removedFolderWorkspaceKeys.add(folderWorkspaceKey(workspace.id))
-        this.state.workspaceSession = removeWorkspaceSessionOwner(
-          this.state.workspaceSession,
-          folderWorkspaceKey(workspace.id)
-        )!
-        this.removeWorkspaceLineageForFolderParent(workspace.id)
+        this.removeWorkspaceLineageForRemovedFolder(workspace.id)
       }
     }
+    // Remove all partition copies or folder layouts could resurrect on load.
+    removeWorkspaceSessionOwnersEverywhere(this.state, removedFolderWorkspaceKeys)
     this.state.folderWorkspaces = (this.state.folderWorkspaces ?? []).filter(
       (workspace) => !deletedGroupIds.has(workspace.projectGroupId)
     )
     this.pruneMobileClientTabSelections((worktreeId) => removedFolderWorkspaceKeys.has(worktreeId))
-    this.scheduleSave()
+    this.scheduleSave([
+      'projectGroups',
+      'repos',
+      'folderWorkspaces',
+      'workspaceLineageByChildKey',
+      'crossStoreLineageByChildKey',
+      ...WORKSPACE_SESSION_DOMAINS,
+      'mobileClientTabSelectionsByDeviceId'
+    ])
     return true
   }
 }

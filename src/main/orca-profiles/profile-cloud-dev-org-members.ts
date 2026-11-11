@@ -9,16 +9,14 @@ import type {
   OrcaProfileOrgInviteRevokeArgs
 } from '../../shared/orca-profiles'
 
-// Why: dev-auth mode has no server, so the whole teammate UI is exercised
-// against this in-memory per-org roster. It mirrors the shape the real client
-// returns (self as owner, one signed-in teammate, one never-signed-in teammate,
-// one pending invite) and the mutation endpoints' status semantics.
+// With no dev-auth server, this roster mirrors real membership states and mutation results.
 type DevOrgRoster = {
   members: OrcaOrgMember[]
   pendingInvites: OrcaOrgPendingInvite[]
 }
 
 const devRostersByOrg = new Map<string, DevOrgRoster>()
+const MAX_DEV_ORG_ROSTERS = 64
 
 function cleanEnvString(value: string | undefined, fallback: string): string {
   const trimmed = value?.trim()
@@ -44,7 +42,7 @@ function seedDevRoster(): DevOrgRoster {
         displayName: 'Dev Teammate',
         role: 'admin'
       },
-      // Why: userId null exercises the "hasn't signed in to Orca yet" disabled row.
+      // Null user IDs exercise members who have not signed in yet.
       { userId: null, email: 'invited-member@orca.local', displayName: undefined, role: 'member' }
     ],
     pendingInvites: [{ email: 'pending@orca.local', role: 'member', createdAt: Date.now() }]
@@ -58,6 +56,13 @@ function getDevRoster(orgId: string): DevOrgRoster {
   }
   const seeded = seedDevRoster()
   devRostersByOrg.set(orgId, seeded)
+  while (devRostersByOrg.size > MAX_DEV_ORG_ROSTERS) {
+    const oldest = devRostersByOrg.keys().next()
+    if (oldest.done) {
+      break
+    }
+    devRostersByOrg.delete(oldest.value)
+  }
   return seeded
 }
 

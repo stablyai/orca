@@ -1,4 +1,8 @@
-import type { ListMergeRequestsResult, MRListState } from '../../shared/gitlab-types'
+import type {
+  GitLabMRInvolvement,
+  ListMergeRequestsResult,
+  MRListState
+} from '../../shared/gitlab-types'
 import type { IssueSourcePreference } from '../../shared/repo-types'
 import { mapMRToWorkItem } from './mappers'
 import {
@@ -16,6 +20,42 @@ import {
   type LocalGitExecOptions
 } from './gl-utils'
 import { encodedProject } from './project-path-encoding'
+import { readGlabViewer } from './gitlab-auth-and-rate-limit'
+import { isTaskRepositoryIneligible } from '../git/task-repository-eligibility'
+
+const INVOLVEMENT_PARAM: Record<GitLabMRInvolvement, string> = {
+  authored: 'author_id',
+  reviewing: 'reviewer_id'
+}
+
+const SIGN_IN_REQUIRED_MESSAGE =
+  "GitLab isn't signed in here, so Orca can't filter merge requests by you. Run glab auth login in this environment, then refresh."
+
+class GitLabSignInRequiredError extends Error {}
+
+// A bare "401" would also match a port or host in the request URL of a network failure.
+const SIGNED_OUT_LOOKUP_FAILURE =
+  /\b401 unauthorized\b|http 401\b|not logged|not authenticated|no token/
+
+function isSignedOutLookupFailure(err: unknown): boolean {
+  return SIGNED_OUT_LOOKUP_FAILURE.test(
+    (err instanceof Error ? err.message : String(err)).toLowerCase()
+  )
+}
+
+async function involvementFilterParam(
+  involvement: GitLabMRInvolvement,
+  hostArgs: string[],
+  options: Parameters<typeof glabExecFileAsync>[1]
+): Promise<string> {
+  const { id: viewerId } = await readGlabViewer(hostArgs, options).catch((err: unknown) => {
+    throw isSignedOutLookupFailure(err) ? new GitLabSignInRequiredError() : err
+  })
+  if (typeof viewerId !== 'number' || !Number.isSafeInteger(viewerId) || viewerId <= 0) {
+    throw new Error('Could not identify the signed-in GitLab user.')
+  }
+  return `&${INVOLVEMENT_PARAM[involvement]}=${viewerId}`
+}
 
 function mrListStateFlags(state: MRListState): string[] {
   switch (state) {
@@ -30,7 +70,6 @@ function mrListStateFlags(state: MRListState): string[] {
   }
 }
 
-/** List merge requests for a project via glab CLI, which handles self-hosted auth and project selection. */
 export async function listMergeRequests(
   repoPath: string,
   state: MRListState = 'opened',
@@ -39,10 +78,11 @@ export async function listMergeRequests(
   preference?: IssueSourcePreference,
   query?: string,
   connectionId?: string | null,
-  localGitOptions: LocalGitExecOptions = {}
+  localGitOptions: LocalGitExecOptions = {},
+  { involvement }: { involvement?: GitLabMRInvolvement } = {}
 ): Promise<ListMergeRequestsResult> {
   const knownHosts = await getGlabKnownHosts(connectionId, localGitOptions)
-  // Why: MRs live on the user's fork (origin); route through the preference resolver so fork workflows share plumbing.
+  // Resolve the same preference-selected project as issue listings.
   const { source: projectRef } = await resolveIssueSource(
     repoPath,
     preference,
@@ -51,8 +91,26 @@ export async function listMergeRequests(
     localGitOptions
   )
   if (!projectRef) {
+    if (await isTaskRepositoryIneligible(repoPath, 'gitlab', connectionId, localGitOptions)) {
+      return { items: [], page, perPage, totalCount: 0, totalPages: 0 }
+    }
+    if (involvement) {
+      // Before the SSH not_found: the task page hides that type, so the empty list would read as "none of yours".
+      return {
+        items: [],
+        page,
+        perPage,
+        totalCount: 0,
+        totalPages: 0,
+        error: {
+          type: 'unknown',
+          message:
+            "Orca couldn't identify this repository's GitLab project, so it can't filter its merge requests by you."
+        }
+      }
+    }
     if (connectionId) {
-      // Why: SSH-backed repos have no local cwd; a cwd-less glab could resolve an unrelated project.
+      // Without local cwd, an unresolved SSH project could become an unrelated glab repository.
       return {
         items: [],
         page,
@@ -65,9 +123,8 @@ export async function listMergeRequests(
         }
       }
     }
-    // Why: fallback — let glab infer the project from cwd when the host isn't in getGlabKnownHosts.
+    // Local compatibility can infer a project omitted from authenticated known hosts.
     const stateFlag = mrListStateFlags(state)
-    // Why: apply the same search as the API path, else queries are silently ignored on cwd-inferred repos (#6263).
     const searchFlag = query?.trim() ? ['--search', query.trim()] : []
     await acquire()
     try {
@@ -95,7 +152,7 @@ export async function listMergeRequests(
         items: data.map((d) => mapMRToWorkItem(d, 'unknown')),
         page,
         perPage,
-        // Why: the CLI omits x-total headers, so totals are approximate.
+        // CLI listings omit total headers; infer whether another page may exist.
         totalCount: data.length,
         totalPages: data.length < perPage ? page : page + 1
       }
@@ -112,30 +169,41 @@ export async function listMergeRequests(
       release()
     }
   }
-  // Why: GitLab's API uses an absent state param to mean "any"; drop it for 'all'.
   const stateParam = state === 'all' ? '' : `&state=${state}`
   const searchParam = query?.trim() ? `&search=${encodeURIComponent(query.trim())}` : ''
   const path =
     `projects/${encodedProject(projectRef.path)}/merge_requests?` +
     `page=${page}&per_page=${perPage}&order_by=updated_at&sort=desc&with_merge_status_recheck=false${stateParam}${searchParam}`
   const repoId = projectRef.path
+  const execOptions = glabRepoExecOptions(repoPath, connectionId, localGitOptions)
+  // A filtered list pins the project's host so the user lookup and the list share one account.
+  const hostArgs = involvement
+    ? ['--hostname', projectRef.host]
+    : glabHostnameArgs(projectRef, connectionId)
 
   await acquire()
   try {
+    const involvementParam = involvement
+      ? await involvementFilterParam(involvement, hostArgs, execOptions)
+      : ''
     const { body, headers } = await glabApiWithHeaders(
-      [...glabHostnameArgs(projectRef, connectionId), path],
-      glabRepoExecOptions(repoPath, connectionId, localGitOptions)
+      [...hostArgs, `${path}${involvementParam}`],
+      execOptions
     )
     const data = parseGlabJsonList<Parameters<typeof mapMRToWorkItem>[0]>(body)
+    const headerTotalCount = parseGlabPaginationHeader(headers['x-total'], 0)
+    // GitLab omits both totals past 10,000 rows and proxies can strip them; a full page advertises one more probe.
+    const probedTotalPages = data.length < perPage ? page : page + 1
     return {
       items: data.map((d) => mapMRToWorkItem(d, repoId, projectRef)),
       page,
       perPage,
-      totalCount: parseGlabPaginationHeader(headers['x-total'], 0) ?? 0,
-      // Why: GitLab may omit x-total-pages for 'all' or large per_page; fall back to ceil(total/perPage).
+      totalCount: headerTotalCount ?? 0,
       totalPages:
         parseGlabPaginationHeader(headers['x-total-pages'], 1) ??
-        Math.max(1, Math.ceil((parseGlabPaginationHeader(headers['x-total'], 0) ?? 0) / perPage))
+        (headerTotalCount === undefined
+          ? probedTotalPages
+          : Math.max(1, Math.ceil(headerTotalCount / perPage)))
     }
   } catch (err) {
     return {
@@ -144,14 +212,12 @@ export async function listMergeRequests(
       perPage,
       totalCount: 0,
       totalPages: 0,
-      error: classifyListFetchError(err)
+      error:
+        err instanceof GitLabSignInRequiredError
+          ? { type: 'permission_denied', message: SIGN_IN_REQUIRED_MESSAGE }
+          : classifyListFetchError(err)
     }
   } finally {
     release()
   }
 }
-
-/**
- * Fetch a work item (MR or issue) by explicit project ref + iid + type.
- * Used by the paste-URL flow, where the URL determines the project directly.
- */

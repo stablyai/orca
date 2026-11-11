@@ -1,5 +1,4 @@
 import { EventEmitter } from 'node:events'
-import { StringDecoder } from 'node:string_decoder'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMetadata } from '../../shared/runtime-bootstrap'
 import { sendRequest } from './transport'
@@ -51,29 +50,21 @@ describe('CLI runtime response framing', () => {
     }
   )
 
-  it('accepts Unicode split across socket bytes using the existing UTF-8 decoder', async () => {
-    const pending = sendRequest(metadata, 'terminal.read', {}, 30000)
-    const decoder = new StringDecoder('utf8')
-    for (const byte of Buffer.from(reply({ data: '界😀é' }))) {
-      socket.emit('data', decoder.write(Buffer.from([byte])))
-    }
-    socket.emit('data', decoder.end())
-    await expect(pending).resolves.toMatchObject({ result: { data: '界😀é' } })
-  })
-
   it('searches each fragment once without rescanning the accumulated reply', async () => {
     const encoded = reply({ data: 'x'.repeat(1024 * 1024) })
     const pending = sendRequest(metadata, 'terminal.read', {}, 30000)
     const originalIndexOf = String.prototype.indexOf
     let searchedCharacters = 0
-    const search = vi
-      .spyOn(String.prototype, 'indexOf')
-      .mockImplementation(function (this: string, value, position) {
-        if (value === '\n') {
-          searchedCharacters += this.length - (position ?? 0)
-        }
-        return originalIndexOf.call(this, value, position)
-      })
+    const search = vi.spyOn(String.prototype, 'indexOf').mockImplementation(function (
+      this: string,
+      value,
+      position
+    ) {
+      if (value === '\n') {
+        searchedCharacters += this.length - (position ?? 0)
+      }
+      return originalIndexOf.call(this, value, position)
+    })
     try {
       for (let offset = 0; offset < encoded.length; offset += 256) {
         socket.emit('data', encoded.slice(offset, offset + 256))

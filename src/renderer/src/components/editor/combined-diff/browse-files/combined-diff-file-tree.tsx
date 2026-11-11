@@ -1,12 +1,13 @@
 import React from 'react'
 import { Check, Filter, PanelLeftClose, Search } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import {
   getCombinedDiffFileTreeEntriesMatchingStaticFilters,
-  getEntryExtension
+  getEntryExtension,
+  NO_EXTENSION_KEY
 } from './combined-diff-file-tree-filter'
 import type {
   CombinedDiffFileTreeEntry,
@@ -14,7 +15,7 @@ import type {
 } from '../resolve-changes/combined-diff-section-identity'
 import { CombinedDiffFileTreeRows } from './combined-diff-file-tree-rows'
 import { useCombinedDiffFileTreeResize } from './use-combined-diff-file-tree-resize'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   buildCombinedDiffBranchTreeRoots,
   buildCombinedDiffUncommittedTreeGroups,
@@ -24,9 +25,7 @@ import {
   type CombinedDiffTreeNode
 } from './combined-diff-file-tree-model'
 
-// Why: a collapsed tree renders nothing, so every memo below short-circuits to one of these instead
-// of building and flattening the whole tree behind a hidden panel. Expanding rebuilds them, which
-// an expand already costs today.
+// Collapsed panels use stable empty inputs to skip hidden tree construction and flattening.
 const EMPTY_TREE_ENTRIES: readonly CombinedDiffFileTreeEntry[] = Object.freeze([])
 const EMPTY_TREE_EXTENSIONS: readonly string[] = Object.freeze([])
 const EMPTY_UNCOMMITTED_TREE_GROUPS: CombinedDiffTreeGroup[] = []
@@ -36,6 +35,7 @@ const EMPTY_TREE_ROWS: CombinedDiffTreeNode[] = []
 export function CombinedDiffFileTree({
   mode,
   worktreePath,
+  sourceWorkspaceId,
   entries,
   sectionIndexByKey,
   activeSectionKey,
@@ -46,6 +46,7 @@ export function CombinedDiffFileTree({
 }: {
   mode: CombinedDiffFileTreeMode
   worktreePath: string
+  sourceWorkspaceId?: string
   entries: readonly CombinedDiffFileTreeEntry[]
   sectionIndexByKey: ReadonlyMap<string, number>
   activeSectionKey: string | null
@@ -54,13 +55,14 @@ export function CombinedDiffFileTree({
   onCollapsedChange: (collapsed: boolean) => void
   onNavigate: (entry: CombinedDiffFileTreeEntry) => void
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const [collapsedDirectoryKeys, setCollapsedDirectoryKeys] = React.useState<Set<string>>(
     () => new Set()
   )
   const [query, setQuery] = React.useState('')
   const [excludedExtensions, setExcludedExtensions] = React.useState<Set<string>>(() => new Set())
   const [includeViewed, setIncludeViewed] = React.useState(true)
-  // Why: state, not a ref — the virtualized row lists need the scroller on their own mount pass.
+  // Use state so virtualized lists receive the scroller on their first mount.
   const [listScrollElement, setListScrollElement] = React.useState<HTMLDivElement | null>(null)
   const { handleResizeKeyDown, handleResizeStart, maxWidth, minWidth, treeRef, width } =
     useCombinedDiffFileTreeResize(collapsed)
@@ -83,8 +85,7 @@ export function CombinedDiffFileTree({
         : Array.from(new Set(entries.map(getEntryExtension))).sort(),
     [collapsed, entries]
   )
-  // Why: viewed/loading state changes for one section must not invalidate the path filter or tree
-  // construction. It is applied below as a visibility overlay.
+  // Apply viewed/loading changes as an overlay without rebuilding path filters or tree structure.
   const structurallyFilteredEntries = React.useMemo(
     () =>
       collapsed
@@ -129,8 +130,7 @@ export function CombinedDiffFileTree({
         : EMPTY_TREE_ROOTS,
     [collapsed, mode, structurallyFilteredEntries]
   )
-  // Why: the viewed overlay below replaces these rows entirely when viewed files are hidden, so
-  // flattening the unfiltered tree there is pure dead work.
+  // When viewed files are hidden, the visibility overlay replaces these rows; skip unused flattening.
   const uncommittedRowsByArea = React.useMemo(() => {
     const rowsByArea = new Map<string, CombinedDiffTreeNode[]>()
     if (collapsed || !includeViewed) {
@@ -200,6 +200,7 @@ export function CombinedDiffFileTree({
   const sharedRowProps = {
     mode,
     worktreePath,
+    sourceWorkspaceId,
     activeSectionKey,
     sectionIndexByKey,
     collapsedDirectoryKeys,
@@ -209,9 +210,7 @@ export function CombinedDiffFileTree({
   }
 
   return (
-    // Why: this column must be height-bounded so the file list, not the page,
-    // owns overflow when review diffs have more files than fit on screen.
-    // Why: useSidebarResize owns the inline width so a rerender mid-drag can't snap it back.
+    // Bound height so the file list owns overflow; useSidebarResize owns width to prevent rerenders snapping an active drag.
     <aside
       ref={treeRef}
       className="relative flex min-h-0 shrink-0 flex-col overflow-hidden border-r border-border bg-background"
@@ -219,13 +218,13 @@ export function CombinedDiffFileTree({
       <div className="sticky top-0 z-20 shrink-0 bg-background">
         <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-1.5">
           <div className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-            {translate('auto.components.editor.CombinedDiffFileTree.481e63ca52', 'Files')}
+            {t('auto.components.editor.CombinedDiffFileTree.481e63ca52', 'Files')}
           </div>
           <Button
             type="button"
             variant="ghost"
             size="icon-xs"
-            aria-label={translate(
+            aria-label={t(
               'auto.components.editor.CombinedDiffFileTree.21783df79f',
               'Collapse file tree'
             )}
@@ -240,7 +239,7 @@ export function CombinedDiffFileTree({
             <Input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder={translate(
+              placeholder={t(
                 'auto.components.editor.CombinedDiffFileTree.4cc7b83ffe',
                 'Filter files...'
               )}
@@ -253,7 +252,7 @@ export function CombinedDiffFileTree({
                 type="button"
                 variant="outline"
                 size="icon-sm"
-                aria-label={translate(
+                aria-label={t(
                   'auto.components.editor.CombinedDiffFileTree.cd0e0ed79e',
                   'Filter diff files'
                 )}
@@ -264,10 +263,7 @@ export function CombinedDiffFileTree({
             </PopoverTrigger>
             <PopoverContent align="end" side="bottom" sideOffset={6} className="w-56 p-0">
               <div className="border-b border-border px-3 py-2 text-xs font-semibold text-foreground">
-                {translate(
-                  'auto.components.editor.CombinedDiffFileTree.c00020f081',
-                  'File extensions'
-                )}
+                {t('auto.components.editor.CombinedDiffFileTree.c00020f081', 'File extensions')}
               </div>
               <div className="max-h-60 overflow-auto py-1 scrollbar-sleek">
                 {availableExtensions.map((extension) => {
@@ -282,7 +278,14 @@ export function CombinedDiffFileTree({
                       <Check
                         className={cn('size-3.5 shrink-0', checked ? 'opacity-100' : 'opacity-0')}
                       />
-                      <span className="min-w-0 flex-1 truncate">{extension}</span>
+                      <span className="min-w-0 flex-1 truncate">
+                        {extension === NO_EXTENSION_KEY
+                          ? t(
+                              'auto.components.editor.CombinedDiffViewer.noExtension',
+                              '(no extension)'
+                            )
+                          : extension}
+                      </span>
                     </button>
                   )
                 })}
@@ -297,10 +300,7 @@ export function CombinedDiffFileTree({
                     className={cn('size-3.5 shrink-0', includeViewed ? 'opacity-100' : 'opacity-0')}
                   />
                   <span className="min-w-0 flex-1 truncate">
-                    {translate(
-                      'auto.components.editor.CombinedDiffFileTree.be119cb9d1',
-                      'Viewed files'
-                    )}
+                    {t('auto.components.editor.CombinedDiffFileTree.be119cb9d1', 'Viewed files')}
                   </span>
                 </button>
                 {activeFilterCount > 0 && (
@@ -309,10 +309,7 @@ export function CombinedDiffFileTree({
                     className="w-full px-3 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                     onClick={resetFilters}
                   >
-                    {translate(
-                      'auto.components.editor.CombinedDiffFileTree.eafe1aeb53',
-                      'Reset filters'
-                    )}
+                    {t('auto.components.editor.CombinedDiffFileTree.eafe1aeb53', 'Reset filters')}
                   </button>
                 )}
               </div>
@@ -323,7 +320,7 @@ export function CombinedDiffFileTree({
       <div ref={setListScrollElement} className="min-h-0 flex-1 overflow-auto py-1 scrollbar-sleek">
         {visibleEntryCount === 0 ? (
           <div className="px-3 py-6 text-center text-xs text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.editor.CombinedDiffFileTree.f984289373',
               'No files match the current filters.'
             )}
@@ -357,7 +354,7 @@ export function CombinedDiffFileTree({
             {mode === 'all' && (branchVisibleRows?.rows ?? branchRows).length > 0 ? (
               <div className="py-1">
                 <div className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-                  {translate(
+                  {t(
                     'auto.components.editor.CombinedDiffFileTree.39b6b9e4e4',
                     'Committed on Branch'
                   )}
@@ -380,7 +377,7 @@ export function CombinedDiffFileTree({
       </div>
       <div
         role="separator"
-        aria-label={translate(
+        aria-label={t(
           'auto.components.editor.CombinedDiffFileTree.resizeFileTree',
           'Resize file tree'
         )}

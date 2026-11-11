@@ -1,6 +1,7 @@
-import { is } from '@electron-toolkit/utils'
+import { app } from 'electron'
 import type { BrowserWindow } from 'electron'
 import { isSystemSessionEnding } from '../crash-reporting/expected-teardown-state'
+import type { LowCommitOomVerdict } from '../crash-reporting/low-commit-oom-recovery-gate'
 import type { CreateMainWindowOptions, MainWindowLoadObserver } from './main-window-contracts'
 import { mainWindowLoadErrorCode } from './main-window-load-error-code'
 
@@ -24,7 +25,11 @@ const MILESTONE_RANK: Record<RecoveryReloadMilestone, number> = {
   'dom-ready': 2
 }
 
-export type RecoveryExhaustionCause = 'crash-loop' | 'reload-stalled'
+export type RecoveryExhaustionCause =
+  | 'crash-loop'
+  | 'reload-stalled'
+  | 'launch-failed'
+  | 'low-commit'
 
 export type RendererRecoveryReloadWatchdog = {
   /** Issues a recovery reload and arms the stall watchdog. */
@@ -34,11 +39,12 @@ export type RendererRecoveryReloadWatchdog = {
     trigger?: RecoveryReloadTrigger
   ) => void
   /** Raises the recovery prompt at most once: a native message box cannot be dismissed, so a second one stacks. */
-  escalate: (subject: RecoveryPromptSubject, cause: RecoveryExhaustionCause) => void
-  /**
-   * A main-frame document finished loading. Only an attempt whose load was superseded takes this as its outcome;
-   * every other attempt settles through its own load promise, which an error page or a later navigation cannot fool.
-   */
+  escalate: (
+    subject: RecoveryPromptSubject,
+    cause: RecoveryExhaustionCause,
+    lowCommit?: LowCommitOomVerdict
+  ) => void
+  /** Only superseded loads use global finish events; normal attempts settle through their own promises so stale events/error pages cannot fake success. */
   notifyDocumentLoaded: () => void
   /** Restarts the stall budget after a suspend froze the timer mid-load. */
   notifySystemResume: () => void
@@ -60,7 +66,7 @@ type RecoveryReload = {
 }
 
 type RecoveryReloadSeed = Pick<RecoveryReload, 'attempt' | 'details' | 'recentRecoveryCount'>
-/** What a raised prompt is about; the crash-loop breaker has no attempt to hand over, only the crash. */
+/** Breaker escalation has no load attempt, only the crash that exhausted recovery. */
 export type RecoveryPromptSubject = Pick<RecoveryReload, 'details' | 'recentRecoveryCount'>
 
 /** Bounds stalled recovery reloads while still observing success after escalation. */
@@ -99,7 +105,7 @@ export function createRendererRecoveryReloadWatchdog(args: {
   }
   // Match loadMainWindow's dev/prod branch.
   const timeoutMs = (): number =>
-    is.dev && process.env.ELECTRON_RENDERER_URL
+    !app.isPackaged && process.env.ELECTRON_RENDERER_URL
       ? RENDERER_RECOVERY_DEV_LOAD_TIMEOUT_MS
       : RENDERER_RECOVERY_LOAD_TIMEOUT_MS
 
@@ -197,7 +203,11 @@ export function createRendererRecoveryReloadWatchdog(args: {
     )
   }
 
-  const escalate = (subject: RecoveryPromptSubject, cause: RecoveryExhaustionCause): void => {
+  const escalate = (
+    subject: RecoveryPromptSubject,
+    cause: RecoveryExhaustionCause,
+    lowCommit?: LowCommitOomVerdict
+  ): void => {
     // A new crash invalidates any document that landed while the prompt was open.
     documentLanded = false
     if (prompt) {
@@ -209,6 +219,7 @@ export function createRendererRecoveryReloadWatchdog(args: {
       webContentsId: rendererWebContentsId,
       recentRecoveryCount: subject.recentRecoveryCount,
       cause,
+      ...(lowCommit ? { lowCommit } : {}),
       // Watch manual retries too, so another stall can offer recovery again.
       retry: () => retryFrom(subject)
     })

@@ -1,58 +1,77 @@
+import type { RuntimeGitLocalBranches } from '../../shared/runtime-worktree-contracts'
+import type { BranchSwitchCreation } from '../../shared/git/branch-switch-target'
 import type { GitRuntimeOptions } from './git-runtime-options'
 import { gitOptionsForWorktree } from './git-runtime-options'
 import { gitExecFileAsync } from './runner'
-import { runWithGitReadCacheInvalidation } from './status'
+import { gitEnvWithoutYesNoPrompt } from './command-runner/git-no-prompt-env'
+import { translateWorktreePath } from './worktrees/catalog/worktree-path-comparison'
+import { parseCheckoutSkippedPaths } from './checkout-skipped-paths'
+import { runWithGitReadCacheInvalidation } from './source-control/git-read-cache-invalidation'
 
-/**
- * Reject branch names git would parse as an option (`-`/`--…`) or that aren't a
- * valid ref. Defense-in-depth: callers also validate at the RPC schema, but the
- * relay entrypoint is reachable independently, so the helper guards too.
- */
+/** Reject empty and option-like names here too: relay callers can bypass RPC schema validation. */
 export function assertValidBranchName(branch: string): void {
   if (branch.length === 0 || branch.startsWith('-')) {
     throw new Error('invalid_branch_name')
   }
 }
 
-/**
- * Switch the worktree to an existing local branch. Git itself refuses (and
- * surfaces a "would be overwritten by checkout" error) when uncommitted changes
- * would conflict, so we let that message propagate to the caller rather than
- * forcing — mobile shows it as a toast. Flag-injection is prevented by
- * `assertValidBranchName` (rejects `-…`); the trailing `--` marks that no
- * pathspecs follow, so the token is unambiguously treated as a branch ref.
- */
+/** Leave conflicting changes to Git; trailing -- disambiguates the branch from pathspecs. */
 export async function checkoutBranch(
   worktreePath: string,
   branch: string,
-  options: GitRuntimeOptions = {}
-): Promise<void> {
+  options: GitRuntimeOptions & { detached?: boolean } = {},
+  creation?: BranchSwitchCreation
+): Promise<{ skippedPaths: string[] }> {
   assertValidBranchName(branch)
-  await runWithGitReadCacheInvalidation(() =>
-    gitExecFileAsync(['checkout', branch, '--'], gitOptionsForWorktree(worktreePath, options))
+  const args =
+    creation?.kind === 'new'
+      ? ['checkout', '--no-track', '-b', branch, '--']
+      : creation?.kind === 'remote'
+        ? ['checkout', '--track', '-b', branch, creation.startPoint, '--']
+        : ['checkout', ...(options.detached ? ['--detach', `${branch}^{commit}`] : [branch]), '--']
+  const { stderr } = await runWithGitReadCacheInvalidation(() =>
+    gitExecFileAsync(args, {
+      ...gitOptionsForWorktree(worktreePath, options),
+      // A locked file must fail the checkout, not open a prompt while the switch lock is held.
+      ...gitEnvWithoutYesNoPrompt()
+    })
   )
+  return { skippedPaths: parseCheckoutSkippedPaths(stderr) }
 }
 
-/**
- * List local branch short-names for the branch picker, current branch first.
- * Uses `for-each-ref` (stable, scriptable output) instead of `branch` to avoid
- * locale-dependent decoration.
- */
+/** for-each-ref avoids localized branch decoration; return the current branch first. */
 export async function listLocalBranches(
   worktreePath: string,
   options: GitRuntimeOptions = {}
-): Promise<{ current: string | null; branches: string[] }> {
+): Promise<RuntimeGitLocalBranches> {
+  const execution = gitOptionsForWorktree(worktreePath, options)
+  let extended = true
   const { stdout } = await gitExecFileAsync(
-    ['for-each-ref', '--format=%(HEAD)%09%(refname:short)', 'refs/heads/'],
-    gitOptionsForWorktree(worktreePath, options)
-  )
+    [
+      'for-each-ref',
+      '--format=%(HEAD)%09%(refname:lstrip=2)%09%(committerdate:unix)%09%(worktreepath)',
+      'refs/heads/'
+    ],
+    execution
+  ).catch((error) => {
+    if (options.signal?.aborted || (error instanceof Error && error.name === 'AbortError')) {
+      throw error
+    }
+    extended = false
+    return gitExecFileAsync(
+      ['for-each-ref', '--format=%(HEAD)%09%(refname:lstrip=2)', 'refs/heads/'],
+      execution
+    )
+  })
   let current: string | null = null
   const branches: string[] = []
+  const committedAt: Record<string, number> = Object.create(null)
+  const worktreePaths: Record<string, string> = Object.create(null)
   for (const line of stdout.split('\n')) {
     if (line.length === 0) {
       continue
     }
-    const [marker, name] = line.split('\t')
+    const [marker, name, timestamp, occupiedPath] = line.split('\t')
     if (!name) {
       continue
     }
@@ -60,9 +79,13 @@ export async function listLocalBranches(
       current = name
     }
     branches.push(name)
+    if (timestamp && Number.isFinite(Number(timestamp))) {
+      committedAt[name] = Number(timestamp) * 1000
+    }
+    if (occupiedPath) {
+      worktreePaths[name] = translateWorktreePath(occupiedPath, worktreePath, options)
+    }
   }
-  // Why: surface the checked-out branch first so the picker reads "you are here"
-  // at the top, then the rest in git's ref order.
   branches.sort((a, b) => {
     if (a === current) {
       return -1
@@ -72,5 +95,5 @@ export async function listLocalBranches(
     }
     return 0
   })
-  return { current, branches }
+  return { current, branches, ...(extended ? { committedAt, worktreePaths } : {}) }
 }

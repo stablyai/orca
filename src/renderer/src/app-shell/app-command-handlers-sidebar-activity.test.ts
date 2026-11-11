@@ -6,15 +6,15 @@ const mocks = vi.hoisted(() => ({
   store: {} as AppState
 }))
 
-vi.mock('../store', () => ({
+vi.mock('../store/index', () => ({
   useAppStore: Object.assign(vi.fn(), { getState: () => mocks.store })
 }))
 
-vi.mock('@/lib/floating-workspace-terminal-actions', () => ({
+vi.mock('@/components/floating-terminal/floating-workspace-terminal-actions', () => ({
   isFloatingWorkspacePanelFocused: () => false
 }))
 
-vi.mock('@/lib/terminal-shortcut-capture-notification', () => ({
+vi.mock('@/lib/notifications/terminal-shortcut-capture-notification', () => ({
   showTerminalShortcutCaptureNotification: vi.fn()
 }))
 

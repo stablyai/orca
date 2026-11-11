@@ -1,17 +1,22 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   toSshExecutionHostId,
-  type ExecutionHostId
+  type ExecutionHostId,
+  getRepoExecutionHostId
 } from '../../../../shared/execution-host'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/workspace-scope'
-import { catalogOwnsHost, getProjectGroupHostId } from '../slices/project-group-owner-routing'
-import type { FolderWorkspaceUpdateTicket } from '../slices/folder-workspace-update-coordinator'
-import { callRuntimeRpc, type RuntimeClientTarget } from '../../runtime/runtime-rpc-client'
+import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
+import '../../../../shared/folder-workspaces/folder-workspace-execution-host'
+import { getFolderWorkspaceHostId } from '../../../../shared/folder-workspaces/folder-workspace-host-id'
+import { catalogOwnsHost } from '../project-groups/project-group-owner-routing'
+import type { FolderWorkspaceUpdateTicket } from './folder-workspace-update-coordinator'
+import { callRuntimeRpc } from '../../runtime/rpc/calls/runtime-rpc-call'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type {
   FolderWorkspaceUpdateCoordinatorInstance,
   FolderWorkspaceUpdateField
@@ -20,8 +25,12 @@ import {
   folderWorkspaceUpdateInvalidatesPathStatus,
   mergeFolderWorkspaceUpdateResponse
 } from './folder-workspace-routing'
-import { getRuntimeTargetHostId } from '../runtime-target-host'
-import { mergeByIdentity, unchangedMergeSource } from '../catalog-identity'
+import { getRuntimeTargetHostId } from '../../runtime/rpc/targets/runtime-client-target'
+import { adoptFromEndpoint } from '../host-catalog/endpoint-catalog-adoption'
+import {
+  mergeByIdentity,
+  unchangedMergeSource
+} from '../../lib/catalog-reconciliation/catalog-identity'
 
 export type FetchedFolderWorkspaceCatalog = {
   folderWorkspaces: FolderWorkspace[]
@@ -35,7 +44,7 @@ function createFolderWorkspaceHostIndex(
 ): FolderWorkspaceHostIndex {
   const hostByGroupId = new Map<string, ExecutionHostId | null>()
   for (const group of projectGroups) {
-    const hostId = getProjectGroupHostId(group)
+    const hostId = getRepoExecutionHostId(group)
     if (!hostByGroupId.has(group.id)) {
       hostByGroupId.set(group.id, hostId)
       continue
@@ -71,32 +80,6 @@ function createFolderWorkspaceHostResolver(
     hostByGroupId ??= createFolderWorkspaceHostIndex(projectGroups)
     return getFolderWorkspaceHostIdFromIndex(workspace, hostByGroupId)
   }
-}
-
-export function getFolderWorkspaceHostId(
-  workspace: FolderWorkspace,
-  projectGroups: readonly ProjectGroup[]
-): ExecutionHostId {
-  const explicitHostId = parseExecutionHostId(workspace.executionHostId)?.id
-  if (explicitHostId) {
-    return explicitHostId
-  }
-  if (workspace.connectionId) {
-    return toSshExecutionHostId(workspace.connectionId)
-  }
-  let matchingHostId: ExecutionHostId | undefined
-  for (const group of projectGroups) {
-    if (group.id !== workspace.projectGroupId) {
-      continue
-    }
-    const hostId = getProjectGroupHostId(group)
-    if (matchingHostId === undefined) {
-      matchingHostId = hostId
-    } else if (matchingHostId !== hostId) {
-      return LOCAL_EXECUTION_HOST_ID
-    }
-  }
-  return matchingHostId ?? LOCAL_EXECUTION_HOST_ID
 }
 
 function getFolderWorkspaceHostIdentity(
@@ -164,38 +147,47 @@ export function getFolderWorkspaceCatalogReplacementIdentities(
   return replacedIdentities
 }
 
+/**
+ * Drops a restored owner once its own host settles it. Folder ids can repeat across hosts, so a
+ * copy on another host proves nothing; only the owner's copy or the owner's hydrated catalog does.
+ */
 export function clearRestoredFolderWorkspaceSessionOwners(
   owners: AppState['restoredRuntimeHostIdByWorkspaceSessionKey'] | undefined,
-  state: Pick<AppState, 'folderWorkspaces' | 'projectGroups'>
+  state: Pick<AppState, 'folderWorkspaces' | 'projectGroups'>,
+  settled: {
+    hydratedHostIds: ReadonlySet<ExecutionHostId>
+    /** Runtime hosts the environment list named; null when it didn't answer. */
+    listedRuntimeHostIds: ReadonlySet<ExecutionHostId> | null
+  }
 ): AppState['restoredRuntimeHostIdByWorkspaceSessionKey'] {
   const next: AppState['restoredRuntimeHostIdByWorkspaceSessionKey'] = {}
+  const resolveHostId = createFolderWorkspaceHostResolver(state.projectGroups)
   for (const [key, hostId] of Object.entries(owners ?? {})) {
     const scope = parseWorkspaceKey(key)
     if (scope?.type !== 'folder') {
       next[key] = hostId
       continue
     }
-    const workspace = state.folderWorkspaces.find((entry) => entry.id === scope.folderWorkspaceId)
-    if (workspace && !state.projectGroups.some((group) => group.id === workspace.projectGroupId)) {
-      // Why: ownership resolves via the project group; if that catalog is still missing, keep the restored host owner so a session write doesn't move runtime tabs local.
+    const ownCopy = state.folderWorkspaces.find(
+      (entry) => entry.id === scope.folderWorkspaceId && resolveHostId(entry) === hostId
+    )
+    if (ownCopy) {
+      if (!state.projectGroups.some((group) => group.id === ownCopy.projectGroupId)) {
+        // Why: ownership resolves via the project group; if that catalog is still missing, keep the restored host owner so a session write doesn't move runtime tabs local.
+        next[key] = hostId
+      }
+      continue
+    }
+    const ownerSettled =
+      [...settled.hydratedHostIds].some((hydrated) => catalogOwnsHost(hydrated, hostId)) ||
+      (settled.listedRuntimeHostIds !== null &&
+        parseExecutionHostId(hostId)?.kind === 'runtime' &&
+        !settled.listedRuntimeHostIds.has(hostId))
+    if (!ownerSettled) {
       next[key] = hostId
     }
   }
   return next
-}
-
-export function folderWorkspaceWithFetchedOwner(
-  workspace: FolderWorkspace,
-  target: RuntimeClientTarget,
-  projectGroups: readonly ProjectGroup[]
-): FolderWorkspace {
-  return {
-    ...workspace,
-    executionHostId:
-      target.kind === 'environment'
-        ? getRuntimeTargetHostId(target)
-        : getFolderWorkspaceHostId(workspace, projectGroups)
-  }
 }
 
 export async function fetchFolderWorkspaceCatalogForTarget(
@@ -213,18 +205,10 @@ export async function fetchFolderWorkspaceCatalogForTarget(
             { timeoutMs: 15_000, reuseRecentCompatibilityFailure: true }
           )
         ).folderWorkspaces
-  let ownedFolderWorkspaces: FolderWorkspace[]
-  if (target.kind === 'local') {
-    const resolveHostId = createFolderWorkspaceHostResolver(projectGroups)
-    ownedFolderWorkspaces = fetchedFolderWorkspaces.map((workspace) => ({
-      ...workspace,
-      executionHostId: resolveHostId(workspace)
-    }))
-  } else {
-    ownedFolderWorkspaces = fetchedFolderWorkspaces.map((workspace) =>
-      folderWorkspaceWithFetchedOwner(workspace, target, projectGroups)
-    )
-  }
+  const resolveOwnHostId = createFolderWorkspaceHostResolver(projectGroups)
+  const ownedFolderWorkspaces = fetchedFolderWorkspaces.map((row) =>
+    adoptFromEndpoint(target, { kind: 'folderWorkspace', row, resolveOwnHostId })
+  )
   return {
     folderWorkspaces: ownedFolderWorkspaces,
     hostId: getRuntimeTargetHostId(target)
@@ -287,7 +271,12 @@ export async function reconcileFailedFolderWorkspaceUpdate(args: {
         : {})
     }))
     if (!refreshed) {
-      args.get().purgeWorktreeTerminalState([folderWorkspaceKey(args.folderWorkspaceId)])
+      args.get().purgeWorktreeTerminalState([
+        hostWorktreeTarget({
+          id: folderWorkspaceKey(args.folderWorkspaceId),
+          hostId: args.ownerHostId
+        })
+      ])
     }
   } catch (err) {
     console.warn('Failed to reconcile folder workspace after update failure:', err)

@@ -1,23 +1,32 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import {
-  addExpoTwoWayAudioEventListener,
-  initialize,
-  requestMicrophonePermissionsAsync,
-  tearDown,
-  toggleRecording
-} from '@orca/expo-two-way-audio'
+import { useDictationCapture } from '../platform/dictation-capture'
+import { useOnDeviceSpeech } from '../platform/on-device-speech'
+import { dictationSessionErrorMessage } from '../dictation/mobile-dictation-setup'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { useMobileDictationMeter } from './mobile-dictation-meter'
+import { useMobileDictationEngineShown } from './mobile-dictation-engine-shown'
+import { useMobileDictationInterruptions } from './use-mobile-dictation-interruptions'
 import { MobileDictationPendingAudioBudget } from './mobile-dictation-pending-audio-budget'
-import { enqueueMobileDictationAudioChunk } from './mobile-dictation-audio-chunk'
-import { createMobileDictationKeepAwakeOwner } from './mobile-dictation-keep-awake'
-import { useMobileDictationForegroundKeepAwake } from './mobile-dictation-foreground-keep-awake'
 import {
-  DICTATION_FINISH_TIMEOUT_MS,
-  createMobileDictationId,
-  isCurrentMobileDictationFinish
-} from './mobile-dictation-session-state'
-import { startMobileDictationDesktopSession } from './mobile-dictation-desktop-start'
+  useMobileDictationTranscriptSoFar,
+  useMobileDictationAudioChunks,
+  type MobileDictationAudioPhase
+} from './mobile-dictation-audio-chunk'
+import { MobileDictationHeldAudio } from './mobile-dictation-held-audio'
+import { MobileDictationRecording } from './mobile-dictation-recording'
+import { failActiveMobileDictation, retryMobileDictationOnHost } from './mobile-dictation-retry'
+import { mobileDictationFailureRetryable } from './mobile-dictation-failure'
+import { finishMobileDictation } from './mobile-dictation-finish'
+import type { MobileDictationEngine } from './mobile-dictation-device-engine'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import {
+  releaseMobileDictationEngine,
+  startMobileDictation,
+  type MobileDictationRun
+} from './mobile-dictation-engine-run'
 import type {
   DictationStatus,
+  MobileDictationKeptFailure,
   UseMobileDictationOptions,
   UseMobileDictationResult
 } from './mobile-dictation-session-state'
@@ -25,290 +34,263 @@ import type {
 export type { UseMobileDictationResult } from './mobile-dictation-session-state'
 
 export function useMobileDictation(options: UseMobileDictationOptions): UseMobileDictationResult {
-  const { client, enabled, onTranscript, onError } = options
-  const keepAwakeOwner = useMemo(() => createMobileDictationKeepAwakeOwner(), [])
+  useMobileTranslation()
+  const { client, enabled, onTranscript, onError, removeFillerWords, onAudioLimitReached } = options
+  const { dictationTerms, worktreeId } = options
+  // Both capture seams hold the screen while the microphone is open; native uses the device directly and page uses shell audio verbs.
+  const capture = useDictationCapture()
+  const speech = useOnDeviceSpeech(removeFillerWords, dictationTerms)
   const [status, setStatus] = useState<DictationStatus>('idle')
   const [error, setError] = useState<string | null>(null)
+  // A failure whose recording is kept for Retry; cleared by Retry, discard and the next dictation.
+  const [failure, setFailure] = useState<MobileDictationKeptFailure | null>(null)
+  const failureRef = useRef(failure)
+  const [transcriptSoFar, setTranscriptSoFar, keptTranscript] = useMobileDictationTranscriptSoFar()
+  const {
+    shown: shownEngine,
+    show: showEngine,
+    clear: clearEngine
+  } = useMobileDictationEngineShown()
+  // Read from an abort that may run between a commit and its passive Effects, where state is stale.
+  const statusRef = useRef<DictationStatus>('idle')
   const activeIdRef = useRef<string | null>(null)
   const clientRef = useRef(client)
+  const speechRef = useRef(speech)
+  const engineRef = useRef<MobileDictationEngine>({ kind: 'host' })
+  const finishRef = useRef<(emptyTranscriptMessage: string) => Promise<void>>(async () => {})
   const enabledRef = useRef(enabled)
   const onTranscriptRef = useRef(onTranscript)
   const onErrorRef = useRef(onError)
+  const onAudioLimitReachedRef = useRef(onAudioLimitReached)
+  const worktreeIdRef = useRef(worktreeId)
   const pendingChunksRef = useRef<Set<Promise<void>>>(new Set())
   const pendingAudioBudgetRef = useRef(new MobileDictationPendingAudioBudget())
-  const acceptingChunksRef = useRef(false)
+  const audioPhaseRef = useRef<MobileDictationAudioPhase>('closed')
+  const heldAudioRef = useRef(new MobileDictationHeldAudio())
+  const recordingRef = useRef(new MobileDictationRecording())
+  const sendHeldAudioRef = useRef(() => {})
+  const stopWhenStartedRef = useRef(false)
   const generationRef = useRef(0)
-  const finishingIdRef = useRef<string | null>(null)
 
   useLayoutEffect(() => {
     // Native audio events can arrive before passive Effects flush, but refs
     // should only expose options from a committed render.
     clientRef.current = client
+    speechRef.current = speech
     enabledRef.current = enabled
     onTranscriptRef.current = onTranscript
     onErrorRef.current = onError
-  }, [client, enabled, onTranscript, onError])
+    onAudioLimitReachedRef.current = onAudioLimitReached
+    worktreeIdRef.current = worktreeId
+  }, [client, speech, enabled, onTranscript, onError, onAudioLimitReached, worktreeId])
 
-  const reportError = useCallback((err: unknown) => {
-    const normalized = err instanceof Error ? err : new Error(String(err))
-    setError(normalized.message)
-    setStatus('error')
-    onErrorRef.current?.(normalized)
+  const applyStatus = useCallback(
+    // Kept through processing so the text so far stays in place until the final transcript replaces it in the same render.
+    (next: DictationStatus, keepText = next === 'recording' || next === 'processing') => {
+      statusRef.current = next
+      setStatus(next)
+      setTranscriptSoFar((text) => (keepText ? text : ''))
+      if (next !== 'recording' && next !== 'processing') {
+        clearEngine()
+      }
+    },
+    [clearEngine]
+  )
+
+  const setKeptFailure = useCallback((next: MobileDictationKeptFailure | null) => {
+    failureRef.current = next
+    setFailure(next)
   }, [])
 
-  const closeDictationAudio = useCallback(
-    (dictationId?: string | null) => {
-      acceptingChunksRef.current = false
-      pendingChunksRef.current.clear()
-      pendingAudioBudgetRef.current.reset()
-      try {
-        toggleRecording(false)
-      } catch (err) {
-        // Cleanup must keep going when native recording shutdown throws, or
-        // the wake tag and dictation state would leak.
-        console.error('Failed to stop microphone recording', err)
-      }
-      void keepAwakeOwner.release(dictationId ?? undefined).catch(() => undefined)
+  const reportError = useCallback(
+    (err: unknown, kept = false) => {
+      const normalized = err instanceof Error ? err : new Error(String(err))
+      setError(normalized.message)
+      applyStatus('error', kept)
+      setKeptFailure(
+        kept
+          ? { message: normalized.message, offline: clientRef.current?.getState() !== 'connected' }
+          : null
+      )
+      onErrorRef.current?.(normalized, { kept })
     },
-    [keepAwakeOwner]
+    [applyStatus, setKeptFailure]
   )
 
-  const failActiveDictation = useCallback(
-    (dictationId: string, err: unknown) => {
-      const client = clientRef.current
-      if (activeIdRef.current !== dictationId) {
-        return
-      }
-      activeIdRef.current = null
-      closeDictationAudio(dictationId)
-      if (client && dictationId) {
-        void client.sendRequest('speech.dictation.cancel', { dictationId }).catch(() => undefined)
-      }
-      reportError(err)
-    },
-    [closeDictationAudio, reportError]
+  const closeDictationAudio = useCallback(() => {
+    audioPhaseRef.current = 'closed'
+    heldAudioRef.current.clear()
+    pendingChunksRef.current.clear()
+    pendingAudioBudgetRef.current.reset()
+    try {
+      void capture.end()
+    } catch (err) {
+      // Cleanup must keep going when a synchronous seam throws, or the dictation state would leak.
+      console.error('Failed to stop microphone recording', err)
+    }
+  }, [capture])
+
+  const run = useMemo<MobileDictationRun>(() => {
+    const created: MobileDictationRun = {
+      status: statusRef,
+      activeId: activeIdRef,
+      client: clientRef,
+      speech: speechRef,
+      engine: engineRef,
+      enabled: enabledRef,
+      generation: generationRef,
+      stopWhenStarted: stopWhenStartedRef,
+      audioPhase: audioPhaseRef,
+      pendingChunks: pendingChunksRef,
+      pendingAudioBudget: pendingAudioBudgetRef,
+      heldAudio: heldAudioRef,
+      recording: recordingRef,
+      sendHeldAudio: sendHeldAudioRef,
+      finish: finishRef,
+      onTranscript: onTranscriptRef,
+      onAudioLimitReached: onAudioLimitReachedRef,
+      worktreeId: worktreeIdRef,
+      keptTranscript,
+      applyStatus,
+      showEngine,
+      closeDictationAudio,
+      reportError,
+      failActiveDictation: (dictationId, err) =>
+        failActiveMobileDictation(created, dictationId, err)
+    }
+    return created
+  }, [applyStatus, closeDictationAudio, keptTranscript, reportError, showEngine])
+
+  useMobileDictationAudioChunks(capture, run)
+
+  const finishDictation = useCallback(
+    (emptyTranscriptMessage: string) => finishMobileDictation(run, capture, emptyTranscriptMessage),
+    [capture, run]
   )
-
-  useEffect(() => {
-    // Microphone events are a hot path; reuse this wiring instead of allocating
-    // a queue object and release predicate for every audio chunk.
-    const audioChunkQueue = {
-      pendingChunks: pendingChunksRef.current,
-      pendingAudioBudget: pendingAudioBudgetRef.current,
-      shouldReleaseBudget: (id: string) =>
-        activeIdRef.current === id || finishingIdRef.current === id,
-      failActiveDictation
-    }
-    const sub = addExpoTwoWayAudioEventListener('onMicrophoneData', (event) => {
-      const client = clientRef.current
-      const dictationId = activeIdRef.current
-      if (!client || !dictationId || !enabledRef.current || !acceptingChunksRef.current) {
-        return
-      }
-      enqueueMobileDictationAudioChunk(client, dictationId, event, audioChunkQueue)
-    })
-    return () => sub.remove()
-  }, [failActiveDictation, reportError])
-
-  const start = useCallback(async () => {
-    const client = clientRef.current
-    if (!client || !enabledRef.current || activeIdRef.current) {
-      return
-    }
-
-    const generation = generationRef.current + 1
-    generationRef.current = generation
-    setError(null)
-    setStatus('starting')
-    const permission = await requestMicrophonePermissionsAsync()
-    if (generationRef.current !== generation || !enabledRef.current) {
-      if (generationRef.current === generation) {
-        setStatus('idle')
-      }
-      return
-    }
-    if (!permission.granted) {
-      setStatus('idle')
-      throw new Error('Microphone permission denied')
-    }
-
-    const initialized = await initialize()
-    if (generationRef.current !== generation || !enabledRef.current) {
-      void tearDown()
-      if (generationRef.current === generation) {
-        setStatus('idle')
-      }
-      return
-    }
-    if (!initialized) {
-      setStatus('idle')
-      throw new Error('Failed to initialize microphone')
-    }
-
-    const dictationId = createMobileDictationId()
-    activeIdRef.current = dictationId
-
-    await startMobileDictationDesktopSession({
-      client,
-      dictationId,
-      generation,
-      getCurrentGeneration: () => generationRef.current,
-      getEnabled: () => enabledRef.current,
-      getActiveId: () => activeIdRef.current,
-      clearActiveId: (id) => {
-        if (activeIdRef.current === id) {
-          activeIdRef.current = null
-        }
-      },
-      setIdle: () => setStatus('idle'),
-      keepAwakeOwner,
-      commitRecordingStart: () => {
-        acceptingChunksRef.current = true
-        pendingChunksRef.current.clear()
-        pendingAudioBudgetRef.current.reset()
-        if (!toggleRecording(true)) {
-          return false
-        }
-        setStatus('recording')
-        return true
-      },
-      rollbackRecordingStart: () => {
-        acceptingChunksRef.current = false
-        pendingChunksRef.current.clear()
-        pendingAudioBudgetRef.current.reset()
-        toggleRecording(false)
-      }
-    })
-  }, [keepAwakeOwner])
+  useLayoutEffect(() => {
+    finishRef.current = finishDictation
+  }, [finishDictation])
 
   const stop = useCallback(async () => {
-    const client = clientRef.current
-    const dictationId = activeIdRef.current
-    if (!client || !dictationId) {
+    // Speech is held from the tap, so a stop before the host answers finishes once it does.
+    if (statusRef.current === 'starting') {
+      stopWhenStartedRef.current = true
       return
     }
+    await finishDictation(dictationSessionErrorMessage('no-speech'))
+  }, [finishDictation])
 
-    const generation = generationRef.current + 1
-    generationRef.current = generation
-    finishingIdRef.current = dictationId
-    setStatus('processing')
-    acceptingChunksRef.current = false
-    try {
-      // Inside the try so a throwing native shutdown still runs the finally
-      // release and error cleanup.
-      toggleRecording(false)
-      await Promise.allSettled(Array.from(pendingChunksRef.current))
+  const start = useCallback(
+    async (startClient?: RpcClient | null) => {
+      // The caller's client, set before the next render commits it: one hook serves whichever session starts.
+      if (startClient !== undefined) {
+        clientRef.current = startClient
+      }
       if (
-        !isCurrentMobileDictationFinish(
-          generationRef.current,
-          generation,
-          enabledRef.current,
-          activeIdRef.current,
-          finishingIdRef.current,
-          dictationId
-        )
+        (!clientRef.current && !speechRef.current) ||
+        !enabledRef.current ||
+        activeIdRef.current
       ) {
         return
       }
-      const response = await client.sendRequest(
-        'speech.dictation.finish',
-        { dictationId },
-        { timeoutMs: DICTATION_FINISH_TIMEOUT_MS }
-      )
-      if (!response.ok) {
-        throw new Error(response.error.message)
-      }
-      if (
-        !isCurrentMobileDictationFinish(
-          generationRef.current,
-          generation,
-          enabledRef.current,
-          activeIdRef.current,
-          finishingIdRef.current,
-          dictationId
-        )
-      ) {
-        return
-      }
-      const result = response.result as { text?: unknown }
-      const text = typeof result.text === 'string' ? result.text.trim() : ''
-      activeIdRef.current = null
-      finishingIdRef.current = null
-      pendingChunksRef.current.clear()
-      pendingAudioBudgetRef.current.reset()
-      setStatus('idle')
-      if (text) {
-        onTranscriptRef.current(text)
-      } else {
-        reportError(new Error('No speech detected.'))
-      }
-    } catch (err) {
-      failActiveDictation(dictationId, err)
-    } finally {
-      // Hold the wake tag through chunk drain and the finish RPC: a screen
-      // lock mid-processing suspends the app and loses the transcript.
-      void keepAwakeOwner.release(dictationId).catch(() => undefined)
-      if (finishingIdRef.current === dictationId) {
-        finishingIdRef.current = null
-      }
-    }
-  }, [failActiveDictation, keepAwakeOwner])
+      setError(null)
+      // A new dictation replaces a failed one's kept recording.
+      setKeptFailure(null)
+      recordingRef.current.clear()
+      await startMobileDictation(run, capture)
+    },
+    [capture, run, setKeptFailure]
+  )
 
-  const cancel = useCallback(async () => {
+  const retry = useCallback(async () => {
     const client = clientRef.current
-    const dictationId = activeIdRef.current
-    generationRef.current += 1
-    activeIdRef.current = null
-    finishingIdRef.current = null
-    closeDictationAudio(dictationId)
-    if (client && dictationId) {
-      await client.sendRequest('speech.dictation.cancel', { dictationId }).catch(() => undefined)
+    if (!failureRef.current || !client || activeIdRef.current || !enabledRef.current) {
+      return
     }
-    setStatus('idle')
     setError(null)
-  }, [closeDictationAudio])
+    setKeptFailure(null)
+    await retryMobileDictationOnHost(run, client)
+  }, [run, setKeptFailure])
 
-  useMobileDictationForegroundKeepAwake(keepAwakeOwner, activeIdRef)
-
-  useEffect(() => {
-    const sub = addExpoTwoWayAudioEventListener('onAudioInterruption', (event) => {
-      if (event.data === 'began' || event.data === 'blocked') {
-        void cancel()
+  // Only the user’s own cancel (reason:null) ends silently; other interruptions call onError so the tap has a visible outcome.
+  const abandonDictation = useCallback(
+    async (reason: string | null) => {
+      const client = clientRef.current
+      const dictationId = activeIdRef.current
+      const wasUnderway = statusRef.current === 'starting' || statusRef.current === 'recording'
+      // Only the user's discard drops a kept recording; an interruption while it waits leaves it for Retry.
+      if (reason !== null && dictationId === null && failureRef.current) {
+        return
       }
-    })
-    return () => sub.remove()
-  }, [cancel])
+      // An interruption keeps a recording the computer can hear again, even mid-finish; the user's cancel never does.
+      const kept =
+        reason !== null &&
+        dictationId !== null &&
+        mobileDictationFailureRetryable(recordingRef.current, engineRef.current)
+      if (!kept) {
+        setKeptFailure(null)
+        recordingRef.current.clear()
+      }
+      generationRef.current += 1
+      activeIdRef.current = null
+      closeDictationAudio()
+      // Settle before the host's cancel reply: a host that went quiet must not hold the mic button in its old state.
+      if (kept) {
+        reportError(new Error(reason), true)
+      } else if (reason !== null && wasUnderway) {
+        reportError(new Error(reason))
+      } else {
+        applyStatus('idle')
+        setError(null)
+      }
+      await releaseMobileDictationEngine(run, client, dictationId)
+    },
+    [applyStatus, closeDictationAudio, reportError, run, setKeptFailure]
+  )
+
+  const cancel = useCallback(() => abandonDictation(null), [abandonDictation])
+
+  useMobileDictationInterruptions({
+    capture,
+    status: statusRef,
+    audioPhase: audioPhaseRef,
+    stopWhenStarted: stopWhenStartedRef,
+    applyStatus,
+    finish: finishDictation,
+    abandon: abandonDictation
+  })
 
   useEffect(() => {
     if (!enabled) {
-      void cancel()
+      void abandonDictation(dictationSessionErrorMessage('input-closed'))
     }
-  }, [cancel, enabled])
+  }, [abandonDictation, enabled])
 
   useEffect(() => {
     return () => {
       const dictationId = activeIdRef.current
       generationRef.current += 1
       activeIdRef.current = null
-      finishingIdRef.current = null
-      closeDictationAudio(dictationId)
-      void tearDown()
-      if (clientRef.current && dictationId) {
-        void clientRef.current
-          .sendRequest('speech.dictation.cancel', { dictationId })
-          .catch(() => undefined)
-      }
+      closeDictationAudio()
+      recordingRef.current.clear()
+      capture.release()
+      void releaseMobileDictationEngine(run, clientRef.current, dictationId)
     }
-  }, [closeDictationAudio])
+  }, [capture, closeDictationAudio, run])
 
   return {
     status,
     isStarting: status === 'starting',
     isRecording: status === 'recording',
     isProcessing: status === 'processing',
+    transcriptSoFar,
     error,
+    failure,
+    engine: shownEngine,
     start,
+    retry,
     stop,
-    cancel
+    cancel,
+    meter: useMobileDictationMeter(capture, status === 'recording')
   }
 }

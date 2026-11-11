@@ -1,23 +1,7 @@
 #!/usr/bin/env node
-// Cold-park reveal-cost benchmark: measures the reveal latency a user pays when
-// returning to a terminal whose hidden view was cold-parked (React subtree
-// unmounted, xterm/buffers/WebGL released) versus a warm reveal where the tab
-// was still in the hot-retain working set. The stock terminal-perf-bench
-// workspace-switch scenario cycles 3 worktrees fast enough that parking never
-// fires, so it only ever measures warm reveals. This bench drives the
-// ORCA_E2E_TERMINAL_PARKING_DELAY_MS override to shrink the 30s hysteresis and
-// window.__terminalParkingDebug.parkedTabIds() to *confirm* a tab parked before
-// timing its reveal — so the cold vs warm delta is the real cost of parking.
-//
-// Output phases per reveal (ms from the switch-back click):
-//   activationMs   store activeWorktree flips to the target terminal
-//   ptyBindMs      the revealed pane has a bound ptyId (xterm remounted+attached)
-//   paintSettleMs  two RAFs after ptyBind (first painted frame settled)
-//
-// Arms:
-//   cold  — tab confirmed parked before reveal (park delay shrunk, wait to park)
-//   warm  — tab revealed before the park delay elapses (hot-retain hit)
-//   off   — parking disabled entirely (kill switch), reveal after the same idle
+// Compare confirmed cold-parked reveal with warm retention and parking-off arms; stock three-worktree cycling never parks.
+// Shorten delay with ORCA_E2E_TERMINAL_PARKING_DELAY_MS and confirm parking before measurement.
+// Report switch→activation, bound PTY, and two-rAF settle (frame proxy, not pixel proof).
 
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
@@ -33,19 +17,19 @@ import {
   pickFreePort,
   stopDevApp,
   waitForStoreReady
-} from '../../config/scripts/windows-apphang-repro/electron-dev-session.mjs'
+} from '../../../config/scripts/windows-apphang-repro/electron-dev-session.mjs'
 import {
   createCompletedOnboardingProfile,
   safeRemoveLocalDirectory
-} from '../../config/scripts/windows-apphang-repro/wsl-workspace-fixture.mjs'
+} from '../../../config/scripts/windows-apphang-repro/wsl-workspace-fixture.mjs'
 import {
   pollUntil,
   rendererActionTimeoutMs,
   runWithTimeout,
   setupTimeoutMs
-} from '../../config/scripts/windows-apphang-repro/repro-timing.mjs'
+} from '../../../config/scripts/windows-apphang-repro/repro-timing.mjs'
 
-const rootDir = path.resolve(fileURLToPath(new URL('../..', import.meta.url)))
+const rootDir = path.resolve(fileURLToPath(new URL('../../..', import.meta.url)))
 const scenarioTimeoutMs = 300_000
 
 // Short enough that a tab parks within a few seconds of being hidden, long
@@ -81,11 +65,7 @@ function parseArgs() {
   return args
 }
 
-// Why: the daemon binds a Unix socket at <userData>/daemon/daemon-v20.sock.
-// macOS sun_path caps at ~104 chars; the default os.tmpdir() (/var/folders/…)
-// blows past it, the daemon fails EINVAL, terminals fall back to non-snapshot
-// PTYs, and cold parking (snapshot-backed only) can never engage. Root the
-// userData + fixture under a short ~/.ocpb path so the socket fits.
+// Use short ~/.ocpb roots for macOS’s ~104-char Unix socket limit; long tmp paths break daemon startup and snapshot-backed parking.
 const shortRoot = path.join(os.homedir(), '.ocpb')
 
 function createShortUserDataDirectory() {
@@ -134,7 +114,8 @@ async function setupWorkspaces(page, fixture) {
           if ('error' in addResult) {
             throw new Error(addResult.error)
           }
-          await store.getState().fetchRepos()
+          const owner = store.getState().settings?.activeRuntimeEnvironmentId ?? null
+          await store.getState().fetchRepos({ runtimeEnvironmentId: owner })
           const state = store.getState()
           const repo = state.repos.find((c) => c.path === repoPath) ?? addResult.repo
           await state.updateRepo(repo.id, {
@@ -211,8 +192,7 @@ async function activateWorktreeTerminal(page, worktreeId) {
   )
 }
 
-/** Wait until the active terminal pane of `worktreeId` has a bound ptyId — i.e.
- *  its terminal actually exists and is warm before we start hiding it. */
+// Require a bound active PTY before hiding so the starting terminal is warm.
 async function waitForBoundTerminal(page, worktreeId) {
   return await pollUntil(
     `pty bound ${worktreeId}`,
@@ -233,10 +213,7 @@ async function waitForBoundTerminal(page, worktreeId) {
   )
 }
 
-/** Fill the active pane's terminal with ~lineCount lines of output so the
- *  parked snapshot (and thus the cold reveal replay) reflects a busy TUI-sized
- *  buffer rather than an empty shell. Writes to the pty and waits for the
- *  xterm buffer to grow. Returns the observed serialized length. */
+// Fill ~lineCount rows and wait for buffer growth so cold replay measures busy-TUI-sized snapshots; return observed serialized length.
 async function primeScrollback(page, worktreeId, lineCount) {
   const ptyId = await page.evaluate((id) => {
     const state = window.__store?.getState?.()
@@ -335,10 +312,7 @@ async function timeReveal(page, targetId) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
-/** Parking signal that does not depend on the e2e debug handle: a parked tab's
- *  TerminalPane unmounts, so its manager leaves window.__paneManagers AND the
- *  overlay slot renders null (no [data-tab-id] container). Prefer the debug
- *  handle when present, fall back to manager/DOM absence. */
+// Prefer parkedTabIds; without debug wiring require both manager and tab DOM absence after TerminalPane unmount.
 function isTabParked(page, tabId) {
   return page.evaluate((id) => {
     const handleIds = window.__terminalParkingDebug?.parkedTabIds?.()
@@ -377,8 +351,7 @@ async function debugSnapshot(page, tabId, worktreeId) {
   )
 }
 
-/** One cold cycle: focus target, hide it (switch to primary), wait until the
- *  tab parks (debug handle or manager-absence), then time the reveal. */
+// Confirm parking before timing the cold reveal.
 async function runColdCycle(page, primaryId, targetId, wantDebug, scrollbackLines) {
   await activateWorktreeTerminal(page, targetId)
   await waitForBoundTerminal(page, targetId)
@@ -402,8 +375,7 @@ async function runColdCycle(page, primaryId, targetId, wantDebug, scrollbackLine
   return { ...timings, parkedConfirmed: parked, diag }
 }
 
-/** One warm cycle: focus target, hide it briefly (under the park delay), reveal
- *  before it can park. Asserts it did NOT park. */
+// Reveal before the delay and require no parking for the warm arm.
 async function runWarmCycle(page, primaryId, targetId, scrollbackLines) {
   await activateWorktreeTerminal(page, targetId)
   await waitForBoundTerminal(page, targetId)
@@ -467,8 +439,7 @@ async function main() {
     fixture = createLocalRepoFixture()
     const cdpPort = await pickFreePort()
     userDataDir = createShortUserDataDirectory()
-    // Shrink the 30s cold-park hysteresis + 5-min hot-retain so parking is
-    // observable in a benchmark run. Inherited by launchDevApp into the app.
+    // Pass shortened cold/hot retention through launchDevApp so parking is observable.
     process.env.ORCA_E2E_TERMINAL_PARKING_DELAY_MS = String(PARK_DELAY_MS)
     console.log(
       `[cold-park] fixture=${fixture.baseDir} userData=${userDataDir} cdp=${cdpPort} parkDelay=${PARK_DELAY_MS}ms`
@@ -481,12 +452,9 @@ async function main() {
     await installRendererProbe(page)
     const setup = await setupWorkspaces(page, fixture)
     let worktrees = setup.worktrees
-    // Why: worktree registration/fetch can lag the setup evaluate return; poll
-    // the store until the two external worktrees materialize before asserting.
+    // Poll registration because external-worktree discovery may lag setup evaluate.
     if (worktrees.length < 2) {
-      // Why: the initial fetchWorktrees can return before the external-worktree
-      // scan surfaces the imported paths. Re-drive the fetch each poll (not just
-      // re-read the store) so a missed first scan self-heals.
+      // Refetch each poll so a missed initial scan can discover imported paths.
       worktrees = await pollUntil(
         'worktrees registered',
         () =>
@@ -517,8 +485,7 @@ async function main() {
     await activateWorktreeTerminal(page, primary.id)
     await waitForBoundTerminal(page, primary.id)
 
-    // Confirm the parking debug handle is present (exposeStore gate). It
-    // registers on first pane mount, so poll rather than read once.
+    // Poll debug registration through first pane mount rather than read once.
     const debugReady = await pollUntil(
       'parking debug handle',
       () => page.evaluate(() => typeof window.__terminalParkingDebug?.parkedTabIds === 'function'),

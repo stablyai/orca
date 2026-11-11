@@ -1,31 +1,42 @@
-import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import type { OrchestrationDb } from '../../../../orchestration/db'
-import type { WorkerTerminalResourceRow } from '../../../../orchestration/worker-terminal-ownership'
-import { stopStructuredWorker } from '../../orchestration-structured-worker-lifecycle'
-import type { StructuredWorkerIdentity } from '../../../../structured-worker-identity'
+import type { WorkerTerminalReleaseRuntime } from '../../../../orchestration/terminal-authority/release/worker-terminal-release-runtime'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+import type { WorkerTerminalResourceRow } from '../../../../orchestration/terminal-authority/release/worker-terminal-ownership'
+import { stopStructuredWorker } from '../structured-workers/orchestration-structured-worker-lifecycle'
+import type { StructuredWorkerIdentity } from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 import { archiveSummary } from './worker-terminal-resource-presentation'
 import type { WorkerReleaseReceipt } from './worker-release-completion'
+import { releaseUnknownRecovery } from './worker-release-unknown-recovery'
 
-/**
- * The close half of a release for a worker that IS a structured session.
- *
- * Separate from the PTY close for the same reason the delivery lane is: there is no terminal to
- * close and no exit to observe, so the host's own settlement is the only proof available. Only a
- * proven close may settle; an unproven one reports `release_unknown` and stays retryable under the
- * same request id.
- */
+/** Use host settlement to prove structured close; unproven closes remain release_unknown. Retry with a fresh request id because replay returns the old receipt. */
 export async function stopStructuredWorkerForRelease(args: {
   structured: StructuredWorkerIdentity
   dispatchId: string
   resource: WorkerTerminalResourceRow
-  runtime: OrcaRuntimeService
+  runtime: WorkerTerminalReleaseRuntime
   db: OrchestrationDb
   archiveSource: string | null
   archiveStatus: string | null
 }): Promise<WorkerReleaseReceipt> {
   const { structured, dispatchId, resource, runtime, db } = args
-  const stop = await stopStructuredWorker(structured, dispatchId, runtime)
+  // Only an automatic release can be refused; an explicit one keeps cutting through a hung start.
+  const stop = await stopStructuredWorker(
+    structured,
+    runtime,
+    resource.auto_release_at
+      ? () => db.admitWorkerChatReleaseClose(resource.id, (row) => runtime.isWorkerAgentInTurn(row))
+      : undefined
+  )
   if (!stop.stopped) {
+    const current = db.getWorkerTerminalResource(resource.id)
+    if (current && current.release_state !== 'releasing') {
+      // Refused in the session lane: Keep open, a new turn, or a fall back to manual release.
+      return {
+        dispatchId,
+        state: 'retained',
+        processAction: 'none',
+        archive: archiveSummary(current)
+      }
+    }
     const unknown = db.markWorkerTerminalReleaseUnknown(
       resource.id,
       stop.reason ?? 'The structured session close was not proven.'
@@ -36,7 +47,7 @@ export async function stopStructuredWorkerForRelease(args: {
       processAction: stop.closeAttempted ? 'closed_agent_terminal' : 'none',
       archive: { source: args.archiveSource, status: args.archiveStatus },
       lastError: unknown.release_error ?? stop.reason,
-      recovery: `Inspect with: orca orchestration worker-show --dispatch ${dispatchId} --json — then repeat worker-release with the same --retry-request.`
+      recovery: releaseUnknownRecovery(dispatchId)
     }
   }
   const settled = db.settleWorkerTerminalRelease(resource.id)

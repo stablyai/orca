@@ -1,31 +1,41 @@
-import type { WebContents } from 'electron'
-import type { Store } from '../persistence'
+import {
+  AutomationDispatchCancelledError,
+  requestAutomationDispatch,
+  runAutomationRequestPrecheck
+} from './automation-dispatch-request'
+import type { Store } from '../persistence/loading-store/store'
 import {
   isFinalAutomationRunStatus,
-  type Automation,
-  type AutomationDispatchRequest,
   type AutomationDispatchResult,
   type AutomationPrecheckResult,
   type AutomationRun
-} from '../../shared/automations-types'
+} from '../../shared/automations/history/automation-run'
+import type { Automation } from '../../shared/automations/automation-definition'
 import type { ClaudeUsageStore } from '../claude-usage/store'
 import type { CodexUsageStore } from '../codex-usage/store'
-import { runAutomationPrecheck } from './precheck-runner'
-import { resolveAutomationRunTarget, type AutomationRunTargetResult } from './run-target-resolution'
-import { collectAutomationRunUsage } from './run-usage-collection'
-import type { HeadlessAutomationDispatcher } from './headless-dispatch'
-import { clearAutomationDispatchTokens, createAutomationDispatchToken } from './dispatch-tokens'
-import { runHeadlessAutomationDispatch } from './headless-dispatch-runner'
+import {
+  captureLegacyRunTarget,
+  resolveAutomationRunTarget,
+  type AutomationRunTargetResult
+} from './run-target-resolution'
+import { writeAutomationRunUsage } from './run-usage-collection'
+import type { AutomationLauncher, AutomationTerminalLauncher } from './automation-launch'
+import { runKeyedSerializedOperation } from '../cli/keyed-promise-queue'
+import { clearAutomationDispatchTokens } from './dispatch-tokens'
 import {
   AutomationRunCompletionWatcher,
   type AutomationRunTerminalObserver
 } from './run-completion-watcher'
 import { createAutomationRunWriter, type AutomationRunWriter } from './automation-run-writer'
+import { reportAutomationScheduleDrift } from './schedule-drift-report'
 import {
-  describeScheduledRefusal,
+  describeScheduledTickRefusal,
+  recordMissedRun,
   recordRefusedAutomationRun,
-  NO_DISPATCH_HOST
+  recordUnevaluableAutomation
 } from './dispatch-refusal'
+import type { RunTerminalRetention } from './run-terminal-retention'
+import { AutomationWakeGate } from './automation-wake-settle'
 import type {
   AutomationsChangedPayload,
   PublishAutomationsChanged
@@ -37,20 +47,23 @@ export class AutomationService {
   private readonly store: Store
   private readonly tickMs: number
   private timer: ReturnType<typeof setInterval> | null = null
-  private webContents: WebContents | null = null
-  private rendererReady = false
   private evaluating = false
+  private stopped = false
+  private dispatchGeneration = 0
   private readonly claudeUsage: ClaudeUsageStore | null
   private readonly codexUsage: CodexUsageStore | null
   private readonly allowRemoteHostScheduling: boolean
-  private readonly headlessDispatcher: HeadlessAutomationDispatcher | null
+  private readonly terminalLauncher: AutomationTerminalLauncher | null
+  private readonly chatDispatcher: AutomationLauncher | null
+  private readonly automationLanes = new Map<string, Promise<void>>()
+  /** Shares this service's lanes and tick; `drain` closes unused completed run terminals. */
+  readonly runTerminalRetention: RunTerminalRetention | null
   private readonly publish: PublishAutomationsChanged | null
   private readonly runs: AutomationRunWriter
   private readonly completionWatcher: AutomationRunCompletionWatcher | null
-  /** Installed by desktop IPC registration, where external probes live; null on
-   *  runtime servers. Orca's own automation traffic parks queued external
-   *  probes behind this lease, whichever transport carried it. */
+  /** Desktop automation traffic holds this lease to defer queued external probes. */
   externalProbePriority: (<T>(run: () => T) => T) | null = null
+  readonly wakeGate = new AutomationWakeGate(() => this.store)
 
   constructor(
     store: Store,
@@ -59,9 +72,11 @@ export class AutomationService {
       claudeUsage?: ClaudeUsageStore
       codexUsage?: CodexUsageStore
       allowRemoteHostScheduling?: boolean
-      headlessDispatcher?: HeadlessAutomationDispatcher
+      terminalLauncher?: AutomationTerminalLauncher
+      chatDispatcher?: AutomationLauncher
       terminalObserver?: AutomationRunTerminalObserver
       onAutomationsChanged?: PublishAutomationsChanged
+      runTerminalRetention?: (service: AutomationService) => RunTerminalRetention
     } = {}
   ) {
     this.store = store
@@ -69,7 +84,8 @@ export class AutomationService {
     this.claudeUsage = opts.claudeUsage ?? null
     this.codexUsage = opts.codexUsage ?? null
     this.allowRemoteHostScheduling = opts.allowRemoteHostScheduling ?? false
-    this.headlessDispatcher = opts.headlessDispatcher ?? null
+    this.terminalLauncher = opts.terminalLauncher ?? null
+    this.chatDispatcher = opts.chatDispatcher ?? null
     this.publish = opts.onAutomationsChanged ?? null
     this.runs = createAutomationRunWriter(store, this.publish)
     this.completionWatcher = opts.terminalObserver
@@ -80,46 +96,33 @@ export class AutomationService {
           markDispatchResult: (result) => this.markDispatchResult(result)
         })
       : null
+    this.runTerminalRetention = opts.runTerminalRetention?.(this) ?? null
   }
 
-  /** CRUD callers publish through the service so every authority write lands on
-   *  the same local + runtime client-event pair. */
   publishAutomationsChanged(payload: AutomationsChangedPayload = {}): void {
     this.publish?.(payload)
-  }
-
-  setWebContents(webContents: WebContents | null): void {
-    this.webContents = webContents
-    this.rendererReady = false
-  }
-
-  setRendererReady(): void {
-    this.rendererReady = true
-    // Why: the renderer publishes the desktop window graph, so only after it
-    // attaches can an unresolvable pane mean a lost terminal rather than "not yet".
-    this.completionWatcher?.markTerminalSurfaceReady()
-    void this.evaluateDueRuns()
   }
 
   start(): void {
     if (this.timer) {
       return
     }
+    this.stopped = false
     this.timer = setInterval(() => {
       void this.evaluateDueRuns()
+      void this.runTerminalRetention?.sweep()
     }, this.tickMs)
+    // Settles unclaimed pending rows before catch-up could claim one again.
     this.completionWatcher?.reconcileRetainedRuns(this.store.listAutomationRuns())
-    // Why: headless serve never gets a renderer-ready IPC, but due runs still
-    // need the same startup catch-up pass desktop gets after renderer attach.
-    if (this.rendererReady || this.headlessDispatcher) {
-      // Serve adopts its daemon PTYs and publishes its graph before start(), so
-      // its terminal surface is already as answerable as it will get.
-      this.completionWatcher?.markTerminalSurfaceReady()
+    reportAutomationScheduleDrift(this.store.listAutomations())
+    if (this.availableLauncher()) {
       void this.evaluateDueRuns()
     }
   }
 
   stop(): void {
+    this.stopped = true
+    this.dispatchGeneration += 1
     this.completionWatcher?.dispose()
     if (!this.timer) {
       return
@@ -129,19 +132,53 @@ export class AutomationService {
   }
 
   async runNow(automationId: string): Promise<AutomationRun> {
-    const automation = this.store.listAutomations().find((entry) => entry.id === automationId)
-    if (!automation) {
+    const generation = this.dispatchGeneration
+    const listed = this.store.listAutomations().find((entry) => entry.id === automationId)
+    if (!listed) {
       throw new Error('Automation not found.')
     }
-    const run = this.runs.createRun(automation, Date.now(), 'manual')
-    return await this.requestDispatch(automation, run, this.resolveTarget(automation))
+    const automation = captureLegacyRunTarget(this.store, listed, this.allowRemoteHostScheduling)
+    const target = this.resolveTarget(automation)
+    const run = await this.runs.createRun(automation, Date.now(), 'manual')
+    // The saved pending row is the acknowledgement; the lane owns execution behind earlier launches.
+    this.launchInLane(automation, run, target, generation)
+    return run
   }
 
-  /** The run-history row doc:94 pairs with the typed refusal an execute fence throws. */
-  recordRefusedRun(automationId: string): void {
+  /** Detached so due runs start together; every failure after createRun settles the row. */
+  private launchInLane(
+    automation: Automation,
+    run: AutomationRun,
+    target: AutomationRunTargetResult,
+    generation: number,
+    afterCreate?: () => Promise<unknown>
+  ): void {
+    void (async () => {
+      // A blocked lane must not defer the schedule advance.
+      await afterCreate?.()
+      await this.requestDispatch(automation, run, target, generation)
+    })()
+      .catch((error: unknown) => this.recordFailedLaunch(run, generation, error))
+      .catch((writeError: unknown) =>
+        console.error('[automations] could not record a failed launch', writeError)
+      )
+  }
+
+  /** Only an unlaunched run of this generation fails; a flush error after launch is not a launch failure. */
+  private async recordFailedLaunch(run: AutomationRun, generation: number, error: unknown) {
+    const current = this.store.listAutomationRuns(run.automationId).find((r) => r.id === run.id)
+    const unlaunched = current?.status === 'pending' || current?.status === 'dispatching'
+    const active = !this.stopped && generation === this.dispatchGeneration
+    if (unlaunched && active && !(error instanceof AutomationDispatchCancelledError)) {
+      const message = error instanceof Error ? error.message : String(error)
+      await this.markDispatchResult({ runId: run.id, status: 'dispatch_failed', error: message })
+    }
+  }
+
+  async recordRefusedRun(automationId: string): Promise<void> {
     const automation = this.store.listAutomations().find((entry) => entry.id === automationId)
     if (automation) {
-      recordRefusedAutomationRun({
+      await recordRefusedAutomationRun({
         store: this.store,
         runs: this.runs,
         automation,
@@ -151,44 +188,13 @@ export class AutomationService {
   }
 
   async runPrecheck(automationId: string, runId: string): Promise<AutomationPrecheckResult | null> {
-    const automation = this.store.listAutomations().find((entry) => entry.id === automationId)
-    if (!automation) {
-      throw new Error('Automation not found.')
-    }
-    const run = this.store.listAutomationRuns(automationId).find((entry) => entry.id === runId)
-    if (!run) {
-      throw new Error('Automation run not found.')
-    }
-    if (run.trigger !== 'scheduled' || !automation.precheck) {
-      return null
-    }
-    const target = this.resolveTarget(automation)
-    if (!target.ok) {
-      return {
-        command: automation.precheck.command,
-        exitCode: null,
-        timedOut: false,
-        durationMs: 0,
-        stdout: '',
-        stderr: '',
-        stdoutTruncated: false,
-        stderrTruncated: false,
-        error: target.error,
-        startedAt: Date.now(),
-        completedAt: Date.now()
-      }
-    }
-    return await runAutomationPrecheck({
-      precheck: automation.precheck,
-      target:
-        automation.executionTargetType === 'ssh'
-          ? { type: 'ssh', cwd: target.cwd, connectionId: automation.executionTargetId }
-          : { type: 'local', cwd: target.cwd }
-    })
+    return runAutomationRequestPrecheck(this.store, automationId, runId, (automation) =>
+      this.resolveTarget(automation)
+    )
   }
 
   async markDispatchResult(result: AutomationDispatchResult): Promise<AutomationRun> {
-    const run = this.runs.updateRun(result)
+    const run = await this.runs.updateRun(result)
     clearAutomationDispatchTokens(run.automationId, run.id)
     if (!isFinalAutomationRunStatus(run.status)) {
       if (run.status === 'dispatched') {
@@ -197,83 +203,90 @@ export class AutomationService {
       return run
     }
     this.completionWatcher?.forget(run.id)
-    // Why: the renderer's mark-completed effect can re-fire for the same run
-    // before refresh() flips its status snapshot off 'dispatched'. Re-running
-    // collectRunUsage advances the attribution window and can rewrite an
-    // already-collected 'known' usage to 'unavailable'/'ambiguous_session'.
+    // Duplicate completion effects must not recalculate usage with a later attribution window.
     if (run.usage) {
       return run
     }
-    const usage = await collectAutomationRunUsage({
-      automation: this.store.listAutomations().find((entry) => entry.id === run.automationId),
+    return await writeAutomationRunUsage({
+      store: this.store,
+      runs: this.runs,
       run,
       claudeUsage: this.claudeUsage,
       codexUsage: this.codexUsage
     })
-    // Why: the run is final during the await above, so a concurrent create-time
-    // retention prune may have evicted it — the usage write must not throw then.
-    if (!this.store.listAutomationRuns(run.automationId).some((entry) => entry.id === run.id)) {
-      return run
-    }
-    return this.runs.updateRun({
-      runId: run.id,
-      status: run.status,
-      workspaceId: run.workspaceId,
-      terminalSessionId: run.terminalSessionId,
-      usage,
-      error: run.error
-    })
   }
 
   private async evaluateDueRuns(): Promise<void> {
-    if (this.evaluating) {
+    // A run started in a dark wake is cut off by the next sleep.
+    if (this.evaluating || this.stopped || !this.wakeGate.admits(this.store, this.tickMs)) {
       return
     }
     this.evaluating = true
+    const generation = this.dispatchGeneration
+    if (this.availableLauncher()) {
+      this.completionWatcher?.markTerminalSurfaceReady()
+    }
     try {
       const now = Date.now()
       for (const automation of this.store.listAutomations()) {
+        if (this.stopped || generation !== this.dispatchGeneration) {
+          break
+        }
         if (!automation.enabled || automation.nextRunAt > now) {
           continue
         }
-        await this.evaluateAutomation(automation, now)
+        // A malformed schedule must not prevent later due rows from running.
+        try {
+          await this.evaluateAutomation(automation, now)
+        } catch (error) {
+          if (
+            !(error instanceof AutomationDispatchCancelledError) &&
+            !this.stopped &&
+            generation === this.dispatchGeneration &&
+            this.store.listAutomations().some((current) => current.id === automation.id)
+          ) {
+            await recordUnevaluableAutomation({ runs: this.runs, automation, error })
+          }
+        }
       }
     } finally {
       this.evaluating = false
+      this.wakeGate.clear()
     }
   }
 
-  private async evaluateAutomation(automation: Automation, now: number): Promise<void> {
+  private async evaluateAutomation(listed: Automation, now: number): Promise<void> {
+    const generation = this.dispatchGeneration
+    const automation = captureLegacyRunTarget(this.store, listed, this.allowRemoteHostScheduling)
     const scheduledFor = this.store.getLatestAutomationOccurrence(automation, now)
     if (scheduledFor === null) {
-      this.store.advanceAutomationNextRun(automation.id, now)
+      await this.runs.advanceNextRun(automation.id, now)
       return
     }
-    const graceMs = automation.missedRunGraceMinutes * 60 * 1000
-    if (now - scheduledFor > graceMs) {
-      const missed = this.runs.createRun(automation, scheduledFor)
-      this.runs.updateRun({
-        runId: missed.id,
-        status: 'skipped_missed',
-        workspaceId: automation.workspaceId,
-        error: 'Orca was unavailable during the missed-run grace window.'
-      })
-      this.store.advanceAutomationNextRun(automation.id, now)
+    if (this.wakeGate.missedBeyondGrace({ automation, scheduledFor, now, tickMs: this.tickMs })) {
+      await recordMissedRun({ runs: this.runs, automation, scheduledFor })
+      await this.runs.advanceNextRun(automation.id, now)
       return
     }
 
-    // Resolved before the run exists: a refusal repeats every occurrence, and a
-    // */5 automation would otherwise write ~288 identical rows a day — past
-    // retention, which would evict the automation's real history.
+    // Fold recurring refusals before creating rows so they do not evict real run history.
     const target = this.resolveTarget(automation)
-    const refusal = describeScheduledRefusal({ target, canDispatch: this.canDispatch() })
-    if (refusal && this.runs.repeatSkip(automation.id, refusal, scheduledFor)) {
-      this.store.advanceAutomationNextRun(automation.id, now)
+    const canDispatch = Boolean(this.availableLauncher())
+    const refusal = await describeScheduledTickRefusal(this.store, { target, canDispatch })
+    // Once WSL owns the schedule, avoid churning skips on the retained local copy.
+    if (refusal?.errorCode === 'wslMoveOwnedByHost') {
+      await this.runs.advanceNextRun(automation.id, now)
+      return
+    }
+    if (refusal && (await this.runs.repeatSkip(automation.id, refusal.error, scheduledFor))) {
+      await this.runs.advanceNextRun(automation.id, now)
       return
     }
 
-    await this.requestDispatch(automation, this.runs.createRun(automation, scheduledFor), target)
-    this.store.advanceAutomationNextRun(automation.id, now)
+    const run = await this.runs.createRun(automation, scheduledFor)
+    this.launchInLane(automation, run, target, generation, () =>
+      this.runs.advanceNextRun(automation.id, now)
+    )
   }
 
   private resolveTarget(automation: Automation): AutomationRunTargetResult {
@@ -282,61 +295,40 @@ export class AutomationService {
     })
   }
 
-  private canDispatchToRenderer(): boolean {
-    const webContents = this.webContents
-    return Boolean(webContents && !webContents.isDestroyed() && this.rendererReady)
+  /** The terminal launcher, while a window graph can hold run terminals. */
+  private availableLauncher(): AutomationLauncher | null {
+    return this.terminalLauncher?.available() ? this.terminalLauncher.launch : null
   }
 
-  /** Headless serve counts: it launches runs with no window at all. */
-  private canDispatch(): boolean {
-    return this.canDispatchToRenderer() || Boolean(this.headlessDispatcher)
+  /** Serialize dispatch and retention per automation until launch, without holding the lane during agent work. */
+  runInAutomationLane<T>(automationId: string, operation: () => Promise<T>): Promise<T> {
+    return runKeyedSerializedOperation(this.automationLanes, automationId, operation)
   }
 
-  private async requestDispatch(
+  private requestDispatch(
     automation: Automation,
     run: AutomationRun,
-    target: AutomationRunTargetResult
+    target: AutomationRunTargetResult,
+    generation: number
   ): Promise<AutomationRun> {
-    if (!target.ok) {
-      return this.runs.updateRun({
-        runId: run.id,
-        status: 'skipped_unavailable',
-        workspaceId: automation.workspaceId,
-        error: target.error
-      })
-    }
-    if (!this.canDispatchToRenderer()) {
-      if (this.headlessDispatcher) {
-        return await runHeadlessAutomationDispatch({
-          automation,
-          run,
-          target,
-          dispatcher: this.headlessDispatcher,
+    return this.runInAutomationLane(automation.id, () =>
+      requestAutomationDispatch(
+        {
+          store: this.store,
           runs: this.runs,
+          isActive: () => !this.stopped && generation === this.dispatchGeneration,
+          launcher: () => this.availableLauncher(),
+          chatDispatcher:
+            this.allowRemoteHostScheduling || this.availableLauncher() ? this.chatDispatcher : null,
+          resolveTarget: (current) => this.resolveTarget(current),
           runPrecheck: () => this.runPrecheck(automation.id, run.id),
           markDispatchResult: (result) => this.markDispatchResult(result),
           watchRun: (dispatched) => this.completionWatcher?.watch(dispatched)
-        })
-      }
-      return this.runs.updateRun({
-        runId: run.id,
-        status: 'skipped_unavailable',
-        workspaceId: automation.workspaceId,
-        error: NO_DISPATCH_HOST
-      })
-    }
-    const updated = this.runs.updateRun({
-      runId: run.id,
-      status: 'dispatching',
-      workspaceId: automation.workspaceId,
-      error: null
-    })
-    const payload: AutomationDispatchRequest = {
-      automation,
-      run: updated,
-      dispatchToken: createAutomationDispatchToken(automation.id, updated.id)
-    }
-    this.webContents?.send('automations:dispatchRequested', payload)
-    return updated
+        },
+        automation,
+        run,
+        target
+      )
+    )
   }
 }

@@ -2,6 +2,16 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { stripSearchExcerptMarkdown } from '../src/components/docs/search-excerpt.mjs'
 
+test('link destinations retain escaped closing parentheses and literal escapes', () => {
+  for (const prefix of ['![label](', '[label](']) {
+    assert.equal(stripSearchExcerptMarkdown(prefix + 'https://example.com/a\\)b)'), 'label')
+    assert.equal(stripSearchExcerptMarkdown(prefix + 'https://example.com/a\\(b)'), 'label')
+    assert.equal(stripSearchExcerptMarkdown(prefix + 'https://example.com/a\\)'), 'label')
+    assert.equal(stripSearchExcerptMarkdown(prefix + 'https://example.com/a\\\\))'), 'label)')
+    assert.equal(stripSearchExcerptMarkdown(prefix + 'https://example.com/a\\\nb)'), 'label')
+  }
+})
+
 test('search excerpts omit inline Markdown syntax', () => {
   assert.equal(
     stripSearchExcerptMarkdown(
@@ -33,4 +43,34 @@ test('search excerpts preserve highlighted matches inside Markdown', () => {
     stripSearchExcerptMarkdown('<mark>[Privacy controls](https://example.com/privacy)</mark>'),
     '<mark>Privacy controls</mark>'
   )
+})
+
+test('tag guards preserve malformed markup, protected code and highlighted matches', () => {
+  const cases = [
+    ['<em>**bold**</em>', 'bold'],
+    ['<> **bold**', '<> bold'],
+    ['<<em>bold</em>', 'bold'],
+    ['<tag\nattr>hello</tag>', 'hello'],
+    ['`<em>**literal**</em>`', '<em>**literal**</em>'],
+    ['<mark>**highlight**</mark>', '<mark>highlight</mark>'],
+    ['<MARK>**highlight**</MARK>', '<MARK>highlight</MARK>'],
+    ['[<label](https://example.com/a>)', '<label'],
+    ['<a **bold**', '<a bold'],
+    ['<mark><<<</mark>', '<mark><<<</mark>'],
+    ['\\> <tag>text</tag>', '> text'],
+    ['plain > text', 'plain > text'],
+    ['<!>text', 'text'],
+    ['<><', '<><'],
+    ['<\0orca-search-code-99\0', '<'],
+    ['Use <mark>[**unclosed**</mark>', 'Use <mark>[unclosed</mark>'],
+    ['<span>[<em>text</em></span>', '[text'],
+    ['Use `[**literal**` and **emphasis**', 'Use [**literal** and emphasis'],
+    ['![<mark>alt</mark>](url)', '<mark>alt</mark>'],
+    ['[[path]]', 'path'],
+    ['[label][ref]', 'label'],
+    [']', ']']
+  ]
+  for (const [input, expected] of cases) {
+    assert.equal(stripSearchExcerptMarkdown(input), expected, input)
+  }
 })

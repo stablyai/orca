@@ -2,7 +2,7 @@ import type {
   AgentSessionBackgroundTask,
   AgentSessionBackgroundTaskRunState,
   AgentSessionBackgroundTaskState
-} from '../../shared/agent-session-wire'
+} from '../../shared/agent-session/agent-session-background-task-wire'
 import {
   classifyClaudeBackgroundTaskKind,
   liveClaudeTaskRunState,
@@ -15,12 +15,12 @@ import {
 } from './claude-background-task-frames'
 import {
   ClaudeSettledBackgroundTasks,
-  claudeBackgroundTaskDetail,
+  claudeBackgroundTaskDetails,
+  hasLiveClaudeBackgroundWork,
   type TrackedClaudeBackgroundTask
 } from './claude-settled-background-tasks'
+import { combineClaudeBackgroundTaskRoster } from './claude-background-task-roster-merge'
 
-// `claude-subagent-*` reads this channel through these names; the readers themselves
-// live in the frames module so both consumers share one definition.
 export {
   classifyClaudeBackgroundTaskKind,
   isBoundedClaudeTaskId,
@@ -29,13 +29,16 @@ export {
 } from './claude-background-task-frames'
 export type { ClaudeBackgroundTaskKind } from './claude-background-task-frames'
 
-const MAX_TRACKED_TASKS = 256
+// Bound terminal IDs without evicting live tasks.
+const MAX_TERMINAL_TASK_IDS = 256
+export type ClaudeGoalBackgroundWork = 'live' | 'unverifiable' | 'exited'
 
 export class ClaudeBackgroundTaskTracker {
   private readonly tasks = new Map<string, TrackedClaudeBackgroundTask>()
   private readonly retention = new ClaudeSettledBackgroundTasks()
   private readonly terminalTaskIds = new Set<string>()
   private aggregateRosterObserved = false
+  private coverageIncomplete = false
   private monitoring = false
   private publishedTasksFingerprint = ''
 
@@ -62,10 +65,19 @@ export class ClaudeBackgroundTaskTracker {
     return ids
   }
 
+  get goalBackgroundWork(): ClaudeGoalBackgroundWork {
+    return hasLiveClaudeBackgroundWork(this.tasks.values())
+      ? 'live'
+      : this.coverageIncomplete
+        ? 'unverifiable'
+        : 'exited'
+  }
+
   observe(message: Record<string, unknown>, startsTurn = false): boolean {
-    // Background work publishes through a foreground turn: the strip stays
-    // honest mid-fan-out and the client alone decides when the idle-only
-    // monitoring label may speak.
+    // Turn changes retire foreground work; background visibility depends on provider evidence.
+    if (startsTurn || message.type === 'result') {
+      this.settleForegroundTasks()
+    }
     if (message.type === 'system') {
       if (!this.observeSystemFrame(message) && !startsTurn) {
         return false
@@ -81,7 +93,16 @@ export class ClaudeBackgroundTaskTracker {
     this.retention.clear()
     this.terminalTaskIds.clear()
     this.aggregateRosterObserved = false
+    this.coverageIncomplete = false
     return this.refreshMonitoring()
+  }
+
+  private settleForegroundTasks(): void {
+    for (const task of this.tasks.values()) {
+      if (!task.backgrounded) {
+        task.liveInTurn = false
+      }
+    }
   }
 
   private settle(
@@ -103,16 +124,14 @@ export class ClaudeBackgroundTaskTracker {
       return false
     }
     if (message.subtype === 'task_notification') {
-      // The notification is affirmative terminal evidence even when its status
-      // field is unreadable — matching the liveness semantics this edge always had.
+      // A terminal notification settles liveness even if its status is unreadable.
       this.settle(id, terminalClaudeTaskRunState(message.status) ?? 'done', {
         totalTokens: taskUsageTotalTokens(message)
       })
       return true
     }
     if (message.subtype === 'task_progress') {
-      // Progress `description` is the current activity ("Running <tool>"), not
-      // the task's name — only usage (and a missing identity) may update.
+      // Progress descriptions are transient activity; preserve the task name.
       const existing = this.tasks.get(id)
       const totalTokens = taskUsageTotalTokens(message)
       if (!existing?.backgrounded || totalTokens === undefined) {
@@ -131,12 +150,15 @@ export class ClaudeBackgroundTaskTracker {
       this.finish(id)
       return true
     }
-    if (this.aggregateRosterObserved && !this.tasks.has(id)) {
+    const kind = classifyClaudeBackgroundTaskKind(message.task_type)
+    const backgrounded =
+      message.is_backgrounded === true || kind === 'workflow' || kind === 'monitor'
+    // The aggregate roster is authoritative only for background work.
+    if (this.aggregateRosterObserved && backgrounded && !this.tasks.has(id)) {
       return false
     }
-    const kind = classifyClaudeBackgroundTaskKind(message.task_type)
     this.upsert(id, {
-      backgrounded: message.is_backgrounded === true || kind === 'workflow' || kind === 'monitor',
+      backgrounded,
       kind,
       description: taskDescription(message.description),
       name: taskName(message),
@@ -157,8 +179,6 @@ export class ClaudeBackgroundTaskTracker {
       return true
     }
     const existing = this.tasks.get(id)
-    // Classification is re-derived per transition: a later frame that reveals a
-    // real type moves the task between buckets instead of pinning first-seen.
     const patchKind =
       'task_type' in patch ? classifyClaudeBackgroundTaskKind(patch.task_type) : undefined
     const liveState = liveClaudeTaskRunState(patch.status)
@@ -184,30 +204,35 @@ export class ClaudeBackgroundTaskTracker {
 
   private replaceAggregateRoster(value: unknown): void {
     if (!Array.isArray(value)) {
+      this.coverageIncomplete = true
       return
     }
     const prior = new Map(this.tasks)
     this.aggregateRosterObserved = true
     this.tasks.clear()
-    this.terminalTaskIds.clear()
+    const roster = new Map<string, TrackedClaudeBackgroundTask>()
+    let coverageIncomplete = false
     for (const valueTask of value) {
-      if (this.tasks.size >= MAX_TRACKED_TASKS) {
-        break
-      }
       const task = record(valueTask)
-      if (!task || task.ambient === true) {
+      if (!task) {
+        coverageIncomplete = true
+        continue
+      }
+      if (task.ambient === true) {
         continue
       }
       const id = taskId(task)
       if (!id) {
+        coverageIncomplete = true
         continue
       }
-      // An authoritative live roster supersedes an earlier terminal edge.
-      const retained = this.retention.resume(id)
-      const existing = prior.get(id) ?? retained
+      // Only explicitly rostered IDs supersede terminal evidence; preserve finished foreground IDs.
+      this.terminalTaskIds.delete(id)
+      const existing = prior.get(id) ?? this.retention.resume(id)
       const kind = classifyClaudeBackgroundTaskKind(task.task_type)
-      this.tasks.set(id, {
+      roster.set(id, {
         backgrounded: true,
+        liveInTurn: true,
         kind: kind !== 'unknown' ? kind : (existing?.kind ?? 'unknown'),
         description: taskDescription(task.description) ?? existing?.description,
         name: taskName(task) ?? existing?.name,
@@ -216,6 +241,10 @@ export class ClaudeBackgroundTaskTracker {
         totalTokens: existing?.totalTokens
       })
     }
+    this.coverageIncomplete = coverageIncomplete
+    for (const [id, task] of combineClaudeBackgroundTaskRoster(prior, roster)) {
+      this.tasks.set(id, task)
+    }
     for (const [id, task] of prior) {
       if (task.backgrounded && !this.tasks.has(id)) {
         this.retention.rememberRemoved(id, task)
@@ -223,25 +252,14 @@ export class ClaudeBackgroundTaskTracker {
     }
   }
 
-  private upsert(id: string, task: TrackedClaudeBackgroundTask): void {
-    if (!this.tasks.has(id) && this.tasks.size >= MAX_TRACKED_TASKS) {
-      let foregroundId: string | undefined
-      for (const [candidateId, candidate] of this.tasks) {
-        if (!candidate.backgrounded) {
-          foregroundId = candidateId
-          break
-        }
-      }
-      if (!foregroundId) {
-        return
-      }
-      this.tasks.delete(foregroundId)
-    }
+  private upsert(id: string, task: Omit<TrackedClaudeBackgroundTask, 'liveInTurn'>): void {
     const existing = this.tasks.get(id) ?? this.retention.resume(id)
     this.terminalTaskIds.delete(id)
     if (existing) {
       this.tasks.set(id, {
         backgrounded: existing.backgrounded || task.backgrounded,
+        // A settled foreground task is not revived by a late edge frame.
+        liveInTurn: existing.liveInTurn,
         kind: task.kind !== 'unknown' ? task.kind : existing.kind,
         description: task.description ?? existing.description,
         name: task.name ?? existing.name,
@@ -251,14 +269,14 @@ export class ClaudeBackgroundTaskTracker {
       })
       return
     }
-    this.tasks.set(id, task)
+    this.tasks.set(id, { ...task, liveInTurn: true })
   }
 
   private finish(id: string): void {
     this.tasks.delete(id)
     this.terminalTaskIds.delete(id)
     this.terminalTaskIds.add(id)
-    if (this.terminalTaskIds.size > MAX_TRACKED_TASKS) {
+    if (this.terminalTaskIds.size > MAX_TERMINAL_TASK_IDS) {
       const oldest = this.terminalTaskIds.values().next()
       if (!oldest.done) {
         this.terminalTaskIds.delete(oldest.value)
@@ -282,13 +300,6 @@ export class ClaudeBackgroundTaskTracker {
   }
 
   private backgroundTaskDetails(): AgentSessionBackgroundTask[] {
-    const details: AgentSessionBackgroundTask[] = []
-    for (const [id, task] of this.tasks) {
-      if (!task.backgrounded) {
-        continue
-      }
-      details.push(claudeBackgroundTaskDetail(id, task))
-    }
-    return details
+    return claudeBackgroundTaskDetails(this.tasks)
   }
 }

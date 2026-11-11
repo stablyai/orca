@@ -13,6 +13,7 @@ import {
 import { getRelativePathInsideRoot } from '@/lib/path'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type UntitledFileRenameDialogProps = {
   open: boolean
@@ -33,13 +34,14 @@ export function UntitledFileRenameDialog({
   onClose,
   onConfirm
 }: UntitledFileRenameDialogProps): React.JSX.Element {
+  const t = useTranslate()
   const baseName = currentName.replace(/\.md$/, '')
   const [name, setName] = useState(baseName)
   const [dir, setDir] = useState(worktreePath)
   const [error, setError] = useState<string | null>(null)
   const nameInputRef = useRef<HTMLInputElement>(null)
   const focusFrameRef = useRef<number | null>(null)
-  const seededOpenStateRef = useRef({ open: false, baseName, worktreePath })
+  const [seededOpenState, setSeededOpenState] = useState({ open: false, baseName, worktreePath })
   const mountedRef = useMountedRef()
 
   const displayError = externalError ?? error
@@ -54,8 +56,7 @@ export function UntitledFileRenameDialog({
   const setNameInputNode = useCallback(
     (node: HTMLInputElement | null): void => {
       if (!node) {
-        // Why: on a quick close, Radix may unmount the input before the
-        // deferred focus frame runs. Cancel it from the ref cleanup path.
+        // Radix may unmount before deferred focus runs; cancel from ref cleanup.
         cancelFocusFrame()
       }
       nameInputRef.current = node
@@ -63,18 +64,20 @@ export function UntitledFileRenameDialog({
     [cancelFocusFrame]
   )
 
-  // Why: seed the drafts before the open dialog paints; focus is handled by
-  // Radix's open lifecycle below so this does not need a post-render Effect.
+  // Seed before painting; Radix’s open lifecycle owns focus without a post-render effect.
   if (open) {
-    const seeded = seededOpenStateRef.current
-    if (!seeded.open || seeded.baseName !== baseName || seeded.worktreePath !== worktreePath) {
-      seededOpenStateRef.current = { open: true, baseName, worktreePath }
+    if (
+      !seededOpenState.open ||
+      seededOpenState.baseName !== baseName ||
+      seededOpenState.worktreePath !== worktreePath
+    ) {
+      setSeededOpenState({ open: true, baseName, worktreePath })
       setName(baseName)
       setDir(worktreePath)
       setError(null)
     }
-  } else if (seededOpenStateRef.current.open) {
-    seededOpenStateRef.current = { open: false, baseName, worktreePath }
+  } else if (seededOpenState.open) {
+    setSeededOpenState({ open: false, baseName, worktreePath })
   }
 
   const handleBrowse = useCallback(async () => {
@@ -92,23 +95,43 @@ export function UntitledFileRenameDialog({
   const handleSubmit = useCallback(() => {
     const trimmedName = name.trim().replace(/\.md$/, '')
     if (!trimmedName) {
-      setError('Name cannot be empty')
+      setError(
+        translate(
+          'auto.components.editor.UntitledFileRenameDialog.nameEmpty',
+          'Name cannot be empty'
+        )
+      )
       return
     }
     if (/[/\\]/.test(trimmedName)) {
-      setError('Name cannot contain path separators')
+      setError(
+        translate(
+          'auto.components.editor.UntitledFileRenameDialog.nameHasSeparators',
+          'Name cannot contain path separators'
+        )
+      )
       return
     }
 
     const trimmedDir = dir.trim().replace(/[\\/]+$/, '')
     if (!trimmedDir) {
-      setError('Folder path cannot be empty')
+      setError(
+        translate(
+          'auto.components.editor.UntitledFileRenameDialog.folderEmpty',
+          'Folder path cannot be empty'
+        )
+      )
       return
     }
 
     const relDir = getRelativePathInsideRoot(trimmedDir, worktreePath)
     if (relDir === null) {
-      setError('Folder must be inside the current workspace')
+      setError(
+        translate(
+          'auto.components.editor.UntitledFileRenameDialog.folderOutsideWorkspace',
+          'Folder must be inside the current workspace'
+        )
+      )
       return
     }
 
@@ -134,10 +157,10 @@ export function UntitledFileRenameDialog({
       >
         <DialogHeader>
           <DialogTitle className="text-sm">
-            {translate('auto.components.editor.UntitledFileRenameDialog.674b046582', 'Save as')}
+            {t('auto.components.editor.UntitledFileRenameDialog.674b046582', 'Save as')}
           </DialogTitle>
           <DialogDescription className="text-xs">
-            {translate(
+            {t(
               'auto.components.editor.UntitledFileRenameDialog.e365f3c638',
               'Name your markdown file and pick a folder.'
             )}
@@ -146,7 +169,7 @@ export function UntitledFileRenameDialog({
         <div className="flex flex-col gap-3">
           <div>
             <label className="text-[11px] font-medium text-muted-foreground mb-1 block">
-              {translate('auto.components.editor.UntitledFileRenameDialog.b6ed807cc6', 'Name')}
+              {t('auto.components.editor.UntitledFileRenameDialog.b6ed807cc6', 'Name')}
             </label>
             <div className="flex items-center gap-1.5">
               <Input
@@ -162,7 +185,7 @@ export function UntitledFileRenameDialog({
                     handleSubmit()
                   }
                 }}
-                placeholder={translate(
+                placeholder={t(
                   'auto.components.editor.UntitledFileRenameDialog.c8ac7868e6',
                   'file name'
                 )}
@@ -170,13 +193,13 @@ export function UntitledFileRenameDialog({
                 aria-invalid={!!displayError}
               />
               <span className="text-xs text-muted-foreground shrink-0">
-                {translate('auto.components.editor.UntitledFileRenameDialog.2d7d39dc63', '.md')}
+                {t('auto.components.editor.UntitledFileRenameDialog.2d7d39dc63', '.md')}
               </span>
             </div>
           </div>
           <div>
             <label className="text-[11px] font-medium text-muted-foreground mb-1 block">
-              {translate('auto.components.editor.UntitledFileRenameDialog.30099dca46', 'Folder')}
+              {t('auto.components.editor.UntitledFileRenameDialog.30099dca46', 'Folder')}
             </label>
             <div className="flex items-center gap-1.5">
               <Input
@@ -202,11 +225,11 @@ export function UntitledFileRenameDialog({
                 onClick={() => void handleBrowse()}
                 title={
                   disableBrowse
-                    ? translate(
+                    ? t(
                         'auto.components.editor.UntitledFileRenameDialog.5e7f0d8a80',
                         'Folder picker unavailable for remote files'
                       )
-                    : translate(
+                    : t(
                         'auto.components.editor.UntitledFileRenameDialog.725868c75d',
                         'Browse folders'
                       )
@@ -220,10 +243,10 @@ export function UntitledFileRenameDialog({
         {displayError && <p className="text-xs text-destructive mt-1">{displayError}</p>}
         <DialogFooter className="mt-1">
           <Button variant="outline" size="sm" onClick={onClose}>
-            {translate('auto.components.editor.UntitledFileRenameDialog.949711deb4', 'Cancel')}
+            {t('auto.components.editor.UntitledFileRenameDialog.949711deb4', 'Cancel')}
           </Button>
           <Button size="sm" onClick={handleSubmit}>
-            {translate('auto.components.editor.UntitledFileRenameDialog.a7dd27b0bc', 'Save')}
+            {t('auto.components.editor.UntitledFileRenameDialog.a7dd27b0bc', 'Save')}
           </Button>
         </DialogFooter>
       </DialogContent>

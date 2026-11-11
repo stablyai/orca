@@ -1,13 +1,14 @@
 import type { LucideIcon } from 'lucide-react'
 import { ArrowRight, LoaderCircle, RefreshCw, Save, Send } from 'lucide-react'
-import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
+import { JiraIssueMarkdown } from './jira-issue-markdown'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { JiraIcon } from '@/components/icons/JiraIcon'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { formatUiRelativeTimeFromDate } from '@/i18n/relative-time-format'
-import type { JiraComment, JiraIssue } from '../../../shared/jira-types'
+import type { JiraComment, JiraIssue } from '../../../shared/jira/jira-types'
 
 export type JiraIssueWorkspaceAction = {
   label: string
@@ -17,6 +18,7 @@ export type JiraIssueWorkspaceAction = {
 
 export function JiraIssueWorkspaceContent({
   displayed,
+  imageTarget,
   titleDraft,
   setTitleDraft,
   labelsDraft,
@@ -32,6 +34,7 @@ export function JiraIssueWorkspaceContent({
   actionItems
 }: {
   displayed: JiraIssue
+  imageTarget: RuntimeClientTarget
   titleDraft: string
   setTitleDraft: (value: string) => void
   labelsDraft: string
@@ -46,13 +49,15 @@ export function JiraIssueWorkspaceContent({
   onUse: (issue: JiraIssue) => void
   actionItems: JiraIssueWorkspaceAction[]
 }): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   return (
     <div className="grid min-h-0 flex-1 grid-cols-1 xl:grid-cols-[minmax(0,1fr)_228px]">
       <div className="min-h-0 overflow-y-auto scrollbar-sleek">
         <section className="border-b border-border/40 px-4 py-4">
           <div className="grid gap-2">
             <label className="text-[11px] font-medium text-muted-foreground">
-              {translate('auto.components.JiraIssueWorkspace.444865b4a8', 'Title')}
+              {t('auto.components.JiraIssueWorkspace.444865b4a8', 'Title')}
             </label>
             <div className="flex gap-2">
               <Input
@@ -80,16 +85,13 @@ export function JiraIssueWorkspaceContent({
               </Button>
             </div>
             <label className="mt-2 text-[11px] font-medium text-muted-foreground">
-              {translate('auto.components.JiraIssueWorkspace.aee97b6913', 'Labels')}
+              {t('auto.components.JiraIssueWorkspace.aee97b6913', 'Labels')}
             </label>
             <div className="flex gap-2">
               <Input
                 value={labelsDraft}
                 onChange={(event) => setLabelsDraft(event.target.value)}
-                placeholder={translate(
-                  'auto.components.JiraIssueWorkspace.0f3c07a901',
-                  'backend, bug'
-                )}
+                placeholder={t('auto.components.JiraIssueWorkspace.0f3c07a901', 'backend, bug')}
                 className="h-8 text-xs"
               />
               <Button
@@ -115,21 +117,18 @@ export function JiraIssueWorkspaceContent({
             <span className="text-xs text-muted-foreground">
               {displayed.project.key} ·{' '}
               {displayed.assignee?.displayName ??
-                translate('auto.components.JiraIssueWorkspace.0b6b5646ed', 'Unassigned')}
+                t('auto.components.JiraIssueWorkspace.0b6b5646ed', 'Unassigned')}
             </span>
           </div>
           {displayed.description?.trim() ? (
-            <CommentMarkdown
+            <JiraIssueMarkdown
+              target={imageTarget}
               content={displayed.description}
-              variant="document"
               className="text-[14px] leading-relaxed"
             />
           ) : (
             <p className="text-sm italic text-muted-foreground">
-              {translate(
-                'auto.components.JiraIssueWorkspace.c4889a47e4',
-                'No description provided.'
-              )}
+              {t('auto.components.JiraIssueWorkspace.c4889a47e4', 'No description provided.')}
             </p>
           )}
         </section>
@@ -138,7 +137,7 @@ export function JiraIssueWorkspaceContent({
           <div className="mb-3 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <span className="text-[13px] font-medium text-foreground">
-                {translate('auto.components.JiraIssueWorkspace.9a980b06b9', 'Comments')}
+                {t('auto.components.JiraIssueWorkspace.9a980b06b9', 'Comments')}
               </span>
               {comments.length > 0 ? (
                 <span className="text-[12px] text-muted-foreground">{comments.length}</span>
@@ -157,7 +156,7 @@ export function JiraIssueWorkspaceContent({
                 ) : (
                   <RefreshCw className="size-3" />
                 )}
-                {translate('auto.components.JiraIssueWorkspace.5cd09beaf9', 'Retry')}
+                {t('auto.components.JiraIssueWorkspace.5cd09beaf9', 'Retry')}
               </Button>
             ) : null}
           </div>
@@ -171,7 +170,7 @@ export function JiraIssueWorkspaceContent({
             </div>
           ) : comments.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              {translate('auto.components.JiraIssueWorkspace.9178090e26', 'No comments yet.')}
+              {t('auto.components.JiraIssueWorkspace.9178090e26', 'No comments yet.')}
             </p>
           ) : (
             <div className="flex flex-col gap-3">
@@ -187,18 +186,17 @@ export function JiraIssueWorkspaceContent({
                     ) : null}
                     <span className="truncate text-[13px] font-semibold text-foreground">
                       {comment.user?.displayName ??
-                        translate('auto.components.JiraIssueWorkspace.666cfdd835', 'Unknown')}
+                        t('auto.components.JiraIssueWorkspace.666cfdd835', 'Unknown')}
                     </span>
                     <span className="shrink-0 text-[12px] text-muted-foreground">
-                      {formatUiRelativeTimeFromDate(comment.createdAt)}
+                      {formatUiRelativeTimeFromDate(comment.createdAt, undefined, intlLocale)}
                     </span>
                   </div>
                   <div className="px-3 py-2">
-                    {/* Why: Jira comment screenshots need the same preview
-                                affordance without changing compact comment typography. */}
-                    <CommentMarkdown
+                    <JiraIssueMarkdown
+                      target={imageTarget}
                       content={comment.body}
-                      expandImages
+                      compact
                       className="text-[13px] leading-relaxed"
                     />
                   </div>
@@ -214,7 +212,7 @@ export function JiraIssueWorkspaceContent({
           onClick={() => onUse(displayed)}
           className="mb-3 w-full justify-center gap-2 sm:hidden"
         >
-          {translate('auto.components.JiraIssueWorkspace.2441be6f9f', 'Start workspace')}
+          {t('auto.components.JiraIssueWorkspace.2441be6f9f', 'Start workspace')}
           <ArrowRight className="size-4" />
         </Button>
         <div className="grid gap-1">
@@ -257,16 +255,14 @@ export function JiraIssueCommentComposer({
   canSubmitComment: boolean
   handleSubmitComment: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="flex-none border-t border-border/50 bg-background px-3 py-3">
       <div className="flex gap-2">
         <textarea
           value={commentDraft}
           onChange={(event) => setCommentDraft(event.target.value)}
-          placeholder={translate(
-            'auto.components.JiraIssueWorkspace.a585fd204e',
-            'Add a Jira comment...'
-          )}
+          placeholder={t('auto.components.JiraIssueWorkspace.a585fd204e', 'Add a Jira comment...')}
           rows={2}
           disabled={commentSubmitting}
           className="min-h-10 flex-1 resize-none rounded-md border border-input bg-transparent px-3 py-2 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
@@ -281,7 +277,7 @@ export function JiraIssueCommentComposer({
           ) : (
             <Send className="size-4" />
           )}
-          {translate('auto.components.JiraIssueWorkspace.b0b92666c9', 'Comment')}
+          {t('auto.components.JiraIssueWorkspace.b0b92666c9', 'Comment')}
         </Button>
       </div>
     </div>

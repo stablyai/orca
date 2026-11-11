@@ -1,3 +1,4 @@
+import type { SecretAtRestProtection } from '../secret-at-rest-protection'
 export type LinearViewer = {
   displayName: string
   email: string | null
@@ -36,16 +37,13 @@ export type LinearConnectionStatus = {
   workspaces?: LinearWorkspace[]
   activeWorkspaceId?: string | null
   selectedWorkspaceId?: LinearWorkspaceSelection | null
-  // Set when a stored token file exists but could not be decrypted, so the
-  // UI can explain reads failing while the connection still looks saved.
+  // Explain token decrypt failures while retaining saved connection metadata.
   credentialError?: string
+  // Plaintext means some tokens are unsealed; absent from older hosts means unknown, never sealed.
+  credentialProtection?: SecretAtRestProtection | null
 }
 
-/**
- * Stable dependency key for Linear reads: only the fields that change what a read returns.
- * Not interchangeable with the store's `linearStatusScopeSignature`, which hashes full
- * viewer and workspace metadata for cache invalidation and so churns on read-irrelevant edits.
- */
+/** Key only fields changing Linear read results; full linearStatusScopeSignature also hashes viewer/workspace metadata and churns on irrelevant edits. */
 export function linearWorkspaceScopeSignature(
   status: Pick<
     LinearConnectionStatus,

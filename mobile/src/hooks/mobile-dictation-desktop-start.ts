@@ -1,22 +1,70 @@
+import { isCurrentMobileDictationStart } from './mobile-dictation-session-state'
+import { sendAcrossConnectionMove } from './mobile-dictation-audio-chunk'
+import { dictationSessionLostMessage } from '../dictation/mobile-dictation-setup'
 import {
-  MOBILE_DICTATION_KEEP_AWAKE_STARTUP_BUDGET_MS,
-  isCurrentMobileDictationStart
-} from './mobile-dictation-session-state'
-import type { MobileDictationKeepAwakeOwner } from './mobile-dictation-keep-awake'
-import type { RpcClient } from '../transport/rpc-client'
+  dictationSessionCancel,
+  dictationSessionFinish,
+  dictationSessionStart
+} from '../dictation/mobile-dictation-operations'
+import { MOBILE_DICTATION_RECONNECT_GRACE_MS } from '../../../src/shared/rpc-contract/speech-params'
+import { pairedDictationFinishTimeoutMs } from '../../../src/shared/dictation-finish-deadlines'
+import { rpcPayloadMember } from '../transport/rpc/rpc-reader-payload'
+import { probeLivenessWhileWaiting } from '../transport/rpc/rpc-liveness-probe-while-waiting'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 
 type StartMobileDictationDesktopSessionOptions = {
   client: RpcClient
   dictationId: string
+  worktreeId?: string
   generation: number
   getCurrentGeneration: () => number
   getEnabled: () => boolean
   getActiveId: () => string | null
   clearActiveId: (dictationId: string) => void
   setIdle: () => void
-  keepAwakeOwner: MobileDictationKeepAwakeOwner
-  commitRecordingStart: () => boolean
+  commitRecordingStart: (hostDedupesResends: boolean) => void
   rollbackRecordingStart: () => void
+}
+
+// The host refuses a phone's second start while its last one is still starting or closing; keyed by client so a start on any screen waits that out.
+const hostWork = new WeakMap<RpcClient, Promise<void>>()
+
+function trackHostWork(client: RpcClient, work: Promise<unknown>): void {
+  hostWork.set(
+    client,
+    Promise.allSettled([hostWork.get(client), work]).then(() => undefined)
+  )
+}
+
+export function settledDesktopDictationWork(client: RpcClient): Promise<void> {
+  return hostWork.get(client) ?? Promise.resolve()
+}
+
+// Offline there is nothing to cancel against; the host drops a session its phone stops reaching, so never wait for a reconnect.
+export function cancelDesktopDictation(client: RpcClient, dictationId: string): Promise<void> {
+  const cancelled = probeLivenessWhileWaiting(
+    client,
+    dictationSessionCancel.request(client, { dictationId }, { failWhenDisconnected: true })
+  ).then(
+    () => undefined,
+    () => undefined
+  )
+  trackHostWork(client, cancelled)
+  return cancelled
+}
+
+// Returns the interpreted reply: the caller reads its text only after its staleness guard.
+export async function finishDesktopDictation(
+  client: RpcClient,
+  dictationId: string,
+  sentAudioSeconds: number
+): Promise<unknown> {
+  const timeoutMs = pairedDictationFinishTimeoutMs(sentAudioSeconds)
+  return dictationSessionFinish.interpret(
+    await sendAcrossConnectionMove(client, () =>
+      dictationSessionFinish.request(client, { dictationId }, { timeoutMs })
+    )
+  )
 }
 
 function isCurrentStart(options: StartMobileDictationDesktopSessionOptions): boolean {
@@ -39,40 +87,53 @@ function setIdleIfGenerationCurrent(options: StartMobileDictationDesktopSessionO
   }
 }
 
-// Cancel a start that went stale mid-startup. The wake-lock release and remote
-// cancel are independent, so run them concurrently: awaiting release first can
-// queue behind a still-running acquisition and delay cancel for the remainder
-// of the native timeout.
-async function cancelStaleStart(
-  options: StartMobileDictationDesktopSessionOptions,
-  { releaseKeepAwake }: { releaseKeepAwake: boolean }
-): Promise<void> {
-  const { client, dictationId, keepAwakeOwner } = options
+async function cancelStaleStart(options: StartMobileDictationDesktopSessionOptions): Promise<void> {
+  const { client, dictationId } = options
   options.clearActiveId(dictationId)
   setIdleIfGenerationCurrent(options)
-  const cleanups: Promise<unknown>[] = [
-    client.sendRequest('speech.dictation.cancel', { dictationId })
-  ]
-  if (releaseKeepAwake) {
-    cleanups.push(keepAwakeOwner.release(dictationId))
-  }
-  await Promise.allSettled(cleanups)
+  await cancelDesktopDictation(client, dictationId)
 }
 
-export async function startMobileDictationDesktopSession(
+export function startMobileDictationDesktopSession(
   options: StartMobileDictationDesktopSessionOptions
 ): Promise<boolean> {
-  const { client, dictationId, keepAwakeOwner } = options
+  const started = startOnHost(options)
+  trackHostWork(options.client, started)
+  return started
+}
+
+async function startOnHost(options: StartMobileDictationDesktopSessionOptions): Promise<boolean> {
+  const { client, dictationId, worktreeId } = options
+  let hostDedupesResends = false
 
   try {
-    const response = await client.sendRequest('speech.dictation.start', { dictationId })
-    if (!response.ok) {
-      throw new Error(response.error.message)
-    }
+    // The mic is already recording, so a start stalled by a drop or a sleeping host must give up rather than hold it.
+    const reply = await probeLivenessWhileWaiting(
+      client,
+      dictationSessionStart.request(
+        client,
+        { dictationId, ...(worktreeId ? { worktreeId } : {}) },
+        { timeoutMs: MOBILE_DICTATION_RECONNECT_GRACE_MS }
+      )
+    ).catch(() => {
+      // Only transport failures reject here; host refusals carry their own message through interpret.
+      throw new Error(dictationSessionLostMessage())
+    })
+    const started = dictationSessionStart.interpret(reply)
+    hostDedupesResends =
+      started != null && rpcPayloadMember(started, 'dedupesResentChunks') === true
   } catch (err) {
     const wasCurrent = isCurrentStart(options)
+    // Capture already holds the screen; roll both back only while this start is current. A stale start could otherwise stop its replacement’s microphone. Capture itself has no start identity.
+    if (wasCurrent) {
+      try {
+        options.rollbackRecordingStart()
+      } catch {
+        // A throwing rollback must neither skip desktop cancellation nor replace the original failure.
+      }
+    }
     options.clearActiveId(dictationId)
-    await client.sendRequest('speech.dictation.cancel', { dictationId }).catch(() => undefined)
+    await cancelDesktopDictation(client, dictationId)
     // Awaited cleanup may overlap a newer start; stale work must not reset or
     // report over the replacement session.
     const shouldReport = wasCurrent && canReportStartFailure(options)
@@ -83,60 +144,13 @@ export async function startMobileDictationDesktopSession(
     throw err
   }
 
+  // No await separates this check and commit; nothing can supersede the start between them.
   if (!isCurrentStart(options)) {
-    await cancelStaleStart(options, { releaseKeepAwake: false })
+    await cancelStaleStart(options)
     return false
   }
 
-  // Keep-awake is acquired only after the desktop session exists, so stale
-  // mobile starts can be canceled without holding a screen-lock tag. It is
-  // best-effort: Android throws with no current Activity, and a screen-lock
-  // nicety must not abort an otherwise viable dictation — nor delay recording
-  // past a small budget when native calls hang. A late acquisition finishes in
-  // the background; the serialized keep-awake queue orders any later release
-  // after it.
-  await new Promise<void>((resolve) => {
-    const budgetTimer = setTimeout(resolve, MOBILE_DICTATION_KEEP_AWAKE_STARTUP_BUDGET_MS)
-    keepAwakeOwner
-      .acquire(dictationId)
-      .catch((err: unknown) => console.error('Keep-awake activation failed', err))
-      .finally(() => {
-        clearTimeout(budgetTimer)
-        resolve()
-      })
-  })
-
-  if (!isCurrentStart(options)) {
-    await cancelStaleStart(options, { releaseKeepAwake: true })
-    return false
-  }
-
-  try {
-    // Commit in the same continuation as the final stale check; returning first
-    // would let a queued cancel resurrect microphone recording after cleanup.
-    if (!options.commitRecordingStart()) {
-      throw new Error('Failed to start microphone recording')
-    }
-  } catch (err) {
-    const wasCurrent = isCurrentStart(options)
-    // Native recording can partially start before throwing, so stop audio before
-    // releasing the wake tag and remote session.
-    try {
-      options.rollbackRecordingStart()
-    } catch {
-      // Continue releasing independently owned resources after native audio failure.
-    }
-    options.clearActiveId(dictationId)
-    await Promise.allSettled([
-      keepAwakeOwner.release(dictationId),
-      client.sendRequest('speech.dictation.cancel', { dictationId })
-    ])
-    const shouldReport = wasCurrent && canReportStartFailure(options)
-    setIdleIfGenerationCurrent(options)
-    if (!shouldReport) {
-      return false
-    }
-    throw err
-  }
+  // Commit before returning so queued cancellation cannot resurrect recording after cleanup.
+  options.commitRecordingStart(hostDedupesResends)
   return true
 }

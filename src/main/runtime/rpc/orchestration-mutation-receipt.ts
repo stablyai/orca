@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto'
-import { isTerminalPromptMutation } from '../../../shared/orchestration-rpc-contract'
-import { parsePaneKey } from '../../../shared/stable-pane-id'
+import { isTerminalPromptMutation } from '../../../shared/orchestration/orchestration-rpc-contract'
+import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import type { OrcaRuntimeService } from '../orca-runtime'
+import type { OrchestrationEntryCaller } from '../orchestration/addressing/orchestration-caller-identity'
 
 export const EFFECT_FREE_WORKER_DONE_CHECKPOINT = JSON.stringify({
   pending: { effectFree: 'worker_done' }
@@ -13,12 +14,33 @@ export type MutationReplayNudge =
   | { kind: 'messages'; targets: { to: string; type: string }[] }
   | { kind: 'federation'; runId?: string }
 
-export function replayStableCallerParams(runtime: OrcaRuntimeService, params: unknown): unknown {
+const CALLER_ORCA_SESSION_ID_KEY = '__orcaCallerOrcaSessionId'
+// A paired Orca's address names its conversation, so one Run's receipt never answers another's.
+const PEER_CALLER_KEY = '__orcaPeerCaller'
+
+export function replayStableCallerParams(
+  runtime: OrcaRuntimeService,
+  params: unknown,
+  caller?: OrchestrationEntryCaller,
+  method?: string
+): unknown {
   if (!params || typeof params !== 'object' || Array.isArray(params)) {
     return params
   }
   const source = params as Record<string, unknown>
-  const result = { ...source }
+  // Absent for terminal callers, so their payload hashes are unchanged.
+  const result: Record<string, unknown> =
+    caller?.kind === 'peer'
+      ? { ...source, [PEER_CALLER_KEY]: caller.address }
+      : caller?.orcaSessionId
+        ? { ...source, [CALLER_ORCA_SESSION_ID_KEY]: caller.orcaSessionId }
+        : { ...source }
+  if (method === 'orchestration.federationImport' && Array.isArray(result.items)) {
+    result.items = result.items.map((item: Record<string, unknown>) => {
+      const { answerSenderReport: _answer, ...canonical } = item
+      return canonical
+    })
+  }
   delete result.waitSubmitMs
   for (const property of ['from', 'callerTerminalHandle', 'terminal'] as const) {
     const handle = source[property]
@@ -184,7 +206,8 @@ export function getPendingWorkerStartRecovery(
   method: string,
   receipt: string | null
 ): { dispatchId: string } | undefined {
-  if (method !== 'orchestration.workerStart' || !receipt) {
+  // A send to a finished worker accepts a follow-up worker-start the same way.
+  if ((method !== 'orchestration.workerStart' && method !== 'orchestration.send') || !receipt) {
     return undefined
   }
   try {

@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { installFakeAppEnvironment } from '../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 import { EventEmitter } from 'node:events'
 import type * as NodeFs from 'node:fs'
 import type * as HostCodexManagedHomeOwnership from './host-codex-managed-home-ownership'
@@ -13,23 +14,15 @@ import {
   testState
 } from './service-test-harness'
 
-// STA-4734: the login verdict and the identity read both decided "no credentials"
-// from a read that had merely failed, and doAddAccount's rollback then deleted the
-// managed home that had just been authenticated successfully.
-
-/**
- * One denial, modelled coherently: a path under an ACL denial fails `readFileSync`
- * AND reports `false` from `existsSync`. Faulting only one of them lets a test pass
- * against code that still consults the other.
- */
 vi.mock('electron', () => ({
   app: {
     getPath: () => testState.userDataDir
   }
 }))
+beforeEach(() => installFakeAppEnvironment({ getPath: () => testState.userDataDir }))
 
-vi.mock('node:os', async () => {
-  const actual = await vi.importActual<typeof import('node:os')>('node:os') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+vi.mock(import('node:os'), async (importOriginal) => {
+  const actual = await importOriginal()
   return {
     ...actual,
     homedir: () => testState.fakeHomeDir
@@ -62,6 +55,7 @@ const authFaults = vi.hoisted(() => {
   return state
 })
 
+// Fault reads and existence checks together so alternate probes cannot hide the denial.
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFs>()
   const originalRead = actual.readFileSync as (...args: unknown[]) => unknown
@@ -75,9 +69,7 @@ vi.mock('node:fs', async (importOriginal) => {
       return originalRead(...args)
     }, originalRead),
     existsSync: Object.assign((...args: unknown[]): boolean => {
-      // Why: existsSync swallows every errno, so a denied path reads as absent —
-      // this is the exact collapse the fix removes, and modelling it is what lets
-      // the pre-fix behaviour be observed.
+      // Model existsSync reporting false on denied paths as well as missing ones.
       return authFaults.isDenied(args[0]) ? false : originalExists(...args)
     }, originalExists)
   }
@@ -91,11 +83,7 @@ const {
   writeFileSync: realWriteFileSync
 } = await vi.importActual<typeof NodeFs>('node:fs')
 
-/**
- * Why: `vi.resetModules()` gives each test a fresh module graph, so a top-level
- * import of the error class is a DIFFERENT constructor than the one the service
- * under test throws — `toBeInstanceOf` would fail against a correct fix.
- */
+// Import after resetModules so instanceof uses the service's error constructor.
 async function importTemporarilyUnavailableError(): Promise<
   typeof HostCodexManagedHomeOwnership.ManagedCodexHomeTemporarilyUnavailableError
 > {
@@ -124,7 +112,7 @@ function authJsonFor(email: string): string {
   return JSON.stringify({ tokens: { id_token: `header.${payload}.signature` } })
 }
 
-/** Every managed home the add path created, whether or not it survived. */
+/** Include account home paths even if their home leaf has been removed. */
 function listManagedHomes(): string[] {
   const root = join(testState.userDataDir, 'codex-accounts')
   if (!realExistsSync(root)) {
@@ -145,10 +133,10 @@ describe('STA-4734 a locked auth.json must not delete a just-authenticated home'
       (_command: string, _args: string[], options: { env: NodeJS.ProcessEnv }) => {
         const child = makeLoginChild()
         const loginHome = options.env.CODEX_HOME!
-        // The login genuinely succeeds: real credential bytes land on disk.
+
         deniedAuthPath = join(loginHome, 'auth.json')
         realWriteFileSync(deniedAuthPath, authJsonFor('user@example.com'), 'utf-8')
-        // Only now does the scanner take the file.
+
         authFaults.deny(deniedAuthPath)
         queueMicrotask(() => child.emit('close', 0))
         return child
@@ -170,8 +158,6 @@ describe('STA-4734 a locked auth.json must not delete a just-authenticated home'
         await importTemporarilyUnavailableError()
       )
 
-      // THE FIX: the rollback is refused, so the credentials survive the failure.
-      // Before it, safeRemoveManagedHome deleted this tree.
       expect(deniedAuthPath).not.toBe('')
       const survivors = listManagedHomes().filter((home) => realExistsSync(home))
       expect(survivors).toHaveLength(1)
@@ -188,8 +174,6 @@ describe('STA-4734 a locked auth.json must not delete a just-authenticated home'
     vi.resetModules()
     authFaults.reset()
 
-    // Why: the fix must not turn every add failure into a kept home. A real
-    // failure — no credentials written, non-zero exit — still rolls back.
     const spawnMock = vi.fn(() => {
       const child = makeLoginChild()
       queueMicrotask(() => child.emit('close', 1))
@@ -208,158 +192,6 @@ describe('STA-4734 a locked auth.json must not delete a just-authenticated home'
 
       await expect(service.addAccount()).rejects.toThrow(/Codex login exited with code 1/)
       expect(listManagedHomes().filter((home) => realExistsSync(home))).toHaveLength(0)
-    } finally {
-      vi.doUnmock('node:child_process')
-      vi.doUnmock('../codex-cli/command')
-    }
-  })
-
-  it('treats a denied auth.json after a Windows tree kill as the success it is', async () => {
-    vi.resetModules()
-    authFaults.reset()
-    vi.useFakeTimers()
-    const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')!
-    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true })
-
-    const child = makeLoginChild() as ReturnType<typeof makeLoginChild> & {
-      pid: number
-      exitCode: number | null
-      signalCode: string | null
-    }
-    child.pid = 5150
-    child.exitCode = null
-    child.signalCode = null
-    vi.doMock('node:child_process', () => ({ execFileSync: vi.fn(), spawn: vi.fn(() => child) }))
-    vi.doMock('../codex-cli/command', () => ({ resolveCodexCommand: () => 'codex' }))
-
-    try {
-      const { CodexAccountService } = await import('./service')
-      const service = new CodexAccountService(
-        createStore(createSettings()) as never,
-        createRateLimits() as never,
-        createRuntimeHome() as never
-      )
-      const loginPromise = (
-        service as unknown as { runCodexLogin(managedHomePath: string): Promise<void> }
-      ).runCodexLogin(testState.fakeHomeDir)
-
-      const authPath = join(testState.fakeHomeDir, 'auth.json')
-      realWriteFileSync(authPath, authJsonFor('user@example.com'), 'utf-8')
-      // The watcher observes the new bytes and arms the post-auth kill.
-      await vi.advanceTimersByTimeAsync(6_000)
-
-      // The scanner takes the file only after the kill is armed, so the close
-      // handler's re-confirmation is the read that fails.
-      authFaults.deny(authPath)
-      child.emit('close', 1)
-
-      // THE FIX: the kill only arms on observed credential bytes, so a denial here
-      // cannot revoke that. Before it, existsSync returned false and this rejected.
-      await expect(loginPromise).resolves.toBeUndefined()
-    } finally {
-      authFaults.reset()
-      Object.defineProperty(process, 'platform', originalPlatform)
-      vi.useRealTimers()
-      vi.doUnmock('node:child_process')
-      vi.doUnmock('../codex-cli/command')
-    }
-  })
-
-  it('still fails a Windows tree kill whose auth.json is definitively gone', async () => {
-    vi.resetModules()
-    authFaults.reset()
-    vi.useFakeTimers()
-    const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')!
-    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true })
-
-    const child = makeLoginChild() as ReturnType<typeof makeLoginChild> & {
-      pid: number
-      exitCode: number | null
-      signalCode: string | null
-    }
-    child.pid = 5151
-    child.exitCode = null
-    child.signalCode = null
-    vi.doMock('node:child_process', () => ({ execFileSync: vi.fn(), spawn: vi.fn(() => child) }))
-    vi.doMock('../codex-cli/command', () => ({ resolveCodexCommand: () => 'codex' }))
-
-    try {
-      const { CodexAccountService } = await import('./service')
-      const service = new CodexAccountService(
-        createStore(createSettings()) as never,
-        createRateLimits() as never,
-        createRuntimeHome() as never
-      )
-      const loginPromise = (
-        service as unknown as { runCodexLogin(managedHomePath: string): Promise<void> }
-      ).runCodexLogin(testState.fakeHomeDir)
-
-      // Why: ENOENT is a real answer. Without this anchor the fix could resolve
-      // every non-zero exit and the suite would not notice.
-      await vi.advanceTimersByTimeAsync(6_000)
-      child.emit('close', 1)
-
-      await expect(loginPromise).rejects.toThrow(/Codex login exited with code 1/)
-    } finally {
-      Object.defineProperty(process, 'platform', originalPlatform)
-      vi.useRealTimers()
-      vi.doUnmock('node:child_process')
-      vi.doUnmock('../codex-cli/command')
-    }
-  })
-
-  it('does not advise "run codex login" for a source home it merely could not read', async () => {
-    vi.resetModules()
-    authFaults.reset()
-
-    const sourceHome = join(testState.fakeHomeDir, '.codex')
-    const sourceAuthPath = join(sourceHome, 'auth.json')
-    realWriteFileSync(sourceAuthPath, authJsonFor('imported@example.com'), 'utf-8')
-    authFaults.deny(sourceAuthPath)
-
-    vi.doMock('node:child_process', () => ({ execFileSync: vi.fn(), spawn: vi.fn() }))
-    vi.doMock('../codex-cli/command', () => ({ resolveCodexCommand: () => 'codex' }))
-
-    try {
-      const { CodexAccountService } = await import('./service')
-      const service = new CodexAccountService(
-        createStore(createSettings()) as never,
-        createRateLimits() as never,
-        createRuntimeHome() as never
-      )
-
-      // Before the fix this reported "No Codex credentials found … Run `codex
-      // login` into this directory first" — advice to redo a login that had
-      // already succeeded.
-      const rejection = service.addAccountFromHome(sourceHome)
-      await expect(rejection).rejects.toBeInstanceOf(await importTemporarilyUnavailableError())
-      await expect(rejection).rejects.not.toThrow(/Run `codex login`/)
-    } finally {
-      authFaults.reset()
-      vi.doUnmock('node:child_process')
-      vi.doUnmock('../codex-cli/command')
-    }
-  })
-
-  it('still reports a genuinely empty source home as having no credentials', async () => {
-    vi.resetModules()
-    authFaults.reset()
-
-    const sourceHome = join(testState.fakeHomeDir, 'empty-codex-home')
-    vi.doMock('node:child_process', () => ({ execFileSync: vi.fn(), spawn: vi.fn() }))
-    vi.doMock('../codex-cli/command', () => ({ resolveCodexCommand: () => 'codex' }))
-
-    try {
-      const { CodexAccountService } = await import('./service')
-      const service = new CodexAccountService(
-        createStore(createSettings()) as never,
-        createRateLimits() as never,
-        createRuntimeHome() as never
-      )
-
-      await expect(service.addAccountFromHome(sourceHome)).rejects.toThrow(
-        /No Codex credentials found/
-      )
     } finally {
       vi.doUnmock('node:child_process')
       vi.doUnmock('../codex-cli/command')

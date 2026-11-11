@@ -1,22 +1,19 @@
-# Keep Automated Runs Out of the Foreground
+# Automated App Launches
 
-Tests and agent-driven app launches share the developer's machine. They may use it; they must never
-take the foreground — no window raised over the editor, no focus stolen, no Dock tile churn.
-
-`src/main/window/foreground-activation-policy.ts` enforces this in the main process. It is on
-whenever `ORCA_E2E_HEADLESS=1`, `ORCA_E2E_HEADFUL=1`, or `ORCA_BACKGROUND_LAUNCH=1`:
-
-- headless / explicit background → the window never reaches the screen (Playwright drives it via CDP)
-- headful without explicit background → `showInactive()`, no `app.focus({ steal: true })`, no
-  `moveTop()`/always-on-top reinforcement
-- macOS headless / explicit background → `accessory` activation policy, so no Dock tile and no menu-bar takeover
-
-Rules when adding tests or scripts:
-
-- Launch through `tests/e2e/helpers/orca-app.ts` (or `orca-restart.ts`) — they already set the env.
-- A raw `electron.launch()` outside those helpers must pass `ORCA_BACKGROUND_LAUNCH: '1'`.
-- Do not reveal windows in explicit background or headless runs. Only an explicitly headful run
-  may call `showInactive()`; never call `show()` or `bringToFront()` in automated background checks.
-- Tag a spec `@headful` only when it needs real pixels; it still runs in the background.
-- Native-focus tests belong on an isolated display or CI. Do not set `ORCA_E2E_FOREGROUND=1`
-  on the user’s desktop; it cannot override explicit background mode.
+- Set `ORCA_BACKGROUND_LAUNCH=1` for all tests and agent-launched apps. Use
+  [`orca-app.ts`](e2e/helpers/orca-app.ts) / [`orca-restart.ts`](e2e/helpers/orca-restart.ts);
+  raw `electron.launch()` calls must pass the env explicitly.
+- Keep windows hidden and drive renderers through Playwright CDP. Never reveal windows,
+  steal focus, or activate the app on the user's desktop. `@headful` is for tests requiring
+  real pixels; it does not authorize foreground activation. Never set `ORCA_E2E_FOREGROUND=1`
+  on the desktop.
+- Run native-focus and visible-window tests only on an isolated display or CI.
+- Rebuild modified launch-policy code before launching; stale wrappers are unsafe.
+- Only the [terminal perf](e2e/terminal-perf-presentation.ts) and
+  [native IBus](e2e/terminal-native-ibus-window.ts) fixtures, and the guarded
+  [native browser image-focus test](e2e/browser-image-link-focus.spec.ts), may explicitly present windows
+  on their isolated hosted-CI Xvfb displays. Preserve their guards and keep
+  `ORCA_BACKGROUND_LAUNCH=1`; do not generalize these exceptions to other fixtures or
+  production launch policy. Background terminal panes stay hidden.
+- The browser image-focus test also permits an isolated Docker Xvfb display, with
+  `ORCA_E2E_BROWSER_NATIVE_XVFB=1`; desktop runs must skip it.

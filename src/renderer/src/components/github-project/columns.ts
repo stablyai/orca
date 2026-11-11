@@ -1,20 +1,17 @@
-// Why: column visibility is a renderer-only preference — GitHub's view
-// definition is the source of truth for which fields exist, and we layer a
-// local visibility filter on top. Persisted in localStorage (not settings)
-// because it's purely cosmetic per device and would otherwise bloat the
-// debounced settings write on every checkbox toggle.
+import { translate } from '@/i18n/i18n'
+// Store per-device visibility locally without modifying GitHub’s field definition or syncing cosmetic settings.
 import type { GitHubProjectField, GitHubProjectView } from '../../../../shared/github/project-types'
 
 export const TYPE_FIELD_ID = '__type__'
 export const TYPE_FIELD_DATA_TYPE = '__TYPE__'
 
-// Why: synthetic "Type" column derives from row.itemType — there is no
-// matching ProjectV2 field, so we inject it client-side. Inserted right
-// after TITLE so users see issue/PR/draft glyphs adjacent to the title.
+// Inject Type after TITLE because row.itemType has no corresponding ProjectV2 field.
 export const TYPE_FIELD: GitHubProjectField = {
   kind: 'field',
   id: TYPE_FIELD_ID,
-  name: 'Type',
+  get name() {
+    return translate('projectViews.columns.type', 'Type')
+  },
   dataType: TYPE_FIELD_DATA_TYPE
 }
 

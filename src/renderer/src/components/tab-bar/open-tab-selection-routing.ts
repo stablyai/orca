@@ -1,20 +1,19 @@
-// Routes an omnibox switch row to the matching palette activation and reports
-// how the destination should take keyboard focus once the menu closes.
+// Route switch rows through palette activation and return focus handoff for after the menu closes.
 
 import { requestBrowserFocus } from '@/components/browser-pane/host-guest/browser-focus'
 import { translate } from '@/i18n/i18n'
-import { activateBrowserPagePaletteResult } from '@/lib/browser-page-palette-activation'
-import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
-import { activateSimulatorTabPaletteResult } from '@/lib/simulator-tab-palette-activation'
-import { activateWorkspaceTabPaletteResult } from '@/lib/workspace-tab-palette-activation'
+import { activateBrowserPagePaletteResult } from '@/lib/browser/palette/browser-page-palette-activation'
+import { focusTerminalTabSurface } from '@/components/terminal-pane/input/focus/focus-terminal-tab-surface'
+import { activateSimulatorTabPaletteResult } from '@/lib/simulator/tabs/simulator-tab-palette-activation'
+import { activateWorkspaceTabPaletteResult } from '@/lib/workspace/search/tabs/workspace-tab-palette-activation'
 import type { OpenTabSearchResult } from './open-tab-search'
 
 export type OpenTabSelectionOutcome =
   | { status: 'activated'; focus: (() => void) | null }
+  | { status: 'blocked' }
   | { status: 'failed'; message: string }
 
-// Every source distinguishes a dead workspace from a target that went stale
-// inside a live one; only the stale wording differs.
+// Distinguish dead workspaces from stale targets inside live ones across all sources.
 function failed(reason: string, staleMessage: string): OpenTabSelectionOutcome {
   return {
     status: 'failed',
@@ -36,6 +35,9 @@ export function activateOpenTabSearchResult(result: OpenTabSearchResult): OpenTa
       workspaceId: result.workspaceId,
       worktreeId: result.worktreeId
     })
+    if (activation.status === 'blocked') {
+      return activation
+    }
     if (activation.status === 'failed') {
       return failed(
         activation.reason,
@@ -58,6 +60,9 @@ export function activateOpenTabSearchResult(result: OpenTabSearchResult): OpenTa
       tabId: result.tabId,
       worktreeId: result.worktreeId
     })
+    if (activation.status === 'blocked') {
+      return activation
+    }
     if (activation.status === 'failed') {
       return failed(
         activation.reason,
@@ -78,6 +83,9 @@ export function activateOpenTabSearchResult(result: OpenTabSearchResult): OpenTa
     tabId: result.tabId,
     worktreeId: result.worktreeId
   })
+  if (activation.status === 'blocked') {
+    return activation
+  }
   if (activation.status === 'failed') {
     return failed(
       activation.reason,

@@ -1,13 +1,17 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../../shared/protocol-version'
-import type { RuntimeTerminalSummary } from '../../../../../../shared/runtime-types'
-import type { OrchestrationDb } from '../../../../orchestration/db'
+import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../../shared/orchestration/orchestration-runtime-capabilities'
+import type { RuntimeTerminalSummary } from '../../../../../../shared/runtime-terminal-contracts'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { RpcContext, RpcRequest } from '../../../core'
 import { RpcDispatcher } from '../../../dispatcher'
-import { ORCHESTRATION_METHODS } from '../../orchestration'
+import { ORCHESTRATION_METHODS } from '../orchestration'
 import { createOrchestrationRpcHarness } from '../rpc-test-harness'
-import { createRootDispatch } from '../../../../orchestration/db/root-dispatch-test-fixture'
+
+import {
+  createRootDispatch,
+  reattachDispatchConsumer
+} from '../../../../orchestration/db/root-dispatch-test-fixture'
 
 type SendWarning = { code: string; recipient: string; message: string }
 type SendResult = {
@@ -93,6 +97,38 @@ describe('orchestration recipient routing oracle', () => {
       messages: { id: string }[]
     }
     expect(check.messages.map((message) => message.id)).toEqual([result.message.id])
+  })
+
+  it('keeps a reply to a live terminal-only sender readable there and reports its limitation', async () => {
+    setup()
+    mockTerminalPaneKeys((handle) =>
+      handle === 'term_coord'
+        ? harness.coordinatorPaneKey
+        : handle === 'term_live'
+          ? 'tab_live:leaf_live'
+          : null
+    )
+    const note = db.insertMessage({
+      from: 'term_live',
+      to: `run:${senderRunId}`,
+      subject: 'Pull-mail note',
+      runId: senderRunId
+    })
+
+    const reply = await harness.call(
+      'orchestration.reply',
+      { id: note.id, from: 'term_coord', body: 'Got it' },
+      ctx
+    )
+
+    const [stored] = db.getAllMessagesForHandle('term_live')
+    expect(reply).toMatchObject({
+      message: { id: stored!.id, to_handle: 'term_live' },
+      warnings: [{ code: 'legacy_terminal_recipient', recipient: 'term_live' }]
+    })
+    expect(await harness.call('orchestration.check', { terminal: 'term_live' }, ctx)).toMatchObject(
+      { messages: [{ id: stored!.id }], count: 1 }
+    )
   })
 
   it('normalizes a cross-Run coordinator handle to the recipient Run mailbox', async () => {
@@ -244,6 +280,50 @@ describe('orchestration recipient routing oracle', () => {
     expect(check.messages.map((message) => message.id)).toEqual([result.message.id])
   })
 
+  it('reaches a terminal still bound to an older Run through its Dispatch in the named Run', async () => {
+    setup()
+    const pane = 'tab_former:leaf_former'
+    const olderRun = db.createRun({
+      objective: 'Older Run this terminal coordinated',
+      coordinatorHandle: 'term_former',
+      coordinatorPaneKey: pane
+    })
+    const dispatch = createRootDispatch(
+      db,
+      db.createTask({ spec: 'now a worker', runId: senderRunId }).id,
+      'term_former',
+      pane
+    )
+    mockTerminalPaneKeys((handle) =>
+      handle === 'term_coord' ? harness.coordinatorPaneKey : handle === 'term_former' ? pane : null
+    )
+
+    const sent = await call({
+      from: 'term_coord',
+      to: 'term_former',
+      run: senderRunId,
+      subject: 'instructions'
+    })
+
+    expect(sent).toMatchObject({
+      message: { run_id: olderRun.id, to_handle: `run:${olderRun.id}` },
+      warnings: [{ code: 'recipient_run_bound_redirect' }]
+    })
+    expect(
+      await harness.call('orchestration.check', { terminal: 'term_former', peek: true }, ctx)
+    ).toMatchObject({ messages: [{ subject: 'instructions' }] })
+
+    // A replaced process no longer holds that Dispatch, so nothing would read the mail.
+    reattachDispatchConsumer(db, {
+      dispatchId: dispatch.id,
+      paneKey: pane,
+      processIncarnation: 'replaced:pty:1'
+    })
+    await expect(
+      call({ from: 'term_coord', to: 'term_former', run: senderRunId, subject: 'lost' })
+    ).rejects.toMatchObject({ code: 'recipient_run_mismatch' })
+  })
+
   it('keeps same-Run historical coordinator routing from the canonical mailbox change', async () => {
     setup()
     db.bindRun({
@@ -284,61 +364,13 @@ describe('orchestration recipient routing oracle', () => {
     expect(db.getInbox(100)).toEqual([])
   })
 
-  it.each(['@all', '@worktree:wt_target'])(
-    'partially delivers %s when a listed recipient disappears before routing',
-    async (address) => {
-      setup()
-      vi.spyOn(runtime, 'listTerminals').mockResolvedValue({
-        terminals: [terminal('term_coord'), terminal('term_live'), terminal('term_disappeared')],
-        totalCount: 3,
-        truncated: false
-      })
-      mockTerminalPaneKeys((handle) =>
-        handle === 'term_coord'
-          ? harness.coordinatorPaneKey
-          : handle === 'term_live'
-            ? 'tab_live:leaf_live'
-            : null
-      )
-      const adoptionLookup = vi.spyOn(db, 'getLegacyAdoptedRunMailboxOwner')
-
-      const result = (await call({
-        from: 'term_coord',
-        to: address,
-        subject: 'fan-out'
-      })) as GroupSendResult
-
-      expect(result.messages).toHaveLength(1)
-      expect(result.messages[0]).toMatchObject({ to_handle: 'term_live' })
-      expect(result.recipients).toBe(1)
-      expect(result.warnings?.map((warning) => warning.code).sort()).toEqual([
-        'legacy_terminal_recipient',
-        'recipient_unreachable'
-      ])
-      expect(db.getInbox(100)).toHaveLength(1)
-      expect(adoptionLookup).toHaveBeenCalledTimes(1)
-    }
-  )
-
-  it('fans out once when historical handles resolve to the same Run mailbox', async () => {
+  it('addresses @all recipients by Dispatch, so a vanished worker terminal still gets durable mail', async () => {
     setup()
-    const foreignRun = db.createRun({
-      objective: 'Foreign Run',
-      coordinatorHandle: 'term_foreign_first',
-      coordinatorPaneKey: 'tab_foreign_first:leaf_foreign_first'
-    })
-    db.bindRun({
-      runId: foreignRun.id,
-      coordinatorHandle: 'term_foreign_second',
-      coordinatorPaneKey: 'tab_foreign_second:leaf_foreign_second'
-    })
+    const task = db.createTask({ spec: 'worker whose pane closed' })
+    const dispatch = createRootDispatch(db, task.id, 'term_gone')
     vi.spyOn(runtime, 'listTerminals').mockResolvedValue({
-      terminals: [
-        terminal('term_coord'),
-        terminal('term_foreign_first'),
-        terminal('term_foreign_second')
-      ],
-      totalCount: 3,
+      terminals: [terminal('term_coord')],
+      totalCount: 1,
       truncated: false
     })
     mockTerminalPaneKeys((handle) => (handle === 'term_coord' ? harness.coordinatorPaneKey : null))
@@ -346,57 +378,81 @@ describe('orchestration recipient routing oracle', () => {
     const result = (await call({
       from: 'term_coord',
       to: '@all',
-      subject: 'one mailbox'
+      subject: 'fan-out'
     })) as GroupSendResult
 
-    expect(result.recipients).toBe(1)
-    expect(result.messages).toHaveLength(1)
-    expect(result.messages[0]).toMatchObject({
-      run_id: foreignRun.id,
-      to_handle: `run:${foreignRun.id}`
+    expect(result.messages).toEqual([
+      expect.objectContaining({ to_handle: `dispatch:${dispatch.id}`, run_id: senderRunId })
+    ])
+    expect(result.warnings).toBeUndefined()
+  })
+
+  it('does not reach a Dispatch of another Run through @all, whatever terminals the host lists', async () => {
+    setup()
+    const foreignRun = db.createRun({
+      objective: 'Foreign Run',
+      coordinatorHandle: 'term_foreign_coord',
+      coordinatorPaneKey: 'tab_foreign:leaf_foreign'
     })
+    const foreignTask = db.createTask({ spec: 'foreign work', runId: foreignRun.id })
+    createRootDispatch(db, foreignTask.id, 'term_foreign_worker')
+    const ownTask = db.createTask({ spec: 'own work' })
+    const own = createRootDispatch(db, ownTask.id, 'term_own_worker')
+    vi.spyOn(runtime, 'listTerminals').mockResolvedValue({
+      terminals: [
+        terminal('term_coord'),
+        terminal('term_foreign_worker'),
+        terminal('term_own_worker')
+      ],
+      totalCount: 3,
+      truncated: false
+    })
+
+    const result = (await call({
+      from: 'term_coord',
+      to: '@all',
+      subject: 'mine only'
+    })) as GroupSendResult
+
+    expect(result.messages.map((message) => message.to_handle)).toEqual([`dispatch:${own.id}`])
     expect(db.getInbox(100)).toHaveLength(1)
   })
 
-  it('excludes historical handles that resolve back to the sender mailbox', async () => {
+  it('skips a federated Dispatch with a warning naming the direct address', async () => {
     setup()
-    db.bindRun({
-      runId: senderRunId,
-      coordinatorHandle: 'term_middle',
-      coordinatorPaneKey: 'tab_middle:leaf_middle'
-    })
-    db.bindRun({
-      runId: senderRunId,
-      coordinatorHandle: 'term_sender',
-      coordinatorPaneKey: 'tab_sender:leaf_sender'
+    const local = createRootDispatch(db, db.createTask({ spec: 'local' }).id, 'term_local')
+    const federated = db.createStartingWorkerDispatch({
+      taskSpec: 'remote work',
+      taskRunId: senderRunId,
+      startOptions: {},
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER,
+      federation: {
+        environmentId: 'environment_remote',
+        environmentName: 'remote',
+        peerFingerprint: 'remote_peer',
+        protocolVersion: 3
+      }
     })
     vi.spyOn(runtime, 'listTerminals').mockResolvedValue({
-      terminals: [
-        terminal('term_sender'),
-        terminal('term_coord'),
-        terminal('term_middle'),
-        terminal('term_live')
-      ],
-      totalCount: 4,
+      terminals: [terminal('term_coord'), terminal('term_local')],
+      totalCount: 2,
       truncated: false
     })
-    mockTerminalPaneKeys((handle) =>
-      handle === 'term_sender'
-        ? 'tab_sender:leaf_sender'
-        : handle === 'term_live'
-          ? 'tab_live:leaf_live'
-          : null
-    )
 
     const result = (await call({
-      from: 'term_sender',
+      from: 'term_coord',
       to: '@all',
-      subject: 'exclude self aliases'
+      subject: 'fan-out'
     })) as GroupSendResult
 
-    expect(result.messages).toHaveLength(1)
-    expect(result.messages[0].to_handle).toBe('term_live')
-    expect(result.warnings).toMatchObject([{ code: 'legacy_terminal_recipient' }])
+    expect(result.messages.map((message) => message.to_handle)).toEqual([`dispatch:${local.id}`])
+    expect(result.warnings).toEqual([
+      expect.objectContaining({
+        code: 'recipient_unreachable',
+        recipient: `dispatch:${federated.dispatch.id}`
+      })
+    ])
   })
 
   it('replays one honest receipt and discards retry receipts for rejected recipients', async () => {
@@ -479,20 +535,13 @@ describe('orchestration recipient routing oracle', () => {
 
   it('rolls back a partial group insert before an idempotent retry', async () => {
     setup()
+    createRootDispatch(db, db.createTask({ spec: 'first' }).id, 'term_first')
+    createRootDispatch(db, db.createTask({ spec: 'second' }).id, 'term_second')
     vi.spyOn(runtime, 'listTerminals').mockResolvedValue({
       terminals: [terminal('term_coord'), terminal('term_first'), terminal('term_second')],
       totalCount: 3,
       truncated: false
     })
-    mockTerminalPaneKeys((handle) =>
-      handle === 'term_coord'
-        ? harness.coordinatorPaneKey
-        : handle === 'term_first'
-          ? 'tab_first:leaf_first'
-          : handle === 'term_second'
-            ? 'tab_second:leaf_second'
-            : null
-    )
     const insertMessage = db.insertMessage.bind(db)
     vi.spyOn(db, 'insertMessage')
       .mockImplementationOnce(insertMessage)
@@ -516,18 +565,12 @@ describe('orchestration recipient routing oracle', () => {
 
   it('replays a completed group receipt when notification fails after durable insertion', async () => {
     setup()
+    createRootDispatch(db, db.createTask({ spec: 'live' }).id, 'term_live')
     vi.spyOn(runtime, 'listTerminals').mockResolvedValue({
       terminals: [terminal('term_coord'), terminal('term_live')],
       totalCount: 2,
       truncated: false
     })
-    mockTerminalPaneKeys((handle) =>
-      handle === 'term_coord'
-        ? harness.coordinatorPaneKey
-        : handle === 'term_live'
-          ? 'tab_live:leaf_live'
-          : null
-    )
     vi.spyOn(runtime, 'notifyMessageArrived').mockImplementationOnce(() => {
       throw new Error('injected notification failure')
     })

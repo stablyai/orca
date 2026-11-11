@@ -1,27 +1,24 @@
-import type { ArtifactListItem } from '../../../../shared/artifacts'
+import type { ArtifactListItem } from '../../../../shared/artifacts/artifacts'
 import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
 import { artifactName, artifactTypeLabel } from './artifact-display-labels'
+import type { Translate } from '../../i18n/use-translate'
 
 /** Pasted queries above this are clamped so filtering never runs on unbounded input. */
 export const ARTIFACT_LIST_SEARCH_QUERY_MAX_BYTES = 2 * 1024
 
-export function artifactSearchHaystack(item: ArtifactListItem): string {
+export function artifactSearchHaystack(item: ArtifactListItem, t?: Translate): string {
   return [
     artifactName(item),
     item.artifact.originalFileName,
     item.artifact.slug,
-    artifactTypeLabel(item)
+    artifactTypeLabel(item, t)
   ]
     .filter((value): value is string => Boolean(value))
     .join('\n')
     .toLowerCase()
 }
 
-/**
- * Caps the controlled input value so a multi-MB paste cannot pin renderer memory.
- * Keeping maxBytes+1 code units is enough for the over-limit check while
- * discarding the rest of the paste.
- */
+/** Retain at most maxBytes+1 code units for the UTF-8 limit check; discard the rest before storing a multi-MB paste. */
 export function clampArtifactListSearchQuery(
   rawQuery: string,
   maxBytes = ARTIFACT_LIST_SEARCH_QUERY_MAX_BYTES
@@ -48,12 +45,13 @@ export function artifactMatchesSearchQuery(item: ArtifactListItem, query: string
 
 export function filterArtifactsBySearchQuery(
   artifacts: readonly ArtifactListItem[],
-  query: string
+  query: string,
+  t?: Translate
 ): readonly ArtifactListItem[] {
   // Why: normalize once per filter, not once per artifact.
   const activeQuery = activeArtifactListSearchQuery(query)
   if (activeQuery === null) {
     return artifacts
   }
-  return artifacts.filter((item) => artifactSearchHaystack(item).includes(activeQuery))
+  return artifacts.filter((item) => artifactSearchHaystack(item, t).includes(activeQuery))
 }

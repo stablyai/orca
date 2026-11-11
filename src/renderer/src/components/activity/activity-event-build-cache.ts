@@ -1,11 +1,11 @@
-import { entryWithRuntimeOrchestration } from '../sidebar/worktree-agent-row-orchestration'
+import { entryWithRuntimeOrchestration } from '../sidebar/workspace-card/activity/worktree-agent-row-orchestration'
 import type {
   AgentStatusEntry,
   AgentStatusOrchestrationContext,
   AgentType
-} from '../../../../shared/agent-status-types'
+} from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { Repo } from '../../../../shared/repo-types'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type {
   ActivityEvent,
@@ -13,6 +13,23 @@ import type {
   ActivityLiveAgentState
 } from './activity-thread-types'
 import { buildPaneActivityEvents } from './activity-pane-events'
+import {
+  buildActivityTabContext,
+  buildActivityTabHostIndex,
+  type ActivityTabContext,
+  type ActivityTabHostIndex
+} from './activity-event-builder-context'
+import type { BuildActivityEventsArgs } from './activity-event-builder'
+
+type ActivityTabInputs = Pick<
+  BuildActivityEventsArgs,
+  'tabsByWorktree' | 'unifiedTabsByWorktree' | 'chatNames'
+>
+
+type ActivityTabIndexes = ActivityTabInputs & {
+  context: Map<string, ActivityTabContext>
+  hosts: ActivityTabHostIndex
+}
 
 type PaneActivityCacheEntry = {
   source: unknown
@@ -29,10 +46,44 @@ type PaneActivityCacheEntry = {
 
 export type ActivityEventBuildCache = {
   panes: Map<string, PaneActivityCacheEntry>
+  tabs?: ActivityTabIndexes
 }
 
 export function createActivityEventBuildCache(): ActivityEventBuildCache {
   return { panes: new Map() }
+}
+
+export function resolveActivityTabIndexes(
+  args: ActivityTabInputs,
+  cache: ActivityEventBuildCache | undefined
+): ActivityTabIndexes {
+  const previous = cache?.tabs
+  if (
+    previous &&
+    previous.tabsByWorktree === args.tabsByWorktree &&
+    previous.unifiedTabsByWorktree === args.unifiedTabsByWorktree &&
+    previous.chatNames === args.chatNames
+  ) {
+    return previous
+  }
+  const next: ActivityTabIndexes = {
+    tabsByWorktree: args.tabsByWorktree,
+    unifiedTabsByWorktree: args.unifiedTabsByWorktree,
+    chatNames: args.chatNames,
+    context: buildActivityTabContext(
+      args.tabsByWorktree,
+      args.unifiedTabsByWorktree,
+      args.chatNames
+    ),
+    hosts:
+      previous && previous.unifiedTabsByWorktree === args.unifiedTabsByWorktree
+        ? previous.hosts
+        : buildActivityTabHostIndex(args.unifiedTabsByWorktree)
+  }
+  if (cache) {
+    cache.tabs = next
+  }
+  return next
 }
 
 export type PaneBuildRequest = {
@@ -55,7 +106,7 @@ export function resolvePaneBuild(
   request: PaneBuildRequest,
   cache: ActivityEventBuildCache | undefined,
   seenCacheKeys: Set<string> | null
-): { events: ActivityEvent[]; live: ActivityLiveAgentSnapshot | null } {
+): { events: ActivityEvent[]; live: ActivityLiveAgentSnapshot | null; rowEntry: AgentStatusEntry } {
   seenCacheKeys?.add(request.cacheKey)
   const cached = cache?.panes.get(request.cacheKey)
   const inputsUnchanged =
@@ -84,7 +135,7 @@ export function resolvePaneBuild(
         cached.live.timestamp === liveTimestamp)
 
   if (inputsUnchanged && liveMatchesCache) {
-    return { events: cached.events, live: cached.live }
+    return { events: cached.events, live: cached.live, rowEntry }
   }
 
   // The live turn is itself an event, so a live change always rebuilds the pane's events.
@@ -110,7 +161,8 @@ export function resolvePaneBuild(
           repo: request.repo,
           entry: rowEntry,
           tab: request.tab,
-          agentType: request.agentType
+          agentType: request.agentType,
+          migrationUnsupportedPtyId: request.migrationUnsupportedPtyId
         }
 
   cache?.panes.set(request.cacheKey, {
@@ -125,5 +177,5 @@ export function resolvePaneBuild(
     live,
     rowEntry
   })
-  return { events, live }
+  return { events, live, rowEntry }
 }

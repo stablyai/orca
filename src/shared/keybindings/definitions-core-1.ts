@@ -1,5 +1,4 @@
-// Ordered slices of one registry: `definitions.ts` concatenates core-1..4 in order and that order
-// is the palette order, so the boundaries follow line count, not theme — do not regroup thematically.
+// definitions.ts concatenates core-1..4 in palette order; slices follow line limits, so thematic regrouping would reorder commands.
 import type { KeybindingDefinition } from './types'
 import { platformBindings } from './definitions-support'
 
@@ -18,7 +17,8 @@ export const KEYBINDING_DEFINITION_CORE_1: readonly KeybindingDefinition[] = [
     group: 'Global',
     scope: 'global',
     searchKeywords: ['shortcut', 'settings', 'preferences'],
-    defaultBindings: platformBindings(['Mod+Comma']),
+    // Leave Cmd/Ctrl+, to terminal apps such as Codex unless the user opts in.
+    defaultBindings: platformBindings([]),
     conflictGroup: 'menu'
   },
   {
@@ -36,11 +36,7 @@ export const KEYBINDING_DEFINITION_CORE_1: readonly KeybindingDefinition[] = [
     group: 'Global',
     scope: 'global',
     searchKeywords: ['shortcut', 'global', 'worktree', 'switch', 'jump'],
-    defaultBindings: {
-      darwin: ['Mod+J'],
-      linux: ['Mod+Shift+J'],
-      win32: ['Mod+Shift+J']
-    }
+    defaultBindings: platformBindings(['Mod+K'])
   },
   {
     id: 'worktree.navigateUp',
@@ -48,7 +44,9 @@ export const KEYBINDING_DEFINITION_CORE_1: readonly KeybindingDefinition[] = [
     group: 'Global',
     scope: 'global',
     searchKeywords: ['shortcut', 'global', 'worktree', 'previous', 'up'],
-    defaultBindings: platformBindings(['Mod+Shift+ArrowUp'])
+    defaultBindings: platformBindings(['Mod+Shift+ArrowUp']),
+    // Why: default Mod+Shift+Up is the field's select-to-start.
+    allowInTextField: 'non-default-chords'
   },
   {
     id: 'worktree.navigateDown',
@@ -56,7 +54,9 @@ export const KEYBINDING_DEFINITION_CORE_1: readonly KeybindingDefinition[] = [
     group: 'Global',
     scope: 'global',
     searchKeywords: ['shortcut', 'global', 'worktree', 'next', 'down'],
-    defaultBindings: platformBindings(['Mod+Shift+ArrowDown'])
+    defaultBindings: platformBindings(['Mod+Shift+ArrowDown']),
+    // Why: default Mod+Shift+Down is the field's select-to-end.
+    allowInTextField: 'non-default-chords'
   },
   {
     id: 'workspace.create',
@@ -136,8 +136,7 @@ export const KEYBINDING_DEFINITION_CORE_1: readonly KeybindingDefinition[] = [
       'open',
       'close'
     ],
-    // Why: configurable but unbound by default, matching workspace.openBoard — an
-    // experimental surface must not claim a global chord from terminal users.
+    // Experimental surfaces stay unbound rather than claim terminal users’ global chords, matching workspace.openBoard.
     defaultBindings: platformBindings([]),
     allowInTerminal: true
   },
@@ -176,6 +175,14 @@ export const KEYBINDING_DEFINITION_CORE_1: readonly KeybindingDefinition[] = [
     scope: 'global',
     searchKeywords: ['shortcut', 'tasks', 'github issues', 'linear'],
     defaultBindings: platformBindings([])
+  },
+  {
+    id: 'view.plugins',
+    title: 'Open Plugins',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: ['shortcut', 'plugins', 'extensions', 'marketplace'],
+    defaultBindings: { darwin: ['Mod+Alt+X'], linux: ['Mod+Shift+Y'], win32: ['Mod+Shift+Y'] }
   },
   {
     id: 'sidebar.left.toggle',
@@ -262,7 +269,8 @@ export const KEYBINDING_DEFINITION_CORE_1: readonly KeybindingDefinition[] = [
     group: 'Global',
     scope: 'global',
     searchKeywords: ['shortcut', 'sidebar', 'activity', 'agents', 'bell', 'toggle', 'view'],
-    defaultBindings: platformBindings(['Mod+Shift+Y']),
+    // Why: Mod+Shift+Y already opens Plugins on Linux/Windows (#36741), so this uses a chord free on every platform.
+    defaultBindings: platformBindings(['Mod+Alt+Y']),
     allowInTerminal: true
   },
   {

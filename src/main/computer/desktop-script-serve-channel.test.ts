@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
-import { DesktopScriptServeChannel, type RuntimeChildProcess } from './desktop-script-serve-channel'
+import type { ChildProcessWithoutNullStreams } from 'node:child_process'
+import { DesktopScriptServeChannel } from './desktop-script-serve-channel'
 
 class FakeChild extends EventEmitter {
   readonly stdout = new EventEmitter()
@@ -26,7 +27,6 @@ class FakeChild extends EventEmitter {
     return true
   }
 
-  /** What a destroyed stdin does to writes still queued at teardown. */
   failQueuedWrites(): void {
     for (const callback of this.pendingWrites.splice(0)) {
       callback(new Error('ERR_STREAM_DESTROYED'))
@@ -37,34 +37,90 @@ class FakeChild extends EventEmitter {
 function createChannel() {
   const child = new FakeChild()
   const handlers = { onLine: vi.fn(), onGone: vi.fn(), onOverflow: vi.fn() }
-  const channel = new DesktopScriptServeChannel(child as unknown as RuntimeChildProcess, handlers)
+  const channel = new DesktopScriptServeChannel(
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture implements the piped streams and events consumed by the channel.
+    child as unknown as ChildProcessWithoutNullStreams,
+    handlers
+  )
   return { channel, child, handlers }
 }
 
 describe('DesktopScriptServeChannel', () => {
-  it('splits responses into lines and tolerates a trailing carriage return', () => {
+  it('reassembles chunked responses with split UTF-8 and CRLF boundaries', () => {
     const { child, handlers } = createChannel()
-
-    child.stdout.emit('data', Buffer.from('{"a":1}\r\n{"b":2}\n', 'utf8'))
-
-    expect(handlers.onLine.mock.calls.map(([line]) => line)).toEqual(['{"a":1}', '{"b":2}'])
+    const payload = Buffer.from('hello 😀\r\n\nnext\ntrailing', 'utf8')
+    for (const byte of payload) {
+      child.stdout.emit('data', Buffer.from([byte]))
+    }
+    expect(handlers.onLine.mock.calls.map(([line]) => line)).toEqual(['hello 😀', 'next'])
+    child.stdout.emit('data', '\n')
+    expect(handlers.onLine).toHaveBeenLastCalledWith('trailing')
   })
 
-  it('reports the exit reason with the stderr tail', () => {
+  it('enforces the buffer cap before a terminating newline arrives', () => {
     const { child, handlers } = createChannel()
+    const chunk = 'a'.repeat(1024 * 1024)
+    for (let index = 0; index < 20; index += 1) {
+      child.stdout.emit('data', chunk)
+    }
+    expect(handlers.onOverflow).not.toHaveBeenCalled()
+    child.stdout.emit('data', 'a')
+    expect(handlers.onOverflow).toHaveBeenCalledOnce()
+    expect(handlers.onLine).not.toHaveBeenCalled()
+    child.stdout.emit('data', 'recovered\n')
+    expect(handlers.onLine).toHaveBeenCalledWith('recovered')
+  })
 
-    child.stderr.emit('data', Buffer.from('it broke', 'utf8'))
-    child.emit('close', 1, null)
+  it('stops delivering a chunk when its line handler closes the channel', () => {
+    const { channel, child, handlers } = createChannel()
+    handlers.onLine.mockImplementation(() => channel.stop())
+    child.stdout.emit('data', 'first\nsecond\n')
+    expect(handlers.onLine.mock.calls.map(([line]) => line)).toEqual(['first'])
+  })
 
-    expect(handlers.onGone).toHaveBeenCalledWith('code 1: it broke')
+  it('releases the drained response that a retained tail was sliced from', () => {
+    const gc = (globalThis as { gc?: () => void }).gc
+    if (!gc) {
+      throw new Error('global.gc unavailable - config/vitest.config.ts must pass --expose-gc')
+    }
+    const collectHeap = (): number => {
+      gc()
+      gc()
+      return process.memoryUsage().heapUsed
+    }
+    const tails: string[] = []
+    const feed = (index: number): void => {
+      const child = new FakeChild()
+      const channel = new DesktopScriptServeChannel(
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture implements the piped streams and events consumed by the channel.
+        child as unknown as ChildProcessWithoutNullStreams,
+        {
+          onLine: () => {},
+          onGone: () => {},
+          onOverflow: () => {}
+        }
+      )
+      const line = String.fromCharCode(65 + (index % 26)).repeat(1024 * 1024)
+      child.stdout.emit('data', `${line}\n{"partial":${index}`)
+      tails.push((channel as unknown as { buffer: string }).buffer)
+    }
+    for (let index = 0; index < 8; index += 1) {
+      feed(index)
+    }
+    tails.length = 0
+    const before = collectHeap()
+    for (let index = 0; index < 32; index += 1) {
+      feed(index)
+    }
+    const used = collectHeap() - before
+    expect(tails).toHaveLength(32)
+    expect(tails[5]).toBe('{"partial":5')
+    // Unowned slices would pin 32 separate megabyte-scale response buffers.
+    expect(used).toBeLessThan(4 * 1024 * 1024)
   })
 
   describe('once stopped', () => {
-    /**
-     * The channel's half of the stale-callback guard, pinned here rather than
-     * through the host: the host refuses a stale report too, so a host-level
-     * test passes with either guard alone and neither ends up covered.
-     */
+    /** Exercise channel guards directly so host guards cannot mask a missing check. */
     it('accepts no further writes', () => {
       const { channel, child } = createChannel()
 

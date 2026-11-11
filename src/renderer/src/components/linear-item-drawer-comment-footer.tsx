@@ -1,3 +1,5 @@
+import { taskProviderErrorText } from '@/lib/work-items/task-provider-error-copy'
+import { ImeTextarea } from '@/lib/text-input/ime/ime-text-field'
 import React, { useCallback, useRef, useState } from 'react'
 import { LoaderCircle, Send } from 'lucide-react'
 import { toast } from 'sonner'
@@ -6,14 +8,20 @@ import { Button } from '@/components/ui/button'
 import {
   getCommentBodySubmitState,
   hasBoundedCommentBodyText
-} from '@/lib/comment-body-submit-state'
-import { getScreenSubmitShortcutLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
-import { createBrowserUuid } from '@/lib/browser-uuid'
-import { useAppStore } from '@/store'
-import { linearAddIssueComment } from '@/runtime/runtime-linear-issue-mutations'
+} from '@/lib/source-control/review/comments/comment-body-submit-state'
+import {
+  getScreenSubmitShortcutLabel,
+  isScreenSubmitShortcut
+} from '@/lib/keyboard/screen-submit-shortcut'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../shared/non-secure-context-uuid'
+import { useAppStore } from '@/store/index'
+import { linearAddIssueComment } from '@/runtime/linear/runtime-linear-issue-client'
 import { translate } from '@/i18n/i18n'
-import type { TaskSourceContext } from '../../../shared/task-source-context'
+import { useTranslate } from '@/i18n/use-translate'
+import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
+import { isUnassignedShortcutLabel } from '@/i18n/unassigned-label'
 import type { LinearLocalComment } from '@/components/linear-item-drawer-types'
+import { defaultScopeSource } from '@/runtime/hosts/selection/default-creation-host'
 
 export function LinearIssueCommentFooter({
   issueId,
@@ -28,8 +36,9 @@ export function LinearIssueCommentFooter({
   variant?: 'compact' | 'linear-page'
   sourceContext?: TaskSourceContext | null
 }): React.JSX.Element {
+  const t = useTranslate()
   const settings = useAppStore((s) => s.settings)
-  const providerSettings = sourceContext ?? settings
+  const providerSettings = sourceContext ?? defaultScopeSource(settings)
   const submitShortcutLabel = getScreenSubmitShortcutLabel()
   const [body, setBody] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -37,8 +46,7 @@ export function LinearIssueCommentFooter({
   const mountedRef = useRef(true)
 
   const handleFooterRef = useCallback((node: HTMLDivElement | null): void => {
-    // Why: comment submission can resolve after the footer unmounts; the root
-    // ref keeps that completion from writing stale local state without an Effect.
+    // Track the footer’s attached lifetime so late submissions cannot write stale local state.
     mountedRef.current = node !== null
   }, [])
 
@@ -95,7 +103,7 @@ export function LinearIssueCommentFooter({
       if (mountedRef.current) {
         toast.error(
           err instanceof Error
-            ? err.message
+            ? taskProviderErrorText(err.message)
             : translate('auto.components.LinearItemDrawer.6ab35eafd5', 'Failed to add comment')
         )
       }
@@ -123,7 +131,7 @@ export function LinearIssueCommentFooter({
         ref={handleFooterRef}
         className="rounded-xl border border-border/70 bg-background shadow-xs"
       >
-        <textarea
+        <ImeTextarea
           ref={textareaRef}
           value={body}
           onChange={(e) => {
@@ -131,17 +139,14 @@ export function LinearIssueCommentFooter({
             autoGrow()
           }}
           onKeyDown={handleKeyDown}
-          placeholder={translate(
-            'auto.components.LinearItemDrawer.2820f0f0f0',
-            'Leave a comment...'
-          )}
+          placeholder={t('auto.components.LinearItemDrawer.2820f0f0f0', 'Leave a comment...')}
           rows={3}
           className="scrollbar-sleek min-h-24 max-h-40 w-full resize-none overflow-y-auto rounded-t-xl bg-transparent px-5 py-4 text-sm placeholder:text-muted-foreground focus-visible:outline-none"
         />
         <div className="flex items-center justify-between px-4 pb-3">
           <span className="text-[11px] text-muted-foreground">
-            {submitShortcutLabel !== 'Unassigned'
-              ? translate('auto.components.LinearItemDrawer.fda549766e', '{{value0}} to comment', {
+            {!isUnassignedShortcutLabel(submitShortcutLabel)
+              ? t('auto.components.LinearItemDrawer.fda549766e', '{{value0}} to comment', {
                   value0: submitShortcutLabel
                 })
               : ''}
@@ -150,7 +155,7 @@ export function LinearIssueCommentFooter({
             size="icon-sm"
             onClick={handleSubmit}
             disabled={!canSubmitComment || submitting}
-            aria-label={translate('auto.components.LinearItemDrawer.d369841269', 'Send comment')}
+            aria-label={t('auto.components.LinearItemDrawer.d369841269', 'Send comment')}
           >
             {submitting ? (
               <LoaderCircle className="size-3.5 animate-spin" />
@@ -168,7 +173,7 @@ export function LinearIssueCommentFooter({
       ref={handleFooterRef}
       className="flex items-end gap-2 border-t border-border/60 bg-background/40 px-4 py-3"
     >
-      <textarea
+      <ImeTextarea
         ref={textareaRef}
         value={body}
         onChange={(e) => {
@@ -176,7 +181,7 @@ export function LinearIssueCommentFooter({
           autoGrow()
         }}
         onKeyDown={handleKeyDown}
-        placeholder={translate('auto.components.LinearItemDrawer.2fcff829a8', 'Add a comment…')}
+        placeholder={t('auto.components.LinearItemDrawer.2fcff829a8', 'Add a comment…')}
         rows={1}
         className="scrollbar-sleek min-h-[32px] max-h-[96px] flex-1 resize-none overflow-y-auto rounded-md border border-input bg-transparent px-3 py-2 text-[13px] placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
       />
@@ -185,7 +190,7 @@ export function LinearIssueCommentFooter({
         onClick={handleSubmit}
         disabled={!canSubmitComment || submitting}
         className="size-8 shrink-0"
-        aria-label={translate('auto.components.LinearItemDrawer.d369841269', 'Send comment')}
+        aria-label={t('auto.components.LinearItemDrawer.d369841269', 'Send comment')}
       >
         {submitting ? (
           <LoaderCircle className="size-3.5 animate-spin" />

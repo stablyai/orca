@@ -1,3 +1,4 @@
+import { useSourceControlScope, useSourceControlState } from '../panel/worktree-scope'
 import React, { useCallback } from 'react'
 import { Copy, ExternalLink, Eye, FolderOpen } from 'lucide-react'
 import {
@@ -5,29 +6,32 @@ import {
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuSeparator,
-  ContextMenuSub,
-  ContextMenuSubContent,
-  ContextMenuSubTrigger,
   ContextMenuTrigger
 } from '@/components/ui/context-menu'
-import { useAppStore } from '@/store'
-import { OpenInApplicationIcon } from '@/lib/open-in-app-catalog'
-import { translate } from '@/i18n/i18n'
-import { getLocalFileManagerLabel } from '@/lib/local-file-manager-label'
-import { NO_OPEN_IN_APPLICATIONS } from '@/lib/open-in-application-selection'
+import { useTranslate } from '@/i18n/use-translate'
+import { LocalOnlyMenuHint } from '@/components/local-only-menu-hint'
 import {
-  getOpenInEntryAvailability,
-  getWorktreeOpenInEntries,
-  openOpenInAppsSettings,
-  openWorktreePath
-} from '@/components/sidebar/WorktreeOpenInMenu'
+  getRevealInFileManagerLabel,
+  getWorkspaceFileRevealOwner,
+  revealInFileManager
+} from '@/lib/files/os-open/reveal-in-file-manager'
+import { isRevealOrEditorOpenBlocked } from '@/lib/files/os-open/local-path-open-guard'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
+import { formatClipboardFilePath } from '@/lib/clipboard/clipboard-file-path'
+import type { ConflictResolution } from '../../../../../../shared/source-control/listing/source-control-entry-actions'
+import { CONFLICT_RESOLUTION_ICONS, getLocalizedConflictResolutionLabel } from './conflict-label'
+import { OpenInContextSubmenu } from '@/components/file-actions/OpenInContextSubmenu'
 
 type SourceControlEntryContextMenuProps = {
   currentWorktreeId: string
   absolutePath?: string
   relativePath?: string
+  /** False for a deleted entry: there is no file for the OS file manager to show. */
+  hasWorkingTreeFile: boolean
   connectionId?: string | null
   onView?: () => void
+  conflictResolutions?: readonly ConflictResolution[]
+  onResolveConflict?: (resolution: ConflictResolution) => void
   onRevealInExplorer: (worktreeId: string, absolutePath: string) => void
   onOpenChange?: (open: boolean) => void
   children: React.ReactNode
@@ -37,28 +41,32 @@ export function SourceControlEntryContextMenu({
   currentWorktreeId,
   absolutePath,
   relativePath,
+  hasWorkingTreeFile,
   connectionId,
   onView,
+  conflictResolutions,
+  onResolveConflict,
   onRevealInExplorer,
   onOpenChange,
   children
 }: SourceControlEntryContextMenuProps): React.JSX.Element {
-  const openInApplications = useAppStore(
-    (s) => s.settings?.openInApplications ?? NO_OPEN_IN_APPLICATIONS
+  const t = useTranslate()
+  const scope = useSourceControlScope()
+  // Resolve the repo owner; OS reveal cannot distinguish another host's path from an identically named local path.
+  const runtimeEnvironmentId = useSourceControlState((s) =>
+    runtimeEnvironmentIdOrLocalUnlessTwin(s, currentWorktreeId)
   )
-  const settings = useAppStore((s) => s.settings)
-  const fileManagerLabel = getLocalFileManagerLabel()
-  const openInEntries = React.useMemo(
-    () => getWorktreeOpenInEntries(openInApplications, fileManagerLabel),
-    [fileManagerLabel, openInApplications]
+  const revealOwner = useSourceControlState((s) =>
+    getWorkspaceFileRevealOwner(s, currentWorktreeId, { connectionId, runtimeEnvironmentId })
   )
+  const revealBlocked = isRevealOrEditorOpenBlocked(revealOwner)
 
   const handleCopyPath = useCallback(() => {
     if (!absolutePath) {
       return
     }
-    void window.api.ui.writeClipboardText(absolutePath)
-  }, [absolutePath])
+    void window.api.ui.writeClipboardText(formatClipboardFilePath(absolutePath, revealOwner))
+  }, [absolutePath, revealOwner])
 
   const handleCopyRelativePath = useCallback(() => {
     if (!relativePath) {
@@ -71,23 +79,18 @@ export function SourceControlEntryContextMenu({
     if (!absolutePath) {
       return
     }
+    if (scope && !hasWorkingTreeFile) {
+      onView?.()
+      return
+    }
     onRevealInExplorer(currentWorktreeId, absolutePath)
-  }, [absolutePath, currentWorktreeId, onRevealInExplorer])
+  }, [absolutePath, currentWorktreeId, hasWorkingTreeFile, onRevealInExplorer, onView, scope])
 
-  const handleOpenInExternal = useCallback(
-    (target: 'file-manager' | 'external-editor', command?: string) => {
-      if (!absolutePath) {
-        return
-      }
-      void openWorktreePath({
-        target,
-        worktreePath: absolutePath,
-        connectionId,
-        command
-      })
-    },
-    [absolutePath, connectionId]
-  )
+  const handleRevealInFileManager = useCallback(() => {
+    if (absolutePath) {
+      void revealInFileManager(absolutePath, revealOwner)
+    }
+  }, [absolutePath, revealOwner])
 
   return (
     <ContextMenu onOpenChange={onOpenChange}>
@@ -95,70 +98,49 @@ export function SourceControlEntryContextMenu({
       <ContextMenuContent className="w-52">
         <ContextMenuItem onSelect={onView} disabled={!onView}>
           <Eye className="size-3.5" />
-          {translate(
-            'auto.components.right.sidebar.SourceControlEntryContextMenu.a1f2c8d901',
-            'View'
-          )}
+          {t('auto.components.right.sidebar.SourceControlEntryContextMenu.a1f2c8d901', 'View')}
         </ContextMenuItem>
-        <ContextMenuSeparator />
-        <ContextMenuItem onSelect={handleCopyPath} disabled={!absolutePath}>
-          <Copy className="size-3.5" />
-          {translate('auto.components.right.sidebar.FileExplorerRow.b5d436aa30', 'Copy Path')}
-        </ContextMenuItem>
-        <ContextMenuItem onSelect={handleCopyRelativePath} disabled={!relativePath}>
-          <Copy className="size-3.5" />
-          {translate(
-            'auto.components.right.sidebar.FileExplorerRow.66a29dde82',
-            'Copy Relative Path'
-          )}
-        </ContextMenuItem>
-        <ContextMenuSeparator />
-        <ContextMenuSub>
-          <ContextMenuSubTrigger disabled={!absolutePath}>
-            <FolderOpen className="size-3.5" />
-            {translate('auto.components.sidebar.WorktreeOpenInMenu.8009ab69a6', 'Open in')}
-          </ContextMenuSubTrigger>
-          <ContextMenuSubContent className="w-52">
-            {openInEntries.map((entry) => {
-              const availability = getOpenInEntryAvailability(entry, settings, connectionId)
+        {onResolveConflict && conflictResolutions && conflictResolutions.length > 0 ? (
+          <>
+            <ContextMenuSeparator />
+            {conflictResolutions.map((resolution) => {
+              const Icon = CONFLICT_RESOLUTION_ICONS[resolution]
               return (
-                <ContextMenuItem
-                  key={entry.id}
-                  onSelect={() => handleOpenInExternal(entry.target, entry.command)}
-                  disabled={!absolutePath || availability.disabled}
-                >
-                  {entry.target === 'file-manager' ? (
-                    <FolderOpen className="size-3.5" />
-                  ) : entry.command ? (
-                    <OpenInApplicationIcon application={{ command: entry.command }} size={14} />
-                  ) : (
-                    <ExternalLink className="size-3.5" />
-                  )}
-                  <span className="min-w-0 truncate">{entry.label}</span>
-                  {availability.metadata ? (
-                    <span className="ml-auto shrink-0 text-[11px] text-muted-foreground">
-                      {availability.metadata}
-                    </span>
-                  ) : null}
+                <ContextMenuItem key={resolution} onSelect={() => onResolveConflict(resolution)}>
+                  <Icon className="size-3.5" />
+                  {getLocalizedConflictResolutionLabel(resolution, t)}
                 </ContextMenuItem>
               )
             })}
-            <ContextMenuSeparator />
-            <ContextMenuItem onSelect={openOpenInAppsSettings}>
-              {translate(
-                'auto.components.sidebar.WorktreeOpenInMenu.1417fd8380',
-                'Customize apps...'
-              )}
-            </ContextMenuItem>
-          </ContextMenuSubContent>
-        </ContextMenuSub>
+          </>
+        ) : null}
+        <ContextMenuSeparator />
+        <ContextMenuItem onSelect={handleCopyPath} disabled={!absolutePath}>
+          <Copy className="size-3.5" />
+          {t('auto.components.right.sidebar.FileExplorerRow.b5d436aa30', 'Copy Path')}
+        </ContextMenuItem>
+        <ContextMenuItem onSelect={handleCopyRelativePath} disabled={!relativePath}>
+          <Copy className="size-3.5" />
+          {t('auto.components.right.sidebar.FileExplorerRow.66a29dde82', 'Copy Relative Path')}
+        </ContextMenuItem>
+        <ContextMenuSeparator />
+        <OpenInContextSubmenu
+          path={absolutePath}
+          workspaceId={currentWorktreeId}
+          owner={revealOwner}
+        />
+        <ContextMenuItem
+          onSelect={handleRevealInFileManager}
+          disabled={!absolutePath || !hasWorkingTreeFile || revealBlocked}
+        >
+          <ExternalLink className="size-3.5" />
+          {getRevealInFileManagerLabel(t)}
+          {revealBlocked ? <LocalOnlyMenuHint /> : null}
+        </ContextMenuItem>
         <ContextMenuSeparator />
         <ContextMenuItem onSelect={handleRevealInOrcaExplorer} disabled={!absolutePath}>
           <FolderOpen className="size-3.5" />
-          {translate(
-            'auto.components.right.sidebar.SourceControl.cc05b2d088',
-            'Open in File Explorer'
-          )}
+          {t('auto.components.right.sidebar.SourceControl.cc05b2d088', 'Open in File Explorer')}
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>

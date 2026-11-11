@@ -1,0 +1,118 @@
+// @vitest-environment happy-dom
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { quietRichMarkdownEditorHost } from './rich-markdown-editor-host.test-support'
+import { createRichMarkdownEditorDocument } from './create-rich-markdown-editor-document'
+import { RICH_MARKDOWN_EDITOR_MARKUP } from './document-markup'
+import type { MobileRichMarkdownEditorMessage } from '../mobile-rich-markdown-editor-contract'
+import type { RichMarkdownEditorDocument } from './document-host-seams'
+
+// Round-trip host generation unchanged so pre-replacement changes can be discarded; suppress document’s own rewrites to avoid echo.
+const started: RichMarkdownEditorDocument[] = []
+
+function editorDocument(loadImageSource?: (path: string) => Promise<string>) {
+  document.body.innerHTML = RICH_MARKDOWN_EDITOR_MARKUP
+  const posted: MobileRichMarkdownEditorMessage[] = []
+  const document_ = createRichMarkdownEditorDocument(
+    quietRichMarkdownEditorHost({
+      postToHost: (message) => posted.push(message),
+      keyboardInsetSource: () => null,
+      loadImageSource
+    })
+  )
+  started.push(document_)
+  posted.length = 0
+  return {
+    handle: document_.send,
+    posted,
+    editor: document.getElementById('editor')!,
+    type: () => document.getElementById('editor')!.dispatchEvent(new Event('input'))
+  }
+}
+
+afterEach(() => {
+  while (started.length > 0) {
+    started.pop()!.stop()
+  }
+  document.body.innerHTML = ''
+})
+
+describe('the editor document content', () => {
+  it('shows workspace images from the host and saves their markdown paths', async () => {
+    const loadImageSource = vi.fn(async (path: string) => `data:image/png;base64,${btoa(path)}`)
+    const editor = editorDocument(loadImageSource)
+    const markdown = '![Diagram](images/diagram.png)\n\n![Remote](https://example.com/remote.png)'
+    editor.handle.setMarkdown(markdown, 1)
+    await vi.waitFor(() =>
+      expect(editor.editor.querySelector('img')?.getAttribute('src')).toBe(
+        `data:image/png;base64,${btoa('images/diagram.png')}`
+      )
+    )
+    expect(loadImageSource).toHaveBeenCalledExactlyOnceWith('images/diagram.png')
+    expect(editor.editor.querySelectorAll('img')[1]?.getAttribute('src')).toBe(
+      'https://example.com/remote.png'
+    )
+    editor.type()
+    expect(editor.posted).toEqual([{ type: 'change', markdown, generation: 1 }])
+  })
+
+  it('stops reporting, and disables every checkbox, once it is read-only', () => {
+    const editor = editorDocument()
+    editor.handle.setMarkdown('- [ ] Open\n- [x] Done', 1)
+    editor.handle.setEditable(false)
+    expect(editor.editor.getAttribute('contenteditable')).toBe('false')
+    expect(
+      Array.from(editor.editor.querySelectorAll('input')).map((input) => input.disabled)
+    ).toEqual([true, true])
+    editor.type()
+    expect(editor.posted).toEqual([])
+
+    editor.handle.setEditable(true)
+    expect(
+      Array.from(editor.editor.querySelectorAll('input')).map((input) => input.disabled)
+    ).toEqual([false, false])
+    editor.type()
+    expect(editor.posted).toEqual([
+      { type: 'change', markdown: '- [ ] Open\n- [x] Done', generation: 1 }
+    ])
+  })
+
+  it('writes a ticked checkbox back into the markup the next serialization reads', () => {
+    const editor = editorDocument()
+    editor.handle.setMarkdown('- [ ] Open', 1)
+    const checkbox = editor.editor.querySelector('input')!
+    checkbox.checked = true
+    checkbox.dispatchEvent(new Event('change', { bubbles: true }))
+    expect(editor.editor.querySelector('li')!.getAttribute('data-checked')).toBe('true')
+    expect(editor.posted).toEqual([{ type: 'change', markdown: '- [x] Open', generation: 1 }])
+  })
+
+  it('reports one change for a checkbox tap, not one per event the tap raises', () => {
+    // Assert click/input/change all bubble for one tick, then prove only one report; missing events cannot satisfy count accidentally.
+    const editor = editorDocument()
+    editor.handle.setMarkdown('- [ ] Open', 1)
+    const reached: string[] = []
+    for (const name of ['click', 'input', 'change']) {
+      editor.editor.addEventListener(name, (event) => reached.push(event.type))
+    }
+    editor.editor.querySelector('input')!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    expect(reached).toEqual(['click', 'input', 'change'])
+    expect(editor.editor.querySelector('li')!.getAttribute('data-checked')).toBe('true')
+    expect(editor.posted).toEqual([{ type: 'change', markdown: '- [x] Open', generation: 1 }])
+  })
+
+  it('reports one change for inline code over a selection, not one per emitting step', async () => {
+    // The wrap helper emitted and `runCommand` emits after every command: two identical changes.
+    const editor = editorDocument()
+    editor.handle.setMarkdown('one two', 1)
+    const text = editor.editor.querySelector('p')!.firstChild!
+    const range = document.createRange()
+    range.setStart(text, 0)
+    range.setEnd(text, 3)
+    const selection = window.getSelection()!
+    selection.removeAllRanges()
+    selection.addRange(range)
+    await editor.handle.runCommand('inlineCode')
+    expect(editor.editor.innerHTML).toBe('<p><code>one</code> two</p>')
+    expect(editor.posted).toEqual([{ type: 'change', markdown: '`one` two', generation: 1 }])
+  })
+})

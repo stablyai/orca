@@ -1,22 +1,32 @@
-import { BrowserWindow, Notification, ipcMain } from 'electron'
-import type { Store } from '../persistence'
+import { BrowserWindow, Notification, ipcMain, powerMonitor } from 'electron'
+import { readDesktopAwayState } from '../notifications/desktop-away-state'
+import type { Store } from '../persistence/loading-store/store'
 import type {
+  NotificationAttentionAcknowledgement,
   NotificationDeliveryProbeResult,
   NotificationDismissResult,
   NotificationDispatchRequest,
   NotificationDispatchResult,
-  NotificationPermissionStatusResult
+  NotificationPermissionStatusResult,
+  StructuredNotificationRead
 } from '../../shared/notification-settings-types'
+import { isNotificationAttentionAcknowledgement } from '../../shared/notification-settings-types'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import { buildNotificationOptions } from './notification-options'
 import { readNotificationAuthorizationStatus } from './notification-authorization-status'
 import { setTrayAttention } from '../tray/system-tray'
 import { isMainWindowVisible } from '../window/main-window-visibility'
 import { activeNotificationsById } from './native-notification-lifecycle'
 import { deliverNativeNotification } from './native-notification-delivery'
-import { reserveNotificationCooldown } from './notification-burst-cooldown'
+import { removeReadMacosNotifications } from './macos-notification-center'
+import { createNotificationDeliveryService } from '../notifications/notification-delivery-service'
+import {
+  createAnnouncedNotificationRegistry,
+  type AnnouncedNotification
+} from '../notifications/announced-notification-registry'
 import { registerNotificationSoundHandlers } from './notification-sound-ipc'
 import { openNotificationSystemSettings } from './notification-system-settings-link'
+import { isStructuredAttentionRead } from '../../shared/agent-session/agent-session-attention'
+import { isAgentSessionExecutionLocation } from '../../shared/agent-session/lifecycle/agent-session-record'
 import {
   getLastObservedDeliveryOutcome,
   hasTriggeredPermissionDialogThisSession,
@@ -25,9 +35,11 @@ import {
   resetNotificationPermissionEvidence
 } from './notification-permission-probe'
 
+let stopRuntimeAttentionEvents: (() => void) | undefined
+
 export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntimeService): void {
-  const recentDesktopNotifications = new Map<string, number>()
-  const recentMobileNotifications = new Map<string, number>()
+  ipcMain.removeHandler('notifications:getDesktopAwayState')
+  ipcMain.handle('notifications:getDesktopAwayState', () => readDesktopAwayState(powerMonitor))
   resetNotificationPermissionEvidence()
 
   ipcMain.removeHandler('notifications:openSystemSettings')
@@ -37,7 +49,7 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
     openNotificationSystemSettings()
   })
 
-  // Why: Electron's main process can't read macOS auth status; expose only what we can observe (platform support + whether we've prompted).
+  // Keep the legacy status surface observational; native authorization is read by onboarding below.
   const getPermissionStatus = (): NotificationPermissionStatusResult => ({
     supported: Notification.isSupported(),
     platform: process.platform,
@@ -48,15 +60,15 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
   ipcMain.handle(
     'notifications:probeDelivery',
     async (_event, args?: { force?: boolean }): Promise<NotificationDeliveryProbeResult> => {
-      // Why: macOS-only — Windows/Linux have no first-use permission dialog, so the onboarding card never renders there.
+      // First-use permission onboarding is macOS-only.
       if (process.platform !== 'darwin' || !Notification.isSupported()) {
         return { state: 'unsupported', authoritative: false }
       }
-      // Why: probes surface the macOS permission dialog, so mark startup registration done to avoid a second prompt later.
+      // Record prompting intent so startup registration cannot trigger a second prompt.
       if (store.getUI().notificationPermissionRequested !== true) {
         store.updateUI({ notificationPermissionRequested: true })
       }
-      // Preferred source: the bundled helper reads real auth silently, so polling tracks System Settings changes without banners.
+      // Prefer silent native reads so System Settings changes are visible without probe banners.
       const authorization = await readNotificationAuthorizationStatus()
       if (authorization === 'authorized') {
         recordNotificationDeliveryOutcome('delivered')
@@ -67,13 +79,13 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
         return { state: 'blocked', authoritative: true }
       }
       if (authorization === 'not-determined') {
-        // Why: the dialog only appears once something asks; fire one probe per session to trigger it, then report pending.
+        // Trigger the first-use presenter once, then report awaiting-decision.
         if (!hasTriggeredPermissionDialogThisSession()) {
           void probeNotificationDelivery()
         }
         return { state: 'awaiting-decision', authoritative: true }
       }
-      // Helper unavailable or 'unknown': fall back to scheduling-based probes with session caching to avoid repeated banners.
+      // Without native evidence, cache scheduling probes within the session to avoid repeat banners.
       const lastObservedDeliveryOutcome = getLastObservedDeliveryOutcome()
       if (!args?.force && lastObservedDeliveryOutcome !== null) {
         return {
@@ -85,23 +97,203 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
     }
   )
 
-  ipcMain.removeHandler('notifications:dismiss')
-  ipcMain.handle('notifications:dismiss', (_event, ids: string[]): NotificationDismissResult => {
-    const uniqueIds = Array.from(
-      new Set(ids.filter((id): id is string => typeof id === 'string' && id.length > 0))
-    )
+  const announced = createAnnouncedNotificationRegistry()
+
+  const closeNativeAnnouncements = (entries: readonly AnnouncedNotification[]): number => {
     let dismissed = 0
-    for (const id of uniqueIds) {
-      const entry = activeNotificationsById.get(id)
-      if (entry) {
-        entry.notification.close()
-        entry.release()
+    for (const entry of entries) {
+      const native = activeNotificationsById.get(entry.id)
+      if (native) {
+        native.notification.close()
+        native.release()
         dismissed += 1
       }
-      runtime?.dismissMobileNotification(id)
     }
-    return { dismissed }
+    return dismissed
+  }
+  const discardEvictedAnnouncements = (entries: readonly AnnouncedNotification[]): void => {
+    closeNativeAnnouncements(entries)
+    for (const entry of entries) {
+      if (entry.paneKey && !entry.pendingOnly) {
+        removeReadMacosNotifications(entry.paneKey, [entry], false)
+      }
+    }
+  }
+
+  const retireAnnouncements = (
+    retired: readonly AnnouncedNotification[],
+    paneKeys: string[] = []
+  ): number => {
+    const dismissed = closeNativeAnnouncements(retired)
+    const byPane = new Map<string, AnnouncedNotification[]>(
+      paneKeys.map((paneKey) => [paneKey, []])
+    )
+    for (const entry of retired) {
+      if (entry.paneKey && !entry.pendingOnly) {
+        const entries = byPane.get(entry.paneKey) ?? []
+        entries.push(entry)
+        byPane.set(entry.paneKey, entries)
+      }
+      if (!entry.origin && !entry.pendingOnly) {
+        runtime?.dismissMobileNotification(entry.id)
+      }
+    }
+    for (const [paneKey, entries] of byPane) {
+      removeReadMacosNotifications(paneKey, entries, !announced.hasUnpositionedSubject(paneKey))
+    }
+    return dismissed
+  }
+
+  const acknowledge = (
+    acknowledgement: NotificationAttentionAcknowledgement,
+    executionHost?: NotificationDispatchRequest['executionHost']
+  ): NotificationDismissResult => {
+    if (!isNotificationAttentionAcknowledgement(acknowledgement)) {
+      return { dismissed: 0 }
+    }
+    const retired = announced.takeAcknowledged(acknowledgement, executionHost)
+    if (executionHost) {
+      runtime?.retireNotificationAttention?.(acknowledgement, executionHost)
+    }
+    return { dismissed: retireAnnouncements(retired) }
+  }
+  stopRuntimeAttentionEvents?.()
+  stopRuntimeAttentionEvents = runtime?.onClientEvent?.(
+    (event) => {
+      if (event.type === 'notificationAttentionAcknowledged') {
+        acknowledge(event.acknowledgement)
+      }
+    },
+    { consumesTerminalSideEffects: false }
+  )
+
+  ipcMain.removeHandler('notifications:acknowledgeAttention')
+  ipcMain.handle(
+    'notifications:acknowledgeAttention',
+    (
+      _event,
+      acknowledgement: NotificationAttentionAcknowledgement,
+      executionHost?: NotificationDispatchRequest['executionHost']
+    ) => acknowledge(acknowledgement, executionHost)
+  )
+
+  ipcMain.removeHandler('notifications:dismiss')
+  ipcMain.handle(
+    'notifications:dismiss',
+    (
+      _event,
+      ids: string[],
+      paneKeys?: string[],
+      reads?: StructuredNotificationRead[]
+    ): NotificationDismissResult => {
+      const retired = new Map<string, AnnouncedNotification>()
+      for (const id of ids.filter(
+        (id) =>
+          typeof id === 'string' &&
+          id.length > 0 &&
+          !id.startsWith('agent-attention:') &&
+          !announced.isBounded(id) &&
+          (!paneKeys?.length || !announced.hasAnnouncement({ notificationId: id }))
+      )) {
+        retired.set(id, { id })
+      }
+      for (const paneKey of Array.isArray(paneKeys) ? paneKeys : []) {
+        if (typeof paneKey !== 'string') {
+          continue
+        }
+        const read = Array.isArray(reads)
+          ? reads.find((item) => isStructuredAttentionRead(item) && item.paneKey === paneKey)
+          : undefined
+        const entries = announced.take(paneKey, read)
+        for (const entry of entries) {
+          retired.set(entry.id, entry)
+        }
+        if (read) {
+          runtime?.retireNotificationAttention?.({ reads: [read] }, read.executionHost)
+        }
+      }
+      return {
+        dismissed: retireAnnouncements(
+          [...retired.values()],
+          paneKeys?.filter((key) => typeof key === 'string')
+        )
+      }
+    }
+  )
+
+  const deliveryService = createNotificationDeliveryService({
+    readNotificationSettings: () => store.getSettings().notifications,
+    findActiveWindow: () =>
+      BrowserWindow.getAllWindows().find((window) => !window.isDestroyed()) ?? null,
+    isWindowVisible: isMainWindowVisible,
+    setTrayAttention,
+    isNotificationSupported: () => Notification.isSupported(),
+    dispatchMobileNotification: runtime
+      ? (payload) => runtime.dispatchMobileNotification(payload)
+      : null,
+    readAuthorizationStatus: readNotificationAuthorizationStatus,
+    recordDeliveryOutcome: recordNotificationDeliveryOutcome,
+    deliverNative: deliverNativeNotification,
+    platform: process.platform,
+    now: () => Date.now(),
+    wasRead: announced.wasRead,
+    reserveNative: (request) => {
+      if (!request.notificationId || (!request.paneKey && !request.worktreeId)) {
+        return undefined
+      }
+      const reservation = announced.reserveNative(
+        request.paneKey ?? `worktree:${request.worktreeId}`,
+        request.notificationId,
+        request.structuredOrigin,
+        request
+      )
+      discardEvictedAnnouncements(reservation.evicted)
+      return reservation
+    },
+    recordAnnounced: (request) => {
+      if (request.notificationId && (request.paneKey || request.worktreeId)) {
+        if (announced.wasRead(request)) {
+          retireAnnouncements([
+            {
+              id: request.notificationId,
+              origin: request.structuredOrigin,
+              paneKey: request.paneKey
+            }
+          ])
+          return
+        }
+        discardEvictedAnnouncements(
+          announced.record(
+            request.paneKey ?? `worktree:${request.worktreeId}`,
+            request.notificationId,
+            request.structuredOrigin,
+            request
+          )
+        )
+      }
+    }
   })
+
+  // A cleared remote prompt must also retire alerts forwarded to this desktop's phones.
+  ipcMain.removeHandler('notifications:settleStructuredPrompts')
+  ipcMain.handle(
+    'notifications:settleStructuredPrompts',
+    (
+      _event,
+      scope: unknown,
+      sessionId: unknown,
+      executionHost?: NotificationDispatchRequest['executionHost']
+    ): void => {
+      if (isAgentSessionExecutionLocation(scope) && typeof sessionId === 'string' && sessionId) {
+        runtime?.reconcileStructuredPromptAttention({
+          scope,
+          sessionId,
+          pendingPromptIds: [],
+          executionHost
+        })
+      }
+    }
+  )
 
   ipcMain.removeHandler('notifications:dispatch')
   ipcMain.handle(
@@ -109,80 +301,8 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
     (
       _event,
       args: NotificationDispatchRequest
-    ): NotificationDispatchResult | Promise<NotificationDispatchResult> => {
-      // Why: light the tray attention dot before the cooldown/focus/enabled gates so they can't hold it back (clears on window show/restore; see index.ts).
-      if (args.source === 'agent-task-complete' || args.source === 'terminal-bell') {
-        const activeWindow = BrowserWindow.getAllWindows().find((win) => !win.isDestroyed()) ?? null
-        if (!isMainWindowVisible(activeWindow)) {
-          setTrayAttention(true)
-        }
-      }
-
-      const settings = store.getSettings().notifications
-      if (!settings.enabled) {
-        return { delivered: false, reason: 'disabled' }
-      }
-
-      if (
-        (args.source === 'agent-task-complete' && !settings.agentTaskComplete) ||
-        (args.source === 'terminal-bell' && !settings.terminalBell)
-      ) {
-        return { delivered: false, reason: 'source-disabled' }
-      }
-
-      const notificationOptions = buildNotificationOptions(args)
-
-      // Why: desktop focus only means this computer sees the worktree; the paired phone may still need the alert.
-      if (runtime && args.source !== 'test') {
-        const dedupeKey = args.worktreeId ?? args.worktreeLabel ?? 'global'
-        if (reserveNotificationCooldown(recentMobileNotifications, dedupeKey, Date.now())) {
-          runtime.dispatchMobileNotification({
-            type: 'notification',
-            source: args.source,
-            title: notificationOptions.title,
-            body: notificationOptions.body,
-            worktreeId: args.worktreeId,
-            ...(args.notificationId ? { notificationId: args.notificationId } : {})
-          })
-        }
-      }
-
-      const browserWindow =
-        BrowserWindow.getAllWindows().find((window) => !window.isDestroyed()) ?? null
-      if (
-        settings.suppressWhenFocused &&
-        args.isActiveWorktree &&
-        browserWindow &&
-        browserWindow.isFocused()
-      ) {
-        return { delivered: false, reason: 'suppressed-focus' }
-      }
-
-      // Why: the Settings test button is an explicit, often-repeated user action, so it bypasses burst dedupe.
-      if (args.source !== 'test') {
-        // Dedupe by worktree, not source — agent-finish and terminal-bell often fire in one chunk; surface only the first.
-        const dedupeKey = args.worktreeId ?? args.worktreeLabel ?? 'global'
-        if (!reserveNotificationCooldown(recentDesktopNotifications, dedupeKey, Date.now())) {
-          return { delivered: false, reason: 'cooldown' }
-        }
-      }
-
-      if (!Notification.isSupported()) {
-        return { delivered: false, reason: 'not-supported' }
-      }
-
-      if (process.platform !== 'darwin') {
-        return deliverNativeNotification(args, notificationOptions, settings)
-      }
-      // Why: macOS silently swallows notifications while permission is denied/undecided (verified macOS 26); skip so the renderer can show a fallback.
-      return readNotificationAuthorizationStatus().then((authorization) => {
-        if (authorization === 'denied' || authorization === 'not-determined') {
-          recordNotificationDeliveryOutcome('failed')
-          return { delivered: false, reason: 'blocked-by-system' }
-        }
-        return deliverNativeNotification(args, notificationOptions, settings)
-      })
-    }
+    ): NotificationDispatchResult | Promise<NotificationDispatchResult> =>
+      deliveryService.dispatch(args)
   )
 
   registerNotificationSoundHandlers(store)

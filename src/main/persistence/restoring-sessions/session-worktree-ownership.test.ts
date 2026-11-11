@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { getDefaultPersistedState, getDefaultWorkspaceSession } from '../../../shared/constants'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
 import {
   collectPersistedSessionWorktreeOwners,
@@ -75,6 +75,11 @@ describe('workspace session worktree ownership', () => {
     [
       'browser close intent',
       'clientHostedBrowserCloseIntentsByEnvironment',
+      { environment: [{ worktreeId: TARGET }] }
+    ],
+    [
+      'paired-host tab close intent',
+      'pairedTerminalTabCloseIntentsByEnvironment',
       { environment: [{ worktreeId: TARGET }] }
     ],
     ['sleeping agent', 'sleepingAgentSessionsByPaneKey', { pane: { worktreeId: TARGET } }],

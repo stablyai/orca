@@ -1,4 +1,5 @@
-import type { PublicKnownRuntimeEnvironment } from '../shared/runtime-environments'
+import { formatAddressLines, formatParentLine, type WorkspaceAnnotation } from './workspace-address'
+import type { PublicKnownRuntimeEnvironment } from '../shared/remote-runtime/host-catalog/runtime-environments'
 import type {
   RuntimeRepoList,
   RuntimeRepoSearchRefs,
@@ -8,6 +9,8 @@ import type {
 } from '../shared/runtime-types'
 import type { MemorySnapshot, WorktreeMemory } from '../shared/process-stats-types'
 import { formatListingHostScope, type WithAnnotatedHostScope } from './omitted-host-scope-selectors'
+import { formatWorktreePsTerminalFields } from './worktree-ps-terminal-verdict'
+import { formatWorktreePsProgramStatus } from './worktree-ps-program-status'
 
 export function formatMemorySnapshot(snapshot: MemorySnapshot): string {
   const topWorktrees = [...snapshot.worktrees].sort((a, b) => b.memory - a.memory).slice(0, 10)
@@ -61,8 +64,7 @@ function formatWorktreeMemoryLine(worktree: WorktreeMemory): string {
   ].join('  ')
 }
 
-// Why omitted rather than zeroed: a host that predates the field, or cannot read
-// commit at all, must not be printed as agents committing nothing.
+// Missing commit fields mean unknown usage, not zero.
 function formatCommitLines(snapshot: MemorySnapshot): string[] {
   if (typeof snapshot.totalPrivateMemory !== 'number') {
     return []
@@ -84,6 +86,9 @@ function formatCpu(cpu: number): string {
 }
 
 function formatProcessMemoryMetric(metric: MemorySnapshot['processMemoryMetric']): string {
+  if (metric === 'footprint') {
+    return 'summed memory footprint (Activity Monitor); includes graphics memory'
+  }
   return metric === 'working-set'
     ? 'summed working set; shared pages may repeat'
     : 'summed RSS; shared or aliased pages may repeat'
@@ -131,7 +136,13 @@ export function formatEnvironment(environment: PublicKnownRuntimeEnvironment): s
   ].join('\n')
 }
 
-export function formatWorktreePs(result: WithAnnotatedHostScope<RuntimeWorktreePsResult>): string {
+type AnnotatedPsRow = RuntimeWorktreePsResult['worktrees'][number] & Partial<WorkspaceAnnotation>
+
+export function formatWorktreePs(
+  result: WithAnnotatedHostScope<
+    Omit<RuntimeWorktreePsResult, 'worktrees'> & { worktrees: AnnotatedPsRow[] }
+  >
+): string {
   const scope = formatListingHostScope(result.hostScope)
   if (result.worktrees.length === 0) {
     return `No worktrees found.\n${scope}`
@@ -139,13 +150,31 @@ export function formatWorktreePs(result: WithAnnotatedHostScope<RuntimeWorktreeP
   const body = result.worktrees
     .map(
       (worktree) =>
-        `${worktree.repo} ${worktree.branch}  host=${worktree.hostId ?? 'unverifiable'}  live:${worktree.liveTerminalCount}  pty:${worktree.hasAttachedPty ? 'yes' : 'no'}  unread:${worktree.unread ? 'yes' : 'no'}\n${worktree.path}${worktree.preview ? `\npreview: ${worktree.preview}` : ''}`
+        `${worktree.repo} ${worktree.branch}  host=${worktree.hostId ?? 'unverifiable'}  ${formatWorktreePsTerminalFields(worktree)}  unread:${worktree.unread ? 'yes' : 'no'}${formatWorktreePsProgramStatus(worktree.agents)}\n${worktree.path}${formatWorktreePsLocation(worktree)}${worktree.preview ? `\npreview: ${worktree.preview}` : ''}`
     )
     .join('\n\n')
   const bodyWithScope = `${body}\n\n${scope}`
   return result.truncated
     ? `${bodyWithScope}\ntruncated: showing ${result.worktrees.length} of ${result.totalCount}`
     : bodyWithScope
+}
+
+function formatWorktreePsLocation(worktree: AnnotatedPsRow): string {
+  const annotation = workspaceAnnotationOf(worktree)
+  return annotation
+    ? `${formatParentLine(annotation)}${formatAddressLines(annotation)}`
+    : formatWorktreePsParent(worktree)
+}
+
+/** The parent line, in the sidebar's precedence: worktree, then folder workspace, then another machine. */
+function formatWorktreePsParent(worktree: RuntimeWorktreePsResult['worktrees'][number]): string {
+  const parent =
+    worktree.parentWorktreeId ??
+    worktree.workspaceLineage?.parentWorkspaceKey ??
+    (worktree.crossStoreParent
+      ? `${worktree.crossStoreParent.parent.workspaceKey} on another machine`
+      : null)
+  return parent ? `\nparent: ${parent}` : ''
 }
 
 export function formatRepoList(result: RuntimeRepoList): string {
@@ -190,12 +219,33 @@ export function formatWorktreeList(
     : bodyWithScope
 }
 
-export function formatWorktreeShow(result: { worktree: RuntimeWorktreeRecord }): string {
+const ANNOTATION_KEYS = new Set(['environment', 'address', 'addressUnavailable', 'parent'])
+
+function workspaceAnnotationOf(record: Partial<WorkspaceAnnotation>): WorkspaceAnnotation | null {
+  const { environment, address, addressUnavailable, parent } = record
+  return environment
+    ? {
+        environment,
+        address: address ?? null,
+        parent: parent ?? null,
+        ...(addressUnavailable ? { addressUnavailable } : {})
+      }
+    : null
+}
+
+export function formatWorktreeShow(result: {
+  worktree: RuntimeWorktreeRecord & Partial<WorkspaceAnnotation>
+}): string {
   const worktree = result.worktree
-  return Object.entries(worktree)
+  const annotation = workspaceAnnotationOf(worktree)
+  const fields = Object.entries(worktree)
+    .filter(([key]) => !annotation || !ANNOTATION_KEYS.has(key))
     .map(
       ([key, value]) =>
         `${key}: ${typeof value === 'object' ? JSON.stringify(value) : String(value)}`
     )
     .join('\n')
+  return annotation
+    ? `${fields}${formatParentLine(annotation)}${formatAddressLines(annotation)}`
+    : fields
 }

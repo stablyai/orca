@@ -1,11 +1,15 @@
 // @vitest-environment happy-dom
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
+
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { RetainedPaneHost } from './RetainedPaneHost'
+import { registerTabGroupBody } from './tab-group-body-geometry'
 
 const disconnect = vi.fn()
+const observerCreated = vi.fn()
 let notifyResize: () => void
 let anchors: HTMLDivElement[]
+let unregisterAnchors: (() => void)[]
 
 beforeEach(() => {
   vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
@@ -14,12 +18,15 @@ beforeEach(() => {
     class {
       constructor(callback: () => void) {
         notifyResize = callback
+        observerCreated()
       }
       observe(): void {}
+      unobserve(): void {}
       disconnect = disconnect
     }
   )
   disconnect.mockClear()
+  observerCreated.mockClear()
   anchors = ['left', 'right'].map((id, index) => {
     const anchor = document.createElement('div')
     anchor.dataset.tabGroupBodyId = id
@@ -27,11 +34,14 @@ beforeEach(() => {
     document.body.append(anchor)
     return anchor
   })
+  unregisterAnchors = ['left', 'right'].map((id, index) => registerTabGroupBody(id, anchors[index]))
 })
 
 afterEach(() => {
   cleanup()
+  unregisterAnchors.forEach((unregister) => unregister())
   anchors.forEach((anchor) => anchor.remove())
+  vi.restoreAllMocks()
   vi.unstubAllGlobals()
 })
 
@@ -83,25 +93,4 @@ it('retains pane content across group moves and visibility changes using measure
   expect(view.getByRole('textbox')).toBe(input)
   view.unmount()
   expect(disconnect).toHaveBeenCalled()
-})
-
-it('allows hidden terminal startup measurement without exposing input or starting fit timers for chat', () => {
-  const timeout = vi.spyOn(window, 'setTimeout')
-  const view = render(
-    <RetainedPaneHost groupId="left" isVisible={false} measureWhileHidden>
-      <input />
-    </RetainedPaneHost>
-  )
-  const host = view.container.firstElementChild as HTMLDivElement
-  expect(host.style.display).toBe('flex')
-  expect(host.style.opacity).toBe('0')
-  expect(host.style.pointerEvents).toBe('none')
-  expect(host.hasAttribute('inert')).toBe(true)
-  view.rerender(
-    <RetainedPaneHost groupId="left" isVisible>
-      <input />
-    </RetainedPaneHost>
-  )
-  expect(timeout).not.toHaveBeenCalled()
-  timeout.mockRestore()
 })

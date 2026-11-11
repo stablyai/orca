@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as GlabApiResponse from './glab-api-response'
 
 const {
   glabExecFileAsyncMock,
@@ -22,7 +23,12 @@ const {
   releaseMock: vi.fn()
 }))
 
-vi.mock('./gl-utils', () => ({
+vi.mock('./gl-utils', async () => ({
+  ...(await vi.importActual<typeof GlabApiResponse>('./glab-api-response')),
+  glabApiWithHeaders: async (args: string[], options: unknown) => ({
+    body: (await glabExecFileAsyncMock(['api', ...args], options)).stdout,
+    headers: {}
+  }),
   acquire: acquireMock,
   release: releaseMock,
   getGlabKnownHosts: getGlabKnownHostsMock,
@@ -31,8 +37,6 @@ vi.mock('./gl-utils', () => ({
   glabHostnameArgs: vi.fn(() => []),
   glabRepoExecOptions: glabRepoExecOptionsMock
 }))
-
-import { countDiffLines } from './mr-file-diffs'
 import { getWorkItemDetails } from './work-item-details'
 
 describe('getWorkItemDetails', () => {
@@ -51,210 +55,7 @@ describe('getWorkItemDetails', () => {
     })
   })
 
-  it('caps MR detail discussions, jobs, and file diffs to one API page', async () => {
-    glabExecFileAsyncMock.mockImplementation(async (args: string[]) => {
-      const endpoint = args.at(-1)
-      if (endpoint === 'projects/g%2Fp/merge_requests/12') {
-        return {
-          stdout: JSON.stringify({
-            id: 120,
-            iid: 12,
-            title: 'Bound detail payloads',
-            state: 'opened',
-            web_url: 'https://gitlab.com/g/p/-/merge_requests/12',
-            updated_at: '2026-05-31T12:00:00Z',
-            source_branch: 'feature/bounds',
-            target_branch: 'main',
-            description: 'MR body',
-            sha: 'head-sha',
-            diff_refs: { base_sha: 'base-sha', start_sha: 'start-sha' },
-            head_pipeline: { id: 99 }
-          })
-        }
-      }
-      if (endpoint === 'projects/g%2Fp/merge_requests/12/discussions?per_page=100') {
-        return {
-          stdout: JSON.stringify([
-            {
-              id: 'discussion-1',
-              notes: [
-                {
-                  id: 1,
-                  body: 'Review note',
-                  created_at: '2026-05-31T12:01:00Z',
-                  author: { username: 'alice', avatar_url: 'https://example.com/a.png' }
-                }
-              ]
-            }
-          ])
-        }
-      }
-      if (endpoint === 'projects/g%2Fp/pipelines/99/jobs?per_page=100') {
-        return {
-          stdout: JSON.stringify([
-            {
-              id: 10,
-              name: 'verify',
-              stage: 'test',
-              status: 'success',
-              web_url: 'https://gitlab.com/g/p/-/jobs/10',
-              duration: 12
-            }
-          ])
-        }
-      }
-      if (endpoint === 'projects/g%2Fp/pipelines/99/bridges?per_page=100') {
-        return { stdout: '[]' }
-      }
-      if (endpoint === 'projects/g%2Fp/merge_requests/12/reviewers') {
-        return { stdout: '[]' }
-      }
-      if (endpoint === 'projects/g%2Fp/merge_requests/12/approvals') {
-        return { stdout: JSON.stringify({ approvals_required: 0, approvals_left: 0 }) }
-      }
-      if (endpoint === 'projects/g%2Fp/merge_requests/12/approval_state') {
-        return { stdout: JSON.stringify({ rules: [] }) }
-      }
-      if (endpoint === 'projects/g%2Fp/merge_requests/12/diffs?per_page=100') {
-        return {
-          stdout: JSON.stringify([
-            {
-              new_path: 'src/app.ts',
-              old_path: 'src/app.ts',
-              diff: '@@ -1 +1 @@\n-old\n+new'
-            }
-          ])
-        }
-      }
-      throw new Error(`unexpected glab call: ${args.join(' ')}`)
-    })
-
-    const details = await getWorkItemDetails('/repo', 12, 'mr')
-
-    expect(details?.comments).toHaveLength(1)
-    expect(details?.pipelineJobs).toHaveLength(1)
-    expect(details?.files).toHaveLength(1)
-    expect(details?.files?.[0]).toMatchObject({
-      path: 'src/app.ts',
-      additions: 1,
-      deletions: 1
-    })
-    expect(glabExecFileAsyncMock.mock.calls.map(([args]) => args)).toContainEqual([
-      'api',
-      'projects/g%2Fp/merge_requests/12/diffs?per_page=100'
-    ])
-    expect(glabExecFileAsyncMock.mock.calls.flatMap(([args]) => args)).not.toContain('--paginate')
-  })
-
-  it('expands bridge child-pipeline jobs into the checks list', async () => {
-    glabExecFileAsyncMock.mockImplementation(async (args: string[]) => {
-      const endpoint = args.at(-1)
-      if (endpoint === 'projects/g%2Fp/merge_requests/12') {
-        return {
-          stdout: JSON.stringify({
-            id: 120,
-            iid: 12,
-            title: 'Bridge pipeline',
-            state: 'opened',
-            web_url: 'https://gitlab.com/g/p/-/merge_requests/12',
-            updated_at: '2026-05-31T12:00:00Z',
-            source_branch: 'feature/bridges',
-            target_branch: 'main',
-            description: 'MR body',
-            sha: 'head-sha',
-            head_pipeline: { id: 99 }
-          })
-        }
-      }
-      if (endpoint === 'projects/g%2Fp/merge_requests/12/discussions?per_page=100') {
-        return { stdout: '[]' }
-      }
-      if (endpoint === 'projects/g%2Fp/pipelines/99/jobs?per_page=100') {
-        return {
-          stdout: JSON.stringify([
-            {
-              id: 10,
-              name: 'semgrep-sast',
-              stage: 'test',
-              status: 'success',
-              web_url: 'https://gitlab.com/g/p/-/jobs/10',
-              duration: 12
-            }
-          ])
-        }
-      }
-      if (endpoint === 'projects/g%2Fp/pipelines/99/bridges?per_page=100') {
-        return {
-          stdout: JSON.stringify([
-            {
-              id: 50,
-              name: 'trigger-ci',
-              stage: 'test',
-              status: 'success',
-              web_url: 'https://gitlab.com/g/p/-/jobs/50',
-              downstream_pipeline: {
-                id: 200,
-                status: 'failed',
-                web_url: 'https://gitlab.com/g/p/-/pipelines/200'
-              }
-            }
-          ])
-        }
-      }
-      if (endpoint === 'projects/g%2Fp/pipelines/200/jobs?per_page=100') {
-        return {
-          stdout: JSON.stringify([
-            {
-              id: 300,
-              name: 'unit',
-              stage: 'test',
-              status: 'failed',
-              web_url: 'https://gitlab.com/g/p/-/jobs/300',
-              duration: 40
-            },
-            {
-              id: 301,
-              name: 'lint',
-              stage: 'test',
-              status: 'success',
-              web_url: 'https://gitlab.com/g/p/-/jobs/301',
-              duration: 20
-            }
-          ])
-        }
-      }
-      if (endpoint === 'projects/g%2Fp/merge_requests/12/reviewers') {
-        return { stdout: '[]' }
-      }
-      if (endpoint === 'projects/g%2Fp/merge_requests/12/approvals') {
-        return { stdout: JSON.stringify({ approvals_required: 0, approvals_left: 0 }) }
-      }
-      if (endpoint === 'projects/g%2Fp/merge_requests/12/approval_state') {
-        return { stdout: JSON.stringify({ rules: [] }) }
-      }
-      if (endpoint === 'projects/g%2Fp/merge_requests/12/diffs?per_page=100') {
-        return { stdout: '[]' }
-      }
-      throw new Error(`unexpected glab call: ${args.join(' ')}`)
-    })
-
-    const details = await getWorkItemDetails('/repo', 12, 'mr')
-    const names = (details?.pipelineJobs ?? []).map((job) => job.name).sort()
-    expect(names).toEqual(['lint', 'semgrep-sast', 'trigger-ci', 'unit'])
-    expect(details?.pipelineJobs?.find((job) => job.name === 'unit')).toMatchObject({
-      id: 300,
-      status: 'failed',
-      pipelineId: 200
-    })
-    expect(details?.pipelineJobs?.find((job) => job.name === 'trigger-ci')).toMatchObject({
-      id: 0,
-      status: 'failed',
-      pipelineId: 99
-    })
-  })
-
-  // Why: each fetch spawns a `glab` binary (a remote exec over SSH) and this runs on the Checks
-  // poll timer, so a bridge-heavy MR must trickle its children rather than burst them.
+  // Every child fetch launches glab; bound the pool during Checks polling.
   it('bounds concurrent child-pipeline fetches', async () => {
     const BRIDGE_COUNT = 25
     let inFlightJobPages = 0
@@ -277,7 +78,7 @@ describe('getWorkItemDetails', () => {
           })
         }
       }
-      if (endpoint === 'projects/g%2Fp/pipelines/99/bridges?per_page=100') {
+      if (endpoint === 'projects/g%2Fp/pipelines/99/bridges?per_page=100&page=1') {
         return {
           stdout: JSON.stringify(
             Array.from({ length: BRIDGE_COUNT }, (_, i) => ({
@@ -311,189 +112,215 @@ describe('getWorkItemDetails', () => {
     })
 
     const details = await getWorkItemDetails('/repo', 12, 'mr')
-    // Parent page can overlap the capped child pool, so allow one above the child limit.
+    // The parent page can overlap the capped child pool.
     expect(peakJobPages).toBeLessThanOrEqual(5)
-    // Every bridge still gets a rollup row even past the 20-child expansion cap.
     expect(details?.pipelineJobs).toHaveLength(BRIDGE_COUNT)
   })
 
-  it('routes local WSL MR detail fetches through project resolution and glab options', async () => {
-    const localGitOptions = { wslDistro: 'Ubuntu' }
+  // Parent pipeline 99 has 150 jobs and 100 bridges, one to child pipeline 1000, which has 150 jobs.
+  function servePipelineGraph(failing: { endpoint: string; page: number; message: string }): void {
     glabExecFileAsyncMock.mockImplementation(async (args: string[]) => {
-      const endpoint = args.at(-1)
+      const endpoint = args.at(-1) as string
       if (endpoint === 'projects/g%2Fp/merge_requests/12') {
         return {
           stdout: JSON.stringify({
-            id: 120,
             iid: 12,
-            title: 'WSL detail',
+            title: 'Graph',
             state: 'opened',
-            web_url: 'https://gitlab.com/g/p/-/merge_requests/12',
-            updated_at: '2026-06-16T00:00:00Z',
-            description: 'MR body',
-            sha: 'head-sha',
-            head_pipeline: null,
-            reviewers: []
+            head_pipeline: { id: 99 }
           })
         }
       }
-      if (endpoint === 'projects/g%2Fp/merge_requests/12/discussions?per_page=100') {
-        return { stdout: '[]' }
+      const listMatch =
+        /^(projects\/g%2Fp\/pipelines\/\d+\/(?:jobs|bridges))\?per_page=100&page=(\d+)$/.exec(
+          endpoint
+        )
+      if (!listMatch) {
+        return { stdout: endpoint.endsWith('/approvals') ? '{}' : '[]' }
       }
-      if (endpoint === 'projects/g%2Fp/merge_requests/12/reviewers') {
-        return { stdout: '[]' }
+      const [, list, pageText] = listMatch
+      const page = Number(pageText)
+      if (list === failing.endpoint && page === failing.page) {
+        throw new Error(failing.message)
       }
-      if (endpoint === 'projects/g%2Fp/merge_requests/12/approvals') {
-        return { stdout: JSON.stringify({ approvals_required: 0, approvals_left: 0 }) }
+      if (list.endsWith('/bridges')) {
+        // A full first page makes the walker request page 2.
+        const bridges = list.includes('/99/')
+          ? [
+              { name: 'child', downstream_pipeline: { id: 1000, status: 'success' } },
+              ...Array.from({ length: 99 }, (_, i) => ({ name: `trigger-${i}` }))
+            ]
+          : []
+        return { stdout: JSON.stringify(page === 1 ? bridges : []) }
       }
-      if (endpoint === 'projects/g%2Fp/merge_requests/12/approval_state') {
-        return { stdout: JSON.stringify({ rules: [] }) }
+      const pipelineId = Number(/pipelines\/(\d+)/.exec(list)?.[1])
+      const count = page === 1 ? 100 : page === 2 ? 50 : 0
+      return {
+        stdout: JSON.stringify(
+          Array.from({ length: count }, (_, i) => ({
+            id: pipelineId * 1000 + (page - 1) * 100 + i + 1,
+            name: `job-${pipelineId}-${(page - 1) * 100 + i}`
+          }))
+        )
       }
-      if (endpoint === 'projects/g%2Fp/merge_requests/12/diffs?per_page=100') {
-        return { stdout: '[]' }
-      }
-      throw new Error(`unexpected glab call: ${args.join(' ')}`)
     })
+  }
 
-    const details = await getWorkItemDetails(
-      '/repo',
-      12,
-      'mr',
-      undefined,
-      null,
-      undefined,
-      localGitOptions
-    )
+  it.each([
+    { endpoint: 'projects/g%2Fp/pipelines/99/jobs', includeReviewDetails: true },
+    { endpoint: 'projects/g%2Fp/pipelines/99/jobs', includeReviewDetails: false },
+    { endpoint: 'projects/g%2Fp/pipelines/1000/jobs', includeReviewDetails: false },
+    { endpoint: 'projects/g%2Fp/pipelines/99/bridges', includeReviewDetails: false }
+  ])(
+    'fails the read when $endpoint page 2 fails (includeReviewDetails=$includeReviewDetails)',
+    async ({ endpoint, includeReviewDetails }) => {
+      servePipelineGraph({ endpoint, page: 2, message: '503 upstream unavailable' })
 
-    expect(details?.item.number).toBe(12)
-    expect(resolveIssueSourceMock).toHaveBeenCalledWith(
-      '/repo',
-      undefined,
-      ['gitlab.com'],
-      null,
-      localGitOptions
-    )
-    expect(glabExecFileAsyncMock.mock.calls.every((call) => call[1]?.wslDistro === 'Ubuntu')).toBe(
-      true
-    )
-  })
-})
+      const details = await getWorkItemDetails(
+        '/repo',
+        12,
+        'mr',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { includeReviewDetails }
+      )
 
-describe('countDiffLines', () => {
-  it('counts added and removed lines inside a hunk', () => {
-    expect(countDiffLines('@@ -1 +1 @@\n-old\n+new')).toEqual({ additions: 1, deletions: 1 })
-  })
-
-  it('counts a removed line whose original content began with `--` (SQL/Lua comment)', () => {
-    // Why: prefix `-` + content `-- old comment` = diff line `--- old comment`,
-    // which collides with the `--- a/file` header under a plain startsWith check.
-    expect(
-      countDiffLines('--- a/db.sql\n+++ b/db.sql\n@@ -1,2 +1,2 @@\n keep\n--- old comment\n+new')
-    ).toEqual({ additions: 1, deletions: 1 })
-  })
-
-  it('counts an added line whose original content began with `++`', () => {
-    // Why: prefix `+` + content `++ flag` = diff line `+++ flag`, colliding with `+++ b/file`.
-    expect(countDiffLines('--- a/f.lua\n+++ b/f.lua\n@@ -1 +1 @@\n-old\n+++ flag')).toEqual({
-      additions: 1,
-      deletions: 1
-    })
-  })
-
-  it('counts the collision on a header-less payload, the shape GitLab actually returns', () => {
-    // Why: the `/diffs` entity emits `json_safe_diff`, which starts at `@@` — the
-    // `--- a/file` form is opt-in via `unidiff=true`, which this call path never sends.
-    // So this, not the header-prefixed variant, is the reachable regression input.
-    expect(countDiffLines('@@ -1 +1 @@\n--- old comment\n+++ new comment')).toEqual({
-      additions: 1,
-      deletions: 1
-    })
-  })
-
-  it('counts an added line of `++i;` C-style increment content', () => {
-    expect(countDiffLines('@@ -1 +1 @@\n-i++;\n+++i;')).toEqual({ additions: 1, deletions: 1 })
-  })
-
-  it('yields zero for a binary-notice diff', () => {
-    expect(countDiffLines('Binary files a/logo.png and b/logo.png differ')).toEqual({
-      additions: 0,
-      deletions: 0
-    })
-  })
-
-  it('skips file headers before the first hunk and yields zero for a header-only diff', () => {
-    expect(countDiffLines('--- a/x\n+++ b/x')).toEqual({ additions: 0, deletions: 0 })
-  })
-
-  it('keeps additions and deletions distinct under an asymmetric hunk', () => {
-    expect(countDiffLines('@@ -1 +1,2 @@\n-old\n+a\n+b')).toEqual({ additions: 2, deletions: 1 })
-  })
-
-  it('accumulates counts across multiple hunks', () => {
-    expect(countDiffLines('@@ -1 +1 @@\n-a\n+b\n@@ -5 +5,2 @@\n-c\n+d\n+e')).toEqual({
-      additions: 3,
-      deletions: 2
-    })
-  })
-
-  it('yields zero for the empty diff that binary and rename-only files carry', () => {
-    // Why: mapMRFile passes `raw.diff ?? ''`, so binary/too_large/rename-only entries land here.
-    expect(countDiffLines('')).toEqual({ additions: 0, deletions: 0 })
-  })
-
-  it('yields zero when no hunk header is present, even with +/- lines', () => {
-    // Why: pins the deliberate behaviour change — without a `@@` there is no hunk, so
-    // leading +/- can only be file headers. Counting them is what caused the collision.
-    expect(countDiffLines('+added\n-removed')).toEqual({ additions: 0, deletions: 0 })
-  })
-
-  it('ignores the no-newline marker and a trailing newline', () => {
-    expect(countDiffLines('@@ -1 +1 @@\n-old\n+new\n\\ No newline at end of file\n')).toEqual({
-      additions: 1,
-      deletions: 1
-    })
-  })
-
-  it('counts hunk content whose own text begins with `@@`', () => {
-    // Why: the `@@` hunk check runs first, so it must not swallow `+`/`-` content.
-    expect(countDiffLines('@@ -1 +1 @@\n-@@ old\n+@@ new')).toEqual({ additions: 1, deletions: 1 })
-  })
-
-  // Why: the scan now reads a prefix code unit at a byte cursor rather than a split
-  // segment, so line-ending and non-ASCII shapes are the new regression surface.
-  it('counts a CRLF hunk the same as an LF hunk', () => {
-    expect(countDiffLines('@@ -1 +1,2 @@\r\n-old\r\n+a\r\n+b\r\n')).toEqual({
-      additions: 2,
-      deletions: 1
-    })
-  })
-
-  it('treats a lone CR as content, not a line break', () => {
-    expect(countDiffLines('@@ -1 +1 @@\n-old\r+new')).toEqual({ additions: 0, deletions: 1 })
-  })
-
-  it('counts lines whose content is multi-byte or a surrogate pair', () => {
-    expect(countDiffLines('@@ -1 +1 @@\n-é ünïcode\n+🚀 rocket')).toEqual({
-      additions: 1,
-      deletions: 1
-    })
-  })
-
-  it('ignores non-ASCII context lines and blank lines inside a hunk', () => {
-    expect(countDiffLines('@@ -1 +1 @@\n é leading accent\n 🚀 leading emoji\n\n')).toEqual({
-      additions: 0,
-      deletions: 0
-    })
-  })
-
-  it('counts large diff prefixes without allocating a string array for every line', () => {
-    const diff = `--- a/file\n+++ b/file\n@@ -1 +1 @@\n${'-old\n+new\n context\n'.repeat(10000)}`
-    const split = vi.spyOn(String.prototype, 'split')
-    try {
-      expect(countDiffLines(diff)).toEqual({ additions: 10000, deletions: 10000 })
-      expect(split.mock.calls.length).toBe(0)
-    } finally {
-      split.mockRestore()
+      expect(details).toBeNull()
     }
+  )
+
+  it('keeps the graph when a child project forbids its first page', async () => {
+    servePipelineGraph({
+      endpoint: 'projects/g%2Fp/pipelines/1000/jobs',
+      page: 1,
+      message: '403 Forbidden'
+    })
+
+    const details = await getWorkItemDetails('/repo', 12, 'mr')
+
+    expect(details?.pipelineJobs?.filter((job) => job.name.startsWith('job-99-'))).toHaveLength(150)
+    expect(details?.pipelineJobs?.some((job) => job.name === 'child')).toBe(true)
   })
+
+  it.each([
+    { markViewerComments: true, mine: true },
+    { markViewerComments: undefined, mine: true },
+    // Desktop detail reads opt out of the viewer lookup.
+    { markViewerComments: false, mine: undefined }
+  ])(
+    'marks only the reading glab account notes unless the read opts out: %o',
+    async ({ markViewerComments, mine }) => {
+      const note = (id: number, username: string) => ({
+        id,
+        body: 'LGTM',
+        author: { username },
+        created_at: `2026-06-01T00:0${id}:00Z`
+      })
+      glabExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+        const endpoint = args.at(-1) as string
+        if (endpoint === 'user') {
+          return { stdout: JSON.stringify({ id: 7, username: 'Me' }) }
+        }
+        if (endpoint.includes('/discussions')) {
+          return {
+            stdout: JSON.stringify([
+              { id: 'd1', individual_note: true, notes: [note(1, 'alice')] },
+              { id: 'd2', individual_note: true, notes: [note(2, 'me')] }
+            ])
+          }
+        }
+        return {
+          stdout: JSON.stringify({
+            iid: 5,
+            title: 'Issue',
+            state: 'opened',
+            web_url: 'https://gitlab.com/g/p/-/issues/5',
+            updated_at: '2026-06-01T00:00:00Z'
+          })
+        }
+      })
+
+      const details = await getWorkItemDetails(
+        '/repo',
+        5,
+        'issue',
+        undefined,
+        null,
+        null,
+        {},
+        {
+          markViewerComments
+        }
+      )
+
+      expect(details?.comments.map((c) => [c.author, c.viewerDidAuthor])).toEqual([
+        ['alice', undefined],
+        ['me', mine]
+      ])
+    }
+  )
+  it.each(['mr', 'issue'] as const)(
+    'returns unavailable for a late %s discussion failure',
+    async (type) => {
+      glabExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+        const endpoint = args.at(-1) ?? ''
+        if (endpoint.includes('/discussions')) {
+          if (endpoint.includes('page=2')) {
+            throw new Error('offline')
+          }
+          return {
+            stdout: JSON.stringify(
+              Array.from({ length: 100 }, (_, i) => ({
+                id: String(i),
+                notes: [{ id: i, body: 'Existing note' }]
+              }))
+            )
+          }
+        }
+        if (endpoint === 'user') {
+          return { stdout: '{"username":"me"}' }
+        }
+        return { stdout: JSON.stringify({ iid: 12, title: 'Item', state: 'opened' }) }
+      })
+      await expect(getWorkItemDetails('/repo', 12, type)).resolves.toBeNull()
+    }
+  )
+  it.each([0, 100, 1000])(
+    'reads %s discussions through the admitted details entrypoint',
+    async (count) => {
+      glabExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+        const endpoint = args.at(-1) ?? ''
+        if (!endpoint.includes('/discussions')) {
+          return { stdout: '{"iid":12,"title":"Item","state":"opened"}' }
+        }
+        const page = Number(new URL(endpoint, 'https://gitlab.com').searchParams.get('page'))
+        const remaining = Math.max(0, count - (page - 1) * 100)
+        return {
+          stdout: JSON.stringify(
+            Array.from({ length: Math.min(100, remaining) }, (_, i) => ({
+              id: `D${page}-${i}`,
+              notes: [{ id: (page - 1) * 100 + i, body: 'Review' }]
+            }))
+          )
+        }
+      })
+      const details = await getWorkItemDetails(
+        '/repo',
+        12,
+        'mr',
+        undefined,
+        null,
+        undefined,
+        {},
+        { includeReviewDetails: false }
+      )
+      expect(details?.comments).toHaveLength(count)
+      // This fixture intentionally strips headers, so an exact full last page needs an empty proof page.
+      expect(
+        glabExecFileAsyncMock.mock.calls.filter(([args]) => args.at(-1).includes('/discussions'))
+      ).toHaveLength(Math.floor(count / 100) + 1)
+    }
+  )
 })

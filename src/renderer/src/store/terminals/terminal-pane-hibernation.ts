@@ -1,18 +1,27 @@
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { replaceRecordEntries, replaceTabBuckets } from '@/store/keyed-record-transitions'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import '@/components/terminal-pane/pty-transport/delivery/pty-dispatcher'
 import {
   restorePtyDataHandlersAfterFailedShutdown,
   unregisterPtyDataHandlers
-} from '@/components/terminal-pane/pty-transport'
-import { shutdownBufferCaptures } from '@/components/terminal-pane/shutdown-buffer-captures'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
+} from '@/components/terminal-pane/pty-transport/shutdown/pty-shutdown-data-suspension'
+import { shutdownBufferCaptures } from '@/components/terminal-pane/snapshots/shutdown-buffer-captures'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
+import '../slices/agent-status/agent-status'
 import {
   collectHibernatedCompletionEvidenceForWorktree,
   collectSleepingAgentSessionRecordsForWorktree
-} from '../slices/agent-status'
+} from '../slices/agent-status/agent-status-recovery-collection'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 import { equalStringSets, sortedUniquePtyIds } from './terminal-pty-identities'
-import { resolveTerminalStopRuntimeEnvironmentId } from './terminal-workspace-routing'
+import { resolveTerminalPtyOwner } from '@/lib/workspace/ownership/terminal-worktree-route'
+import { resolveTerminalTeardownOwner } from './terminal-teardown-owner'
+import { removePanesAttention } from '../slices/workspace-attention/subject-attention-transitions'
+import { settleAttentionRemovedBy } from '../slices/workspace-attention/attention-removal-follow-up'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { recordPaneSleepThroughLayoutOwner } from './terminal-sleep-layout-owner'
 
 export function createTerminalPaneHibernationActions(
   set: TerminalStoreSet,
@@ -26,7 +35,22 @@ export function createTerminalPaneHibernationActions(
       )
       const rendererShutdownPtyIds = [opts.ptyId]
       const state = get()
-      const runtimeEnvironmentId = resolveTerminalStopRuntimeEnvironmentId(state, worktreeId)
+      const worktreeOwner = resolveTerminalPtyOwner(state, worktreeId)
+      const teardownOwner = resolveTerminalTeardownOwner(worktreeOwner, [opts.ptyId])
+      // Use PTY owner for twins; losing bindings without an attributable host stop leaves unseen running agents.
+      if (
+        teardownOwner.kind === 'refused' ||
+        (worktreeOwner.kind === 'ambiguous' &&
+          isRemoteRuntimePtyId(opts.ptyId) &&
+          expectedRuntimePtyIds.length === 0)
+      ) {
+        console.warn('[agent-hibernation] refusing pane hibernation: terminal owner is ambiguous', {
+          worktreeId,
+          paneKey: opts.paneKey
+        })
+        throw new Error('ambiguous_terminal_owner')
+      }
+      const runtimeEnvironmentId = teardownOwner.runtimeEnvironmentId
       // Why: pane transports emit renderer PTY ids, not raw exact-stop handles; guard only the identity that can deliver an exit callback.
       const exitGuardPtyIds = [opts.ptyId]
       const tab = (state.tabsByWorktree[worktreeId] ?? []).find(
@@ -86,16 +110,13 @@ export function createTerminalPaneHibernationActions(
           for (const ptyId of exitGuardPtyIds) {
             delete next[ptyId]
           }
-          const nextSleeping = { ...s.sleepingAgentSessionsByPaneKey }
-          for (const key of sleepingRecordKeys) {
-            const replaced = replacedSleepingRecords[key]
-            if (replaced) {
-              nextSleeping[key] = replaced
-            } else {
-              delete nextSleeping[key]
-            }
+          return {
+            suppressedPtyExitIds: next,
+            sleepingAgentSessionsByPaneKey: replaceRecordEntries(
+              s.sleepingAgentSessionsByPaneKey,
+              sleepingRecordKeys.map((key) => [key, replacedSleepingRecords[key] ?? null] as const)
+            )
           }
-          return { suppressedPtyExitIds: next, sleepingAgentSessionsByPaneKey: nextSleeping }
         })
       }
       set((s) => ({
@@ -103,10 +124,10 @@ export function createTerminalPaneHibernationActions(
           ...s.suppressedPtyExitIds,
           ...Object.fromEntries(exitGuardPtyIds.map((ptyId) => [ptyId, true] as const))
         },
-        sleepingAgentSessionsByPaneKey: {
-          ...s.sleepingAgentSessionsByPaneKey,
-          ...sleepingAgentSessionRecords
-        }
+        sleepingAgentSessionsByPaneKey: replaceRecordEntries(
+          s.sleepingAgentSessionsByPaneKey,
+          Object.entries(sleepingAgentSessionRecords)
+        )
       }))
       if (expectedRuntimePtyIds.length > 0) {
         if (!runtimeEnvironmentId) {
@@ -154,7 +175,7 @@ export function createTerminalPaneHibernationActions(
         for (const snapshot of unregisterPtyDataHandlers(rendererShutdownPtyIds) ?? []) {
           snapshot.commit?.()
         }
-      } else if (!opts.ptyId.startsWith('remote:')) {
+      } else if (!isRemoteRuntimePtyId(opts.ptyId)) {
         // Why: pty.kill can flush final data before exit; unregister first so stale handlers can't fire phantom notifications during hibernation.
         const handlerSnapshots = unregisterPtyDataHandlers(rendererShutdownPtyIds) ?? []
         try {
@@ -168,73 +189,67 @@ export function createTerminalPaneHibernationActions(
           snapshot.commit?.()
         }
       }
-      set((s) => {
-        const existingPtyIds = s.ptyIdsByTabId[opts.tabId] ?? []
-        const shutdownPtyIdSet = new Set(rendererShutdownPtyIds)
-        const remainingPtyIds = existingPtyIds.filter((ptyId) => !shutdownPtyIdSet.has(ptyId))
-        const nextTabsByWorktree = { ...s.tabsByWorktree }
-        const tabs = nextTabsByWorktree[worktreeId] ?? []
-        const tabIndex = tabs.findIndex((candidate) => candidate.id === opts.tabId)
-        if (tabIndex !== -1) {
-          const nextTabs = [...tabs]
-          nextTabs[tabIndex] = {
-            ...nextTabs[tabIndex],
-            ptyId: remainingPtyIds.at(-1) ?? null
+      // Switch point: main records the sleep this window decided, once the stop settled.
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        recordPaneSleepThroughLayoutOwner(get(), worktreeId, sleepingAgentSessionRecords)
+      }
+      settleAttentionRemovedBy(set, get, () =>
+        set((s) => {
+          const existingPtyIds = s.ptyIdsByTabId[opts.tabId] ?? []
+          const shutdownPtyIdSet = new Set(rendererShutdownPtyIds)
+          const remainingPtyIds = existingPtyIds.filter((ptyId) => !shutdownPtyIdSet.has(ptyId))
+          const tabs = s.tabsByWorktree[worktreeId] ?? []
+          const replacements: [string, typeof tabs][] = []
+          const tabIndex = tabs.findIndex((candidate) => candidate.id === opts.tabId)
+          if (tabIndex !== -1) {
+            const nextTabs = [...tabs]
+            nextTabs[tabIndex] = {
+              ...nextTabs[tabIndex],
+              ptyId: remainingPtyIds.at(-1) ?? null
+            }
+            replacements.push([worktreeId, nextTabs])
           }
-          nextTabsByWorktree[worktreeId] = nextTabs
-        }
-        const nextCodexRestartNoticeByPtyId = { ...s.codexRestartNoticeByPtyId }
-        for (const ptyId of exitGuardPtyIds) {
-          delete nextCodexRestartNoticeByPtyId[ptyId]
-        }
-        const nextLastKnownRelay =
-          remainingPtyIds.length === 0
-            ? { ...s.lastKnownRelayPtyIdByTabId }
-            : s.lastKnownRelayPtyIdByTabId
-        if (remainingPtyIds.length === 0) {
-          delete nextLastKnownRelay[opts.tabId]
-        }
-        let nextRuntimePaneTitlesByTabId = s.runtimePaneTitlesByTabId
-        const numericPaneId = Number(opts.leafId)
-        if (
-          Number.isInteger(numericPaneId) &&
-          s.runtimePaneTitlesByTabId[opts.tabId]?.[numericPaneId]
-        ) {
-          const nextByPane = { ...s.runtimePaneTitlesByTabId[opts.tabId] }
-          delete nextByPane[numericPaneId]
-          nextRuntimePaneTitlesByTabId = { ...s.runtimePaneTitlesByTabId }
-          if (Object.keys(nextByPane).length > 0) {
-            nextRuntimePaneTitlesByTabId[opts.tabId] = nextByPane
-          } else {
-            delete nextRuntimePaneTitlesByTabId[opts.tabId]
+          const nextCodexRestartNoticeByPtyId = { ...s.codexRestartNoticeByPtyId }
+          for (const ptyId of exitGuardPtyIds) {
+            delete nextCodexRestartNoticeByPtyId[ptyId]
           }
-        }
-        const nextUnreadTerminalPanes = { ...s.unreadTerminalPanes }
-        const nextUnreadAgentCompletionPanes = { ...s.unreadAgentCompletionPanes }
-        const nextLastTerminalInputAtByPaneKey = { ...s.lastTerminalInputAtByPaneKey }
-        delete nextUnreadTerminalPanes[opts.paneKey]
-        delete nextUnreadAgentCompletionPanes[opts.paneKey]
-        delete nextLastTerminalInputAtByPaneKey[opts.paneKey]
-        return {
-          tabsByWorktree: nextTabsByWorktree,
-          ptyIdsByTabId: {
-            ...s.ptyIdsByTabId,
-            [opts.tabId]: remainingPtyIds
-          },
-          lastKnownRelayPtyIdByTabId: nextLastKnownRelay,
-          suppressedPtyExitIds: {
-            ...s.suppressedPtyExitIds,
-            ...Object.fromEntries(exitGuardPtyIds.map((ptyId) => [ptyId, true] as const))
-          },
-          codexRestartNoticeByPtyId: nextCodexRestartNoticeByPtyId,
-          ...(nextRuntimePaneTitlesByTabId !== s.runtimePaneTitlesByTabId
-            ? { runtimePaneTitlesByTabId: nextRuntimePaneTitlesByTabId }
-            : {}),
-          unreadTerminalPanes: nextUnreadTerminalPanes,
-          unreadAgentCompletionPanes: nextUnreadAgentCompletionPanes,
-          lastTerminalInputAtByPaneKey: nextLastTerminalInputAtByPaneKey
-        }
-      })
+          const nextLastKnownRelay =
+            remainingPtyIds.length === 0
+              ? replaceRecordEntries<string>(s.lastKnownRelayPtyIdByTabId, [[opts.tabId, null]])
+              : s.lastKnownRelayPtyIdByTabId
+          let nextRuntimePaneTitlesByTabId = s.runtimePaneTitlesByTabId
+          const numericPaneId = Number(opts.leafId)
+          if (
+            Number.isInteger(numericPaneId) &&
+            s.runtimePaneTitlesByTabId[opts.tabId]?.[numericPaneId]
+          ) {
+            const nextByPane = { ...s.runtimePaneTitlesByTabId[opts.tabId] }
+            delete nextByPane[numericPaneId]
+            nextRuntimePaneTitlesByTabId = replaceRecordEntries(s.runtimePaneTitlesByTabId, [
+              [opts.tabId, Object.keys(nextByPane).length > 0 ? nextByPane : null]
+            ])
+          }
+          const nextLastTerminalInputAtByPaneKey = { ...s.lastTerminalInputAtByPaneKey }
+          delete nextLastTerminalInputAtByPaneKey[opts.paneKey]
+          return {
+            tabsByWorktree: replaceTabBuckets(s.tabsByWorktree, replacements),
+            ptyIdsByTabId: replaceRecordEntries(s.ptyIdsByTabId, [[opts.tabId, remainingPtyIds]]),
+            lastKnownRelayPtyIdByTabId: nextLastKnownRelay,
+            suppressedPtyExitIds: {
+              ...s.suppressedPtyExitIds,
+              ...Object.fromEntries(exitGuardPtyIds.map((ptyId) => [ptyId, true] as const))
+            },
+            codexRestartNoticeByPtyId: nextCodexRestartNoticeByPtyId,
+            ...(nextRuntimePaneTitlesByTabId !== s.runtimePaneTitlesByTabId
+              ? {
+                  runtimePaneTitlesByTabId: nextRuntimePaneTitlesByTabId
+                }
+              : {}),
+            ...removePanesAttention(s, new Set([opts.paneKey])),
+            lastTerminalInputAtByPaneKey: nextLastTerminalInputAtByPaneKey
+          }
+        })
+      )
       get().dropHibernatedAgentStatusPane(worktreeId, opts.paneKey, {
         retainedCompletionEvidence
       })

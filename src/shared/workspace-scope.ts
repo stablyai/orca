@@ -1,4 +1,13 @@
-import type { WorkspaceKey, WorkspaceScope } from './folder-workspace-types'
+import {
+  getWorktreeIdFromHostIdentity,
+  isWorktreeHostIdentity
+} from './worktree/host-qualified-identity'
+
+export type WorkspaceScope =
+  | { type: 'worktree'; worktreeId: string }
+  | { type: 'folder'; folderWorkspaceId: string }
+
+export type WorkspaceKey = `worktree:${string}` | `folder:${string}`
 
 export function worktreeWorkspaceKey(worktreeId: string): WorkspaceKey {
   return `worktree:${worktreeId}`
@@ -20,12 +29,26 @@ export function parseWorkspaceKey(value: string): WorkspaceScope | null {
   return null
 }
 
+/** The folder workspace id a `folder:<id>` or `id:folder:<id>` selector names. */
+export function folderIdOfSelector(selector: string): string | undefined {
+  const parsed = parseWorkspaceKey(selector.startsWith('id:') ? selector.slice(3) : selector)
+  return parsed?.type === 'folder' ? parsed.folderWorkspaceId : undefined
+}
+
+/** Strip WorkspaceKey or host-qualified visit-recency scope (ssh:target|repo::path); retain already-bare workspace IDs. */
+export function normalizeWorkspaceSessionKeyToWorkspaceId(value: string): string {
+  if (isWorktreeHostIdentity(value)) {
+    return getWorktreeIdFromHostIdentity(value)
+  }
+  const scope = parseWorkspaceKey(value)
+  return scope?.type === 'worktree' ? scope.worktreeId : value
+}
+
 export function isWorkspaceKey(value: string): value is WorkspaceKey {
   return parseWorkspaceKey(value) !== null
 }
 
-// Why: folder workspaces are tracked by the scoped active key, while older
-// worktree-only paths still read activeWorktreeId.
+// Folder workspaces use the scoped active key; older worktree paths still use activeWorktreeId.
 export function getActiveSidebarWorkspaceId(
   activeWorkspaceKey: string | null,
   activeWorktreeId: string | null

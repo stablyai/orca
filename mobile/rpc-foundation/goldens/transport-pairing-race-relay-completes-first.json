@@ -1,0 +1,117 @@
+{
+  "goldenFormatVersion": 6,
+  "operation": "transport.pairing-race",
+  "family": "transport.pairing-race",
+  "namedDeltas": [],
+  "values": {
+    "2a6d50107927": {
+      "name": "candidate-closed",
+      "ordinal": 5,
+      "value": "direct"
+    },
+    "416024b9c436": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": "relay"
+    },
+    "61a4715b43bf": {
+      "name": "status.get#2",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "capabilities": []
+          }
+        }
+      }
+    },
+    "a1e33b5bf8ef": {
+      "name": "status.get#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "capabilities": []
+          }
+        }
+      }
+    },
+    "a7d5becc0aed": {
+      "outcome": "relay"
+    },
+    "e7b5d7d57a61": {
+      "name": "status.get#1",
+      "ordinal": 3,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+    },
+    "f1834177e593": {
+      "name": "status.get#2",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+    }
+  },
+  "recording": {
+    "scenario": "transport-pairing-race-relay-completes-first",
+    "checkpoints": [
+      {
+        "id": "relay-wins-when-it-completes-first",
+        "observation": {
+          "sender": ["a1e33b5bf8ef", "61a4715b43bf"],
+          "payloads": ["e7b5d7d57a61", "f1834177e593"],
+          "settlements": {
+            "race": "416024b9c436"
+          },
+          "state": "a7d5becc0aed",
+          "effects": ["2a6d50107927"]
+        }
+      }
+    ]
+  }
+}

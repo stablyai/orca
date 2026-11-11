@@ -112,6 +112,10 @@ describe('Windows host Git environment readiness', () => {
       const waitUntilReady = vi.fn(() => ready.promise)
       const child = createMockChildProcess(1234)
       spawnMock.mockReturnValue(child)
+      execFileMock.mockImplementation((_cmd, _args, _options, callback) => {
+        callback(Object.assign(new Error('missing SSH config'), { code: 1 }), '', '')
+        return child
+      })
       configureWindowsHostGitEnvironmentReadiness(waitUntilReady)
       process.env.Path = 'hydrating-path'
 
@@ -136,6 +140,10 @@ describe('Windows host Git environment readiness', () => {
       const waitUntilReady = vi.fn(() => new Promise<void>(() => {}))
       const child = createMockChildProcess(1234)
       spawnMock.mockReturnValue(child)
+      execFileMock.mockImplementation((_cmd, _args, _options, callback) => {
+        callback(Object.assign(new Error('missing SSH config'), { code: 1 }), '', '')
+        return child
+      })
       configureWindowsHostGitEnvironmentReadiness(waitUntilReady)
 
       await expect(

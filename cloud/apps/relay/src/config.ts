@@ -1,21 +1,19 @@
 import { z } from 'zod'
+import { isRelayCellConnectionHardCap, RELAY_CELL_CONNECTION_HARD_CAP, RELAY_MAX_CELL_CONNECTION_UNOBSERVED_BOUND, relayCellAdmissionBounds, type RelayCellConnectionHardCap } from '@orca-cloud/relay-contract/admission-budgets'
+import { RELAY_DEFAULT_REGION, RelayRegionSchema, type RelayRegion } from '@orca-cloud/relay-contract/relay-regions'
 import {
-  isRelayCellConnectionHardCap,
-  RELAY_CELL_CONNECTION_HARD_CAP,
-  RELAY_MAX_CELL_CONNECTION_UNOBSERVED_BOUND,
-  RELAY_DEFAULT_REGION,
-  RelayRegionSchema,
-  relayCellAdmissionBounds,
-  type RelayCellConnectionHardCap,
-  type RelayRegion
-} from '@orca-cloud/relay-contract'
+  RELAY_MAX_READINESS_GRACE_MS,
+  RELAY_READINESS_JWKS_GRACE_MS,
+  RELAY_READINESS_SQL_GRACE_MS
+} from './process-lifecycle/relay-readiness.js'
+import type { EdgeRelayConfig } from './edge-relay.js'
 
 export const RELAY_MAX_CELL_CAPACITY_REQUESTS = 100_000
 export const RELAY_DATABASE_POOL_MAX = 10
 export const RELAY_DIRECTOR_DATABASE_POOL_MAX = 3
 export const RELAY_PUBLIC_RESOLVE_CONCURRENCY = 1
 export const RELAY_PUBLIC_RESOLVE_WAIT_MS = 5_000
-export { RELAY_CELL_CONNECTION_HARD_CAP }
+
 
 const RelayCellConnectionHardCapSchema = z.custom<RelayCellConnectionHardCap>(
   isRelayCellConnectionHardCap
@@ -30,6 +28,13 @@ const OptionalServiceAccountSchema = z.preprocess(
   (value) => (value === '' ? undefined : value),
   z.string().email().optional()
 )
+
+// Cloud Run unset values arrive as empty strings, which coerce to 0 (fail-first readiness) instead of the grace default.
+const readinessGraceSchema = (defaultMs: number) =>
+  z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    z.coerce.number().int().min(0).max(RELAY_MAX_READINESS_GRACE_MS).default(defaultMs)
+  )
 
 const EnvSchema = z.object({
   PORT: z.coerce.number().int().positive().default(8080),
@@ -75,11 +80,35 @@ const EnvSchema = z.object({
   ORCA_RELAY_RUNTIME_SERVICE_ACCOUNT: z.string().email().optional(),
   ORCA_RELAY_DIRECTOR_URL: z.string().url().optional(),
   ORCA_RELAY_HEARTBEAT_AUDIENCE: z.string().url().optional(),
-  ORCA_RELAY_IMAGE_DIGEST: z.string().regex(/^sha256:[a-f0-9]{64}$/).optional(),
+  ORCA_RELAY_IMAGE_DIGEST: z
+    .string()
+    .regex(/^sha256:[a-f0-9]{64}$/)
+    .optional(),
   ORCA_RELAY_ADMIN_JWKS_URL: z.string().url().default('https://www.googleapis.com/oauth2/v3/certs'),
   ORCA_RELAY_DATABASE_POOL_MAX: z.coerce.number().int().positive().max(100).optional(),
+  ORCA_RELAY_READINESS_JWKS_GRACE_MS: readinessGraceSchema(RELAY_READINESS_JWKS_GRACE_MS),
+  ORCA_RELAY_READINESS_SQL_GRACE_MS: readinessGraceSchema(RELAY_READINESS_SQL_GRACE_MS),
   ORCA_RELAY_PUBLIC_ASSIGNMENTS_ENABLED: EnvironmentBooleanSchema,
   ORCA_RELAY_REGIONAL_PLACEMENT_ENABLED: EnvironmentBooleanSchema,
+  ORCA_RELAY_REGION_CORRECTION_COHORT_PERCENT: z.coerce.number().int().min(0).max(100).default(0),
+  // Step 5 on directors: `off` (default) is today's path; `dry-run` asks the picked cell to
+  // check a booking without making it, and logs the answer; `on` places on switched-on cells.
+  ORCA_RELAY_RESERVE_PLACEMENT: z.enum(['off', 'dry-run', 'on']).default('off'),
+  // Step 1 C: this share of hosts (by hash) on a reserve cell outside their region is booked
+  // in it on reconnect; 0 (default) is off.
+  ORCA_RELAY_RESERVE_REHOME_PERCENT: z.coerce.number().int().min(0).max(100).default(0),
+  // Step 3 shadow directory: unset or empty polls no cell; `all` or a comma list of cell ids.
+  ORCA_RELAY_SHADOW_SEAT_FEED_CELLS: z
+    .string()
+    .default('')
+    .transform((value) =>
+      value.trim() === 'all'
+        ? ('all' as const)
+        : value
+            .split(',')
+            .map((cellId) => cellId.trim())
+            .filter((cellId) => cellId.length > 0)
+    ),
   ORCA_RELAY_PUBLIC_ASSIGNMENT_CONCURRENCY: z.coerce.number().int().positive().max(100).default(2),
   ORCA_RELAY_PUBLIC_STICKY_CONCURRENCY: z.coerce.number().int().positive().max(100).default(1),
   ORCA_RELAY_PUBLIC_STICKY_QUEUE_MAX: z.coerce.number().int().positive().max(4_096).default(64),
@@ -90,6 +119,17 @@ const EnvSchema = z.object({
     .positive()
     .max(60)
     .default(2),
+  // Borrowed from placement concurrency, which always keeps at least one permit.
+  ORCA_RELAY_DRAIN_RETURN_CONCURRENCY: z.coerce.number().int().positive().max(4).default(1),
+  ORCA_RELAY_DRAIN_RETURN_QUEUE_MAX: z.coerce.number().int().positive().max(64).default(4),
+  ORCA_RELAY_DRAIN_RETURN_WAIT_MS: z.coerce.number().int().positive().max(10_000).default(3_000),
+  // The desktop parser caps a Retry-After at 5 minutes; a larger value is truncated there.
+  ORCA_RELAY_DRAIN_RETURN_MAX_RETRY_AFTER_SECONDS: z.coerce
+    .number()
+    .int()
+    .min(2)
+    .max(300)
+    .default(300),
   ORCA_RELAY_PUBLIC_ASSIGNMENT_QUEUE_MAX: z.coerce
     .number()
     .int()
@@ -108,6 +148,29 @@ const EnvSchema = z.object({
     .positive()
     .max(300)
     .default(5),
+  // Relay edge (director only). Unset URL: no edge cell, no override, today's behaviour.
+  ORCA_RELAY_EDGE_CELL_URL: z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    z.string().url().optional()
+  ),
+  ORCA_RELAY_EDGE_ROLLOUT_PERCENT: z.coerce.number().int().min(0).max(100).default(0),
+  ORCA_RELAY_EDGE_ALLOW_HOSTS: z.string().default(''),
+  ORCA_RELAY_EDGE_DENY_HOSTS: z.string().default(''),
+  // Comma-separated account ids (relay token `sub`); every host of these accounts joins.
+  ORCA_RELAY_EDGE_ALLOW_USERS: z.string().default(''),
+  ORCA_RELAY_EDGE_REGIONS: z.string().default(RELAY_DEFAULT_REGION),
+  // Set: the edge keeps host data in its objects, so moves push and export it (signed with this
+  // key, never the assignment lease key). Never unset while rows are on the edge.
+  ORCA_RELAY_EDGE_ADMIN_SIGNING_KEY: z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    z.string().min(32).optional()
+  ),
+  // Unset: EDGE_EXPORT_SKIP_AFTER_MS. How long the edge's export must keep failing before leaving
+  // hosts are placed without it (0: on the first failure).
+  ORCA_RELAY_EDGE_EXPORT_SKIP_AFTER_MS: z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    z.coerce.number().int().min(0).optional()
+  ),
   DATABASE_URL: z.string().optional(),
   ORCA_RELAY_DATA_DIR: z.string().default('./data/relay')
 })
@@ -175,6 +238,9 @@ export type RelayConfig = {
   fenceBrokerServiceAccount?: string
   rehomeDirectorServiceAccount?: string
   rehomeAudience?: string
+  shadowSeatFeedCells?: 'all' | string[]
+  reservePlacement?: 'off' | 'dry-run' | 'on'
+  reserveRehomePercent?: number
   runtimeServiceAccount: string
   directorUrl?: string
   heartbeatAudience?: string
@@ -183,8 +249,11 @@ export type RelayConfig = {
   connectionUnobservedBound?: number
   adminJwksUrl: string
   databasePoolMax: number
+  readinessJwksGraceMs?: number
+  readinessSqlGraceMs?: number
   publicAssignmentsEnabled: boolean
   regionalPlacementEnabled?: boolean
+  regionCorrectionCohortPercent?: number
   publicAssignmentConcurrency: number
   publicAssignmentQueueMax: number
   publicAssignmentWaitMs: number
@@ -195,8 +264,13 @@ export type RelayConfig = {
   publicStickyQueueMax?: number
   publicStickyWaitMs?: number
   publicStickyRetryAfterSeconds?: number
+  drainReturnConcurrency?: number
+  drainReturnQueueMax?: number
+  drainReturnWaitMs?: number
+  drainReturnMaxRetryAfterSeconds?: number
   databaseUrl?: string
   dataDir: string
+  edge?: EdgeRelayConfig
 }
 
 function canonicalOrigin(value: string, name: string): string {
@@ -296,6 +370,10 @@ export function loadRelayConfig(env: NodeJS.ProcessEnv = process.env): RelayConf
   ) {
     throw new Error('sticky and placement admission together must fit the database pool')
   }
+  const edge = parseEdgeConfig(parsed, publicUrl)
+  if (edge && cells.some((cell) => cell.id === 'edge' || cell.url === edge.cellUrl)) {
+    throw new Error('the relay edge cell id and URL must not be a configured cell')
+  }
   return {
     port: parsed.PORT,
     publicUrl,
@@ -317,6 +395,9 @@ export function loadRelayConfig(env: NodeJS.ProcessEnv = process.env): RelayConf
     fenceBrokerServiceAccount: parsed.ORCA_RELAY_FENCE_BROKER_SERVICE_ACCOUNT,
     rehomeDirectorServiceAccount: parsed.ORCA_RELAY_REHOME_DIRECTOR_SERVICE_ACCOUNT,
     rehomeAudience: parsed.ORCA_RELAY_REHOME_AUDIENCE,
+    shadowSeatFeedCells: parsed.ORCA_RELAY_SHADOW_SEAT_FEED_CELLS,
+    reservePlacement: parsed.ORCA_RELAY_RESERVE_PLACEMENT,
+    reserveRehomePercent: parsed.ORCA_RELAY_RESERVE_REHOME_PERCENT,
     runtimeServiceAccount:
       parsed.ORCA_RELAY_RUNTIME_SERVICE_ACCOUNT ?? parsed.ORCA_RELAY_DEPLOY_SERVICE_ACCOUNT,
     directorUrl,
@@ -330,8 +411,11 @@ export function loadRelayConfig(env: NodeJS.ProcessEnv = process.env): RelayConf
     connectionUnobservedBound: ownCell.connectionUnobservedBound,
     adminJwksUrl: parsed.ORCA_RELAY_ADMIN_JWKS_URL,
     databasePoolMax,
+    readinessJwksGraceMs: parsed.ORCA_RELAY_READINESS_JWKS_GRACE_MS,
+    readinessSqlGraceMs: parsed.ORCA_RELAY_READINESS_SQL_GRACE_MS,
     publicAssignmentsEnabled: parsed.ORCA_RELAY_PUBLIC_ASSIGNMENTS_ENABLED,
     regionalPlacementEnabled: parsed.ORCA_RELAY_REGIONAL_PLACEMENT_ENABLED,
+    regionCorrectionCohortPercent: parsed.ORCA_RELAY_REGION_CORRECTION_COHORT_PERCENT,
     publicAssignmentConcurrency: parsed.ORCA_RELAY_PUBLIC_ASSIGNMENT_CONCURRENCY,
     publicAssignmentQueueMax: parsed.ORCA_RELAY_PUBLIC_ASSIGNMENT_QUEUE_MAX,
     publicAssignmentWaitMs: parsed.ORCA_RELAY_PUBLIC_ASSIGNMENT_WAIT_MS,
@@ -342,7 +426,78 @@ export function loadRelayConfig(env: NodeJS.ProcessEnv = process.env): RelayConf
     publicStickyQueueMax: parsed.ORCA_RELAY_PUBLIC_STICKY_QUEUE_MAX,
     publicStickyWaitMs: parsed.ORCA_RELAY_PUBLIC_STICKY_WAIT_MS,
     publicStickyRetryAfterSeconds: parsed.ORCA_RELAY_PUBLIC_STICKY_RETRY_AFTER_SECONDS,
+    drainReturnConcurrency: parsed.ORCA_RELAY_DRAIN_RETURN_CONCURRENCY,
+    drainReturnQueueMax: parsed.ORCA_RELAY_DRAIN_RETURN_QUEUE_MAX,
+    drainReturnWaitMs: parsed.ORCA_RELAY_DRAIN_RETURN_WAIT_MS,
+    drainReturnMaxRetryAfterSeconds: parsed.ORCA_RELAY_DRAIN_RETURN_MAX_RETRY_AFTER_SECONDS,
     databaseUrl: parsed.DATABASE_URL,
-    dataDir: parsed.ORCA_RELAY_DATA_DIR
+    dataDir: parsed.ORCA_RELAY_DATA_DIR,
+    ...(edge ? { edge } : {})
+  }
+}
+
+const RELAY_HOST_ID_PATTERN = /^[A-Za-z0-9_-]{16}$/
+
+function hostIdList(value: string, name: string): Set<string> {
+  const ids = value
+    .split(',')
+    .map((id) => id.trim())
+    .filter((id) => id.length > 0)
+  for (const id of ids) {
+    if (!RELAY_HOST_ID_PATTERN.test(id)) {
+      throw new Error(`${name} has an invalid relay host id`)
+    }
+  }
+  return new Set(ids)
+}
+
+function userIdList(value: string): Set<string> {
+  const ids = value
+    .split(',')
+    .map((id) => id.trim())
+    .filter((id) => id.length > 0)
+  for (const id of ids) {
+    if (id.length > 128 || !/^[A-Za-z0-9_.:|-]+$/.test(id)) {
+      throw new Error('ORCA_RELAY_EDGE_ALLOW_USERS has an invalid account id')
+    }
+  }
+  return new Set(ids)
+}
+
+function parseEdgeConfig(
+  parsed: z.infer<typeof EnvSchema>,
+  publicUrl: string
+): EdgeRelayConfig | undefined {
+  if (parsed.ORCA_RELAY_ROLE !== 'director' || !parsed.ORCA_RELAY_EDGE_CELL_URL) {
+    return undefined
+  }
+  const cellUrl = canonicalOrigin(parsed.ORCA_RELAY_EDGE_CELL_URL, 'ORCA_RELAY_EDGE_CELL_URL')
+  if (cellUrl === publicUrl) {
+    throw new Error('ORCA_RELAY_EDGE_CELL_URL must differ from the director')
+  }
+  const regions = parsed.ORCA_RELAY_EDGE_REGIONS.split(',')
+    .map((region) => region.trim())
+    .filter((region) => region.length > 0)
+    .map((region) => RelayRegionSchema.parse(region))
+  const adminKey = parsed.ORCA_RELAY_EDGE_ADMIN_SIGNING_KEY
+  // The deployed edge keeps host data in its objects: without the key the director could not
+  // push it, and hosts would land on an edge that holds none of their devices.
+  if (adminKey === undefined) {
+    throw new Error('ORCA_RELAY_EDGE_CELL_URL needs ORCA_RELAY_EDGE_ADMIN_SIGNING_KEY')
+  }
+  if (adminKey === parsed.ORCA_RELAY_ASSIGNMENT_SIGNING_KEY) {
+    throw new Error('ORCA_RELAY_EDGE_ADMIN_SIGNING_KEY must differ from the assignment signing key')
+  }
+  return {
+    cellUrl,
+    adminSigningKey: new TextEncoder().encode(adminKey),
+    rolloutPercent: parsed.ORCA_RELAY_EDGE_ROLLOUT_PERCENT,
+    allowHosts: hostIdList(parsed.ORCA_RELAY_EDGE_ALLOW_HOSTS, 'ORCA_RELAY_EDGE_ALLOW_HOSTS'),
+    allowUsers: userIdList(parsed.ORCA_RELAY_EDGE_ALLOW_USERS),
+    denyHosts: hostIdList(parsed.ORCA_RELAY_EDGE_DENY_HOSTS, 'ORCA_RELAY_EDGE_DENY_HOSTS'),
+    regions: new Set(regions),
+    ...(parsed.ORCA_RELAY_EDGE_EXPORT_SKIP_AFTER_MS === undefined
+      ? {}
+      : { exportSkipAfterMs: parsed.ORCA_RELAY_EDGE_EXPORT_SKIP_AFTER_MS })
   }
 }

@@ -1,17 +1,30 @@
 import { toast } from 'sonner'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-import { getGitHubRuntimeRepoId, type GitHubRuntimeHost } from '@/lib/github-source-runtime-context'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import {
+  getGitHubRuntimeRepoId,
+  type GitHubRuntimeHost
+} from '@/lib/work-items/github/github-source-runtime-context'
 import { translate } from '@/i18n/i18n'
 import type { GitHubOwnerRepo } from '../../../../../shared/github/pull-request-types'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import type { PRCheckDetail } from '../../../../../shared/github/check-types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
+import type { GitHubChecksTabState } from '../../github-checks-tab-state'
+import { codeHostErrorText } from '@/lib/source-control/remote/code-host-error-copy'
+
+/** The checks tab mints one of these per context; only its reference identity is ever read. */
+type ChecksContextOwner = GitHubChecksTabState['contextOwner']
 
 export async function rerunPullRequestChecks(args: {
   canUseChecksRepoContext: boolean
   rerunning: boolean
-  committedChecksContextOwnerRef: { current: object }
-  setRerunningOwner: (value: object | null | ((current: object | null) => object | null)) => void
+  committedChecksContextOwnerRef: { current: ChecksContextOwner }
+  setRerunningOwner: (
+    value:
+      | ChecksContextOwner
+      | null
+      | ((current: ChecksContextOwner | null) => ChecksContextOwner | null)
+  ) => void
   runtimeHost: GitHubRuntimeHost | null
   sourceContext?: TaskSourceContext | null
   repoId: string | null
@@ -21,7 +34,7 @@ export async function rerunPullRequestChecks(args: {
   prRepo: GitHubOwnerRepo | null
   failedOnly: boolean
   mountedRef: { current: boolean }
-  handleRefresh: (expectedContextOwner?: object) => Promise<PRCheckDetail[] | null>
+  handleRefresh: (expectedContextOwner?: ChecksContextOwner) => Promise<PRCheckDetail[] | null>
 }): Promise<void> {
   if (!args.canUseChecksRepoContext || args.rerunning) {
     return
@@ -58,7 +71,7 @@ export async function rerunPullRequestChecks(args: {
       return
     }
     if (!result.ok) {
-      toast.error(result.error)
+      toast.error(codeHostErrorText(result))
       return
     }
     toast.success(

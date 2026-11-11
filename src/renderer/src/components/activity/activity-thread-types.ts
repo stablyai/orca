@@ -3,24 +3,25 @@ import type {
   AgentStatusEntry,
   AgentStatusState,
   AgentType
-} from '../../../../shared/agent-status-types'
+} from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { Repo } from '../../../../shared/repo-types'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { ActivityPortalReadinessStatus } from './activity-portal-readiness-oscillation'
 
-export type { ActivityGroupBy, ThreadReadFilter } from '../../../../shared/ui-chrome-types'
-
-export type ActivityEventState = AgentStatusState
+type ActivityEventState = AgentStatusState
 export type ActivityHookLiveAgentState = Extract<
   AgentStatusState,
   'working' | 'blocked' | 'waiting'
 >
-export type ActivityLiveAgentState = ActivityHookLiveAgentState | 'monitoring'
+export type ActivityLiveAgentState = ActivityHookLiveAgentState | 'monitoring' | 'unverifiable'
 export type ActivityEvent = {
   id: string
   state: ActivityEventState
+  /** The state's own start time; unread and "Clear completed" compare against it. */
   timestamp: number
+  /** When Orca saw the switch into this state; orders the timeline and keys the event. */
+  observedAt: number
   worktree: Worktree
   repo: Repo | null
   entry: AgentStatusEntry
@@ -39,6 +40,7 @@ export type ActivityLiveAgentSnapshot = {
   entry: AgentStatusEntry
   tab: TerminalTab
   agentType: AgentType
+  migrationUnsupportedPtyId?: string
 }
 
 // Why: keyed per agent pane (tab + leaf id), not per workspace, so the list shows one row per agent; paneKey is `${tabId}:${leafId}`.
@@ -51,6 +53,8 @@ export type AgentPaneThread = {
   agentType: AgentType
   currentAgentState: ActivityLiveAgentState | null
   currentAgentEntry: AgentStatusEntry | null
+  /** The pane's own status row, live or not; its state outranks the newest event's. */
+  paneEntry?: AgentStatusEntry
   responsePreview: string
   latestTimestamp: number
   latestEvent: ActivityEvent | null

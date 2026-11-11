@@ -1,26 +1,17 @@
-import type { AgentSessionExecutionLocation } from '../../shared/agent-session-record'
+import type { AgentSessionExecutionLocation } from '../../shared/agent-session/lifecycle/agent-session-record'
+import type { StructuredAgentId } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
-import {
-  readClaudeManagedAccountGateSettings,
-  structuredClaudeMatchesActiveManagedAccount,
-  type ClaudeManagedAccountGateSettings
-} from './claude-structured-managed-account-support'
 
 export type StructuredAgentSessionCreateSupport = {
   supported: boolean
-  reason?: 'agent' | 'remote' | 'wsl'
+  reason?: 'agent' | 'remote' | 'wsl' | 'windows'
 }
 
-/**
- * The create-support verdict, kept out of the runtime class file because that file is `@ts-nocheck`
- * — a call site there is not typechecked, so an auth-identity decision written inline would compile
- * however wrong it was. The runtime hands over the two facts it owns and this decides.
- */
 export function resolveStructuredAgentSessionCreateSupport(input: {
-  agent: 'claude' | 'codex'
   location: AgentSessionExecutionLocation
   adapterSupportsCreate: boolean
-  getSettings: () => ClaudeManagedAccountGateSettings
+  /** The agent has no chat on this host's OS, so no install or update can help. */
+  unavailableOnPlatform?: boolean
 }): StructuredAgentSessionCreateSupport {
   if (!input.adapterSupportsCreate) {
     return {
@@ -30,19 +21,25 @@ export function resolveStructuredAgentSessionCreateSupport(input: {
           ? 'remote'
           : input.location.wslDistro
             ? 'wsl'
-            : 'agent'
+            : input.unavailableOnPlatform
+              ? 'windows'
+              : 'agent'
     }
   }
-  // Claude only: Codex resolves its account on a different path, so its answer is untouched here.
-  // `wsl` is the closest existing reason — the cause is a WSL-bound account rather than a WSL
-  // workspace — and no client reads the field, so it stays as-is.
-  if (
-    input.agent === 'claude' &&
-    !structuredClaudeMatchesActiveManagedAccount(
-      readClaudeManagedAccountGateSettings(input.getSettings)
-    )
-  ) {
-    return { supported: false, reason: 'wsl' }
-  }
   return { supported: true }
+}
+
+export type StructuredAgentSessionCreateSupportCheck = 'location' | 'installed-agent'
+
+/** Log the failing check once per terminal fallback; omit paths and environment values. */
+export function warnStructuredAgentSessionCreateUnsupported(
+  agent: StructuredAgentId,
+  support: StructuredAgentSessionCreateSupport,
+  check: StructuredAgentSessionCreateSupportCheck
+): void {
+  if (!support.supported) {
+    console.warn(
+      `[structured-create-support] ${agent} unsupported: ${check} check refused (reason ${support.reason ?? 'none'})`
+    )
+  }
 }

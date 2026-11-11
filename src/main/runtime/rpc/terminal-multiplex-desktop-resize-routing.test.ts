@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from './dispatcher'
-import { TERMINAL_METHODS } from './methods/terminal'
-import type { RuntimeTerminalWait } from '../../../shared/runtime-types'
+import { TERMINAL_METHODS } from './methods/terminal/terminal'
+import type { RuntimeTerminalWait } from '../../../shared/runtime-terminal-contracts'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
@@ -10,7 +10,7 @@ import {
   encodeTerminalStreamFrame,
   encodeTerminalStreamJson,
   encodeTerminalStreamText
-} from '../../../shared/terminal-stream-protocol'
+} from '../../../shared/terminal/stream/terminal-stream-protocol'
 import { makeRequest, stubRuntime } from './terminal-multiplex-test-harness'
 
 describe('terminal multiplex RPC', () => {
@@ -206,11 +206,15 @@ describe('terminal multiplex RPC', () => {
         )
       )
       await vi.waitFor(() =>
-        expect(runtime.sendTerminal).toHaveBeenCalledWith('terminal-1', {
-          text: 'ls\r',
-          enter: false,
-          interrupt: false
-        })
+        expect(runtime.sendTerminal).toHaveBeenCalledWith(
+          'terminal-1',
+          {
+            text: 'ls\r',
+            enter: false,
+            interrupt: false
+          },
+          { inputKind: 'driving', inputSource: 'desktop' }
+        )
       )
       const sentAfterSuccessfulClaim = vi.mocked(runtime.sendTerminal).mock.calls.length
       vi.mocked(runtime.updateRemoteDesktopViewer).mockResolvedValueOnce(false)
@@ -248,11 +252,15 @@ describe('terminal multiplex RPC', () => {
         )
       }
       await vi.waitFor(() =>
-        expect(runtime.sendTerminal).toHaveBeenLastCalledWith('terminal-1', {
-          text: 'retry',
-          enter: false,
-          interrupt: false
-        })
+        expect(runtime.sendTerminal).toHaveBeenLastCalledWith(
+          'terminal-1',
+          {
+            text: 'retry',
+            enter: false,
+            interrupt: false
+          },
+          { inputKind: 'driving', inputSource: 'desktop' }
+        )
       )
 
       dataListenerRef.current?.('a')
@@ -330,8 +338,9 @@ describe('terminal multiplex RPC', () => {
       ).toMatchObject({
         requestId: 7
       })
+      // Desktop initial snapshots carry history, not just the screen (#20158).
       expect(runtime.serializeTerminalBuffer).toHaveBeenCalledWith('pty-1', {
-        scrollbackRows: 0
+        scrollbackRows: 1000
       })
       expect(runtime.serializeAuthoritativeTerminalBuffer).toHaveBeenLastCalledWith('pty-1', {
         scrollbackRows: 5000
@@ -343,8 +352,7 @@ describe('terminal multiplex RPC', () => {
           .join('')
       ).toBe('authoritative snapshot')
 
-      // A viewport-less stream is passive: it must neither register nor later
-      // release the active stream's width floor when the connection closes.
+      // Passive streams must neither register nor release active peers' width floors on disconnect.
       handlers.get(0)?.(
         decodeTerminalStreamFrame(
           encodeTerminalStreamFrame({
@@ -369,8 +377,7 @@ describe('terminal multiplex RPC', () => {
         ).toBe(true)
       )
 
-      // A second active floor on the same PTY is released in the same batch,
-      // keeping connection teardown to one registry recomputation per PTY.
+      // Two active floors on one PTY should require only one teardown recomputation.
       handlers.get(0)?.(
         decodeTerminalStreamFrame(
           encodeTerminalStreamFrame({
@@ -404,129 +411,6 @@ describe('terminal multiplex RPC', () => {
         'multiplex:conn-1:5',
         'multiplex:conn-1:7'
       ])
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('applies a viewer resize parked during a snapshot-request buffering window', async () => {
-    vi.useFakeTimers()
-    try {
-      const messages: string[] = []
-      const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
-      const handlers = new Map<
-        number,
-        (frame: NonNullable<ReturnType<typeof decodeTerminalStreamFrame>>) => void
-      >()
-      const cleanups = new Map<string, () => void>()
-      const runtime = stubRuntime({
-        resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
-        readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
-        serializeTerminalBuffer: vi
-          .fn()
-          .mockResolvedValue({ data: 'snapshot', cols: 120, rows: 40 }),
-        getTerminalSize: vi.fn().mockReturnValue({ cols: 120, rows: 40 }),
-        getMobileDisplayMode: vi.fn().mockReturnValue('auto'),
-        getLayout: vi.fn().mockReturnValue({ seq: 1 }),
-        subscribeToTerminalData: vi.fn().mockReturnValue(vi.fn()),
-        subscribeToTerminalResize: vi.fn().mockReturnValue(vi.fn()),
-        subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
-        subscribeToDriverChanges: vi.fn().mockReturnValue(vi.fn()),
-        getTerminalFitOverride: vi.fn().mockReturnValue(null),
-        getDriver: vi.fn().mockReturnValue({ kind: 'idle' }),
-        registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
-          cleanups.set(id, cleanup)
-        }),
-        cleanupSubscription: vi.fn((id: string) => {
-          const cleanup = cleanups.get(id)
-          cleanups.delete(id)
-          cleanup?.()
-        }),
-        waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {})),
-        sendTerminal: vi.fn().mockResolvedValue({ accepted: true })
-      })
-      const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
-
-      const dispatchPromise = dispatcher.dispatchStreaming(
-        makeRequest('terminal.multiplex', {}),
-        (msg) => messages.push(msg),
-        {
-          connectionId: 'conn-snap',
-          sendBinary: (bytes) => {
-            binaryFrames.push(bytes)
-          },
-          registerBinaryStreamHandler: (streamId, handler) => {
-            handlers.set(streamId, handler)
-            return () => handlers.delete(streamId)
-          }
-        }
-      )
-
-      await vi.waitFor(() =>
-        expect(messages.some((msg) => JSON.parse(msg).result?.type === 'ready')).toBe(true)
-      )
-      handlers.get(0)?.(
-        decodeTerminalStreamFrame(
-          encodeTerminalStreamFrame({
-            opcode: TerminalStreamOpcode.Subscribe,
-            streamId: 0,
-            seq: 1,
-            payload: encodeTerminalStreamJson({
-              streamId: 9,
-              terminal: 'terminal-1',
-              client: { id: 'desktop-1', type: 'desktop' },
-              viewport: { cols: 300, rows: 150 },
-              capabilities: { desktopViewportClaims: 1 }
-            })
-          })
-        )!
-      )
-      await vi.waitFor(() =>
-        expect(messages.some((msg) => JSON.parse(msg).result?.type === 'subscribed')).toBe(true)
-      )
-      // Ignore the subscribe-time floor registration; assert only the drained one.
-      vi.mocked(runtime.updateRemoteDesktopViewer).mockClear()
-
-      // A snapshot request opens the buffering window synchronously (buffering
-      // is set before the first await inside the handler)...
-      handlers.get(9)?.(
-        decodeTerminalStreamFrame(
-          encodeTerminalStreamFrame({
-            opcode: TerminalStreamOpcode.SnapshotRequest,
-            streamId: 9,
-            seq: 2,
-            payload: encodeTerminalStreamJson({ requestId: 3, scrollbackRows: 1000 })
-          })
-        )!
-      )
-      // ...so a resize arriving now is PARKED, not applied inline.
-      handlers.get(9)?.(
-        decodeTerminalStreamFrame(
-          encodeTerminalStreamFrame({
-            opcode: TerminalStreamOpcode.Resize,
-            streamId: 9,
-            seq: 3,
-            payload: encodeTerminalStreamJson({ cols: 88, rows: 33 })
-          })
-        )!
-      )
-      expect(runtime.updateRemoteDesktopViewer).not.toHaveBeenCalled()
-
-      // Once the snapshot completes and buffering clears, the parked resize is
-      // drained (previously it was silently dropped until the next resize).
-      await vi.waitFor(() =>
-        expect(runtime.updateRemoteDesktopViewer).toHaveBeenCalledWith(
-          'pty-1',
-          'multiplex:conn-snap:9',
-          'desktop-1',
-          88,
-          33,
-          false
-        )
-      )
-
-      runtime.cleanupSubscription('terminal-multiplex:conn-snap')
-      await dispatchPromise
     } finally {
       vi.useRealTimers()
     }

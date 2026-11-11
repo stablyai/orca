@@ -1,17 +1,10 @@
 // @vitest-environment happy-dom
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { XTERM_HTML } from './terminal-webview-html'
-
-function iifeSource(): string {
-  const start = XTERM_HTML.indexOf('(function() {')
-  const end = XTERM_HTML.lastIndexOf('})();')
-  return XTERM_HTML.slice(start, end + '})();'.length)
-}
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
+import { TERMINAL_DOCUMENT_SCRIPT } from './terminal-webview-document-script.generated'
+import { TERMINAL_DOCUMENT_MARKUP } from './terminal-webview-html'
 
 function bodyMarkup(): string {
-  const start = XTERM_HTML.indexOf('<body>') + '<body>'.length
-  const end = XTERM_HTML.indexOf('<script>', start)
-  return XTERM_HTML.slice(start, end)
+  return TERMINAL_DOCUMENT_MARKUP
 }
 
 type BufferState = {
@@ -104,7 +97,7 @@ function dispatchWheel(deltaY: number, init: WheelEventInit = {}): WheelEvent {
     ...init
   })
   if (init.ctrlKey) {
-    // Why: happy-dom drops modifier flags from the WheelEvent init dict.
+    // Happy DOM drops wheel modifier initialization; set flags explicitly.
     Object.defineProperty(event, 'ctrlKey', { value: true })
   }
   surface.dispatchEvent(event)
@@ -122,20 +115,20 @@ function terminalInputBytes(postMessage: ReturnType<typeof vi.fn>): string {
 describe('terminal WebView external pointer wheel scrolling', () => {
   let animationFrames: Array<() => void>
   let buffer: BufferState
-  let postMessage: ReturnType<typeof vi.fn>
+  let postMessage: Mock<(data: string) => void>
   let registeredWindowListeners: RegisteredWindowListener[]
-  let scrollLines: ReturnType<typeof vi.fn>
+  let scrollLines: Mock<(lines: number) => void>
   let terminals: TerminalStub[]
 
   function boot(): void {
     document.body.innerHTML = bodyMarkup()
-    new Function(iifeSource())()
+    new Function(TERMINAL_DOCUMENT_SCRIPT)()
     window.dispatchEvent(
       new MessageEvent('message', {
         data: JSON.stringify({ type: 'init', cols: 40, rows: 24, initialData: '' })
       })
     )
-    // Why: init commits the replacement surface on the next animation frame.
+    // Wait for init’s next-frame surface commit.
     while (animationFrames.length > 0) {
       animationFrames.shift()?.()
     }
@@ -151,7 +144,7 @@ describe('terminal WebView external pointer wheel scrolling', () => {
     animationFrames = []
     buffer = { baseY: 0, type: 'normal', viewportY: 0 }
     registeredWindowListeners = []
-    scrollLines = vi.fn()
+    scrollLines = vi.fn<(lines: number) => void>()
     terminals = []
     const addWindowEventListener = window.addEventListener.bind(window)
     vi.spyOn(window, 'addEventListener').mockImplementation(((
@@ -169,7 +162,7 @@ describe('terminal WebView external pointer wheel scrolling', () => {
     vi.stubGlobal('cancelAnimationFrame', () => {})
     Object.defineProperty(window, 'innerWidth', { value: 381, configurable: true })
     Object.defineProperty(window, 'innerHeight', { value: 612, configurable: true })
-    postMessage = vi.fn()
+    postMessage = vi.fn<(data: string) => void>()
     const webWindow = window as unknown as {
       Terminal: new () => TerminalStub
       ReactNativeWebView: { postMessage: (data: string) => void }
@@ -197,8 +190,7 @@ describe('terminal WebView external pointer wheel scrolling', () => {
 
     dispatchWheel(3 * CELL_HEIGHT)
 
-    // Why: alt-screen TUIs (Claude Code, vim) have no scrollback, so an external
-    // mouse/trackpad wheel must reach the PTY as cursor keys the way touch does.
+    // Alternate-screen TUIs have no scrollback; wheels must reach the PTY as input, matching touch.
     expect(terminalInputBytes(postMessage)).toBe(ESC_ARROW_DOWN.repeat(3))
   })
 
@@ -224,11 +216,14 @@ describe('terminal WebView external pointer wheel scrolling', () => {
       throw new Error('terminal missing')
     }
     terminal.modes.mouseTrackingMode = 'any'
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        data: JSON.stringify({ type: 'write', data: `${ESC}[?1006l` })
+      })
+    )
 
     dispatchWheel(CELL_HEIGHT)
 
-    // Default (non-SGR) encoding: wheel-down button 65 + 32 = 97 ('a'), then two
-    // printable cell bytes (their value depends on the fit scale, not on routing).
     const bytes = terminalInputBytes(postMessage)
     expect(bytes.slice(0, 4)).toBe(`${ESC}[Ma`)
     expect(bytes).toHaveLength(6)

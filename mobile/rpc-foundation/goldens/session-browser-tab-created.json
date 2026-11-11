@@ -1,0 +1,93 @@
+{
+  "goldenFormatVersion": 6,
+  "operation": "session.content-create",
+  "family": "session.browser-tab-create",
+  "namedDeltas": [],
+  "values": {
+    "4a842fa3c9c1": {
+      "name": "browser.tabCreate#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.tabCreate"
+        },
+        {
+          "name": "params",
+          "value": {
+            "activate": true,
+            "url": "https://example.com/",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "browserPageId": "page-1"
+          }
+        }
+      }
+    },
+    "6248a3dd0710": {
+      "name": "fetch-session-tabs",
+      "ordinal": 3,
+      "value": {}
+    },
+    "84e5ca07cb7a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": true
+    },
+    "d9a882adde26": {
+      "name": "browser.tabCreate#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"browser.tabCreate\",\"params\":{\"worktree\":\"id:workspace-1\",\"url\":\"https://example.com/\",\"activate\":true}}"
+    },
+    "dfb723df461a": {
+      "name": "fetch-pending-browser-tabs",
+      "ordinal": 5,
+      "value": {}
+    },
+    "eda7d625e4b6": {
+      "name": "fetch-pending-browser-tabs",
+      "ordinal": 4,
+      "value": {}
+    },
+    "f1e12d7f04c7": {
+      "createError": "",
+      "creatingBrowser": false,
+      "creatingMarkdown": false,
+      "pendingBrowserFocusPageId": "page-1"
+    }
+  },
+  "recording": {
+    "scenario": "session-browser-tab-created",
+    "checkpoints": [
+      {
+        "id": "created",
+        "observation": {
+          "sender": ["4a842fa3c9c1"],
+          "payloads": ["d9a882adde26"],
+          "settlements": {
+            "browser": "84e5ca07cb7a"
+          },
+          "state": "f1e12d7f04c7",
+          "effects": ["6248a3dd0710", "eda7d625e4b6", "dfb723df461a"]
+        }
+      }
+    ]
+  }
+}

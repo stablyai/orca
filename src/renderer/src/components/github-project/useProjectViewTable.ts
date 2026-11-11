@@ -1,10 +1,11 @@
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useMountedRef } from '@/hooks/useMountedRef'
+import { useGitHubTaskProjectTable } from '@/hooks/useGitHubTaskItems'
 import { translate } from '@/i18n/i18n'
-import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
-import { useAppStore } from '@/store'
-import { projectViewCacheKey } from '@/store/github/cache-identity'
+import { useAppStore } from '@/store/index'
+import { projectViewCacheKey, projectViewSourceScope } from '@/store/github/cache/cache-identity'
 import type {
   GitHubProjectSettings,
   GitHubProjectTable,
@@ -12,14 +13,14 @@ import type {
 } from '../../../../shared/github/project-types'
 import type {
   GetProjectViewTableResult,
-  GitHubProjectViewError,
-  ListProjectViewsResult
+  GitHubProjectViewError
 } from '../../../../shared/github/project-result-types'
 import {
   githubProjectHost,
   githubProjectIdentityKey
 } from '../../../../shared/github/project-identity'
 import type { ResolvedProjectSelection } from './project-picker-selection'
+import { listProjectViewsForRuntime } from './project-picker-runtime'
 import { filterProjectTableRowsBySelectedRepos } from './project-row-filtering'
 import {
   getNextVisibleProjectTableCache,
@@ -27,23 +28,12 @@ import {
   getVisibleProjectTable,
   type CachedVisibleProjectTable
 } from './project-visible-table-cache'
-import { useRepoSlugIndex } from '@/lib/repo-slug-index'
+import { useRepoSlugIndex } from '@/lib/workspace/catalog/repo-slug-index'
 
-type Settings = Parameters<typeof getActiveRuntimeTarget>[0]
-
-async function listProjectViewsForRuntime(
-  settings: Settings,
-  args: { owner: string; ownerType: 'organization' | 'user'; projectNumber: number; host?: string }
-): Promise<ListProjectViewsResult> {
-  const target = getActiveRuntimeTarget(settings)
-  return target.kind === 'environment'
-    ? callRuntimeRpc<ListProjectViewsResult>(target, 'github.project.listViews', args, {
-        timeoutMs: 30_000
-      })
-    : window.api.gh.listProjectViews(args)
-}
-
-export function useProjectViewTable(selectedRepoIds: ReadonlySet<string>) {
+export function useProjectViewTable(
+  selectedRepoIds: ReadonlySet<string>,
+  sourceTarget: RuntimeClientTarget
+) {
   const settings = useAppStore((state) => state.settings)
   const projectViewCache = useAppStore((state) => state.projectViewCache)
   const fetchProjectViewTable = useAppStore((state) => state.fetchProjectViewTable)
@@ -51,8 +41,7 @@ export function useProjectViewTable(selectedRepoIds: ReadonlySet<string>) {
   const lastViewByProject = settings?.githubProjects?.lastViewByProject ?? {}
   const { lookupSlugMatches, ready: slugIndexReady } = useRepoSlugIndex()
   const mountedRef = useMountedRef()
-  const target = getActiveRuntimeTarget(settings)
-  const sourceScope = target.kind === 'environment' ? `runtime:${target.environmentId}` : 'local'
+  const sourceScope = projectViewSourceScope(sourceTarget)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<{ error: GitHubProjectViewError; totalCount?: number } | null>(
     null
@@ -71,6 +60,7 @@ export function useProjectViewTable(selectedRepoIds: ReadonlySet<string>) {
       setError(null)
       try {
         const result: GetProjectViewTableResult = await fetchProjectViewTable(
+          sourceTarget,
           {
             owner: selection.owner,
             ownerType: selection.ownerType,
@@ -93,7 +83,7 @@ export function useProjectViewTable(selectedRepoIds: ReadonlySet<string>) {
         }
       }
     },
-    [fetchProjectViewTable, mountedRef]
+    [fetchProjectViewTable, mountedRef, sourceTarget]
   )
 
   const projectIdentity = activeProject ? githubProjectIdentityKey(activeProject) : null
@@ -115,7 +105,10 @@ export function useProjectViewTable(selectedRepoIds: ReadonlySet<string>) {
           activeProject.host
         )
       : null
-  const table = currentCacheKey ? (projectViewCache[currentCacheKey]?.data ?? null) : null
+  const table = useGitHubTaskProjectTable(
+    currentCacheKey ? (projectViewCache[currentCacheKey]?.data ?? null) : null,
+    sourceTarget
+  )
 
   useEffect(() => {
     if (!activeProject || !viewId || !currentCacheKey || projectViewCache[currentCacheKey]?.data) {
@@ -143,7 +136,8 @@ export function useProjectViewTable(selectedRepoIds: ReadonlySet<string>) {
       return
     }
     let cancelled = false
-    void listProjectViewsForRuntime(settings, {
+    // No wake: this also runs on a restored page with no click, so a stopped distro stays stopped.
+    void listProjectViewsForRuntime(sourceTarget, {
       owner: activeProject.owner,
       ownerType: activeProject.ownerType,
       projectNumber: activeProject.number,
@@ -164,7 +158,7 @@ export function useProjectViewTable(selectedRepoIds: ReadonlySet<string>) {
     return () => {
       cancelled = true
     }
-  }, [activeProject, settings, sourceScope, viewListByProject])
+  }, [activeProject, sourceTarget, sourceScope, viewListByProject])
 
   const selectedRepoFingerprint = useMemo(
     () => getSelectedRepoFingerprint(selectedRepoIds),
@@ -247,7 +241,7 @@ export function useProjectViewTable(selectedRepoIds: ReadonlySet<string>) {
   )
 
   return {
-    settings,
+    sourceTarget,
     activeProject,
     sourceScope,
     viewId,

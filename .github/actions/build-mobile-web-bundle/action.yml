@@ -1,0 +1,11 @@
+name: Build the mobile web bundle
+description: Builds out/mobile-web, the page phones load, which every orcad build ships and refuses to build without.
+
+runs:
+  using: composite
+  steps:
+    # Why: the bundle build resolves React Native and Expo from mobile/node_modules.
+    - uses: ./.github/actions/install-mobile-dependencies
+    - name: Build the mobile web bundle
+      shell: bash
+      run: pnpm run build:mobile-web

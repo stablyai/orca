@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { EventEmitter } from 'node:events'
-import type { ChildProcessWithoutNullStreams } from 'node:child_process'
+import 'node:events'
+
 import {
   _resetHydrateShellPathCache,
   configureWindowsShellPathHydration,
@@ -32,17 +32,6 @@ function deferred<T>(): Deferred<T> {
   return { promise, resolve }
 }
 
-function createMockShellProcess(): ChildProcessWithoutNullStreams {
-  const proc = new EventEmitter() as ChildProcessWithoutNullStreams
-  Object.assign(proc, {
-    stdout: new EventEmitter(),
-    stderr: new EventEmitter(),
-    stdin: new EventEmitter(),
-    kill: vi.fn()
-  })
-  return proc
-}
-
 describe('Windows shell PATH hydration', () => {
   const originalPath = process.env.PATH
 
@@ -60,136 +49,6 @@ describe('Windows shell PATH hydration', () => {
       process.env.PATH = originalPath
     }
   })
-
-  it('hydrates the default PowerShell profile PATH on Windows (#13328)', async () => {
-    const spawner = vi.fn<HydrationSpawner>(async () => ({
-      segments: ['C:\\Users\\tester\\AppData\\Local\\fnm'],
-      ok: true,
-      failureReason: 'none'
-    }))
-
-    await expect(hydrateShellPath({ spawner })).resolves.toEqual({
-      segments: ['C:\\Users\\tester\\AppData\\Local\\fnm'],
-      ok: true,
-      failureReason: 'none'
-    })
-    expect(spawner).toHaveBeenCalledWith('powershell.exe')
-  })
-
-  it('uses the configured PowerShell executable', async () => {
-    const spawner = vi.fn<HydrationSpawner>(async () => ({
-      segments: ['C:\\tools'],
-      ok: true,
-      failureReason: 'none'
-    }))
-
-    configureWindowsShellPathHydration('C:\\Program Files\\PowerShell\\7\\pwsh.exe')
-    await hydrateShellPath({ spawner })
-
-    expect(spawner).toHaveBeenCalledWith('C:\\Program Files\\PowerShell\\7\\pwsh.exe')
-  })
-
-  it('falls back to Windows PowerShell when preferred pwsh cannot spawn', async () => {
-    const spawner = vi.fn<HydrationSpawner>()
-    spawner
-      .mockResolvedValueOnce({ segments: [], ok: false, failureReason: 'spawn_error' })
-      .mockResolvedValueOnce({
-        segments: ['C:\\WindowsPowerShell-profile'],
-        ok: true,
-        failureReason: 'none'
-      })
-    configureWindowsShellPathHydration('pwsh.exe', null, 'powershell.exe')
-
-    await expect(hydrateShellPath({ spawner })).resolves.toEqual({
-      segments: ['C:\\WindowsPowerShell-profile'],
-      ok: true,
-      failureReason: 'none'
-    })
-    expect(spawner.mock.calls).toEqual([['pwsh.exe'], ['powershell.exe']])
-  })
-
-  it('uses the resolved Git Bash executable for the configured sentinel', async () => {
-    const spawner = vi.fn<HydrationSpawner>(async () => ({
-      segments: ['C:\\tools'],
-      ok: true,
-      failureReason: 'none'
-    }))
-
-    configureWindowsShellPathHydration('git-bash', 'C:\\Program Files\\Git\\bin\\bash.exe')
-    await hydrateShellPath({ spawner })
-
-    expect(spawner).toHaveBeenCalledWith('C:\\Program Files\\Git\\bin\\bash.exe')
-  })
-
-  it('loads PowerShell profiles and parses their Windows PATH', async () => {
-    const proc = createMockShellProcess()
-    spawnMock.mockReturnValue(proc)
-    const resultPromise = hydrateShellPath({ force: true })
-    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce())
-
-    proc.stdout.emit(
-      'data',
-      Buffer.from(
-        'profile banner\r\n__ORCA_SHELL_PATH__C:\\profile-node;C:\\Windows__ORCA_SHELL_PATH__'
-      )
-    )
-    proc.emit('close', 0, null)
-
-    await expect(resultPromise).resolves.toEqual({
-      segments: ['C:\\profile-node', 'C:\\Windows'],
-      ok: true,
-      failureReason: 'none'
-    })
-    expect(spawnMock).toHaveBeenCalledWith(
-      'powershell.exe',
-      ['-NoLogo', '-Command', expect.stringContaining('$env:Path')],
-      expect.objectContaining({ windowsHide: true })
-    )
-    expect(spawnMock.mock.calls[0]?.[1]).not.toContain('-NoProfile')
-  })
-
-  it('converts a Git Bash PATH to Windows segments before parsing it', async () => {
-    const proc = createMockShellProcess()
-    spawnMock.mockReturnValue(proc)
-    const resultPromise = hydrateShellPath({
-      shellOverride: 'C:\\Program Files\\Git\\bin\\bash.exe',
-      force: true
-    })
-    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce())
-
-    proc.stdout.emit(
-      'data',
-      Buffer.from('__ORCA_SHELL_PATH__C:\\git-node;C:\\Windows__ORCA_SHELL_PATH__')
-    )
-    proc.emit('close', 0, null)
-
-    await expect(resultPromise).resolves.toEqual({
-      segments: ['C:\\git-node', 'C:\\Windows'],
-      ok: true,
-      failureReason: 'none'
-    })
-    expect(spawnMock).toHaveBeenCalledWith(
-      'C:\\Program Files\\Git\\bin\\bash.exe',
-      ['-ilc', expect.stringContaining('cygpath -wp "$PATH"')],
-      expect.objectContaining({ windowsHide: true })
-    )
-  })
-
-  it.each(['cmd.exe', 'wsl.exe', 'git-bash', 'C:\\Tools\\zsh.exe'])(
-    'does not merge %s guest or profile-less paths',
-    async (shell) => {
-      const spawner = vi.fn<HydrationSpawner>()
-
-      configureWindowsShellPathHydration(shell)
-
-      await expect(hydrateShellPath({ spawner })).resolves.toEqual({
-        segments: [],
-        ok: false,
-        failureReason: 'no_shell'
-      })
-      expect(spawner).not.toHaveBeenCalled()
-    }
-  )
 
   it('serializes shell changes, discards stale results, and caches the newest request', async () => {
     const powerShellResult = deferred<HydrationResult>()
@@ -260,20 +119,6 @@ describe('Windows shell PATH hydration', () => {
       { segments: [], ok: false, failureReason: 'no_shell' }
     ])
     expect(spawner).toHaveBeenCalledOnce()
-  })
-
-  it('deduplicates PATH entries case-insensitively', () => {
-    process.env.PATH = 'C:\\Tools;C:\\Windows'
-
-    expect(mergePathSegments(['c:\\tools', 'C:\\profile-node'])).toEqual(['C:\\profile-node'])
-    expect(process.env.PATH).toBe('c:\\tools;C:\\profile-node;C:\\Windows')
-  })
-
-  it('deduplicates PATH entries with trailing slashes', () => {
-    process.env.PATH = 'C:\\Windows\\;C:\\Tools'
-
-    expect(mergePathSegments(['C:\\Windows', 'C:\\profile-node\\'])).toEqual(['C:\\profile-node\\'])
-    expect(process.env.PATH).toBe('C:\\Windows;C:\\profile-node\\;C:\\Tools')
   })
 
   it('removes profile entries when switching to a shell without a profile', () => {

@@ -2,7 +2,7 @@ import React, { useId } from 'react'
 import { LoaderCircle, Pencil } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { GitHubAssignableUser } from '../../../../../shared/github/pull-request-types'
 import { ReviewerPickerRow } from './picker-row'
 
@@ -47,6 +47,7 @@ export function ReviewerPicker({
   onEnter: () => void
   onRequestReviewer: (reviewer: GitHubAssignableUser) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const reviewerListId = useId()
   const reviewerRowId = (index: number): string => `${reviewerListId}-${index}`
   const activeReviewerRow = actionableReviewerRows[activeReviewerIndex] ?? null
@@ -56,7 +57,7 @@ export function ReviewerPicker({
         <button
           type="button"
           disabled={submitting || !canRequestReview}
-          aria-label={translate('auto.components.PullRequestPage.a04c137bb7', 'Reviewer')}
+          aria-label={t('auto.components.PullRequestPage.a04c137bb7', 'Reviewer')}
           className="rounded p-0.5 text-muted-foreground transition hover:bg-accent hover:text-foreground disabled:opacity-50"
         >
           {submitting ? (
@@ -81,11 +82,8 @@ export function ReviewerPicker({
             value={reviewerInput}
             onChange={(event) => onInputChange(event.target.value)}
             disabled={submitting || !canRequestReview}
-            placeholder={translate(
-              'auto.components.PullRequestPage.3bde131f49',
-              'Type or choose a user'
-            )}
-            aria-label={translate('auto.components.PullRequestPage.a04c137bb7', 'Reviewer')}
+            placeholder={t('auto.components.PullRequestPage.3bde131f49', 'Type or choose a user')}
+            aria-label={t('auto.components.PullRequestPage.a04c137bb7', 'Reviewer')}
             role="combobox"
             aria-expanded={open}
             aria-haspopup="listbox"
@@ -123,14 +121,14 @@ export function ReviewerPicker({
         <div id={reviewerListId} className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek">
           {reviewerMetadataLoading ? (
             <div className="px-3 py-2 text-[13px] text-muted-foreground">
-              {translate('auto.components.PullRequestPage.57750f4a8c', 'Loading...')}
+              {t('auto.components.PullRequestPage.57750f4a8c', 'Loading...')}
             </div>
           ) : filteredReviewerCandidates.length > 0 ? (
             <>
               {suggestedReviewerRows.length > 0 ? (
                 <>
                   <div className="border-b border-border/70 bg-muted/50 px-3 py-1.5 text-[12px] font-semibold text-foreground">
-                    {translate('auto.components.PullRequestPage.828f045847', 'Suggestions')}
+                    {t('auto.components.PullRequestPage.828f045847', 'Suggestions')}
                   </div>
                   {suggestedReviewerRows.map((reviewer, index) => (
                     <ReviewerPickerRow
@@ -149,7 +147,7 @@ export function ReviewerPicker({
                 </>
               ) : null}
               <div className="border-b border-border/70 bg-muted/50 px-3 py-1.5 text-[12px] font-semibold text-foreground">
-                {translate('auto.components.PullRequestPage.2760fa29a4', 'Everyone else')}
+                {t('auto.components.PullRequestPage.2760fa29a4', 'Everyone else')}
               </div>
               {everyoneElseReviewerRows.length > 0 ? (
                 everyoneElseReviewerRows.map((reviewer, index) => (
@@ -168,10 +166,7 @@ export function ReviewerPicker({
                 ))
               ) : (
                 <div className="px-3 py-2 text-[13px] text-muted-foreground">
-                  {translate(
-                    'auto.components.PullRequestPage.5ad00c7a0e',
-                    'No matching reviewers.'
-                  )}
+                  {t('auto.components.PullRequestPage.5ad00c7a0e', 'No matching reviewers.')}
                 </div>
               )}
             </>
@@ -179,11 +174,8 @@ export function ReviewerPicker({
             <div className="px-3 py-2 text-[13px] text-muted-foreground">
               {reviewerMetadataError ??
                 (hasReviewerMetadata
-                  ? translate(
-                      'auto.components.PullRequestPage.5ad00c7a0e',
-                      'No matching reviewers.'
-                    )
-                  : translate(
+                  ? t('auto.components.PullRequestPage.5ad00c7a0e', 'No matching reviewers.')
+                  : t(
                       'auto.components.PullRequestPage.56ec6eafb7',
                       'Open the PR details to view current reviewers.'
                     ))}

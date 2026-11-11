@@ -3,7 +3,7 @@ import type { Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { waitForSessionReady } from './helpers/store'
 import { getLargeDiffRenderLimit } from '../../src/shared/large-diff-render-limit'
-import { MAX_AUTOMATIC_DIFF_CHANGED_LINES } from '../../src/renderer/src/components/editor/combined-diff-on-demand-load'
+import { MAX_AUTOMATIC_DIFF_CHANGED_LINES } from '../../src/renderer/src/components/editor/combined-diff/load-sections/combined-diff-on-demand-load'
 import {
   buildLargeTypeScriptFile,
   createIsolatedLargeDiffRepo,
@@ -25,8 +25,7 @@ async function addAndActivateRepo(orcaPage: Page, repoPath: string): Promise<str
     return addedRepo.id
   }, repoPath)
 
-  // Why: fetchWorktrees() resolves before Zustand always reflects the async
-  // worktree scan, so poll the same public store path real repo setup uses.
+  // Poll the public store because fetchWorktrees may resolve before async scan state is visible.
   await expect
     .poll(
       () =>
@@ -240,9 +239,11 @@ test.describe('Large diff freeze repro', () => {
             throw new Error(`staged locale fixture missing entries: ${missing.join(', ')}`)
           }
 
-          // Why: reproduce stale snapshot behavior by opening combined diffs
-          // as "unstaged" using entries captured from the staged status snapshot.
-          const staleUnstagedEntries = entries.map((entry) => ({ ...entry, area: 'unstaged' }))
+          // Open staged-snapshot entries as unstaged to reproduce the stale combined diff.
+          const staleUnstagedEntries = entries.map((entry) => ({
+            ...entry,
+            area: 'unstaged' as const
+          }))
           const intervalMs = 50
           const samples: number[] = []
           let last = performance.now()

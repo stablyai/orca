@@ -2,6 +2,6 @@ export function shouldAutoCreateInitialTerminal(
   renderableTabCount: number,
   hasPersistedTerminalState = false
 ): boolean {
-  // Why: a missing row means never initialized; an explicit empty row records that the user closed the last terminal.
+  // Desktop treats empty legacy/non-close rows as uninitialized via isTerminalWorkspaceEmptiedOnPurpose.
   return renderableTabCount === 0 && !hasPersistedTerminalState
 }

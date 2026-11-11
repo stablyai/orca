@@ -1,0 +1,149 @@
+{
+  "provenance": {
+    "capturedAt": "2026-10-24T08:14:01Z",
+    "environment": "M4Air, isolated qa-with-lb protocol capture",
+    "scope": "Real representative command rejections, not startup-auth captures or Pi/ACP app lifecycle runs.",
+    "stdinEnd": "Input EOF after the error response; each CLI exited 0 (qa-report.md protocol section).",
+    "sanitization": "Only failing request, exact error response, invocation/version and exit retained. Working directories and spawn identities omitted; ACP request cwd replaced with <capture-workspace>.",
+    "source": "PR #33045 QA transfer, evidence/protocol-sanitized",
+    "provenanceSha256": "fe1a2e3ce30ec2ce980833c628fb392958310461d53cce83f375b22ccaa97da8"
+  },
+  "claude": {
+    "sourceFile": "claude-control.jsonl",
+    "sourceSha256": "db149878a78961e5ac76197287eac33e22b30780c9ee88075b548936624cff38",
+    "command": [
+      "/Users/m4air/.local/bin/claude",
+      "--print",
+      "--input-format",
+      "stream-json",
+      "--output-format",
+      "stream-json",
+      "--verbose"
+    ],
+    "version": "2.1.310 (Claude Code)",
+    "request": {
+      "type": "control_request",
+      "request_id": "qa-error",
+      "request": {
+        "subtype": "set_permission_mode",
+        "mode": "qa-invalid-33045"
+      }
+    },
+    "response": {
+      "type": "control_response",
+      "response": {
+        "subtype": "error",
+        "request_id": "qa-error",
+        "error": "Cannot set permission mode: must be one of acceptEdits, auto, bypassPermissions, default, dontAsk, plan",
+        "error_code": "invalid_mode"
+      }
+    },
+    "exit": {
+      "code": 0,
+      "signal": null,
+      "elapsedMs": 528,
+      "receivedFinal": true
+    }
+  },
+  "codex": {
+    "sourceFile": "codex-rpc.jsonl",
+    "sourceSha256": "0f2dd5ac418bc63e1640df6aadd05bf9b1eed40deaecd71626a5ef8aa85a3531",
+    "command": ["/opt/homebrew/bin/codex", "app-server"],
+    "version": "codex-cli 0.163.0",
+    "request": {
+      "id": 2,
+      "method": "thread/read",
+      "params": {
+        "threadId": "qa-missing-33045",
+        "includeTurns": true
+      }
+    },
+    "response": {
+      "error": {
+        "code": -32600,
+        "message": "invalid thread id: invalid character: expected an optional prefix of `urn:uuid:` followed by [0-9a-fA-F-], found `q` at 1"
+      },
+      "id": 2
+    },
+    "exit": {
+      "code": 0,
+      "signal": null,
+      "elapsedMs": 90,
+      "receivedFinal": true
+    }
+  },
+  "pi": {
+    "sourceFile": "pi-jsonl.jsonl",
+    "sourceSha256": "7a60aa4dda389cf68c2421d4ec3dfc7d5cb68daffc493a8a4fae24ce57b93b46",
+    "command": [
+      "/opt/homebrew/bin/pi",
+      "--mode",
+      "rpc",
+      "--no-session",
+      "--provider",
+      "openai-codex"
+    ],
+    "version": "0.73.1",
+    "request": {
+      "id": "qa-pi-error",
+      "type": "set_model",
+      "provider": "openai",
+      "modelId": "qa-nonexistent-33045"
+    },
+    "response": {
+      "id": "qa-pi-error",
+      "type": "response",
+      "command": "set_model",
+      "success": false,
+      "error": "Model not found: openai/qa-nonexistent-33045"
+    },
+    "exit": {
+      "code": 0,
+      "signal": null,
+      "elapsedMs": 1009,
+      "receivedFinal": true
+    },
+    "versionEvidence": {
+      "sourceFile": "pi-version-fixed-receipt.json",
+      "sourceSha256": "b8c747b9dccdfe9fd4738d359bb2d159159c49b78ff62e6734810586aaa684e9",
+      "captureCommand": ["qa-with-lb", "--", "node", "-e", "spawnSync pi --version"],
+      "command": ["/opt/homebrew/bin/pi", "--version"],
+      "stdout": "",
+      "stderr": "0.73.1\n",
+      "exit": 0
+    }
+  },
+  "acp": {
+    "sourceFile": "acp-rpc.jsonl",
+    "sourceSha256": "c026e934ce19ac919b42f75f6b9f350022a00dbd5a70e8b34d1e3a490df52b24",
+    "command": ["/opt/homebrew/bin/opencode", "acp"],
+    "version": "opencode v2.0.21",
+    "request": {
+      "jsonrpc": "2.0",
+      "id": 2,
+      "method": "session/load",
+      "params": {
+        "sessionId": "qa-missing-33045",
+        "cwd": "<capture-workspace>",
+        "mcpServers": []
+      }
+    },
+    "response": {
+      "jsonrpc": "2.0",
+      "id": 2,
+      "error": {
+        "code": -32603,
+        "message": "Internal error: Internal service failure",
+        "data": {
+          "errorName": "InvalidRequestError"
+        }
+      }
+    },
+    "exit": {
+      "code": 0,
+      "signal": null,
+      "elapsedMs": 236,
+      "receivedFinal": true
+    }
+  }
+}

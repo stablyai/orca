@@ -1,6 +1,7 @@
-import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
+import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
+import { linearLabelCountLabel } from './linear-attribute-count-labels'
 import { ChevronDown, LoaderCircle, Check, UserRound, FolderKanban, Tag } from 'lucide-react'
 import { LinearPriorityIcon } from '@/components/linear-priority-icon'
 export function TaskPageLinearIssueAttributes({
@@ -8,6 +9,7 @@ export function TaskPageLinearIssueAttributes({
 }: {
   model: TaskPageComposerActionsModel
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const {
     newLinearIssueSubmitting,
     newLinearIssueStateId,
@@ -28,7 +30,6 @@ export function TaskPageLinearIssueAttributes({
   } = model
   return (
     <div className="flex flex-wrap items-center gap-2 border-t border-border/40 pt-4 mt-2">
-      {/* Status Selector */}
       <Popover>
         <PopoverTrigger asChild>
           <button
@@ -47,8 +48,7 @@ export function TaskPageLinearIssueAttributes({
                     }}
                   />
                   <span>
-                    {selectedState?.name ||
-                      translate('auto.components.TaskPage.154b0fa623', 'Status')}
+                    {selectedState?.name || t('auto.components.TaskPage.154b0fa623', 'Status')}
                   </span>
                 </>
               )
@@ -58,7 +58,7 @@ export function TaskPageLinearIssueAttributes({
         </PopoverTrigger>
         <PopoverContent align="start" className="w-56 p-1 popover-scroll-content scrollbar-sleek">
           <div className="text-[10px] font-semibold text-muted-foreground px-2 py-1 uppercase tracking-wider">
-            {translate('auto.components.TaskPage.154b0fa623', 'Status')}
+            {t('auto.components.TaskPage.154b0fa623', 'Status')}
           </div>
           {newLinearStates.loading ? (
             <div className="flex items-center justify-center p-4">
@@ -90,7 +90,6 @@ export function TaskPageLinearIssueAttributes({
         </PopoverContent>
       </Popover>
 
-      {/* Assignee Selector */}
       <Popover>
         <PopoverTrigger asChild>
           <button
@@ -121,7 +120,7 @@ export function TaskPageLinearIssueAttributes({
               return (
                 <>
                   <UserRound className="size-3.5 text-muted-foreground/70" />
-                  <span>{translate('auto.components.TaskPage.d2a876ca53', 'Assignee')}</span>
+                  <span>{t('auto.components.TaskPage.d2a876ca53', 'Assignee')}</span>
                 </>
               )
             })()}
@@ -130,7 +129,7 @@ export function TaskPageLinearIssueAttributes({
         </PopoverTrigger>
         <PopoverContent align="start" className="w-64 p-1 popover-scroll-content scrollbar-sleek">
           <div className="text-[10px] font-semibold text-muted-foreground px-2 py-1 uppercase tracking-wider">
-            {translate('auto.components.TaskPage.d2a876ca53', 'Assignee')}
+            {t('auto.components.TaskPage.d2a876ca53', 'Assignee')}
           </div>
           {newLinearMembers.loading ? (
             <div className="flex items-center justify-center p-4">
@@ -145,7 +144,7 @@ export function TaskPageLinearIssueAttributes({
               >
                 <div className="flex items-center gap-2">
                   <UserRound className="size-3.5 text-muted-foreground/50" />
-                  <span>{translate('auto.components.TaskPage.42a9160321', 'Unassigned')}</span>
+                  <span>{t('auto.components.TaskPage.42a9160321', 'Unassigned')}</span>
                 </div>
                 {newLinearIssueAssigneeId === null && <Check className="size-3 text-foreground" />}
               </button>
@@ -178,7 +177,6 @@ export function TaskPageLinearIssueAttributes({
         </PopoverContent>
       </Popover>
 
-      {/* Priority Selector */}
       <Popover>
         <PopoverTrigger asChild>
           <button
@@ -189,42 +187,42 @@ export function TaskPageLinearIssueAttributes({
             <LinearPriorityIcon priority={newLinearIssuePriority} className="size-3.5" />
             <span>
               {newLinearIssuePriority === 1
-                ? translate('auto.components.TaskPage.f373ab1a4f', 'Urgent')
+                ? t('auto.components.TaskPage.f373ab1a4f', 'Urgent')
                 : newLinearIssuePriority === 2
-                  ? translate('auto.components.TaskPage.345b169f1f', 'High')
+                  ? t('auto.components.TaskPage.345b169f1f', 'High')
                   : newLinearIssuePriority === 3
-                    ? translate('auto.components.TaskPage.7fd59c18d8', 'Medium')
+                    ? t('auto.components.TaskPage.7fd59c18d8', 'Medium')
                     : newLinearIssuePriority === 4
-                      ? translate('auto.components.TaskPage.69591944e7', 'Low')
-                      : translate('auto.components.TaskPage.c8d5bec5f7', 'Priority')}
+                      ? t('auto.components.TaskPage.69591944e7', 'Low')
+                      : t('auto.components.TaskPage.c8d5bec5f7', 'Priority')}
             </span>
             <ChevronDown className="size-3 text-muted-foreground/70" />
           </button>
         </PopoverTrigger>
         <PopoverContent align="start" className="w-48 p-1 popover-scroll-content scrollbar-sleek">
           <div className="text-[10px] font-semibold text-muted-foreground px-2 py-1 uppercase tracking-wider">
-            {translate('auto.components.TaskPage.c8d5bec5f7', 'Priority')}
+            {t('auto.components.TaskPage.c8d5bec5f7', 'Priority')}
           </div>
           {[
             {
               val: 0,
-              label: translate('auto.components.TaskPage.713179dfdc', 'No priority')
+              label: t('auto.components.TaskPage.713179dfdc', 'No priority')
             },
             {
               val: 1,
-              label: translate('auto.components.TaskPage.f373ab1a4f', 'Urgent')
+              label: t('auto.components.TaskPage.f373ab1a4f', 'Urgent')
             },
             {
               val: 2,
-              label: translate('auto.components.TaskPage.345b169f1f', 'High')
+              label: t('auto.components.TaskPage.345b169f1f', 'High')
             },
             {
               val: 3,
-              label: translate('auto.components.TaskPage.7fd59c18d8', 'Medium')
+              label: t('auto.components.TaskPage.7fd59c18d8', 'Medium')
             },
             {
               val: 4,
-              label: translate('auto.components.TaskPage.69591944e7', 'Low')
+              label: t('auto.components.TaskPage.69591944e7', 'Low')
             }
           ].map((p) => (
             <button
@@ -243,7 +241,6 @@ export function TaskPageLinearIssueAttributes({
         </PopoverContent>
       </Popover>
 
-      {/* Project Selector */}
       <Popover>
         <PopoverTrigger asChild>
           <button
@@ -257,7 +254,10 @@ export function TaskPageLinearIssueAttributes({
                 const selectedProj = newLinearIssueProjects.find(
                   (p) => p.id === newLinearIssueProjectId
                 )
-                return selectedProj?.name || 'Project'
+                return (
+                  selectedProj?.name ||
+                  t('auto.components.TaskPage.linearProjectPlaceholder', 'Project')
+                )
               })()}
             </span>
             <ChevronDown className="size-3 text-muted-foreground/70" />
@@ -265,7 +265,7 @@ export function TaskPageLinearIssueAttributes({
         </PopoverTrigger>
         <PopoverContent align="start" className="w-64 p-1 popover-scroll-content scrollbar-sleek">
           <div className="text-[10px] font-semibold text-muted-foreground px-2 py-1 uppercase tracking-wider">
-            {translate('auto.components.TaskPage.00022ec0ba', 'Project')}
+            {t('auto.components.TaskPage.00022ec0ba', 'Project')}
           </div>
           {newLinearIssueProjectsLoading ? (
             <div className="flex items-center justify-center p-4">
@@ -280,7 +280,7 @@ export function TaskPageLinearIssueAttributes({
               >
                 <div className="flex items-center gap-2">
                   <FolderKanban className="size-3.5 text-muted-foreground/50" />
-                  <span>{translate('auto.components.TaskPage.1742eafc14', 'No Project')}</span>
+                  <span>{t('auto.components.TaskPage.1742eafc14', 'No Project')}</span>
                 </div>
                 {newLinearIssueProjectId === null && <Check className="size-3 text-foreground" />}
               </button>
@@ -303,7 +303,6 @@ export function TaskPageLinearIssueAttributes({
         </PopoverContent>
       </Popover>
 
-      {/* Labels Selector */}
       <Popover>
         <PopoverTrigger asChild>
           <button
@@ -314,18 +313,15 @@ export function TaskPageLinearIssueAttributes({
             <Tag className="size-3.5 text-muted-foreground/70" />
             <span>
               {newLinearIssueLabelIds.length === 0
-                ? translate('auto.components.TaskPage.d0ca4aa1d0', 'Labels')
-                : translate('auto.components.TaskPage.eff9800d4b', '{{value0}} label{{value1}}', {
-                    value0: newLinearIssueLabelIds.length,
-                    value1: newLinearIssueLabelIds.length > 1 ? 's' : ''
-                  })}
+                ? t('auto.components.TaskPage.d0ca4aa1d0', 'Labels')
+                : linearLabelCountLabel(newLinearIssueLabelIds.length, t)}
             </span>
             <ChevronDown className="size-3 text-muted-foreground/70" />
           </button>
         </PopoverTrigger>
         <PopoverContent align="start" className="w-64 p-1 popover-scroll-content scrollbar-sleek">
           <div className="text-[10px] font-semibold text-muted-foreground px-2 py-1 uppercase tracking-wider">
-            {translate('auto.components.TaskPage.d0ca4aa1d0', 'Labels')}
+            {t('auto.components.TaskPage.d0ca4aa1d0', 'Labels')}
           </div>
           {newLinearLabels.loading ? (
             <div className="flex items-center justify-center p-4">

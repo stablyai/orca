@@ -1,8 +1,10 @@
+import { withDurableRuntimeStore } from '../orca-runtime-tests/runtime-durable-store-fixture'
 import { vi, type Mock } from 'vitest'
-import { makePaneKey } from '../../../shared/stable-pane-id'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
-import type { RuntimeTerminalListResult } from '../../../shared/runtime-types'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
+import type { RuntimeTerminalListResult } from '../../../shared/runtime-terminal-contracts'
 import { OrcaRuntimeService } from '../orca-runtime'
+import { withMainLayout } from './main-layout-close-fixture'
 import {
   CANARY_INCARNATION_ID,
   CANARY_LEAF_ID,
@@ -20,43 +22,16 @@ import {
   WORKTREE_ID,
   WORKTREE_PATH,
   canaryProcess,
+  makeDeferred,
   makeSession
 } from './orca-runtime-terminal-close-continuity-state-fixture'
 import { createCloseContinuityGraphFixture } from './orca-runtime-terminal-close-continuity-graph-fixture'
-
-export {
-  CANARY_INCARNATION_ID,
-  CANARY_LEAF_ID,
-  CANARY_PTY_ID,
-  CANARY_TAB_ID,
-  INCARNATION_ID,
-  LEAF_ID,
-  OTHER_WORKTREE_ID,
-  PTY_ID,
-  REPO_ID,
-  RUNTIME_OWNED_PTY_ID,
-  SIBLING_INCARNATION_ID,
-  SIBLING_LEAF_ID,
-  SIBLING_PTY_ID,
-  STALE_TAB_ID,
-  TAB_ID,
-  WORKTREE_ID,
-  WORKTREE_PATH,
-  makeSession
-} from './orca-runtime-terminal-close-continuity-state-fixture'
-
-function makeDeferred() {
-  let resolve!: () => void
-  const promise = new Promise<void>((settle) => {
-    resolve = settle
-  })
-  return { promise, resolve }
-}
 
 export type CloseContinuityHarness = {
   runtime: OrcaRuntimeService
   acknowledged: ReturnType<typeof makeDeferred>
   closeTerminal: Mock<(...args: unknown[]) => unknown>
+  closeTerminalPane: Mock<(...args: unknown[]) => unknown>
   closeTerminalTab: Mock<(...args: unknown[]) => unknown>
   flushOrThrow: Mock<() => void>
   kill: Mock<(ptyId: string) => boolean>
@@ -67,6 +42,7 @@ export type CloseContinuityHarness = {
   syncFixtureTabWithoutLeaf: () => void
   syncSplitFixtureGraph: () => void
   getSession: () => WorkspaceSessionState
+  editSession: (edit: (session: WorkspaceSessionState) => WorkspaceSessionState) => void
   makeSessionUnavailable: () => void
   removeVictimFromInventory: () => void
   retirePersistedTab: () => void
@@ -101,7 +77,7 @@ function createHarness(
     badgeColor: '#000000',
     addedAt: 1
   }
-  const store = {
+  const store = withDurableRuntimeStore({
     getRepos: () => [repo],
     getRepo: (id: string) => (id === REPO_ID ? repo : undefined),
     getAllWorktreeMeta: () => ({}),
@@ -117,11 +93,13 @@ function createHarness(
         throw flushError
       }
     })
-  }
+  })
+  withMainLayout(store, { get: () => session, set: (next) => (session = next) })
   const acknowledged = makeDeferred()
   let closeTerminalTabError: Error | null = null
   let closeTerminalTabAction: (() => void | Promise<void>) | null = null
   const closeTerminal = vi.fn()
+  const closeTerminalPane = vi.fn()
   const closeTerminalTab = vi.fn(() => {
     if (closeTerminalTabError) {
       return Promise.reject(closeTerminalTabError)
@@ -162,7 +140,8 @@ function createHarness(
     ...(options.includeCanary ? [canaryProcess] : [])
   ])
   const runtime = new OrcaRuntimeService(store as never)
-  runtime.setNotifier({ closeTerminal, closeTerminalTab } as never)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these close paths call only the listed notifier methods.
+  runtime.setNotifier({ closeTerminal, closeTerminalPane, closeTerminalTab } as never)
   runtime.setPtyController({
     write: () => true,
     kill,
@@ -201,16 +180,20 @@ function createHarness(
     }
   }
   graph.syncFixtureGraph()
-  return {
+  return withDurableRuntimeStore({
     runtime,
     acknowledged,
     closeTerminal,
+    closeTerminalPane,
     closeTerminalTab,
     flushOrThrow: store.flushOrThrow,
     kill,
     stopAndWait,
     ...graph,
     getSession: () => session,
+    editSession: (edit) => {
+      session = edit(session)
+    },
     makeSessionUnavailable: () => {
       sessionAvailable = false
     },
@@ -264,7 +247,7 @@ function createHarness(
         }
       }
     }
-  }
+  })
 }
 
 function createPtyBackedPublishedSurfaceHarness(): CloseContinuityHarness {
@@ -296,9 +279,4 @@ async function createStaleTabCloseHarness(
   return { ...harness, terminal }
 }
 
-export {
-  makeDeferred,
-  createHarness,
-  createPtyBackedPublishedSurfaceHarness,
-  createStaleTabCloseHarness
-}
+export { createHarness, createPtyBackedPublishedSurfaceHarness, createStaleTabCloseHarness }

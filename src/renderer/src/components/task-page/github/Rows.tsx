@@ -1,11 +1,13 @@
-import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
-import { findGithubWorkItemWorkspaceAttachment } from '@/lib/github-work-item-workspace-attachment'
-import { getWorktreeAttachmentLabel } from '@/lib/worktree-attachment-label'
-import { formatPRDelta } from '@/components/task-page-pr-delta-summary'
+import { getTaskPageRepoSourceContext } from '../../../lib/work-items/task-repo-source-context'
+import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
+import { getWorkItemRepo } from '@/lib/work-items/work-item-repo-row'
+import { findGithubWorkItemWorkspaceAttachment } from '@/lib/work-items/github/github-work-item-workspace-attachment'
+import { getWorktreeAttachmentLabel } from '@/lib/workspace/display/worktree-attachment-label'
+import { formatPRDelta } from '../task-page-pr-delta-summary'
 import {
   isTaskPageGitHubDraftPR,
   getTaskPageGitHubPRIconTone
-} from '@/components/task-page-github-work-item-status'
+} from '@/components/task-page/github/task-page-github-work-item-status'
 import {
   GitPullRequestDraft,
   GitPullRequest,
@@ -18,16 +20,15 @@ import {
   ExternalLink,
   EllipsisVertical
 } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import {
   GITHUB_TASK_STICKY_ID_CELL_CLASS,
   GITHUB_TASK_STICKY_TITLE_CELL_CLASS,
-  getTaskPageRepoSourceContext,
   formatRelativeTime
-} from '../../task-page-source-context'
+} from '../task-page-source-context'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
-import { TaskPageGitHubWorkItemStateBadge } from '@/components/task-page-github-work-item-status-badge'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
+import { TaskPageGitHubWorkItemStateBadge } from '@/components/task-page/github/task-page-github-work-item-status-badge'
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { GHAssigneesCell } from './AssigneesCell'
 import { PRReviewCell } from './ReviewCell'
@@ -42,13 +43,16 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { ButtonGroup } from '@/components/ui/button-group'
 import { Button } from '@/components/ui/button'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 export function TaskPageGitHubRows({
   model
 }: {
   model: TaskPageComposerActionsModel
 }): React.JSX.Element | null {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const {
-    repoMap,
+    repos,
     allWorktrees,
     selectedRepos,
     openGitHubDetailPage,
@@ -65,23 +69,37 @@ export function TaskPageGitHubRows({
     <div className="divide-y divide-border/40">
       {!showGitHubTaskSkeletons &&
         filteredWorkItems.map((item) => {
-          const itemRepo = repoMap.get(item.repoId) ?? null
+          const itemRepo = getWorkItemRepo(repos, item) ?? null
           const attachedWorkspace = findGithubWorkItemWorkspaceAttachment(
             allWorktrees,
             item.repoId,
             item.type,
-            item.number
+            item.number,
+            item.url
           )
           const attachedWorkspaceLabel = attachedWorkspace
             ? getWorktreeAttachmentLabel(attachedWorkspace)
             : null
-          const prDelta = item.type === 'pr' ? formatPRDelta(item) : null
+          const prDelta = item.type === 'pr' ? formatPRDelta(item, t) : null
           const githubTaskIdPill = (
             <span
-              // Why: no fill — a muted wash on the pill stacks on the
-              // row's hover:bg-accent and reads as a second hover tint.
+              // Avoid a pill fill that would stack with the row hover tint.
               className="inline-flex items-center gap-1 rounded-md border border-border/40 px-1.5 py-0.5 text-muted-foreground"
-              aria-label={`${item.type === 'pr' ? (isTaskPageGitHubDraftPR(item) ? 'Draft pull request' : 'Pull request') : 'Issue'} #${item.number}`}
+              aria-label={
+                item.type === 'pr'
+                  ? isTaskPageGitHubDraftPR(item)
+                    ? t(
+                        'auto.components.TaskPage.draftPullRequestNumber',
+                        'Draft pull request #{{number}}',
+                        { number: item.number }
+                      )
+                    : t('auto.components.TaskPage.pullRequestNumber', 'Pull request #{{number}}', {
+                        number: item.number
+                      })
+                  : t('auto.components.TaskPage.issueNumber', 'Issue #{{number}}', {
+                      number: item.number
+                    })
+              }
             >
               {item.type === 'pr' ? (
                 isTaskPageGitHubDraftPR(item) ? (
@@ -104,8 +122,8 @@ export function TaskPageGitHubRows({
           return (
             // Why: clickable div not a <button> — it nests buttons, and button-in-button is invalid HTML that breaks hydration.
             <div
-              // Why: key on repoId+item.id — repos sharing an upstream reuse item.id, so a bare key collides and React silently drops rows.
-              key={`${item.repoId}:${item.id}`}
+              // Scope React keys by repo, host and item because twins and shared upstreams repeat item IDs.
+              key={`${item.repoId}:${item.repoHostId ?? ''}:${item.id}`}
               role="button"
               tabIndex={0}
               onClick={() => openGitHubDetailPage(item)}
@@ -116,10 +134,7 @@ export function TaskPageGitHubRows({
                 }
               }}
               className={cn(
-                // Why: sticky ID/Title paint the same bg-background /
-                // hover:bg-accent pair (with transition-colors) so the
-                // left columns don't flash a separate hover wash.
-                // Grid stretch (default) keeps sticky fills full-height.
+                // Match full-height sticky cells to the row surface/hover transition so columns do not flash separately.
                 'group/github-task-row grid min-h-12 cursor-pointer gap-3 px-3 py-2.5 text-left transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
                 githubTaskGridClass
               )}
@@ -129,7 +144,7 @@ export function TaskPageGitHubRows({
                   <Tooltip>
                     <TooltipTrigger asChild>{githubTaskIdPill}</TooltipTrigger>
                     <TooltipContent side="bottom" sideOffset={6}>
-                      {translate('auto.components.TaskPage.054bf695cc', 'Draft')}
+                      {t('auto.components.TaskPage.054bf695cc', 'Draft')}
                     </TooltipContent>
                   </Tooltip>
                 ) : (
@@ -158,8 +173,7 @@ export function TaskPageGitHubRows({
                 </div>
                 <div className="mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[12px] text-muted-foreground">
                   <span>
-                    {item.author ??
-                      translate('auto.components.TaskPage.6430594b18', 'unknown author')}
+                    {item.author ?? t('auto.components.TaskPage.6430594b18', 'unknown author')}
                   </span>
                   {selectedRepos.length === 1 && itemRepo ? (
                     <span>{itemRepo.displayName}</span>
@@ -167,7 +181,7 @@ export function TaskPageGitHubRows({
                   {item.type === 'pr' && item.state === 'draft' ? (
                     <>
                       <span aria-hidden="true">·</span>
-                      <span>{translate('auto.components.TaskPage.054bf695cc', 'Draft')}</span>
+                      <span>{t('auto.components.TaskPage.054bf695cc', 'Draft')}</span>
                     </>
                   ) : null}
                   {prDelta ? (
@@ -250,7 +264,7 @@ export function TaskPageGitHubRows({
                   </div>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" sideOffset={6}>
-                  {new Date(item.updatedAt).toLocaleString()}
+                  {new Date(item.updatedAt).toLocaleString(intlLocale)}
                 </TooltipContent>
               </Tooltip>
 
@@ -273,19 +287,16 @@ export function TaskPageGitHubRows({
                         )}
                         aria-label={
                           attachedWorkspace
-                            ? translate(
+                            ? t(
                                 'auto.components.TaskPage.67d881244c',
                                 'Resume workspace attached to PR'
                               )
-                            : translate(
-                                'auto.components.TaskPage.e4b29c5bcf',
-                                'Start workspace from PR'
-                              )
+                            : t('auto.components.TaskPage.e4b29c5bcf', 'Start workspace from PR')
                         }
                       >
                         {attachedWorkspace
-                          ? translate('auto.components.TaskPage.7753652524', 'Resume')
-                          : translate('auto.components.TaskPage.7d08e8be0f', 'Start')}
+                          ? t('auto.components.TaskPage.7753652524', 'Resume')
+                          : t('auto.components.TaskPage.7d08e8be0f', 'Start')}
                         <ArrowRight className="size-3" />
                       </Button>
                       <DropdownMenuTrigger asChild>
@@ -295,10 +306,7 @@ export function TaskPageGitHubRows({
                           size="icon-xs"
                           onClick={(event) => event.stopPropagation()}
                           className={cn(attachedWorkspace ? 'shadow-xs' : 'bg-background/80')}
-                          aria-label={translate(
-                            'auto.components.TaskPage.7deb9e59a5',
-                            'More PR actions'
-                          )}
+                          aria-label={t('auto.components.TaskPage.7deb9e59a5', 'More PR actions')}
                         >
                           <ChevronDown className="size-3" />
                         </Button>
@@ -308,12 +316,12 @@ export function TaskPageGitHubRows({
                       {attachedWorkspace ? (
                         <DropdownMenuItem onSelect={() => handleUseWorkItem(item)}>
                           <Plus className="size-4" />
-                          {translate('auto.components.TaskPage.b6329379ca', 'Start new workspace')}
+                          {t('auto.components.TaskPage.b6329379ca', 'Start new workspace')}
                         </DropdownMenuItem>
                       ) : null}
-                      <DropdownMenuItem onSelect={() => window.api.shell.openUrl(item.url)}>
+                      <DropdownMenuItem onSelect={() => openAppHttpLink(item.url)}>
                         <ExternalLink className="size-4" />
-                        {translate('auto.components.TaskPage.c1d1600362', 'Open in browser')}
+                        {t('auto.components.TaskPage.c1d1600362', 'Open in browser')}
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -334,19 +342,16 @@ export function TaskPageGitHubRows({
                     )}
                     aria-label={
                       attachedWorkspace
-                        ? translate(
+                        ? t(
                             'auto.components.TaskPage.2193a99ec1',
                             'Open workspace attached to issue'
                           )
-                        : translate(
-                            'auto.components.TaskPage.e104fa3d3d',
-                            'Start workspace from issue'
-                          )
+                        : t('auto.components.TaskPage.e104fa3d3d', 'Start workspace from issue')
                     }
                   >
                     {attachedWorkspace
-                      ? translate('auto.components.TaskPage.606a85c774', 'Open')
-                      : translate('auto.components.TaskPage.7d08e8be0f', 'Start')}
+                      ? t('auto.components.TaskPage.606a85c774', 'Open')
+                      : t('auto.components.TaskPage.7d08e8be0f', 'Start')}
                     <ArrowRight className="size-3" />
                   </Button>
                 )}
@@ -357,10 +362,7 @@ export function TaskPageGitHubRows({
                         type="button"
                         onClick={(e) => e.stopPropagation()}
                         className="rounded-lg p-1.5 text-muted-foreground transition hover:bg-muted/60 hover:text-foreground"
-                        aria-label={translate(
-                          'auto.components.TaskPage.66ae7330f6',
-                          'More actions'
-                        )}
+                        aria-label={t('auto.components.TaskPage.66ae7330f6', 'More actions')}
                       >
                         <EllipsisVertical className="size-4" />
                       </button>
@@ -369,12 +371,12 @@ export function TaskPageGitHubRows({
                       {attachedWorkspace ? (
                         <DropdownMenuItem onSelect={() => handleUseWorkItem(item)}>
                           <Plus className="size-4" />
-                          {translate('auto.components.TaskPage.b6329379ca', 'Start new workspace')}
+                          {t('auto.components.TaskPage.b6329379ca', 'Start new workspace')}
                         </DropdownMenuItem>
                       ) : null}
-                      <DropdownMenuItem onSelect={() => window.api.shell.openUrl(item.url)}>
+                      <DropdownMenuItem onSelect={() => openAppHttpLink(item.url)}>
                         <ExternalLink className="size-4" />
-                        {translate('auto.components.TaskPage.c1d1600362', 'Open in browser')}
+                        {t('auto.components.TaskPage.c1d1600362', 'Open in browser')}
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>

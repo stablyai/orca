@@ -1,4 +1,5 @@
 import { EventEmitter } from 'node:events'
+import { StringDecoder } from 'node:string_decoder'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Socket } from 'node:net'
 import { UnixSocketTransport } from './unix-socket-transport'
@@ -7,13 +8,33 @@ class FakeSocket extends EventEmitter {
   destroyed = false
   writable = true
   readonly writes: string[] = []
+  private idleMs = 0
+  private idleHandler: (() => void) | null = null
+  private idleTimer: NodeJS.Timeout | null = null
 
   setEncoding(): void {}
   setNoDelay(): void {}
-  setTimeout(): void {}
+  end(): void {}
+
+  // Match setTimeout: positive arms, zero suspends, and callback-free rearm preserves the handler.
+  setTimeout(ms: number, handler?: () => void): this {
+    if (handler) {
+      this.idleHandler = handler
+    }
+    if (this.idleTimer) {
+      clearTimeout(this.idleTimer)
+      this.idleTimer = null
+    }
+    this.idleMs = ms
+    if (ms > 0 && this.idleHandler) {
+      this.idleTimer = setTimeout(() => this.idleHandler?.(), ms)
+    }
+    return this
+  }
 
   write(data: string): boolean {
     this.writes.push(data)
+    this.refreshIdleTimer()
     return true
   }
 
@@ -21,9 +42,25 @@ class FakeSocket extends EventEmitter {
     if (!this.destroyed) {
       this.destroyed = true
       this.writable = false
+      if (this.idleTimer) {
+        clearTimeout(this.idleTimer)
+        this.idleTimer = null
+      }
       this.emit('close')
     }
     return this
+  }
+
+  emit(event: string | symbol, ...args: unknown[]): boolean {
+    if (event === 'data') {
+      this.refreshIdleTimer()
+    }
+    return super.emit(event, ...args)
+  }
+
+  // Traffic resets the idle window; net.Socket counts reads and writes alike.
+  private refreshIdleTimer(): void {
+    this.setTimeout(this.idleMs)
   }
 }
 
@@ -38,6 +75,31 @@ describe('UnixSocketTransport', () => {
 
   afterEach(() => {
     vi.useRealTimers()
+  })
+
+  function createReceiver() {
+    const transport = new UnixSocketTransport({ endpoint: 'test-pipe', kind: 'named-pipe' })
+    const socket = new FakeSocket()
+    const received: string[] = []
+    transport.onMessage((message, reply) => {
+      received.push(message)
+      reply('ok')
+    })
+    ;(transport as unknown as UnixSocketTransportInternals).handleConnection(
+      socket as unknown as Socket
+    )
+    return { socket, received }
+  }
+
+  it.each([false, true])('preserves the UTF-8 byte boundary with oversized=%s', (oversized) => {
+    const { socket, received } = createReceiver()
+    const message = `${'é'.repeat(524287)}a${oversized ? 'x' : ''}`
+    const wire = Buffer.from(`${message}\n`)
+    const decoder = new StringDecoder('utf8')
+    for (let offset = 0; offset < wire.length; offset += 4095) {
+      socket.emit('data', decoder.write(wire.subarray(offset, offset + 4095)))
+    }
+    expect(received).toEqual([oversized ? '' : message])
   })
 
   it('clears request keepalive timers when the socket closes before a reply', () => {

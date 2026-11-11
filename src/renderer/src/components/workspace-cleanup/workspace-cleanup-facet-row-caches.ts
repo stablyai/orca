@@ -1,6 +1,6 @@
-import type { LiveAgentWorktreeStatus } from '@/lib/worktree-activity-state'
+import type { LiveAgentWorktreeStatus } from '../../../../shared/sidebar-list/workspace-activity-facts'
 import type { WorkspaceStatusDefinition } from '../../../../shared/worktree/types'
-import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup'
+import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup/workspace-cleanup'
 import {
   buildWorkspaceCleanupFacets,
   type WorkspaceCleanupFacetSources,
@@ -12,26 +12,16 @@ import {
   type WorkspaceCleanupReviewInfo,
   type WorkspaceCleanupReviewLookup
 } from './workspace-cleanup-presentation'
+import './workspace-cleanup-host-identity'
 import {
   getWorkspaceCleanupCandidateHostId,
   getWorkspaceCleanupCandidateIdentity,
   getWorkspaceCleanupHostIdentity
-} from './workspace-cleanup-host-identity'
-import { getWorktreeVisitTimestamp } from '@/lib/worktree-visit-recency'
+} from '../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
+import { getWorktreeVisitTimestamp } from '@/lib/workspace/activation/worktree-visit-recency'
+import type { Translate } from '@/i18n/use-translate'
 
-/**
- * Streaming ticks replace only the candidate objects they touched, so all
- * per-candidate work here is cached on candidate object identity; unchanged
- * rows reuse their previous facet/review objects and the row array itself
- * keeps identity when nothing changed, which is what lets React.memo and
- * downstream memos hold.
- *
- * The caches are owned by useMemo keyed on their invalidation inputs (never
- * refs — ref writes during render are unsafe under concurrent rendering).
- * Filling them during render is safe because they are content-addressed and
- * idempotent: a replayed or discarded render stores the same value for the
- * same key.
- */
+/** Cache by candidate identity and reuse unchanged row arrays. useMemo owns invalidation; content-addressed/idempotent fills survive discarded renders without unsafe ref mutation. */
 export type WorkspaceCleanupReviewInfoCache = WeakMap<
   WorkspaceCleanupCandidate,
   WorkspaceCleanupReviewInfo
@@ -41,19 +31,22 @@ export function createWorkspaceCleanupReviewInfoCache(): WorkspaceCleanupReviewI
   return new WeakMap()
 }
 
-export function computeWorkspaceCleanupReviewInfoIndex(args: {
-  candidates: readonly WorkspaceCleanupCandidate[]
-  candidateIdCounts: ReadonlyMap<string, number>
-  reviewSources: WorkspaceCleanupRendererStateInputs
-  reviewLookup: WorkspaceCleanupReviewLookup
-  cache: WorkspaceCleanupReviewInfoCache
-}): Map<string, WorkspaceCleanupReviewInfo> {
+export function computeWorkspaceCleanupReviewInfoIndex(
+  args: {
+    candidates: readonly WorkspaceCleanupCandidate[]
+    candidateIdCounts: ReadonlyMap<string, number>
+    reviewSources: WorkspaceCleanupRendererStateInputs
+    reviewLookup: WorkspaceCleanupReviewLookup
+    cache: WorkspaceCleanupReviewInfoCache
+  },
+  t?: Translate
+): Map<string, WorkspaceCleanupReviewInfo> {
   const { candidates, candidateIdCounts, reviewSources, reviewLookup, cache } = args
   const infos = new Map<string, WorkspaceCleanupReviewInfo>()
   for (const candidate of candidates) {
     let info = cache.get(candidate)
     if (info === undefined) {
-      info = getWorkspaceCleanupReviewInfo(candidate, reviewSources, reviewLookup)
+      info = getWorkspaceCleanupReviewInfo(candidate, reviewSources, reviewLookup, t)
       cache.set(candidate, info)
     }
     infos.set(
@@ -88,21 +81,23 @@ export function createWorkspaceCleanupFacetListCache(): WorkspaceCleanupFacetLis
   return { byCandidate: new WeakMap(), lastList: [] }
 }
 
-export function computeWorkspaceCleanupFacetList(args: {
-  candidates: readonly WorkspaceCleanupCandidate[]
-  sources: Required<Omit<WorkspaceCleanupFacetSources, 'workspaceStatuses'>> & {
-    workspaceStatuses: readonly WorkspaceStatusDefinition[]
-  }
-  cache: WorkspaceCleanupFacetListCache
-}): WorkspaceCleanupFacets[] {
+export function computeWorkspaceCleanupFacetList(
+  args: {
+    candidates: readonly WorkspaceCleanupCandidate[]
+    sources: Required<Omit<WorkspaceCleanupFacetSources, 'workspaceStatuses'>> & {
+      workspaceStatuses: readonly WorkspaceStatusDefinition[]
+    }
+    cache: WorkspaceCleanupFacetListCache
+  },
+  t?: Translate
+): WorkspaceCleanupFacets[] {
   const { candidates, sources, cache } = args
   const list = candidates.map((candidate) => {
     const hostIdentity = getWorkspaceCleanupHostIdentity(
       getWorkspaceCleanupCandidateHostId(candidate),
       candidate.worktreeId
     )
-    // Per-id projections mirror buildWorkspaceCleanupFacets' lookups; the
-    // cached facet is valid only while every projected input is unchanged.
+    // Mirror facet-builder inputs so cached rows invalidate only when projected evidence changes.
     const sizeBytes =
       sources.sizeBytesByWorktreeId.get(hostIdentity) ??
       sources.sizeBytesByWorktreeId.get(candidate.worktreeId)
@@ -128,7 +123,7 @@ export function computeWorkspaceCleanupFacetList(args: {
     ) {
       return cached.facet
     }
-    const facet = buildWorkspaceCleanupFacets(candidate, sources)
+    const facet = buildWorkspaceCleanupFacets(candidate, sources, t)
     cache.byCandidate.set(candidate, {
       facet,
       sizeBytes,
@@ -139,8 +134,7 @@ export function computeWorkspaceCleanupFacetList(args: {
     })
     return facet
   })
-  // Why: reusing the previous array identity when no row changed lets every
-  // downstream memo skip its O(N) pass on no-op streaming ticks.
+  // Reuse unchanged row-array identity so downstream memos skip O(N) passes on no-op ticks.
   const previous = cache.lastList
   if (previous.length === list.length && list.every((facet, index) => facet === previous[index])) {
     return previous

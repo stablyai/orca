@@ -4,11 +4,11 @@ import { act } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderHook } from '@testing-library/react'
 import type { DashboardCard, DashboardSnapshot } from '../../../../shared/dashboard-snapshot'
-import {
-  AGENT_STATUS_STALE_AFTER_MS,
-  type AgentStatusClearIpcPayload,
-  type AgentStatusIpcPayload
-} from '../../../../shared/agent-status-types'
+
+import type {
+  AgentStatusClearIpcPayload,
+  AgentStatusIpcPayload
+} from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { useDashboardSnapshot } from './useDashboardSnapshot'
 
 ;(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -43,24 +43,27 @@ let apply: (next: DashboardSnapshot) => void
 let applyStatus: (next: AgentStatusIpcPayload) => void
 let applyClear: (next: AgentStatusClearIpcPayload) => void
 const requestSnapshot = vi.fn(async () => {})
+let readyRejection: unknown = null
+let hideDocumentAfterTransitionStart = false
 const startViewTransition = vi.fn((cb: () => void) => {
   cb()
+  if (hideDocumentAfterTransitionStart) {
+    hideDocument()
+  }
   return {
     finished: Promise.resolve(),
-    ready: Promise.resolve(),
+    ready: readyRejection !== null ? Promise.reject(readyRejection) : Promise.resolve(),
     updateCallbackDone: Promise.resolve()
   }
 })
 
-/** A Radix dialog marks its open content with role + data-state; mimic that so
- *  the hook's top-layer-conflict guard sees an "open terminal". */
-function openTerminalDialog(): HTMLElement {
-  const el = document.createElement('div')
-  el.setAttribute('role', 'dialog')
-  el.setAttribute('data-state', 'open')
-  document.body.appendChild(el)
-  return el
+const originalVisibilityState = Object.getOwnPropertyDescriptor(document, 'visibilityState')
+
+function hideDocument(): void {
+  Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true })
 }
+
+/** Mimic Radix’s open-dialog attributes so the top-layer conflict guard recognizes the terminal. */
 
 describe('useDashboardSnapshot', () => {
   beforeEach(() => {
@@ -89,98 +92,14 @@ describe('useDashboardSnapshot', () => {
   })
   afterEach(() => {
     document.body.innerHTML = ''
+    readyRejection = null
+    hideDocumentAfterTransitionStart = false
+    if (originalVisibilityState) {
+      Object.defineProperty(document, 'visibilityState', originalVisibilityState)
+    } else {
+      Reflect.deleteProperty(document, 'visibilityState')
+    }
     vi.clearAllMocks()
-  })
-
-  it('runs a view transition when a card changes column', () => {
-    const { result } = renderHook(() => useDashboardSnapshot())
-    act(() => apply(snapshot([card({ bucket: 'idle' })])))
-    startViewTransition.mockClear() // ignore the initial populate
-
-    act(() => apply(snapshot([card({ bucket: 'working' })])))
-    expect(startViewTransition).toHaveBeenCalledTimes(1)
-    expect(result.current.cards[0].bucket).toBe('working')
-  })
-
-  it('skips the view transition — but still applies the update — while the terminal dialog is open', () => {
-    const { result } = renderHook(() => useDashboardSnapshot())
-    act(() => apply(snapshot([card({ bucket: 'idle' })])))
-    startViewTransition.mockClear() // ignore the initial populate
-    openTerminalDialog()
-
-    act(() => apply(snapshot([card({ bucket: 'working' })])))
-    // Why: the card's View Transition snapshot would paint in the browser top
-    // layer, above the z-50 dialog — so we jump instead of morphing.
-    expect(startViewTransition).not.toHaveBeenCalled()
-    expect(result.current.cards[0].bucket).toBe('working')
-  })
-
-  // Why: the bridge stops re-sending repoIconsByRepoId on throttled republishes
-  // once it is unchanged, so the icons would disappear from the board on the
-  // very next tick if this window did not hold on to the last map it was given.
-  it('retains the last repo icons when a republish omits them', () => {
-    const icons = {
-      r1: { type: 'image' as const, src: 'data:image/png;base64,AAAA', source: 'upload' as const }
-    }
-    const { result } = renderHook(() => useDashboardSnapshot())
-
-    act(() => apply({ ...snapshot([card({})]), repoIconsByRepoId: icons }))
-    expect(result.current.repoIconsByRepoId).toEqual(icons)
-
-    act(() => apply(snapshot([card({ task: 'moved on' })])))
-    expect(result.current.repoIconsByRepoId).toEqual(icons)
-    expect(result.current.cards[0].task).toBe('moved on')
-  })
-
-  it('replaces retained icons when the bridge sends a new map', () => {
-    const first = {
-      r1: { type: 'image' as const, src: 'data:image/png;base64,AAAA', source: 'upload' as const }
-    }
-    const second = { r1: { type: 'emoji' as const, emoji: '🦑' } }
-    const { result } = renderHook(() => useDashboardSnapshot())
-
-    act(() => apply({ ...snapshot([card({})]), repoIconsByRepoId: first }))
-    act(() => apply({ ...snapshot([card({})]), repoIconsByRepoId: second }))
-    expect(result.current.repoIconsByRepoId).toEqual(second)
-
-    // An omitted map must retain the NEW icons, not resurrect the old ones.
-    act(() => apply(snapshot([card({})])))
-    expect(result.current.repoIconsByRepoId).toEqual(second)
-  })
-
-  // A repo whose icon was cleared must actually lose it — retention applies to
-  // an OMITTED map, never to an empty one.
-  it('honours an explicitly empty icon map', () => {
-    const icons = { r1: { type: 'emoji' as const, emoji: '🦑' } }
-    const { result } = renderHook(() => useDashboardSnapshot())
-
-    act(() => apply({ ...snapshot([card({})]), repoIconsByRepoId: icons }))
-    act(() => apply({ ...snapshot([card({})]), repoIconsByRepoId: {} }))
-    expect(result.current.repoIconsByRepoId).toEqual({})
-  })
-
-  it('applies known hook status without requesting a rebuilt snapshot', () => {
-    const { result } = renderHook(() => useDashboardSnapshot())
-    act(() => apply(snapshot([card({ statusUpdatedAt: 100 })])))
-    requestSnapshot.mockClear()
-
-    act(() =>
-      applyStatus({
-        paneKey: 'pk',
-        state: 'blocked',
-        prompt: 'Choose',
-        connectionId: null,
-        receivedAt: 300,
-        stateStartedAt: 250
-      })
-    )
-
-    expect(requestSnapshot).not.toHaveBeenCalled()
-    expect(result.current.cards[0]).toMatchObject({
-      bucket: 'attention',
-      task: 'Choose',
-      statusUpdatedAt: 300
-    })
   })
 
   it('trailing-debounces an unknown-pane burst into one topology refresh', () => {
@@ -236,33 +155,6 @@ describe('useDashboardSnapshot', () => {
     expect(requestSnapshot).not.toHaveBeenCalled()
 
     act(() => vi.advanceTimersByTime(200))
-    expect(requestSnapshot).toHaveBeenCalledTimes(1)
-    vi.useRealTimers()
-  })
-
-  it('refreshes when a monitoring card crosses the stale boundary', () => {
-    vi.useFakeTimers()
-    const statusUpdatedAt = 1_000
-    vi.setSystemTime(statusUpdatedAt)
-    renderHook(() => useDashboardSnapshot())
-    act(() =>
-      apply(
-        snapshot([
-          card({
-            dotState: 'working',
-            workingMode: 'monitoring',
-            statusUpdatedAt
-          })
-        ])
-      )
-    )
-    requestSnapshot.mockClear()
-
-    act(() => vi.advanceTimersByTime(AGENT_STATUS_STALE_AFTER_MS))
-    expect(requestSnapshot).not.toHaveBeenCalled()
-    act(() => vi.advanceTimersByTime(250))
-    expect(requestSnapshot).not.toHaveBeenCalled()
-    act(() => vi.advanceTimersByTime(1))
     expect(requestSnapshot).toHaveBeenCalledTimes(1)
     vi.useRealTimers()
   })

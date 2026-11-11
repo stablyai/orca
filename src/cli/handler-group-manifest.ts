@@ -1,25 +1,45 @@
 import type { CommandHandler } from './dispatch'
-import { BROWSER_HANDLER_GROUPS } from './browser-handler-groups'
+import { BROWSER_HANDLER_GROUPS } from './browser/browser-handler-groups'
+import { JIRA_HANDLER_GROUP } from './jira-handler-group'
+import { LINEAR_HANDLER_GROUP } from './linear-handler-group'
+import { REFERENCE_HANDLER_GROUP } from './reference-handler-group'
+import { SERVE_PAIRING_HANDLER_GROUPS } from './serve-pairing-handler-groups'
+import { PLUGIN_HANDLER_GROUPS } from './plugin-handler-groups'
+import { HOST_HANDLER_GROUPS } from './host-handler-groups'
+import { WORKTREE_HANDLER_GROUPS } from './worktree-handler-groups'
 
 export type HandlerGroup = {
   name: string
-  // Why: eager string keys let dispatch build (and duplicate-check) the whole
-  // command table without loading any group's transitive module graph.
+  // Eager keys allow routing and duplicate checks without importing each handler graph.
   keys: readonly string[]
   load: () => Promise<Record<string, CommandHandler>>
 }
 
-// Why: `keys` mirrors each group's exported record and is verified against the
-// real exports by handler-group-manifest.test.ts, so drift fails CI, not dispatch.
+// handler-group-manifest.test.ts checks keys against the real exports to prevent drift.
 export const HANDLER_GROUPS: readonly HandlerGroup[] = [
+  JIRA_HANDLER_GROUP,
+  LINEAR_HANDLER_GROUP,
+  REFERENCE_HANDLER_GROUP,
   {
     name: 'core',
     keys: ['claude-teams', 'open', 'serve', 'status'],
     load: async () => (await import('./handlers/core.js')).CORE_HANDLERS
   },
+  ...SERVE_PAIRING_HANDLER_GROUPS,
+  {
+    name: 'serve-reset-identity',
+    keys: ['serve reset-identity'],
+    load: async () =>
+      (await import('./handlers/serve-reset-identity.js')).SERVE_RESET_IDENTITY_HANDLERS
+  },
+  {
+    name: 'serve-service',
+    keys: ['serve service install', 'serve service status', 'serve service uninstall'],
+    load: async () => (await import('./handlers/serve-service.js')).SERVE_SERVICE_HANDLERS
+  },
   {
     name: 'account',
-    keys: ['account add', 'account list'],
+    keys: ['account add', 'account list', 'account select', 'account rm'],
     load: async () => (await import('./handlers/account.js')).ACCOUNT_HANDLERS
   },
   {
@@ -61,22 +81,17 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
   },
   {
     name: 'repo',
-    keys: ['repo list', 'repo add', 'repo show', 'repo set-base-ref', 'repo search-refs'],
+    keys: [
+      'repo list',
+      'repo add',
+      'repo show',
+      'repo set',
+      'repo set-base-ref',
+      'repo search-refs'
+    ],
     load: async () => (await import('./handlers/repo.js')).REPO_HANDLERS
   },
-  {
-    name: 'worktree',
-    keys: [
-      'worktree ps',
-      'worktree list',
-      'worktree show',
-      'worktree current',
-      'worktree create',
-      'worktree set',
-      'worktree rm'
-    ],
-    load: async () => (await import('./handlers/worktree.js')).WORKTREE_HANDLERS
-  },
+  ...WORKTREE_HANDLER_GROUPS,
   {
     name: 'file',
     keys: ['file open', 'file diff', 'file open-changed'],
@@ -92,6 +107,7 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
       'terminal wait',
       'terminal stop',
       'terminal rename',
+      'terminal set-pane-title',
       'terminal create',
       'terminal switch',
       'terminal close',
@@ -121,6 +137,7 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
       'orchestration worker-stop',
       'orchestration worker-abandon',
       'orchestration worker-release',
+      'orchestration worker-keep-open',
       'orchestration worker-retain',
       'orchestration worker-list',
       'orchestration dispatch',
@@ -184,72 +201,68 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     load: async () => (await import('./handlers/agent-hooks.js')).AGENT_HOOK_HANDLERS
   },
   {
+    name: 'agent-launch',
+    keys: ['agent launch'],
+    load: async () => (await import('./handlers/agent-launch.js')).AGENT_LAUNCH_HANDLERS
+  },
+  {
+    name: 'chat',
+    keys: ['chat rename', 'chat list', 'chat read', 'chat send', 'chat wait'],
+    load: async () => (await import('./handlers/chat.js')).CHAT_HANDLERS
+  },
+  {
+    name: 'connector',
+    keys: [
+      'connector start',
+      'connector send',
+      'connector prompt',
+      'connector answer',
+      'connector cancel',
+      'connector watch',
+      'connector reply'
+    ],
+    load: async () => (await import('./handlers/connector.js')).CONNECTOR_HANDLERS
+  },
+  {
+    name: 'profile-state',
+    keys: ['profile state exports', 'profile state rollback'],
+    load: async () => (await import('./handlers/profile-state.js')).PROFILE_STATE_HANDLERS
+  },
+  {
     name: 'diagnostics',
-    keys: ['diagnostics memory'],
+    keys: ['diagnostics memory', 'terminal-daemon status', 'terminal-daemon restart'],
     load: async () => (await import('./handlers/diagnostics.js')).DIAGNOSTICS_HANDLERS
+  },
+  {
+    name: 'speech',
+    keys: ['speech openai-key status', 'speech openai-key set', 'speech openai-key clear'],
+    load: async () => (await import('./handlers/speech.js')).SPEECH_HANDLERS
   },
   {
     name: 'introspection',
     keys: ['agent-context'],
     load: async () => (await import('./handlers/introspection.js')).INTROSPECTION_HANDLERS
   },
-  {
-    name: 'environment',
-    keys: [
-      'host list',
-      'environment add',
-      'environment list',
-      'environment show',
-      'environment rm'
-    ],
-    load: async () => (await import('./handlers/environment.js')).ENVIRONMENT_HANDLERS
-  },
-  {
-    name: 'linear',
-    keys: [
-      'linear save-issue',
-      'linear list-issues',
-      'linear relation add',
-      'linear relation remove',
-      'linear issue',
-      'linear search',
-      'linear team list',
-      'linear team members',
-      'linear team states',
-      'linear team labels',
-      'linear project list',
-      'linear list',
-      'linear status set',
-      'linear assignee set',
-      'linear assignee clear',
-      'linear priority set',
-      'linear priority clear',
-      'linear estimate set',
-      'linear estimate clear',
-      'linear due-date set',
-      'linear due-date clear',
-      'linear label add',
-      'linear label remove',
-      'linear label set',
-      'linear comment add',
-      'linear attach',
-      'linear create'
-    ],
-    load: async () => (await import('./handlers/linear.js')).LINEAR_HANDLERS
-  },
-  {
-    name: 'vm',
-    keys: ['vm recipe doctor'],
-    load: async () => (await import('./handlers/vm.js')).VM_HANDLERS
-  },
+  ...HOST_HANDLER_GROUPS,
   {
     name: 'skill-sharing',
     keys: ['skills installed', 'skills share'],
     load: async () => (await import('./handlers/skill-sharing.js')).SKILL_SHARING_HANDLERS
   },
+  ...PLUGIN_HANDLER_GROUPS,
   {
     name: 'skills',
     keys: ['skills list', 'skills get', 'skills install', 'skills update'],
     load: async () => (await import('./handlers/skills.js')).SKILL_HANDLERS
+  },
+  {
+    name: 'search',
+    keys: ['search'],
+    load: async () => (await import('./handlers/search.js')).SEARCH_HANDLERS
+  },
+  {
+    name: 'ports',
+    keys: ['ports'],
+    load: async () => (await import('./handlers/ports.js')).PORTS_HANDLERS
   }
 ]

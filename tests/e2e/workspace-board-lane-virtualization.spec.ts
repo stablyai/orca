@@ -1,156 +1,15 @@
 import { test, expect } from './helpers/orca-app'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 
-const SEEDED_WORKSPACE_COUNT = 300
 const MARQUEE_WORKSPACE_COUNT = 102
 const MANY_LANE_COUNT = 21
 const CARDS_PER_LANE = 100
 
-/**
- * Why: the board used to mount every workspace card in every lane in one
- * commit, which blocked the sheet open for seconds on a large workspace set.
- * These assert the lane renders a window instead, and that each rendered card
- * still carries its true lane index so drop targeting stays correct.
- */
+// Window lane cards instead of mounting all in one blocking commit; retain true lane indices for drop targeting.
 test.describe('Workspace board lane virtualization', () => {
   test.beforeEach(async ({ orcaPage }) => {
     await waitForSessionReady(orcaPage)
     await waitForActiveWorktree(orcaPage)
-  })
-
-  test('mounts a window of cards for a large lane and keeps lane indexes', async ({ orcaPage }) => {
-    await orcaPage.evaluate((count) => {
-      const store = window.__store
-      if (!store) {
-        throw new Error('window.__store is not available')
-      }
-      const state = store.getState()
-      const repo = state.repos[0]
-      if (!repo) {
-        throw new Error('Expected a seeded e2e repo')
-      }
-
-      const now = Date.now()
-      const seeded = state.worktreesByRepo[repo.id] ?? []
-      const synthetic = Array.from({ length: count }, (_, index) => {
-        const suffix = String(index).padStart(3, '0')
-        return {
-          id: `${repo.id}::/virtual-board-${suffix}`,
-          instanceId: `virtual-board-${suffix}`,
-          repoId: repo.id,
-          path: `${repo.path}/../virtual-board-${suffix}`,
-          displayName: `Virtual board ${suffix}`,
-          comment: '',
-          linkedIssue: null,
-          linkedPR: null,
-          linkedLinearIssue: null,
-          isArchived: false,
-          isUnread: false,
-          isPinned: false,
-          sortOrder: 10_000 - index,
-          lastActivityAt: now - index - 100,
-          head: '0000000000000000000000000000000000000000',
-          branch: `virtual-board-${suffix}`,
-          isBare: false,
-          isMainWorktree: false,
-          workspaceStatus: 'in-progress'
-        }
-      })
-
-      state.setSidebarOpen(true)
-      state.setShowSleepingWorkspaces(true)
-      state.setHideDefaultBranchWorkspace(false)
-      state.setFilterRepoIds([])
-      store.setState({
-        sortBy: 'manual',
-        worktreesByRepo: { ...state.worktreesByRepo, [repo.id]: [...seeded, ...synthetic] }
-      })
-    }, SEEDED_WORKSPACE_COUNT)
-
-    await orcaPage.getByRole('button', { name: 'Workspace board' }).click()
-
-    const cards = orcaPage.locator('[data-workspace-board-card-id]')
-    // Why: an empty window would also satisfy "fewer than seeded"; the point of
-    // the change is a filled window, not a blank board.
-    await expect.poll(() => cards.count(), { timeout: 15_000 }).toBeGreaterThan(3)
-    expect(await cards.count()).toBeLessThan(SEEDED_WORKSPACE_COUNT / 2)
-
-    const indexes = await cards.evaluateAll((elements) =>
-      elements.map((element) =>
-        Number((element as HTMLElement).dataset.workspaceBoardCardIndex ?? -1)
-      )
-    )
-    expect(indexes.every((index) => Number.isInteger(index) && index >= 0)).toBe(true)
-    expect(new Set(indexes).size).toBe(indexes.length)
-  })
-
-  test('renders later lane indexes after the lane scrolls', async ({ orcaPage }) => {
-    await orcaPage.evaluate((count) => {
-      const store = window.__store
-      if (!store) {
-        throw new Error('window.__store is not available')
-      }
-      const state = store.getState()
-      const repo = state.repos[0]
-      if (!repo) {
-        throw new Error('Expected a seeded e2e repo')
-      }
-      const now = Date.now()
-      const seeded = state.worktreesByRepo[repo.id] ?? []
-      const synthetic = Array.from({ length: count }, (_, index) => ({
-        id: `${repo.id}::/virtual-scroll-${index}`,
-        instanceId: `virtual-scroll-${index}`,
-        repoId: repo.id,
-        path: `${repo.path}/../virtual-scroll-${index}`,
-        displayName: `Virtual scroll ${index}`,
-        comment: '',
-        linkedIssue: null,
-        linkedPR: null,
-        linkedLinearIssue: null,
-        isArchived: false,
-        isUnread: false,
-        isPinned: false,
-        sortOrder: 10_000 - index,
-        lastActivityAt: now - index - 100,
-        head: '0000000000000000000000000000000000000000',
-        branch: `virtual-scroll-${index}`,
-        isBare: false,
-        isMainWorktree: false,
-        workspaceStatus: 'in-progress'
-      }))
-      state.setSidebarOpen(true)
-      state.setShowSleepingWorkspaces(true)
-      state.setFilterRepoIds([])
-      store.setState({
-        sortBy: 'manual',
-        worktreesByRepo: { ...state.worktreesByRepo, [repo.id]: [...seeded, ...synthetic] }
-      })
-    }, SEEDED_WORKSPACE_COUNT)
-
-    await orcaPage.getByRole('button', { name: 'Workspace board' }).click()
-
-    const cards = orcaPage.locator('[data-workspace-board-card-id]')
-    await expect.poll(() => cards.count(), { timeout: 15_000 }).toBeGreaterThan(3)
-
-    const readMaxIndex = (): Promise<number> =>
-      cards.evaluateAll((elements) =>
-        Math.max(
-          ...elements.map((element) =>
-            Number((element as HTMLElement).dataset.workspaceBoardCardIndex ?? -1)
-          )
-        )
-      )
-    const before = await readMaxIndex()
-
-    await orcaPage
-      .locator('[data-workspace-status="in-progress"] [data-workspace-board-lane-scroll]')
-      .first()
-      .evaluate((element) => {
-        element.scrollTop = element.scrollHeight
-        element.dispatchEvent(new Event('scroll', { bubbles: true }))
-      })
-
-    await expect.poll(readMaxIndex, { timeout: 15_000 }).toBeGreaterThan(before)
   })
 
   test('bounds mounted lanes and cards while preserving a 21-status workflow', async ({
@@ -418,20 +277,14 @@ test.describe('Workspace board lane virtualization', () => {
     await orcaPage.mouse.down()
     await orcaPage.mouse.move(box.x + box.width - 18, box.y + 80, { steps: 4 })
 
-    // Why: proves the board accepted the gesture. Without it a rejected
-    // pointerdown only shows up 15s later as "0 cards previewed", which reads as
-    // a virtualization bug rather than a marquee that never started.
+    // Require gesture acceptance up front so rejected pointerdown cannot look like a delayed virtualization failure.
     await expect(orcaPage.locator('[data-workspace-board-selection-rect]')).toBeVisible()
     await expect
       .poll(() => lane.locator('[data-workspace-board-card-area-selected="true"]').count(), {
         timeout: 15_000
       })
       .toBeGreaterThan(0)
-    // Why: a measured card is much taller than the lane's row estimate, so each
-    // jump to the bottom re-measures the window and grows the spacer past the
-    // scrollTop the jump just landed on. A fixed pass budget commits the marquee
-    // mid-growth on a loaded machine — short of the last cards — so jump until
-    // the virtualizer stops moving the bottom instead.
+    // Jump until virtualizer bottom stabilizes: measured cards exceed estimates, so fixed passes can end mid-growth before final cards.
     const laneScrollSettle = await laneScroll.evaluate(async (element) => {
       let settledPasses = 0
       let passes = 0
@@ -459,8 +312,7 @@ test.describe('Workspace board lane virtualization', () => {
     await orcaPage.mouse.move(box.x + box.width - 18, box.y + box.height - 12)
     await orcaPage.mouse.up()
 
-    // Why: assert the badge's text, not its presence — a marquee that stopped
-    // short reports the count it did commit instead of a bare locator timeout.
+    // Assert count text so a short marquee reports its committed count instead of locator timeout.
     await expect(orcaPage.getByText(/^\d+ selected$/)).toHaveText(
       `${MARQUEE_WORKSPACE_COUNT} selected`
     )

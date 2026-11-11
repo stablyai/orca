@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { applyDocumentTheme } from '@/lib/document-theme'
-import { track } from '@/lib/telemetry'
-import { ONBOARDING_FINAL_STEP } from '../../../../shared/constants'
+import { applyDocumentTheme } from '@/app-shell/appearance/document-theme'
+import { track } from '@/diagnostics/telemetry/telemetry'
+import { ONBOARDING_FINAL_STEP } from '../../../../shared/onboarding-defaults'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { EventProps } from '../../../../shared/telemetry-events'
 import type { AppState } from '@/store/types'
@@ -14,7 +14,7 @@ import type { StepNumber, STEPS } from './use-onboarding-flow-types'
 type OnboardingTelemetryArgs = {
   remappedLastCompletedStep: number
   currentStep: (typeof STEPS)[number]
-  persistedThemeRef: { current: GlobalSettings['theme'] }
+  paintedThemeRef: { current: GlobalSettings['theme'] }
   preflightStatus: AppState['preflightStatus']
   preflightStatusLoading: boolean
   linearStatus: AppState['linearStatus']
@@ -24,7 +24,7 @@ type OnboardingTelemetryArgs = {
 export function useOnboardingFlowTelemetry({
   remappedLastCompletedStep,
   currentStep,
-  persistedThemeRef,
+  paintedThemeRef,
   preflightStatus,
   preflightStatusLoading,
   linearStatus,
@@ -47,13 +47,14 @@ export function useOnboardingFlowTelemetry({
 
   const [initialStepStartedAt] = useState(() => Date.now())
   const stepStartedAtRef = useRef<number>(initialStepStartedAt)
+  // Keyed by step number, not page: the Chat/Terminal and agent pages are one step 1 view and duration.
   useEffect(() => {
     stepStartedAtRef.current = Date.now()
     track('onboarding_step_viewed', {
       step: currentStep.stepNumber,
       value_kind: currentStep.valueKind
     })
-  }, [currentStep.id, currentStep.stepNumber, currentStep.valueKind])
+  }, [currentStep.stepNumber, currentStep.valueKind])
 
   const consumeStepDurationMs = useCallback((): number => {
     return Math.max(0, Date.now() - stepStartedAtRef.current)
@@ -62,10 +63,10 @@ export function useOnboardingFlowTelemetry({
   const setLifecycleRootRef = useCallback(
     (node: HTMLElement | null): void => {
       if (node === null) {
-        applyDocumentTheme(persistedThemeRef.current)
+        applyDocumentTheme(paintedThemeRef.current)
       }
     },
-    [persistedThemeRef]
+    [paintedThemeRef]
   )
 
   const trackTaskSourcesSnapshot = useCallback(

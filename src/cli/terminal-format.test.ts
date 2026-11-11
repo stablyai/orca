@@ -1,5 +1,17 @@
 import { describe, expect, it } from 'vitest'
-import { formatTerminalClose, formatTerminalFocus, formatTerminalSend } from './terminal-format'
+import type {
+  RuntimeTerminalShow,
+  RuntimeTerminalWait,
+  RuntimeTerminalWaitBlockedReason
+} from '../shared/runtime-terminal-contracts'
+import {
+  formatTerminalClose,
+  formatTerminalFocus,
+  formatTerminalRead,
+  formatTerminalSend,
+  formatTerminalShow,
+  formatTerminalWait
+} from './terminal-format'
 
 describe('formatTerminalFocus', () => {
   it('distinguishes superseded navigation from a winning focus', () => {
@@ -46,6 +58,22 @@ describe('formatTerminalClose', () => {
     )
   })
 
+  it('promises the reconnect replay only when the host recorded the kill for it', () => {
+    const close = {
+      handle: 'term_remote',
+      tabId: 'tab-1',
+      ptyKilled: false,
+      ptyStopVerdict: 'unverifiable' as const,
+      ptyStopReason: 'SSH connection lost, reconnecting...'
+    }
+    expect(formatTerminalClose({ close: { ...close, pendingKillRecorded: true } })).toBe(
+      'Closed terminal term_remote. The PTY was not confirmed stopped: SSH connection lost, reconnecting... The kill retries when the host reconnects.'
+    )
+    expect(formatTerminalClose({ close })).toBe(
+      'Closed terminal term_remote. The PTY was not confirmed stopped: SSH connection lost, reconnecting...'
+    )
+  })
+
   it('names a PTY known to be live', () => {
     expect(
       formatTerminalClose({
@@ -61,33 +89,6 @@ describe('formatTerminalClose', () => {
 })
 
 describe('formatTerminalSend', () => {
-  it('exposes the provider and healthy delivery observation', () => {
-    expect(
-      formatTerminalSend({
-        send: {
-          handle: 'term_worker',
-          accepted: true,
-          bytesWritten: 8,
-          prompt: {
-            requestId: 'prompt-healthy',
-            stages: ['input_accepted', 'turn_started'],
-            provider: 'codex',
-            observation: 'supported',
-            processIncarnation: 'inc-1',
-            generation: 1,
-            baselineWorkingSequence: 0
-          }
-        }
-      })
-    ).toBe(
-      [
-        'Prompt prompt-healthy on term_worker: input_accepted -> turn_started.',
-        'provider: codex',
-        'delivery observation: supported'
-      ].join('\n')
-    )
-  })
-
   it.each([
     {
       observation: 'permission' as const,
@@ -169,5 +170,90 @@ describe('formatTerminalSend', () => {
 
     expect(output).toContain('no turn start was observed')
     expect(output).toContain('--retry-request prompt-swallowed --wait-submit <seconds>')
+  })
+})
+
+function showResult(reason?: RuntimeTerminalWaitBlockedReason): {
+  terminal: RuntimeTerminalShow
+} {
+  return {
+    terminal: {
+      handle: 'term_agy',
+      ptyId: 'pty-1',
+      paneRuntimeId: 1,
+      rendererGraphEpoch: 1,
+      worktreeId: 'worktree-1',
+      worktreePath: '/tmp/w',
+      branch: 'main',
+      tabId: 'tab-1',
+      leafId: 'leaf-1',
+      title: 'Antigravity',
+      connected: true,
+      writable: true,
+      lastOutputAt: null,
+      preview: 'Do you trust the files in this folder?',
+      agentWait: { source: 'prompt-text', reason }
+    }
+  }
+}
+
+// Older hosts can mislabel other providers' dialogs with codex-* tokens; include the neutral names.
+describe('blocked-reason rendering against a mixed-version host', () => {
+  function waitResult(blockedReason: RuntimeTerminalWaitBlockedReason): {
+    wait: RuntimeTerminalWait
+  } {
+    return {
+      wait: {
+        handle: 'term_agy',
+        condition: 'tui-idle',
+        satisfied: false,
+        status: 'running',
+        exitCode: null,
+        blockedReason
+      }
+    }
+  }
+
+  // Pair alias additions with unchanged tokens so missing alias logic cannot pass on absence alone.
+  it.each([
+    ['codex-trust-workspace', 'codex-trust-workspace (agent-trust-workspace)'],
+    ['codex-update-prompt', 'codex-update-prompt (agent-update-prompt)'],
+    ['codex-cwd-prompt', 'codex-cwd-prompt (agent-cwd-prompt)'],
+    ['codex-hooks-review-prompt', 'codex-hooks-review-prompt (agent-hooks-review-prompt)'],
+    ['codex-interactive-prompt', 'codex-interactive-prompt (agent-interactive-prompt)'],
+    ['agent-trust-workspace', 'agent-trust-workspace'],
+    ['codex-model-migration-prompt', 'codex-model-migration-prompt']
+  ] as const)('renders %s as %s on both wait and show', (reason, rendered) => {
+    expect(formatTerminalWait(waitResult(reason)).split('\n').at(-1)).toBe(
+      `blockedReason: ${rendered}`
+    )
+    expect(formatTerminalShow(showResult(reason))).toContain(
+      `agentWait: ${rendered} (via prompt-text)`
+    )
+  })
+
+  it('still describes a wait with no reason at all', () => {
+    expect(formatTerminalShow(showResult(undefined))).toContain(
+      'agentWait: interactive prompt (via prompt-text)'
+    )
+  })
+})
+
+describe('formatTerminalRead draft separation', () => {
+  it('labels composer drafts outside terminal output', () => {
+    const output = formatTerminalRead({
+      terminal: {
+        handle: 'term_1',
+        status: 'running',
+        tail: ['Build passed', '❯'],
+        truncated: false,
+        nextCursor: null,
+        source: 'screen',
+        draft: 'proceed with the release'
+      }
+    })
+
+    expect(output).toContain('draft: "proceed with the release"')
+    expect(output).toContain('\n\nBuild passed\n❯')
   })
 })

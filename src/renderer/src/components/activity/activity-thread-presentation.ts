@@ -1,34 +1,52 @@
 import type { AgentDotState } from '@/components/AgentStateDot'
-import { formatAgentTypeLabel } from '@/lib/agent-status'
-import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
-import { showsAgentToolPreview } from '@/lib/agent-row-tool-preview'
+import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
+import { getAgentRowPrimaryText } from '../../../../shared/agent-status/presentation/agent-row-primary-text'
+import { showsAgentToolPreview } from '@/lib/agent-status/presentation/agent-row-tool-preview'
+import {
+  agentMainAgentVerdict,
+  agentVerdictDisplayMark
+} from '../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import {
   getActivityThreadTaskTitle,
   getActivityThreadWorkspaceTitle,
   resolveActivityThreadStatusPreview
-} from '@/lib/activity-thread-display'
+} from '@/lib/workspace/activity/activity-thread-display'
 import { formatUiRelativeTime } from '@/i18n/relative-time-format'
 import { translate } from '@/i18n/i18n'
-import type { AgentStatusEntry, AgentStatusState } from '../../../../shared/agent-status-types'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
-import type { ActivityEvent, AgentPaneThread } from './activity-thread-types'
+import type { Translate } from '@/i18n/use-translate'
+import type {
+  AgentStatusEntry,
+  AgentStatusState
+} from '../../../../shared/agent-status/contracts/agent-status-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
+import { isHistoricalActivityState } from './activity-event-state'
+import type {
+  ActivityEvent,
+  ActivityLiveAgentState,
+  AgentPaneThread
+} from './activity-thread-types'
+import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
 
 const ACTIVITY_THREAD_RESPONSE_RENDER_PREVIEW_MAX_LENGTH = 320
 
-const absoluteDateFormatter = new Intl.DateTimeFormat(undefined, {
+const ABSOLUTE_DATE_OPTIONS: Intl.DateTimeFormatOptions = {
   year: 'numeric',
   month: 'short',
   day: 'numeric',
   hour: 'numeric',
   minute: '2-digit'
-})
-
-export function formatAbsoluteDate(timestamp: number): string {
-  return absoluteDateFormatter.format(new Date(timestamp))
 }
 
-export function formatRelativeTime(timestamp: number, now = Date.now()): string {
-  return formatUiRelativeTime(timestamp - now)
+export function formatAbsoluteDate(timestamp: number, intlLocale?: string): string {
+  return uiDateTimeFormat(ABSOLUTE_DATE_OPTIONS, intlLocale).format(new Date(timestamp))
+}
+
+export function formatRelativeTime(
+  timestamp: number,
+  now = Date.now(),
+  intlLocale?: string
+): string {
+  return formatUiRelativeTime(timestamp - now, intlLocale)
 }
 
 function truncatePreservingSurrogates(value: string, maxLength: number): string {
@@ -63,7 +81,20 @@ export function agentTitle(event: ActivityEvent): string {
     return 'Agent working'
   }
   if (event.state === 'done') {
-    return event.entry.interrupted ? 'Agent interrupted' : 'Agent finished'
+    switch (agentMainAgentVerdict(event.entry)) {
+      // A turn cut short by anything but the user is a fault, as a failure is.
+      case 'failure':
+      case 'interruption':
+        return 'Agent failed'
+      case 'cancellation':
+      case 'superseded':
+        return 'Agent interrupted'
+      case 'unconfirmed':
+        return 'Couldn’t confirm agent finished'
+      case 'success':
+      case null:
+        return 'Agent finished'
+    }
   }
   return event.state === 'waiting' ? 'Agent waiting for input' : 'Agent needs input'
 }
@@ -86,7 +117,19 @@ export function agentMeta(event: ActivityEvent): string {
     return `${agent} ${event.state}`
   }
   if (event.state === 'done') {
-    return event.entry.interrupted ? `${agent} interrupted` : `${agent} completed`
+    switch (agentMainAgentVerdict(event.entry)) {
+      case 'failure':
+      case 'interruption':
+        return `${agent} failed`
+      case 'cancellation':
+      case 'superseded':
+        return `${agent} interrupted`
+      case 'unconfirmed':
+        return `${agent} unconfirmed`
+      case 'success':
+      case null:
+        return `${agent} completed`
+    }
   }
   return event.state === 'waiting' ? `${agent} waiting` : `${agent} blocked`
 }
@@ -114,58 +157,77 @@ export function statusPreviewForEntry(
 
 export type ActivityThreadStatusId = AgentDotState
 
-/** Single classifier behind grouping, labels, and clear-completed; the only place the
- *  interrupted predicate is spelled. */
+/** Keep grouping, labels and clear-completed on one verdict classifier. */
 export function activityThreadStatusId(thread: AgentPaneThread): ActivityThreadStatusId {
-  const state = thread.currentAgentState ?? thread.latestEvent?.state ?? 'done'
-  if (!thread.currentAgentState && state === 'done' && thread.latestEvent?.entry.interrupted) {
-    return 'interrupted'
+  // Why: a failed main agent outranks the subagent work still holding its row live.
+  if (thread.currentAgentEntry && agentVerdictDisplayMark(thread.currentAgentEntry) === 'failed') {
+    return 'failed'
+  }
+  const state = threadCurrentState(thread) ?? 'done'
+  const verdictEntry = threadVerdictEntry(thread)
+  const verdictDot = verdictEntry ? agentVerdictDisplayMark(verdictEntry) : null
+  if (!thread.currentAgentState && state === 'done' && verdictDot) {
+    return verdictDot
   }
   return state
 }
 
-// Interrupted rows deliberately keep the done glyph (#2569).
-export function threadAgentState(thread: AgentPaneThread): AgentDotState {
-  const id = activityThreadStatusId(thread)
-  return id === 'interrupted' ? 'done' : id
+function threadVerdictEntry(thread: AgentPaneThread): AgentStatusEntry | undefined {
+  return paneActivityEntry(thread) ?? thread.latestEvent?.entry
 }
 
-export function threadAgentStateLabel(thread: AgentPaneThread): string {
-  // Literal keys with literal fallbacks: a dynamic key registers no catalog reference
-  // and forces every state string into the boot bundle.
+// Why the pane's row: an answered ask's done predates the blocked event, and a clear can hide it.
+function paneActivityEntry(thread: AgentPaneThread): AgentStatusEntry | null {
+  return thread.paneEntry && isHistoricalActivityState(thread.paneEntry.state)
+    ? thread.paneEntry
+    : null
+}
+
+function threadCurrentState(
+  thread: AgentPaneThread
+): ActivityLiveAgentState | AgentStatusState | null {
+  return (
+    thread.currentAgentState ??
+    paneActivityEntry(thread)?.state ??
+    thread.latestEvent?.state ??
+    null
+  )
+}
+
+export function threadAgentStateLabel(thread: AgentPaneThread, t: Translate = translate): string {
+  // Literal translation keys/fallbacks register catalog references and avoid bundling every state string at boot.
   switch (activityThreadStatusId(thread)) {
     case 'working':
-      return translate('auto.components.activity.ActivityPrototypePage.state.working', 'Working')
+      return t('auto.components.activity.ActivityPrototypePage.state.working', 'Working')
     case 'monitoring':
-      return translate(
+      return t(
         'auto.components.activity.ActivityPrototypePage.state.monitoring',
         'Monitoring background tasks'
       )
     case 'blocked':
-      return translate('auto.components.activity.ActivityPrototypePage.state.blocked', 'Blocked')
+      return t('auto.components.activity.ActivityPrototypePage.state.blocked', 'Blocked')
     case 'waiting':
-      return translate(
-        'auto.components.activity.ActivityPrototypePage.state.waiting',
-        'Waiting for input'
-      )
+      return t('auto.components.activity.ActivityPrototypePage.state.waiting', 'Waiting for input')
     case 'interrupted':
-      return translate('auto.components.activity.ActivityPrototypePage.interrupted', 'Interrupted')
+      return t('auto.components.activity.ActivityPrototypePage.interrupted', 'Interrupted')
     case 'failed':
-      return translate('auto.components.activity.ActivityPrototypePage.state.failed', 'Failed')
+      return t('auto.components.activity.ActivityPrototypePage.state.failed', 'Failed')
     case 'done':
-      return translate('auto.components.activity.ActivityPrototypePage.state.done', 'Done')
+      return t('auto.components.activity.ActivityPrototypePage.state.done', 'Done')
     case 'idle':
-      return translate('auto.components.activity.ActivityPrototypePage.state.idle', 'Idle')
+      return t('auto.components.activity.ActivityPrototypePage.state.idle', 'Idle')
     case 'unverifiable':
-      return translate(
+      return t(
         'auto.components.activity.ActivityPrototypePage.state.unverifiable',
         'No recent update'
       )
-    case 'permission':
-      return translate(
-        'auto.components.activity.ActivityPrototypePage.state.permission',
-        'Needs attention'
+    case 'unconfirmed':
+      return t(
+        'auto.components.activity.ActivityPrototypePage.state.unconfirmed',
+        'Couldn’t confirm'
       )
+    case 'permission':
+      return t('auto.components.activity.ActivityPrototypePage.state.permission', 'Needs attention')
   }
 }
 
@@ -191,17 +253,24 @@ function previewDuplicatesIdentity(preview: string, title: string, workspace: st
   return normalized === normalizeScanLabel(title) || normalized === normalizeScanLabel(workspace)
 }
 
-export function activityThreadRowCopy(thread: AgentPaneThread): ActivityThreadRowCopy {
+export function activityThreadRowCopy(
+  thread: AgentPaneThread,
+  t?: Translate
+): ActivityThreadRowCopy {
   const workspaceLabel = getActivityThreadWorkspaceTitle(thread.worktree)
   const taskTitle = thread.paneTitle.trim() || workspaceLabel
   const renderedPreview = activityThreadResponseRenderPreview({
     responsePreview: thread.responsePreview
   })
-  const liveState = thread.currentAgentState ?? thread.latestEvent?.state ?? null
+  const liveState = threadCurrentState(thread)
   const toolPreviewState = liveState === 'monitoring' ? null : liveState
-  const state = threadAgentState(thread)
+  const state = activityThreadStatusId(thread)
   const needsAttention = state === 'waiting' || state === 'blocked' || state === 'permission'
-  if (renderedPreview && !previewDuplicatesIdentity(renderedPreview, taskTitle, workspaceLabel)) {
+  if (
+    state !== 'unverifiable' &&
+    renderedPreview &&
+    !previewDuplicatesIdentity(renderedPreview, taskTitle, workspaceLabel)
+  ) {
     return {
       taskTitle,
       statusLine: renderedPreview,
@@ -214,7 +283,7 @@ export function activityThreadRowCopy(thread: AgentPaneThread): ActivityThreadRo
   if (state !== 'done' && state !== 'idle') {
     return {
       taskTitle,
-      statusLine: threadAgentStateLabel(thread),
+      statusLine: threadAgentStateLabel(thread, t),
       statusKind: 'state',
       needsAttention,
       workspaceLabel

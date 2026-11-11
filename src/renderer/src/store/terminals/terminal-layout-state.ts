@@ -1,18 +1,19 @@
-import { makePaneKey } from '../../../../shared/stable-pane-id'
-import { terminalLayoutEqual } from '@/lib/terminal-layout-equality'
+import { replaceRecordEntries } from '@/store/keyed-record-transitions'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import { terminalLayoutEqual } from '../../../../shared/workspace-layout/terminal-layout-equality'
 import {
   normalizeTerminalLayoutPtyOwnership,
   resolveTerminalLayoutPtyOwnershipTransfers
-} from '@/components/terminal-pane/terminal-layout-pty-ownership'
-import { transferDirectSshPaneDetachLedger } from '../slices/direct-ssh-terminal-authority-ledger'
+} from '../../../../shared/workspace-layout/terminal-layout-pty-ownership'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 import {
-  isCurrentDirectSshAuthority,
   resolvePrimaryLayoutPtyId,
   uniquePtyIds,
-  withTerminalTabPtyId
+  withTerminalTabPtyIds
 } from './terminal-pty-identities'
 import { transferNormalizedTerminalLayoutPtyOwnership } from './workspace-terminal-hydration-patch'
+import { recordChatPaneInLayoutOwner } from './terminal-chat-pane-layout-owner'
 
 export function createTerminalLayoutActions(
   set: TerminalStoreSet,
@@ -23,23 +24,43 @@ export function createTerminalLayoutActions(
   | 'setTabPaneExpanded'
   | 'setTabCanExpandPane'
   | 'setTabLayout'
+  | 'setTabLocalOnlyScrollback'
   | 'syncPaneDetachPtyOwnership'
 > {
   return {
+    // Ordinary-park scrollback stays local, outside remote projection; resolveLeafScrollbackBuffers reads WorkspaceSessionState.localOnlyScrollbackByTabId.
+    setTabLocalOnlyScrollback: (tabId, buffersByLeafId) => {
+      set((s) => {
+        const current = s.localOnlyScrollbackByTabId ?? {}
+        if (!buffersByLeafId || Object.keys(buffersByLeafId).length === 0) {
+          if (!(tabId in current)) {
+            return s
+          }
+          const next = { ...current }
+          delete next[tabId]
+          return { localOnlyScrollbackByTabId: next }
+        }
+        return { localOnlyScrollbackByTabId: { ...current, [tabId]: buffersByLeafId } }
+      })
+    },
     replaceTerminalLayoutPanePtyId: (tabId, leafId, ptyId) => {
       set((s) => {
         const layout = s.terminalLayoutsByTabId[tabId]
         if (!layout || layout.ptyIdsByLeafId?.[leafId] === ptyId) {
-          return {}
+          return s
         }
         return {
-          terminalLayoutsByTabId: {
-            ...s.terminalLayoutsByTabId,
-            [tabId]: {
-              ...layout,
-              ptyIdsByLeafId: { ...layout.ptyIdsByLeafId, [leafId]: ptyId }
-            }
-          }
+          terminalLayoutsByTabId: replaceRecordEntries<
+            TerminalSlice['terminalLayoutsByTabId'][string]
+          >(s.terminalLayoutsByTabId, [
+            [
+              tabId,
+              {
+                ...layout,
+                ptyIdsByLeafId: { ...layout.ptyIdsByLeafId, [leafId]: ptyId }
+              }
+            ]
+          ])
         }
       })
     },
@@ -60,14 +81,17 @@ export function createTerminalLayoutActions(
     },
     setTabLayout: (tabId, layout) => {
       let ownershipTransfers: ReturnType<typeof resolveTerminalLayoutPtyOwnershipTransfers> = []
+      const before = ORCA_LAYOUT_OWNER_IS_MAIN ? get().terminalLayoutsByTabId[tabId] : undefined
       set((s) => {
         if (!layout) {
           if (!(tabId in s.terminalLayoutsByTabId)) {
             return s
           }
-          const next = { ...s.terminalLayoutsByTabId }
-          delete next[tabId]
-          return { terminalLayoutsByTabId: next }
+          return {
+            terminalLayoutsByTabId: replaceRecordEntries<
+              TerminalSlice['terminalLayoutsByTabId'][string]
+            >(s.terminalLayoutsByTabId, [[tabId, null]])
+          }
         }
         const normalized = normalizeTerminalLayoutPtyOwnership(layout)
         // Resolved before the bailout: normalization can transfer pane ownership even when the stored snapshot is untouched.
@@ -83,10 +107,16 @@ export function createTerminalLayoutActions(
           return s
         }
         return {
-          terminalLayoutsByTabId: { ...s.terminalLayoutsByTabId, [tabId]: normalized.snapshot }
+          terminalLayoutsByTabId: replaceRecordEntries<
+            TerminalSlice['terminalLayoutsByTabId'][string]
+          >(s.terminalLayoutsByTabId, [[tabId, normalized.snapshot]])
         }
       })
       transferNormalizedTerminalLayoutPtyOwnership(get(), tabId, ownershipTransfers)
+      // Switch point: the chat pane the window picks reaches main as a command, not by its save.
+      if (ORCA_LAYOUT_OWNER_IS_MAIN && layout) {
+        recordChatPaneInLayoutOwner(get(), tabId, before, get().terminalLayoutsByTabId[tabId])
+      }
     },
     syncPaneDetachPtyOwnership: ({
       detachedLeafId,
@@ -106,45 +136,35 @@ export function createTerminalLayoutActions(
           layoutSourcePtyIds.length > 0 ? layoutSourcePtyIds : existingSourcePtyIds
         const sourcePrimaryPtyId =
           resolvePrimaryLayoutPtyId(sourceLayout) ?? sourcePtyIds[0] ?? null
-        const nextPtyIdsByTabId = {
-          ...s.ptyIdsByTabId,
-          [sourceTabId]: sourcePtyIds
-        }
+        const ptyReplacements: [string, string[]][] = [[sourceTabId, sourcePtyIds]]
         if (detachedPtyId) {
-          nextPtyIdsByTabId[targetTabId] = uniquePtyIds([
-            ...(nextPtyIdsByTabId[targetTabId] ?? []),
-            detachedPtyId
+          ptyReplacements.push([
+            targetTabId,
+            uniquePtyIds([
+              ...(targetTabId === sourceTabId
+                ? sourcePtyIds
+                : (s.ptyIdsByTabId[targetTabId] ?? [])),
+              detachedPtyId
+            ])
           ])
         }
-        const nextLastKnownRelayPtyIdByTabId = { ...s.lastKnownRelayPtyIdByTabId }
-        if (sourcePrimaryPtyId) {
-          nextLastKnownRelayPtyIdByTabId[sourceTabId] = sourcePrimaryPtyId
-        } else {
-          delete nextLastKnownRelayPtyIdByTabId[sourceTabId]
-        }
+        const relayReplacements: [string, string | null][] = [
+          [sourceTabId, sourcePrimaryPtyId || null]
+        ]
         if (detachedPtyId) {
-          nextLastKnownRelayPtyIdByTabId[targetTabId] = detachedPtyId
+          relayReplacements.push([targetTabId, detachedPtyId])
         }
         // Why: pane-to-tab detach moves a live PTY without spawning or exiting, so transfer identity without activity bumps.
-        const sourceTabsByWorktree = withTerminalTabPtyId(
-          s.tabsByWorktree,
-          sourceTabId,
-          sourcePrimaryPtyId
-        )
-        const nextTabsByWorktree = detachedPtyId
-          ? withTerminalTabPtyId(sourceTabsByWorktree, targetTabId, detachedPtyId)
-          : sourceTabsByWorktree
-        const directSshLedger = transferDirectSshPaneDetachLedger(s, {
-          detachedPtyId,
-          sourcePtyId: sourcePrimaryPtyId,
-          sourceTabId,
-          targetTabId,
-          isAuthorityCurrent: (authority) => isCurrentDirectSshAuthority(s, authority)
-        })
+        const nextTabsByWorktree = withTerminalTabPtyIds(s.tabsByWorktree, [
+          { tabId: sourceTabId, ptyId: sourcePrimaryPtyId },
+          ...(detachedPtyId ? [{ tabId: targetTabId, ptyId: detachedPtyId }] : [])
+        ])
         return {
-          ptyIdsByTabId: nextPtyIdsByTabId,
-          lastKnownRelayPtyIdByTabId: nextLastKnownRelayPtyIdByTabId,
-          ...directSshLedger,
+          ptyIdsByTabId: replaceRecordEntries(s.ptyIdsByTabId, ptyReplacements),
+          lastKnownRelayPtyIdByTabId: replaceRecordEntries(
+            s.lastKnownRelayPtyIdByTabId,
+            relayReplacements
+          ),
           ...(nextTabsByWorktree !== s.tabsByWorktree ? { tabsByWorktree: nextTabsByWorktree } : {})
         }
       })

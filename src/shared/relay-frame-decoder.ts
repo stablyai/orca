@@ -143,12 +143,19 @@ export class FrameDecoder {
         const framed = this.buffer.take(totalLength)
         frames += 1
         bytes += totalLength
-        this.onFrame({
-          type: framed[0],
-          id: framed.readUInt32BE(1),
-          ack: framed.readUInt32BE(5),
-          payload: framed.subarray(HEADER_LENGTH, totalLength)
-        })
+        // Socket data callbacks must contain owner exceptions like continuation turns do: close the bad connection, never crash
+        // the process and every other connection it serves.
+        try {
+          this.onFrame({
+            type: framed[0],
+            id: framed.readUInt32BE(1),
+            ack: framed.readUInt32BE(5),
+            payload: framed.subarray(HEADER_LENGTH, totalLength)
+          })
+        } catch (error) {
+          // reset() bumps the generation, which ends this turn and drops the residue.
+          containFrameDecoderContinuation(() => this.reset(), this.onError, error)
+        }
       }
     } finally {
       this.draining = false

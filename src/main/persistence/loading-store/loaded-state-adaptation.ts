@@ -15,14 +15,12 @@ export class LoadedStateAdaptationOperations {
     let relocatedInline = false
     for (const workspace of this.runtime.state.folderWorkspaces ?? []) {
       if (Array.isArray(workspace.diffComments) && workspace.diffComments.length > 0) {
-        // Inline wins: an intervening rollback to a #14112 build writes notes inline and leaves the
-        // older map untouched, so inline is the last notes-aware write. Also makes the relocation
-        // durable even if the user never edits anything this session.
+        // Inline notes win after rollback writes; persist relocation even without further edits.
         relocatedInline = true
         continue
       }
       const comments = stored?.[workspace.id]
-      // Not `??`: a degenerate `{ id: [] }` entry must not delete an intact inline value.
+      // Empty map entries must not erase intact inline notes.
       if (Array.isArray(comments) && comments.length > 0) {
         workspace.diffComments = comments
       }
@@ -30,13 +28,12 @@ export class LoadedStateAdaptationOperations {
     if (relocatedInline) {
       this.runtime.loadNeedsSave = true
     }
-    // Write-only projection: buildStateToSave() is the only producer, so leaving the loaded map in
-    // state would make it a stale second source of truth that getDurableState() spreads back out.
+    // This map is output-only; retaining it would create a stale second source of truth.
     delete this.runtime.state.folderWorkspaceDiffComments
   }
 
   adaptFlatFolderScanProjectGroups(): boolean {
-    // Why: older folder imports kept a real parent path but flat repos; upgrade that shape into v1 sparse folder scopes.
+    // Upgrade legacy flat folder imports into sparse folder scopes.
     const groups = this.runtime.state.projectGroups ?? []
     const repos = this.runtime.state.repos
     if (groups.length === 0 || repos.length === 0) {
@@ -102,9 +99,9 @@ export class LoadedStateAdaptationOperations {
         if (!group) {
           continue
         }
-        const nextOrder = nextOrderByGroupId.get(group.id) ?? 0
-        nextOrderByGroupId.set(group.id, nextOrder + 1)
-        if (repo.projectGroupId !== group.id || repo.projectGroupOrder !== nextOrder) {
+        if (repo.projectGroupId !== group.id) {
+          const nextOrder = nextOrderByGroupId.get(group.id) ?? 0
+          nextOrderByGroupId.set(group.id, nextOrder + 1)
           repo.projectGroupId = group.id
           repo.projectGroupOrder = nextOrder
           changed = true

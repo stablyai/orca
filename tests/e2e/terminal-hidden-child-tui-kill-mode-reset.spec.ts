@@ -24,7 +24,7 @@ async function activateTerminalTab(page: Page, tabId: string): Promise<void> {
   await page.evaluate((id) => {
     const state = window.__store?.getState()
     state?.setActiveTab(id)
-    state?.setActiveTabType('terminal')
+    state?.setActiveTabType('terminal', state.activeWorktreeId)
   }, tabId)
   await expect
     .poll(() =>
@@ -70,7 +70,7 @@ for (const exitMode of ['normal', 'sigkill'] as const) {
         const tab = state.createTab(worktreeId)
         state.queueTabStartupCommand(tab.id, { command })
         state.setActiveTab(tab.id)
-        state.setActiveTabType('terminal')
+        state.setActiveTabType('terminal', window.__store?.getState().activeWorktreeId ?? null)
         return tab.id
       },
       { command }
@@ -155,12 +155,8 @@ for (const exitMode of ['normal', 'sigkill'] as const) {
       )
       .toEqual({ buffer: 'normal', mouse: 'none' })
 
-    // Why normal-exit only: the barrier preserves shell output from the 133;D
-    // boundary onward (the prompt), but bytes the dying command printed while
-    // the alternate screen was still up are part of the discarded dead frame.
-    // On SIGKILL the parent's exit line lands pre-D in the alt buffer, so it is
-    // unrecoverable by design; on normal exit the child's own ?1049l precedes
-    // it and it survives on the normal buffer.
+    // Preserve output from 133;D onward, discarding the dead alt frame. SIGKILL’s parent exit line lands pre-D in alt and is intentionally lost;
+    // normal exit sends ?1049l first, preserving the line in the normal buffer.
     if (exitMode === 'normal') {
       await expect
         .poll(() => getTerminalContent(orcaPage, 6_000), { timeout: 8_000 })

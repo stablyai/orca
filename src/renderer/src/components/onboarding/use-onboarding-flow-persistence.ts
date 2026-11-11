@@ -1,13 +1,20 @@
 import { useCallback, useRef } from 'react'
-import { track } from '@/lib/telemetry'
-import { useAppStore } from '@/store'
-import { ONBOARDING_FINAL_STEP, ONBOARDING_FLOW_VERSION } from '../../../../shared/constants'
+import { toast } from 'sonner'
+import { translate } from '@/i18n/i18n'
+import { track } from '@/diagnostics/telemetry/telemetry'
+import { useAppStore } from '@/store/index'
+import {
+  ONBOARDING_FINAL_STEP,
+  ONBOARDING_FLOW_VERSION
+} from '../../../../shared/onboarding-defaults'
 import type { EventProps } from '../../../../shared/telemetry-events'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { OnboardingState } from '../../../../shared/onboarding-state-types'
-import type { TuiAgent } from '../../../../shared/tui-agent'
-import { applyAgentPermissionMode } from '../../../../shared/tui-agent-permissions'
-import type { StepId, StepNumber } from './use-onboarding-flow-types'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import { applyAllAgentsPermission } from '../../../../shared/agent-launch/permissions/tui-agent-permission-choice'
+import type { AgentChatPermissionMode } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
+import type { AgentSurface, StepId, StepNumber } from './use-onboarding-flow-types'
+import { agentSurfaceSettingsUpdate } from './onboarding-flow-state'
 
 export async function persistStep(
   stepNumber: number,
@@ -20,8 +27,28 @@ export async function persistStep(
   })
 }
 
+function notifyProgressSaveFailure(): void {
+  toast.error(
+    translate(
+      'auto.components.onboarding.use.onboarding.flow.52acfbef51',
+      'Could not save progress'
+    )
+  )
+}
+
 function selectedAgentOrBlank(agent: TuiAgent | null): TuiAgent | 'blank' {
   return agent ?? 'blank'
+}
+
+/** Apply Yolo to chat defaults only after an explicit toggle; preserve custom modes as with agent arguments. */
+export function onboardingChatPermissionSetting(
+  current: AgentChatPermissionMode | undefined,
+  yolo: boolean,
+  chosen: boolean
+): Partial<Pick<GlobalSettings, 'nativeChatPermissionMode'>> {
+  return !chosen || current === 'accept-edits' || current === 'auto'
+    ? {}
+    : { nativeChatPermissionMode: yolo ? 'full-access' : 'ask' }
 }
 
 export function buildCompletedOnboardingNotificationSettings(
@@ -31,6 +58,7 @@ export function buildCompletedOnboardingNotificationSettings(
     ...notifications,
     enabled: true,
     agentTaskComplete: true,
+    agentNeedsInput: true,
     terminalBell: true
   }
 }
@@ -69,18 +97,13 @@ export function trackOnboardingDismissed(
 }
 
 export function useCloseWith({ onOnboardingChange, startTimeRef, setError }: CloseWithDeps) {
-  // Why: onboarding closes exactly once. On the final notifications step both
-  // the "Add your first project" handoff (completed) and a click-off/Escape
-  // dismissal (dismissed) can reach closeWith, and next()'s persist window
-  // leaves the modal interactive with no busy flag. This latch makes closeWith
-  // idempotent so the first close wins — no double onboarding.update write and
-  // no double completed/dismissed telemetry.
+  // First close wins across completion/dismissal during persistence, preventing duplicate writes and telemetry.
   const closedRef = useRef(false)
   return useCallback(
     async (
       outcome: 'completed' | 'dismissed',
       lastStepReached: StepNumber,
-      completedPath?: 'add_project_modal',
+      completedPath?: 'add_project_modal' | 'workspace',
       dismissedExtras?: DismissedExtras
     ): Promise<boolean> => {
       if (closedRef.current) {
@@ -97,26 +120,23 @@ export function useCloseWith({ onOnboardingChange, startTimeRef, setError }: Clo
           checklist: { dismissed: outcome === 'dismissed' }
         })
       } catch (err) {
-        // Why: the persist failed, so onboarding did not actually close — clear
-        // the latch so the user can retry the close action.
+        // A failed write did not close onboarding; release the latch for retry.
         closedRef.current = false
         setError(err instanceof Error ? err.message : String(err))
+        notifyProgressSaveFailure()
         return false
       }
       onOnboardingChange(nextState)
       if (outcome === 'completed' && completedPath) {
         const total = Math.max(0, Date.now() - startTimeRef.current)
-        // Why: no `is_git_repo` — project selection now happens in the Add
-        // Project modal after this fires, so the signal moved to
-        // `repo_added.is_git_repo`.
+        // Project selection happens later; repo_added owns is_git_repo telemetry.
         track('onboarding_completed', {
           path: completedPath,
           total_duration_ms: total
         })
       }
       if (outcome === 'completed') {
-        // Why: closeWith updates parent state synchronously from this hook's
-        // perspective, but the modal unmounts on the next React commit.
+        // Wait until the next commit can unmount onboarding before notifying star nag.
         window.setTimeout(() => {
           void window.api.starNag.onboardingCompleted()
         }, 0)
@@ -131,8 +151,12 @@ export function useCloseWith({ onOnboardingChange, startTimeRef, setError }: Clo
 
 type PersistCurrentStepDeps = {
   currentStepId: StepId
+  agentSurface: AgentSurface
   selectedAgent: TuiAgent | null
+  agentInteractedRef: { current: boolean }
   yoloPermissions: boolean
+  /** Whether the person flipped Yolo mode in this flow; a replay left untouched keeps chats as set. */
+  yoloPermissionsChosen: { readonly current: boolean }
   theme: GlobalSettings['theme']
   settings: GlobalSettings | null
   updateSettings: (updates: Partial<GlobalSettings>) => Promise<void> | void
@@ -147,8 +171,11 @@ export type PersistCurrentStepResult = {
 
 export function usePersistCurrentStep({
   currentStepId,
+  agentSurface,
   selectedAgent,
+  agentInteractedRef,
   yoloPermissions,
+  yoloPermissionsChosen,
   theme,
   settings,
   updateSettings,
@@ -161,20 +188,38 @@ export function usePersistCurrentStep({
       return { ok: false }
     }
     try {
-      if (currentStepId === 'agent') {
+      if (currentStepId === 'agent_surface') {
+        // Why: the Chat UI choice saves with the default agent, so leaving mid-step changes nothing.
+        return { ok: true }
+      }
+      if (currentStepId === 'agent' || currentStepId === 'notifications') {
+        if (currentStepId === 'agent') {
+          // Continue confirms the visible choice before late detection can replace it during the save.
+          agentInteractedRef.current = true
+        }
         const defaultTuiAgent = selectedAgentOrBlank(selectedAgent)
         await updateSettings({
+          ...agentSurfaceSettingsUpdate(settings, agentSurface),
           defaultTuiAgent,
-          ...applyAgentPermissionMode({
-            mode: yoloPermissions ? 'yolo' : 'manual',
-            agentDefaultArgs: settings.agentDefaultArgs,
-            agentDefaultEnv: settings.agentDefaultEnv
-          })
+          ...(currentStepId === 'notifications'
+            ? {
+                notifications: buildCompletedOnboardingNotificationSettings(settings.notifications)
+              }
+            : {}),
+          // Off adds no flag, as it always has: each agent's own settings apply.
+          ...(yoloPermissionsChosen.current
+            ? applyAllAgentsPermission(settings, yoloPermissions ? 'full-access' : 'own')
+            : {}),
+          ...onboardingChatPermissionSetting(
+            settings.nativeChatPermissionMode,
+            yoloPermissions,
+            yoloPermissionsChosen.current
+          )
         })
         const choseAgent = defaultTuiAgent !== 'blank'
         const wasAlreadyChosen = onboardingChecklist.choseAgent
         onOnboardingChange(
-          await persistStep(1, {
+          await persistStep(currentStepId === 'agent' ? 1 : ONBOARDING_FINAL_STEP, {
             checklist: { ...onboardingChecklist, choseAgent }
           })
         )
@@ -184,6 +229,9 @@ export function usePersistCurrentStep({
             time_since_completed_ms: 0
           })
         }
+        if (currentStepId === 'notifications') {
+          useAppStore.getState().recordFeatureInteraction('notifications')
+        }
         return { ok: true }
       }
       if (currentStepId === 'theme') {
@@ -191,34 +239,25 @@ export function usePersistCurrentStep({
         onOnboardingChange(await persistStep(2))
         return { ok: true }
       }
-      if (currentStepId === 'notifications') {
-        await updateSettings({
-          notifications: buildCompletedOnboardingNotificationSettings(settings.notifications)
-        })
-        useAppStore.getState().recordFeatureInteraction('notifications')
-        onOnboardingChange(await persistStep(ONBOARDING_FINAL_STEP))
-        return { ok: true }
-      }
       if (currentStepId === 'windows_terminal') {
-        // Why: the Windows terminal controls persist on selection. Continuing
-        // only marks the preference page complete for resume/telemetry state.
+        // Selections already persist; Continue only records page completion for resume/telemetry.
         onOnboardingChange(await persistStep(4))
         return { ok: true }
       }
       if (currentStepId === 'integrations') {
-        // Why: GitHub and Linear connections persist through their own
-        // store slices when the user actually wires them up. The step itself
-        // is a no-op for settings/onboarding state beyond marking it
-        // completed.
+        // Connections persist in their integration slices; this step only records completion.
         onOnboardingChange(await persistStep(3))
         return { ok: true }
       }
       return { ok: false }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
+      notifyProgressSaveFailure()
       return { ok: false }
     }
   }, [
+    agentInteractedRef,
+    agentSurface,
     currentStepId,
     onboardingChecklist,
     onOnboardingChange,
@@ -227,6 +266,7 @@ export function usePersistCurrentStep({
     theme,
     updateSettings,
     yoloPermissions,
+    yoloPermissionsChosen,
     setError
   ])
 }

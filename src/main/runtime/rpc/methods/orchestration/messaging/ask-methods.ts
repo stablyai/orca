@@ -1,63 +1,115 @@
-import { defineMethod, type RpcMethod } from '../../../core'
+import { defineOrchestrationMethod } from '../access/orchestration-method-access'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { clampOrchestrationAskTimeoutMs } from '../../../../../../shared/orchestration-ask-timeout'
-import { isGroupAddress } from '../../../../orchestration/groups'
-import { AskParams } from '../schemas'
+import { clampOrchestrationAskTimeoutMs } from '../../../../../../shared/orchestration/mailbox/orchestration-ask-timeout'
+import { isGroupAddress } from '../../../../orchestration/addressing/groups/group-addressing'
+import { dispatchReportMailbox } from '../../../../orchestration/workers/reports/dispatch-report-mailbox'
+import { AskParams } from '../../../../../../shared/rpc-contract/orchestration-params'
 import { rejectFederatedExplicitTarget } from '../routing'
-import { askRemoteRunHome } from './ask-remote'
+import { askRemoteRunHome } from '../../../../orchestration/legacy-remote/legacy-remote'
+import {
+  mailboxAddressOf,
+  runCoordinatorKey
+} from '../../../../orchestration/addressing/orchestration-caller-identity'
+import { resolveOrchestrationParty } from '../../../../orchestration/addressing/orchestration-party'
+import { assertLifecycleCallerIsNotAnotherParty } from './lifecycle-caller-fence'
+import { assertWorkerCanReport } from '../../../../orchestration/workers/reports/worker-report-admission'
+import { finishedWorkerDispatch, refuseFinishedRemoteWorker } from './finished-worker-mail'
+import { isDispatchAssignee } from '../../../../orchestration/db/dispatch-context/dispatch-lookup'
+import {
+  askedQuestionReceipt,
+  waitForQuestionAnswer
+} from '../../../../orchestration/mailbox/questions/question-answer-delivery'
 
-export const ORCHESTRATION_ASK_METHODS: RpcMethod[] = [
-  defineMethod({
+export const ORCHESTRATION_ASK_METHODS = [
+  defineOrchestrationMethod({
     name: 'orchestration.ask',
+    access: {
+      kind: 'writes',
+      caller: 'from',
+      targets: { to: 'party', resume: 'message', run: 'run' }
+    },
+    permission: 'workspace',
     params: AskParams,
     handler: async (
       params,
-      { runtime, signal, orchestrationCapability, recordMutationReceipt }
+      {
+        runtime,
+        signal,
+        recordMutationReceipt,
+        orchestrationCaller,
+        orchestrationCompatibilityEvidence
+      }
     ) => {
-      // Why: group addresses have no unambiguous first-answer authority.
+      // Group addresses cannot select an unambiguous first answerer.
       if (params.to && isGroupAddress(params.to)) {
-        throw new Error(
-          'ask does not support group addresses; use send for non-blocking fan-out questions'
+        throw new OrchestrationError(
+          'invalid_argument',
+          'ask does not support group addresses; ask your owning run:<id>, or use send for a non-blocking fan-out within your Run.'
         )
       }
 
       const db = runtime.getOrchestrationDb()
       const from = params.from ?? 'unknown'
-      // Why: echoed on every return so a clamped caller reports the budget actually waited, not the one it asked for.
+      // Echo the clamped budget on every return so callers report time actually waited.
       const timeoutMs = clampOrchestrationAskTimeoutMs(params.timeoutMs)
       const paneKey = runtime.getTerminalPaneKey(from) ?? undefined
+      if (!orchestrationCaller) {
+        assertLifecycleCallerIsNotAnotherParty(runtime, {
+          from,
+          fromPaneKey: paneKey,
+          evidence: orchestrationCompatibilityEvidence
+        })
+      }
       const remoteAttachment = paneKey ? db.findActiveRemoteAttachmentForPane(paneKey) : undefined
-      if (remoteAttachment) {
-        rejectFederatedExplicitTarget(params)
+      if (remoteAttachment && paneKey) {
+        rejectFederatedExplicitTarget(params, remoteAttachment.home_run_id)
         return askRemoteRunHome({
           params: { ...params, timeoutMs },
           runtime,
           signal,
-          orchestrationCapability,
           recordMutationReceipt,
           from,
-          paneKey: paneKey as string,
+          paneKey,
           dispatchId: remoteAttachment.dispatch_id,
-          taskId: remoteAttachment.task_id
+          taskId: remoteAttachment.task_id,
+          workerState: remoteAttachment.state
         })
       }
-      const activeDispatch = db.getActiveDispatchForIdentity(from, paneKey)
-      if (!activeDispatch) {
+      const workingDispatch = db.getActiveDispatchForIdentity(from, paneKey)
+      // A finished worker still asks its coordinator; the question changes nothing about its Task.
+      const askingDispatch =
+        workingDispatch ??
+        finishedWorkerDispatch(
+          db,
+          {
+            address: from,
+            paneKey: paneKey ?? null,
+            orcaSessionId: orchestrationCaller?.orcaSessionId ?? null,
+            processIncarnation: () => runtime.getTerminalProcessIncarnation(from) ?? undefined
+          },
+          { run: undefined, dispatchId: undefined, dispatch: undefined },
+          'question'
+        )
+      if (!askingDispatch) {
+        refuseFinishedRemoteWorker(db, paneKey, undefined)
         throw new OrchestrationError(
           'dispatch_inactive',
           'ask requires an active supervised Dispatch.'
         )
       }
-      if (activeDispatch.capability_hash) {
-        const authority = db.verifyDispatchCapability({
-          dispatchId: activeDispatch.id,
-          capability: orchestrationCapability,
-          paneKey,
-          processIncarnation: runtime.getTerminalProcessIncarnation(from) ?? undefined
+      if (workingDispatch) {
+        assertWorkerCanReport({
+          dispatchId: workingDispatch.id,
+          from,
+          workerState: db.getWorkerDispatch(workingDispatch.id)?.state,
+          processCurrent:
+            !workingDispatch.process_incarnation ||
+            db.isDispatchProcessCurrent({
+              dispatchId: workingDispatch.id,
+              paneKey: paneKey ?? null,
+              processIncarnation: runtime.getTerminalProcessIncarnation(from)
+            })
         })
-        if (!authority.valid) {
-          throw new OrchestrationError('dispatch_capability_invalid', authority.reason)
-        }
       }
       const options =
         params.options
@@ -66,103 +118,69 @@ export const ORCHESTRATION_ASK_METHODS: RpcMethod[] = [
           .filter(Boolean) ?? []
       let question = params.resume ? db.getQuestion(params.resume) : undefined
       if (params.resume) {
-        if (!question || question.dispatch_id !== activeDispatch.id) {
+        // Its own question from a finished Dispatch stays resumable after a follow-up starts.
+        const askedBy = question && db.getDispatchContextById(question.dispatch_id)
+        if (!question || !askedBy || !isDispatchAssignee(askedBy, from, paneKey)) {
           throw new OrchestrationError(
             'question_not_found',
             `Question ${params.resume} does not belong to this active Dispatch.`
           )
         }
       } else {
-        const run = db.getRun(activeDispatch.run_id)
+        const run = db.getRun(askingDispatch.run_id)
         if (!run || run.legacy === 1) {
           throw new OrchestrationError(
             'run_not_found',
-            `Run ${activeDispatch.run_id} was not found.`
+            `Run ${askingDispatch.run_id} was not found.`
           )
         }
         if (params.run && params.run !== run.id) {
           throw new OrchestrationError(
             'dispatch_run_mismatch',
-            `Dispatch ${activeDispatch.id} belongs to Run ${run.id}, not ${params.run}.`
+            `Dispatch ${askingDispatch.id} belongs to Run ${run.id}, not ${params.run}.`
           )
         }
-        if (params.to && params.to !== `run:${run.id}` && params.to !== run.coordinator_handle) {
+        const reportTo = dispatchReportMailbox(db, askingDispatch)
+        if (
+          params.to &&
+          params.to !== `run:${run.id}` &&
+          params.to !== reportTo &&
+          resolveOrchestrationParty(params.to, db).address !==
+            mailboxAddressOf(runCoordinatorKey(run))
+        ) {
           throw new OrchestrationError(
             'dispatch_run_mismatch',
-            `ask from Dispatch ${activeDispatch.id} must target its owning Run ${run.id}.`
+            `ask from Dispatch ${askingDispatch.id} must target its owning Run ${run.id}.`
           )
         }
+        // An explicit Run or coordinator target still reaches the Run; otherwise the asker's creator.
+        const to = params.to && params.to !== reportTo ? `run:${run.id}` : reportTo
         const created = db.createQuestion({
           runId: run.id,
-          dispatchId: activeDispatch.id,
+          dispatchId: askingDispatch.id,
           askerHandle: from,
           question: params.question as string,
-          options
+          options,
+          to
         })
         question = created.question
-        runtime.notifyMessageArrived(`run:${run.id}`, created.message.type)
+        runtime.notifyMessageArrived(to, created.message.type)
       }
 
       const questionId = question.message_id
-      recordMutationReceipt?.({
-        accepted: true,
-        answer: null,
-        messageId: questionId,
-        threadId: questionId,
-        timedOut: false,
-        cancelled: false,
-        connectionLost: false,
-        timeoutMs
-      })
-      const deadline = Date.now() + timeoutMs
-      while (true) {
-        const current = db.getQuestion(questionId)
-        if (!current || current.status === 'closed') {
-          throw new OrchestrationError(
-            'dispatch_inactive',
-            `Question ${questionId} closed because its Dispatch is inactive.`
-          )
-        }
-        if (current.status === 'answered') {
-          return {
-            answer: current.answer_body,
-            messageId: questionId,
-            answerMessageId: current.answer_message_id,
-            threadId: questionId,
-            timedOut: false,
-            cancelled: false,
-            connectionLost: false,
-            timeoutMs
-          }
-        }
-        if (signal?.aborted) {
-          return {
-            answer: null,
-            messageId: questionId,
-            threadId: questionId,
-            timedOut: false,
-            cancelled: true,
-            connectionLost: true,
-            timeoutMs
-          }
-        }
-        const remainingMs = deadline - Date.now()
-        if (remainingMs <= 0) {
-          return {
-            answer: null,
-            messageId: questionId,
-            threadId: questionId,
-            timedOut: true,
-            cancelled: false,
-            connectionLost: false,
-            timeoutMs
-          }
-        }
-        await runtime.waitForMessage(`dispatch:${activeDispatch.id}`, {
-          timeoutMs: remainingMs,
-          signal
-        })
+      // A finished worker has no turn for an answer to wake, so it waits for it here.
+      if (!params.resume && params.wait === false && workingDispatch) {
+        return askedQuestionReceipt(questionId, recordMutationReceipt)
       }
+      return waitForQuestionAnswer({
+        runtime,
+        questionId,
+        readQuestion: () => db.getQuestion(questionId),
+        closedMessage: `Question ${questionId} closed because its Dispatch is inactive.`,
+        timeoutMs,
+        signal,
+        recordMutationReceipt
+      })
     }
   })
 ]

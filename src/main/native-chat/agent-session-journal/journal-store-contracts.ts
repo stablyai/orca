@@ -1,36 +1,71 @@
+import type { JournalRow } from './durable-rows/journal-row-schema'
+import type Database from '../../sqlite/sync-database'
+import type { JournalItemEcho } from './projection/journal-item-echo'
+import type { AgentJournalDispatchRejection } from '../../../shared/agent-session/failures/agent-session-failure-words'
+import type {
+  AgentJournalAnsweredTurnIdentity,
+  AgentJournalItemBody,
+  AgentJournalMessageItem,
+  AgentJournalProducerLinkage,
+  AgentJournalResetReason,
+  AgentJournalRowAttribution
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type {
   AgentJournalCursor,
-  AgentJournalItemBody,
   AgentJournalItemIdentity,
-  AgentJournalMessageItem,
-  AgentJournalResetReason,
   AgentSessionJournalIdentity
-} from '../../../shared/agent-session-journal-types'
-import type { JournalLoad } from './journal-open'
-import type { JournalLifecycleMutationInput } from './journal-row-builders'
-import type { JournalRow } from './journal-row-schema'
+} from '../../../shared/agent-session/journal/agent-session-journal-identity'
+import type { AgentJournalTurnScope } from '../../../shared/agent-session/journal/agent-session-journal-turn-scope'
+import type { AgentSessionMessageSource } from '../../../shared/agent-session/agent-session-message-source'
+import type { AgentSessionExecutionOptions } from '../../../shared/agent-session/options/agent-session-execution-options'
+import type { JournalHostDatabase } from './database/journal-host-database'
+import type { JournalLifecycleMutationInput } from './writing/journal-lifecycle-mutation'
+import type { JournalRowsRead } from './replay/journal-read-row'
+import type { JournalReducerState } from './projection/journal-reducer'
+import type { JournalOperationReceipt, JournalRowWriter } from './writing/journal-row-writer'
+import type { UsageLimitContinueIdentity } from '../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
+import type { JournalAttachmentClaim } from './submissions/journal-submission-hook'
+import type { JournalWriteBody } from './writing/journal-write-queue'
+import type { QueuedMessageOwed } from './queued-messages/queued-message-consume-error'
 
 export type AgentSessionJournalOptions = {
   identity: AgentSessionJournalIdentity
-  journalDir: string
+  database: JournalHostDatabase
   now?: () => number
   mintEpoch?: () => string
-  /** A caller that already loaded the journal can avoid reading the same files again. */
-  loaded?: JournalLoad | null
+  /** Saves a person's Stop of limited work in the same commit as the rows that reveal it. */
+  withdrawStoppedCut?: (cut: UsageLimitContinueIdentity) => JournalOperationReceipt | undefined
+  /** Runs in every write's transaction with the rows, the commit clock and each item's prior body;
+   *  must not throw. */
+  captureCommittedRows?: JournalCommittedRowsCapture
 }
 
 export type JournalReadSince =
-  | { ok: true; rows: JournalRow[]; cursor: AgentJournalCursor }
+  | ({ ok: true; cursor: AgentJournalCursor } & JournalRowsRead)
   | { ok: false; reset: AgentJournalResetReason }
 
 export type ResolveDispatchInput = {
   clientMessageId: string
   fence: number
   recovered?: true
-} & (
-  | { state: 'accepted'; providerIdentity: AgentJournalItemIdentity }
-  | { state: 'rejected' | 'unknown'; reason?: string | null }
-)
+} &
+  /** Null identity means the provider accepted without echoing an item, e.g. an in-place command. */
+  (
+    | { state: 'accepted'; providerIdentity: AgentJournalItemIdentity | null }
+    /** Handover scope: live root turn, otherwise thread. */
+    | {
+        state: 'pending'
+        turnScope: AgentJournalTurnScope
+        carries?: readonly string[]
+      }
+    /** Generate both legacy reason text and typed rejection with agentSessionFailureWords. */
+    | ({
+        state: 'rejected'
+        keptAsQueuedMessageId?: string
+        answeredInTurn?: AgentJournalAnsweredTurnIdentity
+      } & AgentJournalDispatchRejection)
+    | { state: 'unknown'; reason?: string | null }
+  )
 
 export type JournalAppendResult = {
   cursor: AgentJournalCursor
@@ -38,14 +73,64 @@ export type JournalAppendResult = {
   revision: number
 }
 
-export type JournalItemAppendOptions = { fence: number; observedAt?: number; recovered?: true }
+export type JournalCommittedRowsCapture = (
+  db: Database.Database,
+  sessionId: string,
+  rows: readonly JournalRow[],
+  committedAt: number,
+  previous: (itemId: string) => AgentJournalItemBody | undefined
+) => void
+
+export type JournalItemAppendOptions = AgentJournalRowAttribution & {
+  echoOf?: JournalItemEcho['echoOf']
+  fence: number
+  /** Provider execution provenance; host bookkeeping omits it to retain the item's owner. */
+  ownerFence?: number
+  /** Fence of the reusable child process producing this write. */
+  executionOwner?: number
+  observedAt?: number
+  recovered?: true
+}
 export type JournalTombstoneInput = { fence: number }
+
+export type JournalItemLinkageVisitor = (
+  itemId: string,
+  sequence: number,
+  body: AgentJournalItemBody,
+  attribution: AgentJournalProducerLinkage & { turnScope?: AgentJournalTurnScope }
+) => void
 
 export type JournalLifecycleBatchInput = {
   settlementId: string
   mutations: readonly JournalLifecycleMutationInput[]
   fence: number
+  /** Provider generation producing every item; host bookkeeping omits it. */
+  ownerFence?: number
   recovered?: true
+  /** Commit settlement verdicts before item rows. */
+  dispatches?: readonly ResolveDispatchInput[]
+  /** Atomically reject queued sends before the batch; skip the batch when none remain. */
+  rejectsQueued?: AgentJournalDispatchRejection
+  keepFailedStart?: boolean
+}
+
+/** Plan after preceding writes, including answers and Stops. */
+export type JournalPlannedLifecycleBatchInput = Pick<
+  JournalLifecycleBatchInput,
+  'settlementId' | 'fence' | 'recovered' | 'keepFailedStart'
+> & {
+  plan: () => {
+    mutations: readonly JournalLifecycleMutationInput[]
+    dispatches: readonly ResolveDispatchInput[]
+  }
+}
+
+export type JournalResolvedLifecycleBatchInput = Omit<
+  JournalLifecycleBatchInput,
+  'mutations' | 'rejectsQueued' | 'dispatches'
+> & {
+  /** Read after earlier writes; empty means no mutations. */
+  resolve: () => readonly JournalLifecycleMutationInput[]
 }
 
 export type JournalSubmissionInput = {
@@ -53,10 +138,44 @@ export type JournalSubmissionInput = {
   payloadFingerprint: string
   body: AgentJournalMessageItem
   fence: number
+  /** Acceptance precedes handover; dispatch/pending records delivery later. */
+  handoverRecorded?: true
+  /** Derived from consume; caller-provided values must match. */
+  queuedMessageId?: string
+  origin?: 'client' | 'host'
+  /** Persist only the sender kind. */
+  source?: Pick<AgentSessionMessageSource, 'kind'>
+  options?: AgentSessionExecutionOptions
+}
+
+/** The submission's queue link constitutes the entire handoff. */
+export type JournalSubmissionConsume = {
+  messageId: string
+  expect: 'waiting' | 'returned'
+  /** Automatic drain honors pauses in the consume transaction; Send now omits this. */
+  yieldsToPause?: true
+  /** Transient selection for mail joining active work; never persisted. */
+  steer?: boolean
+  /** Re-asked in the handover transaction: an agent's message can stop being owed while it waits. */
+  owed?: () => QueuedMessageOwed
 }
 
 export type JournalItemAppendInput = {
   identity: AgentJournalItemIdentity
   body: AgentJournalItemBody
   options: JournalItemAppendOptions
+}
+
+export type JournalQueuedMessagesDeps = {
+  sessionId: string
+  serialize: <T>(run: JournalWriteBody<T>) => Promise<T>
+  database: () => JournalHostDatabase
+  readOnly: () => boolean
+  state: () => JournalReducerState
+  /** Fallback pause boundary when this handle could not write its reopen mark. */
+  reopenFloor: () => AgentJournalCursor | null
+  writer: JournalRowWriter
+  /** Notify after legacy deletion that appends no row. */
+  committed: () => void
+  claimAttachments: JournalAttachmentClaim
 }

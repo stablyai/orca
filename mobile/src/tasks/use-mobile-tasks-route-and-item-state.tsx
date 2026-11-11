@@ -1,12 +1,13 @@
+import { useMobileTasksSelection } from './github-task-identity'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import {
   type GitHubIssueSourceError,
   type GitHubIssueSourceFallback,
   type GitHubRepoSlugCacheEntry,
-  type RpcClient,
-  type TaskProvider,
-  normalizeVisibleTaskProviders,
   useHostClient,
   useHostRepoList,
+  useMemo,
+  reconcileRepoSelection,
   useLastConnectedAt,
   useRelayRecoveryStatus,
   useLocalSearchParams,
@@ -17,7 +18,13 @@ import {
   useState
 } from './mobile-tasks-dependencies'
 import {
-  type ActionableTaskItem,
+  type TaskProvider,
+  normalizeVisibleTaskProviders
+} from '../../../src/shared/work-items/task-providers'
+import { newTabRepoListRead } from '../session/agent-launch/mobile-runtime-repo-operations'
+import { useHostProtocolGates } from '../components/host-protocol-gates-context'
+import { useTaskHostRepos } from './use-task-host-repos'
+import {
   DEFAULT_LINEAR_DISPLAY_PROPERTIES,
   type GitHubPreset,
   type GitHubProjectRow,
@@ -39,17 +46,20 @@ import {
   type TaskItem,
   type TaskResumeState,
   type TaskSort,
-  type TasksSupportState,
-  getTaskPresetQuery,
-  isSuccess
+  type TasksSupportState
 } from './mobile-tasks-legacy-foundation'
+import { getTaskPresetQuery } from '../../../src/shared/work-items/task-preset-query'
 import { useMobileTasksItemState } from './use-mobile-tasks-item-state'
+import { useTaskCommentDraft, useTaskCreateDraft } from './task-draft-rows'
+import { useMobileJiraConnectionState } from './use-mobile-jira-connection-state'
+import type { JiraIssueFilter } from '../../../src/shared/jira/jira-types'
 
 export function useMobileTasksRouteAndItemState() {
   const { hostId, taskSource } = useLocalSearchParams<{ hostId: string; taskSource?: string }>()
   const router = useRouter()
   const insets = useSafeAreaInsets()
-  const { client, state: connState } = useHostClient(hostId)
+  const { client: desktopClient, state: connState } = useHostClient(hostId)
+  const { hostCapabilities } = useHostProtocolGates()
   const reconnectAttempts = useReconnectAttempt(hostId)
   const lastConnectedAt = useLastConnectedAt(hostId)
   const relayRecovery = useRelayRecoveryStatus(hostId)
@@ -57,24 +67,34 @@ export function useMobileTasksRouteAndItemState() {
   const loadGenerationRef = useRef(0)
   const taskResumeRef = useRef<TaskResumeState>({})
   const repoList = useHostRepoList<RepoSummary>(
-    client,
-    client && connState === 'connected'
+    desktopClient,
+    desktopClient && connState === 'connected'
       ? async () => {
-          const response = await client.sendRequest('repo.list')
-          if (!isSuccess(response)) {
-            throw new Error(response.error.message)
-          }
-          return (response.result as { repos: RepoSummary[] }).repos
+          const reply = await newTabRepoListRead.request(desktopClient)
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+          return newTabRepoListRead.interpret(reply) as RepoSummary[]
         }
       : null
   )
-  const repos = repoList.state.repos
-  const { ensureLoaded: repoListEnsureLoaded, reload: repoListReload } = repoList
+  // One routed client sends each server repo’s calls to its owner.
+  const { client, repos, serverRepoList, repoListEnsureLoaded, repoListReload, repoHostLabels } =
+    useTaskHostRepos({
+      hostId,
+      desktopClient,
+      connState,
+      hostCapabilities,
+      desktopRepoList: repoList
+    })
   const [provider, setProvider] = useState<TaskProvider>('github')
   const [visibleProviders, setVisibleProviders] = useState<TaskProvider[]>(() =>
     normalizeVisibleTaskProviders(undefined)
   )
   const [linearConnected, setLinearConnected] = useState(false)
+  const [jiraConnection, setJiraConnection] = useMobileJiraConnectionState(client, connState)
+  const jiraStatusRequestIdRef = useRef(0)
+  const [jiraFilter, setJiraFilter] = useState<JiraIssueFilter>('assigned')
+  const [showJiraFilterPicker, setShowJiraFilterPicker] = useState(false)
+  const [showJiraSitePicker, setShowJiraSitePicker] = useState(false)
   const [githubMode, setGithubMode] = useState<'items' | 'project'>('items')
   const [githubKind, setGithubKind] = useState<GitHubTaskKind>('issues')
   const [githubPreset, setGithubPreset] = useState<GitHubPreset>('issues')
@@ -94,14 +114,9 @@ export function useMobileTasksRouteAndItemState() {
     null
   )
   const [selectedLinearTeamIds, setSelectedLinearTeamIds] = useState<Set<string>>(new Set())
-  const defaultRepoSelectionRef = useRef<string[] | null>(null)
-  const repoSelectionHydratedRef = useRef(false)
   const defaultLinearTeamSelectionRef = useRef<string[] | null>(null)
   const [showLinearWorkspacePicker, setShowLinearWorkspacePicker] = useState(false)
   const [showLinearTeamPicker, setShowLinearTeamPicker] = useState(false)
-  const [showLinearViewPicker, setShowLinearViewPicker] = useState(false)
-  const [showLinearGroupPicker, setShowLinearGroupPicker] = useState(false)
-  const [showLinearOrderPicker, setShowLinearOrderPicker] = useState(false)
   const [showLinearDisplayPicker, setShowLinearDisplayPicker] = useState(false)
   const [showLinearConnect, setShowLinearConnect] = useState(false)
   const [linearApiKeyDraft, setLinearApiKeyDraft] = useState('')
@@ -111,12 +126,20 @@ export function useMobileTasksRouteAndItemState() {
   const [linearConnectError, setLinearConnectError] = useState('')
   const [taskSort, setTaskSort] = useState<TaskSort>('updated')
   const [selectedRepoIds, setSelectedRepoIds] = useState<Set<string>>(new Set())
+  // Readers narrow saved ids without pruning; only user edits may drop temporarily absent server repos.
+  const effectiveRepoKey = [...reconcileRepoSelection(repos, [...selectedRepoIds])]
+    .sort()
+    .join('\n')
+  const effectiveRepoIds = useMemo(
+    (): ReadonlySet<string> => new Set(effectiveRepoKey ? effectiveRepoKey.split('\n') : []),
+    [effectiveRepoKey]
+  )
   const [items, setItems] = useState<TaskItem[]>([])
   const [githubPages, setGithubPages] = useState<
     Array<Extract<TaskItem, { provider: 'github' }>[]>
   >([])
   const [githubCurrentPage, setGithubCurrentPage] = useState(0)
-  const [githubTotalCount, setGithubTotalCount] = useState<number | null>(null)
+  const [githubCountedTotalPages, setGithubCountedTotalPages] = useState<number | null>(null)
   const [githubPaginationLoading, setGithubPaginationLoading] = useState(false)
   const [githubLoadingTargetPage, setGithubLoadingTargetPage] = useState<number | null>(null)
   const [githubRepoSources, setGithubRepoSources] = useState<Record<string, GitHubRepoSources>>({})
@@ -132,32 +155,39 @@ export function useMobileTasksRouteAndItemState() {
   >({})
   const [query, setQuery] = useState(getTaskPresetQuery('issues'))
   const [appliedQuery, setAppliedQuery] = useState(getTaskPresetQuery('issues'))
-  const [showProviderPicker, setShowProviderPicker] = useState(false)
   const [showGitHubKindPicker, setShowGitHubKindPicker] = useState(false)
   const [showGitHubPresetPicker, setShowGitHubPresetPicker] = useState(false)
   const [showGitLabViewPicker, setShowGitLabViewPicker] = useState(false)
   const [showGitLabFilterPicker, setShowGitLabFilterPicker] = useState(false)
   const [showLinearFilterPicker, setShowLinearFilterPicker] = useState(false)
-  const [showSortPicker, setShowSortPicker] = useState(false)
+  const [showFilterSheet, setShowFilterSheet] = useState(false)
   const [showRepoPicker, setShowRepoPicker] = useState(false)
   const [showGitHubIssueSourcePicker, setShowGitHubIssueSourcePicker] = useState(false)
   const [showGitHubPagePicker, setShowGitHubPagePicker] = useState(false)
   const [showCreateTask, setShowCreateTask] = useState(false)
   const [showCreateTargetPicker, setShowCreateTargetPicker] = useState(false)
-  const [createTitle, setCreateTitle] = useState('')
-  const [createBody, setCreateBody] = useState('')
+  const { createTitle, setCreateTitle, createBody, setCreateBody } =
+    useTaskCreateDraft(showCreateTask)
   const [createRepoId, setCreateRepoId] = useState<string | null>(null)
   const [createTeamId, setCreateTeamId] = useState<string | null>(null)
   const [linearTeams, setLinearTeams] = useState<LinearTeam[]>([])
   const [creatingTask, setCreatingTask] = useState(false)
   const [loading, setLoading] = useState(false)
+  // False until a list read settles, so an unread list is not shown as an empty one.
+  const [taskListSettled, setTaskListSettled] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [tasksSupportState, setTasksSupportState] = useState<TasksSupportState>({
     kind: 'unknown',
     client: null
   })
   const [error, setError] = useState('')
-  const [actionItem, setActionItem] = useState<ActionableTaskItem | null>(null)
+  const itemState = useMobileTasksItemState()
+  const itemSelection = useMobileTasksSelection(
+    client,
+    itemState.readDetailPayload,
+    itemState.reconcilePrFileConnection
+  )
+  const [itemCommentDraft, setItemCommentDraft] = useTaskCommentDraft(itemSelection.actionItem)
   const [mergeMethodTaskItem, setMergeMethodTaskItem] = useState<
     Extract<TaskItem, { provider: 'github' }> | Extract<TaskItem, { provider: 'gitlab' }> | null
   >(null)
@@ -167,7 +197,6 @@ export function useMobileTasksRouteAndItemState() {
     useState<PendingProjectGitHubMerge | null>(null)
   const [pendingHostedStateChange, setPendingHostedStateChange] =
     useState<PendingHostedStateChange | null>(null)
-  const itemState = useMobileTasksItemState()
   return {
     hostId,
     taskSource,
@@ -183,6 +212,8 @@ export function useMobileTasksRouteAndItemState() {
     taskResumeRef,
     repoList,
     repos,
+    serverRepoList,
+    repoHostLabels,
     repoListEnsureLoaded,
     repoListReload,
     provider,
@@ -191,6 +222,15 @@ export function useMobileTasksRouteAndItemState() {
     setVisibleProviders,
     linearConnected,
     setLinearConnected,
+    jiraConnection,
+    setJiraConnection,
+    jiraStatusRequestIdRef,
+    jiraFilter,
+    setJiraFilter,
+    showJiraFilterPicker,
+    setShowJiraFilterPicker,
+    showJiraSitePicker,
+    setShowJiraSitePicker,
     githubMode,
     setGithubMode,
     githubKind,
@@ -221,19 +261,11 @@ export function useMobileTasksRouteAndItemState() {
     setSelectedLinearWorkspaceId,
     selectedLinearTeamIds,
     setSelectedLinearTeamIds,
-    defaultRepoSelectionRef,
-    repoSelectionHydratedRef,
     defaultLinearTeamSelectionRef,
     showLinearWorkspacePicker,
     setShowLinearWorkspacePicker,
     showLinearTeamPicker,
     setShowLinearTeamPicker,
-    showLinearViewPicker,
-    setShowLinearViewPicker,
-    showLinearGroupPicker,
-    setShowLinearGroupPicker,
-    showLinearOrderPicker,
-    setShowLinearOrderPicker,
     showLinearDisplayPicker,
     setShowLinearDisplayPicker,
     showLinearConnect,
@@ -247,6 +279,7 @@ export function useMobileTasksRouteAndItemState() {
     taskSort,
     setTaskSort,
     selectedRepoIds,
+    effectiveRepoIds,
     setSelectedRepoIds,
     items,
     setItems,
@@ -254,8 +287,8 @@ export function useMobileTasksRouteAndItemState() {
     setGithubPages,
     githubCurrentPage,
     setGithubCurrentPage,
-    githubTotalCount,
-    setGithubTotalCount,
+    githubCountedTotalPages,
+    setGithubCountedTotalPages,
     githubPaginationLoading,
     setGithubPaginationLoading,
     githubLoadingTargetPage,
@@ -274,8 +307,6 @@ export function useMobileTasksRouteAndItemState() {
     setQuery,
     appliedQuery,
     setAppliedQuery,
-    showProviderPicker,
-    setShowProviderPicker,
     showGitHubKindPicker,
     setShowGitHubKindPicker,
     showGitHubPresetPicker,
@@ -286,8 +317,8 @@ export function useMobileTasksRouteAndItemState() {
     setShowGitLabFilterPicker,
     showLinearFilterPicker,
     setShowLinearFilterPicker,
-    showSortPicker,
-    setShowSortPicker,
+    showFilterSheet,
+    setShowFilterSheet,
     showRepoPicker,
     setShowRepoPicker,
     showGitHubIssueSourcePicker,
@@ -312,14 +343,15 @@ export function useMobileTasksRouteAndItemState() {
     setCreatingTask,
     loading,
     setLoading,
+    taskListSettled,
+    setTaskListSettled,
     refreshing,
     setRefreshing,
     tasksSupportState,
     setTasksSupportState,
     error,
     setError,
-    actionItem,
-    setActionItem,
+    ...itemSelection,
     mergeMethodTaskItem,
     setMergeMethodTaskItem,
     mergeMethodProjectRow,
@@ -330,7 +362,9 @@ export function useMobileTasksRouteAndItemState() {
     setPendingProjectGitHubMerge,
     pendingHostedStateChange,
     setPendingHostedStateChange,
-    ...itemState
+    ...itemState,
+    itemCommentDraft,
+    setItemCommentDraft
   }
 }
 

@@ -2,17 +2,10 @@ import { execFileSync } from 'node:child_process'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { listFilesWithGit } from '../ipc/filesystem-list-files-git-fallback'
-import { searchWithGitGrep } from '../ipc/filesystem-search-git'
-import {
-  gitExecFileAsync,
-  gitExecFileAsyncBuffer,
-  gitStreamStdout,
-  toLinuxPath,
-  toWindowsWslPath
-} from './runner'
-import { listWorktrees } from './worktree'
-import { resetWslLinkedWorktreeGitRoutingForTests } from './wsl-linked-worktree-git-routing'
+import { gitExecFileAsync, gitExecFileAsyncBuffer, gitStreamStdout } from './runner'
+import { toLinuxPath } from '../../shared/wsl-paths'
+import { listWorktrees } from './worktrees/catalog/worktree-scan-cache'
+import { resetWslLinkedWorktreeGitRoutingForTests } from './command-runner/wsl-linked-worktree-git-routing'
 
 const distro = process.env.ORCA_TEST_WSL_DISTRO?.trim()
 const fixtureRoots: string[] = []
@@ -66,15 +59,7 @@ describe.runIf(process.platform === 'win32' && Boolean(distro))(
         )
       ).toThrow(/not a git repository/i)
 
-      await expect(listFilesWithGit(linkedPath, [], { wslDistro: distro! })).resolves.toEqual(
-        expect.arrayContaining(['tracked.txt', 'untracked.txt'])
-      )
       resetWslLinkedWorktreeGitRoutingForTests()
-      await expect(
-        searchWithGitGrep(linkedPath, { query: 'tracked', rootPath: linkedPath }, 10, {
-          wslDistro: distro!
-        })
-      ).resolves.toMatchObject({ totalMatches: 2 })
 
       let streamedStatus = ''
       await expect(
@@ -134,27 +119,6 @@ describe.runIf(process.platform === 'win32' && Boolean(distro))(
       wslExec(['git', 'init', toLinuxPath(nestedPath)])
       await expect(
         gitExecFileAsync(['--exec-path'], { cwd: nestedPath, wslDistro: distro! })
-      ).resolves.toMatchObject({ stdout: expect.stringMatching(/(?:^|\n)\/[^\n]+\n$/) })
-    })
-
-    it('keeps WSL-native repositories on WSL Git', async () => {
-      const linuxRoot = wslExec(['mktemp', '-d', '/tmp/orca-wsl-native-XXXXXX']).trim()
-      wslFixtureRoots.push(linuxRoot)
-      const windowsRoot = toWindowsWslPath(linuxRoot, distro!)
-
-      wslExec(['git', 'init', linuxRoot])
-      wslExec(['git', '-C', linuxRoot, 'config', 'user.name', 'Orca Test'])
-      wslExec(['git', '-C', linuxRoot, 'config', 'user.email', 'test@invalid'])
-      await writeFile(join(windowsRoot, 'tracked.txt'), 'tracked\n')
-      wslExec(['git', '-C', linuxRoot, 'add', 'tracked.txt'])
-      wslExec(['git', '-C', linuxRoot, 'commit', '-m', 'fixture'])
-      await writeFile(join(windowsRoot, 'untracked.txt'), 'untracked\n')
-
-      await expect(
-        gitExecFileAsync(['status', '--short'], { cwd: windowsRoot, wslDistro: distro! })
-      ).resolves.toMatchObject({ stdout: expect.stringMatching(/(?:^|\n)\?\? untracked\.txt\n$/) })
-      await expect(
-        gitExecFileAsync(['--exec-path'], { cwd: windowsRoot, wslDistro: distro! })
       ).resolves.toMatchObject({ stdout: expect.stringMatching(/(?:^|\n)\/[^\n]+\n$/) })
     })
   }

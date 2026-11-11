@@ -1,0 +1,58 @@
+name: Restore pnpm verification
+description: Restore the pnpm-owned lockfile verdict without installing dependencies.
+
+inputs:
+  enabled:
+    description: Restore a verification record on supported runners.
+    default: 'true'
+  container-toolchain:
+    description: Use the manifest's pnpm version and default Linux cache path without installing host pnpm.
+    default: 'false'
+
+outputs:
+  path:
+    description: The pnpm-owned verification record.
+    value: ${{ steps.verification-cache.outputs.path }}
+  key:
+    description: Exact OS, architecture, pnpm version and policy key.
+    value: ${{ steps.verification-cache.outputs.key }}
+  cache-hit:
+    description: Whether the exact record was restored.
+    value: ${{ steps.verification-cache-restore.outputs.cache-hit }}
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve pnpm verification cache
+      id: verification-cache
+      if: >-
+        inputs.enabled == 'true' &&
+        (runner.os == 'Linux' ||
+        (runner.os == 'Windows' && (runner.arch == 'X64' || runner.arch == 'ARM64')) ||
+        (runner.os == 'macOS' && runner.arch == 'X64'))
+      shell: bash
+      env:
+        POLICY_HASH: ${{ hashFiles('pnpm-lock.yaml', 'pnpm-workspace.yaml', '.npmrc') }}
+        CONTAINER_TOOLCHAIN: ${{ inputs.container-toolchain }}
+      run: |
+        if [ "$CONTAINER_TOOLCHAIN" = true ]; then
+          test "$RUNNER_OS" = Linux
+          # Cache versions include paths, so match the native Linux producer.
+          cache_path="$(node -p "require('node:path').join(process.env.XDG_CACHE_HOME || require('node:path').join(require('node:os').homedir(), '.cache'), 'pnpm')")"
+          pnpm_version="$(node -p "require('./package.json').packageManager.match(/^pnpm@([^+]+)/)[1]")"
+          mkdir -p "$cache_path"
+        else
+          cache_path="$(pnpm cache path)"
+          pnpm_version="$(pnpm --version)"
+        fi
+        printf 'path=%s/lockfile-verified.jsonl\n' "$cache_path" >> "$GITHUB_OUTPUT"
+        printf 'key=pnpm-verification-v1-%s-%s-%s-%s\n' "$RUNNER_OS" "$RUNNER_ARCH" "$pnpm_version" "$POLICY_HASH" >> "$GITHUB_OUTPUT"
+
+    - name: Restore pnpm verification record
+      id: verification-cache-restore
+      if: steps.verification-cache.outputs.key != ''
+      continue-on-error: true
+      uses: actions/cache/restore@v5
+      with:
+        path: ${{ steps.verification-cache.outputs.path }}
+        key: ${{ steps.verification-cache.outputs.key }}

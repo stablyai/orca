@@ -1,3 +1,4 @@
+import { githubBodyImageUrls, githubBodyMediaHeaders } from '../body-image-urls'
 import {
   acquire,
   assertPositiveInt,
@@ -27,7 +28,10 @@ export async function updateIssueBySlug(
     return { ok: false, error: number.error }
   }
   if (!args.updates || typeof args.updates !== 'object') {
-    return { ok: false, error: { type: 'validation_error', message: 'Updates required.' } }
+    return {
+      ok: false,
+      error: { type: 'validation_error', message: 'Updates required.', reason: 'updates_required' }
+    }
   }
   const duplicateError = validateDuplicateUpdate(args)
   if (duplicateError) {
@@ -43,15 +47,16 @@ export async function updateIssueBySlug(
     return stateResult
   }
   const { title, body } = args.updates
+  let bodyImageUrls: Record<string, string> | undefined
   if (title !== undefined || body !== undefined) {
     const patchArgs = ['-X', 'PATCH', base]
     if (title !== undefined) {
       patchArgs.push('--raw-field', `title=${title}`)
     }
     if (body !== undefined) {
-      patchArgs.push('--raw-field', `body=${body}`)
+      patchArgs.push(...githubBodyMediaHeaders(body), '--raw-field', `body=${body}`)
     }
-    const result = await runRest<unknown>(
+    const result = await runRest<{ body?: string; body_html?: string }>(
       patchArgs,
       undefined,
       'core',
@@ -60,12 +65,20 @@ export async function updateIssueBySlug(
     if (!result.ok) {
       return { ok: false, error: result.error }
     }
+    try {
+      if (body !== undefined && result.data?.body === body) {
+        bodyImageUrls = githubBodyImageUrls(body, result.data.body_html)
+      }
+    } catch {
+      // Optional display data cannot turn an accepted edit into a failed write.
+    }
   }
   const labelResult = await updateIssueLabels(args, base)
   if (!labelResult.ok) {
     return labelResult
   }
-  return updateIssueAssignees(args, base)
+  const assigneeResult = await updateIssueAssignees(args, base)
+  return assigneeResult.ok ? { ok: true, bodyImageUrls } : assigneeResult
 }
 
 function validateDuplicateUpdate(args: UpdateIssueBySlugArgs): GitHubProjectMutationResult | null {
@@ -75,7 +88,8 @@ function validateDuplicateUpdate(args: UpdateIssueBySlugArgs): GitHubProjectMuta
       ok: false,
       error: {
         type: 'validation_error',
-        message: 'Duplicate target is only valid when closing as duplicate.'
+        message: 'Duplicate target is only valid when closing as duplicate.',
+        reason: 'duplicate_target_not_allowed'
       }
     }
   }
@@ -84,7 +98,8 @@ function validateDuplicateUpdate(args: UpdateIssueBySlugArgs): GitHubProjectMuta
       ok: false,
       error: {
         type: 'validation_error',
-        message: 'Duplicate target issue number is required.'
+        message: 'Duplicate target issue number is required.',
+        reason: 'duplicate_target_required'
       }
     }
   }
@@ -102,7 +117,7 @@ async function updateIssueState(args: UpdateIssueBySlugArgs): Promise<GitHubProj
   if (state === undefined) {
     return { ok: true }
   }
-  const guard = repositoryRateLimitGuard(args, 'core')
+  const guard = repositoryRateLimitGuard(args, 'graphql')
   if (guard.blocked) {
     return { ok: false, error: rateLimitedError(guard) }
   }
@@ -120,7 +135,7 @@ async function updateIssueState(args: UpdateIssueBySlugArgs): Promise<GitHubProj
     }
   }
   await acquire()
-  noteRepositoryRateLimitSpend(args, 'core')
+  noteRepositoryRateLimitSpend(args, 'graphql')
   try {
     await ghExecFileAsync(stateArgs, {
       encoding: 'utf-8',

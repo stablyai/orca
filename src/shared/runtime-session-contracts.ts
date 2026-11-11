@@ -1,21 +1,24 @@
-import type { AgentStatusOrchestrationContext } from './agent-status-types'
+import type { AgentSenderPublication, AgentSenderRevision } from './agent-sender-associations'
+import type { MobileProjectSectionCatalog } from './mobile-project-sections-contract'
+import type { AgentStatusOrchestrationContext } from './agent-status/contracts/agent-status-types'
 import type { RemoteServerUpdateSupport } from './remote-server-update'
-import type { RemoteRuntimeSharedConnectionDiagnostics } from './remote-runtime-shared-control-types'
-import type { RuntimeHostConnectionState } from './runtime-host-connection-state'
+import type { RemoteRuntimeSharedConnectionDiagnostics } from './remote-runtime/control/remote-runtime-shared-control-types'
+import type { RuntimeHostConnectionState } from './remote-runtime/host-status/runtime-host-connection-state'
 import type { RuntimeCapability } from './protocol-version'
 import type {
   RuntimeBrowserUnavailableReason,
   RuntimeDegradation
 } from './runtime-capability-degradation'
 import type { TabGroupLayoutNode } from './tab-types'
-import type { TerminalPaneLayoutNode } from './terminal-tab-types'
+import type { TerminalPaneLayoutNode } from './workspace-layout/terminal-tab-types'
 import type {
   RuntimeMobileSessionClientTab,
   RuntimeMobileSessionSnapshotTab,
   RuntimeMobileSessionTerminalClientTab
 } from './runtime-mobile-session-tab-contracts'
-
-export type * from './runtime-mobile-session-tab-contracts'
+import type { CliStatusCaller } from './orchestration/orchestration-caller-status'
+import type { RuntimeHostDescriptor } from './remote-runtime/host-status/runtime-host-descriptor'
+import type { TuiAgent } from './agent-launch/catalog/tui-agent'
 
 export type RuntimeGraphStatus = 'ready' | 'reloading' | 'unavailable'
 
@@ -30,12 +33,9 @@ export type RuntimeTerminalDriverState =
   | { kind: 'desktop' }
   | { kind: 'mobile'; clientId: string }
 
-export type RuntimeBrowserDriverState = RuntimeTerminalDriverState
-
 export const BROWSER_UNAVAILABLE_ERROR_CODE = 'browser_unavailable' as const
 
-// Why: one sentence per cause, each naming the thing the operator can change. The host
-// renders these so an older client still shows an accurate reason it cannot decode.
+// Render actionable per-cause messages host-side so older clients can display reasons they cannot decode.
 const BROWSER_UNAVAILABLE_MESSAGES: Record<RuntimeBrowserUnavailableReason, string> = {
   unconfigured:
     'Browser automation has no backend on this host. Install the Orca desktop app, or set ORCA_BROWSER_EXECUTABLE to a Chromium executable.',
@@ -78,17 +78,18 @@ export type RuntimeStatus = {
   worktreeCreateIdempotency?: {
     dedupeTtlMs: number
   }
-  /** True only when this Windows host can prove process creation times for PID ownership. */
+  /** Legacy Windows clients keep probing WSL until true; remove only after their compatibility window. */
   windowsProcessStartTimeAvailable?: boolean
-  /**
-   * Optional for mixed-version peers. Absence means the host predates structured
-   * degradation reporting, not that the host proved every optional feature available.
-   */
+  /** Absent on older hosts; missing degradation reports never prove all optional features work. */
   degradations?: RuntimeDegradation[]
   appVersion?: string
   remoteUpdateSupport?: RemoteServerUpdateSupport
   remoteControl?: RemoteRuntimeSharedConnectionDiagnostics | null
   hostPlatform?: NodeJS.Platform
+  /** Optional display name reported by the answering runtime. */
+  machineName?: string
+  /** Absent from older hosts and from hosts whose profile could not persist an installation id. */
+  hostDescriptor?: RuntimeHostDescriptor
   terminalWindowsShell?: string | null
   deviceScope?: DeviceScope
   floatingWorkspaceEnabled?: boolean
@@ -125,6 +126,8 @@ export type CliStatusResult = {
   graph: {
     state: RuntimeGraphStatus | 'not_running' | 'starting'
   }
+  /** This process's Orca session ID when it runs as an Orca session; see `CliStatusCaller`. */
+  caller?: CliStatusCaller
 }
 
 export type RuntimeSyncedTab = {
@@ -147,11 +150,34 @@ export type RuntimeSyncedLeaf = {
   parked?: boolean
 }
 
+/** Layout-owner builds: a pane the window shows of a workspace main owns. */
+export type RuntimeMountedLeaf = {
+  tabId: string
+  leafId: string
+  paneRuntimeId: number
+  /** Retained by a parked PTY watcher, not mounted in the renderer. */
+  parked?: boolean
+  /** The pane's title as the window resolves it, a reset of a stuck agent title included. */
+  paneTitle?: string | null
+}
+
 export type RuntimeSyncWindowGraph = {
   tabs: RuntimeSyncedTab[]
   leaves: RuntimeSyncedLeaf[]
+  /** Layout-owner windows report main-owned panes here; tabs/leaves then cover other workspaces. Window-to-main only. */
+  mountedLeaves?: RuntimeMountedLeaf[]
   mobileSessionTabs?: RuntimeMobileSessionTabsSnapshot[]
   unchangedMobileSessionWorktrees?: string[]
+  /** Shown tab-group grids let main size new terminals; window-to-main only, never copied into session tabs. */
+  terminalGroupGridSizes?: Record<string, { cols: number; rows: number }>
+  /** The grid a workspace with a single tab group gets, for one the window is not showing. */
+  singleGroupWorkspaceGridSize?: { cols: number; rows: number }
+  /** Merge changed workspace selections; absent leaves prior entries, null means none shown. Layout-owner builds only. */
+  activeGroupByWorkspace?: Record<string, string | null>
+  /** The sender publication this window last applied; main answers "unchanged" while it holds. */
+  agentSenderBase?: AgentSenderRevision
+  /** The sidebar's Project grouping inputs for paired phones; sent only when they changed. */
+  projectSectionCatalog?: MobileProjectSectionCatalog
 }
 
 export type RuntimeRendererSyncWindowGraph = RuntimeSyncWindowGraph & {
@@ -165,6 +191,9 @@ export type RuntimeNativeChatLaunchDraftResolution = {
 }
 
 export type RuntimeSyncWindowGraphResult = RuntimeStatus & {
+  agentSenderAssociations?: AgentSenderPublication
+  /** Sent instead of the publication when the window's base is still current. */
+  agentSenderRevision?: AgentSenderRevision
   agentOrchestrationByPaneKey?: Record<string, AgentStatusOrchestrationContext>
   nativeChatLaunchDraftResolutions?: RuntimeNativeChatLaunchDraftResolution[]
   mobileSessionResyncWorktrees?: string[]
@@ -194,6 +223,8 @@ export type RuntimeMobileSessionTabMoveResult = { moved: true }
 
 export type RuntimeMobileSessionTabCloseResult = {
   closed: true
+  /** Proven host retirement; delegated and legacy replies omit this receipt. */
+  retirementConfirmed?: true
   refused?: true
   refusalReason?:
     | 'missing-intent'
@@ -207,15 +238,11 @@ export type RuntimeMobileSessionTabCloseResult = {
 
 export type RuntimeSessionTabCloseReason = 'user' | 'pty-exit' | 'cleanup'
 
-/**
- * The publication epoch a runtime answers with for a worktree it has published nothing for yet —
- * the state every worktree is in for a moment after the host process restarts.
- *
- * Paired with `snapshotVersion: 0` it marks a synthesized placeholder, not a host answer: the
- * runtime is saying "ask me later", not "those tabs are gone". Clients must not read absence from
- * such a frame as evidence a tab was closed.
- */
+/** Placeholder epoch before first publication, optionally navigation-suffixed: “ask later”, never evidence tabs closed. */
 export const UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH = 'none'
+
+/** Suffix a host appends to the epoch when projecting a snapshot for one paired client's navigation. */
+export const CLIENT_NAVIGATION_PUBLICATION_EPOCH_SUFFIX = ':client-navigation'
 
 export type RuntimeMobileSessionTabsSnapshot = {
   worktree: string
@@ -241,7 +268,10 @@ export type RuntimeMobileSessionRetiredTerminalSurface = {
 }
 
 export type RuntimeMobileSessionTabsResult = {
+  agentSenderAssociations?: AgentSenderPublication
   worktree: string
+  /** Query-only truth about an executing launch that owns this workspace's first surface. */
+  initialSurfaceLaunch?: { launchId: string; agent: TuiAgent }
   publicationEpoch: string
   snapshotVersion: number
   navigationIntent?: 'follow'
@@ -252,23 +282,26 @@ export type RuntimeMobileSessionTabsResult = {
   tabGroupLayout?: TabGroupLayoutNode | null
   retiredTerminalSurfaces?: RuntimeMobileSessionRetiredTerminalSurface[]
   tabs: RuntimeMobileSessionClientTab[]
-  /**
-   * Set while a freshly started runtime has not yet taken back the client-hosted pages its paired
-   * hosts are still holding. Such a snapshot is authoritative about terminals, which it rehydrated
-   * from disk, but silently empty of browser rows it has simply not heard about yet — so a client
-   * must not read the absence of its own client-hosted rows here as "the host closed them".
-   *
-   * Always bounded: the runtime clears it once a host attaches, and drops it on a deadline so a
-   * host that never returns cannot hold rows open forever.
-   */
+  /** After restart, client-hosted browser rows may be unknown while terminals are authoritative. Preserve absent
+   * client-hosted rows until reattachment; clear this flag on host attach or deadline so absent hosts cannot hold rows forever. */
   clientHostedPagesUnreconciled?: true
+  /** Unreadable chat journals leave chat rows unverifiable while other rows remain authoritative. Preserve absent
+   * chat tabs until host restore; no deadline because the chats remain durable on disk. */
+  agentSessionsUnverifiable?: true
 }
 
 export type RuntimeMobileSessionCreateTerminalResult = {
   tab: RuntimeMobileSessionTerminalClientTab
   publicationEpoch: string
   snapshotVersion: number
+  warning?: 'desktop-tab-not-shown'
+  /** The saved folder was gone, so the terminal started at the workspace root. */
+  startupCwdFallback?: 'workspace-root'
 }
+
+/** Activation's reply: the fallback rides this one answer and is never stored on the snapshot. */
+export type RuntimeMobileSessionTabActivationResult = RuntimeMobileSessionTabsResult &
+  Pick<RuntimeMobileSessionCreateTerminalResult, 'startupCwdFallback'>
 
 export type RuntimeMobileSessionTabsRemovedResult = RuntimeMobileSessionTabsResult & {
   removed: true

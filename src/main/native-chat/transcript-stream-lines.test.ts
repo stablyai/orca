@@ -1,66 +1,31 @@
 import { Readable } from 'node:stream'
 import { describe, expect, it } from 'vitest'
-import { decodeTranscriptStream } from './transcript-stream-lines'
+import { splitTranscriptStreamLines } from './transcript-stream-lines'
 
-const decode = (line: string, id: string) => ({
-  id,
-  role: 'user' as const,
-  blocks: [{ type: 'text' as const, text: line }],
-  timestamp: null,
-  source: 'transcript' as const
-})
+describe('bounded transcript records', () => {
+  async function collect(chunks: (Buffer | string)[], limit: number) {
+    const records: string[] = []
+    for await (const record of splitTranscriptStreamLines(Readable.from(chunks), limit)) {
+      records.push(record.line)
+    }
+    return records
+  }
 
-describe('decodeTranscriptStream', () => {
-  it('uses identical absolute byte ids for full and incremental reads', async () => {
-    const prefix = '{"first":"é"}\r\n'
-    const appended = '{"second":true}\n'
-    const full = await decodeTranscriptStream(
-      Readable.from([prefix + appended]),
-      '/chat.jsonl',
-      0,
-      decode,
-      true
-    )
-    const incremental = await decodeTranscriptStream(
-      Readable.from([appended]),
-      '/chat.jsonl',
-      Buffer.byteLength(prefix, 'utf8'),
-      decode,
-      false
-    )
-
-    expect(incremental.messages[0]?.id).toBe(full.messages[1]?.id)
+  it('resets the byte budget per record and accepts the exact limit', async () => {
+    expect(await collect(['1234\n123', '4\n1234'], 4)).toEqual(['1234', '1234', '1234'])
   })
 
-  it('keeps a codepoint split across two Buffer chunks intact', async () => {
-    const line = `{"text":"😀é中"}\n`
-    const bytes = Buffer.from(line, 'utf8')
-    // Split inside the emoji's 4-byte sequence, as a 1 MiB gated chunk boundary does.
-    const split = Buffer.from('{"text":"', 'utf8').length + 2
-    const result = await decodeTranscriptStream(
-      Readable.from([bytes.subarray(0, split), bytes.subarray(split)]),
-      '/chat.jsonl',
-      0,
-      decode,
-      false
-    )
-
-    expect(result.messages[0]?.blocks[0]).toEqual({ type: 'text', text: line.slice(0, -1) })
-    expect(result.consumedBytes).toBe(bytes.length)
+  it('counts UTF-8 bytes across split codepoints', async () => {
+    const bytes = Buffer.from('😀é')
+    const chunks = [bytes.subarray(0, 2), bytes.subarray(2, 5), bytes.subarray(5)]
+    expect((await collect(chunks, 6))[0]).toBe('😀é')
+    await expect(collect(chunks, 5)).rejects.toThrow('record exceeds 5 byte limit')
+    expect((await collect(['\ud83d', '\ude00'], 4))[0]).toBe('😀')
   })
 
-  it('does not consume a partial trailing JSONL record', async () => {
-    const complete = '{"first":true}\n'
-    const partial = '{"second"'
-    const result = await decodeTranscriptStream(
-      Readable.from([complete + partial]),
-      '/chat.jsonl',
-      0,
-      decode,
-      false
+  it('checks the decoder tail before emitting it', async () => {
+    await expect(collect([Buffer.from([0x61, 0xf0, 0x9f])], 3)).rejects.toThrow(
+      'record exceeds 3 byte limit'
     )
-
-    expect(result.messages).toHaveLength(1)
-    expect(result.consumedBytes).toBe(Buffer.byteLength(complete, 'utf8'))
   })
 })

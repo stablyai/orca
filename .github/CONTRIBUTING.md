@@ -2,40 +2,42 @@
 
 Thanks for contributing to Orca.
 
-## Before You Start
-
-- Keep changes scoped to a clear user-facing improvement, bug fix, or refactor.
-- Orca targets macOS, Linux, and Windows. Every change must stay compatible with all three platforms unless the code is explicitly guarded by a runtime platform check.
-- For keyboard shortcuts, use runtime platform checks in renderer code and `CmdOrCtrl` in Electron menu accelerators.
-- For shortcut labels, show `⌘` and `⇧` on macOS, and `Ctrl+` and `Shift+` on Linux and Windows.
-- For file paths, use Node or Electron path utilities such as `path.join`.
-- Orca must work against local repositories, remote servers, and SSH worktrees. Do not assume a process, file, credential, shell, or network path exists only on the local machine.
-- Orca supports many CLI agents, integrations, and git providers. Keep generic behavior provider-neutral; guard integration-specific logic behind explicit checks.
-- Keep changes well-engineered and performant: follow existing architecture, avoid unnecessary work in hot paths, clean up owned resources, and use concrete module names.
-- For UI work, follow [`docs/STYLEGUIDE.md`](../docs/STYLEGUIDE.md), use the tokens and shadcn primitives it specifies, and verify polished behavior across platforms, light/dark mode, and SSH latency.
+Found a security vulnerability? Do not open a public issue or PR; report it privately as described in [`SECURITY.md`](./SECURITY.md).
 
 ## Local Setup
 
+Install Node 24, the pnpm version in `packageManager` in [`package.json`](../package.json), and the Bun version in [`config/.bun-version`](../config/.bun-version). `pnpm install` compiles native modules, so you also need a C++ toolchain and Python 3 (Xcode Command Line Tools on macOS, Visual Studio Build Tools on Windows, `build-essential` and Electron's libraries on Linux).
+
 ```bash
 pnpm install
+pnpm -C mobile install --frozen-lockfile   # mobile/ has its own lockfile; build and lint need it
 pnpm dev
 ```
 
+`pnpm dev` in a linked Git worktree uses its own profile and ports, so instances in different worktrees run side by side.
+
+See [`docs/development.md`](../docs/development.md) for per-OS packages, Corepack and Windows notes, dev profiles and seeding, cross-architecture and Linux (Docker) builds, and troubleshooting.
+
 ## Branch Naming
 
-Use a clear, descriptive branch name that reflects the change.
+Use a clear, descriptive branch name that reflects the change, such as `fix/ctrl-backspace-delete-word`, `feat/shift-enter-newline`, or `chore/update-contributor-guide`. Avoid vague names like `test`, `misc`, or `changes`.
 
-Good examples:
+## Code Guidelines
 
-- `fix/ctrl-backspace-delete-word`
-- `feat/shift-enter-newline`
-- `chore/update-contributor-guide`
+- Keep changes scoped to a clear user-facing improvement, bug fix, or refactor.
+- Orca targets macOS, Linux, and Windows. Guard platform-specific code with runtime checks, use `CmdOrCtrl` in Electron menu accelerators, show `⌘`/`⇧` labels on macOS and `Ctrl+`/`Shift+` elsewhere, and build paths with `path.join`. See [cross-platform support](../docs/agents-md-refs/cross-platform-support.md).
+- Orca must work against local repositories, remote servers, and SSH worktrees. Do not assume a process, file, credential, shell, or network path exists only on the local machine.
+- Keep generic behavior provider-neutral across CLI agents, integrations, and git providers; guard integration-specific logic behind explicit checks.
+- Follow existing architecture, avoid unnecessary work in hot paths, clean up owned resources, and use concrete module names.
+- For UI work, follow [`docs/STYLEGUIDE.md`](../docs/STYLEGUIDE.md) and verify behavior across platforms, light/dark mode, and SSH latency.
 
-Avoid vague names like `test`, `misc`, or `changes`.
+### Type Declarations: Prefer `.ts` Over `.d.ts`
 
-## Before Opening a PR
+Put project-owned types in `.ts` files. `.d.ts` is reserved for ambient shims (e.g., `env.d.ts`). `skipLibCheck: true` applies to our own `.d.ts` files too, so an unresolved type reference there silently becomes `any`. CI enforces this for `src/preload/` and `src/shared/`.
 
-Run the same checks that CI runs:
+## Checks Before Opening a PR
+
+Run the same checks CI runs, after the `mobile/` install above:
 
 ```bash
 pnpm lint
@@ -44,88 +46,28 @@ pnpm test
 pnpm build
 ```
 
-Add high-quality tests for behavior changes and bug fixes. Prefer tests that would actually catch a regression, not shallow coverage that only exercises the happy path.
+For faster repeat typechecks use `pnpm tc` (or `pnpm tc:node`, `pnpm tc:web`, `pnpm tc:cli`); run `pnpm tc:node` after editing shared tests.
 
-If your change affects UI or interaction behavior, verify it on the platforms it could impact.
+Add a test when it would catch a regression of your behavior change or bug fix, not for shallow coverage; see [test anti-patterns](../docs/agents-md-refs/test-antipatterns.md). If your change affects UI or interaction behavior, verify it on the platforms it could impact.
 
-## Type Declarations: Prefer `.ts` Over `.d.ts`
+### Targeting Local Tests
 
-Project-owned type declarations belong in `.ts` files. `.d.ts` is reserved for ambient shims (e.g., `env.d.ts`, `vite/client.d.ts`). TypeScript's `skipLibCheck: true` setting applies globally, including to our own `.d.ts` files, which means any unresolved type reference in a `.d.ts` silently becomes `any` at its call sites. Write your types in `.ts` files so the compiler actually checks them.
+Use `pnpm test`, not raw `vitest`: only it keeps the transform cache that makes repeat runs fast.
 
-CI enforces this for `src/preload/` and `src/shared/`.
+```bash
+pnpm test src/shared/automations/scheduling/automation-cron-input-validation.test.ts --maxWorkers=2
+pnpm test:changed src/main/runtime --maxWorkers=2   # staged, unstaged, and untracked changes
+pnpm test --changed=origin/main --maxWorkers=2      # also commits since the merge base
+```
+
+Affected tests follow Vitest's static import graph, so run suites explicitly for dynamic imports, fixtures, or subprocess inputs. Local affected tests do not replace CI. If a file passes alone but fails after others, add `// @orca-isolated-worker` to it.
 
 ## Pull Requests
 
-Each pull request should follow [`.github/pull_request_template.md`](./pull_request_template.md). In particular:
+Fill in every section of [`.github/pull_request_template.md`](./pull_request_template.md): an ELI5, what changed and why, a linked issue (required for outside contributors), a before and after (screenshots or videos) for any UI or behavior change (only if there is truly no visual or interaction change, write exactly `N/A` and briefly say why), how you tested it, the risk, and under Review a short summary from your AI coding agent covering cross-platform, SSH/remote, agent and integration compatibility, performance, UI quality, and security. Keep each PR small and focused on one topic.
 
-- open with an ELI5 of the change (plain language paragraph; the PR title is the one-liner)
-- explain what changed and why, and stay focused on a single topic when possible
-- for any UI or interaction change, attach **before and after** screenshots (or short videos); if there is no visual change, say `No visual change` and why
-- include high-quality tests when behavior changes or bug fixes warrant them
-- include a brief code review summary from your AI coding agent that explicitly checks cross-platform compatibility, SSH/remote/local compatibility, supported agent and integration compatibility, performance risk, UI quality when applicable, and basic security risk
-- mention any platform-specific, remote/SSH-specific, agent-specific, integration-specific, or git-provider-specific behavior and testing notes
-- **Include your X (Twitter) handle** in the PR template Author section — we shout out contributors when we merge features on [@orca_build](https://x.com/orca_build).
+Version bumps, tags, and releases are maintainer-managed. Do not include release version changes unless a maintainer asks. Maintainers cut releases with the [Cut Release](https://github.com/stablyai/orca/actions/workflows/release-cut.yml) workflow.
 
-## Release Process
+## Getting Help
 
-Version bumps, tags, and releases are maintainer-managed. Do not include release version changes in a normal contribution unless a maintainer asks for them.
-
-### Cutting a release (maintainers)
-
-All releases are cut from the **Cut Release** GitHub Actions workflow. There is no local `pnpm release:*` script — running releases locally is too easy to get wrong (dirty tree, wrong branch, stale main).
-
-**To cut a release:**
-
-1. Open [Actions → Cut Release](../../actions/workflows/release-cut.yml).
-2. Click **Run workflow** and pick:
-   - **kind**: one of `rc`, `patch`, `minor`, `major`.
-   - **ref**: the branch, tag, or SHA to build from. Defaults to `main`.
-3. Run it.
-
-The workflow resolves the next version from GitHub Releases, bumps `package.json`, tags, pushes, and runs the multi-platform build + publish inline.
-
-**How the next version is chosen:**
-
-All stable kinds (`patch`, `minor`, `major`) are computed off the latest _stable_ release, ignoring any RCs in between.
-
-- `kind=rc` + last tag was stable (e.g. `v1.3.14`) → `v1.3.15-rc.0`.
-- `kind=rc` + active RC series (e.g. `v1.3.15-rc.2`) → `v1.3.15-rc.3`.
-- `kind=patch` + latest stable `v1.3.14` → `v1.3.15` (regardless of any intermediate RCs).
-- `kind=minor` + latest stable `v1.3.14` → `v1.4.0`.
-- `kind=major` + latest stable `v1.3.14` → `v2.0.0`.
-
-**Safety guarantees:**
-
-- Stable releases are refused if the new version isn't strictly greater than the latest published stable. This is the only rule `electron-updater` actually needs — it compares semver within the `latest` channel, so a regressing stable is the one thing that breaks auto-update for fresh installs.
-- Complete RC draft releases created by the release workflow are published before cutting a new tag only when the draft tag was built from the current release ref. Stale drafts are skipped so fixes cut a fresh RC instead of exposing old artifacts.
-- If the latest RC tag exists but is still draft-only or missing its GitHub Release, the workflow resumes that tag only when it was built from the current release ref. Otherwise the next RC number is cut.
-- RC numbering also considers release commits on `main`, so deleting a stale tag does not let a later cut reuse the same RC number.
-- Off-main releases (when `ref` is not the tip of `main`) only push the tag. `main` is never mutated from a non-main ref, so you can safely release an older commit without polluting history.
-- When `ref` is the tip of `main`, the version-bump commit is fast-forwarded onto `main` so local `package.json` stays in sync with what's shipped.
-
-**Common scenarios:**
-
-- **Normal release:** `kind=patch`, `ref=main`.
-- **"A bad commit just landed on main, release the commit before it":** `kind=patch`, `ref=<good-sha>`. `main` is left alone; the tag points at the good SHA. Fix forward on `main` afterward.
-- **One-off RC for a feature branch:** `kind=rc`, `ref=<branch-or-sha>`. Produces an RC tag that does not touch `main`.
-- **Minor or major bump:** `kind=minor` or `kind=major`.
-
-The scheduled 2x/day RC cron in [`release-rc.yml`](../../actions/workflows/release-rc.yml) is independent and continues to run automatically from `main`.
-
-## Release Channels
-
-The public Homebrew cask tracks stable desktop releases:
-
-```bash
-brew install --cask stablyai/orca/orca
-```
-
-Release candidates use a separate cask token:
-
-```bash
-brew install --cask stablyai/orca/orca@rc
-```
-
-The two casks conflict because both install `Orca.app`. Switch channels with a
-normal `brew uninstall --cask` followed by the install for the other channel.
-Do not use `--zap` unless you intentionally want to remove local Orca state.
+Ask questions on [Discord](https://discord.gg/fzjDKHxv8Q), or open an [issue](https://github.com/stablyai/orca/issues/new/choose) for bugs and feature requests.

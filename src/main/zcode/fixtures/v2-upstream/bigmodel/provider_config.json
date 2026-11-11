@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "config": {
+    "providerOrder": [],
+    "providerConfigRules": {
+      "providerRules": []
+    },
+    "modelConfigRules": {
+      "providerModelRules": [],
+      "manualProviderModelRules": []
+    },
+    "defaultModelSelection": {
+      "providerId": "account:bigmodel-individual-coding-plan",
+      "modelId": "GLM-5.3"
+    }
+  }
+}

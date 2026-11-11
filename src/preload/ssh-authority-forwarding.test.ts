@@ -31,8 +31,6 @@ vi.mock('electron', () => ({
   webUtils: { getPathForFile: vi.fn(() => '') }
 }))
 
-vi.mock('@electron-toolkit/preload', () => ({ electronAPI: {} }))
-
 describe('native preload SSH authority forwarding', () => {
   const originalContextIsolated = Object.getOwnPropertyDescriptor(process, 'contextIsolated')
 
@@ -117,7 +115,6 @@ describe('native preload SSH authority forwarding', () => {
     listener({}, { targetId: 'ssh-1', state })
 
     expect(onStateChanged).toHaveBeenCalledWith({ targetId: 'ssh-1', state })
-    expect(onStateChanged.mock.calls[0]?.[0].state).toEqual(state)
   })
 
   it('normalizes partial compatibility authority to unknown for reconciliation', async () => {

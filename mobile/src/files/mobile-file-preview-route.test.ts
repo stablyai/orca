@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
-  createMobileFilePreviewHref,
   displayNameFromPreviewPath,
+  mobileFilePreviewShellParams,
   normalizeMobileFilePreviewRouteParams
 } from './mobile-file-preview-route'
 
@@ -111,24 +111,51 @@ describe('mobile-file-preview-route', () => {
     ).toEqual({ ok: false, message: 'Unable to load preview' })
   })
 
-  it('builds the Expo href object so Expo owns URL encoding', () => {
-    const relativePath = 'src/#hash ?query%20\\file.ts'
-
+  it('hands the shell every param but the two the pathname spells as segments', () => {
     expect(
-      createMobileFilePreviewHref({
+      mobileFilePreviewShellParams({
         hostId: 'host-1',
         worktreeId: 'wt-1',
-        relativePath,
-        name: 'file.ts'
+        relativePath: 'docs/my notes/readme.md',
+        source: 'worktree',
+        line: '12'
+      })
+    ).toEqual({ relativePath: 'docs/my notes/readme.md', source: 'worktree', line: '12' })
+  })
+
+  it('leaves an absent param out rather than sending it empty', () => {
+    // Use the real normalizer, which emits optional keys as undefined; a hand-written literal would miss this case.
+    // Omit absent params: the page distinguishes missing line (open at top) from line:"" (scroll nowhere).
+    const route = normalizeMobileFilePreviewRouteParams({
+      hostId: 'host-1',
+      worktreeId: 'wt-1',
+      relativePath: 'readme.md'
+    })
+    if (!route.ok) {
+      throw new Error(route.message)
+    }
+    expect('line' in route.params).toBe(true)
+    expect(mobileFilePreviewShellParams(route.params)).toEqual({
+      relativePath: 'readme.md',
+      source: 'worktree'
+    })
+  })
+
+  it('carries a terminal artifact by its absolute path, which is not a segment either', () => {
+    expect(
+      mobileFilePreviewShellParams({
+        hostId: 'host-1',
+        worktreeId: 'wt-1',
+        source: 'terminalArtifact',
+        absolutePath: '/logs/run 1.txt',
+        grantId: 'grant-1',
+        cwd: '/logs'
       })
     ).toEqual({
-      pathname: '/h/[hostId]/files/preview/[worktreeId]',
-      params: {
-        hostId: 'host-1',
-        worktreeId: 'wt-1',
-        relativePath,
-        name: 'file.ts'
-      }
+      source: 'terminalArtifact',
+      absolutePath: '/logs/run 1.txt',
+      grantId: 'grant-1',
+      cwd: '/logs'
     })
   })
 

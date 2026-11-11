@@ -1,5 +1,15 @@
+import { githubTaskKey, requireGitHubTaskTarget } from './github-task-identity'
 import type { GithubCheckFileActionsModel } from './use-mobile-tasks-github-check-file-actions'
 import { useCallback } from './mobile-tasks-dependencies'
+import {
+  githubIssueCommentWrite,
+  githubReviewCommentReplyWrite
+} from './mobile-task-item-comment-operations'
+import {
+  githubPullRequestMerge,
+  gitlabMergeRequestMerge,
+  linearIssueUpdate
+} from './mobile-task-item-state-operations'
 import {
   type DetailComment,
   type HostedReviewMergeMethod,
@@ -7,30 +17,56 @@ import {
   type TaskItem,
   commentAuthor,
   createLinearTask,
-  isGitHubPrMergeBlocked,
-  isSuccess
+  isGitHubPrMergeBlocked
 } from './mobile-tasks-legacy-foundation'
+import {
+  type CommentDraftSlot,
+  isCommentSendUnconfirmed,
+  useMobileTaskCommentSendOutcome
+} from './use-mobile-task-comment-send-outcome'
 
-export function useMobileTasksGithubReplyMergeActions(model: GithubCheckFileActionsModel) {
+export type useMobileTasksGithubReplyMergeActionsInput = Pick<
+  GithubCheckFileActionsModel,
+  | 'claimPublication'
+  | 'actionItem'
+  | 'detailPayload'
+  | 'client'
+  | 'itemReplyDrafts'
+  | 'captureTaskListRefresh'
+  | 'requestDetailRefresh'
+  | 'setActionItem'
+  | 'setDetailPayload'
+  | 'setError'
+  | 'setItemReplyDrafts'
+  | 'setItems'
+  | 'tryBeginMutation'
+  | 'taskUiReady'
+>
+
+export function useMobileTasksGithubReplyMergeActions<
+  Model extends useMobileTasksGithubReplyMergeActionsInput
+>(model: Model) {
   const {
+    claimPublication,
     client,
     itemReplyDrafts,
-    loadTasks,
-    mutatingStatus,
+    captureTaskListRefresh,
     setActionItem,
     setDetailPayload,
     setError,
     setItemReplyDrafts,
     setItems,
-    setMutatingStatus,
+    tryBeginMutation,
     taskUiReady
   } = model
+  const { commentSendNotice, beginCommentSend, holdUnconfirmedCommentSend, noteCommentNotSent } =
+    useMobileTaskCommentSendOutcome(model)
   const replyToGitHubComment = useCallback(
     async (
       item: Extract<TaskItem, { provider: 'github' }>,
       comment: DetailComment
     ): Promise<void> => {
-      if (!client || mutatingStatus) {
+      if (!client) {
         return
       }
       const key = String(comment.id)
@@ -38,50 +74,71 @@ export function useMobileTasksGithubReplyMergeActions(model: GithubCheckFileActi
       if (!body) {
         return
       }
-      setMutatingStatus(true)
+      const finish = tryBeginMutation()
+      if (!finish) {
+        return
+      }
       setError('')
+      const send = beginCommentSend(item)
+      const isCurrent = claimPublication(item)
+      const slot: CommentDraftSlot = `reply:${key}`
+      const clearDraft = () =>
+        setItemReplyDrafts((current) => {
+          if ((current[key] ?? '').trim() !== body) {
+            return current
+          }
+          const next = { ...current }
+          delete next[key]
+          return next
+        })
+      const reviewAnchor =
+        item.source.type === 'pr' &&
+        comment.path &&
+        typeof comment.line === 'number' &&
+        typeof comment.id === 'number'
+          ? { path: comment.path, line: comment.line, commentId: comment.id }
+          : null
+      // Without a review anchor the reply posts as an issue comment that mentions the author.
+      const postedBody = reviewAnchor ? body : `@${commentAuthor(comment)} ${body}`
       try {
-        const canUseReviewReply =
-          item.source.type === 'pr' &&
-          comment.path &&
-          typeof comment.line === 'number' &&
-          typeof comment.id === 'number'
-        const response = canUseReviewReply
-          ? await client.sendRequest(
-              'github.addPRReviewCommentReply',
-              {
-                repo: `id:${item.source.repoId}`,
-                prNumber: item.source.number,
-                commentId: comment.id,
-                body,
-                threadId: comment.threadId,
-                path: comment.path,
-                line: comment.line
-              },
-              { timeoutMs: 30_000 }
+        const replyResult = reviewAnchor
+          ? githubReviewCommentReplyWrite.interpret(
+              await githubReviewCommentReplyWrite.request(
+                client,
+                {
+                  repo: `id:${item.source.repoId}`,
+                  prNumber: item.source.number,
+                  prRepo: requireGitHubTaskTarget(item.source).repository,
+                  commentId: reviewAnchor.commentId,
+                  body,
+                  threadId: comment.threadId,
+                  path: reviewAnchor.path,
+                  line: reviewAnchor.line
+                },
+                { timeoutMs: 30_000 }
+              )
             )
-          : await client.sendRequest(
-              'github.addIssueComment',
-              {
-                repo: `id:${item.source.repoId}`,
-                number: item.source.number,
-                body: `@${commentAuthor(comment)} ${body}`,
-                type: item.source.type
-              },
-              { timeoutMs: 30_000 }
+          : githubIssueCommentWrite.interpret(
+              await githubIssueCommentWrite.request(
+                client,
+                {
+                  repo: `id:${item.source.repoId}`,
+                  number: item.source.number,
+                  body: postedBody,
+                  type: item.source.type,
+                  prRepo: requireGitHubTaskTarget(item.source).repository
+                },
+                { timeoutMs: 30_000 }
+              )
             )
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
+        if (replyResult.ok === false) {
+          throw new Error(replyResult.error ?? 'Failed to reply')
         }
-        const result = response.result as {
-          ok?: boolean
-          error?: string
-          comment?: DetailComment
+        clearDraft()
+        if (!isCurrent()) {
+          return
         }
-        if (result.ok === false) {
-          throw new Error(result.error ?? 'Failed to reply')
-        }
-        const reply: DetailComment = result.comment ?? {
+        const reply: DetailComment = replyResult.comment ?? {
           id: `local-${Date.now()}`,
           body,
           createdAt: new Date().toISOString(),
@@ -90,23 +147,26 @@ export function useMobileTasksGithubReplyMergeActions(model: GithubCheckFileActi
           line: comment.line,
           threadId: comment.threadId
         }
-        setItemReplyDrafts((current) => {
-          const next = { ...current }
-          delete next[key]
-          return next
-        })
         setDetailPayload((current) =>
-          current?.provider === 'github'
+          current?.provider === 'github' && current.targetKey === githubTaskKey(item.source)
             ? { ...current, comments: [...current.comments, reply] }
             : current
         )
       } catch (err) {
+        if (isCommentSendUnconfirmed(err)) {
+          holdUnconfirmedCommentSend(send, slot, postedBody, clearDraft)
+        } else if (!isCurrent()) {
+          noteCommentNotSent(send, slot)
+        }
+        if (!isCurrent()) {
+          return
+        }
         setError(err instanceof Error ? err.message : 'Failed to reply')
       } finally {
-        setMutatingStatus(false)
+        finish()
       }
     },
-    [client, itemReplyDrafts, mutatingStatus]
+    [claimPublication, client, itemReplyDrafts, tryBeginMutation]
   )
 
   const mergeHostedReview = useCallback(
@@ -114,7 +174,7 @@ export function useMobileTasksGithubReplyMergeActions(model: GithubCheckFileActi
       item: Extract<TaskItem, { provider: 'github' }> | Extract<TaskItem, { provider: 'gitlab' }>,
       method: HostedReviewMergeMethod
     ): Promise<void> => {
-      if (!client || mutatingStatus) {
+      if (!client) {
         return
       }
       if (item.provider === 'github' && item.source.type !== 'pr') {
@@ -127,46 +187,58 @@ export function useMobileTasksGithubReplyMergeActions(model: GithubCheckFileActi
         setError('GitHub reports merge conflicts. Open in GitHub to continue.')
         return
       }
-      setMutatingStatus(true)
+      const finish = tryBeginMutation()
+      if (!finish) {
+        return
+      }
+      const refreshList = captureTaskListRefresh()
       setError('')
+      const isCurrent = claimPublication(item)
       try {
-        const response =
+        const merged =
           item.provider === 'github'
-            ? await client.sendRequest(
-                'github.mergePR',
-                {
-                  repo: `id:${item.source.repoId}`,
-                  prNumber: item.source.number,
-                  method
-                },
-                { timeoutMs: 60_000 }
+            ? githubPullRequestMerge.interpret(
+                await githubPullRequestMerge.request(
+                  client,
+                  {
+                    repo: `id:${item.source.repoId}`,
+                    prNumber: item.source.number,
+                    prRepo: requireGitHubTaskTarget(item.source).repository,
+                    method
+                  },
+                  { timeoutMs: 60_000 }
+                )
               )
-            : await client.sendRequest(
-                'gitlab.mergeMR',
-                {
-                  repo: `id:${item.source.repoId}`,
-                  iid: item.source.number,
-                  method,
-                  projectRef: item.source.projectRef
-                },
-                { timeoutMs: 60_000 }
+            : gitlabMergeRequestMerge.interpret(
+                await gitlabMergeRequestMerge.request(
+                  client,
+                  {
+                    repo: `id:${item.source.repoId}`,
+                    iid: item.source.number,
+                    method,
+                    projectRef: item.source.projectRef
+                  },
+                  { timeoutMs: 60_000 }
+                )
               )
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
+        if (merged.ok === false) {
+          throw new Error(merged.error ?? 'Failed to merge')
         }
-        const result = response.result as { ok?: boolean; error?: string }
-        if (result.ok === false) {
-          throw new Error(result.error ?? 'Failed to merge')
+        refreshList()
+        if (!isCurrent()) {
+          return
         }
         setActionItem(null)
-        await loadTasks({ silent: true })
       } catch (err) {
+        if (!isCurrent()) {
+          return
+        }
         setError(err instanceof Error ? err.message : 'Failed to merge')
       } finally {
-        setMutatingStatus(false)
+        finish()
       }
     },
-    [client, loadTasks, mutatingStatus]
+    [claimPublication, client, captureTaskListRefresh, tryBeginMutation]
   )
 
   const setLinearStatus = useCallback(
@@ -175,20 +247,22 @@ export function useMobileTasksGithubReplyMergeActions(model: GithubCheckFileActi
       state: LinearState,
       options: { closeDetail?: boolean } = {}
     ): Promise<void> => {
-      if (!client || !taskUiReady || mutatingStatus) {
+      if (!client || !taskUiReady) {
         return
       }
-      setMutatingStatus(true)
+      const finish = tryBeginMutation()
+      if (!finish) {
+        return
+      }
+      const refreshList = captureTaskListRefresh()
       setError('')
       try {
-        const response = await client.sendRequest('linear.updateIssue', {
+        const reply = await linearIssueUpdate.request(client, {
           id: item.source.id,
           workspaceId: item.source.workspaceId,
           updates: { stateId: state.id }
         })
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
+        linearIssueUpdate.interpret(reply)
         const nextState = {
           name: state.name,
           type: state.type,
@@ -213,16 +287,22 @@ export function useMobileTasksGithubReplyMergeActions(model: GithubCheckFileActi
             state: nextState
           }) as Extract<TaskItem, { provider: 'linear' }>
         })
-        await loadTasks({ silent: true })
+        refreshList()
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to update Linear issue')
       } finally {
-        setMutatingStatus(false)
+        finish()
       }
     },
-    [client, loadTasks, mutatingStatus, taskUiReady]
+    [claimPublication, client, captureTaskListRefresh, tryBeginMutation, taskUiReady]
   )
-  return Object.assign(model, { replyToGitHubComment, mergeHostedReview, setLinearStatus })
+  return Object.assign(model, {
+    replySendNotice: commentSendNotice,
+    replyToGitHubComment,
+    mergeHostedReview,
+    setLinearStatus
+  })
 }
 
-export type GithubReplyMergeActionsModel = ReturnType<typeof useMobileTasksGithubReplyMergeActions>
+export type GithubReplyMergeActionsModel = GithubCheckFileActionsModel &
+  ReturnType<typeof useMobileTasksGithubReplyMergeActions>

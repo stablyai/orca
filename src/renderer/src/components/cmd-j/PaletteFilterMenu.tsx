@@ -1,9 +1,10 @@
 import React, { useCallback, useMemo, useState } from 'react'
 import { ChevronRight, ListFilter, X } from 'lucide-react'
 import { Command, CommandGroup, CommandItem, CommandList } from '@/components/ui/command'
+import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import type { PaletteFilterModel } from './palette-filter-options'
 import {
   addPaletteFilterValues,
@@ -71,19 +72,19 @@ export default function PaletteFilterMenu({
   onRequestInputFocus: () => void
   portalContainer: HTMLElement | null
 }): React.JSX.Element | null {
+  const t = useTranslate()
+  const languageRevision = useUiLanguageRevision()
   const [open, setOpen] = useState(false)
-  // null = category root; non-null = drill into that field's options
   const [activeField, setActiveField] = useState<PaletteFilterField | null>(null)
   const [optionQuery, setOptionQuery] = useState('')
 
   const groups = useMemo<PaletteFilterGroup[]>(() => {
     const entries: PaletteFilterGroup[] = []
-    // Why: a single host (or single repository) is nothing to disambiguate between,
-    // so that axis stays hidden rather than offering a no-op checkbox.
+    // Hide single-choice axes; their checkboxes cannot disambiguate anything.
     if (model.hosts.length > 1) {
       entries.push({
         field: 'host',
-        heading: translate('worktreeJumpPalette.filter.hosts', 'Hosts'),
+        heading: t('worktreeJumpPalette.filter.hosts', 'Hosts'),
         options: model.hosts,
         selected: filter.hostIds
       })
@@ -92,15 +93,15 @@ export default function PaletteFilterMenu({
       entries.push({
         field: 'repository',
         // "Projects" is the user-facing term for repository-granular choices; see filter.emptySubtitle.
-        heading: translate('worktreeJumpPalette.filter.projects', 'Projects'),
+        heading: t('worktreeJumpPalette.filter.projects', 'Projects'),
         options: model.repositories,
         selected: filter.repoIds
       })
     }
     return entries
-  }, [filter.hostIds, filter.repoIds, model.hosts, model.repositories])
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
+  }, [filter.hostIds, filter.repoIds, model.hosts, model.repositories, languageRevision, t])
 
-  // Stale field falls back to root if its group disappeared mid-session.
   const activeGroup =
     activeField == null ? null : (groups.find((group) => group.field === activeField) ?? null)
 
@@ -119,7 +120,6 @@ export default function PaletteFilterMenu({
         resetMenuState()
         return
       }
-      // Single axis: skip the category step and open straight into its options.
       if (groups.length === 1) {
         setActiveField(groups[0].field)
       }
@@ -132,8 +132,7 @@ export default function PaletteFilterMenu({
     setOptionQuery('')
   }, [])
 
-  // Why: stopPropagation so the palette's ancestor cmdk doesn't steal keys;
-  // Escape on the options layer steps back instead of closing when both axes exist.
+  // Keep keys from ancestor cmdk; Escape returns from options to categories when both axes exist.
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent) => {
       event.stopPropagation()
@@ -160,22 +159,23 @@ export default function PaletteFilterMenu({
 
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
-      <PopoverTrigger
-        type="button"
-        aria-label={translate('worktreeJumpPalette.filter.trigger', 'Filter results')}
-        data-active={active ? 'true' : undefined}
-        className={cn(
-          'ml-2 flex h-7 shrink-0 items-center gap-1.5 rounded-md border border-border/55 px-2 text-[12px] text-muted-foreground transition-colors outline-none hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50',
-          active && 'border-primary/45 bg-primary/12 text-foreground'
-        )}
-      >
-        <ListFilter className="size-3.5" aria-hidden="true" />
-        <span>{translate('worktreeJumpPalette.filter.label', 'Filter')}</span>
-        {active ? (
-          <span className="rounded-full bg-primary/85 px-1.5 text-[10px] font-semibold tabular-nums text-primary-foreground">
-            {selectionCount}
-          </span>
-        ) : null}
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant={active ? 'secondary' : 'outline'}
+          size="xs"
+          aria-label={t('worktreeJumpPalette.filter.trigger', 'Filter results')}
+          data-active={active ? 'true' : undefined}
+          className="ml-2"
+        >
+          <ListFilter className="size-3.5" aria-hidden="true" />
+          <span>{t('worktreeJumpPalette.filter.label', 'Filter')}</span>
+          {active ? (
+            <span className="rounded-full bg-primary/85 px-1.5 text-[10px] font-semibold tabular-nums text-primary-foreground">
+              {selectionCount}
+            </span>
+          ) : null}
+        </Button>
       </PopoverTrigger>
       <PopoverContent
         align="end"
@@ -211,7 +211,7 @@ export default function PaletteFilterMenu({
         {active ? (
           <div className="flex items-center justify-between border-t border-border/55 px-3 py-2">
             <span className="text-[11px] text-muted-foreground">
-              {translate('worktreeJumpPalette.filter.activeCount', '{{value0}} active', {
+              {t('worktreeJumpPalette.filter.activeCount', '{{value0}} active', {
                 value0: selectionCount
               })}
             </span>
@@ -221,7 +221,7 @@ export default function PaletteFilterMenu({
               className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground"
             >
               <X className="size-3" aria-hidden="true" />
-              {translate('worktreeJumpPalette.filter.clearAll', 'Clear all')}
+              {t('worktreeJumpPalette.filter.clearAll', 'Clear all')}
             </button>
           </div>
         ) : null}

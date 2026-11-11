@@ -3,14 +3,23 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { syncLegacySharedCodexConfigForRetainedPanes } from './legacy-shared-config-compatibility'
-import type * as FsUtils from './fs-utils'
+import type * as FsUtils from '../filesystem/atomic-file-publication'
 
 const generationRace = vi.hoisted(() => ({
   path: null as string | null,
   beforeGuardedReplace: null as (() => void) | null
 }))
 
-vi.mock('./fs-utils', async (importOriginal) => {
+// Keep asserted config bytes independent of platform socket-path limits.
+vi.mock(
+  '../codex/configuration/shared-server/codex-daemon-socket-path-guard',
+  async (importOriginal) => ({
+    ...(await importOriginal<object>()),
+    applyCodexDaemonSocketGuard: (config: string) => config
+  })
+)
+
+vi.mock('../filesystem/atomic-file-publication', async (importOriginal) => {
   const actual = await importOriginal<typeof FsUtils>()
   return {
     ...actual,
@@ -82,6 +91,49 @@ describe('legacy shared Codex config compatibility', () => {
     expect(readFileSync(join(sharedRuntimeHome, 'auth.json'), 'utf-8')).toBe(staleSharedAuth)
   })
 
+  it('keeps an Orca-added MCP server while settings and trust still refresh', () => {
+    const baselinePath = join(sharedRuntimeHome, '.orca-config-settings-baseline.json')
+    const baseline = JSON.stringify({ version: 3, settings: {}, mcpServers: [] })
+    writeFileSync(baselinePath, baseline)
+    writeFileSync(
+      join(systemCodexHome, 'config.toml'),
+      ['model = "canonical"', '', '[projects."/revoked"]', 'trust_level = "untrusted"', ''].join(
+        '\n'
+      )
+    )
+    writeFileSync(
+      join(sharedRuntimeHome, 'config.toml'),
+      [
+        'model = "stale"',
+        '',
+        '[projects."/trusted-in-orca"]',
+        'trust_level = "trusted"',
+        '',
+        '[projects."/revoked"]',
+        'trust_level = "trusted"',
+        '',
+        '[hooks.state."orca:stop:0:0"]',
+        'enabled = true',
+        '',
+        '[mcp_servers.demo-mcp]',
+        'command = "demo"',
+        ''
+      ].join('\n')
+    )
+
+    syncLegacySharedCodexConfigForRetainedPanes({ sharedRuntimeHome, systemCodexHome })
+
+    const sharedConfig = readFileSync(join(sharedRuntimeHome, 'config.toml'), 'utf-8')
+    expect(sharedConfig).toContain('model = "canonical"')
+    expect(sharedConfig).not.toContain('model = "stale"')
+    expect(sharedConfig).toContain('[projects."/trusted-in-orca"]\ntrust_level = "trusted"')
+    expect(sharedConfig).toContain('[projects."/revoked"]\ntrust_level = "untrusted"')
+    expect(sharedConfig).not.toContain('[projects."/revoked"]\ntrust_level = "trusted"')
+    expect(sharedConfig).toContain('[hooks.state."orca:stop:0:0"]')
+    expect(sharedConfig).toContain('[mcp_servers.demo-mcp]\ncommand = "demo"')
+    expect(readFileSync(baselinePath, 'utf-8')).toBe(baseline)
+  })
+
   it('does not delete config when the canonical source is transiently missing', () => {
     const staleConfig = 'model_provider = "stale-provider"\n'
     writeFileSync(join(sharedRuntimeHome, 'config.toml'), staleConfig, 'utf-8')
@@ -89,20 +141,6 @@ describe('legacy shared Codex config compatibility', () => {
     syncLegacySharedCodexConfigForRetainedPanes({ sharedRuntimeHome, systemCodexHome })
 
     expect(readFileSync(join(sharedRuntimeHome, 'config.toml'), 'utf-8')).toBe(staleConfig)
-  })
-
-  it('does not promote retained-pane settings into the real home', () => {
-    writeFileSync(join(systemCodexHome, 'config.toml'), 'model = "canonical"\n', 'utf-8')
-    writeFileSync(join(sharedRuntimeHome, 'config.toml'), 'model = "retained-pane-change"\n')
-
-    syncLegacySharedCodexConfigForRetainedPanes({ sharedRuntimeHome, systemCodexHome })
-
-    expect(readFileSync(join(systemCodexHome, 'config.toml'), 'utf-8')).toBe(
-      'model = "canonical"\n'
-    )
-    expect(readFileSync(join(sharedRuntimeHome, 'config.toml'), 'utf-8')).toBe(
-      'model = "canonical"\n'
-    )
   })
 
   it('does not overwrite trust appended by a retained Codex during the mirror', () => {

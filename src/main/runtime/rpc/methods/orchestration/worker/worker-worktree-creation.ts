@@ -1,26 +1,106 @@
-/**
- * Creating the worktree a `--worktree new-child` / `new-top-level` dispatch asks for.
- *
- * `withAgentTerminal` is the whole difference between the two worker modes: a PTY worker's
- * worktree is created agent-first, so the startup terminal IS the worker, while a structured
- * worker's worktree is created with no agent at all and its session is created for the worktree
- * afterwards. Setup, default tabs and lineage are identical either way.
- */
+import type { RuntimeTerminalCreate } from '../../../../../../shared/runtime-terminal-create-contract'
+/** Create PTY worktrees agent-first; structured workers create sessions afterwards without startup agents. Setup/default tabs/lineage stay identical. */
 
-import type { AgentLaunchPreferences } from '../../../../../../shared/agent-session-host-authority'
-import type { TuiAgent } from '../../../../../../shared/tui-agent'
+import type { AgentLaunchPreferences } from '../../../../../../shared/agent-session/agent-session-host-authority'
+import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
+import { suggestCreatureNameForPaths } from '../../../../../../shared/worktree-name-suggestion'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import type { OrchestrationDb } from '../../../../orchestration/db'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+import { resolveUnattendedSetupDecision } from '../../../../../workspace-hooks/effective-hook-config'
+import { OrchestrationError } from '../../../../orchestration/orchestration-error'
+import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import type { WorkerEffect, WorkerSetupReceipt } from './worker-topology'
+
+/** The repo a new worker worktree is created in, and its parent for `new-child`. */
+export type WorkerWorktreeCreationTarget = {
+  repoSelector: string
+  parentWorktreeId?: string
+  /** A multi-repo folder workspace parent (`folder:<id>`); its destination repo is explicit. */
+  parentWorkspace?: string
+}
+
+export async function resolveWorkerWorktreeCreationTarget(args: {
+  runtime: Pick<OrcaRuntimeService, 'showManagedWorktree'>
+  requestedWorktree: string
+  repo: string | undefined
+  callerWorktreeId: string
+}): Promise<WorkerWorktreeCreationTarget> {
+  const { requestedWorktree, repo } = args
+  // An explicit repo is all a top-level worktree needs, so callers outside a worktree can use it.
+  if (requestedWorktree === 'new-top-level' && repo) {
+    return { repoSelector: repo }
+  }
+  // A folder workspace spans several repos, so its child names the destination repo itself.
+  if (
+    requestedWorktree === 'new-child' &&
+    parseWorkspaceKey(args.callerWorktreeId)?.type === 'folder'
+  ) {
+    if (!repo) {
+      throw new OrchestrationError(
+        'invalid_argument',
+        '--worktree new-child from a multi-repo folder workspace needs --repo <selector> naming the repo to create the worktree in.'
+      )
+    }
+    return { repoSelector: repo, parentWorkspace: args.callerWorktreeId }
+  }
+  const callerWorktree = await args.runtime
+    .showManagedWorktree(`id:${args.callerWorktreeId}`)
+    .catch((error: unknown) => {
+      if (error instanceof Error && error.message === 'selector_not_found') {
+        throw new OrchestrationError(
+          'invalid_argument',
+          `The dispatching terminal's workspace could not be resolved to a git worktree Orca manages, which --worktree ${requestedWorktree} needs; run from one, or pass --worktree new-top-level --repo <selector>.`
+        )
+      }
+      throw error
+    })
+  return {
+    repoSelector: repo ?? callerWorktree.repoId,
+    ...(requestedWorktree === 'new-child' ? { parentWorktreeId: callerWorktree.id } : {})
+  }
+}
+
+/** No --name gets the creature name a nameless UI create gets, so first-work rename can replace it. */
+export async function resolveWorkerWorktreeName(
+  runtime: {
+    listManagedWorktrees(
+      repoSelector: undefined,
+      limit: number
+    ): Promise<{ worktrees: readonly { path: string }[] }>
+    listRetiredWorktreeNames(repoSelector: string): Promise<{
+      retiredNamesByRepo: Record<string, readonly string[]>
+      retiredNameTiersByRepo: Record<string, number>
+    }>
+  },
+  repoSelector: string,
+  name: string | undefined
+): Promise<{ name: string; nameWasGenerated?: true }> {
+  if (name) {
+    return { name }
+  }
+  // Live names dedupe across projects like the sidebar's; retired names only within this one.
+  const [listed, retired] = await Promise.all([
+    runtime.listManagedWorktrees(undefined, Number.MAX_SAFE_INTEGER),
+    runtime.listRetiredWorktreeNames(repoSelector)
+  ])
+  const generated = suggestCreatureNameForPaths(
+    listed.worktrees.map((worktree) => worktree.path),
+    undefined,
+    {
+      names: Object.values(retired.retiredNamesByRepo).flat(),
+      exhaustedTiers: Math.max(0, ...Object.values(retired.retiredNameTiersByRepo))
+    }
+  )
+  return { name: generated, nameWasGenerated: true }
+}
 
 export async function createWorkerWorktree(args: {
   runtime: OrcaRuntimeService
   db: OrchestrationDb
   dispatchId: string
   requestedWorktree: string
-  coordinatorWorktree: Awaited<ReturnType<OrcaRuntimeService['showManagedWorktree']>>
+  target: WorkerWorktreeCreationTarget
   params: {
-    repo?: string
     name?: string
     baseBranch?: string
     displayName?: string
@@ -29,25 +109,31 @@ export async function createWorkerWorktree(args: {
     from: string
   }
   agent: TuiAgent
-  /** False for a structured worker: the session is created for the worktree afterwards, so the
-   *  worktree must not be created agent-first. Setup and default tabs still run; what is skipped
-   *  is the startup agent terminal and, with it, the TUI trust write — which a structured session
-   *  does not need, since the trust preset exists so a PTY agent's menu does not eat the first
-   *  bracketed paste. The renderer's own structured worktree create skips both the same way. */
+  /** Structured creation skips startup agent and TUI trust presets: no PTY menu can consume its first paste. Setup/default tabs still run, matching renderer chat creates. */
   withAgentTerminal: boolean
+  promisedAgentChat?: boolean
+  onWorkspaceCreated?: (worktreeId: string) => void
   launchPreferences?: AgentLaunchPreferences
   effects: WorkerEffect[]
 }): Promise<{
   worktree: Awaited<ReturnType<OrcaRuntimeService['showManagedWorktree']>>
   terminalHandle: string | undefined
+  terminalCreation?: RuntimeTerminalCreate
   setupReceipt: WorkerSetupReceipt
 }> {
-  const { runtime, db, dispatchId, requestedWorktree, coordinatorWorktree, params, effects } = args
-  const setupDecision = params.setup ?? 'run'
+  const { runtime, db, dispatchId, requestedWorktree, target, params, effects } = args
+  const setupDecision = resolveUnattendedSetupDecision(
+    await runtime.showRepo(target.repoSelector),
+    params.setup
+  )
+  let terminalCreation: RuntimeTerminalCreate | undefined
   db.recordWorkerStage({ dispatchId, stage: 'worktree_creating', effects })
   const created = await runtime.createManagedWorktree({
-    repoSelector: params.repo ?? coordinatorWorktree.repoId,
-    name: params.name as string,
+    onStartupTerminalCreated: (terminal) => {
+      terminalCreation = terminal
+    },
+    repoSelector: target.repoSelector,
+    ...(await resolveWorkerWorktreeName(runtime, target.repoSelector, params.name)),
     baseBranch: params.baseBranch,
     displayName: params.displayName,
     ...(params.displayName !== undefined ? { displayNameKind: 'user' as const } : {}),
@@ -58,15 +144,20 @@ export async function createWorkerWorktree(args: {
     awaitTerminalProvisioning: true,
     observeSetupCompletion: true,
     createdWithAgent: args.agent,
+    ...(args.promisedAgentChat ? { promisedAgentChat: true } : {}),
+    ...(args.onWorkspaceCreated ? { onWorkspaceCreated: args.onWorkspaceCreated } : {}),
     ...(args.withAgentTerminal
       ? {
           startupAgent: args.agent,
+          startupLaunchSource: 'orchestration',
+          startupSuppressUpdatePrompt: true,
           ...(args.launchPreferences ? { startupLaunchPreferences: args.launchPreferences } : {})
         }
       : {}),
     activate: false,
     lineage: {
-      parentWorktree: requestedWorktree === 'new-child' ? coordinatorWorktree.id : undefined,
+      parentWorktree: target.parentWorktreeId,
+      ...(target.parentWorkspace ? { parentWorkspace: target.parentWorkspace } : {}),
       noParent: requestedWorktree === 'new-top-level',
       callerTerminalHandle: params.from
     }
@@ -75,7 +166,8 @@ export async function createWorkerWorktree(args: {
   effects.push({
     kind: 'worktree',
     action: requestedWorktree === 'new-child' ? 'created_child' : 'created_top_level',
-    id: created.worktree.id
+    id: created.worktree.id,
+    name: created.worktree.displayName
   })
   db.recordWorkerStage({
     dispatchId,
@@ -85,7 +177,7 @@ export async function createWorkerWorktree(args: {
     residualResources: effects
   })
   const setupReceipt = {
-    requested: setupDecision,
+    requested: params.setup ?? 'inherit',
     effective: setupDecision,
     source: params.setup ? 'explicit_request' : 'orchestration_default',
     hookFound: created.setupReceipt?.hookFound ?? false,
@@ -108,9 +200,7 @@ export async function createWorkerWorktree(args: {
           : terminal.handle === setupTerminalHandle
             ? 'setup'
             : 'configured_tab',
-      // Every terminal listed here — the agent terminal included — was created by this call's
-      // agent-first worktree creation. The old 'reused_agent_terminal' verb on the agent row
-      // conflated the role test with a lifecycle claim and misdiagnosed at least one incident.
+      // Agent-first creation made every listed terminal; reused_agent_terminal incorrectly mixed role with lifecycle.
       action: 'created',
       id: terminal.handle,
       tabId: terminal.tabId,
@@ -134,6 +224,7 @@ export async function createWorkerWorktree(args: {
   return {
     worktree: created.worktree as Awaited<ReturnType<OrcaRuntimeService['showManagedWorktree']>>,
     terminalHandle,
+    terminalCreation,
     setupReceipt
   }
 }

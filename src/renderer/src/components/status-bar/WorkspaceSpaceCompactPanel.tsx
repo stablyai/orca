@@ -6,22 +6,25 @@ import { Button } from '../ui/button'
 import {
   formatBytes,
   getWorkspaceSpaceProgressLabel,
+  getWorkspaceSpaceScanningFallbackLabel,
   getWorkspaceSpaceScanTimeLabel
 } from './workspace-space-format'
-import { translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 
 export function WorkspaceSpaceCompactPanel({
   onOpenFullPage
 }: {
   onOpenFullPage: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const analysis = useAppStore((state) => state.workspaceSpaceAnalysis)
   const progress = useAppStore((state) => state.workspaceSpaceScanProgress)
   const scanError = useAppStore((state) => state.workspaceSpaceScanError)
   const isScanning = useAppStore((state) => state.workspaceSpaceScanning)
   const refreshWorkspaceSpace = useAppStore((state) => state.refreshWorkspaceSpace)
   const cancelWorkspaceSpaceScan = useAppStore((state) => state.cancelWorkspaceSpaceScan)
-  const progressLabel = getWorkspaceSpaceProgressLabel(progress)
+  const progressLabel = getWorkspaceSpaceProgressLabel(progress, t)
 
   const scan = useCallback((): void => {
     void refreshWorkspaceSpace().catch(() => {
@@ -34,57 +37,54 @@ export function WorkspaceSpaceCompactPanel({
   }, [cancelWorkspaceSpaceScan])
 
   return (
-    <div className="border-t border-border/50 bg-muted/15 px-3 py-2">
+    <div className="shrink-0 border-t border-border/50 bg-muted/15 px-3 py-2">
       <div className="flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
           <HardDrive className="size-3.5 shrink-0 text-muted-foreground" />
           <div className="min-w-0">
             <div className="flex min-w-0 items-center gap-1.5 text-[11px] font-medium text-foreground">
               <span className="truncate">
-                {translate(
-                  'auto.components.status.bar.WorkspaceSpaceCompactPanel.8ff597593d',
-                  'Space'
-                )}
+                {t('auto.components.status.bar.WorkspaceSpaceCompactPanel.8ff597593d', 'Space')}
               </span>
               <Badge variant="secondary" className="px-1.5 py-0 text-[9px]">
-                {translate(
-                  'auto.components.status.bar.WorkspaceSpaceCompactPanel.c361440dc0',
-                  'Beta'
-                )}
+                {t('auto.components.status.bar.WorkspaceSpaceCompactPanel.c361440dc0', 'Beta')}
               </Badge>
             </div>
             <div className="truncate text-[11px] text-muted-foreground">
               {analysis
                 ? isScanning
-                  ? translate(
+                  ? t(
                       'auto.components.status.bar.WorkspaceSpaceCompactPanel.3d8d47ce77',
                       '{{value0}} · last result kept',
-                      { value0: progressLabel ?? 'Scanning workspace sizes' }
+                      {
+                        value0: progressLabel ?? getWorkspaceSpaceScanningFallbackLabel(t)
+                      }
                     )
                   : analysis.unavailableWorktreeCount > 0
-                    ? translate(
-                        'auto.components.status.bar.WorkspaceSpaceCompactPanel.bef4dc0457',
-                        '{{value0}} reclaimable · {{value1}} unavailable',
+                    ? t(
+                        'workspaceSpace.compact.linkedAndUnavailable',
+                        '{{value0}} in linked worktrees · {{value1}} unavailable',
                         {
                           value0: formatBytes(analysis.reclaimableBytes),
                           value1: analysis.unavailableWorktreeCount
                         }
                       )
-                    : translate(
-                        'auto.components.status.bar.WorkspaceSpaceCompactPanel.bef4dc0457',
-                        '{{value0}} reclaimable · {{value1}} workspaces',
+                    : t(
+                        'workspaceSpace.compact.linkedAndScannedCount',
+                        '{{size}} in linked worktrees · {{count}} workspaces',
                         {
-                          value0: formatBytes(analysis.reclaimableBytes),
-                          value1: analysis.scannedWorktreeCount
+                          size: formatBytes(analysis.reclaimableBytes),
+                          count: analysis.scannedWorktreeCount,
+                          defaultValue_one: '{{size}} in linked worktrees · {{count}} workspace'
                         }
                       )
                 : isScanning
                   ? (progressLabel ??
-                    translate(
+                    t(
                       'auto.components.status.bar.WorkspaceSpaceCompactPanel.39786e3b73',
                       'Scanning workspace sizes.'
                     ))
-                  : translate(
+                  : t(
                       'auto.components.status.bar.WorkspaceSpaceCompactPanel.0583c806ac',
                       'Workspace disk usage is not scanned.'
                     )}
@@ -111,29 +111,14 @@ export function WorkspaceSpaceCompactPanel({
             )}
             {isScanning
               ? progress?.state === 'cancelling'
-                ? translate(
-                    'auto.components.status.bar.WorkspaceSpaceCompactPanel.5691353a21',
-                    'Stopping'
-                  )
-                : translate(
-                    'auto.components.status.bar.WorkspaceSpaceCompactPanel.2af2174d6d',
-                    'Cancel'
-                  )
+                ? t('auto.components.status.bar.WorkspaceSpaceCompactPanel.5691353a21', 'Stopping')
+                : t('auto.components.status.bar.WorkspaceSpaceCompactPanel.2af2174d6d', 'Cancel')
               : analysis
-                ? translate(
-                    'auto.components.status.bar.WorkspaceSpaceCompactPanel.f5e1a84d79',
-                    'Refresh'
-                  )
-                : translate(
-                    'auto.components.status.bar.WorkspaceSpaceCompactPanel.0582df6d2e',
-                    'Scan'
-                  )}
+                ? t('auto.components.status.bar.WorkspaceSpaceCompactPanel.f5e1a84d79', 'Refresh')
+                : t('auto.components.status.bar.WorkspaceSpaceCompactPanel.0582df6d2e', 'Scan')}
           </Button>
           <Button variant="ghost" size="xs" onClick={onOpenFullPage}>
-            {translate(
-              'auto.components.status.bar.WorkspaceSpaceCompactPanel.6a5dc3c61a',
-              'Review'
-            )}
+            {t('auto.components.status.bar.WorkspaceSpaceCompactPanel.6a5dc3c61a', 'Review')}
           </Button>
         </div>
       </div>
@@ -142,10 +127,7 @@ export function WorkspaceSpaceCompactPanel({
         <div className="mt-2 grid grid-cols-3 gap-1 text-[10px] tabular-nums">
           <div className="rounded border border-border/60 bg-background/40 px-2 py-1">
             <div className="text-muted-foreground">
-              {translate(
-                'auto.components.status.bar.WorkspaceSpaceCompactPanel.f4d2651498',
-                'Scanned'
-              )}
+              {t('auto.components.status.bar.WorkspaceSpaceCompactPanel.f4d2651498', 'Scanned')}
             </div>
             <div className="truncate font-medium text-foreground">
               {formatBytes(analysis.totalSizeBytes)}
@@ -153,10 +135,7 @@ export function WorkspaceSpaceCompactPanel({
           </div>
           <div className="rounded border border-border/60 bg-background/40 px-2 py-1">
             <div className="text-muted-foreground">
-              {translate(
-                'auto.components.status.bar.WorkspaceSpaceCompactPanel.9be86c46a0',
-                'Freeable'
-              )}
+              {t('workspaceSpace.compact.linked', 'Linked')}
             </div>
             <div className="truncate font-medium text-foreground">
               {formatBytes(analysis.reclaimableBytes)}
@@ -164,13 +143,10 @@ export function WorkspaceSpaceCompactPanel({
           </div>
           <div className="rounded border border-border/60 bg-background/40 px-2 py-1">
             <div className="text-muted-foreground">
-              {translate(
-                'auto.components.status.bar.WorkspaceSpaceCompactPanel.a471aa9c24',
-                'Updated'
-              )}
+              {t('auto.components.status.bar.WorkspaceSpaceCompactPanel.a471aa9c24', 'Updated')}
             </div>
             <div className="truncate font-medium text-foreground">
-              {getWorkspaceSpaceScanTimeLabel(analysis.scannedAt)}
+              {getWorkspaceSpaceScanTimeLabel(analysis.scannedAt, undefined, intlLocale)}
             </div>
           </div>
         </div>

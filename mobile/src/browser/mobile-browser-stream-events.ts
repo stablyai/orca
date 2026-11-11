@@ -2,7 +2,13 @@ import type { Dispatch, SetStateAction } from 'react'
 import { displayBrowserUrl } from './browser-url'
 import { shouldSurfaceBrowserError } from './mobile-browser-frame-state'
 
-export type BrowserDialogState = { dialogType: string; message: string }
+// error leaves page blocked after failed answer; pending token disables buttons for sole in-flight answer.
+export type BrowserDialogState = {
+  dialogType: string
+  message: string
+  error?: string
+  pending?: number
+}
 
 export type ScreencastEvent = {
   type?: string

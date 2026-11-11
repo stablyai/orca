@@ -1,26 +1,34 @@
 import { toast } from 'sonner'
-import { dispatchWorkspaceTabCommand } from '@/lib/workspace-tab-commands'
-import type { KeybindingActionId } from '../../../shared/keybindings'
+import { dispatchWorkspaceTabCommand } from '@/lib/workspace/tabs/workspace-tab-commands'
 import { keybindingMatchesAction } from '../../../shared/keybindings'
+import type { KeybindingActionId } from '../../../shared/keybindings'
 import { matchesRecentTabSwitcherChord } from '../../../shared/window-shortcut-policy'
-import { useAppStore } from '../store'
+import { useAppStore } from '../store/index'
 import {
-  createFloatingWorkspaceBrowserTab,
-  createFloatingWorkspaceMarkdownTab,
-  createFloatingWorkspaceTerminalTab,
   handleEmptyFloatingWorkspacePanelCloseShortcut,
   isEventTargetInsideFloatingWorkspacePanel,
   isFloatingWorkspacePanelFocused
-} from '@/lib/floating-workspace-terminal-actions'
-import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'
+} from '@/components/floating-terminal/floating-workspace-terminal-actions'
+import {
+  createFloatingWorkspaceBrowserTab,
+  createFloatingWorkspaceMarkdownTab,
+  createFloatingWorkspaceTerminalTab
+} from '@/components/floating-terminal/floating-workspace-tab-creation'
+import { showTerminalShortcutCaptureNotification } from '@/lib/notifications/terminal-shortcut-capture-notification'
 import {
   ensureClientCreationActionAllowed,
   showClientCreationActionError
-} from '@/lib/client-creation-action-error'
+} from '@/lib/workspace/creation/surface-policy/client-creation-action-error'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { translate } from '@/i18n/i18n'
 import { getKeybindingContext } from './terminal-workspace-model'
+import { isAgentTerminalPreviewTarget } from './dashboard-popout/agent-terminal-preview-target'
 import { resolveTerminalAgentTabShortcut } from './terminal-agent-tab-shortcut'
+import { getDetectionTargetIdentityForWorktree } from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
+import {
+  launchAgentTabShortcut,
+  launchFloatingWorkspaceAgentShortcut
+} from './agent-tab-shortcut-launch'
 import { handleTerminalWorkspaceEditorShortcut } from './terminal-workspace-editor-shortcuts'
 import type { TerminalActivationController } from './use-terminal-activation-actions'
 
@@ -32,8 +40,8 @@ export function handleTerminalWorkspaceKeyDown(
   const {
     activeWorktreeId,
     handleCloseAllFiles,
-    handleNewAgentTab,
     handleNewBrowserTab,
+    handleNewBrowserTabSplitRight,
     handleNewFile,
     handleNewSimulatorTab,
     handleNewTab,
@@ -45,7 +53,8 @@ export function handleTerminalWorkspaceKeyDown(
     return
   }
   const context = getKeybindingContext(event.target)
-  const floatingWorkspaceFocused = isFloatingWorkspacePanelFocused()
+  const floatingWorkspaceFocused =
+    isEventTargetInsideFloatingWorkspacePanel(event.target) || isFloatingWorkspacePanelFocused()
   const matchShortcut = (actionId: KeybindingActionId): boolean =>
     keybindingMatchesAction(actionId, event, shortcutPlatform, keybindings, {
       context,
@@ -61,36 +70,40 @@ export function handleTerminalWorkspaceKeyDown(
       keybindings
     })
   }
-  if (!event.repeat && matchShortcut('tab.newTerminal')) {
-    event.preventDefault()
-    notifyTerminalCapture('tab.newTerminal')
-    if (floatingWorkspaceFocused) {
-      void createFloatingWorkspaceTerminalTab(useAppStore.getState())
-      return
-    }
-    handleNewTab()
-    return
-  }
-
   if (!event.repeat) {
     const agentShortcut = resolveTerminalAgentTabShortcut({
-      activeWorktreeId,
+      activeWorktreeId: floatingWorkspaceFocused ? FLOATING_TERMINAL_WORKTREE_ID : activeWorktreeId,
       keybindings,
-      matchShortcut
+      matchShortcut,
+      includeTerminal: true
     })
     if (agentShortcut.actionId) {
       event.preventDefault()
       notifyTerminalCapture(agentShortcut.actionId)
-      if (agentShortcut.agent) {
-        handleNewAgentTab(agentShortcut.agent)
-      } else {
-        toast.message(
-          translate(
-            'auto.components.Terminal.5b2c1a9e44',
-            'No agent CLI detected — install one or pick a default agent in Settings.'
-          )
-        )
+      if (agentShortcut.actionId === 'tab.newTerminal') {
+        if (floatingWorkspaceFocused) {
+          void createFloatingWorkspaceTerminalTab(useAppStore.getState())
+        } else {
+          handleNewTab()
+        }
+        return
       }
+      if (floatingWorkspaceFocused) {
+        // Why: this capture listener usually runs before the floating panel's own, so it routes there too.
+        launchFloatingWorkspaceAgentShortcut(agentShortcut)
+        return
+      }
+      const detectionTarget = getDetectionTargetIdentityForWorktree(
+        useAppStore.getState(),
+        activeWorktreeId
+      )
+      launchAgentTabShortcut(activeWorktreeId, agentShortcut, () => {
+        const latest = useAppStore.getState()
+        return (
+          latest.activeWorktreeId === activeWorktreeId &&
+          getDetectionTargetIdentityForWorktree(latest, activeWorktreeId) === detectionTarget
+        )
+      })
       return
     }
   }
@@ -121,6 +134,17 @@ export function handleTerminalWorkspaceKeyDown(
       return
     }
     handleNewBrowserTab()
+    return
+  }
+  if (!event.repeat && matchShortcut('tab.newBrowserSplitRight')) {
+    event.preventDefault()
+    notifyTerminalCapture('tab.newBrowserSplitRight')
+    if (
+      !floatingWorkspaceFocused &&
+      ensureClientCreationActionAllowed(activeWorktreeId, 'managed-browser')
+    ) {
+      handleNewBrowserTabSplitRight()
+    }
     return
   }
   if (!event.repeat && mobileEmulatorEnabled && matchShortcut('tab.newSimulator')) {
@@ -163,13 +187,22 @@ export function handleTerminalWorkspaceKeyDown(
     void handleNewFile()
     return
   }
-  if (handleEmptyFloatingWorkspacePanelCloseShortcut(event, shortcutPlatform, keybindings)) {
+  const previewOwnsClose = isAgentTerminalPreviewTarget(event.target)
+  if (
+    !previewOwnsClose &&
+    handleEmptyFloatingWorkspacePanelCloseShortcut(
+      useAppStore.getState(),
+      event,
+      shortcutPlatform,
+      keybindings
+    )
+  ) {
     return
   }
   if (!event.repeat && matchShortcut('tab.close')) {
     const floatingPanelOwnsEvent =
       isEventTargetInsideFloatingWorkspacePanel(event.target) || floatingWorkspaceFocused
-    if (floatingPanelOwnsEvent) {
+    if (previewOwnsClose || floatingPanelOwnsEvent) {
       return
     }
     if (dispatchWorkspaceTabCommand({ type: 'close', context })) {
@@ -192,11 +225,20 @@ export function handleTerminalWorkspaceKeyDown(
   ) {
     return
   }
-  if (!event.repeat && matchShortcut('tab.previousRecent')) {
+  // Claim held repeats without switching again, or the newly active terminal receives the shortcut’s byte fallback.
+  const claimTabSwitch = (): boolean => {
     event.preventDefault()
     event.stopPropagation()
     event.stopImmediatePropagation()
-    dispatchWorkspaceTabCommand({ type: 'previous-recent' })
+    return !event.repeat
+  }
+  if (matchShortcut('tab.previousRecent')) {
+    if (claimTabSwitch()) {
+      dispatchWorkspaceTabCommand({
+        type: 'previous-recent',
+        floatingPanelOwned: floatingWorkspaceFocused
+      })
+    }
     return
   }
   const switchSameTypeDirection = matchShortcut('tab.nextSameType')
@@ -209,10 +251,10 @@ export function handleTerminalWorkspaceKeyDown(
     : matchShortcut('tab.previousAllTypes')
       ? -1
       : null
-  if (!event.repeat && (switchSameTypeDirection !== null || switchAllTypesDirection !== null)) {
-    event.preventDefault()
-    event.stopPropagation()
-    event.stopImmediatePropagation()
+  if (switchSameTypeDirection !== null || switchAllTypesDirection !== null) {
+    if (!claimTabSwitch()) {
+      return
+    }
     notifyTerminalCapture(
       switchAllTypesDirection !== null
         ? switchAllTypesDirection === 1
@@ -225,7 +267,8 @@ export function handleTerminalWorkspaceKeyDown(
     dispatchWorkspaceTabCommand({
       type: 'switch',
       direction: switchAllTypesDirection ?? switchSameTypeDirection ?? 1,
-      scope: switchAllTypesDirection !== null ? 'all-types' : 'same-type'
+      scope: switchAllTypesDirection !== null ? 'all-types' : 'same-type',
+      floatingPanelOwned: floatingWorkspaceFocused
     })
   }
   const terminalTabDirection = matchShortcut('tab.nextTerminal')
@@ -233,14 +276,12 @@ export function handleTerminalWorkspaceKeyDown(
     : matchShortcut('tab.previousTerminal')
       ? -1
       : null
-  if (!event.repeat && terminalTabDirection !== null) {
-    event.preventDefault()
-    event.stopPropagation()
-    event.stopImmediatePropagation()
+  if (terminalTabDirection !== null && claimTabSwitch()) {
     dispatchWorkspaceTabCommand({
       type: 'switch',
       direction: terminalTabDirection,
-      scope: 'terminal'
+      scope: 'terminal',
+      floatingPanelOwned: floatingWorkspaceFocused
     })
   }
 }

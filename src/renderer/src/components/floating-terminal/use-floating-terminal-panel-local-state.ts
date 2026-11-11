@@ -1,5 +1,4 @@
 import { useRef, useState } from 'react'
-import type { TerminalPaneHandle } from '@/components/terminal-pane/TerminalPane'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { ModifierDoubleTapDetector } from '../../../../shared/modifier-double-tap-detector'
 import type {
@@ -9,10 +8,9 @@ import type {
 } from './floating-terminal-panel-bounds'
 import { readPersistedFloatingTerminalPanelViewState } from './floating-terminal-panel-view-state'
 import {
-  hasOrchestrationSetupMarker,
+  isOrchestrationSetupEnabled,
   isOrchestrationSetupDismissed
-} from '@/lib/orchestration-setup-state'
-import { createTerminalPaneHandleRegistry } from './terminal-pane-handle-registry'
+} from '@/components/orchestration/setup/orchestration-setup-state'
 import {
   readInitialPanelBounds,
   type FloatingTerminalPanelBoundsState
@@ -20,7 +18,6 @@ import {
 import { useSettledPanelViewport } from './use-settled-panel-viewport'
 
 export function useFloatingTerminalPanelLocalState() {
-  const [cwd, setCwd] = useState<string | null>(null)
   const [markdownCwd, setMarkdownCwd] = useState<string | null>(null)
   const initialBoundsStateRef = useRef<FloatingTerminalPanelBoundsState | null>(null)
   if (initialBoundsStateRef.current === null) {
@@ -38,20 +35,14 @@ export function useFloatingTerminalPanelLocalState() {
   const panelViewportSettled = useSettledPanelViewport()
   const [orchestrationDialogOpen, setOrchestrationDialogOpen] = useState(false)
   const [showOrchestrationSetup, setShowOrchestrationSetup] = useState(
-    () => !hasOrchestrationSetupMarker() && !isOrchestrationSetupDismissed()
+    () => !isOrchestrationSetupEnabled() && !isOrchestrationSetupDismissed()
   )
   const restoreBoundsRef = useRef<FloatingTerminalPanelBoundsState | null>(null)
   const stagedBoundsRef = useRef<FloatingTerminalPanelBounds | null>(null)
   const lastPersistedBoundsRef = useRef<FloatingTerminalPanelCommittedBounds | null>(
     initialBoundsState.source === 'user' ? initialBoundsState.committedBounds : null
   )
-  const pendingEditorCloseQueueRef = useRef<string[]>([])
-  const pendingReclaimArmByFileIdRef = useRef<Map<string, () => void>>(new Map())
-  const saveDialogFileIdRef = useRef<string | null>(null)
   const panelRef = useRef<HTMLDivElement | null>(null)
-  const [terminalPaneRegistry] = useState(() =>
-    createTerminalPaneHandleRegistry<TerminalPaneHandle>()
-  )
   const doubleTapDetectorRef = useRef<ModifierDoubleTapDetector | null>(null)
   if (!doubleTapDetectorRef.current) {
     // The detector must exist before event handlers are published.
@@ -74,8 +65,6 @@ export function useFloatingTerminalPanelLocalState() {
   } | null>(null)
 
   return {
-    cwd,
-    setCwd,
     markdownCwd,
     setMarkdownCwd,
     boundsSourceRef,
@@ -92,11 +81,7 @@ export function useFloatingTerminalPanelLocalState() {
     restoreBoundsRef,
     stagedBoundsRef,
     lastPersistedBoundsRef,
-    pendingEditorCloseQueueRef,
-    pendingReclaimArmByFileIdRef,
-    saveDialogFileIdRef,
     panelRef,
-    terminalPaneRegistry,
     doubleTapDetectorRef,
     shortcutFocusFrameRef,
     shortcutFocusTimeoutRef,

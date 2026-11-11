@@ -1,21 +1,19 @@
 import { useState } from 'react'
 import { ChevronDown, ChevronUp } from 'lucide-react'
-import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { Button } from '../ui/button'
 import { MobileEmulatorAgentSetupGuideSteps } from './MobileEmulatorAgentSetupGuideSteps'
 import type { useMobileEmulatorAgentSetupState } from './use-mobile-emulator-agent-setup-state'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type MobileEmulatorAgentSetupGuideProps = {
   setup: ReturnType<typeof useMobileEmulatorAgentSetupState>
-  worktreeId: string
 }
 
 export function MobileEmulatorAgentSetupGuide({
-  setup,
-  worktreeId
+  setup
 }: MobileEmulatorAgentSetupGuideProps): React.JSX.Element {
+  const t = useTranslate()
   const dismissMobileEmulatorAgentSetup = useAppStore((s) => s.dismissMobileEmulatorAgentSetup)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
@@ -35,7 +33,7 @@ export function MobileEmulatorAgentSetupGuide({
   return (
     <div
       role="region"
-      aria-label={translate(
+      aria-label={t(
         'auto.components.emulator.pane.MobileEmulatorAgentSetupGuide.2fda9ff015',
         'Set up agent control'
       )}
@@ -45,7 +43,7 @@ export function MobileEmulatorAgentSetupGuide({
         <p className="min-w-0 flex-1 text-[11px] leading-4 text-muted-foreground">
           {setup.setupComplete ? (
             <span className="font-medium text-foreground">
-              {translate(
+              {t(
                 'auto.components.emulator.pane.MobileEmulatorAgentSetupGuide.0ac0fef514',
                 'Agent control is ready.'
               )}
@@ -53,14 +51,14 @@ export function MobileEmulatorAgentSetupGuide({
           ) : (
             <>
               <span className="font-medium text-foreground">
-                {translate(
+                {t(
                   'auto.components.emulator.pane.MobileEmulatorAgentSetupGuide.2bdfff8763',
                   'Agent control (optional).'
                 )}{' '}
               </span>
-              {translate(
-                'auto.components.emulator.pane.MobileEmulatorAgentSetupGuide.72736b051f',
-                'Set up Orca CLI + skill when you want agents to drive this simulator.'
+              {t(
+                'auto.components.emulator.pane.MobileEmulatorAgentSetupGuide.installSkillPrompt',
+                'Install the Orca CLI skill when you want agents to drive this simulator.'
               )}
             </>
           )}
@@ -75,10 +73,7 @@ export function MobileEmulatorAgentSetupGuide({
               className="h-6 px-2.5 text-[11px]"
               onClick={dismiss}
             >
-              {translate(
-                'auto.components.emulator.pane.MobileEmulatorAgentSetupGuide.d10ae98046',
-                'Done'
-              )}
+              {t('auto.components.emulator.pane.MobileEmulatorAgentSetupGuide.d10ae98046', 'Done')}
             </Button>
           ) : (
             <>
@@ -89,7 +84,7 @@ export function MobileEmulatorAgentSetupGuide({
                 className="h-6 px-2 text-[11px] text-muted-foreground"
                 onClick={dismiss}
               >
-                {translate(
+                {t(
                   'auto.components.emulator.pane.MobileEmulatorAgentSetupGuide.3756cbeca7',
                   'Not now'
                 )}
@@ -103,11 +98,11 @@ export function MobileEmulatorAgentSetupGuide({
                 onClick={() => setExpanded((value) => !value)}
               >
                 {expanded
-                  ? translate(
+                  ? t(
                       'auto.components.emulator.pane.MobileEmulatorAgentSetupGuide.6d950431d2',
                       'Hide'
                     )
-                  : translate(
+                  : t(
                       'auto.components.emulator.pane.MobileEmulatorAgentSetupGuide.ebceac65a4',
                       'Set up'
                     )}
@@ -120,26 +115,14 @@ export function MobileEmulatorAgentSetupGuide({
 
       {expanded && !setup.setupComplete ? (
         <div className="scrollbar-sleek max-h-[min(36vh,16rem)] overflow-y-auto border-t border-border/60 px-3 pb-2">
-          <div className="flex items-center justify-end py-1.5">
-            <span
-              className={cn(
-                'rounded-full px-2 py-0.5 text-[10px] font-medium',
-                setup.setupComplete
-                  ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400'
-                  : 'bg-muted text-muted-foreground'
-              )}
-            >
-              {setup.completedCount}/2
-            </span>
-          </div>
-          <MobileEmulatorAgentSetupGuideSteps setup={setup} worktreeId={worktreeId} />
+          <MobileEmulatorAgentSetupGuideSteps setup={setup} />
           <div className="pb-1 pt-1">
             <button
               type="button"
               onClick={openSettings}
               className="text-[11px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
             >
-              {translate(
+              {t(
                 'auto.components.emulator.pane.MobileEmulatorAgentSetupGuide.3f003507f4',
                 'Open full setup in Settings'
               )}

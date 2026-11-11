@@ -6,14 +6,18 @@ import type {
   RuntimeTerminalRead,
   RuntimeTerminalShow
 } from '../../../src/shared/runtime-types'
-import { toWebTerminalSurfaceTabId } from '../../../src/shared/terminal-surface-id'
+import { toWebTerminalSurfaceTabId } from '../../../src/shared/workspace-layout/terminal-surface-id'
 import { expect } from './orca-app'
 import { getTerminalContent, waitForActivePanePtyId } from './terminal'
 import { readFreshTerminalInventory } from './terminal-inventory-observation'
+import { quotePosixShell } from '../../../src/shared/shell/launch/shell-argument-quoting'
 
 const RECOVERY_DEADLINE_MS = 8_000
+// The host's shell-ready deadline (SHELL_READY_TIMEOUT_MS): a profile exec drops the ready marker, so the command waits for it.
+const SHELL_READY_DEADLINE_MS = 15_000
 
 export type StartupExecTerminal = {
+  createdAtMs: number
   hostPtyId: string
   panePtyId: string
   parentTabId: string
@@ -39,8 +43,8 @@ function execProfileContents(
   const guard = `ORCA_STA4067_EXEC_${runId.replaceAll(/[^A-Za-z0-9_]/g, '_')}`
   const barrierScript = barrier
     ? [
-        `: > ${shellQuote(barrier.startedPath)}`,
-        `while [[ ! -e ${shellQuote(barrier.releasePath)} ]]; do sleep 0.02; done`
+        `: > ${quotePosixShell(barrier.startedPath)}`,
+        `while [[ ! -e ${quotePosixShell(barrier.releasePath)} ]]; do sleep 0.02; done`
       ].join('\n  ')
     : ''
   return `if [[ -z "\${${guard}:-}" ]]; then
@@ -59,10 +63,6 @@ export function zshExecProfileContents(runId: string, barrier?: BashExecProfileB
   return execProfileContents(runId, ZSH_EXEC_LINE, barrier)
 }
 
-function shellQuote(value: string): string {
-  return `'${value.replaceAll("'", `'\\''`)}'`
-}
-
 function splitMarker(marker: string): [string, string] {
   const midpoint = Math.floor(marker.length / 2)
   return [marker.slice(0, midpoint), marker.slice(midpoint)]
@@ -70,7 +70,7 @@ function splitMarker(marker: string): [string, string] {
 
 function markerCommand(marker: string): string {
   const [left, right] = splitMarker(marker)
-  return `printf '%s%s\\n' ${shellQuote(left)} ${shellQuote(right)}`
+  return `printf '%s%s\\n' ${quotePosixShell(left)} ${quotePosixShell(right)}`
 }
 
 function count(text: string, marker: string): number {
@@ -150,9 +150,10 @@ export async function createStartupExecTerminal(
 ): Promise<StartupExecTerminal> {
   const startupMarker = `STA4067_STARTUP_READY_${runId}`
   const command = [
-    `printf '%s|%s\\n' "$$" "$(tty)" > ${shellQuote(ledgerPath)}`,
+    `printf '%s|%s\\n' "$$" "$(tty)" > ${quotePosixShell(ledgerPath)}`,
     markerCommand(startupMarker)
   ].join('; ')
+  const createdAtMs = Date.now()
   const created = await callStartupExecRuntime<{
     tab: { parentTabId: string; terminal: string | null }
   }>(page, 'session.tabs.createTerminal', {
@@ -194,6 +195,7 @@ export async function createStartupExecTerminal(
     shown.terminal.ptyId
   )
   return {
+    createdAtMs,
     hostPtyId: shown.terminal.ptyId,
     panePtyId,
     parentTabId: created.tab.parentTabId,
@@ -217,8 +219,14 @@ export async function expectStartupExecRecovery(
   created: StartupExecTerminal,
   runId: string
 ): Promise<void> {
+  const shellReadyDeadlineRemainingMs = Math.max(
+    0,
+    created.createdAtMs + SHELL_READY_DEADLINE_MS - Date.now()
+  )
   await expect
-    .poll(() => readTerminal(page, created.terminal), { timeout: RECOVERY_DEADLINE_MS })
+    .poll(() => readTerminal(page, created.terminal), {
+      timeout: shellReadyDeadlineRemainingMs + RECOVERY_DEADLINE_MS
+    })
     .toMatchObject({
       tail: expect.arrayContaining([expect.stringContaining(created.startupMarker)])
     })

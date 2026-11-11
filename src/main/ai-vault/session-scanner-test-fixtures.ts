@@ -1,18 +1,68 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
+import Database from '../sqlite/sync-database'
+
+export async function writeOpenCode2SqliteFixture(root: string): Promise<string> {
+  const opencode2DbPath = join(root, 'opencode-next.db')
+  const db = new Database(opencode2DbPath)
+  db.exec(`
+    CREATE TABLE session_v2 (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL,
+      parent_id TEXT,
+      slug TEXT NOT NULL,
+      directory TEXT NOT NULL,
+      title TEXT,
+      version TEXT NOT NULL,
+      time_created INTEGER NOT NULL,
+      time_updated INTEGER NOT NULL,
+      time_archived INTEGER
+    );
+    CREATE TABLE session_message (
+      id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL,
+      type TEXT NOT NULL,
+      seq INTEGER NOT NULL,
+      time_created INTEGER NOT NULL,
+      time_updated INTEGER NOT NULL,
+      data TEXT NOT NULL
+    );
+  `)
+  db.prepare(
+    `INSERT INTO session_v2
+      (id, project_id, parent_id, slug, directory, title, version, time_created, time_updated)
+     VALUES (?, 'proj-1', NULL, 'slug', '/tmp/opencode2', 'OpenCode 2 title', '0.0.0-next-1', 1777634000000, 1777634001000)`
+  ).run('opencode2-session')
+  db.prepare(
+    `INSERT INTO session_message (id, session_id, type, seq, time_created, time_updated, data)
+     VALUES (?, 'opencode2-session', 'user', 1, 1777634000500, 1777634000500, ?)`
+  ).run(
+    'msg_opencode2_1',
+    JSON.stringify({
+      id: 'msg_opencode2_1',
+      type: 'user',
+      text: 'OpenCode 2 title',
+      time: { created: 1777634000500 }
+    })
+  )
+  db.close()
+  return opencode2DbPath
+}
 
 export function isolatedScanRoots(root: string) {
   return {
     claudeProjectsDir: join(root, 'claude-projects'),
+    codebuddyProjectsDir: join(root, 'codebuddy-projects'),
+    qoderProjectsDir: join(root, 'qoder-projects'),
     codexSessionsDir: join(root, 'codex-sessions'),
     geminiSessionsDir: join(root, 'gemini-sessions'),
     antigravityBrainDir: join(root, 'antigravity-brain'),
     copilotSessionsDir: join(root, 'copilot-sessions'),
     cursorProjectsDir: join(root, 'cursor-projects'),
     opencodeStorageDir: join(root, 'opencode-storage'),
-    // Why: prevent the SQLite scanner from picking up the real
-    // ~/.local/share/opencode/opencode.db during tests.
+    // Avoid discovering the user’s real OpenCode database.
     opencodeDbPaths: [] as readonly string[],
+    zcodeDbPath: join(root, 'zcode', 'db.sqlite'),
     grokSessionsDir: join(root, 'grok-sessions'),
     devinTranscriptsDir: join(root, 'devin-transcripts'),
     hermesSessionsDir: join(root, 'hermes-sessions'),
@@ -25,7 +75,10 @@ export function isolatedScanRoots(root: string) {
     droidSessionsDir: join(root, 'droid-sessions'),
     droidProjectsDir: join(root, 'droid-projects'),
     clineSessionsDir: join(root, 'cline-sessions'),
-    kimiSessionsDir: join(root, 'kimi-sessions')
+    kimiSessionsDir: join(root, 'kimi-sessions'),
+    museSessionsDir: join(root, 'muse-sessions'),
+    jcodeSessionsDir: join(root, 'jcode-sessions'),
+    kiroSessionsDir: join(root, 'kiro-sessions')
   }
 }
 
@@ -33,9 +86,10 @@ export function jsonLines(records: unknown[]): string {
   return records.map((record) => JSON.stringify(record)).join('\n')
 }
 
+// Terminate records so the reader does not treat the last line as an incomplete write.
 export async function writeJsonlFile(filePath: string, records: unknown[]): Promise<void> {
   await mkdir(dirname(filePath), { recursive: true })
-  await writeFile(filePath, jsonLines(records))
+  await writeFile(filePath, `${jsonLines(records)}\n`)
 }
 
 export async function writeAntigravityTranscript(
@@ -52,8 +106,6 @@ export function writeAntigravityHistory(brainDir: string, records: unknown[]): P
   return writeJsonlFile(join(dirname(brainDir), 'history.jsonl'), records)
 }
 
-// Message-graph fixtures for the Pi forks: each writes one session transcript
-// and returns its path, since both agents resume by absolute transcript path.
 export async function writeOmpScannerFixture(sessionsDir: string): Promise<string> {
   const sessionFile = join(sessionsDir, 'omp-session.jsonl')
   await writeJsonlFile(sessionFile, [
@@ -82,8 +134,7 @@ export async function writeOmpScannerFixture(sessionsDir: string): Promise<strin
         role: 'assistant',
         content: [{ type: 'text', text: 'OMP answer' }],
         model: 'gpt-5.4-mini',
-        // totalTokens deliberately != input+output so the assertion proves
-        // the explicit-total field is read, not an input/output sum.
+        // Distinct total proves the explicit field wins over input + output.
         usage: { input: 10, output: 5, totalTokens: 160 }
       }
     }
@@ -91,8 +142,6 @@ export async function writeOmpScannerFixture(sessionsDir: string): Promise<strin
   return sessionFile
 }
 
-// Prime Agent shares Pi's message-graph format (and its `modelId` key) but
-// reads its own ~/.prime/agent/sessions root.
 export async function writePrimeAgentScannerFixture(sessionsDir: string): Promise<string> {
   const sessionFile = join(sessionsDir, 'prime-agent-session.jsonl')
   await writeJsonlFile(sessionFile, [
@@ -136,4 +185,100 @@ export function writeAntigravityScannerFixture(
       content: 'Done'
     }
   ])
+}
+
+// Muse 1.0.3 mixes bare records, retained frames, and omitted-live-only markers.
+export async function writeMuseScannerFixture(sessionsDir: string): Promise<string> {
+  const sessionFile = join(sessionsDir, '2026', '05', '01', 'muse-session', 'session.jsonl')
+  const bare = (payloadType: string, payload: unknown, recordedAt: number) => ({
+    record_type: 'event',
+    payload_type: payloadType,
+    recorded_at: recordedAt,
+    payload
+  })
+  await writeJsonlFile(sessionFile, [
+    bare(
+      'runtime.session.metadata',
+      { kind: 'metadata', record: { workspace_root: '/tmp/muse', provider_id: 'meta' } },
+      1780000000000000
+    ),
+    bare(
+      'runtime.user_intent.accepted',
+      { intent_id: 'intent-1', refill_blocks: [{ kind: 'text', text: 'Muse vault title' }] },
+      1780000001000000
+    ),
+    // The run-start prompt repeats the user message and must not count as another turn.
+    bare(
+      'runtime.session',
+      { kind: 'run', run_id: 'run-1', event: { kind: 'started', prompt: 'Muse vault title' } },
+      1780000001000007
+    ),
+    {
+      retained_frame: true,
+      frame_schema_version: 1,
+      outer_log_ordinal: 3,
+      transaction_id: 'txn-1',
+      children: [
+        {
+          child_index: 0,
+          record_json: JSON.stringify(
+            bare(
+              'runtime.session',
+              {
+                kind: 'run',
+                run_id: 'run-1',
+                event: { kind: 'assistant_message_committed', text: 'Muse answer' }
+              },
+              1780000002000000
+            )
+          )
+        }
+      ]
+    },
+    bare(
+      'runtime.session',
+      {
+        kind: 'run',
+        run_id: 'run-1',
+        event: {
+          kind: 'model_completed',
+          model: 'muse-spark-test',
+          usage: { input_tokens: 10, output_tokens: 5 }
+        }
+      },
+      1780000003000000
+    ),
+    {
+      retained_marker: 'omitted_live_only',
+      schema_version: 1,
+      stream: { kind: 'session', id: 'muse-session' }
+    }
+  ])
+  return sessionFile
+}
+
+export async function writeJcodeSessionFixture(
+  roots: ReturnType<typeof isolatedScanRoots>
+): Promise<void> {
+  await mkdir(roots.jcodeSessionsDir, { recursive: true })
+  await writeFile(
+    join(roots.jcodeSessionsDir, 'session_jcode-session.json'),
+    JSON.stringify({
+      id: 'session_jcode-session',
+      short_name: 'jcode-session',
+      model: 'jcode-model',
+      working_dir: '/tmp/jcode',
+      created_at: '2026-05-01T10:12:00.000Z',
+      updated_at: '2026-05-01T10:12:01.000Z',
+      messages: [
+        {
+          id: 'm1',
+          role: 'user',
+          display_role: 'system',
+          content: [{ type: 'text', text: '<system-reminder>injected</system-reminder>' }]
+        },
+        { id: 'm2', role: 'user', content: [{ type: 'text', text: 'Jcode title' }] }
+      ]
+    })
+  )
 }

@@ -2,7 +2,7 @@ import {
   effectiveExternalWorktreeVisibility,
   isLegacyRepoForExternalWorktreeVisibility
 } from '../../../shared/external-worktree-visibility'
-import { WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import { WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY } from '../../../shared/worktree-runtime-capabilities'
 import type { Repo } from '../../../shared/repo-types'
 import type { RpcContext } from './core'
 
@@ -16,12 +16,13 @@ export function projectRepoVisibilityForClient(repo: Repo, context: RepoProjecti
   ) {
     return repo
   }
+  const settings = context.runtime.requireStore?.().getSettings()
   return {
     ...repo,
     externalWorktreeVisibility: effectiveExternalWorktreeVisibility(
       repo,
       isLegacyRepoForExternalWorktreeVisibility(repo),
-      context.runtime.getClientSettings?.().worktreeVisibilityDefaults
+      settings ? (settings.worktreeVisibilityDefaults ?? { external: 'hide' }) : undefined
     )
   }
 }

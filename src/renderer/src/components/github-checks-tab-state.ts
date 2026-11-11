@@ -1,3 +1,4 @@
+import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
 import type { PRCheckDetail, PRCheckRunDetails } from '../../../shared/github/check-types'
 
 export type CheckDetailsLoadState = {
@@ -7,10 +8,16 @@ export type CheckDetailsLoadState = {
   error: string | null
 }
 
+declare const checksContextOwnerBrand: unique symbol
+
+/** Identity minted per checks context; only its reference is ever compared. */
+export type GitHubChecksContextOwner = object & { readonly [checksContextOwnerBrand]?: never }
+
 export type GitHubChecksTabState = {
   contextKey: string
-  contextOwner: object
+  contextOwner: GitHubChecksContextOwner
   sourceChecks: GitHubChecksSource
+  checkObservationOwner?: GitHubWorkItem
   localChecks: PRCheckDetail[] | null
   expandedCheckKey: string | null
   detailsByCheckKey: Record<string, CheckDetailsLoadState>
@@ -40,9 +47,13 @@ export function resolveGitHubChecksTabState(
   if (state.contextKey !== contextKey) {
     return createGitHubChecksTabState(sourceChecks, contextKey)
   }
-  return state.sourceChecks === sourceChecks
-    ? state
-    : resetGitHubChecksTabForSource(state, sourceChecks)
+  if (state.sourceChecks === sourceChecks) {
+    return state
+  }
+  const reset = resetGitHubChecksTabForSource(state, sourceChecks)
+  return sourceChecks === state.localChecks
+    ? { ...reset, checkObservationOwner: state.checkObservationOwner }
+    : reset
 }
 
 export function resetGitHubChecksTabForSource(
@@ -61,11 +72,13 @@ export function resetGitHubChecksTabForSource(
 
 export function updateGitHubChecksTabLocalChecks(
   state: GitHubChecksTabState,
-  localChecks: PRCheckDetail[]
+  localChecks: PRCheckDetail[],
+  checkObservationOwner?: GitHubWorkItem
 ): GitHubChecksTabState {
   return {
     ...state,
-    localChecks
+    localChecks,
+    checkObservationOwner
   }
 }
 
@@ -79,11 +92,7 @@ export function toggleGitHubChecksTabExpandedKey(
   }
 }
 
-/**
- * Unfenced write: an entry stored without a `requestId` silently drops the
- * settlement of any request already in flight for that key. Use
- * `beginGitHubChecksTabDetails` whenever a settlement is expected.
- */
+/** Writes without requestId retire in-flight settlements; use beginGitHubChecksTabDetails when a result must settle. */
 export function updateGitHubChecksTabDetails(
   state: GitHubChecksTabState,
   key: string,
@@ -112,11 +121,7 @@ export function beginGitHubChecksTabDetails(
   })
 }
 
-/**
- * A context change is fenced indirectly: `resolveGitHubChecksTabState` swaps in
- * a state with an empty `detailsByCheckKey`, so requests from the old context
- * find no owning entry here and settle into nothing.
- */
+/** Context swaps clear owning entries so requests from the old context cannot settle. */
 export function settleGitHubChecksTabDetails(
   state: GitHubChecksTabState,
   key: string,

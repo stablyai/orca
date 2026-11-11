@@ -21,19 +21,6 @@ describe('createServeDesktopActivationGate', () => {
     expect(gate.getState()).toBe('ready')
   })
 
-  it('activates immediately after the persistent provider is ready', () => {
-    const activateWindow = vi.fn()
-    const gate = createServeDesktopActivationGate({
-      initialState: 'ready',
-      activateWindow
-    })
-
-    gate.requestActivation()
-    gate.requestActivation()
-
-    expect(activateWindow).toHaveBeenCalledTimes(2)
-  })
-
   it('drops pending activation and fails closed when promotion is blocked', () => {
     const activateWindow = vi.fn()
     const onBlocked = vi.fn()

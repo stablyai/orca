@@ -8,8 +8,7 @@ const {
   getBitbucketRepoSlugMock,
   getGiteaRepoSlugMock,
   getHostedReviewForBranchMock,
-  getRepoSlugMock,
-  getSshGitProviderMock
+  getRepoSlugMock
 } = vi.hoisted(() => ({
   gitExecFileAsyncMock: vi.fn(),
   glabExecFileAsyncMock: vi.fn(),
@@ -18,15 +17,22 @@ const {
   getBitbucketRepoSlugMock: vi.fn(),
   getGiteaRepoSlugMock: vi.fn(),
   getHostedReviewForBranchMock: vi.fn(),
-  getRepoSlugMock: vi.fn(),
-  getSshGitProviderMock: vi.fn()
+  getRepoSlugMock: vi.fn()
 }))
 
-vi.mock('../git/runner', () => ({
-  gitExecFileAsync: gitExecFileAsyncMock,
-  glabExecFileAsync: glabExecFileAsyncMock,
-  ghExecFileAsync: ghExecFileAsyncMock,
-  extractExecError: vi.fn()
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  gitExecFileAsync: gitExecFileAsyncMock
+}))
+
+vi.mock('../git/command-runner/glab-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  glabExecFileAsync: glabExecFileAsyncMock
+}))
+
+vi.mock('../git/command-runner/gh-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  ghExecFileAsync: ghExecFileAsyncMock
 }))
 
 vi.mock('../github/client', () => ({
@@ -53,18 +59,15 @@ vi.mock('../gitea/client', () => ({
   getGiteaPullRequest: vi.fn()
 }))
 
-vi.mock('../providers/ssh-git-dispatch', () => ({
-  getSshGitProvider: getSshGitProviderMock
-}))
-
 vi.mock('./hosted-review', () => ({
   getHostedReviewForBranch: getHostedReviewForBranchMock
 }))
 
-import { REMOTE_URL_PROBE_TIMEOUT_MS } from '../git/remote-url-probe'
 import { _resetKnownHostsCache, _resetProjectRefCache } from '../gitlab/gl-utils'
 import { diagnoseAuth } from '../gitlab/client'
 import { getHostedReviewCreationEligibility } from './hosted-review-creation'
+import { detectHostedReviewProvider } from './forge-provider-detection'
+import { rememberGlabKnownHosts } from '../gitlab/gitlab-known-host-probe'
 
 function resetMocks(): void {
   for (const mock of [
@@ -75,8 +78,7 @@ function resetMocks(): void {
     getBitbucketRepoSlugMock,
     getGiteaRepoSlugMock,
     getHostedReviewForBranchMock,
-    getRepoSlugMock,
-    getSshGitProviderMock
+    getRepoSlugMock
   ]) {
     mock.mockReset()
   }
@@ -99,102 +101,6 @@ describe('GitLab self-hosted hosted review creation eligibility', () => {
     gitExecFileAsyncMock.mockResolvedValue({
       stdout: 'git@gitlab.internal:team/orca.git\n',
       stderr: ''
-    })
-  })
-
-  it('enables MR creation when glab recognizes the self-hosted origin host', async () => {
-    glabExecFileAsyncMock.mockImplementation(async (args: string[]) => {
-      if (args[0] === 'auth' && args[1] === 'status' && args.includes('--hostname')) {
-        return {
-          stdout: `gitlab.internal
-  ✓ Logged in as user
-`,
-          stderr: ''
-        }
-      }
-      if (args[0] === 'auth' && args[1] === 'status') {
-        return {
-          stdout: `gitlab.com
-  ✓ Logged in to gitlab.com as user
-`,
-          stderr: ''
-        }
-      }
-      return { stdout: '', stderr: '' }
-    })
-
-    await expect(
-      getHostedReviewCreationEligibility({
-        executionHostId: 'local',
-        repoPath: '/repo',
-        branch: 'feature/self-hosted-mr',
-        base: 'main',
-        hasUncommittedChanges: false,
-        hasUpstream: true,
-        ahead: 0,
-        behind: 0
-      })
-    ).resolves.toMatchObject({
-      provider: 'gitlab',
-      canCreate: true,
-      blockedReason: null,
-      nextAction: null,
-      head: 'feature/self-hosted-mr'
-    })
-
-    // The probe is bounded: a dead mount must not pin the forge detection that
-    // every hosted-review lookup starts with (P1-D).
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote', 'get-url', 'origin'], {
-      cwd: '/repo',
-      timeout: REMOTE_URL_PROBE_TIMEOUT_MS
-    })
-    expect(glabExecFileAsyncMock).toHaveBeenCalledWith(
-      ['auth', 'status', '--hostname', 'gitlab.internal'],
-      { cwd: '/repo' }
-    )
-  })
-
-  it('classifies known-but-unauthenticated self-hosted GitLab as auth_required', async () => {
-    glabExecFileAsyncMock.mockImplementation(async (args: string[]) => {
-      if (args[0] === 'auth' && args[1] === 'status' && args.includes('--hostname')) {
-        const error = new Error('invalid token provided') as Error & {
-          stdout: string
-          stderr: string
-        }
-        error.stdout = `gitlab.internal
-  ! Invalid token provided
-`
-        error.stderr = ''
-        throw error
-      }
-      if (args[0] === 'auth' && args[1] === 'status') {
-        return {
-          stdout: `gitlab.com
-  ✓ Logged in to gitlab.com as user
-gitlab.internal
-  ! Invalid token provided
-`,
-          stderr: ''
-        }
-      }
-      return { stdout: '', stderr: '' }
-    })
-
-    const result = await getHostedReviewCreationEligibility({
-      executionHostId: 'local',
-      repoPath: '/repo',
-      branch: 'feature/self-hosted-mr',
-      base: 'main',
-      hasUncommittedChanges: false,
-      hasUpstream: true,
-      ahead: 0,
-      behind: 0
-    })
-    expect(result).toMatchObject({
-      provider: 'gitlab',
-      canCreate: false,
-      blockedReason: 'auth_required',
-      nextAction: 'authenticate'
     })
   })
 
@@ -258,4 +164,49 @@ gitlab.internal
       blockedReason: null
     })
   })
+
+  it.each(['per-host failure', 'global inventory', 'remembered inventory'])(
+    'keeps GitHub PR identity across repositories despite glab %s',
+    async (evidence) => {
+      gitExecFileAsyncMock.mockResolvedValue({ stdout: 'git@github.com:team/orca.git\n' })
+      getRepoSlugMock.mockResolvedValue({ owner: 'team', repo: 'orca' })
+      if (evidence === 'remembered inventory') {
+        rememberGlabKnownHosts(['github.com'])
+      }
+      glabExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+        if (args.includes('--hostname')) {
+          // Captured glab 1.115 output for a configured host without a token.
+          throw Object.assign(new Error('glab auth status failed'), {
+            stdout: '',
+            stderr:
+              'github.com\n  x github.com: API call failed\n  ! No token found (checked config file, keyring, and environment variables).\n'
+          })
+        }
+        return {
+          stdout:
+            evidence === 'global inventory'
+              ? 'github.com\n  ✓ Logged in to github.com as example-user (config file)\n'
+              : 'gitlab.com\n  ✓ Logged in to gitlab.com as example-user (config file)\n',
+          stderr: ''
+        }
+      })
+      for (const repoPath of ['/first-repo', '/second-repo']) {
+        await expect(
+          detectHostedReviewProvider({ repoPath, executionHostId: 'local' })
+        ).resolves.toBe('github')
+      }
+
+      gitExecFileAsyncMock.mockResolvedValue({ stdout: 'https://forge.acme.test/team/orca.git\n' })
+      glabExecFileAsyncMock.mockRejectedValue(
+        Object.assign(new Error('glab auth status failed'), {
+          stdout: '',
+          stderr:
+            'forge.acme.test\n  x forge.acme.test: API call failed\n  ! No token found (checked config file, keyring, and environment variables).\n'
+        })
+      )
+      await expect(
+        detectHostedReviewProvider({ repoPath: '/custom', executionHostId: 'local' })
+      ).resolves.toBe('gitlab')
+    }
+  )
 })

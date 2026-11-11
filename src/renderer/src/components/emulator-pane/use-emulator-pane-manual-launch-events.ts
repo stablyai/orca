@@ -4,7 +4,8 @@ import type { EmulatorPaneSession } from './emulator-pane-types'
 import {
   EMULATOR_MANUAL_LAUNCH_FAILED_EVENT,
   EMULATOR_MANUAL_LAUNCH_STARTED_EVENT
-} from '@/lib/simulator-launch-coordination'
+} from '@/lib/simulator/launch/simulator-launch-coordination'
+import { SIMULATOR_DEFAULT_TAB_LABEL } from '@/lib/simulator/tabs/simulator-tab-label'
 
 type UseEmulatorPaneManualLaunchEventsArgs = {
   worktreeId: string
@@ -54,7 +55,7 @@ export function useEmulatorPaneManualLaunchEvents({
       setLoading(false)
       setError(detail?.message ?? 'Could not start the emulator.')
       if (tabId) {
-        useAppStore.getState().setTabLabel(tabId, 'Mobile Emulator')
+        useAppStore.getState().setTabLabel(tabId, SIMULATOR_DEFAULT_TAB_LABEL)
       }
     }
     window.addEventListener(EMULATOR_MANUAL_LAUNCH_FAILED_EVENT, onFailed)

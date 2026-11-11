@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { CalendarClock, ExternalLink, RefreshCw, Sparkles } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '../../store'
 import { Button } from '../ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
@@ -8,15 +8,15 @@ import { StatCard } from './StatCard'
 import { formatUpdatedAt } from './usage-formatters'
 
 export function GrokUsagePane(): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const grok = useAppStore((s) => s.rateLimits.grok)
   const grokAuthConfigured = useAppStore((s) => s.rateLimits.grokAuthConfigured)
   const refreshGrokRateLimits = useAppStore((s) => s.refreshGrokRateLimits)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
-  // Why: settled snapshots keep their status during refetches (no 'fetching'
-  // repaint), so manual-refresh feedback must be renderer-local, matching the
-  // StatusBar refresh button.
+  // Settled snapshots hide background refetch status; track manual-refresh feedback locally like StatusBar.
   const [isRefreshing, setIsRefreshing] = useState(false)
 
   const handleRefresh = (): void => {
@@ -32,7 +32,7 @@ export function GrokUsagePane(): React.JSX.Element {
     openSettingsPage()
   }
 
-  const paneTitle = translate('auto.components.stats.GrokUsagePane.g8h9i0j1k2', 'Grok usage')
+  const paneTitle = t('auto.components.stats.GrokUsagePane.g8h9i0j1k2', 'Grok usage')
 
   if (!grokAuthConfigured) {
     return (
@@ -44,7 +44,7 @@ export function GrokUsagePane(): React.JSX.Element {
           <div className="space-y-2">
             <h3 className="text-sm font-semibold text-foreground">{paneTitle}</h3>
             <p className="text-sm text-muted-foreground">
-              {translate(
+              {t(
                 'auto.components.stats.GrokUsagePane.b2d3e4f5c6',
                 'Weekly subscription credits from Grok CLI OAuth (~/.grok/auth.json). Same source as the status bar.'
               )}
@@ -59,7 +59,7 @@ export function GrokUsagePane(): React.JSX.Element {
               openGrokAccounts()
             }}
           >
-            {translate('auto.components.stats.GrokUsagePane.c3e4f5a6b7', 'Set up in Accounts')}
+            {t('auto.components.stats.GrokUsagePane.c3e4f5a6b7', 'Set up in Accounts')}
           </Button>
         </div>
       </div>
@@ -81,16 +81,16 @@ export function GrokUsagePane(): React.JSX.Element {
         <div className="min-w-0 flex-1">
           <h3 className="text-sm font-semibold text-foreground">{paneTitle}</h3>
           <p className="mt-1 text-xs text-muted-foreground">
-            {formatUpdatedAt(grok?.updatedAt ?? null)}
+            {formatUpdatedAt(grok?.updatedAt ?? null, t, intlLocale)}
             {grok?.error
-              ? translate('auto.components.stats.GrokUsagePane.h9i0j1k2l3', ' • {{value0}}', {
+              ? t('auto.components.stats.GrokUsagePane.h9i0j1k2l3', ' • {{value0}}', {
                   value0: grok.error
                 })
               : ''}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2 self-start">
-          <TooltipProvider delayDuration={250}>
+          <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -98,7 +98,7 @@ export function GrokUsagePane(): React.JSX.Element {
                   size="icon-xs"
                   onClick={handleRefresh}
                   disabled={isFetching}
-                  aria-label={translate(
+                  aria-label={t(
                     'auto.components.stats.GrokUsagePane.i0j1k2l3m4',
                     'Refresh Grok usage'
                   )}
@@ -107,7 +107,7 @@ export function GrokUsagePane(): React.JSX.Element {
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom" sideOffset={6}>
-                {translate('auto.components.stats.GrokUsagePane.d4f5a6b7c8', 'Refresh')}
+                {t('auto.components.stats.GrokUsagePane.d4f5a6b7c8', 'Refresh')}
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -116,15 +116,12 @@ export function GrokUsagePane(): React.JSX.Element {
 
       <div className="grid gap-3 md:grid-cols-2">
         <StatCard
-          label={translate('auto.components.stats.GrokUsagePane.e5a6b7c8d9', 'Weekly credits used')}
+          label={t('auto.components.stats.GrokUsagePane.e5a6b7c8d9', 'Weekly credits used')}
           value={weeklyPercent !== null ? `${weeklyPercent}%` : '—'}
           icon={<Sparkles className="size-4" />}
         />
         <StatCard
-          label={translate(
-            'auto.components.stats.GrokUsagePane.f6b7c8d9e0',
-            'Billing period reset'
-          )}
+          label={t('auto.components.stats.GrokUsagePane.f6b7c8d9e0', 'Billing period reset')}
           value={grok?.weekly?.resetDescription ?? '—'}
           icon={<CalendarClock className="size-4" />}
         />
@@ -141,7 +138,7 @@ export function GrokUsagePane(): React.JSX.Element {
           className="h-auto gap-1 px-0 text-xs"
           onClick={openGrokAccounts}
         >
-          {translate('auto.components.stats.GrokUsagePane.a7b8c9d0e1', 'Grok account settings')}
+          {t('auto.components.stats.GrokUsagePane.a7b8c9d0e1', 'Grok account settings')}
           <ExternalLink className="size-3" />
         </Button>
       </div>

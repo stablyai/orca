@@ -1,3 +1,5 @@
+import { shouldAcceptMergedFallbackPR } from '../../shared/github/pr-branch-fallback-rule'
+import { reviewRefreshIntervalMs } from '../../shared/review-refresh-policy'
 import type {
   GitHubPRRefreshAlias,
   GitHubPRRefreshCandidate,
@@ -6,7 +8,8 @@ import type {
   PRRefreshOutcome
 } from '../../shared/github/pull-request-refresh-types'
 import type { GitHubPRBranchLookupOptions } from './client'
-import { NO_REVIEW_REFRESH_INTERVAL_MS } from '../source-control/hosted-review-refresh-pacing'
+import { PR_CHECK_PAGE_LIMIT } from './client/check/pr-check-rollup'
+import { parsePRKey } from './pr-watch/pr-watch-types'
 
 export const MANUAL_MERGEABILITY_PENDING_REFRESH_MS = 2_500
 export const POST_PUSH_DELAY_MS = 2_500
@@ -16,19 +19,13 @@ type PRBranchLookupCandidate = Pick<
   'localGitOptions' | 'linkedPRNumber' | 'fallbackPRNumber' | 'fallbackPRSource' | 'currentHeadOid'
 >
 
-function shouldAcceptMergedFallbackPR(candidate: PRBranchLookupCandidate): boolean {
-  return (
-    candidate.linkedPRNumber == null &&
-    candidate.fallbackPRNumber != null &&
-    candidate.fallbackPRSource != null
-  )
-}
-
 export function hostedReviewOptionArgs(
   candidate: PRBranchLookupCandidate,
-  reason: GitHubPRRefreshReason = 'visible'
+  reason: GitHubPRRefreshReason = 'visible',
+  requestOptions: { userRefresh?: boolean; watchPRKey?: string } = {}
 ): [] | [GitHubPRBranchLookupOptions] {
-  const options: GitHubPRBranchLookupOptions = {}
+  const options: GitHubPRBranchLookupOptions =
+    requestOptions.userRefresh === true ? { userRefresh: true } : {}
   options.localGitExecOptions = {
     ...(candidate.localGitOptions?.wslDistro
       ? { wslDistro: candidate.localGitOptions.wslDistro }
@@ -37,6 +34,18 @@ export function hostedReviewOptionArgs(
   }
   if (shouldAcceptMergedFallbackPR(candidate)) {
     options.acceptMergedFallbackPR = true
+  }
+  if (reason === 'watch') {
+    options.checkPageLimit = PR_CHECK_PAGE_LIMIT
+    // A watch knows its PR's repository; probing another remote by number could read another PR.
+    const pr = requestOptions.watchPRKey ? parsePRKey(requestOptions.watchPRKey) : null
+    if (pr) {
+      options.exactRepository = {
+        owner: pr.owner,
+        repo: pr.repo,
+        ...(pr.host === 'github.com' ? {} : { host: pr.host })
+      }
+    }
   }
   if (typeof candidate.currentHeadOid === 'string' && candidate.currentHeadOid.trim().length > 0) {
     options.currentHeadOid = candidate.currentHeadOid.trim()
@@ -91,7 +100,7 @@ export function isBackground(reason: GitHubPRRefreshReason): boolean {
 }
 
 export function isBudgetedBackground(reason: GitHubPRRefreshReason): boolean {
-  return reason === 'visible' || reason === 'swr'
+  return reason === 'visible' || reason === 'swr' || reason === 'watch'
 }
 
 export function shouldBroadcastQueued(reason: GitHubPRRefreshReason, dueAt: number): boolean {
@@ -106,14 +115,18 @@ export function shouldSkipFresh(
   candidate: GitHubPRRefreshCandidate,
   reason: GitHubPRRefreshReason
 ): boolean {
-  if (bypassesFreshnessDelay(reason) || candidate.cachedFetchedAt == null) {
+  if (
+    bypassesFreshnessDelay(reason) ||
+    candidate.cachedFetchedAt == null ||
+    hasStaleHead(candidate)
+  ) {
     return false
   }
   return Date.now() - candidate.cachedFetchedAt < refreshIntervalForCandidate(candidate)
 }
 
 export function freshRetryAt(candidate: GitHubPRRefreshCandidate): number | null {
-  return candidate.cachedFetchedAt == null
+  return candidate.cachedFetchedAt == null || hasStaleHead(candidate)
     ? null
     : candidate.cachedFetchedAt + refreshIntervalForCandidate(candidate)
 }
@@ -144,6 +157,7 @@ export function visibleCandidateAfterOutcome(
   return {
     ...candidate,
     cachedFetchedAt: outcome.fetchedAt,
+    cachedHeadOid: candidate.currentHeadOid ?? null,
     cachedHasPR: outcome.kind === 'found',
     cachedPRState: outcome.kind === 'found' ? outcome.pr.state : null,
     cachedChecksStatus: outcome.kind === 'found' ? outcome.pr.checksStatus : null,
@@ -152,31 +166,23 @@ export function visibleCandidateAfterOutcome(
   }
 }
 
-function refreshIntervalForCandidate(candidate: GitHubPRRefreshCandidate): number {
-  if (candidate.cachedPRState === 'closed' || candidate.cachedPRState === 'merged') {
-    return 30 * 60_000
-  }
-  if (candidate.cachedHasPR === false) {
-    return NO_REVIEW_REFRESH_INTERVAL_MS
-  }
-  if (
-    candidate.cachedHasPR === true &&
-    candidate.cachedPRState === 'open' &&
-    candidate.cachedMergeable === 'UNKNOWN' &&
-    !hasResolvedMergeStateStatus(candidate.cachedMergeStateStatus)
-  ) {
-    return 10_000
-  }
-  if (candidate.cachedChecksStatus === 'success') {
-    return 10 * 60_000
-  }
-  if (candidate.cachedChecksStatus === 'failure') {
-    return 3 * 60_000
-  }
-  if (candidate.cachedChecksStatus === 'pending') {
-    return 90_000
-  }
-  return 60_000
+export function hasStaleHead(candidate: GitHubPRRefreshCandidate): boolean {
+  return (
+    candidate.currentHeadOid != null &&
+    candidate.cachedHeadOid != null &&
+    candidate.currentHeadOid !== candidate.cachedHeadOid
+  )
+}
+
+export function refreshIntervalForCandidate(candidate: GitHubPRRefreshCandidate): number {
+  return (
+    reviewRefreshIntervalMs({
+      state: candidate.cachedPRState,
+      checksStatus: candidate.cachedChecksStatus,
+      hasReview: candidate.cachedHasPR,
+      selected: candidate.isSelected
+    }) ?? Number.POSITIVE_INFINITY
+  )
 }
 
 function hasResolvedMergeStateStatus(status: string | null | undefined): boolean {
@@ -189,5 +195,24 @@ export function isMergeabilityPendingOutcome(outcome: PRRefreshOutcome): boolean
     outcome.pr.state === 'open' &&
     outcome.pr.mergeable === 'UNKNOWN' &&
     !hasResolvedMergeStateStatus(outcome.pr.mergeStateStatus)
+  )
+}
+
+export function sameAliasRequestIdentity(
+  left: GitHubPRRefreshAlias,
+  right: GitHubPRRefreshAlias
+): boolean {
+  return (
+    left.cacheKey === right.cacheKey &&
+    left.repoId === right.repoId &&
+    left.repoPath === right.repoPath &&
+    left.branch === right.branch &&
+    left.worktreeId === right.worktreeId &&
+    left.connectionId === right.connectionId &&
+    left.executionHostId === right.executionHostId &&
+    left.linkedPRNumber === right.linkedPRNumber &&
+    left.fallbackPRNumber === right.fallbackPRNumber &&
+    left.fallbackPRSource === right.fallbackPRSource &&
+    left.currentHeadOid === right.currentHeadOid
   )
 }

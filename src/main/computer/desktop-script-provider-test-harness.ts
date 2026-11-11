@@ -24,7 +24,7 @@ vi.mock('fs/promises', () => ({
   writeFile: writeFileMock
 }))
 
-/** Builds a client on the one-shot bridge; pass a host to exercise serve mode. */
+/** Omit the runtime host to exercise the one-shot bridge. */
 export async function createDesktopScriptProviderClient(
   platform: 'linux' | 'windows',
   executablePath: string,

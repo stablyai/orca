@@ -1,9 +1,10 @@
 import { isWslUncPath } from '../../shared/wsl-paths'
-import { filterPathsToRunningWslDistrosAsync } from '../wsl-running-path-filter'
+import { filterPathsToRunningWslDistrosAsync } from '../wsl/filesystem/wsl-running-path-filter'
 import {
   createTranscriptNativeWatcher,
   type TranscriptNativeWatcher
-} from './transcript-native-watcher'
+} from '../../shared/transcript-native-watcher'
+import { parseSshTranscriptPath } from './ssh-transcript-path'
 
 export function isWslTranscriptWatcherPath(filePath: string): boolean {
   return isWslUncPath(filePath)
@@ -21,8 +22,8 @@ export function createRunningGuardedTranscriptNativeWatcher(
   onEvent: () => void,
   onRetry: () => void
 ): TranscriptNativeWatcher {
-  const isWslPath = isWslTranscriptWatcherPath(filePath)
-  if (isWslPath) {
+  // Remote files use host-side stat reconciliation; native fs.watch cannot observe them here.
+  if (isWslTranscriptWatcherPath(filePath) || parseSshTranscriptPath(filePath)) {
     return {
       bind: () => false,
       dispose: () => {},

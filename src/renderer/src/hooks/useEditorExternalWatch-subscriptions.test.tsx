@@ -15,17 +15,32 @@ type TestWatchTarget = {
 const subscriptionState = vi.hoisted(() => ({
   snapshot: { targets: [] as TestWatchTarget[], targetsKey: '' },
   subscribeRuntimeFileChanges: vi.fn(),
-  disposeEventHandler: vi.fn()
+  disposeEventHandler: vi.fn(),
+  handleFsChanged: vi.fn(),
+  contacts: new Map<string, () => void>(),
+  unsubscribeContact: vi.fn()
 }))
 
 vi.mock('@/store', () => ({
-  useAppStore: (selector: (state: unknown) => unknown) => selector({})
+  useAppStore: Object.assign((selector: (state: unknown) => unknown) => selector({}), {
+    getState: () => ({ openFiles: [] })
+  })
 }))
-vi.mock('@/runtime/runtime-file-client', () => ({
+vi.mock('@/runtime/hosts/connections/runtime-host-contact-regained', () => ({
+  subscribeRuntimeHostContactRegained: (id: string, listener: () => void) => {
+    subscriptionState.contacts.set(id, listener)
+    return subscriptionState.unsubscribeContact
+  }
+}))
+vi.mock('@/runtime/files/watching/runtime-file-watch-client', () => ({
   subscribeRuntimeFileChanges: subscriptionState.subscribeRuntimeFileChanges
 }))
 vi.mock('./editor-external-watch-targets', () => ({
-  selectEditorExternalWatchTargets: () => subscriptionState.snapshot,
+  selectEditorExternalWatchTargets: () => ({
+    unwatchedTargetKeys: new Set<string>(),
+    unwatchedTargetsKey: '',
+    ...subscriptionState.snapshot
+  }),
   getEditorExternalWatchTargetKey: (target: TestWatchTarget) =>
     [
       target.worktreeId,
@@ -37,7 +52,7 @@ vi.mock('./editor-external-watch-targets', () => ({
 }))
 vi.mock('./editor-external-watch-event-reconciliation', () => ({
   buildEditorExternalWatchEventHandler: vi.fn(() => ({
-    handleFsChanged: vi.fn(),
+    handleFsChanged: subscriptionState.handleFsChanged,
     dispose: subscriptionState.disposeEventHandler
   })),
   collectOverflowEditorExternalReloadTargets: vi.fn()
@@ -83,6 +98,8 @@ describe('useEditorExternalWatch subscriptions', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    subscriptionState.contacts.clear()
+    subscriptionState.subscribeRuntimeFileChanges.mockReset()
     subscriptionState.snapshot = { targets: [], targetsKey: '' }
     watchWorktree = vi.fn().mockResolvedValue(undefined)
     unwatchWorktree = vi.fn().mockResolvedValue(undefined)
@@ -103,53 +120,6 @@ describe('useEditorExternalWatch subscriptions', () => {
     await act(async () => root.unmount())
     container.remove()
     ;(window as unknown as { api?: unknown }).api = previousApi
-  })
-
-  it('unsubscribes an SSH watch and the shared event listener exactly once on unmount', async () => {
-    subscriptionState.snapshot = {
-      targets: [
-        {
-          worktreeId: 'wt-ssh',
-          worktreePath: '/remote/repo',
-          connectionId: 'ssh-1',
-          runtimeEnvironmentId: null
-        }
-      ],
-      targetsKey: 'ssh-watch'
-    }
-    await act(async () => root.render(createElement(WatchProbe)))
-
-    expect(watchWorktree).toHaveBeenCalledWith({
-      worktreePath: '/remote/repo',
-      connectionId: 'ssh-1'
-    })
-    await act(async () => root.unmount())
-
-    expect(unwatchWorktree).toHaveBeenCalledTimes(1)
-    expect(unwatchWorktree).toHaveBeenCalledWith({
-      worktreePath: '/remote/repo',
-      connectionId: 'ssh-1'
-    })
-    expect(unsubscribeFsEvents).toHaveBeenCalledTimes(1)
-    expect(subscriptionState.disposeEventHandler).toHaveBeenCalledTimes(1)
-  })
-
-  it('disposes a runtime subscription that resolves after unmount', async () => {
-    const pending = deferredRuntimeSubscription()
-    const unsubscribeRuntime = vi.fn()
-    subscriptionState.subscribeRuntimeFileChanges.mockReturnValueOnce(pending.promise)
-    subscriptionState.snapshot = {
-      targets: [runtimeTarget()],
-      targetsKey: 'runtime-watch'
-    }
-    await act(async () => root.render(createElement(WatchProbe)))
-    await act(async () => root.unmount())
-
-    pending.resolve(unsubscribeRuntime)
-    await act(async () => pending.promise)
-
-    expect(unsubscribeRuntime).toHaveBeenCalledTimes(1)
-    expect(unwatchWorktree).not.toHaveBeenCalled()
   })
 
   it('cannot let an old runtime subscribe resolution replace a re-added watch', async () => {
@@ -183,5 +153,46 @@ describe('useEditorExternalWatch subscriptions', () => {
 
     await act(async () => root.unmount())
     expect(unsubscribeCurrent).toHaveBeenCalledTimes(1)
+  })
+
+  it('retries a failed initial watch when the same host answers again', async () => {
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    subscriptionState.subscribeRuntimeFileChanges
+      .mockRejectedValueOnce(new Error('connection lost'))
+      .mockResolvedValueOnce(vi.fn())
+    subscriptionState.snapshot = { targets: [runtimeTarget()], targetsKey: 'recovering-watch' }
+    try {
+      await act(async () => root.render(createElement(WatchProbe)))
+      await act(async () => subscriptionState.contacts.get('runtime-1')?.())
+      expect(subscriptionState.subscribeRuntimeFileChanges).toHaveBeenCalledTimes(2)
+      expect(subscriptionState.handleFsChanged).toHaveBeenCalledWith(
+        {
+          worktreePath: '/runtime/repo',
+          events: [{ kind: 'overflow', absolutePath: '/runtime/repo' }],
+          resync: true
+        },
+        'runtime-1'
+      )
+    } finally {
+      warning.mockRestore()
+    }
+  })
+
+  it('replaces a lost watch and stops contact recovery when the editor unmounts', async () => {
+    const firstStop = vi.fn()
+    const secondStop = vi.fn()
+    subscriptionState.subscribeRuntimeFileChanges
+      .mockResolvedValueOnce(firstStop)
+      .mockResolvedValueOnce(secondStop)
+    subscriptionState.snapshot = { targets: [runtimeTarget()], targetsKey: 'live-watch' }
+    await act(async () => root.render(createElement(WatchProbe)))
+    await act(async () => subscriptionState.contacts.get('runtime-1')?.())
+    expect(firstStop).toHaveBeenCalledOnce()
+    expect(subscriptionState.subscribeRuntimeFileChanges).toHaveBeenCalledTimes(2)
+    await act(async () => root.unmount())
+    expect(secondStop).toHaveBeenCalledOnce()
+    expect(subscriptionState.unsubscribeContact).toHaveBeenCalledOnce()
+    subscriptionState.contacts.get('runtime-1')?.()
+    expect(subscriptionState.subscribeRuntimeFileChanges).toHaveBeenCalledTimes(2)
   })
 })

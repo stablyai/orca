@@ -11,17 +11,36 @@ import type {
   LocalNetworkConnectionTestResult
 } from '../../shared/developer-permissions-types'
 import type {
+  NotificationAttentionAcknowledgement,
   NotificationDeliveryProbeResult,
   NotificationDismissResult,
   NotificationDispatchRequest,
   NotificationDispatchResult,
   NotificationPermissionStatusResult,
-  NotificationSoundResult
+  NotificationSoundResult,
+  StructuredNotificationRead
 } from '../../shared/notification-settings-types'
+import type { AgentSessionExecutionLocation } from '../../shared/agent-session/lifecycle/agent-session-record'
 
 export type NotificationsApi = {
+  getDesktopAwayState: () => Promise<boolean | undefined>
   dispatch: (args: NotificationDispatchRequest) => Promise<NotificationDispatchResult>
-  dismiss: (ids: string[]) => Promise<NotificationDismissResult>
+  acknowledgeAttention: (
+    acknowledgement: NotificationAttentionAcknowledgement,
+    executionHost?: NotificationDispatchRequest['executionHost']
+  ) => Promise<NotificationDismissResult>
+  /** `paneKeys` also retires every id main announced for those subjects. */
+  dismiss: (
+    ids: string[],
+    paneKeys?: string[],
+    reads?: StructuredNotificationRead[]
+  ) => Promise<NotificationDismissResult>
+  /** The remote host owning this session reports no prompt pending; retires relayed prompt alerts. */
+  settleStructuredPrompts: (
+    scope: AgentSessionExecutionLocation,
+    sessionId: string,
+    executionHost?: NotificationDispatchRequest['executionHost']
+  ) => Promise<void>
   openSystemSettings: () => Promise<void>
   getPermissionStatus: () => Promise<NotificationPermissionStatusResult>
   probeDelivery: (args?: { force?: boolean }) => Promise<NotificationDeliveryProbeResult>

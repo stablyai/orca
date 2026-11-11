@@ -68,7 +68,7 @@ export function extractGrokToolFields(
     }
     return update
   }
-  if (isGrokEvent(eventName, 'stop', 'session_end', 'stop_failure')) {
+  if (isGrokEvent(eventName, 'stop', 'session_end', 'stop_failure', 'stop_cancelled')) {
     const direct =
       readString(hookPayload, 'lastAssistantMessage') ??
       readString(hookPayload, 'last_assistant_message')
@@ -104,6 +104,13 @@ export function isGrokPermissionNotification(message: string | undefined): boole
     lower.includes('feedback') ||
     lower.includes('clarify') ||
     lower.includes('question')
+  )
+}
+
+export function isGrokSubagentEvent(hookPayload: Record<string, unknown>): boolean {
+  return (
+    readString(hookPayload, 'subagentType') !== undefined ||
+    readString(hookPayload, 'subagent_type') !== undefined
   )
 }
 

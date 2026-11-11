@@ -1,53 +1,59 @@
-import { defineMethod, type RpcMethod } from '../../../core'
+import { defineOrchestrationMethod } from '../access/orchestration-method-access'
+import { dispatchAccess } from '../access/run-access-rules'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { buildDispatchPreamble } from '../../../../orchestration/preamble'
+import { buildDispatchPreamble } from '../../../../orchestration/workers/launch/worker-dispatch-preamble'
+import { sendAgentTurn } from '../../../../orchestration/turn-delivery/send-agent-turn'
 import { resolveDispatchCreator } from './dispatch-creator'
 import {
   injectRejectedError,
-  taskNotFoundError,
   taskNotStartableError
-} from '../../../../orchestration/task-dispatch-refusal'
-import { resolveRunScope } from './run-scope'
-import { DispatchParams, DispatchShowParams } from '../schemas'
+} from '../../../../orchestration/coordinator/dispatch/task-dispatch-refusal'
+import {
+  DispatchParams,
+  DispatchShowParams
+} from '../../../../../../shared/rpc-contract/orchestration-params'
+import {
+  orcaSessionIdOrHandle,
+  resolveDispatchAssigneeParty
+} from '../../../../orchestration/addressing/orchestration-party'
+import {
+  admitChatAssignee,
+  chatAssigneeOf,
+  refuseChatSelfAssignment
+} from '../chat-assignee-admission'
+import { sendChatTask } from '../chat-task-delivery'
+import { dispatchTaskSource } from '../../../../orchestration/coordinator/dispatch/dispatch-task-source'
 
-export const ORCHESTRATION_DISPATCH_METHODS: RpcMethod[] = [
-  defineMethod({
+export const ORCHESTRATION_DISPATCH_METHODS = [
+  defineOrchestrationMethod({
     name: 'orchestration.dispatch',
+    permission: 'workspace',
     params: DispatchParams,
+    access: {
+      kind: 'writes',
+      caller: 'from',
+      targets: { task: 'task', to: 'party', run: 'run' },
+      rule: dispatchAccess
+    },
     handler: async (
       params,
-      {
-        orchestrationCompatibilityEvidence,
-        runtime,
-        legacyCoordinatorRunId,
-        revalidateLegacyCoordinator,
-        orchestrationMutation
-      }
+      { orchestrationCaller, runtime, revalidateLegacyCoordinator, orchestrationMutation },
+      { task }
     ) => {
       const db = runtime.getOrchestrationDb()
-      const task = db.getTask(params.task)
-      if (!task) {
-        throw taskNotFoundError(`Task not found: ${params.task}`, { taskId: params.task })
-      }
-      const run = resolveRunScope(runtime, {
-        runId: params.run,
-        callerTerminalHandle: params.from,
-        requireCurrentConsumer: true,
-        legacyCoordinatorRunId,
-        callerEvidence: orchestrationCompatibilityEvidence
-      })
-      if (task.run_id !== run.id) {
-        throw taskNotFoundError(`Task ${task.id} was not found in Run ${run.id}.`, {
-          taskId: task.id,
-          runId: run.id
-        })
+      const assigneeParty = params.to ? resolveDispatchAssigneeParty(params.to, db) : undefined
+      const assignee = assigneeParty?.address
+      // A chat has no pane, process or agent to probe: it is reached as mail to it is.
+      const chatAssignee = assigneeParty ? chatAssigneeOf(assigneeParty) : null
+      if (chatAssignee) {
+        await admitChatAssignee(runtime, chatAssignee, db)
       }
 
-      // Why: dry-run previews the preamble without mutating state, so it skips the ready-status check and uses a placeholder dispatchId.
+      // Dry-run previews without state changes; skip readiness and use a placeholder Dispatch id.
       if (params.dryRun) {
         const maxDepth = runtime.getNestedWorkerMaxDepth()
         const previewDepth = db.resolveChildDispatchDepth(
-          resolveDispatchCreator(runtime, params.from),
+          resolveDispatchCreator(runtime, params.from, orchestrationCaller),
           maxDepth
         )
         const preamble = buildDispatchPreamble({
@@ -55,20 +61,18 @@ export const ORCHESTRATION_DISPATCH_METHODS: RpcMethod[] = [
           dispatchId: 'ctx_dryrun',
           canDispatchSubWorkers: previewDepth < maxDepth,
           taskSpec: task.spec,
-          coordinatorHandle: params.from ?? 'coordinator',
-          workerHandle: params.to ?? 'worker',
+          coordinatorHandle: orcaSessionIdOrHandle(params.from ?? 'coordinator', db),
+          workerHandle: assignee ? orcaSessionIdOrHandle(assignee, db) : 'worker',
           devMode: params.devMode,
-          ...(params.to
-            ? { cliCommand: runtime.getTerminalOrchestrationCliCommand(params.to) }
-            : {})
+          ...(assignee ? { cliCommand: runtime.getTerminalOrchestrationCliCommand(assignee) } : {})
         })
         return { dispatch: null, injected: false, dryRun: true, preamble }
       }
 
-      if (!params.to) {
+      if (!assignee) {
         throw new Error('Missing --to')
       }
-      const to = params.to
+      const to = assignee
 
       if (task.status !== 'ready') {
         throw taskNotStartableError(
@@ -78,43 +82,51 @@ export const ORCHESTRATION_DISPATCH_METHODS: RpcMethod[] = [
         )
       }
 
-      const dispatchAuthority = runtime.getOrchestrationDispatchAuthority(to)
-      const assigneePaneKey =
-        dispatchAuthority?.paneKey ?? runtime.getTerminalPaneKey(to) ?? undefined
+      // A structured worker's chat keeps the pane and process its custody is held under.
+      const sessionOnly = assigneeParty?.terminalHandle === null
+      const dispatchAuthority = sessionOnly ? null : runtime.getOrchestrationDispatchAuthority(to)
+      const assigneePaneKey = sessionOnly
+        ? undefined
+        : (dispatchAuthority?.paneKey ?? runtime.getTerminalPaneKey(to) ?? undefined)
       const processIncarnation =
         dispatchAuthority?.paneKey && dispatchAuthority.processIncarnation
           ? dispatchAuthority.processIncarnation
           : undefined
-      // Why: the assignee side prefers dispatch authority, so the caller side must too — getTerminalPaneKey
-      // alone returns null for a handle reachable only through the window-graph leaf, going inert here.
+      // Resolve dispatch authority on both sides; pane lookup alone misses window-graph-only handles.
       const callerPane = params.from
         ? (runtime.getOrchestrationDispatchAuthority(params.from)?.paneKey ??
           runtime.getTerminalPaneKey(params.from) ??
           null)
         : null
+      if (params.inject && chatAssignee) {
+        // The session wins over `--from`, so a chat calling with none is still refused here.
+        refuseChatSelfAssignment({
+          sessionId: chatAssignee,
+          coordinatorSessionId: orchestrationCaller?.orcaSessionId,
+          remedy: 'Dispatch to a different agent, or use worker-start to create one.'
+        })
+      }
       if (
         params.inject &&
         params.from &&
         (to === params.from || (assigneePaneKey != null && assigneePaneKey === callerPane))
       ) {
-        // An injected preamble into the coordinator's own pane makes it answer itself forever
-        // (worker-start --terminal is the other door). A context-only self-dispatch writes
-        // nothing into the pane and stays legal for low-level topologies.
+        // Refuse self-injected preambles to avoid endless self-answering; context-only topology dispatch remains legal.
         throw new OrchestrationError(
           'terminal_is_coordinator',
           `Terminal ${to} is this coordinator's own terminal. Dispatch to a different agent pane, or use worker-start to create one.`
         )
       }
 
-      // Why: injecting the preamble into a bare shell dumps it as shell commands (gibberish), so require a detected agent first.
-      if (params.inject) {
+      // Require a detected agent before injection so a bare shell cannot execute the preamble.
+      if (params.inject && !chatAssignee) {
         const hasAgent = await runtime.isTerminalRunningAgent(to)
         if (!hasAgent) {
           throw injectRejectedError(to, 'no_agent_detected')
         }
       }
 
-      if (params.inject && (!assigneePaneKey || !processIncarnation)) {
+      if (params.inject && !sessionOnly && (!assigneePaneKey || !processIncarnation)) {
         throw new OrchestrationError(
           'stable_pane_required',
           `Terminal ${to} has no stable pane/process incarnation for lifecycle authority.`
@@ -128,26 +140,21 @@ export const ORCHESTRATION_DISPATCH_METHODS: RpcMethod[] = [
         assigneePaneKey,
         launchTokenHash: dispatchAuthority?.launchTokenHash ?? undefined,
         processIncarnation,
-        creator: resolveDispatchCreator(runtime, params.from),
+        hostScope: dispatchAuthority?.hostScope
+          ? JSON.stringify(dispatchAuthority.hostScope)
+          : null,
+        creator: resolveDispatchCreator(runtime, params.from, orchestrationCaller),
         maxDepth: runtime.getNestedWorkerMaxDepth()
       })
-      const dispatchCapability = params.inject
-        ? db.mintDispatchCapability({
-            dispatchId: ctx.id,
-            paneKey: assigneePaneKey as string,
-            processIncarnation: processIncarnation as string
-          })
-        : undefined
 
-      // Why: built after ctx so dispatchId is the real ctx.id, letting heartbeats attribute liveness to a specific dispatch context, not just a task.
+      // Build after ctx so worker_done carries this Dispatch's real id.
       const preamble = buildDispatchPreamble({
         taskId: task.id,
         dispatchId: ctx.id,
         canDispatchSubWorkers: ctx.depth < runtime.getNestedWorkerMaxDepth(),
         taskSpec: task.spec,
-        coordinatorHandle: params.from ?? 'coordinator',
-        workerHandle: to,
-        dispatchCapability,
+        coordinatorHandle: orcaSessionIdOrHandle(params.from ?? 'coordinator', db),
+        workerHandle: orcaSessionIdOrHandle(to, db),
         devMode: params.devMode,
         cliCommand: runtime.getTerminalOrchestrationCliCommand(to)
       })
@@ -156,20 +163,38 @@ export const ORCHESTRATION_DISPATCH_METHODS: RpcMethod[] = [
       let prompt
       if (params.inject) {
         try {
-          prompt = await runtime.sendTerminalAgentPrompt(to, preamble, {
-            // A delayed provider hook must not revoke an accepted Dispatch.
-            acceptQueued: true,
-            observationTimeoutMs: 0,
-            requestId: orchestrationMutation?.requestId ?? ctx.id
-          })
+          if (chatAssignee) {
+            const from = dispatchTaskSource({
+              db,
+              dispatch: ctx,
+              from: params.from,
+              senderSnapshot: (party, reported) =>
+                runtime.orchestrationSenderNames.snapshotOf(party, reported)
+            })
+            await sendChatTask({ db, dispatch: ctx, from, preamble })
+          } else {
+            prompt = await sendAgentTurn({
+              kind: 'terminal',
+              runtime,
+              handle: to,
+              turn: {
+                purpose: 'dispatch-preamble',
+                body: preamble,
+                operationId: orchestrationMutation?.requestId ?? ctx.id
+              }
+            })
+          }
           injected = true
         } catch (err) {
-          db.failDispatch(ctx.id, err instanceof Error ? err.message : String(err))
+          // Unknown delivery may still be running; keep Dispatch open for its report or explicit abandon.
+          if (!(err instanceof OrchestrationError && err.code === 'operation_unknown')) {
+            db.failDispatch(ctx.id, err instanceof Error ? err.message : String(err))
+          }
           throw err
         }
       }
 
-      // Why: returnPreamble is opt-in because the preamble is several hundred bytes most callers don't need in the response.
+      // Opt into returning the preamble to avoid hundreds of unnecessary response bytes.
       if (params.returnPreamble) {
         return {
           dispatch: ctx,
@@ -182,9 +207,11 @@ export const ORCHESTRATION_DISPATCH_METHODS: RpcMethod[] = [
     }
   }),
 
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.dispatchShow',
+    permission: 'workspace',
     params: DispatchShowParams,
+    access: { kind: 'reads', targets: { task: 'task' } },
     handler: (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
       if (!params.task) {
@@ -201,12 +228,12 @@ export const ORCHESTRATION_DISPATCH_METHODS: RpcMethod[] = [
         const workerHandle = ctx?.assignee_handle ?? 'worker'
         const preamble = buildDispatchPreamble({
           taskId: task.id,
-          // Why: use the real ctx.id when present so the preview matches what was injected; placeholder when no dispatch has occurred yet.
+          // Use the real Dispatch id for matching previews; use a placeholder before dispatch.
           dispatchId: ctx?.id ?? 'ctx_preview',
           canDispatchSubWorkers: (ctx?.depth ?? 1) < runtime.getNestedWorkerMaxDepth(),
           taskSpec: task.spec,
-          coordinatorHandle: params.from ?? 'coordinator',
-          workerHandle,
+          coordinatorHandle: orcaSessionIdOrHandle(params.from ?? 'coordinator', db),
+          workerHandle: orcaSessionIdOrHandle(workerHandle, db),
           devMode: params.devMode,
           ...(ctx ? { cliCommand: runtime.getTerminalOrchestrationCliCommand(workerHandle) } : {})
         })

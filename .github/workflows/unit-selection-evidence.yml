@@ -1,0 +1,65 @@
+name: Unit selection evidence
+
+# Call advisory evidence beside unit-tests, preserving artifacts without delaying verify ~36s after shards; job/comparison remain continue-on-error.
+on:
+  workflow_call:
+    inputs:
+      rebuild_plan:
+        description: Rebuild shadow selection from the tested source outside the required gate.
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  selection_evidence:
+    if: ${{ !cancelled() }}
+    continue-on-error: true
+    runs-on: ${{ inputs.rebuild_plan && 'ubuntu-24.04' || 'ubuntu-slim' }}
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 2
+          sparse-checkout: ${{ !inputs.rebuild_plan && '/config/scripts/ci/unit-selection/ci-unit-selection-review.mjs' || '' }}
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - uses: ./.github/actions/install-node-dependencies
+        if: inputs.rebuild_plan
+      - name: Rebuild shadow selection
+        if: inputs.rebuild_plan
+        env:
+          ORCA_UNIT_SELECTION_MODE: shadow
+          ORCA_PULL_REQUEST_DRAFT: ${{ github.event.pull_request.draft }}
+          ORCA_UNIT_FULL_SHARD_COUNT: ${{ vars.ORCA_UNIT_FULL_SHARD_COUNT || '12' }}
+        run: node config/scripts/ci/unit-selection/ci-unit-plan.mjs
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: unit-shard-node-*-attempt-${{ github.run_attempt }}
+          path: unit-evidence/
+      - name: Compare selection with full results
+        continue-on-error: true
+        uses: actions/github-script@v8
+        env:
+          REBUILD_SELECTION_PLAN: ${{ inputs.rebuild_plan }}
+        with:
+          github-token: unused
+          script: |
+            const env = { ...process.env }
+            delete env['INPUT_GITHUB-TOKEN']
+            const args = [
+              'config/scripts/ci/unit-selection/ci-unit-selection-review.mjs',
+              'unit-evidence'
+            ]
+            if (env.REBUILD_SELECTION_PLAN === 'true') args.push('ci-shards/unit-selection.json')
+            await exec.exec(process.execPath, args, { env })
+      - uses: actions/upload-artifact@v7
+        if: always()
+        continue-on-error: true
+        with:
+          name: unit-selection-review-attempt-${{ github.run_attempt }}
+          path: |
+            unit-evidence/selection-review.json
+            ci-shards/unit-selection.json
+          retention-days: 30

@@ -1,15 +1,15 @@
 import type { GitAdmissionTier } from '../git/command-runner/git-exec-options'
+import type { GhAccountBinding } from '../../shared/github/account-binding'
 
 export type HostedReviewLocalGitOptions = {
   wslDistro?: string
   admissionTier?: GitAdmissionTier
+  ghAccount?: GhAccountBinding
 }
 
 export type HostedReviewExecutionOptions = {
   localGitExecOptions?: HostedReviewLocalGitOptions
-  /** Paths Orca may have symlinked into this worktree. An untracked entry that
-   *  is one of these is Orca's own artifact, not work the user can commit, so it
-   *  must not read as "dirty" and block review creation. */
+  /** Configured Orca shared links are clean only when untracked real symlinks, never user files. */
   sharedLinkPaths?: readonly string[]
 }
 
@@ -18,9 +18,11 @@ export function getHostedReviewLocalGitOptions(
 ): HostedReviewLocalGitOptions {
   const wslDistro = options.localGitExecOptions?.wslDistro
   const admissionTier = options.localGitExecOptions?.admissionTier
+  const ghAccount = options.localGitExecOptions?.ghAccount
   return {
     ...(wslDistro ? { wslDistro } : {}),
-    ...(admissionTier ? { admissionTier } : {})
+    ...(admissionTier ? { admissionTier } : {}),
+    ...(ghAccount ? { ghAccount } : {})
   }
 }
 

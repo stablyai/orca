@@ -2,28 +2,40 @@ import { describe, expect, it, vi } from 'vitest'
 import { PromiseSettlementWaiters } from './promise-settlement-waiters'
 
 describe('PromiseSettlementWaiters', () => {
-  it('removes ten thousand aborted callers while one anchor remains pending', async () => {
-    let resolveBase: (value: number) => void = () => {}
-    const basePromise = new Promise<number>((resolve) => {
+  it.each([false, true])('preserves abort scheduling with abortInMicrotask=%s', async (defer) => {
+    let resolveBase = (_value: string): void => {}
+    const base = new Promise<string>((resolve) => {
       resolveBase = resolve
     })
-    const thenSpy = vi.spyOn(basePromise, 'then')
-    const waiters = new PromiseSettlementWaiters(basePromise)
-    const anchor = waiters.wait()
-    const controllers = Array.from({ length: 10_000 }, () => new AbortController())
-    const cancelled = controllers.map((controller) =>
-      waiters.wait({ signal: controller.signal }).catch((error) => error)
-    )
+    const waiters = new PromiseSettlementWaiters(base)
+    const controller = new AbortController()
+    const reason = { code: 'aborted' }
+    const wait = waiters.wait({
+      signal: controller.signal,
+      abortInMicrotask: defer,
+      createAbortError: () => reason
+    })
+    resolveBase('raw result')
+    controller.abort()
+    await (defer ? expect(wait).resolves.toBe('raw result') : expect(wait).rejects.toBe(reason))
+    expect(waiters.waiterCount).toBe(0)
+  })
 
-    for (const controller of controllers) {
-      controller.abort()
-    }
-    await Promise.all(cancelled)
-
-    expect(waiters.waiterCount).toBe(1)
-    expect(thenSpy).toHaveBeenCalledOnce()
-    resolveBase(42)
-    await expect(anchor).resolves.toBe(42)
+  it('lets an earlier deferred abort win over a later raw settlement', async () => {
+    let resolveBase = (_value: string): void => {}
+    const base = new Promise<string>((resolve) => {
+      resolveBase = resolve
+    })
+    const waiters = new PromiseSettlementWaiters(base)
+    const controller = new AbortController()
+    const wait = waiters.wait({
+      signal: controller.signal,
+      abortInMicrotask: true,
+      createAbortError: () => false
+    })
+    controller.abort()
+    resolveBase('raw result')
+    await expect(wait).rejects.toBe(false)
     expect(waiters.waiterCount).toBe(0)
   })
 

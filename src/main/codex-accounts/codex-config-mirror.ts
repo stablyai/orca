@@ -1,11 +1,15 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { parseWslUncPath } from '../../shared/wsl-paths'
-import { syncSystemConfigIntoManagedCodexHome } from '../codex/codex-config-mirror'
-import { readCodexTopLevelModelProvider } from '../codex/codex-model-provider-config'
-import type { Store } from '../persistence'
-import { toWindowsWslPath } from '../wsl'
+import { parseWslUncPath, toWindowsWslPath } from '../../shared/wsl-paths'
+import {
+  ensureCodexDaemonSocketGuard,
+  syncSystemConfigIntoManagedCodexHome
+} from '../codex/configuration/settings/codex-config-mirror'
+import { readCodexTopLevelModelProvider } from '../codex/structured/launch/codex-model-provider-config'
+import type { Store } from '../persistence/loading-store/store'
+import { wasWslDistroLastSeenRunningSettled } from '../wsl/discovery/wsl-background-distro-gate'
+import { WSL_UNC_RUNNING_LEASE_MS } from '../wsl/filesystem/wsl-unc-access-gate'
 
 export type CanonicalCodexConfig = {
   contents: string
@@ -17,28 +21,28 @@ export type CanonicalCodexConfig = {
 
 export class CodexConfigMirror {
   constructor(
-    private readonly store: Store,
+    private readonly store: Pick<Store, 'getSettings'>,
     private readonly assertManagedHomePath: (
       candidatePath: string,
       expectedAccountId?: string
-    ) => string
+    ) => string | Promise<string>
   ) {}
 
-  safeSyncToManagedHomes(): void {
+  async safeSyncToManagedHomes(): Promise<void> {
     try {
-      this.syncToManagedHomes()
+      await this.syncToManagedHomes()
     } catch (error) {
       console.warn('[codex-accounts] Failed to sync canonical config:', error)
     }
   }
 
-  safeSyncIntoManagedHome(
+  async safeSyncIntoManagedHome(
     managedHomePath: string,
     canonicalConfig?: CanonicalCodexConfig | null,
     expectedAccountId?: string
-  ): void {
+  ): Promise<void> {
     try {
-      this.syncIntoManagedHome(managedHomePath, canonicalConfig, expectedAccountId)
+      await this.syncIntoManagedHome(managedHomePath, canonicalConfig, expectedAccountId)
     } catch (error) {
       console.warn('[codex-accounts] Failed to seed managed config:', error)
     }
@@ -62,8 +66,7 @@ export class CodexConfigMirror {
     }
 
     try {
-      // Why: the config is read over UNC but consumed by Codex inside WSL, so
-      // path rewrites must anchor to the Linux-side ~/.codex, not the UNC path.
+      // Read over UNC while anchoring rewritten paths to the guest-side config directory.
       return {
         contents: readFileSync(configPath, 'utf-8'),
         sourceHomePath: toWindowsWslPath(`${wslHome}/.codex`, wslInfo.distro),
@@ -83,39 +86,64 @@ export class CodexConfigMirror {
       return
     }
 
-    // Why: mirroring a custom-provider pin into an OAuth managed home makes
-    // the new OAuth credentials inert; fail before login and leave user config intact.
+    // A custom-provider pin would prevent the new OAuth credentials from being used.
     throw new Error(
       `Orca cannot add a Codex OAuth account while ~/.codex/config.toml pins the custom provider ${JSON.stringify(modelProvider)}. Keep using the system-default account for this provider, or remove model_provider (or set it to "openai") before adding an OAuth account. Orca left your config unchanged.`
     )
   }
 
-  private syncToManagedHomes(): void {
+  /** Host homes sync before this returns; a WSL home's ownership check finishes later. */
+  private async syncToManagedHomes(): Promise<void> {
+    const pending: Promise<void>[] = []
     for (const account of this.store.getSettings().codexManagedAccounts) {
-      try {
-        this.syncIntoManagedHome(account.managedHomePath, undefined, account.id)
-      } catch (error) {
+      const distro = parseWslUncPath(account.managedHomePath)?.distro
+      // Its UNC reads boot a stopped distro (E9); launch preparation syncs that home before use.
+      if (
+        distro &&
+        !wasWslDistroLastSeenRunningSettled(distro, { maxAgeMs: WSL_UNC_RUNNING_LEASE_MS })
+      ) {
+        continue
+      }
+      const warn = (error: unknown): void =>
         console.warn('[codex-accounts] Failed to sync managed config:', error)
+      try {
+        const synced = this.syncIntoManagedHome(account.managedHomePath, undefined, account.id)
+        if (synced) {
+          pending.push(synced.catch(warn))
+        }
+      } catch (error) {
+        warn(error)
       }
     }
+    await Promise.all(pending)
   }
 
+  /** Synchronous for a home whose ownership check is; otherwise the promise of its sync. */
   private syncIntoManagedHome(
     managedHomePath: string,
     canonicalConfig = this.readForManagedHome(managedHomePath),
     expectedAccountId?: string
-  ): void {
+  ): Promise<void> | undefined {
     if (canonicalConfig === null) {
-      return
+      // Guard long host homes even without source config; WSL launch preparation guards guest homes.
+      if (parseWslUncPath(managedHomePath)) {
+        return undefined
+      }
+      return thenWith(
+        this.assertManagedHomePath(managedHomePath, expectedAccountId),
+        ensureCodexDaemonSocketGuard
+      )
     }
-    const trustedManagedHomePath = this.assertManagedHomePath(managedHomePath, expectedAccountId)
-    // Why: every account home is Codex's own CODEX_HOME. Preserve trust Codex
-    // granted there while refreshing ordinary settings from the lane's source.
-    syncSystemConfigIntoManagedCodexHome({
-      runtimeHomePath: trustedManagedHomePath,
-      systemHomePath: canonicalConfig.sourceHomePath,
-      systemConfigDir: canonicalConfig.sourceConfigDir
-    })
+    // Refresh ordinary settings without replacing approvals owned by this runtime home.
+    return thenWith(
+      this.assertManagedHomePath(managedHomePath, expectedAccountId),
+      (runtimeHomePath) =>
+        syncSystemConfigIntoManagedCodexHome({
+          runtimeHomePath,
+          systemHomePath: canonicalConfig.sourceHomePath,
+          systemConfigDir: canonicalConfig.sourceConfigDir
+        })
+    )
   }
 
   private readHostConfig(): CanonicalCodexConfig | null {
@@ -131,4 +159,18 @@ export class CodexConfigMirror {
       return null
     }
   }
+}
+
+/** Runs `apply` now on a plain value, or once the promise settles. */
+function thenWith(
+  value: string | Promise<string>,
+  apply: (resolved: string) => unknown
+): Promise<void> | undefined {
+  if (typeof value === 'string') {
+    apply(value)
+    return undefined
+  }
+  return value.then((resolved) => {
+    apply(resolved)
+  })
 }

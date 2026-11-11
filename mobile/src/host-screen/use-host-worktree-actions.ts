@@ -1,17 +1,52 @@
 import { useCallback } from 'react'
-import { Alert } from 'react-native'
+import { useQueryClient } from '@tanstack/react-query'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../src/shared/sidebar-inputs-switch'
 import type { useRouter } from 'expo-router'
 import { floatingWorkspaceSessionPath } from '../session/floating-workspace'
+import { holdSessionLeave } from '../session/session-leave-guard'
 import { savePinnedIds } from '../storage/preferences'
-import type { useForgetHostClient } from '../transport/client-context'
-import { removeHostAndCloseClient } from '../transport/host-removal-lifecycle'
-import type { RpcClient } from '../transport/rpc-client'
-import type { ConnectionState } from '../transport/types'
-import { setHostRouteNewWorktreeVisible } from '../host-route-action-state'
+import type { useForgetHostClient } from '../transport/connection/host-client-hooks'
+import { removeHostAndCloseClient } from '../host-catalog/host-removal-lifecycle'
+import { isPageHostRemovalUnavailable } from '../host-catalog/page-host-removal-refusal'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import {
+  rpcClientForExecutionHost,
+  workspaceRouteExecutionHost
+} from '../worktree/execution-host-scoped-rpc-client'
+import { serverUpdateNeededNotice } from '../host-route-notice'
+import type { ConnectionState } from '../transport/connection/connection-state'
 import { leaveHostRoute } from '../host-route-exit'
-import { getWorktreeRowIdentity, removeWorktreeRow } from '../worktree/worktree-host-row-identity'
+import { getWorktreeRowIdentity, isSameWorktreeRow } from '../worktree/worktree-host-row-identity'
+import { noteLastVisitedWorktree } from '../worktree/last-visited-worktree-by-host'
 import { isWorktreePinned, type Worktree } from '../worktree/workspace-list-sections'
+import {
+  worktreeActivate,
+  worktreeDisplayNameWrite,
+  worktreePinWrite,
+  worktreeSleep
+} from './host-screen-operations'
 import type { HostScreenState } from './use-host-screen-state'
+import { useHostWorktreeDelete } from './use-host-worktree-delete'
+import { defineHostMutation, useHostMutation, type HostMutationPhase } from '../query/host-mutation'
+
+async function sendWorkspaceRename(
+  client: RpcClient,
+  vars: { worktreeId: string; displayName: string }
+): Promise<void> {
+  worktreeDisplayNameWrite.interpret(
+    await worktreeDisplayNameWrite.request(client, {
+      worktree: `id:${vars.worktreeId}`,
+      displayName: vars.displayName
+    })
+  )
+}
+
+const workspaceRename = defineHostMutation({
+  offline: 'draft',
+  send: sendWorkspaceRename,
+  // Renaming is idempotent, so a lost reply is settled by sending the same name again.
+  confirm: sendWorkspaceRename
+})
 
 export function useHostWorktreeActions(args: {
   client: RpcClient | null
@@ -19,6 +54,7 @@ export function useHostWorktreeActions(args: {
   embedded: boolean
   fetchWorktrees: (options?: { allowDuringModal?: boolean }) => Promise<void>
   forgetHostClient: ReturnType<typeof useForgetHostClient>
+  hostCapabilities: readonly string[]
   hostId: string | undefined
   pathname: string
   router: ReturnType<typeof useRouter>
@@ -30,43 +66,57 @@ export function useHostWorktreeActions(args: {
     embedded,
     fetchWorktrees,
     forgetHostClient,
+    hostCapabilities,
     hostId,
     pathname,
     router,
     state
   } = args
+  const queryClient = useQueryClient()
   const {
-    newWorktreeModalRef,
-    newWorktreeModalVisibleRef,
     pinnedIds,
+    setActionError,
     setConfirmRemoveHost,
     setLastKnownWorktrees,
     setOptimisticActiveWorktreeIdentity,
     setPinnedIds,
-    setRouteActionState,
+    serverWorkspaces,
+    setNewWorktreeVisible,
+    setServerNotice,
+    setServerWorkspaces,
+    setSleptIds,
     setWorktrees,
     worktrees
   } = state
 
+  // Route server-workspace actions through the desktop to their owning server.
+  const clientForRow = useCallback(
+    (item: Worktree) => client && rpcClientForExecutionHost(client, hostCapabilities, item.hostId),
+    [client, hostCapabilities]
+  )
+
+  // A removed host leaves unconditionally; this is the user's own leave, which a recording session holds first.
   const leaveHost = useCallback(() => {
-    leaveHostRoute(router)
+    if (!holdSessionLeave()) {
+      leaveHostRoute(router)
+    }
   }, [router])
 
-  const openNewWorktreeModal = useCallback(() => {
-    const modal = newWorktreeModalRef.current
-    if (!modal) {
-      return
-    }
-    newWorktreeModalVisibleRef.current = true
-    modal.open()
-  }, [])
-
-  const setShowNewWorktreeVisible = useCallback((visible: boolean) => {
-    setRouteActionState((current) => setHostRouteNewWorktreeVisible(current, visible))
-  }, [])
+  const openNewWorktreeModal = useCallback(
+    () => setNewWorktreeVisible(true),
+    [setNewWorktreeVisible]
+  )
+  const closeNewWorktreeModal = useCallback(
+    () => setNewWorktreeVisible(false),
+    [setNewWorktreeVisible]
+  )
 
   const updateLocalPins = useCallback(
     (worktreeId: string, pinned: boolean) => {
+      // Switch point: a feed-built list keeps no pin cache of its own.
+      if (ORCA_SIDEBAR_INPUTS_IS_MAIN) {
+        return
+      }
       setPinnedIds((prev) => {
         const next = new Set(prev)
         if (pinned) {
@@ -84,7 +134,26 @@ export function useHostWorktreeActions(args: {
   )
 
   const togglePin = useCallback(
-    (worktreeId: string) => {
+    (item: Worktree) => {
+      // Why: the desktop pins a server's workspace on that server (worktree.set at its owner).
+      if (item.hostId?.startsWith('runtime:')) {
+        const rowClient = clientForRow(item)
+        if (!rowClient) {
+          return
+        }
+        const isPinned = !item.isPinned
+        setServerWorkspaces((prev) => ({
+          ...prev,
+          worktrees: prev.worktrees.map((w) =>
+            isSameWorktreeRow(w, item) ? { ...w, isPinned } : w
+          )
+        }))
+        void worktreePinWrite
+          .request(rowClient, { worktree: `id:${item.worktreeId}`, isPinned })
+          .catch(() => {})
+        return
+      }
+      const { worktreeId } = item
       const worktree = worktrees.find((w) => w.worktreeId === worktreeId)
       const currentlyPinned = worktree
         ? isWorktreePinned(worktree, pinnedIds)
@@ -101,66 +170,84 @@ export function useHostWorktreeActions(args: {
       updateLocalPins(worktreeId, newPinned)
 
       if (client) {
-        client
-          .sendRequest('worktree.set', {
+        worktreePinWrite
+          .request(client, {
             worktree: `id:${worktreeId}`,
             isPinned: newPinned
           })
           .catch(() => {})
       }
     },
-    [client, worktrees, pinnedIds, updateLocalPins]
+    [client, clientForRow, worktrees, pinnedIds, updateLocalPins]
   )
 
-  const handleDeleteWorktree = useCallback(
-    async (item: Worktree) => {
+  const putWorktreeToSleep = useCallback(
+    (item: Worktree) => {
       if (!client) {
         return
       }
-
-      const removeFromList = (list: Worktree[]) => removeWorktreeRow(list, item)
-      setWorktrees(removeFromList)
-      setLastKnownWorktrees(removeFromList)
-
-      try {
-        const response = await client.sendRequest('worktree.rm', {
-          worktree: `id:${item.worktreeId}`,
-          force: true
-        })
-        if (!response.ok) {
-          setWorktrees((prev) => [...prev, item])
-          setLastKnownWorktrees((prev) => [...prev, item])
-        }
-        void fetchWorktrees()
-      } catch {
-        setWorktrees((prev) => [...prev, item])
-        setLastKnownWorktrees((prev) => [...prev, item])
-      }
+      setSleptIds((prev) => new Set(prev).add(getWorktreeRowIdentity(item)))
+      void worktreeSleep.request(client, { worktree: `id:${item.worktreeId}` }).catch(() => null)
     },
-    [client, fetchWorktrees]
+    [client, setSleptIds]
   )
+
+  const workspaceRenameWrite = useHostMutation(workspaceRename, { hostId: hostId ?? '', client })
+  const { mutate: mutateWorkspaceName } = workspaceRenameWrite
+  // Written at the row's owner, as desktop does; empty text returns the label to automatic.
+  const renameWorktree = useCallback(
+    async (item: Worktree, displayName: string, onPhase?: (phase: HostMutationPhase) => void) => {
+      await mutateWorkspaceName(
+        { worktreeId: item.worktreeId, displayName },
+        {
+          // Re-routed per attempt: a reconnect replaces the host client under a lost reply.
+          route: (hostClient) =>
+            rpcClientForExecutionHost(hostClient, hostCapabilities, item.hostId),
+          onPhase
+        }
+      )
+      void fetchWorktrees()
+    },
+    [mutateWorkspaceName, hostCapabilities, fetchWorktrees]
+  )
+
+  const worktreeDelete = useHostWorktreeDelete({ client, clientForRow, fetchWorktrees, state })
 
   const handleRemoveHost = useCallback(async () => {
     if (!hostId) {
       return
     }
     try {
-      await removeHostAndCloseClient(hostId, forgetHostClient)
-      leaveHost()
-    } catch {
-      // Why: removal can fail while still paired; re-open confirm (ConfirmModal closes on confirm).
+      await removeHostAndCloseClient(hostId, forgetHostClient, queryClient)
+      leaveHostRoute(router)
+    } catch (error) {
+      if (isPageHostRemovalUnavailable(error)) {
+        // Page removal is unsupported; do not offer a confirm or retry that cannot work.
+        setActionError(error.message)
+        return
+      }
+      // Reopen the confirm after removal failure; ConfirmModal closes on confirm.
       setConfirmRemoveHost(true)
-      Alert.alert('Could not remove host', 'Please try again.')
+      // React Native Web Alert is a no-op; show a dismissible action error while keeping the list, header and confirm usable.
+      setActionError('Could not remove host. Please try again.')
     }
-  }, [hostId, leaveHost, forgetHostClient])
+  }, [hostId, router, forgetHostClient, queryClient, setActionError, setConfirmRemoveHost])
 
+  // beforeNavigate runs unless the open session holds the leave, so a held tap leaves the target untouched.
   const navigateFromHostList = useCallback(
-    (target: string) => {
+    (target: string, selectPane = false, beforeNavigate?: () => void) => {
       if (!embedded) {
+        beforeNavigate?.()
         router.push(target)
         return
       }
-      if (pathname === (target.split('?')[0] ?? target)) {
+      // In the page every replace remounts the open session, even a pane tap, so only a no-op is not a leave.
+      const noop = !selectPane && pathname === (target.split('?')[0] ?? target)
+      if (!noop && holdSessionLeave()) {
+        return
+      }
+      beforeNavigate?.()
+      if (noop) {
         return
       }
       if (pathname === `/h/${hostId}`) {
@@ -173,38 +260,67 @@ export function useHostWorktreeActions(args: {
   )
 
   const openWorktreeSession = useCallback(
-    (item: Worktree) => {
-      setOptimisticActiveWorktreeIdentity(getWorktreeRowIdentity(item))
-      if (client && connState === 'connected') {
-        void client
-          .sendRequest('worktree.activate', {
-            worktree: `id:${item.worktreeId}`,
-            notifyClients: false,
-            navigation: 'caller'
-          })
-          .catch(() => null)
+    (item: Worktree, paneKey?: string) => {
+      const server = serverWorkspaces.hosts.find((host) => host.hostId === item.hostId)
+      if (server?.relay === 'update-needed') {
+        setServerNotice(serverUpdateNeededNotice(server.label))
+        return
       }
-      const target = `/h/${hostId}/session/${encodeURIComponent(item.worktreeId)}?name=${encodeURIComponent(item.displayName || item.repo)}`
-      navigateFromHostList(target)
+      const routeHost = workspaceRouteExecutionHost(client, hostCapabilities, item.hostId)
+      if (routeHost === null) {
+        return
+      }
+      // Use an empty missing hostId: the shell refuses /h//session, whereas the string undefined would name an accepted host.
+      const executionHost = routeHost ? `&executionHost=${encodeURIComponent(routeHost)}` : ''
+      const pane = paneKey ? `&paneKey=${encodeURIComponent(paneKey)}` : ''
+      const target = `/h/${encodeURIComponent(hostId ?? '')}/session/${encodeURIComponent(item.worktreeId)}?name=${encodeURIComponent(item.displayName || item.repo)}${executionHost}${pane}`
+      navigateFromHostList(target, Boolean(paneKey), () => {
+        // Record this phone’s visit before navigation; a session opened in another page cannot publish its stored write back here.
+        if (!ORCA_SIDEBAR_INPUTS_IS_MAIN) {
+          setOptimisticActiveWorktreeIdentity(getWorktreeRowIdentity(item))
+        } else if (hostId) {
+          noteLastVisitedWorktree({ hostId, worktreeId: item.worktreeId, executionHost: routeHost })
+        }
+        const rowClient = clientForRow(item)
+        if (rowClient && connState === 'connected') {
+          void worktreeActivate
+            .request(rowClient, {
+              worktree: `id:${item.worktreeId}`,
+              notifyClients: false,
+              navigation: 'caller'
+            })
+            .catch(() => null)
+        }
+      })
     },
-    [client, connState, hostId, navigateFromHostList]
+    [
+      client,
+      clientForRow,
+      connState,
+      hostCapabilities,
+      hostId,
+      navigateFromHostList,
+      serverWorkspaces
+    ]
   )
 
   const openFloatingWorkspace = useCallback(() => {
-    // Why: no worktree.activate here — the floating sentinel has no worktree
-    // record; session.tabs.list hydrates its host-owned tabs on open.
+    // The floating sentinel has no worktree record to activate; tabs.list hydrates its host-owned tabs.
     navigateFromHostList(floatingWorkspaceSessionPath(hostId))
   }, [hostId, navigateFromHostList])
 
   return {
-    handleDeleteWorktree,
+    ...worktreeDelete,
     handleRemoveHost,
     leaveHost,
     navigateFromHostList,
     openFloatingWorkspace,
     openNewWorktreeModal,
+    closeNewWorktreeModal,
     openWorktreeSession,
-    setShowNewWorktreeVisible,
+    putWorktreeToSleep,
+    renameWorktree,
+    workspaceRenameWrite,
     togglePin
   }
 }

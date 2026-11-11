@@ -78,8 +78,7 @@ export const KEYBINDING_DEFINITION_CORE_2: readonly KeybindingDefinition[] = [
     group: 'Global',
     scope: 'global',
     searchKeywords: ['shortcut', 'worktree', 'history', 'back'],
-    defaultBindings: platformBindings(['Mod+Alt+ArrowLeft']),
-    allowInTerminal: true
+    defaultBindings: platformBindings(['Mod+Alt+ArrowLeft'])
   },
   {
     id: 'worktree.history.forward',
@@ -87,8 +86,7 @@ export const KEYBINDING_DEFINITION_CORE_2: readonly KeybindingDefinition[] = [
     group: 'Global',
     scope: 'global',
     searchKeywords: ['shortcut', 'worktree', 'history', 'forward'],
-    defaultBindings: platformBindings(['Mod+Alt+ArrowRight']),
-    allowInTerminal: true
+    defaultBindings: platformBindings(['Mod+Alt+ArrowRight'])
   },
   {
     id: 'tab.newTerminal',
@@ -118,6 +116,19 @@ export const KEYBINDING_DEFINITION_CORE_2: readonly KeybindingDefinition[] = [
     scope: 'tabs',
     searchKeywords: ['shortcut', 'tab', 'browser', 'new'],
     defaultBindings: platformBindings(['Mod+Shift+B'])
+  },
+  {
+    id: 'tab.newBrowserSplitRight',
+    title: 'New browser tab in right split',
+    group: 'Tabs',
+    scope: 'tabs',
+    searchKeywords: ['shortcut', 'tab', 'browser', 'new', 'split', 'right', 'side', 'pane'],
+    // Why: macOS only — Ctrl+Alt+letter is AltGr text input on Windows/Linux.
+    defaultBindings: {
+      darwin: ['Mod+Alt+B'],
+      linux: [],
+      win32: []
+    }
   },
   {
     id: 'tab.newSimulator',
@@ -251,7 +262,7 @@ export const KEYBINDING_DEFINITION_CORE_2: readonly KeybindingDefinition[] = [
     title: 'Select Tab 1–9',
     group: 'Tab Navigation',
     scope: 'tabs',
-    // Why: no shared conflictGroup with workspace.selectByIndex so swapping their modifiers isn't a false conflict; safe because resolveWindowShortcutAction checks the workspace range first.
+    // Separate workspace/tab digit conflict groups allow modifier swaps; resolveWindowShortcutAction checks workspace ranges first.
     searchKeywords: ['shortcut', 'tab', 'select', 'switch', 'number', 'digit', '1-9', 'index'],
     // Why: representative chord for the 1-9 range (see workspace.selectByIndex); each platform avoids the workspace-jump chord (Mod+1-9).
     defaultBindings: {
@@ -277,29 +288,5 @@ export const KEYBINDING_DEFINITION_CORE_2: readonly KeybindingDefinition[] = [
     scope: 'browser',
     searchKeywords: ['shortcut', 'browser', 'find', 'search'],
     defaultBindings: platformBindings(['Mod+F'])
-  },
-  {
-    id: 'browser.back',
-    title: 'Go Back in Browser',
-    group: 'Browser',
-    scope: 'browser',
-    searchKeywords: ['shortcut', 'browser', 'history', 'back', 'previous'],
-    defaultBindings: {
-      darwin: ['Mod+BracketLeft'],
-      linux: ['Alt+ArrowLeft'],
-      win32: ['Alt+ArrowLeft']
-    }
-  },
-  {
-    id: 'browser.forward',
-    title: 'Go Forward in Browser',
-    group: 'Browser',
-    scope: 'browser',
-    searchKeywords: ['shortcut', 'browser', 'history', 'forward', 'next'],
-    defaultBindings: {
-      darwin: ['Mod+BracketRight'],
-      linux: ['Alt+ArrowRight'],
-      win32: ['Alt+ArrowRight']
-    }
   }
 ]

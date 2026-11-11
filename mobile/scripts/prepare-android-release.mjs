@@ -79,8 +79,7 @@ const requestedVersionCode = input('MOBILE_ANDROID_VERSION_CODE')
 const bumpVersionCode = truthy(input('MOBILE_ANDROID_BUMP_VERSION_CODE'))
 
 if (requestedVersionCode || bumpVersionCode) {
-  // Why: Android rejects lower versionCode installs; release-only bumps leave
-  // committed dev builds behind shipped APKs and break local testing.
+  // Android rejects lower versionCode; bump dev builds too or shipped APKs block local installs.
   fail('Android versionCode changes must be committed in mobile/app.json before release')
 }
 

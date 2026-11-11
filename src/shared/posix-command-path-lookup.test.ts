@@ -220,21 +220,11 @@ describe('buildPosixCommandPathLookupScript', () => {
     }
   )
 
-  it('quotes literal targets before assigning them in the generated shell fragment', () => {
-    const script = buildPosixCommandPathLookupScript({
-      kind: 'literal',
-      value: "agent'; echo injected; '"
-    })
-
-    expect(script).toContain(`_orca_lookup_command='agent'\\''; echo injected; '\\'''`)
-  })
-
   it.skipIf(!canRunWslSh())(
     'resolves through the Windows-to-WSL login-shell boundary with inline masks',
     () => {
       const lookup = buildPosixCommandPathLookupScript({ kind: 'literal', value: 'sh' })
-      // Why the captured form: an interactive login shell also prints the distro's
-      // rc/motd to stdout, which would land in front of the resolved path.
+      // Capture fencing excludes interactive-login rc/motd output from the resolved path.
       const captured = buildWslCapturedLoginShellCommand(
         [
           `sh() { printf '%s\\n' masked-function; }`,

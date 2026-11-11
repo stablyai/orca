@@ -32,7 +32,7 @@ export class SparsePresetPersistence {
       index === -1
         ? [...existing, preset]
         : existing.map((entry, entryIndex) => (entryIndex === index ? preset : entry))
-    scheduleSave(this[sparsePresetPersistenceContext].scheduling)
+    scheduleSave(this[sparsePresetPersistenceContext].scheduling, ['sparsePresetsByRepo'])
     return preset
   }
 
@@ -41,15 +41,6 @@ export class SparsePresetPersistence {
       this[sparsePresetPersistenceContext].runtime.state.sparsePresetsByRepo[repoId] ?? []
     this[sparsePresetPersistenceContext].runtime.state.sparsePresetsByRepo[repoId] =
       existing.filter((entry) => entry.id !== presetId)
-    scheduleSave(this[sparsePresetPersistenceContext].scheduling)
+    scheduleSave(this[sparsePresetPersistenceContext].scheduling, ['sparsePresetsByRepo'])
   }
-}
-
-export function installSparsePresetPersistenceContext(
-  target: object,
-  source: SparsePresetPersistence
-): void {
-  Object.defineProperty(target, sparsePresetPersistenceContext, {
-    value: source[sparsePresetPersistenceContext]
-  })
 }

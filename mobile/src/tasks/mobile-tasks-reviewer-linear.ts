@@ -1,6 +1,7 @@
 import { type GitHubOwnerRepo, colors } from './mobile-tasks-dependencies'
 import { getLinearPriorityLabel, getLinearPriorityRank } from './mobile-tasks-hosted-review'
 import { formatUpdatedAt, taskTime } from './mobile-tasks-item-mapping'
+import { translate } from '../i18n/mobile-i18n'
 import type { LinearIssueSection } from './mobile-tasks-options'
 import type {
   LinearDisplayProperty,
@@ -80,22 +81,27 @@ export function hasGitHubIssueSourceChoice(sources: GitHubRepoSources | undefine
 }
 
 export function issueSourceSlug(source: GitHubOwnerRepo | null | undefined): string {
-  return source ? `${source.owner}/${source.repo}` : 'Unknown'
+  return source ? `${source.owner}/${source.repo}` : translate('common.unknown', 'Unknown')
 }
 
-export function compareLinearIssues(
-  a: LinearIssue,
-  b: LinearIssue,
+export function sortLinearIssues(
+  issues: readonly LinearIssue[],
   orderBy: LinearOrderBy
-): number {
-  if (orderBy === 'updated') {
-    return taskTime(b.updatedAt) - taskTime(a.updatedAt)
+): LinearIssue[] {
+  if (issues.length < 2) {
+    return [...issues]
   }
   if (orderBy === 'identifier') {
-    return a.identifier.localeCompare(b.identifier, undefined, { numeric: true })
+    const collator = new Intl.Collator(undefined, { numeric: true })
+    return [...issues].sort((a, b) => collator.compare(a.identifier, b.identifier))
   }
-  const priorityDelta = getLinearPriorityRank(a.priority) - getLinearPriorityRank(b.priority)
-  return priorityDelta || taskTime(b.updatedAt) - taskTime(a.updatedAt)
+  const keyed = issues.map((issue) => ({
+    issue,
+    updatedAt: taskTime(issue.updatedAt),
+    priority: orderBy === 'updated' ? 0 : getLinearPriorityRank(issue.priority)
+  }))
+  keyed.sort((a, b) => a.priority - b.priority || b.updatedAt - a.updatedAt)
+  return keyed.map(({ issue }) => issue)
 }
 
 export function getLinearIssueGroup(
@@ -112,21 +118,33 @@ export function getLinearIssueGroup(
   if (groupBy === 'assignee') {
     return {
       key: `assignee:${issue.assignee?.id ?? issue.assignee?.displayName ?? 'unassigned'}`,
-      label: issue.assignee?.displayName ?? 'Unassigned',
+      get label() {
+        return (
+          issue.assignee?.displayName ?? translate('tasks.reviewerLinear.unassigned', 'Unassigned')
+        )
+      },
       color: colors.accentBlue
     }
   }
   if (groupBy === 'priority') {
     return {
       key: `priority:${issue.priority}`,
-      label: getLinearPriorityLabel(issue.priority),
+      get label() {
+        return getLinearPriorityLabel(issue.priority)
+      },
       color: issue.priority === 1 ? colors.statusRed : colors.accentBlue
     }
   }
   if (groupBy === 'team') {
     return { key: `team:${issue.team.id}`, label: issue.team.name, color: issue.state.color }
   }
-  return { key: 'all', label: 'Issues', color: colors.accentBlue }
+  return {
+    key: 'all',
+    get label() {
+      return translate('tasks.reviewerLinear.issues', 'Issues')
+    },
+    color: colors.accentBlue
+  }
 }
 
 export function groupLinearIssues(
@@ -134,9 +152,31 @@ export function groupLinearIssues(
   groupBy: LinearGroupBy,
   orderBy: LinearOrderBy
 ): LinearIssueSection[] {
-  const sorted = [...issues].sort((a, b) => compareLinearIssues(a, b, orderBy))
+  return groupOrderedLinearIssues(sortLinearIssues(issues, orderBy), groupBy)
+}
+
+export function groupSortedLinearIssues(
+  issues: readonly LinearIssue[],
+  groupBy: LinearGroupBy
+): LinearIssueSection[] {
+  return groupOrderedLinearIssues([...issues], groupBy)
+}
+
+function groupOrderedLinearIssues(
+  sorted: LinearIssue[],
+  groupBy: LinearGroupBy
+): LinearIssueSection[] {
   if (groupBy === 'none') {
-    return [{ key: 'all', label: 'Issues', color: colors.accentBlue, issues: sorted }]
+    return [
+      {
+        key: 'all',
+        get label() {
+          return translate('tasks.reviewerLinear.issues', 'Issues')
+        },
+        color: colors.accentBlue,
+        issues: sorted
+      }
+    ]
   }
   const sections = new Map<
     string,
@@ -148,7 +188,13 @@ export function groupLinearIssues(
     if (section) {
       section.issues.push(issue)
     } else {
-      sections.set(group.key, { ...group, issues: [issue] })
+      sections.set(group.key, {
+        ...group,
+        get label() {
+          return group.label
+        },
+        issues: [issue]
+      })
     }
   }
   return [...sections.values()]
@@ -177,11 +223,9 @@ export function linearIssueSecondaryParts(
   return parts
 }
 
-export function reconcileTeamSelection(
-  teams: LinearTeam[],
-  saved: string[] | null | undefined
-): Set<string> {
-  if (!saved) {
+// Older hosts may publish raw persisted strings; decode them as sticky-all.
+export function reconcileTeamSelection(teams: LinearTeam[], saved: unknown): Set<string> {
+  if (!Array.isArray(saved)) {
     return new Set(teams.map((team) => team.id))
   }
   const available = new Set(teams.map((team) => team.id))

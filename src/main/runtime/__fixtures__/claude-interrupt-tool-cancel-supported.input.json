@@ -1,0 +1,60 @@
+[
+  {
+    "atMs": 523,
+    "kind": "title",
+    "title": "✳ Claude Code"
+  },
+  {
+    "atMs": 1612,
+    "kind": "input",
+    "label": "type-prompt",
+    "text": "Use Bash to execute exactly this command in the foreground: node -e \"require('fs').writeFileSync('.tmp/claude-interrupt-verification/foreground.pid',String(process.pid));setTimeout(()=>console.log('SLEEP-DONE'),45000)\". Set timeout to 60000 and run_in_background to false. Do not run any other tools. After it finishes say SLEEP-DONE."
+  },
+  {
+    "atMs": 2063,
+    "kind": "input",
+    "label": "submit-prompt",
+    "text": "\r"
+  },
+  {
+    "atMs": 2086,
+    "kind": "title",
+    "title": "◐ Claude Code"
+  },
+  {
+    "atMs": 3047,
+    "kind": "title",
+    "title": "◑ Claude Code"
+  },
+  {
+    "atMs": 3633,
+    "kind": "title",
+    "title": "◑ Foreground interrupt verification sleep"
+  },
+  {
+    "atMs": 4008,
+    "kind": "title",
+    "title": "◐ Foreground interrupt verification sleep"
+  },
+  {
+    "atMs": 4968,
+    "kind": "title",
+    "title": "◑ Foreground interrupt verification sleep"
+  },
+  {
+    "atMs": 5928,
+    "kind": "title",
+    "title": "◐ Foreground interrupt verification sleep"
+  },
+  {
+    "atMs": 6137,
+    "kind": "input",
+    "label": "cancel-tool",
+    "text": "\u001b"
+  },
+  {
+    "atMs": 6196,
+    "kind": "title",
+    "title": "✳ Foreground interrupt verification sleep"
+  }
+]

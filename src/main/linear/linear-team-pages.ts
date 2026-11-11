@@ -19,6 +19,7 @@ type TeamLabelNode = {
   id: string
   name: string
   color: string
+  isGroup: boolean
 }
 
 type TeamMemberNode = {
@@ -38,10 +39,13 @@ type TeamStateNode = {
 }
 
 export async function fetchAllTeamsForWorkspace(
-  entry: LinearClientForWorkspace
+  entry: LinearClientForWorkspace,
+  signal?: AbortSignal
 ): Promise<LinearTeam[]> {
+  signal?.throwIfAborted()
   let page = await entry.client.teams({ first: TEAM_PAGE_SIZE })
   while (page.pageInfo.hasNextPage) {
+    signal?.throwIfAborted()
     await page.fetchNext()
   }
   return page.nodes.map((t) => ({
@@ -58,11 +62,15 @@ export async function fetchAllTeamsForWorkspace(
   }))
 }
 
-export async function fetchAllTeamStates(team: {
-  states: (variables?: { first?: number }) => Promise<LinearConnectionPage<TeamStateNode>>
-}): Promise<LinearWorkflowState[]> {
+export async function fetchAllTeamStates(
+  team: {
+    states: (variables?: { first?: number }) => Promise<LinearConnectionPage<TeamStateNode>>
+  },
+  signal?: AbortSignal
+): Promise<LinearWorkflowState[]> {
   const states = await team.states({ first: TEAM_PAGE_SIZE })
   while (states.pageInfo.hasNextPage) {
+    signal?.throwIfAborted()
     await states.fetchNext()
   }
   return states.nodes
@@ -76,21 +84,31 @@ export async function fetchAllTeamStates(team: {
     .sort((a, b) => a.position - b.position)
 }
 
-export async function fetchAllTeamLabels(team: {
-  labels: (variables?: { first?: number }) => Promise<LinearConnectionPage<TeamLabelNode>>
-}): Promise<LinearLabel[]> {
+export async function fetchAllTeamLabels(
+  team: {
+    labels: (variables?: { first?: number }) => Promise<LinearConnectionPage<TeamLabelNode>>
+  },
+  signal?: AbortSignal
+): Promise<LinearLabel[]> {
   const labels = await team.labels({ first: TEAM_PAGE_SIZE })
   while (labels.pageInfo.hasNextPage) {
+    signal?.throwIfAborted()
     await labels.fetchNext()
   }
-  return labels.nodes.map((l) => ({ id: l.id, name: l.name, color: l.color }))
+  return labels.nodes
+    .filter((l) => !l.isGroup)
+    .map((l) => ({ id: l.id, name: l.name, color: l.color }))
 }
 
-export async function fetchAllTeamMembers(team: {
-  members: (variables?: { first?: number }) => Promise<LinearConnectionPage<TeamMemberNode>>
-}): Promise<LinearMember[]> {
+export async function fetchAllTeamMembers(
+  team: {
+    members: (variables?: { first?: number }) => Promise<LinearConnectionPage<TeamMemberNode>>
+  },
+  signal?: AbortSignal
+): Promise<LinearMember[]> {
   const members = await team.members({ first: TEAM_PAGE_SIZE })
   while (members.pageInfo.hasNextPage) {
+    signal?.throwIfAborted()
     await members.fetchNext()
   }
   return members.nodes.map((m) => ({

@@ -1,0 +1,39 @@
+{
+  "goldenFormatVersion": 6,
+  "operation": "session.pr-triage-launch",
+  "family": "session.pr-triage",
+  "namedDeltas": [],
+  "values": {
+    "c2a44248892e": {
+      "launched": {
+        "kind": "not-started",
+        "message": "Update Orca on your computer to start an agent from your phone."
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "pr-triage-update-required",
+    "checkpoints": [
+      {
+        "id": "update-required",
+        "observation": {
+          "sender": [],
+          "payloads": [],
+          "settlements": {
+            "launch": "eb79a9b3682a"
+          },
+          "state": "c2a44248892e",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

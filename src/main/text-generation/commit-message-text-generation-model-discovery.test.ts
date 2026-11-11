@@ -1,17 +1,15 @@
 import { spawn } from 'node:child_process'
 import type * as ChildProcess from 'node:child_process'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  createSshDisposalError,
-  SSH_MUX_REQUEST_TIMEOUT_CODE
-} from '../ssh/ssh-channel-multiplexer'
-import {
-  discoverCommitMessageModelsLocal,
-  discoverCommitMessageModelsRemote
-} from './commit-message-text-generation'
+import type * as CliCommandResolution from '../../shared/node-cli-command-resolution'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { discoverCommitMessageModelsLocal } from './commit-message-text-generation'
+import agentPickerCliRecordings from '../../shared/fixtures/agent-picker-cli-recordings.json'
+import { PROVIDER_SPAWN_FAILURE_MARKER } from '../provider-process/provider-spawn-failure-report'
 import {
   createChildTerminationExpectation,
+  answerCodexAppServer,
   createMockDiscoveryChild,
+  spawnedAgentArgv,
   withPlatform
 } from './commit-message-text-generation-test-harness'
 
@@ -19,8 +17,14 @@ const { terminateWindowsProcessTreeMock } = vi.hoisted(() => ({
   terminateWindowsProcessTreeMock: vi.fn(async () => {})
 }))
 
-vi.mock('../windows-process-tree-kill', () => ({
+vi.mock('../pty/process-retirement/windows-process-tree-kill', () => ({
   terminateWindowsProcessTree: terminateWindowsProcessTreeMock
+}))
+
+// These protocol fixtures use fake processes; installed host CLIs belong to the CLI-path suite.
+vi.mock('../../shared/node-cli-command-resolution', async (importOriginal) => ({
+  ...(await importOriginal<typeof CliCommandResolution>()),
+  resolveCliCommand: (command: string) => command
 }))
 
 vi.mock('child_process', async (importOriginal) => {
@@ -33,65 +37,58 @@ vi.mock('child_process', async (importOriginal) => {
 
 const spawnMock = vi.mocked(spawn)
 
+function spawnChildren(...children: ReturnType<typeof createMockDiscoveryChild>[]): void {
+  for (const child of children) {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: discovery reads only the pid, kill, stdio streams and events the mock child implements.
+    spawnMock.mockReturnValueOnce(child as unknown as ReturnType<typeof spawn>)
+  }
+}
+
+function spawnError(errno: string): Error {
+  return Object.assign(new Error(`spawn claude ${errno}`), { code: errno })
+}
+
 const expectChildTerminated = createChildTerminationExpectation(terminateWindowsProcessTreeMock)
 
+// Fake Windows direct-child/taskkill paths here; source-control-local-process.test.ts covers supervised POSIX stop and managed-home lock release.
+const hostPlatform = process.platform
+
+afterEach(() => {
+  Object.defineProperty(process, 'platform', {
+    configurable: true,
+    value: hostPlatform
+  })
+  vi.unstubAllEnvs()
+})
+
 beforeEach(() => {
+  Object.defineProperty(process, 'platform', {
+    configurable: true,
+    value: 'win32'
+  })
+  // Clear PATH so host agent installs cannot answer fake Windows lookups.
+  vi.stubEnv('PATH', '')
   terminateWindowsProcessTreeMock.mockClear()
   terminateWindowsProcessTreeMock.mockResolvedValue(undefined)
   spawnMock.mockClear()
 })
 
-describe('discoverCommitMessageModelsLocal', () => {
-  it('returns static catalog models without spawning for static agents', async () => {
-    const result = await discoverCommitMessageModelsLocal('amp', undefined)
-
-    expect(result).toMatchObject({
-      success: true,
-      catalogOrigin: 'spec',
-      defaultModelId: 'smart'
-    })
-    expect(spawnMock).not.toHaveBeenCalled()
-  })
-
-  it('discovers dynamic models through the agent CLI', async () => {
-    const listeners = new Map<string, (value: unknown) => void>()
-    const child = {
-      pid: 123,
-      kill: vi.fn(),
-      stdout: { on: vi.fn((event, callback) => listeners.set(`stdout:${event}`, callback)) },
-      stderr: { on: vi.fn((event, callback) => listeners.set(`stderr:${event}`, callback)) },
-      stdin: { end: vi.fn() },
-      on: vi.fn((event, callback) => listeners.set(event, callback))
-    }
-    spawnMock.mockReturnValue(child as never)
-
-    const pending = discoverCommitMessageModelsLocal('cursor', undefined)
-
-    listeners.get('stdout:data')?.(Buffer.from('auto - Auto\ngpt-5.2 - GPT-5.2\n'))
-    listeners.get('close')?.(0)
-
-    await expect(pending).resolves.toMatchObject({
-      success: true,
-      defaultModelId: 'auto',
-      models: [
-        { id: 'auto', label: 'Auto' },
-        { id: 'gpt-5.2', label: 'GPT-5.2' }
-      ]
-    })
-    expect(spawnMock).toHaveBeenCalledWith(
-      'cursor-agent',
-      ['--list-models'],
-      expect.objectContaining({ windowsHide: true })
-    )
-  })
-
+describe('discoverCommitMessageModelsLocal on the Windows direct-child path', () => {
   it('writes the Claude list_models request to stdin and parses the control response', async () => {
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: hostPlatform
+    })
     const listeners = new Map<string, (value: unknown) => void>()
     const child = {
       pid: 123,
       kill: vi.fn(),
-      stdout: { on: vi.fn((event, callback) => listeners.set(`stdout:${event}`, callback)) },
-      stderr: { on: vi.fn((event, callback) => listeners.set(`stderr:${event}`, callback)) },
+      stdout: {
+        on: vi.fn((event, callback) => listeners.set(`stdout:${event}`, callback))
+      },
+      stderr: {
+        on: vi.fn((event, callback) => listeners.set(`stderr:${event}`, callback))
+      },
       stdin: { on: vi.fn(), end: vi.fn() },
       on: vi.fn((event, callback) => listeners.set(event, callback))
     }
@@ -135,11 +132,22 @@ describe('discoverCommitMessageModelsLocal', () => {
         { id: 'haiku', label: 'Haiku' }
       ]
     })
-    expect(spawnMock).toHaveBeenCalledWith(
+    expect(spawnedAgentArgv(spawnMock.mock.calls[0]!)).toEqual([
       'claude',
-      ['-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose'],
-      expect.objectContaining({ windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] })
-    )
+      '-p',
+      '--input-format',
+      'stream-json',
+      '--output-format',
+      'stream-json',
+      '--verbose',
+      '--strict-mcp-config',
+      '--settings',
+      '{"disableAllHooks":true}'
+    ])
+    expect(spawnMock.mock.calls[0]![2]).toMatchObject({
+      windowsHide: true,
+      stdio: ['pipe', 'pipe', 'pipe', ...(process.platform === 'win32' ? [] : ['ipc'])]
+    })
     expect(child.stdin.end).toHaveBeenCalledWith(expect.stringContaining('"list_models"'))
   })
 
@@ -148,8 +156,12 @@ describe('discoverCommitMessageModelsLocal', () => {
     const child = {
       pid: 123,
       kill: vi.fn(),
-      stdout: { on: vi.fn((event, callback) => listeners.set(`stdout:${event}`, callback)) },
-      stderr: { on: vi.fn((event, callback) => listeners.set(`stderr:${event}`, callback)) },
+      stdout: {
+        on: vi.fn((event, callback) => listeners.set(`stdout:${event}`, callback))
+      },
+      stderr: {
+        on: vi.fn((event, callback) => listeners.set(`stderr:${event}`, callback))
+      },
       stdin: { on: vi.fn(), end: vi.fn() },
       on: vi.fn((event, callback) => listeners.set(event, callback))
     }
@@ -157,7 +169,7 @@ describe('discoverCommitMessageModelsLocal', () => {
 
     const pending = discoverCommitMessageModelsLocal('claude', undefined)
 
-    // Captured from claude 2.1.100: the unsupported subtype still exits 0.
+    // Real Claude 2.1.100 output: unsupported subtype still exits zero.
     listeners.get('stdout:data')?.(
       Buffer.from(
         '{"type":"control_response","response":{"subtype":"error","request_id":"orca-model-discovery","error":"Unsupported control request subtype: list_models"}}\n'
@@ -173,50 +185,18 @@ describe('discoverCommitMessageModelsLocal', () => {
     })
   })
 
-  it('discovers dynamic models through the configured agent command override', async () => {
-    const listeners = new Map<string, (value: unknown) => void>()
-    const child = {
-      pid: 123,
-      kill: vi.fn(),
-      stdout: { on: vi.fn((event, callback) => listeners.set(`stdout:${event}`, callback)) },
-      stderr: { on: vi.fn((event, callback) => listeners.set(`stderr:${event}`, callback)) },
-      stdin: { end: vi.fn() },
-      on: vi.fn((event, callback) => listeners.set(event, callback))
-    }
-    spawnMock.mockReturnValue(child as never)
-
-    const pending = discoverCommitMessageModelsLocal('cursor', undefined, 'npx cursor-agent')
-
-    listeners.get('stdout:data')?.(Buffer.from('auto - Auto\n'))
-    listeners.get('close')?.(0)
-
-    await expect(pending).resolves.toMatchObject({
-      success: true,
-      defaultModelId: 'auto'
-    })
-    if (process.platform === 'win32') {
-      expect(spawnMock).toHaveBeenCalledWith(
-        expect.stringMatching(/cmd\.exe$/i),
-        ['/d', '/c', expect.stringMatching(/npx\.cmd$/i), 'cursor-agent', '--list-models'],
-        expect.objectContaining({ windowsHide: true })
-      )
-    } else {
-      expect(spawnMock).toHaveBeenCalledWith(
-        'npx',
-        ['cursor-agent', '--list-models'],
-        expect.objectContaining({ windowsHide: true })
-      )
-    }
-  })
-
   it('discovers dynamic models through the selected WSL distro login shell', async () => {
     await withPlatform('win32', async () => {
       const listeners = new Map<string, (value: unknown) => void>()
       const child = {
         pid: 123,
         kill: vi.fn(),
-        stdout: { on: vi.fn((event, callback) => listeners.set(`stdout:${event}`, callback)) },
-        stderr: { on: vi.fn((event, callback) => listeners.set(`stderr:${event}`, callback)) },
+        stdout: {
+          on: vi.fn((event, callback) => listeners.set(`stdout:${event}`, callback))
+        },
+        stderr: {
+          on: vi.fn((event, callback) => listeners.set(`stderr:${event}`, callback))
+        },
         stdin: { end: vi.fn() },
         on: vi.fn((event, callback) => listeners.set(event, callback))
       }
@@ -226,6 +206,7 @@ describe('discoverCommitMessageModelsLocal', () => {
         cwd: 'C:\\repo',
         wslDistro: 'Ubuntu'
       })
+      await vi.waitFor(() => expect(spawnMock).toHaveBeenCalled())
 
       listeners.get('stdout:data')?.(Buffer.from('auto - Auto\n'))
       listeners.get('close')?.(0)
@@ -238,10 +219,7 @@ describe('discoverCommitMessageModelsLocal', () => {
         'wsl.exe',
         ['-d', 'Ubuntu', '--exec', 'sh', '-lc', expect.any(String)],
         expect.objectContaining({
-          // Why a concrete directory (#16463): `undefined` makes CreateProcessW inherit
-          // Orca's own cwd, a deletable WSL UNC path when it was launched from a
-          // worktree. The Linux directory still rides inside the command (/mnt/c/repo,
-          // asserted below), so the Windows-side cwd never decides where discovery runs.
+          // #16463: explicit native cwd avoids inherited deletable WSL UNC paths; discovery's guest cwd remains inside the command.
           cwd: expect.any(String),
           windowsHide: true
         })
@@ -254,37 +232,17 @@ describe('discoverCommitMessageModelsLocal', () => {
     })
   })
 
-  it('falls back to static models when dynamic discovery returns no parseable models', async () => {
-    const listeners = new Map<string, (value: unknown) => void>()
-    const child = {
-      pid: 123,
-      kill: vi.fn(),
-      stdout: { on: vi.fn((event, callback) => listeners.set(`stdout:${event}`, callback)) },
-      stderr: { on: vi.fn((event, callback) => listeners.set(`stderr:${event}`, callback)) },
-      stdin: { end: vi.fn() },
-      on: vi.fn((event, callback) => listeners.set(event, callback))
-    }
-    spawnMock.mockReturnValue(child as never)
-
-    const pending = discoverCommitMessageModelsLocal('pi', undefined)
-
-    listeners.get('stdout:data')?.(Buffer.from('provider model\n'))
-    listeners.get('close')?.(0)
-
-    await expect(pending).resolves.toMatchObject({
-      success: true,
-      defaultModelId: 'github-copilot/gpt-5.4-mini',
-      models: [{ id: 'github-copilot/gpt-5.4-mini' }]
-    })
-  })
-
   it('parses Pi model discovery from stderr when the CLI exits successfully', async () => {
     const listeners = new Map<string, (value: unknown) => void>()
     const child = {
       pid: 123,
       kill: vi.fn(),
-      stdout: { on: vi.fn((event, callback) => listeners.set(`stdout:${event}`, callback)) },
-      stderr: { on: vi.fn((event, callback) => listeners.set(`stderr:${event}`, callback)) },
+      stdout: {
+        on: vi.fn((event, callback) => listeners.set(`stdout:${event}`, callback))
+      },
+      stderr: {
+        on: vi.fn((event, callback) => listeners.set(`stderr:${event}`, callback))
+      },
       stdin: { end: vi.fn() },
       on: vi.fn((event, callback) => listeners.set(event, callback))
     }
@@ -305,8 +263,61 @@ describe('discoverCommitMessageModelsLocal', () => {
 
     await expect(pending).resolves.toMatchObject({
       success: true,
-      defaultModelId: 'github-copilot/gpt-5.4-mini',
+      defaultModelId: 'default',
       models: [{ id: 'github-copilot/gpt-5.4-mini' }, { id: 'openai-codex/gpt-5.5' }]
+    })
+  })
+
+  const notFound = 'claude not found on PATH. Install Claude to discover models.'
+  const failedToStart =
+    'Claude model discovery failed to start. Check the agent CLI configuration and try again.'
+  const couldNotStart =
+    'Claude model discovery could not be started. Check the agent CLI configuration and try again.'
+  it.each([
+    ['ENOENT', false, notFound],
+    ['EACCES', false, failedToStart],
+    ['ENOTDIR', true, couldNotStart]
+  ])(
+    'reports a supervisor %s spawn failure as a direct spawn does',
+    async (errno, thrown, error) => {
+      const child = createMockDiscoveryChild()
+      spawnMock.mockReturnValue(child as never)
+
+      const pending = discoverCommitMessageModelsLocal('claude', undefined)
+      child.stderr.emit(
+        'data',
+        Buffer.from(
+          `Warning: an Electron startup notice\n${PROVIDER_SPAWN_FAILURE_MARKER}${JSON.stringify({
+            thrown,
+            code: errno,
+            message: `spawn claude ${errno}`
+          })}\n`
+        )
+      )
+      child.emit('close', 127)
+
+      await expect(pending).resolves.toEqual({
+        success: false,
+        error,
+        ...(errno === 'ENOENT' ? { unavailable: { reason: 'cliMissing' } } : {})
+      })
+    }
+  )
+
+  it.each([
+    ['ENOENT', notFound],
+    ['EACCES', failedToStart]
+  ])('reports an emitted %s spawn error as before', async (errno, error) => {
+    const child = createMockDiscoveryChild()
+    spawnMock.mockReturnValue(child as never)
+
+    const pending = discoverCommitMessageModelsLocal('claude', undefined)
+    child.emit('error', spawnError(errno))
+
+    await expect(pending).resolves.toEqual({
+      success: false,
+      error,
+      ...(errno === 'ENOENT' ? { unavailable: { reason: 'cliMissing' } } : {})
     })
   })
 
@@ -335,6 +346,113 @@ describe('discoverCommitMessageModelsLocal', () => {
     }
   })
 
+  it('lists Codex models from app-server model/list without hidden rows, then releases the home once it stops', async () => {
+    vi.useFakeTimers()
+    const child = createMockDiscoveryChild()
+    const nextChild = createMockDiscoveryChild()
+    spawnChildren(child, nextChild)
+    const env = { CODEX_HOME: '/managed/codex-model-list-home' }
+    answerCodexAppServer(child, [
+      { data: agentPickerCliRecordings.modelList.data, nextCursor: 'page-2' },
+      {
+        data: [
+          {
+            id: 'codex-auto-review',
+            model: 'codex-auto-review',
+            displayName: 'Codex Auto Review',
+            hidden: true
+          }
+        ],
+        nextCursor: null
+      }
+    ])
+
+    try {
+      const first = discoverCommitMessageModelsLocal('codex', env)
+      await vi.advanceTimersByTimeAsync(0)
+      await expect(first).resolves.toEqual({
+        success: true,
+        catalogOrigin: 'probe',
+        defaultModelId: 'gpt-5.6-sol',
+        capability: expect.objectContaining({ defaultModelId: 'gpt-5.6-sol' }),
+        models: [
+          {
+            id: 'gpt-5.6-sol',
+            label: 'GPT-5.6-Sol',
+            description: 'Latest frontier agentic coding model.',
+            thinkingLevels: [
+              { id: 'low', label: 'Low' },
+              { id: 'medium', label: 'Medium' },
+              { id: 'high', label: 'High' },
+              { id: 'xhigh', label: 'Extra high' },
+              { id: 'max', label: 'Max' },
+              { id: 'ultra', label: 'Ultra' }
+            ],
+            defaultThinkingLevel: 'low',
+            isDefault: true
+          }
+        ]
+      })
+      expect(spawnedAgentArgv(spawnMock.mock.calls[0])).toContain('app-server')
+      expect(child.stdin.end).toHaveBeenCalled()
+
+      // A different command shares the home lock but not the cached listing.
+      const next = discoverCommitMessageModelsLocal('codex', env, 'codex')
+      await vi.advanceTimersByTimeAsync(1_499)
+      expect(child.kill).not.toHaveBeenCalled()
+      expect(spawnMock).toHaveBeenCalledTimes(1)
+      // A child that ignores stdin EOF is stopped after the grace; its exit frees the home.
+      await vi.advanceTimersByTimeAsync(1)
+      await expectChildTerminated(child)
+      child.emit('exit', null, 'SIGKILL')
+      await vi.advanceTimersByTimeAsync(0)
+      expect(spawnMock).toHaveBeenCalledTimes(2)
+
+      answerCodexAppServer(nextChild, [
+        { data: [{ id: 'gpt-5.5', model: 'gpt-5.5', displayName: 'GPT-5.5' }], nextCursor: null }
+      ])
+      await vi.advanceTimersByTimeAsync(0)
+      await expect(next).resolves.toMatchObject({ success: true, defaultModelId: 'gpt-5.5' })
+      // An app-server that exits on stdin EOF is never killed.
+      nextChild.emit('exit', 0, null)
+      await vi.advanceTimersByTimeAsync(2_000)
+      expect(nextChild.kill).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('lists again for a different Codex home when Windows env names differ only in case', async () => {
+    const listing = {
+      data: [{ id: 'gpt-5.5', model: 'gpt-5.5', displayName: 'GPT-5.5' }],
+      nextCursor: null
+    }
+    for (const home of ['C:\\accounts\\a', 'C:\\accounts\\b']) {
+      const child = createMockDiscoveryChild()
+      spawnChildren(child)
+      answerCodexAppServer(child, [listing])
+      await expect(
+        discoverCommitMessageModelsLocal('codex', { codex_home: 'C:\\shell', CODEX_HOME: home })
+      ).resolves.toMatchObject({ success: true })
+      child.emit('exit', 0, null)
+    }
+    expect(spawnMock).toHaveBeenCalledTimes(2)
+  })
+
+  it.each([
+    ['an unsupported model/list', { rpcError: { code: -32601, message: 'Method not found' } }],
+    ['an unreadable page', { data: 'not-a-list', nextCursor: null }]
+  ])('keeps the built-in Codex list when the app-server returns %s', async (name, page) => {
+    const child = createMockDiscoveryChild()
+    spawnChildren(child)
+    answerCodexAppServer(child, [page])
+
+    await expect(
+      discoverCommitMessageModelsLocal('codex', { CODEX_HOME: `/managed/codex-${name}` })
+    ).resolves.toMatchObject({ success: false })
+    child.emit('exit', 0, null)
+  })
+
   it('keeps the Codex home locked after a discovery timeout until the child closes', async () => {
     vi.useFakeTimers()
     const firstChild = createMockDiscoveryChild()
@@ -345,7 +463,8 @@ describe('discoverCommitMessageModelsLocal', () => {
     try {
       const first = discoverCommitMessageModelsLocal('codex', env)
       await vi.advanceTimersByTimeAsync(0)
-      const second = discoverCommitMessageModelsLocal('codex', env)
+      // A different command shares the home lock but not the in-flight listing.
+      const second = discoverCommitMessageModelsLocal('codex', env, 'codex')
       await vi.advanceTimersByTimeAsync(60_000)
 
       await expect(first).resolves.toMatchObject({
@@ -358,12 +477,13 @@ describe('discoverCommitMessageModelsLocal', () => {
       firstChild.emit('close', null)
       await vi.advanceTimersByTimeAsync(0)
       expect(spawnMock).toHaveBeenCalledTimes(2)
-      secondChild.stdout.emit(
-        'data',
-        Buffer.from(JSON.stringify({ models: [{ slug: 'gpt-5.5', display_name: 'GPT-5.5' }] }))
-      )
-      secondChild.emit('close', 0)
-      await expect(second).resolves.toMatchObject({ success: true, defaultModelId: 'gpt-5.5' })
+      answerCodexAppServer(secondChild, [
+        { data: [{ id: 'gpt-5.5', model: 'gpt-5.5', displayName: 'GPT-5.5' }], nextCursor: null }
+      ])
+      await expect(second).resolves.toMatchObject({
+        success: true,
+        defaultModelId: 'gpt-5.5'
+      })
     } finally {
       vi.useRealTimers()
     }
@@ -379,23 +499,24 @@ describe('discoverCommitMessageModelsLocal', () => {
     try {
       const first = discoverCommitMessageModelsLocal('codex', env)
       await vi.advanceTimersByTimeAsync(0)
-      const second = discoverCommitMessageModelsLocal('codex', env)
+      // A different command shares the home lock but not the in-flight listing.
+      const second = discoverCommitMessageModelsLocal('codex', env, 'codex')
       await vi.advanceTimersByTimeAsync(60_000)
       await expect(first).resolves.toMatchObject({ success: false })
       expect(spawnMock).toHaveBeenCalledTimes(1)
 
-      // A grandchild kept the inherited stdout open, so the killed child reports
-      // 'exit' and 'close' never arrives.
+      // Inherited stdout can outlive the killed root; exit must suffice without close.
       firstChild.emit('exit', null, 'SIGKILL')
       await vi.advanceTimersByTimeAsync(0)
       expect(spawnMock).toHaveBeenCalledTimes(2)
 
-      secondChild.stdout.emit(
-        'data',
-        Buffer.from(JSON.stringify({ models: [{ slug: 'gpt-5.5', display_name: 'GPT-5.5' }] }))
-      )
-      secondChild.emit('close', 0)
-      await expect(second).resolves.toMatchObject({ success: true, defaultModelId: 'gpt-5.5' })
+      answerCodexAppServer(secondChild, [
+        { data: [{ id: 'gpt-5.5', model: 'gpt-5.5', displayName: 'GPT-5.5' }], nextCursor: null }
+      ])
+      await expect(second).resolves.toMatchObject({
+        success: true,
+        defaultModelId: 'gpt-5.5'
+      })
     } finally {
       vi.useRealTimers()
     }
@@ -406,6 +527,7 @@ describe('discoverCommitMessageModelsLocal', () => {
     spawnMock.mockReturnValue(child as never)
 
     const pending = discoverCommitMessageModelsLocal('cursor', undefined)
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalled())
 
     child.stdout.emit('data', Buffer.alloc(4 * 1024 * 1024 + 1))
 
@@ -418,98 +540,5 @@ describe('discoverCommitMessageModelsLocal', () => {
     expect(child.stderr.listenerCount('data')).toBe(0)
     expect(child.listenerCount('error')).toBe(0)
     expect(child.listenerCount('close')).toBe(0)
-  })
-})
-
-describe('generateCommitMessageFromContext', () => {
-  it('discovers dynamic models through a remote execution plan', async () => {
-    const execute = vi.fn(async (plan, cwd, timeoutMs) => {
-      expect(plan).toEqual({
-        binary: 'npx',
-        args: ['cursor-agent', '--list-models'],
-        stdinPayload: null,
-        label: 'Cursor'
-      })
-      expect(cwd).toBe('/remote/repo')
-      expect(timeoutMs).toBe(60_000)
-      return {
-        stdout: 'auto - Auto\ngpt-5.2 - GPT-5.2\n',
-        stderr: '',
-        exitCode: 0,
-        timedOut: false
-      }
-    })
-
-    const result = await discoverCommitMessageModelsRemote(
-      'cursor',
-      '/remote/repo',
-      execute,
-      'npx cursor-agent'
-    )
-
-    expect(result).toMatchObject({
-      success: true,
-      defaultModelId: 'auto',
-      models: [
-        { id: 'auto', label: 'Auto' },
-        { id: 'gpt-5.2', label: 'GPT-5.2' }
-      ]
-    })
-  })
-
-  it('reports remote model discovery transport timeouts without PATH guidance', async () => {
-    const transportTimeout = Object.assign(
-      new Error('Request "agent.execNonInteractive" timed out after 65000ms'),
-      { code: SSH_MUX_REQUEST_TIMEOUT_CODE }
-    )
-    const result = await discoverCommitMessageModelsRemote(
-      'cursor',
-      '/remote/repo',
-      async () => {
-        throw transportTimeout
-      },
-      'npx cursor-agent'
-    )
-
-    expect(result).toEqual({
-      success: false,
-      error:
-        'Cursor model discovery took longer than 60s and may still be running on the remote host.'
-    })
-  })
-
-  it('keeps the unverifiable wording when the link is declared lost instead of timing out', async () => {
-    // Same regression as the exec leg: a wedged link now disposes the mux before the response
-    // deadline, so this branch sees CONNECTION_LOST. Reporting "could not be reached" for it
-    // asserts absence the client never observed (docs/reference/ssh-execution-boundary.md).
-    const result = await discoverCommitMessageModelsRemote(
-      'cursor',
-      '/remote/repo',
-      async () => {
-        throw createSshDisposalError('connection_lost')
-      },
-      'npx cursor-agent'
-    )
-
-    expect(result).toEqual({
-      success: false,
-      error:
-        'Cursor model discovery took longer than 60s and may still be running on the remote host.'
-    })
-  })
-
-  it('reports remote model discovery spawn failures with remote install guidance', async () => {
-    const result = await discoverCommitMessageModelsRemote('cursor', '/remote/repo', async () => ({
-      stdout: '',
-      stderr: '',
-      exitCode: null,
-      timedOut: false,
-      spawnError: 'ENOENT'
-    }))
-
-    expect(result).toEqual({
-      success: false,
-      error: 'cursor-agent not found on the remote PATH. Install Cursor there.'
-    })
   })
 })

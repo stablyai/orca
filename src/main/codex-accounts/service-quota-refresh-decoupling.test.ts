@@ -20,8 +20,8 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('node:os', async () => {
-  const actual = await vi.importActual<typeof import('node:os')>('node:os') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+vi.mock(import('node:os'), async (importOriginal) => {
+  const actual = await importOriginal()
   return {
     ...actual,
     homedir: () => testState.fakeHomeDir
@@ -31,9 +31,6 @@ vi.mock('node:os', async () => {
 describe('CodexAccountService config sync', () => {
   registerCodexAccountsTestHomes()
 
-  // Why: quota probes against a cold per-account CODEX_HOME can take 10–25s
-  // (RPC + PTY fallback) and queue behind an in-flight global usage refresh;
-  // account mutations must never block on — or fail because of — that probe.
   describe('quota refresh decoupling', () => {
     function createAccountOneSettings(): GlobalSettings {
       const managedHomePath = createManagedHome(
@@ -120,29 +117,6 @@ describe('CodexAccountService config sync', () => {
       expect(rateLimits.refreshForCodexAccountChange).toHaveBeenCalledTimes(1)
     })
 
-    it('resolves selectAccount when the quota refresh rejects', async () => {
-      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-      const store = createStore(createAccountOneSettings())
-      const rateLimits = {
-        refreshForCodexAccountChange: vi.fn().mockRejectedValue(new Error('cold probe failed')),
-        evictInactiveCodexCache: vi.fn()
-      }
-      const runtimeHome = createRuntimeHome()
-
-      const { CodexAccountService } = await import('./service')
-      const service = new CodexAccountService(
-        store as never,
-        rateLimits as never,
-        runtimeHome as never
-      )
-
-      const state = await service.selectAccount('account-1')
-
-      expect(state.activeAccountId).toBe('account-1')
-      await vi.waitFor(() => expect(errorSpy).toHaveBeenCalled())
-      errorSpy.mockRestore()
-    })
-
     it('resolves addAccount while the post-login quota refresh never settles', async () => {
       vi.resetModules()
       writeFileSync(
@@ -206,8 +180,7 @@ describe('CodexAccountService config sync', () => {
       expect(state.accounts).toHaveLength(1)
       const account = store.getSettings().codexManagedAccounts[0]
       expect(account.email).toBe('user@example.com')
-      // The durable mutation must survive a failed usage probe — previously the
-      // rejection fell into login cleanup and deleted the just-created home.
+
       expect(existsSync(account.managedHomePath)).toBe(true)
       expect(existsSync(join(account.managedHomePath, 'auth.json'))).toBe(true)
       await vi.waitFor(() => expect(errorSpy).toHaveBeenCalled())

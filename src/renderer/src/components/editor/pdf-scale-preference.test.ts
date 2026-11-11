@@ -1,48 +1,32 @@
 import { describe, expect, it } from 'vitest'
-import {
-  applyPdfScalePreference,
-  clampPdfScale,
-  stepPdfScalePreference
-} from './pdf-scale-preference'
+import { zoomPdfViewerWithWheel } from './pdf-scale-preference'
 
-const BOUNDS = { min: 0.25, max: 5, step: 1.25 }
+function fakeViewer(currentScale: number) {
+  return {
+    currentScale,
+    currentScaleValue: '',
+    container: { scrollLeft: 0, scrollTop: 0, getBoundingClientRect: () => ({ left: 0, top: 0 }) },
+    update: () => {}
+  }
+}
 
-describe('clampPdfScale', () => {
-  it('clamps to the configured range', () => {
-    expect(clampPdfScale(0.1, BOUNDS.min, BOUNDS.max)).toBe(0.25)
-    expect(clampPdfScale(9, BOUNDS.min, BOUNDS.max)).toBe(5)
-    expect(clampPdfScale(1.5, BOUNDS.min, BOUNDS.max)).toBe(1.5)
-  })
-})
+const zoomInEvent = {
+  ctrlKey: true,
+  deltaY: -100,
+  deltaMode: 0,
+  clientX: 0,
+  clientY: 0,
+  preventDefault: () => {}
+}
+const bounds = { min: 0.25, max: 5 }
 
-describe('applyPdfScalePreference', () => {
-  it('restores an absolute scale after a content reload', () => {
-    const viewer = { currentScale: 1, currentScaleValue: 'auto' }
-    applyPdfScalePreference(viewer, 2.5, BOUNDS)
-    expect(viewer.currentScale).toBe(2.5)
-  })
+describe('zoomPdfViewerWithWheel', () => {
+  it('stops on the fit-width scale when a step would pass it, then leaves it', () => {
+    const below = fakeViewer(1)
+    expect(zoomPdfViewerWithWheel(below, zoomInEvent, bounds, () => 1.5)).toBe('page-width')
+    expect(below.currentScaleValue).toBe('page-width')
 
-  it('uses fit-to-width for the default preference', () => {
-    const viewer = { currentScale: 1, currentScaleValue: 'auto' }
-    applyPdfScalePreference(viewer, 'page-width', BOUNDS)
-    expect(viewer.currentScaleValue).toBe('page-width')
-  })
-
-  it('clamps an out-of-range absolute preference', () => {
-    const viewer = { currentScale: 1, currentScaleValue: 'auto' }
-    applyPdfScalePreference(viewer, 99, BOUNDS)
-    expect(viewer.currentScale).toBe(5)
-  })
-})
-
-describe('stepPdfScalePreference', () => {
-  it('records the absolute scale so a later reload can restore it', () => {
-    const zoomedIn = stepPdfScalePreference(1, 'in', BOUNDS)
-    expect(zoomedIn.preference).toBe(1.25)
-    expect(zoomedIn.scale).toBe(1.25)
-
-    const zoomedOut = stepPdfScalePreference(1.25, 'out', BOUNDS)
-    expect(zoomedOut.preference).toBe(1)
-    expect(zoomedOut.scale).toBe(1)
+    const atFit = fakeViewer(1.5)
+    expect(zoomPdfViewerWithWheel(atFit, zoomInEvent, bounds, () => 1.5)).toBeGreaterThan(1.5)
   })
 })

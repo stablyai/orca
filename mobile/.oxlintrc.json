@@ -1,7 +1,12 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
   "extends": ["../.oxlintrc.json"],
-  "ignorePatterns": ["src/terminal/terminal-webview-engine.generated.ts"],
+  "ignorePatterns": [
+    "src/components/mobile-markdown-mdast-nodes.d.ts",
+    "src/terminal/terminal-webview-engine.generated.ts",
+    "src/components/pr-sidebar/mermaid-page-engine.generated.ts",
+    "src/components/katex-page-style.generated.ts"
+  ],
   "rules": {
     "react-hooks/exhaustive-deps": "off",
     "react/no-unescaped-entities": "off",

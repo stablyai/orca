@@ -1,25 +1,19 @@
-// Extracts the diagnosable parts of a Crashpad minidump without symbols.
-//
-// Why: a Chromium CHECK/DCHECK surfaces to `render-process-gone` as exit code
-// 0x80000003 (STATUS_BREAKPOINT) and nothing else, so the exit code alone can
-// never name the failing check. Some Crashpad builds expose the fatal line as
-// `LOG_FATAL`; Electron 43 on Windows only carries it in captured process
-// memory. Both forms are recoverable without symbols or minidump_stackwalk.
-//
-// Layouts are from Crashpad's minidump_extensions.h and the Windows
-// MINIDUMP_* structs. Everything here is bounds-checked and returns null
-// rather than throwing: a truncated dump must degrade, not break crash
-// reporting.
+// Layouts follow Crashpad minidump_extensions.h and Windows MINIDUMP_* structs.
 
-import { findStream, isMinidump, MinidumpView } from './minidump-stream-reader'
+import { findStream, isMinidump, MinidumpView, type MinidumpSource } from './minidump-stream-reader'
 import { readCrashpadAnnotations } from './minidump-crashpad-annotations'
+import { findEmbeddedCheckMessage } from './minidump-embedded-check'
+import { readMinidumpFaultContext, type MinidumpFaultContext } from './minidump-fault-context'
 
 const STREAM_TYPE_MODULE_LIST = 4
 const STREAM_TYPE_EXCEPTION = 6
+const STREAM_TYPE_SYSTEM_INFO = 7
+// Crashpad uses different PlatformId values for macOS and Linux.
+const SYSTEM_INFO_PLATFORM_ID_OFFSET = 20
+const VER_PLATFORM_WIN32_NT = 2
 
 const MODULE_RECORD_SIZE = 108
-// 8x headroom over a measured 1042-image macOS renderer, whose whole list a
-// 1_024 cap dropped; a dump claiming more than this is corrupt.
+// Allow headroom for macOS renderers with over 1,024 loaded images.
 const MAX_MODULE_LIST_MODULES = 8_192
 const MODULE_BASE_OFFSET = 0
 const MODULE_SIZE_OFFSET = 8
@@ -30,23 +24,10 @@ const EXCEPTION_RECORD_OFFSET = 8
 const EXCEPTION_CODE_OFFSET = EXCEPTION_RECORD_OFFSET + 0
 const EXCEPTION_ADDRESS_OFFSET = EXCEPTION_RECORD_OFFSET + 16
 
-const CHROMIUM_LOG_MARKERS = [
-  Buffer.from(':FATAL:', 'ascii'),
-  Buffer.from(':CHECK:', 'ascii'),
-  Buffer.from(':DFATAL:', 'ascii'),
-  Buffer.from(':ERROR:', 'ascii')
-]
-const MAX_LOG_PREFIX_BYTES = 96
-const MAX_CHECK_LOG_BYTES = 4_000
-const MAX_MARKERS_PER_SEVERITY = 256
-const CHECK_LOG_PATTERN =
-  /^\[(?:\d+:){1,2}\d{4}\/\d{6}\.\d{3,6}:(FATAL|CHECK|DFATAL|ERROR)(?::[^:\]\r\n]{1,80})*:([^:\]\r\n]{1,512}?)(?:\((\d+)\)|:(\d+))\]\s*(.+)$/
-const ERROR_CHECK_PATTERN = /\b(?:Check failed:|D?CHECK failed:|Intentionally causing D?CHECK\b)/i
-
 export type MinidumpCrashSignature = {
   /** Chromium's fatal log line, e.g. `[...:FATAL:node.cc(123)] Check failed: !x.` */
   readonly checkMessage?: string
-  /** Source file basename parsed out of `checkMessage`. */
+  /** Source file basename from the annotated or embedded log line. */
   readonly checkFile?: string
   readonly checkLine?: number
   /** Crashpad `ptype`: `renderer`, `gpu-process`, `browser`. */
@@ -57,6 +38,7 @@ export type MinidumpCrashSignature = {
   /** Module whose image range contains `exceptionAddress`. */
   readonly faultingModule?: string
   readonly faultingModuleOffset?: string
+  readonly fault?: MinidumpFaultContext
   /** Allowlisted Crashpad annotations, verbatim. */
   readonly annotations: Readonly<Record<string, string>>
 }
@@ -67,28 +49,36 @@ type ModuleRecord = {
   readonly name: string
 }
 
-function readModules(view: MinidumpView): ModuleRecord[] {
-  const stream = findStream(view, STREAM_TYPE_MODULE_LIST)
+async function readModules(view: MinidumpView): Promise<ModuleRecord[]> {
+  const stream = await findStream(view, STREAM_TYPE_MODULE_LIST)
   if (!stream) {
     return []
   }
-  const count = view.u32(stream.rva)
+  const count = await view.u32(stream.rva)
   if (count === null || count > MAX_MODULE_LIST_MODULES) {
     return []
   }
   const modules: ModuleRecord[] = []
   for (let index = 0; index < count; index += 1) {
     const record = stream.rva + 4 + index * MODULE_RECORD_SIZE
-    const base = view.u64(record + MODULE_BASE_OFFSET)
-    const size = view.u32(record + MODULE_SIZE_OFFSET)
-    const nameRva = view.u32(record + MODULE_NAME_RVA_OFFSET)
+    const base = await view.u64(record + MODULE_BASE_OFFSET)
+    const size = await view.u32(record + MODULE_SIZE_OFFSET)
+    const nameRva = await view.u32(record + MODULE_NAME_RVA_OFFSET)
     if (base === null || size === null || nameRva === null) {
       break
     }
-    const name = view.utf16String(nameRva, 2_048)
+    const name = await view.utf16String(nameRva, 2_048)
     modules.push({ base, size, name: name ?? 'unknown' })
   }
   return modules
+}
+
+async function isWindowsDump(view: MinidumpView): Promise<boolean> {
+  const stream = await findStream(view, STREAM_TYPE_SYSTEM_INFO)
+  return (
+    stream !== null &&
+    (await view.u32(stream.rva + SYSTEM_INFO_PLATFORM_ID_OFFSET)) === VER_PLATFORM_WIN32_NT
+  )
 }
 
 function moduleBasename(modulePath: string): string {
@@ -100,68 +90,6 @@ function toHex(value: bigint): string {
   return `0x${value.toString(16)}`
 }
 
-type LocatedCheckMessage = {
-  readonly message: string
-  readonly file?: string
-  readonly line?: number
-}
-
-function isPrintableLogByte(value: number): boolean {
-  return value === 0x09 || (value >= 0x20 && value <= 0x7e)
-}
-
-/**
- * `lastIndexOf(byte, from)` restricted to `within` bytes before `from`. An
- * unbounded search scans the whole dump backward on a miss only for the result
- * to be thrown away by the same prefix limit; zero-filled regions are normal in
- * a minidump, so that miss is the common case, not the adversarial one.
- */
-function lastIndexOfWithin(dump: Buffer, byte: number, from: number, within: number): number {
-  const floor = Math.max(0, from - within)
-  for (let at = from; at >= floor; at -= 1) {
-    if (dump[at] === byte) {
-      return at
-    }
-  }
-  return -1
-}
-
-/** Electron 43 omits LOG_FATAL but keeps Chromium's formatted log line in memory. */
-function findEmbeddedCheckMessage(dump: Buffer): LocatedCheckMessage | undefined {
-  for (const marker of CHROMIUM_LOG_MARKERS) {
-    let from = 0
-    for (let inspected = 0; inspected < MAX_MARKERS_PER_SEVERITY; inspected += 1) {
-      const markerAt = dump.indexOf(marker, from)
-      if (markerAt === -1) {
-        break
-      }
-      from = markerAt + marker.length
-      const start = lastIndexOfWithin(dump, 0x5b, markerAt, MAX_LOG_PREFIX_BYTES)
-      if (start === -1) {
-        continue
-      }
-      let end = markerAt + marker.length
-      const limit = Math.min(dump.length, start + MAX_CHECK_LOG_BYTES)
-      while (end < limit && isPrintableLogByte(dump[end])) {
-        end += 1
-      }
-      const candidate = dump.subarray(start, end).toString('utf8')
-      const match = CHECK_LOG_PATTERN.exec(candidate)
-      if (!match || (match[1] === 'ERROR' && !ERROR_CHECK_PATTERN.test(match[5]))) {
-        continue
-      }
-      const line = Number.parseInt(match[3] ?? match[4], 10)
-      return {
-        message: candidate,
-        file: moduleBasename(match[2]),
-        line: Number.isFinite(line) ? line : undefined
-      }
-    }
-  }
-  return undefined
-}
-
-/** Parses the annotation form, which uses `file.cc(123)`. */
 function parseCheckLocation(checkMessage: string): {
   file?: string
   line?: number
@@ -190,28 +118,26 @@ function findFaultingModule(
 }
 
 export type MinidumpParseOptions = {
-  /**
-   * Process type the caller will accept. A dump from any other process is
-   * discarded by the caller anyway, so parsing stops at `processType` and the
-   * returned signature is deliberately partial — read only `processType` when
-   * it does not match.
-   */
+  /** On a mismatch, only processType and annotations are populated; skip expensive scans. */
   readonly expectedProcessType?: string
 }
 
-/**
- * Parses a Crashpad minidump into the fields that make a CHECK failure
- * nameable. Returns null when the buffer is not a minidump.
- */
-export function parseMinidumpCrashSignature(
-  dump: Buffer,
+/** Returns null for invalid minidump headers; malformed fields may yield a partial signature. */
+export async function parseMinidumpCrashSignature(
+  dump: Buffer | MinidumpSource,
   options: MinidumpParseOptions = {}
-): MinidumpCrashSignature | null {
-  if (!isMinidump(dump)) {
+): Promise<MinidumpCrashSignature | null> {
+  const source: MinidumpSource = Buffer.isBuffer(dump)
+    ? {
+        byteLength: dump.length,
+        read: async (offset, size) => dump.subarray(offset, offset + size)
+      }
+    : dump
+  if (!isMinidump(await source.read(0, 32))) {
     return null
   }
-  const view = new MinidumpView(dump)
-  const annotations = readCrashpadAnnotations(view)
+  const view = new MinidumpView(source)
+  const annotations = await readCrashpadAnnotations(view)
 
   const signature: {
     -readonly [K in keyof MinidumpCrashSignature]: MinidumpCrashSignature[K]
@@ -221,14 +147,13 @@ export function parseMinidumpCrashSignature(
   if (processType) {
     signature.processType = processType
   }
-  // Annotations are bounded; the scans below are not. A renderer crash would
-  // otherwise scan every fresh GPU/utility dump end to end before rejecting it.
+  // Reject unrelated dumps before scanning their captured memory for log lines.
   if (options.expectedProcessType !== undefined && processType !== options.expectedProcessType) {
     return signature
   }
 
   const annotatedCheckMessage = annotations['LOG_FATAL'] ?? annotations['abort-message']
-  const embeddedCheck = annotatedCheckMessage ? undefined : findEmbeddedCheckMessage(dump)
+  const embeddedCheck = annotatedCheckMessage ? undefined : await findEmbeddedCheckMessage(source)
   const checkMessage = annotatedCheckMessage ?? embeddedCheck?.message
   if (checkMessage) {
     signature.checkMessage = checkMessage
@@ -240,27 +165,30 @@ export function parseMinidumpCrashSignature(
       signature.checkLine = location.line
     }
   }
-  const exception = findStream(view, STREAM_TYPE_EXCEPTION)
+  const exception = await findStream(view, STREAM_TYPE_EXCEPTION)
   if (exception) {
-    const code = view.u32(exception.rva + EXCEPTION_CODE_OFFSET)
-    const address = view.u64(exception.rva + EXCEPTION_ADDRESS_OFFSET)
+    const code = await view.u32(exception.rva + EXCEPTION_CODE_OFFSET)
+    const address = await view.u64(exception.rva + EXCEPTION_ADDRESS_OFFSET)
     if (code !== null) {
       signature.exceptionCode = code
     }
     if (address !== null) {
       signature.exceptionAddress = toHex(address)
-      const faulting = findFaultingModule(readModules(view), address)
+      const faulting = findFaultingModule(await readModules(view), address)
       if (faulting) {
         signature.faultingModule = faulting.name
         signature.faultingModuleOffset = faulting.offset
       }
+      // Capture Windows module code for binary comparison; POSIX may report a data address here.
+      signature.fault = await readMinidumpFaultContext(view, exception.rva, code, address, {
+        captureCodeBytes: faulting !== undefined && (await isWindowsDump(view))
+      })
     }
   }
 
   return signature
 }
 
-/** Flattens a signature into `CrashReportRecord.details` keys. */
 export function minidumpSignatureDetails(
   signature: MinidumpCrashSignature
 ): Record<string, string | number> {
@@ -288,6 +216,19 @@ export function minidumpSignatureDetails(
   }
   if (signature.faultingModuleOffset) {
     details.minidumpFaultingModuleOffset = signature.faultingModuleOffset
+  }
+  const fault = signature.fault
+  if (fault?.access) {
+    details.minidumpExceptionAccess = fault.access
+  }
+  if (fault?.faultAddress) {
+    details.minidumpFaultAddress = fault.faultAddress
+  }
+  if (fault?.faultStackPointerDelta !== undefined) {
+    details.minidumpFaultStackPointerDelta = fault.faultStackPointerDelta
+  }
+  if (fault?.codeBytes) {
+    details.minidumpCodeBytes = fault.codeBytes
   }
   for (const [key, value] of Object.entries(signature.annotations)) {
     if (key === 'LOG_FATAL' || key === 'abort-message' || key === 'ptype') {

@@ -3,7 +3,6 @@ import { createFloatingTerminalPanelDragActions } from './floating-terminal-pane
 import type { FloatingTerminalPanelProps } from './floating-terminal-panel-types'
 import { useFloatingTerminalCloseActions } from './use-floating-terminal-close-actions'
 import { useFloatingTerminalCreateActions } from './use-floating-terminal-create-actions'
-import { useFloatingTerminalEditorCloseQueue } from './use-floating-terminal-editor-close-queue'
 import { useFloatingTerminalFocusLifecycle } from './use-floating-terminal-focus-lifecycle'
 import { useFloatingTerminalGlobalShortcutListeners } from './use-floating-terminal-global-shortcut-listeners'
 import { useFloatingTerminalGuestBridge } from './use-floating-terminal-guest-bridge'
@@ -12,7 +11,7 @@ import { useFloatingTerminalOrchestrationDismissal } from './use-floating-termin
 import { useFloatingTerminalOrchestrationVisibility } from './use-floating-terminal-orchestration-visibility'
 import { useFloatingTerminalPanelFocusReclaim } from './use-floating-terminal-panel-focus-reclaim'
 import { useFloatingTerminalPanelGeometry } from './use-floating-terminal-panel-geometry'
-import { useFloatingTerminalPanelItems } from './use-floating-terminal-panel-items'
+import { useFloatingWorkspaceChromeModel } from './use-floating-workspace-chrome-model'
 import { useFloatingTerminalPanelLocalState } from './use-floating-terminal-panel-local-state'
 import { useFloatingTerminalPanelMaximize } from './use-floating-terminal-panel-maximize'
 import { useFloatingTerminalPanelShortcuts } from './use-floating-terminal-panel-shortcuts'
@@ -27,7 +26,7 @@ export function useFloatingTerminalPanelController({
   const storeState = useFloatingTerminalPanelStoreState()
   const shortcutDetails = useFloatingTerminalShortcutDetails()
   const localState = useFloatingTerminalPanelLocalState()
-  const items = useFloatingTerminalPanelItems({ ...storeState, open })
+  const items = useFloatingWorkspaceChromeModel()
 
   useContextualTour('floating-workspace', open, 'floating_workspace_visible', {
     recordFeatureInteraction: tourInteractionSnapshot?.recordFeatureInteractionForTour ?? false,
@@ -35,7 +34,6 @@ export function useFloatingTerminalPanelController({
     wasFeaturePreviouslyInteracted: tourInteractionSnapshot?.wasPreviouslyInteracted
   })
 
-  const editorCloseQueue = useFloatingTerminalEditorCloseQueue({ ...storeState, ...localState })
   const geometry = useFloatingTerminalPanelGeometry({ ...storeState, ...localState })
   useFloatingTerminalInitialFocusEffects({ ...items, ...localState, open })
   const orchestrationVisibility = useFloatingTerminalOrchestrationVisibility({
@@ -48,10 +46,7 @@ export function useFloatingTerminalPanelController({
     ...items
   })
   const closeActions = useFloatingTerminalCloseActions({
-    ...storeState,
-    ...localState,
-    ...items,
-    ...editorCloseQueue
+    ...items
   })
   const focusReclaim = useFloatingTerminalPanelFocusReclaim({
     ...storeState,
@@ -86,7 +81,6 @@ export function useFloatingTerminalPanelController({
     ...shortcutDetails,
     ...localState,
     ...items,
-    ...editorCloseQueue,
     ...geometry,
     ...orchestrationVisibility,
     ...createActions,

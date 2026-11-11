@@ -1,25 +1,21 @@
-// Field readers for the Claude SDK's background-task lifecycle frames
-// (task_started / task_updated / task_notification / background_tasks_changed).
-// Pure and bounded: every reader rejects absent, non-string, or oversized
-// values so a malformed frame degrades to "field unknown", never to a throw.
-
+import { classifyClaudeBackgroundTaskKind } from '../../shared/claude-background-task-kind'
 import type {
   AgentSessionBackgroundTask,
   AgentSessionBackgroundTaskRunState
-} from '../../shared/agent-session-wire'
+} from '../../shared/agent-session/agent-session-background-task-wire'
+import { ownRetainedString } from '../../shared/own-retained-string'
 
 const MAX_TASK_ID_LENGTH = 512
 const MAX_TASK_TEXT_LENGTH = 512
 
 export type ClaudeBackgroundTaskKind = AgentSessionBackgroundTask['kind']
+export { classifyClaudeBackgroundTaskKind }
 
 export function record(value: unknown): Record<string, unknown> | null {
   return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : null
 }
 
-/** The bound every task id shares, wherever it enters. An id the roster stores
- *  becomes a durable entry key, so a provisional one takes the same bound the
- *  announced path applies — an over-long id is rejected, never truncated. */
+// Reject oversized durable IDs rather than truncating them into collisions.
 export function isBoundedClaudeTaskId(value: string): boolean {
   return value.length > 0 && value.length <= MAX_TASK_ID_LENGTH
 }
@@ -29,20 +25,27 @@ export function taskId(message: Record<string, unknown>): string | null {
   return typeof value === 'string' && isBoundedClaudeTaskId(value) ? value : null
 }
 
+export function taskAliasId(value: unknown): string | undefined {
+  return typeof value === 'string' && isBoundedClaudeTaskId(value) ? value : undefined
+}
+
 function boundedTaskText(value: unknown): string | undefined {
   if (typeof value !== 'string') {
     return undefined
   }
   const trimmed = value.trim().replace(/\s+/g, ' ')
-  return trimmed.length > 0 ? trimmed.slice(0, MAX_TASK_TEXT_LENGTH) : undefined
+  return trimmed.length > 0 ? ownRetainedString(trimmed.slice(0, MAX_TASK_TEXT_LENGTH)) : undefined
 }
 
 export function taskDescription(value: unknown): string | undefined {
   return boundedTaskText(value)
 }
 
-/** The provider-reported identity for a task. Subagent frames have carried the
- *  type under both `agent_type` and `subagent_type` across SDK versions. */
+export function taskText(value: unknown): string | undefined {
+  return boundedTaskText(value)
+}
+
+// SDK versions use both agent_type and subagent_type for the same identity.
 export function taskName(frame: Record<string, unknown>): string | undefined {
   return (
     boundedTaskText(frame.name) ??
@@ -51,22 +54,6 @@ export function taskName(frame: Record<string, unknown>): string | undefined {
   )
 }
 
-export function classifyClaudeBackgroundTaskKind(taskType: unknown): ClaudeBackgroundTaskKind {
-  switch (taskType) {
-    case 'local_agent':
-      return 'agent'
-    case 'local_workflow':
-      return 'workflow'
-    case 'local_bash':
-      return 'command'
-    case 'monitor':
-      return 'monitor'
-    default:
-      return 'unknown'
-  }
-}
-
-/** Cumulative token usage from a task_progress / task_notification frame. */
 export function taskUsageTotalTokens(frame: Record<string, unknown>): number | undefined {
   const usage = record(frame.usage)
   const total = usage?.total_tokens
@@ -75,8 +62,6 @@ export function taskUsageTotalTokens(frame: Record<string, unknown>): number | u
     : undefined
 }
 
-/** Settled state for a terminal status. Null for anything else — an unreadable
- *  status never settles a task by itself. */
 export function terminalClaudeTaskRunState(
   status: unknown
 ): AgentSessionBackgroundTaskRunState | null {
@@ -93,7 +78,6 @@ export function terminalClaudeTaskRunState(
   }
 }
 
-/** Live state for a non-terminal status. Null leaves the tracked state alone. */
 export function liveClaudeTaskRunState(status: unknown): AgentSessionBackgroundTaskRunState | null {
   switch (status) {
     case 'pending':
@@ -104,3 +88,15 @@ export function liveClaudeTaskRunState(status: unknown): AgentSessionBackgroundT
       return null
   }
 }
+
+export const CLAUDE_BACKGROUND_TASK_ROW_SUBTYPES: ReadonlySet<string> = new Set([
+  'task_started',
+  'task_updated',
+  'task_progress',
+  'task_notification'
+])
+
+export const CLAUDE_BACKGROUND_TASK_SILENT_REFRESH_SUBTYPES: ReadonlySet<string> = new Set([
+  'task_progress',
+  'background_tasks_changed'
+])

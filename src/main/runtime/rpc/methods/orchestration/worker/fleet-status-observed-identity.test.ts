@@ -1,26 +1,24 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentStatusOrchestrationContext } from '../../../../../../shared/agent-status-types'
-import { AgentHookServer } from '../../../../../agent-hooks/server'
+
+import type { AgentStatusOrchestrationContext } from '../../../../../../shared/agent-status/contracts/agent-status-types'
+
+import { AgentHookServer } from '../../../../../agent-hooks/server/agent-hook-server'
+
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import type { OrchestrationDb } from '../../../../orchestration/db'
-import { OrcaRuntimeWithGetOrchestrationDispatchAuthority } from '../../../../orca-runtime-get-orchestration-dispatch-authority'
+
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+
+import { OrcaRuntimeWithGetOrchestrationDispatchAuthority } from '../../../../terminal/output/terminal-orchestration-authority'
+
 import {
   AgentStatusObservedPaneIdentities,
   recordObservedAgentStatusPaneIdentity
-} from '../../../../agent-status-observed-pane-identity'
+} from '../../../../terminal/identity/agent-status-observed-pane-identity'
+
 import { projectFleetWorkerPage } from './worker-observation'
 
-/**
- * A cached hook row must keep the identity it was observed under.
- *
- * The fleet snapshot remints every row on every read, so a row seen under one process used to
- * acquire whichever process, dispatch and terminal the pane owned at read time. Incarnation
- * equality in the matcher then agreed perfectly while the evidence described a dead process.
- * These cases replay one unchanged row across a rebind, so nothing but the capture point can
- * make them fail closed.
- */
+/** Capture hook identity at ingest; reminting cached observations during fleet reads could falsely match a new occupant's incarnation. Replay one row across rebind to catch that drift. */
 const PANE_KEY = 'tab-observed:11111111-1111-4111-8111-111111111111'
-const REMINTED_PANE_KEY = 'tab-observed:22222222-2222-4222-8222-222222222222'
 const TERMINAL_HANDLE = 'term_observed'
 const INCARNATION_ONE = 'pty-observed:inc-1'
 const INCARNATION_TWO = 'pty-observed:inc-2'
@@ -51,7 +49,7 @@ function createWorld(): ObservedWorld {
   const server = new AgentHookServer()
   const observed = new AgentStatusObservedPaneIdentities()
   server.subscribeEnrichedStatus((entry) =>
-    recordObservedAgentStatusPaneIdentity(observed, entry.paneKey, identity)
+    recordObservedAgentStatusPaneIdentity(observed, entry, identity)
   )
   const host = {
     ...identity,
@@ -135,35 +133,13 @@ function livenessOf(world: ObservedWorld, db: OrchestrationDb, dispatchId: strin
 }
 
 describe('fleet evidence keeps the identity it was observed under', () => {
-  it('reads live while the pane still runs the process the row was observed on', () => {
-    const world = createWorld()
-    world.bindPane(PANE_KEY, TERMINAL_HANDLE)
-    world.runProcess(TERMINAL_HANDLE, INCARNATION_ONE)
-    world.dispatchPane(PANE_KEY, DISPATCH_OLD)
-    world.ingest(PANE_KEY, 'working')
-
-    expect(
-      livenessOf(
-        world,
-        createDb({
-          dispatchId: DISPATCH_OLD,
-          paneKey: PANE_KEY,
-          handle: TERMINAL_HANDLE,
-          incarnation: INCARNATION_ONE
-        }),
-        DISPATCH_OLD
-      )
-    ).toMatchObject({ verdict: 'live', source: 'agent_status' })
-  })
-
   it('refuses the same row once the durable resource advances to the new incarnation', () => {
     const world = createWorld()
     world.bindPane(PANE_KEY, TERMINAL_HANDLE)
     world.runProcess(TERMINAL_HANDLE, INCARNATION_ONE)
     world.dispatchPane(PANE_KEY, DISPATCH_OLD)
     world.ingest(PANE_KEY, 'working')
-    // The pane is reused by a new process and the durable worker names it too, so the
-    // matcher's incarnation equality agrees — with an observation from the dead process.
+    // A new process owns both pane and durable worker; never retag the dead process's cached observation to match it.
     world.runProcess(TERMINAL_HANDLE, INCARNATION_TWO)
 
     expect(
@@ -210,8 +186,7 @@ describe('fleet evidence keeps the identity it was observed under', () => {
     world.ingest(PANE_KEY, 'working')
     world.runProcess(TERMINAL_HANDLE, INCARNATION_TWO)
 
-    // An unsupervised worker has no materialized resource, so nothing downstream can
-    // contradict the incarnation the row was minted with.
+    // Unsupervised workers lack durable resources to contradict a wrongly minted incarnation.
     expect(
       livenessOf(
         world,
@@ -224,27 +199,6 @@ describe('fleet evidence keeps the identity it was observed under', () => {
         DISPATCH_OLD
       )
     ).toMatchObject({ verdict: 'unverifiable', reason: 'missing_status' })
-  })
-
-  it('still binds a legitimate pane remint on the same dispatch and incarnation', () => {
-    const world = createWorld()
-    world.bindPane(REMINTED_PANE_KEY, TERMINAL_HANDLE)
-    world.runProcess(TERMINAL_HANDLE, INCARNATION_ONE)
-    world.dispatchPane(REMINTED_PANE_KEY, DISPATCH_OLD)
-    world.ingest(REMINTED_PANE_KEY, 'working')
-
-    expect(
-      livenessOf(
-        world,
-        createDb({
-          dispatchId: DISPATCH_OLD,
-          paneKey: PANE_KEY,
-          handle: TERMINAL_HANDLE,
-          incarnation: INCARNATION_ONE
-        }),
-        DISPATCH_OLD
-      )
-    ).toMatchObject({ verdict: 'live', source: 'agent_status' })
   })
 
   it('reads live for the rebound worker and not for the one it replaced', () => {

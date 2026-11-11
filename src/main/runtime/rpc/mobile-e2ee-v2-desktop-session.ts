@@ -5,14 +5,14 @@ import {
   type MobileE2EETransport,
   type MobileE2EEV2Hello,
   type MobileE2EEV2Ready
-} from '../../../shared/mobile-e2ee-v2-contract'
+} from '../../../shared/remote-runtime/e2ee/mobile-e2ee-v2-contract'
 import {
   openMobileE2EEV2Frame,
   sealMobileE2EEV2Frame
-} from '../../../shared/mobile-e2ee-v2-framing'
-import { deriveSharedKey } from './e2ee-crypto'
-import { deriveMobileE2EEV2KeySchedule } from './mobile-e2ee-v2-key-schedule'
-import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from '../../../shared/remote-runtime-memory-limits'
+} from '../../../shared/remote-runtime/e2ee/mobile-e2ee-v2-framing'
+import { deriveSharedKey } from '../../../shared/remote-runtime/e2ee/node/e2ee-crypto'
+import { deriveMobileE2EEV2KeySchedule } from '../../../shared/remote-runtime/e2ee/node/mobile-e2ee-v2-node-key-schedule'
+import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from '../../../shared/remote-runtime/remote-runtime-memory-limits'
 
 const MOBILE_E2EE_V2_FRAME_OVERHEAD_BYTES = 82
 export const MAX_MOBILE_E2EE_V2_TEXT_FRAME_BASE64_CHARACTERS =

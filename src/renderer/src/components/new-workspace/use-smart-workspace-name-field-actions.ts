@@ -2,22 +2,33 @@ import { useCallback } from 'react'
 import type React from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { lookupGitHubWorkItemByOwnerRepoForSource } from '@/lib/github-work-item-source-lookup'
+import { lookupGitHubWorkItemByOwnerRepoForSource } from '@/lib/work-items/github/github-work-item-source-lookup'
 import {
   applyWorkspaceEmojiSuggestion,
   type WorkspaceEmojiReplacement,
-  type WorkspaceEmojiSuggestion
-} from '@/lib/workspace-emoji-shortcodes'
+  type getActiveWorkspaceEmojiShortcode
+} from '@/lib/workspace/display/workspace-emoji-shortcodes'
+import type { StandardEmojiShortcodeEntry } from '../../../../shared/emoji-shortcode-catalog'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
-import { buildTaskSourceContextFromRepo } from '../../../../shared/task-source-context'
-import { bindJiraIssueSourceContext } from './use-jira-url-source'
-import type { RepoOption, RowEntry } from './smart-workspace-name-field-model'
+import { buildTaskSourceContextFromRepo } from '../../../../shared/work-items/task-source-context'
+import type {
+  RepoOption,
+  RowEntry,
+  SmartWorkspaceNameFieldProps
+} from './smart-workspace-name-field-model'
 import { getRepoSlugCached, sameSlug } from './smart-workspace-repo-slug'
-import type { useSmartWorkspaceNameFieldFoundation } from './use-smart-workspace-name-field-foundation'
-import type { useSmartWorkspaceNameFieldPresentation } from './use-smart-workspace-name-field-presentation'
+import type { useWorkItemSourceSearch } from './use-work-item-source-search'
+import type { useSmartWorkspaceFieldFocusControls } from './use-smart-workspace-field-focus-controls'
+import { useAppStore } from '@/store/index'
+import type { useWorkItemSourcePresentation } from './use-work-item-source-presentation'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
-type Foundation = ReturnType<typeof useSmartWorkspaceNameFieldFoundation>
-type Presentation = ReturnType<typeof useSmartWorkspaceNameFieldPresentation>
+type Foundation = ReturnType<typeof useWorkItemSourceSearch> &
+  SmartWorkspaceNameFieldProps &
+  ReturnType<typeof useSmartWorkspaceFieldFocusControls>
+type Presentation = ReturnType<typeof useWorkItemSourcePresentation> & {
+  activeEmojiShortcode: ReturnType<typeof getActiveWorkspaceEmojiShortcode>
+}
 
 function scheduleEmojiInputFocus(
   frameRef: React.RefObject<number | null>,
@@ -36,8 +47,7 @@ export function useSmartWorkspaceNameFieldActions(
   presentation: Presentation
 ) {
   const {
-    jiraConnectionStatus,
-    jiraSourceContext,
+    resolveRow,
     onBranchSelect,
     onGitHubItemSelect,
     onGitLabItemSelect,
@@ -59,10 +69,10 @@ export function useSmartWorkspaceNameFieldActions(
     setCrossRepoPrompt,
     selectedRepo,
     allowCrossRepoProjectAdd,
-    addRepo,
     repoSlugCacheRef
   } = foundation
-  const { selectJiraAccount, jiraBoundSourceContext, activeEmojiShortcode } = presentation
+  const addRepo = useAppStore((s) => s.addRepo)
+  const { selectJiraAccount, activeEmojiShortcode } = presentation
 
   const handleSelect = useCallback(
     (row: RowEntry) => {
@@ -80,15 +90,7 @@ export function useSmartWorkspaceNameFieldActions(
       } else if (row.kind === 'branch') {
         onBranchSelect(row.refName, row.localBranchName)
       } else if (row.kind === 'jira') {
-        const sites = jiraConnectionStatus?.sites ?? []
-        const site =
-          sites.find((candidate) => candidate.id === row.issue.siteId) ??
-          (sites.length === 1 ? sites[0] : null)
-        const sourceContext =
-          jiraBoundSourceContext ??
-          (jiraSourceContext && site
-            ? bindJiraIssueSourceContext(jiraSourceContext, site, row.issue)
-            : null)
+        const sourceContext = resolveRow(row)?.taskSourceContext
         if (!sourceContext) {
           toast.error(
             translate(
@@ -105,9 +107,7 @@ export function useSmartWorkspaceNameFieldActions(
       setOpen(false)
     },
     [
-      jiraBoundSourceContext,
-      jiraConnectionStatus?.sites,
-      jiraSourceContext,
+      resolveRow,
       onBranchSelect,
       onGitHubItemSelect,
       onGitLabItemSelect,
@@ -120,7 +120,7 @@ export function useSmartWorkspaceNameFieldActions(
   )
   const openSelectedSource = useCallback((): void => {
     if (selectedSource?.url) {
-      void window.api.shell.openUrl(selectedSource.url)
+      openAppHttpLink(selectedSource.url)
     }
   }, [selectedSource?.url])
   const applyEmojiReplacement = useCallback(
@@ -139,7 +139,7 @@ export function useSmartWorkspaceNameFieldActions(
     ]
   )
   const handleEmojiSelect = useCallback(
-    (suggestion: WorkspaceEmojiSuggestion): void => {
+    (suggestion: StandardEmojiShortcodeEntry): void => {
       if (!activeEmojiShortcode) {
         return
       }

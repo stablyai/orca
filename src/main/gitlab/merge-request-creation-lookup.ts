@@ -4,7 +4,7 @@ import {
 } from '../source-control/hosted-review-git-options'
 import {
   glabExecFileAsync,
-  glabHostnameArgs,
+  glabHostEnvOptions,
   glabRepoExecOptions,
   type ProjectRef
 } from './gl-utils'
@@ -65,12 +65,12 @@ export async function findOpenMRByHeadBase(args: {
       '--per-page',
       '2',
       '--output',
-      'json',
-      ...glabHostnameArgs(args.projectRef, args.connectionId)
+      'json'
     ],
     {
       ...glabRepoExecOptions(args.repoPath, args.connectionId),
-      ...(args.connectionId ? {} : getHostedReviewLocalGitOptions(args.options))
+      ...(args.connectionId ? {} : getHostedReviewLocalGitOptions(args.options)),
+      ...glabHostEnvOptions(args.projectRef, args.connectionId)
     }
   )
   const list = JSON.parse(stdout) as {

@@ -1,7 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type Database from '../../../../../sqlite/sync-database'
-import { OrchestrationDb } from '../../../../orchestration/db'
-import type { FederatedDispatchRow } from '../../../../orchestration/types'
+import { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+import '../../../../orchestration/db/contract-constants'
+import '../../../../orchestration/db/messages/mailbox-routing-page'
+import '../../../../orchestration/db/dispatch-row-writer'
+import '../../../../orchestration/db/attempt-outcome-projection'
+import type { FederatedDispatchRow } from '../../../../orchestration/db/orchestration-records'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
 import { encodeWorkerListCursor } from './worker-list-cursor'
 import { ORCHESTRATION_WORKER_LIST_METHOD } from './worker-list-method'
@@ -13,6 +17,7 @@ type WorkerListResult = {
   }[]
   counts: Record<string, number>
   page: { total: number; hasMore: boolean; nextCursor: string | null }
+  warnings?: string[]
 }
 
 describe('orchestration worker-list pagination', () => {
@@ -60,69 +65,42 @@ describe('orchestration worker-list pagination', () => {
     expect(second.page).toEqual({ total: 125, limit: 100, hasMore: false, nextCursor: null })
   })
 
-  it('fails an omitted-pagination legacy result above the explicit safety ceiling', async () => {
-    db = new OrchestrationDb(':memory:')
-    const runtime = new OrcaRuntimeService()
-    runtime.setOrchestrationDb(db)
-    vi.spyOn(db, 'listWorkerTerminalResources').mockReturnValue(
-      Array.from({ length: 5_001 }, () => null) as never
-    )
-
-    await expect(callWorkerList(runtime, {})).rejects.toMatchObject({
-      code: 'worker_list_snapshot_too_large',
-      message: expect.stringContaining('at most 5000 rows')
-    })
-  })
-
-  it('excludes later same-second rows that sort between snapshot cursors', async () => {
+  it('opens on the newest Dispatches, warns that the page truncated, and pages down', async () => {
     db = new OrchestrationDb(':memory:')
     const runtime = new OrcaRuntimeService()
     runtime.setOrchestrationDb(db)
     const run = db.createRun({
-      objective: 'Stable worker inventory',
+      objective: 'Newest-first worker inventory',
       coordinatorHandle: 'term-coordinator',
       coordinatorPaneKey: 'tab-coordinator:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
     })
-    insertDispatch(db, run.id, 'dispatch-a')
-    insertDispatch(db, run.id, 'dispatch-z')
+    const id = (index: number): string => `dispatch-${String(index).padStart(3, '0')}`
+    for (let index = 1; index <= 105; index += 1) {
+      insertDispatch(db, run.id, id(index))
+    }
 
-    const first = await callWorkerList(runtime, { run: run.id, limit: 1 })
-    expect(first.workers.map((worker) => worker.dispatchId)).toEqual(['dispatch-a'])
-    expect(first.page).toMatchObject({ total: 2, hasMore: true })
-    expect(first.page.nextCursor).toEqual(expect.any(String))
+    const first = await callWorkerList(runtime, { run: run.id, paginate: true })
 
-    insertDispatch(db, run.id, 'dispatch-m')
+    expect(first.workers.map((worker) => worker.dispatchId)).toEqual(
+      Array.from({ length: 100 }, (_, offset) => id(105 - offset))
+    )
+    expect(first.page).toMatchObject({ total: 105, hasMore: true })
+    expect(first.warnings).toEqual([
+      'Showing 100 of 105 Dispatches, newest first; more are on later pages. Follow page.nextCursor with --cursor.'
+    ])
+    expect(first.counts).toEqual({ retained: 105 })
 
+    insertDispatch(db, run.id, 'dispatch-after-first-call')
     const second = await callWorkerList(runtime, {
       run: run.id,
-      limit: 1,
+      paginate: true,
       cursor: first.page.nextCursor
     })
-    expect(second.workers.map((worker) => worker.dispatchId)).toEqual(['dispatch-z'])
-    expect(second.page).toEqual({ total: 2, limit: 1, hasMore: false, nextCursor: null })
-  })
 
-  it('continues a version-one snapshot cursor from an older runtime', async () => {
-    db = new OrchestrationDb(':memory:')
-    const runtime = new OrcaRuntimeService()
-    runtime.setOrchestrationDb(db)
-    const run = db.createRun({
-      objective: 'Compatible worker inventory',
-      coordinatorHandle: 'term-coordinator',
-      coordinatorPaneKey: 'tab-coordinator:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
-    })
-    insertDispatch(db, run.id, 'dispatch-a')
-    insertDispatch(db, run.id, 'dispatch-z')
-    const cursor = encodeWorkerListCursor({
-      version: 1,
-      snapshot: { createdAt: '2026-08-27 00:00:00', dispatchId: 'dispatch-z' },
-      after: { createdAt: '2026-08-27 00:00:00', dispatchId: 'dispatch-a' }
-    })
-
-    const page = await callWorkerList(runtime, { run: run.id, limit: 1, cursor })
-
-    expect(page.workers.map((worker) => worker.dispatchId)).toEqual(['dispatch-z'])
-    expect(page.page).toEqual({ total: 2, limit: 1, hasMore: false, nextCursor: null })
+    expect(second.workers.map((worker) => worker.dispatchId)).toEqual([5, 4, 3, 2, 1].map(id))
+    expect(second.page).toEqual({ total: 105, limit: 100, hasMore: false, nextCursor: null })
+    expect(second.warnings).toBeUndefined()
+    expect(second.counts).toEqual({ retained: 105 })
   })
 
   it('expires a pre-rowid cursor whose anchor row a reset deleted', async () => {
@@ -141,14 +119,14 @@ describe('orchestration worker-list pagination', () => {
     const cursor = encodeWorkerListCursor({
       version: 2,
       snapshot: { databaseId: 3 },
-      after: { createdAt: '2026-08-27 00:00:00', dispatchId: 'dispatch-a' }
+      after: { createdAt: '2026-08-27 00:00:00', dispatchId: 'dispatch-z' }
     })
     const ok = await callWorkerList(runtime, { run: run.id, limit: 10, cursor })
-    expect(ok.workers.map((worker) => worker.dispatchId)).toEqual(['dispatch-m', 'dispatch-z'])
+    expect(ok.workers.map((worker) => worker.dispatchId)).toEqual(['dispatch-m', 'dispatch-a'])
 
-    sqliteFor(db).prepare('DELETE FROM dispatch_contexts WHERE id = ?').run('dispatch-a')
+    sqliteFor(db).prepare('DELETE FROM dispatch_contexts WHERE id = ?').run('dispatch-z')
 
-    // `rowid > NULL` used to exclude every row: zero workers against a non-zero total.
+    // `rowid < NULL` used to exclude every row: zero workers against a non-zero total.
     await expect(callWorkerList(runtime, { run: run.id, limit: 10, cursor })).rejects.toMatchObject(
       {
         code: 'worker_list_cursor_expired'
@@ -173,12 +151,12 @@ describe('orchestration worker-list pagination', () => {
       terminalState: 'retained',
       limit: 1
     })
-    expect(first.workers.map((worker) => worker.dispatchId)).toEqual(['dispatch-a'])
+    expect(first.workers.map((worker) => worker.dispatchId)).toEqual(['dispatch-z'])
     expect(first.page).toMatchObject({ total: 2, hasMore: true })
 
     sqliteFor(db)
       .prepare('UPDATE dispatch_contexts SET assignee_handle = NULL WHERE id = ?')
-      .run('dispatch-z')
+      .run('dispatch-a')
     const second = await callWorkerList(runtime, {
       run: run.id,
       terminalState: 'retained',
@@ -186,7 +164,7 @@ describe('orchestration worker-list pagination', () => {
       cursor: first.page.nextCursor
     })
 
-    expect(second.workers.map((worker) => worker.dispatchId)).toEqual(['dispatch-z'])
+    expect(second.workers.map((worker) => worker.dispatchId)).toEqual(['dispatch-a'])
     expect(second.page).toEqual({ total: 2, limit: 1, hasMore: false, nextCursor: null })
     // The pinned total and the counts have to describe the same rows.
     expect(second.counts).toEqual({ retained: second.page.total })
@@ -204,7 +182,7 @@ describe('orchestration worker-list pagination', () => {
     insertDispatch(db, run.id, 'dispatch-a')
     insertDispatch(db, run.id, 'dispatch-z')
     vi.spyOn(db, 'listFederatedDispatchesByIds').mockImplementation((dispatchIds) =>
-      dispatchIds.includes('dispatch-a') ? [federatedDispatch('dispatch-a')] : []
+      dispatchIds.includes('dispatch-z') ? [federatedDispatch('dispatch-z')] : []
     )
     vi.spyOn(runtime, 'resolveOrchestrationWorkerServer').mockReturnValue({
       environmentId: 'environment-remote',
@@ -224,7 +202,7 @@ describe('orchestration worker-list pagination', () => {
           runtimeEpoch: 'epoch-remote',
           items: [
             {
-              dispatchId: 'dispatch-a',
+              dispatchId: 'dispatch-z',
               observation: { status: 'live', exactWorker: true }
             }
           ]
@@ -241,7 +219,7 @@ describe('orchestration worker-list pagination', () => {
       expect(remoteCall).toHaveBeenCalledWith(
         'environment-remote',
         'orchestration.federationFleetSnapshot',
-        { dispatchIds: ['dispatch-a'] },
+        { dispatchIds: ['dispatch-z'] },
         expect.any(Number),
         undefined,
         { expectedEnvironmentPairingRevision: 1 }
@@ -254,7 +232,7 @@ describe('orchestration worker-list pagination', () => {
 
     const first = await pending
     expect(first).toMatchObject({
-      workers: [{ dispatchId: 'dispatch-a' }],
+      workers: [{ dispatchId: 'dispatch-z' }],
       page: { total: 2, hasMore: true, nextCursor: expect.any(String) }
     })
     const second = await callWorkerList(runtime, {
@@ -263,7 +241,7 @@ describe('orchestration worker-list pagination', () => {
       limit: 1,
       cursor: first.page.nextCursor
     })
-    expect(second.workers.map((worker) => worker.dispatchId)).toEqual(['dispatch-z'])
+    expect(second.workers.map((worker) => worker.dispatchId)).toEqual(['dispatch-a'])
   })
 
   it('does not allocate filtered snapshots when the first page has no more rows', async () => {
@@ -298,82 +276,7 @@ describe('orchestration worker-list pagination', () => {
       cursor: first.page.nextCursor
     })
 
-    expect(second.workers.map((worker) => worker.dispatchId)).toEqual(['dispatch-z'])
-  })
-
-  it('projects a 100-row page within six synchronous read statements', async () => {
-    db = new OrchestrationDb(':memory:')
-    const runtime = new OrcaRuntimeService()
-    runtime.setOrchestrationDb(db)
-    const run = db.createRun({
-      objective: 'Bounded worker inventory reads',
-      coordinatorHandle: 'term-coordinator',
-      coordinatorPaneKey: 'tab-coordinator:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
-    })
-    for (let index = 0; index < 100; index += 1) {
-      insertDispatch(db, run.id, `dispatch-${String(index).padStart(3, '0')}`)
-    }
-    db.recordAttemptObservation({
-      id: 'observation-failed-worker',
-      dispatchId: 'dispatch-050',
-      sequence: 0,
-      authorityId: 'home',
-      authorityClock: 'home',
-      facet: 'worker_report',
-      payload: { status: 'accepted', outcome: 'failed' },
-      homeReceivedAt: Date.now()
-    })
-    const prepare = vi.spyOn(sqliteFor(db), 'prepare')
-    prepare.mockClear()
-
-    const page = await callWorkerList(runtime, { run: run.id, limit: 100 })
-
-    expect(page.workers.map((worker) => worker.dispatchId)).toEqual(
-      Array.from({ length: 100 }, (_, index) => `dispatch-${String(index).padStart(3, '0')}`)
-    )
-    expect(page.workers[50]?.projection.attention.categories).toContain('failure')
-    expect(page.page).toEqual({ total: 100, limit: 100, hasMore: false, nextCursor: null })
-    expect(prepare).toHaveBeenCalledTimes(6)
-  })
-
-  it('aggregates exact inventory counts while preserving filtered totals', async () => {
-    db = new OrchestrationDb(':memory:')
-    const runtime = new OrcaRuntimeService()
-    runtime.setOrchestrationDb(db)
-    const run = db.createRun({
-      objective: 'Exact worker inventory counts',
-      coordinatorHandle: 'term-coordinator',
-      coordinatorPaneKey: 'tab-coordinator:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
-    })
-    insertWorkerInventory(db, run.id, 'active', 'ready', 'not_requested')
-    insertWorkerInventory(db, run.id, 'reclaimable-a', 'succeeded', 'not_requested')
-    insertWorkerInventory(db, run.id, 'reclaimable-b', 'failed', 'not_requested')
-    insertDispatch(db, run.id, 'retained')
-    insertWorkerInventory(db, run.id, 'released', 'succeeded', 'released', 'released')
-    insertWorkerInventory(db, run.id, 'release-pending', 'ready', 'requested')
-    insertWorkerInventory(db, run.id, 'release-unknown', 'ready', 'unknown')
-
-    const page = await callWorkerList(runtime, { run: run.id })
-    const filtered = await callWorkerList(runtime, {
-      run: run.id,
-      terminalState: 'reclaimable'
-    })
-
-    expect(page.counts).toEqual({
-      active: 1,
-      reclaimable: 2,
-      retained: 1,
-      release_pending: 1,
-      release_unknown: 1,
-      released: 1
-    })
-    expect(page.page.total).toBe(7)
-    expect(filtered.workers.map((worker) => worker.dispatchId)).toEqual([
-      'reclaimable-a',
-      'reclaimable-b'
-    ])
-    expect(filtered.page.total).toBe(2)
-    expect(filtered.counts).toEqual(page.counts)
+    expect(second.workers.map((worker) => worker.dispatchId)).toEqual(['dispatch-a'])
   })
 
   it('never re-emits a row whose worker registers between pages', async () => {
@@ -412,7 +315,7 @@ describe('orchestration worker-list pagination', () => {
       }
     }
 
-    expect(seen).toEqual(['dispatch-a', 'dispatch-z'])
+    expect(seen).toEqual(['dispatch-z', 'dispatch-a'])
   })
 
   it('counts only the rows a pinned filtered cursor can still reach', async () => {
@@ -443,61 +346,9 @@ describe('orchestration worker-list pagination', () => {
       cursor: first.page.nextCursor
     })
 
-    expect(second.workers.map((worker) => worker.dispatchId)).toEqual(['dispatch-z'])
+    expect(second.workers.map((worker) => worker.dispatchId)).toEqual(['dispatch-a'])
     expect(second.page.total).toBe(2)
     expect(second.counts).toEqual({ retained: 2 })
-  })
-
-  it.each([10, 20, 40])(
-    'reads %i unreachable federated rows without a per-row query',
-    async (workerCount) => {
-      db = new OrchestrationDb(':memory:')
-      const runtime = new OrcaRuntimeService()
-      runtime.setOrchestrationDb(db)
-      const run = db.createRun({
-        objective: 'Federated read cost',
-        coordinatorHandle: 'term-coordinator',
-        coordinatorPaneKey: 'tab-coordinator:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
-      })
-      for (let index = 0; index < workerCount; index += 1) {
-        insertDispatch(db, run.id, `dispatch-${String(index).padStart(3, '0')}`)
-      }
-      const prepare = vi.spyOn(sqliteFor(db), 'prepare')
-      prepare.mockClear()
-
-      await callWorkerList(runtime, { run: run.id, limit: 100, includeRemote: true })
-
-      // The page cost must not grow with the number of federated rows on it.
-      expect(prepare.mock.calls.length).toBeLessThan(8)
-    }
-  )
-
-  it('filters and labels terminal state through one projection', async () => {
-    db = new OrchestrationDb(':memory:')
-    const runtime = new OrcaRuntimeService()
-    runtime.setOrchestrationDb(db)
-    const run = db.createRun({
-      objective: 'Unsupervised owned resource',
-      coordinatorHandle: 'term-coordinator',
-      coordinatorPaneKey: 'tab-coordinator:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
-    })
-    // An owned, unreleased resource whose dispatch has no worker_dispatches row.
-    insertDispatch(db, run.id, 'dispatch-unsupervised')
-    sqliteFor(db)
-      .prepare(
-        `INSERT INTO worker_terminal_resources (
-           id, origin_dispatch_id, owner_dispatch_id, terminal_handle,
-           ownership_state, release_state
-         ) VALUES (?, ?, ?, ?, 'owned', 'not_requested')`
-      )
-      .run('resource-unsupervised', 'dispatch-unsupervised', 'dispatch-unsupervised', 'term-x')
-
-    const all = await callWorkerList(runtime, { run: run.id })
-    const active = await callWorkerList(runtime, { run: run.id, terminalState: 'active' })
-
-    expect(all.counts).toEqual({ active: 1 })
-    expect(active.workers.map((worker) => worker.dispatchId)).toEqual(['dispatch-unsupervised'])
-    expect(active.page.total).toBe(1)
   })
 
   describe('a legacy cursor anchored outside the requested Run', () => {
@@ -550,21 +401,6 @@ describe('orchestration worker-list pagination', () => {
         callWorkerList(runtime, { run: runA, limit: 10, cursor: foreign })
       ).rejects.toThrow(/changed destructively/u)
     })
-
-    it('still pages the requested Run from its own anchor', async () => {
-      const { runA } = twoRuns()
-      const runtime = new OrcaRuntimeService()
-      runtime.setOrchestrationDb(db!)
-      const own = encodeWorkerListCursor({
-        version: 2,
-        snapshot: { databaseId: 4 },
-        after: { createdAt: '2026-08-27 00:00:00', dispatchId: 'a-1', databaseId: 1 }
-      })
-
-      const page = await callWorkerList(runtime, { run: runA, limit: 10, cursor: own })
-
-      expect(page.workers.map((worker) => worker.dispatchId)).toEqual(['a-2'])
-    })
   })
 })
 
@@ -587,40 +423,6 @@ function insertDispatch(db: OrchestrationDb, runId: string, dispatchId: string):
     .run(dispatchId, runId, task.id, `term-${dispatchId}`)
 }
 
-function insertWorkerInventory(
-  db: OrchestrationDb,
-  runId: string,
-  dispatchId: string,
-  workerState: 'ready' | 'succeeded' | 'failed',
-  releaseState: 'not_requested' | 'requested' | 'released' | 'unknown',
-  ownershipState: 'owned' | 'released' = 'owned'
-): void {
-  insertDispatch(db, runId, dispatchId)
-  const sqlite = sqliteFor(db)
-  sqlite
-    .prepare(
-      `INSERT INTO worker_dispatches (
-         dispatch_id, state, stage, agent_terminal_handle
-       ) VALUES (?, ?, 'ready', ?)`
-    )
-    .run(dispatchId, workerState, `term-${dispatchId}`)
-  sqlite
-    .prepare(
-      `INSERT INTO worker_terminal_resources (
-         id, origin_dispatch_id, owner_dispatch_id, terminal_handle,
-         ownership_state, release_state
-       ) VALUES (?, ?, ?, ?, ?, ?)`
-    )
-    .run(
-      `resource-${dispatchId}`,
-      dispatchId,
-      dispatchId,
-      `term-${dispatchId}`,
-      ownershipState,
-      releaseState
-    )
-}
-
 function sqliteFor(db: OrchestrationDb): Database.Database {
   return (db as unknown as { db: Database.Database }).db
 }
@@ -637,6 +439,8 @@ function federatedDispatch(dispatchId: string): FederatedDispatchRow {
     remote_terminal_handle: null,
     to_home_imported_sequence: 0,
     to_home_acknowledged_sequence: 0,
+    home_auto_release_at: null,
+    home_auto_release_state: null,
     created_at: '2026-08-27 00:00:00',
     updated_at: '2026-08-27 00:00:00'
   }

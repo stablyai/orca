@@ -1,24 +1,61 @@
+import { requireGitHubTaskTarget, sameGitHubTask } from './github-task-identity'
+import { withGitHubTargetOperation } from './github-work-item-operation'
 import type { ProjectReviewCheckActionsModel } from './use-mobile-tasks-project-review-check-actions'
 import { useCallback } from './mobile-tasks-dependencies'
 import {
   type DetailComment,
   type GitHubDetailFile,
-  type GitHubPRFileContents,
   type GitHubProjectRow,
   type HostedReviewMergeMethod,
   type TaskItem,
-  isSuccess,
   projectRowGitHubRepository
 } from './mobile-tasks-legacy-foundation'
+import {
+  githubIssueUpdate,
+  githubPullRequestFileContentsRead,
+  githubPullRequestMerge,
+  githubPullRequestStateUpdate
+} from './mobile-task-item-state-operations'
+import { githubReviewCommentWrite } from './mobile-task-item-comment-operations'
 
-export function useMobileTasksProjectFileMergeActions(model: ProjectReviewCheckActionsModel) {
+export type ProjectFileMergeActionsInput = Pick<
+  ProjectReviewCheckActionsModel,
+  | 'claimPublication'
+  | 'actionItem'
+  | 'detailPayload'
+  | 'activeGitHubProjectHost'
+  | 'client'
+  | 'expandedPrFilePath'
+  | 'findProjectRowRepo'
+  | 'captureTaskListRefresh'
+  | 'prFileCommentDrafts'
+  | 'prFileContents'
+  | 'projectMutating'
+  | 'projectRowDetail'
+  | 'setActionItem'
+  | 'setError'
+  | 'setExpandedPrFilePath'
+  | 'setGithubProjectTable'
+  | 'tryBeginMutation'
+  | 'setPrFileCommentDrafts'
+  | 'setPrFileContents'
+  | 'beginFileLoad'
+  | 'setProjectMutating'
+  | 'setProjectRowDetail'
+  | 'setProjectRowDetailError'
+  | 'setProjectRowItem'
+>
+
+export function useMobileTasksProjectFileMergeActions<Model extends ProjectFileMergeActionsInput>(
+  model: Model
+) {
   const {
+    claimPublication,
     activeGitHubProjectHost,
     client,
     expandedPrFilePath,
     findProjectRowRepo,
-    loadTasks,
-    mutatingStatus,
+    captureTaskListRefresh,
     prFileCommentDrafts,
     prFileContents,
     projectMutating,
@@ -27,25 +64,17 @@ export function useMobileTasksProjectFileMergeActions(model: ProjectReviewCheckA
     setError,
     setExpandedPrFilePath,
     setGithubProjectTable,
-    setMutatingStatus,
+    tryBeginMutation,
     setPrFileCommentDrafts,
     setPrFileContents,
-    setPrFileLoadingPath,
+    beginFileLoad,
     setProjectMutating,
     setProjectRowDetail,
     setProjectRowDetailError,
     setProjectRowItem
   } = model
-  const toggleProjectGitHubFileExpansion = useCallback(
+  const loadProjectGitHubFileContents = useCallback(
     async (row: GitHubProjectRow, file: GitHubDetailFile): Promise<void> => {
-      if (expandedPrFilePath === file.path) {
-        setExpandedPrFilePath(null)
-        return
-      }
-      setExpandedPrFilePath(file.path)
-      if (prFileContents[file.path]) {
-        return
-      }
       const repo = findProjectRowRepo(row)
       if (
         !client ||
@@ -59,11 +88,15 @@ export function useMobileTasksProjectFileMergeActions(model: ProjectReviewCheckA
         setProjectRowDetailError('Unable to load file contents for this pull request.')
         return
       }
-      setPrFileLoadingPath(file.path)
+      const request = beginFileLoad(
+        file.path,
+        claimPublication(null),
+        () => void loadProjectGitHubFileContents(row, file)
+      )
       setProjectRowDetailError('')
       try {
-        const response = await client.sendRequest(
-          'github.prFileContents',
+        const reply = await githubPullRequestFileContentsRead.request(
+          client,
           {
             repo: `id:${repo.id}`,
             prNumber: row.content.number,
@@ -76,29 +109,44 @@ export function useMobileTasksProjectFileMergeActions(model: ProjectReviewCheckA
           },
           { timeoutMs: 30_000 }
         )
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
+        const contents = githubPullRequestFileContentsRead.interpret(reply)
+        if (request.canPublish()) {
+          setPrFileContents((current) => ({ ...current, [file.path]: contents }))
         }
-        setPrFileContents((current) => ({
-          ...current,
-          [file.path]: response.result as GitHubPRFileContents
-        }))
       } catch (err) {
+        if (!request.canPublish()) {
+          return
+        }
         setProjectRowDetailError(
           err instanceof Error ? err.message : 'Failed to load file contents'
         )
       } finally {
-        setPrFileLoadingPath(null)
+        request.finish()
       }
     },
     [
+      beginFileLoad,
+      claimPublication,
       activeGitHubProjectHost,
       client,
-      expandedPrFilePath,
       findProjectRowRepo,
-      prFileContents,
       projectRowDetail
     ]
+  )
+
+  const toggleProjectGitHubFileExpansion = useCallback(
+    async (row: GitHubProjectRow, file: GitHubDetailFile): Promise<void> => {
+      if (expandedPrFilePath === file.path) {
+        setExpandedPrFilePath(null)
+        return
+      }
+      setExpandedPrFilePath(file.path)
+      if (prFileContents[file.path]) {
+        return
+      }
+      await loadProjectGitHubFileContents(row, file)
+    },
+    [expandedPrFilePath, loadProjectGitHubFileContents, prFileContents]
   )
 
   const addProjectGitHubFileReviewComment = useCallback(
@@ -125,8 +173,8 @@ export function useMobileTasksProjectFileMergeActions(model: ProjectReviewCheckA
       setProjectMutating(true)
       setProjectRowDetailError('')
       try {
-        const response = await client.sendRequest(
-          'github.addPRReviewComment',
+        const reply = await githubReviewCommentWrite.request(
+          client,
           {
             repo: `id:${repo.id}`,
             prNumber: row.content.number,
@@ -138,14 +186,7 @@ export function useMobileTasksProjectFileMergeActions(model: ProjectReviewCheckA
           },
           { timeoutMs: 30_000 }
         )
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const result = response.result as {
-          ok?: boolean
-          error?: string
-          comment?: DetailComment
-        }
+        const result = githubReviewCommentWrite.interpret(reply)
         if (result.ok === false) {
           throw new Error(result.error ?? 'Failed to add review comment')
         }
@@ -203,8 +244,8 @@ export function useMobileTasksProjectFileMergeActions(model: ProjectReviewCheckA
       setProjectMutating(true)
       setProjectRowDetailError('')
       try {
-        const response = await client.sendRequest(
-          'github.mergePR',
+        const reply = await githubPullRequestMerge.request(
+          client,
           {
             repo: `id:${repo.id}`,
             prNumber: row.content.number,
@@ -213,10 +254,7 @@ export function useMobileTasksProjectFileMergeActions(model: ProjectReviewCheckA
           },
           { timeoutMs: 60_000 }
         )
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const result = response.result as { ok?: boolean; error?: string }
+        const result = githubPullRequestMerge.interpret(reply)
         if (result.ok === false) {
           throw new Error(result.error ?? 'Failed to merge pull request')
         }
@@ -250,43 +288,66 @@ export function useMobileTasksProjectFileMergeActions(model: ProjectReviewCheckA
 
   const toggleGitHubStatus = useCallback(
     async (item: Extract<TaskItem, { provider: 'github' }>): Promise<void> => {
-      if (!client || mutatingStatus || item.source.state === 'merged') {
+      if (!client || item.source.state === 'merged') {
         return
       }
-      setMutatingStatus(true)
+      const finish = tryBeginMutation()
+      if (!finish) {
+        return
+      }
+      const refreshList = captureTaskListRefresh()
       setError('')
       const nextState = item.source.state === 'closed' ? 'open' : 'closed'
+      const isCurrent = claimPublication(item)
       try {
-        const method = item.source.type === 'issue' ? 'github.updateIssue' : 'github.updatePRState'
-        const params =
+        const target = requireGitHubTaskTarget(item.source)
+        const updated =
           item.source.type === 'issue'
-            ? {
-                repo: `id:${item.source.repoId}`,
-                number: item.source.number,
-                updates: { state: nextState }
-              }
-            : {
-                repo: `id:${item.source.repoId}`,
-                prNumber: item.source.number,
-                updates: { state: nextState }
-              }
-        const response = await client.sendRequest(method, params)
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
+            ? githubIssueUpdate.interpret(
+                await withGitHubTargetOperation({
+                  client,
+                  params: { repo: `id:${item.source.repoId}` },
+                  ownerRepo: target.repository,
+                  issueTarget: target,
+                  send: (selected, exact, options) =>
+                    githubIssueUpdate.request(
+                      selected,
+                      {
+                        repo: `id:${item.source.repoId}`,
+                        number: item.source.number,
+                        updates: { state: nextState },
+                        ...exact
+                      },
+                      options
+                    )
+                })
+              )
+            : githubPullRequestStateUpdate.interpret(
+                await githubPullRequestStateUpdate.request(client, {
+                  repo: `id:${item.source.repoId}`,
+                  prNumber: item.source.number,
+                  prRepo: target.repository,
+                  updates: { state: nextState }
+                })
+              )
+        if (updated.ok === false) {
+          throw new Error(updated.error ?? 'Failed to update GitHub status')
         }
-        const result = response.result as { ok?: boolean; error?: string }
-        if (result.ok === false) {
-          throw new Error(result.error ?? 'Failed to update GitHub status')
+        refreshList()
+        if (!isCurrent()) {
+          return
         }
-        setActionItem(null)
-        await loadTasks({ silent: true })
+        setActionItem((current) => (sameGitHubTask(current, item) ? null : current))
       } catch (err) {
+        if (!isCurrent()) {
+          return
+        }
         setError(err instanceof Error ? err.message : 'Failed to update status')
       } finally {
-        setMutatingStatus(false)
+        finish()
       }
     },
-    [client, loadTasks, mutatingStatus]
+    [claimPublication, client, captureTaskListRefresh, tryBeginMutation]
   )
   return Object.assign(model, {
     toggleProjectGitHubFileExpansion,
@@ -296,4 +357,5 @@ export function useMobileTasksProjectFileMergeActions(model: ProjectReviewCheckA
   })
 }
 
-export type ProjectFileMergeActionsModel = ReturnType<typeof useMobileTasksProjectFileMergeActions>
+export type ProjectFileMergeActionsModel = ProjectReviewCheckActionsModel &
+  ReturnType<typeof useMobileTasksProjectFileMergeActions>

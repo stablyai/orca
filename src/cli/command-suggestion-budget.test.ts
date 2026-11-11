@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import * as distance from '../shared/edit-distance'
 import { suggestCommands, unknownFlagData } from './command-suggestion'
 import type { CommandSpec } from './command-spec'
+import { COMMAND_SPECS } from './specs'
 
 const specs: CommandSpec[] = [
   { path: ['list'], summary: '', usage: '', allowedFlags: [] },
@@ -14,6 +15,12 @@ describe('suggestion distance work', () => {
   it('does no distance calculations for a long command, including destructive intent', () => {
     const spy = vi.spyOn(distance, 'levenshtein')
     expect(suggestCommands(specs, ['x'.repeat(32_768)])).toEqual([])
+    expect(spy).not.toHaveBeenCalled()
+  })
+
+  it('keeps the live destructive alias registry out of long-input distance work', () => {
+    const spy = vi.spyOn(distance, 'levenshtein')
+    expect(suggestCommands(COMMAND_SPECS, ['emulator', 'x'.repeat(32_768)])).toEqual([])
     expect(spy).not.toHaveBeenCalled()
   })
 

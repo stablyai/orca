@@ -38,7 +38,7 @@ describe('CustomAddressDialog', () => {
 
     await waitFor(() => expect(onConfirm).toHaveBeenCalledWith('large.example'))
     expect(onOpenChange).not.toHaveBeenCalled()
-    expect(screen.getByRole('alert').textContent).toContain('could not produce')
+    expect((await screen.findByRole('alert')).textContent).toContain('could not produce')
 
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
     expect(onOpenChange).toHaveBeenCalledWith(false)

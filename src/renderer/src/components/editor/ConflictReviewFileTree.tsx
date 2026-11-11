@@ -1,17 +1,18 @@
 import React from 'react'
-import { ChevronDown, Folder, FolderOpen, PanelLeftClose } from 'lucide-react'
+import { ChevronDown, PanelLeftClose } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { getFileTypeIcon } from '@/lib/file-type-icons'
-import { cn } from '@/lib/utils'
+import { FileTypeIcon, FolderIcon } from '@/components/FileTypeIcon'
+import { cn } from '@/lib/class-names'
 import {
   buildSourceControlTree,
   compactSourceControlTree,
   flattenSourceControlTree,
   type SourceControlTreeNode
-} from '@/components/right-sidebar/source-control-tree'
-import type { ConflictReviewEntry } from '@/store/slices/editor'
-import type { GitStatusEntry } from '../../../../shared/git-status-types'
-import { translate } from '@/i18n/i18n'
+} from '../../../../shared/source-control/listing/source-control-tree'
+import { VirtualizedList } from '@/components/virtualized-list'
+import type { ConflictReviewEntry } from '../../../../shared/editor-tab-view-types'
+import type { GitStatusEntry } from '../../../../shared/git/status/git-status-types'
+import { useTranslate } from '@/i18n/use-translate'
 
 type ConflictReviewTreeEntry = ConflictReviewEntry & {
   liveEntry?: GitStatusEntry
@@ -22,15 +23,15 @@ type ConflictReviewTreeNode = SourceControlTreeNode<ConflictReviewTreeEntry, 'co
 const CONFLICT_REVIEW_TREE_INDENT_PX = 12
 const CONFLICT_REVIEW_DIRECTORY_PADDING_PX = 8
 const CONFLICT_REVIEW_FILE_PADDING_PX = 20
+// Status badges need one extra pixel beyond the directory rows’ 24px height.
+export const CONFLICT_REVIEW_ROW_HEIGHT_PX = 25
 
 function buildConflictReviewRows(
   entries: readonly ConflictReviewTreeEntry[],
   collapsedDirectoryKeys: ReadonlySet<string>
 ): ConflictReviewTreeNode[] {
-  const roots = compactSourceControlTree(
-    buildSourceControlTree('conflict-review', [...entries])
-  ) as ConflictReviewTreeNode[]
-  return flattenSourceControlTree(roots, collapsedDirectoryKeys) as ConflictReviewTreeNode[]
+  const roots = compactSourceControlTree(buildSourceControlTree('conflict-review', [...entries]))
+  return flattenSourceControlTree(roots, collapsedDirectoryKeys)
 }
 
 export function ConflictReviewFileTree({
@@ -46,6 +47,7 @@ export function ConflictReviewFileTree({
   selectedPath: string | null
   onOpenEntry: (entry: GitStatusEntry) => void
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const [collapsedDirectoryKeys, setCollapsedDirectoryKeys] = React.useState<Set<string>>(
     () => new Set()
   )
@@ -53,6 +55,8 @@ export function ConflictReviewFileTree({
     () => buildConflictReviewRows(entries, collapsedDirectoryKeys),
     [collapsedDirectoryKeys, entries]
   )
+  // Use state: a ref is unattached when the virtualizer first observes.
+  const [listScrollElement, setListScrollElement] = React.useState<HTMLDivElement | null>(null)
   const toggleDirectory = React.useCallback((key: string) => {
     setCollapsedDirectoryKeys((prev) => {
       const next = new Set(prev)
@@ -73,7 +77,7 @@ export function ConflictReviewFileTree({
     <aside className="flex w-72 shrink-0 flex-col border-r border-border bg-background">
       <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-1.5">
         <div className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-          {translate('auto.components.editor.ConflictReviewFileTree.99496bab6e', 'Files')}
+          {t('auto.components.editor.ConflictReviewFileTree.99496bab6e', 'Files')}
         </div>
         <div className="flex items-center gap-2">
           <div className="text-[11px] text-muted-foreground tabular-nums">{entries.length}</div>
@@ -81,7 +85,7 @@ export function ConflictReviewFileTree({
             type="button"
             variant="ghost"
             size="icon-xs"
-            aria-label={translate(
+            aria-label={t(
               'auto.components.editor.ConflictReviewFileTree.a54551c5a6',
               'Collapse file tree'
             )}
@@ -91,25 +95,31 @@ export function ConflictReviewFileTree({
           </Button>
         </div>
       </div>
-      <div className="min-h-0 flex-1 overflow-auto py-1 scrollbar-sleek">
+      <div ref={setListScrollElement} className="min-h-0 flex-1 overflow-auto py-1 scrollbar-sleek">
         {rows.length === 0 ? (
           <div className="px-3 py-6 text-center text-xs text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.editor.ConflictReviewFileTree.3449521a8c',
               'No conflicts in this snapshot.'
             )}
           </div>
         ) : (
-          rows.map((node) => (
-            <ConflictReviewFileTreeRow
-              key={node.key}
-              node={node}
-              isCollapsed={collapsedDirectoryKeys.has(node.key)}
-              isSelected={node.type === 'file' && node.entry.path === selectedPath}
-              onToggleDirectory={toggleDirectory}
-              onOpenEntry={onOpenEntry}
-            />
-          ))
+          <VirtualizedList
+            rows={rows}
+            scrollElement={listScrollElement}
+            estimateRowHeightPx={CONFLICT_REVIEW_ROW_HEIGHT_PX}
+            getRowKey={(node) => node.key}
+            renderRow={(node) => (
+              <ConflictReviewFileTreeRow
+                key={node.key}
+                node={node}
+                isCollapsed={collapsedDirectoryKeys.has(node.key)}
+                isSelected={node.type === 'file' && node.entry.path === selectedPath}
+                onToggleDirectory={toggleDirectory}
+                onOpenEntry={onOpenEntry}
+              />
+            )}
+          />
         )}
       </div>
     </aside>
@@ -129,6 +139,7 @@ function ConflictReviewFileTreeRow({
   onToggleDirectory: (key: string) => void
   onOpenEntry: (entry: GitStatusEntry) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   if (node.type === 'directory') {
     return (
       <button
@@ -143,11 +154,7 @@ function ConflictReviewFileTreeRow({
         <ChevronDown
           className={cn('size-3 shrink-0 transition-transform', isCollapsed && '-rotate-90')}
         />
-        {isCollapsed ? (
-          <Folder className="size-3 shrink-0" />
-        ) : (
-          <FolderOpen className="size-3 shrink-0" />
-        )}
+        <FolderIcon folderPath={node.name} open={!isCollapsed} className="size-3 shrink-0" />
         <span className="min-w-0 flex-1 truncate">{node.name}</span>
         <span className="w-4 shrink-0 text-center text-[10px] font-bold tabular-nums text-muted-foreground/80">
           {node.fileCount}
@@ -155,8 +162,6 @@ function ConflictReviewFileTreeRow({
       </button>
     )
   }
-
-  const FileIcon = getFileTypeIcon(node.entry.path)
   const liveEntry = node.entry.liveEntry
   const isStillUnresolved = liveEntry?.conflictStatus === 'unresolved'
 
@@ -178,7 +183,8 @@ function ConflictReviewFileTreeRow({
         }
       }}
     >
-      {React.createElement(FileIcon, {
+      {React.createElement(FileTypeIcon, {
+        filePath: node.entry.path,
         className: cn('size-3.5 shrink-0', isStillUnresolved && 'text-destructive')
       })}
       <span className="min-w-0 flex-1 truncate">
@@ -193,10 +199,10 @@ function ConflictReviewFileTreeRow({
         )}
       >
         {isStillUnresolved
-          ? translate('auto.components.editor.ConflictReviewFileTree.69d4e210bb', 'Unresolved')
+          ? t('auto.components.editor.ConflictReviewFileTree.69d4e210bb', 'Unresolved')
           : liveEntry
-            ? translate('auto.components.editor.ConflictReviewFileTree.8528a5eaf5', 'Resolved')
-            : translate('auto.components.editor.ConflictReviewFileTree.496e28a932', 'Gone')}
+            ? t('auto.components.editor.ConflictReviewFileTree.8528a5eaf5', 'Resolved')
+            : t('auto.components.editor.ConflictReviewFileTree.496e28a932', 'Gone')}
       </span>
     </button>
   )

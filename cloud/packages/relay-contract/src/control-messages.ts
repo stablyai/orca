@@ -44,12 +44,27 @@ export const HostChallengeAckSchema = z
   .object({ challengeId: OpaqueIdSchema, proofB64: Base6432ByteSchema })
   .strict()
 
-// Advertised on the control upgrade rather than in host-hello: HostHelloSchema
-// is strict, so a new hello key is refused by every already-deployed cell.
+// Advertise via upgrade header: strict deployed HostHelloSchema rejects new hello keys.
 export const RELAY_HOST_CAPABILITIES_HEADER = 'x-orca-host-capabilities'
-// The host accepts kind/relayDeviceId on a pendingConns entry. A host that does
-// not advertise this parses those entries strictly and would drop the whole ack.
+// Echo director assignment lease on upgrade; older cells ignore unknown headers, current cells shadow-check.
+export const RELAY_ASSIGNMENT_LEASE_HEADER = 'x-orca-relay-assignment-lease'
+// Advertise before sending pendingConns details: legacy strict parsers would reject the entire ack.
 export const RELAY_HOST_CAPABILITY_PENDING_CONN_DETAILS = 'pending-conn-details'
+export const RELAY_HOST_CAPABILITY_IDLE_REGIONAL_REHOME = 'idle-regional-rehome-v1'
+// The host can send the keepalive below. A relay that supports it says so with a keepalive-offer
+// after the hello-ack; only then does the host send it. Relays that never offer keep pinging.
+export const RELAY_HOST_CAPABILITY_CLIENT_KEEPALIVE = 'client-keepalive-v1'
+// Exact frames: the edge answers the request without waking the host's object, so they never vary.
+export const RELAY_CLIENT_KEEPALIVE_FRAME = '{"type":"keepalive"}'
+export const RELAY_CLIENT_KEEPALIVE_ACK_FRAME = '{"type":"keepalive-ack"}'
+
+export const KeepaliveOfferSchema = z
+  .object({
+    type: z.literal('keepalive-offer'),
+    v: z.literal(1),
+    intervalMs: z.number().int().min(1_000).max(60_000)
+  })
+  .strict()
 
 export function parseRelayHostCapabilities(
   header: string | string[] | undefined
@@ -64,8 +79,7 @@ export function parseRelayHostCapabilities(
   )
 }
 
-// kind/relayDeviceId are optional so an entry stays readable by a host that
-// predates them; the cell only emits them to a host that advertised support.
+// Optional details support older cells; emit only to hosts advertising support.
 const PendingConnectionSchema = z
   .object({
     connId: OpaqueIdSchema,
@@ -121,11 +135,22 @@ export const DeviceRevokeSchema = z
   .object({ reqId: OpaqueIdSchema, relayDeviceId: OpaqueIdSchema })
   .strict()
 
-export const AuthRefreshSchema = z.object({ relayJwt: z.string().min(1).max(8 * 1024) }).strict()
+export const AuthRefreshSchema = z
+  .object({
+    relayJwt: z
+      .string()
+      .min(1)
+      .max(8 * 1024)
+  })
+  .strict()
 
 export const DrainSchema = z
   .object({
-    graceMs: z.number().int().nonnegative().max(60 * 60 * 1000),
+    graceMs: z
+      .number()
+      .int()
+      .nonnegative()
+      .max(60 * 60 * 1000),
     recovery: z.literal('resolve-director')
   })
   .strict()

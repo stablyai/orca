@@ -2,13 +2,18 @@ import {
   getServeFlagTypoError,
   getServeOptionValidationError
 } from '../../shared/serve-option-validation'
+import { resolveOrcadBindHost } from '../../shared/orcad-bind-address'
 
 export type ServeOptions = {
   json: boolean
   wsPort?: number
+  bind?: string
   pairingAddress: string | null
   noPairing: boolean
   mobilePairing: boolean
+  grantDesktopControl: boolean
+  allowPublic: boolean
+  refusePublic: boolean
   recipeJson: boolean
   projectRoot: string | null
 }
@@ -89,6 +94,7 @@ function hasFlag(argv: readonly string[], flags: readonly string[]): boolean {
   return argv.some((token) => flagNames.has(optionName(token)))
 }
 
+/** Parse and validate the serve options shared by direct CLI and Electron startup paths. */
 export function getServeOptions(argv: readonly string[]): ServeOptions {
   const optionsArgv = optionsBeforeTerminator(argv)
   const typoError = getServeFlagTypoError(optionsArgv)
@@ -106,10 +112,14 @@ export function getServeOptions(argv: readonly string[]): ServeOptions {
     wsPort = parsedPort
   }
 
+  const rawBind = valueAfter(optionsArgv, ['--serve-bind', '--bind'], true, '--serve-bind')
+  const bind = rawBind === null ? undefined : resolveOrcadBindHost(rawBind)
+
   const options: ServeOptions = {
     // The CLI uses `flags.has('json')`, so even `--json=false` enables JSON output.
     json: hasFlag(optionsArgv, ['--serve-json', '--json']),
     ...(wsPort !== undefined ? { wsPort } : {}),
+    ...(bind !== undefined ? { bind } : {}),
     pairingAddress: valueAfter(
       optionsArgv,
       ['--serve-pairing-address', '--pairing-address'],
@@ -118,6 +128,12 @@ export function getServeOptions(argv: readonly string[]): ServeOptions {
     ),
     noPairing: lastBooleanValue(optionsArgv, ['--serve-no-pairing', '--no-pairing']),
     mobilePairing: lastBooleanValue(optionsArgv, ['--serve-mobile-pairing', '--mobile-pairing']),
+    grantDesktopControl: lastBooleanValue(optionsArgv, [
+      '--serve-grant-desktop-control',
+      '--grant-desktop-control'
+    ]),
+    allowPublic: lastBooleanValue(optionsArgv, ['--serve-allow-public', '--allow-public']),
+    refusePublic: lastBooleanValue(optionsArgv, ['--serve-refuse-public', '--refuse-public']),
     recipeJson: lastBooleanValue(optionsArgv, ['--serve-recipe-json', '--recipe-json']),
     projectRoot: valueAfter(
       optionsArgv,

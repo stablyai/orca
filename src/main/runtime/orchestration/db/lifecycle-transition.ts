@@ -1,15 +1,9 @@
 import type Database from '../../../sqlite/sync-database'
 import { OrchestrationError } from '../orchestration-error'
 import type { OrchestrationDb } from './orchestration-db'
+import { notifyPeerMailQueued } from '../federation/peer-mail/peer-mail-waiters'
 
-/**
- * The single write boundary for Task, Dispatch, and supervised worker state.
- *
- * This function deliberately does not open or commit a transaction. Callers
- * often compose several projections (and a mailbox effect) in one transaction;
- * keeping the boundary neutral makes every projection atomic with that
- * caller-owned transaction.
- */
+/** Callers own transactions so lifecycle projections and mailbox effects commit atomically together. */
 export type LifecycleEntity = 'task' | 'dispatch' | 'worker'
 
 type LifecycleWriteTransaction = {
@@ -39,6 +33,10 @@ export function rollbackLifecycleWriteTransaction(
   db: Database.Database,
   transaction: LifecycleWriteTransaction
 ): void {
+  // SQLite ends the whole transaction itself on I/O and disk-full errors; rolling back again would replace that error.
+  if (!db.isTransaction) {
+    return
+  }
   if (transaction.savepoint) {
     db.exec(`ROLLBACK TO ${transaction.savepoint}`)
     db.exec(`RELEASE ${transaction.savepoint}`)
@@ -89,7 +87,7 @@ const LEGAL_TRANSITIONS: Record<LifecycleEntity, Record<string, readonly string[
     start_unknown: ['start_unknown', 'ready', 'failed', 'stopping', 'stopped', 'abandoned'],
     ready: ['ready', 'succeeded', 'failed', 'stopping', 'abandoned'],
     stopping: ['stopping', 'stopped', 'stop_unknown', 'ready', 'failed', 'abandoned'],
-    stop_unknown: ['stop_unknown', 'failed', 'stopped', 'abandoned'],
+    stop_unknown: ['stop_unknown', 'ready', 'failed', 'stopped', 'abandoned'],
     succeeded: ['succeeded'],
     failed: ['failed'],
     stopped: ['stopped'],
@@ -154,7 +152,8 @@ export function transitionLifecycleWithDb(
   const legal = LEGAL_TRANSITIONS[params.entity][current.state] ?? []
   const promptReportCorrection =
     params.correction === 'unobserved_prompt_report' &&
-    current.state === 'failed' &&
+    (current.state === 'failed' ||
+      (params.entity === 'dispatch' && current.state === 'circuit_broken')) &&
     ((params.entity === 'task' && params.to === 'completed') ||
       (params.entity === 'dispatch' && params.to === 'completed') ||
       (params.entity === 'worker' && params.to === 'succeeded'))
@@ -191,7 +190,8 @@ export function transitionLifecycleWithDb(
       `${params.entity} ${params.id} changed while transitioning.`
     )
   }
-
+  // A peer Run's change is queued home by trigger in this statement.
+  notifyPeerMailQueued(db)
   return { changed: true }
 }
 

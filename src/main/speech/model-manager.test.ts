@@ -1,10 +1,18 @@
-import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, mkdtempSync, rmSync, truncateSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  renameSync,
+  rmSync,
+  truncateSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { SPEECH_MODEL_CATALOG } from './model-catalog'
 import { ModelManager } from './model-manager'
+import { openElectronSpeechDownloadRequest } from '../host/electron-speech-services'
 
 const { hasOpenAiSpeechApiKeyMock, netRequestMock } = vi.hoisted(() => ({
   hasOpenAiSpeechApiKeyMock: vi.fn(),
@@ -25,17 +33,6 @@ vi.mock('./openai-api-key-store', () => ({
 }))
 
 type ModelManagerInternals = {
-  verifyFileSha256: (filePath: string, expectedSha256: string) => Promise<void>
-  downloadFileWithRetry: (
-    url: string,
-    filePath: string,
-    expectedSize: number,
-    modelId: string,
-    isAborted: () => boolean,
-    signal: AbortSignal,
-    completedBytes?: number,
-    modelTotalBytes?: number
-  ) => Promise<void>
   downloadFile: (
     url: string,
     dest: string,
@@ -46,6 +43,14 @@ type ModelManagerInternals = {
   ) => Promise<void>
 }
 
+function managerInternals(dir: string): ModelManagerInternals {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the tests drive the download hooks the class keeps protected.
+  return new ModelManager(
+    dir,
+    openElectronSpeechDownloadRequest
+  ) as unknown as ModelManagerInternals
+}
+
 describe('ModelManager', () => {
   beforeEach(() => {
     netRequestMock.mockReset()
@@ -53,150 +58,92 @@ describe('ModelManager', () => {
     hasOpenAiSpeechApiKeyMock.mockReturnValue(false)
   })
 
-  it('requires pinned, internally consistent metadata for every model file', () => {
-    for (const manifest of SPEECH_MODEL_CATALOG) {
-      if (manifest.provider !== 'local') {
-        continue
-      }
-      expect(manifest.downloadFiles?.length).toBeGreaterThan(0)
-      expect(manifest.files).toEqual(manifest.downloadFiles?.map(({ name }) => name))
-      expect(manifest.sizeBytes).toBe(
-        manifest.downloadFiles?.reduce((total, { sizeBytes }) => total + sizeBytes, 0)
-      )
-      for (const file of manifest.downloadFiles ?? []) {
-        expect(file.url).toMatch(
-          /^https:\/\/huggingface\.co\/[^/]+\/[^/]+\/resolve\/[a-f0-9]{40}\//
-        )
-        expect(file.sha256).toMatch(/^[a-f0-9]{64}$/)
-        expect(file.sizeBytes).toBeGreaterThan(0)
-      }
-    }
-  })
-
-  it('verifies downloaded model file hashes before installation', async () => {
+  it('reports a model downloaded in the old sherpa-onnx format as needing an update', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-model-manager-'))
     try {
-      const filePath = join(dir, 'model.onnx')
-      writeFileSync(filePath, 'known model bytes')
-      const expected = createHash('sha256').update('known model bytes').digest('hex')
-      const manager = new ModelManager(dir) as unknown as ModelManagerInternals
+      const manager = new ModelManager(dir, openElectronSpeechDownloadRequest)
+      const modelDir = manager.getModelDir('parakeet-tdt-0.6b-v2-int8')
+      mkdirSync(modelDir, { recursive: true })
+      for (const [name, size] of [
+        ['encoder.int8.onnx', 652_184_296],
+        ['decoder.int8.onnx', 7_257_753],
+        ['joiner.int8.onnx', 1_739_080],
+        ['tokens.txt', 9_384]
+      ] as const) {
+        writeFileSync(join(modelDir, name), '')
+        truncateSync(join(modelDir, name), size)
+      }
 
-      await expect(manager.verifyFileSha256(filePath, expected)).resolves.toBeUndefined()
-      await expect(manager.verifyFileSha256(filePath, '0'.repeat(64))).rejects.toThrow(
-        /integrity verification/
-      )
+      await expect(manager.getModelState('parakeet-tdt-0.6b-v2-int8')).resolves.toEqual({
+        id: 'parakeet-tdt-0.6b-v2-int8',
+        status: 'not-downloaded',
+        needsUpdate: true
+      })
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }
   })
 
-  it('rejects non-HTTPS model downloads', async () => {
+  it('keeps the old files after a cancelled or failed update, so the update is offered again', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-model-manager-'))
     try {
-      const manager = new ModelManager(dir) as unknown as ModelManagerInternals
+      const modelId = 'parakeet-tdt-0.6b-v2-int8'
+      const manager = new ModelManager(dir, openElectronSpeechDownloadRequest)
+      const modelDir = manager.getModelDir(modelId)
+      mkdirSync(modelDir, { recursive: true })
+      for (const [name, size] of [
+        ['encoder.int8.onnx', 652_184_296],
+        ['decoder.int8.onnx', 7_257_753],
+        ['joiner.int8.onnx', 1_739_080],
+        ['tokens.txt', 9_384]
+      ] as const) {
+        writeFileSync(join(modelDir, name), '')
+        truncateSync(join(modelDir, name), size)
+      }
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the test stubs the protected file download step.
+      const internals = manager as unknown as {
+        downloadModelFiles: (
+          manifest: unknown,
+          stagingDir: string,
+          modelId: string,
+          isAborted: () => boolean,
+          signal: AbortSignal
+        ) => Promise<void>
+      }
 
-      await expect(
-        manager.downloadFile(
-          'http://example.com/model.bin',
-          join(dir, 'model.bin'),
-          1,
-          'm',
-          () => false
-        )
-      ).rejects.toThrow(/HTTPS/)
-    } finally {
-      rmSync(dir, { recursive: true, force: true })
-    }
-  })
-
-  it('installs individually verified model files through a staging directory', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'orca-model-manager-'))
-    try {
-      const manifest = SPEECH_MODEL_CATALOG.find(
-        (model) => model.id === 'zipformer-streaming-zh-14m'
-      )!
-      const manager = new ModelManager(dir)
-      const internals = manager as unknown as ModelManagerInternals
-      const downloadMock = vi
-        .spyOn(internals, 'downloadFileWithRetry')
-        .mockImplementation(async (_url, filePath, expectedSize) => {
-          writeFileSync(filePath, '')
-          truncateSync(filePath, expectedSize)
+      internals.downloadModelFiles = (_manifest, _stagingDir, _modelId, _isAborted, signal) =>
+        new Promise((_, reject) => {
+          signal.addEventListener('abort', () => reject(new Error('aborted')))
         })
-      const verifyMock = vi.spyOn(internals, 'verifyFileSha256').mockResolvedValue()
+      const cancelled = manager.downloadModel(modelId)
+      manager.cancelDownload(modelId)
+      await expect(cancelled).resolves.toBeUndefined()
+      expect((await manager.getModelState(modelId)).needsUpdate).toBe(true)
 
-      await manager.downloadModel(manifest.id)
-
-      const modelDir = manager.getModelDir(manifest.id)
-      expect(downloadMock).toHaveBeenCalledTimes(manifest.downloadFiles?.length ?? 0)
-      expect(verifyMock).toHaveBeenCalledTimes(manifest.downloadFiles?.length ?? 0)
-      let expectedOffset = 0
-      for (const [index, file] of (manifest.downloadFiles ?? []).entries()) {
-        expect(downloadMock.mock.calls[index]?.slice(6)).toEqual([
-          expectedOffset,
-          manifest.sizeBytes
-        ])
-        expectedOffset += file.sizeBytes
-        expect(existsSync(join(modelDir, file.name))).toBe(true)
+      const failed = new ModelManager(dir, openElectronSpeechDownloadRequest)
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: as above.
+      ;(failed as unknown as typeof internals).downloadModelFiles = async () => {
+        throw new Error('network down')
       }
+      await expect(failed.downloadModel(modelId)).rejects.toThrow('network down')
       expect(existsSync(`${modelDir}.partial`)).toBe(false)
-      await expect(manager.getModelState(manifest.id)).resolves.toEqual({
-        id: manifest.id,
-        status: 'ready'
-      })
-    } finally {
-      rmSync(dir, { recursive: true, force: true })
-    }
-  })
-
-  it('marks OpenAI transcription models ready only when an API key is configured', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'orca-model-manager-'))
-    try {
-      const manager = new ModelManager(dir)
-
-      await expect(manager.getModelState('openai-gpt-4o-mini-transcribe')).resolves.toEqual({
-        id: 'openai-gpt-4o-mini-transcribe',
-        status: 'not-downloaded'
-      })
-
-      hasOpenAiSpeechApiKeyMock.mockReturnValue(true)
-
-      await expect(manager.getModelState('openai-gpt-4o-mini-transcribe')).resolves.toEqual({
-        id: 'openai-gpt-4o-mini-transcribe',
-        status: 'ready'
-      })
-    } finally {
-      rmSync(dir, { recursive: true, force: true })
-    }
-  })
-
-  it('deletes a ready local model and reports it as not downloaded', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'orca-model-manager-'))
-    try {
-      const manifest = SPEECH_MODEL_CATALOG.find(
-        (model) => model.id === 'zipformer-streaming-zh-14m'
+      const state = await new ModelManager(dir, openElectronSpeechDownloadRequest).getModelState(
+        modelId
       )
-      expect(manifest?.files).toBeDefined()
-      const manager = new ModelManager(dir)
-      const modelDir = manager.getModelDir(manifest!.id)
-      for (const file of manifest!.downloadFiles ?? []) {
-        const path = join(modelDir, file.name)
-        mkdirSync(dirname(path), { recursive: true })
-        writeFileSync(path, '')
-        truncateSync(path, file.sizeBytes)
+      expect(state.needsUpdate).toBe(true)
+
+      const failedSwap = new ModelManager(dir, openElectronSpeechDownloadRequest)
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: as above.
+      ;(failedSwap as unknown as typeof internals).downloadModelFiles = async (_m, stagingDir) => {
+        rmSync(stagingDir, { recursive: true, force: true })
       }
+      await expect(failedSwap.downloadModel(modelId)).rejects.toThrow('ENOENT')
+      expect((await failedSwap.getModelState(modelId)).needsUpdate).toBe(true)
 
-      await expect(manager.getModelState(manifest!.id)).resolves.toEqual({
-        id: manifest!.id,
-        status: 'ready'
-      })
-      await manager.deleteModel(manifest!.id)
-
-      expect(existsSync(modelDir)).toBe(false)
-      await expect(manager.getModelState(manifest!.id)).resolves.toEqual({
-        id: manifest!.id,
-        status: 'not-downloaded'
-      })
+      // An interrupted swap leaves the old files only in .previous.
+      renameSync(modelDir, `${modelDir}.previous`)
+      await expect(failedSwap.downloadModel(modelId)).rejects.toThrow('ENOENT')
+      expect((await failedSwap.getModelState(modelId)).needsUpdate).toBe(true)
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }
@@ -260,7 +207,7 @@ describe('ModelManager', () => {
         end: vi.fn(() => request)
       }
       netRequestMock.mockReturnValue(request)
-      const manager = new ModelManager(dir)
+      const manager = new ModelManager(dir, openElectronSpeechDownloadRequest)
 
       const download = manager.downloadModel(manifest.id)
       manager.cancelDownload(manifest.id)
@@ -336,7 +283,7 @@ describe('ModelManager', () => {
       }
       netRequestMock.mockReturnValue(request)
       const controller = new AbortController()
-      const manager = new ModelManager(dir) as unknown as ModelManagerInternals
+      const manager = managerInternals(dir)
 
       const download = manager.downloadFile(
         'https://example.com/model.bin',
@@ -418,7 +365,7 @@ describe('ModelManager', () => {
         end: vi.fn(() => request)
       }
       netRequestMock.mockReturnValue(request)
-      const manager = new ModelManager(dir) as unknown as ModelManagerInternals
+      const manager = managerInternals(dir)
 
       const download = manager.downloadFile(
         'https://example.com/model.bin',

@@ -1,15 +1,50 @@
 import { CLOSE_TERMINAL_PANE_EVENT } from '@/constants/terminal'
-import type {
-  AgentStatusClearIpcPayload,
-  AgentStatusIpcPayload
-} from '../../../../shared/agent-status-types'
 import {
   resolveLegacyWorkerTerminalRecoveryAction,
   rollbackLegacyWorkerTerminalSurfaceInStore
 } from '../legacy-worker-terminal-recovery-event'
-import { useAppStore } from '../../store'
-import { resolvePaneKey } from './agent-status-routing'
+import { useAppStore } from '../../store/index'
+import {
+  forgetRefusedPaneResume,
+  namesRefusedResume
+} from '@/lib/agent-session/resume/forget-refused-pane-resume'
+import { resolveAgentPaneAuthorityKey } from '@/store/slices/agent-status/agent-pane-authority'
+import { resolvePaneKey } from '../../lib/agent-status/ownership/agent-status-pane-ownership'
+import type {
+  AgentStatusClearIpcPayload,
+  AgentStatusIpcPayload,
+  RefusedPaneResume
+} from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { PendingAgentStatusEvent } from './agent-status-bridge-types'
+
+/** An already delivered event for the pane naming a refused conversation would restore it. */
+function dropEventsRestoringRefused(
+  paneKey: string,
+  refused: RefusedPaneResume,
+  queues: {
+    pendingAgentStatusEvents: PendingAgentStatusEvent[]
+    liveAgentStatusBurstQueue: AgentStatusIpcPayload[]
+  }
+): void {
+  const restores = (event: AgentStatusIpcPayload): boolean =>
+    !!refused.expectedStatus &&
+    event.receivedAt <= refused.expectedStatus.receivedAt &&
+    event.stateStartedAt === refused.expectedStatus.stateStartedAt &&
+    resolveAgentPaneAuthorityKey(event.paneKey) === paneKey &&
+    namesRefusedResume(refused, { ...event, agent: event.agentType })
+  const pending = queues.pendingAgentStatusEvents
+  for (let index = pending.length - 1; index >= 0; index -= 1) {
+    if (restores(pending[index].data)) {
+      pending.splice(index, 1)
+    }
+  }
+  const burst = queues.liveAgentStatusBurstQueue
+  for (let index = burst.length - 1; index >= 0; index -= 1) {
+    if (restores(burst[index])) {
+      burst.splice(index, 1)
+    }
+  }
+}
 
 export function registerAgentStatusListeners(args: {
   unsubs: (() => void)[]
@@ -72,6 +107,14 @@ export function registerAgentStatusListeners(args: {
       if (!('paneKey' in data) || typeof data.paneKey !== 'string') {
         return
       }
+      if (data.refusedResume) {
+        dropEventsRestoringRefused(data.paneKey, data.refusedResume, {
+          pendingAgentStatusEvents,
+          liveAgentStatusBurstQueue
+        })
+        forgetRefusedPaneResume(useAppStore.getState(), data.paneKey, data.refusedResume)
+        return
+      }
       // Why: preserve set→clear FIFO so a queued completion still survives pane teardown.
       if (liveAgentStatusBurstQueue.some((queued) => queued.paneKey === data.paneKey)) {
         drainQueuedLiveAgentStatusesForPane(data.paneKey)
@@ -82,7 +125,11 @@ export function registerAgentStatusListeners(args: {
         }
       }
       const store = useAppStore.getState()
-      if (store.agentStatusByPaneKey[data.paneKey]?.state === 'done') {
+      if (
+        data.statusUnavailable !== true &&
+        data.programStatusRemoved !== true &&
+        store.agentStatusByPaneKey[data.paneKey]?.state === 'done'
+      ) {
         return
       }
       store.removeAgentStatus(data.paneKey)

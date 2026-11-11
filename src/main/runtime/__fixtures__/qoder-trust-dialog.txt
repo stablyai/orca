@@ -1,0 +1,58 @@
+[8m[?u]11;?\[>q[>4;?m[c[2K[0m]0;◇ Qoder CLI | Ready                                                             ]8;;[0m7[r8[J
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[H[?25h[?25l[?1006l[?1002l[?1004h]0;◇ Qoder CLI | Ready                                                             [?2004h[?2004h[?1004h[0m
+[2G[38;5;78m [39m[4G[38;5;78m██████[39m[38G╭─[41G[38;5;78m[1mTips[22m[39m[46G[38;5;78m[1mfor[22m[39m[50G[38;5;78m[1mgetting[22m[39m[58G[38;5;78m[1mstarted[22m[39m[66G────────────────────────────────╮
+[2G[38;5;78m██[39m[10G[38;5;78m██[39m[38G│[40G1.[43GUse[47GAGENTS.md[57Gfiles[63Gto[66Gcustomize[76Ginteractions[98G│
+[2G[38;5;78m██[39m[6G[38;5;78m██[39m[10G[38;5;78m██[39m[14G[1mQoder[22m[20G[1mCLI[22m[24Gv1.1.64[38G│[40G2.[43G/help[49Gfor[53Gmore[58Ginformation[98G│
+[2G[38;5;78m██[39m[8G[38;5;78m██[39m[38G│[40G3.[43GAsk[47Gcoding[54Gquestions,[65Gedit[70Gcode[75Gor[78Grun[82Gcommands[98G│
+[2G[38;5;78m [39m[4G[38;5;78m████[39m[10G[38;5;78m██[39m[14G[1mNot[22m[18G[1mLogin[22m[24GPlease[31GAuth[38G│[40G4.[43GBe[46Gspecific[55Gfor[59Gthe[63Gbest[68Gresults[98G│
+[38G╰───────────────────────────────────────────────────────────╯
+
+
+[1m Do[22m[5G[1myou[22m[9G[1mtrust[22m[15G[1mthe[22m[19G[1mfiles[22m[25G[1min[22m[28G[1mthis[22m[33G[1mfolder?[22m
+────────────────────────────────────────────────────────────────────────────────────────────────────
+[2GPlease[9Gconfirm[17Gthis[22Gis[25Gyour[30Gown[34Gproject[42Gor[45Gfrom[50Ga[52Gtrusted[60Gsource.[68GOnce[73Gtrusted,[82GQoder[88GCLI[92Gcan
+[2Gread,[8Gmodify,[16Gand[20Gexecute[28Gfiles[34Ghere,[40Gand[44Gwill[49Gload[54Glocal[60Gconfigurations[75G(commands,[86Ghooks,[93GMCP
+[2Gservers,[11Gagents,[19Gskills,[27Gsettings).
+
+[2G[1m/private/tmp/orca-qoder-probe/workspace[22m
+
+[3G❯[5G1.[8GTrust[14Gfolder
+[5G2.[8GDon't[14Gtrust[20Gand[24Gexit
+
+[2G[3m↑/↓[23m[6G[3mnavigate[23m[15G[3m·[23m[17G[3mEnter[23m[23G[3mselect[23m[30G[3m·[23m[32G[3mEsc[23m[36G[3mback[23m
+[0m[>0q[c[0m[12A ● Warning: True color (24-bit) support[41Gnot[45Gdetected.[55GUsing[61Ga[63Gterminal[72Gwith[77Gtrue[82Gcolor[88Genabled[96Gwill[1B   result in a better visual experience.[K[1C[1B[K[1B[1m [22m[1mD[22m[1mo[22m[1m [22m[1my[22m[1mo[22m[1mu[22m[1m [22m[1mt[22m[1mr[22m[1mu[22m[1ms[22m[1mt[22m[1m [22m[1mt[22m[1mh[22m[1me[22m[1m [22m[1mf[22m[1mi[22m[1ml[22m[1me[22m[1ms[22m[1m [22m[1mi[22m[1mn[22m[1m [22m[1mt[22m[1mh[22m[1mi[22m[1ms[22m[1m [22m[1mf[22m[1mo[22m[1ml[22m[1md[22m[1me[22m[1mr[22m[1m?[22m[K[1B────────────────────────────────────────────────────────────────────────────────────────────────────[1C[1BPlease[9Gconfirm[17Gthis[22Gis[25Gyour[30Gown[34Gproject[42Gor[45Gfrom[50Ga[52Gtrusted[60Gsource.[68GOnce[73Gtrusted,[82GQoder[88GCLI[92Gcan[1C[1Bread, modify, and execute files here, and[44Gwill[49Gload[54Glocal[60Gconfigurations[75G(commands,[86Ghooks,[93GMCP[1C[1Bservers,[11Gagents,[19Gskills,[27Gsettings).[2C[1B[K[1C[1B[1m/[22m[1mp[22m[1mr[22m[1mi[22m[1mv[22m[1ma[22m[1mt[22m[1me[22m[1m/[22m[1mt[22m[1mm[22m[1mp[22m[1m/[22m[1mo[22m[1mr[22m[1mc[22m[1ma[22m[1m-[22m[1mq[22m[1mo[22m[1md[22m[1me[22m[1mr[22m[1m-[22m[1mp[22m[1mr[22m[1mo[22m[1mb[22m[1me[22m[1m/[22m[1mw[22m[1mo[22m[1mr[22m[1mk[22m[1ms[22m[1mp[22m[1ma[22m[1mc[22m[1me[22m[1C[2B ❯ 1. Trust folder[K
+[5G2.[8GDon't[14Gtrust[20Gand[24Gexit
+
+[2G[3m↑/↓[23m[6G[3mnavigate[23m[15G[3m·[23m[17G[3mEnter[23m[23G[3mselect[23m[30G[3m·[23m[32G[3mEsc[23m[36G[3mback[23m
+[0m

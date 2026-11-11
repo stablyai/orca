@@ -8,7 +8,6 @@ import android.media.AudioFocusRequest
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioRecord
-import android.media.AudioTrack
 import android.media.MediaRecorder
 import android.media.audiofx.AcousticEchoCanceler
 import android.media.audiofx.NoiseSuppressor
@@ -16,47 +15,37 @@ import android.os.Build
 import android.os.PowerManager
 import android.util.Log
 import androidx.annotation.RequiresApi
-import java.util.Queue
-import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.Executors
-import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.pow
 
 
+// The microphone rate; on-device speech requires it too.
+internal const val MIC_SAMPLE_RATE = 16000
+
 class AudioEngine (context: Context) {
-    private val SAMPLE_RATE = 16000
+    private val SAMPLE_RATE = MIC_SAMPLE_RATE
     private val AUDIO_FORMAT = AudioFormat.ENCODING_PCM_16BIT
     private val CHANNEL_CONFIG = AudioFormat.CHANNEL_IN_MONO
 
     private lateinit var audioRecord: AudioRecord
     private lateinit var audioManager: AudioManager
-    private lateinit var audioTrack: AudioTrack
     private var audioFocusRequest: AudioFocusRequest? = null
     private var audioFocusChangeListener: AudioManager.OnAudioFocusChangeListener? = null
     private var audioDeviceCallback: android.media.AudioDeviceCallback? = null
-    private val audioSampleQueue: Queue<ByteArray> = ConcurrentLinkedQueue()
-    private val playbackRunning = AtomicBoolean(false)
     private var echoCanceler: AcousticEchoCanceler? = null
     private var noiseSuppressor: NoiseSuppressor? = null
     private val executorServiceMicrophone = Executors.newFixedThreadPool(1)
-    private val executorServicePlayback = Executors.newFixedThreadPool(1)
     private var speakerDevice: AudioDeviceInfo? = null
     private var bridgeWindowStartedAtMs = System.currentTimeMillis()
     private var micEvents = 0
     private var micBytes = 0L
-    private var playbackEvents = 0
-    private var playbackQueuedBytes = 0L
-    private var playbackWrites = 0
-    private var playbackWriteBytes = 0L
 
+    // Read by the mic tap loop; written on the main (focus loss, pause), JS and tap threads.
+    @Volatile
     var isRecording = false
-    private var isRecordingBeforePause = false
-    var isPlaying = false
 
-    // Callbacks
     var onMicDataCallback: ((ByteArray) -> Unit)? = null
     var onInputVolumeCallback: ((Float) -> Unit)? = null
-    var onOutputVolumeCallback: ((Float) -> Unit)? = null
     var onAudioInterruptionCallback: ((String) -> Unit)? = null
 
     init {
@@ -71,18 +60,11 @@ class AudioEngine (context: Context) {
         }
         Log.d(
             "AudioEngine",
-            "[bridge] $reason mic=$micEvents" +
-                "ev/${micBytes}B playbackQueue=$playbackEvents" +
-                "ev/${playbackQueuedBytes}B playbackWrites=$playbackWrites" +
-                "ev/${playbackWriteBytes}B windowMs=$elapsedMs"
+            "[bridge] $reason mic=${micEvents}ev/${micBytes}B windowMs=$elapsedMs"
         )
         bridgeWindowStartedAtMs = now
         micEvents = 0
         micBytes = 0
-        playbackEvents = 0
-        playbackQueuedBytes = 0
-        playbackWrites = 0
-        playbackWriteBytes = 0
     }
 
     @SuppressLint("NewApi")
@@ -92,11 +74,9 @@ class AudioEngine (context: Context) {
         requestAudioFocus()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            // Route audio to external device if connected, otherwise route to speaker.
-            // AudioDeviceInfo/getDevices are API 23+, while the module supports API 21.
+            // Prefer connected outputs, falling back to speaker; AudioDeviceInfo/getDevices require API 23 (module floor: 21).
             updateAudioRouting()
 
-            // Listen for changes in audio routing
             val callback = object:android.media.AudioDeviceCallback(){
                 override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>?) {
                     Log.d("AudioEngine", "onAudioDevicesAdded")
@@ -113,29 +93,6 @@ class AudioEngine (context: Context) {
             audioManager.registerAudioDeviceCallback(callback, null)
         } else {
             updateLegacyAudioRouting()
-        }
-
-        val bufferSize = AudioTrack.getMinBufferSize(
-            SAMPLE_RATE,
-            AudioFormat.CHANNEL_OUT_MONO,
-            AUDIO_FORMAT
-        )
-
-        audioTrack = AudioTrack(
-            AudioAttributes.Builder()
-                .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
-                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                .build(),
-            AudioFormat.Builder()
-                .setEncoding(AUDIO_FORMAT)
-                .setSampleRate(SAMPLE_RATE)
-                .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
-                .build(),
-            bufferSize,
-            AudioTrack.MODE_STREAM,
-            audioManager.generateAudioSessionId()
-        ).apply {
-            play()
         }
     }
 
@@ -162,7 +119,6 @@ class AudioEngine (context: Context) {
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            // Use the modern API for Android S and above
             try {
                 selectedDevice?.let {
                     audioManager.setCommunicationDevice(it)
@@ -175,7 +131,6 @@ class AudioEngine (context: Context) {
             }
 
         } else {
-            // Fall back to deprecated method for older Android versions
             @Suppress("DEPRECATION")
             audioManager.isSpeakerphoneOn = !isExternalDeviceConnected
         }
@@ -192,18 +147,14 @@ class AudioEngine (context: Context) {
 
     @SuppressLint("NewApi")
     private fun requestAudioFocus() {
+        // Every resume re-requests; without abandoning first the previous listener stays on the focus stack.
+        abandonAudioFocus()
+
         val listener = AudioManager.OnAudioFocusChangeListener { focusChange ->
+            // Calls, alarms and assistants take focus transiently but hold the mic meanwhile; a duck request only lowers output we never play.
             when (focusChange) {
-                AudioManager.AUDIOFOCUS_LOSS -> {
-                    Log.d("AudioEngine", "Audio focus lost")
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                        pauseRecordingAndPlayer()
-                    } else {
-                        stopRecording()
-                        stopPlayback()
-                    }
-                    onAudioInterruptionCallback?.let { it("blocked") }
-                }
+                AudioManager.AUDIOFOCUS_LOSS -> endRecordingForInterruption("blocked")
+                AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> endRecordingForInterruption("began")
             }
         }
         audioFocusChangeListener = listener
@@ -237,8 +188,21 @@ class AudioEngine (context: Context) {
         }
     }
 
+    @SuppressLint("NewApi")
+    private fun abandonAudioFocus() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            audioFocusRequest?.let { audioManager.abandonAudioFocusRequest(it) }
+            audioFocusRequest = null
+        } else {
+            @Suppress("DEPRECATION")
+            audioFocusChangeListener?.let { audioManager.abandonAudioFocus(it) }
+        }
+        audioFocusChangeListener = null
+    }
+
     @RequiresApi(Build.VERSION_CODES.Q)
     @SuppressLint("MissingPermission")
+    @Synchronized
     private fun startRecording(){
         val bufferSize = AudioRecord.getMinBufferSize(SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT)
         audioRecord = AudioRecord(
@@ -300,6 +264,7 @@ class AudioEngine (context: Context) {
         }
     }
 
+    @Synchronized
     private fun stopRecording() {
         if (!isRecording) return
         isRecording = false
@@ -310,59 +275,24 @@ class AudioEngine (context: Context) {
         onInputVolumeCallback?.invoke(0.0F)
     }
 
+    // Stop for good and let JS finish with what was heard; reopening later would splice a silent gap into the dictation.
+    @Synchronized
+    private fun endRecordingForInterruption(kind: String) {
+        if (!isRecording) return
+        Log.d("AudioEngine", "Recording interrupted: $kind")
+        stopRecording()
+        abandonAudioFocus()
+        onAudioInterruptionCallback?.invoke(kind)
+    }
+
     @RequiresApi(Build.VERSION_CODES.Q)
     fun toggleRecording(value: Boolean): Boolean {
-        if (value == isRecording) return isRecording
-
         if (value) {
-            startRecording()
+            if (!isRecording) startRecording()
         } else {
             stopRecording()
         }
-
-        isRecording = value
         return isRecording
-    }
-
-    fun playPCMData(data: ByteArray) {
-        audioSampleQueue.add(data)
-        playbackEvents += 1
-        playbackQueuedBytes += data.size.toLong()
-        flushBridgeStats("queue")
-        if (playbackRunning.compareAndSet(false, true)) {
-            playAudioFromSampleQueue()
-        }
-    }
-
-    private fun playAudioFromSampleQueue() {
-        executorServicePlayback.execute{
-            isPlaying = true
-            try {
-                while (true){
-                    val data = audioSampleQueue.poll() ?: break
-                    playSample(data)
-                    val audioVolume = calculateRMSLevel(data)
-                    onOutputVolumeCallback?.invoke(audioVolume)
-                }
-            }catch (e: Exception){
-                Log.e("AudioEngine", "Error playing audio", e)
-                e.printStackTrace()
-            }finally {
-                playbackRunning.set(false)
-                isPlaying = false
-                onOutputVolumeCallback?.invoke(0.0F)
-                if (audioSampleQueue.isNotEmpty() && playbackRunning.compareAndSet(false, true)) {
-                    playAudioFromSampleQueue()
-                }
-            }
-        }
-    }
-
-    private fun playSample(data: ByteArray) {
-        val written = audioTrack.write(data, 0, data.size)
-        playbackWrites += 1
-        playbackWriteBytes += written.coerceAtLeast(0).toLong()
-        flushBridgeStats("write")
     }
 
     fun bypassVoiceProcessing(bypass: Boolean) {
@@ -375,53 +305,22 @@ class AudioEngine (context: Context) {
         }
     }
 
-    @RequiresApi(Build.VERSION_CODES.Q)
-    fun pauseRecordingAndPlayer() {
-        isRecordingBeforePause = isRecording
-        isRecording = toggleRecording(false)
-        audioTrack.pause()
+    // Recording in the background is not supported, so leaving the app interrupts it.
+    fun endRecordingForPause() {
+        endRecordingForInterruption("began")
     }
 
-    @RequiresApi(Build.VERSION_CODES.Q)
-    fun resumeRecordingAndPlayer() {
+    fun regainAudioFocus() {
         requestAudioFocus()
-        isRecording = toggleRecording(isRecordingBeforePause)
-        audioTrack.play()
-    }
-
-    fun stopPlayback() {
-        audioSampleQueue.clear()
-        audioTrack.pause()
-        audioTrack.flush()
-        playbackRunning.set(false)
-        isPlaying = false
-        onOutputVolumeCallback?.invoke(0.0F)
-        Log.d("AudioEngine", "Playback stopped")
-    }
-
-    fun pausePlayback() {
-        audioTrack.pause()
-        Log.d("AudioEngine", "Playback paused")
-    }
-
-    fun resumePlayback() {
-        audioTrack.play()
-        Log.d("AudioEngine", "Playback resumed")
     }
 
     @SuppressLint("NewApi")
     fun tearDown() {
         stopRecording()
-        if (::audioTrack.isInitialized) {
-            audioTrack.stop()
-            audioTrack.release()
-        }
         echoCanceler?.release()
         echoCanceler = null
         noiseSuppressor?.release()
         noiseSuppressor = null
-        audioSampleQueue.clear()
-        playbackRunning.set(false)
         audioManager.mode = AudioManager.MODE_NORMAL
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             audioDeviceCallback?.let { audioManager.unregisterAudioDeviceCallback(it) }
@@ -430,16 +329,8 @@ class AudioEngine (context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             audioManager.clearCommunicationDevice()
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            audioFocusRequest?.let { request ->
-                audioManager.abandonAudioFocusRequest(request)
-            }
-        } else {
-            @Suppress("DEPRECATION")
-            audioManager.abandonAudioFocus(audioFocusChangeListener)
-        }
+        abandonAudioFocus()
         executorServiceMicrophone.shutdownNow()
-        executorServicePlayback.shutdownNow()
     }
 
 
@@ -448,26 +339,21 @@ class AudioEngine (context: Context) {
         val sampleCount = buffer.size / 2
         var sumSquares = 0.0f
         for (i in 0 until sampleCount) {
-            // Why: preserve Android's existing signed-byte decode while avoiding
-            // a temporary sample array on every mic/playback audio buffer.
+            // Preserve signed-byte decoding without allocating a sample array per audio buffer.
             val sample = (buffer[i * 2].toInt() or (buffer[i * 2 + 1].toInt() shl 8)).toShort()
             val normalizedSample = sample / 32768.0f
             sumSquares += normalizedSample * normalizedSample
         }
 
-        // Calculate RMS value
         val rmsValue = kotlin.math.sqrt(sumSquares / sampleCount)
 
-        // Convert to decibels
         val dbValue = 20 * kotlin.math.log10(maxOf(rmsValue, epsilon))
 
-        // Normalize decibel value to 0-1 range
-        // Assuming minimum audible is -80dB and maximum is 0dB
+        // Normalize the assumed audible range [-80, 0] dB.
         val minDb = -80.0f
         val normalizedValue = maxOf(0.0f, minOf(1.0f, (dbValue - minDb) / kotlin.math.abs(minDb)))
 
-        // Optional: Apply exponential factor to push smaller values down
-        val expFactor = 2.0f // Adjust this value to change the curve
+        val expFactor = 2.0f
         val adjustedValue = normalizedValue.pow(expFactor)
 
         return adjustedValue

@@ -1,51 +1,50 @@
+import type { Translate } from '../i18n/mobile-i18n'
+
 export type HomeStatsSummary = {
   totalAgentsSpawned: number
   totalPRsCreated: number
   totalAgentTimeMs: number
-  firstEventAt: number | null
 }
 
-/**
- * Why: the home header shows one lifetime-usage row for every paired desktop. Each host answers
- * stats.summary for itself, so a single shared slot made the row flip to whichever host replied
- * last — visible churn now that every reconnect re-reads. Sum instead; one host still totals itself.
- *
- * Summing only `hostIds` keeps an unpaired desktop out of the total: replies are cached per host
- * for the life of the process, so an entry outlives the host it describes.
- */
+// Wire rows and fields may be absent or malformed; the total supplies every default.
+export type HomeStatsRow = Partial<Record<keyof HomeStatsSummary, unknown>> | null | undefined
+
+const STAT_KEYS = ['totalAgentsSpawned', 'totalPRsCreated', 'totalAgentTimeMs'] as const
+
+// Sum paired hosts only: replies outlive unpairing, and a shared slot would show whichever host replied last.
 export function totalHomeStats(
-  byHost: Record<string, HomeStatsSummary>,
+  byHost: Record<string, HomeStatsRow>,
   hostIds: readonly string[]
 ): HomeStatsSummary | null {
-  const hosts = hostIds.filter((id) => id in byHost).map((id) => byHost[id])
-  if (hosts.length === 0) {
-    return null
-  }
-  const total: HomeStatsSummary = {
-    totalAgentsSpawned: 0,
-    totalPRsCreated: 0,
-    totalAgentTimeMs: 0,
-    firstEventAt: null
-  }
-  for (const host of hosts) {
-    // The rows come straight off the wire unvalidated; a malformed desktop reply must not
-    // NaN out or crash the header for every other host.
+  const total: HomeStatsSummary = { totalAgentsSpawned: 0, totalPRsCreated: 0, totalAgentTimeMs: 0 }
+  let answered = false
+  for (const hostId of hostIds) {
+    const host = byHost[hostId]
+    // A host without stats replies `{}`; that is no data, not a row of zeros.
     if (!host || typeof host !== 'object') {
       continue
     }
-    total.totalAgentsSpawned += finiteOrZero(host.totalAgentsSpawned)
-    total.totalPRsCreated += finiteOrZero(host.totalPRsCreated)
-    total.totalAgentTimeMs += finiteOrZero(host.totalAgentTimeMs)
-    if (typeof host.firstEventAt === 'number' && Number.isFinite(host.firstEventAt)) {
-      total.firstEventAt =
-        total.firstEventAt === null
-          ? host.firstEventAt
-          : Math.min(total.firstEventAt, host.firstEventAt)
+    for (const key of STAT_KEYS) {
+      const value = host[key]
+      if (typeof value === 'number' && Number.isFinite(value)) {
+        total[key] += value
+        answered = true
+      }
     }
   }
-  return total
+  return answered ? total : null
 }
 
-function finiteOrZero(value: number): number {
-  return typeof value === 'number' && Number.isFinite(value) ? value : 0
+/** Whole days, else whole hours, else minutes: the tile has room for one unit. */
+export function formatHomeAgentTime(ms: number, t: Translate): string {
+  const minutes = Math.max(0, Math.floor(ms / 60_000))
+  const hours = Math.floor(minutes / 60)
+  const days = Math.floor(hours / 24)
+  if (days > 0) {
+    return t('home.stats.days', '{{days}}d', { days })
+  }
+  if (hours > 0) {
+    return t('home.stats.hours', '{{hours}}h', { hours })
+  }
+  return t('home.stats.minutes', '{{minutes}}m', { minutes })
 }

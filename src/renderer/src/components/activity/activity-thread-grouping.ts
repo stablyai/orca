@@ -1,63 +1,44 @@
 import type { AgentDotState } from '@/components/AgentStateDot'
 import { translate } from '@/i18n/i18n'
-import { formatAgentTypeLabel } from '@/lib/agent-status'
-import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
-import { getActivityThreadWorkspaceTitle } from '@/lib/activity-thread-display'
+import type { Translate } from '@/i18n/use-translate'
+import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
+import { getAgentRowPrimaryText } from '../../../../shared/agent-status/presentation/agent-row-primary-text'
+import { getActivityThreadWorkspaceTitle } from '@/lib/workspace/activity/activity-thread-display'
 import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
 import {
   activityThreadStatusId,
   agentMeta,
   agentSummary,
   agentTitle,
-  threadAgentState,
-  threadAgentStateLabel,
-  type ActivityThreadStatusId
+  threadAgentStateLabel
 } from './activity-thread-presentation'
-import type { ActivityGroupBy, ActivityThreadGroup, AgentPaneThread } from './activity-thread-types'
-
-// Attention-first. Exhaustive Record so an unranked dot state is a type error; ranks are
-// unique so header order never falls back to thread recency.
-const ACTIVITY_STATUS_GROUP_RANK: Record<ActivityThreadStatusId, number> = {
-  waiting: 0,
-  blocked: 1,
-  permission: 2,
-  interrupted: 3,
-  working: 4,
-  monitoring: 5,
-  unverifiable: 6,
-  failed: 7,
-  done: 8,
-  idle: 9
-}
+import { AGENT_LIST_STATUS_RANK } from '../../../../shared/agent-status/presentation/agent-list-status'
+import type { ActivityGroupBy } from '../../../../shared/agents-view-thread-filters'
+import type { ActivityThreadGroup, AgentPaneThread } from './activity-thread-types'
 
 function activityStatusRank(thread: AgentPaneThread): number {
-  return ACTIVITY_STATUS_GROUP_RANK[activityThreadStatusId(thread)]
+  return AGENT_LIST_STATUS_RANK[activityThreadStatusId(thread)]
 }
 
 export function getActivityThreadGroup(
   thread: AgentPaneThread,
-  groupBy: ActivityGroupBy
+  groupBy: ActivityGroupBy,
+  t: Translate = translate
 ): { key: string; label: string; state?: AgentDotState } {
   if (groupBy === 'none') {
     return { key: 'all', label: '' }
   }
   if (groupBy === 'status') {
-    // Header dot mirrors the row dot, so the two can never disagree.
-    return {
-      key: activityThreadStatusId(thread),
-      label: threadAgentStateLabel(thread),
-      state: threadAgentState(thread)
-    }
+    // The key is the glyph every row in the group draws, so it heads the group too.
+    const status = activityThreadStatusId(thread)
+    return { key: status, label: threadAgentStateLabel(thread, t), state: status }
   }
   if (groupBy === 'project') {
     return thread.repo
       ? { key: `project:${thread.repo.id}`, label: thread.repo.displayName }
       : {
           key: 'project:unknown',
-          label: translate(
-            'auto.components.activity.ActivityPrototypePage.5651b216c6',
-            'Unknown project'
-          )
+          label: t('auto.components.activity.ActivityPrototypePage.5651b216c6', 'Unknown project')
         }
   }
   if (groupBy === 'worktree') {
@@ -68,7 +49,8 @@ export function getActivityThreadGroup(
 
 export function buildActivityThreadGroups(
   threads: AgentPaneThread[],
-  groupBy: ActivityGroupBy
+  groupBy: ActivityGroupBy,
+  t?: Translate
 ): ActivityThreadGroup[] {
   if (groupBy === 'none') {
     return threads.length > 0 ? [{ key: 'all', label: '', threads }] : []
@@ -76,7 +58,7 @@ export function buildActivityThreadGroups(
   const groups: ActivityThreadGroup[] = []
   const groupIndexByKey = new Map<string, number>()
   for (const thread of threads) {
-    const group = getActivityThreadGroup(thread, groupBy)
+    const group = getActivityThreadGroup(thread, groupBy, t)
     const existingIndex = groupIndexByKey.get(group.key)
     if (existingIndex === undefined) {
       groups.push({ ...group, threads: [thread] })
@@ -105,23 +87,13 @@ function buildThreadSearchText(thread: AgentPaneThread): string {
   return `${thread.paneTitle} ${getActivityThreadWorkspaceTitle(thread.worktree)} ${thread.worktree.branch ?? ''} ${thread.repo?.displayName ?? ''} ${formatAgentTypeLabel(thread.agentType)} ${stateLabel} ${currentPrompt} ${rawCurrentPrompt} ${currentSummary} ${thread.responsePreview} ${latestEventText}`.toLowerCase()
 }
 
-// Why: thread objects are rebuilt only when the underlying store data changes, so their
-// identity is a correct cache key; without this every keystroke re-lowercases a large
-// string per thread. WeakMap so dropped threads release their text.
+// Thread identity changes with its data, so cache lowercase search text across keystrokes; WeakMap releases dropped threads.
 const threadSearchTextCache = new WeakMap<AgentPaneThread, string>()
-let threadSearchTextComputeCount = 0
-
-/** Test hook: how many times search text was actually (re)built. */
-export function getThreadSearchTextComputeCount(): number {
-  return threadSearchTextComputeCount
-}
-
 function threadSearchText(thread: AgentPaneThread): string {
   const cached = threadSearchTextCache.get(thread)
   if (cached !== undefined) {
     return cached
   }
-  threadSearchTextComputeCount += 1
   const text = buildThreadSearchText(thread)
   threadSearchTextCache.set(thread, text)
   return text
@@ -134,6 +106,20 @@ export function isActivitySearchQueryTooLarge(
   maxBytes = ACTIVITY_SEARCH_QUERY_MAX_BYTES
 ): boolean {
   return isClipboardTextByteLengthOverLimit(query, maxBytes)
+}
+
+export function createActivityThreadSearchMatcher(
+  searchQuery: string
+): (thread: AgentPaneThread) => boolean {
+  if (isActivitySearchQueryTooLarge(searchQuery)) {
+    return () => false
+  }
+  const trimmedQuery = searchQuery.trim()
+  if (!trimmedQuery) {
+    return () => true
+  }
+  const normalizedQuery = trimmedQuery.toLowerCase()
+  return (thread) => threadSearchText(thread).includes(normalizedQuery)
 }
 
 export function activityThreadMatchesSearchQuery({

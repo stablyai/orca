@@ -1,24 +1,38 @@
+import { enqueueRootProjectOrderForSidebarDrop } from './root-project-order-commit'
 import { useCallback, useEffect, useMemo } from 'react'
 import type React from 'react'
 import { useAppStore } from '@/store'
-import { getProjectGroupHostId } from '@/store/slices/project-group-owner-routing'
+import '@/store/project-groups/project-group-owner-routing'
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { ProjectOrderBy } from '../../../../../../shared/ui-chrome-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import type { HostHeaderRow, HostSectionRow } from '../../host-section-rows'
-import type { Row, WorktreeGroupBy } from '../grouping/row-types'
+import type {
+  HostHeaderRow,
+  HostSectionRow
+} from '../../../../../../shared/sidebar-list/host-section-rows'
+import type { Row, WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
 import type { RenderRow } from '../listing/render-row'
 import {
   getProjectGroupHeaderSectionEndByGroupId,
+  getRootProjectHeaderSectionEndByKey,
   getRepoHeaderSectionEndByRepoId
-} from '../../worktree-header-section-boundaries'
-import { useHostHeaderDrag } from '../../host-header-drag'
-import { useRepoHeaderDrag } from '../../project-header-drag'
-import { getSidebarOrderedRepoHeaderIdsByBucket } from '../../project-header-drop'
-import { useProjectGroupHeaderDrag } from '../../project-group-header-drag'
-import { getSidebarOrderedProjectGroupHeaderIdsByBucket } from '../../project-group-header-drop'
+} from '../viewport/worktree-header-section-boundaries'
+import { useHostHeaderDrag } from './host-header-drag'
+import { useRepoHeaderDrag } from './project-header-drag'
+import { getSidebarOrderedRepoHeaderIdsByBucket } from './project-header-drop'
+import { useProjectGroupHeaderDrag } from './project-group-header-drag'
+import { getSidebarOrderedProjectGroupHeaderIdsByBucket } from './project-group-header-drop'
 import { USER_SCROLL_MEASUREMENT_ADJUSTMENT_SUPPRESS_MS } from '../viewport/use-scroll-suppression'
+import {
+  getRootProjectHeaderCountByOccurrenceKey,
+  getSidebarRootProjectHeaderKeys
+} from './root-project-header-drop'
+import { toast } from 'sonner'
+import { translate } from '@/i18n/i18n'
+
+const readLiveRepos = (): readonly Repo[] => useAppStore.getState().repos
 
 export type WorktreeSidebarHeaderDrag = ReturnType<typeof useWorktreeSidebarHeaderDrag>
 
@@ -42,8 +56,6 @@ function bucketById(byBucket: ReadonlyMap<string, readonly string[]>): Map<strin
   return map
 }
 
-// Reordering the three header tiers (host card, project group, project) plus the bucket
-// bookkeeping their drag controllers and DOM attributes need.
 export function useWorktreeSidebarHeaderDrag(args: {
   rows: HostSectionRow[]
   renderRows: readonly RenderRow[]
@@ -80,22 +92,39 @@ export function useWorktreeSidebarHeaderDrag(args: {
   const hasProjectGroups = projectGroups.length > 0
   const canReorderRepoHeaders = groupBy === 'repo' && projectOrderBy === 'manual'
   const canReorderProjectGroupHeaders = groupBy === 'repo' && hasProjectGroups
+  const rootProjectHeaderKeys = useMemo(
+    () =>
+      hasProjectGroups
+        ? getSidebarRootProjectHeaderKeys(
+            projectOrderBy === 'recent'
+              ? rows.filter(
+                  (row) => row.type === 'host-header' || (row.type === 'header' && !row.repo)
+                )
+              : rows
+          )
+        : undefined,
+    [hasProjectGroups, projectOrderBy, rows]
+  )
   const projectGroupByIdForHeaderDrag = useMemo(
     () => new Map(projectGroups.map((group) => [group.id, group])),
     [projectGroups]
+  )
+  const rootProjectHeaderCountByOccurrenceKey = useMemo(
+    () => getRootProjectHeaderCountByOccurrenceKey(rootProjectHeaderKeys),
+    [rootProjectHeaderKeys]
   )
   // Why: an id shared by two hosts has no single owner, so leave it unrouted rather than guess.
   const projectGroupOwnerHostIdByGroupId = useMemo(() => {
     const byGroupId = new Map<string, ExecutionHostId | null>()
     for (const group of projectGroups) {
-      const hostId = getProjectGroupHostId(group)
+      const hostId = getRepoExecutionHostId(group)
       const existing = byGroupId.get(group.id)
       byGroupId.set(group.id, existing === undefined || existing === hostId ? hostId : null)
     }
     return byGroupId
   }, [projectGroups])
 
-  // Why: reorder keeps scrollTop stable; flag direct scroll input so anchor-restore won't chase the moved row (jumpy drop).
+  // Suppress anchor correction after manual header moves so it cannot chase the reordered row.
   const suppressScrollCorrectionForHeaderCommit = useCallback(() => {
     const suppressUntil = window.performance.now() + USER_SCROLL_MEASUREMENT_ADJUSTMENT_SUPPRESS_MS
     suppressMeasurementAdjustmentUntilRef.current = suppressUntil
@@ -157,8 +186,8 @@ export function useWorktreeSidebarHeaderDrag(args: {
     [sidebarProjectGroupHeaderIdsByBucket]
   )
   const commitProjectGroupOrder = useCallback(
-    (repoId: string, projectGroupId: string | null, order: number) => {
-      void moveProjectToGroup(repoId, projectGroupId, order)
+    (project: Repo, projectGroupId: string | null, order: number) => {
+      void moveProjectToGroup(project, projectGroupId, order)
     },
     [moveProjectToGroup]
   )
@@ -174,51 +203,83 @@ export function useWorktreeSidebarHeaderDrag(args: {
     },
     [projectGroupOwnerHostIdByGroupId, suppressScrollCorrectionForHeaderCommit, updateProjectGroup]
   )
+  const commitRootProjectOrder = useCallback(
+    (visibleKeys: readonly string[], draggedKey: string, dropIndex: number) => {
+      const save = () =>
+        enqueueRootProjectOrderForSidebarDrop({
+          getState: useAppStore.getState,
+          visibleKeys,
+          draggedKey,
+          dropIndex,
+          onCommit: suppressScrollCorrectionForHeaderCommit
+        })
+      void save()
+        .catch(() => false)
+        .then((saved) => {
+          if (!saved) {
+            toast.error(
+              translate(
+                'auto.components.sidebar.projectOrderSaveFailed',
+                'Could not save the complete project order'
+              )
+            )
+          }
+        })
+    },
+    [suppressScrollCorrectionForHeaderCommit]
+  )
   // Drag applies only in manual order; still construct the controller inert for stable hook order.
   const repoDrag = useRepoHeaderDrag({
     orderedRepoIds: allRepoIds,
     sidebarRepoHeaderIdsByBucket,
     repoById: repoMap,
+    getLiveRepos: readLiveRepos,
     usesProjectGroupOrdering: hasProjectGroups,
     onCommitRepoOrder: commitRepoReorder,
     onCommitProjectGroupOrder: commitProjectGroupOrder,
+    rootProjectHeaderKeys,
+    onCommitRootProjectOrder: commitRootProjectOrder,
     getScrollContainer: () => scrollRef.current
   })
   const projectGroupDrag = useProjectGroupHeaderDrag({
     sidebarProjectGroupHeaderIdsByBucket,
     projectGroupById: projectGroupByIdForHeaderDrag,
     onCommitProjectGroupTabOrder: commitProjectGroupHeaderOrder,
+    rootProjectHeaderKeys,
+    onCommitRootProjectOrder: commitRootProjectOrder,
     getScrollContainer: () => scrollRef.current
   })
   const repoHeaderSectionEndByRepoId = useMemo(
     () =>
       getRepoHeaderSectionEndByRepoId({
         rows: renderRows,
-        firstHeaderIndex,
-        sidebarRepoHeaderIdsByBucket,
-        repoHeaderBucketByRepoId
+        firstHeaderIndex
       }),
-    [firstHeaderIndex, renderRows, repoHeaderBucketByRepoId, sidebarRepoHeaderIdsByBucket]
+    [firstHeaderIndex, renderRows]
   )
   const projectGroupHeaderSectionEndByGroupId = useMemo(
     () =>
       getProjectGroupHeaderSectionEndByGroupId({
         rows: renderRows,
-        firstHeaderIndex,
-        sidebarProjectGroupHeaderIdsByBucket,
-        projectGroupHeaderBucketByGroupId
+        firstHeaderIndex
       }),
-    [
-      firstHeaderIndex,
-      projectGroupHeaderBucketByGroupId,
-      renderRows,
-      sidebarProjectGroupHeaderIdsByBucket
-    ]
+    [firstHeaderIndex, renderRows]
+  )
+
+  const rootProjectHeaderSectionEndByKey = useMemo(
+    () =>
+      hasProjectGroups
+        ? getRootProjectHeaderSectionEndByKey(renderRows, firstHeaderIndex)
+        : new Map<string, number>(),
+    [hasProjectGroups, renderRows, firstHeaderIndex]
   )
 
   return {
+    rootProjectHeaderCountByOccurrenceKey,
+    rootProjectHeaderSectionEndByKey,
     canReorderRepoHeaders,
     canReorderProjectGroupHeaders,
+    rootProjectHeaderKeys,
     orderedHostIds,
     hostDrag,
     repoDrag,

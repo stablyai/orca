@@ -3,25 +3,32 @@ import type { AppState } from '../types'
 import type { Repo } from '../../../../shared/repo-types'
 import { sanitizeRepoIcon } from '../../../../shared/repo-icon'
 import { normalizeRepoBadgeColor } from '../../../../shared/repo-badge-color'
-import {
-  findRepoForHost,
-  getRepoHostIdentityForParts,
-  repoMatchesHostIdentity
-} from '../slices/repo-host-identity'
-import { callRuntimeRpc, getActiveRuntimeTarget } from '../../runtime/runtime-rpc-client'
+import { normalizeGhAccountBinding } from '../../../../shared/github/account-binding'
+import { normalizeJiraProjectReference } from '../../../../shared/jira/jira-project-reference'
+import { sanitizeAgentWorkspaceTrustDecision } from '../../../../shared/agent-launch/permissions/agent-workspace-trust-decision'
+import { findRepoForHost, repoMatchesHostIdentity } from './repo-host-identity'
+import { getRepoHostIdentityForParts } from '../../../../shared/repo-host-identity'
+import { callRuntimeRpc } from '../../runtime/rpc/calls/runtime-rpc-call'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import {
   normalizeCustomWorktreeVisibilitySources,
   normalizeWorktreeVisibilitySourcePreferences
 } from '../../../../shared/worktree/visibility-sources'
 import type { RepoSlice, RepoUpdate } from './repo-state'
-import { repoWithFetchedOwner, settingsForRepoOwner } from './owner-routing'
-import { getRuntimeTargetHostId } from '../runtime-target-host'
+import { adoptFromEndpoint } from '../host-catalog/endpoint-catalog-adoption'
 import { getProjectSetupRuntimeTarget } from '../projects/project-host-routing'
 import { mergeProjectCompatibilityForHostRepoChange } from './repo-catalog-identity'
 
 export function sanitizeRepoUpdate(updates: RepoUpdate): RepoUpdate {
   const sanitized = { ...updates }
+  if ('defaultJiraProject' in sanitized) {
+    const reference = normalizeJiraProjectReference(sanitized.defaultJiraProject)
+    if (reference === undefined) {
+      delete sanitized.defaultJiraProject
+    } else {
+      sanitized.defaultJiraProject = reference
+    }
+  }
   if ('badgeColor' in sanitized) {
     const badgeColor = normalizeRepoBadgeColor(sanitized.badgeColor)
     if (!badgeColor) {
@@ -49,6 +56,20 @@ export function sanitizeRepoUpdate(updates: RepoUpdate): RepoUpdate {
     sanitized.forkSyncMode !== 'off'
   ) {
     delete sanitized.forkSyncMode
+  }
+  if (
+    'agentWorkspaceTrust' in sanitized &&
+    sanitizeAgentWorkspaceTrustDecision(sanitized.agentWorkspaceTrust) === undefined
+  ) {
+    delete sanitized.agentWorkspaceTrust
+  }
+  if ('ghAccount' in sanitized && sanitized.ghAccount != null) {
+    const normalized = normalizeGhAccountBinding(sanitized.ghAccount)
+    if (!normalized) {
+      delete sanitized.ghAccount
+    } else {
+      sanitized.ghAccount = normalized
+    }
   }
   if ('customWorktreeVisibilitySources' in sanitized) {
     const sources = normalizeCustomWorktreeVisibilitySources(
@@ -103,15 +124,15 @@ export function createRepoUpdateActions(
       const ownerHasExplicitHost = Boolean(
         options?.hostId || ownerRepo.executionHostId?.trim() || ownerRepo.connectionId?.trim()
       )
-      const explicitOwnerHostId = getRepoExecutionHostId(ownerRepo)
-      const ownerTarget = ownerHasExplicitHost
-        ? getProjectSetupRuntimeTarget(explicitOwnerHostId)
-        : getActiveRuntimeTarget(settingsForRepoOwner(get(), projectId))
-      const ownerHostId = ownerHasExplicitHost
-        ? explicitOwnerHostId
-        : getRuntimeTargetHostId(ownerTarget)
+      // Why: a row with no stamp is this app's own; ingest stamps every server row.
+      const ownerHostId = getRepoExecutionHostId(ownerRepo)
+      const ownerTarget = getProjectSetupRuntimeTarget(ownerHostId)
       const updateChainKey = getRepoHostIdentityForParts(projectId, ownerHostId)
       const applyRepoUpdate = async () => {
+        // Why at dispatch: an earlier queued update (an account change) may legitimately replace the owner.
+        const sourceOwner = get().githubSourceCollections?.capture(
+          get().repos.find((r) => repoMatchesHostIdentity(r, projectId, ownerHostId)) ?? ownerRepo
+        )
         try {
           const sanitizedUpdates = sanitizeRepoUpdate(updates)
           const target = ownerTarget
@@ -130,6 +151,21 @@ export function createRepoUpdateActions(
                     { timeoutMs: 15_000 }
                   )
                 ).repo
+          if (
+            sanitizedUpdates.projectGroupOrder !== undefined &&
+            (!updatedRepo ||
+              (updatedRepo.projectGroupOrder ?? null) !== sanitizedUpdates.projectGroupOrder)
+          ) {
+            return false
+          }
+          // A host from before dictionaries drops the field and still answers with its row.
+          if (
+            sanitizedUpdates.dictationTerms !== undefined &&
+            JSON.stringify(updatedRepo?.dictationTerms ?? []) !==
+              JSON.stringify(sanitizedUpdates.dictationTerms)
+          ) {
+            return false
+          }
           set((s) => {
             const nextRepos = s.repos.map((r) => {
               const matchesOwner = ownerHasExplicitHost
@@ -138,13 +174,22 @@ export function createRepoUpdateActions(
               if (!matchesOwner) {
                 return r
               }
+              if (sourceOwner && !s.githubSourceCollections?.owns(sourceOwner)) {
+                return r
+              }
               if (updatedRepo) {
-                return repoWithFetchedOwner(updatedRepo, target)
+                return (
+                  s.githubSourceCollections?.adopt(
+                    adoptFromEndpoint(target, { kind: 'repo', row: updatedRepo })
+                  ) ?? adoptFromEndpoint(target, { kind: 'repo', row: updatedRepo })
+                )
               }
               let mergedRepo: Repo = r
               const {
+                projectGroupOrder: _projectGroupOrder,
                 sourceControlAi,
                 externalWorktreeDiscoverySuppressedAt,
+                ghAccount,
                 externalWorktreeVisibility,
                 agentWorktreeVisibility,
                 ...updatesWithoutClearSentinels
@@ -180,7 +225,13 @@ export function createRepoUpdateActions(
               } else if (externalWorktreeDiscoverySuppressedAt !== undefined) {
                 mergedRepo = { ...mergedRepo, externalWorktreeDiscoverySuppressedAt }
               }
-              return mergedRepo
+              if (ghAccount === null) {
+                const { ghAccount: _ghAccount, ...repoWithoutGhAccount } = mergedRepo
+                mergedRepo = repoWithoutGhAccount
+              } else if (ghAccount !== undefined) {
+                mergedRepo = { ...mergedRepo, ghAccount }
+              }
+              return s.githubSourceCollections?.adopt(mergedRepo) ?? mergedRepo
             })
             return {
               repos: nextRepos,
@@ -199,7 +250,7 @@ export function createRepoUpdateActions(
         }
       }
       const previous = updateRepoChains.get(updateChainKey)
-      // Why: settings persist as full nested values, so preserve per-repo call order — a slower response mustn't overwrite newer state.
+      // Persisted nested settings replace whole values; serialize per repo so slow replies cannot overwrite newer edits.
       const next = previous
         ? previous.catch(() => undefined).then(applyRepoUpdate)
         : applyRepoUpdate()

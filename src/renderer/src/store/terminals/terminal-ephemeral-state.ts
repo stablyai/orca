@@ -1,11 +1,12 @@
-import { isClaudeAgent } from '@/lib/agent-status'
-import { recordTerminalInputActivity } from '@/lib/terminal-input-activity-coalescing'
-import { classifyTitleActivity } from '@/lib/pane-agent-evidence'
+import { isClaudeAgent as isClaudeAgentDefault } from '../../../../shared/agent-status/title/agent-title-identity'
+import { recordTerminalInputActivity } from '@/lib/terminal/input/terminal-input-activity-coalescing'
+import { detectAgentStatusFromTitle } from '../../../../shared/agent-status/title/agent-title-status'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 
 export function createTerminalEphemeralActions(
   set: TerminalStoreSet,
-  get: TerminalStoreGet
+  get: TerminalStoreGet,
+  isClaudeAgent = isClaudeAgentDefault
 ): Pick<
   TerminalSlice,
   | 'markDefaultTerminalTabsApplied'
@@ -30,7 +31,7 @@ export function createTerminalEphemeralActions(
     markDefaultTerminalTabsApplied: (worktreeId) =>
       set((s) => {
         if (s.defaultTerminalTabsAppliedByWorktreeId[worktreeId]) {
-          return {}
+          return s
         }
         return {
           defaultTerminalTabsAppliedByWorktreeId: {
@@ -70,7 +71,7 @@ export function createTerminalEphemeralActions(
       set((s) => {
         const current = s.nativeChatLaunchPromptByTabId[tabId]
         if (!current || current.failed) {
-          return {}
+          return s
         }
         return {
           nativeChatLaunchPromptByTabId: {
@@ -83,7 +84,7 @@ export function createTerminalEphemeralActions(
     clearNativeChatLaunchPrompt: (tabId) => {
       set((s) => {
         if (!s.nativeChatLaunchPromptByTabId[tabId]) {
-          return {}
+          return s
         }
         const next = { ...s.nativeChatLaunchPromptByTabId }
         delete next[tabId]
@@ -102,7 +103,7 @@ export function createTerminalEphemeralActions(
       set((s) => {
         const current = s.nativeChatLaunchDraftByTabId[tabId]
         if (!current || current.adopted) {
-          return {}
+          return s
         }
         return {
           nativeChatLaunchDraftByTabId: {
@@ -121,7 +122,7 @@ export function createTerminalEphemeralActions(
           current.createdAt !== resolution.createdAt ||
           current.text !== resolution.text
         ) {
-          return {}
+          return s
         }
         return {
           nativeChatLaunchDraftByTabId: {
@@ -134,7 +135,7 @@ export function createTerminalEphemeralActions(
     clearNativeChatLaunchDraft: (tabId) => {
       set((s) => {
         if (!s.nativeChatLaunchDraftByTabId[tabId]) {
-          return {}
+          return s
         }
         const next = { ...s.nativeChatLaunchDraftByTabId }
         delete next[tabId]
@@ -148,8 +149,7 @@ export function createTerminalEphemeralActions(
       recordTerminalInputActivity({
         paneKey,
         timestamp,
-        // Why: the first stamp for a pane must land synchronously; automation take-over
-        // detection subscribes and compares undefined→value across a launch.
+        // Publish first pane input synchronously so automation takeover observes undefined→timestamp across launch.
         forceWrite: get().lastTerminalInputAtByPaneKey[paneKey] === undefined,
         commit: {
           insert: (key, at) =>
@@ -168,7 +168,7 @@ export function createTerminalEphemeralActions(
                 next ??= { ...s.lastTerminalInputAtByPaneKey }
                 next[key] = at
               }
-              return next ? { lastTerminalInputAtByPaneKey: next } : {}
+              return next ? { lastTerminalInputAtByPaneKey: next } : s
             })
         }
       })
@@ -202,7 +202,7 @@ export function createTerminalEphemeralActions(
           if (!tab.title || !isClaudeAgent(tab.title)) {
             continue
           }
-          const status = classifyTitleActivity(tab.title)
+          const status = detectAgentStatusFromTitle(tab.title)
           if (status === null || status === 'working') {
             continue
           }
@@ -227,7 +227,7 @@ export function createTerminalEphemeralActions(
     removeDeferredSshSessionId: (tabId) =>
       set((s) => {
         if (!s.deferredSshSessionIdsByTabId[tabId]) {
-          return {}
+          return s
         }
         const next = { ...s.deferredSshSessionIdsByTabId }
         delete next[tabId]

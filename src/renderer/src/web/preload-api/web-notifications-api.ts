@@ -3,8 +3,12 @@ import { getBrowserPlatform } from './web-storage'
 
 export function createNotificationsApi(): NonNullable<Partial<PreloadApi>['notifications']> {
   return {
+    getDesktopAwayState: async () => undefined,
     dispatch: () => Promise.resolve({ delivered: false, reason: 'not-supported' }),
+    acknowledgeAttention: () => Promise.resolve({ dismissed: 0 }),
     dismiss: () => Promise.resolve({ dismissed: 0 }),
+    // The browser client relays nothing to phones, so there is nothing to settle.
+    settleStructuredPrompts: () => Promise.resolve(),
     openSystemSettings: () => Promise.resolve(),
     getPermissionStatus: () =>
       Promise.resolve({ supported: false, platform: getBrowserPlatform(), requested: false }),

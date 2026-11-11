@@ -1,30 +1,33 @@
 import React, { useCallback, useMemo } from 'react'
 import { Cloud, Copy, FolderGit2, GitBranch, Laptop, LocateFixed, Server } from 'lucide-react'
 import { toast } from 'sonner'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
-import { AgentIcon } from '@/lib/agent-catalog'
-import { agentTypeToIconAgent, formatAgentTypeLabel } from '@/lib/agent-status'
-import { getWorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
-import { jumpToWorktreeFromSidebar } from '@/lib/worktree-jump-navigation'
+import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
+import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
+import { getWorktreeGitIdentityDisplay } from '../../../../shared/worktree/git-identity-display'
+import { jumpToWorktreeFromSidebar } from '@/lib/workspace/activation/worktree-jump-navigation'
 import { translate } from '@/i18n/i18n'
-import { cn } from '@/lib/utils'
-import {
-  getExecutionHostLabel,
-  getWorktreeExecutionHostId,
-  parseExecutionHostId
-} from '../../../../shared/execution-host'
+import { useTranslate } from '@/i18n/use-translate'
+import { formatClipboardFilePath } from '@/lib/clipboard/clipboard-file-path'
+import { getWorktreeRowLocalPathOpenOwner } from '@/lib/workspace/ownership/worktree-row-open-in-owner'
+import { cn } from '@/lib/class-names'
+import { getWorktreeExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
 import CommentMarkdown from '../sidebar/CommentMarkdown'
-import { DetailHeader, MetadataActionIcon } from '../sidebar/WorktreeCardMetadataControls'
+import { getTranslatedExecutionHostLabel } from '../sidebar/execution-host-label'
+import {
+  DetailHeader,
+  MetadataActionIcon
+} from '../sidebar/workspace-card/metadata/WorktreeCardMetadataControls'
 import {
   WorktreeCardDetailSection,
   WorktreeCardDetailSectionContent
-} from '../sidebar/WorktreeCardDetailSection'
+} from '../sidebar/workspace-card/details/WorktreeCardDetailSection'
 import { EventTime, ThreadAgentStateIndicator } from './activity-thread-controls'
 import { activityThreadRowCopy, threadAgentStateLabel } from './activity-thread-presentation'
-import { getActivityThreadWorkspaceTitle } from '@/lib/activity-thread-display'
+import { getActivityThreadWorkspaceTitle } from '@/lib/workspace/activity/activity-thread-display'
 import type { AgentPaneThread } from './activity-thread-types'
 
 export function ActivityThreadHoverCardSummary({
@@ -38,13 +41,14 @@ export function ActivityThreadHoverCardSummary({
   onJumpToWorkspace?: (event: React.MouseEvent) => void
   canJumpToWorkspace?: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   const { worktree, repo } = thread
   const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   const executionHostId = getWorktreeExecutionHostId(worktree, repo ?? undefined)
   const parsedHost = parseExecutionHostId(executionHostId)
   const hostLabelOverrides = useMemo(() => getHostDisplayLabelOverrides(settings), [settings])
-  const hostDisplayLabel = useMemo(() => {
+  const customHostDisplayLabel = useMemo(() => {
     const override = hostLabelOverrides.get(executionHostId)
     if (override) {
       return override
@@ -61,15 +65,14 @@ export function ActivityThreadHoverCardSummary({
         return target
       }
     }
-    return getExecutionHostLabel(executionHostId)
+    return null
   }, [executionHostId, hostLabelOverrides, parsedHost, runtimeEnvironments, sshTargetLabels])
+  const hostDisplayLabel =
+    customHostDisplayLabel ?? getTranslatedExecutionHostLabel(executionHostId)
   const branchIdentityDisplay = useMemo(() => getWorktreeGitIdentityDisplay(worktree), [worktree])
-  const { taskTitle, needsAttention } = activityThreadRowCopy(thread)
+  const { taskTitle, needsAttention } = activityThreadRowCopy(thread, t)
   const workspaceTitle = getActivityThreadWorkspaceTitle(worktree)
-  const copyPathLabel = translate(
-    'auto.components.activity.ActivityThreadHoverCard.copyPath',
-    'Copy path'
-  )
+  const copyPathLabel = t('auto.components.activity.ActivityThreadHoverCard.copyPath', 'Copy path')
 
   const isKnownWorktree = useAppStore((s) =>
     Boolean(s.getKnownWorktreeById(worktree.id, executionHostId))
@@ -84,7 +87,7 @@ export function ActivityThreadHoverCardSummary({
       } else {
         const state = useAppStore.getState()
         if (state.getKnownWorktreeById(worktree.id, executionHostId)) {
-          state.acknowledgeAgents([thread.paneKey])
+          state.acknowledgeAgents([thread.paneKey], undefined, 'explicit')
           jumpToWorktreeFromSidebar(worktree.id, { executionHostId })
         }
       }
@@ -97,7 +100,12 @@ export function ActivityThreadHoverCardSummary({
       return
     }
     try {
-      await window.api.ui.writeClipboardText(worktree.path)
+      const owner = getWorktreeRowLocalPathOpenOwner(
+        useAppStore.getState(),
+        worktree,
+        repo?.connectionId
+      )
+      await window.api.ui.writeClipboardText(formatClipboardFilePath(worktree.path, owner))
       toast.success(
         translate(
           'auto.components.activity.ActivityThreadHoverCard.pathCopied',
@@ -112,7 +120,7 @@ export function ActivityThreadHoverCardSummary({
         )
       )
     }
-  }, [worktree.path])
+  }, [repo?.connectionId, worktree])
 
   return (
     <>
@@ -120,7 +128,7 @@ export function ActivityThreadHoverCardSummary({
         <div className="flex items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-1.5">
             <span className="inline-flex shrink-0">
-              <AgentIcon agent={agentTypeToIconAgent(thread.agentType)} size={14} />
+              <AgentTypeIcon agentType={thread.agentType} size={14} />
             </span>
             <span className="truncate text-[12px] font-semibold text-foreground">
               {formatAgentTypeLabel(thread.agentType)}
@@ -134,7 +142,7 @@ export function ActivityThreadHoverCardSummary({
                 needsAttention ? 'text-agent-question-text' : 'text-muted-foreground'
               )}
             >
-              {threadAgentStateLabel(thread)}
+              {threadAgentStateLabel(thread, t)}
             </span>
             <span className="text-muted-foreground/40">•</span>
             <EventTime timestamp={thread.latestTimestamp} compact />
@@ -158,14 +166,11 @@ export function ActivityThreadHoverCardSummary({
       <WorktreeCardDetailSection>
         <DetailHeader
           icon={<FolderGit2 className="size-3 text-muted-foreground" />}
-          label={translate(
-            'auto.components.activity.ActivityThreadHoverCard.workspace',
-            'Workspace'
-          )}
+          label={t('auto.components.activity.ActivityThreadHoverCard.workspace', 'Workspace')}
           actions={
             canJump ? (
               <MetadataActionIcon
-                label={translate(
+                label={t(
                   'auto.components.activity.ActivityThreadHoverCard.jumpToWorkspace',
                   'Jump to workspace'
                 )}

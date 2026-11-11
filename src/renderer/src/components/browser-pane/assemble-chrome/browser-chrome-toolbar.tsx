@@ -1,37 +1,28 @@
-import { cn } from '@/lib/utils'
-import { Crosshair, ExternalLink, MessageSquarePlus, SquareCode } from 'lucide-react'
+import { useRef } from 'react'
+import { X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
 import {
   BrowserNavigationControlRow,
   type BrowserNavigationControls
 } from './browser-navigation-control-row'
-import { MarkupDrawButton } from '../annotate/MarkupDrawButton'
-import type { GrabIntent } from '../describe-page/browser-page-types'
+import {
+  BROWSER_CHROME_FOLD_ORDER,
+  useBrowserChromeToolFold,
+  type BrowserChromeFoldStage
+} from './use-browser-chrome-tool-fold'
+import {
+  BrowserAnnotateSplitButton,
+  type BrowserChromeElementTools,
+  type BrowserChromeMarkupTool,
+  type BrowserChromeNoteActions
+} from './browser-annotate-split-button'
+import { useFloatingSplitBrowserClose } from './use-floating-split-browser-close'
 
-/** The in-guest element picker, driving both Grab (copy) and Annotate (comment). */
-export type BrowserChromeElementTools = {
-  /** The intent the picker is armed for right now, or null when it is idle. */
-  activeIntent: GrabIntent | null
-  onStartIntent: (intent: GrabIntent) => void
-  disabled: boolean
-  grabShortcutLabel: string
-  annotationCount: number
-}
-
-export type BrowserChromeMarkupTool = {
-  active: boolean
-  disabled: boolean
-  onToggle: () => void
-  /**
-   * Whether this surface may spend the draw tool's one-per-install discovery popover. False on a
-   * hidden pane (a portaled layer would anchor to a zero-size trigger) and false on any surface
-   * that does not own the nudge — a preview consuming it would burn the single view on a reader
-   * who came for a document, before the browsing pane ever offered it.
-   */
-  canShowDiscoveryHint: boolean
-}
+export type {
+  BrowserChromeElementTools,
+  BrowserChromeMarkupTool,
+  BrowserChromeNoteActions
+} from './browser-annotate-split-button'
 
 export type BrowserChromeToolAction = {
   onSelect: () => void
@@ -39,168 +30,126 @@ export type BrowserChromeToolAction = {
   disabled?: boolean
 }
 
+export type BrowserChromeOverflowMenuProps = {
+  triggerRef: React.RefObject<HTMLButtonElement | null>
+  /** Run after menu close without focus return; focusing the ⋯ trigger would immediately dismiss a new popover or dialog. */
+  deferUntilClose: (action: () => void) => void
+  onMenuCloseAutoFocus: (event: Event) => void
+}
+
 /**
- * The whole browser chrome bar — history, identity, tools — for every surface that renders guest
- * content: the browsing pane and the workspace document preview.
- *
- * Why one component and not a shared row plus two tool clusters: a tool added here has to appear
- * on both surfaces to stay honest, and a per-surface cluster is exactly how they drift apart. A
- * surface omits a tool only by passing null, and each null below says why that tool cannot apply.
+ * One row for browsing and document previews: navigation, the address, one agent tool and ⋯.
+ * Page actions live in the address slot; browser actions live in each surface's ⋯ menu.
  */
 export function BrowserChromeToolbar({
   controls,
   addressSlot,
   reloadControl,
   reloadLabel,
-  importControl,
+  extensionActions,
   elementTools,
   markup,
+  notes,
   shareControl,
-  viewSource,
-  openExternal,
   overflowMenu,
-  showTourAnchors = false
+  closeTabOwner,
+  showTourAnchors = false,
+  pinAnnotateLabel = false
 }: {
   controls: BrowserNavigationControls
   addressSlot: React.ReactNode
   reloadControl?: React.ReactNode
   reloadLabel?: string
-  /** Cookie import — a browsing session concept; null where there is no session to import into. */
-  importControl?: React.ReactNode
-  elementTools: BrowserChromeElementTools | null
+  /** Pinned extension buttons; null where the page's session runs no extensions. `compact` hides them, and unpinned popups anchor to ⋯. */
+  extensionActions?:
+    | ((
+        compact: boolean,
+        menuTriggerRef: React.RefObject<HTMLButtonElement | null>
+      ) => React.ReactNode)
+    | null
+  elementTools: BrowserChromeElementTools
   markup: BrowserChromeMarkupTool
+  notes?: BrowserChromeNoteActions | null
+  /** Share beside a document chip, which can't hold a nested button the way the address field does. */
   shareControl?: React.ReactNode
-  viewSource: BrowserChromeToolAction | null
-  openExternal: BrowserChromeToolAction | null
-  overflowMenu?: React.ReactNode
+  overflowMenu: (props: BrowserChromeOverflowMenuProps) => React.ReactNode
+  /** The page whose tab the toolbar X closes in a floating split, where the panel's one tab row may be showing another split. */
+  closeTabOwner: { worktreeId: string; browserPageId: string }
   /** Only the browsing pane anchors the contextual tour; a second anchor would steal its steps. */
   showTourAnchors?: boolean
+  /** Keeps the tour's target fully labelled while it is pointed at. */
+  pinAnnotateLabel?: boolean
 }): React.JSX.Element {
+  const closeTab = useFloatingSplitBrowserClose(
+    closeTabOwner.worktreeId,
+    closeTabOwner.browserPageId
+  )
+  const rowRef = useRef<HTMLDivElement>(null)
+  const overflowTriggerRef = useRef<HTMLButtonElement>(null)
+  const present: Record<BrowserChromeFoldStage, boolean> = {
+    extensions: extensionActions != null,
+    'annotate-label': !pinAnnotateLabel
+  }
+  const folded = useBrowserChromeToolFold(
+    rowRef,
+    BROWSER_CHROME_FOLD_ORDER.filter((stage) => present[stage])
+  )
+
+  const afterMenuCloseRef = useRef<(() => void) | null>(null)
+  const deferUntilClose = (action: () => void): void => {
+    afterMenuCloseRef.current = action
+  }
+  const onMenuCloseAutoFocus = (event: Event): void => {
+    const action = afterMenuCloseRef.current
+    if (!action) {
+      return
+    }
+    afterMenuCloseRef.current = null
+    event.preventDefault()
+    action()
+  }
+
   return (
     <BrowserNavigationControlRow
+      rowRef={rowRef}
       controls={controls}
       addressSlot={addressSlot}
       reloadControl={reloadControl}
       reloadLabel={reloadLabel}
       showTourAnchors={showTourAnchors}
     >
-      {importControl}
-
-      {elementTools ? (
+      {shareControl}
+      <BrowserAnnotateSplitButton
+        tools={elementTools}
+        markup={markup}
+        notes={notes}
+        compact={folded.has('annotate-label')}
+        showTourAnchors={showTourAnchors}
+      />
+      <span className="flex shrink-0 items-center">
+        {extensionActions?.(folded.has('extensions'), overflowTriggerRef)}
+        {overflowMenu({
+          triggerRef: overflowTriggerRef,
+          deferUntilClose,
+          onMenuCloseAutoFocus
+        })}
+      </span>
+      {closeTab ? (
         <>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span className="inline-flex">
-                <Button
-                  size="icon"
-                  variant={elementTools.activeIntent === 'copy' ? 'default' : 'ghost'}
-                  className={cn(
-                    'h-8 w-8',
-                    elementTools.activeIntent === 'copy' &&
-                      'bg-foreground/80 text-background hover:bg-foreground/90'
-                  )}
-                  onClick={() => elementTools.onStartIntent('copy')}
-                  disabled={elementTools.disabled}
-                  aria-label={translate(
-                    'auto.components.browser.pane.BrowserPane.fdfc7fe0ef',
-                    'Grab page element'
-                  )}
-                  {...(showTourAnchors
-                    ? { 'data-contextual-tour-target': 'browser-grab-control' }
-                    : {})}
-                >
-                  <Crosshair className="size-4" />
-                </Button>
-              </span>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" sideOffset={4}>
-              {translate(
-                'auto.components.browser.pane.BrowserPane.acbe79fd01',
-                'Grab page element ({{value0}})',
-                { value0: elementTools.grabShortcutLabel }
-              )}
-            </TooltipContent>
-          </Tooltip>
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              {/* Why: disabled <button> drops hover events, so wrap in a span so the tooltip trigger still fires. */}
-              <span className="inline-flex">
-                <Button
-                  size="icon"
-                  variant={elementTools.activeIntent === 'annotate' ? 'default' : 'ghost'}
-                  className={cn(
-                    'relative h-8 w-8',
-                    elementTools.activeIntent === 'annotate' &&
-                      'bg-foreground/80 text-background hover:bg-foreground/90'
-                  )}
-                  onClick={() => elementTools.onStartIntent('annotate')}
-                  disabled={elementTools.disabled}
-                  aria-label={translate(
-                    'auto.components.browser.pane.BrowserPane.fc9be38f6f',
-                    'Annotate page element'
-                  )}
-                  {...(showTourAnchors
-                    ? { 'data-contextual-tour-target': 'browser-annotation-control' }
-                    : {})}
-                >
-                  <MessageSquarePlus className="size-4" />
-                  {elementTools.annotationCount > 0 ? (
-                    <span className="absolute -top-1 -right-1 flex min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] leading-4 text-primary-foreground">
-                      {elementTools.annotationCount}
-                    </span>
-                  ) : null}
-                </Button>
-              </span>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" sideOffset={4}>
-              {translate(
-                'auto.components.browser.pane.BrowserPane.fc9be38f6f',
-                'Annotate page element'
-              )}
-            </TooltipContent>
-          </Tooltip>
+          <span className="mx-0.5 h-4 w-px shrink-0 bg-border" aria-hidden />
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-7 w-7"
+            onClick={closeTab.onSelect}
+            title={closeTab.label}
+            aria-label={closeTab.label}
+            disabled={closeTab.disabled}
+          >
+            <X className="size-4" />
+          </Button>
         </>
       ) : null}
-
-      <MarkupDrawButton
-        onClick={markup.onToggle}
-        disabled={markup.disabled}
-        active={markup.active}
-        surfaceActive={markup.canShowDiscoveryHint}
-      />
-
-      {shareControl}
-
-      {viewSource ? (
-        <Button
-          size="icon"
-          variant="ghost"
-          className="h-7 w-7"
-          onClick={viewSource.onSelect}
-          title={viewSource.label}
-          aria-label={viewSource.label}
-          disabled={viewSource.disabled}
-        >
-          <SquareCode className="size-4" />
-        </Button>
-      ) : null}
-
-      {openExternal ? (
-        <Button
-          size="icon"
-          variant="ghost"
-          className="h-7 w-7"
-          onClick={openExternal.onSelect}
-          title={openExternal.label}
-          aria-label={openExternal.label}
-          disabled={openExternal.disabled}
-        >
-          <ExternalLink className="size-4" />
-        </Button>
-      ) : null}
-
-      {overflowMenu}
     </BrowserNavigationControlRow>
   )
 }
