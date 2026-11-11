@@ -134,6 +134,10 @@ export function HostSectionHeader({
       >
         {row.vmState ? (
           <VmHostIcon state={row.vmState} isCloud={isCloudHost} />
+        ) : isCloudHost ? (
+          <HostGlyph kind="orca-cloud" size={14} />
+        ) : row.kind === 'local' ? (
+          <HostGlyph kind="local" size={14} />
         ) : isDisconnected ? (
           <ServerOff className="size-3.5 shrink-0 text-muted-foreground/80" />
         ) : (
