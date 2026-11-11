@@ -143,4 +143,38 @@ describe('RateLimitService', () => {
     await flushMicrotasks(20)
     expect(vi.mocked(fetchCodexRateLimits)).toHaveBeenCalledTimes(1)
   })
+
+  it('admits an automatic read for the account selected after a switch, both ways', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    try {
+      const start = 1_000_000
+      let home = '/accounts/default/.codex'
+      const service = new RateLimitService()
+      service.setCodexHomePathResolver(() => ({ kind: 'ready', codexHomePath: home }))
+      vi.mocked(fetchCodexRateLimits).mockClear()
+      const automaticRead = async (at: number) => {
+        vi.setSystemTime(at)
+        vi.mocked(fetchCodexRateLimits).mockResolvedValue(okProvider('codex', 10, at))
+        service.requestUsageReading('codex', { notWithinMs: 600_000 })
+        await flushMicrotasks(20)
+      }
+      // The other account is selected and its switch-time read fails.
+      const switchTo = async (next: string, at: number) => {
+        vi.setSystemTime(at)
+        home = next
+        vi.mocked(fetchCodexRateLimits).mockResolvedValue(errorProvider('codex', 'probe failed'))
+        await service.refreshForCodexAccountChange(null)
+      }
+      await automaticRead(start)
+      await switchTo('/accounts/managed-b', start + 60_000)
+      // Past the failure backoff and well inside the default account's ten minutes.
+      await automaticRead(start + 90_000)
+      expect(vi.mocked(fetchCodexRateLimits)).toHaveBeenCalledTimes(3)
+      await switchTo('/accounts/default/.codex', start + 150_000)
+      await automaticRead(start + 180_000)
+      expect(vi.mocked(fetchCodexRateLimits)).toHaveBeenCalledTimes(5)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })

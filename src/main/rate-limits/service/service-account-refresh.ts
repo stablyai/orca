@@ -40,8 +40,14 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
     return this.state[provider]
   }
 
-  /** When an automatic read of each provider was last admitted. */
-  private readonly automaticReadingAt: Partial<Record<'claude' | 'codex', number>> = {}
+  /** When an automatic read of each provider was last admitted, and which account's reading
+   *  source the service held then; it counts only for that account. */
+  private readonly automaticReadingAt: Partial<
+    Record<
+      'claude' | 'codex',
+      { at: number; source: { home: string; provenance: string } | undefined }
+    >
+  > = {}
 
   /** An automatic, non-forced read of one provider's selected account. It waits out Retry-After
    *  and the failure backoff the poller keeps; with `notWithinMs` it also waits while a reading
@@ -57,15 +63,18 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
     }
     if (options.notWithinMs !== undefined) {
       const checkedAt = limits?.status === 'ok' ? this.providerCheckedAt(provider, limits) : null
+      const admitted = this.automaticReadingAt[provider]
+      // After a switch, another account's read says nothing about this one.
+      const sameAccount = admitted?.source === this.usageReadingAccounts[provider]
       const last = Math.max(
-        this.automaticReadingAt[provider] ?? Number.NEGATIVE_INFINITY,
+        (sameAccount && admitted?.at) || Number.NEGATIVE_INFINITY,
         checkedAt ?? Number.NEGATIVE_INFINITY
       )
       if (now - last < options.notWithinMs) {
         return
       }
     }
-    this.automaticReadingAt[provider] = now
+    this.automaticReadingAt[provider] = { at: now, source: this.usageReadingAccounts[provider] }
     // Starts the failure clock as the poller's own retries do.
     this.lastActiveFailureRetryAtByProvider[provider] = now
     void (provider === 'claude' ? this.fetchClaudeOnly() : this.fetchCodexOnly()).catch(() => {})
