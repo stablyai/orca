@@ -7,6 +7,7 @@ import { EXACT_NODE_ENTRYPOINT_IDENTITIES } from './agent-node-entrypoint-identi
 import { NODE_PACKAGE_SCRIPT_ENTRYPOINTS } from './agent-node-package-entrypoints'
 import type { AgentType } from '../contracts/agent-status-types'
 import type { TerminalAgent } from '../identity/terminal-agent'
+import type { TuiAgent } from '../../agent-launch/catalog/tui-agent'
 import { filterHeadlessOneShotAgentCommand } from './agent-headless-command'
 import { getFirstCommandToken } from '../../command-token-scanner'
 import {
@@ -189,6 +190,17 @@ export function isExpectedAgentProcess(
     (['qoder', 'qodercli'].includes(normalizedExpected) &&
       /^(?:qoder|qodercli(?:-\d.*)?)$/.test(normalizedProcess)) ||
     (normalizedExpected === 'muse' && normalizedProcess.startsWith('muse-bin-'))
+  )
+}
+
+/** The foreground belongs to `agent`: any name it is recognized by (dsh-TUI 0.19 runs as `dsh-tui`, not `dsh`) or its expectedProcess. */
+export function isAgentForegroundProcess(
+  processName: string | null | undefined,
+  agent: TuiAgent
+): boolean {
+  return (
+    recognizeAgentProcess(processName)?.agent === agent ||
+    isExpectedAgentProcess(processName, TUI_AGENT_CONFIG[agent].expectedProcess)
   )
 }
 
