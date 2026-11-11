@@ -21,6 +21,7 @@ const vm = require('../image/vm/orca-read-snapshot.cjs') as {
   fitToBudget: <T>(payload: T, maxBytes?: number) => T
   storedSessions: (dataDir: string) => Record<string, unknown>[]
   signingKey: (stateDir: string) => { publicKeyB64: string }
+  workspaceCheckout: (worktrees: Record<string, unknown>[], sessions: Record<string, unknown>[]) => Record<string, unknown> | null
   sign: (out: Record<string, unknown>, key: unknown) => { publicKeyB64: string; signatureB64: string }
 }
 
@@ -364,5 +365,17 @@ describe('read snapshots of sleeping workspaces (E2EE)', () => {
     expect(replaced).not.toBe(first)
     expect(vm.signingKey(dir).publicKeyB64).toBe(replaced)
     expect(() => vm.signingKey('.orca-sandbox')).toThrow()
+  })
+
+  it('reads the workspace’s own checkout, not the base clone (branch workspaces are separate worktrees)', () => {
+    const base = { path: '/vercel/sandbox/project', isMainWorktree: true, lastActivityAt: 0, sortOrder: 5 }
+    const branch = { path: '/vercel/sandbox/worktrees/ra10-asleep', isMainWorktree: false, lastActivityAt: 0, sortOrder: 9 }
+    // No chats: the most recently active checkout.
+    expect(vm.workspaceCheckout([base, branch], [])).toBe(branch)
+    // Chats: the checkout the newest one works in wins.
+    expect(vm.workspaceCheckout([base, branch], [{ worktreePath: base.path, updatedAt: 2 }, { worktreePath: branch.path, updatedAt: 1 }])).toBe(base)
+    // A tie prefers the workspace's worktree over the base clone.
+    expect(vm.workspaceCheckout([{ ...base, sortOrder: 9 }, branch], [])).toBe(branch)
+    expect(vm.workspaceCheckout([], [])).toBeNull()
   })
 })

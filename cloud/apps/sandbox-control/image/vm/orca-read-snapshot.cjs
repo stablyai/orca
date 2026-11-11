@@ -288,7 +288,9 @@ function storedSessions(dataDir) {
         open: open.has(row.session_id),
         lastPrompt: str(last.prompt, LIMITS.messageChars),
         lastReply: str(last.reply, LIMITS.messageChars),
-        lastAt: num(last.at)
+        lastAt: num(last.at),
+        // "<repoId>::<path>": which checkout this chat works in.
+        worktreePath: isObj(record.location) && typeof record.location.workspaceId === 'string' ? record.location.workspaceId.split('::').pop() : null
       })
     }
     return out
@@ -322,12 +324,33 @@ function liveAgents(worktrees) {
   return out
 }
 
+/**
+ * The checkout this workspace is about: the one its newest chat works in, else the most recently
+ * active one (a workspace on its own branch is a separate worktree, not the base clone at
+ * /vercel/sandbox/project), else the base clone.
+ */
+function workspaceCheckout(worktrees, sessions) {
+  const byPath = new Map(worktrees.filter((w) => typeof w.path === 'string').map((w) => [w.path, w]))
+  const newest = sessions
+    .filter((s) => s.worktreePath && byPath.has(s.worktreePath))
+    .sort((a, b) => (num(b.updatedAt) || 0) - (num(a.updatedAt) || 0))[0]
+  if (newest) {
+    return byPath.get(newest.worktreePath)
+  }
+  const activity = (w) => Math.max(num(w.lastActivityAt) || 0, num(w.sortOrder) || 0)
+  const ranked = [...byPath.values()].sort(
+    (a, b) => activity(b) - activity(a) || Number(a.isMainWorktree === true) - Number(b.isMainWorktree === true)
+  )
+  return ranked[0] || null
+}
+
 /** `call(method, params)` -> result | null. Never throws: a missing piece is left out. */
 async function gather(call, { workspaceId, snapshotId, reason, now, deadline, listSessions = () => [] }) {
   const timeLeft = () => deadline - Date.now()
   const ps = await call('worktree.ps', { limit: 20 })
   const worktrees = isObj(ps) && Array.isArray(ps.worktrees) ? ps.worktrees.filter(isObj) : []
-  const project = worktrees.find((w) => w.path === PROJECT) || worktrees[0] || null
+  const stored = listSessions()
+  const project = workspaceCheckout(worktrees, stored)
   const selector = project && typeof project.path === 'string' ? `path:${project.path}` : `path:${PROJECT}`
   const [status, log] = await Promise.all([
     call('git.status', { worktree: selector, includeLineStats: true }),
@@ -335,7 +358,7 @@ async function gather(call, { workspaceId, snapshotId, reason, now, deadline, li
   ])
   const live = liveAgents(worktrees)
   const byId = new Map()
-  for (const s of listSessions()) {
+  for (const s of stored) {
     byId.set(s.sessionId, s)
   }
   for (const [sessionId, a] of live) {
@@ -462,7 +485,7 @@ async function main() {
   process.stdout.write(`${JSON.stringify(out)}\n`)
 }
 
-module.exports = { seal, sign, signingKey, gather, fitToBudget, messagesOf, gitOf, prOf, rpc, storedSessions, liveAgents }
+module.exports = { workspaceCheckout, seal, sign, signingKey, gather, fitToBudget, messagesOf, gitOf, prOf, rpc, storedSessions, liveAgents }
 
 if (require.main === module) {
   // A fixed message: an error text could carry workspace content into the control plane's logs.
