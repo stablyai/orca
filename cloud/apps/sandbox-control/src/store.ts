@@ -71,6 +71,8 @@ export type SandboxRow = {
   last_activity_at: number | null
   last_activity_by: string | null
   token_usd_micros: number | null
+  /** 0051: this workspace's number in its account (shown as W-123); null only on rows from before it. */
+  number?: number | null
 }
 
 export type WorkspaceVisibility = 'private' | 'team'
@@ -118,18 +120,28 @@ export async function insertSandbox(
     Partial<Pick<SandboxRow, 'environment_id' | 'environment_build_id' | 'source_snapshot_id' | 'name' | 'repo_branch' | 'visibility' | 'section'>>,
   now: number
 ): Promise<SandboxRow> {
-  await db
-    .prepare(
-      `INSERT INTO sandboxes (id, account_id, user_id, workspace_id, provider, provider_name, status,
-         machine_size, region, generation, created_at, updated_at, repo_url, environment_id, environment_build_id,
-         source_snapshot_id, created_by, name, repo_branch, visibility, section, last_activity_at, last_activity_by)
-       VALUES (?, ?, ?, ?, ?, ?, 'creating', ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    )
-    .bind(row.id, row.account_id, row.user_id, row.workspace_id, row.provider, row.provider_name,
-      row.machine_size, row.region, now, now, row.repo_url, row.environment_id ?? null,
-      row.environment_build_id ?? null, row.source_snapshot_id ?? null, row.user_id, row.name ?? null,
-      row.repo_branch ?? null, row.visibility ?? 'private', row.section ?? null, now, row.user_id)
-    .run()
+  // One transaction: bump the account's counter, then take its value as this row's number (W-123).
+  // A failed insert rolls the bump back; a destroyed row keeps its number, so none is ever reused.
+  await db.batch([
+    db
+      .prepare(
+        `INSERT INTO org_workspace_counters (account_id, last_number) VALUES (?, 1)
+         ON CONFLICT (account_id) DO UPDATE SET last_number = last_number + 1`
+      )
+      .bind(row.account_id),
+    db
+      .prepare(
+        `INSERT INTO sandboxes (id, account_id, user_id, workspace_id, provider, provider_name, status,
+           machine_size, region, generation, created_at, updated_at, repo_url, environment_id, environment_build_id,
+           source_snapshot_id, created_by, name, repo_branch, visibility, section, last_activity_at, last_activity_by, number)
+         VALUES (?, ?, ?, ?, ?, ?, 'creating', ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+           (SELECT last_number FROM org_workspace_counters WHERE account_id = ?))`
+      )
+      .bind(row.id, row.account_id, row.user_id, row.workspace_id, row.provider, row.provider_name,
+        row.machine_size, row.region, now, now, row.repo_url, row.environment_id ?? null,
+        row.environment_build_id ?? null, row.source_snapshot_id ?? null, row.user_id, row.name ?? null,
+        row.repo_branch ?? null, row.visibility ?? 'private', row.section ?? null, now, row.user_id, row.account_id)
+  ])
   const inserted = await getSandbox(db, row.id)
   if (!inserted) {
     throw new Error('sandbox insert lost')

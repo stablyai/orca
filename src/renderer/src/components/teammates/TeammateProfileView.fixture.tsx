@@ -4,6 +4,9 @@ import { FIXTURE_NOW, workspace } from '../cloud-workspaces/cloud-workspaces.tes
 import { TeammateProfileView, type TeammateProfileViewProps } from './TeammateProfileView'
 
 const DAYS = 182
+// Fixtures render offline: a self-contained stand-in for a provider profile picture.
+const PICTURE =
+  "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='%23f6c38f'/><stop offset='1' stop-color='%23c0713d'/></linearGradient></defs><rect width='64' height='64' fill='url(%23g)'/><circle cx='32' cy='26' r='12' fill='%23fff3e6'/><rect x='14' y='42' width='36' height='22' rx='11' fill='%23fff3e6'/></svg>"
 
 /** A believable work pattern: weekdays busy, weekends quiet, a vacation gap. Deterministic. */
 function levels(): number[] {
@@ -83,6 +86,16 @@ export const teammate = defineFixture({
   render: () => (
     <Frame>
       <TeammateProfileView {...base} />
+    </Frame>
+  )
+})
+
+/** A teammate with a provider profile picture (falls back to initials if it fails to load). */
+export const withPicture = defineFixture({
+  width: 600,
+  render: () => (
+    <Frame>
+      <TeammateProfileView {...base} pictureUrl={PICTURE} />
     </Frame>
   )
 })

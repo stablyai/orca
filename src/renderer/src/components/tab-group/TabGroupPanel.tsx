@@ -27,6 +27,7 @@ import { useWindowBackdropActive } from '@/lib/window-backdrop'
 import { useThemeBackgroundStore } from '@/store/appearance/theme-background'
 import { EditorRevealFlash } from './EditorRevealFlash'
 import { SplitPaneLanding } from './SplitPaneLanding'
+import { CloudWorkspaceNumberChip } from '../cloud-workspaces/CloudWorkspaceNumberChip'
 import { isSplitLandingGroup } from '@/store/slices/tabs/split-landing-groups'
 
 const EditorPanel = lazy(() => import('../editor/EditorPanel'))
@@ -310,7 +311,10 @@ export default function TabGroupPanel({
               className={actionChromeClassName}
               style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
             >
-              {/* One Run button per workspace: in the focused split, or the only group. */}
+              {/* One W-number and Run button per workspace: in the focused split, or the only group. */}
+              {!hasSplitGroups || isFocused ? (
+                <CloudWorkspaceNumberChip worktreeId={worktreeId} />
+              ) : null}
               {!hasSplitGroups || isFocused ? <RunActionButton worktreeId={worktreeId} /> : null}
               <TabBarQuickCommandsButton
                 worktreeId={worktreeId}

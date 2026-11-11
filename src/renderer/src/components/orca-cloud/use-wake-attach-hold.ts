@@ -20,9 +20,17 @@ type Track = {
   attempt: number
   /** The pane never re-attached within the cap: shown as a failed card, not a dead pane. */
   stalled: CloudWakeProgressEvent | undefined
+  /** Held by main's `ready` (not a Try again, which reconnects itself): reconnect the pane now. */
+  reconnectNow: boolean
 }
 
-const IDLE: Track = { last: undefined, held: undefined, attempt: 0, stalled: undefined }
+const IDLE: Track = {
+  last: undefined,
+  held: undefined,
+  attempt: 0,
+  stalled: undefined,
+  reconnectNow: false
+}
 
 export type WakeAttachHold = {
   /** What the overlay shows in place of the store's wake, if anything. */
@@ -77,7 +85,7 @@ export function useWakeAttachHold(
       settled && isAttached(workspaceId) === false
         ? { ...track.last, phase: 'connecting' as const }
         : undefined
-    setTrack({ ...IDLE, attempt: track.attempt + 1, held })
+    setTrack({ ...IDLE, attempt: track.attempt + 1, held, reconnectNow: held !== undefined })
   }
 
   // Release once the pane takes input; at the cap, reconnect it once quietly, then fail visibly.
@@ -85,9 +93,17 @@ export function useWakeAttachHold(
   // wake) clears it on its own. The store dropping the settled wake doesn't cancel this.
   const waiting = track.held !== undefined || track.stalled !== undefined
   const attempt = track.attempt
+  const reconnectNow = track.reconnectNow
   useEffect(() => {
     if (!waiting) {
       return
+    }
+    // The server is up, so reconnect the pane in front now rather than waiting on its own path
+    // back: a pane that sat through an app restart while asleep has none, and would otherwise only
+    // come back at the cap. A pane already reconnecting ignores this (the reconnect only acts on a
+    // pane that is idle or parked), and the quiet retry at the cap stays the safety net.
+    if (reconnectNow && isAttached(workspaceId) === false) {
+      retryPane(workspaceId)
     }
     // Only visible time counts toward the cap: a hidden window pauses this poll (and the pane's
     // own re-attach), so time spent hidden must not turn a healthy wake into a stalled card.
@@ -139,7 +155,7 @@ export function useWakeAttachHold(
       },
       intervalMs: WAKE_ATTACH_POLL_MS
     })
-  }, [waiting, attempt, workspaceId, isAttached, retryPane])
+  }, [waiting, attempt, reconnectNow, workspaceId, isAttached, retryPane])
 
   const retry = useCallback(() => {
     retryPane(workspaceId)
@@ -149,7 +165,8 @@ export function useWakeAttachHold(
             ...current,
             attempt: current.attempt + 1,
             held: { ...current.stalled, phase: 'connecting' },
-            stalled: undefined
+            stalled: undefined,
+            reconnectNow: false
           }
         : current
     )

@@ -6,6 +6,7 @@ import type {
 } from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
 import { availabilityRetryDelay } from '@/lib/availability-retry'
 import { installWindowVisibilityTimeoutPoller } from '@/lib/window-visibility-timeout-poller'
+import { rememberCloudWorkspaces } from './cloud-workspace-identity'
 
 /** Presence is live; the list re-reads on this beat while visible (and on focus). */
 const POLL_MS = 8_000
@@ -133,6 +134,7 @@ export function useCloudWorkspaces(
         return
       }
       if (result.ok) {
+        rememberCloudWorkspaces(result.value)
         setState({
           status: 'ready',
           key,

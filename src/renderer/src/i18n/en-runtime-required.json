@@ -2478,6 +2478,9 @@
         "sendingNotConfigured": "sending diagnostics is not configured for this build"
       }
     },
+    "groups": {
+      "orcaCloud": "Orca Cloud"
+    },
     "mcp": {
       "serverCount_one": "{{count}} server",
       "serverCount_other": "{{count}} servers"

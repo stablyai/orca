@@ -5,9 +5,11 @@ import { listEphemeralVmRuntimes } from '../../shared/ephemeral-vm-runtime-store
 import { openSealedGrant } from '../../shared/cloud-workspaces/sealed-grant'
 import { errorMessage } from '../../shared/error-message'
 import type {
+  CloudWorkspaceLinkTarget,
   CloudWorkspace,
   CloudWorkspaceListQuery,
   CloudWorkspacePatch,
+  CloudWorkspacePrefsDocument,
   CloudWorkspaceRoutineRuns,
   OrgPrompts
 } from '../../shared/cloud-workspaces/cloud-workspaces-wire'
@@ -30,7 +32,7 @@ const TYPING_HOLD_MS = 6_000
 
 export type CloudWorkspacesResult<T> =
   | { ok: true; value: T }
-  | { ok: false; error: string; reason?: string; status?: number }
+  | { ok: false; error: string; reason?: string; status?: number; orgId?: string }
 
 /** A list read, plus what Home's Routine runs switch hides (absent from older control planes). */
 export type CloudWorkspaceListResult =
@@ -49,7 +51,13 @@ async function wrap<T>(run: () => Promise<T>): Promise<CloudWorkspacesResult<T>>
     return { ok: true, value: await run() }
   } catch (error) {
     if (error instanceof CloudWorkspacesError) {
-      return { ok: false, error: error.code, reason: error.reason, status: error.status }
+      return {
+        ok: false,
+        error: error.code,
+        reason: error.reason,
+        status: error.status,
+        ...(error.orgId ? { orgId: error.orgId } : {})
+      }
     }
     return { ok: false, error: 'internal_error', reason: errorMessage(error).slice(0, 200) }
   }
@@ -165,8 +173,12 @@ export function createCloudWorkspacesService(deps: {
     get: (id: string) => wrap(() => client.get(id)),
     patch: (id: string, patch: CloudWorkspacePatch) =>
       wrap(async () => (await client.patch(id, patch)).workspace),
-    resolveLink: (workspaceId: string, chatId?: string | null) =>
-      wrap(() => client.resolveLink(workspaceId, chatId)),
+    resolveLink: (target: CloudWorkspaceLinkTarget, chatId?: string | null) =>
+      wrap(() => client.resolveLink(target, chatId)),
+    getPrefs: () => wrap(() => client.getPrefs()),
+    putPrefs: (document: CloudWorkspacePrefsDocument, revision: number) =>
+      wrap(() => client.putPrefs(document, revision, deps.clientId)),
+    getOrgSlug: (name?: string | null) => wrap(() => client.getOrgSlug(name)),
     listGrants: (id: string) => wrap(() => client.listGrants(id)),
     revokeGrant: (id: string, grantId: string) =>
       wrap(async () => void (await client.revokeGrant(id, grantId))),
