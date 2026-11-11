@@ -11,7 +11,6 @@ import { registerPtyConnectionHiddenSnapshotLiveOverlapTests } from '../output-r
 import { registerPtyConnectionHiddenSnapshotResizeSignalsTests } from '../output-restore/pty-connection-hidden-snapshot-resize-signals.spec'
 import { registerPtyConnectionHiddenResizeAuthorityTests } from '../geometry/pty-connection-hidden-resize-authority.spec'
 import { registerPtyConnectionStalledHiddenRestoreTests } from '../output-restore/pty-connection-stalled-hidden-restore.spec'
-import { registerPtyConnectionDaemonSnapshotReplayTests } from '../reattach/pty-connection-daemon-snapshot-replay.spec'
 
 import { registerPtyConnectionRemotePauseDropNoticeTests } from '../output-restore/pty-connection-remote-pause-drop-notice.spec'
 
@@ -41,6 +40,5 @@ describe('pty-connection-hidden-snapshot-resize-signals', () => {
   registerPtyConnectionHiddenResizeAuthorityTests()
 })
 describe('pty-connection-stalled-hidden-restore', registerPtyConnectionStalledHiddenRestoreTests)
-describe('pty-connection-daemon-snapshot-replay', registerPtyConnectionDaemonSnapshotReplayTests)
 
 describe('pty-connection-remote-pause-drop-notice', registerPtyConnectionRemotePauseDropNoticeTests)

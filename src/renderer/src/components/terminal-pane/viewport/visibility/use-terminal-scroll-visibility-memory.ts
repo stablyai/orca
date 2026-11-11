@@ -5,11 +5,11 @@ import {
   cancelDeferredScrollRestore,
   captureScrollState,
   getTerminalOutputEpoch
-} from '@/lib/pane-manager/pane-scroll'
+} from '@/lib/pane-manager/terminal-scroll/pane-scroll'
 import {
   getTerminalScrollIntentKind,
   markTerminalFollowOutput
-} from '@/lib/pane-manager/terminal-scroll-intent'
+} from '@/lib/pane-manager/terminal-scroll/terminal-scroll-intent'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { ScrollState } from '@/lib/pane-manager/pane-manager-types'
 

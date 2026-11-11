@@ -1,6 +1,6 @@
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 import { shouldWritePtyOutputForeground } from '../output/foreground-output-visibility'
-import { cancelTerminalScrollIntentBufferRebuildCompletions } from '@/lib/pane-manager/terminal-scroll-intent-rebuild'
+import { cancelTerminalScrollIntentBufferRebuildCompletions } from '@/lib/pane-manager/terminal-scroll/terminal-scroll-intent-rebuild'
 import {
   HIDDEN_OUTPUT_RESTORE_DEFERRED_RETRY_MS,
   HIDDEN_OUTPUT_RESTORE_DEFERRED_RETRY_MAX
