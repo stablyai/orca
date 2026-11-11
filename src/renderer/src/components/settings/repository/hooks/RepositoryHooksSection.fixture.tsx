@@ -10,7 +10,10 @@ const repo = {
   kind: 'git' as const,
   hookSettings: {
     mode: 'auto' as const,
-    scripts: { setup: 'installer="$HOME/install-skills.sh"\n"$installer" "$ORCA_WORKTREE_PATH"' }
+    scripts: {
+      setup: 'installer="$HOME/install-skills.sh"\n"$installer" "$ORCA_WORKTREE_PATH"',
+      archive: ''
+    }
   }
 }
 
