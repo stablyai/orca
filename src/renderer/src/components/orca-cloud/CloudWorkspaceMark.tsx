@@ -80,6 +80,13 @@ function CloudWorkspaceMarkInner({
   useCloudStatusPolling(workspaceId, PANEL_POLL_MS, open !== null)
   const close = useCallback(() => setOpen(null), [])
   const actions = useCloudPanelActions(workspaceId, close)
+  // Esc closes the innermost layer first: the card's sub-panel, then the card.
+  const escapeInner = useRef<(() => boolean) | null>(null)
+  // Pointer or focus inside (the card, its sub-panel or its ⋯ menu) keeps a hover preview open.
+  const pin = useCallback(() => {
+    clearTimer()
+    setOpen((current) => (current === 'hover' ? 'pinned' : current))
+  }, [clearTimer])
   const label = t('orcaCloudWorkspace.cloudMarkLabel', 'Cloud workspace · {{state}}', {
     state: cloudStateLabel(view.state, t)
   })
@@ -136,6 +143,18 @@ function CloudWorkspaceMarkInner({
         tabIndex={-1}
         onPointerEnter={() => clearTimer()}
         onPointerLeave={hoverOut}
+        onPointerDownCapture={pin}
+        onFocusCapture={(event) => {
+          // The preview's own open focus lands on the content, not inside it.
+          if (event.target !== content.current) {
+            pin()
+          }
+        }}
+        onEscapeKeyDown={(event) => {
+          if (escapeInner.current?.()) {
+            event.preventDefault()
+          }
+        }}
         onOpenAutoFocus={(event) => {
           // Hover previews keep focus in the sidebar; a pinned panel takes focus itself (not
           // its first action, so Enter can't act by accident).
@@ -154,6 +173,8 @@ function CloudWorkspaceMarkInner({
             entry={view.entry}
             pending={view.pending}
             actions={actions}
+            escapeRef={escapeInner}
+            onMenuOpenChange={(menuOpen) => (menuOpen ? pin() : undefined)}
           />
         </div>
       </PopoverContent>
