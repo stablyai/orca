@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { NativeChatSubagentRun } from './subagents/NativeChatSubagentRun'
 import { useNativeChatSessionChildren } from './use-native-chat-session-children'
@@ -14,9 +15,12 @@ import { subagentStateLabel } from '../../../../shared/native-chat/transcript/na
 import { sayNativeChatSubagentGroupTranslated as say } from './subagents/native-chat-subagent-group-words-text'
 import { NativeChatChildMetadata } from './NativeChatChildMetadata'
 
-export function nativeChatWorkerStateLabel(worker: OrchestrationSessionChild): string {
+export function nativeChatWorkerStateLabel(
+  worker: OrchestrationSessionChild,
+  t: Translate = translate
+): string {
   return worker.workerState === 'starting'
-    ? translate('components.native-chat.children.starting', 'Starting')
+    ? t('components.native-chat.children.starting', 'Starting')
     : subagentStateLabel(worker.state, 1, 1, say)
 }
 
@@ -31,6 +35,7 @@ export function NativeChatSessionChildren({
   dispatchId?: string
   isVisible: boolean
 }): React.JSX.Element | null {
+  const t = useTranslate()
   useTranslation()
   const { children, current } = useNativeChatSessionChildren({
     sessionId,
@@ -103,8 +108,8 @@ export function NativeChatSessionChildren({
                 children.map((child) => [
                   `dispatch:${child.dispatchId}`,
                   current
-                    ? nativeChatWorkerStateLabel(child)
-                    : translate('components.native-chat.children.unavailableState', 'Unavailable')
+                    ? nativeChatWorkerStateLabel(child, t)
+                    : t('components.native-chat.children.unavailableState', 'Unavailable')
                 ])
               )
             }
@@ -112,7 +117,7 @@ export function NativeChatSessionChildren({
         </NativeChatChildNavigationContext.Provider>
         {!current ? (
           <p className="text-xs text-chat-foreground-faint">
-            {translate(
+            {t(
               'components.native-chat.children.workersUnavailable',
               'This host’s worker history is unavailable.'
             )}

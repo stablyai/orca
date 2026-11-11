@@ -3,6 +3,7 @@ import { useNativeChatChildHistory } from './use-native-chat-child-history'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type { NativeChatSubagentEntry } from '../../../../shared/native-chat/native-chat-types'
 import type { OrchestrationSessionChild } from '../../../../shared/orchestration-session-children'
@@ -71,6 +72,7 @@ function WorkerTranscript({
   >
   scopeAgentId?: string
 }): React.JSX.Element {
+  const t = useTranslate()
   const worker = roster.children.find((child) => child.dispatchId === source.dispatchId)
   const recorded = worker?.conversation
   const conversation =
@@ -111,7 +113,7 @@ function WorkerTranscript({
       roster={undefined}
       worker={journalSource ? undefined : worker}
       entry={journalSource ? undefined : workerEntry(worker)}
-      unavailable={roster.loading ? undefined : unavailableText(conversation)}
+      unavailable={roster.loading ? undefined : unavailableText(conversation, t)}
     />
   )
 }
@@ -131,27 +133,28 @@ function workerEntry(
 }
 
 function unavailableText(
-  conversation: OrchestrationSessionChild['conversation'] | undefined
+  conversation: OrchestrationSessionChild['conversation'] | undefined,
+  t: Translate = translate
 ): string {
   if (conversation?.kind === 'unavailable' && conversation.reason === 'identity-unverifiable') {
-    return translate(
+    return t(
       'components.native-chat.children.identityUnavailable',
       'This worker’s conversation identity could not be verified.'
     )
   }
   if (conversation?.kind === 'unavailable' && conversation.reason === 'terminal-worker') {
-    return translate(
+    return t(
       'components.native-chat.children.terminalUnavailable',
       'This worker runs in a terminal. Its conversation history is unavailable here.'
     )
   }
   if (conversation?.kind === 'unavailable' && conversation.reason === 'remote-worker') {
-    return translate(
+    return t(
       'components.native-chat.children.remoteUnavailable',
       'This worker’s execution host has not supplied an inspectable conversation.'
     )
   }
-  return translate(
+  return t(
     'components.native-chat.children.unavailable',
     'This host has not supplied the agent’s conversation history.'
   )
@@ -167,6 +170,7 @@ function JournalTranscript({
   scopeAgentId?: string
   workerCurrent?: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   const navigation = useNativeChatChildNavigation()
   const read = useStructuredAgentSessionRead({
     target: source.target,
@@ -266,13 +270,13 @@ function JournalTranscript({
         unavailable={
           !workerCurrent
             ? messages.length > 0
-              ? translate(
+              ? t(
                   'components.native-chat.children.retainedUnavailable',
                   'The worker’s identity could not be verified. Showing retained history.'
                 )
-              : unavailableText({ kind: 'unavailable', reason: 'identity-unverifiable' })
+              : unavailableText({ kind: 'unavailable', reason: 'identity-unverifiable' }, t)
             : read.state.status === 'error' || (read.state.epoch !== null && !read.readCurrent)
-              ? unavailableText(undefined)
+              ? unavailableText(undefined, t)
               : undefined
         }
       />

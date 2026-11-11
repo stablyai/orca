@@ -1,5 +1,5 @@
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
-import { readProposedPaneFitDimensions } from '@/lib/pane-manager/pane-fit'
+import { readProposedPaneFitDimensions } from '@/lib/pane-manager/terminal-fit/pane-fit'
 import {
   ABORT_TRUNCATED_CONTROL_STRING,
   buildSnapshotReplayPrologue

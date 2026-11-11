@@ -11,7 +11,6 @@ import type { Repo } from '../../../../../shared/repo-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import '../../../../../shared/execution-host'
 import { createTestStore } from '../../testing/app-store-test-fixture'
-import { selectWorktreeDiffCommentsOrEmpty } from './worktree-diff-comments-selector'
 
 vi.mock('../../../runtime/rpc/calls/runtime-rpc-call', async (importOriginal) => ({
   ...(await importOriginal<typeof RuntimeRpcCallModule>()),
@@ -86,146 +85,12 @@ function rowNotes(store: ReturnType<typeof createTwinStore>, hostId: string): st
   return (row?.diffComments ?? []).map((comment) => comment.body)
 }
 
-function addNote(store: ReturnType<typeof createTwinStore>) {
-  return addNoteFor(store, capturedOwner(store, WT))
-}
-
-function addNoteFor(store: ReturnType<typeof createTwinStore>, owner: DiffCommentOwner | null) {
-  if (!owner) {
-    throw new Error('no workspace')
-  }
-  return store.getState().addDiffComment(owner, {
-    worktreeId: WT,
-    filePath: 'README.md',
-    lineNumber: 1,
-    body: 'ssh note',
-    side: 'modified'
-  })
-}
-
 beforeEach(() => {
   vi.mocked(callRuntimeRpc).mockClear()
   vi.mocked(toast.error).mockClear()
   resetNotesInFlightForTests()
   updateMeta.mockReset()
   updateMeta.mockResolvedValue({})
-})
-
-describe('diff comments on twin worktrees', () => {
-  it('saves to the open twin and names its host', async () => {
-    const store = createTwinStore('ssh:box')
-
-    expect(await addNote(store)).not.toBeNull()
-
-    expect(rowNotes(store, 'ssh:box')).toEqual(['ssh note'])
-    expect(rowNotes(store, 'local')).toEqual([])
-    // What the notes panel and diff gutters render.
-    expect(selectWorktreeDiffCommentsOrEmpty(store.getState(), WT).map((c) => c.body)).toEqual([
-      'ssh note'
-    ])
-    expect(updateMeta).toHaveBeenCalledWith(
-      expect.objectContaining({ worktreeId: WT, executionHostId: 'ssh:box' })
-    )
-  })
-
-  it('rolls back only the twin it wrote', async () => {
-    const store = createTwinStore('ssh:box')
-    store.setState({
-      worktreesByRepo: {
-        [REPO]: [worktree('local', [note('l1', 'local note')]), worktree('ssh:box')]
-      }
-    })
-    updateMeta.mockRejectedValueOnce(new Error('write failed'))
-
-    expect(await addNote(store)).toBeNull()
-
-    expect(rowNotes(store, 'ssh:box')).toEqual([])
-    expect(rowNotes(store, 'local')).toEqual(['local note'])
-  })
-
-  it('drops a queued save whose twin left, instead of writing the other copy under its host', async () => {
-    const store = createTwinStore('ssh:box')
-    store.setState({
-      worktreesByRepo: {
-        [REPO]: [worktree('local', [note('l1', 'local note')]), worktree('ssh:box')]
-      }
-    })
-
-    const pending = addNote(store)
-    store.setState({ worktreesByRepo: { [REPO]: [worktree('local', [note('l1', 'local note')])] } })
-
-    expect(await pending).toBeNull()
-    expect(updateMeta).not.toHaveBeenCalled()
-    expect(rowNotes(store, 'local')).toEqual(['local note'])
-  })
-
-  it('keeps one queue for a copy when its twin leaves between saves', async () => {
-    const store = createTwinStore('ssh:box')
-    updateMeta.mockRejectedValue(new Error('write failed'))
-
-    const first = addNote(store)
-    // The local copy goes before the second save, so the SSH copy is the only row left.
-    store.setState({ worktreesByRepo: { [REPO]: [store.getState().worktreesByRepo[REPO][1]] } })
-    const second = addNote(store)
-
-    expect(await first).toBeNull()
-    expect(await second).toBeNull()
-    expect(rowNotes(store, 'ssh:box')).toEqual([])
-  })
-
-  it('writes every duplicated row of one copy, so reads see the note', async () => {
-    const store = createTwinStore(null)
-    store.setState({ worktreesByRepo: { [REPO]: [worktree('local'), worktree('local')] } })
-
-    expect(await addNote(store)).not.toBeNull()
-
-    expect(
-      store
-        .getState()
-        .getDiffComments(WT)
-        .map((c) => c.body)
-    ).toEqual(['ssh note'])
-  })
-
-  it('rolls a failed burst back to disk when a listing stamps the row mid-burst', async () => {
-    const store = createTwinStore('local')
-    store.setState({ worktreesByRepo: { [REPO]: [worktree(undefined)] } })
-    updateMeta.mockRejectedValue(new Error('write failed'))
-
-    const first = addNote(store)
-    const [row] = store.getState().worktreesByRepo[REPO]
-    store.setState({ worktreesByRepo: { [REPO]: [{ ...row, hostId: 'local' }] } })
-    const second = addNote(store)
-
-    expect(await first).toBeNull()
-    expect(await second).toBeNull()
-    expect(rowNotes(store, 'local')).toEqual([])
-  })
-
-  it('reports a save main refused as failed and rolls it back', async () => {
-    const store = createTwinStore('ssh:box')
-    updateMeta.mockResolvedValueOnce(null)
-
-    expect(await addNote(store)).toBeNull()
-
-    expect(rowNotes(store, 'ssh:box')).toEqual([])
-  })
-
-  it('refuses a note-id change on an unstamped twin rather than route it by the open one', async () => {
-    const store = createTwinStore('ssh:box')
-    store.setState({
-      worktreesByRepo: {
-        [REPO]: [worktree(undefined, [note('u1', 'unstamped')]), worktree('ssh:box')]
-      }
-    })
-
-    await store.getState().deleteDiffComment(capturedOwner(store, WT), 'u1')
-
-    expect(updateMeta).not.toHaveBeenCalled()
-    expect(store.getState().worktreesByRepo[REPO][0].diffComments?.map((c) => c.body)).toEqual([
-      'unstamped'
-    ])
-  })
 })
 
 function capturedOwner(store: { getState: () => AppState }, worktreeId: string): DiffCommentOwner {

@@ -7,7 +7,7 @@ import {
   type ProfileStateRecoveryRepairSection
 } from '../../../shared/profile-state-recovery-command'
 import type { ProfileStateMaintenance } from './profile-state-access'
-import { profileHasPendingProjectMove } from '../../orca-profiles/profile-project-move-record'
+import { profileHasPendingProjectMove } from '../../orca-profiles/project-transfer/profile-project-move-record'
 import { readProfileStateAutomationRunsDocument } from './profile-state-automation-runs'
 import { profileStateDatabaseBackups } from './profile-state-backup-path'
 import {

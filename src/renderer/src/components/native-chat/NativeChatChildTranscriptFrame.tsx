@@ -5,7 +5,7 @@ import { ArrowLeft, Bot, Loader2 } from 'lucide-react'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { getIntlLocale, translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import type { NativeChatSubagentEntry } from '../../../../shared/native-chat/native-chat-types'
 import type { StructuredAgentSessionState } from '../../../../shared/agent-session/structured-agent-session-reducer'
 import { normalizeSubagentState } from '../../../../shared/native-chat/transcript/native-chat-subagent-summary'
@@ -44,10 +44,12 @@ export function NativeChatChildTranscriptFrame({
   workerTarget?: RuntimeClientTarget
   presentation?: ReturnType<typeof useStructuredAgentSessionTransportState>
 }): React.JSX.Element {
+  const intlLocale = useIntlLocale()
+  const t = useTranslate()
   useTranslation()
   const state = entry ? normalizeSubagentState(entry.state) : null
   const working = (presentation?.isWorking ?? state === 'working') && session.readCurrent !== false
-  const dateFormat = new Intl.DateTimeFormat(getIntlLocale(), {
+  const dateFormat = new Intl.DateTimeFormat(intlLocale, {
     dateStyle: 'short',
     timeStyle: 'short'
   })
@@ -70,8 +72,7 @@ export function NativeChatChildTranscriptFrame({
           <Button variant="ghost" size="sm" onClick={onBack}>
             <ArrowLeft aria-hidden="true" />
             <span className="max-w-48 truncate">
-              {parent?.label ??
-                translate('components.native-chat.children.back', 'Back to conversation')}
+              {parent?.label ?? t('components.native-chat.children.back', 'Back to conversation')}
             </span>
           </Button>
           <Bot aria-hidden="true" className="size-4 shrink-0 text-chat-foreground-faint" />
@@ -81,7 +82,9 @@ export function NativeChatChildTranscriptFrame({
           {state ? (
             <span className="ml-auto flex shrink-0 items-center gap-1.5 text-xs text-chat-foreground-faint">
               <StatusDot state={state} pulsing={working} />
-              {worker ? nativeChatWorkerStateLabel(worker) : subagentStateLabel(state, 1, 1, say)}
+              {worker
+                ? nativeChatWorkerStateLabel(worker, t)
+                : subagentStateLabel(state, 1, 1, say)}
             </span>
           ) : null}
         </header>
@@ -96,14 +99,14 @@ export function NativeChatChildTranscriptFrame({
           <div className="flex flex-wrap gap-x-4 gap-y-1 px-4 py-2 text-xs text-chat-foreground-faint">
             {entry.startedAt !== undefined ? (
               <time dateTime={new Date(entry.startedAt).toISOString()}>
-                {translate('components.native-chat.children.started', 'Started {{value0}}', {
+                {t('components.native-chat.children.started', 'Started {{value0}}', {
                   value0: dateFormat.format(entry.startedAt)
                 })}
               </time>
             ) : null}
             {entry.settledAt !== undefined ? (
               <time dateTime={new Date(entry.settledAt).toISOString()}>
-                {translate('components.native-chat.children.finished', 'Finished {{value0}}', {
+                {t('components.native-chat.children.finished', 'Finished {{value0}}', {
                   value0: dateFormat.format(entry.settledAt)
                 })}
               </time>
@@ -149,8 +152,8 @@ export function NativeChatChildTranscriptFrame({
             {!unavailable ? (
               <p>
                 {session.readPhase === 'loading' || session.loadingEarlier
-                  ? translate('components.native-chat.children.loading', 'Loading agent history…')
-                  : translate(
+                  ? t('components.native-chat.children.loading', 'Loading agent history…')
+                  : t(
                       'components.native-chat.children.unavailable',
                       'This host has not supplied the agent’s conversation history.'
                     )}
@@ -166,7 +169,7 @@ export function NativeChatChildTranscriptFrame({
                 {session.loadingEarlier ? (
                   <Loader2 aria-hidden="true" className="animate-spin" />
                 ) : null}
-                {translate('components.native-chat.children.loadEarlier', 'Load earlier history')}
+                {t('components.native-chat.children.loadEarlier', 'Load earlier history')}
               </Button>
             ) : null}
           </div>
@@ -178,7 +181,7 @@ export function NativeChatChildTranscriptFrame({
             >
               <CollapsibleTrigger asChild>
                 <Button variant="ghost" size="sm">
-                  {translate('components.native-chat.children.result', 'Recorded result')}
+                  {t('components.native-chat.children.result', 'Recorded result')}
                 </Button>
               </CollapsibleTrigger>
               <CollapsibleContent>

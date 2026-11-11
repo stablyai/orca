@@ -13,6 +13,7 @@ import '../../../../orchestration/db/dispatch-row-writer'
 import '../../../../orchestration/db/attempt-outcome-projection'
 import type { OrchestrationEnvironmentTransport } from '../../../../orchestration/federation/environment-transport'
 import '../../../../orchestration/legacy-remote/federation-lifecycle-settlement'
+import { attachmentHostCapabilities } from './federation-peer-capabilities.test-support'
 import { RpcDispatcher } from '../../../dispatcher'
 import { ORCHESTRATION_METHODS } from '../orchestration'
 import { createFederationWorkerStartRequest as startRequest } from './federation-request.test-support'
@@ -35,7 +36,7 @@ describe('orchestration federation lifecycle settlement', () => {
     workerRuntime = new OrcaRuntimeService()
     workerRuntime.setOrchestrationDb(workerDb)
     workerDispatcher = new RpcDispatcher({ runtime: workerRuntime, methods: ORCHESTRATION_METHODS })
-    workerCapabilities = [...(workerRuntime.getStatus().capabilities ?? [])]
+    workerCapabilities = attachmentHostCapabilities(workerRuntime)
     failNextAckBeforeDelivery = false
     ackAttempts = 0
     transport = {

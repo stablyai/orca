@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { selectExecutionHostDisplayLabel } from '@/runtime/hosts/display/execution-host-display-label'
 import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agent-session-launch-label'
 import { useAppStore } from '@/store'
@@ -18,6 +18,7 @@ export function NativeChatChildMetadata({
   target?: RuntimeClientTarget
   detailed?: boolean
 }): React.JSX.Element | null {
+  const t = useTranslate()
   useTranslation()
   const agent =
     worker.conversation.kind === 'journal' ? worker.conversation.agent : worker.metadata?.agent
@@ -28,30 +29,23 @@ export function NativeChatChildMetadata({
     switch (host?.kind) {
       case 'local': {
         if (!target) {
-          return translate(
-            'components.native-chat.children.metadata.localHost',
-            'Local execution host'
-          )
+          return t('components.native-chat.children.metadata.localHost', 'Local execution host')
         }
         const label = selectExecutionHostDisplayLabel(
           state,
           executionHostIdForStructuredTarget(target)
         )
         return target.kind === 'environment' && label === target.environmentId
-          ? translate(
-              'components.native-chat.children.metadata.environment',
-              'Environment {{value0}}',
-              {
-                value0: target.environmentId
-              }
-            )
+          ? t('components.native-chat.children.metadata.environment', 'Environment {{value0}}', {
+              value0: target.environmentId
+            })
           : label
       }
       case 'wsl':
         if (typeof host.distro !== 'string' || !host.distro.trim()) {
           return null
         }
-        return translate('components.native-chat.children.metadata.wsl', 'WSL · {{value0}}', {
+        return t('components.native-chat.children.metadata.wsl', 'WSL · {{value0}}', {
           value0: host.distro
         })
       case 'ssh': {
@@ -63,7 +57,7 @@ export function NativeChatChildMetadata({
               sshEnvironmentId: target.kind === 'environment' ? target.environmentId : null
             })
           : host.targetId
-        return translate('components.native-chat.children.metadata.ssh', 'SSH · {{value0}}', {
+        return t('components.native-chat.children.metadata.ssh', 'SSH · {{value0}}', {
           value0: label === host.targetId ? label : `${label} (${host.targetId})`
         })
       }
@@ -73,13 +67,9 @@ export function NativeChatChildMetadata({
         }
         return (
           (typeof host.label === 'string' && host.label.trim()) ||
-          translate(
-            'components.native-chat.children.metadata.environment',
-            'Environment {{value0}}',
-            {
-              value0: host.environmentId
-            }
-          )
+          t('components.native-chat.children.metadata.environment', 'Environment {{value0}}', {
+            value0: host.environmentId
+          })
         )
       case undefined:
         return null
@@ -91,16 +81,16 @@ export function NativeChatChildMetadata({
   if (!detailed) {
     return <>{[agentLabel, hostLabel].filter(Boolean).join(' · ')}</>
   }
-  const unknown = translate('components.native-chat.children.metadata.unknown', 'Unknown')
+  const unknown = t('components.native-chat.children.metadata.unknown', 'Unknown')
   return (
     <dl className="flex shrink-0 flex-wrap gap-x-4 gap-y-1 px-4 pt-2 text-xs text-chat-foreground-faint">
       <div className="flex min-w-0 gap-1">
-        <dt>{translate('components.native-chat.children.metadata.agent', 'Agent')}</dt>
+        <dt>{t('components.native-chat.children.metadata.agent', 'Agent')}</dt>
         <dd className="min-w-0 break-words">{agentLabel ?? unknown}</dd>
       </div>
       <div className="flex min-w-0 gap-1">
         <dt className="shrink-0">
-          {translate('components.native-chat.children.metadata.host', 'Execution host')}
+          {t('components.native-chat.children.metadata.host', 'Execution host')}
         </dt>
         <dd className="min-w-0 break-words">{hostLabel ?? unknown}</dd>
       </div>
