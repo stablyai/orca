@@ -24,6 +24,7 @@ vi.mock('@/lib/orca-cloud/orca-cloud-environment-id', () => ({
   isOrcaCloudEnvironmentId: (id: string) => cloud.ids.has(id)
 }))
 import { useAppStore } from '@/store/index'
+import { getDefaultSettings } from '../../../../../shared/constants'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import { resetCloudRunningSignoutForTest } from '@/lib/orca-cloud/cloud-running-agent-signout'
@@ -411,6 +412,49 @@ describe('RA-11 Restart on a paired (remote) pane', () => {
     await vi.waitFor(() => expect(cloudAgentRestartStartedFresh(PANE_KEY, 0)).toBe(true))
     vi.advanceTimersByTime(CLOUD_AGENT_FRESH_NOTICE_MS)
     expect(cloudAgentRestartStartedFresh(PANE_KEY, 0)).toBe(false)
+  })
+
+  it('RA-11d: a host-launched pane with nothing recorded falls back to the default CLI args', async () => {
+    useAppStore.setState({
+      settings: {
+        ...getDefaultSettings('/home/dev'),
+        agentDefaultArgs: {
+          ...getDefaultSettings('/home/dev').agentDefaultArgs,
+          claude: '--model opus --effort high'
+        }
+      }
+    })
+    clickRemoteRestart()
+    const resumeRemotePane = vi.fn(async () => undefined)
+    const freshIfResumeFoundNothing = vi.fn(async () => false)
+    const buildFreshCommand = vi.fn(
+      (_agent: string, _leaf: string, agentArgs?: string | null) => `claude ${agentArgs}`
+    )
+    const handleRestartPane = vi.fn()
+    runReadyPaneAccountRestarts({
+      panes: [{ id: 7, leafId: LEAF }],
+      ptyIdOf: () => REMOTE,
+      readyRestartPtyIds: selectReadyAccountRestartPtyIds(useAppStore.getState(), TAB),
+      tabId: TAB,
+      consumePendingPaneAccountRestart: useAppStore.getState().consumePendingPaneAccountRestart,
+      // A host-launched agent: a session, but no launch config recorded on the desktop.
+      buildAccountRestartStartup: () => ({
+        command: 'claude',
+        resumeProviderSession: { key: 'session_id' as const, id: 'sess-tab-1' }
+      }),
+      handleRestartPane,
+      stopRemotePane: () => Promise.resolve(),
+      resumeRemotePane,
+      freshIfResumeFoundNothing,
+      buildFreshCommand
+    })
+    await vi.waitFor(() => expect(freshIfResumeFoundNothing).toHaveBeenCalledTimes(1))
+    expect(resumeRemotePane).toHaveBeenCalledWith(
+      expect.objectContaining({
+        launchConfig: { agentArgs: '--model opus --effort high', agentEnv: {} }
+      })
+    )
+    expect(buildFreshCommand).toHaveBeenCalledWith('claude', LEAF, '--model opus --effort high')
   })
 
   it('a failed resume on the host shows the failure and never reconnects', async () => {

@@ -83,6 +83,11 @@ export function useReadyPaneAccountRestarts({
 
 type ReadyRestartPane = { id: number; leafId: string }
 
+function defaultLaunchConfig(agent: AccountRestartAgent): SleepingAgentLaunchConfig | undefined {
+  const agentArgs = useAppStore.getState().settings?.agentDefaultArgs?.[agent]?.trim()
+  return agentArgs ? { agentArgs, agentEnv: {} } : undefined
+}
+
 function worktreeIdForTab(tabId: string): string | null {
   for (const [worktreeId, tabs] of Object.entries(useAppStore.getState().tabsByWorktree)) {
     if (tabs.some((tab) => tab.id === tabId)) {
@@ -195,6 +200,9 @@ export function runReadyPaneAccountRestarts<
       launch()
       continue
     }
+    // RA-11d: the pane's recorded launch, or (a host-launched agent the desktop never recorded) the
+    // agent's default CLI args, the same source the create launch read.
+    const launchConfig = launchedStartup.launchConfig ?? defaultLaunchConfig(agent)
     // Stop that one host terminal first (its exit is ours, not the pane's), then reconnect.
     const store = useAppStore.getState()
     store.suppressPtyExit(ptyId)
@@ -204,9 +212,7 @@ export function runReadyPaneAccountRestarts<
         providerSession
           ? args.resumeRemotePane({
               // RA-11d: the pane's own launch (model, effort, every flag), not the host defaults.
-              ...(launchedStartup.launchConfig
-                ? { launchConfig: launchedStartup.launchConfig }
-                : {}),
+              ...(launchConfig ? { launchConfig } : {}),
               ptyId,
               worktreeId,
               tabId: args.tabId,
@@ -230,11 +236,7 @@ export function runReadyPaneAccountRestarts<
                     ] ?? null,
                   replacedPtyId: ptyId,
                   // RA-11d: a fresh fallback keeps the pane's own model, effort and flags too.
-                  freshCommand: args.buildFreshCommand(
-                    agent,
-                    pane.leafId,
-                    launchedStartup.launchConfig?.agentArgs
-                  )
+                  freshCommand: args.buildFreshCommand(agent, pane.leafId, launchConfig?.agentArgs)
                 })
               )
               .then((startedFresh) => {
