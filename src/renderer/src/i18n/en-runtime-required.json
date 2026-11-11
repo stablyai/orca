@@ -2178,12 +2178,7 @@
       }
     },
     "orcaCloud": {
-      "offline": {
-        "keepAwake": "Keep awake",
-        "savingCopy": "Saving a read-only copy of chats, terminals and changes…"
-      },
       "read": {
-        "justNow": "just now",
         "showMore_one": "Show {{count}} earlier message",
         "showMore_other": "Show {{count}} earlier messages"
       }
@@ -2402,17 +2397,11 @@
       "sleepsWhenIdleMinutes_one": "Sleeps in {{count}} minute if idle",
       "sleepsWhenIdleMinutes_other": "Sleeps in {{count}} minutes if idle"
     },
-    "files": {
-      "goingToSleep": "Going to sleep… The read-only copy shows here when it’s done."
-    },
     "idleSleptMinutes_one": "{{name}} slept after {{count}} minute idle",
     "idleSleptMinutes_other": "{{name}} slept after {{count}} minutes idle",
     "overlay": {
       "pendingKeys_one": "{{count}} key waiting · it goes to the terminal when it’s up",
       "pendingKeys_other": "{{count}} keys waiting · they go to the terminal when it’s up"
-    },
-    "state": {
-      "goingToSleep": "Going to sleep…"
     }
   },
   "pet": {

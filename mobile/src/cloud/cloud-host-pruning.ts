@@ -112,3 +112,13 @@ export async function pruneGoneCloudHost(
   const taken = await takeCloudWorkspaceLinks((id) => id === sandboxId)
   return forget(taken, removeHost)
 }
+
+/**
+ * A host's orcad refused this phone (auth failed: its identity no longer matches what was saved).
+ * A host this run reused from an earlier pairing points at a rebuilt sandbox: drop it and pair afresh
+ * through a new grant. One this run just paired is not retried in a loop: it is forgotten and the
+ * error shown.
+ */
+export function cloudStaleHostAction(reused: boolean): 'repair' | 'forget' {
+  return reused ? 'repair' : 'forget'
+}

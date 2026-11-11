@@ -208,3 +208,22 @@ export const wakeFailed = defineFixture({
 
 /** A rollback was refused. */
 export const stale = defineFixture({ width: WIDTH, render: () => view({ kind: 'stale' }) })
+
+/** The copy was not signed by this workspace's VM (forged, re-signed, or unsigned after a pin). */
+export const unverified = defineFixture({
+  width: WIDTH,
+  render: () => view({ kind: 'unverified' })
+})
+
+/** The wake failed on the server for no known reason: the shared "Couldn't wake the sandbox" copy. */
+export const wakeFailedServerError = defineFixture({
+  width: WIDTH,
+  render: () =>
+    view({ kind: 'ready', snapshot }, { wake: { phase: 'failed', unknownServerError: true } })
+})
+
+/** Signed by a different key than before: not shown; the only way on is "Wake to continue". */
+export const signerChanged = defineFixture({
+  width: WIDTH,
+  render: () => view({ kind: 'signer_changed' })
+})

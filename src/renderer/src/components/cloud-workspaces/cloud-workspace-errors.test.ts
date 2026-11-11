@@ -5,7 +5,8 @@ import {
   resetBillingSummary
 } from '@/components/billing/billing-summary-store'
 import { sampleOffers, sampleTeam } from '@/components/billing/plan-billing-fixtures'
-import { describeError } from './cloud-workspace-errors'
+import { isUnknownServerWakeFailure } from '../orca-cloud/CloudWakingOverlay'
+import { describeError, isUnknownServerFailure } from './cloud-workspace-errors'
 
 // English defaults with {{slots}} filled, like i18next with no catalog.
 const t: Translate = (_key, fallback, params) =>
@@ -93,5 +94,27 @@ describe('describeError for the per-seat running cap', () => {
     ).toBe(
       'Alex is at their limit of running sandboxes. This workspace runs on their seat, so ask them to put one to sleep, then try again.'
     )
+  })
+})
+
+describe('unknown server wake failures (shared "Couldn\'t wake the sandbox" copy)', () => {
+  it('is a 5xx with no specific copy', () => {
+    expect(isUnknownServerFailure('internal_error', 500)).toBe(true)
+    expect(isUnknownServerFailure('error', 502)).toBe(true)
+    // Known codes keep their own copy; 4xx are never "unknown server".
+    expect(isUnknownServerFailure('provider_unavailable', 503)).toBe(false)
+    expect(isUnknownServerFailure('entitlement_denied', 500)).toBe(false)
+    expect(isUnknownServerFailure('weird', 400)).toBe(false)
+    expect(isUnknownServerFailure('weird', undefined)).toBe(false)
+  })
+
+  it("recognizes the wake overlay's raw 5xx diagnostics", () => {
+    expect(isUnknownServerWakeFailure('Orca Cloud request failed (HTTP 502).')).toBe(true)
+    expect(isUnknownServerWakeFailure('Orca Cloud refused the request (internal_error).')).toBe(
+      true
+    )
+    expect(isUnknownServerWakeFailure('Orca Cloud refused the request (conflict).')).toBe(false)
+    expect(isUnknownServerWakeFailure('Orca Cloud request failed (HTTP 404).')).toBe(false)
+    expect(isUnknownServerWakeFailure(undefined)).toBe(false)
   })
 })

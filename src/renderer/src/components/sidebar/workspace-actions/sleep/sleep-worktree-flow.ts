@@ -7,6 +7,13 @@ import type { WorkspaceSleepOutcome } from '../../../../../../shared/workspace-s
 import { workspaceSleepTarget } from './workspace-sleep-target'
 import { dismissOrcaCloudRestartWarning } from '@/lib/orca-cloud-session-toasts'
 import { notePredictiveWakeSlept } from '@/lib/orca-cloud/cloud-predictive-wake'
+import {
+  clearWorktreeGoingToSleep,
+  clearWorktreeKeptAwake,
+  markWorktreeGoingToSleep,
+  releaseWorktreeSleepView
+} from '@/lib/worktree-sleep-view'
+import { holdActiveCloudSleepView } from './workspace-sleep-view-hold'
 
 /** One per host asked to stop the workspace's chats. */
 export type WorkspaceSleepResult = {
@@ -74,11 +81,20 @@ export async function runSleepWorktrees(
   // Intent (hover, focus) must not wake what was just put to sleep.
   for (const id of worktreeIds) {
     notePredictiveWakeSlept(id)
+    // "Going to sleep…" from the click on: main first saves the copy the asleep view shows.
+    markWorktreeGoingToSleep(id)
+    holdActiveCloudSleepView(id)
   }
-  const { errors, results, vmStillRunningIds } = await sleepWorktreesReportingFailures(
-    worktreeIds,
-    { markChatsAsleep: true }
-  )
+  const { errors, results, vmStillRunningIds, unsleptWorktreeIds } =
+    await sleepWorktreesReportingFailures(worktreeIds, { markChatsAsleep: true })
+  for (const id of worktreeIds) {
+    clearWorktreeGoingToSleep(id)
+    clearWorktreeKeptAwake(id)
+  }
+  // Refused before main started it (nothing stopped) or failed: the workspace is awake.
+  for (const id of unsleptWorktreeIds) {
+    releaseWorktreeSleepView(id)
+  }
   // An Orca Cloud sandbox left running gets the cloud copy (sandbox hours, Try again) instead.
   const cloudToasted = toastCloudSleepFailure(
     vmStillRunningIds,
@@ -145,6 +161,8 @@ export type WorktreeSleepOutcome = {
   /** Slept, but the VM suspend failed: the workspace is asleep and its machine still runs. */
   vmStillRunningIds: string[]
   results: WorkspaceSleepResult[]
+  /** Refused or failed outright: still awake (a chat stop left unconfirmed is not here). */
+  unsleptWorktreeIds: string[]
 }
 
 /** The sleep without the toast, for callers that report failures themselves. */
@@ -156,7 +174,13 @@ export async function sleepWorktreesReportingFailures(
   // Host twins share one ID and must sleep only once.
   const worktreeIds = [...new Set(requestedWorktreeIds)]
   if (worktreeIds.length === 0) {
-    return { failedWorktreeIds: [], errors: [], vmStillRunningIds: [], results: [] }
+    return {
+      failedWorktreeIds: [],
+      errors: [],
+      vmStillRunningIds: [],
+      results: [],
+      unsleptWorktreeIds: []
+    }
   }
   const state = useAppStore.getState()
   const errors: string[] = []
@@ -214,6 +238,7 @@ export async function sleepWorktreesReportingFailures(
     ],
     errors: [...new Set(errors)],
     vmStillRunningIds,
-    results
+    results,
+    unsleptWorktreeIds: [...failedWorktreeIds]
   }
 }

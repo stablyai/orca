@@ -8,11 +8,18 @@ import {
   type SealedReadSnapshot
 } from '../../../src/shared/cloud-workspaces/read-snapshot'
 import {
+  checkReadSnapshotPin,
+  ReadSnapshotSignatureError,
+  verifyReadSnapshotSigner
+} from '../../../src/shared/cloud-workspaces/read-snapshot-signature'
+import nacl from 'tweetnacl'
+import {
   CloudRequestError,
   cloudRequest,
   type CloudControlPlane
 } from './cloud-control-plane-request'
 import { loadCloudDeviceIdentity } from './cloud-device-identity'
+import { commitCloudReadSnapshotPin, loadCloudReadSnapshotPin } from './cloud-read-snapshot-pins'
 import { loadCloudReaderKey, saveCloudReaderKeyRegistration } from './cloud-reader-key'
 import { CLOUD_SEALED_PRIMITIVES } from './cloud-sealed-grant'
 
@@ -33,7 +40,9 @@ export type CloudReadSnapshotResult =
   /** Anything else; a 401 here means the session was revoked (see forgetRevokedCloudSession). */
   | { state: 'error'; error: unknown }
 
-const inflight = new Map<string, Promise<{ keyId: string; secretKey: Uint8Array }>>()
+type CloudReader = { deviceSessionId: string; keyId: string; secretKey: Uint8Array }
+
+const inflight = new Map<string, Promise<CloudReader>>()
 
 /**
  * This phone's reader key, registered with the control plane (PUT /v1/reader-keys) when it never
@@ -42,7 +51,7 @@ const inflight = new Map<string, Promise<{ keyId: string; secretKey: Uint8Array 
 export async function ensureCloudReaderKey(
   plane: CloudControlPlane,
   options: { force?: boolean; now?: () => number } = {}
-): Promise<{ keyId: string; secretKey: Uint8Array } | null> {
+): Promise<CloudReader | null> {
   const enrollment = (await loadCloudDeviceIdentity()).enrollment
   if (!enrollment) {
     return null
@@ -61,7 +70,7 @@ export async function ensureCloudReaderKey(
       registered &&
       now() - registered.registeredAt < CLOUD_READER_KEY_REFRESH_MS
     ) {
-      return { keyId: registered.keyId, secretKey: key.secretKey }
+      return { deviceSessionId: sessionId, keyId: registered.keyId, secretKey: key.secretKey }
     }
     const reply = await cloudRequest(
       plane,
@@ -79,7 +88,7 @@ export async function ensureCloudReaderKey(
     )
     const keyId = reply.readerKey.id
     await saveCloudReaderKeyRegistration(key, { keyId, registeredAt: now() })
-    return { keyId, secretKey: key.secretKey }
+    return { deviceSessionId: sessionId, keyId, secretKey: key.secretKey }
   })()
   inflight.set(sessionId, task)
   try {
@@ -105,25 +114,19 @@ async function fetchSealed(
   return reply.snapshot
 }
 
-/** A snapshot older than one this phone already showed for the workspace: a rollback, refused. */
-export class CloudReadSnapshotRollbackError extends Error {
-  constructor(
-    readonly capturedAt: number,
-    readonly newestShownAt: number
-  ) {
-    super('read_snapshot_rollback')
-    this.name = 'CloudReadSnapshotRollbackError'
+/**
+ * A copy this phone refuses to show: older than one it already showed (`rollback`), or not signed by
+ * the workspace's pinned VM key (`signer_changed`, `unsigned`, `bad_signature`).
+ */
+export class CloudReadSnapshotRefusedError extends Error {
+  constructor(readonly reason: 'rollback' | 'signer_changed' | 'unsigned' | 'bad_signature') {
+    super(`read_snapshot_${reason}`)
+    this.name = 'CloudReadSnapshotRefusedError'
   }
 }
 
-// Per workspace, the newest capturedAt opened this app session. The control plane relays the
-// ciphertext, so it could replay an older (validly sealed) snapshot; this pins it forward.
-const newestShown = new Map<string, number>()
-
-/** Test seam: forget the per-workspace rollback pins. */
-export function resetCloudReadSnapshotPins(): void {
-  newestShown.clear()
-}
+const ed25519Verify = (publicKey: Uint8Array, message: Uint8Array, signature: Uint8Array) =>
+  nacl.sign.detached.verify(message, signature, publicKey)
 
 type MissingState = 'no_snapshot' | 'not_sealed_for_key' | 'not_found'
 
@@ -166,6 +169,23 @@ export async function readCloudWorkspaceSnapshot(
       }
       sealed = await fetchSealed(plane, sandboxId, reader.keyId, signal)
     }
+    // Who wrote it, before opening anything: a forged signature is refused outright.
+    let signer: string | null
+    try {
+      signer = await verifyReadSnapshotSigner(sealed, ed25519Verify)
+    } catch (error) {
+      if (error instanceof ReadSnapshotSignatureError) {
+        return { state: 'error', error: new CloudReadSnapshotRefusedError('bad_signature') }
+      }
+      throw error
+    }
+    // A pinned signer that doesn't match (or a missing signature) is refused before decrypting;
+    // only the rollback check needs the payload's capturedAt.
+    const pin = await loadCloudReadSnapshotPin(reader.deviceSessionId, sandboxId)
+    const early = checkReadSnapshotPin(pin, signer, Number.POSITIVE_INFINITY)
+    if (!early.ok) {
+      return { state: 'error', error: new CloudReadSnapshotRefusedError(early.reason) }
+    }
     // The AAD binds exactly the sandbox row id this phone asked for.
     const snapshot = await openReadSnapshot(
       sealed,
@@ -173,14 +193,12 @@ export async function readCloudWorkspaceSnapshot(
       reader.secretKey,
       CLOUD_SEALED_PRIMITIVES
     )
-    const pinned = newestShown.get(sandboxId)
-    if (pinned !== undefined && snapshot.capturedAt < pinned) {
-      return {
-        state: 'error',
-        error: new CloudReadSnapshotRollbackError(snapshot.capturedAt, pinned)
-      }
+    // Persisted per device session and workspace: pinned signer, never an older capture.
+    const verdict = checkReadSnapshotPin(pin, signer, snapshot.capturedAt)
+    if (!verdict.ok) {
+      return { state: 'error', error: new CloudReadSnapshotRefusedError(verdict.reason) }
     }
-    newestShown.set(sandboxId, snapshot.capturedAt)
+    await commitCloudReadSnapshotPin(reader.deviceSessionId, sandboxId, pin, verdict.pin)
     return { state: 'ready', snapshot }
   } catch (error) {
     // not_sealed_for_key only means the snapshot predates this key: nothing to renew here.

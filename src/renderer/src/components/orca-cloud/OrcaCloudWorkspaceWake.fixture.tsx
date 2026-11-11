@@ -107,3 +107,24 @@ export const wakingTerminalStalled = defineFixture({
     </Pane>
   )
 })
+
+// A wake that failed on the server for no known reason (HTTP 5xx): the shared "Couldn't wake the
+// sandbox" copy, never the raw diagnostics.
+export const wakeFailedServerError = defineFixture({
+  width: 640,
+  render: () => (
+    <Pane>
+      <CloudWakingOverlay
+        wake={startedAgo(26_000, {
+          phase: 'failed',
+          message: 'Orca Cloud request failed (HTTP 502).'
+        })}
+        workspaceName="fix-auth-redirect"
+        autoFocus={false}
+        onRetry={noop}
+        onRestart={noop}
+        onDismiss={noop}
+      />
+    </Pane>
+  )
+})

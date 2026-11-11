@@ -2,6 +2,7 @@ import type { Translate } from '../i18n/mobile-i18n'
 import { isRpcDeliveryUnknown } from '../transport/rpc/rpc-delivery-ambiguity'
 import type { CloudRole, CloudSeatOwner, CloudWorkspace } from './cloud-control-plane-client'
 import { CloudRequestError } from './cloud-control-plane-request'
+import type { CloudReadSnapshotRefusedError } from './cloud-read-snapshot'
 import { CloudAttachError, type CloudAttachPhase } from './cloud-workspace-attach'
 import { entitlementDeniedMessage } from './cloud-entitlement-copy'
 import { formatElapsed } from './cloud-workspace-display'
@@ -27,6 +28,8 @@ export function attachErrorMessage(
           'cloud.error.wakeTimeout',
           'The sandbox is taking longer than usual to wake. Your files are safe.'
         )
+      case 'wake_failed':
+        return t('cloud.error.wakeFailed', 'Couldn’t wake the sandbox. Your files are safe.')
       case 'grant_failed':
         return t(
           'cloud.error.grant',
@@ -64,6 +67,31 @@ export function attachErrorMessage(
     }
   }
   return t('cloud.error.generic', 'Something went wrong. Your files are safe.')
+}
+
+/** Why a copy is refused: an older one than already shown, or one this workspace didn't sign. */
+export function readSnapshotRefusedMessage(
+  reason: CloudReadSnapshotRefusedError['reason'],
+  t: Translate
+): string {
+  switch (reason) {
+    case 'rollback':
+      return t(
+        'cloud.snapshot.rollback',
+        'Orca Cloud sent an older copy than the one you last saw, so it isn’t shown. Wake the workspace to see it as it is now.'
+      )
+    case 'signer_changed':
+      return t(
+        'cloud.snapshot.signerChanged',
+        'The saved copy of this workspace is signed by a different key than before, so it isn’t shown. Wake the workspace to see it as it is now.'
+      )
+    case 'unsigned':
+    case 'bad_signature':
+      return t(
+        'cloud.snapshot.unsigned',
+        'The saved copy of this workspace couldn’t be verified, so it isn’t shown. Wake the workspace to see it as it is now.'
+      )
+  }
 }
 
 export function phaseLabel(phase: CloudAttachPhase, t: Translate): string {

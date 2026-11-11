@@ -18,11 +18,7 @@ import {
   loadCloudControlPlane,
   useCloudHostRemoval
 } from './cloud-session'
-import {
-  CloudAttachError,
-  attachCloudWorkspace,
-  type CloudAttachPhase
-} from './cloud-workspace-attach'
+import { attachCloudWorkspace, type CloudAttachPhase } from './cloud-workspace-attach'
 import {
   attachErrorMessage,
   cloudPromptErrorCode,
@@ -35,14 +31,23 @@ import {
   type CloudLaunchedAgent
 } from './cloud-workspace-host-operations'
 import { ownerForCloudError, roleForCloudError } from './cloud-entitlement-copy'
-import { cloudWorkspaceProjectRoot, recordCloudWorkspaceHost } from './cloud-workspace-links'
+import { cloudWorkspaceProjectRoot } from './cloud-workspace-links'
 import { removeHostAndCloseClient } from '../transport/hosts/host-removal-lifecycle'
+import { useCloudDeliveryWatchdog } from './use-cloud-delivery-watchdog'
 import { useInvalidateCloudWorkspaces } from './use-cloud-workspaces'
 
 export type CloudWorkspaceRun =
   | { kind: 'idle' }
   | { kind: 'attaching'; phase: CloudAttachPhase; startedAt: number; intent: 'open' | 'send' }
-  | { kind: 'delivering'; hostId: string; startedAt: number; connectBy: number }
+  | {
+      kind: 'delivering'
+      hostId: string
+      startedAt: number
+      connectBy: number
+      intent: 'open' | 'send'
+      /** A saved host, not one this run just paired: if its orcad refuses us, pair afresh once. */
+      reused: boolean
+    }
   | { kind: 'error'; message: string; retry: 'open' | 'send' | null }
   | { kind: 'launched'; hostId: string; worktreeId: string; agent: CloudLaunchedAgent }
 
@@ -60,6 +65,10 @@ export function useCloudWorkspaceRun(sandboxId: string, workspace: CloudWorkspac
   const mountedRef = useRef(true)
   const deliveryStarted = useRef<CloudWorkspaceRun | null>(null)
   const inFlight = useRef(false)
+  // The latest attach, for the stale-host re-pair that starts from inside an effect.
+  const attachRef = useRef<(intent: 'open' | 'send', freshPairing: boolean) => Promise<void>>(
+    async () => undefined
+  )
   const host = useHostClient(run.kind === 'delivering' ? run.hostId : undefined)
   const active = run.kind === 'attaching' || run.kind === 'delivering'
   const title = workspace?.title ?? ''
@@ -81,39 +90,15 @@ export function useCloudWorkspaceRun(sandboxId: string, workspace: CloudWorkspac
     }
   }, [run, t])
 
-  useEffect(() => {
-    if (
-      run.kind !== 'delivering' ||
-      host.state === 'connected' ||
-      deliveryStarted.current === run
-    ) {
-      return
-    }
-    const hostId = run.hostId
-    // A pairing the VM refuses (revoked, rebuilt) is dropped so the next try gets a fresh grant; a
-    // slow network keeps it, so retries don't pile up devices on the sandbox.
-    const giveUp = (forget: boolean) => {
-      if (forget) {
-        void recordCloudWorkspaceHost(sandboxId, null)
-        void removeHostAndCloseClient(hostId, removal.forgetHostClient, removal.queryClient).catch(
-          () => undefined
-        )
-      }
-      void markWaitingCloudPromptsFailed(sandboxId, 'not_connected').catch(() => undefined)
-      setRun({
-        kind: 'error',
-        message: attachErrorMessage(new CloudAttachError('pairing_failed'), t),
-        retry: 'send'
-      })
-    }
-    if (host.state === 'auth-failed') {
-      giveUp(true)
-      return
-    }
-    // One deadline per run, not per state change: a flapping connection still ends.
-    const timer = setTimeout(() => giveUp(false), Math.max(0, run.connectBy - Date.now()))
-    return () => clearTimeout(timer)
-  }, [run, host.state, t, sandboxId, removal])
+  useCloudDeliveryWatchdog({
+    run,
+    hostState: host.state,
+    sandboxId,
+    deliveryStarted,
+    mountedRef,
+    setRun,
+    repair: (intent) => attachRef.current(intent, true)
+  })
 
   useEffect(() => {
     // One delivery per run: a re-render must never launch the same prompts twice.
@@ -201,10 +186,10 @@ export function useCloudWorkspaceRun(sandboxId: string, workspace: CloudWorkspac
     })()
   }, [run, host.client, host.state, sandboxId, invalidate, router, t, title])
 
-  const start = useCallback(
-    async (intent: 'open' | 'send') => {
+  const attach = useCallback(
+    async (intent: 'open' | 'send', freshPairing: boolean) => {
       // A ref, not state: a second tap in the same frame must not start a second grant.
-      if (!workspace || active || inFlight.current) {
+      if (!workspace || inFlight.current) {
         return
       }
       inFlight.current = true
@@ -222,12 +207,13 @@ export function useCloudWorkspaceRun(sandboxId: string, workspace: CloudWorkspac
       const startedAt = Date.now()
       setRun({ kind: 'attaching', phase: 'waking', startedAt, intent })
       try {
-        const { hostId } = await attachCloudWorkspace({
+        const { hostId, paired, replacedHostId } = await attachCloudWorkspace({
           plane,
           sandboxId,
           title: workspace.title,
           deviceLabel: cloudDeviceLabel(),
           signal: controller.signal,
+          freshPairing,
           onPhase: (phase) =>
             setRun((current) =>
               current.kind === 'attaching' && current.phase !== phase
@@ -236,6 +222,14 @@ export function useCloudWorkspaceRun(sandboxId: string, workspace: CloudWorkspac
             )
         })
         invalidate()
+        if (replacedHostId) {
+          // A fresh pairing replaced the saved host: the old one belongs to a sandbox that is gone.
+          await removeHostAndCloseClient(
+            replacedHostId,
+            removal.forgetHostClient,
+            removal.queryClient
+          ).catch(() => undefined)
+        }
         if (controller.signal.aborted || !mountedRef.current) {
           return
         }
@@ -245,7 +239,9 @@ export function useCloudWorkspaceRun(sandboxId: string, workspace: CloudWorkspac
           kind: 'delivering',
           hostId,
           startedAt,
-          connectBy: Date.now() + DELIVERY_CONNECT_DEADLINE_MS
+          connectBy: Date.now() + DELIVERY_CONNECT_DEADLINE_MS,
+          intent,
+          reused: !paired
         })
       } catch (error) {
         if (controller.signal.aborted || !mountedRef.current) {
@@ -279,7 +275,20 @@ export function useCloudWorkspaceRun(sandboxId: string, workspace: CloudWorkspac
         inFlight.current = false
       }
     },
-    [workspace, active, router, sandboxId, invalidate, t, removal]
+    [workspace, router, sandboxId, invalidate, t, removal]
+  )
+  useEffect(() => {
+    attachRef.current = attach
+  }, [attach])
+
+  /**
+   * `freshPairing`: skip the saved host and pair through a new grant (the read view saw the
+   * workspace's snapshot signer change, a sign its sandbox was rebuilt). A failed pairing keeps it.
+   */
+  const start = useCallback(
+    (intent: 'open' | 'send', options: { freshPairing?: boolean } = {}) =>
+      active ? Promise.resolve() : attach(intent, options.freshPairing === true),
+    [active, attach]
   )
 
   const openSession = useCallback(

@@ -7,6 +7,7 @@ import { CloudWorkspaceMarkSlot } from '@/components/orca-cloud/CloudWorkspaceMa
 import { cloudStateLabel } from '@/components/orca-cloud/cloud-state-copy'
 import { useCloudWorkspaceView } from '@/components/orca-cloud/use-cloud-workspace-view'
 import { useCloudWorkspace } from '@/lib/orca-cloud/orca-cloud-workspace-store'
+import { useIsWorktreeGoingToSleep } from '@/lib/worktree-sleep-view'
 import type { CloudDotState } from '@/lib/orca-cloud/orca-cloud-workspace-state'
 import { selectEphemeralVmWorkspaceState } from '@/store/slices/ephemeral-vm/ephemeral-vm-lifecycle'
 import { parseExecutionHostId } from '../../../../../../shared/execution-host'
@@ -91,22 +92,27 @@ export function WorktreeCardHostStateWord({
       ? vmStateToDot(selectEphemeralVmWorkspaceState(state, worktreeId))
       : null
   )
+  const goingToSleep = useIsWorktreeGoingToSleep(worktreeId)
   const t = useTranslate()
   const state = cloud.isCloud ? cloud.state : vmDot
+  // Sleep chosen, the sandbox not suspended yet: its record still reads running for a while.
+  const going = cloud.isCloud && goingToSleep && (state === 'running' || state === 'unknown')
   // Unknown is not a state to name (the panel shows a placeholder until the first read).
-  if (!state || state === 'running' || state === 'unknown') {
+  if (!going && (!state || state === 'running' || state === 'unknown')) {
     return null
   }
   return (
     <>
       <span
-        data-host-state-word={state}
+        data-host-state-word={going ? 'goingToSleep' : state}
         className={cn(
           'shrink-0 text-[11px] leading-none',
-          PROBLEM.has(state) ? 'text-destructive' : 'text-muted-foreground'
+          state && PROBLEM.has(state) ? 'text-destructive' : 'text-muted-foreground'
         )}
       >
-        {cloudStateLabel(state, t)}
+        {going || !state
+          ? t('orcaCloudWorkspace.state.goingToSleep', 'Going to sleep…')
+          : cloudStateLabel(state, t)}
       </span>
       {/* Its own element so CSS hides it when nothing follows on line 2 ("Couldn't start ·"
           alone reads as cut off), whatever does or doesn't render after it. */}

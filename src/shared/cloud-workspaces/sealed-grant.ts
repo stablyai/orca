@@ -19,7 +19,13 @@ export type SealedGrant = {
   ciphertextB64: string
 }
 
-export type OpenedGrant = { pairingUrl: string; deviceId: string; scope: 'runtime' | 'mobile' }
+export type OpenedGrant = {
+  pairingUrl: string
+  deviceId: string
+  scope: 'runtime' | 'mobile'
+  /** The workspace's read-snapshot signer (Ed25519, base64), for devices to pin; older VMs omit it. */
+  readSignerPublicKeyB64?: string
+}
 
 export type SealedGrantPrimitives = {
   /** Raw X25519: scalar multiplication of `secretKey` (32 bytes) with `publicKey` (32 bytes). */
@@ -141,7 +147,15 @@ export async function openSealedGrant(
   ) {
     throw new SealedGrantError('invalid_payload')
   }
-  return { pairingUrl: payload.pairingUrl, deviceId: payload.deviceId, scope: payload.scope }
+  const signer = payload.readSignerPublicKeyB64
+  return {
+    pairingUrl: payload.pairingUrl,
+    deviceId: payload.deviceId,
+    scope: payload.scope,
+    ...(typeof signer === 'string' && /^[A-Za-z0-9+/]{43}=$/.test(signer)
+      ? { readSignerPublicKeyB64: signer }
+      : {})
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

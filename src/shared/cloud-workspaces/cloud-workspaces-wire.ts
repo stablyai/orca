@@ -142,7 +142,11 @@ export const SealedReadSnapshotSchema = z.object({
     ephemeralPublicKeyB64: z.string().max(64),
     nonceB64: z.string().max(64),
     wrappedKeyB64: z.string().max(128)
-  })
+  }),
+  // The VM's Ed25519 signature (read-snapshot-signature.ts); absent from VMs before signing.
+  signature: z
+    .object({ publicKeyB64: z.string().max(64), signatureB64: z.string().max(128) })
+    .optional()
 })
 export const CloudReadSnapshotResponseSchema = z.object({ snapshot: SealedReadSnapshotSchema })
 
