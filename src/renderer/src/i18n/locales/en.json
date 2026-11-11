@@ -1391,6 +1391,13 @@
         "keywordUsage": "usage",
         "keywordOverage": "overage",
         "description": "Your Orca Cloud plan, sandbox hours and payment."
+      },
+      "skills": {
+        "searchDescription": "Sync Claude and Codex skills and slash commands from this computer to your cloud workspaces.",
+        "keywordSkills": "skills",
+        "keywordCommands": "slash commands",
+        "keywordPrompts": "prompts",
+        "description": "Skills and slash commands from Claude and Codex on this computer, synced to your cloud workspaces."
       }
     },
     "groups": {
@@ -23201,7 +23208,6 @@
       "startInTerminal": "Start {{value0}} in a terminal"
     },
     "newWorkspace": {
-      "agentOptional": "Agent (optional)",
       "createDescription": "Choose the project and workspace name. Select an agent if you want to start one.",
       "setupCheckFailed": "Could not check setup configuration. Try again.",
       "directSetup": {
@@ -23294,7 +23300,8 @@
         "signInSaving": "Saving…",
         "agentWillNotStartShort": "{{agent}} isn’t set up for Orca Cloud, so it won’t start.",
         "agentWillNotStartIn": "{{agent}} isn’t set up for Orca Cloud, so it won’t start in {{workspace}}."
-      }
+      },
+      "agentLabel": "Agent"
     },
     "JiraIssueWorkspace": {
       "pendingChange": "Another issue change is in progress."
@@ -23479,7 +23486,7 @@
       "retry": "Try again",
       "notCloudTitle": "Remote desktop is only available in cloud workspaces.",
       "notCloudDetail": "Create a cloud workspace to run apps with a screen.",
-      "asleepTitle": "This sandbox is asleep.",
+      "asleepTitle": "This workspace is asleep.",
       "asleepDetail": "Wake it to open the remote desktop. Your files are safe.",
       "notInstalledTitle": "This sandbox doesn’t have a remote desktop yet.",
       "notInstalledDetail": "It was created before remote desktop was available. New cloud workspaces include it. Your files are safe.",
@@ -23489,21 +23496,21 @@
       "forwardFailedDetail": "The desktop is running in the sandbox. Your files are safe.",
       "unavailableTitle": "Couldn’t start the remote desktop.",
       "unavailableDetail": "Orca Cloud didn’t respond in time. Your files are safe.",
-      "wake": "Wake sandbox",
+      "wake": "Wake workspace",
       "signIn": "Sign in",
       "createWorkspace": "Create workspace",
       "slowDetail": "The first start in a sandbox can take up to a minute.",
       "dismiss": "Dismiss",
       "openMenuItem": "Open remote desktop",
-      "startingTitle": "The sandbox is still starting or waking.",
+      "startingTitle": "The workspace is still starting or waking.",
       "archivedTitle": "This workspace is archived.",
       "archivedDetail": "Unarchive it to open the remote desktop. Your files are safe.",
       "startingDetail": "Try again in a moment. Your files are safe.",
       "keyboardCaptured": "Keys go to the remote desktop. Press <kbd>{{chord}}</kbd> to use Orca shortcuts.",
       "keyboardReleased": "Orca shortcuts are back. Click the desktop to type in it.",
-      "pageAsleep": "This sandbox is asleep. Wake it in Orca, then reconnect.",
+      "pageAsleep": "This workspace is asleep. Wake it in Orca, then reconnect.",
       "pageArchived": "This workspace is archived. Unarchive it in Orca, then reconnect.",
-      "pageStarting": "The sandbox is starting or waking. Reconnect in a moment.",
+      "pageStarting": "The workspace is starting or waking. Reconnect in a moment.",
       "pageSignedOut": "You’re signed out of Orca Cloud. Sign in, then reconnect.",
       "pageDisconnected": "The remote desktop disconnected. Your files are safe.",
       "reconnect": "Reconnect",
@@ -27109,6 +27116,12 @@
       "waking": "Waking… the files show when it’s up.",
       "noChangesAtSleep": "No files had changed when this workspace went to sleep · {{time}}",
       "noChangesAtSleepNoTime": "No files had changed when this workspace went to sleep",
+      "unarchiveForAll": "Unarchive the workspace to browse all its files.",
+      "archived": "Files aren’t available while the workspace is archived.",
+      "changedAtArchive": "Changed files when this workspace was archived · {{time}}",
+      "changedAtArchiveNoTime": "Changed files when this workspace was archived",
+      "noChangesAtArchive": "No files had changed when this workspace was archived · {{time}}",
+      "noChangesAtArchiveNoTime": "No files had changed when this workspace was archived",
       "changedTitle": "Changed files",
       "moreChanged": "+{{count}} more",
       "recentCommitsOn": "Recent commits on {{branch}}",
@@ -28223,5 +28236,71 @@
     "description": "Set up Claude and Codex once. Every cloud workspace uses them, including new, cloned and restarted ones.",
     "footerLabel": "Related settings",
     "allAccounts": "All agent accounts"
+  },
+  "cloudSkillsSync": {
+    "title": "Skills & commands",
+    "appliesEverywhere": "Applies to every cloud workspace",
+    "toggleItem": "Sync {{name}} ({{kind}}) to cloud workspaces",
+    "loading": "Loading skills and commands…",
+    "syncedAgo": "synced {{time}}",
+    "syncing": "Syncing skills and commands…",
+    "syncingShort": "Syncing…",
+    "syncNow": "Sync now",
+    "syncAgain": "Sync again",
+    "manualOnly": "Not synced automatically. Sync now copies them once.",
+    "group": {
+      "synced": "Synced",
+      "pending": "Not synced yet",
+      "notSynced": "Not synced"
+    },
+    "autoSync": "Sync when a workspace starts or wakes",
+    "autoSyncHint": "Copies your Claude and Codex skills and slash commands into each cloud workspace. Anything that looks like a key stays on this computer, and nothing made in the sandbox is overwritten.",
+    "shareAcrossAgents": "Share between Claude and Codex",
+    "shareAcrossAgentsHint": "In cloud workspaces, Codex also gets your Claude skills and commands, and Claude gets your Codex skills and prompts. An agent keeps its own if it has one with that name.",
+    "startFailed": "Couldn’t start the sync.",
+    "saveFailed": "Couldn’t save the change.",
+    "emptyBody": "Skills and commands sync to a cloud workspace while it runs. Start or wake one to see what it gets.",
+    "workspaceLabel": "Skills and commands in {{name}}",
+    "unavailable": "Skill sync isn’t available in this build.",
+    "kind": {
+      "skill": "{{agent}} skill",
+      "prompt": "Codex prompt",
+      "command": "{{agent}} command",
+      "project": "{{kind}}, this project"
+    },
+    "summary": {
+      "none": "None found in Claude or Codex on this computer",
+      "notSynced_one": "{{count}} found, not synced yet",
+      "notSynced_other": "{{count}} found, not synced yet",
+      "synced_one": "{{count}} synced",
+      "synced_other": "{{count}} synced",
+      "skipped_one": "{{count}} not synced",
+      "skipped_other": "{{count}} not synced",
+      "pair": "{{synced}}, {{skipped}}"
+    },
+    "error": {
+      "hostOutdated": "This workspace was created before skills sync. Create a new workspace to use it.",
+      "hostUnreachable": "Couldn’t reach the sandbox. Skills already there still work.",
+      "failed": "The last sync didn’t finish. Skills already in the sandbox still work."
+    },
+    "row": {
+      "withheld_one": "Synced without 1 file that looks like a key or credential",
+      "withheld_other": "Synced without {{count}} files that look like keys or credentials",
+      "converted": "Copied from {{agent}} so both agents have it",
+      "turnedOff": "Turned off",
+      "inRepo": "Committed to the repo, so the sandbox already has it",
+      "tooLarge": "Too large to sync (256 KB a file, 512 KB a skill)",
+      "overLimit": "Over the 8 MB a workspace can receive",
+      "secret": "Looks like it contains a key or token, so it stays on this computer",
+      "invalid": "Its name or files can’t be copied",
+      "keptHost": "The sandbox has its own {{name}}, so it’s left alone",
+      "noProject": "The sandbox has no project checkout for it",
+      "failed": "Couldn’t write it in the sandbox"
+    },
+    "state": {
+      "synced": "Synced",
+      "pending": "Not synced yet",
+      "skipped": "Not synced"
+    }
   }
 }

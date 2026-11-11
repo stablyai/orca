@@ -35,17 +35,23 @@ export function formatWhen(at: number, now: number, locale: string, t: Translate
  */
 export function CloudAsleepFilesPanel({
   workspaceId,
-  waking = false
+  waking = false,
+  archived = false
 }: {
   workspaceId: string
   /** Opening an asleep workspace wakes it: the files arrive when it is up, nothing to press. */
   waking?: boolean
+  /**
+   * Archived, not asleep (DS-h): the copy says "archived", and there is no Wake here, since the
+   * archived view beside it already has Unarchive as its one action.
+   */
+  archived?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const { snapshot } = useCloudOfflineData(workspaceId, true)
   const now = useNow(30_000)
   const git = snapshot?.git ?? null
-  const wake = waking ? (
+  const wake = archived ? null : waking ? (
     <span className="inline-flex items-center gap-1.5 text-muted-foreground" role="status">
       <Loader2 className="size-3 motion-safe:animate-spin" aria-hidden="true" />
       {t('orcaCloudWorkspace.files.waking', 'Waking… the files show when it’s up.')}
@@ -63,14 +69,24 @@ export function CloudAsleepFilesPanel({
     >
       {git ? (
         <>
-          <SavedChanges git={git} at={snapshot?.capturedAt ?? null} now={now} />
+          <SavedChanges
+            git={git}
+            at={snapshot?.capturedAt ?? null}
+            now={now}
+            archived={archived}
+          />
           <RecentCommits git={git} now={now} />
           <div className="flex flex-col items-start gap-2 border-t border-border/60 pt-3 text-muted-foreground">
             <p>
-              {t(
-                'orcaCloudWorkspace.files.wakeForAll',
-                'Wake the workspace to browse all its files.'
-              )}
+              {archived
+                ? t(
+                    'orcaCloudWorkspace.files.unarchiveForAll',
+                    'Unarchive the workspace to browse all its files.'
+                  )
+                : t(
+                    'orcaCloudWorkspace.files.wakeForAll',
+                    'Wake the workspace to browse all its files.'
+                  )}
             </p>
             {wake}
           </div>
@@ -78,10 +94,15 @@ export function CloudAsleepFilesPanel({
       ) : (
         <div className="flex flex-col items-start gap-2 text-muted-foreground">
           <p>
-            {t(
-              'orcaCloudWorkspace.files.asleep',
-              'Files aren’t available while the workspace is asleep.'
-            )}
+            {archived
+              ? t(
+                  'orcaCloudWorkspace.files.archived',
+                  'Files aren’t available while the workspace is archived.'
+                )
+              : t(
+                  'orcaCloudWorkspace.files.asleep',
+                  'Files aren’t available while the workspace is asleep.'
+                )}
           </p>
           {wake}
         </div>
@@ -95,11 +116,13 @@ type Git = NonNullable<CloudOfflineSnapshot['git']>
 function SavedChanges({
   git,
   at,
-  now
+  now,
+  archived
 }: {
   git: Git
   at: number | null
   now: number
+  archived: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const locale = useIntlLocale()
@@ -107,7 +130,18 @@ function SavedChanges({
   if (git.changes.length === 0 && git.changeCount === 0) {
     return (
       <p className="text-muted-foreground">
-        {time
+        {archived
+          ? time
+            ? t(
+                'orcaCloudWorkspace.files.noChangesAtArchive',
+                'No files had changed when this workspace was archived · {{time}}',
+                { time }
+              )
+            : t(
+                'orcaCloudWorkspace.files.noChangesAtArchiveNoTime',
+                'No files had changed when this workspace was archived'
+              )
+          : time
           ? t(
               'orcaCloudWorkspace.files.noChangesAtSleep',
               'No files had changed when this workspace went to sleep · {{time}}',
@@ -127,7 +161,18 @@ function SavedChanges({
       aria-label={t('orcaCloudWorkspace.files.changedTitle', 'Changed files')}
     >
       <h3 className="font-medium text-foreground">
-        {time
+        {archived
+          ? time
+            ? t(
+                'orcaCloudWorkspace.files.changedAtArchive',
+                'Changed files when this workspace was archived · {{time}}',
+                { time }
+              )
+            : t(
+                'orcaCloudWorkspace.files.changedAtArchiveNoTime',
+                'Changed files when this workspace was archived'
+              )
+          : time
           ? t(
               'orcaCloudWorkspace.files.changedAtSleep',
               'Changed files when this workspace went to sleep · {{time}}',

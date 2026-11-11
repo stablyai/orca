@@ -20744,7 +20744,6 @@
       "startInTerminal": "{{value0}} ajanını bir terminalde başlat"
     },
     "newWorkspace": {
-      "agentOptional": "Ajan [İsteğe bağlı]",
       "createDescription": "Projeyi ve çalışma alanı adını seçin. Bir ajan başlatmak istiyorsanız ajan seçin.",
       "directSetup": {
         "run": "Run setup",

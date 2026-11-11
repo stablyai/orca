@@ -33,6 +33,7 @@ describe('Orca Cloud settings group', () => {
       'cloud-billing',
       'cloud-team',
       'cloud-secrets',
+      'cloud-skills',
       'cloud-environments',
       'cloud-mcp',
       'cloud-api-keys'
