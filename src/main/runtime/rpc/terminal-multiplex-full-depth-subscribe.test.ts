@@ -55,14 +55,31 @@ describe('desktop subscribe history depth', () => {
     expect(depths).toEqual([1000, 1000, 1000, 1000, 1000, 1000])
   })
 
-  it('a client that asks for full depth on every reconnect gets it once per pane per interval', async () => {
+  it('one mount that asks on every reconnect gets full depth once per interval', async () => {
+    const mount = { historyDepth: 'full', historyMountId: 'mount-a' }
     // The harness's waits move the fake clock a little per subscribe, so the edges keep a 1 s margin.
     const start = Date.now()
-    expect(await subscribeDepth({ historyDepth: 'full' })).toBe(5000)
-    expect(await subscribeDepth({ historyDepth: 'full' })).toBe(1000)
+    expect(await subscribeDepth(mount)).toBe(5000)
+    expect(await subscribeDepth(mount)).toBe(1000)
     vi.setSystemTime(start + FULL_DEPTH_SNAPSHOT_INTERVAL_MS - 1000)
-    expect(await subscribeDepth({ historyDepth: 'full' })).toBe(1000)
+    expect(await subscribeDepth(mount)).toBe(1000)
     vi.setSystemTime(start + FULL_DEPTH_SNAPSHOT_INTERVAL_MS + 1000)
-    expect(await subscribeDepth({ historyDepth: 'full' })).toBe(5000)
+    expect(await subscribeDepth(mount)).toBe(5000)
+  })
+
+  it('a quit and reopen right away is a new mount and gets full depth again', async () => {
+    expect(await subscribeDepth({ historyDepth: 'full', historyMountId: 'before-quit' })).toBe(5000)
+    expect(await subscribeDepth({ historyDepth: 'full', historyMountId: 'after-reopen' })).toBe(5000)
+  })
+
+  it('a remount loop (a new mount id each time) is held to a few full snapshots per minute', async () => {
+    const start = Date.now()
+    const depths: (number | undefined)[] = []
+    for (let i = 0; i < 6; i++) {
+      depths.push(await subscribeDepth({ historyDepth: 'full', historyMountId: `loop-${i}` }))
+    }
+    expect(depths).toEqual([5000, 5000, 5000, 1000, 1000, 1000])
+    vi.setSystemTime(start + 61_000)
+    expect(await subscribeDepth({ historyDepth: 'full', historyMountId: 'loop-later' })).toBe(5000)
   })
 })

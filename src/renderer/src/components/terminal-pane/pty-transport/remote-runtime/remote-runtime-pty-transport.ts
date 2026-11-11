@@ -331,6 +331,8 @@ export function createRemoteRuntimePtyTransport(
   // from the 1000-row cut.
   let fullHistoryReceived = false
   const FULL_HISTORY_DEPTH = 'full' as const
+  // A quit-and-reopen is a new mount, so the host gives it depth even right after the last one.
+  const historyMountId = crypto.randomUUID()
   // A terminal this pane just created has no history, so an empty first image there is not a gap.
   let spawnedHandle: string | null = null
   let inputReadySubscription: number | null = null
@@ -3080,7 +3082,7 @@ export function createRemoteRuntimePtyTransport(
       inputSessionId: inputJournal.sessionId,
       reportsPaneVisibility: true,
       outputCadence: desiredOutputCadence,
-      ...(fullHistoryReceived ? {} : { historyDepth: FULL_HISTORY_DEPTH }),
+      ...(fullHistoryReceived ? {} : { historyDepth: FULL_HISTORY_DEPTH, historyMountId }),
       callbacks: {
         onData: (data, meta) => {
           if (isCurrentSubscription()) {

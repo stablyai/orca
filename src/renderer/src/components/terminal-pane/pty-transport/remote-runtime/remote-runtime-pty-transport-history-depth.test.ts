@@ -74,6 +74,8 @@ describe('remote pane subscribe history depth', () => {
   it('a fresh pane (mount or app reopen) asks for full depth', async () => {
     const transport = await connectedTransport()
     expect(latestSubscribePayload().historyDepth).toBe('full')
+    // Names this mount: a reopen right after a quit is a new mount, which the host still serves.
+    expect(latestSubscribePayload().historyMountId).toMatch(/^[0-9a-f-]{36}$/)
     transport.destroy?.()
   })
 

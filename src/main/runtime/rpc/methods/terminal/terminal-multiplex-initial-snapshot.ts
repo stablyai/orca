@@ -44,10 +44,12 @@ export async function publishMultiplexInitialSnapshot(
     process.env.ORCA_E2E_FORCE_REMOTE_TERMINAL_INITIAL_SNAPSHOT_TRUNCATED === '1'
   // A WSL-moved pane replays its whole carried history once; the first view must hold all of it.
   // A desktop with no local copy of the pane (fresh mount, app reopen) asks for a local terminal's
-  // depth (N-02), at most once per pane per interval. Every other subscribe (phones, reconnects)
+  // depth (N-02), within per-mount and per-terminal limits. Every other subscribe (phones, reconnects)
   // gets the 1000-row cut: a deep snapshot per reconnect would flood a flaky link.
   const fullDepth =
-    !isMobile && request.historyDepth === 'full' && admitFullDepthSnapshot(ptyId)
+    !isMobile &&
+    request.historyDepth === 'full' &&
+    admitFullDepthSnapshot(ptyId, request.historyMountId)
   const firstRows = isMovedPaneHistorySessionId(ptyId)
     ? MOVED_PANE_SUBSCRIBE_SCROLLBACK_ROWS
     : fullDepth

@@ -28,6 +28,8 @@ export class RemoteRuntimeTerminalMultiplexer extends RemoteRuntimeTerminalBinar
     outputCadence?: TerminalOutputCadence
     /** N-02: this view holds no local copy of the pane, so the first snapshot carries full history. */
     historyDepth?: 'full'
+    /** Names this pane mount, so the host's full-depth limit counts repeats per mount. */
+    historyMountId?: string
     callbacks: RemoteRuntimeMultiplexedTerminalCallbacks
   }): Promise<RemoteRuntimeMultiplexedTerminal> {
     const streamId = this.allocateStreamId()
@@ -170,7 +172,10 @@ export class RemoteRuntimeTerminalMultiplexer extends RemoteRuntimeTerminalBinar
           },
           ...(args.inputSessionId ? { inputSessionId: args.inputSessionId } : {}),
           ...(outputCadence !== 'focused' ? { outputCadence } : {}),
-          ...(args.historyDepth ? { historyDepth: args.historyDepth } : {})
+          ...(args.historyDepth ? { historyDepth: args.historyDepth } : {}),
+          ...(args.historyDepth && args.historyMountId
+            ? { historyMountId: args.historyMountId }
+            : {})
         })
       )
       if (!sent) {
