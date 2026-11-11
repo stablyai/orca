@@ -1,4 +1,5 @@
 import { RELEASE_SYNCHRONIZED_OUTPUT } from '../../../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
+import { syncTerminalScrollIntentFromViewport } from '@/lib/pane-manager/terminal-scroll-intent'
 import { waitForTerminalOutputParsed } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { safeFit, safeFitAndThen } from '@/lib/pane-manager/pane-fit'
 import { getFitOverrideForPty } from '@/lib/pane-manager/mobile-fit-overrides'
@@ -19,6 +20,13 @@ import {
 } from '../reattach/cursor-agent-reattach-screen'
 
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
+import {
+  beginWakeScrollbackRestore,
+  finishWakeScrollbackRestore,
+  HOLD_RENDER_UNTIL_RESTORED,
+  noteBeforeCloudReplay,
+  type WakeScrollbackRestore
+} from '@/lib/orca-cloud/cloud-wake-scrollback'
 
 export function bindReplayDataDrain(session: ConnectPanePtySession): void {
   session.sendFocusedReattachFocusInAfterReplay = (
@@ -110,7 +118,28 @@ export function bindReplayDataDrain(session: ConnectPanePtySession): void {
       // Relay replay may overlap painted output; eager replay decides earlier so metadata-only frames preserve saved scrollback.
       // Clear before source-grid resize to avoid reflowing history that replay immediately discards.
       let replayPayload = data
+      let preSleep: WakeScrollbackRestore | null = null
       if (clearBeforeReplay) {
+        // WAKE-SCROLLBACK: a resubscribe keeps only the host's 1000 rows; keep the fuller copy first
+        // in case a sleep nobody clicked here follows (a teammate, idle auto-sleep).
+        const keptBeforeReplay = noteBeforeCloudReplay(
+          session.pane.leafId,
+          session.pane.terminal,
+          payload.ptyId
+        )
+        if (keptBeforeReplay) {
+          await keptBeforeReplay
+          if (!isCurrentPayload()) {
+            continue
+          }
+        }
+        // A woken cloud pane's pre-sleep output, put back once this snapshot painted.
+        preSleep = beginWakeScrollbackRestore(
+          session.pane.leafId,
+          session.pane.terminal,
+          Date.now(),
+          payload.ptyId
+        )
         if (carriesNormalBuffer) {
           // Wait for queued alt-screen transitions before choosing replay’s target buffer.
           await waitForTerminalOutputParsed(session.pane.terminal)
@@ -123,10 +152,14 @@ export function bindReplayDataDrain(session: ConnectPanePtySession): void {
             carriesHistory === true
           )
           replayPayload = image.payload
-          await session.writeReplayDataAsync(image.preamble)
+          await session.writeReplayDataAsync(
+            preSleep ? `${image.preamble}${HOLD_RENDER_UNTIL_RESTORED}` : image.preamble
+          )
         } else {
           // Reconnect can sever DEC 2026 mid-frame; clear-screen does not release its latch, leaving replay invisible until timeout.
-          await session.writeReplayDataAsync(`${RELEASE_SYNCHRONIZED_OUTPUT}\x1b[2J\x1b[3J\x1b[H`)
+          await session.writeReplayDataAsync(
+            `${RELEASE_SYNCHRONIZED_OUTPUT}\x1b[2J\x1b[3J\x1b[H${preSleep ? HOLD_RENDER_UNTIL_RESTORED : ''}`
+          )
         }
         if (!isCurrentPayload()) {
           continue
@@ -160,6 +193,21 @@ export function bindReplayDataDrain(session: ConnectPanePtySession): void {
       await session.writeReplayDataAsync(replayPayload)
       if (!isCurrentPayload()) {
         continue
+      }
+      if (preSleep) {
+        await finishWakeScrollbackRestore(
+          preSleep,
+          session.pane.terminal,
+          session.writeReplayDataAsync
+        )
+        if (preSleep.scrolledTo !== null) {
+          // Record the person's place as a pin, so post-fit scroll-intent restores keep it there
+          // instead of following output to the bottom.
+          syncTerminalScrollIntentFromViewport(session.pane.terminal, { allowBufferShrink: true })
+        }
+        if (!isCurrentPayload()) {
+          continue
+        }
       }
       if (clearBeforeReplay || data.length > 0) {
         await session.writeReplayEpilogue(

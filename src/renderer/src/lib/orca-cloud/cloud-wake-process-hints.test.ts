@@ -11,7 +11,8 @@ import {
   wakeHintForPane,
   readTerminalTail,
   resetWakeProcessCapture,
-  resetWakeProcessHintsForTests
+  resetWakeProcessHintsForTests,
+  scrollbackPaneKind
 } from './cloud-wake-process-hints'
 
 afterEach(() => resetWakeProcessHintsForTests())
@@ -236,5 +237,22 @@ describe('wake process hints', () => {
       }
     }
     expect(readTerminalTail(terminal, 2)).toEqual(['b', 'c'])
+  })
+})
+
+describe('scrollbackPaneKind (WAKE-SCROLLBACK)', () => {
+  const claudeScreen = ['$ claude', '────────', '> Try "fix lint"', '────────', '  ? for shortcuts']
+
+  it('an agent still on screen, or a full-screen app, restores only its scrollback', () => {
+    expect(scrollbackPaneKind(claudeScreen, { agentType: 'claude' })).toBe('agent')
+    expect(scrollbackPaneKind(claudeScreen, { agentType: 'codex' })).toBe('agent')
+    expect(scrollbackPaneKind(['$ vim notes.md'], { alternateScreen: true })).toBe('agent')
+  })
+
+  it('a shell pane (no agent, or the agent quit back to its prompt) restores its visible rows too', () => {
+    expect(scrollbackPaneKind(['$ seq 1 3', '1', '2', '3', '$ '], {})).toBe('shell')
+    expect(scrollbackPaneKind(['$ claude', 'bye', 'ubuntu@sbx:~$ '], { agentType: 'claude' })).toBe(
+      'shell'
+    )
   })
 })

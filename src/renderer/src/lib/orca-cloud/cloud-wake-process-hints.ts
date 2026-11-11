@@ -300,3 +300,19 @@ export function resetWakeProcessHintsForTests(): void {
   withHistory.clear()
   version = 0
 }
+
+/**
+ * WAKE-SCROLLBACK: an agent pane (the same rule as the woke-up strip, #451: a Claude/Codex pane not
+ * back at its shell) or a full-screen app restores only the scrollback above its screen; a shell
+ * pane restores its visible rows too.
+ */
+export function scrollbackPaneKind(
+  lines: readonly string[],
+  facts: WakePaneFacts
+): 'shell' | 'agent' {
+  if (facts.alternateScreen) {
+    return 'agent'
+  }
+  const hint = wakeHintForPane(lines, facts)
+  return hint !== null && 'restartAgent' in hint ? 'agent' : 'shell'
+}

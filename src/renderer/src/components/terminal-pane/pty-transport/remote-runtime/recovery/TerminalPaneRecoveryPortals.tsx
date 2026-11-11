@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { PtyTransport } from '../../pty-transport-types'
 import { useWslHostUnavailableReason } from '../../../../../runtime/hosts/wsl/wsl-host-availability'
@@ -23,8 +23,6 @@ import { CloudAsleepTerminalNotice } from '@/components/orca-cloud/offline/Cloud
 import { CloudWokeProcessesNotice } from '@/components/orca-cloud/offline/CloudWokeProcessesNotice'
 import { CloudWokeAgentNotice } from '@/components/orca-cloud/offline/CloudWokeAgentNotice'
 import {
-  captureWakeProcessHint,
-  cursorBelowLastText,
   dismissWakeProcessHint,
   endsAtShellPrompt,
   getWakeCaptureTime,
@@ -39,6 +37,14 @@ import { paneShowsWslHostStoppedCard } from '@/runtime/hosts/wsl/wsl-host-stoppe
 import { withoutWslHostStoppedLines } from '../../../../../../../shared/wsl-host-stopped-message'
 import { makePaneKey } from '../../../../../../../shared/workspace-layout/stable-pane-id'
 import { cloudWokeActionFor, runCloudWokeAction } from '@/lib/orca-cloud/cloud-wake-hint-action'
+import { captureCloudPaneBeforeWake } from '@/lib/orca-cloud/cloud-wake-pane-capture'
+import { useIsWorktreeGoingToSleep } from '@/lib/worktree-sleep-view'
+import {
+  armWakeScrollback,
+  forgetWakeScrollback,
+  noteWakeViewport
+} from '@/lib/orca-cloud/cloud-wake-scrollback'
+import { restartPaneExists } from '@/lib/orca-cloud/cloud-agent-restart-pane-watch'
 import { mapPaneTerminalErrors } from '../../../errors/terminal-error-accumulation'
 import type { TerminalPaneController } from '../../../controller/use-terminal-pane-controller'
 
@@ -139,24 +145,83 @@ export function TerminalPaneRecoveryPortals({
   // While asleep (or waking) the pane still holds the pre-sleep scrollback: note what was running,
   // so after the wake the pane can say it stopped and offer it back (JA-15).
   const isCloud = cloud !== null
+  const asleepSince = cloud?.asleepSince ?? null
+  // Sleep was asked for: look now, before the transport's resubscribes (while the VM suspends)
+  // replace the pane's buffer with the host's 1000-row snapshot (WAKE-SCROLLBACK).
+  const goingToSleep = useIsWorktreeGoingToSleep(controller.worktreeId)
+  // Set once the workspace was asleep this cycle: only then is a replay the woken terminal's.
+  const sleptRef = useRef(false)
   useEffect(() => {
     if (!isCloud) {
       return
     }
-    if (cloudAsleep || cloudWaking) {
-      const agentPanes = useAppStore.getState().agentStatusByPaneKey
+    // Never while waking: a remount may already hold restored copies; the capture is the sleep's.
+    if (goingToSleep || cloudAsleep) {
       for (const pane of managedPanes) {
-        // An agent TUI or full-screen app's last line is its own input, not a shell command.
-        captureWakeProcessHint(pane.leafId, readTerminalTail(pane.terminal), {
-          agentType: agentPanes[makePaneKey(tabId, pane.leafId)]?.agentType ?? null,
-          alternateScreen: pane.terminal.buffer.active.type === 'alternate',
-          cursorBelowText: cursorBelowLastText(pane.terminal)
+        // The Rerun hint and the pre-sleep output, before the new terminal attaches.
+        captureCloudPaneBeforeWake({
+          tabId,
+          leafId: pane.leafId,
+          worktreeId: controller.worktreeId,
+          terminal: pane.terminal,
+          asleepSince
         })
       }
     } else {
       resetWakeProcessCapture(managedPanes.map((pane) => pane.leafId))
     }
-  }, [isCloud, cloudAsleep, cloudWaking, managedPanes, tabId])
+    if (cloudAsleep) {
+      sleptRef.current = true
+    } else if (sleptRef.current && (cloudWaking || cloudAwake)) {
+      // Waking or live after a sleep: the next clearing replay is the woken terminal's.
+      armWakeScrollback(managedPanes.map((pane) => pane.leafId))
+      if (cloudAwake) {
+        sleptRef.current = false
+      }
+    }
+  }, [
+    isCloud,
+    goingToSleep,
+    cloudAsleep,
+    cloudWaking,
+    cloudAwake,
+    managedPanes,
+    tabId,
+    controller.worktreeId,
+    asleepSince
+  ])
+  // WAKE-SCROLLBACK: a person scrolling the pane while it sleeps or wakes keeps that place after the
+  // restore, across the wake's remount. Wheel only: writes also scroll, and must not count.
+  useEffect(() => {
+    if (!isCloud || !(cloudAsleep || cloudWaking)) {
+      return
+    }
+    const listening = new AbortController()
+    for (const pane of managedPanes) {
+      pane.container.addEventListener(
+        'wheel',
+        () => requestAnimationFrame(() => noteWakeViewport(pane.leafId, pane.terminal)),
+        { passive: true, signal: listening.signal }
+      )
+    }
+    return () => listening.abort()
+  }, [isCloud, cloudAsleep, cloudWaking, managedPanes])
+  // A pane closed, or its tab or workspace went away: drop its kept pre-sleep output.
+  const leafIdsRef = useRef<(typeof managedPanes)[number]['leafId'][]>([])
+  useEffect(() => {
+    const now = managedPanes.map((pane) => pane.leafId)
+    forgetWakeScrollback(leafIdsRef.current.filter((id) => !now.includes(id)))
+    leafIdsRef.current = now
+  }, [managedPanes])
+  useEffect(
+    () => () => {
+      const state = useAppStore.getState()
+      forgetWakeScrollback(
+        leafIdsRef.current.filter((id) => !restartPaneExists(state, makePaneKey(tabId, id)))
+      )
+    },
+    [tabId]
+  )
   const isolated = controller.isolatedPaneKey !== null
   // Why: a pane waiting for SSH sign-in says so itself; "reconnecting" over it would be false.
   const awaitingSignInHere = managedPanes.some(

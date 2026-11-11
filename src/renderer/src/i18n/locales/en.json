@@ -27164,7 +27164,8 @@
       "asleepSince": "Asleep since {{time}}",
       "rerun": "Rerun {{command}}",
       "rerunLabel": "Rerun",
-      "wokeProcessesStopped": "Woke up · processes stopped while asleep"
+      "wokeProcessesStopped": "Woke up · processes stopped while asleep",
+      "sleptRangeDivider": "Slept {{range}} · processes stopped"
     },
     "archivedDetailLocalEdits_one": "It goes to sleep and stays browsable: PRs, last changes and files. {{count}} changed file on this computer will be removed.",
     "archivedDetailLocalEdits_other": "It goes to sleep and stays browsable: PRs, last changes and files. {{count}} changed files on this computer will be removed.",
