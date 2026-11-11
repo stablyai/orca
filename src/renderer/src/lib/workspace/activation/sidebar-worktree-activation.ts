@@ -30,6 +30,8 @@ import {
   releaseWorktreeSleepView
 } from '@/lib/worktree-sleep-view'
 import { requestWakeAfterSleep } from '@/lib/worktree-sleep-wake-request'
+import { markWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
+import { holdActiveCloudSleepView } from '@/components/sidebar/workspace-actions/sleep/workspace-sleep-view-hold'
 
 /** Coded failures render through the catalog; a thrown IPC error only has its message. */
 async function settleLifecycleCall(
@@ -62,10 +64,21 @@ export async function activateWorktreeFromSidebar(
     })
     return { ok: true }
   }
-  // "Wake to continue" (or opening it) while main is already suspending its VM: the VM must go
-  // down before it can wake, so it shows as waking from now and wakes once the sleep ends (the
-  // sleep follower does that). Opening it now would show dead panes with no cover meanwhile.
-  if (isWorktreeSleepViewHeld(worktreeId) && isWorktreeSuspendCommitted(worktreeId)) {
+  // "Wake to continue", or opening it again from its row, while main is already suspending its VM:
+  // the VM must go down before it can wake, so it shows as waking from now and wakes once the
+  // sleep ends (the sleep follower does that). Opening it now would show dead panes meanwhile.
+  if (isWorktreeSuspendCommitted(worktreeId)) {
+    if (!isWorktreeSleepViewHeld(worktreeId)) {
+      // Left and come back: select it, then (before its panes mount) keep it asleep and on
+      // screen read-only, as when it went to sleep, so its panes wait instead of reattaching.
+      activateAndRevealWorktree(worktreeId, {
+        navigationIntent: 'user-open',
+        revealInSidebar: false,
+        ...(executionHostId ? { executionHostId } : {})
+      })
+      markWorktreeSleepIntent(worktreeId)
+      holdActiveCloudSleepView(worktreeId)
+    }
     requestWakeAfterSleep(worktreeId, Date.now())
     return { ok: true }
   }

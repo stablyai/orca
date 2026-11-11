@@ -6,12 +6,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({
   beginWorkspaceWake: vi.fn(),
   activateAndRevealWorktree: vi.fn(),
+  holdActiveCloudSleepView: vi.fn(() => true),
   resumeWorkspace: vi.fn()
 }))
 
 vi.mock('@/components/terminal-pane/input/wake-input-buffer', () => ({
   beginWorkspaceWake: mocks.beginWorkspaceWake,
   endWorkspaceWake: vi.fn()
+}))
+vi.mock('@/components/sidebar/workspace-actions/sleep/workspace-sleep-view-hold', () => ({
+  holdActiveCloudSleepView: mocks.holdActiveCloudSleepView
 }))
 vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealFolderWorkspace: vi.fn(),
@@ -34,6 +38,7 @@ import {
   resetWorktreeSleepViewForTests
 } from './worktree-sleep-view'
 import { activateWorktreeFromSidebar } from './workspace/activation/sidebar-worktree-activation'
+import { forgetWorktreeSleepIntent, hasWorktreeSleepIntent } from './worktree-sleep-intent'
 
 const WS = 'cloud-wt'
 const PRESS = 1_800_000_000_000
@@ -45,6 +50,7 @@ beforeEach(() => {
 afterEach(() => {
   resetWakeAfterSleepForTests()
   resetWorktreeSleepViewForTests()
+  forgetWorktreeSleepIntent(WS)
   vi.unstubAllGlobals()
   cleanup()
 })
@@ -85,6 +91,25 @@ describe('wake pressed while main suspends the VM', () => {
     // Still the read-only view, not a re-activation or a resume: no dead panes, no early wake.
     expect(isWorktreeSleepViewHeld(WS)).toBe(true)
     expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
+    expect(mocks.resumeWorkspace).not.toHaveBeenCalled()
+  })
+
+  it('re-opening it from its row after leaving mid-sleep selects it, kept asleep, and waits', async () => {
+    // Left during the sleep: the read-only hold ended with the selection.
+    markWorktreeSuspendCommitted(WS)
+    await expect(activateWorktreeFromSidebar(WS)).resolves.toEqual({ ok: true })
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith(
+      WS,
+      expect.objectContaining({ navigationIntent: 'user-open' })
+    )
+    // Selecting clears sleep intent; it is put back (and the view held) right after, before any
+    // pane mounts, so the panes wait for the wake instead of attaching to a VM going down.
+    expect(hasWorktreeSleepIntent(WS)).toBe(true)
+    expect(mocks.holdActiveCloudSleepView).toHaveBeenCalledWith(WS)
+    expect(mocks.holdActiveCloudSleepView.mock.invocationCallOrder[0]).toBeGreaterThan(
+      mocks.activateAndRevealWorktree.mock.invocationCallOrder[0]
+    )
+    expect(hasWakeAfterSleepRequest(WS)).toBe(true)
     expect(mocks.resumeWorkspace).not.toHaveBeenCalled()
   })
 
