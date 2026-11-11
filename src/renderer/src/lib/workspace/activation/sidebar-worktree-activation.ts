@@ -24,7 +24,12 @@ import {
 import { CLOUD_WORKSPACE_ARCHIVED_ERROR } from '../../../../../shared/hosted-sandbox/cloud-workspace-api'
 import { isWakeActive } from '@/lib/orca-cloud/orca-cloud-workspace-state'
 import { claimPredictiveWake } from '@/lib/orca-cloud/cloud-predictive-wake'
-import { releaseWorktreeSleepView } from '@/lib/worktree-sleep-view'
+import {
+  isWorktreeSleepViewHeld,
+  isWorktreeSuspendCommitted,
+  releaseWorktreeSleepView
+} from '@/lib/worktree-sleep-view'
+import { requestWakeAfterSleep } from '@/lib/worktree-sleep-wake-request'
 
 /** Coded failures render through the catalog; a thrown IPC error only has its message. */
 async function settleLifecycleCall(
@@ -55,6 +60,13 @@ export async function activateWorktreeFromSidebar(
         : {}),
       ...(executionHostId ? { executionHostId } : {})
     })
+    return { ok: true }
+  }
+  // "Wake to continue" (or opening it) while main is already suspending its VM: the VM must go
+  // down before it can wake, so it shows as waking from now and wakes once the sleep ends (the
+  // sleep follower does that). Opening it now would show dead panes with no cover meanwhile.
+  if (isWorktreeSleepViewHeld(worktreeId) && isWorktreeSuspendCommitted(worktreeId)) {
+    requestWakeAfterSleep(worktreeId, Date.now())
     return { ok: true }
   }
   // Opening (or "Wake to continue" on) a workspace kept read-only after its Sleep wakes it.
