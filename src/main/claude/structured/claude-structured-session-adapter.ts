@@ -8,6 +8,7 @@ import type {
   StructuredAgentSessionAdapter
 } from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { stopCurrentClaudeBackgroundTasks } from './claude-structured-control-actions'
+import { manageClaudeMcp } from './claude-structured-mcp'
 import { claudeHeldSends, claudeHoldsDispatch } from '../claude-command-lifecycle'
 import {
   releaseClaudeAcquisition,
@@ -197,6 +198,8 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
     this.sessions.has(sessionId) ? { supportsTaskStop: true, supportsStopAll: true } : undefined
   readCommands: NonNullable<StructuredAgentSessionAdapter['readCommands']> = (sessionId) =>
     this.sessions.get(sessionId)?.commands.commands
+  manageMcp: NonNullable<StructuredAgentSessionAdapter['manageMcp']> = (sessionId, input) =>
+    manageClaudeMcp(this.sessions, sessionId, input)
   readonly atRestCommands: ClaudeStructuredSessionAdapterDeps['atRestCommands']
   holdsDispatch = (sessionId: string): boolean => claudeHoldsDispatch(this.sessions.get(sessionId))
   requiresModelTransitionRestart = claudeOptions.claudeModelTransitionRestart(this.sessions)

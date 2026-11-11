@@ -8,7 +8,6 @@ import { buildClaudeChildProcessEnv } from './claude-child-process-environment'
 import { withoutInheritedClaudeConfigDir } from './claude-config-dir-pin'
 import { withoutRejectedClaudeApiKey } from './claude-rejected-api-key'
 import {
-  ClaudeControlRequestError,
   createClaudeControlSurface,
   type ClaudeControlSurface
 } from './claude-agent-sdk-control-requests'
@@ -26,8 +25,9 @@ import { withProviderSpawnAbsence } from '../provider-process/provider-executabl
 import { claudeStreamJsonExitError } from './claude-stream-json-exit-error'
 import { withObservedProviderExit } from '../native-chat/agent-session-wire/startup/structured-agent-session-failure-text'
 import type { ProviderProcessCloseOptions } from '../provider-process/provider-process-close'
+import { createClaudeMcpLogin } from './claude-mcp-login'
 
-export { ClaudeControlRequestError }
+export { ClaudeControlRequestError } from './claude-agent-sdk-control-requests'
 
 /** Bound output draining after proven exit so inherited pipes cannot hold close open. */
 export const CLAUDE_READER_DRAIN_AFTER_EXIT_MS = 2_000
@@ -86,6 +86,7 @@ export type ClaudeChildExitVerdict = {
 }
 
 export type ClaudeStreamJsonConnection = ClaudeControlSurface & {
+  loginMcp?: (server: string) => Promise<void>
   readonly pid: number | undefined
   readonly closed: boolean
   /** What the ladder has observed so far; read after a `close()` that returned false. */
@@ -307,9 +308,9 @@ export async function openClaudeStreamJsonConnection(
     return closePromise
   }
 
-  const controls = createClaudeControlSurface(session)
   return {
-    ...controls,
+    ...createClaudeControlSurface(session),
+    loginMcp: createClaudeMcpLogin(launch, env, exited.promise),
     startupFailure: startup.failure,
     exited: exited.promise,
     get pid() {

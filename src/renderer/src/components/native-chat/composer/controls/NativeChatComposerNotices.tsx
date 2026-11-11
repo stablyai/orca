@@ -1,4 +1,4 @@
-import { AlertCircle, Paperclip, ServerOff, Smartphone, X } from 'lucide-react'
+import { AlertCircle, Paperclip, ServerOff, Smartphone, SquareTerminal, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
@@ -57,13 +57,15 @@ function NoticeRow({ notice }: { notice: NativeChatComposerNotice }): React.JSX.
   const isError = notice.kind === 'error'
   const isHostWarning = notice.kind === 'host' && notice.tone === 'warning'
   const Icon =
-    notice.kind === 'host'
-      ? ServerOff
-      : notice.kind === 'device'
-        ? Smartphone
-        : isError
-          ? AlertCircle
-          : Paperclip
+    notice.kind === 'command'
+      ? SquareTerminal
+      : notice.kind === 'host'
+        ? ServerOff
+        : notice.kind === 'device'
+          ? Smartphone
+          : isError
+            ? AlertCircle
+            : Paperclip
   const dismissLabel = t('components.native-chat.notices.dismiss', 'Dismiss')
   return (
     <li data-notice-kind={notice.kind} className={cn(isError && 'bg-destructive/5')}>
@@ -77,17 +79,26 @@ function NoticeRow({ notice }: { notice: NativeChatComposerNotice }): React.JSX.
             isHostWarning && 'text-destructive'
           )}
         />
-        <p
-          className={cn(
-            'min-w-0 flex-1 select-text py-px leading-5 [overflow-wrap:anywhere]',
-            'text-muted-foreground',
-            isError && 'text-foreground',
-            isHostWarning && 'text-destructive'
-          )}
-        >
-          {notice.content ?? notice.text}
-        </p>
-        {notice.action ? <NativeChatActionButton {...notice.action} /> : null}
+        <div className="min-w-0 flex-1">
+          <p
+            className={cn(
+              'select-text py-px leading-5 [overflow-wrap:anywhere]',
+              'text-muted-foreground',
+              isError && 'text-foreground',
+              isHostWarning && 'text-destructive'
+            )}
+          >
+            {notice.content ?? notice.text}
+          </p>
+          {notice.kind === 'command' && notice.action ? (
+            <div className="mt-2">
+              <NativeChatActionButton {...notice.action} />
+            </div>
+          ) : null}
+        </div>
+        {notice.kind !== 'command' && notice.action ? (
+          <NativeChatActionButton {...notice.action} />
+        ) : null}
         {notice.onDismiss ? (
           <Button
             type="button"

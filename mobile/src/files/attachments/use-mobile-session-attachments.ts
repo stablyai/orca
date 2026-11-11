@@ -110,6 +110,9 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
     })
   const nativeChatStructuredComposer = useMobileNativeChatStructuredComposer({
     structured: structuredNativeChat,
+    agent,
+    client,
+    sessionId: nativeChatSessionId,
     sessionCommands: nativeChatController.nativeChatSessionCommands,
     acceptsFiles: agentSessionHostSupport?.phoneAttachments === true,
     conversationCommands:

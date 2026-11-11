@@ -82,6 +82,7 @@ import {
   AttachmentUploadStartParams
 } from './agent-session-attachment-params'
 import { CurrentRequestsParams } from './agent-session-current-requests-params'
+import { AgentSessionMcpParams } from './agent-session-mcp-params'
 import { CreateAgentSessionParams, EnsureAgentSessionParams } from './agent-session-params'
 import { ReadVisualParams } from './agent-session-visual-params'
 import {
@@ -843,6 +844,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentSession.history': HistoryParams,
   'agentSession.hold': HoldParams,
   'agentSession.item': ItemParams,
+  'agentSession.mcp': AgentSessionMcpParams,
   'agentSession.modelCatalog': ModelCatalogParams,
   'agentSession.options': OptionsParams,
   'agentSession.queuedMessageDelete': QueuedMessageActionParams,

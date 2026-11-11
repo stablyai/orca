@@ -26,6 +26,7 @@ import {
   type MobileComposerStructuredCatalog
 } from './mobile-native-chat-composer-menu'
 import type { ComposerMenuRow } from './MobileNativeChatComposerMenu'
+import type { SlashCommandSuggestion } from '../../../../../src/shared/native-chat/input/native-chat-slash-commands'
 
 type Selection = { start: number; end: number }
 /** Opening the menu from the + sheet narrows it to what that row named. */
@@ -36,6 +37,7 @@ export function useMobileNativeChatComposerMenu(input: {
   value: string
   onChangeText: (text: string) => void
   agent: string | null
+  interactiveCommands?: readonly SlashCommandSuggestion[]
   /** Undefined on a terminal-backed chat. */
   structuredCatalog: MobileComposerStructuredCatalog | undefined
   filePaths: readonly string[]
@@ -88,6 +90,18 @@ export function useMobileNativeChatComposerMenu(input: {
       }),
     [agent, skillDiscovery, structuredCatalog, input.interactionModeSupported]
   )
+  const commands = useMemo(
+    () =>
+      input.interactiveCommands?.length
+        ? [
+            ...input.interactiveCommands,
+            ...catalog.commands.filter(
+              (entry) => !input.interactiveCommands?.some(({ name }) => name === entry.name)
+            )
+          ]
+        : catalog.commands,
+    [input.interactiveCommands, catalog.commands]
+  )
   const skillTokens = useMemo(() => mobileComposerSkillTokens(catalog), [catalog])
   const skillToken = leadingSkillToken(value, skillTokens)
   const setDraft = (next: string): void => {
@@ -111,7 +125,7 @@ export function useMobileNativeChatComposerMenu(input: {
       deriveComposerAutocomplete(
         beforeCaret,
         beforeCaret.length,
-        catalog.commands,
+        commands,
         catalog.discovery.skills,
         catalog.profile,
         catalog.discovery,
@@ -119,7 +133,7 @@ export function useMobileNativeChatComposerMenu(input: {
         catalog.sessionSkills,
         commandAvailable
       ),
-    [beforeCaret, catalog, commandAvailable]
+    [beforeCaret, catalog, commands, commandAvailable]
   )
   const rows = useMemo<ComposerMenuRow[]>(() => {
     if (autocomplete.mode === 'mention') {

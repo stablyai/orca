@@ -1,4 +1,7 @@
-import { useMemo } from 'react'
+import { useCallback, useMemo } from 'react'
+import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
+import { callAgentSession } from '../agent-session/mobile-structured-agent-session-rpc'
+import type { AgentSessionMcpRequest } from '../../../../../src/shared/agent-session/view/use-agent-session-mcp'
 import type { AgentSessionConversationCommand } from '../../../../../src/shared/agent-session/agent-session-conversation-command'
 import type { MobileNativeChatStructuredComposer } from './mobile-native-chat-structured-composer'
 import type { MobileNativeChatFileAttachments } from './use-mobile-native-chat-file-attachments'
@@ -9,6 +12,9 @@ const NO_COMMANDS: readonly AgentSessionConversationCommand[] = []
 
 export function useMobileNativeChatStructuredComposer(args: {
   structured: boolean
+  agent?: string | null
+  client?: RpcClient | null
+  sessionId?: string | null
   sessionCommands: ReturnType<typeof useMobileStructuredSessionCommands>
   /** The host keeps files a phone uploads; an older one refuses the upload. */
   acceptsFiles: boolean
@@ -18,6 +24,21 @@ export function useMobileNativeChatStructuredComposer(args: {
   threadGoal: MobileStructuredThreadGoal | null
 }): MobileNativeChatStructuredComposer | null {
   const { structured, acceptsFiles, compactInstructions, files, threadGoal } = args
+  const { client, sessionId, agent } = args
+  const requestMcp = useCallback<AgentSessionMcpRequest>(
+    (operation) =>
+      client && sessionId
+        ? callAgentSession(client, 'agentSession.mcp', { sessionId, operation }, 300_000, {
+            failWhenDisconnected: true
+          })
+        : Promise.resolve({ status: 'unavailable' }),
+    [client, sessionId]
+  )
+  const mcp = useMemo(
+    () =>
+      agent === 'claude' && sessionId ? { sessionKey: sessionId, request: requestMcp } : undefined,
+    [agent, requestMcp, sessionId]
+  )
   const conversationCommands = args.conversationCommands ?? NO_COMMANDS
   const { commands, refresh, setMenuOpen } = args.sessionCommands
   const { files: pendingFiles, attachFiles, attachPastedText, removeFiles } = files
@@ -30,6 +51,7 @@ export function useMobileNativeChatStructuredComposer(args: {
     () =>
       structured
         ? {
+            mcp,
             catalog,
             onSlashMenuOpen: refresh,
             onSlashMenuDemand: setMenuOpen,
@@ -45,6 +67,7 @@ export function useMobileNativeChatStructuredComposer(args: {
         : null,
     [
       threadGoal,
+      mcp,
       acceptsFiles,
       attachFiles,
       attachPastedText,

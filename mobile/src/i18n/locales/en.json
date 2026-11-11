@@ -3427,6 +3427,33 @@
       "outcomeUnknownReturned": "Orca couldn't confirm whether the conversation went back to this message. Your message is back in the composer, and Orca checks the conversation before your next message is sent.",
       "timeout": "The chat didn't update after going back to this message. Reopen it to see the latest.",
       "pending": "Wait for the conversation to go back to the earlier message."
+    },
+    "mcp": {
+      "connected": "Connected",
+      "failed": "Connection failed",
+      "needsAuth": "Sign-in required",
+      "connecting": "Connecting",
+      "disabled": "Disabled",
+      "signIn": "Sign in",
+      "reconnect": "Reconnect",
+      "enable": "Enable",
+      "title": "MCP connections",
+      "waitingForConsent": "Finish sign-in in the browser on the computer running Claude. Waiting up to 3 minutes…",
+      "waiting": "Waiting for sign-in…",
+      "checking": "Checking the connection…",
+      "offline": "Reconnect to the computer running Claude, then refresh.",
+      "unconfirmed": "The action could not be confirmed. Refresh to check the connection before trying again.",
+      "disable": "Disable",
+      "terminalRequired": "This server requires sign-in from the Claude terminal on its computer.",
+      "empty": "This session reports no MCP servers.",
+      "refresh": "Refresh status",
+      "hostBrowser": "Sign-in uses the browser on the computer running Claude.",
+      "lastChecked": "Last checked: {{status}}"
+    },
+    "commands": {
+      "mcp": "Manage MCP connections",
+      "config": "Open session settings",
+      "permissions": "Open session permissions"
     }
   },
   "sourceControl": {

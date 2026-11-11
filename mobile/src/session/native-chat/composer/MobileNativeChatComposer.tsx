@@ -1,5 +1,4 @@
 import { getNativeChatAgentProfile } from '../../../../../src/shared/native-chat/native-chat-agent-profiles'
-import type { NativeChatSendFollowUp } from '../../../../../src/shared/native-chat/input/native-chat-follow-up-behavior'
 import {
   recordMobileNativeChatSkillPick,
   useMobileNativeChatDraft
@@ -9,11 +8,9 @@ import {
   focusMobileNativeChatTextDestination,
   pruneMobileNativeChatDraftSkills
 } from './mobile-native-chat-draft-inputs'
-import type { NativeChatSkillDiscoverySnapshot } from '../../../../../src/shared/native-chat/input/native-chat-picker-items'
 import { MobileNativeChatComposerAllocation } from './MobileNativeChatComposerAllocation'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Keyboard, type TextInput, View } from 'react-native'
-import type { NativeChatContextUsageSummary } from '../../../../../src/shared/native-chat/native-chat-context-usage-summary'
 import { colors } from '../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
@@ -22,17 +19,10 @@ import { MobileNativeChatComposerField } from './MobileNativeChatComposerField'
 import { MobileNativeChatComposerAttachments } from './MobileNativeChatComposerAttachments'
 import type { PendingNativeChatFile } from './mobile-native-chat-file-attachment'
 import { MobileNativeChatComposerAttachButton } from './MobileNativeChatComposerAttachButton'
-import {
-  MobileNativeChatSessionOptionPickers,
-  type MobileNativeChatSessionOptionPickersProps
-} from '../input/MobileNativeChatSessionOptionPickers'
+import { MobileNativeChatSessionOptionPickers } from '../input/MobileNativeChatSessionOptionPickers'
 import { useMobileNativeChatPickerPresentation } from '../input/use-mobile-native-chat-picker-presentation'
-import type { MobileNativeChatSteerHead } from './use-mobile-native-chat-composer-tray'
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
-import {
-  mobileNativeChatComposerPasteHandler,
-  type MobilePastedImages
-} from './mobile-native-chat-composer-paste'
+import { mobileNativeChatComposerPasteHandler } from './mobile-native-chat-composer-paste'
 import { useMobileNativeChatComposerMenu } from './use-mobile-native-chat-composer-menu'
 import { mobileNativeChatComposerStyles as styles } from './mobile-native-chat-composer-styles'
 import { composerInputStyles as inputStyles } from '../../../components/composer-input/composer-input-styles'
@@ -41,66 +31,15 @@ import { MobileNativeChatEditActions } from './MobileNativeChatEditActions'
 import { useMobileNativeChatContextRing } from './MobileNativeChatContextUsageRing'
 import type { MobileNativeChatSendIntent } from './mobile-native-chat-send'
 import { MobileNativeChatComposerMic } from './MobileNativeChatComposerMic'
-import type { MobileNativeChatMicProps } from './MobileNativeChatComposerMic'
 import { MobileNativeChatDictationLeading } from './MobileNativeChatDictationLeading'
-import type { MobileNativeChatStructuredComposer } from './mobile-native-chat-structured-composer'
 import { useMobileNativeChatComposerGoalMode } from './use-mobile-native-chat-composer-goal-mode'
 import { MobileNativeChatComposerPlanChip } from './MobileNativeChatComposerPlanChip'
+import { useMobileClaudeCommandPanel } from './use-mobile-claude-command-panel'
+import type { MobileNativeChatComposerProps as Props } from './mobile-native-chat-composer-props'
 
 const NO_FILE_PATHS: string[] = []
 const NO_ATTACHMENTS: PendingNativeChatImage[] = []
 const NO_FILES: PendingNativeChatFile[] = []
-
-type Props = MobileNativeChatMicProps & {
-  // Applies dictation's edit to the draft this composer shows; false when it can no longer take it.
-  insertDictation?: (insert: (draft: string) => string) => boolean | void
-  draftScopeKey?: string | null
-  editSession?: {
-    cancel: () => void
-    refuseCommand: (text: string) => boolean
-    locked: boolean
-    interactionModeSupported?: boolean
-  }
-  onPickSkill?: (skill: { name: string; path: string }) => void
-  inputRef?: React.RefObject<TextInput | null>
-  // Terminal-backed chats keep curated commands and image-only attachment actions.
-  structured?: MobileNativeChatStructuredComposer | null
-  value: string
-  onChangeText: (text: string) => void
-  onSend: (text: string, intent?: MobileNativeChatSendIntent) => Promise<boolean>
-  /** While the agent works on a host that queues: what a tap on Send does and whether holding it offers the other way; null otherwise. */
-  sendFollowUp?: NativeChatSendFollowUp | null
-  /** Cmd/Ctrl+Enter on an empty composer: steers the head queued card, or with no turn running sends it. */
-  steerHead?: MobileNativeChatSteerHead
-  /** Changes whenever the route focuses a different chat composer surface. */
-  sendSurfaceId: string
-  /** Reads the retained route's focus generation without forcing a screen render. */
-  getSendCompletionGeneration: () => number
-  getComposerEditGeneration: () => number
-  agent?: string | null
-  sessionOptions?: MobileNativeChatSessionOptionPickersProps | null
-  /** A structured chat's context-window readout; null hides the ring. */
-  contextUsage?: NativeChatContextUsageSummary | null
-  onAttachImage?: () => void
-  /** Images pasted into the field attach like a Photos pick. */
-  onPasteImages?: (paste: MobilePastedImages) => void
-  attachments?: PendingNativeChatImage[]
-  onRemoveAttachment?: (id: string) => void
-  isAttaching?: boolean
-  disabled?: boolean
-  /** The desktop is out: typing and Send (which queues) still work; attaching and dictation can't. */
-  offline?: boolean
-  /** Only Send is unavailable; typing, dictation and attachments still edit the draft. */
-  sendDisabled?: boolean
-  placeholder?: string
-  filePaths?: string[]
-  onNeedFiles?: (query: string) => void
-  /** The host's disk-scanned skills, loaded once a skill trigger opens. */
-  skillDiscovery?: NativeChatSkillDiscoverySnapshot
-  onNeedSkills?: () => void
-  /** Set while the agent can be stopped; Stop takes Send's slot when Send can't deliver. */
-  stop?: { onStop?: () => void; held: boolean } | null
-}
 
 /** What a chat's composer sends through, which the chat view hands down from its route. */
 export type MobileNativeChatSendProps = Pick<Props, 'onSend' | 'sendFollowUp'>
@@ -153,6 +92,8 @@ export function MobileNativeChatComposer({
   // This composer's ✕, which its own held mic may be released over.
   const cancelRef = useRef<View>(null)
   const [focused, setFocused] = useState(false)
+  const [sending, setSending] = useState(false)
+  const sessionOptionDispatching = sessionOptions?.controller.pendingId != null
   const [picker, setPicker] = useMobileNativeChatPickerPresentation(
     sessionOptions?.controller.optionPickerRequest
   )
@@ -163,7 +104,20 @@ export function MobileNativeChatComposer({
     onAttachPastedText: structured?.onAttachPastedText
   })
   const goal = useMobileNativeChatComposerGoalMode(structured, !!editSession, sendSurfaceId)
+  const commands = useMobileClaudeCommandPanel({
+    agent,
+    draft: value,
+    surfaceId: sendSurfaceId,
+    draftScopeKey,
+    editing: !!editSession,
+    disabled: disabled || sendDisabled || sending || sessionOptionDispatching,
+    offline,
+    structured,
+    sessionOptions,
+    openOptions: (page) => setPicker({ page, refocus: false })
+  })
   const menu = useMobileNativeChatComposerMenu({
+    interactiveCommands: commands.commands,
     value,
     onChangeText: (text) => {
       if (editSession && draftScopeKey) {
@@ -219,8 +173,6 @@ export function MobileNativeChatComposer({
       sendSurfaceGenerationRef.current += 1
     }
   }, [sendSurfaceId])
-  const [sending, setSending] = useState(false)
-  const sessionOptionDispatching = sessionOptions?.controller.pendingId != null
   const filesUploading = files.some((file) => file.path === null)
   const attachmentCount = attachments.length + files.length
   // An attachment alone is a valid send (desktop parity), so it rides even with no text.
@@ -246,6 +198,9 @@ export function MobileNativeChatComposer({
     keepFocus = false
   ): Promise<void> => {
     if (!canSend || sendingRef.current || goal.consumeBareGoal(value, () => onChangeText(''))) {
+      return
+    }
+    if (commands.open()) {
       return
     }
     sendingRef.current = true
@@ -281,9 +236,10 @@ export function MobileNativeChatComposer({
   const headChord = goal.holdsFollowUp ? undefined : steerHead
   const content = (
     <View ref={groupRef} testID="native-chat-composer-group">
+      {commands.panel}
       <MobileNativeChatComposerSuggestions
         anchorRef={groupRef}
-        rows={menu.rows}
+        rows={commands.consumesDraft ? [] : menu.rows}
         onPick={menu.pick}
         nestedScrollEnabled={editSession ? true : undefined}
       />
@@ -302,6 +258,9 @@ export function MobileNativeChatComposer({
             skillToken={menu.skillToken}
             onChangeText={menu.onFieldChange}
             onKeyboardSubmit={() => {
+              if (commands.open()) {
+                return
+              }
               const first = menu.rows[0]
               if (first) {
                 menu.pick(first)
