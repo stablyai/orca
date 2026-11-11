@@ -23,6 +23,16 @@ import { outputClockOf } from './tui-idle-evidence-source'
 import { createSetupCompletionScanner } from '../../orchestration/workers/launch/setup-completion-signal'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 const TUI_IDLE_VISIBLE_PROBE_SETTLE_MARGIN_MS = 10
+const TUI_IDLE_VISIBLE_PROBE_RETRY_MS = 2_000
+
+/** Only a visibly working body-read agent needs the screen read again; every other outcome keeps the one-shot probe. */
+export function visibleProbeNeedsRetry(
+  agent: TuiAgent | null,
+  working: boolean,
+  remainingMs: number
+): boolean {
+  return isBodyReadinessAgent(agent) && working && remainingMs > TUI_IDLE_VISIBLE_PROBE_RETRY_MS
+}
 
 /** The probe settles only what the live screen would: agent rules for screen-ruled and body-read agents, else a settled ready preview. */
 export function visibleProbeReady(args: {
@@ -53,7 +63,7 @@ export function visibleProbeReadsScreen(agent: TuiAgent | null, screenRule: bool
 }
 
 export abstract class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRuntimeWithCreateAgentPromptRenderGate {
-  /** One bounded readiness read for adopted PTYs with lost metadata; later working-to-idle transitions belong to the poll. */
+  /** One bounded readiness read for adopted PTYs with lost metadata; a working body-read agent retries until its composer returns. */
   protected startTuiIdleVisibleReadProbe(
     waiter: TerminalWaiter,
     waiterTimeoutMs: number,
@@ -63,9 +73,22 @@ export abstract class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRu
       TUI_IDLE_VISIBLE_PROBE_SETTLE_MARGIN_MS,
       Math.max(1, Math.floor(waiterTimeoutMs / 3))
     )
+    this.probeTuiIdleVisibleScreen(waiter, Date.now() + waiterTimeoutMs, agent, settleMarginMs)
+  }
+
+  private probeTuiIdleVisibleScreen(
+    waiter: TerminalWaiter,
+    deadline: number,
+    agent: TuiAgent | null,
+    settleMarginMs: number
+  ): void {
+    const remaining = deadline - Date.now()
+    if (remaining < 1 || !this.terminalWaiters.has(waiter)) {
+      return
+    }
     const probeTimeoutMs = Math.min(
       VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS + settleMarginMs,
-      Math.max(0, waiterTimeoutMs - settleMarginMs)
+      Math.max(0, remaining - settleMarginMs)
     )
     const providerTimeoutMs = Math.min(
       VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS,
@@ -100,6 +123,21 @@ export abstract class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRu
         ) {
           return
         }
+        const working =
+          pty.lastAgentStatus === 'working' ||
+          hasFreshWorkingFirstPartyStatus(
+            this.tuiIdleEvidenceSource.getFirstPartyAgentStatus(pty.ptyId)
+          )
+        // Why: a working turn can paint either prompt text, so never resolve readiness or a block from it.
+        if (isBodyReadinessAgent(agent) && working) {
+          if (visibleProbeNeedsRetry(agent, working, deadline - Date.now())) {
+            setTimeout(
+              () => this.probeTuiIdleVisibleScreen(waiter, deadline, agent, settleMarginMs),
+              TUI_IDLE_VISIBLE_PROBE_RETRY_MS
+            ).unref?.()
+          }
+          return
+        }
         const snapshotText = projection.tail.join('\n')
         const blockedReason = detectTerminalWaitBlockedReason(snapshotText)
         const ready = visibleProbeReady({
@@ -109,11 +147,7 @@ export abstract class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRu
           restoredLines: restoreProjectedComposerDraft(projection.tail, projection.draft),
           // Why read now: output since the probe started makes the pane clocked.
           hasOutputClock: outputClockOf(this.tuiIdleEvidenceSource, pty) !== null,
-          working:
-            pty.lastAgentStatus === 'working' ||
-            hasFreshWorkingFirstPartyStatus(
-              this.tuiIdleEvidenceSource.getFirstPartyAgentStatus(pty.ptyId)
-            )
+          working
         })
         if (!blockedReason && !ready) {
           return
