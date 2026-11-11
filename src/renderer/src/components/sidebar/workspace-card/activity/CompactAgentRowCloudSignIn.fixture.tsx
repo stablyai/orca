@@ -10,6 +10,7 @@ import type { AgentType } from '../../../../../../shared/agent-status/contracts/
 import type { OrcaCloudAgentsStatus } from '../../../../../../shared/orca-cloud-agents/orca-cloud-agents-wire'
 import type { PublicKnownRuntimeEnvironment } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { makeTabWithIds } from '@/components/activity/ActivityPrototypePage-test-fixtures'
+import DashboardAgentRowView from '@/components/dashboard/DashboardAgentRow'
 import { CompactAgentRow } from './worktree-card-compact-agent-row'
 
 const ENVIRONMENT_ID = 'env-cloud'
@@ -92,9 +93,13 @@ function row(agentType: AgentType, prompt: string | null): DashboardAgentRow {
   }
 }
 
-function cloudRowFixture(state: OrcaCloudAgentAccountsState, agent: DashboardAgentRow) {
+function cloudRowFixture(
+  state: OrcaCloudAgentAccountsState,
+  agent: DashboardAgentRow,
+  variant: 'compact' | 'full' = 'compact'
+) {
   return defineFixture({
-    width: 300,
+    width: variant === 'full' ? 360 : 300,
     store: {
       repos: [repo],
       worktreesByRepo: { [repo.id]: [worktree] },
@@ -103,7 +108,16 @@ function cloudRowFixture(state: OrcaCloudAgentAccountsState, agent: DashboardAge
     setup: () => setOrcaCloudAgentAccountsStateForTest(state),
     render: () => (
       <div className="bg-sidebar p-2 text-sidebar-foreground">
-        <CompactAgentRow agent={agent} now={now} onActivate={() => {}} />
+        {variant === 'full' ? (
+          <DashboardAgentRowView
+            agent={agent}
+            now={now}
+            onActivate={() => {}}
+            onDismiss={() => {}}
+          />
+        ) : (
+          <CompactAgentRow agent={agent} now={now} onActivate={() => {}} />
+        )}
       </div>
     )
   })
@@ -130,4 +144,29 @@ export const codexNotSignedIn = cloudRowFixture(
 export const claudeCoveredDone = cloudRowFixture(
   accounts({ state: 'active' }, { state: 'active' }),
   row('claude', 'Fix the login redirect')
+)
+
+// The dashboard's full row reads the same sign-in state.
+export const fullClaudeNotSignedIn = cloudRowFixture(
+  accounts({ state: 'none' }, { state: 'none' }),
+  row('claude', null),
+  'full'
+)
+
+export const fullClaudeSignInExpired = cloudRowFixture(
+  accounts({ state: 'expired' }, { state: 'none' }),
+  row('claude', null),
+  'full'
+)
+
+export const fullCodexNotSignedIn = cloudRowFixture(
+  accounts({ state: 'active' }, { state: 'none' }),
+  row('codex', null),
+  'full'
+)
+
+export const fullClaudeCoveredDone = cloudRowFixture(
+  accounts({ state: 'active' }, { state: 'active' }),
+  row('claude', 'Fix the login redirect'),
+  'full'
 )

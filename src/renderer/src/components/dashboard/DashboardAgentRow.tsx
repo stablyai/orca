@@ -47,6 +47,8 @@ import {
 } from '@/components/agent-child-row-text'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { useCloudAgentRowSignIn } from '@/components/orca-cloud/use-cloud-agent-row-sign-in'
+import { cloudAgentRowSignInLabel } from '@/lib/orca-cloud/cloud-agent-row-sign-in'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
 function formatTimeAgo(ts: number, now: number, t: Translate = translate): string {
@@ -175,7 +177,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   const conversationName = useAgentRowConversationName(agent)
   const prompt = conversationName ?? getAgentRowPrimaryText(agent.entry)
   // Why: prompt is '' when unknown, so fall back to the state label to keep the row labeled.
-  const displayLabel =
+  const promptLabel =
     prompt ||
     agentStateLabel(
       agent.childRow?.displayState ?? asDotState(agent.state, agent.entry.workingMode)
@@ -214,7 +216,11 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
         )
       : [formatAgentTypeLabel(agent.agentType), model].filter(Boolean).join(' · ')
   // Surface failed main-agent outcomes even while subagents continue running.
-  const dotState: AgentDotState = dotStateOverride ?? agentRowDisplayDotState(agent)
+  const reportedDotState: AgentDotState = dotStateOverride ?? agentRowDisplayDotState(agent)
+  // Orca Cloud only: an agent that started without a sign-in never ran, so it is not "Done".
+  const cloudSignIn = useCloudAgentRowSignIn(agent, reportedDotState)
+  const dotState: AgentDotState = cloudSignIn ? 'permission' : reportedDotState
+  const displayLabel = cloudSignIn ? cloudAgentRowSignInLabel(cloudSignIn, t) : promptLabel
   const dotTooltipLabel = agentStateProgressLabel(
     dotState,
     presentation.progress,

@@ -17,6 +17,7 @@ import {
 import type * as HostAgentSignInClient from '@/runtime/provider-accounts/sign-in/host-agent-sign-in-status-client'
 import type { PublicKnownRuntimeEnvironment } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { makeTabWithIds } from '@/components/activity/ActivityPrototypePage-test-fixtures'
+import DashboardAgentRow from '@/components/dashboard/DashboardAgentRow'
 import { CompactAgentRow } from './worktree-card-compact-agent-row'
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
@@ -173,6 +174,48 @@ describe('CompactAgentRow on an Orca Cloud workspace whose agent is not signed i
   it('leaves a local workspace unchanged', () => {
     const container = renderRow(makeAgent(LOCAL_WORKTREE, true))
     expect(container.textContent).toContain('Done - Claude')
+    expect(container.textContent).not.toContain('Not signed in')
+  })
+})
+
+function renderFullRow(agent: DashboardAgentRowData): HTMLElement {
+  const container = document.createElement('div')
+  document.body.appendChild(container)
+  root = createRoot(container)
+  act(() => {
+    root!.render(
+      <TooltipProvider>
+        <DashboardAgentRow agent={agent} now={2000} onActivate={() => {}} onDismiss={() => {}} />
+      </TooltipProvider>
+    )
+  })
+  return container
+}
+
+function fullRowLabel(container: HTMLElement): string | null {
+  return container.querySelector('span.flex-1[title]')?.textContent ?? null
+}
+
+describe('DashboardAgentRow (full row) on an Orca Cloud workspace', () => {
+  it('shows Not signed in instead of Done when Claude is not set up', () => {
+    const container = renderFullRow(makeAgent(CLOUD_WORKTREE, true))
+    expect(fullRowLabel(container)).toBe('Not signed in')
+    expect(container.querySelector('[aria-label="Needs attention"]')).not.toBeNull()
+  })
+
+  it('shows Sign-in expired when the Orca account sign-in expired', () => {
+    setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'expired' }))
+    expect(fullRowLabel(renderFullRow(makeAgent(CLOUD_WORKTREE, true)))).toBe('Sign-in expired')
+  })
+
+  it('keeps Done for a covered agent idle after a turn', () => {
+    setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'active' }))
+    expect(fullRowLabel(renderFullRow(makeAgent(CLOUD_WORKTREE, false)))).toBe('Done')
+  })
+
+  it('leaves a local workspace unchanged', () => {
+    const container = renderFullRow(makeAgent(LOCAL_WORKTREE, true))
+    expect(fullRowLabel(container)).toBe('Done')
     expect(container.textContent).not.toContain('Not signed in')
   })
 })
