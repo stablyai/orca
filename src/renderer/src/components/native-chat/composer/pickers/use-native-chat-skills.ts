@@ -90,6 +90,8 @@ export function useNativeChatSkills(
     if (!profile || !enabled || !context) {
       // Without a current pane, discard retry intent before it can force another pane’s scan.
       forceNextDiscovery.current = false
+      // The owning host already caches scans; renderer snapshots must not outlive the picker.
+      paneDiscoveryCache.current.clear()
       setState(IDLE_STATE)
       return
     }
@@ -127,10 +129,10 @@ export function useNativeChatSkills(
     const request = getOrStartDiscovery(context, forced)
     void request.then(
       (result) => {
-        paneDiscoveryCache.current.set(paneCacheKey, result)
         if (cancelled) {
           return
         }
+        paneDiscoveryCache.current.set(paneCacheKey, result)
         emitNativeChatSkillDiscovery({
           agent,
           outcome: 'ready',
