@@ -1,7 +1,7 @@
 import { localUsageDay } from '../../shared/usage-history-range'
-import { filterUsageDaily } from '../usage/usage-scope-filters'
+import { filterUsageDaily } from '../usage/reporting/range-query/usage-scope-filters'
 import { projectClaudeUsageHistory } from '../usage/usage-history-projection'
-import { claudeTokenSessions } from '../usage/agent-token-usage'
+import { claudeTokenSessions } from '../usage/reporting/token-usage/agent-token-usage'
 import { getAppEnvironment } from '../../shared/app-environment'
 import { join } from 'node:path'
 import type {
@@ -20,8 +20,8 @@ import type { ClaudeUsagePersistedState } from './types'
 import {
   scanClaudeUsageFilesViaWorker,
   splitUsageCacheFileViaWorker
-} from '../usage/usage-scan-worker-spawn'
-import { UsageProviderStoreLifecycle } from '../usage/usage-provider-store-lifecycle'
+} from '../usage/scan-worker/usage-scan-worker-spawn'
+import { UsageProviderStoreLifecycle } from '../usage/provider-lifecycle/usage-provider-store-lifecycle'
 import { buildBreakdown, buildDaily, buildSummary } from './claude-usage-report-aggregation'
 import { buildRecentSessions } from './claude-usage-session-rows'
 import type { AutomationUsageLookupInput } from './claude-usage-automation-attribution'

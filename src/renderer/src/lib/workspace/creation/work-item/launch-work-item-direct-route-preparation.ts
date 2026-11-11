@@ -27,7 +27,6 @@ import type {
   DirectWorkItemLaunchInputs,
   LaunchWorkItemDirectArgs
 } from './launch-work-item-direct-types'
-import type { AgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
 
 export type DirectWorkItemAgentLaunchPreparation = {
   launchConnectionId: string | null
@@ -115,7 +114,7 @@ export async function prepareDirectWorkItemAgentLaunch(args: {
   repoLaunchHost: KnownExecutionHostPlatform
   repoProjectRuntime?: ProjectExecutionRuntimeResolution
   planLaunch: typeof planAgentSessionLaunch
-  requestId: AgentLaunchRequestId
+  requestId: string
   preflightPlan?: AgentSessionLaunchPlan
 }): Promise<DirectWorkItemAgentLaunchPreparation> {
   const agentSelection = await resolveDirectWorkItemAgent({

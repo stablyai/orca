@@ -17,9 +17,9 @@ import {
   scanCodexUsageFilesViaWorker,
   scanMuseUsageFilesViaWorker,
   scanOpenCodeUsageDatabasesViaWorker
-} from '../../../usage/usage-scan-worker-spawn'
+} from '../../../usage/scan-worker/usage-scan-worker-spawn'
 
-vi.mock('../../../usage/usage-scan-worker-spawn', () => ({
+vi.mock('../../../usage/scan-worker/usage-scan-worker-spawn', () => ({
   scanClaudeUsageFilesViaWorker: vi.fn(),
   scanCodexUsageFilesViaWorker: vi.fn(),
   scanMuseUsageFilesViaWorker: vi.fn(),

@@ -5,7 +5,7 @@ import { getRelativePathInsideRoot } from '@/lib/path'
 import { getExplorerDisplayDepth } from './file-explorer-display-root'
 import { FILE_EXPLORER_FULL_ROOT } from '../../../../../../shared/file-listing/file-explorer-display-root'
 import { useAppStore } from '@/store/index'
-import { getRevealAncestorDirs } from './file-explorer-paths'
+import { getRevealAncestorDirs, getRevealTargetPath } from './file-explorer-paths'
 import type { DirCache } from '../tree/file-explorer-types'
 import type { FileExplorerRowProjection } from '../tree/file-explorer-row-projection'
 import { fileExplorerRevealDirToReadOn } from '../tree/file-explorer-dir-pages'
@@ -184,7 +184,10 @@ export function useFileExplorerReveal({
       return
     }
 
-    const targetPath = pendingExplorerReveal.filePath
+    const targetPath = getRevealTargetPath(
+      displayRootPath ?? worktreePath,
+      pendingExplorerReveal.filePath
+    )
     const parentDirPath =
       pendingRevealAncestorDirs.length > 0
         ? pendingRevealAncestorDirs.at(-1)!

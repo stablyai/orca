@@ -1,7 +1,7 @@
 import { localUsageDay } from '../../shared/usage-history-range'
-import { filterUsageDaily } from '../usage/usage-scope-filters'
+import { filterUsageDaily } from '../usage/reporting/range-query/usage-scope-filters'
 import { projectEventUsageHistory } from '../usage/usage-history-projection'
-import { codexOpenCodeTokenSessions } from '../usage/agent-token-usage'
+import { codexOpenCodeTokenSessions } from '../usage/reporting/token-usage/agent-token-usage'
 import { getAppEnvironment } from '../../shared/app-environment'
 import { join } from 'node:path'
 import type {
@@ -22,8 +22,8 @@ import { CODEX_USAGE_SCHEMA_VERSION, codexUsageProvider } from './codex-usage-pr
 import { resolveCodexAutomationRunUsage } from './codex-automation-run-attribution'
 import { buildRecentSessions } from './codex-usage-session-rows'
 import { buildBreakdown, buildDaily, buildSummary } from './codex-usage-rollup-projections'
-import { UsageProviderStoreLifecycle } from '../usage/usage-provider-store-lifecycle'
-import { splitUsageCacheFileViaWorker } from '../usage/usage-scan-worker-spawn'
+import { UsageProviderStoreLifecycle } from '../usage/provider-lifecycle/usage-provider-store-lifecycle'
+import { splitUsageCacheFileViaWorker } from '../usage/scan-worker/usage-scan-worker-spawn'
 
 const SCHEMA_VERSION = CODEX_USAGE_SCHEMA_VERSION
 

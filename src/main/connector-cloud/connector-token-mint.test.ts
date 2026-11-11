@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { OrcaCloudAuthConfig } from '../orca-profiles/profile-cloud-auth-config'
+import type { OrcaCloudAuthConfig } from '../orca-profiles/cloud-auth/profile-cloud-auth-config'
 import { desktopConnectorTokenMint } from './connector-token-mint'
 
 const profile = vi.hoisted(() => {
@@ -11,7 +11,7 @@ const runFresh = vi.hoisted(() => vi.fn())
 vi.mock('../orca-profiles/profile-index-store', () => ({
   ensureActiveOrcaProfile: () => ({ profile: { id: 'p1', cloud: profile.cloud } })
 }))
-vi.mock('../orca-profiles/profile-cloud-session-refresh', () => ({
+vi.mock('../orca-profiles/cloud-session/profile-cloud-session-refresh', () => ({
   runWithFreshOrcaCloudSession: runFresh
 }))
 vi.mock('../runtime/hosts/platform-probe/host-descriptor', () => ({

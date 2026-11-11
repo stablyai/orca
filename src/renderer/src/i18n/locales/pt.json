@@ -5509,13 +5509,6 @@
               "inWindow": "na própria janela",
               "worktrees": "worktrees",
               "eaf17a7214": "Painel de Agentes"
-            },
-            "browserExtensions": {
-              "title": "Extensões de navegador",
-              "description": "Execute extensões do Chrome, como gerenciadores de senhas, nas abas do navegador do Orca.",
-              "extension": "extensão",
-              "chrome": "chrome",
-              "password": "gerenciador de senhas"
             }
           }
         },
@@ -6005,10 +5998,6 @@
             "modeAriaLabel": "Modo de abertura do Painel de Agentes",
             "modeInWindow": "Na própria janela",
             "modePopout": "Janela separada"
-          },
-          "browserExtensions": {
-            "copy": "Adiciona Configurações › Navegador › Extensões para perfis de navegador locais.",
-            "toggleLabel": "Ativar ou desativar extensões de navegador"
           }
         },
         "RuntimePairingUrlGenerator": {
@@ -6558,7 +6547,7 @@
               "tokenHint": "Tokens de acesso de repositório, projeto e espaço de trabalho são criados na página de configurações correspondente do Bitbucket e precisam de acesso de leitura a pull requests.",
               "basicHint": "Crie um token de API da Atlassian para sua conta e depois combine-o com o endereço de e-mail que o possui.",
               "scopesTitle": "Selecione estes escopos do token de API do Bitbucket:",
-              "scopeUser": "Verificar sua conta",
+              "scopeUser": "Mostrar o nome da sua conta",
               "scopeRepository": "Ler status de build",
               "scopeReadPullRequest": "Ler pull requests",
               "scopeWritePullRequest": "Criar pull requests",
@@ -14775,13 +14764,10 @@
         },
         "AutomationDetail": {
           "host": "Host",
-          "a1d52c2189": "Cobertura de uso",
-          "449fc83bf7": "Tokens",
           "401f40ae79": "Gasto est.",
           "a7c312430d": "Última execução",
           "2df8970cd5": "Agente",
           "e353ab9516": "Pré-verificação",
-          "620b22145e": "Tolerância",
           "15ea446b93": "Sessão",
           "5405a09b1f": "Local de execução",
           "2f8baf5360": "Criar a partir de",
@@ -14791,7 +14777,6 @@
           "1f6026358e": "Excluir automação",
           "d79452fb30": "Retomar automação",
           "91a4155e95": "Pausar automação",
-          "4b1ea02d2e": "Editar automação",
           "2fb1605beb": "Executar Agora",
           "221916d93c": "Crie uma automação para começar a agendar trabalho de agente.",
           "b09b2384fd": "Pausada",
@@ -14805,9 +14790,6 @@
           "graceHours_one": "{{count}} hora",
           "graceHours_other": "{{count}} horas",
           "graceHours_many": "{{count}} horas",
-          "usageCoverageRuns_one": "{{known}}/{{count}} execução",
-          "usageCoverageRuns_other": "{{known}}/{{count}} execuções",
-          "usageCoverageRuns_many": "{{known}}/{{count}} execuções",
           "usageUnavailable": "Indisponível",
           "noRuns": "Nenhuma execução",
           "projectDefault": "Padrão do projeto",
@@ -20562,7 +20544,6 @@
           "browsePlugins": "Explorar plugins",
           "browseThemePlugins": "Explorar plugins de temas",
           "colorMode": "Modo de cor",
-          "colorModeCaption": "Claro, escuro ou igual ao sistema.",
           "darkLook": "Visual escuro",
           "darkLooks": "Visuais escuros",
           "lightLook": "Visual claro",
@@ -20578,10 +20559,8 @@
           "slotLabel": "Visual a editar",
           "sourceBuiltIn": "Integrado",
           "sourceCommunity": "Paleta do terminal",
-          "themes": "Tema",
-          "themesCaption": "Opcional. Vá além com temas do app e paletas do terminal."
-        },
-        "subtitle": "Escolha claro ou escuro e, se quiser, um tema. Altere ambos quando quiser em Configurações."
+          "themes": "Tema"
+        }
       },
       "integrations": {
         "capabilities": {

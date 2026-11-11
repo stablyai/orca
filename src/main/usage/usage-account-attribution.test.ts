@@ -18,7 +18,7 @@ import type { UsageHistoryRow } from '../../shared/usage-history-types'
 import type { CodexUsagePersistedFile } from '../codex-usage/types'
 import { buildClaudeUsageProjectionIntegrity } from '../claude-usage/transcript-projection-integrity'
 import { createUsageAccountRootResolver } from './usage-account-attribution'
-import { readUsageSourceCacheForScan, writeUsageSourceCache } from './usage-source-cache-file'
+import { readUsageSourceCacheForScan, writeUsageSourceCache } from './cache/usage-source-cache-file'
 
 const { homedirMock } = vi.hoisted(() => ({ homedirMock: vi.fn<() => string>() }))
 vi.mock('node:os', async () => ({

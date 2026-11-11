@@ -8047,10 +8047,6 @@
             "modeAriaLabel": "Öffnungsmodus des Agenten-Dashboards",
             "modeInWindow": "Im Fenster",
             "modePopout": "Separates Fenster"
-          },
-          "browserExtensions": {
-            "copy": "Fügt Einstellungen › Browser › Erweiterungen für lokale Browserprofile hinzu.",
-            "toggleLabel": "Browser-Erweiterungen umschalten"
           }
         },
         "FloatingWorkspacePane": {
@@ -10216,13 +10212,6 @@
               "inWindow": "im Fenster",
               "worktrees": "Worktrees",
               "eaf17a7214": "Agenten-Dashboard"
-            },
-            "browserExtensions": {
-              "title": "Browser-Erweiterungen",
-              "description": "Chrome-Erweiterungen wie Passwortmanager in Orca-Browser-Tabs ausführen.",
-              "extension": "Erweiterung",
-              "chrome": "chrome",
-              "password": "Passwortmanager"
             }
           }
         },
@@ -12486,7 +12475,7 @@
               "tokenHint": "Zugriffstoken für Repositorys, Projekte und Arbeitsbereiche werden auf der jeweiligen Bitbucket-Einstellungsseite erstellt und benötigen Lesezugriff auf Pull Requests.",
               "basicHint": "Einen Atlassian-API-Token für das Konto erstellen und mit der zugehörigen E-Mail-Adresse kombinieren.",
               "scopesTitle": "Diese Bitbucket-API-Token-Bereiche auswählen:",
-              "scopeUser": "Konto bestätigen",
+              "scopeUser": "Kontonamen anzeigen",
               "scopeRepository": "Build-Status lesen",
               "scopeReadPullRequest": "Pull Requests lesen",
               "scopeWritePullRequest": "Pull Requests erstellen",
@@ -17569,13 +17558,10 @@
         },
         "AutomationDetail": {
           "host": "Host",
-          "a1d52c2189": "Abdeckung der Nutzungsdaten",
-          "449fc83bf7": "Tokens",
           "401f40ae79": "Geschätzte Ausgaben",
           "a7c312430d": "Letzte Ausführung",
           "2df8970cd5": "Agent",
           "e353ab9516": "Vorabprüfung",
-          "620b22145e": "Nachholfrist",
           "15ea446b93": "Sitzung",
           "5405a09b1f": "Ausführungsort",
           "2f8baf5360": "Erstellen aus",
@@ -17585,7 +17571,6 @@
           "1f6026358e": "Automatisierung löschen",
           "d79452fb30": "Automatisierung fortsetzen",
           "91a4155e95": "Automatisierung pausieren",
-          "4b1ea02d2e": "Automatisierung bearbeiten",
           "2fb1605beb": "Jetzt ausführen",
           "221916d93c": "Eine Automatisierung erstellen, um Agentenaufgaben zeitlich zu planen.",
           "b09b2384fd": "Pausiert",
@@ -17597,8 +17582,6 @@
           "graceMinutes_other": "{{count}} Minuten",
           "graceHours_one": "{{count}} Stunde",
           "graceHours_other": "{{count}} Stunden",
-          "usageCoverageRuns_one": "{{known}}/{{count}} Ausführung",
-          "usageCoverageRuns_other": "{{known}}/{{count}} Ausführungen",
           "usageUnavailable": "Nicht verfügbar",
           "noRuns": "Keine Ausführungen",
           "projectDefault": "Projektstandard",
@@ -19212,7 +19195,6 @@
           "browsePlugins": "Plugins durchsuchen",
           "browseThemePlugins": "Design-Plugins durchsuchen",
           "colorMode": "Farbmodus",
-          "colorModeCaption": "Hell, dunkel oder wie dein System.",
           "darkLook": "Dunkler Look",
           "darkLooks": "Dunkle Looks",
           "lightLook": "Heller Look",
@@ -19228,10 +19210,8 @@
           "slotLabel": "Zu bearbeitender Look",
           "sourceBuiltIn": "Integriert",
           "sourceCommunity": "Terminal-Palette",
-          "themes": "Design",
-          "themesCaption": "Optional. Geh weiter mit App-Designs und Terminal-Paletten."
-        },
-        "subtitle": "Wähle hell oder dunkel und optional ein Design. Beides kannst du jederzeit in den Einstellungen ändern."
+          "themes": "Design"
+        }
       },
       "integrations": {
         "capabilities": {

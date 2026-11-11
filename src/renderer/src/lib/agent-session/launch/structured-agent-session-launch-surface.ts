@@ -18,10 +18,8 @@ import {
   readStructuredAgentLaunchRecords,
   writeStructuredAgentLaunchRecord
 } from './structured-agent-session-launch-persistence'
-import {
-  getStructuredAgentSessionLaunchOwner,
-  getStructuredLaunchStateBySessionId
-} from './structured-agent-session-launch-registry'
+import { getStructuredAgentSessionLaunchOwner } from './structured-agent-session-launch-registry'
+import { getStructuredLaunchStateBySessionId } from './structured-agent-session-launch-state-store'
 import {
   structuredAgentSessionFocusOwner,
   structuredAgentSessionTargetForHost

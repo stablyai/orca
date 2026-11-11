@@ -1,5 +1,5 @@
-import type { UsageProvider } from '../usage/usage-provider-contract'
-import { scanCodexUsageFilesViaWorker } from '../usage/usage-scan-worker-spawn'
+import type { UsageProvider } from '../usage/provider-lifecycle/usage-provider-contract'
+import { scanCodexUsageFilesViaWorker } from '../usage/scan-worker/usage-scan-worker-spawn'
 import type { CodexUsageDailyAggregate, CodexUsageSession } from './types'
 
 // Rescan older caches for turn-ID fork deduplication and per-session daily identity.

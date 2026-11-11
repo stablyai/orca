@@ -7659,10 +7659,6 @@
             "modeAriaLabel": "Modo de apertura del Panel de agentes",
             "modeInWindow": "En ventana",
             "modePopout": "Ventana emergente"
-          },
-          "browserExtensions": {
-            "copy": "Añade Ajustes › Navegador › Extensiones para los perfiles de navegador locales.",
-            "toggleLabel": "Activar o desactivar extensiones del navegador"
           }
         },
         "FloatingWorkspacePane": {
@@ -9783,13 +9779,6 @@
               "inWindow": "en la ventana",
               "worktrees": "árboles de trabajo",
               "eaf17a7214": "Panel de agentes"
-            },
-            "browserExtensions": {
-              "title": "Extensiones del navegador",
-              "description": "Ejecuta extensiones de Chrome, como gestores de contraseñas, en las pestañas del navegador de Orca.",
-              "extension": "extensión",
-              "chrome": "chrome",
-              "password": "gestor de contraseñas"
             }
           }
         },
@@ -12149,7 +12138,7 @@
               "tokenHint": "Los tokens de acceso al repositorio, al proyecto y al espacio de trabajo se crean desde la página de configuración de Bitbucket correspondiente y necesitan acceso de lectura para las solicitudes de extracción.",
               "basicHint": "Cree un token API de Atlassian para su cuenta y luego vincúlelo con la dirección de correo electrónico propietaria.",
               "scopesTitle": "Seleccione estos alcances del token API de Bitbucket:",
-              "scopeUser": "Verificar su cuenta",
+              "scopeUser": "Mostrar el nombre de su cuenta",
               "scopeRepository": "Leer estados de compilación",
               "scopeReadPullRequest": "Leer pull requests",
               "scopeWritePullRequest": "Crear pull requests",
@@ -17302,13 +17291,10 @@
         },
         "AutomationDetail": {
           "host": "Host",
-          "a1d52c2189": "Cobertura de uso",
-          "449fc83bf7": "Fichas",
           "401f40ae79": "Est. gastar",
           "a7c312430d": "última ejecución",
           "2df8970cd5": "Agente",
           "e353ab9516": "verificación previa",
-          "620b22145e": "Gracia",
           "15ea446b93": "Sesión",
           "5405a09b1f": "Ejecutar ubicación",
           "2f8baf5360": "Crear desde",
@@ -17318,7 +17304,6 @@
           "1f6026358e": "Eliminar automatización",
           "d79452fb30": "Reanudar la automatización",
           "91a4155e95": "Pausar la automatización",
-          "4b1ea02d2e": "Editar automatización",
           "2fb1605beb": "Ejecutar ahora",
           "221916d93c": "Cree una automatización para comenzar a programar el trabajo de los agentes.",
           "b09b2384fd": "En pausa",
@@ -17332,9 +17317,6 @@
           "graceHours_one": "{{count}} hora",
           "graceHours_other": "{{count}} horas",
           "graceHours_many": "{{count}} horas",
-          "usageCoverageRuns_one": "{{known}}/{{count}} ejecución",
-          "usageCoverageRuns_other": "{{known}}/{{count}} ejecuciones",
-          "usageCoverageRuns_many": "{{known}}/{{count}} ejecuciones",
           "usageUnavailable": "No disponible",
           "noRuns": "Sin ejecuciones",
           "projectDefault": "Predeterminado del proyecto",
@@ -20676,7 +20658,6 @@
           "browsePlugins": "Explorar plugins",
           "browseThemePlugins": "Explorar plugins de temas",
           "colorMode": "Modo de color",
-          "colorModeCaption": "Claro, oscuro o según tu sistema.",
           "darkLook": "Estilo oscuro",
           "darkLooks": "Estilos oscuros",
           "lightLook": "Estilo claro",
@@ -20692,10 +20673,8 @@
           "slotLabel": "Estilo a editar",
           "sourceBuiltIn": "Integrado",
           "sourceCommunity": "Paleta de terminal",
-          "themes": "Tema",
-          "themesCaption": "Opcional. Ve más allá con temas de la app y paletas de terminal."
-        },
-        "subtitle": "Elige claro u oscuro y, si quieres, un tema. Puedes cambiar ambos cuando quieras en Ajustes."
+          "themes": "Tema"
+        }
       },
       "integrations": {
         "capabilities": {
