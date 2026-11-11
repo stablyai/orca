@@ -1258,7 +1258,7 @@ async function main() {
       step.extraPicks = i + 1
     }
     await d.getByRole('button', { name: 'Later', exact: true }).click({ timeout: 1500 }).catch(() => {})
-    step.composerHint = (await d.innerText()).match(/Hosted sandbox[\s\S]*?idle/)?.[0]?.replace(/\s+/g, ' ')
+    step.composerHint = (await d.innerText()).match(/(?:Hosted sandbox|Sandbox)[\s\S]*?idle/)?.[0]?.replace(/\s+/g, ' ')
     await fillName(d, wsName)
     await shot(step, 'composer-orca-cloud')
     await clearToasts()
