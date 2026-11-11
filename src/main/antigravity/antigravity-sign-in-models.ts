@@ -15,6 +15,8 @@ export function saveSignInModels(
   options.adoptSession(started.response, 'new')
   const { models } = options.read()
   if (models.length > 0) {
+    // Retire any prior host-agy catalog binding so new chats switch to this signed-in account.
+    agentModelCatalogStore.expireFailures(spec.agent)
     agentModelCatalogStore.recordSuccess(
       agentModelCatalogFingerprint({ agent: spec.agent, accountHome, wslDistro: null }),
       spec.agent,

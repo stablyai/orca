@@ -103,6 +103,9 @@ export function createAgentModelCatalogRefreshes(context: {
         return
       }
       const { record, scoped, workspacePath, folder, base, probeHome } = facts
+      const registered = deps.probes?.[agent]
+      const probe =
+        probeHome && registered?.supportsAccount?.(probeHome) !== false ? registered : undefined
       const bound: AgentModelCatalogBinding = {
         identity: launch.identity,
         agent,
@@ -113,6 +116,7 @@ export function createAgentModelCatalogRefreshes(context: {
         fingerprint: base,
         base,
         exact: false,
+        canProbe: Boolean(probe),
         folder,
         workspacePath,
         // A workspace that was named but cannot be inspected here may pick its own model.
@@ -155,7 +159,6 @@ export function createAgentModelCatalogRefreshes(context: {
       const { fingerprint, exact, resolved, cwd } = scope
       Object.assign(bound, { fingerprint, exact, cwd })
       bindAgentModelCatalogScope(bindings, launch.bindingKey, bound, requestKey)
-      const probe = deps.probes?.[agent]
       let completion: Promise<AgentModelCatalogEntry | null> | undefined
       if (
         !launch.passive &&
