@@ -19,6 +19,8 @@ import {
   appendProvisioningLog,
   appendProvisioningWarnings
 } from '@/lib/pending-creation-provisioning-log'
+import { cloudCreateIdempotencyKey } from '@/lib/orca-cloud/cloud-create-intent'
+import { ORCA_CLOUD_RECIPE_ID } from '../../../shared/hosted-sandbox/orca-cloud-recipe-id'
 
 export async function prepareRequestForCreate(
   creationId: string,
@@ -71,6 +73,7 @@ async function prepareEphemeralVmRecipeRequest(
           }
         : {}),
       provisionId: creationId,
+      ...cloudCreateIdempotency(recipe.recipeId, creationId),
       setupExistingFolder: async (args) => {
         // The VM's checkout folder is named "project"; register it under the real project's name.
         const displayName =
@@ -266,4 +269,13 @@ export function getProvisionedRootSparseCheckoutError(): string {
     'auto.lib.ephemeralVmWorktreeCreation.sparseCheckoutUnsupported',
     'Provisioned-root recipes do not support sparse checkout.'
   )
+}
+
+/** Orca Cloud creates carry the Create press's Idempotency-Key; other recipes don't. */
+function cloudCreateIdempotency(recipeId: string, creationId: string): { idempotencyKey?: string } {
+  if (recipeId !== ORCA_CLOUD_RECIPE_ID) {
+    return {}
+  }
+  const key = cloudCreateIdempotencyKey(creationId)
+  return key ? { idempotencyKey: key } : {}
 }

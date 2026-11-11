@@ -58,9 +58,17 @@ it('sends you to Settings when your Pokes are off, and disables Poke when theirs
   fireEvent.click(screen.getByRole('button', { name: 'Open settings' }))
   expect(onTurnOnPokes).toHaveBeenCalledOnce()
   cleanup()
-  view({ profile: profile({ pokes: { enabled: true, teammateEnabled: false } }) })
+  const { onPoke } = view({
+    profile: profile({ pokes: { enabled: true, teammateEnabled: false } })
+  })
   expect(screen.getByText('Grace Hopper hasn’t turned on Pokes yet.')).toBeTruthy()
-  expect(screen.getByRole('button', { name: /Poke/ }).hasAttribute('disabled')).toBe(true)
+  const poke = screen.getByRole('button', { name: /Poke/ })
+  // Muted and explained, but still focusable; a click does nothing.
+  expect(poke.getAttribute('aria-disabled')).toBe('true')
+  expect(poke.hasAttribute('disabled')).toBe(false)
+  expect(poke.getAttribute('aria-describedby')).toBeTruthy()
+  fireEvent.click(poke)
+  expect(onPoke).not.toHaveBeenCalled()
 })
 
 it('says when a teammate has not shared their activity', () => {

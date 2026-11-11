@@ -1,8 +1,10 @@
+import { useId } from 'react'
 import { ArrowUpRight, Hand } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { InlineError } from '@/components/ui/inline-error'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import type { CloudWorkspace } from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
@@ -135,6 +137,7 @@ export function TeammateProfileView(props: TeammateProfileViewProps): React.JSX.
   const { profile } = props
   const self = profile?.self ?? false
   const footer = pokeFooterCopy(props, t)
+  const pokeNoteId = useId()
   const loading = profile === null && props.error === null
   return (
     <div className="flex flex-col gap-6" aria-busy={loading || undefined}>
@@ -275,6 +278,7 @@ export function TeammateProfileView(props: TeammateProfileViewProps): React.JSX.
               props.poke.kind === 'refused' ? 'text-foreground' : 'text-muted-foreground'
             )}
             role="status"
+            id={pokeNoteId}
           >
             {footer.note ??
               t(
@@ -288,20 +292,30 @@ export function TeammateProfileView(props: TeammateProfileViewProps): React.JSX.
               {t('auto.components.teammates.openExperimental', 'Open settings')}
             </Button>
           ) : (
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={!footer.canPoke}
-              aria-disabled={props.poke.kind === 'sending' || undefined}
-              onClick={() => {
-                if (props.poke.kind !== 'sending') {
-                  props.onPoke()
-                }
-              }}
-            >
-              <Hand aria-hidden />
-              {t('auto.components.teammates.poke', 'Poke')}
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                {/* aria-disabled, not disabled: it stays focusable and hoverable so the tooltip can
+                    say why it can't poke, with the muted disabled look. */}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  aria-disabled={!footer.canPoke || undefined}
+                  aria-busy={props.poke.kind === 'sending' || undefined}
+                  aria-describedby={footer.canPoke ? undefined : pokeNoteId}
+                  onClick={() => {
+                    if (footer.canPoke && props.poke.kind !== 'sending') {
+                      props.onPoke()
+                    }
+                  }}
+                >
+                  <Hand aria-hidden />
+                  {t('auto.components.teammates.poke', 'Poke')}
+                </Button>
+              </TooltipTrigger>
+              {!footer.canPoke && footer.note ? (
+                <TooltipContent side="top">{footer.note}</TooltipContent>
+              ) : null}
+            </Tooltip>
           )}
         </footer>
       ) : null}

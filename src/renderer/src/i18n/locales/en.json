@@ -2291,7 +2291,9 @@
         "preparingCloudEnvironment": "Preparing environment…",
         "startingSandbox": "Starting sandbox…",
         "cloningRepository": "Cloning the repository…",
-        "updatingRepository": "Updating the repository…"
+        "updatingRepository": "Updating the repository…",
+        "cloudBlockedAsleep": "Asleep",
+        "cloudCouldNotOpen": "Couldn’t open"
       },
       "duplicatePairedServers": {
         "ambiguousSameServer": "{{value0}} and {{value1}} are the same server paired twice. Remove one in Settings > Remote Orca Servers."
@@ -14600,7 +14602,6 @@
           "sectionDescription": "For the Orca Cloud API, the orca CLI and MCP clients. Claude or Codex keys go in Cloud secrets."
         },
         "cloudRoutines": {
-          "queued": "Run queued. It shows up in the history below.",
           "pausedSr": "(paused)",
           "createdByPerson": "by <person></person>",
           "lastRun": "Last run:",
@@ -14609,7 +14610,6 @@
           "runningShowHistory": "{{routineName}} is running. Show run history",
           "runNowLabel": "Run {{routineName}} now",
           "alreadyRunning": "A run is already in progress.",
-          "runningNow": "Running…",
           "runNow": "Run now",
           "more": "More actions for {{routineName}}",
           "hideHistory": "Hide run history",
@@ -20651,7 +20651,6 @@
           "makeOwnerBody": "Owners control billing and can manage other owners. To hand the team over, make {{value0}} an owner, then ask them to change your role.",
           "makeOwnerConfirm": "Make owner",
           "makeOwnerTitle": "Make {{value0}} an owner?",
-          "manage": "Members, invites and seats",
           "members": "Members",
           "membersList": "Team members and invites",
           "nextInvoice": "Next invoice (est.)",
@@ -20719,7 +20718,8 @@
           "totalPerMonth": "{{total}} per month",
           "totalPerYear": "{{total}} per year",
           "openProfile": "Open {{value0}}’s profile",
-          "viewProfile": "View profile"
+          "viewProfile": "View profile",
+          "seatsOnPlanBilling": "Seats and invoices are in"
         },
         "manageBilling": "Manage billing",
         "comparePlans": "Compare plans",
@@ -23231,10 +23231,6 @@
         "trialChip_other": "Trial · {{hours}} sandbox hours left",
         "planChip_one": "{{hours}} sandbox hour left",
         "planChip_other": "{{hours}} sandbox hours left",
-        "trialToast_one": "Using sandbox hours · {{hours}} sandbox hour left in your trial",
-        "trialToast_other": "Using sandbox hours · {{hours}} sandbox hours left in your trial",
-        "planToast_one": "Using sandbox hours · {{hours}} sandbox hour left",
-        "planToast_other": "Using sandbox hours · {{hours}} sandbox hours left",
         "trialOffered_one": "Trial · {{hours}} sandbox hour left · No card needed",
         "trialOffered_other": "Trial · {{hours}} sandbox hours left · No card needed"
       },
@@ -23257,10 +23253,15 @@
         "folderDetail": "Orca Cloud starts from a GitHub repository. This project is a folder on this computer."
       },
       "cloudStart": {
-        "agentNotStarted": "{{agent}} isn’t set up for Orca Cloud, so it didn’t start. The workspace has a terminal.",
-        "agentNotStartedGeneric": "Your agent isn’t set up for Orca Cloud, so it didn’t start. The workspace has a terminal.",
         "setUpAgentOnce": "Set up {{agent}} once",
-        "setUpAgentOnceGeneric": "Set up once"
+        "agentNotStartedShort": "{{agent}} isn’t set up for Orca Cloud, so it didn’t start.",
+        "agentNotStartedIn": "{{agent}} isn’t set up for Orca Cloud, so it didn’t start in {{workspace}}.",
+        "copyCode": "Copy code",
+        "openSettings": "Open Settings",
+        "signInBrowser": "Finish signing in to {{agent}} in your browser…",
+        "signInDevice": "Enter {{code}} at {{host}} to sign in to {{agent}}.",
+        "signInPaste": "Paste the {{agent}} setup token in Settings to finish.",
+        "signInSaving": "Saving…"
       }
     },
     "JiraIssueWorkspace": {
@@ -27936,7 +27937,6 @@
     "signIn": "Sign in",
     "loadFailed": "Couldn’t load your agent accounts.",
     "title": "Orca Cloud",
-    "help": "Set up once on this computer. Every cloud workspace uses it, including new, cloned and restarted ones.",
     "policy": "Your Claude and ChatGPT accounts are used only in your own workspaces. Teammates never use them.",
     "codeCopied": "Code copied",
     "agent": {
@@ -27965,7 +27965,8 @@
     "unavailableDetail": "Signing in once with your {{product}} account isn’t available in Orca Cloud yet. Each new cloud workspace asks you to sign in.",
     "allUnavailable": "Claude and Codex sign in for each cloud workspace for now.",
     "pasteTokenInstead": "Paste a token instead",
-    "rowMenu": "{{agent}} account options"
+    "rowMenu": "{{agent}} account options",
+    "helpAccountWide": "Set up once. Every cloud workspace uses it, including new, cloned and restarted ones."
   },
   "vmBuildAgents": {
     "menu": {
@@ -28092,13 +28093,6 @@
     "expiredCompact": "{{agent}} sign-in expired"
   },
   "cloudSetupPage": {
-    "agent": {
-      "lead": "Save your agent sign-in to your Orca account and every cloud workspace uses it. You can also skip this and sign in inside the workspace.",
-      "setUp": "Set up once",
-      "skip": "Skip for now",
-      "title": "Sign in to {{agent}} once",
-      "titleGeneric": "Sign in to your agent once"
-    },
     "back": "Back",
     "billing": {
       "capLead": "Raise the spend cap to start this workspace.",
@@ -28117,16 +28111,22 @@
     "copyLink": "Copy link",
     "done": {
       "lead": "Starting your cloud workspace…",
-      "title": "All set"
+      "title": "All set",
+      "accountLead": "Your Orca account is ready for Orca Cloud.",
+      "accountTitle": "You’re signed in",
+      "agentTitle": "{{agent}} is set up for Orca Cloud",
+      "agentTitleGeneric": "Your agent is set up for Orca Cloud",
+      "githubTitle": "Orca Cloud can reach this repository",
+      "planTitle": "Your team has Orca Cloud",
+      "teamTitle": "Team selected",
+      "trialTitle": "Your trial is on"
     },
-    "eyebrow": "Orca Cloud setup",
     "github": {
       "lead": "Orca Cloud clones your code from GitHub. Install the Orca Cloud app on this repository once.",
       "title": "Give Orca Cloud access on GitHub",
       "waiting": "This page starts the workspace once they approve.",
       "waitingTitle": "Waiting for approval on GitHub"
     },
-    "orcaCloud": "Orca Cloud",
     "owner": {
       "lead": "Orca Cloud needs a Team plan. Only owners and admins can choose one.",
       "title": "An owner or admin needs to fix this"
@@ -28149,7 +28149,6 @@
       "title": "Sign in to Orca"
     },
     "starting": "Starting…",
-    "startsAfter": "Starts when setup is done",
     "step": {
       "account": "Account",
       "agent": "Agent",
@@ -28173,7 +28172,18 @@
       "lead_one": "{{hours}} sandbox hour to try Orca Cloud. No card needed.",
       "lead_other": "{{hours}} sandbox hours to try Orca Cloud. No card needed."
     },
-    "untitled": "New cloud workspace",
-    "waitingBrowser": "Waiting for your browser…"
+    "waitingBrowser": "Waiting for your browser…",
+    "continue": "Continue",
+    "exit": "Exit setup",
+    "exited": "Orca Cloud setup closed. Your draft is kept.",
+    "header": "Setting up Orca Cloud",
+    "headerFor": "Setting up Orca Cloud for {{name}}",
+    "resumeDraft": "Open draft"
+  },
+  "orcaCloudSignInSheet": {
+    "title": "Agents in Orca Cloud",
+    "description": "Set up Claude and Codex once. Every cloud workspace uses them, including new, cloned and restarted ones.",
+    "footerLabel": "Related settings",
+    "allAccounts": "All agent accounts"
   }
 }

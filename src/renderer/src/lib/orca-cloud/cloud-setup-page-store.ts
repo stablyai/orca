@@ -6,6 +6,7 @@ import type { OrcaCloudAvailability } from '../../../../shared/orca-yaml-hook-ty
 import type { ComposerModalData } from '@/components/new-workspace/composer-modal-data'
 import type { OrcaCloudRunTargetAccess } from '@/components/new-workspace/orca-cloud-run-target-access'
 import { e2eConfig } from '@/lib/e2e-config'
+import { cancelCloudCreateIntent } from './cloud-create-intent'
 
 export type CloudSetupPageRequest = {
   prompt: string
@@ -17,6 +18,8 @@ export type CloudSetupPageRequest = {
   cloudOnlyRepo: string | null
   /** The composer as it was: Back and the auto-start reopen it with everything kept. */
   composer: ComposerModalData
+  /** The Create press this setup belongs to: its start uses it once; Exit and Back cancel it. */
+  intentId: string
   /**
    * Dev and e2e only: pins the account's billing answer so every step can be walked against the
    * real page (dev sign-in has no billing). Never set by the app.
@@ -35,6 +38,10 @@ function emit(): void {
 }
 
 export function openCloudSetupPage(request: Omit<CloudSetupPageRequest, 'openedAt'>): void {
+  // A newer Start replaces an older setup: the older press can never create.
+  if (current && current.intentId !== request.intentId) {
+    cancelCloudCreateIntent(current.intentId)
+  }
   current = { ...request, openedAt: Date.now() }
   emit()
 }
@@ -59,31 +66,6 @@ export function useCloudSetupPageRequest(): CloudSetupPageRequest | null {
     },
     () => current
   )
-}
-
-const AGENT_SKIP_KEY = 'orca.cloudSetup.agentSkipped.v1'
-
-/** "Skip for now" on the agent step is remembered, so a ready account isn't asked on every Start. */
-export function isCloudSetupAgentSkipped(agent: string | null): boolean {
-  if (!agent || typeof localStorage === 'undefined') {
-    return false
-  }
-  try {
-    return localStorage.getItem(`${AGENT_SKIP_KEY}:${agent}`) === '1'
-  } catch {
-    return false
-  }
-}
-
-export function rememberCloudSetupAgentSkipped(agent: string | null): void {
-  if (!agent || typeof localStorage === 'undefined') {
-    return
-  }
-  try {
-    localStorage.setItem(`${AGENT_SKIP_KEY}:${agent}`, '1')
-  } catch {
-    // Private mode: the step asks again next time.
-  }
 }
 
 // Dev and e2e: drive the page from the console or CDP (as `__store` is), e.g. to walk the trial step.
