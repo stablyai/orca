@@ -50,9 +50,9 @@ export function AdvancedPane({ settings, updateSettings }: AdvancedPaneProps): R
         )}
       >
         <SearchableSetting
-          title={getAdvancedSearchEntry(t).http1Compatibility.title}
-          description={getAdvancedSearchEntry(t).http1Compatibility.description}
-          keywords={getAdvancedSearchEntry(t).http1Compatibility.keywords}
+          title={getAdvancedSearchEntry().http1Compatibility.title}
+          description={getAdvancedSearchEntry().http1Compatibility.description}
+          keywords={getAdvancedSearchEntry().http1Compatibility.keywords}
           className="space-y-2 py-2"
           id="advanced-http1-compatibility"
         >
@@ -62,7 +62,7 @@ export function AdvancedPane({ settings, updateSettings }: AdvancedPaneProps): R
                 <Label id="advanced-http1-compatibility-label">
                   {t('auto.components.settings.AdvancedPane.e9506d3377', 'HTTP/1.1 Compatibility')}
                 </Label>
-                <TooltipProvider delayDuration={250}>
+                <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <button

@@ -130,7 +130,7 @@ export function retireAbsentStructuredAgentLaunchCancellations(
   publishedSessionIds: ReadonlySet<string>,
   authoritativeInventory: number,
   executionHostId: ExecutionHostId
-): boolean {
+): string[] {
   restoreCancellationRetirementFences()
   const retainedSessionIds = new Set(publishedSessionIds)
   for (const [sessionId, retirement] of cancellationRetirementBySessionId) {
@@ -141,16 +141,16 @@ export function retireAbsentStructuredAgentLaunchCancellations(
       retainedSessionIds.add(sessionId)
     }
   }
-  const changed = retireAbsentStructuredAgentLaunchCancellationTombstonesPersisted(
+  const retired = retireAbsentStructuredAgentLaunchCancellationTombstonesPersisted(
     retainedSessionIds,
     executionHostId
   )
-  if (changed) {
+  if (retired.length) {
     for (const sessionId of cancellationRetirementBySessionId.keys()) {
       if (!hasStructuredAgentLaunchCancellationTombstonePersisted(sessionId)) {
         cancellationRetirementBySessionId.delete(sessionId)
       }
     }
   }
-  return changed
+  return retired
 }

@@ -7,10 +7,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { pairedRuntimeConnectionFromOffer } from '../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { parsePairingCode } from '../../shared/remote-runtime/pairing/pairing'
-import {
-  subscribeRemoteRuntimeRequest,
-  type RemoteRuntimeSubscription
-} from '../../shared/remote-runtime/remote-runtime-client'
+import '../../shared/remote-runtime/requests/remote-runtime-request-socket'
+import { subscribeRemoteRuntimeTransport } from '../../shared/remote-runtime/requests/remote-runtime-subscription-transport'
+import type { RemoteRuntimeTransportSubscription } from '../../shared/remote-runtime/requests/remote-runtime-subscription-contract'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
@@ -41,7 +40,13 @@ vi.mock('../git/worktrees/catalog/worktree-listing', async (importOriginal) => (
 
 const { getWorktreeListingMocks } = vi.hoisted(() => {
   const worktrees = [
-    { path: '/tmp/worktree-a', head: 'abc', branch: 'a', isBare: false, isMainWorktree: false }
+    {
+      path: '/tmp/worktree-a',
+      head: 'abc',
+      branch: 'a',
+      isBare: false,
+      isMainWorktree: false
+    }
   ]
   const listings = {
     listWorktrees: vi.fn().mockResolvedValue(worktrees),
@@ -59,6 +64,7 @@ type Client = Awaited<ReturnType<typeof attach>>
 const SLOW_WAIT = { timeout: 5_000 }
 // Surfaced in afterEach so a protocol regression fails loudly instead of as a waitFor timeout.
 const streamErrors: unknown[] = []
+let attachCount = 0
 const StreamResponse = z
   .object({
     type: z.string().optional(),
@@ -78,7 +84,7 @@ async function attach(
   const pairing = parsePairingCode(pairingUrl)!
   const responses: StreamResponse[] = []
   const frames: ReturnType<typeof decodeTerminalStreamFrame>[] = []
-  const subscription: RemoteRuntimeSubscription = await subscribeRemoteRuntimeRequest(
+  const subscription: RemoteRuntimeTransportSubscription = await subscribeRemoteRuntimeTransport(
     pairedRuntimeConnectionFromOffer(pairing),
     'terminal.multiplex',
     {},
@@ -99,7 +105,8 @@ async function attach(
   const streamId = 7
   let controlSeq = 0
   let inputSeq = 0
-  const inputSessionId = `${client.id}-input-session`
+  // Each attach is a new input session, as a reconnecting app would open; a reused one dedupes seq 1.
+  const inputSessionId = `${client.id}-input-session-${++attachCount}`
   const frame = (opcode: TerminalStreamOpcode, payload: Uint8Array, seq = 0) =>
     subscription.sendBinary(
       encodeTerminalStreamFrame({
@@ -211,7 +218,11 @@ describe('multiple clients on one headless runtime', () => {
     await server.start()
     cleanups.push(() => server.stop())
     const pair = (name: string, scope: 'runtime' | 'mobile') => {
-      const offer = server.createPairingOffer({ address: '127.0.0.1', name, scope })
+      const offer = server.createPairingOffer({
+        address: '127.0.0.1',
+        name,
+        scope
+      })
       if (!offer.available) {
         throw new Error('pairing unavailable')
       }
@@ -381,7 +392,7 @@ describe('multiple clients on one headless runtime', () => {
     expect(h.size()).toEqual({ cols: 200, rows: 50 })
   })
 
-  it('lets a passively attached phone take the floor from every desktop until take-back', async () => {
+  it('lets a phone view at the owner size and take the size only by typing or fitting', async () => {
     const h = await start()
     const desktop = await h.join(
       h.desktopUrl,
@@ -392,16 +403,24 @@ describe('multiple clients on one headless runtime', () => {
     desktop.claim(200, 50)
     await typed(desktop, 'd1')
 
+    // Viewing only: the phone renders the owner's grid and nobody is resized or locked out.
+    const resizesBeforePhone = h.sizes.length
     const phone = await h.join(h.phoneUrl, { id: 'phone', type: 'mobile' }, { cols: 50, rows: 30 })
-    await vi.waitFor(() => expect(h.size()).toEqual({ cols: 50, rows: 30 }))
-    await vi.waitFor(() => expect([desktop.driver(), web.driver()]).toEqual(['mobile', 'mobile']))
-
-    // Desktop and web input is acknowledged but dropped while the phone drives.
+    expect(h.runtime.getMobileDisplayMode(PTY_ID)).toBe('desktop')
     await typed(desktop, 'd2')
     await typed(web, 'w2')
-    await typed(phone, 'p1')
-    expect(h.writes).toEqual(['d1', 'p1'])
+    expect(h.sizes.length).toBe(resizesBeforePhone)
+    expect(h.size()).toEqual({ cols: 200, rows: 50 })
+    expect(h.runtime.getDriver(PTY_ID).kind).not.toBe('mobile')
+    expect(h.writes).toEqual(['d1', 'd2', 'w2'])
 
+    // Typing on the phone claims the size.
+    await typed(phone, 'p1')
+    await vi.waitFor(() => expect(h.size()).toEqual({ cols: 50, rows: 30 }))
+    await vi.waitFor(() => expect([desktop.driver(), web.driver()]).toEqual(['mobile', 'mobile']))
+    expect(h.runtime.getMobileDisplayMode(PTY_ID)).toBe('auto')
+
+    // The desktop's take-back on the phone-driving banner reclaims its size.
     const takeBack = await sendRequest(h.endpoint, {
       id: 'take-back',
       authToken: h.authToken,
@@ -410,14 +429,39 @@ describe('multiple clients on one headless runtime', () => {
     })
     expect(takeBack.result).toEqual({ restored: true })
     expect(h.size()).toEqual({ cols: 200, rows: 50 })
+    await vi.waitFor(() => expect(desktop.driver()).toBe('desktop'))
     await typed(desktop, 'd3')
+    expect(h.writes).toEqual(['d1', 'd2', 'w2', 'p1', 'd3'])
 
-    // Deliberate phone input takes the floor straight back.
-    await typed(phone, 'p2')
+    // The phone's explicit "fit to phone" request is a claim too.
+    const fit = await sendRequest(h.endpoint, {
+      id: 'fit-to-phone',
+      authToken: h.authToken,
+      method: 'terminal.setDisplayMode',
+      params: {
+        terminal: h.handle,
+        mode: 'auto',
+        client: { id: 'phone', type: 'mobile' },
+        viewport: { cols: 50, rows: 30 }
+      }
+    })
+    expect(fit.result).toMatchObject({ mode: 'auto' })
     expect(h.size()).toEqual({ cols: 50, rows: 30 })
-    expect(h.writes).toEqual(['d1', 'p1', 'd3', 'p2'])
 
+    // Leaving hands the size back; reopening the terminal on the phone is a view again.
     phone.close()
-    await vi.waitFor(() => expect(h.size()).toEqual({ cols: 200, rows: 50 }))
+    await vi.waitFor(() => expect(h.size()).toEqual({ cols: 200, rows: 50 }), SLOW_WAIT)
+    const resizesBeforeReopen = h.sizes.length
+    const phoneAgain = await h.join(
+      h.phoneUrl,
+      { id: 'phone', type: 'mobile' },
+      { cols: 50, rows: 30 }
+    )
+    await typed(desktop, 'd4')
+    expect(h.sizes.length).toBe(resizesBeforeReopen)
+    expect(h.writes.at(-1)).toBe('d4')
+    await typed(phoneAgain, 'p2')
+    expect(h.writes.at(-1)).toBe('p2')
+    await vi.waitFor(() => expect(h.size()).toEqual({ cols: 50, rows: 30 }))
   })
 })

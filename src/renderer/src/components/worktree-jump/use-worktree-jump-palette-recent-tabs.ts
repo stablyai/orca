@@ -6,7 +6,7 @@ import {
 import {
   orderRecentWorkspaceTabs,
   type RecentWorkspaceTabRow
-} from '@/lib/recent-workspace-tab-rows'
+} from '@/lib/workspace/search/palette/recent-workspace-tab-rows'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import {
   EMPTY_RECENT_TAB_ORDER,

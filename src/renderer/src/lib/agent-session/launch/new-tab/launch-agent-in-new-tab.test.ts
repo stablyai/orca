@@ -1,4 +1,4 @@
-import { nonRefusedAgentLaunch } from '@/lib/agent-tab-launch-outcome.test-fixture'
+import { nonRefusedAgentLaunch } from '@/lib/agent-session/launch/new-tab/agent-tab-launch-outcome.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   mockCreateTab,
@@ -208,7 +208,7 @@ describe('launchAgentInNewTab', () => {
       }
       const startup = queuedStartups()[0]
       expect(startup).toBeDefined()
-      expect(tokenizeStartupCommand(startup.command, 'posix')).toMatchObject({
+      expect(tokenizeStartupCommand(startup.command ?? '', 'posix')).toMatchObject({
         ok: true,
         tokens: ['cx', '-c', 'model="true"', '-c', 'model_reasoning_effort=high']
       })

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import {
   Alert,
   View,
@@ -17,7 +18,7 @@ import { NavBar } from '../../../src/components/nav-bar/NavBar'
 import { NavBarButton } from '../../../src/components/nav-bar/NavBarButton'
 import { themedStyleSheet } from '../../../src/theme/themed-styles'
 import { useMobileColorScheme } from '../../../src/theme/use-mobile-color-scheme'
-import { loadHosts, updateHostNameAndEndpoint } from '../../../src/transport/hosts/host-store'
+import { loadHosts, updateHostNameAndEndpoint } from '../../../src/host-catalog/host-store'
 import { displayHostEndpoint } from '../../../src/transport/hosts/host-endpoint'
 import { resolveHostEndpointEdit } from '../../../src/transport/hosts/host-endpoint-edit'
 import {
@@ -25,12 +26,12 @@ import {
   usePrimeHosts,
   useRefreshHostClient
 } from '../../../src/transport/connection/host-client-hooks'
-import { removeHostAndCloseClient } from '../../../src/transport/hosts/host-removal-lifecycle'
-import { useHostDisplay } from '../../../src/transport/hosts/use-host-display'
+import { removeHostAndCloseClient } from '../../../src/host-catalog/host-removal-lifecycle'
+import { useHostDisplay } from '../../../src/host-descriptors/use-host-display'
 import { leaveHostRoute } from '../../../src/host-route-exit'
 import { ConfirmModal } from '../../../src/components/ConfirmModal'
 import { ListGroup, ListRow } from '../../../src/components/list/ListGroup'
-import type { HostProfile } from '../../../src/transport/hosts/host-profile'
+import type { HostProfile } from '../../../src/host-catalog/host-profile'
 import { hostOs } from '../../../src/platform/host-os'
 import { translate } from '../../../src/i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../src/i18n/use-mobile-translation'
@@ -45,6 +46,7 @@ export default function EditHostScreen() {
   const primeHosts = usePrimeHosts()
   const refreshHostClient = useRefreshHostClient()
   const forgetHostClient = useForgetHostClient()
+  const queryClient = useQueryClient()
 
   const [host, setHost] = useState<HostProfile | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -189,7 +191,7 @@ export default function EditHostScreen() {
       return
     }
     try {
-      await removeHostAndCloseClient(host.id, forgetHostClient)
+      await removeHostAndCloseClient(host.id, forgetHostClient, queryClient)
     } catch {
       setConfirmRemove(true)
       Alert.alert(

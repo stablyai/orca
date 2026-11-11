@@ -1,7 +1,7 @@
 import React, { useCallback, useMemo } from 'react'
 import { LoaderCircle, GitMerge, ChevronDown, GitPullRequestClosed } from 'lucide-react'
 import { useAppStore } from '@/store/index'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import {
@@ -196,7 +196,7 @@ export default function HostedReviewActions({
   if (review.state === 'open') {
     return (
       <div className="space-y-1.5">
-        <TooltipProvider delayDuration={300}>
+        <TooltipProvider>
           <div className={RIGHT_SIDEBAR_SPLIT_ACTION_ROW_CLASS}>
             <Tooltip>
               <TooltipTrigger asChild>

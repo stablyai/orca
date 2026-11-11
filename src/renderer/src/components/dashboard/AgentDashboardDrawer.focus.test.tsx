@@ -17,7 +17,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorkspace: mocks.activateAndRevealWorkspace
 }))
-vi.mock('@/lib/activate-tab-and-focus-pane', () => ({
+vi.mock('@/lib/workspace/tabs/activate-tab-and-focus-pane', () => ({
   activateTabAndFocusPane: mocks.activateTabAndFocusPane
 }))
 vi.mock('./useLiveDashboardSnapshot', () => ({

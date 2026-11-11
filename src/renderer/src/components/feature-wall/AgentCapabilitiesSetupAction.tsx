@@ -1,25 +1,25 @@
 import {
   useBundledSkillInstallAction,
   type BundledSkillInstallActionState
-} from '@/hooks/use-bundled-skill-install-action'
+} from '@/hooks/skills/installation/use-bundled-skill-install-action'
 import { bundledSkillSetupActionLabel } from '../skills/setup/bundled-skill-setup-copy'
-import { useOnboardingSkillRuntime } from '@/hooks/use-onboarding-skill-runtime'
+import { useOnboardingSkillRuntime } from '@/hooks/skills/runtime/use-onboarding-skill-runtime'
 import { FeatureSetupInlineTerminal } from '../onboarding/FeatureSetupInlineTerminal'
-import { buildAgentFeatureSkillInstallCommand } from '@/lib/agent-feature-install-commands'
-import { buildSkillCommandForRuntime } from '../../lib/skill-runtime-command'
+import { buildAgentFeatureSkillInstallCommand } from '@/lib/skills/installation/agent-feature-install-commands'
+import { buildSkillCommandForRuntime } from '../../lib/skills/runtime/skill-runtime-command'
 import type { OnboardingFeatureSetupRuntimeContext } from '../onboarding/onboarding-feature-setup-runtime'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Check, Download, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
-import { useAppStore } from '@/store'
+import { cn } from '@/lib/class-names'
+import { useAppStore } from '@/store/index'
 import { AgentCapabilityStatusNote, AgentCapabilityStatusPill } from './AgentCapabilityStatusBadges'
 import {
   bundledSkillInstallNeedsAttention,
   useBundledSkillInstall,
   type BundledSkillInstall
-} from '@/hooks/use-bundled-skill-install'
+} from '@/hooks/skills/installation/use-bundled-skill-install'
 import { BundledSkillInstallStatus } from '../skills/setup/BundledSkillInstallStatus'
 import {
   DEFAULT_ONBOARDING_FEATURE_SETUP_SELECTION,
@@ -41,7 +41,7 @@ import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { capabilitiesSetupBusyLabel, capabilityToggleLabel } from './agent-capability-setup-copy'
 import { AGENT_CAPABILITY_SETUP_ROWS } from './agent-capability-setup-rows'
-import { track } from '@/lib/telemetry'
+import { track } from '@/diagnostics/telemetry/telemetry'
 
 type AgentCapabilitiesSetupActionProps = {
   onOrchestrationSkillInstalledChange: (installed: boolean) => void

@@ -8,11 +8,14 @@ import android.content.res.Configuration
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
+import androidx.webkit.WebViewCompat
+import androidx.webkit.WebViewFeature
 import expo.modules.kotlin.exception.CodedException
 import expo.modules.kotlin.exception.Exceptions
 import expo.modules.kotlin.functions.Queues
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
+import java.io.File
 
 class OrcaMobileWebShellModule : Module() {
   private val main = Handler(Looper.getMainLooper())
@@ -55,6 +58,27 @@ class OrcaMobileWebShellModule : Module() {
 
     OnActivityDestroys {
       discardSpare()
+    }
+
+    // Page builds live in filesDir: "Clear cache", cleaner apps and low storage empty cacheDir, which cost a full
+    // download on the next open. allowBackup false and the device-transfer rules keep them on this phone.
+    Function("generationStoreDirectory") { name: String ->
+      val filesDir = appContext.reactContext?.filesDir ?: throw Exceptions.ReactContextLost()
+      val directory = File(filesDir, name)
+      // A full disk can refuse the folder; the caller then keeps the old root.
+      if (!directory.mkdirs() && !directory.isDirectory) throw UnableToCreateGenerationStoreException()
+      Uri.fromFile(directory).toString()
+    }
+
+    // Lets isolation-unavailable name the WebView to update.
+    Function("currentWebViewProvider") {
+      val context = appContext.reactContext ?: return@Function null
+      val info = WebViewCompat.getCurrentWebViewPackage(context) ?: return@Function null
+      val version = info.versionName ?: return@Function null
+      val name = info.applicationInfo?.loadLabel(context.packageManager)?.toString() ?: info.packageName
+      val hasShellFeatures = WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT) &&
+        WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)
+      mapOf("name" to name, "version" to version, "hasShellFeatures" to hasShellFeatures)
     }
 
     AsyncFunction("prepareSpareDocument") { directory: String, sessionId: String ->
@@ -124,3 +148,6 @@ class OrcaMobileWebShellModule : Module() {
     }
   }
 }
+
+private class UnableToCreateGenerationStoreException :
+  CodedException("The page build folder could not be created")

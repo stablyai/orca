@@ -1,3 +1,4 @@
+import { GENERAL_SETTING_ANCHORS } from '../general/general-setting-anchors'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import { useTranslate } from '@/i18n/use-translate'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
@@ -16,9 +17,10 @@ export function EditorWordWrapSetting({
   const t = useTranslate()
   return (
     <SearchableSetting
+      id={GENERAL_SETTING_ANCHORS.editorWrap}
       title={t(
-        'auto.components.settings.GeneralEditorSettingsSection.7ddd66fede',
-        'Editor Word Wrap'
+        'auto.components.settings.GeneralEditorSettingsSection.75e326278e',
+        'Editor word wrap'
       )}
       description={t(
         'auto.components.settings.GeneralEditorSettingsSection.9b18de6eea',
@@ -30,8 +32,8 @@ export function EditorWordWrapSetting({
       <div className="min-w-0 flex-1 space-y-0.5">
         <Label>
           {t(
-            'auto.components.settings.GeneralEditorSettingsSection.7ddd66fede',
-            'Editor Word Wrap'
+            'auto.components.settings.GeneralEditorSettingsSection.75e326278e',
+            'Editor word wrap'
           )}
         </Label>
         <p className="text-xs text-muted-foreground">
@@ -43,8 +45,8 @@ export function EditorWordWrapSetting({
       </div>
       <SettingsSegmentedControl
         ariaLabel={t(
-          'auto.components.settings.GeneralEditorSettingsSection.7ddd66fede',
-          'Editor Word Wrap'
+          'auto.components.settings.GeneralEditorSettingsSection.75e326278e',
+          'Editor word wrap'
         )}
         value={settings.editorWordWrap === false ? 'off' : 'on'}
         onChange={(option) => updateSettings({ editorWordWrap: option === 'on' })}

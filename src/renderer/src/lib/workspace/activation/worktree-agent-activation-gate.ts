@@ -1,3 +1,4 @@
+import { sleepingAgentRecordIndex } from '@/store/terminals/sleeping-agent-record-index'
 import { useAppStore } from '@/store/index'
 import type { PtyListedSession } from '../../../../../shared/terminal/pty/lifecycle/pty-listed-session'
 import {
@@ -20,7 +21,7 @@ import {
 import {
   type LiveTerminalSurfaceOwnerIndex,
   readWorktreeLiveTerminalSurfaceOwners
-} from '../../worktree-live-terminal-surface-owners'
+} from '../ownership/worktree-live-terminal-surface-owners'
 import { isStructuredAgentSyntheticSleepingRecord } from '../../agent-session/resume/structured-agent-synthetic-sleeping-record'
 import {
   readWorktreeStructuredActivationInventory,
@@ -84,9 +85,10 @@ export function workspaceHasSleepingAgentSessions(
   state: Pick<ReturnType<typeof useAppStore.getState>, 'sleepingAgentSessionsByPaneKey'>,
   worktreeId: string
 ): boolean {
-  return Object.values(state.sleepingAgentSessionsByPaneKey).some(
-    (record) => record.worktreeId === worktreeId
-  )
+  return sleepingAgentRecordIndex
+    .entries(state.sleepingAgentSessionsByPaneKey, worktreeId)
+    .map(([, record]) => record)
+    .some((record) => record.worktreeId === worktreeId)
 }
 
 function hasStructuredSession(store: ActivationStore, worktreeId: string): boolean {
@@ -122,7 +124,9 @@ function liveSleepingAgentClaims(
       session.paneKey ? [[session.paneKey, session.id] as const] : []
     )
   )
-  for (const record of Object.values(store.sleepingAgentSessionsByPaneKey)) {
+  for (const record of sleepingAgentRecordIndex
+    .entries(store.sleepingAgentSessionsByPaneKey, worktreeId)
+    .map(([, record]) => record)) {
     if (record.worktreeId !== worktreeId) {
       continue
     }
@@ -247,10 +251,13 @@ export async function runWorktreeAgentActivationGate(
     liveWorkspaceSessions,
     structuredInventory
   )
-  const hasUnclaimedRecovery = Object.values(store.sleepingAgentSessionsByPaneKey).some(
-    (record) =>
-      record.worktreeId === worktreeId && !claims.keys.has(getProviderSessionClaimKey(record))
-  )
+  const hasUnclaimedRecovery = sleepingAgentRecordIndex
+    .entries(store.sleepingAgentSessionsByPaneKey, worktreeId)
+    .map(([, record]) => record)
+    .some(
+      (record) =>
+        record.worktreeId === worktreeId && !claims.keys.has(getProviderSessionClaimKey(record))
+    )
   // A surfaced PTY without a conversation claim may still own the sleeping session.
   if (
     hasUnclaimedRecovery &&

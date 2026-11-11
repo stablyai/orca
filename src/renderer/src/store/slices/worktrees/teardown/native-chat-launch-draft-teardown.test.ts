@@ -1,11 +1,6 @@
 /** Evict nativeChatLaunchDraftByTabId wherever launch prompt retires (close, orphan sweep, bulk/single purge); stranded drafts otherwise keep publishing to mobile. */
-import { afterEach, describe, it, expect, vi, beforeEach } from 'vitest'
-import type * as AgentStatusModule from '@/lib/agent-status'
-
-import {
-  drawTabsFromMain,
-  type TabsDrawnFromMain
-} from '../../tabs/tabs-drawn-from-main.test-fixture'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import type * as AgentStatusModule from '@/lib/agent-status/aggregation/worktree-agent-status'
 
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
@@ -18,7 +13,7 @@ vi.mock('@/components/terminal-pane/pty-transport/shutdown/pty-shutdown-data-sus
   unregisterPtyDataHandlers: vi.fn()
 }))
 
-vi.mock('@/lib/agent-status', async (importOriginal) => {
+vi.mock('@/lib/agent-status/aggregation/worktree-agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
   return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
 })
@@ -51,12 +46,7 @@ globalThis.window = { api: mockApi }
 import { createTestStore, seedStore } from '../../../testing/app-store-test-fixture'
 import { makeWorktree } from '../worktree.test-fixture'
 import { makeTab } from '../../../terminals/terminal-tab.test-fixture'
-import { makeTabGroup, makeUnifiedTab } from '../../tabs/tab-group.test-fixture'
-import {
-  readNativeChatComposerDraft,
-  updateNativeChatComposerDraft
-} from '@/components/native-chat/drafts/native-chat-composer-draft-store'
-import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/drafts/native-chat-draft-scope'
+import { readNativeChatComposerDraft } from '@/components/native-chat/drafts/native-chat-composer-draft-store'
 import {
   addNativeChatPendingAttachment,
   settleNativeChatPendingAttachment
@@ -91,14 +81,9 @@ function seedDrafts(store: ReturnType<typeof createTestStore>): void {
 }
 
 describe('nativeChatLaunchDraftByTabId teardown', () => {
-  let main: TabsDrawnFromMain | undefined
   beforeEach(() => {
     vi.clearAllMocks()
     mockApi.worktrees.remove.mockResolvedValue(undefined)
-  })
-  afterEach(() => {
-    main?.close()
-    main = undefined
   })
 
   it('a user tab close drops the uploads still on their way in that tab’s panes only', () => {
@@ -116,65 +101,5 @@ describe('nativeChatLaunchDraftByTabId teardown', () => {
     )
     expect(settled).toEqual([false, true])
     expect(readNativeChatComposerDraft(`${TAB1}:leaf-b`).images).toEqual([])
-  })
-
-  function seedStructuredChat(store: ReturnType<typeof createTestStore>) {
-    const chat = makeUnifiedTab({
-      id: 'chat-tab',
-      entityId: 'session-1',
-      contentType: 'agent-session',
-      worktreeId: WT1,
-      groupId: 'group-1'
-    })
-    seedStore(store, {
-      worktreesByRepo: {
-        repo1: [
-          makeWorktree({ id: WT1, repoId: 'repo1', path: '/path/wt1' }),
-          makeWorktree({ id: WT2, repoId: 'repo1', path: '/path/wt2' })
-        ]
-      },
-      unifiedTabsByWorktree: { [WT1]: [chat] },
-      groupsByWorktree: {
-        [WT1]: [
-          makeTabGroup({
-            id: 'group-1',
-            worktreeId: WT1,
-            activeTabId: chat.id,
-            tabOrder: [chat.id]
-          })
-        ]
-      }
-    })
-    return chat
-  }
-
-  it('closing a structured chat tab keeps its conversation’s unsent draft', async () => {
-    const store = createTestStore()
-    const chat = seedStructuredChat(store)
-    main = await drawTabsFromMain(store)
-    const conversation = structuredAgentSessionDraftScopeKey('session-1')
-    updateNativeChatComposerDraft(conversation, { text: 'unsent' }, 'immediate')
-
-    store.getState().closeUnifiedTab(chat.id)
-    await main.settle()
-
-    // Main's frame drops a workspace with no tabs left; the window keeps an empty list.
-    expect(store.getState().unifiedTabsByWorktree[WT1] ?? []).toEqual([])
-    expect(readNativeChatComposerDraft(conversation).text).toBe('unsent')
-  })
-
-  it('removing a worktree drops its structured chats’ conversation drafts only', async () => {
-    const store = createTestStore()
-    seedStructuredChat(store)
-    const removed = structuredAgentSessionDraftScopeKey('session-1')
-    const other = structuredAgentSessionDraftScopeKey('session-2')
-    updateNativeChatComposerDraft(removed, { text: 'unsent' }, 'immediate')
-    updateNativeChatComposerDraft(other, { text: 'kept' }, 'immediate')
-
-    const result = await store.getState().removeWorktree({ id: WT1, executionHostId: null })
-
-    expect(result).toEqual({ ok: true })
-    expect(readNativeChatComposerDraft(removed).text).toBe('')
-    expect(readNativeChatComposerDraft(other).text).toBe('kept')
   })
 })

@@ -7,21 +7,41 @@ const RECOVERABLE_STATUSES: ReadonlySet<EphemeralVmRuntimeRecord['status']> = ne
   'suspend_failed'
 ])
 
+export type RecipeVmContactEvidence = {
+  readSshStatus: (targetId: string) => SshConnectionStatus | undefined
+  /** Every contact with the paired server failed for minutes, it is not ready now, and the user
+   *  did not disconnect it. */
+  isServerContactLost: (environmentId: string) => boolean
+}
+
 /**
- * An SSH-mode VM recorded as up whose SSH host Orca gave up reaching: the reconnect ladder spent
- * every attempt, minutes of failures, so the provider likely stopped or reclaimed it on its own
- * (#34089). The recipe's resume is then what brings it back. A blip, a reconnect still under way,
- * a host the user disconnected or one never dialed this session is not evidence, and is left to
- * the normal reconnects.
+ * A VM recorded as up whose host Orca gave up reaching, so the provider likely stopped or
+ * reclaimed it on its own (#34089). The recipe's resume is then what brings it back.
+ * - SSH: the reconnect ladder spent every attempt, minutes of failures.
+ * - Orca server: every health probe and control-socket reconnect failed for minutes.
+ * A blip, a reconnect still under way, a host the user disconnected or one never dialed this
+ * session is not evidence, and is left to the normal reconnects. Nothing here dials: the
+ * evidence comes from dials Orca already makes, and none are made to a VM the user suspended.
  */
 export function isRecipeVmLostContact(
-  runtime: Pick<EphemeralVmRuntimeRecord, 'status' | 'connectionMode' | 'sshTargetId'>,
-  readSshStatus: (targetId: string) => SshConnectionStatus | undefined
+  runtime: Pick<
+    EphemeralVmRuntimeRecord,
+    'status' | 'connectionMode' | 'sshTargetId' | 'runtimeEnvironmentId'
+  >,
+  evidence: RecipeVmContactEvidence
 ): boolean {
+  if (!RECOVERABLE_STATUSES.has(runtime.status)) {
+    return false
+  }
+  if (runtime.connectionMode === 'ssh') {
+    return (
+      runtime.sshTargetId !== undefined &&
+      evidence.readSshStatus(runtime.sshTargetId) === 'reconnection-failed'
+    )
+  }
   return (
-    RECOVERABLE_STATUSES.has(runtime.status) &&
-    runtime.connectionMode === 'ssh' &&
-    runtime.sshTargetId !== undefined &&
-    readSshStatus(runtime.sshTargetId) === 'reconnection-failed'
+    runtime.connectionMode === 'orca-server' &&
+    runtime.runtimeEnvironmentId !== undefined &&
+    evidence.isServerContactLost(runtime.runtimeEnvironmentId)
   )
 }

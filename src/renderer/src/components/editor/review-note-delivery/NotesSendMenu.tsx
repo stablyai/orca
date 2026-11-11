@@ -1,4 +1,4 @@
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { useAppStateValue } from '@/store/retained-views/app-state-view'
 import type { DiffCommentOwner } from '@/store/slices/diff-comments/diff-comment-owner'
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
@@ -14,7 +14,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { ReviewNotesSendMenuContent } from './ReviewNotesSendMenuContent'
 import type { DiffCommentDeliverySnapshot } from '@/store/slices/diff-comments/create-diff-comments-slice'
 import {
@@ -22,7 +22,7 @@ import {
   holdNotesForSend,
   isNoteInFlight,
   useNotesInFlightVersion
-} from '@/lib/notes-send-in-flight'
+} from '@/components/notes/delivery/notes-send-in-flight'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { recomputeOn } from '@/lib/recompute-on'

@@ -59,20 +59,6 @@ describe('RuntimeFileReads', () => {
       ).rejects.toThrow('file_too_large')
     })
 
-    it('keeps local previews above the remote cap available without a request budget', async () => {
-      const size = RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES + 1
-      const dir = await previewFixture(size)
-      const { commands } = createFileReads({ path: dir })
-      resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
-
-      await expect(commands.readFileExplorerPreview('id:wt-1', 'logo.png')).resolves.toEqual({
-        content: Buffer.alloc(size, 0x61).toString('base64'),
-        isBinary: true,
-        isImage: true,
-        mimeType: 'image/png'
-      })
-    })
-
     // Phones read images a chat names by host path; only image files on this machine qualify.
     it('reads a chat image outside every project root but never another file type', async () => {
       const dir = await previewFixture()

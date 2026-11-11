@@ -6,7 +6,7 @@ import { MOBILE_AI_VAULT_CAPABILITY } from '../../agent-history/agent-history-ca
 import '../../../../src/shared/protocol-version'
 import { TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY } from '../../../../src/shared/terminal/runtime-policy/terminal-runtime-capabilities'
 import { PROGRAM_STATUS_RUNTIME_CAPABILITY } from '../../../../src/shared/program-status/protocol'
-import { structuredAgentSessionHostSupport } from '../mobile-structured-agent-session-host-support'
+import { structuredAgentSessionHostSupport } from '../native-chat/agent-session/mobile-structured-agent-session-host-support'
 import { runAcceptedMobileSessionTabsEffects } from './mobile-session-tabs-accepted-effects'
 import type { SessionTabsStreamSource } from './mobile-session-tabs-stream-health'
 import { useMobileSessionTabsFetchReporting } from './use-mobile-session-tabs-fetch-reporting'

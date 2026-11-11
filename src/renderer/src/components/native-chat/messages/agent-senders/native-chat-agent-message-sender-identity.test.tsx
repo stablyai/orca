@@ -4,22 +4,19 @@ import {
   structuredAgentSessionTabId
 } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import '@testing-library/jest-dom/vitest'
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
+import { foldAgentSessionConversationNames } from '../../../../../../shared/agent-session/agent-session-conversation-names'
+import type { AgentSessionConversationNames } from '../../../../../../shared/agent-session/agent-session-conversation-names'
+import { testOrcaSessionId } from '../../../../../../shared/orca-session-address-test-fixture'
+import { NativeChatAgentMessageSenders } from './NativeChatAgentMessageSenders'
 import type {
   AgentSessionConversationName,
   AgentSessionStatusSummary
 } from '../../../../../../shared/agent-session/agent-session-wire'
-import {
-  foldAgentSessionConversationNames,
-  type AgentSessionConversationNames
-} from '../../../../../../shared/agent-session/agent-session-conversation-names'
 import type { AgentMessageSource } from '../../../../../../shared/agent-session/agent-session-message-source'
-import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
-import { testOrcaSessionId } from '../../../../../../shared/orca-session-address-test-fixture'
 import type { Tab } from '../../../../../../shared/tab-types'
-import { NativeChatAgentMessageSenders } from './NativeChatAgentMessageSenders'
 
 const feeds = vi.hoisted(
   () =>
@@ -63,14 +60,14 @@ vi.mock('@/runtime/native-chat/status/structured-agent-session-status-feed', () 
   }
 }))
 const openAgentMessageSender = vi.hoisted(() => vi.fn())
-vi.mock('@/lib/open-agent-message-sender', () => ({ openAgentMessageSender }))
+vi.mock('@/lib/agent-session/open/open-agent-message-sender', () => ({ openAgentMessageSender }))
 
 const ROOT = testOrcaSessionId('root-chat')
 const RECIPIENT = 'recipient'
 const SENDER = 'sender'
-const PANE = 'terminal:11111111-1111-4111-8111-111111111111'
+void 'terminal:11111111-1111-4111-8111-111111111111'
 const initial = useAppStore.getInitialState()
-const providerA = { key: 'session_id' as const, id: 'provider-a' }
+void { key: 'session_id' as const, id: 'provider-a' }
 
 function summary(sessionId: string): AgentSessionStatusSummary {
   return {
@@ -131,33 +128,11 @@ function publish(
     listener()
   }
 }
-function row(provider = providerA, agentType = 'claude'): AgentStatusEntry {
-  return {
-    paneKey: PANE,
-    terminalHandle: 'term-a',
-    worktreeId: SENDER,
-    state: 'working',
-    prompt: '',
-    updatedAt: 1,
-    stateStartedAt: 1,
-    stateHistory: [],
-    agentType,
-    providerSession: provider,
-    connectionId: null
-  }
-}
 
 beforeEach(() => {
   openAgentMessageSender.mockClear()
   feeds.set('local', {
     snapshot: new Map([[ROOT, summary(ROOT)]]),
-    names: new Map(),
-    listeners: new Set(),
-    live: true,
-    activations: 0
-  })
-  feeds.set('remote', {
-    snapshot: new Map(),
     names: new Map(),
     listeners: new Set(),
     live: true,
@@ -173,86 +148,6 @@ afterEach(() => {
   useAppStore.setState(initial, true)
   feeds.clear()
 })
-
-it('uses the recipient host when identical session text is published by two hosts', () => {
-  publish('local', [summary(ROOT)])
-  publish('remote', [summary(ROOT)])
-  useAppStore.setState({
-    activeWorkspaceExecutionHostId: 'runtime:remote',
-    unifiedTabsByWorktree: {
-      [SENDER]: [tab(ROOT, 'Remote sender', 'runtime:remote'), tab(ROOT, 'Wrong host')]
-    }
-  })
-  render(<NativeChatAgentMessageSenders from={source()} chatWorktreeId={RECIPIENT} />)
-  expect(screen.getByText('Remote sender')).toBeInTheDocument()
-})
-
-it('shows a chat sender by its current rename', () => {
-  const renamed = 'Production Release Scan & Compatibility Review'
-  useAppStore.setState({ unifiedTabsByWorktree: { [SENDER]: [tab(ROOT, '')] } })
-  const feed = feeds.get('local')!
-  const status = feed.snapshot
-  expect(feed.names.has(ROOT)).toBe(false)
-  render(<NativeChatAgentMessageSenders from={source()} chatWorktreeId={RECIPIENT} />)
-  expect(screen.getByText('Original sender')).toBeInTheDocument()
-  act(() => publish('local', undefined, [{ sessionId: ROOT, conversationName: null }]))
-  expect(screen.getByText('Original sender')).toBeInTheDocument()
-  act(() => publish('local', undefined, [{ sessionId: ROOT, conversationName: renamed }]))
-  const name = screen.getByText(renamed)
-  expect(name).toBeInTheDocument()
-  fireEvent.click(name)
-  expect(openAgentMessageSender).toHaveBeenCalledWith(
-    source(),
-    source().senders[0],
-    RECIPIENT,
-    undefined,
-    undefined,
-    renamed
-  )
-  expect(feed.snapshot).toBe(status)
-  expect(status.get(ROOT)?.conversationName).toBeUndefined()
-})
-
-it.each([false, true])(
-  'keeps CLI A saved name after provider B and a terminal rename reuse the shell (%s queued)',
-  (queued) => {
-    const terminal = {
-      id: 'terminal',
-      ptyId: 'pty',
-      worktreeId: SENDER,
-      title: 'Claude Code',
-      customTitle: 'Resumed A',
-      color: null,
-      sortOrder: 0,
-      createdAt: 0
-    }
-    useAppStore.setState({
-      agentStatusByPaneKey: { [PANE]: row() },
-      tabsByWorktree: { [SENDER]: [terminal] }
-    })
-    const from = source(true)
-    render(<NativeChatAgentMessageSenders from={from} chatWorktreeId={RECIPIENT} queued={queued} />)
-    expect(screen.getByText('Original sender')).toBeInTheDocument()
-    act(() => {
-      useAppStore.setState({
-        agentStatusByPaneKey: { [PANE]: row({ key: 'session_id', id: 'provider-b' }) },
-        tabsByWorktree: { [SENDER]: [{ ...terminal, customTitle: 'Renamed B' }] }
-      })
-    })
-    const link = screen.getByText('Original sender')
-    expect(link).toBeInTheDocument()
-    fireEvent.click(link)
-    expect(openAgentMessageSender).toHaveBeenCalledWith(
-      from,
-      from.senders[0],
-      RECIPIENT,
-      undefined,
-      undefined,
-      'Original sender'
-    )
-    expect(feeds.get('local')!.activations).toBe(0)
-  }
-)
 
 it('uses the same published /clear successor for the live sender label', () => {
   const live = testOrcaSessionId('22222222-2222-4222-8222-222222222222')

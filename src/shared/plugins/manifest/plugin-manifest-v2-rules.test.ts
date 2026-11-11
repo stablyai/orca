@@ -5,6 +5,7 @@ import {
   PLUGIN_DERIVED_PUBLISHER_SINCE,
   PLUGIN_MANIFEST_V2_SINCE
 } from './plugin-schema-field-docs'
+import { PLUGIN_EDITOR_TYPOGRAPHY_SINCE } from '../workers/plugin-host-api-editor-typography'
 
 function v2(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
@@ -73,6 +74,24 @@ describe('manifest format 2 rules', () => {
     expect(parseHostPluginManifest(v2({ engines: { orca: '>=1.4.160' }, pluginApi: 1 }))).toEqual({
       ok: false,
       error: 'pluginApi: data plugins never call the host API; remove pluginApi'
+    })
+  })
+})
+
+describe('event subscriptions', () => {
+  const worker = (on: string) =>
+    v2({
+      execution: 'trusted-worker',
+      main: 'main.mjs',
+      engines: { orca: `>=${PLUGIN_EDITOR_TYPOGRAPHY_SINCE}` },
+      contributes: { events: [{ on }] }
+    })
+
+  it('needs no capability for editor typography, unlike workspace events', () => {
+    expect(parsePluginManifest(worker('editor.typography.changed'))).toMatchObject({ ok: true })
+    expect(parsePluginManifest(worker('workspace.changed'))).toMatchObject({
+      ok: false,
+      error: expect.stringContaining('requires the workspace:read capability')
     })
   })
 })

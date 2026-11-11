@@ -23,7 +23,10 @@ import {
 } from './runtime-environment-managed-tunnel'
 import { wslHostsGateOpen } from '../../wsl/host-lifecycle/wsl-host-gate'
 import type { WslHostPhoneReach } from '../../wsl/host-lifecycle/wsl-host-phone-reach'
-import { getWslHostPhoneGate } from '../../wsl/host-lifecycle/wsl-host-service-instance'
+import {
+  getWslHostPhoneGate,
+  onWslHostStatusesChanged
+} from '../../wsl/host-lifecycle/wsl-host-service-instance'
 import type { SshConnectionState } from '../../../shared/ssh-types'
 import {
   getRegisteredSshState,
@@ -34,13 +37,14 @@ import {
   callRuntimeEnvironment,
   subscribeRuntimeEnvironment
 } from './runtime-environment-transport-routing'
-import type { RemoteRuntimeSubscription } from '../../../shared/remote-runtime/remote-runtime-client'
+import type { RemoteRuntimeTransportSubscription } from '../../../shared/remote-runtime/requests/remote-runtime-subscription-contract'
 import { isRuntimeSubscriptionReplayResponse } from '../../../shared/runtime-subscription-replay'
 import {
   isRuntimeEnvironmentManuallyDisconnected,
   runtimeEnvironmentManualDisconnectCount
 } from './runtime-environment-manual-disconnect'
 import { onRuntimeEnvironmentStatusPublished } from './runtime-environment-status-owner'
+import { watchRuntimeEnvironmentRegistry } from './runtime-environment-preference'
 import { getRuntimeEnvironmentTransportGeneration } from './runtime-environment-transport-generation'
 import { getRuntimeEnvironmentRegistryRoot } from './runtime-environment-registry-root'
 import { recipeVmServerState } from './runtime-environment-recipe-vm-wake'
@@ -195,7 +199,18 @@ export function createRuntimeEnvironmentMobileRelayHosts(): MobileDesktopRelayHo
       retirementListeners.add(listener)
       return () => retirementListeners.delete(listener)
     },
-    onStatusChanged: onRuntimeEnvironmentStatusPublished,
+    // A WSL host's reach (hidden, stopped, ready) is part of its listing too.
+    onStatusChanged: (listener) => {
+      const stopStatus = onRuntimeEnvironmentStatusPublished(listener)
+      const stopWsl = onWslHostStatusesChanged(listener)
+      return () => {
+        stopStatus()
+        stopWsl()
+      }
+    },
+    // Its own watch: serve has no window, so the renderer catalog broadcast never runs there.
+    onCatalogChanged: (listener) =>
+      watchRuntimeEnvironmentRegistry(userDataPath, listener, 'Phone server list'),
     watchChanges: (host, expected, callbacks) =>
       watchRuntimeEnvironmentChanges(userDataPath, host.environmentId, expected, callbacks)
   }
@@ -209,7 +224,7 @@ function watchRuntimeEnvironmentChanges(
   callbacks: Parameters<MobileDesktopRelayHosts['watchChanges']>[2]
 ): MobileDesktopRelayHostWatch {
   const controller = new AbortController()
-  let subscription: RemoteRuntimeSubscription | null = null
+  let subscription: RemoteRuntimeTransportSubscription | null = null
   const generation = getRuntimeEnvironmentTransportGeneration(environmentId)
   const current = (): boolean =>
     !controller.signal.aborted &&

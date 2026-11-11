@@ -6,7 +6,7 @@ import type {
   KeybindingDefinition,
   KeybindingInput
 } from '../../../../../shared/keybindings/types'
-import { cn } from '../../../lib/utils'
+import { cn } from '../../../lib/class-names'
 import { Badge } from '../../ui/badge'
 import { Button } from '../../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip'
@@ -119,7 +119,7 @@ export function ShortcutCommandBlock({
       className="group/shortcut flex max-w-none flex-col"
     >
       <div className="flex min-h-9 items-center gap-3 rounded-md px-2 py-1 transition-colors hover:bg-accent/40 focus-within:bg-accent/40">
-        <div className="flex min-w-0 flex-1 items-center gap-2">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
           <TruncatedSidebarLabel
             text={item.title}
             className={cn('text-sm', isDisabled ? 'text-muted-foreground' : 'text-foreground')}

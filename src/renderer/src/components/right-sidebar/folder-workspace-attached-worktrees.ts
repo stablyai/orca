@@ -4,7 +4,7 @@ import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folde
 import { getFolderWorkspaceHostIdentity } from '../../../../shared/folder-workspaces/folder-workspace-worktree'
 import type { WorkspaceLineage, WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { compareWorktreeDisplayName } from '@/lib/worktree-display-name-order'
+import { compareWorktreeDisplayName } from '@/lib/workspace/display/worktree-display-name-order'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import { getProjectedWorktreeLineage } from '../../../../shared/worktree/workspace-lineage-graph'
 import {

@@ -1,7 +1,7 @@
 import {
   GRAB_BUDGET,
   type BrowserPageAnnotation
-} from '../../../../../../shared/browser-grab-types'
+} from '../../../../../../shared/browser/element-grab/browser-grab-types'
 
 export function sanitizeBrowserPageAnnotation(
   annotation: BrowserPageAnnotation
@@ -41,4 +41,17 @@ export function retainBrowserAnnotationMarkerIds(
     delete nextByPageId[pageId]
   }
   return nextByPageId
+}
+
+/** Closing a browser tab discards the notes its pages hold unsent. */
+export function hasUnsentBrowserNotes(
+  state: {
+    browserPagesByWorkspace: Record<string, readonly { id: string }[]>
+    browserAnnotationsByPageId: Record<string, readonly BrowserPageAnnotation[]>
+  },
+  browserWorkspaceId: string
+): boolean {
+  return (state.browserPagesByWorkspace[browserWorkspaceId] ?? []).some(
+    (page) => (state.browserAnnotationsByPageId[page.id]?.length ?? 0) > 0
+  )
 }

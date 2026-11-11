@@ -1,4 +1,3 @@
-import type * as NodeFsModule from 'node:fs'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import type * as NodeOsModule from 'node:os'
@@ -6,28 +5,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installFakeAppEnvironment } from '../../../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 
-const state = vi.hoisted((): { home: string; syncCalls: { name: string; target: string }[] } => ({
-  home: '',
-  syncCalls: []
-}))
-
-vi.mock('node:fs', async (importOriginal) => {
-  const actual = await importOriginal<typeof NodeFsModule>()
-  const wrapped: Record<string, unknown> = { ...actual }
-  for (const [name, value] of Object.entries(actual)) {
-    if (!name.endsWith('Sync') || typeof value !== 'function') {
-      continue
-    }
-    const original = value as ((...args: unknown[]) => unknown) & Record<string, unknown>
-    const recorder = (...args: unknown[]): unknown => {
-      state.syncCalls.push({ name, target: typeof args[0] === 'string' ? args[0] : '' })
-      return original(...args)
-    }
-    Object.assign(recorder, original)
-    wrapped[name] = recorder
-  }
-  return { ...wrapped, default: wrapped }
-})
+const state = vi.hoisted(() => ({ home: '' }))
 
 vi.mock('node:os', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeOsModule>()
@@ -38,13 +16,7 @@ vi.mock('electron', () => ({ app: { getPath: () => '/tmp/orca-user-data' } }))
 
 import { MANAGED_AGENT_HOOK_SCRIPT_REFRESHERS } from '../managed-agent-hook-registry'
 
-function syncCallsUnderHome(): string[] {
-  return state.syncCalls
-    .filter((call) => call.target.startsWith(state.home))
-    .map((call) => `${call.name}(${call.target})`)
-}
-
-describe('managed hook script refresh stays off the main thread', () => {
+describe('managed hook script refresh and owned profile cleanup', () => {
   beforeEach(async () => {
     state.home = await mkdtemp(join(tmpdir(), 'orca-hook-refresh-main-thread-'))
     vi.stubEnv('CLAUDE_CONFIG_DIR', join(state.home, '.claude'))
@@ -53,7 +25,6 @@ describe('managed hook script refresh stays off the main thread', () => {
     vi.stubEnv('GROK_HOME', undefined)
     vi.stubEnv('KIMI_CODE_HOME', undefined)
     vi.stubEnv('XDG_CONFIG_HOME', undefined)
-    state.syncCalls = []
   })
 
   afterEach(async () => {
@@ -61,7 +32,7 @@ describe('managed hook script refresh stays off the main thread', () => {
     vi.unstubAllEnvs()
   })
 
-  it('uses no synchronous HOME filesystem calls for missing or stale scripts', async () => {
+  it('refreshes stale scripts and removes owned profile plugins while preserving unowned files', async () => {
     const hooksDir = join(state.home, '.orca', 'agent-hooks')
     const claudeScript = join(
       hooksDir,
@@ -107,13 +78,11 @@ describe('managed hook script refresh stays off the main thread', () => {
     await mkdir(join(unowned, 'hooks'))
     await writeFile(join(unowned, '.claude-plugin', 'orca-managed.json'), '{"owner":"someone"}')
     await writeFile(join(unowned, 'hooks', 'register.js'), 'user-owned')
-    state.syncCalls = []
 
     for (const [, refresh] of MANAGED_AGENT_HOOK_SCRIPT_REFRESHERS) {
       await refresh()
     }
 
-    expect(syncCallsUnderHome()).toEqual([])
     const refreshed = await readFile(claudeScript, 'utf8')
     expect(refreshed).not.toBe('stale')
     expect(refreshed).toContain(

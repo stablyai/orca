@@ -1,3 +1,4 @@
+import type { EditorDiscardGeneration } from '../../save/flush/editor-discard-epoch'
 import { handleRichMarkdownViewportReveal } from '../viewport/rich-markdown-viewport'
 import type { Editor, UseEditorOptions } from '@tiptap/react'
 import type { EditorView } from '@tiptap/pm/view'
@@ -24,7 +25,7 @@ import {
   type ActivateMarkdownLink
 } from '../links/rich-markdown-editor-click-routing'
 import { createRichMarkdownKeyHandler } from '../commands/rich-markdown-key-handler'
-import { staleViewEditEpoch } from '../../save/flush/editor-stale-view-edit'
+import { captureViewEditGeneration } from '../../save/flush/editor-stale-view-edit'
 import {
   createRichMarkdownImageResolverContext,
   setRichMarkdownImageResolverContext
@@ -77,8 +78,8 @@ export type EditorConfigParams = {
   cancelAutoFocusRef: MutableRefObject<(() => void) | null>
   fileId: string
   serializeTimerRef: MutableRefObject<number | null>
-  /** Discard epoch when the pending serialization began. */
-  pendingEditEpochRef: MutableRefObject<number>
+  /** Discard generation when the pending serialization began. */
+  pendingEditGenerationRef: MutableRefObject<EditorDiscardGeneration | null>
   isInitializingRef: MutableRefObject<boolean>
   isApplyingProgrammaticUpdateRef: MutableRefObject<boolean>
   markdownCommentsRef: MutableRefObject<DiffComment[]>
@@ -274,7 +275,7 @@ export function createRichMarkdownEditorConfig(params: EditorConfigParams): UseE
       if (serializeTimerRef.current !== null) {
         window.clearTimeout(serializeTimerRef.current)
       } else {
-        params.pendingEditEpochRef.current = staleViewEditEpoch(params.fileId)
+        params.pendingEditGenerationRef.current = captureViewEditGeneration(params.fileId)
       }
       serializeTimerRef.current = window.setTimeout(() => {
         params.flushPendingSerialization()

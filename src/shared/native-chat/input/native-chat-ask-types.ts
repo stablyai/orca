@@ -1,4 +1,4 @@
-export type AskOption = { label: string; description?: string }
+export type AskOption = { label: string; description?: string; preview?: string }
 export type AskQuestion = {
   question: string
   header?: string

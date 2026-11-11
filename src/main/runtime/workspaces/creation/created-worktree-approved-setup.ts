@@ -1,4 +1,6 @@
 import { isFolderRepo } from '../../../../shared/repo-kind'
+import { isRepoOnCatalogHost } from '../../../../shared/execution-host'
+import { scopeHooksToRepoKind } from '../../../../shared/folder-workspace-hooks'
 import { getSetupRunnerCommandPlatformForPath } from '../../../../shared/agent-launch/startup/setup-runner-command'
 import type { RunApprovedWorktreeSetupResult } from '../../../../shared/worktree/create-types'
 import {
@@ -20,7 +22,9 @@ import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import type { WorktreeTerminalProvisioningArgs } from '../startup/runtime-worktree-terminal-provisioning'
 
 type ApprovedSetupRuntime = {
-  showManagedWorktree: (selector: string) => Promise<Pick<Worktree, 'id' | 'repoId' | 'path'>>
+  showManagedWorktree: (
+    selector: string
+  ) => Promise<Pick<Worktree, 'id' | 'repoId' | 'path' | 'displayName'>>
   requireStore: () => Pick<RuntimeStore, 'getRepo' | 'getSettings'>
   provisionManagedWorktreeTerminals: (args: WorktreeTerminalProvisioningArgs) => Promise<unknown>
 }
@@ -38,10 +42,10 @@ export async function runApprovedCreatedWorktreeSetup(
   const worktree = await runtime.showManagedWorktree(worktreeSelector)
   const store = runtime.requireStore()
   const repo = store.getRepo(worktree.repoId)
-  if (!repo || isFolderRepo(repo)) {
+  if (!repo || (isFolderRepo(repo) && !isRepoOnCatalogHost(repo))) {
     return { status: 'not_configured' }
   }
-  const yamlHooks = loadHooks(worktree.path)
+  const yamlHooks = scopeHooksToRepoKind(repo, loadHooks(worktree.path))
   const mismatch = checkCreatedWorktreeSetupTrust(repo, yamlHooks, 'run', { approvedSetupHash })
   if (mismatch) {
     return { status: 'mismatch', setupTrustMismatch: mismatch }
@@ -54,7 +58,8 @@ export async function runApprovedCreatedWorktreeSetup(
         setupScript,
         getLocalProjectWorktreeGitOptions(store, repo),
         resolveSetupRunnerShell(store.getSettings()),
-        yamlHooks?.setupAgentStartupPolicy
+        yamlHooks?.setupAgentStartupPolicy,
+        { worktreeId: worktree.id, displayName: worktree.displayName }
       )
     : undefined
   // The create already opened the command-less default tabs.

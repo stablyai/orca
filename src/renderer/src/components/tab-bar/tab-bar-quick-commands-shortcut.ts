@@ -8,10 +8,10 @@ import {
   ModifierDoubleTapDetector,
   toModifierDoubleTapEvent
 } from '../../../../shared/modifier-double-tap-detector'
-import { getShortcutPlatform } from '@/lib/shortcut-platform'
-import { TOGGLE_QUICK_COMMANDS_MENU_EVENT } from '@/lib/quick-commands-menu-events'
-import { useAppStore } from '@/store'
-import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
+import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
+import { TOGGLE_QUICK_COMMANDS_MENU_EVENT } from '@/lib/terminal/quick-commands/quick-commands-menu-events'
+import { useAppStore } from '@/store/index'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 
 type UseTabBarQuickCommandsShortcutParams = {
   isFocused: boolean

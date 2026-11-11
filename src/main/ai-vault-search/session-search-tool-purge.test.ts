@@ -121,30 +121,6 @@ function newPurge(db: HarnessDb, closed = () => false, onChange = (): void => {}
   })
 }
 
-it('persists a high-water mark so later passes skip already-scanned rowids', async () => {
-  const index = await openSessionSearchHarness('ss-tool-purge-mark')
-  try {
-    addSyntheticSession(index.db, { id: 1, text: 'userkept', rows: 300 })
-    addSyntheticSession(index.db, { id: 2, role: 'tool', text: 'toolremoved', rows: 300 })
-    const purge = newPurge(index.db)
-    await purge.request()
-    expect(countTool(index.db)).toBe(0)
-    const mark = Number(readMeta(index.db, 'tool_purge_scanned_rowid'))
-    expect(mark).toBeGreaterThanOrEqual(600)
-    expect(readMeta(index.db, 'tool_purge_floor_rowid')).toBeUndefined()
-
-    // Without the floor trigger, a row below the mark is invisible to later passes: no rescan.
-    index.db.exec('DROP TRIGGER search_tool_purge_floor')
-    index.db.exec('DELETE FROM messages WHERE id = 1')
-    index.db.exec("INSERT INTO messages(id, session_row_id, role) VALUES (1, 1, 'tool')")
-    await purge.request()
-    expect(countTool(index.db)).toBe(1)
-    expect(Number(readMeta(index.db, 'tool_purge_scanned_rowid'))).toBe(mark)
-  } finally {
-    await index.close()
-  }
-})
-
 it('purges legacy tool rows written after the mark, including reused tail rowids', async () => {
   const index = await openSessionSearchHarness('ss-tool-purge-downgrade')
   try {

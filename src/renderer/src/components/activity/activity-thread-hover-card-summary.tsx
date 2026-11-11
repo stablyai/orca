@@ -1,17 +1,17 @@
 import React, { useCallback, useMemo } from 'react'
 import { Cloud, Copy, FolderGit2, GitBranch, Laptop, LocateFixed, Server } from 'lucide-react'
 import { toast } from 'sonner'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
-import { AgentTypeIcon } from '@/lib/agent-type-icon'
+import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
 import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
 import { getWorktreeGitIdentityDisplay } from '../../../../shared/worktree/git-identity-display'
-import { jumpToWorktreeFromSidebar } from '@/lib/worktree-jump-navigation'
+import { jumpToWorktreeFromSidebar } from '@/lib/workspace/activation/worktree-jump-navigation'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
-import { formatClipboardFilePath } from '@/lib/clipboard-file-path'
-import { getWorktreeRowLocalPathOpenOwner } from '@/lib/worktree-row-open-in-owner'
-import { cn } from '@/lib/utils'
+import { formatClipboardFilePath } from '@/lib/clipboard/clipboard-file-path'
+import { getWorktreeRowLocalPathOpenOwner } from '@/lib/workspace/ownership/worktree-row-open-in-owner'
+import { cn } from '@/lib/class-names'
 import {
   getExecutionHostLabel,
   getWorktreeExecutionHostId,
@@ -30,7 +30,7 @@ import {
 } from '../sidebar/workspace-card/details/WorktreeCardDetailSection'
 import { EventTime, ThreadAgentStateIndicator } from './activity-thread-controls'
 import { activityThreadRowCopy, threadAgentStateLabel } from './activity-thread-presentation'
-import { getActivityThreadWorkspaceTitle } from '@/lib/activity-thread-display'
+import { getActivityThreadWorkspaceTitle } from '@/lib/workspace/activity/activity-thread-display'
 import type { AgentPaneThread } from './activity-thread-types'
 
 export function ActivityThreadHoverCardSummary({

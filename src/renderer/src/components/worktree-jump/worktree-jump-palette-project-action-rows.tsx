@@ -3,7 +3,7 @@ import { FolderTree } from 'lucide-react'
 import { CommandItem } from '@/components/ui/command'
 import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import { getPaletteHostBadge } from '@/components/cmd-j/palette-host-badge'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import type {
   ProjectTargetPaletteItem,

@@ -46,7 +46,7 @@ import { normalizeNotificationSettings } from './onboarding-normalization'
 import { retireLegacyInstructionsForClearedTextActionRecipes } from './source-control-settings'
 import {
   buildWorkspaceDirHistoryForUpdate,
-  expandWorkspaceDirHome,
+  normalizeWorkspaceDirSetting,
   stripRetiredGlobalSettings
 } from './terminal-settings-migrations'
 
@@ -63,7 +63,7 @@ export function updateSettings(
   updates: Partial<GlobalSettings>,
   options: { notifyListeners?: boolean; originWebContentsId?: number } = {}
 ): GlobalSettings {
-  const sanitizedUpdates = expandWorkspaceDirHome(stripRetiredGlobalSettings(updates))
+  const sanitizedUpdates = normalizeWorkspaceDirSetting(stripRetiredGlobalSettings(updates))
   const linkBehavior = updates.terminalLinkClickBehavior
   if (linkBehavior === 'actions' || linkBehavior === 'open' || linkBehavior === 'none') {
     // Loaded defaults are ambiguous; synchronize the legacy switch only on an explicit write.

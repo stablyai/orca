@@ -1,17 +1,17 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { translate } from '@/i18n/i18n'
 import type {
   BrowserAnnotationIntent,
   BrowserPageAnnotation
-} from '../../../../../shared/browser-grab-types'
-import { formatBrowserAnnotationsAsMarkdown } from './browser-annotation-output'
+} from '../../../../../shared/browser/element-grab/browser-grab-types'
+import { formatBrowserAnnotationsAsMarkdown } from '../../../../../shared/browser/annotations/browser-annotation-output'
 import { EMPTY_BROWSER_ANNOTATIONS } from '../describe-page/browser-annotation-geometry'
 import {
   holdNotesForSend,
   isNoteInFlight,
   useNotesInFlightVersion
-} from '@/lib/notes-send-in-flight'
+} from '@/components/notes/delivery/notes-send-in-flight'
 import { recomputeOn } from '@/lib/recompute-on'
 
 export function useBrowserPageAnnotationSend({

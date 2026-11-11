@@ -10,7 +10,10 @@ import {
   zoomPdfViewerWithWheel,
   type PdfScalePreference
 } from './pdf-scale-preference'
-import { pdfViewPositionCache, setWithLRU } from '@/lib/scroll-cache'
+import {
+  pdfViewPositionCache,
+  setWithLRU
+} from '@/components/editor/model-lifetime/retention/editor-view-state-cache'
 import {
   buildPdfScrollDestination,
   clampPdfViewPosition,

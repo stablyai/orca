@@ -12,12 +12,12 @@ import {
 import { withProfileStateWriteTransaction } from './profile-state-write-transaction'
 
 /**
- * Older builds read the legacy rows. Starting the writer brings them current (covering an
- * earlier crash); while it runs they lag the parts by at most this long, even when writes
- * stop, which bounds what a downgrade straight after a crash can miss. Each refresh rewrites
- * only stale rows.
+ * Older builds read the legacy rows. Starting the writer and graceful close bring them current;
+ * while it runs they lag the parts by at most this long, which bounds what a downgrade straight
+ * after a crash can miss. A refresh rewrites each stale domain's whole document (several MB for
+ * sessions), so a short interval would dominate profile-state disk writes.
  */
-const LEGACY_DOCUMENT_REFRESH_INTERVAL_MS = 5 * 60 * 1000
+const LEGACY_DOCUMENT_REFRESH_INTERVAL_MS = 60 * 60 * 1000
 
 type DatabaseSource = () => Database.Database | undefined
 

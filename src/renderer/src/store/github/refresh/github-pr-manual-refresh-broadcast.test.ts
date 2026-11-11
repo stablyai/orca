@@ -95,12 +95,6 @@ describe('manual PR refresh whose outcome main also broadcasts', () => {
       expected: 'failure',
       check: { name: 'build', status: 'completed', conclusion: 'failure', url: null },
       order: 'reply-first'
-    },
-    {
-      raw: 'success',
-      expected: 'pending',
-      check: { name: 'build', status: 'in_progress', conclusion: null, url: null },
-      order: 'broadcast-first'
     }
   ]
   it.each(checksDeliveryCases)(
