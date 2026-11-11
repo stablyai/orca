@@ -1,4 +1,7 @@
-import type { Dispatch, SetStateAction } from 'react'
+import type {
+  FileExplorerDirCacheSetter,
+  FileExplorerDirCacheUpdate
+} from '../tree/file-explorer-directory-cache'
 import type { DirCache } from '../tree/file-explorer-types'
 import type { FileExplorerDirLoadTracker } from '../tree/file-explorer-dir-load-tracker'
 import { fileExplorerListingToDirCache } from '../tree/file-explorer-dir-pages'
@@ -25,7 +28,7 @@ export type RefreshFileExplorerExpandedDirsParams = {
   dirs: RefreshFileExplorerTreeDir[]
   worktreePath: string
   dirLoadTracker: FileExplorerDirLoadTracker
-  setDirCache: Dispatch<SetStateAction<Record<string, DirCache>>>
+  setDirCache: FileExplorerDirCacheSetter
   updateLoadingDirPaths: FileExplorerLoadingDirsUpdater
   readDirectory: (dirPath: string) => Promise<FileExplorerDirectoryListing>
   maxConcurrentReads: number
@@ -92,9 +95,12 @@ export async function refreshFileExplorerExpandedDirs({
     }
 
     setDirCache((prev) => {
-      let next = { ...prev }
+      let next: FileExplorerDirCacheUpdate = {
+        dirCache: { ...prev },
+        changedPaths: currentResults.map((result) => result.dirPath)
+      }
       for (const result of currentResults) {
-        next[result.dirPath] =
+        next.dirCache[result.dirPath] =
           result.cache.error !== undefined
             ? {
                 ...prev[result.dirPath],

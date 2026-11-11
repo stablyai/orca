@@ -113,7 +113,7 @@ it.each([100, 1000])(
       requests
         .filter((request) => request.repositoryIntent === 'probe')
         .flatMap((request) => request.repositoryPaths!)
-    ).toHaveLength(count - count / 10)
+    ).toHaveLength(0)
     expect(requests.filter((request) => request.repositoryIntent === 'ignored')).toHaveLength(1)
     observer.setVisible(false)
     requests.length = 0

@@ -1,3 +1,4 @@
+import type { FileExplorerDirCacheUpdate } from './file-explorer-directory-cache'
 import { useAppStore } from '@/store/index'
 import { getRelativePathInsideRoot, joinPath } from '@/lib/path'
 import type { DirEntry } from '../../../../../../shared/file-listing/directory-entry'
@@ -97,12 +98,13 @@ export function keepOpenedDirectoryLinks(
 }
 
 export function clearFailedOpenedDirectoryLink(
-  cache: Record<string, DirCache>,
+  update: FileExplorerDirCacheUpdate,
   linkPath: string
-): Record<string, DirCache> {
+): FileExplorerDirCacheUpdate {
+  const cache = update.dirCache
   const parentPath = resolveCachedDirPath(cache, parentDirForWatchPath(linkPath))
   if (!parentPath) {
-    return cache
+    return update
   }
   const parent = cache[parentPath]
   let changed = false
@@ -113,7 +115,13 @@ export function clearFailedOpenedDirectoryLink(
     changed = true
     return { ...child, isDirectory: false, isDirectoryFromOpenedLink: false }
   })
-  return changed ? { ...cache, [parentPath]: { ...parent, children } } : cache
+  return changed
+    ? {
+        ...update,
+        dirCache: { ...cache, [parentPath]: { ...parent, children } },
+        changedPaths: [...update.changedPaths, parentPath]
+      }
+    : update
 }
 
 /** A gesture, a listed link row, or an already-outside listing may follow a project folder link; a folder that only became a link stays refused until clicked. */

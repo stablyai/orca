@@ -120,6 +120,7 @@ it('keeps uncertain listing boundaries, heals under activity, and catches up rev
   expect(projection(false).hasPath('/w/child/forced.tmp')).toBe(true)
   expect(projection(true).hasPath('/w/child/forced.tmp')).toBe(true)
   initialized = true
+  observer.invalidateChanges([{ path: 'later/.git', kind: 'create' }])
   ignored = false
   requests.length = 0
   for (let index = 0; index < 14; index++) {

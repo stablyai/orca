@@ -1,4 +1,7 @@
-import type { Dispatch, SetStateAction } from 'react'
+import type {
+  FileExplorerDirCacheSetter,
+  FileExplorerDirectoryCache
+} from './file-explorer-directory-cache'
 import type { UserOpenedPathStat } from '@/lib/files/access/user-opened-local-path'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { DirEntryCursor } from '../../../../../../shared/file-listing/file-dir-page'
@@ -46,7 +49,8 @@ export type FileExplorerTreeRefreshOutcome = 'refreshed' | 'superseded' | 'root-
 
 export type UseFileExplorerTreeResult = {
   dirCache: Record<string, DirCache>
-  setDirCache: Dispatch<SetStateAction<Record<string, DirCache>>>
+  dirCacheStore: FileExplorerDirectoryCache
+  setDirCache: FileExplorerDirCacheSetter
   /** Workspace whose committed root listing owns the rendered cache. */
   sourceWorkspaceId: string | null
   /** Dirs with a read in flight — kept out of dirCache so the row projection does not rebuild. */

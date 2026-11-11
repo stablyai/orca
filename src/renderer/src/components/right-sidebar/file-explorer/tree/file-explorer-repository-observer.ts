@@ -1,23 +1,14 @@
 import { retiredExplorerRepositorySources } from './file-explorer-repository-frontier'
 import { forgetExplorerRepositoryPaths } from './file-explorer-repository-evidence'
-import { createExplorerRepositoryValidation } from './file-explorer-repository-validation'
+import { ExplorerRepositoryDiscovery } from './file-explorer-repository-discovery-owner'
 import {
   explorerRepositoryOwner,
   type ExplorerRepositoryDemand
 } from './file-explorer-repository-paths'
 import {
-  discoverExplorerRepositories,
-  repositoryDiscoveryDueAt
-} from './file-explorer-repository-discovery'
-import {
-  createGitStatusRefreshScheduler,
-  type GitStatusRefreshScheduler
-} from '../../source-control/sync/git-status-refresh-scheduler'
-import {
   createExplorerRepositorySource,
   explorerRepositorySnapshot,
   updateExplorerRepositoryDemand,
-  EXPLORER_REPOSITORY_SCHEDULER_OPTIONS,
   type ExplorerRepositorySource,
   type ExplorerRepositorySourceState,
   type ExplorerRepositoryRead
@@ -37,70 +28,36 @@ export type { ExplorerRepositoryChange } from './file-explorer-repository-path-i
 /** One logical Explorer owns discovery and independent sources; virtual rows never own Git work. */
 export class FileExplorerRepositoryObserver {
   private sourceIndex = new ExplorerRepositoryPathIndex()
-  private candidateIndex = new ExplorerRepositoryPathIndex()
   private sources = new Map<string, ExplorerRepositorySourceState>()
-  private candidates = new Map<string, ExplorerRepositoryCandidate>()
-  private invalidListings = new WeakSet<object>()
-  private validations = new Map<string, ReturnType<typeof createExplorerRepositoryValidation>>()
-  private evidence = new Map<string, object | undefined>()
   private queue = new ExplorerRepositoryReadQueue()
   private visible = false
   private disposed = false
   private generation = 0
   private demand: readonly string[] = []
-  private discovery: GitStatusRefreshScheduler
+  private discovery: ExplorerRepositoryDiscovery
   private snapshot: readonly ExplorerRepositorySource[] = []
-  private discoveryRetryAt = -Infinity
 
   constructor(
     private read: ExplorerRepositoryRead,
     private publish: (sources: readonly ExplorerRepositorySource[]) => void,
-    private supports: () => Promise<boolean> = async () => true
+    supports: () => Promise<boolean> = async () => true
   ) {
-    this.discovery = createGitStatusRefreshScheduler(
-      async ({ reason, signal }) => {
-        const generation = this.generation
-        if (Date.now() < this.discoveryRetryAt) {
-          return
-        }
-        const supported = await Promise.resolve()
-          .then(() => this.supports())
-          .catch(() => undefined)
-        if (!this.current(generation, signal)) {
-          return
-        }
-        if (supported !== true) {
-          if (supported === false) {
-            this.sources.forEach((_, path) => this.removeSource(path, false, true))
-            this.emit()
-          }
-          this.discoveryRetryAt = Date.now() + 60_000
-          return
-        }
-        await discoverExplorerRepositories(
-          {
-            candidates: () => this.candidates,
-            hasSource: (path) => this.sources.has(path),
-            evidence: this.evidence,
-            validations: this.validations,
-            invalidListings: this.invalidListings,
-            current: () => this.current(generation, signal),
-            read: this.read,
-            discovered: (paths) => this.activateSources(paths.map((path) => this.addSource(path)))
-          },
-          reason,
-          signal
-        )
-      },
-      {
-        ...EXPLORER_REPOSITORY_SCHEDULER_OPTIONS,
-        nextSafetyAt: () =>
-          Math.max(
-            this.discoveryRetryAt,
-            repositoryDiscoveryDueAt(this.candidates, this.sources, this.validations)
-          )
+    this.discovery = new ExplorerRepositoryDiscovery({
+      read,
+      supports,
+      generation: () => this.generation,
+      visible: () => this.visible,
+      current: (generation, signal) => this.current(generation, signal),
+      hasSource: (path) => this.sources.has(path),
+      discovered: (paths) => this.activateSources(paths.map((path) => this.addSource(path))),
+      unsupported: () => {
+        this.sources.forEach((_, path) => {
+          this.removeSource(path, false, true)
+          this.discovery.invalidate(path)
+        })
+        this.emit()
       }
-    )
+    })
   }
 
   private current(generation: number, signal: AbortSignal): boolean {
@@ -132,6 +89,7 @@ export class FileExplorerRepositoryObserver {
       remove: () => this.removeSource(path, true),
       publish: () => this.emit()
     })
+    this.discovery.debt.delete(path)
     this.sources.set(path, source)
     this.sourceIndex.add(path)
     return source
@@ -154,18 +112,7 @@ export class FileExplorerRepositoryObserver {
     this.sources.get(path)?.scheduler.dispose()
     this.sources.delete(path)
     this.sourceIndex.delete(path)
-    this.evidence.delete(path)
-    this.validations.delete(path)
-    if (absent) {
-      const candidate = this.candidates.get(path)
-      if (candidate?.listing) {
-        this.invalidListings.add(candidate.listing)
-      }
-      this.evidence.set(path, candidate?.listing)
-      const validation = createExplorerRepositoryValidation()
-      validation.settle(true)
-      this.validations.set(path, validation)
-    }
+    this.discovery.forgetSource(path, absent)
     if (!deferPublish) {
       this.setDemand()
       this.emit()
@@ -178,14 +125,16 @@ export class FileExplorerRepositoryObserver {
     retainedSubtrees: readonly string[] = dependencies
   ): void {
     const next = new Map(candidates.map((candidate) => [candidate.path, candidate]))
-    for (const [path, evidence] of this.evidence) {
-      if (!next.has(path) || next.get(path)?.listing !== evidence) {
-        this.evidence.delete(path)
-        this.validations.delete(path)
+    const changes = new Map<string, ExplorerRepositoryCandidate | undefined>()
+    for (const path of this.discovery.candidates.keys()) {
+      if (!next.has(path)) {
+        changes.set(path, undefined)
       }
     }
-    this.candidates = next
-    this.candidateIndex.set(next.keys())
+    for (const [path, candidate] of next) {
+      changes.set(path, candidate)
+    }
+    this.discovery.update(changes)
     const retired = retiredExplorerRepositorySources(this.sources, dependencies, retainedSubtrees)
     for (const path of retired) {
       this.removeSource(path, false, true)
@@ -194,9 +143,33 @@ export class FileExplorerRepositoryObserver {
       this.setDemand()
       this.emit()
     }
-    if (this.visible) {
-      this.discovery.signal()
+    this.discovery.wake()
+  }
+
+  updateFrontier(
+    changes: ReadonlyMap<string, ExplorerRepositoryCandidate | undefined>,
+    affectedPaths: readonly string[],
+    retains: (path: string) => boolean
+  ): void {
+    this.discovery.update(changes)
+    let retired = false
+    for (const path of this.sourceIndex.related(affectedPaths)) {
+      if (path !== '' && !retains(path)) {
+        this.removeSource(path, false, true)
+        retired = true
+      }
     }
+    if (retired) {
+      this.setDemand()
+      this.emit()
+    }
+    if (this.discovery.debt.dueAt() <= Date.now()) {
+      this.discovery.wake()
+    }
+  }
+
+  invalidateCandidate(path: string): void {
+    this.discovery.invalidate(path)
   }
 
   setDemand(paths: readonly string[] = this.demand, partition?: ExplorerRepositoryDemand): void {
@@ -207,15 +180,7 @@ export class FileExplorerRepositoryObserver {
   invalidate(path?: string, directory = false): void {
     if (path === undefined) {
       this.generation++
-      this.evidence.clear()
-      this.validations.clear()
-      this.discoveryRetryAt = -Infinity
-      for (const candidate of this.candidates.values()) {
-        if (candidate.listing) {
-          this.invalidListings.add(candidate.listing)
-        }
-      }
-      this.discovery.pause()
+      this.discovery.reset()
       for (const source of this.sources.values()) {
         source.scheduler.pause()
         source.statusDirty = true
@@ -224,7 +189,7 @@ export class FileExplorerRepositoryObserver {
         source.ignoredQueries.invalidate(this.visible)
       }
       if (this.visible) {
-        this.discovery.resumeSafety()
+        this.discovery.wake()
         for (const source of this.sources.values()) {
           source.scheduler.resumeSafety()
         }
@@ -240,7 +205,7 @@ export class FileExplorerRepositoryObserver {
         changes,
         this.sources,
         this.sourceIndex,
-        this.candidateIndex
+        this.discovery.index
       )
     let pruned = false
     for (const path of affected) {
@@ -268,15 +233,10 @@ export class FileExplorerRepositoryObserver {
       this.emit()
     }
     for (const path of discoveryCandidates) {
-      this.evidence.delete(path)
-      this.validations.delete(path)
-      const listing = this.candidates.get(path)?.listing
-      if (listing) {
-        this.invalidListings.add(listing)
-      }
+      this.discovery.invalidate(path)
     }
     if (discoveryCandidates.size && this.visible) {
-      this.discovery.signal()
+      this.discovery.wake()
     }
   }
 
@@ -287,7 +247,7 @@ export class FileExplorerRepositoryObserver {
     this.visible = visible
     this.queue.setVisible(visible)
     if (visible) {
-      this.discovery.resumeSafety()
+      this.discovery.wake()
       for (const source of this.sources.values()) {
         source.statusDirty = true
         source.proofRevision++

@@ -29,7 +29,7 @@ describe('processFileExplorerFsPayload update reconciliation', () => {
     }
     type DirCacheUpdate = Parameters<Parameters<typeof purgeDirCacheSubtrees>[0]>[0]
     const setDirCache = (update: DirCacheUpdate): void => {
-      cache = typeof update === 'function' ? update(cache) : update
+      cache = update(cache).dirCache
     }
 
     purgeDirCacheSubtrees(setDirCache, new Set(['C:\\repo\\old', '/srv/repo/Old']))
@@ -65,7 +65,7 @@ describe('processFileExplorerFsPayload update reconciliation', () => {
       cache,
       expanded: new Set(),
       setDirCache: (update: DirCacheUpdate) => {
-        cache = typeof update === 'function' ? update(cache) : update
+        cache = update(cache).dirCache
       },
       setSelectedPath: vi.fn(),
       refreshDir: vi.fn(),
@@ -115,7 +115,7 @@ describe('processFileExplorerFsPayload update reconciliation', () => {
     if (typeof pending !== 'function') {
       throw new Error('Expected a queued functional cache purge')
     }
-    const result = pending(newer)
+    const result = pending(newer).dirCache
     expect(Object.keys(result)).toEqual([root, '/repo/added'])
     expect(result['/repo/added']).toBe(newer['/repo/added'])
   })

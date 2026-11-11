@@ -6,65 +6,90 @@ export type ExplorerRepositoryChange = {
   directory?: boolean
   kind: Exclude<FsChangeEvent['kind'], 'overflow'>
 }
-/** Membership changes rebuild the sorted index lazily; event batches only visit matching ranges. */
+type PathNode = { member: boolean; children: Map<string, PathNode> }
+
+/** Membership and queries follow path segments, including immediately after a local edit. */
 export class ExplorerRepositoryPathIndex {
-  private paths = new Set<string>()
-  private sorted: readonly string[] | null = null
+  private root: PathNode = { member: false, children: new Map() }
 
   add(path: string): void {
-    if (!this.paths.has(path)) {
-      this.paths.add(path)
-      this.sorted = null
+    let node = this.root
+    for (const part of path ? path.split('/') : []) {
+      let child = node.children.get(part)
+      if (!child) {
+        child = { member: false, children: new Map() }
+        node.children.set(part, child)
+      }
+      node = child
     }
+    node.member = true
   }
 
   delete(path: string): void {
-    if (this.paths.delete(path)) {
-      this.sorted = null
+    let node = this.root
+    const parents: [PathNode, string][] = []
+    for (const part of path ? path.split('/') : []) {
+      const child = node.children.get(part)
+      if (!child) {
+        return
+      }
+      parents.push([node, part])
+      node = child
     }
+    node.member = false
+    for (
+      let index = parents.length - 1;
+      index >= 0 && !node.member && !node.children.size;
+      index--
+    ) {
+      const [parent, part] = parents[index]
+      parent.children.delete(part)
+      node = parent
+    }
+  }
+
+  has(path: string): boolean {
+    return this.find(path)?.member === true
   }
 
   set(paths: Iterable<string>): void {
-    const next = new Set(paths)
-    if (next.size !== this.paths.size || [...next].some((path) => !this.paths.has(path))) {
-      this.paths = next
-      this.sorted = null
+    this.root = { member: false, children: new Map() }
+    for (const path of paths) {
+      this.add(path)
     }
   }
 
+  private find(path: string): PathNode | undefined {
+    let node: PathNode | undefined = this.root
+    for (const part of path ? path.split('/') : []) {
+      node = node?.children.get(part)
+    }
+    return node
+  }
+
   descendants(paths: readonly string[]): Set<string> {
-    const sorted = (this.sorted ??= [...this.paths].sort())
-    const lowerBound = (target: string): number => {
-      let low = 0
-      let high = sorted.length
-      while (low < high) {
-        const middle = (low + high) >>> 1
-        if (sorted[middle] < target) {
-          low = middle + 1
-        } else {
-          high = middle
+    const roots = new Set(paths)
+    const found = new Set<string>()
+    for (const path of roots) {
+      const slash = path.lastIndexOf('/')
+      const parent = slash === -1 ? '' : path.slice(0, slash)
+      if (path && explorerRepositoryOwner(roots, `${parent}/`) !== undefined) {
+        continue
+      }
+      const node = this.find(path)
+      if (!node) {
+        continue
+      }
+      const pending: [string, PathNode][] = [[path, node]]
+      while (pending.length) {
+        const [currentPath, current] = pending.pop()!
+        if (current.member) {
+          found.add(currentPath)
+        }
+        for (const [part, child] of current.children) {
+          pending.push([currentPath ? `${currentPath}/${part}` : part, child])
         }
       }
-      return low
-    }
-    const ranges: [number, number][] = []
-    for (const path of new Set(paths)) {
-      const exact = lowerBound(path)
-      if (sorted[exact] === path) {
-        ranges.push([exact, exact + 1])
-      }
-      ranges.push([
-        lowerBound(path ? `${path}/` : ''),
-        path ? lowerBound(`${path}0`) : sorted.length
-      ])
-    }
-    const found = new Set<string>()
-    let visitedUntil = 0
-    for (const [start, end] of ranges.sort((a, b) => a[0] - b[0])) {
-      for (let index = Math.max(start, visitedUntil); index < end; index++) {
-        found.add(sorted[index])
-      }
-      visitedUntil = Math.max(visitedUntil, end)
     }
     return found
   }
@@ -73,7 +98,7 @@ export class ExplorerRepositoryPathIndex {
     const found = this.descendants(paths)
     for (let path of paths) {
       for (;;) {
-        if (this.paths.has(path)) {
+        if (this.has(path)) {
           found.add(path)
         }
         if (!path) {
@@ -114,15 +139,22 @@ export function collectExplorerRepositoryInvalidation(
       ignoreOwners.add(owner)
     }
   }
-  const discoveryPaths = changes
-    .filter(
-      (change) =>
-        change.directory ||
-        change.kind !== 'update' ||
-        change.path.endsWith('/.git') ||
-        change.path === '.git'
-    )
-    .map((change) => change.path)
+  const identityPaths: string[] = []
+  const discoveryCandidates = new Set<string>()
+  for (const change of changes) {
+    const marker = /(?:^|\/)\.git(?:\/|$)/.exec(change.path)
+    const exact = marker ? change.path.slice(0, marker.index) : change.path
+    if (marker || (change.kind === 'update' && change.directory)) {
+      if (candidateIndex.has(exact)) {
+        discoveryCandidates.add(exact)
+      }
+    } else if (change.kind !== 'update') {
+      identityPaths.push(change.path)
+    }
+  }
+  for (const path of candidateIndex.related(identityPaths)) {
+    discoveryCandidates.add(path)
+  }
   return {
     affected,
     proofOwners,
@@ -130,6 +162,6 @@ export function collectExplorerRepositoryInvalidation(
     deleted: new Set(
       changes.filter((change) => change.kind === 'delete').map((change) => change.path)
     ),
-    discoveryCandidates: candidateIndex.related(discoveryPaths)
+    discoveryCandidates
   }
 }

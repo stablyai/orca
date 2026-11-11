@@ -5,7 +5,7 @@ import { useFileExplorerRepositories } from './use-file-explorer-repositories'
 import { ORCA_WORKTREE_FILE_CHANGE_EVENT } from '@/hooks/worktree-file-change-event'
 import type { FsChangeEvent } from '../../../../../../shared/file-watch/filesystem-change-event'
 import type { GitRepositoryStatusRequest } from '../../../../../../shared/git/status/git-repository-status'
-import type { UseFileExplorerTreeResult } from './file-explorer-types'
+import { FileExplorerDirectoryCache } from './file-explorer-directory-cache'
 
 const { read } = vi.hoisted(() => ({ read: vi.fn() }))
 vi.mock('@/runtime/source-control/git/runtime-git-status-client', () => ({
@@ -38,13 +38,17 @@ const owner = {
   executionHostId: 'runtime:test-host'
 } as const
 const expanded = new Set<string>()
-const tree: Pick<UseFileExplorerTreeResult, 'sourceWorkspaceId' | 'dirCache'> = {
+const dirCacheStore = new FileExplorerDirectoryCache()
+dirCacheStore.update(() => ({
+  changedPaths: [],
+  reset: true,
   sourceWorkspaceId: 'folder:w',
   dirCache: {
     '/w': { repositoryMarker: false, operationOwner: owner, children: [] },
     '/w/group/repo': { repositoryMarker: true, operationOwner: owner, children: [] }
   }
-}
+}))
+const tree = { dirCacheStore }
 
 function mountRepository() {
   return renderHook(() =>

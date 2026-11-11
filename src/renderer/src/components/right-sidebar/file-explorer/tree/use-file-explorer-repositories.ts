@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useEffectEvent, useRef, useState } from 'react'
 import {
   useFileListOperationOwner,
   getFileExplorerOperationRoute
@@ -25,15 +25,16 @@ import {
 } from './file-explorer-repository-observer'
 
 import type { ExplorerRepositoryDemand } from './file-explorer-repository-paths'
-import { buildExplorerRepositoryFrontier } from './file-explorer-repository-frontier'
+import { ExplorerRepositoryFrontier } from './file-explorer-repository-frontier-owner'
 
+const EMPTY_CACHE = {}
 const NO_SOURCES: readonly ExplorerRepositorySource[] = []
 
 export function useFileExplorerRepositories(
   workspaceId: string | null,
   root: string | null,
   displayRoot: string | null,
-  tree: Pick<UseFileExplorerTreeResult, 'sourceWorkspaceId' | 'dirCache'>,
+  tree: Pick<UseFileExplorerTreeResult, 'dirCacheStore'>,
   expanded: ReadonlySet<string>,
   enabled: boolean,
   hasRootGitSource: boolean
@@ -42,35 +43,15 @@ export function useFileExplorerRepositories(
   const ownerKey = JSON.stringify(owner)
   const identity = JSON.stringify([workspaceId, root, ownerKey])
   const observer = useRef<FileExplorerRepositoryObserver | null>(null)
+  const frontier = useRef<ExplorerRepositoryFrontier | null>(null)
+  const dirCacheStore = tree.dirCacheStore
   const demand = useRef<{ identity: string; paths: readonly string[] } | null>(null)
   const [answer, setAnswer] = useState<{
     identity: string
     sources: readonly ExplorerRepositorySource[]
   } | null>(null)
-  const frontier = useMemo(() => {
-    if (!root || !displayRoot) {
-      return { candidates: [], dependencies: [], retainedSubtrees: [] }
-    }
-    return buildExplorerRepositoryFrontier(
-      root,
-      displayRoot,
-      tree.sourceWorkspaceId === workspaceId ? tree.dirCache : {},
-      expanded,
-      JSON.parse(ownerKey),
-      hasRootGitSource
-    )
-  }, [
-    root,
-    displayRoot,
-    tree.dirCache,
-    tree.sourceWorkspaceId,
-    workspaceId,
-    ownerKey,
-    expanded,
-    hasRootGitSource
-  ])
-  const applyInitialFrontier = useEffectEvent((instance: FileExplorerRepositoryObserver) => {
-    instance.setFrontier(frontier.candidates, frontier.dependencies, frontier.retainedSubtrees)
+  const applyView = useEffectEvent((instance: ExplorerRepositoryFrontier) => {
+    instance.setView(displayRoot, expanded, hasRootGitSource)
   })
   useEffect(() => {
     const route = getFileExplorerOperationRoute(JSON.parse(ownerKey))
@@ -109,7 +90,24 @@ export function useFileExplorerRepositories(
     if (demand.current?.identity === identity) {
       instance.setDemand(demand.current.paths)
     }
-    applyInitialFrontier(instance)
+    const model = new ExplorerRepositoryFrontier(root, JSON.parse(ownerKey), {
+      apply: (changes, affected, retains) => instance.updateFrontier(changes, affected, retains),
+      invalidate: (path) => instance.invalidateCandidate(path),
+      resetProof: () => instance.invalidate()
+    })
+    frontier.current = model
+    applyView(model)
+    const commit = (
+      snapshot: ReturnType<typeof dirCacheStore.getSnapshot> & {
+        changedPaths: readonly string[]
+        reset: boolean
+      }
+    ): void => {
+      const current = snapshot.sourceWorkspaceId === workspaceId
+      model.commit(current ? snapshot.dirCache : EMPTY_CACHE, snapshot.changedPaths, snapshot.reset)
+    }
+    const unsubscribeCache = dirCacheStore.subscribeChanges(commit)
+    commit({ ...dirCacheStore.getSnapshot(), changedPaths: [], reset: true })
     const environmentId = route.target.kind === 'environment' ? route.target.environmentId : null
     const unsubscribe = environmentId
       ? subscribeRuntimeHostContactRegained(environmentId, () => instance.invalidate())
@@ -148,22 +146,29 @@ export function useFileExplorerRepositories(
     return () => {
       live = false
       unsubscribe?.()
+      unsubscribeCache()
       instance.dispose()
       window.removeEventListener(ORCA_WORKTREE_FILE_CHANGE_EVENT, changed)
       if (observer.current === instance) {
         observer.current = null
+        frontier.current = null
       }
     }
-  }, [identity, workspaceId, root, ownerKey])
+  }, [identity, workspaceId, root, ownerKey, dirCacheStore])
   useEffect(() => {
-    observer.current?.setFrontier(
-      frontier.candidates,
-      frontier.dependencies,
-      frontier.retainedSubtrees
-    )
-  }, [identity, frontier])
+    frontier.current?.setView(displayRoot, expanded, hasRootGitSource)
+  }, [identity, displayRoot, expanded, hasRootGitSource])
   useEffect(() => {
-    const reconcile = (): void => observer.current?.setVisible(enabled && isWindowVisible())
+    const reconcile = (): void => {
+      const visible = enabled && isWindowVisible()
+      if (!visible) {
+        observer.current?.setVisible(false)
+      }
+      frontier.current?.setVisible(visible)
+      if (visible) {
+        observer.current?.setVisible(true)
+      }
+    }
     reconcile()
     document.addEventListener('visibilitychange', reconcile)
     return () => document.removeEventListener('visibilitychange', reconcile)

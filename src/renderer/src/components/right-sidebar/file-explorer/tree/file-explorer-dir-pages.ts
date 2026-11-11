@@ -1,4 +1,4 @@
-import type { Dispatch, SetStateAction } from 'react'
+import type { FileExplorerDirCacheSetter } from './file-explorer-directory-cache'
 import { sortDirEntries } from '../../../../../../shared/file-listing/file-name-sort'
 import type { DirCache } from './file-explorer-types'
 import type { FileExplorerDirLoadTracker } from './file-explorer-dir-load-tracker'
@@ -100,7 +100,7 @@ export type LoadMoreFileExplorerDirParams = {
   dirCache: Readonly<Record<string, DirCache>>
   loadingDirPaths: ReadonlySet<string>
   dirLoadTracker: FileExplorerDirLoadTracker
-  setDirCache: Dispatch<SetStateAction<Record<string, DirCache>>>
+  setDirCache: FileExplorerDirCacheSetter
   updateLoadingDirPaths: FileExplorerLoadingDirsUpdater
 }
 
@@ -132,16 +132,19 @@ export async function loadMoreFileExplorerDir({
     setDirCache((prev) =>
       prev[dirPath]
         ? {
-            ...prev,
-            [dirPath]: appendFileExplorerDirPage(
-              prev[dirPath],
-              page,
-              dirPath,
-              fileExplorerDirDepth(worktreePath, dirPath),
-              worktreePath
-            )
+            dirCache: {
+              ...prev,
+              [dirPath]: appendFileExplorerDirPage(
+                prev[dirPath],
+                page,
+                dirPath,
+                fileExplorerDirDepth(worktreePath, dirPath),
+                worktreePath
+              )
+            },
+            changedPaths: [dirPath]
           }
-        : prev
+        : { dirCache: prev, changedPaths: [] }
     )
   } catch (error) {
     if (!dirLoadTracker.isCurrent(loadToken)) {
@@ -150,8 +153,14 @@ export async function loadMoreFileExplorerDir({
     // Why an error mark: it stops scrolling from retrying a failing host until the next refresh.
     setDirCache((prev) =>
       prev[dirPath]
-        ? { ...prev, [dirPath]: { ...prev[dirPath], error: describeFileExplorerReadError(error) } }
-        : prev
+        ? {
+            dirCache: {
+              ...prev,
+              [dirPath]: { ...prev[dirPath], error: describeFileExplorerReadError(error) }
+            },
+            changedPaths: [dirPath]
+          }
+        : { dirCache: prev, changedPaths: [] }
     )
   }
   updateLoadingDirPaths((prev) => clearFileExplorerDirsLoading(prev, [dirPath]))
