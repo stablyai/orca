@@ -3,6 +3,7 @@ import type { BrowserPage as BrowserPageState } from '../../../../shared/browser
 import { BrowserLoadFailureOverlay } from './navigate/browser-load-failure-overlay'
 import { getOpenableExternalUrl, toDisplayUrl } from './describe-page/browser-page-url-display'
 import { isOrcaCloudEnvironmentId } from '@/lib/orca-cloud/orca-cloud-environment-id'
+import { useSetupScriptAsleepCloud } from '../sidebar/use-setup-script-asleep-cloud'
 import {
   describeSandboxUnreachableSite,
   SandboxUnreachableSiteState
@@ -23,6 +24,7 @@ export function ClientHostedBrowserLoadFailure({
   const certificateFailure = useAppStore(
     (s) => s.browserCertificateFailuresByPageId[browserTab.id] ?? null
   )
+  const sandboxNotAwake = useSetupScriptAsleepCloud(browserTab.worktreeId)
   if (!browserTab.loadError) {
     return null
   }
@@ -40,6 +42,7 @@ export function ClientHostedBrowserLoadFailure({
         onOpenInBrowser={(url) => void window.api.shell.openUrl(url)}
         onRetry={onRetry}
         isActive={isActive}
+        sandboxAwake={!sandboxNotAwake}
       />
     )
   }

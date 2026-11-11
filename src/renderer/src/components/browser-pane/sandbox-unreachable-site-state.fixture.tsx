@@ -18,6 +18,7 @@ function Pane({ url }: { url: string }): React.JSX.Element {
           onOpenInBrowser={() => {}}
           onRetry={() => {}}
           isActive={false}
+          sandboxAwake
         />
       </div>
     </div>

@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { Globe } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
@@ -7,7 +7,6 @@ import type { BrowserLoadError } from '../../../../shared/browser-workspace-type
 // ERR_SOCKS_CONNECTION_FAILED, ERR_SOCKS_CONNECTION_HOST_UNREACHABLE, ERR_PROXY_CONNECTION_FAILED: what a
 // desktop-hosted cloud page gets when the sandbox (its SOCKS route) cannot connect.
 const SANDBOX_ROUTE_FAILURE_CODES = new Set([-120, -121, -130])
-const SANDBOX_SERVER_RETRY_MS = 4000
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]', '::1'])
 
 export type SandboxUnreachableSite = {
@@ -43,12 +42,53 @@ export function describeSandboxUnreachableSite(
   }
 }
 
+/**
+ * How long to wait before the next re-try of a sandbox server that isn't running yet: every 4 s for
+ * 2 minutes, then every 15 s, then stop at 10 minutes (re-armed when the user returns to the tab).
+ */
+export function sandboxServerRetryDelayMs(elapsedMs: number): number | null {
+  if (elapsedMs < 2 * 60_000) {
+    return 4_000
+  }
+  if (elapsedMs < 10 * 60_000) {
+    return 15_000
+  }
+  return null
+}
+
+/** Re-tries while enabled; each enable (tab shown again, sandbox awake again) restarts the schedule. */
+function useSandboxServerRetry(enabled: boolean, onRetry: () => void): void {
+  const retryRef = useRef(onRetry)
+  retryRef.current = onRetry
+  useEffect(() => {
+    if (!enabled) {
+      return
+    }
+    const startedAt = Date.now()
+    let timer: number | undefined
+    const schedule = (): void => {
+      const delay = sandboxServerRetryDelayMs(Date.now() - startedAt)
+      if (delay === null) {
+        return
+      }
+      timer = window.setTimeout(() => {
+        // The reload swaps the page in place when the server answers; no toast.
+        retryRef.current()
+        schedule()
+      }, delay)
+    }
+    schedule()
+    return () => window.clearTimeout(timer)
+  }, [enabled])
+}
+
 export function SandboxUnreachableSiteState({
   site,
   errorName,
   onOpenInBrowser,
   onRetry,
-  isActive
+  isActive,
+  sandboxAwake
 }: {
   site: SandboxUnreachableSite
   /** Raw Chromium error name, kept out of the main text for debugging. */
@@ -57,16 +97,11 @@ export function SandboxUnreachableSiteState({
   /** Re-attempts the load; a sandbox server that starts later then appears on its own. */
   onRetry: () => void
   isActive: boolean
+  /** False while the sandbox is asleep, waking or going to sleep: a re-try must never wake it. */
+  sandboxAwake: boolean
 }): React.JSX.Element {
   const t = useTranslate()
-  const pollForServer = site.kind === 'sandbox-server' && isActive
-  useEffect(() => {
-    if (!pollForServer) {
-      return
-    }
-    const timer = window.setInterval(onRetry, SANDBOX_SERVER_RETRY_MS)
-    return () => window.clearInterval(timer)
-  }, [pollForServer, onRetry])
+  useSandboxServerRetry(site.kind === 'sandbox-server' && isActive && sandboxAwake, onRetry)
   return (
     <div
       data-testid="sandbox-unreachable-site"
