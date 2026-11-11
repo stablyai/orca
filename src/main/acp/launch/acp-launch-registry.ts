@@ -12,6 +12,7 @@ import {
   parseOpenCodeModelListing
 } from '../../opencode/model-launch/opencode-model-catalog-listing'
 
+import { GENERIC_ACP_DIALECT } from '../acp-dialects/acp-dialect'
 import { agentSessionSetupFor } from '../../../shared/agent-session/lifecycle/agent-session-setup-commands'
 import {
   loadGrokVisualsSkill,
@@ -149,12 +150,37 @@ const OMP_LAUNCH_SPEC: AcpLaunchSpec = {
   sessionHistory: OMP_SESSION_HISTORY
 }
 
+// `dsh acp` is DeepSeek Harness's ACP server profile (`dsh --profile acp`).
+const DSH_LAUNCH_SPEC: AcpLaunchSpec = {
+  agent: 'dsh',
+  command: 'dsh',
+  args: () => ['acp'],
+  env: {},
+  // dsh serves plain ACP; provider quirks stay out until one is observed.
+  dialect: GENERIC_ACP_DIALECT,
+  loginCommand: agentSessionSetupFor('dsh')?.loginCommand ?? [],
+  account: directoryAccountBinding('DSH_HOME', (homePath) => join(homePath, '.dsh')),
+  // Its CLI installs beside the Desktop app but is exposed on PATH from ~/.local/bin.
+  installDirectories: ({ homePath }) => [join(homePath, '.local', 'bin')],
+  // Models arrive as session config options, like opencode2's.
+  modelDiscovery: { kind: 'session', listingNamesConfiguredModel: false },
+  // A chat's ACP transport is its own transcript; there is no CLI transcript to import.
+  transcriptImport: null,
+  // Orca has no dsh session scanner yet, so chats expose no reusable rows.
+  sessionHistory: {
+    rowAgents: [],
+    rowSessionId: (link) => link.handle.nativeId,
+    parseResumeArgs: () => null
+  }
+}
+
 export const ACP_LAUNCH_SPECS: readonly AcpLaunchSpec[] = [
   GROK_LAUNCH_SPEC,
   OPENCODE_LAUNCH_SPEC,
   OPENCODE2_LAUNCH_SPEC,
   OMP_LAUNCH_SPEC,
-  ANTIGRAVITY_LAUNCH_SPEC
+  ANTIGRAVITY_LAUNCH_SPEC,
+  DSH_LAUNCH_SPEC
 ]
 
 export function acpLaunchSpecFor(agent: string): AcpLaunchSpec | null {
