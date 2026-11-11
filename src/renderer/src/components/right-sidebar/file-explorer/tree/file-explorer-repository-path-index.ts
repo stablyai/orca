@@ -118,7 +118,7 @@ export function collectExplorerRepositoryInvalidation(
     .filter(
       (change) =>
         change.directory ||
-        change.deleted ||
+        change.kind !== 'update' ||
         change.path.endsWith('/.git') ||
         change.path === '.git'
     )
