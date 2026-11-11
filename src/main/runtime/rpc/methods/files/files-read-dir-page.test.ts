@@ -55,14 +55,14 @@ describe('DirListingPageCache', () => {
     expect(read).toHaveLength(5)
   })
 
-  it('places a cursor whose entry was since deleted, folders before files', async () => {
+  it('places a deleted file cursor before folders', async () => {
     const cache = new DirListingPageCache(() => 0)
-    const entries = [{ name: 'src', isDirectory: true, isSymlink: false }, ...folder(3)]
+    const entries = [...folder(3), { name: 'src', isDirectory: true, isSymlink: false }]
     const page = await cache.readPage(
       'socket-1',
-      { ...REQUEST, after: { name: 'zzz-gone', isDirectory: true }, limit: 10 },
+      { ...REQUEST, after: { name: 'zzz-gone', isDirectory: false }, limit: 10 },
       async () => entries
     )
-    expect(names(page.entries)).toEqual(names(folder(3)))
+    expect(names(page.entries)).toEqual(['src'])
   })
 })
