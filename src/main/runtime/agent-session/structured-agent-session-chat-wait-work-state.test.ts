@@ -1,5 +1,5 @@
-// `orca chat send --wait` and `chat wait` through the real host: each check while the turn runs
-// reads only work state, never a history page, a running-turn scan or the turn's text.
+// `orca chat send --wait` through the real host: each check while the turn runs reads only work
+// state, never a history page, a running-turn scan or the turn's text.
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RpcResponse } from '../rpc/core'
@@ -114,6 +114,14 @@ async function seedRunningTurn(rows: number, newestBytes: number): Promise<void>
   })
 }
 
+/** Lets the command's next checks run until it prints, then surfaces its result or failure. */
+async function settle(command: Promise<void>, logs: string[]): Promise<void> {
+  for (let second = 0; second < 10 && logs.length === 0; second += 1) {
+    await vi.advanceTimersByTimeAsync(1_000)
+  }
+  await command
+}
+
 /** Runs `chat send --wait`, completes the turn after two checks, and returns what each check cost. */
 async function sendAndWait(rows: number, newestBytes: number) {
   harness = await openStructuredCodexRpcHarness([], {}, { localCli: true })
@@ -141,16 +149,14 @@ async function sendAndWait(rows: number, newestBytes: number) {
   }
   expect(checks()).toHaveLength(2)
   const during = { ...work, checks: checks().map((r) => r.json) }
+  work.historyPages = 0
   harness.codex.notify('turn/completed', {
     threadId: THREAD,
     turn: { id: TURN, status: 'completed' }
   })
-  while (logs.length === 0) {
-    await vi.advanceTimersByTimeAsync(1_000)
-  }
-  await sending
-  const printed: { result: { entries: { text: string }[] } } = JSON.parse(logs.join('\n'))
-  return { during, result: printed.result }
+  await settle(sending, logs)
+  const printed: { result: { entries: unknown[] } } = JSON.parse(logs.join('\n'))
+  return { during, finalPages: work.historyPages, result: printed.result }
 }
 
 describe('chat send --wait over the real host', () => {
@@ -160,7 +166,7 @@ describe('chat send --wait over the real host', () => {
   ])(
     'checks a running turn without history pages, turn scans or its text ($rows rows, $newestBytes byte newest reply)',
     async ({ rows, newestBytes }) => {
-      const { during, result } = await sendAndWait(rows, newestBytes)
+      const { during, finalPages, result } = await sendAndWait(rows, newestBytes)
       expect(during.historyPages).toBe(0)
       expect(during.turnScans).toBe(0)
       for (const check of during.checks) {
@@ -173,9 +179,16 @@ describe('chat send --wait over the real host', () => {
           fence: expect.any(Number)
         })
       }
+      expect(finalPages).toBe(1)
       expect(result).toMatchObject({ delivery: 'submitted', settled: 'done', truncated: false })
-      expect(result.entries).toHaveLength(rows + 1)
-      expect(result.entries.at(-1)?.text.startsWith(NEWEST_MARKER)).toBe(true)
+      expect(result.entries).toEqual([
+        ...Array.from({ length: rows }, (_, index) => ({
+          kind: 'message',
+          role: 'assistant',
+          text: `Older reply ${index}.`
+        })),
+        { kind: 'message', role: 'assistant', text: `${NEWEST_MARKER} ${'x'.repeat(newestBytes)}` }
+      ])
     }
   )
 
@@ -209,10 +222,7 @@ describe('chat send --wait over the real host', () => {
       threadId: THREAD,
       turn: { id: TURN, status: 'completed' }
     })
-    while (logs.length === 0) {
-      await vi.advanceTimersByTimeAsync(1_000)
-    }
-    await sending
+    await settle(sending, logs)
     expect(replies.filter((r) => r.method === 'agentSession.workState')).toHaveLength(1)
     expect(JSON.parse(logs.join('\n')).result).toMatchObject({
       delivery: 'submitted',
