@@ -9,7 +9,10 @@ import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
 import { agentProviderSessionForHostEnsure } from '@/runtime/hosted-terminals/creation/agent-launch/agent-session-ensure-provider-session'
 import { toHostSessionTabId } from '../../../../shared/workspace-layout/terminal-surface-id'
-import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type {
+  AgentProviderSessionMetadata,
+  SleepingAgentLaunchConfig
+} from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { AccountRestartAgent } from '@/store/terminals/terminal-contracts'
 
 type StopExactResult = {
@@ -69,6 +72,8 @@ export async function resumeRemotePaneAgent(args: {
   leafId: string
   agent: AccountRestartAgent
   providerSession: AgentProviderSessionMetadata
+  /** RA-11d: how the pane's agent was launched; its args (model, effort, …) carry over. */
+  launchConfig?: SleepingAgentLaunchConfig
 }): Promise<void> {
   const environmentId = parseRemoteRuntimePtyId(args.ptyId)?.environmentId
   if (!environmentId) {
@@ -82,6 +87,8 @@ export async function resumeRemotePaneAgent(args: {
       worktree: toRuntimeWorktreeSelector(args.worktreeId),
       agent: args.agent,
       providerSession: await agentProviderSessionForHostEnsure(environmentId, args.providerSession),
+      ...(args.launchConfig?.agentArgs?.trim() ? { agentArgs: args.launchConfig.agentArgs } : {}),
+
       // The same pane: the host tab and leaf the stopped terminal lived in.
       placement: { tabId: toHostSessionTabId(args.tabId), leafId: args.leafId },
       presentation: 'background'

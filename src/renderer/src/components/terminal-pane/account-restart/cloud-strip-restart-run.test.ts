@@ -302,7 +302,8 @@ describe('RA-11 Restart on a paired (remote) pane', () => {
       consumePendingPaneAccountRestart: useAppStore.getState().consumePendingPaneAccountRestart,
       buildAccountRestartStartup: () => ({
         command: 'claude',
-        resumeProviderSession: providerSession
+        resumeProviderSession: providerSession,
+        launchConfig: { agentArgs: '--model opus --effort high', agentEnv: {} }
       }),
       handleRestartPane,
       stopRemotePane: async () => {
@@ -320,6 +321,8 @@ describe('RA-11 Restart on a paired (remote) pane', () => {
       expect.objectContaining({ replacedPtyId: REMOTE, freshCommand: `fresh claude ${LEAF}` })
     )
     expect(resumeRemotePane).toHaveBeenCalledWith({
+      // RA-11d: the pane's own launch rides along to the host.
+      launchConfig: { agentArgs: '--model opus --effort high', agentEnv: {} },
       ptyId: REMOTE,
       worktreeId: 'wt-1',
       tabId: TAB,

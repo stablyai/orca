@@ -63,6 +63,37 @@ describe('resumeRemotePaneAgent (RA-11 paired pane)', () => {
     calls.length = 0
   })
 
+  it('RA-11d: carries the pane’s own launch args (model, effort, flags), never the host defaults', async () => {
+    await resumeRemotePaneAgent({
+      ptyId: 'remote:env-1@@term_a',
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'leaf-1',
+      agent: 'claude',
+      providerSession: { key: 'session_id', id: 'sess-1' },
+      launchConfig: {
+        agentArgs: '--model opus --effort high --dangerously-skip-permissions',
+        agentEnv: {}
+      }
+    })
+    expect(calls.at(-1)).toMatchObject({
+      method: 'terminal.ensureAgentSession',
+      params: { agentArgs: '--model opus --effort high --dangerously-skip-permissions' }
+    })
+  })
+
+  it('without a recorded launch it sends no args, so the host keeps its own', async () => {
+    await resumeRemotePaneAgent({
+      ptyId: 'remote:env-1@@term_a',
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'leaf-1',
+      agent: 'claude',
+      providerSession: { key: 'session_id', id: 'sess-1' }
+    })
+    expect(calls.at(-1)?.params).not.toHaveProperty('agentArgs')
+  })
+
   it('ensures the agent on its own session, placed in the same host tab and leaf', async () => {
     await resumeRemotePaneAgent({
       ptyId: 'remote:env-1@@term_a',

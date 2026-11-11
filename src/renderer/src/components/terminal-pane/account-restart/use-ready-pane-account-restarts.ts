@@ -19,7 +19,10 @@ import {
   resumeRemotePaneAgent,
   stopRemotePaneTerminalForRestart
 } from '@/lib/orca-cloud/cloud-pane-restart-stop'
-import type { AgentProviderSessionMetadata } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type {
+  AgentProviderSessionMetadata,
+  SleepingAgentLaunchConfig
+} from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import {
   isRemoteRuntimePtyId,
@@ -95,7 +98,10 @@ function worktreeIdForTab(tabId: string): string | null {
  * ends silently.
  */
 export function runReadyPaneAccountRestarts<
-  Startup extends { resumeProviderSession?: AgentProviderSessionMetadata }
+  Startup extends {
+    resumeProviderSession?: AgentProviderSessionMetadata
+    launchConfig?: SleepingAgentLaunchConfig
+  }
 >(input: {
   panes: readonly ReadyRestartPane[]
   ptyIdOf: (paneId: number) => string | null
@@ -189,6 +195,10 @@ export function runReadyPaneAccountRestarts<
       .then(() =>
         providerSession
           ? args.resumeRemotePane({
+              // RA-11d: the pane's own launch (model, effort, every flag), not the host defaults.
+              ...(launchedStartup.launchConfig
+                ? { launchConfig: launchedStartup.launchConfig }
+                : {}),
               ptyId,
               worktreeId,
               tabId: args.tabId,
