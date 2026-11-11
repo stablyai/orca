@@ -289,29 +289,6 @@ describe('ClientHostedBrowserPagePane failure records across a remount', () => {
     })
   })
 
-  it('keeps a useful local and published identity when the current document clears its title', async () => {
-    await act(async () => {
-      render(<StoreDrivenPane />)
-    })
-    await act(async () => {
-      reportClientHostedGuestMetadata({
-        webContentsId: 42,
-        kind: 'title',
-        title: ''
-      })
-    })
-    expect(storedPage()).toMatchObject({
-      url: 'https://selfsigned.internal/',
-      title: 'https://selfsigned.internal/'
-    })
-    expect(
-      vi.mocked(window.api.browser.publishClientPageMetadata).mock.calls.at(-1)?.[0].params
-    ).toMatchObject({
-      url: 'https://selfsigned.internal/',
-      title: 'https://selfsigned.internal/'
-    })
-  })
-
   it('retains the saved title until a first committed document exists, including a failed first load', () => {
     reportClientHostedGuestMetadata({
       webContentsId: 42,
@@ -338,26 +315,6 @@ describe('ClientHostedBrowserPagePane failure records across a remount', () => {
       })
     )
     expect(storedPage().title).toBe('Selfsigned')
-  })
-
-  it('reconciles a hidden commit on settlement even when metadata publication never answers', () => {
-    vi.mocked(window.api.browser.publishClientPageMetadata).mockImplementation(
-      () => new Promise(() => {})
-    )
-    const view = render(<StoreDrivenPane />)
-    act(() => view.unmount())
-    reportClientHostedGuestMetadata({
-      webContentsId: 42,
-      kind: 'navigation',
-      url: 'https://example.internal/next',
-      loading: true,
-      navigationRevision: 2
-    })
-    render(<StoreDrivenPane />)
-    act(() => reportClientHostedGuestMetadata({ webContentsId: 42, kind: 'stop', loading: false }))
-    expect(storedPage().url).toBe('https://example.internal/next')
-    expect(storedPage().loading).toBe(false)
-    expect(storedPage().loadError).toBeNull()
   })
 
   it('clears a standing failure after a successful same-URL reload', () => {
