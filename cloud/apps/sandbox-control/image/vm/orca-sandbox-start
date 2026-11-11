@@ -94,6 +94,13 @@ start_share_proxy() {
 }
 
 boot_id="$(cat /proc/sys/kernel/random/boot_id)"
+# CREATE-GIT-ASYNC: a create answers before member identities are installed; `git` holds commits and
+# pushes until orca-sandbox-members (or the control plane) marks this setup ready or failed. Marked
+# before the already-started exit below: a pooled VM's orcad may be up before its create claims it.
+if [ "${ORCA_GIT_SETUP:-}" = pending ]; then
+  rm -f "$STATE/git-setup.ready" "$STATE/git-setup.failed"
+  date +%s >"$STATE/git-setup.pending"
+fi
 start_share_proxy
 unset ORCA_SHARE_PROXY_KEY
 if [ "$(cat "$STATE/boot-id" 2>/dev/null || true)" = "$boot_id" ] && [ -s "$STATE/ready.json" ] \
@@ -104,6 +111,8 @@ fi
 # Resume = reboot from disk: locks and pids from the previous session name dead processes.
 rm -f "$STATE/ready.json" "$STATE/orcad.pid"
 printf '%s' "$boot_id" >"$STATE/boot-id"
+# Any other boot (wake, restart) installs identities before it answers: a resumed disk's marks are stale.
+[ "${ORCA_GIT_SETUP:-}" = pending ] || rm -f "$STATE/git-setup.pending" "$STATE/git-setup.ready" "$STATE/git-setup.failed"
 
 if [ -n "${ORCA_GIT_EXTRAHEADER:-}" ]; then
   # Every github.com request carries the placeholder; the egress policy swaps in a 1h repo token.

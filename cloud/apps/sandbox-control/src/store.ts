@@ -57,6 +57,8 @@ export type SandboxRow = {
   wake_ms?: number | null
   /** Last sleep someone asked for (not the idle timer), from any client (0038). */
   user_slept_at?: number | null
+  /** Background member-git setup after a create failed (0053); cleared by the next successful sync. */
+  git_setup_failed_at?: number | null
   archived_at: number | null
   archive_expires_at: number | null
   /** Registry (0006). `user_id` is the current owner (reassignable); `created_by` never changes. */

@@ -58,4 +58,9 @@ if [ -n "$user_home" ]; then
   sudo -u "$USER_NAME" env HOME="$user_home" git config --global user.name >/dev/null 2>&1 \
     || sudo -u "$USER_NAME" env HOME="$user_home" git config --global user.name 'Orca Cloud'
 fi
+# CREATE-GIT-ASYNC: identities are in place, so `git` stops holding commits and pushes for this boot.
+if [ -n "$user_home" ] && [ -d "$user_home/.orca-sandbox" ]; then
+  sudo -u "$USER_NAME" sh -c 'rm -f "$1/git-setup.pending" "$1/git-setup.failed" && date +%s >"$1/git-setup.ready"' \
+    _ "$user_home/.orca-sandbox" || true
+fi
 echo "{\"members\":$count,\"devices\":$devices}"

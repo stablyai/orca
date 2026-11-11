@@ -179,6 +179,7 @@ import {
   issueGrant,
   listGrants,
   recordOwnerDeviceAndSync,
+  recordOwnerDeviceForCreate,
   revokeForAccessChange,
   revokeGrantsForDeviceSession,
   revokeOne
@@ -1603,7 +1604,7 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
     const idleMinutesAware = features.includes('idle-minutes')
     // Predictive wake: the last deliberate sleep and the seat's running count, for clients that ask.
     const wakeHintsAware = features.includes('wake-hints')
-    const view = (row: SandboxRow) => sandboxView(row, archivedAware)
+    const view = (row: SandboxRow) => sandboxView(row, archivedAware, features.includes('git-setup'))
     if (!id) {
       if (request.method === 'GET') {
         // Routine runs and other machine-made workspaces stay out of the desktop's list.
@@ -1630,8 +1631,13 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
           { accountId: caller.accountId, scope: `sandbox.create:${caller.userId}`, key: readIdempotencyKey(request), body: raw, now: life.now() },
           async () => {
             // Desktops that show the clone as its own step ask for it in the background (GET .../clone).
-            const ready = await createSandbox(life, caller, { ...body.data, cloneInBackground: features.includes('clone-progress') })
-            await recordOwnerDeviceAndSync(life, ready.row, ready.connection.pairingCode)
+            // Member identities install after the response; the VM's git holds commits and pushes until then.
+            const ready = await createSandbox(life, caller, {
+              ...body.data,
+              cloneInBackground: features.includes('clone-progress'),
+              deferMemberGit: true
+            })
+            await recordOwnerDeviceForCreate(life, ready)
             timings = ready.timings
             return { status: 200, body: readyView(ready.row, ready.connection, ready.cloning, features.includes('repo-update')) }
           }
