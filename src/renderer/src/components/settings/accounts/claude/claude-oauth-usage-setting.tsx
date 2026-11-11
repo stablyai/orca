@@ -22,7 +22,7 @@ export function ClaudeOAuthUsageSetting({
       )}
       description={translate(
         'auto.components.settings.AccountsPane.688fd1f924',
-        "Lets Orca read your Claude Code sign-in and call Anthropic's usage endpoint for the status bar. Off, usage comes only from running Claude Code sessions and Orca does not read your sign-in."
+        "Lets Orca read your Claude Code sign-in token and call Anthropic's usage endpoint for the status bar. Off, usage comes only from running Claude Code sessions and Orca does not read your Claude token."
       )}
       keywords={['claude', 'usage', 'oauth', 'credentials', 'rate limit', 'status bar']}
       className="flex items-center justify-between gap-4 py-2"
@@ -37,7 +37,7 @@ export function ClaudeOAuthUsageSetting({
         <p className="text-xs text-muted-foreground">
           {translate(
             'auto.components.settings.AccountsPane.688fd1f924',
-            "Lets Orca read your Claude Code sign-in and call Anthropic's usage endpoint for the status bar. Off, usage comes only from running Claude Code sessions and Orca does not read your sign-in."
+            "Lets Orca read your Claude Code sign-in token and call Anthropic's usage endpoint for the status bar. Off, usage comes only from running Claude Code sessions and Orca does not read your Claude token."
           )}
         </p>
       </div>

@@ -8103,7 +8103,7 @@
           "ea631977b5": "Configure OpenCode Go provider settings.",
           "4ac10b4d08": "OpenCode Go",
           "73f26694ad": "Claude usage from your sign-in",
-          "688fd1f924": "Lets Orca read your Claude Code sign-in and call Anthropic's usage endpoint for the status bar. Off, usage comes only from running Claude Code sessions and Orca does not read your sign-in.",
+          "688fd1f924": "Lets Orca read your Claude Code sign-in token and call Anthropic's usage endpoint for the status bar. Off, usage comes only from running Claude Code sessions and Orca does not read your Claude token.",
           "c2aee76420": "Extracts OAuth credentials from your local Gemini CLI installation to authenticate with Google for {{value0}}. This uses credentials issued to the Gemini CLI app, not Orca. May break if Google updates the CLI. Use at your own risk.",
           "96f3649526": "Use Gemini CLI credentials (experimental)",
           "d676c41fc6": "Extracts OAuth credentials from your local Gemini CLI installation to authenticate with Google. This uses credentials issued to the Gemini CLI app, not Orca. May break if Google updates the CLI. Use at your own risk.",

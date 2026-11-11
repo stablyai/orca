@@ -199,4 +199,41 @@ describe('Claude OAuth usage switch', () => {
 
     expect(fetchActiveClaudeRateLimits).toHaveBeenCalledTimes(1)
   })
+
+  it.each(['after a refresh', 'on the next statusLine post'] as const)(
+    'drops OAuth-only Fable and credit figures %s once opted out',
+    async (when) => {
+      let enabled = true
+      const service = new RateLimitService()
+      service.setClaudeOAuthUsageEnabledResolver(() => enabled)
+      vi.mocked(fetchActiveClaudeRateLimits).mockResolvedValueOnce({
+        ...okProvider('claude', 18),
+        fableWeekly: okProvider('claude', 40).session,
+        extraUsage: {
+          unit: 'credits',
+          balance: 5,
+          unlimited: false,
+          enabled: true,
+          disabledReason: null,
+          resetsAt: null
+        }
+      })
+      await service.refresh()
+      service.ingestLiveClaudeRateLimits(LIVE_POST)
+      enabled = false
+
+      if (when === 'after a refresh') {
+        await service.refresh()
+      } else {
+        service.ingestLiveClaudeRateLimits({ ...LIVE_POST, fiveHour: { used_percentage: 34 } })
+      }
+
+      expect(service.getState().claude).toMatchObject({
+        status: 'ok',
+        fableWeekly: null,
+        extraUsage: null,
+        usageMetadata: { source: 'live-session' }
+      })
+    }
+  )
 })
