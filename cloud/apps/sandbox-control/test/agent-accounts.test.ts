@@ -42,7 +42,7 @@ function decode(encoded: string | undefined): Record<string, string> {
 function expectSignedOut(answer: { status: number; body: string }): void {
   expect(answer.status).toBe(401)
   expect(JSON.parse(answer.body)).toMatchObject({ type: 'error', error: { type: 'authentication_error' } })
-  expect(answer.body).toContain('Orca sign-in for Claude')
+  expect(JSON.parse(answer.body).error.message).toBe('Your Claude sign-in for Orca Cloud expired. Renew it in Orca: Settings → Agent accounts.')
 }
 
 async function setup(overrides: Record<string, string> = {}) {

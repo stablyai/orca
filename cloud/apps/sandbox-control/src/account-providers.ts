@@ -102,7 +102,7 @@ export const claudeAccount: AccountProvider = {
       type: 'error',
       error: {
         type: 'authentication_error',
-        message: 'Your Orca sign-in for Claude needs renewing. Sign in again in Orca (Settings > Agent accounts).'
+        message: 'Your Claude sign-in for Orca Cloud expired. Renew it in Orca: Settings → Agent accounts.'
       }
     })
   }
