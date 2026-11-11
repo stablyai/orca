@@ -1585,6 +1585,20 @@
       "lead_other": "{{hours}} sandbox hours to try Orca Cloud. No card needed."
     }
   },
+  "cloudSkillsSync": {
+    "row": {
+      "withheld_one": "Synced without 1 file that looks like a key or credential",
+      "withheld_other": "Synced without {{count}} files that look like keys or credentials"
+    },
+    "summary": {
+      "notSynced_one": "{{count}} found, not synced yet",
+      "notSynced_other": "{{count}} found, not synced yet",
+      "skipped_one": "{{count}} not synced",
+      "skipped_other": "{{count}} not synced",
+      "synced_one": "{{count}} synced",
+      "synced_other": "{{count}} synced"
+    }
+  },
   "codeHost": {
     "bitbucketConnect": {
       "accessTokenRequired": "Enter an access token.",

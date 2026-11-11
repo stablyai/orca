@@ -20873,7 +20873,6 @@
       "startInTerminal": "Démarrer {{value0}} dans un terminal"
     },
     "newWorkspace": {
-      "agentOptional": "Agent (facultatif)",
       "createDescription": "Choisissez le projet et le nom de l'espace de travail. Sélectionnez un agent si vous souhaitez en démarrer un.",
       "directSetup": {
         "run": "Run setup",

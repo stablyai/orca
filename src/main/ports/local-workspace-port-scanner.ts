@@ -42,9 +42,12 @@ export async function scanWorkspacePorts(
       options.requireMetadata
     )
     const hostManaged = hostManagedListenerConfig()
+    const managedFlags = await Promise.all(
+      rawPorts.map((port) => isHostManagedListener(port, hostManaged))
+    )
     const managed = new Set(
       rawPorts
-        .filter((port) => isHostManagedListener(port, hostManaged))
+        .filter((_, index) => managedFlags[index])
         .map((port) => `${port.host}:${port.port}:${port.pid ?? 'unknown'}`)
     )
     // Orca's own listeners (runtime socket, hook server) run with a workspace in their command line but are not its servers.
