@@ -5,7 +5,7 @@ import {
   parseWorktreePreparationPathOwnerPid
 } from '../../../../shared/worktree/create-preparation'
 import { orcadDataRootIsOnLocalDisk } from '../../../orcad/orcad-data-root-locality'
-import { profileStateAccessMachineIdentity } from '../../../persistence/profile-state/profile-state-access-identity'
+import { profileStateAccessMachineIdentity } from '../../../persistence/profile-state/access/profile-state-access-identity'
 import type { AddWorktreeOptions } from '../../../git/worktrees/worktree-operation-options'
 import { listWorktreeGraph } from '../../../git/worktrees/catalog/worktree-scan-cache'
 import {

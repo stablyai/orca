@@ -2,13 +2,13 @@ import {
   getAttachmentByUuidForAgent as getLinearAttachmentByUuidForAgent,
   getCommentByUuidForAgent as getLinearCommentByUuidForAgent,
   getIssueByUuidForAgent as getLinearIssueByUuidForAgent
-} from '../../../linear/linear-issue-lookups'
+} from '../../../linear/issues/linear-issue-lookups'
 import { sameStringSet } from './linear-label-id-equality'
 import {
   LinearAgentAccessError,
   linearError,
   sanitizeLinearErrorMessage
-} from '../../../linear/issue-context/errors'
+} from '../../../linear/issues/context/linear-access-errors'
 import type { LinearCreateFieldIntent } from './linear-create-field-intent'
 import { RuntimeLinearCommentLookupCommands } from './runtime-linear-comment-lookup-commands'
 

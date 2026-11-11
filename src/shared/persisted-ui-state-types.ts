@@ -18,6 +18,7 @@ import type {
   AgentActivityDisplayMode,
   ManualRepoOrderEntry,
   ProjectOrderBy,
+  ActivityBarPosition,
   RightSidebarExplorerView,
   RightSidebarTab,
   StatusBarItem,
@@ -49,6 +50,8 @@ export type PersistedUIState = {
   rightSidebarTab: RightSidebarTab
   rightSidebarExplorerView: RightSidebarExplorerView
   rightSidebarWidth: number
+  /** Right sidebar activity-bar edge. Missing on older profiles, which stay at the top. */
+  activityBarPosition?: ActivityBarPosition
   markdownTocPanelWidth?: number
   combinedDiffFileTreeWidth?: number
   groupBy: 'none' | 'workspace-status' | 'repo' | 'pr-status'
@@ -222,6 +225,8 @@ export type PersistedUIState = {
   windowBounds?: { x: number; y: number; width: number; height: number } | null
   /** Whether the window was maximized when it was last closed. */
   windowMaximized?: boolean
+  /** Whether the window was in native fullscreen when it was last closed. */
+  windowFullScreen?: boolean
   /** Dashboard popout bounds, independent of main-window bounds. */
   dashboardPopoutBounds?: { x: number; y: number; width: number; height: number } | null
   /** Migrate legacy recent→smart once so later activity-based recent selections survive. */

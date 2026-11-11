@@ -21,7 +21,7 @@ import {
 } from '../../../orca-runtime-tests/orca-runtime-test-fixtures.spec'
 import { registerLivePty } from '../../../orca-runtime-tests/bind-first-pane.test-fixture'
 import type { HostWorktreeTarget } from '../../../../../shared/worktree/host-qualified-identity'
-import { mergeWorktreeMetaForWrite } from '../../../../persistence/loading-store/worktree-meta-write-normalization'
+import { mergeWorktreeMetaForWrite } from '../../../../persistence/loading-store/worktree-metadata/worktree-meta-write-normalization'
 
 type MetadataWrite = {
   target: HostWorktreeTarget

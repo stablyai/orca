@@ -13,13 +13,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultPersistedState } from '../../../shared/constants'
 import { ORCA_PROFILE_INDEX_SCHEMA_VERSION } from '../../../shared/orca-profiles'
 import type { Repo } from '../../../shared/repo-types'
-import * as profileStateDocuments from '../../persistence/profile-state/profile-state-documents'
-import { openProfileStateDatabase } from '../../persistence/profile-state/profile-state-database'
+import * as profileStateDocuments from '../../persistence/profile-state/documents/profile-state-documents'
+import { openProfileStateDatabase } from '../../persistence/profile-state/database/profile-state-database'
 import { ProfileStateSqliteAuthority } from '../../persistence/profile-state/profile-state-sqlite-authority'
 import {
   createProfileStateDatabaseBackupId,
   profileStateDatabaseBackupPath
-} from '../../persistence/profile-state/profile-state-backup-path'
+} from '../../persistence/profile-state/backup/profile-state-backup-path'
 import { transferOrcaProfileProject } from './profile-project-transfer'
 import {
   readProfileStateWithRevision,
