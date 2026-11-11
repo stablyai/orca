@@ -1,12 +1,11 @@
 import { ORCHESTRATION_REPLY_METHOD } from './reply-method'
+import { ORCHESTRATION_INBOX_METHOD } from './inbox-method'
 import { defineOrchestrationMethod } from '../access/orchestration-method-access'
 import { inspectedRunAccess, taskCreateAccess, taskUpdateAccess } from '../access/run-access-rules'
 import type { TaskStatus } from '../../../../orchestration/db/orchestration-records'
 import { abbreviateOrchestrationTasks } from '../../../../../../shared/orchestration/orchestration-task-summary'
 import { orchestrationCallerIdentity } from '../runs/run-scope'
-import { resolveOrchestrationParty } from '../../../../orchestration/addressing/orchestration-party'
 import {
-  InboxParams,
   TaskCreateParams,
   TaskListParams
 } from '../../../../../../shared/rpc-contract/orchestration/orchestration-params'
@@ -14,28 +13,7 @@ import { TaskUpdateParams } from './task-update-params'
 
 export const ORCHESTRATION_MESSAGE_METHODS = [
   ORCHESTRATION_REPLY_METHOD,
-  defineOrchestrationMethod({
-    name: 'orchestration.inbox',
-    permission: 'workspace',
-    params: InboxParams,
-    access: { kind: 'reads', targets: { terminal: 'party', run: 'run' }, collection: true },
-    handler: (params, { runtime }) => {
-      const db = runtime.getOrchestrationDb()
-      // Return empty for stale/unknown handles because historical mail outlives handle deletion (design doc §3.3).
-      const messages = params.terminal
-        ? db.getAllMessagesForHandle(
-            resolveOrchestrationParty(params.terminal, db).address,
-            params.limit,
-            undefined,
-            params.run
-          )
-        : db.getInbox(params.limit, params.run)
-      return {
-        messages: messages.map(({ answer_sender_snapshot: _answer, ...message }) => message),
-        count: messages.length
-      }
-    }
-  }),
+  ORCHESTRATION_INBOX_METHOD,
 
   defineOrchestrationMethod({
     name: 'orchestration.taskCreate',
