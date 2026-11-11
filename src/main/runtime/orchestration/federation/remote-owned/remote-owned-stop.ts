@@ -49,7 +49,7 @@ function settleUnansweredStop(
   dispatchId: string
 ) {
   const server = remoteServerName(runtime, link.environment_id)
-  settleRemoteAttemptHere(runtime.getOrchestrationDb(), dispatchId)
+  settleRemoteAttemptHere(runtime.getOrchestrationDb(), dispatchId, 'stopped')
   return {
     dispatchId,
     state: 'stop_requested',
@@ -68,7 +68,7 @@ export function settleUnansweredAbandon(
   dispatchId: string
 ) {
   const server = remoteServerName(runtime, link.environment_id)
-  settleRemoteAttemptHere(runtime.getOrchestrationDb(), dispatchId)
+  settleRemoteAttemptHere(runtime.getOrchestrationDb(), dispatchId, 'abandoned')
   return {
     dispatchId,
     state: 'abandoned',

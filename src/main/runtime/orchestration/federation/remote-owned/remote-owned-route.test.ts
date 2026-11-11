@@ -49,6 +49,7 @@ describe('commands about a worker a paired server owns', () => {
   let sleeping: boolean
   let pulls: unknown[][]
   let paired: boolean
+  let pullFailures: number
   let sequence = 0
   let server: OrchestrationWorkerServer = {
     environmentId: 'env_b',
@@ -89,6 +90,12 @@ describe('commands about a worker a paired server owns', () => {
         return ok({ runtimeId: 'runtime_b', capabilities })
       }
       if (method === 'orchestration.peerMailPull') {
+        if (pullFailures > 0) {
+          pullFailures -= 1
+          throw Object.assign(new Error('Could not connect to the remote Orca runtime.'), {
+            code: 'remote_runtime_unavailable'
+          })
+        }
         const items = pulls.shift()
         if (!items) {
           // A real pull waits there for mail; yielding keeps the loop from starving timers.
@@ -130,6 +137,7 @@ describe('commands about a worker a paired server owns', () => {
     sleeping = false
     pulls = []
     paired = true
+    pullFailures = 0
     capabilities = [
       ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
       ORCHESTRATION_REMOTE_OWNED_WORKERS_RUNTIME_CAPABILITY
@@ -648,6 +656,23 @@ describe('commands about a worker a paired server owns', () => {
     )
   })
 
+  it('sends a stop it owes as soon as its server answers again, not after its backoff', async () => {
+    const { taskId, runId } = await startOnB()
+    importState(runId, taskId, 1, {
+      status: 'dispatched',
+      workerState: 'ready',
+      taskStatus: 'dispatched'
+    })
+    await call('orchestration.workerStop', { dispatch: 'ctx_b1' })
+    db.db.prepare('UPDATE remote_dispatches SET stop_retry_at = ?').run(Date.now() + 600_000)
+    const stops = () => sent.filter((s) => s.method === 'orchestration.workerStop').length
+    const before = stops()
+
+    answers['orchestration.workerStop'] = [{ result: { state: 'stopped', alreadySettled: false } }]
+    pullFailures = 1
+    await vi.waitFor(() => expect(stops()).toBe(before + 1), { timeout: 8_000 })
+  })
+
   /** devB's queue item saying where its Dispatch and Task now stand. */
   function importState(
     runId: string,
@@ -711,7 +736,7 @@ describe('commands about a worker a paired server owns', () => {
       expect(getRemoteDispatch(db, 'ctx_b1')).toMatchObject({
         status: 'completed',
         worker_state: 'succeeded',
-        task_settled_here: 1
+        task_settled_here: stop ? 1 : 2
       })
 
       answers['orchestration.workerStart'] = [started('ctx_b2')]

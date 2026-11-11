@@ -15,6 +15,7 @@ import {
 import { runLifecycleWriteTransaction } from '../lifecycle-write-transaction-runner'
 import { claimTaskForStart } from '../tasks/task-start-claim'
 import {
+  ABANDONED_HERE,
   ensureRemoteDispatchRecord,
   getRemoteDispatch,
   isRemoteDispatchActive,
@@ -313,16 +314,30 @@ export function remoteHoldOnTask(
  * does (blocked, so it can be retried), while the stop stays owed. The first result stands, so a
  * later state from the server changes only this attempt's record.
  */
-export function settleRemoteAttemptHere(db: OrchestrationDb, dispatchId: string): void {
+export function settleRemoteAttemptHere(
+  db: OrchestrationDb,
+  dispatchId: string,
+  how: 'stopped' | 'abandoned'
+): void {
   runLifecycleWriteTransaction(db.db, 'settle_remote_attempt_here', () => {
     const record = getRemoteDispatch(db, dispatchId)
-    if (!record || record.task_settled_here) {
+    if (!record) {
+      return
+    }
+    if (how === 'abandoned') {
+      db.db
+        .prepare('UPDATE remote_dispatches SET task_settled_here = ? WHERE dispatch_id = ?')
+        .run(ABANDONED_HERE, dispatchId)
+    }
+    if (record.task_settled_here) {
       return
     }
     const current = currentRemoteAttempt(db, record.task_id)?.dispatch_id === dispatchId
-    db.db
-      .prepare('UPDATE remote_dispatches SET task_settled_here = 1 WHERE dispatch_id = ?')
-      .run(dispatchId)
+    if (how === 'stopped') {
+      db.db
+        .prepare('UPDATE remote_dispatches SET task_settled_here = 1 WHERE dispatch_id = ?')
+        .run(dispatchId)
+    }
     if (current) {
       reconcileTaskAfterDispatchInterruption(db, record.task_id, dispatchId)
     }

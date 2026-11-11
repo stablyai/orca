@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { OrchestrationDb } from '../orchestration-db'
 import { createRootDispatch } from '../root-dispatch-test-fixture'
+import { claimTaskForStart } from '../tasks/task-start-claim'
 import type { RunRow } from '../orchestration-records'
 import type { OrchestrationWorkerServer } from '../../federation/environment-transport'
 import {
@@ -165,8 +166,38 @@ describe('remote-owned records on the coordinating Orca', () => {
       db.createTables()
 
       startedOnB('task_t', 'ctx_b1')
-      settleRemoteAttemptHere(db, 'ctx_b1')
+      settleRemoteAttemptHere(db, 'ctx_b1', 'stopped')
       expect(getRemoteDispatch(db, 'ctx_b1')).toMatchObject({ task_settled_here: 1 })
+    })
+  })
+
+  describe('a retry here of an attempt on the server, by the local rule', () => {
+    const retryHere = () => claimTaskForStart(db, db.getTask('task_t')!, { retryOf: 'ctx_b1' })
+
+    it('refuses while a stop is unproven, and follows an abandon here or a proven stop', () => {
+      startedOnB('task_t', 'ctx_b1')
+      importItem(stateItem('ctx_b1', 'task_t', { status: 'dispatched', workerState: 'ready' }))
+      settleRemoteAttemptHere(db, 'ctx_b1', 'stopped')
+      expect(db.getTask('task_t')?.status).toBe('blocked')
+      // As a local stop_unknown worker: its outcome is unknown, so nothing may follow it yet.
+      expect(retryHere).toThrow('Task task_t cannot retry from Dispatch ctx_b1.')
+
+      settleRemoteAttemptHere(db, 'ctx_b1', 'abandoned')
+      expect(retryHere).not.toThrow()
+    })
+
+    it('follows a stop the server proved', () => {
+      startedOnB('task_t', 'ctx_b1')
+      importItem(stateItem('ctx_b1', 'task_t', { status: 'dispatched', workerState: 'ready' }))
+      settleRemoteAttemptHere(db, 'ctx_b1', 'stopped')
+      importItem(
+        stateItem('ctx_b1', 'task_t', {
+          status: 'failed',
+          workerState: 'stopped',
+          taskStatus: 'blocked'
+        })
+      )
+      expect(retryHere).not.toThrow()
     })
   })
 

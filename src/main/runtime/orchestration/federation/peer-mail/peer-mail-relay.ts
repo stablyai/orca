@@ -11,6 +11,7 @@ import { presentImportedPeerItem } from '../../mailbox/formatting/imported-peer-
 import { importRemoteOwnedItem } from '../../db/remote-owned/remote-owned-import'
 import {
   closeRemoteRunLinksOfRemovedServer,
+  dueRemoteResendsNow,
   getRemoteRunLink,
   listLiveRemoteRunLinkEnvironments,
   noteRemoteRunLinkError,
@@ -108,6 +109,11 @@ export class PeerMailRelay {
     while (this.isCurrent(environmentId, loop)) {
       try {
         await this.pullOnce(environmentId, loop)
+        if (failures > 0) {
+          // The server answers again: what this Orca owes it goes out now, not after its backoff.
+          dueRemoteResendsNow(loop.db, environmentId)
+          this.resendOwed(environmentId, loop)
+        }
         failures = 0
       } catch {
         if (this.isEnvironmentRemoved(environmentId)) {

@@ -5,6 +5,10 @@ import {
   getLiveRemotePlacement,
   retireRemotePlacement
 } from '../remote-owned/remote-placement-hold'
+import {
+  getRemoteDispatch,
+  isRemoteAttemptSettledForRetry
+} from '../remote-owned/remote-dispatch-records'
 
 /**
  * The one claim every start of a Task passes, inside its caller's write transaction: a start here,
@@ -45,7 +49,24 @@ export function claimTaskForStart(
     return { priorFailures: 0 }
   }
   let priorFailures = 0
-  if (start.retryOf) {
+  const remotePrior =
+    start.retryOf && placement?.dispatch_id === start.retryOf
+      ? getRemoteDispatch(db, start.retryOf)
+      : undefined
+  if (remotePrior) {
+    // The Task's latest attempt ran on a paired server: a retry here follows it by the same rule.
+    if (
+      !isRemoteAttemptSettledForRetry(remotePrior) ||
+      !['failed', 'blocked'].includes(task.status)
+    ) {
+      throw taskNotStartableError(
+        db,
+        `Task ${task.id} cannot retry from Dispatch ${start.retryOf}.`,
+        task,
+        start.retryOf
+      )
+    }
+  } else if (start.retryOf) {
     const prior = db.getDispatchContextById(start.retryOf)
     const priorWorker = db.getWorkerDispatch(start.retryOf)
     const latest = db.getDispatchContext(task.id)

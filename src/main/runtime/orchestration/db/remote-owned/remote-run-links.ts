@@ -255,3 +255,18 @@ export function noteRemoteRunLinkError(
     .prepare('UPDATE remote_run_links SET last_error = ? WHERE conversation_id = ?')
     .run(error instanceof Error ? error.message : String(error), conversationId)
 }
+
+/** The server answers again: every stop and cancel owed to it is due now instead of after its backoff. */
+export function dueRemoteResendsNow(db: OrchestrationDb, environmentId: string): void {
+  db.db
+    .prepare(
+      `UPDATE remote_dispatches SET stop_retry_at = NULL WHERE environment_id = ? AND stop_owed = 1`
+    )
+    .run(environmentId)
+  db.db
+    .prepare(
+      `UPDATE remote_run_links SET cancel_retry_at = NULL
+       WHERE environment_id = ? AND state = 'cancel_owed'`
+    )
+    .run(environmentId)
+}

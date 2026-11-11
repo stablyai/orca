@@ -26,6 +26,8 @@ export type RemoteDispatchRow = {
 }
 
 const SETTLED_WORKER_STATES = ['succeeded', 'failed', 'stopped', 'abandoned']
+/** `task_settled_here` for an attempt abandoned here, which a retry may follow at once. */
+export const ABANDONED_HERE = 2
 const ACTIVE_DISPATCH_STATUSES = ['pending', 'dispatched']
 
 /** Proof the server's worker is done: a settled worker, or a settled context-only Dispatch. */
@@ -38,6 +40,18 @@ export function isRemoteDispatchTerminal(
 }
 
 /** Counted as a local Dispatch would be: active while its Dispatch is pending or dispatched there. */
+/** A prior a retry may follow, by the local rule: its worker settled there, or it was abandoned here. */
+export function isRemoteAttemptSettledForRetry(
+  record: Pick<RemoteDispatchRow, 'status' | 'worker_state' | 'task_settled_here'>
+): boolean {
+  return (
+    record.task_settled_here === ABANDONED_HERE ||
+    (record.worker_state === null
+      ? record.status === 'failed'
+      : ['failed', 'stopped', 'abandoned'].includes(record.worker_state))
+  )
+}
+
 export function isRemoteDispatchActive(record: Pick<RemoteDispatchRow, 'status'>): boolean {
   return ACTIVE_DISPATCH_STATUSES.includes(record.status)
 }
