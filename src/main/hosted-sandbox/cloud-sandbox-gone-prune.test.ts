@@ -202,4 +202,20 @@ describe('Orca Cloud list reconcile', () => {
     await backfill.run({ force: true })
     expect(onListed).toHaveBeenCalledTimes(2)
   })
+
+  it('logs one line per pruned record, naming the sandbox and why', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-gone-log-'))
+    dirs.push(userDataPath)
+    upsertEphemeralVmRuntime(userDataPath, record('cusk', { workspaceName: 'cusk' }))
+    const lines: string[] = []
+    const prune = createCloudSandboxGonePrune({
+      userDataPath,
+      activeAccountId: () => TEAM,
+      get: notFound,
+      retire: async () => {},
+      log: (line) => lines.push(line)
+    })
+    await prune.observeList(TEAM, new Set())
+    expect(lines).toEqual(['[orca-cloud] pruned stale cloud workspace sbx-cusk (cusk; not found)'])
+  })
 })

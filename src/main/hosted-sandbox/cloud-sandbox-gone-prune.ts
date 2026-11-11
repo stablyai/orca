@@ -35,6 +35,8 @@ export function createCloudSandboxGonePrune(deps: {
   retire: (runtime: EphemeralVmRuntimeRecord) => Promise<void>
   log?: (line: string) => void
 }): CloudSandboxGonePrune {
+  // The app log by default: each prune is one timestamped line (LC-2).
+  const log = deps.log ?? ((line: string) => console.log(line))
   // Sandboxes one list has missed; a second miss in a row confirms them.
   let missedOnce = new Set<string>()
 
@@ -64,7 +66,8 @@ export function createCloudSandboxGonePrune(deps: {
       const previous = missedOnce
       missedOnce = new Set(missing.map(({ sandboxId }) => sandboxId))
       for (const { runtime, sandboxId } of missing) {
-        const gone = previous.has(sandboxId) || (await confirmedGone(sandboxId))
+        const missedTwice = previous.has(sandboxId)
+        const gone = missedTwice || (await confirmedGone(sandboxId))
         // The confirming answer must still be for the team this list was for.
         if (!gone || deps.activeAccountId() !== account) {
           continue
@@ -72,9 +75,12 @@ export function createCloudSandboxGonePrune(deps: {
         try {
           await deps.retire(runtime)
           missedOnce.delete(sandboxId)
-          deps.log?.(`[orca-cloud] retired ${runtime.workspaceName ?? runtime.id}: sandbox is gone`)
+          // One line per retired record, so a run can be timestamped from the app log.
+          log(
+            `[orca-cloud] pruned stale cloud workspace ${sandboxId} (${runtime.workspaceName ?? runtime.id}; ${missedTwice ? 'missing from two lists' : 'not found'})`
+          )
         } catch (error) {
-          deps.log?.(`[orca-cloud] could not retire a gone sandbox's records: ${String(error)}`)
+          log(`[orca-cloud] could not retire a gone sandbox's records: ${String(error)}`)
         }
       }
     }
