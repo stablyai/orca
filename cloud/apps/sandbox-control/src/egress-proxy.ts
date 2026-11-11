@@ -35,8 +35,11 @@ export const NO_CREDENTIALS: CredentialBroker = { authorizationFor: async () => 
 export type ProxiedRoute = {
   header: string
   placeholders: readonly string[]
-  /** The header value, or null (refused), or `{ deny }` to refuse with a specific reason. */
-  credential: () => Promise<string | null | { deny: string }>
+  /**
+   * The header value, or null (refused), or `{ deny }` to refuse with a specific reason. A deny may carry
+   * the provider-shaped answer to give instead (a signed-out account answers like the provider's 401).
+   */
+  credential: () => Promise<string | null | { deny: string; answer?: { status: number; contentType: string; body: string } }>
   /** Extra headers set with the credential (e.g. an account id the client can't know). */
   extraHeaders?: () => Record<string, string>
   /** Sees the provider's status (e.g. a 401 revokes an account credential). Never sees the body. */
@@ -140,6 +143,13 @@ export async function handleEgressProxy(request: Request, deps: EgressProxyDeps)
     return deny('credential_unavailable')
   }
   if (typeof credential !== 'string') {
+    if (credential.answer) {
+      console.log(JSON.stringify({ event: 'egress_denied', sandboxId: row.id, host, reason: credential.deny }))
+      return new Response(credential.answer.body, {
+        status: credential.answer.status,
+        headers: { 'content-type': credential.answer.contentType }
+      })
+    }
     return deny(credential.deny)
   }
   const headers = new Headers(request.headers)
