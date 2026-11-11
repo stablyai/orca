@@ -1,3 +1,4 @@
+import { useFileExplorerRepositories } from '../tree/use-file-explorer-repositories'
 import React, { useCallback, useMemo } from 'react'
 import { useAppStore } from '@/store/index'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
@@ -119,6 +120,16 @@ function FileExplorerFiles(): React.JSX.Element {
     handleClearNameFilter
   } = useFileExplorerNameFilter({ isFilesViewActive, activeWorktreeId })
 
+  const repositories = useFileExplorerRepositories(
+    activeWorktreeId,
+    worktreePath,
+    displayRootPath,
+    tree,
+    effectiveExpanded,
+    Boolean(visibleFilesWorktreePath),
+    activeRepoSupportsGit
+  )
+
   const {
     rowProjection,
     ignoredByRelativePath,
@@ -134,7 +145,8 @@ function FileExplorerFiles(): React.JSX.Element {
     showDotfiles,
     nameFilterSource,
     hasNameFilter ? nameFilterCollapsedPaths : null,
-    visibleFilesWorktreePath ? displayRootPath : null
+    visibleFilesWorktreePath ? displayRootPath : null,
+    repositories
   )
   const rowExpandedPaths = useMemo(
     () =>
@@ -146,7 +158,13 @@ function FileExplorerFiles(): React.JSX.Element {
     [expanded, hasNameFilter, nameFilterExpandedPaths]
   )
   const visibleRowCount = rowProjection.getVisibleCount()
-  const manualRefresh = useFileExplorerManualRefresh(tree.refreshTree)
+  const { refresh: refreshRepositories } = repositories
+  const { refreshTree } = tree
+  const refreshRepositoriesAndTree = useCallback(() => {
+    refreshRepositories()
+    return refreshTree()
+  }, [refreshRepositories, refreshTree])
+  const manualRefresh = useFileExplorerManualRefresh(refreshRepositoriesAndTree)
   const canCollapseAll = isFilesViewActive && !hasNameFilter && expanded.size > 0
   const handleCollapseAll = useCallback(() => {
     if (!activeWorktreeId || !isFilesViewActive || hasNameFilter) {
@@ -182,6 +200,7 @@ function FileExplorerFiles(): React.JSX.Element {
   )
   // Keep effects above the null-path return so transient missing ownership cannot reset cache guards or SSH generations.
   const paneState = useFileExplorerTreePaneState({
+    repositorySources: repositories.sources,
     onRevealOutsideRoot: rootNavigation.revealOutsideRoot,
     activeWorktreeId,
     activeRepo,

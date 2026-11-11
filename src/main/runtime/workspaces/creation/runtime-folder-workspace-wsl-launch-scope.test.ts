@@ -7,6 +7,17 @@ vi.mock('node:fs/promises', async (importOriginal) => ({
   stat: statMock
 }))
 
+const repositoryReadMock = vi.hoisted(() =>
+  vi.fn(async () => ({
+    entries: [],
+    conflictOperation: 'unknown',
+    repositoryStatuses: [{ path: '', kind: 'repository' }]
+  }))
+)
+vi.mock('../../../git/source-control/repository-status', () => ({
+  getRepositoryStatuses: repositoryReadMock
+}))
+
 // Fragments stay side-effect ordered: mocks, then lifecycle, then fixtures.
 await import('../../orca-runtime-tests/runtime-test-module-registration.spec')
 const { OrcaRuntimeService } = await import('../../orca-runtime')
@@ -76,3 +87,49 @@ describe('a runtime start in a folder workspace on a stopped WSL distro (E9)', (
     expect(statMock).not.toHaveBeenCalled()
   })
 })
+
+it('resolves read-only folder Git authority before physical folder checks', async () => {
+  Object.defineProperty(process, 'platform', { configurable: true, value: hostPlatform })
+  statMock.mockRejectedValue(
+    Object.assign(new Error('raw namespace cannot be opened'), { code: 'EPERM' })
+  )
+  const runtime = makeRuntime()
+  await expect(
+    runtime.getRuntimeGitStatus(`id:${TEST_FOLDER_WORKSPACE_KEY}`, {
+      repositoryPaths: [''],
+      repositoryIntent: 'probe'
+    })
+  ).resolves.toMatchObject({ repositoryStatuses: [{ path: '', kind: 'repository' }] })
+  expect(statMock).not.toHaveBeenCalled()
+  expect(repositoryReadMock).toHaveBeenCalledWith(
+    FOLDER,
+    expect.objectContaining({ repositoryPaths: [''], repositoryIntent: 'probe' }),
+    expect.objectContaining({ admissionTier: 'background' })
+  )
+})
+
+it.each([
+  { executionHostId: 'runtime:other', connectionId: null },
+  { executionHostId: 'runtime:other', connectionId: 'nested-ssh' },
+  { executionHostId: 'ssh:other', connectionId: 'other' }
+] as const)(
+  'refuses unserved folder Git authority %j before reading its same-spelled local path',
+  async (host) => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: hostPlatform })
+    repositoryReadMock.mockClear()
+    const runtime = new OrcaRuntimeService(
+      createFolderWorkspaceRuntimeStore(
+        makeFolderWorkspace({ folderPath: FOLDER, ...host }),
+        makeFolderProjectGroup({ parentPath: PARENT, ...host })
+      )
+    )
+    await expect(
+      runtime.getRuntimeGitStatus(`id:${TEST_FOLDER_WORKSPACE_KEY}`, {
+        repositoryPaths: [''],
+        repositoryIntent: 'status'
+      })
+    ).rejects.toBeInstanceOf(Error)
+    expect(repositoryReadMock).not.toHaveBeenCalled()
+    expect(statMock).not.toHaveBeenCalled()
+  }
+)

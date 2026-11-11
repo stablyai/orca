@@ -29,7 +29,14 @@ export type RuntimeGitTarget = {
   localGitOptions?: GitRuntimeOptions
 }
 
+export type RuntimeGitReadTarget = {
+  worktree: { path: string }
+  executionHostId: ExecutionHostId
+  localGitOptions?: GitRuntimeOptions
+}
+
 export type RuntimeGitCommandHost = {
+  resolveRuntimeGitReadTarget?(selector: string): Promise<RuntimeGitReadTarget>
   resolveRuntimeGitTarget(selector: string): Promise<RuntimeGitTarget>
   getRuntimeSettings(): SourceControlAiSettingsInput
   getCommitMessageAgentEnvironment?(): CommitMessageAgentEnvironmentResolvers | undefined
@@ -56,7 +63,7 @@ export type RuntimeGitRoute =
   /** An SSH target this process does not serve; it fails or reports unavailable, never runs here. */
   | { kind: 'ssh'; connectionId: string }
 
-export function runtimeGitRouteForTarget(target: RuntimeGitTarget): RuntimeGitRoute {
+export function runtimeGitRouteForTarget(target: RuntimeGitReadTarget): RuntimeGitRoute {
   const route = resolveGitRouteForHost(target.executionHostId)
   switch (route.kind) {
     case 'local':
@@ -70,7 +77,7 @@ export function runtimeGitRouteForTarget(target: RuntimeGitTarget): RuntimeGitRo
 
 /** The local route for work this process runs itself; `ssh:` and `runtime:` hosts throw. */
 export function requireLocalRuntimeGitRoute(
-  target: RuntimeGitTarget
+  target: RuntimeGitReadTarget
 ): Extract<RuntimeGitRoute, { kind: 'local' }> {
   const route = runtimeGitRouteForTarget(target)
   if (route.kind === 'ssh') {

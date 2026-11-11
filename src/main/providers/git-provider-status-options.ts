@@ -1,4 +1,6 @@
-export type GitProviderStatusOptions = {
+import type { GitRepositoryStatusRequest } from '../../shared/git/status/git-repository-status'
+
+export type GitProviderStatusOptions = GitRepositoryStatusRequest & {
   admissionTier?: 'interactive' | 'status' | 'background'
   includeIgnored?: boolean
   includeLineStats?: boolean

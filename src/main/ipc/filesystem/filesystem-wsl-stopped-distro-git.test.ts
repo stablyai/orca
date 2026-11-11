@@ -153,6 +153,16 @@ describe('background Git for a stopped WSL distro', () => {
 
   it.each([
     ['git:status', { worktreePath: UNC_ROOT }],
+    ['git:status', { worktreePath: UNC_ROOT, repositoryPaths: [''], repositoryIntent: 'probe' }],
+    [
+      'git:status',
+      {
+        worktreePath: UNC_ROOT,
+        repositoryPaths: ['nested'],
+        repositoryIntent: 'status',
+        wakeWslDistro: true
+      }
+    ],
     ['git:conflictOperation', { worktreePath: UNC_ROOT }],
     ['git:upstreamStatus', { worktreePath: UNC_ROOT }],
     ['git:branchCompare', { worktreePath: UNC_ROOT, baseRef: 'main' }],

@@ -54,6 +54,7 @@ function getStatusReadKey(worktreePath: string, options: GetStatusOptions): stri
   return `${getStatusLineStatsCacheKey(worktreePath, options)}\0${stableInFlightKey([
     options.admissionTier ?? 'status',
     options.includeIgnored === true,
+    options.skipEffectiveUpstream === true,
     options.includeLineStats !== false,
     options.reuseLineStats === true,
     // Totals for different fork points or opt-in states cannot share a lease.
@@ -168,7 +169,12 @@ async function runGetStatus(
   }
   await dropSharedSymlinkUntrackedEntries(worktreePath, entries, options)
 
-  if (statusSucceeded && !didHitLimit && shouldProbeEffectiveUpstreamStatus(branch, upstreamName)) {
+  if (
+    !options.skipEffectiveUpstream &&
+    statusSucceeded &&
+    !didHitLimit &&
+    shouldProbeEffectiveUpstreamStatus(branch, upstreamName)
+  ) {
     const branchName = getShortBranchName(branch)
     if (branchName) {
       const cacheKey = getEffectiveUpstreamStatusCacheKey(

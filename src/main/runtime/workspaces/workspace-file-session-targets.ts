@@ -1,9 +1,11 @@
+import { findLocalFolderWorkspaceRuntimeRepo } from '../../../shared/folder-workspaces/folder-workspace-execution-host'
 import type { OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree } from '../terminal/launch/terminal-workspace-scope'
 import type { OrcaRuntimeWithTransitionGraphReloadToTerminalState } from '../session-graph/session-graph-authority'
 import type { ResolvedWorktree } from './catalog/runtime-worktree-path-identity'
 import type { Repo } from '../../../shared/repo-types'
 import {
   getConnectionExecutionHostId,
+  getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
 } from '../../../shared/execution-host'
@@ -58,6 +60,37 @@ export abstract class RuntimeWorkspaceFileTargets extends RuntimeMarkdownTabOper
         ? getLocalProjectWorktreeGitOptions(store, repo)
         : {}
     return { worktree, repo, executionHostId, localGitOptions }
+  }
+
+  protected async resolveRuntimeGitReadTarget(worktreeSelector: string) {
+    const scope = await this.resolveFolderWorkspaceLaunchScope(
+      worktreeSelector,
+      {},
+      undefined,
+      false
+    )
+    if (!scope?.folderWorkspace) {
+      return this.resolveRuntimeGitTarget(worktreeSelector)
+    }
+    const store = this.requireStore()
+    const executionHostId = getRepoExecutionHostId(scope.folderWorkspace)
+    const repo =
+      executionHostId === LOCAL_EXECUTION_HOST_ID
+        ? findLocalFolderWorkspaceRuntimeRepo(
+            {
+              folderWorkspaces: store.getFolderWorkspaces?.() ?? [],
+              projectGroups: store.getProjectGroups?.() ?? [],
+              repos: store.getRepos()
+            },
+            scope.folderWorkspace.id,
+            scope.folderWorkspace
+          )
+        : undefined
+    return {
+      worktree: this.folderWorkspaceToResolvedWorktree(scope.folderWorkspace),
+      executionHostId,
+      localGitOptions: repo ? getLocalProjectWorktreeGitOptions(store, repo) : {}
+    }
   }
 
   // Resolve the worktree's filesystem host; getRepo(id) conflates host twins, runtime targets, unresolved owners and local paths (#11163).

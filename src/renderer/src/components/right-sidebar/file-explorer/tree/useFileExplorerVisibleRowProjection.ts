@@ -1,3 +1,9 @@
+import type { ExplorerRepositorySource } from './file-explorer-repository-observer'
+import {
+  partitionExplorerRepositoryDemand,
+  type ExplorerRepositoryDemand
+} from './file-explorer-repository-paths'
+import type { RepositoryIgnoredPathSet } from '../../../../lib/source-control/paths/git-path-decoration'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useAppStore } from '@/store/index'
 import { isDotfileRelativePath } from './file-explorer-entries'
@@ -157,7 +163,11 @@ export function useFileExplorerVisibleRowProjection(
   showDotfiles: boolean,
   nameFilter: FileExplorerNameFilterProjectionSource | null,
   nameFilterCollapsedPaths: ReadonlySet<string> | null = null,
-  displayRootPath: string | null = worktreePath
+  displayRootPath: string | null = worktreePath,
+  repositories?: {
+    sources: readonly ExplorerRepositorySource[]
+    setDemand: (paths: readonly string[], partition?: ExplorerRepositoryDemand) => void
+  }
 ): {
   rowProjection: FileExplorerRowProjection
   ignoredByRelativePath: Set<string>
@@ -168,9 +178,10 @@ export function useFileExplorerVisibleRowProjection(
   const settings = useAppStore((s) => s.settings)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const showGitIgnoredFiles = settings?.showGitIgnoredFiles ?? true
+  const hasRepositoryObserver = Boolean(repositories?.sources.length)
   const rebuiltRelativePaths = useMemo(
     () =>
-      activeRepoSupportsGit
+      activeRepoSupportsGit || hasRepositoryObserver
         ? nameFilter
           ? getFileExplorerNameFilterIgnoredQueryRelativePaths(
               nameFilter,
@@ -184,6 +195,7 @@ export function useFileExplorerVisibleRowProjection(
         : EMPTY_RELATIVE_PATHS,
     [
       activeRepoSupportsGit,
+      hasRepositoryObserver,
       dirCache,
       expanded,
       nameFilter,
@@ -194,23 +206,49 @@ export function useFileExplorerVisibleRowProjection(
   )
   // Keep filter-keystroke identities fresh; only tree wave commits need content stability.
   const relativePaths = useContentStableRelativePaths(rebuiltRelativePaths, !nameFilter)
+  const rootsKey = JSON.stringify(repositories?.sources.map((source) => source.path) ?? [])
+  const partition = useMemo(
+    () => partitionExplorerRepositoryDemand(new Set<string>(JSON.parse(rootsKey)), relativePaths),
+    [relativePaths, rootsKey]
+  )
+  const rootRelativePaths = partition.rootPaths
+  const setDemand = repositories?.setDemand
+  useEffect(() => {
+    if (worktreePath) {
+      setDemand?.(relativePaths, partition)
+    }
+  }, [relativePaths, partition, setDemand, worktreePath])
   const canLoadIgnoredPaths =
     activeRepoSupportsGit &&
     Boolean(activeWorktreeId) &&
     Boolean(worktreePath) &&
-    relativePaths.length > 0
+    rootRelativePaths.length > 0
   const shouldDebounceIgnoredQuery = nameFilter !== null
   const effectiveIgnoredPaths = useFileExplorerIgnoredPaths({
     activeWorktreeId,
     canLoadIgnoredPaths,
-    relativePaths,
+    relativePaths: rootRelativePaths,
     shouldDebounceIgnoredQuery,
     worktreePath
   })
-  const ignoredSet = useMemo(
-    () => buildIgnoredSet(effectiveIgnoredPaths, worktreePath),
-    [effectiveIgnoredPaths, worktreePath]
+  const ownIgnoreRef = useRef(new Map<string, ReadonlyMap<string, boolean>>())
+  const nextOwnIgnore = new Map(
+    repositories?.sources.map((source) => [source.path, source.ignored])
   )
+  if (
+    nextOwnIgnore.size !== ownIgnoreRef.current.size ||
+    [...nextOwnIgnore].some(([path, ignored]) => ownIgnoreRef.current.get(path) !== ignored)
+  ) {
+    ownIgnoreRef.current = nextOwnIgnore
+  }
+  const ownIgnore = ownIgnoreRef.current
+  const ignoredSet = useMemo(() => {
+    const set: RepositoryIgnoredPathSet = buildIgnoredSet(effectiveIgnoredPaths, worktreePath)
+    if (ownIgnore.size) {
+      set.repositories = ownIgnore
+    }
+    return set
+  }, [effectiveIgnoredPaths, worktreePath, ownIgnore])
   const rowProjection = useMemo(
     () =>
       createVisibleFileExplorerRowProjection(

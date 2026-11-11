@@ -29,6 +29,7 @@ export type TreeNode = {
 export type FileExplorerDirMore = { after: DirEntryCursor }
 
 export type DirCache = {
+  repositoryMarker?: boolean
   error?: string
   children: TreeNode[]
   operationOwner?: FileExplorerOperationOwner

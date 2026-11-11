@@ -1,3 +1,4 @@
+import { GIT_REPOSITORY_STATUS_CAPABILITY } from './git/status/git-repository-status'
 import {
   MANAGED_RUNTIME_INSTALL_RUNTIME_CAPABILITY,
   MANAGED_RUNTIME_REMOVE_RUNTIME_CAPABILITY
@@ -21,6 +22,7 @@ export const SETTINGS_CHANGED_EVENT_RUNTIME_CAPABILITY =
 // The paired host itself: status, environments, control, updates and the servers it manages.
 export const HOST_RUNTIME_CAPABILITIES = [
   'runtime.status.compat.v1',
+  GIT_REPOSITORY_STATUS_CAPABILITY,
   'runtime.environments.v1',
   REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY,
   RUNTIME_AUTOMATIC_WORK_RUNTIME_CAPABILITY,

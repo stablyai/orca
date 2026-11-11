@@ -23,8 +23,8 @@ type FileExplorerVirtualRowsProps = {
   inlineInput: InlineInput | null
   handleInlineSubmit: (value: string) => void
   dismissInlineInput: () => void
-  folderStatusByRelativePath: Map<string, GitFileStatus | null>
-  statusByRelativePath: Map<string, GitFileStatus>
+  folderStatusByRelativePath: Pick<ReadonlyMap<string, GitFileStatus | null>, 'get'>
+  statusByRelativePath: Pick<ReadonlyMap<string, GitFileStatus>, 'get'>
   ignoredByRelativePath: Set<string>
   expanded: Set<string>
   canCollapseFolderSubtree?: boolean

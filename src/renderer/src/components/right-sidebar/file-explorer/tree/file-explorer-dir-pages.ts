@@ -39,6 +39,11 @@ export function fileExplorerListingToDirCache(
       listing.outsideProject === true
     ),
     operationOwner: listing.operationOwner,
+    ...(listing.entries.some((entry) => entry.name === '.git')
+      ? { repositoryMarker: true }
+      : !listing.more
+        ? { repositoryMarker: false }
+        : {}),
     ...(listing.more ? { more: listing.more } : {}),
     ...(listing.paged ? { paged: true } : {}),
     ...(listing.outsideProject ? { outsideProject: true } : {})
@@ -65,6 +70,11 @@ export function appendFileExplorerDirPage(
   return {
     ...listed,
     children: sortDirEntries([...cache.children, ...added]),
+    ...(page.entries.some((entry) => entry.name === '.git')
+      ? { repositoryMarker: true }
+      : !page.more && cache.repositoryMarker !== true
+        ? { repositoryMarker: false }
+        : {}),
     ...(page.more ? { more: page.more } : {})
   }
 }

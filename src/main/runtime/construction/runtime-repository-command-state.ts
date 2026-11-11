@@ -1,5 +1,6 @@
 import type { RuntimeTerminalAgentStatus } from '../../../shared/runtime-terminal-contracts'
 import { RuntimeGitCommands } from '../integrations/git/orca-runtime-git'
+import type { RuntimeGitReadTarget } from '../integrations/git/runtime-git-command-target'
 import { RuntimeHostedReviewCommands } from '../integrations/reviews/runtime-hosted-review-commands'
 import { RuntimeGitHubRepositoryQueryCommands } from '../integrations/github/runtime-github-repository-query-commands'
 import { RuntimeGitLabQueryCommands } from '../integrations/gitlab/runtime-gitlab-query-commands'
@@ -23,7 +24,10 @@ import {
 import { OrcaRuntimeWithFileCommands } from './runtime-file-command-state'
 
 export abstract class OrcaRuntimeWithRepositoryCommands extends OrcaRuntimeWithFileCommands {
+  protected abstract resolveRuntimeGitReadTarget(selector: string): Promise<RuntimeGitReadTarget>
+
   protected readonly gitCommands = new RuntimeGitCommands({
+    resolveRuntimeGitReadTarget: (selector) => this.resolveRuntimeGitReadTarget(selector),
     resolveRuntimeGitTarget: (selector) => this.resolveRuntimeGitTarget(selector),
     getRuntimeSettings: () => this.requireStore().getSettings(),
     getCommitMessageAgentEnvironment: () => this.accounts.getCommitMessageAgentEnvironment(),
