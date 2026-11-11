@@ -1,6 +1,7 @@
 // Account credentials for agents (agent-sources contract D11): one per person per agent, Personal only.
 //   GET    /v1/agent-credentials                  -> {claude, codex: {state, label?, expiresAt?}, providerEnabled, providerState}
 //   PUT    /v1/agent-credentials/claude {token, label?, expiresAt?}   (flag S1; desktop main runs `claude setup-token`)
+//   POST   /v1/agent-credentials/claude/verify -> {claude, verifiedAt, checked}   (pre-launch check, agent-credential-checks.ts)
 //   DELETE /v1/agent-credentials/:agent
 // Values are never returned or logged. They leave the Worker only when the egress proxy swaps them into a
 // request from the person's own, unshared workspace (D10, D13). The Codex broker (flag S2) stores its tokens
@@ -104,7 +105,8 @@ export async function putAgentCredential(
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)
        ON CONFLICT (user_id, agent) DO UPDATE SET account_id = excluded.account_id, kek_id = excluded.kek_id,
          wrapped_dek = excluded.wrapped_dek, ciphertext = excluded.ciphertext, label = excluded.label,
-         expires_at = excluded.expires_at, state = 'active', updated_at = excluded.updated_at`
+         expires_at = excluded.expires_at, state = 'active', updated_at = excluded.updated_at,
+         checked_at = NULL, verified_at = NULL`
     )
     .bind(input.userId, input.accountId, input.agent, sealed.kekId, sealed.wrappedDek, sealed.ciphertext, input.label ?? null, input.expiresAt ?? null, now, now)
     .run()

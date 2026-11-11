@@ -114,7 +114,7 @@ import { egressAccountRoutes, egressSecretHosts, placeholderValues, secretPlaceh
 import { SecretError, handleSecretsRoute, keyringFor, type SecretChange } from './secrets'
 import { refreshAfterSecretChange, refreshSandboxEnv } from './env-refresh'
 import { accountProvider, isSharedWorkspace } from './account-providers'
-import { handleAccountUnauthorized } from './agent-credential-checks'
+import { handleAccountUnauthorized, verifyAccountCredential } from './agent-credential-checks'
 import { codexBrokerTick, handleCodexBrokerRoute, type BrokerDeps } from './codex-broker'
 import { refreshCodexLeases } from './codex-credentials'
 import {
@@ -528,6 +528,28 @@ async function agentCredentialsRoute(request: Request, url: URL, env: Env, deps:
       forgetAccountCredential(caller.userId, 'claude')
       await refreshOwnersSandboxes(env, deps, caller.userId)
       return noStore(await agentCredentialsView(db, env, caller.userId, now))
+    }
+    // Pre-launch check (desktop): a recent pass answers at once; otherwise one rate-limited auth check with
+    // the real token, revoking only on a definite auth failure (agent-credential-checks.ts).
+    if (request.method === 'POST' && url.pathname === '/v1/agent-credentials/claude/verify') {
+      const provider = accountProvider('claude')
+      if (!providerEnabled(env).claude || !provider) {
+        return fail('not_found', 404)
+      }
+      const result = await verifyAccountCredential({
+        db,
+        keyring: await keyring,
+        provider,
+        userId: caller.userId,
+        now,
+        fetch: deps.egressFetch ?? fetch
+      })
+      if (result.outcome === 'revoked') {
+        forgetAccountCredential(caller.userId, 'claude')
+        await refreshOwnersSandboxes(env, deps, caller.userId)
+      }
+      const view = await agentCredentialsView(db, env, caller.userId, now)
+      return noStore({ claude: view.claude, verifiedAt: result.verifiedAt, checked: result.outcome !== 'fresh' && result.outcome !== 'skipped' })
     }
     if (url.pathname === '/v1/agent-credentials/codex/broker' || url.pathname.startsWith('/v1/agent-credentials/codex/broker/')) {
       return await handleCodexBrokerRoute(request, url, { enabled: providerEnabled(env).codex, deps: await codexBrokerDeps(env, deps), caller })
