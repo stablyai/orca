@@ -110,49 +110,45 @@ export function applySessionSearchWorkAcknowledgement(
     admission: ReturnType<SessionSearchStore['catalogCandidates']['admission']>
   }
 ): boolean {
-  if (!queue.matches(command.work)) {
-    return false
-  }
-  const row = known ? known.row : store.fileRow(command.work.candidate.file.path)
-  const admission = known
-    ? known.admission
-    : store.catalogCandidates.admission(command.work.candidate)
-  const required = admission.contentRequired
-  const handoff = command.handoff
-  const refusal = handoff?.scope.startsWith(`physical:${command.work.candidate.agent}:`)
-    ? store.catalogStorage.execute({
-        kind: 'get',
-        scope: `${handoff.scope}:file-refusals`,
-        key: command.work.candidate.file.path
-      }).rows?.[0]
-    : undefined
-  const debt: { force?: boolean; metadata?: boolean } | undefined = refusal
-    ? JSON.parse(refusal.value)
-    : undefined
-  const transferred =
-    handoff &&
-    refusal?.tie === handoff.revision &&
-    (!required || debt?.force) &&
-    (!command.work.metadata || debt?.metadata)
-  const held =
-    row?.state === 'failed' &&
-    row.failCount >= SESSION_SEARCH_FAILURES_BEFORE_HELD_OUT &&
-    row.failedMtimeMs === command.work.candidate.file.mtimeMs
-  const expired =
-    store.retentionCutoff !== null && command.work.candidate.file.mtimeMs < store.retentionCutoff
-  queue.acknowledgeAccepted(
-    { ...command.work, force: required || (command.work.force && command.retry) },
-    transferred || !admission.allowed
-      ? false
-      : command.handoff
-        ? admission.required
-        : required
-          ? !held && !expired
-          : command.retry
-  )
-
-  if (command.reconcile) {
-    queue.rowChangedAccepted(command.work.candidate.file.path, row)
-  }
-  return true
+  return queue.acknowledgeCurrent(command.work, () => {
+    const row = known ? known.row : store.fileRow(command.work.candidate.file.path)
+    const admission = known
+      ? known.admission
+      : store.catalogCandidates.admission(command.work.candidate)
+    const required = admission.contentRequired
+    const handoff = command.handoff
+    const refusal = handoff?.scope.startsWith(`physical:${command.work.candidate.agent}:`)
+      ? store.catalogStorage.execute({
+          kind: 'get',
+          scope: `${handoff.scope}:file-refusals`,
+          key: command.work.candidate.file.path
+        }).rows?.[0]
+      : undefined
+    const debt: { force?: boolean; metadata?: boolean } | undefined = refusal
+      ? JSON.parse(refusal.value)
+      : undefined
+    const transferred =
+      handoff &&
+      refusal?.tie === handoff.revision &&
+      (!required || debt?.force) &&
+      (!command.work.metadata || debt?.metadata)
+    const held =
+      row?.state === 'failed' &&
+      row.failCount >= SESSION_SEARCH_FAILURES_BEFORE_HELD_OUT &&
+      row.failedMtimeMs === command.work.candidate.file.mtimeMs
+    const expired =
+      store.retentionCutoff !== null && command.work.candidate.file.mtimeMs < store.retentionCutoff
+    return {
+      force: required || (command.work.force && command.retry),
+      retry:
+        transferred || !admission.allowed
+          ? false
+          : command.handoff
+            ? admission.required
+            : required
+              ? !held && !expired
+              : command.retry,
+      due: command.reconcile && row?.state === 'due'
+    }
+  })
 }

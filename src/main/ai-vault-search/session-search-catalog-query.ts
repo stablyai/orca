@@ -1,5 +1,8 @@
 import type SyncDatabase from '../sqlite/sync-database'
-import type { SessionSearchCatalogBaseCommand } from './session-search-catalog-types'
+import type {
+  SessionSearchCatalogBaseCommand,
+  SessionSearchCatalogCommand
+} from './session-search-catalog-types'
 import { sessionSearchInventoryStorage } from './session-search-inventory-storage'
 import { sessionSearchInventoryRelation } from './session-search-inventory-relation'
 
@@ -95,4 +98,48 @@ export function sessionSearchCatalogPageRows(
       }
     }
   })()
+}
+
+export function readSessionSearchScopeCounts(
+  db: SyncDatabase,
+  scopes: string[]
+): [string, number, number][] {
+  const result: [string, number, number][] = []
+  for (let start = 0; start < scopes.length; start += 256) {
+    const page = scopes.slice(start, start + 256)
+    const rows = db
+      .prepare(`SELECT requested.value AS scope,COALESCE(counts.n,0) AS n,COALESCE(counts.runnable,0) AS runnable
+          FROM json_each(?) requested LEFT JOIN temp.search_catalog_counts counts ON counts.scope=requested.value`)
+      .all(JSON.stringify(page))
+    const counts = new Map(rows.map((row) => [String(row.scope), row]))
+    for (const scope of page) {
+      const row = counts.get(scope)
+      result.push([scope, Number(row?.n ?? 0), Number(row?.runnable ?? 0)])
+    }
+  }
+  return result
+}
+
+export function validateSessionSearchCatalogRequest(command: SessionSearchCatalogCommand): void {
+  const records =
+    'rows' in command
+      ? command.rows
+      : 'keys' in command
+        ? command.keys
+        : 'inputs' in command
+          ? command.inputs
+          : 'outcomes' in command
+            ? command.outcomes
+            : 'receipts' in command
+              ? command.receipts
+              : 'paths' in command
+                ? command.paths
+                : undefined
+  if (
+    records &&
+    (records.length > 256 ||
+      (records.length > 1 && JSON.stringify(command).length * 2 > 256 * 1024))
+  ) {
+    throw new Error('Session catalog request exceeds page budget')
+  }
 }

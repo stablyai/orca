@@ -13,6 +13,34 @@ import { transitionSessionSearchContainer } from './session-search-container-tra
 import { transitionSessionSearchDependency } from './session-search-dependency-transition'
 import { transitionSessionSearchDirectory } from './session-search-directory-transition'
 import { transitionSessionSearchInventory } from './session-search-inventory-transition'
+import type { SessionSearchInventoryCommand } from './session-search-observation-types'
+
+export function isSessionSearchInventoryCommand(
+  command: SessionSearchCatalogCommand
+): command is SessionSearchInventoryCommand {
+  return ['observe-prepare', 'observe-apply', 'observe-ack', 'forget-files'].includes(command.kind)
+}
+
+export function acceptSessionSearchInventory(
+  catalog: SessionSearchCatalog,
+  command: SessionSearchInventoryCommand
+): SessionSearchCatalogResult {
+  const records =
+    command.kind === 'observe-prepare'
+      ? command.inputs
+      : command.kind === 'observe-apply'
+        ? command.outcomes
+        : command.kind === 'observe-ack'
+          ? command.receipts
+          : command.paths
+  if (
+    records.length > 256 ||
+    (records.length > 1 && JSON.stringify(command).length * 2 > 256 * 1024)
+  ) {
+    throw new Error('Session observation exceeds page budget')
+  }
+  return transitionSessionSearchInventory(catalog, command)
+}
 
 export function transitionSessionSearchCatalog(
   catalog: SessionSearchCatalog,
@@ -73,22 +101,8 @@ export function transitionSessionSearchCatalog(
     case 'observe-apply':
     case 'observe-ack':
     case 'forget-files': {
-      const records =
-        command.kind === 'observe-prepare'
-          ? command.inputs
-          : command.kind === 'observe-apply'
-            ? command.outcomes
-            : command.kind === 'observe-ack'
-              ? command.receipts
-              : command.paths
-      if (
-        records.length > 256 ||
-        (records.length > 1 && JSON.stringify(command).length * 2 > 256 * 1024)
-      ) {
-        throw new Error('Session observation exceeds page budget')
-      }
       return catalog.transaction('search_inventory_transition', () =>
-        transitionSessionSearchInventory(catalog, command)
+        acceptSessionSearchInventory(catalog, command)
       )
     }
     case 'count':

@@ -12,15 +12,14 @@ export function prepareSessionSearchRead(
   const catalog = store.catalogStorage
   return catalog.transaction('search_read_preparation', () => {
     const result = candidates.execute({ kind: 'batch', rows: [] })
-    const work = queue.get(path)
+    const work = queue.get(path, expected.receipt)
     const current = { size: queue.size, left: queue.left, revision: queue.revision }
     if (
       expected.revision !== queue.revision ||
       !work ||
       work.version !== expected.version ||
       work.root !== expected.root ||
-      work.candidate.agent !== agent ||
-      !queue.matches({ ...work, receipt: expected.receipt })
+      work.candidate.agent !== agent
     ) {
       return { ...result, work: current }
     }
@@ -35,7 +34,7 @@ export function prepareSessionSearchRead(
     ) {
       throw new Error('Session read preparation has no matching physical owner')
     }
-    const prepared = catalog.response({
+    const prepared = catalog.inventoryResponseWithinAcceptance({
       kind: 'observe-prepare',
       scope: observation.scope,
       generation: observation.generation,

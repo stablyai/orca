@@ -3,7 +3,6 @@ import { fileIdentity } from './storage/session-search-file-cursor'
 import { sessionSearchReadDecision } from './indexing/session-search-read-decision'
 import type SyncDatabase from '../sqlite/sync-database'
 import type { SessionSearchCatalog } from './session-search-catalog'
-import { SESSION_SEARCH_CATALOG_PAGE_BYTES } from './session-search-catalog'
 import {
   sessionSearchCandidateFacts,
   type SessionSearchFactReference
@@ -12,6 +11,10 @@ import type { SessionSearchFileRow } from './storage/session-search-store-types'
 import type { SessionSearchStore } from './storage/session-search-store'
 import { recordSessionSearchPrimaryFailure } from './session-search-primary-retries'
 import type { SessionSearchWorkReceipt } from './session-search-work-queue'
+import {
+  projectSessionSearchWork,
+  readSessionSearchWorkPage
+} from './session-search-work-projection'
 
 export type SessionSearchWork = {
   candidate: SessionFileCandidate
@@ -58,30 +61,14 @@ export class SessionSearchWorkCatalog {
   private reference(row: Record<string, unknown>): SessionSearchFactReference {
     return { id: Number(row.fact_id), revision: Number(row.fact_revision) }
   }
-  private project(row: Record<string, unknown>): SessionSearchWork {
+  private load(row: Record<string, unknown>): SessionSearchWork {
     const candidate = sessionSearchCandidateFacts(this.db).get(this.reference(row))
     const root = this.db
       .prepare(
         'SELECT root FROM temp.search_candidates WHERE path=? AND agent=? AND selected=1 ORDER BY key LIMIT 1'
       )
       .get(candidate.file.path, candidate.agent)?.root
-    return {
-      candidate,
-      version: Number(row.version),
-      force: row.force_read === 1,
-      metadata: row.metadata === 1,
-      root: root === undefined ? undefined : String(root),
-      receipt: {
-        path: String(row.path),
-        version: Number(row.version),
-        fact: Number(row.fact_id),
-        factRevision: Number(row.fact_revision),
-        ordering: Number(row.ordering),
-        deferred: row.deferred === 1,
-        force: row.force_read === 1,
-        metadata: row.metadata === 1
-      }
-    }
+    return projectSessionSearchWork(row, candidate, root)
   }
   enqueue(
     candidate: SessionFileCandidate,
@@ -146,51 +133,13 @@ export class SessionSearchWorkCatalog {
     return !!work && (work.force || work.metadata)
   }
   next(eligibleThrough = this.order): SessionSearchWork[] {
-    const lanes = (['changed', 'backlog'] as const).map((lane) =>
-      this.db
-        .prepare(`SELECT path,fact_id,fact_revision,version,force_read,metadata,lane,rank,ordering,due,deferred FROM temp.search_read_work
-      WHERE lane='${lane}' AND (deferred=0 OR ordering<=?) ORDER BY rank,ordering,path LIMIT 256`)
-        .iterate(eligibleThrough)
-    )
-    const works: SessionSearchWork[] = []
-    let bytes = 1024,
-      selected = this.chooseChanged ? 0 : 1
-    const exhausted = [false, false]
-    try {
-      while (works.length < 256) {
-        if (exhausted[selected]) {
-          selected = 1 - selected
-          if (exhausted[selected]) {
-            break
-          }
-        }
-        const row = lanes[selected].next()
-        if (row.done) {
-          exhausted[selected] = true
-          continue
-        }
-        const work = this.project(row.value)
-        const size = JSON.stringify(work).length * 2 + 64
-        if (works.length && bytes + size > SESSION_SEARCH_CATALOG_PAGE_BYTES) {
-          break
-        }
-        works.push(work)
-        bytes += size
-        if (bytes >= SESSION_SEARCH_CATALOG_PAGE_BYTES) {
-          break
-        }
-        selected = 1 - selected
-      }
-    } finally {
-      for (const lane of lanes) {
-        lane.return?.()
-      }
-    }
-    return works
+    return readSessionSearchWorkPage(this.db, eligibleThrough, this.chooseChanged)
   }
-  get(path: string): SessionSearchWork | undefined {
+  get(path: string, receipt?: SessionSearchWorkReceipt): SessionSearchWork | undefined {
     const row = this.entry(path)
-    return row && this.project(row)
+    return row && (!receipt || this.matchesEntry({ version: receipt.version, receipt }, row))
+      ? this.load(row)
+      : undefined
   }
   async acknowledge(work: SessionSearchWork, retry: boolean): Promise<void> {
     this.acknowledgeAccepted(work, retry)
@@ -199,7 +148,10 @@ export class SessionSearchWorkCatalog {
     const entry = this.entry(work.candidate.file.path)
     return !!entry && this.matchesEntry(work, entry)
   }
-  private matchesEntry(work: SessionSearchWork, entry: Record<string, unknown>): boolean {
+  private matchesEntry(
+    work: Pick<SessionSearchWork, 'version' | 'receipt'>,
+    entry: Record<string, unknown>
+  ): boolean {
     const receipt = work.receipt
     return (
       Number(entry.version) === work.version &&
@@ -213,25 +165,42 @@ export class SessionSearchWorkCatalog {
     )
   }
   acknowledgeAccepted(work: SessionSearchWork, retry: boolean): void {
-    this.accept(() => {
+    this.acknowledgeCurrent(work, () => ({ force: work.force, retry }))
+  }
+  acknowledgeCurrent(
+    work: SessionSearchWork,
+    decide: () => { force: boolean; retry: boolean; due?: boolean }
+  ): boolean {
+    return this.accept(() => {
       const path = work.candidate.file.path
       const entry = this.entry(path)
       if (!entry || !this.matchesEntry(work, entry)) {
-        return
+        return false
       }
       sessionSearchCandidateFacts(this.db).verify(this.reference(entry))
+      const decision = decide()
       this.chooseChanged = !this.chooseChanged
-      if (retry) {
+      if (decision.retry) {
         const order = ++this.order
+        const due = !!decision.due
         this.db
           .prepare(
-            `UPDATE temp.search_read_work SET force_read=?,metadata=?,lane='backlog',ordering=?,rank=?,due=0,deferred=1 WHERE path=? AND version=?`
+            `UPDATE temp.search_read_work SET force_read=?,metadata=?,lane='backlog',ordering=?,rank=?,due=?,deferred=1 WHERE path=? AND version=?`
           )
-          .run(Number(work.force), Number(work.metadata), order, order, path, work.version)
-        this.due -= Number(entry.due === 1)
+          .run(
+            Number(decision.force),
+            Number(work.metadata),
+            order,
+            order,
+            Number(due),
+            path,
+            work.version
+          )
+        this.due += Number(due) - Number(entry.due === 1)
       } else {
-        this.removeNow(path, false)
+        this.removeEntry(entry, false)
       }
+      return true
     })
   }
   async remove(path: string, invalidate = true): Promise<void> {
@@ -242,7 +211,10 @@ export class SessionSearchWorkCatalog {
     if (!entry) {
       return
     }
-    this.db.prepare('DELETE FROM temp.search_read_work WHERE path=?').run(path)
+    this.removeEntry(entry, invalidate)
+  }
+  private removeEntry(entry: Record<string, unknown>, invalidate: boolean): void {
+    this.db.prepare('DELETE FROM temp.search_read_work WHERE path=?').run(String(entry.path))
     this.revision += Number(invalidate)
     this.count--
     this.due -= Number(entry.due === 1)

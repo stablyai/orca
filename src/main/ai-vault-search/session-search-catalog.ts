@@ -1,6 +1,15 @@
-import { sessionSearchCatalogPageRows } from './session-search-catalog-query'
+import {
+  sessionSearchCatalogPageRows,
+  readSessionSearchScopeCounts,
+  validateSessionSearchCatalogRequest
+} from './session-search-catalog-query'
 import type SyncDatabase from '../sqlite/sync-database'
-import { transitionSessionSearchCatalog } from './session-search-catalog-transition'
+import {
+  acceptSessionSearchInventory,
+  isSessionSearchInventoryCommand,
+  transitionSessionSearchCatalog
+} from './session-search-catalog-transition'
+import type { SessionSearchInventoryCommand } from './session-search-observation-types'
 import { SessionSearchCatalogStorage } from './session-search-catalog-storage'
 import {
   releaseSessionSearchCatalog,
@@ -94,42 +103,31 @@ export class SessionSearchCatalog extends SessionSearchCatalogStorage {
     })
   }
   response(command: SessionSearchCatalogCommand): SessionSearchCatalogResult {
-    const records =
-      'rows' in command
-        ? command.rows
-        : 'keys' in command
-          ? command.keys
-          : 'inputs' in command
-            ? command.inputs
-            : 'outcomes' in command
-              ? command.outcomes
-              : 'receipts' in command
-                ? command.receipts
-                : 'paths' in command
-                  ? command.paths
-                  : undefined
-    if (
-      records &&
-      (records.length > SESSION_SEARCH_CATALOG_PAGE_ROWS ||
-        (records.length > 1 &&
-          JSON.stringify(command).length * 2 > SESSION_SEARCH_CATALOG_PAGE_BYTES))
-    ) {
-      throw new Error('Session catalog request exceeds page budget')
+    if (!command.receipt && isSessionSearchInventoryCommand(command)) {
+      return this.transaction('search_catalog_accept', () =>
+        this.inventoryResponseWithinAcceptance(command)
+      )
     }
+    validateSessionSearchCatalogRequest(command)
     this.touched.clear()
     const result = ['get', 'get-page', 'page', 'count', 'frontier-snapshot'].includes(command.kind)
       ? this.execute(command)
       : this.transaction('search_catalog_accept', () => this.execute(command))
-    return {
-      ...result,
-      scopeCounts: [...this.touched].map((scope) => {
-        const row = this.db
-          .prepare('SELECT n,runnable FROM temp.search_catalog_counts WHERE scope=?')
-          .get(scope)
-        return [scope, Number(row?.n ?? 0), Number(row?.runnable ?? 0)]
-      })
-    }
+    return { ...result, scopeCounts: this.scopeCounts() }
   }
+  inventoryResponseWithinAcceptance(
+    command: SessionSearchInventoryCommand
+  ): SessionSearchCatalogResult {
+    this.touched.clear()
+    this.touched.add(command.scope)
+    const result = acceptSessionSearchInventory(this, command)
+    return { ...result, scopeCounts: this.scopeCounts() }
+  }
+  private scopeCounts(): [string, number, number][] {
+    this.inventory.flush()
+    return readSessionSearchScopeCounts(this.db, [...this.touched])
+  }
+
   get connection(): SyncDatabase {
     return this.db
   }
