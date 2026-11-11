@@ -1,5 +1,5 @@
-// "On this computer" in a cloud workspace's status panel: `.context` sync (on by default) and the
-// read-only mirror (off by default), where the files are, and how current they are. Quiet by
+// The card's "On this computer" sub-panel: `.context` sync (on by default) and the read-only mirror
+// (off by default); with the mirror on, where the files are and how current they are. Quiet by
 // design: no toasts; progress is announced politely and at most every ~10 s.
 import React, { useContext, useEffect, useId, useRef, useState } from 'react'
 import { ConfirmationDialogContext } from '@/components/confirmation-dialog-context'
@@ -182,11 +182,14 @@ function useAnnouncement(view: CloudSyncView | null, t: T): string {
 
 export function CloudWorkspaceSyncSection({
   workspaceId,
-  view: injected
+  view: injected,
+  labelledBy
 }: {
   workspaceId: string
   /** Fixtures pass a view; the panel reads the live one. */
   view?: CloudSyncView | null
+  /** The sub-panel's heading. */
+  labelledBy: string
 }): React.JSX.Element | null {
   const t = useTranslate()
   const live = useCloudSync(workspaceId)
@@ -246,6 +249,7 @@ export function CloudWorkspaceSyncSection({
     return null
   }
   const on = view.choice.context || view.choice.mirror
+  const mirror = view.choice.mirror
   const status = cloudSyncStatusLine(view, t, now)
   const tooLarge = view.skippedLarge > 0
   const overLimit = view.overLimit > 0
@@ -253,18 +257,15 @@ export function CloudWorkspaceSyncSection({
   return (
     <section
       ref={section}
-      aria-labelledby={`cloud-sync-${workspaceId}`}
-      className="flex flex-col gap-2.5 border-t border-border/60 pt-3"
+      aria-labelledby={labelledBy}
+      className="flex flex-col gap-2.5"
       data-cloud-sync-section={workspaceId}
     >
-      <h3 id={`cloud-sync-${workspaceId}`} className="font-medium text-muted-foreground">
-        {t('orcaCloudSync.title', 'On this computer')}
-      </h3>
       <SyncRow
         label={t('orcaCloudSync.contextLabel', '.context folder')}
         description={t(
-          'orcaCloudSync.contextDescription',
-          'Plans and screenshots from this workspace'
+          'orcaCloudSync.contextHelper',
+          'Plans and screenshots from this workspace, synced to this computer.'
         )}
         checked={view.choice.context}
         onCheckedChange={(next) => void choose({ context: next })}
@@ -273,16 +274,16 @@ export function CloudWorkspaceSyncSection({
         switchRef={mirrorSwitch}
         label={t('orcaCloudSync.mirrorLabel', 'Mirror to this computer')}
         description={t(
-          'orcaCloudSync.mirrorDescription',
-          'A read-only copy of the workspace files, kept up to date while it runs. Skips files in .gitignore.'
+          'orcaCloudSync.mirrorHelper',
+          'A read-only copy of this workspace’s files, kept up to date while it runs.'
         )}
         checked={view.choice.mirror}
         onCheckedChange={(next) => void choose({ mirror: next })}
       />
 
-      {on ? (
+      {on && status ? <p className="tabular-nums text-muted-foreground">{status}</p> : null}
+      {mirror ? (
         <div className="flex flex-col gap-1.5">
-          {status ? <p className="tabular-nums text-muted-foreground">{status}</p> : null}
           <code
             className="block min-w-0 break-words rounded bg-muted/50 px-1.5 py-0.5 font-mono text-[11px] text-foreground"
             title={view.displayPath}
