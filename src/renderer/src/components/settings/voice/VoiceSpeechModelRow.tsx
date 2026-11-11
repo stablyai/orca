@@ -1,6 +1,6 @@
 import { Check, Loader2, Trash2 } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { Button } from '../../ui/button'
 import { SettingsBadge } from '../form-controls/SettingsFormControls'
 import { isSpeechModelDownloading, type VoiceSpeechModelRowData } from './voice-speech-model-rows'

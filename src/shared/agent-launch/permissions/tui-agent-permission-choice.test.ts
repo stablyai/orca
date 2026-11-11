@@ -168,6 +168,19 @@ describe('permission carrier ownership across save, reload and consumers', () =>
       goose_mode: 'approve'
     })
   })
+
+  it('launches Kimi Full access in Never Ask and keeps its own approval flags uncombined', () => {
+    const fullAccess = (kimi: string) =>
+      resolveTuiAgentLaunchArgs('kimi', {
+        agentPermissionDefault: 'full-access',
+        agentDefaultArgs: { kimi }
+      })
+    expect(fullAccess('')).toBe('--auto')
+    // Kimi exits on --yolo (or an alias) together with --auto.
+    for (const flag of ['--yolo', '-y', '--yes', '--auto-approve']) {
+      expect(fullAccess(`--model k2 ${flag}`)).toBe(`--model k2 ${flag}`)
+    }
+  })
 })
 
 const importWork = { chars: 0, visits: 0 }

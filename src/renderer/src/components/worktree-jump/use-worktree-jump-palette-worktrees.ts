@@ -4,8 +4,8 @@ import { filterWorkspaceRows } from '../../../../shared/workspace-view/workspace
 import { buildDesktopWorkspaceRowFactReader } from '@/components/sidebar/worktree-list/listing/desktop-workspace-row-facts'
 import { sortWorktreesSmart } from '../../../../shared/sidebar-list/smart-sort'
 import { buildWorktreeChecksReviewIndex } from '@/components/cmd-j/worktree-checks-review-index'
-import { getLiveAgentStatusByWorktreeId } from '@/lib/worktree-activity-state'
-import { orderEmptyQueryWorktrees } from '@/lib/order-empty-query-worktrees'
+import { getLiveAgentStatusByWorktreeId } from '@/lib/workspace/activity/worktree-activity-state'
+import { orderEmptyQueryWorktrees } from '@/lib/workspace/search/palette/order-empty-query-worktrees'
 import {
   getWorktreePaletteSearchScope,
   searchWorktreeDocuments

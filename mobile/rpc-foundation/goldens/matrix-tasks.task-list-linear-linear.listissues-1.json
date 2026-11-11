@@ -158,11 +158,6 @@
       "ordinal": 13,
       "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"linear.searchIssues\",\"params\":{\"query\":\"bug\",\"limit\":50,\"workspaceId\":\"linear-workspace\"}}"
     },
-    "1a5f65e0078d": {
-      "name": "loading",
-      "ordinal": 15,
-      "value": false
-    },
     "1f4eeb3dcff1": {
       "name": "items",
       "ordinal": 5,
@@ -452,46 +447,6 @@
       "loading": false,
       "refreshing": false
     },
-    "a27078adc061": {
-      "name": "items",
-      "ordinal": 13,
-      "value": [
-        {
-          "key": "linear:linear-workspace:issue-2",
-          "provider": "linear",
-          "source": {
-            "description": "",
-            "id": "issue-2",
-            "identifier": "ENG-2",
-            "labels": [],
-            "priority": 0,
-            "state": {
-              "color": "#000",
-              "name": "Todo",
-              "type": "unstarted"
-            },
-            "team": {
-              "id": "team-1",
-              "key": "ENG",
-              "name": "Engineering"
-            },
-            "title": "A found issue",
-            "updatedAt": "2020-01-01T00:00:00.000Z",
-            "url": "",
-            "workspaceId": "linear-workspace"
-          },
-          "status": "Todo",
-          "subtitle": "ENG-2 · Engineering",
-          "title": "A found issue",
-          "updatedAt": "2020-01-01T00:00:00.000Z"
-        }
-      ]
-    },
-    "ab9026005b36": {
-      "name": "refreshing",
-      "ordinal": 16,
-      "value": false
-    },
     "b25e7c116f7e": {
       "name": "items",
       "ordinal": 5,
@@ -530,11 +485,6 @@
     "ba411b67de4b": {
       "name": "taskListSettled",
       "ordinal": 9,
-      "value": true
-    },
-    "bf0de0571310": {
-      "name": "taskListSettled",
-      "ordinal": 17,
       "value": true
     },
     "c6d55e6b8844": {
@@ -634,62 +584,6 @@
       "ordinal": 18,
       "value": true
     },
-    "dd5be60ee9f9": {
-      "name": "linear.searchIssues#1",
-      "ordinal": 11,
-      "args": [
-        {
-          "name": "method",
-          "value": "linear.searchIssues"
-        },
-        {
-          "name": "params",
-          "value": {
-            "limit": 50,
-            "query": "bug",
-            "workspaceId": "linear-workspace"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-2",
-          "ok": true,
-          "result": [
-            {
-              "description": "",
-              "id": "issue-2",
-              "identifier": "ENG-2",
-              "labels": [],
-              "priority": 0,
-              "state": {
-                "color": "#000",
-                "name": "Todo",
-                "type": "unstarted"
-              },
-              "team": {
-                "id": "team-1",
-                "key": "ENG",
-                "name": "Engineering"
-              },
-              "title": "A found issue",
-              "updatedAt": "2020-01-01T00:00:00.000Z",
-              "url": "",
-              "workspaceId": "linear-workspace"
-            }
-          ]
-        }
-      }
-    },
     "dff6398be355": {
       "name": "linear.listIssues#1",
       "ordinal": 3,
@@ -728,11 +622,6 @@
           }
         }
       }
-    },
-    "e3642939f5f6": {
-      "name": "linear.searchIssues#1",
-      "ordinal": 12,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"linear.searchIssues\",\"params\":{\"query\":\"bug\",\"limit\":50,\"workspaceId\":\"linear-workspace\"}}"
     },
     "e6b86743ee36": {
       "name": "linear.listIssues#1",
@@ -782,11 +671,6 @@
       "value": {
         "$rpc": "undefined"
       }
-    },
-    "ef8932b03a8c": {
-      "name": "error",
-      "ordinal": 14,
-      "value": ""
     },
     "f1dcb0c02c92": {
       "name": "error",
@@ -880,8 +764,8 @@
       {
         "id": "tk-list-linear.normal:load-settled",
         "observation": {
-          "sender": ["c6d55e6b8844", "dd5be60ee9f9"],
-          "payloads": ["7b6df16c2cf0", "e3642939f5f6"],
+          "sender": ["c6d55e6b8844", "837199f7c720"],
+          "payloads": ["7b6df16c2cf0", "19d7ea49485f"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load-0": "eb79a9b3682a",
@@ -898,11 +782,12 @@
             "411aee2eccd9",
             "ba411b67de4b",
             "3aefb3006914",
-            "a27078adc061",
-            "ef8932b03a8c",
-            "1a5f65e0078d",
-            "ab9026005b36",
-            "bf0de0571310"
+            "52e364aee6ba",
+            "3e58b6085f7d",
+            "29cadc65bcbb",
+            "0a23a5e47479",
+            "e8ba61988aec",
+            "cbe48ad190bf"
           ]
         }
       },

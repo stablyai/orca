@@ -15,16 +15,14 @@ export const CLI_MAIN_ENTRY_NAMES = [
   // `orca vm env doctor` runs its checks in the CLI process.
   'environment-doctor/environment-doctor',
   'environment-doctor/environment-doctor-host',
-  ...[
-    'access',
-    'active-location',
-    'storage-classification',
-    'offline-settings',
-    'backup-path',
-    'database-recovery',
-    'domain-reader',
-    'recovery-command'
-  ].map((module) => `persistence/profile-state/profile-state-${module}`),
+  'persistence/profile-state/access/profile-state-access',
+  'persistence/profile-state/offline-access/profile-state-active-location',
+  'persistence/profile-state/database/profile-state-storage-classification',
+  'persistence/profile-state/offline-access/profile-state-offline-settings',
+  'persistence/profile-state/backup/profile-state-backup-path',
+  'persistence/profile-state/recovery/profile-state-database-recovery',
+  'persistence/profile-state/documents/profile-state-domain-reader',
+  'persistence/profile-state/recovery/profile-state-recovery-command',
   'persistence/profile-state/legacy-json/profile-state-export-path',
   'persistence/profile-state/legacy-json/profile-state-recovery',
   'startup/http1-compatibility-marker'

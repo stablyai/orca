@@ -1,7 +1,7 @@
 import React from 'react'
 import type { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { AutomationRun } from '../../../../shared/automations/history/automation-run'
 import type { PendingAutomationSetupReview } from './authoring/automation-setup-review'
 import { translate } from '@/i18n/i18n'

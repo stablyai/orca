@@ -22,7 +22,7 @@ import {
 import { GitHubUserAvatar } from '@/components/github/github-user-avatar'
 import { parseOwnerRepoFromItemUrl } from '@/components/github/github-work-item-identity'
 import { formatRelativeTime, getStateLabel } from '@/components/github/work-item-state-presentation'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import { getSolidStateTone } from '../presentation/state-badge'

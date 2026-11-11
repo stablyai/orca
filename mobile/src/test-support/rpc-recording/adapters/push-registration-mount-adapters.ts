@@ -1,13 +1,5 @@
-import type { OperationExposure, operationModuleLoader } from '../operation-module-loader'
+import type { operationModuleLoader } from '../operation-module-loader'
 import type { MountAdapter } from '../recording-scenario'
-
-// Expose private senders to record wire behavior without inventing keychain and device-token storage in substitutes.
-export const pushRegistrationMountExposures: readonly OperationExposure[] = [
-  [
-    'notifications/push-registration.ts',
-    '\nexports.sendRegister = sendRegister;\nexports.sendUnregister = sendUnregister;'
-  ]
-]
 
 const REGISTER_TIMEOUT_MS = 5_000
 
@@ -19,7 +11,7 @@ export function pushRegistrationMountAdapters(
       const push = modules.load<{
         sendRegister: (client: unknown, token: unknown, filter: unknown) => Promise<boolean>
         sendUnregister: (client: unknown, timeoutMs: number) => Promise<boolean>
-      }>('mobile/src/notifications/push-registration.ts')
+      }>('mobile/src/notifications/mobile-push-registration-operations.ts')
       const results: Record<string, unknown> = {}
       return {
         action(name, args) {

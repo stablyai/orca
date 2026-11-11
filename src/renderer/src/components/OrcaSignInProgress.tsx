@@ -3,8 +3,8 @@ import { toast } from 'sonner'
 import { Button } from './ui/button'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
-import { useAppStore } from '../store'
+import { cn } from '@/lib/class-names'
+import { useAppStore } from '../store/index'
 
 async function copySignInLink(link: string): Promise<void> {
   try {

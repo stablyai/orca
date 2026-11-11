@@ -6,7 +6,7 @@ import {
   isMarkdownPreviewFindShortcut,
   isMarkdownPreviewReplaceShortcut
 } from '../../markdown-preview/search/markdown-preview-search'
-import { isTextSearchQueryTooLarge as isMarkdownPreviewSearchQueryTooLarge } from '../../../../lib/text-match-ranges'
+import { isTextSearchQueryTooLarge as isMarkdownPreviewSearchQueryTooLarge } from '../../../../lib/text-search/text-match-ranges'
 import {
   createRichMarkdownSearchPlugin,
   findRichMarkdownSearchMatches,

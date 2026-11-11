@@ -220,21 +220,21 @@
 1 src/renderer/src/lib/browser/navigation/http-link-localhost-route.ts # extracted from http-link-routing.ts
 1 src/renderer/src/lib/browser/navigation/http-link-routing.ts
 2 src/renderer/src/lib/browser/workspace/workspace-browser-tab-open.ts
-1 src/renderer/src/lib/client-creation-action-error.ts
-2 src/renderer/src/lib/client-creation-action-policy.ts
+1 src/renderer/src/lib/workspace/creation/surface-policy/client-creation-action-error.ts
+2 src/renderer/src/lib/workspace/creation/surface-policy/client-creation-action-policy.ts
 1 src/renderer/src/runtime/hosts/selection/default-creation-host.ts # the sanctioned reader of the default host
-1 src/renderer/src/lib/launch-ai-vault-session.ts
-1 src/renderer/src/lib/local-preflight-context.ts
+1 src/renderer/src/lib/agent-session/resume/history/launch-ai-vault-session.ts
+1 src/renderer/src/runtime/hosts/preflight/local-preflight-context.ts
 2 src/renderer/src/runtime/hosts/observations/provider-runtime-context.ts
 2 src/renderer/src/lib/workspace/ownership/repo-runtime-owner.ts
 1 src/renderer/src/lib/workspace/ownership/runtime-session-mirror-owners.ts
-1 src/renderer/src/lib/runtime-session-mirror-targets.ts
+1 src/renderer/src/runtime/web-session-tabs-sync/subscriptions/runtime-session-mirror-targets.ts
 1 src/renderer/src/lib/workspace/ownership/single-runtime-legacy-owner.ts
 1 src/renderer/src/lib/skills/runtime/skill-runtime-command.ts
-1 src/renderer/src/lib/terminal-close-route.ts
-4 src/renderer/src/lib/terminal-worktree-route.ts # resolveTerminalPtyOwner: teardown, close and PTY identity read spawn's attribution (round 3 F8), which retired the deprecated resolver's readers
-3 src/renderer/src/lib/unread-badge-count-selector.ts
-1 src/renderer/src/lib/web-runtime-worktree-terminal-after-wake.ts
+1 src/renderer/src/lib/workspace/ownership/terminal-close-route.ts
+4 src/renderer/src/lib/workspace/ownership/terminal-worktree-route.ts # resolveTerminalPtyOwner: teardown, close and PTY identity read spawn's attribution (round 3 F8), which retired the deprecated resolver's readers
+3 src/renderer/src/attention/unread/unread-badge-count-selector.ts
+1 src/renderer/src/runtime/hosted-terminals/restoration/web-runtime-worktree-terminal-after-wake.ts
 1 src/renderer/src/lib/work-items/linear/linear-issue-url-lookup.ts
 1 src/renderer/src/lib/work-items/linear/linear-issue-write.ts
 1 src/renderer/src/lib/workspace/activation/worktree-activation.ts

@@ -1,6 +1,6 @@
 import React from 'react'
-import { useAppStore } from '@/store'
-import { cn } from '@/lib/utils'
+import { useAppStore } from '@/store/index'
+import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { retryBackgroundWorktreeCreation } from '@/lib/workspace/creation/worktree-creation-flow'

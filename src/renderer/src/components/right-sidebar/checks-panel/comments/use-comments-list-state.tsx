@@ -1,7 +1,7 @@
 import type { GitHubImageIntake } from '@/components/github/use-github-image-uploads'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Checkbox } from '@/components/ui/checkbox'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import {
   filterPRCommentsByAudience,
   getPRCommentAudienceCounts,

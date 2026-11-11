@@ -19,7 +19,7 @@ import { loadWslMoveFence } from '../persistence/moving-wsl-projects/wsl-move-sc
 import { startWslMoveStartup } from '../persistence/moving-wsl-projects/wsl-move-startup'
 import { startWslHostsPolicyLiveUpdates } from '../wsl/host-lifecycle/wsl-hosts-policy-live-update'
 import { runPendingWslDriveUncConversions } from '../wsl/filesystem/wsl-drive-unc-conversion-startup'
-import { createProfileStateStoreForStartup } from '../persistence/profile-state/profile-state-startup-authority'
+import { createProfileStateStoreForStartup } from '../persistence/profile-state/startup/profile-state-startup-authority'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { initializeBrowserClientHostId } from '../browser/client-hosts/lifecycle/browser-client-host-id'
 import { scheduleSecretProtectionGapReport } from '../host/deferred-secret-protection-report'
@@ -269,8 +269,8 @@ export async function initializeReadyFoundation(): Promise<void> {
         )
       }
     }
-    if ('experimentalBrowserExtensions' in updates) {
-      void switchBrowserExtensionSupport(settings.experimentalBrowserExtensions === true)
+    if ('browserExtensionsEnabled' in updates) {
+      void switchBrowserExtensionSupport(settings.browserExtensionsEnabled !== false)
     }
     if ('showMenuBarIcon' in updates) {
       // Store owns settings mutations; sync every menu-bar toggle through this listener.
@@ -299,7 +299,7 @@ export async function initializeReadyFoundation(): Promise<void> {
   registerDocPreviewGrantHandlers()
   // Session setup needs the extension support decision before loading profiles.
   initializeBrowserExtensionSupport({
-    enabled: store.getSettings().experimentalBrowserExtensions === true,
+    enabled: store.getSettings().browserExtensionsEnabled !== false,
     savedBrowserTabs: store
   })
   // Desktop webviews and runtime commands share sessions; initialize without waiting for renderer IPC.

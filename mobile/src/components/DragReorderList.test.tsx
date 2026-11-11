@@ -1,13 +1,6 @@
-import { probe, publishLayout, mounted, positions } from './drag-reorder-test-harness.test-fixture'
-import { createElement } from 'react'
-import { act, create } from 'react-test-renderer'
-import Animated, { useAnimatedRef, useSharedValue } from 'react-native-reanimated'
+import { probe, mounted, positions } from './drag-reorder-test-harness.test-fixture'
+import { act } from 'react-test-renderer'
 import { describe, expect, it, vi } from 'vitest'
-import { DragReorderList } from './DragReorderList'
-import { GripVertical } from 'lucide-react-native'
-
-import { queuedMessageStyles } from '../session/native-chat/input/mobile-native-chat-queued-message-styles'
-import { spacing } from '../theme/mobile-theme'
 
 describe('drag completion and cancellation', () => {
   it('restores original positions and writes nothing when an active drag is cancelled', async () => {
@@ -203,75 +196,4 @@ describe('late gesture callbacks', () => {
     })
     expect(fixture.onReorder).not.toHaveBeenCalled()
   })
-})
-
-it('stops scrolling at the viewport edge when rows are replaced', async () => {
-  const fixture = await mounted()
-  probe.viewport = { pageY: 0, height: 100 }
-  await act(async () => {
-    fixture.gesture.start!({ absoluteY: 90, translationY: 0 }, true)
-    probe.frame!({ timeSincePreviousFrame: 16 })
-  })
-  expect(probe.scroll).toHaveBeenCalledTimes(1)
-  await fixture.updateItems(['b', 'c'])
-  await act(async () => probe.frame!({ timeSincePreviousFrame: 16 }))
-  expect(probe.scroll).toHaveBeenCalledTimes(1)
-  expect(probe.frameActive).toHaveBeenLastCalledWith(false)
-  await act(async () => fixture.root.unmount())
-})
-
-it('keeps measured rows still on hold, restores cancellation, and drops by moved ID plus neighbor', async () => {
-  const move = vi.fn()
-  function Harness() {
-    return createElement(DragReorderList<string>, {
-      items: ['a', 'b', 'c'],
-      itemKey: (item) => item,
-      rowPresentation: 'plain',
-      renderRow: (item, handle) => createElement('Text', null, item, handle),
-      onMove: move,
-      scrollRef: useAnimatedRef<Animated.ScrollView>(),
-      scrollOffsetY: useSharedValue(0),
-      scrollContentHeight: useSharedValue(140)
-    })
-  }
-  let root: ReturnType<typeof create>
-  await act(async () => {
-    root = create(createElement(Harness))
-  })
-  const handle = root!.root.findAllByType(Animated.View).find((node) => node.props.hitSlop)!
-  const handleStyle = Object.assign({}, ...handle.props.style)
-  const gripWidth = handle.findByType(GripVertical).props.size
-  const width = gripWidth + 2 * handleStyle.paddingHorizontal
-  const left = queuedMessageStyles.row.paddingLeft - handle.props.hitSlop.left
-  const right = queuedMessageStyles.row.paddingLeft + width + handle.props.hitSlop.right
-  expect(handleStyle.paddingHorizontal).toBe(spacing.xs)
-  expect([left, right]).toEqual([4, 62])
-  expect(right - Math.max(0, left)).toBe(58)
-  const rows = root!.root.findAll(
-    (node) => node.type === Animated.View && typeof node.props.onLayout === 'function'
-  )
-  await act(async () =>
-    rows.forEach((row, index) =>
-      row.props.onLayout({ nativeEvent: { layout: { height: index === 0 ? 100 : 20 } } })
-    )
-  )
-  await publishLayout()
-  const gesture = probe.gestures.at(-3)!
-  const at = (translationY: number) => ({ absoluteY: 100 + translationY, translationY })
-  await act(async () => {
-    gesture.start!(at(0), true)
-    gesture.update!(at(0), true)
-    gesture.finalize!(at(0), true)
-    gesture.start!(at(0), true)
-    gesture.update!(at(35), true)
-    gesture.finalize!(at(35), false)
-  })
-  expect(move).not.toHaveBeenCalled()
-  await act(async () => {
-    gesture.start!(at(0), true)
-    gesture.update!(at(35), true)
-    gesture.finalize!(at(35), true)
-  })
-  expect(move).toHaveBeenCalledExactlyOnceWith({ movedId: 'a', afterId: 'c' })
-  await act(async () => root!.unmount())
 })

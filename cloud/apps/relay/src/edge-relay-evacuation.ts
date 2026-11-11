@@ -3,7 +3,6 @@
 // rows whose host is no longer in the cohort and asks the edge to drain them; the desktop then
 // re-asks /v1/assign, and that ask exports its data and places it on a cell (app.ts). Each pass also
 // retries fences that did not land after a host left (edge-relay-fence.ts).
-import { RELAY_DEFAULT_REGION, RelayRegionSchema } from '@orca-cloud/relay-contract/relay-regions'
 import type { RelayDatabase } from './database/database.js'
 import { EdgeAdminUnavailableError, type EdgeAdmin } from './edge-admin-client.js'
 import { inEdgeCohort, text, type EdgeRelayConfig, type Identity } from './edge-relay-cohort.js'
@@ -116,9 +115,11 @@ export class EdgeEvacuation {
       for (const row of rows) {
         const identity = { userId: text(row, 'user_id'), relayHostId: text(row, 'relay_host_id') }
         pass.cursor = identity
-        const stored = RelayRegionSchema.safeParse(row.preferred_region)
-        const region = stored.success ? stored.data : RELAY_DEFAULT_REGION
-        if (inEdgeCohort(this.config, identity.relayHostId, region, identity.userId)) { continue }
+        // Region scope is the assign path's call alone: it decides with the region the desktop
+        // asks for, which the stored preference can miss or lag. Judging it here too drained
+        // hosts that the next ask put straight back (a drain every few minutes). A host that asks
+        // for a region outside the scope leaves on that ask.
+        if (inEdgeCohort(this.config, identity.relayHostId, 'any', identity.userId)) { continue }
         if (this.drainedAt.has(drainKey(identity))) { continue }
         leaving.push(identity)
         // Resume after the last host taken, so the rest of the page is read next tick.
@@ -143,10 +144,8 @@ export class EdgeEvacuation {
   private async readPage(pass: Pass) {
     const { cursor, origin, wrapped } = pass
     return await this.database.query(
-      `SELECT a.user_id, a.relay_host_id, p.preferred_region
+      `SELECT a.user_id, a.relay_host_id
        FROM relay_assignments a
-       LEFT JOIN relay_assignment_region_preferences p
-         ON p.user_id = a.user_id AND p.relay_host_id = a.relay_host_id
        WHERE a.cell_id = ? AND (a.user_id > ? OR (a.user_id = ? AND a.relay_host_id > ?))
          ${wrapped ? 'AND (a.user_id < ? OR (a.user_id = ? AND a.relay_host_id <= ?))' : ''}
        ORDER BY a.user_id, a.relay_host_id

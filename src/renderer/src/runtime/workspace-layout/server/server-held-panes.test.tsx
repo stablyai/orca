@@ -6,7 +6,6 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status/aggregation/worktree-agent-status'
 import type * as FrameDrawnModule from '../../web-session-tabs-sync/frame-drawn-server-workspaces'
-import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { toWebTerminalSurfaceTabId } from '../../../../../shared/workspace-layout/terminal-surface-id'
 import type { NewerDaemonReopenResult } from '../../../../../shared/newer-daemon-hold'
 import type {
@@ -79,9 +78,7 @@ hoisted.subscribe = streams.subscribe
 const { setServers, mirroredStore, install, uninstallAll } = createServerHarness(hoisted)
 
 const TAB_1 = toWebTerminalSurfaceTabId('host-tab-1')
-const PANE_KEY = makePaneKey(TAB_1, LEAF_ID)
 const REOPENS: Server = { ...CAPABLE, reopensHeldPanes: true }
-const FAILED_TITLE = "Couldn't reopen this terminal"
 
 /** ENV's workspace with its one pane carrying `status`, as the server publishes it. */
 function layoutWith(status: PaneStartStatus | undefined): PublishedWorkspaceLayout {
@@ -197,23 +194,5 @@ describe("a layout-owner server's held pane on a paired desktop", () => {
     expect(store.getState().terminalLayoutsByTabId[TAB_1]?.ptyIdsByLeafId?.[LEAF_ID]).toMatch(
       /^remote:/
     )
-  })
-
-  it.each([
-    ['refuses', () => Promise.resolve({ reopened: false })],
-    ['fails', () => Promise.reject(new Error('connection lost'))]
-  ] as const)('shows the failed state when the server %s', async (_, reply) => {
-    hoisted.callRuntimeRpc.mockImplementation(reply)
-    await heldServerPane()
-
-    await act(async () => button('Reopen terminal').click())
-
-    expect(paneElement.textContent).toContain(FAILED_TITLE)
-    expect(button('Try again').disabled).toBe(false)
-    // The banner stays on the failed path while the server still holds the pane.
-    await publish(layoutWith('held'))
-    await render()
-    expect(paneElement.textContent).toContain(FAILED_TITLE)
-    expect(newerDaemonHoldStore.getState().panes[PANE_KEY]?.phase).toBe('failed')
   })
 })

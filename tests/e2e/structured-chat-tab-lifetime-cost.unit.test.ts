@@ -7,7 +7,7 @@ import {
 } from '../../src/main/runtime/agent-session/lifecycle/structured-agent-session-tab-authority.test-support'
 import { chatTabCommandsSettled } from '../../src/main/runtime/orca-runtime-tests/session-layout-apply.test-fixture'
 import type { createChatTabLayoutQueue } from '../../src/main/runtime/agent-session/agent-session-tab-layout-queue'
-import { fixture } from '../../src/main/persistence/loading-store/profile-state-delayed-authority-fixture'
+import { fixture } from '../../src/main/persistence/loading-store/profile-writing/profile-state-delayed-authority-fixture'
 import { loadChatTabLayout } from '../../src/main/runtime/agent-session/agent-session-tab-layout'
 
 const queueProbe = vi.hoisted(() => {

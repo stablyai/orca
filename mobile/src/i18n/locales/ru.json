@@ -3541,6 +3541,27 @@
     }
   },
   "tasks": {
+    "hostedMerge": {
+      "confirmGitHubMerge": "Слить PR #{{number}}?",
+      "confirmGitHubSquash": "Объединить коммиты и слить PR #{{number}}?",
+      "confirmGitHubRebase": "Выполнить rebase и слить PR #{{number}}?",
+      "confirmGitLabMerge": "Слить запрос на слияние #{{number}}?",
+      "confirmGitLabSquash": "Объединить коммиты и слить запрос на слияние #{{number}}?",
+      "confirmGitLabRebase": "Выполнить rebase и слить запрос на слияние #{{number}}?",
+      "merged": "Слито",
+      "closed": "Закрыто",
+      "conflicts": "Конфликты",
+      "behind": "Отстаёт",
+      "blocked": "Заблокировано",
+      "checksPending": "Проверки ожидаются",
+      "ableToMerge": "Можно слить",
+      "unknown": "Неизвестно"
+    },
+    "pagination": {
+      "pageUnreachable": "Страница {{page}} выходит за пределы результатов поиска GitHub.",
+      "loadPageFailed": "Не удалось загрузить страницу {{page}} из GitHub.",
+      "noMoreResults": "На странице {{page}} больше нет результатов."
+    },
     "composerSource": {
       "baseFailed": "Не удалось определить базовую ветку.",
       "forkPushWarning": "В этом PR отключена настройка «Разрешить правки сопровождающим»; GitHub может отклонить отправку в форк."

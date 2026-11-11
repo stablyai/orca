@@ -59,6 +59,7 @@ export type MessageRowProps = {
   continuesTurn?: boolean
   /** In a turn: whether this row holds the response's actions (its last words, else its last images). */
   endsResponse?: boolean
+  latestResponse?: boolean
   /** Response controls may hang into the gap below; otherwise they keep their own height. */
   actionsHang?: boolean
   /** Align this message's top to the top of the scroll viewport. */

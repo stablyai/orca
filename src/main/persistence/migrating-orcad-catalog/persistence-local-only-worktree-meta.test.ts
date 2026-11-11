@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os'
 import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultPersistedState } from '../../../shared/constants'
 import { composeWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
 import { canonicalWorktreeIdentity } from '../../../shared/worktree/identity'
-import { hydrateWorktreeMetaAliasProjection } from '../loading-store/worktree-meta-alias-projection'
+import { hydrateWorktreeMetaAliasProjection } from '../loading-store/worktree-metadata/worktree-meta-alias-projection'
 import { normalizeWorktreeLinkedItemMetadata } from '../tracking-repos/worktree-metadata-normalization'
 
 vi.mock('electron', () => ({

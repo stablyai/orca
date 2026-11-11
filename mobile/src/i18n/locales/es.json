@@ -1502,11 +1502,11 @@
       "updateRequired": "Actualiza Orca Mobile para abrir archivos PDF"
     },
     "unsavedEditsOffer": {
-      "changedSince": "Modificado en el escritorio desde tus cambios de las {{time}}",
+      "changedSince": "Modificado en el ordenador después de tus cambios de {{time}}",
       "copyMyEdits": "Copiar mis cambios",
       "discard": "Descartar",
       "restore": "Restaurar",
-      "unsavedFrom": "Cambios sin guardar de las {{time}}"
+      "unsavedFrom": "Cambios sin guardar ({{time}})"
     }
   },
   "home": {
@@ -3452,6 +3452,27 @@
     }
   },
   "tasks": {
+    "hostedMerge": {
+      "confirmGitHubMerge": "¿Fusionar el PR #{{number}}?",
+      "confirmGitHubSquash": "¿Compactar y fusionar el PR #{{number}}?",
+      "confirmGitHubRebase": "¿Hacer rebase y fusionar el PR #{{number}}?",
+      "confirmGitLabMerge": "¿Fusionar la solicitud de merge #{{number}}?",
+      "confirmGitLabSquash": "¿Compactar y fusionar la solicitud de merge #{{number}}?",
+      "confirmGitLabRebase": "¿Hacer rebase y fusionar la solicitud de merge #{{number}}?",
+      "merged": "Fusionado",
+      "closed": "Cerrado",
+      "conflicts": "Conflictos",
+      "behind": "Desactualizado",
+      "blocked": "Bloqueado",
+      "checksPending": "Comprobaciones pendientes",
+      "ableToMerge": "Se puede fusionar",
+      "unknown": "Desconocido"
+    },
+    "pagination": {
+      "pageUnreachable": "La página {{page}} está fuera del alcance de la búsqueda de GitHub.",
+      "loadPageFailed": "No se pudo cargar la página {{page}} desde GitHub.",
+      "noMoreResults": "No hay más resultados en la página {{page}}."
+    },
     "composerSource": {
       "baseFailed": "No se pudo resolver la rama base.",
       "forkPushWarning": "Esta PR tiene desactivada la opción \"Allow edits from maintainers\"; GitHub podría rechazar el push al fork."

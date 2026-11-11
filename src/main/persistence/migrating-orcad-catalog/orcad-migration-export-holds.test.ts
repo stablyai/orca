@@ -8,7 +8,7 @@ import {
   getTerminalScrollbackSnapshotPath,
   writeTerminalScrollbackSnapshotSync
 } from '../../pty/scrollback/terminal-scrollback-snapshots'
-import { deleteRemovedTerminalScrollbackSnapshots } from '../loading-store/terminal-session-cleanup'
+import { deleteRemovedTerminalScrollbackSnapshots } from '../loading-store/workspace-sessions/terminal-session-cleanup'
 import { deleteRemovedTerminalScrollbackSnapshotsAsync } from '../../pty/scrollback/terminal-scrollback-snapshot-async-migration'
 
 const roots: string[] = []
