@@ -16,7 +16,7 @@ import { wslGatedReaddir, wslGatedStat } from '../../../native-chat/wsl-transcri
 import { WslTranscriptFsError } from '../../../native-chat/wsl-transcript-fs-error'
 import { mapWithConcurrency } from '../../../../shared/map-with-concurrency'
 import type { RetirementScanResult } from './worktree-retirement-backfill-scan'
-import { normalizeRetirableGeneratedName } from './worktree-name-retirement'
+import { normalizeRetirableGeneratedName } from './retirable-generated-name'
 import { getWslHomeAsync } from '../../../wsl/discovery/distro-catalog'
 
 /** Prefer spending an extra name to reissuing a path whose agent history survives. */

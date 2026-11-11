@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
-import { getJiraAccountLabel } from '@/lib/jira-account-label'
+import { getJiraAccountLabel } from '@/lib/work-items/jira/jira-account-label'
 import { assertRuntimeEnvironmentCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import {
   getMatchingJiraSites,

@@ -21,7 +21,6 @@ import type {
   BrowserRouteGuestLifecycleClaim,
   BrowserRoutePageGuestIdentity
 } from '../../../routing/guest-authority/browser-route-page-authority'
-import { BrowserPopupAdapterProbeFixture } from './browser-popup-adapter-probe-fixture'
 
 const origin = process.env.ORCA_POPUP_FIXTURE_ORIGIN
 const statusPath = process.env.ORCA_POPUP_FIXTURE_STATUS
@@ -50,10 +49,6 @@ let fixtureAuthority: symbol | null = authority
 let fixtureAuthorityThrows = false
 let revision = 0
 let failure: string | undefined
-const adapterProbe =
-  process.env.ORCA_POPUP_FIXTURE_ADAPTER_PROBE === '1'
-    ? new BrowserPopupAdapterProbeFixture(() => writeStatus())
-    : null
 const native = new BrowserPopupNativeFixture({
   routeSession: () => fixtureRouteSession,
   failAuthority: (throwOnRead) => {
@@ -91,7 +86,6 @@ function writeStatus(error?: string): void {
       blocked,
       inputs,
       electronVersion: process.versions.electron,
-      adapterProbe: adapterProbe?.events,
       windowsHidden: BaseWindow.getAllWindows().every((window) => !window.isVisible()),
       guestIds: Object.fromEntries([...guests].map(([name, guest]) => [name, guest.id]))
     })
@@ -127,11 +121,7 @@ async function createHost(name: string, partition: string, nativeControl = false
           writeStatus()
         })
         if (nativeControl) {
-          if (adapterProbe) {
-            adapterProbe.install(guest)
-          } else {
-            native.installControlHandler(guest)
-          }
+          native.installControlHandler(guest)
           await guest.loadURL(`${fixtureOrigin}/${name}`)
           resolve()
           return
@@ -264,10 +254,6 @@ async function run(): Promise<void> {
   if (process.env.ORCA_POPUP_FIXTURE_NATIVE_CONTROLS === '1') {
     await createHost('local-control', localPartition, true)
     await createHost('route-control', routePartition, true)
-  }
-  if (adapterProbe) {
-    await createHost('probe-one', localPartition, true)
-    await createHost('probe-two', localPartition, true)
   }
   ready = true
   writeStatus()

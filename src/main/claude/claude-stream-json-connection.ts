@@ -1,3 +1,4 @@
+import { withOrcaClaudeChatEntrypoint } from '../../shared/agent-launch/startup/claude-chat-entrypoint'
 import { claudeStartupAnswerObservation } from './claude-startup-answer-observation'
 import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
 import type * as ClaudeAgentSdk from '@anthropic-ai/claude-agent-sdk'
@@ -112,8 +113,7 @@ export async function openClaudeStreamJsonConnection(
   const env = await withoutRejectedClaudeApiKey(
     withoutKeys(
       buildClaudeChildProcessEnv(launch.env, {
-        inheritedEnv: withoutInheritedClaudeConfigDir(process.env),
-        scrubConfiguredChildSessionStamps: true
+        inheritedEnv: withoutInheritedClaudeConfigDir(process.env)
       }),
       launch.envToDelete ?? []
     )
@@ -124,7 +124,7 @@ export async function openClaudeStreamJsonConnection(
     options: {
       ...launch.options,
       cwd: launch.cwd,
-      env,
+      env: withOrcaClaudeChatEntrypoint(env, process.platform),
       pathToClaudeCodeExecutable: launch.pathToClaudeCodeExecutable,
       spawnClaudeCodeProcess: spawner.spawn,
       ...(handlers.canUseTool ? { canUseTool: handlers.canUseTool } : {}),

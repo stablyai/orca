@@ -55,6 +55,7 @@ const SELECTABLE_ENTRY_TYPES = [
   'workspace-tab',
   'simulator-tab',
   'project-target',
+  'extra',
   'hint'
 ] as const
 

@@ -10,7 +10,7 @@ import type {
 } from '../../../source-control/review/mobile-diff-review-screen-model'
 import type { MountAdapter } from '../recording-scenario'
 import type { operationModuleLoader } from '../operation-module-loader'
-import type * as NativeChatStaleInput from '../../../session/native-chat/mobile-native-chat-stale-input'
+import type * as NativeChatStaleInput from '../../../session/native-chat/composer/mobile-native-chat-stale-input'
 
 const WORKSPACE = 'workspace-1'
 const HOST = 'host-1'
@@ -30,7 +30,7 @@ export function diffReviewActionMountAdapters(
         'mobile/src/source-control/review/mobile-diff-review-sheets.ts'
       )
       const staleInput = modules.load<typeof NativeChatStaleInput>(
-        'mobile/src/session/native-chat/mobile-native-chat-stale-input.ts'
+        'mobile/src/session/native-chat/composer/mobile-native-chat-stale-input.ts'
       )
       staleInput.resetMobileNativeChatStaleInputForTests()
       const comment: DiffComment = {
@@ -106,7 +106,13 @@ export function diffReviewActionMountAdapters(
             moveSelection: () => {},
             // Viewed state stays on the phone here; GitHub-viewed files have their own recordings.
             remoteViewed: () => null,
-            setComposerBody: () => {},
+            noteDraft: {
+              composerBody: '',
+              setComposerBody: () => {},
+              openNewNoteSheet: () => {},
+              openEditComposer: () => {},
+              clearSavedNote: () => {}
+            },
             setActionError: (update) => {
               actionError = typeof update === 'function' ? update(actionError) : update
             },

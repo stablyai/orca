@@ -226,7 +226,7 @@ export function LinearAgentSkillGuide({
             className="shrink-0"
             onClick={onOpenTaskSources}
           >
-            {t('auto.components.settings.LinearAgentSkillGuide.openTaskSources', 'Task Sources')}
+            {t('auto.components.settings.LinearAgentSkillGuide.c5cd02806b', 'Task sources')}
           </Button>
         </div>
       </div>

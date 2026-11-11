@@ -60,7 +60,6 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
       <View style={dockStyles.inputBar}>
         <LiveInputField
           controller={controller}
-          keysInRail={rail.keysInRail}
           trailing={
             <MobileTerminalLiveInputStatus
               dictation={dictation}
@@ -95,11 +94,9 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
 // Only this field reads the typed text, so a keystroke re-renders it and not the dock or session.
 function LiveInputField({
   controller,
-  keysInRail,
   trailing
 }: {
   controller: MobileSessionController
-  keysInRail: boolean
   trailing: ReactNode
 }) {
   const t = useMobileTranslation()
@@ -124,11 +121,8 @@ function LiveInputField({
       trailing={trailing}
       value={text}
       onChange={(event) => {
-        // A ctrl/alt/shift held on the Duo rail turns the next typed letter into a combo, while the rail shows it.
-        if (
-          !keysInRail ||
-          !dockKeys.interceptTypedCharacter(text, event.nativeEvent.text, liveInputRef)
-        ) {
+        // A held Shift, Ctrl or Alt on the key row or the Duo rail turns the next typed letter into a combo.
+        if (!dockKeys.interceptTypedCharacter(text, event.nativeEvent.text, liveInputRef)) {
           handleLiveInputChange(event)
         }
       }}

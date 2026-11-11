@@ -40,13 +40,14 @@ const cleanups: (() => void)[] = []
 afterEach(() => {
   cleanups.splice(0).forEach((stop) => stop())
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
   shell.current = { PATH: '/a', IGNORED: 'a' }
   shell.next = { ...shell.current }
   shell.saved = []
   shell.nextSaved = []
 })
 
-function rig() {
+function rig(overlay?: Record<string, string>) {
   const record = {
     ...agentSessionRecordFixture(),
     provider: 'grok',
@@ -67,7 +68,8 @@ function rig() {
     workspaceMayOverrideDefaultModel: defaults
   })
   const environment = createStructuredAgentEnvironmentResolvers({
-    resolveShellEnvironmentPolicy: () => ({ inheritAll: false, names: [] })
+    resolveShellEnvironmentPolicy: () => ({ inheritAll: false, names: [] }),
+    resolveAgentLaunchEnv: () => overlay ?? {}
   })
   cleanups.push(service.stop, environment.bindCatalogSources(['grok']))
   const listing = (id: string) => ({
@@ -83,6 +85,22 @@ function rig() {
     fingerprint: agentModelCatalogFingerprintForRecord(record)
   }
 }
+
+it('keeps a Windows catalog source while only a shadowed inherited path changes', async () => {
+  vi.stubGlobal('process', { ...process, platform: 'win32' })
+  const overlay = { path: '/configured/bin' }
+  const h = rig(overlay)
+  const source = h.service.captureSource(h.record)
+  cleanups.push(() => source.release?.())
+  await captureHostShellEnvironment(async () => {
+    shell.next = { PATH: '/changed', IGNORED: 'a' }
+  })
+  expect(source()).toBe(true)
+  await captureHostShellEnvironment(async () => {
+    overlay.path = '/new-configured/bin'
+  })
+  expect(source()).toBe(false)
+})
 
 it('retires a producer on effective Refresh before new publication and fences late defaults and new old reports', async () => {
   const h = rig()

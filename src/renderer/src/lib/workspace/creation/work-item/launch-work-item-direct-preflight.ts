@@ -1,18 +1,14 @@
 import { invalidTerminalArgsMessage } from './launch-work-item-direct-messages'
-import {
-  planAgentCliArgsSuffix,
-  type AgentStartupShell
-} from '../../../../../../shared/agent-launch/startup/tui-agent-startup-shell'
-
+import { planAgentCliArgsSuffix } from '../../../../../../shared/agent-launch/startup/tui-agent-startup-shell'
+import type { AgentStartupShell } from '../../../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { readAgentLaunchPreferencesForWorkspace } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import { useAppStore } from '@/store/index'
-import type { AppState } from '@/store/types'
 import {
   ensureDetectedAgentsForRepo,
   loadProjectLaunchContext
 } from '../../../agent-session/launch/inventory/agent-detection-target-inventory'
-import { CLIENT_PLATFORM } from '../../../new-workspace'
-import { getLocalRepoProjectExecutionRuntimeContext } from '../../../local-preflight-context'
+import { CLIENT_PLATFORM } from '../new-workspace'
+import { getLocalRepoProjectExecutionRuntimeContext } from '../../../../runtime/hosts/preflight/local-preflight-context'
 import {
   refineLocalLaunchPlatform,
   resolveRepoExecutionHostPlatform
@@ -20,21 +16,21 @@ import {
 import { isTuiAgentEnabled } from '../../../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { resolveDefaultAgentForWorkspace } from '../../../agent-session/launch/shortcuts/agent-tab-shortcuts'
 import { isTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
-import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
-import type { ProjectLaunchContext } from '../../../../../../shared/rpc-contract/preflight-params'
-import type { AgentLaunchRequestId } from '../../../agent-session/launch/routing/agent-launch-request-id'
 import {
   awaitStructuredRouteHostAnswer,
-  planAgentSessionLaunch,
-  type AgentSessionLaunchRequest
+  planAgentSessionLaunch
 } from '../../../agent-session/launch/routing/agent-session-launch-plan'
-import { resolveGitHubPrStartPointForRepo } from '@/lib/github-pr-start-point'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
-import {
-  getRepoExecutionHostId,
-  type ExecutionHostId
-} from '../../../../../../shared/execution-host'
+import type { AgentSessionLaunchRequest } from '../../../agent-session/launch/routing/agent-session-launch-plan'
+import { resolveGitHubPrStartPointForRepo } from '@/lib/source-control/review/github-pr-start-point'
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
+import '../setup/workspace-setup-preparation'
+import type { AppState } from '@/store/types'
+import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
+import type { ProjectLaunchContext } from '../../../../../../shared/rpc-contract/preflight-params'
+
+import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { GitHubPrStartPoint } from '../../../../../../shared/worktree/types'
 import type {
@@ -63,8 +59,6 @@ export async function resolveDirectPrStartPoint(
   })
 }
 
-import '../setup/workspace-setup-preparation'
-
 export type DirectLaunchOwnerRow = {
   repo: Repo
   executionHostId: ExecutionHostId
@@ -87,7 +81,7 @@ export function resolveDirectLaunchOwnerRow(
 
 /** Freeze the prospective verdict before create; the actual-agent path handles older hosts. */
 export async function planDirectWorkItemLaunch(args: {
-  requestId: AgentLaunchRequestId
+  requestId: string
   prospectiveAgent: TuiAgent | null
   projectContext?: ProjectLaunchContext
   repoId: string

@@ -1,3 +1,4 @@
+import { ClaudeJournalBoundDelivery } from '../../claude-journal-bound-delivery'
 import { describe, expect, it, vi } from 'vitest'
 import { setClaudeStructuredOption } from './claude-structured-options'
 import type { ClaudeSession } from '../claude-structured-session-state'
@@ -25,6 +26,7 @@ function sessionFor(setModel: ClaudeSession['connection']['setModel']): ClaudeSe
     dispatchWaiters: [],
     retiredDispatchWaiters: [],
     replayContentFallbackBlocked: false,
+    delivery: new ClaudeJournalBoundDelivery(),
     backgroundTasks: new ClaudeBackgroundTaskTracker(),
     childWork: new ClaudeChildWorkDecoder(),
     commands: new ClaudeSlashCommandCatalog(),

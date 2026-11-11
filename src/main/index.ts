@@ -23,20 +23,20 @@ import {
   formatProfileStateStartupFailure,
   isDivergedProfileStateFailure,
   profileStateStartupFailureClass
-} from './persistence/profile-state/profile-state-startup-failure'
-import { recordDurableCrashBreadcrumb } from './crash-reporting/durable-crash-breadcrumb'
+} from './persistence/profile-state/startup/profile-state-startup-failure'
+import { recordDurableCrashBreadcrumb } from './crash-reporting/breadcrumbs/durable-crash-breadcrumb'
 import {
   chooseProfileStateCopy,
   chooseProfileStateRepair,
   presentProfileStateStartupRecoveryDialog,
   readProfileStateCopySavedTimes
-} from './persistence/profile-state/profile-state-startup-recovery-dialog'
+} from './persistence/profile-state/startup/profile-state-startup-recovery-dialog'
 import { profileStateDesktopRecoveryArgs } from './startup/profile-state-recovery-preflight'
 import { profileStateRepairSectionApproval } from '../shared/profile-state-recovery-command'
 import { prepareEarlyMainUiLanguage, translateMain } from './i18n/main-i18n'
-import { ProfileStateRecoveryRequiredError } from './persistence/profile-state/profile-state-recovery-required'
+import { ProfileStateRecoveryRequiredError } from './persistence/profile-state/recovery/profile-state-recovery-required'
 import { getProfileUserDataPath } from './orca-profiles/profile-storage-paths'
-import { leaseAppImageGenerationForCurrentProcess } from './cli/appimage-generation-lease'
+import { leaseAppImageGenerationForCurrentProcess } from './cli/appimage/appimage-generation-lease'
 import { deleteLegacyWslHostWakeList } from './wsl/host-lifecycle/wsl-host-early-wake'
 import { configureWslHostsGateFromDisk } from './wsl/host-lifecycle/wsl-host-gate-startup'
 import { configureRemoteRuntimeE2EEV2HostLatch } from '../shared/remote-runtime/e2ee/node/remote-runtime-e2ee-v2-host-latch'

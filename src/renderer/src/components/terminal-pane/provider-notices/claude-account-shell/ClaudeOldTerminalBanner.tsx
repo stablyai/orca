@@ -1,3 +1,8 @@
+import {
+  getTerminalNoticeLifetime,
+  isTerminalNoticeLifetimeCurrent,
+  type TerminalNoticeLifetime
+} from '../terminal-notice-lifetime'
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
@@ -12,9 +17,6 @@ import {
   PaneBannerLearnMore,
   PaneTopWarningBanner
 } from '../../appearance/pane-top-banner/PaneTopWarningBanner'
-
-// Why module scope: a pane remounts on tab switches, and Dismiss must hold for the app session.
-const dismissedPtyIds = new Set<string>()
 
 // System default already matches new terminals; key explicit selections so account switches recheck old shells.
 function selectedClaudeAccountKey(state: AppState): string | null {
@@ -31,13 +33,17 @@ function selectedClaudeAccountKey(state: AppState): string | null {
 function useOpenedBeforeClaudeAccounts(
   ptyId: string,
   tabId: string,
-  selectionKey: string | null
+  selectionKey: string | null,
+  lifetime: TerminalNoticeLifetime | undefined
 ): boolean {
-  const [openedBefore, setOpenedBefore] = useState(false)
+  const [answer, setAnswer] = useState<{
+    lifetime: TerminalNoticeLifetime
+    openedBefore: boolean
+  }>()
   useEffect(() => {
     const target = selectionKey ? paneClaudeTarget(tabId) : null
     // Why hidden without a target: only the pane's own runtime says which account it runs.
-    if (!target) {
+    if (!target || !lifetime) {
       return
     }
     let cancelled = false
@@ -45,16 +51,16 @@ function useOpenedBeforeClaudeAccounts(
       .openedBeforeClaudeAccounts(ptyId, target)
       .catch(() => false)
       .then((answer) => {
-        if (!cancelled) {
-          setOpenedBefore(answer)
+        if (!cancelled && isTerminalNoticeLifetimeCurrent(lifetime)) {
+          setAnswer({ lifetime, openedBefore: answer })
         }
       })
     return () => {
       cancelled = true
-      setOpenedBefore(false)
+      setAnswer(undefined)
     }
-  }, [selectionKey, ptyId, tabId])
-  return openedBefore
+  }, [selectionKey, ptyId, tabId, lifetime])
+  return answer?.lifetime === lifetime && answer?.openedBefore === true
 }
 
 /** For Claude in a terminal whose shell predates per-account folders: its `claude` ignores the selection. */
@@ -69,7 +75,11 @@ export function ClaudeOldTerminalBanner({
 }): React.JSX.Element | null {
   const t = useTranslate()
   const paneKey = makePaneKey(tabId, leafId)
-  const [dismissed, setDismissed] = useState(() => dismissedPtyIds.has(ptyId))
+  const lifetime = getTerminalNoticeLifetime(ptyId)
+  const [dismissedLifetime, setDismissedLifetime] = useState<TerminalNoticeLifetime>()
+  const dismissed =
+    lifetime !== undefined &&
+    (dismissedLifetime === lifetime || lifetime.dismissed.has('claude-old-terminal'))
   const selectionKey = useAppStore(selectedClaudeAccountKey)
   // Why either signal: a typed claude is seen by the process read, or by its hooks.
   const claudeInPane = useAppStore(
@@ -80,7 +90,8 @@ export function ClaudeOldTerminalBanner({
   const openedBefore = useOpenedBeforeClaudeAccounts(
     ptyId,
     tabId,
-    claudeInPane && !dismissed ? selectionKey : null
+    claudeInPane && !dismissed ? selectionKey : null,
+    lifetime
   )
   const [dialogOpen, setDialogOpen] = useState(false)
   // Why: the dialog has no Radix trigger, so closing it would leave focus on document.body.
@@ -115,8 +126,10 @@ export function ClaudeOldTerminalBanner({
             </Button>
           }
           onDismiss={() => {
-            dismissedPtyIds.add(ptyId)
-            setDismissed(true)
+            if (lifetime && isTerminalNoticeLifetimeCurrent(lifetime)) {
+              lifetime.dismissed.add('claude-old-terminal')
+            }
+            setDismissedLifetime(lifetime)
           }}
         />
       ) : null}

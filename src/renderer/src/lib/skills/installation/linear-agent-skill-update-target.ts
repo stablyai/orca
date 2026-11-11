@@ -2,7 +2,7 @@ import type { DiscoveredSkill } from '../../../../../shared/skills'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   hasInstalledAgentSkill
-} from '@/hooks/useInstalledAgentSkills'
+} from '@/hooks/skills/discovery/useInstalledAgentSkills'
 import {
   LINEAR_TICKETS_SKILL_NAME,
   ORCA_LINEAR_SKILL_NAME

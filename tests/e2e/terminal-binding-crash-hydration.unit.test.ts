@@ -1,6 +1,6 @@
 import '../../src/renderer/src/store/terminals/terminal-hydration-store.test-bootstrap'
 import { describe, expect, it, vi } from 'vitest'
-import { applyPtyBinding } from '../../src/main/persistence/loading-store/pty-binding-session-update'
+import { applyPtyBinding } from '../../src/main/persistence/loading-store/terminal-bindings/pty-binding-session-update'
 import { getDefaultWorkspaceSession } from '../../src/shared/constants'
 import { folderWorkspaceKey } from '../../src/shared/workspace-scope'
 import type { WorkspaceSessionState } from '../../src/shared/workspace-session/workspace-session-state-types'

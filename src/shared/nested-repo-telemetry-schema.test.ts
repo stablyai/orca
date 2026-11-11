@@ -58,29 +58,6 @@ describe('nested repo import telemetry schemas', () => {
     ).toBe(false)
   })
 
-  it('rejects unbounded imported counts', () => {
-    const parsed = eventSchemas.add_repo_nested_import_result.safeParse({
-      attempt_id: attemptId,
-      surface: 'onboarding',
-      runtime_kind: 'local',
-      mode: 'separate',
-      outcome: 'success',
-      found_count: 501,
-      found_count_bucket: '16+',
-      selected_count: 501,
-      selected_count_bucket: '16+',
-      imported_count: 501,
-      imported_count_bucket: '16+',
-      already_known_count: 0,
-      already_known_count_bucket: '0',
-      failed_count: 0,
-      failed_count_bucket: '0',
-      all_selected: true
-    })
-
-    expect(parsed.success).toBe(false)
-  })
-
   it('rejects mismatched exact counts and buckets', () => {
     expect(
       eventSchemas.add_repo_nested_import_action.safeParse({

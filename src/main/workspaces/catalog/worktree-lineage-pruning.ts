@@ -7,7 +7,7 @@ import { isWorkspaceKey, parseWorkspaceKey } from '../../../shared/workspace-sco
 import { splitWorktreeId } from '../../../shared/worktree/id'
 import { worktreeRetentionPathComparisonKey } from './worktree-retention-path-comparison'
 import type { Store } from '../../persistence/loading-store/store'
-import { isWslMoveRepoBlocked } from '../../persistence/moving-wsl-projects/wsl-move-background-backoff'
+import { isWslMoveRepoBlocked } from '../../persistence/moving-wsl-projects/orchestration/wsl-move-background-backoff'
 import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 
 type WorktreeLineagePruningStore = Pick<Store, 'getRepos' | 'getWorktreeMeta' | 'setWorktreeMeta'> &

@@ -28,7 +28,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator
 } from '@/components/ui/dropdown-menu'
-import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
+import { focusTerminalTabSurface } from '@/components/terminal-pane/input/focus/focus-terminal-tab-surface'
 import '@/lib/agent-session/messaging/terminal/active-agent-note-send'
 import {
   activeAgentNotesSendFailureMessage,
@@ -41,7 +41,7 @@ import {
 } from '@/lib/agent-session/messaging/notes-send-agent-targets'
 import { agentKindForAgentType } from '@/lib/agent-status/aggregation/worktree-agent-status'
 import { formatAgentTypeLabel } from '../../../../../shared/agent-status/presentation/agent-type-label'
-import { track } from '@/lib/telemetry'
+import { track } from '@/diagnostics/telemetry/telemetry'
 import { useNow } from '@/hooks/use-now'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
 import { lastEnteredDoneAt } from '@/components/dashboard/agent-finished-timestamp'

@@ -1,6 +1,12 @@
 import { withGitHubRepoExecution } from '../../github-repository-identity'
 import type { IssueSourcePreference } from '../../../../shared/repo-types'
-import { acquire, release, classifyGhError, type LocalGitExecOptions } from '../../gh-utils'
+import {
+  acquire,
+  release,
+  classifyGhError,
+  extractExecError,
+  type LocalGitExecOptions
+} from '../../gh-utils'
 import {
   resolveGitHubApiRepository,
   resolveGitHubApiRepositoryCandidates,
@@ -214,7 +220,12 @@ export async function getWorkItemByOwnerRepo(
         connectionId,
         localGitOptions
       )
-    } catch {
+    } catch (err) {
+      // Only the failure class is logged: stderr and the command line name the repository.
+      const stderr = extractExecError(err).stderr || (err instanceof Error ? err.message : '')
+      console.warn(
+        `getWorkItemByOwnerRepo ${options.preview ? 'preview' : type} lookup failed: ${classifyGhError(stderr).type}`
+      )
       return null
     } finally {
       release()

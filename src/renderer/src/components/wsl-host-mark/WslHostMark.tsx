@@ -4,8 +4,8 @@ import { LinuxPenguinIcon } from '@/components/icons/LinuxPenguinIcon'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import type { Translate } from '@/i18n/use-translate'
-import { useAppStore } from '@/store'
-import { cn } from '@/lib/utils'
+import { useAppStore } from '@/store/index'
+import { cn } from '@/lib/class-names'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import {
   isWslHostRuntimeEnvironment,

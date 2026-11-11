@@ -4,6 +4,7 @@ import {
   EphemeralVmRecipeLegacyResultSchema,
   EphemeralVmRecipeResultSchema
 } from './ephemeral-vm-recipes'
+import type { EphemeralVmFailure } from './ephemeral-vm-failure-copy'
 
 export const EphemeralVmRuntimeStatusSchema = z.enum([
   'provisioning',
@@ -67,6 +68,10 @@ export const EphemeralVmRuntimeRecordSchema = z.object({
   /** Optional open code + params so the renderer can localize `cleanupLastError`; English stays authoritative. */
   cleanupLastErrorCode: z.string().min(1).optional(),
   cleanupLastErrorParams: z.record(z.string(), z.union([z.string(), z.number()])).optional(),
+  /** Last suspend/resume failure (English + optional code/params); cleared when one succeeds. */
+  lifecycleLastError: z.string().min(1).optional(),
+  lifecycleLastErrorCode: z.string().min(1).optional(),
+  lifecycleLastErrorParams: z.record(z.string(), z.union([z.string(), z.number()])).optional(),
   createdAt: z.number().finite(),
   updatedAt: z.number().finite(),
   /** Absent only on write-ahead records persisted before `create` returned a result. */
@@ -93,6 +98,29 @@ export function requireEphemeralVmRecipeResult(
   }
   return runtime
 }
+
+/** Fields `updateEphemeralVmRuntimeStatus` may change; undefined leaves a field as is. */
+export type EphemeralVmRuntimeStatusPatch = {
+  status?: EphemeralVmRuntimeStatus
+  cleanupStatus?: EphemeralVmCleanupStatus
+  cleanupLastAttemptAt?: number
+  /** A string clears any stored code; null clears both. */
+  cleanupLastError?: string | EphemeralVmFailure | null
+  /** Suspend/resume failure; null clears it. */
+  lifecycleLastError?: EphemeralVmFailure | null
+  workspaceId?: string
+  workspaceName?: string
+  connectionMode?: EphemeralVmRuntimeRecord['connectionMode'] | null
+  runtimeEnvironmentId?: string
+  sshTargetId?: string | null
+  recipeResult?: EphemeralVmRuntimeRecord['recipeResult']
+  updatedAt?: number
+}
+
+/** Suspend/resume over IPC: failures come back as values so the code reaches the renderer catalog. */
+export type EphemeralVmWorkspaceLifecycleResult =
+  | { ok: true; runtime: EphemeralVmRuntimeRecord | null }
+  | ({ ok: false } & EphemeralVmFailure)
 
 export const EphemeralVmRuntimeStoreSchema = z.object({
   version: z.literal(1),

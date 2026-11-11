@@ -1,13 +1,9 @@
-import { watchSnapshotInputs } from './useDashboardPopoutBridge'
-import { createDashboardChatProgramHolds } from './dashboard-chat-program-acquisition'
-import { useEffect, useMemo, useRef } from 'react'
+import { useMemo, useRef } from 'react'
 import { useAppStore } from '@/store'
 import { useStructuredChatTabNames } from '@/runtime/native-chat/naming/structured-chat-name-observation'
 import type { DashboardSnapshot } from '../../../../shared/dashboard-snapshot'
 import { buildDashboardSnapshot } from './build-dashboard-snapshot'
-import { useChatProgramFactsVersion } from '@/lib/host-chat-program-acquisition'
 import { createWorktreeAgentRowsCache } from './worktree-agent-rows-cache'
-import { selectAgentLaunchRouteView } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import {
   selectDetectedWorktreesByRepo,
   selectFolderWorkspaces,
@@ -53,25 +49,11 @@ export function useLiveDashboardSnapshot(): DashboardSnapshot {
   const runtimeEnvironmentCatalogHydrated = useAppStore((s) => s.runtimeEnvironmentCatalogHydrated)
   const removedRuntimeEnvironmentIds = useAppStore((s) => s.removedRuntimeEnvironmentIds)
   const paneForegroundAgentByPaneKey = useAppStore((s) => s.paneForegroundAgentByPaneKey)
-  const detectedAgentIds = useAppStore((s) => s.detectedAgentIds)
-  const remoteDetectedAgentIds = useAppStore((s) => s.remoteDetectedAgentIds)
-  const runtimeDetectedAgentIds = useAppStore((s) => s.runtimeDetectedAgentIds)
   // Freshness can change buckets without map writes; the epoch invalidates stale-decay memos.
   const agentStatusEpoch = useAppStore((s) => s.agentStatusEpoch)
   const chatNames = useStructuredChatTabNames()
-  // Why: launch options read only this view, so any route input change rebuilds them.
-  const launchRouteStore = useAppStore(selectAgentLaunchRouteView)
-  useEffect(() => {
-    const holds = createDashboardChatProgramHolds()
-    const reconcile = (): void => holds.reconcile(useAppStore.getState())
-    const stopWatching = watchSnapshotInputs(reconcile)
-    reconcile()
-    return () => {
-      stopWatching()
-      holds.release()
-    }
-  }, [])
-  const chatProgramFactsVersion = useChatProgramFactsVersion()
+  const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  const activeWorkspaceExecutionHostId = useAppStore((s) => s.activeWorkspaceExecutionHostId)
 
   return useMemo(
     // Read the clock when the freshness epoch invalidates this memo, matching row derivation.
@@ -79,8 +61,8 @@ export function useLiveDashboardSnapshot(): DashboardSnapshot {
       buildDashboardSnapshot(
         {
           chatNames,
-          activeWorktreeId: launchRouteStore.activeWorktreeId,
-          activeWorkspaceExecutionHostId: launchRouteStore.activeWorkspaceExecutionHostId,
+          activeWorktreeId,
+          activeWorkspaceExecutionHostId,
           repos,
           worktreesByRepo,
           tabsByWorktree,
@@ -109,15 +91,12 @@ export function useLiveDashboardSnapshot(): DashboardSnapshot {
           runtimeEnvironmentCatalogHydrated,
           removedRuntimeEnvironmentIds,
           paneForegroundAgentByPaneKey,
-          detectedAgentIds,
-          remoteDetectedAgentIds,
-          runtimeDetectedAgentIds,
           // Read launch identity non-reactively because Shift+Enter routing does not depend on it; match the bridge gate.
           agentLaunchConfigByPaneKey: useAppStore.getState().agentLaunchConfigByPaneKey
         },
         Date.now(),
         // Reuse unchanged worktree rows while assembling cards fresh from current review/host/status slices.
-        { rowsCache: rowsCacheRef.current, rowsGeneration: agentStatusEpoch, launchRouteStore }
+        { rowsCache: rowsCacheRef.current, rowsGeneration: agentStatusEpoch }
       ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [
@@ -149,12 +128,9 @@ export function useLiveDashboardSnapshot(): DashboardSnapshot {
       runtimeEnvironmentCatalogHydrated,
       removedRuntimeEnvironmentIds,
       paneForegroundAgentByPaneKey,
-      detectedAgentIds,
-      remoteDetectedAgentIds,
-      runtimeDetectedAgentIds,
       chatNames,
-      chatProgramFactsVersion,
-      launchRouteStore,
+      activeWorktreeId,
+      activeWorkspaceExecutionHostId,
       agentStatusEpoch
     ]
   )

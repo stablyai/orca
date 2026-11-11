@@ -26,8 +26,8 @@ export const getTerminalWindowsAdministratorSearchEntry = createLocalizedCatalog
 export const getTerminalWindowsShellSearchEntry = createLocalizedCatalog(() => [
   {
     title: translate(
-      'auto.components.settings.terminal.windows.search.13715f9d23',
-      'Default Shell'
+      'auto.components.settings.terminal.windows.search.94792c10ac',
+      'Default shell'
     ),
     description: translate(
       'auto.components.settings.terminal.windows.search.713c4a2f92',
@@ -81,8 +81,8 @@ export const getTerminalWindowsShellSearchEntry = createLocalizedCatalog(() => [
 export const getTerminalWindowsPowershellImplementationSearchEntry = createLocalizedCatalog(() => [
   {
     title: translate(
-      'auto.components.settings.terminal.windows.search.860e0e6402',
-      'PowerShell Version'
+      'auto.components.settings.terminal.windows.search.6efd8b2174',
+      'PowerShell version'
     ),
     description: translate(
       'auto.components.settings.terminal.windows.search.41a69bc24d',

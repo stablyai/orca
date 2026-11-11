@@ -1,5 +1,5 @@
 import { getGitHubRepoLookupIndex } from '../repositories/github-repo-lookup-index'
-import { githubTaskBinding } from '@/lib/github-task-observation'
+import { githubTaskBinding } from '@/lib/work-items/github/github-task-observation'
 import type { AppState } from '../../types'
 import type { RuntimeFocusSettings } from '../../../../../shared/github/github-cache-key'
 import type { Repo } from '../../../../../shared/repo-types'

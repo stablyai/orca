@@ -1,7 +1,7 @@
 import type React from 'react'
 import { useEffect, useRef, useState } from 'react'
 import { Check, ChevronLeft, ChevronRight, ExternalLink, Puzzle } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
 import type { ThemeLook } from './onboarding-theme-looks'

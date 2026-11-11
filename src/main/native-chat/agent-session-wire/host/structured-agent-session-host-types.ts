@@ -245,6 +245,10 @@ export type SetUserConversationName = StructuredAgentSessionConversationNaming['
 export type StructuredChatNamingFailure = AgentSessionNamingError & { forName: string }
 
 export type StructuredAgentSessionConversationNaming = {
+  captureTitleSourceUnavailable?: (
+    sessionId: string,
+    journal: AgentSessionJournal
+  ) => (() => void) | undefined
   publishName: (workspaceId: string, sessionId: string) => void
   activeSessionIds: () => string[]
   failure: (sessionId: string) => StructuredChatNamingFailure | undefined

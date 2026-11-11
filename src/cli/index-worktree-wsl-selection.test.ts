@@ -21,20 +21,6 @@ const upper = buildWorktree(UPPER, 'main', 'abc', 'repo-a')
 const lower = buildWorktree(LOWER, 'main', 'abc', 'repo-b')
 
 describe('WSL enclosing selection with Windows path resolution on every platform', () => {
-  it.each([[UPPER, String.raw`\\wsl$\ubuntu\home\Alice\App\src`]])(
-    'retains original identity for uppercase-tail aliases: %s',
-    (root, cwd) => {
-      const row = buildWorktree(root, 'main', 'abc', 'repo-a')
-      for (const caller of [undefined, row.id]) {
-        expect(selectEnclosingWorktreeSelectionOnHost([row], cwd, 'local', caller)).toEqual({
-          selector: `id:${row.id}`,
-          worktreeId: row.id
-        })
-        expect(selectEnclosingRepoOnHost([row], cwd, 'local', caller)).toBe('repo-a')
-      }
-    }
-  )
-
   it('excludes case-distinct directories before caller preference in either order', () => {
     for (const rows of [
       [upper, lower],

@@ -62,7 +62,8 @@ export class StructuredAgentSessionHost {
   private readonly lifetime: HostTypes.StructuredAgentSessionConversationLifetime
   private readonly conversationDelivery: conversation.StructuredAgentSessionConversationDelivery
   private readonly eventRecovery: StructuredAgentSessionEventRecovery
-  private readonly backgroundTasks: BackgroundTasks
+  /** History and work-state reads, which open a chat at rest without starting its agent. */
+  readonly backgroundTasks: BackgroundTasks
   readonly restartResume: StructuredAgentSessionRestartResume
 
   readonly usageLimitContinue: ReturnType<typeof usageLimit.start>
@@ -304,9 +305,9 @@ export class StructuredAgentSessionHost {
 
   readonly continuationContext: ReturnType<typeof contextReader>
 
-  observeConversationPublications: typeof this.sessions.observeConversationPublications = (
-    ...args
-  ) => this.sessions.observeConversationPublications(...args)
+  observeConversationPublications = this.sessions.observeConversationPublications
+  beginConversationTitleWait = (sessionId: string) =>
+    this.runtimeState.acquireAborts.begin(sessionId)
   journalSnapshot = (sessionId: string) => this.backgroundTasks.journalSnapshot(sessionId)
   journalCurrentRead = this.reads.journalCurrentRead
   queuedSendAnswer = this.reads.queuedSendAnswer

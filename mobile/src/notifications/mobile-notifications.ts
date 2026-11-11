@@ -4,7 +4,7 @@ import type { DismissNotificationEvent } from './desktop-notification-events'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { waitForPushFallback } from './push-fallback'
 import { getHostPushSupported, getHostPushSupportCompletion } from './push-registration'
-import { loadHostCatalog } from '../transport/hosts/host-store'
+import { loadHostCatalog } from '../host-catalog/host-store'
 import { deriveHostFingerprint } from './push-host-fingerprint'
 import { presentForegroundPush } from './android-foreground-push'
 import {

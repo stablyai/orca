@@ -1,5 +1,18 @@
 import type { AgentPickerEntry, AgentPickerDraft } from './agent-launch-picker'
 
+export function agentPickerCatalogAuthoritative(
+  entry: AgentPickerEntry
+): entry is AgentPickerEntry & {
+  catalog: Exclude<AgentPickerEntry['catalog'], { origin: 'unknown' }>
+} {
+  return (
+    (entry.catalogRead === undefined || entry.catalogRead === 'settled') &&
+    entry.catalog.origin !== 'unknown' &&
+    !entry.catalog.listingInProgress &&
+    entry.catalog.unavailable === undefined
+  )
+}
+
 export function agentPickerArgumentsKnown(
   entry: AgentPickerEntry,
   draft: AgentPickerDraft

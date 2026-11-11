@@ -1,5 +1,5 @@
 import type React from 'react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 
 type SettingsGroupProps = {
   title?: React.ReactNode
@@ -63,8 +63,14 @@ export function SettingsGroupHeader({
   return (
     <div className={cn('flex items-end justify-between gap-3 px-1', className)} onClick={onClick}>
       <div className="min-w-0 space-y-1">
-        <h3 className="text-base font-semibold leading-tight">{title}</h3>
-        {description ? <p className="text-xs text-muted-foreground">{description}</p> : null}
+        <h3 data-settings-group-heading="" className="text-base font-semibold leading-tight">
+          {title}
+        </h3>
+        {description ? (
+          <p data-settings-group-description="" className="text-xs text-muted-foreground">
+            {description}
+          </p>
+        ) : null}
       </div>
       {action ? <div className="shrink-0">{action}</div> : null}
     </div>

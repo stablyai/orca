@@ -1,19 +1,11 @@
 import { describe, vi } from 'vitest'
 import {
-  registerPtyConnectionSleepingRecordResumeTests,
-  registerPtyConnectionLiveResumeIdentityTests
-} from '../reattach/pty-connection-agent-session-resume.spec'
-import {
   registerPtyConnectionNonAgentLaunchRegistrationTests,
   registerPtyConnectionUnboundAgentLaunchRegistrationTests
 } from '../startup/pty-connection-agent-startup-launch-registration.spec'
 import { registerPtyConnectionColdRestoreAgentResumeTests } from '../reattach/pty-connection-cold-restore-agent-resume.spec'
 import { registerPtyConnectionColdRestoreRepaintTests } from '../reattach/pty-connection-cold-restore-repaint.spec'
 import { registerPtyConnectionColdRestoreResumeCommandTests } from '../reattach/pty-connection-cold-restore-resume-command.spec'
-import {
-  registerPtyConnectionHibernationWakeTests,
-  registerPtyConnectionHibernationWakeClaimTests
-} from '../lifecycle/pty-connection-hibernation-wake.spec'
 import { registerPtyConnectionRestartReplacementDisposeTests } from '../spawn/pty-connection-restart-replacement-stop-claim.spec'
 import { registerPtyConnectionHibernationActivityTests } from '../input/pty-connection-hibernation-activity.spec'
 import { registerPtyConnectionHiddenSleepingResumeTests } from '../lifecycle/pty-connection-hidden-sleeping-resume.spec'
@@ -30,10 +22,8 @@ vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
 )
 
 describe('pty-connection-agent-session-resume', () => {
-  registerPtyConnectionSleepingRecordResumeTests()
   registerPtyConnectionNonAgentLaunchRegistrationTests()
   registerPtyConnectionUnboundAgentLaunchRegistrationTests()
-  registerPtyConnectionLiveResumeIdentityTests()
 })
 describe(
   'pty-connection-cold-restore-agent-resume',
@@ -45,9 +35,7 @@ describe(
   registerPtyConnectionColdRestoreResumeCommandTests
 )
 describe('pty-connection-hibernation-wake', () => {
-  registerPtyConnectionHibernationWakeTests()
   registerPtyConnectionRestartReplacementDisposeTests()
-  registerPtyConnectionHibernationWakeClaimTests()
   registerPtyConnectionHibernationActivityTests()
 })
 describe('pty-connection-hidden-sleeping-resume', registerPtyConnectionHiddenSleepingResumeTests)

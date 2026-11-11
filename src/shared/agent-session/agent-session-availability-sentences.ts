@@ -6,7 +6,7 @@ import type {
   AgentSessionFailureSurface
 } from './failures/agent-session-failure-words'
 import { joinSentences } from '../sentence-joining'
-import { agentSessionSignInFor } from './lifecycle/agent-session-sign-in'
+import { agentSessionSetupFor } from './lifecycle/agent-session-setup-commands'
 
 const SENTENCE_END = /[.!?\u3002\uFF01\uFF1F][\p{Pe}\p{Pf}"']*\s*$/u
 
@@ -22,7 +22,7 @@ export function notSignedInSentence(
   say: AgentSessionFailureSay,
   surface: AgentSessionFailureSurface = 'row'
 ): string {
-  const signIn = agentSessionSignInFor(context.agentName ?? context.provider)
+  const signIn = agentSessionSetupFor(context.agentName ?? context.provider)
   const copy = say(signIn ? agentSessionSignInCopyId(signIn.agent, fact.account) : 'notSignedIn', {
     ...agent(say, context),
     loginCommand: signIn?.loginCommand.join(' '),

@@ -11,7 +11,7 @@ import {
   hostSupportsMobileChatFork,
   mobileChatForkCreateReplyMessage,
   mobileChatForkRequestFailureMessage
-} from '../../session/mobile-chat-fork-create-feedback'
+} from './mobile-chat-fork-create-feedback'
 import type { MobileSessionTab } from '../../session/tabs/mobile-session-tabs'
 import type { Terminal } from './mobile-terminal-model'
 import type { MobileSessionAttachmentsModel } from '../../files/attachments/use-mobile-session-attachments'
@@ -23,7 +23,7 @@ import {
   type MobileSessionTerminalCreateOptions
 } from './mobile-session-terminal-create-request'
 import { isAgentSessionHandleProvider } from '../../../../src/shared/agent-session/lifecycle/agent-session-provider-handle'
-import { createMobileStructuredAgentSession } from '../../session/mobile-structured-agent-session-launch'
+import { createMobileStructuredAgentSession } from '../../session/native-chat/agent-session/mobile-structured-agent-session-launch'
 import {
   launchesThroughHost,
   launchNewTabAgentThroughHost

@@ -1,6 +1,10 @@
-import { observeLinearIssueRead } from '@/store/slices/linear/linear-issue-publication'
-import { taskProviderErrorMessage, taskProviderErrorText } from '@/lib/task-provider-error-copy'
-import { ImeInput } from '@/lib/ime-text-field'
+import '@/store/slices/linear/linear-issue-read'
+import { observeLinearIssueRead } from '@/store/slices/linear/linear-issue-read-lifecycle'
+import {
+  taskProviderErrorMessage,
+  taskProviderErrorText
+} from '@/lib/work-items/task-provider-error-copy'
+import { ImeInput } from '@/lib/text-input/ime/ime-text-field'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowRight, LoaderCircle, Plus } from 'lucide-react'
 import { toast } from 'sonner'

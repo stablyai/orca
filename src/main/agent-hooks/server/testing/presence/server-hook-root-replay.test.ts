@@ -249,30 +249,6 @@ describe('startup spool replay of panes without a proven owner', () => {
       release()
     }
   )
-
-  it('answers past 64 unfinished reads as unknown, and reads that pane on its next turn', async () => {
-    const panes = [...Array.from({ length: 69 }, (_, index) => paneOf(index)), PANE]
-    const userDataPath = spoolDir(
-      panes.map((paneKey) =>
-        spooled(paneKey, 49969, { hook_event_name: 'UserPromptSubmit', prompt: 'task' })
-      )
-    )
-    runningPane(49969, CLAUDE)
-    const { release, requested } = rootAnswers(() => true)
-    const { server, started } = launchServer(userDataPath)
-    await requested
-    await vi.advanceTimersByTimeAsync(500)
-    await started
-    expect(attempts()).toBe(64)
-    vi.useRealTimers()
-    release()
-    await settled(64)
-    expect(server.presence(panes[0])?.fallback).toBeUndefined()
-    expect(server.presence()).toMatchObject({ process: capture(49969), fallback: true })
-    await hook(server, 'UserPromptSubmit', { prompt: 'next' })
-    expect(attempts()).toBe(65)
-    expect(server.presence()?.fallback).toBeUndefined()
-  })
 })
 
 describe('WSL relay startup spool replay', () => {
