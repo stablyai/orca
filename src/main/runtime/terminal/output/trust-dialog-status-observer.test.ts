@@ -220,6 +220,21 @@ describe('TrustDialogStatusObserver', () => {
     }
   )
 
+  // A tall dialog's heading sits above the live tail window; the footer alone proves it owns the screen.
+  it('offers a card when many imports push the heading high above the footer', async () => {
+    const { prompts, recording, write } = await pane('claude-2-1-316-startup-external-imports')
+    const importRow = '/outside/notes.md\x1b[39m'
+    const extraRows = ['a', 'b', 'c', 'd']
+      .map((name) => `\n\n\x1b[3G\x1b[38;2;153;153;153m \x1b[5G/outside/${name}.md\x1b[39m`)
+      .join('')
+    expect(recording).toContain(importRow)
+    await write(recording.replace(importRow, importRow + extraRows))
+    const card = parseInteractivePrompt(prompts[0], undefined, 'claude')
+    expect(card?.kind === 'approval' && card.approval.description).toBe(
+      'Allow external CLAUDE.md file imports?'
+    )
+  })
+
   it('leaves a ready Claude composer alone', async () => {
     const { published, recording, write } = await pane('claude-2-1-316-default-labelled-blurred')
     await write(recording, 1)

@@ -53,7 +53,8 @@ function dialogReason(lines: string[]): RuntimeTerminalWaitBlockedReason | null 
   if (!TRUST_DIALOG_FOOTER_RE.test(lines.at(-1) ?? '')) {
     return null
   }
-  const reason = findTerminalWaitBlockedSignal(lines.join('\n'))?.reason
+  // The live footer is the last line, so the whole grid can be read; a tall dialog's heading sits above the tail window.
+  const reason = findTerminalWaitBlockedSignal(lines.join('\n'), { wholeText: true })?.reason
   if (reason && TRUST_REASONS.has(reason)) {
     const choices = lines.slice(-TRUST_DIALOG_CHOICE_ROWS, -1)
     return choices.some((line) => TRUST_DIALOG_CHOICE_RE.test(line)) ? reason : null
