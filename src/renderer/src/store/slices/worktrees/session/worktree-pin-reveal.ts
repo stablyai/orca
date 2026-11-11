@@ -16,6 +16,10 @@ import { getIndexedWorktreesById } from '../listing/worktree-catalog-index'
 import '@/lib/workspace/ownership/worktree-runtime-owner-index'
 import { worktreeOwnerHostIds } from '@/lib/workspace/ownership/workspace-catalog-owner-index'
 import { selectWorktreesByRepo } from '../../../workspaces/catalog/workspace-record-fields'
+import {
+  notifyWorktreesPinnedByUser,
+  type WorktreePinTarget
+} from '@/lib/orca-cloud/worktree-pin-listeners'
 
 type WorktreeWithEmbeddedLineage = Worktree & { lineage?: WorktreeLineage | null }
 function getProjectedLineage(get: WorktreeSliceGet, worktree: Worktree): WorktreeLineage | null {
@@ -75,6 +79,7 @@ export function createSetWorktreesPinnedAndReveal(
     const activeHostId = get().activeWorkspaceExecutionHostId ?? null
     // Skip worktrees already in the target state so a no-op toggle doesn't scroll the viewport away.
     const updates: WorktreeMetaBatchUpdate[] = []
+    const pinTargets: WorktreePinTarget[] = []
     const changedWorktreeIds = new Set<string>()
     let didChange = false
     let revealWorktreeId: string | null = null
@@ -91,6 +96,7 @@ export function createSetWorktreesPinnedAndReveal(
       }
       const executionHostId = target.hostId ?? current.hostId ?? 'local'
       didChange = true
+      pinTargets.push({ id: worktreeId, hostId: executionHostId })
       // A server-proxied row answers to its own SSH host and to its server's runtime alias.
       const onFocusedHost =
         !activeHostId ||
@@ -116,6 +122,8 @@ export function createSetWorktreesPinnedAndReveal(
     if (!didChange) {
       return
     }
+    // Cloud workspaces mirror this into the member's synced prefs (their other devices).
+    notifyWorktreesPinnedByUser(pinTargets, isPinned)
     if (
       revealWorktreeId === null &&
       activeSidebarWorktreeId !== null &&

@@ -143,13 +143,14 @@ export function createStripeClient(env: Env, fetchImpl: typeof fetch = fetch) {
         idempotencyKey
       )
     },
-    addSubscriptionItem(args: { subscription: string; price: string }) {
+    /** `after`: the id a replayed add returned for an item since removed, so this add is a new one. */
+    addSubscriptionItem(args: { subscription: string; price: string; after?: string }) {
       return request<{ id: string }>(
         'POST',
         '/v1/subscription_items',
         // Metered: nothing to prorate; usage is billed in arrears.
         { subscription: args.subscription, price: args.price, proration_behavior: 'none' },
-        `overage-item:${args.subscription}:${args.price}`
+        `overage-item:${args.subscription}:${args.price}${args.after ? `:after:${args.after}` : ''}`
       )
     },
     /** Moves an item to another price in place (an older overage price to the current one). */
