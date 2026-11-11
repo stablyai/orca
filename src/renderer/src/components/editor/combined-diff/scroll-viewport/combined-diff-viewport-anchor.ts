@@ -170,19 +170,23 @@ export class CombinedDiffViewportAnchor {
     }
     const previous = this.committed?.point
     this.readingDirty = false
-    const edge = this.context.getDirection() === 'up' ? this.context.getHeight() : 0
-    const step = this.context.getDirection() === 'up' ? -1 : 1
-    const visible = this.context.getVisible()
-    for (
-      let index = step === 1 ? 0 : visible.length - 1;
-      index >= 0 && index < visible.length;
-      index += step
-    ) {
-      const point = visible[index].binding?.capture(edge, previous)
-      if (point) {
-        this.preserve(point)
-        return
+    const up = this.context.getDirection() === 'up'
+    const edge = up ? this.context.getHeight() : 0
+    const offset = this.context.getTop() + edge
+    const extents = this.context.getIndex()
+    const item = this.context.getVisible().find((candidate) => {
+      const index = extents.position(candidate.key)
+      if (index === undefined || extents.heightAt(index) <= 0) {
+        return false
       }
+      const start = extents.startAt(index)
+      const end = start + extents.heightAt(index)
+      return up ? start < offset && offset <= end : start <= offset && offset < end
+    })
+    const point = item?.binding?.capture(edge, previous)
+    if (point) {
+      this.preserve(point)
+      return
     }
     this.clearPoint()
   }

@@ -21,7 +21,12 @@ declare module 'monaco-editor/esm/vs/base/browser/ui/scrollbar/scrollableElement
   export class SmoothScrollableElement {
     constructor(
       element: HTMLElement,
-      options: { vertical: number; horizontal: number; useShadows: boolean },
+      options: {
+        vertical: number
+        horizontal: number
+        useShadows: boolean
+        handleMouseWheel?: boolean
+      },
       scrollable: Scrollable
     )
     getDomNode(): HTMLElement

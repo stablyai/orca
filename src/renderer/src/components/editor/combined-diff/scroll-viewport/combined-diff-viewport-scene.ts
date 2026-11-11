@@ -1,5 +1,6 @@
 import { Scrollable } from 'monaco-editor/esm/vs/base/common/scrollable.js'
 import { SmoothScrollableElement } from 'monaco-editor/esm/vs/base/browser/ui/scrollbar/scrollableElement.js'
+import { handleCombinedDiffWheel } from './combined-diff-wheel-input'
 import { CombinedDiffExtentIndex } from './combined-diff-extent-index'
 import type { DiffItemLayout, DiffViewportLayout } from './combined-diff-layout'
 import type { DiffViewportItem } from './combined-diff-viewport-owner'
@@ -50,7 +51,7 @@ export class CombinedDiffViewportScene {
     })
     this.scrollbar = new SmoothScrollableElement(
       this.root,
-      { vertical: 1, horizontal: 2, useShadows: false },
+      { vertical: 1, horizontal: 2, useShadows: false, handleMouseWheel: false },
       this.scrollable
     )
     this.scrollable.onScroll(({ scrollTop }) => {
@@ -61,6 +62,7 @@ export class CombinedDiffViewportScene {
       this.callbacks.scrollTo(target)
     })
     this.root.addEventListener('scroll', this.forwardNativeScroll)
+    this.root.addEventListener('wheel', this.onWheel, { passive: false })
     this.root.addEventListener('keydown', this.onKeyDown)
     this.root.addEventListener('focusin', this.callbacks.focusChanged)
     this.root.addEventListener('focusout', this.callbacks.focusChanged)
@@ -232,6 +234,11 @@ export class CombinedDiffViewportScene {
     event.preventDefault()
     this.callbacks.scrollBy(delta)
   }
+  private onWheel = (event: WheelEvent): void => {
+    if (this.mounted && !this.disposed) {
+      handleCombinedDiffWheel(event, this.root, this.height, this.layout, this.callbacks.scrollBy)
+    }
+  }
   private forwardNativeScroll = (): void => {
     const delta = this.root.scrollTop
     if (!delta && !this.root.scrollLeft) {
@@ -245,6 +252,7 @@ export class CombinedDiffViewportScene {
     this.disposed = true
     this.observer?.disconnect()
     this.root.removeEventListener('scroll', this.forwardNativeScroll)
+    this.root.removeEventListener('wheel', this.onWheel)
     this.root.removeEventListener('keydown', this.onKeyDown)
     this.root.removeEventListener('focusin', this.callbacks.focusChanged)
     this.root.removeEventListener('focusout', this.callbacks.focusChanged)
