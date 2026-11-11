@@ -91,7 +91,7 @@ On the hosts list, tap the host card's **⋯** button (or long-press the card) a
 
 - **Edge authentication** — optional native-app WebSocket handshake headers, stored in this phone's keychain and sent only to a `wss://` endpoint. For Cloudflare Access service tokens, add `CF-Access-Client-Id` and `CF-Access-Client-Secret` using credentials issued for your tunnel's Access policy. Values must use printable ASCII and stay out of pairing links and connection logs. Credentials are bound to the secure host and port: after changing either, save the address, reopen this form, and enter credentials for the new endpoint. Unbound credentials from an earlier development build are never sent. These controls are unavailable in browser builds. Clear all rows to remove the saved headers; removing the host also removes its credentials.
 
-Changing the secure host or port keeps the old credential bundle in the keychain. Returning to that address restores its headers. To delete those credentials, clear all header rows and save while the old address is selected, then change the address.
+Changing the secure host or port keeps the old credential bundle in the keychain until you save headers for another endpoint or clear them. Returning to the old address before then restores its headers. Each host has one credential bundle, so saving headers for a new endpoint replaces the old bundle. To delete the old credentials before switching addresses, clear all header rows and save while the old address is selected.
 
 Saving an address change reconnects to the new endpoint. Pairing token stays the same.
 

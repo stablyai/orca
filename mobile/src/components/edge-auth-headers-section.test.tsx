@@ -197,6 +197,11 @@ it("clears another host's rows before an unreadable credential load", async () =
     expect(current().authNormalized).toEqual({ ok: true, headers: {} })
     expect(current().authChanged).toBe(false)
     expect(current().storedAuthCount).toBe(0)
+    expect(current().authLoaded).toBe(false)
+    await act(async () => {
+      await current().loadAuthForHost('other-host', 'wss://other.example')
+    })
+    expect(current().authLoaded).toBe(true)
   } finally {
     act(() => renderer?.unmount())
   }
