@@ -1,3 +1,4 @@
+import { OrcaCloudWallLine } from './run-on/OrcaCloudWallLine'
 import React from 'react'
 import { FolderPlus, LoaderCircle, PlugZap } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -213,6 +214,7 @@ export function NewWorkspaceComposerProjectSection({
                 {ephemeralVmRecipeError}
               </p>
             ) : null}
+            {cloudStart?.wall ? <OrcaCloudWallLine wall={cloudStart.wall} /> : null}
           </div>
         ) : null}
       </div>

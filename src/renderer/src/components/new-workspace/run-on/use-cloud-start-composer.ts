@@ -28,14 +28,18 @@ import { useRunOnDefault } from './use-run-on-default'
 import { useCloudOnlyCreate, useCloudOnlyRepo } from './use-cloud-only-repo'
 import type { CloudStartView } from './cloud-start-view'
 import { showCloudAgentNotStartedToast } from '@/lib/orca-cloud/cloud-agent-not-started-toast'
+import { orcaCloudWallNotice, useRunOnPreflightEnabled } from '@/lib/orca-cloud/run-on-preflight'
 import { isOrcaCloudAccountAgent } from '../../../../../shared/orca-cloud-agents/orca-cloud-agents-wire'
 
 export type { CloudStartView } from './cloud-start-view'
 
-/** The workspace started without its agent: the one prompt to set it up (design-squad journey). */
+/**
+ * The agent isn't set up: its pane holds on the "Set up once" strip (PC-3b), so the toast only
+ * names the workspace once the user has moved to another one (design-squad journey).
+ */
 function showAgentNotStartedToast(agent: string | null, workspaceName: string): void {
   if (isOrcaCloudAccountAgent(agent)) {
-    showCloudAgentNotStartedToast(agent, workspaceName)
+    showCloudAgentNotStartedToast(agent, workspaceName, { onlyWhenAway: true })
   }
 }
 
@@ -52,7 +56,6 @@ export function useCloudStartComposer({
   createReady = true,
   composerSnapshot,
   onCreate: createWorkspace,
-  onCreateWithoutAgent,
   onClose,
   accessOverride
 }: {
@@ -75,8 +78,6 @@ export function useCloudStartComposer({
   /** The composer as it is now, for the setup page's Back and its auto-start. */
   composerSnapshot: () => ComposerModalData
   onCreate: () => void
-  /** The same create with no agent launched (the agent has no Orca Cloud account yet). */
-  onCreateWithoutAgent?: () => void
   /** Closes the composer (setup moves to its page; a cloud-only repository started, D4). */
   onClose?: () => void
   /** Fixtures pin the account's access. */
@@ -93,6 +94,11 @@ export function useCloudStartComposer({
   const cloudSelected = selectedRecipeId === ORCA_CLOUD_RECIPE_ID
   const fetched = useOrcaCloudRunTargetAccess(segment === 'enabled' && !accessOverride)
   const access = accessOverride ?? fetched
+  const preflight = useRunOnPreflightEnabled()
+  const wall = useMemo(
+    () => (cloudSelected && preflight ? orcaCloudWallNotice(access) : null),
+    [access, cloudSelected, preflight]
+  )
   const cloudOnly = useCloudOnlyRepo({
     repoId,
     cloudSelected,
@@ -110,31 +116,25 @@ export function useCloudStartComposer({
   })
   const { steps, held: switchTeam } = useSwitchTeamSteps(rowSteps, cloudSelected)
   const setupNeeded = cloudSetupRequired(steps, { teamSwitch: switchTeam !== null })
-  // The agent has no Orca Cloud account (the user skipped setting it up): never launch it into its
-  // /login. Start a plain terminal and say how to set the agent up once.
+  // The agent has no Orca Cloud account (the user skipped setting it up). It is still created with
+  // the workspace: its launch holds on the pane's "Set up once" strip and never reaches the agent's
+  // own /login (PC-3b, #385), and its first prompt waits for it.
   const agentUnset =
     cloudSelected && steps.some((step) => step.id === 'agent' && step.state === 'optional')
   const onCreateRaw = useCloudOnlyCreate({
     cloudOnly,
     createWorkspace,
     prompt,
-    agent: agentUnset ? null : agent,
+    agent,
     profileId,
     onClose
   })
   const onCreate = useCallback(() => {
-    if (!agentUnset) {
-      onCreateRaw()
-      return
+    onCreateRaw()
+    if (agentUnset) {
+      showAgentNotStartedToast(agent, prompt)
     }
-    // A GitHub-only start already leaves the agent out (above); a local project's create skips it.
-    if (cloudOnly.picked || !onCreateWithoutAgent) {
-      onCreateRaw()
-    } else {
-      onCreateWithoutAgent()
-    }
-    showAgentNotStartedToast(agent, prompt)
-  }, [agent, agentUnset, cloudOnly.picked, onCreateRaw, onCreateWithoutAgent, prompt])
+  }, [agent, agentUnset, onCreateRaw, prompt])
 
   const { markTouched } = useRunOnDefault({
     active,
@@ -221,9 +221,10 @@ export function useCloudStartComposer({
             onSelectOrcaCloud,
             onUserPick: markTouched,
             cloudOnly,
-            folderProject: cloudOnly.folderProject
+            folderProject: cloudOnly.folderProject,
+            wall
           },
-    [cloudOnly, markTouched, onSelectOrcaCloud, segment]
+    [cloudOnly, markTouched, onSelectOrcaCloud, segment, wall]
   )
   if (!view || !cloudSelected) {
     return { view, onPrimary: null, recordCreated }

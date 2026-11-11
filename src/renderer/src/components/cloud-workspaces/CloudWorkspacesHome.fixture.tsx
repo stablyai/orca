@@ -309,3 +309,38 @@ export const routineRunsShown = defineFixture({
     await waitFor(() => document.querySelector('[aria-label="Routine run"]') !== null)
   }
 })
+
+/** JA-30: a few workspaces (under 5) and no filter on: title and count only, no filter row. */
+export const fewWorkspaces = defineFixture({
+  width: WIDTH,
+  store: { orcaProfileAuthStatus: AUTH_STATUS },
+  setup: () => {
+    const rows = teamWorkspaces().slice(0, 3)
+    stubCloudWorkspacesApi(() => Promise.resolve({ ok: true, value: rows }))
+  },
+  render: () => <CloudWorkspacesHome />,
+  interact: () => waitFor(() => document.querySelector('[data-cloud-workspace-row]') !== null)
+})
+
+/** JA-30: Mine on a team where others have workspaces: "You don't have any…", same button. */
+export const emptyMine = defineFixture({
+  width: WIDTH,
+  store: { orcaProfileAuthStatus: AUTH_STATUS },
+  setup: () => {
+    const rows = teamWorkspaces()
+    stubCloudWorkspacesApi(() => Promise.resolve({ ok: true, value: rows }))
+    Object.assign(window.api.cloudWorkspaces, {
+      list: (query: { scope?: string }) =>
+        Promise.resolve({ ok: true as const, value: query.scope === 'mine' ? [] : rows })
+    })
+  },
+  render: () => <CloudWorkspacesHome />,
+  interact: async () => {
+    await waitFor(() => document.querySelector('[data-cloud-workspace-row]') !== null)
+    const mine = [...document.querySelectorAll<HTMLElement>('[role="radio"], button')].find(
+      (el) => el.textContent?.trim() === 'Mine'
+    )
+    mine?.click()
+    await waitFor(() => (document.querySelector('section')?.textContent ?? '').includes('yet.'))
+  }
+})

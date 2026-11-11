@@ -182,4 +182,40 @@ describe('Orca Cloud list reconcile', () => {
     await backfill.run()
     expect(onListed).toHaveBeenCalledTimes(2)
   })
+
+  it('a forced run lists now, so a sandbox deleted elsewhere is pruned without waiting (LC-2)', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-gone-force-'))
+    dirs.push(userDataPath)
+    upsertEphemeralVmRuntime(userDataPath, record('lumpfish'))
+    const onListed = vi.fn(async () => {})
+    const backfill = createCloudAccountBackfill({
+      userDataPath,
+      activeAccountId: () => TEAM,
+      list: async () => [],
+      onListed,
+      relistMs: 10 * 60_000,
+      now: () => 0
+    })
+    await backfill.run()
+    await backfill.run()
+    expect(onListed).toHaveBeenCalledTimes(1)
+    await backfill.run({ force: true })
+    expect(onListed).toHaveBeenCalledTimes(2)
+  })
+
+  it('logs one line per pruned record, naming the sandbox and why', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-gone-log-'))
+    dirs.push(userDataPath)
+    upsertEphemeralVmRuntime(userDataPath, record('cusk', { workspaceName: 'cusk' }))
+    const lines: string[] = []
+    const prune = createCloudSandboxGonePrune({
+      userDataPath,
+      activeAccountId: () => TEAM,
+      get: notFound,
+      retire: async () => {},
+      log: (line) => lines.push(line)
+    })
+    await prune.observeList(TEAM, new Set())
+    expect(lines).toEqual(['[orca-cloud] pruned stale cloud workspace sbx-cusk (cusk; not found)'])
+  })
 })

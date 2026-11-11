@@ -250,3 +250,55 @@ export const withCloudSnapshot = defineFixture({
       />
     )
 })
+
+/** Sleep chosen with an earlier copy on screen: the header note says the new copy is saving. */
+export const goingToSleepWithEarlierCopy = defineFixture({
+  width: 900,
+  render: () =>
+    frame(
+      <CloudWorkspaceOfflineView
+        snapshot={snapshot}
+        queued={[]}
+        workspaceName="fix-auth-redirect"
+        now={NOW}
+        goingToSleep
+        viewOnly
+        onKeepAwake={noop}
+        onWake={noop}
+        onQueue={yes}
+        onCancel={noop}
+        onEdit={yes}
+      />
+    )
+})
+
+const PROMPT = 'ubuntu@w2slot:~/orca/workspaces/Hello-World/w2slot$'
+
+/** A terminal respawned by wakes: each boot's prompt on its own line, no blank rows above. */
+export const terminalAfterWakes = defineFixture({
+  width: 900,
+  render: () =>
+    frame(
+      <CloudWorkspaceOfflineView
+        snapshot={{
+          ...snapshot,
+          chats: [],
+          terminals: [
+            {
+              handle: 'boot-3',
+              title: null,
+              lines: [...Array<string>(14).fill(''), `${PROMPT} ${PROMPT} ${PROMPT} `],
+              at: NOW - 2 * MIN
+            }
+          ]
+        }}
+        queued={[]}
+        workspaceName="w2slot"
+        now={NOW}
+        onWake={noop}
+        onQueue={yes}
+        onCancel={noop}
+        onEdit={yes}
+      />
+    )
+})

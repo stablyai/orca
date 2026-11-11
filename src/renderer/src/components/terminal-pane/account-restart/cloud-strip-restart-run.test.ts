@@ -44,6 +44,8 @@ const TAB = 'tab-1'
 const LEAF = '11111111-1111-4111-8111-111111111111'
 const PTY = 'env-1@@pty-1'
 const PANE_KEY = makePaneKey(TAB, LEAF)
+/** The terminal a resume ensure placed in the pane's leaf. */
+const RESUMED = { handle: 'term_resumed', disposition: 'created' as const }
 
 function seed(state: AgentStatusEntry['state']): void {
   useAppStore.setState({
@@ -292,6 +294,7 @@ describe('RA-11 Restart on a paired (remote) pane', () => {
     const providerSession = { key: 'session_id' as const, id: 'sess-tab-1' }
     const resumeRemotePane = vi.fn(async () => {
       order.push('resume')
+      return RESUMED
     })
     const freshIfResumeFoundNothing = vi.fn(async () => false)
     const handleRestartPane = vi.fn(() => order.push('reconnect'))
@@ -311,6 +314,7 @@ describe('RA-11 Restart on a paired (remote) pane', () => {
         order.push('stop')
       },
       resumeRemotePane,
+      waitForResumedTerminal: () => Promise.resolve(),
       freshIfResumeFoundNothing,
       buildFreshCommand: (agent, leafId, agentArgs) => `fresh ${agent} ${leafId} ${agentArgs}`
     })
@@ -376,14 +380,15 @@ describe('RA-11 Restart on a paired (remote) pane', () => {
       }),
       handleRestartPane,
       stopRemotePane: () => Promise.resolve(),
-      resumeRemotePane: () => Promise.resolve(),
+      resumeRemotePane: () => Promise.resolve(RESUMED),
+      waitForResumedTerminal: () => Promise.resolve(),
       freshIfResumeFoundNothing: (input) =>
         realBackstop({ ...input, sleep: () => Promise.resolve() }),
       buildFreshCommand: () => 'claude --dangerously-skip-permissions'
     })
     await vi.waitFor(() => expect(cloudAgentRestartStartedFresh(PANE_KEY, 0)).toBe(true))
     expect(rpc.sends).toEqual([
-      { terminal: 'term_new', text: 'claude --dangerously-skip-permissions', enter: true }
+      { terminal: 'term_new', text: 'claude --dangerously-skip-permissions\r' }
     ])
     vi.advanceTimersByTime(CLOUD_AGENT_FRESH_NOTICE_MS)
     expect(cloudAgentRestartStartedFresh(PANE_KEY, 0)).toBe(false)
@@ -405,7 +410,8 @@ describe('RA-11 Restart on a paired (remote) pane', () => {
       }),
       handleRestartPane,
       stopRemotePane: () => Promise.resolve(),
-      resumeRemotePane: () => Promise.resolve(),
+      resumeRemotePane: () => Promise.resolve(RESUMED),
+      waitForResumedTerminal: () => Promise.resolve(),
       freshIfResumeFoundNothing: async () => true,
       buildFreshCommand: () => 'claude'
     })
@@ -425,7 +431,7 @@ describe('RA-11 Restart on a paired (remote) pane', () => {
       }
     })
     clickRemoteRestart()
-    const resumeRemotePane = vi.fn(async () => undefined)
+    const resumeRemotePane = vi.fn(async () => RESUMED)
     const freshIfResumeFoundNothing = vi.fn(async () => false)
     const buildFreshCommand = vi.fn(
       (_agent: string, _leaf: string, agentArgs?: string | null) => `claude ${agentArgs}`
@@ -445,6 +451,7 @@ describe('RA-11 Restart on a paired (remote) pane', () => {
       handleRestartPane,
       stopRemotePane: () => Promise.resolve(),
       resumeRemotePane,
+      waitForResumedTerminal: () => Promise.resolve(),
       freshIfResumeFoundNothing,
       buildFreshCommand
     })
@@ -455,6 +462,151 @@ describe('RA-11 Restart on a paired (remote) pane', () => {
       })
     )
     expect(buildFreshCommand).toHaveBeenCalledWith('claude', LEAF, '--model opus --effort high')
+  })
+
+  it('a fresh start that could not be typed shows Couldn’t restart (never a quiet bare shell)', async () => {
+    clickRemoteRestart()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    // The pane settles on its new PTY first; the failed fallback must bring the strip back.
+    const handleRestartPane = vi.fn(() => {
+      settleCloudAgentRestart(PANE_KEY)
+    })
+    runReadyPaneAccountRestarts({
+      panes: [{ id: 7, leafId: LEAF }],
+      ptyIdOf: () => REMOTE,
+      readyRestartPtyIds: selectReadyAccountRestartPtyIds(useAppStore.getState(), TAB),
+      tabId: TAB,
+      consumePendingPaneAccountRestart: useAppStore.getState().consumePendingPaneAccountRestart,
+      buildAccountRestartStartup: () => ({
+        command: 'claude',
+        resumeProviderSession: { key: 'session_id' as const, id: 'sess-tab-1' }
+      }),
+      handleRestartPane,
+      stopRemotePane: () => Promise.resolve(),
+      resumeRemotePane: () => Promise.resolve(RESUMED),
+      waitForResumedTerminal: () => Promise.resolve(),
+      freshIfResumeFoundNothing: () => Promise.reject(new Error('ra11e_fresh_send_failed')),
+      buildFreshCommand: () => 'claude'
+    })
+    await vi.waitFor(() => expect(cloudAgentRestartAttempt(PANE_KEY, 0)?.phase).toBe('failed'))
+    expect(cloudAgentRestartAttempt(PANE_KEY, 0)).toMatchObject({
+      failure: 'hostUnresponsive',
+      resumable: false
+    })
+    expect(cloudAgentRestartStartedFresh(PANE_KEY, 0)).toBe(false)
+    warn.mockRestore()
+  })
+
+  // RA-11 resume race: the pane's own transport reattached when the stop ended its stream, woke the
+  // leaf with its original launch, and the resume was adopted away.
+  function runResume(over: {
+    waitForResumedTerminal?: () => Promise<void>
+    onReconnect?: () => void
+    order?: string[]
+  }) {
+    const order = over.order ?? []
+    const handleRestartPane = vi.fn(
+      (_paneId: number, _startup: unknown, options: { focus: boolean }) => {
+        order.push(options.focus ? 'reconnect(focus)' : 'reconnect')
+        over.onReconnect?.()
+      }
+    )
+    runReadyPaneAccountRestarts({
+      panes: [{ id: 7, leafId: LEAF }],
+      ptyIdOf: () => REMOTE,
+      readyRestartPtyIds: selectReadyAccountRestartPtyIds(useAppStore.getState(), TAB),
+      tabId: TAB,
+      consumePendingPaneAccountRestart: useAppStore.getState().consumePendingPaneAccountRestart,
+      buildAccountRestartStartup: () => ({
+        command: 'claude',
+        resumeProviderSession: { key: 'session_id' as const, id: 'sess-tab-1' }
+      }),
+      handleRestartPane,
+      releasePaneForRestart: () => {
+        order.push('release')
+      },
+      stopRemotePane: async () => {
+        order.push('stop')
+      },
+      resumeRemotePane: async () => {
+        order.push('ensure')
+        return { handle: 'term_resumed', disposition: 'created' as const }
+      },
+      waitForResumedTerminal: async () => {
+        order.push('ready?')
+        await (over.waitForResumedTerminal?.() ?? Promise.resolve())
+      },
+      freshIfResumeFoundNothing: async () => false,
+      buildFreshCommand: () => 'claude'
+    })
+    return { handleRestartPane, order }
+  }
+
+  function bindPane(handle: string): void {
+    const layouts = useAppStore.getState().terminalLayoutsByTabId
+    useAppStore.setState({
+      terminalLayoutsByTabId: {
+        ...layouts,
+        [TAB]: { ...layouts[TAB]!, ptyIdsByLeafId: { [LEAF]: `remote:env-1@@${handle}` } }
+      }
+    })
+  }
+
+  it('lets go of the pane before the stop, then stop → resume → ready → one reconnect', async () => {
+    clickRemoteRestart()
+    const { handleRestartPane, order } = runResume({})
+    await vi.waitFor(() => expect(handleRestartPane).toHaveBeenCalledTimes(1))
+    expect(order).toEqual(['release', 'stop', 'ensure', 'ready?', 'reconnect'])
+  })
+
+  it('never reconnects before the resumed terminal is live in the leaf', async () => {
+    clickRemoteRestart()
+    let ready: () => void = () => undefined
+    const gate = new Promise<void>((resolve) => {
+      ready = resolve
+    })
+    const { handleRestartPane, order } = runResume({ waitForResumedTerminal: () => gate })
+    await vi.waitFor(() => expect(order).toContain('ready?'))
+    await Promise.resolve()
+    expect(handleRestartPane).not.toHaveBeenCalled()
+    ready()
+    await vi.waitFor(() => expect(handleRestartPane).toHaveBeenCalledTimes(1))
+  })
+
+  it('a resumed terminal that never shows fails the restart and reattaches the pane (never empty)', async () => {
+    clickRemoteRestart()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const { handleRestartPane } = runResume({
+      waitForResumedTerminal: () => Promise.reject(new Error('restart_resume_not_ready'))
+    })
+    await vi.waitFor(() => expect(cloudAgentRestartAttempt(PANE_KEY, 0)?.phase).toBe('failed'))
+    expect(cloudAgentRestartAttempt(PANE_KEY, 0)?.failure).toBe('hostUnresponsive')
+    expect(handleRestartPane).toHaveBeenCalledTimes(1)
+    expect(handleRestartPane.mock.calls[0]?.[2]).toEqual({ focus: false })
+    warn.mockRestore()
+  })
+
+  it('the pane binding the resumed terminal is a clean restart', async () => {
+    clickRemoteRestart()
+    const { handleRestartPane } = runResume({ onReconnect: () => bindPane('term_resumed') })
+    await vi.waitFor(() => expect(handleRestartPane).toHaveBeenCalledTimes(1))
+    await Promise.resolve()
+    expect(cloudAgentRestartAttempt(PANE_KEY, 0)?.phase).not.toBe('failed')
+  })
+
+  it('the pane binding any other terminal fails visibly (a new conversation is not a resume)', async () => {
+    clickRemoteRestart()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const { handleRestartPane } = runResume({
+      onReconnect: () => {
+        settleCloudAgentRestart(PANE_KEY)
+        bindPane('term_original_launch')
+      }
+    })
+    await vi.waitFor(() => expect(handleRestartPane).toHaveBeenCalledTimes(1))
+    await vi.waitFor(() => expect(cloudAgentRestartAttempt(PANE_KEY, 0)?.phase).toBe('failed'))
+    expect(cloudAgentRestartAttempt(PANE_KEY, 0)?.ptyId).toBe('remote:env-1@@term_original_launch')
+    warn.mockRestore()
   })
 
   it('a failed resume on the host shows the failure and never reconnects', async () => {

@@ -41,6 +41,7 @@ import {
 } from '@/lib/worktree-sleep-view'
 import { useWakeInput, useWakeInputNotices } from './use-wake-input'
 import { useWakeAttachHold } from './use-wake-attach-hold'
+import { useWakeAfterSleep } from '@/lib/worktree-sleep-wake-request'
 import { clearWakeInput } from '@/components/terminal-pane/input/wake-input-buffer'
 import { runUnarchiveCloudWorkspace, wakeCloudWorkspace } from './cloud-workspace-actions'
 import { keepWorkspaceAwakeDuringSleep } from '@/components/sidebar/workspace-actions/sleep/workspace-sleep-follower'
@@ -186,7 +187,10 @@ function CloudSurface({ workspaceId }: { workspaceId: string }): React.JSX.Eleme
   // Ready means the server answers; the pill stays ("Connecting…") until the pane in front has
   // re-attached and can take keys.
   const attachHold = useWakeAttachHold(workspaceId, view.wake)
-  const shownWake = attachHold.wake ?? view.wake
+  // Wake pressed while main still suspends the VM: shown as waking from the press, before main
+  // can report (and with the same start once it does).
+  const wakeAfterSleep = useWakeAfterSleep(workspaceId)
+  const shownWake = attachHold.wake ?? view.wake ?? wakeAfterSleep
   const now = useNow(1_000, shownWake !== undefined)
   // Typing is accepted while a wake is in flight, so the terminal stays visible and typeable.
   const wakeInput = useWakeInput(workspaceId)
@@ -195,7 +199,7 @@ function CloudSurface({ workspaceId }: { workspaceId: string }): React.JSX.Eleme
     shownWake,
     Math.max(now, shownWake?.at ?? 0),
     t('orcaCloudWorkspace.overlay.stalled', 'Orca Cloud stopped responding while waking.'),
-    wakeInput.pending > 0
+    wakeInput.pending > 0 || wakeAfterSleep !== undefined
   )
   const archived = view.state === 'archived'
   const maybeAsleep =

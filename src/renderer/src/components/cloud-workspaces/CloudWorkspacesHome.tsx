@@ -17,7 +17,7 @@ import { CloudWorkspaceRow } from './CloudWorkspaceRow'
 import { CloudWorkspaceGroupView, rowDragProps } from './CloudWorkspaceGroup'
 import { useCloudWorkspaceArrangement } from './use-cloud-workspace-arrangement'
 import { NEW_SECTION } from './CloudWorkspaceRowMenu'
-import { ANY, CloudWorkspacesToolbar } from './CloudWorkspacesToolbar'
+import { ANY, CloudWorkspacesToolbar, shouldShowCloudHomeFilters } from './CloudWorkspacesToolbar'
 import { EmptyState, ErrorState, NewSectionDialog, SkeletonRows } from './CloudWorkspacesStates'
 import { useCloudHomeFilters } from './use-cloud-home-filters'
 import { CloudWorkspaceConfirmDialog, type PendingConfirm } from './CloudWorkspaceConfirmDialog'
@@ -259,8 +259,8 @@ export function CloudWorkspacesHome({
         selfId={selfId}
         metaStale={stale}
         meta={
-          state.status === 'ready'
-            ? // Why: no hours here. A sum over the listed workspaces isn't the team's month, and it
+          state.status === 'ready' && visible.length > 0
+            ? // Why: no hours here. Empty: the empty card says so; no "0 workspaces" (JA-30). A sum over the listed workspaces isn't the team's month, and it
               // disagreed with Plan & billing and the account menu (JA-07).
               t('auto.components.cloudWorkspaces.listMetaCount', '{{count}} workspaces', {
                 count: visible.length,
@@ -271,6 +271,7 @@ export function CloudWorkspacesHome({
         reading={reading}
         onRefresh={refresh}
         routineRuns={routineRuns}
+        showFilters={shouldShowCloudHomeFilters(all.length, filters, Boolean(orgId))}
       />
 
       <div
@@ -297,6 +298,7 @@ export function CloudWorkspacesHome({
             scope={scope}
             archived={filters.archived}
             filtered={by !== ANY || repo !== ANY}
+            hasOrg={Boolean(orgId)}
           />
         )}
         {state.status === 'ready' &&

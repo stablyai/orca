@@ -1,3 +1,4 @@
+import { runOnHonoursParentWorktree } from './new-workspace/run-on/cloud-advanced-options'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -324,7 +325,12 @@ export default function NewWorkspaceComposerCard(
           branchNameInputId={branchNameInputId}
           showSetupAgentStartupPolicy={showSetupAgentStartupPolicy}
           parentWorktreeId={parentWorktreeId}
-          onParentWorktreeIdChange={onParentWorktreeIdChange}
+          // DS-j: Orca Cloud can't take a parent (a new sandbox is its own host): no picker.
+          onParentWorktreeIdChange={
+            runOnHonoursParentWorktree(props.selectedEphemeralVmRecipeId)
+              ? onParentWorktreeIdChange
+              : undefined
+          }
           selectedRepoExecutionHostId={selectedRepoExecutionHostId}
           selectedRepoProjectId={selectedRepoProjectId}
           activeFolderWorkspaceId={activeFolderWorkspaceId}

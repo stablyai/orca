@@ -19006,6 +19006,20 @@
                 }
               }
             }
+          },
+          "SandboxOnlyBrowserPage": {
+            "title": "Your agent opened this page in the sandbox",
+            "body": "Orca can't show the sandbox's browser here yet. Open the page on this computer to see it. Pages the agent signed in to will open signed out.",
+            "open": "Open on this computer",
+            "sandboxOnly": "This page can only be viewed in the sandbox.",
+            "cantShow": "Orca can't show the sandbox's browser here yet.",
+            "openFailed": "Couldn't open the page. Try again."
+          },
+          "SandboxUnreachableSite": {
+            "title": "The sandbox can't reach {{value0}}",
+            "notRunning": "Nothing is running on {{value0}} in the sandbox.",
+            "outside": "Orca Cloud sandboxes only reach approved sites and servers running in the sandbox, like localhost:3000.",
+            "openInBrowser": "Open in your browser"
           }
         },
         "webauthn": {
@@ -20965,9 +20979,6 @@
         "emptyArchivedTitle": "No archived workspaces",
         "emptyFilteredBody": "Try another owner or repository.",
         "emptyFilteredTitle": "Nothing matches these filters",
-        "emptyMineTitle": "No cloud workspaces yet",
-        "emptyTeamBody": "Share a cloud workspace from its menu and everyone on your team can open it here.",
-        "emptyTeamTitle": "No team workspaces yet",
         "environmentName": "{{value0}} (cloud)",
         "errorConcurrencyLimit": "You're at your team's limit of running sandboxes. Put one to sleep or delete it, then try again.",
         "errorMemberConcurrencyLimit": "You're at your limit of running sandboxes. Put one to sleep or delete it, then try again.",
@@ -21118,7 +21129,8 @@
           "lateEdit": "Too late to change: {{agent}} is starting with the queued prompt. Send your edit once the workspace opens:",
           "lateQueue": "Too late to queue: {{agent}} is already starting. Send this once the workspace opens:",
           "draftQueued": "Draft for {{agent}}, typed in when ready",
-          "queued": "Queued for {{agent}}",
+          "queuedUntilReady": "First prompt for {{agent}} · Sends when the workspace is ready",
+          "held": "First prompt for {{agent}} · Sends once {{agent}} is set up",
           "drafting": "Ready as a draft in {{agent}}",
           "sending": "Sending to {{agent}} next",
           "edit": "Edit queued prompt"
@@ -23694,8 +23706,10 @@
       }
     },
     "cloudWorkspaces": {
-      "emptyMineStartBody": "Start one and it keeps running while your laptop sleeps.",
-      "newCloudWorkspace": "New cloud workspace"
+      "newCloudWorkspace": "New cloud workspace",
+      "emptyStartBody": "It runs in a sandbox, so your agents keep working even when this computer is off.",
+      "emptyMineYoursTitle": "You don’t have any cloud workspaces yet.",
+      "emptyFirstTitle": "Start your first cloud workspace"
     },
     "worktreeCreation": {
       "pendingNativeChat": {
@@ -27068,8 +27082,7 @@
     "undo": "Undo",
     "unarchiveFailed": "Couldn’t unarchive the workspace",
     "asleep": {
-      "noCopy": "Asleep · nothing cached yet",
-      "readOnly": "Read-only copy kept on this computer."
+      "noCopy": "Asleep · nothing cached yet"
     },
     "bytes": {
       "gb": "{{value}} GB",
@@ -28263,8 +28276,7 @@
       "agent": "Agent",
       "github": "GitHub",
       "plan": "Plan",
-      "team": "Team",
-      "trial": "Trial"
+      "team": "Team"
     },
     "stepCurrent": "current step",
     "stepDone": "done",

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { orcaCloudNeedsFixFirst, useRunOnPreflightEnabled } from '@/lib/orca-cloud/run-on-preflight'
 import type { OrcaCloudAvailability } from '../../../../shared/orca-yaml-hook-types'
 import { isOrcaCloudRecipe, type EphemeralVmRecipeOption } from './run-target-options'
 import { getOrcaCloudPick, type OrcaCloudRunTargetAccess } from './orca-cloud-run-target-access'
@@ -70,6 +71,8 @@ export function useRunTargetOrcaCloud({
   runBlockedAction: () => void
   select: (recipe: EphemeralVmRecipeOption | null) => void
 } {
+  // JA-21 (flagged): in the composer a billing wall routes to its fix instead of picking Orca Cloud.
+  const preflight = useRunOnPreflightEnabled() && Boolean(onSelectOrcaCloud)
   const fetched = useOrcaCloudRunTargetAccess(
     !override && (recipes.some(isOrcaCloudRecipe) || offer?.state === 'no-plan')
   )
@@ -100,7 +103,11 @@ export function useRunTargetOrcaCloud({
   const pickFor = useCallback(
     (resolved: OrcaCloudRunTargetAccess, recipe: EphemeralVmRecipeOption | null): void => {
       const pick = getOrcaCloudPick(resolved)
-      if (onSelectOrcaCloud && pick.kind !== 'blocked') {
+      if (
+        onSelectOrcaCloud &&
+        pick.kind !== 'blocked' &&
+        !(preflight && orcaCloudNeedsFixFirst(resolved))
+      ) {
         close()
         onSelectOrcaCloud()
         return
@@ -114,7 +121,7 @@ export function useRunTargetOrcaCloud({
         selectRecipe(recipe.id)
       }
     },
-    [close, onSelectOrcaCloud, selectRecipe]
+    [close, onSelectOrcaCloud, preflight, selectRecipe]
   )
   const runBlockedAction = useCallback((): void => pickFor(access, null), [access, pickFor])
   const select = useCallback(

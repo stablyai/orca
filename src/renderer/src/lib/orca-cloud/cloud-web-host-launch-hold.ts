@@ -14,11 +14,13 @@ import type {
   CreatedWebRuntimeSessionTerminal
 } from '@/runtime/hosted-terminals/creation/terminal-create-contracts'
 import { translate } from '@/i18n/i18n'
+import { useAppStore } from '@/store'
 import { isOrcaCloudEnvironmentId } from './orca-cloud-environment-id'
 import {
   cloudAgentLaunchDecision,
   cloudTabHoldKey,
-  holdCloudAgentLaunch
+  holdCloudAgentLaunch,
+  takeCloudAgentHoldStartedByPerson
 } from './cloud-agent-launch-hold'
 
 type CreateHostTerminal = (
@@ -86,15 +88,65 @@ export async function createWithCloudAgentHold(
     )
     return placeholder
   }
-  const created = await create(args)
+  // Started by the person's click in the held pane: bring the agent's tab forward so they see their
+  // queued prompt run. A Renew's auto-start (maybe on a background tab) never steals focus.
+  const startedByPerson = takeCloudAgentHoldStartedByPerson(cloudTabHoldKey(tabId))
+  const created = await create(startedByPerson ? { ...args, activate: true } : args)
   // The agent opened in its own tab; the placeholder shell has done its job.
   if (args.environmentId) {
-    void closeWebRuntimeSessionTab({
+    const closed = closeWebRuntimeSessionTab({
       worktreeId: args.worktreeId,
       tabId,
       environmentId: args.environmentId,
       reason: 'user'
     }).catch(() => undefined)
+    if (startedByPerson && created.hostTabId) {
+      // Closing the (active) placeholder selects its neighbour, a plain terminal; the person asked
+      // for the agent, so its tab takes focus once the placeholder is gone.
+      const agentTabId = toWebTerminalSurfaceTabId(
+        webTerminalPlacementParentTabId(created.hostTabId)
+      )
+      void closed.then(() => focusAgentTab(args.worktreeId, agentTabId))
+    }
   }
   return created
+}
+
+// The agent's tab can reach the store after the placeholder's close (a create's sync is slower).
+const AGENT_TAB_FOCUS_WAIT_MS = 10_000
+
+/** Focus the agent's tab once it is in the store, unless the person picked another tab meanwhile. */
+function focusAgentTab(worktreeId: string, agentTabId: string): void {
+  const hasTab = (): boolean =>
+    (useAppStore.getState().tabsByWorktree[worktreeId] ?? []).some((tab) => tab.id === agentTabId)
+  if (hasTab()) {
+    useAppStore.getState().setActiveTab(agentTabId)
+    return
+  }
+  const activeAtClose = useAppStore.getState().activeTabId
+  let done = false
+  const finish = (): void => {
+    done = true
+    unsubscribe()
+    clearTimeout(timer)
+  }
+  const unsubscribe = useAppStore.subscribe((state) => {
+    if (done) {
+      return
+    }
+    if (state.activeTabId !== activeAtClose && state.activeTabId !== agentTabId) {
+      // The person chose a tab themselves: never take it from them.
+      finish()
+      return
+    }
+    if (hasTab()) {
+      finish()
+      useAppStore.getState().setActiveTab(agentTabId)
+    }
+  })
+  const timer = setTimeout(() => {
+    if (!done) {
+      finish()
+    }
+  }, AGENT_TAB_FOCUS_WAIT_MS)
 }

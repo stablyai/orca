@@ -143,13 +143,21 @@ export function SkeletonRows(): React.JSX.Element {
 export function EmptyState({
   scope,
   archived,
-  filtered
+  filtered,
+  hasOrg = true
 }: {
   scope: 'team' | 'mine'
   archived: boolean
   filtered: boolean
+  /** On a team: an empty Mine list says it's yours that's empty, not that nobody has started one. */
+  hasOrg?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
+  // Nothing to filter or share yet: say how to start one (JA-30), in the glossary's own words.
+  const startBody = t(
+    'components.cloudWorkspaces.emptyStartBody',
+    'It runs in a sandbox, so your agents keep working even when this computer is off.'
+  )
   const [title, body] = filtered
     ? [
         t('auto.components.cloudWorkspaces.emptyFilteredTitle', 'Nothing matches these filters'),
@@ -163,20 +171,17 @@ export function EmptyState({
             'Archived cloud workspaces show up here.'
           )
         ]
-      : scope === 'team'
+      : scope === 'mine' && hasOrg
         ? [
-            t('auto.components.cloudWorkspaces.emptyTeamTitle', 'No team workspaces yet'),
             t(
-              'auto.components.cloudWorkspaces.emptyTeamBody',
-              'Share a cloud workspace from its menu and everyone on your team can open it here.'
-            )
+              'components.cloudWorkspaces.emptyMineYoursTitle',
+              'You don’t have any cloud workspaces yet.'
+            ),
+            startBody
           ]
         : [
-            t('auto.components.cloudWorkspaces.emptyMineTitle', 'No cloud workspaces yet'),
-            t(
-              'components.cloudWorkspaces.emptyMineStartBody',
-              'Start one and it keeps running while your laptop sleeps.'
-            )
+            t('components.cloudWorkspaces.emptyFirstTitle', 'Start your first cloud workspace'),
+            startBody
           ]
   // Spec E3: an empty Mine or Team list offers a real button, not just copy.
   const offerCreate = !filtered && !archived

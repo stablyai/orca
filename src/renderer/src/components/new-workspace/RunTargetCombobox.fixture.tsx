@@ -57,12 +57,15 @@ function Preview({
   vmSelected = false,
   recipes = NO_RECIPES,
   recipeValue = null,
-  access
+  access,
+  composer = false
 }: {
   vmSelected?: boolean
   recipes?: EphemeralVmRecipeOption[]
   recipeValue?: string | null
   access?: OrcaCloudRunTargetAccess
+  /** The composer's picker: setup comes after Start, JA-21's preflight applies when flagged. */
+  composer?: boolean
 }): React.JSX.Element {
   return (
     <div className="h-[460px] p-4">
@@ -81,6 +84,7 @@ function Preview({
           recipes.some((recipe) => recipe.provider === 'orca-cloud') ? 'offered' : 'needs-sign-in'
         }
         {...(access ? { orcaCloudAccess: access } : {})}
+        {...(composer ? { onSelectOrcaCloud: () => {} } : {})}
       />
     </div>
   )
@@ -280,4 +284,69 @@ export const orcaCloudCapReachedMember = defineFixture({
 export const rowActions = defineFixture({
   ...vmSelectedClosed,
   interact: pressKeys('ArrowDown', 'ArrowDown')
+})
+
+// JA-21 (flagged): the composer's picker for an owner at a billing wall, flag off then on.
+const preflight = (on: boolean): void => {
+  if (on) {
+    localStorage.setItem('orca:dev:runOnPreflight', '1')
+  } else {
+    localStorage.removeItem('orca:dev:runOnPreflight')
+  }
+}
+export const composerOutOfHoursPreflightOff = defineFixture({
+  width: 420,
+  render: () => {
+    preflight(false)
+    return (
+      <Preview
+        composer
+        recipes={withCloud}
+        access={{ state: 'out-of-hours', cause: 'hours', canManageBilling: true }}
+      />
+    )
+  },
+  interact: open
+})
+export const composerOutOfHoursPreflight = defineFixture({
+  width: 420,
+  render: () => {
+    preflight(true)
+    return (
+      <Preview
+        composer
+        recipes={withCloud}
+        access={{ state: 'out-of-hours', cause: 'hours', canManageBilling: true }}
+      />
+    )
+  },
+  interact: open
+})
+export const composerPaymentIssuePreflight = defineFixture({
+  width: 420,
+  render: () => {
+    preflight(true)
+    return (
+      <Preview
+        composer
+        recipes={withCloud}
+        access={{ state: 'payment-issue', canManageBilling: true }}
+      />
+    )
+  },
+  interact: open
+})
+export const composerLapsedPreflight = defineFixture({
+  width: 420,
+  render: () => {
+    preflight(true)
+    return (
+      <Preview
+        composer
+        recipes={withCloud}
+        access={{ state: 'no-plan', lapsed: true, canManageBilling: true }}
+      />
+    )
+  },
+  interact: open
 })

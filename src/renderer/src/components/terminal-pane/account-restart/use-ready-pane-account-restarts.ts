@@ -8,6 +8,7 @@ import {
 import {
   beginCloudAgentRestart,
   failCloudAgentRestart,
+  failCloudAgentRestartAfterLaunch,
   noteCloudAgentRestartFresh,
   isForcedCloudAgentRestart,
   noteCloudAgentRestartLaunched
@@ -23,12 +24,18 @@ import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
 } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import {
+  expectPaneBindsHandle,
+  remotePtyIdWithHandle
+} from '@/lib/orca-cloud/cloud-restart-bind-check'
+import { waitForResumedTerminalReady } from '@/lib/orca-cloud/cloud-resumed-terminal-ready'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import {
   isRemoteRuntimePtyId,
   parseRemoteRuntimePtyId
 } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { isOrcaCloudEnvironmentId } from '@/lib/orca-cloud/orca-cloud-environment-id'
+import { defaultLaunchConfig, freshCommandFor } from '@/lib/orca-cloud/cloud-restart-launch-command'
 import { buildFreshAccountRestartCommand } from '@/lib/agent-session/accounts/agent-account-restart-startup'
 import type { AccountRestartAgent } from '@/store/terminals/terminal-contracts'
 import type { usePaneAccountRestartStartup } from './use-pane-account-restart-startup'
@@ -40,6 +47,7 @@ export function useReadyPaneAccountRestarts({
   tabId,
   buildAccountRestartStartup,
   handleRestartPane,
+  releasePaneForRestart,
   panePtyLayoutBindings
 }: Pick<
   TerminalPaneCloseController,
@@ -49,6 +57,7 @@ export function useReadyPaneAccountRestarts({
     typeof usePaneAccountRestartStartup
   >['buildAccountRestartStartup']
   handleRestartPane: ReturnType<typeof usePaneProcessRestart>['handleRestartPane']
+  releasePaneForRestart: ReturnType<typeof usePaneProcessRestart>['releasePaneForRestart']
   panePtyLayoutBindings: TerminalPaneCloseController['savedLayout']['ptyIdsByLeafId']
 }) {
   // Why primitive ids: unrelated status updates stay shallow-equal and skip this pane.
@@ -67,12 +76,14 @@ export function useReadyPaneAccountRestarts({
       tabId,
       consumePendingPaneAccountRestart,
       buildAccountRestartStartup,
-      handleRestartPane
+      handleRestartPane,
+      releasePaneForRestart
     })
   }, [
     buildAccountRestartStartup,
     consumePendingPaneAccountRestart,
     handleRestartPane,
+    releasePaneForRestart,
     panePtyLayoutBindings,
     readyRestartPtyIds,
     managerRef,
@@ -82,11 +93,6 @@ export function useReadyPaneAccountRestarts({
 }
 
 type ReadyRestartPane = { id: number; leafId: string }
-
-function defaultLaunchConfig(agent: AccountRestartAgent): SleepingAgentLaunchConfig | undefined {
-  const agentArgs = useAppStore.getState().settings?.agentDefaultArgs?.[agent]?.trim()
-  return agentArgs ? { agentArgs, agentEnv: {} } : undefined
-}
 
 function worktreeIdForTab(tabId: string): string | null {
   for (const [worktreeId, tabs] of Object.entries(useAppStore.getState().tabsByWorktree)) {
@@ -115,10 +121,18 @@ export function runReadyPaneAccountRestarts<
   consumePendingPaneAccountRestart: (ptyId: string) => AccountRestartAgent | null
   buildAccountRestartStartup: (agent: AccountRestartAgent, leafId: string) => Startup | null
   handleRestartPane: (paneId: number, startup: Startup, options: { focus: boolean }) => void
+  /**
+   * Destroys the pane's transport without reconnecting. A paired pane's transport otherwise reacts to
+   * its own host terminal stopping by reattaching, which wakes the leaf with its original launch
+   * before the resume lands (RA-11 resume race).
+   */
+  releasePaneForRestart?: (paneId: number) => void
   /** Stops the one host terminal behind a paired pane before its restart reconnects. */
   stopRemotePane?: (ptyId: string, worktreeId: string) => Promise<void>
   /** Relaunches the paired pane's agent on its own conversation, in the same pane. */
   resumeRemotePane?: typeof resumeRemotePaneAgent
+  /** RA-11 resume race: wait until the resumed terminal is live in the pane's own leaf. */
+  waitForResumedTerminal?: typeof waitForResumedTerminalReady
   /** RA-11e: start fresh in the same pane when a resume found no conversation. */
   freshIfResumeFoundNothing?: typeof freshIfResumeFoundNothing
   /** The fresh-launch command for this tab's pane (no session to resume). */
@@ -131,6 +145,7 @@ export function runReadyPaneAccountRestarts<
   const args = {
     stopRemotePane: stopRemotePaneTerminalForRestart,
     resumeRemotePane: resumeRemotePaneAgent,
+    waitForResumedTerminal: waitForResumedTerminalReady,
     freshIfResumeFoundNothing,
     buildFreshCommand: (agent: AccountRestartAgent, leafId: string, agentArgs?: string | null) =>
       buildFreshAccountRestartCommand(
@@ -194,7 +209,9 @@ export function runReadyPaneAccountRestarts<
         noteCloudAgentRestartLaunched(ptyId)
       }
       // Why: one Claude switch restarts many panes at once; none was the one the user clicked.
-      args.handleRestartPane(pane.id, launchedStartup, { focus: agent === 'codex' })
+      args.handleRestartPane(pane.id, launchedStartup, {
+        focus: agent === 'codex'
+      })
     }
     if (!worktreeId) {
       launch()
@@ -206,6 +223,9 @@ export function runReadyPaneAccountRestarts<
     // Stop that one host terminal first (its exit is ours, not the pane's), then reconnect.
     const store = useAppStore.getState()
     store.suppressPtyExit(ptyId)
+    // Order is stop → ensure → reconnect: let go of the pane's transport before the stop, or its own
+    // recovery reattaches the moment the stop ends its stream and wakes the original launch.
+    args.releasePaneForRestart?.(pane.id)
     void args
       .stopRemotePane(ptyId, worktreeId)
       .then(() =>
@@ -222,9 +242,44 @@ export function runReadyPaneAccountRestarts<
             })
           : undefined
       )
+      .then(async (resumed) => {
+        // RA-11 resume race: reconnect only once the resumed terminal is live in this very leaf;
+        // an earlier reconnect would wake the leaf with its original launch and drop the resume.
+        if (resumed) {
+          await args.waitForResumedTerminal({
+            ptyId,
+            worktreeId,
+            tabId: args.tabId,
+            leafId: pane.leafId,
+            handle: resumed.handle
+          })
+        }
+        return resumed
+      })
       .then(
-        () => {
+        (resumed) => {
           launch()
+          if (resumed && tracked) {
+            // The pane must end on the resumed terminal; anything else is a new conversation.
+            expectPaneBindsHandle({
+              tabId: args.tabId,
+              leafId: pane.leafId,
+              replacedPtyId: ptyId,
+              handle: resumed.handle,
+              onMismatch: (bound) => {
+                console.warn(
+                  '[orca-cloud] RA-11 restart bound',
+                  bound,
+                  'not the resumed',
+                  resumed.handle
+                )
+                failCloudAgentRestartAfterLaunch(makePaneKey(args.tabId, pane.leafId), {
+                  agent,
+                  ptyId: remotePtyIdWithHandle(ptyId, bound)
+                })
+              }
+            })
+          }
           if (providerSession) {
             // RA-11e: a session with no conversation can't resume; start fresh in the same pane, once.
             void Promise.resolve()
@@ -236,7 +291,10 @@ export function runReadyPaneAccountRestarts<
                     ] ?? null,
                   replacedPtyId: ptyId,
                   // RA-11d: a fresh fallback keeps the pane's own model, effort and flags too.
-                  freshCommand: args.buildFreshCommand(agent, pane.leafId, launchConfig?.agentArgs)
+                  freshCommand: freshCommandFor(
+                    () => args.buildFreshCommand(agent, pane.leafId, launchConfig?.agentArgs),
+                    agent
+                  )
                 })
               )
               .then((startedFresh) => {
@@ -245,7 +303,19 @@ export function runReadyPaneAccountRestarts<
                   noteCloudAgentRestartFresh(makePaneKey(args.tabId, pane.leafId))
                 }
               })
-              .catch((err: unknown) => console.warn('[orca-cloud] fresh fallback failed:', err))
+              .catch((err: unknown) => {
+                console.warn('[orca-cloud] fresh fallback failed:', err)
+                if (tracked) {
+                  // The pane is a bare shell now: say so with Try again, never leave it quiet.
+                  failCloudAgentRestartAfterLaunch(makePaneKey(args.tabId, pane.leafId), {
+                    agent,
+                    ptyId:
+                      useAppStore.getState().terminalLayoutsByTabId[args.tabId]?.ptyIdsByLeafId?.[
+                        pane.leafId
+                      ] ?? ptyId
+                  })
+                }
+              })
           }
         },
         (err: unknown) => {
@@ -253,6 +323,11 @@ export function runReadyPaneAccountRestarts<
           useAppStore.getState().consumeSuppressedPtyExit(ptyId)
           // The host did not stop or relaunch it: the strip names that reason.
           failCloudAgentRestart(ptyId, 'hostUnresponsive')
+          if (args.releasePaneForRestart) {
+            // Its transport was let go before the stop: reattach so the pane is never left empty
+            // (the still-live terminal, or the leaf's own launch if the stop went through).
+            args.handleRestartPane(pane.id, launchedStartup, { focus: false })
+          }
           if (!forced && agent === 'codex') {
             // The switch was answered on the old account: ask again rather than leave it silently stale.
             useAppStore.getState().reopenCodexRestartPrompt(ptyId)

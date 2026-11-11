@@ -179,6 +179,28 @@ export function cloudAgentRestartStartedFresh(paneKey: string, _revision: number
   return freshNotices.has(paneKey)
 }
 
+/**
+ * The restart relaunched but did not end where it must: the fresh start after an empty resume could
+ * not be typed (RA-11e, a bare shell), or the pane bound a terminal other than the resumed one (RA-11
+ * resume race, a new conversation). The attempt may already have settled on the new PTY; show
+ * "Couldn't restart" again so the person can Try again, never a quiet wrong result.
+ */
+export function failCloudAgentRestartAfterLaunch(
+  paneKey: string,
+  args: { agent: HostAgentSignInAgent; ptyId: string }
+): void {
+  stopRestartTimer(paneKey)
+  restarts.set(paneKey, {
+    phase: 'failed',
+    agent: args.agent,
+    resumable: false,
+    ptyId: args.ptyId,
+    launchedAt: null,
+    failure: 'hostUnresponsive'
+  })
+  notifyCloudRunningStrips()
+}
+
 /** Tests only. */
 export function resetCloudAgentRestartsForTest(): void {
   forcedRestarts.clear()

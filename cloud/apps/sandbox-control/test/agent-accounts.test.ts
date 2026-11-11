@@ -37,6 +37,14 @@ function decode(encoded: string | undefined): Record<string, string> {
   )
 }
 
+/** A request still carrying the account placeholder after the account stopped applying gets Anthropic's own
+ * auth-failure shape (Claude Code then shows its sign-in message), never a proxy error, and nothing upstream. */
+function expectSignedOut(answer: { status: number; body: string }): void {
+  expect(answer.status).toBe(401)
+  expect(JSON.parse(answer.body)).toMatchObject({ type: 'error', error: { type: 'authentication_error' } })
+  expect(JSON.parse(answer.body).error.message).toBe('Your Claude sign-in for Orca Cloud expired. Renew it in Orca: Settings → Agent accounts.')
+}
+
 async function setup(overrides: Record<string, string> = {}) {
   const { privateKey, publicKey } = await generateKeyPair('RS256')
   const jwks = { keys: [{ ...(await exportJWK(publicKey)), kid: 'v1', alg: 'RS256' }] }
@@ -148,7 +156,7 @@ describe('egress-time Source (D10) and shared workspaces (D13)', () => {
     expect(upstream.at(-1)!.headers.get('authorization')).toBe(`Bearer ${SETUP_TOKEN}`)
     await h.call('DELETE', '/v1/agent-credentials/claude', { bearer: mia })
     // The proxy refuses at once; the session moves back to the team key.
-    expect((await proxied(id, 'api.anthropic.com', { authorization: `Bearer orca-ph-claude-account-${id}` })).status).toBe(403)
+    expectSignedOut(await proxied(id, 'api.anthropic.com', { authorization: `Bearer orca-ph-claude-account-${id}` }))
     env = lastEnv(ENV_COMMAND)
     expect(env.CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined()
     expect(env.ANTHROPIC_API_KEY).toMatch(/^orca-ph-anthropic-api-key-/)
@@ -164,7 +172,7 @@ describe('egress-time Source (D10) and shared workspaces (D13)', () => {
     // The workspace becomes shared: the very next request is refused, and the session refreshes off the account.
     await h.env.SANDBOX_DB.prepare(`UPDATE sandboxes SET visibility = 'team' WHERE id = ?`).bind(id).run()
     const refused = await proxied(id, 'api.anthropic.com', { authorization: `Bearer orca-ph-claude-account-${id}` })
-    expect(refused.status).toBe(403)
+    expectSignedOut(refused)
     expect(lastEnv(ENV_COMMAND).CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined()
     expect((await h.call('GET', `/v1/agent-sources?workspaceId=${id}`, { bearer: mia })).body.sharedWorkspace).toBe(true)
   })
@@ -179,7 +187,7 @@ describe('egress-time Source (D10) and shared workspaces (D13)', () => {
     const id: string = created.body.sandbox.id
     await h.env.SANDBOX_DB.prepare(`UPDATE sandboxes SET user_id = 'bob' WHERE id = ?`).bind(id).run()
     const refused = await proxied(id, 'api.anthropic.com', { authorization: `Bearer orca-ph-claude-account-${id}` })
-    expect(refused).toEqual({ status: 403, body: 'account_owner_changed' })
+    expectSignedOut(refused)
   })
 
   it('a 401 from the provider marks the account revoked and the session falls off it', async () => {
@@ -202,7 +210,7 @@ describe('egress-time Source (D10) and shared workspaces (D13)', () => {
       expect(refreshed.length).toBeGreaterThan(0)
       expect(decode(refreshed.at(-1)!.env.ORCA_SECRET_ENV).CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined()
     })
-    expect((await proxied(id, 'api.anthropic.com', { authorization: `Bearer orca-ph-claude-account-${id}` })).status).toBe(403)
+    expectSignedOut(await proxied(id, 'api.anthropic.com', { authorization: `Bearer orca-ph-claude-account-${id}` }))
   })
 
   it('kill switch: Source "sign-in" falls back to the agent signing in inside the sandbox (no key, no placeholder)', async () => {

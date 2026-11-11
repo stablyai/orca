@@ -1,4 +1,5 @@
 import { setTimeout as delay } from 'node:timers/promises'
+import { killPtyStragglers } from './pty-marked-stragglers'
 import { OrcaRuntimeWithTerminalSleepSnapshot } from './worktree-terminal-sleep-snapshot'
 import { setsEqual } from '../identity/runtime-worktree-binding-index'
 import type { RuntimeLeafRecord } from '../records/runtime-terminal-state-records'
@@ -48,6 +49,25 @@ export abstract class OrcaRuntimeWithStopExactTerminalsForWorktree extends OrcaR
     const livePtyIds = this.getLivePtyIdsForWorktree(worktree.id, refreshedPtyLiveness)
     const targetOnly = opts.targetOnly === true
     const expectedIsLive = [...expected].every((ptyId) => livePtyIds.has(ptyId))
+    // Idempotent target stop: the PTY already gone (an earlier stop killed its shell) still reaps whatever
+    // carries its id, so a retry after a survivor can finish the job instead of failing forever.
+    if (targetOnly && !expectedIsLive) {
+      const ptyId = [...expected][0] ?? ''
+      const survivors = await killPtyStragglers(ptyId)
+      if (survivors.length > 0) {
+        throw Object.assign(new Error('terminal_exact_stop_failed'), {
+          ptyId,
+          reason: 'agent_survived',
+          survivorPids: survivors
+        })
+      }
+      return {
+        stopped: 0,
+        stoppedPtyIds: [ptyId],
+        livePtyIds: [...livePtyIds].sort(),
+        postStopVerified: true
+      }
+    }
     if (targetOnly ? !expectedIsLive : !setsEqual(livePtyIds, expected)) {
       const error = Object.assign(new Error('terminal_stop_pty_set_mismatch'), {
         livePtyIds: [...livePtyIds].sort(),
@@ -78,6 +98,16 @@ export abstract class OrcaRuntimeWithStopExactTerminalsForWorktree extends OrcaR
       }
       if (!stopped) {
         throw Object.assign(new Error('terminal_exact_stop_failed'), { ptyId })
+      }
+      // RA-ORPH: a process that left the PTY's session (setsid, a launcher) outlives the session kill but
+      // still carries this PTY's id; reap it, and never call the stop verified while one survives.
+      const survivors = await killPtyStragglers(ptyId)
+      if (survivors.length > 0) {
+        throw Object.assign(new Error('terminal_exact_stop_failed'), {
+          ptyId,
+          reason: 'agent_survived',
+          survivorPids: survivors
+        })
       }
       stoppedPtyIds.push(ptyId)
     }

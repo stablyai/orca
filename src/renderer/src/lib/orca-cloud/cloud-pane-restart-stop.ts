@@ -3,7 +3,10 @@
 // relaunches. Put exactly that one host terminal to sleep first (the reversible stop the pane-sleep
 // path uses: the leaf stays, as a sleeping surface); the reconnect then wakes it with --resume.
 // A plain stop is a close: the host drops the tab and there is nothing left to relaunch into.
-import { parseRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
+import {
+  parseRemoteRuntimePtyId,
+  toRemoteRuntimePtyId
+} from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import type { RuntimeTerminalShow } from '../../../../shared/runtime-terminal-contracts'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
@@ -30,7 +33,10 @@ export async function stopRemotePaneTerminalForRestart(
   if (!parsed?.environmentId) {
     throw new Error('restart_remote_pane_unowned')
   }
-  const target = { kind: 'environment' as const, environmentId: parsed.environmentId }
+  const target = {
+    kind: 'environment' as const,
+    environmentId: parsed.environmentId
+  }
   // The pane names its terminal by handle; the host stops by its own PTY id.
   const { terminal } = await callRuntimeRpc<{ terminal?: RuntimeTerminalShow }>(
     target,
@@ -60,10 +66,20 @@ export async function stopRemotePaneTerminalForRestart(
   }
 }
 
+/** The terminal the host ensured for the resume, and whether it spawned it or adopted a live one. */
+export type RemotePaneResume = {
+  handle: string
+  disposition: 'created' | 'adopted'
+}
+
 /**
  * Relaunch the pane's agent on its own conversation, in the same pane. Without this the host wakes
  * the sleeping pane with its original launch (a new conversation). Only for a resumable session;
  * a pane with none takes the host's fresh launch, which is what "Starts a new conversation" says.
+ *
+ * Returns the ensured terminal's handle so the pane binds to exactly it. `adopted` means a live
+ * owner already held the leaf (something woke it with its original launch first) and the resume
+ * never ran: stop that terminal and ensure once more; still adopted throws (Couldn't restart).
  */
 export async function resumeRemotePaneAgent(args: {
   ptyId: string
@@ -74,44 +90,170 @@ export async function resumeRemotePaneAgent(args: {
   providerSession: AgentProviderSessionMetadata
   /** RA-11d: how the pane's agent was launched; its args (model, effort, …) carry over. */
   launchConfig?: SleepingAgentLaunchConfig
-}): Promise<void> {
+}): Promise<RemotePaneResume> {
   const environmentId = parseRemoteRuntimePtyId(args.ptyId)?.environmentId
   if (!environmentId) {
     throw new Error('restart_remote_pane_unowned')
   }
-  await callRuntimeRpc(
-    { kind: 'environment', environmentId },
-    'terminal.ensureAgentSession',
-    {
-      kind: 'explicit',
-      worktree: toRuntimeWorktreeSelector(args.worktreeId),
-      agent: args.agent,
-      providerSession: await agentProviderSessionForHostEnsure(environmentId, args.providerSession),
-      ...(args.launchConfig?.agentArgs?.trim() ? { agentArgs: args.launchConfig.agentArgs } : {}),
-
-      // The same pane: the host tab and leaf the stopped terminal lived in.
-      placement: { tabId: toHostSessionTabId(args.tabId), leafId: args.leafId },
-      presentation: 'background'
-    },
-    { timeoutMs: 15_000 }
+  const ensure = async (): Promise<RemotePaneResume> => {
+    const result = await callRuntimeRpc<{
+      terminal?: { handle?: string }
+      disposition?: 'created' | 'adopted'
+    }>(
+      { kind: 'environment', environmentId },
+      'terminal.ensureAgentSession',
+      {
+        kind: 'explicit',
+        worktree: toRuntimeWorktreeSelector(args.worktreeId),
+        agent: args.agent,
+        providerSession: await agentProviderSessionForHostEnsure(
+          environmentId,
+          args.providerSession
+        ),
+        // RA-11d: the pane's own model, effort and flags carry over to the resume.
+        ...(args.launchConfig?.agentArgs?.trim() ? { agentArgs: args.launchConfig.agentArgs } : {}),
+        // The same pane: the host tab and leaf the stopped terminal lived in.
+        placement: {
+          tabId: toHostSessionTabId(args.tabId),
+          leafId: args.leafId
+        },
+        presentation: 'background'
+      },
+      { timeoutMs: 15_000 }
+    )
+    const handle = result?.terminal?.handle
+    if (!handle) {
+      throw new Error('restart_resume_no_terminal')
+    }
+    return {
+      handle,
+      disposition: result?.disposition === 'adopted' ? 'adopted' : 'created'
+    }
+  }
+  const first = await ensure()
+  if (first.disposition !== 'adopted') {
+    return first
+  }
+  console.warn(
+    '[orca-cloud] RA-11 resume adopted a live terminal; stopping it and resuming again',
+    first.handle
   )
+  await stopRemotePaneTerminalForRestart(
+    toRemoteRuntimePtyId(first.handle, environmentId),
+    args.worktreeId
+  )
+  const second = await ensure()
+  if (second.disposition === 'adopted') {
+    throw new Error('restart_resume_adopted')
+  }
+  return second
 }
 
 /** What Claude prints when `--resume <id>` names a session that never had a conversation. */
 const NO_CONVERSATION = /No conversation found with session ID/i
-const RESUME_CHECK_MS = 10_000
+// Claude's own start on a sandbox plus the pane's re-attach can take well over 10 s.
+const RESUME_CHECK_MS = 25_000
 const RESUME_POLL_MS = 1_000
+// eslint-disable-next-line no-control-regex -- terminal output carries ANSI escapes.
+const ANSI = /\u001b\[[0-9;?]*[ -/]*[@-~]|\u001b\][^\u0007]*\u0007/g
+
+/** The pane's terminal handle on its host, from the pane's PTY id (`remote:<env>@@<handle>`). */
+function hostTerminalOf(ptyId: string | null): { environmentId: string; handle: string } | null {
+  const parsed = ptyId ? parseRemoteRuntimePtyId(ptyId) : null
+  return parsed?.environmentId
+    ? { environmentId: parsed.environmentId, handle: parsed.handle }
+    : null
+}
+
+// A just-relaunched host can be slow to take input; never leave the pane a bare shell for that.
+const FRESH_SEND_TIMEOUT_MS = 20_000
+const FRESH_SEND_ATTEMPTS = 3
+const FRESH_SEND_RETRY_MS = 1_000
+/** The fresh start landed: the command echoed, or the agent's own screen is up after the miss. */
+const AGENT_UP = /Claude Code|OpenAI Codex|^\s*[❯›>]\s*$/
+
+/** Whether the fresh command (or the agent it starts) shows after the last "no conversation" line. */
+function freshStartLanded(lines: readonly string[], freshCommand: string): boolean {
+  let miss = -1
+  lines.forEach((line, index) => {
+    if (NO_CONVERSATION.test(line)) {
+      miss = index
+    }
+  })
+  const echo = freshCommand.trim().slice(-24)
+  return lines
+    .slice(miss + 1)
+    .some((line) => AGENT_UP.test(line) || (echo.length > 0 && line.includes(echo)))
+}
+
+async function readTail(
+  target: { kind: 'environment'; environmentId: string },
+  handle: string
+): Promise<string[] | null> {
+  const read = await callRuntimeRpc<{ terminal?: { tail?: string[] } }>(
+    target,
+    'terminal.read',
+    { terminal: handle, limit: 80 },
+    { timeoutMs: 5_000 }
+  ).catch(() => null)
+  const tail = read?.terminal?.tail
+  return Array.isArray(tail) ? tail.map((line) => line.replace(ANSI, '')) : null
+}
+
+/**
+ * Type the fresh command once. A send that times out may still have landed, so before each retry
+ * the tail is read again and nothing is typed a second time if the command or the agent shows.
+ * Throws when every try failed: the caller reports it rather than leave a quiet bare shell.
+ */
+async function sendFreshOnce(
+  target: { kind: 'environment'; environmentId: string },
+  handle: string,
+  freshCommand: string,
+  sleep: (ms: number) => Promise<void>
+): Promise<void> {
+  let lastError: unknown = null
+  for (let attempt = 1; attempt <= FRESH_SEND_ATTEMPTS; attempt += 1) {
+    if (attempt > 1) {
+      await sleep(FRESH_SEND_RETRY_MS)
+      const tail = await readTail(target, handle)
+      if (tail && freshStartLanded(tail, freshCommand)) {
+        return
+      }
+    }
+    try {
+      // The Enter rides in the text, not `enter: true`: the host holds an Enter send for the launched
+      // Claude's composer (8 s), which never comes once it exited to the shell, then refuses it.
+      const sent = await callRuntimeRpc<{
+        send?: { accepted?: boolean; refusedReason?: string }
+      }>(
+        target,
+        'terminal.send',
+        { terminal: handle, text: `${freshCommand}\r` },
+        { timeoutMs: FRESH_SEND_TIMEOUT_MS }
+      )
+      if (sent?.send?.accepted === false) {
+        throw new Error(`terminal_send_refused:${sent.send.refusedReason ?? 'unknown'}`)
+      }
+      return
+    } catch (err) {
+      lastError = err
+      console.warn(`[orca-cloud] RA-11e fresh start send failed (try ${attempt}):`, err)
+    }
+  }
+  throw new Error('ra11e_fresh_send_failed', { cause: lastError })
+}
 
 /**
  * RA-11e backstop: a recorded session can have no conversation on disk (Claude started, never ran a
  * turn). Its `--resume` prints "No conversation found…" and exits, leaving a bare shell. Watch the
- * relaunched pane briefly; if that happened, start the agent fresh in the same shell, once.
- * Returns whether it relaunched fresh.
+ * relaunched pane's terminal (its new handle) for up to 25 s; if that happened, start the agent fresh
+ * in the same shell, once. Returns whether it relaunched fresh; throws when the fresh start could not
+ * be typed (the pane is left a bare shell, so the caller must say so).
  */
 export async function freshIfResumeFoundNothing(args: {
   /** The pane's PTY id now (the relaunched terminal), or null while it is still binding. */
   currentPtyId: () => string | null
-  /** The PTY id the restart replaced; the check waits for a different one. */
+  /** The PTY id the restart replaced; only a terminal with a different handle is read. */
   replacedPtyId: string
   freshCommand: string
   sleep?: (ms: number) => Promise<void>
@@ -120,31 +262,44 @@ export async function freshIfResumeFoundNothing(args: {
   const sleep =
     args.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)))
   const now = args.now ?? Date.now
+  const replaced = hostTerminalOf(args.replacedPtyId)
   const deadline = now() + RESUME_CHECK_MS
+  let lastSeen: string | null = null
   while (now() < deadline) {
     await sleep(RESUME_POLL_MS)
-    const ptyId = args.currentPtyId()
-    const parsed = ptyId && ptyId !== args.replacedPtyId ? parseRemoteRuntimePtyId(ptyId) : null
-    if (!parsed?.environmentId) {
+    const current = hostTerminalOf(args.currentPtyId())
+    // Key off the terminal handle, not the whole id: the host may reuse its PTY id on relaunch.
+    if (!current || current.handle === replaced?.handle) {
       continue
     }
-    const target = { kind: 'environment' as const, environmentId: parsed.environmentId }
+    if (lastSeen !== current.handle) {
+      lastSeen = current.handle
+      console.info('[orca-cloud] RA-11e watching relaunched terminal', current.handle)
+    }
+    const target = {
+      kind: 'environment' as const,
+      environmentId: current.environmentId
+    }
     const read = await callRuntimeRpc<{ terminal?: { tail?: string[] } }>(
       target,
       'terminal.read',
-      { terminal: parsed.handle, limit: 40 },
+      { terminal: current.handle, limit: 80 },
       { timeoutMs: 5_000 }
-    ).catch(() => null)
-    if (!read?.terminal?.tail?.some((line) => NO_CONVERSATION.test(line))) {
+    ).catch((err: unknown) => {
+      console.warn('[orca-cloud] RA-11e terminal.read failed:', err)
+      return null
+    })
+    const lines = (read?.terminal?.tail ?? []).map((line) => line.replace(ANSI, ''))
+    if (!lines.some((line) => NO_CONVERSATION.test(line))) {
       continue
     }
-    await callRuntimeRpc(
-      target,
-      'terminal.send',
-      { terminal: parsed.handle, text: args.freshCommand, enter: true },
-      { timeoutMs: 5_000 }
+    console.info(
+      '[orca-cloud] RA-11e resume found no conversation; starting fresh in',
+      current.handle
     )
+    await sendFreshOnce(target, current.handle, args.freshCommand, sleep)
     return true
   }
+  console.info('[orca-cloud] RA-11e watch ended without a "no conversation" line', lastSeen)
   return false
 }

@@ -9,6 +9,11 @@ import {
   beginWebRuntimeWakeTerminalRespawn,
   endWebRuntimeWakeTerminalRespawn
 } from '@/runtime/hosted-terminals/restoration/web-runtime-wake-terminal-respawn'
+import {
+  beginWebRuntimeInitialTerminalBootstrap,
+  endWebRuntimeInitialTerminalBootstrap,
+  markWebRuntimeInitialTerminalBootstrapAwaitingMirror
+} from '@/runtime/web-session-tabs-sync/initial-terminal/web-runtime-initial-terminal-bootstrap'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import type { WorktreeStartupPayload } from '@/lib/workspace/creation/worktree-startup-payload'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
@@ -113,6 +118,12 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(
   if (!beginWebRuntimeWakeTerminalRespawn(worktreeId)) {
     return false
   }
+  // This terminal is the workspace's first surface too: hold the session-tabs seeder off until the
+  // host lists it, or an empty first answer seeds a second, plain terminal beside it (GA-P3t).
+  const claimedInitialBootstrap = beginWebRuntimeInitialTerminalBootstrap(
+    runtimeEnvironmentId,
+    worktreeId
+  )
 
   const startup = opts?.startup
   // Why: sleep keeps tab rows but terminal.stop clears host PTYs, while a failed create receipt leaves a selected agent with no host surface.
@@ -164,9 +175,31 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(
           id: `web-runtime-worktree-terminal:${runtimeEnvironmentId}:${worktreeId}`
         })
       }
+      if (claimedInitialBootstrap) {
+        releaseInitialBootstrapClaim(runtimeEnvironmentId, worktreeId, outcome.status === 'failed')
+      }
+    })
+    .catch((error: unknown) => {
+      if (claimedInitialBootstrap) {
+        endWebRuntimeInitialTerminalBootstrap(runtimeEnvironmentId, worktreeId)
+      }
+      throw error
     })
     .finally(() => {
       endWebRuntimeWakeTerminalRespawn(worktreeId)
     })
   return true
+}
+
+/** Same release rule as the seeder's own bootstrap: a failed create retries, a created one waits for its mirrored row. */
+function releaseInitialBootstrapClaim(
+  environmentId: string,
+  worktreeId: string,
+  failed: boolean
+): void {
+  if (failed || Object.hasOwn(useAppStore.getState().tabsByWorktree, worktreeId)) {
+    endWebRuntimeInitialTerminalBootstrap(environmentId, worktreeId)
+  } else {
+    markWebRuntimeInitialTerminalBootstrapAwaitingMirror(environmentId, worktreeId)
+  }
 }

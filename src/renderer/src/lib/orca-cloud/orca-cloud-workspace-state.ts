@@ -62,6 +62,12 @@ export function deriveCloudDotState(input: {
   if (status?.state === 'failed') {
     return 'failed'
   }
+  // Main said this wake is ready after the last status read: that read (still "sleeping" or
+  // "waking" until the re-read lands) is stale, and the VM answers. Without this the row read
+  // "Asleep" for a moment after the workspace went live.
+  if (wake?.phase === 'ready' && (!status || status.checkedAt < wake.at)) {
+    return 'running'
+  }
   // The control plane is the truth for the VM; the desktop's own sleep record only fills in
   // before the first status read (a cloud workspace with no open panes is not asleep).
   if (!status) {

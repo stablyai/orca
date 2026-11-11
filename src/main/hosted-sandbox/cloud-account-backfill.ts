@@ -24,9 +24,10 @@ function sandboxIdOf(runtime: EphemeralVmRuntimeRecord): string | null {
 export type CloudAccountBackfill = {
   /**
    * Lists the active team's sandboxes when a live record is unfiled, the team changed, or the last
-   * list is older than `relistMs` (the first run, at startup, always lists).
+   * list is older than `relistMs` (the first run, at startup, always lists). `force` lists now
+   * (a cloud list refreshed, or a sandbox read said not found: LC-2).
    */
-  run(): Promise<void>
+  run(options?: { force?: boolean }): Promise<void>
 }
 
 export function createCloudAccountBackfill(deps: {
@@ -45,7 +46,7 @@ export function createCloudAccountBackfill(deps: {
   let lastKey: string | null = null
   let listedAt = Number.NEGATIVE_INFINITY
   return {
-    async run() {
+    async run(options) {
       const account = deps.activeAccountId()
       if (!account) {
         return
@@ -54,7 +55,7 @@ export function createCloudAccountBackfill(deps: {
       // A team switch re-lists once even with nothing unfiled: it corrects a misfiled create.
       const key = keyOf(account, before)
       const stale = deps.relistMs !== undefined && now() - listedAt >= deps.relistMs
-      if (before.length === 0 || (key === lastKey && !stale)) {
+      if (before.length === 0 || (key === lastKey && !stale && !options?.force)) {
         return
       }
       let listed: ReadonlySet<string>

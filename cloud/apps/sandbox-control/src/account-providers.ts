@@ -35,6 +35,12 @@ export type AccountProvider = {
    * provider 401 may revoke it (agent-credential-checks.ts). 'invalid' only for a definite auth failure.
    */
   verify?(credential: string, fetchImpl: typeof fetch): Promise<'valid' | 'invalid' | 'unknown'>
+  /**
+   * What a request still carrying this sandbox's placeholder gets once the account no longer applies
+   * (revoked, expired, removed, turned off): the provider's own auth-failure shape, so the agent shows its
+   * normal sign-in message instead of a proxy error.
+   */
+  signedOut?: { status: number; contentType: string; body: string }
 }
 
 /** Anthropic's token counter: authenticated like Messages, free, and nothing is generated. */
@@ -88,7 +94,18 @@ export const claudeAccount: AccountProvider = {
   header: 'authorization',
   format: (credential) => `Bearer ${credential}`,
   credential: (db, keyring, userId, now) => readUsableAgentCredential(db, keyring, userId, 'claude', now),
-  verify: verifyClaudeToken
+  verify: verifyClaudeToken,
+  signedOut: {
+    status: 401,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      type: 'error',
+      error: {
+        type: 'authentication_error',
+        message: 'Your Claude sign-in for Orca Cloud expired. Renew it in Orca: Settings → Agent accounts.'
+      }
+    })
+  }
 }
 
 export const ACCOUNT_PROVIDERS: AccountProvider[] = [claudeAccount, codexAccount]

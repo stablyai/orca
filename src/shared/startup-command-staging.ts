@@ -49,6 +49,11 @@ export function shouldStageStartupCommand(args: {
   platform: NodeJS.Platform
   /** An agent launch line Orca built with POSIX quoting, which sh can run in any shell. */
   orcaBuiltLine?: boolean
+  /**
+   * This PTY host is an Orca Cloud VM: an Orca-built agent line is always staged, so the pane shows
+   * `. /tmp/orca-launch-….sh` instead of the agent's flags, plugin path and prompt (CR-cmd).
+   */
+  cloudHost?: boolean
 }): boolean {
   if (args.platform === 'win32') {
     return false
@@ -56,7 +61,9 @@ export function shouldStageStartupCommand(args: {
   const shellName = stagingShellName(args.shellPath)
   const body = stripSubmitTerminator(args.command)
   const needsStaging =
-    hasControlByte(body) || encoder.encode(body).byteLength > TYPED_STARTUP_LINE_PROMPT_BUDGET_BYTES
+    (args.cloudHost === true && args.orcaBuiltLine === true) ||
+    hasControlByte(body) ||
+    encoder.encode(body).byteLength > TYPED_STARTUP_LINE_PROMPT_BUDGET_BYTES
   if (shellName === null) {
     // tcsh mutates backslashes/!! and nu rejects POSIX apostrophe escapes; type plain lines directly to retain foreground-job detection.
     return args.orcaBuiltLine === true && (needsStaging || /[!\\"`$]/.test(body))
@@ -82,9 +89,12 @@ export function stageStartupCommand(args: {
   orcaBuiltLine?: boolean
   platform?: NodeJS.Platform
   directory?: string
+  /** Defaults to this process being orcad on an Orca Cloud VM (ORCA_IS_CLOUD=1, set by the image). */
+  cloudHost?: boolean
 }): StartupCommandStaging {
   const platform = args.platform ?? process.platform
-  if (!shouldStageStartupCommand({ ...args, platform })) {
+  const cloudHost = args.cloudHost ?? process.env.ORCA_IS_CLOUD === '1'
+  if (!shouldStageStartupCommand({ ...args, platform, cloudHost })) {
     return { command: args.command, delivery: 'typed' }
   }
   const directory = args.directory ?? tmpdir()

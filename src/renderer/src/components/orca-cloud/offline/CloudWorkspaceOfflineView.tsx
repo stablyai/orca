@@ -13,6 +13,7 @@ import { asOfParts } from '../read-snapshot/cloud-read-snapshot-format'
 import { CloudReadPrLink } from '../read-snapshot/CloudReadPrLink'
 import { ChatPanel } from './CloudOfflineChatPanel'
 import { formatAsleepSince } from './CloudAsleepTerminalNotice'
+import { tidyTerminalTail } from './tidy-terminal-tail'
 
 export type CloudOfflineViewProps = {
   snapshot: CloudOfflineSnapshot
@@ -57,8 +58,6 @@ export function CloudWorkspaceOfflineView(props: CloudOfflineViewProps): React.J
     : asOf
       ? t('components.orcaCloud.read.asOf', 'Asleep · As of {{when}}', { when: asOf.relative })
       : t('orcaCloudWorkspace.asleep.noCopy', 'Asleep · nothing cached yet')
-  // Sections may come from the copy the workspace saved when it went to sleep (Orca Cloud).
-  const fromCloud = snapshot.source === 'cloud' || snapshot.source === 'mixed'
   return (
     <section
       className="flex h-full min-h-0 w-full max-w-3xl flex-col gap-5 px-6 py-8"
@@ -74,9 +73,13 @@ export function CloudWorkspaceOfflineView(props: CloudOfflineViewProps): React.J
         note={
           empty
             ? undefined
-            : fromCloud
-              ? t('components.orcaCloud.read.note', 'Read-only copy saved when it went to sleep.')
-              : t('orcaCloudWorkspace.asleep.readOnly', 'Read-only copy kept on this computer.')
+            : // Still saving: the copy shown is the one from before, not the one going to sleep.
+              props.goingToSleep
+              ? t(
+                  'components.orcaCloud.offline.savingCopy',
+                  'Saving a read-only copy of chats, terminals and changes…'
+                )
+              : t('components.orcaCloud.read.note', 'Read-only copy saved when it went to sleep.')
         }
         headingRef={props.headingRef}
         action={
@@ -179,7 +182,7 @@ export function CloudWorkspaceOfflineView(props: CloudOfflineViewProps): React.J
                             // Like a live terminal, open at the latest output.
                             ref={scrollToEnd}
                           >
-                            {terminal.lines.join('\n')}
+                            {tidyTerminalTail(terminal.lines).join('\n')}
                           </pre>
                           {snapshot.capturedAt !== null ? (
                             <div

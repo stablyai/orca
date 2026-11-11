@@ -164,6 +164,66 @@ describe('legacy plaintext cache files', () => {
 })
 
 describe('offline snapshot', () => {
+  it('keeps one terminal per tab across wake/sleep cycles, not one per boot', async () => {
+    const { cache, tick } = setup()
+    // Each boot respawns the tab's terminal under a new handle; every capture lists and reads it.
+    for (const handle of ['boot1', 'boot2', 'boot3']) {
+      cache.record(
+        'env',
+        'terminal.list',
+        { worktree: 'id:w' },
+        ok({ terminals: [{ handle, title: 'zsh' }] })
+      )
+      cache.record(
+        'env',
+        'terminal.read',
+        { terminal: handle, limit: 400 },
+        ok({ terminal: { handle, tail: [`$ on ${handle}`] } })
+      )
+      tick()
+    }
+    // A filtered listing (one tab) never decides which terminals are live.
+    cache.record('env', 'terminal.list', { worktree: 'id:w', tabId: 't' }, ok({ terminals: [] }))
+    tick()
+    const snapshot = await buildOfflineSnapshot(cache, 'env', 'w', true)
+    expect(snapshot.terminals.map((t) => [t.handle, t.lines])).toEqual([['boot3', ['$ on boot3']]])
+  })
+
+  it('keeps a terminal read after the newest listing (opened since), and all with no listing', async () => {
+    const { cache, tick } = setup()
+    cache.record(
+      'env',
+      'terminal.read',
+      { terminal: 'old' },
+      ok({ terminal: { handle: 'old', tail: ['a'] } })
+    )
+    tick()
+    expect((await buildOfflineSnapshot(cache, 'env', 'w', true)).terminals).toHaveLength(1)
+    cache.record(
+      'env',
+      'terminal.list',
+      { worktree: 'id:w' },
+      ok({ terminals: [{ handle: 'h1' }] })
+    )
+    cache.record(
+      'env',
+      'terminal.read',
+      { terminal: 'h1' },
+      ok({ terminal: { handle: 'h1', tail: ['b'] } })
+    )
+    tick()
+    cache.record(
+      'env',
+      'terminal.read',
+      { terminal: 'new' },
+      ok({ terminal: { handle: 'new', tail: ['c'] } })
+    )
+    const handles = (await buildOfflineSnapshot(cache, 'env', 'w', true)).terminals.map(
+      (t) => t.handle
+    )
+    expect(handles.sort()).toEqual(['h1', 'new'])
+  })
+
   it('builds chats, terminals and git state from cached answers', async () => {
     const { cache, tick } = setup()
     cache.record(
