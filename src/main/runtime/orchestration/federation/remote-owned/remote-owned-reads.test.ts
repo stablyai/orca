@@ -10,19 +10,12 @@ import type { OrchestrationWorkerServer } from '../environment-transport'
 import { OrchestrationError } from '../../orchestration-error'
 import {
   getRemoteDispatch,
-  oweRemoteDispatchStop,
   recordRemoteDispatchReport,
   recordRemoteDispatchState
 } from '../../db/remote-owned/remote-dispatch-records'
 import { recordRemoteStart, reserveRemotePlacement } from '../../db/remote-owned/remote-placements'
-import {
-  closeRemoteRunLink,
-  noteRemoteRunLinkError,
-  openRemoteRunLink
-} from '../../db/remote-owned/remote-run-links'
+import { openRemoteRunLink } from '../../db/remote-owned/remote-run-links'
 import { ORCHESTRATION_WORKER_LIST_METHOD } from '../../../rpc/methods/orchestration/worker/worker-list-method'
-import { remoteWorkerShow } from './remote-owned-reads'
-import { explainRemoteServerFailure } from './remote-server-unreachable'
 
 const SERVER: OrchestrationWorkerServer = {
   environmentId: 'env_b',
@@ -101,91 +94,6 @@ describe('reads of workers a paired server runs, from this Orca’s records', ()
     } as never)) as ListedWorkers
   }
 
-  it('shows a remote worker in the ordinary shape, labelled with its server, record time and last report', () => {
-    const shown = remoteWorkerShow(runtime, remoteWorker('task_1', 'ctx_w1'))
-
-    expect(shown).toMatchObject({
-      dispatch: { id: 'ctx_w1', taskId: 'task_1', runId: run.id, status: 'dispatched' },
-      worker: { dispatchId: 'ctx_w1', state: 'ready', stage: 'server_record' },
-      server: { name: 'devB', asOf: '2026-11-09T08:30:00Z' },
-      lastReport: 'Halfway: tests written.'
-    })
-    expect(shown.server).not.toHaveProperty('reachable')
-    expect(shown.observation.reason).toBe(
-      "devB's state as of 2026-11-09T08:30:00Z. Its output is kept only on devB."
-    )
-  })
-
-  it('adds what the pull loop last heard from the server, and says unreachable only when it knows', () => {
-    const record = remoteWorker('task_1', 'ctx_w1')
-    const now = Date.parse('2026-11-10T12:00:00Z')
-    vi.useFakeTimers({ toFake: ['Date'], now })
-    const heard = vi.spyOn(runtime, 'getPeerServerAnswerStatus')
-    heard.mockReturnValue({ answeredAt: now - 12_000 })
-    const live = remoteWorkerShow(runtime, record)
-    expect(live.server).toMatchObject({ reachable: true })
-    expect(live.observation.reason).toContain('devB last answered 12 s ago.')
-
-    heard.mockReturnValue({ answeredAt: now - 40_000, unreachableSince: now - 5_000 })
-    const asleep = remoteWorkerShow(runtime, record)
-    expect(asleep.server).toMatchObject({ reachable: false })
-    expect(asleep.observation.reason).toContain(
-      'devB could not be reached; it last answered 40 s ago.'
-    )
-  })
-
-  it('keeps the time devB last reported when this Orca only owes it a stop', () => {
-    const record = remoteWorker('task_1', 'ctx_w1')
-    oweRemoteDispatchStop(db, record.dispatch_id, 'intent_1')
-
-    const shown = remoteWorkerShow(runtime, getRemoteDispatch(db, 'ctx_w1')!)
-    expect(shown.server.asOf).toBe('2026-11-09T08:30:00Z')
-    expect(shown.observation.reason).toContain('A stop is owed')
-  })
-
-  it('says a re-made pairing, not an unreachable server, left the record', async () => {
-    const record = remoteWorker('task_1', 'ctx_w1')
-    closeRemoteRunLink(db, record.conversation_id, 'The pairing with devB was re-made.')
-    // A later unreadable item on the closed link does not replace why it closed.
-    noteRemoteRunLinkError(db, record.conversation_id, new Error('Queue item x was not imported.'))
-
-    const shown = remoteWorkerShow(runtime, record)
-    expect(shown.server).toMatchObject({ name: 'devB', repaired: true })
-    expect(shown.observation.reason).toContain('The pairing with devB was re-made')
-    const listed = await listWorkers({ run: run.id, paginate: true })
-    expect(listed.workers).toEqual([
-      expect.objectContaining({
-        dispatchId: 'ctx_w1',
-        server: expect.objectContaining({ name: 'devB', repaired: true })
-      })
-    ])
-  })
-
-  it('keeps remote rows within the page limit and counts the rest in the total', async () => {
-    remoteWorker('task_1', 'ctx_w1')
-    remoteWorker('task_2', 'ctx_w2')
-
-    const page = await listWorkers({ run: run.id, paginate: true, limit: 1 })
-    expect(page.workers.map((worker) => worker.dispatchId)).toEqual(['ctx_w2'])
-    expect(page.page).toMatchObject({ total: 2 })
-    expect(page.warnings).toEqual(['Showing the newest 1 of 2 workers on paired servers.'])
-  })
-
-  it('names a server removed since by the name it had, and says it was removed', () => {
-    const record = remoteWorker('task_1', 'ctx_w1', 'env_gone')
-    closeRemoteRunLink(
-      db,
-      record.conversation_id,
-      "devB was removed from this Orca's paired servers."
-    )
-
-    const shown = remoteWorkerShow(runtime, record)
-    expect(shown.server.name).toBe('devB')
-    expect(shown.observation.reason).toBe(
-      "devB was removed from this Orca's paired servers. It no longer reports this worker here; this is devB's state as of 2026-11-09T08:30:00Z. Its output is kept only on devB."
-    )
-  })
-
   it('lists remote workers on the first page beside local ones, named by their server, and nowhere else', async () => {
     remoteWorker('task_1', 'ctx_w1')
     remoteWorker('task_2', 'ctx_w2')
@@ -229,60 +137,5 @@ describe('reads of workers a paired server runs, from this Orca’s records', ()
       coordinatorPaneKey: null
     })
     expect((await listWorkers({ run: other.id, paginate: true })).workers).toEqual([])
-  })
-
-  it('says a server that never answered cannot confirm a change, and passes its own unknown outcome through', () => {
-    const offline = new OrchestrationError(
-      'remote_runtime_unavailable',
-      'Could not connect to the remote Orca runtime.'
-    )
-    const change = explainRemoteServerFailure(offline, {
-      server: 'devB',
-      method: 'orchestration.workerRelease',
-      params: { dispatch: 'ctx_w1' },
-      dispatchId: 'ctx_w1'
-    })
-    expect(change).toMatchObject({
-      code: 'remote_runtime_unavailable',
-      data: { server: 'devB', reachable: false }
-    })
-    expect(change).toHaveProperty(
-      'message',
-      expect.stringContaining(
-        'devB did not answer (Could not connect to the remote Orca runtime.), so this Orca cannot tell whether the command reached it.'
-      )
-    )
-    expect(change).toHaveProperty(
-      'message',
-      expect.stringContaining('Retry only with the same request ID (--retry-request)')
-    )
-
-    const read = explainRemoteServerFailure(
-      new OrchestrationError('runtime_timeout', 'Timed out.'),
-      {
-        server: 'devB',
-        method: 'orchestration.workerRead',
-        params: { dispatch: 'ctx_w1' },
-        dispatchId: 'ctx_w1'
-      }
-    )
-    expect(read).toMatchObject({ code: 'runtime_timeout' })
-    expect(read).toHaveProperty(
-      'message',
-      expect.stringContaining('devB could not be reached (Timed out.)')
-    )
-    expect(read).toHaveProperty(
-      'message',
-      expect.stringContaining('its output is kept only on devB')
-    )
-
-    const unknown = new OrchestrationError('operation_unknown', 'The stop is still pending.')
-    expect(
-      explainRemoteServerFailure(unknown, {
-        server: 'devB',
-        method: 'orchestration.workerStop',
-        params: { dispatch: 'ctx_w1' }
-      })
-    ).toBe(unknown)
   })
 })

@@ -10,7 +10,7 @@ import {
   hasOpenCodeGoApiKey,
   readOpenCodeGoApiKey,
   saveOpenCodeGoApiKey
-} from '../opencode/opencode-go-api-key-store'
+} from '../opencode/accounts/opencode-go-api-key-store'
 import { agentHookServer } from '../agent-hooks/server/agent-hook-server'
 import { resolveHostCodexSessionSourceHome } from '../codex/history/rollouts/codex-session-source-home'
 import { browserManager } from '../browser/guest-lifecycle/manager/browser-manager'

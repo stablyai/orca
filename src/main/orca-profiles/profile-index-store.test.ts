@@ -11,7 +11,7 @@ import {
 import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { openProfileStateDatabase } from '../persistence/profile-state/profile-state-database'
+import { openProfileStateDatabase } from '../persistence/profile-state/database/profile-state-database'
 import {
   createDefaultLocalOrcaProfile,
   DEFAULT_LOCAL_ORCA_PROFILE_ID,

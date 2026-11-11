@@ -79,7 +79,7 @@
           {
             "name": "@linear/sdk",
             "allowTypeImports": true,
-            "message": "Value-importing @linear/sdk hoists its ~2.6MB CJS bundle into the eager top-level require block and defeats the lazy loader. Use `import type` plus loadLinearSdk() from src/main/linear/linear-sdk.ts."
+            "message": "Value-importing @linear/sdk hoists its ~2.6MB CJS bundle into the eager top-level require block and defeats the lazy loader. Use `import type` plus loadLinearSdk() from src/main/linear/requests/linear-sdk.ts."
           }
         ]
       }
@@ -145,7 +145,7 @@
               {
                 "name": "@linear/sdk",
                 "allowTypeImports": true,
-                "message": "Value-importing @linear/sdk hoists its ~2.6MB CJS bundle into the eager top-level require block and defeats the lazy loader. Use `import type` plus loadLinearSdk() from src/main/linear/linear-sdk.ts."
+                "message": "Value-importing @linear/sdk hoists its ~2.6MB CJS bundle into the eager top-level require block and defeats the lazy loader. Use `import type` plus loadLinearSdk() from src/main/linear/requests/linear-sdk.ts."
               },
               {
                 "name": "ssh2",
@@ -285,7 +285,7 @@
               {
                 "name": "@linear/sdk",
                 "allowTypeImports": true,
-                "message": "Value-importing @linear/sdk hoists its ~2.6MB CJS bundle into the eager top-level require block and defeats the lazy loader. Use `import type` plus loadLinearSdk() from src/main/linear/linear-sdk.ts."
+                "message": "Value-importing @linear/sdk hoists its ~2.6MB CJS bundle into the eager top-level require block and defeats the lazy loader. Use `import type` plus loadLinearSdk() from src/main/linear/requests/linear-sdk.ts."
               },
               {
                 "name": "ssh2",

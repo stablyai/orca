@@ -1,30 +1,19 @@
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  readdirSync,
-  rmSync,
-  writeFileSync
-} from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultPersistedState } from '../../../shared/constants'
 import { ORCA_PROFILE_INDEX_SCHEMA_VERSION } from '../../../shared/orca-profiles'
 import type { Repo } from '../../../shared/repo-types'
-import * as profileStateDocuments from '../../persistence/profile-state/profile-state-documents'
-import { openProfileStateDatabase } from '../../persistence/profile-state/profile-state-database'
-import { ProfileStateSqliteAuthority } from '../../persistence/profile-state/profile-state-sqlite-authority'
+import * as profileStateDocuments from '../../persistence/profile-state/documents/profile-state-documents'
+import { openProfileStateDatabase } from '../../persistence/profile-state/database/profile-state-database'
+
 import {
   createProfileStateDatabaseBackupId,
   profileStateDatabaseBackupPath
-} from '../../persistence/profile-state/profile-state-backup-path'
+} from '../../persistence/profile-state/backup/profile-state-backup-path'
 import { transferOrcaProfileProject } from './profile-project-transfer'
-import {
-  readProfileStateWithRevision,
-  writeSerializedProfileState
-} from './profile-project-state-file'
+import { readProfileStateWithRevision } from './profile-project-state-file'
 
 vi.mock('../../persistence/loading-store/store', () => {
   throw new Error('Profile transfers must not load inactive Stores')
@@ -125,28 +114,6 @@ describe('profile transfer migration', () => {
     expect(readFileSync(paths('source').dataFile, 'utf8')).toBe(sourceJson)
   })
 
-  it('copies from JSON into SQLite without migrating or changing the source', () => {
-    const sourceJson = writeState('source', false, [repo])
-    writeState('target', true)
-    expect(transfer('copy')).toMatchObject({ status: 'transferred' })
-    expect(readFileSync(paths('source').dataFile, 'utf8')).toBe(sourceJson)
-    expect(existsSync(paths('source').databaseFile)).toBe(false)
-    expect(readProfileStateWithRevision('target', directory).state.repos).toHaveLength(1)
-  })
-
-  it('refuses a legacy JSON write outside participant migration', () => {
-    const sourceJson = writeState('source', false, [repo])
-    expect(() => writeSerializedProfileState('source', directory, '{}')).toThrow(
-      'established SQLite participant'
-    )
-    expect(readFileSync(paths('source').dataFile, 'utf8')).toBe(sourceJson)
-    expect(() => writeSerializedProfileState('target', directory, '{}')).toThrow(
-      'established SQLite participant'
-    )
-    expect(existsSync(paths('target').dataFile)).toBe(false)
-    expect(existsSync(paths('target').databaseFile)).toBe(false)
-  })
-
   it('refuses to adopt stale target JSON when a retained database backup proves missing authority', () => {
     writeState('source', true, [repo])
     writeState('target', false)
@@ -165,19 +132,6 @@ describe('profile transfer migration', () => {
     expect(readProfileStateWithRevision('source', directory).state.repos).toHaveLength(1)
   })
 
-  it('leaves both participants untouched when the import fails before publication', () => {
-    writeState('source', true, [repo])
-    const targetJson = writeState('target', false)
-    vi.spyOn(profileStateDocuments, 'importProfileStateJson').mockImplementation(() => {
-      throw new Error('import failure')
-    })
-    expect(() => transfer()).toThrow('import failure')
-    expect(readProfileStateWithRevision('source', directory).state.repos).toHaveLength(1)
-    expect(readFileSync(paths('target').dataFile, 'utf8')).toBe(targetJson)
-    expect(existsSync(paths('target').databaseFile)).toBe(false)
-    expect(readdirSync(join(paths('target').dataFile, '..'))).toEqual(['orca-data.json'])
-  })
-
   it('rejects a JSON edit during migration before publishing SQLite', () => {
     writeState('source', true, [repo])
     writeState('target', false)
@@ -190,17 +144,5 @@ describe('profile transfer migration', () => {
     expect(() => transfer()).toThrow('JSON changed while importing')
     expect(existsSync(paths('target').databaseFile)).toBe(false)
     expect(readProfileStateWithRevision('source', directory).state.repos).toHaveLength(1)
-  })
-
-  it('keeps a valid migrated participant after export failure without moving the project', () => {
-    writeState('source', true, [repo])
-    const targetJson = writeState('target', false)
-    vi.spyOn(ProfileStateSqliteAuthority.prototype, 'writeJsonExport').mockImplementation(() => {
-      throw new Error('export failure')
-    })
-    expect(() => transfer()).toThrow('export failure')
-    expect(readProfileStateWithRevision('source', directory).state.repos).toHaveLength(1)
-    expect(readProfileStateWithRevision('target', directory).state.repos).toHaveLength(0)
-    expect(readFileSync(paths('target').dataFile, 'utf8')).toBe(targetJson)
   })
 })

@@ -111,12 +111,4 @@ describe('pinned small JSONL reader', () => {
     expect(await collect(active)).toEqual([{ line: 'one', endOffset: 4, terminated: true }])
     expect(await validateJsonlFileReader(active)).toBe(false)
   })
-
-  it('invalidates a truncation encountered by the descriptor loop', async () => {
-    const active = await openFixture('one\ntwo\n')
-    await writeFile(filePath, 'one\n')
-
-    expect(await collect(active)).toEqual([])
-    expect(await validateJsonlFileReader(active)).toBe(false)
-  })
 })

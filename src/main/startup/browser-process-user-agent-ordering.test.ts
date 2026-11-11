@@ -162,7 +162,7 @@ vi.mock('../persistence/loading-store/user-data-path', () => ({
   initDataPath: () => mocks.events.push('init-data-path'),
   getCanonicalUserDataPath: () => '/canonical-user-data'
 }))
-vi.mock('../persistence/profile-state/profile-state-access', () => ({
+vi.mock('../persistence/profile-state/access/profile-state-access', () => ({
   acquireProfileStateRuntimeAdmission: (root: string) => {
     mocks.events.push(`admission:${root}`)
     return mocks.admission()
@@ -178,17 +178,17 @@ vi.mock('../orca-profiles/profile-storage-paths', () => ({
 vi.mock('../orca-profiles/project-transfer/profile-project-move-intent', () => ({
   recoverPendingProfileProjectMoves: mocks.recoverMoves
 }))
-vi.mock('../persistence/profile-state/profile-state-active-location', () => ({
+vi.mock('../persistence/profile-state/offline-access/profile-state-active-location', () => ({
   getActiveProfileStateLocation: () => ({ profileId: 'active-profile' })
 }))
 vi.mock('../stats/collector')
 vi.mock('../browser/document-preview/doc-preview-protocol')
-vi.mock('../crash-reporting/crashpad-capture')
-vi.mock('../crash-reporting/crash-report-store')
-vi.mock('../crash-reporting/crash-breadcrumb-store')
-vi.mock('../crash-reporting/durable-crash-breadcrumb')
-vi.mock('../crash-reporting/gpu-crash-diagnostics')
-vi.mock('../crash-reporting/main-process-lifecycle-identity')
+vi.mock('../crash-reporting/capture/crashpad-capture')
+vi.mock('../crash-reporting/reports/crash-report-store')
+vi.mock('../crash-reporting/breadcrumbs/crash-breadcrumb-store')
+vi.mock('../crash-reporting/breadcrumbs/durable-crash-breadcrumb')
+vi.mock('../crash-reporting/capture/gpu-crash-diagnostics')
+vi.mock('../crash-reporting/process-exits/main-process-lifecycle-identity')
 vi.mock('./ensure-virtual-display', () => ({
   ensureVirtualDisplayForHeadlessServe: vi.fn(),
   hasUsableLinuxDisplay: () => true,

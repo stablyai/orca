@@ -5,7 +5,7 @@ import type {
   MobilePushRegisterInput,
   MobilePushRegisterResult
 } from '../../../shared/mobile-push-contract'
-import { runKeyedSerializedOperation } from '../../cli/keyed-promise-queue'
+import { runKeyedSerializedOperation } from '../../../shared/concurrency/keyed-serialized-operations'
 import type { DeviceRegistry } from '../rpc/server/pairing/device-registry'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import type { OrcaRuntimeRpcServer } from '../rpc/server/runtime-rpc'

@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   attach: vi.fn(),
   publishMetadata: vi.fn(),
   createBrowserTab: vi.fn(async () => true),
+  restoredPageUnrecovered: false,
   addressBar: {
     current: null as {
       value: string
@@ -36,6 +37,10 @@ vi.mock('./browser-client-page-renderer-installation', () => ({
   attachBrowserClientPageToViewport: mocks.attach
 }))
 
+vi.mock('./restored-client-hosted-recovery-window', () => ({
+  useRestoredClientHostedRecoveryWindow: () => mocks.restoredPageUnrecovered
+}))
+
 vi.mock('./assemble-chrome/BrowserAddressBar', () => ({
   // Keep the shared bar’s own behavior out of this suite; preserve the ref targeted by pane focus rules.
   default: (props: {
@@ -61,6 +66,7 @@ function render(ui: React.ReactElement) {
 describe('ClientHostedBrowserPagePane', () => {
   beforeEach(() => {
     mocks.attach.mockReset()
+    mocks.restoredPageUnrecovered = false
     mocks.publishMetadata.mockReset().mockResolvedValue({ status: 'published', accepted: true })
     // Download, popup and permission notices subscribe on mount; each has its own suite.
     installClientHostedPaneApi({ browser: { publishClientPageMetadata: mocks.publishMetadata } })
@@ -170,6 +176,47 @@ describe('ClientHostedBrowserPagePane', () => {
     act(() => screen.getByText('Retry').click())
     expect(webview.reload).not.toHaveBeenCalled()
     expect(webview.src).toBe(normalizeBrowserNavigationUrl(loadError.validatedUrl))
+  })
+
+  it('offers Reopen without a stale load-failure surface until the restored page attaches', () => {
+    mocks.restoredPageUnrecovered = true
+    const browserTab = {
+      ...page(),
+      url: 'https://remote.internal/failed',
+      loadError: {
+        code: -120,
+        description: 'ERR_SOCKS_CONNECTION_FAILED',
+        validatedUrl: 'https://remote.internal/failed'
+      }
+    }
+    const pane = (placement: typeof PLACEMENT | null) => (
+      <ClientHostedBrowserPagePane
+        browserTab={browserTab}
+        workspaceId="workspace-a"
+        chromeShortcutScope="focused"
+        runtimeEnvironmentId="environment-a"
+        worktreeId="worktree-a"
+        placement={placement}
+        isActive
+        onUpdatePageState={vi.fn()}
+        onSetUrl={vi.fn()}
+      />
+    )
+    const view = render(pane(null))
+
+    expect(
+      screen.getByRole<HTMLButtonElement>('button', { name: 'Reopen on server' }).disabled
+    ).toBe(false)
+    expect(screen.queryByText('Retry', { selector: 'button' })).toBeNull()
+
+    const { webview, setUrl } = createWebview()
+    setUrl(browserTab.url)
+    mocks.attach.mockReturnValue(retainedAttachment(webview))
+    mocks.restoredPageUnrecovered = false
+    view.rerender(pane(PLACEMENT))
+
+    expect(screen.queryByRole('button', { name: 'Reopen on server' })).toBeNull()
+    expect(screen.getByText('Retry', { selector: 'button' })).toBeTruthy()
   })
 
   it('shows exact-generation unavailability without creating a fallback guest', () => {

@@ -30,7 +30,7 @@ vi.mock('../../shared/backend-port-rpc', () => ({
   }
 }))
 vi.mock('../backend/backend-message-port', () => ({ backendMessagePort: () => ({}) }))
-vi.mock('../crash-reporting/durable-crash-breadcrumb', () => ({
+vi.mock('../crash-reporting/breadcrumbs/durable-crash-breadcrumb', () => ({
   recordDurableCrashBreadcrumb: vi.fn()
 }))
 vi.mock('../worker-threads/worker-thread-entry-path', () => ({

@@ -4,12 +4,11 @@ import { getStructuredAgentSessionHost } from '../../../../native-chat/agent-ses
 import { structuredAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
 import type { AgentJournalApprovalItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { mintAgentSessionOperationId } from '../../mailbox/structured-pointer/structured-pointer-operation-id'
-import {
-  workerApprovalDecisionOf,
-  workerApprovalOption,
-  type WorkerApprovalDecision,
-  type WorkerApprovalOutcome
-} from './worker-approval'
+import { workerApprovalDecisionOf, workerApprovalOption } from './worker-approval'
+import type {
+  WorkerApprovalDecision,
+  WorkerApprovalOutcome
+} from '../../../../../shared/orchestration/approvals/worker-approval-payload'
 
 /** Marks a prompt Orca answered for a coordinator or a person, so the chat's own closer leaves it alone. */
 export const ORCHESTRATION_APPROVAL_CALLER_PREFIX = 'trusted-local:orchestration:approval:'

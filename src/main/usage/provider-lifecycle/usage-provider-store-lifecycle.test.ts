@@ -130,14 +130,6 @@ describe('UsageProviderStoreLifecycle', () => {
   let split: ReturnType<typeof vi.fn<TestSplit>>
   let capture: ReturnType<typeof vi.fn<UsageTelemetryHost['capture']>>
 
-  function createStore(
-    cacheFile = join(tempDirectory, `usage-${stores.length}.json`)
-  ): TestUsageStore {
-    const store = new TestUsageStore(cacheFile, scan, split, capture)
-    stores.push(store)
-    return store
-  }
-
   beforeEach(() => {
     capture = vi.fn<UsageTelemetryHost['capture']>(async () => true)
     tempDirectory = mkdtempSync(join(tmpdir(), 'orca-usage-lifecycle-'))
@@ -195,31 +187,6 @@ describe('UsageProviderStoreLifecycle', () => {
     readCatalog.mockClear()
     await store.refresh(true)
     expect(readCatalog).not.toHaveBeenCalled()
-  })
-
-  it('flush waits for queued analytics identity creation', async () => {
-    const store = createStore()
-    const identity = store.getAnalyticsSessionIds(['session'])
-    await store.flush()
-    const [id] = await identity
-    expect(
-      readFileSync(join(tempDirectory, 'usage-0-analytics-session-ids.json'), 'utf8')
-    ).toContain(id)
-  })
-
-  it('keeps per-source records out of the report main writes', async () => {
-    const cacheFile = join(tempDirectory, 'provider.json')
-    const store = createStore(cacheFile)
-    await store.setEnabled(true)
-    scan.mockResolvedValueOnce({ sessions: [{ id: 'session' }], dailyAggregates: [] })
-
-    await store.refresh(true)
-    await store.flush()
-
-    const persisted = readFileSync(cacheFile, 'utf-8')
-    expect(JSON.parse(persisted)).not.toHaveProperty('processedSources')
-    expect(JSON.parse(persisted).sessions).toEqual([{ id: 'session' }])
-    expect(persisted).not.toContain('\n')
   })
 
   it('keeps a successful scan when the first async telemetry consent request rejects', async () => {

@@ -19,7 +19,7 @@ import {
 } from './run-target-resolution'
 import { writeAutomationRunUsage } from './run-usage-collection'
 import type { AutomationLauncher, AutomationTerminalLauncher } from './automation-launch'
-import { runKeyedSerializedOperation } from '../cli/keyed-promise-queue'
+import { runKeyedSerializedOperation } from '../../shared/concurrency/keyed-serialized-operations'
 import { clearAutomationDispatchTokens } from './dispatch-tokens'
 import {
   AutomationRunCompletionWatcher,

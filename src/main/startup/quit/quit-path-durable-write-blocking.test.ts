@@ -1,4 +1,4 @@
-import { createWorkerMaintenanceFixture } from '../../persistence/loading-store/profile-state-maintenance-fixture'
+import { createWorkerMaintenanceFixture } from '../../persistence/loading-store/profile-writing/profile-state-maintenance-fixture'
 import type { Store } from '../../persistence/loading-store/store'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'

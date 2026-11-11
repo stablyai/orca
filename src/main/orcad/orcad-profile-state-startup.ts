@@ -1,5 +1,5 @@
-import { createProfileStateStoreForStartup } from '../persistence/profile-state/profile-state-startup-authority'
-import type { ProfileStateStoreFactoryResult } from '../persistence/profile-state/profile-state-store-factory'
+import { createProfileStateStoreForStartup } from '../persistence/profile-state/startup/profile-state-startup-authority'
+import type { ProfileStateStoreFactoryResult } from '../persistence/profile-state/startup/profile-state-store-factory'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
 import { initOrcaProfilePaths } from '../orca-profiles/profile-storage-paths'
 import { initSshHostKeyStoreFile } from '../ssh/host-keys/ssh-host-key-store'

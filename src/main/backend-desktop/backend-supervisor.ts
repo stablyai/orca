@@ -8,7 +8,7 @@ import {
   type WebFrameMain
 } from 'electron'
 import { join } from 'node:path'
-import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
+import { recordDurableCrashBreadcrumb } from '../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
 import { pathToFileURL } from 'node:url'
 import { BackendPortRpc } from '../../shared/backend-port-rpc'
 import {

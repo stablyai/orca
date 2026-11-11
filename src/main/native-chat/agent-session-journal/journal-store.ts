@@ -15,7 +15,6 @@ import type {
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentSessionContextUsage } from '../../../shared/agent-session/agent-session-context-usage'
 import { latestStructuredAgentContextFacts } from '../../../shared/agent-session/structured-agent-session-context-usage'
-import { runningStructuredAgentSessionTurnItemBySequence } from '../../../shared/agent-session/view/structured-agent-session-live-turn'
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { journalWroteBeforeOpen } from './replay/journal-cursor'
 import type { JournalHostDatabase } from './database/journal-host-database'
@@ -230,9 +229,8 @@ export class AgentSessionJournal {
   hasRecordedItem = (itemId: string): boolean =>
     this.state.items.has(itemId) || this.state.tombstones.has(itemId)
 
-  /** Read the journal's running turn without allocating a snapshot; host projection decides current work. */
-  runningTurn = (): { item: journal.AgentJournalRenderItem; turnId: string } | null =>
-    runningStructuredAgentSessionTurnItemBySequence(this.state.items.values())
+  /** Read from the per-row turn index so hot readers never rescan history; host projection decides current work. */
+  runningTurn = () => journalInputOrder(this.state).newestTurn.running()
 
   newestTurn = (): journal.AgentJournalTurnLifecycle | null =>
     readAgentJournalTurn(journalInputOrder(this.state).newestTurn.read()?.body)
