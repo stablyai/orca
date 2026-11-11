@@ -84,7 +84,10 @@ export function getActivityThreadWorkspaceTitle(
 
 export function getActivityThreadTaskTitle(args: {
   entry: Pick<AgentStatusEntry, 'orchestration' | 'prompt' | 'stateHistory'>
-  tab: Pick<TerminalTab, 'customTitle' | 'generatedTitle' | 'title' | 'defaultTitle'>
+  tab: Pick<
+    TerminalTab,
+    'customTitle' | 'aiVaultTitle' | 'generatedTitle' | 'title' | 'defaultTitle'
+  >
   generatedTitlesEnabled: boolean
 }): string {
   const customTitle = args.tab.customTitle?.trim()
@@ -95,6 +98,13 @@ export function getActivityThreadTaskTitle(args: {
   const orchestrationLabel = orchestrationLabelForEntry(args.entry)
   if (orchestrationLabel) {
     return orchestrationLabel
+  }
+
+  // Resume records the first prompt this tab saw as generatedTitle. The session's own name outranks that stand-in, as the tab bar does.
+  const namedSessionTitle =
+    args.tab.aiVaultTitle?.kind === 'named' ? args.tab.aiVaultTitle.title.trim() : ''
+  if (namedSessionTitle) {
+    return namedSessionTitle
   }
 
   // Respect tabAutoGenerateTitle here too so disabled generated titles cannot resurface.
