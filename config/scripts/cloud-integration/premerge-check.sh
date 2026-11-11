@@ -56,16 +56,10 @@ else
     esac
   done < <(git diff --name-only --diff-filter=AMR "$base"...HEAD -- 'src/*')
   if ((${#tests[@]} > 0)); then
-    tests=($(printf "%s\n" "${tests[@]}" | sort -u)) # repo paths have no spaces
-    # Skip files on the full-suite base list: they fail on upstream too (this Mac's environment), so they would only block.
-    base_list=config/scripts/cloud-integration/full-suite-base-list.txt
-    if [[ -f "$base_list" ]]; then
-      kept=()
-      for t in "${tests[@]}"; do
-        if grep -qxF "$t" "$base_list"; then echo "premerge: skipping base-list test $t"; else kept+=("$t"); fi
-      done
-      tests=(${kept[@]+"${kept[@]}"})
-    fi
+    # Skip files on the full-suite base list: they fail on upstream too (this Mac's environment), so they would only
+    # block. Exact whole-line matches only (filter-base-list-tests.sh, unit-tested); repo paths have no spaces.
+    tests=($(printf "%s\n" "${tests[@]}" | sort -u |
+      bash config/scripts/cloud-integration/filter-base-list-tests.sh config/scripts/cloud-integration/full-suite-base-list.txt))
     echo "premerge: ${#tests[@]} targeted test file(s):"
   fi
   if ((${#tests[@]} > 0)); then
