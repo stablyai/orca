@@ -14,6 +14,7 @@ import {
   withProviderSpawnAbsence,
   type ProviderSpawnAbsence
 } from '../provider-process/provider-executable-missing'
+import { redactString } from '../observability/redactor'
 import { AcpAgentExitedError, AcpConnectionClosedError, AcpSignInPromptError } from './acp-errors'
 import { resolveAcpPeerOptions, type AcpPeerOptions } from './acp-peer-limits'
 import { AcpSessionRuntime, type AcpSessionRuntimeOptions } from './acp-session-runtime'
@@ -178,13 +179,14 @@ export class AcpAgentConnection extends AcpSessionRuntime {
       const expected = lifecycle.closing
       const finish = (): void => {
         clearTimeout(lifecycle.outputEndTimer)
-        const detail = managed.stderrTail().trim() || `${launch.command} exited`
+        const stderr = this.stderrTail()
+        const detail = stderr || `${launch.command} exited`
         // Only an exit Orca neither caused nor preceded with its own refusal leaves calls unanswered.
         const error = withProviderSpawnAbsence(
           lifecycle.error ??
             (expected
               ? new AcpConnectionClosedError(detail)
-              : new AcpAgentExitedError(detail, managed.stderrTail().trim())),
+              : new AcpAgentExitedError(detail, stderr)),
           managed.spawnAbsence
         )
         super.close(error)
@@ -232,8 +234,9 @@ export class AcpAgentConnection extends AcpSessionRuntime {
     return this.exited && (result?.tree === 'unverifiable' || result?.tree === 'live')
   }
 
+  /** Agent stderr reaches errors and the saved chat, so credentials it printed are redacted. */
   stderrTail(): string {
-    return this.managed.stderrTail().trim()
+    return redactString(this.managed.stderrTail().trim())
   }
 
   /** First managed exit observation, including processless spawn failure. */

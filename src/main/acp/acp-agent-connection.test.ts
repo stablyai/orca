@@ -118,6 +118,22 @@ describe('ACP process-owning connection', () => {
     await expect(connection.close()).resolves.toBe(true)
   })
 
+  it('redacts a credential the agent printed before exiting from every report of its stderr', async () => {
+    const onExit = vi.fn()
+    const { connection, child } = fixture({ onExit })
+    await connection.start(start)
+    const turn = connection.prompt([...prompt]).catch((error: unknown) => error)
+    const key = `sk-proj-${'a1B2'.repeat(10)}`
+    child.stderr.write(`provider rejected key ${key}\nOPENROUTER_API_KEY=${key}\n`)
+    child.emit('exit', 1, null)
+    child.emit('close', 1, null)
+    const error = await turn
+    await vi.waitFor(() => expect(onExit).toHaveBeenCalledOnce())
+    const reports = [String(error), String(onExit.mock.calls[0]?.[0]), connection.stderrTail()]
+    expect(reports.join('\n')).not.toContain(key.slice(8))
+    expect(connection.stderrTail()).toContain('provider rejected key')
+  })
+
   it('ends a turn signed out at a sign-in prompt line and never retains its URL', async () => {
     const said: string[] = []
     const onExit = vi.fn((error: Error) => said.push(error.message))
