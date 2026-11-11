@@ -12,7 +12,9 @@ export function orcaCloudSandboxIdFor(
   const runtime = listEphemeralVmRuntimes(userDataPath).find(
     (record) =>
       record.runtimeEnvironmentId === runtimeEnvironmentId &&
-      record.recipe?.provider === 'orca-cloud'
+      // Composer-created cloud workspaces store the recipe without a provider (like
+      // cloud-desktop-keys); the hosted-sandbox handle below is what proves it is Orca Cloud.
+      (record.recipe?.provider === 'orca-cloud' || record.recipe?.provider === undefined)
   )
   const handle = runtime?.recipeResult
     ? environmentHandleFromRecipeResult(runtime.recipeResult, HOSTED_SANDBOX_DRIVER_ID)
