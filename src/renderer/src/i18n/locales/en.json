@@ -21126,6 +21126,7 @@
           "label": "First prompt for {{agent}}",
           "placeholder": "What should {{agent}} work on?",
           "hint": "{{agent}} starts with it as soon as the workspace is ready.",
+          "heldHint": "Sends once {{agent}} is set up.",
           "cancelEdit": "Cancel",
           "queue": "Queue prompt",
           "lateEdit": "Too late to change: {{agent}} is starting with the queued prompt. Send your edit once the workspace opens:",
