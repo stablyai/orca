@@ -2,6 +2,7 @@ import { renderOrchestrationArgv, type OrchestrationAgentView } from './agent-vi
 import type { WorkerListRunScope } from './worker-list-run-scope'
 import { isActionableOrchestrationFleetAttention } from '../../../shared/orchestration/fleet/orchestration-fleet-attention'
 import { formatPrCommentRelativeTime } from '../../../shared/source-control/review-comments/pr-comment-time'
+import type { OrchestrationWorkerSettings } from '../../../shared/orchestration/workers/orchestration-worker-settings'
 
 type WorkerProjection = {
   runId?: string
@@ -40,6 +41,7 @@ export type WorkerShowResult = {
     terminalHandle?: string | null
   } | null
   observation?: { agentWait?: { source: string; reason?: string } | null; reason?: string }
+  settings?: OrchestrationWorkerSettings
   /** Present only for a worker a paired server runs, which this Orca's record answers. */
   server?: RemoteWorkerServer & { reachable?: boolean }
   lastReport?: string | null

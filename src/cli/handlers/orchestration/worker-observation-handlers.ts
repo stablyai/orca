@@ -17,7 +17,8 @@ import { formatWorkerRead, type LegacyWorkerReadResult } from './worker-output'
 export const ORCHESTRATION_WORKER_OBSERVATION_HANDLERS: Record<string, CommandHandler> = {
   'orchestration worker-show': async ({ flags, client, json }) => {
     const result = await client.call<WorkerShowResult>('orchestration.workerShow', {
-      dispatch: getRequiredStringFlag(flags, 'dispatch')
+      dispatch: getRequiredStringFlag(flags, 'dispatch'),
+      ...(flags.has('full') ? { includeSettings: true } : {})
     })
     if (!flags.has('full')) {
       printOrchestrationResult(result, json, WORKER_SHOW_VIEW)
@@ -62,6 +63,13 @@ export const ORCHESTRATION_WORKER_OBSERVATION_HANDLERS: Record<string, CommandHa
       }
       if (value.autoReleaseAt) {
         lines.push(`Auto-release: ${value.autoReleaseAt}`)
+      }
+      if (value.settings) {
+        lines.push(
+          value.settings.kind === 'unknown'
+            ? `Settings: unknown (${value.settings.reason})`
+            : `Settings (session=${value.settings.sessionId}, fence=${value.settings.runtimeFence}): ${JSON.stringify(value.settings.current)}`
+        )
       }
       return lines.join('\n')
     })

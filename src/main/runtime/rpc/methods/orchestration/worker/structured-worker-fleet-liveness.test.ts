@@ -13,6 +13,9 @@ import {
   structuredAgentSessionTabId
 } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+import { OrcaRuntimeService } from '../../../../orca-runtime'
+import { eraseRpcMethods, isStreamingMethod } from '../../../core'
+import { ORCHESTRATION_WORKER_CONTROL_METHODS } from './worker-control'
 import '../../../../orchestration/db/contract-constants'
 import '../../../../orchestration/db/dispatch-row-writer'
 import '../../../../orchestration/db/attempt-outcome-projection'
@@ -25,7 +28,7 @@ vi.mock(
 )
 
 const { projectWorkerFleet } = await import('./worker-list-projection')
-const { ensureSessionWorkerRecords, inspectSessionWorker } =
+const { ensureSessionWorkerRecords, inspectSessionWorker, readStructuredWorkerSettings } =
   await import('./session-worker-observation')
 const { createSessionWorkerLivenessReader } =
   await import('../../../../orchestration/workers/lifecycle/session-worker-liveness')
@@ -52,7 +55,7 @@ function record(
 }
 
 function installHost(current: AgentSessionRecord, attached: boolean) {
-  hostRef.current = {
+  const host = {
     deps: {
       store: {
         getConversation: () => agentSessionConversationView(current),
@@ -60,9 +63,13 @@ function installHost(current: AgentSessionRecord, attached: boolean) {
         getVisibleSessionTabIndex: () => ({ present: true, sessionIds: [SESSION] })
       }
     },
+    getPersistedVisibleSessionTabIndex: () => ({ present: true, sessionIds: [SESSION] }),
     getSessionTabId: () => `agent-session:${SESSION}`,
-    hasSession: () => attached
+    hasSession: () => attached,
+    readOptions: async () => ({ models: [], current: {} })
   }
+  hostRef.current = host
+  return host
 }
 
 /** The session's own status row, as the structured status feed publishes it. */
@@ -94,7 +101,10 @@ describe('worker-list liveness for chat-mode workers', () => {
     structuredWorkerIdentities.clear()
     hostRef.current = null
   })
-  afterEach(() => db.close())
+  afterEach(() => {
+    db.close()
+    vi.restoreAllMocks()
+  })
 
   function seed() {
     const task = db.createTask({ runId: 'run_legacy_local', spec: 'structured work' })
@@ -173,7 +183,11 @@ describe('worker-list liveness for chat-mode workers', () => {
       deathEvidence: { kind: 'exit-observed', detail: 'provider exited', observedAt: 1 }
     })
     // After a restart the host is not installed until a caller asks for it.
-    const runtime = { ensureStructuredAgentSessionHost: async () => installHost(ended, false) }
+    const runtime = {
+      ensureStructuredAgentSessionHost: async () => {
+        installHost(ended, false)
+      }
+    }
     const rows = db.listWorkerTerminalResources({ dispatchIds: [dispatchId], limit: 1 })
 
     await ensureSessionWorkerRecords(runtime, rows)
@@ -190,5 +204,113 @@ describe('worker-list liveness for chat-mode workers', () => {
     hostRef.current = null
     const shown = await inspectSessionWorker(runtime, db, dispatchId, rows[0]!.agentTerminalHandle!)
     expect(shown?.status).toBe('exited')
+  })
+
+  it('exposes only option facts for the exact live worker without promoting saved choices', async () => {
+    const dispatchId = seed()
+    const host = installHost(record('claude'), true)
+    host.readOptions = async () => ({
+      models: [],
+      transcriptPath: '/private/conversation',
+      current: {
+        model: 'next-model',
+        reportedModel: 'running-model',
+        effort: 'high',
+        reportedEffort: 'medium',
+        confirmed: ['permissionMode'],
+        reportedPermissionMode: 'plan',
+        defaulted: [],
+        acceptedInputSources: { model: 'saved', effort: 'saved' }
+      }
+    })
+    const runtime = { ensureStructuredAgentSessionHost: async () => {} }
+
+    expect(await readStructuredWorkerSettings(runtime, db, dispatchId)).toEqual({
+      kind: 'options',
+      sessionId: SESSION,
+      runtimeFence: 7,
+      agent: 'claude',
+      current: {
+        model: 'next-model',
+        reportedModel: 'running-model',
+        effort: 'high',
+        reportedEffort: 'medium',
+        confirmed: ['permissionMode'],
+        reportedPermissionMode: 'plan',
+        defaulted: [],
+        acceptedInputSources: { model: 'saved', effort: 'saved' }
+      }
+    })
+  })
+
+  it('includes setting facts through the detailed worker-show RPC while leaving ordinary reads unchanged', async () => {
+    const dispatchId = seed()
+    const host = installHost(record('codex'), true)
+    host.readOptions = async () => ({
+      models: [],
+      current: { model: 'native-model', effort: 'medium' }
+    })
+    const runtime = new OrcaRuntimeService()
+    runtime.setOrchestrationDb(db)
+    vi.spyOn(runtime, 'ensureStructuredAgentSessionHost').mockResolvedValue(undefined)
+    vi.spyOn(runtime, 'getOrchestrationFleetAgentStatusSnapshot').mockReturnValue([])
+    const method = eraseRpcMethods(ORCHESTRATION_WORKER_CONTROL_METHODS).find(
+      (candidate) => candidate.name === 'orchestration.workerShow'
+    )
+    if (!method || isStreamingMethod(method)) {
+      throw new Error('Missing worker-show')
+    }
+
+    expect(
+      await method.handler(method.params?.parse({ dispatch: dispatchId, includeSettings: true }), {
+        runtime
+      })
+    ).toMatchObject({
+      settings: {
+        kind: 'options',
+        sessionId: SESSION,
+        runtimeFence: 7,
+        agent: 'codex',
+        current: { model: 'native-model', effort: 'medium' }
+      }
+    })
+    expect(
+      await method.handler(method.params?.parse({ dispatch: dispatchId }), { runtime })
+    ).not.toHaveProperty('settings')
+  })
+
+  it('discards settings when the child changes during the options read', async () => {
+    const dispatchId = seed()
+    const current = record('codex')
+    const host = installHost(current, true)
+    host.readOptions = async () => {
+      current.lease.runtimeFence = 8
+      return { models: [], current: { model: 'retired-child' } }
+    }
+    const runtime = { ensureStructuredAgentSessionHost: async () => {} }
+
+    expect(await readStructuredWorkerSettings(runtime, db, dispatchId)).toEqual({
+      kind: 'unknown',
+      reason: 'identity_changed'
+    })
+  })
+
+  it('keeps at-rest and failed provider reads unknown', async () => {
+    const dispatchId = seed()
+    installHost(record('codex', { claimStatus: 'released' }), false)
+    const runtime = { ensureStructuredAgentSessionHost: async () => {} }
+    expect(await readStructuredWorkerSettings(runtime, db, dispatchId)).toEqual({
+      kind: 'unknown',
+      reason: 'not_live'
+    })
+
+    const host = installHost(record('codex'), true)
+    host.readOptions = async () => {
+      throw new Error('provider error with private account detail')
+    }
+    expect(await readStructuredWorkerSettings(runtime, db, dispatchId)).toEqual({
+      kind: 'unknown',
+      reason: 'read_failed'
+    })
   })
 })

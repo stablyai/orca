@@ -64,6 +64,34 @@ describe('orchestration agent views', () => {
     vi.restoreAllMocks()
   })
 
+  it('requests native settings only for detailed worker inspection and preserves unknown evidence', async () => {
+    const result = {
+      dispatch: { id: 'ctx_1', taskId: 'task_1', status: 'active' },
+      worker: { state: 'ready', stage: 'ready', agentTerminalHandle: null },
+      settings: { kind: 'unknown', reason: 'not_live' }
+    }
+    const full = await run(
+      'worker-show',
+      [
+        ['dispatch', 'ctx_1'],
+        ['full', true]
+      ],
+      result,
+      true
+    )
+    expect(callMock).toHaveBeenLastCalledWith('orchestration.workerShow', {
+      dispatch: 'ctx_1',
+      includeSettings: true
+    })
+    expect(JSON.parse(full.stdout).result.settings).toEqual({
+      kind: 'unknown',
+      reason: 'not_live'
+    })
+
+    await run('worker-show', [['dispatch', 'ctx_1']], result, true)
+    expect(callMock).toHaveBeenLastCalledWith('orchestration.workerShow', { dispatch: 'ctx_1' })
+  })
+
   it('makes a failed worker-start impossible to miss on stdout, stderr, and the exit code', async () => {
     const { stdout, stderr } = await run('worker-start', [['task', 'task_1']], {
       ...OLDER_RUNTIME_START,

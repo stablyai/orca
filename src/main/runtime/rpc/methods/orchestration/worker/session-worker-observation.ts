@@ -10,6 +10,8 @@ import {
   observeStructuredSession
 } from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
 import { resolveStructuredWorkerForDispatch } from '../structured-workers/orchestration-structured-worker-lifecycle'
+import { getStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
+import type { OrchestrationWorkerSettings } from '../../../../../../shared/orchestration/workers/orchestration-worker-settings'
 
 export type SessionWorkerObservation = {
   terminal: null
@@ -82,5 +84,87 @@ export async function ensureSessionWorkerRecords(
     )
   ) {
     await runtime.ensureStructuredAgentSessionHost().catch(() => undefined)
+  }
+}
+
+/** Detailed inspection reads options without starting a child; a replaced owner invalidates the answer. */
+export async function readStructuredWorkerSettings(
+  runtime: Pick<OrcaRuntimeService, 'ensureStructuredAgentSessionHost'>,
+  db: OrchestrationDb,
+  dispatchId: string
+): Promise<OrchestrationWorkerSettings> {
+  const identity = resolveStructuredWorkerForDispatch(db, dispatchId)
+  if (!identity) {
+    return { kind: 'unknown', reason: 'terminal_worker' }
+  }
+  try {
+    await runtime.ensureStructuredAgentSessionHost()
+    const host = getStructuredAgentSessionHost()
+    if (!host) {
+      return { kind: 'unknown', reason: 'host_unavailable' }
+    }
+    const held = holdStructuredWorker(identity, db)
+    if (held.kind !== 'held') {
+      return { kind: 'unknown', reason: 'not_held' }
+    }
+    const sessionId = held.running.sessionId
+    const before = host.deps.store.getConversation(sessionId)
+    if (!before || observeStructuredSession(sessionId).status !== 'live') {
+      return { kind: 'unknown', reason: 'not_live' }
+    }
+    const options = await host.readOptions(sessionId, { readsWithoutModel: true })
+    const after = host.deps.store.getConversation(sessionId)
+    const currentHold = holdStructuredWorker(identity, db)
+    if (
+      currentHold.kind !== 'held' ||
+      currentHold.running.sessionId !== sessionId ||
+      after?.currentFence !== before.currentFence ||
+      observeStructuredSession(sessionId).status !== 'live' ||
+      !db.isDispatchProcessCurrent({
+        dispatchId,
+        paneKey: identity.paneKey,
+        processIncarnation: identity.processIncarnation
+      })
+    ) {
+      return { kind: 'unknown', reason: 'identity_changed' }
+    }
+    const {
+      model,
+      reportedModel,
+      effort,
+      reportedEffort,
+      fastMode,
+      serviceTier,
+      interactionMode,
+      permissionMode,
+      reportedPermissionMode,
+      fastModeState,
+      acceptedInputSources,
+      confirmed,
+      defaulted
+    } = options.current
+    return {
+      kind: 'options',
+      sessionId,
+      runtimeFence: before.currentFence,
+      agent: before.provider,
+      current: {
+        model,
+        reportedModel,
+        effort,
+        reportedEffort,
+        fastMode,
+        serviceTier,
+        interactionMode,
+        permissionMode,
+        reportedPermissionMode,
+        fastModeState,
+        acceptedInputSources,
+        confirmed,
+        defaulted
+      }
+    }
+  } catch {
+    return { kind: 'unknown', reason: 'read_failed' }
   }
 }
