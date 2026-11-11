@@ -22,16 +22,20 @@ import { orcaCloudNeedsFixFirst, useRunOnPreflightEnabled } from '@/lib/orca-clo
  */
 function RowAction({
   label,
-  onAction
+  onAction,
+  alignTop = false
 }: {
   label: string
   onAction: () => void
+  /** Beside a wrapping reason, the action sits at the top of the row. */
+  alignTop?: boolean
 }): React.JSX.Element {
   return (
     <span
       className={cn(
         buttonVariants({ variant: 'outline', size: 'xs' }),
-        'ml-2 shrink-0 self-center'
+        'ml-2 shrink-0',
+        alignTop ? 'self-start' : 'self-center'
       )}
       onMouseDown={(event) => {
         event.preventDefault()
@@ -190,10 +194,12 @@ function AskOwnerOrAdmin(): React.JSX.Element {
 
 function OrcaCloudMeta({
   access,
-  onAction
+  onAction,
+  alignTop = false
 }: {
   access: OrcaCloudRunTargetAccess
   onAction: () => void
+  alignTop?: boolean
 }): React.JSX.Element | null {
   const t = useTranslate()
   const hoursLeft = useOrcaCloudHoursLeft(access)
@@ -224,6 +230,7 @@ function OrcaCloudMeta({
             'Sign in'
           )}
           onAction={onAction}
+          alignTop={alignTop}
         />
       )
     case 'no-plan':
@@ -238,6 +245,7 @@ function OrcaCloudMeta({
               : t('auto.components.new.workspace.RunTargetCombobox.orcaCloudUpgrade', 'Upgrade')
           }
           onAction={onAction}
+          alignTop={alignTop}
         />
       )
     case 'out-of-hours':
@@ -264,6 +272,7 @@ function OrcaCloudMeta({
                   )
           }
           onAction={onAction}
+          alignTop={alignTop}
         />
       )
     case 'unknown':
@@ -321,6 +330,8 @@ export function RunTargetOrcaCloudRow({
 }): React.JSX.Element {
   const t = useTranslate()
   const preflight = useRunOnPreflightEnabled() && setupAfterStart
+  // A billing wall keeps "Orca Cloud" whole and wraps its reason under it (design-squad).
+  const wallShown = preflight && orcaCloudNeedsFixFirst(access)
   return (
     <RunTargetRow
       icon={<Cloud className="size-3.5 shrink-0 text-muted-foreground" />}
@@ -341,16 +352,17 @@ export function RunTargetOrcaCloudRow({
           access.state === 'out-of-hours' ||
           access.state === 'payment-issue') &&
           !access.canManageBilling) ||
-        (preflight && orcaCloudNeedsFixFirst(access))
+        wallShown
       }
       optionId={optionId}
+      wrapDetail={wallShown}
       busy={pending}
       onArm={onArm}
       onCommit={onSelect}
       description={orcaCloudRowHint(access, t)}
       trailing={
         setupAfterStart && !showsMetaAfterStart(access, preflight) ? undefined : (
-          <OrcaCloudMeta access={access} onAction={onBlockedAction} />
+          <OrcaCloudMeta access={access} onAction={onBlockedAction} alignTop={wallShown} />
         )
       }
     />

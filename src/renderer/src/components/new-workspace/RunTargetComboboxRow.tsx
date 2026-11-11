@@ -26,7 +26,8 @@ export function RunTargetRow({
   onArm,
   onCommit,
   trailing,
-  description
+  description,
+  wrapDetail = false
 }: {
   icon: React.ReactNode
   label: string
@@ -56,6 +57,8 @@ export function RunTargetRow({
   armedInSubmenu?: boolean
   /** What Enter does when the row's inline action isn't a Tab stop of its own. */
   description?: string
+  /** Stacked rows: the label stays whole and the detail wraps (an error reason is never cut). */
+  wrapDetail?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const hasDetail = Boolean(detailNode ?? detail)
@@ -76,7 +79,11 @@ export function RunTargetRow({
       onClick={onCommit}
       className={cn(
         'flex cursor-default gap-2 rounded-sm px-2 text-sm',
-        stacked ? 'items-center py-1.5' : 'h-8 items-baseline',
+        stacked
+          ? wrapDetail
+            ? 'items-start py-1.5'
+            : 'items-center py-1.5'
+          : 'h-8 items-baseline',
         armed &&
           (armedInSubmenu
             ? // A faint fill plus an inset ring keeps the path distinct from the armed child (dark mode too).
@@ -97,11 +104,20 @@ export function RunTargetRow({
       {stacked ? (
         <span className={cn('flex min-w-0 flex-1 flex-col', (dimmed || disabled) && 'opacity-60')}>
           <span className="flex min-w-0 items-center gap-1.5">
-            <span className={cn('truncate', current && 'font-medium')}>{label}</span>
+            <span
+              className={cn(
+                wrapDetail ? 'whitespace-nowrap' : 'truncate',
+                current && 'font-medium'
+              )}
+            >
+              {label}
+            </span>
             {labelBadge}
           </span>
           {detailNode ? (
-            <span className="truncate text-xs text-muted-foreground">{detailNode}</span>
+            <span className={cn(!wrapDetail && 'truncate', 'text-xs text-muted-foreground')}>
+              {detailNode}
+            </span>
           ) : detail ? (
             <ProjectOptionDetail detail={detail} className="text-xs text-muted-foreground" />
           ) : null}

@@ -12,10 +12,11 @@ export function OrcaCloudWallLine({ wall }: { wall: OrcaCloudWallNotice }): Reac
   return (
     <p
       role="status"
-      className="flex min-w-0 items-center gap-1 text-[11px] text-muted-foreground"
+      className="flex min-w-0 flex-wrap items-baseline gap-x-1 text-[11px] text-muted-foreground"
       data-orca-cloud-wall
     >
-      <span className="truncate">{wall.reason}</span>
+      {/* Wraps rather than truncating: the glossary reason is never cut (design-squad). */}
+      <span>{wall.reason}</span>
       <span aria-hidden>·</span>
       {wall.action ? (
         <Button type="button" variant="link" size="xs" onClick={wall.action.run}>
