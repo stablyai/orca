@@ -5,8 +5,8 @@ import {
 import { readFile, realpath, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { isDefinitiveAbsence } from '../../../../shared/definitive-filesystem-absence'
-import { resolveGitMetadataPath } from '../../../../shared/git-metadata-path'
-import { parseGitdirMarkerPayload } from '../../../../shared/gitdir-marker-payload'
+import { resolveGitMetadataPath } from '../../../../shared/git/metadata/git-metadata-path'
+import { parseGitdirMarkerPayload } from '../../../../shared/git/metadata/gitdir-marker-payload'
 import { isWorktreeCreatePreparation } from '../../../../shared/worktree/create-preparation'
 import { toWslExecutionSpace } from '../../../../shared/wsl-paths'
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
@@ -57,7 +57,7 @@ export async function listWorktreesUnshared(
     const visibleWorktrees = options.includeCreatePreparations
       ? worktrees
       : worktrees.filter((worktree) => !isWorktreeCreatePreparation(worktree))
-    return annotateSparseCheckoutStatus(repoPath, visibleWorktrees, options)
+    return await annotateSparseCheckoutStatus(repoPath, visibleWorktrees, options)
   } catch (err) {
     if (await isTrueEmptyWorktreeListing(repoPath, err)) {
       return []

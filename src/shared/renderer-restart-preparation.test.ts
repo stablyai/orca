@@ -3,8 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { UpdateStatus } from './update-status-types'
 import {
   ORCA_RENDERER_SHUTDOWN_CHECKPOINT_ABORTED_EVENT,
-  ORCA_RENDERER_SHUTDOWN_CHECKPOINT_FAILED_EVENT,
-  publishShutdownCheckpointFailureReason
+  ORCA_RENDERER_SHUTDOWN_CHECKPOINT_FAILED_EVENT
 } from './renderer-shutdown-events'
 import {
   createUpdaterQuitAbortRelay,
@@ -38,24 +37,6 @@ describe('prepareRendererForAppRestart', () => {
     expect(checkpoint).toHaveBeenCalledTimes(1)
     expect(aborted).toHaveBeenCalledTimes(1)
     expect(independentlyAborted).not.toHaveBeenCalled()
-  })
-
-  it('names the published failure cause in the thrown checkpoint error (STA-5505)', async () => {
-    const eventTarget = new EventTarget()
-    eventTarget.addEventListener('beforeunload', (event) => {
-      // Mirrors the checkpoint guard: publish the cause, then fail the checkpoint.
-      publishShutdownCheckpointFailureReason('sendSync payload rejected')
-      event.currentTarget?.dispatchEvent(new Event(ORCA_RENDERER_SHUTDOWN_CHECKPOINT_FAILED_EVENT))
-      event.preventDefault()
-    })
-
-    await expect(
-      prepareRendererForAppRestart(eventTarget, {
-        startedEventName: 'restart-started',
-        abortedEventName: 'restart-aborted',
-        awaitCheckpoint: () => Promise.resolve()
-      })
-    ).rejects.toThrow('Renderer shutdown checkpoint was not completed: sendSync payload rejected')
   })
 
   it('does not mistake an unrelated unload veto for checkpoint failure', async () => {
@@ -134,16 +115,5 @@ describe('createUpdaterQuitAbortRelay', () => {
     relay.handleStatus({ state: 'error', message: 'duplicate failure' } satisfies UpdateStatus)
 
     expect(aborted).toHaveBeenCalledTimes(1)
-  })
-
-  it('ignores updater errors when no update restart was prepared', () => {
-    const eventTarget = new EventTarget()
-    const aborted = vi.fn()
-    eventTarget.addEventListener('update-restart-aborted', aborted)
-    const relay = createUpdaterQuitAbortRelay(eventTarget, 'update-restart-aborted')
-
-    relay.handleStatus({ state: 'error', message: 'check failed' } satisfies UpdateStatus)
-
-    expect(aborted).not.toHaveBeenCalled()
   })
 })

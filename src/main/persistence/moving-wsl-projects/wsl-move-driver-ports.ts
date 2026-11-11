@@ -8,16 +8,16 @@ import type {
   OrcadMigrationCatalogState,
   OrcadMigrationManifest
 } from '../../../shared/orcad-migration/orcad-migration-manifest'
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../shared/project-group-types'
 import type { Repo } from '../../../shared/repo-types'
 import type { WslMoveProgressEvent } from '../../../shared/wsl-move/wsl-move-driver-types'
 import type {
   OrcadMigrationBlobDestination,
   OrcadMigrationBlobSource
-} from '../../ssh/orcad-migration-blob-coordinator'
-import type { OrcadMigrationDestinationCatalog } from '../../ssh/orcad-migration-cutover-coordinator'
-import type { OrcadMigrationSnapshotSource } from '../../ssh/orcad-migration-snapshot-coordinator'
+} from '../../managed-server/migration/transfers/orcad-migration-blob-coordinator'
+import type { OrcadMigrationDestinationCatalog } from '../../managed-server/migration/cutover/orcad-migration-cutover-coordinator'
+import type { OrcadMigrationSnapshotSource } from '../../managed-server/migration/transfers/orcad-migration-snapshot-coordinator'
 import type { WslMoveHostHolding } from './wsl-move-delta-plan'
 import type { WslMoveQuiesceDeps } from './wsl-move-quiesce'
 import type { WslMoveSleptScrollback } from './wsl-move-slept-scrollback'

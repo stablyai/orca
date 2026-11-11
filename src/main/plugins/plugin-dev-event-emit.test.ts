@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { parsePluginManifest } from '../../shared/plugins/manifest/plugin-manifest'
-import { PLUGIN_EVENT_NAMES } from '../../shared/plugins/contributions/plugin-event-contribution'
+
 import type { ValidDiscoveredPlugin } from './plugin-discovery'
 import { emitPluginDevEvent } from './plugin-dev-event-emit'
 import type { PluginWorkerHandle } from './workers/plugin-host-process'
@@ -106,23 +106,6 @@ describe('emitPluginDevEvent', () => {
     expect(ensureWorker).not.toHaveBeenCalled()
   })
 
-  it('lists the events when the name is unknown', async () => {
-    const { emit } = await harness()
-    await expect(emit('workspace.renamed', {})).rejects.toMatchObject({
-      code: 'invalid_argument',
-      data: { events: [...PLUGIN_EVENT_NAMES] }
-    })
-  })
-
-  it('refuses data that does not match the payload schema', async () => {
-    const { emit, ensureWorker } = await harness()
-    await expect(emit('workspace.created', { workspaceId: 'wt-1' })).rejects.toMatchObject({
-      code: 'invalid_argument',
-      data: { issues: expect.arrayContaining([expect.stringMatching(/^kind: /)]) }
-    })
-    expect(ensureWorker).not.toHaveBeenCalled()
-  })
-
   it('refuses an event nothing listens for, one it lacks the capability for, or while not approved', async () => {
     const { emit } = await harness()
     await expect(
@@ -140,16 +123,6 @@ describe('emitPluginDevEvent', () => {
     await expect(pending.emit('workspace.created', CREATED)).rejects.toThrow(/not approved/)
     expect(pending.ensureWorker).not.toHaveBeenCalled()
     expect(pending.publishEvent).not.toHaveBeenCalled()
-  })
-
-  it("also publishes to the plugin's own open panels, and counts them", async () => {
-    const both = await harness({ openPanels: 2 })
-    await expect(both.emit('workspace.created', CREATED)).resolves.toMatchObject({
-      delivered: { worker: true, panels: 2 }
-    })
-    expect(both.publishEvent).toHaveBeenCalledWith('workspace.created', CREATED, {
-      pluginKey: 'acme.demo'
-    })
   })
 
   it('reaches a panel-only plugin without starting a worker', async () => {

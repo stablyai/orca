@@ -2,7 +2,7 @@ import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from './remote-runtime/remote-
 import {
   JsonStringifyByteLimitError,
   stringifyJsonWithinByteLimit
-} from './node-bounded-json-stringify'
+} from './json-stream/node-bounded-json-stringify'
 
 // Reserve fixed/future reply metadata; separately charge arbitrary echoed request IDs.
 const OUTBOUND_ENVELOPE_RESERVE_BYTES = 4 * 1024

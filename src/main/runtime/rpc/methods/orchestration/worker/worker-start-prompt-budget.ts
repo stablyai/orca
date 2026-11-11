@@ -1,7 +1,7 @@
 import {
   isWorkerStartTaskSpecTooLarge,
   ORCHESTRATION_WORKER_START_TASK_SPEC_MAX_BYTES
-} from '../../../../../../shared/orchestration-worker-start-prompt-budget'
+} from '../../../../../../shared/orchestration/workers/orchestration-worker-start-prompt-budget'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 
 export async function assertWorkerStartTaskSpecWithinPromptBudget(spec: string): Promise<void> {

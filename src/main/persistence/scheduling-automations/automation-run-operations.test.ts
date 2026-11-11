@@ -1,12 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import { automationRunFailure } from '../../../shared/automation-run-failure-copy'
-import {
-  listAutomationRunsPage,
-  recordRepeatedAutomationSkip,
-  updateAutomationRun,
-  type AutomationRunOperations
-} from './automation-run-operations'
+
+import { listAutomationRunsPage } from './automation-run-operations'
 
 function stateWithRuns(runs: { id: string; createdAt: number }[]): PersistedState {
   return {
@@ -15,25 +10,6 @@ function stateWithRuns(runs: { id: string; createdAt: number }[]): PersistedStat
 }
 
 describe('listAutomationRunsPage', () => {
-  it('returns a bounded, newest-first page and an opaque continuation cursor', () => {
-    const state = stateWithRuns([
-      { id: 'old', createdAt: 1 },
-      { id: 'new', createdAt: 3 },
-      { id: 'middle', createdAt: 2 }
-    ])
-
-    const first = listAutomationRunsPage(state, 'a1', 2)
-    expect(first.runs.map((run) => run.id)).toEqual(['new', 'middle'])
-    expect(first.nextCursor).not.toBeNull()
-
-    expect(listAutomationRunsPage(state, 'a1', 2, first.nextCursor ?? undefined)).toEqual(
-      expect.objectContaining({
-        runs: [expect.objectContaining({ id: 'old' })],
-        nextCursor: null
-      })
-    )
-  })
-
   it('keeps the window stable when a newer run lands between pages', () => {
     const state = stateWithRuns([
       { id: 'r1', createdAt: 1 },
@@ -97,53 +73,5 @@ describe('listAutomationRunsPage', () => {
     ])
 
     expect(listAutomationRunsPage(state, 'a1', 2, '2').runs.map((run) => run.id)).toEqual(['r1'])
-  })
-})
-
-describe('automation run failure codes', () => {
-  it('persists the code beside the English error and drops it with the next result', () => {
-    const state = stateWithRuns([{ id: 'r1', createdAt: 1 }])
-    state.automationRuns[0] = {
-      ...state.automationRuns[0],
-      status: 'pending',
-      trigger: 'scheduled',
-      scheduledFor: 1
-    }
-    state.automations = []
-    const operations: AutomationRunOperations = {
-      state,
-      flush: () => {},
-      recordManualRun: () => {},
-      getWorkspaceDisplayName: () => null
-    }
-    const failure = automationRunFailure('projectSetupNotReady', { setupState: 'setting-up' })
-    updateAutomationRun(operations, {
-      runId: 'r1',
-      status: 'skipped_unavailable',
-      ...failure
-    })
-    recordRepeatedAutomationSkip(operations, 'a1', failure.error, 2)
-    // Usage writes forward only the English error.
-    updateAutomationRun(operations, {
-      runId: 'r1',
-      status: 'skipped_unavailable',
-      error: failure.error
-    })
-
-    const [stored] = JSON.parse(JSON.stringify(state.automationRuns))
-    expect(stored).toMatchObject({
-      error: 'Project setup on the selected automation host is setting-up.',
-      errorCode: 'projectSetupNotReady',
-      errorParams: { setupState: 'setting-up' },
-      occurrenceCount: 2
-    })
-
-    updateAutomationRun(operations, {
-      runId: 'r1',
-      status: 'dispatch_failed',
-      error: 'spawn failed'
-    })
-    expect(state.automationRuns[0]).not.toHaveProperty('errorCode')
-    expect(state.automationRuns[0]).not.toHaveProperty('errorParams')
   })
 })

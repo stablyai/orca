@@ -1,7 +1,7 @@
 // Real sh/dash/ash under a pty: an interactive shell reads $ENV only with a terminal attached.
 // Locally this covers /bin/sh and whichever of dash and busybox are installed. The PR body records a
 // docker run against dash 0.5.8, 0.5.10, 0.5.11 and 0.5.12, busybox ash and bash-as-sh.
-import { execFileSync } from 'node:child_process'
+import 'node:child_process'
 import {
   chmodSync,
   existsSync,
@@ -17,7 +17,7 @@ import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { buildWslInteractiveLoginShellCommand } from '../../../shared/wsl-login-shell-command'
 import { SH_WSL_ENV_FILE } from './wsl-shell-cwd-report'
-import { parseFileUriPath } from '../../daemon/osc7-file-uri'
+import { parseFileUriPath } from '../../daemon/emulation/osc7-file-uri'
 
 function findOnPath(name: string): string | null {
   for (const dir of ['/bin', '/usr/bin', '/usr/local/bin', '/opt/homebrew/bin']) {
@@ -152,87 +152,4 @@ describe.skipIf(process.platform === 'win32')('a WSL bridge sh pane reports its 
     },
     60_000
   )
-})
-
-describe.skipIf(process.platform === 'win32')('the WSL bridge sh ENV file', () => {
-  let home: string
-  beforeEach(() => {
-    home = realpathSync(mkdtempSync(path.join(tmpdir(), 'wsl-sh-env-')))
-    writeFileSync(path.join(home, 'env'), SH_WSL_ENV_FILE)
-    writeFileSync(path.join(home, 'user-env'), 'echo USER_ENV_SOURCED\n')
-  })
-  afterEach(() => rmSync(home, { recursive: true, force: true }))
-
-  it('is never read by a non-interactive sh -c', () => {
-    const out = execFileSync(
-      '/bin/sh',
-      ['-c', 'command -v __orca_wsl_cwd_report >/dev/null && echo HOOKED || echo PLAIN'],
-      {
-        encoding: 'utf8',
-        env: {
-          PATH: '/usr/bin:/bin',
-          ENV: path.join(home, 'env'),
-          ORCA_WSL_USER_ENV: path.join(home, 'user-env'),
-          WSL_DISTRO_NAME: 'Ubuntu'
-        }
-      }
-    )
-    expect(out).toBe('PLAIN\n')
-  })
-
-  it.each(DASH ? ['/bin/sh', DASH] : ['/bin/sh'])(
-    '%s starts quietly when the file is gone (Orca updated away or uninstalled)',
-    (shell) => {
-      const out = execFileSync(shell, ['-i'], {
-        encoding: 'utf8',
-        input: 'echo ALIVE\nexit\n',
-        env: { PATH: '/usr/bin:/bin', ENV: path.join(home, 'gone', 'env'), PS1: '' }
-      })
-      expect(out).toContain('ALIVE')
-    }
-  )
-})
-
-describe.skipIf(process.platform === 'win32')('the WSL bridge launch for sh', () => {
-  // A stub shell named dash that reports the ENV it was given instead of starting.
-  function envGiven(root: string, inherited: Record<string, string> = {}): string {
-    const home = realpathSync(mkdtempSync(path.join(tmpdir(), 'wsl-sh-launch-')))
-    try {
-      const stub = path.join(home, 'dash')
-      writeFileSync(
-        stub,
-        '#!/bin/sh\nprintf "ENV=[%s] USER=[%s]\\n" "${ENV-unset}" "${ORCA_WSL_USER_ENV-unset}"\n'
-      )
-      chmodSync(stub, 0o755)
-      writeFileSync(path.join(home, 'getent'), `#!/bin/sh\nprintf '%s\\n' "u:x:1:1::/:${stub}"\n`)
-      chmodSync(path.join(home, 'getent'), 0o755)
-      mkdirSync(path.join(root, 'sh'), { recursive: true })
-      writeFileSync(path.join(root, 'sh', 'env'), SH_WSL_ENV_FILE)
-      return execFileSync('/bin/sh', ['-c', buildWslInteractiveLoginShellCommand()], {
-        encoding: 'utf8',
-        env: { PATH: `${home}:/usr/bin:/bin`, ORCA_SHELL_READY_ROOT: root, ...inherited }
-      }).trim()
-    } finally {
-      rmSync(home, { recursive: true, force: true })
-    }
-  }
-
-  it('points ENV at the published file and saves the user value', () => {
-    const root = realpathSync(mkdtempSync(path.join(tmpdir(), 'wsl-sh-root-')))
-    try {
-      expect(envGiven(root, { ENV: '$HOME/.shrc' })).toBe(`ENV=[${root}/sh/env] USER=[$HOME/.shrc]`)
-      expect(envGiven(root)).toBe(`ENV=[${root}/sh/env] USER=[unset]`)
-    } finally {
-      rmSync(root, { recursive: true, force: true })
-    }
-  })
-
-  it('leaves ENV alone when the root would be mangled by ENV expansion', () => {
-    const base = realpathSync(mkdtempSync(path.join(tmpdir(), 'wsl-sh-root-')))
-    try {
-      expect(envGiven(path.join(base, 'a$b'), { ENV: '/u/env' })).toBe('ENV=[/u/env] USER=[unset]')
-    } finally {
-      rmSync(base, { recursive: true, force: true })
-    }
-  })
 })

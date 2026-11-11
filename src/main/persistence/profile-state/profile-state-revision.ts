@@ -5,6 +5,10 @@ import {
   PROFILE_STATE_AUTOMATION_RUNS_TABLE
 } from './profile-state-automation-runs-model'
 import { isRecord, ProfileStateDocumentCorruptionError } from './profile-state-document-validation'
+import {
+  hasProfileStateDocumentPartsTables,
+  PROFILE_STATE_DOCUMENT_PARTS_META_TABLE
+} from './profile-state-document-parts'
 
 export function readProfileStateRevision(db: Database.Database): number {
   const row = db
@@ -27,7 +31,12 @@ export function assertProfileStateRepairRevision(db: Database.Database, revision
       `SELECT 1 FROM (
         SELECT revision FROM profile_state_documents
         UNION ALL SELECT revision FROM ${PROFILE_STATE_AUTOMATION_RUNS_TABLE}
-        UNION ALL SELECT revision FROM ${PROFILE_STATE_AUTOMATION_RUNS_META_TABLE}
+        UNION ALL SELECT revision FROM ${PROFILE_STATE_AUTOMATION_RUNS_META_TABLE}${
+          hasProfileStateDocumentPartsTables(db)
+            ? `
+        UNION ALL SELECT revision FROM ${PROFILE_STATE_DOCUMENT_PARTS_META_TABLE}`
+            : ''
+        }
       ) WHERE typeof(revision) IN ('integer', 'real')
         AND revision BETWEEN 1 AND ? AND revision = CAST(revision AS INTEGER)
         AND revision > ? LIMIT 1`

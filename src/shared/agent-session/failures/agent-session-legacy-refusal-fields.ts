@@ -5,7 +5,7 @@ import type { AgentJournalResolution } from '../journal/agent-session-journal-ty
 import {
   AGENT_SESSION_REWIND_REASONS,
   type AgentSessionRewindReason
-} from '../lifecycle/agent-session-rewind'
+} from '../lifecycle/agent-session-rewind-reasons'
 import type {
   AgentSessionOwnerVerdict,
   AgentSessionWireRefusalCode

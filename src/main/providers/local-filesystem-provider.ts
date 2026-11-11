@@ -4,10 +4,10 @@ import { throwIfSignalAborted, waitForPromiseWithSignal } from '../../shared/abo
 import {
   readAuthorizedDocPreviewFile,
   readAuthorizedDocPreviewFileChunk
-} from '../../shared/doc-preview-file-access'
+} from '../../shared/document-preview/doc-preview-file-access'
 import { renameLocalPathSerializedByDestination } from '../filesystem/destination-serialized-local-rename'
-import type { resolveAuthorizedPath as ResolveAuthorizedPath } from '../ipc/filesystem/filesystem-auth'
-import { isENOENT } from '../ipc/filesystem/filesystem-path-containment'
+import type { resolveAuthorizedPath as ResolveAuthorizedPath } from '../ipc/filesystem/access/filesystem-auth'
+import { isENOENT } from '../ipc/filesystem/access/filesystem-path-containment'
 import {
   assertNotExists,
   rethrowWithUserMessage
@@ -15,14 +15,14 @@ import {
 import { classifyFilesystemDirectoryEntries } from '../ipc/filesystem/filesystem-symlink-directory-entries'
 import { getLocalGitOptionsForRegisteredWorktree } from '../ipc/local-worktree-runtime-options'
 import { listMarkdownDocuments } from '../ipc/markdown-documents'
-import type { RuntimeStore } from '../runtime/runtime-store-contract'
+import type { RuntimeStore } from '../runtime/construction/runtime-store-contract'
 import { runBundledRipgrepTextSearch } from '../ripgrep/bundled-ripgrep-text-search'
 import { resolveBundledRipgrepWslRouting } from '../ripgrep/bundled-ripgrep-wsl-routing'
 import type { IFilesystemProvider } from './filesystem-provider-contract'
 import type {
   FileWriteDiskPrecondition,
   FileWriteResult
-} from '../../shared/file-write-disk-precondition'
+} from '../../shared/file-write/file-write-disk-precondition'
 import { writeLocalTextFileWithDiskPrecondition } from '../ipc/filesystem/local-disk-write-precondition'
 import { windowsFsPath } from '../wsl/filesystem/wsl-unc-drive-fs-path'
 

@@ -8,8 +8,8 @@ import type {
   AgentSessionOptionCatalog,
   CatalogModel
 } from '../../agent-session/options/agent-session-option-catalog-types'
-import type { AgentType } from '../../agent-status-types'
-import type { CommitMessageModelCapability } from '../../commit-message-agent-spec'
+import type { AgentType } from '../../agent-status/contracts/agent-status-types'
+import type { CommitMessageModelCapability } from '../../source-control/ai/generation/commit-message-agent-spec'
 
 export type NativeChatModelDiscoveryResult =
   | {
@@ -41,6 +41,7 @@ export function catalogModelsFromModelDiscovery(
     ...(model.description ? { description: model.description } : {}),
     ...(model.isDefault ? { isDefault: true as const } : {}),
     ...(model.contextWindowTokens ? { contextWindowTokens: model.contextWindowTokens } : {}),
+    ...(model.resolvedModel ? { resolvedModel: model.resolvedModel } : {}),
     options:
       agent === 'claude'
         ? createClaudeCatalogOptions({

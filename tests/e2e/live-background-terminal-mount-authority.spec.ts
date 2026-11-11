@@ -22,8 +22,8 @@ import type {
   RuntimeTerminalSummary,
   RuntimeWorktreeCreateResult
 } from '../../src/shared/runtime-types'
-import { PROTOCOL_VERSION } from '../../src/main/daemon/types'
-import { makePaneKey } from '../../src/shared/stable-pane-id'
+import { PROTOCOL_VERSION } from '../../src/main/daemon/protocol/daemon-protocol-version'
+import { makePaneKey } from '../../src/shared/workspace-layout/stable-pane-id'
 import { getDefaultRepoHookSettings } from '../../src/shared/constants'
 import {
   buildFakeAgentCommandOverride,

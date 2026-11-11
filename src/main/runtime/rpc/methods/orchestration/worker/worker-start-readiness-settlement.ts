@@ -1,14 +1,14 @@
 import {
   AGENT_PROMPT_EFFECT_TIMEOUT_MS,
   ORCHESTRATION_WORKER_START_CLIENT_GRACE_MS
-} from '../../../../../../shared/orchestration-timing-budgets'
+} from '../../../../../../shared/orchestration/orchestration-timing-budgets'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import type { OrchestrationDb } from '../../../../orchestration/db'
-import type { RunRow, TaskRow } from '../../../../orchestration/types'
-import type { WorkerStartModeReceipt } from '../../orchestration-worker-start-mode'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+import type { RunRow, TaskRow } from '../../../../orchestration/db/orchestration-records'
+import type { AgentLaunchModeReceipt as WorkerStartModeReceipt } from '../../../../../../shared/agent-launch/contracts/agent-launch-intent'
 import { deliverWorkerDispatchPreamble } from './deliver-worker-dispatch-preamble'
 import { reportedWorkerOutcome } from './worker-start-receipt'
-import { chatAssigneeSessionId } from '../../../../orchestration/chat-assignee'
+import { chatAssigneeSessionId } from '../../../../orchestration/workers/lifecycle/chat-assignee'
 import type { OrchestrationWorkerLaunchReceipt } from './worker-launch-preferences'
 import {
   describeUnobservedWorkerTurnStart,

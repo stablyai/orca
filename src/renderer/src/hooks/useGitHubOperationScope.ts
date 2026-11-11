@@ -1,14 +1,14 @@
 import { useMemo } from 'react'
 import { normalizeGhAccountBinding } from '../../../shared/github/account-binding'
 import { useShallow } from 'zustand/react/shallow'
-import { isWebClientLocation } from '@/lib/web-client-location'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { webRuntimeState } from '@/web/preload-api/web-runtime-session'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
-import type { TaskSourceContext } from '../../../shared/task-source-context'
-import { resolveGitHubRepoOperationOwner } from '@/lib/github-source-runtime-context'
-import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
-import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status-connection-generation'
+import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
+import { resolveGitHubRepoOperationOwner } from '@/lib/work-items/github/github-source-runtime-context'
+import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
+import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status/runtime-status-connection-generation'
 
 export function useGitHubOperationOwner(args: {
   target?: RuntimeClientTarget | null

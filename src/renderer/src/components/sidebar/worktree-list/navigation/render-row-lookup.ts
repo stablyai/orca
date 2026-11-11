@@ -2,9 +2,12 @@ import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import {
   folderWorkspaceToWorktree,
   getFolderWorkspaceHostIdentity
-} from '../../../../../../shared/folder-workspace-worktree'
-import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
+import {
+  getWorktreeExecutionHostId,
+  type ExecutionHostId
+} from '../../../../../../shared/execution-host'
+
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import {
   composeWorktreeHostIdentity,
@@ -38,7 +41,10 @@ export function getRenderRowSidebarKey(row: RenderRow): string | null {
 
 export function rowKeyMatchesRenderRow(row: RenderRow, rowKey: string): boolean {
   if (row.type === 'lineage-group') {
-    return row.rows.some((item) => item.rowKey === rowKey)
+    return (
+      row.rows.some((item) => item.rowKey === rowKey) ||
+      (row.folder !== undefined && rowKeyMatchesRenderRow(row.folder, rowKey))
+    )
   }
   if (row.type === 'folder-workspace' && rowKey === folderWorkspaceKey(row.folderWorkspace.id)) {
     return true
@@ -76,7 +82,11 @@ export function renderRowContainsWorktree(
     )
   }
   if (row.type === 'lineage-group') {
-    return row.rows.some((item) => itemMatchesWorktree(item, worktreeId, executionHostId))
+    return (
+      row.rows.some((item) => itemMatchesWorktree(item, worktreeId, executionHostId)) ||
+      (row.folder !== undefined &&
+        renderRowContainsWorktree(row.folder, worktreeId, executionHostId))
+    )
   }
   return row.type === 'item' && itemMatchesWorktree(row, worktreeId, executionHostId)
 }
@@ -125,14 +135,17 @@ export function findPreferredRenderRowIndexForWorktreeIdentity(
   for (let index = 0; index < renderRows.length; index++) {
     const row = renderRows[index]
     // Host-qualified reveals include folder rows, not just worktree item rows.
+    const folderRow =
+      row.type === 'folder-workspace' ? row : row.type === 'lineage-group' ? row.folder : undefined
+    if (
+      folderRow &&
+      folderWorkspaceKey(folderRow.folderWorkspace.id) === worktree.id &&
+      (!worktree.hostId ||
+        getWorktreeHostIdentity(folderWorkspaceToWorktree(folderRow.folderWorkspace)) === identity)
+    ) {
+      return index
+    }
     if (row.type === 'folder-workspace') {
-      if (
-        folderWorkspaceKey(row.folderWorkspace.id) === worktree.id &&
-        (!worktree.hostId ||
-          getWorktreeHostIdentity(folderWorkspaceToWorktree(row.folderWorkspace)) === identity)
-      ) {
-        return index
-      }
       continue
     }
     const itemRows = row.type === 'lineage-group' ? row.rows : row.type === 'item' ? [row] : []

@@ -21,6 +21,7 @@ import {
 } from './host-selector-alternatives'
 import type { RuntimeClient } from './runtime-client'
 import { RuntimeClientError } from './runtime/types'
+import { isLocalEnvironmentSelector } from './local-environment-selector'
 
 export type HostFlagRoutingSelection = {
   // Enumerating SSH targets needs the running host; defer lookup until error recovery.
@@ -73,10 +74,12 @@ export async function resolveHostFlagEnvironmentId(
   if (host?.kind !== 'runtime' && host?.kind !== 'alias') {
     return null
   }
-  const [{ listEnvironments, resolveEnvironment }, { getDefaultUserDataPath }] = await Promise.all([
-    import('./runtime/environments.js'),
-    import('./runtime-client.js')
-  ])
+  const [{ resolveEnvironment }, { getDefaultUserDataPath }, { listEnvironments }] =
+    await Promise.all([
+      import('./runtime/environments.js'),
+      import('./runtime-client.js'),
+      import('../shared/remote-runtime/host-store/runtime-environment-store.js')
+    ])
   const userDataPath = getDefaultUserDataPath()
   const environments = listEnvironments(userDataPath).map((candidate) => ({
     id: candidate.id,
@@ -135,9 +138,10 @@ export async function resolveHostFlagEnvironmentId(
   }
   if (selection.environmentSelector) {
     const { value } = selection.environmentSelector
-    const selected =
-      findEnvironmentByName(environments, value) ?? resolveEnvironment(userDataPath, value)
-    if (selected.id !== environment.id) {
+    const selected = isLocalEnvironmentSelector(value)
+      ? null
+      : (findEnvironmentByName(environments, value) ?? resolveEnvironment(userDataPath, value))
+    if (selected?.id !== environment.id) {
       throw new RuntimeClientError(
         'invalid_argument',
         `${flagSpelling} and ${selection.environmentSelector.label} ${selection.environmentSelector.value} name different Orca servers.`
@@ -213,9 +217,10 @@ export async function resolveHostFlagTarget(
   if (host?.kind !== 'ssh' && host?.kind !== 'alias') {
     return host
   }
-  const [{ listEnvironments }, { getDefaultUserDataPath }] = await Promise.all([
+  const [, { getDefaultUserDataPath }, { listEnvironments }] = await Promise.all([
     import('./runtime/environments.js'),
-    import('./runtime-client.js')
+    import('./runtime-client.js'),
+    import('../shared/remote-runtime/host-store/runtime-environment-store.js')
   ])
   const environments = listEnvironments(getDefaultUserDataPath()).map((candidate) => ({
     id: candidate.id,
@@ -290,9 +295,10 @@ export async function resolveEnvironmentSelectorForStore(
   selector: string,
   listSshTargetsForSuggestion: () => Promise<SshTargetSummary[]>
 ): Promise<string> {
-  const [{ listEnvironments }, { getDefaultUserDataPath }] = await Promise.all([
+  const [, { getDefaultUserDataPath }, { listEnvironments }] = await Promise.all([
     import('./runtime/environments.js'),
-    import('./runtime-client.js')
+    import('./runtime-client.js'),
+    import('../shared/remote-runtime/host-store/runtime-environment-store.js')
   ])
   const environments = listEnvironments(getDefaultUserDataPath()).map((candidate) => ({
     id: candidate.id,

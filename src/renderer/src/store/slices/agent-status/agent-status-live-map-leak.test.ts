@@ -1,13 +1,13 @@
 /** Regression for #9872: missed pane teardown must not let heavy live status rows grow unbounded. */
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { ParsedAgentStatusPayload } from '../../../../../shared/agent-status-types'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../../shared/agent-status-freshness'
+import type { ParsedAgentStatusPayload } from '../../../../../shared/agent-status/contracts/agent-status-types'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../../shared/agent-status/contracts/agent-status-freshness'
 import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import './agent-status'
 import { MAX_LIVE_AGENT_STATUSES } from './agent-status-capacity-eviction'
-import { createTestStore } from '../store-test-helpers'
-import { makeTab } from '../store-session-test-harness'
-import { makeWorktree } from '../worktrees-slice-test-fixtures'
+import { createTestStore } from '../../testing/app-store-test-fixture'
+import { makeTab } from '../../terminals/terminal-tab.test-fixture'
+import { makeWorktree } from '../worktrees/worktree.test-fixture'
 import type { AppState } from '../../types'
 
 // Use the production payload limits so the regression represents the leaked byte weight.

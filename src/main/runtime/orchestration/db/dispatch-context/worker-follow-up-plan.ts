@@ -1,4 +1,4 @@
-import type { MessageType } from '../../types'
+import type { MessageType } from '../orchestration-records'
 
 type Dispatch = { id: string; status: string; follow_up_of_dispatch_id: string | null }
 type Resource = { owner_dispatch_id: string; origin_dispatch_id: string }

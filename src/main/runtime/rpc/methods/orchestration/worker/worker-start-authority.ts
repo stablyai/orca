@@ -2,20 +2,22 @@ import type { WorkerFollowUp } from './worker-follow-up-placement'
 import { createWorkerFollowUpQualification } from './worker-follow-up-admission'
 import { liveDispatchCreatorEvaluation } from '../../../../orchestration/db/dispatch-depth'
 import { selectExistingWorkerStartRun } from './worker-start-run-authority'
-import type { OrchestrationDb } from '../../../../orchestration/db'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
+import type { OrchestrationEntryCaller } from '../../../../orchestration/addressing/orchestration-caller-identity'
+import type { OrchestrationPartyIdentity as OrchestrationCallerIdentity } from '../../../../../../shared/orchestration/mailbox/orchestration-party-identity'
 import type {
-  OrchestrationCallerIdentity,
-  OrchestrationSessionCaller
-} from '../../../../orchestration/orchestration-caller-identity'
-import type { DispatchContextRow, RunRow, TaskRow } from '../../../../orchestration/types'
+  DispatchContextRow,
+  RunRow,
+  TaskRow
+} from '../../../../orchestration/db/orchestration-records'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { resolveDispatchCreator } from '../runs/dispatch-creator'
 import { createBoundRun } from '../runs/runs'
-import { ROOT_DISPATCH_DEPTH } from '../../../../../../shared/nested-worker-depth'
+import { ROOT_DISPATCH_DEPTH } from '../../../../../../shared/orchestration/workers/nested-worker-depth'
 import { readCustodyCohort } from '../../../../orchestration/db/worker-terminal/worker-terminal-transfer'
 import { createHelperStartScope } from './helper-start-scope'
-import { requireOrchestrationAdmission } from '../../../../orchestration/orchestration-admission'
+import { requireOrchestrationAdmission } from '../../../../orchestration/addressing/orchestration-admission'
 
 export type WorkerStartRunBinding = { run: RunRow; created: boolean }
 
@@ -25,7 +27,7 @@ export function resolveWorkerStartRun(
   args: {
     coordinator: OrchestrationCallerIdentity | null
     from: string
-    callerSession: OrchestrationSessionCaller | undefined
+    callerSession: OrchestrationEntryCaller | undefined
     runId: string | undefined
     /** Objective for a Run this start may create; absent when it names an existing Task. */
     objective: string | undefined
@@ -118,7 +120,7 @@ export function qualifyLiveWorkerFollowUp(
   runtime: OrcaRuntimeService,
   coordinator: OrchestrationCallerIdentity | null,
   from: string,
-  session: OrchestrationSessionCaller | undefined,
+  session: OrchestrationEntryCaller | undefined,
   runId: string,
   followUp: Parameters<ReturnType<typeof createWorkerFollowUpQualification>>[1]
 ) {

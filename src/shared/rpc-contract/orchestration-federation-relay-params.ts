@@ -43,7 +43,8 @@ export const FederationImportParams = z.object({
       sequence: z.number().int().positive(),
       message_id: requiredString('Missing relay message ID'),
       kind: requiredString('Missing relay kind'),
-      payload: requiredString('Missing relay payload')
+      payload: requiredString('Missing relay payload'),
+      answerSenderReport: z.unknown().optional()
     })
   )
 })

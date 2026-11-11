@@ -1,10 +1,14 @@
 import { expect, vi } from 'vitest'
-import { ORCHESTRATION_METHODS } from '../../orchestration'
+import { ORCHESTRATION_METHODS } from '../orchestration'
 import { isStreamingMethod, eraseRpcMethods, type RpcContext, type RpcMethod } from '../../../core'
-import { OrchestrationDb } from '../../../../orchestration/db'
+import { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+import '../../../../orchestration/db/contract-constants'
+import '../../../../orchestration/db/messages/mailbox-routing-page'
+import '../../../../orchestration/db/dispatch-row-writer'
+import '../../../../orchestration/db/attempt-outcome-projection'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
-import type { TuiAgent } from '../../../../../../shared/tui-agent'
-import type { RuntimeStore } from '../../../../runtime-store-contract'
+import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
+import type { RuntimeStore } from '../../../../construction/runtime-store-contract'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
 import {
   getAppEnvironment,
@@ -12,7 +16,7 @@ import {
   setAppEnvironment,
   type AppEnvironment
 } from '../../../../../../shared/app-environment'
-import { getWorkerTerminalAutoReleaseScheduler } from '../../../../orchestration/worker-terminal-auto-release-scheduler'
+import { getWorkerTerminalAutoReleaseScheduler } from '../../../../orchestration/terminal-authority/release/worker-terminal-auto-release-scheduler'
 
 type WorkerStartOptions = { terminal?: string; agent?: TuiAgent }
 

@@ -30,7 +30,7 @@ test('restores media playback after switching editor tabs without retaining the 
   await openFileExplorer(orcaPage)
   const row = (name: string) =>
     orcaPage.locator('[data-file-explorer-row]').filter({
-      has: orcaPage.locator('[data-file-explorer-row-name]').getByText(name, { exact: true })
+      has: orcaPage.getByText(name, { exact: true })
     })
   await row('playback.mp4').dblclick()
   const video = orcaPage.locator('video')

@@ -1,14 +1,14 @@
-import type { WorkspaceKey } from '../../../shared/folder-workspace-types'
 import type { BrowserPage, BrowserWorkspace } from '../../../shared/browser-workspace-types'
 import { remapBrowserPageDocLocation } from '../../../shared/browser-page-doc-location'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
-import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
+import { type WorkspaceKey, worktreeWorkspaceKey } from '../../../shared/workspace-scope'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import {
   getWorktreeIdFromHostIdentity,
   isWorktreeHostIdentity
 } from '../../../shared/worktree/host-qualified-identity'
 import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
+import { withCrossStoreChildKey } from '../../../shared/worktree/cross-store-lineage-records'
 import { repointRowArrays, repointRowRecord } from './worktree-identity-row-repoint'
 
 /** Mutate worktree references in place; return whether anything changed so callers can gate persistence. */
@@ -259,6 +259,15 @@ export function migrateWorktreeIdentity(
     delete state.workspaceLineageByChildKey[oldWorkspaceKey]
     changed = true
   }
+  // Only the child moves; a cross-store parent names another store's workspace, never this one.
+  if (state.crossStoreLineageByChildKey && oldWorkspaceKey in state.crossStoreLineageByChildKey) {
+    state.crossStoreLineageByChildKey[newWorkspaceKey] = withCrossStoreChildKey(
+      state.crossStoreLineageByChildKey[oldWorkspaceKey],
+      newWorkspaceKey
+    )
+    delete state.crossStoreLineageByChildKey[oldWorkspaceKey]
+    changed = true
+  }
   for (const [childKey, lineage] of Object.entries(state.workspaceLineageByChildKey)) {
     if (lineage.parentWorkspaceKey === oldWorkspaceKey) {
       state.workspaceLineageByChildKey[childKey as WorkspaceKey] = {
@@ -280,6 +289,9 @@ export function migrateWorktreeIdentity(
   }
   if (state.ui?.explorerDisplayRootByWorktree) {
     changed = moveKey(state.ui.explorerDisplayRootByWorktree) || changed
+  }
+  if (state.ui?.gitGraphFiltersByWorktree) {
+    changed = moveKey(state.ui.gitGraphFiltersByWorktree) || changed
   }
   const showDotfiles = state.ui?.showDotfilesByWorktree
   if (showDotfiles) {

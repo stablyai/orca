@@ -2,6 +2,7 @@ import type {
   PluginInstallSource,
   PluginLockEntry
 } from '../../../shared/plugins/installation/plugin-install-lockfile'
+import { isSamePluginSource } from '../../../shared/plugins/catalog/plugin-marketplace'
 import { marketplaceSourceId } from './plugin-marketplace-store'
 
 type MarketplaceInstallSource = Extract<PluginInstallSource, { kind: 'marketplace' }>
@@ -17,4 +18,13 @@ export function marketplaceInstallOf(entry: PluginLockEntry | null): Marketplace
     sourceId: marketplaceSourceId({ kind: 'git', url: marketplace.url, ref: marketplace.ref }),
     plugin
   }
+}
+
+/** Whether a catalog source would replace a marketplace install that came from another repository. */
+export function marketplaceInstallMoved(
+  entry: PluginLockEntry | null,
+  source: { url: string; path?: string }
+): boolean {
+  const installed = marketplaceInstallOf(entry)
+  return installed !== null && !isSamePluginSource(installed.plugin, source)
 }

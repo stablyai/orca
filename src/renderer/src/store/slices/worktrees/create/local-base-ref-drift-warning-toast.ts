@@ -1,12 +1,13 @@
 import { toast } from 'sonner'
 import type { LocalBaseRefDriftWarning } from '../../../../../../shared/worktree/base-ref-drift-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import { resolveWorktreeDisplayName } from '@/lib/worktree-default-display-name'
+import { resolveWorktreeDisplayName } from '@/lib/workspace/display/worktree-default-display-name'
 import { translate } from '@/i18n/i18n'
 
 export function showLocalBaseRefDriftWarningToast(
   warning: LocalBaseRefDriftWarning | undefined,
-  createdWorktree: Pick<Worktree, 'id' | 'displayName' | 'branch' | 'path'>
+  createdWorktree: Pick<Worktree, 'id' | 'displayName' | 'branch' | 'path'>,
+  creationWarning?: string
 ): void {
   if (!warning) {
     return
@@ -14,7 +15,8 @@ export function showLocalBaseRefDriftWarningToast(
 
   const worktreeName = resolveWorktreeDisplayName(createdWorktree).trim()
   const detail =
-    warning.relation === 'diverged'
+    creationWarning ??
+    (warning.relation === 'diverged'
       ? translate(
           'auto.store.slices.worktrees.localBaseRefDriftWarningDiverged',
           'Selected base {{value0}} has {{value1}} commit(s) behind and {{value2}} ahead of {{value3}}.',
@@ -33,7 +35,7 @@ export function showLocalBaseRefDriftWarningToast(
             value1: warning.behind,
             value2: warning.defaultBaseRef
           }
-        )
+        ))
 
   toast.warning(
     worktreeName

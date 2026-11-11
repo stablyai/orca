@@ -1,8 +1,8 @@
 import type { GitAdmissionTier } from '../../../../shared/rpc-contract/git-admission-tier-params'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
-import { isShowRefNoMatchError } from '../../../../shared/git-show-ref-no-match'
+import { isShowRefNoMatchError } from '../../../../shared/git/refs/git-show-ref-no-match'
 import { hasCommitObjectViaGitExec } from '../../commit-object-ref'
-import { isSafeGitRefName } from '../../../../shared/git-status-upstream-ref'
+import { isSafeGitRefName } from '../../../../shared/git/status/git-status-upstream-ref'
 import { resolveWorktreeAddBaseRef } from '../../../../shared/worktree/base-ref'
 
 type GitExecOptions = {

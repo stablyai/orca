@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react'
+import { recomputeOn } from '@/lib/recompute-on'
 
 const leaseCountsByPageId = new Map<string, number>()
 const pageIdByToken = new Map<string, string>()
@@ -40,8 +41,10 @@ export function isBrowserAutomationVisible(browserPageId: string): boolean {
 export function useBrowserAutomationVisibilityForAny(
   browserPageIds: readonly (string | null | undefined)[]
 ): boolean {
-  useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
-  return browserPageIds.some((pageId) => Boolean(pageId && isBrowserAutomationVisible(pageId)))
+  const storeVersion = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
+  return recomputeOn([storeVersion], () =>
+    browserPageIds.some((pageId) => Boolean(pageId && isBrowserAutomationVisible(pageId)))
+  )
 }
 
 export function getBrowserAutomationVisiblePageIds(browserPageIds: readonly string[]): Set<string> {
@@ -55,8 +58,8 @@ export function getBrowserAutomationVisiblePageIds(browserPageIds: readonly stri
 }
 
 export function useBrowserAutomationVisiblePageIds(browserPageIds: readonly string[]): Set<string> {
-  useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
-  return getBrowserAutomationVisiblePageIds(browserPageIds)
+  const storeVersion = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
+  return recomputeOn([storeVersion], () => getBrowserAutomationVisiblePageIds(browserPageIds))
 }
 
 export function acquireBrowserAutomationVisibility(browserPageId: string): string {

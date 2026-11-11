@@ -20,8 +20,8 @@ import {
   abortWithRecovery,
   confirmDurableCommit,
   type OrcadMigrationDestinationCatalog
-} from '../../ssh/orcad-migration-cutover-coordinator'
-import { orcadMigrationRequestFits } from '../../ssh/orcad-migration-manifest-export'
+} from '../../managed-server/migration/cutover/orcad-migration-cutover-coordinator'
+import { orcadMigrationRequestFits } from '../../managed-server/migration/catalog/orcad-migration-request-budget'
 import { wslHostsServing } from '../../wsl/host-lifecycle/wsl-host-gate'
 import {
   listWslMoveCutovers,

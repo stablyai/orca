@@ -1,20 +1,24 @@
 import { RateLimitServiceResultPolicy } from './service-result-policy'
-import { fetchCodexRateLimits } from '../codex-fetcher'
-import { fetchKimiRateLimits } from '../kimi-fetcher'
+import { fetchCodexRateLimits } from '../providers/codex/codex-fetcher'
+import { fetchKimiRateLimits } from '../providers/kimi/kimi-fetcher'
 import {
   isSystemDefaultClaudeAuth,
-  type ClaudeRuntimeAuthPreparation,
-  type CodexAccountSelectionTarget,
   type MiniMaxResolvedConfig,
   type ZcodePlanResolvedConfig,
   type OpenCodeGoResolvedConfig,
-  type NormalizedCodexAccountSelectionTarget,
-  type NormalizedClaudeAccountSelectionTarget,
-  type ProviderRateLimits,
-  type RateLimitState,
   toErrorMessage
 } from './service-types'
-import type { CodexRateLimitResetOutcome } from '../../../shared/rate-limit-types'
+import type { ClaudeRuntimeAuthPreparation } from '../../claude-accounts/runtime-auth/runtime-auth-types'
+import type {
+  CodexAccountSelectionTarget,
+  NormalizedCodexAccountSelectionTarget
+} from '../../../shared/codex-selection-lane'
+import type { NormalizedClaudeAccountSelectionTarget } from '../../claude-accounts/runtime-selection'
+import type {
+  ProviderRateLimits,
+  RateLimitState,
+  CodexRateLimitResetOutcome
+} from '../../../shared/rate-limit-types'
 import { ApiKeyFileUnreadableError } from '../../credentials/api-key-file-unreadable-error'
 
 const CODEX_RESET_REFRESH_RETRIES = 3

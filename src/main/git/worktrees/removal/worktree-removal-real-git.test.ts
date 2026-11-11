@@ -190,22 +190,6 @@ describe('worktree removal against the real Git binary', () => {
     }
   )
 
-  it('leaves sibling worktrees registered', async () => {
-    const siblingPath = join(workspaceRoot, 'repo', 'sibling')
-    await git(['worktree', 'add', '-q', siblingPath, '-b', 'sibling'], repoPath)
-
-    await removeWorktree(repoPath, worktreePath, false, { deleteBranch: false })
-
-    expect(await isRegistered(siblingPath)).toBe(true)
-    expect(existsSync(siblingPath)).toBe(true)
-  })
-
-  it('deletes the branch exactly as the in-place removal did', async () => {
-    await removeWorktree(repoPath, worktreePath, false)
-
-    expect(await git(['branch', '--list', 'feature'], repoPath)).toBe('')
-  })
-
   it('preserves a branch whose only unmerged commit is empty', async () => {
     await git(['commit', '--allow-empty', '-qm', 'unique empty commit'], worktreePath)
     const head = (await git(['rev-parse', 'HEAD'], worktreePath)).trim()

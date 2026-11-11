@@ -4,20 +4,45 @@ import { normalizeRuntimePathForComparison } from '../../../shared/cross-platfor
 import {
   legacyTerminalScrollbackBytesToRows,
   normalizeDesktopTerminalScrollbackRows
-} from '../../../shared/terminal-scrollback-policy'
+} from '../../../shared/terminal/replay/terminal-scrollback-policy'
 import {
   DEFAULT_TUI_AGENT_ARGS,
   DEFAULT_TUI_AGENT_ENV,
   normalizeTuiAgentArgsRecord,
   normalizeTuiAgentEnvRecord
-} from '../../../shared/tui-agent-launch-defaults'
+} from '../../../shared/agent-launch/choices/tui-agent-launch-defaults'
 import { expandLeadingHomePath } from '../../filesystem/home-path-expansion'
+import { normalizeWorkspaceDirInput } from '../../../shared/worktree/workspace-dir-input'
 
-/** Unexpanded, a leading ~ resolves inside each repo and worktrees land in <repo>/~ (#34944). */
-export function expandWorkspaceDirHome(settings: Partial<GlobalSettings>): Partial<GlobalSettings> {
+/** A raw ~ or padded absolute path resolves inside each repo (#34944, STA-14308); normalize at the store boundary. */
+export function normalizeWorkspaceDirSetting(
+  settings: Partial<GlobalSettings>
+): Partial<GlobalSettings> {
   return typeof settings.workspaceDir === 'string'
-    ? { ...settings, workspaceDir: expandLeadingHomePath(settings.workspaceDir, homedir()) }
+    ? {
+        ...settings,
+        workspaceDir: expandLeadingHomePath(
+          normalizeWorkspaceDirInput(settings.workspaceDir, process.platform === 'win32'),
+          homedir()
+        )
+      }
     : settings
+}
+
+/** Keep a repaired saved spelling in history so checkouts under its old root keep their visibility. */
+export function normalizeLoadedWorkspaceDirSetting(
+  settings: Partial<GlobalSettings>,
+  defaults: GlobalSettings
+): Partial<GlobalSettings> {
+  const normalized = normalizeWorkspaceDirSetting(settings)
+  if (normalized.workspaceDir === settings.workspaceDir) {
+    return normalized
+  }
+  const history = buildWorkspaceDirHistoryForUpdate(
+    { ...defaults, ...settings },
+    { workspaceDir: normalized.workspaceDir }
+  )
+  return history ? { ...normalized, workspaceDirHistory: history } : normalized
 }
 
 export function buildWorkspaceDirHistoryForUpdate(
@@ -83,6 +108,8 @@ type RetiredGlobalSettings = {
   orchestrationHeartbeatIntervalMinutes?: unknown
   // Full-access plugins now need only their own approval.
   pluginFullAccessEnabled?: unknown
+  // Extensions left Experimental and default on; browserExtensionsEnabled replaces this.
+  experimentalBrowserExtensions?: unknown
 }
 
 export function stripRetiredGlobalSettings(
@@ -102,6 +129,7 @@ export function stripRetiredGlobalSettings(
     orchestrationHeartbeatsEnabled: _retiredHeartbeatsEnabled,
     orchestrationHeartbeatIntervalMinutes: _retiredHeartbeatInterval,
     pluginFullAccessEnabled: _retiredPluginFullAccessSwitch,
+    experimentalBrowserExtensions: _retiredBrowserExtensionsExperiment,
     ...rest
   } = (settings ?? {}) as Partial<GlobalSettings> & RetiredGlobalSettings
   void _retiredChatPermissionCopies
@@ -117,6 +145,7 @@ export function stripRetiredGlobalSettings(
   void _retiredHeartbeatsEnabled
   void _retiredHeartbeatInterval
   void _retiredPluginFullAccessSwitch
+  void _retiredBrowserExtensionsExperiment
   return rest
 }
 

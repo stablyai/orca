@@ -1,19 +1,23 @@
 import type { PluginHostListEntry } from '../../../../../preload/api-types'
 import { PluginReviewSection } from './plugin-review-dialog-layout'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 
 type VmRecipePreview = NonNullable<PluginHostListEntry['vmRecipes']>[number]
 
-function lifecycleLabel(phase: VmRecipePreview['commands'][number]['phase']): string {
+function lifecycleLabel(
+  phase: VmRecipePreview['commands'][number]['phase'],
+  t: Translate = translate
+): string {
   switch (phase) {
     case 'create':
-      return translate('auto.components.settings.PluginVmRecipeConsentPreview.create', 'Create')
+      return t('auto.components.settings.PluginVmRecipeConsentPreview.create', 'Create')
     case 'suspend':
-      return translate('auto.components.settings.PluginVmRecipeConsentPreview.suspend', 'Suspend')
+      return t('auto.components.settings.PluginVmRecipeConsentPreview.suspend', 'Suspend')
     case 'resume':
-      return translate('auto.components.settings.PluginVmRecipeConsentPreview.resume', 'Resume')
+      return t('auto.components.settings.PluginVmRecipeConsentPreview.resume', 'Resume')
     case 'destroy':
-      return translate('auto.components.settings.PluginVmRecipeConsentPreview.destroy', 'Destroy')
+      return t('auto.components.settings.PluginVmRecipeConsentPreview.destroy', 'Destroy')
   }
 }
 
@@ -22,13 +26,14 @@ export function PluginVmRecipeConsentPreview({
 }: {
   recipes: readonly VmRecipePreview[]
 }): React.JSX.Element | null {
+  const t = useTranslate()
   if (recipes.length === 0) {
     return null
   }
   return (
     <PluginReviewSection
       headingId="plugin-vm-recipe-consent-heading"
-      title={translate(
+      title={t(
         'auto.components.settings.PluginVmRecipeConsentPreview.heading',
         'VM recipe commands'
       )}
@@ -43,14 +48,14 @@ export function PluginVmRecipeConsentPreview({
           </div>
           <dl className="space-y-2">
             {recipe.commands.map(({ phase, command }) => {
-              const phaseLabel = lifecycleLabel(phase)
+              const phaseLabel = lifecycleLabel(phase, t)
               return (
                 <div key={phase}>
                   <dt className="mb-1 text-xs text-muted-foreground">{phaseLabel}</dt>
                   <dd>
                     <pre
                       tabIndex={0}
-                      aria-label={translate(
+                      aria-label={t(
                         'auto.components.settings.PluginVmRecipeConsentPreview.commandLabel',
                         '{{value0}} · {{value1}} command',
                         { value0: recipe.name, value1: phaseLabel }

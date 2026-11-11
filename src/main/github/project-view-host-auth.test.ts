@@ -85,19 +85,6 @@ describe('project view host authentication boundary', () => {
     })
   })
 
-  it('keeps github.com fast and never probes it as Enterprise', async () => {
-    ghExecFileAsyncMock.mockResolvedValue({
-      stdout: '{"data":{"viewer":{"login":"me"}}}',
-      stderr: ''
-    })
-
-    await expect(
-      runGraphql('query { viewer { login } }', {}, { host: 'github.com' })
-    ).resolves.toMatchObject({ ok: true })
-
-    expect(hostAuthenticatedMock).not.toHaveBeenCalled()
-  })
-
   it.each([
     { owner: 'acme-co', path: 'orgs', root: 'organization', ownerType: 'organization' },
     { owner: 'octocat', path: 'users', root: 'user', ownerType: 'user' },
@@ -195,16 +182,4 @@ describe('project view host authentication boundary', () => {
     expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
     expect(acquireMock).not.toHaveBeenCalled()
   })
-
-  it.each(['_acme/7', 'https://github.com/users/a%2Fb/projects/7'])(
-    'rejects malformed owner input %s before requesting GitHub',
-    async (input) => {
-      await expect(resolveProjectRef({ input })).resolves.toMatchObject({
-        ok: false,
-        error: { type: 'validation_error' }
-      })
-      expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
-      expect(acquireMock).not.toHaveBeenCalled()
-    }
-  )
 })

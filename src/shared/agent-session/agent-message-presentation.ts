@@ -1,9 +1,14 @@
 import type { AgentMessageSender, AgentMessageSource } from './agent-session-message-source'
-import type { AgentStatusEntry } from '../agent-status-types'
+import type { AgentStatusEntry } from '../agent-status/contracts/agent-status-types'
 import type { NativeChatMessage } from '../native-chat/native-chat-types'
 import { agentMessageTranscriptText } from './agent-message-display-text'
 
-export const AGENT_MESSAGE_FOLDED_LINES = 3
+export function agentMessageIsCompact(
+  message: Pick<NativeChatMessage, 'agentStart' | 'from'>
+): boolean {
+  return message.agentStart === true || message.from?.kind === 'agent'
+}
+
 export type AgentMessageHeading =
   | 'started'
   | 'handed-off'
@@ -80,7 +85,14 @@ export function agentMessageSavedKind(
 
 /** A Dispatch address names work, not a pane; every other sender address can be opened. */
 export function agentMessageSenderCanOpen(sender: AgentMessageSender): boolean {
-  return !sender.party.address.startsWith('dispatch:')
+  return (
+    !sender.party.address.startsWith('dispatch:') &&
+    !(
+      sender.party.address.startsWith('run:') &&
+      !sender.party.orcaSessionId &&
+      !sender.party.terminalHandle
+    )
+  )
 }
 
 export function agentMessagePrimarySender(
@@ -100,14 +112,6 @@ export function agentMessageSenderView(
   return senderType === undefined || row.agentType === senderType
     ? row
     : { ...row, agentType: senderType }
-}
-
-export function agentMessageOverflows(height: number, lineHeight: number): boolean {
-  return height > lineHeight * AGENT_MESSAGE_FOLDED_LINES + 1
-}
-
-export function agentMessageFoldLabel(open: boolean): 'expanded' | 'collapsed' {
-  return open ? 'expanded' : 'collapsed'
 }
 
 export function agentMessageCanCopy(text: string): boolean {

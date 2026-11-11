@@ -1,16 +1,16 @@
 import { isMissingProviderExecutable } from '../provider-process/provider-executable-missing'
 import { mergeCommandEnvironment } from '../../shared/command-environment'
-import type { CommandTemplateBackslash } from '../../shared/commit-message-prompt'
+import type { CommandTemplateBackslash } from '../../shared/source-control/ai/generation/commit-message-prompt'
 import {
   getAgentModelProbeSpec,
   type AgentModelProbeSpec
 } from '../../shared/agent-model-probe-spec'
-import type { CommitMessagePlan } from '../../shared/commit-message-plan'
+import type { CommitMessagePlan } from '../../shared/source-control/ai/generation/commit-message-plan'
 import {
   runClaudeBackgroundAttempts,
   type ClaudeBackgroundFailedExit
 } from '../../shared/claude-background-run-isolation'
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import { resolveCodexHomeProcessLockKeyForSpawnEnv } from '../codex-cli/codex-home-process-lock'
 import { supervisedProviderSpawnFailure } from '../provider-process/provider-spawn-failure-report'
 import {
@@ -23,6 +23,12 @@ import {
   SOURCE_CONTROL_GENERATION_TIMEOUT_MS
 } from './source-control-generation-limits'
 import { runCodexProcessWithHomeLock } from './source-control-local-generation'
+import { formatAgentCliFailureMessage } from './source-control-agent-failure'
+import {
+  settleCodexModelListing,
+  startCodexModelListDiscovery,
+  type CodexModelListDiscovery
+} from './codex-model-list-discovery'
 import { killSourceControlAgentProcess } from './source-control-local-process'
 import type {
   DiscoverCommitMessageModelsResult,
@@ -99,6 +105,8 @@ async function discoverModelsOnce(
       : {}),
     error: couldNotStart
   })
+  // The app-server answers `model/list` over the stdin it must keep open.
+  const appServer = spec.modelDiscovery !== undefined && 'listing' in spec.modelDiscovery
   const startDiscovery = (): LocalProcessExecution<DiscoverCommitMessageModelsResult> => {
     let markProcessClosed!: () => void
     const processClosed = new Promise<void>((resolve) => {
@@ -106,6 +114,7 @@ async function discoverModelsOnce(
     })
     const result = new Promise<DiscoverCommitMessageModelsResult>((resolve) => {
       let child: SpawnedSourceControlAgentProcess
+      let listing: CodexModelListDiscovery | null = null
       try {
         child = input.spawnAgent({
           binary,
@@ -114,10 +123,14 @@ async function discoverModelsOnce(
           env: input.options.wslDistro ? input.env : env,
           commandEnv: plan.env,
           wslDistro: input.options.wslDistro,
-          stdinMode: plan.stdinPayload === null ? 'ignore' : 'pipe',
+          stdinMode: plan.stdinPayload === null && !appServer ? 'ignore' : 'pipe',
           useCwdForNative: false
         })
-        if (plan.stdinPayload !== null) {
+        if (appServer && child.stdin) {
+          const stdin = child.stdin
+          listing = startCodexModelListDiscovery(stdin)
+          stdin.on('error', (error) => listing?.fail(error))
+        } else if (plan.stdinPayload !== null) {
           child.stdin?.on?.('error', () => {})
           child.stdin?.end(plan.stdinPayload)
         }
@@ -129,6 +142,8 @@ async function discoverModelsOnce(
       }
 
       let stdout = ''
+      // Count bytes read from both streams; the budget bounds raw input, not retained text.
+      let outputBytes = 0
       let stderr = ''
       let outputLimitExceeded = false
       let settled = false
@@ -151,6 +166,8 @@ async function discoverModelsOnce(
           timer = null
         }
         detachChildListeners()
+        // Waiting listing requests have no timers of their own.
+        listing?.fail(new Error(`${spec.label} model discovery ended`))
         if (input.agentId !== 'codex') {
           markProcessClosed()
         }
@@ -165,10 +182,8 @@ async function discoverModelsOnce(
       }, SOURCE_CONTROL_GENERATION_TIMEOUT_MS)
 
       const onData = (chunk: Buffer, append: (text: string) => void): void => {
-        if (
-          stdout.length + stderr.length + chunk.byteLength >
-          MAX_SOURCE_CONTROL_AGENT_OUTPUT_BYTES
-        ) {
+        outputBytes += chunk.byteLength
+        if (outputBytes > MAX_SOURCE_CONTROL_AGENT_OUTPUT_BYTES) {
           outputLimitExceeded = true
           startTermination()
           finish({ success: false, error: `${spec.label} returned too much model data.` })
@@ -176,7 +191,10 @@ async function discoverModelsOnce(
         }
         append(chunk.toString('utf-8'))
       }
-      const onStdoutData = (chunk: Buffer): void => onData(chunk, (text) => (stdout += text))
+      const onStdoutData = (chunk: Buffer): void =>
+        listing
+          ? onData(chunk, () => listing?.receive(chunk))
+          : onData(chunk, (text) => (stdout += text))
       const onStderrData = (chunk: Buffer): void => onData(chunk, (text) => (stderr += text))
       const onError = (error: Error): void => {
         if (!child.pid) {
@@ -195,6 +213,7 @@ async function discoverModelsOnce(
       }
       const onClose = (code: number | null): void => {
         markClosedAfterTermination()
+        listing?.fail(new Error(`${spec.label} app-server exited`))
         const spawnFailure = outputLimitExceeded
           ? null
           : supervisedProviderSpawnFailure(code, stderr)
@@ -213,8 +232,31 @@ async function discoverModelsOnce(
         finish(
           outputLimitExceeded
             ? { success: false, error: `${spec.label} returned too much model data.` }
-            : finalizeModelDiscoveryOutput(spec, stdout, stderr, code)
+            : listing
+              ? listingFailure(code)
+              : finalizeModelDiscoveryOutput(spec, stdout, stderr, code)
         )
+      }
+      const listingFailure = (code: number | null): DiscoverCommitMessageModelsResult => {
+        console.error('[commit-message] Model discovery failed:', {
+          label: spec.label,
+          exitCode: code,
+          stderr
+        })
+        return {
+          success: false,
+          error: formatAgentCliFailureMessage(spec.label, '', stderr, code)
+        }
+      }
+      if (listing) {
+        settleCodexModelListing({
+          listing,
+          spec,
+          child,
+          isSettled: () => settled,
+          stop: startTermination,
+          finish
+        })
       }
       child.stdout?.on('data', onStdoutData)
       child.stderr?.on('data', onStderrData)

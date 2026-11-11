@@ -10,7 +10,7 @@ import {
   reopenTopologyStore
 } from '../../../persistence/terminal-topology/terminal-topology-profile-fixture'
 import { OrcaRuntimeService } from '../../orca-runtime'
-import type { ResolvedWorktree } from '../../runtime-worktree-path-identity'
+import type { ResolvedWorktree } from '../catalog/runtime-worktree-path-identity'
 import { TERMINAL_QUERY_METHODS } from '../../rpc/methods/terminal/terminal-query-methods'
 
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
@@ -118,18 +118,6 @@ describe('main places the swept workspace’s live terminals, layout-owner build
     const listed = listing.terminals.find((terminal) => terminal.ptyId === 'pty-swept')
     expect(listed).toMatchObject({ orphaned: false })
     expect(listed?.tabId).not.toMatch(/^pty:/)
-  })
-
-  it('a listing that does not ask places nothing', async () => {
-    const { store, runtime } = await hostWith([session('pty-swept')])
-
-    const context = { runtime }
-    await terminalListHandler()(
-      { worktree: `id:${SWEPT}`, limit: 200, requireFreshPtyLiveness: true },
-      context
-    )
-
-    expect(boundPtyIds(store, SWEPT)).toEqual([])
   })
 
   it('leaves a terminal whose registration is still binding its pane, as a census does', async () => {

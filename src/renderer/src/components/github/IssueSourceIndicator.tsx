@@ -3,7 +3,8 @@ import type { GitHubOwnerRepo } from '../../../../shared/github/pull-request-typ
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { Trans } from 'react-i18next'
 import { i18n, translate } from '@/i18n/i18n'
-import { cn } from '@/lib/utils'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { cn } from '@/lib/class-names'
 import {
   githubRepoIdentityKey,
   isDefaultGitHubHost
@@ -21,10 +22,10 @@ export type IssueSourceIndicatorProps = {
 }
 
 // Name the resolved repository, not remote aliases that could imply a stable UI-to-git-config mapping.
-function issueSourceTemplate(variant: 'list' | 'item'): string {
+function issueSourceTemplate(variant: 'list' | 'item', t: Translate = translate): string {
   return variant === 'item'
-    ? translate('auto.components.github.IssueSourceIndicator.issueFromRepo', 'Issue from <repo/>')
-    : translate('auto.components.github.IssueSourceIndicator.issuesFromRepo', 'Issues from <repo/>')
+    ? t('auto.components.github.IssueSourceIndicator.issueFromRepo', 'Issue from <repo/>')
+    : t('auto.components.github.IssueSourceIndicator.issuesFromRepo', 'Issues from <repo/>')
 }
 
 export function sameGitHubOwnerRepo(
@@ -46,6 +47,7 @@ export default function IssueSourceIndicator({
   localRepo,
   className
 }: IssueSourceIndicatorProps): React.JSX.Element | null {
+  const t = useTranslate()
   if (!issues || !prs) {
     return null
   }
@@ -57,7 +59,7 @@ export default function IssueSourceIndicator({
     host && !isDefaultGitHubHost(host)
       ? `${host}/${issues.owner}/${issues.repo}`
       : `${issues.owner}/${issues.repo}`
-  const template = issueSourceTemplate(variant)
+  const template = issueSourceTemplate(variant, t)
   const label = template.replace('<repo/>', slug)
   return (
     <span

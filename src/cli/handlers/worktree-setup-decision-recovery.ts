@@ -1,3 +1,4 @@
+import { getPresentStringFlag } from '../flags'
 import { RuntimeClientError, RuntimeRpcFailureError } from '../runtime/types'
 
 // Hosts use generic runtime_error here; this message is the stable discriminator.
@@ -43,4 +44,21 @@ export function attachCliErrorData(error: RuntimeClientError, data: unknown): Ru
     })
   }
   return new RuntimeClientError(error.code, error.message, data)
+}
+
+/** --setup's value, refusing a contradiction with --run-hooks. */
+export function getOptionalSetupDecision(
+  flags: Map<string, string | boolean>
+): 'run' | 'skip' | 'inherit' | undefined {
+  const setup = getPresentStringFlag(flags, 'setup')
+  if (setup !== undefined && setup !== 'run' && setup !== 'skip' && setup !== 'inherit') {
+    throw new RuntimeClientError('invalid_argument', '--setup must be one of: run, skip, inherit')
+  }
+  if (flags.get('run-hooks') === true && setup !== undefined && setup !== 'run') {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      'Choose either --run-hooks or --setup run, not contradictory setup flags.'
+    )
+  }
+  return setup
 }

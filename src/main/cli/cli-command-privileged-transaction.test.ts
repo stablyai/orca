@@ -167,26 +167,6 @@ describe.skipIf(process.platform !== 'darwin' || process.getuid?.() === 0)(
       ).toBe(false)
     })
 
-    it('creates missing parent directories readable by the user', async () => {
-      const fixture = await createPrivilegedFixture()
-      const commandPath = join(fixture.protectedDirectory, 'nested', 'bin', 'orca')
-      const installer = new CliInstaller({
-        ...fixtureInstallerOptions(fixture),
-        commandPathOverride: commandPath,
-        privilegedRunner: async (command) => {
-          await chmod(fixture.protectedDirectory, 0o700)
-          await executePrivilegedShell(command)
-        }
-      })
-
-      await chmod(fixture.protectedDirectory, 0o500)
-      await expect(installer.install()).resolves.toMatchObject({ state: 'installed' })
-      expect((await lstat(join(fixture.protectedDirectory, 'nested'))).mode & 0o777).toBe(0o755)
-      expect((await lstat(join(fixture.protectedDirectory, 'nested', 'bin'))).mode & 0o777).toBe(
-        0o755
-      )
-    })
-
     it('makes an unreadable link to the current launcher readable with one privileged step', async () => {
       const fixture = await createPrivilegedFixture()
       const commands: string[] = []

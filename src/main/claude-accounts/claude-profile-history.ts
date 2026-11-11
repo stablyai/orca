@@ -8,7 +8,8 @@ import {
   unlinkSync
 } from 'node:fs'
 import { join } from 'node:path'
-import { renameFileWithWindowsRetry } from '../codex-accounts/fs-utils'
+import '../filesystem/atomic-file-publication'
+import { renameFileWithWindowsRetry } from '../../shared/windows-retry-file-operations'
 import { resolveClaudeDefaultHome } from './claude-profile-paths'
 import {
   ClaudeProfileSurfaceError,

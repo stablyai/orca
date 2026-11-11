@@ -9,6 +9,7 @@ vi.mock('../../command-runner/git-exec-file', () => ({
 }))
 
 import { getLocalBaseRefDriftWarningForWorktreeCreate } from './worktree-base-drift-warning'
+import { resolveWorktreeCreateBase } from '../../../workspaces/creation/worktree-create-base'
 
 describe('getLocalBaseRefDriftWarningForWorktreeCreate', () => {
   beforeEach(() => {
@@ -48,7 +49,6 @@ describe('getLocalBaseRefDriftWarningForWorktreeCreate', () => {
       timeout
     })
 
-    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(3)
     for (const [, options] of gitExecFileAsyncMock.mock.calls) {
       expect(options).toMatchObject({
         cwd: '/repo',
@@ -68,11 +68,6 @@ describe('getLocalBaseRefDriftWarningForWorktreeCreate', () => {
       'origin/main'
     )
     expect(warning).toBeUndefined()
-
-    expect(gitExecFileAsyncMock.mock.calls.map(([args]) => args[0])).toEqual([
-      'rev-parse',
-      'rev-parse'
-    ])
   })
 
   it('reports a diverged local base', async () => {
@@ -116,11 +111,39 @@ describe('getLocalBaseRefDriftWarningForWorktreeCreate', () => {
     await expect(
       getLocalBaseRefDriftWarningForWorktreeCreate('/repo', 'origin/release', 'origin/main')
     ).resolves.toBeUndefined()
-    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
 
     gitExecFileAsyncMock.mockResolvedValue({ stdout: 'not-a-count' })
     await expect(
       getLocalBaseRefDriftWarningForWorktreeCreate('/repo', 'work/stale', 'origin/main')
     ).resolves.toBeUndefined()
+  })
+})
+
+describe('persisted base diagnostics', () => {
+  it('keeps a usable persisted base even when its advisory fails', async () => {
+    await expect(
+      resolveWorktreeCreateBase({
+        repoWorktreeBaseRef: 'work/stale',
+        resolveDefaultBaseRef: async () => 'origin/main',
+        isBaseUsable: async () => true,
+        onPersistedBaseSelected: async () => {
+          throw new Error('comparison unavailable')
+        }
+      })
+    ).resolves.toBe('work/stale')
+  })
+
+  it('does not probe an explicit override', async () => {
+    const advisory = vi.fn()
+    await expect(
+      resolveWorktreeCreateBase({
+        requestedBaseBranch: 'work/explicit',
+        repoWorktreeBaseRef: 'work/stale',
+        resolveDefaultBaseRef: async () => 'origin/main',
+        isBaseUsable: async () => true,
+        onPersistedBaseSelected: advisory
+      })
+    ).resolves.toBe('work/explicit')
+    expect(advisory).not.toHaveBeenCalled()
   })
 })

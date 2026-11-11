@@ -21,12 +21,17 @@ function accountRows(provider: 'codex' | 'claude', width = 520) {
     weekly: {
       usedPercent: 38,
       windowMinutes: 10_080,
-      resetsAt: null,
+      resetsAt: Date.now() + (6 * 24 + 4) * 3_600_000 + 5_000,
       resetDescription: null
     },
     fableWeekly:
       provider === 'claude'
-        ? { usedPercent: 42, windowMinutes: 10_080, resetsAt: null, resetDescription: null }
+        ? {
+            usedPercent: 42,
+            windowMinutes: 10_080,
+            resetsAt: Date.now() + 43 * 3_600_000 + 5_000,
+            resetDescription: null
+          }
         : null,
     updatedAt: 0,
     error: null,

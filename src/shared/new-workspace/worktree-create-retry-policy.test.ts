@@ -1,16 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
-  getClientWorktreeCreateCandidate,
   getGeneratedWorktreeCreateRetryCandidate,
   isRetryableWorktreeCreateConflict
 } from './worktree-create-retry-policy'
 
 describe('client worktree create retry policy', () => {
-  it('uses the same suffix sequence for every client', () => {
-    expect(getClientWorktreeCreateCandidate('feature', 0)).toBe('feature')
-    expect(getClientWorktreeCreateCandidate('feature', 1)).toBe('feature-2')
-  })
-
   it('keeps generated retries on canonical tiers', () => {
     expect(getGeneratedWorktreeCreateRetryCandidate('nautilus-2', 0)).toBe('nautilus-2')
     expect(getGeneratedWorktreeCreateRetryCandidate('nautilus-2', 1)).toBe('nautilus-3')

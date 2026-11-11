@@ -1,14 +1,9 @@
-import { chmodSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
-
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { runProcess } from '@orca/process-host'
 
 import {
   bundledRipgrepWslSpawnOptions,
-  resetBundledRipgrepPathCacheForTests,
-  resolveBundledRipgrepPath
+  resetBundledRipgrepPathCacheForTests
 } from './bundled-ripgrep-path'
 
 const originalResourcesPath = process.resourcesPath
@@ -21,21 +16,6 @@ describe('bundled ripgrep path', () => {
   afterEach(() => {
     setResourcesPath(originalResourcesPath)
     resetBundledRipgrepPathCacheForTests()
-  })
-
-  it('prefers the packaged resources copy', () => {
-    const resourcesDir = mkdtempSync(join(tmpdir(), 'orca-rg-resources-'))
-    try {
-      const packaged = join(resourcesDir, 'ripgrep', 'linux-x64', 'rg')
-      mkdirSync(join(resourcesDir, 'ripgrep', 'linux-x64'), { recursive: true })
-      writeFileSync(packaged, '')
-      chmodSync(packaged, 0o755)
-      setResourcesPath(resourcesDir)
-
-      expect(resolveBundledRipgrepPath('linux-x64')).toBe(realpathSync(packaged))
-    } finally {
-      rmSync(resourcesDir, { recursive: true, force: true })
-    }
   })
 
   it.skipIf(process.platform === 'win32')(

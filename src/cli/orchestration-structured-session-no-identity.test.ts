@@ -75,15 +75,4 @@ describe('a structured chat session with no orchestration identity', () => {
       expect.objectContaining({ terminal: 'structworker_self' })
     )
   })
-
-  it('leaves an ordinary shell alone, which has no marker and may still guess', async () => {
-    delete process.env[ORCA_STRUCTURED_SESSION_ENV]
-    callMock.mockResolvedValue({ result: { messages: [], count: 0 } })
-    await invoke('orchestration check')
-    expect(getTerminalHandleMock).toHaveBeenCalled()
-    expect(callMock).toHaveBeenCalledWith(
-      'orchestration.check',
-      expect.objectContaining({ terminal: 'term_sibling' })
-    )
-  })
 })

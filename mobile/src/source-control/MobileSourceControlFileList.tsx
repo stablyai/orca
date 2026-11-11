@@ -43,13 +43,15 @@ export type FileListState = FileRowState &
 export function MobileSourceControlFileList({
   state,
   header,
-  bottomInset
+  bottomInset,
+  stageAllInBar = false
 }: {
   state: FileListState
   /** The status line, Commits row and conflict banner above the sections. */
   header: ReactNode
   /** Clears the next-step bar the panel floats over the list. */
   bottomInset: number
+  stageAllInBar?: boolean
 }) {
   const colorScheme = useMobileColorScheme()
   const t = useMobileTranslation()
@@ -78,11 +80,13 @@ export function MobileSourceControlFileList({
   const stageAllOnStaged =
     cappedWithoutUnstaged && state.sections.some((section) => section.id === 'staged')
   const stageAllOnConflicts = cappedWithoutUnstaged && !stageAllOnStaged
-  const stageAllAction = sectionAction(
-    t('sourceControl.fileList.stageAll', 'Stage all'),
-    () => void state.stageAll(),
-    canStageAll
-  )
+  const stageAllAction = stageAllInBar
+    ? null
+    : sectionAction(
+        t('sourceControl.fileList.stageAll', 'Stage all'),
+        () => void state.stageAll(),
+        canStageAll
+      )
   const sections: FileSection[] = state.sections.map((section) => {
     const title =
       merging && section.id === 'staged'

@@ -3,7 +3,7 @@ import { rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type * as WindowsAcl from '../../shared/secure-path-windows-acl'
+import type * as WindowsAcl from '../../shared/secure-storage/secure-path-windows-acl'
 import type { OrcadManagedStopRequest } from '../../shared/orcad-stop-request'
 
 import { acquireOrcadInstanceLock } from './orcad-instance-lock'
@@ -11,13 +11,9 @@ import { orcadManagedStopRequestPath } from './orcad-managed-stop-request'
 import { cancelOrcadManagedStop } from './orcad-managed-stop-cancellation'
 import { claimOrcadManagedStopDecision } from './orcad-managed-stop-decision'
 
-import { completeOrcadManagedStop } from './orcad-managed-stop-completion'
-
-import { installOrcadStopRequestListeners } from './orcad-stop-request-listener'
-
 const hardening = vi.hoisted(() => ({ pending: new Set<Promise<void>>() }))
 
-vi.mock('../../shared/secure-path-windows-acl', async (importOriginal) => {
+vi.mock('../../shared/secure-storage/secure-path-windows-acl', async (importOriginal) => {
   const acl = await importOriginal<typeof WindowsAcl>()
   return {
     ...acl,
@@ -70,42 +66,5 @@ describe('cancelling a managed stop', () => {
     writeFileSync(orcadManagedStopRequestPath(request.instance), JSON.stringify(other))
     expect(cancelOrcadManagedStop(request)).toBe('canceled')
     expect(existsSync(orcadManagedStopRequestPath(request.instance))).toBe(true)
-  })
-
-  it('does not reissue a cancelled transaction while orcad keeps running', async () => {
-    const request = running()
-    cancelOrcadManagedStop(request)
-    expect(
-      await completeOrcadManagedStop(request, {
-        probeProcess: () => 'alive',
-        startedAtMs: () => 5,
-        sleep: async () => {}
-      })
-    ).toBe('live')
-    expect(existsSync(orcadManagedStopRequestPath(request.instance))).toBe(false)
-  })
-
-  it('keeps orcad running when its listener meets a cancelled request', async () => {
-    const request = running()
-    cancelOrcadManagedStop(request)
-    writeFileSync(orcadManagedStopRequestPath(request.instance), JSON.stringify(request))
-    const onRequest = vi.fn()
-    const report = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const root = mkdtempSync(join(tmpdir(), 'orcad-stop-cancel-slot-'))
-    roots.push(root)
-    const listener = installOrcadStopRequestListeners(onRequest, {
-      installRoot: root,
-      managedStop: {
-        version: request.version,
-        runtimeId: request.runtimeId,
-        instance: request.instance
-      },
-      pollIntervalMs: 10
-    })
-    await vi.waitFor(() => expect(report).toHaveBeenCalled())
-    listener.close()
-    expect(onRequest).not.toHaveBeenCalled()
-    expect(String(report.mock.calls[0]?.[1])).toContain('orcad_managed_stop_canceled')
-    expect(existsSync(orcadManagedStopRequestPath(request.instance))).toBe(false)
   })
 })

@@ -8,12 +8,12 @@ import {
   pinnedNodeRuntimeAsset,
   type NodeRuntimeTarget
 } from '../../../shared/node-runtime-pin'
-import { quotePosixShell } from '../../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import {
   isWindowsRemoteHost,
   joinRemotePath,
   type RemoteHostPlatform
-} from '../../ssh/ssh-remote-platform'
+} from '../../ssh/remote-host/ssh-remote-platform'
 import { configuredNodeDistMirror } from '../../node-runtime/node-dist-mirror-setting'
 import { DesktopDownloadUnreachableError } from '../../node-runtime/pinned-runtime-materializer'
 import { remoteSha256Command } from './remote-sha256-command'

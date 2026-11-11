@@ -3,8 +3,9 @@ import type { DashboardSnapshotState } from './build-dashboard-snapshot'
 import {
   releaseRuntimeAgentOrchestrationBatchCache,
   selectRuntimeAgentOrchestrationBatch
-} from '../sidebar/worktree-agent-orchestration-batch'
-import { selectRuntimeAgentOrchestrationForWorktree } from '../sidebar/worktree-agent-row-selectors'
+} from '../sidebar/workspace-card/activity/worktree-agent-orchestration-batch'
+import '../sidebar/workspace-card/activity/worktree-agent-row-selectors'
+import { selectWorktreeAgentOrchestration as selectRuntimeAgentOrchestrationForWorktree } from '../sidebar/workspace-card/activity/worktree-agent-orchestration-index'
 
 export function selectDashboardOrchestration(
   state: DashboardSnapshotState,

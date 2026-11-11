@@ -5,9 +5,9 @@ import type {
   MobileGitHistoryItem,
   MobileGitHistoryResult
 } from './git-history-reply-schema'
-import { refusedRpcMessageOrFallback } from '../transport/rpc-refusal-message'
+import { refusedRpcMessageOrFallback } from '../transport/rpc/rpc-refusal-message'
 import { gitHistoryRead } from './mobile-git-read-operations'
-import type { RpcOperationSender } from '../transport/rpc-operation-sender'
+import type { UnvalidatedRpcRequestPort } from '../transport/rpc/unvalidated-rpc-request-port'
 
 export const MOBILE_GIT_HISTORY_PAGE_SIZE = 50
 
@@ -89,7 +89,7 @@ export type MobileGitHistoryPageRequest = {
 }
 
 export async function fetchMobileGitHistory(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   worktreeId: string,
   page?: MobileGitHistoryPageRequest
 ): Promise<MobileGitHistoryResult> {

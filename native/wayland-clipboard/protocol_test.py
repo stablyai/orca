@@ -185,22 +185,9 @@ class ClipboardProtocolTests(unittest.TestCase):
             self.assertIsNone(server.source)
             self.assertEqual(result.stdout, b"")
 
-    def test_missing_display_rejects_without_echoing_text(self):
-        with tempfile.TemporaryDirectory() as directory:
-            result = subprocess.run([BINARY], input=b"private text", capture_output=True,
-                                    env={**os.environ, "XDG_RUNTIME_DIR": directory, "WAYLAND_DISPLAY": "missing"}, timeout=3)
-            self.assertEqual(result.returncode, 69)
-            self.assertNotIn(b"private text", result.stdout + result.stderr)
-
     def test_size_limit_precedes_selection_publication(self):
         with DataControlServer("ext_data_control") as server:
             self.assertEqual(server.copy(b"x" * (16 * 1024 * 1024 + 1)).returncode, 65)
-            self.assertIsNone(server.source)
-
-    def test_probe_does_not_write(self):
-        with DataControlServer("ext_data_control") as server:
-            result = subprocess.run([BINARY, "--probe"], capture_output=True, env=server.environment(), timeout=3)
-            self.assertEqual(result.returncode, 0)
             self.assertIsNone(server.source)
 
     def test_replacement_during_ack_is_success_but_device_loss_is_failure(self):

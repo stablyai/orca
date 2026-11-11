@@ -1,12 +1,13 @@
 import type * as WorktreeScanCacheModule from '../git/worktrees/catalog/worktree-scan-cache'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import * as issueCommandFile from '../workspace-hooks/issue-command-file'
-import * as projectGitOptions from '../workspaces/execution-host/project-runtime-git-options'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { addWorktreeMock, listWorktreesMock } from './worktrees-test-module-mocks'
-import { handlers, setupWorktreeHandlers, store } from './worktrees-test-harness'
+import {
+  addWorktreeMock,
+  getBranchConflictKindStrictMock,
+  listWorktreesMock,
+  computeWorktreePathMock,
+  gitExecFileAsyncMock
+} from './worktrees-test-module-mocks'
+import { handlers, harnessRepo, setupWorktreeHandlers, store } from './worktrees-test-harness'
 import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
 
 vi.mock('../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
@@ -22,7 +23,7 @@ vi.mock('../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) =
 vi.mock('electron', async () =>
   (await import('./worktrees-test-module-mocks')).electronModuleMock()
 )
-vi.mock('../../shared/git-worktree-porcelain-parser', async (importOriginal) => ({
+vi.mock('../../shared/git/worktrees/git-worktree-porcelain-parser', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   parseWorktreeList: (await import('./worktrees-test-module-mocks')).parseWorktreeListMock
 }))
@@ -78,6 +79,7 @@ vi.mock('../git/command-runner/git-exec-file-sync', async (importOriginal) => ({
 vi.mock('../git/repo', async () =>
   (await import('./worktrees-test-module-mocks')).gitRepoModuleMock()
 )
+
 vi.mock('../git/repo-default-base-ref', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   getBaseRefDefault: (await import('./worktrees-test-module-mocks')).getBaseRefDefaultMock
@@ -88,6 +90,9 @@ vi.mock('../git/git-username', async (importOriginal) => ({
     .resolveLocalGitUsernameMock
 }))
 vi.mock('../github/client', async () =>
+  (await import('./worktrees-test-module-mocks')).githubClientModuleMock()
+)
+vi.mock('../github/client/lookup/get-pr-for-branch', async () =>
   (await import('./worktrees-test-module-mocks')).githubClientModuleMock()
 )
 vi.mock('../source-control/hosted-review', async () =>
@@ -145,7 +150,7 @@ vi.mock('../workspaces/space-analysis/workspace-space-analysis-snapshot', async 
 vi.mock('../workspaces/cleanup/workspace-cleanup-removal-snapshot-prune', async () =>
   (await import('./worktrees-test-module-mocks')).workspaceCleanupRemovalSnapshotPruneModuleMock()
 )
-vi.mock('../runtime/worktree-teardown', async () =>
+vi.mock('../runtime/workspaces/removal/worktree-teardown', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeTeardownModuleMock()
 )
 vi.mock('./pty/provider/registry', async () =>
@@ -175,94 +180,6 @@ function useRepo(repo: ReturnType<typeof makeRepo>): void {
   store.setWorktreeMeta.mockImplementation((_target: unknown, meta: unknown) => meta)
 }
 
-describe('registerWorktreeHandlers', () => {
-  beforeEach(() => {
-    setupWorktreeHandlers()
-  })
-
-  it.each(['command', ' '])(
-    'preserves local file writes with an unavailable runtime: %j',
-    async (content) => {
-      const root = mkdtempSync(join(tmpdir(), 'orca-runtime-ignore-'))
-      const repo = {
-        id: 'repo-1',
-        path: root,
-        displayName: 'local',
-        badgeColor: '#000',
-        addedAt: 0
-      }
-      mkdirSync(join(root, '.orca'))
-      writeFileSync(join(root, '.orca', 'issue-command'), 'old command\n')
-      store.getRepo.mockReturnValue(repo)
-      store.getRepos.mockReturnValue([repo])
-      const resolver = vi
-        .spyOn(projectGitOptions, 'getLocalProjectWorktreeGitOptions')
-        .mockImplementation(() => {
-          throw new Error('Project runtime requires repair')
-        })
-      try {
-        await handlers['hooks:writeIssueCommand'](null, { repoId: repo.id, content })
-        if (content.trim()) {
-          expect(readFileSync(join(root, '.orca', 'issue-command'), 'utf8')).toBe('command\n')
-          expect(readFileSync(join(root, '.gitignore'), 'utf8')).toBe('.orca\n')
-        } else {
-          expect(existsSync(join(root, '.orca', 'issue-command'))).toBe(false)
-          expect(existsSync(join(root, '.gitignore'))).toBe(false)
-          expect(resolver).not.toHaveBeenCalled()
-        }
-      } finally {
-        resolver.mockRestore()
-        rmSync(root, { recursive: true, force: true })
-      }
-    }
-  )
-
-  it('forwards the resolved WSL options when writing a local override', async () => {
-    const resolveOptions = vi
-      .spyOn(projectGitOptions, 'getLocalProjectWorktreeGitOptions')
-      .mockReturnValue({ wslDistro: 'Ubuntu' })
-    const write = vi
-      .spyOn(issueCommandFile, 'writeIssueCommandUnlessWslStopped')
-      .mockResolvedValue(undefined)
-    try {
-      await handlers['hooks:writeIssueCommand'](null, { repoId: 'repo-1', content: 'command' })
-      const options = write.mock.calls[0]?.[2]
-      expect(typeof options).toBe('function')
-      expect(typeof options === 'function' ? options() : options).toEqual({ wslDistro: 'Ubuntu' })
-      expect(resolveOptions).toHaveBeenCalledWith(store, expect.objectContaining({ id: 'repo-1' }))
-      expect(write).toHaveBeenCalledExactlyOnceWith(
-        '/workspace/repo',
-        'command',
-        expect.any(Function),
-        { wakeWslDistro: undefined }
-      )
-    } finally {
-      resolveOptions.mockRestore()
-      write.mockRestore()
-    }
-  })
-
-  it('rejects SSH issue-command writes, which this process does not serve', async () => {
-    const repo = {
-      id: 'repo-ssh',
-      path: '/remote/repo',
-      displayName: 'ssh',
-      badgeColor: '#000',
-      addedAt: 0,
-      connectionId: 'conn-1',
-      worktreeBaseRef: null
-    }
-    store.getRepo.mockReturnValue(repo)
-
-    await expect(
-      handlers['hooks:writeIssueCommand'](null, {
-        repoId: 'repo-ssh',
-        content: 'orca issue command'
-      })
-    ).rejects.toThrow('Remote filesystem unavailable')
-  })
-})
-
 describe('worktrees:create execution host routing', () => {
   beforeEach(() => {
     setupWorktreeHandlers()
@@ -277,44 +194,77 @@ describe('worktrees:create execution host routing', () => {
 
     expect(addWorktreeMock).not.toHaveBeenCalled()
   })
+})
 
-  it('refuses a runtime row with no nested SSH target instead of creating locally', async () => {
-    useRepo(makeRepo({ executionHostId: 'runtime:env-1' }))
+describe('worktrees:create exact name', () => {
+  beforeEach(() => {
+    setupWorktreeHandlers()
+  })
+
+  // Electron flattens the error to its message, so the renderer reads the code from the trailing token.
+  it('refuses a taken name with the code token instead of suffixing', async () => {
+    getBranchConflictKindStrictMock.mockResolvedValue('local')
 
     await expect(
-      handlers['worktrees:create'](null, { repoId: 'repo-1', name: 'wt' })
-    ).rejects.toThrow('not dispatched by this process')
+      handlers['worktrees:create'](null, {
+        repoId: 'repo-1',
+        name: 'Login fix',
+        branchIntent: 'create-exact'
+      })
+    ).rejects.toThrow(/\nworktree_create_exact_name_taken$/)
 
     expect(addWorktreeMock).not.toHaveBeenCalled()
   })
+})
 
-  it('refuses a runtime row that also names a nested SSH target', async () => {
-    // This target belongs to env-1, never the local client.
-    useRepo(makeRepo({ executionHostId: 'runtime:env-1', connectionId: 'target-a' }))
-
-    await expect(
-      handlers['worktrees:create'](null, { repoId: 'repo-1', name: 'wt' })
-    ).rejects.toThrow('not dispatched by this process')
-
-    expect(addWorktreeMock).not.toHaveBeenCalled()
+it('reports stale local base drift through the desktop create path', async () => {
+  const runtime = setupWorktreeHandlers()
+  store.getRepo.mockReturnValue({ ...harnessRepo, worktreeBaseRef: 'develop' })
+  runtime.resolveRemoteTrackingBase.mockResolvedValue(null)
+  addWorktreeMock.mockResolvedValueOnce({ upstreamWarning: 'Upstream setup unavailable' })
+  listWorktreesMock.mockResolvedValue([
+    {
+      path: '/workspace/local-stale-base',
+      head: 'created-sha',
+      branch: 'local-stale-base',
+      isBare: false,
+      isMainWorktree: false
+    }
+  ])
+  computeWorktreePathMock.mockReturnValue('/workspace/local-stale-base')
+  gitExecFileAsyncMock.mockImplementation(async (args) => {
+    if (args[0] === 'rev-list') {
+      return { stdout: '0\t692\n', stderr: '' }
+    }
+    if (args.includes('refs/heads/develop^{commit}')) {
+      return { stdout: 'develop-sha\n', stderr: '' }
+    }
+    return { stdout: '', stderr: '' }
   })
 
-  it('answers local for a row that declares itself local while carrying a connection', async () => {
-    // Explicit local ownership overrides legacy connection fields.
-    useRepo(
-      makeRepo({ path: '/workspace/repo', executionHostId: 'local', connectionId: 'target-a' })
-    )
-    listWorktreesMock.mockResolvedValue([
-      {
-        path: '/workspace/wt',
-        head: 'abc123',
-        branch: 'wt',
-        isBare: false,
-        isMainWorktree: false
-      }
-    ])
-    await handlers['worktrees:create'](null, { repoId: 'repo-1', name: 'wt' })
-
-    expect(addWorktreeMock).toHaveBeenCalledTimes(1)
+  const result = await handlers['worktrees:create'](null, {
+    repoId: 'repo-1',
+    name: 'local-stale-base'
   })
+
+  expect(addWorktreeMock).toHaveBeenCalledWith(
+    '/workspace/repo',
+    '/workspace/local-stale-base',
+    'local-stale-base',
+    'develop',
+    false,
+    false,
+    {}
+  )
+  expect(result).toMatchObject({
+    localBaseRefDriftWarning: {
+      baseRef: 'develop',
+      defaultBaseRef: 'origin/main',
+      ahead: 0,
+      behind: 692,
+      relation: 'behind'
+    },
+    warning: expect.stringContaining('develop is 692 commit(s) behind origin/main')
+  })
+  expect(result).toMatchObject({ warning: expect.stringContaining('Upstream setup unavailable') })
 })

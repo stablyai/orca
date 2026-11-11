@@ -1,9 +1,9 @@
 import type { ClaudeNamingGeneration } from '../../claude-naming-generation'
 import { claudeProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import { AgentSessionAcquisitionExitUnprovenError } from '../../../native-chat/agent-session-wire/structured-agent-session-acquisition-errors'
-import { launchPreparationFailure } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter-errors'
-import type { StructuredAgentSessionAcquireInput } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
-import { stopAgentSessionProviderRoot } from '../../../native-chat/agent-session-wire/structured-agent-session-provider-exit-proof'
+import { AgentSessionAcquisitionExitUnprovenError } from '../../../native-chat/agent-session-wire/acquisition/structured-agent-session-acquisition-errors'
+import { launchPreparationFailure } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
+import type { StructuredAgentSessionAcquireInput } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import { stopAgentSessionProviderRoot } from '../../../native-chat/agent-session-wire/termination/structured-agent-session-provider-exit-proof'
 import { withAgentSessionCreatePhase } from '../../../observability/agent-session-instrumentation'
 import type { ClaudeStructuredLaunch } from './claude-structured-launch-resolution'
 import {

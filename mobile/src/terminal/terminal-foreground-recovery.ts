@@ -1,5 +1,6 @@
 import type { RefObject } from 'react'
-import type { ConnectionState } from '../transport/types'
+import type { TerminalResumeState } from './session/terminal-stream-resume'
+import type { ConnectionState } from '../transport/connection/connection-state'
 import type { TerminalWebViewHandle } from './TerminalWebView'
 
 export const TERMINAL_FOREGROUND_RECOVERY_DELAY_MS = 120
@@ -12,6 +13,7 @@ type TerminalForegroundRecoveryOptions = {
   visibleTerminalHandlesRef?: RefObject<readonly string[]>
   terminalRefs: RefObject<Map<string, TerminalWebViewHandle>>
   initializedHandlesRef: RefObject<Set<string>>
+  terminalResume: TerminalResumeState
   connStateRef: RefObject<ConnectionState>
   unsubscribeTerminal: (handle: string) => void
   subscribeToTerminal: (handle: string) => void
@@ -36,24 +38,31 @@ export function recoverActiveTerminalAfterForeground({
   visibleTerminalHandlesRef,
   terminalRefs,
   initializedHandlesRef,
+  terminalResume,
   connStateRef,
   unsubscribeTerminal,
   subscribeToTerminal,
   schedule,
   delayMs = TERMINAL_FOREGROUND_RECOVERY_DELAY_MS
 }: TerminalForegroundRecoveryOptions): TerminalForegroundRecoveryOutcome {
+  // A blanked WebView needs a snapshot: a resume would only append to it.
+  terminalResume.forget()
   if (connStateRef.current !== 'connected') {
     return 'deferred'
   }
   const initializedMountedHandles = Array.from(initializedHandlesRef.current).filter((handle) =>
     terminalRefs.current.has(handle)
   )
-  if (initializedMountedHandles.length === 0) {
-    return 'skipped'
-  }
   const visible =
     visibleTerminalHandlesRef?.current ?? (activeHandleRef.current ? [activeHandleRef.current] : [])
-  const recovering = visible.filter((handle) => initializedMountedHandles.includes(handle))
+  const recovering = visible.filter(
+    (handle) =>
+      initializedMountedHandles.includes(handle) ||
+      (terminalResume.isCatchingUp(handle) && terminalRefs.current.has(handle))
+  )
+  if (initializedMountedHandles.length === 0 && recovering.length === 0) {
+    return 'skipped'
+  }
 
   // Opacity-hidden WebViews can also lose iOS backing stores; their next activation must accept replay.
   for (const initializedHandle of initializedMountedHandles) {

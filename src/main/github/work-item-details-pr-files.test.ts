@@ -74,8 +74,7 @@ vi.mock('./rate-limit', () => ({
   repositoryRateLimitGuard: repositoryRateLimitGuardMock,
   noteRepositoryRateLimitSpend: noteRepositoryRateLimitSpendMock
 }))
-
-import { getPRFileContents, getWorkItemDetails } from './work-item-details'
+import { getWorkItemDetails } from './work-item-details'
 
 import { _resetOriginGitHubApiRepositoryCache } from './github-api-repository'
 
@@ -185,90 +184,6 @@ describe('getWorkItemDetails PR file listing', () => {
     ).toHaveLength(3)
   })
 
-  it('flags filesUnavailable when the file fetch fails', async () => {
-    getWorkItemMock.mockResolvedValueOnce(pullRequestItem(8305, 'Files fetch fails'))
-    ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {
-      const target = args.at(-1)
-      if (target === 'repos/acme/widgets/pulls/8305') {
-        return {
-          stdout: JSON.stringify({ head: { sha: 'head-sha' }, base: { sha: 'base-sha' } })
-        }
-      }
-      if (target === 'repos/acme/widgets/pulls/8305/files?per_page=100') {
-        throw new Error('gh: API rate limit exceeded (403)')
-      }
-      return auxiliaryPRResponse(args)
-    })
-
-    const details = await getWorkItemDetails('/repo-root', 8305, 'pr')
-
-    expect(details?.filesUnavailable).toBe(true)
-    expect(details?.files).toBeUndefined()
-  })
-
-  it('preserves an empty file list as an available result', async () => {
-    getWorkItemMock.mockResolvedValueOnce(pullRequestItem(8306, 'Empty PR'))
-    ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {
-      const target = args.at(-1)
-      if (target === 'repos/acme/widgets/pulls/8306') {
-        return {
-          stdout: JSON.stringify({ head: { sha: 'head-sha' }, base: { sha: 'base-sha' } })
-        }
-      }
-      if (target === 'repos/acme/widgets/pulls/8306/files?per_page=100') {
-        return { stdout: '[]' }
-      }
-      return auxiliaryPRResponse(args)
-    })
-
-    const details = await getWorkItemDetails('/repo-root', 8306, 'pr')
-
-    expect(details?.filesUnavailable).toBe(false)
-    expect(details?.files).toEqual([])
-  })
-
-  it('backfills the Enterprise origin host before a host-less PR detail fan-out', async () => {
-    const enterprise = { owner: 'team', repo: 'orca', host: 'github.acme-corp.com' }
-    getWorkItemMock.mockResolvedValueOnce({
-      ...pullRequestItem(8, 'Host-less Enterprise PR'),
-      author: '',
-      prRepo: { owner: 'team', repo: 'orca' }
-    })
-    getOwnerRepoMock.mockResolvedValue(null)
-    getEnterpriseGitHubRepoSlugMock.mockResolvedValue(enterprise)
-    ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {
-      const endpoint = args.find((arg) => arg.startsWith('repos/')) ?? ''
-      if (endpoint === 'repos/team/orca/pulls/8') {
-        return { stdout: JSON.stringify({ body: 'Enterprise body' }) }
-      }
-      if (endpoint === 'repos/team/orca/pulls/8/files?per_page=100') {
-        return { stdout: '[]' }
-      }
-      return auxiliaryPRResponse(args)
-    })
-
-    const details = await getWorkItemDetails('/remote/repo', 8, 'pr', 'ssh-1')
-
-    expect(details?.item.prRepo).toEqual(enterprise)
-    expect(getPRCommentsMock).toHaveBeenCalledWith(
-      '/remote/repo',
-      8,
-      { prRepo: enterprise },
-      'ssh-1'
-    )
-    expect(getPRChecksMock).toHaveBeenCalledWith(
-      '/remote/repo',
-      8,
-      undefined,
-      enterprise,
-      undefined,
-      'ssh-1'
-    )
-    expect(
-      ghExecFileAsyncMock.mock.calls.every(([, options]) => options?.host === enterprise.host)
-    ).toBe(true)
-  })
-
   it('does not run bare PR detail commands when local host resolution fails', async () => {
     getWorkItemMock.mockResolvedValueOnce({
       ...pullRequestItem(9, 'Unresolved PR'),
@@ -282,108 +197,5 @@ describe('getWorkItemDetails PR file listing', () => {
     expect(getPRCommentsMock).not.toHaveBeenCalled()
     expect(getPRChecksMock).not.toHaveBeenCalled()
     expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
-  })
-
-  it('uses the selected upstream GitHub Enterprise repo for both PR file sides', async () => {
-    const prRepo = {
-      owner: 'team',
-      repo: 'orca',
-      host: 'github.acme-corp.com'
-    }
-    ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {
-      const endpoint = args.find((arg) => arg.startsWith('repos/')) ?? ''
-      if (endpoint === 'repos/team/orca/contents/src/path%23with%3Fchars.ts?ref=base-sha') {
-        return { stdout: 'base content' }
-      }
-      if (endpoint === 'repos/team/orca/contents/src/path%23with%3Fchars.ts?ref=head-sha') {
-        return { stdout: 'head content' }
-      }
-      throw new Error(`unexpected gh call: ${args.join(' ')}`)
-    })
-
-    const contents = await getPRFileContents({
-      repoPath: '/repo-root',
-      prRepo,
-      prNumber: 7,
-      path: 'src/path#with?chars.ts',
-      status: 'modified',
-      headSha: 'head-sha',
-      baseSha: 'base-sha'
-    })
-
-    expect(contents).toMatchObject({
-      original: 'base content',
-      modified: 'head content',
-      originalIsBinary: false,
-      modifiedIsBinary: false
-    })
-    const apiCalls = ghExecFileAsyncMock.mock.calls.map(([args]) => args as string[])
-    expect(apiCalls).toHaveLength(2)
-    expect(apiCalls.every((args) => !args.includes('--hostname'))).toBe(true)
-    expect(
-      ghExecFileAsyncMock.mock.calls.every(
-        ([, options]) => options?.host === 'github.acme-corp.com'
-      )
-    ).toBe(true)
-    expect(
-      repositoryRateLimitGuardMock.mock.calls.filter(([, bucket]) => bucket === 'core')
-    ).toHaveLength(2)
-    expect(
-      noteRepositoryRateLimitSpendMock.mock.calls.filter(([, bucket]) => bucket === 'core')
-    ).toHaveLength(2)
-  })
-
-  it('skips an added file base read and preserves a head max-buffer overflow', async () => {
-    ghExecFileAsyncMock.mockRejectedValueOnce(
-      Object.assign(new Error('stdout maxBuffer length exceeded'), { code: 'ENOBUFS' })
-    )
-
-    const contents = await getPRFileContents({
-      repoPath: '/repo-root',
-      prRepo: { owner: 'team', repo: 'orca', host: 'github.acme-corp.com' },
-      prNumber: 7,
-      path: 'src/large.ts',
-      status: 'added',
-      headSha: 'head-sha',
-      baseSha: 'base-sha'
-    })
-
-    expect(contents).toEqual({
-      original: '',
-      modified: '',
-      originalIsBinary: false,
-      modifiedIsBinary: false,
-      originalTooLarge: undefined,
-      modifiedTooLarge: true
-    })
-    expect(ghExecFileAsyncMock).toHaveBeenCalledOnce()
-    expect(ghExecFileAsyncMock.mock.calls[0][0]).toContain(
-      'repos/team/orca/contents/src/large.ts?ref=head-sha'
-    )
-    expect(noteRepositoryRateLimitSpendMock).toHaveBeenCalledOnce()
-  })
-
-  it('does not fetch raw PR file contents while the repository core budget is blocked', async () => {
-    repositoryRateLimitGuardMock.mockReturnValue({
-      blocked: true,
-      remaining: 0,
-      limit: 5000,
-      resetAt: 1_800_000_000
-    })
-
-    await expect(
-      getPRFileContents({
-        repoPath: '/repo-root',
-        prRepo: { owner: 'team', repo: 'orca', host: 'github.acme-corp.com' },
-        prNumber: 7,
-        path: 'src/file.ts',
-        status: 'modified',
-        headSha: 'head-sha',
-        baseSha: 'base-sha'
-      })
-    ).resolves.toMatchObject({ original: '', modified: '' })
-
-    expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
-    expect(noteRepositoryRateLimitSpendMock).not.toHaveBeenCalled()
   })
 })

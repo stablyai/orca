@@ -44,6 +44,38 @@ export function pathEnvRelativeTo(pathEnv: string | undefined, cwd: string): str
     .join(delimiter)
 }
 
+/** Whether a command line may name files relative to where it runs: a relative command, or any
+ *  user-configured argument (no rule can tell `settings.json` or `--env-file=work env` from a
+ *  word), so it may mean something else from another working directory. */
+function invocationDependsOnCwd(command: string, userArgs: readonly string[]): boolean {
+  return userArgs.length > 0 || (!isAbsolute(command) && /[\\/]/.test(command))
+}
+
+/** Where a catalog listing runs: `listIn`, unless the command line may mean something else
+ *  outside the chat's `launchDirectory`. */
+export function catalogListingDirectory(
+  command: string,
+  userArgs: readonly string[],
+  listIn: string | undefined,
+  launchDirectory: string | undefined
+): string | undefined {
+  return listIn &&
+    launchDirectory &&
+    launchDirectory !== listIn &&
+    invocationDependsOnCwd(command, userArgs)
+    ? launchDirectory
+    : listIn
+}
+
+/** The environment for a child that runs elsewhere but must find what it would from `cwd`. */
+export function envWithPathRelativeTo<T extends Record<string, string | undefined>>(
+  env: T,
+  cwd: string
+): T {
+  const key = env.PATH !== undefined ? 'PATH' : env.Path !== undefined ? 'Path' : null
+  return key ? { ...env, [key]: pathEnvRelativeTo(env[key], cwd) } : env
+}
+
 function* firstRunnable(
   platform: NodeJS.Platform,
   directories: string[],

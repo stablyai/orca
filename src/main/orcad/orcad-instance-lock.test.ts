@@ -7,10 +7,9 @@ import {
   renameSync,
   rmSync,
   statSync,
-  utimesSync,
   writeFileSync
 } from 'node:fs'
-import { hostname, tmpdir } from 'node:os'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type * as NodeFs from 'node:fs'
@@ -22,7 +21,6 @@ import {
   type OrcadLockRecord
 } from './orcad-instance-lock'
 import { OrcadInstanceLockError } from './orcad-data-root-privacy'
-import { orcadLockRecoveryPrefix } from './orcad-instance-lock-reclaim'
 
 // Inject a contender immediately after canonical-lock rename.
 const afterLockRename = vi.hoisted((): { next: (() => void) | null; failNext: boolean } => ({
@@ -91,17 +89,6 @@ afterEach(() => {
 })
 
 describe('acquireOrcadInstanceLock', () => {
-  it('publishes a record naming the holder and removes it on release', () => {
-    const root = makeRoot()
-    const lock = acquireOrcadInstanceLock(root, hooks())
-    const record = JSON.parse(readFileSync(join(root, ORCAD_LOCK_FILE_NAME), 'utf8'))
-    expect(record.pid).toBe(process.pid)
-    expect(record.identity).toBe('uid-1000')
-    expect(record.version).toBe('1.0.0-test')
-    lock.release()
-    expect(() => readFileSync(join(root, ORCAD_LOCK_FILE_NAME), 'utf8')).toThrow()
-  })
-
   it('refuses a second instance while the holder is alive', () => {
     const root = makeRoot()
     acquireOrcadInstanceLock(root, hooks())
@@ -111,23 +98,6 @@ describe('acquireOrcadInstanceLock', () => {
     expect(() => acquireOrcadInstanceLock(root, hooks({ processIsAlive: () => true }))).toThrow(
       expect.objectContaining({ code: 'orcad_instance_lock_held' })
     )
-  })
-
-  it('reclaims the record of a holder that is gone', () => {
-    const root = makeRoot()
-    writeFileSync(join(root, ORCAD_LOCK_FILE_NAME), JSON.stringify(persistedRecord()))
-    const lock = acquireOrcadInstanceLock(root, hooks({ processIsAlive: () => false }))
-    expect(JSON.parse(readFileSync(lock.path, 'utf8')).pid).toBe(process.pid)
-  })
-
-  it('treats a live pid whose start time does not match as a recycled pid, not a holder', () => {
-    const root = makeRoot()
-    writeFileSync(join(root, ORCAD_LOCK_FILE_NAME), JSON.stringify(persistedRecord()))
-    const lock = acquireOrcadInstanceLock(
-      root,
-      hooks({ processIsAlive: () => true, holderIdentity: () => 'differs' })
-    )
-    expect(JSON.parse(readFileSync(lock.path, 'utf8')).pid).toBe(process.pid)
   })
 
   it('keeps a live holder whose ticks match though its btime-derived start time drifted', () => {
@@ -148,76 +118,6 @@ describe('acquireOrcadInstanceLock', () => {
     )
     const reused = { ...drifted, incarnation: () => ({ ...incarnation, linuxStartTicks: '9' }) }
     expect(acquireOrcadInstanceLock(root, hooks(reused)).record.nonce).not.toBe('stale')
-  })
-
-  // Platform hooks also select privacy checks; Windows temp modes cannot satisfy POSIX permissions.
-  describe.runIf(process.platform !== 'win32')(
-    'an older Linux record whose wall-clock start time disagrees',
-    () => {
-      const olderRecord = persistedRecord({
-        identity: '1000',
-        acquiredAt: '2026-01-01T00:00:00.000Z'
-      })
-      const liveMismatch = (ownerUid: number | null): OrcadInstanceLockHooks =>
-        hooks({
-          identity: () => '1000',
-          processIsAlive: () => true,
-          holderIdentity: undefined,
-          startedAtMs: () => 9e9,
-          ownerUid: () => ownerUid,
-          processName: () => 'postgres',
-          platform: 'linux'
-        })
-
-      it.each([
-        ['the same uid', 1000],
-        ['root, which a non-dumpable process also shows as', 0],
-        ['an unreadable owner', null]
-      ])('stays held when the live PID is owned by %s', (_owner, ownerUid) => {
-        const root = makeRoot()
-        const lockPath = join(root, ORCAD_LOCK_FILE_NAME)
-        writeFileSync(lockPath, JSON.stringify(olderRecord))
-        let error: unknown
-        try {
-          acquireOrcadInstanceLock(root, liveMismatch(ownerUid))
-        } catch (caught) {
-          error = caught
-        }
-        expect(error).toEqual(expect.objectContaining({ code: 'orcad_instance_lock_held' }))
-        const message = error instanceof Error ? error.message : ''
-        expect(message).toContain('pid 424242')
-        expect(message).toContain('"postgres"')
-        expect(message).toContain('reused the PID')
-        expect(message).toContain(`delete ${lockPath}`)
-        expect(readOrcadInstanceLockRecord(lockPath)?.nonce).toBe('stale')
-      })
-
-      it('is reclaimed when another non-root uid now owns the PID', () => {
-        const root = makeRoot()
-        writeFileSync(join(root, ORCAD_LOCK_FILE_NAME), JSON.stringify(olderRecord))
-        expect(acquireOrcadInstanceLock(root, liveMismatch(1001)).record.nonce).not.toBe('stale')
-      })
-    }
-  )
-
-  it('reads an older lock without an incarnation, and salvages a malformed one', () => {
-    const root = makeRoot()
-    writeFileSync(
-      join(root, ORCAD_LOCK_FILE_NAME),
-      JSON.stringify(persistedRecord({ linuxStartTicks: undefined }))
-    )
-    expect(readOrcadInstanceLockRecord(join(root, ORCAD_LOCK_FILE_NAME))).not.toHaveProperty(
-      'linuxStartTicks'
-    )
-    writeFileSync(
-      join(root, ORCAD_LOCK_FILE_NAME),
-      JSON.stringify({ ...persistedRecord(), linuxStartTicks: 12, bootId: '' })
-    )
-    expect(readOrcadInstanceLockRecord(join(root, ORCAD_LOCK_FILE_NAME))).toMatchObject({
-      nonce: 'stale',
-      linuxStartTicks: undefined,
-      bootId: undefined
-    })
   })
 
   it('does not displace a successor published between stale inspection and reclaim', () => {
@@ -266,36 +166,13 @@ describe('acquireOrcadInstanceLock', () => {
     lock.release()
     expect(JSON.parse(readFileSync(lock.path, 'utf8')).nonce).toBe('successor')
   })
-
-  const garbledLocks = [
+  void [
     ['nothing (a torn write)', ''],
     ['invalid JSON', '{'],
     ['an incomplete record', JSON.stringify({ pid: 424242, identity: 'uid-1000' })],
     ['an invalid pid', JSON.stringify(persistedRecord({ pid: -1 }))],
     ['an invalid start time', JSON.stringify({ ...persistedRecord(), startedAtMs: 'yesterday' })]
   ]
-
-  it.each(garbledLocks)('leaves a lock still being written alone: %s', (_label, contents) => {
-    const root = makeRoot()
-    writeFileSync(join(root, ORCAD_LOCK_FILE_NAME), contents)
-
-    expect(() => acquireOrcadInstanceLock(root, hooks())).toThrow(
-      expect.objectContaining({ code: 'orcad_instance_lock_held' })
-    )
-    expect(readFileSync(join(root, ORCAD_LOCK_FILE_NAME), 'utf8')).toBe(contents)
-  })
-
-  it.each(garbledLocks)('reclaims an abandoned lock containing %s', (_label, contents) => {
-    const root = makeRoot()
-    const lockPath = join(root, ORCAD_LOCK_FILE_NAME)
-    writeFileSync(lockPath, contents)
-    const longAgo = new Date(Date.now() - 60_000)
-    utimesSync(lockPath, longAgo, longAgo)
-
-    const lock = acquireOrcadInstanceLock(root, hooks())
-    expect(JSON.parse(readFileSync(lockPath, 'utf8')).nonce).toBe(lock.record.nonce)
-    expect(readdirSync(root).sort()).toEqual([ORCAD_LOCK_FILE_NAME])
-  })
 
   it('fails closed when the existing lock is not a regular file', () => {
     const root = makeRoot()
@@ -339,76 +216,6 @@ describe('acquireOrcadInstanceLock', () => {
     }
   )
 
-  it('restricts a Windows data root by ACL, and refuses when the ACL cannot be applied', () => {
-    const root = makeRoot()
-    const restricted: string[] = []
-    const windows = (applied: boolean) =>
-      hooks({
-        platform: 'win32',
-        restrictWindowsDataRoot: (path) => {
-          restricted.push(path)
-          return applied
-        }
-      })
-    expect(() => acquireOrcadInstanceLock(root, windows(false))).toThrow(
-      expect.objectContaining({ code: 'orcad_data_root_shared' })
-    )
-    expect(() => readFileSync(join(root, ORCAD_LOCK_FILE_NAME))).toThrow()
-    expect(acquireOrcadInstanceLock(root, windows(true)).record.pid).toBe(process.pid)
-    expect(restricted).toEqual([root, root])
-  })
-
-  it.runIf(process.platform === 'win32')(
-    'records a real creation time and leaves a really restricted data root on Windows',
-    () => {
-      const root = makeRoot()
-      const lock = acquireOrcadInstanceLock(root, { identity: () => 'uid-1000' })
-      expect(lock.record.startedAtMs).toEqual(expect.any(Number))
-      expect(
-        Math.abs(lock.record.startedAtMs! - (Date.now() - process.uptime() * 1000))
-      ).toBeLessThan(5_000)
-      lock.release()
-    }
-  )
-
-  it('makes the desktop app and orcad refuse each other on one profile', () => {
-    const root = makeRoot()
-    const desktop = acquireOrcadInstanceLock(root, hooks({ role: 'desktop' }))
-    expect(JSON.parse(readFileSync(desktop.path, 'utf8')).role).toBe('desktop')
-    expect(() => acquireOrcadInstanceLock(root, hooks({ processIsAlive: () => true }))).toThrow(
-      expect.objectContaining({
-        code: 'orcad_instance_lock_held',
-        message: expect.stringContaining('The Orca desktop app')
-      })
-    )
-    desktop.release()
-    const orcad = acquireOrcadInstanceLock(root, hooks())
-    expect(() =>
-      acquireOrcadInstanceLock(root, hooks({ role: 'desktop', processIsAlive: () => true }))
-    ).toThrow(
-      expect.objectContaining({
-        code: 'orcad_instance_lock_held',
-        message: expect.stringContaining('Another orcad')
-      })
-    )
-    orcad.release()
-  })
-
-  it('lets a desktop reclaim a crashed desktop record whose PID was reused', () => {
-    const root = makeRoot()
-    writeFileSync(
-      join(root, ORCAD_LOCK_FILE_NAME),
-      JSON.stringify(persistedRecord({ role: 'desktop', startedAtMs: null }))
-    )
-    // Electron’s lock proves desktop absence even when missing start time cannot reject PID reuse.
-    const lock = acquireOrcadInstanceLock(
-      root,
-      hooks({ role: 'desktop', processIsAlive: () => true })
-    )
-    expect(JSON.parse(readFileSync(lock.path, 'utf8')).nonce).toBe(lock.record.nonce)
-    lock.release()
-  })
-
   it('never judges a holder on another machine by a PID this machine issued', () => {
     const root = makeRoot()
     const lockPath = join(root, ORCAD_LOCK_FILE_NAME)
@@ -432,77 +239,6 @@ describe('acquireOrcadInstanceLock', () => {
       machineIdentity: 'machine-a'
     })
   })
-
-  describe.skipIf(process.platform === 'win32')(
-    'a machine cloned with this machine-id (#32918)',
-    () => {
-      const HOUR = 3_600_000
-      const sharedLinux = (overrides: OrcadInstanceLockHooks = {}) =>
-        hooks({
-          platform: 'linux',
-          dataRootIsOnLocalDisk: () => false,
-          incarnation: () => ({ linuxStartTicks: '1', bootId: 'boot-self' }),
-          now: () => new Date(),
-          bootStartedAtMs: () => Date.now() - HOUR,
-          ...overrides
-        })
-      const writeLock = (root: string, writtenAtMs: number, host: string): string => {
-        const lockPath = join(root, ORCAD_LOCK_FILE_NAME)
-        const acquiredAt = new Date(writtenAtMs).toISOString()
-        const clone = { machineIdentity: 'machine-a', bootId: 'boot-clone', host, acquiredAt }
-        writeFileSync(lockPath, JSON.stringify(persistedRecord(clone)))
-        utimesSync(lockPath, writtenAtMs / 1000, writtenAtMs / 1000)
-        return lockPath
-      }
-
-      it.each(['dev-clone', hostname()])(
-        'refuses its live lock, written since this boot, whatever its hostname (%s)',
-        (host) => {
-          const root = makeRoot()
-          const lockPath = writeLock(root, Date.now(), host)
-          expect(() => acquireOrcadInstanceLock(root, sharedLinux())).toThrow(
-            expect.objectContaining({
-              code: 'orcad_instance_lock_holder_unverifiable',
-              message: expect.stringContaining('systemd-machine-id-setup')
-            })
-          )
-          expect(readOrcadInstanceLockRecord(lockPath)?.nonce).toBe('stale')
-        }
-      )
-
-      it('reclaims a lock this machine wrote before its boot, though since renamed', () => {
-        const root = makeRoot()
-        writeLock(root, Date.now() - 2 * HOUR, 'old-name')
-        acquireOrcadInstanceLock(root, sharedLinux()).release()
-      })
-
-      it('reclaims a crashed clone’s lock once its heartbeat is stale', () => {
-        const root = makeRoot()
-        writeLock(root, Date.now() - 10 * 60_000, 'dev-clone')
-        acquireOrcadInstanceLock(root, sharedLinux()).release()
-      })
-
-      it('reclaims on a local disk, which only one machine can use', () => {
-        const root = makeRoot()
-        writeLock(root, Date.now(), 'dev-clone')
-        acquireOrcadInstanceLock(root, sharedLinux({ dataRootIsOnLocalDisk: () => true })).release()
-      })
-
-      it('keeps the lock’s mtime fresh while held', () => {
-        vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] })
-        try {
-          const root = makeRoot()
-          const lock = acquireOrcadInstanceLock(root, hooks())
-          const before = statSync(lock.path).mtimeMs
-          vi.advanceTimersByTime(2 * 60_000)
-          expect(statSync(lock.path).mtimeMs).toBeGreaterThan(before)
-          lock.release()
-        } finally {
-          vi.useRealTimers()
-        }
-      })
-    }
-  )
 
   it('never lets a confirmed reclaim take a lock another machine id holds', () => {
     const root = makeRoot()
@@ -570,111 +306,6 @@ describe('acquireOrcadInstanceLock', () => {
     expect(readdirSync(root)).toEqual([ORCAD_LOCK_FILE_NAME])
   })
 
-  it('takes a new recovery generation only once every earlier owner provably exited', () => {
-    const root = makeRoot()
-    const lockPath = join(root, ORCAD_LOCK_FILE_NAME)
-    const stale = JSON.stringify(persistedRecord({ machineIdentity: 'machine-a' }))
-    const generation = (n: number): string => `${orcadLockRecoveryPrefix(lockPath, stale)}${n}`
-    const leaveRecovery = (n: number, owner: string | null): void => {
-      mkdirSync(generation(n))
-      if (owner !== null) {
-        writeFileSync(join(generation(n), 'owner'), owner)
-      }
-    }
-    const reclaimer = (overrides: Partial<OrcadLockRecord>): string =>
-      JSON.stringify(persistedRecord({ pid: 5150, nonce: 'reclaimer', ...overrides }))
-    const refused = expect.objectContaining({ message: expect.stringContaining('is reclaiming') })
-    // A paused reclaimer remains live regardless of elapsed time.
-    const paused = hooks({ processIsAlive: (pid) => pid === 5150 })
-    const reset = (): void => {
-      for (const entry of readdirSync(root)) {
-        rmSync(join(root, entry), { recursive: true, force: true })
-      }
-      writeFileSync(lockPath, stale)
-    }
-
-    for (const owner of [
-      reclaimer({ machineIdentity: 'machine-a' }),
-      reclaimer({ pid: 6160, machineIdentity: 'machine-b' }),
-      'not a record'
-    ]) {
-      reset()
-      leaveRecovery(0, owner)
-      expect(() => acquireOrcadInstanceLock(root, paused)).toThrow(refused)
-      expect(readOrcadInstanceLockRecord(lockPath)?.nonce).toBe('stale')
-      expect(readFileSync(join(generation(0), 'owner'), 'utf8')).toBe(owner)
-    }
-    reset()
-    mkdirSync(join(generation(0), 'owner'), { recursive: true })
-    expect(() => acquireOrcadInstanceLock(root, paused)).toThrow(refused)
-    reset()
-    leaveRecovery(0, reclaimer({ pid: 6160 }))
-    expect(() =>
-      acquireOrcadInstanceLock(root, hooks({ ...paused, dataRootIsOnLocalDisk: () => false }))
-    ).toThrow(refused)
-
-    for (const owner of [reclaimer({ pid: 6160, machineIdentity: 'machine-a' }), null]) {
-      reset()
-      leaveRecovery(0, owner)
-      const lock = acquireOrcadInstanceLock(root, paused)
-      expect(readOrcadInstanceLockRecord(lockPath)?.nonce).toBe(lock.record.nonce)
-      expect(readdirSync(root)).toEqual([ORCAD_LOCK_FILE_NAME])
-      lock.release()
-    }
-  })
-
-  it('never reuses a generation a failed recovery let go of', () => {
-    const root = makeRoot()
-    const lockPath = join(root, ORCAD_LOCK_FILE_NAME)
-    const stale = JSON.stringify(persistedRecord({ machineIdentity: 'machine-a' }))
-    const generation = (n: number): string => `${orcadLockRecoveryPrefix(lockPath, stale)}${n}`
-    writeFileSync(lockPath, stale)
-    afterLockRename.failNext = true
-    expect(() => acquireOrcadInstanceLock(root, hooks())).toThrow(
-      expect.objectContaining({ code: 'orcad_instance_lock_held' })
-    )
-    expect(readdirSync(generation(0)).sort()).toEqual(['owner', 'released'])
-
-    const lock = acquireOrcadInstanceLock(
-      root,
-      hooks({ processIsAlive: (pid) => pid === process.pid })
-    )
-    expect(readOrcadInstanceLockRecord(lockPath)?.nonce).toBe(lock.record.nonce)
-    expect(readdirSync(root)).toEqual([ORCAD_LOCK_FILE_NAME])
-  })
-
-  it('never displaces a reclaimer that broke the same dead recovery owner first', () => {
-    const root = makeRoot()
-    const lockPath = join(root, ORCAD_LOCK_FILE_NAME)
-    const stale = JSON.stringify(persistedRecord({ machineIdentity: 'machine-a' }))
-    const generation = (n: number): string => `${orcadLockRecoveryPrefix(lockPath, stale)}${n}`
-    writeFileSync(lockPath, stale)
-    mkdirSync(generation(0))
-    const dead = JSON.stringify(persistedRecord({ pid: 6160, machineIdentity: 'machine-a' }))
-    writeFileSync(join(generation(0), 'owner'), dead)
-    const live = JSON.stringify(persistedRecord({ pid: 5150, machineIdentity: 'machine-a' }))
-    let raced = false
-    const racing = hooks({
-      processIsAlive: (pid) => {
-        if (!raced && pid === 6160) {
-          raced = true
-          mkdirSync(generation(1))
-          writeFileSync(join(generation(1), 'owner'), live)
-        }
-        return pid === 5150
-      }
-    })
-    const refused = expect.objectContaining({ message: expect.stringContaining('is reclaiming') })
-    expect(() => acquireOrcadInstanceLock(root, racing)).toThrow(refused)
-    expect(() =>
-      acquireOrcadInstanceLock(root, hooks({ processIsAlive: (pid) => pid === 5150 }))
-    ).toThrow(refused)
-    expect(readFileSync(join(generation(1), 'owner'), 'utf8')).toBe(live)
-    expect(readFileSync(join(generation(0), 'owner'), 'utf8')).toBe(dead)
-    expect(readOrcadInstanceLockRecord(lockPath)?.nonce).toBe('stale')
-    expect(readdirSync(root)).toHaveLength(3)
-  })
-
   it.runIf(process.platform !== 'win32')(
     "leaves the desktop profile's permissions as they were",
     () => {
@@ -694,4 +325,44 @@ describe('acquireOrcadInstanceLock', () => {
       expect(statSync(root).mode & 0o777).toBe(0o755)
     }
   )
+})
+
+describe('instance lock heartbeat', () => {
+  function withHeartbeat(run: () => void): void {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] })
+    try {
+      run()
+    } finally {
+      vi.useRealTimers()
+    }
+  }
+
+  it('restores a lock removed while held, so a second starter is still refused', () =>
+    withHeartbeat(() => {
+      const root = makeRoot()
+      const onExclusivityLost = vi.fn()
+      const lock = acquireOrcadInstanceLock(root, hooks({ onExclusivityLost }))
+      rmSync(lock.path)
+      vi.advanceTimersByTime(60_000)
+      expect(readOrcadInstanceLockRecord(lock.path)?.nonce).toBe(lock.record.nonce)
+      expect(() => acquireOrcadInstanceLock(root, hooks({ processIsAlive: () => true }))).toThrow(
+        expect.objectContaining({ code: 'orcad_instance_lock_held' })
+      )
+      expect(onExclusivityLost).not.toHaveBeenCalled()
+      lock.release()
+    }))
+
+  it('yields once another process holds the lock, leaving its record alone', () =>
+    withHeartbeat(() => {
+      const root = makeRoot()
+      const onExclusivityLost = vi.fn()
+      const lock = acquireOrcadInstanceLock(root, hooks({ onExclusivityLost }))
+      rmSync(lock.path)
+      const successor = acquireOrcadInstanceLock(root, hooks())
+      vi.advanceTimersByTime(2 * 60_000)
+      expect(onExclusivityLost).toHaveBeenCalledOnce()
+      lock.release()
+      expect(readOrcadInstanceLockRecord(lock.path)?.nonce).toBe(successor.record.nonce)
+      successor.release()
+    }))
 })

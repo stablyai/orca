@@ -25,8 +25,7 @@ export async function resolveWorktreeCreateBase(
     return repoWorktreeBaseRef
   }
   // Unusable persisted refs fall back to the detected default; usable custom refs stay authoritative.
-  const isUsable = await args.isBaseUsable(repoWorktreeBaseRef)
-  if (isUsable) {
+  if (await args.isBaseUsable(repoWorktreeBaseRef)) {
     try {
       await args.onPersistedBaseSelected?.(repoWorktreeBaseRef, defaultBaseRef)
     } catch {
