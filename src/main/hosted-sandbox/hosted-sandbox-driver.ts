@@ -10,6 +10,7 @@ import {
 import {
   EnvironmentProviderError,
   isEnvironmentProviderError,
+  type EnvironmentProviderCallContext,
   type EnvironmentHandle,
   type EnvironmentStatus
 } from '../environment-providers/environment-provider-driver'
@@ -71,6 +72,9 @@ export function createHostedSandboxDriver(
         },
         ctx?.signal
       )
+      if (ready.clone) {
+        await waitForClone(client, ready.sandbox.id, ctx)
+      }
       ctx?.onProgress?.({ phase: 'connecting' })
       return toReady(ready)
     },
@@ -129,6 +133,87 @@ export function createHostedSandboxDriver(
       ctx?.onProgress?.({ phase: 'connecting' })
       return toReady(ready)
     }
+  }
+}
+
+/** A clone whose progress has not moved this long is stuck (git's own silent stretches are ~20 s). */
+export const CLONE_STALL_MS = 5 * 60_000
+const CLONE_POLL_MS = 1_000
+
+function cloneFailure(reason: string): EnvironmentProviderError {
+  return new EnvironmentProviderError(
+    'conflict',
+    `Orca Cloud couldn't clone the repository (${reason}).`,
+    `clone:${reason}`
+  )
+}
+
+function delay(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new EnvironmentProviderError('aborted', 'Cancelled.'))
+      return
+    }
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort)
+      resolve()
+    }, ms)
+    const onAbort = (): void => {
+      clearTimeout(timer)
+      reject(new EnvironmentProviderError('aborted', 'Cancelled.'))
+    }
+    signal?.addEventListener('abort', onAbort, { once: true })
+  })
+}
+
+/**
+ * The sandbox is up and the repo clones in it: report git's progress until it is done. A failed,
+ * stalled or cancelled clone deletes the sandbox (the caller never got its handle, so nothing else
+ * would) and fails the create with the clone's reason.
+ */
+export async function waitForClone(
+  client: Pick<HostedSandboxControlPlaneClient, 'cloneStatus' | 'destroy'>,
+  sandboxId: string,
+  ctx?: EnvironmentProviderCallContext,
+  { now = Date.now, pollMs = CLONE_POLL_MS }: { now?: () => number; pollMs?: number } = {}
+): Promise<void> {
+  ctx?.onProgress?.({ phase: 'cloning' })
+  let lastProgress = ''
+  let movedAt = now()
+  try {
+    for (;;) {
+      await delay(pollMs, ctx?.signal)
+      let status: Awaited<ReturnType<HostedSandboxControlPlaneClient['cloneStatus']>> | null = null
+      try {
+        status = await client.cloneStatus(sandboxId, ctx?.signal)
+      } catch (error) {
+        // One failed poll is not a failed clone; a cancel or a dead sandbox ends it below.
+        if (ctx?.signal?.aborted || isEnvironmentProviderError(error, 'not_found')) {
+          throw error
+        }
+      }
+      if (status?.state === 'done' || status?.state === 'none') {
+        return
+      }
+      if (status?.state === 'failed') {
+        throw cloneFailure(status.reason)
+      }
+      if (status?.state === 'running') {
+        const progress = `${status.percent}:${status.stage}`
+        if (progress !== lastProgress) {
+          lastProgress = progress
+          movedAt = now()
+          ctx?.onProgress?.({ phase: 'cloning', percent: status.percent, message: status.stage })
+        }
+      }
+      if (now() - movedAt > CLONE_STALL_MS) {
+        throw cloneFailure('clone_stalled')
+      }
+    }
+  } catch (error) {
+    // Its own signal may be the reason we stopped: the delete must still go out.
+    await client.destroy(sandboxId).catch(() => undefined)
+    throw error
   }
 }
 

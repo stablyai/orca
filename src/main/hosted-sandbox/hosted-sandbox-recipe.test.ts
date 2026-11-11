@@ -6,6 +6,8 @@ import { parseEphemeralVmRecipeResult } from '../../shared/ephemeral-vm-recipes'
 import { buildEphemeralVmRecipeLifecyclePayload } from '../../shared/ephemeral-vm-recipe-lifecycle-payload'
 import { createHostedSandboxControlPlaneClient } from './hosted-sandbox-control-plane-client'
 import { createHostedSandboxDriver } from './hosted-sandbox-driver'
+import { EnvironmentProviderError } from '../environment-providers/environment-provider-driver'
+import type { HostedEnvironmentProviderDriver } from './hosted-environment-provider'
 import { ORCA_CLOUD_RECIPE, createHostedSandboxStepProvider } from './hosted-sandbox-recipe'
 import { createFakeHostedControlPlane } from './fake-hosted-control-plane.test-support'
 
@@ -91,5 +93,43 @@ describe('Orca Cloud built-in recipe steps', () => {
     expect((await step({ mode: 'create', repoPath, context })).failure?.errorCode).toBe(
       'cloudConcurrencyLimit'
     )
+  })
+})
+
+describe('Orca Cloud clone progress', () => {
+  function stubbed(create: HostedEnvironmentProviderDriver['create']) {
+    const { plane } = setup()
+    const real = createHostedSandboxDriver(
+      createHostedSandboxControlPlaneClient({
+        baseUrl: 'https://sandbox.cloud.test',
+        getAccessToken: async () => plane.token,
+        fetch: plane.fetch
+      })
+    )
+    return createHostedSandboxStepProvider({ ...real, create })
+  }
+
+  it('streams the clone as its own phase with percent lines the sheet reads', async () => {
+    const stderr: string[] = []
+    const step = stubbed(async (_spec, ctx) => {
+      ctx?.onProgress?.({ phase: 'cloning' })
+      ctx?.onProgress?.({ phase: 'cloning', percent: 42, message: 'download' })
+      ctx?.onProgress?.({ phase: 'cloning', percent: 91, message: 'checkout' })
+      throw new EnvironmentProviderError('conflict', 'x', 'clone:clone_timeout')
+    })
+    const result = await step({
+      mode: 'create',
+      repoPath,
+      context,
+      onStderr: (c) => stderr.push(c)
+    })
+    expect(stderr).toEqual([
+      '[orca-cloud] cloning\n',
+      '[orca-cloud] clone-progress 42 download\n',
+      '[orca-cloud] clone-progress 91 checkout\n',
+      'Orca Cloud: clone_timeout\n'
+    ])
+    expect(result.exitCode).toBe(1)
+    expect(result.failure?.errorCode).toBe('cloudCloneFailed')
   })
 })

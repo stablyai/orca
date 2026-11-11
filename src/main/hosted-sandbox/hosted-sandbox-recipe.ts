@@ -39,7 +39,8 @@ export const ORCA_CLOUD_RECIPE: OrcaVmRecipe = {
   suspend: 'orca-cloud suspend',
   resume: 'orca-cloud resume',
   destroy: 'orca-cloud destroy',
-  timeoutSeconds: { create: 300, resume: 180, suspend: 420, destroy: 120 }
+  // create includes cloning the repo (VM-side cap 15 min, stall cap 5 min): it reports progress throughout.
+  timeoutSeconds: { create: 1200, resume: 180, suspend: 420, destroy: 120 }
 }
 
 const LifecyclePayload = z.looseObject({ recipeResult: EphemeralVmRecipeResultSchema.optional() })
@@ -110,6 +111,14 @@ function failed(error: unknown): RecipeStepProviderResult {
       failure: ephemeralVmFailure('cloudGithubNotConnected')
     }
   }
+  if (isEnvironmentProviderError(error, 'conflict') && error.reason?.startsWith('clone:')) {
+    return {
+      ...base,
+      // The reason line tells the sheet which clone failure to explain.
+      stderr: `Orca Cloud: ${error.reason.slice('clone:'.length)}\n`,
+      failure: ephemeralVmFailure('cloudCloneFailed')
+    }
+  }
   if (isEnvironmentProviderError(error) && error.reason === HOSTED_SANDBOX_DELETE_NOT_CONFIRMED) {
     return {
       ...base,
@@ -150,7 +159,21 @@ export function createHostedSandboxStepProvider(
   return async ({ mode, repoPath, context, stdin, signal, onStderr }) => {
     const ctx = {
       signal,
-      onProgress: ({ phase }: { phase: string }) => onStderr?.(`[orca-cloud] ${phase}\n`)
+      // `clone-progress <percent> <stage>` lines drive the sheet's clone step; the plain log hides them.
+      onProgress: ({
+        phase,
+        percent,
+        message
+      }: {
+        phase: string
+        percent?: number
+        message?: string
+      }) =>
+        onStderr?.(
+          phase === 'cloning' && percent !== undefined
+            ? `[orca-cloud] clone-progress ${percent} ${message === 'checkout' ? 'checkout' : 'download'}\n`
+            : `[orca-cloud] ${phase}\n`
+        )
     }
     try {
       if (mode === 'create') {

@@ -16,6 +16,8 @@ export type EnvironmentProviderCapabilities = Readonly<{
 export type EnvironmentProviderPhase =
   | 'provisioning'
   | 'booting'
+  /** The repo clones in the VM after it is up; `percent` is git's overall progress. */
+  | 'cloning'
   | 'connecting'
   | 'suspending'
   | 'resuming'
@@ -23,7 +25,12 @@ export type EnvironmentProviderPhase =
 
 export type EnvironmentProviderCallContext = {
   signal?: AbortSignal
-  onProgress?: (progress: { phase: EnvironmentProviderPhase; message?: string }) => void
+  onProgress?: (progress: {
+    phase: EnvironmentProviderPhase
+    message?: string
+    /** 0-100 while the phase reports progress (cloning). */
+    percent?: number
+  }) => void
 }
 
 export type EnvironmentCreateSpec = {

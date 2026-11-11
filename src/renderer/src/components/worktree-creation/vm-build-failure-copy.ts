@@ -6,6 +6,7 @@ import type {
 } from '../../../../shared/orca-billing'
 import type { VmBuildFailure } from './vm-build-failure'
 import { sandboxLimitBody } from './vm-build-limit-copy'
+import { cloneFailedBody, repoOwner } from './vm-build-clone-failure-copy'
 import { localRecipeFailureCopy } from './vm-build-recipe-failure-copy'
 
 /** The running-sandbox caps billing enforces: per member, and per team (per seat × seats). */
@@ -187,8 +188,9 @@ export function vmBuildFailureCopy(
           { repo: repoName }
         ),
         body: t(
-          'auto.components.worktree.creation.VmBuildFailureCard.githubNotConnectedBody',
-          'Orca Cloud clones your code from GitHub and needs access to this repository first. Connect GitHub, then try again. Nothing was created, and you weren’t charged.'
+          'auto.components.worktree.creation.VmBuildFailureCard.githubNotConnectedBody2',
+          'Orca Cloud clones your code from GitHub and needs access to this repository first. Install the Orca GitHub App on {{owner}}, then try again. Nothing was created, and you weren’t charged.',
+          { owner: repoOwner(repoName) }
         )
       }
     case 'noGithubRemote':
@@ -265,6 +267,15 @@ export function vmBuildFailureCopy(
                 )
           }
         : localRecipeFailureCopy('provision', t)
+    case 'cloneFailed':
+      return {
+        title: t(
+          'auto.components.worktree.creation.VmBuildFailureCard.cloneFailedTitle',
+          'Couldn’t clone {{repo}}',
+          { repo: repoName }
+        ),
+        body: cloneFailedBody(failure.reason, t)
+      }
     case 'create':
       return cloud
         ? {

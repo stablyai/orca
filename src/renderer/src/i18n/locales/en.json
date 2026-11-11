@@ -4229,7 +4229,11 @@
             "stateFailed": "Failed",
             "openFailedCloud": "Couldn’t open your cloud workspace",
             "stateSkipped": "Skipped",
-            "runChecksAgain": "Run checks again"
+            "runChecksAgain": "Run checks again",
+            "cloneCloud": "Clone repository",
+            "cloneCheckout": "Checking out files…",
+            "cloneDownload": "Downloading history…",
+            "cloneCounting": "Counting objects…"
           },
           "VmBuildFailureCard": {
             "createFailedTitle": "Couldn’t create workspace",
@@ -4268,7 +4272,6 @@
             "limitBody": "Put one to sleep or delete it, then try again. Nothing was created, and you weren’t charged.",
             "memberLimitTitle": "You’re at your limit of running sandboxes",
             "githubNotConnectedTitle": "GitHub isn’t connected for {{repo}}",
-            "githubNotConnectedBody": "Orca Cloud clones your code from GitHub and needs access to this repository first. Connect GitHub, then try again. Nothing was created, and you weren’t charged.",
             "noGithubRemoteTitle": "{{repo}} isn’t on GitHub",
             "signInBody3": "Cloud workspaces run on your Orca account. Sign in and Orca starts this one for you. Nothing was created, and you weren’t charged.",
             "unavailableBody2": "The problem is on our side, not in your project. Nothing was created, and you weren’t charged. Try again in a moment.",
@@ -4297,7 +4300,14 @@
             "teamLimitBodyCount_one": "Your team can run {{count}} sandbox at once ({{value1}} per seat). Put it to sleep or delete it, then try again. Nothing was created, and you weren’t charged.",
             "teamLimitBodyCount_other": "Your team can run {{count}} sandboxes at once ({{value1}} per seat). Put one to sleep or delete it, then try again. Nothing was created, and you weren’t charged.",
             "memberLimitBodyCount_one": "You can run {{count}} sandbox at once. Put it to sleep or delete it, then try again. Nothing was created, and you weren’t charged.",
-            "memberLimitBodyCount_other": "You can run {{count}} sandboxes at once. Put one to sleep or delete it, then try again. Nothing was created, and you weren’t charged."
+            "memberLimitBodyCount_other": "You can run {{count}} sandboxes at once. Put one to sleep or delete it, then try again. Nothing was created, and you weren’t charged.",
+            "cloneTimeoutBody": "Cloning took longer than 15 minutes, so Orca stopped it and deleted the sandbox. Try again, or contact support if it keeps happening.",
+            "cloneStalledBody": "Cloning stopped making progress, so Orca stopped it and deleted the sandbox. Try again in a moment.",
+            "cloneUnreachableBody": "GitHub refused access to this repository. Check that it still exists and that the Orca GitHub App can reach it, then try again. The sandbox was deleted.",
+            "cloneDiskFullBody": "This repository doesn’t fit on the sandbox’s disk. The sandbox was deleted.",
+            "cloneFailedBody": "Git stopped with an error while cloning, and the sandbox was deleted. Try again, or open the logs for details.",
+            "githubNotConnectedBody2": "Orca Cloud clones your code from GitHub and needs access to this repository first. Install the Orca GitHub App on {{owner}}, then try again. Nothing was created, and you weren’t charged.",
+            "cloneFailedTitle": "Couldn’t clone {{repo}}"
           },
           "VmBuildLog": {
             "jumpToError": "Jump to first error",
@@ -4334,7 +4344,8 @@
             "denyMemberConcurrency2": "You’re at your limit of running sandboxes.",
             "denyMachineSize2": "This sandbox size isn’t part of your plan.",
             "refusedProvider2": "Orca Cloud is unavailable right now.",
-            "rollingOver2": "Restarting the sandbox…"
+            "rollingOver2": "Restarting the sandbox…",
+            "cloning": "Cloning the repository…"
           },
           "environmentCheckCopy": {
             "gitMissing": "git isn’t installed.",
@@ -26342,6 +26353,7 @@
       "cloudUnavailable": "Orca Cloud is unavailable right now. Try again in a moment.",
       "cloudGithubNotConnected": "Connect GitHub to your Orca account so Orca Cloud can clone this repository.",
       "cloudNoGithubRemote": "Orca Cloud clones your code from GitHub, and this repository has no GitHub remote. Push it to GitHub, then try again.",
+      "cloudCloneFailed": "Orca Cloud couldn’t clone this repository, so it deleted the sandbox. Try again.",
       "cloudConcurrencyLimit": "You’re at your team’s limit of running sandboxes. Put one to sleep or delete it, then try again."
     }
   },
