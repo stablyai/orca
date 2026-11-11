@@ -227,7 +227,7 @@ export function RepositoryHookCommandSourceSetting({
       }}
     >
       <summary
-        className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden"
+        className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-md outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 [&::-webkit-details-marker]:hidden"
         onClick={(event) => {
           if (advancedMatchesSearch) {
             event.preventDefault()
@@ -267,11 +267,16 @@ export function RepositoryHookCommandSourceSetting({
               />
             </p>
           </div>
-          <SegmentedPolicyToggle
-            options={options}
-            selected={selectedPolicy}
-            onSelect={onSelectPolicy}
-          />
+          <div className="space-y-1.5">
+            <SegmentedPolicyToggle
+              options={options}
+              selected={selectedPolicy}
+              onSelect={onSelectPolicy}
+            />
+            <p className="text-right text-[11px] text-muted-foreground">
+              {options.find((option) => option.policy === selectedPolicy)?.description}
+            </p>
+          </div>
         </div>
         <RepositoryHooksYamlStatus
           yamlState={yamlState}

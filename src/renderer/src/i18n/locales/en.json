@@ -11298,7 +11298,8 @@
             "bbbe994528": "Remove project",
             "cedbe6c02c": "When to run setup",
             "eefc3e51ef": "GitHub account",
-            "f94afd4078": "Keep fork up to date"
+            "f94afd4078": "Keep fork up to date",
+            "waitForSetupToComplete": "wait for setup to complete"
           }
         },
         "runtime": {
