@@ -55,6 +55,21 @@ async function readDeliveryHoldWarning(
     : null
 }
 
+/** A stored send's receipt with the hold line added, when the delivery gate would hold it. */
+export async function withDeliveryHoldWarning<T>(
+  sent: T,
+  runtime: Pick<OrcaRuntimeService, 'readTerminalMailHold'>,
+  db: OrchestrationDb,
+  recipient: string
+): Promise<T | (T & { warnings: unknown[] })> {
+  const held = await sendDeliveryHoldWarning(runtime, db, recipient)
+  if (!held || typeof sent !== 'object' || sent === null) {
+    return sent
+  }
+  const prior = 'warnings' in sent && Array.isArray(sent.warnings) ? sent.warnings : []
+  return { ...sent, warnings: [...prior, held] }
+}
+
 /** A paired server's worker: this Orca sees only that the relay took the mail. */
 export function relayedDeliveryUnknownWarning(recipient: string): SendRecipientWarning {
   return {

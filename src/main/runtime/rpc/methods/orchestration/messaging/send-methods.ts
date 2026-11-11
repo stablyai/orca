@@ -27,7 +27,7 @@ import { orchestrationCallerIdentity } from '../runs/run-scope'
 import { assertLifecycleCallerIsNotAnotherParty } from './lifecycle-caller-fence'
 import { planWorkerFollowUp, startWorkerFollowUp } from './worker-follow-up'
 import { finishedWorkerSend, refuseFinishedRemoteWorker } from './finished-worker-mail'
-import { relayedDeliveryUnknownWarning, sendDeliveryHoldWarning } from './send-delivery-hold'
+import { relayedDeliveryUnknownWarning, withDeliveryHoldWarning } from './send-delivery-hold'
 import {
   followThroughWorkerReport,
   passHeldWorkerMail,
@@ -288,15 +288,9 @@ export const ORCHESTRATION_SEND_METHODS = [
             params.type === 'worker_done' ? settledDispatchId(sent) : undefined
           )
           // Read only once the mail is stored: an await before it could let the worker settle and miss it.
-          const held =
-            federatedTarget || params.type === 'worker_done' || params.type === 'heartbeat'
-              ? null
-              : await sendDeliveryHoldWarning(runtime, db, to)
-          if (!held || typeof sent !== 'object' || sent === null) {
-            return sent
-          }
-          const prior = 'warnings' in sent && Array.isArray(sent.warnings) ? sent.warnings : []
-          return { ...sent, warnings: [...prior, held] }
+          return federatedTarget || params.type === 'worker_done' || params.type === 'heartbeat'
+            ? sent
+            : withDeliveryHoldWarning(sent, runtime, db, to)
         }
         return sendGroupMessage({
           params,
