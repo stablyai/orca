@@ -103,6 +103,25 @@ export function useRuntimeEnvironmentMutationActions({
         }
         setPendingCredentials(null)
         await loadEnvironments()
+        if (submission !== revision.current || !mountedRef.current) {
+          return
+        }
+        if (!allowLocalRuntime) {
+          const environment = useAppStore
+            .getState()
+            .runtimeEnvironments.find(
+              (entry) =>
+                entry.id === pendingCredentials.environmentId &&
+                (entry.pairingRevision ?? entry.createdAt) ===
+                  pendingCredentials.expectedPairingRevision
+            )
+          if (environment) {
+            await connectEnvironment(environment)
+          }
+        }
+        if (submission !== revision.current || !mountedRef.current) {
+          return
+        }
         setAddServerFormOpen(false)
         setName('')
         setPairingCode('')
