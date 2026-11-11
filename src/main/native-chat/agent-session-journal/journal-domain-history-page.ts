@@ -24,6 +24,7 @@ import {
 import { buildAgentSessionHistoryPage } from '../agent-session-wire/publication/history/agent-session-history-page-result'
 import {
   queuedImageSubmissionPresenter,
+  unchangedQueuedImageSubmission,
   type QueuedImageHistoryPolicy
 } from '../agent-session-wire/publication/history/agent-session-queued-image-reader'
 import { JournalSqlScope } from './journal-sql-scope'
@@ -144,17 +145,22 @@ function readHistory(
       resolveHistoryLimit(request.limit),
       reader,
       latestTurnItem(db, head),
-      (ids, forms) =>
+      (ids, forms, states, ordinals) =>
         readJournalDomainHistorySnapshot(
           db,
           head,
           ids,
           queuedImageSourceIds(request),
           reader.presentSubmission,
-          forms
+          forms,
+          states,
+          ordinals
         ),
       reset,
-      request.reader?.queuedImages
+      request.reader?.queuedImages,
+      reader.form === CLIENT_HISTORY_READER.form &&
+        (reader.presentSubmission === undefined ||
+          reader.presentSubmission === unchangedQueuedImageSubmission)
     )
   }
   const cursor = request.direction === 'before' ? request.cursor : undefined

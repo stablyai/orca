@@ -34,7 +34,8 @@ export function resolveJournalDomainDisplay(
 export function readJournalDomainStopStates(
   db: Database.Database,
   target: JournalDomainItemTarget,
-  ids: readonly string[]
+  ids: readonly string[],
+  idsJson?: string
 ): Map<string, unknown> {
   if (ids.length === 0) {
     return new Map()
@@ -46,7 +47,7 @@ export function readJournalDomainStopStates(
     CROSS JOIN journal_items item WHERE item.session_id=? AND item.epoch=? AND item.item_id=wanted.value
       AND item.wire_version IS NOT ${AGENT_SESSION_ITEM_WIRE_VERSION} AND item.turn_item_id IS NOT NULL
       AND item.original_stop_note_json IS NOT NULL`)
-        .all(JSON.stringify(ids), target.sessionId, target.epoch)
+        .all(idsJson ?? JSON.stringify(ids), target.sessionId, target.epoch)
         .map((row) => String(row.turn_item_id))
     )
   ]
@@ -82,12 +83,15 @@ export function readJournalDomainDisplayedRow(
   row: SqliteRow
 ): { item: AgentJournalRenderItem; payload: string } {
   const source: AgentJournalRenderItem = JSON.parse(String(row.payload_json))
-  const states = readJournalDomainStopStates(db, target, [String(row.item_id)])
+  const states =
+    row.wire_version === AGENT_SESSION_ITEM_WIRE_VERSION
+      ? undefined
+      : readJournalDomainStopStates(db, target, [String(row.item_id)])
   const item = resolveJournalDomainDisplay(
     source,
     row.wire_version,
     row.wire_json,
-    journalDomainDisplayTurnState(source, states)
+    states && journalDomainDisplayTurnState(source, states)
   )
   return { item, payload: item === source ? String(row.payload_json) : JSON.stringify(item) }
 }

@@ -92,7 +92,7 @@ export function refreshJournalDomainStopNotes(
       ...prefix,
       next.itemId
     )
-    if (!same || row.wire_version !== AGENT_SESSION_ITEM_WIRE_VERSION) {
+    if (!same) {
       changed.push(next)
     }
   }

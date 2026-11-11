@@ -35,12 +35,13 @@ export function readJournalDomainClientForms(
   if (wanted.length === 0) {
     return forms
   }
-  states ??= readJournalDomainStopStates(db, target, wanted)
+  const wantedJson = JSON.stringify(wanted)
+  states ??= readJournalDomainStopStates(db, target, wanted, wantedJson)
   for (const row of db
     .prepare(`SELECT ${journalDomainClientFormColumns()} FROM json_each(?) wanted
     CROSS JOIN journal_items item
     WHERE item.session_id=? AND item.epoch=? AND item.item_id=wanted.value AND item.hidden=0`)
-    .iterate(JSON.stringify(wanted), target.sessionId, target.epoch)) {
+    .iterate(wantedJson, target.sessionId, target.epoch)) {
     forms.set(String(row.item_id), readJournalDomainClientForm(row, states))
   }
   return forms
@@ -67,9 +68,10 @@ export function readJournalDomainClientItems(
   db: Database.Database,
   target: JournalDomainItemTarget,
   ids: readonly string[],
-  forms?: Map<string, HistoryItemForm>
+  forms?: Map<string, HistoryItemForm>,
+  states?: ReadonlyMap<string, unknown>
 ): AgentJournalRenderItem[] {
-  const selected = readJournalDomainClientForms(db, target, ids, forms)
+  const selected = readJournalDomainClientForms(db, target, ids, forms, states)
   return ids.flatMap((id) => (selected.has(id) ? [selected.get(id)!.item] : []))
 }
 

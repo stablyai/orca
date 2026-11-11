@@ -16,6 +16,7 @@ import {
   readJournalDomainSourceBody
 } from './journal-domain-source-items'
 import { readJournalDomainClientItems } from './journal-domain-item-presentation'
+import { readJournalDomainStopStates } from './journal-domain-item-display'
 import { itemSubmissions } from './journal-domain-history-after'
 import type { JournalDomainHistoryHead } from './journal-domain-history-page'
 import type { JournalDomainHistoryHeader } from './journal-domain-history-window'
@@ -37,9 +38,19 @@ export function formJournalDomainHistoryGroups(
   const ordinals = new Map<string, number>()
   const byItem = new Map<string, AgentJournalSubmission[]>()
   const ids = groups.flatMap((group) => group.map((header) => header.itemId))
+  const states = readJournalDomainStopStates(
+    db,
+    head,
+    ids.filter((id) => !forms.has(id))
+  )
   const bodies = reader.presentSubmission
     ? undefined
-    : new Map(readJournalDomainClientItems(db, head, ids, forms).map((item) => [item.itemId, item]))
+    : new Map(
+        readJournalDomainClientItems(db, head, ids, forms, states).map((item) => [
+          item.itemId,
+          item
+        ])
+      )
   if (bodies) {
     itemSubmissions(db, head, ids, undefined, ordinals, byItem)
   }
@@ -61,7 +72,8 @@ export function formJournalDomainHistoryGroups(
           db,
           head,
           group.map((header) => header.itemId),
-          forms
+          forms,
+          states
         ).map((item) => [item.itemId, item])
       )
     const formed = group.map((header) =>

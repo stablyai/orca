@@ -264,18 +264,20 @@ it('derives a stale Stop presentation from its owning turn before history admiss
   expect(display()).toMatchObject({
     item: { body: { kind: 'status', text: 'Cancellation requested.' } }
   })
-  expect(
-    readJournalDomainHistoryPage(db, {
-      sessionId: 'chat',
-      direction: 'tail',
-      reader: { form: 'client', budgetBytes: 1024 }
-    }).page.items
-  ).toContainEqual(
-    expect.objectContaining({
-      itemId: noteId,
-      body: { kind: 'status', text: 'Cancellation requested.' }
-    })
-  )
+  for (const queuedImages of [undefined, { ids: [], imageIds: [] }]) {
+    expect(
+      readJournalDomainHistoryPage(db, {
+        sessionId: 'chat',
+        direction: 'tail',
+        reader: { form: 'client', budgetBytes: 1024, queuedImages }
+      }).page.items
+    ).toContainEqual(
+      expect.objectContaining({
+        itemId: noteId,
+        body: { kind: 'status', text: 'Cancellation requested.' }
+      })
+    )
+  }
   const context = new JournalSqlStatusContext(new JournalSqlScope(db, 'chat', 'epoch'))
   expect(context.displayed(noteId)?.body).toEqual({
     kind: 'status',
@@ -301,7 +303,9 @@ it('derives a stale Stop presentation from its owning turn before history admiss
   })
   expect(item(noteId)?.body).toEqual(original)
   // An ordinary owning-turn refresh repairs the stamp even when its displayed body is equal.
-  runJournalTransaction(db, () => refreshJournalDomainStopNotes(db, target, [turnId]))
+  expect(
+    runJournalTransaction(db, () => refreshJournalDomainStopNotes(db, target, [turnId]))
+  ).toEqual([])
   expect(db.prepare('SELECT wire_version FROM journal_items WHERE item_id=?').get(noteId)).toEqual({
     wire_version: 1
   })

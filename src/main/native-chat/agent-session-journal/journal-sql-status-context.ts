@@ -6,6 +6,7 @@ import { runningStructuredAgentSessionTurnItemBySequence } from '../../../shared
 import type { JournalLatestStop } from './context-epochs/journal-stop-turn-end'
 import { journalContextEpoch } from './context-epochs/journal-context-epoch'
 import type { JournalSqlScope } from './journal-sql-scope'
+import { AGENT_SESSION_ITEM_WIRE_VERSION } from '../agent-session-wire/publication/history/agent-session-item-presentation-contract'
 import type { JournalStatusItem, JournalStatusItemSelection } from './journal-status-items'
 import { sqlJournalStatusItems } from './journal-sql-status-items'
 import { sqlFailedStatusItems, sqlHasStatusRequestItem } from './journal-sql-status-request-items'
@@ -75,12 +76,15 @@ export class JournalSqlStatusContext {
       if (row) {
         this.scope.examined(row)
         const source = this.scope.decode<AgentJournalRenderItem>(row.payload_json)
-        const states = readJournalDomainStopStates(this.scope.db, this.scope, [id])
+        const states =
+          row.wire_version === AGENT_SESSION_ITEM_WIRE_VERSION
+            ? undefined
+            : readJournalDomainStopStates(this.scope.db, this.scope, [id])
         const displayed = resolveJournalDomainDisplay(
           source,
           row.wire_version,
           row.wire_json,
-          journalDomainDisplayTurnState(source, states)
+          states && journalDomainDisplayTurnState(source, states)
         )
         row.display_json = displayed === source ? row.payload_json : JSON.stringify(displayed)
       }

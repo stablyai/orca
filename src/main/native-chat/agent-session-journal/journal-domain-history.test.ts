@@ -289,14 +289,21 @@ it('windows retained image sources before reading their bodies and admits their 
   const forward = read({ direction: 'after', cursor: { epoch: 'epoch', sequence: 1 }, reader })
   expect(sequences(forward)).toEqual([1, 2, 4, 5])
   expect(forward.page).toMatchObject({ hasNewer: false, window: { nextCursor: { sequence: 5 } } })
+  const deferred = db
+    .prepare("SELECT payload_json FROM journal_items WHERE item_id='orca:5:0'")
+    .get()!.payload_json
+  db.exec(
+    "UPDATE journal_items SET wire_version=NULL,payload_json='excluded stale source' WHERE item_id='orca:5:0'"
+  )
   const excluded = read({
     direction: 'after',
     cursor: { epoch: 'epoch', sequence: 1 },
-    limit: 2,
+    limit: 4,
     reader: { ...reader, budgetBytes: 4096 }
   })
   expect(sequences(excluded)).toEqual([2])
   expect(excluded.page).toMatchObject({ hasNewer: true, window: { nextCursor: { sequence: 2 } } })
+  db.prepare("UPDATE journal_items SET payload_json=? WHERE item_id='orca:5:0'").run(deferred)
   const bounded = {
     ...reader,
     form: 'bounded' as const,
@@ -438,6 +445,32 @@ it('catches up with the current revision, placement and submission, not the repl
     'orca:child'
   ])
   expect(assertPlans().some((sql) => sql.includes('root=1'))).toBe(true)
+})
+
+it('orders queued-image submissions independently of touched-event order', () => {
+  const { db, seedItem, seedSend, head, event, read } = history()
+  seedSend()
+  seedItem({ ...text(8, 'early send'), itemId: 'orca:early' })
+  db.exec(`INSERT INTO journal_submission_attempts(session_id,epoch,message_id,attempt_sequence,
+    attempt_index,current,item_id,ordinal,submitted_at,fingerprint,dispatch_state,payload_json)
+    SELECT session_id,epoch,'early',1,0,1,'orca:early',2,0,fingerprint,dispatch_state,
+      json_set(payload_json,'$.clientMessageId','early','$.submittedAt',0)
+    FROM journal_submission_attempts WHERE message_id='send' AND current=1`)
+  event(9, ['orca:send'])
+  event(10, ['orca:early'])
+  head(10, 8)
+  for (const queuedImages of [
+    { ids: [], imageIds: [] },
+    { ids: [['send', true] as const], imageIds: ['card'] }
+  ]) {
+    const page = read({
+      direction: 'after',
+      cursor: { epoch: 'epoch', sequence: 8 },
+      reader: { form: 'client', queuedImages }
+    })
+    expect(page.page.submissions.map((send) => send.clientMessageId)).toEqual(['early', 'send'])
+    expect(page.page.window.nextCursor).toEqual({ epoch: 'epoch', sequence: 10 })
+  }
 })
 
 it('resets a cursor below the pruned boundary or across a gap, and resumes at the boundary', () => {

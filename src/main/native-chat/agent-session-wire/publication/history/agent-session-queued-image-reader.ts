@@ -154,7 +154,14 @@ export async function heldQueuedImageHistoryPolicy(
   }
 }
 
+export const unchangedQueuedImageSubmission = (
+  send: AgentJournalSubmission
+): AgentJournalSubmission => send
+
 export function queuedImageSubmissionPresenter(policy: QueuedImageHistoryPolicy) {
+  if (policy.ids.length === 0 && policy.imageIds.length === 0) {
+    return unchangedQueuedImageSubmission
+  }
   const ids = new Map(policy.ids)
   const imageIds = new Set(policy.imageIds)
   return (send: AgentJournalSubmission): AgentJournalSubmission =>

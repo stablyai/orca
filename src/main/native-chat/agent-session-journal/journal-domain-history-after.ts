@@ -25,6 +25,11 @@ import { readJournalDomainClientItems } from './journal-domain-item-presentation
 import { findSequenceGap, resolveJournalResume } from './replay/journal-cursor'
 import type { JournalDomainEventChanges } from './journal-domain-schema'
 import type { JournalDomainHistoryHead } from './journal-domain-history-page'
+import {
+  admitJournalDomainImageEvents,
+  halvedJournalDomainEventLimit,
+  type JournalDomainHistorySnapshotReader
+} from './journal-domain-history-image-admission'
 
 /** Select one ordered event window, then current rows for only its identities, in the caller's snapshot. */
 export function readJournalDomainForwardHistory(
@@ -34,18 +39,24 @@ export function readJournalDomainForwardHistory(
   limit: number,
   reader: Pick<HistoryReader, 'form' | 'budgetBytes'>,
   latestTurn: AgentJournalRenderItem | null,
-  readSnapshot: (ids: Set<string>, forms: Map<string, HistoryItemForm>) => AgentJournalSnapshot,
+  readSnapshot: JournalDomainHistorySnapshotReader,
   reset: (
     reason: Extract<AgentSessionHistoryResult, { ok: false }>['reset']
   ) => AgentSessionHistoryResult,
-  queuedImages?: QueuedImageHistoryPolicy
+  queuedImages?: QueuedImageHistoryPolicy,
+  useStoredClientForms = queuedImages === undefined
 ): AgentSessionHistoryResult {
   // One bounded identity read serves the size admission and the builder's lookahead.
   const links = queuedImages && new Map(queuedImages.links)
   const since = cursor && readJournalDomainEvents(db, head, cursor, limit + 1, links)
   const forms = new Map<string, HistoryItemForm>()
+  const image =
+    since?.ok && queuedImages && !useStoredClientForms
+      ? admitJournalDomainImageEvents(db, head, since.rows.slice(0, limit), reader, readSnapshot)
+      : undefined
   const admitted =
-    since?.ok && queuedImages === undefined
+    image?.limit ??
+    (since?.ok
       ? fittingJournalDomainEventCount(
           db,
           head,
@@ -53,8 +64,12 @@ export function readJournalDomainForwardHistory(
           reader.budgetBytes,
           forms
         )
-      : limit
-  let materialized: AgentJournalSnapshot | undefined
+      : limit)
+  const count =
+    since?.ok && queuedImages && useStoredClientForms
+      ? halvedJournalDomainEventLimit(Math.min(limit, since.rows.length), admitted)
+      : admitted
+  let materialized: AgentJournalSnapshot | undefined = image?.snapshot
   return readAgentSessionForwardHistory(
     {
       readSince: (after, count = limit + 1) =>
@@ -72,7 +87,7 @@ export function readJournalDomainForwardHistory(
       submissions: []
     },
     cursor,
-    admitted,
+    count,
     reader,
     (ids) => {
       materialized ??= readSnapshot(ids, forms)
@@ -103,7 +118,14 @@ function readJournalDomainEvents(
   cursor: AgentJournalCursor,
   limit: number,
   queueLinks?: Map<string, readonly string[]>
-): JournalReadSince {
+):
+  | Exclude<JournalReadSince, { ok: true }>
+  | {
+      ok: true
+      rows: JournalOutcomeReadRow[]
+      through: number
+      cursor: AgentJournalCursor
+    } {
   const resume = resolveJournalResume(
     {
       epoch: head.cursor.epoch,
@@ -227,7 +249,9 @@ export function readJournalDomainHistorySnapshot(
   ids: ReadonlySet<string>,
   sourceIds: readonly string[] = [],
   present?: (send: AgentJournalSubmission) => AgentJournalSubmission,
-  forms?: Map<string, HistoryItemForm>
+  forms?: Map<string, HistoryItemForm>,
+  states?: ReadonlyMap<string, unknown>,
+  ordinals?: Map<string, number>
 ): AgentJournalSnapshot {
   const wanted = [...ids]
   return {
@@ -243,7 +267,8 @@ export function readJournalDomainHistorySnapshot(
         ORDER BY item.sequence,item.sequence_index,item.ordinal`)
           .all(JSON.stringify(wanted), head.sessionId, head.epoch)
           .map((row) => String(row.item_id)),
-        forms
+        forms,
+        states
       ),
       ...readJournalDomainSourceHeaders(
         new JournalSqlScope(db, head.sessionId, head.epoch),
@@ -254,7 +279,7 @@ export function readJournalDomainHistorySnapshot(
           readJournalDomainSourceBody(new JournalSqlScope(db, head.sessionId, head.epoch), header)
         )
     ],
-    submissions: itemSubmissions(db, head, wanted, present)
+    submissions: itemSubmissions(db, head, wanted, present, ordinals)
   }
 }
 
