@@ -636,7 +636,6 @@
 2 test-no-wall-clock:src/renderer/src/components/workspace-cleanup/use-workspace-cleanup-removal.agent-stop.test.tsx
 1 test-no-wall-clock:src/renderer/src/components/worktree-jump/WorktreeJumpPalette.recent-tabs.behavior.test.tsx
 2 test-no-wall-clock:src/renderer/src/hooks/ipc-events/agent-status-terminal-title-tab-write.test.ts
-2 test-no-wall-clock:src/renderer/src/lib/agent-session/tab-identity/use-tab-agent-observed-signal-dispatch.test.tsx
 1 test-no-wall-clock:src/renderer/src/lib/workspace/ownership/workspace-terminal-host-authority.test.ts
 1 test-no-wall-clock:src/renderer/src/lib/workspace/activation/worktree-activation-emptied-workspace-reseed.test.ts
 2 test-no-wall-clock:src/renderer/src/store/github/pull-requests/github-pr-branch-linked-pr-divergence.test.ts
