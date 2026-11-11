@@ -14,6 +14,7 @@ import {
 import { planChangedChecks } from './check-changed-selection.mjs'
 import { resolveOxcCliInvocation } from '../../tool-invocation/oxc-cli-invocation.mjs'
 import { resolvePnpmCliInvocation } from '../../tool-invocation/pnpm-cli-invocation.mjs'
+import { delegateHostValidation } from '../host-validation/host-validation-budget.mjs'
 
 const OUTPUT_TAIL_LINES = 200
 const HEARTBEAT_MS = 60_000
@@ -328,7 +329,9 @@ export async function main(root, argv) {
   )
 
   // Typecheck and tests lead the queue: they take longest, so the short checks fill in around them.
-  const concurrency = Math.max(3, Math.floor(availableParallelism() / 3))
+  const concurrency = process.env.ORCA_VALIDATION_TOKEN
+    ? 1
+    : Math.max(3, Math.floor(availableParallelism() / 3))
   const running = new Map()
   // Why: output is buffered until a task ends, so long test runs would otherwise look hung.
   const heartbeat = setInterval(() => {
@@ -366,8 +369,12 @@ export async function main(root, argv) {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   try {
-    const root = execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim()
-    process.exitCode = await main(root, process.argv.slice(2))
+    if (!(await delegateHostValidation())) {
+      const root = execFileSync('git', ['rev-parse', '--show-toplevel'], {
+        encoding: 'utf8'
+      }).trim()
+      process.exitCode = await main(root, process.argv.slice(2))
+    }
   } catch (error) {
     console.error(`check:changed: ${error.message ?? error}`)
     process.exitCode = 1

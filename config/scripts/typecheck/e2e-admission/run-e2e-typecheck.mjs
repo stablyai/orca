@@ -2,6 +2,7 @@ import { availableParallelism } from 'node:os'
 import { runProcessSync } from '@orca/process-host'
 import { describeProcessFailure } from '../../tool-invocation/process-failure-message.mjs'
 import { isDirectInvocation } from '../../tool-invocation/script-entry-detection.mjs'
+import { delegateHostValidation } from '../../preflight/host-validation/host-validation-budget.mjs'
 import {
   resolveTypecheckBunExecutable,
   resolveTypecheckCommand,
@@ -20,7 +21,8 @@ export function runE2eTypecheck({
   const command = resolveTypecheckCommand(CONFIG, {
     ...selection,
     root,
-    bunThreads: availableParallelism()
+    bunThreads: process.env.ORCA_VALIDATION_TOKEN ? 2 : availableParallelism(),
+    checkers: process.env.ORCA_VALIDATION_TOKEN ? 2 : null
   })
   const result = execute({
     ...command,
@@ -42,7 +44,7 @@ export function runE2eTypecheck({
   return { code: result.code, output }
 }
 
-if (isDirectInvocation(import.meta.url, process.argv[1])) {
+if (isDirectInvocation(import.meta.url, process.argv[1]) && !(await delegateHostValidation())) {
   try {
     const args = process.argv.slice(2)
     if (args.length > 1 || (args.length === 1 && args[0] !== '--compiler=native')) {

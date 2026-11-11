@@ -6,6 +6,7 @@ import { RUN_ARGS_ENV } from './vitest-run-filters.mjs'
 import { localModuleCacheEnv } from '../module-cache/vitest-local-module-cache.mjs'
 import { createRunTempDirectory } from './vitest-run-temp-directory.mjs'
 import { createVitestZodBundle } from '../module-cache/vitest-zod-bundle.mjs'
+import { delegateHostValidation } from '../../preflight/host-validation/host-validation-budget.mjs'
 import {
   checkBunVersion,
   probeBunVersion,
@@ -15,6 +16,21 @@ import {
 
 const root = resolve(import.meta.dirname, '../../../..')
 const vitestArgs = process.argv.slice(2)
+if (process.env.ORCA_VALIDATION_TOKEN) {
+  let workers = 2
+  for (let index = vitestArgs.length - 1; index >= 0; index--) {
+    const argument = vitestArgs[index]
+    if (/^--max-?workers(?:=|$)/i.test(argument)) {
+      const value = argument.includes('=') ? argument.split('=')[1] : vitestArgs[index + 1]
+      const count = value?.endsWith('%')
+        ? Math.ceil((os.availableParallelism() * Number(value.slice(0, -1))) / 100)
+        : Number(value)
+      workers = Math.min(workers, count)
+      vitestArgs.splice(index, argument.includes('=') ? 1 : 2)
+    }
+  }
+  vitestArgs.push(`--maxWorkers=${workers}`)
+}
 
 const FORWARDED_SIGNALS = ['SIGINT', 'SIGTERM', 'SIGHUP']
 
@@ -95,9 +111,11 @@ async function runVitest() {
   }
 }
 
-if (await hasNoChangedFiles(vitestArgs, root, runProcess)) {
-  // Vitest's own result for this case, without paying its startup.
-  console.log('No changed files found, exiting with code 0')
-} else {
-  process.exitCode = await runVitest()
+if (!(await delegateHostValidation())) {
+  if (await hasNoChangedFiles(vitestArgs, root, runProcess)) {
+    // Vitest's own result for this case, without paying its startup.
+    console.log('No changed files found, exiting with code 0')
+  } else {
+    process.exitCode = await runVitest()
+  }
 }

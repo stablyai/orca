@@ -9,6 +9,7 @@ import {
   resolvePinnedBunExecutable
 } from '../../tool-invocation/pinned-bun-executable.mjs'
 import { resolveTsrsTypecheckCommand, supportsTsrs } from './tsrs-typecheck-compiler.mjs'
+import { delegateHostValidation } from '../../preflight/host-validation/host-validation-budget.mjs'
 
 const BYTES_PER_GIB = 1024 ** 3
 
@@ -311,13 +312,28 @@ export async function runTypecheckProjects({
   return failures
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(process.argv[1]).href &&
+  !(await delegateHostValidation())
+) {
   const options = parseTypecheckOptions(process.argv.slice(2))
   const selection = selectTypecheckCompiler(options.compiler, {
     root: repoRoot,
     resolveBunExecutable: resolveTypecheckBunExecutable
   })
-  const failures = await runTypecheckProjects({ ...options, ...selection })
+  const failures = await runTypecheckProjects({
+    ...options,
+    ...selection,
+    ...(process.env.ORCA_VALIDATION_TOKEN
+      ? {
+          parallelism: 1,
+          bunConcurrency: 1,
+          bunThreads: Math.min(options.bunThreads, 2),
+          checkers: Math.min(options.checkers ?? 2, 2)
+        }
+      : {})
+  })
   if (failures.length > 0) {
     for (const failure of failures) {
       console.error(failure.message ?? failure)

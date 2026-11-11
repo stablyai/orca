@@ -62,6 +62,18 @@ pnpm test --changed=origin/main --maxWorkers=2      # also commits since the mer
 
 Affected tests follow Vitest's static import graph, so run suites explicitly for dynamic imports, fixtures, or subprocess inputs. Local affected tests do not replace CI. If a file passes alone but fails after others, add `// @orca-isolated-worker` to it.
 
+### Shared-host validation
+
+On local macOS and Linux (including SSH hosts and WSL), `check:changed`, `lint`, the typecheck runners, `pnpm test` / `test:changed`, typed-code-quality audits, and the pre-commit hook share one per-user host validation lane across worktrees and clones. Queued commands print their wait immediately and every 15 seconds, then print admission time. Checks still run and failures still fail; queueing does not create a passing cache entry. Nested runner calls authenticate and reuse the active lane rather than waiting for themselves.
+
+Within that lane, preflight tasks, lint steps, and typecheck projects run serially. The project runner's compiler checkers, Bun compiler threads, and Vitest workers are capped at two (a requested single worker stays single). Rust/Go tools inherit `RAYON_NUM_THREADS` / `GOMAXPROCS` hints, which tools can override; admission is not an OS CPU or memory ceiling. This deliberately favors bounded aggregate load over one agent's fastest preflight. GitHub Actions and native Windows retain their existing scheduling; the lane depends on POSIX process groups and is not a Windows Job Object implementation. Setting `CI=1` for a noninteractive local command does not bypass admission.
+
+Admission uses a loopback listening socket shared with the validation process group, not a PID file or an expiring heartbeat lock. The kernel releases it when its owners exit, so there is no stale lock to delete or PID-reuse recovery to guess. A supervisor and entry guard monitor each other: cancellation allows ten seconds for tool cleanup, then retires the remaining group; a crashed group supervisor makes the entry guard retire its own group. Workloads must not detach validation workers into independent sessions. Intentionally persistent dev servers and language servers are not managed by this lane.
+
+Use the normal command's cancellation control to leave the queue or stop your own run. Do not delete lock files, terminate another worktree's session, or bypass validation to make a commit proceed. If an unrelated service occupies the reported loopback port, choose one unused port with `ORCA_VALIDATION_PORT` **consistently for every Orca worktree on that host**. The default derives from the user's home directory. The lane is host-local, not a distributed limit between a laptop and a remote host, and contention is retried rather than strictly FIFO.
+
+Only updated runners participate: already-running jobs, older worktrees, raw `tsc` / `vitest` / `oxlint` invocations, and other custom package commands can bypass it. Updating this source does not change an installed Orca app or reclaim existing allocations. This bounds validation overlap; it does not establish or repair a Vite, Electron, agent, or persistent-session memory leak.
+
 ## Pull Requests
 
 Fill in every section of [`.github/pull_request_template.md`](./pull_request_template.md): an ELI5, what changed and why, a linked issue (required for outside contributors), a before and after (screenshots or videos) for any UI or behavior change (only if there is truly no visual or interaction change, write exactly `N/A` and briefly say why), how you tested it, the risk, and under Review a short summary from your AI coding agent covering cross-platform, SSH/remote, agent and integration compatibility, performance, UI quality, and security. Keep each PR small and focused on one topic.
