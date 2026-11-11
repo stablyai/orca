@@ -95,6 +95,7 @@ export function agentJournalItemForWire(item: AgentJournalRenderItem): HistoryIt
   if (sent === undefined) {
     sent = wireItem(item)
     sentForms.set(item, sent)
+    sentForms.set(sent.item, sent)
   }
   return sent
 }
