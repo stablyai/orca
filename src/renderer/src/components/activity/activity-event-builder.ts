@@ -1,7 +1,7 @@
 import { getStructuredAgentSessionTabsByPaneKey } from '@/components/native-chat/session/status/structured-agent-session-tabs'
 import { parseAgentStatusPaneIdentity } from '../../../../shared/agent-status/identity/agent-status-worktree-attribution'
 import { tabHasLivePty } from '../../../../shared/tab-has-live-pty'
-import { freshActivityLiveAgentState } from './activity-event-state'
+import { activityLiveAgentState } from './activity-event-state'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-status-contract'
 import type {
   AgentStatusEntry,
@@ -103,14 +103,11 @@ export function buildActivityEvents(
     )
     const orchestration = args.runtimeAgentOrchestrationByPaneKey?.[paneKey]
     // Only fresh raw live state proves working; history and orchestration enrichment cannot establish liveness.
-    const liveState =
-      freshActivityLiveAgentState(entry, args.now) ??
-      (entry.state === 'working' &&
-      entry.workingMode === 'monitoring' &&
-      entry.restoredUnconfirmed !== true &&
-      tabHasLivePty(args.ptyIdsByTabId ?? {}, parsed.tabId)
-        ? 'unverifiable'
-        : null)
+    const liveState = activityLiveAgentState(
+      entry,
+      args.now,
+      tabHasLivePty(args.ptyIdsByTabId ?? {}, context.tab.id)
+    )
     const {
       events: paneEvents,
       live,

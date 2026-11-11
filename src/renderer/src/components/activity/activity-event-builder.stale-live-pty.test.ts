@@ -5,9 +5,11 @@ import {
   PANE_KEY
 } from './ActivityPrototypePage-test-fixtures'
 
-describe('stale monitoring activity', () => {
-  it('retains only confirmed monitoring panes with a live terminal as unverifiable', () => {
-    const entry = { ...makeWorkingEntryWithoutHistory(), workingMode: 'monitoring' as const }
+describe('stale activity with a live terminal', () => {
+  it.each([
+    ['working', makeWorkingEntryWithoutHistory()],
+    ['monitoring', { ...makeWorkingEntryWithoutHistory(), workingMode: 'monitoring' as const }]
+  ])('keeps a stale %s pane with a live PTY as unverifiable', (_label, entry) => {
     const result = makeActivityResult({
       entries: { [PANE_KEY]: entry },
       ptyIdsByTabId: { 'tab-1': ['pty-1'] },
