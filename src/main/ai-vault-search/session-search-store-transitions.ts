@@ -96,10 +96,10 @@ export async function transitionSessionSearchWork(
   let eligibleThrough
   switch (command.kind) {
     case 'enqueue':
-      await queue.enqueue(command.candidate, store, command.force, command.recent, command.metadata)
+      queue.enqueue(command.candidate, store, command.force, command.recent, command.metadata)
       break
     case 'get':
-      work = await queue.get(command.path)
+      work = queue.get(command.path)
       break
     case 'next':
       eligibleThrough = command.eligibleThrough ?? queue.eligibleThrough

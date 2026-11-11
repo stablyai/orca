@@ -1,7 +1,9 @@
 import type { SessionSearchContainerRemoval } from './session-search-container-transition'
 import type { SessionSearchRemovalReceipt } from './session-search-observation-authority'
-import type { SessionSearchCandidateCommand } from './session-search-catalog-candidates'
-import type { SessionSearchCatalogCandidate } from './session-search-catalog-candidates'
+import type {
+  SessionSearchCandidateCommand,
+  SessionSearchCatalogCandidate
+} from './session-search-catalog-candidates'
 import type { SessionSearchWorkResult } from './session-search-work-queue'
 import { sessionSearchRecordPages } from './session-search-catalog-pages'
 import type { SessionSearchIndexStore } from './storage/session-search-store-types'

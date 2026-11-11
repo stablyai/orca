@@ -118,7 +118,7 @@ export class SessionSearchWorkCatalog {
     })
   }
   async hasPublicationDebt(path: string): Promise<boolean> {
-    const work = await this.get(path)
+    const work = this.get(path)
     return !!work && (work.force || work.metadata)
   }
   next(eligibleThrough = this.order): SessionSearchWork[] {
