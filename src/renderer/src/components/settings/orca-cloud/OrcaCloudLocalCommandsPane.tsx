@@ -225,7 +225,9 @@ export function OrcaCloudLocalCommandsView({
                   <p className="truncate text-xs text-muted-foreground">
                     {[
                       entry.workspaceLabel,
-                      formatUiRelativeTime(entry.at - now),
+                      now - entry.at < 60_000
+                        ? t('localCommands.audit.justNow', 'just now')
+                        : formatUiRelativeTime(entry.at - now),
                       result,
                       entry.detail
                     ]

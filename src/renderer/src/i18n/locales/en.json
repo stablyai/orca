@@ -28240,7 +28240,8 @@
       "resultSignal": "Stopped ({{signal}})",
       "resultFinished": "Finished",
       "resultFailed": "Failed (exit {{code}})",
-      "noCommand": "(unreadable request)"
+      "noCommand": "(unreadable request)",
+      "justNow": "just now"
     },
     "notification": {
       "title": "Run a command on this computer?",
