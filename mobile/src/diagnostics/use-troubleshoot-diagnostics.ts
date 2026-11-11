@@ -3,6 +3,9 @@ import type { View } from 'react-native'
 import { Platform } from 'react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { loadHostCatalog, loadHosts } from '../host-catalog/host-store'
+import { primeEndpointAuthHeaders } from '../transport/endpoint-auth-headers-store'
+import { endpointAuthMutationEpoch } from '../transport/endpoint-auth-headers'
+import { getHostCredentialWriteRevision } from '../host-credentials/host-credential-write-revision'
 import {
   startDiagnosticFetchTimeout,
   type DiagnosticFetchTimeout
@@ -152,18 +155,40 @@ export function useTroubleshootDiagnostics() {
         if (!isCurrentRun()) {
           return
         }
-        const reachable = await testHostReachability(host.endpoint)
+        const epoch = endpointAuthMutationEpoch(host.id)
+        const revision = getHostCredentialWriteRevision(host.id)
+        const isCurrentProbe = () =>
+          isCurrentRun() &&
+          endpointAuthMutationEpoch(host.id) === epoch &&
+          getHostCredentialWriteRevision(host.id) === revision
+        const headers = await primeEndpointAuthHeaders(host.id, host.endpoint, isCurrentProbe)
         if (!isCurrentRun()) {
           return
         }
+        if (!isCurrentProbe()) {
+          continue
+        }
+        const probe = await testHostReachability(host.endpoint, headers)
+        if (!isCurrentRun()) {
+          return
+        }
+        if (!isCurrentProbe()) {
+          continue
+        }
         results.push({
           label: host.name,
-          status: reachable ? 'pass' : 'fail',
-          detail: reachable
+          status: probe.reachable ? 'pass' : 'fail',
+          detail: probe.reachable
             ? t('diagnostics.useTroubleshootDiagnostics.reachable', 'Reachable at {{endpoint}}', {
                 endpoint: formatEndpoint(host.endpoint)
               })
-            : unreachableHostDetail(host.endpoint)
+            : probe.httpStatus !== undefined
+              ? t(
+                  'diagnostics.useTroubleshootDiagnostics.upgradeRejected',
+                  'WebSocket upgrade rejected (HTTP {{status}}). Check the proxy route and credentials.',
+                  { status: probe.httpStatus }
+                )
+              : unreachableHostDetail(host.endpoint)
         })
         setChecks([...results])
       }

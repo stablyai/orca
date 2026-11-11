@@ -1,9 +1,11 @@
+import type { EndpointAuthHeaders } from '../endpoint-auth-headers'
 import { DirectRpcClient } from './direct-rpc-client'
 import type { ConnectionLogSink } from '../../diagnostics/connection/connection-log-types'
 import type { ConnectionState } from '../connection/connection-state'
 import type { RpcClient } from './rpc-client-contract'
 
 export type ConnectOptions = {
+  edgeAuthHeaders?: EndpointAuthHeaders | null
   onStateChange?: (state: ConnectionState) => void
   onLog?: ConnectionLogSink
 }

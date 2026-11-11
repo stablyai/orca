@@ -1,3 +1,5 @@
+vi.mock('../endpoint-auth-headers-store', () => ({ primeEndpointAuthHeaders: async () => null }))
+
 import { createElement } from 'react'
 
 import { act, create } from 'react-test-renderer'
