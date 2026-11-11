@@ -12,6 +12,11 @@ export const SHELL_PREFIXES = [
   'src/main/runtime/agent-session/environment/structured-session-cli-login-shell',
   'src/main/runtime/agent-session/environment/structured-session-login-shell-test-harness',
   'src/main/runtime/agent-session/environment/structured-session-child-env',
+  // STA-2380: the only real-shell guard for command-paint attribution under zsh preexec hooks; the
+  // unit shards exclude the live-shell test, so these exact files must route here or nothing runs it.
+  'src/main/runtime/terminal/input/terminal-command-paint.ts',
+  'src/main/runtime/terminal/wait/tui-idle-evidence-source.ts',
+  'src/main/runtime/terminal/wait/tui-idle-zsh-preexec-hook-order.live-shell.test.ts',
   'src/main/startup/shell-probe-terminal-detach',
   'src/main/startup/shell-probe-lifetime',
   'src/main/startup/hydrate-shell-path',
@@ -22,6 +27,7 @@ export const SHELL_PREFIXES = [
   'src/shared/terminal/pty/ingress/pty-reply-echo-shapes',
   'src/shared/startup-shell-portability',
   'src/shared/posix-command-path-lookup',
+  'src/shared/draft-paste-ready-scanner.ts',
   'src/main/wsl/filesystem/wsl-shell-cwd-report',
   'src/main/wsl/filesystem/wsl-sh-cwd-report',
   'src/shared/wsl-login-shell-command',

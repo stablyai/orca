@@ -19,7 +19,8 @@ import { hasTerminalAgentPainted, TerminalCommandPaint } from '../input/terminal
 const itWithZsh = hasZsh ? it : it.skip
 const POLL_INTERVAL_MS = 2_000
 const COMMAND_START = '\x1b]133;C'
-// The stand-in's first bytes: Claude 2.1.310+ turns on palette-change reports before its composer.
+// The stand-in's first bytes: Claude turns on palette-change reports before its composer (captures
+// from 2.1.291 through 2.1.316; no cutoff is claimed).
 const AGENT_FIRST_BYTES = '\x1b[?2031h'
 const CLAUDE_COMPOSER_PROMPT = '❯ '
 const CLAUDE_REST_TITLE = '✳ Claude Code'
@@ -163,25 +164,58 @@ async function captureLaunch(hookCase: HookCase): Promise<Capture> {
       // Already gone.
     }
     // zsh writes history and session files on the way out; remove the tree after it has gone.
+    // ast-grep-ignore: test-no-real-time-wait -- the condition is zsh's exit (`exited`); the cap only keeps a shell that ignores SIGHUP from stalling teardown, and rmSync retries cover a late writer.
     await Promise.race([exited, new Promise((resolve) => setTimeout(resolve, 2_000))])
     rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
   }
 }
 
-/** The index of the stand-in's first chunk; everything before it is the shell and its hooks. */
-function agentChunkIndex(chunks: readonly Chunk[]): number {
-  const index = chunks.findIndex((chunk) => chunk.data.includes(AGENT_FIRST_BYTES))
-  expect(index, 'the stand-in must have painted').toBeGreaterThan(0)
-  return index
+type SplitCapture = {
+  /** The shell and its hooks: every byte before the stand-in's first escape. */
+  shell: Chunk[]
+  /** The stand-in from its first byte on. A chunk that straddled the boundary is split, keeping its time. */
+  agent: Chunk[]
+  /** The last read made of shell bytes alone, for measuring the hand-off silence. */
+  lastShellOnlyAt: number
 }
 
-/** Feed captured bytes the way pty-output-ingestion does: normalized with the pending-escape carry. */
-function observePaint(paint: TerminalCommandPaint, chunks: readonly Chunk[]): void {
-  let pendingAnsi = ''
+/** Attribute bytes by their offset in the accumulated stream, not by PTY read boundaries: the anchor
+ *  may arrive split across reads or coalesced with the shell's last bytes (C2 F2). */
+function splitAtAgentStart(chunks: readonly Chunk[]): SplitCapture {
+  const stream = chunks.map((chunk) => chunk.data).join('')
+  const agentOffset = stream.indexOf(AGENT_FIRST_BYTES)
+  expect(agentOffset, 'the stand-in must have painted').toBeGreaterThan(0)
+  const shell: Chunk[] = []
+  const agent: Chunk[] = []
+  let lastShellOnlyAt = chunks[0].at
+  let offset = 0
   for (const chunk of chunks) {
-    const normalized = normalizeTerminalChunk(chunk.data, pendingAnsi)
-    pendingAnsi = normalized.pendingAnsi
-    paint.observe(chunk.data, normalized.text)
+    const end = offset + chunk.data.length
+    if (end <= agentOffset) {
+      shell.push(chunk)
+      lastShellOnlyAt = chunk.at
+    } else if (offset >= agentOffset) {
+      agent.push(chunk)
+    } else {
+      const split = agentOffset - offset
+      shell.push({ data: chunk.data.slice(0, split), at: chunk.at })
+      agent.push({ data: chunk.data.slice(split), at: chunk.at })
+    }
+    offset = end
+  }
+  return { shell, agent, lastShellOnlyAt }
+}
+
+/** Feeds captured bytes the way pty-output-ingestion does: normalized, with the pending-escape carry
+ *  kept across calls so an escape cut by a read boundary is not misread. */
+function paintObserver(paint: TerminalCommandPaint): (chunks: readonly Chunk[]) => void {
+  let pendingAnsi = ''
+  return (chunks) => {
+    for (const chunk of chunks) {
+      const normalized = normalizeTerminalChunk(chunk.data, pendingAnsi)
+      pendingAnsi = normalized.pendingAnsi
+      paint.observe(chunk.data, normalized.text)
+    }
   }
 }
 
@@ -220,36 +254,62 @@ describe.skipIf(process.platform === 'win32')('tui-idle under real zsh preexec h
       () => {
         expect(capture.hookOrder.split(/\s+/)[0]).toBe('__orca_osc133_preexec')
         expect(capture.hookOrder).toContain(hookCase.hookName)
-        const agentIndex = agentChunkIndex(capture.chunks)
-        const shellBytes = capture.chunks
-          .slice(0, agentIndex)
-          .map((chunk) => chunk.data)
-          .join('')
+        const { shell, agent, lastShellOnlyAt } = splitAtAgentStart(capture.chunks)
+        const shellBytes = shell.map((chunk) => chunk.data).join('')
         expect(shellBytes).toContain(COMMAND_START)
+        expect(shellBytes).not.toContain(AGENT_FIRST_BYTES)
+        expect(agent[0].data.startsWith(AGENT_FIRST_BYTES)).toBe(true)
         // The stand-in stayed silent for a real interval after the shell handed off.
-        const lastShellAt = capture.chunks[agentIndex - 1].at
-        expect(capture.chunks[agentIndex].at - lastShellAt).toBeGreaterThanOrEqual(
-          AGENT_SILENT_MS * 0.8
-        )
+        expect(agent[0].at - lastShellOnlyAt).toBeGreaterThanOrEqual(AGENT_SILENT_MS * 0.8)
       }
     )
 
     itWithZsh('attributes paint to Claude only once its own composer marker arrives', () => {
-      const agentIndex = agentChunkIndex(capture.chunks)
+      const { shell, agent } = splitAtAgentStart(capture.chunks)
       const paint = new TerminalCommandPaint()
-      observePaint(paint, capture.chunks.slice(0, agentIndex))
+      const observe = paintObserver(paint)
+      observe(shell)
       // The any-visible-byte latch is what C1 F1 found: hook text satisfies it before Claude runs.
       expect(paint.hasPainted()).toBe(hookCase.anyBytePaintBeforeAgent)
       expect(hasTerminalAgentPainted({ commandPaint: paint }, 'claude')).toBe(false)
 
-      observePaint(paint, capture.chunks.slice(agentIndex))
+      observe(agent)
+      expect(hasTerminalAgentPainted({ commandPaint: paint }, 'claude')).toBe(true)
+    })
+
+    itWithZsh.each([
+      ['coalesced into one read', (stream: string) => [stream]],
+      [
+        'split into 3-byte reads',
+        (stream: string) =>
+          Array.from({ length: Math.ceil(stream.length / 3) }, (_, i) =>
+            stream.slice(i * 3, i * 3 + 3)
+          )
+      ]
+    ])('attributes paint the same way with the capture %s', (_label, rechunk) => {
+      const stream = capture.chunks.map((chunk) => chunk.data).join('')
+      const at = capture.chunks[0].at
+      const rechunked = rechunk(stream).map((data) => ({ data, at }))
+      const { shell, agent } = splitAtAgentStart(rechunked)
+      expect(shell.map((chunk) => chunk.data).join('')).toBe(
+        stream.slice(0, stream.indexOf(AGENT_FIRST_BYTES))
+      )
+      expect(agent.map((chunk) => chunk.data).join('')).toBe(
+        stream.slice(stream.indexOf(AGENT_FIRST_BYTES))
+      )
+      const paint = new TerminalCommandPaint()
+      const observe = paintObserver(paint)
+      observe(shell)
+      expect(paint.hasPainted()).toBe(hookCase.anyBytePaintBeforeAgent)
+      expect(hasTerminalAgentPainted({ commandPaint: paint }, 'claude')).toBe(false)
+      observe(agent)
       expect(hasTerminalAgentPainted({ commandPaint: paint }, 'claude')).toBe(true)
     })
 
     itWithZsh(
       'keeps `terminal wait --for tui-idle` pending through the silent boot, then settles on the composer',
       async () => {
-        const agentIndex = agentChunkIndex(capture.chunks)
+        const { shell, agent } = splitAtAgentStart(capture.chunks)
         const { runtime, handle } = await createTranscriptPane({
           paneTitle: 'Terminal',
           foregroundProcess: 'claude',
@@ -267,7 +327,7 @@ describe.skipIf(process.platform === 'win32')('tui-idle under real zsh preexec h
           return at
         }
 
-        const shellDoneAt = await replay(capture.chunks.slice(0, agentIndex), capture.chunks[0].at)
+        const shellDoneAt = await replay(shell, capture.chunks[0].at)
         const settled = vi.fn()
         const wait = runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 60_000 })
         wait.then(settled, () => {})
@@ -275,7 +335,7 @@ describe.skipIf(process.platform === 'win32')('tui-idle under real zsh preexec h
         await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 6)
         expect(settled).not.toHaveBeenCalled()
 
-        await replay(capture.chunks.slice(agentIndex), shellDoneAt + POLL_INTERVAL_MS * 6)
+        await replay(agent, shellDoneAt + POLL_INTERVAL_MS * 6)
         await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 3)
         await expect(wait).resolves.toMatchObject({ satisfied: true })
       }

@@ -129,7 +129,17 @@ export function hasTerminalCommandPainted(record: TerminalCommandPaintRecord): b
 }
 
 /** Whether `agent`'s command painted: its own composer marker where it has one, else any visible
- *  post-marker byte. Shares the markerless and lost-history defaults of `hasTerminalCommandPainted`. */
+ *  post-marker byte. Shares the markerless and lost-history defaults of `hasTerminalCommandPainted`.
+ *
+ *  Accepted trade-off (STA-2380 C2): a known Claude whose command-start history is complete but
+ *  whose build or platform never sends the supported composer signal (`❯`+NBSP after DECSET 2031;
+ *  the scanner's quiet fallback is deliberately not read here), and whose `✳` rest title is also
+ *  off, now stays pending until the wait's own timeout instead of settling on quiet. There is no
+ *  silence-only fallback by design: silence under a shell auto-title was the false-ready bug, and
+ *  a reported timeout is recoverable where a lost dispatch is not. The marker has been seen in
+ *  captures from 2.1.291 through 2.1.316; no older-version cutoff is claimed. Unchanged and still
+ *  failing open: shells that send no OSC 133;C marker and panes whose output history has a gap
+ *  report "painted" (the pre-existing `?? true`), so this does not prevent every premature ready. */
 export function hasTerminalAgentPainted(
   record: TerminalCommandPaintRecord,
   agent: TuiAgent | null | undefined
