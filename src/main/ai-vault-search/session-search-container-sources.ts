@@ -1,23 +1,28 @@
+import type {
+  SessionSearchContainerAuthority,
+  SessionSearchContainerRemoval,
+  SessionSearchContainerOmission
+} from './session-search-container-transition'
+import { SessionSearchOperationError } from './session-search-worker-client'
+import type { SessionSearchCatalogClient } from './session-search-catalog-client'
 import {
-  SessionSearchCatalogClient,
   recordSessionSearchCatalogCounts,
   type SessionSearchCatalogRequest
 } from './session-search-catalog-client'
 import { recordSessionScanIssue } from '../ai-vault/session-scan-issues'
 import { SessionObservationRetries } from '../ai-vault/session-observation-retries'
 import type { AiVaultScanIssue } from '../../shared/ai-vault/contracts/ai-vault-types'
-import { throwIfAiVaultScanCancelled } from '../ai-vault/ai-vault-scan-cancellation'
 import type { FileWithMtime, SessionFileDiscovery } from '../ai-vault/session-scanner-types'
-import { isMissingTranscriptPathError } from '../ai-vault/session-scanner-discovery'
-import { wslGatedStat } from '../native-chat/wsl-transcript-fs-access'
 
-type Physical = {
+export type SessionSearchContainerPhysical = {
   files: SessionSearchCatalogClient<{
     file: FileWithMtime
     epoch: number
     changed: boolean
     revision: number
   }>
+  omissions: SessionSearchCatalogClient<SessionSearchContainerOmission>
+  authority?: SessionSearchContainerAuthority
   epoch: number
   pending: number
   proof?: number
@@ -25,11 +30,11 @@ type Physical = {
   identity?: string
   fullDue: boolean
   retiring?: boolean
-  retirement?: { epoch: number; after?: string }
+  retirement?: { authority: number; phase: 'raw' | 'receipts'; after?: string }
 }
 type Family = {
   discovery?: SessionFileDiscovery
-  physical: Map<string, Physical>
+  physical: Map<string, SessionSearchContainerPhysical>
   sourceOrder: ReadonlyMap<string, number>
 }
 
@@ -46,22 +51,9 @@ export class SessionSearchContainerSources {
   protected readonly retries = new SessionObservationRetries()
   readonly removed = new Map<string, Set<string>>()
   protected request: SessionSearchCatalogRequest | undefined
-  protected retirement: SessionSearchCatalogClient<{ path: string; revision: number }> | undefined
-  private retirementReceipts: { key: string; revision: number }[] = []
-  async acknowledgeRetirements(): Promise<void> {
-    if (!this.retirementReceipts.length) {
-      return
-    }
-    await this.request!({
-      kind: 'container-retirement-ack',
-      scope: this.retirement!.scope,
-      receipts: this.retirementReceipts
-    })
-    this.retirementReceipts = []
-  }
-  protected get retirementCount(): number {
-    return this.retirement?.size ?? 0
-  }
+  readonly removalReceipts = new Map<string, SessionSearchContainerRemoval[]>()
+  private readonly deliveredScopes = new Set<string>()
+  private retirementRows = 0
   protected readonly deliveries = new WeakMap<
     SessionFileDiscovery,
     { scope: string; receipts: { key: string; revision: number }[] }[]
@@ -72,14 +64,18 @@ export class SessionSearchContainerSources {
     }
     this.deliveries.delete(discovery)
   }
-  protected readonly acceptedProofs = new Map<string, Physical>()
+  async acknowledgeRetirements(): Promise<void> {
+    for (const scope of this.deliveredScopes) {
+      await this.request!({ kind: 'count', scope: `${scope}:omissions` })
+    }
+  }
+  protected readonly acceptedProofs = new Map<string, SessionSearchContainerPhysical>()
   attach(request: SessionSearchCatalogRequest): void {
     this.request ??= async (command) => {
       const result = await request(command)
       recordSessionSearchCatalogCounts(this.request!, result)
       return result
     }
-    this.retirement ??= new SessionSearchCatalogClient('container-retirements', this.request)
   }
   readonly proofs = async (
     container: string,
@@ -91,8 +87,15 @@ export class SessionSearchContainerSources {
     if (physical?.proof === undefined) {
       return null
     }
-    const page = await physical.files.page({ group: id, limit: 1 })
-    return page.rows.some(({ value }) => value.epoch === physical.proof)
+    let after: string | undefined
+    do {
+      const page = await physical.files.page({ group: id, after })
+      if (page.rows.some(({ value }) => value.epoch === physical.proof)) {
+        return true
+      }
+      after = page.after
+    } while (after !== undefined)
+    return false
   }
 
   begin(full: boolean, recentLimit: number): void {
@@ -101,7 +104,9 @@ export class SessionSearchContainerSources {
     this.retries.begin(full)
     this.recentLimit = recentLimit
     this.removed.clear()
-    this.retirementReceipts = []
+    this.removalReceipts.clear()
+    this.deliveredScopes.clear()
+    this.retirementRows = 0
     if (full) {
       for (const family of this.families.values()) {
         for (const physical of family.physical.values()) {
@@ -111,9 +116,6 @@ export class SessionSearchContainerSources {
     }
   }
   get pending(): boolean {
-    if (this.retirementCount) {
-      return true
-    }
     for (const [root, list] of this.pathLists) {
       if (!list.complete && !this.retries.heldOut(`paths:${root}`)) {
         return true
@@ -125,7 +127,11 @@ export class SessionSearchContainerSources {
       }
       for (const [path, physical] of family.physical) {
         if (
-          (physical.pending || physical.fullDue || physical.retiring || physical.retirement) &&
+          (physical.pending ||
+            physical.fullDue ||
+            (physical.authority?.state !== 'unknown' &&
+              physical.authority &&
+              (physical.retirement || physical.omissions.readySize))) &&
           !this.retries.heldOut(`${key}:${path}`)
         ) {
           return true
@@ -165,85 +171,124 @@ export class SessionSearchContainerSources {
     }
     return result
   }
+  protected async setAuthority(
+    key: string,
+    path: string,
+    physical: SessionSearchContainerPhysical,
+    state: SessionSearchContainerAuthority['state'],
+    epoch?: number,
+    restart = false
+  ): Promise<void> {
+    const previous = physical.authority
+    physical.authority = undefined
+    this.acceptedProofs.delete(`${key.split(':', 1)[0]}:${path}`)
+    const command = {
+      kind: 'container-retire' as const,
+      scope: physical.files.scope,
+      agent: key.split(':', 1)[0],
+      authority: state,
+      epoch,
+      restart,
+      authorityRevision: previous?.revision
+    }
+    let result = await physical.files.transition(command)
+    if (result.accepted === false && result.authority) {
+      result = await physical.files.transition({
+        ...command,
+        authorityRevision: result.authority.revision
+      })
+    }
+    if (!result.accepted || !result.authority) {
+      throw new SessionSearchOperationError('Container authority was superseded')
+    }
+    physical.authority = result.authority
+  }
   protected async drainRetirements(): Promise<void> {
-    if (this.retirementReceipts.length) {
-      return
+    for (const family of this.families.values()) {
+      for (const physical of family.physical.values()) {
+        if (
+          !physical.authority ||
+          physical.authority.state === 'unknown' ||
+          !physical.omissions.readySize ||
+          this.deliveredScopes.has(physical.files.scope) ||
+          this.retirementRows >= 256
+        ) {
+          continue
+        }
+        this.deliveredScopes.add(physical.files.scope)
+        const page = await physical.omissions.page({ ready: 1, limit: 256 - this.retirementRows })
+        for (const { key: path, value } of page.rows) {
+          if (
+            value.authority !== physical.authority.revision ||
+            value.incarnation !== physical.authority.incarnation
+          ) {
+            continue
+          }
+          const agents = this.removed.get(path) ?? new Set<string>()
+          agents.add(value.agent)
+          this.removed.set(path, agents)
+          const receipts = this.removalReceipts.get(path) ?? []
+          receipts.push({ ...value, scope: physical.files.scope })
+          this.removalReceipts.set(path, receipts)
+          this.retirementRows++
+        }
+      }
     }
-    const page = await this.retirement!.page({ limit: Math.max(1, 256 - this.removed.size) })
-    for (const { key, value } of page.rows) {
-      const path = value.path
-      const agent = key.slice(0, key.indexOf(':'))
-      const agents = this.removed.get(path) ?? new Set<string>()
-      agents.add(agent)
-      this.removed.set(path, agents)
-    }
-    this.retirementReceipts = page.rows.map(({ key, value }) => ({ key, revision: value.revision }))
   }
   protected async release(
     key: string,
     path: string,
     family: Family,
-    physical: Physical
+    physical: SessionSearchContainerPhysical
   ): Promise<void> {
-    physical.retiring = true
-    physical.retirement = undefined
-    const result = await physical.files.transition({
-      kind: 'container-retire',
-      scope: physical.files.scope,
-      agent: family.discovery?.agent ?? key.split(':', 1)[0]
-    })
+    if (!physical.retiring || physical.authority?.state !== 'released') {
+      await this.setAuthority(key, path, physical, 'released')
+      physical.retiring = true
+      physical.fullDue = false
+      physical.retirement = { authority: physical.authority!.revision, phase: 'raw' }
+    }
+    await this.advanceRetirement(key, family, physical)
     this.retries.delete(`${key}:${path}`)
     this.acceptedProofs.delete(`${key.split(':', 1)[0]}:${path}`)
-    if (!result.after) {
+    if (!physical.retirement && !physical.omissions.size && !physical.files.size) {
+      await physical.files.transition({
+        kind: 'release',
+        scope: `${physical.files.scope}:authority`
+      })
       family.physical.delete(path)
     }
   }
   protected async advanceRetirement(
     key: string,
-    path: string,
     family: Family,
-    physical: Physical
+    physical: SessionSearchContainerPhysical
   ): Promise<void> {
     const retirement = physical.retirement
-    if (!retirement) {
+    if (
+      !retirement ||
+      physical.authority?.state === 'unknown' ||
+      physical.authority?.revision !== retirement.authority
+    ) {
       return
     }
     const result = await physical.files.transition({
       kind: 'container-retire',
       scope: physical.files.scope,
-      epoch: retirement.epoch,
+      authorityRevision: retirement.authority,
+      phase: retirement.phase,
       after: retirement.after,
       agent: family.discovery?.agent ?? key.split(':', 1)[0]
     })
+    if (!result.accepted) {
+      throw new SessionSearchOperationError('Container cleanup was superseded')
+    }
     retirement.after = result.after
     if (!result.after) {
-      physical.proof = retirement.epoch
-      this.acceptedProofs.set(`${key.split(':', 1)[0]}:${path}`, physical)
-      physical.retirement = undefined
+      if (retirement.phase === 'raw') {
+        retirement.phase = 'receipts'
+      } else {
+        physical.retirement = undefined
+      }
     }
-  }
-  protected async signature(path: string, signal?: AbortSignal) {
-    let known = true
-    let identity = ''
-    const facts = await Promise.all(
-      [path, `${path}-wal`].map(async (input) => {
-        try {
-          const stat = await wslGatedStat(input, 'scan', signal)
-          const id = `${stat.dev}:${stat.ino}:${stat.birthtimeMs}`
-          if (input === path) {
-            identity = id
-          }
-          return `${id}:${stat.mtimeMs}:${stat.ctimeMs}:${stat.size}`
-        } catch (error) {
-          throwIfAiVaultScanCancelled(signal)
-          if (isMissingTranscriptPathError(error)) {
-            return 'missing'
-          }
-          known = false
-          return 'unknown'
-        }
-      })
-    )
-    return { known, identity, signature: facts.join('|') }
   }
 }

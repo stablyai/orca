@@ -4,6 +4,7 @@ import { fileIdentity } from './session-search-file-cursor'
 import { sessionSearchReadDecision } from './session-search-read-decision'
 import type SyncDatabase from '../sqlite/sync-database'
 import { sessionSearchCatalogPageRows } from './session-search-catalog-query'
+import type { SessionSearchCatalog } from './session-search-catalog'
 import { SESSION_SEARCH_CATALOG_PAGE_BYTES } from './session-search-catalog'
 import type { SessionSearchFileRow, SessionSearchIndexStore } from './session-search-store'
 
@@ -174,6 +175,30 @@ export class SessionSearchWorkCatalog {
     }
     await this.catalog!.delete(path)
     this.revision += Number(invalidate)
+    this.count--
+    this.due -= Number(entry.due)
+  }
+
+  rollbackPoint(): () => void {
+    const count = this.count,
+      due = this.due,
+      revision = this.revision
+    return () => {
+      this.count = count
+      this.due = due
+      this.revision = revision
+    }
+  }
+
+  removeAccepted(catalog: SessionSearchCatalog, path: string): void {
+    const row = catalog.execute({ kind: 'get', scope: 'read-work', key: path }).rows?.[0]
+    if (!row) {
+      return
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the read queue encoded this connection-private row.
+    const entry = JSON.parse(row.value) as Queued
+    catalog.execute({ kind: 'delete', scope: 'read-work', key: path })
+    this.revision++
     this.count--
     this.due -= Number(entry.due)
   }

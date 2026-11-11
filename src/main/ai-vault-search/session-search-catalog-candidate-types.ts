@@ -1,3 +1,4 @@
+import type { SessionSearchContainerRemoval } from './session-search-container-transition'
 import type { SessionSearchRemovalReceipt } from './session-search-observation-authority'
 import type { SessionSearchSnapshotRow } from './session-search-worker-protocol'
 import type { SessionSearchWorkResult } from './session-search-work-queue'
@@ -35,7 +36,12 @@ export type SessionSearchCandidateCommand =
   | { kind: 'remove'; path: string; agents?: string[] }
   | {
       kind: 'remove-page'
-      rows: { path: string; agents?: string[]; observation?: SessionSearchRemovalReceipt }[]
+      rows: {
+        path: string
+        agents?: string[]
+        observation?: SessionSearchRemovalReceipt
+        containers?: SessionSearchContainerRemoval[]
+      }[]
     }
   | { kind: 'unowned-page'; rows: { path: string; agent?: string | null }[] }
   | { kind: 'path'; path: string; agent?: string | null; read?: boolean }

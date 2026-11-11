@@ -37,9 +37,10 @@ export function transitionSessionSearchCatalog(
     case 'container-apply':
     case 'container-drain':
     case 'container-ack':
-    case 'container-retirement-ack':
     case 'container-retire':
-      return transitionSessionSearchContainer(catalog, command)
+      return catalog.transaction('search_container_transition', () =>
+        transitionSessionSearchContainer(catalog, command)
+      )
     case 'input-invalidate':
     case 'dirty-page':
     case 'dirty-ack': {

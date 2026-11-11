@@ -166,7 +166,10 @@ export async function runSessionSearchPass(
       state.discovery.removed,
       { ...args.roots, signal },
       new Set(),
-      state.discovery.removedCandidates
+      state.discovery.removedCandidates,
+      false,
+      new Set(),
+      state.discovery.containers.removalReceipts
     )
     await accept([], false, update)
     await state.discovery.containers.acknowledgeRetirements()

@@ -1,3 +1,5 @@
+import { sessionSearchContainerSignature } from './session-search-container-signature'
+import { SessionSearchOperationError } from './session-search-worker-client'
 import { sessionSearchRecordPages } from './session-search-catalog-pages'
 import { SessionSearchContainerSources } from './session-search-container-sources'
 import { SessionSearchCatalogClient } from './session-search-catalog-client'
@@ -23,7 +25,10 @@ export class SessionSearchContainerInventory extends SessionSearchContainerSourc
       this.families.set(key, family)
     }
     if (!enumerationComplete) {
-      for (const path of family.physical.keys()) {
+      for (const [path, physical] of family.physical) {
+        if (physical.authority?.state !== 'unknown') {
+          await this.setAuthority(key, path, physical, 'unknown')
+        }
         this.acceptedProofs.delete(`${key.split(':', 1)[0]}:${path}`)
       }
     } else if (
@@ -36,6 +41,10 @@ export class SessionSearchContainerInventory extends SessionSearchContainerSourc
     const deliveries: { scope: string; receipts: { key: string; revision: number }[] }[] = []
     for (const path of paths) {
       let physical = family.physical.get(path)
+      const before = await sessionSearchContainerSignature(path, signal)
+      if (!physical && before.known && before.identity === '') {
+        continue
+      }
       if (!physical) {
         const files = new SessionSearchCatalogClient<{
           file: FileWithMtime
@@ -45,6 +54,7 @@ export class SessionSearchContainerInventory extends SessionSearchContainerSourc
         }>(`container:${key}:${path}`, this.request!)
         physical = {
           files,
+          omissions: new SessionSearchCatalogClient(`${files.scope}:omissions`, this.request!),
           epoch: 0,
           get pending() {
             return files.readySize
@@ -52,20 +62,24 @@ export class SessionSearchContainerInventory extends SessionSearchContainerSourc
           fullDue: true
         }
         family.physical.set(path, physical)
+        await this.setAuthority(key, path, physical, 'unknown')
       }
-      if (physical.retiring) {
+      const retryKey = `${key}:${path}`
+      if (physical.retiring && before.known && before.identity !== '') {
+        await this.setAuthority(key, path, physical, 'unknown', undefined, true)
+        physical.retirement = undefined
         physical.retiring = false
         physical.fullDue = true
       }
-      if (physical.retirement) {
-        await this.advanceRetirement(key, path, family, physical)
-        continue
-      }
-      const retryKey = `${key}:${path}`
-      const before = await this.signature(path, signal)
       const proofKey = `${key.split(':', 1)[0]}:${path}`
-      if (!before.known || physical.signature !== before.signature) {
-        this.acceptedProofs.delete(proofKey)
+      if (
+        (!before.known || physical.signature !== before.signature) &&
+        physical.authority?.state !== 'unknown'
+      ) {
+        await this.setAuthority(key, path, physical, 'unknown')
+      }
+      if (!physical.authority) {
+        await this.setAuthority(key, path, physical, 'unknown')
       }
       if (physical.identity !== before.identity && before.known) {
         physical.fullDue = true
@@ -73,6 +87,14 @@ export class SessionSearchContainerInventory extends SessionSearchContainerSourc
       }
       if (before.identity === '' && before.known && family.discovery) {
         await this.release(key, path, family, physical)
+        continue
+      }
+      if (
+        physical.retirement &&
+        physical.authority?.state !== 'unknown' &&
+        physical.authority?.revision === physical.retirement.authority
+      ) {
+        await this.advanceRetirement(key, family, physical)
         continue
       }
       const full =
@@ -95,13 +117,17 @@ export class SessionSearchContainerInventory extends SessionSearchContainerSourc
           })),
           epoch,
           full,
-          proof: this.acceptedProofs.has(proofKey) ? physical.proof : undefined
+          proof: this.acceptedProofs.has(proofKey) ? physical.proof : undefined,
+          authorityRevision: physical.authority!.revision
         })
+        if (result.accepted === false) {
+          throw new SessionSearchOperationError('Container input was superseded')
+        }
         if (result.invalidProof) {
-          this.acceptedProofs.delete(proofKey)
+          await this.setAuthority(key, path, physical, 'unknown')
         }
       }
-      const after = await this.signature(path, signal)
+      const after = await sessionSearchContainerSignature(path, signal)
       const complete = discovery.complete !== false
       const stable = complete && before.known && after.known && before.signature === after.signature
       if (full && complete) {
@@ -109,15 +135,22 @@ export class SessionSearchContainerInventory extends SessionSearchContainerSourc
         this.retries.delete(retryKey)
         // Empty also means an unknown schema under the existing reader contract.
         if (stable && currentCount) {
-          physical.retirement = { epoch }
-          await this.advanceRetirement(key, path, family, physical)
+          if (enumerationComplete) {
+            await this.setAuthority(key, path, physical, 'full', epoch)
+            physical.proof = epoch
+            this.acceptedProofs.set(proofKey, physical)
+          }
+          if (physical.authority?.state === 'full') {
+            physical.retirement = { authority: physical.authority.revision, phase: 'raw' }
+            await this.advanceRetirement(key, family, physical)
+          }
         }
       }
       if (full && !complete) {
         this.retries.fail(retryKey)
       }
-      if (!stable) {
-        this.acceptedProofs.delete(proofKey)
+      if (!stable && physical.authority?.state !== 'unknown') {
+        await this.setAuthority(key, path, physical, 'unknown')
       }
       physical.signature = after.signature
       physical.identity = after.known ? after.identity : physical.identity

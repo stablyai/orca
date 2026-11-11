@@ -7,7 +7,10 @@ import type {
 import type { SessionSearchDependencyFanoutCommand } from './session-search-dependency-fanout'
 import type { SessionSearchDirectoryFrontierCommand } from './session-search-directory-frontier'
 import type { SessionSearchFrontierCommand } from './session-search-frontier-transition'
-import type { SessionSearchContainerCommand } from './session-search-container-transition'
+import type {
+  SessionSearchContainerAuthority,
+  SessionSearchContainerCommand
+} from './session-search-container-transition'
 import type { SessionSearchDependencyCommand } from './session-search-dependency-transition'
 import type {
   SessionSearchDirectoryCommand,
@@ -79,6 +82,8 @@ export type SessionSearchCatalogResult = SessionSearchDirtyResult &
     observationEpoch?: number
     dependencyMore?: boolean
     invalidProof?: boolean
+    authority?: SessionSearchContainerAuthority
+    accepted?: boolean
     scopeCounts?: [string, number, number][]
     rows?: SessionSearchCatalogRow[]
     count?: number

@@ -1,3 +1,4 @@
+import { validSessionSearchContainerRemoval } from './session-search-container-transition'
 import { SESSION_SEARCH_FAILURES_BEFORE_HELD_OUT } from './session-search-read-decision'
 import { recordSessionSearchPrimaryFailure } from './session-search-primary-retries'
 import { wakeSessionSearchMetadataWrite } from './session-search-store-write'
@@ -71,23 +72,40 @@ export async function transitionSessionSearchCandidates(
     }
   }
   if (command.kind === 'remove-page') {
-    for (const row of command.rows) {
-      if (row.observation && !store.validRemoval(row.path, row.observation)) {
-        continue
+    store.catalogStorage.transaction('search_candidate_remove', () => {
+      for (const row of command.rows) {
+        if (row.observation && !store.validRemoval(row.path, row.observation)) {
+          continue
+        }
+        const receipts = row.containers?.filter((receipt) =>
+          validSessionSearchContainerRemoval(store.catalogStorage, row.path, receipt)
+        )
+        const agents = receipts
+          ? row.agents?.filter((agent) => receipts.some((receipt) => receipt.agent === agent))
+          : row.agents
+        if (receipts && (!receipts.length || !agents?.length)) {
+          continue
+        }
+        store.catalogCandidates.execute({ kind: 'remove', path: row.path, agents })
+        const agent = store.fileRow(row.path)?.agent
+        if (!store.catalogCandidates.execute({ kind: 'path', path: row.path, agent }).rows.length) {
+          store.removeReadWork(row.path)
+          store.catalogStorage.execute({
+            kind: 'frontier-set',
+            scope: 'retirement',
+            key: row.path,
+            value: JSON.stringify(row.path)
+          })
+        }
+        for (const receipt of receipts ?? []) {
+          store.catalogStorage.execute({
+            kind: 'delete',
+            scope: `${receipt.scope}:omissions`,
+            key: row.path
+          })
+        }
       }
-      store.catalogCandidates.execute({ kind: 'remove', ...row })
-      const agent = store.fileRow(row.path)?.agent
-      if (store.catalogCandidates.execute({ kind: 'path', path: row.path, agent }).rows.length) {
-        continue
-      }
-      await store.work({ kind: 'remove', path: row.path })
-      await store.catalog({
-        kind: 'frontier-set',
-        scope: 'retirement',
-        key: row.path,
-        value: JSON.stringify(row.path)
-      })
-    }
+    })
     return {
       ...store.catalogCandidates.execute({ kind: 'batch', rows: [] }),
       work: await store.work({ kind: 'stats' })

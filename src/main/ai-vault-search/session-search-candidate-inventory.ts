@@ -1,3 +1,4 @@
+import type { SessionSearchContainerRemoval } from './session-search-container-transition'
 import type { SessionSearchRemovalReceipt } from './session-search-observation-authority'
 import type { SessionSearchCatalogCandidate } from './session-search-catalog-candidates'
 import type { SessionSearchWorkResult } from './session-search-work-queue'
@@ -92,13 +93,15 @@ export class SessionSearchCandidateInventory extends SessionSearchCandidatePubli
   async remove(
     paths: ReadonlySet<string>,
     agents: ReadonlyMap<string, ReadonlySet<string>> = new Map(),
-    observations: ReadonlyMap<string, SessionSearchRemovalReceipt> = new Map()
+    observations: ReadonlyMap<string, SessionSearchRemovalReceipt> = new Map(),
+    containers: ReadonlyMap<string, SessionSearchContainerRemoval[]> = new Map()
   ) {
     let work
     const rows = [...new Set([...paths, ...agents.keys()])].map((path) => ({
       path,
       agents: paths.has(path) ? undefined : [...agents.get(path)!],
-      observation: observations.get(path)
+      observation: observations.get(path),
+      containers: containers.get(path)
     }))
     for (const page of sessionSearchRecordPages(rows)) {
       for (const row of page) {
@@ -115,7 +118,8 @@ export class SessionSearchCandidateInventory extends SessionSearchCandidatePubli
     invalidated: ReadonlySet<string> = new Set(),
     removedCandidates: ReadonlyMap<string, ReadonlySet<string>> = new Map(),
     partial = false,
-    metadata: ReadonlySet<string> = new Set()
+    metadata: ReadonlySet<string> = new Set(),
+    containerRemovals: ReadonlyMap<string, SessionSearchContainerRemoval[]> = new Map()
   ): Promise<{
     receipts: { key: string; revision: number }[]
     candidates: SessionFileCandidate[]
@@ -135,7 +139,7 @@ export class SessionSearchCandidateInventory extends SessionSearchCandidatePubli
         this.sourceOrders.delete(scope)
       }
     }
-    const work = await this.remove(removed, removedCandidates)
+    const work = await this.remove(removed, removedCandidates, new Map(), containerRemovals)
     const rows: (SessionSearchCatalogCandidate & {
       force?: boolean
       metadata?: boolean

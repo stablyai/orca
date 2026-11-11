@@ -82,7 +82,14 @@ export class SessionSearchStore {
       undefined
   ) {
     this.effects = new SessionSearchTransactionEffects(
-      () => this.catalogCandidates.rollbackPoint(),
+      () => {
+        const candidates = this.catalogCandidates.rollbackPoint()
+        const work = this.workCatalog?.rollbackPoint()
+        return () => {
+          candidates()
+          work?.()
+        }
+      },
       (path) => this.fileRow(path),
       publishSourceWake
     )
@@ -165,6 +172,10 @@ export class SessionSearchStore {
   }
   async catalog(command: SessionSearchCatalogCommand) {
     return this.catalogStorage.response(command)
+  }
+
+  removeReadWork(path: string): void {
+    this.workCatalog?.removeAccepted(this.catalogStorage, path)
   }
 
   validRemoval(path: string, receipt: SessionSearchRemovalReceipt): boolean {
