@@ -150,14 +150,14 @@ it.each([
         <CurrentPane />
       </TooltipProvider>
     )
-    const name = screen.getByRole('textbox', { name: 'Display Name' })
+    const name = screen.getByRole('textbox', { name: /display name/i })
     expect(name).toHaveProperty('value', selected.displayName)
     fireEvent.compositionStart(name)
     fireEvent.change(name, { target: { value: 'uncommitted name' } })
     act(() =>
       useAppStore.setState({ repos: repos.map((repo) => ({ ...repo, projectGroupOrder: 42 })) })
     )
-    expect(screen.getByRole('textbox', { name: 'Display Name' })).toHaveProperty(
+    expect(screen.getByRole('textbox', { name: /display name/i })).toHaveProperty(
       'value',
       'uncommitted name'
     )
@@ -165,7 +165,7 @@ it.each([
     expect(screen.getByText('Current source unavailable')).toBeTruthy()
     expect(update).not.toHaveBeenCalled()
     act(() => useAppStore.setState({ repos }))
-    expect(screen.getByRole('textbox', { name: 'Display Name' })).toHaveProperty(
+    expect(screen.getByRole('textbox', { name: /display name/i })).toHaveProperty(
       'value',
       'uncommitted name'
     )

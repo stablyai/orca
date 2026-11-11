@@ -168,6 +168,8 @@ it('keeps the actual implicit and explicitly chosen checkout through control sav
       settingsProjectList: entries,
       activeSectionId,
       setActiveSectionId,
+      generalSubPage: null,
+      setGeneralSubPage: nothing,
       pendingNavRequestTick,
       setPendingNavRequestTick,
       setMountedSectionIds,
@@ -338,7 +340,7 @@ it('keeps the actual implicit and explicitly chosen checkout through control sav
   expect(screen.getByText('No settings found for "sparse checkout presets"')).toBeTruthy()
   expect(screen.queryByRole('button', { name: 'Save preset' })).toBeNull()
   expect(document.getElementById('repo-a-source-control-ai-commitMessage')).toBeNull()
-  const unavailableDuringGap = screen.queryByText('Available Hosts') !== null
+  const unavailableDuringGap = screen.queryByText(/available hosts/i) !== null
   act(() => useAppStore.setState({ repos: [first, twin] }))
   expect(screen.getByRole('textbox', { name: 'Name' })).toHaveProperty('value', 'unsaved preset')
   expect(screen.getByText('src', { exact: true })).toBeTruthy()
@@ -377,7 +379,7 @@ it('keeps the actual implicit and explicitly chosen checkout through control sav
       writeRepo.mock.calls.some(([args]) => args.updates.worktreeBasePath === '../pending-location')
     ).toBe(true)
   )
-  const name = screen.getByRole('textbox', { name: 'Display Name' })
+  const name = screen.getByRole('textbox', { name: /display name/i })
   fireEvent.compositionStart(name)
   fireEvent.change(name, { target: { value: '未確定' } })
   const beforeComposition = writeRepo.mock.calls.length
@@ -386,9 +388,9 @@ it('keeps the actual implicit and explicitly chosen checkout through control sav
       settings: { ...saved, projectGroupingOverrides: { [projectId]: 'folder' } }
     })
   )
-  expect(screen.getByRole('textbox', { name: 'Display Name' })).toHaveProperty('value', '未確定')
+  expect(screen.getByRole('textbox', { name: /display name/i })).toHaveProperty('value', '未確定')
   expect(writeRepo).toHaveBeenCalledTimes(beforeComposition)
-  fireEvent.compositionEnd(screen.getByRole('textbox', { name: 'Display Name' }))
+  fireEvent.compositionEnd(screen.getByRole('textbox', { name: /display name/i }))
   await waitFor(() =>
     expect(writeRepo.mock.calls.some(([args]) => args.updates.displayName === '未確定')).toBe(true)
   )

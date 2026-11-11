@@ -6,7 +6,9 @@ import { hookMount, settleQueryNotifications } from '../test-support/rpc-recordi
 import type { MobileWorkspaceRepo } from './new-worktree-modal-types'
 import { useNewWorkspaceRepositories } from './use-new-workspace-repositories'
 
-vi.mock('react-native', () => ({ AppState: {} }))
+vi.mock('react-native', () => ({
+  AppState: { currentState: 'active', addEventListener: () => ({ remove: () => {} }) }
+}))
 const servers = vi.hoisted(() => {
   const state: { repos: ReadonlyMap<string, unknown[]> } = { repos: new Map() }
   return state

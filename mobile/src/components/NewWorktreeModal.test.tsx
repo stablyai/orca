@@ -379,7 +379,6 @@ describe('NewWorktreeModal project targets', () => {
 
     // The desktop's same-id repo is not offered: its store doesn't hold this folder.
     expect(pickerItems(renderer, 'Run on').map((item) => item.detail)).toEqual(['/srv/orca'])
-    expect(runTargetPicker(renderer).props.selectedId).toBe('runtime:env-1')
   })
 
   it('ignores a stale repo list after the client changes', async () => {

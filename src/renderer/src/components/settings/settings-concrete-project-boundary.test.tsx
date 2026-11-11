@@ -122,13 +122,13 @@ it('keeps retained server Settings available without borrowing local hooks/path/
   const user = userEvent.setup()
   const view = render(<Harness repos={[local]} host="runtime:server" />)
   expect(needed).toEqual([])
-  expect(screen.queryByLabelText('Display Name')).toBeNull()
+  expect(screen.queryByLabelText(/display name/i)).toBeNull()
   expect(screen.queryByText('/local/app', { selector: 'section > div > p' })).toBeNull()
-  expect(screen.getByText('Available Hosts')).toBeTruthy()
+  expect(screen.getByText(/available hosts/i)).toBeTruthy()
   expect(updateRepo).not.toHaveBeenCalled()
   view.rerender(<Harness repos={[local, server]} host="runtime:server" />)
   expect(needed).toEqual([server])
-  await user.type(screen.getByLabelText('Display Name'), ' changed')
+  await user.type(screen.getByLabelText(/display name/i), ' changed')
   expect(updateRepo).toHaveBeenLastCalledWith(
     'same',
     expect.objectContaining({ displayName: expect.stringContaining('changed') }),
@@ -136,10 +136,10 @@ it('keeps retained server Settings available without borrowing local hooks/path/
   )
   view.rerender(<Harness repos={[local]} host="runtime:server" />)
   expect(needed).toEqual([])
-  expect(screen.queryByLabelText('Display Name')).toBeNull()
+  expect(screen.queryByLabelText(/display name/i)).toBeNull()
   view.rerender(<Harness repos={[local, server]} host="local" />)
   expect(needed).toEqual([local])
-  await user.type(screen.getByLabelText('Display Name'), ' local')
+  await user.type(screen.getByLabelText(/display name/i), ' local')
   expect(updateRepo).toHaveBeenLastCalledWith('same', expect.anything(), { hostId: 'local' })
   // Sole unstamped/unconnected legacy rows remain usable; ambiguous legacy rows cannot impersonate a stamped server.
   const { executionHostId: _host, ...legacy } = local
