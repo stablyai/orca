@@ -65,16 +65,6 @@ import { applyPaneLayoutGeometry } from './pane-layout/pane-layout-geometry-appl
 import type { TerminalPaneLayoutNode } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { FIRST_PANE_ID } from '../../../../shared/pane-key'
 
-export type {
-  PaneManagerOptions,
-  PaneStyleOptions,
-  ManagedPane,
-  DropZone,
-  PaneExternalDropTarget,
-  PaneExternalDropResolver,
-  PaneExternalDropHandler
-} from './pane-manager-types'
-
 export class PaneManager {
   private root: HTMLElement
   private panes = new Map<number, ManagedPaneInternal>()

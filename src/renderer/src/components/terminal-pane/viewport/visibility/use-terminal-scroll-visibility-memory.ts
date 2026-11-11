@@ -3,7 +3,6 @@ import type { Terminal } from '@xterm/xterm'
 import { flushTerminalOutput } from '@/lib/pane-manager/terminal-output/pane-terminal-output-scheduler'
 import {
   cancelDeferredScrollRestore,
-  captureScrollState,
   getTerminalOutputEpoch
 } from '@/lib/pane-manager/terminal-scroll/pane-scroll'
 import {
@@ -11,7 +10,10 @@ import {
   markTerminalFollowOutput
 } from '@/lib/pane-manager/terminal-scroll/terminal-scroll-intent'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import type { ScrollState } from '@/lib/pane-manager/pane-manager-types'
+import {
+  captureScrollState,
+  type ScrollState
+} from '@/lib/pane-manager/terminal-scroll/pane-scroll-snapshot'
 
 type VisibleScrollSnapshot = {
   scrollState: ScrollState
