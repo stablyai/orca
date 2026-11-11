@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { z } from 'zod'
+import * as z from 'zod'
 import type { ClaudeSessionStatus } from '../../../../src/shared/native-chat/claude-session-status'
 import { isMobileMethodUnavailableError } from '../../transport/rpc/mobile-method-unavailable'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
