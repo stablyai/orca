@@ -45,6 +45,9 @@ export type ControlAttachment = {
   clientKeepalive?: boolean
   // A keepalive control found silent: one relay ping sent at this time (see probeSilentControls).
   probeAt?: number
+  // Upgrade and activation times, for metrics (absent on attachments from before these fields).
+  openedAt?: number
+  activeAt?: number
 }
 export type Attachment = ControlAttachment
 export type Conn = {

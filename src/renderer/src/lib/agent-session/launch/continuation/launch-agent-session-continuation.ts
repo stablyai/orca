@@ -20,8 +20,8 @@ import {
 import type { AgentLaunchChoice } from '@/lib/agent-session/launch/routing/agent-menu-selection'
 import type { AgentLaunchRoute } from '@/lib/agent-session/launch/routing/agent-launch-routing'
 import { translate } from '@/i18n/i18n'
-import { resolveWorktreeDisplayName } from '@/lib/worktree-default-display-name'
-import { getResolvedExecutionHostIdForWorktree } from '@/lib/resolved-worktree-execution-host'
+import { resolveWorktreeDisplayName } from '@/lib/workspace/display/worktree-default-display-name'
+import { getResolvedExecutionHostIdForWorktree } from '@/lib/workspace/ownership/resolved-worktree-execution-host'
 import { workspaceNavigationToastAction } from '@/lib/workspace/activation/workspace-navigation-toast-action'
 
 type LaunchAgentSessionContinuationArgs = {

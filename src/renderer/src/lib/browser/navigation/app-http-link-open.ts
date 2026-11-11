@@ -1,15 +1,12 @@
-import type { AppState } from '@/store/types'
 import {
   canNativeChatOpenOwnedBrowser,
   resolveNativeChatHttpLinkSourceOwner
 } from '@/components/native-chat/links/actions/native-chat-http-link-source-owner'
-import { getWorkspaceClientCreationActionPolicy } from '../../client-creation-action-policy'
-import {
-  openOwnedHttpLink,
-  type HttpLinkDestination,
-  type HttpLinkSourceOwner
-} from './http-link-routing'
+import { getWorkspaceClientCreationActionPolicy } from '../../workspace/creation/surface-policy/client-creation-action-policy'
+import { openOwnedHttpLink } from './http-link-routing'
+import type { HttpLinkDestination, HttpLinkSourceOwner } from './http-link-routing'
 import { getShortcutPlatform } from '../../keyboard/shortcut-platform'
+import type { AppState } from '@/store/types'
 
 // The store registers itself so link buttons need not import it.
 let appStateAccessor: (() => AppState) | null = null

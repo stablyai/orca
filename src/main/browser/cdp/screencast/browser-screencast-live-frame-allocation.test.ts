@@ -40,6 +40,7 @@ function createLiveFrameRoute(
     maxHeight: 1200,
     everyNthFrame: 2,
     minFrameIntervalMs: 0,
+    holdPaint: () => () => {},
     onFrame
   }
   const isClosed = () => false

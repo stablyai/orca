@@ -1,8 +1,4 @@
-import type { Repo } from '../../../../../../shared/repo-types'
-import { resolveReviewRepository } from '@/lib/review-owner'
-import type { AppState } from '../../../types'
-import type { OpenFile } from '../types/open-file'
-import type { OpenCheckRunDetailsState } from '../../../../../../shared/editor-tab-view-types'
+import { resolveReviewRepository } from '@/lib/source-control/review/review-owner'
 import { getCheckRunTabIdentity } from '@/components/editor/check-details/actions/check-run-details-tab'
 import {
   LOCAL_EXECUTION_HOST_ID,
@@ -22,9 +18,11 @@ import {
 import { layoutFrameWorkspace } from '@/runtime/workspace-layout/frames/layout-frame-workspaces'
 import {
   resolveWorktreeOperationRoute,
-  resolveWorktreeOperationRouteForHost,
-  type WorktreeOperationOwnerRecord,
-  type WorktreeOperationRoute
+  resolveWorktreeOperationRouteForHost
+} from '@/lib/workspace/ownership/worktree-operation-route'
+import type {
+  WorktreeOperationOwnerRecord,
+  WorktreeOperationRoute
 } from '@/lib/workspace/ownership/worktree-operation-route'
 import { resolveExactWorktreeRoute } from '@/lib/workspace/ownership/worktree-owner-route'
 import { onPairedWebClientHost } from '@/app-shell/platform/paired-web-client-host'
@@ -34,6 +32,10 @@ import {
   selectDetectedWorktreesByRepo,
   selectWorktreesByRepo
 } from '../../../workspaces/catalog/workspace-record-fields'
+import type { Repo } from '../../../../../../shared/repo-types'
+import type { AppState } from '../../../types'
+import type { OpenFile } from '../types/open-file'
+import type { OpenCheckRunDetailsState } from '../../../../../../shared/editor-tab-view-types'
 
 export type CheckRunDetailsOwnership = Pick<
   OpenFile,

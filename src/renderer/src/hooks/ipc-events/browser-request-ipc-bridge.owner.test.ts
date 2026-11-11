@@ -73,6 +73,7 @@ function storeState(activeWorktreeId: string) {
       [LOCAL_WT]: [{ id: 'ws-local' }],
       [REMOTE_WT]: [{ id: 'ws-remote' }]
     },
+    browserAnnotationsByPageId: {},
     browserPagesByWorkspace: {
       'ws-local': [{ id: 'page-local' }],
       'ws-remote': [{ id: 'page-remote' }]

@@ -1,15 +1,18 @@
 /** What one twin owns, read back out of a host-twin fixture's store and module stores. */
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
-import type { AppState } from '../../types'
 import {
   readNativeChatComposerDraft,
   updateNativeChatComposerDraft
 } from '@/components/native-chat/drafts/native-chat-composer-draft-store'
-import { forgetWorktreeSleepIntent, hasWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
+import {
+  forgetWorktreeSleepIntent,
+  hasWorktreeSleepIntent
+} from '@/lib/workspace/sleep/worktree-sleep-intent'
 import {
   clearHugeRepoWarningDismissalsForTests,
   hasDismissedHugeRepoWarning
 } from '@/lib/source-control/warnings/source-control-huge-repo-warning-dismissals'
+import type { AppState } from '../../types'
 import type { HostTwinFixture, HostTwinSide } from './host-twin.test-fixture'
 
 export function resetHostTwinModuleStores(fixture: HostTwinFixture): void {
