@@ -43,15 +43,39 @@ it.each([40, 400])(
     const local = vi.spyOn(catalog, 'execute').mockImplementation((command) => {
       const result = execute(command)
       localRows +=
-        command.kind === 'put'
-          ? command.rows.length
-          : command.kind === 'get'
-            ? 1
-            : command.kind === 'page'
-              ? (result.rows?.length ?? 0)
-              : 0
+        (command.kind === 'get' || command.kind === 'put') && catalog.inventory.owner(command.scope)
+          ? 0
+          : command.kind === 'put'
+            ? command.rows.length
+            : command.kind === 'get'
+              ? 1
+              : command.kind === 'page'
+                ? (result.rows?.length ?? 0)
+                : 0
       return result
     })
+    const getValue = catalog.inventory.loadValue.bind(catalog.inventory)
+    const typedReads = vi.spyOn(catalog.inventory, 'loadValue').mockImplementation((...args) => {
+      localRows++
+      return getValue(...args)
+    })
+    const putValue = catalog.inventory.putValue.bind(catalog.inventory)
+    const typedWrites = vi.spyOn(catalog.inventory, 'putValue').mockImplementation((...args) => {
+      localRows++
+      return putValue(...args)
+    })
+    const deleteStaged = catalog.inventory.deleteStaged.bind(catalog.inventory)
+    const minimumFloor = catalog.inventory.minimumFloor.bind(catalog.inventory)
+    const floorReads = vi.spyOn(catalog.inventory, 'minimumFloor').mockImplementation((scope) => {
+      localRows += 3
+      return minimumFloor(scope)
+    })
+    const stagedDeletes = vi
+      .spyOn(catalog.inventory, 'deleteStaged')
+      .mockImplementation((...args) => {
+        localRows += args[3].length
+        return deleteStaged(...args)
+      })
     const request = async (command: SessionSearchCatalogCommand) => {
       envelopes++
       const result = catalog.response(command)
@@ -157,6 +181,10 @@ it.each([40, 400])(
     } finally {
       transactionTraffic.mockRestore()
       local.mockRestore()
+      typedReads.mockRestore()
+      typedWrites.mockRestore()
+      stagedDeletes.mockRestore()
+      floorReads.mockRestore()
       db.close()
       await harness.cleanup()
     }

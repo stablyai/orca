@@ -1,17 +1,20 @@
 import { dirname } from 'node:path'
 import { isInsideSessionRoot } from '../ai-vault/session-file-discovery'
 import type { SessionSearchCatalog, SessionSearchCatalogRow } from './session-search-catalog'
-export function authorityValue<T>(row: SessionSearchCatalogRow | undefined): T | undefined {
+import { sessionSearchValueRow, type SessionSearchValueRow } from './session-search-value-row'
+export function authorityValue<T>(
+  row: SessionSearchCatalogRow | SessionSearchValueRow | undefined
+): T | undefined {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these connection-private records have one typed writer.
-  return row ? (JSON.parse(row.value) as T) : undefined
+  return row ? (('data' in row ? row.data : JSON.parse(row.value)) as T) : undefined
 }
 
 type Authority = { self: number; tree: number }
 
 /** Facts are shared only within one synchronous inventory transition. */
 export class SessionSearchAuthorityPage {
-  private readonly rows = new Map<string, SessionSearchCatalogRow | undefined>()
-  private readonly writes = new Map<string, SessionSearchCatalogRow>()
+  private readonly rows = new Map<string, SessionSearchValueRow | undefined>()
+  private readonly writes = new Map<string, SessionSearchValueRow>()
   private base: string | undefined
   private baseRead = false
   private floor: number | undefined
@@ -20,18 +23,22 @@ export class SessionSearchAuthorityPage {
     readonly scope: string
   ) {}
 
-  get(scope: string, path: string): SessionSearchCatalogRow | undefined {
+  get(scope: string, path: string): SessionSearchValueRow | undefined {
     const key = `${scope}\0${path}`
     if (!this.rows.has(key)) {
-      this.rows.set(key, this.catalog.execute({ kind: 'get', scope, key: path }).rows?.[0])
+      this.rows.set(key, this.catalog.valueRow(scope, path))
     }
     return this.rows.get(key)
   }
   forget(scope: string, path: string): void {
     this.rows.delete(`${scope}\0${path}`)
   }
-  changed(scope: string, path: string, row?: SessionSearchCatalogRow): void {
-    this.rows.set(`${scope}\0${path}`, row)
+  changed(
+    scope: string,
+    path: string,
+    row?: SessionSearchCatalogRow | SessionSearchValueRow
+  ): void {
+    this.rows.set(`${scope}\0${path}`, row && ('data' in row ? row : sessionSearchValueRow(row)))
   }
   private root(): string | undefined {
     if (!this.baseRead) {
@@ -61,7 +68,7 @@ export class SessionSearchAuthorityPage {
       const tree = Math.max(revision, old?.tree ?? 0)
       const row = {
         key,
-        value: JSON.stringify({ self: key === path ? revision : (old?.self ?? 0), tree }),
+        data: { self: key === path ? revision : (old?.self ?? 0), tree },
         parent: '',
         group: '',
         rank: tree,
@@ -85,8 +92,8 @@ export class SessionSearchAuthorityPage {
       if (key === path || this.get(`${this.scope}:directories`, key)) {
         continue
       }
-      const row = { key, value: 'true', parent: dirname(key), group: '', rank: 0, ready: 0 }
-      this.catalog.execute({ kind: 'put', scope: `${this.scope}:directories`, rows: [row] })
+      const row = { key, data: true, parent: dirname(key), group: '', rank: 0, ready: 0 }
+      this.catalog.putValue(`${this.scope}:directories`, row)
       this.changed(`${this.scope}:directories`, key, row)
     }
   }
@@ -100,18 +107,7 @@ export class SessionSearchAuthorityPage {
     )
     let live = scopes.some((scope) => !!this.rows.get(`${scope}\0${path}`))
     if (!live) {
-      this.floor ??= Math.min(
-        ...['epochs', 'observation-epochs', 'removal-epochs'].map(
-          (suffix) =>
-            this.catalog.execute({
-              kind: 'page',
-              scope: `${this.scope}:${suffix}`,
-              group: '',
-              orderRank: true,
-              limit: 1
-            }).rows?.[0]?.rank ?? Infinity
-        )
-      )
+      this.floor ??= this.catalog.minimumFloor(this.scope)
       // A protected witness gets one liveness check when its epoch permits cleanup.
       if (row.rank <= this.floor) {
         live = scopes.some((scope) => !!this.get(scope, path))
@@ -131,7 +127,7 @@ export class SessionSearchAuthorityPage {
   }
   flush(): void {
     for (const row of this.writes.values()) {
-      this.catalog.execute({ kind: 'put', scope: `${this.scope}:authority`, rows: [row] })
+      this.catalog.putValue(`${this.scope}:authority`, row)
     }
     this.writes.clear()
   }

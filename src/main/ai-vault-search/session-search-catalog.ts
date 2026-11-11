@@ -20,7 +20,6 @@ export type { SessionSearchCatalogCommand, SessionSearchCatalogResult, SessionSe
 
 /** Inactive observations and obligations spill to this connection's private scratch catalog. */
 export class SessionSearchCatalog extends SessionSearchCatalogStorage {
-  private readonly touched = new Set<string>()
   private revision = 0
   constructor(
     db: SyncDatabase,
@@ -34,13 +33,14 @@ export class SessionSearchCatalog extends SessionSearchCatalogStorage {
   }
 
   transaction<T>(name: string, run: () => T): T {
+    this.inventory.flush()
     const effects = this.effects?.begin()
     let result: T,
       opened = false
     try {
       this.db.exec(`SAVEPOINT ${name}`)
       opened = true
-      result = run()
+      result = this.inventory.withinPage(run)
       this.db.exec(`RELEASE ${name}`)
     } catch (error) {
       try {
@@ -235,15 +235,17 @@ export class SessionSearchCatalog extends SessionSearchCatalogStorage {
           this.execute({ kind: 'delete', scope: base.scope, key })
         }
         return {}
-      case 'delete':
-        if (this.inventory.owner(base.scope)) {
-          this.inventory.delete(this.inventory.owner(base.scope)!, base.key)
+      case 'delete': {
+        const owner = this.inventory.owner(base.scope)
+        if (owner) {
+          this.inventory.delete(owner, base.key)
           return {}
         }
         this.db
           .prepare('DELETE FROM temp.search_catalog WHERE scope = ? AND key = ?')
           .run(base.scope, base.key)
         return {}
+      }
       case 'release':
         this.db.prepare('DELETE FROM temp.search_catalog WHERE scope = ?').run(base.scope)
         return {}
@@ -268,6 +270,7 @@ export class SessionSearchCatalog extends SessionSearchCatalogStorage {
         return { count }
       }
       case 'count': {
+        this.inventory.flush()
         const row = this.db
           .prepare('SELECT n,runnable FROM temp.search_catalog_counts WHERE scope=?')
           .get(base.scope)

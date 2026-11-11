@@ -18,11 +18,7 @@ export function putAuthorityValue(
   parent = '',
   group = ''
 ) {
-  catalog.execute({
-    kind: 'put',
-    scope,
-    rows: [{ key, value: JSON.stringify(value), parent, group, rank, ready }]
-  })
+  catalog.putValue(scope, { key, data: value, parent, group, rank, ready })
 }
 export function sessionSearchInputAuthority(
   catalog: SessionSearchCatalog,
@@ -208,11 +204,17 @@ export function cleanupSessionSearchAuthority(catalog: SessionSearchCatalog, sco
       parent: value.path,
       group: String(value.epoch)
     })
-    catalog.execute({
-      kind: 'delete-page',
-      scope: `${scope}:directory-input`,
-      keys: (page.rows ?? []).map((row) => row.key)
-    })
+    const keys = (page.rows ?? []).map((row) => row.key)
+    if (
+      !catalog.inventory.deleteStaged(
+        `${scope}:directory-input`,
+        value.path,
+        String(value.epoch),
+        keys
+      )
+    ) {
+      catalog.execute({ kind: 'delete-page', scope: `${scope}:directory-input`, keys })
+    }
     if (
       !catalog.execute({
         kind: 'page',
@@ -226,18 +228,7 @@ export function cleanupSessionSearchAuthority(catalog: SessionSearchCatalog, sco
     }
     return {}
   }
-  const floor = Math.min(
-    ...['epochs', 'observation-epochs', 'removal-epochs'].map(
-      (suffix) =>
-        catalog.execute({
-          kind: 'page',
-          scope: `${scope}:${suffix}`,
-          group: '',
-          orderRank: true,
-          limit: 1
-        }).rows?.[0]?.rank ?? Infinity
-    )
-  )
+  const floor = catalog.minimumFloor(scope)
   const page = catalog.execute({
     kind: 'page',
     scope: `${scope}:authority`,

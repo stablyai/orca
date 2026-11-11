@@ -1,4 +1,5 @@
 export { requireSessionSearchCandidateReason } from './session-search-candidate-reason'
+import { acceptSessionSearchDiscoveryPage } from './session-search-discovery-acceptance'
 import { admitSessionSearchCandidatePage } from './session-search-candidate-admission-page'
 import { validSessionSearchContainerRemoval } from './session-search-container-transition'
 import { SESSION_SEARCH_FAILURES_BEFORE_HELD_OUT } from './indexing/session-search-read-decision'
@@ -15,6 +16,9 @@ export async function transitionSessionSearchCandidates(
   store: SessionSearchStore,
   command: SessionSearchCandidateCommand
 ): Promise<SessionSearchCandidateResult> {
+  if (command.kind === 'batch' && command.admission) {
+    return acceptSessionSearchDiscoveryPage(store, command)
+  }
   if (command.kind === 'publication-step') {
     const publication = await stepSessionSearchPublication(store)
     return { ...store.catalogCandidates.execute({ kind: 'batch', rows: [] }), ...publication }

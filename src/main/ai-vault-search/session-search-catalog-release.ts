@@ -19,6 +19,7 @@ export function releaseSessionSearchInventory(
         catalog.execute({ kind: 'delete', scope: command.scope, key: row.key })
       }
       count += rows.length
+      catalog.inventory.invalidate()
     }
   }
   if (command.kind === 'release-prefix') {
@@ -44,11 +45,13 @@ export function releaseSessionSearchCatalog(
 ): { count: number } {
   let count = 0
   do {
+    catalog.inventory.flush()
     const next = catalog.connection
       .prepare(`SELECT scope FROM temp.search_catalog_counts
       WHERE n>0 AND (scope=? OR (scope>=? AND scope<?)) ORDER BY scope LIMIT 1`)
       .get(command.scope, `${command.scope}:`, `${command.scope}:\uffff`)
     if (!next) {
+      catalog.inventory.invalidate()
       catalog.connection
         .prepare(`DELETE FROM temp.search_inventory_sources WHERE scope=?
         AND NOT EXISTS (SELECT 1 FROM temp.search_catalog_counts
@@ -65,6 +68,7 @@ export function releaseSessionSearchCatalog(
       catalog.execute({ kind: 'delete', scope, key: row.key })
     }
     count += rows.length
+    catalog.inventory.invalidate()
   } while (command.kind === 'release-scopes' || count < 256)
   return { count }
 }

@@ -1,9 +1,50 @@
 import { initializeSessionSearchStorage } from './session-search-storage-bootstrap'
 import type SyncDatabase from '../sqlite/sync-database'
-import type { SessionSearchCatalogRow } from './session-search-catalog'
+import type {
+  SessionSearchCatalogRow,
+  SessionSearchCatalogCommand,
+  SessionSearchCatalogResult
+} from './session-search-catalog'
+import { sessionSearchValueRow, type SessionSearchValueRow } from './session-search-value-row'
 import { sessionSearchInventoryStorage } from './session-search-inventory-storage'
 
-export class SessionSearchCatalogStorage {
+export abstract class SessionSearchCatalogStorage {
+  protected readonly touched = new Set<string>()
+  abstract execute(command: SessionSearchCatalogCommand): SessionSearchCatalogResult
+
+  valueRow(scope: string, key: string): SessionSearchValueRow | undefined {
+    this.touched.add(scope)
+    const owner = this.inventory.owner(scope)
+    if (owner) {
+      return this.inventory.getValue(owner, key)
+    }
+    const row = this.execute({ kind: 'get', scope, key }).rows?.[0]
+    return row && sessionSearchValueRow(row)
+  }
+  putValue(scope: string, row: SessionSearchValueRow): void {
+    this.touched.add(scope)
+    const owner = this.inventory.owner(scope)
+    if (owner) {
+      this.inventory.putValue(owner, row)
+    } else {
+      const { data, ...fields } = row
+      this.execute({ kind: 'put', scope, rows: [{ ...fields, value: JSON.stringify(data) }] })
+    }
+  }
+  minimumFloor(scope: string): number {
+    return (
+      this.inventory.minimumFloor(scope) ??
+      Math.min(
+        ...['epochs', 'observation-epochs', 'removal-epochs'].map((suffix) => {
+          const row = this.db
+            .prepare(`SELECT rank FROM temp.search_catalog
+        WHERE scope=? AND group_key='' ORDER BY rank LIMIT 1`)
+            .get(`${scope}:${suffix}`)
+          return Number(row?.rank ?? Infinity)
+        })
+      )
+    )
+  }
   readonly inventory: ReturnType<typeof sessionSearchInventoryStorage>
   constructor(protected readonly db: SyncDatabase) {
     initializeSessionSearchStorage(db)

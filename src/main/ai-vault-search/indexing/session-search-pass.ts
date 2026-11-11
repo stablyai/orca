@@ -1,3 +1,5 @@
+import { admitSessionSearchRead } from './session-search-read-admission'
+import type { SessionSearchDiscoveryTransfer } from '../session-search-catalog-candidate-types'
 import {
   retireSessionSearchPassSources,
   wakeSessionSearchPassRetirements
@@ -78,7 +80,8 @@ export async function runSessionSearchPass(
       partial: boolean,
       existing?: Awaited<ReturnType<typeof state.candidates.update>>,
       forced: ReadonlySet<string> = new Set(),
-      metadata: ReadonlySet<string> = new Set()
+      metadata: ReadonlySet<string> = new Set(),
+      transfer?: SessionSearchDiscoveryTransfer
     ) => {
       let update =
         existing ??
@@ -89,19 +92,26 @@ export async function runSessionSearchPass(
           forced,
           new Map(),
           partial,
-          metadata
+          metadata,
+          new Map(),
+          transfer
         ))
+      if (update.scopeCounts) {
+        state.acceptCounts(update.scopeCounts)
+      }
       if (update.work) {
         state.queue.update(update.work)
         await state.retire.refresh()
       }
       do {
-        await state.parkedRetire.deletePage(
-          update.candidates.map((candidate) => candidate.file.path)
-        )
-        state.queue.update(
-          await state.candidates.admitChanges(update.receipts, !args.full, state.recovering)
-        )
+        if (!update.transferred) {
+          await state.parkedRetire.deletePage(
+            update.candidates.map((candidate) => candidate.file.path)
+          )
+          state.queue.update(
+            await state.candidates.admitChanges(update.receipts, !args.full, state.recovering)
+          )
+        }
         if (!state.candidates.pendingChanges || args.discoveryOverdue?.()) {
           break
         }
@@ -153,8 +163,24 @@ export async function runSessionSearchPass(
         await accept([], true)
       })
     )
-    state.discovery.onDiscovery((discovery, forced, metadata) =>
-      serializeDiscovery(() => accept([discovery], true, undefined, forced, metadata))
+    state.discovery.onDiscovery((discovery, forced, metadata, inputs) =>
+      serializeDiscovery(async () => {
+        await accept(
+          [discovery],
+          true,
+          undefined,
+          forced,
+          metadata,
+          inputs
+            ? {
+                inputs,
+                recent: !args.full,
+                recovering: state.recovering
+              }
+            : undefined
+        )
+        return inputs !== undefined
+      })
     )
     const swept = await withSessionDiscovery(state.discovery, () =>
       discoverSessionSearchCandidates(args.roots, { limitPerAgent: Infinity, signal, raw: true })
@@ -191,59 +217,7 @@ export async function runSessionSearchPass(
       signal,
       overdue: readOverdue,
       publications: state.candidates,
-      admit: async (work) => {
-        const admission = await state.candidates.readAdmission(work.candidate)
-        if (!state.queue.selectionCurrent(admission.work)) {
-          return undefined
-        }
-        if (admission.work.work?.version !== work.version) {
-          return undefined
-        }
-        work = admission.work.work
-        const { candidate } = work
-        const path = candidate.file.path
-        const rootDir = admission.root
-        if (rootDir === undefined) {
-          await state.queue.acknowledge(work, false)
-          return undefined
-        }
-        const observation = await state.discovery.observeForRead(
-          candidate,
-          rootDir,
-          args.roots,
-          !!work.metadata && !work.force,
-          work.metadata
-        )
-        if (observation === null) {
-          return work
-        }
-        if (observation.file === undefined) {
-          // Observation debt owns retry/holdout; accepted facts cannot certify a refused input.
-          await state.queue.acknowledge(work, false, observation.handoff)
-          return undefined
-        }
-        if (!observation.changed) {
-          return work
-        }
-        const refreshed = await state.candidates.update(
-          [{ agent: candidate.agent, rootDir, files: [observation.file] }],
-          new Set(),
-          { ...args.roots, signal },
-          observation.force ? new Set([path]) : new Set(),
-          new Map(),
-          true,
-          observation.metadata ? new Set([path]) : new Set()
-        )
-        const admitted = await state.candidates.admitChanges(
-          refreshed.receipts,
-          !args.full,
-          state.recovering,
-          { path, delivery: observation.receipt }
-        )
-        state.queue.update(admitted)
-        state.discovery.acceptReadCounts(admitted.scopeCounts)
-        return admitted.work
-      }
+      admit: (work) => admitSessionSearchRead(args, work)
     })
     await state.candidates.reconcilePublications(
       store,

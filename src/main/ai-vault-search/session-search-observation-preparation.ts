@@ -24,13 +24,13 @@ export function prepareSessionSearchObservations(
   const put = (scope: string, key: string, value: unknown) => {
     const row = {
       key,
-      value: JSON.stringify(value),
+      data: value,
       parent: dirname(key),
       group: '',
       rank: 0,
       ready: 0
     }
-    catalog.execute({ kind: 'put', scope, rows: [row] })
+    catalog.putValue(scope, row)
     authority.changed(scope, key, row)
   }
   const scopes = [

@@ -4,6 +4,7 @@ import type {
 } from './storage/session-search-store-types'
 import {
   SessionSearchCatalogClient,
+  recordSessionSearchCatalogCounts,
   type SessionSearchCatalogRequest
 } from './session-search-catalog-client'
 import { SessionSearchCatalogFrontier } from './session-search-catalog-frontier'
@@ -60,6 +61,10 @@ export class SessionSearchPassState {
     this.candidates.attach(store)
     this.queue.attach(store)
     this.discovery.attach((command) => store.catalog(command))
+  }
+  acceptCounts(scopeCounts: [string, number, number][]): void {
+    recordSessionSearchCatalogCounts(this.request, { scopeCounts })
+    this.discovery.acceptReadCounts(scopeCounts)
   }
   get pending(): boolean {
     return (

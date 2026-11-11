@@ -1,13 +1,14 @@
-import { dirname } from 'node:path'
+import type { SessionSearchValueRow } from './session-search-value-row'
+import { SessionSearchInventoryPage } from './session-search-inventory-page'
+import { SessionSearchInventoryMutations } from './session-search-inventory-mutations'
 import type SyncDatabase from '../sqlite/sync-database'
-import type { FileWithMtime } from '../ai-vault/session-scanner-types'
 import type { SessionSearchCatalogRow } from './session-search-catalog-types'
 import { initializeSessionSearchInventory } from './session-search-inventory-schema'
-import { SESSION_SEARCH_FILE_COLUMNS, sessionSearchFileValues } from './session-search-file-facts'
 import {
   SESSION_SEARCH_INVENTORY_MEMBERS,
   sessionSearchInventoryRelation,
-  decodeSessionSearchInventoryRow,
+  sessionSearchInventoryColumns,
+  decodeSessionSearchInventoryValue,
   type SessionSearchInventoryMember
 } from './session-search-inventory-relation'
 
@@ -24,12 +25,34 @@ export function sessionSearchInventoryStorage(db: SyncDatabase): SessionSearchIn
 export type SessionSearchInventoryOwner = { source: number; member: SessionSearchInventoryMember }
 
 /** Sources are interned once; per-path facts stay exclusively in the writer connection. */
-export class SessionSearchInventoryStorage {
-  constructor(readonly db: SyncDatabase) {
+export class SessionSearchInventoryStorage extends SessionSearchInventoryMutations {
+  withinPage<T>(run: () => T): T {
+    this.flush()
+    const previous = this.page
+    this.page = new SessionSearchInventoryPage(this.db)
+    try {
+      const result = run()
+      this.flush()
+      return result
+    } finally {
+      this.page = previous
+      previous?.clear()
+    }
+  }
+  flush(): void {
+    this.page?.flush()
+  }
+  invalidate(): void {
+    this.flush()
+    this.page?.clear()
+  }
+  constructor(db: SyncDatabase) {
+    super(db)
     initializeSessionSearchInventory(db)
   }
 
   open(scope: string, root: string): void {
+    this.invalidate()
     this.db
       .prepare(
         'INSERT INTO temp.search_inventory_sources(scope,root) VALUES (?,?) ON CONFLICT(scope) DO UPDATE SET root=excluded.root'
@@ -42,208 +65,87 @@ export class SessionSearchInventoryStorage {
     if (!member) {
       return undefined
     }
-    const source = this.db
-      .prepare('SELECT id FROM temp.search_inventory_sources WHERE scope=?')
-      .get(scope.slice(0, at))
-    return source ? { source: Number(source.id), member } : undefined
+    const sourceScope = scope.slice(0, at)
+    if (!this.page?.sources.has(sourceScope)) {
+      const row = this.db
+        .prepare('SELECT id FROM temp.search_inventory_sources WHERE scope=?')
+        .get(sourceScope)
+      const source = row ? Number(row.id) : undefined
+      this.page?.sources.set(sourceScope, source)
+      return source === undefined ? undefined : { source, member }
+    }
+    const source = this.page.sources.get(sourceScope)
+    return source === undefined ? undefined : { source, member }
   }
   select(owner: SessionSearchInventoryOwner): string {
     const relation = sessionSearchInventoryRelation(owner.member)
-    return `SELECT *,${relation.key} AS projected_key,${relation.parent} AS projected_parent,
+    return `SELECT ${sessionSearchInventoryColumns(owner.member)},${relation.key} AS projected_key,${relation.parent} AS projected_parent,
       ${relation.group} AS projected_group,${relation.rank} AS projected_rank,
       ${relation.ready} AS projected_ready FROM temp.${relation.table}
       WHERE source=? AND ${relation.present}`
   }
   get(owner: SessionSearchInventoryOwner, key: string): SessionSearchCatalogRow | undefined {
+    const row = this.getValue(owner, key)
+    if (!row) {
+      return undefined
+    }
+    const { data, ...fields } = row
+    return { ...fields, value: JSON.stringify(data) }
+  }
+  getValue(owner: SessionSearchInventoryOwner, key: string): SessionSearchValueRow | undefined {
+    const identity = `${owner.source}:${owner.member}:${key}`
+    if (this.page?.rows.has(identity)) {
+      return this.page.rows.get(identity)
+    }
+    const row = this.loadValue(owner, key)
+    this.page?.rows.set(identity, row)
+    return row
+  }
+  loadValue(owner: SessionSearchInventoryOwner, key: string): SessionSearchValueRow | undefined {
     const relation = sessionSearchInventoryRelation(owner.member)
     const keyColumn = owner.member === 'observation-epochs' ? 'revision' : relation.key
-    const row = this.db.prepare(`${this.select(owner)} AND ${keyColumn}=?`).get(owner.source, key)
-    return row ? decodeSessionSearchInventoryRow(owner.member, row) : undefined
+    const raw = this.db.prepare(`${this.select(owner)} AND ${keyColumn}=?`).get(owner.source, key)
+    return raw ? decodeSessionSearchInventoryValue(owner.member, raw) : undefined
+  }
+  minimumFloor(scope: string): number | undefined {
+    const owner = this.owner(`${scope}:epochs`)
+    if (!owner) {
+      return undefined
+    }
+    return Math.min(
+      ...['epochs', 'observation-epochs', 'removal-epochs'].map((kind) => {
+        const row = this.db
+          .prepare(`SELECT cutoff FROM temp.search_inventory_epochs
+        WHERE source=? AND kind=? ORDER BY cutoff LIMIT 1`)
+          .get(owner.source, kind)
+        return Number(row?.cutoff ?? Infinity)
+      })
+    )
+  }
+  deleteStaged(scope: string, parent: string, epoch: string, keys: string[]): boolean {
+    const owner = this.owner(scope)
+    if (!owner || owner.member !== 'directory-input') {
+      return false
+    }
+    if (!keys.length) {
+      return true
+    }
+    this.db
+      .prepare(`DELETE FROM temp.search_inventory_staging
+      WHERE source=? AND parent=? AND epoch=? AND path IN (SELECT value FROM json_each(?))`)
+      .run(owner.source, parent, epoch, JSON.stringify(keys))
+    for (const key of keys) {
+      this.page?.rows.delete(`${owner.source}:${owner.member}:${key}`)
+    }
+    return true
   }
   decode(
     owner: SessionSearchInventoryOwner,
     row: Record<string, unknown>
   ): SessionSearchCatalogRow {
-    return decodeSessionSearchInventoryRow(owner.member, row)
-  }
-  put(owner: SessionSearchInventoryOwner, row: SessionSearchCatalogRow): void {
-    const value: {
-      file?: Omit<FileWithMtime, 'modifiedAt'>
-      revision?: number
-      dependency?: string
-      directory?: boolean
-      self?: number
-      tree?: number
-      cutoff?: number
-      sealed?: boolean
-      removed?: boolean
-      force?: boolean
-      metadata?: boolean
-      authority?: number
-    } = JSON.parse(row.value)
-    const relation = sessionSearchInventoryRelation(owner.member)
-    let fields: Record<string, SyncDatabase.BindValue> = {}
-    let path = row.key
-    switch (owner.member) {
-      case 'files': {
-        const facts = sessionSearchFileValues(value.file!)
-        fields = {
-          file_revision: value.revision ?? 0,
-          dependency: value.dependency ?? null,
-          ...Object.fromEntries(SESSION_SEARCH_FILE_COLUMNS.map((column, n) => [column, facts[n]!]))
-        }
-        break
-      }
-      case 'directories':
-        fields = { directory: 1 }
-        break
-      case 'directory-input':
-        fields = {
-          epoch: row.group,
-          file: value.file === undefined ? null : Number(value.file),
-          directory: value.directory === undefined ? null : Number(value.directory)
-        }
-        break
-      case 'authority':
-        fields = {
-          authority_self: value.self ?? 0,
-          authority_tree: value.tree ?? 0,
-          reclaimable: row.ready
-        }
-        break
-      case 'observing': {
-        const token: string = JSON.parse(row.value)
-        const [file, dirty, authority]: number[] = JSON.parse(token)
-        fields = {
-          observation_file: file,
-          observation_dirty: dirty,
-          observation_authority: authority
-        }
-        break
-      }
-      case 'observation-epochs':
-        path = JSON.parse(row.value)
-        fields = { kind: owner.member, revision: Number(row.key), cutoff: row.rank, sealed: 0 }
-        break
-      case 'epochs':
-        fields = {
-          kind: owner.member,
-          revision: value.revision ?? 0,
-          cutoff: value.cutoff ?? row.rank,
-          sealed: Number(value.sealed)
-        }
-        break
-      case 'removal-epochs':
-        fields = { kind: owner.member, revision: row.rank, cutoff: row.rank, sealed: 0 }
-        break
-      case 'delivery': {
-        const facts = value.file
-          ? sessionSearchFileValues(value.file)
-          : SESSION_SEARCH_FILE_COLUMNS.map(() => null)
-        fields = {
-          delivery_revision: value.revision ?? 0,
-          delivery_removed: value.removed === undefined ? null : Number(value.removed),
-          delivery_force: Number(value.force ?? false),
-          delivery_metadata: value.metadata === undefined ? null : Number(value.metadata),
-          delivery_authority: value.authority ?? null,
-          ...Object.fromEntries(
-            SESSION_SEARCH_FILE_COLUMNS.map((column, n) => [`delivery_${column}`, facts[n]])
-          )
-        }
-        break
-      }
-    }
-    const parent = relation.table === 'search_inventory_activity' ? dirname(path) : row.parent
-    const columns = [
-      'source',
-      'path',
-      ...(relation.table === 'search_inventory_epochs' ? [] : ['parent']),
-      ...Object.keys(fields)
-    ]
-    const values = [
-      owner.source,
-      path,
-      ...(relation.table === 'search_inventory_epochs' ? [] : [parent]),
-      ...Object.values(fields)
-    ]
-    const identity =
-      relation.table === 'search_inventory_epochs'
-        ? owner.member === 'observation-epochs'
-          ? 'source,kind,revision'
-          : 'source,kind,path'
-        : 'source,path'
-    const predicate =
-      relation.table === 'search_inventory_epochs'
-        ? owner.member === 'observation-epochs'
-          ? "WHERE kind='observation-epochs'"
-          : "WHERE kind<>'observation-epochs'"
-        : ''
-    this.db
-      .prepare(`INSERT INTO temp.${relation.table} (${columns.join(',')}) VALUES (${columns.map(() => '?').join(',')})
-      ON CONFLICT(${identity}) ${predicate} DO UPDATE SET ${Object.keys(fields)
-        .map((column) => `${column}=excluded.${column}`)
-        .join(',')}`)
-      .run(...values)
-  }
-  delete(owner: SessionSearchInventoryOwner, key: string): boolean {
-    const previous = this.get(owner, key)
-    if (!previous) {
-      return false
-    }
-    const relation = sessionSearchInventoryRelation(owner.member)
-    if (
-      owner.member === 'directory-input' ||
-      owner.member === 'epochs' ||
-      owner.member === 'removal-epochs' ||
-      owner.member === 'observation-epochs'
-    ) {
-      this.db
-        .prepare(
-          `DELETE FROM temp.${relation.table} WHERE source=? AND ${relation.present} AND ${owner.member === 'observation-epochs' ? 'revision' : 'path'}=?`
-        )
-        .run(owner.source, key)
-    } else {
-      const fields =
-        owner.member === 'files'
-          ? [
-              'file_revision',
-              'mtime',
-              'size',
-              'dev',
-              'ino',
-              'nlink',
-              'alias_mtime',
-              'sidecar',
-              'dependency'
-            ]
-          : owner.member === 'directories'
-            ? ['directory']
-            : owner.member === 'authority'
-              ? ['authority_self', 'authority_tree', 'reclaimable']
-              : owner.member === 'observing'
-                ? ['observation_file', 'observation_dirty', 'observation_authority']
-                : [
-                    'delivery_revision',
-                    'delivery_removed',
-                    'delivery_force',
-                    'delivery_metadata',
-                    'delivery_authority',
-                    ...SESSION_SEARCH_FILE_COLUMNS.map((column) => `delivery_${column}`)
-                  ]
-      const path = key
-      this.db
-        .prepare(
-          `UPDATE temp.${relation.table} SET ${fields.map((column) => `${column}=${column === 'directory' ? '0' : 'NULL'}`).join(',')} WHERE source=? AND path=?`
-        )
-        .run(owner.source, path)
-      const empty =
-        relation.table === 'search_inventory_entries'
-          ? 'file_revision IS NULL AND directory=0'
-          : 'authority_self IS NULL AND observation_authority IS NULL AND delivery_revision IS NULL'
-      this.db
-        .prepare(`DELETE FROM temp.${relation.table} WHERE source=? AND path=? AND ${empty}`)
-        .run(owner.source, path)
-    }
-    return true
+    const value = decodeSessionSearchInventoryValue(owner.member, row)
+    this.page?.rows.set(`${owner.source}:${owner.member}:${value.key}`, value)
+    const { data, ...fields } = value
+    return { ...fields, value: JSON.stringify(data) }
   }
 }

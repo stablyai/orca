@@ -1,4 +1,5 @@
 import type { SessionSearchRemovalReceipt } from './session-search-observation-authority'
+import type { SessionSearchCandidateInput } from './session-search-catalog-candidate-types'
 import {
   SessionSearchCatalogClient,
   recordSessionSearchCatalogCounts,
@@ -65,11 +66,36 @@ export class SessionSearchDiscoverySources {
     | ((
         discovery: SessionFileDiscovery,
         forced?: ReadonlySet<string>,
-        metadata?: ReadonlySet<string>
-      ) => Promise<void>)
+        metadata?: ReadonlySet<string>,
+        inputs?: ReadonlyMap<string, SessionSearchCandidateInput>
+      ) => Promise<boolean | void>)
     | undefined
   onDiscovery(accept: NonNullable<SessionSearchDiscoverySources['accept']>): void {
     this.accept = accept
+  }
+  protected discoveryInput(
+    root: Root,
+    path: string,
+    revision: number,
+    metadataValue: number | undefined
+  ): SessionSearchCandidateInput {
+    return {
+      scope: root.inventory.scope,
+      revision,
+      metadataValue: metadataValue === undefined ? undefined : JSON.stringify(metadataValue),
+      dependencyOwners: [...root.dependencies.values()].flatMap((observer) => {
+        const owner = observer.fileOwner(path)
+        return owner ? [owner] : []
+      })
+    }
+  }
+  protected async settleDependencies(root: Root): Promise<void> {
+    for (const observer of root.dependencies.values()) {
+      await observer.settleDelivered(root.inventory.scope, this.overdue)
+      if (!root.inventory.pending && !root.inventory.refused) {
+        await observer.discardUnowned(this.overdue)
+      }
+    }
   }
   attach(request: SessionSearchCatalogRequest): void {
     this.request ??= request

@@ -1,11 +1,18 @@
 import './session-search-watcher.test-fixture'
 import { configureSessionSearchWorkerFixture } from './worker/session-search-worker.test-fixture'
+import { SessionSearchWorkerStore } from './worker/session-search-worker-store'
+import { SessionSearchPassState } from './session-search-pass-state'
+import { runSessionSearchPass } from './indexing/session-search-pass'
+import { SessionSearchDirectoryListings } from './discovery/session-search-directory-listings'
 import { join, resolve } from 'node:path'
 import { expect, it, vi } from 'vitest'
 import { SessionSearchIndexer } from './indexing/session-search-indexer'
 import { SessionSearchStore } from './storage/session-search-store'
 import { SessionSearchCandidateInventory } from './session-search-candidate-inventory'
-import { SessionSearchIndexConsumer } from './indexing/session-search-index-consumer'
+import {
+  SessionSearchIndexConsumer,
+  registerSessionSearchIndexConsumer
+} from './indexing/session-search-index-consumer'
 import { SessionSearchEngine } from './query/session-search-engine'
 import {
   openSessionSearchIndexFile,
@@ -19,6 +26,99 @@ import {
 } from './indexing/session-search-indexer-test-fixture'
 
 vi.mock('./session-search-filesystem', () => ({ sessionSearchRequiresPolling: async () => false }))
+
+it('finishes the first conversation after its discovery transfer rolls back internally', async () => {
+  const harness = await openSessionSearchIndexerHarness('ss-first-transfer-rollback')
+  const path = join(harness.claudeProjectDir, 'session.jsonl')
+  const signal = new Int32Array(new SharedArrayBuffer(4))
+  Atomics.store(signal, 0, 1)
+  configureSessionSearchWorkerFixture({
+    data: { path, signal: signal.buffer },
+    prelude: `
+      const { workerData } = require('node:worker_threads');
+      const { SessionSearchStore } = require(${JSON.stringify(resolve('src/main/ai-vault-search/storage/session-search-store.ts'))});
+      const candidates = SessionSearchStore.prototype.candidates;
+      SessionSearchStore.prototype.candidates = async function(command) {
+        if (command.kind !== 'batch' || !command.admission || !command.rows.some(row => row.candidate.file.path === workerData.path) || Atomics.compareExchange(new Int32Array(workerData.signal), 0, 1, 0) !== 1) return candidates.call(this, command);
+        this.connection.exec("CREATE TEMP TRIGGER refuse_first_transfer BEFORE UPDATE OF delivery_revision ON search_inventory_activity WHEN OLD.delivery_revision IS NOT NULL AND NEW.delivery_revision IS NULL BEGIN SELECT RAISE(ABORT,'fixture first transfer rollback'); END");
+        try { return await candidates.call(this, command); }
+        finally { this.connection.exec('DROP TRIGGER refuse_first_transfer'); }
+      };
+    `,
+    onResponse: () => undefined
+  })
+  const store = new SessionSearchWorkerStore(harness.databasePath, () => undefined)
+  const state = new SessionSearchPassState()
+  const unregister = registerSessionSearchIndexConsumer(store, state.candidates)
+  state.discovery.onDiscovery(async (discovery, forced, metadata, inputs) => {
+    const update = await state.candidates.update(
+      [discovery],
+      new Set(),
+      harness.roots,
+      forced,
+      new Map(),
+      true,
+      metadata,
+      new Map(),
+      inputs ? { inputs, recent: false, recovering: false } : undefined
+    )
+    if (update.scopeCounts) {
+      state.acceptCounts(update.scopeCounts)
+    }
+    if (update.work) {
+      state.queue.update(update.work)
+    }
+    return inputs !== undefined
+  })
+  const hits = () =>
+    harness.read((db) =>
+      db
+        .prepare(
+          "SELECT count(*) AS n FROM messages_fts WHERE messages_fts MATCH 'firsttransferneedle'"
+        )
+        .get()
+    )
+  try {
+    await writeClaudeTranscript(path, ['firsttransferneedle'], 'first-transfer')
+    await store.prepare()
+    await state.prepare(store)
+    state.discovery.begin({ full: true, maintenance: true, recentLimit: 12, overdue: () => false })
+    await expect(
+      state.discovery.files({
+        rootDir: harness.roots.claudeProjectsDir!,
+        agent: 'claude',
+        limit: 0,
+        issues: [],
+        extensions: ['.jsonl']
+      })
+    ).rejects.toThrow('fixture first transfer rollback')
+    expect(Atomics.load(signal, 0)).toBe(0)
+    expect(hits()).toEqual({ n: 0 })
+    const result = await runSessionSearchPass({
+      store,
+      state,
+      roots: harness.roots,
+      full: false,
+      purge: false,
+      recentPerAgent: 12,
+      listings: new SessionSearchDirectoryListings()
+    })
+    expect(hits()).toEqual({ n: 2 })
+    expect(result).toMatchObject({
+      completed: true,
+      outOfTime: false,
+      pending: false,
+      degradedRoots: []
+    })
+  } finally {
+    unregister()
+    await state.close()
+    store.close()
+    await store.retired()
+    configureSessionSearchWorkerFixture()
+    await harness.cleanup()
+  }
+})
 
 it.each(['dirty', 'input-receipts'])(
   'publishes failed-row recovery only after the %s transaction accepts',

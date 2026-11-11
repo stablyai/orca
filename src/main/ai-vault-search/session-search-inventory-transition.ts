@@ -1,10 +1,13 @@
 import { acknowledgeSessionSearchDirty } from './session-search-dirty-transition'
-import { SessionSearchAuthorityPage } from './session-search-authority-page'
+import {
+  SessionSearchAuthorityPage,
+  authorityValue as decode
+} from './session-search-authority-page'
 import { SESSION_INPUT_FAILURES_BEFORE_HELD_OUT } from '../ai-vault/session-observation-retries'
 import { recordSessionSearchRetry } from './session-search-retry-transition'
 import { cleanupSessionSearchAuthority } from './session-search-observation-authority'
 import { prepareSessionSearchObservations } from './session-search-observation-preparation'
-import type { SessionSearchCatalog, SessionSearchCatalogRow } from './session-search-catalog'
+import type { SessionSearchCatalog } from './session-search-catalog'
 import { sidecarUnchanged } from '../ai-vault/parse-cache/session-sidecar-stat'
 import { dirname } from 'node:path'
 
@@ -24,11 +27,6 @@ export type {
   SessionSearchInventoryResult
 } from './session-search-observation-types'
 
-function decode<T>(row: SessionSearchCatalogRow | undefined): T | undefined {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: scratch rows are written only by the matching typed inventory scope.
-  return row ? (JSON.parse(row.value) as T) : undefined
-}
-
 /** Accepted observations and retry transitions share the writer's keyed transaction. */
 export function transitionSessionSearchInventory(
   catalog: SessionSearchCatalog,
@@ -42,8 +40,8 @@ export function transitionSessionSearchInventory(
   const authority = new SessionSearchAuthorityPage(catalog, command.scope)
   const get = (scope: string, key: string) => authority.get(scope, key)
   const put = (scope: string, key: string, value: unknown, group = '', ready = 0) => {
-    const row = { key, value: JSON.stringify(value), parent: dirname(key), group, rank: 0, ready }
-    catalog.execute({ kind: 'put', scope, rows: [row] })
+    const row = { key, data: value, parent: dirname(key), group, rank: 0, ready }
+    catalog.putValue(scope, row)
     authority.changed(scope, key, row)
   }
   const remove = (scope: string, key: string) => {
@@ -55,7 +53,7 @@ export function transitionSessionSearchInventory(
   if (command.kind === 'observe-ack') {
     for (const receipt of command.receipts) {
       const row = get(delivery, receipt.path)
-      if (row && JSON.parse(row.value).revision === receipt.revision) {
+      if (row && decode<{ revision: number }>(row)?.revision === receipt.revision) {
         remove(delivery, receipt.path)
         authority.settle(receipt.path)
       }
@@ -216,7 +214,7 @@ export function transitionSessionSearchInventory(
       if (!unknown) {
         for (const owner of outcome.dependencyOwners ?? []) {
           const previous = get(owner.scope, outcome.path)
-          if (!previous || JSON.parse(previous.value) !== owner.key) {
+          if (!previous || decode<string>(previous) !== owner.key) {
             const row = {
               key: outcome.path,
               value: JSON.stringify(owner.key),

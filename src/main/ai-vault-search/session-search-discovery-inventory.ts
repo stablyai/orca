@@ -162,6 +162,8 @@ export class SessionSearchDiscoveryInventory
       const forced = new Set<string>()
       const metadata = new Set<string>()
       const paths = delta.changes.map((change) => change.file.path)
+      const changedPaths = new Set(paths)
+      const receipts = new Map(delta.receipts.map((receipt) => [receipt.path, receipt]))
       const metadataFacts = await this.metadataDebt!.getPage(paths)
       for (const change of delta.changes) {
         if (change.force) {
@@ -171,14 +173,11 @@ export class SessionSearchDiscoveryInventory
           metadata.add(change.file.path)
         }
       }
-      for (const observer of root.dependencies.values()) {
-        await observer.addFiles(paths)
-      }
-      for (const observer of root.dependencies.values()) {
-        await observer.settleDelivered(root.inventory.scope, this.overdue)
-        if (!root.inventory.walking && !root.inventory.refused) {
-          await observer.discardUnowned(this.overdue)
+      if (!this.accept || !delta.changes.length) {
+        for (const observer of root.dependencies.values()) {
+          await observer.addFiles(paths)
         }
+        await this.settleDependencies(root)
       }
       for (const observer of root.dependencies.values()) {
         await observer.removeFiles(delta.removed, delta.removalReceipts)
@@ -190,20 +189,48 @@ export class SessionSearchDiscoveryInventory
       }
       await this.acceptRemoved?.(delta.removed, delta.removalReceipts)
       if (this.accept && delta.changes.length) {
-        await this.accept(
+        const transferred = await this.accept(
           {
             agent: args.agent,
             rootDir: args.rootDir,
             files: delta.changes.map((change) => change.file)
           },
           forced,
-          metadata
+          metadata,
+          new Map(
+            delta.changes.map(({ file }) => {
+              const receipt = receipts.get(file.path)!
+              return [
+                file.path,
+                this.discoveryInput(root, file.path, receipt.revision, metadataFacts.get(file.path))
+              ]
+            })
+          )
         )
-        await this.metadataDebt!.transition({
-          kind: 'ack-values',
-          scope: this.metadataDebt!.scope,
-          rows: [...metadataFacts].map(([key, value]) => ({ key, value: JSON.stringify(value) }))
-        })
+        if (!transferred) {
+          for (const observer of root.dependencies.values()) {
+            await observer.addFiles(paths)
+          }
+          await this.settleDependencies(root)
+          await this.metadataDebt!.transition({
+            kind: 'ack-values',
+            scope: this.metadataDebt!.scope,
+            rows: [...metadataFacts].map(([key, value]) => ({ key, value: JSON.stringify(value) }))
+          })
+        } else {
+          await this.settleDependencies(root)
+          await root.inventory.acknowledge(
+            delta.receipts.filter((receipt) => !changedPaths.has(receipt.path))
+          )
+          const admittedPrimary = await admitPrimary()
+          if (
+            (!delta.changes.length && !delta.removed.length && !admittedPrimary) ||
+            this.overdue()
+          ) {
+            break
+          }
+          continue
+        }
       } else if (!this.accept) {
         await root.inventory.acknowledge(delta.receipts)
         return {

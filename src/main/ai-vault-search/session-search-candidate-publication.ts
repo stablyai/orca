@@ -1,3 +1,4 @@
+import { sessionSearchRecordPages } from './session-search-catalog-pages'
 import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
 import type {
   SessionSearchIndexStore,
@@ -33,6 +34,29 @@ export abstract class SessionSearchCandidatePublications {
       this.publications = result.pendingPublications
       return result
     }
+  }
+  async readAdmission(candidate: SessionFileCandidate) {
+    const result = await this.request!({
+      kind: 'path',
+      path: candidate.file.path,
+      agent: candidate.agent,
+      read: true
+    })
+    return { root: result.rows.find((row) => row.selected)?.root, work: result.work! }
+  }
+  async has(path: string, agent?: string | null): Promise<boolean> {
+    return (await this.request!({ kind: 'path', path, agent })).rows.length > 0
+  }
+  async unowned(rows: { path: string; agent?: string | null }[]): Promise<string[]> {
+    const unowned: string[] = []
+    for (const page of sessionSearchRecordPages(rows)) {
+      const result = await this.request!({ kind: 'unowned-page', rows: page })
+      if (!result.unowned) {
+        throw new Error('Session membership projection did not return its results')
+      }
+      unowned.push(...result.unowned)
+    }
+    return unowned
   }
   get pendingPublications(): boolean {
     return this.boundStore?.catalogPending ?? (this.publications > 0 || this.changed > 0)

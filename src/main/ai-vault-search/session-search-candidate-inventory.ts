@@ -1,16 +1,17 @@
+import type {
+  SessionSearchCandidateBatchRow,
+  SessionSearchDiscoveryTransfer
+} from './session-search-catalog-candidate-types'
 import type { SessionSearchContainerRemoval } from './session-search-container-transition'
 import type { SessionSearchRemovalReceipt } from './session-search-observation-authority'
-import type {
-  SessionSearchCandidateCommand,
-  SessionSearchCatalogCandidate
-} from './session-search-catalog-candidates'
+import type { SessionSearchCandidateCommand } from './session-search-catalog-candidates'
 import type { SessionSearchWorkResult } from './session-search-work-queue'
 import { sessionSearchRecordPages } from './session-search-catalog-pages'
 import type { SessionSearchIndexStore } from './storage/session-search-store-types'
 import { SessionSearchCandidatePublications } from './session-search-candidate-publication'
 import { splitOpenCodeSqliteCandidate } from '../../shared/opencode-sqlite-session-path'
-import { basename, dirname, extname } from 'node:path'
-import { sessionFileExecutionNamespace } from '../../shared/ai-vault/scanning/ai-vault-scope-cwd-match'
+import { basename } from 'node:path'
+import { sessionSearchCandidateGroup } from './session-search-candidate-group'
 import { discoveryFileCandidates } from '../ai-vault/session-scanner-candidates'
 import { readCodexRolloutSessionMetaId } from '../codex/history/rollouts/codex-rollout-session-meta'
 import {
@@ -22,19 +23,6 @@ import type {
   SessionFileCandidate,
   SessionFileDiscovery
 } from '../ai-vault/session-scanner-types'
-
-function groupKey(candidate: SessionFileCandidate, root: string): string {
-  const path = candidate.file.path
-  return candidate.agent === 'codex'
-    ? `codex:${sessionFileExecutionNamespace(path)}:${basename(path)}`
-    : candidate.agent === 'antigravity'
-      ? `antigravity:${dirname(path)}`
-      : candidate.agent === 'opencode' ||
-          candidate.agent === 'opencode2' ||
-          candidate.agent === 'zcode'
-        ? `${candidate.agent}:${root}:${splitOpenCodeSqliteCandidate(path, candidate.agent)?.sessionId ?? basename(path, extname(path))}`
-        : path
-}
 
 /** Bounded projections of the raw candidates; the archive never lives in this isolate. */
 export class SessionSearchCandidateInventory extends SessionSearchCandidatePublications {
@@ -48,29 +36,6 @@ export class SessionSearchCandidateInventory extends SessionSearchCandidatePubli
   override reset(): void {
     super.reset()
     this.sourceOrders.clear()
-  }
-  async readAdmission(candidate: SessionFileCandidate) {
-    const result = await this.request!({
-      kind: 'path',
-      path: candidate.file.path,
-      agent: candidate.agent,
-      read: true
-    })
-    return { root: result.rows.find((row) => row.selected)?.root, work: result.work! }
-  }
-  async has(path: string, agent?: string | null): Promise<boolean> {
-    return (await this.request!({ kind: 'path', path, agent })).rows.length > 0
-  }
-  async unowned(rows: { path: string; agent?: string | null }[]): Promise<string[]> {
-    const unowned: string[] = []
-    for (const page of sessionSearchRecordPages(rows)) {
-      const result = await this.request!({ kind: 'unowned-page', rows: page })
-      if (!result.unowned) {
-        throw new Error('Session membership projection did not return its results')
-      }
-      unowned.push(...result.unowned)
-    }
-    return unowned
   }
   async changedForRoot(root: string, agent: string) {
     return (await this.request!({ kind: 'changes', root, agent })).rows
@@ -124,7 +89,8 @@ export class SessionSearchCandidateInventory extends SessionSearchCandidatePubli
     removedCandidates: ReadonlyMap<string, ReadonlySet<string>> = new Map(),
     partial = false,
     metadata: ReadonlySet<string> = new Set(),
-    containerRemovals: ReadonlyMap<string, SessionSearchContainerRemoval[]> = new Map()
+    containerRemovals: ReadonlyMap<string, SessionSearchContainerRemoval[]> = new Map(),
+    transfer?: SessionSearchDiscoveryTransfer
   ): Promise<{
     receipts: { key: string; revision: number }[]
     candidates: SessionFileCandidate[]
@@ -132,6 +98,8 @@ export class SessionSearchCandidateInventory extends SessionSearchCandidatePubli
     forced: Set<string>
     metadata: Set<string>
     work?: SessionSearchWorkResult
+    transferred?: boolean
+    scopeCounts?: [string, number, number][]
   }> {
     if (!this.request) {
       throw new Error('Session candidate catalog is not attached')
@@ -144,29 +112,26 @@ export class SessionSearchCandidateInventory extends SessionSearchCandidatePubli
         this.sourceOrders.delete(scope)
       }
     }
-    const work = await this.remove(removed, removedCandidates, new Map(), containerRemovals)
-    const rows: (SessionSearchCatalogCandidate & {
-      force?: boolean
-      metadata?: boolean
-    })[] = []
+    let work = await this.remove(removed, removedCandidates, new Map(), containerRemovals)
+    const rows: SessionSearchCandidateBatchRow[] = []
     for (const discovery of discoveries) {
       const projected = discoveryFileCandidates(discovery, discovery.files, options)
+      const eligible = projected.filter(
+        (candidate) =>
+          candidate.agent === 'codex' && /^rollout-.+\.jsonl$/.test(basename(candidate.file.path))
+      )
       const contestedPaths = new Set(
-        (
-          await this.request({
-            kind: 'contested',
-            rows: projected
-              .filter(
-                (candidate) =>
-                  candidate.agent === 'codex' &&
-                  /^rollout-.+\.jsonl$/.test(basename(candidate.file.path))
-              )
-              .map((candidate) => ({
-                group: groupKey(candidate, discovery.rootDir),
-                path: candidate.file.path
-              }))
-          })
-        ).contested
+        eligible.length
+          ? (
+              await this.request({
+                kind: 'contested',
+                rows: eligible.map((candidate) => ({
+                  group: sessionSearchCandidateGroup(candidate, discovery.rootDir),
+                  path: candidate.file.path
+                }))
+              })
+            ).contested
+          : []
       )
       const scope = `${discovery.agent}:${discovery.rootDir}`
       if (discovery.sourceOrder && this.sourceOrders.get(scope) !== discovery.sourceOrder) {
@@ -186,7 +151,7 @@ export class SessionSearchCandidateInventory extends SessionSearchCandidatePubli
       }
       for (const candidate of projected) {
         this.invalidate(candidate.file.path)
-        const group = groupKey(candidate, discovery.rootDir)
+        const group = sessionSearchCandidateGroup(candidate, discovery.rootDir)
         const source = splitOpenCodeSqliteCandidate(
           candidate.file.path,
           candidate.agent === 'zcode' ? 'zcode' : 'opencode'
@@ -249,6 +214,7 @@ export class SessionSearchCandidateInventory extends SessionSearchCandidatePubli
         }
         rows.push({
           candidate,
+          input: transfer?.inputs.get(candidate.file.path),
           root: discovery.rootDir,
           group,
           alias,
@@ -268,8 +234,29 @@ export class SessionSearchCandidateInventory extends SessionSearchCandidatePubli
         })
       }
     }
+    const scopeCounts: [string, number, number][] = []
     for (const page of sessionSearchRecordPages(rows)) {
-      await this.request({ kind: 'batch', rows: page })
+      const response = await this.request({
+        kind: 'batch',
+        rows: page,
+        admission: transfer
+          ? { recent: transfer.recent, recovering: transfer.recovering }
+          : undefined
+      })
+      work = response.work ?? work
+      scopeCounts.push(...(response.scopeCounts ?? []))
+    }
+    if (transfer) {
+      return {
+        work,
+        scopeCounts,
+        transferred: true,
+        receipts: [],
+        candidates: [],
+        suppressed: new Set(),
+        forced: new Set(),
+        metadata: new Set()
+      }
     }
     const changed = await this.request({ kind: 'changes' })
     const suppressed = new Set(

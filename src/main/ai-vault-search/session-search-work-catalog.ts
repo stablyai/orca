@@ -46,7 +46,11 @@ export class SessionSearchWorkCatalog {
     return this.db.isTransaction ? run() : this.catalog.transaction('search_read_work_accept', run)
   }
   private entry(path: string) {
-    return this.db.prepare('SELECT * FROM temp.search_read_work WHERE path=?').get(path)
+    return this.db
+      .prepare(
+        'SELECT path,fact_id,fact_revision,version,force_read,metadata,lane,rank,ordering,due,deferred FROM temp.search_read_work WHERE path=?'
+      )
+      .get(path)
   }
   private reference(row: Record<string, unknown>): SessionSearchFactReference {
     return { id: Number(row.fact_id), revision: Number(row.fact_revision) }
@@ -124,7 +128,7 @@ export class SessionSearchWorkCatalog {
   next(eligibleThrough = this.order): SessionSearchWork[] {
     const lanes = (['changed', 'backlog'] as const).map((lane) =>
       this.db
-        .prepare(`SELECT * FROM temp.search_read_work
+        .prepare(`SELECT path,fact_id,fact_revision,version,force_read,metadata,lane,rank,ordering,due,deferred FROM temp.search_read_work
       WHERE lane='${lane}' AND (deferred=0 OR ordering<=?) ORDER BY rank,ordering,path LIMIT 256`)
         .iterate(eligibleThrough)
     )

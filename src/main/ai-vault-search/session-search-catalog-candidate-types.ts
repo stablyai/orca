@@ -19,6 +19,23 @@ export type SessionSearchCatalogCandidate = {
   sourcePath?: string
 }
 
+export type SessionSearchCandidateInput = {
+  scope: string
+  revision: number
+  metadataValue?: string
+  dependencyOwners?: { scope: string; key: string }[]
+}
+export type SessionSearchCandidateBatchRow = SessionSearchCatalogCandidate & {
+  force?: boolean
+  metadata?: boolean
+  input?: SessionSearchCandidateInput
+}
+export type SessionSearchDiscoveryTransfer = {
+  inputs: ReadonlyMap<string, SessionSearchCandidateInput>
+  recent: boolean
+  recovering: boolean
+}
+
 export type SessionSearchCandidateCommand =
   | { kind: 'publication-step' }
   | {
@@ -31,7 +48,8 @@ export type SessionSearchCandidateCommand =
   | { kind: 'put'; row: SessionSearchCatalogCandidate }
   | {
       kind: 'batch'
-      rows: (SessionSearchCatalogCandidate & { force?: boolean; metadata?: boolean })[]
+      rows: SessionSearchCandidateBatchRow[]
+      admission?: { recent: boolean; recovering: boolean }
     }
   | { kind: 'contested'; rows: { group: string; path: string }[] }
   | { kind: 'remove'; path: string; agents?: string[] }

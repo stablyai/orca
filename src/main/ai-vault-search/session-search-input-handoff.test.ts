@@ -29,6 +29,8 @@ it.each([
   'apply-before',
   'apply-after',
   'apply-newer',
+  'transfer-before',
+  'transfer-after',
   'directory-schedule'
 ] as const)('retains a delivered new conversation across %s rejection', async (failure) => {
   const harness = await openSessionSearchIndexerHarness('ss-input-handoff')
@@ -55,19 +57,24 @@ it.each([
     .spyOn(SessionSearchWorkerClient.prototype, 'request')
     .mockImplementation(async function (this: SessionSearchWorkerClient, command) {
       const target =
-        command.op === 'catalog' &&
-        ((failure.startsWith('event-') &&
-          command.command.kind === 'input-invalidate' &&
-          command.command.path === second) ||
-          (failure.startsWith('prepare-') &&
-            command.command.kind === 'observe-prepare' &&
-            command.command.inputs.some((input) => input.path === second)) ||
-          (failure.startsWith('apply-') &&
-            command.command.kind === 'observe-apply' &&
-            command.command.outcomes.some((input) => input.path === second)) ||
-          (failure === 'directory-schedule' &&
-            command.command.kind === 'directory-schedule' &&
-            command.command.path === directory))
+        (command.op === 'catalog' &&
+          ((failure.startsWith('event-') &&
+            command.command.kind === 'input-invalidate' &&
+            command.command.path === second) ||
+            (failure.startsWith('prepare-') &&
+              command.command.kind === 'observe-prepare' &&
+              command.command.inputs.some((input) => input.path === second)) ||
+            (failure.startsWith('apply-') &&
+              command.command.kind === 'observe-apply' &&
+              command.command.outcomes.some((input) => input.path === second)) ||
+            (failure === 'directory-schedule' &&
+              command.command.kind === 'directory-schedule' &&
+              command.command.path === directory))) ||
+        (command.op === 'candidates' &&
+          failure.startsWith('transfer-') &&
+          command.command.kind === 'batch' &&
+          !!command.command.admission &&
+          command.command.rows.some((row) => row.candidate.file.path === second))
       if (armed && !rejected && target) {
         rejected = true
         if (failure.endsWith('after')) {

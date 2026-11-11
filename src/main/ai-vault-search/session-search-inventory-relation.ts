@@ -1,4 +1,5 @@
 import type { SessionSearchCatalogRow } from './session-search-catalog-types'
+import type { SessionSearchValueRow } from './session-search-value-row'
 import { sessionSearchFileFacts } from './session-search-file-facts'
 
 export const SESSION_SEARCH_INVENTORY_MEMBERS = [
@@ -44,7 +45,7 @@ export function sessionSearchInventoryRelation(
     return {
       ...base,
       table: 'search_inventory_epochs',
-      present: `kind='${member}'`,
+      present: `kind='${member}'${member === 'observation-epochs' ? '' : " AND kind<>'observation-epochs'"}`,
       key: member === 'observation-epochs' ? 'CAST(revision AS TEXT)' : 'path',
       parent: "''",
       rank: 'cutoff'
@@ -67,10 +68,29 @@ export function sessionSearchInventoryRelation(
   }
 }
 
-export function decodeSessionSearchInventoryRow(
+export function sessionSearchInventoryColumns(member: SessionSearchInventoryMember): string {
+  const facts = 'mtime,size,dev,ino,nlink,alias_mtime,sidecar'
+  const columns: Record<SessionSearchInventoryMember, string> = {
+    files: `file_revision,dependency,${facts}`,
+    directories: 'directory',
+    'directory-input': 'file,directory',
+    authority: 'authority_self,authority_tree',
+    observing: 'observation_file,observation_dirty,observation_authority',
+    delivery: `delivery_revision,delivery_removed,delivery_force,delivery_metadata,delivery_authority,${facts
+      .split(',')
+      .map((name) => `delivery_${name}`)
+      .join(',')}`,
+    epochs: 'revision,cutoff,sealed',
+    'removal-epochs': 'revision,cutoff',
+    'observation-epochs': 'revision,cutoff'
+  }
+  return `path,${columns[member]}`
+}
+
+export function decodeSessionSearchInventoryValue(
   member: SessionSearchInventoryMember,
   row: Record<string, unknown>
-): SessionSearchCatalogRow {
+): SessionSearchValueRow {
   const path = String(row.path)
   let value: unknown
   switch (member) {
@@ -126,11 +146,19 @@ export function decodeSessionSearchInventoryRow(
   }
   return {
     key: String(row.projected_key),
-    value: JSON.stringify(value),
+    data: value,
     parent: String(row.projected_parent),
     group: String(row.projected_group),
     rank: Number(row.projected_rank),
     ready: Number(row.projected_ready),
     tie: 0
   }
+}
+
+export function decodeSessionSearchInventoryRow(
+  member: SessionSearchInventoryMember,
+  row: Record<string, unknown>
+): SessionSearchCatalogRow {
+  const { data, ...fields } = decodeSessionSearchInventoryValue(member, row)
+  return { ...fields, value: JSON.stringify(data) }
 }

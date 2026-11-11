@@ -49,7 +49,9 @@ export class SessionSearchCandidateFacts {
   }
   get(reference: SessionSearchFactReference): SessionFileCandidate {
     const row = this.db
-      .prepare('SELECT * FROM temp.search_candidate_facts WHERE id=? AND snapshot_revision=?')
+      .prepare(
+        'SELECT agent,path,mtime,size,dev,ino,nlink,alias_mtime,sidecar,codex_home,history_path FROM temp.search_candidate_facts WHERE id=? AND snapshot_revision=?'
+      )
       .get(reference.id, reference.revision)
     if (!row) {
       throw new Error('Session work candidate snapshot is unavailable')
@@ -58,7 +60,8 @@ export class SessionSearchCandidateFacts {
   }
   acquire(
     candidate: SessionFileCandidate,
-    references: SessionSearchFactReference[] = []
+    references: SessionSearchFactReference[] = [],
+    known?: { reference: SessionSearchFactReference; candidate: SessionFileCandidate }
   ): SessionSearchFactReference {
     const key = (value: SessionFileCandidate) =>
       JSON.stringify([
@@ -70,7 +73,13 @@ export class SessionSearchCandidateFacts {
       ])
     const expected = key(candidate)
     for (const reference of references) {
-      if (key(this.get(reference)) === expected) {
+      const loaded =
+        known &&
+        known.reference.id === reference.id &&
+        known.reference.revision === reference.revision
+          ? known.candidate
+          : this.get(reference)
+      if (key(loaded) === expected) {
         return reference
       }
     }

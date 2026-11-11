@@ -9,6 +9,7 @@ export function sessionSearchCatalogPageRows(
   lane?: 'changed' | 'backlog'
 ) {
   const inventory = sessionSearchInventoryStorage(db)
+  inventory.flush()
   const owner = inventory.owner(command.scope)
   const relation = owner && sessionSearchInventoryRelation(owner.member)
   const column = (name: 'key' | 'parent' | 'group' | 'rank' | 'ready' | 'tie') =>
