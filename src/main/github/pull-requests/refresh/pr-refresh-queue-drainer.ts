@@ -13,7 +13,8 @@ import {
   isMergeabilityPendingOutcome,
   sameAliasRequestIdentity,
   validateCandidate,
-  visibleCandidateAfterOutcome
+  visibleCandidateAfterOutcome,
+  visibleFollowUpPriority
 } from './pr-refresh-candidate-policy'
 import type { PRRefreshEventPublisher } from './pr-refresh-event-publisher'
 import { type PRRefreshPacing, usesActiveRefreshPacing } from './pr-refresh-pacing'
@@ -125,7 +126,7 @@ export class PRRefreshQueueDrainer {
       candidate: followUpCandidate,
       aliases: new Map(aliases.map((alias) => [alias.cacheKey, alias])),
       reason: 'visible',
-      priority,
+      priority: visibleFollowUpPriority(followUpCandidate, priority),
       dueAt,
       queuedAt: this.queue.nextOrder(),
       bypassBackgroundBudget: pendingDueAt !== null,
