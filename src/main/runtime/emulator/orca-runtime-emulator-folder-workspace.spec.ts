@@ -51,6 +51,7 @@ export function registerOrcaRuntimeEmulatorFolderWorkspaceTests(): void {
         shutdownActiveManagedForWorktree: vi.fn(async () => null),
         stopActiveForSwitch: vi.fn(async () => null)
       }
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture supplies only the catalog and settings reads used by the emulator route.
       const runtime = new OrcaRuntimeService({
         getFolderWorkspaces: () => folderWorkspaces,
         getFolderWorkspace: (id: string) =>
