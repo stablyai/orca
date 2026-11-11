@@ -40,7 +40,8 @@ export function parseCloneStatus(stdout: string): CloneStatus {
   if (state === 'none' || state === '') {
     return { state: 'none' }
   }
-  if (state === 'done') {
+  if (state === 'done' || state.startsWith('done ')) {
+    // "done stale": an update after an environment boot failed; the build's checkout still opens.
     return { state: 'done' }
   }
   if (state.startsWith('failed')) {

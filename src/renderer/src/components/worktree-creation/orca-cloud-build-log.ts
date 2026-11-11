@@ -29,6 +29,11 @@ function phaseLabel(phase: string, t: Translate): string | null {
         'auto.components.worktree.creation.orcaCloudBuildLog.cloning',
         'Cloning the repository…'
       )
+    case 'updating':
+      return t(
+        'auto.components.worktree.creation.orcaCloudBuildLog.updating',
+        'Updating the repository…'
+      )
     case 'connecting':
       return t(
         'auto.components.worktree.creation.orcaCloudBuildLog.connecting',

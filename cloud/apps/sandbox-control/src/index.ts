@@ -141,6 +141,7 @@ import { credentialTargets, type CredentialTarget } from './provider-env'
 import type { Keyring } from './secrets-crypto'
 import { ProviderError, type SandboxProviderApi } from './sandbox-provider'
 import { readCloneStatus } from './clone-status'
+import { ensureAutoEnvironment, expireAutoEnvironments, touchEnvironment } from './auto-environments'
 import { DesktopCommandError, VmCommandError, startDesktop } from './sandbox-vm-commands'
 import { forgetShareLink, handleShareGateway } from './share-gateway'
 import { handleShareRoute, revokeSandboxShares, sharePathMode, shareSecret, shareSecrets } from './share-links'
@@ -742,8 +743,8 @@ function devCredentials(env: Env): CredentialBroker {
 }
 
 /** Ready answers carry phase timings as Server-Timing so clients and dashboards can see the slow step. */
-function readyResponse(ready: Ready): Response {
-  const response = json(readyView(ready.row, ready.connection, ready.cloning))
+function readyResponse(ready: Ready, updateAware = false): Response {
+  const response = json(readyView(ready.row, ready.connection, ready.cloning, updateAware))
   const timing = Object.entries(ready.timings ?? {})
     .map(([phase, ms]) => `${phase};dur=${ms}`)
     .join(', ')
@@ -802,7 +803,7 @@ export async function lifecycleDeps(env: Env, deps: Deps): Promise<LifecycleDeps
       projectId: env.VERCEL_PROJECT_ID!,
       baseUrl: env.VERCEL_API_BASE
     })
-  return {
+  const life: LifecycleDeps = {
     db: env.SANDBOX_DB,
     provider,
     entitlements: deps.entitlements ?? withDevAccountBypass(env, createEntitlementClient(env)),
@@ -834,6 +835,14 @@ export async function lifecycleDeps(env: Env, deps: Deps): Promise<LifecycleDeps
         env.SESSION_DEADLINE_MS && env.SANDBOX_ENV !== 'prod' ? Number(env.SESSION_DEADLINE_MS) : undefined
     }
   }
+  // AUTO_ENVIRONMENTS=off: creates of repos without an environment keep cloning from scratch.
+  if (env.AUTO_ENVIRONMENTS !== 'off') {
+    life.autoEnvironment = {
+      ensure: (accountId, repoUrl) => ensureAutoEnvironment(buildDeps(life, deps, env), accountId, repoUrl),
+      touch: (environmentId) => touchEnvironment(env.SANDBOX_DB, environmentId, life.now())
+    }
+  }
+  return life
 }
 
 /**
@@ -1521,7 +1530,7 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
       // Desktops that show the clone as its own step ask for it in the background (GET .../clone).
       const ready = await createSandbox(life, caller, { ...body.data, cloneInBackground: features.includes('clone-progress') })
       await recordOwnerDeviceAndSync(life, ready.row, ready.connection.pairingCode)
-      return readyResponse(ready)
+      return readyResponse(ready, features.includes('repo-update'))
     }
     const row = await getSandbox(env.SANDBOX_DB, id)
     const route = `${request.method} ${action ?? ''}`
@@ -2137,6 +2146,11 @@ export default {
           const refresh = await refreshEnvironmentsOnGolden(env, fresh)
           if (refresh.stale > 0) {
             console.log(JSON.stringify({ event: 'environment_golden_refresh', ...refresh }))
+          }
+          // Automatic environments unused for 14 days go with their snapshots (storage).
+          const expired = await expireAutoEnvironments(buildDeps(fresh, {}, env)).catch(() => 0)
+          if (expired > 0) {
+            console.log(JSON.stringify({ event: 'auto_environments_expired', expired }))
           }
         }
       })

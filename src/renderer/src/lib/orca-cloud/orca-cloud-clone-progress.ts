@@ -1,9 +1,11 @@
 // The background clone of an Orca Cloud create, read from the provider's build-log lines
-// (`[orca-cloud] cloning`, `[orca-cloud] clone-progress <percent> <stage>`, then the next phase).
+// (`[orca-cloud] cloning` or `updating`, `[orca-cloud] clone-progress <percent> <stage>`, then the next phase).
 const PHASE_LINE = /^\[orca-cloud\] ([a-z-]+)$/
 const CLONE_PROGRESS_LINE = /^\[orca-cloud\] clone-progress (\d{1,3}) (download|checkout)$/
 
 export type OrcaCloudCloneProgress = {
+  /** 'update': the repo came prebuilt (an environment build) and only changes are fetched. */
+  mode: 'clone' | 'update'
   startedAt: number | null
   /** The next phase began: the clone finished. */
   ended: boolean
@@ -26,8 +28,15 @@ export function orcaCloudCloneProgress(
   lines.forEach((raw, index) => {
     const line = raw.trim()
     const stamp = stamps[index] ?? null
-    if (line === '[orca-cloud] cloning') {
-      progress = { startedAt: stamp, ended: false, endedAt: null, percent: null, stage: null }
+    if (line === '[orca-cloud] cloning' || line === '[orca-cloud] updating') {
+      progress = {
+        mode: line.endsWith('updating') ? 'update' : 'clone',
+        startedAt: stamp,
+        ended: false,
+        endedAt: null,
+        percent: null,
+        stage: null
+      }
       return
     }
     if (!progress) {

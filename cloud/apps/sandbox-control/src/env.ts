@@ -23,6 +23,8 @@ export type Env = {
   GOLDEN_SNAPSHOT_REGION?: string
   /** Non-prod only: pin this image over the rotated active one (preview versions testing new VM entry points). */
   GOLDEN_SNAPSHOT_OVERRIDE?: string
+  /** 'off': no automatic environments (auto-environments.ts); creates without one keep cloning. */
+  AUTO_ENVIRONMENTS?: string
   /** Git as the sender: `on`, `accounts:<id>,<id>` or off (default). See memberGitEnabled in index.ts. */
   MEMBER_GIT_IDENTITY?: string
   /** How long after a member's own send their GitHub identity stays usable (default 30). */

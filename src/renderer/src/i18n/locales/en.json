@@ -2289,7 +2289,8 @@
         "vmChecksFailed": "Environment checks failed",
         "preparingCloudEnvironment": "Preparing environment…",
         "startingSandbox": "Starting sandbox…",
-        "cloningRepository": "Cloning the repository…"
+        "cloningRepository": "Cloning the repository…",
+        "updatingRepository": "Updating the repository…"
       },
       "duplicatePairedServers": {
         "ambiguousSameServer": "{{value0}} and {{value1}} are the same server paired twice. Remove one in Settings > Remote Orca Servers."
@@ -4236,7 +4237,9 @@
             "cloneCloud": "Clone repository",
             "cloneCheckout": "Checking out files…",
             "cloneDownload": "Downloading history…",
-            "cloneCounting": "Counting objects…"
+            "cloneCounting": "Counting objects…",
+            "updateCloud": "Update repository",
+            "updateFetching": "Fetching changes…"
           },
           "VmBuildFailureCard": {
             "createFailedTitle": "Couldn’t create workspace",
@@ -4348,7 +4351,8 @@
             "denyMachineSize2": "This sandbox size isn’t part of your plan.",
             "refusedProvider2": "Orca Cloud is unavailable right now.",
             "rollingOver2": "Restarting the sandbox…",
-            "cloning": "Cloning the repository…"
+            "cloning": "Cloning the repository…",
+            "updating": "Updating the repository…"
           },
           "environmentCheckCopy": {
             "gitMissing": "git isn’t installed.",

@@ -9,7 +9,9 @@ export function stepLabel(step: VmBuildStep, cloud: boolean, t: Translate): stri
         ? t('auto.components.worktree.creation.VmBuildSheet.provisionCloud', 'Start sandbox')
         : t('auto.components.worktree.creation.VmBuildSheet.provision', 'Provision VM')
     case 'clone':
-      return t('auto.components.worktree.creation.VmBuildSheet.cloneCloud', 'Clone repository')
+      return step.cloneMode === 'update'
+        ? t('auto.components.worktree.creation.VmBuildSheet.updateCloud', 'Update repository')
+        : t('auto.components.worktree.creation.VmBuildSheet.cloneCloud', 'Clone repository')
     case 'checks':
       return cloud
         ? t('auto.components.worktree.creation.VmBuildSheet.checksCloud', 'Prepare environment')
@@ -87,8 +89,12 @@ export function headerTitle(
 /** What the running clone is doing, in plain words. */
 export function cloneStageLabel(
   stage: 'counting' | 'download' | 'checkout' | undefined,
-  t: Translate
+  t: Translate,
+  mode: 'clone' | 'update' = 'clone'
 ): string {
+  if (mode === 'update' && stage !== 'checkout') {
+    return t('auto.components.worktree.creation.VmBuildSheet.updateFetching', 'Fetching changes…')
+  }
   if (stage === 'counting') {
     return t('auto.components.worktree.creation.VmBuildSheet.cloneCounting', 'Counting objects…')
   }
