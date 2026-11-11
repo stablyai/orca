@@ -55,27 +55,27 @@ export function AccountRow({
           }
           detail={t(
             'orcaCloudAccounts.notSetUpDetail',
-            'One sign-in on this computer. Then every cloud workspace can use it.'
+            'One sign-in. Then every cloud workspace can use it.'
           )}
           actions={
-            <Button type="button" variant="outline" size="sm" onClick={() => actions.start(agent)}>
-              {useAccount}
-            </Button>
+            <>
+              {/* The paste path stays reachable without the browser (RA-5), as a real action (JA-23). */}
+              {agent === 'claude' ? (
+                <Button type="button" variant="ghost" size="sm" onClick={actions.usePaste}>
+                  {t('orcaCloudAccounts.pasteTokenInstead', 'Paste a token instead')}
+                </Button>
+              ) : null}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => actions.start(agent)}
+              >
+                {useAccount}
+              </Button>
+            </>
           }
-        >
-          {/* The paste path stays reachable without waiting for the browser (RA-5). */}
-          {agent === 'claude' ? (
-            <Button
-              type="button"
-              variant="link-muted"
-              size="statusAction"
-              className="-ml-1"
-              onClick={actions.usePaste}
-            >
-              {t('orcaCloudAccounts.pasteTokenInstead', 'Paste a token instead')}
-            </Button>
-          ) : null}
-        </RowShell>
+        />
       )
       break
     case 'setup':

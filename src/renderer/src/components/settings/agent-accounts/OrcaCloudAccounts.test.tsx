@@ -1,9 +1,14 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import type React from 'react'
+import { cleanup, fireEvent, render as baseRender, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { OrcaCloudAccountRow } from '@/lib/orca-cloud/orca-cloud-agent-accounts-model'
 import type { OrcaCloudAgentsStatus } from '../../../../../shared/orca-cloud-agents/orca-cloud-agents-wire'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { OrcaCloudAccountsView, type OrcaCloudAccountsActions } from './OrcaCloudAccounts'
+
+// The policy line is a Radix tooltip (JA-23), which needs the provider the app mounts at its root.
+const render = (ui: React.ReactElement) => baseRender(ui, { wrapper: TooltipProvider })
 
 const STATUS: OrcaCloudAgentsStatus = {
   credentials: {
@@ -51,13 +56,13 @@ const NOT_SET_UP: OrcaCloudAccountRow = { kind: 'notSetUp', keyKind: null }
 describe('OrcaCloudAccountsView', () => {
   afterEach(cleanup)
 
-  it('always shows the policy line and starts setup per agent', () => {
+  it('keeps the policy reachable from a focusable info button and starts setup per agent', () => {
     const handlers = view({ claude: NOT_SET_UP, codex: { kind: 'notSetUp', keyKind: 'team' } })
-    expect(
-      screen.getByText(
-        'Your Claude and ChatGPT accounts are used only in your own workspaces. Teammates never use them.'
-      )
-    ).toBeTruthy()
+    // JA-23: the mandatory A1 line moved into a tooltip; its text stays in the accessibility tree.
+    const info = screen.getByRole('button', {
+      name: /used only in your own workspaces\. Teammates never use them\./
+    })
+    expect(info.tagName).toBe('BUTTON')
     expect(screen.getByText('Not set up · using the team key')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Use my ChatGPT account' }))
     expect(handlers.start).toHaveBeenCalledWith('codex')

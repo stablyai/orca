@@ -37,10 +37,15 @@ describe('AgentAccountsOverview (RA-5)', () => {
     expect(screen.queryByRole('table')).toBeNull()
   })
 
-  it('never truncates the Orca Cloud name away: it keeps a minimum width', () => {
+  it('never truncates the host name or its detail: they stack (RA-5, JA-23)', () => {
     overview([CLOUD])
     const name = screen.getByText('Orca Cloud', { selector: 'span' })
-    expect(name.className).toContain('min-w-[6rem]')
-    expect(screen.getByText('all your cloud workspaces').className).toContain('truncate')
+    expect(name.className).not.toContain('truncate')
+    expect(screen.getByText('all your cloud workspaces').className).not.toContain('truncate')
+  })
+
+  it('has no "Signed in means…" footnote (JA-23)', () => {
+    overview([CLOUD])
+    expect(screen.queryByText(/confirmed it in the last minute/)).toBeNull()
   })
 })
