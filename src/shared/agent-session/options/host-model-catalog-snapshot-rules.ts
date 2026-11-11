@@ -37,7 +37,7 @@ export function withoutUnprovenNewLaunchDefault(
     : withoutNamedDefault(catalog)
 }
 
-/** Undefined when no answer fits this launch. Workspace config can replace defaults, so another workspace’s answer is valid only for named models, no-default lists or host-proven workspace-independent defaults. */
+/** Undefined when no answer fits this launch. Workspace config can replace defaults, so another workspace’s default is named only for no-default lists or host-proven workspace-independent defaults. */
 export function selectHostModelCatalogSnapshot(
   snapshot: HostModelCatalogSnapshot | undefined,
   launch: HostModelCatalogLaunch
@@ -60,7 +60,8 @@ export function selectHostModelCatalogSnapshot(
   ) {
     return listed
   }
-  return launch.seedsModel ? withoutNamedDefault(listed) : undefined
+  // Another workspace may run a different default, so name none; the list itself still lets a new chat pick.
+  return withoutNamedDefault(listed)
 }
 
 /** The snapshot after a host answer for `worktree` (null for a session-less read); undefined means keep none.

@@ -23,8 +23,7 @@ import { statUserOpenedPath } from '@/lib/files/access/user-opened-local-path'
 import {
   CLIENT_LOCAL_FILE_TARGET,
   hostGrantedEditorFields,
-  resolveHostWorkspaceFile,
-  revealHostWorkspaceRoot
+  resolveHostWorkspaceFile
 } from '../../host-files/terminal-host-workspace-file'
 import type { HostWorkspaceFile } from '../../host-files/terminal-host-workspace-file'
 import { captureEditorOpenLinkIntent } from '@/store/slices/editor/tabs/editor-open-target-group'
@@ -38,6 +37,7 @@ import { httpLinkDirectClickDestination } from '@/lib/browser/navigation/http-li
 import type { HttpLinkDestination } from '@/lib/browser/navigation/http-link-destinations'
 import { isHtmlFilePath, localHtmlFileDestinations } from './local-html-file-destinations'
 import type { FileOpenFailure } from './terminal-file-open-failure'
+import { openDetectedFolder } from './terminal-folder-open'
 
 type TerminalFileOpenDeps = {
   worktreeId: string
@@ -191,13 +191,10 @@ export function openDetectedFilePath(
     const opensWithSystemDefault = pageDestination
       ? pageDestination === 'system'
       : openWithSystemDefault
-    if (opensWithSystemDefault && canOpenWithSystemDefault) {
+    // Why folders skip this: the folder branch opens them with the OS too, and reports a failed open.
+    if (opensWithSystemDefault && canOpenWithSystemDefault && !statResult.isDirectory) {
       // Shift+Cmd/Ctrl follows URL-link behavior and OS file associations without new editor settings.
-      const openedWithSystemDefault = await window.api.shell.openFilePath(
-        mappedFilePath,
-        LOCAL_EXECUTION_HOST_ID
-      )
-      if (openedWithSystemDefault || statResult.isDirectory) {
+      if (await window.api.shell.openFilePath(mappedFilePath, LOCAL_EXECUTION_HOST_ID)) {
         return
       }
     }
@@ -206,11 +203,20 @@ export function openDetectedFilePath(
       if (refuseExplicitNonEditorRoute()) {
         return
       }
-      if (canOpenWithSystemDefault) {
-        await window.api.shell.openFilePath(mappedFilePath, LOCAL_EXECUTION_HOST_ID)
-      } else if (hostWorkspaceFile) {
-        revealHostWorkspaceRoot(hostWorkspaceFile)
-      }
+      await openDetectedFolder({
+        folderPath: mappedFilePath,
+        worktreeId,
+        worktreePath,
+        hostWorkspaceFile,
+        sourceHostId: sourceFileHostId,
+        openWithSystemDefault: canOpenWithSystemDefault,
+        onFailure: (failure) => {
+          // Why: the OS open is awaited, so a newer click may own the toast by now.
+          if (isCurrentRequest()) {
+            deps.onOpenFailure?.(failure)
+          }
+        }
+      })
       return
     }
 

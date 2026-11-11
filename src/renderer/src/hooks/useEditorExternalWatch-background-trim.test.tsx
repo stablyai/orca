@@ -28,9 +28,12 @@ const harness = vi.hoisted(() => {
 })
 
 vi.mock('@/store', () => ({
-  useAppStore: Object.assign((selector: (state: unknown) => unknown) => selector({}), {
-    getState: () => ({ openFiles: [] })
-  })
+  useAppStore: Object.assign(
+    (selector: (state: unknown) => unknown) => selector({ openFiles: [] }),
+    {
+      getState: () => ({ openFiles: [] })
+    }
+  )
 }))
 vi.mock('./editor-external-watch-targets', () => ({
   selectEditorExternalWatchTargets: () => ({

@@ -1,6 +1,7 @@
-import { mkdir, mkdtemp, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
+import { zstdCompressSync } from 'node:zlib'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { parseCodexSessionFile } from './session-scanner-codex-parser'
 import {
@@ -144,5 +145,46 @@ describe('Codex resumable parser fast path', () => {
 
     expect(session).toBeNull()
     expect(stats.bytesRead).toBeLessThan((file.sizeBytes ?? 0) / 2)
+  })
+
+  it('indexes a Codex rollout archived as .jsonl.zst (#40312)', async () => {
+    const lines = [
+      record(
+        'session_meta',
+        { id: 'archived-session', cwd: '/repo/archived' },
+        '2026-08-01T10:00:00.000Z'
+      ),
+      record(
+        'response_item',
+        { type: 'message', role: 'user', content: 'archived question' },
+        '2026-08-01T10:00:05.000Z'
+      ),
+      record(
+        'response_item',
+        { type: 'message', role: 'assistant', content: 'archived answer' },
+        '2026-08-01T10:00:10.000Z'
+      )
+    ]
+    const plain = await writeTranscript(lines, 'rollout-2026-08-01T10-00-00-archived.jsonl')
+    const file: FileWithMtime = {
+      ...plain,
+      path: `${plain.path}.zst`,
+      sizeBytes: undefined
+    }
+    await writeFile(file.path, zstdCompressSync(await readFile(plain.path)))
+    const fileStat = await stat(file.path)
+    file.mtimeMs = fileStat.mtimeMs
+    file.sizeBytes = fileStat.size
+
+    const session = await parseAgentSessionFileCached(
+      { agent: 'codex', file, codexHome: null },
+      process.platform
+    )
+
+    expect(session).toMatchObject({
+      sessionId: 'archived-session',
+      messageCount: 2,
+      updatedAt: '2026-08-01T10:00:10.000Z'
+    })
   })
 })

@@ -1,6 +1,7 @@
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { removeTempDirs } from '../../shared/testing/remove-temp-dirs.test-support'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { encodePairingOffer } from '../../shared/remote-runtime/pairing/pairing'
 import { PAIRING_OFFER_VERSION } from '../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
@@ -57,10 +58,8 @@ import { toWorkspaceLifecycleResult } from '../ephemeral-vm/workspace-lifecycle-
 
 const tempDirs: string[] = []
 
-afterEach(() => {
-  for (const dir of tempDirs.splice(0)) {
-    rmSync(dir, { recursive: true, force: true })
-  }
+afterEach(async () => {
+  await removeTempDirs(tempDirs.splice(0))
 })
 
 function makeDir(prefix: string): string {
@@ -111,10 +110,7 @@ function pluginServiceWithRecipes(
 }
 
 describe('registerEphemeralVmHandlers', () => {
-  const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
-
   beforeEach(() => {
-    Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
     handlers.clear()
     handleMock.mockReset()
     removeHandlerMock.mockReset()
@@ -138,12 +134,6 @@ describe('registerEphemeralVmHandlers', () => {
     handleMock.mockImplementation((channel: string, handler: never) => {
       handlers.set(channel, handler)
     })
-  })
-
-  afterEach(() => {
-    if (originalPlatform) {
-      Object.defineProperty(process, 'platform', originalPlatform)
-    }
   })
 
   it('uses an immutable plugin recipe snapshot after the plugin is removed', async () => {
