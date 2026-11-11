@@ -168,7 +168,7 @@ export function useTroubleshootDiagnostics() {
         if (!isCurrentProbe()) {
           continue
         }
-        const reachable = await testHostReachability(host.endpoint, headers)
+        const probe = await testHostReachability(host.endpoint, headers)
         if (!isCurrentRun()) {
           return
         }
@@ -177,12 +177,18 @@ export function useTroubleshootDiagnostics() {
         }
         results.push({
           label: host.name,
-          status: reachable ? 'pass' : 'fail',
-          detail: reachable
+          status: probe.reachable ? 'pass' : 'fail',
+          detail: probe.reachable
             ? t('diagnostics.useTroubleshootDiagnostics.reachable', 'Reachable at {{endpoint}}', {
                 endpoint: formatEndpoint(host.endpoint)
               })
-            : unreachableHostDetail(host.endpoint)
+            : probe.httpStatus !== undefined
+              ? t(
+                  'diagnostics.useTroubleshootDiagnostics.upgradeRejected',
+                  'WebSocket upgrade rejected (HTTP {{status}}). Check the proxy route and credentials.',
+                  { status: probe.httpStatus }
+                )
+              : unreachableHostDetail(host.endpoint)
         })
         setChecks([...results])
       }

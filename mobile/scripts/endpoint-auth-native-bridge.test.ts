@@ -9,7 +9,8 @@ const requireNative = createRequire(import.meta.resolve('react-native/package.js
 
 function nativeSocketConstructor(
   connect: ReturnType<typeof vi.fn>,
-  capabilities: { supportsNoRedirects: boolean } | null = { supportsNoRedirects: true }
+  capabilities: { supportsNoRedirects: boolean } | null = { supportsNoRedirects: true },
+  listeners = new Map<string, (event: unknown) => void>()
 ) {
   const babel: unknown = requireNative('@babel/core')
   if (
@@ -57,7 +58,8 @@ function nativeSocketConstructor(
       }
       if (name.endsWith('/NativeEventEmitter')) {
         return class {
-          addListener() {
+          addListener(name: string, listener: (event: unknown) => void) {
+            listeners.set(name, listener)
             return { remove() {} }
           }
         }
@@ -151,4 +153,22 @@ describe('credential socket native bridge', () => {
     Reflect.construct(nativeSocketConstructor(connect, null), ['wss://tunnel.example'])
     expect(connect.mock.calls[0]?.[2]).toEqual({ headers: {} })
   })
+})
+
+it('delivers native HTTP status on the WebSocket error event', () => {
+  const connect = vi.fn()
+  const listeners = new Map<string, (event: unknown) => void>()
+  const socket = Reflect.construct(nativeSocketConstructor(connect, undefined, listeners), [
+    'wss://tunnel.example'
+  ])
+  let status: unknown
+  socket.addEventListener('error', (event: Event) => {
+    status = 'httpStatus' in event ? event.httpStatus : undefined
+  })
+  listeners.get('websocketFailed')?.({
+    id: connect.mock.calls[0]?.[3],
+    message: 'synthetic proxy detail',
+    httpStatus: 403
+  })
+  expect(status).toBe(403)
 })

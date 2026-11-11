@@ -145,7 +145,7 @@ export function EdgeAuthHeadersSection({
         {hint ??
           t(
             'edgeAuth.hint',
-            "Optional headers sent on the connection handshake, for tunnels protected by edge authentication (for example Cloudflare Access service tokens). Stored in this phone's keychain, never in pairing links. Pair over LAN or Relay before configuring these headers. If the secure host or port changes, save the address, then reopen this form to enter credentials for it. Leave all rows blank for none."
+            "Optional headers required by your reverse proxy or secure tunnel, such as a custom proxy header or Cloudflare Access service token. Stored in this phone's keychain, never in pairing links. Pair over LAN or Relay before configuring these headers. If the secure host or port changes, save the address, then reopen this form to enter credentials for it. Leave all rows blank for none."
           )}
         {storedCount > 0
           ? ` ${t('edgeAuth.saved', '{{count}} headers saved.', {
@@ -174,7 +174,7 @@ export function EdgeAuthHeadersSection({
             onChangeText={(value) =>
               onRowsChange(rows.map((r) => (r.id === row.id ? { ...r, name: value } : r)))
             }
-            placeholder={t('edgeAuth.namePlaceholder', 'CF-Access-Client-Id')}
+            placeholder={t('edgeAuth.namePlaceholder', 'X-Proxy-Token')}
             placeholderTextColor={colors.textMuted}
             autoCapitalize="none"
             autoCorrect={false}

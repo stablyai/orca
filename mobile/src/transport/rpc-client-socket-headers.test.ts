@@ -78,7 +78,7 @@ describe('direct socket edge-auth headers', () => {
     client.close()
   })
 
-  it('omits native error and close payloads for authenticated edge connections', () => {
+  it('reports the HTTP status while omitting native error and close payloads', () => {
     const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     const logs: ConnectionLogEntry[] = []
     const client = connect('wss://tunnel.example/runtime', 'device-token', 'server-key', {
@@ -90,6 +90,7 @@ describe('direct socket edge-auth headers', () => {
     // Native network errors may include a response or request details.
     const error = {
       message: 'request synthetic-secret failed',
+      httpStatus: 403,
       headers: { 'CF-Access-Client-Secret': 'synthetic-secret' }
     }
     const closed = {
@@ -101,6 +102,7 @@ describe('direct socket edge-auth headers', () => {
     socket?.onerror?.(error)
     socket?.onclose?.(closed)
     expect(JSON.stringify(consoleSpy.mock.calls)).not.toContain('synthetic-secret')
+    expect(logs).toContainEqual(expect.objectContaining({ detail: 'HTTP 403' }))
     expect(JSON.stringify(logs)).not.toContain('synthetic-secret')
     expect(JSON.stringify(consoleSpy.mock.calls)).toContain('1006')
     client.close()

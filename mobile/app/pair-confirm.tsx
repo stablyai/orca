@@ -248,7 +248,7 @@ function PairConfirmAttemptScreen({ routeState }: { routeState: PairConfirmRoute
                   scrollViewRef={scrollTarget}
                   hint={t(
                     'edgeAuth.pairingHint',
-                    "Optional headers for this secure tunnel. Orca verifies the desktop before saving them in this phone's keychain. Never include them in a pairing link."
+                    "Optional headers for this reverse proxy or secure tunnel. Orca verifies the desktop before saving them in this phone's keychain. Never include them in a pairing link."
                   )}
                 />
               ) : null}
