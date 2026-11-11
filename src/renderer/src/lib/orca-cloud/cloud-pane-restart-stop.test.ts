@@ -113,6 +113,21 @@ describe('freshIfResumeFoundNothing (RA-11e)', () => {
     })
   })
 
+  it('ANSI-coloured output and a late message (after 15 s) are still caught', async () => {
+    readTail = ['\u001b[31mNo conversation found with session ID: s1\u001b[39m', '$ ']
+    let reads = 0
+    const relaunched = await freshIfResumeFoundNothing({
+      // The pane binds its new terminal only after 15 s.
+      currentPtyId: () => (++reads > 15 ? 'remote:env-1@@term_new' : 'remote:env-1@@term_old'),
+      replacedPtyId: 'remote:env-1@@term_old',
+      freshCommand: 'claude',
+      sleep,
+      now
+    })
+    expect(relaunched).toBe(true)
+    expect(calls.filter((c) => c.method === 'terminal.send')).toHaveLength(1)
+  })
+
   it('a resume that worked is left alone', async () => {
     readTail = ['Claude Code v2.1.319', '❯ say hi 1']
     const relaunched = await freshIfResumeFoundNothing({

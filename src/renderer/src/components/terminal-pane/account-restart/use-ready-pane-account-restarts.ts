@@ -26,6 +26,7 @@ import {
   parseRemoteRuntimePtyId
 } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { isOrcaCloudEnvironmentId } from '@/lib/orca-cloud/orca-cloud-environment-id'
+import { ORCA_CLOUD_SESSION_ENV_REFRESH } from '@/lib/orca-cloud/cloud-restart-session-env'
 import { buildFreshAccountRestartCommand } from '@/lib/agent-session/accounts/agent-account-restart-startup'
 import type { AccountRestartAgent } from '@/store/terminals/terminal-contracts'
 import type { usePaneAccountRestartStartup } from './use-pane-account-restart-startup'
@@ -79,6 +80,16 @@ export function useReadyPaneAccountRestarts({
 }
 
 type ReadyRestartPane = { id: number; leafId: string }
+
+/** The fresh command; if it can't be built from settings, the agent's plain launch after the env refresh. */
+function freshCommandFor(build: () => string, agent: AccountRestartAgent): string {
+  try {
+    return build()
+  } catch (err) {
+    console.warn('[orca-cloud] RA-11e fresh command fell back to the plain launch:', err)
+    return `${ORCA_CLOUD_SESSION_ENV_REFRESH}${agent}`
+  }
+}
 
 function worktreeIdForTab(tabId: string): string | null {
   for (const [worktreeId, tabs] of Object.entries(useAppStore.getState().tabsByWorktree)) {
@@ -211,7 +222,10 @@ export function runReadyPaneAccountRestarts<
                       pane.leafId
                     ] ?? null,
                   replacedPtyId: ptyId,
-                  freshCommand: args.buildFreshCommand(agent, pane.leafId)
+                  freshCommand: freshCommandFor(
+                    () => args.buildFreshCommand(agent, pane.leafId),
+                    agent
+                  )
                 })
               )
               .then((startedFresh) => {

@@ -92,19 +92,30 @@ export async function resumeRemotePaneAgent(args: {
 
 /** What Claude prints when `--resume <id>` names a session that never had a conversation. */
 const NO_CONVERSATION = /No conversation found with session ID/i
-const RESUME_CHECK_MS = 10_000
+// Claude's own start on a sandbox plus the pane's re-attach can take well over 10 s.
+const RESUME_CHECK_MS = 25_000
 const RESUME_POLL_MS = 1_000
+// eslint-disable-next-line no-control-regex -- terminal output carries ANSI escapes.
+const ANSI = /\u001b\[[0-9;?]*[ -/]*[@-~]|\u001b\][^\u0007]*\u0007/g
+
+/** The pane's terminal handle on its host, from the pane's PTY id (`remote:<env>@@<handle>`). */
+function hostTerminalOf(ptyId: string | null): { environmentId: string; handle: string } | null {
+  const parsed = ptyId ? parseRemoteRuntimePtyId(ptyId) : null
+  return parsed?.environmentId
+    ? { environmentId: parsed.environmentId, handle: parsed.handle }
+    : null
+}
 
 /**
  * RA-11e backstop: a recorded session can have no conversation on disk (Claude started, never ran a
  * turn). Its `--resume` prints "No conversation found…" and exits, leaving a bare shell. Watch the
- * relaunched pane briefly; if that happened, start the agent fresh in the same shell, once.
- * Returns whether it relaunched fresh.
+ * relaunched pane's terminal (its new handle) for up to 25 s; if that happened, start the agent fresh
+ * in the same shell, once. Returns whether it relaunched fresh.
  */
 export async function freshIfResumeFoundNothing(args: {
   /** The pane's PTY id now (the relaunched terminal), or null while it is still binding. */
   currentPtyId: () => string | null
-  /** The PTY id the restart replaced; the check waits for a different one. */
+  /** The PTY id the restart replaced; only a terminal with a different handle is read. */
   replacedPtyId: string
   freshCommand: string
   sleep?: (ms: number) => Promise<void>
@@ -113,31 +124,46 @@ export async function freshIfResumeFoundNothing(args: {
   const sleep =
     args.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)))
   const now = args.now ?? Date.now
+  const replaced = hostTerminalOf(args.replacedPtyId)
   const deadline = now() + RESUME_CHECK_MS
+  let lastSeen: string | null = null
   while (now() < deadline) {
     await sleep(RESUME_POLL_MS)
-    const ptyId = args.currentPtyId()
-    const parsed = ptyId && ptyId !== args.replacedPtyId ? parseRemoteRuntimePtyId(ptyId) : null
-    if (!parsed?.environmentId) {
+    const current = hostTerminalOf(args.currentPtyId())
+    // Key off the terminal handle, not the whole id: the host may reuse its PTY id on relaunch.
+    if (!current || current.handle === replaced?.handle) {
       continue
     }
-    const target = { kind: 'environment' as const, environmentId: parsed.environmentId }
+    if (lastSeen !== current.handle) {
+      lastSeen = current.handle
+      console.info('[orca-cloud] RA-11e watching relaunched terminal', current.handle)
+    }
+    const target = { kind: 'environment' as const, environmentId: current.environmentId }
     const read = await callRuntimeRpc<{ terminal?: { tail?: string[] } }>(
       target,
       'terminal.read',
-      { terminal: parsed.handle, limit: 40 },
+      { terminal: current.handle, limit: 80 },
       { timeoutMs: 5_000 }
-    ).catch(() => null)
-    if (!read?.terminal?.tail?.some((line) => NO_CONVERSATION.test(line))) {
+    ).catch((err: unknown) => {
+      console.warn('[orca-cloud] RA-11e terminal.read failed:', err)
+      return null
+    })
+    const lines = (read?.terminal?.tail ?? []).map((line) => line.replace(ANSI, ''))
+    if (!lines.some((line) => NO_CONVERSATION.test(line))) {
       continue
     }
+    console.info(
+      '[orca-cloud] RA-11e resume found no conversation; starting fresh in',
+      current.handle
+    )
     await callRuntimeRpc(
       target,
       'terminal.send',
-      { terminal: parsed.handle, text: args.freshCommand, enter: true },
+      { terminal: current.handle, text: args.freshCommand, enter: true },
       { timeoutMs: 5_000 }
     )
     return true
   }
+  console.info('[orca-cloud] RA-11e watch ended without a "no conversation" line', lastSeen)
   return false
 }
