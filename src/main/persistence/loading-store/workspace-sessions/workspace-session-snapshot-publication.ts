@@ -1,0 +1,205 @@
+import type { PersistedState } from '../../../../shared/persisted-state-types'
+import { WORKSPACE_SESSION_DOMAINS } from '../../workspace-session-domains'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
+import { sanitizeWorkspaceSessionTerminalRetirements } from '../../../runtime/terminal/surface/mobile-session-terminal-persistence-retirement'
+import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
+import { setMigrationUnsupportedPty } from '../../../agent-hooks/observations/migration-unsupported-pty-state'
+import { pruneLocalTerminalScrollbackBuffers } from '../../../../shared/workspace-session/workspace-session-terminal-buffers'
+import { pruneWorkspaceSessionBrowserHistory } from '../../../../shared/workspace-session/workspace-session-browser-history'
+import { migrateWorkspaceSessionTerminalScrollbackSnapshots } from '../../../pty/scrollback/terminal-scrollback-snapshots'
+import {
+  deleteRemovedTerminalScrollbackSnapshotsAsync,
+  migrateWorkspaceSessionTerminalScrollbackSnapshotsAsync
+} from '../../../pty/scrollback/terminal-scrollback-snapshot-async-migration'
+import { preserveRuntimeAuthoredWorkspaceSessionFields } from '../../runtime-authored-workspace-session-fields'
+import { dropClosedTerminalTabs } from '../../closed-terminal-tab-write-fence'
+import { keepWslMoveFrozenSessionsForStore } from '../../moving-wsl-projects/terminal-state/wsl-move-session-freeze'
+import { registerPersistedPaneKeyAlias } from '../../restoring-sessions/pane-alias-normalization'
+import {
+  normalizeWorkspaceSessionPaneIdentities,
+  remapSshRemotePtyLeaseLeafIds,
+  type WorkspaceSessionPaneIdentityRemap
+} from '../../restoring-sessions/workspace-pane-normalization'
+import {
+  remapAcknowledgedAgentPaneKeys,
+  remapActivityClearedAtPaneKeys,
+  remapManuallyUnreadTurnPaneKeys
+} from '../../restoring-sessions/pane-key-remapping'
+import { deleteRemovedTerminalScrollbackSnapshots } from './terminal-session-cleanup'
+import { preserveMissingWorkspaceSessionTerminalBindings } from './workspace-session-terminal-binding-replay'
+import type { SessionSnapshotOperations } from './session-snapshot-operations'
+import { getSessionSnapshotOperationsContext } from './session-snapshot-operations-context'
+import { scheduleSave } from '../profile-writing/write-scheduling'
+import { orderTerminalRowsByTabGroups } from '../../../../shared/workspace-layout/terminal-row-order'
+
+export function setLocalWorkspaceSession(
+  owner: SessionSnapshotOperations,
+  session: PersistedState['workspaceSession'],
+  deferSnapshotFiles = false
+): void {
+  const context = getSessionSnapshotOperationsContext(owner)
+  const prior = context.runtime.state.workspaceSession
+  session = keepWslMoveFrozenSessionsForStore(session, prior)
+  // Quit staging bypasses caller guards; preserve runtime fields at the shared write boundary.
+  session = dropClosedTerminalTabs(preserveRuntimeAuthoredWorkspaceSessionFields(session, prior))
+  session = sanitizeWorkspaceSessionTerminalRetirements(session, prior)
+  session = pruneWorkspaceSessionBrowserHistory(
+    pruneLocalTerminalScrollbackBuffers(session, context.runtime.state.repos)
+  )
+
+  // Recover bindings from stale pre-spawn snapshots without reviving proven closes.
+  const normalized = normalizeWorkspaceSessionPaneIdentities(session, prior?.terminalLayoutsByTabId)
+  for (const entry of normalized.migrationUnsupportedEntries) {
+    setMigrationUnsupportedPty(entry)
+  }
+  const remappedAcknowledgements = remapAcknowledgedAgentPaneKeys(
+    context.runtime.state.ui?.acknowledgedAgentsByPaneKey,
+    normalized.leafIdByInputLeafIdByTabId
+  )
+  const remappedActivityCutoffs = remapActivityClearedAtPaneKeys(
+    context.runtime.state.ui?.activityClearedAtByPaneKey,
+    normalized.leafIdByInputLeafIdByTabId
+  )
+  const remappedManualUnread = remapManuallyUnreadTurnPaneKeys(
+    context.runtime.state.ui?.manuallyUnreadTurnsByPaneKey,
+    normalized.leafIdByInputLeafIdByTabId
+  )
+  if (
+    remappedAcknowledgements.changed ||
+    remappedActivityCutoffs.changed ||
+    remappedManualUnread.changed
+  ) {
+    context.runtime.state.ui = {
+      ...context.runtime.state.ui,
+      ...(remappedAcknowledgements.changed
+        ? { acknowledgedAgentsByPaneKey: remappedAcknowledgements.acknowledgements }
+        : {}),
+      ...(remappedActivityCutoffs.changed
+        ? { activityClearedAtByPaneKey: remappedActivityCutoffs.cutoffs }
+        : {}),
+      ...(remappedManualUnread.changed
+        ? { manuallyUnreadTurnsByPaneKey: remappedManualUnread.turns }
+        : {})
+    }
+  }
+  for (const entry of normalized.legacyPaneKeyAliasEntries) {
+    registerPersistedPaneKeyAlias(entry)
+  }
+  session = normalized.session
+  const remapsByHostId = new Map<ExecutionHostId, WorkspaceSessionPaneIdentityRemap>([
+    [LOCAL_EXECUTION_HOST_ID, normalized]
+  ])
+  const remappedLeases = remapSshRemotePtyLeaseLeafIds(
+    context.runtime.state.sshRemotePtyLeases ?? [],
+    remapsByHostId,
+    new Set(context.sessions.getWorkspaceSessionHostIds())
+  )
+  if (remappedLeases.changed) {
+    context.runtime.state.sshRemotePtyLeases = remappedLeases.leases
+  }
+  session = preserveMissingWorkspaceSessionTerminalBindings(session, prior, context.bindingRecovery)
+  session = pruneLocalTerminalScrollbackBuffers(session, context.runtime.state.repos)
+  if (!deferSnapshotFiles) {
+    const migratedScrollback = migrateWorkspaceSessionTerminalScrollbackSnapshots(
+      session,
+      context.runtime.terminalScrollbackSnapshotStorage
+    )
+    session = migratedScrollback.session
+    deleteRemovedTerminalScrollbackSnapshots(
+      prior,
+      session,
+      context.runtime.terminalScrollbackSnapshotStorage,
+      retainedScrollbackRefs(context.runtime)
+    )
+  }
+  // Apply group ordering after prior steps finish rebasing stored rows.
+  session = orderTerminalRowsByTabGroups(session)
+  context.runtime.state.workspaceSession = session
+  if (deferSnapshotFiles) {
+    enqueueTerminalScrollbackSnapshotWork(owner, prior, session)
+  }
+  if (
+    remappedAcknowledgements.changed ||
+    remappedActivityCutoffs.changed ||
+    remappedManualUnread.changed
+  ) {
+    // UI remaps include protected fields, so keep the complete serializer boundary.
+    scheduleSave(
+      context.scheduling,
+      [WORKSPACE_SESSION_DOMAINS[0], 'ui', 'sshRemotePtyLeases'],
+      LOCAL_EXECUTION_HOST_ID
+    )
+  } else {
+    scheduleSave(
+      context.scheduling,
+      remappedLeases.changed ? ['workspaceSession', 'sshRemotePtyLeases'] : ['workspaceSession'],
+      LOCAL_EXECUTION_HOST_ID
+    )
+  }
+}
+
+export function enqueueTerminalScrollbackSnapshotWork(
+  owner: SessionSnapshotOperations,
+  prior: WorkspaceSessionState | undefined,
+  staged: WorkspaceSessionState
+): void {
+  const context = getSessionSnapshotOperationsContext(owner)
+  const previous = context.runtime.pendingSnapshotFileWork ?? Promise.resolve()
+  const work = previous
+    .then(async () => {
+      if (context.runtime.state.workspaceSession !== staged) {
+        if (context.runtime.state.workspaceSession) {
+          await deleteRemovedTerminalScrollbackSnapshotsAsync(
+            prior,
+            context.runtime.state.workspaceSession,
+            context.runtime.terminalScrollbackSnapshotStorage,
+            retainedScrollbackRefs(context.runtime)
+          )
+        }
+        return
+      }
+      const migrated = await migrateWorkspaceSessionTerminalScrollbackSnapshotsAsync(
+        staged,
+        context.runtime.terminalScrollbackSnapshotStorage
+      )
+      const current =
+        context.runtime.state.workspaceSession === staged
+          ? migrated
+          : context.runtime.state.workspaceSession
+      if (context.runtime.state.workspaceSession === staged) {
+        context.runtime.state.workspaceSession = migrated
+      } else if (current) {
+        await deleteRemovedTerminalScrollbackSnapshotsAsync(
+          migrated,
+          current,
+          context.runtime.terminalScrollbackSnapshotStorage,
+          retainedScrollbackRefs(context.runtime)
+        )
+      }
+      if (current) {
+        await deleteRemovedTerminalScrollbackSnapshotsAsync(
+          prior,
+          current,
+          context.runtime.terminalScrollbackSnapshotStorage,
+          retainedScrollbackRefs(context.runtime)
+        )
+      }
+    })
+    .catch((error) => {
+      console.error('[terminal-scrollback] Failed to prepare unload snapshots:', error)
+    })
+    .finally(() => {
+      if (context.runtime.pendingSnapshotFileWork === work) {
+        context.runtime.pendingSnapshotFileWork = null
+      }
+    })
+  context.runtime.pendingSnapshotFileWork = work
+}
+
+function retainedScrollbackRefs(runtime: {
+  retainedScrollbackRefsByMigrationId: ReadonlyMap<string, ReadonlySet<string>>
+}): ReadonlySet<string> {
+  return new Set(
+    [...runtime.retainedScrollbackRefsByMigrationId.values()].flatMap((refs) => [...refs])
+  )
+}

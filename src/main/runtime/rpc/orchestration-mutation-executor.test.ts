@@ -50,6 +50,7 @@ function createHarness() {
   vi.spyOn(runtime, 'getTerminalPaneKey').mockReturnValue('window-1:leaf-prompt')
   return {
     db,
+    runtime,
     executor: new OrchestrationMutationExecutor(runtime),
     bindTerminal: (next: { generation: number; processIncarnation: string }) => {
       binding.mockReturnValue({ ptyId: 'pty-prompt', ...next })
@@ -235,4 +236,28 @@ describe('worker start mutation coalescing', () => {
     await first
     expect(invoke).toHaveBeenCalledOnce()
   })
+})
+
+describe('a stop or Run cancel interrupted by a restart', () => {
+  it.each(['orchestration.workerStop', 'orchestration.peerRunCancel'])(
+    '%s runs again on a retry with the same request ID instead of answering operation_unknown',
+    async (method) => {
+      const harness = createHarness()
+      const params = method === 'orchestration.workerStop' ? { dispatch: 'ctx_1' } : {}
+      // The first attempt's receipt is pending when this runtime goes away.
+      void harness.executor.run(
+        workerStartRequest(method, 'stop-1.1:ctx_1', params),
+        params,
+        () => new Promise(() => {})
+      )
+      const restarted = new OrchestrationMutationExecutor(harness.runtime)
+
+      const invoke = vi.fn(async () => ({ remaining: 0 }))
+      await expect(
+        restarted.run(workerStartRequest(method, 'stop-1.1:ctx_1', params), params, invoke)
+      ).resolves.toMatchObject({ remaining: 0 })
+      expect(invoke).toHaveBeenCalledOnce()
+      harness.db.close()
+    }
+  )
 })

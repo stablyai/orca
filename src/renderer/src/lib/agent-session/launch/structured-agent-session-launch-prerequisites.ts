@@ -9,7 +9,7 @@ import {
   structuredLaunchRequestedOptions
 } from '../../../../../shared/native-chat/input/native-chat-session-option-defaults'
 import type { structuredSessionSelectionController } from '../options/structured-agent-session-selection-controller'
-import type { StructuredLaunchState } from './structured-agent-session-launch-registry'
+import type { StructuredLaunchState } from './structured-agent-session-launch-state-store'
 import { StructuredAgentSessionLaunchCancelledError } from './structured-agent-session-launch-recovery'
 
 export type LegacyPrerequisites = {

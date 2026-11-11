@@ -7,6 +7,7 @@ import {
   getFileExplorerOperationOwner
 } from '@/components/right-sidebar/file-explorer/navigation/file-explorer-operation-owner'
 import type { FileExplorerOperationOwner } from '@/components/right-sidebar/file-explorer/tree/file-explorer-types'
+import { translate } from '@/i18n/i18n'
 
 /** Strip ipcRenderer.invoke’s remote-method wrapper so toasts show the underlying error. */
 export function extractIpcErrorMessage(err: unknown, fallback: string): string {
@@ -97,7 +98,14 @@ export async function renameFileOnDisk(args: RenameFileArgs): Promise<void> {
       }
     })
   } catch (err) {
-    toast.error(extractIpcErrorMessage(err, `Failed to rename '${existingName}'.`))
+    toast.error(
+      extractIpcErrorMessage(
+        err,
+        translate('components.toastFallbacks.fileRenameFailed', "Failed to rename '{{name}}'.", {
+          name: existingName
+        })
+      )
+    )
   }
   if (refreshDir) {
     await refreshDir(parentDir)
