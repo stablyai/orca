@@ -7,6 +7,7 @@ import { useEffect, useSyncExternalStore } from 'react'
 import type { HostAgentSignInAgent } from '../../../../shared/host-agent-sign-in-status'
 import { agentTurnEndedUncleanly } from '../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
+import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import { orcaCloudAgentCoverage } from './orca-cloud-agent-accounts-model'
 import {
   ensureFreshOrcaCloudAgentAccounts,
@@ -115,7 +116,7 @@ export function cloudRunningStrip(args: {
 }
 
 let liveReaders = 0
-let timer: ReturnType<typeof setInterval> | null = null
+let stopInterval: (() => void) | null = null
 const LIVE_READ_MS = 60_000
 
 function readNow(): void {
@@ -124,7 +125,8 @@ function readNow(): void {
 
 /**
  * While any running Orca Cloud agent pane is mounted, keep the account read fresh: on window focus
- * and at most once a minute (the read itself is cached for 30 s). One timer for the whole window.
+ * and at most once a minute while the window is visible (the read itself is cached for 30 s). The
+ * desktop gets no push for a revoke, so this read is how the strip learns. One timer per window.
  */
 export function useCloudRunningAccountReads(active: boolean): void {
   useEffect(() => {
@@ -134,17 +136,19 @@ export function useCloudRunningAccountReads(active: boolean): void {
     liveReaders += 1
     if (liveReaders === 1) {
       window.addEventListener('focus', readNow)
-      timer = setInterval(readNow, LIVE_READ_MS)
+      stopInterval = installWindowVisibilityInterval({
+        run: readNow,
+        intervalMs: LIVE_READ_MS,
+        slowWhileUnfocused: true
+      })
       readNow()
     }
     return () => {
       liveReaders -= 1
       if (liveReaders === 0) {
         window.removeEventListener('focus', readNow)
-        if (timer) {
-          clearInterval(timer)
-          timer = null
-        }
+        stopInterval?.()
+        stopInterval = null
       }
     }
   }, [active])
