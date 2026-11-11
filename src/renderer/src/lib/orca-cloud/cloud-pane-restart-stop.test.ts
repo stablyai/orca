@@ -8,12 +8,24 @@ let readTail: string[] = []
 let sendAnswers: ('ok' | 'timeout' | 'refused')[] = []
 /** Tail the host shows after the nth send (the fresh agent came up), if set. */
 let tailAfterSend: string[] | null = null
+/** What each terminal.ensureAgentSession answers, in order. */
+let ensureAnswers: { handle: string; disposition: 'created' | 'adopted' }[] = []
+/** What terminal.list answers, per call (the last one repeats). */
+let listAnswers: { handle: string; tabId: string; leafId: string; connected?: boolean }[][] = []
 
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
   callRuntimeRpc: async (target: { environmentId: string }, method: string, params: unknown) => {
     calls.push({ method, params, environmentId: target.environmentId })
     if (method === 'terminal.read') {
       return { terminal: { tail: readTail } }
+    }
+    if (method === 'terminal.ensureAgentSession') {
+      const answer = ensureAnswers.shift() ?? { handle: 'term_resumed', disposition: 'created' }
+      return { terminal: { handle: answer.handle }, disposition: answer.disposition }
+    }
+    if (method === 'terminal.list') {
+      const answer = listAnswers.length > 1 ? listAnswers.shift() : listAnswers[0]
+      return { terminals: answer ?? [] }
     }
     if (method === 'terminal.send') {
       if (tailAfterSend) {
@@ -34,8 +46,12 @@ vi.mock(
   () => ({ agentProviderSessionForHostEnsure: async (_env: string, session: unknown) => session })
 )
 
-const { freshIfResumeFoundNothing, resumeRemotePaneAgent, stopRemotePaneTerminalForRestart } =
-  await import('./cloud-pane-restart-stop')
+const {
+  freshIfResumeFoundNothing,
+  resumeRemotePaneAgent,
+  stopRemotePaneTerminalForRestart,
+  waitForResumedTerminalReady
+} = await import('./cloud-pane-restart-stop')
 
 describe('stopRemotePaneTerminalForRestart (RA-11 paired pane)', () => {
   beforeEach(() => {
@@ -72,9 +88,60 @@ describe('stopRemotePaneTerminalForRestart (RA-11 paired pane)', () => {
   })
 })
 
+const RESUME_ARGS = {
+  ptyId: 'remote:env-1@@term_a',
+  worktreeId: 'wt-1',
+  tabId: 'web-terminal-host-tab%3A%3Aleaf',
+  leafId: 'leaf-1',
+  agent: 'claude' as const,
+  providerSession: { key: 'session_id' as const, id: 'sess-1' }
+}
+
 describe('resumeRemotePaneAgent (RA-11 paired pane)', () => {
   beforeEach(() => {
     calls.length = 0
+    ensureAnswers = []
+    showPtyId = 'host-pty-7'
+    stopResult = { stoppedPtyIds: ['host-pty-7'], postStopVerified: true }
+  })
+
+  it('returns the terminal the host ensured, so the pane can bind exactly it', async () => {
+    ensureAnswers = [{ handle: 'term_resumed', disposition: 'created' }]
+    await expect(resumeRemotePaneAgent(RESUME_ARGS)).resolves.toEqual({
+      handle: 'term_resumed',
+      disposition: 'created'
+    })
+  })
+
+  it('an adopted live terminal (the resume never ran) is stopped and the resume ensured once more', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    ensureAnswers = [
+      { handle: 'term_original', disposition: 'adopted' },
+      { handle: 'term_resumed', disposition: 'created' }
+    ]
+    await expect(resumeRemotePaneAgent(RESUME_ARGS)).resolves.toEqual({
+      handle: 'term_resumed',
+      disposition: 'created'
+    })
+    expect(calls.map((c) => c.method)).toEqual([
+      'terminal.ensureAgentSession',
+      'terminal.show',
+      'terminal.stopExact',
+      'terminal.ensureAgentSession'
+    ])
+    expect(calls[1]).toMatchObject({ params: { terminal: 'term_original' } })
+    warn.mockRestore()
+  })
+
+  it('adopted twice fails the restart (never a silent new conversation)', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    ensureAnswers = [
+      { handle: 'term_original', disposition: 'adopted' },
+      { handle: 'term_original2', disposition: 'adopted' }
+    ]
+    await expect(resumeRemotePaneAgent(RESUME_ARGS)).rejects.toThrow('restart_resume_adopted')
+    expect(calls.filter((c) => c.method === 'terminal.ensureAgentSession')).toHaveLength(2)
+    warn.mockRestore()
   })
 
   it('ensures the agent on its own session, placed in the same host tab and leaf', async () => {
@@ -97,6 +164,43 @@ describe('resumeRemotePaneAgent (RA-11 paired pane)', () => {
         placement: { tabId: 'host-tab::leaf', leafId: 'leaf-1' }
       }
     })
+  })
+})
+
+describe('waitForResumedTerminalReady (RA-11 resume race)', () => {
+  const sleep = () => Promise.resolve()
+  let clock = 0
+  const now = () => (clock += 300)
+  const args = {
+    ptyId: 'remote:env-1@@term_a',
+    worktreeId: 'wt-1',
+    tabId: 'web-terminal-host-tab%3A%3Aleaf',
+    leafId: 'leaf-1',
+    handle: 'term_resumed',
+    sleep,
+    now
+  }
+  beforeEach(() => {
+    calls.length = 0
+    clock = 0
+    listAnswers = []
+  })
+
+  it('waits until the ensured terminal itself is live in the pane’s own tab and leaf', async () => {
+    listAnswers = [
+      [],
+      // Some other terminal ready in the leaf is not enough.
+      [{ handle: 'term_original', tabId: 'host-tab::leaf', leafId: 'leaf-1' }],
+      [{ handle: 'term_resumed', tabId: 'host-tab::leaf', leafId: 'leaf-1', connected: true }]
+    ]
+    await expect(waitForResumedTerminalReady(args)).resolves.toBeUndefined()
+    expect(calls.filter((c) => c.method === 'terminal.list')).toHaveLength(3)
+    expect(calls[0]).toMatchObject({ params: { handles: ['term_resumed'] } })
+  })
+
+  it('throws when the ensured terminal never shows in that leaf', async () => {
+    listAnswers = [[{ handle: 'term_resumed', tabId: 'host-tab::leaf', leafId: 'other-leaf' }]]
+    await expect(waitForResumedTerminalReady(args)).rejects.toThrow('restart_resume_not_ready')
   })
 })
 
@@ -163,7 +267,11 @@ describe('freshIfResumeFoundNothing (RA-11e)', () => {
   it('never types twice: a timed-out send whose Claude came up anyway is not sent again', async () => {
     readTail = ['No conversation found with session ID: s1', '$ ']
     sendAnswers = ['timeout']
-    tailAfterSend = ['No conversation found with session ID: s1', '$ claude', 'Claude Code v2.1.319']
+    tailAfterSend = [
+      'No conversation found with session ID: s1',
+      '$ claude',
+      'Claude Code v2.1.319'
+    ]
     const relaunched = await freshIfResumeFoundNothing({
       currentPtyId: () => 'remote:env-1@@term_new',
       replacedPtyId: 'remote:env-1@@term_old',

@@ -3,7 +3,10 @@
 // relaunches. Put exactly that one host terminal to sleep first (the reversible stop the pane-sleep
 // path uses: the leaf stays, as a sleeping surface); the reconnect then wakes it with --resume.
 // A plain stop is a close: the host drops the tab and there is nothing left to relaunch into.
-import { parseRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
+import {
+  parseRemoteRuntimePtyId,
+  toRemoteRuntimePtyId
+} from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import type { RuntimeTerminalShow } from '../../../../shared/runtime-terminal-contracts'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
@@ -27,7 +30,10 @@ export async function stopRemotePaneTerminalForRestart(
   if (!parsed?.environmentId) {
     throw new Error('restart_remote_pane_unowned')
   }
-  const target = { kind: 'environment' as const, environmentId: parsed.environmentId }
+  const target = {
+    kind: 'environment' as const,
+    environmentId: parsed.environmentId
+  }
   // The pane names its terminal by handle; the host stops by its own PTY id.
   const { terminal } = await callRuntimeRpc<{ terminal?: RuntimeTerminalShow }>(
     target,
@@ -57,10 +63,20 @@ export async function stopRemotePaneTerminalForRestart(
   }
 }
 
+/** The terminal the host ensured for the resume, and whether it spawned it or adopted a live one. */
+export type RemotePaneResume = {
+  handle: string
+  disposition: 'created' | 'adopted'
+}
+
 /**
  * Relaunch the pane's agent on its own conversation, in the same pane. Without this the host wakes
  * the sleeping pane with its original launch (a new conversation). Only for a resumable session;
  * a pane with none takes the host's fresh launch, which is what "Starts a new conversation" says.
+ *
+ * Returns the ensured terminal's handle so the pane binds to exactly it. `adopted` means a live
+ * owner already held the leaf (something woke it with its original launch first) and the resume
+ * never ran: stop that terminal and ensure once more; still adopted throws (Couldn't restart).
  */
 export async function resumeRemotePaneAgent(args: {
   ptyId: string
@@ -69,25 +85,126 @@ export async function resumeRemotePaneAgent(args: {
   leafId: string
   agent: AccountRestartAgent
   providerSession: AgentProviderSessionMetadata
+}): Promise<RemotePaneResume> {
+  const environmentId = parseRemoteRuntimePtyId(args.ptyId)?.environmentId
+  if (!environmentId) {
+    throw new Error('restart_remote_pane_unowned')
+  }
+  const ensure = async (): Promise<RemotePaneResume> => {
+    const result = await callRuntimeRpc<{
+      terminal?: { handle?: string }
+      disposition?: 'created' | 'adopted'
+    }>(
+      { kind: 'environment', environmentId },
+      'terminal.ensureAgentSession',
+      {
+        kind: 'explicit',
+        worktree: toRuntimeWorktreeSelector(args.worktreeId),
+        agent: args.agent,
+        providerSession: await agentProviderSessionForHostEnsure(
+          environmentId,
+          args.providerSession
+        ),
+        // The same pane: the host tab and leaf the stopped terminal lived in.
+        placement: {
+          tabId: toHostSessionTabId(args.tabId),
+          leafId: args.leafId
+        },
+        presentation: 'background'
+      },
+      { timeoutMs: 15_000 }
+    )
+    const handle = result?.terminal?.handle
+    if (!handle) {
+      throw new Error('restart_resume_no_terminal')
+    }
+    return {
+      handle,
+      disposition: result?.disposition === 'adopted' ? 'adopted' : 'created'
+    }
+  }
+  const first = await ensure()
+  if (first.disposition !== 'adopted') {
+    return first
+  }
+  console.warn(
+    '[orca-cloud] RA-11 resume adopted a live terminal; stopping it and resuming again',
+    first.handle
+  )
+  await stopRemotePaneTerminalForRestart(
+    toRemoteRuntimePtyId(first.handle, environmentId),
+    args.worktreeId
+  )
+  const second = await ensure()
+  if (second.disposition === 'adopted') {
+    throw new Error('restart_resume_adopted')
+  }
+  return second
+}
+
+// The ensured terminal shows up in the host's inventory within a second or two of the ensure.
+const RESUMED_READY_WAIT_MS = 15_000
+const RESUMED_READY_POLL_MS = 300
+
+/**
+ * RA-11 resume race: wait until the host lists exactly the ensured terminal `handle`, live, in the
+ * pane's own host tab and leaf. Only then may the pane reconnect: its activation reuses a ready leaf,
+ * and a leaf that is not ready yet is woken with its ORIGINAL launch (the resume is then lost).
+ * A turn-less `--resume` exits to a shell but its PTY stays live, so it still lists. Throws when the
+ * terminal never shows, so the restart fails visibly instead of reconnecting into the race.
+ */
+export async function waitForResumedTerminalReady(args: {
+  ptyId: string
+  worktreeId: string
+  tabId: string
+  leafId: string
+  handle: string
+  sleep?: (ms: number) => Promise<void>
+  now?: () => number
 }): Promise<void> {
   const environmentId = parseRemoteRuntimePtyId(args.ptyId)?.environmentId
   if (!environmentId) {
     throw new Error('restart_remote_pane_unowned')
   }
-  await callRuntimeRpc(
-    { kind: 'environment', environmentId },
-    'terminal.ensureAgentSession',
-    {
-      kind: 'explicit',
-      worktree: toRuntimeWorktreeSelector(args.worktreeId),
-      agent: args.agent,
-      providerSession: await agentProviderSessionForHostEnsure(environmentId, args.providerSession),
-      // The same pane: the host tab and leaf the stopped terminal lived in.
-      placement: { tabId: toHostSessionTabId(args.tabId), leafId: args.leafId },
-      presentation: 'background'
-    },
-    { timeoutMs: 15_000 }
-  )
+  const sleep =
+    args.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)))
+  const now = args.now ?? Date.now
+  const hostTabId = toHostSessionTabId(args.tabId)
+  const deadline = now() + RESUMED_READY_WAIT_MS
+  while (now() < deadline) {
+    const listed = await callRuntimeRpc<{
+      terminals?: {
+        handle?: string
+        tabId?: string
+        leafId?: string
+        connected?: boolean
+        verdict?: string
+      }[]
+    }>(
+      { kind: 'environment', environmentId },
+      'terminal.list',
+      {
+        worktree: toRuntimeWorktreeSelector(args.worktreeId),
+        handles: [args.handle],
+        includePreview: false,
+        includeVisualLayouts: false
+      },
+      { timeoutMs: 5_000 }
+    ).catch(() => null)
+    const ready = (listed?.terminals ?? []).some(
+      (terminal) =>
+        terminal.handle === args.handle &&
+        terminal.tabId === hostTabId &&
+        terminal.leafId === args.leafId &&
+        terminal.connected !== false &&
+        terminal.verdict !== 'dead'
+    )
+    if (ready) {
+      return
+    }
+    await sleep(RESUMED_READY_POLL_MS)
+  }
+  throw new Error('restart_resume_not_ready')
 }
 
 /** What Claude prints when `--resume <id>` names a session that never had a conversation. */
@@ -164,7 +281,9 @@ async function sendFreshOnce(
     try {
       // The Enter rides in the text, not `enter: true`: the host holds an Enter send for the launched
       // Claude's composer (8 s), which never comes once it exited to the shell, then refuses it.
-      const sent = await callRuntimeRpc<{ send?: { accepted?: boolean; refusedReason?: string } }>(
+      const sent = await callRuntimeRpc<{
+        send?: { accepted?: boolean; refusedReason?: string }
+      }>(
         target,
         'terminal.send',
         { terminal: handle, text: `${freshCommand}\r` },
@@ -215,7 +334,10 @@ export async function freshIfResumeFoundNothing(args: {
       lastSeen = current.handle
       console.info('[orca-cloud] RA-11e watching relaunched terminal', current.handle)
     }
-    const target = { kind: 'environment' as const, environmentId: current.environmentId }
+    const target = {
+      kind: 'environment' as const,
+      environmentId: current.environmentId
+    }
     const read = await callRuntimeRpc<{ terminal?: { tail?: string[] } }>(
       target,
       'terminal.read',
