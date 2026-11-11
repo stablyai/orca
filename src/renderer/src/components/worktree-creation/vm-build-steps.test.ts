@@ -280,6 +280,33 @@ describe('Orca Cloud clone step', () => {
     ).toEqual({ kind: 'cloneFailed', reason: 'clone_timeout' })
   })
 
+  it('names the repository step once, from the boot plan, before it runs (PC-4)', () => {
+    const pendingStep = (...rows: [string, number][]) =>
+      deriveVmBuildSteps({ ...base, ...lines(...rows) }, 2000, { cloud: true })[1]
+    // Not known yet: no mode (the row shows a placeholder, never a guessed label).
+    expect(pendingStep(['[orca-cloud] provisioning', 1000])).toMatchObject({
+      state: 'pending'
+    })
+    expect(pendingStep(['[orca-cloud] provisioning', 1000])?.cloneMode).toBeUndefined()
+    expect(
+      pendingStep(['[orca-cloud] provisioning', 1000], ['[orca-cloud] plan-update', 1200])
+    ).toMatchObject({ state: 'pending', cloneMode: 'update' })
+    // The running step keeps the planned name.
+    const running = deriveVmBuildSteps(
+      {
+        ...base,
+        ...lines(
+          ['[orca-cloud] plan-update', 1200],
+          ['[orca-cloud] updating', 4000],
+          ['[orca-cloud] clone-progress 40 download', 4500]
+        )
+      },
+      5000,
+      { cloud: true }
+    )[1]
+    expect(running).toMatchObject({ state: 'running', cloneMode: 'update' })
+  })
+
   it('a prebuilt repo (environment build) shows as an update, not a clone', () => {
     const t: Translate = (_key, fallback) => fallback
     const steps = deriveVmBuildSteps(

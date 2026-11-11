@@ -63,14 +63,27 @@ export function createHostedSandboxDriver(
     async create(spec, ctx) {
       const machineSize = toMachineSize(spec.machineSize)
       ctx?.onProgress?.({ phase: 'provisioning' })
+      // Names the repository step before the create answers (no relabel mid-run). Best effort: an
+      // older control plane answers 404 and the step is named when the create answers.
+      if (spec.repo) {
+        void client
+          .bootPlan(spec.repo.url, ctx?.signal)
+          .then((plan) =>
+            ctx?.onProgress?.({ phase: plan === 'update' ? 'plan-update' : 'plan-clone' })
+          )
+          .catch(() => undefined)
+      }
       const ready = await client.create(
         {
           workspaceId: spec.workspaceId,
           machineSize,
+          // Named rows: Home shows the workspace's name, never an untitled sandbox (PC-8).
+          ...(spec.workspaceName?.trim() ? { title: spec.workspaceName.trim().slice(0, 120) } : {}),
           ...(spec.region ? { region: spec.region } : {}),
           ...(spec.repo ? { repo: spec.repo } : {})
         },
-        ctx?.signal
+        ctx?.signal,
+        spec.idempotencyKey
       )
       if (ready.clone) {
         await waitForClone(client, ready.sandbox.id, ctx, { mode: ready.clone.mode ?? 'clone' })
