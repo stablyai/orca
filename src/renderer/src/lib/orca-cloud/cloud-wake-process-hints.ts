@@ -1,48 +1,122 @@
 // What was running in each terminal pane when an Orca Cloud workspace went to sleep. Sleep stops
 // the sandbox (a reboot), so a dev server or watcher is silently gone after a wake; the pane says
-// so once and offers to rerun the command. Never reruns on its own.
+// so once and offers it back. Never reruns or restarts on its own.
 import { useSyncExternalStore } from 'react'
+import { recognizeAgentLaunchCommand } from '../../../../shared/agent-launch/startup/agent-command-line-intent'
+import type { HostAgentSignInAgent } from '../../../../shared/host-agent-sign-in-status'
 
-/** A pane's foreground process as seen in its scrollback just before the sleep. */
-export type WakeProcessHint = {
-  /** The command line that started it, when the prompt line is readable. */
-  command: string
+/** A shell command still running when the workspace went to sleep, read back from its prompt line. */
+export type WakeShellCommand = { command: string }
+
+/**
+ * What the woke-up strip offers: Rerun for a plain shell command, or Restart for an agent pane
+ * (through the agent restart path; never by retyping its launch line, which sources a one-shot
+ * launch script that resumes a conversation the reboot may have lost).
+ */
+export type WakeProcessHint = WakeShellCommand | { restartAgent: HostAgentSignInAgent }
+
+/** What the pane itself knows at capture time, beyond its text. */
+export type WakePaneFacts = {
+  /** The pane's agent, from its agent status row. */
+  agentType?: string | null
+  /** A full-screen app (vim, htop, an alternate-screen TUI) owned the pane. */
+  alternateScreen?: boolean
 }
 
 // A shell prompt line: something short, then a prompt mark, then the typed command.
-const PROMPT_LINE = /^(.{0,120}?)(?:\$|#|%|❯|›|>)\s+(\S.*)$/
-const BARE_PROMPT = /^(.{0,120}?)(?:\$|#|%|❯|›|>)\s*$/
+const PROMPT_LINE = /^(.{0,120}?)(\$|#|%|❯|›|>)\s+(\S.*)$/
+const BARE_PROMPT = /^(.{0,120}?)(\$|#|%|❯|›|>)\s*$/
+// Marks that also open agent TUI input rows ("> Try …", "› Ask …"); a shell uses them only after
+// some prompt text (fish's "user@host ~>"), never alone at the start of a line.
+const TUI_INPUT_MARKS = new Set(['>', '›'])
+// Box-drawing rows: a TUI's frame (an agent's input box, a pager, a dashboard), never a shell prompt.
+const TUI_CHROME = /[\u2500-\u257f]/
+// Orca's own agent launch line (". /tmp/orca-launch-<hex>.sh"): the script deletes itself after it
+// runs, so it can never be rerun.
+const ORCA_LAUNCH_SCRIPT = /orca-launch-[\w-]*\.sh/
 const MAX_COMMAND_LENGTH = 300
+
+function isPromptMark(prefix: string, mark: string): boolean {
+  return !TUI_INPUT_MARKS.has(mark) || /\S$/.test(prefix)
+}
+
+function promptCommand(line: string): string | null {
+  const match = PROMPT_LINE.exec(line)
+  return match && isPromptMark(match[1]!, match[2]!) ? match[3]!.trim() : null
+}
+
+function isIdlePrompt(line: string): boolean {
+  const bare = BARE_PROMPT.exec(line)
+  return (bare !== null && isPromptMark(bare[1]!, bare[2]!)) || promptCommand(line) !== null
+}
 
 /**
  * The command still running at the end of a terminal tail: the last prompt line with a command,
- * followed by output and no new prompt. Null when the shell was idle at a prompt, or nothing looks
- * like a prompt (we only offer Rerun for a command we can read back exactly).
+ * followed by output and no new prompt. Null when the shell was idle at a prompt, nothing looks
+ * like a prompt, or the pane shows a TUI (an agent's input box is typed text, not a command): we
+ * only offer Rerun for a shell command we can read back exactly (JA-15).
  */
-export function detectForegroundCommand(lines: readonly string[]): WakeProcessHint | null {
+export function detectForegroundCommand(lines: readonly string[]): WakeShellCommand | null {
   const trimmed = lines.map((line) => line.replace(/\s+$/, ''))
-  let last = trimmed.length - 1
-  while (last >= 0 && trimmed[last] === '') {
-    last--
-  }
-  if (last < 0) {
+  const last = lastTextRow(trimmed)
+  // Empty, or idle at a prompt (with or without a half-typed line): nothing was running.
+  if (last < 0 || isIdlePrompt(trimmed[last]!)) {
     return null
   }
-  // Idle at a prompt (with or without a half-typed line): nothing was running.
-  if (BARE_PROMPT.test(trimmed[last]!) || PROMPT_LINE.test(trimmed[last]!)) {
-    return null
-  }
-  for (let index = last - 1; index >= 0; index--) {
-    const match = PROMPT_LINE.exec(trimmed[index]!)
-    if (match) {
-      const command = match[2]!.trim()
-      if (!command || command.length > MAX_COMMAND_LENGTH) {
-        return null
-      }
-      return { command }
+  for (let index = last; index >= 0; index--) {
+    const line = trimmed[index]!
+    if (TUI_CHROME.test(line)) {
+      return null
     }
+    const command = index < last ? promptCommand(line) : null
+    if (command === null) {
+      continue
+    }
+    // An agent launched from the shell owns the screen below it: rerunning it is not "restart the
+    // dev server", and what it drew is not shell output.
+    if (
+      !command ||
+      command.length > MAX_COMMAND_LENGTH ||
+      ORCA_LAUNCH_SCRIPT.test(command) ||
+      recognizeAgentLaunchCommand(command)
+    ) {
+      return null
+    }
+    return { command }
   }
   return null
+}
+
+function lastTextRow(lines: readonly string[]): number {
+  let last = lines.length - 1
+  while (last >= 0 && lines[last]!.trim() === '') {
+    last--
+  }
+  return last
+}
+
+/**
+ * The pane's hint: Rerun for a readable shell command; else, for a Claude or Codex pane that was
+ * not sitting at a shell prompt, Restart that agent (interim until agents relaunch themselves on
+ * wake); else nothing (an alternate-screen app, an idle shell, or nothing readable).
+ */
+export function wakeHintForPane(
+  lines: readonly string[],
+  facts: WakePaneFacts = {}
+): WakeProcessHint | null {
+  const shell = facts.alternateScreen ? null : detectForegroundCommand(lines)
+  if (shell) {
+    return shell
+  }
+  const agent = facts.agentType
+  if (agent !== 'claude' && agent !== 'codex') {
+    return null
+  }
+  const last = lastTextRow(lines)
+  // An agent row outlives the agent: back at a shell prompt, nothing of it was running.
+  return last >= 0 && !isIdlePrompt(lines[last]!.replace(/\s+$/, ''))
+    ? { restartAgent: agent }
+    : null
 }
 
 type TailSource = {
@@ -117,7 +191,11 @@ function emit(): void {
 }
 
 /** Called once per pane per sleep, while the pre-sleep scrollback is still in the pane. */
-export function captureWakeProcessHint(leafId: string, lines: readonly string[]): void {
+export function captureWakeProcessHint(
+  leafId: string,
+  lines: readonly string[],
+  facts: WakePaneFacts = {}
+): void {
   if (captured.has(leafId)) {
     return
   }
@@ -126,7 +204,7 @@ export function captureWakeProcessHint(leafId: string, lines: readonly string[])
   if (hasHistory) {
     withHistory.add(leafId)
   }
-  const hint = detectForegroundCommand(lines)
+  const hint = wakeHintForPane(lines, facts)
   if (hint) {
     hints.set(leafId, hint)
   }

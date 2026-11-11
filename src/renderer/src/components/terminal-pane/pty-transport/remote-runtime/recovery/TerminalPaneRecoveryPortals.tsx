@@ -33,6 +33,8 @@ import {
 } from '@/lib/orca-cloud/cloud-wake-process-hints'
 import { paneShowsWslHostStoppedCard } from '@/runtime/hosts/wsl/wsl-host-stopped-status'
 import { withoutWslHostStoppedLines } from '../../../../../../../shared/wsl-host-stopped-message'
+import { makePaneKey } from '../../../../../../../shared/workspace-layout/stable-pane-id'
+import { cloudWokeActionFor, runCloudWokeAction } from '@/lib/orca-cloud/cloud-wake-hint-action'
 import { mapPaneTerminalErrors } from '../../../errors/terminal-error-accumulation'
 import type { TerminalPaneController } from '../../../controller/use-terminal-pane-controller'
 
@@ -76,8 +78,13 @@ export function TerminalPaneRecoveryPortals({
 }: {
   controller: TerminalPaneController
 }): React.JSX.Element | null {
-  const { managedPanes, paneTransportsRef, ptyRecoveryStatesByPaneId, showSshReconnectOverlay } =
-    controller
+  const {
+    managedPanes,
+    paneTransportsRef,
+    ptyRecoveryStatesByPaneId,
+    showSshReconnectOverlay,
+    tabId
+  } = controller
   const wslHostUnavailable = useWslHostUnavailableReason(controller.worktreeId)
   const pairingRefusedEnvironmentId = useManagedPairingRefusedEnvironmentId(controller.worktreeId)
   const serverReplaced = useManagedServerReplaced(pairingRefusedEnvironmentId)
@@ -133,13 +140,18 @@ export function TerminalPaneRecoveryPortals({
       return
     }
     if (cloudAsleep || cloudWaking) {
+      const agentPanes = useAppStore.getState().agentStatusByPaneKey
       for (const pane of managedPanes) {
-        captureWakeProcessHint(pane.leafId, readTerminalTail(pane.terminal))
+        // An agent TUI or full-screen app's last line is its own input, not a shell command.
+        captureWakeProcessHint(pane.leafId, readTerminalTail(pane.terminal), {
+          agentType: agentPanes[makePaneKey(tabId, pane.leafId)]?.agentType ?? null,
+          alternateScreen: pane.terminal.buffer.active.type === 'alternate'
+        })
       }
     } else {
       resetWakeProcessCapture(managedPanes.map((pane) => pane.leafId))
     }
-  }, [isCloud, cloudAsleep, cloudWaking, managedPanes])
+  }, [isCloud, cloudAsleep, cloudWaking, managedPanes, tabId])
   const isolated = controller.isolatedPaneKey !== null
   // Why: a pane waiting for SSH sign-in says so itself; "reconnecting" over it would be false.
   const awaitingSignInHere = managedPanes.some(
@@ -253,13 +265,17 @@ export function TerminalPaneRecoveryPortals({
         if (wokeHint) {
           return createPortal(
             <CloudWokeProcessesNotice
-              command={wokeHint.command}
+              action={cloudWokeActionFor(wokeHint)}
               paneLeafId={pane.leafId}
-              onRerun={() => {
+              onAction={() => {
                 dismissWakeProcessHint(pane.leafId)
-                paneTransportsRef.current
-                  .get(pane.id)
-                  ?.sendInput(`${wokeHint.command}\r`, 'driving')
+                runCloudWokeAction(wokeHint, {
+                  tabId,
+                  leafId: pane.leafId,
+                  worktreeId: controller.worktreeId,
+                  sendInput: (data) =>
+                    paneTransportsRef.current.get(pane.id)?.sendInput(data, 'driving')
+                })
               }}
               onDismiss={() => dismissWakeProcessHint(pane.leafId)}
             />,

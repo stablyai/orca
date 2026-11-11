@@ -5,6 +5,7 @@ import {
   dismissWakeProcessHint,
   getWakeProcessHint,
   historyEndRow,
+  wakeHintForPane,
   readTerminalTail,
   resetWakeProcessCapture,
   resetWakeProcessHintsForTests
@@ -30,9 +31,76 @@ describe('detectForegroundCommand', () => {
     expect(detectForegroundCommand(['$ npm test', 'ok', '$ git st'])).toBeNull()
   })
 
+  // JA-15: Claude's input placeholder was offered as `Rerun Try "create a util logging.py that..."`.
+  it('never offers an agent TUI input line as a command', () => {
+    const claudeInputBox = [
+      'ubuntu@sbx:~/project$ claude',
+      '╭───────────────────────────────────────────────╮',
+      '│ ✻ Welcome to Claude Code!                     │',
+      '╰───────────────────────────────────────────────╯',
+      '────────────────────────────────────────────────',
+      '> Try "create a util logging.py that..."',
+      '────────────────────────────────────────────────',
+      '  ? for shortcuts'
+    ]
+    expect(detectForegroundCommand(claudeInputBox)).toBeNull()
+    // Without the frame: a bare "> " or "› " row is TUI input, and the launch line is an agent.
+    expect(
+      detectForegroundCommand(['$ codex', '› Ask Codex to do anything', '  ⏎ send'])
+    ).toBeNull()
+    expect(detectForegroundCommand(['> Try "fix lint"', '  ? for shortcuts'])).toBeNull()
+    expect(detectForegroundCommand(['$ claude', 'Thinking…'])).toBeNull()
+  })
+
+  it('still reads fish-style "~>" prompts', () => {
+    expect(detectForegroundCommand(['neil@sbx ~/app> pnpm dev', 'ready'])).toEqual({
+      command: 'pnpm dev'
+    })
+  })
+
   it('returns null when no prompt line is readable', () => {
     expect(detectForegroundCommand(['compiling…', 'done'])).toBeNull()
     expect(detectForegroundCommand([])).toBeNull()
+  })
+})
+
+// JA-15 P2 (RA-WAKE P3): a Claude pane offered `Rerun Try "create a util logging.py that..."`.
+describe('wakeHintForPane', () => {
+  const claudeAtInput = [
+    'ubuntu@sbx:~/project$ . /tmp/orca-launch-3f9a.sh',
+    '────────────────────────────────────────────────',
+    '> Try "create a util logging.py that..."',
+    '────────────────────────────────────────────────',
+    '  ? for shortcuts'
+  ]
+
+  it('a Claude pane offers Restart Claude, never its input placeholder or launch script', () => {
+    expect(wakeHintForPane(claudeAtInput, { agentType: 'claude' })).toEqual({
+      restartAgent: 'claude'
+    })
+  })
+
+  it('without an agent row, the same TUI tail offers nothing', () => {
+    expect(wakeHintForPane(claudeAtInput)).toBeNull()
+  })
+
+  it("never offers Orca's self-deleting launch script as a command", () => {
+    expect(wakeHintForPane(['$ . /tmp/orca-launch-3f9a.sh', 'Starting…'])).toBeNull()
+  })
+
+  it('a shell pane keeps Rerun with its real command, even with a leftover agent row', () => {
+    const devServer = ['$ claude', 'bye', '$ pnpm dev', '  ready on http://localhost:3000']
+    expect(wakeHintForPane(devServer, { agentType: 'claude' })).toEqual({ command: 'pnpm dev' })
+  })
+
+  it('an agent row on a pane idle at its shell prompt offers nothing', () => {
+    expect(
+      wakeHintForPane(['$ claude', 'bye', 'ubuntu@sbx:~$ '], { agentType: 'claude' })
+    ).toBeNull()
+  })
+
+  it('other agents get no Restart from this strip', () => {
+    expect(wakeHintForPane(claudeAtInput, { agentType: 'gemini' })).toBeNull()
   })
 })
 
@@ -50,6 +118,11 @@ describe('wake process hints', () => {
     captureWakeProcessHint('leaf-idle', ['$ '])
     expect(getWakeProcessHint('leaf-busy')).not.toBeNull()
     expect(getWakeProcessHint('leaf-idle')).toBeNull()
+  })
+
+  it('a full-screen (alternate-screen) app gets no hint, even if its tail looks like a command', () => {
+    captureWakeProcessHint('leaf-vim', running, { alternateScreen: true })
+    expect(getWakeProcessHint('leaf-vim')).toBeNull()
   })
 
   it('dismiss clears it; the next sleep captures again', () => {
