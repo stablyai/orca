@@ -12,6 +12,7 @@ import { escalateWorkerFailure } from '../reports/worker-failure-escalation'
 import { replaceDispatchCapabilities } from '../../terminal-authority/views/worker-terminal-redaction'
 import type { WorkerApprovalPayload } from '../../../../../shared/orchestration/approvals/worker-approval-payload'
 import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../shared/orca-session-address-prefix'
+import { describeApprovalClosed, describeCoordinatorAnswer } from './worker-approval-text'
 
 // One screenful: enough to show the agent's last words or error banner without flooding the inbox.
 const LAST_OUTPUT_MAX_CHARS = 2_000
@@ -52,6 +53,8 @@ export type WorkerTurnStopReportDeps = {
   notify: (handle: string, messageType: string) => void
   /** Whether a mailbox reaches a chat coordinator, whose user sees the approval card; unknown reads as no. */
   isChatMailbox?: (mailbox: string) => boolean
+  /** Whether the user lets coordinator agents allow this machine's workers' prompts; unknown reads as no. */
+  coordinatorApprovals?: () => boolean
 }
 
 export function workerTurnStopDispatchId(target: WorkerTurnStopDispatch): string {
@@ -78,6 +81,8 @@ type StopContext = {
   dispatchId: string
   chatCoordinator?: boolean
   taskReady?: boolean
+  /** The user lets the coordinator allow this machine's workers' prompts. */
+  coordinatorApprovals?: boolean
 }
 
 function describeStop(stop: WorkerTurnStop, context: StopContext): string {
@@ -126,7 +131,7 @@ function describeStop(stop: WorkerTurnStop, context: StopContext): string {
 // The reader runs its own CLI build, so name the subcommand, never an executable.
 function describeNextStep(
   stop: WorkerTurnStop,
-  { taskId, dispatchId, chatCoordinator, taskReady }: StopContext
+  { taskId, dispatchId, chatCoordinator, taskReady, coordinatorApprovals }: StopContext
 ): string[] {
   if (stop.settled === 'circuit_broken') {
     return [
@@ -147,9 +152,18 @@ function describeNextStep(
     const { summary, approvalId, allowedActions } = stop.approval
     const where = stop.from.startsWith(ORCA_SESSION_ADDRESS_PREFIX) ? 'chat' : 'terminal'
     const shown = allowedActions.map((action) => (action === 'allow' ? 'Allow' : 'Deny')).join('/')
-    return [
+    const given = [
       ...(summary.detail ? [summary.detail] : []),
-      ...(summary.reason ? [`Reason given: ${summary.reason}`] : []),
+      ...(summary.reason ? [`Reason given: ${summary.reason}`] : [])
+    ]
+    if (coordinatorApprovals) {
+      return [
+        ...given,
+        ...describeCoordinatorAnswer(stop.approval, { dispatchId, chatCoordinator })
+      ]
+    }
+    return [
+      ...given,
       `${
         chatCoordinator
           ? `The user has been shown ${shown} in your chat in Orca.`
@@ -225,7 +239,8 @@ export function reportWorkerTurnStop(
             taskId: dispatch.task_id,
             dispatchId: dispatch.id,
             chatCoordinator: deps.isChatMailbox?.(dispatchReportMailbox(db, dispatch)) === true,
-            taskReady: db.getTask(dispatch.task_id)?.status === 'ready'
+            taskReady: db.getTask(dispatch.task_id)?.status === 'ready',
+            coordinatorApprovals: deps.coordinatorApprovals?.() === true
           })
         }),
         payload: { taskId: dispatch.task_id, ...payload }
@@ -253,7 +268,8 @@ export function reportWorkerTurnStop(
         body: describeStop(stop, {
           task: attachment.task_id,
           taskId: attachment.task_id,
-          dispatchId
+          dispatchId,
+          coordinatorApprovals: deps.coordinatorApprovals?.() === true
         }),
         type: 'escalation',
         priority: 'high',
@@ -273,39 +289,6 @@ export function stopReportId(dispatchId: string, stopKey: string): string {
     .update(JSON.stringify([dispatchId, stopKey]))
     .digest('hex')
     .slice(0, 24)}`
-}
-
-const CLOSED_BY: Record<NonNullable<WorkerApprovalPayload['outcome']>['by'], string> = {
-  person: 'by a person in Orca',
-  coordinator: 'by the coordinator',
-  'worker-chat': "in the worker's own chat",
-  'worker-terminal': "in the worker's terminal",
-  auto: "by the worker's agent on its own (its 2:00 timeout)",
-  'terminal-only': "for Orca; a person must answer it in the worker's terminal",
-  'worker-ended': 'because its worker ended',
-  unknown: 'without an answer Orca can name'
-}
-
-function describeApprovalClosed(approval: WorkerApprovalPayload): string {
-  const { outcome, approvalId, worker } = approval
-  const decision =
-    outcome?.decision === 'allow' ? 'Allowed' : outcome?.decision === 'deny' ? 'Denied' : 'Closed'
-  return [
-    `${decision} ${CLOSED_BY[outcome?.by ?? 'unknown']}: approval ${approvalId} of worker ${worker.handle} (${approval.summary.title}).`,
-    ...(outcome?.reason
-      ? [
-          `Reason: ${outcome.reason}`,
-          ...(outcome.reasonDelivered
-            ? []
-            : [
-                "This agent's prompt takes no message, so the reason was sent to the worker as mail."
-              ])
-        ]
-      : []),
-    outcome?.by === 'terminal-only'
-      ? "Tell the user to answer it in the worker's terminal."
-      : 'Nothing to do unless the worker stays stuck.'
-  ].join('\n')
 }
 
 /** The one closing line for a reported approval; the same stable id makes a second closer a no-op. */

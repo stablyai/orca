@@ -4,9 +4,10 @@ import type { OrchestrationDb } from '../../db/orchestration-db'
 import type { DispatchContextRow } from '../../db/orchestration-records'
 import type { WorkerTurnStopReportDeps } from '../turn-stops/worker-turn-stop-report'
 import type { ClaudeToolRecord } from './claude-tool-result-close'
-import type {
-  WorkerApprovalOutcome,
-  WorkerApprovalPayload
+import {
+  closedApproval,
+  type WorkerApprovalOutcome,
+  type WorkerApprovalPayload
 } from '../../../../../shared/orchestration/approvals/worker-approval-payload'
 
 export type TerminalWorkerApprovalHoldsDeps = Pick<WorkerTurnStopReportDeps, 'notify'> & {
@@ -50,11 +51,45 @@ export type TerminalWorkerApprovalHold = {
   expiresAt?: string
   /** The coordinator was told about it, so it is owed one closing line. */
   reported: boolean
+  /** How Orca closed it, once closed other than by its own answer. */
+  closedAs?: TerminalWorkerApprovalCloseHow | null
   timer: { cancel: () => void } | null
 }
 
 export type TerminalWorkerApprovalCloseHow = Pick<WorkerApprovalOutcome, 'by' | 'decision'>
 
+/** Claude dropped Orca's allow and still asks: some checks only a person at the terminal may approve. */
+export function droppedAllowRefusal(
+  hold: TerminalWorkerApprovalHold,
+  input: { approvalId: string; decision: 'allow' | 'deny' }
+): TerminalWorkerApprovalAnswer | null {
+  if (input.decision !== 'allow' || hold.closedAs?.by !== 'terminal-only') {
+    return null
+  }
+  return {
+    ok: false,
+    code: 'approval_requires_person',
+    message: `Claude did not take the allow for ${input.approvalId} and still asks in the worker's terminal: it lets only a person approve this one there, so it stays with the user.`
+  }
+}
+
 export type TerminalWorkerApprovalAnswer =
   | { ok: true; approval: WorkerApprovalPayload }
-  | { ok: false; code: 'approval_not_open'; message: string }
+  | { ok: false; code: 'approval_not_open' | 'approval_requires_person'; message: string }
+
+/** The approval as its escalation and closing message carry it. */
+export function holdPayload(
+  hold: TerminalWorkerApprovalHold,
+  outcome?: WorkerApprovalOutcome
+): WorkerApprovalPayload {
+  const open: WorkerApprovalPayload = {
+    v: 1,
+    approvalId: hold.approvalId,
+    state: 'open',
+    worker: { handle: hold.handle, dispatchId: hold.dispatch.id, taskId: hold.dispatch.task_id },
+    summary: hold.summary,
+    allowedActions: ['allow', 'deny'],
+    ...(hold.expiresAt ? { expiresAt: hold.expiresAt } : {})
+  }
+  return outcome ? closedApproval(open, outcome) : open
+}

@@ -58,6 +58,7 @@ export function claudeApprovalItem(prompt: ClaudePendingPrompt): AgentJournalApp
     ...(prompt.blockedPath ? { blockedPath: prompt.blockedPath } : {}),
     ...(prompt.matchedAskRule ? { matchedAskRule: prompt.matchedAskRule } : {}),
     ...(prompt.subject ? { subject: prompt.subject } : {}),
+    ...(prompt.personOnly ? { personOnly: true } : {}),
     detail: detail || null,
     options: (planSubject ? PLAN_APPROVAL_OPTIONS : APPROVAL_OPTIONS).map((option) => ({
       ...option

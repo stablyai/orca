@@ -219,6 +219,19 @@ describe('terminal worker approval holds', () => {
     expect(ctx.closedWith()[0]).toMatchObject({ state: 'answered', by: 'unknown' })
   })
 
+  it('refuses an allow Claude drops while its dialog stays, and leaves the prompt with the person', async () => {
+    const ctx = setup()
+    // A check only a person may approve: Claude ignores a hook's allow and keeps asking.
+    const approvalId = await opened(ctx, hook('tool-1'))
+    const answering = answer(ctx, approvalId, 'allow')
+    await ctx.tick(40)
+
+    expect(await answering).toMatchObject({ ok: false, code: 'approval_requires_person' })
+    expect(ctx.closedWith()).toEqual([
+      expect.objectContaining({ by: 'terminal-only', decision: null })
+    ])
+  })
+
   it("doesn't take Orca's allow when the person's No won the race", async () => {
     const ctx = setup()
     const approvalId = await opened(

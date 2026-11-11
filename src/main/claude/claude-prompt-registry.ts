@@ -15,6 +15,7 @@ export type ClaudePromptPresentation = {
   blockedPath?: string
   matchedAskRule?: AgentJournalApprovalMatchedAskRule
   subject?: AgentJournalApprovalSubject
+  personOnly?: true
 }
 
 export type ClaudePendingPrompt = ClaudePromptPresentation & {
@@ -96,6 +97,7 @@ export class ClaudePromptRegistry {
       ...(registration.blockedPath ? { blockedPath: registration.blockedPath } : {}),
       ...(registration.matchedAskRule ? { matchedAskRule: registration.matchedAskRule } : {}),
       ...(registration.subject ? { subject: registration.subject } : {}),
+      ...(registration.personOnly ? { personOnly: true } : {}),
       questionIds: questions.map(questionId),
       settle: registration.settle,
       ...(agentId ? { agentId } : {})
