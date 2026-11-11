@@ -18,7 +18,10 @@ import { extractIpcErrorMessage } from '@/runtime/errors/ipc-error'
 import { useSourceControlWorktreeContext } from './use-worktree-context'
 import type { GitCommitAction } from '../../../../../../shared/git/commands/git-commit-action'
 import { useAppStore } from '@/store/index'
-import { resolveWorktreeGitCopyNow, worktreeCopyPushTarget } from '@/lib/worktree-git-copy'
+import {
+  resolveWorktreeGitCopyNow,
+  worktreeCopyPushTarget
+} from '@/lib/workspace/ownership/worktree-git-copy'
 
 async function runSequencerRecovery(run: () => Promise<void>, refresh: () => void) {
   try {

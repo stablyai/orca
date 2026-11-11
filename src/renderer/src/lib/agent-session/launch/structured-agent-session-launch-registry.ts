@@ -13,7 +13,7 @@ import {
   resetStructuredAgentLaunchCancellationForTests,
   retireAbsentStructuredAgentLaunchCancellations,
   retireStructuredAgentLaunchCancellation
-} from '../../launch-cancel-tombstones-compat/structured-agent-session-launch-cancellation'
+} from './structured-agent-session-launch-cancellation'
 import { resetStructuredAgentLocalLaunchCancelsForTests } from './structured-agent-session-local-launch-cancel'
 import {
   clearStructuredLaunchStateStoreForTests,

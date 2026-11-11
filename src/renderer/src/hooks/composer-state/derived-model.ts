@@ -1,3 +1,4 @@
+import type { FolderSetupSupport } from '@/lib/use-folder-setup-supported'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { OrcaHooks, SetupRunPolicy } from '../../../../shared/orca-yaml-hook-types'
 import type { SparsePreset } from '../../../../shared/worktree/create-types'
@@ -15,6 +16,8 @@ export type ComposerDerivedModel = {
   effectiveLinkedPR: number | null
   currentYamlHooks: OrcaHooks | null
   setupConfig: SetupConfig | null
+  /** False for a folder project whose host predates folder setup; its setup controls stay hidden. */
+  setupSupport: FolderSetupSupport
   setupPolicy: SetupRunPolicy
   linkedWorkItemProvider: 'github' | 'gitlab' | 'linear' | 'jira' | null
   requiresExplicitSetupChoice: boolean

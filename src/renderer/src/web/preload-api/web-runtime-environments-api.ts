@@ -18,7 +18,7 @@ import {
   saveStoredWebRuntimeEnvironment
 } from '../web-runtime-environment'
 import { translate } from '@/i18n/i18n'
-import { translateHostAccessLinkError } from '@/lib/remote-pairing-copy'
+import { translateHostAccessLinkError } from '@/lib/remote-pairing/remote-pairing-copy'
 import {
   assertEnvironmentPairing,
   callEnvironmentEnvelope,
