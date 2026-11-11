@@ -7,7 +7,12 @@ import { waitForStructuredAgentSessionRecovery } from '../../../agent-session/st
 import { awakeNow, createAwakeClock, type AwakeClock } from '../../../../power/awake-clock'
 import type * as AwakeClockModule from '../../../../power/awake-clock'
 
-function hasDeliveryCompletion(value: object): value is {
+type MailDeliveryOwner = Pick<
+  typeof OrchestrationStructuredMailboxPointerDelivery.prototype,
+  'deliverForHandle'
+>
+
+function hasDeliveryCompletion(value: MailDeliveryOwner): value is MailDeliveryOwner & {
   deliver(mailbox: string, types?: ReadonlySet<string>): Promise<void>
 } {
   return 'deliver' in value && typeof value.deliver === 'function'
@@ -78,7 +83,8 @@ export function createCoordinatorMailObservationClock(
         return result instanceof Promise ? track(result) : result
       })
       // The existing private delivery promise spans sends and recursive reruns after settlement.
-      const deliveryPrototype: object = OrchestrationStructuredMailboxPointerDelivery.prototype
+      const deliveryPrototype: MailDeliveryOwner =
+        OrchestrationStructuredMailboxPointerDelivery.prototype
       if (!hasDeliveryCompletion(deliveryPrototype)) {
         throw new Error('structured mailbox delivery has no completion method')
       }

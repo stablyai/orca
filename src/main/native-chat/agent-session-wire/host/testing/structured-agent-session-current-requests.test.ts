@@ -153,18 +153,30 @@ it('keeps full child requests answerable outside the bounded transcript and clea
   expect((await current.host.currentWork(SESSION))?.requestProjection(SESSION).marker.version).toBe(
     requestVersion
   )
+  const caughtUp = Promise.withResolvers<void>()
+  const target = journal.cursor()
   const closeReopened = await current.host.subscribe({
     id: 'reopened',
     sessionId: SESSION,
     boundedFrames: true,
     readsCurrentRequests: true,
     cursor,
-    emit
+    emit: (event) => {
+      try {
+        emit(event)
+        coalescer.flush()
+        if (state.cursor?.epoch === target.epoch && state.cursor.sequence === target.sequence) {
+          caughtUp.resolve()
+        }
+      } catch (error) {
+        caughtUp.reject(error)
+        throw error
+      }
+    },
+    end: caughtUp.reject
   })
-  await vi.waitFor(() => {
-    coalescer.flush()
-    expect(state.cursor).toEqual(journal.cursor())
-  })
+  await caughtUp.promise
+  expect(state.cursor).toEqual(target)
   await vi.waitFor(() =>
     expect(state.requestAuthority?.version).toEqual(state.requestMarker?.version)
   )
