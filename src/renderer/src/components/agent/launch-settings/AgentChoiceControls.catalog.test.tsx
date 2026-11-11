@@ -1,15 +1,9 @@
 // @vitest-environment happy-dom
-import {
-  act,
-  renderHook,
-  render,
-  fireEvent,
-  screen,
-  waitFor,
-  cleanup
-} from '@testing-library/react'
+import { act, render, fireEvent, screen, waitFor, cleanup } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { useState } from 'react'
+import { useAppStore } from '@/store'
+import { getDefaultSettings } from '../../../../../shared/constants'
 import { AgentChoiceControls } from './AgentChoiceControls'
 import type { AgentDedicatedChoices } from '../../../../../shared/agent-launch/choices/agent-launch-choices'
 const mocks = vi.hoisted(() => ({ call: vi.fn() }))
@@ -43,19 +37,24 @@ vi.mock('./AgentChoiceMenu', () => ({
   )
 }))
 
+import { HostAgentLaunchChoiceEditor } from '@/components/settings/agents/launch/HostAgentLaunchChoiceEditor'
 import { useAgentModelMenu } from './use-agent-model-menu'
 import {
   recordHostModelCatalogSnapshot,
+  readHostModelCatalogSnapshot,
+  preloadHostModelCatalogSnapshots,
   resetHostModelCatalogSnapshotsForTests
 } from '@/runtime/native-chat/model-catalogs/host-model-catalog-snapshots'
 import { modelMenuOptions } from '../../../../../shared/agent-session/options/model-menu-options'
 import { getAgentSessionOptionLaunchCatalog } from '../../../../../shared/agent-session/options/agent-session-option-catalog'
+const initialStore = useAppStore.getState()
 const source = {
   scope: { target: { kind: 'local' as const }, agent: 'codex' },
   coherentCatalog: true
 }
 afterEach(() => {
   cleanup()
+  useAppStore.setState(initialStore, true)
   resetHostModelCatalogSnapshotsForTests()
   mocks.call.mockReset()
 })
@@ -121,113 +120,128 @@ it('keeps options-only effort editable through pinning and clearing the model', 
   expect(changed).toHaveBeenLastCalledWith({})
 })
 
-it('shows fallback only after an eligible settled read fails, never before demand', async () => {
-  const pending = Promise.withResolvers<unknown>()
-  mocks.call.mockReturnValue(pending.promise)
-  const eligible = { ...source, scope: { ...source.scope, worktree: 'id:settings-failure' } }
-  function Editor({ applicable }: { applicable: boolean }) {
-    const [open, setOpen] = useState(false)
-    const menu = useAgentModelMenu('codex', undefined, applicable ? eligible : undefined, open)
-    return (
-      <AgentChoiceControls
-        agent="codex"
-        value={undefined}
-        modelMenu={menu}
-        onChange={() => {}}
-        onOpenChange={setOpen}
-      />
-    )
+it('keeps its own account rows and mounted saved label independent of preload and workspace seeds', async () => {
+  useAppStore.setState({ settings: getDefaultSettings('/synthetic') })
+  const preload = Promise.withResolvers<unknown>()
+  mocks.call.mockReturnValueOnce(preload.promise).mockResolvedValueOnce({
+    origin: 'probe',
+    fetchedAt: 3,
+    modelsDifferByWorkspace: true,
+    listingNamesConfiguredModel: true,
+    models: [
+      {
+        id: 'gpt-6-luna',
+        label: 'GPT-6 Luna',
+        isDefault: true,
+        defaultEffort: 'high',
+        efforts: [
+          { value: 'high', label: 'High' },
+          { value: 'ultra', label: 'Ultra' }
+        ]
+      }
+    ]
+  })
+  const preloading = preloadHostModelCatalogSnapshots(source.scope.target, ['codex'], {
+    savedOnly: true
+  })
+  recordHostModelCatalogSnapshot(source.scope.target, 'codex', 'id:composer', {
+    origin: 'probe',
+    fetchedAt: 2,
+    modelsDifferByWorkspace: true,
+    models: [{ id: 'composer-only', label: 'Composer', isDefault: false, efforts: [] }]
+  })
+  function Editor({ open, saved }: { open: boolean; saved?: AgentDedicatedChoices }) {
+    const menu = useAgentModelMenu('codex', saved, source, open)
+    return <AgentChoiceControls agent="codex" value={saved} modelMenu={menu} onChange={() => {}} />
   }
-  const view = render(<Editor applicable={false} />)
+  const view = render(<Editor open />)
+  await waitFor(() => expect(screen.getByRole('option', { name: 'GPT-6 Luna' })).toBeTruthy())
+  await act(async () => {
+    preload.resolve({
+      origin: 'probe',
+      fetchedAt: 1,
+      models: [{ id: 'preload-only', label: 'Preload', isDefault: false, efforts: [] }]
+    })
+    await preloading
+    recordHostModelCatalogSnapshot(source.scope.target, 'codex', 'id:sibling', {
+      origin: 'probe',
+      fetchedAt: 4,
+      modelsDifferByWorkspace: true,
+      models: [{ id: 'sibling-only', label: 'Sibling', isDefault: false, efforts: [] }]
+    })
+  })
+  expect(
+    readHostModelCatalogSnapshot(source.scope.target, 'codex', {
+      worktree: 'id:composer',
+      newLaunch: true,
+      seedsModel: true
+    })
+  ).toMatchObject({ models: [{ id: 'composer-only' }] })
+  expect(
+    [...screen.getByRole<HTMLSelectElement>('combobox', { name: 'Model' }).options].map(
+      ({ value }) => value
+    )
+  ).toEqual(['__agent_default__', 'gpt-6-luna'])
   expect(screen.queryByRole('note')).toBeNull()
-  expect(mocks.call).not.toHaveBeenCalled()
-  view.rerender(<Editor applicable />)
-  expect(screen.getByRole('combobox', { name: 'Model' }).getAttribute('aria-busy')).toBe('false')
-  expect(screen.queryByRole('note')).toBeNull()
-  expect(mocks.call).not.toHaveBeenCalled()
-  fireEvent.focus(screen.getByRole('combobox', { name: 'Model' }))
-  await waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(1))
-  expect(screen.queryByRole('note')).toBeNull()
-  pending.reject(new Error('transport unavailable'))
-  await waitFor(() => expect(screen.queryByRole('note')).not.toBeNull())
-  view.rerender(<Editor applicable={false} />)
-  expect(screen.queryByRole('note')).toBeNull()
+  view.rerender(
+    <Editor open={false} saved={{ model: 'gpt-6-luna', options: { effort: 'ultra' } }} />
+  )
+  const model = screen.getByRole<HTMLSelectElement>('combobox', { name: 'Model' })
+  act(() =>
+    useAppStore.setState((state) => ({
+      settings: {
+        ...state.settings!,
+        agentCmdOverrides: { ...state.settings?.agentCmdOverrides },
+        nativeChatSessionOptions: { codex: { model: 'gpt-6-luna' } }
+      }
+    }))
+  )
+  expect(model.selectedOptions[0].label).toBe('GPT-6 Luna')
+  expect(model.getAttribute('aria-busy')).toBe('false')
+  expect(screen.getByRole<HTMLSelectElement>('combobox', { name: 'Reasoning effort' }).value).toBe(
+    'ultra'
+  )
 })
 
-it.each(['live', 'empty', 'saved-empty'] as const)(
-  'keeps successful account %s visible in Settings after self and sibling notifications',
-  async (kind) => {
-    const saved =
-      kind === 'saved-empty' ? { model: 'old-only', options: { effort: 'ultra' } } : undefined
-    const change = vi.fn()
-    mocks.call.mockResolvedValueOnce({
-      origin: 'probe',
-      fetchedAt: 3,
-      modelsDifferByWorkspace: true,
-      listingNamesConfiguredModel: true,
-      models:
-        kind === 'live'
-          ? [
-              {
-                id: 'gpt-6.1-sol',
-                label: 'GPT-6.1 Sol',
-                isDefault: true,
-                efforts: [
-                  { value: 'high', label: 'High' },
-                  { value: 'ultra', label: 'Ultra' }
-                ],
-                defaultEffort: 'high'
-              }
-            ]
-          : []
-    })
-    const hook = renderHook(() => useAgentModelMenu('codex', saved, source, true))
-    await waitFor(() => expect(hook.result.current.status).toBe('listed'))
-    expect(hook.result.current.fallbackAfterFailure).toBe(false)
-    expect(hook.result.current.rows.map(({ id }) => id)).toEqual(
-      kind === 'live' ? ['gpt-6.1-sol'] : []
-    )
-    for (const worktree of ['id:other', '']) {
-      act(() =>
-        recordHostModelCatalogSnapshot(source.scope.target, 'codex', worktree, {
-          origin: 'probe',
-          fetchedAt: 4,
-          modelsDifferByWorkspace: true,
-          models: [{ id: 'other', label: 'Other', isDefault: false, efforts: [] }]
-        })
-      )
-    }
-    expect(hook.result.current.status).toBe('listed')
-    expect(hook.result.current.fallbackAfterFailure).toBe(false)
-    expect(hook.result.current.rows.map(({ id }) => id)).toEqual(
-      kind === 'live' ? ['gpt-6.1-sol'] : []
-    )
+it('keeps the Settings fallback for an assignment-prefixed terminal wrapper', async () => {
+  const previousApi = Object.getOwnPropertyDescriptor(window, 'api')
+  Object.defineProperty(window, 'api', {
+    configurable: true,
+    value: { platform: { get: () => ({ platform: 'darwin' }) } }
+  })
+  mocks.call.mockResolvedValue({
+    origin: 'probe',
+    fetchedAt: 1,
+    models: [{ id: 'wrong-account', label: 'Wrong account', isDefault: false, efforts: [] }]
+  })
+  try {
     render(
-      <AgentChoiceControls
+      <HostAgentLaunchChoiceEditor
         agent="codex"
-        value={saved}
-        modelMenu={hook.result.current}
-        onChange={change}
+        label="Codex"
+        choices={undefined}
+        userArgs=""
+        permission={undefined}
+        save={async () => {}}
+        detectionTarget={{ kind: 'local' }}
+        commandOverride="ACCOUNT=other codex"
+        showArguments={false}
       />
     )
-    const model = screen.getByRole<HTMLSelectElement>('combobox', { name: 'Model' })
-    expect([...model.options].map(({ value }) => value)).toEqual([
-      '__agent_default__',
-      ...(kind === 'live' ? ['gpt-6.1-sol'] : saved ? ['old-only'] : [])
-    ])
-    expect(model.value).toBe(saved ? 'old-only' : '__agent_default__')
-    expect(screen.queryByRole('note')).toBeNull()
-    if (saved) {
-      const effort = screen.getByRole<HTMLSelectElement>('combobox', { name: 'Reasoning effort' })
-      expect(effort.value).toBe('ultra')
-      expect(effort.disabled).toBe(true)
-      expect(hook.result.current.descriptors.find(({ id }) => id === 'effort')).toMatchObject({
-        settable: false,
-        kind: { currentValue: 'ultra' }
-      })
-      expect(saved).toEqual({ model: 'old-only', options: { effort: 'ultra' } })
+    await act(async () => {
+      fireEvent.focus(screen.getByRole('combobox', { name: 'Model' }))
+    })
+    expect(
+      [...screen.getByRole<HTMLSelectElement>('combobox', { name: 'Model' }).options].map(
+        ({ value }) => value
+      )
+    ).toContain('gpt-5.6-sol')
+    expect(screen.queryByRole('option', { name: 'Wrong account' })).toBeNull()
+  } finally {
+    if (previousApi) {
+      Object.defineProperty(window, 'api', previousApi)
+    } else {
+      Reflect.deleteProperty(window, 'api')
     }
-    expect(change).not.toHaveBeenCalled()
-    hook.unmount()
   }
-)
+})

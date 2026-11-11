@@ -34,7 +34,8 @@ class AgentPickerAcquisition {
   private supports = new Map<number, SupportRead>()
   private jobs: AgentPickerCatalogJob[]
   private defaults: AgentPickerEntry[]
-  private catalogSubscriptions: (() => void)[] = []
+  private stopInvalidation?: () => void
+  private physicalCatalogs = 0
 
   constructor(
     readonly key: string,
@@ -63,26 +64,27 @@ class AgentPickerAcquisition {
     const first = this.observers.size === 0
     this.observers.add(observer)
     if (first) {
+      if (this.demand) {
+        this.jobs = this.jobs.map((job) => ({ ...job }))
+      }
       this.demand = new AbortController()
-      this.catalogSubscriptions = this.jobs.map(
-        (job, index) =>
-          this.reads.observeCatalog?.(
-            this.entries[job.index],
-            ({ answer, pending, invalidated }) => {
-              this.entries = updateAgentPickerCatalog(this.entries, job, {
-                catalog: answer ?? { origin: 'unknown' },
-                catalogRead: pending || invalidated ? 'pending' : 'settled'
-              })
-              if (invalidated) {
-                // Retire completions admitted under the previous generation's job identity.
-                this.jobs[index] = { ...job }
-                this.queued.catalog.add(index)
-              }
-              this.publish()
-              this.admit('catalog')
-            }
-          ) ?? (() => {})
-      )
+      this.outstanding = { catalog: 0, refresh: 0, support: this.outstanding.support }
+      this.stopInvalidation = this.reads.subscribeInvalidation?.(() => {
+        this.demand?.abort()
+        this.demand = new AbortController()
+        this.outstanding = { catalog: 0, refresh: 0, support: this.outstanding.support }
+        this.jobs = this.jobs.map((job) => ({ ...job }))
+        this.queued.refresh.clear()
+        this.jobs.forEach((job, index) => {
+          this.entries = updateAgentPickerCatalog(this.entries, job, {
+            catalog: { origin: 'unknown' },
+            catalogRead: 'pending'
+          })
+          this.queued.catalog.add(index)
+        })
+        this.publish()
+        this.admit('catalog')
+      })
       for (const [index, job] of this.jobs.entries()) {
         const view = this.entries[job.index]
         if (
@@ -117,8 +119,10 @@ class AgentPickerAcquisition {
       this.observers.delete(observer)
       if (!this.observers.size) {
         this.demand?.abort()
-        this.catalogSubscriptions.forEach((stop) => stop())
-        this.catalogSubscriptions = []
+        this.stopInvalidation?.()
+        this.stopInvalidation = undefined
+        this.queued.refresh.clear()
+        this.jobs.forEach((_, index) => this.queued.catalog.add(index))
       }
       this.retire()
     }
@@ -178,26 +182,20 @@ class AgentPickerAcquisition {
     const job = this.jobs[index]
     const signal = this.demand!.signal
     const catalog = await this.reads.catalog(entry, waitForListing, signal)
-    if (job !== this.jobs[index]) {
-      return
-    }
-    if (signal.aborted && (!catalog || catalog.listingInProgress)) {
-      this.queued.catalog.add(index)
-    }
-    if (signal.aborted && !catalog) {
+    if (job !== this.jobs[index] || (signal.aborted && this.observers.size > 0) || !catalog) {
       return
     }
     // An open picker waits on a running listing, and again when a wait used its whole budget.
     const refresh =
       !signal.aborted &&
       this.observers.size > 0 &&
-      (waitForListing ? catalog?.waitExpired : catalog?.listingInProgress) === true
+      (waitForListing ? catalog.waitExpired : catalog.listingInProgress) === true
     if (refresh) {
       this.queued.refresh.add(index)
     }
     this.entries = updateAgentPickerCatalog(this.entries, job, {
-      ...(catalog ? { catalog } : {}),
-      catalogRead: !catalog ? 'failed' : refresh ? 'pending' : 'settled'
+      catalog,
+      catalogRead: refresh ? 'pending' : 'settled'
     })
   }
 
@@ -215,16 +213,20 @@ class AgentPickerAcquisition {
         break
       }
       this.queued[kind].delete(index)
-      this.outstanding[kind]++
+      const outstanding = this.outstanding
+      outstanding[kind]++
       const entry = this.entries[kind !== 'support' ? this.jobs[index].index : index]
       if (kind === 'support') {
         this.supports.set(index, { state: 'pending' })
+      } else {
+        this.physicalCatalogs++
       }
       const job = this.jobs[index]
+      const signal = this.demand!.signal
       const read =
         kind !== 'support'
           ? this.readCatalog(entry, index, kind === 'refresh').catch((error: unknown) => {
-              if (job === this.jobs[index]) {
+              if (job === this.jobs[index] && !signal.aborted) {
                 this.entries = updateAgentPickerCatalog(this.entries, job, {
                   catalogRead: agentPickerCatalogFailure(error)
                 })
@@ -240,7 +242,12 @@ class AgentPickerAcquisition {
       void read
         .catch(() => undefined)
         .then(() => {
-          this.outstanding[kind]--
+          if (kind === 'support') {
+            this.outstanding.support--
+          } else {
+            outstanding[kind]--
+            this.physicalCatalogs--
+          }
           this.publish()
           this.admit(kind)
           if (kind !== 'support') {
@@ -255,11 +262,12 @@ class AgentPickerAcquisition {
     if (
       !this.observers.size &&
       !this.settingsPending &&
-      !this.outstanding.catalog &&
-      !this.outstanding.refresh &&
+      !this.physicalCatalogs &&
       !this.outstanding.support
     ) {
-      pending.delete(this.key)
+      if (pending.get(this.key) === this) {
+        pending.delete(this.key)
+      }
     }
   }
 

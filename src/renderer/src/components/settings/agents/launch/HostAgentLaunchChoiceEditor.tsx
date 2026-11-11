@@ -2,10 +2,13 @@ import { recomputeOn } from '@/lib/recompute-on'
 import type { ComponentProps } from 'react'
 import { AgentLaunchChoiceEditor } from '@/components/agent/launch-settings/AgentLaunchChoiceEditor'
 import type { AgentDetectionTarget } from '@/hooks/useDetectedAgents'
-import { useAppStateValue } from '@/store/retained-views/app-state-view'
+import { useAppStateValue, useAppViewExternalStore } from '@/store/retained-views/app-state-view'
 import { useHostStructuredAgentsVersion } from '@/runtime/native-chat/agent-catalogs/chat-provider-agents'
 import { readHostStructuredAgentsForRuntime } from '@/runtime/native-chat/agent-catalogs/host-structured-agents'
-import { readLocalRuntimeCapabilitiesOrUnknown } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
+import {
+  readLocalRuntimeCapabilityObservation,
+  subscribeLocalRuntimeCapabilityObservation
+} from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import {
   LOCAL_EXECUTION_HOST_ID,
   toRuntimeExecutionHostId
@@ -24,6 +27,11 @@ export function HostAgentLaunchChoiceEditor({
   commandOverride?: string
 }) {
   const version = useHostStructuredAgentsVersion()
+  const localCapabilities = useAppViewExternalStore(
+    subscribeLocalRuntimeCapabilityObservation,
+    readLocalRuntimeCapabilityObservation,
+    readLocalRuntimeCapabilityObservation
+  )
   const status = useAppStateValue((state) =>
     detectionTarget.kind === 'runtime'
       ? state.runtimeStatusByEnvironmentId.get(detectionTarget.environmentId)
@@ -43,7 +51,9 @@ export function HostAgentLaunchChoiceEditor({
   const capabilities =
     detectionTarget.kind === 'runtime'
       ? lastVerifiedRuntimeStatus(status)?.capabilities
-      : readLocalRuntimeCapabilitiesOrUnknown()
+      : localCapabilities.state === 'known'
+        ? localCapabilities.capabilities
+        : null
   const eligible = modelMenuUsesHostCatalog({
     nativeRuntime: detectionTarget.kind !== 'ssh',
     registered,

@@ -7,7 +7,18 @@ import {
   settleStructuredAgentSessionBuiltinCatalog
 } from './structured-agent-session-options'
 import { structuredAgentSessionShownSnapshot } from './structured-agent-session-option-view'
-import { withoutUnprovenNewLaunchDefault } from './host-model-catalog-snapshot-rules'
+/** Account defaults may be replaced by the next workspace's configuration. */
+function withoutUnprovenNewLaunchDefault(catalog: AgentSessionModelCatalogResult) {
+  return catalog.origin === 'unknown' ||
+    catalog.listingNamesConfiguredModel === false ||
+    catalog.defaultHoldsInEveryWorkspace === true
+    ? catalog
+    : {
+        ...catalog,
+        listingNamesConfiguredModel: false,
+        models: catalog.models.map((model) => ({ ...model, isDefault: false }))
+      }
+}
 
 export type ModelMenuSurface = 'chat' | 'terminal' | 'textGeneration'
 export type ModelMenuInput = {

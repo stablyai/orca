@@ -10,44 +10,20 @@ type ListedHostModelCatalog = Exclude<AgentSessionModelCatalogResult, { origin: 
 /** One host's answers for one agent. */
 export type HostModelCatalogSnapshot = {
   /** A session-less read's answer: the account a new chat would pin, with no workspace named. */
-  readonly account: AgentSessionModelCatalogResult | null
+  readonly account: ListedHostModelCatalog | null
   /** A new chat's answer per worktree (`''` when it named none): only it says whether that
    *  workspace's own config replaces the listed default. */
-  readonly byWorktree: ReadonlyMap<string, AgentSessionModelCatalogResult>
+  readonly byWorktree: ReadonlyMap<string, ListedHostModelCatalog>
 }
 
-export type HostModelCatalogLaunch = {
-  newLaunch: boolean
-  worktree?: string | null
-  seedsModel: boolean
-}
-
-const unnamedDefaults = new WeakMap<ListedHostModelCatalog, ListedHostModelCatalog>()
+export type HostModelCatalogLaunch = { newLaunch: boolean; worktree?: string; seedsModel: boolean }
 
 function withoutNamedDefault(catalog: ListedHostModelCatalog): ListedHostModelCatalog {
-  const held = unnamedDefaults.get(catalog)
-  if (held) {
-    return held
-  }
-  const projected: ListedHostModelCatalog = {
+  return {
     ...catalog,
     models: catalog.models.map((model) => ({ ...model, isDefault: false })),
     listingNamesConfiguredModel: false
   }
-  unnamedDefaults.set(catalog, projected)
-  return projected
-}
-
-/** A host-global default is nameable only when no workspace config can replace it. */
-export function withoutUnprovenNewLaunchDefault(
-  catalog: AgentSessionModelCatalogResult
-): AgentSessionModelCatalogResult {
-  return catalog.origin === 'unknown' ||
-    catalog.models.length === 0 ||
-    catalog.listingNamesConfiguredModel === false ||
-    catalog.defaultHoldsInEveryWorkspace === true
-    ? catalog
-    : withoutNamedDefault(catalog)
 }
 
 /** Undefined when no answer fits this launch. Workspace config can replace defaults, so another workspace’s answer is valid only for named models, no-default lists or host-proven workspace-independent defaults. */
@@ -58,27 +34,11 @@ export function selectHostModelCatalogSnapshot(
   if (!snapshot) {
     return undefined
   }
-  if (launch.worktree === null && snapshot.account) {
-    return launch.newLaunch ? withoutUnprovenNewLaunchDefault(snapshot.account) : snapshot.account
-  }
-  const exact =
-    launch.worktree === null ? undefined : snapshot.byWorktree.get(launch.worktree ?? '')
+  const exact = snapshot.byWorktree.get(launch.worktree ?? '')
   if (exact) {
     return exact
   }
-  const account = snapshot.account
-  if (account && (account.origin === 'unknown' || account.models.length === 0)) {
-    return undefined
-  }
-  let listed = account
-  if (!listed) {
-    for (const answer of snapshot.byWorktree.values()) {
-      if (answer.origin !== 'unknown' && answer.models.length > 0) {
-        listed = answer
-        break
-      }
-    }
-  }
+  const listed = snapshot.account ?? snapshot.byWorktree.values().next().value
   if (!listed || listed.modelsDifferByWorkspace) {
     return undefined
   }
@@ -93,7 +53,7 @@ export function selectHostModelCatalogSnapshot(
 }
 
 /** The snapshot after a host answer for `worktree` (null for a session-less read); undefined means keep none.
- *  An unknown or empty answer is retained for its scope so an older fallback cannot revive it. One whose listing is
+ *  An unknown or empty answer proves absence and retires what it answered for. One whose listing is
  *  still running proves nothing yet: it never replaces or retires a held list, but may fill an empty scope. */
 export function withHostModelCatalogAnswer(
   snapshot: HostModelCatalogSnapshot | undefined,
@@ -110,16 +70,24 @@ export function withHostModelCatalogAnswer(
       return snapshot
     }
   }
-  if (worktree === null) {
-    // A completed account observation supersedes every answer from the previous snapshot.
-    return { account: catalog, byWorktree: new Map() }
-  }
   if (!listed) {
-    const retired = snapshot?.byWorktree.get(worktree)
-    return {
-      account: retired && snapshot?.account === retired ? null : (snapshot?.account ?? null),
-      byWorktree: new Map(snapshot?.byWorktree).set(worktree, catalog)
+    if (worktree === null || !snapshot) {
+      return undefined
     }
+    if (!snapshot.byWorktree.has(worktree)) {
+      return snapshot
+    }
+    const retired = snapshot.byWorktree.get(worktree)
+    const byWorktree = new Map(snapshot.byWorktree)
+    byWorktree.delete(worktree)
+    return {
+      account: retired && snapshot.account === retired ? null : snapshot.account,
+      byWorktree
+    }
+  }
+  if (worktree === null) {
+    // A newer account-level list supersedes per-workspace answers made from an older one.
+    return { account: catalog, byWorktree: new Map() }
   }
   const byWorktree = new Map(snapshot?.byWorktree).set(worktree, catalog)
   // A default no workspace can replace is every new chat's, wherever it runs.

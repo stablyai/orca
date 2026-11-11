@@ -1,0 +1,120 @@
+// @vitest-environment happy-dom
+import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
+import { afterEach, expect, it, vi } from 'vitest'
+import { useAppStore } from '@/store'
+import { getDefaultSettings } from '../../../../shared/constants'
+import { useAgentLaunchPickerInventory } from './use-agent-launch-picker-inventory'
+import type { UseDetectedAgentsResult } from '@/hooks/useDetectedAgents'
+import type { NewTabAgentMenuModel } from '../tab-bar/new-tab-agent-menu-model'
+import {
+  loadHostStructuredAgents,
+  resetHostStructuredAgentsForTests
+} from '@/runtime/native-chat/agent-catalogs/host-structured-agents'
+import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY as REGISTERED } from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
+import { TEST_REPO } from '@/store/repos/repo.test-fixture'
+const transport = vi.hoisted(() => ({ call: vi.fn(), rpc: vi.fn(), defaults: vi.fn() }))
+vi.mock('@/runtime/native-chat/requests/structured-agent-session-call', () => ({
+  callStructuredAgentSession: transport.call
+}))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({ callRuntimeRpc: transport.rpc }))
+vi.mock('@/runtime/agent-launch-settings/agent-launch-settings-transport', () => ({
+  readHostAgentLaunchDefaults: transport.defaults
+}))
+const initial = useAppStore.getState()
+afterEach(() => {
+  cleanup()
+  useAppStore.setState(initial, true)
+  resetHostStructuredAgentsForTests()
+  vi.resetAllMocks()
+  vi.unstubAllGlobals()
+})
+const detection: UseDetectedAgentsResult = {
+  detectedIds: ['codex'],
+  isLoading: false,
+  isRefreshing: false,
+  detectionFailed: false,
+  needsServerUpdate: false,
+  refresh: async () => ['codex']
+}
+
+it('reads a paired unknown-platform catalog before launch defaults and keeps it after defaults fail', async () => {
+  useAppStore.setState({ settings: getDefaultSettings('/synthetic') })
+  transport.rpc.mockResolvedValue({ agents: [] })
+  await loadHostStructuredAgents('runtime:unknown-platform', [REGISTERED], 'server-runtime')
+  const defaults = Promise.withResolvers<never>()
+  transport.defaults.mockReturnValue(defaults.promise)
+  transport.call.mockResolvedValue({
+    origin: 'probe',
+    fetchedAt: 1,
+    models: [{ id: 'server-only', label: 'Server', isDefault: false, efforts: [] }]
+  })
+  const model: NewTabAgentMenuModel = {
+    state: 'settled',
+    rows: [{ agent: 'codex', kind: 'cli' }],
+    detection,
+    pickerContext: {
+      workspace: {
+        kind: 'git-worktree',
+        repoId: 'future',
+        executionHostId: 'runtime:unknown-platform'
+      },
+      executionHostId: 'runtime:unknown-platform',
+      runtimeId: 'server-runtime',
+      settings: null,
+      key: 'unknown-platform'
+    }
+  }
+  const hook = renderHook(() => useAgentLaunchPickerInventory(undefined, model, true))
+  await waitFor(() =>
+    expect(hook.result.current[0]).toMatchObject({
+      catalogRead: 'settled',
+      defaultsPending: true,
+      catalog: { models: [{ id: 'server-only' }] }
+    })
+  )
+  await act(async () => {
+    defaults.reject(new Error('defaults offline'))
+  })
+  expect(hook.result.current[0]).toMatchObject({
+    catalogRead: 'settled',
+    catalog: { models: [{ id: 'server-only' }] }
+  })
+})
+
+it('reads the structured host list for a local UNC workspace instead of gating on its terminal route', async () => {
+  vi.stubGlobal('window', { api: { platform: { get: () => ({ platform: 'win32' }) } } })
+  useAppStore.setState({
+    settings: getDefaultSettings('/synthetic'),
+    repos: [
+      {
+        ...TEST_REPO,
+        id: 'unc',
+        path: '\\\\wsl.localhost\\Ubuntu\\home\\app',
+        executionHostId: 'local'
+      }
+    ]
+  })
+  transport.call.mockResolvedValue({
+    origin: 'probe',
+    fetchedAt: 1,
+    models: [{ id: 'host-only', label: 'Host', isDefault: false, efforts: [] }]
+  })
+  const model: NewTabAgentMenuModel = {
+    state: 'settled',
+    rows: [{ agent: 'codex', kind: 'cli' }],
+    detection,
+    pickerContext: {
+      workspace: { kind: 'git-worktree', repoId: 'unc' },
+      executionHostId: 'local',
+      settings: {},
+      key: 'local-unc'
+    }
+  }
+  const hook = renderHook(() => useAgentLaunchPickerInventory(undefined, model, true))
+  await waitFor(() =>
+    expect(hook.result.current[0]).toMatchObject({
+      catalogRead: 'settled',
+      catalog: { models: [{ id: 'host-only' }] }
+    })
+  )
+})

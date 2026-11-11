@@ -38,8 +38,6 @@ import {
   recordHostModelCatalogSnapshot,
   resetHostModelCatalogSnapshotsForTests
 } from './host-model-catalog-snapshots'
-import { firstFrameOptionState } from '@/components/native-chat/session/options/structured/structured-agent-session-option-first-frame'
-import { structuredAgentSessionShownSnapshot } from '../../../../../shared/agent-session/options/structured-agent-session-option-view'
 import { installHostModelCatalogSnapshotsSync } from './host-model-catalog-snapshots-sync'
 import { createCompatibleRuntimeStatusResponse } from '../../rpc/testing/runtime-compatibility-test-fixture'
 
@@ -73,7 +71,7 @@ describe('host model catalog snapshots', () => {
       recordHostModelCatalogSnapshot(LOCAL, 'grok', 'wt-1', worldwide)
       expect(readHostModelCatalogSnapshot(LOCAL, 'grok', NEW_CHAT)).toBe(worldwide)
       recordHostModelCatalogSnapshot(LOCAL, 'grok', 'wt-1', retired)
-      expect(readHostModelCatalogSnapshot(LOCAL, 'grok', NEW_CHAT)).toBe(retired)
+      expect(readHostModelCatalogSnapshot(LOCAL, 'grok', NEW_CHAT)).toBeUndefined()
       expect(readHostModelCatalogSnapshot(LOCAL, 'grok', other)).toBe(scoped)
       expect(readHostModelCatalogSnapshot(PAIRED, 'grok', NEW_CHAT)).toBe(worldwide)
       expect(readHostModelCatalogSnapshot(LOCAL, 'omp', NEW_CHAT)).toBe(scoped)
@@ -82,12 +80,11 @@ describe('host model catalog snapshots', () => {
     recordHostModelCatalogSnapshot(LOCAL, 'grok', 'wt-1', worldwide)
     recordHostModelCatalogSnapshot(LOCAL, 'grok', 'wt-2', newer)
     recordHostModelCatalogSnapshot(LOCAL, 'grok', 'wt-1', { origin: 'unknown' })
-    expect(readHostModelCatalogSnapshot(LOCAL, 'grok', NEW_CHAT)).toEqual({ origin: 'unknown' })
+    expect(readHostModelCatalogSnapshot(LOCAL, 'grok', NEW_CHAT)).toBe(newer)
     recordHostModelCatalogSnapshot(LOCAL, 'grok', null, worldwide)
-    expect(readHostModelCatalogSnapshot(LOCAL, 'grok', NEW_CHAT)).toBe(worldwide)
     recordHostModelCatalogSnapshot(LOCAL, 'grok', 'wt-1', scoped)
     recordHostModelCatalogSnapshot(LOCAL, 'grok', 'wt-1', { origin: 'unknown' })
-    expect(readHostModelCatalogSnapshot(LOCAL, 'grok', NEW_CHAT)).toEqual({ origin: 'unknown' })
+    expect(readHostModelCatalogSnapshot(LOCAL, 'grok', NEW_CHAT)).toBe(worldwide)
   })
 
   it('keeps a held list through an answer whose listing is still running', () => {
@@ -104,18 +101,7 @@ describe('host model catalog snapshots', () => {
     expect(readHostModelCatalogSnapshot(LOCAL, 'claude', other)).toBe(filling)
   })
 
-  it('keeps preload misses pending and preserves chat answers that arrive during preload', async () => {
-    mocks.call.mockResolvedValueOnce({ origin: 'unknown' })
-    await preloadHostModelCatalogSnapshots(LOCAL, ['codex'], { savedOnly: true })
-    expect(mocks.call).toHaveBeenCalledWith(LOCAL, 'agentSession.modelCatalog', {
-      agent: 'codex',
-      savedOnly: true
-    })
-    const firstFrame = firstFrameOptionState('codex', LOCAL, { ...NEW_CHAT, worktree: 'id:x' })
-    expect(firstFrame.catalogSource).toBe('seed')
-    const model = structuredAgentSessionShownSnapshot(firstFrame).find(({ id }) => id === 'model')
-    expect(model).toMatchObject({ settable: false, kind: { type: 'select', choices: [] } })
-    expect(model?.kind.currentValue).toBeUndefined()
+  it("keeps a chat's answer that lands while an older preload is out", async () => {
     let answer: (catalog: AgentSessionModelCatalogResult) => void = () => {}
     mocks.call.mockImplementation(() => new Promise((resolve) => (answer = resolve)))
     const preload = preloadHostModelCatalogSnapshots(LOCAL, ['claude'], { savedOnly: true })
