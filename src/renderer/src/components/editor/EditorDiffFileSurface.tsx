@@ -1,11 +1,12 @@
-import { translate } from '@/i18n/i18n'
-import type { OpenFile } from '@/store/slices/editor'
-import type { GitDiffResult } from '../../../../shared/git-diff-compare-types'
-import { getDiffContentSignature } from './diff-content-signature'
+import { DiffTooLargeNotice } from './diff/large-files/DiffTooLargeNotice'
+import { useTranslate } from '@/i18n/use-translate'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
+import type { GitDiffResult } from '../../../../shared/git/diff/git-diff-compare-types'
+import { getDiffContentSignature } from './diff/sections/diff-content-signature'
 import { DiffViewer, ImageDiffViewer, MarkdownPreview } from './editor-lazy-views'
-import { ExternalFileChangeBanner } from './ExternalFileChangeBanner'
-import { MarkdownPreviewSizeGate } from './MarkdownPreviewSizeGate'
-import type { useMarkdownDocuments } from './useMarkdownDocuments'
+import { ExternalFileChangeBanner } from './external-changes/ExternalFileChangeBanner'
+import { MarkdownPreviewSizeGate } from './markdown-preview/render-tree/MarkdownPreviewSizeGate'
+import type { useMarkdownDocuments } from './markdown/documents/useMarkdownDocuments'
 
 type MarkdownDocumentsController = ReturnType<typeof useMarkdownDocuments>
 
@@ -44,16 +45,20 @@ export function EditorDiffFileSurface({
   onSave: (content: string) => Promise<boolean>
   reloadContent: (file: OpenFile) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   if (!diffContent) {
     return (
       <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-        {translate('auto.components.editor.EditorContent.c88c73a0d3', 'Loading diff...')}
+        {t('auto.components.editor.EditorContent.c88c73a0d3', 'Loading diff...')}
       </div>
     )
   }
 
   const isEditable = activeFile.diffSource === 'unstaged'
   if (diffContent.kind === 'binary') {
+    if (diffContent.tooLarge) {
+      return <DiffTooLargeNotice />
+    }
     if (diffContent.isImage) {
       return (
         <ImageDiffViewer
@@ -69,15 +74,15 @@ export function EditorDiffFileSurface({
       <div className="flex h-full items-center justify-center px-6 text-center">
         <div className="space-y-2">
           <div className="text-sm font-medium text-foreground">
-            {translate('auto.components.editor.EditorContent.78541e254e', 'Binary file changed')}
+            {t('auto.components.editor.EditorContent.78541e254e', 'Binary file changed')}
           </div>
           <div className="text-xs text-muted-foreground">
             {activeFile.diffSource === 'branch'
-              ? translate(
+              ? t(
                   'auto.components.editor.EditorContent.3c6e71df22',
                   'Text diff is unavailable for this file in branch compare.'
                 )
-              : translate(
+              : t(
                   'auto.components.editor.EditorContent.8a0898ae4c',
                   'Text diff is unavailable for this file.'
                 )}
@@ -112,7 +117,7 @@ export function EditorDiffFileSurface({
         {externalChangeBanner}
         <div className="border-b border-border/60 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
           {/* Markdown previews show the modified side because they cannot represent both additions and deletions. */}
-          {translate(
+          {t(
             'auto.components.editor.EditorContent.9640d1d3db',
             'Previewing the modified version of this diff. Switch to source mode to inspect changes.'
           )}
@@ -125,6 +130,7 @@ export function EditorDiffFileSurface({
               filePath={activeFile.filePath}
               sourceFileId={activeFile.id}
               sourceWorktreeId={activeFile.worktreeId}
+              sourceRelativePath={activeFile.relativePath}
               sourceRuntimeEnvironmentId={activeFile.runtimeEnvironmentId}
               scrollCacheKey={`${diffViewStateKey}:preview`}
               showTableOfContents={showMarkdownTableOfContents}
@@ -146,6 +152,7 @@ export function EditorDiffFileSurface({
       // Refresh through modifiedModelKey; keying the widget by content would remount and flash on save.
       key={`${viewStateScopeId}:${diffReloadNonce}`}
       modelKey={diffViewStateKey}
+      modelOwnerKey={activeFile.id}
       originalModelKey={originalModelKey}
       modifiedModelKey={modifiedModelKey}
       originalContent={diffContent.originalContent}
@@ -158,6 +165,7 @@ export function EditorDiffFileSurface({
       sideBySide={sideBySide}
       editable={isEditable}
       worktreeId={activeFile.worktreeId}
+      noteSource={activeFile}
       onContentChange={isEditable ? onContentChange : undefined}
       onSave={isEditable ? (isMarkdown ? markdownDocuments.mdSave : onSave) : undefined}
     />

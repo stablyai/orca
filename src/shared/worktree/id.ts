@@ -1,8 +1,6 @@
 import { normalizeRuntimePathForComparison } from '../cross-platform-path'
-import { WORKTREE_ID_SEPARATOR } from '../pty-session-id-format'
+import { WORKTREE_ID_SEPARATOR } from '../terminal/pty/lifecycle/pty-session-id-format'
 import type { Repo } from '../repo-types'
-
-export { WORKTREE_ID_SEPARATOR } from '../pty-session-id-format'
 
 export type ParsedWorktreeId = {
   repoId: string
@@ -54,6 +52,26 @@ export function splitWorktreeId(worktreeId: string): ParsedWorktreeId | null {
     repoId: worktreeId.slice(0, separatorIdx),
     worktreePath: worktreeId.slice(separatorIdx + WORKTREE_ID_SEPARATOR.length)
   }
+}
+
+/** `worktreeId` with its path mapped; the repo id and a folder workspace's instance suffix stay. */
+export function rewriteWorktreeIdPath(
+  worktreeId: string,
+  mapPath: (path: string) => string
+): string {
+  const parsed = splitWorktreeId(worktreeId)
+  if (!parsed || !parsed.repoId || !parsed.worktreePath) {
+    return worktreeId
+  }
+  const suffixAt = parsed.worktreePath.lastIndexOf(FOLDER_WORKSPACE_INSTANCE_SEPARATOR)
+  const instanceId = parsed.worktreePath.slice(
+    suffixAt + FOLDER_WORKSPACE_INSTANCE_SEPARATOR.length
+  )
+  const suffix =
+    suffixAt > 0 && /^[0-9a-f-]{36}$/.test(instanceId) ? parsed.worktreePath.slice(suffixAt) : ''
+  const path = parsed.worktreePath.slice(0, parsed.worktreePath.length - suffix.length)
+  const mapped = mapPath(path)
+  return mapped === path ? worktreeId : `${parsed.repoId}${WORKTREE_ID_SEPARATOR}${mapped}${suffix}`
 }
 
 export function splitWorktreeIdForFilesystem(worktreeId: string): ParsedWorktreeId | null {

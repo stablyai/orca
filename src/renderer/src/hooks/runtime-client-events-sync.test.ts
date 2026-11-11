@@ -211,6 +211,73 @@ describe('createRuntimeClientEventsSync', () => {
     }
   })
 
+  it('resubscribes on its own when the stream closes, backing off until a stream stays up', async () => {
+    vi.useFakeTimers()
+    try {
+      const closes: (() => void)[] = []
+      const unsubscribes: ReturnType<typeof vi.fn>[] = []
+      const subscribe = vi.fn(
+        (
+          _environmentId: string,
+          _onEvent: unknown,
+          _onError: unknown,
+          _isCurrent: unknown,
+          onClose?: () => void
+        ): Promise<RuntimeClientEventSubscriptionHandle> => {
+          const unsubscribe = vi.fn()
+          unsubscribes.push(unsubscribe)
+          closes.push(() => onClose?.())
+          // The first stream closes before its setup settles.
+          if (closes.length === 1) {
+            onClose?.()
+          }
+          return Promise.resolve({ unsubscribe })
+        }
+      )
+      const sync = createRuntimeClientEventsSync({
+        getDesiredEnvironmentIds: () => ['A'],
+        getSubscriptionKey: () => 'A:1',
+        subscribe,
+        onEvent: vi.fn(),
+        retryDelayMs: 10,
+        retryMaxDelayMs: 40,
+        random: () => 1
+      })
+
+      sync.sync()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(unsubscribes[0]).toHaveBeenCalledTimes(1)
+      await vi.advanceTimersByTimeAsync(10)
+      expect(subscribe).toHaveBeenCalledTimes(2)
+
+      // Streams that close right after setup back off 20, 40, then stay capped at 40.
+      for (const [attempt, delay] of [
+        [2, 20],
+        [3, 40],
+        [4, 40]
+      ]) {
+        closes[attempt - 1]()
+        await vi.advanceTimersByTimeAsync(delay - 1)
+        expect(subscribe).toHaveBeenCalledTimes(attempt)
+        await vi.advanceTimersByTimeAsync(1)
+        expect(subscribe).toHaveBeenCalledTimes(attempt + 1)
+      }
+
+      // A late close from a replaced stream must not drop the live one.
+      closes[1]()
+      await vi.advanceTimersByTimeAsync(40)
+      expect(subscribe).toHaveBeenCalledTimes(5)
+
+      // A stream that stayed up 30s ends the streak: the next retry uses the base delay.
+      await vi.advanceTimersByTimeAsync(30_000)
+      closes[4]()
+      await vi.advanceTimersByTimeAsync(10)
+      expect(subscribe).toHaveBeenCalledTimes(6)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('backs off exponentially with a cap while an environment keeps failing', async () => {
     vi.useFakeTimers()
     try {
@@ -239,79 +306,6 @@ describe('createRuntimeClientEventsSync', () => {
       await vi.advanceTimersByTimeAsync(40)
       expect(subscribe).toHaveBeenCalledTimes(4)
       await vi.advanceTimersByTimeAsync(39)
-      expect(subscribe).toHaveBeenCalledTimes(4)
-      await vi.advanceTimersByTimeAsync(1)
-      expect(subscribe).toHaveBeenCalledTimes(5)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('applies jitter below the full backoff delay', async () => {
-    vi.useFakeTimers()
-    try {
-      const subscribe = vi.fn((): Promise<RuntimeClientEventSubscriptionHandle> =>
-        Promise.reject(new Error('unreachable'))
-      )
-      const sync = createRuntimeClientEventsSync({
-        getDesiredEnvironmentIds: () => ['A'],
-        subscribe,
-        onEvent: vi.fn(),
-        retryDelayMs: 10,
-        random: () => 0
-      })
-
-      sync.sync()
-      await Promise.resolve()
-      expect(subscribe).toHaveBeenCalledTimes(1)
-
-      // random() => 0 halves the delay: retry at 5ms instead of 10ms.
-      await vi.advanceTimersByTimeAsync(5)
-      expect(subscribe).toHaveBeenCalledTimes(2)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('starts a fresh backoff epoch after a successful subscribe', async () => {
-    vi.useFakeTimers()
-    try {
-      let desired = ['A']
-      let failing = true
-      const unsubscribe = vi.fn()
-      const subscribe = vi.fn((): Promise<RuntimeClientEventSubscriptionHandle> => {
-        if (failing) {
-          return Promise.reject(new Error('unreachable'))
-        }
-        return Promise.resolve({ unsubscribe })
-      })
-      const sync = createRuntimeClientEventsSync({
-        getDesiredEnvironmentIds: () => desired,
-        subscribe,
-        onEvent: vi.fn(),
-        retryDelayMs: 10,
-        random: () => 1
-      })
-
-      sync.sync()
-      await Promise.resolve()
-      await vi.advanceTimersByTimeAsync(10)
-      expect(subscribe).toHaveBeenCalledTimes(2)
-
-      failing = false
-      await vi.advanceTimersByTimeAsync(20)
-      await Promise.resolve()
-      expect(subscribe).toHaveBeenCalledTimes(3)
-
-      // Leaving/reentering resets failure count so first retry returns to base delay.
-      desired = []
-      sync.sync()
-      desired = ['A']
-      failing = true
-      sync.sync()
-      await Promise.resolve()
-      expect(subscribe).toHaveBeenCalledTimes(4)
-      await vi.advanceTimersByTimeAsync(9)
       expect(subscribe).toHaveBeenCalledTimes(4)
       await vi.advanceTimersByTimeAsync(1)
       expect(subscribe).toHaveBeenCalledTimes(5)
@@ -355,7 +349,7 @@ describe('createRuntimeClientEventsSync', () => {
     }
   })
 
-  it('an external sync retries a waiting environment immediately (recovery path)', async () => {
+  it('an explicit recovery wake retries a waiting environment immediately', async () => {
     vi.useFakeTimers()
     try {
       const subscribe = vi.fn((): Promise<RuntimeClientEventSubscriptionHandle> =>
@@ -375,9 +369,107 @@ describe('createRuntimeClientEventsSync', () => {
       expect(subscribe).toHaveBeenCalledTimes(1)
 
       // Reachability changes retry immediately instead of waiting on backoff.
-      sync.sync()
+      sync.sync(['A'])
       await vi.advanceTimersByTimeAsync(0)
       expect(subscribe).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it.each([10, 100])('keeps retries local to due hosts in a fleet of %i', async (hostCount) => {
+    vi.useFakeTimers()
+    try {
+      const desired = Array.from({ length: hostCount }, (_, i) => `host-${i}`)
+      const getDesiredEnvironmentIds = vi.fn(() => desired)
+      const getSubscriptionKey = vi.fn((id: string) => id)
+      const closes = new Map<string, () => void>()
+      const subscribe = vi.fn(
+        (id: string, _event: unknown, _error: unknown, _current: unknown, close: () => void) => {
+          closes.set(id, close)
+          return Promise.resolve({ unsubscribe: vi.fn() })
+        }
+      )
+      const sync = createRuntimeClientEventsSync({
+        getDesiredEnvironmentIds,
+        getSubscriptionKey,
+        subscribe,
+        onEvent: vi.fn(),
+        random: () => 1
+      })
+      sync.sync()
+      await vi.advanceTimersByTimeAsync(0)
+      getDesiredEnvironmentIds.mockClear()
+      getSubscriptionKey.mockClear()
+      subscribe.mockClear()
+
+      closes.get('host-0')!()
+      await vi.advanceTimersByTimeAsync(1_000)
+      expect(subscribe.mock.calls.map(([id]) => id)).toEqual(['host-0'])
+      expect(getDesiredEnvironmentIds).not.toHaveBeenCalled()
+      expect(getSubscriptionKey).not.toHaveBeenCalled()
+
+      subscribe.mockClear()
+      for (const close of closes.values()) {
+        close()
+      }
+      // Every host is due once within 2s; only host-0 has a prior failure.
+      await vi.advanceTimersByTimeAsync(2_000)
+      expect(subscribe).toHaveBeenCalledTimes(hostCount)
+      expect(new Set(subscribe.mock.calls.map(([id]) => id)).size).toBe(hostCount)
+      expect(getDesiredEnvironmentIds).not.toHaveBeenCalled()
+      expect(getSubscriptionKey).not.toHaveBeenCalled()
+      sync.stop()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('preserves sibling deadlines across retries, reconciliation, and scoped recovery', async () => {
+    vi.useFakeTimers()
+    try {
+      const closes = new Map<string, () => void>()
+      const attempts: { id: string; at: number }[] = []
+      const sync = createRuntimeClientEventsSync({
+        getDesiredEnvironmentIds: () => ['A', 'B'],
+        subscribe: (id, _event, _error, _current, close) => {
+          attempts.push({ id, at: Date.now() })
+          closes.set(id, close)
+          return Promise.resolve({ unsubscribe: vi.fn() })
+        },
+        onEvent: vi.fn(),
+        random: () => 1
+      })
+      vi.setSystemTime(0)
+      sync.sync()
+      await vi.advanceTimersByTimeAsync(0)
+      for (const delay of [1_000, 2_000, 4_000, 8_000, 16_000]) {
+        closes.get('A')!()
+        await vi.advanceTimersByTimeAsync(delay)
+      }
+      // A is due at 61s. B's first close at 31s must not reset A's deadline.
+      closes.get('A')!()
+      closes.get('B')!()
+      sync.sync()
+      await vi.advanceTimersByTimeAsync(1_000)
+      expect(attempts.filter(({ id }) => id === 'A').map(({ at }) => at)).toEqual([
+        0, 1_000, 3_000, 7_000, 15_000, 31_000
+      ])
+      expect(attempts.filter(({ id }) => id === 'B').map(({ at }) => at)).toEqual([0, 32_000])
+
+      closes.get('B')!()
+      sync.sync(['B'])
+      await vi.advanceTimersByTimeAsync(0)
+      expect(attempts.filter(({ id }) => id === 'B').map(({ at }) => at)).toEqual([
+        0, 32_000, 32_000
+      ])
+      await vi.advanceTimersByTimeAsync(28_999)
+      expect(attempts.filter(({ id }) => id === 'A')).toHaveLength(6)
+      await vi.advanceTimersByTimeAsync(1)
+      expect(attempts.filter(({ id }) => id === 'A').map(({ at }) => at)).toEqual([
+        0, 1_000, 3_000, 7_000, 15_000, 31_000, 61_000
+      ])
+      sync.stop()
     } finally {
       vi.useRealTimers()
     }

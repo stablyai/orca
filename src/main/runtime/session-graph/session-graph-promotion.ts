@@ -1,9 +1,8 @@
+import type { OrcaRuntimeWithResolveExitWaiters as ResolveExitWaitersMethods } from '../terminal/wait/terminal-wait-settlements'
 import type { OrcaRuntimeWithHasTerminalsForWorktree as HasTerminalsForWorktreeMethods } from './session-graph-reload-lifecycle'
 import type { OrcaRuntimeWithBindPtyIncarnationHandle as BindPtyIncarnationHandleMethods } from '../terminal/identity/terminal-handle-bindings'
-import type { OrcaRuntimeWithResolveExitWaiters as ResolveExitWaitersMethods } from '../terminal/wait/terminal-wait-settlements'
 import type { OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees as CollectMobileVisibleGraphChangedWorktreesMethods } from '../session-tabs/session-tabs-inventory'
-import type { OrcaRuntimeWithGetPtyRecordForPaneKey as GetPtyRecordForPaneKeyMethods } from '../orchestration/terminal-pane-mail-routing'
-import type { OrcaRuntimeWithResolveWaiter as ResolveWaiterMethods } from '../orca-runtime-resolve-waiter'
+import type { OrcaRuntimeWithGetPtyRecordForPaneKey as GetPtyRecordForPaneKeyMethods } from '../orchestration/mailbox/routing/terminal-pane-mail-routing'
 import type { OrcaRuntimeWithMarkPtyLivenessUnverifiable as MarkPtyLivenessUnverifiableMethods } from '../terminal/layout/terminal-input-floor'
 import type { OrcaRuntimeWithRecordPtyWorktree as RecordPtyWorktreeMethods } from '../terminal/identity/pty-worktree-record'
 import type { RuntimeSessionTabsInventoryPublication as SessionTabsInventoryPublicationMethods } from '../session-tabs/session-tabs-inventory-publication'
@@ -12,13 +11,24 @@ import type { OrcaRuntimeWithTouchMobileSessionTabsForWorktree as TouchMobileSes
 import type { OrcaRuntimeWithScheduleMobileSessionTabsChanged as ScheduleMobileSessionTabsChangedMethods } from '../session-tabs/session-tabs-change-publication'
 import type { OrcaRuntimeWithSyncMobileSessionTabs as SyncMobileSessionTabsMethods } from '../session-tabs/mobile-session-reconciliation'
 import { OrcaRuntimeWithNotifySshStateChanged } from '../workspaces/workspace-host-notifications'
-import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-types'
+import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-session-contracts'
 import { ActiveGroupViewFacts } from '../view-facts/active-group-view-facts'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
-import type { RuntimePtyWorktreeRecord } from '../runtime-terminal-state-records'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
+import type { RuntimePtyWorktreeRecord } from '../terminal/records/runtime-terminal-state-records'
+import type { SessionTitleAuthority } from '../session-tabs/session-title-publisher'
 
 export abstract class OrcaRuntimeWithAttachWindow extends OrcaRuntimeWithNotifySshStateChanged {
+  protected abstract captureSessionTitleAuthority(): SessionTitleAuthority
+  protected abstract republishSessionTitleAuthorityChanges(
+    before: SessionTitleAuthority,
+    alreadyChanged?: ReadonlySet<string>
+  ): void
+
+  protected abstract agentSenderGraphReply(
+    ...args: Parameters<ScheduleMobileSessionTabsChangedMethods['agentSenderGraphReply']>
+  ): ReturnType<ScheduleMobileSessionTabsChangedMethods['agentSenderGraphReply']>
+
   protected abstract mainDecidesLiveness(worktreeId: string): boolean
 
   /** Main-owned panes do not prove liveness or override certified exits; terminal records decide (L80). */
@@ -68,10 +78,6 @@ export abstract class OrcaRuntimeWithAttachWindow extends OrcaRuntimeWithNotifyS
     ...args: Parameters<BindPtyIncarnationHandleMethods['adoptPreAllocatedHandle']>
   ): ReturnType<BindPtyIncarnationHandleMethods['adoptPreAllocatedHandle']>
 
-  protected abstract checkDeliverySettledAndArmRecheck(
-    ...args: Parameters<ResolveExitWaitersMethods['checkDeliverySettledAndArmRecheck']>
-  ): ReturnType<ResolveExitWaitersMethods['checkDeliverySettledAndArmRecheck']>
-
   protected abstract collectMobileVisibleGraphChangedWorktrees(
     ...args: Parameters<
       CollectMobileVisibleGraphChangedWorktreesMethods['collectMobileVisibleGraphChangedWorktrees']
@@ -80,13 +86,9 @@ export abstract class OrcaRuntimeWithAttachWindow extends OrcaRuntimeWithNotifyS
     CollectMobileVisibleGraphChangedWorktreesMethods['collectMobileVisibleGraphChangedWorktrees']
   >
 
-  protected abstract deliverPendingMessagesForLeaf(
-    ...args: Parameters<GetPtyRecordForPaneKeyMethods['deliverPendingMessagesForLeaf']>
-  ): ReturnType<GetPtyRecordForPaneKeyMethods['deliverPendingMessagesForLeaf']>
-
-  protected abstract getLeafKey(
-    ...args: Parameters<ResolveWaiterMethods['getLeafKey']>
-  ): ReturnType<ResolveWaiterMethods['getLeafKey']>
+  protected abstract deliverPendingMessagesForPty(
+    ...args: Parameters<ResolveExitWaitersMethods['deliverPendingMessagesForPty']>
+  ): ReturnType<ResolveExitWaitersMethods['deliverPendingMessagesForPty']>
 
   abstract getPtyLivenessVerdict(
     ...args: Parameters<MarkPtyLivenessUnverifiableMethods['getPtyLivenessVerdict']>

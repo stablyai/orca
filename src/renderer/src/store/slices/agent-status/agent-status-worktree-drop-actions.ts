@@ -11,7 +11,7 @@ import {
   shouldReplaceRetainedWithLive
 } from './agent-status-pane-key-tab-binding'
 import { removePaneKeys } from './agent-status-pane-keyed-records'
-import { agentTurnEndedOnPurpose } from '../../../../../shared/agent-main-agent-verdict'
+import { agentTurnEndedOnPurpose } from '../../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 
 export function createAgentStatusWorktreeDropActions(
   runtime: AgentStatusRuntime
@@ -20,7 +20,7 @@ export function createAgentStatusWorktreeDropActions(
   return {
     dropAgentStatusByWorktree: (worktreeId, opts?: DropAgentStatusByWorktreeOptions) => {
       let hadLive = false
-      set((s) => {
+      set((s, changedPaneKeys) => {
         const tabPrefixes = (s.tabsByWorktree[worktreeId] ?? []).map((tab) => `${tab.id}:`)
         // An open chat's row is its host's: the chat tab's projection removes it on close.
         const chatTabIds = openNonTerminalTabIds(s, worktreeId)
@@ -118,6 +118,7 @@ export function createAgentStatusWorktreeDropActions(
         const nextLive =
           liveKeys.length > 0 ? { ...s.agentStatusByPaneKey } : s.agentStatusByPaneKey
         for (const key of liveKeys) {
+          changedPaneKeys.add(key)
           delete nextLive[key]
         }
         const nextLaunchConfigs =

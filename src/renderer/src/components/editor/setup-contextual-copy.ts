@@ -1,6 +1,6 @@
 import type { editor } from 'monaco-editor'
 import { formatShortcutLabel } from '@/hooks/useShortcutLabel'
-import { monaco } from '@/lib/monaco-setup'
+import { monaco } from '@/lib/editor/monaco/monaco-setup'
 import { useAppStore } from '@/store'
 import { editorShortcutMatches } from './editor-shortcuts'
 import {
@@ -12,7 +12,8 @@ import {
   PRIMARY_SELECTION_MAX_LENGTH,
   isPrimarySelectionEnabled,
   setPrimarySelectionText
-} from '@/lib/primary-selection'
+} from '@/lib/clipboard/primary-selection/primary-selection'
+import { translate } from '@/i18n/i18n'
 
 export function setupContextualCopy({
   editorInstance,
@@ -39,10 +40,13 @@ export function setupContextualCopy({
   copyHintNode.className =
     'pointer-events-none rounded-md border border-border/90 bg-background px-2.5 py-1 text-xs font-medium text-foreground shadow-[0_6px_18px_rgba(15,23,42,0.18)] backdrop-blur whitespace-nowrap'
   const updateCopyHintLabel = (): void => {
-    copyHintNode.textContent = `Copy context ${formatShortcutLabel(
-      'editor.copyContext',
-      useAppStore.getState().keybindings
-    )}`
+    copyHintNode.textContent = translate(
+      'auto.components.editor.contextualCopy.copyContextHint',
+      'Copy context {{shortcut}}',
+      {
+        shortcut: formatShortcutLabel('editor.copyContext', useAppStore.getState().keybindings)
+      }
+    )
   }
   updateCopyHintLabel()
   copyHintNode.style.display = 'none'

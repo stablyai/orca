@@ -3,7 +3,7 @@ import type { SshManagedServerUpdateNote, SshTarget } from '../../../shared/ssh-
 import {
   checkManagedServerUpdate,
   type ManagedServerUpdateDeps
-} from '../../ssh/managed-server-update-check'
+} from '../../ssh/host-server/managed-server-update-check'
 
 export type ManagedOrcadRestoreUpdateDeps = ManagedServerUpdateDeps & {
   target: (environmentId: string) => SshTarget | null

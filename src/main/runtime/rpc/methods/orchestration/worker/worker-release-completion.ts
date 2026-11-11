@@ -1,22 +1,25 @@
-import type { OrchestrationDb } from '../../../../orchestration/db'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import type {
   WorkerTerminalArchiveKind,
   WorkerTerminalArchiveStatus,
   WorkerTerminalResourceRow,
   WorkerTerminalRetainedReason
-} from '../../../../orchestration/worker-terminal-ownership'
-import { summarizeWorkerOutputArchive } from '../../../../orchestration/worker-output-archive'
-import type { WorkerTerminalReleaseRuntime } from '../../../../orchestration/worker-terminal-release-runtime'
-import { describeUnconfirmedAgentStop } from '../../../../../../shared/pty-liveness-verdict'
+} from '../../../../orchestration/terminal-authority/release/worker-terminal-ownership'
+import { summarizeWorkerOutputArchive } from '../../../../orchestration/workers/archives/worker-output-archive'
+import type { WorkerTerminalReleaseRuntime } from '../../../../orchestration/terminal-authority/release/worker-terminal-release-runtime'
+import { describeUnconfirmedAgentStop } from '../../../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import { inspectWorkerTerminal } from './worker-observation'
 import { orchestrationTimestampToMs } from './worker-output'
 import { archiveSummary } from './worker-terminal-resource-presentation'
 import { classifyWorkerTerminalCloseError } from './worker-release-close-error'
 import { workerTerminalLeaseIsCurrent } from './worker-terminal-release-lease'
-import { resolveStructuredWorkerForDispatch } from '../../orchestration-structured-worker-lifecycle'
+import { resolveStructuredWorkerForDispatch } from '../structured-workers/orchestration-structured-worker-lifecycle'
 import { stopStructuredWorkerForRelease } from './structured-worker-release-stop'
-import { isStructuredWorkerHandle } from '../../../../../../shared/structured-worker-handle'
+import { isStructuredWorkerHandle } from '../../../../../../shared/orchestration/workers/structured-worker-handle'
 import { captureWorkerReleaseArchive } from './worker-release-archive-capture'
+import { WorkerTerminalReleaseSingleFlight } from './worker-terminal-release-single-flight'
+import { releaseUnknownRecovery } from './worker-release-unknown-recovery'
+import { yieldAutoReleaseToWorkingAgent } from '../../../../orchestration/terminal-authority/release/worker-terminal-auto-release-working-yield'
 
 export type WorkerReleaseReceipt = {
   dispatchId: string
@@ -36,48 +39,20 @@ type WorkerTerminalReleaseArgs = {
   mode?: 'interactive' | 'recovery'
 }
 
-type ActiveWorkerTerminalRelease = {
-  promise: Promise<WorkerReleaseReceipt>
-  recoveryRequested: boolean
-}
-
-const activeReleaseByRuntime = new WeakMap<
-  WorkerTerminalReleaseRuntime,
-  Map<string, ActiveWorkerTerminalRelease>
->()
+const localReleases = new WorkerTerminalReleaseSingleFlight<WorkerReleaseReceipt>()
 
 // Shared RPC/recovery completion: prove exact identity, archive output, close only its terminal, then settle.
 export function completeWorkerTerminalRelease(
   args: WorkerTerminalReleaseArgs
 ): Promise<WorkerReleaseReceipt> {
-  let activeByResource = activeReleaseByRuntime.get(args.runtime)
-  if (!activeByResource) {
-    activeByResource = new Map()
-    activeReleaseByRuntime.set(args.runtime, activeByResource)
-  }
-  const active = activeByResource.get(args.resource.id)
-  if (active) {
-    active.recoveryRequested ||= args.mode === 'recovery'
-    return active.promise
-  }
-  const activeRelease = {
-    recoveryRequested: args.mode === 'recovery'
-  } as ActiveWorkerTerminalRelease
-  const release = completeWorkerTerminalReleaseOnce(args)
-    .then((receipt) => {
-      if (activeRelease.recoveryRequested) {
+  return localReleases.run(args.runtime, args.resource.id, args.mode, (active) =>
+    completeWorkerTerminalReleaseOnce(args).then((receipt) => {
+      if (active.recoveryRequested) {
         args.db.recordWorkerTerminalRecoveryAttempt(args.resource.id)
       }
       return receipt
     })
-    .finally(() => {
-      if (activeByResource?.get(args.resource.id) === activeRelease) {
-        activeByResource.delete(args.resource.id)
-      }
-    })
-  activeRelease.promise = release
-  activeByResource.set(args.resource.id, activeRelease)
-  return release
+  )
 }
 
 async function completeWorkerTerminalReleaseOnce(
@@ -208,14 +183,19 @@ async function completeWorkerTerminalReleaseOnce(
     archiveSource ??= stored.source
     archiveStatus ??= stored.status
   }
-  const releasing = db.commitWorkerTerminalArchiveForRelease({
+  const committed = db.commitWorkerTerminalArchiveForRelease({
     dispatchId,
     resourceId: resource.id,
     ...capturedArchive,
     archiveSource,
     archiveStatus: archiveStatus === 'empty' ? 'empty' : 'captured'
   })
-  if (releasing.ownership_state !== 'owned' || releasing.release_state !== 'releasing') {
+  const releasing = !isStillReleasing(committed)
+    ? committed
+    : !workerTerminalLeaseIsCurrent(runtime, db, dispatchId, committed, terminalHandle)
+      ? db.revertWorkerTerminalReleaseToRetained(resource.id, 'identity_unproven')
+      : yieldAutoReleaseToWorkingAgent(runtime, committed)
+  if (!isStillReleasing(releasing)) {
     return {
       dispatchId,
       state: 'retained',
@@ -224,17 +204,6 @@ async function completeWorkerTerminalReleaseOnce(
       archive: archiveSummary(releasing)
     }
   }
-  if (!workerTerminalLeaseIsCurrent(runtime, db, dispatchId, releasing, terminalHandle)) {
-    const retained = db.revertWorkerTerminalReleaseToRetained(resource.id, 'identity_unproven')
-    return {
-      dispatchId,
-      state: 'retained',
-      reason: 'identity_unproven',
-      processAction: 'none',
-      archive: archiveSummary(retained)
-    }
-  }
-
   try {
     if (structured) {
       return await stopStructuredWorkerForRelease({
@@ -299,10 +268,6 @@ async function completeWorkerTerminalReleaseOnce(
   }
 }
 
-export function releaseUnknownRecovery(dispatchId: string): string {
-  return `Inspect with: orca orchestration worker-show --dispatch ${dispatchId} --json — then retry worker-release with a fresh request ID (omit --retry-request to let the CLI generate one). Reusing the prior request ID only replays this release_unknown receipt. Never substitute a broad terminal close.`
-}
-
 function retainedReason(resource: WorkerTerminalResourceRow): WorkerTerminalRetainedReason {
   if (resource.retained_reason) {
     return resource.retained_reason as WorkerTerminalRetainedReason
@@ -311,4 +276,8 @@ function retainedReason(resource: WorkerTerminalResourceRow): WorkerTerminalReta
     return 'user_takeover'
   }
   return 'identity_unproven'
+}
+
+function isStillReleasing(resource: WorkerTerminalResourceRow): boolean {
+  return resource.ownership_state === 'owned' && resource.release_state === 'releasing'
 }

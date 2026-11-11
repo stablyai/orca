@@ -2,8 +2,8 @@ import React from 'react'
 import { ArrowUp, RefreshCw, Settings2, type LucideIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
-import type { GitBranchCompareSummary } from '../../../../../../shared/git-diff-compare-types'
+import { useTranslate } from '@/i18n/use-translate'
+import type { GitBranchCompareSummary } from '../../../../../../shared/git/diff/git-diff-compare-types'
 
 export type BranchCompareStatusHeadSnapshot = {
   baseRef: string
@@ -24,9 +24,11 @@ export function shouldRefreshBranchCompareForStatusHead(
   previous: BranchCompareStatusHeadSnapshot | null,
   current: BranchCompareStatusHeadSnapshot
 ): boolean {
+  // A first status load is not a HEAD move; the visible-entry compare already read HEAD.
   return (
     current.statusHead !== null &&
     previous !== null &&
+    previous.statusHead !== null &&
     previous.worktreeId === current.worktreeId &&
     previous.baseRef === current.baseRef &&
     previous.statusHead !== current.statusHead
@@ -37,8 +39,10 @@ export function shouldRefreshBranchCompareForRemoteStatus(
   previous: BranchCompareRemoteStatusSnapshot | null,
   current: BranchCompareRemoteStatusSnapshot
 ): boolean {
+  // A first upstream load is not a push.
   return (
     previous !== null &&
+    previous.hasUpstream !== null &&
     previous.worktreeId === current.worktreeId &&
     previous.baseRef === current.baseRef &&
     (previous.hasUpstream !== current.hasUpstream ||
@@ -67,13 +71,19 @@ export function CompareSummary({
   onChangeBaseRef: () => void
   onRetry: () => void
 }): React.JSX.Element | null {
+  const t = useTranslate()
   if (!summary || summary.status === 'loading') {
     return (
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
         <RefreshCw className="size-3.5 animate-spin" />
         <span>
-          {translate('auto.components.right.sidebar.SourceControl.11b5dd8e41', 'Comparing against')}{' '}
-          {summary?.baseRef ?? '…'}
+          {t(
+            'auto.components.right.sidebar.SourceControl.comparingAgainstRef',
+            'Comparing against {{ref}}',
+            {
+              ref: summary?.baseRef ?? '…'
+            }
+          )}
         </span>
       </div>
     )
@@ -84,7 +94,7 @@ export function CompareSummary({
       <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
         <span className="min-w-0 flex-1 truncate">
           {summary.errorMessage ??
-            translate(
+            t(
               'auto.components.right.sidebar.SourceControl.715d229c86',
               'Branch compare unavailable'
             )}
@@ -92,15 +102,12 @@ export function CompareSummary({
         <div className="flex shrink-0 items-center gap-2">
           <CompareSummaryToolbarButton
             icon={Settings2}
-            label={translate(
-              'auto.components.right.sidebar.SourceControl.493f963029',
-              'Change base ref'
-            )}
+            label={t('auto.components.right.sidebar.SourceControl.493f963029', 'Change base ref')}
             onClick={onChangeBaseRef}
           />
           <CompareSummaryToolbarButton
             icon={RefreshCw}
-            label={translate('auto.components.right.sidebar.SourceControl.286dbda4d6', 'Retry')}
+            label={t('auto.components.right.sidebar.SourceControl.286dbda4d6', 'Retry')}
             onClick={onRetry}
           />
         </div>
@@ -112,17 +119,15 @@ export function CompareSummary({
   const showCommitsAhead = typeof commitsAhead === 'number' && commitsAhead > 0
   const commitsAheadTitle = !showCommitsAhead
     ? undefined
-    : commitsAhead === 1
-      ? translate(
-          'auto.components.right.sidebar.source.control.compare.summary.commitsAheadSingular',
-          '{{count}} commit ahead of {{ref}}',
-          { count: commitsAhead, ref: summary.baseRef }
-        )
-      : translate(
-          'auto.components.right.sidebar.source.control.compare.summary.commitsAheadPlural',
-          '{{count}} commits ahead of {{ref}}',
-          { count: commitsAhead, ref: summary.baseRef }
-        )
+    : t(
+        'auto.components.right.sidebar.source.control.compare.summary.commitsAhead',
+        '{{count}} commits ahead of {{ref}}',
+        {
+          count: commitsAhead,
+          ref: summary.baseRef,
+          defaultValue_one: '{{count}} commit ahead of {{ref}}'
+        }
+      )
 
   if (!showCommitsAhead) {
     return null
@@ -133,22 +138,21 @@ export function CompareSummary({
       <span className="flex min-w-0 items-center gap-1" title={commitsAheadTitle}>
         <ArrowUp className="size-3" />
         <span>
-          {commitsAhead}{' '}
-          {translate('auto.components.right.sidebar.SourceControl.3278b2767b', 'ahead')}
+          {t('auto.components.right.sidebar.SourceControl.commitsAheadShort', '{{count}} ahead', {
+            count: commitsAhead,
+            defaultValue_one: '{{count}} ahead'
+          })}
         </span>
       </span>
       <div className="ml-auto flex shrink-0 items-center gap-2">
         <CompareSummaryToolbarButton
           icon={Settings2}
-          label={translate(
-            'auto.components.right.sidebar.SourceControl.493f963029',
-            'Change base ref'
-          )}
+          label={t('auto.components.right.sidebar.SourceControl.493f963029', 'Change base ref')}
           onClick={onChangeBaseRef}
         />
         <CompareSummaryToolbarButton
           icon={RefreshCw}
-          label={translate(
+          label={t(
             'auto.components.right.sidebar.SourceControl.ed34038d0d',
             'Refresh branch compare'
           )}
@@ -198,6 +202,7 @@ export function CompareUnavailable({
   onChangeBaseRef: () => void
   onRetry: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const changeBaseRefAllowed =
     summary.status === 'invalid-base' ||
     summary.status === 'no-merge-base' ||
@@ -207,18 +212,15 @@ export function CompareUnavailable({
     <div className="m-3 rounded-md border border-border/60 bg-muted/20 px-3 py-3 text-xs">
       <div className="font-medium text-foreground">
         {summary.status === 'error'
-          ? translate(
-              'auto.components.right.sidebar.SourceControl.97d8b03cdf',
-              'Branch compare failed'
-            )
-          : translate(
+          ? t('auto.components.right.sidebar.SourceControl.97d8b03cdf', 'Branch compare failed')
+          : t(
               'auto.components.right.sidebar.SourceControl.715d229c86',
               'Branch compare unavailable'
             )}
       </div>
       <div className="mt-1 text-muted-foreground">
         {summary.errorMessage ??
-          translate(
+          t(
             'auto.components.right.sidebar.SourceControl.b6922abb13',
             'Unable to load branch compare.'
           )}
@@ -233,12 +235,12 @@ export function CompareUnavailable({
             onClick={onChangeBaseRef}
           >
             <Settings2 className="size-3.5" />
-            {translate('auto.components.right.sidebar.SourceControl.476b77745b', 'Change Base Ref')}
+            {t('auto.components.right.sidebar.SourceControl.476b77745b', 'Change Base Ref')}
           </Button>
         )}
         <Button type="button" variant="ghost" size="sm" className="h-7 text-xs" onClick={onRetry}>
           <RefreshCw className="size-3.5" />
-          {translate('auto.components.right.sidebar.SourceControl.286dbda4d6', 'Retry')}
+          {t('auto.components.right.sidebar.SourceControl.286dbda4d6', 'Retry')}
         </Button>
       </div>
     </div>

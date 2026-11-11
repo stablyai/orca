@@ -1,5 +1,5 @@
-import { z } from 'zod'
-import { prFlag, prText } from '../session/github-pr-entity-reply-schema'
+import * as z from 'zod'
+import { prFlag, prText } from '../source-control/review/github-pr-entity-reply-schema'
 import { taskCommentWriteEnvelopeSchema } from './task-provider-entity-reply-schema'
 
 // Missing or unreadable comments retain the local echo; callers handle optional ok/error fields themselves.
@@ -13,4 +13,4 @@ export const linearCommentWrittenSchema = z.looseObject({
 })
 
 // Only true confirms a thread toggle; false and non-boolean replies must not imply a write.
-export { githubPrMutationConfirmationSchema as reviewThreadResolvedSchema } from '../session/github-pr-mutation-reply-schema'
+export { githubPrMutationConfirmationSchema as reviewThreadResolvedSchema } from '../source-control/review/github-pr-mutation-reply-schema'

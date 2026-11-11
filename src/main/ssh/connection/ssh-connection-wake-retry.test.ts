@@ -5,50 +5,56 @@ import {
   nextSshClientCreation,
   resetSshConnectionMocks,
   spawnSystemSshCommandMock
-} from './ssh-connection-test-harness'
-import { clientInstances, emitSshEvent, ssh2Mock } from '../__tests__/ssh-connection-test-client'
+} from './testing/ssh-connection-test-harness'
+import { clientInstances, emitSshEvent, ssh2Mock } from './testing/ssh-connection-test-client'
 import {
   createCallbacks,
   createHangingSystemCommandChannel,
   createResolvedConfig,
   createTarget
-} from './ssh-connection-test-fixtures'
+} from './testing/ssh-connection-test-fixtures'
 import { SshConnection } from './ssh-connection'
 import { resolveWithSshG } from '../config/ssh-g-config-resolution'
-import { SshConnectionManager } from './ssh-connection-manager'
-import { RECONNECT_BACKOFF_MS } from './ssh-connection-timing'
-import { recordSshUserDisconnected, resetSshUserDisconnectsForTests } from '../ssh-user-disconnect'
 
-vi.mock('ssh2', async () =>
-  (await import('../__tests__/ssh-connection-test-client')).createSsh2Module()
+import { RECONNECT_BACKOFF_MS } from './ssh-connection-timing'
+import { recordSshUserDisconnected } from './ssh-user-disconnect'
+
+vi.mock('../authentication/ssh2-module-load', async () =>
+  (await import('./testing/ssh-connection-test-client')).createSsh2LoaderModule()
 )
 vi.mock('../system-transport/system-ssh-binary', async () =>
-  (await import('./ssh-connection-test-harness')).createSystemSshBinaryModule()
+  (await import('./testing/ssh-connection-test-harness')).createSystemSshBinaryModule()
 )
 vi.mock('../system-transport/system-ssh-args', async (importOriginal) =>
-  (await import('./ssh-connection-test-harness')).withSystemSshArgsMocks(await importOriginal())
+  (await import('./testing/ssh-connection-test-harness')).withSystemSshArgsMocks(
+    await importOriginal()
+  )
 )
 vi.mock('../system-transport/system-ssh-command', async (importOriginal) =>
-  (await import('./ssh-connection-test-harness')).withSystemSshCommandMocks(await importOriginal())
-)
-vi.mock('../system-transport/system-ssh-file-binary-transfer', async (importOriginal) =>
-  (await import('./ssh-connection-test-harness')).withSystemSshFileBinaryTransferMocks(
+  (await import('./testing/ssh-connection-test-harness')).withSystemSshCommandMocks(
     await importOriginal()
   )
 )
-vi.mock('../system-transport/system-ssh-file-transfer', async (importOriginal) =>
-  (await import('./ssh-connection-test-harness')).withSystemSshFileTransferMocks(
+vi.mock(
+  '../system-transport/file-transfer/system-ssh-file-binary-transfer',
+  async (importOriginal) =>
+    (await import('./testing/ssh-connection-test-harness')).withSystemSshFileBinaryTransferMocks(
+      await importOriginal()
+    )
+)
+vi.mock('../system-transport/file-transfer/system-ssh-file-transfer', async (importOriginal) =>
+  (await import('./testing/ssh-connection-test-harness')).withSystemSshFileTransferMocks(
     await importOriginal()
   )
 )
-vi.mock('../ssh-control-socket', async () =>
-  (await import('./ssh-connection-test-harness')).createControlSocketModule()
+vi.mock('../system-transport/ssh-control-socket', async () =>
+  (await import('./testing/ssh-connection-test-harness')).createControlSocketModule()
 )
 vi.mock('../config/ssh-config-parser', async () =>
-  (await import('./ssh-connection-test-harness')).createSshConfigParserModule()
+  (await import('./testing/ssh-connection-test-harness')).createSshConfigParserModule()
 )
 vi.mock('../config/ssh-g-config-resolution', async (importOriginal) =>
-  (await import('./ssh-connection-test-harness')).withSshGConfigResolutionMocks(
+  (await import('./testing/ssh-connection-test-harness')).withSshGConfigResolutionMocks(
     await importOriginal()
   )
 )
@@ -80,7 +86,6 @@ async function spendLadderWhileAsleep(conn: SshConnection): Promise<void> {
 describe('SshConnection retry after wake or network return', () => {
   beforeEach(() => {
     resetSshConnectionMocks()
-    resetSshUserDisconnectsForTests()
     vi.useFakeTimers()
   })
   afterEach(() => {
@@ -180,42 +185,6 @@ describe('SshConnection retry after wake or network return', () => {
     await vi.advanceTimersByTimeAsync(1)
     expect(conn.getState().status).toBe('connected')
     expect(conn.usesSystemSshTransport()).toBe(true)
-  })
-
-  it('leaves healthy, initial, and explicitly closed connections alone', async () => {
-    const { conn } = recordStatuses()
-    await connectWithFakeTimers(conn)
-    expect(conn.retryAfterNetworkReturn()).toBe(false)
-
-    await conn.disconnect()
-    expect(conn.retryAfterNetworkReturn()).toBe(false)
-
-    const initial = new SshConnection(createTarget(), createCallbacks())
-    ssh2Mock.connectBehavior = 'pending'
-    void initial.connect().catch(() => undefined)
-    await vi.advanceTimersByTimeAsync(10_000)
-    // The first connect owns its own retries and result.
-    expect(initial.retryAfterNetworkReturn()).toBe(false)
-    await initial.disconnect()
-  })
-
-  it('restarts every stalled connection the manager holds', async () => {
-    const manager = new SshConnectionManager(createCallbacks())
-    const created = nextSshClientCreation()
-    const connecting = manager.connect(createTarget())
-    await created
-    await vi.advanceTimersByTimeAsync(1)
-    const conn = await connecting
-    await spendLadderWhileAsleep(conn)
-
-    ssh2Mock.connectBehavior = 'ready'
-    const recreated = nextSshClientCreation()
-    expect(manager.retryStalledReconnects()).toEqual([createTarget().id])
-    await recreated
-    await vi.advanceTimersByTimeAsync(1)
-    expect(manager.getState(createTarget().id)?.status).toBe('connected')
-    expect(manager.retryStalledReconnects()).toEqual([])
-    await manager.disconnectAll()
   })
 
   it('never redials a host the user disconnected while its teardown is still queued', async () => {

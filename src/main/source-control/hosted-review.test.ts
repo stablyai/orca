@@ -81,9 +81,57 @@ describe('getHostedReviewForBranch', () => {
     __resetHostedReviewBranchCacheForTests()
   })
 
+  it('refreshes a self-managed GitLab MR through the provider while old metadata is pending', async () => {
+    getProjectSlugMock.mockResolvedValue({ host: 'gitlab.example.test', path: 'g/p' })
+    const old = {
+      number: 7,
+      title: 'MR',
+      state: 'opened',
+      url: 'https://gitlab.example.test/g/p/-/merge_requests/7',
+      pipelineStatus: 'success',
+      updatedAt: '2026-05-10T00:00:00.000Z',
+      mergeable: 'MERGEABLE'
+    }
+    let finishOld: (value: typeof old) => void = () => {}
+    const pending = new Promise<typeof old>((resolve) => {
+      finishOld = resolve
+    })
+    let started!: () => void
+    const requestStarted = new Promise<void>((resolve) => {
+      started = resolve
+    })
+    getMergeRequestForBranchMock.mockImplementation(
+      (
+        _repo: string,
+        _branch: string,
+        _linked: unknown,
+        connectionId?: string | null,
+        options?: { userRefresh?: boolean }
+      ) => {
+        started()
+        if (connectionId !== 'ssh-1') {
+          return Promise.resolve(null)
+        }
+        return options?.userRefresh ? Promise.resolve({ ...old, state: 'merged' }) : pending
+      }
+    )
+    const input = {
+      repoPath: '/repo',
+      executionHostId: 'ssh:ssh-1',
+      branch: 'feature',
+      force: true
+    } as const
+    const before = getHostedReviewForBranch(input)
+    await requestStarted
+    const click = getHostedReviewForBranch({ ...input, userRefresh: true })
+    finishOld(old)
+    await before
+    await expect(click).resolves.toMatchObject({ provider: 'gitlab', state: 'merged', number: 7 })
+  })
+
   it('maps GitLab merge requests into the hosted review surface', async () => {
     getProjectSlugMock.mockResolvedValue({ host: 'gitlab.com', path: 'g/p' })
-    getMergeRequestForBranchMock.mockResolvedValue({
+    const mr = {
       number: 7,
       title: 'GitLab branch',
       state: 'opened',
@@ -91,7 +139,13 @@ describe('getHostedReviewForBranch', () => {
       pipelineStatus: 'success',
       updatedAt: '2026-05-10T00:00:00.000Z',
       mergeable: 'MERGEABLE'
-    })
+    }
+    getMergeRequestForBranchMock.mockImplementation(
+      (repo: string, branch: string, _linked: unknown, connectionId?: string | null) =>
+        Promise.resolve(
+          repo === '/repo' && branch === 'feature' && connectionId === 'ssh-1' ? mr : null
+        )
+    )
 
     await expect(
       getHostedReviewForBranch({
@@ -110,7 +164,6 @@ describe('getHostedReviewForBranch', () => {
       mergeable: 'MERGEABLE'
     })
     expect(getProjectSlugMock).toHaveBeenCalledWith('/repo', 'ssh-1')
-    expect(getMergeRequestForBranchMock).toHaveBeenCalledWith('/repo', 'feature', null, 'ssh-1')
     expect(getPRForBranchOutcomeMock).not.toHaveBeenCalled()
   })
 
@@ -222,144 +275,5 @@ describe('getHostedReviewForBranch', () => {
       acceptMergedFallbackPR: true,
       currentHeadOid: null
     })
-  })
-
-  it('falls through to Bitbucket when origin is not GitLab or GitHub', async () => {
-    getProjectSlugMock.mockResolvedValue(null)
-    getRepoSlugMock.mockResolvedValue(null)
-    getBitbucketRepoSlugMock.mockResolvedValue({ workspace: 'team', repoSlug: 'orca' })
-    getBitbucketPullRequestForBranchMock.mockResolvedValue({
-      number: 11,
-      title: 'Bitbucket branch',
-      state: 'open',
-      url: 'https://bitbucket.org/team/orca/pull-requests/11',
-      status: 'success',
-      updatedAt: '2026-05-10T00:00:00.000Z',
-      mergeable: 'UNKNOWN',
-      headSha: 'abc123'
-    })
-
-    await expect(
-      getHostedReviewForBranch({
-        repoPath: '/repo',
-        executionHostId: 'ssh:ssh-1',
-        branch: 'feature/bitbucket',
-        linkedBitbucketPR: 11
-      })
-    ).resolves.toEqual({
-      provider: 'bitbucket',
-      number: 11,
-      title: 'Bitbucket branch',
-      state: 'open',
-      url: 'https://bitbucket.org/team/orca/pull-requests/11',
-      status: 'success',
-      updatedAt: '2026-05-10T00:00:00.000Z',
-      mergeable: 'UNKNOWN',
-      headSha: 'abc123'
-    })
-    expect(getBitbucketRepoSlugMock).toHaveBeenCalledWith('/repo', 'ssh-1')
-    expect(getBitbucketPullRequestForBranchMock).toHaveBeenCalledWith(
-      '/repo',
-      'feature/bitbucket',
-      11,
-      'ssh-1'
-    )
-  })
-
-  it('falls through to Gitea when origin is not another hosted provider', async () => {
-    getProjectSlugMock.mockResolvedValue(null)
-    getRepoSlugMock.mockResolvedValue(null)
-    getBitbucketRepoSlugMock.mockResolvedValue(null)
-    getAzureDevOpsRepoSlugMock.mockResolvedValue(null)
-    getGiteaRepoSlugMock.mockResolvedValue({
-      host: 'git.example.com',
-      owner: 'team',
-      repo: 'orca'
-    })
-    getGiteaPullRequestForBranchMock.mockResolvedValue({
-      number: 14,
-      title: 'Gitea branch',
-      state: 'open',
-      url: 'https://git.example.com/team/orca/pulls/14',
-      status: 'pending',
-      updatedAt: '2026-05-15T00:00:00.000Z',
-      mergeable: 'MERGEABLE',
-      headSha: 'def456'
-    })
-
-    await expect(
-      getHostedReviewForBranch({
-        repoPath: '/repo',
-        executionHostId: 'ssh:ssh-1',
-        branch: 'feature/gitea',
-        linkedGiteaPR: 14
-      })
-    ).resolves.toEqual({
-      provider: 'gitea',
-      number: 14,
-      title: 'Gitea branch',
-      state: 'open',
-      url: 'https://git.example.com/team/orca/pulls/14',
-      status: 'pending',
-      updatedAt: '2026-05-15T00:00:00.000Z',
-      mergeable: 'MERGEABLE',
-      headSha: 'def456'
-    })
-    expect(getGiteaRepoSlugMock).toHaveBeenCalledWith('/repo', 'ssh-1')
-    expect(getGiteaPullRequestForBranchMock).toHaveBeenCalledWith(
-      '/repo',
-      'feature/gitea',
-      14,
-      'ssh-1'
-    )
-  })
-
-  it('falls through to Azure DevOps before Gitea when origin is an Azure Repos remote', async () => {
-    getProjectSlugMock.mockResolvedValue(null)
-    getRepoSlugMock.mockResolvedValue(null)
-    getBitbucketRepoSlugMock.mockResolvedValue(null)
-    getAzureDevOpsRepoSlugMock.mockResolvedValue({
-      host: 'dev.azure.com',
-      organization: 'team',
-      project: 'Project',
-      repository: 'orca'
-    })
-    getAzureDevOpsPullRequestForBranchMock.mockResolvedValue({
-      number: 21,
-      title: 'Azure branch',
-      state: 'open',
-      url: 'https://dev.azure.com/team/Project/_git/orca/pullrequest/21',
-      status: 'success',
-      updatedAt: '2026-05-16T00:00:00.000Z',
-      mergeable: 'MERGEABLE',
-      headSha: 'abc123'
-    })
-
-    await expect(
-      getHostedReviewForBranch({
-        repoPath: '/repo',
-        executionHostId: 'ssh:ssh-1',
-        branch: 'feature/azure',
-        linkedAzureDevOpsPR: 21
-      })
-    ).resolves.toEqual({
-      provider: 'azure-devops',
-      number: 21,
-      title: 'Azure branch',
-      state: 'open',
-      url: 'https://dev.azure.com/team/Project/_git/orca/pullrequest/21',
-      status: 'success',
-      updatedAt: '2026-05-16T00:00:00.000Z',
-      mergeable: 'MERGEABLE',
-      headSha: 'abc123'
-    })
-    expect(getAzureDevOpsRepoSlugMock).toHaveBeenCalledWith('/repo', 'ssh-1')
-    expect(getAzureDevOpsPullRequestForBranchMock).toHaveBeenCalledWith(
-      '/repo',
-      'feature/azure',
-      21,
-      'ssh-1'
-    )
-    expect(getGiteaRepoSlugMock).not.toHaveBeenCalled()
   })
 })

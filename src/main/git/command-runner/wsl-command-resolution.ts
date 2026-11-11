@@ -1,21 +1,23 @@
 import { assertWslDistroAllowed } from '@orca/process-host/wsl-distro-allowlist'
-import { getDefaultWslDistro, parseWslPath, type WslPathInfo } from '../../wsl'
+import { getDefaultWslDistro } from '../../wsl/discovery/distro-catalog'
+import { parseWslPath } from '../../wsl/filesystem/unc-path-access'
+import type { WslUncPathInfo as WslPathInfo } from '../../../shared/wsl-paths'
 import {
   buildWslCapturedLoginShellCommand,
   buildWslExecArgs,
   buildWslLoginShellCommand,
   type WslCapturedLoginShellCommand
 } from '../../../shared/wsl-login-shell-command'
-import { quotePosixShell } from '../../../shared/shell-argument-quoting'
-import { UNTRANSLATED_GIT_OUTPUT_ENV } from '../../../shared/git-output-locale'
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
+import { UNTRANSLATED_GIT_OUTPUT_ENV } from '../../../shared/git/commands/git-output-locale'
 import type { WslGitReadEnvironment } from '../wsl-git-read-environment'
 import {
   createWslProcessGroupTermination,
   type WslProcessGroupTermination
 } from '../wsl-process-group-termination'
 import { translateArgForWsl, translateArgsForWsl } from './wsl-path-translation'
-import { resolveWslInteropSpawnCwd } from '../../wsl-interop-spawn-directory'
-import { noteWslDistroLaunched } from '../../wsl-background-distro-gate'
+import { resolveWslInteropSpawnCwd } from '../../wsl/execution/wsl-interop-spawn-directory'
+import { noteWslDistroLaunched } from '../../wsl/discovery/wsl-background-distro-gate'
 
 // Carry Git locale pins in the WSL command; these assignment values are shell-safe.
 const GIT_OUTPUT_LOCALE_SHELL_PREFIX = Object.entries(UNTRANSLATED_GIT_OUTPUT_ENV)
@@ -49,7 +51,7 @@ export type ResolvedCommand = {
   cwd: string | undefined
   wsl: WslPathInfo | null
   wslMode: 'direct-git' | 'login-shell' | 'non-login-shell' | null
-  /** Present only when the caller opted into a fenced login-shell read. */
+  /** Present only for a fenced (buffered) login-shell read. */
   captured?: WslCapturedLoginShellCommand
   termination?: WslProcessGroupTermination
 }
@@ -60,11 +62,16 @@ export function setDefaultWslDistroOverride(distro: string | null): void {
   defaultWslDistroOverride = distro
 }
 
+/** The distro a cwd-less gh/glab call falls back to when the host CLI is missing. */
+export function defaultWslCliDistro(): string | null {
+  return defaultWslDistroOverride ?? getDefaultWslDistro()
+}
+
 export function resolveDefaultWslCli(
   command: 'gh' | 'glab',
   args: string[]
 ): ResolvedCommand | null {
-  const distro = defaultWslDistroOverride ?? getDefaultWslDistro()
+  const distro = defaultWslCliDistro()
   return distro ? resolveCommand(command, args, undefined, distro) : null
 }
 
@@ -108,11 +115,15 @@ export function resolveCommand(
     command === 'git'
       ? `${GIT_OUTPUT_LOCALE_SHELL_PREFIX} ${wslGitObjectStorePrefix(options.env)}`
       : ''
+  const editorPrefix =
+    command === 'git' && options.env?.GIT_EDITOR !== undefined
+      ? `GIT_EDITOR=${quotePosixShell(options.env.GIT_EDITOR)} `
+      : ''
   const escapedCommand = options.wslShellCommand ?? quotePosixShell(command)
   // Quote each argument against shell splitting and expansion.
   const escapedArgs = translatedArgs.map(quotePosixShell)
   const linuxCwd = cwdWsl?.linuxPath ?? (cwd && wslDistroOverride ? translateArgForWsl(cwd) : null)
-  const invocation = `${localePrefix}${escapedCommand} ${escapedArgs.join(' ')}`
+  const invocation = `${localePrefix}${editorPrefix}${escapedCommand} ${escapedArgs.join(' ')}`
   const enterCwd = linuxCwd
     ? options.cwdFailureExitCode === undefined
       ? `cd ${quotePosixShell(linuxCwd)} && `
@@ -133,6 +144,9 @@ export function resolveCommand(
           `PATH=${options.wslGitReadEnvironment.path}`,
           `HOME=${options.wslGitReadEnvironment.home}`,
           ...GIT_OUTPUT_LOCALE_ENV_ARGS,
+          ...(options.env?.GIT_EDITOR !== undefined
+            ? [`GIT_EDITOR=${options.env.GIT_EDITOR}`]
+            : []),
           ...(optionalLocks !== undefined ? [`GIT_OPTIONAL_LOCKS=${optionalLocks}`] : []),
           options.wslGitReadEnvironment.gitPath,
           ...(linuxCwd ? ['-C', linuxCwd] : []),
@@ -206,5 +220,25 @@ function withWslProcessGroupTermination(
       ...termination.wrapGuestArgs(command.args.slice(execIndex + 1))
     ],
     termination
+  }
+}
+
+/** Prefix only the opt-in preparation; retain the resolver's original guest argv intact. */
+export function withWslPreparation(
+  command: ResolvedCommand,
+  preparation: { script: string; args: string[] }
+): ResolvedCommand {
+  const execIndex = command.args.indexOf('--exec')
+  return {
+    ...command,
+    args: [
+      ...command.args.slice(0, execIndex + 1),
+      '/bin/sh',
+      '-c',
+      preparation.script,
+      'orca-generation',
+      ...preparation.args,
+      ...command.args.slice(execIndex + 1)
+    ]
   }
 }

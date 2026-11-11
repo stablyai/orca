@@ -1,21 +1,37 @@
 import type { ProcessRunResult } from './ephemeral-vm-recipe-process'
+import {
+  EPHEMERAL_VM_FAILURE_COPY,
+  ephemeralVmExitFailure,
+  ephemeralVmFailure,
+  ephemeralVmTimeoutFailure,
+  type EphemeralVmFailure
+} from './ephemeral-vm-failure-copy'
 
-export const EPHEMERAL_VM_CLEANUP_STOPPED_ERROR = 'Cleanup stopped by user.'
+export const EPHEMERAL_VM_CLEANUP_STOPPED_ERROR = EPHEMERAL_VM_FAILURE_COPY.cleanupStopped
 
 type FailedEphemeralVmRecipeDestroy = {
   ok: false
   skipped: false
-  error: string
-} & ProcessRunResult
+} & EphemeralVmFailure &
+  ProcessRunResult
 
 export function getEphemeralVmRecipeDestroyFailure(
-  result: ProcessRunResult
+  result: ProcessRunResult,
+  timeoutSeconds: number
 ): FailedEphemeralVmRecipeDestroy | null {
+  if (result.timedOut) {
+    return {
+      ok: false,
+      skipped: false,
+      ...ephemeralVmTimeoutFailure('destroy', timeoutSeconds),
+      ...result
+    }
+  }
   if (result.aborted) {
     return {
       ok: false,
       skipped: false,
-      error: EPHEMERAL_VM_CLEANUP_STOPPED_ERROR,
+      ...ephemeralVmFailure('cleanupStopped'),
       ...result
     }
   }
@@ -23,7 +39,7 @@ export function getEphemeralVmRecipeDestroyFailure(
     return {
       ok: false,
       skipped: false,
-      error: `Destroy exited with code ${result.exitCode ?? 'unknown'}.`,
+      ...ephemeralVmExitFailure('destroy', result.exitCode),
       ...result
     }
   }

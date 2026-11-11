@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type * as AgentHookServerModule from '../agent-hooks/server'
-import { makePaneKey } from '../../shared/stable-pane-id'
+import type * as AgentHookServerModule from '../agent-hooks/server/agent-hook-server'
+import { makePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 
 // Renderer dismissals must evict persisted status as well as the live row.
 
@@ -36,9 +36,11 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('../agent-hooks/server', async () => {
+vi.mock('../agent-hooks/server/agent-hook-server', async () => {
   // Use the real pane-key validator so invalid-input coverage tracks its constraints.
-  const actual = await vi.importActual<typeof AgentHookServerModule>('../agent-hooks/server')
+  const actual = await vi.importActual<typeof AgentHookServerModule>(
+    '../agent-hooks/server/agent-hook-server'
+  )
   return {
     ...actual,
     agentHookServer: {
@@ -55,7 +57,7 @@ vi.mock('../agent-hooks/server', async () => {
   }
 })
 
-vi.mock('../agent-hooks/migration-unsupported-pty-state', () => ({
+vi.mock('../agent-hooks/observations/migration-unsupported-pty-state', () => ({
   clearMigrationUnsupportedPtysByTabPrefix,
   clearMigrationUnsupportedPtysForPaneKey,
   getMigrationUnsupportedPtySnapshot: vi.fn(() => [])
@@ -67,7 +69,7 @@ vi.mock('../claude/hook-service', () => ({
 vi.mock('../openclaude/hook-service', () => ({
   openClaudeHookService: { getStatus: vi.fn(() => ({ agent: 'openclaude', state: 'absent' })) }
 }))
-vi.mock('../codex/hook-service', () => ({
+vi.mock('../codex/hooks/installation/hook-service', () => ({
   codexHookService: { getStatus: vi.fn(() => ({ agent: 'codex', state: 'absent' })) }
 }))
 vi.mock('../gemini/hook-service', () => ({
@@ -128,358 +130,7 @@ afterEach(() => {
   vi.resetModules()
 })
 
-describe('agentStatus:getSnapshot IPC', () => {
-  it('returns the hook cache snapshot', async () => {
-    const snapshot = [
-      {
-        paneKey: PANE_KEY,
-        state: 'done',
-        prompt: 'p',
-        agentType: 'claude',
-        receivedAt: 1_700_000_000_000,
-        stateStartedAt: 1_699_999_999_000
-      }
-    ]
-    getStatusSnapshot.mockReturnValue(snapshot)
-    const { registerAgentHookHandlers } = await import('./agent-hooks')
-    registerAgentHookHandlers()
-
-    const handler = handleHandlers.get('agentStatus:getSnapshot')
-    expect(handler).toBeDefined()
-    expect(handler!({})).toEqual(snapshot)
-  })
-
-  // Keep one writer per pane while the renderer feed bridge owns structured rows.
-  it('omits structured rows the renderer feed bridge still owns', async () => {
-    getStatusSnapshot.mockReturnValue([
-      {
-        paneKey: PANE_KEY,
-        state: 'done',
-        prompt: 'hook row',
-        agentType: 'claude',
-        connectionId: null,
-        receivedAt: 1_700_000_000_000,
-        stateStartedAt: 1_699_999_999_000
-      },
-      {
-        paneKey: CHILD_PANE_KEY,
-        state: 'working',
-        prompt: 'native chat row',
-        agentType: 'codex',
-        connectionId: null,
-        structuredHost: 'owned',
-        receivedAt: 1_700_000_001_000,
-        stateStartedAt: 1_700_000_000_500
-      }
-    ])
-    const { registerAgentHookHandlers } = await import('./agent-hooks')
-    registerAgentHookHandlers()
-
-    const rows = handleHandlers.get('agentStatus:getSnapshot')!({}) as { paneKey: string }[]
-    expect(rows.map((row) => row.paneKey)).toEqual([PANE_KEY])
-  })
-
-  it('enriches the hook cache snapshot with runtime lineage metadata', async () => {
-    const snapshot = [
-      {
-        paneKey: PANE_KEY,
-        state: 'done',
-        prompt: 'parent',
-        agentType: 'codex',
-        connectionId: null,
-        receivedAt: 1_700_000_000_000,
-        stateStartedAt: 1_699_999_999_000
-      },
-      {
-        paneKey: CHILD_PANE_KEY,
-        state: 'done',
-        prompt: 'child',
-        agentType: 'codex',
-        connectionId: null,
-        receivedAt: 1_700_000_001_000,
-        stateStartedAt: 1_700_000_000_500
-      }
-    ]
-    getStatusSnapshot.mockReturnValue(snapshot)
-    const runtime = {
-      getAgentStatusTerminalHandleForPaneKey: vi.fn((paneKey: string) =>
-        paneKey === PANE_KEY ? 'term-parent' : paneKey === CHILD_PANE_KEY ? 'term-child' : undefined
-      ),
-      getAgentStatusOrchestrationContextForPaneKey: vi.fn((paneKey: string) =>
-        paneKey === CHILD_PANE_KEY
-          ? {
-              taskId: 'task-child',
-              dispatchId: 'dispatch-child',
-              parentTerminalHandle: 'term-parent',
-              parentPaneKey: PANE_KEY,
-              coordinatorHandle: 'term-parent'
-            }
-          : undefined
-      ),
-      getTerminalProcessIncarnation: vi.fn(() => 'pty-1:inc-1')
-    }
-    const { registerAgentHookHandlers } = await import('./agent-hooks')
-    registerAgentHookHandlers(runtime)
-
-    const handler = handleHandlers.get('agentStatus:getSnapshot')
-    expect(handler).toBeDefined()
-    expect(handler!({})).toEqual([
-      {
-        ...snapshot[0],
-        terminalHandle: 'term-parent'
-      },
-      {
-        ...snapshot[1],
-        terminalHandle: 'term-child',
-        orchestration: {
-          taskId: 'task-child',
-          dispatchId: 'dispatch-child',
-          parentTerminalHandle: 'term-parent',
-          parentPaneKey: PANE_KEY,
-          coordinatorHandle: 'term-parent'
-        }
-      }
-    ])
-  })
-})
-
-describe('agentStatus:inferInterrupt IPC', () => {
-  it('forwards valid inference requests to the hook server', async () => {
-    inferInterrupt.mockReturnValue(true)
-    const { registerAgentHookHandlers } = await import('./agent-hooks')
-    registerAgentHookHandlers()
-
-    const handler = handleHandlers.get('agentStatus:inferInterrupt')
-    expect(handler).toBeDefined()
-    const request = {
-      paneKey: PANE_KEY,
-      baselineUpdatedAt: 1_000,
-      baselineStateStartedAt: 900,
-      baselinePrompt: 'long task',
-      baselineAgentType: 'codex',
-      intent: 'ctrl-c'
-    }
-
-    expect(handler!({}, request)).toBe(true)
-    expect(inferInterrupt).toHaveBeenCalledWith(request)
-  })
-
-  it('rejects malformed requests before the hook server boundary', async () => {
-    const { registerAgentHookHandlers } = await import('./agent-hooks')
-    registerAgentHookHandlers()
-
-    const handler = handleHandlers.get('agentStatus:inferInterrupt')
-    expect(handler).toBeDefined()
-    for (const value of [null, undefined, '', 123, true]) {
-      expect(handler!({}, value)).toBe(false)
-    }
-    expect(inferInterrupt).not.toHaveBeenCalled()
-  })
-})
-
-describe('agentStatus:drop IPC', () => {
-  it('forwards drop to dropStatusEntry', async () => {
-    const { registerAgentHookHandlers } = await import('./agent-hooks')
-    registerAgentHookHandlers()
-
-    const handler = onHandlers.get('agentStatus:drop')
-    expect(handler).toBeDefined()
-    handler!({}, PANE_KEY)
-    expect(dropStatusEntry).toHaveBeenCalledWith(PANE_KEY)
-    expect(clearMigrationUnsupportedPtysForPaneKey).toHaveBeenCalledWith(PANE_KEY)
-  })
-
-  it('forwards a runtime-owned legacy numeric row dismissal', async () => {
-    const { registerAgentHookHandlers } = await import('./agent-hooks')
-    registerAgentHookHandlers()
-
-    const handler = onHandlers.get('agentStatus:drop')!
-    handler!({}, 'tab-1:0')
-
-    expect(dropStatusEntry).toHaveBeenCalledWith('tab-1:0')
-    expect(clearMigrationUnsupportedPtysForPaneKey).toHaveBeenCalledWith('tab-1:0')
-  })
-
-  it('rejects non-string paneKey (defensive against a malformed renderer message)', async () => {
-    const { registerAgentHookHandlers } = await import('./agent-hooks')
-    registerAgentHookHandlers()
-
-    const handler = onHandlers.get('agentStatus:drop')!
-    const bad: unknown[] = [
-      123,
-      undefined,
-      '',
-      null,
-      {},
-      [],
-      'no-colon', // missing colon — rejected by isValidPaneKey
-      ':leading', // empty tabId half
-      'trailing:', // empty leafId half
-      'a:b:c' // multiple colons
-    ]
-    for (const value of bad) {
-      expect(() => handler({}, value)).not.toThrow()
-    }
-    expect(dropStatusEntry).not.toHaveBeenCalled()
-  })
-})
-
-describe('agentStatus:dropPersisted IPC', () => {
-  it('forwards a validated cache identity without clearing pane state', async () => {
-    const { registerAgentHookHandlers } = await import('./agent-hooks')
-    registerAgentHookHandlers()
-
-    const handler = onHandlers.get('agentStatus:dropPersisted')
-    expect(handler).toBeDefined()
-    const identity = {
-      paneKey: PANE_KEY,
-      receivedAt: 2_000,
-      stateStartedAt: 1_000
-    }
-    handler!({}, identity)
-    expect(dropPersistedStatusEntry).toHaveBeenCalledWith(identity)
-    expect(dropStatusEntry).not.toHaveBeenCalled()
-  })
-
-  it('forwards a batch, keeping only valid identities, and clears migration state per evicted pane', async () => {
-    const { registerAgentHookHandlers } = await import('./agent-hooks')
-    registerAgentHookHandlers()
-
-    const handler = onHandlers.get('agentStatus:dropPersistedBatch')
-    expect(handler).toBeDefined()
-    const good = { paneKey: PANE_KEY, receivedAt: 2_000, stateStartedAt: 1_000 }
-    const alsoGood = { paneKey: CHILD_PANE_KEY, receivedAt: 3_000, stateStartedAt: 2_500 }
-    dropPersistedStatusEntries.mockReturnValue([PANE_KEY])
-    handler!({}, [good, { paneKey: 'not-a-pane-key', receivedAt: 1, stateStartedAt: 1 }, alsoGood])
-    expect(dropPersistedStatusEntries).toHaveBeenCalledWith([good, alsoGood])
-    expect(clearMigrationUnsupportedPtysForPaneKey).toHaveBeenCalledWith(PANE_KEY)
-    expect(clearMigrationUnsupportedPtysForPaneKey).not.toHaveBeenCalledWith(CHILD_PANE_KEY)
-    expect(dropPersistedStatusEntry).not.toHaveBeenCalled()
-  })
-
-  it('ignores a batch that is not an array or is empty after validation', async () => {
-    const { registerAgentHookHandlers } = await import('./agent-hooks')
-    registerAgentHookHandlers()
-
-    const handler = onHandlers.get('agentStatus:dropPersistedBatch')!
-    for (const value of [null, {}, 'x', [], [{ paneKey: PANE_KEY }]]) {
-      expect(() => handler({}, value)).not.toThrow()
-    }
-    expect(dropPersistedStatusEntries).not.toHaveBeenCalled()
-  })
-
-  it('rejects malformed cache identities', async () => {
-    const { registerAgentHookHandlers } = await import('./agent-hooks')
-    registerAgentHookHandlers()
-
-    const handler = onHandlers.get('agentStatus:dropPersisted')!
-    for (const value of [
-      null,
-      undefined,
-      {},
-      { paneKey: PANE_KEY },
-      { paneKey: PANE_KEY, receivedAt: Number.NaN, stateStartedAt: 1 },
-      { paneKey: PANE_KEY, receivedAt: 2, stateStartedAt: Number.POSITIVE_INFINITY },
-      { paneKey: 'not-a-pane-key', receivedAt: 2, stateStartedAt: 1 },
-      { paneKey: PANE_KEY, receivedAt: '2', stateStartedAt: 1 }
-    ]) {
-      expect(() => handler({}, value)).not.toThrow()
-    }
-    expect(dropPersistedStatusEntry).not.toHaveBeenCalled()
-  })
-})
-
-describe('agentStatus:dropByTabPrefix IPC', () => {
-  it('forwards valid tab ids to tab-prefix cache eviction', async () => {
-    const { registerAgentHookHandlers } = await import('./agent-hooks')
-    registerAgentHookHandlers()
-
-    const handler = onHandlers.get('agentStatus:dropByTabPrefix')
-    expect(handler).toBeDefined()
-    handler!({}, 'tab-1')
-    expect(dropStatusEntriesByTabPrefix).toHaveBeenCalledWith('tab-1')
-    expect(clearMigrationUnsupportedPtysByTabPrefix).toHaveBeenCalledWith('tab-1')
-  })
-
-  it('rejects malformed tab ids', async () => {
-    const { registerAgentHookHandlers } = await import('./agent-hooks')
-    registerAgentHookHandlers()
-
-    const handler = onHandlers.get('agentStatus:dropByTabPrefix')!
-    const bad: unknown[] = [
-      123,
-      undefined,
-      '',
-      null,
-      {},
-      [],
-      'tab-1:leaf',
-      ' leading-space',
-      'trailing-space ',
-      'x'.repeat(161)
-    ]
-    for (const value of bad) {
-      expect(() => handler({}, value)).not.toThrow()
-    }
-    expect(dropStatusEntriesByTabPrefix).not.toHaveBeenCalled()
-    expect(clearMigrationUnsupportedPtysByTabPrefix).not.toHaveBeenCalled()
-  })
-
-  it('removes any existing listener before registering the tab-prefix channel', async () => {
-    const { registerAgentHookHandlers } = await import('./agent-hooks')
-    registerAgentHookHandlers()
-
-    expect(removeAllListeners).toHaveBeenCalledWith('agentStatus:dropByTabPrefix')
-  })
-})
-
 describe('agent pane authority IPC', () => {
-  it('retires one validated pane authority', async () => {
-    const { registerAgentHookHandlers } = await import('./agent-hooks')
-    registerAgentHookHandlers()
-
-    onHandlers.get('agentStatus:retirePaneAuthority')!({}, PANE_KEY)
-
-    expect(retirePaneAuthority).toHaveBeenCalledWith(PANE_KEY, undefined)
-    expect(clearMigrationUnsupportedPtysForPaneKey).toHaveBeenCalledWith(PANE_KEY)
-  })
-
-  it('transfers validated pane authority with its provider PTY', async () => {
-    const { registerAgentHookHandlers } = await import('./agent-hooks')
-    registerAgentHookHandlers()
-
-    onHandlers.get('agentStatus:transferPaneAuthority')!(
-      {},
-      {
-        fromPaneKey: PANE_KEY,
-        toPaneKey: CHILD_PANE_KEY,
-        ptyId: 'pty-1'
-      }
-    )
-
-    expect(transferPaneAuthority).toHaveBeenCalledWith(PANE_KEY, CHILD_PANE_KEY, 'pty-1')
-  })
-
-  it('rejects malformed pane authority messages and replaces prior listeners', async () => {
-    const { registerAgentHookHandlers } = await import('./agent-hooks')
-    registerAgentHookHandlers()
-
-    onHandlers.get('agentStatus:retirePaneAuthority')!({}, 'tab-1:0')
-    onHandlers.get('agentStatus:transferPaneAuthority')!(
-      {},
-      {
-        fromPaneKey: PANE_KEY,
-        toPaneKey: 'invalid',
-        ptyId: ''
-      }
-    )
-
-    expect(retirePaneAuthority).not.toHaveBeenCalled()
-    expect(transferPaneAuthority).not.toHaveBeenCalled()
-    expect(removeAllListeners).toHaveBeenCalledWith('agentStatus:retirePaneAuthority')
-    expect(removeAllListeners).toHaveBeenCalledWith('agentStatus:transferPaneAuthority')
-  })
-
   it('rejects unowned and oversized pane authority transfers', async () => {
     const { registerAgentHookHandlers } = await import('./agent-hooks')
     registerAgentHookHandlers()

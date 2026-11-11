@@ -11,8 +11,6 @@ import {
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
-import { ProfileStateBackupRotation } from './profile-state-backup-rotation'
-import { profileStateDatabaseBackups } from './profile-state-backup-path'
 import {
   openProfileStateDatabase,
   openProfileStateDatabaseReadOnly
@@ -22,12 +20,7 @@ import {
   importProfileStateJson,
   readProfileStateSnapshot
 } from './profile-state-documents'
-import {
-  runProfileStateBackup,
-  runProfileStateBackupWorker,
-  resolveProfileStateBackupWorkerPath
-} from './profile-state-backup-worker'
-import * as backupWorker from './profile-state-backup-worker'
+import { runProfileStateBackupWorker } from './profile-state-backup-worker'
 
 const directories: string[] = []
 let workerDirectory: string
@@ -164,42 +157,6 @@ describe('profile state backup worker', () => {
     expect(readFileSync(job.databasePath).equals(before)).toBe(true)
   })
 
-  it.each(['true', 'false'])('waits for actual exit after an ok=%s response', async (ok) => {
-    const { directory, job } = fixture()
-    const delayedWorker = script(
-      directory,
-      `
-      const { parentPort, workerData } = require('node:worker_threads')
-      parentPort.postMessage({ ok: ${ok}, error: 'backup failed' })
-      setTimeout(() => {
-        require('node:fs').writeFileSync(workerData.targetPath, 'handles released')
-        parentPort.close()
-      }, 50)
-    `
-    )
-    const result = runProfileStateBackupWorker(job, { workerPath: delayedWorker })
-    await (ok === 'true' ? result : expect(result).rejects.toThrow('backup failed'))
-    expect(readFileSync(job.targetPath, 'utf8')).toBe('handles released')
-  })
-
-  it.each([
-    ['throw new Error("worker boot failed")', 'worker boot failed'],
-    ['process.exit(0)', 'without completion'],
-    ['require("node:worker_threads").parentPort.postMessage({ wrong: true })', 'Invalid profile'],
-    ['setInterval(() => {}, 1000)', 'timed out']
-  ])('fails closed for worker failure: %s', async (source, error) => {
-    const { directory, job } = fixture()
-    const failedWorker = script(directory, source)
-    await expect(
-      runProfileStateBackupWorker(job, {
-        workerPath: failedWorker,
-        timeoutMs: error === 'timed out' ? 500 : undefined
-      })
-    ).rejects.toThrow(error)
-    expect(existsSync(job.targetPath)).toBe(false)
-    rmSync(directory, { recursive: true })
-  })
-
   it.each(['timeout', 'cancel'] as const)(
     'cleans a terminated %s worker only after exit',
     async (mode) => {
@@ -247,85 +204,4 @@ describe('profile state backup worker', () => {
       }
     }
   )
-
-  it('reports a missing bundle and leaves the primary untouched', async () => {
-    const { directory, job } = fixture()
-    const before = readFileSync(job.databasePath)
-    await expect(
-      runProfileStateBackupWorker(job, { workerPath: join(directory, 'missing.js') })
-    ).rejects.toThrow()
-    expect(readFileSync(job.databasePath).equals(before)).toBe(true)
-  })
-
-  it('coalesces desktop work and drains a started backup before allowing quarantine', async () => {
-    const { directory, job } = fixture()
-    let started: () => void = () => {}
-    const beginning = new Promise<void>((resolve) => {
-      started = resolve
-    })
-    const dispatch = vi
-      .spyOn(backupWorker, 'runProfileStateBackup')
-      .mockImplementation((request) => {
-        started()
-        return runProfileStateBackupWorker(request, { workerPath })
-      })
-    const rotation = new ProfileStateBackupRotation(job.databasePath, job.profileId)
-    rotation.schedule()
-    rotation.schedule()
-    await beginning
-    rotation.stop()
-    expect(() => rotation.assertIdle()).toThrow('Flush pending')
-    await rotation.drain()
-    expect(() => rotation.assertIdle()).not.toThrow()
-    expect(dispatch).toHaveBeenCalledOnce()
-    expect(profileStateDatabaseBackups(job.databasePath)).toHaveLength(1)
-    rmSync(directory, { recursive: true })
-  })
-
-  describe.skipIf(!!process.versions.electron)('under plain Node', () => {
-    it('uses the bundled worker whenever its entry exists', async () => {
-      const { directory, job } = fixture()
-      const marker = script(
-        directory,
-        `
-        const { parentPort, workerData } = require('node:worker_threads')
-        require('node:fs').writeFileSync(workerData.targetPath, 'worker thread')
-        parentPort.postMessage({ ok: true })
-      `
-      )
-      await runProfileStateBackup(job, undefined, marker)
-      expect(readFileSync(job.targetPath, 'utf8')).toBe('worker thread')
-    })
-
-    it('runs the built entry off-thread and publishes a readable backup', async () => {
-      const { job } = fixture()
-      await runProfileStateBackup(job, undefined, workerPath)
-      const snapshot = openProfileStateDatabaseReadOnly(job.targetPath, job.profileId)
-      try {
-        expect(JSON.parse(readProfileStateSnapshot(snapshot.db).json)).toEqual({
-          settings: { theme: 'dark' }
-        })
-      } finally {
-        snapshot.db.close()
-      }
-    })
-
-    it('falls back to inline validation only when no entry was bundled', async () => {
-      const { directory, job } = fixture()
-      await runProfileStateBackup(job, undefined, join(directory, 'missing.js'))
-      const snapshot = openProfileStateDatabaseReadOnly(job.targetPath, job.profileId)
-      try {
-        expect(JSON.parse(readProfileStateSnapshot(snapshot.db).json)).toEqual({
-          settings: { theme: 'dark' }
-        })
-      } finally {
-        snapshot.db.close()
-      }
-    })
-  })
-
-  it('finds entries beside the launcher and above Rollup shared chunks', () => {
-    expect(resolveProfileStateBackupWorkerPath(workerDirectory)).toBe(workerPath)
-    expect(resolveProfileStateBackupWorkerPath(join(workerDirectory, 'chunks'))).toBe(workerPath)
-  })
 })

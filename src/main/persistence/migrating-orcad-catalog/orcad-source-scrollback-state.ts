@@ -1,18 +1,19 @@
 import { createHash } from 'node:crypto'
-import type { OrcadMigrationTerminalScrollbackSnapshot } from '../../../shared/orcad-migration/orcad-migration-scrollback'
+
 import {
+  type OrcadMigrationTerminalScrollbackSnapshot,
   MAX_ORCAD_MIGRATION_SCROLLBACK_SNAPSHOTS,
   MAX_ORCAD_MIGRATION_SCROLLBACK_TOTAL_BYTES
 } from '../../../shared/orcad-migration/orcad-migration-scrollback'
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import { TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT } from '../../../shared/terminal-scrollback-limits'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import { TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT } from '../../../shared/terminal/replay/terminal-scrollback-limits'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import {
   makeTerminalScrollbackSnapshotRef,
   readTerminalScrollbackStoredBytesSync,
   readTerminalScrollbackStoredSnapshotSync,
   type TerminalScrollbackSnapshotStorage
-} from '../../terminal-scrollback-snapshots'
+} from '../../pty/scrollback/terminal-scrollback-snapshots'
 import { compareKeys } from './orcad-source-key-order'
 
 export type ProjectedOrcadMigrationScrollback = {
@@ -42,7 +43,12 @@ export function projectOrcadMigrationSessionScrollback(
   session: WorkspaceSessionState,
   storage?: TerminalScrollbackSnapshotStorage,
   /** "Move anyway" can retain untransferable history while moving its pane. */
-  leaveBehind = false
+  leaveBehind = false,
+  /**
+   * A WSL move's panes whose daemon checkpoint travels as a `terminal-history` blob: the host's
+   * daemon restores it, so no renderer snapshot or ref may also paint it.
+   */
+  daemonHistoryLeaf?: (tabId: string, leafId: string) => boolean
 ): ProjectedOrcadMigrationScrollback {
   const projected = structuredClone(session)
   const snapshots: OrcadMigrationTerminalScrollbackSnapshot[] = []
@@ -59,6 +65,10 @@ export function projectOrcadMigrationSessionScrollback(
       ...Object.keys(sourceLayout.scrollbackRefsByLeafId ?? {})
     ])
     for (const leafId of [...leafIds].sort(compareKeys)) {
+      // Its checkpoint is newer than any snapshot saved before, and the host restores it itself.
+      if (daemonHistoryLeaf?.(tabId, leafId)) {
+        continue
+      }
       const buffer = inlineLeafBuffer(localOnly, sourceLayout.buffersByLeafId, leafId)
       const sourceRef = sourceLayout.scrollbackRefsByLeafId?.[leafId]
       const ref = buffer ? makeTerminalScrollbackSnapshotRef(tabId, leafId) : sourceRef

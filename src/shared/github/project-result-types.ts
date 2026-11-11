@@ -103,7 +103,7 @@ export type ProjectWorkItemDetailsBySlugResult =
   | { ok: false; error: GitHubProjectViewError }
 
 export type GitHubProjectMutationResult =
-  | { ok: true }
+  | { ok: true; bodyImageUrls?: Record<string, string> }
   | { ok: false; error: GitHubProjectViewError }
 
 export type GitHubProjectCommentMutationResult =

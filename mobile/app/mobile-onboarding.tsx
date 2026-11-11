@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
-import { Animated, BackHandler, Text, View, type LayoutChangeEvent } from 'react-native'
+import { Animated, BackHandler, Easing, Text, View, type LayoutChangeEvent } from 'react-native'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { OrcaLogo } from '../src/components/OrcaLogo'
@@ -10,6 +10,7 @@ import {
   type NotificationOnboardingChoice
 } from '../src/onboarding/MobileOnboardingPage'
 import { parseMobileOnboardingSteps } from '../src/onboarding/mobile-onboarding-plan'
+import { PUSH_CURVE, PUSH_SLIDE_MS } from '../src/navigation/push-motion'
 import { useReducedMotionEnabled } from '../src/platform/use-reduced-motion'
 import { useMobileColorScheme } from '../src/theme/use-mobile-color-scheme'
 import { mobileOnboardingStyles as styles } from '../src/onboarding/mobile-onboarding-styles'
@@ -18,8 +19,7 @@ import {
   type MobileSessionView
 } from '../src/storage/session-view-preferences'
 import { setRemotePushEnabled } from '../src/notifications/push-registration'
-
-const SLIDE_DURATION_MS = 280
+import { useMobileTranslation } from '../src/i18n/use-mobile-translation'
 
 export default function MobileOnboardingScreen() {
   const params = useLocalSearchParams<{
@@ -46,6 +46,7 @@ function MobileOnboardingFlow({
   rawSteps: string | undefined
 }) {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const router = useRouter()
   const steps = useMemo(() => parseMobileOnboardingSteps(rawSteps), [rawSteps])
   // Measure pager viewport: iPad sheet is narrower than window; null waits for first layout.
@@ -80,7 +81,8 @@ function MobileOnboardingFlow({
     Animated.timing(slideProgress, {
       toValue: nextIndex,
       // Preserve carousel continuity while honoring reduced motion.
-      duration: reducedMotionEnabled === true ? 0 : SLIDE_DURATION_MS,
+      duration: reducedMotionEnabled === true ? 0 : PUSH_SLIDE_MS,
+      easing: Easing.bezier(...PUSH_CURVE),
       useNativeDriver: true
     }).start(() => {
       // Cancelled cosmetic animation must not block the next choice after previous choice persisted.
@@ -102,12 +104,14 @@ function MobileOnboardingFlow({
         await saveDefaultSessionView(view)
         advanceOrContinue()
       } catch {
-        setError('Your choice could not be saved. Try again.')
+        setError(
+          t('app.mobileOnboarding.saveChoiceFailed', 'Your choice could not be saved. Try again.')
+        )
         setBusyChoice(null)
         choiceInFlightRef.current = false
       }
     },
-    [advanceOrContinue]
+    [advanceOrContinue, t]
   )
 
   const chooseNotifications = useCallback(
@@ -123,12 +127,17 @@ function MobileOnboardingFlow({
         await setRemotePushEnabled(enabled)
         advanceOrContinue()
       } catch {
-        setError('Notification settings could not be updated. Try again.')
+        setError(
+          t(
+            'app.mobileOnboarding.notificationSettingsFailed',
+            'Notification settings could not be updated. Try again.'
+          )
+        )
         setBusyChoice(null)
         choiceInFlightRef.current = false
       }
     },
-    [advanceOrContinue]
+    [advanceOrContinue, t]
   )
 
   const translateX = useMemo(
@@ -152,8 +161,13 @@ function MobileOnboardingFlow({
           <View
             accessible
             accessibilityRole="progressbar"
-            accessibilityLabel="Onboarding progress"
-            accessibilityValue={{ text: `Step ${activeIndex + 1} of ${steps.length}` }}
+            accessibilityLabel={t('app.mobileOnboarding.progress', 'Onboarding progress')}
+            accessibilityValue={{
+              text: t('app.mobileOnboarding.stepProgress', 'Step {{step}} of {{total}}', {
+                step: activeIndex + 1,
+                total: steps.length
+              })
+            }}
             style={styles.progress}
           >
             {steps.map((step, index) => (

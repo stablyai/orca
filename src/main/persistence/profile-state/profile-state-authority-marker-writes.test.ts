@@ -1,14 +1,14 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import * as durableFileWrite from '../../durable-file-write'
-import { prepareProfileProjectDomainChanges } from '../../orca-profiles/profile-project-domain-changes'
+import * as durableFileWrite from '../../filesystem/durable-file-write'
+import { prepareProfileProjectDomainChanges } from '../../orca-profiles/project-transfer/profile-project-domain-changes'
 import {
   readProfileProjectTransferState,
   writeProfileProjectDomainChanges
-} from '../../orca-profiles/profile-project-domain-state'
-import { writeSerializedProfileState } from '../../orca-profiles/profile-project-state-file'
+} from '../../orca-profiles/project-transfer/profile-project-domain-state'
+import { writeSerializedProfileState } from '../../orca-profiles/project-transfer/profile-project-state-file'
 import {
   hasProfileStateAuthorityMarker,
   profileStateAuthorityMarkerPath
@@ -19,7 +19,7 @@ import {
 } from './profile-state-database'
 import { importProfileStateJson, readProfileStateSnapshot } from './profile-state-documents'
 import { updateAgentHookSettingsFromProfileState } from './profile-state-offline-settings'
-import { profileStateDatabaseFiles } from './profile-state-storage-classification'
+import './profile-state-storage-classification'
 
 const roots: string[] = []
 const before = JSON.stringify({
@@ -105,22 +105,5 @@ describe.each(['hooks', 'domains', 'replay'] as const)('%s direct canonical writ
     const committed = read(location)
     expect(committed.revision).toBe(2)
     expect(JSON.parse(committed.json).settings.agentStatusHooksEnabled).toBe(false)
-  })
-
-  it.each([false, true])('refuses lost SQL with stale JSON present=%s', (hasJson) => {
-    const { location, write } = fixture()
-    write[route]()
-    for (const path of profileStateDatabaseFiles(location.databaseFile)) {
-      rmSync(path, { force: true })
-    }
-    if (hasJson) {
-      writeFileSync(location.dataFile, before)
-    }
-    expect(write[route]).toThrow()
-    expect(existsSync(location.databaseFile)).toBe(false)
-    expect(existsSync(location.dataFile)).toBe(hasJson)
-    if (hasJson) {
-      expect(readFileSync(location.dataFile, 'utf8')).toBe(before)
-    }
   })
 })

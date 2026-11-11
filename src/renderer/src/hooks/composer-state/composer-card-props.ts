@@ -1,14 +1,30 @@
 import { resolveComposerAttachmentTarget } from './composer-attachment-target'
-import { getAttachmentLabel } from '@/lib/new-workspace'
-import { getQuickComposerCreateDisabled } from '@/lib/new-workspace-create-gates'
+import { getAttachmentLabel } from '@/lib/workspace/creation/new-workspace'
+import { getQuickComposerCreateDisabled } from '@/lib/workspace/creation/new-workspace-create-gates'
 import type { ComposerModel } from './composer-model'
 import { resolveComposerAgentRows } from './composer-agent-rows-target'
 import type { ComposerCardActionProps, ComposerCardSourceProps } from './composer-card-contract'
+import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
+import '@/lib/workspace/ownership/worktree-runtime-owner-index'
+import { worktreeOwnerHostIds } from '@/lib/workspace/ownership/workspace-catalog-owner-index'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
+import { useAppStore } from '@/store'
 
 export function buildComposerCardProps(state: ComposerModel) {
   const attachmentTarget = resolveComposerAttachmentTarget(state)
+  const targetHostId = attachmentTarget.hostId
+  const existingBranchWorkspace =
+    state.reuseSelectedBranch && state.reuseEligibleBranch && targetHostId
+      ? selectWorktreesByRepo(useAppStore.getState())[state.repoId]?.find(
+          (worktree) =>
+            worktreeOwnerHostIds(worktree).includes(targetHostId) &&
+            worktree.branch.replace(/^refs\/heads\//, '') === state.reuseEligibleBranch
+        )
+      : undefined
   const {
     advancedOpen,
+    setupChoiceRevealRequest,
+    clearSetupChoiceReveal,
     agentPrompt,
     attachmentPaths,
     baseBranch,
@@ -89,6 +105,7 @@ export function buildComposerCardProps(state: ComposerModel) {
     selectedRepoRequiresConnection,
     sourceIntentBlocksCreate,
     sparseError,
+    selectedTargetNeedsVisibleHost,
     selectedRepoSshStatus,
     setAdvancedOpen,
     setAgentPrompt,
@@ -121,9 +138,8 @@ export function buildComposerCardProps(state: ComposerModel) {
     workspaceSeedName,
     creating,
     sourceIntentBlocksCreate,
-    requiresExplicitSetupChoice,
-    hasSetupDecision: Boolean(setupDecision),
     selectedRepoRequiresConnection,
+    selectedTargetNeedsVisibleHost,
     sparseError
   })
   const createDisabled = isProjectGroupTarget ? folderCreateDisabled : repoCreateDisabled
@@ -171,12 +187,27 @@ export function buildComposerCardProps(state: ComposerModel) {
     smartNameMode,
     smartNameSelection,
     onClearSmartNameSelection: handleClearSmartNameSelection,
+    reuseEligibleBranch: isProjectGroupTarget ? null : reuseEligibleBranch,
     canReuseSelectedBranch:
       !isProjectGroupTarget &&
       reuseEligibleBranch !== null &&
       smartNameSelection?.kind === 'branch',
     reuseSelectedBranch,
     onReuseSelectedBranchChange: handleReuseSelectedBranchChange,
+    onOpenSelectedBranchWorkspace:
+      existingBranchWorkspace && !isProjectGroupTarget
+        ? () => {
+            if (
+              activateAndRevealWorktree(existingBranchWorkspace.id, {
+                executionHostId: attachmentTarget.hostId ?? undefined,
+                navigationIntent: 'user-open'
+              }) !== false
+            ) {
+              state.closeModal()
+              state.onCreated?.()
+            }
+          }
+        : undefined,
     // Create multiple applies to Git worktrees; folder creation still closes afterward.
     showCreateMultiple: !isProjectGroupTarget,
     createMultiple,
@@ -208,6 +239,8 @@ export function buildComposerCardProps(state: ComposerModel) {
     agentRows: resolveComposerAgentRows(state),
     onOpenAgentSettings: handleOpenAgentSettings,
     advancedOpen,
+    setupChoiceRevealRequest,
+    onSetupChoiceRevealed: clearSetupChoiceReveal,
     onToggleAdvanced: () => setAdvancedOpen((current) => !current),
     createDisabled,
     projectError: isProjectGroupTarget ? pathStatusProjectError : projectError,

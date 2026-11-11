@@ -1,12 +1,15 @@
+import { getLinearSourceScope } from '@/store/slices/linear/linear-slice-scope'
+import { writeLinearIssue } from '@/lib/work-items/linear/linear-issue-write'
+import { taskProviderErrorMessage } from '@/lib/work-items/task-provider-error-copy'
 import type { TaskPageLinearListProjectionModel } from './use-task-page-linear-list-projection'
 import React, { useMemo, useCallback } from 'react'
 import type { LinearIssue } from '../../../../../shared/linear/issue-types'
 import {
   writeLinearBoardIssueDragData,
   readLinearBoardIssueDragData
-} from '@/lib/linear-board-drag-payload'
-import { linearTeamStates } from '@/runtime/runtime-linear-project-client'
-import { linearUpdateIssue } from '@/runtime/runtime-linear-issue-mutations'
+} from '@/lib/work-items/linear/linear-board-drag-payload'
+import { linearTeamStates } from '@/runtime/linear/runtime-linear-project-client'
+import { linearUpdateIssue } from '@/runtime/linear/runtime-linear-issue-client'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
@@ -17,14 +20,12 @@ import {
   findLinearWorkflowStateForStatus,
   getLinearStatusSectionState
 } from './task-page-linear-issue-model'
-import { defaultScopeSource } from '@/lib/default-creation-host'
+import { defaultScopeSource } from '@/runtime/hosts/selection/default-creation-host'
 export function useTaskPageLinearBoard(model: TaskPageLinearListProjectionModel) {
   const {
     settings,
     invalidateLinearIssueLists,
-    patchLinearIssue,
     linearTaskSourceContext,
-    setSelectedLinearIssueFallback,
     linearGroupBy,
     linearOrderBy,
     setLinearDisplayProperties,
@@ -34,7 +35,6 @@ export function useTaskPageLinearBoard(model: TaskPageLinearListProjectionModel)
     setLinearBoardDragOverKey,
     linearBoardUpdatingIssueIds,
     setLinearBoardUpdatingIssueIds,
-    patchScopedLinearIssue,
     filteredLinearIssues,
     pagedLinearIssues
   } = model
@@ -102,17 +102,6 @@ export function useTaskPageLinearBoard(model: TaskPageLinearListProjectionModel)
         next.add(issue.id)
         return next
       })
-      const previousState = issue.state
-      const applyFallbackState = (state: LinearIssue['state']) => {
-        setSelectedLinearIssueFallback((prev) =>
-          prev?.id === issue.id
-            ? {
-                ...prev,
-                state
-              }
-            : prev
-        )
-      }
       try {
         const states = await linearTeamStates(
           linearTaskSourceContext ?? defaultScopeSource(settings),
@@ -138,65 +127,31 @@ export function useTaskPageLinearBoard(model: TaskPageLinearListProjectionModel)
           type: workflowState.type,
           color: workflowState.color
         }
-        patchLinearIssue(
-          issue.id,
-          {
-            state: nextState
-          },
-          {
-            sourceContext: linearTaskSourceContext
-          }
-        )
-        patchScopedLinearIssue(issue.id, {
-          state: nextState
-        })
-        applyFallbackState(nextState)
-        const result = await linearUpdateIssue(
+        const scope = getLinearSourceScope(linearTaskSourceContext ?? defaultScopeSource(settings))
+        const result = await writeLinearIssue(
+          issue,
+          { state: nextState },
           linearTaskSourceContext ?? defaultScopeSource(settings),
-          issue.id,
-          {
-            stateId: workflowState.id
-          },
-          issue.workspaceId
+          () =>
+            linearUpdateIssue(
+              linearTaskSourceContext ?? defaultScopeSource(settings),
+              issue.id,
+              { stateId: workflowState.id },
+              issue.workspaceId
+            )
         )
         if (result.ok === false) {
-          patchLinearIssue(
-            issue.id,
-            {
-              state: previousState
-            },
-            {
-              sourceContext: linearTaskSourceContext
-            }
-          )
-          patchScopedLinearIssue(issue.id, {
-            state: previousState
-          })
-          applyFallbackState(previousState)
           toast.error(
-            result.error ??
+            taskProviderErrorMessage(result) ||
               translate('auto.components.TaskPage.6775c05483', 'Failed to update Linear state')
           )
           return
         }
         invalidateLinearIssueLists({
-          sourceContext: linearTaskSourceContext
+          scope
         })
         useAppStore.getState().recordFeatureInteraction('linear-tasks')
       } catch {
-        patchLinearIssue(
-          issue.id,
-          {
-            state: previousState
-          },
-          {
-            sourceContext: linearTaskSourceContext
-          }
-        )
-        patchScopedLinearIssue(issue.id, {
-          state: previousState
-        })
-        applyFallbackState(previousState)
         toast.error(
           translate('auto.components.TaskPage.6775c05483', 'Failed to update Linear state')
         )
@@ -214,12 +169,9 @@ export function useTaskPageLinearBoard(model: TaskPageLinearListProjectionModel)
       linearBoardDraggingIssueId,
       linearBoardUpdatingIssueIds,
       linearStatusBoardEnabled,
-      patchScopedLinearIssue,
-      patchLinearIssue,
       linearTaskSourceContext,
       settings,
       setLinearBoardDragOverKey,
-      setSelectedLinearIssueFallback,
       setLinearBoardUpdatingIssueIds
     ]
   )

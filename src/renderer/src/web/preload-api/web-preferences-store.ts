@@ -1,3 +1,4 @@
+import * as chatSettings from './web-native-chat-settings'
 import type { PreloadApi } from '../../../../preload/api-types'
 import {
   getDefaultSettings,
@@ -11,27 +12,32 @@ import type { PersistedUIState } from '../../../../shared/persisted-ui-state-typ
 import {
   applyPRBotAuthorOverride,
   normalizePRBotAuthorOverrides
-} from '../../../../shared/pr-bot-author-overrides'
+} from '../../../../shared/source-control/review-comments/pr-bot-author-overrides'
 import { readStoredWebRuntimeEnvironment } from '../web-runtime-environment'
 import {
   mergeSettings,
+  stripRetiredWebChatSettings,
   mergeWebUIState,
   migrateStoredWebSettings,
-  runtimeChatPermissionSetting
+  needsChatUiChoiceCarry,
+  retainOriginalWebChatSetting
 } from './web-preference-normalization'
 import { callRuntimeResult } from './web-runtime-calls'
+import { followHostVoiceSettings } from './web-speech-api'
 import { requireActiveEnvironmentOrNull, webRuntimeState } from './web-runtime-session'
 import { zcodePlanSiteOwner, settingsForZcodePlanSiteOwner } from './web-zcode-plan-site'
 import { SETTINGS_STORAGE_KEY, UI_STORAGE_KEY, readJson, writeJson } from './web-storage'
 
 export type WebSettingsApi = NonNullable<PreloadApi['settings']>
+type SettingsResult = { settings: Partial<GlobalSettings> }
 
 export function getStoredSettings(): GlobalSettings {
   webRuntimeState.activeEnvironment ??= readStoredWebRuntimeEnvironment()
-  const defaults = getDefaultSettings('~')
+  const defaults = { ...getDefaultSettings('~'), artifactSharingEnabled: false } // Host grants it.
   const rawStoredSettings = window.localStorage.getItem(SETTINGS_STORAGE_KEY)
   const stored = readJson<Partial<GlobalSettings>>(SETTINGS_STORAGE_KEY, {})
   const migratedStored = migrateStoredWebSettings(stored)
+  delete migratedStored.nativeChatAutoContinueAfterUsageLimit
   if (
     rawStoredSettings &&
     (stored.autoRenameBranchFromWork !== migratedStored.autoRenameBranchFromWork ||
@@ -45,13 +51,17 @@ export function getStoredSettings(): GlobalSettings {
       stored.terminalAllowOsc52ClipboardDefaultedOnForAllUsers !==
         migratedStored.terminalAllowOsc52ClipboardDefaultedOnForAllUsers ||
       stored.terminalCustomThemes !== migratedStored.terminalCustomThemes ||
+      stored.terminalColorOverridesSplit !== migratedStored.terminalColorOverridesSplit ||
       stored.uiLanguage !== migratedStored.uiLanguage ||
+      stored.pluginAppThemeLight !== migratedStored.pluginAppThemeLight ||
+      stored.pluginAppThemeDark !== migratedStored.pluginAppThemeDark ||
+      needsChatUiChoiceCarry(stored) ||
       stored.uiLanguagePortugueseMigrationApplied !== true)
   ) {
     try {
       const parsed = JSON.parse(rawStoredSettings) as unknown
       if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-        writeJson(SETTINGS_STORAGE_KEY, migratedStored)
+        writeJson(SETTINGS_STORAGE_KEY, retainOriginalWebChatSetting(migratedStored, stored))
         if (osc52ClipboardDefaultOnOverridesPersistedOff(stored)) {
           // readLocalWebUIState calls getStoredSettings; raw merge avoids recursive migration writes.
           writeJson(UI_STORAGE_KEY, {
@@ -67,13 +77,14 @@ export function getStoredSettings(): GlobalSettings {
   const settings = mergeSettings(
     {
       ...defaults,
-      floatingTerminalEnabled: false,
       rightSidebarOpenByDefault: false,
       activeRuntimeEnvironmentId: null
     },
     migratedStored
   )
+  delete settings.nativeChatAutoContinueAfterUsageLimit
   delete settings.zcodePlanSite
+  settings.floatingTerminalEnabled = false // A browser tab cannot host it, whatever was stored (#40268).
   return settings
 }
 
@@ -81,11 +92,12 @@ export function writeStoredSettings(
   settings: GlobalSettings,
   explicitActiveRuntimeEnvironmentId?: string | null
 ): void {
-  const durable = { ...settings }
+  const stored = readJson<Partial<GlobalSettings>>(SETTINGS_STORAGE_KEY, {})
+  const durable = retainOriginalWebChatSetting(settings, stored)
+  delete durable.nativeChatAutoContinueAfterUsageLimit
   if (explicitActiveRuntimeEnvironmentId !== undefined) {
     durable.activeRuntimeEnvironmentId = explicitActiveRuntimeEnvironmentId
   } else {
-    const stored = readJson<Partial<GlobalSettings>>(SETTINGS_STORAGE_KEY, {})
     if (Object.hasOwn(stored, 'activeRuntimeEnvironmentId')) {
       durable.activeRuntimeEnvironmentId = stored.activeRuntimeEnvironmentId ?? null
     } else {
@@ -95,20 +107,23 @@ export function writeStoredSettings(
   writeJson(SETTINGS_STORAGE_KEY, durable)
 }
 
+function settleRuntimeSettings(patch: Partial<GlobalSettings>): GlobalSettings {
+  const next = mergeSettings(getStoredSettings(), patch)
+  writeStoredSettings(next)
+  return next
+}
+
 export async function getRuntimeBackedStoredSettings(): Promise<GlobalSettings> {
   const local = getStoredSettings()
   const requestedEnvironment = requireActiveEnvironmentOrNull()
   const requestedSiteOwner = zcodePlanSiteOwner(requestedEnvironment)
   if (!requestedEnvironment) {
-    return local
+    return settingsForActiveVisibilityOwner(local)
   }
   try {
-    const result = await callRuntimeResult<{ settings: Partial<GlobalSettings> }>(
-      'settings.get',
-      undefined,
-      15_000
-    )
-    const runtimeSettings: Partial<GlobalSettings> = {}
+    // A reply after the host changed still merges; publish keeps consent to the pairing that answered.
+    const result = await callRuntimeResult<SettingsResult>('settings.get', undefined, 15_000)
+    const runtimeSettings = followHostVoiceSettings(local, result.settings)
     const currentEnvironment = requireActiveEnvironmentOrNull()
     if (currentEnvironment?.id === requestedEnvironment.id) {
       const visibilityDefaults = normalizeWorktreeVisibilityDefaults(
@@ -119,12 +134,10 @@ export async function getRuntimeBackedStoredSettings(): Promise<GlobalSettings> 
         : null
       webRuntimeState.worktreeVisibilityDefaultsRuntimeValue = visibilityDefaults ?? null
     }
-    if (typeof result.settings.experimentalNewWorktreeCardStyle === 'boolean') {
-      runtimeSettings.experimentalNewWorktreeCardStyle =
-        result.settings.experimentalNewWorktreeCardStyle
-    }
-    if (typeof result.settings.compactWorktreeCards === 'boolean') {
-      runtimeSettings.compactWorktreeCards = result.settings.compactWorktreeCards
+    for (const key of ['experimentalNewWorktreeCardStyle', 'compactWorktreeCards'] as const) {
+      if (typeof result.settings[key] === 'boolean') {
+        runtimeSettings[key] = result.settings[key]
+      }
     }
     if (typeof result.settings.minimaxGroupId === 'string') {
       runtimeSettings.minimaxGroupId = result.settings.minimaxGroupId
@@ -149,22 +162,21 @@ export async function getRuntimeBackedStoredSettings(): Promise<GlobalSettings> 
         result.settings.prBotAuthorOverrides
       )
     }
-    Object.assign(runtimeSettings, runtimeChatPermissionSetting(result.settings))
+    Object.assign(runtimeSettings, chatSettings.read(result.settings))
+    chatSettings.publish(requestedEnvironment, result.settings)
     // Read-only host capability; a host without a sharing service omits it, which must not keep a stale local grant.
     runtimeSettings.artifactSharingEnabled = result.settings.artifactSharingEnabled === true
     runtimeSettings.agentSkillSharingEnabled = result.settings.agentSkillSharingEnabled === true
-    const next = mergeSettings(local, runtimeSettings)
-    writeStoredSettings(next)
-    return settingsForActiveVisibilityOwner(next)
+    return settingsForActiveVisibilityOwner(settleRuntimeSettings(runtimeSettings))
   } catch {
     // Why: unpaired/offline web clients keep a local settings fallback.
-    return settingsForActiveVisibilityOwner(local)
+    return settingsForActiveVisibilityOwner(getStoredSettings())
   }
 }
 
 export function settingsForActiveVisibilityOwner(settings: GlobalSettings): GlobalSettings {
   const environment = requireActiveEnvironmentOrNull()
-  const ownedSettings = settingsForZcodePlanSiteOwner(settings, environment)
+  const ownedSettings = chatSettings.project(settingsForZcodePlanSiteOwner(settings, environment))
   if (!environment) {
     return ownedSettings
   }
@@ -182,78 +194,88 @@ export function settingsForActiveVisibilityOwner(settings: GlobalSettings): Glob
 }
 
 export async function syncRuntimeBackedSettings(
-  updates: Partial<GlobalSettings>,
-  localNext: GlobalSettings
+  updates: Partial<GlobalSettings>
 ): Promise<GlobalSettings> {
   const requestedEnvironment = requireActiveEnvironmentOrNull()
-  if (!requestedEnvironment) {
-    return localNext
-  }
-  const runtimeUpdates: Partial<GlobalSettings> = {}
-  const visibilityDefaults = normalizeWorktreeVisibilityDefaults(updates.worktreeVisibilityDefaults)
-  if (visibilityDefaults) {
-    runtimeUpdates.worktreeVisibilityDefaults = visibilityDefaults
-  }
-  if (typeof updates.experimentalNewWorktreeCardStyle === 'boolean') {
-    runtimeUpdates.experimentalNewWorktreeCardStyle = updates.experimentalNewWorktreeCardStyle
-  }
-  if (typeof updates.compactWorktreeCards === 'boolean') {
-    runtimeUpdates.compactWorktreeCards = updates.compactWorktreeCards
-  }
-  if (typeof updates.minimaxGroupId === 'string') {
-    runtimeUpdates.minimaxGroupId = updates.minimaxGroupId
-  }
-  if (typeof updates.minimaxUsageModels === 'string') {
-    runtimeUpdates.minimaxUsageModels = updates.minimaxUsageModels
-  }
-  if (updates.minimaxEndpoint === 'overseas' || updates.minimaxEndpoint === 'cn') {
-    runtimeUpdates.minimaxEndpoint = updates.minimaxEndpoint
-  }
-  if (Array.isArray(updates.prBotAuthorOverrides)) {
-    runtimeUpdates.prBotAuthorOverrides = normalizePRBotAuthorOverrides(
-      updates.prBotAuthorOverrides
+  if (requestedEnvironment) {
+    const runtimeUpdates: Partial<GlobalSettings> = {}
+    const visibilityDefaults = normalizeWorktreeVisibilityDefaults(
+      updates.worktreeVisibilityDefaults
     )
-  }
-  Object.assign(runtimeUpdates, runtimeChatPermissionSetting(updates, false))
-  if (Object.keys(runtimeUpdates).length === 0) {
-    return localNext
-  }
-  try {
-    const result = await callRuntimeResult<{ settings: Partial<GlobalSettings> }>(
-      'settings.update',
-      runtimeUpdates,
-      15_000
-    )
-    const runtimeSettings = { ...result.settings }
-    delete runtimeSettings.activeRuntimeEnvironmentId
-    const updatedVisibilityDefaults = normalizeWorktreeVisibilityDefaults(
-      runtimeSettings.worktreeVisibilityDefaults
-    )
-    if (
-      requireActiveEnvironmentOrNull()?.id === requestedEnvironment.id &&
-      updatedVisibilityDefaults
-    ) {
-      webRuntimeState.worktreeVisibilityDefaultsRuntimeEnvironmentId = requestedEnvironment.id
-      webRuntimeState.worktreeVisibilityDefaultsRuntimeValue = updatedVisibilityDefaults
-    }
-    delete runtimeSettings.worktreeVisibilityDefaults
-    const next = mergeSettings(localNext, runtimeSettings)
-    writeStoredSettings(next)
-    return next
-  } catch (error) {
     if (visibilityDefaults) {
-      throw error
+      runtimeUpdates.worktreeVisibilityDefaults = visibilityDefaults
     }
-    // Why: unpaired/offline web clients still need local settings persistence.
-    return localNext
+    if (typeof updates.experimentalNewWorktreeCardStyle === 'boolean') {
+      runtimeUpdates.experimentalNewWorktreeCardStyle = updates.experimentalNewWorktreeCardStyle
+    }
+    if (typeof updates.compactWorktreeCards === 'boolean') {
+      runtimeUpdates.compactWorktreeCards = updates.compactWorktreeCards
+    }
+    if (typeof updates.minimaxGroupId === 'string') {
+      runtimeUpdates.minimaxGroupId = updates.minimaxGroupId
+    }
+    if (typeof updates.minimaxUsageModels === 'string') {
+      runtimeUpdates.minimaxUsageModels = updates.minimaxUsageModels
+    }
+    if (updates.minimaxEndpoint === 'overseas' || updates.minimaxEndpoint === 'cn') {
+      runtimeUpdates.minimaxEndpoint = updates.minimaxEndpoint
+    }
+    if (Array.isArray(updates.prBotAuthorOverrides)) {
+      runtimeUpdates.prBotAuthorOverrides = normalizePRBotAuthorOverrides(
+        updates.prBotAuthorOverrides
+      )
+    }
+    Object.assign(runtimeUpdates, await chatSettings.updates(updates, requestedEnvironment))
+    if (Object.keys(runtimeUpdates).length > 0) {
+      try {
+        // Consent is written only to the host it was chosen for; other settings keep the common path.
+        const result =
+          typeof runtimeUpdates.nativeChatAutoContinueAfterUsageLimit === 'boolean'
+            ? await chatSettings.call<SettingsResult>(
+                requestedEnvironment,
+                'settings.update',
+                runtimeUpdates
+              )
+            : await callRuntimeResult<SettingsResult>('settings.update', runtimeUpdates, 15_000)
+        chatSettings.publish(requestedEnvironment, result.settings)
+        const runtimeSettings = stripRetiredWebChatSettings(result.settings)
+        delete runtimeSettings.nativeChatAutoContinueAfterUsageLimit
+        delete runtimeSettings.agentDefaultSurface
+        delete runtimeSettings.nativeChatProviders
+        delete runtimeSettings.activeRuntimeEnvironmentId
+        const updatedVisibilityDefaults = normalizeWorktreeVisibilityDefaults(
+          runtimeSettings.worktreeVisibilityDefaults
+        )
+        if (
+          requireActiveEnvironmentOrNull()?.id === requestedEnvironment.id &&
+          updatedVisibilityDefaults
+        ) {
+          webRuntimeState.worktreeVisibilityDefaultsRuntimeEnvironmentId = requestedEnvironment.id
+          webRuntimeState.worktreeVisibilityDefaultsRuntimeValue = updatedVisibilityDefaults
+        }
+        delete runtimeSettings.worktreeVisibilityDefaults
+        // Host voice is read only through followHostVoiceSettings, which also checks this page can capture.
+        delete runtimeSettings.voice
+        return settleRuntimeSettings(runtimeSettings)
+      } catch (error) {
+        if (
+          visibilityDefaults ||
+          typeof runtimeUpdates.nativeChatAutoContinueAfterUsageLimit === 'boolean'
+        ) {
+          throw error
+        }
+        // Why: unpaired/offline web clients still need local settings persistence.
+        return getStoredSettings()
+      }
+    }
   }
+  return getStoredSettings()
 }
 
 export async function updateRuntimePRBotAuthorOverride(args: {
   author: string
   isBot: boolean
 }): Promise<GlobalSettings> {
-  const local = getStoredSettings()
   if (requireActiveEnvironmentOrNull()) {
     // Why: don't report a successful mark the authoritative runtime failed to persist and will later overwrite.
     const result = await callRuntimeResult<{ settings: Partial<GlobalSettings> }>(
@@ -261,12 +283,11 @@ export async function updateRuntimePRBotAuthorOverride(args: {
       args,
       15_000
     )
-    const next = mergeSettings(local, {
+    return settleRuntimeSettings({
       prBotAuthorOverrides: normalizePRBotAuthorOverrides(result.settings.prBotAuthorOverrides)
     })
-    writeStoredSettings(next)
-    return next
   }
+  const local = getStoredSettings()
   const next = mergeSettings(local, {
     prBotAuthorOverrides: applyPRBotAuthorOverride(
       local.prBotAuthorOverrides,

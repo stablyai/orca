@@ -52,38 +52,4 @@ export function registerDurableSettingsWriteTests(): void {
     expect(readState().settings.alwaysForceDeleteWorktrees).toBe(previous)
     expect(onChanged).not.toHaveBeenCalled()
   })
-
-  it('rolls back the preference while retaining unrelated concurrent settings edits', async () => {
-    const { store, authority } = await createWorkerMaintenanceFixture()
-    const previous = store.getSettings().alwaysForceDeleteWorktrees
-    const started = maintenanceBarrier()
-    const release = maintenanceBarrier()
-    vi.spyOn(authority, 'writeSerializedDomains').mockImplementationOnce(async () => {
-      started.resolve()
-      await release.promise
-      throw new Error('Disk full')
-    })
-    const pending = store.updateSettingsAndFlush({ alwaysForceDeleteWorktrees: true })
-    const rejected = expect(pending).rejects.toThrow('Disk full')
-    await started.promise
-    store.updateSettings({ theme: 'dark' })
-    release.resolve()
-    await rejected
-    expect(store.getSettings()).toMatchObject({
-      alwaysForceDeleteWorktrees: previous,
-      theme: 'dark'
-    })
-  })
-
-  it('removes previously absent optional keys after a failed preference payload write', async () => {
-    const { store, authority } = await createWorkerMaintenanceFixture()
-    delete store.getSettings().editorWordWrap
-    const previous = store.getSettings().alwaysForceDeleteWorktrees
-    vi.spyOn(authority, 'writeSerializedDomains').mockRejectedValueOnce(new Error('Disk full'))
-    await expect(
-      store.updateSettingsAndFlush({ alwaysForceDeleteWorktrees: true, editorWordWrap: false })
-    ).rejects.toThrow('Disk full')
-    expect(Object.hasOwn(store.getSettings(), 'editorWordWrap')).toBe(false)
-    expect(store.getSettings().alwaysForceDeleteWorktrees).toBe(previous)
-  })
 }

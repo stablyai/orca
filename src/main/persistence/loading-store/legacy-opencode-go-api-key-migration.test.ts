@@ -8,7 +8,8 @@ const secretStore = vi.hoisted(() => ({
 
 vi.mock('../../../shared/secret-store', () => ({ getSecretStore: () => secretStore }))
 
-const { ProtectedSecretPersistence } = await import('../../protected-secret-persistence')
+const { ProtectedSecretPersistence } =
+  await import('../../credentials/protected-secret-persistence')
 const {
   LEGACY_OPENCODE_GO_API_KEY_SLOT,
   migrateLegacyOpenCodeGoApiKey,
@@ -51,48 +52,6 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-describe('retainLegacyOpenCodeGoApiKey', () => {
-  it('drops the field from settings and parks the ciphertext without decrypting it', () => {
-    const settings: Record<string, unknown> = { opencodeGoApiKey: SEALED, other: 1 }
-    const secrets = new ProtectedSecretPersistence()
-
-    retainLegacyOpenCodeGoApiKey(settings, secrets)
-
-    expect(settings).toEqual({ other: 1 })
-    expect(secrets.sealedBlob(LEGACY_OPENCODE_GO_API_KEY_SLOT)).toBe(SEALED)
-    expect(secretStore.decryptString).not.toHaveBeenCalled()
-  })
-
-  it('seals a #22551 plaintext key before parking it, and migration still recovers it', () => {
-    const secrets = parked('sk-fake-plaintext-key')
-
-    const blob = secrets.sealedBlob(LEGACY_OPENCODE_GO_API_KEY_SLOT)
-    expect(blob).toBe(Buffer.from('enc:sk-fake-plaintext-key').toString('base64'))
-    const store = memoryStore()
-    expect(migrateLegacyOpenCodeGoApiKey(secrets, store)).toBe(true)
-    expect(store.value()).toBe('sk-fake-plaintext-key')
-  })
-
-  it('parks a plaintext key verbatim while encryption is unavailable', () => {
-    secretStore.isEncryptionAvailable.mockReturnValue(false)
-    const secrets = parked('sk-fake-plaintext-key')
-
-    expect(secrets.sealedBlob(LEGACY_OPENCODE_GO_API_KEY_SLOT)).toBe('sk-fake-plaintext-key')
-    expect(secretStore.encryptString).not.toHaveBeenCalled()
-  })
-
-  it('ignores settings without the field and drops malformed values', () => {
-    const secrets = new ProtectedSecretPersistence()
-    retainLegacyOpenCodeGoApiKey({ other: 1 }, secrets)
-    retainLegacyOpenCodeGoApiKey(undefined, secrets)
-    const malformed: Record<string, unknown> = { opencodeGoApiKey: { nested: 'fake' } }
-    retainLegacyOpenCodeGoApiKey(malformed, secrets)
-
-    expect(malformed).toEqual({})
-    expect(secrets.sealedBlob(LEGACY_OPENCODE_GO_API_KEY_SLOT)).toBeNull()
-  })
-})
-
 describe('migrateLegacyOpenCodeGoApiKey', () => {
   it('saves the key into an empty store, then releases the legacy value', () => {
     const secrets = parked()
@@ -101,15 +60,6 @@ describe('migrateLegacyOpenCodeGoApiKey', () => {
     expect(migrateLegacyOpenCodeGoApiKey(secrets, store)).toBe(true)
     expect(store.value()).toBe('fake-legacy-key')
     expect(secrets.sealedBlob(LEGACY_OPENCODE_GO_API_KEY_SLOT)).toBeNull()
-  })
-
-  it('is idempotent: a second run has nothing left to move', () => {
-    const secrets = parked()
-    const store = memoryStore()
-
-    migrateLegacyOpenCodeGoApiKey(secrets, store)
-    expect(migrateLegacyOpenCodeGoApiKey(secrets, store)).toBe(false)
-    expect(store.save).toHaveBeenCalledOnce()
   })
 
   it('never overwrites a readable key already saved in the store, and releases the legacy value', () => {

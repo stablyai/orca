@@ -1,5 +1,9 @@
-import type { GitDiffResult } from '../../../../shared/git-diff-compare-types'
-import type { CsvFilePreview } from './csv/csv-file-content'
+import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
+import type { EditorPanelContentLoadOptions } from './external-changes/useEditorPanelExternalContentEvents'
+import type { GitDiffResult } from '../../../../shared/git/diff/git-diff-compare-types'
+import type { CsvFilePreview } from './csv/preview/csv-file-content'
+import type { RuntimeFileReadArgs } from '@/runtime/files/runtime-file-client-types'
 
 /** Transient owner hydration/connection failure; retry instead of reading remote paths locally and latching access errors. */
 export const WORKTREE_OWNER_NOT_READY_ERROR =
@@ -21,17 +25,24 @@ export const WORKTREE_HOST_UNRESOLVED_ERROR =
 
 export type FileContent = {
   mediaUrl?: string
+  size?: number
   csvPreview?: CsvFilePreview
   content: string
   isBinary: boolean
   isImage?: boolean
   mimeType?: string
   fileIdentity?: string
+  /** The grant that served a host file outside every workspace, renewed or minted by the read. */
+  terminalArtifactGrantId?: string
+  /** This copy can't be saved where it was read from, such as a file larger than its grant saves. */
+  readOnly?: true
   loadError?: string
   /** Machine code from a runtime RPC failure; `loadError` alone may be prose (#21041). */
   loadErrorCode?: string
   /** Superseded by an external change; still rendered until the lazy reload lands. */
   isStale?: boolean
+  /** How the loader reached the file, so a binary custom editor can page its bytes from the same host. */
+  byteSource?: RuntimeFileReadArgs
 }
 
 export type DiffContent = GitDiffResult & {
@@ -42,4 +53,21 @@ export type DiffContent = GitDiffResult & {
 export type InFlightContentRead<T> = {
   externalEventGeneration?: number
   promise: Promise<T>
+}
+
+export type EditorPanelFileContentLoader = (
+  filePath: string,
+  id: string,
+  worktreeId?: string,
+  relativePath?: string,
+  options?: EditorPanelContentLoadOptions
+) => Promise<void>
+
+export type UseEditorPanelFileContentLoaderParams = {
+  fileLoadRetryAttemptsRef: MutableRefObject<Record<string, number>>
+  fileReadGenerationCounterRef: MutableRefObject<number>
+  fileReadGenerationRef: MutableRefObject<Record<string, number>>
+  openFilesRef: MutableRefObject<OpenFile[]>
+  outstandingFileReadsRef: MutableRefObject<Record<string, number>>
+  setFileContents: Dispatch<SetStateAction<Record<string, FileContent>>>
 }

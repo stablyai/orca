@@ -1,14 +1,17 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session/journal/agent-session-journal-types'
 import {
   createRestTestRig,
   foundRestTestChat,
-  IDLE_MS,
-  REST_TEST_SESSION,
-  REST_TEST_THREAD,
-  sweepOnce,
-  type RestTestRig
-} from '../native-chat/agent-session-wire/structured-agent-session-rest-test-rig'
+  sweepOnce
+} from '../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig'
+
+import { STRUCTURED_AGENT_SESSION_IDLE_MS as IDLE_MS } from '../native-chat/agent-session-wire/termination/structured-agent-session-idle-sweep'
+import {
+  HOST_TEST_SESSION as REST_TEST_SESSION,
+  HOST_TEST_THREAD as REST_TEST_THREAD
+} from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+import type { RestTestRig } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig'
 import { OrcadIdleExitMonitor } from './orcad-idle-exit-monitor'
 import { createOrcadIdleProbes } from './orcad-managed-idle-exit'
 

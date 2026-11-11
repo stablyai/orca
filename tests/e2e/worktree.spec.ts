@@ -107,43 +107,62 @@ test.describe('Create Workspace', () => {
     }
   })
 
-  test('creates an emoji-named worktree with a safe git branch', async ({ orcaPage }) => {
-    const workspaceName = '🚀🧪✨'
+  for (const autoRenameBranchFromWork of [true, false]) {
+    test(`uses a typed emoji workspace name as its branch with automatic branch naming ${autoRenameBranchFromWork ? 'on' : 'off'}`, async ({
+      orcaPage
+    }) => {
+      const workspaceName = autoRenameBranchFromWork ? '✨🚀🧪' : '🚀🧪✨'
+      const previousSetting = await orcaPage.evaluate(
+        () => window.__store!.getState().settings!.autoRenameBranchFromWork
+      )
 
-    try {
-      await openSidebarWorkspaceComposer(orcaPage)
+      try {
+        await orcaPage.evaluate(async (enabled) => {
+          await window
+            .__store!.getState()
+            .updateSettingsOrThrow({ autoRenameBranchFromWork: enabled })
+        }, autoRenameBranchFromWork)
+        await openSidebarWorkspaceComposer(orcaPage)
 
-      const dialog = orcaPage.getByRole('dialog', { name: /Create (Workspace|Worktree)/i })
-      await expect(dialog).toBeVisible()
-      await expect(dialog.locator('[data-workspace-name-input="true"]')).toBeVisible()
+        const dialog = orcaPage.getByRole('dialog', { name: /Create (Workspace|Worktree)/i })
+        await expect(dialog).toBeVisible()
+        await expect(dialog.locator('[data-workspace-name-input="true"]')).toBeVisible()
 
-      const nameInput = dialog.getByPlaceholder(/Type a name/i)
-      await nameInput.fill(workspaceName)
+        const nameInput = dialog.getByPlaceholder(/Type a name/i)
+        await nameInput.fill(workspaceName)
 
-      const createButton = dialog.getByRole('button', { name: /Create (Workspace|Worktree)/i })
-      await expect(createButton).toBeEnabled()
-      await createButton.click()
+        const createButton = dialog.getByRole('button', { name: /Create (Workspace|Worktree)/i })
+        await expect(createButton).toBeEnabled()
+        await createButton.click()
 
-      await expect(dialog).toBeHidden({ timeout: 15_000 })
-      await expect(orcaPage.getByRole('option', { name: new RegExp(workspaceName) })).toBeVisible({
-        timeout: 10_000
-      })
+        await expect(dialog).toBeHidden({ timeout: 15_000 })
+        await expect(orcaPage.getByRole('option', { name: new RegExp(workspaceName) })).toBeVisible(
+          {
+            timeout: 10_000
+          }
+        )
 
-      const branch = await orcaPage.evaluate((displayName) => {
-        const worktrees = Object.values(window.__store!.getState().worktreesByRepo).flat()
-        return worktrees.find((worktree) => worktree.displayName === displayName)?.branch ?? null
-      }, workspaceName)
-      expect(branch).toBe('refs/heads/rocket-test-tube-sparkles')
-    } finally {
-      await orcaPage
-        .evaluate(() => {
-          window.__store?.getState().closeModal()
-        })
-        .catch(() => {
-          /* page may already be torn down */
-        })
-    }
-  })
+        await expect(
+          orcaPage.getByRole('option', { name: new RegExp(workspaceName) })
+        ).toContainText(
+          autoRenameBranchFromWork ? 'sparkles-rocket-test-tube' : 'rocket-test-tube-sparkles'
+        )
+      } finally {
+        await orcaPage
+          .evaluate(() => {
+            window.__store?.getState().closeModal()
+          })
+          .catch(() => {
+            /* page may already be torn down */
+          })
+        await orcaPage.evaluate(async (enabled) => {
+          await window
+            .__store!.getState()
+            .updateSettingsOrThrow({ autoRenameBranchFromWork: enabled })
+        }, previousSetting)
+      }
+    })
+  }
 
   test('enters the Korean flag with the flag_kr shortcode suggestion', async ({ orcaPage }) => {
     try {

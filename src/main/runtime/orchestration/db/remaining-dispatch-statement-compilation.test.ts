@@ -9,7 +9,6 @@ import { createRootDispatch } from './root-dispatch-test-fixture'
 import { LEGACY_CONTRACT_VERSION } from './contract-constants'
 import { DISPATCH_CONTEXT_COLUMNS } from './row-column-lists'
 import { DROP_REMOVED_WORK_TRIGGERS_SQL } from './reset/removed-orchestration-work-store'
-import { warnStaleDispatches } from '../coordinator-task-dispatch'
 
 const databases: OrchestrationDb[] = []
 const directories: string[] = []
@@ -62,6 +61,7 @@ function fixture(count = 1, version: 'fresh' | 'v41' = 'fresh') {
       ${DROP_REMOVED_WORK_TRIGGERS_SQL}
       DROP INDEX idx_runs_coordinator_orca_session_id;
       DROP INDEX idx_dispatch_assignee_orca_session_id;
+      DROP INDEX idx_dispatch_session_presentation;
       DROP TRIGGER trg_runs_remember_coordinator_insert;
       DROP TRIGGER trg_runs_remember_coordinator_update;
       DROP TRIGGER trg_messages_route_coordinator_mail;
@@ -92,7 +92,19 @@ function fixture(count = 1, version: 'fresh' | 'v41' = 'fresh') {
       .map((row) => row.name)
       .toSorted()
   ).toEqual(DISPATCH_CONTEXT_COLUMNS.toSorted())
+  const priorVersion = writer.db.pragma('user_version', { simple: true })
+  expect(
+    writer.db
+      .prepare("SELECT name FROM sqlite_master WHERE name = 'idx_dispatch_session_presentation'")
+      .get()
+  ).toBeDefined()
   const reader = new OrchestrationDb(path)
+  expect(reader.db.pragma('user_version', { simple: true })).toBe(priorVersion)
+  expect(
+    reader.db
+      .prepare("SELECT name FROM sqlite_master WHERE name = 'idx_dispatch_session_presentation'")
+      .get()
+  ).toBeDefined()
   databases.push(reader)
   return { writer, reader, run, entries }
 }
@@ -109,7 +121,7 @@ function fullDispatchReads(calls: [string, ...unknown[]][]): string[] {
 
 describe('remaining dispatch metadata statement compilation', () => {
   it.each(['fresh', 'v41'] as const)(
-    'reuses stale and direct-owner reads with exact rows, rebinding, plans and cross-connection freshness (%s)',
+    'reuses direct-owner reads with exact rows, rebinding and cross-connection freshness (%s)',
     (version) => {
       const {
         writer,
@@ -121,8 +133,6 @@ describe('remaining dispatch metadata statement compilation', () => {
       vi.setSystemTime(new Date(NOW))
       const compile = vi.spyOn(DatabaseSync.prototype, 'prepare')
       for (let call = 0; call < 10; call += 1) {
-        expect(reader.getStaleDispatches('2026-10-02T11:00:00Z')).toEqual([expected])
-        expect(reader.getStaleDispatches('2026-10-02T09:00:00Z')).toEqual([])
         expect(reader.findActiveDispatchForDirectMessageOwner(run.id, 'worker_0')).toEqual(expected)
         expect(reader.findActiveDispatchForDirectMessageOwner(run.id, 'missing', PANE)).toEqual(
           expected
@@ -138,17 +148,11 @@ describe('remaining dispatch metadata statement compilation', () => {
           reader.findActiveDispatchForDirectMessageOwner(run.id, 'missing', 'bad:legacy')
         ).toBeUndefined()
       }
-      const warnings: string[] = []
-      warnStaleDispatches(reader, (warning) => warnings.push(warning), 5)
-      expect(warnings).toEqual([
-        `Warning: worker worker_0 on task ${dispatch.task_id} has not sent a heartbeat in ~10 min (dispatch ${dispatch.id})`
-      ])
       writer.db
         .prepare(
           'UPDATE dispatch_contexts SET last_heartbeat_at = ?, assignee_handle = ? WHERE id = ?'
         )
         .run(NOW, 'updated', dispatch.id)
-      expect(reader.getStaleDispatches('2026-10-02T11:00:00Z')).toEqual([])
       expect(reader.findActiveDispatchForDirectMessageOwner(run.id, 'worker_0')).toBeUndefined()
       expect(reader.findActiveDispatchForDirectMessageOwner(run.id, 'updated')).toEqual({
         ...expected,
@@ -156,16 +160,8 @@ describe('remaining dispatch metadata statement compilation', () => {
         assignee_handle: 'updated'
       })
       const reads = fullDispatchReads(compile.mock.calls)
-      const staleSql = reads.find((sql) => sql.includes('julianday'))
       compile.mockRestore()
-      if (!staleSql) {
-        throw new Error('Missing stale query')
-      }
-      const wildcardSql = staleSql.replace(/SELECT .*? FROM/, 'SELECT * FROM')
-      expect(writer.db.prepare(`EXPLAIN QUERY PLAN ${staleSql}`).all(NOW, NOW)).toEqual(
-        writer.db.prepare(`EXPLAIN QUERY PLAN ${wildcardSql}`).all(NOW, NOW)
-      )
-      expect(reads).toHaveLength(3)
+      expect(reads).toHaveLength(2)
     }
   )
 
@@ -201,66 +197,6 @@ describe('remaining dispatch metadata statement compilation', () => {
         reader.resolveCreatorDispatchId({ kind: 'session', orcaSessionId: sessionId })
       ).toBeNull()
       expect(fullDispatchReads(compile.mock.calls)).toHaveLength(1)
-    }
-  )
-
-  it.each(['fresh', 'v41'] as const)(
-    'reuses gate ownership and settlement reads while preserving completed rows and blocked tasks (%s)',
-    (version) => {
-      vi.useFakeTimers()
-      vi.setSystemTime(new Date(NOW))
-      const { reader, entries } = fixture(10, version)
-      const compile = vi.spyOn(DatabaseSync.prototype, 'prepare')
-      for (const { task, dispatch, expected } of entries) {
-        const gate = reader.createGate({ taskId: task.id, question: 'Continue?' })
-        expect(gate.task_id).toBe(task.id)
-        expect(gate.status).toBe('pending')
-        expect(reader.getDispatchContextById(dispatch.id)).toEqual({
-          ...expected,
-          status: 'completed',
-          completed_at: NOW,
-          capability_revoked_at: NOW
-        })
-        expect(reader.getTask(task.id)?.status).toBe('blocked')
-      }
-      expect(fullDispatchReads(compile.mock.calls)).toHaveLength(12)
-    }
-  )
-
-  it.each(['fresh', 'v41'] as const)(
-    'reuses the private failure snapshot while preserving returned committed row order (%s)',
-    (version) => {
-      vi.useFakeTimers()
-      vi.setSystemTime(new Date(NOW))
-      const { reader, entries } = fixture(10, version)
-      const compile = vi.spyOn(DatabaseSync.prototype, 'prepare')
-      for (const { task, dispatch, expected } of entries) {
-        const expectedFailure = {
-          ...expected,
-          status: 'failed',
-          failure_count: 1,
-          last_failure: 'failed send',
-          completed_at: NOW,
-          capability_revoked_at: NOW
-        }
-        const failure = reader.failDispatch(dispatch.id, 'failed send')
-        expect(failure).toEqual(expectedFailure)
-        expect(JSON.stringify(failure)).toBe(JSON.stringify(expectedFailure))
-        expect(reader.getTask(task.id)?.status).toBe('ready')
-      }
-      const reads = fullDispatchReads(compile.mock.calls)
-      compile.mockRestore()
-      const first = entries[0]
-      if (!first) {
-        throw new Error('Missing failure fixture')
-      }
-      const before = reader.db
-        .prepare('SELECT * FROM dispatch_contexts WHERE id = ?')
-        .get(first.dispatch.id)
-      const early = reader.failDispatch(first.dispatch.id, 'later')
-      expect(JSON.stringify(early)).toBe(JSON.stringify(before))
-      expect(early).not.toBe(reader.failDispatch(first.dispatch.id, 'later'))
-      expect(reads).toHaveLength(21)
     }
   )
 

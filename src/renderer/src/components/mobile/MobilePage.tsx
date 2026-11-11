@@ -3,8 +3,7 @@ import { toast } from 'sonner'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store'
 import type { Platform, StepIndex } from './MobileHero'
-import type { IosChannel } from './mobile-platform-copy'
-import type { MobileNetworkInterface } from '../settings/mobile-network-interface-selection'
+import type { PairingNetworkInterface } from '../../../../shared/pairing-address-auto-selection'
 import { translate } from '@/i18n/i18n'
 import { useMobilePageEscape } from './use-mobile-page-escape'
 import { MobilePageContent } from './MobilePageContent'
@@ -12,13 +11,14 @@ import { useMobileInstallQr } from './use-mobile-install-qr'
 import {
   canMintMobilePairingOffer,
   type MobilePairingConnectionMode
-} from '../../../../shared/mobile-pairing-connection-mode'
+} from '../../../../shared/remote-runtime/pairing/mobile-pairing-connection-mode'
 import { useMobilePairingConnectionMode } from './use-mobile-pairing-connection-mode'
 import { useMobilePairingGeneration } from './use-mobile-pairing-generation'
 import { useMobilePairingQrInvalidation } from './use-mobile-pairing-qr-invalidation'
 import { useMobileInstallActions } from './use-mobile-install-actions'
 import { useMobilePagePairedDevices } from './use-mobile-page-paired-devices'
-import type { MobileRelayMintFailure } from '../../../../shared/mobile-relay-mint-failure'
+import { usePairingOfferExpiry } from './use-pairing-offer-expiry'
+import type { MobileRelayMintFailure } from '../../../../shared/remote-runtime/relay/mobile-relay-mint-failure'
 import {
   type MobilePairingAddressChange,
   useMobilePairingAddressPreference
@@ -28,19 +28,18 @@ export default function MobilePage(): React.JSX.Element {
   const [stepIdx, setStepIdx] = useState<StepIndex>(0)
 
   const [platform, setPlatform] = useState<Platform>('ios')
-  // Default to the daily iOS preview unless the user chooses the public release.
-  const [iosChannel, setIosChannel] = useState<IosChannel>('preview')
 
   const [pairQrDataUrl, setPairQrDataUrl] = useState<string | null>(null)
   const [pairQrSize, setPairQrSize] = useState<number | null>(null)
   const [pairingUrl, setPairingUrl] = useState<string | null>(null)
+  const [pairExpiresAt, setPairExpiresAt] = useState<number | null>(null)
   const [pairingQrError, setPairingQrError] = useState(false)
   const [relayMintFailure, setRelayMintFailure] = useState<MobileRelayMintFailure | null>(null)
   const [pairLoading, setPairLoading] = useState(false)
   const signedIn = useAppStore((state) => state.orcaProfileAuthStatus?.state === 'connected')
   const refreshAuthStatus = useAppStore((state) => state.fetchOrcaProfileAuthStatus)
   const [connectionMode, setConnectionMode] = useMobilePairingConnectionMode()
-  const [networkInterfaces, setNetworkInterfaces] = useState<MobileNetworkInterface[]>([])
+  const [networkInterfaces, setNetworkInterfaces] = useState<PairingNetworkInterface[]>([])
   const pairingAddressChangeRef = useRef<(change: MobilePairingAddressChange) => void>(() => {})
   const notifyPairingAddressChange = useCallback(
     (change: MobilePairingAddressChange): void => pairingAddressChangeRef.current(change),
@@ -80,11 +79,9 @@ export default function MobilePage(): React.JSX.Element {
     showPairedDevices,
     stage
   } = useMobilePagePairedDevices({ stepIdx, setStepIdx })
-  const installQrUrl = useMobileInstallQr(stage, platform, iosChannel)
-  const { copyInstallUrl, openAndroidInstallGuide, openInstallUrl } = useMobileInstallActions(
-    platform,
-    iosChannel
-  )
+  const installQrUrl = useMobileInstallQr(stage, platform)
+  const { copyInstallUrl, openAndroidInstallGuide, openInstallUrl } =
+    useMobileInstallActions(platform)
 
   const { generatePairing } = useMobilePairingGeneration({
     connectionMode,
@@ -96,6 +93,7 @@ export default function MobilePage(): React.JSX.Element {
     setPairQrDataUrl,
     setPairQrSize,
     setPairingUrl,
+    setPairExpiresAt,
     setPairingQrError,
     setPairLoading,
     setRelayMintFailure,
@@ -273,6 +271,10 @@ export default function MobilePage(): React.JSX.Element {
     void generatePairing(false)
   }, [stage, stepIdx, canGenerate, generatePairing, pairingAddressSettled])
 
+  // Refresh only a code on screen; the old one stays valid for a phone mid-scan.
+  const pairingCodeShown = stage === 'flow' && stepIdx === 1 && pairingUrl != null
+  usePairingOfferExpiry(pairingCodeShown ? pairExpiresAt : null, () => void generatePairing(false))
+
   // Clear prior QR state on entry so expired codes cannot flash during the fresh visit.
   const beginPairingVisit = (): void => {
     pairingRequestIdRef.current += 1
@@ -339,8 +341,6 @@ export default function MobilePage(): React.JSX.Element {
       handleBack={handleBack}
       handleContinue={handleContinue}
       installQrUrl={installQrUrl}
-      iosChannel={iosChannel}
-      setIosChannel={setIosChannel}
       loadNetworkInterfaces={() => void loadNetworkInterfaces()}
       networkInterfaces={networkInterfaces}
       openAndroidInstallGuide={openAndroidInstallGuide}

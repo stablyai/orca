@@ -76,6 +76,7 @@ export function createBrowserApi(): NonNullable<Partial<PreloadApi>['browser']> 
       }),
     onGrabModeToggle: () => noopUnsubscribe,
     onGrabActionShortcut: () => noopUnsubscribe,
+    onGuestEscape: () => noopUnsubscribe,
     sessionListProfiles: () => Promise.resolve([]),
     onSessionProfilesChanged: () => noopUnsubscribe,
     // Web clients render remote workspaces through the server; no local SSH routing exists.
@@ -92,6 +93,7 @@ export function createBrowserApi(): NonNullable<Partial<PreloadApi>['browser']> 
           'Cookie import is unavailable in the web client.'
         )
       }),
+    sessionImportCookiesForClientHost: () => Promise.resolve(null),
     sessionResolvePartition: () => Promise.resolve(null),
     sessionDetectBrowsers: () => Promise.resolve([]),
     sessionDetectBrowsersForClientHost: () => Promise.resolve(null),
@@ -106,6 +108,8 @@ export function createBrowserApi(): NonNullable<Partial<PreloadApi>['browser']> 
           'Cookie import is unavailable in the web client.'
         )
       }),
+    sessionGoogleCookieClearTarget: () => Promise.resolve(null),
+    sessionClearGoogleCookies: () => Promise.resolve('unverified' as const),
     sessionClearDefaultCookies: () => Promise.resolve(false),
     sitePermissionsList: () => Promise.resolve([]),
     sitePermissionsSet: () => Promise.resolve([]),
@@ -137,11 +141,14 @@ export function createBrowserApi(): NonNullable<Partial<PreloadApi>['browser']> 
 }
 
 export function createEmulatorApi(): NonNullable<Partial<PreloadApi>['emulator']> {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial stub; withFallback in web-preload-api answers every emulator member it omits.
   return {
     onPaneFocus: () => noopUnsubscribe,
     onAutoAttach: () => noopUnsubscribe,
     startFrameStream: () => Promise.reject(new Error('Mobile emulator is unavailable on web.')),
     stopFrameStream: () => Promise.resolve(),
+    startVideoStream: () => Promise.reject(new Error('Mobile emulator is unavailable on web.')),
+    stopVideoStream: () => Promise.resolve(),
     onFrameStreamFrame: () => noopUnsubscribe,
     onFrameStreamError: () => noopUnsubscribe
   } as unknown as NonNullable<Partial<PreloadApi>['emulator']>

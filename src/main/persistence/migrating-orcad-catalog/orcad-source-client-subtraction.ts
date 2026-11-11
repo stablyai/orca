@@ -1,8 +1,10 @@
-import type { OrcadMigrationManifest } from '../../../shared/orcad-migration/orcad-migration-manifest'
-import { serializeOrcadMigrationValue } from '../../../shared/orcad-migration/orcad-migration-manifest'
+import {
+  type OrcadMigrationManifest,
+  serializeOrcadMigrationValue
+} from '../../../shared/orcad-migration/orcad-migration-manifest'
 import { requireOrcadMigrationSshSource } from '../../../shared/orcad-migration/orcad-migration-source-kind'
-import { parsePersistedAutomationHostFilter } from '../../../shared/automation-host-filter'
-import { hostStableKey } from '../../../shared/automation-owner-key'
+import { parsePersistedAutomationHostFilter } from '../../../shared/automations/ownership/automation-host-filter'
+import { hostStableKey } from '../../../shared/automations/ownership/automation-owner-key'
 import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
 import { composeWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
 import type { OrcadMigrationClientStatePayload } from '../../../shared/orcad-migration/orcad-migration-client-state'
@@ -10,7 +12,7 @@ import type { PersistedState } from '../../../shared/persisted-state-types'
 import {
   MAX_CLIENT_HOSTED_BROWSER_CLOSE_INTENTS,
   type ClientHostedBrowserCloseIntent
-} from '../../../shared/client-hosted-browser-close-intent'
+} from '../../../shared/workspace-session/client-hosted-browser-close-intent'
 import {
   createOrcadMigrationSourceScope,
   orcadMigrationOwnerMatchesScope,

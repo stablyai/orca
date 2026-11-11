@@ -1,5 +1,11 @@
 import type { RelayControlRequestTimeout } from './relay-control-requests'
 import { RELAY_RENEWAL_JITTER_RATIO } from './relay-renewal-jitter'
+import {
+  RELAY_CLIENT_KEEPALIVE_FRAME,
+  RelayKeepaliveAckMessageSchema,
+  RelayKeepaliveOfferMessageSchema,
+  RelayPingMessageSchema
+} from './relay-control-protocol'
 
 // STA-7672: request timeout may be relay load or half-open TCP; probe before inferring death.
 
@@ -19,6 +25,7 @@ type TeardownReason = 'probe-unanswered' | 'silence-limit'
 export type RelayControlLivenessOptions = {
   cellUrl: string
   ping: () => void
+  send?: (frame: string) => void
   isLive: () => boolean
   terminate: () => void
   random?: () => number
@@ -28,6 +35,8 @@ export class RelayControlLiveness {
   private readonly random: () => number
   private probe: { timer: ReturnType<typeof setInterval>; misses: number } | null = null
   private silenceTimer: ReturnType<typeof setInterval> | null = null
+  private keepaliveTimer: ReturnType<typeof setInterval> | null = null
+  private keepaliveSentAt = 0
   private openedAt = 0
   private lastInboundAt = 0
 
@@ -40,6 +49,12 @@ export class RelayControlLiveness {
     this.lastInboundAt = this.openedAt
     this.silenceTimer = setInterval(() => {
       if (Date.now() - this.lastInboundAt > SILENCE_LIMIT_MS) {
+        // Our own keepalive timer was held back too (a throttled app), so the silence says nothing
+        // about the link: send one now and judge on the next check.
+        if (this.keepaliveTimer && Date.now() - this.keepaliveSentAt > SILENCE_LIMIT_MS) {
+          this.sendKeepalive()
+          return
+        }
         this.tearDown('silence-limit')
       }
     }, SILENCE_CHECK_INTERVAL_MS)
@@ -56,10 +71,47 @@ export class RelayControlLiveness {
     this.clearProbe()
   }
 
+  /** Relay pings, the keepalive offer and its acks; the caller already counted them as inbound. */
+  handleLivenessMessage(message: Record<string, unknown>): boolean {
+    const ping = RelayPingMessageSchema.safeParse(message)
+    if (ping.success) {
+      this.options.send?.(JSON.stringify({ type: 'pong', t: ping.data.t }))
+      return true
+    }
+    const offer = RelayKeepaliveOfferMessageSchema.safeParse(message)
+    if (offer.success) {
+      this.startKeepalive(offer.data.intervalMs)
+      return true
+    }
+    return RelayKeepaliveAckMessageSchema.safeParse(message).success
+  }
+
+  // The relay offered the host-sent keepalive: its answer is an inbound frame, so it keeps the
+  // silence bound met without relay pings. Relays that never offer keep pinging as before.
+  startKeepalive(intervalMs: number): void {
+    if (this.keepaliveTimer || !this.silenceTimer || !this.options.send) {
+      return
+    }
+    this.keepaliveSentAt = Date.now()
+    this.keepaliveTimer = setInterval(() => this.sendKeepalive(), intervalMs)
+    this.keepaliveTimer.unref?.()
+  }
+
+  private sendKeepalive(): void {
+    if (this.options.isLive()) {
+      this.keepaliveSentAt = Date.now()
+      this.options.send?.(RELAY_CLIENT_KEEPALIVE_FRAME)
+    }
+  }
+
   stop(): void {
     if (this.silenceTimer) {
       clearInterval(this.silenceTimer)
       this.silenceTimer = null
+    }
+    if (this.keepaliveTimer) {
+      clearInterval(this.keepaliveTimer)
+      this.keepaliveTimer = null
     }
     this.clearProbe()
   }

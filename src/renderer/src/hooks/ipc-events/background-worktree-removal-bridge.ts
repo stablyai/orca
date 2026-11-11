@@ -1,6 +1,6 @@
 import type { Worktree } from '../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
-import { getDeleteStateForWorktreeHost } from '@/components/sidebar/worktree-delete-state-host-match'
+import { getDeleteStateForWorktreeHost } from '@/components/sidebar/workspace-actions/deletion/worktree-delete-state-host-match'
 import { useAppStore } from '../../store'
 import {
   UNFINISHED_WORKTREE_REMOVAL_ERROR,
@@ -9,7 +9,7 @@ import {
 import {
   selectDetectedWorktreesByRepo,
   selectWorktreesByRepo
-} from '@/store/workspace-record-selectors'
+} from '@/store/workspaces/catalog/workspace-record-fields'
 
 type HostMarkedRow = Pick<Worktree, 'id' | 'hostId'>
 type AppStoreApi = Pick<typeof useAppStore, 'getState' | 'setState'>

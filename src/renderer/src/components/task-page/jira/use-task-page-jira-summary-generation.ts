@@ -1,14 +1,18 @@
+import {
+  taskProviderErrorMessage,
+  taskProviderErrorText
+} from '@/lib/work-items/task-provider-error-copy'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
-import { isWebClientLocation } from '@/lib/web-client-location'
-import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
+import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import {
   generateRuntimeJiraIssueSummary,
   cancelRuntimeJiraIssueSummary
-} from '@/runtime/runtime-jira-summary-generation-client'
+} from '@/runtime/jira/runtime-jira-summary-generation-client'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import type { JiraIssueSummaryGenerationRequest } from '../../../../../shared/jira/jira-issue-summary-generation'
-import { getTaskSourceCacheScope } from '../../../../../shared/task-source-context'
+import { getTaskSourceCacheScope } from '../../../../../shared/work-items/task-source-context'
 import { translate } from '@/i18n/i18n'
 import type { TaskPageJiraIssueCreationModel } from './use-task-page-jira-issue-creation'
 
@@ -166,7 +170,7 @@ export function useTaskPageJiraSummaryGeneration<T extends SummaryGenerationMode
           setGenerationError({
             draftKey,
             message:
-              result.error ||
+              taskProviderErrorMessage(result) ||
               translate(
                 'components.jiraIssueTitleField.failed',
                 'Failed to generate a summary from the description.'
@@ -185,7 +189,7 @@ export function useTaskPageJiraSummaryGeneration<T extends SummaryGenerationMode
           draftKey,
           message:
             error instanceof Error
-              ? error.message
+              ? taskProviderErrorText(error.message)
               : translate(
                   'components.jiraIssueTitleField.failed',
                   'Failed to generate a summary from the description.'

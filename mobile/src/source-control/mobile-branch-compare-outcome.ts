@@ -1,6 +1,6 @@
-import type { RpcOperationSender } from '../transport/rpc-operation-sender'
-import type { RequestCurrency } from '../transport/generation-scoped-request-owner'
-import { refusedRpcMessageOrFallback } from '../transport/rpc-refusal-message'
+import { translate } from '../i18n/mobile-i18n'
+import type { UnvalidatedRpcRequestPort } from '../transport/rpc/unvalidated-rpc-request-port'
+import { refusedRpcMessageOrFallback } from '../transport/rpc/rpc-refusal-message'
 import {
   resolveMobileBranchBaseRefs,
   type MobileBranchBaseRefs,
@@ -9,7 +9,6 @@ import {
 import { gitBranchCompareRead } from './mobile-git-read-operations'
 import { isMobileGitUnavailableReply } from './mobile-git-status'
 import type { MobileGitBranchCompareReply } from './git-compare-reply-schema'
-import type { MobileBranchCompareState } from './mobile-source-control-screen-state'
 
 export type BranchCompareOutcome =
   | { readonly kind: 'ready'; readonly result: MobileGitBranchCompareReply }
@@ -21,22 +20,17 @@ export type BranchCompareAttempt = BranchCompareOutcome & {
   readonly effectiveBaseRef: string | null
 }
 
-// Return failures because callers void this load; null means superseded and publishes nothing.
+// Return failures because callers void this load.
 export async function readBranchCompareOutcome(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   worktreeId: string,
-  currency: RequestCurrency,
   compare?: MobileBranchCompareTarget
-): Promise<BranchCompareAttempt | null> {
+): Promise<BranchCompareAttempt> {
   let baseRefs: MobileBranchBaseRefs
   try {
     baseRefs = await resolveMobileBranchBaseRefs(client, worktreeId, compare)
   } catch (err) {
     return { ...failedCompare(err), effectiveBaseRef: null }
-  }
-  // Base resolution can outlive its scope; stop before sending a superseded compare request.
-  if (!currency.isCurrent()) {
-    return null
   }
   const [outcome, effectiveBaseRef] = await Promise.all([
     readCompare(client, worktreeId, baseRefs.compareBaseRef),
@@ -46,12 +40,18 @@ export async function readBranchCompareOutcome(
 }
 
 async function readCompare(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   worktreeId: string,
   baseRef: string | null
 ): Promise<BranchCompareOutcome> {
   if (!baseRef) {
-    return { kind: 'failed', message: 'Unable to resolve the base branch for comparison.' }
+    return {
+      kind: 'failed',
+      message: translate(
+        'sourceControl.branchCompareOutcome.baseBranchUnavailable',
+        'Unable to resolve the base branch for comparison.'
+      )
+    }
   }
   try {
     const reply = await gitBranchCompareRead.request(client, {
@@ -67,7 +67,13 @@ async function readCompare(
     } catch (error) {
       return {
         kind: 'failed',
-        message: refusedRpcMessageOrFallback(error, 'Unable to load committed changes')
+        message: refusedRpcMessageOrFallback(
+          error,
+          translate(
+            'sourceControl.branchCompareOutcome.loadFailed',
+            'Unable to load committed changes'
+          )
+        )
       }
     }
   } catch (err) {
@@ -78,23 +84,12 @@ async function readCompare(
 function failedCompare(err: unknown): BranchCompareOutcome {
   return {
     kind: 'failed',
-    message: err instanceof Error ? err.message : 'Unable to load committed changes'
+    message:
+      err instanceof Error
+        ? err.message
+        : translate(
+            'sourceControl.branchCompareOutcome.loadFailed',
+            'Unable to load committed changes'
+          )
   }
-}
-
-export function nextBranchCompareState(
-  outcome: BranchCompareOutcome,
-  previous: MobileBranchCompareState,
-  preserveReadyOnFailure: boolean
-): MobileBranchCompareState {
-  if (outcome.kind === 'ready') {
-    return { kind: 'ready', result: outcome.result }
-  }
-  // Clearing ready state to idle would claim No Changes despite retained branch commits.
-  if (preserveReadyOnFailure && previous.kind === 'ready') {
-    return previous
-  }
-  return outcome.kind === 'unavailable'
-    ? { kind: 'idle' }
-    : { kind: 'error', message: outcome.message }
 }

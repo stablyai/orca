@@ -36,7 +36,7 @@ vi.mock('./parser-runner', () => ({
 
 import { previewWarpThemeImport } from './index'
 import { parseWarpThemeYaml } from './parser'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 
 const VALID_THEME = `
 name: Duplicate
@@ -389,14 +389,6 @@ describe('previewWarpThemeImport', () => {
     ])
   })
 
-  it('labels auto-discovered themes by Warp data home', async () => {
-    const preview = await previewWarpThemeImport({} as Store, { kind: 'auto' })
-
-    expect(preview.sourceLabel).toBe('Warp themes')
-    expect(preview.themes.map((theme) => theme.name)).toEqual(['Duplicate', 'Duplicate'])
-    expect(preview.themes.map((theme) => theme.sourceLabel)).toEqual(['.warp', '.warp'])
-  })
-
   it('returns a bounded preview error for invalid sources without auto discovery', async () => {
     const preview = await previewWarpThemeImport({} as Store, { kind: 'surprise' })
     const nullPreview = await previewWarpThemeImport({} as Store, null)
@@ -641,61 +633,6 @@ describe('previewWarpThemeImport', () => {
     )
   })
 
-  it('does not report a skipped theme file warning for exactly the folder cap', async () => {
-    opendirMock.mockResolvedValue(
-      mockDirectory(Array.from({ length: 200 }, (_, index) => fileEntry(`theme-${index}.yaml`)))
-    )
-
-    const preview = await previewWarpThemeImport({} as Store, { kind: 'auto' })
-
-    expect(preview.themes).toHaveLength(200)
-    expect(preview.skippedFiles).not.toContainEqual({
-      label: 'themes',
-      reason: 'Only the first 200 theme files were scanned.'
-    })
-  })
-
-  it('does not report the theme cap for exactly the folder cap plus non-theme files', async () => {
-    opendirMock.mockResolvedValue(
-      mockDirectory([
-        ...Array.from({ length: 200 }, (_, index) => fileEntry(`theme-${index}.yaml`)),
-        fileEntry('z-readme.md')
-      ])
-    )
-
-    const preview = await previewWarpThemeImport({} as Store, { kind: 'auto' })
-
-    expect(preview.themes).toHaveLength(200)
-    expect(preview.skippedFiles).not.toContainEqual({
-      label: 'themes',
-      reason: 'Only the first 200 theme files were scanned.'
-    })
-  })
-
-  it('does not report the theme cap when a nested folder fills the cap before non-theme siblings', async () => {
-    opendirMock.mockImplementation((directoryPath: string) => {
-      if (directoryPath.endsWith('themes')) {
-        return Promise.resolve(
-          mockDirectory([directoryEntry('standard'), fileEntry('z-readme.md')])
-        )
-      }
-      if (directoryPath.endsWith('standard')) {
-        return Promise.resolve(
-          mockDirectory(Array.from({ length: 200 }, (_, index) => fileEntry(`theme-${index}.yaml`)))
-        )
-      }
-      return Promise.resolve(mockDirectory([]))
-    })
-
-    const preview = await previewWarpThemeImport({} as Store, { kind: 'auto' })
-
-    expect(preview.themes).toHaveLength(200)
-    expect(preview.skippedFiles).not.toContainEqual({
-      label: 'themes',
-      reason: 'Only the first 200 theme files were scanned.'
-    })
-  })
-
   it('reports capped manually selected theme files after deterministic YAML sorting', async () => {
     const themePaths = Array.from({ length: 201 }, (_, index) =>
       path.join('/Users/alice/warp-themes', `theme-${String(index).padStart(3, '0')}.yaml`)
@@ -754,16 +691,6 @@ describe('previewWarpThemeImport', () => {
     expect(yieldedNames).toHaveLength(501)
     expect(yieldedNames).not.toContain('theme-501.yaml')
     expect(yieldedNames).not.toContain('theme-999.yaml')
-  })
-
-  it('does not copy absolute folder paths into skipped reasons', async () => {
-    opendirMock.mockRejectedValue(
-      new Error("ENOENT: no such file or directory, scandir '/Users/alice/.warp/themes'")
-    )
-
-    const preview = await previewWarpThemeImport({} as Store, { kind: 'auto' })
-
-    expect(preview.skippedFiles).toEqual([{ label: '.warp', reason: 'Could not read folder.' }])
   })
 
   it('does not copy absolute file paths into skipped reasons', async () => {

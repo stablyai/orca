@@ -14,6 +14,7 @@ import {
   hasSameIdentity,
   hasSameSnapshot,
   inspectStableCommand,
+  isSameDirectoryEntry,
   isUnreadableSymlink,
   quarantineCommandPath,
   readEntrySnapshot,
@@ -22,7 +23,7 @@ import {
 } from './cli-command-filesystem-transaction'
 import { DEV_LAUNCHER_DIR, LEGACY_LINUX_COMMAND_NAME } from './cli-install-constants'
 import { buildWindowsForwarder } from './cli-dev-launcher'
-import { isPermissionError } from '../win32-utils'
+import { isPermissionError } from '../filesystem/permission-errors'
 import { isPathInsideOrEqual } from './cli-install-path-format'
 
 export class CliCommandInstallation extends CliCommandInspection {
@@ -31,6 +32,9 @@ export class CliCommandInstallation extends CliCommandInspection {
     const launcherPath = status.launcherPath
     if (!commandPath || !launcherPath || status.state === 'installed') {
       return
+    }
+    if (await isSameDirectoryEntry(commandPath, launcherPath)) {
+      throw new Error(`Refusing to register ${commandPath} as a link to itself.`)
     }
 
     const inspected = await this.inspectStableSymlink(commandPath, launcherPath)

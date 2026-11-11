@@ -1,5 +1,4 @@
 // Find minimal copied run-as-node Orca files for real ConPTY without install-dir handles; Windows packaged build required.
-// --selftest validates pure logic anywhere; see README.md.
 
 import { randomUUID } from 'node:crypto'
 import { existsSync, readFileSync, readdirSync, rmSync } from 'node:fs'
@@ -11,7 +10,6 @@ import { copyHost } from './host-copy.mjs'
 import { launchDaemonHost } from './daemon-launch.mjs'
 import { runPtyEcho } from './ndjson-client.mjs'
 import { assessDaemonHandles } from './loaded-module-probe.mjs'
-import { runSelftest } from './selftest.mjs'
 
 const HERE = import.meta.dirname
 const FALLBACK_PROTOCOL_VERSION = 18
@@ -273,14 +271,8 @@ async function main() {
     console.error(getUsage())
     return 2
   }
-  if (parsed.selftest) {
-    return runSelftest() ? 0 : 1
-  }
-
   if (process.platform !== 'win32') {
-    console.error(
-      'launch mode requires Windows (ConPTY + loaded-module probe). Use --selftest elsewhere.'
-    )
+    console.error('launch mode requires Windows (ConPTY + loaded-module probe).')
     return 2
   }
 

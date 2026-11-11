@@ -17,6 +17,7 @@ async function runTaskListBrief(): Promise<unknown> {
   vi.spyOn(client, 'call').mockImplementation(callMock)
   await ORCHESTRATION_HANDLERS['orchestration task-list']({
     flags: new Map<string, string | boolean>([
+      ['full', true],
       ['brief', true],
       ['run', 'run_1']
     ]),

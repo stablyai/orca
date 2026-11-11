@@ -6,11 +6,13 @@ import { getClients, isAuthError } from './client'
 import { PROJECT_TEAMS_QUERY } from './linear-project-graphql'
 import type { LinearRawVariables, ProjectTeamsResponse } from './linear-project-nodes'
 import { coalesce, normalizeConcreteWorkspaceId } from './linear-project-models'
+import { linearConnectionHasNextPage } from './issue-context/pagination'
 
 export async function listProjectTeams(
   projectId: string,
   workspaceId: LinearConcreteWorkspaceId,
-  force = false
+  force = false,
+  signal?: AbortSignal
 ): Promise<NonNullable<LinearProjectSummary['teams']>> {
   const id = projectId.trim()
   if (!id) {
@@ -21,15 +23,16 @@ export async function listProjectTeams(
   return coalesce(
     key,
     async () => {
-      const entry = getClients(concreteWorkspaceId)[0]
+      const entry = getClients(concreteWorkspaceId, signal)[0]
       if (!entry) {
         return []
       }
       const teams: NonNullable<LinearProjectSummary['teams']> = []
       let after: string | undefined
-      await acquire()
+      await acquire(signal)
       try {
         while (true) {
+          signal?.throwIfAborted()
           const result = await entry.client.client.rawRequest<
             ProjectTeamsResponse,
             LinearRawVariables
@@ -53,7 +56,7 @@ export async function listProjectTeams(
           )
           const nextCursor = connection?.pageInfo?.endCursor ?? undefined
           if (
-            !connection?.pageInfo?.hasNextPage ||
+            !linearConnectionHasNextPage(connection) ||
             !nextCursor ||
             nextCursor === after ||
             nodes.length === 0
@@ -72,6 +75,7 @@ export async function listProjectTeams(
         release()
       }
     },
-    force
+    force,
+    signal
   )
 }

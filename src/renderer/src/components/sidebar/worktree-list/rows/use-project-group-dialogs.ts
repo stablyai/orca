@@ -1,25 +1,31 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import { projectRemovalTargets } from '../../removal-unsaved-files'
+import { projectRemovalTargets } from '../../workspace-actions/deletion/removal-unsaved-files'
 import { confirmUnsavedDiscard } from '@/store/slices/worktrees/teardown/removed-workspace-unsaved-files'
 import { translate } from '@/i18n/i18n'
-import { selectProjectGroupRemovalTargets } from '@/store/slices/project-group-removal-targets'
+import { selectProjectGroupRemovalTargets } from '@/store/project-groups/project-group-removal-targets'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import {
   getRepoExecutionHostId,
   type ExecutionHostId
 } from '../../../../../../shared/execution-host'
+import { refreshFolderProjectGroup } from './project-group-folder-refresh'
 import {
   selectDetectedWorktreesByRepo,
   selectWorktreesByRepo
-} from '@/store/workspace-record-selectors'
+} from '@/store/workspaces/catalog/workspace-record-fields'
 
 export type ProjectGroupNameDialogState =
   | { type: 'create-from-repo'; repo: Repo }
   // hostId is the group row's owner host, so the mutation is not routed to whichever host has focus.
-  | { type: 'rename'; groupId: string; currentName: string; hostId?: ExecutionHostId }
+  | {
+      type: 'rename'
+      groupId: string
+      currentName: string
+      hostId?: ExecutionHostId
+    }
 
 export type ProjectGroupDeleteDialogState = {
   groupId: string
@@ -56,18 +62,16 @@ function reportProjectGroupDeleteFailures(result: {
         'Some projects could not be removed from Orca'
       ),
       {
-        description:
-          requestedCount === 1
-            ? translate(
-                'auto.components.sidebar.WorktreeList.groupProjectsRemainedSingular',
-                '{{remaining}} of {{count}} contained project remained after deleting the group.',
-                { remaining: result.failedProjectRemovals.length, count: requestedCount }
-              )
-            : translate(
-                'auto.components.sidebar.WorktreeList.groupProjectsRemainedPlural',
-                '{{remaining}} of {{count}} contained projects remained after deleting the group.',
-                { remaining: result.failedProjectRemovals.length, count: requestedCount }
-              )
+        description: translate(
+          'auto.components.sidebar.WorktreeList.groupProjectsRemained',
+          '{{remaining}} of {{count}} contained projects remained after deleting the group.',
+          {
+            remaining: result.failedProjectRemovals.length,
+            count: requestedCount,
+            defaultValue_one:
+              '{{remaining}} of {{count}} contained project remained after deleting the group.'
+          }
+        )
       }
     )
   }
@@ -85,6 +89,7 @@ export function useProjectGroupDialogs(args: {
   const deleteProjectGroupWithContainedProjects = useAppStore(
     (s) => s.deleteProjectGroupWithContainedProjects
   )
+  const refreshingGroupIds = useRef(new Set<string>())
   const [nameDialog, setNameDialog] = useState<ProjectGroupNameDialogState | null>(null)
   const [deleteDialog, setDeleteDialog] = useState<ProjectGroupDeleteDialogState | null>(null)
 
@@ -105,6 +110,45 @@ export function useProjectGroupDialogs(args: {
   const handleRemoveProjectFromGroup = useCallback(
     (repo: Repo) => {
       void moveProjectToGroup(repo, null)
+    },
+    [moveProjectToGroup]
+  )
+
+  const handleRefreshProjectGroup = useCallback(
+    async (group: ProjectGroup): Promise<void> => {
+      if (refreshingGroupIds.current.has(group.id)) {
+        return
+      }
+      refreshingGroupIds.current.add(group.id)
+      // Why: scans of large folders can take seconds; show progress so repeat clicks aren't silently ignored.
+      const loadingToastId = toast.loading(
+        translate(
+          'auto.components.sidebar.WorktreeList.projectGroupRefreshing',
+          'Refreshing {{group}}…',
+          { group: group.name }
+        )
+      )
+      try {
+        await refreshFolderProjectGroup(group, {
+          getRepos: () => useAppStore.getState().repos,
+          getProjectGroups: () => useAppStore.getState().projectGroups,
+          scanNestedRepos: useAppStore.getState().scanNestedRepos,
+          importNestedRepos: useAppStore.getState().importNestedRepos,
+          moveProjectToGroup
+        })
+      } catch (error) {
+        console.error('Failed to refresh project group:', error)
+        toast.error(
+          translate(
+            'auto.components.sidebar.WorktreeList.projectGroupRefreshScanFailed',
+            'Could not scan this project group'
+          ),
+          { description: error instanceof Error ? error.message : String(error) }
+        )
+      } finally {
+        toast.dismiss(loadingToastId)
+        refreshingGroupIds.current.delete(group.id)
+      }
     },
     [moveProjectToGroup]
   )
@@ -232,6 +276,7 @@ export function useProjectGroupDialogs(args: {
     handleCreateGroupFromRepo,
     handleMoveProjectToGroup,
     handleRemoveProjectFromGroup,
+    handleRefreshProjectGroup,
     handleRenameProjectGroup,
     handleSubmitProjectGroupName,
     handleDeleteProjectGroup,

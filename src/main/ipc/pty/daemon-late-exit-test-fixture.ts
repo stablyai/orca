@@ -5,7 +5,7 @@ import {
   createMockSubprocess,
   startDaemonAdapterHarness,
   waitFor
-} from '../../daemon/daemon-pty-adapter-test-harness'
+} from '../../daemon/providers/adapter/testing/daemon-pty-adapter-test-harness'
 import { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { setPtyHostBindings, type PtyIpcSurface } from './pty-host-bindings'
 import { consumeSyntheticKillExit, rememberSyntheticKillExit } from './delivery/exit'
@@ -19,7 +19,7 @@ import { finishPtyShutdown } from './provider/liveness'
 import { stopAndWaitPtyFromRuntimeController } from './runtime/kill'
 import type { PtyRuntimeControllerDeps } from './runtime/controller-deps'
 import { createPtyIpcSession } from './session'
-import type { DaemonPtyAdapter } from '../../daemon/daemon-pty-adapter'
+import type { DaemonPtyAdapter } from '../../daemon/providers/adapter/daemon-pty-adapter'
 
 const PTY_ID = 'repo::/tmp/late-exit-audit@@terminal'
 const TAB_ID = '00000000-0000-4000-8000-000000000001'

@@ -1,6 +1,6 @@
 // Report stored-to-next-save differences field by field using the disk-field tables.
 
-import type { WorkspaceSessionState } from '../workspace-session-state-types'
+import type { WorkspaceSessionState } from '../workspace-session/workspace-session-state-types'
 import type { DiskTable } from './workspace-layout-disk-fields'
 import { editorFileKey } from './workspace-layout-editor-tab-file'
 import { collectLayoutLeafIdsInOrder } from './terminal-pane-tree'
@@ -137,7 +137,7 @@ export function stableJson(value: unknown): string {
   return JSON.stringify(value, (_key, inner: unknown) =>
     inner && typeof inner === 'object' && !Array.isArray(inner)
       ? Object.fromEntries(
-          Object.entries(inner).sort(([left], [right]) => left.localeCompare(right))
+          Object.entries(inner).sort(([left], [right]) => left.localeCompare(right, 'en'))
         )
       : inner
   )

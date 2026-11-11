@@ -1,10 +1,13 @@
-import type { AgentMainAgentStatus, ParsedAgentStatusPayload } from '../../agent-status-types'
+import type { AgentMainAgentStatus } from '../../agent-status/lifecycle/main-agent-status'
+import type { ParsedAgentStatusPayload } from '../../agent-status/contracts/agent-status-types'
+import { isAskUserQuestionTool } from '../../agent-status/lifecycle/agent-question-answered-intent'
+import { CODEX_ASYNC_QUESTION_TOOL } from '../../codex-async-question-input'
 import {
   continueMainAgentStatus,
   foldAgentLeadStatus,
   mainAgentTurnInterrupted,
   type AgentLeadStatusResolution
-} from '../../agent-lead-status-fold'
+} from '../../agent-status/lifecycle/agent-lead-status-fold'
 import {
   codexRosterChildWorkLiveness,
   codexRosterToSnapshots,
@@ -17,7 +20,8 @@ import {
   hasTrackedCodexTranscriptSubagents,
   type CodexSubagentTranscriptState
 } from '../../codex-subagent-transcript'
-import type { CodexLeadTurnState, HookListenerState } from '../listener-state'
+import type { HookListenerState } from '../listener-state'
+import type { CodexLeadTurnState } from '../main-agent-turn-state'
 
 export function getOrCreateCodexSubagentRoster(
   state: HookListenerState,
@@ -159,26 +163,68 @@ export function markCodexLeadTurnInterrupted(state: HookListenerState, paneKey: 
   })
 }
 
+/** The root state a Codex hook event implies; auto-allowed request_user_input still blocks on PreToolUse (Codex 0.145+). */
+export function codexHookEventState(
+  eventName: unknown,
+  toolName: string | undefined
+): CodexLeadTurnState['state'] | undefined {
+  switch (eventName) {
+    case 'Stop':
+    case 'Interrupt':
+    case 'SessionStart':
+      return 'done'
+    case 'PermissionRequest':
+      return 'waiting'
+    case 'PreToolUse':
+      return isAskUserQuestionTool(toolName) ? 'waiting' : 'working'
+    case 'UserPromptSubmit':
+    case 'PostToolUse':
+      return 'working'
+    default:
+      return undefined
+  }
+}
+
 export function codexLeadStateForHookEvent(
   eventName: string | undefined,
-  normalizedState?: ParsedAgentStatusPayload['state']
+  normalizedState?: ParsedAgentStatusPayload['state'],
+  toolName?: string
 ): CodexLeadTurnState['state'] | undefined {
-  if (eventName === 'Stop' || eventName === 'Interrupt') {
-    return 'done'
-  }
-  if (eventName === 'PermissionRequest') {
-    // Preserve execution-host reviewer ownership; event names alone would turn every relayed approval into waiting.
-    return normalizedState === 'working' ? 'working' : 'waiting'
-  }
-  if (
-    eventName === 'SessionStart' ||
-    eventName === 'UserPromptSubmit' ||
-    eventName === 'PreToolUse' ||
-    eventName === 'PostToolUse'
-  ) {
+  // Preserve execution-host reviewer ownership; event names alone would turn every relayed approval into waiting.
+  if (eventName === 'PermissionRequest' && normalizedState === 'working') {
     return 'working'
   }
-  return undefined
+  // The execution host tracks Codex's async questions; its waiting outlasts the events around it.
+  if (normalizedState === 'waiting' && toolName === CODEX_ASYNC_QUESTION_TOOL) {
+    return 'waiting'
+  }
+  return codexHookEventState(eventName, toolName)
+}
+
+/** Which children an unlabelled relayed poll may retire by omitting them. */
+export type CodexRemoteRosterAuthority = {
+  /** Current relay connection session; a restarted guest rebuilds only part of its roster. */
+  relaySession: string
+  /** The relay shed the roster to fit a frame, so an absent list proves nothing. */
+  rosterShed: boolean
+}
+
+/** Retire children the current relay session listed but this poll no longer does. */
+function pruneCodexRosterFromRemotePoll(
+  roster: CodexSubagentRoster,
+  payload: ParsedAgentStatusPayload,
+  authority: CodexRemoteRosterAuthority
+): void {
+  // Aggregate done means the guest has no live children, even when its roster was shed.
+  if (!payload.subagents && authority.rosterShed && payload.state !== 'done') {
+    return
+  }
+  const listedIds = new Set(payload.subagents?.map((child) => child.id))
+  for (const [id, child] of roster) {
+    if (child.reportedBy === authority.relaySession && !listedIds.has(id)) {
+      roster.delete(id)
+    }
+  }
 }
 
 /** Why: relay restarts lose lead/roster state; merge child events into main's longer-lived cache. */
@@ -188,7 +234,8 @@ export function reconcileRemoteCodexState(
   eventName: string | undefined,
   agentId: string | undefined,
   payload: ParsedAgentStatusPayload,
-  previous: ParsedAgentStatusPayload | undefined
+  previous: ParsedAgentStatusPayload | undefined,
+  remoteRosterAuthority?: CodexRemoteRosterAuthority
 ): ParsedAgentStatusPayload {
   if (previous?.agentType === 'codex') {
     seedCodexStateFromSnapshot(state, paneKey, previous)
@@ -202,14 +249,18 @@ export function reconcileRemoteCodexState(
   }
   const roster = getOrCreateCodexSubagentRoster(state, paneKey)
   if (payload.subagents) {
-    seedCodexSubagentRoster(roster, payload.subagents)
+    seedCodexSubagentRoster(roster, payload.subagents, remoteRosterAuthority?.relaySession)
+  }
+  // Polls restate the last hook's child attribution, so agentId does not narrow the guest's roster.
+  if (!eventName && payload.mainAgent && remoteRosterAuthority) {
+    pruneCodexRosterFromRemotePoll(roster, payload, remoteRosterAuthority)
   }
   if (agentId) {
     if (eventName === 'SubagentStop') {
       finishCodexSubagent(roster, agentId)
     }
   } else {
-    const leadState = codexLeadStateForHookEvent(eventName, payload.state)
+    const leadState = codexLeadStateForHookEvent(eventName, payload.state, payload.toolName)
     if (eventName === 'SessionStart' || (eventName === 'Stop' && !payload.subagents)) {
       roster.clear()
     }
@@ -218,16 +269,15 @@ export function reconcileRemoteCodexState(
       setCodexMainAgentTurnState(state, paneKey, {
         state: leadState,
         ...codexLeadOutcomeForEvent(eventName, previousLead, leadState),
+        ...(eventName === 'UserPromptSubmit' && payload.mainAgent?.state === 'working'
+          ? { stateStartedAt: payload.mainAgent.stateStartedAt }
+          : {}),
         model: payload.model ?? previousLead?.model
       })
     }
   }
 
   if (!eventName && !agentId && payload.mainAgent && payload.mainAgent.state !== 'blocked') {
-    if (payload.mainAgent.state === 'done' && !payload.subagents) {
-      // Why: an unlabelled host turn end (failed or cancelled) reporting no children has none left.
-      roster.clear()
-    }
     setCodexMainAgentTurnState(state, paneKey, {
       ...payload.mainAgent,
       state: payload.mainAgent.state,

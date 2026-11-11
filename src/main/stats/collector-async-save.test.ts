@@ -1,4 +1,4 @@
-import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import type * as FsPromises from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -123,43 +123,49 @@ describe('StatsCollector async debounced save', () => {
     expect(JSON.parse(readFileSync(statsPath(), 'utf-8')).aggregates.totalAgentsSpawned).toBe(5)
   })
 
-  it('bounds retained events while a stalled write prevents serialization', async () => {
+  it('persists aggregates without raw events and compacts a legacy event log', async () => {
     vi.useFakeTimers()
+    const legacyEvents = Array.from({ length: 10_000 }, (_, index) => ({
+      type: 'agent_start',
+      at: index,
+      worktreeId: 'repo::/Users/someone/workspaces/feature',
+      meta: { sessionKey: 'tab:leaf' }
+    }))
+    writeFileSync(
+      statsPath(),
+      JSON.stringify({
+        schemaVersion: 1,
+        events: legacyEvents,
+        aggregates: {
+          totalAgentsSpawned: 7,
+          totalPRsCreated: 0,
+          totalAgentTimeMs: 0,
+          countedPRs: [],
+          firstEventAt: 0
+        }
+      })
+    )
     const { StatsCollector, initStatsPath } = await importCollector()
     initStatsPath(userDataDir)
     const collector = new StatsCollector()
 
-    gate.blocked = true
-    collector.record({ type: 'agent_start', at: 0 })
     await vi.advanceTimersByTimeAsync(5_000)
-    await vi.waitFor(() => expect(gate.writeFileCalls).toBe(1))
+    await vi.waitFor(() =>
+      expect(JSON.parse(readFileSync(statsPath(), 'utf-8')).events).toEqual([])
+    )
 
-    const expectedEvents = Array.from({ length: 10_000 }, (_, index) => ({
-      type: 'agent_start',
-      at: index + 10_001
-    }))
-    try {
-      for (let at = 1; at <= 20_000; at += 1) {
-        collector.record({ type: 'agent_start', at })
-        if (at % 5_000 === 0) {
-          await vi.advanceTimersByTimeAsync(5_000)
-          expect(collector['events'].length).toBeLessThanOrEqual(10_000)
-        }
-      }
-      expect(gate.writeFileCalls).toBe(1)
-      expect(collector['events']).toEqual(expectedEvents)
-    } finally {
-      const flushed = collector.flushAsync()
-      gate.blocked = false
-      gate.waiters.splice(0).forEach((resolve) => resolve())
-      await flushed
+    for (let at = 1; at <= 100; at += 1) {
+      collector.onAgentStart(`pane-${at}`, at, undefined, 'repo::/Users/someone/workspaces/feature')
+      collector.onAgentStop(`pane-${at}`, at + 10)
     }
+    await collector.flushAsync()
 
-    const persisted = JSON.parse(readFileSync(statsPath(), 'utf-8'))
-    expect(persisted.events).toEqual(expectedEvents)
-    expect(persisted.aggregates).toMatchObject({
-      totalAgentsSpawned: 20_001,
-      firstEventAt: 0
+    const raw = readFileSync(statsPath(), 'utf-8')
+    expect(raw.length).toBeLessThan(1_000)
+    expect(JSON.parse(raw)).toMatchObject({
+      schemaVersion: 1,
+      events: [],
+      aggregates: { totalAgentsSpawned: 107, totalAgentTimeMs: 1_000, firstEventAt: 0 }
     })
   })
 

@@ -1,5 +1,5 @@
 import { setTimeout } from 'node:timers/promises'
-import type { RuntimeUploadFileStreamRequest } from '../../shared/runtime-upload-staging-contract'
+import type { RuntimeUploadFileStreamRequest } from '../../shared/file-import/runtime-upload-staging-contract'
 import { callRuntimeEnvironment } from './runtime-environments/runtime-environment-transport-routing'
 
 const RUNTIME_UPLOAD_SWEEP_ATTEMPTS = 2

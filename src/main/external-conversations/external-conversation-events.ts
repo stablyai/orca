@@ -1,24 +1,24 @@
-import type { AgentPaneChange } from '../agent-hooks/agent-transition-detector'
-import { agentMainAgentVerdict } from '../../shared/agent-main-agent-verdict'
-import type { PendingPrompt } from '../../shared/agent-pending-prompt'
-import type { AgentStatusIpcPayload } from '../../shared/agent-status-ipc-payload'
-import { hookRowAgentPhase } from '../../shared/agent-transitions'
-import type { AgentTurnOutcome } from '../../shared/agent-turn-outcome'
+import type { AgentPaneChange } from '../agent-hooks/observations/agent-transition-detector'
+import { agentMainAgentVerdict } from '../../shared/agent-status/lifecycle/agent-main-agent-verdict'
+import type { PendingPrompt } from '../../shared/agent-status/contracts/agent-pending-prompt'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
+import { hookRowAgentPhase } from '../../shared/agent-status/lifecycle/agent-transitions'
+import type { AgentTurnOutcome } from '../../shared/agent-status/lifecycle/agent-turn-outcome'
 import type {
   ConnectorAgent,
   ExternalConversationLink
 } from '../../shared/external-conversation-link'
-import { judgeIdleAgentTurn } from '../agent-turn-idle-verdict'
+import { judgeIdleAgentTurn } from '../runtime/agent-state-rules/agent-turn-idle-verdict'
 import {
   TerminalAgentTurnNews,
   type TerminalAgentTurnNewsItem
-} from '../runtime/terminal-agent-turn-news'
+} from '../runtime/push/notifications/terminal-agent-turn-news'
 import {
   allLinks,
   type ExternalConversationLinkStore,
   type LinkedConversation
 } from './external-conversation-links'
-import type { AgentPromptExpectedBinding } from '../runtime/runtime-terminal-contracts'
+import type { AgentPromptExpectedBinding } from '../runtime/terminal/input/agent-prompt-write-options'
 import { sameBinding } from './external-conversation-send'
 import { workingStampedTurn } from './external-conversation-turn-id'
 import type { ConversationKey } from './external-conversation-types'
@@ -98,7 +98,8 @@ export class ConversationEvents {
         deliver: (item) => this.told(item),
         setTimer: (run, delayMs) => this.deps.setTimer(run, delayMs),
         started: (item) => this.started(item),
-        stopped: (item) => this.ended(item, agentMainAgentVerdict(item.row))
+        stopped: (item) => this.ended(item, agentMainAgentVerdict(item.row)),
+        everyLeadTurn: true
       })
       const unsubscribe = this.deps.onAgentPaneChange((change) => {
         this.settleRejected(change.paneKey)

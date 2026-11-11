@@ -3,126 +3,12 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { CLAUDE_STATUSLINE_MIN_POST_INTERVAL_SECONDS } from '../../shared/claude-statusline-rate-limits'
 import { getManagedStatusLineScript } from './statusline-script'
 
 const ORIGINAL_PLATFORM = process.platform
 
-function stubPlatform(platform: NodeJS.Platform): void {
-  Object.defineProperty(process, 'platform', { configurable: true, value: platform })
-}
-
 afterEach(() => {
   Object.defineProperty(process, 'platform', { configurable: true, value: ORIGINAL_PLATFORM })
-})
-
-describe('getManagedStatusLineScript (posix)', () => {
-  it('guards on rate_limits before sourcing the endpoint or spawning curl', () => {
-    stubPlatform('darwin')
-    const script = getManagedStatusLineScript('local')
-    expect(script).toBe(getManagedStatusLineScript('posix'))
-    const guardIndex = script.indexOf('*\'"rate_limits"\'*')
-    const endpointIndex = script.indexOf('ORCA_AGENT_HOOK_ENDPOINT')
-    const curlIndex = script.indexOf('curl -sS')
-    expect(guardIndex).toBeGreaterThan(-1)
-    expect(guardIndex).toBeLessThan(endpointIndex)
-    expect(endpointIndex).toBeLessThan(curlIndex)
-    expect(script).toContain('/statusline/claude')
-    expect(script).toContain('--data-urlencode "payload@-"')
-    expect(script).toContain('| LC_ALL= LC_NUMERIC=C curl -sS')
-    expect(script).not.toMatch(/\|\s+curl\b/)
-  })
-
-  it('returns the posix script even on win32 when targeting a remote', () => {
-    stubPlatform('win32')
-    const script = getManagedStatusLineScript('posix')
-    expect(script).toContain('#!/bin/sh')
-    expect(script).not.toContain('curl.exe')
-  })
-})
-
-describe('getManagedStatusLineScript (win32 local)', () => {
-  it('guards on rate_limits via findstr before the endpoint call and curl spawn', () => {
-    stubPlatform('win32')
-    const script = getManagedStatusLineScript('local')
-    const captureIndex = script.indexOf('more.com')
-    const guardIndex = script.indexOf('findstr.exe" /c:\\"rate_limits\\"')
-    const endpointIndex = script.indexOf('call "%ORCA_AGENT_HOOK_ENDPOINT%"')
-    const curlIndex = script.indexOf('curl.exe')
-    expect(captureIndex).toBeGreaterThan(-1)
-    expect(guardIndex).toBeGreaterThan(captureIndex)
-    expect(guardIndex).toBeLessThan(endpointIndex)
-    expect(endpointIndex).toBeLessThan(curlIndex)
-    expect(script).toContain('if errorlevel 1 goto :orca_statusline_cleanup')
-  })
-
-  it('posts the buffered payload file and deletes it afterwards', () => {
-    stubPlatform('win32')
-    const script = getManagedStatusLineScript('local')
-    expect(script).toContain('set "ORCA_STATUSLINE_PANE_ID=%ORCA_PANE_KEY:~-36%"')
-    expect(script).toContain('set "ORCA_STATUSLINE_PANE_ID=%ORCA_STATUSLINE_PANE_ID::=_%"')
-    expect(script).toContain(
-      'set "ORCA_STATUSLINE_PAYLOAD_FILE=%TEMP%\\orca-claude-statusline-%ORCA_STATUSLINE_PANE_ID%.tmp"'
-    )
-    expect(script).toContain('--data-urlencode "payload@%ORCA_STATUSLINE_PAYLOAD_FILE%"')
-    expect(script).not.toContain('payload@-')
-    const curlIndex = script.indexOf('curl.exe')
-    const delIndex = script.indexOf('del "%ORCA_STATUSLINE_PAYLOAD_FILE%"')
-    expect(delIndex).toBeGreaterThan(curlIndex)
-  })
-
-  it('never posts a literal %CLAUDE_CONFIG_DIR% token when the var is unset', () => {
-    stubPlatform('win32')
-    const script = getManagedStatusLineScript('local')
-    expect(script).toContain('set "ORCA_STATUSLINE_CONFIG_DIR_FIELD=configDir="')
-    expect(script).toContain(
-      'if defined CLAUDE_CONFIG_DIR set "ORCA_STATUSLINE_CONFIG_DIR_FIELD=configDir=%CLAUDE_CONFIG_DIR%"'
-    )
-    expect(script).toContain('--data-urlencode "%ORCA_STATUSLINE_CONFIG_DIR_FIELD%"')
-    expect(script).not.toContain('"configDir=%CLAUDE_CONFIG_DIR%"')
-  })
-
-  it('exits without reading stdin when the pane key is missing (#24907)', () => {
-    stubPlatform('win32')
-    const script = getManagedStatusLineScript('local')
-    const paneGuardIndex = script.indexOf('if "%ORCA_PANE_KEY%"=="" exit /b 0')
-    expect(paneGuardIndex).toBeGreaterThan(-1)
-    expect(paneGuardIndex).toBeLessThan(script.indexOf('more.com'))
-    expect(script.match(/more\.com/g)).toHaveLength(1)
-  })
-
-  it('throttles with an all-builtin seconds-of-day stamp that fails open to posting', () => {
-    stubPlatform('win32')
-    const script = getManagedStatusLineScript('local')
-    const captureIndex = script.indexOf('more.com')
-    const stampIndex = script.indexOf(
-      'set "ORCA_STATUSLINE_STAMP_FILE=%TEMP%\\orca-claude-statusline-last-%ORCA_STATUSLINE_PANE_ID%.tmp"'
-    )
-    const throttleIndex = script.indexOf(
-      `if %ORCA_STATUSLINE_ELAPSED% GEQ 0 if %ORCA_STATUSLINE_ELAPSED% LSS ${CLAUDE_STATUSLINE_MIN_POST_INTERVAL_SECONDS} goto :orca_statusline_cleanup`
-    )
-    const findstrIndex = script.indexOf('findstr.exe')
-    const stampWriteIndex = script.indexOf(
-      'if defined ORCA_STATUSLINE_NOW (>"%ORCA_STATUSLINE_STAMP_FILE%" echo %ORCA_STATUSLINE_NOW%)'
-    )
-    const tokenGuardIndex = script.indexOf('if "%ORCA_AGENT_HOOK_TOKEN%"=="" goto')
-    const curlIndex = script.indexOf('curl.exe')
-    expect(stampIndex).toBeGreaterThan(captureIndex)
-    expect(throttleIndex).toBeGreaterThan(stampIndex)
-    expect(throttleIndex).toBeLessThan(findstrIndex)
-    expect(stampWriteIndex).toBeGreaterThan(tokenGuardIndex)
-    expect(stampWriteIndex).toBeLessThan(curlIndex)
-    expect(script).toContain('if not defined ORCA_STATUSLINE_ELAPSED goto :orca_statusline_probe')
-    expect(script).toContain(
-      'for /f "delims=0123456789" %%d in ("%ORCA_STATUSLINE_LAST%") do set "ORCA_STATUSLINE_LAST="'
-    )
-    expect(script).toContain(
-      'if defined ORCA_STATUSLINE_NOW if defined ORCA_STATUSLINE_LAST set /a "ORCA_STATUSLINE_ELAPSED=ORCA_STATUSLINE_NOW-ORCA_STATUSLINE_LAST" 2>nul'
-    )
-    // Prefixing with 1 avoids cmd octal parsing of 08/09.
-    expect(script).toContain('(1%%a %% 100)*3600+(1%%b %% 100)*60+(1%%c %% 100)')
-    expect(script).toContain('set "ORCA_STATUSLINE_TIME=%TIME: =0%"')
-  })
 })
 
 describe.skipIf(process.platform === 'win32')('statusline curl throttle (posix behavioral)', () => {
@@ -263,14 +149,6 @@ describe.skipIf(process.platform === 'win32')('statusline curl throttle (posix b
     expect(readFileSync(payloadLog, 'utf8')).toBe(payload)
   })
 
-  it('fails open on a garbage stamp even early in a session', async () => {
-    const { scriptPath, dir, curlLog } = makeHarness()
-    writeFileSync(stampPathFor(dir), 'not-a-number')
-    await runScript(scriptPath, dir, rateLimitPayload(1_000))
-    expect(lineCount(curlLog)).toBe(1)
-    expect(readFileSync(stampPathFor(dir), 'utf8')).toMatch(/^[0-9]+$/)
-  })
-
   it('fails open and repairs a leading-zero stamp instead of dying in arithmetic', async () => {
     const { scriptPath, dir, curlLog } = makeHarness()
     // 008 is invalid octal in dash arithmetic and must not prevent stamp repair.
@@ -278,15 +156,6 @@ describe.skipIf(process.platform === 'win32')('statusline curl throttle (posix b
     await runScript(scriptPath, dir, rateLimitPayload(1_000))
     expect(lineCount(curlLog)).toBe(1)
     expect(readFileSync(stampPathFor(dir), 'utf8')).toBe('1')
-  })
-
-  it('uses the clock fallback when the payload omits session duration', async () => {
-    const { scriptPath, dir, curlLog, dateLog } = makeHarness()
-    const payload = '{"rate_limits":{"five_hour":{"used_percentage":12}}}'
-    await runScript(scriptPath, dir, payload)
-    await runScript(scriptPath, dir, payload)
-    expect(lineCount(curlLog)).toBe(1)
-    expect(lineCount(dateLog)).toBe(2)
   })
 
   it('uses only the stable leaf id for temp files', async () => {

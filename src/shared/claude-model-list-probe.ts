@@ -1,5 +1,6 @@
 import { claudeBackgroundArgs } from './claude-background-run-isolation'
-import { assertJsonTextStructureWithinLimits } from './json-text-structure-limit'
+import { assertJsonTextStructureWithinLimits } from './json-stream/json-text-structure-limit'
+import { labelFromModelId } from './model-id-label'
 
 // claude models starts chat; list_models over --print stream-json reads the picker without an API turn. Older CLIs return error with exit 0; keep seed models.
 export const CLAUDE_MODEL_LIST_STDIN = `${JSON.stringify({
@@ -26,6 +27,11 @@ export function buildClaudeModelListArgs(
 
 export const CLAUDE_MODEL_LIST_ARGS = buildClaudeModelListArgs()
 
+/** A listed row keyed by the model it runs is named by that id, without its release date. */
+export function claudeListedModelLabel(modelId: string): string {
+  return labelFromModelId(modelId.replace(/-\d{8}(?=$|\[)/, ''))
+}
+
 export type ClaudeListedModel = {
   /** Value the CLI accepts for `--model` and `/model` (e.g. `opus[1m]`). */
   id: string
@@ -40,6 +46,8 @@ export type ClaudeListedModel = {
   supportsAutoMode?: boolean
   /** Runs what the CLI's `default` row resolves to: what a chat that names no model runs. */
   isDefault?: true
+  /** The versioned model the row runs, when the CLI names one. */
+  resolvedModel?: string
 }
 
 const CLAUDE_MODEL_LIST_JSON_LIMITS = {
@@ -123,18 +131,36 @@ export function parseClaudeModelList(stdout: string): ClaudeListedModel[] {
     if (!Array.isArray(models)) {
       continue
     }
-    const seen = new Set<string>()
-    const listed: ClaudeListedModel[] = []
+    // Key rows by the versioned model they run, like the native-chat listing, so
+    // a remembered model matches here; an alias no row is keyed by stays listed.
+    const rows = models.filter((entry) => valueOf(entry) !== 'default')
     const defaultRuns = resolvedModelOf(models.find((entry) => valueOf(entry) === 'default'))
-    for (const entry of models) {
+    const listed: ClaudeListedModel[] = []
+    for (const entry of [...rows, ...models.filter((entry) => !rows.includes(entry))]) {
       const model = toListedModel(entry)
-      // Mark the real model resolved by default; do not publish a duplicate default row.
-      if (!model || model.id === 'default' || seen.has(model.id)) {
+      const resolved = resolvedModelOf(entry)
+      const id = resolved ?? model?.id
+      if (!model || !id || id === 'default' || listed.some((row) => row.id === id)) {
         continue
       }
-      seen.add(model.id)
-      const runsDefault = defaultRuns !== null && resolvedModelOf(entry) === defaultRuns
-      listed.push(runsDefault ? { ...model, isDefault: true } : model)
+      listed.push({
+        ...model,
+        id,
+        ...(resolved ? { resolvedModel: resolved } : {}),
+        ...(resolved && resolved !== model.id ? { label: claudeListedModelLabel(resolved) } : {}),
+        ...(defaultRuns !== null && id === defaultRuns ? { isDefault: true as const } : {})
+      })
+    }
+    for (const entry of rows) {
+      const model = toListedModel(entry)
+      const resolved = resolvedModelOf(entry)
+      if (model && !listed.some((row) => row.id === model.id)) {
+        listed.push({
+          ...model,
+          label: `${model.label} alias`,
+          ...(resolved ? { resolvedModel: resolved } : {})
+        })
+      }
     }
     if (listed.length > 0) {
       return listed

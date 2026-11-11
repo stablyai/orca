@@ -4,18 +4,19 @@ import { orcadAgentBrowserNativeName } from '../../../shared/orcad-agent-browser
 import type { NodeRuntimeTarget } from '../../../shared/node-runtime-pin'
 import { ensureRemoteOrcadNodeRuntime } from './orcad-remote-node-runtime'
 import { recordedRemoteNodeRuntimeProbeCommand } from './orcad-remote-node-runtime-recorded-probe'
+import { cachedOrcadSlotInstalled } from './orcad-remote-install-cached-probe'
 import {
   execCommand,
   isUnconfirmedSshCommandTermination
 } from '../../ssh/remote-exec/remote-exec-command'
-import { quotePosixShell } from '../../../shared/shell-argument-quoting'
-import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
-import { joinRemotePath, type RemoteHostPlatform } from '../../ssh/ssh-remote-platform'
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
+import type { OrcadHostTransport } from './orcad-host-transport'
+import { joinRemotePath, type RemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'
 import { ORCAD_INSTALL_MODEL } from './remote-install-model'
 import { acquireInstallLock } from './remote-install-lock'
 import { ORCAD_FENCE_OWNER_FILENAME } from '../activation/orcad-activation-fence-scope'
-import { forgetHeldOrcadFence, rememberHeldOrcadFence } from '../../ssh/orcad-held-fence-tokens'
-import { exitedOwnLockProof } from '../../ssh/orcad-exited-own-lock'
+import { forgetHeldOrcadFence, rememberHeldOrcadFence } from '../activation/orcad-held-fence-tokens'
+import { exitedOwnLockProof } from '../activation/orcad-exited-own-lock'
 import { orcadWindowsBaseDir } from './orcad-remote-windows-node'
 import { uploadRemoteInstallDirectory, writeRemoteInstallFile } from './remote-install-transfers'
 import {
@@ -34,13 +35,18 @@ export async function installOrcadBundle(
     nodeRuntimeArchive: () => Promise<string>
     /** Offline archive location named when downloads fail. */
     nodeRuntimeOfflineArchivePath?: string
+    /** Per-source connect budget for the host's own download fallback. */
+    nodeRuntimeHostConnectTimeoutSeconds?: number
     /** WSL opt-in: reuse a matching stat signature previously hashed to this pin. */
     recordedNodeRuntimeProbe?: boolean
     signal?: AbortSignal
   },
   fullVersion: string,
   remoteDir: string
-): Promise<void> {
+): Promise<'uploaded' | 'reused'> {
+  if (options.recordedNodeRuntimeProbe && (await cachedOrcadSlotInstalled(options, remoteDir))) {
+    return 'reused'
+  }
   // Existing slot bytes are unusable without their referenced runtime.
   await ensureRemoteOrcadNodeRuntime({
     conn: options.conn,
@@ -49,6 +55,7 @@ export async function installOrcadBundle(
     target: options.target,
     archivePath: options.nodeRuntimeArchive,
     offlineArchivePath: options.nodeRuntimeOfflineArchivePath,
+    hostConnectTimeoutSeconds: options.nodeRuntimeHostConnectTimeoutSeconds,
     signal: options.signal,
     ...(options.recordedNodeRuntimeProbe
       ? { posixProbeCommand: recordedRemoteNodeRuntimeProbeCommand }
@@ -59,7 +66,7 @@ export async function installOrcadBundle(
       signal: options.signal
     })
   ) {
-    return
+    return 'reused'
   }
   // Persist the token so a relaunch can prove ownership of an interrupted upload lock.
   const token = randomUUID()
@@ -88,7 +95,7 @@ export async function installOrcadBundle(
         signal: options.signal
       })
     ) {
-      return
+      return 'reused'
     }
     await uploadRemoteInstallDirectory(
       options.conn,
@@ -120,6 +127,7 @@ export async function installOrcadBundle(
       signal: options.signal,
       releaseLock: false
     })
+    return 'uploaded'
   } catch (error) {
     preserveInstallLock = isUnconfirmedSshCommandTermination(error)
     throw error

@@ -7,6 +7,9 @@ import {
   type GitHubApiRepository
 } from './github-api-repository'
 import { acquire, classifyGhError, ghExecFileAsync, release } from './gh-utils'
+import { codeHostFailure, combinedClassifiedFailure } from '../../shared/code-host-failure-copy'
+import type { ClassifiedError } from '../../shared/classified-error'
+import { githubBodyImageUrls, githubBodyMediaHeaders } from './body-image-urls'
 
 export async function updateIssue(
   repoPath: string,
@@ -16,7 +19,7 @@ export async function updateIssue(
   localGitOptions: LocalGitExecOptions = {},
   preference?: IssueSourcePreference,
   ownerRepoOverride?: GitHubApiRepository | null
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<{ ok: true; bodyImageUrls?: Record<string, string> } | { ok: false; error: string }> {
   const { ownerRepo, ghOptions } = await resolveGitHubRepoExecution(
     repoPath,
     ownerRepoOverride ??
@@ -33,11 +36,12 @@ export async function updateIssue(
     localGitOptions
   )
   if (!ownerRepo) {
-    return { ok: false, error: 'Could not resolve GitHub owner/repo for this repository' }
+    return codeHostFailure('github.repoUnresolved')
   }
 
   const repo = `${ownerRepo.owner}/${ownerRepo.repo}`
-  const errors: string[] = []
+  const errors: ClassifiedError[] = []
+  let bodyImageUrls: Record<string, string> | undefined
 
   if (updates.state) {
     await acquire()
@@ -58,7 +62,7 @@ export async function updateIssue(
     } catch (err) {
       // Why: gh exits 0 when the issue is already in the target state, so any failure is real.
       const stderr = err instanceof Error ? err.message : String(err)
-      errors.push(classifyGhError(stderr).message)
+      errors.push(classifyGhError(stderr))
     } finally {
       release()
     }
@@ -67,20 +71,29 @@ export async function updateIssue(
   if (updates.body !== undefined) {
     await acquire()
     try {
-      await ghExecFileAsync(
+      const { stdout } = await ghExecFileAsync(
         [
           'api',
           '-X',
           'PATCH',
           `repos/${ownerRepo.owner}/${ownerRepo.repo}/issues/${issueNumber}`,
+          ...githubBodyMediaHeaders(updates.body),
           '--input',
           '-'
         ],
         { ...ghOptions, stdin: JSON.stringify({ body: updates.body }) }
       )
+      try {
+        const response: { body?: string; body_html?: string } = JSON.parse(stdout)
+        if (response?.body === updates.body) {
+          bodyImageUrls = githubBodyImageUrls(response.body, response.body_html)
+        }
+      } catch {
+        // Optional display data cannot turn an accepted edit into a failed write.
+      }
     } catch (err) {
       const stderr = err instanceof Error ? err.message : String(err)
-      errors.push(classifyGhError(stderr).message)
+      errors.push(classifyGhError(stderr))
     } finally {
       release()
     }
@@ -116,14 +129,14 @@ export async function updateIssue(
       await ghExecFileAsync(editArgs, ghOptions)
     } catch (err) {
       const stderr = err instanceof Error ? err.message : String(err)
-      errors.push(classifyGhError(stderr).message)
+      errors.push(classifyGhError(stderr))
     } finally {
       release()
     }
   }
 
   if (errors.length > 0) {
-    return { ok: false, error: errors.join('; ') }
+    return combinedClassifiedFailure(errors)
   }
-  return { ok: true }
+  return { ok: true, bodyImageUrls }
 }

@@ -1,0 +1,81 @@
+// @vitest-environment happy-dom
+
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
+import { createStructuredAgentSessionLaunchIntent } from '@/lib/agent-session/launch/structured-agent-session-launch-intent'
+import { StructuredAgentSessionCreateUnknownOutcomeError } from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
+import { launchAndReconcile } from '@/lib/agent-session/launch/structured-agent-session-launch-recovery'
+
+const calls = vi.hoisted(() => ({
+  log: new Array<string>(),
+  createSupportAnswers: new Array<'supported' | 'offline'>()
+}))
+
+function offline(): RuntimeRpcCallError {
+  return new RuntimeRpcCallError({
+    id: '1',
+    ok: false,
+    error: { code: 'runtime_unavailable', message: 'connection lost' }
+  })
+}
+
+vi.mock('../../../runtime/native-chat/requests/structured-agent-session-call', () => ({
+  callStructuredAgentSession: vi.fn(async (_target: unknown, method: string) => {
+    calls.log.push(method)
+    if (method === 'agentSession.createSupport') {
+      if (calls.createSupportAnswers.shift() === 'supported') {
+        return { supported: true }
+      }
+      throw offline()
+    }
+    // The create was sent and its reply lost when the connection dropped: the host may hold it.
+    throw offline()
+  })
+}))
+vi.mock('@/runtime/native-chat/host-capabilities/structured-chat-host-permission', () => ({
+  readStructuredChatHostPermissionVerdict: async () => ({ kind: 'allowed' })
+}))
+vi.mock('@/runtime/native-chat/tab-inventory/structured-session-tab-inventory', () => ({
+  readStructuredSessionTabInventory: vi.fn(async () => {
+    calls.log.push('inventory')
+    throw new Error('host offline')
+  })
+}))
+
+function launchState(executionHostId: 'local' | 'runtime:server-1') {
+  return {
+    intent: createStructuredAgentSessionLaunchIntent('wt-1', 'claude', executionHostId),
+    promise: Promise.resolve({ sessionId: '', fence: 0 }),
+    visibilityUnknown: false,
+    cancelled: false
+  }
+}
+
+beforeEach(() => {
+  calls.log.splice(0)
+  calls.createSupportAnswers.splice(0)
+})
+
+// Outage proves no refusal; retain unconfirmed state/prompt for Retry instead of forgetting the launch.
+describe('a structured launch whose host stops answering', () => {
+  it('stays unconfirmed when the reply to a sent create is lost and the retry cannot reach it', async () => {
+    calls.createSupportAnswers.push('supported', 'offline')
+    const state = launchState('runtime:server-1')
+
+    const error = await launchAndReconcile(state).catch((caught: unknown) => caught)
+
+    expect(calls.log).toContain('agentSession.create')
+    expect(error).toBeInstanceOf(StructuredAgentSessionCreateUnknownOutcomeError)
+    expect(state.visibilityUnknown).toBe(true)
+  })
+
+  it('stays unconfirmed when this machine briefly cannot answer the probe', async () => {
+    calls.createSupportAnswers.push('offline', 'offline')
+    const state = launchState('local')
+
+    const error = await launchAndReconcile(state).catch((caught: unknown) => caught)
+
+    expect(error).toBeInstanceOf(StructuredAgentSessionCreateUnknownOutcomeError)
+    expect(state.visibilityUnknown).toBe(true)
+  })
+})

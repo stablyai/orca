@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { salvagedOptional, salvagingArray } from '../../../src/shared/zod-salvage'
 
 // Guarded capabilities may be absent; keep idempotency policy unknown for the caller’s distinct absent/null/object cases.

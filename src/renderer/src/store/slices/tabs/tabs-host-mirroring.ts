@@ -1,8 +1,9 @@
 import type { AppState } from '../../types'
-import type { TerminalTab } from '../../../../../shared/terminal-tab-types'
-import { findTabAndWorktree } from '../tab-group-state'
-import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
+import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
+import { findTabAndWorktree } from './tab-group-state'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { locateTerminalTab } from '../../terminals/terminal-tab-location'
+import { replaceTabBuckets } from '../../keyed-record-transitions'
 
 /** Mirror host-tracked fields onto terminal rows: reconciliation derives unified fields there and recovery reads row ownership, so unified-only writes revert or remount hidden chat. */
 export function patchTerminalTabRow(
@@ -16,7 +17,7 @@ export function patchTerminalTabRow(
   }
   const nextTabs = tabsByWorktree[location.worktreeId].slice()
   nextTabs[location.index] = { ...location.tab, ...patch }
-  return { tabsByWorktree: { ...tabsByWorktree, [location.worktreeId]: nextTabs } }
+  return { tabsByWorktree: replaceTabBuckets(tabsByWorktree, [[location.worktreeId, nextTabs]]) }
 }
 
 // Mirror terminal pins so reconnect/peers retain them; dynamic import avoids a static store-to-runtime dependency.
@@ -31,8 +32,8 @@ export function mirrorTabPinnedToHost(state: AppState, tabId: string, isPinned: 
     return
   }
   const worktreeId = found.worktreeId
-  void import('@/runtime/web-runtime-terminal-actions').then(({ setWebRuntimeTabProps }) =>
-    setWebRuntimeTabProps({ worktreeId, tabId, isPinned })
+  void import('@/runtime/hosted-terminals/actions/web-runtime-tab-properties').then(
+    ({ setWebRuntimeTabProps }) => setWebRuntimeTabProps({ worktreeId, tabId, isPinned })
   )
 }
 
@@ -52,7 +53,7 @@ export function mirrorTabViewModeToHost(
     return
   }
   const worktreeId = found.worktreeId
-  void import('@/runtime/web-runtime-terminal-actions').then(({ setWebRuntimeTabProps }) =>
-    setWebRuntimeTabProps({ worktreeId, tabId, viewMode })
+  void import('@/runtime/hosted-terminals/actions/web-runtime-tab-properties').then(
+    ({ setWebRuntimeTabProps }) => setWebRuntimeTabProps({ worktreeId, tabId, viewMode })
   )
 }

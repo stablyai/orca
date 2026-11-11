@@ -2,17 +2,17 @@ import { tmpdir } from 'node:os'
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../shared/constants'
 import type { GlobalSettings } from '../../shared/global-settings-types'
-import { pluginManifestSchema } from '../../shared/plugins/plugin-manifest'
-import type { Store } from '../persistence'
-import { applyPluginConsent, applyPluginEnablement } from './plugin-enablement'
+import { pluginManifestSchema } from '../../shared/plugins/manifest/plugin-manifest'
+import type { Store } from '../persistence/loading-store/store'
+import { applyPluginConsent, revokePluginConsent } from './plugin-enablement'
 import type { ValidDiscoveredPlugin } from './plugin-discovery'
 import type { PluginService } from './plugin-service'
 
-const pluginKey = 'orca-samples.demo'
+const pluginKey = 'samples.demo'
 const manifest = pluginManifestSchema.parse({
   manifestVersion: 1,
   id: 'demo',
-  publisher: 'orca-samples',
+  publisher: 'samples',
   name: 'Demo',
   version: '1.0.0',
   engines: { orca: '>=1.0.0' },
@@ -41,7 +41,9 @@ function createPluginService(
   getFingerprint: () => string,
   overrides: Partial<ValidDiscoveredPlugin> = {}
 ): PluginService {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the enablement paths read only these members.
   return {
+    options: {},
     findValidPlugin: (requestedKey: string) =>
       requestedKey === pluginKey
         ? {
@@ -113,20 +115,23 @@ describe('applyPluginConsent', () => {
   })
 })
 
-describe('applyPluginEnablement', () => {
-  it('does not persist unknown plugin identities', async () => {
+describe('revokePluginConsent', () => {
+  it('drops only this plugin’s approval, leaves it enabled, and stops it running', async () => {
     const harness = createStore()
-    const pluginService = createPluginService(() => 'sha256-current')
+    harness.store.updateSettings({
+      pluginConsents: { [pluginKey]: 'sha256-old', 'samples.other': 'sha256-other' }
+    })
+    const pluginService = createPluginService(() => 'sha256-old')
+    await revokePluginConsent({ store: harness.store, pluginService, pluginKey })
+    expect(harness.getSettings().pluginConsents).toEqual({ 'samples.other': 'sha256-other' })
+    expect(harness.getSettings().disabledPlugins).not.toContain(pluginKey)
+    expect(pluginService.reconcileActivationState).toHaveBeenCalledOnce()
+  })
 
-    await expect(
-      applyPluginEnablement({
-        store: harness.store,
-        pluginService,
-        pluginKey: 'orca-samples.unknown',
-        enabled: false
-      })
-    ).rejects.toThrow('unknown plugin')
-
+  it('writes nothing when the plugin had no approval', async () => {
+    const harness = createStore()
+    const pluginService = createPluginService(() => 'sha256-old')
+    await revokePluginConsent({ store: harness.store, pluginService, pluginKey })
     expect(harness.updateSettings).not.toHaveBeenCalled()
   })
 })

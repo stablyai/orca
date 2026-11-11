@@ -11,9 +11,10 @@ import {
 import { getCohortAtEmit } from '../telemetry/cohort-classifier'
 import { getOnboardingCohortAtEmit } from '../telemetry/onboarding-cohort-classifier'
 import { resolveConsent, type ConsentState } from '../telemetry/consent'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { isCohortExtendedEvent, isOnboardingEvent } from '../../shared/telemetry-events'
-import type { EventName, EventProps, OptInVia } from '../../shared/telemetry-events'
+import type { EventName, OptInVia } from '../../shared/telemetry-events'
+import type { EventProps } from '../../shared/telemetry-event-classification'
 
 // Derive consent provenance synchronously from pre-mutation settings.
 let storeRef: Store | null = null
@@ -29,12 +30,19 @@ const MAIN_OWNED_TELEMETRY_EVENTS = new Set<EventName>([
   'daemon_pty_cwd_readable',
   'star_nag_outcome',
   'feature_interaction_usage_bucket_reached',
+  'first_agent_interaction',
+  'meaningful_activity_day',
+  'native_chat_prompt_submitted',
+  'plugin_installed',
   'ssh_remote_runtime_resolved',
   'ssh_host_server_decided',
   'ssh_host_server_conversion',
   'ssh_host_server_deploy_failed',
   'ssh_host_server_move',
   'ssh_host_server_legacy_relay_bridge',
+  'wsl_move',
+  'wsl_move_orchestrator',
+  'wsl_move_undo',
   'wsl_usage_snapshot'
 ])
 

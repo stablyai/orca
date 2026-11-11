@@ -21,7 +21,7 @@ function isUrlSegment(segment: string): boolean {
 }
 
 // Before rehydration, React Navigation treats absent index as the last route.
-function focusedIndex(state: NativeStackState): number {
+export function focusedIndex(state: NativeStackState): number {
   return state.index ?? state.routes.length - 1
 }
 

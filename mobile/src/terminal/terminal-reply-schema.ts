@@ -1,5 +1,12 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { salvagedOptional } from '../../../src/shared/zod-salvage'
+
+export const terminalComposerDraftSchema = z.looseObject({
+  terminal: salvagedOptional(
+    'terminal',
+    z.looseObject({ draft: salvagedOptional('draft', z.string()) })
+  )
+})
 
 // Only send.accepted === true proves delivery; malformed/missing envelopes must retain the writers’ not-delivered verdict.
 export const terminalSendAcceptedSchema = z
@@ -11,6 +18,10 @@ export const terminalSendAcceptedSchema = z
   })
   .transform((reply) => reply.send?.accepted === true)
 
+export const terminalInputSessionSchema = z
+  .object({ inputSessionId: z.string().min(1).max(128).nullable() })
+  .transform((reply) => reply.inputSessionId)
+
 // Booleanize only exact true so malformed fields fall through to legacy resubscribe; unread seq stays unconstrained.
 export const terminalViewportUpdatedSchema = z
   .looseObject({
@@ -21,5 +32,6 @@ export const terminalViewportUpdatedSchema = z
 
 export const terminalAutoRestoreFitSchema = z.looseObject({ ms: z.number().nullable() })
 
-// Payloads are unread; requiring changed/clear fields would reject hosts without affecting any consumer.
-export const terminalWriteUnreadReplySchema = z.unknown()
+export const terminalBufferClearedSchema = z
+  .looseObject({ clear: z.looseObject({ cleared: z.boolean() }) })
+  .transform((reply) => reply.clear.cleared)

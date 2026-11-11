@@ -1,13 +1,12 @@
-import { withDurableRuntimeStore } from '../runtime-durable-store-fixture'
+import { makeRuntimeOrchestrationDb } from './runtime-orchestration-db.test-fixture'
+import { withDurableRuntimeStore } from './runtime-durable-store-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
-import {
-  OrcaRuntimeService,
-  getDefaultWorkspaceSession,
-  makePaneKey
-} from '../orca-runtime-test-mocks.spec'
-import type { OrchestrationDb } from '../orchestration/db'
-import type { WorkspaceSessionState } from '../orca-runtime-test-mocks.spec'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { getDefaultWorkspaceSession } from '../../../shared/constants'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import {
   HEADLESS_LEAF_ID,
   HEADLESS_SECOND_LEAF_ID,
@@ -20,49 +19,11 @@ import {
   TEST_WORKTREE_PATH,
   deferred,
   makeHeadlessTerminalLayout,
-  makeRuntimeStoreWithWorkspaceSession,
-  store
-} from '../orca-runtime-test-fixtures.spec'
-import { publishLegacyWorkerReveal } from '../orca-runtime-test-scenario-builders.spec'
+  makeRuntimeStoreWithWorkspaceSession
+} from './orca-runtime-test-fixtures.spec'
+import { publishLegacyWorkerReveal } from './orca-runtime-test-scenario-builders.spec'
 
 describe('OrcaRuntimeService', () => {
-  it('recovers exported ORCA_TERMINAL_HANDLE from discovered live PTY sessions', async () => {
-    const runtime = new OrcaRuntimeService(store)
-    const writes: string[] = []
-    runtime.setPtyController({
-      write: (_ptyId, data) => {
-        writes.push(data)
-        return true
-      },
-      kill: () => true,
-      getForegroundProcess: async () => null,
-      listProcesses: async () => [
-        {
-          id: 'pty-1',
-          cwd: TEST_WORKTREE_PATH,
-          title: 'claude',
-          terminalHandle: 'term_exported'
-        }
-      ]
-    })
-
-    const listed = await runtime.listTerminals()
-    expect(listed.terminals[0]?.handle).toBe('term_exported')
-
-    runtime.onPtyData('pty-1', 'after restart\n', 100)
-    await expect(runtime.readTerminal('term_exported')).resolves.toMatchObject({
-      handle: 'term_exported',
-      tail: ['after restart']
-    })
-    await expect(
-      runtime.sendTerminal('term_exported', { text: 'still writable' }, { inputKind: 'driving' })
-    ).resolves.toMatchObject({
-      handle: 'term_exported',
-      accepted: true
-    })
-    expect(writes).toEqual(['still writable'])
-  })
-
   it('adopts a v1.4.150-shaped agent, setup, and shell orphan as one topology transaction', async () => {
     const session = {
       ...getDefaultWorkspaceSession(),
@@ -469,23 +430,24 @@ describe('OrcaRuntimeService', () => {
             : null
       }
     )
-    runtime.setOrchestrationDb({
-      getActiveDispatchForTerminal: () => undefined,
-      listLegacyWorkerTerminalRecoveryRows: () => [
-        {
-          dispatch_id: 'dispatch-legacy',
-          task_id: 'task-legacy',
-          dispatch_status: 'completed',
-          contract_version: 0,
-          assignee_handle: 'term_legacy',
-          assignee_pane_key: workerPaneKey,
-          process_incarnation: `pty-legacy:${incarnationId}`,
-          worker_state: 'ready',
-          worktree_id: TEST_WORKTREE_ID,
-          agent_terminal_handle: 'term_legacy'
-        }
-      ]
-    } as unknown as OrchestrationDb)
+    const orchestrationDb = makeRuntimeOrchestrationDb()
+    vi.spyOn(orchestrationDb, 'listSessionDispatchesForPresentation').mockImplementation(() => [])
+    vi.spyOn(orchestrationDb, 'getActiveDispatchForTerminal').mockImplementation(() => undefined)
+    vi.spyOn(orchestrationDb, 'listLegacyWorkerTerminalRecoveryRows').mockImplementation(() => [
+      {
+        dispatch_id: 'dispatch-legacy',
+        task_id: 'task-legacy',
+        dispatch_status: 'completed',
+        contract_version: 0,
+        assignee_handle: 'term_legacy',
+        assignee_pane_key: workerPaneKey,
+        process_incarnation: `pty-legacy:${incarnationId}`,
+        worker_state: 'ready',
+        worktree_id: TEST_WORKTREE_ID,
+        agent_terminal_handle: 'term_legacy'
+      }
+    ])
+    runtime.setOrchestrationDb(orchestrationDb)
     const write = vi.fn(() => true)
     const kill = vi.fn(() => true)
     const READY_SCREEN =

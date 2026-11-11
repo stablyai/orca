@@ -2,13 +2,14 @@ import React from 'react'
 import { ExternalLink, KanbanSquare, Map as MapIcon, Table as TableIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
-import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { cn } from '@/lib/class-names'
+import { useTranslate } from '@/i18n/use-translate'
 import { GhAuthErrorHelp } from './GhAuthErrorHelp'
 import { projectViewErrorMessage } from './project-view-error-copy'
 import { isRenderableProjectViewLayout } from '../../../../shared/github/project-types'
 import type { GitHubProjectViewSummary } from '../../../../shared/github/project-types'
 import type { GitHubProjectViewError } from '../../../../shared/github/project-result-types'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 const ORCA_FEATURE_REQUEST_URL = 'https://github.com/stablyai/orca/issues/new'
 
@@ -44,14 +45,15 @@ function ProjectViewTab({
   active: boolean
   onPick: (viewId: string) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const supported = isRenderableProjectViewLayout(view.layout)
   const layoutLabel =
     view.layout === 'BOARD_LAYOUT'
-      ? translate('projectViews.layout.board', 'Board')
+      ? t('projectViews.layout.board', 'Board')
       : view.layout === 'ROADMAP_LAYOUT'
-        ? translate('projectViews.layout.roadmap', 'Roadmap')
+        ? t('projectViews.layout.roadmap', 'Roadmap')
         : view.layout === 'TABLE_LAYOUT'
-          ? translate('projectViews.layout.table', 'Table')
+          ? t('projectViews.layout.table', 'Table')
           : formatUnknownLayout(view.layout)
   const Icon =
     view.layout === 'BOARD_LAYOUT'
@@ -67,7 +69,7 @@ function ProjectViewTab({
       title={
         supported
           ? view.name
-          : translate(
+          : t(
               'auto.components.github.project.ProjectViewWrapper.2edf5e7e77',
               "{{value0}} — Orca doesn't support {{value1}} project views yet. File a feature request at {{value2}}.",
               { value0: view.name, value1: layoutLabel, value2: ORCA_FEATURE_REQUEST_URL }
@@ -89,7 +91,7 @@ function ProjectViewTab({
   if (supported) {
     return tab
   }
-  const message = translate(
+  const message = t(
     'projectViews.unsupported.layoutNotSupported',
     "Orca doesn't support {{layout}} project views yet.",
     { layout: layoutLabel }
@@ -99,7 +101,7 @@ function ProjectViewTab({
       <HoverCardTrigger asChild>
         <span
           tabIndex={0}
-          aria-label={translate(
+          aria-label={t(
             'auto.components.github.project.ProjectViewWrapper.55de4fb57a',
             '{{value0}}. {{value1}} File a feature request at {{value2}}.',
             { value0: view.name, value1: message, value2: ORCA_FEATURE_REQUEST_URL }
@@ -113,7 +115,7 @@ function ProjectViewTab({
         <div className="space-y-2">
           <p className="text-xs leading-5 text-muted-foreground">
             {message}{' '}
-            {translate(
+            {t(
               'projectViews.unsupported.switchLayout',
               'Switch to a Table, Board, or Roadmap view to work with this project in Orca.'
             )}
@@ -122,9 +124,9 @@ function ProjectViewTab({
             type="button"
             size="xs"
             variant="outline"
-            onClick={() => void window.api.shell.openUrl(ORCA_FEATURE_REQUEST_URL)}
+            onClick={(event) => openAppHttpLink(ORCA_FEATURE_REQUEST_URL, { event })}
           >
-            {translate(
+            {t(
               'auto.components.github.project.ProjectViewWrapper.4d2a77a119',
               'File feature request'
             )}
@@ -147,6 +149,7 @@ export function ProjectViewErrorState({
   host?: string
   onOpenInGitHub: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   if (error.type === 'auth_required' || error.type === 'scope_missing') {
     return (
       <div className="flex flex-1 flex-col items-start gap-3 p-6 text-sm">
@@ -160,10 +163,10 @@ export function ProjectViewErrorState({
   }
   const copy =
     error.type === 'not_found'
-      ? translate('projectViews.error.notFoundState', 'Could not find this project or view.')
+      ? t('projectViews.error.notFoundState', 'Could not find this project or view.')
       : error.type === 'schema_drift'
-        ? translate('projectViews.error.schemaDrift', 'Could not read this project view.')
-        : projectViewErrorMessage(error, { host, totalCount })
+        ? t('projectViews.error.schemaDrift', 'Could not read this project view.')
+        : projectViewErrorMessage(error, { host, totalCount }, t)
   return (
     <div className="flex flex-1 flex-col items-start gap-3 p-6 text-sm">
       <div className="text-muted-foreground">{copy}</div>
@@ -181,19 +184,21 @@ function formatUnknownLayout(layout: string): string {
 }
 
 function OpenInGitHubButton({ onClick }: { onClick: () => void }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <Button size="sm" variant="outline" onClick={onClick}>
       <ExternalLink className="mr-1 size-3.5" />
-      {translate('auto.components.github.project.ProjectViewWrapper.23b87ba9f7', 'Open in GitHub')}
+      {t('auto.components.github.project.ProjectViewWrapper.23b87ba9f7', 'Open in GitHub')}
     </Button>
   )
 }
 
 export function ProjectTableSkeleton(): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div
       aria-busy="true"
-      aria-label={translate(
+      aria-label={t(
         'auto.components.github.project.ProjectViewWrapper.463f1205c0',
         'Loading project view'
       )}
@@ -223,10 +228,11 @@ export function ProjectTableSkeleton(): React.JSX.Element {
 
 /** Unfiltered empty results may be transient; blaming a nonexistent filter would imply data loss. */
 export function ProjectItemsEmptyState({ filter }: { filter: string }): React.JSX.Element {
+  const t = useTranslate()
   if (filter.trim().length > 0) {
     return (
       <div className="flex min-h-[120px] items-center justify-center p-6 text-sm text-muted-foreground">
-        {translate(
+        {t(
           'auto.components.github.project.ProjectViewList.4f57d2e0b1',
           "No items match this view's filter."
         )}
@@ -236,13 +242,13 @@ export function ProjectItemsEmptyState({ filter }: { filter: string }): React.JS
   return (
     <div className="flex min-h-[120px] flex-col items-center justify-center gap-1 p-6 text-center text-sm text-muted-foreground">
       <span>
-        {translate(
+        {t(
           'auto.components.github.project.ProjectViewStates.3b9c1d5e47',
           'This view has no items yet.'
         )}
       </span>
       <span className="text-xs">
-        {translate(
+        {t(
           'auto.components.github.project.ProjectViewStates.7e4a2f80c6',
           'Recently added items can take a while to appear.'
         )}

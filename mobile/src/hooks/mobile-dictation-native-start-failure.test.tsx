@@ -124,14 +124,14 @@ describe('a native start the desktop refuses', () => {
       await started
     })
     expect(device.calls).toContain('initialize')
-    expect(device.calls).toContain('toggleRecording(false)')
+    expect(device.calls).toContain('tearDown')
     // The open capture owns a wake tag; no outer start catch releases it.
     expect(device.screen).toEqual(['+', '-'])
     expect(dictation().status).toBe('idle')
   })
 })
 
-describe('a stale native start whose refusal arrives after a newer one is recording', () => {
+describe('a stale native start whose refusal arrives while a newer one is recording from the tap', () => {
   it('leaves the newer dictation recording, with the microphone and the screen still its own', async () => {
     const rpc = createFakeRpcClient()
     mount(rpc)
@@ -149,14 +149,15 @@ describe('a stale native start whose refusal arrives after a newer one is record
       await pump(rpc, 'none')
       await cancelled
     })
+    let started: Promise<void> = Promise.resolve()
     await act(async () => {
-      const started = dictation()
+      started = dictation()
         .start()
         .catch(() => undefined)
       await pump(rpc, 'none')
-      await started
     })
-    expect(dictation().status).toBe('recording')
+    // B records from the tap but waits for A to settle on the host before its own start.
+    expect(dictation().status).toBe('starting')
     const screenWhileRecording = [...device.screen]
     const callsWhileRecording = [...device.calls]
     // A no longer owns the microphone or screen; late failure must leave B alone.
@@ -167,6 +168,8 @@ describe('a stale native start whose refusal arrives after a newer one is record
         error: { code: 'refused', message: 'no model installed' }
       })
       await pump(rpc, 'none')
+      await pump(rpc, 'none')
+      await started
     })
     expect(dictation().status).toBe('recording')
     expect(device.screen).toEqual(screenWhileRecording)
@@ -174,7 +177,7 @@ describe('a stale native start whose refusal arrives after a newer one is record
   })
 })
 
-describe('a stale native start that succeeds after a newer one is recording', () => {
+describe('a stale native start that succeeds while a newer one is recording from the tap', () => {
   it('does not commit itself over the dictation that replaced it', async () => {
     // A’s late success must cancel only its desktop session, leaving B’s capture untouched.
     const rpc = createFakeRpcClient()
@@ -192,19 +195,22 @@ describe('a stale native start that succeeds after a newer one is recording', ()
       await pump(rpc, 'none')
       await cancelled
     })
+    let started: Promise<void> = Promise.resolve()
     await act(async () => {
-      const started = dictation()
+      started = dictation()
         .start()
         .catch(() => undefined)
       await pump(rpc, 'none')
-      await started
     })
-    expect(dictation().status).toBe('recording')
+    // B records from the tap but waits for A to settle on the host before its own start.
+    expect(dictation().status).toBe('starting')
     const screenWhileRecording = [...device.screen]
     const callsWhileRecording = [...device.calls]
     await act(async () => {
       first.request?.resolve({ id: 'desktop', ok: true, result: { started: true } })
       await pump(rpc, 'none')
+      await pump(rpc, 'none')
+      await started
     })
     expect(dictation().status).toBe('recording')
     expect(device.screen).toEqual(screenWhileRecording)

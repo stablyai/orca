@@ -1,0 +1,23 @@
+import { describe, expect, it } from 'vitest'
+import { BrowserHostPagePlacementRegistry } from './browser-host-page-placement'
+
+const placements = (maxPagePlacements = 256): BrowserHostPagePlacementRegistry =>
+  new BrowserHostPagePlacementRegistry(
+    { authorityRuntimeId: 'runtime-a', authorityEpoch: 'epoch-a' },
+    { maxPagePlacements }
+  )
+
+describe('browser host page placement authority', () => {
+  it('transfers a retired placement slot to its pending replacement reservation', () => {
+    const pages = placements(1)
+    const host = { browserHostClientId: 'host-a', browserHostGeneration: 1 }
+    const existing = pages.placeClientPage('page-a', host)
+    const replacement = pages.reserveClientPage('page-a', host, 5)
+
+    const retirement = pages.beginPageRetirement('page-a', existing)
+    expect(pages.completePageRetirement(retirement)).toBe(true)
+
+    expect(() => pages.placeServerPage('page-b')).toThrow('browser_page_placement_capacity')
+    expect(pages.commitClientPageReservation(replacement)).toBe(replacement.placement)
+  })
+})

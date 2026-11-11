@@ -17,10 +17,14 @@ node_modules/
 node_modules
 
 dist/
+# The declarative sample ships its prebuilt bundle so it installs without a build step.
+!examples/plugins/hello-components/dist/
 dist-electron/
 out/
 /build/
 release/
+!config/scripts/release/
+!src/main/runtime/orchestration/terminal-authority/release/
 native/**/.build/
 native/windows-cli-launcher/target/
 native/windows-agent-hook/target/
@@ -95,6 +99,7 @@ docs/**
 !docs/bug-reproductions/
 !docs/bug-reproductions/**
 !docs/STYLEGUIDE.md
+!docs/development.md
 !docs/styleguide/
 !docs/styleguide/**
 !docs/agents-md-refs/
@@ -115,6 +120,9 @@ validation-screenshots/
 
 test-results/
 playwright-report/
+
+# Claude Code settings are machine-local.
+**/.claude/settings.local.json
 
 # Agent skills are installed per machine.
 /.claude/skills/

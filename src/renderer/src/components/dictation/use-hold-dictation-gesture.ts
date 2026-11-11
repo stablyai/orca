@@ -1,16 +1,20 @@
-import { useEffect, useRef, type MutableRefObject } from 'react'
-import { getShortcutPlatform } from '@/lib/shortcut-platform'
-import { keybindingMatchesAction, type KeybindingOverrides } from '../../../../shared/keybindings'
-import type { DictationState } from '../../../../shared/speech-types'
+import { useCallback, useEffect, useEffectEvent, useRef } from 'react'
+import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
+import {
+  keybindingMatchesAction,
+  normalizeTerminalShortcutPolicy,
+  type KeybindingOverrides
+} from '../../../../shared/keybindings'
+import { textInputOwnsComposition } from '../../../../shared/text-input-shortcut-policy'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { DictationInsertionTarget } from './dictation-insertion-target'
-import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
+import { dictationShortcutMode } from '../../../../shared/dictation-shortcut-mode'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
+import { showTerminalShortcutCaptureNotification } from '@/lib/notifications/terminal-shortcut-capture-notification'
+import { getKeybindingContext } from '../terminal-workspace-model'
 
 type HoldDictationGestureOptions = {
-  dictationStateRef: MutableRefObject<DictationState>
-  holdGestureActiveRef: MutableRefObject<boolean>
-  insertionTargetRef: MutableRefObject<DictationInsertionTarget | null>
-  intentionalTargetCancellationRef: MutableRefObject<boolean>
+  canStartDictation: () => boolean
+  isDictationUnderway: () => boolean
   keybindings: KeybindingOverrides
   settings: GlobalSettings | null
   startDictation: () => Promise<void> | void
@@ -18,6 +22,17 @@ type HoldDictationGestureOptions = {
 }
 
 type HoldDictationReleaseMatcher = (event: KeyboardEvent) => boolean
+
+type ActiveHold = {
+  matchesRelease: HoldDictationReleaseMatcher
+  pressedAt: number
+  /** Latest keydown for this press, key repeat included. */
+  lastDownAt: number
+  startedDictation: boolean
+}
+
+// Auto: a press held this long records until release; a shorter tap leaves dictation running.
+const AUTO_HOLD_THRESHOLD_MS = 300
 
 type HeldModifiers = {
   alt: boolean
@@ -103,98 +118,126 @@ function createHoldDictationReleaseMatcher(event: KeyboardEvent): HoldDictationR
 }
 
 export function useHoldDictationGesture({
-  dictationStateRef,
-  holdGestureActiveRef,
-  insertionTargetRef,
-  intentionalTargetCancellationRef,
+  canStartDictation,
+  isDictationUnderway,
   keybindings,
   settings,
   startDictation,
   stopDictation
-}: HoldDictationGestureOptions): void {
-  const releaseMatcherRef = useRef<HoldDictationReleaseMatcher | null>(null)
+}: HoldDictationGestureOptions): { isHolding: () => boolean } {
+  const activeHoldRef = useRef<ActiveHold | null>(null)
+  const mode = dictationShortcutMode(settings?.voice)
+  const enabled = settings?.voice?.enabled === true
+  // Settings and keybinding refreshes re-create these inputs; re-running the effect would end a held dictation.
+  const start = useEffectEvent(() => void startDictation())
+  const stop = useEffectEvent(() => void stopDictation())
+  const canStart = useEffectEvent(() => canStartDictation())
+  const isUnderway = useEffectEvent(() => isDictationUnderway())
+  // Main forwards Hold and Auto presses, so the terminal shortcut policy it would apply is applied here.
+  const matchesShortcut = useEffectEvent((e: KeyboardEvent) =>
+    keybindingMatchesAction('voice.dictation', e, getShortcutPlatform(), keybindings, {
+      context: getKeybindingContext(e.target),
+      terminalShortcutPolicy: settings?.terminalShortcutPolicy
+    })
+  )
+  const notifyTerminalCapture = useEffectEvent(() => {
+    if (normalizeTerminalShortcutPolicy(settings?.terminalShortcutPolicy) === 'orca-first') {
+      showTerminalShortcutCaptureNotification({
+        actionId: 'voice.dictation',
+        platform: getShortcutPlatform(),
+        keybindings
+      })
+    }
+  })
 
-  // Hold mode owns DOM press/release events; main before-input-event suppresses keyup after preventDefault.
+  // Hold and Auto own DOM press/release events; main before-input-event suppresses keyup after preventDefault.
   useEffect(() => {
-    const mode = settings?.voice?.dictationMode ?? 'toggle'
-    if (mode !== 'hold') {
+    if (mode === 'toggle' || !enabled) {
       return
     }
 
+    // Losing the release (blur, hidden, mode change) ends the press; without a release time, key repeat times it.
+    const endHold = (releasedAt: number | null = null): void => {
+      const hold = activeHoldRef.current
+      if (!hold) {
+        return
+      }
+      activeHoldRef.current = null
+      const held = (releasedAt ?? hold.lastDownAt) - hold.pressedAt >= AUTO_HOLD_THRESHOLD_MS
+      if (mode === 'hold' || (hold.startedDictation && held)) {
+        stop()
+      }
+    }
+
     const handleKeyDown = (e: KeyboardEvent): void => {
-      if (keybindingMatchesAction('voice.dictation', e, getShortcutPlatform(), keybindings)) {
-        if (!settings?.voice?.enabled || !settings.voice.sttModel) {
+      if (textInputOwnsComposition(e) || !matchesShortcut(e)) {
+        return
+      }
+      if (e.target instanceof Element && e.target.closest('[data-shortcut-recorder-active]')) {
+        return
+      }
+      e.preventDefault()
+      e.stopPropagation()
+      if (!e.repeat) {
+        if (getKeybindingContext(e.target) === 'terminal') {
+          notifyTerminalCapture()
+        }
+        if (mode === 'auto' && isUnderway()) {
+          // A tap started this dictation; the next press ends it.
+          activeHoldRef.current = null
+          stop()
           return
         }
-        e.preventDefault()
-        e.stopPropagation()
-        holdGestureActiveRef.current = true
-        releaseMatcherRef.current = createHoldDictationReleaseMatcher(e)
-        if (dictationStateRef.current === 'idle') {
-          void startDictation()
+        const now = performance.now()
+        activeHoldRef.current = {
+          matchesRelease: createHoldDictationReleaseMatcher(e),
+          pressedAt: now,
+          lastDownAt: now,
+          startedDictation: false
         }
+      }
+      const hold = activeHoldRef.current
+      if (hold) {
+        hold.lastDownAt = performance.now()
+      }
+      // One dictation per press: key repeat after an automatic stop must not start another.
+      if (hold && !hold.startedDictation && canStart()) {
+        hold.startedDictation = true
+        start()
       }
     }
 
     const handleKeyUp = (e: KeyboardEvent): void => {
-      if (!holdGestureActiveRef.current) {
-        return
-      }
-      if (
-        !keybindingMatchesAction('voice.dictation', e, getShortcutPlatform(), keybindings) &&
-        releaseMatcherRef.current?.(e) !== true
-      ) {
-        return
-      }
-      releaseMatcherRef.current = null
-      if (dictationStateRef.current === 'idle' || dictationStateRef.current === 'stopping') {
-        holdGestureActiveRef.current = false
-        return
-      }
-      holdGestureActiveRef.current = false
-      void stopDictation()
-    }
-
-    const handleBlur = (): void => {
-      if (!holdGestureActiveRef.current) {
-        return
-      }
-      holdGestureActiveRef.current = false
-      releaseMatcherRef.current = null
-      if (dictationStateRef.current !== 'idle' && dictationStateRef.current !== 'stopping') {
-        insertionTargetRef.current = null
-        intentionalTargetCancellationRef.current = true
-        void stopDictation()
+      const hold = activeHoldRef.current
+      if (hold && (matchesShortcut(e) || hold.matchesRelease(e))) {
+        // macOS drops the key's keyup while Cmd is held, so no keyup under Cmd times the key.
+        const cmdHidesKeyUp =
+          getShortcutPlatform() === 'darwin' && (e.metaKey || getReleasedModifier(e) === 'meta')
+        endHold(cmdHidesKeyUp ? null : performance.now())
       }
     }
 
     const handleVisibilityChange = (): void => {
       if (document.visibilityState !== 'visible') {
-        handleBlur()
+        endHold()
       }
     }
+    const handleBlur = (): void => endHold()
 
     addAppKeyListener('keydown', handleKeyDown)
     addAppKeyListener('keyup', handleKeyUp)
     window.addEventListener('blur', handleBlur)
     document.addEventListener('visibilitychange', handleVisibilityChange)
     return () => {
-      handleBlur()
+      endHold()
       removeAppKeyListener('keydown', handleKeyDown)
       removeAppKeyListener('keyup', handleKeyUp)
       window.removeEventListener('blur', handleBlur)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
-  }, [
-    settings?.voice?.dictationMode,
-    settings?.voice?.enabled,
-    settings?.voice?.sttModel,
-    keybindings,
-    startDictation,
-    stopDictation,
-    dictationStateRef,
-    holdGestureActiveRef,
-    insertionTargetRef,
-    intentionalTargetCancellationRef
-  ])
+  }, [mode, enabled])
+
+  // True while a held shortcut press is the one recording.
+  const isHolding = useCallback(() => activeHoldRef.current?.startedDictation === true, [])
+  return { isHolding }
 }

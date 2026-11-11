@@ -1,25 +1,24 @@
+import type { AgentSenderPublication, AgentSenderRevision } from './agent-sender-associations'
 import type { MobileProjectSectionCatalog } from './mobile-project-sections-contract'
-import type { AgentStatusOrchestrationContext } from './agent-status-types'
+import type { AgentStatusOrchestrationContext } from './agent-status/contracts/agent-status-types'
 import type { RemoteServerUpdateSupport } from './remote-server-update'
 import type { RemoteRuntimeSharedConnectionDiagnostics } from './remote-runtime/control/remote-runtime-shared-control-types'
-import type { RuntimeHostConnectionState } from './runtime-host-connection-state'
+import type { RuntimeHostConnectionState } from './remote-runtime/host-status/runtime-host-connection-state'
 import type { RuntimeCapability } from './protocol-version'
 import type {
   RuntimeBrowserUnavailableReason,
   RuntimeDegradation
 } from './runtime-capability-degradation'
 import type { TabGroupLayoutNode } from './tab-types'
-import type { TerminalPaneLayoutNode } from './terminal-tab-types'
+import type { TerminalPaneLayoutNode } from './workspace-layout/terminal-tab-types'
 import type {
   RuntimeMobileSessionClientTab,
   RuntimeMobileSessionSnapshotTab,
   RuntimeMobileSessionTerminalClientTab
 } from './runtime-mobile-session-tab-contracts'
-import type { CliStatusCaller } from './orchestration-caller-status'
-import type { RuntimeHostDescriptor } from './runtime-host-descriptor'
-import type { TuiAgent } from './tui-agent'
-
-export type * from './runtime-mobile-session-tab-contracts'
+import type { CliStatusCaller } from './orchestration/orchestration-caller-status'
+import type { RuntimeHostDescriptor } from './remote-runtime/host-status/runtime-host-descriptor'
+import type { TuiAgent } from './agent-launch/catalog/tui-agent'
 
 export type RuntimeGraphStatus = 'ready' | 'reloading' | 'unavailable'
 
@@ -33,8 +32,6 @@ export type RuntimeTerminalDriverState =
   | { kind: 'idle' }
   | { kind: 'desktop' }
   | { kind: 'mobile'; clientId: string }
-
-export type RuntimeBrowserDriverState = RuntimeTerminalDriverState
 
 export const BROWSER_UNAVAILABLE_ERROR_CODE = 'browser_unavailable' as const
 
@@ -177,6 +174,8 @@ export type RuntimeSyncWindowGraph = {
   singleGroupWorkspaceGridSize?: { cols: number; rows: number }
   /** Merge changed workspace selections; absent leaves prior entries, null means none shown. Layout-owner builds only. */
   activeGroupByWorkspace?: Record<string, string | null>
+  /** The sender publication this window last applied; main answers "unchanged" while it holds. */
+  agentSenderBase?: AgentSenderRevision
   /** The sidebar's Project grouping inputs for paired phones; sent only when they changed. */
   projectSectionCatalog?: MobileProjectSectionCatalog
 }
@@ -192,6 +191,9 @@ export type RuntimeNativeChatLaunchDraftResolution = {
 }
 
 export type RuntimeSyncWindowGraphResult = RuntimeStatus & {
+  agentSenderAssociations?: AgentSenderPublication
+  /** Sent instead of the publication when the window's base is still current. */
+  agentSenderRevision?: AgentSenderRevision
   agentOrchestrationByPaneKey?: Record<string, AgentStatusOrchestrationContext>
   nativeChatLaunchDraftResolutions?: RuntimeNativeChatLaunchDraftResolution[]
   mobileSessionResyncWorktrees?: string[]
@@ -221,6 +223,8 @@ export type RuntimeMobileSessionTabMoveResult = { moved: true }
 
 export type RuntimeMobileSessionTabCloseResult = {
   closed: true
+  /** Proven host retirement; delegated and legacy replies omit this receipt. */
+  retirementConfirmed?: true
   refused?: true
   refusalReason?:
     | 'missing-intent'
@@ -264,6 +268,7 @@ export type RuntimeMobileSessionRetiredTerminalSurface = {
 }
 
 export type RuntimeMobileSessionTabsResult = {
+  agentSenderAssociations?: AgentSenderPublication
   worktree: string
   /** Query-only truth about an executing launch that owns this workspace's first surface. */
   initialSurfaceLaunch?: { launchId: string; agent: TuiAgent }

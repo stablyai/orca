@@ -1,10 +1,10 @@
 import { randomInt, randomUUID } from 'node:crypto'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import {
-  createNewProfileNativeChatUpgradeTipAudience,
-  parseNativeChatUpgradeTipAudience,
-  type NativeChatUpgradeTipAudience
-} from '../../../shared/native-chat/native-chat-upgrade-tip-audience'
+  parseChatUiLaunchTipAudience,
+  type ChatUiLaunchTipAudience
+} from '../../../shared/native-chat/chat-ui-launch-tip-audience'
+import { carriedChatUiLaunchSettings } from '../../../shared/native-chat/native-chat-providers'
 import { savedChatUiWithTerminalDefaultView } from '../applying-settings/terminal-settings-migrations'
 
 import type { StoreRuntimeState } from './store-runtime-state'
@@ -14,61 +14,146 @@ type LoadedCohortMigrationOperationsRuntime = Pick<StoreRuntimeState, 'loadNeeds
 export class LoadedCohortMigrationOperations {
   constructor(private readonly runtime: LoadedCohortMigrationOperationsRuntime) {}
 
-  migrateTabSwitchKeybindings(state: PersistedState, fileExistedOnLoad: boolean): PersistedState {
-    const existing = state.settings?.tabSwitchKeybindingSeed
-    if (existing === 'pending' || existing === 'done') {
-      return state
-    }
-    // Persist the frozen cohort before the first file makes a fresh install appear existing.
-    this.runtime.loadNeedsSave = true
-    return {
-      ...state,
-      settings: {
-        ...state.settings,
-        // Existing installs seed old chords; fresh ones use current defaults.
-        tabSwitchKeybindingSeed: fileExistedOnLoad ? 'pending' : 'done'
+  /** Freezes each rollout's new-or-existing cohort on first load, before a save makes a fresh install look existing. */
+  migrateCohortSeeds(state: PersistedState, fileExistedOnLoad: boolean): PersistedState {
+    // Secondary profiles start with only the install's telemetry consent, before their first load.
+    const telemetryOnly =
+      Object.keys(state).length === 1 &&
+      isRecord(state.settings) &&
+      Object.keys(state.settings).length === 1 &&
+      isRecord(state.settings.telemetry)
+    const existingProfile = fileExistedOnLoad && !telemetryOnly
+    for (const key of [
+      'tabSwitchKeybindingSeed',
+      'searchKeybindingSeed',
+      'nonMacSearchKeybindingSeed'
+    ] as const) {
+      const existing = state.settings?.[key]
+      if (existing === 'legacy' || existing === 'done') {
+        continue
+      }
+      // Freeze each rollout's cohort before saving makes a fresh install appear existing.
+      this.runtime.loadNeedsSave = true
+      state = {
+        ...state,
+        settings: {
+          ...state.settings,
+          [key]: existing === 'pending' || existingProfile ? 'legacy' : 'done'
+        }
       }
     }
+    if (state.settings?.claudeCodeThemeSyncOffer === undefined) {
+      this.runtime.loadNeedsSave = true
+      // Why every profile: settings.json is global, so even a fresh profile must not restyle Claude Code unasked.
+      state = {
+        ...state,
+        settings: {
+          ...state.settings,
+          claudeCodeThemeSync: false,
+          claudeCodeThemeSyncOffer: 'pending'
+        }
+      }
+    }
+    return state
   }
 
-  captureNativeChatUpgradeTipAudience(savedProfile: unknown): NativeChatUpgradeTipAudience {
-    const saved = isRecord(savedProfile) ? savedProfile.nativeChatUpgradeTipAudience : undefined
-    const kept = saved === undefined ? null : parseNativeChatUpgradeTipAudience(saved)
+  /** Reads the retired Chat UI switch from the raw profile, before load strips it. */
+  captureChatUiLaunchTipAudience(savedProfile: unknown): ChatUiLaunchTipAudience {
+    const saved = isRecord(savedProfile) ? savedProfile.chatUiLaunchTipAudience : undefined
+    const kept = saved === undefined ? null : parseChatUiLaunchTipAudience(saved)
     if (kept) {
       return kept
     }
     // Persist this decision before later settings changes can alter the apparent audience.
     this.runtime.loadNeedsSave = true
     if (!isRecord(savedProfile)) {
-      return createNewProfileNativeChatUpgradeTipAudience()
+      return { version: 1, membership: 'excluded', basis: 'new-profile' }
     }
     if (saved !== undefined) {
-      // Never rederive a damaged audience record from current Chat UI settings.
+      // Never rederive a damaged audience record from current settings.
       return { version: 1, membership: 'excluded', basis: 'unreadable-record' }
     }
     const settings = isRecord(savedProfile.settings) ? savedProfile.settings : undefined
-    const chatUi = settings?.experimentalNativeChat
-    if (chatUi === true) {
-      // The retired key proves the opt-in predates the upgrade; later opt-ins cannot establish membership.
-      if (!settings || !Object.hasOwn(settings, 'openAgentTabsInChatByDefault')) {
-        return { version: 1, membership: 'excluded', basis: 'chat-ui-on-unproven' }
-      }
-      return {
-        version: 1,
-        membership: 'eligible',
-        basis: savedChatUiWithTerminalDefaultView(settings)
-          ? 'chat-ui-on-terminal-default'
-          : 'chat-ui-on'
-      }
+    // Opt-ins saved with new tabs opening in the terminal were kept on the terminal, so they count as off.
+    const chatUiOn =
+      settings?.experimentalNativeChat === true && !savedChatUiWithTerminalDefaultView(settings)
+    return { version: 1, membership: 'eligible', basis: chatUiOn ? 'chat-ui-on' : 'chat-ui-off' }
+  }
+
+  /** Runs with the audience capture that first records the profile, so it applies once and in the same save. */
+  carryChatUiChoices(
+    state: PersistedState,
+    savedProfile: unknown,
+    audience: ChatUiLaunchTipAudience
+  ): PersistedState {
+    if (
+      !isRecord(savedProfile) ||
+      savedProfile.chatUiLaunchTipAudience !== undefined ||
+      (audience.basis !== 'chat-ui-on' && audience.basis !== 'chat-ui-off')
+    ) {
+      return state
     }
-    return {
-      version: 1,
-      membership: 'excluded',
-      basis: chatUi === false ? 'chat-ui-off' : 'chat-ui-unset'
+    const saved = isRecord(savedProfile.settings) ? savedProfile.settings : undefined
+    const launchSettings = carriedChatUiLaunchSettings(
+      saved?.nativeChatProviders,
+      audience.basis === 'chat-ui-on'
+    )
+    this.runtime.loadNeedsSave = true
+    return { ...state, settings: { ...state.settings, ...launchSettings } }
+  }
+
+  /** Resume on restart defaults on for new profiles; profiles saved before without a choice keep it off. */
+  keepResumeOnRestartOffForExistingProfiles(
+    state: PersistedState,
+    savedProfile: unknown
+  ): PersistedState {
+    if (!isRecord(savedProfile)) {
+      return state
     }
+    const saved = isRecord(savedProfile.settings) ? savedProfile.settings : undefined
+    if (typeof saved?.nativeChatResumeWorkOnRestart === 'boolean') {
+      return state
+    }
+    this.runtime.loadNeedsSave = true
+    return { ...state, settings: { ...state.settings, nativeChatResumeWorkOnRestart: false } }
   }
 
   migrateTelemetry(state: PersistedState, fileExistedOnLoad: boolean): PersistedState {
+    return this.seedMilestoneInstallCohort(
+      this.migrateTelemetryIdentity(state, fileExistedOnLoad),
+      fileExistedOnLoad
+    )
+  }
+
+  /** Freeze once so upgraded profiles' first post-release interaction is never counted as activation. */
+  private seedMilestoneInstallCohort(
+    state: PersistedState,
+    fileExistedOnLoad: boolean
+  ): PersistedState {
+    const telemetry = state.settings?.telemetry
+    if (!telemetry || telemetry.protectedMilestones?.installCohort !== undefined) {
+      return state
+    }
+    this.runtime.loadNeedsSave = true
+    return {
+      ...state,
+      settings: {
+        ...state.settings,
+        telemetry: {
+          ...telemetry,
+          protectedMilestones: {
+            ...telemetry.protectedMilestones,
+            installCohort: fileExistedOnLoad ? 'existing' : 'fresh'
+          }
+        }
+      }
+    }
+  }
+
+  private migrateTelemetryIdentity(
+    state: PersistedState,
+    fileExistedOnLoad: boolean
+  ): PersistedState {
     const existing = state.settings?.telemetry
     // Partial telemetry blocks still require migration unless all invariants hold.
     if (

@@ -7,10 +7,10 @@ import {
 } from '../../../shared/plain-ssh-terminal'
 import { isSshHostMoveBlocked } from '../../../shared/ssh-host-move-blocked'
 import { mayUserSshConfigClaimAlias } from '../../ssh/config/ssh-config-alias-claim'
-import { getSshHostServerStatus } from '../../ssh/ssh-host-server-status'
+import { getSshHostServerStatus } from '../../ssh/host-server/ssh-host-server-status'
 import { getSshTargetRegistryStore } from '../../ssh/targets/ssh-target-registry'
 import { findSystemSsh } from '../../ssh/system-transport/system-ssh-binary'
-import { ensureNodePtySpawnHelperExecutable } from '../../providers/local-pty-utils'
+import { ensureNodePtySpawnHelperExecutable } from '../../providers/local-pty/local-pty-executable-spawn'
 import {
   ackPlainSshTerminal,
   closePlainSshTerminal,

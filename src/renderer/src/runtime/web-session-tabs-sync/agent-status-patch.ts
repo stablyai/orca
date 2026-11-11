@@ -1,23 +1,24 @@
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
-import { withMirroredEvidenceReceipt } from '../../../../shared/agent-status-freshness'
-import { agentEntryCompletionAt } from '../../../../shared/agent-completion-time'
-import { agentMainAgentVerdict } from '../../../../shared/agent-main-agent-verdict'
-import { normalizeCompatibleAgentStatusEntryForOwner } from '../../../../shared/agent-title-owner'
+import { resolveAgentSessionStartedAt } from '../../../../shared/agent-session/lifecycle/agent-session-start-time'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
+import { withMirroredEvidenceReceipt } from '../../../../shared/agent-status/contracts/agent-status-freshness'
+import { agentEntryCompletionAt } from '../../../../shared/agent-status/lifecycle/agent-completion-time'
+import { agentMainAgentVerdict } from '../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
+import { normalizeCompatibleAgentStatusEntryForOwner } from '../../../../shared/agent-status/title/agent-title-owner'
 import {
   isWebTerminalSurfaceTabId,
   toWebTerminalSurfaceTabId
-} from '../../../../shared/terminal-surface-id'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+} from '../../../../shared/workspace-layout/terminal-surface-id'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type {
   MirroredTerminalTab,
-  TerminalSurface,
   WebSessionTabsBatchContext,
   WebSessionTabsSyncState
 } from './state'
+import type { RuntimeMobileSessionTerminalClientTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
 import {
   isClientOwnedAgentStatus,
   isMirroredAgentStatusOwnedBy,
-  isFencedClientAgentStatus,
+  clientAgentStatusFencesHost,
   hostAgentStatusPiercesClientAuthority,
   isMirroredAgentPaneKeyForTabs,
   batchAgentPaneKeysForTabs,
@@ -25,23 +26,35 @@ import {
   updateBatchAgentPaneKey
 } from './agent-status-primitives'
 import {
+  retirePaneLaunchNote,
+  retiresLaunch
+} from '../../store/slices/agent-status/agent-status-launch-config'
+import {
   agentStatusEntryEqual,
   isAgentStatusFresh,
   isMirroredCommandCodeTurnBump,
   writableWebSessionTabsRecord
 } from './state-equality-core'
 
+type MirroredAgentStatusPatch = Pick<
+  WebSessionTabsSyncState,
+  'agentStatusByPaneKey' | 'agentStatusEpoch' | 'sortEpoch'
+> &
+  Partial<
+    Pick<WebSessionTabsSyncState, 'agentLaunchConfigByPaneKey' | 'sleepingAgentSessionsByPaneKey'>
+  >
+
 export function buildMirroredAgentStatusPatch(
   state: WebSessionTabsSyncState,
   currentTerminalTabs: readonly TerminalTab[],
-  terminalSurfaceTabs: readonly TerminalSurface[],
+  terminalSurfaceTabs: readonly RuntimeMobileSessionTerminalClientTab[],
   mirroredTerminalTabs: readonly MirroredTerminalTab[],
   environmentId: string,
   worktreeId: string,
   retractedTabIds: ReadonlySet<string>,
   now: number,
   batchContext?: WebSessionTabsBatchContext
-): Pick<WebSessionTabsSyncState, 'agentStatusByPaneKey' | 'agentStatusEpoch' | 'sortEpoch'> | null {
+): MirroredAgentStatusPatch | null {
   const mirroredTabIds = new Set<string>()
   for (const tab of currentTerminalTabs) {
     if (isWebTerminalSurfaceTabId(tab.id)) {
@@ -57,7 +70,7 @@ export function buildMirroredAgentStatusPatch(
   }
 
   let retainedSurfaceByHostTabAndPrunedLeafId:
-    | Map<string, ReadonlyMap<string, TerminalSurface>>
+    | Map<string, ReadonlyMap<string, RuntimeMobileSessionTerminalClientTab>>
     | undefined
   for (const entry of mirroredTerminalTabs) {
     if (entry.retainedSurfaceByPrunedLeafId) {
@@ -73,7 +86,7 @@ export function buildMirroredAgentStatusPatch(
     const retainedSurface = retainedSurfaceByHostTabAndPrunedLeafId
       ?.get(surface.parentTabId)
       ?.get(surface.leafId)
-    const hostEntry = remapHostAgentStatus(surface, retainedSurface)
+    const hostEntry = remapHostAgentStatus(surface, worktreeId, retainedSurface)
     if (!hostEntry) {
       continue
     }
@@ -93,11 +106,14 @@ export function buildMirroredAgentStatusPatch(
       existing.state !== 'done' &&
       existing.stateStartedAt > entry.stateStartedAt
     // Cross-machine clocks cannot arbitrate live byte ownership; keep client state except host-only classes, adopting host identity below.
-    const clientOwnsEntry =
-      isFencedClientAgentStatus(entry.paneKey, existing, now) &&
-      !hostAgentStatusPiercesClientAuthority(entry)
+    const hostPiercesAuthority = hostAgentStatusPiercesClientAuthority(entry)
+    const clientOwnsEntry = clientAgentStatusFencesHost(entry.paneKey, existing, entry, now)
     const nextEntry =
-      existing && (clientOwnsEntry || existing.updatedAt > entry.updatedAt)
+      existing &&
+      (clientOwnsEntry ||
+        (!hostPiercesAuthority &&
+          isAgentStatusFresh(existing, now) &&
+          existing.updatedAt > entry.updatedAt))
         ? {
             ...normalizeCompatibleAgentStatusEntryForOwner(existing, entry.agentType),
             ...(clientOwnsEntry && existing.state === 'working' && entry.state === 'working'
@@ -119,10 +135,23 @@ export function buildMirroredAgentStatusPatch(
                 : entry.lastAssistantMessageIsToolOutput
           }
         : entry
-    nextByPaneKey.set(
-      entry.paneKey,
-      nextEntry === entry ? entry : withHostProgramStatus(nextEntry, entry.programStatus)
-    )
+    // The host owns the launch fact whichever writer wins presentation.
+    const accepted =
+      nextEntry === entry
+        ? entry
+        : {
+            ...withHostProgramStatus(nextEntry, entry.programStatus),
+            ...(entry.launchAttested !== undefined ? { launchAttested: entry.launchAttested } : {})
+          }
+    const retained = existing ? undefined : state.retainedAgentsByPaneKey?.[entry.paneKey]
+    nextByPaneKey.set(entry.paneKey, {
+      ...accepted,
+      firstStateStartedAt: resolveAgentSessionStartedAt({
+        entry: accepted,
+        previous: existing ?? retained?.entry,
+        previousStartedAt: retained?.startedAt
+      })
+    })
   }
 
   let nextAgentStatusByPaneKey = state.agentStatusByPaneKey
@@ -164,9 +193,17 @@ export function buildMirroredAgentStatusPatch(
     sortRelevantChange = true
   }
 
+  let retirement: ReturnType<typeof retirePaneLaunchNote> = {}
   for (const [paneKey, entry] of nextByPaneKey) {
     const existing = nextAgentStatusByPaneKey[paneKey]
-    if (agentStatusEntryEqual(existing, entry)) {
+    // The host's retirement of this pane's launch ends the client's copies of its note.
+    if (retiresLaunch(existing, entry)) {
+      retirement = { ...retirement, ...retirePaneLaunchNote({ ...state, ...retirement }, paneKey) }
+    }
+    if (
+      agentStatusEntryEqual(existing, entry) &&
+      existing?.firstStateStartedAt === entry.firstStateStartedAt
+    ) {
       continue
     }
     if (nextAgentStatusByPaneKey === state.agentStatusByPaneKey) {
@@ -193,6 +230,7 @@ export function buildMirroredAgentStatusPatch(
       !!existing && agentMainAgentVerdict(existing) !== agentMainAgentVerdict(entry)
     const entrySortRelevantChange =
       !existing ||
+      existing.firstStateStartedAt !== entry.firstStateStartedAt ||
       existing.state !== entry.state ||
       !isAgentStatusFresh(existing, now) ||
       entryFreshnessChanged ||
@@ -211,7 +249,8 @@ export function buildMirroredAgentStatusPatch(
   return {
     agentStatusByPaneKey: nextAgentStatusByPaneKey,
     agentStatusEpoch: aggregateRelevantChange ? state.agentStatusEpoch + 1 : state.agentStatusEpoch,
-    sortEpoch: sortRelevantChange ? state.sortEpoch + 1 : state.sortEpoch
+    sortEpoch: sortRelevantChange ? state.sortEpoch + 1 : state.sortEpoch,
+    ...retirement
   }
 }
 

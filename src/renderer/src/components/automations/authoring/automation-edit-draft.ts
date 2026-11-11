@@ -1,0 +1,52 @@
+import { automationCanonicalLaunchSetup } from '../../../../../shared/automations/launch/automation-canonical-launch-setup'
+import type { Automation } from '../../../../../shared/automations/automation-definition'
+import { translate } from '@/i18n/i18n'
+import { getAutomationRunRepoId } from '../../../../../shared/automations/history/automation-run-identity'
+import {
+  isRunnableAutomationSchedule,
+  tryParseAutomationRrule
+} from '../../../../../shared/automations/scheduling/automation-schedule-parsing'
+import type { AutomationDraft } from './AutomationEditorDialog'
+import { AUTOMATION_DEFAULT_TIME, formatTimeInput } from './automation-draft-model'
+import { getAutomationSetupDecisionDraftValue } from './automation-setup-decision'
+
+export function buildAutomationEditDraft(automation: Automation): AutomationDraft {
+  const setup = automationCanonicalLaunchSetup(automation)
+  const schedule = tryParseAutomationRrule(automation.rrule)
+  const hasCustomSchedule = !schedule && isRunnableAutomationSchedule(automation.rrule)
+  return {
+    name: automation.name,
+    prompt: automation.prompt,
+    agentId: automation.agentId,
+    surface: automation.launchSetup?.surface ?? automation.surface ?? 'terminal',
+    extraAgentArgs: setup.extraAgentArgs ?? '',
+    ...(setup.launchPreferences !== undefined
+      ? { launchPreferences: setup.launchPreferences }
+      : {}),
+    ...(setup.agentArgs !== undefined ? { agentArgs: setup.agentArgs } : {}),
+    projectId: getAutomationRunRepoId(automation),
+    workspaceMode: automation.workspaceMode,
+    workspaceId: automation.workspaceId ?? '',
+    baseBranch: automation.baseBranch ?? '',
+    setupDecision: getAutomationSetupDecisionDraftValue({
+      workspaceMode: automation.workspaceMode,
+      persistedSetupDecision: automation.setupDecision
+    }),
+    reuseSession: automation.workspaceMode === 'existing' && automation.reuseSession,
+    precheckCommand: automation.precheck?.command ?? '',
+    precheckTimeoutSeconds: String(automation.precheck?.timeoutSeconds ?? 60),
+    preset: schedule?.preset ?? (hasCustomSchedule ? 'custom' : 'weekdays'),
+    time: schedule ? formatTimeInput(schedule.hour, schedule.minute) : AUTOMATION_DEFAULT_TIME,
+    dayOfWeek: String(schedule?.dayOfWeek ?? 1),
+    customSchedule: hasCustomSchedule ? automation.rrule : '',
+    savedSchedule: automation.rrule,
+    missedRunGraceMinutes: String(automation.missedRunGraceMinutes),
+    scheduleWarning:
+      schedule || hasCustomSchedule
+        ? null
+        : translate(
+            'auto.components.automations.editDraft.unsupportedSchedule',
+            'This automation has an unsupported saved schedule. Pick a supported schedule before saving changes.'
+          )
+  }
+}

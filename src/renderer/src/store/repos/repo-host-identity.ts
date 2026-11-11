@@ -1,0 +1,65 @@
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { Repo } from '../../../../shared/repo-types'
+import {
+  getRepoExecutionHostId,
+  getSettingsFocusedExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
+  normalizeHostPart,
+  type ExecutionHostId
+} from '../../../../shared/execution-host'
+import { getRepoHostIdentity } from '../../../../shared/repo-host-identity'
+
+type RepoIdentityParts = Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>
+
+export function worktreeBelongsToHost(worktree: { hostId?: string }, hostId: string): boolean {
+  return (worktree.hostId ?? LOCAL_EXECUTION_HOST_ID) === hostId
+}
+
+export function getRepoRowIdentity(repo: RepoIdentityParts): string {
+  return JSON.stringify([getRepoHostIdentity(repo), normalizeHostPart(repo.connectionId)])
+}
+
+/** One exact row: a paired server's twins share its `runtime:` host and differ by nested SSH target. */
+export function isSameRepoRow(left: RepoIdentityParts, right: RepoIdentityParts): boolean {
+  return (
+    getRepoHostIdentity(left) === getRepoHostIdentity(right) &&
+    normalizeHostPart(left.connectionId) === normalizeHostPart(right.connectionId)
+  )
+}
+
+export function repoMatchesHostIdentity(
+  repo: RepoIdentityParts,
+  repoId: string,
+  hostId: string
+): boolean {
+  return repo.id === repoId && getRepoExecutionHostId(repo) === hostId
+}
+
+export function findRepoForHost<T extends RepoIdentityParts>(
+  repos: readonly T[],
+  repoId: string,
+  options: {
+    hostId?: ExecutionHostId | (string & {}) | null
+    settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
+  } = {}
+): T | null {
+  const matchingRepos = repos.filter((repo) => repo.id === repoId)
+  if (matchingRepos.length === 0) {
+    return null
+  }
+
+  if (options.hostId) {
+    return matchingRepos.find((repo) => getRepoExecutionHostId(repo) === options.hostId) ?? null
+  }
+
+  if (matchingRepos.length === 1) {
+    return matchingRepos[0]
+  }
+
+  const focusedHostId = getSettingsFocusedExecutionHostId(options.settings)
+  const focusedMatches = matchingRepos.filter(
+    (repo) => getRepoExecutionHostId(repo) === focusedHostId
+  )
+  // Even focused hosts can contain duplicate IDs; refuse bare-ID ambiguity instead of guessing an owner.
+  return focusedMatches.length === 1 ? focusedMatches[0] : null
+}

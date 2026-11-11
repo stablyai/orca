@@ -1,8 +1,11 @@
+import { useAppStateViewActive, useAppStateValue } from '@/store/retained-views/app-state-view'
 import { useCallback, useEffect, useRef } from 'react'
-import { useAppStore } from '@/store'
-import { runtimeHostContactForEntry } from '../../../shared/runtime-host-contact'
-import type { TuiAgent } from '../../../shared/tui-agent'
-import { getRuntimeAgentInventoryKey } from '@/store/slices/runtime-agent-inventory-key'
+import { useAppStore } from '@/store/index'
+import { getLocalAgentPreflightContext } from '@/runtime/hosts/preflight/local-preflight-context'
+import { localAgentInventoryContextKey } from '@/runtime/hosts/preflight/local-preflight-context-key'
+import { runtimeHostContactForEntry } from '../../../shared/remote-runtime/host-status/runtime-host-contact'
+import { getRuntimeAgentInventoryKey } from '@/store/slices/agent-inventory/runtime-agent-inventory-key'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 
 export type UseDetectedAgentsResult = {
   /** Null while detection is in flight on first load. */
@@ -38,10 +41,12 @@ function normalizeAgentDetectionTarget(
   return target
 }
 
-/** One detected-agent inventory keeps launch surfaces synchronized. Accept legacy SSH IDs or host targets; null means local, undefined means unresolved/loading. */
+/** Local Settings requests a complete inventory; launch surfaces use enabled agents. Remote inventories remain complete. */
 export function useDetectedAgents(
-  connectionId: AgentDetectionTarget | string | null | undefined
+  connectionId: AgentDetectionTarget | string | null | undefined,
+  inventory: 'enabled' | 'all' = 'enabled'
 ): UseDetectedAgentsResult {
+  const viewActive = useAppStateViewActive()
   const target = normalizeAgentDetectionTarget(connectionId)
   const observedRemoteTargetKeysRef = useRef<Set<string>>(new Set())
   // Undefined ownership stays loading so remote hydration cannot flash local agents.
@@ -60,7 +65,17 @@ export function useDetectedAgents(
     targetKind === 'runtime' && targetId
       ? getRuntimeAgentInventoryKey(targetId, runtimeWorktreeId)
       : targetId
-  const localContextKey = target?.kind === 'local' ? target.contextKey : undefined
+  const includeDisabled = inventory === 'all'
+  const completeLocalContextKey = useAppStateValue((s) =>
+    targetKind === 'local' && includeDisabled
+      ? localAgentInventoryContextKey(
+          getLocalAgentPreflightContext(s, undefined, undefined, localWorktreeId),
+          true
+        )
+      : undefined
+  )
+  const localContextKey =
+    completeLocalContextKey ?? (target?.kind === 'local' ? target.contextKey : undefined)
   const remoteTargetKey =
     targetKind === 'ssh' && targetId
       ? `ssh:${targetId}`
@@ -68,7 +83,7 @@ export function useDetectedAgents(
         ? `runtime:${recordKey}`
         : null
   // Why: a re-pair clears the record; re-running the effect re-probes for a surface still waiting.
-  const pairingRevision = useAppStore((s) => {
+  const pairingRevision = useAppStateValue((s) => {
     if (targetKind !== 'runtime' || !targetId) {
       return undefined
     }
@@ -78,7 +93,7 @@ export function useDetectedAgents(
 
   // Why: a probe that failed while the host was down must re-run once contact returns, and only then.
   // 'down' only when the host's status says so; a never-asked host is still probed as before.
-  const runtimeContactEpoch = useAppStore((s) => {
+  const runtimeContactEpoch = useAppStateValue((s) => {
     if (targetKind !== 'runtime' || !targetId) {
       return null
     }
@@ -91,7 +106,15 @@ export function useDetectedAgents(
       : 'down'
   })
 
-  const detectedIds = useAppStore((s) => {
+  // The SSH counterpart: its disconnect clears the list, so only the return to connected re-lists it.
+  // Null when the connection has no state yet: probe as before.
+  const sshConnected = useAppStateValue((s) => {
+    const status =
+      targetKind === 'ssh' && targetId ? s.sshConnectionStates.get(targetId)?.status : undefined
+    return status === undefined ? null : status === 'connected'
+  })
+
+  const detectedIds = useAppStateValue((s) => {
     if (isUnknown) {
       return null
     }
@@ -105,7 +128,7 @@ export function useDetectedAgents(
       ? (s.localDetectedAgentIdsByContext[localContextKey] ?? null)
       : s.detectedAgentIds
   })
-  const isLoading = useAppStore((s) => {
+  const isLoading = useAppStateValue((s) => {
     if (isUnknown) {
       return true
     }
@@ -119,7 +142,7 @@ export function useDetectedAgents(
       ? (s.isDetectingLocalAgentsByContext[localContextKey] ?? false)
       : s.isDetectingAgents
   })
-  const isRefreshing = useAppStore((s) => {
+  const isRefreshing = useAppStateValue((s) => {
     if (targetKind === 'runtime' && recordKey) {
       return s.isRefreshingRuntimeAgents[recordKey] ?? false
     }
@@ -133,7 +156,7 @@ export function useDetectedAgents(
       ? (s.isRefreshingLocalAgentsByContext[localContextKey] ?? false)
       : s.isRefreshingAgents
   })
-  const needsServerUpdate = useAppStore((s) =>
+  const needsServerUpdate = useAppStateValue((s) =>
     targetKind === 'runtime' && recordKey
       ? s.runtimeAgentDetectionNeedsServerUpdate[recordKey] === true
       : false
@@ -158,11 +181,14 @@ export function useDetectedAgents(
     if (targetKind === 'ssh' && targetId) {
       return state.refreshRemoteDetectedAgents(targetId)
     }
-    return state.refreshDetectedAgents(localWorktreeId)
-  }, [isUnknown, localWorktreeId, runtimeWorktreeId, targetKind, targetId])
+    // Only the refresh control calls this: a user act that may start a stopped WSL distro.
+    return includeDisabled
+      ? state.refreshAllDetectedAgents(localWorktreeId, { wakeWslDistro: true })
+      : state.refreshDetectedAgents(localWorktreeId, { wakeWslDistro: true })
+  }, [includeDisabled, isUnknown, localWorktreeId, runtimeWorktreeId, targetKind, targetId])
 
   useEffect(() => {
-    if (isUnknown) {
+    if (!viewActive || isUnknown) {
       return
     }
     const isNewRemoteTarget =
@@ -173,8 +199,12 @@ export function useDetectedAgents(
     }
     const state = useAppStore.getState()
     if (targetKind === 'ssh' && targetId) {
+      const failedWhileOffline =
+        sshConnected === false && state.remoteAgentInventoryOutcome(targetId) === 'failed'
       if (detectedIds === null) {
-        void state.ensureRemoteDetectedAgents(targetId)
+        if (!failedWhileOffline) {
+          void state.ensureRemoteDetectedAgents(targetId)
+        }
       } else if (isNewRemoteTarget && detectedIds.length > 0) {
         // Refresh once when a new launch surface observes a host; cached inventory may predate installs.
         void state.refreshRemoteDetectedAgents(targetId)
@@ -200,10 +230,14 @@ export function useDetectedAgents(
       }
     } else {
       if (detectedIds === null && !localProbePending) {
-        void state.ensureDetectedAgents(localWorktreeId)
+        void (includeDisabled
+          ? state.ensureAllDetectedAgents(localWorktreeId)
+          : state.ensureDetectedAgents(localWorktreeId))
       }
     }
   }, [
+    viewActive,
+    includeDisabled,
     isUnknown,
     targetKind,
     targetId,
@@ -211,6 +245,7 @@ export function useDetectedAgents(
     recordKey,
     pairingRevision,
     runtimeContactEpoch,
+    sshConnected,
     detectedIds,
     localProbePending,
     localWorktreeId,

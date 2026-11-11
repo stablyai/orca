@@ -15,12 +15,25 @@ import type {
   TerminalSubscriptionArgs
 } from './terminal-subscribe-types'
 import { deepenHeadlessCopyToDesktopDepth } from './headless-copy-desktop-depth'
+import { sendTerminalSubscribeRecoverySnapshot } from './terminal-subscribe-recovery-snapshot'
+import type { TerminalStreamToken } from './terminal-stream-tokens'
+import { tryPublishResumedOutput } from './terminal-subscribe-binary-resume'
 
 const MOBILE_RENDERER_MOUNT_READY_TIMEOUT_MS = 3_000
 
-export async function publishTerminalSubscribeBinarySnapshot(
+export function publishTerminalSubscribeBinarySnapshot(
   args: TerminalSubscriptionArgs,
-  state: TerminalSubscribeBinaryState
+  state: TerminalSubscribeBinaryState,
+  /** Set when this stream's output is credited; the client acks and later resumes under this token. */
+  streamToken: TerminalStreamToken | null
+): Promise<void> {
+  return args.registration.publishFirstScreen(() => publishSnapshot(args, state, streamToken))
+}
+
+async function publishSnapshot(
+  args: TerminalSubscriptionArgs,
+  state: TerminalSubscribeBinaryState,
+  streamToken: TerminalStreamToken | null
 ): Promise<void> {
   const {
     params,
@@ -46,11 +59,17 @@ export async function publishTerminalSubscribeBinarySnapshot(
   if (state.closed) {
     return
   }
+  // After presence: fitting the PTY to this phone first is what lets a quick tab flip land on an unchanged grid.
+  if (params.resume && tryPublishResumedOutput(args, state, streamToken, params.resume)) {
+    return
+  }
 
+  // After an exit only the held model is read: renderer seeding would build a model for a dead PTY.
+  const seedsFromRenderer = (): boolean =>
+    missingHeadlessStateBeforeMobileFit && !registration.ptyExited
   // Fit first so the seed uses the phone-owned grid.
   const hydratedFromRenderer =
-    missingHeadlessStateBeforeMobileFit &&
-    (await runtime.maybeHydrateHeadlessFromRenderer?.(ptyId)) === true
+    seedsFromRenderer() && (await runtime.maybeHydrateHeadlessFromRenderer?.(ptyId)) === true
   if (state.closed) {
     return
   }
@@ -67,9 +86,7 @@ export async function publishTerminalSubscribeBinarySnapshot(
   }
   // Missing model state, unlike blank text, means never-attached; null renderer answers fall back to mount wait even for stale host flags.
   const needsRendererScreen =
-    missingHeadlessStateBeforeMobileFit &&
-    !hydratedFromRenderer &&
-    serialized?.source !== 'renderer'
+    seedsFromRenderer() && !hydratedFromRenderer && serialized?.source !== 'renderer'
   let rendererReady =
     needsRendererScreen &&
     (await runtime.serializeRendererTerminalBuffer(ptyId, { scrollbackRows: 0 })) !== null
@@ -125,7 +142,7 @@ export async function publishTerminalSubscribeBinarySnapshot(
     }
   }
   let rendererSeed: { seq?: number } | null = null
-  if (rendererReady) {
+  if (rendererReady && seedsFromRenderer()) {
     read = await runtime.readTerminal(params.terminal)
     const stableRendererSnapshot = await serializeStableMobileRendererSnapshot(
       runtime,
@@ -142,17 +159,20 @@ export async function publishTerminalSubscribeBinarySnapshot(
       (typeof stableRendererSnapshot.seq === 'number' || state.pendingOutput.length === 0)
     ) {
       serialized = stableRendererSnapshot
-      const trailingOutput = state.pendingOutput.flatMap((item) => {
-        const output = getOutputAfterSnapshotSeq(item, stableRendererSnapshot.seq)
-        const seq = item.meta?.seq
-        return output && typeof seq === 'number' ? [{ data: output.data, seq }] : []
-      })
-      runtime.replaceHeadlessTerminalFromRendererSnapshotForRecovery(
-        ptyId,
-        stableRendererSnapshot,
-        trailingOutput
-      )
-      rendererSeed = stableRendererSnapshot
+      // The PTY may have exited during the awaits: the phone still gets this screen, but a seed would outlive the PTY.
+      if (seedsFromRenderer()) {
+        const trailingOutput = state.pendingOutput.flatMap((item) => {
+          const output = getOutputAfterSnapshotSeq(item, stableRendererSnapshot.seq)
+          const seq = item.meta?.seq
+          return output && typeof seq === 'number' ? [{ data: output.data, seq }] : []
+        })
+        runtime.replaceHeadlessTerminalFromRendererSnapshotForRecovery(
+          ptyId,
+          stableRendererSnapshot,
+          trailingOutput
+        )
+        rendererSeed = stableRendererSnapshot
+      }
     }
   }
   let initialOutputOverflowed = false
@@ -193,7 +213,8 @@ export async function publishTerminalSubscribeBinarySnapshot(
     cols: serialized?.cols ?? size?.cols,
     rows: serialized?.rows ?? size?.rows,
     displayMode: state.displayMode,
-    seq: layoutSeq
+    seq: layoutSeq,
+    ...(streamToken ? { outputAck: true, streamToken: streamToken.token } : {})
   })
   const snapshotStats = sendSnapshotFrames(state.sendFrame, {
     ...scrollbackFrame,
@@ -208,6 +229,7 @@ export async function publishTerminalSubscribeBinarySnapshot(
     oscLinks: serialized?.oscLinks,
     alternateScreen: serialized?.alternateScreen,
     terminalOwner: serialized?.terminalOwner,
+    lastTitle: serialized?.lastTitle,
     data: serialized?.data ?? ''
   })
   console.log('[mobile-terminal-stream] snapshot', {
@@ -225,52 +247,27 @@ export async function publishTerminalSubscribeBinarySnapshot(
   // Initial replay already rewrapped to these columns; seed resize replay gating.
   state.lastResizeCols = serialized?.cols ?? size?.cols
   let recoveryAttempts = 0
-  // Use the recovery's actual resized frame for its budget.
-  const recoveryFrame = { kind: 'resized', reason: 'pending-output-overflow' } as const
   // Pre-subscribe overflow dropped a middle segment; only a fresh model snapshot covers it.
   while (state.pendingOutputOverflowed && recoveryAttempts < 2) {
     state.pendingOutputOverflowed = false
     recoveryAttempts += 1
-    const recovery = await serializeBudgetedMobileSnapshot(
-      runtime,
-      ptyId,
-      mobileSnapshotByteBudget(params.snapshotByteBudget, state.streamId, recoveryFrame)
+    const recoverySeq = await sendTerminalSubscribeRecoverySnapshot(
+      args,
+      state,
+      'pending-output-overflow'
     )
     if (state.closed) {
       return
     }
-    if (!recovery) {
+    if (recoverySeq === undefined) {
       break
     }
-    // Without output seq, retain bounded replay rather than an unverifiable renderer snapshot.
-    if (typeof recovery.seq !== 'number') {
-      break
-    }
-    // Clients ignore repeat scrollback but apply resized inline; omit output seq to avoid polluting layout seq filtering.
-    const recoveryStats = sendSnapshotFrames(state.sendFrame, {
-      ...recoveryFrame,
-      cols: recovery.cols,
-      rows: recovery.rows,
-      displayMode: state.displayMode,
-      source: recovery.source,
-      truncated: false,
-      truncatedByByteBudget: recovery.truncatedByByteBudget,
-      data: recovery.data
-    })
-    console.log('[mobile-terminal-stream] recovery snapshot', {
-      terminal: params.terminal,
-      streamId: state.streamId,
-      reason: 'pending-output-overflow',
-      bytes: recoveryStats.bytes,
-      chunks: recoveryStats.chunks,
-      scrollbackRows: recovery.scrollbackRows,
-      truncatedByByteBudget: recovery.truncatedByByteBudget === true
-    })
-    const trimmed = trimPendingOutputCoveredBySnapshot(state.pendingOutput, recovery.seq)
+    const trimmed = trimPendingOutputCoveredBySnapshot(state.pendingOutput, recoverySeq)
     state.pendingOutput = trimmed.chunks
     state.pendingOutputBytes = trimmed.bytes
-    snapshotOutputSeq = recovery.seq
+    snapshotOutputSeq = recoverySeq
   }
+  streamToken?.ledger?.anchor(initialOutputOverflowed ? undefined : snapshotOutputSeq)
   state.buffering = false
   const bufferedOutput = state.pendingOutput.splice(0)
   const queryReplayData = state.pendingQueryOverflowed

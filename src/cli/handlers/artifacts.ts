@@ -5,18 +5,18 @@ import type {
   ArtifactListPage,
   ArtifactListItem,
   ArtifactWriteRequest
-} from '../../shared/artifacts'
-import { ARTIFACT_CLI_MAX_RPC_BYTES } from '../../shared/artifacts'
+} from '../../shared/artifacts/artifacts'
+import { ARTIFACT_CLI_MAX_RPC_BYTES } from '../../shared/artifacts/artifacts'
 import {
   parseRemoteArtifactInput,
   REMOTE_ARTIFACT_INPUT_ENV
-} from '../../shared/artifact-cli-bridge'
-import { readArtifactFileWithinLimit } from '../../shared/artifact-file-read'
+} from '../../shared/artifacts/artifact-cli-bridge'
+import { readArtifactFileWithinLimit } from '../../shared/artifacts/artifact-file-read'
 import {
   ARTIFACT_SHARING_DISABLED_CODE,
   ARTIFACT_SHARING_DISABLED_MESSAGE,
   ARTIFACT_SHARING_DISABLED_NEXT_STEPS
-} from '../../shared/artifact-sharing-gate'
+} from '../../shared/artifacts/artifact-sharing-gate'
 import type { CommandHandler, HandlerContext } from '../dispatch'
 import { rejectRemoteSelectionFlags } from '../remote-selection-flag-rejection'
 import { RuntimeClientError } from '../runtime-client'

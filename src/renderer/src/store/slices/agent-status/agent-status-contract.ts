@@ -5,15 +5,15 @@ import type {
   AgentType,
   ParsedAgentStatusPayload,
   TurnEndDisposition
-} from '../../../../../shared/agent-status-types'
-import type { AgentStatusObservation } from '../../../../../shared/agent-status-observation'
+} from '../../../../../shared/agent-status/contracts/agent-status-types'
+import type { AgentStatusObservation } from '../../../../../shared/agent-status/contracts/agent-status-observation'
 import type { ProgramStatusFacet } from '../../../../../shared/program-status/facet'
 import type {
   AgentProviderSessionMetadata,
   ResumableTuiAgent,
   SleepingAgentLaunchConfig
-} from '../../../../../shared/agent-session-resume'
-import type { TerminalTab } from '../../../../../shared/terminal-tab-types'
+} from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 
 export type RetainedAgentEntry = {
   entry: AgentStatusEntry
@@ -106,7 +106,8 @@ export type AgentStatusMetadata = {
   /** Structured status rows remain fresh while the host owns the session; cleared on feed loss. */
   structuredHostOwned?: true
   providerSession?: AgentProviderSessionMetadata
-  launchConfig?: SleepingAgentLaunchConfig
+  /** Null is a host statement that no Orca launch runs; absent says nothing. */
+  launchConfig?: SleepingAgentLaunchConfig | null
   launchToken?: string
   terminalResumeEligible?: false
   paneOwner?: { agent: AgentType; session: string }
@@ -130,7 +131,10 @@ export type AgentProviderSessionRouting = {
   connectionId?: string | null
 }
 
-export type AgentProviderSessionRecordMetadata = { launchToken?: string }
+export type AgentProviderSessionRecordMetadata = {
+  launchToken?: string
+  launchConfig?: SleepingAgentLaunchConfig | null
+}
 
 export type AgentProviderSessionUpdate = {
   kind: 'providerSession'
@@ -160,3 +164,11 @@ export type AgentStatusBatchTransaction = {
   apply: (update: AgentStatusBatchUpdate) => boolean
   afterCommit: (effect: () => void) => void
 }
+
+/** Ephemeral accepted live-row mutations; missing references describe creation/deletion. */
+export type AgentStatusChange = {
+  paneKey: string
+  previous: AgentStatusEntry | undefined
+  current: AgentStatusEntry | undefined
+}
+export type AgentStatusChangeListener = (changes: readonly AgentStatusChange[]) => void

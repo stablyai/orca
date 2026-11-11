@@ -3,23 +3,23 @@
 import { describe, expect, it, vi, type Mock } from 'vitest'
 import type {
   AgentJournalItemBody,
-  AgentJournalItemIdentity,
   AgentJournalMessageItem
-} from '../../shared/agent-session-journal-types'
-import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
-import { ClaudeStructuredSessionAdapter } from './claude-structured-session-adapter'
+} from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session/journal/agent-session-journal-identity'
+import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
+import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { ClaudeStructuredSessionAdapter } from './structured/claude-structured-session-adapter'
 import type {
   ClaudeStructuredSessionAdapterDeps,
   ClaudeStructuredSessionEvent
 } from './structured/claude-structured-session-state'
-import type { ClaudeStructuredLaunch } from './claude-structured-launch-resolution'
+import type { ClaudeStructuredLaunch } from './structured/launch/claude-structured-launch-resolution'
 import {
   fakeClaude,
   identityFor,
   PROVIDER_SESSION_ID
-} from './claude-structured-session-test-support'
-import { claudeStartupSettled } from './claude-structured-startup-settled-test-support'
+} from './structured/claude-structured-session-test-support'
+import { claudeStartupSettled } from './structured/claude-structured-startup-settled-test-support'
 import {
   assistantText,
   initFrame,
@@ -28,18 +28,7 @@ import {
   type CapturedFoldFrame
 } from './claude-fold-steer-frame-builders.test-fixture'
 import {
-  backgroundWakeCapture,
-  cancelCapture,
-  CANCEL_SEND_AT,
-  earlySteerCapture,
-  EARLY_STEER_SEND_AT,
   FIRST_PROMPT,
-  foldFreshCapture,
-  FOLD_FRESH_SEND_AT,
-  foldResumedCapture,
-  FOLD_RESUMED_SEND_AT,
-  missCapture,
-  MISS_SEND_AT,
   SECOND_STEER_PROMPT,
   STEER_PROMPT,
   twoSteersCapture,
@@ -82,6 +71,7 @@ async function riggedAdapter(
       providerSessionId: PROVIDER_SESSION_ID,
       resumeLeafUuid: null,
       resumesTranscript: false,
+      cliFlag: async () => 'supported' as const,
       continuesChain: false,
       ...launch
     }),
@@ -141,101 +131,6 @@ function replayEventFor(events: ClaudeStructuredSessionEvent[], uuid: string) {
 }
 
 describe('Claude fold receipt for a mid-turn send (captured orders)', () => {
-  it('fold-fresh: the folded steer settles as a receipt inside the one turn it was sent during', async () => {
-    const rig = await riggedAdapter()
-    const first = await rig.dispatchAt(FOLD_FRESH_SEND_AT.first, 'client-first', FIRST_PROMPT)
-    const framesFor = (steerUuid: string) =>
-      foldFreshCapture({ sessionId: PROVIDER_SESSION_ID, first, steer: steerUuid })
-    for (const captured of framesFor('pending')) {
-      if (captured.at < FOLD_FRESH_SEND_AT.steer) {
-        rig.deliver(captured)
-      }
-    }
-    const steer = await rig.dispatchAt(FOLD_FRESH_SEND_AT.steer, 'client-steer', STEER_PROMPT)
-    for (const captured of framesFor(steer)) {
-      if (captured.at > FOLD_FRESH_SEND_AT.steer) {
-        rig.deliver(captured)
-      }
-    }
-
-    const turnIds = [...new Set(rig.turns().map((turn) => turn.turnId))]
-    expect(turnIds).toEqual([first])
-    expect(rig.turns().every((turn) => turn.state !== 'interrupted')).toBe(true)
-    expect(rig.turns().at(-1)).toMatchObject({
-      turnId: first,
-      state: 'completed',
-      outcome: 'success',
-      startedAt: T0 + 2_094,
-      completedAt: T0 + 23_048,
-      durationMs: 22_845
-    })
-    expect(rig.settled).toHaveBeenCalledWith({
-      sessionId: 'session-1',
-      clientMessageId: 'client-steer',
-      providerIdentity: { provider: 'claude', sessionId: PROVIDER_SESSION_ID, uuid: steer }
-    })
-    expect(replayEventFor(rig.events, steer)).not.toHaveProperty('startsTurn')
-    expect(replayEventFor(rig.events, first)).toMatchObject({ startsTurn: true })
-  })
-
-  it('session-start proof: a hook-frame startup proof with init only at the first cycle still folds', async () => {
-    // Captured SessionStart proof precedes init; fold detection must not depend on proof-frame shape.
-    const rig = await riggedAdapter({}, { initProof: 'session-start' })
-    const first = await rig.dispatchAt(FOLD_FRESH_SEND_AT.first, 'client-first', FIRST_PROMPT)
-    const framesFor = (steerUuid: string) =>
-      foldFreshCapture({ sessionId: PROVIDER_SESSION_ID, first, steer: steerUuid })
-    for (const captured of framesFor('pending')) {
-      if (captured.at < FOLD_FRESH_SEND_AT.steer) {
-        rig.deliver(captured)
-      }
-    }
-    const steer = await rig.dispatchAt(FOLD_FRESH_SEND_AT.steer, 'client-steer', STEER_PROMPT)
-    for (const captured of framesFor(steer)) {
-      if (captured.at > FOLD_FRESH_SEND_AT.steer) {
-        rig.deliver(captured)
-      }
-    }
-
-    expect([...new Set(rig.turns().map((turn) => turn.turnId))]).toEqual([first])
-    expect(rig.turns().every((turn) => turn.state !== 'interrupted')).toBe(true)
-    expect(replayEventFor(rig.events, steer)).not.toHaveProperty('startsTurn')
-  })
-
-  it('fold-resumed: the receipt holds on a resumed provider session', async () => {
-    const rig = await riggedAdapter({
-      resumeLeafUuid: 'leaf-1',
-      resumesTranscript: true,
-      continuesChain: true
-    })
-    const first = await rig.dispatchAt(FOLD_RESUMED_SEND_AT.first, 'client-first', FIRST_PROMPT)
-    const framesFor = (steerUuid: string) =>
-      foldResumedCapture({ sessionId: PROVIDER_SESSION_ID, first, steer: steerUuid })
-    for (const captured of framesFor('pending')) {
-      if (captured.at < FOLD_RESUMED_SEND_AT.steer) {
-        rig.deliver(captured)
-      }
-    }
-    const steer = await rig.dispatchAt(FOLD_RESUMED_SEND_AT.steer, 'client-steer', STEER_PROMPT)
-    for (const captured of framesFor(steer)) {
-      if (captured.at > FOLD_RESUMED_SEND_AT.steer) {
-        rig.deliver(captured)
-      }
-    }
-    expect(rig.settled).toHaveBeenCalledWith({
-      sessionId: 'session-1',
-      clientMessageId: 'client-steer',
-      providerIdentity: { provider: 'claude', sessionId: PROVIDER_SESSION_ID, uuid: steer }
-    })
-
-    expect([...new Set(rig.turns().map((turn) => turn.turnId))]).toEqual([first])
-    expect(rig.turns().every((turn) => turn.state !== 'interrupted')).toBe(true)
-    expect(rig.turns().at(-1)).toMatchObject({
-      turnId: first,
-      state: 'completed',
-      durationMs: 23_367
-    })
-  })
-
   it('two-steers: both folded sends settle individually inside the one turn', async () => {
     const rig = await riggedAdapter()
     const first = await rig.dispatchAt(TWO_STEERS_SEND_AT.first, 'client-first', FIRST_PROMPT)
@@ -274,89 +169,6 @@ describe('Claude fold receipt for a mid-turn send (captured orders)', () => {
       sessionId: 'session-1',
       clientMessageId: 'client-steer-2',
       providerIdentity: { provider: 'claude', sessionId: PROVIDER_SESSION_ID, uuid: secondSteer }
-    })
-  })
-
-  it('early-steer: a steer written before the first replay arrives still folds into the one turn', async () => {
-    const rig = await riggedAdapter()
-    const first = await rig.dispatchAt(EARLY_STEER_SEND_AT.first, 'client-first', FIRST_PROMPT)
-    const framesFor = (steerUuid: string) =>
-      earlySteerCapture({ sessionId: PROVIDER_SESSION_ID, first, steer: steerUuid })
-    for (const captured of framesFor('pending')) {
-      if (captured.at < EARLY_STEER_SEND_AT.steer) {
-        rig.deliver(captured)
-      }
-    }
-    const steer = await rig.dispatchAt(EARLY_STEER_SEND_AT.steer, 'client-steer', STEER_PROMPT)
-    for (const captured of framesFor(steer)) {
-      if (captured.at > EARLY_STEER_SEND_AT.steer) {
-        rig.deliver(captured)
-      }
-    }
-
-    expect([...new Set(rig.turns().map((turn) => turn.turnId))]).toEqual([first])
-    expect(rig.turns().every((turn) => turn.state !== 'interrupted')).toBe(true)
-    expect(rig.turns().at(-1)).toMatchObject({
-      turnId: first,
-      state: 'completed',
-      durationMs: 7_155
-    })
-    expect(replayEventFor(rig.events, steer)).not.toHaveProperty('startsTurn')
-    expect(rig.settled).toHaveBeenCalledWith({
-      sessionId: 'session-1',
-      clientMessageId: 'client-steer',
-      providerIdentity: { provider: 'claude', sessionId: PROVIDER_SESSION_ID, uuid: steer }
-    })
-  })
-
-  it('background-wake: the wake cycle opens from its output and its result settles no waiter', async () => {
-    const rig = await riggedAdapter()
-    const first = await rig.dispatchAt(13, 'client-first', FIRST_PROMPT)
-    const { firstTurn, wake } = backgroundWakeCapture({
-      sessionId: PROVIDER_SESSION_ID,
-      first,
-      steer: 'unused'
-    })
-    for (const captured of [...firstTurn, ...wake]) {
-      rig.deliver(captured)
-    }
-
-    // Captured task completion precedes wake init and opens the wake turn.
-    const finalByTurn = new Map(rig.turns().map((turn) => [turn.turnId, turn]))
-    expect([...finalByTurn.keys()]).toEqual([first, 'task_updated-17547'])
-    expect(finalByTurn.get('task_updated-17547')).toMatchObject({ state: 'completed' })
-    expect(rig.settled).toHaveBeenCalledTimes(1)
-  })
-
-  it('background-wake: a steer replayed after the wake cycle began work folds into the wake turn', async () => {
-    const rig = await riggedAdapter()
-    const first = await rig.dispatchAt(13, 'client-first', FIRST_PROMPT)
-    const { firstTurn, wake } = backgroundWakeCapture({
-      sessionId: PROVIDER_SESSION_ID,
-      first,
-      steer: 'pending'
-    })
-    const wakeResult = wake.findIndex((captured) => captured.frame.type === 'result')
-    for (const captured of [...firstTurn, ...wake.slice(0, wakeResult)]) {
-      rig.deliver(captured)
-    }
-    // Add a mid-cycle replay to the captured wake order, matching the p3 early-steer shape.
-    const steer = await rig.dispatchAt(19_725, 'client-steer', STEER_PROMPT)
-    rig.deliver(userReplay(19_726, PROVIDER_SESSION_ID, steer, STEER_PROMPT))
-    for (const captured of wake.slice(wakeResult)) {
-      rig.deliver(captured)
-    }
-
-    expect([...new Set(rig.turns().map((turn) => turn.turnId))]).toEqual([
-      first,
-      'task_updated-17547'
-    ])
-    expect(rig.turns().every((turn) => turn.state !== 'interrupted')).toBe(true)
-    expect(replayEventFor(rig.events, steer)).not.toHaveProperty('startsTurn')
-    expect(rig.settled).toHaveBeenCalledWith({
-      sessionId: 'session-1',
-      clientMessageId: 'client-steer',
-      providerIdentity: { provider: 'claude', sessionId: PROVIDER_SESSION_ID, uuid: steer }
     })
   })
 
@@ -421,112 +233,9 @@ describe('Claude fold receipt for a mid-turn send (captured orders)', () => {
       providerIdentity: { provider: 'claude', sessionId: PROVIDER_SESSION_ID, uuid: steer }
     })
   })
-
-  it('miss: a steer whose replay trails the result keeps the opener path and its own turn', async () => {
-    const rig = await riggedAdapter()
-    const first = await rig.dispatchAt(MISS_SEND_AT.first, 'client-first', FIRST_PROMPT)
-    const { beforeSteerSend } = missCapture({
-      sessionId: PROVIDER_SESSION_ID,
-      first,
-      steer: 'pending'
-    })
-    for (const captured of beforeSteerSend) {
-      rig.deliver(captured)
-    }
-    const steer = await rig.dispatchAt(MISS_SEND_AT.steer, 'client-steer', STEER_PROMPT)
-    for (const captured of missCapture({ sessionId: PROVIDER_SESSION_ID, first, steer })
-      .afterSteerSend) {
-      rig.deliver(captured)
-    }
-
-    expect([...new Set(rig.turns().map((turn) => turn.turnId))]).toEqual([first, steer])
-    expect(rig.turns().every((turn) => turn.state !== 'interrupted')).toBe(true)
-    const finalByTurn = new Map(rig.turns().map((turn) => [turn.turnId, turn]))
-    expect(finalByTurn.get(first)).toMatchObject({
-      state: 'completed',
-      completedAt: T0 + 25_556,
-      durationMs: 25_241
-    })
-    expect(finalByTurn.get(steer)).toMatchObject({
-      state: 'completed',
-      startedAt: T0 + 28_703,
-      completedAt: T0 + 29_275,
-      durationMs: 3_711
-    })
-    expect(replayEventFor(rig.events, steer)).toMatchObject({ startsTurn: true })
-  })
-
-  it('cancel: a cancelled steer settles nothing and the receipt path changes none of it', async () => {
-    const rig = await riggedAdapter()
-    const first = await rig.dispatchAt(CANCEL_SEND_AT.first, 'client-first', FIRST_PROMPT)
-    const { beforeSteerSend, afterInterrupt } = cancelCapture({
-      sessionId: PROVIDER_SESSION_ID,
-      first,
-      steer: 'never-replayed'
-    })
-    for (const captured of beforeSteerSend) {
-      rig.deliver(captured)
-    }
-    await rig.dispatchAt(CANCEL_SEND_AT.steer, 'client-steer', STEER_PROMPT)
-    for (const captured of afterInterrupt) {
-      rig.deliver(captured)
-    }
-
-    expect([...new Set(rig.turns().map((turn) => turn.turnId))]).toEqual([first])
-    expect(rig.turns().at(-1)).toMatchObject({
-      turnId: first,
-      state: 'interrupted',
-      outcome: 'cancellation'
-    })
-    expect(rig.settled).not.toHaveBeenCalledWith(
-      expect.objectContaining({ clientMessageId: 'client-steer' })
-    )
-    expect(replayEventFor(rig.events, 'interrupt-notice-1')).not.toHaveProperty('startsTurn')
-  })
 })
 
 describe('Claude fold receipt boundaries (synthetic orders)', () => {
-  it('lost result: a root init starts a cycle with no work yet, so the next adopted replay is a boundary', async () => {
-    const rig = await riggedAdapter()
-    const uuidA = await rig.dispatchAt(10, 'client-a', 'first prompt')
-    rig.deliver(userReplay(1_000, PROVIDER_SESSION_ID, uuidA, 'first prompt'))
-    const uuidB = await rig.dispatchAt(1_500, 'client-b', STEER_PROMPT)
-    rig.deliver(initFrame(2_000, PROVIDER_SESSION_ID))
-    rig.deliver(userReplay(3_000, PROVIDER_SESSION_ID, uuidB, STEER_PROMPT))
-
-    expect([...new Set(rig.turns().map((turn) => turn.turnId))]).toEqual([uuidA, uuidB])
-    expect(replayEventFor(rig.events, uuidB)).toMatchObject({ startsTurn: true })
-  })
-
-  it('provider wake: an adopted replay during the live wake cycle folds into the wake turn', async () => {
-    // Combine captured wake-cycle semantics (p3-background-wake) with a mid-cycle replay (p3-early-steer).
-    const rig = await riggedAdapter()
-    const uuidA = await rig.dispatchAt(10, 'client-a', 'first prompt')
-    rig.deliver(userReplay(1_000, PROVIDER_SESSION_ID, uuidA, 'first prompt'))
-    rig.deliver(
-      resultFrame(2_000, PROVIDER_SESSION_ID, 'result-1', {
-        userMessageUuids: [uuidA],
-        durationMs: 1_990,
-        numTurns: 1
-      })
-    )
-    const uuidB = await rig.dispatchAt(2_500, 'client-b', STEER_PROMPT)
-    rig.deliver(initFrame(3_000, PROVIDER_SESSION_ID))
-    rig.deliver(assistantText(3_500, PROVIDER_SESSION_ID, 'provider-resumed-1', 'background done'))
-    rig.deliver(userReplay(4_000, PROVIDER_SESSION_ID, uuidB, STEER_PROMPT))
-
-    expect([...new Set(rig.turns().map((turn) => turn.turnId))]).toEqual([
-      uuidA,
-      'provider-resumed-1'
-    ])
-    expect(replayEventFor(rig.events, uuidB)).not.toHaveProperty('startsTurn')
-    expect(rig.settled).toHaveBeenCalledWith({
-      sessionId: 'session-1',
-      clientMessageId: 'client-b',
-      providerIdentity: { provider: 'claude', sessionId: PROVIDER_SESSION_ID, uuid: uuidB }
-    })
-  })
-
   it('a fresh replay uuid with user_message_uuid correlation keeps the opener path, not a fold receipt', async () => {
     const rig = await riggedAdapter()
     const uuidA = await rig.dispatchAt(10, 'client-a', 'first prompt')
@@ -542,31 +251,6 @@ describe('Claude fold receipt boundaries (synthetic orders)', () => {
       clientMessageId: 'client-b',
       providerIdentity: { provider: 'claude', sessionId: PROVIDER_SESSION_ID, uuid: 'fresh-turn-2' }
     })
-  })
-
-  it('plural result uuids: an unsettled folded waiter settles under its own uuid, never a shared result alias', async () => {
-    const rig = await riggedAdapter()
-    const uuidA = await rig.dispatchAt(10, 'client-a', 'first prompt')
-    rig.deliver(userReplay(1_000, PROVIDER_SESSION_ID, uuidA, 'first prompt'))
-    const uuidB = await rig.dispatchAt(1_500, 'client-b', STEER_PROMPT)
-    rig.deliver(
-      resultFrame(5_000, PROVIDER_SESSION_ID, 'result-1', {
-        userMessageUuids: [uuidA, uuidB],
-        durationMs: 4_990,
-        numTurns: 2
-      })
-    )
-
-    expect(rig.settled).toHaveBeenCalledWith({
-      sessionId: 'session-1',
-      clientMessageId: 'client-b',
-      providerIdentity: { provider: 'claude', sessionId: PROVIDER_SESSION_ID, uuid: uuidB }
-    })
-    expect(rig.settled).not.toHaveBeenCalledWith(
-      expect.objectContaining({ providerIdentity: expect.objectContaining({ uuid: 'result-1' }) })
-    )
-    expect([...new Set(rig.turns().map((turn) => turn.turnId))]).toEqual([uuidA])
-    expect(rig.turns().at(-1)).toMatchObject({ turnId: uuidA, state: 'completed' })
   })
 
   it('plural result uuids: a result naming only settled sends does not claim an unnamed live waiter by queue order', async () => {

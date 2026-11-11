@@ -1,14 +1,16 @@
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import { retireAtRestCommandSettings } from '../../native-chat/agent-session-wire/at-rest-command-context'
+import { retireAtRestCommandSettings } from '../../native-chat/agent-session-wire/options/at-rest-command-context'
+import { createAgentModelCatalogSettingsExpiry } from '../../native-chat/agent-model-catalog/agent-model-catalog-account-expiry'
+import { agentModelCatalogStore } from '../../native-chat/agent-model-catalog/agent-model-catalog-store'
 import type { OnboardingChecklistState } from '../../../shared/onboarding-state-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import { getDefaultOnboardingState } from '../../../shared/onboarding-defaults'
 import type { FeatureInteractionId } from '../../../shared/feature-interactions'
 import {
-  nativeChatUpgradeTipVariant,
-  parseNativeChatUpgradeTipAudience,
-  type NativeChatUpgradeTipVariant
-} from '../../../shared/native-chat/native-chat-upgrade-tip-audience'
+  chatUiLaunchTipVariant,
+  parseChatUiLaunchTipAudience,
+  type ChatUiLaunchTipVariant
+} from '../../../shared/native-chat/chat-ui-launch-tip-audience'
 import {
   updateSettings as updateSettingsOperation,
   type SettingsMutationOperations
@@ -21,16 +23,25 @@ import {
 } from '../applying-settings/feature-interaction-recording'
 
 import type { StoreRuntimeState } from './store-runtime-state'
+import { persistGithubCache } from './github-cache-persistence'
 import type { WriteSchedulingOperations } from './write-scheduling'
 import { scheduleSave } from './write-scheduling'
-import { bumpLocalWorktreeScanGeneration } from '../../local-worktree-scan-generation'
+import { bumpLocalWorktreeScanGeneration } from '../../workspaces/catalog/local-worktree-scan-generation'
 
 type ProfilePreferencesRuntime = Pick<
   StoreRuntimeState,
   | 'activeViewPreference'
+  | 'dataFile'
   | 'githubCacheDirty'
-  | 'githubCacheGeneration'
+  | 'githubCachePersistedAt'
+  | 'githubCacheLegacyFileHash'
+  | 'githubCachePersistenceDisabled'
+  | 'githubCachePersistTimer'
+  | 'githubCacheRetryDelayMs'
   | 'githubCacheWriteListeners'
+  | 'profileMaintenancePending'
+  | 'quitFlushStarted'
+  | 'writesFrozen'
   | 'protectedSecrets'
   | 'runDurableMutation'
   | 'settingsChangeListeners'
@@ -103,7 +114,7 @@ export class ProfilePreferences {
         rollback: () => {
           const currentEntries = new Map(Object.entries(runtime.state.settings))
           const nextEntries = new Map(Object.entries(next))
-          const restoredUpdates = Object.fromEntries(
+          const restoredUpdates: Record<string, unknown> = Object.fromEntries(
             Object.entries(previous).filter(
               ([key]) =>
                 updateKeys.has(key) && Object.is(currentEntries.get(key), nextEntries.get(key))
@@ -116,8 +127,13 @@ export class ProfilePreferences {
               Object.is(currentEntries.get(key), nextEntries.get(key))
             ) {
               Reflect.deleteProperty(restoredSettings, key)
+              restoredUpdates[key] = undefined
             }
           }
+          createAgentModelCatalogSettingsExpiry(agentModelCatalogStore, runtime.state.settings)(
+            restoredUpdates,
+            restoredSettings
+          )
           runtime.state.settings = restoredSettings
           retireAtRestCommandSettings(updateKeys)
         }
@@ -170,14 +186,14 @@ export class ProfilePreferences {
         ...updates.checklist
       }
     }
-    scheduleSave(this[profilePreferencesContext].scheduling)
+    scheduleSave(this[profilePreferencesContext].scheduling, ['onboarding'])
     return this.getOnboarding()
   }
 
-  getNativeChatUpgradeTipVariant(): NativeChatUpgradeTipVariant {
-    return nativeChatUpgradeTipVariant(
-      parseNativeChatUpgradeTipAudience(
-        this[profilePreferencesContext].runtime.state.nativeChatUpgradeTipAudience
+  getChatUiLaunchTipVariant(): ChatUiLaunchTipVariant {
+    return chatUiLaunchTipVariant(
+      parseChatUiLaunchTipAudience(
+        this[profilePreferencesContext].runtime.state.chatUiLaunchTipAudience
       )
     )
   }
@@ -190,7 +206,7 @@ export class ProfilePreferences {
     // Cache polls write a sidecar at flush; scheduling a full profile save here amplifies every poll.
     this[profilePreferencesContext].runtime.state.githubCache = cache
     this[profilePreferencesContext].runtime.githubCacheDirty = true
-    this[profilePreferencesContext].runtime.githubCacheGeneration += 1
+    persistGithubCache(this[profilePreferencesContext].runtime, 'routine')
     for (const listener of this[profilePreferencesContext].runtime.githubCacheWriteListeners) {
       listener()
     }
@@ -251,7 +267,7 @@ export function getUIUpdateOperations(owner: ProfilePreferences): UIUpdateOperat
     setActiveView: (activeView) =>
       owner[profilePreferencesContext].runtime.activeViewPreference.set(activeView),
     getUI: () => owner.getUI(),
-    scheduleSave: () => scheduleSave(owner[profilePreferencesContext].scheduling),
+    scheduleSave: () => scheduleSave(owner[profilePreferencesContext].scheduling, ['ui']),
     notifyUIChanged: () => notifyUIChanged(owner)
   }
 }

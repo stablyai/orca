@@ -9,14 +9,14 @@ import {
   WRITE_ACCEPTED,
   writeUnverifiable,
   type WriteSettlement
-} from '../../../src/shared/pty-write-settlement'
+} from '../../../src/shared/terminal/pty/lifecycle/pty-write-settlement'
 import { toSshExecutionHostId } from '../../../src/shared/execution-host'
 import { createPtyWriteInput } from '../../../src/main/ipc/pty/ipc/write-input'
 import type { IPtyProvider } from '../../../src/main/providers/pty-provider-contract'
 import type * as PtyProviderRegistry from '../../../src/main/ipc/pty/provider/registry'
 import { ptyOwnership } from '../../../src/main/ipc/pty/provider/ownership-state'
 import { OrcaRuntimeService } from '../../../src/main/runtime/orca-runtime'
-import { makeStore } from '../../../src/main/runtime/runtime-rpc-worktree-store-fixtures'
+import { makeStore } from '../../../src/main/runtime/rpc/server/runtime-rpc-worktree-store-fixtures'
 
 const io = vi.hoisted(() => ({
   getProvider: (): IPtyProvider => {
@@ -34,10 +34,10 @@ vi.mock('../../../src/main/ipc/pty/provider/registry', async (importOriginal) =>
   }
 })
 vi.mock('@/store', () => ({ useAppStore: { getState: () => ({ terminalLayoutsByTabId: {} }) } }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
   callRuntimeRpc: (...args: unknown[]) => io.rpc(...args)
 }))
-vi.mock('@/runtime/runtime-terminal-stream', () => ({
+vi.mock('@/runtime/hosted-terminals/identity/remote-runtime-pty-owner', () => ({
   getRemoteRuntimePtyEnvironmentId: (id: string) => (id.startsWith('remote:') ? 'owner' : null),
   getRemoteRuntimeTerminalHandle: (id: string) => (id.startsWith('remote:') ? 'terminal' : null),
   getRemoteRuntimePtyOwner: (id: string) =>
@@ -78,7 +78,7 @@ function createSettlingProvider(
       if (mode === 'lost') {
         return settleAfter(10, writeUnverifiable('transport_settlement_lost', true))
       }
-      if (mode === 'slow' && data.startsWith('X')) {
+      if (mode === 'slow' && (data.startsWith('X') || data.startsWith('\x1b[200~X'))) {
         return settleAfter(1300, WRITE_ACCEPTED)
       }
       return Promise.resolve(WRITE_ACCEPTED)

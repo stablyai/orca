@@ -1,17 +1,19 @@
+import { replaceTabBuckets, replaceRecordEntries } from '@/store/keyed-record-transitions'
+import { getFirstTerminalTabOwnerWorktreeId } from './terminal-tab-owner-index'
 import {
   isRemoteRuntimePtyId,
   parseRemoteRuntimePtyId,
   toRemoteRuntimePtyId
 } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
-import { isTerminalTabPresent } from '../slices/terminal-tab-retirement'
-import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
+import { isTerminalTabPresent } from './terminal-tab-retirement'
 import {
   consumePendingActivationSpawn,
   getPendingActivationSpawnCount
 } from './terminal-pty-identities'
 import { omitUnverifiedPtyLossTabIds } from './terminal-unverified-pty-loss'
-import { clearWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
+import { clearWorktreeSleepIntent } from '@/lib/workspace/sleep/worktree-sleep-intent'
 import { omitDisownedPtyIds } from './terminal-disowned-pty-sources'
+import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 
 export function createTerminalPtyBindingActions(
   set: TerminalStoreSet,
@@ -25,9 +27,11 @@ export function createTerminalPtyBindingActions(
       }
       let worktreeId: string | null = null
       let wasActivationSpawn = false
+      let wasAlreadyBound = false
       const isRemoteRuntimeMirror = isRemoteRuntimePtyId(ptyId)
       set((s) => {
         const existingPtyIds = s.ptyIdsByTabId[tabId] ?? []
+        wasAlreadyBound = !replacedPtyId && existingPtyIds.includes(ptyId)
         const remote = parseRemoteRuntimePtyId(ptyId)
         const legacyRemotePtyId = remote?.environmentId ? toRemoteRuntimePtyId(remote.handle) : null
         const hasLegacyPtyBinding = legacyRemotePtyId
@@ -60,15 +64,18 @@ export function createTerminalPtyBindingActions(
               })
             )
             if (changed) {
-              nextTerminalLayoutsByTabId = {
-                ...s.terminalLayoutsByTabId,
-                [tabId]: { ...existingLayout, ptyIdsByLeafId: nextBindings }
-              }
+              nextTerminalLayoutsByTabId = replaceRecordEntries<
+                TerminalSlice['terminalLayoutsByTabId'][string]
+              >(s.terminalLayoutsByTabId, [
+                [tabId, { ...existingLayout, ptyIdsByLeafId: nextBindings }]
+              ])
             }
           }
         }
         let nextTabsByWorktree = s.tabsByWorktree
-        for (const [wId, tabs] of Object.entries(s.tabsByWorktree)) {
+        const ownerId = getFirstTerminalTabOwnerWorktreeId(s.tabsByWorktree, tabId)
+        for (const wId of ownerId ? [ownerId] : []) {
+          const tabs = s.tabsByWorktree[wId] ?? []
           const index = tabs.findIndex((t) => t.id === tabId)
           if (index === -1) {
             continue
@@ -97,7 +104,7 @@ export function createTerminalPtyBindingActions(
                 : {}),
               ptyId: nextTabPtyId
             }
-            nextTabsByWorktree = { ...s.tabsByWorktree, [wId]: nextTabs }
+            nextTabsByWorktree = replaceTabBuckets(s.tabsByWorktree, [[wId, nextTabs]])
           }
           break
         }
@@ -110,14 +117,22 @@ export function createTerminalPtyBindingActions(
           (s.suppressedPtyExitIds[ptyId] ||
             (replacementPtyId && s.suppressedPtyExitIds[replacementPtyId]))
         )
-        const nextSuppressedPtyExitIds = { ...s.suppressedPtyExitIds }
-        delete nextSuppressedPtyExitIds[ptyId]
-        if (replacementPtyId) {
-          delete nextSuppressedPtyExitIds[replacementPtyId]
-        }
-        if (shouldRetainSuppressedExit) {
-          // Why: handle rotation keeps the same terminal lifecycle; an intentional exit racing the rotation must stay suppressed once.
-          nextSuppressedPtyExitIds[ptyId] = true
+        const touchesSuppressedExit =
+          ptyId in s.suppressedPtyExitIds ||
+          (replacementPtyId !== null && replacementPtyId in s.suppressedPtyExitIds)
+        // Keep identity on a plain reattach so subscribers don't re-render for an unchanged map.
+        const nextSuppressedPtyExitIds = touchesSuppressedExit
+          ? { ...s.suppressedPtyExitIds }
+          : s.suppressedPtyExitIds
+        if (touchesSuppressedExit) {
+          delete nextSuppressedPtyExitIds[ptyId]
+          if (replacementPtyId) {
+            delete nextSuppressedPtyExitIds[replacementPtyId]
+          }
+          if (shouldRetainSuppressedExit) {
+            // Why: handle rotation keeps the same terminal lifecycle; an intentional exit racing the rotation must stay suppressed once.
+            nextSuppressedPtyExitIds[ptyId] = true
+          }
         }
         const nextUnverifiedPtyLossTabIds = s.unverifiedPtyLossTabIds[tabId]
           ? omitUnverifiedPtyLossTabIds(s.unverifiedPtyLossTabIds, [tabId])
@@ -166,16 +181,22 @@ export function createTerminalPtyBindingActions(
         }
         return {
           ...(nextTabsByWorktree !== s.tabsByWorktree
-            ? { tabsByWorktree: nextTabsByWorktree }
+            ? {
+                tabsByWorktree: nextTabsByWorktree
+              }
             : {}),
-          ptyIdsByTabId: {
-            ...s.ptyIdsByTabId,
-            [tabId]: nextPtyIds
-          },
-          lastKnownRelayPtyIdByTabId: {
-            ...s.lastKnownRelayPtyIdByTabId,
-            [tabId]: ptyId
-          },
+          ...(nextPtyIds !== existingPtyIds || !(tabId in s.ptyIdsByTabId)
+            ? {
+                ptyIdsByTabId: replaceRecordEntries(s.ptyIdsByTabId, [[tabId, nextPtyIds]])
+              }
+            : {}),
+          ...(s.lastKnownRelayPtyIdByTabId[tabId] !== ptyId
+            ? {
+                lastKnownRelayPtyIdByTabId: replaceRecordEntries(s.lastKnownRelayPtyIdByTabId, [
+                  [tabId, ptyId]
+                ])
+              }
+            : {}),
           ...(nextUnverifiedPtyLossTabIds !== s.unverifiedPtyLossTabIds
             ? { unverifiedPtyLossTabIds: nextUnverifiedPtyLossTabIds }
             : {}),
@@ -187,7 +208,9 @@ export function createTerminalPtyBindingActions(
           codexRestartNoticeByPtyId: nextCodexRestartNoticeByPtyId,
           migrationUnsupportedByPtyId: nextMigrationUnsupportedByPtyId,
           ...(nextTerminalLayoutsByTabId !== s.terminalLayoutsByTabId
-            ? { terminalLayoutsByTabId: nextTerminalLayoutsByTabId }
+            ? {
+                terminalLayoutsByTabId: nextTerminalLayoutsByTabId
+              }
             : {}),
           ...(shouldBumpSortEpoch ? { sortEpoch: s.sortEpoch + 1 } : {})
         }
@@ -195,7 +218,8 @@ export function createTerminalPtyBindingActions(
       // Why: a bound PTY means the workspace is awake by any route (CLI, automation, client wake), not only activation.
       clearWorktreeSleepIntent(worktreeId)
       // Why: activation spawns come from clicking a worktree, not work in it — skip the lastActivityAt stamp and sortEpoch bump; other spawn reasons still bump.
-      if (worktreeId && !wasActivationSpawn && !isRemoteRuntimeMirror) {
+      // A remount reattaching its own live PTY (e.g. a hidden prewarm) is not new work either.
+      if (worktreeId && !wasActivationSpawn && !wasAlreadyBound && !isRemoteRuntimeMirror) {
         get().bumpWorktreeActivity(worktreeId)
       }
     }

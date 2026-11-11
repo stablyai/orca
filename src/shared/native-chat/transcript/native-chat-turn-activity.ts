@@ -1,8 +1,8 @@
-import { readAgentJournalTurn } from '../../agent-session-turn-record'
-import type { AgentJournalRenderItem } from '../../agent-session-journal-types'
-import type { AgentSessionTurnActivity } from '../../agent-session-wire'
-import { isRootAgentJournalItem } from '../../agent-session-journal-producer'
-import { normalizePromptField } from '../../agent-status-field-normalization'
+import { readAgentJournalTurn } from '../../agent-session/lifecycle/agent-session-turn-record'
+import type { AgentJournalRenderItem } from '../../agent-session/journal/agent-session-journal-types'
+import type { AgentSessionTurnActivity } from '../../agent-session/agent-session-wire'
+import { isRootAgentJournalItem } from '../../agent-session/journal/agent-session-journal-producer'
+import { normalizePromptField } from '../../agent-status/contracts/agent-status-field-normalization'
 import { describeActiveToolCall, formatActiveToolLabel } from '../tools/native-chat-tool-activity'
 
 export type NativeChatTurnActivity = { kind: 'description'; text: string }

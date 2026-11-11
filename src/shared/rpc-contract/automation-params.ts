@@ -1,5 +1,7 @@
-import { z } from 'zod'
-import { isTuiAgent } from '../tui-agent-config'
+import * as z from 'zod'
+import { ChoicePatch, OptionKey } from './agent-launch-settings-params'
+import { AGENT_PERMISSION_CHOICES } from '../agent-launch/permissions/tui-agent-permission-choice'
+import { isTuiAgent } from '../agent-launch/catalog/tui-agent-config'
 import {
   OptionalBoolean,
   OptionalPlainString,
@@ -9,11 +11,11 @@ import {
   requiredString
 } from './rpc-param-primitives'
 import { normalizeExecutionHostId } from '../execution-host'
-import { isValidAutomationSchedule } from '../automation-schedule-parsing'
+import { isValidAutomationSchedule } from '../automations/scheduling/automation-schedule-parsing'
 import {
   MAX_AUTOMATION_PRECHECK_TIMEOUT_SECONDS,
   normalizeAutomationPrecheckTimeoutSeconds
-} from '../automation-precheck'
+} from '../automations/launch/automation-precheck'
 
 export const TuiAgent = requiredString('Missing provider').refine(isTuiAgent, {
   message: 'Unknown provider'
@@ -178,11 +180,77 @@ export const AutomationRuns = z.object({
   automationId: OptionalString,
   expectedOwner: ExpectedOwner,
   limit: OptionalPositiveInt,
-  cursor: OptionalString
+  cursor: OptionalString,
+  /** Reply with a byte-bounded page of rows whose output is cut to a preview. */
+  preview: OptionalBoolean,
+  /** Reply with this one full run as `{ run }`; requires `automationId`. */
+  runId: OptionalString
 })
 
 // Why strict: null or a non-string must fail rather than fall back to "omitted", which preserves.
 const ExtraAgentArgs = z.string({ message: 'Extra agent arguments must be text.' }).optional()
+
+export const AutomationCanonicalLaunchSetup = z.strictObject({
+  surface: z.enum(['chat', 'terminal']).optional(),
+  extraAgentArgs: z.string().optional(),
+  launchPreferences: ChoicePatch.extend({
+    permissionMode: z.enum(AGENT_PERMISSION_CHOICES).optional()
+  }).optional(),
+  agentArgs: z
+    .string()
+    .refine((value) => !value.includes('\0'))
+    .nullable()
+    .optional()
+})
+
+export const AutomationLaunchSetupPatch = z
+  .strictObject({
+    surface: z.enum(['chat', 'terminal']).optional(),
+    choices: ChoicePatch.optional(),
+    arguments: z
+      .discriminatedUnion('kind', [
+        z.strictObject({ kind: z.literal('legacy-extras'), value: z.string() }),
+        z.strictObject({
+          kind: z.literal('value'),
+          value: z.string().refine((value) => !value.includes('\0'))
+        }),
+        z.strictObject({ kind: z.literal('empty') }),
+        z.strictObject({ kind: z.literal('inherit') })
+      ])
+      .optional(),
+    sources: z
+      .strictObject({
+        arguments: z
+          .discriminatedUnion('kind', [
+            z.strictObject({
+              kind: z.literal('value'),
+              value: z.string().refine((value) => !value.includes('\0'))
+            }),
+            z.strictObject({ kind: z.literal('empty') }),
+            z.strictObject({ kind: z.literal('inherit') })
+          ])
+          .optional(),
+        legacyArguments: z.string().optional(),
+        extraAgentArgs: z.string().optional(),
+        retiredChoices: z
+          .array(
+            z
+              .string()
+              .refine(
+                (key) =>
+                  key === 'model' ||
+                  key === 'permissionMode' ||
+                  (key.startsWith('options.') && OptionKey.safeParse(key.slice(8)).success)
+              )
+          )
+          .optional()
+      })
+      .optional(),
+    copy: AutomationCanonicalLaunchSetup.optional()
+  })
+  .refine((patch) => Object.values(patch).some((value) => value !== undefined), {
+    message: 'Choose an automation launch change.'
+  })
 
 export const AutomationCreate = z.object({
   creationKey: OptionalString,
@@ -191,6 +259,7 @@ export const AutomationCreate = z.object({
   precheck: AutomationPrecheck,
   agentId: TuiAgent,
   extraAgentArgs: ExtraAgentArgs,
+  launchSetupPatch: AutomationLaunchSetupPatch.optional(),
   runContext: WorkspaceRunContext,
   sourceContext: TaskSourceContext,
   repo: OptionalString,
@@ -198,6 +267,7 @@ export const AutomationCreate = z.object({
   workspaceMode: AutomationWorkspaceMode,
   baseBranch: OptionalPlainString,
   setupDecision: SetupDecision,
+  setupTrustHash: z.string().max(128).optional(),
   reuseSession: OptionalBoolean,
   timezone: OptionalString,
   rrule: AutomationSchedule,
@@ -213,6 +283,7 @@ export const AutomationUpdateFields = z.object({
   precheck: AutomationPrecheck,
   agentId: TuiAgent.optional(),
   extraAgentArgs: ExtraAgentArgs,
+  launchSetupPatch: AutomationLaunchSetupPatch.optional(),
   runContext: WorkspaceRunContext,
   sourceContext: TaskSourceContext,
   repo: OptionalString,
@@ -221,6 +292,7 @@ export const AutomationUpdateFields = z.object({
   // Why: update patches distinguish omitted from null so callers can clear a saved base branch.
   baseBranch: OptionalNullablePlainString,
   setupDecision: SetupDecision,
+  setupTrustHash: z.string().max(128).optional(),
   reuseSession: OptionalBoolean,
   timezone: OptionalString,
   rrule: AutomationSchedule.optional(),
@@ -233,5 +305,7 @@ export const AutomationUpdate = z.object({
   id: requiredString('Missing automation id'),
   updates: AutomationUpdateFields,
   expectedOwner: ExpectedOwner,
-  destination: Destination
+  destination: Destination,
+  // An edit relying on the current new-per-run mode is refused if the stored mode changed first.
+  expectedWorkspaceMode: z.literal('new_per_run').optional()
 })

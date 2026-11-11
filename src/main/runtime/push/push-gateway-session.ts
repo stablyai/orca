@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { cancelUnreadResponseBody } from '../../lib/unread-response-body'
-import type { E2EEKeypair } from '../e2ee-keypair'
+import type { E2EEKeypair } from '../rpc/server/pairing/e2ee-keypair'
 import { deriveRelayHostId } from '../mobile-cloud-relay/relay-http-client'
 import { answerPushHostChallenge } from './push-host-proof'
 import {

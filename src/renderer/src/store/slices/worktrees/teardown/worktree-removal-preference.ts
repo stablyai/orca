@@ -1,5 +1,5 @@
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
-import type { RemoveWorktreeOptions } from '../../worktree-removal-options'
+import type { RemoveWorktreeOptions } from './worktree-removal-options'
 
 export function resolveWorktreeRemovalPreference(
   settings: GlobalSettings | null,

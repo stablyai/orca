@@ -1,6 +1,8 @@
 import path from 'node:path'
+import { WorkspacePortPathIndex } from './workspace-port-path-index'
 import { realpath } from 'node:fs/promises'
 import { withTimeout } from '../../shared/promise-timeout-fallback'
+import { blockedWslDistroForPath } from '../wsl/filesystem/wsl-unc-access-gate'
 import { PrioritySemaphore } from '../../shared/priority-semaphore'
 import { mapWithConcurrency } from '../../shared/map-with-concurrency'
 import type {
@@ -33,7 +35,7 @@ function observeRealpath(root: string, deadline: number): Promise<string | null 
         release()
         return undefined
       }
-      return realpath(root).then(normalizeComparablePath).finally(release)
+      return realpathUnlessWslStopped(root).finally(release)
     })
     .catch((error: unknown) =>
       error instanceof Error &&
@@ -54,6 +56,17 @@ function observeRealpath(root: string, deadline: number): Promise<string | null 
   return operation
 }
 
+/**
+ * A WSL root's realpath is a 9P touch that starts a stopped distro (E9). The port scan is background,
+ * so it never wakes one: a stopped root's alias stays unknown, as a timed-out lookup's does.
+ */
+async function realpathUnlessWslStopped(root: string): Promise<string | undefined> {
+  if (await blockedWslDistroForPath(root)) {
+    return undefined
+  }
+  return normalizeComparablePath(await realpath(root))
+}
+
 const HTTP_PORTS: Record<number, true> = {
   80: true,
   3000: true,
@@ -72,7 +85,10 @@ export function attributePortToWorkspace(
   port: Pick<RawListeningPort, 'cwd' | 'commandLine'>,
   worktrees: WorkspacePortProbe[]
 ): WorkspacePortOwner | undefined {
-  return attributePortToNormalizedWorkspaces(port, normalizeWorkspacePortProbes(worktrees))
+  return attributePortToNormalizedWorkspaces(
+    port,
+    new WorkspacePortPathIndex(normalizeWorkspacePortProbes(worktrees))
+  )
 }
 
 export function normalizeWorkspacePortProbes(
@@ -124,16 +140,12 @@ export async function resolveWorkspacePortProbes(
 
 function attributePortToNormalizedWorkspaces(
   port: Pick<RawListeningPort, 'cwd' | 'commandLine'>,
-  worktrees: readonly NormalizedWorkspacePortProbe[]
+  index: WorkspacePortPathIndex
 ): WorkspacePortOwner | undefined {
   const cwd = port.cwd ? normalizeComparablePath(port.cwd) : null
   const commandLine = port.commandLine ? normalizeComparableText(port.commandLine) : null
 
-  const cwdMatch = cwd
-    ? pickDeepestMatching(worktrees, ({ normalizedPath }) =>
-        isSameOrDescendant(cwd, normalizedPath)
-      )
-    : undefined
+  const cwdMatch = cwd ? index.findCwd(cwd) : undefined
   if (cwdMatch) {
     return toOwner(cwdMatch.worktree, 'cwd')
   }
@@ -142,17 +154,32 @@ function attributePortToNormalizedWorkspaces(
     return undefined
   }
 
-  const commandMatch = pickDeepestMatching(worktrees, ({ normalizedPath }) =>
-    includesPathBoundary(commandLine, normalizedPath)
-  )
+  const commandMatch = index.findCommand(commandLine)
   return commandMatch ? toOwner(commandMatch.worktree, 'command') : undefined
 }
+type AttributedListeningPort = { port: RawListeningPort; owner: WorkspacePortOwner | undefined }
+
+export function attributePortsToWorkspaces(
+  ports: readonly RawListeningPort[],
+  worktrees: readonly NormalizedWorkspacePortProbe[]
+): AttributedListeningPort[] {
+  let index: WorkspacePortPathIndex | undefined
+  return ports.map((port) => ({
+    port,
+    owner:
+      port.cwd || port.commandLine
+        ? attributePortToNormalizedWorkspaces(
+            port,
+            (index ??= new WorkspacePortPathIndex(worktrees))
+          )
+        : undefined
+  }))
+}
+
 export function enrichPort(
-  port: RawListeningPort,
-  worktrees: readonly NormalizedWorkspacePortProbe[],
+  { port, owner }: AttributedListeningPort,
   urlWatcher: Pick<AdvertisedUrlWatcher, 'lookup'>
 ): WorkspacePort {
-  const owner = attributePortToNormalizedWorkspaces(port, worktrees)
   const base = {
     id: `${port.host}:${port.port}:${port.pid ?? 'unknown'}`,
     bindHost: port.host,
@@ -181,25 +208,22 @@ export function enrichPort(
 }
 
 export function reconcileAdvertisedUrls(
-  ports: RawListeningPort[],
+  ports: readonly AttributedListeningPort[],
   worktrees: readonly NormalizedWorkspacePortProbe[],
-  urlWatcher: Pick<AdvertisedUrlWatcher, 'reconcileScan'>
+  urlWatcher: Pick<AdvertisedUrlWatcher, 'reconcileWorkspaces'>
 ): void {
   const observationsByWorktree = new Map<string, { port: number; pid?: number }[]>()
   for (const worktree of worktrees) {
     observationsByWorktree.set(worktree.worktree.id, [])
   }
-  for (const port of ports) {
-    const owner = attributePortToNormalizedWorkspaces(port, worktrees)
+  for (const { port, owner } of ports) {
     if (!owner) {
       continue
     }
     observationsByWorktree.get(owner.worktreeId)?.push({ port: port.port, pid: port.pid })
   }
-  for (const [worktreeId, observations] of observationsByWorktree) {
-    // Invalidate disappeared/changed listeners before lazy lookup can pin a stale banner.
-    urlWatcher.reconcileScan([worktreeId], observations)
-  }
+  // Invalidate disappeared/changed listeners before lazy lookup can pin a stale banner.
+  urlWatcher.reconcileWorkspaces(observationsByWorktree)
 }
 
 export function compareWorkspacePorts(a: WorkspacePort, b: WorkspacePort): number {
@@ -236,41 +260,6 @@ function toOwner(
     path: worktree.path,
     confidence
   }
-}
-
-function pickDeepestMatching<T extends { normalizedPath: string }>(
-  candidates: readonly T[],
-  predicate: (candidate: T) => boolean
-): T | undefined {
-  let best: T | undefined
-  for (const candidate of candidates) {
-    if (!predicate(candidate)) {
-      continue
-    }
-    if (!best || candidate.normalizedPath.length > best.normalizedPath.length) {
-      best = candidate
-    }
-  }
-  return best
-}
-
-function isSameOrDescendant(candidate: string, parent: string): boolean {
-  return candidate === parent || candidate.startsWith(`${parent}/`)
-}
-
-function includesPathBoundary(commandLine: string, normalizedPath: string): boolean {
-  let index = commandLine.indexOf(normalizedPath)
-  while (index !== -1) {
-    const before = index === 0 ? '' : commandLine[index - 1]
-    const after = commandLine[index + normalizedPath.length] ?? ''
-    const startsOnBoundary = before === '' || /\s|["'=]/.test(before)
-    const endsOnBoundary = after === '' || /[\s"'/:]/.test(after)
-    if (startsOnBoundary && endsOnBoundary) {
-      return true
-    }
-    index = commandLine.indexOf(normalizedPath, index + normalizedPath.length)
-  }
-  return false
 }
 
 function normalizeComparablePath(input: string): string {

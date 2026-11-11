@@ -3,9 +3,9 @@
 import type {
   AgentSessionBackgroundTask,
   AgentSessionBackgroundTaskState
-} from './agent-session-wire'
-import { agentChildWorkLiveness } from './agent-status-child-work-liveness'
-import type { AgentChildWorkView } from './agent-status-child-work-view'
+} from './agent-session/agent-session-background-task-wire'
+import { agentChildWorkLiveness } from './agent-status/child-work/agent-status-child-work-liveness'
+import type { AgentChildWorkView } from './agent-status/child-work/agent-status-child-work-view'
 
 export type StructuredSessionBackgroundTasksView = {
   /** Background rows remain visible during a foreground turn. */

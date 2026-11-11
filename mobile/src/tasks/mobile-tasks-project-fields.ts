@@ -1,3 +1,8 @@
+import {
+  projectContentField,
+  projectContentFieldLabel
+} from '../../../src/shared/github/project-content-field'
+import { translate } from '../i18n/mobile-i18n'
 import type { GitHubProjectTable as SharedGitHubProjectTable } from '../../../src/shared/github/project-types'
 import { isIterationCurrent } from '../../../src/shared/github/project-group-sort'
 import type { ProjectGroup } from '../../../src/shared/github/project-group-sort'
@@ -48,17 +53,32 @@ export function projectFieldValueLabel(row: GitHubProjectRow, field: GitHubProje
 }
 
 export function projectFieldDisplayLabel(row: GitHubProjectRow, field: GitHubProjectField): string {
+  const contentValue = projectContentField(row.content, field.dataType)
+  if (contentValue !== undefined) {
+    if (!contentValue) {
+      return 'Empty'
+    }
+    const label = projectContentFieldLabel(contentValue)
+    if (contentValue.kind !== 'linked') {
+      return label
+    }
+    const overflow = contentValue.linked.totalCount - contentValue.linked.pullRequests.length
+    return [
+      label,
+      overflow > 0
+        ? translate('tasks.githubProjectList.linkedPullRequestsOverflow', '+{{count}} more', {
+            count: overflow
+          })
+        : ''
+    ]
+      .filter(Boolean)
+      .join(' ')
+  }
   if (field.dataType === 'ASSIGNEES') {
     return row.content.assignees.map((user) => user.login).join(', ') || 'Empty'
   }
   if (field.dataType === 'LABELS') {
     return row.content.labels.map((label) => label.name).join(', ') || 'Empty'
-  }
-  if (field.dataType === 'REPOSITORY') {
-    return row.content.repository ?? 'Empty'
-  }
-  if (field.dataType === 'PARENT_ISSUE') {
-    return row.content.parentIssue ? `#${row.content.parentIssue.number}` : 'Empty'
   }
   if (field.dataType === 'ISSUE_TYPE') {
     return row.content.issueType?.name ?? 'Empty'

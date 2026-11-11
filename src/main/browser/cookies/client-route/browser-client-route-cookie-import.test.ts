@@ -1,0 +1,122 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+const {
+  bindingStore,
+  detectInstalledBrowsersMock,
+  getProfileMock,
+  getRouteIdentityMock,
+  importCookiesFromBrowserMock,
+  importCookiesFromFileMock,
+  requireRouteBrowserProfileMock,
+  recordClientRouteImportSourceMock,
+  selectBrowserProfileMock
+} = vi.hoisted(() => ({
+  bindingStore: {
+    get: vi.fn(() => null as string | null),
+    set: vi.fn(() => [] as readonly string[]),
+    touch: vi.fn(),
+    findPartitionByFingerprint: vi.fn(() => null as string | null),
+    rebind: vi.fn()
+  },
+  detectInstalledBrowsersMock: vi.fn(),
+  getProfileMock: vi.fn(),
+  getRouteIdentityMock: vi.fn(),
+  importCookiesFromBrowserMock: vi.fn(),
+  importCookiesFromFileMock: vi.fn(),
+  requireRouteBrowserProfileMock: vi.fn(),
+  recordClientRouteImportSourceMock: vi.fn(),
+  selectBrowserProfileMock: vi.fn()
+}))
+
+vi.mock('../sources/browser-cookie-detection', () => ({
+  detectInstalledBrowsers: detectInstalledBrowsersMock,
+  selectBrowserProfile: selectBrowserProfileMock
+}))
+vi.mock('../browser-cookie-import', () => ({
+  importCookiesFromBrowser: importCookiesFromBrowserMock
+}))
+vi.mock('../imports/import-cookie-file', () => ({
+  importCookiesFromFile: importCookiesFromFileMock
+}))
+vi.mock('../../routing/partitions/browser-route-partition-binding-runtime', () => ({
+  currentBrowserRoutePartitionBindingStore: () => bindingStore
+}))
+vi.mock('../../sessions/profiles/browser-session-registry', () => ({
+  browserSessionRegistry: {
+    getProfile: getProfileMock,
+    requireRouteBrowserProfile: requireRouteBrowserProfileMock
+  }
+}))
+vi.mock('./client-route-cookie-import-source-store', () => ({
+  recordClientRouteCookieImportSource: recordClientRouteImportSourceMock
+}))
+vi.mock('../../client-hosts/lifecycle/paired-runtime-browser-client-host-runtime', () => ({
+  getPairedRuntimeBrowserClientRouteIdentity: getRouteIdentityMock
+}))
+
+const { importCookiesIntoClientRoutePartition } =
+  await import('./browser-client-route-cookie-import')
+
+const routeIdentity = {
+  orcaProfileId: 'orca-profile-a',
+  authorityConnectionIdentity: 'paired-runtime:authority-a',
+  executionHostIdentity: 'execution-host-a',
+  pairingAuthorityConnectionIdentity: 'paired-runtime:pairing-authority-a',
+  legacyAuthorityConnectionIdentity: 'paired-runtime:legacy-authority-a',
+  legacyExecutionHostIdentity: 'legacy-execution-host-a',
+  storageScope: 'e'.repeat(64)
+}
+
+const repairedRouteIdentity = {
+  ...routeIdentity,
+  authorityConnectionIdentity: 'paired-runtime:authority-b'
+}
+
+const chrome = {
+  family: 'chrome',
+  label: 'Chrome',
+  profiles: [{ name: 'Person 1', directory: 'Default' }],
+  selectedProfile: 'Default'
+}
+
+const request = {
+  environmentId: 'env-a',
+  browserProfileId: 'default',
+  browserFamily: 'chrome'
+}
+
+beforeEach(() => {
+  vi.clearAllMocks()
+  bindingStore.get.mockReturnValue(null)
+  getRouteIdentityMock.mockReturnValue(routeIdentity)
+  getProfileMock.mockReturnValue({ id: 'default', partition: 'persist:legacy-server-profile' })
+  detectInstalledBrowsersMock.mockReturnValue([chrome])
+  importCookiesFromBrowserMock.mockResolvedValue({ ok: true, summary: { importedCookies: 4 } })
+  importCookiesFromFileMock.mockResolvedValue({ ok: true, summary: { importedCookies: 2 } })
+})
+
+describe('importCookiesIntoClientRoutePartition', () => {
+  it('fails closed on a conflicting persisted binding', async () => {
+    bindingStore.get.mockReturnValue('b'.repeat(64))
+
+    expect(await importCookiesIntoClientRoutePartition(request)).toMatchObject({
+      ok: false,
+      reason: 'browser_route_partition_binding_conflict'
+    })
+    expect(importCookiesFromBrowserMock).not.toHaveBeenCalled()
+  })
+
+  // A replacement during import must not report success for an abandoned partition.
+  it('fails the import when the server is re-paired mid-import', async () => {
+    getRouteIdentityMock.mockReturnValueOnce(routeIdentity).mockReturnValue(repairedRouteIdentity)
+
+    const result = await importCookiesIntoClientRoutePartition(request)
+
+    expect(result).toMatchObject({
+      ok: false,
+      reason: 'This server was re-paired during the import. Try again.'
+    })
+    expect(importCookiesFromBrowserMock).toHaveBeenCalledOnce()
+    expect(recordClientRouteImportSourceMock).not.toHaveBeenCalled()
+  })
+})

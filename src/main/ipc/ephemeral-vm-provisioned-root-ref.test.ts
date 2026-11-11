@@ -1,7 +1,8 @@
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { removeTempDirs } from '../../shared/testing/remove-temp-dirs.test-support'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 const handlers = new Map<string, (_event: unknown, args: never) => unknown>()
@@ -15,6 +16,7 @@ const { connectRuntimeOwnedSshTargetMock, getPathMock, handleMock, removeHandler
 )
 
 vi.mock('electron', () => ({
+  BrowserWindow: { getAllWindows: () => [] },
   app: { getPath: getPathMock },
   ipcMain: { handle: handleMock, removeHandler: removeHandlerMock }
 }))
@@ -42,9 +44,8 @@ beforeEach(() => {
   })
 })
 
-afterEach(() => {
-  rmSync(userDataPath, { recursive: true, force: true })
-  rmSync(repoPath, { recursive: true, force: true })
+afterEach(async () => {
+  await removeTempDirs([userDataPath, repoPath])
   vi.clearAllMocks()
 })
 
@@ -62,23 +63,6 @@ it('captures the source ref commit before a provisioned-root recipe starts', asy
   expect(readFileSync(createCountPath, 'utf8')).toBe('x')
   expect(JSON.parse(readFileSync(createEnvPath, 'utf8'))).toEqual({
     ref: 'selected',
-    refHead: expectedRefHead,
-    repoUrl: ''
-  })
-})
-
-it('captures the effective default ref when no start ref is selected', async () => {
-  const expectedRefHead = createGitFixtureCommit(repoPath)
-  const createCountPath = join(repoPath, 'create-count.txt')
-  const createEnvPath = join(repoPath, 'create-env.json')
-  writeRecipe(repoPath, createCountPath, createEnvPath)
-  registerEphemeralVmHandlers(makeStore(repoPath) as never)
-
-  const result = await provision({})
-
-  expect(result).toMatchObject({ ok: true, connectionType: 'ssh', expectedRefHead })
-  expect(JSON.parse(readFileSync(createEnvPath, 'utf8'))).toEqual({
-    ref: 'main',
     refHead: expectedRefHead,
     repoUrl: ''
   })

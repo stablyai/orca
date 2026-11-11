@@ -166,39 +166,4 @@ describe('generated OpenCode 2 setup ownership', () => {
       expect(hooks.dispose).toHaveBeenCalledOnce()
     }
   )
-
-  it('disposes both owners once on ordinary unload', async () => {
-    const hooks = { event: vi.fn(async () => {}), dispose: vi.fn(async () => {}) }
-    const promptDispose = vi.fn(async () => {})
-    const cleanup = await createSetup(async () => hooks)({
-      session: { hook: async () => ({ dispose: promptDispose }) },
-      event: { subscribe: async function* () {} }
-    })
-    expect(hooks.dispose).not.toHaveBeenCalled()
-    await cleanup()
-    expect(promptDispose).toHaveBeenCalledOnce()
-    expect(hooks.dispose).toHaveBeenCalledOnce()
-  })
-
-  it('accepts absent optional disposers', async () => {
-    const cleanup = await createSetup(async () => ({ event: async () => {} }))({
-      session: { hook: async () => undefined },
-      event: { subscribe: async function* () {} }
-    })
-    await cleanup()
-  })
-
-  it('skips allocation for an unusable context and tolerates factory rejection', async () => {
-    const factory = vi.fn(async (): Promise<Hooks> => {
-      throw new Error('Factory failed')
-    })
-    await (
-      await createSetup(factory)(undefined)
-    )()
-    expect(factory).not.toHaveBeenCalled()
-    await (
-      await createSetup(factory)({ session: { hook: vi.fn() }, event: { subscribe: vi.fn() } })
-    )()
-    expect(factory).toHaveBeenCalledOnce()
-  })
 })

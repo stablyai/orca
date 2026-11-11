@@ -18,10 +18,11 @@ import {
   gitHubSshConfigHostAlias
 } from './github-remote-identity-parsing'
 import { resolveSshConfigHostname } from './github-ssh-host-alias-resolution'
-import { parseWslPath } from '../wsl'
-import { isStableMissingGitRemoteError } from '../git/stable-missing-git-remote-error'
+import { parseWslPath } from '../wsl/filesystem/unc-path-access'
+import { isStableMissingGitRemoteError } from '../git/remotes/stable-missing-git-remote-error'
 import { requireReachableGitRoute } from '../providers/execution-host-provider-dispatch'
 import { getConnectionExecutionHostId } from '../../shared/execution-host'
+import { getPublicForgeProviderForHost } from '../../shared/git/remotes/public-forge-host'
 
 export type GitHubEnterpriseRepoSlug = GitHubOwnerRepo & { host: string }
 
@@ -131,8 +132,13 @@ async function resolveAuthenticatedGitHubHost(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<string | null | undefined> {
+  const owner = getPublicForgeProviderForHost(host)
+  if (owner && owner !== 'github') {
+    return null
+  }
   const normalizedHost = normalizeGitHubHost(host)?.authority ?? host.trim().toLowerCase()
-  const cacheKey = `${runtimeCacheKey(repoPath, connectionId, localGitOptions.wslDistro)}\0${normalizedHost}\0${githubReadExecutionScope({ ghAccount: localGitOptions.ghAccount })}`
+  const execOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions))
+  const cacheKey = `${runtimeCacheKey(repoPath, connectionId, localGitOptions.wslDistro)}\0${normalizedHost}\0${githubReadExecutionScope(execOptions)}`
   const now = Date.now()
   pruneHostAuthCache(now)
   const cached = hostAuthCache.get(cacheKey)
@@ -144,9 +150,6 @@ async function resolveAuthenticatedGitHubHost(
     return inFlight
   }
   const probe = (async () => {
-    const execOptions = {
-      ...ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions))
-    }
     let authenticatedHost: string | null
     try {
       const { stdout, stderr } = await ghExecFileAsync(['auth', 'status'], execOptions)

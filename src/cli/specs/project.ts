@@ -48,10 +48,19 @@ export const PROJECT_COMMAND_SPECS: CommandSpec[] = [
     path: ['project', 'setup-clone'],
     summary: 'Make a project available on a host by cloning a repository',
     usage:
-      'orca project setup-clone --project <id> --host <host> --url <clone-url> --destination <path> [--display-name <name>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'project', 'host', 'url', 'destination', 'display-name'],
+      'orca project setup-clone --project <id> --host <host> --url <clone-url> --destination <path> [--folder-name <name>] [--display-name <name>] [--json]',
+    allowedFlags: [
+      ...GLOBAL_FLAGS,
+      'project',
+      'host',
+      'url',
+      'destination',
+      'folder-name',
+      'display-name'
+    ],
     notes: [
       'For remote runtimes, --destination must be an absolute parent directory on the remote server.',
+      '--folder-name sets the folder created inside --destination; it defaults to the repository name from the URL.',
       '--host takes local, ssh:<target-id>, runtime:<environment-id>, or the bare host name `orca host list` prints for any of them.',
       'SSH targets are cloned through the desktop UI because the desktop client owns SSH connections.'
     ],

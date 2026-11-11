@@ -2,20 +2,18 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, test } from 'vitest'
-import { codexProviderHandle } from '../../../src/shared/agent-session-provider-handle-encoding'
-import { agentSessionFailureFact } from '../../../src/shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../../src/shared/agent-session-failure-words'
-import type {
-  AgentJournalSubmission,
-  AgentSessionJournalIdentity
-} from '../../../src/shared/agent-session-journal-types'
-import type { AgentSessionHistoryPage } from '../../../src/shared/agent-session-wire'
+import { codexProviderHandle } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { agentSessionFailureFact } from '../../../src/shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../src/shared/agent-session/failures/agent-session-failure-words'
+import type { AgentJournalSubmission } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionJournalIdentity } from '../../../src/shared/agent-session/journal/agent-session-journal-identity'
+import type { AgentSessionHistoryPage } from '../../../src/shared/agent-session/agent-session-wire'
 import {
   createTrackedJournalOpener,
   type TrackedJournalOpener
-} from '../../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
-import { projectJournalBatch } from '../../../src/main/native-chat/agent-session-wire/agent-session-journal-batch'
-import { readAgentSessionHydrationPage } from '../../../src/main/native-chat/agent-session-wire/agent-session-history-page'
+} from '../../../src/main/native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { projectJournalBatch } from '../../../src/main/native-chat/agent-session-wire/publication/history/agent-session-journal-batch'
+import { readAgentSessionHydrationPage } from '../../../src/main/native-chat/agent-session-wire/publication/history/agent-session-history-page'
 import {
   importReleaseCheckoutModule,
   materializeReleaseCheckout,

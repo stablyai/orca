@@ -1,31 +1,37 @@
 import { memo, useRef, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { ShieldQuestion } from 'lucide-react-native'
-import { approvalBlockedPathToShow } from '../../../../../src/shared/agent-session-approval-blocked-path'
-import { MobileNativeChatCardHeaderAction } from '../../MobileNativeChatCardHeaderAction'
-import { MobileMarkdown } from '../../../components/MobileMarkdown'
+import { approvalDetailPreview } from '../../../../../src/shared/agent-session/agent-session-approval-detail-preview'
+import { approvalBlockedPathToShow } from '../../../../../src/shared/agent-session/agent-session-approval-blocked-path'
+import { MobileNativeChatCardHeaderAction } from './MobileNativeChatCardHeaderAction'
+import { MobileNativeChatMarkdown } from '../transcript/MobileNativeChatMarkdown'
 import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import {
   isNewerApprovalSubject,
   isPlanApprovalSubject
-} from '../../../../../src/shared/agent-session-approval-subject'
+} from '../../../../../src/shared/agent-session/agent-session-approval-subject'
 import type { MobileChatPermission } from './mobile-native-chat-permission'
 
 function MobileNativeChatPermissionImpl({
   permission,
   onRespond,
   onCancel,
-  onCollapse
+  onCollapse,
+  onAnswerInTerminal
 }: {
   permission: MobileChatPermission
   onRespond: (send: string) => Promise<boolean>
+  /** Shown when the card has no options: only the terminal can answer it. */
+  onAnswerInTerminal?: () => void
   onCancel?: (prompt?: NonNullable<MobileChatPermission['prompt']>) => Promise<boolean>
   // Collapse writes nothing to the agent.
   onCollapse?: () => void
 }): React.JSX.Element {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const [submitting, setSubmitting] = useState(false)
   const submittingRef = useRef(false)
   // Unknown newer-host subjects allow only cancellation; preserve their detail for the reader.
@@ -64,7 +70,7 @@ function MobileNativeChatPermissionImpl({
       <MobileNativeChatPermissionContext permission={permission} newerSubject={newerSubject} />
       <View testID="native-chat-approval-actions" style={styles.options}>
         {permission.options.map((option, index) => {
-          const isPrimary = index === 0
+          const isPrimary = index === 0 && !permission.neutralOptions
           return (
             <Pressable
               key={`${option.send}:${option.label}`}
@@ -84,6 +90,22 @@ function MobileNativeChatPermissionImpl({
             </Pressable>
           )
         })}
+        {permission.options.length === 0 && onAnswerInTerminal ? (
+          <Pressable
+            accessibilityRole="button"
+            style={({ pressed }) => [
+              styles.option,
+              styles.optionPrimary,
+              pressed && styles.optionPressed
+            ]}
+            hitSlop={6}
+            onPress={onAnswerInTerminal}
+          >
+            <Text style={[styles.optionText, styles.optionTextPrimary]}>
+              {t('chat.promptCard.answerInTerminal', 'Answer in terminal')}
+            </Text>
+          </Pressable>
+        ) : null}
       </View>
     </View>
   )
@@ -99,6 +121,7 @@ function MobileNativeChatPermissionContext({
   newerSubject: boolean
 }): React.JSX.Element | null {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const neededPath = approvalBlockedPathToShow(permission)
   if (
     !permission.description &&
@@ -119,32 +142,63 @@ function MobileNativeChatPermissionContext({
       {permission.description ? <Text style={styles.detail}>{permission.description}</Text> : null}
       {permission.decisionReason ? (
         <Text style={styles.detail}>
-          <Text style={styles.contextLabel}>Reason: </Text>
+          <Text style={styles.contextLabel}>{t('chat.permission.reason', 'Reason: ')}</Text>
           {permission.decisionReason}
         </Text>
       ) : null}
       {neededPath ? (
         <Text style={styles.detail}>
-          <Text style={styles.contextLabel}>Needs access to: </Text>
+          <Text style={styles.contextLabel}>
+            {t('chat.permission.needsAccessTo', 'Needs access to: ')}
+          </Text>
           {neededPath}
         </Text>
       ) : null}
       {isPlanApprovalSubject(permission.subject) ? (
         <View>
-          <MobileMarkdown content={permission.subject.text} />
+          <MobileNativeChatMarkdown content={permission.subject.text} />
           {permission.subject.filePath ? (
-            <Text style={styles.planFile}>Plan file: {permission.subject.filePath}</Text>
+            <Text style={styles.planFile}>
+              {t('chat.permission.planFile', 'Plan file: {{filePath}}', {
+                filePath: permission.subject.filePath
+              })}
+            </Text>
           ) : null}
         </View>
       ) : permission.detail ? (
-        <Text style={styles.detail}>{permission.detail}</Text>
+        <MobileNativeChatPermissionDetail detail={permission.detail} />
       ) : null}
       {newerSubject ? (
         <Text testID="native-chat-approval-needs-newer-orca" style={styles.detail}>
-          This request needs a newer version of Orca.
+          {t('chat.permission.newerVersionRequired', 'This request needs a newer version of Orca.')}
         </Text>
       ) : null}
     </ScrollView>
+  )
+}
+
+function MobileNativeChatPermissionDetail({ detail }: { detail: string }): React.JSX.Element {
+  const t = useMobileTranslation()
+  const [expanded, setExpanded] = useState(false)
+  const preview = approvalDetailPreview(detail)
+  return (
+    <View style={styles.content}>
+      {preview !== detail ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ expanded }}
+          onPress={() => setExpanded((open) => !open)}
+          hitSlop={8}
+        >
+          <Text style={[styles.detail, styles.contextLabel]}>
+            {expanded ? t('common.hideDetails', 'Hide details') : t('common.details', 'Details')}
+          </Text>
+        </Pressable>
+      ) : null}
+      <Text selectable style={styles.detail}>
+        {expanded ? detail : preview}
+      </Text>
+    </View>
   )
 }
 
@@ -154,7 +208,7 @@ const styles = themedStyleSheet(() => ({
     marginVertical: spacing.sm,
     padding: spacing.md,
     gap: spacing.sm,
-    borderRadius: radii.card,
+    borderRadius: radii.surface,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,
     backgroundColor: colors.bgPanel,
@@ -205,10 +259,12 @@ const styles = themedStyleSheet(() => ({
   },
   option: {
     minHeight: 44,
+    // A long menu label wraps inside its button instead of running off the card.
+    maxWidth: '100%',
     justifyContent: 'center',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    borderRadius: radii.button
+    borderRadius: radii.control
   },
   optionPrimary: {
     backgroundColor: colors.accentBlue

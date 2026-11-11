@@ -3,7 +3,7 @@ import { writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { buildSync, type Metafile } from 'esbuild'
 import { spawnProcess } from '@orca/process-host'
-import { createWorkspaceSourceResolver } from '../../../../config/scripts/workspace-source-exports.mjs'
+import { createWorkspaceSourceResolver } from '../../../../config/scripts/workspace/source-exports/workspace-source-exports.mjs'
 
 export type RecoveryCrashOptions = {
   root: string

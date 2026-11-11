@@ -71,6 +71,9 @@ export function normalizeProjectGroups(value: unknown): ProjectGroup[] {
           : 'manual',
       tabOrder:
         typeof raw.tabOrder === 'number' && Number.isFinite(raw.tabOrder) ? raw.tabOrder : 0,
+      ...(typeof raw.rootProjectOrder === 'number' && Number.isFinite(raw.rootProjectOrder)
+        ? { rootProjectOrder: raw.rootProjectOrder }
+        : {}),
       isCollapsed: raw.isCollapsed === true,
       color: typeof raw.color === 'string' ? raw.color : null,
       createdAt:

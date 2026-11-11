@@ -1,11 +1,11 @@
 import { readOpenCodeNativeChatTranscriptFull } from './transcript-opencode'
-import { isENOENT } from '../ipc/filesystem/filesystem-path-containment'
+import { isENOENT } from '../ipc/filesystem/access/filesystem-path-containment'
+import type { AgentType } from '../../shared/agent-status/contracts/agent-status-types'
 import type {
-  AgentType,
   NativeChatMessage,
   NativeChatTurnLifecycle
-} from '../../shared/native-chat-types'
-import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat-agent-support'
+} from '../../shared/native-chat/native-chat-types'
+import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat/native-chat-agent-support'
 import { errorMessage } from '../ai-vault/session-scanner-values'
 import { resolveSessionFilePath, type ResolveSessionFileOptions } from './session-file-resolver'
 import { openTranscriptReadStream } from './wsl-transcript-fs-access'
@@ -23,6 +23,7 @@ export type ReadTranscriptResult =
       messages: NativeChatMessage[]
       lifecycle?: NativeChatTurnLifecycle
       sourceEmpty?: boolean
+      forkTipItemIds?: string[]
     }
   // notFound is retryable: the agent may not have flushed its transcript yet.
   | { error: string; notFound?: true }

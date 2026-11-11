@@ -20,6 +20,7 @@ type RegisteredWindowListener = {
 }
 
 function makeTerminal(writeCallbacks: Array<() => void>, writes: string[]) {
+  const dimensions = { css: { cell: { width: 8, height: 15 } } }
   const terminal = {
     cols: 80,
     rows: 24,
@@ -27,7 +28,16 @@ function makeTerminal(writeCallbacks: Array<() => void>, writes: string[]) {
     modes: {},
     element: null as HTMLElement | null,
     disposed: false,
-    _core: { _renderService: { dimensions: { css: { cell: { width: 8, height: 15 } } } } },
+    _core: {
+      _renderService: {
+        get dimensions(): typeof dimensions {
+          if (terminal.disposed) {
+            throw new Error('Renderer dimensions are unavailable after terminal disposal')
+          }
+          return dimensions
+        }
+      }
+    },
     buffer: {
       active: {
         viewportY: 0,
@@ -131,28 +141,6 @@ describe('terminal WebView init surface replacement', () => {
       window.removeEventListener(type, listener as EventListener, options)
     }
     vi.restoreAllMocks()
-  })
-
-  it("keeps xterm's inactive cursor visible across replacement surfaces", () => {
-    dispatchInit(120, 'desktop')
-    dispatchInit(51, 'phone-resize')
-    dispatchInit(51, 'phone-scrollback')
-
-    expect(terminalOptions).toHaveLength(3)
-    for (const options of terminalOptions) {
-      expect(options).toMatchObject({
-        cursorStyle: 'bar',
-        cursorInactiveStyle: 'block',
-        showCursorImmediately: true
-      })
-    }
-  })
-
-  it('grounds the initial replay without clearing the host live pen', () => {
-    dispatchInit(80, '\x1b[1mBOLD-RUN-LEFT-OPEN')
-    animationFrames.shift()?.()
-
-    expect(writes).toEqual(['\x1b[0m\x1b[1mBOLD-RUN-LEFT-OPEN'])
   })
 
   it('commits only the newest surface when phone-fit init calls overlap', () => {

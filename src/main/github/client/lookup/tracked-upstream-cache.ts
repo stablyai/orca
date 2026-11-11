@@ -1,4 +1,5 @@
-import { splitRemoteBranchName } from '../../../../shared/git-effective-upstream'
+import type { GitReviewBranchSource } from '../../../../shared/git/remotes/git-review-branch-source'
+import { splitRemoteBranchName } from '../../../../shared/git/remotes/git-remote-branch-name'
 import type { OwnerRepo } from '../../gh-utils'
 import { readLocalGitConfigSignature } from '../../local-git-config-signature'
 import { githubRepoIdentityKey } from '../../../../shared/github/repository-identity-key'
@@ -15,6 +16,7 @@ export type TrackedUpstreamSnapshotCacheEntry = {
   expiresAt: number
   gitConfigSignature?: string
   upstreamsByBranchName: Map<string, TrackedUpstreamBranch | null>
+  reviewSources?: Map<string, GitReviewBranchSource | Error>
 }
 
 export type TrackedUpstreamSnapshotProbeResult = {
@@ -22,6 +24,7 @@ export type TrackedUpstreamSnapshotProbeResult = {
   gitConfigSignature?: string
   probeFailed: boolean
   upstreamsByBranchName: Map<string, TrackedUpstreamBranch | null>
+  reviewSources?: Map<string, GitReviewBranchSource | Error>
 }
 
 export const trackedUpstreamSnapshotCache = new Map<string, TrackedUpstreamSnapshotCacheEntry>()

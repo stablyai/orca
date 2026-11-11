@@ -1,14 +1,15 @@
+import { captureWorkspaceTerminalNoticeRemoval } from '../../../terminals/terminal-notice-removal'
 import type { StateCreator } from 'zustand'
 import { appliedWorktreeCatalogVersionPatch } from './worktree-catalog-version-state'
 import type { AppState } from '../../../types'
-import type { WorktreeSlice } from '../../worktree-helpers'
+import type { WorktreeSlice } from '../worktree-slice-contract'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import { routeListingBranchSwitchesThroughGitIdentity } from '../../worktree-listing-branch-switch'
+import { routeListingBranchSwitchesThroughGitIdentity } from './worktree-listing-branch-switch'
 import {
   areDetectedWorktreeResultsEqual,
-  areWorktreesEqual,
   worktreesDifferOnlyInSortOrder
 } from './worktree-catalog-visibility'
+import { catalogRowsEqual } from '../../../../lib/catalog-reconciliation/catalog-row-reconciliation'
 import { mergeDetectedWorktreesForHost } from './detected-worktree-host-merge'
 import {
   getRemovedWorktreeIdsAfterAuthoritativeScan,
@@ -29,7 +30,7 @@ import { buildWorktreePurgeState } from '../teardown/worktree-purge-state'
 import { flushPurgedWorkspaceEdits } from '../teardown/removed-workspace-unsaved-files'
 import { hostWorktreeTarget } from '../../../../../../shared/worktree/host-qualified-identity'
 import { isDisplayNamePersistencePending } from '../metadata/worktree-meta-persist'
-import { branchName } from '@/lib/git-utils'
+import { branchName } from '@/lib/source-control/branches/branch-name'
 import {
   forgetAuthoritativelyRemovedWorktrees,
   forgetPersistedWorktreeMetaForRemovals,
@@ -137,28 +138,33 @@ export function preserveConcurrentDisplayName<T extends Worktree>(
 }
 
 export function mergeFetchedWorktrees(
-  set: Parameters<StateCreator<AppState, [], [], WorktreeSlice>>[0],
+  _set: Parameters<StateCreator<AppState, [], [], WorktreeSlice>>[0],
   get: () => AppState,
   args: FencedWorktreeMergeArgs
 ): WorktreeListingMergeOutcome {
+  let retireNotices: ((after: AppState) => void) | undefined
   if (args.purgeRemovedWorktrees !== false) {
     // Why before the updater: delayed views must commit text the purge may offer back.
     const state = get()
+    const removedIds = getRemovedWorktreeIdsAfterAuthoritativeScan(
+      state,
+      args.repoId,
+      args.refresh.result,
+      args.hostId
+    )
     flushPurgedWorkspaceEdits(
       state,
-      getRemovedWorktreeIdsAfterAuthoritativeScan(
-        state,
-        args.repoId,
-        args.refresh.result,
-        args.hostId
-      ).map((id) => hostWorktreeTarget({ id, hostId: args.hostId }))
+      removedIds.map((id) => hostWorktreeTarget({ id, hostId: args.hostId }))
     )
+    if (removedIds.length > 0) {
+      retireNotices = captureWorkspaceTerminalNoticeRemoval(state, removedIds)
+    }
   }
   // Why a holder: the updater decides the outcome, and a narrowed `let` would hide that assignment.
   const decision: { outcome: WorktreeListingMergeOutcome } = { outcome: 'not-current' }
   let authoritativelyRemovedIds: readonly string[] = []
   let authoritativelySeenIds: readonly string[] = []
-  set((s) => {
+  get().updateAgentStatusState((s, changedPaneKeys) => {
     // Check live applied catalog before any row/detection/purge merge so in-flight listings cannot undo newer create/remove replies.
     const refusal = worktreeListingRefusal(
       s,
@@ -194,6 +200,7 @@ export function mergeFetchedWorktrees(
       requestStarted: args.requestStartedWorktrees,
       current: s.worktreesByRepo[args.repoId],
       incoming,
+      refreshHostId: args.hostId,
       matchesRefreshHost: (worktree) => worktreeMatchesHost(worktree, args.hostId, matchOptions),
       hasBranchScopedReviewContext: hasBranchScopedHostedReviewContext,
       updateWorktreeGitIdentity: s.updateWorktreeGitIdentity
@@ -212,7 +219,9 @@ export function mergeFetchedWorktrees(
       args.setup,
       matchOptions
     )
-    if (!args.refresh.result.authoritative && worktrees.length === 0 && currentForHost.length > 0) {
+    // Stored rows from a stopped WSL distro lack branch state the scanned rows already have.
+    const keepCurrent = worktrees.length === 0 || !!args.refresh.result.wslDistroStopped
+    if (!args.refresh.result.authoritative && keepCurrent && currentForHost.length > 0) {
       return areDetectedWorktreeResultsEqual(s.detectedWorktreesByRepo[args.repoId], mergedDetected)
         ? s
         : {
@@ -241,7 +250,7 @@ export function mergeFetchedWorktrees(
     if (args.refresh.result.authoritative) {
       authoritativelySeenIds = args.refresh.result.worktrees.map((worktree) => worktree.id)
     }
-    const worktreesChanged = !areWorktreesEqual(s.worktreesByRepo[args.repoId], mergedWorktrees)
+    const worktreesChanged = !catalogRowsEqual(s.worktreesByRepo[args.repoId], mergedWorktrees)
     const detectedChanged = !areDetectedWorktreeResultsEqual(
       s.detectedWorktreesByRepo[args.repoId],
       mergedDetected
@@ -285,12 +294,14 @@ export function mergeFetchedWorktrees(
       ...(removedIds.length > 0
         ? buildWorktreePurgeState(
             s,
-            removedIds.map((id) => hostWorktreeTarget({ id, hostId: args.hostId }))
+            removedIds.map((id) => hostWorktreeTarget({ id, hostId: args.hostId })),
+            changedPaneKeys
           )
         : {})
     }
   })
   if (decision.outcome === 'applied') {
+    retireNotices?.(get())
     // Why: applied outside the updater so a repeated updater call cannot double-apply the removal memory.
     forgetAuthoritativelyRemovedWorktrees(args.hostId, authoritativelySeenIds)
     rememberAuthoritativelyRemovedWorktrees(args.hostId, authoritativelyRemovedIds)

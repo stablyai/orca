@@ -1,28 +1,31 @@
-import { useAppStore } from '@/store'
-import type { PtyReplayDataMeta } from '../pty-transport-types'
-import { INITIAL_MODE_2031_REPLY_SCAN_STATE } from '../../../../../shared/terminal-color-scheme-protocol'
-import { waitForTerminalOutputParsed } from '@/lib/pane-manager/pane-terminal-output-scheduler'
-import { executeTerminalStartupCommandPaste } from '../terminal-startup-command-paste'
-import { resolveTerminalPasteRuntime } from '../terminal-paste-runtime'
-import { CLIENT_PLATFORM } from '@/lib/new-workspace'
+import { paneResumeRecord } from './startup/pane-resume-record'
+import { useAppStore } from '@/store/index'
+import type { PtyReplayDataMeta } from '../pty-transport/pty-transport-types'
+import { INITIAL_MODE_2031_REPLY_SCAN_STATE } from '../../../../../shared/terminal/protocol/queries/terminal-color-scheme-protocol'
+import { waitForTerminalOutputParsed } from '@/lib/pane-manager/terminal-output/pane-terminal-output-scheduler'
+import { executeTerminalStartupCommandPaste } from '../input/paste/terminal-startup-command-paste'
+import { resolveTerminalPasteRuntime } from '../input/paste/terminal-paste-runtime'
+import { CLIENT_PLATFORM } from '@/lib/workspace/creation/new-workspace'
 import { recordPaneWakeThroughLayoutOwner } from '@/store/terminals/terminal-sleep-layout-owner'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
 
-import { shouldKeepHiddenStartupRendererQueriesLive } from './hidden-startup-renderer-query'
-import { createForegroundImmediateBudget } from './foreground-output-budgets'
-import type { FreshSpawnOptions, ColdRestoreAgentResumeStartup } from './fresh-spawn-types'
+import { shouldKeepHiddenStartupRendererQueriesLive } from './output/hidden-startup-renderer-query'
+import { createForegroundImmediateBudget } from './output/foreground-output-budgets'
+import type { FreshSpawnOptions, ColdRestoreAgentResumeStartup } from './startup/fresh-spawn-types'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
-import { bindCaptureTransportOutputCallbacks } from './transport-output-callbacks'
+import { bindCaptureTransportOutputCallbacks } from './lifecycle/transport-output-callbacks'
+import { initializeHiddenOutputRestoreState } from './output-restore/hidden-output-restore-state'
 
-import { bindReplayDataDrain } from './replay-data-drain'
-import { bindStartFreshSpawn } from './fresh-spawn-start'
+import { bindReplayDataDrain } from './output/replay-data-drain'
+import { bindStartFreshSpawn } from './spawn/fresh-spawn-start'
 
-import { bindFreshSpawnFollowReset } from './fresh-spawn-follow-reset'
-import { deferHiddenAgentResume } from './hidden-agent-resume-deferral'
-import { holdInPlaceResumeUntilSettled } from './in-place-resume-hold'
-import { attachToMainResumedSleepPane, mainResumedSleepPane } from './main-resumed-sleep-pane'
-import { startPaneThroughMainThenAttach } from './main-pane-start-request'
+import { bindFreshSpawnFollowReset } from './output/fresh-spawn-follow-reset'
+import { bindReplacedProcessInputModes } from './output/replaced-process-input-modes'
+import { deferHiddenAgentResume } from './spawn/hidden-agent-resume-deferral'
+import { holdInPlaceResumeUntilSettled } from './startup/in-place-resume-hold'
+import { attachToMainResumedSleepPane, mainResumedSleepPane } from './spawn/main-resumed-sleep-pane'
+import { startPaneThroughMainThenAttach } from './spawn/main-pane-start-request'
 
 export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySession): void {
   session.applyColdRestoreAgentResumeStartup = (
@@ -52,21 +55,48 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
     }
     return true
   }
-  session.clearSleepingRecordAfterColdRestoreSpawn = (
+  session.keepResumeRecordAfterColdRestoreSpawn = (
     startup: ColdRestoreAgentResumeStartup | null
   ): void => {
-    if (startup && !startup.useLiveEntry && startup.sleepingRecordEntry) {
-      // Record main’s wake before dropping the record; record-only consumption would leave nothing for main to resume.
-      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-        recordPaneWakeThroughLayoutOwner(
-          useAppStore.getState(),
-          session.deps.worktreeId,
-          session.cacheKey
-        )
+    if (!startup || startup.resumeSource?.cancelled) {
+      return
+    }
+    const state = useAppStore.getState()
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      if (!startup.useLiveEntry && startup.sleepingRecordEntry) {
+        recordPaneWakeThroughLayoutOwner(state, session.deps.worktreeId, session.cacheKey)
+        session.clearSleepingRecordProviderDuplicates(state, startup.sleepingRecordEntry)
       }
+      return
+    }
+    const captured = startup.sleepingRecordEntry
+    if (captured && state.sleepingAgentSessionsByPaneKey[captured.paneKey] !== captured.record) {
+      return
+    }
+    if (!captured && startup.useLiveEntry) {
+      const expected = startup.resumeSource?.expectedStatus
+      const current = state.agentStatusByPaneKey[session.cacheKey]
+      if (
+        !expected ||
+        current?.updatedAt !== expected.receivedAt ||
+        current.stateStartedAt !== expected.stateStartedAt
+      ) {
+        return
+      }
+    }
+    // Spawn proves a PTY exists, not that the agent has replaced its resume identity.
+    const record = paneResumeRecord(session, startup)
+    if (record) {
+      state.rememberSleepingAgentSession(
+        record,
+        captured && captured.paneKey === session.cacheKey ? captured.record : undefined
+      )
+    }
+    if (!startup.useLiveEntry && startup.sleepingRecordEntry) {
       session.clearSleepingRecordProviderDuplicates(
         useAppStore.getState(),
-        startup.sleepingRecordEntry
+        startup.sleepingRecordEntry,
+        session.cacheKey
       )
     }
   }
@@ -85,19 +115,15 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
   // Why ungated: a reveal, a restart replacement on show, or a phone wake already chose to run now.
   session.spawnColdRestoreAgentResume = (
     startup: ColdRestoreAgentResumeStartup | null = session.buildColdRestoreAgentResumeStartup(),
-    options: FreshSpawnOptions = {}
+    options: FreshSpawnOptions = {},
+    automatic?: boolean
   ): Promise<string | null> => {
     if (startup?.resumeSource?.cancelled) {
       return Promise.resolve(null)
     }
     const mainPane = mainResumedSleepPane(session, startup)
     if (mainPane && startup?.sleepingRecordEntry) {
-      return attachToMainResumedSleepPane(
-        session,
-        mainPane,
-        startup.sleepingRecordEntry.paneKey,
-        options
-      )
+      return attachToMainResumedSleepPane(session, mainPane, startup, options, automatic)
     }
     return startPaneThroughMainThenAttach(session, () => {
       session.applyColdRestoreAgentResumeStartup(startup)
@@ -196,6 +222,7 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
     session.freshSpawnFollowResetDisposables = []
   }
   bindFreshSpawnFollowReset(session)
+  bindReplacedProcessInputModes(session)
   bindStartFreshSpawn(session)
   bindReplayDataDrain(session)
   session.replayDataCallback = (
@@ -217,6 +244,7 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
           }
         : {}),
       ...(meta.terminalOwner ? { terminalOwner: meta.terminalOwner } : {}),
+      ...(meta.lastTitle !== undefined ? { lastTitle: meta.lastTitle } : {}),
       ...(meta.alternateScreen !== undefined ? { alternateScreen: meta.alternateScreen } : {}),
       ...(meta.snapshotCols !== undefined && meta.snapshotRows !== undefined
         ? { snapshotCols: meta.snapshotCols, snapshotRows: meta.snapshotRows }
@@ -228,6 +256,7 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
   }
 
   bindCaptureTransportOutputCallbacks(session)
+  initializeHiddenOutputRestoreState(session)
   session.setRestoredSnapshotBaseline = function (
     ptyId: string,
     snapshot: { seq?: number; pendingDeliveryStartSeq?: number },

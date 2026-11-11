@@ -5,6 +5,8 @@ import type {
   ComputerUsePermissionSetupResult,
   ComputerUsePermissionStatusResult
 } from '../../shared/computer-use-permissions-types'
+import { computerUsePermissionStatusGate } from '../computer/macos-computer-use-permission-status-gate'
+import { mainI18n } from '../i18n/main-i18n'
 
 export function registerComputerUsePermissionHandlers(): void {
   ipcMain.handle(
@@ -15,16 +17,12 @@ export function registerComputerUsePermissionHandlers(): void {
     ): Promise<ComputerUsePermissionSetupResult> => {
       const { openComputerUsePermissions } =
         await import('../computer/macos-computer-use-permissions')
-      return openComputerUsePermissions(args?.id)
+      return openComputerUsePermissions(args?.id, mainI18n.resolvedLanguage ?? mainI18n.language)
     }
   )
   ipcMain.handle(
     'computerUsePermissions:getStatus',
-    async (): Promise<ComputerUsePermissionStatusResult> => {
-      const { getComputerUsePermissionStatus } =
-        await import('../computer/macos-computer-use-permissions')
-      return getComputerUsePermissionStatus()
-    }
+    (): Promise<ComputerUsePermissionStatusResult> => computerUsePermissionStatusGate.read()
   )
   ipcMain.handle(
     'computerUsePermissions:reset',

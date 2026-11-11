@@ -1,22 +1,23 @@
 import { randomUUID } from 'node:crypto'
-import { isFinalAutomationRunStatus } from '../../../shared/automations-types'
-import { invalidateLocalWorktreeMetadataPruneInputs } from '../../local-worktree-metadata-prune-gate'
+import { isFinalAutomationRunStatus } from '../../../shared/automations/history/automation-run'
+import { normalizeSetupSkippedContent } from './automation-setup-skipped-content'
+import { invalidateLocalWorktreeMetadataPruneInputs } from '../../workspaces/catalog/local-worktree-metadata-prune-gate'
+import type { Automation } from '../../../shared/automations/automation-definition'
 import type {
-  Automation,
   AutomationDispatchResult,
   AutomationRun,
   AutomationRunsPage,
   AutomationRunTrigger
-} from '../../../shared/automations-types'
+} from '../../../shared/automations/history/automation-run'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import {
   nextAutomationRunNumber,
   pruneAutomationRuns
-} from '../../../shared/automation-run-retention'
+} from '../../../shared/automations/history/automation-run-retention'
 import {
   compareAutomationRunsNewestFirst,
   paginateAutomationRuns
-} from '../../../shared/automation-run-cursor'
+} from '../../../shared/automations/history/automation-run-cursor'
 import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import {
@@ -159,6 +160,25 @@ export function recordRepeatedAutomationSkip(
   return updated
 }
 
+/** Rewrites of the same error (e.g. usage writes) keep its code; a different error drops a stale one. */
+function resultErrorCodeFields(
+  result: AutomationDispatchResult,
+  previous: AutomationRun
+): Pick<AutomationRun, 'errorCode' | 'errorParams'> {
+  const source = result.errorCode
+    ? result
+    : result.error && result.error === previous.error
+      ? previous
+      : null
+  if (!result.error || !source?.errorCode) {
+    return {}
+  }
+  return {
+    errorCode: source.errorCode,
+    ...(source.errorParams ? { errorParams: source.errorParams } : {})
+  }
+}
+
 export function updateAutomationRun(
   operations: AutomationRunOperations,
   result: AutomationDispatchResult
@@ -170,7 +190,8 @@ export function updateAutomationRun(
     throw new Error('Automation run not found.')
   }
   const now = Date.now()
-  const current = operations.state.automationRuns[index]
+  const previous = operations.state.automationRuns[index]
+  const { errorCode: _code, errorParams: _params, ...current } = previous
   const workspaceId = result.workspaceId ?? current.workspaceId
   const workspaceDisplayName = Object.hasOwn(result, 'workspaceDisplayName')
     ? normalizeAutomationRunWorkspaceDisplayName(result.workspaceDisplayName ?? null)
@@ -178,6 +199,10 @@ export function updateAutomationRun(
   const updated: AutomationRun = {
     ...current,
     status: result.status,
+    sessionKind: result.sessionKind ?? current.sessionKind,
+    chatSessionId: Object.hasOwn(result, 'chatSessionId')
+      ? (result.chatSessionId ?? null)
+      : current.chatSessionId,
     workspaceId,
     workspaceDisplayName:
       workspaceDisplayName ??
@@ -200,9 +225,17 @@ export function updateAutomationRun(
       : normalizeAutomationPrecheckResult(current.precheckResult),
     usage: Object.hasOwn(result, 'usage') ? (result.usage ?? null) : (current.usage ?? null),
     error: result.error ?? null,
+    ...resultErrorCodeFields(result, previous),
     startedAt: current.startedAt ?? now,
     dispatchedAt:
-      result.status === 'dispatched' ? (result.dispatchedAt ?? now) : current.dispatchedAt
+      result.status === 'dispatched' ? (result.dispatchedAt ?? now) : current.dispatchedAt,
+    // Later updates (completion) keep the dispatch's note.
+    ...(result.setupSkippedReason === 'setup-changed'
+      ? {
+          setupSkippedReason: result.setupSkippedReason,
+          ...normalizeSetupSkippedContent(result.setupSkippedContent)
+        }
+      : {})
   }
   // Replace the array to invalidate identity-keyed list projections.
   operations.state.automationRuns = operations.state.automationRuns.map((run) =>
