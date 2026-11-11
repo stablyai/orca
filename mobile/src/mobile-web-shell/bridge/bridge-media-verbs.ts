@@ -1,5 +1,5 @@
 import * as z from 'zod'
-import { CLIPBOARD_IMAGE_MAX_SOURCE_BYTES } from '../../../../src/shared/clipboard-image'
+import { AGENT_SESSION_ATTACHMENT_MAX_BYTES } from '../../../../src/shared/agent-session/agent-session-attachments'
 import { MOBILE_CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS } from '../../files/attachments/mobile-clipboard-image-upload-chunk'
 
 // Picked media exceeds frame/reply ceilings, especially after base64; stage behind a handle and read chunks before release.
@@ -26,7 +26,7 @@ const BASE64_PATTERN = /^[A-Za-z0-9+/]*={0,2}$/
 
 const handleSchema = z.string().min(1).max(BRIDGE_MEDIA_HANDLE_MAX_CHARS)
 
-const byteOffsetSchema = z.number().int().min(0).max(CLIPBOARD_IMAGE_MAX_SOURCE_BYTES)
+const byteOffsetSchema = z.number().int().min(0).max(AGENT_SESSION_ATTACHMENT_MAX_BYTES)
 
 // Dimensions are optional because document pickers may report files without raster metadata; only pre-read preview sizing uses them.
 export const mediaItemSchema = z.strictObject({
@@ -47,6 +47,13 @@ export const mediaPickParamsSchema = z.strictObject({
 
 export const mediaPickResultSchema = z.strictObject({
   items: z.array(mediaItemSchema).max(BRIDGE_MEDIA_MAX_LIVE_HANDLES)
+})
+
+// Separate verb, not a pick param: mediaPickParamsSchema is strict, so old shells would reject a new field. Old pages never call it, so they never get a 200 MB item to assemble in memory.
+export const mediaPickLargeParamsSchema = z.strictObject({})
+
+export const mediaPickLargeResultSchema = z.strictObject({
+  items: z.array(mediaItemSchema).max(1)
 })
 
 export const mediaReadParamsSchema = z.strictObject({

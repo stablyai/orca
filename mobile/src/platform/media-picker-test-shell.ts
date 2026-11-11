@@ -2,6 +2,7 @@
 import {
   BRIDGE_MEDIA_READ_MAX_BYTES,
   mediaNameParamsSchema,
+  mediaPickLargeParamsSchema,
   mediaPickParamsSchema,
   mediaReadParamsSchema,
   mediaReleaseParamsSchema,
@@ -69,25 +70,30 @@ export function createMediaTestShell(options: {
     calls,
     released,
     serveNativeVerb: (verb, params) => {
-      if (verb === 'native.media.pick') {
+      if (verb === 'native.media.pick' || verb === 'native.media.picklarge') {
         // Parse the real verb schema so this fake cannot accept params the device would refuse.
-        const { source, multiple } = mediaPickParamsSchema.parse(params)
-        calls.push(`pick ${source} ${multiple ? 'multiple' : 'single'}`)
+        const large = verb === 'native.media.picklarge'
+        const { source, multiple } = large
+          ? { ...mediaPickLargeParamsSchema.parse(params), source: 'files', multiple: false }
+          : mediaPickParamsSchema.parse(params)
+        calls.push(`${large ? 'picklarge' : 'pick'} ${source} ${multiple ? 'multiple' : 'single'}`)
         if (options.refusePick) {
           return Promise.reject(options.refusePick)
         }
-        const items: BridgeMediaItem[] = (options.staged[source] ?? []).map((item) => {
-          minted += 1
-          const handle = `media-${minted}`
-          live.set(handle, item)
-          return {
-            handle,
-            mime: item.mime ?? 'image/png',
-            byteLength: item.bytes.byteLength,
-            ...(item.width === undefined ? {} : { width: item.width }),
-            ...(item.height === undefined ? {} : { height: item.height })
-          }
-        })
+        const items: BridgeMediaItem[] = (options.staged[source] ?? [])
+          .slice(0, large ? 1 : undefined)
+          .map((item) => {
+            minted += 1
+            const handle = `media-${minted}`
+            live.set(handle, item)
+            return {
+              handle,
+              mime: item.mime ?? 'image/png',
+              byteLength: item.bytes.byteLength,
+              ...(item.width === undefined ? {} : { width: item.width }),
+              ...(item.height === undefined ? {} : { height: item.height })
+            }
+          })
         return Promise.resolve({ items })
       }
       if (verb === 'native.media.read') {

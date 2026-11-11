@@ -2,6 +2,7 @@ import {
   BRIDGE_MEDIA_NAME_MAX_CHARS,
   BRIDGE_MEDIA_READ_MAX_BYTES,
   mediaNameParamsSchema,
+  mediaPickLargeParamsSchema,
   mediaPickParamsSchema,
   mediaReadParamsSchema,
   mediaReleaseParamsSchema,
@@ -14,6 +15,7 @@ import {
   type MediaHandleRegistry,
   type StagedMedia
 } from '../mobile-web-shell/media-handle-registry'
+import { AGENT_SESSION_ATTACHMENT_MAX_BYTES } from '../../../src/shared/agent-session/agent-session-attachments'
 import { MobileImageBase64Accumulator } from '../files/attachments/mobile-image-base64-accumulator'
 
 // Stage native media behind handles because raw/base64 image sizes exceed reply caps; inject device calls to test provider/cancel/size failures.
@@ -67,15 +69,15 @@ export function createNativeMediaVerbServer(
   deps: NativeMediaDeps
 ): (verb: BridgeNativeVerb, params: unknown) => Promise<unknown> {
   // Read authoritative staged-file sizes: picker metadata can be absent or wrong.
-  function stage(assets: readonly PickedAsset[]): StagedMedia[] {
+  function stage(assets: readonly PickedAsset[], ceiling: number): StagedMedia[] {
     const staged: StagedMedia[] = []
     // Delete only owned files; provider URIs are never ours to unlink.
     const owned: string[] = []
     try {
       for (const asset of assets) {
-        const uri = adopt(asset, owned)
+        const uri = adopt(asset, owned, ceiling)
         const { size } = deps.openFile(uri)
-        refuseOverStagingCeiling(size)
+        refuseOverCeiling(size, ceiling)
         const name = pickedName(asset)
         staged.push({
           uri,
@@ -96,7 +98,7 @@ export function createNativeMediaVerbServer(
   }
 
   // Adopt provider URIs into cache so release/TTL can delete the file without touching the provider’s original.
-  function adopt(asset: PickedAsset, owned: string[]): string {
+  function adopt(asset: PickedAsset, owned: string[], ceiling: number): string {
     if (deps.ownsStagedUri(asset.uri)) {
       owned.push(asset.uri)
       return asset.uri
@@ -106,7 +108,8 @@ export function createNativeMediaVerbServer(
     if (weighed <= 0) {
       throw new Error(`a picked item could not be weighed before reading it: ${asset.uri}`)
     }
-    refuseOverStagingCeiling(weighed)
+    // The copy holds the whole file in memory, so even a large pick copies no more than the staged ceiling.
+    refuseOverCeiling(weighed, Math.min(ceiling, MEDIA_STAGED_MAX_BYTES))
     const copy = deps.copyIntoCache(asset.uri)
     // Reject an unowned copy before recording ownership; neither it nor the provider’s original is ours to unlink.
     if (!deps.ownsStagedUri(copy)) {
@@ -116,11 +119,11 @@ export function createNativeMediaVerbServer(
     return copy
   }
 
-  function refuseOverStagingCeiling(size: number): void {
-    if (size > MEDIA_STAGED_MAX_BYTES) {
+  function refuseOverCeiling(size: number, ceiling: number): void {
+    if (size > ceiling) {
       throw new BridgeNativeVerbRefusedError(
         'native_media_too_large',
-        `a picked item is ${size} bytes, over the ${MEDIA_STAGED_MAX_BYTES} this shell stages`
+        `a picked item is ${size} bytes, over the ${ceiling} this shell stages`
       )
     }
   }
@@ -137,7 +140,8 @@ export function createNativeMediaVerbServer(
   async function pickFrom(
     source: BridgeMediaSource,
     multiple: boolean,
-    isCurrent: () => boolean
+    isCurrent: () => boolean,
+    ceiling: number
   ): Promise<StagedMedia[]> {
     // Check room before the OS copies a selection that mint would refuse.
     const room = deps.registry.remainingCapacity()
@@ -154,15 +158,18 @@ export function createNativeMediaVerbServer(
       }
       const base64 = image.data.replace(DATA_URL_PREFIX_RE, '')
       const uri = deps.stageBase64(base64)
-      return stage([
-        {
-          uri,
-          mimeType: CLIPBOARD_STAGED_MIME,
-          ...(image.size === undefined
-            ? {}
-            : { width: image.size.width, height: image.size.height })
-        }
-      ])
+      return stage(
+        [
+          {
+            uri,
+            mimeType: CLIPBOARD_STAGED_MIME,
+            ...(image.size === undefined
+              ? {}
+              : { width: image.size.width, height: image.size.height })
+          }
+        ],
+        ceiling
+      )
     }
     // DocumentPicker ignores room; enforce count before staging any bytes.
     function withinRoom(assets: readonly PickedAsset[]): readonly PickedAsset[] {
@@ -184,7 +191,7 @@ export function createNativeMediaVerbServer(
     const assets = readAssets(
       await (source === 'library'
         ? deps.launchLibrary({ multiple, limit: room })
-        : deps.launchFiles({ multiple, limit: room }))
+        : deps.launchFiles({ multiple, limit: multiple ? room : 1 }))
     )
     if (!isCurrent()) {
       for (const asset of assets) {
@@ -194,7 +201,7 @@ export function createNativeMediaVerbServer(
       }
       return []
     }
-    return stage(withinRoom(assets))
+    return stage(withinRoom(assets), ceiling)
   }
 
   // Decode chunks before joining; concatenating independently padded base64 corrupts the file.
@@ -219,11 +226,20 @@ export function createNativeMediaVerbServer(
   }
 
   return async (verb, params) => {
-    if (verb === 'native.media.pick') {
-      const { source, multiple } = mediaPickParamsSchema.parse(params)
+    if (verb === 'native.media.pick' || verb === 'native.media.picklarge') {
+      // The large verb takes one file from the document picker and stages it up to the attachment ceiling.
+      const { source, multiple, ceiling } =
+        verb === 'native.media.picklarge'
+          ? {
+              ...mediaPickLargeParamsSchema.parse(params),
+              source: 'files' as const,
+              multiple: false,
+              ceiling: AGENT_SESSION_ATTACHMENT_MAX_BYTES
+            }
+          : { ...mediaPickParamsSchema.parse(params), ceiling: MEDIA_STAGED_MAX_BYTES }
       const generation = deps.registry.generation
       const isCurrent = (): boolean => deps.registry.generation === generation
-      const staged = await pickFrom(source, multiple, isCurrent)
+      const staged = await pickFrom(source, multiple, isCurrent, ceiling)
       if (!isCurrent()) {
         for (const item of staged) {
           discardQuietly(item.uri)
