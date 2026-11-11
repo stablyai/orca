@@ -29,6 +29,9 @@ vi.mock('./manager/registration/browser-guest-discard-protection', () => ({
   markInitialBrowserGuest: vi.fn(),
   readBrowserGuestDiscardProtection: () => ({ protection: 'discardable' })
 }))
+function startNavigation(guest: Electron.WebContents, url = 'https://example.test/b'): void {
+  guest.emit('did-start-navigation', { url, isSameDocument: false, isMainFrame: true })
+}
 const pageId = 'memory-page'
 afterEach(() => {
   closeBrowserMemoryPage(pageId)
@@ -71,7 +74,19 @@ function attach(id: number, partition = 'persist:profile') {
   }) as unknown as Electron.WebContents
   associateBrowserPageAttach(guest)
   startBrowserPageAttach(guest)
-  return { guest, finishLoad, failLoad, marker }
+  startNavigation(guest)
+  const resolveLoad = finishLoad
+  return {
+    guest,
+    finishLoad: () => {
+      guest.emit('did-navigate', {}, 'https://example.test/b')
+      guest.emit('did-finish-load')
+      resolveLoad()
+    },
+    settleLoad: resolveLoad,
+    failLoad,
+    marker
+  }
 }
 
 it('keeps the cold identity/history, gates every consumer on load and fences retiring G from H', async () => {
@@ -161,22 +176,84 @@ it('waits through an aborted initial navigation for its replacement document', a
   expect(action).toHaveBeenCalledOnce()
 })
 
-it('preserves failed cold history for normal reload recovery instead of poisoning subsequent commands', async () => {
+it('keeps error finishes and incomplete recoveries cold, then releases only a successful native load', async () => {
   const first = attach(9)
   first.finishLoad()
   await waitForBrowserPageReady(pageId, first.guest)
   expect(reserveBrowserPageDiscard(pageId, first.guest)).toBe(true)
   const second = attach(10)
   const failed = waitForBrowserPageReady(pageId, second.guest)
+  second.guest.emit('did-fail-load', {}, -106, 'Offline', 'https://example.test/b', true)
   second.failLoad(new Error('Offline'))
+  second.guest.emit('did-finish-load')
+  second.guest.emit('did-stop-loading')
   await expect(failed).rejects.toThrow('Offline')
   await Promise.resolve()
   await expect(waitForBrowserPageReady(pageId, second.guest)).rejects.toThrow(
     'could not be restored'
   )
   await expect(waitForBrowserPageReady(pageId, second.guest, true)).resolves.toBeUndefined()
+
+  startNavigation(second.guest)
+  second.guest.emit('did-navigate', {}, 'https://example.test/b')
+  await expect(waitForBrowserPageReady(pageId, second.guest)).rejects.toThrow(
+    'could not be restored'
+  )
+  second.guest.emit('did-fail-load', {}, -102, 'Connection refused', 'https://example.test/b', true)
   second.guest.emit('did-finish-load')
+  second.guest.emit('did-stop-loading')
+  await expect(waitForBrowserPageReady(pageId, second.guest)).rejects.toThrow(
+    'could not be restored'
+  )
+
+  startNavigation(second.guest)
+  second.guest.emit('did-fail-load', {}, -3, 'Aborted', 'https://example.test/b', true)
+  second.guest.emit('did-stop-loading')
+  await expect(waitForBrowserPageReady(pageId, second.guest)).rejects.toThrow(
+    'could not be restored'
+  )
+  startNavigation(second.guest, 'https://example.test/redirect')
+  startNavigation(second.guest)
+  second.guest.emit(
+    'did-fail-load',
+    {},
+    -3,
+    'Predecessor aborted',
+    'https://example.test/redirect',
+    true
+  )
+  second.guest.emit('did-navigate', {}, 'https://example.test/b')
+  second.guest.emit('did-fail-load', {}, -106, 'Subframe failed', 'https://frame.test/', false)
+  second.guest.emit('did-finish-load')
+  second.guest.emit('did-stop-loading')
   await expect(waitForBrowserPageReady(pageId, second.guest)).resolves.toBeUndefined()
+})
+
+it('never admits a cold waiter from a stale starter promise and never lets old guest completion release its replacement', async () => {
+  const first = attach(13)
+  first.finishLoad()
+  await waitForBrowserPageReady(pageId, first.guest)
+  expect(reserveBrowserPageDiscard(pageId, first.guest)).toBe(true)
+  const old = attach(14)
+  const action = vi.fn()
+  const pending = waitForBrowserPageReady(pageId, old.guest).then(action)
+  startNavigation(old.guest, 'https://example.test/successor')
+  old.settleLoad()
+  await expect(pending).rejects.toThrow('could not be restored')
+  expect(action).not.toHaveBeenCalled()
+  await Promise.resolve()
+  const replacement = attach(15)
+  startNavigation(old.guest)
+  old.guest.emit('did-navigate', {}, 'https://example.test/b')
+  old.guest.emit('did-finish-load')
+  old.guest.close()
+  const replacementAction = vi.fn()
+  const replacementWait = waitForBrowserPageReady(pageId, replacement.guest).then(replacementAction)
+  await Promise.resolve()
+  expect(replacementAction).not.toHaveBeenCalled()
+  replacement.finishLoad()
+  await replacementWait
+  expect(replacementAction).toHaveBeenCalledOnce()
 })
 
 it('does not carry an invalid page selector into the lifetime of a later real page', async () => {

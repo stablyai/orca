@@ -14,6 +14,7 @@ import { BrowserError } from '../../../browser/browser-error'
 import { publishSwitchedBrowserSessionTab } from './browser-tab-create-publication'
 import type {
   BrowserCommandTargetParams,
+  BrowserAnswerAdmission,
   RuntimeBrowserCommandHost
 } from '../commands/browser-command-contracts'
 import type { RuntimeBrowserCommandTargets } from '../commands/browser-command-targets'
@@ -54,9 +55,11 @@ export class RuntimeBrowserTabQueries {
   }
 
   async browserProceedCertificate(
-    params: { challengeId: string } & BrowserCommandTargetParams
+    params: { challengeId: string } & BrowserCommandTargetParams,
+    admit?: BrowserAnswerAdmission
   ): Promise<BrowserCertificateProceedResult> {
-    const target = await this.targets.resolveBrowserCommandTarget(params)
+    const resolved = await this.targets.resolveBrowserCommandTarget(params)
+    const target = typeof admit === 'function' ? admit(resolved) : resolved
     if (!target.browserPageId) {
       return { ok: false, reason: 'missing' }
     }

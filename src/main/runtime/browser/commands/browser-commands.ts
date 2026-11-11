@@ -226,10 +226,7 @@ export class RuntimeBrowserCommands {
       'browserProfileDetectBrowsers',
       'browserProfileImportFromBrowser',
       'browserProfileClearGoogleCookies',
-      'browserProfileClearDefaultCookies',
-      'browserDialogAccept',
-      'browserDialogDismiss',
-      'browserProceedCertificate'
+      'browserProfileClearDefaultCookies'
     ])
     for (const [name, value] of Object.entries(this)) {
       if (passive.has(name)) {
@@ -243,6 +240,13 @@ export class RuntimeBrowserCommands {
         this,
         name,
         async (params: BrowserCommandTargetParams & { index?: number }, ...rest: unknown[]) => {
+          const answer =
+            name === 'browserDialogAccept' ||
+            name === 'browserDialogDismiss' ||
+            name === 'browserProceedCertificate'
+          if (name === 'browserProceedCertificate' && !params.page) {
+            return command.call(this, params)
+          }
           let target = params
           if (name === 'browserTabSwitch' && !params.page) {
             const listed = await queries.browserTabList(params)
@@ -252,12 +256,19 @@ export class RuntimeBrowserCommands {
             }
           }
           if (target.page && host.getRuntimeBrowserPageRegistry().getPage(target.page)) {
-            return command.call(this, target, ...rest)
+            return command.call(this, target, ...(answer ? [] : rest))
           }
           return targets.withPageOperation(
             target,
-            (admitted) => Promise.resolve(command.call(this, { ...target, ...admitted }, ...rest)),
-            name === 'browserReload' || name === 'browserGoto'
+            (admitted, admitAnswer) =>
+              Promise.resolve(
+                command.call(this, { ...target, ...admitted }, ...(answer ? [admitAnswer] : rest))
+              ),
+            answer
+              ? 'answer'
+              : name === 'browserReload' || name === 'browserGoto'
+                ? 'recover'
+                : 'ordinary'
           )
         }
       )

@@ -17,6 +17,7 @@ import { whenBrowserMainWindowReady } from '../../../browser/guest-lifecycle/bro
 import type { BrowserSnapshotResult } from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import type {
   BrowserCommandTargetParams,
+  BrowserAnswerAdmission,
   RuntimeBrowserCommandHost,
   ResolvedBrowserCommandTarget,
   ResolvedBrowserPageWebContents
@@ -39,16 +40,42 @@ export class RuntimeBrowserCommandTargets {
 
   async withPageOperation<T>(
     params: BrowserCommandTargetParams,
-    execute: (params: BrowserCommandTargetParams) => Promise<T>,
-    recoverFromLoadError = false
+    execute: (
+      params: BrowserCommandTargetParams,
+      admitAnswer?: BrowserAnswerAdmission
+    ) => Promise<T>,
+    mode: 'ordinary' | 'recover' | 'answer' = 'ordinary'
   ): Promise<T> {
-    const explicitRelease = params.page ? claimBrowserMemoryPage(params.page) : null
+    const explicitRelease = params.page ? claimBrowserMemoryPage(params.page, 'operation') : null
     let release = explicitRelease
     try {
       const worktreeId = params.worktree
         ? (await this.host.resolveWorkspaceSelector(params.worktree)).id
         : undefined
       const bridge = this.host.getAgentBrowserBridge()
+      if (
+        params.page &&
+        (bridge?.getRegisteredTabs(worktreeId).has(params.page) ||
+          this.host
+            .readBrowserTabBar?.(worktreeId)
+            .some((entry) => entry.browserPageId === params.page))
+      ) {
+        retainBrowserMemoryPageForAgent(params.page)
+      }
+      if (mode === 'answer') {
+        const admitAnswer: BrowserAnswerAdmission = (resolved) => {
+          let target: ResolvedBrowserPageWebContents
+          try {
+            target = this.resolveBrowserPageWebContents(resolved.worktreeId, resolved.browserPageId)
+          } catch {
+            return resolved
+          }
+          release ??= claimBrowserMemoryPage(target.browserPageId, 'operation')
+          retainBrowserMemoryPageForAgent(target.browserPageId)
+          return { ...resolved, browserPageId: target.browserPageId }
+        }
+        return await execute(params, admitAnswer)
+      }
       const browserPageId =
         params.page ??
         bridge?.getActivePageId(worktreeId) ??
@@ -56,11 +83,11 @@ export class RuntimeBrowserCommandTargets {
       if (!browserPageId) {
         return await execute(params)
       }
-      release ??= claimBrowserMemoryPage(browserPageId)
+      release ??= claimBrowserMemoryPage(browserPageId, 'operation')
       await this.ensureBrowserPageActive(worktreeId, browserPageId)
       const target = this.resolveBrowserPageWebContents(worktreeId, browserPageId)
       retainBrowserMemoryPageForAgent(browserPageId)
-      await waitForBrowserPageReady(browserPageId, target.webContents, recoverFromLoadError)
+      await waitForBrowserPageReady(browserPageId, target.webContents, mode === 'recover')
       return await execute({ ...params, page: browserPageId })
     } finally {
       release?.()

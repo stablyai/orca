@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { BrowserError } from '../browser-error'
 import { waitForBrowserGuestLoad } from './browser-guest-load'
 import {
   claims,
@@ -142,13 +143,64 @@ export function startBrowserPageAttach(guest: Electron.WebContents, url?: string
   pendingLoads.delete(guest)
   const page = attach.page
   const snapshot = page.history
-  const complete = (): void => {
-    if (pages.get(attach.pageId) === page && page.guest === guest && page.history === snapshot) {
-      page.history = null
+  if (snapshot) {
+    let outcome: 'pending' | 'committed' | 'failed' = 'pending'
+    const dispose = (): void => {
+      guest.off('did-start-navigation', started)
+      guest.off('did-navigate', committed)
+      guest.off('did-fail-load', failed)
+      guest.off('did-finish-load', finished)
+      guest.off('did-stop-loading', stopped)
+      guest.off('destroyed', dispose)
     }
+    const isCurrent = (): boolean => {
+      if (pages.get(attach.pageId) === page && page.guest === guest && page.history === snapshot) {
+        return true
+      }
+      dispose()
+      return false
+    }
+    const started = (
+      details: Electron.Event<Electron.WebContentsDidStartNavigationEventParams>
+    ): void => {
+      if (isCurrent() && details.isMainFrame && !details.isSameDocument) {
+        outcome = 'pending'
+      }
+    }
+    const committed = (): void => {
+      if (isCurrent() && outcome === 'pending') {
+        outcome = 'committed'
+      }
+    }
+    const failed = (
+      _event: Electron.Event,
+      code: number,
+      _description: string,
+      _url: string,
+      main: boolean
+    ): void => {
+      if (isCurrent() && main && code !== -3) {
+        outcome = 'failed'
+      }
+    }
+    const finished = (): void => {
+      if (isCurrent() && outcome === 'committed') {
+        page.history = null
+        dispose()
+      }
+    }
+    const stopped = (): void => {
+      if (isCurrent()) {
+        outcome = 'pending'
+      }
+    }
+    guest.on('did-start-navigation', started)
+    guest.on('did-navigate', committed)
+    guest.on('did-fail-load', failed)
+    guest.on('did-finish-load', finished)
+    guest.on('did-stop-loading', stopped)
+    guest.once('destroyed', dispose)
   }
-  guest.once('did-finish-load', complete)
-  guest.once('destroyed', () => guest.off('did-finish-load', complete))
   const promise = waitForBrowserGuestLoad(guest, () =>
     snapshot
       ? guest.navigationHistory.restore({ entries: snapshot.entries, index: snapshot.index })
@@ -157,7 +209,12 @@ export function startBrowserPageAttach(guest: Electron.WebContents, url?: string
     if (pages.get(attach.pageId) !== page || page.guest !== guest) {
       throw new Error('Browser page replaced')
     }
-    complete()
+    if (snapshot && page.history === snapshot) {
+      throw new BrowserError(
+        'browser_navigation_failed',
+        'The browser page could not be restored. Try reloading it.'
+      )
+    }
   })
   page.restoring = promise
   guestLoads.set(guest, promise)

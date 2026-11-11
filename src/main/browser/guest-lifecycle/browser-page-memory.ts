@@ -81,7 +81,10 @@ export function readBrowserMemoryPageDiscardProtection(
   return protection
 }
 
-export function claimBrowserMemoryPage(pageId: string): () => void {
+export function claimBrowserMemoryPage(
+  pageId: string,
+  ownership: 'agent' | 'operation' = 'agent'
+): () => void {
   let claim = claims.get(pageId)
   if (!claim) {
     claim = { held: false, operations: 0 }
@@ -89,7 +92,7 @@ export function claimBrowserMemoryPage(pageId: string): () => void {
   }
   const wasHeld = claim.held
   claim.operations++
-  if (pages.has(pageId) && isAgentRpcCaller(getActiveRpcCaller())) {
+  if (ownership === 'agent' && pages.has(pageId) && isAgentRpcCaller(getActiveRpcCaller())) {
     claim.held = true
   }
   const page = pages.get(pageId)

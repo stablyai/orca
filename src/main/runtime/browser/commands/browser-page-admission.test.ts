@@ -2,6 +2,7 @@ import { EventEmitter } from 'node:events'
 import { expect, it, vi } from 'vitest'
 import { RuntimeBrowserCommandTargets } from './browser-command-targets'
 import { RuntimeBrowserCommands } from './browser-commands'
+import { AgentBrowserBridgeUtilityCommands } from '../../../browser/agent-browser/commands/agent-browser-bridge-page-commands'
 import {
   prepareBrowserPageAttach,
   admitBrowserPageAttach,
@@ -18,6 +19,7 @@ const { native } = vi.hoisted(() => {
   return { native }
 })
 vi.mock('electron', () => ({
+  app: { getPath: () => '/test-app', getAppPath: () => '/test-project', isPackaged: false },
   ipcMain: { on: vi.fn(), removeListener: vi.fn() },
   webContents: { fromId: () => native.guest }
 }))
@@ -84,10 +86,28 @@ it('runs production reload after a failed cold restore, then admits an ordinary 
     admitBrowserPageAttach(marker, 99, 'persist:profile')
     let destroyed = false
     let loading = true
-    const reloadNative = vi.fn(async () => {
-      loading = false
-      guest.emit('did-finish-load')
-      return { url: 'https://example.test/', title: 'Recovered' }
+    let offline = true
+    let rejectRestore: (error: Error) => void = () => {}
+    const load = new Promise<void>((_resolve, reject) => {
+      rejectRestore = reject
+    })
+    const reloadNative = vi.fn(() => {
+      loading = true
+      guest.emit('did-start-navigation', {
+        url: 'https://example.test/',
+        isSameDocument: false,
+        isMainFrame: true
+      })
+      queueMicrotask(() => {
+        loading = false
+        if (offline) {
+          guest.emit('did-fail-load', {}, -106, 'Offline', 'https://example.test/', true)
+        } else {
+          guest.emit('did-navigate', {}, 'https://example.test/')
+        }
+        guest.emit('did-finish-load')
+        guest.emit('did-stop-loading')
+      })
     })
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fixture models native attach/load events and the recovery command's underlying action.
     const guest = Object.assign(new EventEmitter(), {
@@ -98,11 +118,14 @@ it('runs production reload after a failed cold restore, then admits an ordinary 
       isLoading: () => loading,
       isDevToolsOpened: () => false,
       debugger: { isAttached: () => false },
-      loadURL: () => new Promise<void>(() => {}),
+      getURL: () => 'https://example.test/',
+      getTitle: () => 'Recovered',
+      reload: reloadNative,
+      loadURL: () => load,
       navigationHistory: {
         getAllEntries: () => [{ url: 'https://example.test/', title: 'Original' }],
         getActiveIndex: () => 0,
-        restore: vi.fn(() => new Promise<void>(() => {}))
+        restore: vi.fn(() => load)
       },
       close: () => {
         destroyed = true
@@ -111,17 +134,29 @@ it('runs production reload after a failed cold restore, then admits an ordinary 
     }) as unknown as Electron.WebContents
     associateBrowserPageAttach(guest)
     startBrowserPageAttach(guest)
+    guest.emit('did-start-navigation', {
+      url: 'https://example.test/',
+      isSameDocument: false,
+      isMainFrame: true
+    })
     native.guest = guest
     return {
       guest,
       reloadNative,
+      online: () => {
+        offline = false
+      },
       finish: () => {
         loading = false
+        guest.emit('did-navigate', {}, 'https://example.test/')
         guest.emit('did-finish-load')
       },
       fail: () => {
         loading = false
         guest.emit('did-fail-load', {}, -106, 'Offline', 'https://example.test/', true)
+        rejectRestore(new Error('Offline'))
+        guest.emit('did-finish-load')
+        guest.emit('did-stop-loading')
       }
     }
   }
@@ -137,7 +172,18 @@ it('runs production reload after a failed cold restore, then admits an ordinary 
       getRegisteredTabs: () => new Map([[pageId, 21]]),
       getActivePageId: () => pageId,
       snapshot,
-      reload: cold.reloadNative
+      reload: (...args: Parameters<AgentBrowserBridgeUtilityCommands['reload']>) =>
+        AgentBrowserBridgeUtilityCommands.prototype.reload.call(
+          {
+            getWebContents: () => cold.guest,
+            enqueuePageAction: (
+              _worktree: string | undefined,
+              _page: string | undefined,
+              action: (session: string, target: { webContentsId: number }) => Promise<unknown>
+            ) => action('native-reload', { webContentsId: cold.guest.id })
+          },
+          ...args
+        )
     }
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only production reload and snapshot host paths are reached.
     const host = {
@@ -160,7 +206,13 @@ it('runs production reload after a failed cold restore, then admits an ordinary 
       url: 'https://example.test/',
       title: 'Recovered'
     })
-    expect(cold.reloadNative).toHaveBeenCalledOnce()
+    await expect(commands.browserSnapshot({ page: pageId })).rejects.toThrow(
+      'could not be restored'
+    )
+    expect(snapshot).not.toHaveBeenCalled()
+    cold.online()
+    await commands.browserReload({ page: pageId })
+    expect(cold.reloadNative).toHaveBeenCalledTimes(2)
     await expect(commands.browserSnapshot({ page: pageId })).resolves.toEqual({
       snapshot: 'Recovered page'
     })
