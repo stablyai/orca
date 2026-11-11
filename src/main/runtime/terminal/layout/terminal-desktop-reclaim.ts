@@ -58,10 +58,28 @@ export abstract class OrcaRuntimeWithReclaimTerminalForDesktop extends OrcaRunti
       this.releaseDesktopTakeBack(ptyId)
       return true
     }
-    // A mobile driver without subscribers or override is a stale lock; release without resizing.
+    // A mobile driver without subscribers or override may still have a drifted PTY grid; restore known renderer geometry before releasing.
     if (this.getDriver(ptyId).kind === 'mobile') {
-      this.releaseDesktopTakeBack(ptyId)
+      const renderer = this.lastRendererSizes.get(ptyId)
+      const current = this.getTerminalSize(ptyId)
       this.setMobileDisplayMode(ptyId, 'desktop')
+      if (
+        renderer &&
+        current &&
+        (current.cols !== renderer.cols || current.rows !== renderer.rows)
+      ) {
+        this.freshSubscribeGuard.add(ptyId)
+        try {
+          await this.enqueueLayout(ptyId, {
+            kind: 'desktop',
+            cols: renderer.cols,
+            rows: renderer.rows
+          })
+        } finally {
+          this.freshSubscribeGuard.delete(ptyId)
+        }
+      }
+      this.releaseDesktopTakeBack(ptyId)
       return true
     }
     return false

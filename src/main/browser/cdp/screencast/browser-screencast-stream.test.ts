@@ -162,4 +162,48 @@ describe('startBrowserScreencast', () => {
     await session.done
     expect(answer).toHaveBeenCalledExactlyOnceWith(false, '')
   })
+
+  it('restores embedder visible size and disables mobile touch emulation when a mobile screencast stops', async () => {
+    const webContents = Object.assign(createMockWebContents(), {
+      getType: () => 'webview'
+    })
+    const session = await startBrowserScreencast(webContents as never, {
+      format: 'jpeg',
+      quality: 70,
+      maxWidth: 1440,
+      maxHeight: 1200,
+      everyNthFrame: 1,
+      minFrameIntervalMs: 0,
+      viewportWidth: 390,
+      viewportHeight: 844,
+      deviceScaleFactor: 2,
+      mobile: true,
+      holdPaint: () => () => {},
+      onFrame: vi.fn()
+    })
+
+    webContents.debugger.emit('message', {}, 'Page.screencastFrame', {
+      data: Buffer.from('mobile-frame').toString('base64'),
+      sessionId: 7,
+      metadata: { deviceWidth: 1280, deviceHeight: 800 }
+    })
+    await Promise.resolve()
+
+    webContents.debugger.sendCommand.mockClear()
+    session.stop()
+    await session.done
+
+    expect(webContents.debugger.sendCommand).toHaveBeenCalledWith(
+      'Emulation.clearDeviceMetricsOverride',
+      {}
+    )
+    expect(webContents.debugger.sendCommand).toHaveBeenCalledWith(
+      'Emulation.setTouchEmulationEnabled',
+      { enabled: false }
+    )
+    expect(webContents.debugger.sendCommand).toHaveBeenCalledWith('Emulation.setVisibleSize', {
+      width: 1280,
+      height: 800
+    })
+  })
 })

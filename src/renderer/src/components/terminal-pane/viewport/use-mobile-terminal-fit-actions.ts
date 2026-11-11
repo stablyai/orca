@@ -1,9 +1,11 @@
 import { useCallback } from 'react'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
-import { getMobileFitOverridePtyIds } from '@/lib/pane-manager/mobile-fit-overrides'
-import { getAllDrivers } from '@/lib/pane-manager/mobile-driver-state'
-import { refitAndRefreshAllTerminalPanes } from '@/lib/pane-manager/pane-manager-registry'
-import { restoreTerminalFitToDesktop, restoreTerminalFitsToDesktop } from './terminal-fit-restore'
+import {
+  getMobileOwnedTerminalPtyIds as readMobileOwnedTerminalPtyIds,
+  reclaimAllMobileSurfacesToDesktop,
+  restoreTerminalFitToDesktop,
+  scheduleRestoredTerminalRefit as triggerRestoredTerminalRefit
+} from './terminal-fit-restore'
 import type { TerminalPaneContextController } from '../controller/use-terminal-pane-context-actions'
 
 export function useMobileTerminalFitActions({
@@ -14,18 +16,12 @@ export function useMobileTerminalFitActions({
   TerminalPaneContextController,
   'paneTransportsRef' | 'refreshMobileOverlays' | 'settingsRef'
 >) {
-  const getMobileOwnedTerminalPtyIds = useCallback((): string[] => {
-    const ptyIds = new Set(getMobileFitOverridePtyIds())
-    for (const [ptyId, driver] of getAllDrivers()) {
-      if (driver.kind === 'mobile') {
-        ptyIds.add(ptyId)
-      }
-    }
-    return [...ptyIds]
-  }, [])
+  const getMobileOwnedTerminalPtyIds = useCallback(
+    (): string[] => readMobileOwnedTerminalPtyIds(),
+    []
+  )
   const scheduleRestoredTerminalRefit = useCallback((): void => {
-    requestAnimationFrame(refitAndRefreshAllTerminalPanes)
-    window.setTimeout(refitAndRefreshAllTerminalPanes, 100)
+    triggerRestoredTerminalRefit()
   }, [])
   const restorePaneTerminalFit = useCallback(
     async (pane: ManagedPane, ptyId: string): Promise<void> => {
@@ -44,16 +40,17 @@ export function useMobileTerminalFitActions({
   )
   const restoreAllTerminalFits = useCallback(
     async (focusPane: ManagedPane): Promise<void> => {
-      const restored = await restoreTerminalFitsToDesktop(
-        getMobileOwnedTerminalPtyIds(),
+      const { restored, hadTargets } = await reclaimAllMobileSurfacesToDesktop(
         settingsRef.current ?? undefined
       )
-      if (restored) {
+      if (restored || hadTargets) {
         scheduleRestoredTerminalRefit()
+      }
+      if (restored) {
         focusPane.terminal.focus()
       }
     },
-    [getMobileOwnedTerminalPtyIds, scheduleRestoredTerminalRefit, settingsRef]
+    [scheduleRestoredTerminalRefit, settingsRef]
   )
   return {
     getMobileOwnedTerminalPtyIds,

@@ -5,6 +5,7 @@ import { useAppStore } from '@/store'
 import { consumeRestartReplacement } from './spawn/restart-replacement-on-show'
 import { shouldReconcileMissingSession } from './lifecycle/terminal-dead-session-reconcile'
 import { cancelPendingSafeFitContinuations } from '@/lib/pane-manager/pane-fit-continuation-registry'
+import { registerLivePanePtySizeReasserter } from '@/lib/pane-manager/pane-manager-registry'
 import { PANE_PTY_RESIZE_HOLD_FLUSH_EVENT } from '@/lib/pane-manager/pane-pty-resize-hold'
 import { discardTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-queue-registry'
 import '@/lib/agent-session/resume/sleeping-agent-pane-ownership'
@@ -38,6 +39,13 @@ export type PanePtyBinding = IDisposable & {
 const SHIFT_ENTER_RECONFIRM_IDLE_MS = 350
 
 export function createPanePtyBinding(session: ConnectPanePtySession): PanePtyBinding {
+  // Post-suppression desktop reclaim rechecks applied PTY sizes after FitAddon already settled xterm locally.
+  const unregisterPtySizeReasserter = registerLivePanePtySizeReasserter(() => {
+    if (!session.disposed && session.deps.isVisibleRef.current) {
+      session.foregroundGridDriftProbeSettled = false
+      session.ptySizeReassertion.request({ fit: true })
+    }
+  })
   session.reconcileIfSessionMissing = (
     hasPty: HasPty,
     livenessRequestedAt = performance.now()
@@ -215,6 +223,7 @@ export function createPanePtyBinding(session: ConnectPanePtySession): PanePtyBin
       // Why: cancel the post-spawn reconcile's pending rAF so a torn-down pane can't keep fitting/resizing after disposal.
       session.ptySizeReconcileHandle?.cancel()
       session.ptySizeReconcileHandle = null
+      unregisterPtySizeReasserter()
       session.ptySizeReassertion.dispose()
       session.terminalSelectionFitGuard?.dispose()
       session.terminalSelectionFitGuard = null

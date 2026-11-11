@@ -4,6 +4,7 @@ import { getFitOverrideForPty, onOverrideChange } from '@/lib/pane-manager/mobil
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { safeFit } from '@/lib/pane-manager/pane-fit'
+import { reassertAllTerminalPanePtySizes } from '@/lib/pane-manager/pane-manager-registry'
 import {
   applyDesktopFitFallbackAfterReplay,
   fitAndRefreshDesktopPane
@@ -49,11 +50,11 @@ export function useMobileOverlayTicks({ managerRef, paneTransportsRef }: MobileO
       pendingFitFrames.add(frameId)
     }
 
-    const scheduleFallbackTimer = (callback: () => void): void => {
+    const scheduleFallbackTimer = (callback: () => void, delayMs = 100): void => {
       const timerId = window.setTimeout(() => {
         pendingFallbackTimers.delete(timerId)
         callback()
-      }, 100)
+      }, delayMs)
       pendingFallbackTimers.add(timerId)
     }
 
@@ -130,6 +131,11 @@ export function useMobileOverlayTicks({ managerRef, paneTransportsRef }: MobileO
             })
           }
         })
+        // Reassert PTY grid after main's 500ms resize-suppression window so split panes whose rAF pty:resize was suppressed converge.
+        scheduleFallbackTimer(() => {
+          fitAffectedPanes()
+          reassertAllTerminalPanePtySizes()
+        }, 550)
       }
     })
 
@@ -149,16 +155,29 @@ export function useMobileOverlayTicks({ managerRef, paneTransportsRef }: MobileO
 
   // Why: driver state lives in a Map for perf; this counter re-renders on driver flips so the lock banner toggles. See docs/mobile-presence-lock.md.
   const [, setDriverTick] = useState(0)
-  useEffect(
-    () =>
-      onDriverChange((event) => {
-        if (!isPtyMountedInTab(paneTransportsRef.current, event.ptyId)) {
-          return
-        }
-        setDriverTick((n) => n + 1)
-      }),
-    [paneTransportsRef]
-  )
+  useEffect(() => {
+    const pendingDriverTimers = new Set<number>()
+    const unsubscribe = onDriverChange((event) => {
+      if (!isPtyMountedInTab(paneTransportsRef.current, event.ptyId)) {
+        return
+      }
+      setDriverTick((n) => n + 1)
+      if (event.driver.kind !== 'mobile') {
+        const timerId = window.setTimeout(() => {
+          pendingDriverTimers.delete(timerId)
+          reassertAllTerminalPanePtySizes()
+        }, 550)
+        pendingDriverTimers.add(timerId)
+      }
+    })
+    return () => {
+      unsubscribe()
+      for (const timerId of pendingDriverTimers) {
+        window.clearTimeout(timerId)
+      }
+      pendingDriverTimers.clear()
+    }
+  }, [paneTransportsRef])
 
   // Reclaim clears stale banners when transport swaps remove all affinity capable of ticking the live portal.
   const refreshMobileOverlays = useCallback((): void => {

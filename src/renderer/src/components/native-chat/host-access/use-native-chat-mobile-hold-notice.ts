@@ -2,9 +2,11 @@ import { useMemo, useState } from 'react'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import { refitAndRefreshAllTerminalPanes } from '@/lib/pane-manager/pane-manager-registry'
 import { useAppStore } from '@/store'
-import { restoreTerminalFitToDesktop } from '../../terminal-pane/viewport/terminal-fit-restore'
+import {
+  restoreTerminalFitToDesktop,
+  scheduleRestoredTerminalRefit
+} from '../../terminal-pane/viewport/terminal-fit-restore'
 import type { NativeChatComposerNotice } from '../composer/controls/native-chat-composer-notice'
 
 /** Chat hides the terminal’s phone overlay and drafts hide its placeholder; keep the lock and Take back action in a notice. */
@@ -24,7 +26,7 @@ export function useNativeChatMobileHoldNotice(
       void restoreTerminalFitToDesktop(ptyId, useAppStore.getState().settings ?? undefined)
         .then((restored) => {
           if (restored) {
-            requestAnimationFrame(refitAndRefreshAllTerminalPanes)
+            scheduleRestoredTerminalRefit()
           }
         })
         .finally(() => {

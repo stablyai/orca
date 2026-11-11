@@ -240,6 +240,31 @@ describe('mobile presence lock — multi-mobile semantics', () => {
     expect(await runtime.reclaimTerminalForDesktop('pty-1')).toBe(true)
     expect(ptySizes.get('pty-1')).toEqual({ cols: 132, rows: 44 })
   })
+
+  it('reclaimTerminalForDesktop restores split renderer geometry when mobile holds only a driver lock', async () => {
+    const { runtime, ptySizes, resizes } = createRuntime()
+    ptySizes.set('pty-split', { cols: 45, rows: 20 })
+    runtime.recordRendererGeometry('pty-split', 90, 40)
+    runtime.setMobileDisplayMode('pty-split', 'desktop')
+    await runtime.handleMobileSubscribe('pty-split', 'phone-A', undefined)
+    const claim = runtime.beginMobileInputFloor('pty-split', 'phone-A')
+    expect(claim).not.toBeNull()
+    claim?.commit()
+    runtime.handleMobileUnsubscribe('pty-split', 'phone-A')
+    await vi.advanceTimersByTimeAsync(300)
+    // Simulate a lingering mobile driver lock without a held fit override while PTY is still narrow.
+    ;(
+      runtime as unknown as {
+        setDriver: (id: string, d: { kind: 'mobile'; clientId: string }) => void
+      }
+    ).setDriver('pty-split', { kind: 'mobile', clientId: 'phone-A' })
+    resizes.length = 0
+
+    expect(await runtime.reclaimTerminalForDesktop('pty-split')).toBe(true)
+    expect(ptySizes.get('pty-split')).toEqual({ cols: 90, rows: 40 })
+    expect(resizes).toContainEqual({ ptyId: 'pty-split', cols: 90, rows: 40 })
+    expect(runtime.getDriver('pty-split')).toEqual({ kind: 'desktop' })
+  })
 })
 
 // #7588: null-viewport re-subscribe leaves an active subscriber under the held fit override.

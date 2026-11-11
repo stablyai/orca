@@ -19,6 +19,8 @@ const managerIds = new WeakMap<RegisteredPaneManager, number>()
 /** Detaches a manager's WebGL renderers and returns the step that reattaches them. */
 type WebglRendererDetacher = () => () => void
 const webglRendererDetachers = new WeakMap<RegisteredPaneManager, WebglRendererDetacher>()
+type LivePanePtySizeReasserter = () => void
+const livePtySizeReasserters = new Set<LivePanePtySizeReasserter>()
 let nextManagerId = 1
 
 export function registerLivePaneManager(
@@ -174,6 +176,23 @@ export function refitAndRefreshAllTerminalPanes(): void {
       manager.refreshAllPanes?.()
     } catch {
       // Continue restore-all across managers being torn down.
+    }
+  }
+}
+
+export function registerLivePanePtySizeReasserter(reassert: LivePanePtySizeReasserter): () => void {
+  livePtySizeReasserters.add(reassert)
+  return () => {
+    livePtySizeReasserters.delete(reassert)
+  }
+}
+
+export function reassertAllTerminalPanePtySizes(): void {
+  for (const reassert of livePtySizeReasserters) {
+    try {
+      reassert()
+    } catch {
+      // Continue size reassertion across bindings being torn down.
     }
   }
 }

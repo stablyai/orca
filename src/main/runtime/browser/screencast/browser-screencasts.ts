@@ -155,6 +155,7 @@ export class RuntimeBrowserScreencasts {
             subscriber.resolveDone()
           }
           pendingRecord.subscribers.clear()
+          void browserManager.restoreViewportAfterScreencast?.(browserPageId)?.catch(() => {})
         })
         .catch(() => {})
     }
@@ -266,6 +267,8 @@ export class RuntimeBrowserScreencasts {
       active.viewportOwnerSubscriptionId = fallback?.[0] ?? null
       if (fallback) {
         void session.updateViewport(fallback[1].viewport).catch(() => {})
+      } else if (active.subscribers.size > 0) {
+        void session.updateViewport({}).catch(() => {})
       }
     }
     if (active.subscribers.size === 0) {
