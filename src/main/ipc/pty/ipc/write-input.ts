@@ -202,8 +202,9 @@ export function createPtyWriteInput(deps: {
     typeof (value as { id?: unknown }).id === 'string' &&
     (value as { id: string }).id.length > 0 &&
     typeof (value as { data?: unknown }).data === 'string' &&
-    ((value as { requireStartupDialog?: unknown }).requireStartupDialog === undefined ||
-      typeof (value as { requireStartupDialog?: unknown }).requireStartupDialog === 'string')
+    (!('requireStartupDialog' in value) ||
+      value.requireStartupDialog === undefined ||
+      typeof value.requireStartupDialog === 'string')
 
   const isPtyViewportClaimPayload = (value: unknown): value is PtyViewportClaimPayload =>
     typeof value === 'object' &&
