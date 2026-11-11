@@ -24,12 +24,13 @@ export function sleptRemotePageMissingAction(page: Page): 'wait' | 'reopen' | 'c
   })
 }
 
-/** The host answered for this page with the sandbox up for good: it is no longer owed. */
-export function noteSleptRemotePageAnswered(page: Page): void {
+/** The host answered for this page with the sandbox up for good: it (and its tab) is no longer owed. */
+export function noteSleptRemotePageAnswered(page: Page & { workspaceId: string }): void {
   if (
     isBrowserSandboxUp(useAppStore.getState(), page.worktreeId, readSleepInFlight(page.worktreeId))
   ) {
     settleReopenAfterSleep(page.id)
+    settleReopenAfterSleep(page.workspaceId)
   }
 }
 

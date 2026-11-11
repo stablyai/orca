@@ -65,6 +65,7 @@ export function useRemoteBrowserPageLifecycle({
   const isActiveRef = useRef(isActive)
   const currentBrowserTabIdRef = useRef(browserTab.id)
   const currentWorktreeIdRef = useRef(browserTab.worktreeId)
+  const currentWorkspaceIdRef = useRef(browserTab.workspaceId)
   const currentBrowserTabUrlRef = useRef(browserTab.url)
   const runtimeWorktree = useMemo(() => toRuntimeWorktreeSelector(worktreeId), [worktreeId])
   const runtimeWorktreeRef = useRef(runtimeWorktree)
@@ -78,6 +79,7 @@ export function useRemoteBrowserPageLifecycle({
   useLayoutEffect(() => {
     currentBrowserTabIdRef.current = browserTab.id
     currentWorktreeIdRef.current = browserTab.worktreeId
+    currentWorkspaceIdRef.current = browserTab.workspaceId
     currentBrowserTabUrlRef.current = browserTab.url
     activeRuntimeEnvironmentIdRef.current = activeRuntimeEnvironmentId
     isActiveRef.current = isActive
@@ -86,6 +88,7 @@ export function useRemoteBrowserPageLifecycle({
     activeRuntimeEnvironmentId,
     browserTab.id,
     browserTab.url,
+    browserTab.workspaceId,
     browserTab.worktreeId,
     isActive,
     runtimeWorktree
@@ -123,6 +126,7 @@ export function useRemoteBrowserPageLifecycle({
       applyTabInfo: (tab) => {
         noteSleptRemotePageAnswered({
           id: currentBrowserTabIdRef.current,
+          workspaceId: currentWorkspaceIdRef.current,
           worktreeId: currentWorktreeIdRef.current
         })
         streamBridgeRef.current.applyTabInfo(tab)

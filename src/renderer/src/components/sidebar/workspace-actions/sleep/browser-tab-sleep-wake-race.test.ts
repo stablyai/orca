@@ -25,6 +25,7 @@ vi.mock('@/store/slices/browser/cleanup/browser-webview-cleanup', () => ({
 const {
   isAwaitingReopenAfterSleep,
   isBrowserSandboxUp,
+  isSleptBrowserTabAwaitingReopen,
   missingRemotePageAction,
   resetReopenAfterSleepForTest,
   settleReopenAfterSleep,
@@ -116,5 +117,16 @@ describe('wake pressed while the suspend is still being committed (LC2-P1)', () 
 
   it('a tab that never slept closes when its host page is gone, as before', () => {
     expect(moment({ vm: 'running' }).onMissing('page-x')).toBe('close')
+  })
+
+  it("the host's session snapshot can't drop a slept tab before its page is reopened", () => {
+    const pages = { browserPagesByWorkspace: store.state.browserPagesByWorkspace }
+    expect(isSleptBrowserTabAwaitingReopen(pages, 'tab-a')).toBe(false)
+    sleepWorktreeBrowserTabs(WT, 1)
+    expect(isSleptBrowserTabAwaitingReopen(pages, 'tab-a')).toBe(true)
+    settleReopenAfterSleep('tab-a')
+    settleReopenAfterSleep('page-a')
+    expect(isSleptBrowserTabAwaitingReopen(pages, 'tab-a')).toBe(false)
+    expect(isSleptBrowserTabAwaitingReopen(pages, 'tab-b')).toBe(true)
   })
 })

@@ -57,6 +57,17 @@ export function isAwaitingReopenAfterSleep(browserPageId: string): boolean {
   return reopenAfterSleep.has(browserPageId)
 }
 
+/** A tab (or any of its pages) still owed a host page since sleep: host snapshots can't drop it. */
+export function isSleptBrowserTabAwaitingReopen(
+  state: { browserPagesByWorkspace: Record<string, readonly { id: string }[]> },
+  tabId: string
+): boolean {
+  return (
+    reopenAfterSleep.has(tabId) ||
+    (state.browserPagesByWorkspace[tabId] ?? []).some((page) => reopenAfterSleep.has(page.id))
+  )
+}
+
 /** A host page answered for this tab again: from now on a missing page is a real close. */
 export function settleReopenAfterSleep(browserPageId: string): void {
   reopenAfterSleep.delete(browserPageId)
