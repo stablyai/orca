@@ -286,6 +286,8 @@
         "errorTeamSandboxLimit_other": "Your team can run {{count}} sandboxes at once ({{perSeat}} per seat). Put one to sleep or delete it, then try again.",
         "listMeta2_one": "{{count}} workspace · {{usage}}",
         "listMeta2_other": "{{count}} workspaces · {{usage}}",
+        "listMetaCount_one": "{{count}} workspace",
+        "listMetaCount_other": "{{count}} workspaces",
         "listSandboxHours_one": "{{hours}} sandbox hour used",
         "listSandboxHours_other": "{{hours}} sandbox hours used",
         "rowSandboxHours_one": "{{hours}} sandbox hour",
@@ -438,6 +440,15 @@
         "AgentStep": {
           "showMoreAgents_one": "Show {{count}} more agent →",
           "showMoreAgents_other": "Show {{count}} more agents →"
+        }
+      },
+      "orca": {
+        "profiles": {
+          "signout": {
+            "confirm": {
+              "description": "Artifacts and Orca Relay will be unavailable until you sign in again. Your local projects and worktrees won't be affected."
+            }
+          }
         }
       },
       "prCheckCounts": {

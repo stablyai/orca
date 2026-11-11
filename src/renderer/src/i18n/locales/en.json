@@ -19974,7 +19974,8 @@
               "title": "Sign out of Orca?",
               "description": "Artifacts and Orca Relay will be unavailable until you sign in again. Your local projects and worktrees won't be affected.",
               "cancel": "Cancel",
-              "action": "Sign out"
+              "action": "Sign out",
+              "description2": "You'll lose access to your cloud workspaces until you sign in again. Local workspaces aren't affected."
             }
           }
         }
@@ -21092,7 +21093,9 @@
         "pinLimit": "You can pin up to {{count}} workspaces. Unpin one first.",
         "pinnedName": "Pinned {{name}}",
         "unpinnedName": "Unpinned {{name}}",
-        "otherWorkspaces": "Other workspaces"
+        "otherWorkspaces": "Other workspaces",
+        "listMetaCount_one": "{{count}} workspace",
+        "listMetaCount_other": "{{count}} workspaces"
       },
       "orcaCloud": {
         "QueuedPrompt": {
