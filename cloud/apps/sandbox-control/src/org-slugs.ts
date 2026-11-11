@@ -9,7 +9,7 @@ import type { SandboxCaller } from './auth'
 import { WorkspaceError, isOrgAdmin } from './workspaces'
 
 /** Path words a slug can't take: they'd read as a different link form. */
-const RESERVED = new Set(['w', 'c', 'me', 'api', 'app', 'new', 'org', 'team', 'settings', 'cloud', 'orca', 'admin', 'help'])
+const RESERVED = new Set(['w', 'c', 'me', 'api', 'app', 'new', 'org', 'team', 'settings', 'cloud', 'orca', 'admin', 'help', 'setup'])
 
 export const SLUG = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$/
 

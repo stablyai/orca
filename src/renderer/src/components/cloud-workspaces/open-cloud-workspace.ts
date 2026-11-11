@@ -10,7 +10,8 @@ import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-a
 import { refreshRuntimeProjectWorktreesAndLineage } from '@/hooks/runtime-project-refresh-scheduler'
 import { RuntimeRpcCallError, unwrapRuntimeRpcResult } from '@/runtime/rpc/calls/runtime-rpc-result'
 import type { CloudWorkspace } from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
-import { cloudWorkspaceLink } from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
+import { cloudWorkspaceShareLink } from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
+import { cloudWorkspaceIdentity, rememberCloudWorkspaces } from './cloud-workspace-identity'
 import {
   getWorktreeExecutionHostId,
   toRuntimeExecutionHostId
@@ -236,9 +237,22 @@ export function openCloudWorkspace(workspace: CloudWorkspace): Promise<OpenOutco
   return attempt
 }
 
+/** The org slug + W-number link when the control plane gave one, else the sandbox id form. */
+async function shareLinkFor(id: string, chatId?: string | null): Promise<string> {
+  let link = cloudWorkspaceIdentity(id)?.link ?? null
+  if (!link) {
+    const fetched = await window.api.cloudWorkspaces.get(id).catch(() => null)
+    if (fetched?.ok) {
+      rememberCloudWorkspaces([fetched.value])
+      link = fetched.value.link ?? null
+    }
+  }
+  return cloudWorkspaceShareLink({ id, ...(link ? { link } : {}) }, chatId)
+}
+
 export async function copyCloudWorkspaceLink(id: string, chatId?: string | null): Promise<void> {
   try {
-    await navigator.clipboard.writeText(cloudWorkspaceLink(id, chatId))
+    await navigator.clipboard.writeText(await shareLinkFor(id, chatId))
   } catch (error) {
     console.warn('[cloud-workspaces] copy link failed', error)
     toast.error(

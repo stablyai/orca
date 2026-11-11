@@ -7,11 +7,19 @@ import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { keybindingMatchesAction } from '../../../../shared/keybindings/matching'
-import type { CloudWorkspace } from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
+import {
+  formatWorkspaceNumber,
+  type CloudWorkspace
+} from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
 import { CloudStateDot } from '../orca-cloud/CloudStateDot'
 import type { CloudDotState } from '@/lib/orca-cloud/orca-cloud-workspace-state'
 import { MemberAvatar, PresenceStack } from './CloudMemberAvatars'
-import { CloudWorkspaceRowMenu, isReadableAsleep, type RowActions } from './CloudWorkspaceRowMenu'
+import {
+  CloudWorkspaceRowMenu,
+  isReadableAsleep,
+  type RowActions,
+  type RowArrangement
+} from './CloudWorkspaceRowMenu'
 import {
   formatSandboxHours,
   formatRelative,
@@ -81,7 +89,10 @@ export function CloudWorkspaceRow({
   opening,
   highlighted,
   now,
-  actions
+  actions,
+  arrangement,
+  dragProps,
+  dragging = false
 }: {
   workspace: CloudWorkspace
   directory: MemberDirectory
@@ -93,6 +104,11 @@ export function CloudWorkspaceRow({
   highlighted: boolean
   now: number
   actions: RowActions
+  /** Pinned state and whether Move up / Move down apply (synced prefs). */
+  arrangement?: RowArrangement
+  /** Drag-to-reorder within its group (from CloudWorkspaceGroup's rowDragProps). */
+  dragProps?: React.LiHTMLAttributes<HTMLLIElement>
+  dragging?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const intlLocale = useIntlLocale()
@@ -155,6 +171,7 @@ export function CloudWorkspaceRow({
     <li
       ref={rowRef}
       data-cloud-workspace-row=""
+      {...dragProps}
       onKeyDown={(event) => {
         // Menu items render in a portal but still bubble through React; only this row's own DOM counts.
         if (!(event.target instanceof Node) || !event.currentTarget.contains(event.target)) {
@@ -174,7 +191,8 @@ export function CloudWorkspaceRow({
       }}
       className={cn(
         'group relative isolate flex items-center gap-3 rounded-lg pr-2 transition-colors hover:bg-accent',
-        menuOpen && 'bg-accent'
+        menuOpen && 'bg-accent',
+        dragging && 'opacity-50'
       )}
     >
       {/* Opened from a link: an accent tint that fades out (instantly under reduced motion). */}
@@ -230,6 +248,11 @@ export function CloudWorkspaceRow({
             >
               {title}
             </span>
+            {w.number ? (
+              <span className="shrink-0 font-mono text-2xs tabular-nums text-muted-foreground">
+                {formatWorkspaceNumber(w.number)}
+              </span>
+            ) : null}
             {w.visibility === 'private' && (
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -366,6 +389,7 @@ export function CloudWorkspaceRow({
         open={menuOpen}
         onOpenChange={setMenuOpen}
         actions={actions}
+        arrangement={arrangement}
       />
       <span id={descriptionId} className="sr-only">
         {description}

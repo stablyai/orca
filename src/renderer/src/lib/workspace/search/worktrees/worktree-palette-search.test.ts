@@ -56,6 +56,23 @@ function gitLabReview(overrides: Partial<HostedReviewInfo> = {}): HostedReviewIn
 }
 
 describe('worktree-palette-search', () => {
+  it('finds a cloud workspace by its number and says why it matched', () => {
+    const cloud = makeWorktree({ id: 'wt-cloud', displayName: 'Fix login' })
+    const local = makeWorktree({ id: 'wt-local', displayName: 'Release 123 notes' })
+    const cloudNumberByWorktreeId = new Map([['wt-cloud', 123]])
+    for (const query of ['W-123', 'w123']) {
+      const results = searchWorktrees([cloud, local], query, repoMap, { cloudNumberByWorktreeId })
+      expect(results.map((r) => r.worktreeId)).toEqual(['wt-cloud'])
+      expect(results[0]?.supportingText?.labelKind).toBe('cloudWorkspace')
+      expect(results[0]?.supportingText?.text).toBe('W-123')
+    }
+    expect(
+      searchWorktrees([cloud, local], '123', repoMap, { cloudNumberByWorktreeId }).map(
+        (r) => r.worktreeId
+      )
+    ).toContain('wt-cloud')
+  })
+
   it('falls back to branch text when a cleared display name left it undefined', () => {
     const cleared = makeWorktree({
       displayName: undefined as unknown as string,

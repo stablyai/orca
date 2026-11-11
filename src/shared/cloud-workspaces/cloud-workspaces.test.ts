@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest'
 import {
   CloudWorkspaceSchema,
   cloudWorkspaceLink,
-  parseCloudWorkspaceLink
+  cloudWorkspaceShareLink,
+  formatWorkspaceNumber,
+  parseCloudWorkspaceLink,
+  parseWorkspaceNumber
 } from './cloud-workspaces-wire'
 import { base64ToBytes, bytesToBase64 } from './sealed-grant'
 import { parseSenderEnvelope, withSenderEnvelope } from './sender-envelope'
@@ -12,13 +15,34 @@ const ID = 'sbx_0123456789abcdef01234567'
 describe('cloud workspace links', () => {
   it('round-trips workspace and chat links', () => {
     expect(parseCloudWorkspaceLink(cloudWorkspaceLink(ID))).toEqual({
-      workspaceId: ID,
+      target: { kind: 'id', workspaceId: ID },
       chatId: null
     })
     expect(parseCloudWorkspaceLink(cloudWorkspaceLink(ID, 'chat 1/2'))).toEqual({
-      workspaceId: ID,
+      target: { kind: 'id', workspaceId: ID },
       chatId: 'chat 1/2'
     })
+  })
+
+  it('parses org slug and number links', () => {
+    expect(parseCloudWorkspaceLink('orca://cloud/acme-labs/W-123')).toEqual({
+      target: { kind: 'number', org: 'acme-labs', number: 123 },
+      chatId: null
+    })
+    expect(parseCloudWorkspaceLink('orca://cloud/acme/w-7/c/s%3Aabc/')).toEqual({
+      target: { kind: 'number', org: 'acme', number: 7 },
+      chatId: 's:abc'
+    })
+  })
+
+  it('copies the server link with the chat appended, or falls back to the id form', () => {
+    expect(cloudWorkspaceShareLink({ id: ID, link: 'orca://cloud/acme/W-3' }, 's:1')).toBe(
+      'orca://cloud/acme/W-3/c/s%3A1'
+    )
+    expect(cloudWorkspaceShareLink({ id: ID })).toBe(`orca://cloud/w/${ID}`)
+    expect(cloudWorkspaceShareLink({ id: ID, link: 'https://evil.example/x' })).toBe(
+      `orca://cloud/w/${ID}`
+    )
   })
 
   it('rejects anything that is not a cloud workspace link', () => {
@@ -26,9 +50,24 @@ describe('cloud workspace links', () => {
       'orca://cloud/w/sbx_nothex',
       `https://cloud/w/${ID}`,
       `orca://cloud/w/${ID}/x`,
-      `orca://cloud/w/${ID}/c/%E0%A4%A`
+      `orca://cloud/w/${ID}/c/%E0%A4%A`,
+      'orca://cloud/setup/return?session=cs_1',
+      'orca://cloud/Acme/W-1',
+      'orca://cloud/a--b/W-1',
+      'orca://cloud/acme/W-0',
+      'orca://cloud/acme/W-x'
     ]) {
       expect(parseCloudWorkspaceLink(bad)).toBeNull()
+    }
+  })
+
+  it('formats and parses workspace numbers', () => {
+    expect(formatWorkspaceNumber(42)).toBe('W-42')
+    for (const text of ['W-42', 'w42', '#42', ' 42 ']) {
+      expect(parseWorkspaceNumber(text)).toBe(42)
+    }
+    for (const text of ['W-', 'W-0', 'fix 42', '4.2', '']) {
+      expect(parseWorkspaceNumber(text)).toBeNull()
     }
   })
 })

@@ -1,15 +1,19 @@
 import type {
   CloudWorkspace,
   CloudWorkspaceGrant,
+  CloudOrgSlug,
+  CloudWorkspaceLinkTarget,
   CloudWorkspaceListQuery,
   CloudWorkspacePatch,
+  CloudWorkspacePrefs,
+  CloudWorkspacePrefsDocument,
   OrgPrompts
 } from '../../shared/cloud-workspaces/cloud-workspaces-wire'
 import type { CloudReadSnapshotState } from '../../shared/cloud-workspaces/read-snapshot-state'
 
 export type CloudWorkspacesResult<T> =
   | { ok: true; value: T }
-  | { ok: false; error: string; reason?: string; status?: number }
+  | { ok: false; error: string; reason?: string; status?: number; orgId?: string }
 
 export type LocalCloudWorkspace = {
   sandboxId: string
@@ -26,8 +30,9 @@ export type CloudWorkspacesApi = {
   list: (query: CloudWorkspaceListQuery) => Promise<CloudWorkspacesResult<CloudWorkspace[]>>
   get: (id: string) => Promise<CloudWorkspacesResult<CloudWorkspace>>
   patch: (id: string, patch: CloudWorkspacePatch) => Promise<CloudWorkspacesResult<CloudWorkspace>>
+  /** Resolves either link form; a slug link for another org fails with reason `other_org` and its `orgId`. */
   resolveLink: (
-    workspaceId: string,
+    target: CloudWorkspaceLinkTarget,
     chatId?: string | null
   ) => Promise<CloudWorkspacesResult<{ workspace: CloudWorkspace; chatId: string | null }>>
   /** A fresh per-device pairing link for a teammate's workspace (E2EE grant, opened in main). */
@@ -62,6 +67,15 @@ export type CloudWorkspacesApi = {
     document: OrgPrompts['document'],
     revision: number
   ) => Promise<CloudWorkspacesResult<OrgPrompts>>
+  /** This member's synced sidebar arrangement of cloud workspaces (pins, order, sections). */
+  getPrefs: () => Promise<CloudWorkspacesResult<CloudWorkspacePrefs>>
+  /** Compare-and-set on `revision`; a stale write fails with `conflict`. */
+  putPrefs: (
+    document: CloudWorkspacePrefsDocument,
+    revision: number
+  ) => Promise<CloudWorkspacesResult<CloudWorkspacePrefs>>
+  /** The org's link slug; `orgName` names it the first time anyone asks. */
+  getOrgSlug: (orgName?: string | null) => Promise<CloudWorkspacesResult<CloudOrgSlug>>
   onOpenLink: (callback: (link: string) => void) => () => void
   consumePendingLink: () => Promise<string | null>
 }

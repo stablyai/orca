@@ -14,6 +14,8 @@ import type {
 } from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
 import { useOrgRoster } from '../billing/team/use-org-roster'
 import { CloudWorkspaceRow } from './CloudWorkspaceRow'
+import { CloudWorkspaceGroupView, rowDragProps } from './CloudWorkspaceGroup'
+import { useCloudWorkspaceArrangement } from './use-cloud-workspace-arrangement'
 import { NEW_SECTION } from './CloudWorkspaceRowMenu'
 import {
   ANY,
@@ -149,16 +151,9 @@ export function CloudWorkspacesHome({
     [all, by, repo, highlightId, filters.running]
   )
   const highlighted = highlightId ? visible.find((w) => w.id === highlightId) : undefined
-  const groups = useMemo(() => {
-    const out = new Map<string, CloudWorkspace[]>()
-    for (const w of visible) {
-      const key = w.section ?? ''
-      out.set(key, [...(out.get(key) ?? []), w])
-    }
-    return [...out.entries()].sort(([a], [b]) =>
-      a === '' ? 1 : b === '' ? -1 : a.localeCompare(b)
-    )
-  }, [visible])
+  // Pinned first, then sections, in the order you arranged them on any of your devices.
+  const arrangement = useCloudWorkspaceArrangement(visible)
+  const { groups } = arrangement
   const members = useMemo(
     () =>
       [...directory.entries()].map(([userId, m]) => ({
@@ -258,9 +253,11 @@ export function CloudWorkspacesHome({
       copyWorkspaceLink: (w: CloudWorkspace) => void copyCloudWorkspaceLink(w.id),
       goToChat: (w: CloudWorkspace, member: CloudWorkspacePresence) => void open(w, member.chatId),
       patch: (w: CloudWorkspace, change: CloudWorkspacePatch) => void patch(w, change),
+      setPinned: arrangement.pin,
+      move: arrangement.move,
       ...homeArchive.homeArchiveActions({ selfId, t, refresh, confirmArchive: setConfirm })
     }),
-    [open, patch, refresh, selfId, setReadingId, t]
+    [open, patch, refresh, selfId, setReadingId, t, arrangement.pin, arrangement.move]
   )
 
   // Nothing (not even a skeleton) until we know this build has a control plane and you are in.
@@ -327,51 +324,46 @@ export function CloudWorkspacesHome({
           />
         )}
         {state.status === 'ready' &&
-          groups.map(([section, rows], index) => {
-            // Section names are free text (spaces), so the id uses the position instead.
-            const headingId = `cloud-workspaces-section-${index}`
-            const showHeading = groups.length > 1 || section !== ''
+          groups.map((group, index) => {
+            const sectionIndex = group.section
+              ? arrangement.shownSections.indexOf(group.section)
+              : -1
             return (
-              <div key={section || '—'} className="py-0.5">
-                {showHeading && (
-                  <h3
-                    id={headingId}
-                    className="px-3 py-2 text-2xs font-medium text-muted-foreground"
-                  >
-                    {section || t('auto.components.cloudWorkspaces.noSection', 'No section')}
-                    {/* The bare number is visual; screen readers get the counted phrase. */}
-                    <span aria-hidden className="ml-1.5 tabular-nums text-muted-foreground">
-                      {rows.length}
-                    </span>{' '}
-                    <span className="sr-only">
-                      {t('auto.components.cloudWorkspaces.sectionCount', '{{count}} workspaces', {
-                        count: rows.length,
-                        defaultValue_one: '{{count}} workspace'
-                      })}
-                    </span>
-                  </h3>
-                )}
-                <ul
-                  role="list"
-                  aria-labelledby={showHeading ? headingId : 'cloud-workspaces-heading'}
-                >
-                  {rows.map((w) => (
-                    <CloudWorkspaceRow
-                      key={w.id}
-                      workspace={w}
-                      directory={directory}
-                      selfId={selfId}
-                      canAdmin={canAdmin}
-                      sections={sections}
-                      members={members}
-                      opening={opening === w.id}
-                      highlighted={highlightId === w.id}
-                      now={now}
-                      actions={actions}
-                    />
-                  ))}
-                </ul>
-              </div>
+              <CloudWorkspaceGroupView
+                key={group.key}
+                group={group}
+                index={index}
+                showHeading={groups.length > 1 || group.kind !== 'none'}
+                canMoveUp={sectionIndex > 0}
+                canMoveDown={
+                  sectionIndex >= 0 && sectionIndex < arrangement.shownSections.length - 1
+                }
+                onToggleCollapsed={(collapsed) =>
+                  group.section && arrangement.toggleCollapsed(group.section, collapsed)
+                }
+                onMoveSection={(delta) =>
+                  group.section && arrangement.moveSection(group.section, delta)
+                }
+              >
+                {group.rows.map((w, rowIndex) => (
+                  <CloudWorkspaceRow
+                    key={w.id}
+                    workspace={w}
+                    directory={directory}
+                    selfId={selfId}
+                    canAdmin={canAdmin}
+                    sections={sections}
+                    members={members}
+                    opening={opening === w.id}
+                    highlighted={highlightId === w.id}
+                    now={now}
+                    actions={actions}
+                    arrangement={arrangement.arrangementFor(group, rowIndex)}
+                    dragProps={rowDragProps(arrangement.drag, group, w.id)}
+                    dragging={arrangement.drag.dragging?.id === w.id}
+                  />
+                ))}
+              </CloudWorkspaceGroupView>
             )
           })}
       </div>

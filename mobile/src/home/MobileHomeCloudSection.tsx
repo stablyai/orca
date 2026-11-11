@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router'
-import { ChevronRight, Cloud, Plus, RotateCw } from 'lucide-react-native'
-import { Fragment, useState } from 'react'
-import { ActivityIndicator, Pressable, Text, View } from 'react-native'
+import { ChevronRight, Cloud, Pin, Plus, RotateCw } from 'lucide-react-native'
+import { Fragment, useMemo, useState } from 'react'
+import { ActivityIndicator, Alert, Pressable, Text, View } from 'react-native'
 import { CloudStatusDot } from '../cloud/CloudStatusDot'
 import { formatReadSnapshotAsOf } from '../cloud/CloudReadSnapshotSection'
 import type { CloudWorkspace } from '../cloud/cloud-control-plane-client'
@@ -10,6 +10,12 @@ import { takeCloudReturnTo } from '../cloud/cloud-return-to'
 import type { CloudEnrollment } from '../cloud/cloud-device-identity'
 import { cloudRepoLine, cloudStatusLabel } from '../cloud/cloud-workspace-display'
 import { useCloudWorkspaces } from '../cloud/use-cloud-workspaces'
+import { useCloudWorkspacePrefs } from '../cloud/cloud-workspace-prefs'
+import {
+  arrangeCloudWorkspaces,
+  setPinned
+} from '../../../src/shared/cloud-workspaces/cloud-workspace-arrangement'
+import { formatWorkspaceNumber } from '../../../src/shared/cloud-workspaces/cloud-workspaces-wire'
 import { formatTimeAgo } from '../worktree/agent-row-display'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors } from '../theme/mobile-theme'
@@ -35,13 +41,43 @@ export function MobileHomeCloudSection(props: {
   const t = useMobileTranslation()
   useMobileColorScheme()
   const query = useCloudWorkspaces(props.enrollment)
+  // Pins and order are the member's own and sync with their desktops.
+  const prefs = useCloudWorkspacePrefs(props.enrollment?.deviceSessionId ?? null)
+  const workspaces = useMemo(
+    () =>
+      arrangeCloudWorkspaces(
+        (query.data ?? []).filter((workspace) => workspace.status !== 'archived'),
+        prefs.document
+      ).flatMap((group) =>
+        group.rows.map((workspace) => ({ workspace, pinned: group.kind === 'pinned' }))
+      ),
+    [query.data, prefs.document]
+  )
   if (props.enrollment === undefined) {
     return null
   }
   if (props.enrollment === null) {
     return <CloudConnectRow desktop={props.enrollDesktop} deviceLabel={props.deviceLabel} />
   }
-  const workspaces = (query.data ?? []).filter((workspace) => workspace.status !== 'archived')
+  const togglePin = (workspace: CloudWorkspace, pinned: boolean) => {
+    Alert.alert(workspace.title, undefined, [
+      {
+        text: pinned ? t('cloud.home.unpin', 'Unpin') : t('cloud.home.pin', 'Pin to top'),
+        onPress: () =>
+          void prefs
+            .edit((doc) => setPinned(doc, workspace.id, !pinned))
+            .then((saved) => {
+              if (!saved) {
+                Alert.alert(
+                  t('cloud.home.pinFailed', 'Couldn’t save that change'),
+                  t('cloud.home.pinFailedDetail', 'Check your connection and try again.')
+                )
+              }
+            })
+      },
+      { text: t('common.cancel', 'Cancel'), style: 'cancel' }
+    ])
+  }
   const now = query.dataUpdatedAt || 0
   return (
     <>
@@ -94,12 +130,14 @@ export function MobileHomeCloudSection(props: {
             </View>
           </View>
         ) : (
-          workspaces.map((workspace) => (
+          workspaces.map(({ workspace, pinned }) => (
             <Fragment key={workspace.id}>
               <CloudWorkspaceRow
                 workspace={workspace}
+                pinned={pinned}
                 now={now}
                 onPress={() => props.onOpenWorkspace(workspace)}
+                onLongPress={() => togglePin(workspace, pinned)}
               />
               <View style={[styles.separator, styles.tileSeparator]} />
             </Fragment>
@@ -135,12 +173,16 @@ function SkeletonRow() {
 
 function CloudWorkspaceRow({
   workspace,
+  pinned,
   now,
-  onPress
+  onPress,
+  onLongPress
 }: {
   workspace: CloudWorkspace
+  pinned: boolean
   now: number
   onPress: () => void
+  onLongPress: () => void
 }) {
   const t = useMobileTranslation()
   const status = cloudStatusLabel(workspace.status, t)
@@ -175,7 +217,9 @@ function CloudWorkspaceRow({
       : createdLine && lastActive - workspace.createdAt < 60_000
         ? null
         : formatTimeAgo(lastActive, reference)
-  const line = [status, detail, when].filter(Boolean).join(' · ')
+  const number = workspace.number ? formatWorkspaceNumber(workspace.number) : null
+  const line = [status, number, detail, when].filter(Boolean).join(' · ')
+  const optionsLabel = pinned ? t('cloud.home.unpin', 'Unpin') : t('cloud.home.pin', 'Pin to top')
   return (
     <Pressable
       accessibilityRole="button"
@@ -187,8 +231,17 @@ function CloudWorkspaceRow({
           detail: line
         }
       )}
+      accessibilityHint={pinned ? t('cloud.home.pinnedHint', 'Pinned') : undefined}
+      accessibilityActions={[{ name: 'longpress', label: optionsLabel }]}
+      onAccessibilityAction={(event) => {
+        if (event.nativeEvent.actionName === 'longpress') {
+          onLongPress()
+        }
+      }}
       style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
       onPress={onPress}
+      onLongPress={onLongPress}
+      delayLongPress={400}
     >
       <View style={styles.tile}>
         <Cloud size={17} strokeWidth={1.8} color={colors.textPrimary} />
@@ -204,13 +257,14 @@ function CloudWorkspaceRow({
           <Text style={workspace.status === 'failed' ? { color: colors.statusRed } : undefined}>
             {status}
           </Text>
-          {[detail, when]
+          {[number, detail, when]
             .filter(Boolean)
             .map((part) => ` · ${part}`)
             .join('')}
         </Text>
       </View>
       <View style={styles.trailing}>
+        {pinned ? <Pin size={14} color={colors.textMuted} /> : null}
         <ChevronRight size={18} color={colors.textMuted} />
       </View>
     </Pressable>

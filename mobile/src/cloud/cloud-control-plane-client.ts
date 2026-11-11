@@ -47,6 +47,9 @@ export type CloudWorkspace = {
   createdByUserId: string | null
   /** When the last sleeping read snapshot was stored (ms); null when none or unknown. */
   readSnapshotAt: number | null
+  /** Its number in the account (W-123); absent on older control planes and the owner-only list. */
+  number?: number | null
+  section?: string | null
 }
 const SANDBOX_STATUS: Record<string, CloudWorkspaceStatus> = {
   creating: 'creating',
@@ -99,7 +102,9 @@ function fromRegistry(row: TeamWorkspace): CloudWorkspace {
     lastActivityAt: row.lastActivityAt,
     sandboxMs: row.cost.computeMs,
     createdByUserId: row.createdBy,
-    readSnapshotAt: row.readSnapshotAt ?? null
+    readSnapshotAt: row.readSnapshotAt ?? null,
+    number: row.number ?? null,
+    section: row.section
   }
 }
 

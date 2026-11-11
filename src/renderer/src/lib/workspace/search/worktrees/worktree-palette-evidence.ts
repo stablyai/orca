@@ -16,6 +16,7 @@ export type PaletteSupportingKind =
   | 'port'
   | 'task'
   | 'automation'
+  | 'cloudWorkspace'
 
 export type WorktreePaletteReviewSource = {
   provider: HostedReviewInfo['provider']
@@ -180,6 +181,21 @@ export function buildWorktreeIssueEvidence(args: {
       },
       { key: 'title', text: args.title ?? '', profile: 'prose' }
     ]
+  })
+}
+
+/** A cloud workspace's number: "W-123" (searching 123, w123 or W-123 finds it). */
+export function buildWorktreeCloudNumberEvidence(
+  number: number | null | undefined
+): PaletteComposedEvidence | null {
+  if (!number) {
+    return null
+  }
+  return composePaletteEvidence({
+    id: `cloud-number:${number}`,
+    kind: 'cloudWorkspace',
+    accessibilityLabel: 'Cloud workspace number',
+    parts: [{ key: 'number', text: `W-${number}`, profile: 'structured-label' }]
   })
 }
 

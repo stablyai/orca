@@ -10,6 +10,7 @@ import { selectActiveTerminalChromeState } from './active-terminal-chrome-select
 import { hasCustomTitleBar } from './app-window-chrome'
 import type { AppChromeLayout } from './use-app-chrome-layout'
 import { RunActionButton } from '../components/run-actions/RunActionButton'
+import { CloudWorkspaceNumberChip } from '../components/cloud-workspaces/CloudWorkspaceNumberChip'
 
 export function RightSidebarToggle(): React.JSX.Element {
   const t = useTranslate()
@@ -68,6 +69,9 @@ export function TitlebarMainStrip({ layout }: { layout: AppChromeLayout }): Reac
           className={`flex flex-1 min-w-0 self-stretch${!layout.workspaceChromeActive ? ' invisible pointer-events-none' : ''}`}
         />
       )}
+      {layout.workspaceChromeActive && !layout.creationLayoutActive && activeWorktreeId ? (
+        <CloudWorkspaceNumberChip worktreeId={activeWorktreeId} />
+      ) : null}
       {layout.workspaceChromeActive && !layout.creationLayoutActive && activeWorktreeId ? (
         <RunActionButton worktreeId={activeWorktreeId} />
       ) : null}

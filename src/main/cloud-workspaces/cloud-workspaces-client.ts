@@ -13,7 +13,13 @@ import {
   CloudWorkspaceListResponseSchema,
   CloudWorkspacePresenceResponseSchema,
   CloudWorkspaceResponseSchema,
+  CloudOrgSlugSchema,
+  CloudWorkspacePrefsSchema,
   OrgPromptsSchema,
+  type CloudOrgSlug,
+  type CloudWorkspaceLinkTarget,
+  type CloudWorkspacePrefs,
+  type CloudWorkspacePrefsDocument,
   type CloudWorkspaceListQuery,
   type CloudWorkspacePatch,
   type OrgPrompts
@@ -29,7 +35,9 @@ export class CloudWorkspacesError extends Error {
   constructor(
     readonly status: number,
     readonly code: string,
-    readonly reason?: string
+    readonly reason?: string,
+    /** A slug link for another org (`reason: other_org`) names that org, so a member can switch. */
+    readonly orgId?: string
   ) {
     super(reason ? `${code}:${reason}` : code)
     this.name = 'CloudWorkspacesError'
@@ -112,7 +120,8 @@ export function createCloudWorkspacesClient(options: CloudWorkspacesClientOption
       throw new CloudWorkspacesError(
         response.status,
         typeof err.error === 'string' ? err.error : 'error',
-        typeof err.reason === 'string' ? err.reason : undefined
+        typeof err.reason === 'string' ? err.reason : undefined,
+        typeof err.orgId === 'string' ? err.orgId.slice(0, 128) : undefined
       )
     }
     const parsed = schema.safeParse(payload)
@@ -204,8 +213,12 @@ export function createCloudWorkspacesClient(options: CloudWorkspacesClientOption
         CloudWorkspaceGrantListSchema.partial().passthrough()
       )
     },
-    async resolveLink(workspaceId: string, chatId?: string | null) {
-      const params = new URLSearchParams({ w: workspaceId })
+    async resolveLink(target: CloudWorkspaceLinkTarget, chatId?: string | null) {
+      const params = new URLSearchParams(
+        target.kind === 'id'
+          ? { w: target.workspaceId }
+          : { org: target.org, n: String(target.number) }
+      )
       if (chatId) {
         params.set('c', chatId)
       }
@@ -256,6 +269,27 @@ export function createCloudWorkspacesClient(options: CloudWorkspacesClientOption
     },
     putOrgPrompts(document: OrgPrompts['document'], revision: number): Promise<OrgPrompts> {
       return call('PUT', '/v1/team/prompts', OrgPromptsSchema, { document, revision })
+    },
+    /** This member's synced arrangement (pins, order, sections) for the current account. */
+    getPrefs(): Promise<CloudWorkspacePrefs> {
+      return call('GET', '/v1/team/prefs', CloudWorkspacePrefsSchema)
+    },
+    /** Compare-and-set: a stale `revision` answers 409 `conflict`; re-read and re-apply. */
+    putPrefs(
+      document: CloudWorkspacePrefsDocument,
+      revision: number,
+      deviceId?: string
+    ): Promise<CloudWorkspacePrefs> {
+      return call('PUT', '/v1/team/prefs', CloudWorkspacePrefsSchema, {
+        document,
+        revision,
+        ...(deviceId ? { deviceId } : {})
+      })
+    },
+    /** The org's link slug; `name` (the org name this client shows) names it the first time. */
+    getOrgSlug(name?: string | null): Promise<CloudOrgSlug> {
+      const qs = name ? `?${new URLSearchParams({ name: name.slice(0, 120) })}` : ''
+      return call('GET', `/v1/team/org${qs}`, CloudOrgSlugSchema)
     }
   }
 }
