@@ -232,6 +232,21 @@ describe('MacosLoginSessionDeathWatch', () => {
     }
   )
 
+  it('keeps running the login probe after a rejection until PAM accepts again, even across sleep', async () => {
+    const { watch, clock, probe, setResolverHealth } = createWatch({
+      outcomes: [ACCEPTED, REJECTED, ACCEPTED]
+    })
+    watch.start()
+    await drainMicrotasks()
+    await clock.advance(120_000)
+    expect(probe).toHaveBeenCalledTimes(2)
+
+    setResolverHealth('healthy')
+    clock.suspend(60 * 60 * 1000)
+    await clock.advance(0) // The sleep gap resets the rejection streak, not the rejected verdict.
+    expect(probe).toHaveBeenCalledTimes(3)
+  })
+
   it('stop() prevents an in-flight resolver check from retiring the daemon', async () => {
     let resolveHealth!: (health: SystemResolverHealth) => void
     let resolverSignal: AbortSignal | undefined
@@ -240,10 +255,14 @@ describe('MacosLoginSessionDeathWatch', () => {
     })
     const { watch, clock, onRetire } = createWatch({
       outcomes: [ACCEPTED, REJECTED, REJECTED, REJECTED, REJECTED],
-      readResolverHealth: (signal) => {
-        resolverSignal = signal
-        return resolverHealth
-      }
+      // The first read is the pre-probe gate; hold only the retirement read.
+      readResolverHealth: vi
+        .fn<MacosLoginSessionDeathWatchOptions['readResolverHealth']>()
+        .mockResolvedValueOnce('unhealthy')
+        .mockImplementationOnce((signal) => {
+          resolverSignal = signal
+          return resolverHealth
+        })
     })
     watch.start()
     await drainMicrotasks()

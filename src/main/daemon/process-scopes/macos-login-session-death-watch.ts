@@ -38,6 +38,7 @@ export class MacosLoginSessionDeathWatch {
 
   // Only a previously successful login probe can establish a session worth watching.
   private armed = false
+  private lastVerdictAccepted = false
   private consecutiveRejections = 0
   private firstRejectionAtMs: number | null = null
   private lastProbeStartedAtMs: number | null = null
@@ -178,17 +179,8 @@ export class MacosLoginSessionDeathWatch {
     }
     const timerGapMs =
       scheduledAtMs === undefined ? 0 : Math.max(0, this.clock.now() - scheduledAtMs)
-    let rejectionWindowRebased = false
-    if (this.consecutiveRejections > 0 && timerGapMs > this.timing.minProbeGapMs * 3) {
-      // Sleep or App Nap pauses are not evidence of continued rejection.
-      this.consecutiveRejections = 0
-      this.firstRejectionAtMs = null
-      rejectionWindowRebased = true
-      this.log.log('login-session-rejection-window-reset', {
-        cause: 'timer-gap',
-        timerGapMs
-      })
-    }
+    // Sleep or App Nap pauses are not evidence of continued rejection.
+    let rejectionWindowRebased = this.resetRejectionWindowAfterGap('timer-gap', timerGapMs)
     const elapsedSinceProbe =
       this.lastProbeStartedAtMs === null ? null : this.clock.now() - this.lastProbeStartedAtMs
     if (
@@ -205,7 +197,7 @@ export class MacosLoginSessionDeathWatch {
     const abortController = new AbortController()
     this.probeAbortController = abortController
     try {
-      if (this.armed && this.consecutiveRejections === 0) {
+      if (this.lastVerdictAccepted) {
         // Why: every login(1) probe writes a macOS login record; retirement needs a dead resolver anyway.
         const resolverHealth = await this.readResolverHealth(abortController.signal)
         if (this.stopped || this.retired) {
@@ -221,16 +213,9 @@ export class MacosLoginSessionDeathWatch {
         return
       }
       const probeGapMs = Math.max(0, this.clock.now() - probeStartedAtMs)
-      if (this.consecutiveRejections > 0 && probeGapMs > this.timing.minProbeGapMs * 3) {
-        // Sleep may suspend a probe after the earlier timer-gap check.
-        this.consecutiveRejections = 0
-        this.firstRejectionAtMs = null
-        rejectionWindowRebased = true
-        this.log.log('login-session-rejection-window-reset', {
-          cause: 'probe-gap',
-          probeGapMs
-        })
-      }
+      // Sleep may suspend a probe after the earlier timer-gap check.
+      rejectionWindowRebased =
+        this.resetRejectionWindowAfterGap('probe-gap', probeGapMs) || rejectionWindowRebased
       if (outcome === null) {
         // Without an applicable login wrapper, PAM cannot establish session health.
         this.log.log('login-session-watch-disabled', { trigger })
@@ -247,11 +232,13 @@ export class MacosLoginSessionDeathWatch {
           this.log.log('login-session-watch-armed', { trigger })
         }
         this.armed = true
+        this.lastVerdictAccepted = true
         this.consecutiveRejections = 0
         this.firstRejectionAtMs = null
         this.scheduleNextProbe(this.timing.periodicProbeMs)
         return
       }
+      this.lastVerdictAccepted = false
       if (!this.armed) {
         this.scheduleNextProbe(this.timing.periodicProbeMs)
         return
@@ -301,6 +288,16 @@ export class MacosLoginSessionDeathWatch {
         )
       }
     }
+  }
+
+  private resetRejectionWindowAfterGap(cause: 'timer-gap' | 'probe-gap', gapMs: number): boolean {
+    if (this.consecutiveRejections === 0 || gapMs <= this.timing.minProbeGapMs * 3) {
+      return false
+    }
+    this.consecutiveRejections = 0
+    this.firstRejectionAtMs = null
+    this.log.log('login-session-rejection-window-reset', { cause, gapMs })
+    return true
   }
 
   private async retireIfResolverDegraded(
