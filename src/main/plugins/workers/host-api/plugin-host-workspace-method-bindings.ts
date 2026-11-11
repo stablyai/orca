@@ -137,7 +137,9 @@ export const PLUGIN_WORKSPACE_ACTION_HANDLERS = {
       surface: 'terminal',
       // A mod works beside the person: never take their focus.
       presentation: 'background',
-      launchSource: 'plugin'
+      launchSource: 'plugin',
+      // Same launch the CLI uses. A later reuseTerminal call races the shell and drops the prompt.
+      ...(params.prompt ? { prompt: { text: params.prompt, delivery: 'submit' as const } } : {})
     })
     const terminalId = agentLaunchAnswer.parse(answer).outcome.handle
     // A plugin that lost approval, or a worker that cancelled, while the call ran gains no close
@@ -145,21 +147,6 @@ export const PLUGIN_WORKSPACE_ACTION_HANDLERS = {
     ctx.scope.assertActive()
     if (!ctx.scope.signal?.aborted) {
       recordPluginOpenedTerminal(ctx.pluginId, terminalId)
-    }
-    if (params.prompt) {
-      // Delivery waits for the agent's composer (up to a minute), longer than a host call may take.
-      void effect(ctx, 'agent.launch', {
-        target: { kind: 'existing', worktree },
-        agent: params.agent,
-        reuseTerminal: { handle: terminalId },
-        prompt: { text: params.prompt, delivery: 'submit' },
-        presentation: 'background',
-        launchSource: 'plugin'
-      }).catch((error: unknown) => {
-        ctx.scope.log?.(
-          `agent.launch: the prompt did not reach ${terminalId}: ${failureDetail(error)}`
-        )
-      })
     }
     return { terminalId }
   }),
