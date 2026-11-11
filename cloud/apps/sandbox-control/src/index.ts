@@ -117,7 +117,7 @@ import { reconcile } from './reconcile'
 import { egressAccountRoutes, egressSecretHosts, placeholderValues, secretPlaceholder } from './secret-egress'
 import { SecretError, handleSecretsRoute, keyringFor, type SecretChange } from './secrets'
 import { refreshAfterSecretChange, refreshSandboxEnv } from './env-refresh'
-import { accountProvider, isSharedWorkspace } from './account-providers'
+import { ACCOUNT_PROVIDERS, accountProvider, isSharedWorkspace } from './account-providers'
 import { handleAccountUnauthorized, verifyAccountCredential } from './agent-credential-checks'
 import { codexBrokerTick, handleCodexBrokerRoute, type BrokerDeps } from './codex-broker'
 import { refreshCodexLeases } from './codex-credentials'
@@ -359,25 +359,27 @@ function egressRoutes(env: Env, deps: Deps): (row: SandboxRow, host: string) => 
             label: `account:${agent}`,
             ...(provider.pathAllowed ? { pathAllowed: provider.pathAllowed } : {}),
             credential: async () => {
+              // The agent sees the provider's own "sign in again" answer, not a proxy error.
+              const signedOut = (reason: string) => ({ deny: reason, ...(provider.signedOut ? { answer: provider.signedOut } : {}) })
               const now = (deps.now ?? Date.now)()
               // The session was set up for this owner; a workspace handed to someone else never uses
               // the new owner's account until its env is rebuilt for them.
               if (owner !== row.user_id) {
                 scheduleEnvRefresh(env, deps, row)
-                return { deny: 'account_owner_changed' }
+                return signedOut('account_owner_changed')
               }
               if (isSharedWorkspace(row)) {
                 scheduleEnvRefresh(env, deps, row)
-                return { deny: 'account_not_shared' }
+                return signedOut('account_not_shared')
               }
               if (!providerEnabled(env)[agent]) {
                 scheduleEnvRefresh(env, deps, row)
-                return { deny: 'account_disabled' }
+                return signedOut('account_disabled')
               }
               real = await cachedAccountCredential(env.SANDBOX_DB, await keyring, row.user_id, agent, now)
               if (!real) {
                 scheduleEnvRefresh(env, deps, row)
-                return { deny: 'no_agent_credential' }
+                return signedOut('no_agent_credential')
               }
               return provider.format(real)
             },
@@ -424,6 +426,20 @@ function egressRoutes(env: Env, deps: Deps): (row: SandboxRow, host: string) => 
           }
         ]
       })
+  // An account that stopped applying (revoked, expired, removed, turned off) leaves its placeholder in shells
+  // and agents already running, and Vercel may still forward for a moment: answer those requests the way the
+  // provider answers a dead token, never with a proxy error. Nothing is swapped on these routes.
+  const signedOutRoutes = (row: SandboxRow, host: string): ProxiedRoute[] => {
+    const live = new Set(egressAccountRoutes(row).filter((route) => route.host === host).map((route) => route.agent))
+    return ACCOUNT_PROVIDERS.filter((provider) => provider.signedOut && provider.hosts.includes(host) && !live.has(provider.agent)).map(
+      (provider) => ({
+        header: provider.header,
+        placeholders: [provider.format(provider.placeholder(row))],
+        label: `account:${provider.agent}:signed-out`,
+        credential: async () => ({ deny: 'account_signed_out', answer: provider.signedOut! })
+      })
+    )
+  }
   return async (row, host) => {
     if (host === 'github.com') {
       return members.routes(row, host)
@@ -437,7 +453,7 @@ function egressRoutes(env: Env, deps: Deps): (row: SandboxRow, host: string) => 
         ...secretRoutes(row, host)
       ]
     }
-    return [...accountRoutes(row, host), ...secretRoutes(row, host)]
+    return [...accountRoutes(row, host), ...signedOutRoutes(row, host), ...secretRoutes(row, host)]
   }
 }
 
