@@ -53,6 +53,7 @@ const updateRecount: CensusRequest = {
 }
 
 afterEach(() => {
+  vi.useRealTimers()
   collect.mockReset()
   listLiveDaemonPtyIds.mockReset()
 })
@@ -129,6 +130,8 @@ describe('bare storage terminal admission', () => {
 })
 
 it('launch classification never starts or waits for full scans at fleet scale', async () => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(1700000000000)
   const runtime = new OrcaRuntimeService(store)
   const repo = store.getRepos()[0]!
   const key = `${repo.id}\0local`
@@ -147,8 +150,8 @@ it('launch classification never starts or waits for full scans at fleet scale', 
       generation: 0,
       runtimeKey: resolveWorktreeScanRuntime(store, repo).runtimeKey,
       result: { ok: true as const, worktrees: graph },
-      expiresAt: Date.now() + 30000,
-      scannedAt: Date.now(),
+      expiresAt: 1700000030000,
+      scannedAt: 1700000000000,
       adminFingerprint: null
     }
     runtime['worktreeScanCache'].set(key, cached)
