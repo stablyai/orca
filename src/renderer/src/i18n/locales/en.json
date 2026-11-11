@@ -27019,7 +27019,11 @@
       "changedAtSleepNoTime": "Changed files when this workspace went to sleep",
       "waking": "Waking… the files show when it’s up.",
       "noChangesAtSleep": "No files had changed when this workspace went to sleep · {{time}}",
-      "noChangesAtSleepNoTime": "No files had changed when this workspace went to sleep"
+      "noChangesAtSleepNoTime": "No files had changed when this workspace went to sleep",
+      "changedTitle": "Changed files",
+      "moreChanged": "+{{count}} more",
+      "recentCommitsOn": "Recent commits on {{branch}}",
+      "recentCommits": "Recent commits"
     },
     "terminal": {
       "asleepNamed": "{{name}} is asleep. Open it to wake it.",
