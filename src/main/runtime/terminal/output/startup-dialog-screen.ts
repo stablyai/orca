@@ -15,10 +15,9 @@ const TRUST_REASONS: ReadonlySet<RuntimeTerminalWaitBlockedReason> = new Set([
   'agent-trust-workspace',
   'codex-trust-workspace'
 ])
-// Only dialogs that precede a first prompt; mid-session approvals have their own cards.
+// Only dialogs that precede a first prompt and end on a key footer; mid-session approvals have their own cards.
 const STARTUP_MENU_REASONS: ReadonlySet<RuntimeTerminalWaitBlockedReason> = new Set([
   'agent-update-prompt',
-  'agent-cwd-prompt',
   'agent-hooks-review-prompt',
   'codex-model-migration-prompt',
   'agent-startup-menu-prompt'
