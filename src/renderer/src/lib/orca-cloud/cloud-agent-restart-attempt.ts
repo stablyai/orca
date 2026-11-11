@@ -180,11 +180,12 @@ export function cloudAgentRestartStartedFresh(paneKey: string, _revision: number
 }
 
 /**
- * RA-11e: the resume found no conversation and the fresh start could not be typed, so the pane is a
- * bare shell. The attempt already settled on the new PTY; show "Couldn't restart" again so the
- * person can Try again, never a quiet shell.
+ * The restart relaunched but did not end where it must: the fresh start after an empty resume could
+ * not be typed (RA-11e, a bare shell), or the pane bound a terminal other than the resumed one (RA-11
+ * resume race, a new conversation). The attempt may already have settled on the new PTY; show
+ * "Couldn't restart" again so the person can Try again, never a quiet wrong result.
  */
-export function failCloudAgentRestartFresh(
+export function failCloudAgentRestartAfterLaunch(
   paneKey: string,
   args: { agent: HostAgentSignInAgent; ptyId: string }
 ): void {
