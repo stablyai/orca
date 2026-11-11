@@ -20650,7 +20650,6 @@
           "makeOwnerBody": "Owners control billing and can manage other owners. To hand the team over, make {{value0}} an owner, then ask them to change your role.",
           "makeOwnerConfirm": "Make owner",
           "makeOwnerTitle": "Make {{value0}} an owner?",
-          "manage": "Members, invites and seats",
           "members": "Members",
           "membersList": "Team members and invites",
           "nextInvoice": "Next invoice (est.)",
@@ -20718,7 +20717,8 @@
           "totalPerMonth": "{{total}} per month",
           "totalPerYear": "{{total}} per year",
           "openProfile": "Open {{value0}}’s profile",
-          "viewProfile": "View profile"
+          "viewProfile": "View profile",
+          "seatsOnPlanBilling": "Seats and invoices are in"
         },
         "manageBilling": "Manage billing",
         "comparePlans": "Compare plans",
