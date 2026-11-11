@@ -18151,7 +18151,6 @@
           "signout": {
             "confirm": {
               "title": "¿Cerrar sesión en Orca?",
-              "description": "Se cerrará tu sesión de Orca en este dispositivo. Tus proyectos y worktrees locales no se verán afectados.",
               "cancel": "Cancelar",
               "action": "Cerrar sesión"
             }

@@ -18396,7 +18396,6 @@
           "signout": {
             "confirm": {
               "title": "Orca'dan çıkış yapılsın mı?",
-              "description": "Yeniden oturum açana kadar Artifact'ler ve Orca Relay kullanılamayacak. Yerel projeleriniz ve worktree'leriniz etkilenmeyecek.",
               "cancel": "İptal",
               "action": "Çıkış yap"
             }

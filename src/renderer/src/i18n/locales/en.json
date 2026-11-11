@@ -19979,9 +19979,9 @@
           "signout": {
             "confirm": {
               "title": "Sign out of Orca?",
-              "description": "Artifacts and Orca Relay will be unavailable until you sign in again. Your local projects and worktrees won't be affected.",
               "cancel": "Cancel",
-              "action": "Sign out"
+              "action": "Sign out",
+              "description2": "You'll lose access to your cloud workspaces until you sign in again. Local workspaces aren't affected."
             }
           }
         }
@@ -20989,10 +20989,6 @@
         "inRepo": "In {{value0}}",
         "justNow": "just now",
         "linkNotFound": "This link points to a private workspace, another team, or a workspace that was deleted.",
-        "listMeta2_one": "{{count}} workspace · {{usage}}",
-        "listMeta2_other": "{{count}} workspaces · {{usage}}",
-        "listSandboxHours_one": "{{hours}} sandbox hour used",
-        "listSandboxHours_other": "{{hours}} sandbox hours used",
         "loading": "Loading cloud workspaces",
         "makeOwner": "Make owner",
         "makePrivate": "Make private",
@@ -21101,7 +21097,9 @@
         "pinLimit": "You can pin up to {{count}} workspaces. Unpin one first.",
         "pinnedName": "Pinned {{name}}",
         "unpinnedName": "Unpinned {{name}}",
-        "otherWorkspaces": "Other workspaces"
+        "otherWorkspaces": "Other workspaces",
+        "listMetaCount_one": "{{count}} workspace",
+        "listMetaCount_other": "{{count}} workspaces"
       },
       "orcaCloud": {
         "QueuedPrompt": {

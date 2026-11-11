@@ -18157,7 +18157,6 @@
           "signout": {
             "confirm": {
               "title": "登出 Orca？",
-              "description": "重新登入之前，成品和 Orca Relay 將無法使用。你的本機專案和工作樹不會受到影響。",
               "cancel": "取消",
               "action": "登出"
             }

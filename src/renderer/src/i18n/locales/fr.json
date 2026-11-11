@@ -18394,7 +18394,6 @@
           "signout": {
             "confirm": {
               "title": "Se déconnecter d'Orca ?",
-              "description": "Les artifacts et Orca Relay seront indisponibles jusqu'à votre reconnexion. Vos projets et worktrees locaux ne seront pas affectés.",
               "cancel": "Annuler",
               "action": "Se déconnecter"
             }

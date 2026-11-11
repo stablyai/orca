@@ -17690,7 +17690,6 @@
           "signout": {
             "confirm": {
               "title": "退出 Orca？",
-              "description": "你将在此设备上退出 Orca。本地项目和工作树不会受到影响。",
               "cancel": "取消",
               "action": "退出登录"
             }
