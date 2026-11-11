@@ -270,16 +270,18 @@ function OrcaCloudMeta({
   }
 }
 
-/** Hours left, the loading skeleton, and "Ask an owner or admin" still say something useful. */
+/**
+ * In the composer, hours and plan details wait until after create (Neil): the row only keeps what
+ * explains why it can't be picked, "Ask an owner or admin".
+ */
 function showsMetaAfterStart(access: OrcaCloudRunTargetAccess): boolean {
   switch (access.state) {
-    case 'loading':
-    case 'entitled':
-      return true
     case 'no-plan':
     case 'out-of-hours':
     case 'payment-issue':
       return !access.canManageBilling
+    case 'loading':
+    case 'entitled':
     case 'signed-out':
     case 'unknown':
       return false

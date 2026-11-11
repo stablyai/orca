@@ -23157,7 +23157,6 @@
         "showMore": "Show more repositories…",
         "folderDetail": "Orca Cloud starts from a GitHub repository. This project is a folder on this computer."
       },
-      "orcaCloudAgentFallback": "{{agent}} isn’t available on Orca Cloud yet, so {{fallback}} is selected.",
       "cloudStart": {
         "agentNotStarted": "{{agent}} isn’t set up for Orca Cloud, so it didn’t start. The workspace has a terminal.",
         "agentNotStartedGeneric": "Your agent isn’t set up for Orca Cloud, so it didn’t start. The workspace has a terminal.",
