@@ -79,7 +79,7 @@ export const ORCHESTRATION_WORKER_APPROVAL_METHODS = [
               id: reasonId,
               from:
                 params.from ??
-                (orchestrationCaller
+                (orchestrationCaller?.orcaSessionId
                   ? formatOrcaSessionAddress(orchestrationCaller.orcaSessionId)
                   : `run:${dispatch.run_id}`),
               to: `dispatch:${dispatch.id}`,
