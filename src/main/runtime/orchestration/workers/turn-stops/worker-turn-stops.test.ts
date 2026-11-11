@@ -588,7 +588,7 @@ describe('chat worker approvals', () => {
 
     const mail = ctx.mail()
     expect(mail).toHaveLength(1)
-    expect(mail[0].subject).toBe('Worker is waiting on approval')
+    expect(mail[0].subject).toBe('Worker is waiting for permission')
     expect(mail[0].body).toContain(
       `orchestration deny --dispatch ${ctx.dispatch.id} --prompt item_1`
     )
@@ -605,6 +605,46 @@ describe('chat worker approvals', () => {
       summary: { title: 'Allow Bash?', detail: 'rm -rf build', reason: null },
       allowedActions: ['allow', 'deny']
     })
+  })
+
+  it("words an approval for the coordinator's surface, and offers deny only when the prompt has one", () => {
+    const report = (chatCoordinator: boolean | undefined, actions: ('allow' | 'deny')[]) => {
+      const ctx = setup()
+      reportWorkerTurnStop(
+        ctx.db,
+        { kind: 'local', dispatch: ctx.dispatch },
+        {
+          from: HANDLE,
+          stopKey: 's1',
+          reason: 'needs-input',
+          lastOutput: undefined,
+          waitingOn: 'approval',
+          approval: {
+            v: 1,
+            approvalId: 'apr_1',
+            state: 'open',
+            worker: { handle: HANDLE, dispatchId: ctx.dispatch.id, taskId: ctx.dispatch.task_id },
+            summary: { title: 'Allow Bash?', detail: 'rm -rf build', reason: null },
+            allowedActions: actions
+          }
+        },
+        chatCoordinator === undefined
+          ? ctx.deps
+          : { ...ctx.deps, isChatMailbox: () => chatCoordinator }
+      )
+      return { body: ctx.mail()[0].body, dispatchId: ctx.dispatch.id }
+    }
+
+    const chat = report(true, ['allow', 'deny'])
+    expect(chat.body).toContain('The user has been shown Allow/Deny.')
+    expect(chat.body).toContain(`orchestration deny --dispatch ${chat.dispatchId} --prompt apr_1`)
+    for (const terminal of [report(false, ['allow', 'deny']), report(undefined, ['allow'])]) {
+      expect(terminal.body).toContain('A person must answer it in Orca or the worker.')
+      expect(terminal.body).not.toContain('The user has been shown')
+    }
+    const noDeny = report(true, ['allow']).body
+    expect(noDeny).not.toContain('orchestration deny')
+    expect(noDeny).toContain('stop the worker or tell the user')
   })
 
   it('closes a reported approval once after it is answered in the worker chat', async () => {
