@@ -63,9 +63,9 @@ function representChat(executionHostId?: string): void {
   }
 }
 
-function feed(status: string | null, observation = 'live', extra = {}) {
+function feed(status: string | null | undefined, observation = 'live', extra = {}) {
   return {
-    getSnapshot: () => new Map([['chat-1', { status, ...extra }]]),
+    getSnapshot: () => new Map(status === undefined ? [] : [['chat-1', { status, ...extra }]]),
     getSessionObservation: () => observation
   }
 }
@@ -102,17 +102,14 @@ describe('assessWindowCloseRunningWork', () => {
 
   it.each([
     ['working', 'unverifiable', {}],
-    [
-      'idle',
-      'live',
-      { hostExecutionOwned: true, childWork: [{ kind: 'agent', state: 'working' }] }
-    ],
-    [null, 'live', { childWork: [{ kind: 'agent' }] }],
+    ['idle', 'live', { hostExecutionOwned: true, children: [{ kind: 'agent', state: 'working' }] }],
+    ['idle', 'live', { children: [{ kind: 'agent', state: 'unverifiable' }] }],
+    [null, 'live', {}],
     [undefined, 'live', {}]
   ])('does not warn for status %s observed as %s', async (status, observation, extra) => {
     setState([])
     representChat()
-    getStatusFeedMock.mockReturnValue(feed(status ?? null, observation, extra))
+    getStatusFeedMock.mockReturnValue(feed(status, observation, extra))
 
     await expect(assessWindowCloseRunningWork({ isQuitting: false })).resolves.toEqual({
       kind: 'none'
