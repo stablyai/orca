@@ -123,6 +123,13 @@ describe('a dsh launch prompt whose first Enter the launchpad refused', () => {
     })
   })
 
+  it('stops at the four-minute hard deadline even if the launchpad still holds the prompt', async () => {
+    const at245s = await launchDsh(fixture('launchpad-draft-starting'), Infinity, false, 245_000)
+    const at300s = await launchDsh(fixture('launchpad-draft-starting'), Infinity, false, 300_000)
+    expect(at300s.enters).toBe(at245s.enters)
+    expect(at300s.enters).toBeLessThanOrEqual(241)
+  })
+
   // Federated worker-start attaches for at most 100 s, so a dispatch keeps the fixed budget.
   it('keeps a worker dispatch inside the fixed budget', async () => {
     await expect(launchDsh(fixture('launchpad-draft-starting'), 45, true, 60_000)).resolves.toEqual({

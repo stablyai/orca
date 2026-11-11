@@ -39,14 +39,16 @@ export abstract class OrcaRuntimeWithResubmitHeldAgentPrompt extends OrcaRuntime
     if (retryDelayMs === undefined || (!blind && !gated)) {
       return 0
     }
-    let deadline = Date.now() + held.heldBudgetMs
+    const retryStartedAt = Date.now()
+    let deadline = retryStartedAt + held.heldBudgetMs
     // Worker dispatches stay inside the fixed budget: federated worker-start attaches for at most
     // 100 s, so a longer wait would let the home dispatch report outcome_unknown mid-retry.
     const launchpadExtensionMs =
       readsLaunchDraft && options.inputKind !== 'orchestration'
         ? DSH_LAUNCHPAD_SUBMIT_EXTENSION_MS
         : 0
-    const hardDeadline = deadline + launchpadExtensionMs
+    // Measured from the retry start, so the cap is absolute rather than base budget plus extension.
+    const hardDeadline = Math.max(deadline, retryStartedAt + launchpadExtensionMs)
     let resubmits = 0
     let gatedResubmits = 0
     try {
