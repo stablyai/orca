@@ -72,9 +72,36 @@ it('serves the ORCA_WEB_ICON file and injects icon and manifest links', async ()
   const manifest = await (await fetch(`${url}/manifest.webmanifest`)).json()
   expect(manifest).toMatchObject({
     name: 'Orca',
+    start_url: 'web-index.html',
     display: 'standalone',
     icons: [{ src: 'orca-web-icon', sizes: '96x96', type: 'image/png' }]
   })
+})
+
+it('serves the manifest start_url under a proxy prefix', async () => {
+  writeFileSync(join(root, 'assets', 'icon-bundled.png'), PNG_96)
+  const url = await startServer()
+
+  const manifestUrl = `${url}/orca/manifest.webmanifest`
+  const manifest = await (await fetch(manifestUrl)).json()
+  const startUrl = new URL(manifest.start_url, manifestUrl)
+
+  const indexResponse = await fetch(startUrl)
+  expect(indexResponse.status).toBe(200)
+  expect(await indexResponse.text()).toContain('Orca Web')
+})
+
+it('accepts an ORCA_WEB_ICON file with an uppercase extension', async () => {
+  const iconPath = join(root, 'custom.PNG')
+  writeFileSync(iconPath, PNG_96)
+  process.env.ORCA_WEB_ICON = iconPath
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  const url = await startServer()
+
+  const iconResponse = await fetch(`${url}/orca-web-icon`)
+  expect(iconResponse.status).toBe(200)
+  expect(Buffer.from(await iconResponse.arrayBuffer())).toEqual(PNG_96)
+  expect(warn).not.toHaveBeenCalledWith(expect.stringContaining('ORCA_WEB_ICON'))
 })
 
 it('falls back to the bundled assets/icon-*.png when ORCA_WEB_ICON is unset', async () => {
