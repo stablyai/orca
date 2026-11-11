@@ -7,7 +7,7 @@ import { resolveAppearanceAccordionDeepLink } from '../appearance/appearance-usa
 import { registerWindowCloseGuard } from '../../window-close-request-coordinator'
 import { isIntentionalAppRestartInProgress } from '@/app-shell/updates/updater-beforeunload'
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
-import { hasVisibleOverlay } from '@/lib/visible-overlay'
+import { hasVisibleOverlay } from '@/lib/overlay-interaction/visible-overlay'
 import { translate } from '@/i18n/i18n'
 import {
   getSettingsTargetHostSelection,

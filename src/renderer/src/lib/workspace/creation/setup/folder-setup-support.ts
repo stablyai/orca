@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useSyncExternalStore } from 'react'
-import { getRepoExecutionHostId, parseExecutionHostId } from '../../../shared/execution-host'
-import { isFolderRepo } from '../../../shared/repo-kind'
-import type { Repo } from '../../../shared/repo-types'
-import { WORKTREE_FOLDER_SETUP_RUNTIME_CAPABILITY } from '../../../shared/worktree-runtime-capabilities'
+import {
+  getRepoExecutionHostId,
+  parseExecutionHostId
+} from '../../../../../../shared/execution-host'
+import { isFolderRepo } from '../../../../../../shared/repo-kind'
+import type { Repo } from '../../../../../../shared/repo-types'
+import { WORKTREE_FOLDER_SETUP_RUNTIME_CAPABILITY } from '../../../../../../shared/worktree-runtime-capabilities'
 import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
 
 export type FolderSetupSupport = 'supported' | 'unsupported' | 'pending'
