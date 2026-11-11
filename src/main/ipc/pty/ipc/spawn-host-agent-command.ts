@@ -1,21 +1,24 @@
-import { resolveQoderTerminalCommand } from '../../../runtime/terminal/launch/qoder-terminal-command-resolution'
+import {
+  hasHostResolvedCommand,
+  resolveHostAgentTerminalCommand
+} from '../../../runtime/terminal/launch/host-agent-terminal-command-resolution'
 import { resolveStartupShell } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { resolveLocalWindowsAgentStartupShell } from '../../../../shared/windows-terminal-shell'
 import type { PtyIpcSpawnState } from './spawn-state'
 
-export async function preparePtyIpcQoderCommand(ctx: PtyIpcSpawnState): Promise<void> {
+export async function preparePtyIpcHostAgentCommand(ctx: PtyIpcSpawnState): Promise<void> {
   // Adopted owners and pane launch plans already determine their own runtime command.
   if (
     ctx.preAdoptedStablePane ||
     ctx.paneAgentLaunch ||
-    (ctx.args.launchAgent !== 'qoder' && ctx.args.launchAgent !== 'cursor')
+    !hasHostResolvedCommand(ctx.args.launchAgent)
   ) {
     return
   }
   const connectionId = ctx.args.connectionId
   const isWsl = ctx.codexSelectionTarget.runtime === 'wsl'
   const platform = connectionId || isWsl ? 'linux' : process.platform
-  const launch = await resolveQoderTerminalCommand(
+  const launch = await resolveHostAgentTerminalCommand(
     {
       launchAgent: ctx.args.launchAgent,
       command: ctx.launchCommand,

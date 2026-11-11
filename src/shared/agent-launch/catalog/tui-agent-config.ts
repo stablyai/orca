@@ -228,14 +228,9 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     detectCmd: 'cn',
     promptInjectionMode: 'stdin-after-start'
   },
-  cursor: {
-    // `agent` is the official name; `cursor-agent` remains installed as a compatibility alias.
-    detectCmd: 'agent',
-    detectCmdAliases: ['cursor-agent'],
-    promptInjectionMode: 'argv',
-    // Why: first-launch trust menu swallows the bracketed paste; pre-write the .workspace-trusted marker so it skips (agent-trust-presets.ts).
-    preflightTrust: 'cursor'
-  },
+  // Why: first-launch trust menu swallows the bracketed paste; pre-write the .workspace-trusted marker so it skips (agent-trust-presets.ts).
+  // prettier-ignore
+  cursor: { detectCmd: 'agent', detectCmdAliases: ['cursor-agent'], expectedProcess: 'cursor-agent', promptInjectionMode: 'argv', preflightTrust: 'cursor' },
   droid: {
     detectCmd: 'droid',
     promptInjectionMode: 'argv',

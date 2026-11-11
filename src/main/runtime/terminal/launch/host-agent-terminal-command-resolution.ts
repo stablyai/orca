@@ -10,10 +10,15 @@ import {
 } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import type { TerminalCreateOptions } from './terminal-create-options'
 
-// Agents that ship under more than one command name; the launch uses whichever the host has.
-const ALIASED_COMMAND_AGENTS = ['qoder', 'cursor'] as const
+const AGENTS_WITH_HOST_RESOLVED_COMMAND = ['qoder', 'cursor'] as const
 
-export async function resolveQoderTerminalCommand<
+export function hasHostResolvedCommand(
+  agent: string | null | undefined
+): agent is (typeof AGENTS_WITH_HOST_RESOLVED_COMMAND)[number] {
+  return AGENTS_WITH_HOST_RESOLVED_COMMAND.some((candidate) => candidate === agent)
+}
+
+export async function resolveHostAgentTerminalCommand<
   T extends Pick<TerminalCreateOptions, 'launchAgent' | 'command' | 'launchConfig'>
 >(
   options: T,
@@ -24,8 +29,8 @@ export async function resolveQoderTerminalCommand<
   },
   detect = detectAgentCommandsOnHost
 ): Promise<T> {
-  const agent = ALIASED_COMMAND_AGENTS.find((candidate) => candidate === options.launchAgent)
-  if (!agent || !options.command) {
+  const agent = options.launchAgent
+  if (!hasHostResolvedCommand(agent) || !options.command) {
     return options
   }
   const config = TUI_AGENT_CONFIG[agent]
