@@ -1,4 +1,5 @@
 import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import type { StructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import { vi } from 'vitest'
 import type {
   AgentSessionLease,
@@ -100,7 +101,34 @@ export function createSessionCallerHarness(
     [SESSION_X, sessionRecord(SESSION_X, { providerId: PROVIDER_ID_X })],
     [SESSION_Y, sessionRecord(SESSION_Y)]
   ])
+  // This host has records but no journal that can prove a handoff.
+  const mailSource: Pick<
+    StructuredAgentSessionHost,
+    'holdMailSources' | 'observeConversationPublications'
+  > = {
+    async holdMailSources(attempts, signal) {
+      signal.throwIfAborted()
+      let held = true
+      return {
+        observations: attempts.map((attempt) => ({
+          attempt,
+          observation: {
+            epoch: '',
+            state: { kind: 'unreadable' as const },
+            body: null,
+            withdrawal: 'unknown' as const
+          }
+        })),
+        current: () => held && !signal.aborted,
+        release: () => {
+          held = false
+        }
+      }
+    },
+    observeConversationPublications: () => () => {}
+  }
   hostRef.current = {
+    ...mailSource,
     deps: {
       store: {
         getRecord: (sessionId: string) => records.get(sessionId) ?? null,

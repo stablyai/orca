@@ -102,7 +102,7 @@ describe('mail checks reconcile the currently owned source attempts', () => {
     try {
       await observed.promise
       const before = host.deps.store.getConversation(PEER_CHAT)!
-      const now = Math.max(Date.now(), before.ownerObservation.lastRenewedAt ?? 0) + 1
+      const now = (before.ownerObservation.lastRenewedAt ?? 0) + 1
       await host.deps.store.renewLease({
         sessionId: PEER_CHAT,
         fence: before.currentFence,
