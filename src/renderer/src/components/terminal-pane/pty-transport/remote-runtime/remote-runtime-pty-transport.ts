@@ -332,7 +332,7 @@ export function createRemoteRuntimePtyTransport(
   let fullHistoryReceived = false
   const FULL_HISTORY_DEPTH = 'full' as const
   // A quit-and-reopen is a new mount, so the host gives it depth even right after the last one.
-  const historyMountId = crypto.randomUUID()
+  const historyMountId = createBrowserUuid()
   // A terminal this pane just created has no history, so an empty first image there is not a gap.
   let spawnedHandle: string | null = null
   let inputReadySubscription: number | null = null
