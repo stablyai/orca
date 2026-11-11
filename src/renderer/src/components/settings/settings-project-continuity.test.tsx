@@ -158,11 +158,20 @@ it('keeps the actual implicit and explicitly chosen checkout through control sav
     const [activeSectionId, setActiveSectionId] = useState(`repo-${entries[0].selectionKey}`)
     const [pendingNavRequestTick, setPendingNavRequestTick] = useState(0)
     const [mountedSectionIds, setMountedSectionIds] = useState(new Set<string>())
-    const [repoHooksMap, setRepoHooksMap] = useState({})
+    const [repoHooksMap, setRepoHooksMap] = useState<SettingsStoreModel['repoHooksMap']>({})
     const [hasUnsavedCommitPromptChanges, setHasUnsavedCommitPromptChanges] = useState(false)
     markGlobalDirty = () => setHasUnsavedCommitPromptChanges(true)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: all fields read by continuity/actions/renderer are supplied.
-    const raw = {
+    const unavailableSkill: SettingsStoreModel['orchestrationSkill'] = {
+      installed: false,
+      loading: false,
+      settled: true,
+      installedUnverifiable: false,
+      error: null,
+      skills: [],
+      sources: [],
+      refresh: async () => false
+    }
+    const partialModel: Partial<SettingsStoreModel> = {
       ...state,
       ...hostNavigation,
       settingsProjectList: entries,
@@ -182,7 +191,8 @@ it('keeps the actual implicit and explicitly chosen checkout through control sav
       fetchKeybindings: asyncNothing,
       refreshModelStates: asyncNothing,
       setVoiceModelStatesLoading: nothing,
-      setHighlightedSettingsTargetId: nothing,
+      highlightedSettingsTarget: null,
+      setHighlightedSettingsTarget: nothing,
       showDesktopOnlySettings: false,
       isWebClient: true,
       settingsHostScope: LOCAL_SETTINGS_HOST_SCOPE,
@@ -194,9 +204,9 @@ it('keeps the actual implicit and explicitly chosen checkout through control sav
       prevScrollbackRows: state.settings?.terminalScrollbackRows,
       setPrevScrollbackRows: nothing,
       setScrollbackMode: nothing,
-      orchestrationSkill: { installed: false, loading: false },
-      linearSkill: { installed: false, loading: false, skills: [] },
-      computerUseSkill: { installed: false, loading: false },
+      orchestrationSkill: unavailableSkill,
+      linearSkill: unavailableSkill,
+      computerUseSkill: unavailableSkill,
       linearConnected: false,
       closeSettingsPage: useAppStore.getState().closeSettingsPage,
       confirm: async () => discardAllowed,
@@ -208,7 +218,9 @@ it('keeps the actual implicit and explicitly chosen checkout through control sav
       hasUnsavedCommitPromptChanges,
       hasUnsavedBranchPromptChanges: false,
       hasUnsavedChatPromptChanges: false
-    } as unknown as SettingsStoreModel
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: checked fields supply the exercised Settings page; inactive sections are omitted.
+    const raw = partialModel as SettingsStoreModel
     const interactions = useSettingsInteractionController(raw)
     const navigation = useSettingsNavigationModel(raw, interactions)
     const model = navigation.model
