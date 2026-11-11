@@ -185,7 +185,33 @@ export const getExperimentalSearchEntry = createLocalizedCatalog(
       },
       newWorktreeCardStyle: getNewWorktreeCardStyleSearchEntry(),
       ephemeralVms: getEphemeralVmsSearchEntry(),
-      browserExtensions: getBrowserExtensionsExperimentalSearchEntry()
+      browserExtensions: getBrowserExtensionsExperimentalSearchEntry(),
+      pokes: {
+        title: translate('auto.components.settings.experimental.search.pokes.title', 'Pokes'),
+        description: translate(
+          'auto.components.settings.experimental.search.pokes.description',
+          'Poke a teammate from their profile. Works when you both turn it on.'
+        ),
+        keywords: [
+          ...translateSearchKeyword(
+            'auto.components.settings.experimental.search.0d24759f14',
+            'experimental'
+          ),
+          ...translateSearchKeyword(
+            'auto.components.settings.experimental.search.pokes.poke',
+            'poke'
+          ),
+          ...translateSearchKeyword(
+            'auto.components.settings.experimental.search.pokes.nudge',
+            'nudge'
+          ),
+          ...translateSearchKeyword(
+            'auto.components.settings.experimental.search.pokes.teammate',
+            'teammate'
+          )
+        ],
+        targetSectionId: 'experimental-pokes'
+      }
     }) satisfies Record<string, SettingsSearchEntry>
 )
 

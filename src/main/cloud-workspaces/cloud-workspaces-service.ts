@@ -162,6 +162,12 @@ export function createCloudWorkspacesService(deps: {
     getOrgPrompts: () => wrap(() => client.getOrgPrompts()),
     putOrgPrompts: (document: OrgPrompts['document'], revision: number) =>
       wrap(() => client.putOrgPrompts(document, revision)),
+    teammateProfile: (userId: string, utcOffsetMin: number) =>
+      wrap(() => client.teammateProfile(userId, utcOffsetMin)),
+    poke: (userId: string) => wrap(() => client.poke(userId)),
+    pokeInbox: () => wrap(() => client.pokeInbox()),
+    setPokesEnabled: (enabled: boolean) => wrap(() => client.setPokesEnabled(enabled)),
+    markPokesSeen: (ids: string[]) => wrap(() => client.markPokesSeen(ids)),
     localWorkspaces: () => localWorkspaces(),
     noteSent: (id: string) => wrap(() => client.noteSent(id)),
     sleep: (id: string) => wrap(() => client.sleep(id)),

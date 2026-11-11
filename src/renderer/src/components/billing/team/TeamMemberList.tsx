@@ -39,6 +39,8 @@ export type TeamMemberListProps = {
   onResend: (email: string, role: OrcaOrgRole) => void
   onRevoke: (email: string) => void
   onLeave: () => void
+  /** Opens a signed-in member's profile (usage heatmap, recent workspaces, Pokes). */
+  onOpenProfile?: (userId: string) => void
 }
 
 function relativeSince(then: number, now: number, locale: string): string {
@@ -210,6 +212,8 @@ export function TeamMemberList(props: TeamMemberListProps): React.JSX.Element {
         const state = props.rowStates[row.key] ?? {}
         const name =
           row.kind === 'member' ? (row.member.displayName ?? row.member.email) : row.invite.email
+        const profileUserId =
+          row.kind === 'member' && row.status === 'active' ? row.member.userId : null
         const secondary =
           row.kind === 'member'
             ? row.member.displayName
@@ -232,7 +236,22 @@ export function TeamMemberList(props: TeamMemberListProps): React.JSX.Element {
               <PersonAvatar name={name} pending={row.status !== 'active'} />
               <div className="min-w-0 flex-1">
                 <p className="flex min-w-0 items-center gap-2 text-sm font-medium">
-                  <span className="truncate">{name}</span>
+                  {profileUserId && props.onOpenProfile ? (
+                    <button
+                      type="button"
+                      onClick={() => props.onOpenProfile?.(profileUserId)}
+                      aria-label={t(
+                        'auto.components.billing.team.openProfile',
+                        'Open {{value0}}’s profile',
+                        { value0: name }
+                      )}
+                      className="min-w-0 cursor-default truncate rounded-sm text-left outline-none hover:underline focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+                    >
+                      {name}
+                    </button>
+                  ) : (
+                    <span className="truncate">{name}</span>
+                  )}
                   {row.self ? (
                     <span className="shrink-0 text-xs font-normal text-muted-foreground">
                       {t('auto.components.billing.team.you', '(you)')}

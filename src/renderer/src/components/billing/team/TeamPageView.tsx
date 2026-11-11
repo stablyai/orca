@@ -44,6 +44,7 @@ export type TeamPageViewProps = {
   onResend: (email: string, role: OrcaOrgRole) => void
   onRevoke: (email: string) => void
   onLeave: () => void
+  onOpenProfile?: (userId: string) => void
   onSeePlans: () => void
   onManageBilling: () => void
   onCreateWorkspace: () => void
@@ -261,6 +262,7 @@ export function TeamPageView(props: TeamPageViewProps): React.JSX.Element {
             onResend={props.onResend}
             onRevoke={props.onRevoke}
             onLeave={props.onLeave}
+            onOpenProfile={props.onOpenProfile}
           />
         ) : props.roster === null ? (
           <SkeletonRows />

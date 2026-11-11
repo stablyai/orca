@@ -25,7 +25,7 @@ import {
 import { cloudWorkspaceTitle } from './open-cloud-workspace'
 
 /** The shared Orca Cloud dot vocabulary (shape and tone), same as the sidebar and panel. */
-function dotState(w: CloudWorkspace): CloudDotState {
+export function dotState(w: CloudWorkspace): CloudDotState {
   if (w.archivedAt !== null) {
     return 'archived'
   }
@@ -48,7 +48,7 @@ function dotState(w: CloudWorkspace): CloudDotState {
 }
 
 /** Glossary lifecycle states only: a sandbox going to sleep already reads as Asleep. */
-function statusLabel(w: CloudWorkspace, t: Translate): string {
+export function statusLabel(w: CloudWorkspace, t: Translate): string {
   if (w.archivedAt !== null) {
     return t('auto.components.cloudWorkspaces.statusArchived', 'Archived')
   }

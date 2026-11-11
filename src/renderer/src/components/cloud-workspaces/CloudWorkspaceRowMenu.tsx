@@ -38,6 +38,7 @@ import type {
   CloudWorkspacePresence
 } from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
 import { MemberAvatar } from './CloudMemberAvatars'
+import { openTeammateProfile } from '../teammates/teammate-profile-store'
 import { memberName, presentMembers, type MemberDirectory } from './cloud-workspace-format'
 
 export type RowActions = {
@@ -168,6 +169,16 @@ export function CloudWorkspaceRowMenu({
           <Link2 />
           {t('auto.components.cloudWorkspaces.copyWorkspaceLink', 'Copy workspace link')}
         </DropdownMenuItem>
+        {w.ownerUserId !== selfId && (
+          <DropdownMenuItem onSelect={() => openTeammateProfile(w.ownerUserId)}>
+            <MemberAvatar userId={w.ownerUserId} directory={directory} selfId={selfId} size="sm" />
+            <span className="truncate">
+              {t('auto.components.cloudWorkspaces.viewOwnerProfile', "View {{name}}'s profile", {
+                name: memberName(directory, w.ownerUserId, selfId, t)
+              })}
+            </span>
+          </DropdownMenuItem>
+        )}
         {teammatesHere.length > 0 && (
           <DropdownMenuSub>
             <DropdownMenuSubTrigger>

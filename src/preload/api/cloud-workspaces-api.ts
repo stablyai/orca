@@ -5,6 +5,7 @@ import type {
   CloudWorkspacePatch,
   OrgPrompts
 } from '../../shared/cloud-workspaces/cloud-workspaces-wire'
+import type { PokeInbox, TeammateProfile } from '../../shared/cloud-workspaces/team-presence-wire'
 import type { CloudReadSnapshotState } from '../../shared/cloud-workspaces/read-snapshot-state'
 
 export type CloudWorkspacesResult<T> =
@@ -62,6 +63,16 @@ export type CloudWorkspacesApi = {
     document: OrgPrompts['document'],
     revision: number
   ) => Promise<CloudWorkspacesResult<OrgPrompts>>
+  /** A teammate's profile: usage heatmap (levels only unless it is you) and workspaces you can see. */
+  teammateProfile: (
+    userId: string,
+    utcOffsetMin: number
+  ) => Promise<CloudWorkspacesResult<TeammateProfile>>
+  /** Pokes (experimental, opt-in on both sides). */
+  poke: (userId: string) => Promise<CloudWorkspacesResult<{ id: string; at: number }>>
+  pokeInbox: () => Promise<CloudWorkspacesResult<PokeInbox>>
+  setPokesEnabled: (enabled: boolean) => Promise<CloudWorkspacesResult<boolean>>
+  markPokesSeen: (ids: string[]) => Promise<CloudWorkspacesResult<void>>
   onOpenLink: (callback: (link: string) => void) => () => void
   consumePendingLink: () => Promise<string | null>
 }

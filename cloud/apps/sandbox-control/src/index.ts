@@ -28,6 +28,8 @@
 //          team workspace registry, presence, per-device grants (src/workspaces.ts, src/grants.ts)
 //          POST /v1/team/workspaces/:id/wake?wait=30s: any member who can open it wakes it (single-flight,
 //          billed to the account, counted on the owner's seat like every wake) -> {state, endpoint: null, …}
+//   /v1/team/members/:userId/(profile|poke), /v1/team/pokes[/settings|/seen]
+//          teammate profiles (usage heatmap, recent workspaces) and opt-in Pokes (src/team-presence.ts)
 // /v1/sandboxes/* is the owner's lifecycle API: only the workspace's owner (and, for suspend and
 // destroy, an org admin) can reach a row there, because resume hands back an orcad pairing offer.
 // Browser (GitHub redirects): GET /v1/github/setup, GET /v1/github/callback
@@ -201,6 +203,7 @@ import {
   workspaceViews
 } from './workspaces'
 import { rememberCallerName } from './member-names'
+import { TeamPresenceError, teamPresenceRoute } from './team-presence'
 import { sweepSessionCpu } from './session-cpu'
 import type { SandboxCaller } from './auth'
 
@@ -1471,7 +1474,10 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
       url.pathname === '/v1/team/workspaces' ||
       url.pathname.startsWith('/v1/team/workspaces/') ||
       url.pathname === '/v1/team/links/resolve' ||
-      url.pathname === '/v1/team/prompts'
+      url.pathname === '/v1/team/prompts' ||
+      url.pathname.startsWith('/v1/team/members/') ||
+      url.pathname === '/v1/team/pokes' ||
+      url.pathname.startsWith('/v1/team/pokes/')
     ) {
       const caller = await authenticateDesktop(env, request, (deps.now ?? Date.now)())
       if (!caller) {
@@ -1822,6 +1828,24 @@ async function workspaceRoute(request: Request, url: URL, env: Env, deps: Deps, 
   }
   if (url.pathname === '/v1/team/workspaces') {
     return request.method === 'GET' ? json(await listWorkspaces(db, caller, url, now)) : fail('not_found', 404)
+  }
+  if (url.pathname.startsWith('/v1/team/members/') || url.pathname.startsWith('/v1/team/pokes')) {
+    try {
+      const answer = await teamPresenceRoute(db, caller, request, url, now, () => readJson(request))
+      return answer === null ? fail('not_found', 404) : json(answer)
+    } catch (error) {
+      if (error instanceof TeamPresenceError) {
+        const response = json(
+          { error: error.code, ...(error.reason ? { reason: error.reason } : {}), ...(error.retryAfterMs ? { retryAfterMs: error.retryAfterMs } : {}) },
+          error.status
+        )
+        if (error.retryAfterMs) {
+          response.headers.set('retry-after', String(Math.ceil(error.retryAfterMs / 1000)))
+        }
+        return response
+      }
+      throw error
+    }
   }
   const match = /^\/v1\/team\/workspaces\/(sbx_[0-9a-f]{24})(?:\/(presence|wake|lease|grants|sent|read-snapshot)(?:\/(grt_[0-9a-f]{24}))?)?$/.exec(url.pathname)
   if (!match) {
