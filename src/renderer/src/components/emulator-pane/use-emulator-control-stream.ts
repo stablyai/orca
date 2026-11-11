@@ -156,15 +156,16 @@ export function useEmulatorControlStream(
       }
 
       ws.onerror = () => {
-        setConnected(false)
         ws.close()
       }
 
       ws.onclose = () => {
-        if (wsRef.current === ws) {
-          wsRef.current = null
-          lastTouchRef.current = null
+        // A replaced socket can close after its successor opens; it must not reset the live one.
+        if (wsRef.current !== ws) {
+          return
         }
+        wsRef.current = null
+        lastTouchRef.current = null
         clearKeyboardTimers()
         setConnected(false)
         if (!disposed) {

@@ -117,7 +117,7 @@ export function EmulatorDeviceFrame({
 
   const { cancel: cancelWheelGesture, queue: queueWheelGesture } =
     useEmulatorWheelGesture(sendTouch)
-  useEffect(cancelWheelGesture, [cancelWheelGesture, canInteract, connected, wsUrl])
+  useEffect(cancelWheelGesture, [cancelWheelGesture, canInteract, connected, inputRotation, wsUrl])
 
   useEffect(
     () => () => {
