@@ -39,6 +39,7 @@ import { getFolderWorkspacePrimaryActionLabel } from '@/components/sidebar/works
 import { useAgentMenuObservation } from '@/components/tab-bar/use-new-tab-agent-menu-rows'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 import { useComposerCloudStart } from './new-workspace/run-on/use-composer-cloud-start'
+import { composerAgentSelection } from './new-workspace/composer-agent-cli'
 import { HiddenComposer, useCloudAutoStartReveal } from './new-workspace/composer-cloud-auto-start'
 
 // Keep Add Project’s clone/SSH machinery outside the composer entry render, matching App loading.
@@ -396,8 +397,7 @@ function QuickTabBody({
           agentMenuModel
             ? {
                 model: agentMenuModel,
-                // Orca Cloud has no chat surface, so its one Claude never reads "Claude (CLI)" (PC-9).
-                selection: orcaCloud ? { ...launchSelection, cli: false } : launchSelection,
+                selection: composerAgentSelection(launchSelection, orcaCloud),
                 surface: quickAgentSurface,
                 contextKey: observation.contextKey,
                 onPick: handleQuickAgentChange
