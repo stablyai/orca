@@ -129,6 +129,7 @@ export default function CombinedDiffViewer({
     sections,
     sectionHeights,
     prefix: (file.skippedConflicts?.length ?? 0) > 0,
+    expectedCount: entrySet.entries.length,
     renderedIndicesRef: registry.renderedIndicesRef
   })
   useCombinedDiffOwnerMemory({

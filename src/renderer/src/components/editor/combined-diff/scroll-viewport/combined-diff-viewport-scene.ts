@@ -21,6 +21,12 @@ export class CombinedDiffViewportScene {
   get mounted(): boolean {
     return this.host !== null
   }
+  get usable(): boolean {
+    return this.mounted && this.height > 0 && this.width > 0
+  }
+  getHeight(index: CombinedDiffExtentIndex): number {
+    return this.usable ? this.height : index.height
+  }
   constructor(
     private readonly callbacks: {
       invalidate(): void
@@ -102,6 +108,9 @@ export class CombinedDiffViewportScene {
     viewport: DiffViewportLayout,
     attached: ReadonlySet<DiffViewportItem>
   ): void {
+    if (!this.usable) {
+      return
+    }
     for (const item of attached) {
       const layout = index.itemLayout(item.key, viewport, this.height)
       if (layout && item.node) {
@@ -117,17 +126,21 @@ export class CombinedDiffViewportScene {
     revision: number
     preserveSlack: boolean
   }): DiffViewportLayout {
-    if (this.applying || this.disposed || !this.scrollable || !this.scrollbar) {
+    if (this.applying || this.disposed) {
+      return this.layout
+    }
+    const height = this.getHeight(input.index)
+    this.layout = input.index.project(
+      input.logicalTop,
+      height,
+      input.revision,
+      input.preserveSlack && this.mounted
+    )
+    if (!this.usable || !this.scrollable || !this.scrollbar) {
       return this.layout
     }
     this.applying = true
     try {
-      this.layout = input.index.project(
-        input.logicalTop,
-        this.height,
-        input.revision,
-        input.preserveSlack
-      )
       this.root.style.height = `${this.height}px`
       this.scene.style.height = `${this.layout.scrollHeight}px`
       this.scrollable.setScrollDimensions(

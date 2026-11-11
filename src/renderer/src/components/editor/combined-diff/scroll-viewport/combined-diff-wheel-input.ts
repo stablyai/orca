@@ -20,8 +20,8 @@ export function handleCombinedDiffWheel(
   const next = Math.max(min, Math.min(layout.logicalTop + delta, max))
   if (next !== layout.logicalTop) {
     event.preventDefault()
-    scrollBy(delta)
   }
+  scrollBy(delta)
 }
 function descendantOwnsWheel(event: WheelEvent, root: HTMLElement, delta: number): boolean {
   for (const node of event.composedPath()) {

@@ -35,6 +35,9 @@ export class CombinedDiffExtentIndex {
   private capped: number[] = [0]
   private viewportHeight = 0
 
+  get height(): number {
+    return this.viewportHeight
+  }
   get length(): number {
     return this.keys.length
   }

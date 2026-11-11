@@ -92,23 +92,30 @@ type DiffAnchorGeometry = {
   pane: 'original' | 'modified'
 }
 
-function anchorProjection(input: DiffAnchorGeometry, top: number): { top: number; rowTop: number } {
-  const maximum = Math.max(0, input.height - input.renderedHeight)
+export function diffNativeScrollOffsets(input: {
+  requested: number
+  originalMax: number
+  modifiedMax: number
+  originalToModified: number
+}): { original: number; modified: number } {
   const lower = Math.max(0, -input.originalToModified)
   const upper = Math.min(input.originalMax, input.modifiedMax - input.originalToModified)
   const clamp = (value: number, min: number, max: number): number =>
     Math.max(min, Math.min(value, max))
-  const requested = clamp(top - input.start, 0, maximum)
   const original =
     lower <= upper
-      ? clamp(requested, lower, upper)
+      ? clamp(input.requested, lower, upper)
       : input.originalToModified > 0
         ? 0
         : input.originalMax
-  const pane =
-    input.pane === 'original'
-      ? original
-      : clamp(original + input.originalToModified, 0, input.modifiedMax)
+  return { original, modified: clamp(original + input.originalToModified, 0, input.modifiedMax) }
+}
+
+function anchorProjection(input: DiffAnchorGeometry, top: number): { top: number; rowTop: number } {
+  const maximum = Math.max(0, input.height - input.renderedHeight)
+  const requested = Math.max(0, Math.min(top - input.start, maximum))
+  const offsets = diffNativeScrollOffsets({ ...input, requested })
+  const pane = input.pane === 'original' ? offsets.original : offsets.modified
   const rowTop = input.start - top + requested
   return { top: rowTop + input.chrome + input.nativeTarget - pane, rowTop }
 }

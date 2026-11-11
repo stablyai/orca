@@ -9,6 +9,7 @@ import {
 } from './combined-diff-layout'
 import type { DiffEditorTemplate, RetainedDiffItem } from './combined-diff-editor-pool'
 import { registerCombinedEditorGeometry } from './combined-diff-editor-geometry'
+import { isCombinedDiffScrollApplied, readCombinedDiffHeight } from './combined-diff-native-metrics'
 import type {
   DiffSemanticPoint,
   DiffViewportBinding,
@@ -170,18 +171,22 @@ export class CombinedDiffNativeBinding implements DiffViewportBinding {
   }
 
   readHeight(): number | null {
-    const state = this.record.viewModel.getDiffState()
-    if (this.detached || !state.isDiffUpToDate || !state.hasResult || this.width <= 0) {
-      return null
-    }
+    return this.detached
+      ? null
+      : readCombinedDiffHeight(
+          this.template.editor,
+          this.record.viewModel,
+          this.width,
+          this.anchors.chromeHeight() + this.borderHeight()
+        )
+  }
+
+  isScrollApplied(): boolean {
+    const offset = this.current?.item.scrollOffset
     return (
-      this.anchors.chromeHeight() +
-      this.borderHeight() +
-      DIFF_SECTION_PADDING_HEIGHT +
-      Math.max(
-        this.template.editor.getOriginalEditor().getContentHeight(),
-        this.template.editor.getModifiedEditor().getContentHeight()
-      )
+      offset !== undefined &&
+      this.readHeight() !== null &&
+      isCombinedDiffScrollApplied(this.template.editor, this.record.model, offset)
     )
   }
 

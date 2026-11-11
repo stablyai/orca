@@ -48,7 +48,7 @@ export function usePRFilesDiffViewPersistence(args: {
       scrollAnchor:
         existing?.entrySignature === args.entrySignature
           ? existing.scrollAnchor
-          : args.viewport.getAnchor(),
+          : args.viewport.getViewMemory().scrollAnchor,
       sideBySide: args.sideBySide,
       fileTreeCollapsed: args.fileTreeCollapsed,
       activeTreeSectionKey: args.activeTreeSectionKey
@@ -74,7 +74,7 @@ export function usePRFilesDiffViewPersistence(args: {
       }
       setWithLRU(prFilesDiffViewStateCache, args.viewStateKey, {
         ...existing,
-        scrollAnchor: args.viewport.getAnchor()
+        scrollAnchor: args.viewport.getViewMemory().scrollAnchor
       })
     }
     const unsubscribe = args.viewport.subscribeScroll(persist)

@@ -15,6 +15,7 @@ type ViewportAnchor = {
   index: number
   top: number
   bottom: number
+  lineHeight: number
   lineText: string
   scrollTop: number
   scrollHeight: number
@@ -210,6 +211,7 @@ async function readViewportAnchor(page: Page): Promise<ViewportAnchor | null> {
           lineText,
           top: rect.top - containerRect.top,
           bottom: rect.bottom - containerRect.top,
+          lineHeight: rect.height,
           scrollTop: (index * 201 + lineIndex) * rect.height - (rect.top - containerRect.top),
           scrollHeight: Number.parseFloat(sceneHeight ?? '0'),
           clientHeight: container.clientHeight
@@ -358,7 +360,9 @@ test.describe('Combined diff scroll restore', () => {
   test.describe.configure({ mode: 'serial' })
   test.use({ seedTestRepo: false })
 
-  test('keeps the visible section anchored after switching tabs', async ({ orcaPage }) => {
+  test('keeps the visible section anchored after switching tabs', async ({
+    orcaPage
+  }, testInfo) => {
     await waitForSessionReady(orcaPage)
     const fixture = createCombinedDiffScrollRepo()
 
@@ -395,6 +399,19 @@ test.describe('Combined diff scroll restore', () => {
       await expect(orcaPage.locator('[data-combined-diff-viewport]')).toBeVisible()
       const afterSwitch = await waitForRestoredViewportAnchor(orcaPage, beforeSwitch)
 
+      await testInfo.attach('tab-return-anchors', {
+        body: JSON.stringify({ beforeSwitch, afterSwitch }, null, 2),
+        contentType: 'application/json'
+      })
+      if (
+        afterSwitch.key !== beforeSwitch.key ||
+        Math.abs(afterSwitch.scrollTop - beforeSwitch.scrollTop) >= 80
+      ) {
+        await testInfo.attach('tab-return-before-cleanup', {
+          body: await orcaPage.screenshot(),
+          contentType: 'image/png'
+        })
+      }
       expect(afterSwitch.key).toBe(beforeSwitch.key)
       expect(Math.abs(afterSwitch.scrollTop - beforeSwitch.scrollTop)).toBeLessThan(80)
 

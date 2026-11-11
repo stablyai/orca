@@ -200,7 +200,11 @@ export function PRFilesCombinedDiffViewer({
     [files]
   )
 
-  const viewport = useCombinedDiffViewport({ sections, sectionHeights })
+  const viewport = useCombinedDiffViewport({
+    sections,
+    sectionHeights,
+    expectedCount: entries.length
+  })
 
   usePRFilesDiffViewPersistence({
     sections,

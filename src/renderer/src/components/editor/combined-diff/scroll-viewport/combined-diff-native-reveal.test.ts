@@ -1,5 +1,13 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi } from 'vitest'
+import { act, renderHook } from '@testing-library/react'
+import { useCombinedDiffOwnerMemory } from '../remember-view/use-combined-diff-owner-memory'
+import {
+  claimCombinedDiffView,
+  readCombinedDiffViewMemory,
+  releaseCombinedDiffView,
+  forgetCombinedDiffViewsForWorktrees
+} from '../remember-view/combined-diff-view-cache'
 import { createNativeBindingFixture, nativeCommit } from './combined-diff-native.test-fixture'
 import { resizeDiffCommentZone } from '../../../diff-comments/diff-comment-view-zone-entry'
 import { CombinedDiffExtentIndex } from './combined-diff-extent-index'
@@ -15,6 +23,126 @@ function rect(top: number, height: number): DOMRect {
 }
 
 describe('combined native reveal integration', () => {
+  it.each([3087, 88])(
+    'restores a fresh owner through pending native alignment with cached height %i',
+    async (height) => {
+      const previous = await createNativeBindingFixture(0, { pending: false })
+      let view: ReturnType<typeof previous.owner.getViewMemory>
+      try {
+        previous.owner.input(1600)
+        view = previous.owner.getViewMemory()
+        expect(view).toEqual({ scrollAnchor: { key: 'target', offset: 1000 }, scrollTop: 1600 })
+      } finally {
+        previous.dispose()
+      }
+      const fixture = await createNativeBindingFixture(0, { pending: true, height, view })
+      try {
+        expect(fixture.original.getScrollTop()).toBe(0)
+        expect(fixture.modified.getScrollTop()).toBe(0)
+        expect(fixture.owner.getViewMemory()).toEqual(view)
+        const published: number[] = []
+        const unsubscribe = fixture.owner.subscribeScroll(() =>
+          published.push(fixture.owner.getScrollTop())
+        )
+        fixture.completeAlignment()
+        await nativeCommit()
+        unsubscribe()
+        expect(fixture.owner.getScrollTop()).toBe(1600)
+        expect(
+          28 + fixture.modified.getTopForPosition(53, 1) - fixture.modified.getScrollTop()
+        ).toBe(16)
+        expect(fixture.owner.getViewMemory()).toEqual(view)
+        expect(published).not.toContain(600)
+      } finally {
+        fixture.dispose()
+      }
+    }
+  )
+
+  it.each(['input', 'clamped input', 'reveal', 'remove', 'final'] as const)(
+    'retires an imported restore when %s replaces its pending target',
+    async (action) => {
+      const fixture = await createNativeBindingFixture(0, {
+        pending: true,
+        view: { scrollAnchor: { key: 'target', offset: 1000 }, scrollTop: 1600 }
+      })
+      try {
+        if (action === 'input' || action === 'clamped input') {
+          fixture.owner.input(action === 'input' ? -500 : 0)
+        } else if (action === 'reveal') {
+          fixture.reveal('gotoLine', 100)
+        } else if (action === 'remove') {
+          fixture.owner.setItems(fixture.restoreItems().filter(({ key }) => key !== 'target'))
+        } else {
+          fixture.owner.setItems(
+            fixture
+              .restoreItems(88)
+              .map((item) =>
+                item.key === 'target'
+                  ? { ...item, generation: 'final', bodyKind: 'final' as const }
+                  : item
+              )
+          )
+          fixture.owner.measure(fixture.owner.getItem('target')!, 88)
+        }
+        await nativeCommit()
+        fixture.completeAlignment()
+        await nativeCommit()
+        expect(fixture.owner.getViewMemory().scrollAnchor).not.toEqual({
+          key: 'target',
+          offset: 1000
+        })
+        if (action === 'reveal') {
+          const projection =
+            28 + fixture.modified.getTopForPosition(100, 1) - fixture.modified.getScrollTop()
+          expect(projection).toBeGreaterThanOrEqual(28)
+          expect(projection).toBeLessThanOrEqual(481)
+        } else if (action === 'remove') {
+          expect(fixture.owner.getViewMemory().scrollAnchor?.key).toBe('tail')
+          fixture.owner.setItems(fixture.restoreItems())
+          await nativeCommit()
+          expect(fixture.owner.getViewMemory().scrollAnchor?.key).toBe('tail')
+        }
+      } finally {
+        fixture.dispose()
+      }
+    }
+  )
+
+  it('saves the original pending import when view-memory cleanup precedes native alignment', async () => {
+    const view = { scrollAnchor: { key: 'target', offset: 1000 }, scrollTop: 1600 }
+    const fixture = await createNativeBindingFixture(0, { pending: true, height: 88 })
+    const lease = claimCombinedDiffView('pending-native-restore', 'pending-native-restore')
+    const restore = {
+      invalidateViewStateCache: () => {},
+      latestDomScrollAnchorRef: { current: view.scrollAnchor },
+      memoryLeaseRef: { current: lease },
+      scrollAnchorRef: { current: view.scrollAnchor },
+      scrollOffsetRef: { current: view.scrollTop }
+    }
+    const hook = renderHook(() =>
+      useCombinedDiffOwnerMemory({
+        owner: fixture.owner,
+        restore,
+        entrySignature: 'pending-native-restore',
+        viewStateKey: 'pending-native-restore'
+      })
+    )
+    try {
+      await act(nativeCommit)
+      expect(fixture.owner.getScrollTop()).toBe(600)
+      hook.unmount()
+      const saved = readCombinedDiffViewMemory('pending-native-restore')
+      expect(saved?.scrollAnchor).toEqual({ key: 'target', offset: 1000 })
+      expect(saved?.scrollTop).toBe(1600)
+    } finally {
+      hook.unmount()
+      fixture.dispose()
+      releaseCombinedDiffView(lease)
+      forgetCombinedDiffViewsForWorktrees(['pending-native-restore'])
+    }
+  })
+
   it('opens the measured own-zone controls once while DOM translation lags native geometry', async () => {
     const fixture = await createNativeBindingFixture(7)
     const { owner, modified, zone } = fixture

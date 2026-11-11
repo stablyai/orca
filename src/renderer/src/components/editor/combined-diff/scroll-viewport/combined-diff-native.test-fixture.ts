@@ -3,22 +3,50 @@ import type { editor } from 'monaco-editor'
 import { CombinedDiffNativeBinding } from './combined-diff-native-binding'
 import { CombinedDiffViewportOwner } from './combined-diff-viewport-owner'
 import type { RetainedDiffItem } from './combined-diff-editor-pool'
+import type { DiffReadingAnchor } from './combined-diff-layout'
 
 export async function nativeCommit(): Promise<void> {
   await Promise.resolve()
   await Promise.resolve()
 }
 
-export async function createNativeBindingFixture(transform = 0) {
+export async function createNativeBindingFixture(
+  transform = 0,
+  restoration?: {
+    pending: boolean
+    height?: number
+    view?: { scrollAnchor: DiffReadingAnchor | null; scrollTop: number }
+  }
+) {
   const owner = new CombinedDiffViewportOwner()
   const host = document.createElement('div')
   Object.defineProperties(host, { clientWidth: { value: 800 }, clientHeight: { value: 500 } })
   Object.defineProperty(owner.root, 'clientHeight', { value: 500 })
   document.body.append(host)
   const unmount = owner.mount(host)
-  owner.setItems([{ key: 'long.ts', generation: '1', height: 3000, collapsed: false, index: 0 }])
+  const target = restoration ? 'target' : 'long.ts'
+  const restoreItems = (height = restoration?.height ?? 3087) => [
+    { key: 'prefix', generation: '1', height: 600, collapsed: false, index: 0 },
+    {
+      key: target,
+      generation: '1',
+      height,
+      collapsed: false,
+      index: 1,
+      bodyKind: 'native' as const
+    },
+    { key: 'tail', generation: '1', height: 600, collapsed: false, index: 2 }
+  ]
+  owner.setItems(
+    restoration
+      ? restoreItems()
+      : [{ key: target, generation: '1', height: 3000, collapsed: false, index: 0 }]
+  )
+  if (restoration?.view) {
+    owner.importView(restoration.view.scrollAnchor, restoration.view.scrollTop)
+  }
   await nativeCommit()
-  const item = owner.getItem('long.ts')!
+  const item = owner.getItem(target)!
   const row = document.createElement('div')
   const header = document.createElement('div')
   const body = document.createElement('div')
@@ -28,7 +56,7 @@ export async function createNativeBindingFixture(transform = 0) {
   item.chrome = { header, conflict: null, body }
   owner.setNode(item, row)
   const text = Array.from({ length: 160 }, (_, index) => `line ${index}`).join('\n')
-  const originalModel = monaco.editor.createModel(text, 'plaintext')
+  const originalModel = monaco.editor.createModel(restoration ? 'original' : text, 'plaintext')
   const modifiedModel = monaco.editor.createModel(text, 'plaintext')
   const zone = { id: 'own-zone', top: 1400, height: 152, hidden: false }
   let nativeHeight = 453
@@ -36,6 +64,7 @@ export async function createNativeBindingFixture(transform = 0) {
   let mappingShift = 0
   let originalOffset = 0
   let modifiedOffset = transform
+  let aligned = !restoration?.pending
   const lifecycle: string[] = []
   const listeners = new Map<string, Set<() => void>>()
   function event(key: string, listener: () => void) {
@@ -60,12 +89,18 @@ export async function createNativeBindingFixture(transform = 0) {
       getContainerDomNode: () => body,
       getLayoutInfo: () => ({ height: nativeHeight, contentWidth: 760 }),
       getScrollWidth: () => (horizontal ? 900 : 760),
-      getScrollHeight: () => 2953 + zone.height - 152,
-      getContentHeight: () => 2953 + zone.height - 152,
+      getScrollHeight: () =>
+        restoration ? (original && !aligned ? 19 : 3040) : 2953 + zone.height - 152,
+      getContentHeight: () =>
+        restoration ? (original && !aligned ? 19 : 3040) : 2953 + zone.height - 152,
       getScrollTop: () => (original ? originalOffset : modifiedOffset),
       setScrollTop: (top: number) => {
-        originalOffset = top
-        modifiedOffset = top + transform
+        originalOffset = restoration
+          ? Math.max(0, Math.min(top, (aligned ? 3040 : 19) - nativeHeight))
+          : top
+        modifiedOffset = restoration
+          ? Math.max(0, Math.min(originalOffset + transform, 3040 - nativeHeight))
+          : top + transform
         fire('scroll')
       },
       getTopForPosition: (line: number) =>
@@ -76,7 +111,7 @@ export async function createNativeBindingFixture(transform = 0) {
           column: 1
         }),
       getViewZoneAtVerticalOffset: (offset: number) =>
-        offset >= zone.top && offset < zone.top + zone.height ? { ...zone } : null,
+        !restoration && offset >= zone.top && offset < zone.top + zone.height ? { ...zone } : null,
       getViewZoneBounds: (id: string) => (id === zone.id ? { ...zone } : null),
       getOption: (option: editor.EditorOption) => {
         if (option === monaco.editor.EditorOption.lineHeight) {
@@ -139,6 +174,7 @@ export async function createNativeBindingFixture(transform = 0) {
     setModel: () => {},
     restoreViewState: () => {},
     saveViewState: () => null,
+    getModel: () => ({ original: originalModel, modified: modifiedModel }),
     getOriginalEditor: () => original,
     getModifiedEditor: () => modified,
     getScrollTopOffset: () => transform,
@@ -153,8 +189,8 @@ export async function createNativeBindingFixture(transform = 0) {
   const diff = rawDiff as unknown as editor.IStandaloneDiffEditor
   const vm = {
     getDiffState: () => ({
-      isDiffUpToDate: true,
-      hasResult: true,
+      isDiffUpToDate: aligned,
+      hasResult: aligned,
       hasChanges: true,
       hasUnchangedRegions: false
     }),
@@ -186,6 +222,14 @@ export async function createNativeBindingFixture(transform = 0) {
     item,
     binding,
     modified,
+    original,
+    restoreItems,
+    completeAlignment: () => {
+      aligned = true
+      fire('diff')
+      fire('zones')
+      fire('content')
+    },
     zone,
     lifecycle,
     setHorizontal: () => {

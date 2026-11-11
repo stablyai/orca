@@ -31,8 +31,13 @@ export class CombinedDiffExtentTransaction {
     }
   }
   measure(item: DiffViewportItem, height: number): boolean {
-    if (item.retired || height <= 0 || height === item.height) {
+    if (item.retired || height <= 0) {
       return false
+    }
+    if (height === item.height) {
+      const changed = !item.measured
+      item.measured = true
+      return changed
     }
     item.height = height
     item.measured = true
@@ -55,22 +60,24 @@ export class CombinedDiffExtentTransaction {
       input.direction,
       input.survives
     )
-    input.scene.prepare(this.index, input.layout, input.attached)
-    const reads = this.all ? input.attached : this.native
-    for (const item of reads) {
-      if (!item.retired) {
-        const height = item.binding?.readHeight()
-        if (height !== null && height !== undefined && height > 0) {
-          this.measure(item, height)
-          item.measured = true
+    if (input.scene.usable) {
+      input.scene.prepare(this.index, input.layout, input.attached)
+      const reads = this.all ? input.attached : this.native
+      for (const item of reads) {
+        if (!item.retired) {
+          const height = item.binding?.readHeight()
+          if (height !== null && height !== undefined && height > 0) {
+            this.measure(item, height)
+            item.measured = true
+          }
         }
       }
+      this.native.clear()
+      this.all = false
     }
     const changed = this.index.commit(input.order, input.height, this.extents, this.structure)
     this.structure = false
     this.extents.clear()
-    this.native.clear()
-    this.all = false
     return { changed, top: changed ? this.index.mapSizeAnchor(anchor, input.height) : input.top }
   }
 }

@@ -7,6 +7,7 @@ export type DiffViewportInput = Readonly<{
   generation: string
   height: number
   collapsed: boolean
+  bodyKind?: 'pending' | 'native' | 'final'
   index: number
 }>
 export class CombinedDiffViewportItems {
@@ -86,7 +87,10 @@ export class CombinedDiffViewportItems {
   }
   private update(item: DiffViewportItem, input: DiffViewportInput): boolean {
     const height = item.collapsed !== input.collapsed || !item.measured ? input.height : item.height
-    const changed = height !== item.height || item.collapsed !== input.collapsed
+    const changed =
+      height !== item.height ||
+      item.collapsed !== input.collapsed ||
+      item.bodyKind !== input.bodyKind
     if (this.indices.get(item.index) === item) {
       this.indices.delete(item.index)
     }
@@ -97,6 +101,7 @@ export class CombinedDiffViewportItems {
       item.measured = false
     }
     item.collapsed = input.collapsed
+    item.bodyKind = input.bodyKind
     return changed
   }
   trackAttachment(item: DiffViewportItem): void {

@@ -1,8 +1,7 @@
 import { CombinedDiffViewportAnchor, type DiffSemanticPoint } from './combined-diff-viewport-anchor'
 import { CombinedDiffViewportScene } from './combined-diff-viewport-scene'
-import { CombinedDiffViewportItems } from './combined-diff-viewport-items'
+import { CombinedDiffViewportItems, type DiffViewportInput } from './combined-diff-viewport-items'
 import { CombinedDiffExtentTransaction } from './combined-diff-extent-transaction'
-import type { DiffViewportInput } from './combined-diff-viewport-items'
 import type { DiffItemLayout, DiffReadingAnchor, DiffViewportLayout } from './combined-diff-layout'
 
 export type { DiffSemanticPoint } from './combined-diff-viewport-anchor'
@@ -21,22 +20,23 @@ export class CombinedDiffViewportOwner {
   private queued = false
   private retainRevision = 0
   private disposed = false
+  private itemsReady = false
   private dirty = false
   private indicesChanged = false
-  private direction: 'up' | 'down' | undefined
-  private directionTimer = 0
   private layout = this.geometry.index.project(0, 0, 0, false)
 
   private readonly anchor = new CombinedDiffViewportAnchor({
     invalidate: () => this.schedule(),
     getIndex: () => this.geometry.index,
-    getHeight: () => this.surface.height,
+    getItem: (key) => this.registry.get(key),
+    itemsReady: () => this.itemsReady,
+    canApply: () => this.surface.usable,
+    getHeight: () => this.surface.getHeight(this.geometry.index),
     getTop: () => this.logicalTop,
     setTop: (top) => {
       this.logicalTop = top
     },
     render: () => this.render(true),
-    getDirection: () => this.direction,
     getVisible: () =>
       this.layout.items.flatMap((layout) => {
         const item = this.registry.get(layout.key)
@@ -70,9 +70,11 @@ export class CombinedDiffViewportOwner {
   getItem(key: string): DiffViewportItem | undefined {
     return this.registry.get(key)
   }
-  setItems(inputs: readonly DiffViewportInput[]): void {
+  setItems(inputs: readonly DiffViewportInput[], itemsReady = true): void {
+    this.itemsReady = itemsReady
     const changes = this.registry.setItems(inputs)
     this.applyInputs(changes)
+    this.schedule()
   }
   updateItems(inputs: readonly DiffViewportInput[]): void {
     this.applyInputs(this.registry.updateItems(inputs))
@@ -114,6 +116,10 @@ export class CombinedDiffViewportOwner {
   }
   getAnchor(): DiffReadingAnchor | null {
     return this.geometry.index.anchorAt(this.logicalTop)
+  }
+  getViewMemory(): { scrollAnchor: DiffReadingAnchor | null; scrollTop: number } {
+    const imported = this.anchor.getViewMemory()
+    return imported ?? { scrollAnchor: this.getAnchor(), scrollTop: this.getScrollTop() }
   }
   getLayout(): DiffViewportLayout {
     return this.layout
@@ -181,28 +187,22 @@ export class CombinedDiffViewportOwner {
 
   input(delta: number): void {
     this.cancelNavigation()
-    this.anchor.beginInput()
-    if (delta !== 0) {
-      this.direction = delta < 0 ? 'up' : 'down'
-      clearTimeout(this.directionTimer)
-      this.directionTimer = window.setTimeout(() => {
-        this.direction = undefined
-      }, 100)
-    }
-    const max = Math.max(0, this.layout.logicalHeight - this.surface.height)
-    this.logicalTop = Math.max(
+    const max = Math.max(0, this.layout.logicalHeight - this.surface.getHeight(this.geometry.index))
+    const nextTop = Math.max(
       -this.layout.leadingSlack,
       Math.min(this.logicalTop + delta, max + this.layout.trailingSlack)
     )
+    this.anchor.beginInput(nextTop - this.logicalTop)
+    this.logicalTop = nextTop
     this.reconcile()
   }
 
   navigate(index: number): void {
+    this.cancelNavigation()
     const item = this.registry.getByIndex(index)
     if (!item) {
       return
     }
-    this.cancelNavigation()
     this.anchor.clearPoint()
     this.logicalTop = this.geometry.index.anchorOffset({ key: item.key, offset: 0 }) ?? 0
     this.reconcile(true)
@@ -212,6 +212,7 @@ export class CombinedDiffViewportOwner {
     this.anchor.importView(anchor, fallback)
   }
   preserve(point: DiffSemanticPoint, displacement = point.project()): void {
+    this.cancelNavigation()
     this.anchor.preserve(point, displacement)
   }
   reveal(
@@ -230,7 +231,7 @@ export class CombinedDiffViewportOwner {
   }
 
   private reconcile(resetSlack = false): void {
-    if (!this.surface.mounted || this.surface.height <= 0 || this.reconciling) {
+    if (this.disposed || this.reconciling) {
       return
     }
     this.reconciling = true
@@ -263,8 +264,8 @@ export class CombinedDiffViewportOwner {
       scene: this.surface,
       layout: this.layout,
       top: this.logicalTop,
-      height: this.surface.height,
-      direction: this.direction,
+      height: this.surface.getHeight(this.geometry.index),
+      direction: this.anchor.direction,
       survives: (key) => this.registry.get(key) !== undefined
     })
     this.logicalTop = result.top
@@ -274,7 +275,9 @@ export class CombinedDiffViewportOwner {
   }
 
   private publishVisible(): void {
-    const visible = this.registry.visibleProjection(this.layout, this.geometry.index)
+    const visible = this.surface.usable
+      ? this.registry.visibleProjection(this.layout, this.geometry.index)
+      : this.visible.filter((item) => this.registry.get(item.key) === item)
     if (
       this.indicesChanged ||
       visible.length !== this.visible.length ||
@@ -299,14 +302,12 @@ export class CombinedDiffViewportOwner {
       return
     }
     this.disposed = true
-    this.cancelNavigation()
-    this.anchor.clearPoint()
+    this.anchor.dispose()
     this.registry.dispose()
     for (const dispose of this.onDispose) {
       dispose()
     }
     this.onDispose.clear()
-    clearTimeout(this.directionTimer)
     this.surface.dispose()
     this.listeners.clear()
     this.scrollListeners.clear()

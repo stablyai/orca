@@ -24,14 +24,15 @@ export function useCombinedDiffViewport(input: {
   sectionHeights: Readonly<Record<number, number>>
   renderedIndicesRef?: { current: Set<number> }
   prefix?: boolean
+  expectedCount?: number
 }): CombinedDiffViewportOwner {
   const { renderedIndicesRef } = input
   const [owner] = useState(() => new CombinedDiffViewportOwner())
   useLayoutEffect(() => owner.retain(), [owner])
   const [inputs] = useState(() => new CombinedDiffInputs(owner))
   useLayoutEffect(() => {
-    inputs.update(input.sections, input.sectionHeights, Boolean(input.prefix))
-  }, [input.sections, input.sectionHeights, input.prefix, inputs])
+    inputs.update(input.sections, input.sectionHeights, Boolean(input.prefix), input.expectedCount)
+  }, [input.sections, input.sectionHeights, input.prefix, input.expectedCount, inputs])
   useLayoutEffect(() => {
     if (!renderedIndicesRef) {
       return

@@ -16,15 +16,19 @@ type CommittedPoint = { point: DiffSemanticPoint; displacement: number }
 type AnchorContext = {
   invalidate(): void
   getIndex(): CombinedDiffExtentIndex
+  getItem(key: string): DiffViewportItem | undefined
+  itemsReady(): boolean
+  canApply(): boolean
   getHeight(): number
   getTop(): number
   setTop(top: number): void
   render(): void
-  getDirection(): 'up' | 'down' | undefined
   getVisible(): readonly DiffViewportItem[]
 }
 
 export class CombinedDiffViewportAnchor {
+  direction: 'up' | 'down' | undefined
+  private directionTimer = 0
   private committed: CommittedPoint | null = null
   private readingDirty = false
   private pending: {
@@ -36,13 +40,28 @@ export class CombinedDiffViewportAnchor {
   private imported: { anchor: DiffReadingAnchor | null; fallback: number } | null = null
   constructor(private readonly context: AnchorContext) {}
 
-  beginInput(): void {
+  beginInput(delta: number): void {
     this.readingDirty = true
+    if (delta !== 0) {
+      this.direction = delta < 0 ? 'up' : 'down'
+      clearTimeout(this.directionTimer)
+      this.directionTimer = window.setTimeout(() => {
+        this.direction = undefined
+      }, 100)
+    }
   }
 
   importView(anchor: DiffReadingAnchor | null, fallback: number): void {
+    this.cancelNavigation()
+    this.clearPoint()
     this.imported = { anchor, fallback }
     this.context.invalidate()
+  }
+
+  getViewMemory(): { scrollAnchor: DiffReadingAnchor | null; scrollTop: number } | null {
+    return this.imported
+      ? { scrollAnchor: this.imported.anchor, scrollTop: this.imported.fallback }
+      : null
   }
 
   preserve(point: DiffSemanticPoint, displacement = point.project()): void {
@@ -82,15 +101,11 @@ export class CombinedDiffViewportAnchor {
 
   reconcile(): (() => void) | undefined {
     let navigation: typeof this.pending = null
-    if (this.imported && this.context.getIndex().length > 0) {
-      this.clearPoint()
-      this.context.setTop(
-        this.imported.anchor
-          ? (this.context.getIndex().anchorOffset(this.imported.anchor) ?? this.imported.fallback)
-          : this.imported.fallback
-      )
-      this.imported = null
-      this.context.render()
+    if (this.imported && !this.applyImport()) {
+      return
+    }
+    if (!this.context.canApply()) {
+      return
     }
     const pending = this.pending
     if (
@@ -123,6 +138,57 @@ export class CombinedDiffViewportAnchor {
     }
     this.captureReadingPoint()
     return settled ? navigation?.focus : undefined
+  }
+
+  private applyImport(): boolean {
+    const imported = this.imported!
+    const index = this.context.getIndex()
+    const anchor = imported.anchor ?? index.anchorAt(imported.fallback)
+    const position = anchor ? index.position(anchor.key) : undefined
+    const item = anchor ? this.context.getItem(anchor.key) : undefined
+    if (position === undefined || !item) {
+      const complete = this.context.itemsReady()
+      this.context.setTop(
+        complete
+          ? Math.max(0, Math.min(imported.fallback, index.total - this.context.getHeight()))
+          : imported.fallback
+      )
+      this.context.render()
+      if (!complete) {
+        return false
+      }
+      this.imported = null
+      return true
+    }
+    const height = index.heightAt(position)
+    const ready =
+      item.collapsed ||
+      (item.bodyKind === 'native'
+        ? item.binding?.readHeight() !== null && item.binding !== null
+        : item.bodyKind !== 'pending' && (item.measured || item.bodyKind === undefined))
+    // Keep an estimated short target in view so its normal body can materialize.
+    const offset =
+      !ready && anchor!.offset >= height
+        ? Math.max(0, height - this.context.getHeight())
+        : Math.min(anchor!.offset, height)
+    const requested = index.startAt(position) + offset
+    this.context.setTop(requested)
+    this.context.render()
+    if (!ready || !this.context.canApply()) {
+      return false
+    }
+    const applied = this.context.getTop()
+    const bounded = Math.max(0, Math.min(requested, index.total - this.context.getHeight()))
+    const outerLanded = Math.abs(applied - requested) < 1 || Math.abs(applied - bounded) < 1
+    const finalFallback = anchor!.offset >= height
+    if (
+      !outerLanded ||
+      (!finalFallback && item.bodyKind === 'native' && !item.binding?.isScrollApplied?.())
+    ) {
+      return false
+    }
+    this.imported = null
+    return true
   }
 
   private applyPoint(): boolean {
@@ -170,7 +236,7 @@ export class CombinedDiffViewportAnchor {
     }
     const previous = this.committed?.point
     this.readingDirty = false
-    const up = this.context.getDirection() === 'up'
+    const up = this.direction === 'up'
     const edge = up ? this.context.getHeight() : 0
     const offset = this.context.getTop() + edge
     const extents = this.context.getIndex()
@@ -194,5 +260,10 @@ export class CombinedDiffViewportAnchor {
     this.committed?.point.dispose()
     this.committed = null
     this.readingDirty = false
+  }
+  dispose(): void {
+    this.cancelNavigation()
+    this.clearPoint()
+    clearTimeout(this.directionTimer)
   }
 }

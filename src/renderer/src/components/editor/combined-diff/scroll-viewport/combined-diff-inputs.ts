@@ -20,18 +20,28 @@ export class CombinedDiffInputs {
   private sections: readonly DiffSection[] | null = null
   private heights: Readonly<Record<number, number>> | null = null
   private prefix = false
+  private expectedCount = -1
   private entries = new Map<string, InputEntry>()
   constructor(private readonly owner: CombinedDiffViewportOwner) {}
 
   update(
     sections: readonly DiffSection[],
     heights: Readonly<Record<number, number>>,
-    prefix: boolean
+    prefix: boolean,
+    expectedCount = sections.length
   ): void {
-    if (sections === this.sections && heights === this.heights && prefix === this.prefix) {
+    if (
+      sections === this.sections &&
+      heights === this.heights &&
+      prefix === this.prefix &&
+      expectedCount === this.expectedCount
+    ) {
       return
     }
-    let structure = sections.length !== this.sections?.length || prefix !== this.prefix
+    let structure =
+      sections.length !== this.sections?.length ||
+      prefix !== this.prefix ||
+      expectedCount !== this.expectedCount
     const changes: DiffViewportInput[] = []
     for (let index = 0; index < sections.length; index++) {
       const section = sections[index]
@@ -60,14 +70,25 @@ export class CombinedDiffInputs {
           ? entry.input.height
           : getDiffSectionRowEstimatedHeight(section, heights[index])
       const previous = entry?.input
-      const input =
+      const bodyKind =
+        section.collapsed || section.loadOnDemand
+          ? 'final'
+          : section.loading
+            ? 'pending'
+            : section.error ||
+                section.diffResult?.kind === 'binary' ||
+                section.largeDiffRenderLimit?.limited
+              ? 'final'
+              : 'native'
+      const input: DiffViewportInput =
         previous &&
         previous.generation === generation &&
         previous.height === height &&
         previous.collapsed === section.collapsed &&
+        previous.bodyKind === bodyKind &&
         previous.index === index
           ? previous
-          : { key: section.key, generation, height, collapsed: section.collapsed, index }
+          : { key: section.key, generation, height, collapsed: section.collapsed, bodyKind, index }
       if (previous?.generation !== generation) {
         structure = true
       }
@@ -79,12 +100,13 @@ export class CombinedDiffInputs {
     this.sections = sections
     this.heights = heights
     this.prefix = prefix
+    this.expectedCount = expectedCount
     if (structure) {
       const inputs = sections.map((section) => this.entries.get(section.key)!.input)
       this.entries = new Map(
         sections.map((section) => [section.key, this.entries.get(section.key)!])
       )
-      this.owner.setItems(prefix ? [notice, ...inputs] : inputs)
+      this.owner.setItems(prefix ? [notice, ...inputs] : inputs, sections.length === expectedCount)
     } else if (changes.length) {
       this.owner.updateItems(changes)
     }

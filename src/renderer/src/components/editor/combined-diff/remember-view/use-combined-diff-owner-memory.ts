@@ -19,8 +19,7 @@ export function useCombinedDiffOwnerMemory({
     owner.importView(scrollAnchorRef.current, scrollOffsetRef.current)
     const lease = memoryLeaseRef.current
     const persist = (): void => {
-      const anchor = owner.getAnchor()
-      const scrollTop = owner.getScrollTop()
+      const { scrollAnchor: anchor, scrollTop } = owner.getViewMemory()
       scrollAnchorRef.current = anchor
       latestDomScrollAnchorRef.current = anchor
       scrollOffsetRef.current = scrollTop
