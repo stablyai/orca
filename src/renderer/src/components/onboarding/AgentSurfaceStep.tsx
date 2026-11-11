@@ -50,7 +50,7 @@ export function AgentSurfaceStep({
           )}
           note={t(
             'components.onboarding.agentSurface.chat.terminalFallback',
-            'Agents without chat support, and SSH or WSL projects, still open in a terminal.'
+            'Agents without chat support and folders opened through SSH or WSL on this computer still open in a terminal.'
           )}
           warning={
             noChatAgentDetected

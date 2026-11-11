@@ -8,7 +8,10 @@ export type WorkspaceCreateErrorDisplay = {
 const MISSING_BASE_REF_ANCHOR = 'could not resolve a default base ref'
 
 export function formatWorkspaceCreateError(error: unknown): WorkspaceCreateErrorDisplay {
-  const message = error instanceof Error ? error.message : 'Failed to create worktree.'
+  const message =
+    error instanceof Error
+      ? error.message
+      : translate('components.toastFallbacks.worktreeCreateFailed', 'Failed to create worktree.')
 
   if (message.toLowerCase().includes(MISSING_BASE_REF_ANCHOR)) {
     return {
@@ -17,7 +20,10 @@ export function formatWorkspaceCreateError(error: unknown): WorkspaceCreateError
         'auto.lib.workspace.create.error.format.37cf0bc991',
         'Orca could not resolve a usable base ref for this workspace.'
       ),
-      help: 'Create an initial commit (for example on main), or select an existing branch in Create From, then try again.'
+      help: translate(
+        'components.toastFallbacks.missingBaseBranchHelp',
+        'Create an initial commit (for example on main), or select an existing branch in Create From, then try again.'
+      )
     }
   }
 

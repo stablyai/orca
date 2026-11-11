@@ -17,7 +17,7 @@ import type { AiVaultAgent } from '../../shared/ai-vault/contracts/ai-vault-type
 import type { AiVaultDeletableAgent } from '../../shared/ai-vault/contracts/ai-vault-session-deletion'
 import { resolveGrokSessionsDir } from '../../shared/grok-session-paths'
 import { resolveKiroHomeDir } from '../../shared/kiro-home'
-import { uniqueCodexSessionsDirs } from './scanners/codex/session-scanner-codex-paths'
+import * as codexPaths from './scanners/codex/session-scanner-codex-paths'
 import {
   clineMessagesPathForMetadata,
   grokTranscriptPathForMetadata,
@@ -110,12 +110,14 @@ export const AI_VAULT_AGENT_SOURCES: Record<AiVaultDeletableAgent, AiVaultAgentS
   },
   codex: {
     rootDirs: (options, wslHomeDirs) =>
-      uniqueCodexSessionsDirs([
+      codexPaths.uniqueCodexSessionsDirs([
         options.codexSessionsDir ?? codexHomeSessionsDir(),
         ...wslHomeSessionDirs('codex', wslHomeDirs),
         ...(options.additionalCodexSessionsDirs ?? [])
       ]),
-    extensions: ['.jsonl'],
+    // Codex archives rollouts idle 7+ days as .jsonl.zst (#40312); only rollout-named archives.
+    extensions: ['.jsonl', '.zst'],
+    filePredicate: codexPaths.isCodexSessionFile,
     searchDependencies: codexSearchDependencies
   },
   gemini: {

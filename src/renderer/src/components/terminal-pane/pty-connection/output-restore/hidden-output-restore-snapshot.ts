@@ -1,6 +1,6 @@
 import { isRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
-import { safeFit, safeFitAndThen } from '@/lib/pane-manager/pane-fit'
-import { getFitOverrideForPty } from '@/lib/pane-manager/mobile-fit-overrides'
+import { safeFit, safeFitAndThen } from '@/lib/pane-manager/terminal-fit/pane-fit'
+import { getFitOverrideForPty } from '@/lib/pane-manager/terminal-fit/mobile-fit-overrides'
 import { waitForTerminalReplayWritesParsed } from '../../snapshots/replay-guard'
 import {
   POST_REPLAY_LIVE_AGENT_SNAPSHOT_RESET,
@@ -10,10 +10,10 @@ import {
   RESET_AFTER_BYTE_GAP,
   buildKittyKeyboardRestore
 } from '../../../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
-import { discardTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-queue-registry'
-import { writeTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
-import { recordTerminalOutput } from '@/lib/pane-manager/pane-scroll'
-import { presentPaneViewport } from '@/lib/pane-manager/pane-viewport-present'
+import { discardTerminalOutput } from '@/lib/pane-manager/terminal-output/pane-terminal-output-queue-registry'
+import { writeTerminalOutput } from '@/lib/pane-manager/terminal-output/pane-terminal-output-scheduler'
+import { recordTerminalOutput } from '@/lib/pane-manager/terminal-scroll/pane-scroll'
+import { presentPaneViewport } from '@/lib/pane-manager/terminal-rendering/pane-viewport-present'
 import {
   buildMainModelSnapshotReplayWrites,
   hasPositiveTerminalDimensions,

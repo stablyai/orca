@@ -50,15 +50,23 @@ test.describe('Worktree Delete Shortcut', () => {
       .catch(() => undefined)
   })
 
-  test('deletes the hovered worktree after Mod+Shift+Backspace confirmation', async ({
-    orcaPage
-  }) => {
+  test('deletes the active worktree while another row is hovered', async ({ orcaPage }) => {
     createdWorktreeId = await createIsolatedWorktree(orcaPage)
     const worktreeId = createdWorktreeId
     const row = worktreeRow(orcaPage, worktreeId)
     await expect(row).toBeVisible()
 
-    await row.hover()
+    const previousActiveId = await orcaPage.evaluate(
+      () => window.__store?.getState().activeWorktreeId
+    )
+    await row.click()
+    await expect
+      .poll(() => orcaPage.evaluate(() => window.__store?.getState().activeWorktreeId))
+      .toBe(worktreeId)
+    if (!previousActiveId || previousActiveId === worktreeId) {
+      throw new Error('Expected a different workspace to hover')
+    }
+    await worktreeRow(orcaPage, previousActiveId).hover()
     await pressShortcut(orcaPage, 'Backspace', { shift: true })
 
     const dialog = orcaPage.getByRole('dialog')
@@ -68,9 +76,10 @@ test.describe('Worktree Delete Shortcut', () => {
     await expect
       .poll(async () => getAllWorktreeIds(orcaPage), {
         timeout: 15_000,
-        message: 'hovered worktree was not removed by the delete shortcut'
+        message: 'active worktree was not removed by the delete shortcut'
       })
       .not.toContain(worktreeId)
+    expect(await getAllWorktreeIds(orcaPage)).toContain(previousActiveId)
     createdWorktreeId = null
   })
 })

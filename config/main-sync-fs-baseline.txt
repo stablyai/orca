@@ -18,7 +18,7 @@
 4 src/main/ai-vault/parse-cache/session-parse-cache-legacy-json.ts
 2 src/main/ai-vault/scan-service/session-scanner-service-entry-path.ts
 1 src/main/ai-vault/scan-service/session-scanner-service-spawn.ts
-1 src/main/ai-vault/scanners/omp/omp-session-root.ts
+3 src/main/ai-vault/scanners/omp/omp-session-root.ts # small fixed profile-dir probes mirroring OMP dirs.ts; one readdir + per-profile candidate checks, not a per-file sweep
 1 src/main/ai-vault/scanners/opencode/reader-transport/opencode-wsl-runtime-preparation.ts
 2 src/main/ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn.ts
 8 src/main/amp/hook-service.ts
@@ -479,7 +479,7 @@
 2 src/main/runtime/mobile-cloud-relay/relay-revoke-outbox.ts
 1 src/main/runtime/orchestration/db/runtime-orchestration-database-access.ts
 2 src/main/runtime/push/push-unregister-outbox.ts
-2 src/main/runtime/rpc/methods/mobile-delivery/bundled-mobile-web-bundle.ts
+1 src/main/runtime/rpc/methods/mobile-delivery/bundled-mobile-web-bundle.ts
 1 src/main/runtime/rpc/server/network-source-policy-store.ts
 2 src/main/runtime/rpc/server/pairing/device-registry-corruption.ts
 2 src/main/runtime/rpc/server/pairing/device-registry-disk-merge.ts
@@ -493,9 +493,9 @@
 1 src/main/runtime/workspaces/persisted-surfaces/crew-operations.ts
 1 src/main/server/serve-pairing-output.ts
 2 src/main/speech/model-cache-path.ts
-9 src/main/speech/model-manager.ts
+7 src/main/speech/model-manager.ts
 10 src/main/speech/openai-api-key-store.ts
-2 src/main/speech/speech-model-download-cleanup.ts
+1 src/main/speech/speech-model-download-cleanup.ts
 1 src/main/speech/speech-model-download-transport.ts
 1 src/main/speech/speech-model-files.ts
 2 src/main/speech/speech-model-http-download.ts

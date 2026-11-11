@@ -4,6 +4,7 @@ import { readTranscriptSlice } from '../../native-chat/wsl-transcript-fs-access'
 import type { AiVaultSession } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import { parseAgentSessionFile } from '../session-scanner-agent-parser'
 import { consumeCompleteJsonlLines } from '../session-scanner-jsonl-reader'
+import { isZstdTranscriptPath } from '../../native-chat/transcript-zstd-decompression'
 import type { ResumableSessionParseState, SessionFileCandidate } from '../session-scanner-types'
 import {
   invalidateSessionParseCacheEntry,
@@ -55,7 +56,10 @@ export async function readResumableTranscript(
 ): Promise<ResumableTranscriptRead> {
   const { file } = args.candidate
   const resume = args.resume
+  // Codex .jsonl.zst archives never grow; decoded offsets cannot address their compressed bytes.
+  const archived = isZstdTranscriptPath(file.path)
   const canResume =
+    !archived &&
     resume !== null &&
     typeof file.sizeBytes === 'number' &&
     file.sizeBytes >= resume.byteOffset &&
@@ -83,7 +87,7 @@ export async function readResumableTranscript(
   // Hash only for consumers: they compare prefixes after a restart drops this resume point.
   const prefixHash = canResume
     ? (resume.prefixHash?.copy() ?? null)
-    : hasTranscriptConsumers()
+    : !archived && hasTranscriptConsumers()
       ? createHash('sha256')
       : null
   const prefixOffsets =
@@ -98,6 +102,8 @@ export async function readResumableTranscript(
     prefixOffsets
   })
   try {
+    // Archives are covered through their compressed size, which search cursors compare to stat size.
+    const coveredThrough = archived ? (file.sizeBytes ?? 0) : null
     const readResult = await consumeCompleteJsonlLines({
       path: file.path,
       start: startOffset,
@@ -138,7 +144,7 @@ export async function readResumableTranscript(
     throwIfAiVaultScanCancelled(args.signal)
     channel.finishRead({
       session: consumerSession,
-      byteOffset: readResult.consumedThrough,
+      byteOffset: coveredThrough ?? readResult.consumedThrough,
       incomplete: false,
       prefixHash: readResult.prefixHash?.copy().digest('hex')
     })
@@ -146,7 +152,7 @@ export async function readResumableTranscript(
       session,
       resume: {
         state,
-        byteOffset: readResult.consumedThrough,
+        byteOffset: coveredThrough ?? readResult.consumedThrough,
         mtimeMs: file.mtimeMs,
         sizeBytes: file.sizeBytes,
         channel,
