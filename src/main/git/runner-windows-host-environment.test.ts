@@ -80,7 +80,10 @@ describe('Windows host Git environment readiness', () => {
       const waitUntilReady = vi.fn(() => ready.promise)
       const child = createMockChildProcess(1234)
       execFileMock.mockImplementation((_cmd, _args, _options, callback) => {
-        callback(null, 'ok', '')
+        queueMicrotask(() => {
+          child.emit('close', 0)
+          callback(null, 'ok', '')
+        })
         return child
       })
       configureWindowsHostGitEnvironmentReadiness(waitUntilReady)
