@@ -1,3 +1,4 @@
+import { isHangWatchdogWorkerData } from './hang-watchdog-worker-protocol'
 import { isMainThread, parentPort, workerData } from 'node:worker_threads'
 import { createHangWatchdogDetectionLoop } from './hang-watchdog-detection-loop'
 import { readAvailableHangDetectionMarker, writeHangDetectionMarker } from './hang-detection-marker'
@@ -19,6 +20,14 @@ import type {
 type HangWatchdogPort = {
   on: (event: 'message', listener: (message: MainToHangWatchdogWorkerMessage) => void) => unknown
   close: () => void
+  postMessage?: (message: { type: 'capture-drain'; token: string }) => void
+}
+type CaptureOwner = {
+  id: string
+  reason?: 'recovery' | 'shutdown'
+  stopJs?: (reason: 'recovery' | 'shutdown') => void
+  stopNative?: () => void
+  done?: Promise<void>
 }
 
 export function runWatchdog(
@@ -34,12 +43,14 @@ export function runWatchdog(
   let sequence = 0
   let activeStallId: string | null = null
   let stopped = false
+  let captureOwner: CaptureOwner | null = null
+  let drain: { token: string; acknowledge: () => void } | null = null
   let collector: AbortController | null = null
   let recentPower: HangPowerReceipt[] = []
   let sleepPeriod: { suspend: HangPowerReceipt; resumeAt: number | null } | null = null
   let receiptWindow: { id: string; until: number; remaining: number } | null = null
   const save = (): void => {
-    if (stopped || !config.markerPath) {
+    if (!config.markerPath) {
       return
     }
     try {
@@ -63,11 +74,61 @@ export function runWatchdog(
     observations.observations.find((item) => item.id === id)
   const update = (id: string, change: Partial<HangObservation>): void => {
     const record = find(id)
-    if (!record || stopped) {
+    if (!record) {
       return
     }
     observations = retainHangObservation(observations, { ...record, ...change })
     save()
+  }
+  const capture = (record: HangObservation): void => {
+    if (isMainThread || captureOwner || stopped || record.kind !== 'heartbeat-stall') {
+      return
+    }
+    const detectedAt = performance.now()
+    const owner: CaptureOwner = { id: record.id }
+    captureOwner = owner
+    owner.done = (async () => {
+      const [inspector, js, native] = await Promise.all([
+        import('node:inspector'),
+        import('./main-js-hang-capture'),
+        import('./native-hang-capture')
+      ])
+      const mainJs = js.captureMainJsHang({
+        session: new inspector.Session(),
+        detectedAt,
+        now: () => performance.now(),
+        publish: (mainJs) => update(record.id, { mainJs }),
+        drain: () =>
+          new Promise<void>((resolve) => {
+            drain = { token: record.id, acknowledge: resolve }
+            port.postMessage?.({ type: 'capture-drain', token: record.id })
+          })
+      })
+      owner.stopJs = mainJs.stop
+      if (owner.reason) {
+        mainJs.stop(owner.reason)
+      }
+      const nativeCapture =
+        !owner.reason && process.platform === 'darwin'
+          ? native.captureNativeHang({
+              pid: config.parentPid,
+              publish: (native) => update(record.id, { native })
+            })
+          : null
+      owner.stopNative = nativeCapture?.stop
+      await Promise.all([mainJs.done, nativeCapture?.done])
+    })()
+      .catch(() => {
+        // A published baseline remains useful if an optional collector cannot initialize.
+      })
+      .finally(() => {
+        if (captureOwner === owner) {
+          captureOwner = null
+        }
+        if (stopped) {
+          port.close()
+        }
+      })
   }
   const openReceiptWindow = (id: string): void => {
     receiptWindow = { id, until: Date.now() + config.checkIntervalMs, remaining: 4 }
@@ -143,6 +204,7 @@ export function runWatchdog(
     }
     openReceiptWindow(record.id)
     save()
+    capture(record)
     enrich(record)
   }
   const loop = createHangWatchdogDetectionLoop({
@@ -156,6 +218,10 @@ export function runWatchdog(
       }
       const id = activeStallId
       activeStallId = null
+      if (captureOwner?.id === id) {
+        captureOwner.reason ??= 'recovery'
+        captureOwner.stopJs?.('recovery')
+      }
       update(id, { selfRecovered: true, resolution: captureHangSnapshot() })
       openReceiptWindow(id)
     },
@@ -177,6 +243,12 @@ export function runWatchdog(
   })
   const checkTimer = setInterval(() => loop.tick(), config.checkIntervalMs)
   port.on('message', (message) => {
+    if (message.type === 'capture-drain-ack' && drain?.token === message.token) {
+      const pending = drain
+      drain = null
+      pending.acknowledge()
+      return
+    }
     if (stopped) {
       return
     }
@@ -209,24 +281,15 @@ export function runWatchdog(
       receiptWindow = null
       clearInterval(checkTimer)
       collector?.abort()
-      port.close()
+      if (captureOwner) {
+        captureOwner.reason ??= 'shutdown'
+        captureOwner.stopJs?.('shutdown')
+        captureOwner.stopNative?.()
+      } else {
+        port.close()
+      }
     }
   })
-}
-
-export function isHangWatchdogWorkerData(value: unknown): value is HangWatchdogWorkerData {
-  const data = value as Partial<HangWatchdogWorkerData> | null
-  return (
-    !!data &&
-    Number.isInteger(data.parentPid) &&
-    (data.parentPid ?? 0) > 0 &&
-    typeof data.markerPath === 'string' &&
-    (data.tracePath === undefined || typeof data.tracePath === 'string') &&
-    Number.isFinite(data.timeoutMs) &&
-    (data.timeoutMs ?? 0) > 0 &&
-    Number.isFinite(data.checkIntervalMs) &&
-    (data.checkIntervalMs ?? 0) > 0
-  )
 }
 
 if (!isMainThread && isHangWatchdogWorkerData(workerData)) {

@@ -9,6 +9,7 @@ import {
   HANG_WATCHDOG_HEARTBEAT_INTERVAL_MS,
   HANG_WATCHDOG_TIMEOUT_MS,
   type HangWatchdogWorkerData,
+  type HangWatchdogToMainMessage,
   type MainToHangWatchdogWorkerMessage
 } from './hang-watchdog-worker-protocol'
 
@@ -58,7 +59,7 @@ export function installMainThreadHangWatchdog(options: {
   }
   let stopped = false
   const postMessage = (message: MainToHangWatchdogWorkerMessage): void => {
-    if (stopped && message.type !== 'shutdown') {
+    if (stopped && message.type !== 'shutdown' && message.type !== 'capture-drain-ack') {
       return
     }
     try {
@@ -67,6 +68,15 @@ export function installMainThreadHangWatchdog(options: {
       // The worker already exited.
     }
   }
+  worker.on('message', (message: HangWatchdogToMainMessage) => {
+    if (
+      message?.type === 'capture-drain' &&
+      typeof message.token === 'string' &&
+      message.token.length <= 80
+    ) {
+      setImmediate(() => postMessage({ type: 'capture-drain-ack', token: message.token }))
+    }
+  })
   const powerEvents: NodeJS.EventEmitter = powerMonitor
   const powerListeners = (['suspend', 'resume', 'lock-screen', 'unlock-screen'] as const).map(
     (event) => {

@@ -34,8 +34,25 @@ export function trackRendererLivenessAtDeath(
   let documentLoaded = false
   let documentLoadFailed = false
   let documentStartedAt = now()
+  let captureEpoch = 0
+  let capture: { stop: () => void } | null = null
+  const stopCapture = (): void => {
+    captureEpoch++
+    capture?.stop()
+    capture = null
+  }
 
   const onUnresponsive = (): void => {
+    if (unresponsiveSince === null) {
+      const epoch = ++captureEpoch
+      void import('../hang-watchdog/renderer-hang-capture')
+        .then((collector) => {
+          if (epoch === captureEpoch && unresponsiveSince !== null && !window.isDestroyed()) {
+            capture = collector.startRendererHangCapture(window)
+          }
+        })
+        .catch(() => {})
+    }
     unresponsiveSince ??= now()
     recordCoalescedDurableCrashBreadcrumb({
       name: 'renderer_unresponsive',
@@ -48,6 +65,7 @@ export function trackRendererLivenessAtDeath(
       return
     }
     const hungForMs = now() - unresponsiveSince
+    stopCapture()
     unresponsiveSince = null
     recordCoalescedDurableCrashBreadcrumb({
       name: 'renderer_responsive',
@@ -67,6 +85,7 @@ export function trackRendererLivenessAtDeath(
     }
     unresponsiveSince = null
     documentLoaded = false
+    stopCapture()
     documentLoadFailed = false
     documentStartedAt = now()
   }
@@ -90,9 +109,11 @@ export function trackRendererLivenessAtDeath(
   contents.on('did-start-navigation', onNavigationStart)
   contents.on('did-fail-load', onLoadFailed)
   contents.on('did-finish-load', onLoaded)
+  contents.on('destroyed', stopCapture)
 
   return {
     takeAtRendererGone: () => {
+      stopCapture()
       const at = now()
       const state: RendererLivenessAtDeath = {
         ...(unresponsiveSince === null

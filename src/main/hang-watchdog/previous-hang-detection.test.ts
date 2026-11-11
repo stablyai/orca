@@ -12,6 +12,11 @@ import {
 } from './hang-observations'
 import { hangDetectionMarkerPath, writeHangDetectionMarker } from './hang-detection-marker'
 import {
+  publishRendererHang,
+  preservePreviousRendererHangs,
+  reportPreviousRendererHangs
+} from './renderer-hang-records'
+import {
   preservePreviousHangDetection,
   reportPreviousHangDetection
 } from './previous-hang-detection'
@@ -217,4 +222,60 @@ describe('previous hang detection', () => {
     expect(existsSync(`${markerPath}.previous`)).toBe(false)
     expect(reportPreviousHangDetection(dir)).toBeNull()
   })
+})
+
+it('replays an old renderer capture into the current trace before consuming it so the default bundle includes it', () => {
+  const detectedAt = Date.now() - 2 * 60 * 60 * 1000
+  publishRendererHang(dir, {
+    id: `456:${detectedAt}:3`,
+    parentPid: 456,
+    windowId: 3,
+    detectedAt,
+    status: 'captured',
+    samples: 1,
+    validSamples: 1,
+    truncated: false,
+    stacks: [
+      {
+        count: 1,
+        hot: true,
+        frames: [{ name: 'busyCaller', module: 'app.js', line: 7, column: 3 }]
+      }
+    ]
+  })
+  preservePreviousRendererHangs(dir)
+  reportPreviousRendererHangs(dir)
+  expect(existsSync(join(dir, 'renderer-hang.json.previous'))).toBe(true)
+  const traceFilePath = join(dir, 'logs', 'main.trace.ndjson')
+  const sink = createLocalFileSink({ filePath: traceFilePath, maxFiles: 1 })
+  try {
+    setActiveSink(sink)
+    reportPreviousRendererHangs(dir)
+    expect(existsSync(join(dir, 'renderer-hang.json.previous'))).toBe(false)
+    const bundle = collectBundle({
+      traceFilePath,
+      maxFiles: 1,
+      appVersion: 'test',
+      platform: 'darwin',
+      arch: 'arm64',
+      osRelease: 'test',
+      orcaChannel: 'dev'
+    })
+    const records = bundle.payload
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line))
+    const capture = records.find(
+      (record) => record.attributes?.['breadcrumb.name'] === 'renderer_hang_capture'
+    )
+    expect(capture?.attributes['breadcrumb.data']).toMatchObject({
+      detectedAt,
+      previousPid: 456,
+      rendererJs0_frame0: 'busyCaller [app.js:7:3]',
+      rendererJs0_count: 1
+    })
+  } finally {
+    setActiveSink(null)
+    sink.close()
+  }
 })

@@ -7,6 +7,11 @@ import {
   type HangObservationCollection,
   type HangDetectionMarker
 } from './hang-observation-schema'
+import {
+  admitHangObservation,
+  parseMainJsCapture,
+  parseNativeHangCapture
+} from './hang-capture-codec'
 export { MACHINE_FIELDS, SNAPSHOT_FIELDS } from './hang-observation-schema'
 export type {
   HangSnapshot,
@@ -131,6 +136,8 @@ function parseObservation(value: unknown): HangObservation | null {
           .map(parsePowerReceipt)
           .filter((v): v is HangPowerReceipt => v !== null)
       : [],
+    ...(data.mainJs ? { mainJs: parseMainJsCapture(data.mainJs) } : {}),
+    ...(data.native ? { native: parseNativeHangCapture(data.native) } : {}),
     ...(gap && finite(gap.observedAt) && finite(gap.durationMs)
       ? {
           watchdogGap: {
@@ -191,6 +198,7 @@ export function retainHangObservation(
   collection: HangObservationCollection,
   record: HangObservation
 ): HangObservationCollection {
+  record = admitHangObservation(record)
   const existing = collection.observations.findIndex((item) => item.id === record.id)
   if (existing !== -1) {
     const old = collection.observations[existing]
@@ -200,7 +208,7 @@ export function retainHangObservation(
         (item) => [`${item.event}:${item.observedAt}:${item.receivedAt}`, item] as const
       )
     )
-    observations[existing] = {
+    observations[existing] = admitHangObservation({
       ...record,
       kind: old.kind,
       id: old.id,
@@ -213,12 +221,24 @@ export function retainHangObservation(
       resolution: old.resolution ?? record.resolution,
       machine: old.machine ?? record.machine,
       completedSpans: old.completedSpans ?? record.completedSpans,
+      mainJs: record.mainJs
+        ? {
+            ...record.mainJs,
+            stacks: record.mainJs.stacks.length ? record.mainJs.stacks : (old.mainJs?.stacks ?? [])
+          }
+        : old.mainJs,
+      native: record.native
+        ? {
+            ...record.native,
+            stacks: record.native.stacks.length ? record.native.stacks : (old.native?.stacks ?? [])
+          }
+        : old.native,
       powerEvents: [...receipts.values()].slice(-4),
       watchdogGap:
         old.watchdogGap && old.watchdogGap.durationMs > (record.watchdogGap?.durationMs ?? -1)
           ? old.watchdogGap
           : (record.watchdogGap ?? old.watchdogGap)
-    }
+    })
     return { ...collection, observations }
   }
   const candidates = [...collection.observations, record]

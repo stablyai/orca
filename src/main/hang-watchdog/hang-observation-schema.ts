@@ -43,6 +43,8 @@ export type HangObservation = {
   machine: HangMachineSnapshot | null
   completedSpans: CompletedHangContext[] | null
   powerEvents: HangPowerReceipt[]
+  mainJs?: MainJsCapture
+  native?: NativeHangCapture
   watchdogGap?: { observedAt: number; durationMs: number; snapshot: HangSnapshot | null }
 }
 export type HangObservationCollection = {
@@ -56,3 +58,4 @@ export type HangDetectionMarker = {
   unresponsiveMs: number
   selfRecovered: boolean
 }
+import type { MainJsCapture, NativeHangCapture } from './hang-stacks'
