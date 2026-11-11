@@ -244,6 +244,7 @@ export function AgentLaunchSettingsCatalog({
     isDetected,
     isEnabled: isTuiAgentEnabled(agent.id, settings.disabledTuiAgents),
     defaultMark: effectiveDefault !== agent.id ? null : chosen === agent.id ? 'chosen' : 'auto',
+    isSavedDefault: chosen === agent.id,
     cmdOverride: settings.agentCmdOverrides[agent.id],
     argsOverride:
       choicesSupported && settings.agentChoices

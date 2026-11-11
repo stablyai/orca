@@ -52,6 +52,8 @@ export type AgentCatalogRowProps = {
   isEnabled: boolean
   /** 'chosen' when saved as the default; 'auto' when Auto resolves to this agent. */
   defaultMark: 'chosen' | 'auto' | null
+  /** Saved as the default, even when not installed now, so it can still be cleared. */
+  isSavedDefault: boolean
   cmdOverride: string | undefined
   argsOverride: string
   envOverride: Record<string, string>
@@ -89,6 +91,7 @@ export function AgentCatalogRow({
   isDetected,
   isEnabled,
   defaultMark,
+  isSavedDefault,
   cmdOverride,
   argsOverride,
   envOverride,
@@ -137,7 +140,7 @@ export function AgentCatalogRow({
     <div className={cn('py-3', !isDetected && !opensAs?.cliMissing && 'opacity-70')}>
       {/* Clicking the row's empty space expands it; its controls and the name button handle their own clicks. */}
       <div
-        className="-mx-2 flex cursor-pointer flex-wrap items-center gap-3 rounded-md px-2 py-1 transition-colors hover:bg-muted/30"
+        className="-mx-2 flex cursor-pointer flex-wrap items-center gap-3 rounded-md px-2 py-1 transition-colors hover:bg-accent"
         onClick={(event) => {
           const target = event.target
           // React bubbles clicks from the portaled menu here too; only the row's own empty space toggles.
@@ -257,11 +260,11 @@ export function AgentCatalogRow({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="min-w-44">
               <DropdownMenuCheckboxItem
-                checked={defaultMark === 'chosen'}
-                disabled={defaultMark !== 'chosen' && !(isDetected && isEnabled)}
+                checked={isSavedDefault}
+                disabled={!isSavedDefault && !(isDetected && isEnabled)}
                 onCheckedChange={onSetDefault}
               >
-                {defaultMark === 'chosen'
+                {isSavedDefault
                   ? t('auto.components.settings.AgentsPane.24e032fa34', 'Default')
                   : t('auto.components.settings.AgentsPane.5f986a9b92', 'Set as default')}
               </DropdownMenuCheckboxItem>
