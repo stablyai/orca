@@ -214,7 +214,7 @@ async function projectWorkerListPageWithFilteredSnapshot(
   const inventory: WorkerListInventory =
     pinnedCount !== undefined && params.terminalState
       ? { total: pinnedCount, counts: { [params.terminalState]: pinnedCount } }
-      : carried && carried.terminalState === params.terminalState
+      : carried && carried.runId === params.run && carried.terminalState === params.terminalState
         ? carried
         : {
             ...db.countWorkerTerminalInventory({
@@ -222,6 +222,7 @@ async function projectWorkerListPageWithFilteredSnapshot(
               terminalState: params.terminalState,
               snapshot: args.snapshot
             }),
+            ...(params.run ? { runId: params.run } : {}),
             ...(params.terminalState ? { terminalState: params.terminalState } : {})
           }
   const nextRow = pageRows.at(-1)
