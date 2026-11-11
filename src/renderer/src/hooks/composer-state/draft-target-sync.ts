@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import type { ComposerModel } from './composer-model'
 import { pickerRepos } from '../../../../shared/hidden-projects'
 
@@ -131,10 +132,16 @@ export function useDraftTargetSync(state: DraftTargetSyncInput): void {
     if (isProjectGroupTarget || pendingInitialWorkspaceTarget) {
       return
     }
-    // The default is the first listed project; a hidden one stays reachable only when named.
-    const firstListed = pickerRepos(eligibleRepos)[0]
-    if (!repoId && firstListed?.id) {
-      setRepoId(firstListed.id)
+    // The default prefers Local among listed projects; a hidden one stays reachable only when named (#41140).
+    const listedRepos = pickerRepos(eligibleRepos)
+    if (!repoId) {
+      const localRepo = listedRepos.find(
+        (repo) => getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID
+      )
+      const seedRepoId = localRepo?.id ?? listedRepos[0]?.id
+      if (seedRepoId) {
+        setRepoId(seedRepoId)
+      }
     }
   }, [eligibleRepos, isProjectGroupTarget, pendingInitialWorkspaceTarget, repoId, setRepoId])
 

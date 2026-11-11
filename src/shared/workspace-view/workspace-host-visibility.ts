@@ -23,15 +23,14 @@ export function resolveVisibleWorkspaceHostIds(
   return legacyScope === 'all' ? null : [legacyScope]
 }
 
-/** Visibility also selects the default host for new workspaces. Keep it for multiple hosts; explicitly write "all" to prevent legacy-scope fallback. */
+/** Visibility also selects the default host for new workspaces. With several hosts visible no hidden scope may survive (#41140). */
 export function workspaceHostScopeForVisibleHosts(
-  visibleHostIds: readonly ExecutionHostId[] | null,
-  current: ExecutionHostScope
+  visibleHostIds: readonly ExecutionHostId[] | null
 ): ExecutionHostScope {
   if (visibleHostIds === null) {
     return 'all'
   }
-  return visibleHostIds.length === 1 ? visibleHostIds[0] : current
+  return visibleHostIds.length === 1 ? visibleHostIds[0] : 'all'
 }
 
 /** Picker rows a saved visibility list selects; a row counts when any id it stands for is saved. */

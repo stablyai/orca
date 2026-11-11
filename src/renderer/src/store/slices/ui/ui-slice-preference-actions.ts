@@ -79,7 +79,7 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
       const normalized = normalizeVisibleExecutionHostIds(ids)
       set({
         visibleWorkspaceHostIds: normalized,
-        workspaceHostScope: workspaceHostScopeForVisibleHosts(normalized, get().workspaceHostScope)
+        workspaceHostScope: workspaceHostScopeForVisibleHosts(normalized)
       })
     },
     workspaceHostOrder: [],

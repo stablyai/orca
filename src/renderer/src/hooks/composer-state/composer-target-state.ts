@@ -19,6 +19,7 @@ export function useComposerTargetState(
   const composerTargetStore = useComposerTargetStore(options, decisions)
   const initialTargetSeedState = useComposerInitialTargetState({
     actionableHostIds: composerTargetStore.actionableHostIds,
+    activeWorkspaceExecutionHostId: composerTargetStore.activeWorkspaceExecutionHostId,
     decisions: composerTargetStore.decisions,
     eligibleRepos: composerTargetStore.eligibleRepos,
     initialProjectGroupId: composerTargetStore.initialProjectGroupId,
@@ -39,6 +40,7 @@ export function useComposerTargetState(
   const runtimeTargetSelection = useComposerRuntimeTargetSelection({
     actionableHostIds: composerTargetStore.actionableHostIds,
     activeRepoId: composerTargetStore.activeRepoId,
+    activeWorkspaceExecutionHostId: composerTargetStore.activeWorkspaceExecutionHostId,
     eligibleRepos: composerTargetStore.eligibleRepos,
     hostOptions: composerTargetStore.hostOptions,
     initialEphemeralVmRecipeId: composerTargetStore.initialEphemeralVmRecipeId,

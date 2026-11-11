@@ -104,6 +104,8 @@ export function useComposerTargetStore(options: ComposerStateInput, decisions: C
 
   const activeRepoId = useAppStore((s) => s.activeRepoId)
 
+  const activeWorkspaceExecutionHostId = useAppStore((s) => s.activeWorkspaceExecutionHostId)
+
   const settings = useAppStore((s) => s.settings)
 
   const newWorkspaceDraft = useAppStore((s) => s.newWorkspaceDraft)
@@ -200,6 +202,7 @@ export function useComposerTargetStore(options: ComposerStateInput, decisions: C
     projectGroups,
     projectHostSetups,
     activeRepoId,
+    activeWorkspaceExecutionHostId,
     settings,
     newWorkspaceDraft,
     worktreesByRepo,

@@ -17,7 +17,6 @@ import { normalizeStatusBarUsageFormat } from '../../../shared/status-bar-usage-
 import { clampMarkdownTocPanelWidth } from '../../../shared/markdown-toc-panel-width'
 import { clampCombinedDiffFileTreeWidth } from '../../../shared/combined-diff-file-tree-width'
 import {
-  normalizeExecutionHostScope,
   normalizeVisibleExecutionHostIds,
   normalizeExecutionHostOrder
 } from '../../../shared/execution-host'
@@ -168,10 +167,7 @@ export function updatePersistedUI(
     ...(sanitizedUpdates.visibleWorkspaceHostIds !== undefined &&
     sanitizedUpdates.workspaceHostScope === undefined
       ? {
-          workspaceHostScope: workspaceHostScopeForVisibleHosts(
-            nextVisibleWorkspaceHostIds,
-            normalizeExecutionHostScope(currentUI.workspaceHostScope)
-          )
+          workspaceHostScope: workspaceHostScopeForVisibleHosts(nextVisibleWorkspaceHostIds)
         }
       : {}),
     agentsVisibleHostIds:

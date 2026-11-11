@@ -108,6 +108,7 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
         projects,
         projectHostSetups,
         draftRepoId: requestedRepoId,
+        activeWorkspaceHostId: input.activeWorkspaceExecutionHostId,
         projectId: pendingInitialWorkspaceTarget?.projectId,
         hostId: pendingInitialWorkspaceTarget?.hostId,
         projectHostSetupId:
@@ -121,6 +122,7 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
     [
       actionableHostIds,
       eligibleRepos,
+      input.activeWorkspaceExecutionHostId,
       pendingInitialWorkspaceTarget,
       projectHostSetups,
       projects,
