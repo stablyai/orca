@@ -87,7 +87,11 @@ export function AgentRowTerminalPeek({
       >
         <div className="min-w-0">{children}</div>
       </HoverCardTrigger>
-      <HoverCardContent variant="agent-terminal-peek" side="right" align="start">
+      <HoverCardContent
+        side="right"
+        align="start"
+        className="h-72 w-[480px] max-w-[calc(100vw-2rem)] overflow-hidden p-0"
+      >
         {target?.ptyId ? (
           <AgentTerminalPreview
             ptyId={target.ptyId}
