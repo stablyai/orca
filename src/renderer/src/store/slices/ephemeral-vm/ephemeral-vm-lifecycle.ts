@@ -13,6 +13,8 @@ export type EphemeralVmWorkspaceRuntime = Pick<
   EphemeralVmRuntimeRecord,
   'id' | 'status' | 'runtimeEnvironmentId'
 > & {
+  /** Last lifecycle change (for a suspended record: when it went to sleep). */
+  updatedAt?: number
   workspaceId: string
   /** Why the VM is in resume_failed / failed, as persisted on the record. */
   failure?: EphemeralVmFailure
@@ -92,6 +94,7 @@ export function projectEphemeralVmWorkspaceRuntimes(
       id: record.id,
       workspaceId: record.workspaceId,
       status: record.status,
+      updatedAt: record.updatedAt,
       ...(record.runtimeEnvironmentId ? { runtimeEnvironmentId: record.runtimeEnvironmentId } : {}),
       ...(record.projectId ? { projectId: record.projectId } : {}),
       ...(environmentBuildIdOf(record) ? { environmentBuildId: environmentBuildIdOf(record) } : {}),

@@ -9,6 +9,8 @@ export type CloudRecoveryContext = {
   asleep: boolean
   /** What the person calls it (never the sandbox's server name or id). */
   workspaceName: string | null
+  /** While asleep or waking: when it went to sleep (the local record's suspend time); null if unknown. */
+  asleepSince: number | null
 }
 
 /** For a terminal's recovery notices: null for a workspace that isn't on Orca Cloud. */
@@ -26,6 +28,10 @@ export function useCloudRecoveryContext(
       ? state.ephemeralVmRuntimesByWorkspaceId?.[worktreeId]?.status === 'suspended'
       : false
   )
+  const suspendedAt = useAppStore((state) => {
+    const record = worktreeId ? state.ephemeralVmRuntimesByWorkspaceId?.[worktreeId] : undefined
+    return record?.status === 'suspended' ? (record.updatedAt ?? null) : null
+  })
   const workspaceName = useAppStore((state) =>
     worktreeId ? (findWorktreeById(state, worktreeId)?.displayName ?? null) : null
   )
@@ -36,5 +42,5 @@ export function useCloudRecoveryContext(
   const asleep =
     !waking &&
     (reported === 'sleeping' || reported === 'stopping' || reported === 'archived' || vmSuspended)
-  return { waking, asleep, workspaceName }
+  return { waking, asleep, workspaceName, asleepSince: asleep || waking ? suspendedAt : null }
 }
