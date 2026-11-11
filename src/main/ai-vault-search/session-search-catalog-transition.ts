@@ -55,6 +55,8 @@ export function transitionSessionSearchCatalog(
       return transitionSessionSearchDirectoryFrontier(catalog, command)
     case 'directory-step':
       return transitionSessionSearchDirectory(catalog, command)
+    case 'frontier-snapshot':
+    case 'frontier-settle':
     case 'frontier-set':
     case 'frontier-set-page':
     case 'frontier-move':
@@ -92,5 +94,7 @@ export function transitionSessionSearchCatalog(
         throw error
       }
     }
+    default:
+      return undefined
   }
 }

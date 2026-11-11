@@ -48,6 +48,7 @@ export class SessionFileInventory extends SessionInventoryDirectoryWalks {
   }
   get pending(): boolean {
     return (
+      this.observations.applying ||
       this.authority.readySize > 0 ||
       this.garbage.size > 0 ||
       this.observations.delivery.size > 0 ||
@@ -123,7 +124,8 @@ export class SessionFileInventory extends SessionInventoryDirectoryWalks {
     path: string,
     args: DiscoverSessionFilesArgs,
     limit: number,
-    metadataOnly = false
+    metadataOnly = false,
+    metadataOwed = false
   ) {
     const file = await this.observations.observe(
       path,
@@ -131,7 +133,7 @@ export class SessionFileInventory extends SessionInventoryDirectoryWalks {
       false,
       limit,
       !metadataOnly,
-      metadataOnly
+      metadataOnly || metadataOwed
     )
     const change = this.observations.changes.get(path)
     this.observations.changes.delete(path)
@@ -144,7 +146,11 @@ export class SessionFileInventory extends SessionInventoryDirectoryWalks {
           changed: change !== undefined || !!delivery,
           receipt: delivery ? { path, revision: delivery.revision } : undefined
         }
-      : undefined
+      : {
+          handoff: this.observations.handoffs.has(path)
+            ? { scope: this.scope, revision: this.observations.handoffs.get(path)! }
+            : undefined
+        }
   }
   async drain(
     args: DiscoverSessionFilesArgs,
@@ -160,6 +166,7 @@ export class SessionFileInventory extends SessionInventoryDirectoryWalks {
     if (!this.initialized) {
       await this.begin(false, args)
     }
+    await this.observations.resume(recentLimit)
     let consumed = 0
     while (
       (this.cancellations.size ||

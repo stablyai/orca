@@ -73,6 +73,7 @@ export type SessionSearchCatalogResult = SessionSearchDirtyResult &
     scopeCounts?: [string, number, number][]
     rows?: SessionSearchCatalogRow[]
     count?: number
+    revision?: number
     processed?: number
     after?: string
   }

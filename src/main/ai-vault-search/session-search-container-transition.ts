@@ -13,7 +13,12 @@ export type SessionSearchContainerCommand =
     }
   | { kind: 'container-drain'; scope: string; limit: number }
   | {
-      kind: 'container-ack' | 'container-retirement-ack'
+      kind: 'container-ack'
+      scope: string
+      receipts: { key: string; revision: number }[]
+    }
+  | {
+      kind: 'container-retirement-ack'
       scope: string
       receipts: { key: string; revision: number }[]
     }

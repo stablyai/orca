@@ -63,6 +63,8 @@ export class SessionSearchIndexer {
   private sweepNext = false
   /** Retention/root maintenance is independent of unfinished discovery and reads. */
   private maintenanceNext = false
+  private primaryWakeNext: number | undefined
+  private primaryWakeRevision = 0
   private sweepInProgress = false
   private retirement: Promise<void> | null = null
   private readonly work: SessionSearchPassState
@@ -134,6 +136,7 @@ export class SessionSearchIndexer {
     if (options.full === true) {
       this.sweepNext = true
       this.maintenanceNext = true
+      this.primaryWakeNext = ++this.primaryWakeRevision
     }
     return this.tick()
   }
@@ -239,6 +242,7 @@ export class SessionSearchIndexer {
 
   private async pass(signal: AbortSignal): Promise<void> {
     this.store.setRetentionCutoffMs(this.cutoffMs())
+    const primaryWake = this.primaryWakeNext
     const full = this.sweepNext
     const maintenance = this.maintenanceNext || full
     this.sweepNext = false
@@ -258,6 +262,7 @@ export class SessionSearchIndexer {
         state: this.work,
         roots: this.roots,
         full,
+        primaryWake,
         purge: maintenance,
         onPurged: () => {
           this.maintenanceNext = false
@@ -277,6 +282,9 @@ export class SessionSearchIndexer {
       if (!result.completed) {
         return
       }
+      if (this.primaryWakeNext === primaryWake) {
+        this.primaryWakeNext = undefined
+      }
       this.degradedRoots = result.degradedRoots
       this.previousRootsWithFiles = result.rootsWithFiles
       this.lastReconcileAt = this.clock.now()
@@ -288,6 +296,7 @@ export class SessionSearchIndexer {
       this.cyclesSinceSweep++
       if (this.cyclesSinceSweep >= this.fullSweepEveryCycles) {
         this.maintenanceNext = true
+        this.primaryWakeNext = ++this.primaryWakeRevision
         this.cyclesSinceSweep = 0
       }
     } catch (error) {

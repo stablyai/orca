@@ -248,7 +248,8 @@ export class SessionSearchCatalog extends SessionSearchCatalogStorage {
         }
         return { rows, after: rows.at(-1)?.key }
       }
+      default:
+        throw new Error('Unsupported session catalog command')
     }
-    throw new Error('Unsupported session catalog command')
   }
 }

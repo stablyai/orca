@@ -11,6 +11,7 @@ export type SessionSearchRootWatch = {
   failed: boolean
   events: Map<string, WatcherProcessEvent>
   reconcile: boolean
+  recovery: boolean
   attempts: number
   retryAt: number
 }
@@ -54,6 +55,7 @@ export class SessionSearchRootWatchers {
         const delivery = { ...watch }
         watch.events = new Map()
         watch.reconcile = false
+        watch.recovery = false
         return delivery
       })
       this.probes.set(key, probe)
@@ -96,6 +98,7 @@ export class SessionSearchRootWatchers {
       failed: false,
       events: new Map(),
       reconcile: true,
+      recovery: !!previous,
       attempts: previous?.attempts ?? 0,
       retryAt: 0
     }
@@ -106,6 +109,7 @@ export class SessionSearchRootWatchers {
       }
       watch.failed = true
       watch.reconcile = true
+      watch.recovery = true
     }
     try {
       watch.subscription = await this.supervisor.subscribe(
@@ -120,6 +124,7 @@ export class SessionSearchRootWatchers {
           for (const event of events) {
             if (watch.events.size >= 16_384) {
               watch.reconcile = true
+              watch.recovery = true
               break
             }
             watch.events.set(event.path, event)
@@ -131,9 +136,11 @@ export class SessionSearchRootWatchers {
           subscribeTimeoutMs: RUNTIME_FILE_WATCH_CRAWL_TIMEOUT_MS,
           onInterruption: () => {
             watch.reconcile = true
+            watch.recovery = true
           },
           onOverflow: () => {
             watch.reconcile = true
+            watch.recovery = true
           },
           onTerminalError: fail,
           delivery: { includeDirectoryMetadata: true, maxEventsPerBatch: 16_384 }

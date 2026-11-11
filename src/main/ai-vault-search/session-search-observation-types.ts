@@ -22,6 +22,7 @@ export type SessionSearchPreparedObservation = SessionSearchObservationInput & {
   accepted?: SessionSearchObservedFacts
   token: string
   authority: number
+  refusalRevision?: number
   attempt: boolean
 }
 export type SessionSearchObservationOutcome = SessionSearchPreparedObservation & {
@@ -46,6 +47,7 @@ export type SessionSearchInventoryCommand =
   | { kind: 'forget-files'; scope: string; paths: string[]; notify?: boolean; cutoff?: number }
   | { kind: 'observe-ack'; scope: string; receipts: { path: string; revision: number }[] }
 export type SessionSearchInventoryResult = {
+  refusals?: { path: string; revision: number }[]
   prepared?: SessionSearchPreparedObservation[]
   observations?: {
     path: string

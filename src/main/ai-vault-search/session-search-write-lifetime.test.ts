@@ -21,7 +21,10 @@ beforeEach(async () => {
   index = await openSessionSearchIndexFile('ss-write-lifetime')
   store = new SessionSearchStore(index.path)
   writer = new SessionSearchIndexWriter(index.db, 1)
-  vi.spyOn(store, 'beginWrite').mockImplementation((...args) => writer.beginWrite(...args))
+  vi.spyOn(store, 'beginWrite').mockImplementation(
+    (candidate, mode, offset, identity, indexing, signal) =>
+      writer.beginWrite(candidate, mode, offset, identity, indexing, signal)
+  )
   unregister = registerSessionSearchIndexConsumer(store)
 })
 

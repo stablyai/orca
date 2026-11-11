@@ -42,8 +42,8 @@ export function readSessionSearchSnapshotRows(
 
 export function applySessionSearchFileCountDelta(
   counts: SessionSearchStateCounts,
-  row: SessionSearchSnapshotRow | null,
-  previous: SessionSearchSnapshotRow | undefined
+  row: Pick<SessionSearchSnapshotRow, 'state' | 'agent'> | null,
+  previous: Pick<SessionSearchSnapshotRow, 'state' | 'agent'> | undefined
 ): void {
   if (previous) {
     counts[previous.state]--

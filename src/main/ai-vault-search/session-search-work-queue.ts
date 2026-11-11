@@ -14,7 +14,12 @@ export type SessionSearchWorkCommand =
   | { kind: 'next' }
   | { kind: 'stats' }
   | { kind: 'get'; path: string }
-  | { kind: 'acknowledge'; work: SessionSearchWork; retry: boolean }
+  | {
+      kind: 'acknowledge'
+      work: SessionSearchWork
+      retry: boolean
+      handoff?: { scope: string; revision: number }
+    }
   | { kind: 'remove'; path: string }
   | { kind: 'row'; path: string; row?: SessionSearchFileRow }
 export type SessionSearchWorkResult = { size: number; left: number; work?: SessionSearchWork }
@@ -62,8 +67,12 @@ export class SessionSearchWorkQueue {
   async get(path: string): Promise<SessionSearchWork | undefined> {
     return (await this.request({ kind: 'get', path })).work
   }
-  async acknowledge(work: SessionSearchWork, retry: boolean): Promise<void> {
-    await this.request({ kind: 'acknowledge', work, retry })
+  async acknowledge(
+    work: SessionSearchWork,
+    retry: boolean,
+    handoff?: { scope: string; revision: number }
+  ): Promise<void> {
+    await this.request({ kind: 'acknowledge', work, retry, handoff })
   }
   async remove(path: string): Promise<void> {
     await this.request({ kind: 'remove', path })

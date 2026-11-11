@@ -5,10 +5,7 @@ import SyncDatabase from '../sqlite/sync-database'
 import { SessionFileInventory } from '../ai-vault/session-file-inventory'
 import type { DiscoverSessionFilesArgs } from '../ai-vault/session-scanner-discovery'
 import { SessionSearchCatalog } from './session-search-catalog'
-import type {
-  SessionSearchCatalogCommand,
-  SessionSearchCatalogResult
-} from './session-search-catalog'
+import type { SessionSearchCatalogCommand } from './session-search-catalog'
 import { createSessionSearchJsonlDependency } from './session-search-jsonl-dependency'
 import {
   FakeSessionSearchClock,
@@ -27,7 +24,7 @@ it.each([40, 400])(
     const catalog = new SessionSearchCatalog(db)
     let envelopes = 0,
       localRows = 0
-    const transferred: [SessionSearchCatalogCommand, SessionSearchCatalogResult][] = []
+    let invalidEnvelope = false
     const execute = catalog.execute.bind(catalog)
     const local = vi.spyOn(catalog, 'execute').mockImplementation((command) => {
       const result = execute(command)
@@ -44,7 +41,9 @@ it.each([40, 400])(
     const request = async (command: SessionSearchCatalogCommand) => {
       envelopes++
       const result = catalog.response(command)
-      transferred.push([command, result])
+      invalidEnvelope ||=
+        JSON.stringify(command).length * 2 > 256 * 1024 ||
+        JSON.stringify(result).length * 2 > 256 * 1024
       return result
     }
     const root = join(harness.root, 'inputs')
@@ -59,6 +58,7 @@ it.each([40, 400])(
     const drain = async () => {
       const paths: string[] = []
       while (inventory.pending) {
+        await inventory.retryFailures()
         const delta = await inventory.drain(args, () => false, 0)
         paths.push(...delta.changes.map(({ file }) => file.path))
         await inventory.acknowledge(delta.receipts)
@@ -71,15 +71,13 @@ it.each([40, 400])(
       expect(envelopes).toBeLessThanOrEqual(40 + 12 * pages)
       // Required comparisons and accepted observations visit each input only a fixed number of times locally.
       expect(localRows).toBeLessThanOrEqual(30 * population + 100)
-      for (const [input, output] of transferred) {
-        expect(JSON.stringify(input).length * 2).toBeLessThanOrEqual(256 * 1024)
-        expect(JSON.stringify(output).length * 2).toBeLessThanOrEqual(256 * 1024)
-      }
+      expect(invalidEnvelope).toBe(false)
     }
     const reset = () => {
       envelopes = 0
       localRows = 0
-      transferred.length = 0
+      invalidEnvelope = false
+      local.mockClear()
     }
     try {
       await mkdir(root)
@@ -89,6 +87,11 @@ it.each([40, 400])(
       await inventory.begin(false, args)
       expect(await drain()).toHaveLength(population)
       check()
+      const residual = () =>
+        db
+          .prepare('SELECT count(*) AS n FROM temp.search_catalog WHERE scope IN (?,?)')
+          .get('physical:batch-control:authority', 'physical:batch-control:authority-garbage')
+      expect(residual()).toEqual({ n: 0 })
       reset()
       await inventory.reconcile()
       expect(await drain()).toEqual([])
@@ -97,6 +100,7 @@ it.each([40, 400])(
       await inventory.invalidate(root)
       expect(await drain()).toEqual([])
       check()
+      expect(residual()).toEqual({ n: 0 })
       const metadata = join(harness.root, 'titles.jsonl')
       const observer = createSessionSearchJsonlDependency(
         metadata,
@@ -192,9 +196,16 @@ it('redelivers an unaccepted observation and retains a newer rewrite after an ol
   const catalog = new SessionSearchCatalog(db)
   const root = join(harness.root, 'inputs')
   const path = join(root, 'conversation.jsonl')
+  let refuseApply = true
   const inventory = new SessionFileInventory(
     root,
-    async (command) => catalog.response(command),
+    async (command) => {
+      if (refuseApply && command.kind === 'observe-apply') {
+        refuseApply = false
+        throw new Error('fixture rejected observation publication')
+      }
+      return catalog.response(command)
+    },
     'physical:receipt-control'
   )
   const args: DiscoverSessionFilesArgs = {
@@ -209,7 +220,15 @@ it('redelivers an unaccepted observation and retains a newer rewrite after an ol
     await mkdir(root)
     await writeFile(path, 'before\n')
     await utimes(path, time, time)
+    await expect(inventory.drain(args, () => false, 0)).rejects.toThrow(
+      'fixture rejected observation publication'
+    )
     const initial = await inventory.drain(args, () => false, 0)
+    expect(
+      db
+        .prepare('SELECT count(*) AS n FROM temp.search_catalog WHERE scope=?')
+        .get('physical:receipt-control:observation-epochs')
+    ).toEqual({ n: 0 })
     expect(initial.changes.map(({ file }) => file.path)).toEqual([path])
     // The first downstream consumer fails before accepting its page.
     expect(

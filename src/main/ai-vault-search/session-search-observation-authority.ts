@@ -38,10 +38,11 @@ export function recordSessionSearchInput(
   scope: string,
   path: string,
   revision = catalog.nextRevision(),
-  ancestors = false
+  ancestors = false,
+  ready = 1
 ): number {
   const page = new SessionSearchAuthorityPage(catalog, scope)
-  page.record(path, revision)
+  page.record(path, revision, ready)
   if (ancestors) {
     page.ensureDirectories(path)
   }

@@ -70,13 +70,15 @@ export function transitionSessionSearchInventory(
   ]
   if (command.kind === 'observe-prepare') {
     const prepared = boundedSessionSearchPage(command.inputs, (input) => {
-      const debt = decode<SessionSearchObservationDebt>(get(failures, input.path))
+      const refusal = get(failures, input.path)
+      const debt = decode<SessionSearchObservationDebt>(refusal)
       const authority = catalog.nextRevision()
       return {
         ...input,
         authority,
         force: input.force || !!debt?.force,
         metadataOwed: input.metadataOwed || debt?.metadata,
+        refusalRevision: refusal?.tie,
         attempt: !debt || (debt.failures < 3 && debt.attempted !== command.generation),
         accepted: decode<SessionSearchObservedFacts>(get(files, input.path)),
         token: ''
@@ -94,6 +96,8 @@ export function transitionSessionSearchInventory(
           force: debt.force || input.force || !!input.readOwed,
           metadata: debt.metadata || input.metadataOwed
         })
+        authority.forget(failures, input.path)
+        input.refusalRevision = get(failures, input.path)?.tie
       }
       if (input.attempt) {
         authority.record(input.path, input.authority, 0)
@@ -114,6 +118,7 @@ export function transitionSessionSearchInventory(
   let filesDelta = 0,
     failuresDelta = 0,
     runnableDelta = 0
+  const refusals: { path: string; revision: number }[] = []
   const missingParents: string[] = []
   const observations: NonNullable<SessionSearchInventoryResult['observations']> = []
   const debtChange = (
@@ -126,6 +131,9 @@ export function transitionSessionSearchInventory(
       Number(!!next && next.failures < 3) - Number(!!previous && previous.failures < 3)
     recordSessionSearchRetry(catalog, failures, path, next)
     authority.forget(failures, path)
+    if (next) {
+      refusals.push({ path, revision: get(failures, path)!.tie! })
+    }
   }
   if (command.kind === 'forget-files') {
     const removedFiles: string[] = []
@@ -261,5 +269,5 @@ export function transitionSessionSearchInventory(
   }
   authority.flush()
   cleanupSessionSearchAuthority(catalog, command.scope)
-  return { observations, filesDelta, failuresDelta, runnableDelta, missingParents }
+  return { observations, refusals, filesDelta, failuresDelta, runnableDelta, missingParents }
 }

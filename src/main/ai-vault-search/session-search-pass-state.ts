@@ -12,7 +12,12 @@ export class SessionSearchPassState {
   discovery: SessionSearchDiscoveryInventory
   candidates = new SessionSearchCandidateInventory()
   queue = new SessionSearchWorkQueue()
-  retirement: AsyncIterator<SessionSearchFileRow> | null = null
+  retirement: {
+    iterator: AsyncIterator<SessionSearchFileRow>
+    rows: Pick<SessionSearchFileRow, 'path' | 'agent'>[]
+    lookahead?: Pick<SessionSearchFileRow, 'path' | 'agent'>
+    exhausted: boolean
+  } | null = null
   private catalog: SessionSearchCatalogRequest | undefined
   private readonly request: SessionSearchCatalogRequest = (command) => this.catalog!(command)
   retire = this.retirementFrontier('retirement')

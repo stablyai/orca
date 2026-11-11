@@ -10,6 +10,18 @@ import type {
 } from './session-search-catalog-candidates'
 import type { SessionSearchStore } from './session-search-store'
 
+function wakeFailedFile(store: SessionSearchStore, path: string): void {
+  const previous = store.fileRow(path)
+  if (previous?.state !== 'failed') {
+    return
+  }
+  store.setFileState(path, 'current')
+  const row = store.fileRow(path)
+  if (row) {
+    store.onSourceWake(previous, row)
+  }
+}
+
 export function requireSessionSearchCandidateReason(
   store: SessionSearchStore,
   path: string,
@@ -23,10 +35,10 @@ export function requireSessionSearchCandidateReason(
       reason === 'metadata' &&
       wakeSessionSearchMetadataWrite(store.connection, path, store.fileRow(path))
     ) {
-      store.setFileState(path, 'current')
+      wakeFailedFile(store, path)
     }
     if (reason === 'force' && store.fileRow(path)?.state === 'failed') {
-      store.setFileState(path, 'current')
+      wakeFailedFile(store, path)
     }
     store.catalogCandidates.execute({ kind: 'require', path, reason, delivered: true })
   }
@@ -166,7 +178,24 @@ export async function transitionSessionSearchWork(
       break
     case 'acknowledge': {
       const row = store.fileRow(command.work.candidate.file.path)
-      const required = store.catalogCandidates.admission(command.work.candidate).contentRequired
+      const admission = store.catalogCandidates.admission(command.work.candidate)
+      const required = admission.contentRequired
+      const handoff = command.handoff
+      const refusal = handoff?.scope.startsWith(`physical:${command.work.candidate.agent}:`)
+        ? store.catalogStorage.execute({
+            kind: 'get',
+            scope: `${handoff.scope}:file-refusals`,
+            key: command.work.candidate.file.path
+          }).rows?.[0]
+        : undefined
+      const debt: { force?: boolean; metadata?: boolean } | undefined = refusal
+        ? JSON.parse(refusal.value)
+        : undefined
+      const transferred =
+        handoff &&
+        refusal?.tie === handoff.revision &&
+        (!required || debt?.force) &&
+        (!command.work.metadata || debt?.metadata)
       const held =
         row?.state === 'failed' &&
         row.failCount >= SESSION_SEARCH_FAILURES_BEFORE_HELD_OUT &&
@@ -176,7 +205,13 @@ export async function transitionSessionSearchWork(
         command.work.candidate.file.mtimeMs < store.retentionCutoff
       await queue.acknowledge(
         { ...command.work, force: required || (command.work.force && command.retry) },
-        required ? !held && !expired : command.retry
+        transferred || !admission.allowed
+          ? false
+          : command.handoff
+            ? admission.required
+            : required
+              ? !held && !expired
+              : command.retry
       )
       break
     }

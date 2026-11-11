@@ -115,6 +115,7 @@ it.each(['file', 'subtree'] as const)(
       // The first build is complete before arranging the recovery overlap.
       paused = true
       await subject.start()
+      expect(hits('existingbody')).toEqual({ n: 600 })
       if (variant === 'subtree') {
         await rm(child, { recursive: true })
       }

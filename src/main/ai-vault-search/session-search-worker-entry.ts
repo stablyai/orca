@@ -81,7 +81,11 @@ async function execute({ id, command: c }: SearchWorkerRequest): Promise<SearchW
     }
     runtimeEpoch = c.runtimeEpoch ?? 0
     pageSequence = 0
-    store = new SessionSearchStore(c.path, onError, onMessagesChanged)
+    store = new SessionSearchStore(c.path, onError, onMessagesChanged, (previous, current) => {
+      const row = rows(current.path)[0] ?? null
+      applySessionSearchFileCountDelta(counts, row, { ...previous, agent: previous.agent ?? null })
+      parentPort?.postMessage({ id: 0, deltas: [{ path: current.path, row }], counts })
+    })
     candidates = store.catalogCandidates
     // Why: worker retirement closes the connection and its maintenance together.
     toolPurge = new SessionSearchToolPurge(

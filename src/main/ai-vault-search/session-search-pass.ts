@@ -30,6 +30,7 @@ export type SessionSearchPassArgs = {
   state: SessionSearchPassState
   roots: SessionSearchScanRoots
   full: boolean
+  primaryWake?: number
   recentPerAgent: number
   previousRootsWithFiles?: ReadonlySet<string>
   purge?: boolean
@@ -62,6 +63,7 @@ export async function runSessionSearchPass(
   await state.candidates.beginPublications(args.full || !!args.purge)
   state.discovery.begin({
     full: args.full,
+    primaryWake: args.primaryWake,
     maintenance: args.purge ?? args.full,
     recentLimit: args.recentPerAgent,
     overdue: args.discoveryOverdue ?? (() => false)
@@ -169,14 +171,15 @@ export async function runSessionSearchPass(
           candidate,
           rootDir,
           args.roots,
-          !!work.metadata && !work.force
+          !!work.metadata && !work.force,
+          work.metadata
         )
         if (observation === null) {
           return work
         }
-        if (!observation) {
+        if (!('file' in observation)) {
           // Observation debt owns retry/holdout; accepted facts cannot certify a refused input.
-          await state.queue.acknowledge(work, false)
+          await state.queue.acknowledge(work, false, observation.handoff)
           return undefined
         }
         if (!observation.changed) {

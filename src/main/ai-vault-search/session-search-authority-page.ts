@@ -92,27 +92,35 @@ export class SessionSearchAuthorityPage {
     if (!row) {
       return
     }
-    this.floor ??= Math.min(
-      ...['epochs', 'observation-epochs', 'removal-epochs'].map(
-        (suffix) =>
-          this.catalog.execute({
-            kind: 'page',
-            scope: `${this.scope}:${suffix}`,
-            group: '',
-            orderRank: true,
-            limit: 1
-          }).rows?.[0]?.rank ?? Infinity
+    const scopes = ['dirty', 'observing', 'refusals', 'file-refusals', 'delivery'].map(
+      (suffix) => `${this.scope}:${suffix}`
+    )
+    let live = scopes.some((scope) => !!this.rows.get(`${scope}\0${path}`))
+    if (!live) {
+      this.floor ??= Math.min(
+        ...['epochs', 'observation-epochs', 'removal-epochs'].map(
+          (suffix) =>
+            this.catalog.execute({
+              kind: 'page',
+              scope: `${this.scope}:${suffix}`,
+              group: '',
+              orderRank: true,
+              limit: 1
+            }).rows?.[0]?.rank ?? Infinity
+        )
       )
-    )
-    // Epochs can close during this page; the earlier floor is conservative for reclamation.
-    const live = ['dirty', 'observing', 'refusals', 'file-refusals', 'delivery'].some(
-      (suffix) => !!this.get(`${this.scope}:${suffix}`, path)
-    )
-    if (!live && row.rank <= this.floor) {
-      this.catalog.execute({ kind: 'delete', scope: `${this.scope}:authority`, key: path })
-      this.writes.delete(path)
-      this.changed(`${this.scope}:authority`, path)
-    } else if (row.ready !== Number(!live)) {
+      // A protected witness gets one liveness check when its epoch permits cleanup.
+      if (row.rank <= this.floor) {
+        live = scopes.some((scope) => !!this.get(scope, path))
+        if (!live) {
+          this.catalog.execute({ kind: 'delete', scope: `${this.scope}:authority`, key: path })
+          this.writes.delete(path)
+          this.changed(`${this.scope}:authority`, path)
+          return
+        }
+      }
+    }
+    if (row.ready !== Number(!live)) {
       const next = { ...row, ready: Number(!live) }
       this.writes.set(path, next)
       this.changed(`${this.scope}:authority`, path, next)

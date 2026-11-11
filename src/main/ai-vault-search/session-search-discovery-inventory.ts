@@ -28,6 +28,11 @@ export class SessionSearchDiscoveryInventory
     root.retiring = false
     root.args = args
     await root.inventory.begin(this.force || this.maintenance, args)
+    const wake = this.primaryWake !== undefined && root.wake !== this.primaryWake
+    if (wake) {
+      await root.inventory.wakeFailures()
+      root.wake = this.primaryWake
+    }
     let watching = false
     if (this.maintenance) {
       root.fallback = await this.watchers.requiresPolling(args.rootDir)
@@ -39,6 +44,7 @@ export class SessionSearchDiscoveryInventory
     } else {
       const watch = await this.watchers.watch(args.rootDir, args.signal)
       if (!watch) {
+        root.unwatched = true
         if (!root.inventory.walking) {
           await root.inventory.reconcile()
         }
@@ -59,9 +65,16 @@ export class SessionSearchDiscoveryInventory
         if (watch.failed && !root.inventory.walking) {
           await root.inventory.reconcile()
         }
-        if (!watch.failed && (watch.reconcile || root.identity !== watch.identity)) {
+        if (
+          !watch.failed &&
+          !wake &&
+          (watch.recovery ||
+            root.unwatched ||
+            (root.identity !== undefined && root.identity !== watch.identity))
+        ) {
           await root.inventory.wakeFailures()
         }
+        root.unwatched = watch.failed
         root.identity = watch.identity
         for (const event of watch.events.values()) {
           await root.inventory.invalidate(event.path)

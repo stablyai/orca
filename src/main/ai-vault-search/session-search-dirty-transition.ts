@@ -21,7 +21,6 @@ export function invalidateSessionSearchPhysical(
   subtree = false
 ) {
   if (delivered) {
-    recordSessionSearchInput(catalog, scope, path)
     if (subtree) {
       wakeSessionSearchPrimaryFailures(catalog, scope, path)
     }
@@ -61,6 +60,9 @@ export function invalidateSessionSearchPhysical(
     key: path,
     value: JSON.stringify(force || current?.value || false)
   })
+  if (delivered) {
+    recordSessionSearchInput(catalog, scope, path, undefined, false, 0)
+  }
 }
 
 export function transitionSessionSearchDirty(

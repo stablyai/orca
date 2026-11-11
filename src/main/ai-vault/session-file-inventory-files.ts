@@ -37,6 +37,8 @@ export class SessionInventoryFiles {
   }
   readonly changes = new Map<string, SessionFileChange>()
   readonly removed = new Set<string>()
+  readonly handoffs = new Map<string, number>()
+  private pending: { outcomes: SessionSearchObservationOutcome[]; generation: number } | undefined
   readonly recent = new Map<string, FileWithMtime>()
   constructor(
     private readonly scope: string,
@@ -66,7 +68,8 @@ export class SessionInventoryFiles {
     args: DiscoverSessionFilesArgs,
     limit: number
   ): Promise<Map<string, FileWithMtime>> {
-    const readable = new Map<string, FileWithMtime>()
+    this.handoffs.clear()
+    const readable = await this.resume(limit)
     for (const page of sessionSearchRecordPages(inputs)) {
       let offset = 0
       while (offset < page.length) {
@@ -96,6 +99,9 @@ export class SessionInventoryFiles {
     const outcomes: SessionSearchObservationOutcome[] = []
     for (const input of prepared) {
       if (!input.attempt) {
+        if (input.refusalRevision !== undefined) {
+          this.handoffs.set(input.path, input.refusalRevision)
+        }
         continue
       }
       const previous = input.accepted
@@ -134,14 +140,26 @@ export class SessionInventoryFiles {
         })
       }
     }
+    this.pending = { outcomes, generation: this.failures.epoch }
+    return this.resume(limit)
+  }
+  get applying(): boolean {
+    return !!this.pending
+  }
+  async resume(limit: number): Promise<Map<string, FileWithMtime>> {
     const readable = new Map<string, FileWithMtime>()
-    for (const page of sessionSearchRecordPages(outcomes)) {
+    while (this.pending?.outcomes.length) {
+      const page = sessionSearchRecordPages(this.pending.outcomes).next().value!
       const accepted = await this.files.transition({
         kind: 'observe-apply',
         scope: this.scope,
-        generation: this.failures.epoch,
+        generation: this.pending.generation,
         outcomes: page
       })
+      this.pending.outcomes.splice(0, page.length)
+      for (const refusal of accepted.refusals ?? []) {
+        this.handoffs.set(refusal.path, refusal.revision)
+      }
       for (const path of accepted.missingParents ?? []) {
         await this.scheduleParent(path)
       }
@@ -160,6 +178,7 @@ export class SessionInventoryFiles {
         }
       }
     }
+    this.pending = undefined
     return readable
   }
   recordRemoval(path: string): void {

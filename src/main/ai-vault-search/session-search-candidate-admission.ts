@@ -22,7 +22,7 @@ export function sessionSearchCandidateAdmission(
     required ||= row.selected === 1 && row.required === 1
     contentRequired ||= row.selected === 1 && row.force_read === 1
     hash.update(
-      `${row.key}:${row.revision}:${row.group_revision ?? 0}:${row.required}:${row.force_read}:${row.metadata}\0`
+      `${String(row.key)}:${String(row.revision)}:${String(row.group_revision ?? 0)}:${String(row.required)}:${String(row.force_read)}:${String(row.metadata)}\0`
     )
   }
   return {

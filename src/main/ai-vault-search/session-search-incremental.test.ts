@@ -438,7 +438,7 @@ it('retains title-only work through admission refusal and wakes held-out publica
   }
 })
 
-it.each(['commit', 'open'] as const)(
+it.each(['commit', 'open', 'observation'] as const)(
   'retains rewritten content through a failed %s and parks until a real content wake',
   async (failure) => {
     const harness = await openSessionSearchIndexerHarness('ss-content-retry')
@@ -447,7 +447,7 @@ it.each(['commit', 'open'] as const)(
     const root = harness.roots.codexSessionsDir!
     const path = join(root, fixture.fileName)
     const index = join(dirname(root), 'session_index.jsonl')
-    const subject = new SessionSearchIndexer({
+    let subject = new SessionSearchIndexer({
       databasePath: harness.databasePath,
       roots: harness.roots,
       historyDays: null,
@@ -462,6 +462,18 @@ it.each(['commit', 'open'] as const)(
       }))
     const stream = filesystem.openTranscriptReadStream
     let refuseOpen = false
+    let refuseObservation = false
+    const actualStat = filesystem.wslGatedStat
+    const observation = vi
+      .spyOn(filesystem, 'wslGatedStat')
+      .mockImplementation((observed, ...args) => {
+        if (refuseObservation && observed === path) {
+          return Promise.reject(
+            Object.assign(new Error('fixture refused observation'), { code: 'EIO' })
+          )
+        }
+        return actualStat(observed, ...args)
+      })
     const primary = vi
       .spyOn(filesystem, 'openTranscriptReadStream')
       .mockImplementation((readPath, ...args) => {
@@ -473,6 +485,8 @@ it.each(['commit', 'open'] as const)(
     const refuse = () => {
       if (failure === 'open') {
         refuseOpen = true
+      } else if (failure === 'observation') {
+        refuseObservation = true
       } else {
         harness.write((db) =>
           db.exec(
@@ -483,6 +497,7 @@ it.each(['commit', 'open'] as const)(
     }
     const allow = () => {
       refuseOpen = false
+      refuseObservation = false
       if (failure === 'commit') {
         harness.write((db) => db.exec('DROP TRIGGER refuse_content'))
       }
@@ -523,18 +538,44 @@ it.each(['commit', 'open'] as const)(
       for (let attempt = 0; attempt < 3; attempt++) {
         await cycle()
       }
-      expect(
-        harness.read((db) =>
-          db.prepare('SELECT state,fail_count FROM files WHERE path=?').get(path)
-        )
-      ).toEqual({ state: 'failed', fail_count: 3 })
+      if (failure !== 'observation') {
+        expect(
+          harness.read((db) =>
+            db.prepare('SELECT state,fail_count FROM files WHERE path=?').get(path)
+          )
+        ).toEqual({ state: 'failed', fail_count: 3 })
+      }
       expect(subject.status().phase).toBe('degraded')
       expect(subject.status().filesDue).toBe(0)
       allow()
       await cycle()
       expect(current()).toEqual({ text: { n: 1 }, title: { title: 'Rewritten title' } })
-      notifySessionSearchFileChange(path)
-      await cycle()
+      if (failure === 'open') {
+        await subject.close()
+        subject = new SessionSearchIndexer({
+          databasePath: harness.databasePath,
+          roots: harness.roots,
+          historyDays: null,
+          clock
+        })
+        await subject.start()
+        expect(
+          harness.read((db) =>
+            db.prepare('SELECT state,fail_count FROM files WHERE path=?').get(path)
+          )
+        ).toEqual({ state: 'failed', fail_count: 3 })
+        expect(current()).toEqual({ text: { n: 1 }, title: { title: 'Rewritten title' } })
+        await subject.reconcile({ full: true })
+        await cycle()
+      } else if (failure === 'commit') {
+        // The existing fifteen-cycle maintenance is a recovery input, without another source notice.
+        for (let cycleIndex = 0; cycleIndex < 16; cycleIndex++) {
+          await cycle()
+        }
+      } else {
+        notifySessionSearchFileChange(path)
+        await cycle()
+      }
       expect(current()).toEqual({ text: { n: 0 }, title: { title: 'Held title' } })
       expect(
         harness.read((db) =>
@@ -544,6 +585,7 @@ it.each(['commit', 'open'] as const)(
       expect(subject.status().phase).toBe('current')
     } finally {
       primary.mockRestore()
+      observation.mockRestore()
       await subject.close()
       await harness.cleanup()
     }

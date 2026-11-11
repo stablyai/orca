@@ -16,6 +16,8 @@ type Root = {
   args: DiscoverSessionFilesArgs
   identity?: string
   fallback: boolean
+  unwatched?: boolean
+  wake?: number
   retiring?: boolean
   dependencies: Map<string, SessionSearchDependencyInventory>
 }
@@ -54,6 +56,7 @@ export class SessionSearchDiscoverySources {
   }
   protected force = false
   protected maintenance = false
+  protected primaryWake: number | undefined
   protected overdue = () => false
   protected recentLimit = 12
   protected seen = new Set<string>()
@@ -67,11 +70,13 @@ export class SessionSearchDiscoverySources {
 
   begin(options: {
     full: boolean
+    primaryWake?: number
     maintenance?: boolean
     overdue: () => boolean
     recentLimit: number
   }): void {
     this.force = options.full
+    this.primaryWake = options.primaryWake
     this.maintenance = options.maintenance === true
     this.overdue = options.overdue
     this.recentLimit = options.recentLimit
@@ -144,7 +149,8 @@ export class SessionSearchDiscoverySources {
     candidate: SessionFileCandidate,
     logicalRoot: string,
     roots: SessionSearchScanRoots,
-    metadataOnly = false
+    metadataOnly = false,
+    metadataOwed = false
   ) {
     const root = await this.fileOwner(candidate, logicalRoot, roots)
     if (!root) {
@@ -155,25 +161,26 @@ export class SessionSearchDiscoverySources {
       path,
       root.args,
       this.recentLimit,
-      metadataOnly
+      metadataOnly,
+      metadataOwed
     )
-    if (change) {
-      for (const observer of root.dependencies.values()) {
-        await observer.addFile(path)
-      }
+    if (!('file' in change)) {
+      return change
     }
-    return change
-      ? {
-          ...change,
-          changed:
-            change.changed ||
-            change.file.mtimeMs !== candidate.file.mtimeMs ||
-            change.file.sizeBytes !== candidate.file.sizeBytes ||
-            change.file.dev !== candidate.file.dev ||
-            change.file.ino !== candidate.file.ino
-        }
-      : undefined
+    for (const observer of root.dependencies.values()) {
+      await observer.addFile(path)
+    }
+    return {
+      ...change,
+      changed:
+        change.changed ||
+        change.file.mtimeMs !== candidate.file.mtimeMs ||
+        change.file.sizeBytes !== candidate.file.sizeBytes ||
+        change.file.dev !== candidate.file.dev ||
+        change.file.ino !== candidate.file.ino
+    }
   }
+
   async acknowledgeRead(
     candidate: SessionFileCandidate,
     logicalRoot: string,

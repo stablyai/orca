@@ -1,22 +1,7 @@
-import type { SessionSearchFileRow } from './session-search-store'
 import type { SessionSearchPassArgs } from './session-search-pass'
 import type { SessionSearchDegradedRoot } from './session-search-degraded-roots'
 import { sessionSearchEmptiedRoots, isUnderScanRoot } from './session-search-scan-roots'
 import { retireDeletedSessionSearchSources } from './session-search-deleted-sources'
-
-async function* replayRetirement(
-  rows: SessionSearchFileRow[],
-  tail: AsyncIterator<SessionSearchFileRow> | null
-): AsyncGenerator<SessionSearchFileRow> {
-  yield* rows
-  while (tail) {
-    const next = await tail.next()
-    if (next.done) {
-      return
-    }
-    yield next.value
-  }
-}
 
 export async function wakeSessionSearchPassRetirements(args: SessionSearchPassArgs): Promise<void> {
   if (args.full || args.purge) {
@@ -41,49 +26,51 @@ export async function retireSessionSearchPassSources(
     : new Set<string>()
   const degraded: SessionSearchDegradedRoot[] = []
   if (!state.discovery.walking && state.needsRetirement) {
-    state.retirement ??= (async function* () {
-      yield* store.fileRows()
-    })()
+    state.retirement ??= {
+      iterator: (async function* () {
+        yield* store.fileRows()
+      })(),
+      rows: [],
+      exhausted: false
+    }
     state.needsRetirement = false
   }
   let batches = 0
-  const availableRetirements = state.retire.size
-  let consumedRetirements = 0
-  do {
-    const paths: string[] = []
-    const remaining = availableRetirements - consumedRetirements
-    const queued = remaining > 0 ? await state.retire.receipts(Math.min(256, remaining)) : []
-    paths.push(...queued.map(({ key }) => key))
-    consumedRetirements += queued.length
-    const inspected: SessionSearchFileRow[] = []
-    let inspectedBytes = 1024
-    try {
-      while (state.retirement && paths.length + inspected.length < 256) {
-        const row = await state.retirement.next()
-        if (row.done) {
-          state.retirement = null
+  const cutoff = await state.retire.snapshot()
+  while (true) {
+    const unit = state.retirement
+    const queued = unit?.rows.length ? [] : await state.retire.receipts(256, cutoff)
+    const paths = queued.map(({ key }) => key)
+    if (unit && !unit.rows.length && !queued.length) {
+      let bytes = 1024
+      while (!unit.exhausted && paths.length + unit.rows.length < 256) {
+        let value = unit.lookahead
+        if (value) {
+          unit.lookahead = undefined
+        } else {
+          const next = await unit.iterator.next()
+          if (next.done) {
+            unit.exhausted = true
+            break
+          }
+          value = { path: next.value.path, agent: next.value.agent }
+        }
+        const size = JSON.stringify(value).length * 2 + 64
+        if (unit.rows.length && bytes + size > 256 * 1024) {
+          unit.lookahead = value
           break
         }
-        const size = JSON.stringify(row.value).length * 2 + 64
-        if (inspected.length && inspectedBytes + size > 256 * 1024) {
-          state.retirement = replayRetirement([row.value], state.retirement)
-          break
-        }
-        inspected.push(row.value)
-        inspectedBytes += size
+        unit.rows.push(value)
+        bytes += size
       }
-      if (inspected.length) {
-        const queuedPaths = new Set(paths)
-        paths.push(
-          ...(await state.candidates.unowned(inspected)).filter((path) => !queuedPaths.has(path))
-        )
-      }
-      if (!paths.length) {
-        if (!state.retirement || args.discoveryOverdue?.()) {
-          break
-        }
-        continue
-      }
+    }
+    if (unit?.rows.length) {
+      const queuedPaths = new Set(paths)
+      paths.push(
+        ...(await state.candidates.unowned(unit.rows)).filter((path) => !queuedPaths.has(path))
+      )
+    }
+    if (paths.length) {
       const retirement = await retireDeletedSessionSearchSources({
         store,
         paths,
@@ -94,30 +81,30 @@ export async function retireSessionSearchPassSources(
         directoryLimit: 512,
         signal
       })
-      await state.retire.acknowledge(queued)
-      await state.retire.setPage(retirement.unchecked.map((path) => [path, path] as const))
       const emptied = (path: string) =>
         [...emptiedRoots].some((root) => isUnderScanRoot(path, root))
-      await state.retire.setPage(
-        retirement.unverifiable.filter(emptied).map((path) => [path, path] as const)
-      )
-      await state.parkedRetire.setPage(
-        retirement.unverifiable
-          .filter((path) => !emptied(path))
-          .map((path) => [path, path] as const)
+      const outcomes = new Map<string, 'retry' | 'parked'>([
+        ...retirement.unchecked.map((key) => [key, 'retry'] as const),
+        ...retirement.unverifiable.map((key) => [key, emptied(key) ? 'retry' : 'parked'] as const)
+      ])
+      const receipts = new Map(queued.map(({ key, revision }) => [key, revision]))
+      await state.retire.settlePaths(
+        state.parkedRetire,
+        cutoff,
+        paths.map((key) => ({ key, revision: receipts.get(key), outcome: outcomes.get(key) }))
       )
       degraded.push(...retirement.degradedRoots)
-      // Retry refused paths next cycle, but keep advancing the older retirement frontier now.
       batches++
-    } catch (error) {
-      if (inspected.length) {
-        state.retirement = replayRetirement(inspected, state.retirement)
-      }
-      throw error
     }
-  } while (
-    (state.retirement || consumedRetirements < availableRetirements) &&
-    (batches === 0 || !args.discoveryOverdue?.())
-  )
+    if (unit && !queued.length) {
+      unit.rows.length = 0
+      if (unit.exhausted && !unit.lookahead) {
+        state.retirement = null
+      }
+    }
+    if ((!state.retirement && !queued.length) || (batches > 0 && args.discoveryOverdue?.())) {
+      break
+    }
+  }
   return degraded
 }

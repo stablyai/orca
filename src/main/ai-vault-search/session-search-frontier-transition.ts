@@ -1,6 +1,14 @@
 import type { SessionSearchCatalog } from './session-search-catalog'
 
 export type SessionSearchFrontierCommand =
+  | { kind: 'frontier-snapshot'; scope: string }
+  | {
+      kind: 'frontier-settle'
+      scope: string
+      target: string
+      cutoff: number
+      rows: { key: string; revision?: number; outcome?: 'retry' | 'parked' }[]
+    }
   | { kind: 'frontier-set'; scope: string; key: string; value: string }
   | { kind: 'frontier-set-page'; scope: string; rows: { key: string; value: string }[] }
   | { kind: 'frontier-move'; scope: string; target: string }
@@ -12,6 +20,48 @@ export function transitionSessionSearchFrontier(
   catalog: SessionSearchCatalog,
   command: SessionSearchFrontierCommand
 ) {
+  if (command.kind === 'frontier-snapshot') {
+    return { revision: catalog.nextRevision() }
+  }
+  if (command.kind === 'frontier-settle') {
+    catalog.connection.exec('SAVEPOINT search_frontier_settle')
+    try {
+      for (const item of command.rows) {
+        const { key } = item
+        const current = catalog.execute({ kind: 'get', scope: command.scope, key }).rows?.[0]
+        if (
+          item.revision !== undefined
+            ? current?.tie !== item.revision
+            : (current?.tie ?? 0) > command.cutoff
+        ) {
+          continue
+        }
+        if (item.outcome) {
+          const target = item.outcome === 'parked' ? command.target : command.scope
+          const newer =
+            target === command.scope
+              ? current
+              : catalog.execute({ kind: 'get', scope: target, key }).rows?.[0]
+          if ((newer?.tie ?? 0) <= command.cutoff) {
+            transitionSessionSearchFrontier(catalog, {
+              kind: 'frontier-set',
+              scope: target,
+              key,
+              value: JSON.stringify(key)
+            })
+          }
+        }
+        if (item.revision !== undefined && item.outcome !== 'retry') {
+          catalog.execute({ kind: 'delete', scope: command.scope, key })
+        }
+      }
+      catalog.connection.exec('RELEASE search_frontier_settle')
+      return {}
+    } catch (error) {
+      catalog.connection.exec('ROLLBACK TO search_frontier_settle; RELEASE search_frontier_settle')
+      throw error
+    }
+  }
   const wakeScope = `${command.scope}:wake`
   if (command.kind === 'ack-values' || command.kind === 'frontier-ack') {
     const items =

@@ -75,7 +75,11 @@ export class SessionSearchStore {
         '[ai-vault-search] index write failed:',
         error instanceof Error ? error.name : 'IndexError'
       ),
-    private readonly onMessagesChanged: (delta: number) => void = () => undefined
+    private readonly onMessagesChanged: (delta: number) => void = () => undefined,
+    readonly onSourceWake: (
+      previous: SessionSearchFileRow,
+      row: SessionSearchFileRow
+    ) => void = () => undefined
   ) {
     this.db = openSessionSearchDatabase(path)
     initializeSessionSearchStorage(this.db)

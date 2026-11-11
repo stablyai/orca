@@ -60,8 +60,37 @@ export class SessionSearchCatalogFrontier<T> {
     })
     recordSessionSearchCatalogCounts(target.catalog.send, result)
   }
-  async receipts(limit = 256) {
-    const page = await this.catalog.page({ group: '', orderRank: true, limit })
+  async snapshot(): Promise<number> {
+    const result = await this.catalog.transition({
+      kind: 'frontier-snapshot',
+      scope: this.catalog.scope
+    })
+    if (result.revision === undefined) {
+      throw new Error('Session frontier snapshot was not accepted')
+    }
+    return result.revision
+  }
+  async settlePaths(
+    target: SessionSearchCatalogFrontier<string>,
+    cutoff: number,
+    rows: { key: string; revision?: number; outcome?: 'retry' | 'parked' }[]
+  ): Promise<void> {
+    const result = await this.catalog.transition({
+      kind: 'frontier-settle',
+      scope: this.catalog.scope,
+      target: target.catalog.scope,
+      cutoff,
+      rows
+    })
+    recordSessionSearchCatalogCounts(target.catalog.send, result)
+  }
+  async receipts(limit = 256, cutoff?: number) {
+    const page = await this.catalog.page({
+      group: '',
+      orderRank: true,
+      limit,
+      throughRevision: cutoff
+    })
     return page.rows.map(({ key, value }) => ({
       key,
       value: value.value,

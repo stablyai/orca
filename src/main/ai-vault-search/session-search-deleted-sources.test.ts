@@ -252,3 +252,38 @@ it('retains a refused retirement remainder at EOF after an earlier unit finished
     await state.close()
   }
 })
+
+it('retains queued retirement when its replacement handoff is rejected', async () => {
+  const [path] = seedSearchableRows(1)
+  const remove = SessionSearchStore.prototype.removeFile.bind(store)
+  let refusing = true
+  store.removeFile = (target) => (refusing ? false : remove(target))
+  const state = new SessionSearchPassState()
+  await state.prepare(store)
+  state.needsRetirement = false
+  await state.retire.set(path, path)
+  const request = store.catalog.bind(store)
+  let rejectHandoff = true
+  const handoff = vi.spyOn(store, 'catalog').mockImplementation((command) => {
+    if (rejectHandoff && command.kind === 'frontier-settle' && command.scope === 'retirement') {
+      rejectHandoff = false
+      return Promise.reject(new Error('fixture rejected replacement retirement'))
+    }
+    return request(command)
+  })
+  try {
+    const args = retirementArgs(state)
+    const roots = [harness.roots.claudeProjectsDir!]
+    await expect(retireSessionSearchPassSources(args, roots, new Set())).rejects.toThrow(
+      'fixture rejected replacement retirement'
+    )
+    expect(retainedRows()).toBe(1)
+    refusing = false
+    await retireSessionSearchPassSources(args, roots, new Set())
+    expect(retainedRows()).toBe(0)
+    expect(state.pending).toBe(false)
+  } finally {
+    handoff.mockRestore()
+    await state.close()
+  }
+})
