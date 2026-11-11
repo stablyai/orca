@@ -1,5 +1,5 @@
 import { useAgentPickerDraftScope } from '../agent/AgentLaunchSetupButton'
-import { agentsOfferedForLaunch } from '@/lib/host-chat-program'
+import { agentsOfferedForLaunch } from '@/lib/agent-session/launch/inventory/host-chat-program'
 import { worktreeLaunchWorkspace } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { useEffect, useRef, useState } from 'react'
 import { Loader2, MessageSquarePlus } from 'lucide-react'
@@ -29,13 +29,13 @@ import {
   SelectValue
 } from '@/components/ui/select'
 import { useTranslate } from '@/i18n/use-translate'
-import { getAgentCatalog, getAgentLabel } from '@/lib/agent-catalog'
+import { getAgentCatalog, getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import {
   buildAgentSessionContinuationPrompt,
   hasFullAgentSessionContext,
   type AgentSessionContinuationContextMode,
   type AgentSessionContinuationRequest
-} from '@/lib/agent-session-continuation'
+} from '@/lib/agent-session/context/agent-session-continuation'
 import { launchAgentSessionContinuation } from '@/lib/agent-session/launch/continuation/launch-agent-session-continuation'
 import { useAppStore } from '@/store'
 import { isTuiAgentEnabled } from '../../../../shared/agent-launch/catalog/tui-agent-selection'

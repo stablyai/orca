@@ -64,7 +64,9 @@ function startLeaf1(ptyId: string): void {
 
 async function connectWithStart(start: TerminalPaneStart | undefined) {
   const { connectPanePty } = await import('../connect-pane-pty')
-  const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+  const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>(
+    '@/lib/agent-status/aggregation/worktree-agent-status'
+  )
   const transport = createMockTransport()
   transportFactoryQueue.push(transport)
   setStore({
@@ -134,7 +136,9 @@ describe('a pane main is starting a terminal for', () => {
 
   it('attaches a split pane to the terminal main bound it to, not its tab’s', async () => {
     const { connectPanePty } = await import('../connect-pane-pty')
-    const agentTitleMocks2 = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+    const agentTitleMocks2 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+      '@/lib/agent-status/aggregation/worktree-agent-status'
+    )
     const transport = createMockTransport()
     transportFactoryQueue.push(transport)
     const newLeaf = leafIdForPane(2)

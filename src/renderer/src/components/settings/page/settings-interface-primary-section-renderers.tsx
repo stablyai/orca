@@ -51,7 +51,7 @@ export function renderQuickCommandsSettingsSection(
   return (
     <SettingsSection
       id="quick-commands"
-      title={t('auto.components.settings.Settings.13d4fe30ad', 'Quick Commands')}
+      title={t('auto.components.settings.Settings.d60b7f0e58', 'Quick commands')}
       description={t(
         'auto.components.settings.Settings.6742c7932c',
         'Saved terminal commands, scoped globally or per project.'
@@ -104,7 +104,7 @@ export function renderMobileEmulatorSettingsSection(
     <SettingsSection
       id="mobile-emulator"
       grouped
-      title={t('auto.components.settings.Settings.f75daf1002', 'Mobile Emulator')}
+      title={t('auto.components.settings.Settings.129ae9859c', 'Mobile emulator')}
       description={t(
         'auto.components.settings.Settings.01f9d36292',
         'Configure mobile emulator support for Orca and coding agents.'
@@ -129,7 +129,7 @@ export function renderFloatingWorkspaceSettingsSection(
   return (
     <SettingsSection
       id="floating-workspace"
-      title={t('auto.components.settings.Settings.3eb22a3ada', 'Floating Workspace')}
+      title={t('auto.components.settings.Settings.c2bb9fc528', 'Floating workspace')}
       description={t(
         'auto.components.settings.Settings.3d9adfe6a5',
         'Global terminal, browser, and markdown tabs.'

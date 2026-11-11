@@ -1,7 +1,7 @@
 // During local stream outage, main applies intents and reconnect snapshot draws them. Local main shares this build, so window fallback drawing is unnecessary.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as AgentStatusModule from '@/lib/agent-status'
+import type * as AgentStatusModule from '@/lib/agent-status/aggregation/worktree-agent-status'
 import { useAppStore } from '@/store/index'
 import {
   applyLayoutCommand,
@@ -43,7 +43,7 @@ vi.mock('./workspace-layout-frame-sync', async (importOriginal) => ({
   showStartupLayoutFrames: () => {}
 }))
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
-vi.mock('@/lib/agent-status', async (importOriginal) => {
+vi.mock('@/lib/agent-status/aggregation/worktree-agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
   return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
 })

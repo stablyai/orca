@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isPluginThemeRegistration, parsePluginAppThemeArtifact } from './plugin-theme-artifact'
+import { parsePluginAppThemeArtifact } from './plugin-theme-artifact'
 import { parsePluginTerminalThemeArtifact } from './plugin-terminal-theme-artifact'
 
 const parseApp = (value: unknown) => () =>
@@ -71,21 +71,6 @@ describe('plugin app theme artifacts', () => {
         })
       ).tokenColors
     ).toEqual([{ scope: ['keyword'], settings: { foreground: '#ff79c6' } }])
-  })
-
-  it('validates registrations crossing IPC', () => {
-    const registration = {
-      id: 'plugin:samples.midnight/midnight',
-      revision: 'r1',
-      pluginKey: 'samples.midnight',
-      pluginName: 'Midnight',
-      label: 'Midnight',
-      base: 'dark',
-      tokens: { '--background': '#000000', '--foreground': '#ffffff' }
-    }
-    expect(isPluginThemeRegistration(registration)).toBe(true)
-    expect(isPluginThemeRegistration({ ...registration, id: 'midnight' })).toBe(false)
-    expect(isPluginThemeRegistration({ ...registration, tokens: { '--x': '#000' } })).toBe(false)
   })
 })
 

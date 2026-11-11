@@ -5,7 +5,7 @@ import { useRepoLabels, useRepoAssignees } from '@/hooks/useGitHubRepoMetadata'
 import { useImmediateMutation } from '@/hooks/useIssueMetadata'
 import { useRepoLabelsBySlug, useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
 import { githubRepoIdentityKey } from '../../../../../shared/github/repository-identity-key'
-import { getGitHubRepoRoutingTarget } from '@/lib/github-source-runtime-context'
+import { getGitHubRepoRoutingTarget } from '@/lib/work-items/github/github-source-runtime-context'
 import {
   getTaskPageGitHubDuplicateCandidates,
   getTaskPageGitHubDuplicateTargetErrorMessage,

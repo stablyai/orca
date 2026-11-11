@@ -15,11 +15,14 @@ export type StructuredRailOutlineWindow = {
 export type StructuredRailOutlineView =
   /** Everything is loaded, or nothing is: the loaded rail is already the whole thread. */
   | { kind: 'complete' }
+  /** An older host's outline may list agent-written inputs, so the rail keeps to loaded messages. */
+  | { kind: 'unattributed' }
   | { kind: 'fresh'; entries: readonly NativeChatRailOutlineEntry[] }
   | { kind: 'stale' }
 
 const COMPLETE: StructuredRailOutlineView = { kind: 'complete' }
 const STALE: StructuredRailOutlineView = { kind: 'stale' }
+const UNATTRIBUTED: StructuredRailOutlineView = { kind: 'unattributed' }
 
 const views = new WeakMap<
   AgentSessionConversationOutline,
@@ -34,11 +37,14 @@ export function selectStructuredRailOutline(
   if (!hasOlder || epoch === null || oldestLoadedSequence === null) {
     return COMPLETE
   }
-  if (
-    !outline ||
-    outline.cursor.epoch !== epoch ||
-    outline.cursor.sequence < oldestLoadedSequence - 1
-  ) {
+  if (!outline || outline.cursor.epoch !== epoch) {
+    return STALE
+  }
+  // Before coverage: refetching an older host's outline as the window moves would only return another unusable one.
+  if (outline.humanMessagesOnly !== true) {
+    return UNATTRIBUTED
+  }
+  if (outline.cursor.sequence < oldestLoadedSequence - 1) {
     return STALE
   }
   // Reuse view identity until covered entries change; streaming often moves the edge without crossing a prompt.

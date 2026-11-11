@@ -5,7 +5,7 @@ import { isWslUncPath } from '../../../../shared/wsl-paths'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/execution-host/project-execution-runtime'
 import { resolveLocalWindowsTerminalShellOverrideForTab } from '../../../../shared/local-windows-terminal-runtime'
 import { WINDOWS_GIT_BASH_SHELL } from '../../../../shared/windows-terminal-shell'
-import { getFolderWorkspaceConnectionId } from '@/lib/folder-workspace-connection'
+import { getFolderWorkspaceConnectionId } from '@/lib/workspace/ownership/folder-workspace-connection'
 import { getIndexedRepoMap } from '../repos/repository-catalog-index'
 import { getIndexedWorktreeMap } from '../slices/worktrees/listing/worktree-catalog-index'
 import {

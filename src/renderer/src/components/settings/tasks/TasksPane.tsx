@@ -174,7 +174,7 @@ export function TasksPane({ settings, updateSettings }: TasksPaneProps): React.J
       ) : null}
 
       <SearchableSetting
-        title={t('auto.components.settings.TasksPane.f71d8a9dd3', 'Task Providers')}
+        title={t('auto.components.settings.TasksPane.30255b39dc', 'Task providers')}
         description={t(
           'auto.components.settings.TasksPane.providersDescription',
           'Each card walks through connection (and skill, for Linear) plus whether it appears in Tasks.'

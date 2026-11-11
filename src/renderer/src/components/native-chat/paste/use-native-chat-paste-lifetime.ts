@@ -2,7 +2,7 @@ import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import { basename } from '@/lib/path'
 import type { NativeChatAttachmentOwner } from '../attachments/uploads/native-chat-attachment-owner'
 import type { NativeChatReservedAttachment } from '../attachments/intake/native-chat-session-attachment-drop'
-import { hasNativeChatPendingAttachment } from '../attachments/chips/native-chat-pending-attachment-cache'
+import { hasNativeChatPendingAttachment } from '../attachments/chips/native-chat-pending-attachment-scopes'
 
 /** Composer owns preview URLs; the draft attachment cache owns pending uploads. */
 export function useNativeChatPasteLifetime(args: {

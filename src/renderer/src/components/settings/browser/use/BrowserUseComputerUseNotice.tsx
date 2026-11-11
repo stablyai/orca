@@ -34,8 +34,8 @@ export function BrowserUseComputerUseNotice({
         >
           <MousePointerClick className="size-3.5" />
           {t(
-            'auto.components.settings.BrowserUseComputerUseNotice.15b5e680ba',
-            'Open Computer Use'
+            'auto.components.settings.BrowserUseComputerUseNotice.9895ed44de',
+            'Open computer use'
           )}
         </Button>
       </div>

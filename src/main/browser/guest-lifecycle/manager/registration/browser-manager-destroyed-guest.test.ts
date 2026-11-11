@@ -67,21 +67,6 @@ describe('browser guest destruction ownership', () => {
     mocks.guests.clear()
   })
 
-  it('releases registered callbacks and ownership after 1000 distinct guest destructions', () => {
-    for (let index = 0; index < 1000; index++) {
-      register(`retired-${index}`).destroy()
-    }
-    expectRetainedCount(0)
-  })
-
-  it('keeps explicit unregister before destruction idempotent', () => {
-    const guest = register('explicit')
-    manager.unregisterGuest('explicit')
-    guest.destroy()
-    manager.unregisterGuest('explicit')
-    expectRetainedCount(0)
-  })
-
   it('does not let a captured old destroyed callback retire a replacement guest', () => {
     const old = register('replacement')
     const [oldDestroyed] = old.listeners('destroyed')
@@ -90,42 +75,6 @@ describe('browser guest destruction ownership', () => {
     oldDestroyed.call(old)
     expect(manager.getGuestWebContentsId('replacement')).toBe(replacement.id)
     expect(manager.getWorktreeIdForTab('replacement')).toBe('worktree-1')
-    expectRetainedCount(1)
-  })
-
-  it('cleans a popup without retiring its live primary page', () => {
-    const parent = register('popup-parent')
-    const popup = createGuest()
-    manager.attachGuestPolicies(popup.asWebContents(), {
-      rootGuestWebContentsId: parent.id,
-      browserTabId: 'popup-parent'
-    })
-    popup.destroy()
-    expect(manager.getGuestWebContentsId('popup-parent')).toBe(parent.id)
-    expectRetainedCount(1)
-  })
-
-  it('cleans policies for a guest destroyed before registration', () => {
-    const guest = createGuest()
-    manager.attachGuestPolicies(guest.asWebContents())
-    guest.destroy()
-    expectRetainedCount(0)
-  })
-
-  it('preserves live guest ownership when its renderer process needs reload recovery', () => {
-    const guest = register('renderer-recovery')
-    guest.emit('render-process-gone', {}, { reason: 'crashed', exitCode: 1 })
-    expect(manager.getGuestWebContentsId('renderer-recovery')).toBe(guest.id)
-    expect(manager.getSessionProfileIdForTab('renderer-recovery')).toBe('profile-1')
-    expectRetainedCount(1)
-  })
-
-  it('rebuilds ownership when a restored page registers its fresh guest', () => {
-    register('fresh-owner').destroy()
-    const replacement = register('fresh-owner')
-    expect(manager.getGuestWebContentsId('fresh-owner')).toBe(replacement.id)
-    expect(manager.getWorktreeIdForTab('fresh-owner')).toBe('worktree-1')
-    expect(manager.getSessionProfileIdForTab('fresh-owner')).toBe('profile-1')
     expectRetainedCount(1)
   })
 

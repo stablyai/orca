@@ -1,5 +1,5 @@
 import { Loader2 } from 'lucide-react'
-import { useEffect, type CSSProperties } from 'react'
+import { useEffect, useState, type CSSProperties } from 'react'
 import { useEmulatorFrameStream } from './use-emulator-frame-stream'
 import { useEmulatorVideoStream } from './use-emulator-video-stream'
 import { scrcpyDeviceIdFromStreamUrl } from './emulator-scrcpy-stream-url'
@@ -12,6 +12,7 @@ type StreamSize = {
 }
 
 type EmulatorScreenStreamContentProps = {
+  deviceId?: string
   loading: boolean
   onStreamError: () => void
   onStreamSize: (size: StreamSize) => void
@@ -24,6 +25,7 @@ type EmulatorScreenStreamContentProps = {
 }
 
 export function EmulatorScreenStreamContent({
+  deviceId,
   loading,
   onStreamError,
   onStreamSize,
@@ -36,24 +38,39 @@ export function EmulatorScreenStreamContent({
 }: EmulatorScreenStreamContentProps) {
   const t = useTranslate()
   const androidDeviceId = scrcpyDeviceIdFromStreamUrl(previewUrl)
+  const iosVideoSession =
+    !androidDeviceId && deviceId && previewUrl ? `${deviceId}\n${previewUrl}\n${streamKey}` : null
+  const [failedIosVideoSession, setFailedIosVideoSession] = useState<string | null>(null)
+  const iosVideo = iosVideoSession !== null && iosVideoSession !== failedIosVideoSession
+  const videoDeviceId = androidDeviceId ?? (iosVideo ? deviceId : undefined)
 
-  const video = useEmulatorVideoStream(
-    androidDeviceId ?? undefined,
+  const { canvasRef, error: videoError } = useEmulatorVideoStream(
+    videoDeviceId,
     streamKey,
-    showStream && Boolean(androidDeviceId),
-    onStreamSize
+    showStream && Boolean(videoDeviceId),
+    onStreamSize,
+    iosVideo ? 'avcc' : 'annex-b'
   )
+  const iosVideoFailed = iosVideo && Boolean(videoError)
+  const jpeg = !androidDeviceId && (!iosVideo || iosVideoFailed)
   const frameStream = useEmulatorFrameStream(
-    androidDeviceId ? undefined : previewUrl,
+    jpeg ? previewUrl : undefined,
     streamKey,
-    showStream && Boolean(previewUrl) && !androidDeviceId
+    showStream && Boolean(previewUrl) && jpeg
   )
+  const mediaError = frameStream.error ?? (androidDeviceId ? videoError : null)
 
   useEffect(() => {
-    if (frameStream.error || video.error) {
+    if (iosVideoFailed) {
+      setFailedIosVideoSession(iosVideoSession)
+    }
+  }, [iosVideoFailed, iosVideoSession])
+
+  useEffect(() => {
+    if (mediaError) {
       onStreamError()
     }
-  }, [frameStream.error, video.error, onStreamError])
+  }, [mediaError, onStreamError])
 
   const mediaStyle = resolveStreamMediaStyle(streamRotation, screenAspectRatio)
   const mediaClassName =
@@ -61,10 +78,10 @@ export function EmulatorScreenStreamContent({
       ? 'block h-full w-full bg-black object-contain'
       : 'absolute left-1/2 top-1/2 block max-w-none bg-black object-contain'
 
-  if (androidDeviceId && showStream && !video.error) {
+  if (videoDeviceId && showStream && !videoError) {
     return (
       <canvas
-        ref={video.canvasRef}
+        ref={canvasRef}
         className={mediaClassName}
         style={mediaStyle}
         aria-label={t(
@@ -99,8 +116,8 @@ export function EmulatorScreenStreamContent({
     )
   }
 
-  const waitingForFrame = showStream && !frameStream.error && !video.error
-  const displayError = streamError || Boolean(frameStream.error) || Boolean(video.error)
+  const waitingForFrame = showStream && !mediaError
+  const displayError = streamError || Boolean(mediaError)
 
   return (
     <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-muted/20 text-muted-foreground">

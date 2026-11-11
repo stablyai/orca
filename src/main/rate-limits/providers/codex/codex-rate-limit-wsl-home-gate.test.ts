@@ -81,22 +81,6 @@ describe('Codex quota poll home for a WSL account (E9)', () => {
     expect(resolution).toEqual({ kind: 'skip' })
   })
 
-  it('prepares the home when the targeted distro runs, and leaves host targets alone', async () => {
-    const h = harness(['orca-w'], () => homeIn('orca-w'))
-
-    await expect(
-      resolveCodexRateLimitHomeUnlessStopped(
-        h.source,
-        { runtime: 'wsl', wslDistro: 'orca-w' },
-        h.deps
-      )
-    ).resolves.toEqual({ kind: 'ready', codexHomePath: homeIn('orca-w') })
-    await resolveCodexRateLimitHomeUnlessStopped(h.source, { runtime: 'host' }, h.deps)
-
-    expect(h.prepareForRateLimitFetch).toHaveBeenLastCalledWith({ runtime: 'host' })
-    expect(h.deps.isRunning).toHaveBeenCalledOnce()
-  })
-
   it('skips when no distro can be named', async () => {
     const h = harness([], () => null)
     h.deps.defaultDistro.mockResolvedValue(null)

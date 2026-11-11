@@ -8,14 +8,14 @@ import {
 } from '@/components/ui/dialog'
 import { AgentSkillSetupPanel } from '@/components/skills/setup/AgentSkillSetupPanel'
 import { IntegrationStatusPill } from '@/components/integration-status-pill'
-import { SkillFreshnessStatusPill } from '@/components/skills/SkillFreshnessStatusPill'
-import { ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-skill-names'
+import { SkillFreshnessStatusPill } from '@/components/skills/freshness/SkillFreshnessStatusPill'
+import { ORCHESTRATION_SKILL_NAME } from '@/lib/skills/installation/agent-feature-skill-names'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkill
-} from '@/hooks/useInstalledAgentSkills'
-import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
-import { refreshSkillFreshness } from '@/hooks/useSkillFreshness'
+} from '@/hooks/skills/discovery/useInstalledAgentSkills'
+import { useActiveProjectSkillRuntime } from '@/hooks/skills/runtime/useActiveProjectSkillRuntime'
+import { refreshSkillFreshness } from '@/hooks/skills/freshness/useSkillFreshness'
 import { useAppStore } from '@/store'
 import { useTranslate } from '@/i18n/use-translate'
 

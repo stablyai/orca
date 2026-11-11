@@ -31,6 +31,18 @@ export type NativeChatGlobalSettings = {
   nativeChatTurnDiffSummary?: boolean
   /** Lines saying how CI went on a pull request the chat opened or pushed to. Absent means on. */
   nativeChatCiResultLines?: boolean
+  /** A "New" line above what arrived while the reader was away. Absent follows the default below. */
+  nativeChatMarkNewMessages?: boolean
+}
+
+/** Not written into default settings, so flipping this reaches everyone who never chose. */
+const NATIVE_CHAT_MARKS_NEW_MESSAGES_BY_DEFAULT = true
+
+export function nativeChatMarksNewMessages(
+  settings: { readonly nativeChatMarkNewMessages?: unknown } | null | undefined
+): boolean {
+  const value = settings?.nativeChatMarkNewMessages
+  return typeof value === 'boolean' ? value : NATIVE_CHAT_MARKS_NEW_MESSAGES_BY_DEFAULT
 }
 
 /** Only explicit OFF keeps a reader's place on send. */

@@ -6,14 +6,15 @@ import type { AgentJournalSubmission } from '../../../../../../../shared/agent-s
 import { agentJournalSubmissionKey } from '../../../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { NativeChatDeliveryNotice } from '../../../messages/rows/NativeChatMessageRow'
 import { useStructuredAgentSessionDeliveryNotices } from './use-structured-agent-session-delivery-notices'
-import { NativeChatSignInContext } from '../../../host-access/native-chat-sign-in'
-import { NativeChatSignInButton } from '../../../host-access/NativeChatSignInButton'
+import { NativeChatHostSetupContext } from '../../../host-access/native-chat-host-setup'
+import { NativeChatSetupButton } from '../../../host-access/NativeChatSetupButton'
 import { agentSessionFailureWords } from '../../../../../../../shared/agent-session/failures/agent-session-failure-words'
 import type { SubmissionRejectionFact } from '../../../../../../../shared/agent-session/failures/agent-session-failure'
 
 afterEach(cleanup)
 const EMPTY: readonly never[] = []
 const signInView = { signingIn: false, signIn: vi.fn() }
+const setupView = { signIn: signInView, install: null }
 
 it('bounds submission work and renders only rows whose delivery notice changes at N and 10N', () => {
   for (const size of [32, 320]) {
@@ -127,10 +128,10 @@ it('keeps one usable sign-in owner as typed rejection and visible failure rows a
     const notice = notices.get(agentJournalSubmissionKey('refused'))
     observed.notice = notice
     return (
-      <NativeChatSignInContext.Provider value={signInView}>
-        <NativeChatSignInButton failureKind={notice?.failureKind} />
-        {stated ? <NativeChatSignInButton failureKind="notSignedIn" /> : null}
-      </NativeChatSignInContext.Provider>
+      <NativeChatHostSetupContext.Provider value={setupView}>
+        <NativeChatSetupButton failureKind={notice?.failureKind} />
+        {stated ? <NativeChatSetupButton failureKind="notSignedIn" /> : null}
+      </NativeChatHostSetupContext.Provider>
     )
   }
   const view = render(<Chat typed={false} />)

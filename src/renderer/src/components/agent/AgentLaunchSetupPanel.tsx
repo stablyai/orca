@@ -21,8 +21,8 @@ import {
 } from '@/components/ui/command'
 import { useTranslate } from '@/i18n/use-translate'
 import { agentModelChoiceChips } from './launch-settings/agent-model-choice-chips'
-import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
-import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
+import { isScreenSubmitShortcut } from '@/lib/keyboard/screen-submit-shortcut'
+import { isImeOwnedKeyboardEvent } from '@/lib/text-input/ime/ime-composition-keyboard-event'
 import { AgentDefaultArgsInput } from './launch-settings/AgentLaunchDefaultsEditor'
 import { NativeChatSessionOptionRows } from '../native-chat/session/options/controls/NativeChatSessionOptionRows'
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible'
@@ -40,7 +40,10 @@ import {
   applyAgentPickerEdit,
   type AgentPickerEdit
 } from '../../../../shared/agent-launch/picker/agent-launch-picker-edits'
-import { agentPickerArgumentsKnown } from '../../../../shared/agent-launch/picker/agent-launch-picker-authority'
+import {
+  agentPickerArgumentsKnown,
+  agentPickerCatalogAuthoritative
+} from '../../../../shared/agent-launch/picker/agent-launch-picker-authority'
 import { agentPickerEffectiveChoices } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import type { AgentPickerSurface } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import {
@@ -65,7 +68,7 @@ export function AgentLaunchSetupPanel({
   const editDraft = (edit: AgentPickerEdit) => {
     const current = getDraft()
     if (current) {
-      onDraftChange(applyAgentPickerEdit(entry, current, edit))
+      onDraftChange(applyAgentPickerEdit(entry, current, edit), edit.kind)
     }
   }
   const [modelQuery, setModelQuery] = useState('')
@@ -74,7 +77,7 @@ export function AgentLaunchSetupPanel({
   const argumentsKnown = agentPickerArgumentsKnown(entry, draft)
   const effective = agentPickerEffectiveChoices(entry, draft)
   const argumentsView = agentPickerPanelArguments(entry, draft)
-  const models = agentPickerModels(entry)
+  const models = agentPickerModels(entry, draft.surface)
   const defaultsPending =
     draft.surface === 'chat' ? entry.structuredDefaultsPending : entry.defaultsPending
   const seed = getAgentSessionOptionLaunchCatalog(entry.agent)
@@ -231,13 +234,7 @@ export function AgentLaunchSetupPanel({
               {catalogMessage}
             </div>
           ) : null}
-          {hasModels &&
-          modelQuery &&
-          entry.catalog.origin !== 'unknown' &&
-          !entry.catalog.listingInProgress &&
-          entry.catalogRead !== 'pending' &&
-          entry.catalogRead !== 'failed' &&
-          entry.catalogRead !== 'unsupported' ? (
+          {hasModels && modelQuery && agentPickerCatalogAuthoritative(entry) ? (
             <CommandEmpty>{t('agentPicker.noModels', 'No models match your search.')}</CommandEmpty>
           ) : null}
           <CommandGroup>

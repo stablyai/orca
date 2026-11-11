@@ -38,7 +38,7 @@ vi.mock('@/store/index', () => {
 vi.mock('@/hooks/use-document-dark-theme', () => ({ useDocumentDarkTheme: () => true }))
 vi.mock('../../MonacoCodeExcerpt', () => ({ useMonacoColorizedLines: () => [] }))
 vi.mock('../../editor-shortcuts', () => ({ installMonacoEditorFindShortcut: () => () => {} }))
-vi.mock('@/lib/monaco-setup', async () => {
+vi.mock('@/lib/editor/monaco/monaco-setup', async () => {
   const actual = await import('monaco-editor/esm/vs/editor/editor.api.js')
   for (const id of ['python', 'javascript', 'markdown']) {
     actual.languages.register({ id })

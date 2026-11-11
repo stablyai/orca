@@ -8,10 +8,10 @@ import { formatBrowserClientHostIdArgument } from '../../shared/browser/client-h
 import { formatWindowMaterialArgument, resolveWindowMaterial } from '../../shared/window-material'
 import { windowMaterialOptions } from './window-material-options'
 import { rememberWindowMaterial } from './window-material-suppression'
-import { markSystemSessionEnding } from '../crash-reporting/expected-teardown-state'
-import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
+import { markSystemSessionEnding } from '../crash-reporting/process-exits/expected-teardown-state'
+import { recordDurableCrashBreadcrumb } from '../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
 import { clearTrustedUIRendererWebContentsId, setTrustedUIRendererWebContentsId } from '../ipc/ui'
-import { flushUnsavedCloudSessions } from '../orca-profiles/profile-cloud-session-owner'
+import { flushUnsavedCloudSessions } from '../orca-profiles/cloud-session/profile-cloud-session-owner'
 import type { Store } from '../persistence/loading-store/store'
 import { closeDashboardPopout } from './dashboard-popout-window'
 import { closeWorkspaceSpaceWindow } from './workspace-space-window'
@@ -88,6 +88,7 @@ export function createMainWindow(
     )
   }
   const savedMaximized = store?.getUI().windowMaximized ?? false
+  const savedFullScreen = store?.getUI().windowFullScreen ?? false
   // Fill the primary work area on first launch; later launches honor saved bounds.
   const defaultBounds = (() => {
     try {
@@ -101,7 +102,7 @@ export function createMainWindow(
   const settings = store?.getSettings()
   browserManager.setDictationShortcutForwardingPredicate(() => {
     const voice = store?.getSettings().voice
-    // Guests forward only keydown, so Hold's release can't reach the renderer; the page keeps the key then.
+    // Chromium drops a page's key releases after a press cancelled here, so Hold can't see its release; the page keeps the key then.
     return voice?.enabled === true && voice.dictationMode !== 'hold'
   })
   const windowMaterial = resolveWindowMaterial(
@@ -203,6 +204,7 @@ export function createMainWindow(
     mainWindow,
     revealOnDidFinishLoad: opts?.revealOnDidFinishLoad === true,
     savedMaximized,
+    savedFullScreen,
     store
   })
   installMainWindowWebviewSecurity(mainWindow)

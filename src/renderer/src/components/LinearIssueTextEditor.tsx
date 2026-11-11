@@ -1,15 +1,18 @@
 import { writeLinearIssue } from '@/lib/work-items/linear/linear-issue-write'
-import { taskProviderErrorMessage } from '@/lib/task-provider-error-copy'
-import { ImeTextarea } from '@/lib/ime-text-field'
+import { taskProviderErrorMessage } from '@/lib/work-items/task-provider-error-copy'
+import { ImeTextarea } from '@/lib/text-input/ime/ime-text-field'
 import React, { useCallback, useRef, useState } from 'react'
 import { LoaderCircle } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { LinearIssueMarkdownDescriptionEditor } from '@/components/LinearIssueMarkdownDescriptionEditor'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { cn } from '@/lib/utils'
-import { useAppStore } from '@/store'
-import { getScreenSubmitShortcutLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
+import { cn } from '@/lib/class-names'
+import { useAppStore } from '@/store/index'
+import {
+  getScreenSubmitShortcutLabel,
+  isScreenSubmitShortcut
+} from '@/lib/keyboard/screen-submit-shortcut'
 import { linearUpdateIssue } from '@/runtime/linear/runtime-linear-issue-client'
 import type { LinearIssue } from '../../../shared/linear/issue-types'
 import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
@@ -23,7 +26,7 @@ import {
 } from './linear-issue-text-draft-state'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
-import { defaultScopeSource } from '@/lib/default-creation-host'
+import { defaultScopeSource } from '@/runtime/hosts/selection/default-creation-host'
 
 type LinearIssueTextEditorProps = {
   issue: LinearIssue

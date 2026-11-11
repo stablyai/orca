@@ -147,7 +147,7 @@ export async function initializeAcpStructuredSession(
     })
     assertStarting()
   }
-  const childStops = await probeAcpChildStops(connection, spec.dialect)
+  const childStops = await probeAcpChildStops(connection, spec.dialect, initialized)
   assertStarting()
   liveLane.apply(liveLane.translator.contextModels(started.response.models, now()))
   const mode = spec.permissionModeConfig

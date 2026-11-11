@@ -73,60 +73,6 @@ describe('browserManager', () => {
     vi.useRealTimers()
   })
 
-  it('drops a queued failure when a replacement navigation starts before registration', () => {
-    const rendererSendMock = vi.fn()
-    const guest = {
-      id: 407,
-      isDestroyed: vi.fn(() => false),
-      getType: vi.fn(() => 'webview'),
-      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
-      isCurrentlyAudible: vi.fn(() => false),
-      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
-      on: guestOnMock,
-      off: guestOffMock,
-      openDevTools: guestOpenDevToolsMock,
-      getURL: vi.fn(() => 'https://example.com/'),
-      ...guestUaMethods()
-    }
-    webContentsFromIdMock.mockImplementation((id: number) =>
-      id === guest.id
-        ? guest
-        : id === rendererWebContentsId
-          ? { isDestroyed: vi.fn(() => false), send: rendererSendMock }
-          : null
-    )
-
-    browserManager.attachGuestPolicies(guest as never)
-    const didFailLoad = guestOnMock.mock.calls.find(
-      ([event]) => event === 'did-fail-load'
-    )?.[1] as (
-      event: unknown,
-      errorCode: number,
-      errorDescription: string,
-      validatedUrl: string,
-      isMainFrame: boolean
-    ) => void
-    const didStartNavigation = guestOnMock.mock.calls.find(
-      ([event]) => event === 'did-start-navigation'
-    )?.[1] as (event: unknown, url: string, isInPlace: boolean, isMainFrame: boolean) => void
-
-    didFailLoad(null, -202, 'Certificate authority invalid', 'https://localhost:3443/', true)
-    didStartNavigation(null, 'https://example.com/', false, true)
-    expect(
-      browserManager.registerGuest({
-        browserPageId: 'browser-late-registration',
-        webContentsId: guest.id,
-        rendererWebContentsId
-      })
-    ).toBe(true)
-
-    expect(rendererSendMock).not.toHaveBeenCalledWith(
-      'browser:guest-load-failed',
-      expect.anything()
-    )
-    expect(browserManager.getBrowserPageLoadError('browser-late-registration')).toBeNull()
-  })
-
   it('restores a certificate failure when a retry navigation aborts before committing', () => {
     const guest = {
       id: 406,

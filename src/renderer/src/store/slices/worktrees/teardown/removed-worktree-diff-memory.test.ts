@@ -38,8 +38,7 @@ function mountDiff(worktreeId: string): { key: string; lease: CombinedDiffViewLe
         }
       ],
       sectionHeights: {},
-      loadedIndices: [0],
-      sideBySide: true
+      loadedIndices: [0]
     },
     scrollTop: 42,
     scrollAnchor: { key: 'source', offset: 0 }

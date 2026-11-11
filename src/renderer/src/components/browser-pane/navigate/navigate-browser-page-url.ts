@@ -1,5 +1,5 @@
-import { detectLanguage } from '@/lib/language-detect'
-import { getConnectionId } from '@/lib/connection-context'
+import { detectLanguage } from '../../../../../shared/editor-language/editor-language-detect'
+import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
 import {
   isPathInsideWorktree,
   toWorktreeRelativePath
@@ -25,8 +25,8 @@ import type {
   BrowserTabPageState
 } from '../describe-page/browser-page-types'
 import type { MutableRefObject } from 'react'
-import { statUserOpenedPath } from '@/lib/user-opened-local-path'
-import { requireRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
+import { statUserOpenedPath } from '@/lib/files/access/user-opened-local-path'
+import { requireRuntimeTargetForFileOwner } from '@/lib/files/access/file-owner-runtime-target'
 
 export type NavigateBrowserPageToUrlArgs = {
   url: string

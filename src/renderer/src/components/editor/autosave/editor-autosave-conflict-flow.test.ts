@@ -19,7 +19,7 @@ const mocks = vi.hoisted(() => ({
   getConnectionIdForFile: vi.fn()
 }))
 
-vi.mock('@/lib/connection-context', () => ({
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
   getConnectionIdForFile: mocks.getConnectionIdForFile
 }))
 

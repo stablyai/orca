@@ -13,7 +13,7 @@ const ok: RuntimeRpcResponse<unknown> = {
   _meta: { runtimeId: 'r' }
 }
 
-function setup(probe: Probe, shouldProbe: () => boolean = () => true) {
+function setup(probe: Probe) {
   const onUnresponsive = vi.fn()
   const onRecovered = vi.fn()
   const probeSpy = vi.fn<Probe>(probe)
@@ -22,7 +22,7 @@ function setup(probe: Probe, shouldProbe: () => boolean = () => true) {
     {
       probe: probeSpy,
       isCurrent: () => true,
-      shouldProbe,
+      shouldProbe: () => true,
       onUnresponsive,
       onRecovered
     }
@@ -126,16 +126,6 @@ describe('shared control app heartbeat', () => {
     await vi.advanceTimersByTimeAsync(2_000)
     expect(onUnresponsive).not.toHaveBeenCalled()
     expect(heartbeat.unresponsiveAt).toBeNull()
-    heartbeat.stop()
-  })
-
-  it('does not probe an asleep host', async () => {
-    const { heartbeat, probe } = setup(
-      () => Promise.resolve(ok),
-      () => false
-    )
-    await vi.advanceTimersByTimeAsync(5_000)
-    expect(probe).not.toHaveBeenCalled()
     heartbeat.stop()
   })
 

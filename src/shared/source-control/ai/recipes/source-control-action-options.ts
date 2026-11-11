@@ -4,8 +4,7 @@ import { isAgentSessionHandleProvider } from '../../../agent-session/lifecycle/a
 import { STRUCTURED_LAUNCH_SEED_OPTION_IDS } from '../../../native-chat/input/native-chat-session-option-defaults'
 import {
   findCatalogModel,
-  getAgentSessionOptionLaunchCatalog,
-  getAgentSessionOptionCatalog
+  getAgentSessionOptionLaunchCatalog
 } from '../../../agent-session/options/agent-session-option-catalog'
 import type { CatalogOption } from '../../../agent-session/options/agent-session-option-catalog-types'
 import {
@@ -48,7 +47,7 @@ export function sourceControlActionOptions(
   agent: TuiAgent,
   modelId: string
 ): SourceControlActionOption[] {
-  const catalog = getAgentSessionOptionCatalog(agent)
+  const catalog = getAgentSessionOptionLaunchCatalog(agent)
   const model = findCatalogModel(catalog ?? { models: [], modelApply: {} }, modelId)
   const options = model?.options ?? catalog?.unknownModelOptions ?? []
   const launchCatalog = getAgentSessionOptionLaunchCatalog(agent)

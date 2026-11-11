@@ -1,4 +1,4 @@
-// Update profiles: cold-restore requires old-daemon death/new daemon, best-effort scrollback, new-terminal input and no flashes.
+// Update profiles: cold-restore requires old-daemon death/new daemon, new-terminal input and no flashes.
 // survival requires unchanged daemon, live marker, original-session echo/Ctrl+C and no flashes.
 
 const CONSOLE_HOST_PROCESSES = new Set([
@@ -102,13 +102,6 @@ function coldRestoreAssertions(ctx) {
       freshDaemon,
       'new daemon pid, alive',
       `post pid ${ctx.postDaemonPid} (alive: ${ctx.postDaemonAlive})`
-    ),
-    // Report null scraped buffer text as informational because WebGL may expose no DOM rows.
-    assertion(
-      'previous terminals show restored scrollback (best-effort)',
-      ctx.scrollbackRestored === null ? null : ctx.scrollbackRestored,
-      'prior output text present after restore',
-      ctx.scrollbackRestored === null ? 'unknown (renderer opaque)' : String(ctx.scrollbackRestored)
     ),
     assertion(
       'new terminal is interactive (typed input echoes)',

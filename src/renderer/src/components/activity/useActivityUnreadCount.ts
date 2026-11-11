@@ -2,7 +2,7 @@ import { useState } from 'react'
 
 import { migrationUnsupportedToAgentStatusEntry } from '../../../../shared/migration-unsupported-agent-entry'
 import { useAppStore } from '@/store'
-import { createAgentStatusEpochSelector } from '@/lib/agent-status-epoch-selector'
+import { createAgentStatusEpochSelector } from '@/lib/agent-status/evidence/agent-status-epoch-selector'
 import type { AppState } from '@/store/types'
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 

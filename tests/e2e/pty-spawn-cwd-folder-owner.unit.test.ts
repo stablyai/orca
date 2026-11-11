@@ -8,7 +8,7 @@ import type { RuntimePtyController } from '../../src/main/runtime/terminal/lifec
 import { spawnMock } from '../../src/main/ipc/pty/pty-ipc-mock-registry'
 import { setupPtyIpcSuite } from '../../src/main/ipc/pty/pty-ipc-test-harness'
 import { registerPtyHandlers } from '../../src/main/ipc/pty/register-handlers'
-import { getFolderWorkspacePathErrorCopy } from '../../src/renderer/src/lib/folder-workspace-path-status'
+import { getFolderWorkspacePathErrorCopy } from '../../src/renderer/src/lib/workspace/paths/folder-workspace-path-status'
 
 vi.mock('electron', () =>
   import('../../src/main/ipc/pty/pty-ipc-mock-registry').then((m) => m.electronModuleMock())
@@ -59,7 +59,7 @@ vi.mock('../../src/main/telemetry/client', () =>
 vi.mock('../../src/main/telemetry/classify-error', () =>
   import('../../src/main/ipc/pty/pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
 )
-vi.mock('../../src/main/cli/linux-terminal-orca-cli-shim', () =>
+vi.mock('../../src/main/cli/launchers/linux-terminal-orca-cli-shim', () =>
   import('../../src/main/ipc/pty/pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
 )
 vi.mock('../../src/main/memory/pty-registry', () =>

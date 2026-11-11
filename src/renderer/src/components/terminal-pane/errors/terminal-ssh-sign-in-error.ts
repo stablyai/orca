@@ -1,4 +1,4 @@
-import { compactIpcErrorMessage } from '@/lib/ipc-error'
+import { compactIpcErrorMessage } from '@/runtime/errors/ipc-error'
 import {
   SSH_CONNECT_IN_PROGRESS_SUFFIX,
   SSH_SIGN_IN_AWAITED_SUFFIX,

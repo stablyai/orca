@@ -43,3 +43,45 @@ export function showsClaudeDialog(lines: readonly string[]): boolean {
   const region = lines.filter((line) => line.trim() !== '').slice(-DIALOG_REGION_LINES)
   return region.some((line) => DIALOG_FOOTER_RE.test(line)) || hasCursoredOptionList(region)
 }
+
+// Claude's permission dialog: "Claude Code will automatically block this request in 1:59, ...".
+const AUTO_BLOCK_COUNTDOWN_RE = /automatically block this request in (\d+):(\d{2})/
+
+/** When the dialog's own auto-block countdown runs out, if the screen shows one. */
+export function claudeDialogExpiresAt(
+  lines: readonly string[] | null,
+  now: number
+): string | undefined {
+  for (const line of (lines ?? []).filter((row) => row.trim() !== '').slice(-DIALOG_REGION_LINES)) {
+    const match = AUTO_BLOCK_COUNTDOWN_RE.exec(line)
+    if (match) {
+      return new Date(now + (Number(match[1]) * 60 + Number(match[2])) * 1_000).toISOString()
+    }
+  }
+  return undefined
+}
+
+// Why String.raw: the orcad bundle must stay ASCII (see CURSORED_OPTION_RE).
+const DASHED_RULE_RE = new RegExp(String.raw`^\s*\u254C`)
+const BOX_LINE_RE = new RegExp(String.raw`^\s*\u2502 ?`)
+const PROCEED_RE = /Do you want to proceed\?/
+
+/** The warning Claude prints under a command it flagged, the paragraph after the command's own
+ *  dashed box and before the countdown; null when the dialog has none. */
+export function claudeDialogWarning(lines: readonly string[] | null): string | null {
+  const region = (lines ?? []).filter((row) => row.trim() !== '').slice(-DIALOG_REGION_LINES * 2)
+  const proceed = region.findLastIndex((line) => PROCEED_RE.test(line))
+  const rules = region
+    .slice(0, Math.max(proceed, 0))
+    .flatMap((line, index) => (DASHED_RULE_RE.test(line) ? [index] : []))
+  // The first rule opens the command's box, the second closes it; a warning follows the second.
+  if (proceed === -1 || rules.length < 2) {
+    return null
+  }
+  const warning = region
+    .slice((rules.at(-1) ?? 0) + 1, proceed)
+    .filter((line) => BOX_LINE_RE.test(line))
+    .map((line) => line.replace(BOX_LINE_RE, '').trim())
+    .join(' ')
+  return warning || null
+}

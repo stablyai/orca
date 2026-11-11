@@ -11,7 +11,9 @@ import { handleRichMarkdownImagePaste } from './rich-markdown-paste-image'
 vi.mock('@/runtime/files/imports/runtime-file-import-client', () => ({
   importExternalPathsToRuntime: vi.fn()
 }))
-vi.mock('@/lib/connection-context', () => ({ getConnectionId: vi.fn(() => null) }))
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
+  getConnectionId: vi.fn(() => null)
+}))
 vi.mock('@/store/index', () => ({
   useAppStore: {
     getState: vi.fn(() => ({
