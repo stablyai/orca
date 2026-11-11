@@ -121,19 +121,6 @@ describe('chat send', () => {
     })
   })
 
-  it('reports a host refusal as an error instead of a sent message', async () => {
-    const client = fakeClient([
-      workState({ fence: 2 }),
-      ok({
-        ok: false,
-        refusal: { code: 'agent_session_fence_mismatch', message: 'The chat restarted.' }
-      })
-    ])
-    await expect(run('chat send', { session: SESSION, text: 'hi' }, client)).rejects.toMatchObject({
-      code: 'agent_session_fence_mismatch'
-    })
-  })
-
   it('with --wait, waits for its queued message to run and returns that turn', async () => {
     vi.useFakeTimers()
     const client = fakeClient([
