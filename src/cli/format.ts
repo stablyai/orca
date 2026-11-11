@@ -22,6 +22,7 @@ export {
   formatProjectList
 } from './project-format'
 export {
+  formatTerminalAgentStatus,
   formatTerminalClose,
   formatTerminalCreate,
   formatTerminalFocus,
