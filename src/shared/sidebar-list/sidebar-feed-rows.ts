@@ -66,6 +66,7 @@ export type SidebarFeedView = {
   filters: WorkspaceRowFilters
   workspaceHostScope: ExecutionHostScope
   visibleWorkspaceHostIds: readonly ExecutionHostId[] | null
+  showHostSections: boolean
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
   pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
   /** The host the desktop has focused (its settings' active runtime), where unowned rows land. */
@@ -272,9 +273,8 @@ export function renderSidebarFeedRows(
   forceCollapseHosts = false
 ): Pick<SidebarFeedRows, 'rows' | 'sectionRows'> {
   const collapsed = new Set(collapsedGroups)
-  const rows = planned.plan.render(
-    planned.hostScoped ? deferHostSectionCollapse(collapsed) : collapsed
-  )
+  const hostScoped = planned.hostScoped || view.showHostSections
+  const rows = planned.plan.render(hostScoped ? deferHostSectionCollapse(collapsed) : collapsed)
   const sectioned = addHostSectionRows({
     rows,
     hostOptions: planned.orderedHostOptions,
@@ -284,9 +284,9 @@ export function renderSidebarFeedRows(
     localHostLabel: view.localHostLabel,
     collapsedHostKeys: collapsed,
     forceCollapseHosts,
-    preferProjectGrouping: true
+    showHostSections: view.showHostSections
   })
-  const sectionRows = planned.hostScoped
+  const sectionRows = hostScoped
     ? scopeHostSectionCollapse({ rows: sectioned, collapsedGroups: collapsed })
     : sectioned
   return { rows, sectionRows }

@@ -65,7 +65,7 @@ function localOnlyViewHeader(
     visibleWorkspaceHostIds: ['local'],
     defaultHostId: 'local',
     localHostLabel: 'Local Mac',
-    preferProjectGrouping: true
+    showHostSections: true
   }).find((row) => row.type === 'header')
   if (!header) {
     throw new Error('the planned view has no project header')

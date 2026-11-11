@@ -71,6 +71,7 @@ function view(overrides: Partial<SidebarFeedView> = {}): SidebarFeedView {
     filters: NO_WORKSPACE_ROW_FILTERS,
     workspaceHostScope: 'all',
     visibleWorkspaceHostIds: null,
+    showHostSections: false,
     workspaceStatuses: [],
     pinnedDisplayPolicy: 'single-location',
     defaultHostId: LOCAL_EXECUTION_HOST_ID,
@@ -173,6 +174,39 @@ describe('buildSidebarFeedRows keeps same-id workspaces on two hosts apart', () 
     expect(repoOf('ssh:box')).toMatchObject({ repo: { connectionId: 'box' } })
     expect(repoOf('local')).toMatchObject({ repo: { id: 'r' } })
     expect(repoOf('local')).not.toMatchObject({ repo: { connectionId: 'box' } })
+  })
+})
+
+describe('buildSidebarFeedRows host sections', () => {
+  const repos = [repo('r'), repo('r', { connectionId: 'box' })]
+  const workspaces = buildWorkspaceRows({
+    worktrees: [
+      worktree('r::/w/a', { hostId: 'local', displayName: 'A', lastActivityAt: 200 }),
+      worktree('r::/w/b', { hostId: 'ssh:box', displayName: 'B', lastActivityAt: 100 })
+    ],
+    folderWorkspaces: [],
+    repos,
+    lineageById: {}
+  })
+  const build = (overrides: Partial<SidebarFeedView>) =>
+    outline(
+      buildSidebarFeedRows(domains({ workspaces }), catalog(repos), view(overrides)).sectionRows
+    )
+
+  it('draws them for all hosts when the layout asks', () => {
+    expect(build({ showHostSections: true })).toEqual([
+      '## This computer',
+      'local|r::/w/a@0',
+      '## box',
+      'ssh:box|r::/w/b@0'
+    ])
+  })
+
+  it('keeps a partial Hosts filter flat when the layout does not ask', () => {
+    expect(build({ visibleWorkspaceHostIds: ['local', 'ssh:box', 'ssh:other'] })).toEqual([
+      'local|r::/w/a@0',
+      'ssh:box|r::/w/b@0'
+    ])
   })
 })
 

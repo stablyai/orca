@@ -275,6 +275,7 @@ export function phoneInputsFromWindowState(
       filters: sidebarWorkspaceRowFilters(state),
       workspaceHostScope: state.workspaceHostScope,
       visibleWorkspaceHostIds: state.visibleWorkspaceHostIds,
+      showHostSections: state.showWorkspaceHostSections,
       workspaceStatuses: state.workspaceStatuses,
       pinnedDisplayPolicy: getPinnedWorktreeDisplayPolicy(state.settings),
       defaultHostId: getSettingsFocusedExecutionHostId(state.settings),

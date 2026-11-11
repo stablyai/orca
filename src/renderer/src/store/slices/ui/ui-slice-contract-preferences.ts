@@ -48,6 +48,8 @@ export type UISlicePreferences = {
   setVisibleWorkspaceHostIds: (ids: VisibleWorkspaceHostIds) => void
   workspaceHostOrder: WorkspaceHostOrder
   setWorkspaceHostOrder: (ids: WorkspaceHostOrder) => void
+  showWorkspaceHostSections: boolean
+  setShowWorkspaceHostSections: (v: boolean) => void
   /** Automations page host filter, in stable form. Never written from an unhydrated catalog. */
   automationHostFilter: AutomationHostFilter
   setAutomationHostFilter: (filter: AutomationHostFilter) => void

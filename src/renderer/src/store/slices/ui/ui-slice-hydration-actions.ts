@@ -138,6 +138,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           workspaceHostScope: normalizeExecutionHostScope(ui.workspaceHostScope),
           visibleWorkspaceHostIds: normalizeHydratedVisibleWorkspaceHostIds(ui),
           workspaceHostOrder: normalizeExecutionHostOrder(ui.workspaceHostOrder),
+          showWorkspaceHostSections: ui.showWorkspaceHostSections === true,
           // Why: a malformed or legacy filter value must degrade to All hosts, never throw during hydration.
           automationHostFilter: parsePersistedAutomationHostFilter(ui.automationHostFilter),
           manualRepoOrder,

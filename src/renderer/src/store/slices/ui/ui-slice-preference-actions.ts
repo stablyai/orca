@@ -88,6 +88,11 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
       set({ workspaceHostOrder })
       window.api.ui.set({ workspaceHostOrder }).catch(console.error)
     },
+    showWorkspaceHostSections: false,
+    setShowWorkspaceHostSections: (v) => {
+      set({ showWorkspaceHostSections: v })
+      window.api.ui.set({ showWorkspaceHostSections: v }).catch(console.error)
+    },
     automationHostFilter: ALL_AUTOMATION_HOSTS_FILTER,
     setAutomationHostFilter: (filter) => {
       window.api.ui

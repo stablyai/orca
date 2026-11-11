@@ -129,21 +129,17 @@ export function addHostSectionRows(args: {
   // Reuse persisted host:<hostId> collapsed-group keys across restarts.
   collapsedHostKeys?: ReadonlySet<string>
   forceCollapseHosts?: boolean
-  // Projects remain primary in the default view; explicit host filters retain operational host headers.
-  preferProjectGrouping?: boolean
+  // A layout choice (Group by > Host sections); the Hosts filter alone never adds host headers.
+  showHostSections: boolean
 }): HostSectionRow[] {
   const visibleHostIds =
     args.visibleWorkspaceHostIds ??
     (args.workspaceHostScope === ALL_EXECUTION_HOSTS_SCOPE ? null : [args.workspaceHostScope])
-  if (
-    args.preferProjectGrouping &&
-    args.workspaceHostScope === ALL_EXECUTION_HOSTS_SCOPE &&
-    !args.visibleWorkspaceHostIds
-  ) {
-    return [...args.rows]
-  }
   if (visibleHostIds && visibleHostIds.length <= 1) {
     return localizeRowsToHost(args.rows, visibleHostIds[0])
+  }
+  if (!args.showHostSections) {
+    return [...args.rows]
   }
   if (args.hostOptions.length <= 1) {
     return localizeRowsToHost(args.rows, args.hostOptions[0]?.id)

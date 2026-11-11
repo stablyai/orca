@@ -95,6 +95,7 @@ export function mergeHostWebUIState(
     hideWorkspacesFromOtherDevices: local.hideWorkspacesFromOtherDevices === true,
     manualRepoOrder: local.manualRepoOrder,
     workspaceHostOrder: local.workspaceHostOrder,
+    showWorkspaceHostSections: local.showWorkspaceHostSections === true,
     sidebarOpen: local.sidebarOpen,
     activityBarPosition: local.activityBarPosition,
     showAgentModels: local.showAgentModels !== false,

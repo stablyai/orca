@@ -17,6 +17,7 @@ afterEach(cleanup)
 const projectGrouping = { projects: [], projectHostSetups: [] }
 const settings = useAppStore.getState().settings
 const workspaceStatuses = cloneDefaultWorkspaceStatuses()
+useAppStore.setState({ showWorkspaceHostSections: true })
 const virtualizer = new Virtualizer<HTMLDivElement, HTMLDivElement>({
   count: 0,
   getScrollElement: () => null,

@@ -1,4 +1,5 @@
 import { Fragment, useMemo, type ComponentType, type JSX } from 'react'
+import { Server } from 'lucide-react'
 import { useAppStore } from '@/store'
 import {
   DropdownMenuLabel,
@@ -35,6 +36,7 @@ import {
 } from '../../../../../../shared/workspace-view/workspace-view-options'
 import { useTranslate } from '@/i18n/use-translate'
 import { SidebarGroupByToggle } from './SidebarGroupByToggle'
+import { FilterToggleRow } from './FilterToggleRow'
 
 export function useWorkspaceOptionsFilterBadge(): {
   hasAnyFilter: boolean
@@ -81,13 +83,33 @@ function HostsOptionItem({
   )
 }
 
-function GroupByOptionItem(): JSX.Element {
+function GroupByOptionItem({ hostOptions }: OptionItemProps): JSX.Element {
+  const t = useTranslate()
   const groupBy = useAppStore((s) => s.groupBy)
   const setGroupBy = useAppStore((s) => s.setGroupBy)
+  const showHostSections = useAppStore((s) => s.showWorkspaceHostSections)
+  const setShowHostSections = useAppStore((s) => s.setShowWorkspaceHostSections)
   return (
-    <div className="px-2 pt-0.5 pb-1">
-      <SidebarGroupByToggle groupBy={groupBy} setGroupBy={setGroupBy} />
-    </div>
+    <>
+      <div className="px-2 pt-0.5 pb-1">
+        <SidebarGroupByToggle groupBy={groupBy} setGroupBy={setGroupBy} />
+      </div>
+      {shouldShowHostScopeControls(hostOptions) || showHostSections ? (
+        <FilterToggleRow
+          icon={<Server className="size-3.5" />}
+          label={t(
+            'auto.components.sidebar.SidebarWorkspaceOptionsMenu.hostSections',
+            'Host sections'
+          )}
+          ariaLabel={t(
+            'auto.components.sidebar.SidebarWorkspaceOptionsMenu.hostSectionsAria',
+            'Group workspaces into a section per host'
+          )}
+          checked={showHostSections}
+          onChange={setShowHostSections}
+        />
+      ) : null}
+    </>
   )
 }
 
