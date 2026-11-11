@@ -1,4 +1,4 @@
-import { AlertTriangle } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import React from 'react'
 import type {
   OwnerNotSetUpPlaceholder,
@@ -300,12 +300,17 @@ export function ProviderSegment({
     )
   }
 
+  // Why calm: a failed usage read isn't the user's emergency, and a warning that never clears turns
+  // into permanent noise ("Refresh failed", "⚠ Sign-in expired"). The bar shows a quiet "--"; the
+  // reason and its fix stay one hover away in the usage card.
   if (p.status === 'error' && !tightest) {
     return (
-      <span className="inline-flex items-center gap-1 text-muted-foreground">
-        <ProviderIcon provider={provider} />
-        {!calm && <AlertTriangle size={11} className="text-muted-foreground/80" />}
-        {!compact && <span className="text-[11px] font-medium">{statusLabel}</span>}
+      <span
+        className="inline-flex items-center gap-1 text-muted-foreground/60"
+        title={statusLabel}
+        aria-label={statusLabel}
+      >
+        <ProviderIcon provider={provider} /> --
       </span>
     )
   }
@@ -318,7 +323,10 @@ export function ProviderSegment({
     mode === 'verbose' && groupedBuckets.length > 0 && groupedBuckets.length === sections.length
 
   return (
-    <span className="inline-flex items-center gap-1.5">
+    <span
+      className={cn('inline-flex items-center gap-1.5', isStale && 'opacity-60')}
+      title={isStale ? statusLabel : undefined}
+    >
       <ProviderIcon provider={provider} />
       {mode === 'verbose' && tightest && !compact ? (
         <MiniBar usedPct={clampUsedPercent(tightest.window.usedPercent)} display={display} />
@@ -350,7 +358,6 @@ export function ProviderSegment({
           <span className="tabular-nums">{formatCompactExtraUsage(p.extraUsage, t)}</span>
         </>
       ) : null}
-      {isStale && <AlertTriangle size={11} className="text-muted-foreground/80" />}
     </span>
   )
 }

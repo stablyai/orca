@@ -31,9 +31,10 @@ describe('sandbox hours: one rule on every surface', () => {
     }
   })
 
+  // The one exception is the last six minutes, where "left" holds at 0.1 on purpose.
   it('used plus left adds up to the included hours', () => {
     const included = 180 * HOUR
-    for (const usedSeconds of [1, 9420, 2.62 * HOUR, 90 * HOUR + 7, 179.97 * HOUR]) {
+    for (const usedSeconds of [1, 9420, 2.62 * HOUR, 90 * HOUR + 7, 179.8 * HOUR + 1]) {
       const total = sandboxHoursUsed(usedSeconds) + sandboxHoursLeft(included - usedSeconds)
       expect(Math.round(total * 10) / 10).toBe(180)
     }
