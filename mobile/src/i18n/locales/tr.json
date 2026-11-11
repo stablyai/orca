@@ -947,6 +947,7 @@
       "mobileTooOldGitHubReleases": "Bu masaüstü uygulaması, Orca Mobile'ın daha yeni bir sürümünü gerektiriyor. Orca Mobile'ı GitHub Releases üzerinden güncelleyin, ardından bu sunucuya bağlanmayı tekrar deneyin.",
       "openAppStore": "App Store'u Aç",
       "openGitHubReleases": "GitHub Releases Sayfasını Aç",
+      "downloadOrcaMobile": "Orca Mobile'ı İndir",
       "refreshRecoveryNote": "Bu mesaj görünmeye devam ederse bu sunucuyu kaldırıp yeniden eşleştirin.",
       "refreshWorkspaceBody": "Bu sunucu için önbelleğe alınan çalışma alanı, masaüstü uygulamasının beklediğinden daha eski. Güncel sürümü indirmek için bu sunucuya yeniden bağlanın.",
       "refreshWorkspaceTitle": "Mobil çalışma alanını yenileyin",

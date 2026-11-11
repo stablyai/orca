@@ -985,6 +985,7 @@
       "mobileTooOldGitHubReleases": "Este escritorio necesita una versión más reciente de Orca Mobile. Actualiza Orca Mobile desde GitHub Releases y vuelve a intentarlo con este host.",
       "openAppStore": "Abrir App Store",
       "openGitHubReleases": "Abrir GitHub Releases",
+      "downloadOrcaMobile": "Descargar Orca Mobile",
       "refreshRecoveryNote": "Si este mensaje persiste, elimina este host y vuelve a emparejarlo.",
       "refreshWorkspaceBody": "La versión en caché del espacio de trabajo de este host es anterior a la que espera el escritorio. Vuelve a conectarte a este host para descargar la versión actual.",
       "refreshWorkspaceTitle": "Actualiza el espacio de trabajo móvil",

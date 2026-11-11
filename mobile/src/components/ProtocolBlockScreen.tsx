@@ -12,6 +12,8 @@ import type { MobileWebBundleCompatVerdict } from '../transport/web-bundle/mobil
 import type { PageRouteRefusalVerdict } from '../mobile-web-shell/page-route-policy'
 
 const RELEASES_URL = 'https://github.com/stablyai/orca/releases'
+// Redirects to the newest APK; the releases list puts desktop releases and long notes above it.
+const ANDROID_APK_DOWNLOAD_URL = 'https://www.onorca.dev/download/android'
 const IOS_APP_STORE_URL = 'itms-apps://apps.apple.com/app/orca-ide/id6766130217'
 
 // Protocol/bundle/page-route walls are terminal: no native workspace fallback; update the relevant app or bundle.
@@ -105,8 +107,8 @@ export function ProtocolBlockScreen({ verdict }: Props) {
           url: IOS_APP_STORE_URL
         }
       : {
-          label: t('components.protocolBlockScreen.openGitHubReleases', 'Open GitHub Releases'),
-          url: RELEASES_URL
+          label: t('components.protocolBlockScreen.downloadOrcaMobile', 'Download Orca Mobile'),
+          url: ANDROID_APK_DOWNLOAD_URL
         }
   const mobileAction = mobileUpdate
     ? {

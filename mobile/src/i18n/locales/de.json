@@ -947,6 +947,7 @@
       "mobileTooOldGitHubReleases": "Diese Desktop-App benötigt eine neuere Version von Orca Mobile. Orca Mobile über GitHub Releases aktualisieren und dann erneut mit diesem Host verbinden.",
       "openAppStore": "App Store öffnen",
       "openGitHubReleases": "GitHub Releases öffnen",
+      "downloadOrcaMobile": "Orca Mobile herunterladen",
       "refreshRecoveryNote": "Wenn diese Meldung weiterhin erscheint, diesen Host entfernen und erneut koppeln.",
       "refreshWorkspaceBody": "Der für diesen Host zwischengespeicherte Arbeitsbereich ist älter als von der Desktop-App erwartet. Erneut mit diesem Host verbinden, um die aktuelle Version herunterzuladen.",
       "refreshWorkspaceTitle": "Mobilen Arbeitsbereich aktualisieren",
