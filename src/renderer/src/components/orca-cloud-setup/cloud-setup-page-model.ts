@@ -101,7 +101,10 @@ export function actionForStep(
  */
 export function cloudSetupPageModel(
   steps: readonly CloudSetupStep[],
-  { agentSkipped = false, teamSwitch = false }: { agentSkipped?: boolean; teamSwitch?: boolean } = {}
+  {
+    agentSkipped = false,
+    teamSwitch = false
+  }: { agentSkipped?: boolean; teamSwitch?: boolean } = {}
 ): CloudSetupPageModel {
   const current = steps.find((step) => !isFinished(step, agentSkipped)) ?? null
   if (!current) {
@@ -123,7 +126,10 @@ export function sessionNeedsFrom(steps: readonly CloudSetupStep[]): CloudSetupSt
  */
 export function cloudSetupRequired(
   steps: readonly CloudSetupStep[],
-  { teamSwitch = false, agentSkipped = false }: { teamSwitch?: boolean; agentSkipped?: boolean } = {}
+  {
+    teamSwitch = false,
+    agentSkipped = false
+  }: { teamSwitch?: boolean; agentSkipped?: boolean } = {}
 ): boolean {
   if (teamSwitch) {
     return true

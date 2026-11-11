@@ -4,6 +4,8 @@ import { useCallback, useEffect, type MutableRefObject } from 'react'
 import type { ComposerModalData } from '../composer-modal-data'
 import type { NewWorkspaceComposerCardProps } from '../new-workspace-composer-card-props'
 import { useCloudStartComposer } from './use-cloud-start-composer'
+import { buildComposerSnapshot } from '../composer-cloud-auto-start'
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 
 type ComposerCardState = Pick<
   NewWorkspaceComposerCardProps,
@@ -12,7 +14,9 @@ type ComposerCardState = Pick<
   | 'onEphemeralVmRecipeChange'
   | 'repoId'
   | 'name'
->
+  | 'baseBranch'
+  | 'note'
+> & { linkedWorkItem?: ComposerModalData['linkedWorkItem'] }
 
 export function useComposerCloudStart({
   active,
@@ -21,17 +25,18 @@ export function useComposerCloudStart({
   quickAgent,
   handleCreate,
   createDisabled,
-  composerSnapshot,
+  quickAgentPick,
   recordCreatedRef,
   onClose
 }: {
   active: boolean
   modalData: ComposerModalData
   cardProps: ComposerCardState
-  quickAgent: string | null
+  quickAgent: TuiAgent | null
   handleCreate: (options?: { withoutAgent?: boolean }) => Promise<void>
   createDisabled: boolean
-  composerSnapshot: () => ComposerModalData
+  /** The agent pick (surface, draft) as the composer keeps it, for the setup page's snapshot. */
+  quickAgentPick: Omit<NonNullable<ComposerModalData['recovery']>, 'note'>
   /** The composer's onCreated calls this: only a start that happened is remembered. */
   recordCreatedRef: MutableRefObject<(() => void) | null>
   onClose?: () => void
@@ -42,6 +47,10 @@ export function useComposerCloudStart({
   const runCreateWithoutAgent = useCallback(
     () => void handleCreate({ withoutAgent: true }),
     [handleCreate]
+  )
+  const composerSnapshot = useCallback(
+    () => buildComposerSnapshot(modalData, cardProps, { ...quickAgentPick, agent: quickAgent }),
+    [cardProps, modalData, quickAgent, quickAgentPick]
   )
   const cloudStart = useCloudStartComposer({
     active,

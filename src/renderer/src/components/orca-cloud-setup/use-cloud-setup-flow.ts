@@ -28,7 +28,11 @@ import {
 import { reportCloudSetupProgress } from '@/lib/orca-cloud/cloud-setup-telemetry'
 import type { OrcaCloudAvailability } from '../../../../shared/orca-yaml-hook-types'
 import type { OrcaCloudRunTargetAccess } from '@/components/new-workspace/orca-cloud-run-target-access'
-import { cloudSetupPageModel, sessionNeedsFrom, type CloudSetupPageModel } from './cloud-setup-page-model'
+import {
+  cloudSetupPageModel,
+  sessionNeedsFrom,
+  type CloudSetupPageModel
+} from './cloud-setup-page-model'
 
 /** Billing rows re-read this often while the page waits on a browser step (focus also re-reads). */
 const BILLING_POLL_MS = 4_000
@@ -96,8 +100,7 @@ export function useCloudSetupFlow(
 ): CloudSetupFlow {
   const fetched = useOrcaCloudRunTargetAccess(!accessOverride)
   const access = accessOverride ?? fetched
-  const [settled, setSettled] = useState(false)
-  const availability = useLiveAvailability(request.repoId, request.availability, !settled && !accessOverride)
+  const availability = useLiveAvailability(request.repoId, request.availability, !accessOverride)
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [inBrowser, setInBrowser] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -106,7 +109,11 @@ export function useCloudSetupFlow(
     () => (request.cloudOnlyRepo ? { id: 'github', state: 'done' } : null),
     [request.cloudOnlyRepo]
   )
-  const { steps: rowSteps, session, openInstall } = useCloudStartSteps({
+  const {
+    steps: rowSteps,
+    session,
+    openInstall
+  } = useCloudStartSteps({
     availability,
     access,
     repoId: request.repoId,
@@ -117,11 +124,6 @@ export function useCloudSetupFlow(
   })
   const { steps, held: switchTeam } = useSwitchTeamSteps(rowSteps, !session)
   const model = cloudSetupPageModel(steps, { agentSkipped, teamSwitch: switchTeam !== null })
-  useEffect(() => {
-    if (model.action === 'done') {
-      setSettled(true)
-    }
-  }, [model.action])
   const error = useMemo(() => {
     const parsed = parseCloudSetupError(session?.error)
     return parsed && session?.teamName ? { ...parsed, teamName: session.teamName } : parsed

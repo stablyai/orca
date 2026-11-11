@@ -37,9 +37,7 @@ describe('cloudSetupPageModel', () => {
     expect(actionForStep({ id: 'plan', state: 'needed', need: 'plan', canFix: false })).toBe(
       'ask-owner'
     )
-    expect(actionForStep({ id: 'team', state: 'needed' }, { teamSwitch: true })).toBe(
-      'switch-team'
-    )
+    expect(actionForStep({ id: 'team', state: 'needed' }, { teamSwitch: true })).toBe('switch-team')
     expect(actionForStep({ id: 'github', state: 'loading' })).toBe('checking')
   })
 })

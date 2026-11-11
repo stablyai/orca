@@ -77,7 +77,9 @@ function SetupStepper({
               )}
             >
               {state === 'done' ? <Check className="size-2.5" strokeWidth={3} /> : null}
-              {state === 'current' ? <span className="size-1.5 rounded-full bg-focus-ring" /> : null}
+              {state === 'current' ? (
+                <span className="size-1.5 rounded-full bg-focus-ring" />
+              ) : null}
             </span>
             <span
               className={cn(
@@ -110,7 +112,8 @@ function trialHours(step: CloudSetupStep): string | null {
 function currentStepCopy(flow: CloudSetupFlow, t: Translate, agentLabel: string | null): StepCopy {
   const step = flow.current
   const detail = step
-    ? (sessionDetailCopy(step, t) === undefined ? step.detail : sessionDetailCopy(step, t)) ?? null
+    ? ((sessionDetailCopy(step, t) === undefined ? step.detail : sessionDetailCopy(step, t)) ??
+      null)
     : null
   switch (flow.action) {
     case 'sign-in':
@@ -132,9 +135,13 @@ function currentStepCopy(flow: CloudSetupFlow, t: Translate, agentLabel: string 
         lead:
           hours === null
             ? t('cloudSetupPage.trial.leadNoHours', 'Try Orca Cloud on your team. No card needed.')
-            : t('cloudSetupPage.trial.lead', '{{hours}} sandbox hours to try Orca Cloud. No card needed.', {
-                hours
-              }),
+            : t(
+                'cloudSetupPage.trial.lead',
+                '{{hours}} sandbox hours to try Orca Cloud. No card needed.',
+                {
+                  hours
+                }
+              ),
         note: t('cloudSetupPage.trial.note', 'Nothing is charged until you choose a plan.')
       }
     }
@@ -172,7 +179,10 @@ function currentStepCopy(flow: CloudSetupFlow, t: Translate, agentLabel: string 
               : t('cloudSetupPage.billing.hoursTitle', 'Out of sandbox hours'),
         lead:
           step?.need === 'payment'
-            ? t('cloudSetupPage.billing.paymentLead', 'The last payment failed. Update the card to keep going.')
+            ? t(
+                'cloudSetupPage.billing.paymentLead',
+                'The last payment failed. Update the card to keep going.'
+              )
             : step?.need === 'spend-cap'
               ? t('cloudSetupPage.billing.capLead', 'Raise the spend cap to start this workspace.')
               : t('cloudSetupPage.billing.hoursLead', 'Turn on overage to start this workspace.')
@@ -203,7 +213,12 @@ function currentStepCopy(flow: CloudSetupFlow, t: Translate, agentLabel: string 
     case 'ask-owner':
       return {
         title: t('cloudSetupPage.owner.title', 'An owner or admin needs to fix this'),
-        lead: detail ?? t('cloudSetupPage.owner.lead', 'Orca Cloud needs a Team plan. Only owners and admins can choose one.')
+        lead:
+          detail ??
+          t(
+            'cloudSetupPage.owner.lead',
+            'Orca Cloud needs a Team plan. Only owners and admins can choose one.'
+          )
       }
     case 'agent':
       return {
@@ -216,7 +231,10 @@ function currentStepCopy(flow: CloudSetupFlow, t: Translate, agentLabel: string 
         )
       }
     case 'checking':
-      return { title: t('cloudSetupPage.checking.title', 'Checking your Orca Cloud account…'), lead: null }
+      return {
+        title: t('cloudSetupPage.checking.title', 'Checking your Orca Cloud account…'),
+        lead: null
+      }
     case 'done':
       return {
         title: t('cloudSetupPage.done.title', 'All set'),
@@ -287,7 +305,10 @@ function StepActions({ flow }: { flow: CloudSetupFlow }): React.JSX.Element | nu
     case 'agent':
       return (
         <div className="flex flex-wrap items-center gap-2">
-          <Button type="button" onClick={flow.current?.action?.onClick ?? openOrcaCloudAgentAccounts}>
+          <Button
+            type="button"
+            onClick={flow.current?.action?.onClick ?? openOrcaCloudAgentAccounts}
+          >
             {flow.current?.action?.label ?? t('cloudSetupPage.agent.setUp', 'Set up once')}
           </Button>
           <Button type="button" variant="ghost" onClick={flow.skipAgent}>
@@ -363,7 +384,11 @@ export function CloudSetupPage({
         </div>
 
         <div className="mt-8">
-          <SetupStepper steps={flow.steps} current={flow.current} allDone={starting || flow.action === 'done'} />
+          <SetupStepper
+            steps={flow.steps}
+            current={flow.current}
+            allDone={starting || flow.action === 'done'}
+          />
         </div>
 
         <div className="mt-8 space-y-3">
@@ -404,8 +429,7 @@ export function CloudSetupPage({
               {t('cloudSetupPage.startsAfter', 'Starts when setup is done')}
             </div>
             <div className="mt-1 truncate text-sm text-foreground">
-              {prompt.trim() ||
-                t('cloudSetupPage.untitled', 'New cloud workspace')}
+              {prompt.trim() || t('cloudSetupPage.untitled', 'New cloud workspace')}
             </div>
             <div className="mt-0.5 truncate text-xs text-muted-foreground">
               {[projectName, agentLabel, t('cloudSetupPage.orcaCloud', 'Orca Cloud')]

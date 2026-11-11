@@ -48,9 +48,13 @@ function showAgentNotStartedToast(agent: string | null): void {
     {
       action: {
         label: name
-          ? translate('components.newWorkspace.cloudStart.setUpAgentOnce', 'Set up {{agent}} once', {
-              agent: name
-            })
+          ? translate(
+              'components.newWorkspace.cloudStart.setUpAgentOnce',
+              'Set up {{agent}} once',
+              {
+                agent: name
+              }
+            )
           : translate('components.newWorkspace.cloudStart.setUpAgentOnceGeneric', 'Set up once'),
         onClick: openOrcaCloudAgentAccounts
       }

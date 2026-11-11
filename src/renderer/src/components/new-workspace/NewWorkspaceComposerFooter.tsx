@@ -72,11 +72,14 @@ export function NewWorkspaceComposerFooter({
           onClick={() => void onCreate()}
           disabled={createDisabled}
           size="sm"
-          className="ml-auto shrink-0 text-xs"
+          className="ml-auto shrink-0"
         >
-          {creating ? <LoaderCircle className="size-4 animate-spin" /> : null}
-          {primaryActionLabel}
-          <ButtonKeyHint modifierLabel={submitShortcutModifierLabel} />
+          {/* The footer's compact type, as before; the Button keeps its own variant styling. */}
+          <span className="flex items-center gap-1.5 whitespace-nowrap text-xs">
+            {creating ? <LoaderCircle className="size-4 animate-spin" /> : null}
+            {primaryActionLabel}
+            <ButtonKeyHint modifierLabel={submitShortcutModifierLabel} />
+          </span>
         </Button>
       </div>
     </>

@@ -38,24 +38,24 @@ type NewWorkspaceComposerProjectSectionProps = Pick<
   | 'orcaCloudAvailability'
   | 'cloudStart'
 > & {
-    disabled?: boolean
-    projectDescriptionId: string
-    onAddProject: () => void
-    focusNameInput: () => void
-    shouldShowRunTargetPicker: boolean
-    projectHostSetupOptions: NewWorkspaceComposerCardProps['projectHostSetupOptions']
-    ephemeralVmRecipes: EphemeralVmRecipeOption[]
-    handleProjectHostSetupChange: (setupId: string) => void
-    handleAddSshHost: () => void
-    handleAddRemoteServer: () => void
-    handleConnectRunTargetHost: (option: NeedsProjectHostOption) => Promise<void>
-    handleSetLocation: (option: NeedsProjectHostOption) => void
-    sshStatusLabel: string
-    connectButtonLabel: string
-    selectedProjectName: string
-    /** Fixtures pin Orca Cloud entitlement; the app reads it from billing. */
-    orcaCloudAccess?: OrcaCloudRunTargetAccess
-  }
+  disabled?: boolean
+  projectDescriptionId: string
+  onAddProject: () => void
+  focusNameInput: () => void
+  shouldShowRunTargetPicker: boolean
+  projectHostSetupOptions: NewWorkspaceComposerCardProps['projectHostSetupOptions']
+  ephemeralVmRecipes: EphemeralVmRecipeOption[]
+  handleProjectHostSetupChange: (setupId: string) => void
+  handleAddSshHost: () => void
+  handleAddRemoteServer: () => void
+  handleConnectRunTargetHost: (option: NeedsProjectHostOption) => Promise<void>
+  handleSetLocation: (option: NeedsProjectHostOption) => void
+  sshStatusLabel: string
+  connectButtonLabel: string
+  selectedProjectName: string
+  /** Fixtures pin Orca Cloud entitlement; the app reads it from billing. */
+  orcaCloudAccess?: OrcaCloudRunTargetAccess
+}
 
 export function NewWorkspaceComposerProjectSection({
   disabled = false,

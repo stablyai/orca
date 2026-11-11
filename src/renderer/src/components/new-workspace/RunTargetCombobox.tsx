@@ -9,7 +9,6 @@ import {
   type ReadyProjectHostSetupOption
 } from '@/lib/project-host-setup-options'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import { ORCA_CLOUD_RECIPE_ID } from '../../../../shared/hosted-sandbox/orca-cloud-recipe-id'
 import { isWithinComboboxRoot, useTypeAheadCombobox } from './use-type-ahead-combobox'
 import { COMBOBOX_POPOVER_SURFACE } from './type-ahead-combobox-styles'
 import {
@@ -18,9 +17,6 @@ import {
   getRecipeSubmenuItemKey,
   getRunTargetSubmenuItemKeys,
   getRunTargetCurrentRowKey,
-  getOrcaCloudDetail,
-  ORCA_CLOUD_LABEL,
-  RUN_TARGET_ORCA_CLOUD_KEY,
   getRunTargetOptionId,
   RUN_TARGET_ADD_HOST_KEY,
   RUN_TARGET_ADD_REMOTE_SERVER_ITEM,
@@ -110,13 +106,8 @@ export default function RunTargetCombobox({
     // An unlisted target (e.g. a per-workspace VM) shows "Choose target", never another host's name (#38669).
     null
   const selectedRecipe = recipes.find((recipe) => recipe.id === recipeValue) ?? null
-  // Signed out, main lists no Orca Cloud recipe, yet the composer can still pick it.
-  const orcaCloudPicked =
-    selectedRecipe === null && recipeValue === ORCA_CLOUD_RECIPE_ID && Boolean(onSelectOrcaCloud)
   // Opening highlights the committed row, so only one row reads as chosen.
-  const currentRowKey = orcaCloudPicked
-    ? RUN_TARGET_ORCA_CLOUD_KEY
-    : getRunTargetCurrentRowKey(selectedRecipe, selectedHost)
+  const currentRowKey = getRunTargetCurrentRowKey(selectedRecipe, selectedHost)
 
   const hasAddHost = Boolean(onAddSshHost || onAddRemoteServer)
   const orcaCloudOffer = getRunTargetOrcaCloudOffer({
@@ -152,8 +143,7 @@ export default function RunTargetCombobox({
   const { submenu, armedItemKey, openSubmenu, closeSubmenu, armItem, moveItemArm, armItemEdge } =
     useRunTargetSubmenu(submenuItemKeys)
   const armedRow = rows.find((row) => row.key === armedKey) ?? rows[0] ?? null
-  const committed =
-    query.length === 0 && (orcaCloudPicked || selectedRecipe !== null || selectedHost !== null)
+  const committed = query.length === 0 && (selectedRecipe !== null || selectedHost !== null)
 
   // Closing also drops any open submenu, which the shared hook doesn't know about.
   const close = useCallback((): void => {
@@ -324,9 +314,7 @@ export default function RunTargetCombobox({
   const activeDescendantId = activeDescendantKey ? optionIdFor(activeDescendantKey) : undefined
   const addHostOptionId = optionIdFor(RUN_TARGET_ADD_HOST_KEY)
 
-  const field = orcaCloudPicked
-    ? { label: ORCA_CLOUD_LABEL, detail: getOrcaCloudDetail(t), recipeKind: 'orca-cloud' as const }
-    : getRunTargetFieldText(selectedRecipe, selectedHost, t)
+  const field = getRunTargetFieldText(selectedRecipe, selectedHost, t)
 
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
@@ -342,7 +330,7 @@ export default function RunTargetCombobox({
         onToggle={() => setOpen(!open)}
         committed={committed}
         recipeKind={field.recipeKind}
-        hostId={orcaCloudPicked ? null : (selectedHost?.hostId ?? null)}
+        hostId={selectedHost?.hostId ?? null}
         label={field.label}
         detail={field.detail}
         controlsId={submenu ? `${listId} ${listId}-${submenu}` : listId}
@@ -396,8 +384,8 @@ export default function RunTargetCombobox({
             <RunTargetRowList
               rows={rows}
               armedKey={armedRow?.key ?? null}
-              selectedHost={selectedRecipe === null && !orcaCloudPicked ? selectedHost : null}
-              selectedRecipeId={orcaCloudPicked ? ORCA_CLOUD_RECIPE_ID : (selectedRecipe?.id ?? null)}
+              selectedHost={selectedRecipe === null ? selectedHost : null}
+              selectedRecipeId={selectedRecipe?.id ?? null}
               matchedRecipes={matchedRecipes}
               recipesOpen={submenu === 'recipes'}
               inSubmenu={inSubmenu}

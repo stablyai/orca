@@ -39,9 +39,7 @@ import { getFolderWorkspacePrimaryActionLabel } from '@/components/sidebar/works
 import { useAgentMenuObservation } from '@/components/tab-bar/use-new-tab-agent-menu-rows'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 import { useComposerCloudStart } from './new-workspace/run-on/use-composer-cloud-start'
-
-/** How long a hidden Orca Cloud auto-start may take before the dialog shows instead. */
-const CLOUD_AUTO_START_REVEAL_MS = 8_000
+import { HiddenComposer, useCloudAutoStartReveal } from './new-workspace/composer-cloud-auto-start'
 
 // Keep Add Project’s clone/SSH machinery outside the composer entry render, matching App loading.
 const HostedAddRepoDialog = lazyWithRetry(
@@ -83,34 +81,18 @@ function ComposerModalBody({
     onClose()
   }, [onClose])
   const isSubmissionCancelled = useCallback(() => submitCancelledRef.current, [])
-  // Orca Cloud setup finished on its page: submit with the dialog unseen. If the start can't run
-  // by itself (a form error, a revoked grant), the dialog appears with everything kept.
-  const [autoStartRevealed, setAutoStartRevealed] = useState(false)
-  useEffect(() => {
-    if (!modalData.cloudAutoStart) {
-      return
-    }
-    const timer = window.setTimeout(() => setAutoStartRevealed(true), CLOUD_AUTO_START_REVEAL_MS)
-    return () => window.clearTimeout(timer)
-  }, [modalData.cloudAutoStart])
-  if (modalData.cloudAutoStart && !autoStartRevealed) {
-    return (
-      // A closed Root still provides the title's context; nothing is portaled or shown.
-      <Dialog open={false}>
-        <div className="hidden" aria-hidden>
-          <QuickTabBody
-            modalData={modalData}
-            onClose={onClose}
-            isSubmissionCancelled={isSubmissionCancelled}
-            active
-          />
-        </div>
-      </Dialog>
-    )
+  const visibleModalData = useCloudAutoStartReveal(modalData)
+  const body = (data: ComposerModalData): React.JSX.Element => (
+    <QuickTabBody
+      modalData={data}
+      onClose={onClose}
+      isSubmissionCancelled={isSubmissionCancelled}
+      active
+    />
+  )
+  if (!visibleModalData) {
+    return <HiddenComposer>{body(modalData)}</HiddenComposer>
   }
-  const visibleModalData = modalData.cloudAutoStart
-    ? { ...modalData, cloudAutoStart: false }
-    : modalData
 
   return (
     <Dialog open onOpenChange={(open) => !open && handleDismiss()}>
@@ -129,12 +111,7 @@ function ComposerModalBody({
           getWorkspaceComposerInitialFocusTarget(content)?.focus({ preventScroll: true })
         }}
       >
-        <QuickTabBody
-          modalData={visibleModalData}
-          onClose={onClose}
-          isSubmissionCancelled={isSubmissionCancelled}
-          active
-        />
+        {body(visibleModalData)}
       </DialogContent>
     </Dialog>
   )
@@ -236,75 +213,67 @@ function QuickTabBody({
 
   // `withoutAgent`: Orca Cloud with an agent that has no account there starts a plain terminal
   // instead of dropping the user into the agent's /login.
-  const handleCreate = useCallback(async (options?: { withoutAgent?: boolean }): Promise<void> => {
-    if (createDisabled) {
-      return
-    }
-    const agent = options?.withoutAgent ? null : quickAgent
-    await submitQuick(agent, {
-      // Blank Terminal is the setup-only create: no agent, and no extra shell beside setup.
-      setupOnly: agent === null,
-      ...(agent === null ? {} : { launchChoice: launchSelection.choice }),
-      onLegacyPreparationFailure: (error) => {
-        if (isSubmissionCancelled()) {
-          return
-        }
-        const snapshot = {
-          ...modalData,
-          prefilledName: cardProps.name,
-          initialRepoId: cardProps.repoId,
-          initialBaseBranch: cardProps.baseBranch,
-          initialWorkspaceTarget:
-            cardProps.selectedProjectId && cardProps.selectedRepoExecutionHostId
-              ? {
-                  projectId: cardProps.selectedProjectId,
-                  hostId: cardProps.selectedRepoExecutionHostId,
-                  projectHostSetupId: cardProps.selectedProjectHostSetupId ?? null
+  const handleCreate = useCallback(
+    async (options?: { withoutAgent?: boolean }): Promise<void> => {
+      if (createDisabled) {
+        return
+      }
+      const agent = options?.withoutAgent ? null : quickAgent
+      await submitQuick(agent, {
+        // Blank Terminal is the setup-only create: no agent, and no extra shell beside setup.
+        setupOnly: agent === null,
+        ...(agent === null ? {} : { launchChoice: launchSelection.choice }),
+        onLegacyPreparationFailure: (error) => {
+          if (isSubmissionCancelled()) {
+            return
+          }
+          const snapshot = {
+            ...modalData,
+            prefilledName: cardProps.name,
+            initialRepoId: cardProps.repoId,
+            initialBaseBranch: cardProps.baseBranch,
+            initialWorkspaceTarget:
+              cardProps.selectedProjectId && cardProps.selectedRepoExecutionHostId
+                ? {
+                    projectId: cardProps.selectedProjectId,
+                    hostId: cardProps.selectedRepoExecutionHostId,
+                    projectHostSetupId: cardProps.selectedProjectHostSetupId ?? null
+                  }
+                : modalData.initialWorkspaceTarget,
+            linkedWorkItem: cardProps.linkedWorkItem,
+            recovery: { ...quickAgentPick, agent: quickAgent, note: cardProps.note }
+          }
+          toast.error(getWorkspaceCreateErrorToastMessage(formatWorkspaceCreateError(error)), {
+            action: {
+              label: translate('auto.lib.composerCreateHandoff.reopen', 'Reopen'),
+              onClick: () => {
+                if (!isSubmissionCancelled() && useAppStore.getState().activeModal === 'none') {
+                  useAppStore.getState().openModal('new-workspace-composer', snapshot)
                 }
-              : modalData.initialWorkspaceTarget,
-          linkedWorkItem: cardProps.linkedWorkItem,
-          recovery: { ...quickAgentPick, agent: quickAgent, note: cardProps.note }
-        }
-        toast.error(getWorkspaceCreateErrorToastMessage(formatWorkspaceCreateError(error)), {
-          action: {
-            label: translate('auto.lib.composerCreateHandoff.reopen', 'Reopen'),
-            onClick: () => {
-              if (!isSubmissionCancelled() && useAppStore.getState().activeModal === 'none') {
-                useAppStore.getState().openModal('new-workspace-composer', snapshot)
               }
             }
-          }
-        })
-      },
-      ...quickWorkspacePickerInputs(
-        pickerDraft,
-        quickAgentPick.entry,
-        launchSelection.choice?.executionHostId
-      )
-    })
-  }, [
-    createDisabled,
-    quickAgent,
-    launchSelection.choice,
-    submitQuick,
-    pickerDraft,
-    quickAgentPick,
-    isSubmissionCancelled,
-    modalData,
-    cardProps
-  ])
-  // The composer as it is now, for Orca Cloud's setup page (Back, and the start when it's done).
-  const composerSnapshot = useCallback(
-    (): ComposerModalData => ({
-      ...modalData,
-      prefilledName: cardProps.name,
-      initialRepoId: cardProps.repoId,
-      initialBaseBranch: cardProps.baseBranch,
-      linkedWorkItem: cardProps.linkedWorkItem,
-      recovery: { ...quickAgentPick, agent: quickAgent, note: cardProps.note }
-    }),
-    [cardProps, modalData, quickAgent, quickAgentPick]
+          })
+        },
+        ...quickWorkspacePickerInputs(
+          pickerDraft,
+          quickAgentPick.entry,
+          launchSelection.choice?.executionHostId
+        )
+      })
+    },
+    [
+      createDisabled,
+      quickAgent,
+      launchSelection.choice,
+      submitQuick,
+      pickerDraft,
+      quickAgentPick,
+      isSubmissionCancelled,
+      modalData,
+      cardProps
+    ]
   )
+  // The composer as it is now, for Orca Cloud's setup page (Back, and the start when it's done).
   const { cloudStart, primaryCreateDisabled, onPrimary } = useComposerCloudStart({
     active,
     modalData,
@@ -312,7 +281,7 @@ function QuickTabBody({
     quickAgent,
     handleCreate,
     createDisabled,
-    composerSnapshot,
+    quickAgentPick,
     recordCreatedRef,
     onClose
   })
