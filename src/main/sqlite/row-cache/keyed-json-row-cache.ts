@@ -16,6 +16,8 @@ export type KeyedJsonRowCacheOptions = {
   busyTimeoutMs?: number
   /** False opens and closes the database per call, so no handle outlives it (profile moves). */
   holdConnection?: boolean
+  /** Sync committed recovery facts even when the host loses power before a WAL checkpoint. */
+  durable?: boolean
   /** JSON file older builds wrote; see load(). */
   legacyPath?: string
 }
@@ -276,6 +278,9 @@ export class KeyedJsonRowCache {
       directoryMode: 0o700,
       sql: SCHEMA_SQL
     })
+    if (this.options.durable) {
+      db.pragma('synchronous = FULL')
+    }
     hardenSqliteDatabaseFiles(this.path)
     this.db = db
     // A fresh connection cannot vouch for a baseline read through an earlier one.

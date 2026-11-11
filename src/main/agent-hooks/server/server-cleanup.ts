@@ -17,6 +17,7 @@ import { isLocalHookConnectionId } from '../../../shared/wsl-hook-relay-contract
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import { AgentHookServerAuthorityFences } from './server-authority-fences'
 import { recordAgentExit } from './agent-exit-evidence'
+import { endedRestoredTurn } from './server-ended-restored-turn'
 
 export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFences {
   /** Resume identity survives teardown without claiming live work. */
@@ -134,20 +135,16 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
       if (!this.hasLiveClaimsForPaneKey(resolvedPaneKey)) {
         continue
       }
+      const previous = this.state.lastStatusByPaneKey.get(resolvedPaneKey) as
+        | EnrichedAgentHookEventPayload
+        | undefined
       const resumeRow = options?.preserveResumeIdentity
-        ? this.toRetainedProviderSessionRow(
-            this.state.lastStatusByPaneKey.get(resolvedPaneKey) as
-              | EnrichedAgentHookEventPayload
-              | undefined
-          )
+        ? (endedRestoredTurn(previous) ?? this.toRetainedProviderSessionRow(previous))
         : null
       const retained =
         resumeRow && options?.endedPresence
           ? { ...resumeRow, agentPresence: options.endedPresence }
           : resumeRow
-      const previous = this.state.lastStatusByPaneKey.get(resolvedPaneKey) as
-        | EnrichedAgentHookEventPayload
-        | undefined
       this.clearPaneState(resolvedPaneKey, { emitStatusRowMutation: false })
       if (retained) {
         admitLegacyAgentStatus(
@@ -156,8 +153,11 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
           retained,
           AGENT_STATUS_2A_CURRENT_PRODUCER_MODE
         )
-        this.scheduleStatusPersist()
+        this.scheduleStatusPersist(!retained.providerSessionOnly)
         this.notifyStatusChangeListeners()
+        if (!retained.providerSessionOnly) {
+          this.emitEnrichedStatus(retained)
+        }
       }
       this.commitStatusRowMutation(previous, retained)
       cleared += 1

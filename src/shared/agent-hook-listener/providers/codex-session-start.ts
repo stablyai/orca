@@ -10,6 +10,7 @@ import type { AgentLeadStatusResolution } from '../../agent-status/lifecycle/age
 import { codexRosterToSnapshots, type CodexSubagentRoster } from '../../codex-subagent-roster'
 import type { AgentHookEventPayload } from '../listener-event'
 import type { HookListenerState } from '../listener-state'
+import { codexResumedTurn } from './codex-resumed-turn'
 import {
   codexMainAgentStatusForPayload,
   reconcileRemoteCodexState,
@@ -99,6 +100,10 @@ export function reconcileCodexStatusEvent(
   previous: (AgentHookEventPayload & { stateStartedAt?: number }) | undefined,
   remoteRosterAuthority?: CodexRemoteRosterAuthority
 ): AgentHookEventPayload | null {
+  const resumed = codexResumedTurn(state, event, previous)
+  if (resumed) {
+    return resumed
+  }
   if (
     (!event.connectionId && event.hookEventName) ||
     event.payload.agentType !== 'codex' ||

@@ -58,6 +58,21 @@ describe('saved agent status cadence', () => {
     expect(server.getStatusSnapshot()[0]?.prompt).toBe('final before stop')
   })
 
+  it('commits the completed turn before quit or the next stream checkpoint', async () => {
+    await prompt('inspect the workspace')
+    await vi.advanceTimersByTimeAsync(1)
+    await postHookEvent(
+      server,
+      buildBody({ hook_event_name: 'Stop', last_assistant_message: 'inspection finished' })
+    )
+    await vi.advanceTimersByTimeAsync(1)
+    expect(JSON.parse(readSavedStatus(lastStatusPath())).entries[PANE].payload).toMatchObject({
+      state: 'done',
+      prompt: 'inspect the workspace',
+      lastAssistantMessage: 'inspection finished'
+    })
+  })
+
   it('saves an authority change within seconds once a held lock clears', async () => {
     await prompt('first')
     await vi.advanceTimersByTimeAsync(1)

@@ -33,6 +33,7 @@ export class LastStatusStore {
     this.cache = new KeyedJsonRowCache(lastStatusDatabasePath(legacyJsonPath), {
       schemaVersion: LAST_STATUS_SCHEMA_VERSION,
       busyTimeoutMs: 0,
+      durable: true,
       legacyPath: legacyJsonPath
     })
   }
