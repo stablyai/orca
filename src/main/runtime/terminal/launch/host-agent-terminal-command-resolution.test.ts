@@ -12,4 +12,12 @@ describe('cursor command resolution', () => {
     )
     expect(launch.command).toBe('cursor-agent --yolo')
   })
+
+  it('keeps the legacy name on a host that cannot be probed', async () => {
+    const launch = await resolveHostAgentTerminalCommand(
+      { launchAgent: 'cursor', command: 'agent --yolo' },
+      { connectionId: 'ssh-1', shell: 'posix' }
+    )
+    expect(launch.command).toBe('cursor-agent --yolo')
+  })
 })

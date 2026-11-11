@@ -12,6 +12,10 @@ import type { TerminalCreateOptions } from './terminal-create-options'
 
 const AGENTS_WITH_HOST_RESOLVED_COMMAND = ['qoder', 'cursor'] as const
 
+const COMMAND_WHEN_HOST_CANNOT_BE_PROBED: Partial<
+  Record<(typeof AGENTS_WITH_HOST_RESOLVED_COMMAND)[number], string>
+> = { cursor: 'cursor-agent' }
+
 export function hasHostResolvedCommand(
   agent: string | null | undefined
 ): agent is (typeof AGENTS_WITH_HOST_RESOLVED_COMMAND)[number] {
@@ -50,8 +54,13 @@ export async function resolveHostAgentTerminalCommand<
     return options
   }
   const candidates = getTuiAgentDetectCommands(config)
-  const found = await detect(candidates, host)
-  const selected = candidates.find((candidate) => found.has(candidate))
+  let selected: string | undefined
+  if (host.connectionId) {
+    selected = COMMAND_WHEN_HOST_CANNOT_BE_PROBED[agent]
+  } else {
+    const found = await detect(candidates, host)
+    selected = candidates.find((candidate) => found.has(candidate))
+  }
   if (!selected || selected === parsed.tokens[executableIndex]) {
     return options
   }
