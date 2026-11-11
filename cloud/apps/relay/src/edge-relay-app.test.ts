@@ -149,5 +149,12 @@ describe('director routes with the relay edge', () => {
     await h.resolve(other!)
     expect(leave).toHaveBeenCalledTimes(1)
     expect(read).toHaveBeenCalledTimes(1)
+    // With the ceiling, a host under it (here: everyone under 1000) still reads.
+    flags.leaveCeilingPermille = 1000
+    const third = hosts.find((host) => host !== above && host !== other)!
+    expect((await h.assign(third)).status).toBe(200)
+    await h.resolve(third)
+    expect(leave).toHaveBeenCalledTimes(2)
+    expect(read).toHaveBeenCalledTimes(2)
   })
 })

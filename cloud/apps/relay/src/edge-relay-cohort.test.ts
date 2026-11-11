@@ -50,5 +50,7 @@ describe('edge control leaveCeilingPermille', () => {
     })
     expect(parseEdgeControl({ v: 1, flags: { mode: 'on' } })).toEqual({ flags: { mode: 'on' }, ignoredKeys: [] })
     expect(parseEdgeControl({ v: 1, flags: { mode: 'on', leaveCeilingPermille: 1001 } })).toBeNull()
+    // A ceiling below the rollout is a mistake: the last applied flags stay.
+    expect(parseEdgeControl({ v: 1, flags: { mode: 'on', rolloutPermille: 20, leaveCeilingPermille: 10 } })).toBeNull()
   })
 })
