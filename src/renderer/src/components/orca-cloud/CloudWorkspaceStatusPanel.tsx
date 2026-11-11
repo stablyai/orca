@@ -331,7 +331,7 @@ export function CloudWorkspaceStatusPanel({
           <Button
             size="xs"
             variant="ghost"
-            className="-ml-2 text-muted-foreground"
+            className="-ml-2"
             {...busyProps(false, anyBusy, actions.onMoveToComputer)}
           >
             <Monitor />
