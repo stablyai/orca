@@ -1,5 +1,5 @@
 import { Terminal } from '@xterm/headless'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   armWakeScrollback,
   beginWakeScrollbackRestore,
@@ -15,9 +15,18 @@ vi.mock('@/i18n/i18n', () => ({
     fallback.replace(/\{\{(\w+)\}\}/g, (_slot: string, name: string) => params?.[name] ?? '')
 }))
 
-afterEach(() => resetWakeScrollbackForTests())
+// A fixed clock (Date only; xterm's own timers stay real): the divider reads 2:02–2:31 PM.
+const NOW = new Date(2026, 10, 11, 14, 31).getTime()
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(NOW)
+})
+afterEach(() => {
+  resetWakeScrollbackForTests()
+  vi.useRealTimers()
+})
 
-const SLEPT_AT = Date.now() - 29 * 60_000
+const SLEPT_AT = NOW - 29 * 60_000
 const DIVIDER = /^── Slept .+–.+ · processes stopped ──$/
 
 function write(terminal: Terminal, data: string): Promise<void> {
@@ -151,12 +160,10 @@ describe('WAKE-SCROLLBACK', () => {
       ptyId: 'remote:env::term-old'
     })
     // A cold restore of the old terminal while still asleep: not taken.
-    expect(
-      beginWakeScrollbackRestore('leaf-1', terminal, Date.now(), 'remote:env::term-old')
-    ).toBeNull()
+    expect(beginWakeScrollbackRestore('leaf-1', terminal, NOW, 'remote:env::term-old')).toBeNull()
     // The woken terminal's snapshot: taken, even though nothing armed it yet.
     expect(
-      beginWakeScrollbackRestore('leaf-1', terminal, Date.now(), 'remote:env::term-new')?.block
+      beginWakeScrollbackRestore('leaf-1', terminal, NOW, 'remote:env::term-new')?.block
     ).toContain('README')
   })
 
