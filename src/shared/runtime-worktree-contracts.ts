@@ -182,6 +182,10 @@ export type RuntimeSpeechSetupState = {
   removeFillerWords: boolean
   /** Seconds of silence that end a tap-started dictation; null never. Absent from older hosts (60). */
   stopAfterSilenceSeconds?: number | null
+  /** "Send when dictation ends" for chat dictation; absent from older hosts (off). */
+  autoSendAfterDictation?: boolean
+  /** Its delay; an off-list value reads as the default. Absent from older hosts. */
+  autoSendDelayMs?: number
   /** ...and spell these terms, repo terms first; absent from older hosts. */
   dictationTerms?: DictationTerm[]
   models: RuntimeSpeechModelSummary[]

@@ -4,7 +4,7 @@ import type {
   RuntimeSpeechModelSummary,
   RuntimeSpeechSetupState
 } from '../../../shared/runtime-worktree-contracts'
-import { getDefaultVoiceSettings } from '../../../shared/constants'
+import { dictationAutoSendDelayMs, getDefaultVoiceSettings } from '../../../shared/constants'
 import { dictationShortcutModeSettings } from '../../../shared/dictation-shortcut-mode'
 import {
   getCatalogModel,
@@ -71,6 +71,8 @@ export class RuntimeMobileSpeechCatalog {
       dictationHoldToRecord: voice.dictationHoldToRecord !== false,
       removeFillerWords: voice.removeFillerWords !== false,
       stopAfterSilenceSeconds: stopAfterSilenceSeconds(voice),
+      autoSendAfterDictation: voice.autoSendAfterDictation === true,
+      autoSendDelayMs: dictationAutoSendDelayMs(voice),
       // The phone has no Whisper prompt to bias, and its text pass would only join the name; keeping the
       // hint out also spares a phone page from before hints, which would treat the name as a full term.
       dictationTerms: hostDictationTerms(store, worktreeId).filter((entry) => !entry.hint),
