@@ -4,6 +4,7 @@ import {
   detectForegroundCommand,
   dismissWakeProcessHint,
   getWakeProcessHint,
+  historyEndRow,
   readTerminalTail,
   resetWakeProcessCapture,
   resetWakeProcessHintsForTests
@@ -58,6 +59,22 @@ describe('wake process hints', () => {
     resetWakeProcessCapture(['leaf-1'])
     captureWakeProcessHint('leaf-1', running)
     expect(getWakeProcessHint('leaf-1')).toEqual({ command: 'pnpm dev' })
+  })
+
+  it('finds where the history ends on screen, or null when it fills the pane', () => {
+    const screen = (lines: string[], rows: number) => ({
+      rows,
+      buffer: {
+        active: {
+          length: lines.length,
+          viewportY: 0,
+          getLine: (index: number) => ({ translateToString: () => lines[index] ?? '' })
+        }
+      }
+    })
+    expect(historyEndRow(screen(['$ python3 -m http.server', 'Serving…', '', ''], 4))).toBe(2)
+    expect(historyEndRow(screen(['a', 'b', 'c', 'd'], 4))).toBeNull()
+    expect(historyEndRow(screen(['', '', ''], 3))).toBeNull()
   })
 
   it('reads the tail of an xterm buffer', () => {

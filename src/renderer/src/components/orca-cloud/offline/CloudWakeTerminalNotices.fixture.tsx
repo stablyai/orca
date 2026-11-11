@@ -39,6 +39,8 @@ export const asleepTerminalHistory = defineFixture({
       <CloudAsleepTerminalNotice
         workspaceId="ws"
         asleepSince={new Date(2026, 10, 10, 15, 10).getTime()}
+        // Five 20px lines from 12px down: right under "GET / HTTP/1.1".
+        historyEndPx={116}
       />
     </Pane>
   )

@@ -33,6 +33,15 @@ describe('CloudAsleepTerminalNotice', () => {
     )
   })
 
+  it('puts the divider right under the last line of history', () => {
+    const { container } = render(
+      <CloudAsleepTerminalNotice workspaceId="ws" asleepSince={Date.now()} historyEndPx={44} />
+    )
+    const divider = container.querySelector<HTMLElement>('[data-cloud-asleep-divider]')
+    expect(divider?.style.top).toBe('44px')
+    expect(divider?.className).toContain('absolute')
+  })
+
   it('omits the divider when the sleep time is unknown', () => {
     const { container } = render(<CloudAsleepTerminalNotice workspaceId="ws" asleepSince={null} />)
     expect(container.querySelector('[data-cloud-asleep-divider]')).toBeNull()

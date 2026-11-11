@@ -65,6 +65,41 @@ export function readTerminalTail(terminal: TailSource, count = 200): string[] {
   return lines
 }
 
+type ViewportSource = TailSource & {
+  rows: number
+  buffer: TailSource['buffer'] & { active: TailSource['buffer']['active'] & { viewportY: number } }
+}
+
+/**
+ * Rows from the top of the visible screen through the last one with text, or null when the text
+ * reaches the last row (the history fills the pane) or the screen is empty.
+ */
+export function historyEndRow(terminal: ViewportSource): number | null {
+  const { viewportY } = terminal.buffer.active
+  for (let row = terminal.rows - 1; row >= 0; row--) {
+    const text = terminal.buffer.active.getLine(viewportY + row)?.translateToString(true) ?? ''
+    if (text.trim() !== '') {
+      return row === terminal.rows - 1 ? null : row + 1
+    }
+  }
+  return null
+}
+
+/** `historyEndRow` in px from the top of `container`, measured from the rendered xterm screen. */
+export function historyEndOffsetPx(
+  terminal: ViewportSource & { element?: HTMLElement | undefined },
+  container: HTMLElement
+): number | null {
+  const rows = historyEndRow(terminal)
+  const screen = terminal.element?.querySelector<HTMLElement>('.xterm-screen')
+  if (rows === null || !screen || terminal.rows <= 0) {
+    return null
+  }
+  const rowHeight = screen.clientHeight / terminal.rows
+  const top = screen.getBoundingClientRect().top - container.getBoundingClientRect().top
+  return Math.round(top + rows * rowHeight + 4)
+}
+
 // Keyed by the pane's durable leaf id; cleared once the pane has shown (or dismissed) its line.
 const hints = new Map<string, WakeProcessHint>()
 // Panes already looked at in this sleep: the first look sees the pre-sleep scrollback.

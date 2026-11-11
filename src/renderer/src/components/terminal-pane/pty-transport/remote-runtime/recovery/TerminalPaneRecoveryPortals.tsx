@@ -25,6 +25,7 @@ import {
   captureWakeProcessHint,
   dismissWakeProcessHint,
   getWakeProcessHint,
+  historyEndOffsetPx,
   readTerminalTail,
   resetWakeProcessCapture,
   wakeShowsStaleHistory,
@@ -228,6 +229,7 @@ export function TerminalPaneRecoveryPortals({
             <CloudAsleepTerminalNotice
               workspaceId={controller.worktreeId}
               asleepSince={cloud?.asleepSince ?? null}
+              historyEndPx={historyEndOffsetPx(pane.terminal, pane.container)}
             />,
             pane.container,
             `cloud-asleep-${pane.id}`
@@ -239,6 +241,7 @@ export function TerminalPaneRecoveryPortals({
             <CloudAsleepTerminalNotice
               workspaceId={controller.worktreeId}
               asleepSince={cloud?.asleepSince ?? null}
+              historyEndPx={historyEndOffsetPx(pane.terminal, pane.container)}
               waking
             />,
             pane.container,

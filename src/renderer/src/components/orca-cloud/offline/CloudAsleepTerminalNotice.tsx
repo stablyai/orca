@@ -24,12 +24,18 @@ export function formatAsleepSince(at: number, now = Date.now()): string {
 export function CloudAsleepTerminalNotice({
   workspaceId,
   asleepSince,
-  waking = false
+  waking = false,
+  historyEndPx = null
 }: {
   workspaceId: string
   asleepSince: number | null
   /** Waking: the waking pill speaks; keep only the greyed history and its divider. */
   waking?: boolean
+  /**
+   * Where the pre-sleep output ends, in px from the top of the pane: the divider sits right under
+   * the last line. Null when unknown or the history fills the pane (then it ends at the bottom).
+   */
+  historyEndPx?: number | null
 }): React.JSX.Element {
   const t = useTranslate()
   return (
@@ -47,7 +53,13 @@ export function CloudAsleepTerminalNotice({
         {asleepSince !== null ? (
           <div
             data-cloud-asleep-divider=""
-            className="flex items-center gap-2 text-[11px] text-muted-foreground"
+            // Right under the last line of history, so it reads as the history's end, not a footer.
+            style={historyEndPx !== null ? { top: historyEndPx } : undefined}
+            className={
+              historyEndPx !== null
+                ? 'absolute inset-x-3 flex items-center gap-2 text-[11px] text-muted-foreground'
+                : 'flex items-center gap-2 text-[11px] text-muted-foreground'
+            }
           >
             <span className="h-px flex-1 bg-border" />
             <span>
