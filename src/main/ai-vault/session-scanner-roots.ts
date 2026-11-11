@@ -63,17 +63,16 @@ export function uniqueDirs(dirs: readonly string[]): string[] {
   return dirs.filter((dir, index) => dirs.indexOf(dir) === index)
 }
 
-/** OMP session roots shared by discovery and transcript validation; profile dirs join unless an explicit sessions dir pins one root. */
+// Use these same roots for discovery, transcript path validation and native chat ID lookup.
 export function ompSessionsRootDirs(args: {
   ompSessionsDir?: string
   wslHomeDirs?: readonly string[]
 }): string[] {
-  // An explicit sessions dir pins one location, matching the native chat resolver.
-  const profileDirs = args.ompSessionsDir === undefined ? ompProfileSessionsDirs() : []
-  return (
+  return uniqueDirs(
     [
       resolveOmpSessionsDir({ sessionsDir: args.ompSessionsDir }),
-      ...profileDirs,
+      // An explicit sessions dir pins one location.
+      ...(args.ompSessionsDir === undefined ? ompProfileSessionsDirs() : []),
       ...wslHomeSessionDirs('omp', normalizedWslHomeDirs(args.wslHomeDirs))
     ]
       // Reject empty roots: normalizing OMP_CODING_AGENT_DIR=/ can otherwise allowlist the process cwd.

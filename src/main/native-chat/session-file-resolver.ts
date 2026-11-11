@@ -9,12 +9,9 @@ import {
 import { isWslUncPath } from '../../shared/wsl-paths'
 import { forEachSessionFile } from '../ai-vault/session-scanner-discovery'
 import {
-  ompProfileSessionsDirsAsync,
-  resolveOmpSessionsDir
-} from '../ai-vault/scanners/omp/omp-session-root'
-import {
   claudeProjectsHostDirs,
   codexHomeSessionsDir,
+  ompSessionsRootDirs,
   uniqueDirs
 } from '../ai-vault/session-scanner-roots'
 import { resolveOrcaManagedCodexHomePath } from '../codex/configuration/homes/codex-home-paths'
@@ -140,7 +137,6 @@ export async function resolveSessionFilePath(
   return resolved
 }
 
-/** Resolves a session ID to its transcript file, walking per-agent roots (plus WSL guests when allowed). */
 async function resolveSessionFileById(
   transcriptAgent: NativeChatTranscriptAgent,
   sessionId: string,
@@ -185,15 +181,7 @@ async function resolveSessionFileById(
   }
   if (transcriptAgent === 'omp') {
     const override = options.ompSessionsDir
-    const root = resolveOmpSessionsDir({ sessionsDir: override })
-    // An explicit override pins one location; profile roots only join the env-resolved root.
-    const hostDirs =
-      override === undefined
-        ? uniqueDirs([...(root ? [root] : []), ...(await ompProfileSessionsDirsAsync())])
-        : root
-          ? [root]
-          : []
-    return resolveTiered('omp', trimmedId, hostDirs, {
+    return resolveTiered('omp', trimmedId, ompSessionsRootDirs({ ompSessionsDir: override }), {
       wslTier: wslTier && override === undefined,
       signal,
       strictErrors: options.strictErrors
