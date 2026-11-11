@@ -12,7 +12,6 @@ import {
 } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { AgentSessionAttachmentStore } from '../../native-chat/agent-session-attachments/agent-session-attachment-store'
-import { AGENT_SESSION_ATTACHMENT_MAX_BYTES } from '../../../shared/agent-session/agent-session-attachments'
 import { runProcess } from '@orca/process-host'
 import { dirname, join } from 'node:path'
 import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
@@ -27,7 +26,7 @@ import {
 const materialize = vi.hoisted(() => vi.fn())
 vi.mock('node:fs/promises', async (original) => {
   const actual = await original<typeof NodeFsPromises>()
-  return { ...actual, open: vi.fn(actual.open) }
+  return { ...actual, open: vi.fn(actual.open), writeFile: vi.fn(actual.writeFile) }
 })
 vi.mock('electron', () => ({ app: {}, ipcMain: {} }))
 vi.mock('./dragged-temp-file-copy', async (original) => ({
@@ -38,6 +37,9 @@ const TEMP = join('/', 'var', 'T', 'TemporaryItems', 'NSIRD_one', 'Shot.png')
 const ORDINARY = join('/', 'files', 'notes.txt')
 const COPY = join('/', 'var', 'T', 'orca-drops', 'orca-drop-abc123', 'Shot.png')
 const env = { platform: 'darwin' as const, sourceTempRoot: '/var/T', copyRoot: '/var/T/drops' }
+// Main's per-drop memory budget and the chat attachment cap.
+const MEMORY_BUDGET_BYTES = 50 * 1024 * 1024
+const ATTACHMENT_MAX_BYTES = 200 * 1024 * 1024
 
 function queue(lane = createDragTempCopyLane(), copyTimeoutMs = 1000) {
   const controller = new AbortController()
@@ -114,7 +116,7 @@ describe('dropped path preparation through the shared copy queue', () => {
     const sibling = join(dirname(reused), 'notes.txt')
     await writeFile(sibling, 'keep')
     const large = join(dirname(source), 'large.png')
-    const bytes = Buffer.alloc(AGENT_SESSION_ATTACHMENT_MAX_BYTES, 7)
+    const bytes = Buffer.alloc(MEMORY_BUDGET_BYTES, 7)
     await writeFile(large, bytes)
     if (process.platform === 'darwin') {
       expect((await xattr(['-w', 'com.orca.test-marker', '1', source])).code).toBe(0)
@@ -165,13 +167,32 @@ describe('dropped path preparation through the shared copy queue', () => {
 
   it('copies a file over the chat attachment limit privately without waiting for the chat host', async () => {
     const { source, env } = await realDrop()
-    await writeFile(source, Buffer.alloc(AGENT_SESSION_ATTACHMENT_MAX_BYTES + 1, 3))
+    await writeFile(source, Buffer.alloc(ATTACHMENT_MAX_BYTES + 1, 3))
     const getStore = vi.fn(async () => null)
     const result = await localQueue(env, getStore)({ paths: [source], consumer: 'local-chat' })
     expect(result.failures).toEqual([])
     expect(dirname(dirname(result.paths[0]))).toBe(env.copyRoot)
-    expect((await stat(result.paths[0])).size).toBe(AGENT_SESSION_ATTACHMENT_MAX_BYTES + 1)
+    expect((await stat(result.paths[0])).size).toBe(ATTACHMENT_MAX_BYTES + 1)
     expect(getStore).not.toHaveBeenCalled()
+  })
+
+  it('streams a file over the memory budget into the chat store without buffering it', async () => {
+    const { source, env, store } = await realDrop()
+    const size = MEMORY_BUDGET_BYTES + 1
+    await writeFile(source, Buffer.alloc(size, 5))
+    vi.mocked(writeFile).mockClear()
+    const result = await localQueue(
+      env,
+      async () => store
+    )({ paths: [source], consumer: 'local-chat' })
+    expect(result.failures).toEqual([])
+    expect(dirname(dirname(result.paths[0]))).toBe(store.rootDir)
+    expect((await stat(result.paths[0])).size).toBe(size)
+    const wholeFileWrites = vi
+      .mocked(writeFile)
+      .mock.calls.filter(([, data]) => Buffer.isBuffer(data) && data.length === size)
+      .map(([path]) => String(path))
+    expect(wholeFileWrites).toEqual([])
   })
 
   it.each(['SECOND-rewritten', 'x'])(
@@ -229,7 +250,7 @@ describe('dropped path preparation through the shared copy queue', () => {
   it('keeps an unlinked over-budget source after the store destination write fails', async () => {
     const { source, env, store } = await realDrop()
     const buffered = join(dirname(source), 'buffered.png')
-    await writeFile(buffered, Buffer.alloc(AGENT_SESSION_ATTACHMENT_MAX_BYTES))
+    await writeFile(buffered, Buffer.alloc(MEMORY_BUDGET_BYTES))
     const storeWith = store.storeWith.bind(store)
     const write = vi.spyOn(store, 'storeWith').mockImplementation((name, writePart) =>
       name !== 'shot.png'
