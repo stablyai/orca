@@ -24,6 +24,11 @@ function phaseLabel(phase: string, t: Translate): string | null {
         'auto.components.worktree.creation.orcaCloudBuildLog.booting',
         'Booting the sandbox…'
       )
+    case 'cloning':
+      return t(
+        'auto.components.worktree.creation.orcaCloudBuildLog.cloning',
+        'Cloning the repository…'
+      )
     case 'connecting':
       return t(
         'auto.components.worktree.creation.orcaCloudBuildLog.connecting',
@@ -188,4 +193,48 @@ export function latestOrcaCloudPhaseLabel(log: string, t: Translate): string | n
     }
   }
   return null
+}
+
+const CLONE_PROGRESS_LINE = /^\[orca-cloud\] clone-progress (\d{1,3}) (download|checkout)$/
+
+export type OrcaCloudCloneProgress = {
+  startedAt: number | null
+  /** When the next phase began (the clone finished); null while it runs. */
+  endedAt: number | null
+  percent: number | null
+  stage: 'download' | 'checkout' | null
+}
+
+/**
+ * The background clone, from the provider's `[orca-cloud] cloning` / `clone-progress <percent> <stage>`
+ * lines and their arrival stamps. Null when this create had no clone step (the log never says cloning).
+ */
+export function orcaCloudCloneProgress(
+  log: string,
+  stamps: readonly number[]
+): OrcaCloudCloneProgress | null {
+  const lines = log.split('\n')
+  let progress: OrcaCloudCloneProgress | null = null
+  lines.forEach((raw, index) => {
+    const line = raw.trim()
+    const stamp = stamps[index] ?? null
+    if (line === '[orca-cloud] cloning') {
+      progress = { startedAt: stamp, endedAt: null, percent: null, stage: null }
+      return
+    }
+    if (!progress) {
+      return
+    }
+    const match = CLONE_PROGRESS_LINE.exec(line)
+    if (match) {
+      progress.percent = Math.min(100, Number(match[1]))
+      progress.stage = match[2] === 'checkout' ? 'checkout' : 'download'
+      return
+    }
+    const phase = PHASE_LINE.exec(line)?.[1]
+    if (phase && progress.endedAt === null) {
+      progress.endedAt = stamp
+    }
+  })
+  return progress
 }

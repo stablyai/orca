@@ -35,6 +35,10 @@ import {
   type HostedSandboxView
 } from '../../shared/hosted-sandbox/hosted-sandbox-wire'
 import {
+  HostedCloneStatusResponseSchema,
+  type HostedCloneStatus
+} from '../../shared/hosted-sandbox/hosted-clone-wire'
+import {
   HostedGithubRepoAccessResponseSchema,
   HostedGithubRepositoriesResponseSchema,
   type HostedGithubRepoAccessResponse,
@@ -50,6 +54,8 @@ export type HostedSandboxControlPlaneClient = {
     signal?: AbortSignal
   ): Promise<HostedSandboxReadyResponse>
   get(sandboxId: string, signal?: AbortSignal): Promise<HostedSandboxView>
+  /** The background clone a create started (create answered with `clone`). */
+  cloneStatus(sandboxId: string, signal?: AbortSignal): Promise<HostedCloneStatus>
   list(signal?: AbortSignal): Promise<HostedSandboxView[]>
   /** `reason` 'idle' is the idle timer; 'user' (or none) is a sleep someone chose. */
   suspend(
@@ -131,8 +137,17 @@ export function createHostedSandboxControlPlaneClient(
       call('POST', 'v1/sandboxes', HostedSandboxReadyResponseSchema, {
         body,
         kind: 'boot',
-        signal
+        signal,
+        // The repo clones after the sandbox is up; the driver shows it as its own step.
+        features: ['clone-progress']
       }),
+    cloneStatus: async (id, signal) =>
+      (
+        await call('GET', sandboxPath(id, '/clone'), HostedCloneStatusResponseSchema, {
+          kind: 'control',
+          signal
+        })
+      ).clone,
     get: async (id, signal) =>
       (
         await call('GET', sandboxPath(id), HostedSandboxStatusResponseSchema, {

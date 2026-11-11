@@ -28,6 +28,8 @@ export type VmBuildFailure =
   | { kind: 'provision'; error: string }
   /** The VM came up, but creating the workspace on it failed. */
   | { kind: 'create'; error: string }
+  /** Orca Cloud: the sandbox came up but cloning the repo failed; the sandbox was deleted. */
+  | { kind: 'cloneFailed'; reason: string }
 
 const ERROR_CODE_KINDS: Partial<Record<string, VmBuildAccountFailureKind>> = {
   cloudPlanRequired: 'plan',
@@ -69,6 +71,12 @@ export function classifyVmBuildFailure(args: {
   }
   if (error === null) {
     return null
+  }
+  if (entry.errorCode === 'cloudCloneFailed') {
+    return {
+      kind: 'cloneFailed',
+      reason: DENY_REASON.exec(entry.provisioningLog ?? '')?.[1] ?? 'clone_failed'
+    }
   }
   const coded = entry.errorCode ? ERROR_CODE_KINDS[entry.errorCode] : undefined
   if (coded === 'plan' || coded === 'concurrency') {

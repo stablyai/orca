@@ -4,8 +4,10 @@ import {
   type WorktreeCreationPhase
 } from '@/lib/workspace/creation/pending-worktree-creation'
 import type { WorktreeSetupStepState } from './worktree-setup-steps'
+import { orcaCloudCloneProgress } from './orca-cloud-build-log'
 
-export type VmBuildStepId = 'provision' | 'checks' | 'create'
+/** `clone` is Orca Cloud only: the repo clones in the sandbox after it starts. */
+export type VmBuildStepId = 'provision' | 'clone' | 'checks' | 'create'
 
 export type VmBuildStep = {
   id: VmBuildStepId
@@ -14,8 +16,10 @@ export type VmBuildStep = {
   skipped: boolean
   /** Time spent so far (running) or in total (done/failed); null when unknown. */
   elapsedMs: number | null
-  /** Git's checkout percent while the workspace step checks out files. */
+  /** Git's percent while the clone or the workspace step checks out files. */
   percent: number | null
+  /** Clone only: what git is doing now (`checkout` = writing the files). */
+  stage?: 'download' | 'checkout'
   /** When the step started, if it has. */
   startedAt: number | null
 }
@@ -30,6 +34,8 @@ type VmBuildEntry = Pick<
   | 'checkoutProgress'
   | 'worktreeId'
   | 'errorAt'
+  | 'provisioningLog'
+  | 'provisioningLogStamps'
 >
 
 export function isOrcaCloudBuild(entry: Pick<PendingWorktreeCreation, 'request'>): boolean {
@@ -69,20 +75,51 @@ function step(
  * row). A failed step keeps the steps before it done and shows how long it ran; a worktree id means
  * the workspace is opening.
  */
-export function deriveVmBuildSteps(entry: VmBuildEntry, now: number): VmBuildStep[] {
+export function deriveVmBuildSteps(
+  entry: VmBuildEntry,
+  now: number,
+  { cloud = false }: { cloud?: boolean } = {}
+): VmBuildStep[] {
   const check = entry.environmentCheck
   const failed = entry.status === 'error'
   const workspacePhase = entry.phase === 'fetching' || entry.phase === 'creating'
   const ready = workspacePhase && !failed && entry.worktreeId !== undefined
   const provisionAt = phaseStart(entry, ['provisioning-vm']) ?? entry.startedAt
   const createAt = phaseStart(entry, ['fetching', 'creating'])
-  const provisionDone = Boolean(check) || workspacePhase
+  const clone = cloud
+    ? orcaCloudCloneProgress(entry.provisioningLog ?? '', entry.provisioningLogStamps ?? [])
+    : null
+  const cloneAt = clone?.startedAt ?? undefined
+  const afterClone = clone?.endedAt ?? check?.startedAt ?? createAt
+  const provisionDone = Boolean(check) || workspacePhase || cloneAt !== undefined
 
   const provision = provisionDone
-    ? step('provision', 'done', span(provisionAt, check?.startedAt ?? createAt), provisionAt)
+    ? step(
+        'provision',
+        'done',
+        span(provisionAt, cloneAt ?? check?.startedAt ?? createAt),
+        provisionAt
+      )
     : failed
       ? step('provision', 'failed', span(provisionAt, entry.errorAt), provisionAt)
       : step('provision', 'running', span(provisionAt, now), provisionAt)
+
+  // No clone lines: an environment build (prebuilt repo) or an older control plane that cloned
+  // inside the start. Either way it is done once the sandbox is, with no time of its own.
+  const cloneStep: VmBuildStep | null = !cloud
+    ? null
+    : cloneAt === undefined
+      ? step('clone', provisionDone ? 'done' : 'pending', null, undefined)
+      : clone?.endedAt !== null || check || workspacePhase
+        ? step('clone', 'done', span(cloneAt, afterClone), cloneAt)
+        : failed
+          ? step('clone', 'failed', span(cloneAt, entry.errorAt), cloneAt)
+          : {
+              ...step('clone', 'running', span(cloneAt, now), cloneAt, {
+                percent: clone?.percent ?? 0
+              }),
+              ...(clone?.stage ? { stage: clone.stage } : {})
+            }
 
   const checks = !check
     ? step('checks', 'pending', null, undefined)
@@ -108,5 +145,5 @@ export function deriveVmBuildSteps(entry: VmBuildEntry, now: number): VmBuildSte
             percent: getVisibleCheckoutProgress(entry)?.percent ?? null
           })
 
-  return [provision, checks, create]
+  return cloneStep ? [provision, cloneStep, checks, create] : [provision, checks, create]
 }
