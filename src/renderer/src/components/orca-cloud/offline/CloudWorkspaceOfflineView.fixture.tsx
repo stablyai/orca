@@ -250,3 +250,24 @@ export const withCloudSnapshot = defineFixture({
       />
     )
 })
+
+/** Sleep chosen with an earlier copy on screen: the header note says the new copy is saving. */
+export const goingToSleepWithEarlierCopy = defineFixture({
+  width: 900,
+  render: () =>
+    frame(
+      <CloudWorkspaceOfflineView
+        snapshot={snapshot}
+        queued={[]}
+        workspaceName="fix-auth-redirect"
+        now={NOW}
+        goingToSleep
+        viewOnly
+        onKeepAwake={noop}
+        onWake={noop}
+        onQueue={yes}
+        onCancel={noop}
+        onEdit={yes}
+      />
+    )
+})
