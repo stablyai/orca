@@ -1,10 +1,10 @@
-import { ORCHESTRATION_FLEET_PAGE_MAX } from '../../../../../../shared/orchestration-fleet-projection'
+import { ORCHESTRATION_FLEET_PAGE_MAX } from '../../../../../../shared/orchestration/fleet/orchestration-fleet-projection'
 import type { WorkerTerminalListState } from '../../../../orchestration/terminal-authority/release/worker-terminal-ownership'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { WORKER_LIST_CURSOR_EXPIRED_MESSAGE } from '../../../../orchestration/db/worker-terminal/worker-terminal-listing'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import { defineMethod } from '../../../core'
+import { defineOrchestrationMethod } from '../access/orchestration-method-access'
 import {
   decodeWorkerListCursor,
   encodeWorkerListCursor,
@@ -29,8 +29,9 @@ const emptyWorkerListPage = (limit: number) => ({
   page: { limit, total: 0, hasMore: false, nextCursor: null }
 })
 
-export const ORCHESTRATION_WORKER_LIST_METHOD = defineMethod({
+export const ORCHESTRATION_WORKER_LIST_METHOD = defineOrchestrationMethod({
   name: 'orchestration.workerList',
+  access: { kind: 'reads', targets: { run: 'run' }, collection: true },
   permission: 'workspace',
   params: WorkerListParams,
   handler: async (params, { runtime }) => {
@@ -250,6 +251,7 @@ async function projectWorkerListPageWithFilteredSnapshot(
       dispatchStatus: row.dispatchStatus,
       agentTerminalHandle: row.agentTerminalHandle,
       terminalState: row.terminalState,
+      coordinatedFrom: row.coordinatedFrom,
       resource: row.resource ? exposeWorkerTerminalResource(row.resource) : null,
       // Emit only derived ownership; resource identity/release fields already live on the row.
       projection: {

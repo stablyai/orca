@@ -22,7 +22,7 @@ import { useNativeChatComposerSessionOptions } from './controls/use-native-chat-
 import { useNativeChatDictation } from './editor/use-native-chat-dictation'
 import { useNativeChatPtyComposerSend } from './submit/use-native-chat-pty-composer-send'
 import { useNativeChatStructuredComposerSend } from './submit/use-native-chat-structured-composer-send'
-import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
+import { useImeEnterGestureOwnership } from '@/lib/text-input/ime/ime-composition-keyboard-event'
 import { useNativeChatComposerAppMenuSelection } from './focus/use-native-chat-composer-app-menu-selection'
 import { useNativeChatComposerSubmit } from './submit/use-native-chat-composer-submit'
 import { useNativeChatComposerCommandPicker } from './pickers/use-native-chat-composer-command-picker'
@@ -337,7 +337,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       hasAttachments: imageAttachments.length > 0,
       ...(!editSession && steerHead ? { steerHead } : {}),
       chordSteersHead: sendButton.chordSteersHead,
-      setActiveSuggestion,
+      setActiveSuggestion: picker.navigateSuggestion,
       setDraft,
       setCaret
     })
@@ -410,6 +410,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
               <NativeChatComposerWorkspace
                 terminalTabId={terminalTabId}
                 structuredTransport={structuredTransport}
+                isWorking={isWorking}
               />
             ) : undefined
           }

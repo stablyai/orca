@@ -25,6 +25,30 @@ export async function fetchAllGitLabPages<T>(
   signal?: AbortSignal
 ): Promise<T[]> {
   const items: T[] = []
+  await consumeGitLabPages<T>(
+    repoPath,
+    projectRef,
+    endpoint,
+    connectionId,
+    localGitOptions,
+    (page) => {
+      items.push(...page)
+    },
+    signal
+  )
+  return items
+}
+
+/** Consume and release each raw page before requesting the next one. */
+export async function consumeGitLabPages<T>(
+  repoPath: string,
+  projectRef: ProjectRef,
+  endpoint: string,
+  connectionId: string | null | undefined,
+  localGitOptions: LocalGitExecOptions,
+  consume: (page: T[]) => void,
+  signal?: AbortSignal
+): Promise<void> {
   let probedPages = 0
   let page: number | undefined = 1
   while (page !== undefined) {
@@ -35,7 +59,7 @@ export async function fetchAllGitLabPages<T>(
       const { body, headers } = await glabApiWithHeaders(
         [
           ...glabHostnameArgs(projectRef, connectionId),
-          `${endpoint}?per_page=${PAGE_SIZE}&page=${page}`
+          `${endpoint}${endpoint.includes('?') ? '&' : '?'}per_page=${PAGE_SIZE}&page=${page}`
         ],
         glabRepoExecOptions(repoPath, connectionId, localGitOptions)
       )
@@ -50,7 +74,7 @@ export async function fetchAllGitLabPages<T>(
       }
       throw error
     }
-    items.push(...pageItems)
+    consume(pageItems)
     // Follow only a header naming the next page after a non-empty one; a skip would hide rows.
     if (pageItems.length > 0 && nextPageHeader?.trim() === String(page + 1)) {
       page += 1
@@ -69,5 +93,4 @@ export async function fetchAllGitLabPages<T>(
       page += 1
     }
   }
-  return items
 }

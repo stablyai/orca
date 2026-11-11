@@ -1,3 +1,4 @@
+import { GitHubBodyImageUrlsContext } from './comment-markdown-github-image-urls'
 import React from 'react'
 import {
   CommentMarkdownMermaidContext,
@@ -16,7 +17,7 @@ import remarkCjkFriendly from 'remark-cjk-friendly/parseOnly'
 import rehypeRaw from 'rehype-raw'
 import rehypeSanitize, { defaultSchema, type Options as SanitizeSchema } from 'rehype-sanitize'
 import remend from 'remend'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import {
   selectCommentMarkdownComponents,
   isTrustedCompactImageSrc,
@@ -36,8 +37,8 @@ import {
   markdownBlockContent
 } from './comment-markdown-block-pipeline'
 import { GITHUB_CALLOUT_SANITIZE_ATTRIBUTE } from '../../../../shared/github/github-callouts'
-import { remarkGitHubCallouts } from '@/lib/remark-github-callouts'
-import { remarkAutolinkLiteralProseBoundary } from '@/lib/remark-autolink-literal-prose-boundary'
+import { remarkGitHubCallouts } from '@/lib/markdown/remark-github-callouts'
+import { remarkAutolinkLiteralProseBoundary } from '@/lib/markdown/remark-autolink-literal-prose-boundary'
 import {
   linkGitHubReferences,
   type GitHubRepoReference
@@ -151,6 +152,7 @@ function extensionRehypePlugins(extension: CommentMarkdownExtension): MarkdownPl
 
 type CommentMarkdownProps = React.ComponentPropsWithoutRef<'div'> & {
   content: string
+  bodyImageUrls?: Readonly<Record<string, string>>
   math?: boolean
   variant?: 'compact' | 'document'
   githubRepo?: GitHubRepoReference | null
@@ -180,6 +182,7 @@ const CommentMarkdown = React.memo(
   React.forwardRef<HTMLDivElement, CommentMarkdownProps>(function CommentMarkdown(
     {
       content,
+      bodyImageUrls,
       math = false,
       className,
       variant = 'compact',
@@ -246,51 +249,53 @@ const CommentMarkdown = React.memo(
     const wrapsWords = fadeWords || hadWordFade
 
     return (
-      <CommentMarkdownMermaidContext.Provider value={renderMermaid}>
-        <CommentMarkdownMermaidSourceContext.Provider value={keepMermaidSourceWhilePending}>
-          <div
-            ref={ref}
-            className={cn(
-              // Descendant pre/code selectors outrank inline-code pill utilities to reset block-code styling.
-              '[&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_pre_code]:rounded-none',
-              'min-w-0 max-w-full [overflow-wrap:anywhere]',
-              className
-            )}
-            onCopy={(event) => {
-              onCopy?.(event)
-              if (math && !event.defaultPrevented) {
-                copyChatMathSelection(event)
-              }
-            }}
-            {...rest}
-          >
-            {blocks.map((block, index) => (
-              <CommentMarkdownBlockLineContext.Provider key={block.start} value={block.line}>
-                <MemoizedMarkdown
-                  block={block.tree ? block : undefined}
-                  remarkPlugins={activeRemarkPlugins}
-                  rehypePlugins={activeRehypePlugins}
-                  math={math}
-                  fadeWords={wrapsWords}
-                  components={wrapsWords ? fadingComponents : components}
-                  urlTransform={
-                    allowFileUriLinks
-                      ? commentMarkdownFileUriUrlTransform
-                      : commentMarkdownUrlTransform
-                  }
-                >
-                  {growing && index === blocks.length - 1 && !block.literalMath
-                    ? remend(markdownBlockContent(block), {
-                        linkMode: 'text-only',
-                        ...(math ? { katex: false, inlineKatex: false } : {})
-                      })
-                    : markdownBlockContent(block)}
-                </MemoizedMarkdown>
-              </CommentMarkdownBlockLineContext.Provider>
-            ))}
-          </div>
-        </CommentMarkdownMermaidSourceContext.Provider>
-      </CommentMarkdownMermaidContext.Provider>
+      <GitHubBodyImageUrlsContext.Provider value={bodyImageUrls}>
+        <CommentMarkdownMermaidContext.Provider value={renderMermaid}>
+          <CommentMarkdownMermaidSourceContext.Provider value={keepMermaidSourceWhilePending}>
+            <div
+              ref={ref}
+              className={cn(
+                // Descendant pre/code selectors outrank inline-code pill utilities to reset block-code styling.
+                '[&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_pre_code]:rounded-none',
+                'min-w-0 max-w-full [overflow-wrap:anywhere]',
+                className
+              )}
+              onCopy={(event) => {
+                onCopy?.(event)
+                if (math && !event.defaultPrevented) {
+                  copyChatMathSelection(event)
+                }
+              }}
+              {...rest}
+            >
+              {blocks.map((block, index) => (
+                <CommentMarkdownBlockLineContext.Provider key={block.start} value={block.line}>
+                  <MemoizedMarkdown
+                    block={block.tree ? block : undefined}
+                    remarkPlugins={activeRemarkPlugins}
+                    rehypePlugins={activeRehypePlugins}
+                    math={math}
+                    fadeWords={wrapsWords}
+                    components={wrapsWords ? fadingComponents : components}
+                    urlTransform={
+                      allowFileUriLinks
+                        ? commentMarkdownFileUriUrlTransform
+                        : commentMarkdownUrlTransform
+                    }
+                  >
+                    {growing && index === blocks.length - 1 && !block.literalMath
+                      ? remend(markdownBlockContent(block), {
+                          linkMode: 'text-only',
+                          ...(math ? { katex: false, inlineKatex: false } : {})
+                        })
+                      : markdownBlockContent(block)}
+                  </MemoizedMarkdown>
+                </CommentMarkdownBlockLineContext.Provider>
+              ))}
+            </div>
+          </CommentMarkdownMermaidSourceContext.Provider>
+        </CommentMarkdownMermaidContext.Provider>
+      </GitHubBodyImageUrlsContext.Provider>
     )
   })
 )

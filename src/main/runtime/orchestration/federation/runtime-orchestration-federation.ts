@@ -1,7 +1,7 @@
 import {
   ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
   ORCHESTRATION_CONTRACT_VERSION
-} from '../../../../shared/orchestration-runtime-capabilities'
+} from '../../../../shared/orchestration/orchestration-runtime-capabilities'
 import type {
   RuntimeOrchestrationEnvelope,
   RuntimeRpcResponse
@@ -9,7 +9,7 @@ import type {
 import {
   isOrchestrationMutation,
   orchestrationMigrationData
-} from '../../../../shared/orchestration-rpc-contract'
+} from '../../../../shared/orchestration/orchestration-rpc-contract'
 import type { RuntimeStatus } from '../../../../shared/runtime-session-contracts'
 import type {
   OrchestrationEnvironmentCallOptions,
@@ -19,16 +19,16 @@ import type {
 import { OrchestrationError } from '../orchestration-error'
 import {
   clearFederationAckCheckpoints,
-  releaseFederationAckCheckpoint
-} from './synchronization/federation-ack-checkpoints'
-import { syncFederatedDispatch } from './synchronization/federation-sync'
+  releaseFederationAckCheckpoint,
+  syncFederatedDispatch,
+  FederationAcknowledgmentRecovery
+} from '../legacy-remote-home/legacy-remote-home'
 import type { OrchestrationDb } from '../db/orchestration-db'
 import type { FederationRuntime } from './federation-runtime'
 import {
   FederationRelayScheduler,
   type FederationRelayTickOutcome
 } from './relay/federation-relay-scheduler'
-import { FederationAcknowledgmentRecovery } from './relay/federation-acknowledgment-recovery'
 
 export class RuntimeOrchestrationFederation {
   private readonly relays = new FederationRelayScheduler((dispatchId) => this.relayTick(dispatchId))

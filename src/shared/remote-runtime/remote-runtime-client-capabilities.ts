@@ -4,7 +4,7 @@ import {
   AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY,
   AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY
 } from '../agent-session/agent-session-runtime-capabilities'
-import { AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY } from '../automation-runtime-capabilities'
+import { AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY } from '../automations/automation-runtime-capabilities'
 import {
   REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY,
   WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY,

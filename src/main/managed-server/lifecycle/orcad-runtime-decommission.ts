@@ -24,10 +24,10 @@ import {
 } from './orcad-managed-runtime-context'
 import { closeOrcadManagedTunnel, ensureOrcadManagedTunnel } from './orcad-managed-tunnel'
 import { clearManagedOrcadUpdateDeferral } from './orcad-managed-update-deferrals'
-import { removeOrcadMigrationJournalsForDestination } from '../../ssh/orcad-migration-cutover-journal'
+import { removeOrcadMigrationJournalsForDestination } from '../../persistence/migrating-orcad-catalog/orcad-migration-cutover-journal'
 import { decommissionRemoteOrcad } from '../install/orcad-remote-decommission'
-import { withManagedOrcadLifecycle } from '../../ssh/orcad-runtime-maintenance'
-import { collectManagedTerminalCensus } from '../../ssh/orcad-terminal-census-client'
+import { withManagedOrcadLifecycle } from './orcad-managed-lifecycle'
+import { collectManagedTerminalCensus } from './orcad-terminal-census-client'
 import { RemoteInstallLockBusyError } from '../install/remote-install-lock'
 
 type ManagedOrcadStopPolicy = {

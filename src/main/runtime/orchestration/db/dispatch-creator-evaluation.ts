@@ -7,7 +7,7 @@ import {
   NESTED_WORKER_DEPTH_EXCEEDED_NEXT_STEPS,
   ROOT_DISPATCH_DEPTH,
   nestedWorkerDepthExceededMessage
-} from '../../../../shared/nested-worker-depth'
+} from '../../../../shared/orchestration/workers/nested-worker-depth'
 import { OrchestrationError } from '../orchestration-error'
 import { POTENTIALLY_LIVE_REMOTE_ATTACHMENT_STATES } from './federation/remote-attachment-liveness'
 

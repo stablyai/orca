@@ -1,3 +1,4 @@
+import type { WorkspaceMetadataSet } from '../../../../shared/worktree/workspace-metadata-set'
 import type {
   RuntimeEditorTabReveal,
   RuntimeFileOpenPosition
@@ -29,13 +30,14 @@ import type {
 import type { CreateWorktreeResult } from '../../../../shared/worktree/create-types'
 import type { WorktreeStartupLaunch } from '../../../../shared/worktree/launch-types'
 import type {
-  RuntimeBrowserDriverState,
   RuntimeMobileSessionTabMove,
   RuntimeTerminalDriverState
 } from '../../../../shared/runtime-session-contracts'
 import type { RuntimeTerminalPresentation } from '../../../../shared/runtime-terminal-contracts'
-
-type DriverState = RuntimeTerminalDriverState
+import type {
+  AgentListPublication,
+  AgentPaneActivityChange
+} from '../../../../shared/agent-status/presentation/agent-list-status'
 
 export type RuntimeNotifier = {
   automationsChanged?(payload: {
@@ -48,6 +50,7 @@ export type RuntimeNotifier = {
     // Why: false for metadata-only changes (sort order) that leave Git scan results valid.
     options?: { invalidateGitScans?: boolean }
   ): void
+  workspaceMetadataSet?(set: WorkspaceMetadataSet): void
   worktreeBaseStatus?(event: WorktreeBaseStatusEvent): void
   worktreeRemoteBranchConflict?(event: WorktreeRemoteBranchConflictEvent): void
   reposChanged(): void
@@ -135,7 +138,8 @@ export type RuntimeNotifier = {
   focusTerminal(tabId: string, worktreeId: string, leafId?: string | null): void
   /** Raises the window onto a pane it shows; resolves false when the window does not know the worktree. */
   revealTerminalPane?(target: TerminalPaneRevealTarget): Promise<boolean>
-  focusEditorTab?(tabId: string, worktreeId: string): void
+  /** `userInitiated` lets a chat tab move the window to another worktree. */
+  focusEditorTab?(tabId: string, worktreeId: string, options?: { userInitiated: true }): void
   closeSessionTab?(tabId: string, worktreeId: string): void | Promise<void>
   moveSessionTab?(worktreeId: string, move: RuntimeMobileSessionTabMove): void
   /** The window moves a client's pane to a new tab, since it owns the layout; rejects when it cannot answer. */
@@ -174,6 +178,8 @@ export type RuntimeNotifier = {
   workspaceSleepChanged?(notice: WorkspaceSleepNotice): void
   // Only the host renderer owns slept-agent wake records; phones request navigation-free wake through this optional bridge.
   resumeSleepingAgents?(worktreeId: string): void
+  /** The window applies a client's Agents-list change with its own actions and answers with the verdicts it leaves. */
+  applyAgentPaneActivity?(change: AgentPaneActivityChange): Promise<AgentListPublication>
   terminalFitOverrideChanged(
     ptyId: string,
     mode: 'mobile-fit' | 'remote-desktop-fit' | 'desktop-fit',
@@ -181,12 +187,12 @@ export type RuntimeNotifier = {
     rows: number
   ): void
   // Publish driver/clientId so the lock banner distinguishes mobile actors; boolean lock state loses identity (docs/mobile-presence-lock.md).
-  terminalDriverChanged(ptyId: string, driver: DriverState): void
+  terminalDriverChanged(ptyId: string, driver: RuntimeTerminalDriverState): void
   nativeChatLaunchDraftResolved?(
     tabId: string,
     resolution: { text: string; createdAt: number }
   ): void
-  browserDriverChanged?(browserPageId: string, driver: RuntimeBrowserDriverState): void
+  browserDriverChanged?(browserPageId: string, driver: RuntimeTerminalDriverState): void
   browserRemoteViewersChanged?(browserPageId: string, hasRemoteViewers: boolean): void
   clientHostedBrowserRowsChanged?(event: ClientHostedBrowserRowsEvent): void
   claudeAccountSelected?(change: ClaudeAccountSelectionChange): void

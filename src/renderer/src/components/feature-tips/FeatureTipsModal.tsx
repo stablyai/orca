@@ -5,8 +5,8 @@ import {
   ORCHESTRATION_ENABLED_STORAGE_KEY,
   ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY,
   notifyOrchestrationSetupStateChanged
-} from '@/lib/orchestration-setup-state'
-import { useAppStore } from '@/store'
+} from '@/components/orchestration/setup/orchestration-setup-state'
+import { useAppStore } from '@/store/index'
 import { ChatUiHereTipDialog } from './ChatUiHereTipDialog'
 import {
   setAgentDefaultSurfaceFromFeatureTip,
@@ -16,6 +16,7 @@ import { CliSetupTipDialog } from './CliSetupTipDialog'
 import { CmdJPaletteTipDialog } from './CmdJPaletteTipDialog'
 import { installCliFromFeatureTip } from './feature-tip-cli-install-action'
 import { getFeatureTipForModal } from './feature-tip-modal-state'
+import { localizeFeatureTip } from './feature-tip-copy'
 import {
   getOrcaCliFeatureTipTelemetrySource,
   trackChatUiFeatureTipAction,
@@ -24,8 +25,9 @@ import {
   trackOrcaCliFeatureTipSetupResult
 } from './feature-tip-telemetry'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { isWebClientLocation } from '@/lib/web-client-location'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { useTranslate } from '@/i18n/use-translate'
+import { formatCliUserFacingDetail } from '@/lib/cli-emulator-user-facing-copy'
 import { SessionSearchTipDialog } from './SessionSearchTipDialog'
 import { useSessionSearchTipSetup } from './use-session-search-tip-setup'
 import { VoiceDictationTipDialog } from './VoiceDictationTipDialog'
@@ -50,7 +52,7 @@ export default function FeatureTipsModal(): JSX.Element | null {
   const [primaryBusy, setPrimaryBusy] = useState(false)
   const [skillTerminalOpen, setSkillTerminalOpen] = useState(false)
   const isOpen = activeModal === 'feature-tips'
-  const currentTip = getFeatureTipForModal({
+  const rawTip = getFeatureTipForModal({
     cliInstalled: true,
     modalData,
     seenTipIds,
@@ -59,6 +61,7 @@ export default function FeatureTipsModal(): JSX.Element | null {
     settings,
     webClient: isWebClientLocation()
   })
+  const currentTip = rawTip ? localizeFeatureTip(rawTip) : null
   const sessionSearchSetup = useSessionSearchTipSetup({
     dialogOpen: isOpen && currentTip?.id === 'agent-session-search'
   })
@@ -234,7 +237,7 @@ export default function FeatureTipsModal(): JSX.Element | null {
             ),
             {
               description:
-                result.status.detail ??
+                formatCliUserFacingDetail(result.status.detail) ||
                 t(
                   'auto.components.feature.tips.FeatureTipsModal.d1a86c7eb5',
                   'Open Settings to finish CLI setup.'
@@ -272,7 +275,7 @@ export default function FeatureTipsModal(): JSX.Element | null {
 
           trackOrcaCliFeatureTipSetupResult(telemetrySource, 'failed')
           if (canApplySetupResult()) {
-            toast.error(message)
+            toast.error(formatCliUserFacingDetail(message) || message)
           }
         } finally {
           if (canApplySetupResult()) {

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { Terminal } from '@xterm/headless'
 import { SerializeAddon } from '@xterm/addon-serialize'
 import { readClaudeSessionOptionsFromTerminalScreen } from './claude-terminal-session-options'
-import { buildBoundedSessionTranscript } from '@/lib/agent-session-fork-context'
+import { buildBoundedSessionTranscript } from '@/lib/agent-session/context/agent-session-fork-context'
 
 const CLAUDE_FRAME = [
   '╭─ Claude Code ───╮',

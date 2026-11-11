@@ -1,6 +1,7 @@
+import { readRuntimeListingMetadata } from './runtime-listing-metadata'
 import type { RuntimeManagedWorktreeQueryDependencies } from './runtime-managed-worktree-query-dependencies'
 import { resolveWorktreeHostRouting } from './worktree-launch-host-repo'
-import { createRepoRowExecutionHostLookup } from '../../../../shared/worktree-execution-host-resolution'
+import { createRepoRowExecutionHostLookup } from '../../../../shared/execution-host/worktree-execution-host-resolution'
 import { buildRuntimeWorktreeVisibilityMatchers } from './runtime-worktree-visibility'
 import { getRepoHostIdentityForParts } from '../../../../shared/repo-host-identity'
 import type { DetectedWorktreeListResult, Worktree } from '../../../../shared/worktree/types'
@@ -137,8 +138,7 @@ export class RuntimeManagedWorktreeQueries {
     const visibilitySettings = { ...settings, worktreeVisibilityDefaults: visibilityDefaults }
     if (isFolderRepo(repo)) {
       const worktrees = listRuntimeFolderWorkspaces(store, repo)
-      const metaById = store.getAllWorktreeMeta()
-      const repoOwnerCount = store.getRepos().filter((candidate) => candidate.id === repo.id).length
+      const listed = readRuntimeListingMetadata(store, repo)
       const matcher = createWorktreeVisibilitySourceMatcher(
         [repo.path, ...worktrees.map((worktree) => worktree.path)],
         resolveCustomWorktreeVisibilitySources(repo, visibilityDefaults),
@@ -151,7 +151,7 @@ export class RuntimeManagedWorktreeQueries {
           matcher,
           defaultsSupported,
           visibilitySettings,
-          getRepoOwnedWorktreeMeta(repo, worktree.id, metaById, repoOwnerCount) ?? null
+          listed.ownedMeta(worktree.id) ?? null
         )
       )
       return {
@@ -159,6 +159,7 @@ export class RuntimeManagedWorktreeQueries {
         authoritative: true,
         source: 'git',
         catalogVersion: getLocalWorktreeCatalogVersion(repo.id),
+        workspaceMetadata: listed.workspaceMetadata,
         worktrees: projectWorktreeLineageWithHostPeers(store, repo, detected)
       }
     }
@@ -185,13 +186,11 @@ export class RuntimeManagedWorktreeQueries {
       resolveConfiguredWorktreeBasePaths(repo)
     )
     const expectedHostId = getRepoExecutionHostId(repo)
-    const repoOwnerCount = store.getRepos().filter((candidate) => candidate.id === repo.id).length
-    const metaById = store.getAllWorktreeMeta()
+    const listed = readRuntimeListingMetadata(store, repo)
+    const repoOwnerCount = listed.repoOwnerCount
     const detected = scan.worktrees.map((gitWorktree) => {
       const id = `${repo.id}::${gitWorktree.path}`
-      const meta =
-        readWorktreeMetaForHost(store, id, expectedHostId) ??
-        getRepoOwnedWorktreeMeta(repo, id, metaById, repoOwnerCount)
+      const meta = readWorktreeMetaForHost(store, id, expectedHostId) ?? listed.ownedMeta(id)
       const worktree = {
         ...mergeWorktree(repo.id, gitWorktree, meta, repo.displayName),
         hostId: repoOwnerCount === 1 ? (meta?.hostId ?? expectedHostId) : expectedHostId
@@ -210,6 +209,7 @@ export class RuntimeManagedWorktreeQueries {
       repoId: repo.id,
       authoritative: scan.ok && !scan.superseded,
       source: scan.ok ? 'git' : 'metadata-fallback',
+      workspaceMetadata: listed.workspaceMetadata,
       // Stamp the scan's starting generation: that is the catalog its rows describe.
       catalogVersion: localWorktreeCatalogVersionAt(scan.scanGeneration),
       worktrees: projectWorktreeLineageWithHostPeers(store, repo, detected)

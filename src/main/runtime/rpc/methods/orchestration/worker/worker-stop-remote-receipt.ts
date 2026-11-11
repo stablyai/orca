@@ -1,9 +1,9 @@
 import { z } from 'zod'
-import { ORCHESTRATION_WORKER_STOP_HELPERS_RUNTIME_CAPABILITY } from '../../../../../../shared/orchestration-runtime-capabilities'
+import { ORCHESTRATION_WORKER_STOP_HELPERS_RUNTIME_CAPABILITY } from '../../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import {
   HelperStopOutcome,
   type WorkerStopReceipt
-} from '../../../../../../shared/orchestration-worker-stop-receipt'
+} from '../../../../../../shared/orchestration/workers/orchestration-worker-stop-receipt'
 
 export const RemoteCapabilities = z.object({ capabilities: z.array(z.string()).optional() })
 

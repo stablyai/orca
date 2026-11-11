@@ -11,19 +11,20 @@ import { act, createElement, StrictMode, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, type Mock, vi } from 'vitest'
 
-import type { Automation, AutomationRun } from '../../../../shared/automations-types'
+import type { Automation } from '../../../../shared/automations/automation-definition'
+import type { AutomationRun } from '../../../../shared/automations/history/automation-run'
 
 import {
   AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY as LIST_HOST_SCOPE,
   AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY as OWNER_FENCING,
   AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY as CREATE_IDEMPOTENCY
-} from '../../../../shared/protocol-version'
+} from '../../../../shared/automations/automation-runtime-capabilities'
 import type { AppState } from '@/store/types'
 
-import { AutomationDestinationField } from './AutomationDestinationField'
+import { AutomationDestinationField } from './authoring/AutomationDestinationField'
 import { TooltipProvider } from '@/components/ui/tooltip'
 
-import { resetAutomationCapabilityProbes } from './automation-scoped-list-client'
+import { resetAutomationCapabilityProbes } from './hosts/automation-capability-probe'
 import {
   addRuntimeProject as addRuntimeProjectFixture,
   selfScopedList
@@ -64,7 +65,7 @@ export const mocks: AutomationsPageMocks = {
   setPendingRunNavigation: vi.fn()
 }
 
-vi.mock('@/store', () => {
+vi.mock('@/store/index', () => {
   const useAppStore = (selector: (state: Partial<AppState>) => unknown): unknown =>
     selector(mocks.state as Partial<AppState>)
   useAppStore.getState = (): Partial<AppState> => mocks.state as Partial<AppState>
@@ -93,7 +94,7 @@ vi.mock('sonner', () => ({
   }
 }))
 
-vi.mock('@/lib/window-visibility-interval', () => ({
+vi.mock('@/lib/window-activity/window-visibility-interval', () => ({
   installWindowVisibilityInterval: () => () => undefined
 }))
 
@@ -112,7 +113,7 @@ vi.mock('@/runtime/repo-hooks/runtime-hooks-client', () => ({
   checkRuntimeHooks: vi.fn(async () => ({ hooks: null, ok: true }))
 }))
 
-vi.mock('@/lib/ensure-hooks-confirmed', () => ({
+vi.mock('@/runtime/repo-hooks/ensure-hooks-confirmed', () => ({
   ensureHooksConfirmed: vi.fn(async () => 'inherit'),
   ensureHooksApproved: vi.fn(async () => ({ decision: 'run' }))
 }))
@@ -121,7 +122,7 @@ vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorktree: vi.fn()
 }))
 
-vi.mock('./AutomationsListPanel', () => ({
+vi.mock('./listing/AutomationsListPanel', () => ({
   AutomationsListPanel: (props: ListPanelProps) => {
     const selectAutomationRow = (rowKey: string | null): void => {
       props.selectAutomationRow(rowKey)
@@ -163,7 +164,7 @@ vi.mock('./AutomationsListPanel', () => ({
   }
 }))
 
-vi.mock('./AutomationsDetailPane', () => ({
+vi.mock('./details/AutomationsDetailPane', () => ({
   AutomationsDetailPane: (props: DetailPaneProps) => {
     mocks.detailPane = props
     return (
@@ -175,7 +176,7 @@ vi.mock('./AutomationsDetailPane', () => ({
   }
 }))
 
-vi.mock('./AutomationEditorDialog', () => ({
+vi.mock('./authoring/AutomationEditorDialog', () => ({
   AutomationEditorDialog: (props: EditorDialogProps) => {
     mocks.editorDialog = props
     return (
@@ -194,7 +195,7 @@ vi.mock('./AutomationEditorDialog', () => ({
   }
 }))
 
-vi.mock('./AutomationDeleteDialogs', () => ({
+vi.mock('./authoring/AutomationDeleteDialogs', () => ({
   AutomationDeleteDialog: (props: DeleteDialogProps) => {
     mocks.deleteDialog = props
     return null

@@ -1,5 +1,5 @@
 // Compare stores independently of mover export so omitted rows remain visible after host/path normalization.
-import { getAutomationRunRepoId } from '../../../shared/automation-run-identity'
+import { getAutomationRunRepoId } from '../../../shared/automations/history/automation-run-identity'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { PersistedUIState } from '../../../shared/persisted-ui-state-types'

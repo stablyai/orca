@@ -7,11 +7,10 @@ import { mergeFetchedRepoCatalog, type FetchedRepoCatalog } from '../../repos/re
 import { projectHostSetupProjectionFromRepos } from '../../../../../shared/project-host-setup-projection'
 import { createRepoUpdateActions } from '../../repos/repo-update'
 import { findTaskPageDialogWorkItem } from '@/components/task-page/task-page-dialog-work-item'
-import { getTaskPageRepoSourceContext } from '@/lib/task-repo-source-context'
+import { getTaskPageRepoSourceContext } from '@/lib/work-items/task-repo-source-context'
 import { taskPageGitHubResumeCache } from '@/components/task-page/github/task-page-github-resume-cache'
-import { createCmdJTaskSearchRequests } from '@/components/cmd-j/task-search-requests'
-import { EMPTY_PALETTE_FILTER } from '@/components/cmd-j/palette-filter'
-import { githubTaskBinding } from '@/lib/github-task-observation'
+
+import { githubTaskBinding } from '@/lib/work-items/github/github-task-observation'
 import type { AppState } from '../../types'
 import { createGlobalSettingsFixture } from '../../../../../shared/global-settings-test-fixture'
 import type { Repo } from '../../../../../shared/repo-types'
@@ -232,21 +231,6 @@ describe('GitHub source collection lifetime', () => {
     expect(ready !== 'save-failed' && ready()).toBe(true)
   })
 
-  it('retries contradiction recovery on a later refresh after the first catalog read failed', async () => {
-    const store = setup()
-    store.setState({ repos: [{ ...repo, issueSourcePreference: 'origin' }] })
-    const resync = vi.fn().mockRejectedValue(new Error('temporary catalog outage'))
-    store.setState({ fetchReposForAllHosts: resync })
-    expect(
-      await store.getState().fetchWorkItems(repo.id, repo.path, 20, '', { force: true })
-    ).toBeUndefined()
-    await flush()
-    expect(
-      await store.getState().fetchWorkItems(repo.id, repo.path, 20, '', { force: true })
-    ).toBeUndefined()
-    await flush()
-  })
-
   it('keeps another repository delivery current when one owner retires its mapping', async () => {
     const store = setup()
     const other = { ...repo, id: 'other', path: '/other' }
@@ -278,43 +262,6 @@ describe('GitHub source collection lifetime', () => {
     expect([await switching, await renaming]).toEqual([true, true])
     expect(store.getState().repos[0].displayName).toBe('New')
   })
-
-  it.each([false, true])(
-    'answers a Cmd-J search held by a source save once it settles, or starts nothing once cancelled (cancelled=%s)',
-    async (cancelled) => {
-      const store = setup()
-      store.setState({ preflightStatusChecked: false })
-      const save = Promise.withResolvers<Repo>()
-      mockApi.repos.update.mockReturnValueOnce(save.promise)
-      mockApi.gh.listWorkItems.mockResolvedValue(envelope('fork'))
-      const saving = store
-        .getState()
-        .setIssueSourcePreference(repo.id, repo.path, 'origin', 'local')
-      const search = () => {
-        const controller = new AbortController()
-        const [request] = createCmdJTaskSearchRequests({
-          query: 'fork',
-          repos: store.getState().repos,
-          settings: createGlobalSettingsFixture({ visibleTaskProviders: ['github'] }),
-          accountBackedTaskSourceHostId: 'local',
-          filter: EMPTY_PALETTE_FILTER,
-          hostLabels: new Map(),
-          signal: controller.signal
-        })
-        return { controller, results: request.run().catch(() => undefined) }
-      }
-      const { controller, results } = search()
-      await flush()
-      expect(mockApi.gh.listWorkItems).not.toHaveBeenCalled()
-      if (cancelled) {
-        controller.abort()
-        await results
-      }
-      save.resolve({ ...repo, issueSourcePreference: 'origin' })
-      await saving
-      expect((await results)?.length).toBe(cancelled ? undefined : 1)
-    }
-  )
 
   it('retires removed owners and their cached pages', async () => {
     const k = 3

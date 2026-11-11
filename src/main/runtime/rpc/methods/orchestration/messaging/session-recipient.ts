@@ -10,7 +10,7 @@ import {
   type OrcaSessionId
 } from '../../../../../../shared/orca-session-address'
 // The caller codes, reused: each names the same fact about a session, whichever side of the mail it is on.
-import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../../../../shared/orchestration-session-caller-codes'
+import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../../../../shared/orchestration/orchestration-session-caller-codes'
 import {
   lookupOrcaAgentSession,
   structuredSessionMailReach

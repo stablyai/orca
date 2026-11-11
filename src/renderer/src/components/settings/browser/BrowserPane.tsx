@@ -36,9 +36,11 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
 } from '../../../../../shared/execution-host'
-import { isMacUserAgent } from '@/lib/user-agent-platform'
-import { isWebClientLocation } from '@/lib/web-client-location'
+import { isMacUserAgent } from '@/app-shell/platform/user-agent-platform'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { useTranslate } from '@/i18n/use-translate'
+import { translateHostDisplayLabel } from '../../sidebar/execution-host-label'
+import { translateBrowserSessionProfileLabel } from '@/lib/browser-session-profile-label'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { resolveAvailableBrowserSessionHostId } from './profiles/browser-session-host-selection'
 import { getDefaultBrowserProfileForHost } from '@/store/slices/browser/hosts/browser-host-state'
@@ -153,7 +155,7 @@ export function BrowserPane({
         .filter((host) => host.kind === 'local' || host.kind === 'runtime')
         .map((host) => ({
           id: host.id,
-          label: host.label,
+          label: translateHostDisplayLabel(host, t),
           detail:
             host.kind === 'local'
               ? t('auto.components.settings.BrowserPane.86b7c83fee', 'This computer')
@@ -184,9 +186,10 @@ export function BrowserPane({
   const activeBrowserSessionProfileId =
     useAppStore((s) => getDefaultBrowserProfileForHost(s, selectedBrowserSessionHostId)) ??
     'default'
-  const activeBrowserSessionProfileLabel =
-    browserSessionProfiles.find((profile) => profile.id === activeBrowserSessionProfileId)?.label ??
+  const activeBrowserSessionProfileLabel = translateBrowserSessionProfileLabel(
+    browserSessionProfiles.find((profile) => profile.id === activeBrowserSessionProfileId)?.label,
     activeBrowserSessionProfileId
+  )
   useEffect(() => {
     const requestedHostId = browserSessionHostIdOverride ?? settingsFocusedHostId
     if (selectedBrowserSessionHostId !== requestedHostId) {

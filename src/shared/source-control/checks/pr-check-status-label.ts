@@ -5,6 +5,9 @@ export function getCheckConclusion(check: PRCheckDetail): NonNullable<PRCheckDet
 }
 
 export function getCheckStatusLabel(check: PRCheckDetail): string {
+  if (check.gitlabAllowedFailure === true && check.conclusion === 'neutral') {
+    return 'Allowed to fail'
+  }
   const conclusion = getCheckConclusion(check)
   if (conclusion === 'success') {
     return 'Successful'

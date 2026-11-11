@@ -5,6 +5,7 @@ import { deriveToolInputPreview, readString } from './tool-input-preview'
 import { readClaudeBatchSettledRequests } from './claude-settled-permission-requests'
 import { extractPromptText } from './prompt-fields'
 import { hasExplicitUserPrompt } from './provider-event-routing'
+import { CLAUDE_NEW_SESSION_START_SOURCES } from './providers/claude-session-start-sources'
 
 /** The fields that tie a Claude PermissionRequest to the PreToolUse it is asking about. */
 export type ClaudeToolRequestFields = {
@@ -60,8 +61,6 @@ function readRequestFields(hookPayload: Record<string, unknown>): ClaudeToolRequ
 
 // Why a bound: calls Claude never resolves (an interrupt) must not accumulate; extra matches only stop naming.
 const MAX_OPEN_TOOL_USES = 32
-// Only a session that starts fresh retires the old session's calls; compaction and children keep them.
-const CLAUDE_FRESH_SESSION_SOURCES: ReadonlySet<unknown> = new Set(['startup', 'resume', 'clear'])
 
 /** Give a Claude PermissionRequest the tool_use_id of the one open call it asks about, so its wait can be settled by request. */
 export function withClaudeToolRequestId(
@@ -172,7 +171,7 @@ function endedRequests(
   if (
     eventName === 'SessionStart' &&
     toolAgentId === undefined &&
-    CLAUDE_FRESH_SESSION_SOURCES.has(hookPayload.source)
+    CLAUDE_NEW_SESSION_START_SOURCES.has(hookPayload.source)
   ) {
     return 'all'
   }

@@ -1,10 +1,10 @@
 import { getAppEnvironment } from '../../shared/app-environment'
-import type { Automation } from '../../shared/automations-types'
+import type { Automation } from '../../shared/automations/automation-definition'
 import type { SshTarget } from '../../shared/ssh-types'
 import type { Store } from '../persistence/loading-store/store'
-import { isManagedOrcadSshTarget } from '../ssh/connection/ssh-connection-store'
+import { isManagedOrcadSshTarget } from '../ssh/targets/ssh-target-runtime-ownership'
 import { moveProjectToManagedHostFirst } from '../../shared/managed-orcad-ssh-owner'
-import { listOrcadMigrationCutoverChainForTarget } from '../ssh/orcad-migration-cutover-journal'
+import { listOrcadMigrationCutoverChainForTarget } from '../persistence/migrating-orcad-catalog/orcad-migration-cutover-journal'
 
 export const ORCAD_FENCED_AUTOMATION = "This automation now runs on its SSH host's Orca server."
 

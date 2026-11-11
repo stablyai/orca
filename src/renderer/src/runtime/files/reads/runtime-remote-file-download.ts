@@ -142,7 +142,7 @@ export async function downloadRemoteFileViaPreview(
     if (result.isBinary && !result.content && !result.isImage && !result.mimeType) {
       throw new Error(REMOTE_DOWNLOAD_UPDATE_REQUIRED_MESSAGE)
     }
-    return window.api.fs.saveDownloadedFile({
+    return await window.api.fs.saveDownloadedFile({
       suggestedName,
       content: result.content,
       encoding: result.isBinary ? 'base64' : 'utf8'

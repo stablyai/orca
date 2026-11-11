@@ -28,9 +28,11 @@ vi.mock('electron', () => ({
   app: { getPath: getPathMock },
   ipcMain: { handle: vi.fn(), on: vi.fn(), removeHandler: vi.fn(), removeAllListeners: vi.fn() }
 }))
-vi.mock('../../src/shared/remote-runtime/remote-runtime-client', () => ({
-  sendRemoteRuntimeRequest: sendRemoteRuntimeRequestMock,
-  subscribeRemoteRuntimeRequest: vi.fn()
+vi.mock('../../src/shared/remote-runtime/requests/remote-runtime-request-socket', () => ({
+  sendRemoteRuntimeRequestOnSocket: sendRemoteRuntimeRequestMock
+}))
+vi.mock('../../src/shared/remote-runtime/requests/remote-runtime-subscription-transport', () => ({
+  subscribeRemoteRuntimeTransport: vi.fn()
 }))
 vi.mock(
   '../../src/main/ipc/runtime-environments/runtime-environment-request-connections',

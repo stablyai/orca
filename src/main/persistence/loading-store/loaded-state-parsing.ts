@@ -18,7 +18,7 @@ import {
   isLegacyOpenCodeSessionCookie,
   isLegacySshPtyOwnerLease
 } from '../leasing-ssh-ptys/secret-validation'
-import { readGithubCacheSnapshot } from './user-data-path'
+import { readGitHubCacheDatabase } from './github-cache-database'
 import { retainLegacyOpenCodeGoApiKey } from './legacy-opencode-go-api-key-migration'
 import {
   gcStaleWorktreeMeta,
@@ -50,6 +50,8 @@ type LoadedStateParsingOperationsRuntime = Pick<
   StoreRuntimeState,
   | 'dataFile'
   | 'githubCacheDirty'
+  | 'githubCacheLegacyFileHash'
+  | 'githubCachePersistenceDisabled'
   | 'loadNeedsSave'
   | 'originalExperimentalNativeChat'
   | 'protectedSecrets'
@@ -287,23 +289,42 @@ export class LoadedStateParsingOperations {
       chatUiLaunchTipAudience: audience
     }
 
-    // Legacy inline caches seed the session, then move to the cache sidecar.
+    // Cache precedence, resolved once: an inline legacy cache, else an older build's sidecar,
+    // else the saved rows. Whatever wins is saved as rows, which retires any sidecar it supersedes.
     const legacyCache = migrated.githubCache
     const hasLegacyCache =
       Object.keys(legacyCache?.pr ?? {}).length > 0 ||
       Object.keys(legacyCache?.issue ?? {}).length > 0
+    const stored = readStoredGitHubCache(this.runtime.dataFile)
     if (hasLegacyCache) {
       this.runtime.loadNeedsSave = true
       // Persist the seed even when no cache poll refresh occurs this session.
       this.runtime.githubCacheDirty = true
-    } else {
-      migrated.githubCache = readGithubCacheSnapshot(this.runtime.dataFile) ?? migrated.githubCache
+    } else if (stored?.cache) {
+      migrated.githubCache = stored.cache
+      // A sidecar import, or rows that already hold it, saves so the sidecar retires.
+      this.runtime.githubCacheDirty ||= stored.sidecarHash !== null
     }
+    this.runtime.githubCacheLegacyFileHash = stored?.sidecarHash ?? null
+    // Unread rows or an unread sidecar may hold newer entries than this session will poll.
+    this.runtime.githubCachePersistenceDisabled = stored?.unavailable ?? false
 
     logStartupMilestone('persistence-load-done', () => ({
       repos: migrated.repos.length,
       workspaceSessionBytes: Buffer.byteLength(JSON.stringify(migrated.workspaceSession))
     }))
     return migrated
+  }
+}
+
+function readStoredGitHubCache(
+  dataFile: string
+): ReturnType<typeof readGitHubCacheDatabase> | null {
+  try {
+    return readGitHubCacheDatabase(dataFile)
+  } catch (error) {
+    // A disposable cache must never block startup; the first poll refills it.
+    console.warn('[persistence] Failed to read github cache:', error)
+    return null
   }
 }

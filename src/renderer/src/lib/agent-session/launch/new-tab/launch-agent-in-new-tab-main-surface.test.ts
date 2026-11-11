@@ -1,4 +1,4 @@
-import { nonRefusedAgentLaunch } from '@/lib/agent-tab-launch-outcome.test-fixture'
+import { nonRefusedAgentLaunch } from '@/lib/agent-session/launch/new-tab/agent-tab-launch-outcome.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   FLOATING_TERMINAL_WORKTREE_ID,
@@ -29,12 +29,14 @@ vi.mock('@/store/index', () => ({
   }
 }))
 
-vi.mock('@/lib/host-chat-program-acquisition', async (original) => ({
+vi.mock('@/lib/agent-session/launch/inventory/host-chat-program-acquisition', async (original) => ({
   ...(await original<object>()),
   acquireAgentLaunchChoices: async () => ({ detected: ['claude', 'codex'] })
 }))
 
-vi.mock('@/lib/focus-terminal-tab-surface', () => ({ focusTerminalTabSurface: vi.fn() }))
+vi.mock('@/components/terminal-pane/input/focus/focus-terminal-tab-surface', () => ({
+  focusTerminalTabSurface: vi.fn()
+}))
 
 vi.mock('@/lib/agent-session/launch/prompt/launch-agent-tab-prompt-paste', () => ({
   pasteAgentLaunchPromptOnceReady: async () => ({ delivered: true, failureNotified: false })
@@ -102,7 +104,8 @@ describe('launchAgentInNewTab main-window surface', () => {
     const { settleAgentTabLaunch } = await import('./launch-agent-in-new-tab-host-agents')
     const { activateAndRevealWorkspaceWithOutcome } =
       await import('@/lib/workspace/activation/worktree-activation')
-    const { reportAgentWorkspaceActivation } = await import('@/lib/worktree-activation-outcome')
+    const { reportAgentWorkspaceActivation } =
+      await import('@/lib/workspace/activation/worktree-activation-outcome')
     const reveal = vi.fn(() =>
       reportAgentWorkspaceActivation(
         activateAndRevealWorkspaceWithOutcome(id, {

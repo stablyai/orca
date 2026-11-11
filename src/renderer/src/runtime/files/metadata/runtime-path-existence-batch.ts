@@ -61,7 +61,7 @@ export async function runtimePathsExist(
         15_000
       ))
     ) {
-      return fallback()
+      return await fallback()
     }
     const result = requirePathExistenceResults(
       await callRuntimeRpc(

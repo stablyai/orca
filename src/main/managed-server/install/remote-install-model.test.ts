@@ -4,11 +4,9 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { orcadRipgrepArtifact } from '../../../shared/orcad-artifacts'
-import {
-  listRemoteInstallBaseDirsCommand,
-  probeRemoteInstallCompleteCommand
-} from '../../ssh/ssh-remote-commands'
-import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
+import { listRemoteInstallBaseDirsCommand } from './remote-install-gc-listing-command'
+import { probeRemoteInstallCompleteCommand } from './remote-install-completeness-command'
+import { getRemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'
 
 import {
   inventoryRemoteInstallDirs,

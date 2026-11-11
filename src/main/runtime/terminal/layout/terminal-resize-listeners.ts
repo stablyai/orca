@@ -19,7 +19,7 @@ import type {
   RuntimeTerminalOrphanAdoptionResult
 } from '../../../../shared/runtime-terminal-contracts'
 import { classifyWorkerTerminalProcessIncarnation } from '../../orchestration/terminal-authority/release/worker-terminal-process-liveness'
-import { parseWorkerTerminalHostScope } from '../../../../shared/worker-terminal-host-scope'
+import { parseWorkerTerminalHostScope } from '../../../../shared/orchestration/workers/worker-terminal-host-scope'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import { escalateWorkerFailure } from '../../orchestration/workers/reports/worker-failure-escalation'
 import { dispatchReportMailbox } from '../../orchestration/workers/reports/dispatch-report-mailbox'

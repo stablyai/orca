@@ -19,9 +19,9 @@ type StaticKeybindingActionId = Exclude<
 
 // Literal keys keep extraction and coverage gates aware of every shortcut title.
 const STATIC_TITLE_COPY = {
-  'worktree.quickOpen': () => translate('keybindings.title.worktreeQuickOpen', 'Go to File'),
-  'app.settings': () => translate('keybindings.title.appSettings', 'Open Settings'),
-  'app.forceReload': () => translate('keybindings.title.appForceReload', 'Force Reload'),
+  'worktree.quickOpen': () => translate('keybindings.title.1d1d2ec47b', 'Go to file'),
+  'app.settings': () => translate('keybindings.title.e316152321', 'Open settings'),
+  'app.forceReload': () => translate('keybindings.title.8a1982d598', 'Force reload'),
   'worktree.palette': () => translate('keybindings.title.worktreePalette', 'Switch worktree'),
   'worktree.navigateUp': () =>
     translate('keybindings.title.worktreeNavigateUp', 'Previous worktree'),
@@ -29,45 +29,41 @@ const STATIC_TITLE_COPY = {
     translate('keybindings.title.worktreeNavigateDown', 'Next worktree'),
   'workspace.create': () => translate('keybindings.title.workspaceCreate', 'Create worktree'),
   'workspace.rename': () => translate('keybindings.title.workspaceRename', 'Rename worktree'),
-  'workspace.delete': () => translate('keybindings.title.workspaceDelete', 'Delete Workspace'),
-  'workspace.openBoard': () =>
-    translate('keybindings.title.workspaceOpenBoard', 'Toggle Workspace Board'),
-  'dashboard.toggle': () =>
-    translate('keybindings.title.dashboardToggle', 'Toggle Agent Dashboard'),
+  'workspace.delete': () => translate('keybindings.title.1d2c86248c', 'Delete workspace'),
+  'workspace.openBoard': () => translate('keybindings.title.1524825c2c', 'Toggle workspace board'),
+  'dashboard.toggle': () => translate('keybindings.title.82c1bf448c', 'Toggle agent dashboard'),
   'workspace.selectByIndex': () =>
-    translate('keybindings.title.workspaceSelectByIndex', 'Select Workspace 1–9'),
+    translate('keybindings.title.0feb1f0496', 'Select workspace 1–9'),
   'voice.dictation': () => translate('keybindings.title.voiceDictation', 'Dictation'),
-  'view.tasks': () => translate('keybindings.title.viewTasks', 'Open Tasks'),
-  'view.plugins': () => translate('keybindings.title.viewPlugins', 'Open Plugins'),
-  'sidebar.left.toggle': () => translate('keybindings.title.sidebarLeftToggle', 'Toggle Sidebar'),
+  'view.tasks': () => translate('keybindings.title.81bcb6ec24', 'Open tasks'),
+  'view.plugins': () => translate('keybindings.title.5c1a9f83e0', 'Open plugins'),
+  'sidebar.left.toggle': () => translate('keybindings.title.196b416429', 'Toggle sidebar'),
   'sidebar.projects.toggleCollapse': () =>
-    translate('keybindings.title.sidebarProjectsToggleCollapse', 'Collapse / Expand All Projects'),
-  'sidebar.right.toggle': () =>
-    translate('keybindings.title.sidebarRightToggle', 'Toggle Right Sidebar'),
+    translate('keybindings.title.5468defe61', 'Collapse / expand all projects'),
+  'sidebar.right.toggle': () => translate('keybindings.title.e0d7e6b665', 'Toggle right sidebar'),
   'sidebar.explorer.toggle': () =>
     translate('keybindings.title.sidebarExplorerToggle', 'Show Explorer'),
-  'sidebar.search.toggle': () => translate('keybindings.title.sidebarSearchToggle', 'Show Search'),
+  'sidebar.search.toggle': () => translate('keybindings.title.da4e681113', 'Show search'),
   'sidebar.sourceControl.toggle': () =>
-    translate('keybindings.title.sidebarSourceControlToggle', 'Show Source Control'),
-  'sidebar.checks.toggle': () => translate('keybindings.title.sidebarChecksToggle', 'Show Checks'),
-  'sidebar.ports.toggle': () => translate('keybindings.title.sidebarPortsToggle', 'Show Ports'),
+    translate('keybindings.title.44e8b7dcb5', 'Show source control'),
+  'sidebar.checks.toggle': () => translate('keybindings.title.e37b19864c', 'Show checks'),
+  'sidebar.ports.toggle': () => translate('keybindings.title.cb816639bd', 'Show ports'),
   'sidebar.sleepingWorkspaces.toggle': () =>
-    translate('keybindings.title.sidebarSleepingWorkspacesToggle', 'Toggle Sleeping Workspaces'),
+    translate('keybindings.title.437260810f', 'Toggle sleeping workspaces'),
   'sidebar.focusWorktreeList': () =>
     translate('keybindings.title.sidebarFocusWorktreeList', 'Focus worktree list'),
   'floatingTerminal.toggle': () =>
-    translate('keybindings.title.floatingTerminalToggle', 'Toggle Floating Terminal'),
+    translate('keybindings.title.e67a41569d', 'Toggle floating terminal'),
   'floatingWorkspace.maximize': () =>
-    translate('keybindings.title.floatingWorkspaceMaximize', 'Maximize Floating Workspace Panel'),
+    translate('keybindings.title.3e3a2d18d4', 'Maximize floating workspace panel'),
   'floatingWorkspace.minimize': () =>
-    translate('keybindings.title.floatingWorkspaceMinimize', 'Minimize Floating Workspace Panel'),
-  'zoom.in': () => translate('keybindings.title.zoomIn', 'Zoom In'),
-  'zoom.out': () => translate('keybindings.title.zoomOut', 'Zoom Out'),
-  'zoom.reset': () => translate('keybindings.title.zoomReset', 'Reset Size'),
-  'worktree.history.back': () =>
-    translate('keybindings.title.worktreeHistoryBack', 'Worktree History Back'),
+    translate('keybindings.title.746ff0c872', 'Minimize floating workspace panel'),
+  'zoom.in': () => translate('keybindings.title.f233164080', 'Zoom in'),
+  'zoom.out': () => translate('keybindings.title.2b20f1f14a', 'Zoom out'),
+  'zoom.reset': () => translate('keybindings.title.bb3beaeef6', 'Reset size'),
+  'worktree.history.back': () => translate('keybindings.title.02dd0f77a0', 'Worktree history back'),
   'worktree.history.forward': () =>
-    translate('keybindings.title.worktreeHistoryForward', 'Worktree History Forward'),
+    translate('keybindings.title.57c4fb0edd', 'Worktree history forward'),
   'tab.newTerminal': () => translate('keybindings.title.tabNewTerminal', 'New terminal tab'),
   'tab.newAgent': () => translate('keybindings.title.tabNewAgent', 'New agent tab (default agent)'),
   'tab.newBrowser': () => translate('keybindings.title.tabNewBrowser', 'New browser tab'),
@@ -92,38 +88,32 @@ const STATIC_TITLE_COPY = {
   'tab.nextTerminal': () => translate('keybindings.title.tabNextTerminal', 'Next terminal tab'),
   'tab.previousTerminal': () =>
     translate('keybindings.title.tabPreviousTerminal', 'Previous terminal tab'),
-  'tab.selectByIndex': () => translate('keybindings.title.tabSelectByIndex', 'Select Tab 1–9'),
+  'tab.selectByIndex': () => translate('keybindings.title.eca3c9fdd7', 'Select tab 1–9'),
   'tab.openQuickCommandsMenu': () =>
     translate('keybindings.title.tabOpenQuickCommandsMenu', 'Toggle Quick Commands menu'),
-  'browser.find': () => translate('keybindings.title.browserFind', 'Find in Browser'),
-  'browser.back': () => translate('keybindings.title.browserBack', 'Go Back in Browser'),
-  'browser.forward': () => translate('keybindings.title.browserForward', 'Go Forward in Browser'),
-  'browser.showHistory': () =>
-    translate('keybindings.title.browserShowHistory', 'Show Browser History'),
-  'browser.reload': () => translate('keybindings.title.browserReload', 'Reload Browser Page'),
-  'browser.hardReload': () =>
-    translate('keybindings.title.browserHardReload', 'Hard Reload Browser Page'),
+  'browser.find': () => translate('keybindings.title.fbf2216baa', 'Find in browser'),
+  'browser.back': () => translate('keybindings.title.0fe8d02935', 'Go back in browser'),
+  'browser.forward': () => translate('keybindings.title.53ae577e44', 'Go forward in browser'),
+  'browser.showHistory': () => translate('keybindings.title.92fad2c21f', 'Show browser history'),
+  'browser.reload': () => translate('keybindings.title.67ce6cf5a0', 'Reload browser page'),
+  'browser.hardReload': () => translate('keybindings.title.6bd12f3071', 'Hard reload browser page'),
   'browser.focusAddressBar': () =>
-    translate('keybindings.title.browserFocusAddressBar', 'Focus Browser Address Bar'),
-  'browser.grabElement': () =>
-    translate('keybindings.title.browserGrabElement', 'Grab Page Element'),
+    translate('keybindings.title.2f2961bebf', 'Focus browser address bar'),
+  'browser.grabElement': () => translate('keybindings.title.23350d5072', 'Grab page element'),
   'browser.annotateElement': () =>
-    translate('keybindings.title.browserAnnotateElement', 'Annotate Page Element'),
+    translate('keybindings.title.69b2b72c98', 'Annotate page element'),
   'editor.find': () => translate('keybindings.title.editorFind', 'Find in editor'),
   'editor.replace': () => translate('keybindings.title.editorReplace', 'Replace in editor'),
-  'editor.save': () => translate('keybindings.title.editorSave', 'Save File'),
+  'editor.save': () => translate('keybindings.title.6a99c55b2d', 'Save file'),
   'editor.markdownPreview': () =>
-    translate('keybindings.title.editorMarkdownPreview', 'Show Markdown Preview'),
-  'editor.toggleWordWrap': () =>
-    translate('keybindings.title.editorToggleWordWrap', 'Toggle Word Wrap'),
-  'editor.copyContext': () => translate('keybindings.title.editorCopyContext', 'Copy Context'),
-  'editor.previousChange': () =>
-    translate('keybindings.title.editorPreviousChange', 'Go to Previous Change'),
-  'editor.nextChange': () => translate('keybindings.title.editorNextChange', 'Go to Next Change'),
-  'editor.addReviewNote': () =>
-    translate('keybindings.title.editorAddReviewNote', 'Add Review Note'),
+    translate('keybindings.title.e25a3e5f9a', 'Show Markdown preview'),
+  'editor.toggleWordWrap': () => translate('keybindings.title.2f207aa199', 'Toggle word wrap'),
+  'editor.copyContext': () => translate('keybindings.title.258e7f75ec', 'Copy context'),
+  'editor.previousChange': () => translate('keybindings.title.324e886c0f', 'Go to previous change'),
+  'editor.nextChange': () => translate('keybindings.title.7055c70bdb', 'Go to next change'),
+  'editor.addReviewNote': () => translate('keybindings.title.9cb1023d40', 'Add review note'),
   'sourceControl.sendReviewNotes': () =>
-    translate('keybindings.title.sourceControlSendReviewNotes', 'Send Review Notes to Agent'),
+    translate('keybindings.title.e9da9f872a', 'Send review notes to agent'),
   'fileExplorer.undo': () => translate('keybindings.title.fileExplorerUndo', 'Undo file operation'),
   'fileExplorer.redo': () => translate('keybindings.title.fileExplorerRedo', 'Redo file operation'),
   'fileExplorer.copyPath': () =>
@@ -131,7 +121,7 @@ const STATIC_TITLE_COPY = {
   'fileExplorer.copyRelativePath': () =>
     translate('keybindings.title.fileExplorerCopyRelativePath', 'Copy relative file path'),
   'fileExplorer.delete': () => translate('keybindings.title.fileExplorerDelete', 'Delete file'),
-  'settings.search': () => translate('keybindings.title.settingsSearch', 'Search Settings'),
+  'settings.search': () => translate('keybindings.title.3acf4e9eb1', 'Search settings'),
   'terminal.copySelection': () =>
     translate('keybindings.title.terminalCopySelection', 'Copy terminal selection'),
   'terminal.selectAll': () =>
@@ -147,14 +137,13 @@ const STATIC_TITLE_COPY = {
     translate('keybindings.title.terminalEqualizePaneSizes', 'Equalize pane sizes'),
   'terminal.expandPane': () =>
     translate('keybindings.title.terminalExpandPane', 'Expand / collapse pane'),
-  'terminal.setTitle': () => translate('keybindings.title.terminalSetTitle', 'Set Title…'),
+  'terminal.setTitle': () => translate('keybindings.title.128cce6e6d', 'Set title…'),
   'chat.find': () => translate('keybindings.title.chatFind', 'Find in chat'),
   'terminal.toggleNativeChat': () =>
     translate('keybindings.title.terminalToggleNativeChat', 'Switch between Chat UI and terminal'),
   'sidebar.childWorkspaces.toggle': () =>
-    translate('keybindings.title.sidebarChildWorkspacesToggle', 'Toggle Child Workspaces'),
-  'terminal.clearPaneTitle': () =>
-    translate('keybindings.title.terminalClearPaneTitle', 'Clear Pane Title'),
+    translate('keybindings.title.8788e3be3a', 'Toggle child workspaces'),
+  'terminal.clearPaneTitle': () => translate('keybindings.title.d286d1ab85', 'Clear pane title'),
   'terminal.closePane': () => translate('keybindings.title.terminalClosePane', 'Close active pane'),
   'terminal.splitRight': () =>
     translate('keybindings.title.terminalSplitRight', 'Split terminal right'),
@@ -170,13 +159,13 @@ const STATIC_TITLE_COPY = {
 const GROUP_COPY = {
   Global: () => translate('keybindings.group.global', 'Global'),
   Tabs: () => translate('keybindings.group.tabs', 'Tabs'),
-  'Tab Navigation': () => translate('keybindings.group.tabNavigation', 'Tab Navigation'),
-  'Quick Commands': () => translate('keybindings.group.quickCommands', 'Quick Commands'),
+  'Tab Navigation': () => translate('keybindings.group.45347db2a3', 'Tab navigation'),
+  'Quick Commands': () => translate('keybindings.group.aab2837fa5', 'Quick commands'),
   Browser: () => translate('keybindings.group.browser', 'Browser'),
   Editors: () => translate('keybindings.group.editors', 'Editors'),
   'File Explorer': () => translate('keybindings.group.fileExplorer', 'File Explorer'),
   Settings: () => translate('keybindings.group.settings', 'Settings'),
-  'Terminal Panes': () => translate('keybindings.group.terminalPanes', 'Terminal Panes'),
+  'Terminal Panes': () => translate('keybindings.group.3492a954c8', 'Terminal panes'),
   Chat: () => translate('keybindings.group.chat', 'Chat'),
   Agents: () => translate('keybindings.group.agents', 'Agents')
 } satisfies Record<string, () => string>

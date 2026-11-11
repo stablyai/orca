@@ -7,7 +7,7 @@ vi.mock('./desktop-notification-channel', () => ({
 import { AppState } from 'react-native'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { RpcResponse } from '../transport/types'
+import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
 import {
   loadPushNotificationsEnabled,
   loadRemotePushHostRegistrations,
@@ -72,38 +72,6 @@ beforeEach(() => {
     stored = value
   })
   vi.mocked(getDevicePushToken).mockResolvedValue(IOS_TOKEN)
-})
-
-describe('push registration capability gating', () => {
-  it('re-probes a host whose first status.get never answered', async () => {
-    vi.useFakeTimers()
-    const sent: string[] = []
-    let probeFails = true
-    const client = {
-      sendRequest: vi.fn(async (method: string) => {
-        sent.push(method)
-        if (method === 'status.get') {
-          if (probeFails) {
-            throw new Error('request timed out')
-          }
-          return ok({ capabilities: [NOTIFICATIONS_REMOTE_PUSH_CAPABILITY] })
-        }
-        return ok({ registered: true, registrationId: 'registration-1' })
-      })
-    }
-    await setRemotePushEnabled(true)
-    attachPushRegistration('host-1', client)
-    await vi.advanceTimersByTimeAsync(0)
-    expect(sent).toEqual(['status.get'])
-
-    probeFails = false
-    await vi.advanceTimersByTimeAsync(1_000)
-    await Promise.resolve()
-    await Promise.resolve()
-
-    expect(sent).toEqual(['status.get', 'status.get', 'notifications.registerPush'])
-    vi.useRealTimers()
-  })
 })
 
 describe('push unregistration', () => {

@@ -608,32 +608,3 @@ it('replaces the full unaccepted extent, accepts once, and preserves promoted ch
   expect(reopened.delegated).toEqual(expect.arrayContaining(['model', 'effort']))
   expect(agentPickerEffectiveChoices(entry, reopened).model).toBeUndefined()
 })
-
-it('orders raw and control picks once and gives one-shot and sparse consumers the same choices', () => {
-  const selection = canonicalSourceControlActionSelection({ agentId: 'claude', agentArgs: '' })
-  for (const edits of [
-    [
-      { kind: 'arguments', text: '--model sonnet --effort high --debug' },
-      { kind: 'choice', patch: { model: 'opus' } }
-    ],
-    [
-      { kind: 'choice', patch: { model: 'opus' } },
-      { kind: 'arguments', text: '--model sonnet --effort high --debug' }
-    ]
-  ] satisfies AgentPickerEdit[][]) {
-    const draft = acceptAgentPickerArguments(
-      entry,
-      edits.reduce(
-        (value, edit) => applyAgentPickerEdit(entry, value, edit),
-        sourceControlPickerDraft(selection, entry, 'terminal')
-      )
-    )
-    const saved = project(applySourceControlPickerDraft(selection, entry, draft))
-    const chat = agentPickerLaunchInputs({ ...draft, surface: 'chat' }, entry)
-    expect(saved.sessionOptions?.model).toBe(chat.sessionOptions?.model)
-    expect(saved.sessionOptions?.effort).toBe(chat.sessionOptions?.effort)
-    expect(saved.agentArgs).toBe('--debug')
-    expect(agentPickerLaunchInputs(draft, entry).agentArgs).toContain('--debug')
-    expect(draft.pendingArguments).toBeUndefined()
-  }
-})

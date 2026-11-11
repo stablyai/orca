@@ -1,4 +1,4 @@
-import { AGENT_PROMPT_EFFECT_TIMEOUT_MS } from '../../../../../../shared/orchestration-timing-budgets'
+import { AGENT_PROMPT_EFFECT_TIMEOUT_MS } from '../../../../../../shared/orchestration/orchestration-timing-budgets'
 import type { RuntimeTerminalPromptDelivery } from '../../../../../../shared/runtime-terminal-send-contract'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 

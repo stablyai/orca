@@ -1,6 +1,6 @@
 import type { RefObject } from 'react'
-import type { TerminalResumeState } from '../session/terminal-stream-resume'
-import type { ConnectionState } from '../transport/types'
+import type { TerminalResumeState } from './session/terminal-stream-resume'
+import type { ConnectionState } from '../transport/connection/connection-state'
 import type { TerminalWebViewHandle } from './TerminalWebView'
 
 export const TERMINAL_FOREGROUND_RECOVERY_DELAY_MS = 120

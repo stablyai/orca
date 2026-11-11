@@ -4,7 +4,7 @@ import type { Translate } from '@/i18n/use-translate'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { SettingsRow, SettingsSegmentedControl } from '../../form-controls/SettingsFormControls'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../ui/select'
-import { getHostRuntimeLabel } from './accounts-pane-runtime'
+import { getHostRuntimeLabel } from '../../../../lib/provider-accounts/account-runtime-label'
 import { WSL_DEFAULT_DISTRO_KEY } from '../../../provider-accounts/provider-account-visibility'
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 import type { AccountsPaneSectionModel } from '../accounts-pane-types'
@@ -39,7 +39,7 @@ export function renderAccountsLocationSection(
   }
   const accountRuntimeControls = wslSupportedPlatform ? (
     <SearchableSetting
-      title={t('auto.components.settings.AccountsPane.f54b4fbd71', 'Account Location')}
+      title={t('auto.components.settings.AccountsPane.91a1b78e67', 'Account location')}
       description={t(
         'auto.components.settings.AccountsPane.2cd197025c',
         'Choose whether provider accounts are inspected and added in {{value0}} or WSL.',

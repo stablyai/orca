@@ -160,7 +160,7 @@ export function useMobileTasksHostedCommentReviewActions<
         finish()
       }
     },
-    [claimPublication, client, itemCommentDraft, tryBeginMutation]
+    [claimPublication, client, itemCommentDraft, setItemCommentDraft, tryBeginMutation]
   )
 
   const copyTaskLink = useCallback(

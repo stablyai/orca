@@ -7,7 +7,7 @@ import {
   taskNotStartableRefusal,
   type DispatchRefusalReceipt,
   type InjectRejectionReason
-} from '../../../../../shared/orchestration-dispatch-refusal-contract'
+} from '../../../../../shared/orchestration/orchestration-dispatch-refusal-contract'
 
 // Callers retain their published wording while code and structured error data are shared.
 

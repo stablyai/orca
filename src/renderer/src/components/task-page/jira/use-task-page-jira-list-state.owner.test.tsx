@@ -3,7 +3,7 @@ import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TaskPageLinearViewStateModel } from '../linear/use-task-page-linear-view-state'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 
 import { useTaskPageJiraListState } from './use-task-page-jira-list-state'
 

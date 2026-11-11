@@ -147,8 +147,8 @@ import { attributedSparsePresetId } from './sparse-preset-attribution'
 import {
   buildSetupRunnerCommand,
   getSetupRunnerCommandPlatformForPath
-} from '../../shared/setup-runner-command'
-import { createSequencedSetupAgentCommands } from '../../shared/setup-agent-sequencing'
+} from '../../shared/agent-launch/startup/setup-runner-command'
+import { createSequencedSetupAgentCommands } from '../../shared/agent-launch/startup/setup-agent-sequencing'
 import {
   createWorktreeCreateTimingRecorder,
   localWorktreeCreateExecutionHost,

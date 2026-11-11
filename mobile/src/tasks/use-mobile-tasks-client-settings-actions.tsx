@@ -1,12 +1,12 @@
 import type { ProjectRepositoryResolutionModel } from './use-mobile-tasks-project-repository-resolution'
 import {
   type GitHubProjectSettings,
-  type TaskProvider,
   persistSetupHookTrustApproval,
   useCallback,
   useLayoutEffect,
   useState
 } from './mobile-tasks-dependencies'
+import type { TaskProvider } from '../../../src/shared/work-items/task-providers'
 import type { GitHubPreset, RepoSummary, TaskResumeState } from './mobile-tasks-legacy-foundation'
 import { taskSettingsWrite, taskUiStateWrite } from './mobile-task-runtime-operations'
 import { patchTaskHydration, type TaskHydration } from './task-queries'

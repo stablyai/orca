@@ -15,8 +15,11 @@ import {
   prChecksQuery,
   prDetailsQuery,
   type PrQueryScope
-} from '../../session/mobile-pr-queries'
-import { prSidebarResourceKey, type PrSidebarState } from '../../session/mobile-pr-sidebar-state'
+} from '../../source-control/review/mobile-pr-queries'
+import {
+  prSidebarResourceKey,
+  type PrSidebarState
+} from '../../source-control/review/mobile-pr-sidebar-state'
 
 /** What is on screen: nothing to keep fresh, the PR and its checks, or its comments too. */
 export type PrTabLive = false | 'checks' | 'details'

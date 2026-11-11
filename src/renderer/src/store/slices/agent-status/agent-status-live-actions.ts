@@ -1,4 +1,4 @@
-import { resolvePaneKey } from '../../../lib/agent-status-pane-ownership'
+import { resolvePaneKey } from '../../../lib/agent-status/ownership/agent-status-pane-ownership'
 import type { AgentStatusSlice } from './agent-status-slice-contract'
 import type { AgentStatusRuntime } from './agent-status-runtime'
 import type {

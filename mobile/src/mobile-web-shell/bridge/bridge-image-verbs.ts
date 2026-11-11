@@ -1,7 +1,7 @@
 import * as z from 'zod'
 import { CLIPBOARD_IMAGE_MAX_SOURCE_BYTES } from '../../../../src/shared/clipboard-image'
 import { isKnownRasterImageMimeType } from '../../../../src/shared/file-preview/raster-image-preview-limits'
-import { MOBILE_CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS } from '../../session/mobile-clipboard-image-upload-chunk'
+import { MOBILE_CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS } from '../../files/attachments/mobile-clipboard-image-upload-chunk'
 
 // The page cannot reach the clipboard, Photos or the share sheet from the WebView, so it hands the image to the shell.
 // Images above the frame cap arrive in staged chunks; one verb with an action keeps routes within the grant ceiling.

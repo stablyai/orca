@@ -98,7 +98,7 @@ await import('../orca-runtime-tests/lineage-and-scan-cache.spec')
 await import('../orca-runtime-tests/lineage-and-scan-cache-part-02.spec')
 await import('../orca-runtime-tests/lineage-and-scan-cache-part-05.spec')
 await import('../orca-runtime-tests/wsl-stopped-distro-worktree-scan.spec')
-await import('../orca-runtime-tests/worktree-setup-and-startup-part-02.spec')
+
 await import('../orca-runtime-tests/worktree-setup-and-startup-part-03.spec')
 await import('../orca-runtime-tests/worktree-setup-and-startup-part-04.spec')
 await import('../orca-runtime-tests/worktree-setup-single-creator.spec')

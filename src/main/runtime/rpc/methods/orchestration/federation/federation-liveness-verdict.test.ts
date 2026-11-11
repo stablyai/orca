@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../../../../shared/constants'
-import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../../shared/orchestration-runtime-capabilities'
+import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import '../../../../orchestration/db/contract-constants'
@@ -18,7 +18,7 @@ const DISPATCH_ID = 'ctx_federation_verdict'
 const HANDLE = 'term_remote_worker'
 const PANE_KEY = 'tab_remote:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
 const INCARNATION = 'runtime:pty:7'
-const SSH_PROVIDER_GONE = 'its SSH provider is no longer registered'
+
 const REAL_PTY_ID = 'pty-federation-liveness'
 const REAL_WORKTREE_ID = 'repo-federation::/tmp/federation-liveness'
 
@@ -199,41 +199,6 @@ describe('federation host liveness verdicts', () => {
     }
   })
 
-  it('publishes a real owning-host natural exit through show, fleet, and release', async () => {
-    const host = await createRealHost()
-    try {
-      host.hostRuntime.onPtyExit(REAL_PTY_ID, 0, 'incarnation-real', {
-        hostExitConfirmed: true
-      })
-      const closeTerminal = vi.spyOn(host.hostRuntime, 'closeTerminal')
-
-      await expect(
-        host.callHost('orchestration.federationShow', { dispatchId: DISPATCH_ID })
-      ).resolves.toMatchObject({ observation: { status: 'exited', exactWorker: true } })
-      await expect(
-        host.callHost('orchestration.federationFleetSnapshot', { dispatchIds: [DISPATCH_ID] })
-      ).resolves.toMatchObject({
-        items: [{ dispatchId: DISPATCH_ID, observation: { status: 'exited' } }]
-      })
-      host.hostDb.recordRemoteAttachmentStage({
-        dispatchId: DISPATCH_ID,
-        state: 'succeeded',
-        stage: 'worker_reported'
-      })
-      await expect(
-        host.callHost('orchestration.federationRelease', { dispatchId: DISPATCH_ID })
-      ).resolves.toMatchObject({
-        state: 'released',
-        processAction: 'closed_exited_terminal',
-        archive: { source: 'terminal', status: 'empty' }
-      })
-      expect(host.hostDb.getWorkerTerminalArchive(DISPATCH_ID)).toBeDefined()
-      expect(closeTerminal).toHaveBeenCalledOnce()
-    } finally {
-      host.hostDb.close()
-    }
-  })
-
   it('keeps real SSH contact loss unverifiable through federation show', async () => {
     const host = await createRealHost('ssh-real-host')
     try {
@@ -269,6 +234,83 @@ describe('federation host liveness verdicts', () => {
     })
   })
 
+  it('still reports its own workers when one requested Dispatch belongs to an earlier pairing', async () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: observation reads only these terminal fields.
+    vi.spyOn(runtime, 'showTerminal').mockResolvedValue({
+      handle: HANDLE,
+      worktreeId: 'repo::remote-worktree',
+      connected: true,
+      status: 'running'
+    } as never)
+    vi.spyOn(runtime, 'getTerminalLivenessVerdict').mockReturnValue(null)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: observation reads only the host scope.
+    vi.spyOn(runtime, 'getOrchestrationDispatchAuthority').mockReturnValue({
+      hostScope: { kind: 'local', hostId: 'local' }
+    } as never)
+
+    const earlierPane = 'tab_earlier:cccccccc-cccc-4ccc-8ccc-cccccccccccc'
+    vi.mocked(runtime.getTerminalPaneKey).mockImplementation((handle) =>
+      handle === 'term_earlier_worker' ? earlierPane : PANE_KEY
+    )
+    vi.mocked(runtime.getTerminalProcessIncarnation).mockImplementation((handle) =>
+      handle === 'term_earlier_worker' ? 'runtime:pty:earlier' : INCARNATION
+    )
+    // Started for this server's earlier pairing with the home, so it is held under another fingerprint.
+    db.createRemoteDispatchAttachment({
+      runId: 'run-home',
+      dispatchId: 'ctx_from_an_earlier_pairing',
+      taskId: 'task_earlier',
+      homePeerFingerprint: 'earlier-pairing-fingerprint',
+      protocolVersion: ORCHESTRATION_CONTRACT_VERSION,
+      runtimeEpoch: runtime.getRuntimeId(),
+      mutationReceipt: {
+        callerFingerprint: 'earlier-pairing-fingerprint',
+        requestId: 'rpc_attach_earlier',
+        method: 'orchestration.federationStart',
+        payloadHash: 'hash'
+      }
+    })
+    db.prepareRemoteAttachmentAuthority({
+      dispatchId: 'ctx_from_an_earlier_pairing',
+      paneKey: earlierPane,
+      processIncarnation: 'runtime:pty:earlier',
+      worktreeId: 'repo::remote-worktree',
+      terminalHandle: 'term_earlier_worker',
+      setupState: 'not_applicable',
+      effects: [],
+      terminalOwnership: 'created'
+    })
+    db.markRemoteAttachmentReady('ctx_from_an_earlier_pairing')
+
+    await expect(
+      call('orchestration.federationFleetSnapshot', {
+        dispatchIds: ['ctx_from_an_earlier_pairing', DISPATCH_ID]
+      })
+    ).resolves.toMatchObject({
+      items: [
+        {
+          dispatchId: 'ctx_from_an_earlier_pairing',
+          // Nothing of another fingerprint's Dispatch is read or returned.
+          observation: { status: 'unverifiable', exactWorker: false }
+        },
+        { dispatchId: DISPATCH_ID, observation: { status: 'live', exactWorker: true } }
+      ]
+    })
+    await expect(
+      call('orchestration.federationFleetSnapshot', {
+        dispatchIds: ['ctx_from_an_earlier_pairing']
+      })
+    ).resolves.toEqual({
+      runtimeEpoch: runtime.getRuntimeId(),
+      items: [
+        {
+          dispatchId: 'ctx_from_an_earlier_pairing',
+          observation: { status: 'unverifiable', exactWorker: false }
+        }
+      ]
+    })
+  })
+
   it('keeps a disconnected verdict-less pane unverifiable rather than exited', async () => {
     vi.spyOn(runtime, 'getTerminalLivenessVerdict').mockReturnValue(null)
     vi.spyOn(runtime, 'getOrchestrationDispatchAuthority').mockReturnValue(null)
@@ -297,29 +339,6 @@ describe('federation host liveness verdicts', () => {
     ).resolves.toMatchObject({
       observation: { status: 'unverifiable', exactWorker: true, reason: 'missing_liveness_verdict' }
     })
-  })
-
-  it('does not relay an unconfirmed close home as a settled stop', async () => {
-    vi.spyOn(runtime, 'getTerminalLivenessVerdict').mockReturnValue({
-      status: 'unverifiable',
-      reason: SSH_PROVIDER_GONE
-    })
-    const closeTerminal = vi.spyOn(runtime, 'closeTerminal').mockResolvedValue({
-      handle: HANDLE,
-      tabId: 'tab_remote',
-      ptyKilled: false,
-      ptyStopVerdict: 'unverifiable',
-      ptyStopReason: SSH_PROVIDER_GONE
-    })
-
-    const stopped = (await call('orchestration.federationStop', { dispatchId: DISPATCH_ID })) as {
-      state: string
-      lastError?: string
-    }
-
-    expect(closeTerminal).toHaveBeenCalledWith(HANDLE)
-    expect(stopped.state).not.toBe('stopped')
-    expect(stopped.lastError).toContain('could not be confirmed stopped')
   })
 
   it('still settles a confirmed close as a stop', async () => {

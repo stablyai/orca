@@ -1,9 +1,9 @@
-import { githubTaskBinding } from '@/lib/github-task-observation'
+import { githubTaskBinding } from '@/lib/work-items/github/github-task-observation'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 import type { GitHubSlice } from '../github-slice-contract'
-import { getWorkItemCountedTotalPages } from '../../../../../shared/work-items'
-import { getTaskSourceCacheScope } from '../../../../../shared/task-source-context'
+import { getWorkItemCountedTotalPages } from '../../../../../shared/work-items/work-item-pagination'
+import { getTaskSourceCacheScope } from '../../../../../shared/work-items/task-source-context'
 import { isGitHubWorkItemsQueryTooLarge } from '../../../../../shared/github/work-items-query-bounds'
 import { workItemsCacheKey, workItemsInflightRequestKey } from '../cache/cache-identity'
 import {

@@ -2,7 +2,7 @@ import { retireStructuredAgentSessionReadOwner } from '@/components/native-chat/
 import { structuredAgentSessionTargetForHost } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../../shared/execution-host'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
-import { markStructuredAgentLaunchCancellation } from '../../launch-cancel-tombstones-compat/structured-agent-session-launch-cancellation'
+import { markStructuredAgentLaunchCancellation } from './structured-agent-session-launch-cancellation'
 import { cancelStructuredAgentLaunchOnLocalHost } from './structured-agent-session-local-launch-cancel'
 import { forgetStructuredSessionSelection } from '../options/structured-agent-session-selection-controller'
 import { hasStructuredAgentLaunchCancellationTombstonePersisted } from './structured-agent-session-launch-persistence'
@@ -63,7 +63,7 @@ function markStructuredAgentSessionLaunchCancelledInternal(
     removeStructuredLaunchSlot(owner, worktreeId, sessionId)
   }
   if (!alreadyCancelled && owner) {
-    notifyStructuredLaunchListeners()
+    notifyStructuredLaunchListeners(sessionId)
   }
   return !alreadyCancelled
 }

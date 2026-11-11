@@ -12,12 +12,37 @@ import {
   normalizeTuiAgentEnvRecord
 } from '../../../shared/agent-launch/choices/tui-agent-launch-defaults'
 import { expandLeadingHomePath } from '../../filesystem/home-path-expansion'
+import { normalizeWorkspaceDirInput } from '../../../shared/worktree/workspace-dir-input'
 
-/** Unexpanded, a leading ~ resolves inside each repo and worktrees land in <repo>/~ (#34944). */
-export function expandWorkspaceDirHome(settings: Partial<GlobalSettings>): Partial<GlobalSettings> {
+/** A raw ~ or padded absolute path resolves inside each repo (#34944, STA-14308); normalize at the store boundary. */
+export function normalizeWorkspaceDirSetting(
+  settings: Partial<GlobalSettings>
+): Partial<GlobalSettings> {
   return typeof settings.workspaceDir === 'string'
-    ? { ...settings, workspaceDir: expandLeadingHomePath(settings.workspaceDir, homedir()) }
+    ? {
+        ...settings,
+        workspaceDir: expandLeadingHomePath(
+          normalizeWorkspaceDirInput(settings.workspaceDir, process.platform === 'win32'),
+          homedir()
+        )
+      }
     : settings
+}
+
+/** Keep a repaired saved spelling in history so checkouts under its old root keep their visibility. */
+export function normalizeLoadedWorkspaceDirSetting(
+  settings: Partial<GlobalSettings>,
+  defaults: GlobalSettings
+): Partial<GlobalSettings> {
+  const normalized = normalizeWorkspaceDirSetting(settings)
+  if (normalized.workspaceDir === settings.workspaceDir) {
+    return normalized
+  }
+  const history = buildWorkspaceDirHistoryForUpdate(
+    { ...defaults, ...settings },
+    { workspaceDir: normalized.workspaceDir }
+  )
+  return history ? { ...normalized, workspaceDirHistory: history } : normalized
 }
 
 export function buildWorkspaceDirHistoryForUpdate(

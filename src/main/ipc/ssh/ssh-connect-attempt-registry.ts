@@ -4,7 +4,7 @@ import {
   getSshProviderAuthority,
   isCurrentSshProviderAuthority,
   rotateSshProviderAuthority
-} from '../../ssh/ssh-provider-authority'
+} from '../../ssh/connection/authority/ssh-provider-authority'
 
 // Preserve credential tracking across macOS window recreation.
 export const credentialRequestedForTarget = new Set<string>()

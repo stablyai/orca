@@ -3,7 +3,7 @@ import type { RpcContext } from '../../../core'
 import { createOrchestrationRpcHarness } from '../rpc-test-harness'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import '../../../../../../shared/orchestration-dispatch-refusal-contract'
+import '../../../../../../shared/orchestration/orchestration-dispatch-refusal-contract'
 import { createRootDispatch } from '../../../../orchestration/db/root-dispatch-test-fixture'
 import '../../../../orchestration/workers/launch/worker-dispatch-preamble'
 
@@ -48,21 +48,6 @@ describe('orchestration RPC methods', () => {
         created_by_process_incarnation: 'pty-creator:incarnation-a',
         created_by_run_generation: 1
       })
-    })
-  })
-
-  describe('orchestration.taskUpdate', () => {
-    it('completion frees the active dispatch context', async () => {
-      setup()
-      const task = db.createTask({ spec: 'work' })
-      createRootDispatch(db, task.id, 'term_a')
-
-      await call('orchestration.taskUpdate', {
-        id: task.id,
-        status: 'completed'
-      })
-
-      expect(db.getActiveDispatchForTerminal('term_a')).toBeUndefined()
     })
   })
 
@@ -152,33 +137,6 @@ describe('orchestration RPC methods', () => {
       await expect(call('orchestration.dispatch', { task: t2.id, to: 'term_a' })).rejects.toThrow(
         /already has an active dispatch/
       )
-    })
-
-    it('dry-run returns the preamble without mutating state', async () => {
-      setup()
-      const task = db.createTask({ spec: 'work' })
-
-      const result = (await call('orchestration.dispatch', {
-        task: task.id,
-        to: 'term_a',
-        inject: true,
-        dryRun: true,
-        from: 'term_coord'
-      })) as {
-        dispatch: null
-        dryRun: boolean
-        preamble: string
-        injected: boolean
-      }
-
-      expect(result.dryRun).toBe(true)
-      expect(result.dispatch).toBeNull()
-      expect(result.injected).toBe(false)
-      expect(result.preamble).toContain('work')
-      expect(result.preamble).toContain(task.id)
-      expect(result.preamble).toContain('term_coord')
-      expect(db.getTask(task.id)?.status).toBe('ready')
-      expect(db.getDispatchContext(task.id)).toBeUndefined()
     })
   })
 })

@@ -5,10 +5,10 @@ import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors, pressedStyle, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { useCalmConnectionState } from '../transport/calm-connection-state'
+import { useCalmConnectionState } from '../transport/connection/calm-connection-state'
 import { formatOfflineAsOfTime } from './offline-as-of-time'
-import type { RpcClient } from '../transport/rpc-client'
-import type { ConnectionState } from '../transport/types'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import type { ConnectionState } from '../transport/connection/connection-state'
 
 /** The banner's state for a screen that shows data, or null while it should stay hidden. */
 export function useHostOfflineBanner({

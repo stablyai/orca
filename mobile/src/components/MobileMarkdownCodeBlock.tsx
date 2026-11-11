@@ -2,7 +2,7 @@ import { TextWrap } from 'lucide-react-native'
 import { memo, useContext, useMemo } from 'react'
 import { Pressable, ScrollView, Text, View } from 'react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { highlightMobileCode } from '../session/mobile-file-syntax'
+import { highlightMobileCode } from '../files/session-documents/mobile-file-syntax'
 import {
   MobileNativeChatDisclosureContext,
   MobileNativeChatMarkdownRowKeyContext,

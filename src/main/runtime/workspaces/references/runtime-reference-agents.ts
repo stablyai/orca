@@ -6,7 +6,7 @@ import {
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import type { Repo } from '../../../../shared/repo-types'
-import type { FleetAgentStatusEvidence } from '../../../../shared/orchestration-fleet-agent-status-evidence'
+import type { FleetAgentStatusEvidence } from '../../../../shared/orchestration/fleet/orchestration-fleet-agent-status-evidence'
 import type { PtyLivenessVerdict } from '../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import { composeWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import {

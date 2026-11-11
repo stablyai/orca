@@ -99,6 +99,7 @@ export async function admitCommandReceiptMutation<TValue>(
       context
     })
     if ('committedReceipt' in outcome) {
+      // oxlint-disable-next-line typescript/return-await -- replay refusals propagate here as at the other answerCommandReceipt calls
       return answerCommandReceipt(request, hostFingerprint, {
         verdict: 'readable',
         receipt: outcome.committedReceipt

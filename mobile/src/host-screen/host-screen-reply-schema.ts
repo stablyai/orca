@@ -2,7 +2,7 @@ import * as z from 'zod'
 import type { PersistedUIState } from '../../../src/shared/persisted-ui-state-types'
 import type { RepoIcon } from '../../../src/shared/repo-icon'
 import { hostUnionArms, salvagedOptional, salvagingArray } from '../../../src/shared/zod-salvage'
-import { NODE_PLATFORM_NAMES } from '../transport/mobile-runtime-host-platform'
+import { NODE_PLATFORM_NAMES } from '../transport/connection/mobile-runtime-host-platform'
 
 export const WORKSPACE_GROUP_BY_ARMS = hostUnionArms<PersistedUIState['groupBy']>({
   none: true,
@@ -83,20 +83,17 @@ export const hostRepoCatalogSnapshotSchema = z.union([
 ])
 
 // Keep target parsing total: absent/malformed targets yield [] and labels degrade to host ids on older hosts. A throw here would also skip the subsequent platform write.
+export const hostSshTargetSummarySchema = z.looseObject({
+  id: z.string(),
+  label: z.string(),
+  // Read raw: an arm a newer desktop adds must leave the badge as it is, not read as a verdict.
+  connected: salvagedOptional('connected', z.boolean()),
+  connectionStatus: salvagedOptional('connectionStatus', z.string())
+})
+
 export const hostSshTargetSummariesSchema = z
   .looseObject({
-    targets: salvagedOptional(
-      'targets',
-      salvagingArray(
-        z.looseObject({
-          id: z.string(),
-          label: z.string(),
-          // Read raw: an arm a newer desktop adds must leave the badge as it is, not read as a verdict.
-          connected: salvagedOptional('connected', z.boolean()),
-          connectionStatus: salvagedOptional('connectionStatus', z.string())
-        })
-      )
-    )
+    targets: salvagedOptional('targets', salvagingArray(hostSshTargetSummarySchema))
   })
   .transform((reply) => reply.targets ?? [])
   .catch(() => [])

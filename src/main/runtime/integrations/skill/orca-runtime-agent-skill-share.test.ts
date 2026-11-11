@@ -7,8 +7,8 @@ import { installFakeAppEnvironment } from '../../../../../config/scripts/test-ru
 import type { AgentSkillShareRequest } from '../../../../shared/agent-skill-sharing-contract'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { DiscoveredSkill } from '../../../../shared/skills'
-import { extractSkillBundleArchive } from '../../../skills/skill-bundle-extraction'
-import { SkillCloudRequestError } from '../../../skills/skill-cloud-request-error'
+import { extractSkillBundleArchive } from '../../../skills/bundle-archive/skill-bundle-extraction'
+import { SkillCloudRequestError } from '../../../skills/cloud/skill-cloud-request-error'
 import { OrcaRuntimeService } from '../../orca-runtime'
 
 const mocks = vi.hoisted(() => ({ userDataPath: '/tmp' }))

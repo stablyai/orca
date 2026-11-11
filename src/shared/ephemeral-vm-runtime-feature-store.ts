@@ -151,7 +151,7 @@ export function featureEntryFromRuntime(
 ): EphemeralVmRuntimeFeatureEntry | null {
   const recipeCheckoutMode = runtime.recipe?.checkoutMode
   const resultCheckoutMode =
-    runtime.recipeResult.schemaVersion === 2 ? runtime.recipeResult.checkoutMode : undefined
+    runtime.recipeResult?.schemaVersion === 2 ? runtime.recipeResult.checkoutMode : undefined
   if (!recipeCheckoutMode && !resultCheckoutMode) {
     return null
   }
@@ -192,7 +192,7 @@ function restoreRuntimeFeatures(
     ...(runtime.recipe && feature.recipeCheckoutMode
       ? { recipe: { ...runtime.recipe, checkoutMode: feature.recipeCheckoutMode } }
       : {}),
-    ...(feature.resultCheckoutMode
+    ...(feature.resultCheckoutMode && runtime.recipeResult
       ? {
           recipeResult: {
             ...runtime.recipeResult,

@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { getRepoExecutionHostId } from '../../../src/shared/execution-host'
 import { useHostQuery } from '../query/host-query'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { buildRepoHostIdByRepoId } from '../worktree/worktree-host-context-labels'
 import { buildSshHostHealthById } from '../worktree/worktree-host-health'
 import type { SectionRepo } from '../worktree/workspace-list-types'
@@ -66,7 +66,7 @@ export function useHostRepoMetadata(args: {
   useEffect(() => {
     if (needsLabels && labels.data) {
       setHostHealthById(buildSshHostHealthById(labels.data.sshTargetSummaries))
-      setHostLabelById(labels.data.hostLabelById)
+      setHostLabelById(new Map(labels.data.hostLabels))
       setHostPlatform(labels.data.platform)
     } else if (repos.data && !needsLabels) {
       // Clear labels for departed hosts so stale metadata cannot badge remaining rows.

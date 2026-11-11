@@ -5,11 +5,8 @@ import {
 } from '../../../../shared/pi-agent-kind'
 import { readSessionShellStartupEnvVar } from '../../../pty/shell-startup/shell-startup-env'
 import { getAgentLaunchExecutableName } from '../../../../shared/agent-launch/startup/agent-command-line-intent'
-import {
-  AGENT_HOOK_RUNTIME_ENV_KEYS,
-  CLAUDE_CHILD_SESSION_STAMP_ENV_KEYS,
-  ORCA_AGENT_SESSION_CALLER_ENV_KEYS
-} from './spawn-env-keys'
+import { AGENT_HOOK_RUNTIME_ENV_KEYS, ORCA_AGENT_SESSION_CALLER_ENV_KEYS } from './spawn-env-keys'
+import { CLAUDE_CHILD_SESSION_STAMP_ENV_KEYS } from '../../../../shared/agent-launch/startup/claude-parent-session-env'
 
 export function readEnvWithProcessFallback(
   baseEnv: Record<string, string>,

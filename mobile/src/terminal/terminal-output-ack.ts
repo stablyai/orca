@@ -1,5 +1,5 @@
-import type { RpcClient } from '../transport/rpc-client'
-import { isRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import { isRpcDeliveryUnknown } from '../transport/rpc/rpc-delivery-ambiguity'
 import type { TerminalWebViewHandle } from './terminal-webview-contract'
 import type { TerminalWebViewCommand } from './terminal-webview-messages'
 import { createTerminalWriteCoalescer } from './terminal-write-coalescer'

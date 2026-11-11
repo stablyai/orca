@@ -9,8 +9,8 @@ import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import {
   loadPendingHostCredentialCleanup,
   subscribePendingHostCredentialCleanup
-} from '../transport/host-credential-cleanup'
-import { retryPendingHostCredentialCleanup } from '../transport/host-store'
+} from '../host-credentials/host-credential-cleanup'
+import { retryPendingHostCredentialCleanup } from '../host-catalog/host-store'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { SettingsSection } from './settings-screen-frame'
 

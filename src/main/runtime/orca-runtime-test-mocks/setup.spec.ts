@@ -4,7 +4,7 @@ import type * as WorktreeScanCacheModule from '../../git/worktrees/catalog/workt
 import { vi, type Mock } from 'vitest'
 
 import type * as GitUsernameModule from '../../git/git-username'
-import type * as GitRepoDefaultBaseRefModule from '../../git/repo-default-base-ref'
+import './repo-creation.spec'
 import type * as WslUncAccessGateModule from '../../wsl/filesystem/wsl-unc-access-gate'
 import type * as FilesystemPathContainmentModule from '../../ipc/filesystem/access/filesystem-path-containment'
 import { reviewHeadRemoteRefComponent } from '../../../shared/review-head-tracking-ref'
@@ -272,7 +272,7 @@ vi.mock('../../preflight/agent-detection', () => ({
   detectInstalledAgentsWithShellPathHydration: detectInstalledAgentsWithShellPathHydrationMock
 }))
 
-vi.mock('../../agent-hooks/managed-agent-hook-controls', () => ({
+vi.mock('../../agent-hooks/installation/managed-agent-hook-controls', () => ({
   applyAgentStatusHooksEnabled: applyAgentStatusHooksEnabledMock
 }))
 
@@ -352,34 +352,6 @@ vi.mock('../../ipc/filesystem/access/filesystem-path-containment', async () => {
 
 vi.mock('../../workspaces/creation/worktree-root-preparation', () => ({
   prepareLocalWorktreeRootForRepo: prepareLocalWorktreeRootForRepoMock
-}))
-
-// Fabricated repo paths need deterministic async default-ref resolution.
-vi.mock('../../git/repo-default-base-ref', async (importOriginal) => {
-  const actual = await importOriginal<typeof GitRepoDefaultBaseRefModule>()
-  const actualGetBaseRefDefault = actual.getBaseRefDefault
-  return {
-    ...actual,
-    // Keep fake local defaults deterministic while WSL exercises real async Git options.
-    getBaseRefDefault: vi
-      .fn()
-      .mockImplementation((path: string, options?: { wslDistro?: string }) =>
-        options?.wslDistro ? actualGetBaseRefDefault(path, options) : Promise.resolve('origin/main')
-      ),
-    resolveDefaultBaseRefWithLocalGit: vi
-      .fn()
-      .mockImplementation((options: { cwd: string; wslDistro?: string }) =>
-        options.wslDistro
-          ? actualGetBaseRefDefault(options.cwd, options)
-          : Promise.resolve('origin/main')
-      )
-  }
-})
-
-vi.mock('../../git/repo-branch-conflict', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  getBranchConflictKind: vi.fn().mockResolvedValue(null),
-  getBranchConflictKindStrict: vi.fn().mockResolvedValue(null)
 }))
 
 vi.mock('../../git/git-username', async () => {

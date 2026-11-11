@@ -89,7 +89,7 @@ it('indexes a Claude transcript through the reader and resumes on append', async
   })
 })
 
-it('keeps a tool result searchable but out of the conversation half', async () => {
+it('keeps the prompt searchable while excluding tool results', async () => {
   const root = await makeTempDir()
   const codexHome = await makeTempDir()
   const path = join(root, CODEX_ROLLOUT_FILE)
@@ -104,10 +104,10 @@ it('keeps a tool result searchable but out of the conversation half', async () =
   await parseTranscript(path, 'codex', codexHome)
   expect(errors).toEqual([])
 
-  expect(sessionsMatching('pericardium')).toHaveLength(1)
-  expect(sessionsMatching('outputonly')).toHaveLength(1)
+  expect(sessionsMatching('pericardium')).toHaveLength(0)
+  expect(sessionsMatching('outputonly')).toHaveLength(0)
   expect(sessionsMatching('tailonly')).toHaveLength(0)
-  expect(sessionsMatching('rg')).toHaveLength(1)
+  expect(sessionsMatching('rg')).toHaveLength(0)
   expect(sessionsMatching('{user_text assistant_text}: promptonly')).toHaveLength(1)
   expect(sessionsMatching('{user_text assistant_text}: outputonly')).toHaveLength(0)
   expect(sessionsMatching('{user_text assistant_text}: rg')).toHaveLength(0)

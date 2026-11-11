@@ -1,11 +1,4 @@
-import {
-  app,
-  clipboard,
-  ipcMain,
-  nativeImage,
-  type IpcMainInvokeEvent,
-  type WebContents
-} from 'electron'
+import { app, clipboard, ipcMain, nativeImage } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { open, stat } from 'node:fs/promises'
 import { runProcess } from '@orca/process-host'
@@ -13,12 +6,16 @@ import type { Store } from '../persistence/loading-store/store'
 import { PATH_ACCESS_DENIED_MESSAGE } from '../ipc/filesystem/access/filesystem-auth'
 import { resolveDesktopAuthorizedPath } from '../ipc/filesystem/access/local-file-access-resolution'
 import { isENOENT } from '../ipc/filesystem/access/filesystem-path-containment'
-import { isTrustedMainRendererSender } from '../ipc/main-renderer-sender-trust'
+import {
+  assertTrustedClipboardSender,
+  assertTrustedClipboardTextSender
+} from './clipboard-ipc-sender-trust'
 import {
   assertClipboardTextWriteWithinLimitWithYield,
   assertClipboardTextWithinLimitWithYield,
   type ReadClipboardTextOptions
 } from '../../shared/clipboard-text'
+import { clipboardHtmlMayHaveLinks } from '../../shared/clipboard-link-html'
 import {
   saveClipboardImageBufferAsTempFile,
   type SaveClipboardImageAsTempFileArgs
@@ -52,13 +49,12 @@ import {
   publishClipboardOperation,
   publishClipboardText
 } from './clipboard-text-publisher'
-import { isDashboardPopoutRenderer } from './dashboard-popout-window'
 import { restoreNativeChatPastes } from './native-chat-paste-files'
 import { savePastedTextAsFile, type SavePastedTextAsFileArgs } from './native-chat-pasted-text-file'
 import { agentSessionPastedImageName } from '../../shared/agent-session/agent-session-attachments'
 import type { AgentSessionAttachmentStore } from '../native-chat/agent-session-attachments/agent-session-attachment-store'
 
-let trustedClipboardRendererWebContentsId: number | null = null
+export { setTrustedClipboardRendererWebContentsId } from './clipboard-ipc-sender-trust'
 
 type ClipboardWriteFileRequest = {
   filePath: string
@@ -105,16 +101,13 @@ async function saveClipboardImageBufferForTarget(
   return saveClipboardImageBufferAsTempFile(buffer, args)
 }
 
-export function setTrustedClipboardRendererWebContentsId(webContentsId: number | null): void {
-  trustedClipboardRendererWebContentsId = webContentsId
-}
-
 export function registerClipboardHandlers(
   store: Store,
   handlerOptions: ClipboardHandlerOptions = {}
 ): void {
   ipcMain.removeHandler('clipboard:readText')
   ipcMain.removeHandler('clipboard:readSelectionText')
+  ipcMain.removeHandler('clipboard:readLinkHtml')
   ipcMain.removeHandler('clipboard:writeText')
   ipcMain.removeHandler('clipboard:writeTerminalText')
   ipcMain.removeHandler('clipboard:writeSelectionText')
@@ -133,6 +126,12 @@ export function registerClipboardHandlers(
   ipcMain.handle('clipboard:readText', async (event, options?: ReadClipboardTextOptions) => {
     assertTrustedClipboardTextSender(event)
     return assertClipboardTextWithinLimitWithYield(clipboard.readText(), options)
+  })
+  // Rich-text copies keep their links only in the HTML flavor; skip shipping HTML that has none.
+  ipcMain.handle('clipboard:readLinkHtml', (event): string => {
+    assertTrustedClipboardSender(event)
+    const html = clipboard.readHTML()
+    return clipboardHtmlMayHaveLinks(html) ? html : ''
   })
   ipcMain.handle(
     'clipboard:readSelectionText',
@@ -292,21 +291,4 @@ function normalizeClipboardWriteFileRequest(args: unknown): ClipboardWriteFileRe
     return { filePath, connectionId }
   }
   return { filePath }
-}
-
-function assertTrustedClipboardSender(event: IpcMainInvokeEvent): void {
-  if (!isTrustedClipboardRenderer(event.sender)) {
-    throw new Error('Unauthorized clipboard IPC sender')
-  }
-}
-
-function assertTrustedClipboardTextSender(event: IpcMainInvokeEvent): void {
-  // Dashboard popouts need text clipboard authority only; never extend it to images, files or remote operations.
-  if (!isTrustedClipboardRenderer(event.sender) && !isDashboardPopoutRenderer(event.sender)) {
-    throw new Error('Unauthorized clipboard IPC sender')
-  }
-}
-
-function isTrustedClipboardRenderer(sender: WebContents): boolean {
-  return isTrustedMainRendererSender(sender, trustedClipboardRendererWebContentsId)
 }

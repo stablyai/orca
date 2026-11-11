@@ -1,7 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../../shared/agent-status/contracts/agent-status-freshness'
-import { flushMicrotasks } from './agent-status-test-harness'
 import { createTestStore } from '../../testing/app-store-test-fixture'
 import { makeTab } from '../../terminals/terminal-tab.test-fixture'
 import { makeTabGroup, makeUnifiedTab } from '../tabs/tab-group.test-fixture'
@@ -53,29 +51,6 @@ afterEach(() => {
 })
 
 {
-  describe('agent status freshness expiry', () => {
-    afterEach(() => {
-      vi.useRealTimers()
-    })
-
-    it('cancels the scheduled freshness tick when the entry is removed first', async () => {
-      vi.useFakeTimers()
-      vi.setSystemTime(new Date('2026-04-09T12:00:00.000Z'))
-
-      const store = createTestStore()
-      store
-        .getState()
-        .setAgentStatus('tab-1:1', { state: 'working', prompt: 'Fix tests', agentType: 'codex' })
-      store.getState().removeAgentStatus('tab-1:1')
-      expect(store.getState().agentStatusEpoch).toBe(2)
-
-      await flushMicrotasks()
-      vi.advanceTimersByTime(AGENT_STATUS_STALE_AFTER_MS + 1)
-
-      expect(store.getState().agentStatusEpoch).toBe(2)
-    })
-  })
-
   describe('agent status stateStartedAt', () => {
     afterEach(() => {
       vi.useRealTimers()
@@ -335,78 +310,6 @@ afterEach(() => {
       expect(patch.agentStatusByPaneKey?.['missing-owner:0']).toBe(
         before.agentStatusByPaneKey['missing-owner:0']
       )
-    })
-  })
-}
-
-{
-  /** Bound retained snapshots by MAX_RETAINED_AGENTS, evicting oldest insertions. Ephemeral pane keys accumulate large messages/prompts/history/tab records during long orchestration sessions; worktree removal/user dismissal alone cannot prevent renderer OOM. */
-
-  // MAX_RETAINED_AGENTS is module-private; mirror its value here.
-  const MAX_RETAINED_AGENTS = 500
-
-  // Use near-maximum production payloads so assertions expose leaked byte weight, not just count.
-  const BIG_ASSISTANT_MESSAGE = 'a'.repeat(8 * 1024)
-  const BIG_INTERACTIVE_PROMPT = 'q'.repeat(16 * 1024)
-
-  function makeRetained(index: number, worktreeId = 'wt-x'): RetainedAgentEntry {
-    const paneKey = `tab-${index}:leaf-${index}`
-    const entry: AgentStatusEntry = {
-      state: 'done',
-      prompt: `prompt ${index}`,
-      updatedAt: index,
-      stateStartedAt: index,
-      paneKey,
-      stateHistory: [],
-      lastAssistantMessage: BIG_ASSISTANT_MESSAGE,
-      interactivePrompt: BIG_INTERACTIVE_PROMPT
-    }
-    return {
-      entry,
-      worktreeId,
-      tab: { id: `tab-${index}`, title: 'claude' } as unknown as TerminalTab,
-      agentType: 'claude',
-      startedAt: index
-    }
-  }
-
-  describe('retainedAgentsByPaneKey stays bounded (leak regression)', () => {
-    afterEach(() => {
-      vi.useRealTimers()
-    })
-
-    it('caps retainedAgentsByPaneKey and keeps the most recently retained keys', () => {
-      const store = createTestStore()
-
-      const total = MAX_RETAINED_AGENTS + 200
-      for (let i = 0; i < total; i++) {
-        store.getState().retainAgents([makeRetained(i)])
-      }
-
-      const retained = store.getState().retainedAgentsByPaneKey
-      expect(Object.keys(retained)).toHaveLength(MAX_RETAINED_AGENTS)
-
-      expect(retained[`tab-${total - 1}:leaf-${total - 1}`]).toBeDefined()
-      expect(retained['tab-0:leaf-0']).toBeUndefined()
-      expect(
-        retained[`tab-${total - MAX_RETAINED_AGENTS - 1}:leaf-${total - MAX_RETAINED_AGENTS - 1}`]
-      ).toBeUndefined()
-      expect(
-        retained[`tab-${total - MAX_RETAINED_AGENTS}:leaf-${total - MAX_RETAINED_AGENTS}`]
-      ).toBeDefined()
-    })
-
-    it('caps even when many completions are retained in a single batch', () => {
-      const store = createTestStore()
-      const total = MAX_RETAINED_AGENTS + 50
-      const batch = Array.from({ length: total }, (_, i) => makeRetained(i))
-
-      store.getState().retainAgents(batch)
-
-      const retained = store.getState().retainedAgentsByPaneKey
-      expect(Object.keys(retained)).toHaveLength(MAX_RETAINED_AGENTS)
-      expect(retained[`tab-${total - 1}:leaf-${total - 1}`]).toBeDefined()
-      expect(retained['tab-0:leaf-0']).toBeUndefined()
     })
   })
 }

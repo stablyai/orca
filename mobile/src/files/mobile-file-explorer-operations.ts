@@ -1,9 +1,9 @@
 import { translate } from '../i18n/mobile-i18n'
 import { defineHostQuery } from '../query/host-query'
-import type { RpcClient } from '../transport/rpc-client'
-import { isMobileMethodUnavailableError } from '../transport/mobile-method-unavailable'
-import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
-import { rpcResultVariant, rpcResultVariants } from '../transport/rpc-operation-result-reader'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import { isMobileMethodUnavailableError } from '../transport/rpc/mobile-method-unavailable'
+import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc/rpc-operation'
+import { rpcResultVariant, rpcResultVariants } from '../transport/rpc/rpc-operation-result-reader'
 import { FILE_READ_DIR_MAX_PAGE_ENTRIES } from '../../../src/shared/file-listing/file-dir-page'
 import { compareDirEntries } from '../../../src/shared/file-listing/file-name-sort'
 import {

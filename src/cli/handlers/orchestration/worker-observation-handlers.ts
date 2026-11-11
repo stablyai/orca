@@ -11,7 +11,7 @@ import { RuntimeClientError } from '../../runtime-client'
 import type {
   OrchestrationWorkerReadResult,
   OrchestrationWorkerReadSource
-} from '../../../shared/orchestration-worker-output'
+} from '../../../shared/orchestration/workers/orchestration-worker-output'
 import { formatWorkerRead, type LegacyWorkerReadResult } from './worker-output'
 
 export const ORCHESTRATION_WORKER_OBSERVATION_HANDLERS: Record<string, CommandHandler> = {

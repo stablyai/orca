@@ -13,7 +13,7 @@ function isSamePane(assigneePaneKey: string, senderPaneKey: string): boolean {
   return Boolean(assigneeLeaf && senderLeaf && assigneeLeaf === senderLeaf)
 }
 
-function hasLifecycleAuthority(
+export function hasLifecycleAuthority(
   dispatch: { assignee_handle: string | null; assignee_pane_key: string | null },
   msg: MessageRow
 ): boolean {

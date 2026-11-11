@@ -1,7 +1,7 @@
 import { collectSavedStructuredAgentSessionIds } from '../agent-session/lifecycle/saved-structured-agent-session-restoration'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import type {
-  RuntimeConstructionBindings,
+  RuntimeConstructionBindings as Bindings,
   RuntimeConstructionDependencies
 } from './runtime-construction-dependencies'
 import type { OrcaRuntimeWithRuntimeId as IdentityState } from './runtime-identity-state'
@@ -10,7 +10,7 @@ import type { OrcaRuntimeWithPreservedBranchCleanup as HostServices } from './ru
 
 import type { RuntimeEdgeCommandSurface } from './runtime-edge-command-controller'
 import type { OrcaRuntimeWithListManagedWorktrees as ListManagedWorktrees } from '../workspaces/managed-workspace-operations'
-import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
+import type { ProjectExecutionRuntimeResolution } from '../../../shared/execution-host/project-execution-runtime'
 import { OrcaRuntimeWithLinearCommands } from '../integrations/linear/linear-commands'
 
 import type { RuntimeStore } from './runtime-store-contract'
@@ -75,11 +75,11 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
   declare protected readonly attestAgentHookCompatibilityAuthorityFn: HostServices['attestAgentHookCompatibilityAuthorityFn']
   declare protected readonly retireAgentHookCompatibilityAuthorityFn: HostServices['retireAgentHookCompatibilityAuthorityFn']
   declare protected readonly readHookCliWriterObservationFn:
-    | RuntimeConstructionBindings['readHookCliWriterObservation']
+    | Bindings['readHookCliWriterObservation']
     | null
   declare protected readonly checkHookAgentPresenceFn: HostServices['checkHookAgentPresenceFn']
   declare readonly subscribeAgentProviderSessionChangesFn:
-    | RuntimeConstructionBindings['subscribeAgentProviderSessionChanges']
+    | Bindings['subscribeAgentProviderSessionChanges']
     | null
   declare protected readonly reconcileAgentStatusForEndedProcessFn: HostServices['reconcileAgentStatusForEndedProcessFn']
   declare protected readonly forgetHookAgentExitFn: HostServices['forgetHookAgentExitFn']
@@ -115,14 +115,14 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
 
   readonly workspaceSleepPlatform: WorkspaceSleepPlatform | null
 
-  protected readonly getAgentStatusSnapshotForPaneFn:
-    | RuntimeConstructionBindings['getAgentStatusSnapshotForPane']
-    | null
+  declare protected readonly getAgentStatusSnapshotForPaneFn: HostServices['getAgentStatusSnapshotForPaneFn']
+
+  protected readonly publicPaneStatusFn?: Bindings['getPublicAgentStatusSnapshotForPane']
 
   /** The agent's full final reply for that finished lead turn; status rows carry only a capped preview. */
-  readonly getAcceptedAgentReply: RuntimeConstructionBindings['getAcceptedAgentReply']
+  readonly getAcceptedAgentReply: Bindings['getAcceptedAgentReply']
   /** Synchronous on every hook status row change, including clears. */
-  readonly subscribeAgentStatusRowChanges: RuntimeConstructionBindings['subscribeAgentStatusRowChanges']
+  readonly subscribeAgentStatusRowChanges: Bindings['subscribeAgentStatusRowChanges']
 
   protected readonly machineName = new RuntimeMachineName(
     () => this.store?.getSettings?.().machineName
@@ -253,6 +253,7 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
     }
     this.getAgentStatusSnapshotFn = deps?.getAgentStatusSnapshot ?? null
     this.getAgentStatusSnapshotForPaneFn = deps?.getAgentStatusSnapshotForPane ?? null
+    this.publicPaneStatusFn = deps?.getPublicAgentStatusSnapshotForPane
     this.structuredAgentStatusSinkFn = deps?.structuredAgentStatusSink ?? null
     this.readObservedAgentStatusPaneIdentityFn =
       deps?.readObservedAgentStatusPaneIdentity ?? (() => ({ kind: 'unobserved' }))

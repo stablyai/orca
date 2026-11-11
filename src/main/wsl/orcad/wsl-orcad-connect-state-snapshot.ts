@@ -28,12 +28,12 @@ import {
   type WslGuestIdentity
 } from '../execution/wsl-guest-process-identity'
 import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
-import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
+import type { OrcadHostTransport } from '../../managed-server/install/orcad-host-transport'
 import {
   isWindowsRemoteHost,
   joinRemotePath,
   type RemoteHostPlatform
-} from '../../ssh/ssh-remote-platform'
+} from '../../ssh/remote-host/ssh-remote-platform'
 
 // The record stores' own caps; a larger file reads as unreadable, as theirs does.
 const RECORD_MAX_BYTES = 64 * 1024

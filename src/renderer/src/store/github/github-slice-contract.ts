@@ -27,7 +27,7 @@ import type {
   GitHubProjectMutationResult
 } from '../../../../shared/github/project-result-types'
 import type { GetProjectViewTableArgs } from '../../../../shared/github/project-request-types'
-import type { TaskSourceContext } from '../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type {

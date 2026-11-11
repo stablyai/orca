@@ -11,7 +11,8 @@ import { OrcaRuntimeService } from '../../orca-runtime'
 import { readRuntimeMetadata } from './runtime-metadata'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
 import { parsePairingCode } from '../../../../shared/remote-runtime/pairing/pairing'
-import { subscribeRemoteRuntimeRequest } from '../../../../shared/remote-runtime/remote-runtime-client'
+import '../../../../shared/remote-runtime/requests/remote-runtime-request-socket'
+import { subscribeRemoteRuntimeTransport } from '../../../../shared/remote-runtime/requests/remote-runtime-subscription-transport'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
@@ -350,7 +351,7 @@ describe('OrcaRuntimeRpcServer', () => {
     const responses: Record<string, unknown>[] = []
     const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
     const onError = vi.fn()
-    const subscription = await subscribeRemoteRuntimeRequest(
+    const subscription = await subscribeRemoteRuntimeTransport(
       pairedRuntimeConnectionFromOffer(pairing),
       'terminal.multiplex',
       {},

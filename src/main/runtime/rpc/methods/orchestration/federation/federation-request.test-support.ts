@@ -1,4 +1,4 @@
-import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../../shared/orchestration-runtime-capabilities'
+import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import type { RpcRequest } from '../../../core'
 
 export function createFederationWorkerStartRequest(

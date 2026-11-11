@@ -1,5 +1,5 @@
 import type { ExecutionHostId } from '../execution-host'
-import type { TaskSourceContext } from '../task-source-context'
+import type { TaskSourceContext } from '../work-items/task-source-context'
 import type { TuiAgent } from '../agent-launch/catalog/tui-agent'
 import type { DiffComment } from '../diff-comment-types'
 import type { SmartTier } from '../sidebar-list/sort-stamps'

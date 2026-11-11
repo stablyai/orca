@@ -6,14 +6,14 @@ import type { DiffComment } from '../../../src/shared/diff-comment-types'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { DIFF_LINE_ID_PREFIX, MobileDiffReviewLine } from './MobileDiffReviewLine'
-import type { ReviewDiffLine } from '../session/mobile-diff-review-screen-model'
+import type { ReviewDiffLine } from '../source-control/review/mobile-diff-review-screen-model'
 import {
   buildMobileDiffReviewRows,
   type MobileDiffReviewRow
-} from '../session/mobile-diff-review-rows'
+} from '../source-control/review/mobile-diff-review-rows'
 import { colors } from '../theme/mobile-theme'
 import { mobileDiffReviewStyles as styles } from './mobile-diff-review-screen-styles'
-import type { MobileDiffReviewThread } from '../session/mobile-diff-review-github'
+import type { MobileDiffReviewThread } from '../source-control/review/mobile-diff-review-github'
 import type { PRCommentCardActions } from './pr-sidebar/PRCommentCard'
 import { CommentGroupView } from './pr-sidebar/PRCommentsSection'
 import { useNow } from '../hooks/use-now'

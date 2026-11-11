@@ -214,7 +214,7 @@ describe('external worktree discovery for paired clients', () => {
           break
         }
       }
-      expect(observed).toEqual(['worktreesChanged', 'reposChanged'])
+      expect(observed).toEqual(['worktreesChanged', 'gitStatusChanged', 'reposChanged'])
     }
 
     for (const [index, session] of sessions.slice(0, 2).entries()) {

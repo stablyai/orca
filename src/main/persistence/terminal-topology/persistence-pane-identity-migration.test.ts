@@ -10,7 +10,7 @@ import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
-import { agentHookServer } from '../../agent-hooks/server'
+import { agentHookServer } from '../../agent-hooks/server/agent-hook-server'
 import { TEST_LEAF_1, TEST_LEAF_2 } from '../persistence-session-fixtures'
 
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
@@ -87,7 +87,7 @@ describe('Store', () => {
     })
 
     await createStore()
-    const { agentHookServer } = await import('../../agent-hooks/server')
+    const { agentHookServer } = await import('../../agent-hooks/server/agent-hook-server')
     agentHookServer.ingestTerminalStatus({
       paneKey: physicalPaneKey,
       tabId: 'tab-source',

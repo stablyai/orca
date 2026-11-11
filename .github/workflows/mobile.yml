@@ -298,8 +298,19 @@ jobs:
             echo 'should_run=true' >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Setup Bun for tests
+      - name: Find installed Bun
+        id: installed-bun
         if: steps.test-scope.outputs.should_run != 'false'
+        shell: bash
+        working-directory: .
+        run: |
+          bun="$GITHUB_WORKSPACE/node_modules/.bin/bun"
+          if [ -x "$bun" ] && [ "$("$bun" --version)" = "$(cat config/.bun-version)" ]; then
+            echo "$GITHUB_WORKSPACE/node_modules/.bin" >> "$GITHUB_PATH"
+            echo 'found=true' >> "$GITHUB_OUTPUT"
+          fi
+      - name: Setup Bun for tests
+        if: steps.test-scope.outputs.should_run != 'false' && steps.installed-bun.outputs.found != 'true'
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: config/.bun-version
@@ -431,7 +442,18 @@ jobs:
         run: node scripts/check-tests-typecheck-ratchet.mjs
 
       # Run all golden consumers, including mutant/page-bridge suites; failures name the recording and rpc:record command.
+      - name: Find installed Bun
+        id: installed-bun
+        shell: bash
+        working-directory: .
+        run: |
+          bun="$GITHUB_WORKSPACE/node_modules/.bin/bun"
+          if [ -x "$bun" ] && [ "$("$bun" --version)" = "$(cat config/.bun-version)" ]; then
+            echo "$GITHUB_WORKSPACE/node_modules/.bin" >> "$GITHUB_PATH"
+            echo 'found=true' >> "$GITHUB_OUTPUT"
+          fi
       - name: Setup Bun for tests
+        if: steps.installed-bun.outputs.found != 'true'
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: config/.bun-version

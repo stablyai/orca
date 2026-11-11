@@ -5,7 +5,7 @@ import {
   removeFileAtomicallyIfUnchanged,
   writeFileAtomically,
   writeFileAtomicallyIfUnchanged
-} from './fs-utils'
+} from '../filesystem/atomic-file-publication'
 import { CodexRuntimeHomeLaunch } from './runtime-home-service-launch'
 import type { CodexSystemDefaultSnapshot } from './runtime-home-service-types'
 

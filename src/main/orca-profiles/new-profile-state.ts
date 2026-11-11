@@ -30,9 +30,19 @@ export function initializeNewOrcaProfileState(
     }
     const defaults = getDefaultPersistedState(homedir())
     const cohorts = new LoadedCohortMigrationOperations({ loadNeedsSave: false })
+    // Inherited consent belongs to an install that already existed, so its milestone cohort is not fresh.
     const initial = cohorts.migrateCohortSeeds(
       telemetry
-        ? { ...defaults, settings: { ...defaults.settings, telemetry } }
+        ? cohorts.migrateTelemetry(
+            {
+              ...defaults,
+              settings: {
+                ...defaults.settings,
+                telemetry: { ...telemetry, protectedMilestones: { installCohort: 'existing' } }
+              }
+            },
+            true
+          )
         : cohorts.migrateTelemetry(defaults, false),
       false
     )

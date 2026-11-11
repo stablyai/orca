@@ -4,7 +4,7 @@ import { useAppStore } from '@/store/index'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { TEST_REPO } from '@/store/repos/repo.test-fixture'
-import type * as ImageBlobPng from '@/lib/image-blob-png'
+import type * as ImageBlobPng from '@/lib/clipboard/images/image-blob-png'
 import { Editor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Image from '@tiptap/extension-image'
@@ -19,11 +19,11 @@ vi.mock('@/store/index', () => ({
     getState: vi.fn()
   }
 }))
-vi.mock('@/lib/connection-context', () => ({
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
   getConnectionId: () => null,
   getConnectionIdForFile: () => null
 }))
-vi.mock('@/lib/image-blob-png', async (original) => {
+vi.mock('@/lib/clipboard/images/image-blob-png', async (original) => {
   const actual = await original<typeof ImageBlobPng>()
   return { ...actual, convertImageBlobToPng: async (blob: Blob) => blob }
 })

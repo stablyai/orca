@@ -8,6 +8,11 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 
@@ -40,20 +45,26 @@ function renderEntry(props: Record<string, unknown> = {}): void {
   act(() => {
     root.render(
       <TooltipProvider>
-        <TabBarCreateEntry
-          worktreeId="wt"
-          groupId="g"
-          menuOpen
-          onOpenEntry={vi.fn().mockResolvedValue(undefined)}
-          {...props}
-        />
+        {/* Agent setup is a submenu, so results render inside the + menu as in the app. */}
+        <DropdownMenu defaultOpen modal={false}>
+          <DropdownMenuTrigger>New tab</DropdownMenuTrigger>
+          <DropdownMenuContent>
+            <TabBarCreateEntry
+              worktreeId="wt"
+              groupId="g"
+              menuOpen
+              onOpenEntry={vi.fn().mockResolvedValue(undefined)}
+              {...props}
+            />
+          </DropdownMenuContent>
+        </DropdownMenu>
       </TooltipProvider>
     )
   })
 }
 
 function setQuery(value: string): void {
-  const input = container.querySelector('input')!
+  const input = document.querySelector('input')!
   const nativeSetter = Object.getOwnPropertyDescriptor(
     window.HTMLInputElement.prototype,
     'value'
@@ -66,7 +77,7 @@ function setQuery(value: string): void {
 
 function submit(): void {
   act(() => {
-    container
+    document
       .querySelector('form')!
       .dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }))
   })
@@ -105,20 +116,20 @@ describe('TabBarCreateEntry search behavior', () => {
     submit()
 
     // Read-only rather than disabled so the pending input keeps keyboard focus.
-    expect(container.querySelector('input')?.disabled).toBe(false)
-    expect(container.querySelector('input')?.readOnly).toBe(true)
-    expect(container.querySelector('input')?.getAttribute('aria-busy')).toBe('true')
-    expect(container.querySelector<HTMLButtonElement>('[role="option"]')?.disabled).toBe(true)
-    expect(container.querySelector('[role="option"] .animate-spin')).not.toBeNull()
+    expect(document.querySelector('input')?.disabled).toBe(false)
+    expect(document.querySelector('input')?.readOnly).toBe(true)
+    expect(document.querySelector('input')?.getAttribute('aria-busy')).toBe('true')
+    expect(document.querySelector<HTMLButtonElement>('[role="option"]')?.disabled).toBe(true)
+    expect(document.querySelector('[role="option"] .animate-spin')).not.toBeNull()
 
     await act(async () => rejectOpen?.(new Error('Search failed safely.')))
 
-    const input = container.querySelector('input')!
+    const input = document.querySelector('input')!
     expect(input.readOnly).toBe(false)
     expect(input.getAttribute('aria-busy')).toBeNull()
     expect(input.getAttribute('aria-expanded')).toBe('false')
     expect(input.getAttribute('aria-errormessage')).toBe('tab-create-entry-error')
-    expect(container.querySelector('#tab-create-entry-error')?.textContent).toContain(
+    expect(document.querySelector('#tab-create-entry-error')?.textContent).toContain(
       'Search failed safely.'
     )
   })

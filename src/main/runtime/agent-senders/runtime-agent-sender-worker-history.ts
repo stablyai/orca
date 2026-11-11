@@ -6,7 +6,7 @@ import {
 import { getFollowUpDispatch } from '../orchestration/db/dispatch-context/worker-follow-up-lineage'
 import type { WorkerTerminalResourceRow } from '../orchestration/terminal-authority/release/worker-terminal-ownership'
 import { potentiallyLiveRemoteAttachmentSql } from '../orchestration/db/federation/remote-attachment-liveness'
-import { isStructuredWorkerHandle } from '../../../shared/structured-worker-handle'
+import { isStructuredWorkerHandle } from '../../../shared/orchestration/workers/structured-worker-handle'
 import type { OrchestrationDb } from '../orchestration/db/orchestration-db'
 import { tolerant } from './agent-sender-row-decoding'
 import {

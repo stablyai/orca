@@ -1,6 +1,7 @@
 import { lstatSync, rmSync, writeFileSync } from 'node:fs'
 import { lstat, rm, writeFile } from 'node:fs/promises'
-import { readHooksJsonWithRaw, type HooksConfig } from '../agent-hooks/installer-utils'
+import { readHooksJsonWithRaw } from '../agent-hooks/installation/configuration/hooks-json-read'
+import type { HooksConfig } from '../agent-hooks/installation/configuration/hook-config-schema'
 import { hasErrorCode } from '../daemon/endpoint/identity/daemon-process-inspection'
 import { isOrcaOwnedRemnant, removeManagedGrokHookEntries } from './grok-hook-config-cleanup'
 import { readGrokHookConfigSnapshot } from './grok-hook-config-file'

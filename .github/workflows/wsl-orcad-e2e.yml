@@ -27,7 +27,8 @@ on:
       - 'config/scripts/*orcad*'
       - 'package.json'
       - 'pnpm-lock.yaml'
-      - 'src/main/ssh/orcad-*'
+      - 'src/main/ssh/migration-source/**'
+      - 'src/main/persistence/migrating-orcad-catalog/**'
       - 'src/main/managed-server/**'
       - 'src/packages/process-host/**'
       # Unit tests never run in this lane; only the real distro test below does.

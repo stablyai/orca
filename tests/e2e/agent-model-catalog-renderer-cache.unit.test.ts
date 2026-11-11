@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { resolveHiddenProbeCwd } from '../../src/main/rate-limits/hidden-probe-cwd'
+import { resolveHiddenProbeCwd } from '../../src/main/lib/hidden-probe-cwd'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({ call: vi.fn(), cli: vi.fn() }))

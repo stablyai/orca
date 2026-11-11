@@ -29,3 +29,40 @@ export const BrowserNetworkExecutionHost = z.discriminatedUnion('kind', [
 ])
 
 export type BrowserNetworkExecutionHost = z.infer<typeof BrowserNetworkExecutionHost>
+
+export function browserNetworkExecutionHostKey(host: BrowserNetworkExecutionHost): string {
+  if (host.kind === 'native') {
+    return JSON.stringify(['native', host.runtimeId, host.revision])
+  }
+  if (host.kind === 'wsl') {
+    return JSON.stringify(['wsl', host.runtimeId, host.revision, host.distro])
+  }
+  return JSON.stringify(['ssh', host.targetId, host.providerEpoch, host.connectionGeneration])
+}
+
+export function parseBrowserNetworkExecutionHostKey(key: string): BrowserNetworkExecutionHost {
+  let tuple: unknown
+  try {
+    tuple = JSON.parse(key)
+  } catch {
+    throw new Error('browser_tunnel_execution_host_key_invalid')
+  }
+  const candidate =
+    Array.isArray(tuple) && tuple[0] === 'native' && tuple.length === 3
+      ? { kind: 'native', runtimeId: tuple[1], revision: tuple[2] }
+      : Array.isArray(tuple) && tuple[0] === 'wsl' && tuple.length === 4
+        ? { kind: 'wsl', runtimeId: tuple[1], revision: tuple[2], distro: tuple[3] }
+        : Array.isArray(tuple) && tuple[0] === 'ssh' && tuple.length === 4
+          ? {
+              kind: 'ssh',
+              targetId: tuple[1],
+              providerEpoch: tuple[2],
+              connectionGeneration: tuple[3]
+            }
+          : null
+  const parsed = BrowserNetworkExecutionHost.safeParse(candidate)
+  if (!parsed.success || browserNetworkExecutionHostKey(parsed.data) !== key) {
+    throw new Error('browser_tunnel_execution_host_key_invalid')
+  }
+  return parsed.data
+}

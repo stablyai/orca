@@ -11,10 +11,12 @@ import { showWorkspaceListChangedToast } from '../../worktree-list/listing/stale
 export function useConfirmedWorktreeDeleteTargets({
   worktreeIdentityData,
   lineageIdentityData,
+  preservationIdentityData,
   closeModal
 }: {
   worktreeIdentityData: unknown
   lineageIdentityData: unknown
+  preservationIdentityData: unknown
   closeModal: () => void
 }) {
   const worktreeDeleteIdentities = useMemo(
@@ -25,11 +27,21 @@ export function useConfirmedWorktreeDeleteTargets({
     () => readWorktreeDeleteIdentities(lineageIdentityData),
     [lineageIdentityData]
   )
+  const lineagePreserveIdentities = useMemo(
+    () => readWorktreeDeleteIdentities(preservationIdentityData ?? lineageIdentityData),
+    [preservationIdentityData, lineageIdentityData]
+  )
   const resolveConfirmedTargets = useCallback(
-    (identities: readonly WorktreeDeleteIdentity[], expectedCount: number) => {
+    (
+      identities: readonly WorktreeDeleteIdentity[],
+      expectedCount: number,
+      options: { includeMainWorktrees?: boolean } = {}
+    ) => {
       const state = useAppStore.getState()
-      const targets = resolveWorktreeBatchDeleteTargets(identities, (worktreeId, hostId) =>
-        getWorktreeOnHostFromState(state, worktreeId, hostId)
+      const targets = resolveWorktreeBatchDeleteTargets(
+        identities,
+        (worktreeId, hostId) => getWorktreeOnHostFromState(state, worktreeId, hostId),
+        options
       )
       if (!targets || targets.length !== expectedCount) {
         showWorkspaceListChangedToast()
@@ -41,5 +53,10 @@ export function useConfirmedWorktreeDeleteTargets({
     [closeModal]
   )
 
-  return { worktreeDeleteIdentities, lineageDeleteIdentities, resolveConfirmedTargets }
+  return {
+    worktreeDeleteIdentities,
+    lineageDeleteIdentities,
+    lineagePreserveIdentities,
+    resolveConfirmedTargets
+  }
 }

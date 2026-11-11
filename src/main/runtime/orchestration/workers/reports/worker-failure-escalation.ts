@@ -1,4 +1,4 @@
-import { buildOrchestrationTaskDisplayMetadata } from '../../../../../shared/orchestration-task-display'
+import { buildOrchestrationTaskDisplayMetadata } from '../../../../../shared/orchestration/orchestration-task-display'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import type { DispatchContextRow, MessageRow } from '../../db/orchestration-records'
 

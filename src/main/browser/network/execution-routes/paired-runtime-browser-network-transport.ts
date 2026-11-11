@@ -4,18 +4,19 @@ import {
 } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
 import type { BrowserNetworkExecutionHost } from '../../../../shared/browser/client-hosting/browser-network-execution-host'
 import type { PairedRuntimeConnection } from '../../../../shared/remote-runtime/pairing/paired-runtime-connection'
-import {
-  subscribeRemoteRuntimeRequest,
-  type RemoteRuntimeSubscription
-} from '../../../../shared/remote-runtime/remote-runtime-client'
-import type { RemoteRuntimeSubscriptionOptions } from '../../../../shared/remote-runtime/requests/remote-runtime-subscription-contract'
+import '../../../../shared/remote-runtime/requests/remote-runtime-request-socket'
+import { subscribeRemoteRuntimeTransport } from '../../../../shared/remote-runtime/requests/remote-runtime-subscription-transport'
+import type {
+  RemoteRuntimeTransportSubscription,
+  RemoteRuntimeSubscriptionOptions
+} from '../../../../shared/remote-runtime/requests/remote-runtime-subscription-contract'
 import { RemoteRuntimeClientError } from '../../../../shared/remote-runtime/remote-runtime-client-error'
 import {
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
   BROWSER_NETWORK_EXECUTION_HOSTS_RUNTIME_CAPABILITY,
   BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY,
   BROWSER_NETWORK_TUNNEL_WINDOW_V2_CAPABILITY
-} from '../../../../shared/browser-runtime-capabilities'
+} from '../../../../shared/browser/runtime/browser-runtime-capabilities'
 import { BrowserNetworkTunnelClient } from '../tunnels/browser-network-tunnel-client'
 import type { BrowserNetworkTunnelOutboundMemoryLease } from '../tunnels/browser-network-tunnel-outbound-memory-budget'
 import {
@@ -46,7 +47,7 @@ type PairedRuntimeBrowserNetworkTransportOptions = {
 export class PairedRuntimeBrowserNetworkTransport {
   private readonly options: PairedRuntimeBrowserNetworkTransportOptions
   private tunnelValue: BrowserNetworkTunnelClient | null = null
-  private subscription: RemoteRuntimeSubscription | null = null
+  private subscription: RemoteRuntimeTransportSubscription | null = null
   private startPromise: Promise<BrowserNetworkTunnelClient> | null = null
   private rejectReady: ((error: Error) => void) | null = null
   private closed = false
@@ -98,7 +99,7 @@ export class PairedRuntimeBrowserNetworkTransport {
     this.rejectReady = rejectReady
     let readyTimeout: ReturnType<typeof setTimeout> | null = null
     try {
-      const subscription = await subscribeRemoteRuntimeRequest(
+      const subscription = await subscribeRemoteRuntimeTransport(
         this.options.connection,
         'network.browserTunnel',
         {

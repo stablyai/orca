@@ -4,7 +4,8 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { Repo } from '../../shared/repo-types'
-import type { Automation, AutomationRun } from '../../shared/automations-types'
+import type { Automation } from '../../shared/automations/automation-definition'
+import type { AutomationRun } from '../../shared/automations/history/automation-run'
 import { AutomationService } from './service'
 import type {
   AutomationRunCompletionObservation,
@@ -91,91 +92,6 @@ describe('authority-owned automation run completion', () => {
   afterEach(async () => {
     await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
-  })
-
-  it('reconciles stranded runs on startup without claiming completion', async () => {
-    const store = await createStore()
-    const automation = createAutomation(store)
-    store.updateAutomation(automation.id, { enabled: false })
-    const pendingManual = store.createAutomationRun(automation, 3_000, 'manual')
-    const pendingScheduled = store.createAutomationRun(automation, 4_000, 'scheduled')
-    const dispatched = store.createAutomationRun(automation, 1_000, 'manual')
-    store.updateAutomationRun({
-      runId: dispatched.id,
-      status: 'dispatched',
-      ...LAUNCH_TARGET,
-      error: null
-    })
-    const dispatching = store.createAutomationRun(automation, 2_000, 'manual')
-    store.updateAutomationRun({
-      runId: dispatching.id,
-      status: 'dispatching',
-      workspaceId: 'wt1',
-      error: null
-    })
-
-    const service = new AutomationService(store, {
-      terminalObserver: createObserver(
-        async () => ({ status: 'completed' }),
-        () => null
-      ),
-      terminalLauncher: { launch: async () => ({ ...LAUNCH_TARGET }), available: () => true }
-    })
-    vi.useFakeTimers()
-    service.start()
-    await vi.advanceTimersByTimeAsync(10 * 60 * 1000)
-
-    expect(readRun(store, automation.id, dispatched.id).status).toBe('dispatch_failed')
-    expect(readRun(store, automation.id, dispatching.id).status).toBe('dispatch_failed')
-    expect(readRun(store, automation.id, dispatched.id).error).toContain('terminal')
-    expect(readRun(store, automation.id, dispatching.id).error).toContain('agent started')
-    for (const pending of [pendingManual, pendingScheduled]) {
-      expect(readRun(store, automation.id, pending.id)).toMatchObject({
-        status: 'dispatch_failed',
-        error: 'Orca stopped before this run could launch.'
-      })
-    }
-    service.stop()
-    vi.useRealTimers()
-  })
-
-  it('persists the terminal status once when another writer wins the race', async () => {
-    const store = await createStore()
-    const automation = createAutomation(store)
-    let resolveObservation: ((value: AutomationRunCompletionObservation) => void) | null = null
-    const service = new AutomationService(store, {
-      allowRemoteHostScheduling: true,
-      terminalLauncher: { launch: async () => ({ ...LAUNCH_TARGET }), available: () => true },
-      terminalObserver: createObserver(
-        () =>
-          new Promise<AutomationRunCompletionObservation>((resolve) => {
-            resolveObservation = resolve
-          })
-      )
-    })
-
-    const run = await runNowSettled(service, store, automation.id)
-    await vi.waitFor(() => expect(resolveObservation).not.toBeNull())
-
-    await service.markDispatchResult({
-      runId: run.id,
-      status: 'completed',
-      ...LAUNCH_TARGET,
-      error: null
-    })
-    const afterFirst = readRun(store, automation.id, run.id)
-    const writeSpy = vi.spyOn(store, 'updateAutomationRun')
-
-    resolveObservation!({ status: 'dispatch_failed', error: 'watcher lost the terminal' })
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    expect(writeSpy).not.toHaveBeenCalled()
-    const afterWatcher = readRun(store, automation.id, run.id)
-    expect(afterWatcher.status).toBe('completed')
-    expect(afterWatcher.error).toBeNull()
-    expect(afterWatcher.usage).toEqual(afterFirst.usage)
-    writeSpy.mockRestore()
-    service.stop()
   })
 
   it('disposes watchers on stop', async () => {

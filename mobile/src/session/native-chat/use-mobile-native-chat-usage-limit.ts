@@ -14,12 +14,12 @@ import type {
 } from '../../../../src/shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionOptionsResult } from '../../../../src/shared/agent-session/options/agent-session-options-result'
 import type { AgentJournalCursor } from '../../../../src/shared/agent-session/journal/agent-session-journal-identity'
-import { mobileStructuredSessionStatusFeed } from '../mobile-structured-session-status-feed'
-import { callAgentSession } from '../mobile-structured-agent-session-rpc'
+import { mobileStructuredSessionStatusFeed } from './agent-session/mobile-structured-session-status-feed'
+import { callAgentSession } from './agent-session/mobile-structured-agent-session-rpc'
 import type {
   MobileStructuredAgentSessionArgs,
   StructuredMobileSession
-} from '../mobile-structured-agent-session-contract'
+} from './agent-session/mobile-structured-agent-session-contract'
 
 /** The usage-limit row the person can act on: the latest cut while nothing is running or sending. */
 export type MobileNativeChatUsageLimit = {

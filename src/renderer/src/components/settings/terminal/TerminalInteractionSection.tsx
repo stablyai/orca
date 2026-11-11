@@ -59,14 +59,14 @@ export function TerminalInteractionSection({
   return (
     <SettingsGroup
       key="pane-interaction"
-      title={t('auto.components.settings.TerminalPane.45721f3e67', 'Terminal Interaction')}
+      title={t('auto.components.settings.TerminalPane.82e19f00f0', 'Terminal interaction')}
       description={t(
         'auto.components.settings.TerminalPane.96fe15def8',
         'Scrolling, mouse, and clipboard behavior for terminal panes.'
       )}
     >
       <SearchableSetting
-        title={t('auto.components.settings.TerminalPane.scrollSpeed.title', 'Scroll Speed')}
+        title={t('auto.components.settings.TerminalPane.scrollSpeed.f7b030e015', 'Scroll speed')}
         description={t(
           'auto.components.settings.TerminalPane.scrollSpeed.description',
           'Tune normal terminal scrollback, fast modifier scrolling, and full-screen TUI wheel speed.'
@@ -88,7 +88,7 @@ export function TerminalInteractionSection({
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="space-y-0.5">
               <Label>
-                {t('auto.components.settings.TerminalPane.scrollSpeed.title', 'Scroll Speed')}
+                {t('auto.components.settings.TerminalPane.scrollSpeed.f7b030e015', 'Scroll speed')}
               </Label>
               <p className="max-w-xl text-xs text-muted-foreground">
                 {t(
@@ -174,8 +174,8 @@ export function TerminalInteractionSection({
       <SearchableSetting {...getTerminalScrollOnUserInputSearchEntry()[0]}>
         <SettingsSwitchRow
           label={t(
-            'components.settings.TerminalInteraction.scrollOnUserInput',
-            'Scroll to Bottom on Input'
+            'components.settings.TerminalInteraction.4c690cdfc3',
+            'Scroll to bottom on input'
           )}
           description={t(
             'components.settings.TerminalInteraction.scrollOnUserInputDescription',
@@ -212,7 +212,7 @@ export function TerminalInteractionSection({
       ) : null}
 
       <SearchableSetting
-        title={t('auto.components.settings.TerminalPane.8eefeaa3da', 'Focus Follows Mouse')}
+        title={t('auto.components.settings.TerminalPane.8c07bc4d7a', 'Focus follows mouse')}
         description={t(
           'auto.components.settings.TerminalPane.9129b7e805',
           'Hovering a terminal pane activates it without needing to click.'
@@ -220,7 +220,7 @@ export function TerminalInteractionSection({
         keywords={['focus', 'follows', 'mouse', 'hover', 'pane', 'ghostty', 'active']}
       >
         <SettingsSwitchRow
-          label={t('auto.components.settings.TerminalPane.8eefeaa3da', 'Focus Follows Mouse')}
+          label={t('auto.components.settings.TerminalPane.8c07bc4d7a', 'Focus follows mouse')}
           description={t(
             'auto.components.settings.TerminalPane.9129b7e805',
             'Hovering a terminal pane activates it without needing to click.'
@@ -235,7 +235,7 @@ export function TerminalInteractionSection({
       </SearchableSetting>
 
       <SearchableSetting
-        title={t('auto.components.settings.TerminalPane.902f5dee1f', 'Copy on Select')}
+        title={t('auto.components.settings.TerminalPane.8f3e7bc91f', 'Copy on select')}
         description={t(
           'components.settings.TerminalInteraction.copyOnSelectDescription',
           'Automatically copy text you select in a terminal or chat to the clipboard.'
@@ -256,7 +256,7 @@ export function TerminalInteractionSection({
         ]}
       >
         <SettingsSwitchRow
-          label={t('auto.components.settings.TerminalPane.902f5dee1f', 'Copy on Select')}
+          label={t('auto.components.settings.TerminalPane.8f3e7bc91f', 'Copy on select')}
           description={t(
             'components.settings.TerminalInteraction.copyOnSelectDescription',
             'Automatically copy text you select in a terminal or chat to the clipboard.'
@@ -271,7 +271,7 @@ export function TerminalInteractionSection({
       </SearchableSetting>
 
       <SearchableSetting
-        title={t('components.settings.TerminalInteraction.copyTrimsGutter', 'Trim Gutter on Copy')}
+        title={t('components.settings.TerminalInteraction.4ed43d5060', 'Trim gutter on copy')}
         description={t(
           'components.settings.TerminalInteraction.copyTrimsGutterDescription',
           'Drop the left gutter agent output is painted behind, so copied text is not indented. Only the indent every selected line shares is removed.'
@@ -290,10 +290,7 @@ export function TerminalInteractionSection({
         ]}
       >
         <SettingsSwitchRow
-          label={t(
-            'components.settings.TerminalInteraction.copyTrimsGutter',
-            'Trim Gutter on Copy'
-          )}
+          label={t('components.settings.TerminalInteraction.4ed43d5060', 'Trim gutter on copy')}
           description={t(
             'components.settings.TerminalInteraction.copyTrimsGutterDescription',
             'Drop the left gutter agent output is painted behind, so copied text is not indented. Only the indent every selected line shares is removed.'
@@ -310,8 +307,8 @@ export function TerminalInteractionSection({
       <SearchableSetting
         id={OSC52_CLIPBOARD_SETTING_ID}
         title={t(
-          'auto.components.settings.TerminalPane.3338dcf8c1',
-          'Allow TUI Clipboard Writes (OSC 52)'
+          'auto.components.settings.TerminalPane.d54811df09',
+          'Allow TUI clipboard writes (OSC 52)'
         )}
         description={t(
           'auto.components.settings.TerminalPane.69c64a479c',
@@ -335,8 +332,8 @@ export function TerminalInteractionSection({
       >
         <SettingsSwitchRow
           label={t(
-            'auto.components.settings.TerminalPane.3338dcf8c1',
-            'Allow TUI Clipboard Writes (OSC 52)'
+            'auto.components.settings.TerminalPane.d54811df09',
+            'Allow TUI clipboard writes (OSC 52)'
           )}
           description={t(
             'auto.components.settings.TerminalPane.6e6480a7df',

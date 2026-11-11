@@ -3,7 +3,7 @@ import type { GlobalSettings } from '../../../../../../shared/global-settings-ty
 import {
   type GlobalWindowsRuntimeDefault,
   normalizeGlobalWindowsRuntimeDefault
-} from '../../../../../../shared/project-execution-runtime'
+} from '../../../../../../shared/execution-host/project-runtime-preference'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../ui/select'
 import { SettingsRow, SettingsSegmentedControl } from '../../form-controls/SettingsFormControls'
 import { translate } from '@/i18n/i18n'

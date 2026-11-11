@@ -1,7 +1,7 @@
 import { Pressable, Text, View } from 'react-native'
 import { getUiIntlLocale } from '../i18n/ui-intl-locale'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { mobileSessionReviewCommentStyles as styles } from '../session/mobile-session-review-comment-styles'
+import { mobileSessionReviewCommentStyles as styles } from '../source-control/review/mobile-session-review-comment-styles'
 import { colors, pressedStyle } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { DocumentEditDraftOffer } from './use-document-edit-draft'

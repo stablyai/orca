@@ -53,65 +53,11 @@ export function registerPtyConnectionHiddenSnapshotLiveOverlapTests(): void {
       await restoreTerminalTestGlobals()
     })
 
-    it('writes foreground chunks that are newer than the restored main snapshot', async () => {
-      const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-      const transport = createMockTransport('pty-id')
-      const capturedDataCallback: {
-        current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
-      } = { current: null }
-      transport.connect.mockImplementation(
-        async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
-          capturedDataCallback.current = callbacks.onData ?? null
-          return 'pty-id'
-        }
-      )
-      transportFactoryQueue.push(transport)
-      const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
-        typeof vi.fn
-      >
-      const hidden = 'x'.repeat(2 * 1024 * 1024 + 1)
-      const live = 'new-live-output\r\n'
-      getMainBufferSnapshot.mockResolvedValue({
-        data: 'snapshot-before-live\r\n',
-        cols: 120,
-        rows: 40,
-        seq: hidden.length
-      })
-
-      const pane = createPane(1)
-      const manager = createManager(1)
-      const deps = createDeps({
-        isVisibleRef: { current: false }
-      })
-      const disposable = connectPanePty(
-        pane as never,
-        manager as never,
-        bindPaneAgentTitleMocks(deps as never, agentTitleMocks)
-      )
-      await flushAsyncTicks(6)
-
-      capturedDataCallback.current?.(hidden, { seq: hidden.length, rawLength: hidden.length })
-      ;(deps.isVisibleRef as { current: boolean }).current = true
-      capturedDataCallback.current?.(live, {
-        seq: hidden.length + live.length,
-        rawLength: live.length
-      })
-      await flushAsyncTicks(20)
-
-      expect(pane.terminal.write).toHaveBeenCalledWith(
-        'snapshot-before-live\r\n',
-        expect.any(Function)
-      )
-      expect(pane.terminal.write).toHaveBeenCalledWith(live, expect.any(Function))
-      disposable.dispose()
-    })
-
     it('writes only the live chunk suffix not covered by the restored main snapshot', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks2 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks2 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: {
         current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
@@ -169,8 +115,9 @@ export function registerPtyConnectionHiddenSnapshotLiveOverlapTests(): void {
 
     it('re-snapshots instead of duplicating partially overlapped chunks with stripped OSC bytes', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks3 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks3 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: {
         current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null

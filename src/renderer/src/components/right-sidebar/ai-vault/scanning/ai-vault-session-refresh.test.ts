@@ -20,12 +20,32 @@ import {
   DEFAULT_AI_VAULT_SESSION_LIMIT,
   type AiVaultSessionLimit
 } from '../session-list/ai-vault-session-limit'
+import { resetAiVaultSessionResultCacheForTest } from './ai-vault-session-result-cache'
 
 const EMPTY_RESULT: AiVaultListResult = {
   sessions: [],
   issues: [],
   scannedAt: '2026-07-01T00:00:00.000Z'
 }
+
+// Stands in for IndexedDB, which happy-dom lacks; it outlives the in-memory cache like a restart does.
+const savedLists = vi.hoisted(() => {
+  const state: {
+    lists: Map<string, AiVaultListResult>
+    read: ((key: string) => Promise<AiVaultListResult | null>) | null
+  } = { lists: new Map(), read: null }
+  return state
+})
+vi.mock('./ai-vault-saved-session-lists', () => ({
+  readSavedAiVaultSessionList: async (key: string) => {
+    const result = await (savedLists.read?.(key) ?? savedLists.lists.get(key) ?? null)
+    return result && { limit: 250, result }
+  },
+  saveAiVaultSessionList: async (key: string, _limit: unknown, result: AiVaultListResult) => {
+    savedLists.lists.set(key, result)
+  },
+  forgetSavedAiVaultSession: async () => {}
+}))
 
 const listSessionsMock = vi.fn<(args: AiVaultListArgs) => Promise<AiVaultListResult>>()
 const cancelListSessionsMock = vi.fn<(args: { requestToken: string }) => Promise<void>>()
@@ -41,11 +61,13 @@ function HookProbe(props: {
   scopePaths: readonly string[]
   executionHostScope?: ExecutionHostScope
   sessionLimit?: AiVaultSessionLimit
+  scopeOnly?: boolean
 }): null {
   latest = useAiVaultSessionRefresh(
     props.scopePaths,
     props.executionHostScope ?? 'local',
-    props.sessionLimit ?? DEFAULT_AI_VAULT_SESSION_LIMIT
+    props.sessionLimit ?? DEFAULT_AI_VAULT_SESSION_LIMIT,
+    props.scopeOnly ?? false
   )
   return null
 }
@@ -53,28 +75,34 @@ function HookProbe(props: {
 async function renderHook(
   scopePaths: readonly string[] = [],
   executionHostScope: ExecutionHostScope = 'local',
-  sessionLimit: AiVaultSessionLimit = DEFAULT_AI_VAULT_SESSION_LIMIT
+  sessionLimit: AiVaultSessionLimit = DEFAULT_AI_VAULT_SESSION_LIMIT,
+  scopeOnly = false
 ): Promise<void> {
   const container = document.createElement('div')
   document.body.appendChild(container)
   const root = createRoot(container)
   roots.push(root)
   await act(async () => {
-    root.render(createElement(HookProbe, { scopePaths, executionHostScope, sessionLimit }))
+    root.render(
+      createElement(HookProbe, { scopePaths, executionHostScope, sessionLimit, scopeOnly })
+    )
   })
 }
 
 async function rerenderHook(
   scopePaths: readonly string[] = [],
   executionHostScope: ExecutionHostScope = 'local',
-  sessionLimit: AiVaultSessionLimit = DEFAULT_AI_VAULT_SESSION_LIMIT
+  sessionLimit: AiVaultSessionLimit = DEFAULT_AI_VAULT_SESSION_LIMIT,
+  scopeOnly = false
 ): Promise<void> {
   const root = roots.at(-1)
   if (!root) {
     throw new Error('renderHook must be called before rerenderHook')
   }
   await act(async () => {
-    root.render(createElement(HookProbe, { scopePaths, executionHostScope, sessionLimit }))
+    root.render(
+      createElement(HookProbe, { scopePaths, executionHostScope, sessionLimit, scopeOnly })
+    )
   })
 }
 
@@ -148,6 +176,8 @@ beforeEach(() => {
     }
   }
   resetAiVaultForcedRescanThrottleForTest()
+  savedLists.lists.clear()
+  savedLists.read = null
   useAppStore.setState(initialAppState, true)
 })
 
@@ -198,6 +228,50 @@ describe('useAiVaultSessionRefresh refocus behavior', () => {
     expect(latest?.scanResult?.scannedAt).toBe('2026-07-01T00:00:02.000Z')
   })
 
+  it('does not show Workspace-only rows under All while All loads or after it fails', async () => {
+    let failAll: (error: Error) => void = () => {}
+    listSessionsMock.mockImplementation((args) =>
+      args.scopeOnly
+        ? Promise.resolve({ ...EMPTY_RESULT, sessions: [makeVaultSession(1)] })
+        : new Promise((_resolve, reject) => {
+            failAll = reject
+          })
+    )
+    await renderHook(['/repo'], 'local', 250, true)
+    await flushMicrotasks()
+    expect(latest?.sessions.map((session) => session.id)).toEqual(['session-1'])
+
+    await rerenderHook(['/repo'], 'local', 250, false)
+    await flushMicrotasks()
+    expect(latest?.sessions).toEqual([])
+    expect(latest?.loading).toBe(true)
+
+    await act(async () => failAll(new Error('scan failed')))
+    await flushMicrotasks()
+    expect(latest?.sessions).toEqual([])
+  })
+
+  it('keeps Workspace rows while a deeper Workspace scan loads and after it fails', async () => {
+    let failDeeper: (error: Error) => void = () => {}
+    listSessionsMock.mockImplementation((args) =>
+      args.limit === 250
+        ? Promise.resolve({ ...EMPTY_RESULT, sessions: [makeVaultSession(1)] })
+        : new Promise((_resolve, reject) => {
+            failDeeper = reject
+          })
+    )
+    await renderHook(['/repo'], 'local', 250, true)
+    await flushMicrotasks()
+
+    await rerenderHook(['/repo'], 'local', 500, true)
+    await flushMicrotasks()
+    expect(latest?.sessions.map((session) => session.id)).toEqual(['session-1'])
+
+    await act(async () => failDeeper(new Error('scan failed')))
+    await flushMicrotasks()
+    expect(latest?.sessions.map((session) => session.id)).toEqual(['session-1'])
+  })
+
   it('replaces a stuck scan on manual Refresh without cancelling an automatic rescan', async () => {
     let resolveInitial: ((result: AiVaultListResult) => void) | null = null
     let resolveReplacement: ((result: AiVaultListResult) => void) | null = null
@@ -239,6 +313,70 @@ describe('useAiVaultSessionRefresh refocus behavior', () => {
       resolveReplacement?.({ ...EMPTY_RESULT, sessions: [makeVaultSession(2)] })
     })
     expect(latest?.sessions.map((session) => session.id)).toEqual(['session-2'])
+  })
+})
+
+function deferredList(): {
+  promise: Promise<AiVaultListResult>
+  resolve: (result: AiVaultListResult) => void
+} {
+  let resolve: (result: AiVaultListResult) => void = () => {}
+  const promise = new Promise<AiVaultListResult>((done) => (resolve = done))
+  return { promise, resolve }
+}
+
+async function restartWithScanPending(): Promise<(result: AiVaultListResult) => void> {
+  listSessionsMock.mockResolvedValueOnce({
+    ...EMPTY_RESULT,
+    sessions: [makeVaultSession(1), makeVaultSession(2)]
+  })
+  await renderHook(['/repo'], 'local', DEFAULT_AI_VAULT_SESSION_LIMIT, true)
+  await flushMicrotasks()
+  expect(latest?.sessions.map((session) => session.id)).toEqual(['session-1', 'session-2'])
+  roots.splice(0).forEach((root) => act(() => root.unmount()))
+  resetAiVaultSessionResultCacheForTest()
+  const scan = deferredList()
+  listSessionsMock.mockReturnValueOnce(scan.promise)
+  return scan.resolve
+}
+
+describe('useAiVaultSessionRefresh after a restart', () => {
+  it('shows the last list as refreshing until the rescan replaces it', async () => {
+    const resolveScan = await restartWithScanPending()
+
+    await renderHook(['/repo'], 'local', DEFAULT_AI_VAULT_SESSION_LIMIT, true)
+    await flushMicrotasks()
+
+    expect(latest?.sessions.map((session) => session.id)).toEqual(['session-1', 'session-2'])
+    expect(latest?.loading).toBe(true)
+    expect(latest?.scopePending).toBe(true)
+
+    await act(async () => {
+      resolveScan({ ...EMPTY_RESULT, sessions: [makeVaultSession(2)] })
+    })
+    await flushMicrotasks()
+
+    expect(latest?.sessions.map((session) => session.id)).toEqual(['session-2'])
+    expect(latest?.loading).toBe(false)
+  })
+
+  it('keeps the rescan when the saved list answers after it', async () => {
+    const resolveScan = await restartWithScanPending()
+    const read = deferredList()
+    savedLists.read = () => read.promise
+
+    await renderHook(['/repo'], 'local', DEFAULT_AI_VAULT_SESSION_LIMIT, true)
+    await act(async () => {
+      resolveScan({ ...EMPTY_RESULT, sessions: [makeVaultSession(3)] })
+    })
+    await flushMicrotasks()
+    await act(async () => {
+      read.resolve({ ...EMPTY_RESULT, sessions: [makeVaultSession(1)] })
+    })
+    await flushMicrotasks()
+
+    expect(latest?.sessions.map((session) => session.id)).toEqual(['session-3'])
+    expect(latest?.loading).toBe(false)
   })
 })
 

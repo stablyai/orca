@@ -26,7 +26,7 @@ import {
 } from '@/attention/agent-attention-notification-delivery'
 import { useAppStore } from '@/store'
 import { canonicalOrchestrationForRow } from '@/runtime/agent-orchestration/visible-agent-orchestration'
-import { isCoordinatorOnlyChatNews } from '../../../../../../shared/dispatched-worker-attention'
+import { isCoordinatorOnlyChatNews } from '../../../../../../shared/orchestration/workers/dispatched-worker-attention'
 import { getNotificationWorkspaceLabels } from '../../../../attention/notification-workspace-labels'
 import { createStructuredAttentionSurface } from './structured-attention-surface'
 import type { StructuredTab } from '../status/structured-agent-session-tabs'

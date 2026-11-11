@@ -2,7 +2,7 @@ import {
   formatOrcaSessionAddress,
   isOrcaSessionId
 } from '../../../../../shared/orca-session-address'
-import type { OrchestrationSessionAddressResult } from '../../../../../shared/orchestration-caller-status'
+import type { OrchestrationSessionAddressResult } from '../../../../../shared/orchestration/orchestration-caller-status'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { RuntimeRpcCallError } from '../../rpc/calls/runtime-rpc-result'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'

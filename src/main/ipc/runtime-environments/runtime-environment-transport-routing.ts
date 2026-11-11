@@ -17,10 +17,9 @@ import {
 } from './runtime-environment-managed-tunnel'
 import { recordRuntimeEnvironmentUsage } from '../../../shared/remote-runtime/host-store/runtime-environment-usage-record'
 import type * as Rpc from '../../../shared/runtime-rpc-envelope'
-import {
-  subscribeRemoteRuntimeRequest,
-  type RemoteRuntimeSubscription
-} from '../../../shared/remote-runtime/remote-runtime-client'
+import '../../../shared/remote-runtime/requests/remote-runtime-request-socket'
+import { subscribeRemoteRuntimeTransport } from '../../../shared/remote-runtime/requests/remote-runtime-subscription-transport'
+import type { RemoteRuntimeTransportSubscription } from '../../../shared/remote-runtime/requests/remote-runtime-subscription-contract'
 import { withRuntimeUnreachableHint } from './runtime-environment-unreachable-hint'
 import { decodeRuntimeEnvironmentSubscriptionEvents } from './runtime-environment-subscription-events'
 import { enqueueRuntimeCall } from './runtime-environment-call-queue'
@@ -192,7 +191,7 @@ export async function subscribeRuntimeEnvironment(
     assertCurrent: () => void
     observeFailure: (failure: RuntimeEnvironmentSetupFailure) => void
   }
-): Promise<RemoteRuntimeSubscription> {
+): Promise<RemoteRuntimeTransportSubscription> {
   const callbacks = {
     ...rawCallbacks,
     onEvent: decodeRuntimeEnvironmentSubscriptionEvents(method, rawCallbacks.onEvent, isCurrent)
@@ -259,7 +258,7 @@ export async function subscribeRuntimeEnvironment(
         signal
       })
     }
-    const subscription = await subscribeRemoteRuntimeRequest(
+    const subscription = await subscribeRemoteRuntimeTransport(
       pairedConnection,
       method,
       params,

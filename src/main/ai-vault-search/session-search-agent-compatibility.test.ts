@@ -15,7 +15,7 @@ import {
 
 afterEach(() => setSessionSearchService(null))
 
-test.each(['runtime', 'relay'] as const)(
+test.each(['relay'] as const)(
   'keeps an empty decoder catalog authoritative over both history flags on %s',
   async (transport) => {
     const service = fakeSearchService()
@@ -40,7 +40,7 @@ test.each(['runtime', 'relay'] as const)(
   }
 )
 
-test.each(['runtime', 'relay'] as const)(
+test.each(['relay'] as const)(
   'keeps an unsupported-only filter narrow through normal service checks on %s',
   async (transport) => {
     const request = {

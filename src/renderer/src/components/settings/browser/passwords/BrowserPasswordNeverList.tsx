@@ -2,7 +2,7 @@ import { ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { useTranslate } from '@/i18n/use-translate'
-import { browserPasswordHostOf } from './browser-password-import-toast'
+import { browserPasswordHostOf } from './browser-passwords-copy'
 
 /** Sites the user told the save offer to skip; removing one lets Orca offer again there. */
 export function BrowserPasswordNeverList({

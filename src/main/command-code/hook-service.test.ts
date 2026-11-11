@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { spawn } from 'node:child_process'
+import { spawnProcess } from '@orca/process-host'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
@@ -34,6 +35,80 @@ describe('CommandCodeHookService', () => {
   })
 
   const itPosix = process.platform === 'win32' ? it.skip : it
+
+  itPosix(
+    'stops identity recovery at a background ancestor even when the hook env is scrubbed',
+    async () => {
+      new CommandCodeHookService().install()
+      const requests: string[] = []
+      const server = createServer((req, res) => {
+        let body = ''
+        req.setEncoding('utf8')
+        req.on('data', (chunk) => (body += chunk))
+        req.on('end', () => {
+          requests.push(new URLSearchParams(body).get('paneKey') ?? '')
+          res.writeHead(204).end()
+        })
+      })
+      const ancestor = join(homeDir, 'ancestor.cjs')
+      writeFileSync(
+        ancestor,
+        `const { spawn } = require('node:child_process')
+const [hook, disabled, stage] = process.argv.slice(2)
+const env = { PATH: process.env.PATH, HOME: process.env.HOME }
+const child = stage === 'ancestor'
+  ? spawn(process.execPath, [__filename, hook, disabled, 'background'], {
+      env: { ...env, ORCA_AGENT_HOOKS_DISABLED: disabled },
+      stdio: ['ignore', 'inherit', 'inherit']
+    })
+  : spawn('/bin/sh', [hook], { env, stdio: ['pipe', 'inherit', 'inherit'] })
+if (stage !== 'ancestor') child.stdin.end(JSON.stringify({ hook_event_name: 'Stop' }))
+child.on('error', error => { throw error })
+child.on('close', code => { process.exitCode = code ?? 1 })
+`
+      )
+      try {
+        await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+        const address = server.address() as AddressInfo
+        const run = async (disabled: string) => {
+          const child = spawnProcess({
+            program: process.execPath,
+            args: [
+              ancestor,
+              join(homeDir, '.orca', 'agent-hooks', 'command-code-hook.sh'),
+              disabled,
+              'ancestor'
+            ],
+            env: {
+              ...process.env,
+              HOME: homeDir,
+              ORCA_AGENT_HOOKS_DISABLED: '0',
+              ORCA_AGENT_HOOK_PORT: String(address.port),
+              ORCA_AGENT_HOOK_TOKEN: 'test-token',
+              ORCA_PANE_KEY: 'recovered-tab:leaf',
+              ORCA_TAB_ID: 'recovered-tab',
+              ORCA_WORKTREE_ID: 'folder-workspace',
+              ORCA_AGENT_LAUNCH_TOKEN: 'parent-launch'
+            },
+            stdio: ['ignore', 'ignore', 'pipe']
+          })
+          let stderr = ''
+          child.stderr?.on('data', (chunk) => (stderr += chunk))
+          const code = await new Promise<number | null>((resolve, reject) => {
+            child.on('error', reject)
+            child.on('close', resolve)
+          })
+          expect(code, stderr).toBe(0)
+        }
+        await run('0')
+        expect(requests).toEqual(['recovered-tab:leaf'])
+        await run('1')
+        expect(requests).toEqual(['recovered-tab:leaf'])
+      } finally {
+        await new Promise<void>((resolve) => server.close(() => resolve()))
+      }
+    }
+  )
 
   itPosix('does not let stale endpoint files clobber recovered connection fields', async () => {
     new CommandCodeHookService().install()

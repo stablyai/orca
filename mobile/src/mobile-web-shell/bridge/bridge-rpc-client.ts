@@ -1,5 +1,8 @@
-import type { RpcClient, SendRequestOptions } from '../../transport/rpc-client'
-import type { ConnectionState, RpcResponse, RpcSuccess } from '../../transport/types'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
+import { emitPageAppInactive } from './bridge-app-inactive'
+import type { SendRequestOptions } from '../../transport/rpc/unvalidated-rpc-request-port'
+import type { ConnectionState } from '../../transport/connection/connection-state'
+import type { RpcResponse, RpcSuccess } from '../../transport/rpc/rpc-wire-types'
 import {
   BRIDGE_MAX_SUBSCRIPTIONS,
   bridgePendingRequestCap,
@@ -196,6 +199,9 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     acceptState: (connection) => acceptState(cache.apply(connection)),
     acceptConnectionPath: (connection) => acceptState(cache.applyPath(connection)),
     acceptBack: back.press,
+    // Only a page booted before its screen, with no init yet, is parked; the shell answers its ready on adoption.
+    acceptParked: handshake.stop,
+    acceptAppInactive: emitPageAppInactive,
     acceptTerminalKey: (key, inputOwner) => terminalKeys.accept(key, inputOwner)
   })
 

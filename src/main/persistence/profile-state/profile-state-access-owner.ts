@@ -17,7 +17,8 @@ import {
   bestEffortFsyncDirectorySync,
   fsyncFileSync
 } from '../../../shared/secure-storage/secure-file'
-import { renameFileWithWindowsRetry } from '../../codex-accounts/fs-utils'
+import '../../filesystem/atomic-file-publication'
+import { renameFileWithWindowsRetry } from '../../../shared/windows-retry-file-operations'
 import {
   START_TIME_TOLERANCE_MS,
   startTimesWithinTolerance

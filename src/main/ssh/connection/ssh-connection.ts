@@ -7,7 +7,7 @@ import {
   writeSshFile,
   type SshFileTransferHost,
   type SshRemoteFileOptions
-} from './ssh-connection-file-transfers'
+} from '../file-transfer/ssh-connection-file-transfers'
 import type { ChildProcess } from 'node:child_process'
 import type {
   Client as SshClient,
@@ -28,31 +28,34 @@ import {
   shouldUseSystemSshLoopbackRoute,
   startSystemSshLoopbackRoute,
   type SystemSshLoopbackRoute
-} from '../system-transport/system-ssh-loopback-route'
-import { removeControlSocketPath } from '../ssh-control-socket'
+} from '../system-transport/forwarding/system-ssh-loopback-route'
+import { removeControlSocketPath } from '../system-transport/ssh-control-socket'
 import { INITIAL_RETRY_ATTEMPTS, INITIAL_RETRY_DELAY_MS, sleep } from './ssh-connection-timing'
 import {
   isTransientError,
   isAuthError,
   isPassphraseError,
   isDefiniteSystemSshHostFailure
-} from '../ssh-reconnect-error-classification'
+} from './reconnect/ssh-reconnect-error-classification'
 import { buildConnectConfig } from './ssh-connect-config'
-import { withSkippedIdentityFileDetail, type SkippedIdentityFiles } from '../ssh-auth-resolution'
+import {
+  withSkippedIdentityFileDetail,
+  type SkippedIdentityFiles
+} from '../authentication/ssh-auth-resolution'
 import { createSshOperationAbortError, type SshExecOptions } from './ssh-exec-options'
 import type { SshConnectionCallbacks, SshCredentialKind } from './ssh-connection-callbacks'
-import { collectKeyboardInteractiveResponses } from '../ssh-keyboard-interactive'
-import { resolveEffectiveProxy, spawnProxyCommand } from '../ssh-proxy-command'
+import { collectKeyboardInteractiveResponses } from '../authentication/ssh-keyboard-interactive'
+import { resolveEffectiveProxy, spawnProxyCommand } from '../system-transport/ssh-proxy-command'
 import { resolveWithSshG, type SshResolvedConfig } from '../config/ssh-g-config-resolution'
 import {
   createCancelledConnectAttemptError,
   isCancelledConnectAttemptError
-} from '../ssh-connect-attempt-cancellation'
+} from './reconnect/ssh-connect-attempt-cancellation'
 import { mayUserSshConfigClaimAlias } from '../config/ssh-config-alias-claim'
 import {
   requiresSystemSshForSecurityKey,
   shouldUseSystemSshTransport
-} from '../ssh-transport-selection'
+} from '../system-transport/ssh-transport-selection'
 import type { FileUploadSession } from '../../providers/filesystem-provider-contract'
 import {
   openSshExecChannel,
@@ -60,22 +63,22 @@ import {
   openSshShellChannel,
   spawnTrackedSystemSshChannel,
   type SshSessionChannelHost
-} from './ssh-connection-session-channels'
+} from './channels/ssh-connection-session-channels'
 import {
   SshConnectionReconnector,
   type SshConnectionReconnectHost
-} from './ssh-connection-reconnect'
+} from './reconnect/ssh-connection-reconnect'
 import { cloneResolvedConfig, waitForSystemSshProbe } from './ssh-system-ssh-probe'
 import {
   installSsh2HostKeyVerification,
   readHostKeyTrustSources,
   type HostKeyTrustSources
-} from './ssh2-host-key-verification'
-import { runSsh2Handshake } from './ssh2-handshake'
+} from '../host-keys/ssh2-host-key-verification'
+import { runSsh2Handshake } from '../authentication/ssh2-handshake'
 import {
   recoverFailedSsh2Attempt,
   type Ssh2CredentialFallbackHost
-} from './ssh2-credential-fallback'
+} from '../authentication/ssh2-credential-fallback'
 
 /** The sign-in a connection holds in memory, handed to the connection that replaces it. */
 export type SshCachedCredentials = { password: string | null; passphrase: string | null }

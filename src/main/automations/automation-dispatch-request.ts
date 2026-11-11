@@ -1,10 +1,10 @@
 import { failedPrecheckResult, runAutomationPrecheck } from './precheck-runner'
 import { isDeepStrictEqual } from 'node:util'
+import type { Automation } from '../../shared/automations/automation-definition'
 import type {
-  Automation,
   AutomationRun,
   AutomationPrecheckResult
-} from '../../shared/automations-types'
+} from '../../shared/automations/history/automation-run'
 import { getRepoExecutionHostId } from '../../shared/execution-host'
 import type { Store } from '../persistence/loading-store/store'
 import type { AutomationRunWriter } from './automation-run-writer'
@@ -16,7 +16,7 @@ import { describeScheduledRefusal, describeStoppedWslDistroRefusal } from './dis
 import {
   automationRunFailure,
   type AutomationRunFailure
-} from '../../shared/automation-run-failure-copy'
+} from '../../shared/automations/history/automation-run-failure-copy'
 import { isOrcadFencedAutomation, ORCAD_FENCED_AUTOMATION } from './orcad-fenced-automation'
 import { AutomationDispatchCancelledError } from './automation-dispatch-cancelled-error'
 

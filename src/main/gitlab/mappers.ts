@@ -1,7 +1,4 @@
-import {
-  mapGitLabPipelineJobStatusToCheckStatus,
-  mapGitLabPipelineJobStatusToConclusion
-} from '../../shared/source-control/checks/gitlab/gitlab-pipeline-checks'
+import { gitLabPipelineJobOutcome } from '../../shared/source-control/checks/gitlab/gitlab-pipeline-checks'
 import type { CheckStatus } from '../../shared/github/pull-request-types'
 import type { GitLabIssueInfo, GitLabWorkItem, MRInfo, MRState } from '../../shared/gitlab-types'
 
@@ -148,7 +145,12 @@ function deriveMergeStateStatus(
 }
 
 export function derivePipelineStatus(
-  rollup: { status?: string }[] | { status?: string } | string | null | undefined
+  rollup:
+    | { status?: string; allowFailure?: boolean }[]
+    | { status?: string }
+    | string
+    | null
+    | undefined
 ): CheckStatus {
   if (!rollup) {
     return 'neutral'
@@ -160,15 +162,7 @@ export function derivePipelineStatus(
     return classifyPipelineString(rollup.status ?? '')
   }
   // Share rollup rules so pipeline cards cannot diverge from Checks rows.
-  const { state } = summarizeProviderChecks(
-    rollup.map((job) => {
-      const s = job.status?.toLowerCase() ?? ''
-      return {
-        status: mapGitLabPipelineJobStatusToCheckStatus(s),
-        conclusion: mapGitLabPipelineJobStatusToConclusion(s)
-      }
-    })
-  )
+  const { state } = summarizeProviderChecks(rollup.map(gitLabPipelineJobOutcome))
   // The public status type uses neutral for no check results.
   return state === 'none' ? 'neutral' : state
 }

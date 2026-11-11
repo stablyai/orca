@@ -1,93 +1,52 @@
-import { createElement } from 'react'
-import { QueryClientProvider } from '@tanstack/react-query'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { afterEach, expect, it } from 'vitest'
-import { settleQueryNotifications } from '../test-support/rpc-recording/hook-mount'
-import { stubRpcClient } from '../transport/rpc-client-test-stub'
-import type { RpcResponse } from '../transport/types'
-import { useHostEventRouter } from './host-event-router'
-import { defineHostQuery, useHostQuery } from './host-query'
+import { QueryObserver } from '@tanstack/react-query'
+import { expect, it, vi } from 'vitest'
+import { stubRpcClient } from '../transport/rpc/rpc-client-test-stub'
+import { retainHostEventRouter } from './host-event-router'
 import { createOrcaQueryClient } from './orca-query-client'
 
-const NO_INPUT = {}
+vi.mock('react-native', () => ({ AppState: {}, Platform: { OS: 'ios' } }))
 
-const rowsQuery = defineHostQuery({
-  family: 'test.rows',
-  fetch: async (client, _target, _input: typeof NO_INPUT) => {
-    const reply = await client.sendRequest('test.rows')
-    return reply.ok ? String(reply.result) : 'refused'
-  },
-  signal: { events: ['worktreesChanged'] }
-})
+const KEY = ['orca', 'host-1', 'test.rows', { exec: 'local' }, {}] as const
 
-let renderer: ReactTestRenderer | null = null
-
-afterEach(() => {
-  act(() => renderer?.unmount())
-  renderer = null
-})
-
-function desktop() {
-  let emit: (event: unknown) => void = () => {}
-  const replies: ((rows: string) => void)[] = []
-  const stateListeners = new Set<(state: 'connected' | 'disconnected') => void>()
+it('reads again after a read that was already out when the event stream reopened', async () => {
+  // One client-events wire at a time; each subscribe hands the test its frames.
+  const wires: ((payload: unknown) => void)[] = []
   const client = stubRpcClient({
     getLastConnectedAt: () => 1,
-    onStateChange: (listener) => {
-      stateListeners.add(listener)
-      return () => stateListeners.delete(listener)
-    },
     subscribe: (_method, _params, onData) => {
-      emit = onData
+      wires.push(onData)
       return () => {}
-    },
-    sendRequest: () =>
-      new Promise<RpcResponse>((resolve) => {
-        replies.push((rows) => resolve({ id: 'r', ok: true, result: rows }))
-      })
+    }
   })
-  return {
-    client,
-    emit: (event: unknown) => emit(event),
-    replies,
-    setState: (state: 'connected' | 'disconnected') => stateListeners.forEach((l) => l(state))
-  }
-}
+  let desktopRows = 1
+  const replies: ((rows: number) => void)[] = []
+  const queryClient = createOrcaQueryClient()
+  const router = retainHostEventRouter(queryClient, 'host-1', client)
+  wires[0]?.({ type: 'ready', subscriptionId: 'events-1' })
 
-async function mountList(host: ReturnType<typeof desktop>): Promise<() => string | undefined> {
-  let rows: string | undefined
-  function List(): null {
-    useHostEventRouter('host-1', host.client)
-    rows = useHostQuery(
-      rowsQuery,
-      { hostId: 'host-1', client: host.client },
-      { exec: 'local' },
-      NO_INPUT
-    ).data
-    return null
-  }
-  await act(async () => {
-    renderer = create(
-      createElement(QueryClientProvider, { client: createOrcaQueryClient() }, createElement(List))
-    )
+  const observer = new QueryObserver(queryClient, {
+    queryKey: KEY,
+    queryFn: () => new Promise<number>((resolve) => replies.push(resolve)),
+    meta: { signal: { events: ['worktreesChanged'] } }
   })
-  await settleQueryNotifications()
-  return () => rows
-}
+  const stop = observer.subscribe(() => {})
+  await vi.waitFor(() => expect(replies).toHaveLength(1))
+  replies[0]?.(desktopRows)
+  await vi.waitFor(() => expect(observer.getCurrentResult().data).toBe(1))
 
-it('reads again when the desktop reports a change during a read, ending on the rows after it', async () => {
-  const host = desktop()
-  const rows = await mountList(host)
-  host.emit({ type: 'ready', subscriptionId: 'events-1' })
-  expect(host.replies).toHaveLength(1)
+  // A read goes out; the stream drops and reopens on the same connection while it is out.
+  void observer.refetch()
+  await vi.waitFor(() => expect(replies).toHaveLength(2))
+  wires[0]?.({ type: 'end' })
+  desktopRows = 2
+  await vi.waitFor(() => expect(wires).toHaveLength(2))
+  wires[1]?.({ type: 'ready', subscriptionId: 'events-2' })
+  // The read sent before the gap answers with what the desktop had then.
+  replies[1]?.(1)
 
-  // The read already out was sent before this change, so its rows may not include it.
-  host.emit({ type: 'worktreesChanged', repoId: 'repo-1', sortOrderOnly: false })
-  await act(async () => host.replies[0]('before'))
-  await settleQueryNotifications()
-  expect(host.replies).toHaveLength(2)
-
-  await act(async () => host.replies[1]('after'))
-  await settleQueryNotifications()
-  expect(rows()).toBe('after')
+  await vi.waitFor(() => expect(replies).toHaveLength(3))
+  replies[2]?.(desktopRows)
+  await vi.waitFor(() => expect(observer.getCurrentResult().data).toBe(2))
+  stop()
+  router.release()
 })

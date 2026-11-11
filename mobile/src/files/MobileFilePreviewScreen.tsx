@@ -8,18 +8,18 @@ import { translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
 import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
-import { getWorktreeLabel } from '../session/worktree-label'
+import { getWorktreeLabel } from '../worktree/worktree-label'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { useForceReconnect } from '../transport/host-client-hooks'
-import { useWorkspaceClient } from '../transport/use-workspace-client'
-import { connectionRetryAction } from '../transport/connection-retry-action'
+import { useForceReconnect } from '../transport/connection/host-client-hooks'
+import { useWorkspaceClient } from '../worktree/use-workspace-client'
+import { connectionRetryAction } from '../transport/connection/connection-retry-action'
 import {
   loadMobileFilePreview,
   previewError,
   saveMobileTerminalArtifactPreview,
   type MobileFilePreviewResult
 } from './mobile-file-preview-request'
-import { ConfirmModal } from '../components/ConfirmModal'
+import { MobileFilePreviewDiscardModal } from './MobileFilePreviewDiscardModal'
 import { NavBar } from '../components/nav-bar/NavBar'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import { MobileFilePreviewBody } from './MobileFilePreviewBody'
@@ -118,9 +118,12 @@ function MobileFilePreviewDocument({ route }: Props) {
     [previewParams]
   )
 
-  useEffect(() => {
+  // Re-seed from the route during render so a route change never paints the previous source.
+  const [seededRouteSource, setSeededRouteSource] = useState(routePreviewSource)
+  if (seededRouteSource !== routePreviewSource) {
+    setSeededRouteSource(routePreviewSource)
     setPreviewSource(routePreviewSource)
-  }, [routePreviewSource])
+  }
 
   useEffect(() => {
     previewSourceKeyRef.current = previewSourceKey
@@ -395,20 +398,9 @@ function MobileFilePreviewDocument({ route }: Props) {
         live={draftContent}
         onRestore={setDraftContent}
       />
-      <ConfirmModal
+      <MobileFilePreviewDiscardModal
         visible={confirmingDiscard}
-        title={t('files.filePreviewScreen.discardTitle', 'Discard changes?')}
-        message={
-          saving
-            ? t(
-                'files.filePreviewScreen.discardMessageSaving',
-                'The save in progress may not finish. Unsaved edits will be lost.'
-              )
-            : t('files.filePreviewScreen.discardMessage', 'Unsaved edits will be lost.')
-        }
-        confirmLabel={t('files.filePreviewScreen.discard', 'Discard')}
-        cancelLabel={t('files.filePreviewScreen.stay', 'Stay')}
-        destructive
+        saving={saving}
         onConfirm={discard}
         onCancel={stay}
       />

@@ -104,7 +104,7 @@ export async function readBridgeWindowCaps() {
 // Read upload base64 chunk cap/product from source; copied resize budget could pass after upload path changes.
 export async function readClipboardImageUploadChunkBase64Chars() {
   const source = await readFile(
-    join(projectDir, 'mobile/src/session/mobile-clipboard-image-upload-chunk.ts'),
+    join(projectDir, 'mobile/src/files/attachments/mobile-clipboard-image-upload-chunk.ts'),
     'utf8'
   )
   const match = /MOBILE_CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS = ([0-9*\s]+)/.exec(source)

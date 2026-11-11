@@ -4,22 +4,22 @@ import { parseExecutionHostId } from '../../../../shared/execution-host'
 import type { AutomationService } from '../../../automations/service'
 import type {
   Automation,
-  AutomationRun,
   AutomationUpdateInput
-} from '../../../../shared/automations-types'
+} from '../../../../shared/automations/automation-definition'
+import type { AutomationRun } from '../../../../shared/automations/history/automation-run'
 import type { Repo } from '../../../../shared/repo-types'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import type {
   AutomationListParams,
   AutomationListResult
-} from '../../../../shared/automation-list-scope'
+} from '../../../../shared/automations/ownership/automation-list-scope'
 import type {
   AutomationOwnerFenceOperation,
   AutomationOwnerPrecondition,
   AutomationDestination
-} from '../../../../shared/automation-owner-precondition'
+} from '../../../../shared/automations/ownership/automation-owner-precondition'
 import { runAutomationNowFenced } from '../../../automations/refused-manual-run'
-import { paginateAutomationRuns } from '../../../../shared/automation-run-cursor'
+import { paginateAutomationRuns } from '../../../../shared/automations/history/automation-run-cursor'
 import { hasRuntimeAutomationUpdateValue } from './runtime-automation-update-value'
 import {
   assertAutomationRunContextMatchesTarget,

@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { RpcClient } from '../../../transport/rpc-client'
+import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 import {
   GenerationScopedRequestOwner,
   type RequestScope
-} from '../../../transport/generation-scoped-request-owner'
+} from '../../../query/generation-scoped-request-owner'
 import {
   nativeChatFileInventoryRead,
   nativeChatFileSearchRead
-} from '../../mobile-session-read-operations'
+} from '../../../files/native-chat-file-search-operations'
 import {
   getPreparedQuickOpenFiles,
   rankQuickOpenFiles

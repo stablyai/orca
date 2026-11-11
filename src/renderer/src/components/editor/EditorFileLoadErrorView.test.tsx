@@ -17,7 +17,7 @@ vi.mock('../wsl-host-stopped/use-stopped-wsl-host', () => ({
   useStoppedWslHost: (worktreeId: string | undefined) =>
     worktreeId === 'wt-wsl' ? mocks.stopped.current : null
 }))
-vi.mock('@/lib/wsl-host-user-start', () => ({
+vi.mock('@/runtime/hosts/wsl/wsl-host-user-start', () => ({
   startWslHostAndReloadProjects: mocks.start
 }))
 

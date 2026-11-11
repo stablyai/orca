@@ -1,4 +1,4 @@
-import type { HostAccountLaunchEnv } from '../../../../shared/host-account-launch-env'
+import type { HostAccountLaunchEnv } from '../../../../shared/agent-launch/startup/host-account-launch-env'
 
 /** Refreshes a host's selected Claude account folder before a Claude launch it starts. */
 export type HostClaudeProfileRefresh = (launchEnv: HostAccountLaunchEnv) => Promise<void>

@@ -3,9 +3,10 @@
 # This is a RATCHET: counts may only go DOWN. Layout moves to one runtime owner; do not add
 # writers. Prune after removing writers: pnpm check:layout-writer-ratchets --prune
 1 src/main/ipc/pty/ipc/leaf-move.ts
+1 src/main/ipc/pty/pane/fresh-pane-binding.ts
 1 src/main/ipc/pty/pane/pane-owner-replacement.ts
 3 src/main/ipc/pty/pane/stable-owner.ts
-2 src/main/ipc/pty/spawn-commit-binding.ts
+1 src/main/ipc/pty/spawn-commit-binding.ts
 1 src/main/ipc/renderer-shutdown-checkpoint.ts
 1 src/main/ipc/runtime-environments/runtime-environment-removal-cleanup.ts
 1 src/main/ipc/runtime-environments/runtime-environment-session-reconcile.ts
@@ -29,10 +30,10 @@
 3 src/main/persistence/loading-store/state-serialization-secret-handling.ts
 4 src/main/persistence/loading-store/workspace-session-snapshot-publication.ts
 4 src/main/persistence/loading-store/workspace-session-terminal-binding-replay.ts
-2 src/main/persistence/loading-store/workspace-session-write-listeners.ts
 2 src/main/persistence/migrating-orcad-catalog/orcad-destination-client-state.ts
 1 src/main/persistence/migrating-orcad-catalog/orcad-destination-workspace-session.ts
 3 src/main/persistence/migrating-orcad-catalog/orcad-dormant-state-records.ts
+1 src/main/persistence/migrating-orcad-catalog/orcad-migration-source-retention.ts
 2 src/main/persistence/migrating-orcad-catalog/orcad-source-client-subtraction.ts
 1 src/main/persistence/migrating-orcad-catalog/orcad-source-dormant-state.ts
 1 src/main/persistence/migrating-orcad-catalog/orcad-source-scrollback-state.ts
@@ -50,14 +51,15 @@
 1 src/main/persistence/tracking-repos/project-group-operations.ts
 4 src/main/persistence/tracking-repos/repo-worktree-pruning.ts
 3 src/main/persistence/tracking-repos/worktree-identity-migration.ts
+2 src/main/persistence/workspace-session-domains.ts
 2 src/main/pty/scrollback/terminal-scrollback-snapshots.ts
 1 src/main/runtime/browser/client-pages/client-hosted-browser-page-persistence.ts
 1 src/main/runtime/client/runtime-client-state.ts
-1 src/main/runtime/session-tabs/headless-editor-tabs.ts
 4 src/main/runtime/orchestration/terminal-authority/runtime-legacy-worker-terminal-recovery-persistence.ts
 2 src/main/runtime/session-graph/session-graph-promotion.ts
 2 src/main/runtime/session-lifecycle/projection/apply-mobile-session-tab-navigation.ts
 2 src/main/runtime/session-lifecycle/projection/build-headless-mobile-session-browser-tabs.ts
+1 src/main/runtime/session-tabs/headless-editor-tabs.ts
 2 src/main/runtime/session-tabs/headless-tab-group-moves.ts
 6 src/main/runtime/session-tabs/headless-tab-properties.ts
 2 src/main/runtime/session-tabs/headless-terminal-tab-titles.ts
@@ -72,5 +74,4 @@
 3 src/main/runtime/terminal/surface/mobile-session-layout-projection.ts
 1 src/main/runtime/workspaces/session-hosts/get-runtime-id.ts
 1 src/main/runtime/workspaces/session-hosts/runtime-workspace-session-controller.ts
-1 src/main/ssh/orcad-migration-source-retention.ts
 1 src/main/ssh/targets/ssh-target-id-migration.ts

@@ -20,7 +20,10 @@ import { buildSubagentChildRows } from '@/components/sidebar/workspace-card/acti
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { CompactAgentRow } from '@/components/sidebar/workspace-card/activity/worktree-card-compact-agent-row'
 import FullAgentRow from '@/components/dashboard/DashboardAgentRow'
-import { opensClaudeParentConversation, viewClaudeAgentFromRow } from '@/lib/claude-agent-row-view'
+import {
+  opensClaudeParentConversation,
+  viewClaudeAgentFromRow
+} from '@/lib/agent-session/navigation/claude-agent-row-view'
 import type * as WorktreeRuntimeOwner from '@/lib/workspace/ownership/worktree-runtime-owner'
 import '@/store/slices/worktrees/worktree.test-fixture'
 import '@/store/repos/repo.test-fixture'
@@ -33,8 +36,12 @@ vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorktree: vi.fn(),
   activateAndRevealWorkspace: vi.fn()
 }))
-vi.mock('@/lib/activate-tab-and-focus-pane', () => ({ activateTabAndFocusPane: vi.fn() }))
-vi.mock('@/lib/terminal-tab-owner-activation', () => ({ activateTerminalTabOnOwner: vi.fn() }))
+vi.mock('@/lib/workspace/tabs/activate-tab-and-focus-pane', () => ({
+  activateTabAndFocusPane: vi.fn()
+}))
+vi.mock('@/lib/workspace/tabs/terminal-tab-owner-activation', () => ({
+  activateTerminalTabOnOwner: vi.fn()
+}))
 vi.mock('@/lib/agent-session/structured-agent-session-tab-activation', () => ({
   activateStructuredAgentSessionTab: vi.fn()
 }))

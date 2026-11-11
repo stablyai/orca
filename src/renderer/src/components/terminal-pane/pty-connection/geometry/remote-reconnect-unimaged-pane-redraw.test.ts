@@ -31,7 +31,7 @@ vi.mock('@/runtime/sync-runtime-graph/graph-sync-scheduler', () => ({ scheduleRu
 vi.mock('@/store/index', () => ({
   useAppStore: { getState: () => mockStoreState, subscribe: () => () => {} }
 }))
-vi.mock('@/lib/agent-status', async (importOriginal) => {
+vi.mock('@/lib/agent-status/aggregation/worktree-agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } =
     await import('../test-fixtures/pty-connection-test-environment')
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
@@ -93,7 +93,9 @@ async function connectVisibleRemotePane(
   opts: { visible?: boolean } = {}
 ): Promise<ReconnectedPane> {
   const { connectPanePty } = await import('../connect-pane-pty')
-  const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+  const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>(
+    '@/lib/agent-status/aggregation/worktree-agent-status'
+  )
   const transport = createMockTransport(REMOTE_PTY_ID)
   transport.serializeBuffer = vi.fn()
   transport.serializeBufferOutcome = vi.fn(

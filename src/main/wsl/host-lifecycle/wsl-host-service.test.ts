@@ -13,7 +13,7 @@ import { getWslHostDeploymentStorePath } from '../../../shared/remote-runtime/ho
 import { getPreferredPairingOffer } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { WslHostStatus } from '../../../shared/wsl-host-types'
 import { OrcadHostUnsupportedError } from '../../orcad/orcad-host-unavailable'
-import { RemoteNodeRuntimeSelfTestError } from '../../ssh/orcad-remote-node-runtime-report'
+import { RemoteNodeRuntimeSelfTestError } from '../../managed-server/install/orcad-remote-node-runtime-report'
 import { WslHostService } from './wsl-host-service'
 import type { WslHostConnector } from './wsl-host-connector-contract'
 import { WslOrcadLaunchDeferredError } from '../orcad/wsl-orcad-connection-errors'

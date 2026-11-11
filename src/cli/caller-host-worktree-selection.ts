@@ -9,7 +9,7 @@ import {
   toSshExecutionHostId,
   type ExecutionHostId
 } from '../shared/execution-host'
-import { readOrchestrationCompatibilityEvidence } from '../shared/orchestration-compatibility-evidence'
+import { readOrchestrationCompatibilityEvidence } from '../shared/orchestration/orchestration-compatibility-evidence'
 import type { RuntimeWorktreeListResult } from '../shared/runtime-types'
 import type { RuntimeClient } from './runtime-client'
 import { RuntimeClientError } from './runtime/types'

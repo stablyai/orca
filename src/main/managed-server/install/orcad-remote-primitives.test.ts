@@ -8,13 +8,15 @@ vi.mock('../../ssh/remote-exec/remote-exec-command', async (importOriginal) => (
     error instanceof Error && error.message === 'channel lost'
 }))
 
-vi.mock('../../ssh/ssh-remote-platform-detection', () => ({ detectRemoteHostPlatform: vi.fn() }))
+vi.mock('../../ssh/remote-host/ssh-remote-platform-detection', () => ({
+  detectRemoteHostPlatform: vi.fn()
+}))
 vi.mock('../host-state/orcad-windows-host-preparation', () => ({
   prepareWindowsOrcadHost: vi.fn()
 }))
 
 import { execCommand } from '../../ssh/remote-exec/remote-exec-command'
-import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
+import { getRemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'
 import { parseOrcadReadinessOutput } from './orcad-remote-launch'
 
 const mockExec = vi.mocked(execCommand)

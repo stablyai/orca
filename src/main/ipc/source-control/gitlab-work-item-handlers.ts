@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron'
-import type { TaskSourceContext } from '../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
 import type { Store } from '../../persistence/loading-store/store'
 import {
   normalizeGitLabMRListState,
@@ -71,7 +71,8 @@ export function registerGitLabWorkItemHandlers(store: Store): void {
           repoConnectionId(repo),
           undefined,
           localGitOptions,
-          { includeReviewDetails: args.includeReviewDetails }
+          // Only the phone reads viewerDidAuthor, so desktop skips the `glab api user` lookup.
+          { includeReviewDetails: args.includeReviewDetails, markViewerComments: false }
         )
       return args.background
         ? guardWslUncPathAccess(repo.path, read, { wslDistro: localGitOptions.wslDistro })

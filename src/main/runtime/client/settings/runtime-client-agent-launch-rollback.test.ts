@@ -21,7 +21,7 @@ vi.mock('../../../ssh/config/ssh-config-parser', () => ({
 vi.mock('../../../claude/agent-view/agent-view-service', () => ({
   getClaudeAgentViewService: () => ({ reconcile: async () => {} })
 }))
-vi.mock('../../../agent-hooks/managed-agent-hook-controls', () => ({
+vi.mock('../../../agent-hooks/installation/managed-agent-hook-controls', () => ({
   applyAgentStatusHooksEnabled: vi.fn(async () => {})
 }))
 

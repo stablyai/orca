@@ -11,7 +11,7 @@ import { prepareWslPrompt } from './source-control-prompt-files'
 import { producePromptRecords } from './source-control-prompt-producer'
 import { planCommitMessageGeneration } from '../../shared/source-control/ai/generation/commit-message-plan'
 import { withPlatform } from './commit-message-text-generation-test-harness'
-import './source-control-agent-launch'
+import { spawnSourceControlAgent } from './source-control-agent-launch'
 import './source-control-local-generation'
 import { resolveCommand } from '../git/command-runner/wsl-command-resolution'
 
@@ -41,6 +41,86 @@ function planned(agentId: 'omp' | 'codex' = 'omp') {
   }
   return result.plan
 }
+
+it.skipIf(process.platform === 'win32')(
+  'clears profile-restored hook identity after login while preserving shell function commands',
+  async () => {
+    const directory = realpathSync(mkdtempSync(join(tmpdir(), 'orca-wsl-hook-isolation-')))
+    const profile = join(directory, 'rc')
+    const shell = join(directory, 'bash')
+    const reader = join(directory, 'reader.cjs')
+    writeFileSync(
+      shell,
+      `#!/bin/sh\nexec /bin/bash --noprofile --rcfile ${quotePosixShell(profile)} -ic "$2"\n`,
+      { mode: 0o700 }
+    )
+    writeFileSync(
+      join(directory, 'getent'),
+      `#!/bin/sh\nprintf '%s\\n' ${quotePosixShell(`user:x:1:1:User:${directory}:${shell}`)}\n`,
+      { mode: 0o700 }
+    )
+    writeFileSync(
+      profile,
+      `export ORCA_PANE_KEY=profile-pane ORCA_AGENT_PANE=profile-pane ORCA_AGENT_HOOK_PORT=54321 ORCA_AGENT_HOOKS_DISABLED=0
+export CODEX_HOME=profile-managed-home
+review_agent() { ${quotePosixShell(process.execPath)} ${quotePosixShell(reader)} "$@"; }
+`
+    )
+    writeFileSync(
+      reader,
+      `console.log(JSON.stringify({
+  pane: process.env.ORCA_PANE_KEY ?? null,
+  alias: process.env.ORCA_AGENT_PANE ?? null,
+  port: process.env.ORCA_AGENT_HOOK_PORT ?? null,
+  disabled: process.env.ORCA_AGENT_HOOKS_DISABLED,
+  home: process.env.CODEX_HOME,
+  args: process.argv.slice(2)
+}))
+`
+    )
+    // Run the real guest login command locally; only replace the Windows executable boundary.
+    spawnMock.mockImplementationOnce((_program, args, options) =>
+      nativeSpawn('/bin/sh', ['-c', args.at(-1)], options)
+    )
+    try {
+      const child = withPlatform('win32', () =>
+        spawnSourceControlAgent({
+          binary: 'review_agent',
+          args: ['literal $HOME'],
+          wslDistro: 'Review',
+          env: {
+            ...process.env,
+            HOME: directory,
+            SHELL: shell,
+            PATH: `${directory}:${process.env.PATH}`
+          },
+          stdinMode: 'pipe',
+          useCwdForNative: true
+        })
+      )
+      let stdout = ''
+      let stderr = ''
+      child.stdout?.on('data', (chunk) => (stdout += chunk))
+      child.stderr?.on('data', (chunk) => (stderr += chunk))
+      const closed = new Promise<number | null>((resolve, reject) => {
+        child.on('error', reject)
+        child.on('close', resolve)
+      })
+      child.stdin?.end()
+      expect(await closed, stderr).toBe(0)
+      expect(JSON.parse(stdout)).toEqual({
+        pane: null,
+        alias: null,
+        port: null,
+        disabled: '1',
+        home: 'profile-managed-home',
+        args: ['literal $HOME']
+      })
+    } finally {
+      await rm(directory, { recursive: true, force: true })
+    }
+  }
+)
 
 it.each([false, true])(
   'prepares before hostile profiles and preserves login invocation/cwd/env (assigned=%s)',

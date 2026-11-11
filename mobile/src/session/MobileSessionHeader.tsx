@@ -6,9 +6,9 @@ import { NavBar, NavBarRefreshLine } from '../components/nav-bar/NavBar'
 import { useRefreshHint } from '../query/refresh-hint'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import { MobileSessionHeaderMoreMenu } from './MobileSessionHeaderMoreMenu'
-import { MobileSessionTabStrip } from './MobileSessionTabStrip'
+import { MobileSessionTabStrip } from './tabs/MobileSessionTabStrip'
 import { MobileSessionTitleBlock } from './MobileSessionTitleBlock'
-import type { SessionTitleCard } from './use-session-title-card'
+import type { SessionTitleCard } from './tabs/use-session-title-card'
 import { styles } from './mobile-session-styles'
 import { spacing } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
@@ -30,7 +30,6 @@ export function MobileSessionHeader({
   const t = useMobileTranslation()
   const {
     hostId,
-    isFolderWorkspaceRoute,
     isFloatingWorkspaceRoute,
     presentedConnState,
     forceReconnectHost,
@@ -61,8 +60,7 @@ export function MobileSessionHeader({
   const tabsInTopBar = (layout.isLandscapePhone || sideRail) && hasTabs
   // Bar buttons otherwise leave less than two readable tabs on a narrow header.
   const actionsCollapsed = tabsInTopBar && (headerWidth ?? layout.width) < 600
-  const sourceControlInBar =
-    !isFolderWorkspaceRoute && !isFloatingWorkspaceRoute && !actionsCollapsed
+  const sourceControlInBar = !isFloatingWorkspaceRoute && !actionsCollapsed
   const tabStrip = hasTabs ? (
     <MobileSessionTabStrip
       controller={controller}

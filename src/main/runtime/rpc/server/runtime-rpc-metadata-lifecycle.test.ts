@@ -1,13 +1,14 @@
 import type * as WorktreeScanCacheModule from '../../../git/worktrees/catalog/worktree-scan-cache'
 import type * as WorktreeListingModule from '../../../git/worktrees/catalog/worktree-listing'
 import '../unused-default-rpc-methods.test-fixture'
-import { existsSync, mkdtempSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import * as runtimeMetadataModule from './runtime-metadata'
 import { readRuntimeMetadata, writeRuntimeMetadata } from './runtime-metadata'
+import { shortDaemonSocketDir } from '../../../daemon/endpoint/publication/daemon-socket-endpoint-path'
 import { createRuntimeTransportMetadata } from './runtime-rpc-socket-metadata'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
 
@@ -153,4 +154,28 @@ describe('OrcaRuntimeRpcServer', () => {
 
     writeMetadataSpy.mockRestore()
   })
+
+  it.skipIf(process.platform === 'win32')(
+    'never sweeps inside a relocated socket dir that is not private to this user',
+    async () => {
+      const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+      const relocatedDir = shortDaemonSocketDir(userDataPath, process.getuid!())
+      mkdirSync(dirname(relocatedDir), { recursive: true, mode: 0o700 })
+      mkdirSync(relocatedDir, { recursive: true, mode: 0o755 })
+      const deadSocket = join(relocatedDir, 'o-99999999-dead.sock')
+      writeFileSync(deadSocket, '')
+      const server = new OrcaRuntimeRpcServer({
+        methods: [],
+        runtime: new OrcaRuntimeService(),
+        userDataPath
+      })
+      try {
+        await server.start()
+        expect(existsSync(deadSocket)).toBe(true)
+      } finally {
+        await server.stop()
+        rmSync(relocatedDir, { recursive: true, force: true })
+      }
+    }
+  )
 })

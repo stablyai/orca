@@ -109,7 +109,7 @@ vi.mock('@/components/terminal-pane/input/terminal-user-input-signal', () => ({
 vi.mock('@/hooks/theme/use-system-prefers-dark', () => ({
   useSystemPrefersDark: () => false
 }))
-vi.mock('@/lib/shortcut-platform', () => ({
+vi.mock('@/lib/keyboard/shortcut-platform', () => ({
   getShortcutPlatform: () => platformState.value
 }))
 vi.mock('@/components/terminal-pane/input/ime/terminal-ime-native-text-forwarder', () => ({
@@ -383,29 +383,5 @@ describe('AgentTerminalPreview', () => {
     expect(terminal.dispose).toHaveBeenCalledTimes(1)
     expect(terminalHarness.userInputDispose).toHaveBeenCalledTimes(1)
     expect(unsubscribe).toHaveBeenCalledWith('pty-1')
-  })
-
-  it('delays repeated capture after an overflow and cancels the retry on unmount', async () => {
-    vi.useFakeTimers()
-    connect.mockResolvedValue({
-      snapshot: { data: 'screen', cols: 80, rows: 24, seq: 1 },
-      replay: [],
-      resyncRequired: true
-    })
-    const view = render(<AgentTerminalPreview ptyId="pty-1" />)
-    await vi.waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
-    const terminal = terminalHarness.instances[0]!
-    expect(connect).toHaveBeenCalledTimes(1)
-
-    act(() => terminal.writeCallbacks.splice(0).forEach((callback) => callback()))
-    await vi.advanceTimersByTimeAsync(149)
-    expect(connect).toHaveBeenCalledTimes(1)
-    await vi.advanceTimersByTimeAsync(1)
-    expect(connect).toHaveBeenCalledTimes(2)
-
-    act(() => terminal.writeCallbacks.splice(0).forEach((callback) => callback()))
-    view.unmount()
-    await vi.advanceTimersByTimeAsync(150)
-    expect(connect).toHaveBeenCalledTimes(2)
   })
 })

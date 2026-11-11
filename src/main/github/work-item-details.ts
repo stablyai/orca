@@ -156,29 +156,31 @@ export async function getWorkItemDetails(
                 ...collapsed.assigneeUsers
               ]),
               body: collapsed.body,
+              bodyImageUrls: collapsed.bodyImageUrls,
               comments: collapsed.comments,
               assignees: item.assignees?.map((user) => user.login) ?? collapsed.assignees,
               participants: collapsed.participants,
               timelineItems: collapsed.timelineItems
             }
           }
-          const [{ body, comments, assignees, timelineItems }, participants] = await Promise.all([
-            getIssueBodyAndComments(
-              repoPath,
-              item.number,
-              resolvedRepository,
-              connectionId,
-              localGitOptions,
-              canonical
-            ),
-            getWorkItemParticipants(
-              repoPath,
-              item,
-              resolvedRepository,
-              connectionId,
-              localGitOptions
-            )
-          ])
+          const [{ body, bodyImageUrls, comments, assignees, timelineItems }, participants] =
+            await Promise.all([
+              getIssueBodyAndComments(
+                repoPath,
+                item.number,
+                resolvedRepository,
+                connectionId,
+                localGitOptions,
+                canonical
+              ),
+              getWorkItemParticipants(
+                repoPath,
+                item,
+                resolvedRepository,
+                connectionId,
+                localGitOptions
+              )
+            ])
           const mentionParticipants = await getMentionParticipants(
             repoPath,
             item,
@@ -191,6 +193,7 @@ export async function getWorkItemDetails(
           return {
             item: enrichItemDisplayAvatars(item, mentionParticipants),
             body,
+            bodyImageUrls,
             comments,
             assignees: item.assignees?.map((user) => user.login) ?? assignees,
             participants: mentionParticipants,
@@ -256,6 +259,7 @@ export async function getWorkItemDetails(
           mentionParticipants
         ),
         body: metadata.body,
+        bodyImageUrls: metadata.bodyImageUrls,
         comments,
         headSha: metadata.headSha,
         baseSha: metadata.baseSha,

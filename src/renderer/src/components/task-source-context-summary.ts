@@ -1,11 +1,12 @@
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import { getExecutionHostLabel } from '../../../shared/execution-host'
 import type { ExecutionHostScope } from '../../../shared/execution-host'
-import type { ExecutionHostHealth } from '../../../shared/execution-host-registry'
+import type { ExecutionHostHealth } from '../../../shared/execution-host/execution-host-health'
 import type { SshConnectionStatus } from '../../../shared/ssh-types'
-import type { TaskProvider } from '../../../shared/task-providers'
-import type { TaskProviderIdentity, TaskSourceContext } from '../../../shared/task-source-context'
+import type { TaskProvider } from '../../../shared/work-items/task-providers'
+import type { TaskProviderIdentity } from '../../../shared/work-items/task-provider-identity'
+import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
+import { getTranslatedExecutionHostLabel } from './sidebar/execution-host-label'
 import {
   accountTitlePart,
   availabilityTitlePart,
@@ -44,7 +45,7 @@ export type TaskSourceHostAvailability = {
 type HostLabelLookup = ReadonlyMap<string, string> | undefined
 
 function getHostLabel(hostId: ExecutionHostScope, hostLabelById: HostLabelLookup): string {
-  return hostLabelById?.get(hostId) ?? getExecutionHostLabel(hostId)
+  return hostLabelById?.get(hostId) ?? getTranslatedExecutionHostLabel(hostId)
 }
 
 type RepoBackedTaskSourceSummaryArgs = {

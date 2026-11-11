@@ -4,7 +4,7 @@ import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 
 export const getGitProviderApiBudgetSearchEntries = createLocalizedCatalog(() => [
   {
-    title: translate('auto.components.settings.git.search.ff86e354c4', 'GitHub API Budget'),
+    title: translate('auto.components.settings.git.search.52d52b099d', 'GitHub API budget'),
     description: translate(
       'auto.components.settings.git.search.1139f61512',
       'Current GitHub CLI REST, Search, and GraphQL rate limits.'
@@ -18,7 +18,7 @@ export const getGitProviderApiBudgetSearchEntries = createLocalizedCatalog(() =>
     ]
   },
   {
-    title: translate('auto.components.settings.git.search.83ecb3f470', 'GitLab API Budget'),
+    title: translate('auto.components.settings.git.search.b7562365cd', 'GitLab API budget'),
     description: translate(
       'auto.components.settings.git.search.2b4a72885d',
       'Current GitLab CLI REST rate-limit headers when available.'

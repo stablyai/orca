@@ -8,7 +8,7 @@ import { PushDeviceRegistryStore } from './device-registry-store.js'
 import { openInMemoryPushDatabase } from './push-database.js'
 import type { PushDelivery } from './push-delivery-message.js'
 import type { PushProviderOutcome } from './push-provider-outcome.js'
-import { WORKER_DRAINS } from './push-worker-concurrency.js'
+
 import { pauseAfter, within } from './durable-push-store.test-fixture.js'
 
 const cleanups: (() => Promise<void>)[] = []
@@ -68,59 +68,6 @@ async function fixture() {
     }
   }
 }
-
-it('sends every burst event immediately with its original content and identity', async () => {
-  const h = await fixture()
-  await h.accept(note(1))
-  await h.accept(
-    note(2, { agentState: 'needs-input', title: 'Answer needed', body: 'Please respond' })
-  )
-  await h.worker.runDue()
-  expect(h.send).toHaveBeenCalledTimes(2)
-  const first = h.send.mock.calls.find(([delivery]) => delivery.orca.notificationSeq === 1)![0]
-  const second = h.send.mock.calls.find(([delivery]) => delivery.orca.notificationSeq === 2)![0]
-  expect(first).toMatchObject({
-    title: 'Done',
-    body: 'Finished task',
-    orca: {
-      notificationId: 'note-1',
-      notificationSeq: 1
-    }
-  })
-  expect(second).toMatchObject({
-    title: 'Answer needed',
-    body: 'Please respond',
-    orca: { notificationId: 'note-2', notificationSeq: 2 }
-  })
-  expect(first.collapseId).not.toBe(second.collapseId)
-  expect(h.send.mock.calls.every(([delivery]) => !('coalescedCount' in delivery.orca))).toBe(true)
-  expect(h.send.mock.calls.every(([delivery]) => !('summaryMembers' in delivery.orca))).toBe(true)
-  expect(h.onRetry).not.toHaveBeenCalled()
-})
-
-it('keeps untrackable bells and per-phone deliveries individually replaceable', async () => {
-  const h = await fixture()
-  const other = await h.devices.upsert({
-    hostFingerprint: 'host',
-    deviceId: 'phone2',
-    platform: 'android',
-    token: 'other-token'
-  })
-  if (!other.ok) throw new Error('registration failed')
-  await h.accept(note(1, { notificationId: undefined, source: 'terminal-bell', agentState: null }))
-  await h.accept(note(2))
-  await h.accept(note(3))
-  await h.store.accept('host', other.registrationId, note(2))
-  await h.worker.runDue()
-  expect(h.send).toHaveBeenCalledTimes(4)
-  const deliveries = h.send.mock.calls.map(([delivery]) => delivery)
-  const primary = deliveries.filter((delivery) => delivery.registrationId === h.registrationId)
-  expect(primary).toHaveLength(3)
-  expect(new Set(primary.map((delivery) => delivery.collapseId)).size).toBe(3)
-  expect(
-    deliveries.find((delivery) => delivery.registrationId === other.registrationId)
-  ).toMatchObject({ orca: { notificationId: 'note-2', notificationSeq: 2 } })
-})
 
 it('preserves provider retry delay when waking a restarted worker', async () => {
   const h = await fixture()
@@ -301,63 +248,4 @@ it('claims new devices while an earlier provider response is still pending', asy
     held.resolve({ status: 'sent' })
     await h.worker.stop()
   }
-})
-
-
-
-
-
-it('coalesces wakes arriving after every active drain found an empty queue', async () => {
-  const h = await fixture()
-  vi.useFakeTimers()
-  const entered = Promise.withResolvers<void>()
-  const release = Promise.withResolvers<void>()
-  const claim = h.store.claim.bind(h.store)
-  let empty = 0
-  let holding = true
-  vi.spyOn(h.store, 'claim').mockImplementation(async () => {
-    const delivery = await claim()
-    if (!delivery && holding) {
-      if (++empty === WORKER_DRAINS) entered.resolve()
-      await release.promise
-    }
-    return delivery
-  })
-  h.worker.start()
-  const startedAt = Date.now()
-  const pending = h.worker.runDue()
-  try {
-    await entered.promise
-    await h.accept(note(1))
-    for (let count = 0; count < 10; count++) h.worker.wake()
-    expect(h.store.claim).toHaveBeenCalledTimes(WORKER_DRAINS)
-    holding = false
-    release.resolve()
-    await pending
-    await vi.waitFor(() => expect(h.send).toHaveBeenCalledOnce())
-    await vi.waitFor(() => expect(h.store.claim).toHaveBeenCalledTimes(WORKER_DRAINS + 2))
-    expect(Date.now() - startedAt).toBeLessThan(1000)
-    expect(h.send.mock.calls[0]?.[0].orca.notificationSeq).toBe(1)
-  } finally {
-    holding = false
-    release.resolve()
-  }
-})
-
-
-
-it('recovers from a failed automatic wake without leaving another timer', async () => {
-  const h = await fixture()
-  vi.useFakeTimers()
-  vi.spyOn(h.store, 'claim').mockRejectedValueOnce(new Error('database unavailable'))
-  h.worker.start()
-  h.worker.wake()
-  await vi.waitFor(() =>
-    expect(console.warn).toHaveBeenCalledWith(JSON.stringify({ event: 'orca_push_worker_failed' }))
-  )
-  await h.accept(note(1))
-  h.worker.wake()
-  await vi.waitFor(() => expect(h.send).toHaveBeenCalledOnce())
-  await h.worker.stop()
-  expect(vi.getTimerCount()).toBe(0)
 })

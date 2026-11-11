@@ -16,7 +16,7 @@ import {
   type AntigravityChatAuthConfig
 } from '../../../../shared/antigravity-chat-auth-config'
 import { Input } from '../ui/input'
-import { SettingRow } from './AntigravityChatAuthSettingRow'
+import { AntigravityChatAuthSettingRow } from './AntigravityChatAuthSettingRow'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 
 export type AntigravityChatAuthAction = {
@@ -296,7 +296,7 @@ function AuthForm({
       {heading}
       {!unavailable && (
         <div className="space-y-3">
-          <SettingRow
+          <AntigravityChatAuthSettingRow
             htmlFor={`${id}-method`}
             label={t('accounts.antigravity.authMethod', 'Sign in with')}
             description={
@@ -332,10 +332,10 @@ function AuthForm({
                 <SelectItem value="oauth-business">{methodLabel('oauth-business', t)}</SelectItem>
               </SelectContent>
             </Select>
-          </SettingRow>
+          </AntigravityChatAuthSettingRow>
           {method === 'oauth-business' && (
             <>
-              <SettingRow
+              <AntigravityChatAuthSettingRow
                 htmlFor={`${id}-project`}
                 label={t('accounts.antigravity.gcpProject', 'Google Cloud project')}
               >
@@ -352,8 +352,8 @@ function AuthForm({
                   onBlur={commitText}
                   onKeyDown={commitOnEnter}
                 />
-              </SettingRow>
-              <SettingRow
+              </AntigravityChatAuthSettingRow>
+              <AntigravityChatAuthSettingRow
                 htmlFor={`${id}-location`}
                 label={t('accounts.antigravity.gcpLocation', 'Google Cloud location')}
               >
@@ -370,7 +370,7 @@ function AuthForm({
                   onBlur={commitText}
                   onKeyDown={commitOnEnter}
                 />
-              </SettingRow>
+              </AntigravityChatAuthSettingRow>
             </>
           )}
         </div>

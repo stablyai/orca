@@ -1,9 +1,6 @@
 import { z } from 'zod'
 import { parseExecutionHostId } from '../execution-host'
-import {
-  AI_VAULT_AGENTS,
-  AI_VAULT_SCOPE_PATHS_MAX_COUNT
-} from '../ai-vault/contracts/ai-vault-types'
+import { AI_VAULT_AGENTS, boundedAiVaultScopeArgs } from '../ai-vault/contracts/ai-vault-types'
 import { OptionalBoolean } from './rpc-param-primitives'
 import { AI_VAULT_SESSION_TITLE_REQUEST_MAX_COUNT } from '../ai-vault/contracts/ai-vault-session-title'
 
@@ -41,11 +38,8 @@ export const AiVaultListSessionsParams = z
       .regex(/^[0-9a-f]{64}$/)
       .nullable()
       .optional(),
-    scopePaths: z
-      .array(z.string().min(1).max(AI_VAULT_SCOPE_PATH_MAX_LENGTH))
-      // Clamp to preserve older uncapped clients; scopes only widen discovery.
-      .transform((paths) => paths.slice(0, AI_VAULT_SCOPE_PATHS_MAX_COUNT))
-      .optional(),
+    scopePaths: z.array(z.string().min(1).max(AI_VAULT_SCOPE_PATH_MAX_LENGTH)).optional(),
+    scopeOnly: OptionalBoolean,
     // Host ID only restamps cached results; desktop/web send it, mobile omits it. Scanning stays host-local.
     executionHostId: executionHostIdSchema.optional()
   })
@@ -54,6 +48,11 @@ export const AiVaultListSessionsParams = z
       ctx.addIssue({ code: 'custom', path: ['limit'], message: 'Limit exceeds maximum' })
     }
   })
+  // Clamp to preserve older uncapped clients; scopes only widen discovery.
+  .transform(({ scopePaths, scopeOnly, ...params }) => ({
+    ...params,
+    ...boundedAiVaultScopeArgs(scopePaths, scopeOnly)
+  }))
 
 const AiVaultRowResumeParams = z
   .object({

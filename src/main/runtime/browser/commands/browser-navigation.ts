@@ -3,7 +3,7 @@ import type {
   BrowserClickResult,
   BrowserGotoResult,
   BrowserReloadResult
-} from '../../../../shared/runtime-browser-contracts'
+} from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import type {
   BrowserCommandTargetParams,
   RuntimeBrowserCommandHost

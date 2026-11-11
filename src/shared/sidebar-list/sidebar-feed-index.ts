@@ -1,10 +1,9 @@
 import {
   getSshTargetIdForExecutionHost,
   LOCAL_EXECUTION_HOST_ID,
-  parseExecutionHostId,
-  type ExecutionHostId
+  parseExecutionHostId
 } from '../execution-host'
-import { buildExecutionHostRegistry } from '../execution-host-registry'
+import { buildExecutionHostRegistry } from '../execution-host/execution-host-registry'
 import type { FolderWorkspace } from '../folder-workspaces/folder-workspace-types'
 import {
   getRepoHostIdentity,
@@ -92,9 +91,6 @@ export function buildFeedHostOptions(
     const parsed = parseExecutionHostId(hostId)
     return parsed?.kind === 'runtime' && host ? [{ parsed, host }] : []
   })
-  const serverLabelByHostId = new Map<ExecutionHostId, string>(
-    servers.map(({ parsed, host }) => [parsed.id, host.label])
-  )
   const focused = parseExecutionHostId(view.defaultHostId)
   return buildExecutionHostRegistry({
     repos,
@@ -112,10 +108,8 @@ export function buildFeedHostOptions(
       name: host.label
     })),
     hostLabelOverrides: view.hostLabelOverrides,
-    localHostLabel: view.localHostLabel
-  }).map((host) => {
-    const label = serverLabelByHostId.get(host.id)
-    return label ? { ...host, label } : host
+    localHostLabel: view.localHostLabel,
+    localHostLabelIsDefault: true
   })
 }
 

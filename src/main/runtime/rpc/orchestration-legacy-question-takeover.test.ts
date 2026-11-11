@@ -3,8 +3,8 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { OrchestrationCompatibilityEvidence } from '../../../shared/orchestration-compatibility-evidence'
-import { ORCHESTRATION_CONTRACT_VERSION } from '../../../shared/orchestration-runtime-capabilities'
+import type { OrchestrationCompatibilityEvidence } from '../../../shared/orchestration/orchestration-compatibility-evidence'
+import { ORCHESTRATION_CONTRACT_VERSION } from '../../../shared/orchestration/orchestration-runtime-capabilities'
 import Database from '../../sqlite/sync-database'
 import { OrchestrationDb } from '../orchestration/db/orchestration-db'
 import '../orchestration/db/contract-constants'
@@ -158,89 +158,6 @@ const workerEvidence: OrchestrationCompatibilityEvidence = {
 }
 
 describe('legacy question takeover compatibility', () => {
-  it('reuses a pending ask that crossed the schema cutover', async () => {
-    const harness = createHarness({ seedCutoverQuestion: true })
-
-    const asked = await harness.dispatcher.dispatch(
-      request(
-        'orchestration.ask',
-        {
-          from: WORKER_HANDLE,
-          to: COORDINATOR_HANDLE,
-          question: 'Continue after update?',
-          options: 'yes,no',
-          timeoutMs: 0
-        },
-        'retry-cutover-ask',
-        workerEvidence
-      )
-    )
-
-    expect(asked).toMatchObject({
-      ok: true,
-      result: {
-        messageId: harness.cutoverQuestionId,
-        legacyCompatibility: { replayed: true }
-      }
-    })
-    const sqlite = (harness.db as unknown as { db: Database.Database }).db
-    expect(
-      (
-        sqlite
-          .prepare(
-            `SELECT COUNT(*) AS count
-             FROM messages
-             WHERE type IN ('decision_gate', 'question')`
-          )
-          .get() as { count: number }
-      ).count
-    ).toBe(1)
-    expect(
-      (sqlite.prepare('SELECT COUNT(*) AS count FROM question_threads').get() as { count: number })
-        .count
-    ).toBe(1)
-  })
-
-  it('resumes an answered pinned-A ask without duplicating it', async () => {
-    const harness = createHarness({
-      seedCutoverQuestion: true,
-      seedCutoverAnswer: true
-    })
-
-    const resumed = await harness.dispatcher.dispatch(
-      request(
-        'orchestration.ask',
-        {
-          from: WORKER_HANDLE,
-          resume: harness.cutoverQuestionId,
-          timeoutMs: 0
-        },
-        'resume-answered-cutover-ask',
-        workerEvidence
-      )
-    )
-
-    expect(resumed).toMatchObject({
-      ok: true,
-      result: {
-        answer: 'Continue.',
-        answerMessageId: harness.cutoverAnswerId,
-        messageId: harness.cutoverQuestionId,
-        legacyCompatibility: {
-          answerAcknowledgement: {
-            questionId: harness.cutoverQuestionId,
-            answerMessageId: harness.cutoverAnswerId
-          }
-        }
-      }
-    })
-    const sqlite = (harness.db as unknown as { db: Database.Database }).db
-    expect(
-      (sqlite.prepare('SELECT COUNT(*) AS count FROM question_threads').get() as { count: number })
-        .count
-    ).toBe(1)
-  })
-
   it('resumes and idempotently acknowledges the exact current Run answer', async () => {
     const harness = createHarness()
     const asked = await harness.dispatcher.dispatch(

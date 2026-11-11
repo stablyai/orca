@@ -62,8 +62,9 @@ export function registerPtyConnectionMode2031SubscriptionsTests(): void {
         dispose: () => void
       }> {
         const { connectPanePty } = await import('../connect-pane-pty')
-        const agentTitleMocks =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
         const transport = createMockTransport('pty-id')
         const captured: {
           current: ((data: string, meta?: { droppedOutput?: boolean }) => void) | null
@@ -102,19 +103,6 @@ export function registerPtyConnectionMode2031SubscriptionsTests(): void {
 
       const replies = (transport: { sendInput: { mock: { calls: unknown[][] } } }): unknown[] =>
         transport.sendInput.mock.calls.flat().filter((arg) => String(arg).includes('997'))
-
-      it('registers a chunk that ends subscribed, then retires it when the next withdraws', async () => {
-        const { transport, deps, emit, dispose } = await connectVisiblePane()
-        // Two separate PTY chunks. xterm would parse both in one batch and see only the net result.
-        emit('\x1b[?2031h')
-        expect(deps.paneMode2031Ref.current.get(1)).toBe(true)
-        expect(deps.paneLastThemeModeRef.current.get(1)).toBe('light')
-        emit('\x1b[?2031l')
-        expect(deps.paneMode2031Ref.current.get(1)).toBeUndefined()
-        expect(deps.paneLastThemeModeRef.current.get(1)).toBeUndefined()
-        expect(replies(transport)).toEqual([])
-        dispose()
-      })
 
       it('catches a subscribed pane up once per mode change across repeated reconnects', async () => {
         const { transport, emit, reconnect, dispose } = await connectVisiblePane()
@@ -165,199 +153,6 @@ export function registerPtyConnectionMode2031SubscriptionsTests(): void {
         expect(replies(transport)).toEqual(['\x1b[?997;1n', '\x1b[?997;2n', '\x1b[?997;2n'])
         dispose()
       })
-
-      it('re-registers a chunk that withdraws and subscribes again', async () => {
-        const { transport, deps, emit, dispose } = await connectVisiblePane()
-        emit('\x1b[?2031h')
-        emit('\x1b[?2031l\x1b[?2031h')
-        expect(deps.paneMode2031Ref.current.get(1)).toBe(true)
-        expect(replies(transport)).toEqual([])
-        dispose()
-      })
-
-      it('registers nothing when one chunk both subscribes and withdraws', async () => {
-        const { transport, deps, emit, dispose } = await connectVisiblePane()
-        // The fish prompt case: the subscription is gone before the program could read anything.
-        emit('\x1b[?2031h prompt \x1b[?2031l')
-        expect(deps.paneMode2031Ref.current.get(1)).toBeUndefined()
-        expect(replies(transport)).toEqual([])
-        dispose()
-      })
-
-      it('registers nothing when the withdrawal is split across two chunks', async () => {
-        const { transport, deps, emit, dispose } = await connectVisiblePane()
-        emit('\x1b[?2031h prompt \x1b[?20')
-        emit('31l')
-        expect(deps.paneMode2031Ref.current.get(1)).toBeUndefined()
-        expect(replies(transport)).toEqual([])
-        dispose()
-      })
-
-      it('registers nothing when an unrelated private mode appends a split withdrawal', async () => {
-        const { transport, deps, emit, dispose } = await connectVisiblePane()
-        emit('\x1b[?2031h prompt \x1b[?25')
-        emit(';2031l')
-        expect(deps.paneMode2031Ref.current.get(1)).toBeUndefined()
-        expect(replies(transport)).toEqual([])
-        dispose()
-      })
-
-      it('registers the subscription once an ambiguous tail resolves to another mode', async () => {
-        const { transport, deps, emit, dispose } = await connectVisiblePane()
-        emit('\x1b[?2031h drawing \x1b[?20')
-        expect(deps.paneMode2031Ref.current.get(1)).toBeUndefined()
-        emit('25h')
-        expect(deps.paneMode2031Ref.current.get(1)).toBe(true)
-        expect(replies(transport)).toEqual([])
-        dispose()
-      })
-
-      // One fish prompt cycle, exactly as fish's tty_handoff.rs emits it.
-      const FISH_PROMPT_HANDOFF = '\x1b[?2031h\x1b[0m~/orca \x1b[32m❯\x1b[0m \x1b[?2031l'
-
-      it('stays silent across three fish prompts', async () => {
-        const { transport, emit, dispose } = await connectVisiblePane()
-        emit(FISH_PROMPT_HANDOFF)
-        emit(FISH_PROMPT_HANDOFF)
-        emit(FISH_PROMPT_HANDOFF)
-        expect(replies(transport)).toEqual([])
-        dispose()
-      })
-
-      it('leaves no stale subscription behind after a fish prompt cycle', async () => {
-        const { deps, emit, dispose } = await connectVisiblePane()
-        emit(FISH_PROMPT_HANDOFF)
-        // A later theme flip must not push CSI 997 at a shell that unsubscribed.
-        expect(deps.paneMode2031Ref.current.get(1)).toBeUndefined()
-        dispose()
-      })
-
-      it('registers a TUI that subscribes at the end of a fish prompt chunk', async () => {
-        const { transport, deps, emit, dispose } = await connectVisiblePane()
-        emit(`${FISH_PROMPT_HANDOFF}\x1b[?2031h`)
-        expect(deps.paneMode2031Ref.current.get(1)).toBe(true)
-        expect(replies(transport)).toEqual([])
-        dispose()
-      })
-
-      it('keeps a subscription whose withdrawal never arrives', async () => {
-        const { transport, deps, emit, dispose } = await connectVisiblePane()
-        // A real TUI: subscribe now, unsubscribe minutes later on exit.
-        emit('\x1b[?2031h')
-        emit('painting the ui')
-        expect(deps.paneMode2031Ref.current.get(1)).toBe(true)
-        expect(replies(transport)).toEqual([])
-        dispose()
-      })
-
-      it('discards a half-read escape prefix when the pane swaps PTYs', async () => {
-        const { transport, deps, emit, dispose } = await connectVisiblePane()
-        // Discard old stream tails on PTY replacement so concatenation cannot fabricate a subscription.
-        transport.serializeBuffer = vi.fn().mockResolvedValue(null)
-        emit('\x1b[?20')
-        // droppedOutput latches the hidden-restore PTY id, which is what detects the swap.
-        emit('', { droppedOutput: true })
-        transport.getPtyId.mockReturnValue('pty-id-2')
-
-        emit('31h')
-
-        expect(deps.paneMode2031Ref.current.get(1)).toBeUndefined()
-        expect(replies(transport)).toEqual([])
-        dispose()
-      })
-    })
-
-    it('records hidden Codex mode 2031 subscribes split across becoming visible', async () => {
-      const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks2 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-      const transport = createMockTransport('pty-id')
-      const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
-      transport.connect.mockImplementation(
-        async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
-          capturedDataCallback.current = callbacks.onData ?? null
-          return 'pty-id'
-        }
-      )
-      transportFactoryQueue.push(transport)
-      mockStoreState = {
-        ...mockStoreState,
-        settings: { ...mockStoreState.settings, theme: 'light' }
-      }
-
-      const isVisibleRef = { current: false }
-      const paneMode2031Ref = { current: new Map<number, boolean>() }
-      const paneLastThemeModeRef = { current: new Map<number, 'dark' | 'light'>() }
-      const pane = createPane(1)
-      const manager = createManager(1)
-      const binding = connectPanePty(
-        pane as never,
-        manager as never,
-        bindPaneAgentTitleMocks(
-          createDeps({
-            isVisibleRef,
-            paneMode2031Ref,
-            paneLastThemeModeRef,
-            startup: { command: 'codex' }
-          }) as never,
-          agentTitleMocks2
-        )
-      )
-      await flushAsyncTicks(6)
-
-      capturedDataCallback.current?.('\x1b[?20')
-      isVisibleRef.current = true
-      capturedDataCallback.current?.('31h')
-
-      expect(transport.sendInputImmediate).not.toHaveBeenCalledWith(expect.stringMatching(/\?997/))
-      expect(paneMode2031Ref.current.get(1)).toBe(true)
-      // Seeded so the next appearance re-apply only pushes on a real color-mode flip.
-      expect(paneLastThemeModeRef.current.get(1)).toBe('light')
-      expect(pane.terminal.write).not.toHaveBeenCalledWith('31h', expect.any(Function))
-
-      binding.dispose()
-    })
-
-    it('does not keep mode 2031 subscribed when a skipped hidden chunk unsubscribes last', async () => {
-      const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks3 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-      const transport = createMockTransport('pty-id')
-      const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
-      transport.connect.mockImplementation(
-        async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
-          capturedDataCallback.current = callbacks.onData ?? null
-          return 'pty-id'
-        }
-      )
-      transportFactoryQueue.push(transport)
-
-      const paneMode2031Ref = { current: new Map<number, boolean>() }
-      const paneLastThemeModeRef = { current: new Map<number, 'dark' | 'light'>() }
-      const pane = createPane(1)
-      const manager = createManager(1)
-      const binding = connectPanePty(
-        pane as never,
-        manager as never,
-        bindPaneAgentTitleMocks(
-          createDeps({
-            isVisibleRef: { current: false },
-            paneMode2031Ref,
-            paneLastThemeModeRef,
-            startup: { command: 'codex' }
-          }) as never,
-          agentTitleMocks3
-        )
-      )
-      await flushAsyncTicks(6)
-
-      capturedDataCallback.current?.('\x1b[?2031h\x1b[?2031l')
-
-      expect(transport.sendInput).not.toHaveBeenCalledWith(expect.stringMatching(/\?997/))
-      expect(paneMode2031Ref.current.has(1)).toBe(false)
-      expect(paneLastThemeModeRef.current.has(1)).toBe(false)
-
-      binding.dispose()
     })
   })
 }

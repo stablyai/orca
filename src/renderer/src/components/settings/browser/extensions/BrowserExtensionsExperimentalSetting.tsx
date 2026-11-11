@@ -2,7 +2,7 @@ import type { GlobalSettings } from '../../../../../../shared/global-settings-ty
 import { useTranslate } from '@/i18n/use-translate'
 import { Label } from '../../../ui/label'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
-import { SettingsSwitch } from '../../form-controls/SettingsFormControls'
+import { Switch } from '@/components/ui/switch'
 import { getExperimentalSearchEntry } from '../../advanced/experimental-search'
 
 type BrowserExtensionsExperimentalSettingProps = {
@@ -15,7 +15,7 @@ export function BrowserExtensionsExperimentalSetting({
   updateSettings
 }: BrowserExtensionsExperimentalSettingProps): React.JSX.Element {
   const t = useTranslate()
-  const entry = getExperimentalSearchEntry(t).browserExtensions
+  const entry = getExperimentalSearchEntry().browserExtensions
   const enabled = settings.experimentalBrowserExtensions === true
 
   return (
@@ -36,13 +36,13 @@ export function BrowserExtensionsExperimentalSetting({
             )}
           </p>
         </div>
-        <SettingsSwitch
+        <Switch
           checked={enabled}
-          ariaLabel={t(
+          aria-label={t(
             'auto.components.settings.ExperimentalPane.browserExtensions.toggleLabel',
             'Toggle browser extensions'
           )}
-          onChange={() => updateSettings({ experimentalBrowserExtensions: !enabled })}
+          onCheckedChange={() => updateSettings({ experimentalBrowserExtensions: !enabled })}
         />
       </div>
     </SearchableSetting>

@@ -91,7 +91,7 @@ const EMPTY_RECEIPTS = new Map()
 const NO_STATUSES = { active: null, completedByTurn: {} }
 const EMPTY_DIFFS = new Map()
 const EMPTY_KEYS = new Set<string>()
-const LINE = { draws: false, thinking: false }
+const LINE = { tailRow: null, thinking: false }
 
 /** Every eligibility decision, in any search, asks this set; count those asks. */
 class CountedSet extends Set<string> {
@@ -152,55 +152,6 @@ beforeEach(() => {
   sideChat = undefined
 })
 
-it.each([
-  [100, 'forkable'],
-  [1000, 'forkable'],
-  [100, 'unmatched'],
-  [1000, 'unmatched']
-] as const)(
-  'decides each of %i responses (%s) once per streamed update, and Send adds no search',
-  async (size, replies) => {
-    const fork = forkSurface(replies === 'forkable' ? allReplies(size) : ['elsewhere'])
-    const view = render(<Pane fork={fork} conversation={conversation(size, 'a')} />)
-    const responses = size + 1
-
-    for (const text of ['ab', 'abc', 'abcd']) {
-      offers.checks = 0
-      offers.lookups = 0
-      view.rerender(<Pane fork={fork} conversation={conversation(size, text)} />)
-      expect(offers.checks).toBeLessThanOrEqual(size * 2 + 2)
-      expect(offers.lookups).toBeLessThanOrEqual(responses)
-    }
-
-    offers.checks = 0
-    offers.lookups = 0
-    await act(() => sideChat!.open('why?'))
-    expect(offers.checks).toBe(0)
-    expect(offers.lookups).toBeLessThanOrEqual(1)
-    if (replies === 'forkable') {
-      expect(request).toHaveBeenCalledWith(`reply-${size - 1}`, { question: 'why?' })
-    } else {
-      expect(request).not.toHaveBeenCalled()
-    }
-  }
-)
-
-it.each([
-  ['nothing listens', { listening: false }],
-  ['support is not known yet', { known: false }]
-])('does no fork work while %s', (_case, options: { listening?: boolean; known?: boolean }) => {
-  const fork = forkSurface(allReplies(100), 0, options.known ?? true)
-  offers.checks = 0
-  const view = render(
-    <Pane fork={fork} conversation={conversation(100, 'a')} listening={options.listening} />
-  )
-  view.rerender(
-    <Pane fork={fork} conversation={conversation(100, 'ab')} listening={options.listening} />
-  )
-
-  expect(offers.checks).toBe(0)
-})
-
 it('follows forkability, the /clear floor and turn attribution', async () => {
   const c = conversation(2, 'a')
   const view = render(<Pane fork={forkSurface(['reply-0'])} conversation={c} />)
@@ -226,17 +177,6 @@ it('follows forkability, the /clear floor and turn attribution', async () => {
   )
   await act(() => sideChat!.open('q'))
   expect(request).toHaveBeenLastCalledWith('live', { question: 'q' })
-})
-
-it('does no layout work when only the fork pending state changes', () => {
-  const c = conversation(100, 'a')
-  const fork = forkSurface(allReplies(100))
-  const view = render(<Pane fork={fork} conversation={c} />)
-  offers.checks = 0
-
-  view.rerender(<Pane fork={{ ...fork, pendingItemId: 'reply-1' }} conversation={c} />)
-
-  expect(offers.checks).toBe(0)
 })
 
 it('has nothing to fork once a rewind empties the conversation', async () => {

@@ -5,17 +5,15 @@ import {
   applyWindowPageLimit,
   deriveAdvertisedTotalPages,
   resolveEmptyPageOutcome
-} from '../../../src/shared/work-item-empty-page'
+} from '../../../src/shared/work-items/work-item-empty-page'
 import { translate } from '../i18n/mobile-i18n'
 import type { TaskListLoadingModel } from './use-mobile-tasks-task-list-loading'
 import {
   CROSS_REPO_DISPLAY_LIMIT,
   PER_REPO_FETCH_LIMIT,
-  getTaskPagePerRepoLimit,
-  useCallback,
-  useMemo,
-  useState
-} from './mobile-tasks-dependencies'
+  getTaskPagePerRepoLimit
+} from '../../../src/shared/work-items/work-item-pagination'
+import { useCallback, useMemo, useState } from './mobile-tasks-dependencies'
 import { type TaskItem, buildPartialRepositoryNotice } from './mobile-tasks-legacy-foundation'
 import { linearAccountConnect } from './mobile-task-list-operations'
 

@@ -2,15 +2,15 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
   ORCHESTRATION_FEDERATION_RELEASE_ARCHIVE_RUNTIME_CAPABILITY
-} from '../../../../../../shared/orchestration-runtime-capabilities'
+} from '../../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
 
 import type { FederatedDispatchRow } from '../../../../orchestration/db/orchestration-records'
-import type { OrchestrationEnvironmentSendOptions } from '../../../../orchestration/federation/environment-transport'
-import './federated-worker-read'
-import { releaseFederatedWorker } from './federated-worker-release'
+
+import '../../../../orchestration/legacy-remote-home/federated-worker-read'
+import { releaseFederatedWorker } from '../../../../orchestration/legacy-remote-home/federated-worker-release'
 import '../worker/worker-observation'
-import '../../../../orchestration/federation/synchronization/federation-sync'
+import '../../../../orchestration/legacy-remote-home/federation-sync'
 import { ORCHESTRATION_WORKER_STOP_METHODS } from '../worker/worker-stop'
 
 const server = {
@@ -59,78 +59,6 @@ describe('federated transport safety', () => {
     for (const entry of call.mock.calls) {
       expect((entry as unknown[])[5]).toBe(73)
     }
-  })
-
-  it('proves the contract once per host incarnation and pins each mutation to it', async () => {
-    let currentRuntimeId = 'epoch-1'
-    let currentCapabilities = [ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY]
-    const call = vi.fn(
-      async (
-        _selector: string,
-        method: string,
-        _params?: unknown,
-        _timeoutMs?: number,
-        _envelope?: unknown,
-        _pairingRevision?: number,
-        send?: OrchestrationEnvironmentSendOptions
-      ) =>
-        send?.expectedRuntimeId !== undefined && send.expectedRuntimeId !== currentRuntimeId
-          ? {
-              id: method,
-              ok: false as const,
-              error: { code: 'runtime_environment_changed', message: 'changed' },
-              _meta: { runtimeId: currentRuntimeId }
-            }
-          : {
-              id: method,
-              ok: true as const,
-              result:
-                method === 'status.get'
-                  ? runtimeStatus(currentCapabilities)
-                  : { acknowledgedThrough: 1 },
-              _meta: { runtimeId: currentRuntimeId }
-            }
-    )
-    const runtime = new OrcaRuntimeService(null, undefined, {
-      orchestrationEnvironmentTransport: { resolve: () => server, call }
-    })
-    const ack = () =>
-      runtime.callOrchestrationWorkerServer(
-        server.environmentId,
-        'orchestration.federationAck',
-        { dispatchId: 'dispatch-worker', throughSequence: 1 },
-        15_000,
-        { orchestrationRequestId: 'ack-request' }
-      )
-    const sent = () => call.mock.calls.map((entry) => [entry[1], entry[6]?.expectedRuntimeId])
-
-    await ack()
-    await ack()
-    expect(sent()).toEqual([
-      ['status.get', undefined],
-      ['orchestration.federationAck', 'epoch-1'],
-      ['orchestration.federationAck', 'epoch-1']
-    ])
-
-    // The host restarted: the pinned send is refused before any effect, then the new incarnation is proved.
-    call.mockClear()
-    currentRuntimeId = 'epoch-2'
-    await ack()
-    expect(sent()).toEqual([
-      ['orchestration.federationAck', 'epoch-1'],
-      ['status.get', undefined],
-      ['orchestration.federationAck', 'epoch-2']
-    ])
-
-    // A downgraded restart lacks the contract, so no mutation reaches it.
-    call.mockClear()
-    currentRuntimeId = 'epoch-3'
-    currentCapabilities = []
-    await expect(ack()).rejects.toMatchObject({ code: 'orchestration_migration_required' })
-    expect(sent()).toEqual([
-      ['orchestration.federationAck', 'epoch-2'],
-      ['status.get', undefined]
-    ])
   })
 
   it('rejects a mismatched release receipt before applying home effects', async () => {

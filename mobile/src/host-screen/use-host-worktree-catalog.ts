@@ -1,4 +1,4 @@
-import { MOBILE_RELAY_HOST_WORKTREE_DELTAS_RUNTIME_CAPABILITY } from '../../../src/shared/mobile-desktop-relay-contract'
+import { MOBILE_RELAY_HOSTS_CHANGED_EVENT_RUNTIME_CAPABILITY } from '../../../src/shared/mobile-desktop-relay-contract'
 import { WORKTREE_ROWS_CHANGED_EVENT_RUNTIME_CAPABILITY } from '../../../src/shared/worktree-runtime-capabilities'
 import { readWorktreeFirstPage } from '../worktree/worktree-catalog-first-page'
 import type { Worktree } from '../worktree/workspace-list-types'
@@ -7,9 +7,9 @@ import { AppState } from 'react-native'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../src/shared/sidebar-inputs-switch'
 import { useFocusEffect } from 'expo-router'
 import { useQueryClient } from '@tanstack/react-query'
-import type { RpcClient } from '../transport/rpc-client'
-import type { ConnectionState } from '../transport/types'
-import { RpcIncompatibleReplyError } from '../transport/rpc-incompatible-reply-error'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import type { ConnectionState } from '../transport/connection/connection-state'
+import { RpcIncompatibleReplyError } from '../transport/rpc/rpc-incompatible-reply-error'
 import { startHostWorktreeRefresh } from '../worktree/host-worktree-refresh'
 import type { HostSidebarFeedTriggers } from './host-sidebar-feed-connection'
 import { areWorktreeListsEqual } from '../worktree/worktree-list-snapshot'
@@ -19,19 +19,21 @@ import {
 } from '../worktree/worktree-host-row-identity'
 import { savePinnedIds } from '../storage/preferences'
 import type { HostScreenState } from './use-host-screen-state'
-import { relaysToServers } from '../transport/execution-host-scoped-rpc-client'
+import { relaysToServers } from '../worktree/execution-host-scoped-rpc-client'
 import { NO_SERVER_WORKSPACES } from '../worktree/server-workspaces'
+import { useRelayHosts } from '../worktree/relay-hosts-feed'
 import { WorktreeCatalogReadError } from '../worktree/worktree-catalog-snapshot-client'
 import { useHostQuery } from '../query/host-query'
 import { hostReadClient } from '../query/host-read-client'
 import { hostScopeKey } from '../query/host-query-key'
 import { isHostNotConnectedError } from '../query/host-query-errors'
-import { refetchHostQueryAfterInFlight, useHostEventRouter } from '../query/host-event-router'
+import { refetchHostQueryAfterInFlight } from '../query/host-event-router'
 import {
   isHostListQuery,
   HOST_LIST_BACKSTOP_POLL_MS,
   HOST_LIST_POLL_MS,
   HOST_LIST_TARGET,
+  hostServerWorkspacesInput,
   hostServerWorkspacesQuery,
   hostWorktreeCatalogKey,
   hostWorktreeCatalogQuery,
@@ -54,6 +56,8 @@ export function useHostWorktreeCatalog(args: {
   connState: ConnectionState
   embedded: boolean
   hostCapabilities: readonly string[]
+  // Whether the host answered its status: capabilities are unknown, not absent, until it has.
+  hostStatusReadable: boolean
   hostId: string | undefined
   sidebarFeed: HostSidebarFeedTriggers | null
   state: HostScreenState
@@ -64,6 +68,7 @@ export function useHostWorktreeCatalog(args: {
     connState,
     embedded,
     hostCapabilities,
+    hostStatusReadable,
     hostId,
     sidebarFeed,
     state,
@@ -97,7 +102,6 @@ export function useHostWorktreeCatalog(args: {
     }, [])
   )
   const subscribed = embedded || focused
-  useHostEventRouter(hostId, client)
 
   const host = { hostId: hostId ?? '', client }
   // The host's sidebar feed replaces the poll: its notices say when a row changed.
@@ -118,11 +122,18 @@ export function useHostWorktreeCatalog(args: {
   )
   // An older desktop or shell lists no server rows, rather than rows that could not open.
   const relays = client !== null && relaysToServers(client, hostCapabilities)
+  // Until the host's status is read, stored server rows paint and nothing reads them.
+  const relaysRuledOut = hostStatusReadable && !relays
+  // Held while server rows poll, so a desktop that announces host changes isn't asked for its hosts on every poll.
+  const announcesHosts = hostCapabilities.includes(
+    MOBILE_RELAY_HOSTS_CHANGED_EVENT_RUNTIME_CAPABILITY
+  )
+  useRelayHosts(subscribed && relays && announcesHosts ? client : null, hostCapabilities)
   const servers = useHostQuery(
     hostServerWorkspacesQuery,
     host,
     HOST_LIST_TARGET,
-    { deltas: hostCapabilities.includes(MOBILE_RELAY_HOST_WORKTREE_DELTAS_RUNTIME_CAPABILITY) },
+    hostServerWorkspacesInput(hostStatusReadable ? hostCapabilities : null),
     // Execution hosts' notices are not relayed, so server rows keep the full poll.
     { enabled: !!hostId && relays, subscribed, refetchInterval: pollMs }
   )
@@ -211,12 +222,13 @@ export function useHostWorktreeCatalog(args: {
   }, [catalog.status, catalog.errorUpdatedAt])
 
   useEffect(() => {
-    if (!relays) {
-      setServerWorkspaces(NO_SERVER_WORKSPACES)
-    } else if (servers.data) {
+    if (servers.data && !relaysRuledOut) {
       setServerWorkspaces(servers.data)
+    } else if (!relays) {
+      // Also drops a previous host's rows when the sidebar switches to one with none stored.
+      setServerWorkspaces(NO_SERVER_WORKSPACES)
     }
-  }, [relays, servers.data])
+  }, [relays, relaysRuledOut, servers.data])
 
   const fetchWorktrees = useCallback(
     async (options: { allowDuringModal?: boolean } = {}) => {

@@ -3,8 +3,8 @@ import {
   type AutomationDispatchResult,
   type AutomationRun,
   type AutomationRunOutputSnapshot
-} from '../../shared/automations-types'
-import type { AutomationRunFailureCodeFields } from '../../shared/automation-run-failure-copy'
+} from '../../shared/automations/history/automation-run'
+import type { AutomationRunFailureCodeFields } from '../../shared/automations/history/automation-run-failure-copy'
 import { RetainedRunReconciler } from './retained-run-reconciliation'
 
 export type AutomationRunCompletionObservation = {

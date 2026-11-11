@@ -1,4 +1,4 @@
-import { ORCHESTRATION_MESSAGE_WAIT_DEFAULT_TIMEOUT_MS } from '../../../../shared/orchestration-message-wait-timeout'
+import { ORCHESTRATION_MESSAGE_WAIT_DEFAULT_TIMEOUT_MS } from '../../../../shared/orchestration/mailbox/orchestration-message-wait-timeout'
 
 import type { MailboxDeliveryBatch } from '../db/messages/role-mailbox-delivery'
 

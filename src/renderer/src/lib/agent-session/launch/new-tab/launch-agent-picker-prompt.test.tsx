@@ -70,25 +70,25 @@ function Menu({
   })
   return (
     <TooltipProvider>
-      {route === 'search' ? (
-        <TabBarCreateEntry
-          worktreeId="wt-1"
-          groupId="group-1"
-          menuOpen
-          agentPickerEntries={[selected]}
-          onOpenEntry={async () => {}}
-          onLaunchAgentOption={(option) =>
-            option.row ? launch(option.row, option.setup, option.pickerEntry) : false
-          }
-        />
-      ) : (
-        <DropdownMenu defaultOpen modal={false}>
-          <DropdownMenuTrigger>New tab</DropdownMenuTrigger>
-          <DropdownMenuContent>
+      <DropdownMenu defaultOpen modal={false}>
+        <DropdownMenuTrigger>New tab</DropdownMenuTrigger>
+        <DropdownMenuContent>
+          {route === 'search' ? (
+            <TabBarCreateEntry
+              worktreeId="wt-1"
+              groupId="group-1"
+              menuOpen
+              agentPickerEntries={[selected]}
+              onOpenEntry={async () => {}}
+              onLaunchAgentOption={(option) =>
+                option.row ? launch(option.row, option.setup, option.pickerEntry) : false
+              }
+            />
+          ) : (
             <AgentLaunchPickerMenu entries={[selected]} runLaunch={launch} />
-          </DropdownMenuContent>
-        </DropdownMenu>
-      )}
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
     </TooltipProvider>
   )
 }

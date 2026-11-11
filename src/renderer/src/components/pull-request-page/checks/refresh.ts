@@ -1,7 +1,10 @@
-import { readPRCheckRefreshOwner } from '@/lib/pr-check-refresh-owner'
+import { readPRCheckRefreshOwner } from '@/lib/source-control/checks/pr-check-refresh-owner'
 import { toast } from 'sonner'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
-import { getGitHubRuntimeRepoId, type GitHubRuntimeHost } from '@/lib/github-source-runtime-context'
+import {
+  getGitHubRuntimeRepoId,
+  type GitHubRuntimeHost
+} from '@/lib/work-items/github/github-source-runtime-context'
 import {
   resetGitHubChecksTabForSource,
   updateGitHubChecksTabLocalChecks,
@@ -11,7 +14,7 @@ import { translate } from '@/i18n/i18n'
 import type { GitHubOwnerRepo } from '../../../../../shared/github/pull-request-types'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import type { PRCheckDetail } from '../../../../../shared/github/check-types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 
 export async function refreshPullRequestChecks(args: {
   canUseChecksRepoContext: boolean

@@ -123,9 +123,7 @@ export const createProjectRowActions = (
           ...args,
           wakeWslDistro: true
         })
-        if (!prRes.ok) {
-          envelope = prRes
-        }
+        envelope = prRes
       }
       if (
         envelope.ok &&
@@ -142,8 +140,12 @@ export const createProjectRowActions = (
           host: table.project.host,
           number,
           updates: {
-            ...(updates.title !== undefined ? { title: updates.title } : {}),
-            ...(updates.body !== undefined ? { body: updates.body } : {}),
+            ...(previousRow.itemType === 'ISSUE' && updates.title !== undefined
+              ? { title: updates.title }
+              : {}),
+            ...(previousRow.itemType === 'ISSUE' && updates.body !== undefined
+              ? { body: updates.body }
+              : {}),
             ...(updates.addLabels ? { addLabels: updates.addLabels } : {}),
             ...(updates.removeLabels ? { removeLabels: updates.removeLabels } : {}),
             ...(updates.addAssignees ? { addAssignees: updates.addAssignees } : {}),
@@ -154,9 +156,15 @@ export const createProjectRowActions = (
           ...args,
           wakeWslDistro: true
         })
-        if (!issueRes.ok) {
-          envelope = issueRes
-        }
+        envelope = issueRes.ok
+          ? {
+              ok: true,
+              bodyImageUrls:
+                previousRow.itemType === 'ISSUE' && updates.body !== undefined
+                  ? issueRes.bodyImageUrls
+                  : envelope.bodyImageUrls
+            }
+          : issueRes
       }
       if (!envelope.ok) {
         rollbackRowIfPresent(set, get, cacheKey, rowId, previousRow)

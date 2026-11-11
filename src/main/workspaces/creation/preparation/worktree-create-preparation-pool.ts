@@ -1,3 +1,11 @@
+import { discardUnmaterializedPreparation } from '../../../git/worktrees/creation/worktree-preparation-add'
+import {
+  cancelPreparationAdmissions,
+  waitForPreparationAdmission,
+  canPrepare,
+  selectPreparationVictim,
+  type StartPreparationArgs
+} from './worktree-preparation-admission-intents'
 import { worktreePreparationGit } from '../../../git/worktrees/creation/worktree-create-git-executor'
 import { randomUUID } from 'node:crypto'
 import { mkdir } from 'node:fs/promises'
@@ -8,10 +16,7 @@ import {
   createWorktreePreparationLockReason
 } from '../../../../shared/worktree/create-preparation'
 import type { AddWorktreeOptions } from '../../../git/worktrees/worktree-operation-options'
-import {
-  prepareWorktreeCreateCheckout,
-  discardPreparedWorktree
-} from '../../../git/worktrees/creation/worktree-create-preparation'
+import { prepareWorktreeCreateCheckout } from '../../../git/worktrees/creation/worktree-create-preparation'
 import { queuePreparedWorktreeTipRefresh } from './worktree-preparation-refresh-queue'
 import { toHostFilesystemPath } from '../../../filesystem/host-tree-removal'
 import { createPreparationActivity } from './worktree-create-preparation-activity'
@@ -35,12 +40,16 @@ import {
 import {
   discardPreparationEntry,
   preparationHostKey,
+  preparationCapacityUsed,
+  registerPreparationObligation,
+  retryPendingPreparationDiscards,
   resetPendingPreparationDiscardsForTests,
   trackPreparationDiscard
 } from './worktree-preparation-discard-retry'
 
 import { WorktreePreparationOperation } from '../../../git/worktrees/creation/worktree-preparation-operation'
 import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
+export type { StartPreparationArgs } from './worktree-preparation-admission-intents'
 export { WORKTREE_CREATE_PREPARATION_TTL_MS } from '../../../git/worktrees/creation/worktree-preparation-operation'
 export const WORKTREE_CREATE_PREPARATION_LIMIT = 3
 
@@ -63,30 +72,22 @@ export type PreparationEntry = {
   activity: PreparationActivity
 }
 
-export type StartPreparationArgs = {
-  repoPath: string
-  workspaceRoot: string
-  baseBranch: string
-  canonicalBase: string
-  options: AddWorktreeOptions
-  beforeMaterialization?: Promise<void>
-}
-
 const preparations = new Map<string, PreparationEntry>()
 
 export function hasPendingPreparations(): boolean {
   return preparations.size > 0 || hasClaims() || hasPendingStalePreparationCleanup()
 }
 
-function discardEntryInBackground(entry: PreparationEntry): void {
-  // Let test reset await background discards before clearing the registry.
-  trackPreparationDiscard(worktreePreparationGit.run(() => discardPreparationEntry(entry)))
+function discardEntryInBackground(entry: PreparationEntry): Promise<void> {
+  const work = worktreePreparationGit.run(() => discardPreparationEntry(entry))
+  trackPreparationDiscard(work)
+  return work
 }
 
-function evictEntry(entry: PreparationEntry): void {
+function evictEntry(entry: PreparationEntry): Promise<void> {
   preparations.delete(entry.key)
   entry.operation.controller.abort()
-  discardEntryInBackground(entry)
+  return discardEntryInBackground(entry)
 }
 
 function expireEntry(entry: PreparationEntry): void {
@@ -97,32 +98,11 @@ function expireEntry(entry: PreparationEntry): void {
 
 /** A removed project has no create left to claim its armed checkouts. */
 export function discardRepoPreparations(repoPathKey: string): void {
+  cancelPreparationAdmissions(repoPathKey)
   for (const entry of preparations.values()) {
     if (entry.repoPathKey === repoPathKey) {
       evictEntry(entry)
     }
-  }
-}
-
-/** Bound full-checkout disk use, evicting the requesting workspace's oldest preparation first. */
-function enforcePreparationLimit(
-  repoPathKey: string,
-  workspaceRootKey: string,
-  wslDistro: string
-): void {
-  while (preparations.size >= WORKTREE_CREATE_PREPARATION_LIMIT) {
-    const byAge = [...preparations.values()].sort((left, right) => left.createdAt - right.createdAt)
-    const victim =
-      byAge.find(
-        (entry) =>
-          entry.repoPathKey === repoPathKey &&
-          entry.workspaceRootKey === workspaceRootKey &&
-          entry.wslDistro === wslDistro
-      ) ?? byAge[0]
-    if (!victim) {
-      return
-    }
-    evictEntry(victim)
   }
 }
 
@@ -157,10 +137,13 @@ export function takePreparation(
   return registerClaim(entry, requestedKey)
 }
 
-export function startPreparation(
+function reusePreparation(
   args: StartPreparationArgs,
-  kind: DeferredPreparation['kind'] = 'explicit'
-): Promise<void> {
+  kind: DeferredPreparation['kind']
+): Promise<void> | undefined {
+  if (!canPrepare(args)) {
+    return Promise.resolve()
+  }
   const existing = findPreparation(
     preparationPathKey(args.repoPath),
     preparationPathKey(args.workspaceRoot),
@@ -175,10 +158,42 @@ export function startPreparation(
       ? refreshPreparationTip(existing, args.beforeMaterialization)
       : existing.ready
   }
-  if (deferPreparationForClaim(args, kind)) {
-    return Promise.resolve()
+  return deferPreparationForClaim(args, kind) ? Promise.resolve() : undefined
+}
+
+export function startPreparation(
+  args: StartPreparationArgs,
+  kind: DeferredPreparation['kind'] = 'explicit'
+): Promise<void> {
+  const full = preparationCapacityUsed() >= WORKTREE_CREATE_PREPARATION_LIMIT
+  const retries = retryPendingPreparationDiscards(
+    full
+      ? undefined
+      : preparationHostKey(preparationPathKey(args.repoPath), args.options.wslDistro ?? '')
+  )
+  void retries.catch((error) =>
+    console.warn('[worktree-create] preparation cleanup retry failed', error)
+  )
+  const reused = reusePreparation(args, kind)
+  if (reused) {
+    return reused
   }
-  return worktreePreparationGit.run(() => startBackgroundPreparation({ ...args, kind }))
+  if (!full) {
+    return worktreePreparationGit.run(() => startBackgroundPreparation({ ...args, kind }))
+  }
+  return worktreePreparationGit.run(() =>
+    waitForPreparationAdmission(args, kind, WORKTREE_CREATE_PREPARATION_LIMIT, {
+      retry: retries,
+      reuse: reusePreparation,
+      hasCapacity: () => preparationCapacityUsed() < WORKTREE_CREATE_PREPARATION_LIMIT,
+      evict: (request) => {
+        const victim = selectPreparationVictim(preparations.values(), request)
+        return victim ? evictEntry(victim) : undefined
+      },
+      start: (request, requestedKind) =>
+        startBackgroundPreparation({ ...request, kind: requestedKind })
+    })
+  )
 }
 
 function refreshPreparationTip(
@@ -204,20 +219,25 @@ function refreshPreparationTip(
   return ready
 }
 
-function startBackgroundPreparation({
-  repoPath,
-  workspaceRoot,
-  baseBranch,
-  canonicalBase,
-  options,
-  beforeMaterialization,
-  kind
-}: StartPreparationArgs & { kind: DeferredPreparation['kind'] }): Promise<void> {
+function startBackgroundPreparation(
+  args: StartPreparationArgs & { kind: DeferredPreparation['kind'] }
+): Promise<void> {
+  const {
+    repoPath,
+    workspaceRoot,
+    baseBranch,
+    canonicalBase,
+    options,
+    beforeMaterialization,
+    kind
+  } = args
   const repoPathKey = preparationPathKey(repoPath)
   const workspaceRootKey = preparationPathKey(workspaceRoot)
   const wslDistro = options.wslDistro ?? ''
   const key = preparationEntryKey(repoPathKey, workspaceRootKey, canonicalBase, wslDistro)
-  enforcePreparationLimit(repoPathKey, workspaceRootKey, wslDistro)
+  if (!canPrepare(args) || preparationCapacityUsed() >= WORKTREE_CREATE_PREPARATION_LIMIT) {
+    return Promise.resolve()
+  }
   const preparationId = `${process.pid}-${randomUUID()}`
   const lockReason = createWorktreePreparationLockReason(
     preparationId,
@@ -242,13 +262,14 @@ function startBackgroundPreparation({
     options,
     createdAt: Date.now(),
     operation,
-    checkoutStarted: false,
+    checkoutStarted: true,
     activity: createPreparationActivity(kind),
     ready: Promise.resolve()
   }
   operation.setDiscard((cleanupOptions) =>
-    discardPreparedWorktree(repoPath, preparedPath, cleanupOptions, lockReason)
+    discardUnmaterializedPreparation(preparedPath, cleanupOptions)
   )
+  registerPreparationObligation(entry)
   entry.ready = operation.run(async () => {
     await waitForPromiseWithSignal(
       startStalePreparationCleanup(preparationHostKey(repoPathKey, wslDistro), repoPath, options),
@@ -257,7 +278,6 @@ function startBackgroundPreparation({
     signal.throwIfAborted()
     await operation.trackWriter(mkdir(toHostFilesystemPath(preparationRoot), { recursive: true }))
     signal.throwIfAborted()
-    entry.checkoutStarted = true
     await prepareWorktreeCreateCheckout(
       repoPath,
       preparedPath,
@@ -281,6 +301,7 @@ function startBackgroundPreparation({
 }
 
 export async function _resetPreparationPoolForTests(): Promise<void> {
+  cancelPreparationAdmissions()
   const entries = [...preparations.values()]
   preparations.clear()
   resetClaimsForTests()

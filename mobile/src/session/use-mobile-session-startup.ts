@@ -2,10 +2,10 @@ import { useEffect } from 'react'
 import { translate } from '../i18n/mobile-i18n'
 import { worktreeActivate } from '../host-screen/host-screen-operations'
 import { headlessActivationNeedsHostRenderer } from '../worktree/worktree-activation-result'
-import { createInitialSessionAutoCreateState } from './use-initial-session-terminal-autocreate'
-import type { MobileSessionKeyboardStateModel } from './use-mobile-session-keyboard-state'
-import { withoutSessionTabHostOwnership } from './mobile-session-tab-status-clock'
-import type { RpcResponse } from '../transport/types'
+import { createInitialSessionAutoCreateState } from '../terminal/session/use-initial-session-terminal-autocreate'
+import type { MobileSessionKeyboardStateModel } from '../terminal/session/use-mobile-session-keyboard-state'
+import { withoutSessionTabHostOwnership } from './tabs/mobile-session-tab-status-clock'
+import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
 
 export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) {
   const {

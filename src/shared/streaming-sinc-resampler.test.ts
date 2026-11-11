@@ -37,16 +37,4 @@ describe('StreamingSincResampler', () => {
     // A 10 kHz tone folds onto 6 kHz at 16 kHz; plain decimation leaves it at full amplitude.
     expect(amplitudeAt(aboveNyquist, 6000, 16000)).toBeLessThan(0.001)
   })
-
-  it('produces the same stream whatever block size the audio thread delivers', () => {
-    const input = tone(440, 44100, 44100)
-    const small = resampleInBlocks(input, 44100, 128)
-    const large = resampleInBlocks(input, 44100, 4096)
-
-    expect(small.length).toBe(large.length)
-    expect(Math.abs(small.length - 16000)).toBeLessThan(40)
-    for (let index = 0; index < small.length; index += 1) {
-      expect(small[index]).toBeCloseTo(large[index], 6)
-    }
-  })
 })

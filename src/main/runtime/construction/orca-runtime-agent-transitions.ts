@@ -1,5 +1,5 @@
 import { watchMovedWorkerResumeSessions } from '../rpc/methods/orchestration/worker/worker-resume-session-capture'
-import { AgentTransitionDetector } from '../../agent-hooks/agent-transition-detector'
+import { AgentTransitionDetector } from '../../agent-hooks/observations/agent-transition-detector'
 import type { ConnectorCloud } from '../../connector-cloud/connector-cloud'
 import type { ExternalConversationSeam } from '../../external-conversations/external-conversation-seam'
 import { installExternalConversations } from '../../external-conversations/external-conversations-install'

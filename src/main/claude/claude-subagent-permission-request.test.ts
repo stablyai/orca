@@ -13,7 +13,7 @@ import type {
 } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentChildWorkEvidence } from '../../shared/agent-status/child-work/agent-status-child-work-evidence'
 import type { AgentStatusStructuredSessionSubject } from '../../shared/agent-status/contracts/agent-status-subject'
-import { AgentHookServer } from '../agent-hooks/server'
+import { AgentHookServer } from '../agent-hooks/server/agent-hook-server'
 import type { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
 import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { StructuredAgentSessionCurrentWork } from '../native-chat/agent-session-wire/observations/structured-agent-session-current-work'

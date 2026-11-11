@@ -11,8 +11,8 @@ import {
 import { ArrowLeft, ArrowRight, X } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
-import { useAppStore } from '@/store'
+import { cn } from '@/lib/class-names'
+import { useAppStore } from '@/store/index'
 import {
   getContextualTour,
   type ContextualTourId,
@@ -28,7 +28,7 @@ import {
   type ContextualTourFloatingPosition
 } from './contextual-tour-floating-position'
 import { useTranslate } from '@/i18n/use-translate'
-import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 import { hasVisibleOverlay } from '@/lib/visible-overlay'
 import { getMeasurableContextualTourTarget } from './contextual-tour-gate'
 

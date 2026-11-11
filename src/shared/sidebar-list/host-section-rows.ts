@@ -7,7 +7,10 @@ import {
   type ExecutionHostKind,
   type ExecutionHostScope
 } from '../execution-host'
-import type { ExecutionHostHealth } from '../execution-host-registry'
+import type {
+  ExecutionHostHealth,
+  ExecutionHostVmState
+} from '../execution-host/execution-host-health'
 import type { RuntimeCompatVerdict } from '../protocol-compat'
 import type { RuntimeHostBlockedReason } from '../remote-runtime/host-status/runtime-host-status'
 import type { SshConnectionStatus } from '../ssh-types'
@@ -22,12 +25,15 @@ export type HostHeaderRow = {
   hostId: ExecutionHostId
   kind: ExecutionHostKind
   label: string
+  isDefaultLocalLabel?: boolean
   detail: string
   health: ExecutionHostHealth
   // Keep skew direction to deep-link the appropriate client/server update guidance.
   compatibility?: RuntimeCompatVerdict
   // Why: a revoked pairing needs "Re-pair", not the update guidance a version block gets.
   blockedReason?: RuntimeHostBlockedReason
+  // A VM-backed host's lifecycle explains suspended/waking/resume-failed without a transport fault.
+  vmState?: ExecutionHostVmState
   connectionStatus?: SshConnectionStatus
   collapsed: boolean
   count: number
@@ -39,10 +45,12 @@ export type HostSectionOption = {
   id: ExecutionHostId
   kind: ExecutionHostKind
   label: string
+  isDefaultLocalLabel?: boolean
   detail: string
   health: ExecutionHostHealth
   compatibility?: RuntimeCompatVerdict
   blockedReason?: RuntimeHostBlockedReason
+  vmState?: ExecutionHostVmState
   connectionStatus?: SshConnectionStatus
 }
 
@@ -70,6 +78,7 @@ function getFallbackHost(hostId: ExecutionHostId, localHostLabel: string): HostS
     id: hostId,
     kind: isLocal ? 'local' : hostId.startsWith('ssh:') ? 'ssh' : 'runtime',
     label: isLocal ? localHostLabel : hostId,
+    isDefaultLocalLabel: isLocal,
     detail: isLocal ? 'This computer' : 'Host',
     health: isLocal ? 'local' : 'available'
   }
@@ -274,10 +283,12 @@ export function addHostSectionRows(args: {
       hostId: host.id,
       kind: host.kind,
       label: host.label,
+      isDefaultLocalLabel: host.isDefaultLocalLabel,
       detail: host.detail,
       health: host.health,
       compatibility: host.compatibility,
       ...(host.blockedReason ? { blockedReason: host.blockedReason } : {}),
+      ...(host.vmState ? { vmState: host.vmState } : {}),
       connectionStatus: host.connectionStatus,
       collapsed,
       count: countWorkspaceRows(hostRows)

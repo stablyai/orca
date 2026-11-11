@@ -1,6 +1,6 @@
-import type { HostStatusReply } from '../transport/host-status-reply-schema'
-import type { RpcClient } from '../transport/rpc-client'
-import type { ConnectionState } from '../transport/types'
+import type { HostStatusReply } from '../transport/hosts/host-status-reply-schema'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import type { ConnectionState } from '../transport/connection/connection-state'
 import {
   readBridgeConnectionSnapshot,
   type BridgeConnectionSnapshot

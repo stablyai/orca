@@ -1,4 +1,6 @@
-import type { PipedChildProcess, PipedProcessSpawner } from '@orca/process-host/process-spec'
+import { withOrcaClaudeChatEntrypoint } from '../../shared/agent-launch/startup/claude-chat-entrypoint'
+import type { ChildProcessWithoutNullStreams } from 'node:child_process'
+import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
 import type { SpawnOptions as ClaudeAgentSdkSpawnOptions } from '@anthropic-ai/claude-agent-sdk'
 import { spawnProcess } from '@orca/process-host'
 import {
@@ -9,8 +11,8 @@ import { claudeChildClosePolicy, claudeChildCloseProven } from './claude-child-e
 
 export type ClaudeCodeProcessSpawn = {
   /** SDK spawn hook; Orca retains process ownership. */
-  spawn: (options: ClaudeAgentSdkSpawnOptions) => PipedChildProcess
-  readonly child: PipedChildProcess | null
+  spawn: (options: ClaudeAgentSdkSpawnOptions) => ChildProcessWithoutNullStreams
+  readonly child: ChildProcessWithoutNullStreams | null
   readonly managed: ManagedProviderProcess | null
   /** Supervisor pid on POSIX; lease ownership also requires start time and spawn token. */
   readonly pid: number | undefined
@@ -30,7 +32,7 @@ function definedEnv(env: Record<string, string | undefined>): Record<string, str
 
 /** Subscribes alongside the SDK's reader: an earlier listener would drain output it never sees. */
 function observeStdoutWithReader(
-  stdout: PipedChildProcess['stdout'],
+  stdout: ChildProcessWithoutNullStreams['stdout'],
   onStdout: (chunk: Buffer | string) => void
 ): void {
   const onSubscribe = (event: string | symbol): void => {
@@ -69,7 +71,7 @@ export function createClaudeCodeProcessSpawn(
         {
           spawnImpl,
           platform,
-          inheritedEnv: definedEnv(options.env),
+          inheritedEnv: withOrcaClaudeChatEntrypoint(definedEnv(options.env), platform),
           site: 'claude-stream-json-teardown',
           policy: (supervised) => claudeChildClosePolicy(supervised, platform),
           acceptClose: claudeChildCloseProven

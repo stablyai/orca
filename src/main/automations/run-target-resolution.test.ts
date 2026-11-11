@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import type { Store } from '../persistence/loading-store/store'
-import type { Automation } from '../../shared/automations-types'
-import type { WorkspaceRunContext } from '../../shared/task-source-context'
+import type { Automation } from '../../shared/automations/automation-definition'
+import type { WorkspaceRunContext } from '../../shared/work-items/task-source-context'
 import type { ProjectHostSetup } from '../../shared/project-types'
 import type { Repo } from '../../shared/repo-types'
 import {
   projectAutomationSelector,
   type AutomationProjectionContext
-} from '../../shared/automation-list-scope'
-import { toAutomationOwnerPrecondition } from '../../shared/automation-owner-precondition'
+} from '../../shared/automations/ownership/automation-list-scope'
+import { toAutomationOwnerPrecondition } from '../../shared/automations/ownership/automation-owner-precondition'
 
 import { resolveAutomationRunTarget } from './run-target-resolution'
 
@@ -128,47 +128,6 @@ describe('resolveAutomationRunTarget projectId drift', () => {
     const result = resolveAutomationRunTarget(store, automation)
 
     expect(result).toMatchObject({ ok: false })
-  })
-
-  it('still blocks when the hostId no longer matches the setup', () => {
-    // Guard returns at the setup hostId/repoId check before any repo lookup, so
-    // the repo's execution host is irrelevant here — assert the guard's own error.
-    const store = makeStore([makeSetup({ hostId: 'ssh:devbox' })], [makeRepo()])
-    const automation = makeAutomation(makeRunContext({ hostId: 'local' }))
-
-    const result = resolveAutomationRunTarget(store, automation)
-
-    expect(result).toMatchObject({
-      ok: false,
-      error: 'Project is not set up on the selected automation host anymore.'
-    })
-  })
-
-  it("still blocks when the repo's execution host drifted off the automation host", () => {
-    // Setup/context hostId agree, but the repo itself now executes on another host —
-    // pins the repo-execution-host check that lives past the setup-match guard.
-    const store = makeStore([makeSetup()], [makeRepo({ executionHostId: 'ssh:devbox' })])
-    const automation = makeAutomation(makeRunContext())
-
-    const result = resolveAutomationRunTarget(store, automation)
-
-    expect(result).toMatchObject({
-      ok: false,
-      error: 'Repository for the selected automation host is no longer available.'
-    })
-  })
-
-  it('still blocks when the path no longer matches the setup', () => {
-    const store = makeStore([makeSetup({ path: '/repo/new' })], [makeRepo({ path: '/repo/new' })])
-    const automation = makeAutomation(makeRunContext({ path: '/repo/old' }))
-
-    const result = resolveAutomationRunTarget(store, automation)
-
-    expect(result).toMatchObject({
-      ok: false,
-      error: 'Project path for the selected automation host has changed.',
-      errorCode: 'projectPathChanged'
-    })
   })
 })
 

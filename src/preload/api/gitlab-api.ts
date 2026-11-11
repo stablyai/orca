@@ -1,4 +1,4 @@
-import type { TaskSourceContext } from '../../shared/task-source-context'
+import type { TaskSourceContext } from '../../shared/work-items/task-source-context'
 import type { ClassifiedError } from '../../shared/classified-error'
 import type {
   GetGitLabRateLimitResult,

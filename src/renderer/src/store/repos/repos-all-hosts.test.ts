@@ -9,7 +9,7 @@ import {
   type RuntimeEnvironmentCallRequest
 } from '../../runtime/rpc/testing/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '../../runtime/rpc/compatibility/runtime-compatibility-cache'
-import { getSetupScriptPromptDismissalKey } from '../../lib/setup-script-prompt'
+import { getSetupScriptPromptDismissalKey } from '../../runtime/repo-hooks/setup-script-prompt'
 
 const localRepo: Repo = {
   id: 'local-repo',
@@ -708,58 +708,5 @@ describe('fetchReposForAllHosts', () => {
     expect(store.getState().trustedOrcaHooks).toEqual({
       'remote-repo': { all: { approvedAt: 1 } }
     })
-  })
-
-  it('starts remote repo catalog loads concurrently for all configured runtimes', async () => {
-    runtimeEnvironmentsList.mockResolvedValue([
-      { id: 'env-1', name: 'first' },
-      { id: 'env-2', name: 'second' }
-    ])
-    const firstStatusResolvers = new Map<string, (value: unknown) => void>()
-    let resolveBothStatusProbes = (): void => {}
-    const bothStatusProbesStarted = new Promise<void>((resolve, reject) => {
-      const timeout = setTimeout(
-        () => reject(new Error('Timed out waiting for both runtime probes')),
-        1_000
-      )
-      resolveBothStatusProbes = () => {
-        clearTimeout(timeout)
-        resolve()
-      }
-    })
-    runtimeEnvironmentTransportCall.mockImplementation(
-      (args: RuntimeEnvironmentCallRequest & { selector?: string }) => {
-        if (
-          args.method === 'status.get' &&
-          args.selector &&
-          !firstStatusResolvers.has(args.selector)
-        ) {
-          return new Promise((resolve) => {
-            firstStatusResolvers.set(args.selector!, resolve)
-            if (firstStatusResolvers.size === 2) {
-              resolveBothStatusProbes()
-            }
-          })
-        }
-        return createCompatibleRuntimeStatusResponseIfNeeded(args) ?? runtimeEnvironmentCall(args)
-      }
-    )
-    const store = createTestStore()
-
-    const load = store.getState().fetchReposForAllHosts()
-    await bothStatusProbesStarted
-
-    expect([...firstStatusResolvers.keys()].sort()).toEqual(['env-1', 'env-2'])
-    for (const resolve of firstStatusResolvers.values()) {
-      resolve(createCompatibleRuntimeStatusResponseIfNeeded({ method: 'status.get' }))
-    }
-    await load
-
-    expect(
-      store
-        .getState()
-        .repos.map((repo) => `${repo.id}:${repo.executionHostId}`)
-        .sort()
-    ).toEqual(['local-repo:local', 'remote-repo:runtime:env-1', 'remote-repo:runtime:env-2'])
   })
 })

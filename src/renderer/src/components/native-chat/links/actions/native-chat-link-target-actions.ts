@@ -19,7 +19,7 @@ import {
   resolveNativeChatHttpLinkSourceOwner
 } from './native-chat-http-link-source-owner'
 import { openNativeChatWebLink } from './native-chat-web-link-actions'
-import { showFileLinkOpenFailureToast } from '@/lib/file-link-open-failure-toast'
+import { showFileLinkOpenFailureToast } from '@/lib/files/open/file-link-open-failure-toast'
 import type { Translate } from '@/i18n/use-translate'
 
 export function resolveNativeChatHttpLinkRouting(
@@ -61,7 +61,7 @@ export function nativeChatFileLinkActions(
     target.absolutePath,
     target.line,
     target.column,
-    nativeChatFileOpenDeps(target, context),
+    { ...nativeChatFileOpenDeps(target, context), omitOpenInNewTab: true },
     resolveNativeChatHttpLinkSourceOwner(useAppStore.getState(), context.worktreeId),
     t
   )

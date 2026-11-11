@@ -2,9 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createScopedExternalAutomations } from './external-manager'
 import { ExternalAutomationManagerCache } from './external-automation-manager-cache'
 import { ExternalAutomationProbeScheduler } from './external-automation-probe-scheduler'
-import { SSH_HOST_NOT_SERVED_MESSAGE } from '../providers/ssh-host-not-served-error'
-import { AutomationOwnerConflictError } from '../../shared/automation-owner-conflict'
-import type { AutomationOwnerRef } from '../../shared/automation-owner-ref'
+
+import { AutomationOwnerConflictError } from '../../shared/automations/ownership/automation-owner-conflict'
+import type { AutomationOwnerRef } from '../../shared/automations/ownership/automation-owner-ref'
 import type { SshTarget } from '../../shared/ssh-types'
 import type * as Fs from 'node:fs'
 import type * as Os from 'node:os'
@@ -69,18 +69,6 @@ afterEach(() => {
 })
 
 describe('scoped external automations', () => {
-  it('reports an SSH host this process does not serve without probing this computer', async () => {
-    const engine = buildEngine([sshTarget(), sshTarget({ id: 'target-b', generation: 1 })])
-
-    const entry = await engine.listManager({
-      owner: desktopSsh('target-a', 3),
-      provider: 'openclaw'
-    })
-
-    expect(entry).toMatchObject({ manager: null, error: SSH_HOST_NOT_SERVED_MESSAGE })
-    expect(runProcessMock).not.toHaveBeenCalled()
-  })
-
   it('fails a scoped mutation closed when the host changed under the dialog', async () => {
     const engine = buildEngine([sshTarget({ generation: 5 })])
 

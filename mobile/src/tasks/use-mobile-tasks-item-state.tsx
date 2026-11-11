@@ -27,7 +27,6 @@ export function useMobileTasksItemState() {
   }, [])
   const [itemTitleDraft, setItemTitleDraft] = useState('')
   const [itemBodyDraft, setItemBodyDraft] = useState('')
-  const [itemCommentDraft, setItemCommentDraft] = useState('')
   const [itemAddLabelsDraft, setItemAddLabelsDraft] = useState('')
   const [itemRemoveLabelsDraft, setItemRemoveLabelsDraft] = useState('')
   const [itemAddAssigneesDraft, setItemAddAssigneesDraft] = useState('')
@@ -110,8 +109,6 @@ export function useMobileTasksItemState() {
     setItemTitleDraft,
     itemBodyDraft,
     setItemBodyDraft,
-    itemCommentDraft,
-    setItemCommentDraft,
     itemAddLabelsDraft,
     setItemAddLabelsDraft,
     itemRemoveLabelsDraft,

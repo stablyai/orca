@@ -10,7 +10,11 @@ import {
   receivesMailWhole
 } from '../../../../orchestration/db/dispatch-context/worker-follow-up-lineage'
 import { FOLLOW_UP_MESSAGE_TYPES } from '../../../../orchestration/db/dispatch-context/worker-follow-up-plan'
-import type { OrchestrationSessionCaller } from '../../../../orchestration/addressing/orchestration-caller-identity'
+import {
+  peerCoordinatorAddress,
+  peerCoordinatorCaller,
+  type OrchestrationEntryCaller
+} from '../../../../orchestration/addressing/orchestration-caller-identity'
 import { resolveOrcaSessionParty } from '../../../../orchestration/addressing/orchestration-party'
 import { readStructuredAgentSessionRecord } from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
 import { createHash } from 'node:crypto'
@@ -111,7 +115,7 @@ async function continueUnreadMail(
     outcome =
       plan?.kind === 'start'
         ? await startWorkerFollowUp({
-            ctx: { runtime, orchestrationCaller: senderSession(db, first.from_handle) },
+            ctx: { runtime, orchestrationCaller: senderCaller(db, first) },
             db,
             plan,
             from: first.from_handle,
@@ -304,7 +308,16 @@ export function continueAllUnreadWorkerMail(
   }
 }
 
-function senderSession(db: OrchestrationDb, from: string): OrchestrationSessionCaller | undefined {
+/** The sender continues as itself: a session as its session, a paired Orca as the coordinator of its Run. */
+function senderCaller(
+  db: OrchestrationDb,
+  message: { from_handle: string; run_id: string }
+): OrchestrationEntryCaller | undefined {
+  const peerRun = db.getPeerRun(message.run_id)
+  if (peerRun && message.from_handle === peerCoordinatorAddress(peerRun.conversation_id)) {
+    return peerCoordinatorCaller(peerRun)
+  }
+  const from = message.from_handle
   const sessionId = parseOrcaSessionAddress(from)
   const record = sessionId ? readStructuredAgentSessionRecord(sessionId) : null
   return sessionId && record

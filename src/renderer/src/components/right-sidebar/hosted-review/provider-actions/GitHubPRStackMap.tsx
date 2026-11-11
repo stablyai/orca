@@ -4,7 +4,7 @@ import type {
   GitHubPRStack,
   GitHubPRStackEntry
 } from '../../../../../../shared/github/pull-request-types'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'

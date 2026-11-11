@@ -1,8 +1,9 @@
 // #36923: a client reaches a recipe VM's workspace through the VM's own server, which is gone
 // while the VM sleeps. Opening the workspace wakes it; any other request leaves it asleep.
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { removeTempDirs } from '../../../shared/testing/remove-temp-dirs.test-support'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { encodePairingOffer } from '../../../shared/remote-runtime/pairing/pairing'
 import { PAIRING_OFFER_VERSION } from '../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
@@ -104,9 +105,9 @@ describe('a request to a recipe VM environment', () => {
     })
   })
 
-  afterEach(() => {
+  afterEach(async () => {
     registerRecipeVmWaker(null)
-    rmSync(userDataPath, { recursive: true, force: true })
+    await removeTempDirs([userDataPath])
   })
 
   it.each(['suspended', 'resume_failed'] as const)(
@@ -157,6 +158,28 @@ describe('a request to a recipe VM environment', () => {
       wokenPairingRevision: 7
     })
     // A later open that woke nothing does not inherit that pairing.
+    await expect(prepareRecipeVm(userDataPath, VM_ENVIRONMENT, 'wake')).resolves.toEqual({
+      wokenPairingRevision: null
+    })
+  })
+
+  // A resume that kept its saved pairing leaves the revision as it was; it is still a new wake.
+  it('reports a wake that kept the pairing an earlier wake made', async () => {
+    recordVm('suspended')
+    forgetRecipeVmWakePairingsForTests()
+    noteRecipeVmWakePairing(VM_ENVIRONMENT.id, 7)
+    holdOpen.mockImplementationOnce(async () => {
+      noteRecipeVmWakePairing(VM_ENVIRONMENT.id, 7, true)
+      return 'up'
+    })
+    await expect(prepareRecipeVm(userDataPath, VM_ENVIRONMENT, 'wake')).resolves.toEqual({
+      wokenPairingRevision: 7
+    })
+    // Without a server restart, a wake that kept the pairing reads as no wake, as before.
+    holdOpen.mockImplementationOnce(async () => {
+      noteRecipeVmWakePairing(VM_ENVIRONMENT.id, 7)
+      return 'up'
+    })
     await expect(prepareRecipeVm(userDataPath, VM_ENVIRONMENT, 'wake')).resolves.toEqual({
       wokenPairingRevision: null
     })

@@ -14,7 +14,7 @@ import {
   type BridgeImageRunParams
 } from '../mobile-web-shell/bridge/bridge-image-verbs'
 import { BridgeNativeVerbRefusedError } from '../mobile-web-shell/bridge-host-errors'
-import { decodeCanonicalBase64Bytes } from '../transport/base64-byte-codec'
+import { decodeCanonicalBase64Bytes } from '../transport/encryption/base64-byte-codec'
 import { mobileFileExtensionForMime } from './mobile-picked-file-name'
 import { freshCacheFolder } from './native-media-device'
 
