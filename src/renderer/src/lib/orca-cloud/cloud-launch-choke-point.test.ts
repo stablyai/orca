@@ -10,7 +10,9 @@ const RAW =
   /from '@\/lib\/agent-session\/launch\/new-tab\/launch-agent-web-host-tab'|from '\.\/launch-agent-web-host-tab'/
 const ALLOWED = new Set([
   'lib/orca-cloud/cloud-web-host-launch-hold.ts',
-  'lib/agent-session/launch/new-tab/launch-agent-web-host-tab.ts'
+  'lib/agent-session/launch/new-tab/launch-agent-web-host-tab.ts',
+  // The create path (background-declined create terminal): #390 owns its Orca Cloud gate.
+  'lib/workspace/creation/worktree-creation-background-mount.ts'
 ])
 
 function sources(dir: string): string[] {
