@@ -16,6 +16,7 @@ import type {
 import { useTranslate } from '@/i18n/use-translate'
 
 type EmulatorScreenSurfaceProps = {
+  deviceId?: string
   frameLayout: DeviceFrameLayout | null
   isLive: boolean
   keyboardCaptureActive: boolean
@@ -39,6 +40,7 @@ type EmulatorScreenSurfaceProps = {
 }
 
 export function EmulatorScreenSurface({
+  deviceId,
   frameLayout,
   isLive,
   keyboardCaptureActive,
@@ -89,6 +91,7 @@ export function EmulatorScreenSurface({
     >
       {/* Use the real streamed screen; extra in-screen chrome would duplicate iOS status bars and distort bezels. */}
       <EmulatorScreenStreamContent
+        deviceId={deviceId}
         loading={loading}
         onStreamError={onStreamError}
         onStreamSize={onStreamSize}
