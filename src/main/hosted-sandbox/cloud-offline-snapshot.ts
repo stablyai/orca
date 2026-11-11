@@ -144,13 +144,35 @@ function chatsOf(entries: OfflineCacheEntry[]): CloudOfflineChat[] {
   return [...bySession.values()].sort((a, b) => b.at - a.at)
 }
 
+/**
+ * The newest `terminal.list` of the whole workspace (the capture's own `{worktree}` call, not a
+ * filtered one) that answered with a terminal list: its handles are the live terminals.
+ */
+function newestWorkspaceListing(
+  lists: readonly OfflineCacheEntry[]
+): { handles: Set<string>; at: number } | null {
+  for (const list of lists) {
+    const params = ParamsSchema.safeParse(list.params)
+    const keys = params.success ? Object.keys(params.data) : []
+    if (keys.length !== 1 || keys[0] !== 'worktree') {
+      continue
+    }
+    const parsed = TerminalListSchema.safeParse(list.result)
+    if (parsed.success && parsed.data.terminals) {
+      return { handles: new Set(parsed.data.terminals.map((t) => t.handle)), at: list.at }
+    }
+  }
+  return null
+}
+
 async function terminalsOf(
   cache: CloudOfflineCache,
   environmentId: string
 ): Promise<CloudOfflineTerminal[]> {
   // Every listing contributes titles (a filtered listing can be empty); newest first wins.
+  const lists = await cache.entries(environmentId, 'terminal.list')
   const titles = new Map<string, string | null>()
-  for (const list of await cache.entries(environmentId, 'terminal.list')) {
+  for (const list of lists) {
     const parsed = TerminalListSchema.safeParse(list.result)
     for (const terminal of parsed.success ? (parsed.data.terminals ?? []) : []) {
       if (!titles.has(terminal.handle)) {
@@ -158,6 +180,10 @@ async function terminalsOf(
       }
     }
   }
+  // Each boot respawns a tab's terminal under a new handle, and reads of the old ones stay cached:
+  // only the terminals the newest whole-workspace listing names are this workspace's terminals
+  // (plus any read after that listing, which it could not know yet). No such listing: keep all.
+  const current = newestWorkspaceListing(lists)
   const seen = new Set<string>()
   const terminals: CloudOfflineTerminal[] = []
   for (const entry of await cache.entries(environmentId, 'terminal.read')) {
@@ -165,6 +191,9 @@ async function terminalsOf(
     const result = parsed.success ? parsed.data.terminal : undefined
     const handle = result?.handle ?? stringParam(entry.params, 'terminal')
     if (!handle || seen.has(handle) || !result?.tail) {
+      continue
+    }
+    if (current && !current.handles.has(handle) && entry.at <= current.at) {
       continue
     }
     seen.add(handle)
