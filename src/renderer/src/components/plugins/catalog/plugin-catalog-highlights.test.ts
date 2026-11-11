@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { PluginMarketplaceHostListing } from '../../../../../preload/api-types'
 import { pluginListEntryFromListing, type PluginListEntry } from '../list/plugin-list-entries'
-import { pickFeaturedPlugins, pickNewlyAddedPlugins } from './plugin-catalog-highlights'
+import {
+  PLUGIN_FEATURED_LIMIT,
+  pickFeaturedPlugins,
+  pickNewlyAddedPlugins
+} from './plugin-catalog-highlights'
 
 const NOW = Date.parse('2026-11-09T20:00:00Z')
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the rows only check that an installed record exists, never read it.
@@ -18,13 +22,21 @@ function entry(
     marketplaceOwner: 'stablyai',
     marketplaceCommit: 'a'.repeat(40),
     pluginKey,
-    source: { kind: 'git', url: `https://github.com/${pluginKey}.git`, ref: 'main' },
+    source: {
+      kind: 'git',
+      url: `https://github.com/${pluginKey}.git`,
+      ref: 'main'
+    },
     categories: ['themes'],
     official: false,
     bundled: false,
     ...extra
   }
-  return { ...pluginListEntryFromListing(listing), installCountEligible: true, ...overrides }
+  return {
+    ...pluginListEntryFromListing(listing),
+    installCountEligible: true,
+    ...overrides
+  }
 }
 
 describe('pickFeaturedPlugins', () => {
@@ -46,6 +58,72 @@ describe('pickFeaturedPlugins', () => {
       'acme.ayu',
       'acme.excalidraw',
       'acme.toolbox'
+    ])
+  })
+
+  it('counts every kind a plugin belongs to, whatever order its categories come in', () => {
+    const counts = { 'acme.multi': 100, 'acme.editor': 90 }
+    for (const categories of [
+      ['themes', 'editors'],
+      ['editors', 'themes']
+    ]) {
+      const entries = [
+        entry('acme.multi', { categories }),
+        entry('acme.editor', { categories: ['editors'] })
+      ]
+
+      expect(pickFeaturedPlugins(entries, counts, null).map((item) => item.pluginKey)).toEqual([
+        'acme.multi',
+        'acme.editor'
+      ])
+    }
+  })
+
+  it('picks the same plugins whatever order the catalog and categories come in', () => {
+    const counts = {
+      'acme.multi': 100,
+      'acme.editor': 90,
+      'acme.theme': 80,
+      'acme.game': 50,
+      'acme.tie-b': 40,
+      'acme.tie-a': 40
+    }
+    const build = (reverse: boolean): PluginListEntry[] => {
+      const order = <T>(items: T[]): T[] => (reverse ? items.toReversed() : items)
+      return order([
+        entry('acme.multi', {
+          categories: order(['themes', 'editors', 'games'])
+        }),
+        entry('acme.editor', { categories: ['editors'] }),
+        entry('acme.theme', { categories: ['themes'] }),
+        entry('acme.game', { categories: order(['games', 'editors']) }),
+        entry('acme.tie-b', { categories: ['panels'] }),
+        entry('acme.tie-a', { categories: ['panels'] })
+      ])
+    }
+
+    const forward = pickFeaturedPlugins(build(false), counts, null).map((item) => item.pluginKey)
+    const reversed = pickFeaturedPlugins(build(true), counts, null).map((item) => item.pluginKey)
+
+    expect(reversed).toEqual(forward)
+    expect(forward).toEqual(['acme.multi', 'acme.editor', 'acme.theme', 'acme.tie-a'])
+  })
+
+  it('offers at most four, one row of the widest grid, even when more kinds have plugins', () => {
+    const categories = ['themes', 'editors', 'panels', 'games', 'icons', 'vm-recipes']
+    const entries = categories.map((category) =>
+      entry(`acme.${category}`, { categories: [category] })
+    )
+    const counts = Object.fromEntries(
+      categories.map((category, index) => [`acme.${category}`, 100 - index])
+    )
+
+    expect(PLUGIN_FEATURED_LIMIT).toBe(4)
+    expect(pickFeaturedPlugins(entries, counts, null).map((item) => item.pluginKey)).toEqual([
+      'acme.themes',
+      'acme.editors',
+      'acme.panels',
+      'acme.games'
     ])
   })
 
@@ -110,7 +188,9 @@ describe('pickNewlyAddedPlugins', () => {
 
   it('offers up to nine, as the website does', () => {
     const entries = Array.from({ length: 12 }, (_, index) =>
-      entry(`acme.p${index}`, { addedAt: new Date(NOW - (index + 1) * 3_600_000).toISOString() })
+      entry(`acme.p${index}`, {
+        addedAt: new Date(NOW - (index + 1) * 3_600_000).toISOString()
+      })
     )
 
     expect(pickNewlyAddedPlugins(entries, null, NOW).map((item) => item.pluginKey)).toEqual(

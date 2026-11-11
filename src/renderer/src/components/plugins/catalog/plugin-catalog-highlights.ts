@@ -3,7 +3,10 @@ import { pluginFilterKinds } from '../list/plugin-list-filter'
 import { pickNewPlugins } from '../../../../../shared/plugins/catalog/plugin-added-at'
 import { pluginListedAt } from '../list/plugin-listed-at'
 
-/** Cards the Featured row offers; the grid shows as many as fit one row (1–4 columns). */
+/**
+ * Cards the Featured row offers; the grid shows as many as fit one row (1–4 columns).
+ * Why a cap: Featured is a responsive teaser, not an exhaustive one-per-category list.
+ */
 export const PLUGIN_FEATURED_LIMIT = 4
 
 /** A plugin someone could install from a highlight row right now. */
@@ -17,7 +20,12 @@ function isOfferable(entry: PluginListEntry, orcaVersion: string | null): boolea
   )
 }
 
-/** Most installed first, one per kind, so a single popular kind can't fill the row. */
+/**
+ * Most installed first, one per kind, so a single popular kind can't fill the row. A plugin counts
+ * for every kind it belongs to, as the category filters do, and fills one of them: the kind with
+ * the fewest lower-ranked candidates left, so a multi-kind plugin doesn't take a kind's only
+ * candidate's place. Ties break by key and kind name, never by category order, so results stay put.
+ */
 export function pickFeaturedPlugins(
   entries: readonly PluginListEntry[],
   installCounts: Readonly<Record<string, number>>,
@@ -27,17 +35,39 @@ export function pickFeaturedPlugins(
     .filter((entry) => entry.installCountEligible && isOfferable(entry, orcaVersion))
     .flatMap((entry) => {
       const count = installCounts[entry.pluginKey]
-      return typeof count === 'number' && count > 0 ? [{ entry, count }] : []
+      return typeof count === 'number' && count > 0
+        ? [{ entry, count, kinds: [...pluginFilterKinds(entry)].sort() }]
+        : []
     })
-    .sort((a, b) => b.count - a.count)
-  const kindsShown = new Set<string>()
+    .sort(
+      (a, b) =>
+        b.count - a.count ||
+        (a.entry.pluginKey < b.entry.pluginKey ? -1 : a.entry.pluginKey > b.entry.pluginKey ? 1 : 0)
+    )
+  const candidatesLeft = new Map<string, number>()
+  for (const { kinds } of counted) {
+    for (const kind of kinds) {
+      candidatesLeft.set(kind, (candidatesLeft.get(kind) ?? 0) + 1)
+    }
+  }
+  const kindsFilled = new Set<string>()
   const featured: PluginListEntry[] = []
-  for (const { entry } of counted) {
-    const [kind] = pluginFilterKinds(entry)
-    if (kind === undefined || kindsShown.has(kind)) {
+  for (const { entry, kinds } of counted) {
+    let pick: string | undefined
+    let pickLeft = Infinity
+    for (const kind of kinds) {
+      const left = (candidatesLeft.get(kind) ?? 1) - 1
+      candidatesLeft.set(kind, left)
+      // Why strict <: kinds are sorted, so an equal count keeps the alphabetically first kind.
+      if (!kindsFilled.has(kind) && left < pickLeft) {
+        pick = kind
+        pickLeft = left
+      }
+    }
+    if (pick === undefined) {
       continue
     }
-    kindsShown.add(kind)
+    kindsFilled.add(pick)
     featured.push(entry)
     if (featured.length === PLUGIN_FEATURED_LIMIT) {
       break

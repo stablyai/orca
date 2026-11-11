@@ -44,6 +44,8 @@ export function PluginCatalogHighlights({
   }
   return (
     <>
+      {/* Why one row of up to four: Featured is a responsive teaser, per the approved mock, not an
+          exhaustive one-per-category list; the catalogs below still list every plugin. */}
       {featured.length > 0 ? (
         <PluginListGroup
           layout="grid"
