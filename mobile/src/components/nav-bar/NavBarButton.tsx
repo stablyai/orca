@@ -1,5 +1,5 @@
 import type { ComponentType, Ref } from 'react'
-import { Pressable, type View } from 'react-native'
+import { Pressable, Text, View } from 'react-native'
 import { colors, feedback, radii } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
@@ -18,6 +18,8 @@ type NavBarButtonProps = {
   disabled?: boolean
   /** The icon's colour while not active, e.g. a PR state's. */
   iconColor?: string
+  /** A needs-you count drawn on the button's corner; hidden at zero. */
+  badge?: number
 }
 
 // A round top-bar button; the bar floats over content like the composer, so its buttons are round too.
@@ -28,7 +30,8 @@ export function NavBarButton({
   onPress,
   active = false,
   disabled = false,
-  iconColor
+  iconColor,
+  badge = 0
 }: NavBarButtonProps) {
   useMobileColorScheme()
   return (
@@ -52,6 +55,11 @@ export function NavBarButton({
         color={active ? colors.bgBase : (iconColor ?? colors.textPrimary)}
         strokeWidth={2.1}
       />
+      {badge > 0 ? (
+        <View style={styles.badge} pointerEvents="none">
+          <Text style={styles.badgeText}>{badge > 99 ? '99+' : badge}</Text>
+        </View>
+      ) : null}
     </Pressable>
   )
 }
@@ -73,5 +81,21 @@ const styles = themedStyleSheet(() => ({
   },
   disabled: {
     opacity: feedback.disabledOpacity
-  }
+  },
+  // The Agents tab's needs-you badge.
+  badge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    minWidth: 17,
+    height: 17,
+    paddingHorizontal: 4,
+    borderRadius: radii.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.statusAmber,
+    borderWidth: 1.5,
+    borderColor: colors.bgBase
+  },
+  badgeText: { fontSize: 11, fontWeight: '700', color: '#000' }
 }))

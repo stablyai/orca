@@ -27,6 +27,7 @@ export type ScreenDependencies = {
   appStateListeners: Set<(state: string) => void>
   openUrl: Mock
   push: Mock
+  dismissTo: Mock
   back: Mock
   canGoBack: boolean
   rootState: NativeStackState | undefined
@@ -86,6 +87,7 @@ export function createScreenDependencies(): ScreenDependencies {
     appStateListeners: new Set(),
     openUrl: vi.fn(),
     push: vi.fn(),
+    dismissTo: vi.fn(),
     back: vi.fn(),
     canGoBack: true,
     rootState: undefined,

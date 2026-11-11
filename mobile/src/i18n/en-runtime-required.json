@@ -201,6 +201,10 @@
     "hostBottomBar": {
       "activeFilters_one": "Workspace options ({{count}} filter active)",
       "activeFilters_other": "Workspace options ({{count}} filters active)"
+    },
+    "hostScreenHeader": {
+      "agentsNeedYou_one": "Agents, {{count}} needs you",
+      "agentsNeedYou_other": "Agents, {{count}} need you"
     }
   },
   "pullRequest": {

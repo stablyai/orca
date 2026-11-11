@@ -1,6 +1,7 @@
-import { useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import {
+  Bot,
   CalendarClock,
   ChevronLeft,
   List,
@@ -17,6 +18,9 @@ import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import { PullDownMenu } from '../components/nav-bar/PullDownMenu'
 import { StatusDot } from '../components/StatusDot'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { countHostAgentsNeedingYou } from '../agents/agent-list-rows'
+import { useSharedNow } from '../hooks/use-now'
+import { homeAgentsHref } from '../navigation/home-agents-route'
 import { useRefreshHint } from '../query/refresh-hint'
 import { colors, pressedStyle } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
@@ -28,6 +32,7 @@ import {
   type ConnectionVerdict
 } from '../transport/connection/connection-health'
 import type { HostScreenController } from './use-host-screen-controller'
+import { useHomeAgentsLink } from './use-home-agents-link'
 
 function isErrorVerdict(v: ConnectionVerdict): boolean {
   return isConnectionOutage(v) || v.kind === 'auth-failed'
@@ -169,13 +174,16 @@ export function HostScreenHeader({
         titleOpacity={collapsingTitle?.barTitleOpacity}
         dividerOpacity={collapsingTitle?.barDividerOpacity}
         trailing={
-          <NavBarButton
-            ref={moreRef}
-            icon={MoreHorizontal}
-            accessibilityLabel={t('hostScreen.hostScreenHeader.moreActions', 'More actions')}
-            onPress={() => setMenuOpen(true)}
-            active={menuOpen}
-          />
+          <>
+            <HostAgentsButton controller={controller} />
+            <NavBarButton
+              ref={moreRef}
+              icon={MoreHorizontal}
+              accessibilityLabel={t('hostScreen.hostScreenHeader.moreActions', 'More actions')}
+              onPress={() => setMenuOpen(true)}
+              active={menuOpen}
+            />
+          </>
         }
       />
       <PullDownMenu
@@ -185,6 +193,39 @@ export function HostScreenHeader({
         onClose={() => setMenuOpen(false)}
       />
     </>
+  )
+}
+
+// Opens Home's Agents tab filtered to this desktop. Its own component, so the clock redraws only the badge.
+function HostAgentsButton({ controller }: { controller: HostScreenController }) {
+  const t = useMobileTranslation()
+  const linked = useHomeAgentsLink()
+  const now = useSharedNow(30_000)
+  const { connState, hostId, router, state } = controller
+  const needsYou = useMemo(
+    () => countHostAgentsNeedingYou(hostId, connState, state.worktrees, now),
+    [hostId, connState, state.worktrees, now]
+  )
+  if (!linked) {
+    return null
+  }
+  return (
+    <NavBarButton
+      icon={Bot}
+      badge={needsYou}
+      accessibilityLabel={
+        needsYou === 0
+          ? t('hostScreen.hostScreenHeader.agents', 'Agents')
+          : needsYou === 1
+            ? t('hostScreen.hostScreenHeader.agentsNeedYou_one', 'Agents, {{count}} needs you', {
+                count: needsYou
+              })
+            : t('hostScreen.hostScreenHeader.agentsNeedYou_other', 'Agents, {{count}} need you', {
+                count: needsYou
+              })
+      }
+      onPress={() => router.dismissTo(homeAgentsHref(hostId))}
+    />
   )
 }
 
