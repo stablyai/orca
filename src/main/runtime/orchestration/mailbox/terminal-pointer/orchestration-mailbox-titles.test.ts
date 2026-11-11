@@ -9,4 +9,5 @@ vi.mock('electron', () => ({
 }))
 
 import './orchestration-codex-completion-title.spec'
+import './orchestration-cursor-native-title.spec'
 import '../../../terminal/output/stale-title-completion-recovery.spec'

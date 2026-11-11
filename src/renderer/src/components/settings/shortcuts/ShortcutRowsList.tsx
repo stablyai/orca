@@ -5,6 +5,7 @@ import { ShortcutCommandBlock } from './ShortcutCommandBlock'
 import type { ShortcutRowsByGroup } from './ShortcutFilterRail'
 import { useTranslate } from '@/i18n/use-translate'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
+import { translateShortcutGroupTitle } from './shortcut-action-copy'
 
 const EMPTY_BINDINGS: readonly string[] = []
 
@@ -63,7 +64,7 @@ export function ShortcutRowsList({
   return (
     <div className={cn('flex flex-col gap-8', className)}>
       {groups.map((group) => (
-        <SettingsGroup key={group.title} title={group.title}>
+        <SettingsGroup key={group.title} title={translateShortcutGroupTitle(group.title)}>
           {group.rows.map((row) => (
             <ShortcutCommandBlock
               key={row.item.id}

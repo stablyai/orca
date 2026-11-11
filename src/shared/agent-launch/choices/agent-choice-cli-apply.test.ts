@@ -92,3 +92,26 @@ it.each(['true', '42', '["high"]', '{key="high"}'])(
     expect(result.userArgs).toBe(userArgs)
   }
 )
+
+it('keeps a Pi model in Arguments literal so chats never receive a CLI pattern', () => {
+  const lift = (userArgs: string) =>
+    reconcileAgentChoiceArgsDetailed({
+      agent: 'pi',
+      userArgs,
+      choices: {},
+      mode: 'arguments-edit',
+      keys
+    })
+  for (const userArgs of [
+    '--model sonnet:high',
+    '--model anthropic/sonnet',
+    '--model anthropic/claude-opus-5-5',
+    '--provider openai --model gpt-6',
+    '--thinking ultra'
+  ]) {
+    const result = lift(userArgs)
+    expect(result.recognized).toEqual([])
+    expect(result.choices).toEqual({})
+    expect(result.userArgs).toBe(userArgs)
+  }
+})

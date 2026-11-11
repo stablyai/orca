@@ -27,6 +27,8 @@ import {
 } from './appearance-usage-percentage-search'
 
 import { LeftSidebarAppearanceSetting } from './LeftSidebarAppearanceSetting'
+import { getStatusBarUsageFormatEntry } from './appearance-status-bar-usage-format-search'
+import { StatusBarUsageFormatSetting } from './StatusBarUsageFormatSetting'
 
 import { useTranslate } from '@/i18n/use-translate'
 import { matchesSettingsSearch, normalizeSettingsSearchQuery } from '../search/settings-search'
@@ -63,6 +65,7 @@ function recordStatusBarToggleInteraction(
   }
 }
 
+/** Window & Sidebar appearance section: sidebar/chrome appearance, status bar controls, and layout advanced settings. */
 export function AppearanceWindowSidebarSection({
   settings,
   updateSettings,
@@ -79,6 +82,9 @@ export function AppearanceWindowSidebarSection({
   const setWorktreeCardMode = useAppStore((state) => state.setWorktreeCardMode)
   const visibleStatusBarToggles = useAvailableStatusBarToggles(getStatusBarToggles())
   const usagePercentageDisplayEntry = getUsagePercentageDisplayEntry()
+  const statusBarUsageFormatEntry = getStatusBarUsageFormatEntry()
+  const statusBarUsageFormat = useAppStore((state) => state.statusBarUsageFormat)
+  const setStatusBarUsageFormat = useAppStore((state) => state.setStatusBarUsageFormat)
   const leftSidebarAppearanceEntry = getLeftSidebarAppearanceEntry()
   const sidebarEntries = getSidebarEntries()
   const workspaceCardLayoutEntry = getWorkspaceCardLayoutEntry()
@@ -97,6 +103,7 @@ export function AppearanceWindowSidebarSection({
   })
   const statusBarControlMatches =
     matchesSettingsSearch(searchQuery, usagePercentageDisplayEntry) ||
+    matchesSettingsSearch(searchQuery, statusBarUsageFormatEntry) ||
     visibleStatusBarToggles.some((toggle) =>
       matchesSettingsSearch(searchQuery, {
         title: toggle.title,
@@ -166,6 +173,18 @@ export function AppearanceWindowSidebarSection({
                     ]}
                   />
                 }
+              />
+            </SearchableSetting>
+
+            <SearchableSetting
+              title={statusBarUsageFormatEntry.title}
+              description={statusBarUsageFormatEntry.description}
+              keywords={statusBarUsageFormatEntry.keywords}
+              className="space-y-2"
+            >
+              <StatusBarUsageFormatSetting
+                format={statusBarUsageFormat}
+                onChange={setStatusBarUsageFormat}
               />
             </SearchableSetting>
 

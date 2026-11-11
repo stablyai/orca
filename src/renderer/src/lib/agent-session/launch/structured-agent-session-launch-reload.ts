@@ -6,14 +6,18 @@ import {
 import { restoreStructuredAgentSessionLaunchIntent } from './structured-agent-session-launch-intent'
 import type { StructuredAgentSessionLaunchIntent } from './structured-agent-session-launch-intent'
 import { StructuredAgentSessionOwnerUnresolvedError } from './structured-agent-session-launch-errors'
-import { createStructuredLaunchCallerGroup } from './structured-agent-session-launch-callers'
-import type { StructuredLaunchCallerGroup } from './structured-agent-session-launch-callers'
+import {
+  createStructuredLaunchCallerGroup,
+  type StructuredLaunchCallerGroup
+} from './structured-agent-session-launch-callers'
+
+import { structuredLaunchIdentity } from './structured-agent-session-launch-registry'
 import {
   getPersistedStructuredAgentLaunchRecord,
   setStructuredLaunchState,
-  structuredLaunchIdentity
-} from './structured-agent-session-launch-registry'
-import type { StructuredLaunchState } from './structured-agent-session-launch-registry'
+  type StructuredLaunchState
+} from './structured-agent-session-launch-state-store'
+
 import {
   initialStructuredLaunchSelection,
   structuredLaunchSelectionController

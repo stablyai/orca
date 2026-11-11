@@ -113,7 +113,6 @@ export function PrivacyPane({ settings }: PrivacyPaneProps): React.JSX.Element {
             >
               {t('auto.components.settings.PrivacyPane.77410e0566', 'Privacy policy')}
             </button>
-            .
           </p>
         </div>
         <Switch
