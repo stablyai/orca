@@ -18,6 +18,11 @@ import { callStructuredAgentSession } from '@/runtime/native-chat/requests/struc
 import { structuredAgentSessionHostKey } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
 import { useAppStore } from '@/store'
 import { readAntigravityHostTerminalCatalog } from '@/runtime/terminal/terminal-model-discovery-client'
+import {
+  agentPickerListsCliModels,
+  readAgentPickerCliModelCatalog
+} from '../agent-launch-picker-cli-model-catalog'
+import { resolveWorktreeModelDiscoveryRuntime } from '../../native-chat/session/options/catalog/native-chat-session-option-discovery'
 
 const SETTINGS_LAUNCH = { newLaunch: true, seedsModel: true }
 
@@ -74,17 +79,24 @@ export function useAgentSettingsModelCatalog(
       return
     }
     let stale = false
+    // Workspace-less CLI discovery can only use this machine; remote hosts retain the seed.
+    const cliRuntime =
+      isLocal && agentPickerListsCliModels({ agent })
+        ? resolveWorktreeModelDiscoveryRuntime(useAppStore.getState(), null)
+        : null
     // Not recorded in the new-chat snapshot: an account answer there would drop newer workspace answers.
     // Old hosts refuse waitForListing, so wait only once the host says a listing is running.
     const read = (wait: boolean): void => {
       const listing =
         agent === 'antigravity' && surface === 'terminal'
           ? readAntigravityHostTerminalCatalog(readTarget)
-          : callStructuredAgentSession<AgentSessionModelCatalogResult>(
-              readTarget,
-              'agentSession.modelCatalog',
-              wait ? { agent, waitForListing: true } : { agent }
-            )
+          : cliRuntime
+            ? readAgentPickerCliModelCatalog(agent, cliRuntime)
+            : callStructuredAgentSession<AgentSessionModelCatalogResult>(
+                readTarget,
+                'agentSession.modelCatalog',
+                wait ? { agent, waitForListing: true } : { agent }
+              )
       void listing
         .then((catalog) => {
           if (stale) {

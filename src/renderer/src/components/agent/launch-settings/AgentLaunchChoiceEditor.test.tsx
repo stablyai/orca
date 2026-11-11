@@ -8,8 +8,10 @@ import { TooltipProvider } from '../../ui/tooltip'
 import { AgentLaunchChoiceEditor } from './AgentLaunchChoiceEditor'
 import { groupAntigravityModelEfforts } from '../../../../../shared/agent-session/options/antigravity-model-efforts'
 import { SourceControlActionModelPicker } from '../../settings/source-control/SourceControlActionModelPicker'
+import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 
 const call = vi.hoisted(() => vi.fn())
+const discover = vi.hoisted(() => vi.fn())
 const menus = vi.hoisted(() => new Map<string, string[]>())
 const select = vi.hoisted(() => new Map<string, (value: string) => void>())
 const terminalRead = vi.hoisted(() => vi.fn())
@@ -20,6 +22,9 @@ vi.mock('@/runtime/terminal/terminal-model-discovery-client', () => ({
 
 vi.mock('@/runtime/native-chat/requests/structured-agent-session-call', () => ({
   callStructuredAgentSession: call
+}))
+vi.mock('@/runtime/source-control/git/runtime-git-generation-client', () => ({
+  discoverRuntimeCommitMessageModels: discover
 }))
 vi.mock('./AgentChoiceMenu', () => ({
   AgentChoiceMenu: ({
@@ -60,16 +65,20 @@ const LISTED = {
 
 const HOST = { kind: 'environment', environmentId: 'env-1' } as const
 
-function renderEditor(model?: string): void {
+function renderEditor(
+  model?: string,
+  agent: 'codex' | 'cursor' = 'codex',
+  catalogTarget: RuntimeClientTarget = HOST
+): void {
   render(
     <TooltipProvider>
       <AgentLaunchChoiceEditor
-        agent="codex"
-        label="Codex"
+        agent={agent}
+        label={agent}
         choices={model ? { model } : undefined}
         userArgs=""
         permission={undefined}
-        catalogTarget={HOST}
+        catalogTarget={catalogTarget}
         save={async () => {}}
       />
     </TooltipProvider>
@@ -81,6 +90,7 @@ describe('AgentLaunchChoiceEditor model list', () => {
 
   beforeEach(() => {
     call.mockReset()
+    discover.mockReset()
     terminalRead.mockReset()
     menus.clear()
     select.clear()
@@ -111,6 +121,22 @@ describe('AgentLaunchChoiceEditor model list', () => {
     await waitFor(() => expect(menus.get('Model')).toEqual(['__agent_default__', 'gpt-wrapped']))
     await act(async () => answerOlder(LISTED))
     expect(menus.get('Model')).toEqual(['__agent_default__', 'gpt-wrapped'])
+  })
+
+  it("lists the local Cursor CLI's models", async () => {
+    // The host's structured catalog has no Cursor listing; Settings must not settle for it.
+    call.mockResolvedValue({ origin: 'unknown' })
+    discover.mockResolvedValueOnce({
+      success: true,
+      catalogOrigin: 'probe',
+      models: [
+        { id: 'auto', label: 'Auto', isDefault: true },
+        { id: 'claude-opus-5-5-max', label: 'Claude Opus 5.5 Max' }
+      ]
+    })
+    useAppStore.setState({ settings: getDefaultSettings('') })
+    renderEditor(undefined, 'cursor', { kind: 'local' })
+    await waitFor(() => expect(menus.get('Model')).toContain('claude-opus-5-5-max'))
   })
 
   it('keeps structured models and efforts for a chat-only Antigravity Settings row', async () => {

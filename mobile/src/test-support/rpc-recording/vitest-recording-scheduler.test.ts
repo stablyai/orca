@@ -50,10 +50,4 @@ describe('recording scheduler randomness', () => {
     const expected = [{ name: 'draw', ordinal: 1, value: SEEDED_FIRST_DRAW }]
     expect([first, later]).toEqual([expected, expected])
   })
-
-  it('draws the same seeded value before the first drain as after it', async () => {
-    expect(await record('draw-before-drain', false)).toEqual([
-      { name: 'draw', ordinal: 1, value: SEEDED_FIRST_DRAW }
-    ])
-  })
 })

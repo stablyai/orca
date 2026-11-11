@@ -281,19 +281,19 @@ export abstract class RuntimeWorkspaceSelectors extends RuntimeProjectLaunchCont
     return this.store
   }
 
-  protected buildResolvedWorktreeFromId(worktreeId: string): ResolvedWorktree | null {
+  protected buildResolvedWorktreeFromId(
+    worktreeId: string,
+    repos = createRepoRowExecutionHostLookup(this.store?.getRepos() ?? [])
+  ): ResolvedWorktree | null {
     const parsed = splitWorktreeIdForFilesystem(worktreeId)
     if (!parsed?.repoId || !parsed.worktreePath) {
       return null
     }
-    const owner = this.store && resolveWorktreeMetaOwner(this.store, worktreeId)
+    const owner = this.store && resolveWorktreeMetaOwner(this.store, worktreeId, repos)
     if (!owner) {
       return null
     }
-    const repo = createRepoRowExecutionHostLookup(this.store?.getRepos() ?? []).byHost(
-      parsed.repoId,
-      owner.hostId
-    )
+    const repo = repos.byHost(parsed.repoId, owner.hostId)
     const git = {
       path: parsed.worktreePath,
       head: '',

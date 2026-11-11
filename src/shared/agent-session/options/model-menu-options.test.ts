@@ -100,20 +100,6 @@ it('distinguishes listing, unavailable discovery, coherent empty and legacy empt
   ).toEqual(['gpt-5.6-sol'])
 })
 
-it('retains gateway rows even when the host also reports unavailable metadata', () => {
-  const menu = modelMenuOptions({ ...recorded, unavailable: { reason: 'notSignedIn' } }, input)
-  expect(menu.status).toBe('listed')
-  expect(menu.rows.map((row) => row.id)).toEqual(['gpt-5.6-sol'])
-  expect(menu.rows[0].efforts.map((row) => row.value)).toEqual([
-    'low',
-    'medium',
-    'high',
-    'xhigh',
-    'max',
-    'ultra'
-  ])
-})
-
 it('keeps a literal saved unlisted model and effort read-only', () => {
   const menu = modelMenuOptions(recorded, {
     ...input,

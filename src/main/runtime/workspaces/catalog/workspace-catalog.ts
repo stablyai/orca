@@ -5,6 +5,7 @@ import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
 import { isPathInsideOrEqual } from '../../../../shared/cross-platform-path'
 import type { ResolvedWorktreeSnapshot } from './runtime-resolved-worktree-cache'
+import { createRepoRowExecutionHostLookup } from '../../../../shared/execution-host/worktree-execution-host-resolution'
 
 import { getWorktreeScanMutationRevision } from '../../../workspaces/catalog/local-worktree-scan-generation'
 import { resolveLocalProjectRuntimesForRepos } from '../../../workspaces/execution-host/local-project-runtime-resolution'
@@ -70,17 +71,14 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
     )
     worktreeIds.add(targetWorktreeId)
 
-    const resolved: ResolvedWorktree[] = []
-    for (const worktreeId of worktreeIds) {
+    const repos = createRepoRowExecutionHostLookup(this.store.getRepos())
+    return [...worktreeIds].flatMap((worktreeId) => {
       const worktree =
         worktreeId === targetWorktreeId
           ? targetWorktree
-          : this.buildResolvedWorktreeFromId(worktreeId)
-      if (worktree) {
-        resolved.push(worktree)
-      }
-    }
-    return resolved
+          : this.buildResolvedWorktreeFromId(worktreeId, repos)
+      return worktree ? [worktree] : []
+    })
   }
 
   /** A warm fleet snapshot already answers any selector for free, so scoped scanning must yield to it. */
@@ -109,12 +107,19 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
     }
     const metaById = this.store.getAllWorktreeMeta() ?? {}
     const repos = this.store.getRepos()
+    const repoOwners = createRepoRowExecutionHostLookup(repos)
     const projectRuntimeByRepoId = resolveLocalProjectRuntimesForRepos(this.requireStore(), repos)
     const platformByRepoId = platformsByRepoId(repos, projectRuntimeByRepoId)
     const deps = this.repoWorktreeRowDeps()
     const perRepoWorktrees = await Promise.all(
-      repos.map(
-        async (repo) => await resolveRepoWorktreeRows(deps, repo, metaById, projectRuntimeByRepoId)
+      repos.map((repo) =>
+        resolveRepoWorktreeRows(
+          deps,
+          repo,
+          metaById,
+          projectRuntimeByRepoId,
+          repoOwners.rowsFor(repo.id).length
+        )
       )
     )
     const lineageById = this.store?.getAllWorktreeLineage?.() ?? {}

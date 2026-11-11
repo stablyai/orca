@@ -33,7 +33,7 @@ import type { AgentSessionAccountHome } from '../../../../shared/agent-session/l
 import { nativeChatShellEnvironmentPolicy } from '../../../../shared/native-chat/native-chat-shell-environment'
 import { getProfileUserDataPath } from '../../../orca-profiles/profile-storage-paths'
 import { structuredChatUnavailableOnPlatform } from '../../../../shared/agent-session/structured-chat-platform-support'
-import { stripInheritedClaudeSessionEnv } from '../../../../shared/agent-launch/startup/claude-parent-session-env'
+import { stripInheritedAgentSessionEnv } from '../../../../shared/agent-launch/startup/parent-agent-session-env'
 
 export type LaunchEnvironmentSettings = Pick<
   GlobalSettings,
@@ -105,7 +105,7 @@ export async function resolveHostStructuredAgentLaunchEnvironment(
 ): Promise<Record<string, string>> {
   const inherited = { ...(await resolveHostAgentBaseEnvironment(settings)) }
   if (agent === 'claude') {
-    stripInheritedClaudeSessionEnv(inherited)
+    stripInheritedAgentSessionEnv(inherited)
   }
   return overlayEnvironmentVariables(
     inherited,
