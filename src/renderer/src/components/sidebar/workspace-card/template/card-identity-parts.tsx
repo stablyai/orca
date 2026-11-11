@@ -24,6 +24,7 @@ import { WorktreeCardSshHostControl } from '../host/WorktreeCardSshHostControl'
 import { WorktreeHostContextBadge } from '../host/WorktreeHostContextBadge'
 import { WorktreeCardHostMark, WorktreeCardHostStateWord } from '../host/WorktreeCardHostMark'
 import { WorktreeTitleInlineRename } from '../identity/WorktreeTitleInlineRename'
+import { CloudAgentHeldMark } from '@/components/orca-cloud/CloudAgentHeldMark'
 import { cardElement } from './card-template-compiler'
 
 type Card = WorktreeCardController
@@ -35,24 +36,28 @@ const withoutTitleTooltip = (title: React.ReactElement): React.ReactElement => t
 function title(props: Readonly<Record<string, unknown>>, card: Card): React.ReactNode {
   const { affiliateListMode, worktree } = card
   return (
-    <WorktreeTitleInlineRename
-      displayName={card.visibleCardTitle}
-      disabled={card.isDeleting || affiliateListMode}
-      showUnreadEmphasis={card.showUnreadEmphasis}
-      dimReadTitle={props.dimWhenRead === true}
-      className="text-[13px] leading-5"
-      editingClassName="flex-1"
-      titleWrapper={props.tooltip === false ? withoutTitleTooltip : undefined}
-      onEditingChange={affiliateListMode ? undefined : card.setTitleRenaming}
-      onRename={card.handleRenameTitle}
-      beginEditing={
-        !affiliateListMode &&
-        shouldBeginWorktreeRename(card.renamingWorktreeId, worktree.id, card.renameRowKey)
-      }
-      onBeginEditingConsumed={
-        affiliateListMode ? undefined : () => card.setRenamingWorktreeId(null)
-      }
-    />
+    <>
+      <WorktreeTitleInlineRename
+        displayName={card.visibleCardTitle}
+        disabled={card.isDeleting || affiliateListMode}
+        showUnreadEmphasis={card.showUnreadEmphasis}
+        dimReadTitle={props.dimWhenRead === true}
+        className="text-[13px] leading-5"
+        editingClassName="flex-1"
+        titleWrapper={props.tooltip === false ? withoutTitleTooltip : undefined}
+        onEditingChange={affiliateListMode ? undefined : card.setTitleRenaming}
+        onRename={card.handleRenameTitle}
+        beginEditing={
+          !affiliateListMode &&
+          shouldBeginWorktreeRename(card.renamingWorktreeId, worktree.id, card.renameRowKey)
+        }
+        onBeginEditingConsumed={
+          affiliateListMode ? undefined : () => card.setRenamingWorktreeId(null)
+        }
+      />
+      {/* N-03: the agent waits on its pane's strip (Orca Cloud): this mark is the signal away. */}
+      {card.titleRenaming ? null : <CloudAgentHeldMark worktreeId={worktree.id} />}
+    </>
   )
 }
 
