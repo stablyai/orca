@@ -5,7 +5,12 @@ import {
   MOBILE_SNAPSHOT_BYTE_BUDGET,
   MOBILE_SUBSCRIBE_SCROLLBACK_ROWS
 } from '../../../terminal/output/mobile-scrollback-limits'
-import { serializeBudgetedMobileSnapshot } from './terminal-snapshot-publication'
+import {
+  sendSnapshotFrames,
+  serializeBudgetedMobileSnapshot
+} from './terminal-snapshot-publication'
+import { TERMINAL_STREAM_CHUNK_BYTES } from '../../../../../shared/terminal/stream/terminal-multiplex-flow-control'
+import { REMOTE_RUNTIME_MAX_INBOUND_FRAME_BYTES } from '../../../../../shared/remote-runtime/remote-runtime-memory-limits'
 
 /** A pane whose history is `historyRows` rows of `bytesPerRow` bytes; a snapshot carries the last `scrollbackRows`. */
 function pane(historyRows: number, bytesPerRow: number) {
@@ -58,6 +63,25 @@ describe('desktop-depth subscribe snapshots (N-02)', () => {
     expect(asked.slice(0, 2)).toEqual([5000, 2000])
     expect(historyRowsIn(snapshot)).toBe(2000)
     expect(snapshot?.data.length ?? 0).toBeLessThanOrEqual(DESKTOP_SNAPSHOT_BYTE_BUDGET)
+  })
+
+  it('a full desktop-budget snapshot goes out in frames no larger than any receiver cap', () => {
+    const frames: Uint8Array[] = []
+    // A worst case at the budget: 2 MB of escape-heavy text.
+    const data = '\x1b[31mx\x1b[0m'.repeat(Math.floor(DESKTOP_SNAPSHOT_BYTE_BUDGET / 10))
+    const result = sendSnapshotFrames(
+      (_opcode, payload) => {
+        if (payload) {
+          frames.push(payload)
+        }
+        return true
+      },
+      { kind: 'scrollback', cols: 120, rows: 30, data }
+    )
+    expect(result.published).toBe(true)
+    const largest = Math.max(...frames.map((frame) => frame.byteLength))
+    expect(largest).toBeLessThanOrEqual(TERMINAL_STREAM_CHUNK_BYTES + 64)
+    expect(largest).toBeLessThanOrEqual(REMOTE_RUNTIME_MAX_INBOUND_FRAME_BYTES)
   })
 
   it('a desktop held to phone-sized limits behaves exactly as before', async () => {
