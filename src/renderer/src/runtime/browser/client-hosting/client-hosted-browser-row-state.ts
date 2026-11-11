@@ -3,7 +3,7 @@ import { recomputeOn } from '@/lib/recompute-on'
 import type {
   ClientHostedBrowserRow,
   ClientHostedBrowserRowsEvent
-} from '../../../../shared/client-hosted-browser-rows'
+} from '../../../../../shared/client-hosted-browser-rows'
 
 /** Host UI placeholders for pages rendered on paired clients own no page. Keep derived module state outside persisted tab/browser stores or restart/runtime projection would resurrect them as host-local tabs. */
 

@@ -2,16 +2,14 @@
 import {
   detachPaneEcho,
   discardUndispatchedKeystroke,
-  drainTimedOutEchoCandidates,
-  findPaneOwningFocus,
-  findPaneOwningNode,
   instrumentPaneEcho,
-  listProbePanes,
   noteEchoOutputArrival,
   recordKeystroke,
-  type EchoObservation,
   type InstrumentedPane
 } from './echo-instrumentation'
+import { drainTimedOutEchoCandidates } from './echo-candidate-timeout'
+import { findPaneOwningFocus, findPaneOwningNode, listProbePanes } from './pane-target'
+import type { EchoObservation } from './echo-observation'
 import { setTerminalOutputArrivalObserver } from '@/lib/pane-manager/terminal-output-arrival-observer'
 import { observeRendererLongTasks } from './renderer-long-tasks'
 import {
@@ -27,8 +25,6 @@ import {
   createExactLatencySampleWindow,
   TYPING_LATENCY_SAMPLE_LIMIT
 } from './sample-window'
-
-export type { TypingLatencyReport } from './diagnostic-report'
 
 let active: ProbeState | null = null
 let lastState: ProbeState | null = null
