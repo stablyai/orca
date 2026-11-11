@@ -16,7 +16,7 @@ export function isAppActive(): boolean {
 }
 
 /** Calls onTakeover when the user edits, presses anywhere, or leaves the composer or app. */
-export function watchComposerTakeover(root: HTMLElement, onTakeover: () => void): () => void {
+function watchComposerTakeover(root: HTMLElement, onTakeover: () => void): () => void {
   const listening = new AbortController()
   const options = { capture: true, signal: listening.signal }
   const onComposerEvent = (event: Event): void => {
@@ -43,4 +43,31 @@ export function watchComposerTakeover(root: HTMLElement, onTakeover: () => void)
   window.addEventListener('blur', onAppLeave, options)
   document.addEventListener('visibilitychange', onAppLeave, options)
   return () => listening.abort()
+}
+
+/** One recording's automatic send, from Stop until it sends or the user takes over. */
+export type AutoSendWatch = {
+  run: number
+  root: HTMLElement
+  /** False once the user took over, the run was dropped, or its send was claimed. */
+  live: boolean
+  endCountdown: (() => void) | null
+  /** The send is waiting for the composer's render, so the watch outlives the session. */
+  handedOff: boolean
+  stopWatching: () => void
+}
+
+export function watchForComposerTakeover(
+  run: number,
+  root: HTMLElement,
+  onTakeover: () => void
+): AutoSendWatch {
+  return {
+    run,
+    root,
+    live: true,
+    endCountdown: null,
+    handedOff: false,
+    stopWatching: watchComposerTakeover(root, onTakeover)
+  }
 }

@@ -10,7 +10,11 @@ import type { DictationState } from '../../../../shared/speech-types'
 import { dispatchDictationControl } from './dictation-control-events'
 import { pressDictationTerminalEnter } from './dictation-insertion-target'
 import type { DictationKeptRecording } from './dictation-kept-recording'
-import { isAppActive, watchComposerTakeover } from './dictation-composer-takeover'
+import {
+  isAppActive,
+  watchForComposerTakeover,
+  type AutoSendWatch
+} from './dictation-composer-takeover'
 
 export type DictationQueuedSendKind = 'chat' | 'terminal'
 
@@ -32,6 +36,8 @@ let composerSendQueue: ComposerSendQueue | null = null
 const composerAutoSends = new WeakMap<HTMLElement, (handoff: AutoSendHandoff) => void>()
 // The owner's hook for a composer that stops taking automatic sends, or now sends somewhere else.
 let composerAutoSendRevoked: ((root: HTMLElement) => void) | null = null
+// Recordings whose composer's destination changed after they started; only they lose auto-send.
+const revokedRecordings = new WeakSet<DictationKeptRecording>()
 
 type PendingSend<Intent> = { intent?: Intent; handoff?: AutoSendHandoff }
 
@@ -72,6 +78,7 @@ export function useSendAfterDictation<Intent>(
     }
     const autoSend = (handoff: AutoSendHandoff): void => sendOnceRendered({ handoff })
     composerAutoSends.set(element, autoSend)
+    composerAutoSendRevoked?.(element)
     return () => {
       if (composerAutoSends.get(element) === autoSend) {
         composerAutoSends.delete(element)
@@ -97,17 +104,6 @@ async function sendIfStillQueued(
   if (landed && stillQueued()) {
     await send(stillQueued)
   }
-}
-
-type AutoSendWatch = {
-  run: number
-  root: HTMLElement
-  /** False once the user took over, the run was dropped, or its send was claimed. */
-  live: boolean
-  endCountdown: (() => void) | null
-  /** The send is waiting for the composer's render, so the watch outlives the session. */
-  handedOff: boolean
-  stopWatching: () => void
 }
 
 /** Enter or Send during a dictation stops it, then sends once its words have landed. */
@@ -163,6 +159,10 @@ export function useDictationQueuedSend(
       return target?.kind === 'composer' && target.root === root && queue('chat', send)
     }
     composerAutoSendRevoked = (root) => {
+      const kept = keptRef.current
+      if (kept?.target?.kind === 'composer' && kept.target.root === root) {
+        revokedRecordings.add(kept)
+      }
       if (autoSendRef.current?.root === root) {
         takeOverAutoSend()
       }
@@ -211,8 +211,10 @@ export function useDictationQueuedSend(
   const watchForAutoSend = useCallback(
     (run: number): AutoSendWatch | null => {
       const voice = useAppStore.getState().settings?.voice
-      const target = keptRef.current?.target
+      const kept = keptRef.current
+      const target = kept?.target
       if (
+        (kept !== null && revokedRecordings.has(kept)) ||
         !voice?.enabled ||
         !voice.autoSendAfterDictation ||
         target?.kind !== 'composer' ||
@@ -222,16 +224,7 @@ export function useDictationQueuedSend(
       ) {
         return null
       }
-      const watch: AutoSendWatch = {
-        run,
-        root: target.root,
-        live: true,
-        endCountdown: null,
-        handedOff: false,
-        stopWatching: () => {}
-      }
-      watch.stopWatching = watchComposerTakeover(target.root, takeOverAutoSend)
-      return watch
+      return watchForComposerTakeover(run, target.root, takeOverAutoSend)
     },
     [keptRef, takeOverAutoSend]
   )

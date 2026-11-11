@@ -31,7 +31,8 @@ function Chat(props: {
   )
 }
 
-it('never sends a dictated draft to the conversation that replaced the one it was dictated into', async () => {
+/** A recording into the chat for session-a, still listening; `stop` ends it and starts its countdown. */
+async function dictateIntoSessionA() {
   vi.useFakeTimers()
   vi.spyOn(document, 'hasFocus').mockReturnValue(true)
   useAppStore.setState({
@@ -46,15 +47,15 @@ it('never sends a dictated draft to the conversation that replaced the one it wa
     }
   })
   const sessionRef: RefObject<DictationSession> = {
-    current: { phase: 'stopping', run: 1, sessionId: '1', heardFinalText: true }
+    current: { phase: 'listening', run: 1, sessionId: '1', heardFinalText: true }
   }
   const keptRef: RefObject<DictationKeptRecording | null> = { current: null }
   const ownerRef: { current: ReturnType<typeof useDictationQueuedSend> | null } = { current: null }
   const rootRef: RefObject<HTMLDivElement | null> = { current: null }
   const props = { onSend: vi.fn(), sessionRef, keptRef, ownerRef, rootRef }
   const view = render(<Chat autoSendTo="session-a" {...props} />)
-  const root = props.rootRef.current!
-  props.keptRef.current = {
+  const root = rootRef.current!
+  keptRef.current = {
     chunks: [],
     complete: true,
     context: {},
@@ -68,18 +69,41 @@ it('never sends a dictated draft to the conversation that replaced the one it wa
     })
   }
   root.querySelector('textarea')!.focus()
-  props.ownerRef.current!.follow(props.sessionRef.current)
-  void props.ownerRef.current!.release(1)
-  await act(async () => {
-    await vi.advanceTimersByTimeAsync(0)
-  })
-  expect(props.ownerRef.current!.autoSend).not.toBeNull()
+  const owner = () => ownerRef.current!
+  return {
+    onSend: props.onSend,
+    owner,
+    switchTo: (autoSendTo: string) => view.rerender(<Chat autoSendTo={autoSendTo} {...props} />),
+    stop: async () => {
+      sessionRef.current = { ...sessionRef.current, phase: 'stopping' }
+      owner().follow(sessionRef.current)
+      void owner().release(1)
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0)
+      })
+    },
+    waitPastDeadline: () =>
+      act(async () => {
+        await vi.advanceTimersByTimeAsync(2000)
+      })
+  }
+}
 
-  view.rerender(<Chat autoSendTo="session-b" {...props} />)
-  await act(async () => {
-    await vi.advanceTimersByTimeAsync(2000)
-  })
+it('never sends a recording to a chat that replaced its own before dictation stopped', async () => {
+  const chat = await dictateIntoSessionA()
+  chat.switchTo('session-b')
+  await chat.stop()
+  expect(chat.owner().autoSend).toBeNull()
+  await chat.waitPastDeadline()
+  expect(chat.onSend).not.toHaveBeenCalled()
+})
 
-  expect(props.ownerRef.current!.autoSend).toBeNull()
-  expect(props.onSend).not.toHaveBeenCalled()
+it('never sends a recording to a chat that replaced its own during the countdown', async () => {
+  const chat = await dictateIntoSessionA()
+  await chat.stop()
+  expect(chat.owner().autoSend).not.toBeNull()
+  chat.switchTo('session-b')
+  await chat.waitPastDeadline()
+  expect(chat.owner().autoSend).toBeNull()
+  expect(chat.onSend).not.toHaveBeenCalled()
 })
