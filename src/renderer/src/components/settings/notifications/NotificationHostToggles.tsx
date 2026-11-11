@@ -8,6 +8,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { useBoundedHostRows } from '../../host-picker/use-bounded-host-rows'
 import { HostListSearchField } from '../../host-picker/HostListSearchField'
 import { HostListOverflowNote } from '../../host-picker/HostListOverflowNote'
+import { SETTINGS_GROUP_NESTED_INSET_CLASS } from '../section-layout/SettingsGroup'
 
 type NotificationHostTogglesProps = {
   mutedNotificationSourceIds: readonly NotificationSourceId[]

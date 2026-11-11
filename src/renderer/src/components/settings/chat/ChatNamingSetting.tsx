@@ -38,7 +38,7 @@ export function ChatNamingSetting({
   writeSourceControlAiSettings,
   onDirtyChange,
   forceVisible = false
-}: ChatNamingSettingProps): React.JSX.Element {
+}: ChatNamingSettingProps): React.JSX.Element | null {
   const t = useTranslate()
   const query = useAppStore((state) => state.settingsSearchQuery)
   const config = useMemo(
