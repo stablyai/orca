@@ -1,3 +1,4 @@
+import { wakeSessionSearchPrimaryFailures } from './session-search-primary-retries'
 import { recordSessionSearchInput } from './session-search-observation-authority'
 import type { SessionSearchCatalog, SessionSearchCatalogRow } from './session-search-catalog'
 import type { SessionSearchObservationDebt } from './session-search-inventory-transition'
@@ -21,6 +22,9 @@ export function invalidateSessionSearchPhysical(
 ) {
   if (delivered) {
     recordSessionSearchInput(catalog, scope, path)
+    if (subtree) {
+      wakeSessionSearchPrimaryFailures(catalog, scope, path)
+    }
     if (force) {
       catalog.requireReason?.(path, 'force')
     }

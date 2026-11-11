@@ -3,9 +3,7 @@ import type { SessionSearchCatalogRow } from './session-search-catalog'
 
 export class SessionSearchCatalogStorage {
   constructor(protected readonly db: SyncDatabase) {
-    db.exec(`PRAGMA temp_store = FILE;
-      PRAGMA temp.cache_size = -1024;
-      CREATE TEMP TABLE search_catalog (
+    db.exec(`CREATE TEMP TABLE search_catalog (
         scope TEXT NOT NULL, key TEXT NOT NULL, value TEXT NOT NULL,
         parent TEXT NOT NULL, group_key TEXT NOT NULL, rank REAL NOT NULL,
         ready INTEGER NOT NULL, tie REAL NOT NULL DEFAULT 0, PRIMARY KEY(scope,key)

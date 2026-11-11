@@ -1,3 +1,5 @@
+import { SESSION_SEARCH_FAILURES_BEFORE_HELD_OUT } from './session-search-read-decision'
+import { recordSessionSearchPrimaryFailure } from './session-search-primary-retries'
 import { wakeSessionSearchMetadataWrite } from './session-search-store-write'
 import { stepSessionSearchPublication } from './session-search-publication-step'
 import type { SessionSearchWorkCatalog } from './session-search-work-catalog'
@@ -21,6 +23,9 @@ export function requireSessionSearchCandidateReason(
       reason === 'metadata' &&
       wakeSessionSearchMetadataWrite(store.connection, path, store.fileRow(path))
     ) {
+      store.setFileState(path, 'current')
+    }
+    if (reason === 'force' && store.fileRow(path)?.state === 'failed') {
       store.setFileState(path, 'current')
     }
     store.catalogCandidates.execute({ kind: 'require', path, reason, delivered: true })
@@ -134,6 +139,21 @@ export async function transitionSessionSearchWork(
   let work
   switch (command.kind) {
     case 'enqueue':
+      if (store.fileRow(command.candidate.file.path)?.state === 'failed') {
+        recordSessionSearchPrimaryFailure(
+          store.catalogStorage,
+          command.candidate.file.path,
+          true,
+          true
+        )
+      }
+      if (command.force) {
+        store.catalogCandidates.execute({
+          kind: 'require',
+          path: command.candidate.file.path,
+          reason: 'force'
+        })
+      }
       await queue.enqueue(command.candidate, store, command.force, command.recent, command.metadata)
       break
     case 'get':
@@ -144,9 +164,22 @@ export async function transitionSessionSearchWork(
       break
     case 'stats':
       break
-    case 'acknowledge':
-      await queue.acknowledge(command.work, command.retry)
+    case 'acknowledge': {
+      const row = store.fileRow(command.work.candidate.file.path)
+      const required = store.catalogCandidates.admission(command.work.candidate).contentRequired
+      const held =
+        row?.state === 'failed' &&
+        row.failCount >= SESSION_SEARCH_FAILURES_BEFORE_HELD_OUT &&
+        row.failedMtimeMs === command.work.candidate.file.mtimeMs
+      const expired =
+        store.retentionCutoff !== null &&
+        command.work.candidate.file.mtimeMs < store.retentionCutoff
+      await queue.acknowledge(
+        { ...command.work, force: required || (command.work.force && command.retry) },
+        required ? !held && !expired : command.retry
+      )
       break
+    }
     case 'remove':
       await queue.remove(command.path)
       break

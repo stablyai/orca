@@ -38,6 +38,7 @@ export class SessionInventoryDirectoryWalks {
   protected readonly cancellations: SessionSearchCatalogClient<unknown>
   protected readonly trailing: SessionSearchCatalogClient<true>
   protected readonly authority: SessionSearchCatalogClient<unknown>
+  protected readonly primaryWakes: SessionSearchCatalogClient<unknown>
   protected readonly garbage: SessionSearchCatalogClient<unknown>
   protected readonly failures: SessionSearchCatalogRetries
   protected readonly removedDirectories = new Set<string>()
@@ -53,6 +54,7 @@ export class SessionInventoryDirectoryWalks {
       return result
     }
     this.authority = new SessionSearchCatalogClient(`${scope}:authority`, this.request)
+    this.primaryWakes = new SessionSearchCatalogClient(`${scope}:primary-wakes`, this.request)
     this.garbage = new SessionSearchCatalogClient(`${scope}:authority-garbage`, this.request)
     this.directories = new SessionSearchCatalogClient(`${scope}:directories`, this.request)
     this.entries = new SessionSearchCatalogClient(`${scope}:directory-input`, this.request)

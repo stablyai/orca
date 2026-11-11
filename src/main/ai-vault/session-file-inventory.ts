@@ -53,6 +53,7 @@ export class SessionFileInventory extends SessionInventoryDirectoryWalks {
       this.observations.delivery.size > 0 ||
       this.walking ||
       this.dirty.size > 0 ||
+      this.primaryWakes.size > 0 ||
       this.failures.pending ||
       this.observations.failures.pending
     )
@@ -72,6 +73,11 @@ export class SessionFileInventory extends SessionInventoryDirectoryWalks {
     }
   }
   async wakeFailures(): Promise<void> {
+    await this.request({
+      kind: 'retry-wake',
+      scope: `${this.scope}:primary-wakes`,
+      prefix: this.root
+    })
     await this.failures.wake()
     await this.observations.failures.wake()
   }

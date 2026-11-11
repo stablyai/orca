@@ -128,7 +128,7 @@ export async function runSessionSearchIndexPass(
     // Equal-stat writes and dependency edits cannot use coverage of the old input as a skip gate.
     if (
       work.force &&
-      row &&
+      row?.state === 'current' &&
       row.mtimeMs === candidate.file.mtimeMs &&
       (row.sizeBytes === null ||
         candidate.file.sizeBytes === undefined ||
@@ -192,7 +192,6 @@ export async function runSessionSearchIndexPass(
       cursor: committed ? store.indexedFile(path, fileIdentity(candidate.file)) : null,
       cutoffMs: store.retentionCutoff
     })
-    work.force = false
     await queue.acknowledge(work, remaining !== 'skip')
     await queue.rowChanged(path, committed)
   }

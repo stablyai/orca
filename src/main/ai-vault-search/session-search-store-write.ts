@@ -56,6 +56,11 @@ export function trackSessionSearchMetadataWrite(
   metadataOnly: boolean
 ): SessionSearchFileWrite {
   ensureFailures(db)
+  const previous = row()
+  const metadataFailure = db
+    .prepare('SELECT identity FROM temp.search_metadata_write_failures WHERE path=?')
+    .get(path)
+  const eligible = previous?.state === 'current' || metadataFailure?.identity === identity(previous)
   if (!metadataOnly) {
     db.prepare('DELETE FROM temp.search_metadata_write_failures WHERE path=?').run(path)
   }
@@ -67,11 +72,11 @@ export function trackSessionSearchMetadataWrite(
         accepted = write.commit(outcome)
         return accepted
       } finally {
-        if (metadataOnly && !accepted) {
+        if (metadataOnly && !accepted && eligible) {
           db.prepare(
             'INSERT OR REPLACE INTO temp.search_metadata_write_failures(path,identity) VALUES(?,?)'
           ).run(path, identity(row(), true))
-        } else if (accepted) {
+        } else {
           db.prepare('DELETE FROM temp.search_metadata_write_failures WHERE path=?').run(path)
         }
       }

@@ -436,3 +436,114 @@ it('retains title-only work through admission refusal and wakes held-out publica
     await harness.cleanup()
   }
 })
+
+it.each(['commit', 'open'] as const)(
+  'retains rewritten content through a failed %s and parks until a real content wake',
+  async (failure) => {
+    const harness = await openSessionSearchIndexerHarness('ss-content-retry')
+    const clock = new FakeSessionSearchClock()
+    const fixture = codexFixture()
+    const root = harness.roots.codexSessionsDir!
+    const path = join(root, fixture.fileName)
+    const index = join(dirname(root), 'session_index.jsonl')
+    const subject = new SessionSearchIndexer({
+      databasePath: harness.databasePath,
+      roots: harness.roots,
+      historyDays: null,
+      clock
+    })
+    const current = () =>
+      harness.read((db) => ({
+        text: db
+          .prepare("SELECT count(*) AS n FROM messages_fts WHERE messages_fts MATCH 'newx'")
+          .get(),
+        title: db.prepare("SELECT title FROM sessions WHERE agent='codex'").get()
+      }))
+    const stream = filesystem.openTranscriptReadStream
+    let refuseOpen = false
+    const primary = vi
+      .spyOn(filesystem, 'openTranscriptReadStream')
+      .mockImplementation((readPath, ...args) => {
+        if (refuseOpen && readPath === path) {
+          throw Object.assign(new Error('fixture refused content'), { code: 'EACCES' })
+        }
+        return stream(readPath, ...args)
+      })
+    const refuse = () => {
+      if (failure === 'open') {
+        refuseOpen = true
+      } else {
+        harness.write((db) =>
+          db.exec(
+            "CREATE TRIGGER refuse_content BEFORE UPDATE ON sessions BEGIN SELECT RAISE(ABORT, 'fixture refused content'); END"
+          )
+        )
+      }
+    }
+    const allow = () => {
+      refuseOpen = false
+      if (failure === 'commit') {
+        harness.write((db) => db.exec('DROP TRIGGER refuse_content'))
+      }
+    }
+    const rewrite = async (from: string, to: string, title: string) => {
+      const previous = await stat(path)
+      await writeFile(path, (await readFile(path, 'utf8')).replace(from, to))
+      await utimes(path, previous.atime, previous.mtime)
+      await writeFile(
+        index,
+        `${JSON.stringify({ id: CODEX_FIXTURE_SESSION_ID, thread_name: title })}\n`
+      )
+      notifySessionSearchFileChange(path)
+      notifySessionSearchFileChange(index)
+    }
+    const cycle = async () => {
+      clock.advance(20_000)
+      await subject.settled()
+    }
+    try {
+      await mkdir(root, { recursive: true })
+      await writeFile(path, `${fixture.seedLines.join('\n')}\n`)
+      await writeFile(
+        index,
+        `${JSON.stringify({ id: CODEX_FIXTURE_SESSION_ID, thread_name: 'Original title' })}\n`
+      )
+      await subject.start()
+      refuse()
+      await rewrite('codex seed question', 'codex newx question', 'Rewritten title')
+      await cycle()
+      expect(current()).toEqual({ text: { n: 0 }, title: { title: 'Original title' } })
+      allow()
+      await cycle()
+      expect(current()).toEqual({ text: { n: 1 }, title: { title: 'Rewritten title' } })
+      expect(subject.status().phase).toBe('current')
+      refuse()
+      await rewrite('codex newx question', 'codex next question', 'Held title')
+      for (let attempt = 0; attempt < 3; attempt++) {
+        await cycle()
+      }
+      expect(
+        harness.read((db) =>
+          db.prepare('SELECT state,fail_count FROM files WHERE path=?').get(path)
+        )
+      ).toEqual({ state: 'failed', fail_count: 3 })
+      expect(subject.status().phase).toBe('current')
+      allow()
+      await cycle()
+      expect(current()).toEqual({ text: { n: 1 }, title: { title: 'Rewritten title' } })
+      notifySessionSearchFileChange(path)
+      await cycle()
+      expect(current()).toEqual({ text: { n: 0 }, title: { title: 'Held title' } })
+      expect(
+        harness.read((db) =>
+          db.prepare("SELECT count(*) AS n FROM messages_fts WHERE messages_fts MATCH 'next'").get()
+        )
+      ).toEqual({ n: 1 })
+      expect(subject.status().phase).toBe('current')
+    } finally {
+      primary.mockRestore()
+      await subject.close()
+      await harness.cleanup()
+    }
+  }
+)

@@ -1,3 +1,4 @@
+import { recordSessionSearchPrimaryFailure } from './session-search-primary-retries'
 import { admitSessionSearchStoreWrite } from './session-search-store-write'
 import {
   validSessionSearchRemoval,
@@ -76,6 +77,7 @@ export class SessionSearchStore {
     private readonly onMessagesChanged: (delta: number) => void = () => undefined
   ) {
     this.db = openSessionSearchDatabase(path)
+    this.db.exec('PRAGMA temp_store = FILE; PRAGMA temp.cache_size = -1024;')
     ensureSessionSearchQuerySchema(this.db)
     this.writer = new SessionSearchIndexWriter(
       this.db,
@@ -140,14 +142,14 @@ export class SessionSearchStore {
     this.workCatalog ??= new SessionSearchWorkCatalog()
     return transitionSessionSearchWork(this, this.workCatalog, command)
   }
-  private get scratchCatalog(): SessionSearchCatalog {
+  get catalogStorage(): SessionSearchCatalog {
     this.scratch ??= new SessionSearchCatalog(this.db, (path, reason) =>
       requireSessionSearchCandidateReason(this, path, reason)
     )
     return this.scratch
   }
   async catalog(command: SessionSearchCatalogCommand) {
-    return this.scratchCatalog.response(command)
+    return this.catalogStorage.response(command)
   }
 
   validRemoval(path: string, receipt: SessionSearchRemovalReceipt): boolean {
@@ -239,6 +241,7 @@ export class SessionSearchStore {
                failed_mtime_ms = excluded.failed_mtime_ms`
           )
           .run(path, atMtimeMs ?? 0, atMtimeMs ?? null)
+        recordSessionSearchPrimaryFailure(this.catalogStorage, path, true)
         return
       }
       this.db
@@ -246,6 +249,9 @@ export class SessionSearchStore {
           'UPDATE files SET state = ?, fail_count = 0, failed_mtime_ms = NULL WHERE path = ?'
         )
         .run(state, path)
+      if (this.scratch) {
+        recordSessionSearchPrimaryFailure(this.scratch, path, false)
+      }
     } catch (error) {
       this.onError(error)
     }

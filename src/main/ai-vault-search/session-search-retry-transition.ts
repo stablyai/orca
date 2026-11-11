@@ -1,3 +1,7 @@
+import {
+  admitSessionSearchPrimaryFailures,
+  wakeSessionSearchPrimaryFailures
+} from './session-search-primary-retries'
 import { isInsideSessionRoot } from '../ai-vault/session-file-discovery'
 import { relative } from 'node:path'
 import { SESSION_INPUT_FAILURES_BEFORE_HELD_OUT } from '../ai-vault/session-observation-retries'
@@ -148,6 +152,7 @@ export function transitionSessionSearchRetry(
   command: SessionSearchRetryCommand
 ) {
   if (command.kind === 'retry-admit') {
+    admitSessionSearchPrimaryFailures(catalog, command.scope)
     admit(
       catalog,
       command.scope,
@@ -167,6 +172,14 @@ export function transitionSessionSearchRetry(
     return {}
   }
   if (command.kind === 'retry-wake') {
+    if (command.scope.endsWith(':primary-wakes') && command.prefix) {
+      wakeSessionSearchPrimaryFailures(
+        catalog,
+        command.scope.slice(0, -':primary-wakes'.length),
+        command.prefix
+      )
+      return {}
+    }
     if (
       !catalog.execute({ kind: 'page', scope: command.scope, prefix: command.prefix, limit: 1 })
         .rows?.length
