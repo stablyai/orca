@@ -71,7 +71,7 @@ export function screenModuleMocks(dependencies: ScreenDependencies) {
       View: 'View',
       useWindowDimensions: () => ({ width: 390, height: 844 })
     }),
-    // Stub Expo-dependent native handlers; native-clipboard.test.ts covers their behavior.
+    // Stub Expo-dependent native handlers.
     'expo-clipboard': () => ({
       setStringAsync: () => Promise.resolve(true),
       getStringAsync: () => Promise.resolve('')

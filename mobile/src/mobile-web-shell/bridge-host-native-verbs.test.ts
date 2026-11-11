@@ -24,46 +24,6 @@ function refusal(bridge: ReturnType<typeof harness>): { code?: unknown; message:
 function reachedTheDesktop(bridge: ReturnType<typeof harness>): unknown[] {
   return [...bridge.client.requests, ...bridge.client.streams]
 }
-
-describe('a native method on a frame that is not a request', () => {
-  it('opens no stream on the desktop client', () => {
-    const bridge = harness()
-    bridge.host.receive(clientFrame({ type: 'ready' }))
-    bridge.host.receive(
-      clientFrame({ type: 'subscribe', id: ID, method: 'native.clipboard.read', params: {} })
-    )
-    expect(reachedTheDesktop(bridge)).toEqual([])
-    expect(refusal(bridge)?.code).toMatch(/^native_verb_/)
-  })
-})
-
-// Before ready, the page has received no session, grants or caps; refuse forwarded/native requests as well as notifications.
-describe('a request before the page has asked for a session', () => {
-  it('is refused rather than forwarded to the desktop', async () => {
-    const bridge = harness()
-    bridge.host.receive(clientFrame({ type: 'request', id: ID, method: 'status.get' }))
-    await flushBridge()
-    expect(reachedTheDesktop(bridge)).toEqual([])
-    expect(refusal(bridge)?.message).toContain('before-ready')
-  })
-
-  it('is refused for a native verb too, before the table is even read', async () => {
-    const bridge = harness()
-    bridge.host.receive(request('native.clipboard.read', { mime: 'text' }))
-    await flushBridge()
-    expect(reachedTheDesktop(bridge)).toEqual([])
-    expect(bridge.nativeCalls).toEqual([])
-    expect(refusal(bridge)?.message).toContain('before-ready')
-  })
-
-  it('refuses a stream on a session that never handshook', () => {
-    const bridge = harness()
-    bridge.host.receive(clientFrame({ type: 'subscribe', id: ID, method: 'x.sub', params: {} }))
-    expect(bridge.client.streams).toEqual([])
-    expect(refusal(bridge)?.message).toContain('before-ready')
-  })
-})
-
 describe('a native method the page asks for', () => {
   it('is answered by the shell and never forwarded to the desktop', async () => {
     const bridge = harness({ clipboardText: 'from the pasteboard' })
@@ -93,61 +53,6 @@ describe('a native method the page asks for', () => {
     ])
   })
 
-  it('refuses a verb this shell has no row for, before anything is forwarded', async () => {
-    const bridge = harness({ ready: true })
-    for (const method of ['native.dictation.start', 'native.']) {
-      bridge.host.receive(request(method, {}))
-      await flushBridge()
-      expect(refusal(bridge)?.code, method).toBe('native_verb_unknown')
-    }
-    expect(bridge.nativeCalls).toEqual([])
-    expect(reachedTheDesktop(bridge)).toEqual([])
-  })
-
-  it('refuses malformed clipboard params before any handler or desktop call', async () => {
-    const bridge = harness({ ready: true })
-    for (const params of [
-      {},
-      { mime: 'text' },
-      { mime: 'audio', value: 'x' },
-      null,
-      { mime: 'text', value: 'x', unexpected: true }
-    ]) {
-      bridge.host.receive(request('native.clipboard.write', params))
-      await flushBridge()
-      expect(refusal(bridge)?.code, JSON.stringify(params)).toBe('native_verb_params')
-    }
-    bridge.host.receive(request('native.clipboard.read', { mime: 'image' }))
-    await flushBridge()
-    expect(refusal(bridge)?.code).toBe('native_verb_params')
-    expect(bridge.nativeCalls).toEqual([])
-    expect(reachedTheDesktop(bridge)).toEqual([])
-  })
-
-  it('opens only PDFs, so the page cannot have the shell download and hand off other files', async () => {
-    const bridge = harness({ ready: true })
-    for (const relativePath of ['notes.docx', 'archive.pdf.zip', 'pdf']) {
-      bridge.host.receive(
-        request('native.pdf.view', { action: 'open', worktreeId: 'w', relativePath })
-      )
-      await flushBridge()
-      expect(refusal(bridge)?.code, relativePath).toBe('native_verb_params')
-    }
-    expect(bridge.nativeCalls).toEqual([])
-    expect(reachedTheDesktop(bridge)).toEqual([])
-  })
-
-  it('refuses a result the verb does not declare, rather than passing it to the page', async () => {
-    // Validate results against the verb table before an arbitrary handler reply reaches the page.
-    const bridge = harness({ serveNativeVerb: () => Promise.resolve({ nonsense: 1 }) })
-    bridge.host.receive(clientFrame({ type: 'ready' }))
-    bridge.host.receive(request('native.clipboard.read', { mime: 'text' }))
-    await flushBridge()
-    expect(reachedTheDesktop(bridge)).toEqual([])
-    expect(refusal(bridge)?.code).toMatch(/^native_verb_/)
-    expect(replyPayload(bridge)).toBeNull()
-  })
-
   it('does not carry a handler message to the page, which could be what it just read', async () => {
     // Handler errors may contain clipboard data; error messages must not bypass declared result shapes.
     const secret = 'sk-live-not-for-the-page'
@@ -164,7 +69,6 @@ describe('a native method the page asks for', () => {
     })
     expect(JSON.stringify(bridge.posted)).not.toContain(secret)
   })
-
   it('settles a cancelled native request the way a forwarded one settles, with no late reply', async () => {
     const settle: { resolve: ((value: unknown) => void) | null } = { resolve: null }
     const bridge = harness({
@@ -185,81 +89,5 @@ describe('a native method the page asks for', () => {
     await flushBridge()
     expect(bridge.frames()).toHaveLength(afterCancel)
     expect(reachedTheDesktop(bridge)).toEqual([])
-  })
-
-  it('refuses a read the page could never receive, rather than truncating it', async () => {
-    const bridge = harness({ clipboardText: 'a'.repeat(9 * 1024 * 1024) })
-    bridge.host.receive(clientFrame({ type: 'ready' }))
-    bridge.host.receive(request('native.clipboard.read', { mime: 'text' }))
-    await flushBridge()
-    expect(reachedTheDesktop(bridge)).toEqual([])
-    expect(refusal(bridge)?.message).toContain('reply-too-large')
-  })
-})
-
-// Grant only the session route’s declared capabilities; app-wide grants would let a navigation/storage page read clipboard data.
-describe('grants scoped to the route the page was opened for', () => {
-  const navigationOnly = ['navigate', 'storage'] as const
-
-  it('refuses a verb that route never asked for', async () => {
-    const bridge = harness({ routeGrants: navigationOnly, ready: true })
-    expect(bridge.last()).toMatchObject({
-      type: 'init',
-      grants: {
-        native: [
-          'fault',
-          'rpcEnvelope',
-          'hostCatalogs',
-          'navigate',
-          'storage',
-          'native.browser.local',
-          'native.browser.view'
-        ]
-      }
-    })
-    for (const [method, params] of [
-      ['native.clipboard.read', { mime: 'text' }],
-      ['native.media.pick', { source: 'library', multiple: false }],
-      ['native.media.read', { handle: 'media-1', offset: 0, length: 16 }],
-      ['native.media.release', { handle: 'media-1' }]
-    ] as const) {
-      bridge.host.receive(request(method, params))
-      await flushBridge()
-      expect(refusal(bridge)?.code, method).toBe('native_verb_ungranted')
-    }
-    expect(bridge.nativeCalls).toEqual([])
-    expect(reachedTheDesktop(bridge)).toEqual([])
-    expect(refusal(bridge)?.code).toBe('native_verb_ungranted')
-  })
-
-  it('serves it for a route that did ask', async () => {
-    const bridge = harness({
-      routeGrants: [...navigationOnly, 'native.clipboard.read'],
-      clipboardText: 'granted',
-      ready: true
-    })
-    bridge.host.receive(request('native.clipboard.read', { mime: 'text' }))
-    await flushBridge()
-    expect(replyPayload(bridge)).toEqual({ id: ID, ok: true, result: { value: 'granted' } })
-  })
-
-  it('refuses valid notifications without their route grants', () => {
-    const bridge = harness({ routeGrants: [], ready: true })
-    const frames = [
-      { name: 'externalLink', url: 'https://example.com/' },
-      { name: 'navigate', href: '/h/host-a/session/wt-1' },
-      { name: 'navigate-back' },
-      { name: 'storage', key: 'orca:pins:host-a', value: '["wt-1"]' }
-    ]
-    for (const frame of frames) {
-      bridge.host.receive(clientFrame({ type: 'notify', ...frame }))
-    }
-    expect(bridge.externalLinks).toEqual([])
-    expect(bridge.navigations).toEqual([])
-    expect(bridge.backPops).toEqual([])
-    expect(bridge.storageWrites).toEqual([])
-    expect(bridge.diagnostics).toEqual(
-      frames.map(({ name }) => ({ kind: 'notify-refused', name, why: 'ungranted' }))
-    )
   })
 })

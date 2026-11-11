@@ -5,8 +5,12 @@ import type {
 } from '../../../../shared/worktree/create-types'
 import { parseWorktreeId } from '../../worktree-logic'
 import { resolveWorktreeRemovalRepoOwner } from '../../../workspaces/removal/worktree-removal-repo-owner'
-import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host'
+
 import type { Repo } from '../../../../shared/repo-types'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { getLocalPtyProvider } from '../../pty/provider/registry'
@@ -39,7 +43,7 @@ import {
   assertWslMoveProjectWritable,
   assertWslMoveRepoWritable,
   isWslMoveSourceHost
-} from '../../../persistence/moving-wsl-projects/wsl-move-scope-guard'
+} from '../../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 import { teardownStops } from '../../../runtime/workspaces/removal/owned-session-teardown-policy'
 
 export function registerWorktreeForgetHandlers(context: WorktreeIpcContext): void {

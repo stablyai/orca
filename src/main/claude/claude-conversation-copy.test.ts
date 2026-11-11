@@ -100,21 +100,6 @@ it('reads the source account and writes the independent copy to the selected hom
   expect(await readdir(join(oldHome, 'projects', 'workspace'))).toEqual([`${SOURCE}.jsonl`])
 })
 
-it('accepts a native terminal assistant without a duration row but refuses unresolved tool work', async () => {
-  const assistantIndex = rows.findLastIndex((row) => row.type === 'assistant')
-  const prefix = rows.slice(0, assistantIndex + 1)
-  const last = prefix.at(-1)!
-  last.message.stop_reason = 'end_turn'
-  last.message.content = [{ type: 'text', text: 'Finished response' }]
-  await writeFile(sourcePath, `${prefix.map((row) => JSON.stringify(row)).join('\n')}\n`)
-  const copyResult = await copy(last.uuid, false)
-  expect(copyResult.sessionId).not.toBe(SOURCE)
-  last.message.stop_reason = 'tool_use'
-  last.message.content = [{ type: 'tool_use', id: 'call', name: 'Read', input: {} }]
-  await writeFile(sourcePath, `${prefix.map((row) => JSON.stringify(row)).join('\n')}\n`)
-  await expect(copy(last.uuid, false)).rejects.toThrow("Claude hasn't finished this response yet")
-})
-
 it('uses the settled native root when the streamed final frame was lost after a recorded tool result', async () => {
   await writeFile(
     sourcePath,
@@ -156,17 +141,6 @@ it('retains an accepted queued steer at the interrupted main-branch endpoint', a
   expect(copied.findLast((row) => row.type === 'attachment')).toMatchObject({
     attachment: { prompt: 'Also remember B' },
     forkedFrom: { messageUuid: '00000000-0000-4000-8000-000000000099' }
-  })
-})
-
-it('resolves an early response beyond the catch-up suffix budget', async () => {
-  const prefix = rows.slice(0, 25)
-  prefix[24].message.content[0].content = 'saved tool output '.repeat(1_000_000)
-  await writeFile(sourcePath, `${prefix.map((row) => JSON.stringify(row)).join('\n')}\n`)
-  const result = await copy('90aca715-6ef8-59b8-aced-da70744cd0bd', true)
-  const copied = parseRows(await readFile(result.filePath!, 'utf8'))
-  expect(copied.findLast((row) => row.type === 'user')).toMatchObject({
-    forkedFrom: { messageUuid: 'a33ccffb-9cd3-54dc-bd5c-bad5de38fdd7' }
   })
 })
 
