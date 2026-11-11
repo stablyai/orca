@@ -49,11 +49,15 @@ beforeEach(() => {
   vi.stubGlobal(
     'ResizeObserver',
     class {
-      constructor(callback: () => void) {
+      constructor(private readonly callback: () => void) {
         resize = callback
       }
       observe() {}
-      disconnect() {}
+      disconnect() {
+        if (resize === this.callback) {
+          resize = undefined
+        }
+      }
       unobserve() {}
     }
   )
@@ -681,6 +685,15 @@ it.each([50_000, 500_000])(
       await act(async () => {
         await controller.refresh()
       })
+      // A normal refresh commits past React's previous-render snapshot.
+      getHistory.mockRejectedValueOnce(new Error('Empty refresh failed'))
+      await act(async () => {
+        await controller.refresh()
+      })
+      expect(container.textContent).toContain('Empty refresh failed')
+      expect(loadedCount()).toBe(0)
+      getHistory.mockReset()
+      renderedGraph.mockClear()
       await expectReleased(empty)
       const missing = await loadDisposable()
       getHistory.mockRejectedValueOnce(new Error('failed filter'))
@@ -691,6 +704,14 @@ it.each([50_000, 500_000])(
         await controller.settledResult()
       })
       expect(loadedCount()).toBeUndefined()
+      getHistory.mockRejectedValueOnce(new Error('Missing refresh failed'))
+      await act(async () => {
+        await controller.refresh()
+      })
+      expect(container.textContent).toContain('Missing refresh failed')
+      expect(loadedCount()).toBeUndefined()
+      getHistory.mockReset()
+      renderedGraph.mockClear()
       await expectReleased(missing)
       const unmounted = await loadDisposable()
       await act(async () => {
