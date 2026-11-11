@@ -12,7 +12,7 @@ import {
 } from '../../pty-transport/delivery/pty-pre-handler-buffer'
 import { parseRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
-import { releaseTerminalScrollIntentKey } from '../../../../lib/pane-manager/terminal-scroll-intent-key-store'
+import { releaseTerminalScrollIntentKey } from '../../../../lib/pane-manager/terminal-scroll/terminal-scroll-intent-key-store'
 
 export type ParkedTerminalPaneCapture = {
   noticeLifetime?: TerminalNoticeLifetime

@@ -2524,7 +2524,8 @@
     "tabStrip": {
       "checkingCapabilities": "Vérification des fonctionnalités de l'ordinateur — réessayez dans un instant",
       "newTab": "Nouvel onglet",
-      "quickCommandsUpdateRequired": "Mettez à jour Orca sur l'ordinateur pour utiliser les commandes rapides"
+      "quickCommandsUpdateRequired": "Mettez à jour Orca sur l'ordinateur pour utiliser les commandes rapides",
+      "tabStatus": "{{title}}, {{status}}"
     },
     "terminalActionSheetActions": {
       "clearTerminal": "Effacer le terminal",
@@ -3452,6 +3453,12 @@
   },
   "tasks": {
     "hostedMerge": {
+      "confirmGitHubMerge": "Fusionner la PR nº {{number}} ?",
+      "confirmGitHubSquash": "Compresser les commits et fusionner la PR nº {{number}} ?",
+      "confirmGitHubRebase": "Rebaser et fusionner la PR nº {{number}} ?",
+      "confirmGitLabMerge": "Fusionner la demande de fusion nº {{number}} ?",
+      "confirmGitLabSquash": "Compresser les commits et fusionner la demande de fusion nº {{number}} ?",
+      "confirmGitLabRebase": "Rebaser et fusionner la demande de fusion nº {{number}} ?",
       "merged": "Fusionné",
       "closed": "Fermé",
       "conflicts": "Conflits",

@@ -1,5 +1,6 @@
 import { getAiVaultResumeWorkspaceWslDistro } from '@/lib/agent-session/resume/history/ai-vault-resume-shell'
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import type { CSSProperties } from 'react'
 import { toast } from 'sonner'
 import { canResumeAiVaultSessionOnTarget } from '../../../../shared/ai-vault/resume/ai-vault-resume-target'
 import {
@@ -15,14 +16,14 @@ import {
 } from '@/lib/agent-session/resume/history/ai-vault-session-drag'
 import { buildAiVaultDropRepinStartup } from '@/lib/agent-session/resume/history/ai-vault-resume-command'
 import { getAiVaultAgentProviderSession } from '../../../../shared/ai-vault/resume/ai-vault-resume-startup'
-import { launchAiVaultSessionInNewTab } from '@/lib/launch-ai-vault-session'
+import { launchAiVaultSessionInNewTab } from '@/lib/agent-session/resume/history/launch-ai-vault-session'
 import { prepareAiVaultTerminalResumeRequest } from '@/lib/agent-session/resume/history/ai-vault-session-resume-preparation'
 import { describeAiVaultResumeFailure } from '@/lib/agent-session/resume/history/ai-vault-resume-refusal'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { resolveDropZone } from './tab-drop-zone'
-import type { TabDropZone } from './useTabDragSplit'
 import { translate } from '@/i18n/i18n'
-import { activateAiVaultStructuredSession } from '@/lib/activate-ai-vault-structured-session'
+import { activateAiVaultStructuredSession } from '@/lib/agent-session/open/activate-ai-vault-structured-session'
+import type { TabDropZone } from './useTabDragSplit'
 
 type PaneDropTarget = {
   groupId: string

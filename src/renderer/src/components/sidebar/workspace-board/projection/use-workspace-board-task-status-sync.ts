@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 import { toast } from 'sonner'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import {
   selectWorkspaceByHostTarget,
   type WorkspaceRecordState
@@ -9,7 +9,7 @@ import { hostWorktreeTarget } from '../../../../../../shared/worktree/host-quali
 import { getRuntimeTargetForWorktreeOwner } from '@/lib/files/access/file-owner-runtime-target'
 import { runtimeTargetForWorkspaceOwner } from '@/lib/workspace/ownership/resolve-owner'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import { warnAmbiguousOwnerOnce } from '@/lib/ambiguous-owner-warning'
+import { warnAmbiguousOwnerOnce } from '@/lib/workspace/ownership/ambiguous-owner-warning'
 import type { WorktreeOperationRouteState } from '@/lib/workspace/ownership/worktree-operation-route'
 import type { RowLessSource as RuntimeLinearSettings } from '@/runtime/hosts/selection/default-creation-host'
 import { translate } from '@/i18n/i18n'

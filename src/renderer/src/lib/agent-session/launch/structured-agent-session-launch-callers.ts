@@ -1,10 +1,10 @@
 import type { StructuredAgentLaunchReceipt } from './structured-agent-session-launch-recovery'
 import type { StructuredLaunchSurfaceAddress } from './structured-agent-session-launch-record'
-import {
-  settleStructuredAgentLaunchPrompt,
-  type StagedStructuredLaunchPrompt,
-  type StructuredLaunchPromptOptions
-} from './structured-agent-session-launch-prompt'
+import { settleStructuredAgentLaunchPrompt } from './structured-agent-session-launch-prompt'
+import type {
+  StagedStructuredLaunchPrompt,
+  StructuredLaunchPromptOptions
+} from './structured-agent-session-staged-prompt'
 import type {
   StructuredAgentSessionForkSource,
   StructuredAgentSessionResumeSource

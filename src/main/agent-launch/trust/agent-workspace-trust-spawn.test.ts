@@ -8,12 +8,10 @@ async function sshTrustRequest(input: {
   worktreeId: string
   globalEnabled?: boolean
   repoDecision?: AgentWorkspaceTrustDecision
-  skipForThisLaunch?: boolean
 }): Promise<AgentTrustSpawnFields> {
   const spawnOptions: AgentTrustSpawnFields = {}
   await applyAgentWorkspaceTrustToSpawn({
     launchAgent: 'claude',
-    skipForThisLaunch: input.skipForThisLaunch,
     worktreeId: input.worktreeId,
     cwd: '/srv/app',
     store: {
@@ -54,12 +52,6 @@ describe('agent folder trust follows the repo decision', () => {
         globalEnabled: false,
         repoDecision: 'pre-trust'
       })
-    ).toEqual({})
-  })
-
-  it("honours this launch's let-agents-ask answer even when the repo has none stored", async () => {
-    expect(
-      await sshTrustRequest({ worktreeId: 'repo-1::/srv/app', skipForThisLaunch: true })
     ).toEqual({})
   })
 })

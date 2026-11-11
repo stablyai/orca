@@ -30,7 +30,7 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import {
   beginStructuredAgentSessionAuthoritativeInventory,
   startStructuredAgentLaunchCancellationCleanup
-} from '../../lib/launch-cancel-tombstones-compat/structured-agent-session-launch-cancellation'
+} from '../../lib/agent-session/launch/structured-agent-session-launch-cancellation'
 import { suppressCancelledStructuredSessionTabs } from '../native-chat/tab-retirement/structured-agent-session-tab-retirement'
 import { LOCAL_STRUCTURED_SESSION_OWNER } from '../native-chat/local-sessions/local-structured-session-owner'
 import { closeStructuredAgentSession } from '../native-chat/requests/structured-agent-session-close'

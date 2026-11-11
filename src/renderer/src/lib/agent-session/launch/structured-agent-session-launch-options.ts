@@ -1,22 +1,10 @@
-import {
-  createLegacyPrerequisites,
-  type LegacyPrerequisites
-} from './structured-agent-session-launch-prerequisites'
+import { createLegacyPrerequisites } from './structured-agent-session-launch-prerequisites'
+import type { LegacyPrerequisites } from './structured-agent-session-launch-prerequisites'
 import { useSyncExternalStore } from 'react'
 import { acceptedStructuredSessionSelectionOutcome } from '../../../../../shared/agent-session/options/structured-agent-session-options-write-owner'
 import { structuredSessionSelectionController } from '../options/structured-agent-session-selection-controller'
-import type {
-  SelectionOperation,
-  SelectionOutcome
-} from '../../../../../shared/agent-session/options/structured-agent-session-selection-operations'
-import {
-  structuredAgentSessionOptionPicks,
-  type StructuredAgentSessionOptionState
-} from '../../../../../shared/agent-session/options/structured-agent-session-options'
-import type {
-  AgentSessionMutationResult,
-  AgentSessionOptionResult
-} from '../../../../../shared/agent-session/agent-session-wire'
+import { structuredAgentSessionOptionPicks } from '../../../../../shared/agent-session/options/structured-agent-session-options'
+import type { StructuredAgentSessionOptionState } from '../../../../../shared/agent-session/options/structured-agent-session-options'
 import {
   createStructuredAgentSessionOperationId,
   structuredAgentSessionPayloadFingerprint
@@ -24,19 +12,28 @@ import {
 import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
 import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
-import type { StructuredAgentLaunchReceipt } from './structured-agent-session-launch-recovery'
 import {
   getStructuredLaunchStateBySessionId,
   subscribeStructuredAgentLaunchStatus,
   type StructuredLaunchState
-} from './structured-agent-session-launch-registry'
+} from './structured-agent-session-launch-state-store'
+
 import {
   agentSessionRefusalFailure,
-  agentSessionThrownFailure,
-  type AgentSessionWriteFailure
+  agentSessionThrownFailure
 } from '../../../../../shared/agent-session/failures/agent-session-write-failure'
+import type { AgentSessionWriteFailure } from '../../../../../shared/agent-session/failures/agent-session-write-failure'
+import type {
+  SelectionOperation,
+  SelectionOutcome
+} from '../../../../../shared/agent-session/options/structured-agent-session-selection-operations'
+import type {
+  AgentSessionMutationResult,
+  AgentSessionOptionResult
+} from '../../../../../shared/agent-session/agent-session-wire'
+import type { StructuredAgentLaunchReceipt } from './structured-agent-session-launch-recovery'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
-import type { StructuredAgentSessionLaunchIntent } from '../../launch-structured-agent-session'
+import type { StructuredAgentSessionLaunchIntent } from './structured-agent-session-launch-intent'
 
 /** The options a launch starts with, replaced whole so readers can compare by identity. */
 export type StructuredLaunchSelection = {

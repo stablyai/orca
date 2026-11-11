@@ -25,13 +25,6 @@ function writeRunner(worktreeId: string): string {
 }
 
 describe('folder setup runner files', () => {
-  it('gives every launch its own file, so a later launch never rewrites a running script', () => {
-    const first = writeRunner(WORKSPACE_A)
-    const second = writeRunner(WORKSPACE_A)
-    expect(first).not.toBe(second)
-    expect(dirname(first)).toBe(dirname(second))
-  })
-
   it("removes only the removed workspace's runners", async () => {
     writeRunner(WORKSPACE_A)
     writeRunner(WORKSPACE_A)

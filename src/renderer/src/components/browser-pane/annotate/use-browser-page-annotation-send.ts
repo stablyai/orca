@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { translate } from '@/i18n/i18n'
 import type {
   BrowserAnnotationIntent,
@@ -11,7 +11,7 @@ import {
   holdNotesForSend,
   isNoteInFlight,
   useNotesInFlightVersion
-} from '@/lib/notes-send-in-flight'
+} from '@/components/notes/delivery/notes-send-in-flight'
 import { recomputeOn } from '@/lib/recompute-on'
 
 export function useBrowserPageAnnotationSend({

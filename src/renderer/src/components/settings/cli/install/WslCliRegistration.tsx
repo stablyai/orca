@@ -18,6 +18,7 @@ import { Switch } from '../../../ui/switch'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../../ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
+import { formatCliUserFacingDetail } from '@/lib/cli-emulator-user-facing-copy'
 
 type WslCliRegistrationProps = {
   currentPlatform: string
@@ -50,7 +51,7 @@ export function WslCliRegistration({
         if (mountedRef.current) {
           toast.error(
             error instanceof Error
-              ? error.message
+              ? formatCliUserFacingDetail(error.message)
               : translate(
                   'auto.components.settings.WslCliRegistration.26b4b3b00f',
                   'Failed to load WSL CLI status.'
@@ -100,7 +101,7 @@ export function WslCliRegistration({
       if (mountedRef.current) {
         toast.error(
           error instanceof Error
-            ? error.message
+            ? formatCliUserFacingDetail(error.message)
             : t(
                 'auto.components.settings.WslCliRegistration.6f91ad1333',
                 'Failed to register `{{value0}}` in WSL.',
@@ -135,7 +136,7 @@ export function WslCliRegistration({
       if (mountedRef.current) {
         toast.error(
           error instanceof Error
-            ? error.message
+            ? formatCliUserFacingDetail(error.message)
             : t(
                 'auto.components.settings.WslCliRegistration.52d990420e',
                 'Failed to remove `{{value0}}` from WSL.',
@@ -167,11 +168,11 @@ export function WslCliRegistration({
                     'auto.components.settings.WslCliRegistration.0307677bb9',
                     'Checking WSL CLI registration...'
                   )
-                : (status?.detail ??
+                : formatCliUserFacingDetail(status?.detail) ||
                   t(
                     'auto.components.settings.WslCliRegistration.7aa456a460',
                     'Register `orca-ide` in ~/.local/bin inside WSL.'
-                  ))}
+                  )}
             </p>
           </div>
           <div className="flex items-center gap-2">
