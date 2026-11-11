@@ -1,7 +1,8 @@
 import { stat } from 'node:fs/promises'
 import {
   PLUGIN_FRAME_ASSET_MAX_BYTES,
-  PLUGIN_FRAME_CHECKED_MAX_BYTES
+  PLUGIN_FRAME_CHECKED_MAX_BYTES,
+  PLUGIN_SOURCE_MODULE_MAX_BYTES
 } from '../../../shared/plugins/frames/plugin-frame-entry-limits'
 import {
   parsePluginFrameUrl,
@@ -42,7 +43,6 @@ import {
   createPluginSourceModuleCompiler,
   type PluginSourceModuleCompiler
 } from './frame-serving/plugin-frame-module-transform'
-import { PLUGIN_SOURCE_MODULE_MAX_BYTES } from '../../../shared/plugins/frames/plugin-frame-entry-limits'
 import {
   pluginFileExistsIn,
   pluginSourceModuleDocumentBody,

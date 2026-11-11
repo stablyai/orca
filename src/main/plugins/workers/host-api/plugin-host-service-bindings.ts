@@ -1,6 +1,5 @@
 import { PLUGIN_WORKSPACE_TERMINAL_LIMIT } from '../../../../shared/plugins/workers/plugin-host-api'
-import type { PluginHostServices } from './plugin-host-method-bindings'
-import type { PluginDesktopFrameServices } from './plugin-host-method-bindings'
+import type { PluginHostServices, PluginDesktopFrameServices } from './plugin-host-method-bindings'
 import type { PluginPanelBridgeServices } from './plugin-host-panel-method-bindings'
 import type { PluginStatusBarState } from '../../status-bar/plugin-status-bar-state'
 import type { PluginRuntimeRpc } from './plugin-host-workspace-method-bindings'
