@@ -53,6 +53,8 @@ export function registerOrcaRuntimeEmulatorFolderWorkspaceTests(): void {
       }
       const runtime = new OrcaRuntimeService({
         getFolderWorkspaces: () => folderWorkspaces,
+        getFolderWorkspace: (id: string) =>
+          folderWorkspaces.find((workspace) => workspace.id === id),
         getAllWorktreeMeta: () => new Map(),
         getRepo: () => null,
         getRepos: () => [],
