@@ -1411,7 +1411,8 @@
       "pageDescription": "Sign-ins, account switching and usage for your agents.",
       "thisComputer": "This computer",
       "selectedHost": "Selected host",
-      "hostsTitle": "Hosts"
+      "hostsTitle": "Hosts",
+      "jumpLabel": "Parts of this page"
     }
   },
   "menu": {
