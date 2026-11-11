@@ -1,6 +1,8 @@
 // PC-3b: what the "not set up" strip's buttons do. Set up once runs S0's setup for the agent (the
-// same flow as Settings › Accounts › Orca Cloud); Start releases the held launch; Cancel stops the
-// setup and opens a plain shell, like cancelling any held launch.
+// same flow as Settings › Accounts › Orca Cloud); Start releases the held launch. Cancel during a
+// setup stops only that setup: the launch stays held on "Set up once", and a setup finished from
+// anywhere (here or Settings) turns the strip into "Start". Cancel with no setup running gives up
+// the held launch and opens a plain shell, like cancelling any held launch (RR-a).
 import { releaseCloudAgentHold } from '@/lib/orca-cloud/cloud-agent-launch-hold'
 import {
   reloadOrcaCloudAgentAccounts,
@@ -45,7 +47,9 @@ export function cloudSetupStripActions(args: {
     useApiKey: args.useApiKey,
     cancel: () => {
       if (args.setupRunning) {
+        // Only the sign-in is abandoned; the person may still set up (here or in Settings) and start.
         stopOrcaCloudAgentSetups(agent)
+        return
       }
       releaseCloudAgentHold(holdKey, 'cancel')
     }

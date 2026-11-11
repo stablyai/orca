@@ -48,6 +48,28 @@ describe('cloudAgentSetupStripModel (PC-3b)', () => {
     expect(failed).toMatchObject({ status: 'error', primary: { action: { kind: 'setUpOnce' } } })
   })
 
+  it('after a cancelled setup it asks again, then offers Start once a setup from anywhere covers the agent (RR-a)', () => {
+    // Cancel left the setup idle and the launch held.
+    const again = cloudAgentSetupStripModel({
+      agent: 'claude',
+      setup: { phase: 'idle' },
+      ready: false,
+      t
+    })
+    expect(again.primary).toMatchObject({ action: { kind: 'setUpOnce' } })
+    // Then set up from Settings: this pane's setup never ran, but the account now covers Claude.
+    const covered = cloudAgentSetupStripModel({
+      agent: 'claude',
+      setup: { phase: 'idle' },
+      ready: true,
+      t
+    })
+    expect(covered).toMatchObject({
+      status: 'done',
+      primary: { label: 'Start Claude', action: { kind: 'start' } }
+    })
+  })
+
   it('offers Start once the account covers the agent', () => {
     const model = cloudAgentSetupStripModel({
       agent: 'claude',
