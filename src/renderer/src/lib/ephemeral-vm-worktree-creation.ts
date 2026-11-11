@@ -1,4 +1,5 @@
 import { toast } from 'sonner'
+import type { CloudCreateRendererPhase } from '../../../shared/orca-cloud/cloud-create-phases'
 import { useAppStore } from '@/store'
 import { prepareEphemeralVmWorkspaceTarget } from '@/lib/ephemeral-vm-workspace-target'
 import type { WorktreeCreationRequest } from '@/lib/workspace/creation/pending-worktree-creation'
@@ -95,6 +96,7 @@ async function prepareEphemeralVmRecipeRequest(
     unsubscribeProvisionEvents?.()
   }
   if (!preparedTarget.ok) {
+    notePhase(creationId, 'failed')
     if (!useAppStore.getState().pendingWorktreeCreations[creationId]) {
       return null
     }
@@ -124,11 +126,13 @@ async function prepareEphemeralVmRecipeRequest(
       .getState()
       .updatePendingWorktreeCreation(creationId, { vmEnvironmentId: preparedTarget.environmentId })
     // Why: the VM's first connect may have just deployed this server; host badges and removal read it.
+    notePhase(creationId, 'runtime-catalog-start')
     try {
       useAppStore.getState().setRuntimeEnvironments(await window.api.runtimeEnvironments.list())
     } catch {
       // A stale catalog only delays host badges; removal re-reads it.
     }
+    notePhase(creationId, 'runtime-catalog-end')
   }
   const preparedRequest: WorktreeCreationRequest = {
     ...request,
@@ -153,6 +157,7 @@ async function prepareEphemeralVmRecipeRequest(
       path: preparedTarget.setup.repo.path
     }
   }
+  notePhase(creationId, 'env-check-start')
   const gate = !useAppStore.getState().pendingWorktreeCreations[creationId]
     ? 'stop'
     : !preparedTarget.environmentId
@@ -174,6 +179,7 @@ async function prepareEphemeralVmRecipeRequest(
               }
             : undefined
         )
+  notePhase(creationId, gate === 'proceed' ? 'env-check-end' : 'failed')
   if (gate !== 'proceed') {
     await cleanupEphemeralVmRuntimeForFailedCreate(preparedRequest, creationId)
     if (gate === 'restart' && useAppStore.getState().pendingWorktreeCreations[creationId]) {
@@ -188,6 +194,7 @@ async function prepareEphemeralVmRecipeRequest(
     phase: 'fetching',
     request: preparedRequest
   })
+  notePhase(creationId, 'workspace-create-start')
   return preparedRequest
 }
 
@@ -278,4 +285,9 @@ function cloudCreateIdempotency(recipeId: string, creationId: string): { idempot
   }
   const key = cloudCreateIdempotencyKey(creationId)
   return key ? { idempotencyKey: key } : {}
+}
+
+/** N-01: reports a create phase to main's app log (no-op in the web client). */
+function notePhase(creationId: string, phase: CloudCreateRendererPhase): void {
+  window.api.ephemeralVm.notePhase?.({ provisionId: creationId, phase })
 }

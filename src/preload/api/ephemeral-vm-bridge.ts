@@ -18,6 +18,7 @@ export const ephemeralVmApi = {
   doctor: (args) => ipcRenderer.invoke('ephemeralVm:doctor', args),
   provision: (args) => ipcRenderer.invoke('ephemeralVm:provision', args),
   cancelProvision: (args) => ipcRenderer.invoke('ephemeralVm:cancelProvision', args),
+  notePhase: (args) => void ipcRenderer.invoke('ephemeralVm:notePhase', args).catch(() => {}),
   onProvisionEvent: (callback) => {
     const listener = (
       _event: Electron.IpcRendererEvent,
