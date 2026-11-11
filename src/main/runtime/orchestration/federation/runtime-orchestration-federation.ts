@@ -22,6 +22,7 @@ import {
   releaseFederationAckCheckpoint
 } from '../legacy-remote-home/federation-ack-checkpoints'
 import {
+  federatedSyncMovedMail,
   syncFederatedDispatch,
   type FederatedSyncResult
 } from '../legacy-remote-home/federation-sync'
@@ -191,7 +192,7 @@ export class RuntimeOrchestrationFederation {
       .then((result) => {
         if (this.syncs.get(dispatchId)?.promise === sync) {
           this.warnings.delete(dispatchId)
-          this.relays.noteSynced(dispatchId)
+          this.relays.noteSynced(dispatchId, federatedSyncMovedMail(result))
         }
         return result
       })
@@ -253,8 +254,7 @@ export class RuntimeOrchestrationFederation {
       return 'ended'
     }
     return this.syncDispatch(dispatchId).then(
-      (result): FederationRelayTickOutcome =>
-        result.imported > 0 || result.sent > 0 ? 'moved' : 'idle',
+      (result): FederationRelayTickOutcome => (federatedSyncMovedMail(result) ? 'moved' : 'idle'),
       (): FederationRelayTickOutcome => {
         if (!this.isEnvironmentRemoved(dispatchId)) {
           return 'failed'

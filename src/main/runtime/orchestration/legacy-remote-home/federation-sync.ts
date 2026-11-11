@@ -28,6 +28,10 @@ const MAX_FEDERATION_PULL_PAGES_PER_SYNC = 6
 /** imported and sent count new relay items, so a sync that moved nothing reads as idle. */
 export type FederatedSyncResult = { imported: number; sent: number; acknowledgedThrough: number }
 
+export function federatedSyncMovedMail(result: FederatedSyncResult): boolean {
+  return result.imported > 0 || result.sent > 0
+}
+
 export async function syncFederatedDispatch(
   runtime: FederationRuntime,
   dispatchId: string,

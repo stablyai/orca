@@ -82,11 +82,14 @@ export class FederationRelayScheduler {
     }
   }
 
-  /** A sync another caller completed proves the relay healthy again, so the next one returns to the base cadence. */
-  noteSynced(dispatchId: string): void {
+  /** A sync another caller completed proves the relay healthy again, and one that moved mail wakes it, so the next sync returns to the base cadence. */
+  noteSynced(dispatchId: string, moved: boolean): void {
     const chain = this.chains.get(dispatchId)
-    if (!chain || chain.running || chain.failures === 0) {
+    if (!chain || chain.running || (chain.failures === 0 && !moved)) {
       return
+    }
+    if (moved) {
+      wake(chain)
     }
     chain.failures = 0
     this.pullForwardToBase(dispatchId, chain)
