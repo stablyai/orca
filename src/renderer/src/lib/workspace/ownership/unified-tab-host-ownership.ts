@@ -13,16 +13,23 @@ import type { AppState } from '@/store/types'
 import { dedupePaletteWorktrees } from '../search/palette-repo-resolution'
 import { getResolvedExecutionHostIdForWorktree } from './resolved-worktree-execution-host'
 import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'
-import {
-  selectFolderWorkspaces,
-  selectWorktreesByRepo
-} from '@/store/workspaces/catalog/workspace-record-fields'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
+import { selectWorkspacePresentationWorktrees } from '@/store/workspaces/catalog/retained-workspace-presentation'
 
 export function getPaletteOwnershipWorktreeIds(
-  state: Pick<AppState, 'folderWorkspaces' | 'worktreesByRepo'>
+  state: Pick<AppState, 'folderWorkspaces' | 'worktreesByRepo'> &
+    Partial<
+      Pick<
+        AppState,
+        | 'detectedWorktreesByRepo'
+        | 'tabsByWorktree'
+        | 'unifiedTabsByWorktree'
+        | 'browserTabsByWorktree'
+      >
+    >
 ): Pick<Worktree, 'id'>[] {
   return [
-    ...dedupePaletteWorktrees(Object.values(selectWorktreesByRepo(state)).flat()),
+    ...dedupePaletteWorktrees(Object.values(selectWorkspacePresentationWorktrees(state)).flat()),
     ...(selectFolderWorkspaces(state) ?? []).map((workspace) => ({
       id: folderWorkspaceKey(workspace.id)
     }))

@@ -9,7 +9,8 @@ import { dedupePaletteWorktrees } from '@/lib/workspace/search/palette-repo-reso
 import {
   readHiddenVmCheckouts,
   subscribeHiddenVmCheckouts,
-  withoutHiddenVmWorktreesByRepo
+  withoutHiddenVmWorktreesByRepo,
+  withoutHiddenVmWorktrees
 } from '@/runtime/ephemeral-vm/vm-create-hidden-checkouts'
 import {
   selectPaletteIndexStatusSnapshot,
@@ -23,6 +24,7 @@ import {
   selectWorktreesByRepo
 } from '@/store/workspaces/catalog/workspace-record-fields'
 import { getFolderWorkspaceWorktree } from '../../../../shared/folder-workspaces/folder-workspace-worktree'
+import { selectWorkspacePresentationWorktrees } from '@/store/workspaces/catalog/retained-workspace-presentation'
 
 export function useWorktreeJumpPaletteStoreState({
   visible,
@@ -42,6 +44,7 @@ export function useWorktreeJumpPaletteStoreState({
   const recordFeatureInteraction = useAppStore((state) => state.recordFeatureInteraction)
   const revealSidebarRow = useAppStore((state) => state.revealSidebarRow)
   const storedWorktreesByRepo = useAppStore((state) => selectWorktreesByRepo(state))
+  const presentationWorktreesByRepo = useAppStore(selectWorkspacePresentationWorktrees)
   const hiddenVmCheckouts = useSyncExternalStore(subscribeHiddenVmCheckouts, readHiddenVmCheckouts)
   // Why: a VM create's checkout is not a workspace until the create adopts it.
   const worktreesByRepo = useMemo(
@@ -71,6 +74,17 @@ export function useWorktreeJumpPaletteStoreState({
     [folderWorkspaces, projectGroups, repos, worktreesByRepo]
   )
   const projects = useAppStore((state) => state.projects)
+  const presentationWorkspaces = useMemo(
+    () =>
+      dedupePaletteWorktrees([
+        ...withoutHiddenVmWorktrees(
+          Object.values(presentationWorktreesByRepo).flat(),
+          hiddenVmCheckouts
+        ),
+        ...workspaces.filter((workspace) => workspace.id.startsWith('folder:'))
+      ]),
+    [presentationWorktreesByRepo, hiddenVmCheckouts, workspaces]
+  )
   const projectHostSetups = useAppStore((state) => state.projectHostSetups)
   const detectedWorktreesByRepo = useAppStore((state) => selectDetectedWorktreesByRepo(state))
   const pendingWorktreeCreations = useAppStore((state) => state.pendingWorktreeCreations)
@@ -167,6 +181,7 @@ export function useWorktreeJumpPaletteStoreState({
     worktreesByRepo,
     pendingVmRepoIds: hiddenVmCheckouts.repoIds,
     workspaces,
+    presentationWorkspaces,
     repos,
     projectGroups,
     projects,

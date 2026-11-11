@@ -2,7 +2,11 @@ import type { ProjectHostSetup } from '../../../../../../shared/project-types'
 import type { DetectedWorktreeListResult } from '../../../../../../shared/worktree/types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { sanitizeHostedReviewLinksForBranchClears } from '../metadata/hosted-review-link-mutation'
-import { mergeWorktreesForHost, withRepoHostOwnership } from './worktree-host-ownership'
+import {
+  mergeWorktreesForHost,
+  withRepoHostOwnership,
+  worktreeMatchesHost
+} from './worktree-host-ownership'
 import type { WorktreeHostMatchOptions } from './worktree-slice-types'
 
 export function mergeDetectedWorktreesForHost(
@@ -17,7 +21,17 @@ export function mergeDetectedWorktreesForHost(
     refreshed.worktrees.map((worktree) => withRepoHostOwnership(worktree, hostId, setup)),
     current?.worktrees
   )
-  const worktrees = mergeWorktreesForHost(current?.worktrees, refreshedForHost, hostId, options)
+  const refreshedIds = new Set(refreshedForHost.map((row) => row.id))
+  // Incomplete scans can update positive identities but cannot delete known content owners.
+  const incoming = refreshed.authoritative
+    ? refreshedForHost
+    : [
+        ...refreshedForHost,
+        ...(current?.worktrees ?? []).filter(
+          (row) => worktreeMatchesHost(row, hostId, options) && !refreshedIds.has(row.id)
+        )
+      ]
+  const worktrees = mergeWorktreesForHost(current?.worktrees, incoming, hostId, options)
   if (
     current &&
     current.repoId === refreshed.repoId &&

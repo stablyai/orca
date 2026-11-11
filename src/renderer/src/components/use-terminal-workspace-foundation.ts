@@ -3,7 +3,8 @@ import { MountedTerminalWorktrees } from './terminal/split-group-mount'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
 import { useAppStore } from '../store/index'
-import { useWorktreeMap } from '../store/slices/worktrees/listing/use-worktree-catalog'
+import { getIndexedWorktreeMap } from '../store/slices/worktrees/listing/worktree-catalog-index'
+import { selectWorkspacePresentationWorktrees } from '@/store/workspaces/catalog/retained-workspace-presentation'
 import { getResolvedExecutionHostIdForWorktree } from '@/lib/workspace/ownership/resolved-worktree-execution-host'
 import type { WorktreeTabBucketProjection } from '@/lib/workspace/tabs/worktree-tab-bucket-projection'
 import { projectWorkspaceSurfaces } from './workspace-surface-projection'
@@ -30,7 +31,9 @@ export function useTerminalWorkspaceFoundation() {
   const measuringTerminalWorktreeIdsRef = useRef(new Set<string>())
   const terminalWorktreeParkCooldownUntilRef = useRef(new Map<string, number>())
   const terminalWorktreeParkingTimersRef = useRef(new Map<string, number>())
-  const worktreesById = useWorktreeMap()
+  const worktreesById = useAppStore((state) =>
+    getIndexedWorktreeMap(selectWorkspacePresentationWorktrees(state))
+  )
   const folderWorkspaces = useAppStore((state) => selectFolderWorkspaces(state))
   const activeWorktreeId = useAppStore((state) => state.activeWorktreeId)
   const renderedActiveWorktreeId = activeWorktreeId
