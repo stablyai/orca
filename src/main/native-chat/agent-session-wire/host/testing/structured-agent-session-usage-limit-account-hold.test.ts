@@ -23,9 +23,16 @@ async function heldChat() {
   let clock = HOST_TEST_NOW
   let reading: ProviderRateLimits | null = null
   let enabled = true
+  let answer: ((now: number) => ProviderRateLimits) | undefined
   const accountA: UsageLimitAccountScope = {
     scope: 'home-a',
-    account: { key: 'account-a', read: () => reading, refresh: () => {} }
+    account: {
+      key: 'account-a',
+      read: () => reading,
+      refresh: () => {
+        reading = answer?.(clock) ?? reading
+      }
+    }
   }
   let attributed: UsageLimitAccountScope = accountA
   const current = await createQueuedMessageTestRig({
@@ -50,6 +57,17 @@ async function heldChat() {
       await current.host.usageLimitContinue.tick()
       const snapshot = await current.host.journalSnapshot(SESSION)
       return snapshot.submissions.filter((submission) => submission.origin === 'host')
+    },
+    /** A pass with no reading arriving except what a requested refresh brings. */
+    quietPass: async (at: number) => {
+      clock = at
+      await current.host.usageLimitContinue.tick()
+      const snapshot = await current.host.journalSnapshot(SESSION)
+      return snapshot.submissions.filter((submission) => submission.origin === 'host')
+    },
+    /** What a requested refresh returns from now on; nothing arrives unasked otherwise. */
+    answerRefresh: (next: (now: number) => ProviderRateLimits) => {
+      answer = next
     },
     state: () => current.host.usageLimitContinue.readState(SESSION),
     /** The launch that a start would make now; a different scope is a different account. */
@@ -225,11 +243,30 @@ it('rebuilds a covering hold beside a spent window of unknown reset, then settle
     )
   ).toEqual([])
   expect(chat.state()).toMatchObject({ state: 'failed', continueAt: weeklyReset })
-  // A fresh reading of this System Default home with room releases the refusal.
-  const sent = await chat.pass(weeklyReset + 15_000, (now) => weekly(0, null, now))
-  expect(sent).toHaveLength(1)
-  const id = sent[0]!.clientMessageId
-  await eventually(async () => expect((await rig!.submission(id))?.handedOverAt).toBeDefined())
-  await rig!.settleAccepted(id, 'continued')
-  expect((await rig!.submission(id))?.dispatchState).toBe('accepted')
+  // A fresh reading with room releases the refusal; the send counts from that reading.
+  const room = weeklyReset + 15_000
+  expect(await chat.pass(room, (now) => weekly(0, null, now))).toEqual([])
+  expect(chat.state()).toMatchObject({ state: 'scheduled', continueAt: room })
+  await settleOne(await chat.pass(room + 15_000, (now) => weekly(0, null, now)))
+  expect(await chat.pass(room + 5 * 60_000, (now) => weekly(0, null, now))).toHaveLength(1)
+})
+
+it('asks for readings while a reset is unknown, and releases an expired hold from the room it brings', async () => {
+  const chat = await heldChat()
+  const reset = chat.cut.resetsAt
+  expect(await chat.pass(reset + 15_000, (now) => weekly(100, reset + 3 * HOUR, now))).toEqual([])
+  expect(await chat.pass(reset + 2 * HOUR, (now) => weekly(100, null, now))).toEqual([])
+  // Unfocused overnight: the poller is idle, so only readings the sweep asks for arrive.
+  chat.answerRefresh((now) => weekly(100, null, now))
+  for (const at of [reset + 12 * HOUR, reset + 22 * HOUR]) {
+    expect(await chat.quietPass(at)).toEqual([])
+  }
+  expect(chat.state()).toMatchObject({ state: 'failed' })
+  chat.answerRefresh((now) => weekly(0, null, now))
+  const room = reset + 30 * HOUR
+  expect(await chat.quietPass(room)).toEqual([])
+  // That room came 27 h after the finite hold ran out; the send still counts from the room.
+  expect(chat.state()).toMatchObject({ state: 'scheduled', continueAt: room })
+  await settleOne(await chat.quietPass(room + 15_000))
+  expect(await chat.quietPass(room + 5 * 60_000)).toHaveLength(1)
 })

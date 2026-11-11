@@ -52,6 +52,8 @@ type Hold = {
   /** When the newest reading that put spending into effect was taken; only later room releases. */
   spentSeenAt?: number
   refreshedFor?: number
+  /** When a pass last asked for a reading while the reset was unknown. */
+  unknownAskedAt?: number
   /** When a due send of this held reset first found no reading to wait for. */
   bootstrapSince?: { reset: number; at: number }
 }
@@ -64,6 +66,8 @@ type AttributionHost = Pick<
 const GRACE_MS = 15_000
 /** How long a due send waits for a fresh reading before it goes on the reset it has. */
 const READING_WAIT_MS = 120_000
+/** How often an unknown reset asks for a reading; only one with room can end it. */
+const UNKNOWN_RESET_ASK_MS = 10 * 60_000
 
 /** Derived each pass from the polled reading; nothing is saved. A hold only grows for its cut and account. */
 export class UsageLimitAccountHolds {
@@ -219,7 +223,7 @@ export class UsageLimitAccountHolds {
       } else if (reading.updatedAt > (hold.spentSeenAt ?? Number.NEGATIVE_INFINITY)) {
         // Room newer than any spending seen releases the hold at that reading, so it counts from now.
         if (hold.unknownReset || (hold.heldUntil ?? Number.NEGATIVE_INFINITY) > reading.updatedAt) {
-          hold.heldUntil = Math.min(hold.heldUntil ?? reading.updatedAt, reading.updatedAt)
+          hold.heldUntil = reading.updatedAt
         }
         hold.unknownReset = false
       }
@@ -268,11 +272,18 @@ export class UsageLimitAccountHolds {
     notBefore = 0
   ): boolean {
     const hold = this.verdict(id, cut, now)
+    const record = this.holds.get(id)
+    const scope = this.scopes.get(id)
+    // The poller may be idle (unfocused, no viewer), and only a reading with room ends this.
+    if (hold.unknownReset && record && scope?.account) {
+      if (now - (record.unknownAskedAt ?? Number.NEGATIVE_INFINITY) >= UNKNOWN_RESET_ASK_MS) {
+        record.unknownAskedAt = now
+        scope.account.refresh()
+      }
+    }
     if (hold.unknownReset || now < Math.max(hold.resetsAt + GRACE_MS, notBefore)) {
       return false
     }
-    const record = this.holds.get(id)
-    const scope = this.scopes.get(id)
     const refresh = scope?.account?.refresh ?? scope?.bootstrap
     if (hold.awaitingReading && record && refresh && record.refreshedFor !== hold.resetsAt) {
       record.refreshedFor = hold.resetsAt
