@@ -5,7 +5,11 @@ import type { PtyIpcSpawnState } from './spawn-state'
 
 export async function preparePtyIpcQoderCommand(ctx: PtyIpcSpawnState): Promise<void> {
   // Adopted owners and pane launch plans already determine their own runtime command.
-  if (ctx.preAdoptedStablePane || ctx.paneAgentLaunch || ctx.args.launchAgent !== 'qoder') {
+  if (
+    ctx.preAdoptedStablePane ||
+    ctx.paneAgentLaunch ||
+    (ctx.args.launchAgent !== 'qoder' && ctx.args.launchAgent !== 'cursor')
+  ) {
     return
   }
   const connectionId = ctx.args.connectionId

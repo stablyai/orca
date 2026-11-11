@@ -229,7 +229,9 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     promptInjectionMode: 'stdin-after-start'
   },
   cursor: {
-    detectCmd: 'cursor-agent',
+    // `agent` is the official name; `cursor-agent` remains installed as a compatibility alias.
+    detectCmd: 'agent',
+    detectCmdAliases: ['cursor-agent'],
     promptInjectionMode: 'argv',
     // Why: first-launch trust menu swallows the bracketed paste; pre-write the .workspace-trusted marker so it skips (agent-trust-presets.ts).
     preflightTrust: 'cursor'

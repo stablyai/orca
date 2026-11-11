@@ -254,7 +254,7 @@ function resolveQoderLaunchCommand(
   store: RuntimeStore,
   runtime: AgentLaunchRuntime | undefined
 ): Promise<TerminalCreateOptions> {
-  if (launch.launchAgent !== 'qoder') {
+  if (launch.launchAgent !== 'qoder' && launch.launchAgent !== 'cursor') {
     return Promise.resolve(launch)
   }
   if (workspace.connectionId) {

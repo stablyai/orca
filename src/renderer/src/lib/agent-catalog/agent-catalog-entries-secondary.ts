@@ -87,7 +87,7 @@ export function secondaryAgentCatalogEntries(): AgentCatalogEntry[] {
     {
       id: 'cursor',
       label: translate('auto.lib.agent.catalog.667c104cff', 'Cursor'),
-      cmd: 'cursor-agent',
+      cmd: 'agent',
       homepageUrl: 'https://cursor.com/cli'
     },
     {
