@@ -120,18 +120,22 @@ port.on('message', ({ id, operation }: JournalSqlReaderRequest) => {
         break
     }
   } catch (error) {
+    let retire = operation.kind === 'fork-prepare'
     if (fork) {
       try {
         fork.preparation.close()
       } catch {
-        reply({ type: 'failed', error: journalSqlFailure(error) })
-        try {
-          db?.close()
-        } catch {}
-        db = undefined
-        port.close()
-        return
+        retire = true
       }
+    }
+    if (retire) {
+      reply({ type: 'failed', error: journalSqlFailure(error) })
+      try {
+        db?.close()
+      } catch {}
+      db = undefined
+      port.close()
+      return
     }
     reply({ type: 'failed', id, error: journalSqlFailure(error) })
   }
