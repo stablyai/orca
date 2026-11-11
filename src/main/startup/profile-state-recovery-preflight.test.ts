@@ -15,21 +15,21 @@ import {
   PROFILE_STATE_RECOVERY_FLAG,
   PROFILE_STATE_RECOVERY_RESULT_PREFIX
 } from '../../shared/profile-state-recovery-command'
-import { acquireProfileStateRuntimeAdmission } from '../persistence/profile-state/profile-state-access'
+import { acquireProfileStateRuntimeAdmission } from '../persistence/profile-state/access/profile-state-access'
 import { profileStateJsonExportPath } from '../persistence/profile-state/legacy-json/profile-state-export-path'
 import {
   createProfileStateDatabaseBackupId,
   profileStateDatabaseBackupPath
-} from '../persistence/profile-state/profile-state-backup-path'
+} from '../persistence/profile-state/backup/profile-state-backup-path'
 import {
   openProfileStateDatabase,
   openProfileStateDatabaseReadOnly
-} from '../persistence/profile-state/profile-state-database'
+} from '../persistence/profile-state/database/profile-state-database'
 import {
   importProfileStateJson,
   readProfileStateSnapshot
-} from '../persistence/profile-state/profile-state-documents'
-import { writeProfileStateDatabaseSnapshotAsync } from '../persistence/profile-state/profile-state-database-snapshot'
+} from '../persistence/profile-state/documents/profile-state-documents'
+import { writeProfileStateDatabaseSnapshotAsync } from '../persistence/profile-state/database/profile-state-database-snapshot'
 import * as marker from './http1-compatibility-marker'
 import {
   profileStateDesktopRecoveryArgs,

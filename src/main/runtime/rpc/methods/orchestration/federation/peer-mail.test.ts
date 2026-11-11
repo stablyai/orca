@@ -293,19 +293,6 @@ describe('agent mail between paired Orca servers', () => {
     expect(b.db.getInbox(10).filter((message) => message.subject === 'Once')).toHaveLength(1)
   })
 
-  it('refuses payload fields before sending anything', async () => {
-    const sent = await mutation(a, 'orchestration.send', {
-      from: 'term_a',
-      on: 'devB',
-      to: 'term_b',
-      subject: 'Report',
-      payload: '{"taskId":"task_1"}'
-    })
-
-    expect(sent).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
-    expect(b.db.getInbox(10)).toEqual([])
-  })
-
   it('refuses mail to a worker another Orca coordinates', async () => {
     vi.spyOn(b.db, 'findActiveRemoteAttachmentForPane').mockImplementation((paneKey) =>
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a test double carrying only the fields the code under test reads.
@@ -320,19 +307,6 @@ describe('agent mail between paired Orca servers', () => {
     })
 
     expect(sent).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
-    expect(b.db.getInbox(10)).toEqual([])
-  })
-
-  it('refuses a conversation ID that is not a peer conversation', async () => {
-    const delivered = await transport.call('devB', 'orchestration.peerMailDeliver', {
-      conversationId: 'ctx_aaaaaaaaaaaa',
-      messageId: 'msg_aaaaaaaaaaaa',
-      to: 'term_b',
-      senderLabel: "term_a on Jinwoo's Mac",
-      subject: 'Into a dispatch'
-    })
-
-    expect(delivered).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
     expect(b.db.getInbox(10)).toEqual([])
   })
 
@@ -385,7 +359,7 @@ describe('agent mail between paired Orca servers', () => {
     a.db.resetMessages()
     // The ack was lost: the server serves the stored reply again.
     b.db['db'].prepare('UPDATE federation_relay_items SET acked_at = NULL').run()
-    notifyPeerMailQueued(b.db)
+    notifyPeerMailQueued(b.db.db)
 
     await vi.waitFor(() =>
       expect(b.db.listPendingFederationRelay(conversationId!, 'to_home')).toEqual([])

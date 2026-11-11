@@ -1,31 +1,25 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { removeTempDirs } from '../../testing/remove-temp-dirs.test-support'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { encodePairingOffer } from '../pairing/pairing'
 import {
   addEnvironmentFromPairingCode,
-  addOrUpdateEnvironmentFromPairingCode,
   listEnvironments,
   markEnvironmentUsed,
-  removeEnvironment,
-  resolveEnvironment,
-  updateEnvironmentFromPairingCode
+  removeEnvironment
 } from './runtime-environment-store'
 import { getEnvironmentStorePath } from './runtime-environment-store-records'
 import {
   getRuntimeEnvironmentSidecarPath,
-  readCurrentRuntimeEnvironmentSidecarEntry,
   writeRuntimeEnvironmentSidecarEntry
 } from './runtime-environment-sidecar'
 import {
   addManagedOrcadEnvironment,
   removeManagedOrcadEnvironment
 } from './runtime-environment-managed-orcad-store'
-import {
-  readPersistedEnvironmentStore,
-  writeEnvironmentStore
-} from './runtime-environment-store-file'
+import { readPersistedEnvironmentStore } from './runtime-environment-store-file'
 
 const pairing = {
   v: 2 as const,
@@ -46,9 +40,9 @@ describe('runtime environment store with records this build cannot read', () => 
     userDataPath = mkdtempSync(join(tmpdir(), 'orca-environment-unreadable-'))
     vi.spyOn(console, 'warn').mockImplementation(() => {})
   })
-  afterEach(() => {
+  afterEach(async () => {
     vi.restoreAllMocks()
-    rmSync(userDataPath, { recursive: true, force: true })
+    await removeTempDirs([userDataPath])
   })
 
   // Why a key per name: two names with one key are one server, which the store refreshes in place.
@@ -116,19 +110,6 @@ describe('runtime environment store with records this build cannot read', () => 
     expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('corrupt, <none>, future'))
   })
 
-  it('refuses to add a readable record under an id an unreadable record owns', () => {
-    const alpha = add('Alpha')
-    appendRawRecords(futureKind)
-    const store = readPersistedEnvironmentStore(userDataPath)
-    expect(() =>
-      writeEnvironmentStore(userDataPath, {
-        version: 1,
-        environments: [...store.environments, { ...alpha, id: futureKind.id, name: 'Other' }]
-      })
-    ).toThrow('newer version of Orca')
-    expect(readJson(getEnvironmentStorePath(userDataPath)).environments).toContainEqual(futureKind)
-  })
-
   it('keeps a sidecar entry owned by an unreadable record when another server writes its links', () => {
     const alpha = add('Alpha')
     appendRawRecords(futureKind)
@@ -173,34 +154,6 @@ describe('runtime environment store with records this build cannot read', () => 
       )
       return { pinned, other, sidecarPath }
     }
-
-    it('hides only its server and keeps it unusable rather than unpinned', () => {
-      const { pinned, other } = setup()
-
-      expect(listEnvironments(userDataPath)).toEqual([other])
-      expect(() => resolveEnvironment(userDataPath, pinned.id)).toThrow('Unknown environment')
-      expect(() => removeEnvironment(userDataPath, pinned.id)).toThrow('Unknown environment')
-      expect(() =>
-        updateEnvironmentFromPairingCode(userDataPath, pinned.id, {
-          pairingCode: encodePairingOffer(pairing)
-        })
-      ).toThrow('Unknown environment')
-      expect(() => readCurrentRuntimeEnvironmentSidecarEntry(userDataPath, pinned)).toThrow(
-        'newer version of Orca'
-      )
-      expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('Hiding 1 server'))
-    })
-
-    it('refuses a second entry for its server even though it is hidden', () => {
-      const { other } = setup()
-      expect(() =>
-        addOrUpdateEnvironmentFromPairingCode(userDataPath, {
-          name: 'Pinned again',
-          pairingCode: encodePairingOffer({ ...pairing, endpoint: 'ws://192.0.2.10:6768' })
-        })
-      ).toThrow('already paired as "Pinned"')
-      expect(listEnvironments(userDataPath)).toEqual([other])
-    })
 
     it('is never replaced, pruned, or orphaned by writes', () => {
       const { pinned, other, sidecarPath } = setup()

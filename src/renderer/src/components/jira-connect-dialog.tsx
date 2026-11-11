@@ -24,7 +24,7 @@ import {
   getProviderRuntimeContextKey,
   isEnvironmentRuntimeContextKey
 } from '@/runtime/hosts/observations/provider-runtime-context'
-import { preventOutsideDismissWhenDirty } from '@/lib/outside-dismiss-guard'
+import { preventOutsideDismissWhenDirty } from '@/lib/overlay-interaction/outside-dismiss-guard'
 import { useTranslate } from '@/i18n/use-translate'
 import { JiraConnectCredentialGuide } from './jira-connect-credential-guide'
 

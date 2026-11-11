@@ -21,6 +21,7 @@ import { RecoverableRenderErrorBoundary } from '../error-boundaries/RecoverableR
 import type { FileContent } from './editor-panel-content-types'
 import { CustomEditorExternalChangeBanner } from './external-changes/CustomEditorExternalChangeBanner'
 import { PluginFileTypeSuggestion } from './PluginFileTypeSuggestion'
+import { BinaryFileDefaultAppButton } from './BinaryFileDefaultAppButton'
 import type { useMarkdownDocuments } from './markdown/documents/useMarkdownDocuments'
 import { EditorMarkdownFileSurface } from './EditorMarkdownFileSurface'
 import type { MarkdownRenderState } from './markdown/render-mode/markdown-render-mode'
@@ -189,8 +190,11 @@ export function EditorEditFileSurface({
       <div className="flex h-full flex-col">
         <PluginEditorSourceFallbackNotice fileId={activeFile.id} filePath={activeFile.filePath} />
         <PluginFileTypeSuggestion filePath={activeFile.filePath} />
-        <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
+        <div className="flex flex-1 flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
           {t('auto.components.editor.EditorContent.b9de81ba52', 'Binary file — cannot display')}
+          {fileContent.byteSource && (
+            <BinaryFileDefaultAppButton key={activeFile.id} source={fileContent.byteSource} />
+          )}
         </div>
       </div>
     )

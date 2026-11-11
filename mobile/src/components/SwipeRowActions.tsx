@@ -84,8 +84,6 @@ export function SwipeRowActions({
     })
   // Web has no worklet plugin; mapper hooks need this explicit dependency list.
   const rowStyle = useAnimatedStyle(() => ({ transform: [{ translateX: offset.value }] }), [offset])
-  // Hidden at rest, so the action can't show through a rounded group's antialiased corners.
-  const actionsStyle = useAnimatedStyle(() => ({ opacity: offset.value === 0 ? 0 : 1 }), [offset])
   // A tap on an open row closes it rather than pressing the row.
   const guardPress = (onPress: () => void) => () => {
     // The click a drag release produces belongs to the drag, not to the row.
@@ -126,10 +124,8 @@ export function SwipeRowActions({
   }
   return (
     <View>
-      <Animated.View pointerEvents="box-none" style={[styles.actions, actionsStyle]}>
-        {leading ? renderAction(leading, 'leading') : null}
-        {trailing ? renderAction(trailing, 'trailing') : null}
-      </Animated.View>
+      {leading ? renderAction(leading, 'leading') : null}
+      {trailing ? renderAction(trailing, 'trailing') : null}
       {/* pan-y keeps the page scrolling vertically over the row on the web. */}
       <GestureDetector gesture={pan} touchAction="pan-y">
         <Animated.View style={rowStyle}>{children(guardPress)}</Animated.View>
@@ -148,7 +144,6 @@ const styles = themedStyleSheet(() => ({
     justifyContent: 'center',
     gap: 2
   },
-  actions: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 },
   leading: { left: 0 },
   trailing: { right: 0 },
   actionPressed: { opacity: feedback.pressedOpacity },
