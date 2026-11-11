@@ -90,7 +90,7 @@ export function renderDeveloperPermissionsSettingsSection(
     <SettingsSection
       id="developer-permissions"
       grouped
-      title={t('auto.components.settings.Settings.65660d4548', 'macOS Permissions')}
+      title={t('auto.components.settings.Settings.65660d4548', 'macOS permissions')}
       description={t(
         'auto.components.settings.Settings.9b83cc62c2',
         'macOS privacy access for terminal-launched developer tools.'

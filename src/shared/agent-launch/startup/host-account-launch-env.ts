@@ -28,5 +28,5 @@ export function hostAccountLaunchEnvFor(
 }
 
 export function hostAccountsManagedByDesktopMessage(wslDistro: string): string {
-  return `Accounts for this WSL host are managed in the Orca desktop app: Settings → AI Provider Accounts, with the ${wslDistro} (WSL) host selected.`
+  return `Accounts for this WSL host are managed in the Orca desktop app: Settings → Agent accounts, with the ${wslDistro} (WSL) host selected.`
 }
