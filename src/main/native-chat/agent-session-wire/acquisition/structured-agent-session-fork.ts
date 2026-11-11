@@ -51,7 +51,7 @@ export async function prepareStructuredAgentSessionFork(
     accountHome: record.accountHome
   }).catch((error: unknown) => {
     if (isAgentSessionRefusalError(error)) {
-      throw error
+      return fail(error)
     }
     host.deps.logger.warn('native conversation copy failed', {
       scope: 'chat-fork',

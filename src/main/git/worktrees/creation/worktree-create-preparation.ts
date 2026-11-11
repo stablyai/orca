@@ -1,3 +1,5 @@
+import { runStandalonePreparation } from './worktree-preparation-standalone'
+import { performPreparedWorktreeFinalization } from './worktree-preparation-finalization-work'
 import { windowsLongPathGitArgs } from '../../../../shared/windows-long-path-git-args'
 import { checkoutWorkersGitArgs } from '../../command-runner/checkout-workers-git-args'
 import { resolveWorktreeAddBaseRef } from '../../../../shared/worktree/base-ref'
@@ -11,28 +13,20 @@ import {
   resolveWorktreeAddTimeoutMs,
   WORKTREE_REMOVAL_REGISTRATION_TIMEOUT_MS
 } from '../worktree-operation-options'
-import {
-  configurePushAutoSetupRemote,
-  persistWorktreeCreationBase,
-  resolveWorktreeAddBaseContext,
-  trackSameNameRemoteBase
-} from './worktree-add'
 import { bumpWorktreeScanGeneration as notifyPreparedWorktreeMutation } from '../catalog/worktree-scan-cache'
-import { gitCleanupOptions, removeFailedFinalization } from './worktree-preparation-discard'
-import { hasWorktreeBaseCommitRef } from './worktree-base-ref-probe'
 import {
-  runStandalonePreparation,
-  type WorktreePreparationOperation
-} from './worktree-preparation-operation'
+  gitCleanupOptions,
+  removeFailedFinalization,
+  reconcilePreparationLocation,
+  discardPreparedWorktree as discardOwnedPreparation
+} from './worktree-preparation-discard'
+import { hasWorktreeBaseCommitRef } from './worktree-base-ref-probe'
+import { WorktreePreparationOperation } from './worktree-preparation-operation'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
 import { runWithGitReadCacheInvalidation } from '../../source-control/git-read-cache-invalidation'
-import { invalidateWslLinkedWorktreeGitRouting } from '../../command-runner/wsl-linked-worktree-git-routing'
 import {
   unlockWorktreePreparation,
-  unlockWorktreePreparationAtPath,
-  verifyWorktreePreparationLock,
-  verifyWorktreePreparationLockAtPath,
-  WorktreePreparationLockOwnershipError
+  verifyWorktreePreparationLockAtPath
 } from './worktree-preparation-lock'
 import { addLockedWorktreePreparation } from './worktree-preparation-add'
 
@@ -139,6 +133,12 @@ export type FinalizedPreparedWorktree = AddWorktreeResult & {
   preparedHeadReset: boolean
 }
 
+export class PreparedWorktreeFinalizationPendingError extends Error {
+  constructor(readonly originalError: unknown) {
+    super('The prepared checkout still has an unverified target writer.', { cause: originalError })
+  }
+}
+
 export async function finalizePreparedWorktree(
   repoPath: string,
   preparedPath: string,
@@ -147,149 +147,110 @@ export async function finalizePreparedWorktree(
   baseBranch: string,
   refreshLocalBaseRef = false,
   options: AddWorktreeOptions = {},
-  expectedLockReason: string
+  expectedLockReason: string,
+  operation?: WorktreePreparationOperation
 ): Promise<FinalizedPreparedWorktree> {
-  const finalizeGitOptions: AddWorktreeOptions = {
-    ...options,
-    timeout: options.timeout ?? resolveWorktreeAddTimeoutMs()
+  const owner = operation ?? new WorktreePreparationOperation(options)
+  let pendingTarget = false
+  const captured: { lockPath?: string; targetWriter: boolean } = { targetWriter: false }
+  if (!operation) {
+    owner.setDiscard((cleanupOptions) =>
+      discardOwnedPreparation(repoPath, preparedPath, cleanupOptions, expectedLockReason)
+    )
   }
   try {
-    return await runWithGitReadCacheInvalidation(async () => {
-      const lockPath = await verifyWorktreePreparationLock(
+    const result = await owner.supervise(options, (ownedOptions) =>
+      performPreparedWorktreeFinalization(
+        repoPath,
         preparedPath,
+        worktreePath,
+        branch,
+        baseBranch,
+        refreshLocalBaseRef,
+        { ...options, ...ownedOptions },
         expectedLockReason,
-        finalizeGitOptions
+        owner,
+        captured
       )
-      const verifyOwnership = (): Promise<void> =>
-        verifyWorktreePreparationLockAtPath(lockPath, expectedLockReason, finalizeGitOptions.signal)
-      const [targetResult, preparedResult] = await Promise.allSettled([
-        (async () => {
-          const baseContext = await resolveWorktreeAddBaseContext(
-            repoPath,
-            baseBranch,
-            refreshLocalBaseRef,
-            finalizeGitOptions,
-            branch
-          )
-          const targetHead =
-            baseContext.effectiveBaseOid ??
-            (
-              await gitExecFileAsync(
-                ['rev-parse', '--verify', `${baseContext.effectiveBase}^{commit}`],
-                gitExecOptions(repoPath, finalizeGitOptions)
-              )
-            ).stdout.trim()
-          return { baseContext, targetHead }
-        })(),
-        gitExecFileAsync(
-          ['rev-parse', '--verify', 'HEAD'],
-          gitExecOptions(preparedPath, finalizeGitOptions)
-        )
-      ])
-      // Settle both reads before failure cleanup can remove the prepared checkout.
-      if (targetResult.status === 'rejected') {
-        throw targetResult.reason
-      }
-      const { baseContext, targetHead } = targetResult.value
-      if (preparedResult.status === 'rejected') {
-        await baseContext.pendingLocalBaseRefRefresh
-        throw preparedResult.reason
-      }
-      const preparedHeadReset = preparedResult.value.stdout.trim() !== targetHead
-      if (preparedHeadReset) {
-        await verifyOwnership()
-        await gitExecFileAsync(
-          [
-            ...(await checkoutWorkersGitArgs(preparedPath, finalizeGitOptions)),
-            ...windowsLongPathGitArgs(preparedPath),
-            'reset',
-            '--hard',
-            targetHead
-          ],
-          gitExecOptions(preparedPath, finalizeGitOptions)
-        )
-      }
-
-      let moved = false
-      try {
-        try {
-          await verifyOwnership()
-          // Git >= 2.25 needs two force flags to move a locked preparation without losing its lock reason.
-          await gitExecFileAsync(
-            [
-              ...windowsLongPathGitArgs(repoPath),
-              'worktree',
-              'move',
-              '-f',
-              '-f',
-              preparedPath,
-              worktreePath
-            ],
-            gitExecOptions(repoPath, finalizeGitOptions)
-          )
-          moved = true
-        } finally {
-          // The move rewrites both `.git` markers, and a failure can have rewritten one.
-          invalidateWslLinkedWorktreeGitRouting(preparedPath)
-          invalidateWslLinkedWorktreeGitRouting(worktreePath)
+    )
+    await owner.physicalSettlement()
+    owner.finishFinalization('disposed')
+    return result
+  } catch (error) {
+    const settled = await owner.waitForPhysicalSettlement()
+    if (captured.lockPath) {
+      owner.setDiscard(async (cleanupOptions) => {
+        if (!captured.lockPath) {
+          return 'revoked'
         }
-        await verifyOwnership()
-        await gitExecFileAsync(
-          [
-            ...windowsLongPathGitArgs(worktreePath),
-            'checkout',
-            '--no-track',
-            '-b',
-            branch,
-            targetHead
-          ],
-          gitExecOptions(worktreePath, finalizeGitOptions)
-        )
-        await verifyOwnership()
-        await persistWorktreeCreationBase(
+        const location = await reconcilePreparationLocation(
+          captured.lockPath,
+          preparedPath,
           worktreePath,
-          branch,
-          baseContext.effectiveBase,
-          finalizeGitOptions
-        )
-        await trackSameNameRemoteBase(
-          worktreePath,
-          branch,
-          baseBranch,
-          baseContext.effectiveBase,
-          finalizeGitOptions
-        )
-        await configurePushAutoSetupRemote(worktreePath, finalizeGitOptions)
-        await unlockWorktreePreparationAtPath(
-          lockPath,
           expectedLockReason,
-          finalizeGitOptions.signal
+          cleanupOptions
         )
-      } catch (error) {
-        if (!(error instanceof WorktreePreparationLockOwnershipError)) {
-          await removeFailedFinalization(
+        if (location === 'hidden') {
+          return discardOwnedPreparation(
             repoPath,
-            moved ? worktreePath : preparedPath,
-            branch,
-            moved,
-            finalizeGitOptions,
-            expectedLockReason
+            preparedPath,
+            cleanupOptions,
+            expectedLockReason,
+            captured.lockPath
           )
         }
-        await baseContext.pendingLocalBaseRefRefresh
-        throw error
+        return location === 'target' || location === 'unknown' ? 'revoked' : location
+      })
+    }
+    if (settled && captured.lockPath) {
+      const location = await reconcilePreparationLocation(
+        captured.lockPath,
+        preparedPath,
+        worktreePath,
+        expectedLockReason,
+        options
+      )
+      if (location === 'target') {
+        let eligible = true
+        const rollback = owner.supervise(
+          {
+            ...options,
+            signal: undefined,
+            canStart: () => eligible && options.canStart?.() !== false
+          },
+          (rollbackOptions) =>
+            removeFailedFinalization(
+              repoPath,
+              worktreePath,
+              branch,
+              true,
+              rollbackOptions,
+              expectedLockReason,
+              captured.lockPath
+            ),
+          true
+        )
+        void rollback.catch(() => {})
+        pendingTarget = !(await owner.waitForPhysicalSettlement(() => {
+          eligible = false
+        }))
+        eligible = false
+        if (!pendingTarget && (await rollback.catch(() => false))) {
+          owner.finishFinalization('disposed')
+        }
       }
-      // Advisory refresh may settle after finalization; it does not determine checkout contents.
-      const localBaseRefRefresh = await baseContext.pendingLocalBaseRefRefresh
-      return {
-        preparedHeadReset,
-        ...(localBaseRefRefresh ? { localBaseRefRefresh } : {}),
-        ...(baseContext.localBaseRefUpdateSuggestion
-          ? { localBaseRefUpdateSuggestion: baseContext.localBaseRefUpdateSuggestion }
-          : {})
-      }
-    })
+    } else {
+      pendingTarget = captured.targetWriter
+    }
+    owner.finishFinalization(!settled || pendingTarget ? 'pending' : 'failed')
+    if (!operation) {
+      await owner.discard()
+    }
+    if (pendingTarget && operation) {
+      throw new PreparedWorktreeFinalizationPendingError(error)
+    }
+    throw error
   } finally {
-    notifyPreparedWorktreeMutation(repoPath)
+    owner.finishFinalization()
   }
 }

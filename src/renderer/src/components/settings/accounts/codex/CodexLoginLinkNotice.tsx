@@ -1,6 +1,6 @@
 import { Check, Copy, ExternalLink } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
-import { useClipboardTextCopyFeedback } from '@/hooks/use-clipboard-text-copy-feedback'
+import { useClipboardTextCopyFeedback } from '@/hooks/clipboard/use-clipboard-text-copy-feedback'
 import { Button } from '../../../ui/button'
 import { useCodexPendingLoginUrl } from './use-codex-pending-login-url'
 

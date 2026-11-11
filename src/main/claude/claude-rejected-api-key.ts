@@ -3,19 +3,27 @@ import { readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { resolveClaudeGlobalConfigFile } from './claude-folder-trust-file'
 
-async function readRejectedApiKeyIds(configFile: string): Promise<readonly unknown[]> {
+type ClaudeApiKeyResponses = { approved: readonly unknown[]; rejected: readonly unknown[] }
+
+async function readApiKeyResponses(configFile: string): Promise<ClaudeApiKeyResponses> {
+  const empty = { approved: [], rejected: [] }
   try {
     const parsed: unknown = JSON.parse(await readFile(configFile, 'utf8'))
     if (typeof parsed !== 'object' || parsed === null || !('customApiKeyResponses' in parsed)) {
-      return []
+      return empty
     }
     const responses = parsed.customApiKeyResponses
-    if (typeof responses !== 'object' || responses === null || !('rejected' in responses)) {
-      return []
+    if (typeof responses !== 'object' || responses === null) {
+      return empty
     }
-    return Array.isArray(responses.rejected) ? responses.rejected : []
+    return {
+      approved:
+        'approved' in responses && Array.isArray(responses.approved) ? responses.approved : [],
+      rejected:
+        'rejected' in responses && Array.isArray(responses.rejected) ? responses.rejected : []
+    }
   } catch {
-    return []
+    return empty
   }
 }
 
@@ -38,9 +46,10 @@ export async function withoutRejectedClaudeApiKey(
     style,
     exists: existsSync
   })
-  const rejected = await readRejectedApiKeyIds(configFile)
+  const responses = await readApiKeyResponses(configFile)
   // Claude records answers by the trimmed key's last 20 characters.
-  if (rejected.includes(apiKey.trim().slice(-20))) {
+  const suffix = apiKey.trim().slice(-20)
+  if (!responses.approved.includes(suffix) && responses.rejected.includes(suffix)) {
     for (const name of keyNames) {
       delete env[name]
     }

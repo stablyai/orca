@@ -2,7 +2,6 @@ import { useSyncExternalStore, type SetStateAction } from 'react'
 import type { AgentJournalSkillRef } from '../../../../../src/shared/agent-session/journal/agent-session-journal-types'
 import { appendReturnedDraftText } from '../../../../../src/shared/returned-draft-text'
 import {
-  resetMobileNativeChatDraftInputsForTests,
   returnMobileNativeChatDraftAttachments,
   closeMobileNativeChatEditInputs,
   mobileNativeChatDraftDestination,
@@ -18,7 +17,6 @@ import {
   readMobileNativeChatInFlightSend,
   readMobileNativeChatInFlightSendsByScope,
   registerSavedMobileNativeChatInFlightSends,
-  resetMobileNativeChatInFlightSendsForTests,
   retireMobileNativeChatInFlightSends,
   restoredImages,
   restoredFiles,
@@ -28,13 +26,11 @@ import {
 import {
   dropMobileNativeChatOfflineSends,
   mobileNativeChatOfflineSendScopes,
-  resetMobileNativeChatOfflineSendsForTests,
   restoreMobileNativeChatOfflineSends,
   savedMobileNativeChatOfflineSends
 } from './mobile-native-chat-offline-sends'
 import {
   closeSavedMobileNativeChatDraft,
-  resetMobileNativeChatDraftPersistenceForTests,
   retainSavedMobileNativeChatDrafts,
   saveMobileNativeChatDraft,
   setMobileNativeChatDraftSource
@@ -304,15 +300,6 @@ setMobileNativeChatDraftSource({
 export function useMobileNativeChatDraft(draftKey: string | null): string {
   const read = (): string => (draftKey ? (drafts.get(draftKey)?.text ?? '') : '')
   return useSyncExternalStore(subscribe, read, read)
-}
-
-export function resetMobileNativeChatDraftStoreForTests(): void {
-  resetMobileNativeChatDraftInputsForTests()
-  drafts.clear()
-  resetMobileNativeChatInFlightSendsForTests()
-  resetMobileNativeChatOfflineSendsForTests()
-  mobileNativeChatLaunchDraftSeeds.clear()
-  resetMobileNativeChatDraftPersistenceForTests()
 }
 
 export type MobileComposerWriter = ((text: string) => boolean) & {

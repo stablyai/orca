@@ -11,7 +11,7 @@ import type { AppState } from '@/store/types'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
-import { resolveWorkspaceDirectory } from '../../workspace-directory'
+import { resolveWorkspaceDirectory } from '../../workspace/paths/workspace-directory'
 import { getFileConnectionOwnerFromState } from '../../workspace/ownership/connection-owner-resolution'
 import { captureWorktreeOperationGenerationSnapshot } from '../../workspace/ownership/worktree-operation-generation'
 import {

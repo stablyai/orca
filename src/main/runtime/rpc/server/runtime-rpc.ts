@@ -49,6 +49,8 @@ export class OrcaRuntimeRpcServer extends RuntimeRpcMobilePairing {
     this.mobileSocketWiring = null
     this.detachPairedServerRows?.()
     this.detachPairedServerRows = null
+    this.detachRelayHostsChanges?.()
+    this.detachRelayHostsChanges = null
     this.detachWebSocketWiring = null
     const stopResults = await Promise.allSettled(
       transports.map(async (transport) => transport.stop())

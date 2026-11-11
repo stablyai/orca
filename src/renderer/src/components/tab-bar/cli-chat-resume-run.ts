@@ -8,10 +8,10 @@ import {
 } from './cli-chat-resume-close-admission'
 import { useSyncExternalStore } from 'react'
 import { useAppStore } from '@/store'
-import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
+
+import { createNonSecureContextUuid } from '../../../../shared/non-secure-context-uuid'
 import { adoptAgentSessionLaunchVerdict } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
 import type { StructuredAgentSessionCreateGate } from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
-import { retryStructuredAgentSessionLaunch } from '@/lib/agent-session/launch/structured-agent-session-launch'
 import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/agent-session/structured-agent-session-provisional-tab'
 import { supportsStructuredAgentSessionCliSource } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-support'
 import { structuredAgentSessionTargetForHost } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
@@ -20,7 +20,7 @@ import { CLI_CONVERSATION_ADOPTING_AGENTS } from '../../../../shared/structured-
 import { toHostSessionPaneKey } from '../../../../shared/workspace-layout/terminal-surface-id'
 import { resolveCliChatResumeSource, type CliChatResumeSource } from './cli-chat-resume-source'
 import {
-  canRestartMissingConversation,
+  recoverMissingConversation,
   reportCliChatResumeFailure,
   reportCliChatResumeFailureInChat,
   reportCliChatResumeTerminalChanged
@@ -168,7 +168,7 @@ export async function runCliChatResume(
     const closes = close !== 'keep'
     const verdict = adoptAgentSessionLaunchVerdict({
       route: 'structured-native-chat',
-      requestId: newAgentLaunchRequestId(),
+      requestId: createNonSecureContextUuid(),
       agent,
       worktreeId: source.workspaceId,
       executionHostId: source.executionHostId,
@@ -276,15 +276,7 @@ export async function runCliChatResume(
       return
     }
     if (closed) {
-      // The terminal is gone and the host has no history for it, so the chat starts a new conversation.
-      const chatSessionId = (
-        useAppStore.getState().unifiedTabsByWorktree[source.workspaceId] ?? []
-      ).find((tab) => tab.id === chatTabId)?.entityId
-      if (
-        chatSessionId &&
-        canRestartMissingConversation(result.error) &&
-        retryStructuredAgentSessionLaunch(source.workspaceId, chatSessionId, { fresh: true })
-      ) {
+      if (await recoverMissingConversation(result.error, source, chatTabId, target, dropChat)) {
         return
       }
       await reportCliChatResumeFailureInChat(result.error, openOwner, target, dropChat)

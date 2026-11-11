@@ -1,3 +1,4 @@
+import { CodexBackgroundTaskTracker } from './codex-background-task-tracker'
 import {
   acquireReadyCodexForTest,
   fakeCodex,
@@ -193,6 +194,66 @@ const shellFrame = (
   })
 
 describe('Codex structured child-work producer', () => {
+  it('delivers pending previews once across late announcements and verdict refinements', () => {
+    const tracker = new CodexBackgroundTaskTracker(THREAD_ID)
+    const send = (frame: Frame) => {
+      tracker.observe({ ...frame, threadId: String(frame.params.threadId) })
+      return tracker.drainChildWorkEvidence(100)
+    }
+    const message = (turnId: string, text: string) =>
+      item('item/completed', REVIEWER, turnId, {
+        type: 'agentMessage',
+        id: `reply-${text}`,
+        text
+      })
+    send(turn('turn/started', REVIEWER, 'r1'))
+    send(message('r1', 'before announcement'))
+    expect(send({ method: 'thread/closed', params: { threadId: REVIEWER } })).toEqual([])
+    expect(send(spawned(REVIEWER, 'review', 'p1'))).toEqual([
+      expect.objectContaining({ type: 'ended', lastMessage: 'before announcement' })
+    ])
+    expect(send(message('r1', 'refined reply'))).toEqual([])
+    expect(send(turn('turn/completed', REVIEWER, 'r1'))).toEqual([
+      expect.objectContaining({ type: 'ended', outcome: 'succeeded', lastMessage: 'refined reply' })
+    ])
+    send(message('r2', 'future reply'))
+    expect(send(turn('turn/started', REVIEWER, 'r2'))).toEqual([
+      expect.objectContaining({
+        type: 'live',
+        child: expect.objectContaining({ lastMessage: 'future reply' })
+      })
+    ])
+    expect(send({ method: 'thread/closed', params: { threadId: REVIEWER } })).toEqual([
+      expect.objectContaining({ type: 'ended', lastMessage: 'future reply' })
+    ])
+    expect(send(turn('turn/completed', REVIEWER, 'r2'))).toEqual([
+      {
+        type: 'ended',
+        observedAt: 100,
+        handle: { idKind: 'thread_id', id: REVIEWER, runId: 'r2' },
+        outcome: 'succeeded'
+      }
+    ])
+  })
+
+  it('keeps the published task order when an earlier helper resumes', () => {
+    const tracker = new CodexBackgroundTaskTracker(THREAD_ID)
+    const send = (frame: Frame) => {
+      tracker.observe({ ...frame, threadId: String(frame.params.threadId) })
+      tracker.publishChildWork()
+    }
+    for (const child of [REVIEWER, 'second-helper']) {
+      send(spawned(child, child, 'p1'))
+      send(turn('turn/started', child, 'r1'))
+    }
+    send(turn('turn/completed', REVIEWER, 'r1'))
+    send(turn('turn/started', REVIEWER, 'r2'))
+    expect(tracker.state?.tasks?.map((task) => task.id)).toEqual([
+      'codex-agent:thread-reviewer',
+      'codex-agent:second-helper'
+    ])
+  })
+
   it('delivers evidence only after the journal wrote and published the frame', async () => {
     const { send, records } = await producer()
     const deliveries = [

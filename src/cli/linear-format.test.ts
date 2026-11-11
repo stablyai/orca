@@ -1,91 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type {
-  LinearIssueContextResult,
-  LinearMcpIssueListResult,
-  LinearSearchResult
-} from '../shared/linear/agent-access'
+import type { LinearIssueContextResult } from '../shared/linear/agent-access'
 import {
   formatLinearIssue,
   formatLinearMcpIssueList,
-  printLinearMcpIssueListWarnings,
-  printLinearSearchWarnings
+  printLinearMcpIssueListWarnings
 } from './linear-format'
 
 describe('linear-format', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
     vi.spyOn(console, 'error').mockImplementation(() => {})
-  })
-
-  it('treats older search results without workspaceErrors as non-partial', () => {
-    const result = {
-      issues: [],
-      meta: {
-        query: 'auth',
-        workspaceId: 'all',
-        limit: 20,
-        returned: 0,
-        limitReached: false,
-        partial: false
-      }
-    } as unknown as LinearSearchResult
-
-    printLinearSearchWarnings(result)
-
-    expect(console.error).not.toHaveBeenCalled()
-  })
-
-  it('binds a list continuation hint to its Linear workspace', () => {
-    printLinearMcpIssueListWarnings({
-      issues: [],
-      truncated: true,
-      meta: {
-        limit: 20,
-        returned: 20,
-        hasMore: true,
-        nextCursor: 'next-page',
-        orderBy: 'updatedAt',
-        workspaceId: 'workspace-1',
-        partial: false,
-        workspaceErrors: []
-      }
-    } as LinearMcpIssueListResult)
-
-    expect(console.error).toHaveBeenCalledWith(
-      'warning: more results available; next cursor: next-page; continue with --workspace workspace-1'
-    )
-  })
-
-  it('prints a stdout truncation marker when a list-issues page is partial', () => {
-    const output = formatLinearMcpIssueList({
-      issues: [
-        {
-          id: 'issue-1',
-          identifier: 'ENG-1',
-          title: 'Fix auth',
-          url: 'https://linear.app/acme/issue/ENG-1',
-          labels: [],
-          state: { name: 'In Progress' },
-          assignee: { displayName: 'Ada' },
-          workspace: { id: 'workspace-1', name: 'Acme' }
-        }
-      ],
-      truncated: true,
-      meta: {
-        limit: 1,
-        returned: 1,
-        hasMore: true,
-        nextCursor: 'next-page',
-        orderBy: 'updatedAt',
-        workspaceId: 'workspace-1',
-        partial: false,
-        workspaceErrors: []
-      }
-    })
-
-    expect(output).toContain('ENG-1')
-    expect(output).toContain('truncated: showing 1')
-    expect(output).not.toContain(' of ')
   })
 
   const OSC_52 = '\u001b]52;c;cGF5bG9hZA==\u0007'

@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({
   supportsCapability: vi.fn(),
   grantRestoredHostFile: vi.fn()
 }))
-vi.mock('@/lib/runtime-workspace-file-route', () => ({
+vi.mock('@/lib/files/access/runtime-workspace-file-route', () => ({
   findWorkspaceFileRoute: mocks.findWorkspaceFileRoute
 }))
 vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', () => ({

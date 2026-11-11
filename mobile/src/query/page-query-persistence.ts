@@ -1,6 +1,7 @@
 import type { QueryClient } from '@tanstack/react-query'
 import type { PageDeviceStore } from '../mobile-web-shell/bridge/page-device-store'
-import { firstPaintQueryKeys } from './first-paint-query-keys'
+import { primeStoredChatTranscripts } from '../session/native-chat/transcript/mobile-native-chat-transcript-store'
+import { firstPaintChatTranscriptIdentity, firstPaintQueryKeys } from './first-paint-query-keys'
 import { createHostQueryPersistence } from './host-query-persistence'
 
 // How long a page holds its first render for stored data once everything else it waits on is ready.
@@ -32,7 +33,11 @@ export function startPageQueryPersistence(
     }
   })
   window.addEventListener('pagehide', flush)
-  return persistence.restore(firstPaintQueryKeys(hostId, route))
+  return persistence.restore(firstPaintQueryKeys(hostId, route)).then(() => {
+    // Read inside the same capped wait, so a relaunched chat paints its stored rows in the first frame.
+    const chat = firstPaintChatTranscriptIdentity(queryClient, hostId, route)
+    return chat ? primeStoredChatTranscripts([chat]) : undefined
+  })
 }
 
 /** Waits for the stored first screen, but never more than a short cap; a later answer still fills empty keys. */

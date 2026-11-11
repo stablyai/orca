@@ -17,7 +17,7 @@ import { getTerminalWindowsAdministratorSearchEntry } from './terminal-windows-s
 import { MANAGE_SESSIONS_SECTION_ID } from '../session-management/open-terminal-manage-sessions'
 import { useAppStore } from '../../../../store/index'
 import { useTranslate } from '@/i18n/use-translate'
-import { isWebClientLocation } from '@/lib/web-client-location'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 export function TerminalWindowsAdministratorSection(): React.JSX.Element {
@@ -260,7 +260,7 @@ export function TerminalWindowsAdministratorSection(): React.JSX.Element {
               </Button>
             ) : (
               <Button variant="outline" size="sm" onClick={openManageSessions}>
-                {t('settings.terminal.windows.openManageSessions', 'Open Manage Sessions')}
+                {t('settings.terminal.windows.10aafff216', 'Open manage sessions')}
               </Button>
             )}
           </DialogFooter>

@@ -3,8 +3,8 @@ import {
   type AgentSessionAttachmentClipboardTarget
 } from '../../../../shared/agent-session/agent-session-attachments'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
-import { holdBrowserAttachmentFiles } from '@/lib/browser-attachment-files'
-import { blobToBase64 } from '@/lib/image-blob-png'
+import { holdBrowserAttachmentFiles } from '@/lib/files/drop/browser-attachment-files'
+import { blobToBase64 } from '@/lib/clipboard/images/image-blob-png'
 import { saveClipboardImageAsWebAgentSessionAttachment } from './web-agent-session-attachment-upload'
 
 /** A long text paste saved as a file: only a chat's store on its server can keep one here, since

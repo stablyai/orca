@@ -1,5 +1,4 @@
 import type {
-  TaskStatus,
   DispatchStatus,
   WorkerDispatchRow,
   LegacyWorkerTerminalRecoveryRow
@@ -7,7 +6,10 @@ import type {
 import { OrchestrationError } from '../../orchestration-error'
 import { DISPATCH_CIRCUIT_BREAK_FAILURES } from '../dispatch-context/dispatch-circuit-breaker'
 import type { OrchestrationDb } from '../orchestration-db'
-import { reconcileTaskAfterDispatchInterruption } from '../dispatch-context/task-dispatch-reconciliation'
+import {
+  reconcileTaskAfterDispatchInterruption,
+  settleTaskAfterLostWorker
+} from '../dispatch-context/task-dispatch-reconciliation'
 import { transitionLifecycleWithDb } from '../lifecycle-transition'
 
 export function listLegacyWorkerTerminalRecoveryRows(
@@ -70,26 +72,12 @@ export function reconcileMissingWorkerTerminal(
         }
       })
       if (!stopWasPending) {
-        const taskStatus: TaskStatus = dispatchStatus === 'circuit_broken' ? 'failed' : 'ready'
         reconcileTaskAfterDispatchInterruption(this, dispatch.task_id, dispatchId)
-        const task = this.getTask(dispatch.task_id)
-        if (
-          task &&
-          ['dispatched', 'blocked'].includes(task.status) &&
-          !this.db
-            .prepare(
-              "SELECT 1 FROM dispatch_contexts WHERE task_id = ? AND status IN ('pending', 'dispatched')"
-            )
-            .get(dispatch.task_id)
-        ) {
-          transitionLifecycleWithDb(this.db, {
-            entity: 'task',
-            id: dispatch.task_id,
-            from: task.status,
-            to: taskStatus,
-            projection: { completed_at: taskStatus === 'failed' ? new Date().toISOString() : null }
-          })
-        }
+        settleTaskAfterLostWorker(
+          this,
+          dispatch.task_id,
+          dispatchStatus === 'circuit_broken' ? 'failed' : 'ready'
+        )
       }
       this.closeQuestionsForDispatch(dispatchId)
     }

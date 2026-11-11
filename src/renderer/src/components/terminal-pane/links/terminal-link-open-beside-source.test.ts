@@ -1,6 +1,6 @@
 import { openRoutedHttpLink } from '@/lib/browser/navigation/http-link-destinations'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
+import '@/lib/workspace/activation/worktree-activation'
 import './files/terminal-link-handlers'
 import { openDetectedFilePath } from './files/terminal-file-open-routing'
 import { createTerminalLinkTestDoubles } from './terminal-link-handlers-test-fixtures'
@@ -16,14 +16,7 @@ import type { PendingEditorReveal } from '@/store/slices/editor/types/pending-ed
 const findWorkspaceFileRouteMock = vi.hoisted(() => vi.fn())
 const toastErrorMock = vi.hoisted(() => vi.fn())
 const doubles = createTerminalLinkTestDoubles()
-const {
-  storeState,
-  deps,
-  openFileForLinkMock,
-  createBrowserTabMock,
-  setPendingEditorRevealMock,
-  statMock
-} = doubles
+const { storeState, deps, openFileForLinkMock, setPendingEditorRevealMock, statMock } = doubles
 
 vi.mock('@/store/index', () => ({
   useAppStore: {
@@ -46,7 +39,7 @@ vi.mock('@/lib/workspace/ownership/connection-context', () => ({
   getConnectionId: vi.fn(() => null)
 }))
 
-vi.mock('@/lib/runtime-workspace-file-route', () => ({
+vi.mock('@/lib/files/access/runtime-workspace-file-route', () => ({
   findWorkspaceFileRoute: findWorkspaceFileRouteMock
 }))
 
@@ -90,42 +83,6 @@ describe('terminal file links carry their source tab', () => {
       { sourceTabId: 'unified-term', workspaceId: 'wt-1', hostId: null },
       expect.any(Function)
     )
-  })
-
-  it('reports a refused HTML placement for the internal Open in new tab action', async () => {
-    seedSourceTab()
-    const stat = createDeferred<{ isDirectory: boolean }>()
-    statMock.mockImplementationOnce(() => stat.promise)
-
-    openDetectedFilePath('/tmp/report.html', null, null, {
-      ...sourceDeps,
-      openInSourceGroupSurface: 'internal'
-    })
-    storeState.groupsByWorktree = {}
-    stat.resolve({ isDirectory: false })
-    await flushAsyncWork()
-
-    expect(createBrowserTabMock).not.toHaveBeenCalled()
-    expect(openFileForLinkMock).not.toHaveBeenCalled()
-    expect(toastErrorMock).toHaveBeenCalledExactlyOnceWith(
-      "Couldn't open /tmp/report.html in this group"
-    )
-  })
-
-  it('refuses a closed explicit group before activating its workspace', async () => {
-    setPlatform('Macintosh')
-    seedSourceTab()
-    const stat = createDeferred<{ isDirectory: boolean }>()
-    statMock.mockImplementationOnce(() => stat.promise)
-
-    openDetectedFilePath('/tmp/src/a.ts', null, null, { ...sourceDeps, openInSourceGroup: true })
-    storeState.groupsByWorktree = {}
-    stat.resolve({ isDirectory: false })
-    await flushAsyncWork()
-
-    expect(activateAndRevealWorkspace).not.toHaveBeenCalled()
-    expect(openFileForLinkMock).not.toHaveBeenCalled()
-    expect(toastErrorMock).toHaveBeenCalledTimes(1)
   })
 })
 

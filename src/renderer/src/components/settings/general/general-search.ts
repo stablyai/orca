@@ -1,3 +1,6 @@
+import { getGeneralConfirmationSearchEntries } from './general-confirmations-search'
+import { getGeneralSubPageTitle } from './general-sub-pages'
+import { GENERAL_SETTING_ANCHORS, generalSetting } from './general-setting-anchors'
 import type { SettingsSearchEntry } from '../search/settings-search'
 import { getGeneralEditorSearchEntries } from '../editor/general-editor-search'
 import { translate } from '@/i18n/i18n'
@@ -7,9 +10,9 @@ import { getGeneralProjectRuntimeSearchEntries } from './project-runtime/general
 import { getGeneralSupportSearchEntries } from './general-support-search'
 import { getUpdateDelayDescription, getUpdateDelayTitle } from '../updates/update-delay-copy'
 
-export const getGeneralWorkspaceSearchEntries = createLocalizedCatalog(() => [
-  {
-    title: translate('auto.components.settings.general.search.4c95d08fa2', 'Workspace Directory'),
+export const getGeneralWorkspaceSearchDescriptors = createLocalizedCatalog(() => [
+  generalSetting(GENERAL_SETTING_ANCHORS.folder, {
+    title: translate('auto.components.settings.general.search.0e030ce4e3', 'Workspace directory'),
     description: translate(
       'auto.components.settings.general.search.d0bc793689',
       'Root directory where workspace folders are created.'
@@ -20,8 +23,8 @@ export const getGeneralWorkspaceSearchEntries = createLocalizedCatalog(() => [
       ...translateSearchKeyword('auto.components.settings.general.search.fb4f338a3d', 'path'),
       ...translateSearchKeyword('auto.components.settings.general.search.df10666259', 'worktree')
     ]
-  },
-  {
+  }),
+  generalSetting(GENERAL_SETTING_ANCHORS.worktrees, {
     title: translate(
       'auto.components.settings.general.search.externalWorktrees',
       'External worktrees'
@@ -31,6 +34,12 @@ export const getGeneralWorkspaceSearchEntries = createLocalizedCatalog(() => [
       'Choose whether worktrees created outside Orca appear by default.'
     ),
     keywords: [
+      ...translateSearchKeyword('settings.general.search.keywords.source', 'source'),
+      ...translateSearchKeyword('settings.general.search.keywords.root', 'root'),
+      ...translateSearchKeyword('settings.general.search.keywords.custom', 'custom'),
+      ...translateSearchKeyword('settings.general.search.keywords.location', 'location'),
+      ...translateSearchKeyword('settings.general.search.keywords.claude', 'Claude'),
+      ...translateSearchKeyword('settings.general.search.keywords.gsd', 'GSD'),
       ...translateSearchKeyword(
         'auto.components.settings.general.search.externalKeyword',
         'external'
@@ -39,57 +48,22 @@ export const getGeneralWorkspaceSearchEntries = createLocalizedCatalog(() => [
       ...translateSearchKeyword('auto.components.settings.general.search.sidebar', 'sidebar'),
       ...translateSearchKeyword('auto.components.settings.general.search.df10666259', 'worktree')
     ]
-  },
-  {
-    title: translate('auto.components.settings.general.search.141f71c69f', 'Nest Workspaces'),
+  }),
+  generalSetting(GENERAL_SETTING_ANCHORS.nesting, {
+    title: translate('settings.general.folder.perProject', 'Folder per project'),
     description: translate(
       'auto.components.settings.general.search.b9cffd374d',
       'Create workspaces inside a repo-named subfolder.'
     ),
     keywords: [
+      translate('auto.components.settings.general.search.11003cbcbd', 'Nest workspaces'),
       ...translateSearchKeyword('auto.components.settings.general.search.ec5049e510', 'nested'),
       ...translateSearchKeyword('auto.components.settings.general.search.9bde064915', 'subfolder'),
       ...translateSearchKeyword('auto.components.settings.general.search.93f6ec5e70', 'directory')
     ]
-  },
-  {
-    title: translate(
-      'auto.components.settings.general.search.913242091d',
-      'Ask Before Deleting Workspaces'
-    ),
-    description: translate(
-      'auto.components.settings.general.search.ae98c9cf36',
-      'Show a confirmation dialog before deleting a workspace.'
-    ),
-    keywords: [
-      ...translateSearchKeyword('auto.components.settings.general.search.84c67d0108', 'delete'),
-      ...translateSearchKeyword('auto.components.settings.general.search.df10666259', 'worktree'),
-      ...translateSearchKeyword('auto.components.settings.general.search.9f8558233a', 'confirm'),
-      ...translateSearchKeyword('auto.components.settings.general.search.ca86dd6e27', 'dialog'),
-      ...translateSearchKeyword('auto.components.settings.general.search.7e9b556873', 'skip'),
-      ...translateSearchKeyword('auto.components.settings.general.search.0efc9d96ad', 'prompt')
-    ]
-  },
-  {
-    title: translate(
-      'auto.components.settings.general.search.d0a65b27fd',
-      'Ask Before Deleting Automations'
-    ),
-    description: translate(
-      'auto.components.settings.general.search.a0c44061ee',
-      'Show a confirmation dialog before deleting an automation and its run history.'
-    ),
-    keywords: [
-      ...translateSearchKeyword('auto.components.settings.general.search.84c67d0108', 'delete'),
-      ...translateSearchKeyword('auto.components.settings.general.search.7edf4f69e2', 'automation'),
-      ...translateSearchKeyword('auto.components.settings.general.search.9f8558233a', 'confirm'),
-      ...translateSearchKeyword('auto.components.settings.general.search.ca86dd6e27', 'dialog'),
-      ...translateSearchKeyword('auto.components.settings.general.search.7e9b556873', 'skip'),
-      ...translateSearchKeyword('auto.components.settings.general.search.0efc9d96ad', 'prompt')
-    ]
-  },
-  {
-    title: translate('auto.components.settings.general.search.451d4af994', 'Open In Apps'),
+  }),
+  generalSetting(GENERAL_SETTING_ANCHORS.openIn, {
+    title: translate('auto.components.settings.general.search.da5c42780e', 'Open in apps'),
     description: translate(
       'auto.components.settings.general.search.a916662068',
       "Choose apps available from a workspace's Open in menu."
@@ -116,17 +90,18 @@ export const getGeneralWorkspaceSearchEntries = createLocalizedCatalog(() => [
         'file explorer'
       )
     ]
-  }
+  })
 ])
 
 export const getGeneralNavigationSearchEntries = createLocalizedCatalog(() => [
   {
-    title: translate('auto.components.settings.general.search.256d92554d', 'Tab Order'),
+    title: translate('auto.components.settings.general.search.b180c1041b', 'Tab order'),
     description: translate(
       'auto.components.settings.general.search.e53d585ed6',
       'Recent or tab strip.'
     ),
     keywords: [
+      ...translateSearchKeyword('settings.general.search.keywords.tabs', 'tabs'),
       ...translateSearchKeyword(
         'auto.components.settings.general.search.ca812803ea',
         'recent tab order'
@@ -141,15 +116,16 @@ export const getGeneralNavigationSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
-    title: translate(
-      'auto.components.settings.GeneralPane.editor_preview_tabs',
-      'Reuse a preview tab when browsing files'
-    ),
+    title: translate('settings.general.previewTabs.title', 'Preview tabs'),
     description: translate(
-      'auto.components.settings.general.search.editor_preview_tabs_short',
-      'Browsing files reuses one preview tab instead of opening a new one.'
+      'settings.general.previewTabs.description',
+      'Single-clicking a file reuses one preview tab until you edit or pin it.'
     ),
     keywords: [
+      translate(
+        'auto.components.settings.GeneralPane.editor_preview_tabs',
+        'Reuse a preview tab when browsing files'
+      ),
       ...translateSearchKeyword('auto.components.settings.general.search.preview', 'preview'),
       ...translateSearchKeyword('auto.components.settings.general.search.2a254b725e', 'tab'),
       ...translateSearchKeyword('auto.components.settings.general.search.reuse', 'reuse'),
@@ -158,57 +134,21 @@ export const getGeneralNavigationSearchEntries = createLocalizedCatalog(() => [
       ...translateSearchKeyword('auto.components.settings.general.search.italic', 'italic'),
       ...translateSearchKeyword('auto.components.settings.general.search.browsing', 'browsing')
     ]
-  },
-  {
-    title: translate(
-      'auto.components.settings.general.search.161a86a9da',
-      'Confirm before closing pinned tabs'
-    ),
-    description: translate(
-      'auto.components.settings.general.search.8e593f04fc',
-      'Show a confirmation dialog before a pinned tab is closed.'
-    ),
-    keywords: [
-      ...translateSearchKeyword('auto.components.settings.general.search.867dddea41', 'pinned'),
-      ...translateSearchKeyword('auto.components.settings.general.search.5250cf0e48', 'pin'),
-      ...translateSearchKeyword('auto.components.settings.general.search.2a254b725e', 'tab'),
-      ...translateSearchKeyword('auto.components.settings.general.search.9f8558233a', 'confirm'),
-      ...translateSearchKeyword('auto.components.settings.general.search.afa37a34e1', 'close')
-    ]
-  },
-  {
-    title: translate(
-      'auto.components.settings.GeneralPane.confirm_running_work_close',
-      'Confirm before closing active chats or terminals'
-    ),
-    description: translate(
-      'auto.components.settings.GeneralPane.confirm_running_work_close_description',
-      'Ask before stopping an active agent or command when closing its chat or terminal.'
-    ),
-    keywords: [
-      ...translateSearchKeyword(
-        'auto.components.settings.general.search.running_terminal',
-        'running'
-      ),
-      ...translateSearchKeyword('components.settings.terminal.clipboard.search.chat', 'chat'),
-      ...translateSearchKeyword('auto.components.settings.general.search.terminal', 'terminal'),
-      ...translateSearchKeyword('auto.components.settings.general.search.agent', 'agent'),
-      ...translateSearchKeyword('auto.components.settings.general.search.command', 'command'),
-      ...translateSearchKeyword('auto.components.settings.general.search.confirm', 'confirm'),
-      ...translateSearchKeyword('auto.components.settings.general.search.close', 'close'),
-      ...translateSearchKeyword('auto.components.settings.general.search.omp', 'OMP')
-    ]
   }
 ])
 
 export const getGeneralCliSearchEntries = createLocalizedCatalog(() => [
   {
-    title: translate('auto.components.settings.general.search.327e3fa70d', 'Orca CLI'),
+    title: translate('settings.general.cli.otherTerminals', '{{command}} in other terminals', {
+      command: 'orca'
+    }),
     description: translate(
       'auto.components.settings.general.search.ca529079bf',
       'Register or remove the Orca CLI command.'
     ),
     keywords: [
+      translate('auto.components.settings.general.search.327e3fa70d', 'Orca CLI'),
+      ...translateSearchKeyword('settings.general.search.keywords.command_line', 'command line'),
       ...translateSearchKeyword('auto.components.settings.general.search.924a660a78', 'cli'),
       ...translateSearchKeyword('auto.components.settings.general.search.fb4f338a3d', 'path'),
       ...translateSearchKeyword('auto.components.settings.general.search.88d3df9ce9', 'terminal'),
@@ -227,12 +167,13 @@ export const getGeneralCliSearchEntries = createLocalizedCatalog(() => [
     targetSectionId: 'cli'
   },
   {
-    title: translate('auto.components.settings.general.search.2d9f7b42df', 'Agent skill'),
+    title: translate('settings.general.cli.skillTitle', 'Orca skill for agents'),
     description: translate(
       'auto.components.settings.general.search.244e3fb4c8',
       'Install the Orca skill so agents know to use the Orca CLI.'
     ),
     keywords: [
+      translate('auto.components.settings.general.search.2d9f7b42df', 'Agent skill'),
       ...translateSearchKeyword('auto.components.settings.general.search.bda108e66c', 'skill'),
       ...translateSearchKeyword('auto.components.settings.general.search.baa263d6d8', 'agents')
     ]
@@ -241,12 +182,13 @@ export const getGeneralCliSearchEntries = createLocalizedCatalog(() => [
 
 export const getGeneralUpdateSearchEntries = createLocalizedCatalog(() => [
   {
-    title: translate('auto.components.settings.general.search.e15af4eb64', 'Check for Updates'),
+    title: translate('auto.components.settings.general.search.0504f69ba0', 'Check for updates'),
     description: translate(
       'auto.components.settings.general.search.79ff46776e',
       'Check for app updates and install a newer Orca version.'
     ),
     keywords: [
+      ...translateSearchKeyword('settings.general.search.keywords.about', 'about'),
       ...translateSearchKeyword('auto.components.settings.general.search.f89a94773c', 'update'),
       ...translateSearchKeyword('auto.components.settings.general.search.9e86ccd05c', 'version'),
       ...translateSearchKeyword(
@@ -277,6 +219,8 @@ export function getGeneralPaneSearchEntries(
   return [
     ...getGeneralWorkspaceSearchEntries(),
     ...getGeneralNavigationSearchEntries(),
+    ...Object.values(getGeneralConfirmationSearchEntries()),
+    ...getGeneralDestinationSearchEntries(),
     ...(options.includeProjectRuntime === false ? [] : getGeneralProjectRuntimeSearchEntries()),
     ...getGeneralEditorSearchEntries(),
     ...getGeneralCliSearchEntries(),
@@ -284,3 +228,21 @@ export function getGeneralPaneSearchEntries(
     ...getGeneralSupportSearchEntries()
   ]
 }
+
+export const getGeneralWorkspaceSearchEntries = createLocalizedCatalog(() =>
+  getGeneralWorkspaceSearchDescriptors().map(({ entry }) => entry)
+)
+
+export const getGeneralDestinationSearchEntries = createLocalizedCatalog(() => [
+  ...(['folder', 'worktrees', 'open-in', 'editor'] as const).map((page) => ({
+    title: getGeneralSubPageTitle(page, translate)
+  })),
+  {
+    title: translate('settings.general.about.title', 'About'),
+    keywords: [
+      ...translateSearchKeyword('settings.general.search.keywords.update', 'update'),
+      ...translateSearchKeyword('settings.general.search.keywords.version', 'version'),
+      ...translateSearchKeyword('settings.general.search.keywords.star', 'star')
+    ]
+  }
+])

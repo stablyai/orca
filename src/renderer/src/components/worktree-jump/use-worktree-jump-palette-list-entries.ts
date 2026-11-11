@@ -7,12 +7,16 @@ import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import {
   appendPaletteListEntries,
-  CONTINUED_SECTION_HEADER_ID_SUFFIX,
   type PaletteItem,
   type PaletteListEntry
 } from './worktree-jump-palette-model'
 import { buildPaletteListEntryRenderKeys } from '@/components/cmd-j/palette-list-entry-render-keys'
 import { BROWSER_NAVIGATION_ACTION_ID } from '@/components/cmd-j/browser-navigation-action'
+import {
+  buildPaletteExtraSectionEntries,
+  type PaletteExtraSlot
+} from './worktree-jump-palette-extra-list-entries'
+import { appendMultiPrimaryPaletteSections } from './worktree-jump-palette-multi-primary-entries'
 import type { WorktreeJumpPaletteSections } from './use-worktree-jump-palette-sections'
 import type { WorktreeJumpPaletteWorktrees } from './use-worktree-jump-palette-worktrees'
 import type { WorktreeJumpPaletteLocalState } from './use-worktree-jump-palette-local-state'
@@ -50,7 +54,8 @@ export function useWorktreeJumpPaletteListEntries({
       middleOverflowCount,
       openTabOverflowCount,
       multiPrimaryFirstScreen,
-      multiPrimaryLayout
+      multiPrimaryLayout,
+      visibleExtraSections
     } = paletteSections
     // Exact entity matches keep priority; issue/PR URLs keep their jump and create rows first.
     const browserNavigationItem =
@@ -82,6 +87,11 @@ export function useWorktreeJumpPaletteListEntries({
           onSeeMore
         })
       }
+    }
+    const pushExtras = (slot: PaletteExtraSlot): void => {
+      entries.push(
+        ...buildPaletteExtraSectionEntries(visibleExtraSections, slot, t, handleExpandSection)
+      )
     }
     const showWorktreeHeader = visibleWorktreeItems.length > 0
     const showOpenTabsHeader = visibleOpenTabItems.length > 0
@@ -181,58 +191,25 @@ export function useWorktreeJumpPaletteListEntries({
     if (!hasQuery) {
       pushOpenTabSection()
       pushWorktreeSection()
+      pushExtras('all')
       return entries
     }
     if (browserNavigationItem) {
       entries.push(browserNavigationItem)
     }
     if (multiPrimaryFirstScreen && multiPrimaryLayout) {
-      const leadingSectionKey = openTabsLeadSections ? 'open-tabs' : 'worktrees'
-      const trailingSectionKey = openTabsLeadSections ? 'worktrees' : 'open-tabs'
-      const leadingHintId = openTabsLeadSections
-        ? '__hint_open_tab_overflow__'
-        : '__hint_worktree_overflow__'
-      const trailingHintId = openTabsLeadSections
-        ? '__hint_worktree_overflow__'
-        : '__hint_open_tab_overflow__'
-      const pushLeadingHeader = (idSuffix = ''): void => {
-        if (openTabsLeadSections) {
-          pushOpenTabsHeader(idSuffix)
-        } else {
-          pushWorktreesHeader(idSuffix)
-        }
-      }
-      const pushTrailingHeader = (idSuffix = ''): void => {
-        if (openTabsLeadSections) {
-          pushWorktreesHeader(idSuffix)
-        } else {
-          pushOpenTabsHeader(idSuffix)
-        }
-      }
-      pushLeadingHeader()
-      appendPaletteListEntries(entries, multiPrimaryLayout.leadingPreview as PaletteItem[])
-      pushOverflowHint(leadingHintId, multiPrimaryLayout.leadingMoreCount, () =>
-        handleExpandSection(openTabsLeadSections ? 'open-tabs' : 'worktrees')
-      )
-      pushTrailingHeader()
-      appendPaletteListEntries(entries, multiPrimaryLayout.trailingFloor as PaletteItem[])
-      const hasLeadingRest = multiPrimaryLayout.leadingRest.length > 0
-      if (hasLeadingRest) {
-        pushLeadingHeader(CONTINUED_SECTION_HEADER_ID_SUFFIX)
-        appendPaletteListEntries(entries, multiPrimaryLayout.leadingRest as PaletteItem[])
-        pushOverflowHint(`${leadingHintId}_tail`, multiPrimaryLayout.leadingHardOverflowCount, () =>
-          handleExpandSection(leadingSectionKey)
-        )
-      }
-      if (multiPrimaryLayout.trailingRest.length > 0) {
-        if (hasLeadingRest) {
-          pushTrailingHeader(CONTINUED_SECTION_HEADER_ID_SUFFIX)
-        }
-        appendPaletteListEntries(entries, multiPrimaryLayout.trailingRest as PaletteItem[])
-      }
-      pushOverflowHint(trailingHintId, multiPrimaryLayout.trailingHardOverflowCount, () =>
-        handleExpandSection(trailingSectionKey)
-      )
+      pushExtras('leading')
+      appendMultiPrimaryPaletteSections({
+        entries,
+        layout: multiPrimaryLayout,
+        openTabsLeadSections,
+        pushOpenTabsHeader,
+        pushWorktreesHeader,
+        pushOverflowHint,
+        handleExpandSection,
+        pushExtras
+      })
+      pushExtras('after-workspaces')
       pushProjectAndMiddleSections()
       pushTasks()
       if (showCreateAction) {
@@ -243,10 +220,13 @@ export function useWorktreeJumpPaletteListEntries({
     if (middleLeadsSections) {
       pushProjectAndMiddleSections()
     }
+    pushExtras('leading')
     if (openTabsLeadSections) {
       pushOpenTabSection()
     }
+    pushExtras('before-workspaces')
     pushWorktreeSection()
+    pushExtras('after-workspaces')
     if (!middleLeadsSections) {
       pushProjectAndMiddleSections()
     }

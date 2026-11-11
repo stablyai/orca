@@ -35,4 +35,6 @@ export type NativeChatTranscriptSlotsInput = {
   subagentChoices?: NativeChatSubagentChoices
   /** The open reasoning block the live activity line discloses: its row takes no slot meanwhile. */
   liveReasoningId?: string | null
+  /** A left-side row draws under the last slot: the live activity line or the awaiting-input row. */
+  tailRowBelow?: boolean
 }

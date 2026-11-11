@@ -1,4 +1,4 @@
-import { skipToken, useQuery, useQueryClient } from '@tanstack/react-query'
+import { hashKey, skipToken, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { type HostQueryKey, type HostQueryParams, hostScopeKey } from '../query/host-query-key'
 import { persistedHostQueryKey, restoreStoredHostQueries } from '../query/host-query-persistence'
@@ -44,6 +44,8 @@ export function useTaskListCache(view: TaskListView) {
   const [rowsReadAt, setRowsReadAt] = useState<number | null>(null)
   // The provider whose rows are on screen, so a provider switch never keeps another provider's rows.
   const shownProviderRef = useRef<string | null>(null)
+  // The list the rows on screen were read for; only a re-read of that same list may stand on them.
+  const shownListRef = useRef<string | null>(null)
   const shownRowsRef = useRef(view.items)
   useLayoutEffect(() => {
     shownRowsRef.current = view.items
@@ -60,6 +62,7 @@ export function useTaskListCache(view: TaskListView) {
   const paintRows = useCallback(
     (key: HostQueryKey, kept: TaskListSnapshot, provider: string, underRead: boolean): void => {
       shownProviderRef.current = provider
+      shownListRef.current = hashKey(key)
       setRowsReadAt(queryClient.getQueryState(key)?.dataUpdatedAt || null)
       view.setItems(kept.items)
       if (underRead) {
@@ -132,8 +135,8 @@ export function useTaskListCache(view: TaskListView) {
     )
   }, [hostId, queryClient])
 
-  // A read of a list starts on that filter's kept rows, else on the same provider's rows still shown, else the
-  // spinner; it is also the list this provider opens on next launch.
+  // A read of a list starts on that filter's kept rows, else on its own rows still shown, else the spinner, so a new
+  // search never starts on another filter's rows; it is also the list this provider opens on next launch.
   const begin = useCallback(
     (params: HostQueryParams | null, provider: string): void => {
       cancelRead()
@@ -147,7 +150,11 @@ export function useTaskListCache(view: TaskListView) {
         paintRows(key, kept, provider, true)
         return
       }
-      if (shownRowsRef.current.length > 0 && shownProviderRef.current === provider) {
+      if (
+        shownRowsRef.current.length > 0 &&
+        shownProviderRef.current === provider &&
+        (!key || shownListRef.current === hashKey(key))
+      ) {
         setRevalidating(true)
       } else {
         view.setLoading(true)
@@ -166,7 +173,9 @@ export function useTaskListCache(view: TaskListView) {
     (provider: string, params: HostQueryParams): void => {
       awaitingStoredRef.current = null
       shownProviderRef.current = provider
-      setRowsReadAt(queryClient.getQueryState(taskListKey(hostId, params))?.dataUpdatedAt || null)
+      const key = taskListKey(hostId, params)
+      shownListRef.current = hashKey(key)
+      setRowsReadAt(queryClient.getQueryState(key)?.dataUpdatedAt || null)
     },
     [hostId, queryClient]
   )

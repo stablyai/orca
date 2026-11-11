@@ -3,10 +3,13 @@ import type { PluginCapabilityKind } from '../../../shared/plugins/capabilities/
 import type { ValidDiscoveredPlugin } from '../plugin-discovery'
 import type { PluginWorkerHandle } from '../workers/plugin-host-process'
 import { PluginPanelBridge } from './plugin-panel-bridge'
+import { resolvePluginEditorTypography } from '../../../shared/plugins/workers/plugin-host-api-editor-typography'
 
 const caller = { id: 'panel-a', surface: 'panel' as const, contributionId: 'todos' }
 
-function setup(options: { main?: string; capabilities?: PluginCapabilityKind[] } = {}) {
+function setup(
+  options: { main?: string; capabilities?: PluginCapabilityKind[]; approved?: boolean } = {}
+) {
   const worker = {
     requestFromPanel: vi.fn(async (_request?: { signal?: AbortSignal }): Promise<unknown> => ({
       ok: true
@@ -19,7 +22,7 @@ function setup(options: { main?: string; capabilities?: PluginCapabilityKind[] }
     findApprovedPlugin: (key) =>
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the bridge reads only pluginKey and manifest.main.
       key === plugin.pluginKey ? (plugin as never as ValidDiscoveredPlugin) : null,
-    grantedCapabilities: () => options.capabilities ?? [],
+    grantedCapabilities: () => (options.approved === false ? null : (options.capabilities ?? [])),
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the bridge calls only requestFromPanel and notifyDataChanged.
     ensureWorker: async () => worker as never as PluginWorkerHandle,
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: as above.
@@ -75,5 +78,25 @@ describe('PluginPanelBridge pushes', () => {
       payload
     })
     expect(quiet).not.toHaveBeenCalled()
+  })
+})
+
+describe('PluginPanelBridge events without a capability', () => {
+  it('delivers editor typography to any approved plugin, never an unapproved one', () => {
+    const unapproved = setup({ approved: false })
+    expect(() =>
+      unapproved.bridge.subscribe('acme.todos', caller.id, 'editor.typography.changed')
+    ).toThrow(expect.objectContaining({ code: 'capability_denied' }))
+    const { bridge } = setup()
+    const deliver = vi.fn()
+    bridge.open(caller, 'acme.todos', deliver)
+    bridge.subscribe('acme.todos', caller.id, 'editor.typography.changed')
+    const payload = resolvePluginEditorTypography({ terminalFontSize: 14 }, 2)
+    expect(bridge.publishEvent('editor.typography.changed', payload)).toBe(1)
+    expect(deliver).toHaveBeenCalledWith({
+      kind: 'event',
+      event: 'editor.typography.changed',
+      payload
+    })
   })
 })

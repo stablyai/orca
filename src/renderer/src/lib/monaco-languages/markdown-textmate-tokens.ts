@@ -1,7 +1,10 @@
 import type * as Monaco from 'monaco-editor'
 import type { IToken } from 'shiki/textmate'
 import type { BundledLanguageInfo } from 'shiki/types'
-import { MARKDOWN_THEMABLE_SCOPES, MARKDOWN_TOKEN_PREFIX } from '../plugin-monaco-token-rules'
+import {
+  MARKDOWN_THEMABLE_SCOPES,
+  MARKDOWN_TOKEN_PREFIX
+} from '../editor/appearance/plugin-monaco-token-rules'
 import { COLD_GRAMMAR_LINE_ATTEMPTS } from '../syntax-highlighting/textmate-core'
 import { loadBuiltInMarkdownRules, matchesPrefix } from './markdown-monaco-theme-rules'
 import { createTokensProvider, loadEditorCore } from './textmate-token-provider'

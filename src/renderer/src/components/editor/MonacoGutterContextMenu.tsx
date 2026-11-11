@@ -1,6 +1,6 @@
 import React from 'react'
 import type { IRange } from 'monaco-editor'
-import { getRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
+import { getRuntimeTargetForFileOwner } from '@/lib/files/access/file-owner-runtime-target'
 import { Copy, ExternalLink } from 'lucide-react'
 import {
   DropdownMenu,
@@ -13,8 +13,8 @@ import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
 import { findFirstIndexedWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
 import { getRuntimeGitRemoteFileUrl } from '@/runtime/source-control/git/runtime-git-working-tree-client'
 import { formatPathLineReference } from './line-copy-path'
-import { formatClipboardFilePath } from '@/lib/clipboard-file-path'
-import { getOpenFileRevealOwner } from '@/lib/reveal-in-file-manager'
+import { formatClipboardFilePath } from '@/lib/clipboard/clipboard-file-path'
+import { getOpenFileRevealOwner } from '@/lib/files/os-open/reveal-in-file-manager'
 import { useTranslate } from '@/i18n/use-translate'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { getRemoteUrlLineRange } from './selection-copy'

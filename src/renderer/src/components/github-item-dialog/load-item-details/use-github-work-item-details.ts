@@ -8,7 +8,7 @@ import {
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { useGitHubTaskItems } from '@/hooks/useGitHubTaskItems'
 import { useGitHubTaskRefresh } from './use-github-task-refresh'
-import { addressedGitHubIssueItem } from '@/lib/github-task-target'
+import { addressedGitHubIssueItem } from '@/lib/work-items/github/github-task-target'
 import {
   normalizeItemDialogTab,
   type ItemDialogTab

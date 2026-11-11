@@ -5,8 +5,9 @@ import { afterEach, describe, expect, it } from 'vitest'
 import {
   openProfileStateDatabaseReadOnly,
   openProfileStateDatabase
-} from './profile-state-database'
-import { readProfileStateRevision } from './profile-state-documents'
+} from './database/profile-state-database'
+import './documents/profile-state-documents'
+import { readProfileStateRevision } from './database/profile-state-revision'
 import { ProfileStateSqliteAuthority } from './profile-state-sqlite-authority'
 
 const fixtures: { authority: ProfileStateSqliteAuthority; directory: string }[] = []

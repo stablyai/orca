@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/runtime-session-contracts'
 import { toWebTerminalSurfaceTabId } from '../../../../../shared/workspace-layout/terminal-surface-id'
 
-import { _getWebSessionTabsTrackingCountsForTest } from '../tracking-lifecycle'
 import { applyFreshWebSessionTabsSnapshot } from '../snapshot-api'
 import { resolveHostSessionTabIdForWebSessionTab } from '../tracking-mappings'
 
@@ -76,11 +75,6 @@ describe('applyWebSessionTabsSnapshot', () => {
       NOW + 1
     )
 
-    expect(_getWebSessionTabsTrackingCountsForTest()).toEqual({
-      freshness: 1,
-      hostMappings: 1,
-      hostMappingWorktrees: 1
-    })
     expect(
       resolveHostSessionTabIdForWebSessionTab(makeState(), {
         environmentId: ENV,

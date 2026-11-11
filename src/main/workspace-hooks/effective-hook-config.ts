@@ -77,6 +77,17 @@ export function shouldRunSetupForCreate(repo: Repo, decision: SetupDecision = 'i
   return policy === 'run-by-default'
 }
 
+/** Unattended creates (orchestration workers) cannot ask, so only an explicit project skip turns setup off. */
+export function resolveUnattendedSetupDecision(
+  repo: Repo,
+  requested?: SetupDecision
+): Extract<SetupDecision, 'run' | 'skip'> {
+  if (requested === 'run' || requested === 'skip') {
+    return requested
+  }
+  return getEffectiveSetupRunPolicy(repo) === 'skip-by-default' ? 'skip' : 'run'
+}
+
 export function getDefaultTabsLaunch(
   hooks: OrcaHooks | null,
   repo: Repo,

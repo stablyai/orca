@@ -12,7 +12,7 @@ import {
   type OpenedMobileSessionTabActivationState
 } from '../../session/tabs/opened-mobile-session-tab'
 import { isRendererUnavailableReply } from '../../transport/rpc/renderer-unavailable-reply'
-import type { RpcOperationSender } from '../../transport/rpc/rpc-operation-sender'
+import type { UnvalidatedRpcRequestPort } from '../../transport/rpc/unvalidated-rpc-request-port'
 import type { RpcResponse } from '../../transport/rpc/rpc-wire-types'
 
 // Hard-wrap guesses can number in the hundreds; stay far below the page bridge's 64 pending requests.
@@ -30,7 +30,7 @@ export type MobileFileTapFailure = {
 }
 
 export type OpenMobileFileTapOptions<T extends FileTapSessionTab> = {
-  client: RpcOperationSender
+  client: UnvalidatedRpcRequestPort
   hostId: string
   worktreeId: string
   worktreeName?: string
