@@ -8,9 +8,12 @@ import { BrowserExtensionInstallDialog } from './components/browser-extension-in
 import { PlansDialogHost } from './components/billing/plans/PlansDialogHost'
 import { CloudMoveToComputerDialogMount } from './components/orca-cloud/CloudMoveToComputerDialogMount'
 import { CloudSecretsAskDialogHost } from './components/cloud-secrets-ask/CloudSecretsMissingNotice'
+import { OrcaCloudSignInSheet } from './components/settings/agent-accounts/sign-in-sheet/OrcaCloudSignInSheet'
 import { AgentHostPanel } from './components/agent-host-panel/AgentHostPanel'
 import { SecretRequestUnseenNotifier } from './components/agent-pane/SecretRequestUnseenNotifier'
 import { TeamDialogHost } from './components/billing/team/TeamDialogHost'
+import { TeammateProfileDialog } from './components/teammates/TeammateProfileDialog'
+import { PokesNotifier } from './components/teammates/PokesNotifier'
 import { BrowserPagePrompts } from './components/browser-pane/browser-page-prompts'
 import { LinkRoutingPreferenceDialogProvider } from './components/link-routing-preference-dialog'
 import { SkillFreshnessNudge } from './components/skills/SkillFreshnessNudge'
@@ -127,8 +130,11 @@ function App(): React.JSX.Element {
             <CloudMoveToComputerDialogMount />
             <CloudSecretsAskDialogHost />
             <AgentHostPanel />
+            <OrcaCloudSignInSheet />
             <SecretRequestUnseenNotifier />
             <TeamDialogHost />
+            <TeammateProfileDialog />
+            <PokesNotifier />
           </LinkRoutingPreferenceDialogProvider>
         </ConfirmationDialogProvider>
         {createPortal(

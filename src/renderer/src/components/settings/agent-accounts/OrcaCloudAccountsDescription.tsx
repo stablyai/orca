@@ -13,8 +13,8 @@ export function OrcaCloudAccountsDescription(): React.JSX.Element {
   return (
     <>
       {t(
-        'orcaCloudAccounts.help',
-        'Set up once on this computer. Every cloud workspace uses it, including new, cloned and restarted ones.'
+        'orcaCloudAccounts.helpAccountWide',
+        'Set up once. Every cloud workspace uses it, including new, cloned and restarted ones.'
       )}{' '}
       {/* Mandatory (spec §5 item 5): the A1 mitigation depends on this sentence. */}
       {t(

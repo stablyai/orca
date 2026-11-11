@@ -369,6 +369,13 @@ export function createFakeVercel(now: () => number): FakeVercel {
     async readFile(sessionId, path) {
       return bySession(sessionId).files.get(path) ?? null
     },
+    async writeFile(sessionId, path, bytes) {
+      const box = bySession(sessionId)
+      if (box.status !== 'running') {
+        throw new ProviderError(410, 'sandbox_stopped')
+      }
+      box.files.set(path, Buffer.from(bytes).toString('latin1'))
+    },
     async deleteSandbox(name) {
       const box = boxes.get(name)
       if (box?.status === 'running') {

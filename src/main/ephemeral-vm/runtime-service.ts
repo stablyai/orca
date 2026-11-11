@@ -33,6 +33,8 @@ export type ProvisionEphemeralVmRuntimeArgs = {
   projectId?: string
   workspaceId?: string
   workspaceName?: string
+  /** One per Create press (Orca Cloud): the create's Idempotency-Key. */
+  idempotencyKey?: string
   repoUrl?: string
   branch?: string
   ref?: string
@@ -102,6 +104,7 @@ export async function provisionEphemeralVmRuntime(
         projectId: args.projectId,
         workspaceId: args.workspaceId,
         workspaceName: args.workspaceName,
+        ...(args.idempotencyKey ? { idempotencyKey: args.idempotencyKey } : {}),
         repoUrl: args.repoUrl,
         branch: args.branch,
         ref: args.ref,

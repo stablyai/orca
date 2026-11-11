@@ -137,6 +137,28 @@ describe('repo-backed create', () => {
     expect(h.billing.requests[0]).toMatchObject({ runningSandboxes: 3, runningSandboxesForUser: 3 })
   })
 
+  it('an Idempotency-Key makes one sandbox per intent, for that account and member only (PC-8)', async () => {
+    const h = await createHarness()
+    const key = { 'idempotency-key': 'create-press-0001' }
+    const first = await h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'w-a', machineSize: 'standard' }, headers: key })
+    expect(first.status).toBe(200)
+    // A re-fired start of the same press (same key, same body): the same sandbox, nothing new.
+    const again = await h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'w-a', machineSize: 'standard' }, headers: key })
+    expect(again.status).toBe(200)
+    expect(again.body.sandbox.id).toBe(first.body.sandbox.id)
+    expect(h.vercel.boxes.size).toBe(1)
+    // Same key, different request: refused, not silently merged.
+    const other = await h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'w-b', machineSize: 'standard' }, headers: key })
+    expect(other.status).toBe(422)
+    // Keys are per member: someone else's press with the same key is their own create.
+    const bob = await h.call('POST', '/v1/sandboxes', { as: 'bob', body: { workspaceId: 'w-a', machineSize: 'standard' }, headers: key })
+    expect(bob.status).toBe(200)
+    expect(bob.body.sandbox.id).not.toBe(first.body.sandbox.id)
+    // A bad key is a 400, before anything starts.
+    const bad = await h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'w-c', machineSize: 'standard' }, headers: { 'idempotency-key': 'x' } })
+    expect(bad.status).toBe(400)
+  })
+
   it('a create whose Worker was cut off is failed after 5 minutes, not 15', async () => {
     const h = await createHarness()
     const { body } = await h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'ws-1', machineSize: 'standard' } })
@@ -151,5 +173,20 @@ describe('repo-backed create', () => {
     }
     expect(row).toEqual({ status: 'destroyed', last_error: 'create_abandoned' })
     expect(h.vercel.boxes.size).toBe(0)
+  })
+})
+
+describe('VM hostname (JA-27)', () => {
+  it('is the workspace name (else the repo), as a hostname label, set at every start', async () => {
+    const { workspaceHostname } = await import('../src/sandbox-vm-commands')
+    expect(workspaceHostname('Fix Login Bug!')).toBe('fix-login-bug')
+    expect(workspaceHostname('--ja_hello--')).toBe('ja-hello')
+    expect(workspaceHostname('🙂')).toBeUndefined()
+    expect(workspaceHostname('a'.repeat(80))).toHaveLength(63)
+    const h = await createHarness()
+    await h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'w1', machineSize: 'standard', title: 'Ja Hello', repo } })
+    const start = h.vercel.commands.find((c) => c.command === START_COMMAND)!
+    expect(start.env.ORCA_HOSTNAME).toBe('ja-hello')
+    expect(start.args?.[1]).toContain('sudo -n hostname "$ORCA_HOSTNAME"')
   })
 })

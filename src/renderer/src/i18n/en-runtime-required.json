@@ -1316,6 +1316,10 @@
         "unavailableCount_one": "{{count}} unavailable",
         "unavailableCount_other": "{{count}} unavailable"
       },
+      "teammates": {
+        "daySandboxHours_one": "{{hours}} sandbox hour",
+        "daySandboxHours_other": "{{hours}} sandbox hours"
+      },
       "terminal": {
         "pane": {
           "TerminalErrorToast": {
@@ -1343,15 +1347,15 @@
       },
       "worktree": {
         "creation": {
+          "BlockedSandboxHoursNote": {
+            "sleepsIn_one": "Sleeps in {{count}} minute if unused.",
+            "sleepsIn_other": "Sleeps in {{count}} minutes if unused."
+          },
           "VmBuildErrorDetails": {
             "earlierLines_one": "…{{count}} earlier line. Copy details includes it.",
             "earlierLines_other": "…{{count}} earlier lines. Copy details includes them."
           },
           "VmBuildFailureCard": {
-            "checksBodyCloud2_one": "Open it anyway and fix it inside the workspace, or run the checks again after changing your project.",
-            "checksBodyCloud2_other": "Open it anyway and fix them inside the workspace, or run the checks again after changing your project.",
-            "checksCountTitleCloud_one": "The sandbox is up, but {{count}} environment check failed",
-            "checksCountTitleCloud_other": "The sandbox is up, but {{count}} environment checks failed",
             "checksCountTitleVm_one": "The VM is up, but {{count}} environment check failed",
             "checksCountTitleVm_other": "The VM is up, but {{count}} environment checks failed",
             "memberLimitBodyCount_one": "You can run {{count}} sandbox at once. Put it to sleep or delete it, then try again. Nothing was created, and you weren’t charged.",
@@ -2130,14 +2134,10 @@
       "cloudHours": {
         "planChip_one": "{{hours}} sandbox hour left",
         "planChip_other": "{{hours}} sandbox hours left",
-        "planToast_one": "Using sandbox hours · {{hours}} sandbox hour left",
-        "planToast_other": "Using sandbox hours · {{hours}} sandbox hours left",
         "trialChip_one": "Trial · {{hours}} sandbox hour left",
         "trialChip_other": "Trial · {{hours}} sandbox hours left",
         "trialOffered_one": "Trial · {{hours}} sandbox hour left · No card needed",
-        "trialOffered_other": "Trial · {{hours}} sandbox hours left · No card needed",
-        "trialToast_one": "Using sandbox hours · {{hours}} sandbox hour left in your trial",
-        "trialToast_other": "Using sandbox hours · {{hours}} sandbox hours left in your trial"
+        "trialOffered_other": "Trial · {{hours}} sandbox hours left · No card needed"
       },
       "cloudSetup": {
         "trialOffer_one": "{{hours}} sandbox hour to try Orca Cloud",

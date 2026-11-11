@@ -111,6 +111,11 @@ export type SandboxProviderApi = {
   updateSnapshotExpiration(name: string, expirationMs: number): Promise<void>
   /** A small text file from the VM (files API: not kept as command logs). Null when absent. */
   readFile(sessionId: string, path: string): Promise<string | null>
+  /**
+   * Writes one file (absolute path, parents created) into a running session through the files API,
+   * so the bytes never pass through argv, env or command logs. Optional: only API attachments use it.
+   */
+  writeFile?(sessionId: string, path: string, bytes: Uint8Array): Promise<void>
   /** Resolves when already gone. */
   deleteSandbox(name: string): Promise<void>
   listSnapshots(name: string): Promise<ProviderSnapshot[]>

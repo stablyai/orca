@@ -29,6 +29,7 @@ export type HostedSandboxRequest = <T>(
     kind: 'boot' | 'control'
     signal?: AbortSignal
     features?: readonly string[]
+    headers?: Record<string, string>
   }
 ) => Promise<T>
 
@@ -50,6 +51,8 @@ export function createHostedSandboxRequest(
       signal?: AbortSignal
       /** Per-call opt-ins on top of the features every call sends. */
       features?: readonly string[]
+      /** Extra request headers (Idempotency-Key); the fixed ones below always win. */
+      headers?: Record<string, string>
     }
   ): Promise<T> {
     const timeoutSignal = AbortSignal.timeout(timeouts[init.kind])
@@ -60,6 +63,7 @@ export function createHostedSandboxRequest(
       response = await doFetch(new URL(path, base), {
         method,
         headers: {
+          ...init.headers,
           authorization: `Bearer ${token}`,
           accept: 'application/json',
           // This client's schemas know the `archived` status.

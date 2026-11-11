@@ -21,7 +21,7 @@ export type CloudRemoteDesktopToastState =
   | { kind: 'waking'; via: 'wake' | 'unarchive' }
   | { kind: 'failed'; code: CloudRemoteDesktopToastFailure }
 
-type FailureCopy = {
+export type FailureCopy = {
   title: string
   detail: string
   action: CloudRemoteDesktopNextAction | null
@@ -31,7 +31,7 @@ type FailureCopy = {
   tone?: 'neutral'
 }
 
-function failureCopy(t: Translate, code: CloudRemoteDesktopToastFailure): FailureCopy {
+export function failureCopy(t: Translate, code: CloudRemoteDesktopToastFailure): FailureCopy {
   switch (code) {
     case 'not_cloud':
       return {
@@ -139,7 +139,7 @@ function failureCopy(t: Translate, code: CloudRemoteDesktopToastFailure): Failur
   }
 }
 
-function actionLabel(t: Translate, action: CloudRemoteDesktopNextAction): string {
+export function actionLabel(t: Translate, action: CloudRemoteDesktopNextAction): string {
   switch (action) {
     case 'wake':
       return t('components.cloudRemoteDesktop.wake', 'Wake sandbox')
