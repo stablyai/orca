@@ -131,11 +131,6 @@ export type BrowserWorkspace = {
   createdAt: number
   /** Mirrored from the active page, like the fields above it. */
   docLocation?: BrowserPageDocLocation | null
-  /**
-   * Set by Sleep: the tab keeps its place but its page was dropped, and it is not activity until
-   * the workspace is opened again (then cleared, and the page reloads when shown).
-   */
-  sleptAt?: number
 }
 
 export type BrowserSessionProfileScope = 'default' | 'isolated' | 'imported'

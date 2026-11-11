@@ -1,45 +1,48 @@
 // Sleep never changes a workspace's tab layout (NEW-01). Its browser tabs stay where they are, in
-// the same order with the same active tab; only their pages are dropped to free memory, and each
-// tab is marked asleep so it no longer counts as activity (an asleep workspace still reads as
-// asleep and hides with "Hide sleeping"). Opening the workspace again wakes the tabs: each page
-// reloads in place when it is shown. A remote desktop tab's own chrome reconnects it after a wake.
+// the same order with the same active tab; only their pages are dropped to free memory, and the
+// workspace's tabs are marked asleep so they no longer count as activity (an asleep workspace still
+// reads as asleep and hides with "Hide sleeping"). Opening the workspace again wakes them: each
+// page reloads in place when it is shown. A remote desktop tab's own chrome reconnects it after a
+// wake. The mark lives outside the layout (asleepBrowserWorktreeIds), so sleep writes no layout.
 import { useAppStore } from '@/store'
 import { destroyWorktreeBrowserGuests } from '@/store/slices/browser/cleanup/browser-webview-cleanup'
 import type { BrowserWorkspace } from '../../../../../../shared/browser-workspace-types'
 
-/** Awake tabs are activity; a tab Sleep put to rest is not, until the workspace is opened again. */
-export function isAwakeBrowserTab(tab: { sleptAt?: number | null }): boolean {
-  return !tab.sleptAt
-}
+type BrowserTabsByWorktree = Record<string, BrowserWorkspace[]>
 
-export function hasAwakeBrowserTab(
-  tabs: readonly { sleptAt?: number | null }[] | null | undefined
-): boolean {
-  return (tabs ?? []).some(isAwakeBrowserTab)
-}
+let cache: {
+  tabs: BrowserTabsByWorktree
+  asleep: Record<string, number>
+  awake: BrowserTabsByWorktree
+} | null = null
 
-function stamp(
-  tabs: readonly BrowserWorkspace[],
-  sleptAt: number | undefined
-): BrowserWorkspace[] | null {
-  let changed = false
-  const next = tabs.map((tab) => {
-    if ((tab.sleptAt ?? undefined) === sleptAt) {
-      return tab
+/**
+ * The browser tabs that count as activity: every workspace's, minus those Sleep put to rest.
+ * Same object back while neither input changes, so store selectors stay stable.
+ */
+export function selectAwakeBrowserTabsByWorktree(state: {
+  browserTabsByWorktree: BrowserTabsByWorktree
+  asleepBrowserWorktreeIds?: Record<string, number>
+}): BrowserTabsByWorktree {
+  const tabs = state.browserTabsByWorktree
+  const asleep = state.asleepBrowserWorktreeIds
+  if (!asleep || Object.keys(asleep).length === 0) {
+    return tabs
+  }
+  if (cache && cache.tabs === tabs && cache.asleep === asleep) {
+    return cache.awake
+  }
+  const awake: BrowserTabsByWorktree = {}
+  for (const [worktreeId, worktreeTabs] of Object.entries(tabs)) {
+    if (!asleep[worktreeId]) {
+      awake[worktreeId] = worktreeTabs
     }
-    changed = true
-    const copy: BrowserWorkspace = { ...tab }
-    if (sleptAt === undefined) {
-      delete copy.sleptAt
-    } else {
-      copy.sleptAt = sleptAt
-    }
-    return copy
-  })
-  return changed ? next : null
+  }
+  cache = { tabs, asleep, awake }
+  return awake
 }
 
-/** Sleep: drop the pages, keep the tabs, mark them asleep. */
+/** Sleep: drop the pages, keep the tabs, mark the workspace's tabs asleep. */
 export function sleepWorktreeBrowserTabs(worktreeId: string, now: number = Date.now()): void {
   const state = useAppStore.getState()
   destroyWorktreeBrowserGuests(
@@ -47,29 +50,27 @@ export function sleepWorktreeBrowserTabs(worktreeId: string, now: number = Date.
     state.browserPagesByWorkspace,
     worktreeId
   )
-  const next = stamp(state.browserTabsByWorktree[worktreeId] ?? [], now)
-  if (next) {
-    useAppStore.setState((s) => ({
-      browserTabsByWorktree: { ...s.browserTabsByWorktree, [worktreeId]: next }
-    }))
+  if ((state.browserTabsByWorktree[worktreeId] ?? []).length === 0) {
+    return
   }
+  useAppStore.setState((s) => ({
+    asleepBrowserWorktreeIds: { ...s.asleepBrowserWorktreeIds, [worktreeId]: now }
+  }))
 }
 
 /** The workspace is open again: its tabs count as activity once more (pages reload when shown). */
 export function wakeWorktreeBrowserTabs(worktreeId: string): void {
-  const tabs = useAppStore.getState().browserTabsByWorktree[worktreeId]
-  if (!tabs || !tabs.some((tab) => tab.sleptAt)) {
+  if (!useAppStore.getState().asleepBrowserWorktreeIds?.[worktreeId]) {
     return
   }
-  const next = stamp(tabs, undefined)
-  if (next) {
-    useAppStore.setState((s) => ({
-      browserTabsByWorktree: { ...s.browserTabsByWorktree, [worktreeId]: next }
-    }))
-  }
+  useAppStore.setState((s) => {
+    const next = { ...s.asleepBrowserWorktreeIds }
+    delete next[worktreeId]
+    return { asleepBrowserWorktreeIds: next }
+  })
 }
 
-/** Wakes a workspace's asleep tabs whenever it becomes the active one (also after an app restart). */
+/** Wakes a workspace's asleep tabs whenever it becomes the active one. */
 export function installBrowserTabWakeOnOpen(): () => void {
   let previous = useAppStore.getState().activeWorktreeId
   if (previous) {

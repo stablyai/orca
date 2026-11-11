@@ -18,6 +18,8 @@ type SleepStateInput = {
   tabsByWorktree?: Record<string, readonly TabLike[]> | null
   ptyIdsByTabId?: Record<string, string[]> | null
   browserTabsByWorktree?: Record<string, readonly TabLike[]> | null
+  /** Workspaces whose browser tabs Sleep put to rest: those tabs are not activity. */
+  asleepBrowserWorktreeIds?: Record<string, number>
   unifiedTabsByWorktree?: Record<string, Tab[]> | null
   structuredChatSleptAtByPaneKey?: StructuredChatSleptAtByPaneKey
 }
@@ -70,7 +72,7 @@ export function selectIsSleepingWorktree(state: SleepStateInput, worktreeId: str
     worktreeId,
     state.tabsByWorktree,
     state.ptyIdsByTabId,
-    state.browserTabsByWorktree,
+    state.asleepBrowserWorktreeIds?.[worktreeId] ? null : state.browserTabsByWorktree,
     selectWorktreeIdsWithLiveAgent(state),
     getWorktreeIdsWithStructuredChat(
       state.unifiedTabsByWorktree,

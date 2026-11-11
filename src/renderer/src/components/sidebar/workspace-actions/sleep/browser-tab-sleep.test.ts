@@ -4,27 +4,36 @@ import type { BrowserWorkspace } from '../../../../../../shared/browser-workspac
 type State = {
   activeWorktreeId: string | null
   browserTabsByWorktree: Record<string, BrowserWorkspace[]>
-  browserPagesByWorkspace: Record<string, unknown[]>
+  asleepBrowserWorktreeIds: Record<string, number>
+  browserPagesByWorkspace: Record<string, never[]>
   activeBrowserTabIdByWorktree: Record<string, string>
 }
 
 const mocks = vi.hoisted(() => {
-  const listeners = new Set<(state: unknown) => void>()
+  const listeners = new Set<(state: State) => void>()
+  const initial: State = {
+    activeWorktreeId: null,
+    browserTabsByWorktree: {},
+    asleepBrowserWorktreeIds: {},
+    browserPagesByWorkspace: {},
+    activeBrowserTabIdByWorktree: {}
+  }
   const store = {
-    state: {} as Record<string, unknown>,
-    getState: () => store.state,
-    setState: (change: (state: Record<string, unknown>) => Record<string, unknown>) => {
+    state: initial,
+    getState: (): State => store.state,
+    setState: (change: (state: State) => Partial<State>): void => {
       store.state = { ...store.state, ...change(store.state) }
       for (const listener of listeners) {
         listener(store.state)
       }
     },
-    subscribe: (listener: (state: unknown) => void) => {
+    subscribe: (listener: (state: State) => void): (() => void) => {
       listeners.add(listener)
       return () => listeners.delete(listener)
     }
   }
-  return { store, evicted: [] as string[] }
+  const evicted: string[] = []
+  return { store, evicted }
 })
 vi.mock('@/store', () => ({ useAppStore: mocks.store }))
 vi.mock('@/store/slices/browser/cleanup/browser-webview-cleanup', () => ({
@@ -32,9 +41,8 @@ vi.mock('@/store/slices/browser/cleanup/browser-webview-cleanup', () => ({
     mocks.evicted.push(worktreeId)
 }))
 
-const { sleepWorktreeBrowserTabs, installBrowserTabWakeOnOpen } = await import(
-  './browser-tab-sleep'
-)
+const { sleepWorktreeBrowserTabs, installBrowserTabWakeOnOpen, selectAwakeBrowserTabsByWorktree } =
+  await import('./browser-tab-sleep')
 const { isInactiveWorkspace } = await import('@/lib/worktree-activity-state')
 
 const tab = (id: string): BrowserWorkspace => ({
@@ -50,13 +58,16 @@ const tab = (id: string): BrowserWorkspace => ({
   createdAt: 1
 })
 
-const state = (): State => mocks.store.getState() as unknown as State
+const state = (): State => mocks.store.getState()
+const inactive = (): boolean =>
+  isInactiveWorkspace('wt', {}, {}, selectAwakeBrowserTabsByWorktree(state()), new Set())
 
 beforeEach(() => {
   mocks.evicted.length = 0
   mocks.store.state = {
     activeWorktreeId: null,
     browserTabsByWorktree: { wt: [tab('a'), tab('b'), tab('c')] },
+    asleepBrowserWorktreeIds: {},
     browserPagesByWorkspace: {},
     activeBrowserTabIdByWorktree: { wt: 'b' }
   }
@@ -64,31 +75,28 @@ beforeEach(() => {
 
 describe('sleep keeps browser tabs in place (NEW-01)', () => {
   it('keeps every tab, in order, with the same active tab; drops only their pages', () => {
+    const before = state().browserTabsByWorktree
     sleepWorktreeBrowserTabs('wt', 42)
     expect(mocks.evicted).toEqual(['wt'])
+    // The layout itself is untouched: same object, same order, same active tab.
+    expect(state().browserTabsByWorktree).toBe(before)
     expect(state().browserTabsByWorktree.wt.map((t) => t.id)).toEqual(['a', 'b', 'c'])
-    expect(state().browserTabsByWorktree.wt.every((t) => t.sleptAt === 42)).toBe(true)
     expect(state().activeBrowserTabIdByWorktree.wt).toBe('b')
   })
 
   it('asleep tabs are not activity, so the workspace still reads as asleep', () => {
-    const inactive = (): boolean =>
-      isInactiveWorkspace('wt', {}, {}, state().browserTabsByWorktree, new Set())
     expect(inactive()).toBe(false)
     sleepWorktreeBrowserTabs('wt', 42)
     expect(inactive()).toBe(true)
   })
 
-  it('opening the workspace again wakes its tabs, still in the same order', () => {
+  it('opening the workspace again wakes its tabs', () => {
     const stop = installBrowserTabWakeOnOpen()
     sleepWorktreeBrowserTabs('wt', 42)
     mocks.store.setState(() => ({ activeWorktreeId: 'wt' }))
-    expect(state().browserTabsByWorktree.wt.map((t) => [t.id, t.sleptAt])).toEqual([
-      ['a', undefined],
-      ['b', undefined],
-      ['c', undefined]
-    ])
-    expect(state().activeBrowserTabIdByWorktree.wt).toBe('b')
+    expect(state().asleepBrowserWorktreeIds).toEqual({})
+    expect(inactive()).toBe(false)
+    expect(state().browserTabsByWorktree.wt.map((t) => t.id)).toEqual(['a', 'b', 'c'])
     stop()
   })
 })

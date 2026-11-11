@@ -7,7 +7,7 @@ import { createWorktreeTabBucketProjection } from '@/lib/workspace/tabs/worktree
 import type { StructuredChatSleptAtByPaneKey } from '@/store/slices/agent-status/structured-chat-slept-at'
 
 export type TerminalActivityTab = Pick<TerminalTab, 'id'>
-export type BrowserActivityTab = Pick<BrowserWorkspace, 'id' | 'sleptAt'>
+export type BrowserActivityTab = Pick<BrowserWorkspace, 'id'>
 
 export function createVisibleWorktreeTerminalActivityProjection(
   onInspectBucket?: (worktreeId: string) => void
@@ -28,10 +28,8 @@ export function getVisibleWorktreeTerminalActivityTabs(
 }
 
 const browserProjection = createWorktreeTabBucketProjection<BrowserWorkspace, BrowserActivityTab>({
-  // A tab Sleep put to rest is not activity, so its mark is part of the projection.
-  projectTab: (tab) => (tab.sleptAt ? { id: tab.id, sleptAt: tab.sleptAt } : { id: tab.id }),
-  isSameProjectedTab: (previousTab, nextTab) =>
-    previousTab.id === nextTab.id && previousTab.sleptAt === nextTab.sleptAt
+  projectTab: (tab) => ({ id: tab.id }),
+  isSameProjectedTab: (previousTab, nextTab) => previousTab.id === nextTab.id
 })
 
 export function getVisibleWorktreeBrowserActivityTabs(

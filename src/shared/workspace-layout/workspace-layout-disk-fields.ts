@@ -217,9 +217,7 @@ const BROWSER = {
   canGoBack: own('browserLive', 'canGoBack'),
   canGoForward: own('browserLive', 'canGoForward'),
   loadError: own('browserLive', 'loadError'),
-  docLocation: own('browserLive', 'docLocation'),
-  // Sleep's mark: runtime-only, so a restart starts every tab awake.
-  sleptAt: 'unwritten'
+  docLocation: own('browserLive', 'docLocation')
 } as const satisfies Record<keyof BrowserWorkspace, DiskFieldWritten>
 
 // Write records only for mounted tree panes; derive keys from tab and leaf IDs.

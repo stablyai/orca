@@ -26,6 +26,7 @@ export function readWindowWorkspaceActivityFacts(
     | 'tabsByWorktree'
     | 'ptyIdsByTabId'
     | 'browserTabsByWorktree'
+    | 'asleepBrowserWorktreeIds'
     | 'unifiedTabsByWorktree'
     | 'agentStatusByPaneKey'
   > &
@@ -55,7 +56,8 @@ export function readWindowWorkspaceActivityFacts(
       )
         ? 'live'
         : null,
-      browser: (state.browserTabsByWorktree[id] ?? []).some((tab) => !tab.sleptAt),
+      browser:
+        !state.asleepBrowserWorktreeIds?.[id] && (state.browserTabsByWorktree[id]?.length ?? 0) > 0,
       structuredChat: structuredChatIds.has(id),
       agent: agentById.get(id) ?? null
     }

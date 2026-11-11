@@ -63,7 +63,7 @@ const STATUS_LABELS: Record<WorktreeStatus, string> = {
 
 export function getWorktreeStatus(
   tabs: readonly Pick<TerminalTab, 'id' | 'title' | 'launchAgent'>[],
-  browserTabs: readonly { id: string; sleptAt?: number | null }[],
+  browserTabs: readonly { id: string }[],
   ptyIdsByTabId: Record<string, string[]>,
   runtimePaneTitlesByTabId: Record<string, Record<number, string>> = {},
   options: WorktreeStatusHeuristicOptions = {}
@@ -84,12 +84,7 @@ export function getWorktreeStatus(
   if (options.liveAgentStatus === 'monitoring') {
     return 'monitoring'
   }
-  // A tab Sleep put to rest (sleptAt) keeps its place but is not activity.
-  if (
-    liveTabs.length > 0 ||
-    browserTabs.some((tab) => !tab.sleptAt) ||
-    options.hasStructuredChat
-  ) {
+  if (liveTabs.length > 0 || browserTabs.length > 0 || options.hasStructuredChat) {
     // Why: browser-only and chat-only worktrees (no PTY) are still active from the user's point of view.
     return 'active'
   }
@@ -204,7 +199,7 @@ export function getWorktreeStatusLabel(status: WorktreeStatus): string {
  */
 export function resolveWorktreeStatus(args: {
   tabs: readonly Pick<TerminalTab, 'id' | 'title' | 'launchAgent'>[]
-  browserTabs: readonly { id: string; sleptAt?: number | null }[]
+  browserTabs: readonly { id: string }[]
   hasStructuredChat?: boolean
   ptyIdsByTabId: Record<string, string[]>
   runtimePaneTitlesByTabId?: Record<string, Record<number, string>>

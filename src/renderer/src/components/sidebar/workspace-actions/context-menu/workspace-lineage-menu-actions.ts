@@ -11,7 +11,7 @@ import { getWorkspaceDeleteLineage } from '../deletion/workspace-delete-lineage'
 type WorkspaceActivityMaps = {
   tabsByWorktree: Record<string, { id: string }[]>
   ptyIdsByTabId: Record<string, string[]>
-  browserTabsByWorktree: Record<string, { id: string; sleptAt?: number | null }[]>
+  browserTabsByWorktree: Record<string, { id: string }[]>
   unifiedTabsByWorktree: Record<string, Tab[]>
   agentStatusByPaneKey: Record<string, { structuredHostOwned?: true }>
   structuredChatSleptAtByPaneKey: StructuredChatSleptAtByPaneKey
@@ -30,7 +30,7 @@ export function hasSleepableWorkspaceActivity(
   const tabs = activity.tabsByWorktree[worktreeId] ?? []
   return (
     tabs.some((tab) => tabHasLivePty(activity.ptyIdsByTabId, tab.id)) ||
-    (activity.browserTabsByWorktree[worktreeId] ?? []).some((tab) => !tab.sleptAt) ||
+    (activity.browserTabsByWorktree[worktreeId] ?? []).length > 0 ||
     // An idle-ended chat still needs Sleep to hide it, even when its legacy tab has no host stamp.
     (activity.unifiedTabsByWorktree[worktreeId] ?? []).some(
       (tab) =>
