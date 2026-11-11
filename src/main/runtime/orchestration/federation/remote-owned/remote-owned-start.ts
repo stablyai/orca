@@ -13,7 +13,6 @@ import { prepareWorkerStartCard } from '../../workers/launch/worker-start-card'
 import { getOrchestrationPeerCapabilityCache } from '../orchestration-peer-capability-cache'
 import type { OrchestrationWorkerServer } from '../environment-transport'
 import {
-  markRemoteStartOutcomeUnknown,
   recordRemoteStart,
   releaseRemotePlacement,
   reserveRemotePlacement
@@ -97,7 +96,6 @@ export async function startRemoteOwnedWorker(
     link,
     taskId,
     requestKey: forward.key,
-    runtimeId: runtime.getRuntimeId(),
     retryOf: params.retryOf,
     create: existingTask
       ? undefined
@@ -192,7 +190,7 @@ export async function startRemoteOwnedWorker(
   )
 }
 
-/** What a start's failure says about its reservation: adopt the Dispatch it names, keep it for the orphan lookup, or free it. */
+/** What a start's failure says about its reservation: adopt the Dispatch it names, keep it for the server's queue to answer, or free it. */
 function settleUnansweredStart(
   runtime: OrcaRuntimeService,
   start: {
@@ -206,8 +204,10 @@ function settleUnansweredStart(
   const db = runtime.getOrchestrationDb()
   const data = errorData(start.error)
   const named = typeof data?.dispatchId === 'string' ? data.dispatchId : undefined
+  // An unknown outcome stays reserved: the queue item for any Dispatch the server created adopts it.
   const outcomeUnknown =
-    start.error instanceof OrchestrationError && start.error.code === 'operation_unknown'
+    (start.error instanceof OrchestrationError && start.error.code === 'operation_unknown') ||
+    (serverNeverAnswered(start.error) && data?.effectsApplied !== false)
   if (named) {
     recordRemoteStart(db, {
       conversationId: start.conversationId,
@@ -215,12 +215,7 @@ function settleUnansweredStart(
       dispatchId: named,
       requestKey: start.key
     })
-  } else if (
-    outcomeUnknown ||
-    (serverNeverAnswered(start.error) && data?.effectsApplied !== false)
-  ) {
-    markRemoteStartOutcomeUnknown(db, start.taskId, start.key)
-  } else {
+  } else if (!outcomeUnknown) {
     // The server's ordinary start refused it, which a start that had launched answers with a receipt.
     releaseRemotePlacement(db, start.taskId, start.key, { createdByStart: start.createdByStart })
   }

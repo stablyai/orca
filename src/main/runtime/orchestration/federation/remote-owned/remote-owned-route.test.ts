@@ -47,6 +47,7 @@ describe('commands about a worker a paired server owns', () => {
   let capabilities: string[]
   let whileSending: () => Promise<void>
   let sleeping: boolean
+  let pulls: unknown[][]
   let sequence = 0
   let server: OrchestrationWorkerServer = {
     environmentId: 'env_b',
@@ -84,7 +85,15 @@ describe('commands about a worker a paired server owns', () => {
         return ok({ runtimeId: 'runtime_b', capabilities })
       }
       if (method === 'orchestration.peerMailPull') {
-        return ok({ items: [] })
+        const items = pulls.shift()
+        if (!items) {
+          // A real pull waits there for mail; yielding keeps the loop from starving timers.
+          await new Promise((resolve) => setImmediate(resolve))
+        }
+        return ok({ items: items ?? [] })
+      }
+      if (method === 'orchestration.peerMailAck') {
+        return ok({})
       }
       const prepared = send?.prepareRequest?.({ params, envelope, measure: () => 0 })
       sent.push({
@@ -115,6 +124,7 @@ describe('commands about a worker a paired server owns', () => {
     answers = {}
     whileSending = async () => undefined
     sleeping = false
+    pulls = []
     capabilities = [
       ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
       ORCHESTRATION_REMOTE_OWNED_WORKERS_RUNTIME_CAPABILITY
@@ -239,10 +249,54 @@ describe('commands about a worker a paired server owns', () => {
     )
     expect(lost.ok ? undefined : lost.error.code).toBe('remote_runtime_unavailable')
     const lostTask = String(sent[1].params.adoptTaskId)
-    expect(getRemotePlacement(db, lostTask)).toMatchObject({
-      state: 'reserved',
-      outcome_unknown: 1
-    })
+    expect(getRemotePlacement(db, lostTask)).toMatchObject({ state: 'reserved' })
+  })
+
+  it("adopts a start whose answer was lost from the server's queue item alone", async () => {
+    const lost = await call(
+      'orchestration.workerStart',
+      { from: 'term_coord', on: 'devB', spec: 'lost', worktree: 'new-top-level' },
+      { requestId: REQUEST }
+    )
+    expect(lost.ok ? undefined : lost.error.code).toBe('remote_runtime_unavailable')
+    const start = sent.find((s) => s.method === 'orchestration.workerStart')!
+    const taskId = String(start.params.adoptTaskId)
+    const link = record(db.db.prepare('SELECT * FROM remote_run_links').get())
+    // The server's insert trigger queued the Dispatch it created; nothing answers a lookup.
+    pulls.push([
+      {
+        conversationId: link.conversation_id,
+        sequence: 1,
+        messageId: 'state_1',
+        kind: 'worker_state',
+        payload: JSON.stringify({
+          v: 1,
+          id: 'state_1',
+          homeRunId: link.run_id,
+          peerRunId: 'run_on_b',
+          dispatch: {
+            id: 'ctx_lost',
+            taskId,
+            status: 'pending',
+            workerState: 'starting',
+            lastFailure: null,
+            agent: 'claude'
+          },
+          task: { status: 'dispatched', result: null },
+          correctedUnobservedPrompt: false,
+          removed: null
+        })
+      }
+    ])
+    runtime.ensureOrchestrationFederationRelay(String(link.run_id))
+
+    await vi.waitFor(() =>
+      expect(getRemotePlacement(db, taskId)).toMatchObject({
+        state: 'accepted',
+        dispatch_id: 'ctx_lost'
+      })
+    )
+    expect(sent.map((s) => s.method)).not.toContain('orchestration.dispatchShow')
   })
 
   it('records nothing for a start the server answers after the Run was reset, and says so', async () => {
@@ -260,7 +314,7 @@ describe('commands about a worker a paired server owns', () => {
     expect(getRemoteDispatch(db, 'ctx_b1')).toBeUndefined()
   })
 
-  it('keeps the start fenced for the orphan lookup when the server says its outcome is unknown', async () => {
+  it('keeps the start fenced when the server says its outcome is unknown', async () => {
     answers['orchestration.workerStart'] = [{ error: 'operation_unknown' }]
     await call(
       'orchestration.workerStart',
@@ -269,7 +323,7 @@ describe('commands about a worker a paired server owns', () => {
     )
 
     const task = String(sent[0].params.adoptTaskId)
-    expect(getRemotePlacement(db, task)).toMatchObject({ state: 'reserved', outcome_unknown: 1 })
+    expect(getRemotePlacement(db, task)).toMatchObject({ state: 'reserved' })
   })
 
   it('never sends a start that names a remote Dispatch to retry without --on', async () => {
@@ -372,6 +426,7 @@ describe('commands about a worker a paired server owns', () => {
     answers['orchestration.workerShow'] = [
       { result: { worker: { dispatchId: 'ctx_b1', state: 'running', stage: 'working' } } }
     ]
+    await vi.waitFor(() => expect(runtime.getPeerServerAnswerStatus('env_b')).toBeDefined())
     const calls = sent.length
     const show = await call('orchestration.workerShow', { dispatch: 'ctx_b1' })
     const list = await call('orchestration.workerList', { run: runId, paginate: true })

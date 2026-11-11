@@ -56,7 +56,6 @@ describe('remote-owned records on the coordinating Orca', () => {
       link,
       taskId,
       requestKey,
-      runtimeId: 'runtime_a',
       create: { spec: `do ${taskId}`, ...(deps ? { deps } : {}) }
     })
   }
@@ -174,8 +173,7 @@ describe('remote-owned records on the coordinating Orca', () => {
         reserveRemotePlacement(db, {
           link,
           taskId: foreign.id,
-          requestKey: 'k',
-          runtimeId: 'runtime_a'
+          requestKey: 'k'
         })
       ).toThrow(`Task ${foreign.id} was not found in Run ${run.id}.`)
       expect(getRemotePlacement(db, foreign.id)).toBeUndefined()
@@ -411,7 +409,6 @@ describe('remote-owned records on the coordinating Orca', () => {
         link,
         taskId: 'task_t',
         requestKey: 'retry',
-        runtimeId: 'runtime_a',
         retryOf: 'ctx_d1'
       })
       recordRemoteStart(db, {
@@ -604,8 +601,7 @@ describe('remote-owned records on the coordinating Orca', () => {
       reserveRemotePlacement(db, {
         link,
         taskId: task.id,
-        requestKey: 'remote',
-        runtimeId: 'runtime_a'
+        requestKey: 'remote'
       })
       recordRemoteStart(db, {
         conversationId: link.conversation_id,
@@ -644,8 +640,7 @@ describe('remote-owned records on the coordinating Orca', () => {
       const retried = reserveRemotePlacement(db, {
         link: next,
         taskId: 'task_t',
-        requestKey: 'k',
-        runtimeId: 'runtime_a'
+        requestKey: 'k'
       })
       expect(retried.placement).toMatchObject({
         conversation_id: next.conversation_id,

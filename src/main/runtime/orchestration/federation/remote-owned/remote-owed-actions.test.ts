@@ -16,12 +16,7 @@ import {
   getRemoteDispatch,
   oweRemoteDispatchStop
 } from '../../db/remote-owned/remote-dispatch-records'
-import {
-  getRemotePlacement,
-  markRemoteStartOutcomeUnknown,
-  recordRemoteStart,
-  reserveRemotePlacement
-} from '../../db/remote-owned/remote-placements'
+import { recordRemoteStart, reserveRemotePlacement } from '../../db/remote-owned/remote-placements'
 import { importRemoteOwnedItem } from '../../db/remote-owned/remote-owned-import'
 import {
   getRemoteRunLink,
@@ -141,7 +136,6 @@ describe('what the coordinating Orca owes a paired server', () => {
       link,
       taskId,
       requestKey: `key_${taskId}`,
-      runtimeId: runtime.getRuntimeId(),
       create: { spec: 'work' }
     })
     recordRemoteStart(db, {
@@ -183,7 +177,6 @@ describe('what the coordinating Orca owes a paired server', () => {
       .map((s) => s.envelope?.orchestrationRequestId)
   const resend = () =>
     resendOwedRemoteActions(runtime, db, 'env_b', {
-      lookUpOrphans: false,
       now: () => (now += 120_000)
     })
 
@@ -422,42 +415,6 @@ describe('what the coordinating Orca owes a paired server', () => {
         message: `The pairing with devB was re-made, so it no longer runs Run ${run.id}'s workers. No effects were applied.`
       })
       expect(sent).toEqual([])
-    })
-  })
-
-  describe('S4 orphan lookup', () => {
-    it('looks up only starts no answer will come for, records what it finds, and keeps the fence otherwise', async () => {
-      const reserve = (taskId: string, runtimeId: string) =>
-        reserveRemotePlacement(db, {
-          link,
-          taskId,
-          requestKey: `k_${taskId}`,
-          runtimeId,
-          create: { spec: taskId }
-        })
-      reserve('task_restarted', 'runtime_before_restart')
-      reserve('task_lost', runtime.getRuntimeId())
-      markRemoteStartOutcomeUnknown(db, 'task_lost', 'k_task_lost')
-      reserve('task_in_flight', runtime.getRuntimeId())
-      answers['orchestration.dispatchShow'] = [
-        {
-          result: { dispatch: { id: 'ctx_found', task_id: 'task_restarted', status: 'dispatched' } }
-        },
-        { result: { dispatch: null } }
-      ]
-      await resendOwedRemoteActions(runtime, db, 'env_b', { lookUpOrphans: true })
-      expect(
-        sent.filter((s) => s.method === 'orchestration.dispatchShow').map((s) => s.params)
-      ).toEqual([{ task: 'task_restarted' }, { task: 'task_lost' }])
-      expect(getRemotePlacement(db, 'task_restarted')).toMatchObject({
-        state: 'accepted',
-        dispatch_id: 'ctx_found'
-      })
-      expect(getRemotePlacement(db, 'task_lost')).toMatchObject({
-        state: 'reserved',
-        dispatch_id: null
-      })
-      expect(db.getTask('task_lost')?.status).toBe('dispatched')
     })
   })
 

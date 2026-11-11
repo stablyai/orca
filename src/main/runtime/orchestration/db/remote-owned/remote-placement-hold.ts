@@ -10,8 +10,6 @@ export type RemotePlacementRow = {
   request_key: string
   prior_task_status: TaskStatus
   dispatch_id: string | null
-  reserved_by_runtime: string
-  outcome_unknown: number
   created_at: string
 }
 

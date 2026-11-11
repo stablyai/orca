@@ -37,10 +37,6 @@ CREATE TABLE IF NOT EXISTS remote_placements (
   request_key        TEXT NOT NULL,
   prior_task_status  TEXT NOT NULL,
   dispatch_id        TEXT,
-  -- The runtime whose start holds the reservation; after it restarts, or once the start's answer
-  -- was lost, nothing will answer for it and only an orphan lookup can.
-  reserved_by_runtime TEXT NOT NULL,
-  outcome_unknown    INTEGER NOT NULL DEFAULT 0,
   created_at         TEXT NOT NULL DEFAULT (datetime('now'))
 );
 

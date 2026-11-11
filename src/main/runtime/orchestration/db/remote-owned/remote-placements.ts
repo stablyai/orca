@@ -46,8 +46,6 @@ export function reserveRemotePlacement(
     link: RemoteRunLinkRow
     taskId: string
     requestKey: string
-    /** This runtime's ID: a reservation outliving it has no start left to answer for it. */
-    runtimeId: string
     create?: TaskCreation
     retryOf?: string
   }
@@ -90,14 +88,13 @@ export function reserveRemotePlacement(
       .prepare(
         `INSERT INTO remote_placements (
            task_id, run_id, environment_id, conversation_id, state, request_key, prior_task_status,
-           dispatch_id, reserved_by_runtime
-         ) VALUES (?, ?, ?, ?, 'reserved', ?, ?, ?, ?)
+           dispatch_id
+         ) VALUES (?, ?, ?, ?, 'reserved', ?, ?, ?)
          ON CONFLICT(task_id) DO UPDATE SET
            run_id = excluded.run_id, environment_id = excluded.environment_id,
            conversation_id = excluded.conversation_id, state = 'reserved',
            request_key = excluded.request_key, prior_task_status = excluded.prior_task_status,
-           dispatch_id = excluded.dispatch_id, reserved_by_runtime = excluded.reserved_by_runtime,
-           outcome_unknown = 0`
+           dispatch_id = excluded.dispatch_id`
       )
       .run(
         task.id,
@@ -106,8 +103,7 @@ export function reserveRemotePlacement(
         link.conversation_id,
         params.requestKey,
         task.status,
-        params.retryOf ?? null,
-        params.runtimeId
+        params.retryOf ?? null
       )
     transitionLifecycleWithDb(db.db, {
       entity: 'task',
@@ -167,39 +163,6 @@ export function releaseRemotePlacement(
     rollbackLifecycleWriteTransaction(db.db, transaction)
     throw error
   }
-}
-
-/** The start's answer was lost, so only an orphan lookup by Task can find what the server did. */
-export function markRemoteStartOutcomeUnknown(
-  db: OrchestrationDb,
-  taskId: string,
-  requestKey: string
-): void {
-  db.db
-    .prepare(
-      `UPDATE remote_placements SET outcome_unknown = 1
-       WHERE task_id = ? AND request_key = ? AND state = 'reserved'`
-    )
-    .run(taskId, requestKey)
-}
-
-/** Reservations no start in this runtime will answer for. */
-export function listOrphanedRemotePlacements(
-  db: OrchestrationDb,
-  environmentId: string,
-  runtimeId: string
-): RemotePlacementRow[] {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over this table returns exactly its row shape.
-  return db.db
-    .prepare(
-      `SELECT placement.* FROM remote_placements placement
-       JOIN remote_run_links link
-         ON link.conversation_id = placement.conversation_id AND link.state = 'open'
-       WHERE placement.environment_id = ? AND placement.state = 'reserved'
-         AND (placement.outcome_unknown = 1 OR placement.reserved_by_runtime <> ?)
-       ORDER BY placement.rowid`
-    )
-    .all(environmentId, runtimeId) as RemotePlacementRow[]
 }
 
 /**

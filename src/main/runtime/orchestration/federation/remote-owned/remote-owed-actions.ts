@@ -13,11 +13,6 @@ import {
   type RemoteDispatchRow
 } from '../../db/remote-owned/remote-dispatch-records'
 import {
-  listOrphanedRemotePlacements,
-  recordRemoteStart,
-  type RemotePlacementRow
-} from '../../db/remote-owned/remote-placements'
-import {
   closeRemoteRunLink,
   getRemoteRunLink,
   listOwedRemoteRunCancels,
@@ -30,7 +25,6 @@ import { REMOTE_SERVER_UNREACHABLE_CODES } from './remote-server-unreachable'
 
 const STOP_TIMEOUT_MS = 60_000
 const CANCEL_TIMEOUT_MS = 120_000
-const LOOKUP_TIMEOUT_MS = 15_000
 // Enough to keep one slow server from holding every other owed action back.
 const RESEND_CONCURRENCY = 4
 
@@ -196,47 +190,12 @@ export async function sendOwedRemoteRunCancel(
   }
 }
 
-/**
- * A start whose answer was lost: asks the server for the Task's latest attempt there. A found
- * attempt becomes the record; finding none keeps the Task fenced, since absence proves nothing.
- */
-export async function lookUpOrphanedRemoteStart(
-  runtime: RemoteOwnedRuntime,
-  placement: RemotePlacementRow
-): Promise<void> {
-  const link = getRemoteRunLink(runtime.getOrchestrationDb(), placement.conversation_id)
-  if (!link) {
-    return
-  }
-  const answer = z
-    .object({
-      dispatch: z.object({ id: z.string().min(1), task_id: z.string().min(1) }).nullable()
-    })
-    .safeParse(
-      await callRemoteOwnedServer(runtime, link, {
-        method: 'orchestration.dispatchShow',
-        params: { task: placement.task_id },
-        timeoutMs: LOOKUP_TIMEOUT_MS,
-        whileLink: ['open']
-      })
-    )
-  const found = answer.success ? answer.data.dispatch : null
-  if (found?.task_id === placement.task_id) {
-    recordRemoteStart(runtime.getOrchestrationDb(), {
-      conversationId: placement.conversation_id,
-      taskId: placement.task_id,
-      dispatchId: found.id,
-      requestKey: placement.request_key
-    })
-  }
-}
-
 /** Everything this Orca owes one server, resent from its pull loop until the server answers for it. */
 export async function resendOwedRemoteActions(
   runtime: RemoteOwnedRuntime,
   db: OrchestrationDb,
   environmentId: string,
-  options: { lookUpOrphans: boolean; now?: () => number }
+  options: { now?: () => number } = {}
 ): Promise<void> {
   const now = options.now ?? Date.now
   const due = (retryAt: number | null) => retryAt === null || retryAt <= now()
@@ -246,12 +205,7 @@ export async function resendOwedRemoteActions(
     ),
     ...listOwedRemoteRunCancels(db, environmentId)
       .filter((link) => due(link.cancel_retry_at))
-      .map((link) => () => sendOwedRemoteRunCancel(runtime, link, now)),
-    ...(options.lookUpOrphans
-      ? listOrphanedRemotePlacements(db, environmentId, runtime.getRuntimeId()).map(
-          (placement) => () => lookUpOrphanedRemoteStart(runtime, placement)
-        )
-      : [])
+      .map((link) => () => sendOwedRemoteRunCancel(runtime, link, now))
   ]
   await mapWithConcurrency(actions, RESEND_CONCURRENCY, (action) => action().catch(() => undefined))
 }

@@ -45,12 +45,8 @@ export type PeerServerAnswerStatus = {
 type Loop = {
   db: OrchestrationDb
   stopped: boolean
-  orphansLookedUpAt: number
   resending: boolean
 }
-
-// A lost start answer is rare; asking the server about it more often only adds load there.
-const ORPHAN_LOOKUP_INTERVAL_MS = 30_000
 
 /** One pull loop per paired server this Orca opened conversations with or coordinates Runs on. The
  *  server never dials back: each pull waits there for queued items, imports them, then acknowledges
@@ -78,7 +74,7 @@ export class PeerMailRelay {
       if (current && !current.stopped && current.db === db) {
         continue
       }
-      const loop: Loop = { db, stopped: false, orphansLookedUpAt: 0, resending: false }
+      const loop: Loop = { db, stopped: false, resending: false }
       this.loops.set(environmentId, loop)
       void this.run(environmentId, loop)
     }
@@ -213,12 +209,8 @@ export class PeerMailRelay {
     if (loop.resending) {
       return
     }
-    const lookUpOrphans = Date.now() - loop.orphansLookedUpAt >= ORPHAN_LOOKUP_INTERVAL_MS
-    if (lookUpOrphans) {
-      loop.orphansLookedUpAt = Date.now()
-    }
     loop.resending = true
-    void resendOwedRemoteActions(this.runtime, loop.db, environmentId, { lookUpOrphans })
+    void resendOwedRemoteActions(this.runtime, loop.db, environmentId)
       .catch((error: unknown) => {
         console.warn(`[orchestration] Owed actions for ${environmentId} failed:`, error)
       })

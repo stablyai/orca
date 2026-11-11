@@ -63,7 +63,6 @@ describe('reads of workers a paired server runs, from this Orca’s records', ()
       link,
       taskId,
       requestKey: `key_${taskId}`,
-      runtimeId: 'runtime_a',
       create: { spec: `do ${taskId}` }
     })
     recordRemoteStart(db, {
