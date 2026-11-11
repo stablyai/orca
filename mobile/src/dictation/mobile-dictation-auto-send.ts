@@ -4,7 +4,7 @@ import {
   dictationAutoSendDelayMs
 } from '../../../src/shared/dictation-auto-send'
 
-/** The computer's "Send when dictation ends" delay; null when it is off or the computer predates it. */
+// Null when the setting is off or the computer predates it.
 export function mobileDictationAutoSendDelayMs(
   setup: Pick<MobileSpeechSetup, 'autoSendAfterDictation' | 'autoSendDelayMs'>
 ): number | null {
@@ -23,7 +23,7 @@ export type MobileDictationAutoSendCountdown = {
   readonly delayMs: number
 }
 
-// One dictation, at most one send: armed when a chat dictation starts, counted down only once its own words land whole.
+// One dictation, at most one send.
 export class MobileDictationAutoSend {
   private armed: {
     readonly scope: string
@@ -31,13 +31,11 @@ export class MobileDictationAutoSend {
     readonly conversation: string
   } | null = null
   private countdown: MobileDictationAutoSendCountdown | null = null
-  // The agent session and terminal the chat in front sends to; unknown until the screen says.
   private conversation: string | null = null
   private timer: ReturnType<typeof setTimeout> | null = null
   private readonly senders = new Map<string, () => void>()
   private readonly listeners = new Set<() => void>()
 
-  /** A dictation started: any earlier one's send is withdrawn, and this one may send if it goes into a chat's draft with the setting on. */
   arm(chatScope: string | null, delayMs: number | null): void {
     this.withdraw()
     const conversation = this.conversation
@@ -47,7 +45,7 @@ export class MobileDictationAutoSend {
         : null
   }
 
-  /** Where the chat in front sends now; a send armed for another conversation is withdrawn, so it never lands elsewhere. */
+  // A replaced agent session or terminal is another conversation, so a send armed for the old one never lands there.
   sendsTo(conversation: string): void {
     this.conversation = conversation
     const pending = this.countdown ?? this.armed
@@ -56,7 +54,6 @@ export class MobileDictationAutoSend {
     }
   }
 
-  /** The user took over or moved away: the draft stays and nothing sends. */
   readonly withdraw = (): void => {
     this.armed = null
     if (this.timer !== null) {
@@ -66,10 +63,10 @@ export class MobileDictationAutoSend {
     this.publish(null)
   }
 
-  /** The armed dictation's words landed; a failure's words so far stay a draft. Null when nothing counts down. */
   start({ partial }: { partial: boolean }): MobileDictationAutoSendCountdown | null {
     const armed = this.armed
     this.armed = null
+    // A failure that hands over the words heard so far leaves them a draft.
     if (partial || !armed || !this.senders.has(armed.scope)) {
       return null
     }
@@ -88,7 +85,6 @@ export class MobileDictationAutoSend {
     return countdown
   }
 
-  /** A chat composer whose Send may run on its own; going away withdraws its chat's send. */
   register(scope: string, send: () => void): () => void {
     this.senders.set(scope, send)
     return () => {
