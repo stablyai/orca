@@ -25,9 +25,9 @@ import { promoteAgentTeamsShimPath, deleteRequestedEnvKeys } from './host-env/pa
 import { resolveConfiguredTerminalShellArgs } from './configured-terminal-shell-args'
 import { ptySizes } from './delivery/visibility-state'
 import {
-  canonicalClaudeSessionStampEnvKey,
-  stripInheritedClaudeSessionEnv
-} from '../../../shared/agent-launch/startup/claude-parent-session-env'
+  canonicalAgentSessionStampEnvKey,
+  stripInheritedAgentSessionEnv
+} from '../../../shared/agent-launch/startup/parent-agent-session-env'
 import { shouldSeedPreAttachPtySize } from './delivery/attached-pty-size'
 
 type TrustInput = Parameters<typeof applyAgentWorkspaceTrustToSpawn>[0]
@@ -49,12 +49,12 @@ export function assemblePtySpawnEnvDeletions(input: {
   const isolated = withCodexTerminalServerIsolationEnv(input.env, input.settings)
   const env = isolated ? { ...isolated } : undefined
   if (env) {
-    stripInheritedClaudeSessionEnv(env, { launchEnv: isolated })
+    stripInheritedAgentSessionEnv(env, { launchEnv: isolated })
   }
   let envToDelete =
     mergePtyEnvDeletions(
       input.callerEnvToDelete?.map((key) =>
-        canonicalClaudeSessionStampEnvKey(key, process.platform)
+        canonicalAgentSessionStampEnvKey(key, process.platform)
       ) ?? [],
       // Persistent daemons and older SSH hosts must not resurrect a parent Pi's ownership.
       PI_PROCESS_OWNER_ENV_KEYS,
