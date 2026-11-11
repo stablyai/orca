@@ -110,10 +110,11 @@ describe('Orca Cloud is one host (RA-2)', () => {
     expect(scope.map((option) => option.label)).toEqual(['All hosts', 'Local Mac', 'Orca Cloud'])
     const cloudRow = scope.find((option) => option.label === 'Orca Cloud')
     expect(cloudRow?.detail).toBe('1 running · 1 asleep')
-    expect(expandEquivalentExecutionHostIds(hosts, [cloudRow!.id]).sort()).toEqual([
-      'runtime:env-a',
-      'runtime:env-b'
-    ])
+    expect(
+      expandEquivalentExecutionHostIds(hosts, [
+        hosts.find((host) => host.id === cloudRow?.id)!.id
+      ]).sort()
+    ).toEqual(['runtime:env-a', 'runtime:env-b'])
   })
 
   it('says "Asleep" when every sandbox sleeps, never "Suspended"', () => {
