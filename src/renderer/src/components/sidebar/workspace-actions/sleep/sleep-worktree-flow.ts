@@ -9,6 +9,7 @@ import { dismissOrcaCloudRestartWarning } from '@/lib/orca-cloud-session-toasts'
 import { notePredictiveWakeSlept } from '@/lib/orca-cloud/cloud-predictive-wake'
 import {
   clearWorktreeGoingToSleep,
+  clearWorktreeKeptAwake,
   markWorktreeGoingToSleep,
   releaseWorktreeSleepView
 } from '@/lib/worktree-sleep-view'
@@ -88,6 +89,7 @@ export async function runSleepWorktrees(
     await sleepWorktreesReportingFailures(worktreeIds, { markChatsAsleep: true })
   for (const id of worktreeIds) {
     clearWorktreeGoingToSleep(id)
+    clearWorktreeKeptAwake(id)
   }
   // Refused before main started it (nothing stopped) or failed: the workspace is awake.
   for (const id of unsleptWorktreeIds) {

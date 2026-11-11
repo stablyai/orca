@@ -23,8 +23,10 @@ export type CloudOfflineViewProps = {
   onCancel: (id: string) => void
   onEdit: (id: string, text: string) => Promise<boolean>
   headingRef?: React.Ref<HTMLHeadingElement>
-  /** Sleep chosen here and still running: the status line says so. */
+  /** Sleep chosen here and still running: the status line says so, and Keep awake replaces Wake. */
   goingToSleep?: boolean
+  /** Keeps it running instead (the same as opening it again before the sleep ends). */
+  onKeepAwake?: () => void
   /** Kept on screen right after Sleep: nothing here wakes it but "Wake to continue". */
   viewOnly?: boolean
 }
@@ -77,18 +79,30 @@ export function CloudWorkspaceOfflineView(props: CloudOfflineViewProps): React.J
         }
         headingRef={props.headingRef}
         action={
-          <Button size="sm" onClick={props.onWake}>
-            <Play />
-            {t('components.orcaCloud.read.wakeToContinue', 'Wake to continue')}
-          </Button>
+          props.goingToSleep && props.onKeepAwake ? (
+            <Button size="sm" onClick={props.onKeepAwake}>
+              <Play />
+              {t('components.orcaCloud.offline.keepAwake', 'Keep awake')}
+            </Button>
+          ) : (
+            <Button size="sm" onClick={props.onWake}>
+              <Play />
+              {t('components.orcaCloud.read.wakeToContinue', 'Wake to continue')}
+            </Button>
+          )
         }
       />
       {empty ? (
         <p className="max-w-[60ch] text-sm text-muted-foreground">
-          {t(
-            'components.orcaCloud.offline.emptyBody',
-            'Orca keeps a copy of chats, terminals and changes once you have used this workspace while it was awake.'
-          )}
+          {props.goingToSleep
+            ? t(
+                'components.orcaCloud.offline.savingCopy',
+                'Saving a read-only copy of chats, terminals and changes…'
+              )
+            : t(
+                'components.orcaCloud.offline.emptyBody',
+                'Orca keeps a copy of chats, terminals and changes once you have used this workspace while it was awake.'
+              )}
         </p>
       ) : (
         <>

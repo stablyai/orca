@@ -23488,7 +23488,9 @@
         "readOnly": "Read-only",
         "terminalOutput": "Saved output of {{title}}",
         "noGit": "No source control state was saved.",
-        "terminalN": "Terminal {{n}}"
+        "terminalN": "Terminal {{n}}",
+        "keepAwake": "Keep awake",
+        "savingCopy": "Saving a read-only copy of chats, terminals and changes…"
       },
       "read": {
         "wakeToContinue": "Wake to continue",
@@ -27029,7 +27031,8 @@
       "changedTitle": "Changed files",
       "moreChanged": "+{{count}} more",
       "recentCommitsOn": "Recent commits on {{branch}}",
-      "recentCommits": "Recent commits"
+      "recentCommits": "Recent commits",
+      "goingToSleep": "Going to sleep… The read-only copy shows here when it’s done."
     },
     "terminal": {
       "asleepHistoryKept": "This workspace is asleep. Your terminal history is kept."

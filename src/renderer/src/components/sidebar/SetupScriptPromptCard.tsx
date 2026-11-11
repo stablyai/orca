@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useCloudRecoveryContext } from '@/lib/orca-cloud/use-cloud-recovery-context'
+import { useSetupScriptAsleepCloud } from './use-setup-script-asleep-cloud'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { track } from '@/lib/telemetry'
@@ -68,9 +68,8 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
     [activeRepoId, activeWorktree, repos, settings]
   )
   const activeRepoHostIdentity = activeRepo ? getRepoHostIdentity(activeRepo) : null
-  // An asleep Orca Cloud workspace can't be inspected: wait until it's awake instead of showing
-  // "Couldn't verify this repo's setup script" with Retry (RA-12).
-  const asleepCloud = useCloudRecoveryContext(activeWorktreeId)?.asleep === true
+  // An asleep (or going to sleep) Orca Cloud workspace can't be inspected: wait until it's awake.
+  const asleepCloud = useSetupScriptAsleepCloud(activeWorktreeId)
   const isDismissed =
     provisionedByEnvironmentBuild ||
     asleepCloud ||

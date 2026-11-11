@@ -54,9 +54,10 @@ vi.mock('./sleep-worktree-sidebar-position', () => ({
 }))
 vi.mock('./sleep-worktree-flow', () => ({ toastWorkspaceSleepOutcome: vi.fn() }))
 
-import { followWorkspaceSleep } from './workspace-sleep-follower'
+import { followWorkspaceSleep, keepWorkspaceAwakeDuringSleep } from './workspace-sleep-follower'
 import { forgetWorktreeSleepIntent, hasWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import {
+  holdWorktreeSleepView,
   isWorktreeGoingToSleep,
   isWorktreeSleepViewHeld,
   releaseWorktreeSleepView,
@@ -191,5 +192,39 @@ describe('sleeping the workspace on screen', () => {
     await flush()
     expect(sleepReopened).not.toHaveBeenCalled()
     expect(resumeWorkspace).not.toHaveBeenCalled()
+  })
+
+  it('Keep awake during the sleep tells main once, ends the hold, and leaves it awake', async () => {
+    started()
+    keepWorkspaceAwakeDuringSleep(CLOUD)
+    expect(isWorktreeSleepViewHeld(CLOUD)).toBe(false)
+    expect(isWorktreeGoingToSleep(CLOUD)).toBe(false)
+    mocks.notify()
+    await flush()
+    expect(sleepReopened).toHaveBeenCalledTimes(1)
+    expect(sleepReopened).toHaveBeenCalledWith(CLOUD)
+    await ended(true)
+    await flush()
+    expect(sleepReopened).toHaveBeenCalledTimes(1)
+    expect(mocks.selection.activeWorktreeId).toBe(CLOUD)
+    // Awake again: its panes may connect, and re-activating in place respawns them.
+    expect(hasWorktreeSleepIntent(CLOUD)).toBe(false)
+    expect(mocks.setActiveWorktree).toHaveBeenCalledWith(CLOUD)
+    expect(resumeWorkspace).not.toHaveBeenCalled()
+  })
+
+  it('Keep awake before main starts the sleep: stays selected and awake, never held', async () => {
+    holdWorktreeSleepView(CLOUD)
+    keepWorkspaceAwakeDuringSleep(CLOUD)
+    started()
+    expect(isWorktreeSleepViewHeld(CLOUD)).toBe(false)
+    expect(isWorktreeGoingToSleep(CLOUD)).toBe(false)
+    expect(mocks.setActiveWorktree).not.toHaveBeenCalled()
+    mocks.notify()
+    await ended(true)
+    await flush()
+    expect(sleepReopened).toHaveBeenCalledTimes(1)
+    expect(hasWorktreeSleepIntent(CLOUD)).toBe(false)
+    expect(mocks.setActiveWorktree).toHaveBeenCalledWith(CLOUD)
   })
 })

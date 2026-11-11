@@ -5,6 +5,8 @@ import { useSyncExternalStore } from 'react'
 // one stays on screen read-only after its Sleep ("view-only": never wakes, only shows the copy).
 const goingToSleep = new Set<string>()
 const viewOnly = new Set<string>()
+// "Keep awake" pressed while the sleep runs, possibly before main's started notice. Not shown.
+const keptAwake = new Set<string>()
 const listeners = new Set<() => void>()
 
 function emit(): void {
@@ -59,6 +61,18 @@ export function isWorktreeSleepViewHeld(worktreeId: string | null): boolean {
   return worktreeId !== null && viewOnly.has(worktreeId)
 }
 
+export function markWorktreeKeptAwake(worktreeId: string): void {
+  keptAwake.add(worktreeId)
+}
+
+export function clearWorktreeKeptAwake(worktreeId: string): void {
+  keptAwake.delete(worktreeId)
+}
+
+export function isWorktreeKeptAwake(worktreeId: string): boolean {
+  return keptAwake.has(worktreeId)
+}
+
 export function useIsWorktreeGoingToSleep(worktreeId: string | null): boolean {
   return useSyncExternalStore(subscribeWorktreeSleepView, () =>
     worktreeId === null ? false : goingToSleep.has(worktreeId)
@@ -72,5 +86,6 @@ export function useIsWorktreeSleepViewHeld(worktreeId: string | null): boolean {
 export function resetWorktreeSleepViewForTests(): void {
   goingToSleep.clear()
   viewOnly.clear()
+  keptAwake.clear()
   listeners.clear()
 }

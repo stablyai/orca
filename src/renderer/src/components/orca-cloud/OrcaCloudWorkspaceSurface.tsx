@@ -38,6 +38,7 @@ import { useWakeInput, useWakeInputNotices } from './use-wake-input'
 import { useWakeAttachHold } from './use-wake-attach-hold'
 import { clearWakeInput } from '@/components/terminal-pane/input/wake-input-buffer'
 import { runUnarchiveCloudWorkspace, wakeCloudWorkspace } from './cloud-workspace-actions'
+import { keepWorkspaceAwakeDuringSleep } from '@/components/sidebar/workspace-actions/sleep/workspace-sleep-follower'
 
 /** A wake that settles faster than this never shows the overlay (no skeleton flash). */
 const SHOW_DELAY_MS = 300
@@ -385,6 +386,7 @@ function CloudSurface({ workspaceId }: { workspaceId: string }): React.JSX.Eleme
                 workspaceName={name}
                 now={Math.max(now, slowNow)}
                 goingToSleep={goingToSleep}
+                onKeepAwake={() => keepWorkspaceAwakeDuringSleep(workspaceId)}
                 viewOnly={viewOnly}
                 headingRef={headingRef}
                 onWake={wake}

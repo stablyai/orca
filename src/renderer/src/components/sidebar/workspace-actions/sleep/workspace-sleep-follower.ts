@@ -11,7 +11,10 @@ import {
 } from '@/lib/worktree-sleep-intent'
 import {
   clearWorktreeGoingToSleep,
+  clearWorktreeKeptAwake,
+  isWorktreeKeptAwake,
   isWorktreeSleepViewHeld,
+  markWorktreeKeptAwake,
   markWorktreeGoingToSleep,
   releaseWorktreeSleepView,
   subscribeWorktreeSleepView
@@ -35,6 +38,26 @@ type FollowedSleep = {
 
 const followed = new Map<string, FollowedSleep>()
 
+function noteReopened(worktreeId: string): void {
+  // Best effort: a missed note only suspends a VM the user can resume.
+  void Promise.resolve()
+    .then(() => window.api.worktrees.sleepReopened(worktreeId))
+    .catch(() => {})
+}
+
+/**
+ * "Keep awake" in the view kept on screen after Sleep: the same as opening the workspace before
+ * the sleep ends. Main keeps its VM running; the workspace stays selected and becomes awake again.
+ */
+export function keepWorkspaceAwakeDuringSleep(worktreeId: string): void {
+  markWorktreeKeptAwake(worktreeId)
+  // Told here, once: the reopen watcher must not tell main again when the hold ends.
+  followed.get(worktreeId)?.stopWatchingReopen()
+  clearWorktreeGoingToSleep(worktreeId)
+  releaseWorktreeSleepView(worktreeId)
+  noteReopened(worktreeId)
+}
+
 /**
  * Tells main once if the user opens the workspace before its sleep ends: its VM then keeps running.
  * A workspace kept on screen read-only after its Sleep is not opened; leaving it and coming back,
@@ -47,10 +70,7 @@ function watchReopenDuringSleep(worktreeId: string): () => void {
       !isWorktreeSleepViewHeld(worktreeId)
     ) {
       stop()
-      // Best effort: a missed note only suspends a VM the user can resume.
-      void Promise.resolve()
-        .then(() => window.api.worktrees.sleepReopened(worktreeId))
-        .catch(() => {})
+      noteReopened(worktreeId)
     }
   }
   const offStore = useAppStore.subscribe(check)
@@ -82,11 +102,18 @@ export function followWorkspaceSleep(
     // Why first: clearing the active workspace unmounts its panes, and a kept one's panes lose
     // their PTYs; either way their exits must not stamp activity.
     markWorktreeSleepIntent(worktreeId)
-    markWorktreeGoingToSleep(worktreeId)
+    // Kept awake before main started: it stays selected and awake, and main was already told.
+    const kept = wasActive && isWorktreeKeptAwake(worktreeId)
+    if (!kept) {
+      markWorktreeGoingToSleep(worktreeId)
+    }
     // A project move pauses through sleep and still leaves; an Orca Cloud workspace the user put
     // to sleep stays on screen read-only.
-    const stayed = wasActive && !notice.projectMovePauseId && holdActiveCloudSleepView(worktreeId)
-    if (stayed) {
+    const stayed =
+      kept || (wasActive && !notice.projectMovePauseId && holdActiveCloudSleepView(worktreeId))
+    if (kept) {
+      // Nothing to hold or watch.
+    } else if (stayed) {
       // Window focus on the workspace still on screen must not wake it (phone or CLI sleeps too).
       notePredictiveWakeSlept(worktreeId)
     } else if (wasActive) {
@@ -116,13 +143,14 @@ export function followWorkspaceSleep(
       teardown,
       selectionBeforeSleep,
       stayed,
-      stopWatchingReopen: watchReopenDuringSleep(worktreeId)
+      stopWatchingReopen: kept ? () => {} : watchReopenDuringSleep(worktreeId)
     })
     return
   }
   const entry = followed.get(worktreeId)
   followed.delete(worktreeId)
   entry?.stopWatchingReopen()
+  clearWorktreeKeptAwake(worktreeId)
   clearWorktreeGoingToSleep(worktreeId)
   if (!notice.slept) {
     // A failed sleep leaves the workspace awake: nothing is view-only any more.
@@ -140,9 +168,9 @@ export function followWorkspaceSleep(
     if (!notice.slept || reopened) {
       clearWorktreeSleepIntent(worktreeId)
     }
-    if (!notice.slept && entry?.selectionBeforeSleep) {
-      // Put the awake workspace back: re-activating a kept one respawns its stopped panes. One the
-      // user left meanwhile is not pulled back.
+    // Put the awake workspace back after a failed sleep, or one kept awake from the view:
+    // re-activating it in place respawns its stopped panes. One the user left is not pulled back.
+    if ((!notice.slept || (entry?.stayed && reopened)) && entry?.selectionBeforeSleep) {
       const stillThere = entry.stayed
         ? state.activeWorktreeId === worktreeId
         : state.activeWorktreeId === null

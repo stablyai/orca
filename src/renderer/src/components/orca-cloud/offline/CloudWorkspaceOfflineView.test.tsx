@@ -59,4 +59,25 @@ describe('the asleep view kept on screen after Sleep', () => {
     fireEvent.click(getByRole('button', { name: 'Wake to continue' }))
     expect(props.onWake).toHaveBeenCalledTimes(1)
   })
+
+  it('while going to sleep: says the copy is being saved, and offers Keep awake, not Wake', () => {
+    const onKeepAwake = vi.fn()
+    const { container, getByRole, queryByRole, rerender, props } = view({
+      snapshot: { ...snapshot, capturedAt: null, chats: [] },
+      goingToSleep: true,
+      viewOnly: true,
+      onKeepAwake
+    })
+    expect(container.textContent).toContain(
+      'Saving a read-only copy of chats, terminals and changes…'
+    )
+    expect(queryByRole('button', { name: 'Wake to continue' })).toBeNull()
+    fireEvent.click(getByRole('button', { name: 'Keep awake' }))
+    expect(onKeepAwake).toHaveBeenCalledTimes(1)
+    expect(props.onWake).not.toHaveBeenCalled()
+    rerender(<CloudWorkspaceOfflineView {...props} goingToSleep={false} />)
+    expect(queryByRole('button', { name: 'Keep awake' })).toBeNull()
+    expect(getByRole('button', { name: 'Wake to continue' })).toBeTruthy()
+    expect(container.textContent).not.toContain('Saving a read-only copy')
+  })
 })

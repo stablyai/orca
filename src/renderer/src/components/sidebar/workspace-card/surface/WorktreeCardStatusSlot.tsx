@@ -15,6 +15,7 @@ import StatusIndicator from './StatusIndicator'
 import { useWorktreeActivityStatus } from '../activity/use-worktree-activity-status'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
+import { useIsWorktreeGoingToSleep } from '@/lib/worktree-sleep-view'
 import {
   selectEphemeralVmWorkspaceRuntime,
   selectEphemeralVmWorkspaceWaking
@@ -153,7 +154,9 @@ export function WorktreeCardStatusSlot({
   })
   // An asleep sandbox runs no agent: a terminal restored from before the sleep is not activity
   // (RA-9). Until the first status read, the local VM record says it is suspended.
-  const asleepCloud = isCloud && (cloudAsleep || vmRuntime?.status === 'suspended')
+  // From the Sleep click on (RA-13b): the sandbox is still up, but its agents are being stopped.
+  const goingToSleep = useIsWorktreeGoingToSleep(worktreeId)
+  const asleepCloud = isCloud && (cloudAsleep || goingToSleep || vmRuntime?.status === 'suspended')
   const status: WorktreeStatus =
     asleepCloud && (liveStatus === 'active' || liveStatus === 'working') ? 'inactive' : liveStatus
   const vmHostState =
