@@ -141,6 +141,14 @@ describe('endpoint auth header storage', () => {
     }
   )
 
+  it('opens insecure hosts without waiting for the keychain', async () => {
+    cacheEndpointAuthSnapshot('host-1', { 'X-Token': 'old-secret' }, ENDPOINT)
+    expect(await primeEndpointAuthHeaders('host-1', 'ws://192.168.1.2:6768')).toBeNull()
+    expect(secureStoreMock.getItemAsync).not.toHaveBeenCalled()
+    expect(asyncStorageMock.getItem).not.toHaveBeenCalled()
+    expect(peekEndpointAuthHeaders('host-1', ENDPOINT)).toBeNull()
+  })
+
   it('does not use legacy credentials without an origin binding', async () => {
     secureStoreMock.getItemAsync.mockResolvedValue(
       JSON.stringify({ v: 1, hostId: 'host-1', headers: { 'X-Token': 'old-secret' } })

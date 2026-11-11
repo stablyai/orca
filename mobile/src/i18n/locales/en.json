@@ -4965,6 +4965,7 @@
     "saveFailed": "Could not save edge authentication.",
     "pairingHint": "Optional headers for this reverse proxy or secure tunnel. Orca verifies the desktop before saving them in this phone's keychain. Never include them in a pairing link.",
     "saving": "Saving credentials…",
-    "configure": "Configure edge authentication"
+    "configure": "Configure edge authentication",
+    "loadFailed": "Could not load edge authentication. Unlock protected storage and reopen this form."
   }
 }

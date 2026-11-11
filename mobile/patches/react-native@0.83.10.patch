@@ -446,3 +446,12 @@ diff --git a/React/FBReactNativeSpec/FBReactNativeSpecJSI.h b/React/FBReactNativ
    static jsi::Value __connect(jsi::Runtime &rt, TurboModule &turboModule, const jsi::Value* args, size_t count) {
      static_assert(
        bridging::getParameterCount(&T::connect) == 5,
+diff --git a/settings.gradle.kts b/settings.gradle.kts
+--- a/settings.gradle.kts
++++ b/settings.gradle.kts
+@@ -38 +38 @@
+-project(":packages").projectDir = file("/tmp")
++project(":packages").projectDir = file(".")
+@@ -40 +40 @@
+-project(":packages:react-native").projectDir = file("/tmp")
++project(":packages:react-native").projectDir = file(".")

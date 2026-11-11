@@ -61,6 +61,9 @@ export async function readEndpointAuthHeaders(
   hostId: string,
   endpoint: string
 ): Promise<EndpointAuthHeaders | null> {
+  if (!endpointAuthOrigin(endpoint)) {
+    return null
+  }
   const raw = await readPairingKeychainItem(headersKey(hostId))
   return raw === null ? null : parseStoredBundle(hostId, endpoint, raw)
 }
