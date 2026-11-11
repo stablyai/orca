@@ -3,6 +3,7 @@
 import { z } from 'zod'
 import type { NetworkPolicy } from './network-policy'
 import type { GoldenImageProviderApi } from './golden-image-provider'
+import { tarGzipFile } from './tar-gzip'
 import {
   ProviderError,
   type CommandResult,
@@ -263,6 +264,27 @@ export function createVercelSandboxApi(
         }
         throw error
       }
+    },
+
+    async writeFile(sessionId, path, bytes) {
+      // Same call @vercel/sandbox's writeFiles makes: a gzipped tarball extracted at `/`.
+      const relative = path.replace(/^\/+/, '')
+      const segments = relative.split('/')
+      const dirs = segments.slice(0, -1).map((_, i) => segments.slice(0, i + 1).join('/'))
+      const body = await tarGzipFile({ dirs, path: relative, bytes, mtime: Date.now() })
+      const url = new URL(`${base}/v2/sandboxes/sessions/${encodeURIComponent(sessionId)}/fs/write`)
+      url.searchParams.set('teamId', config.teamId)
+      const response = await doFetch(url, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${config.token}`, 'content-type': 'application/gzip', 'x-cwd': '/' },
+        body,
+        redirect: 'manual'
+      })
+      if (!response.ok) {
+        const parsed = ErrorBody.safeParse(await response.json().catch(() => null))
+        throw new ProviderError(response.status, parsed.success ? (parsed.data.error?.code ?? null) : null)
+      }
+      await response.body?.cancel()
     },
 
     deleteSandbox: (name) =>

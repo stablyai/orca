@@ -130,9 +130,13 @@ describe('MCP protocol', () => {
     const list = await h.rpc(key, 'tools/list', {}, { 'mcp-protocol-version': '2025-11-25' })
     const tools = list.body.result.tools as { name: string; inputSchema: any; annotations: any; description: string }[]
     expect(tools.map((t) => t.name)).toEqual([
-      'whoami', 'list_projects', 'list_workspaces', 'get_workspace', 'create_workspace', 'sleep_workspace', 'wake_workspace',
-      'archive_workspace', 'destroy_workspace', 'send_message', 'get_message', 'list_sessions', 'read_session', 'list_routines', 'run_routine'
+      'whoami', 'list_models', 'list_projects', 'list_workspaces', 'get_workspace', 'create_workspace', 'rename_workspace',
+      'sleep_workspace', 'wake_workspace', 'archive_workspace', 'unarchive_workspace', 'destroy_workspace', 'create_session',
+      'cancel_session', 'rename_session', 'upload_attachment', 'send_message', 'get_message', 'list_sessions', 'read_session',
+      'list_routines', 'run_routine'
     ])
+    // Conductor's 20 tools minus run_sql (transcripts are end-to-end encrypted on the VM), plus Orca's own.
+    expect(tools).toHaveLength(22)
     for (const t of tools) {
       expect(t.inputSchema.type).toBe('object')
       expect(t.description.length).toBeGreaterThan(40)
@@ -142,6 +146,38 @@ describe('MCP protocol', () => {
     expect(byName.list_workspaces!.annotations.readOnlyHint).toBe(true)
     expect(byName.sleep_workspace!.annotations.idempotentHint).toBe(true)
     expect(byName.send_message!.inputSchema.required).toEqual(['workspaceId', 'text'])
+  })
+
+  it('starts, renames and cancels sessions, uploads files and lists models through the new tools', async () => {
+    const h = await harness()
+    const key = await h.apiKey(['workspaces:read', 'workspaces:write', 'messages:write'])
+    h.vercel.commandHandler = (params) => {
+      const args = params.args ?? []
+      if (args.includes('launch')) {
+        return { exitCode: 0, stdout: JSON.stringify({ ok: true, result: { outcome: { kind: 'terminal', handle: 'term_mcp1' } } }), stderr: '' }
+      }
+      if (args.includes('terminal')) {
+        return { exitCode: 0, stdout: JSON.stringify({ ok: true, result: {} }), stderr: '' }
+      }
+      return undefined
+    }
+    const models = (await h.tool(key, 'list_models')).structuredContent.agents
+    expect(models.map((a: { id: string }) => a.id)).toContain('codex')
+    const ws = (await h.tool(key, 'create_workspace', { name: 'm' })).structuredContent.workspace
+    expect((await h.tool(key, 'rename_workspace', { workspaceId: ws.id, name: 'renamed' })).structuredContent.workspace.name).toBe('renamed')
+    const file = await h.tool(key, 'upload_attachment', { workspaceId: ws.id, filename: 'shot.png', contentType: 'image/png', data: Buffer.from('PNGDATA').toString('base64') })
+    expect(file.isError).toBeUndefined()
+    const attachment = file.structuredContent.attachment
+    expect(attachment).toMatchObject({ filename: 'shot.png', byteSize: 7, contentType: 'image/png' })
+    const session = await h.tool(key, 'create_session', { workspaceId: ws.id, agent: 'codex', model: 'gpt-5.5', effort: 'high', name: 'Second', message: 'look', attachments: [attachment.id] })
+    expect(session.structuredContent.session).toMatchObject({ handle: 'term_mcp1', agent: 'codex', model: 'gpt-5.5', name: 'Second' })
+    const launch = h.vercel.commands.find((c) => c.args?.includes('launch'))!
+    expect(launch.args).toContain('--model=gpt-5.5')
+    expect(launch.args!.at(-1)).toContain(attachment.path)
+    expect((await h.tool(key, 'rename_session', { workspaceId: ws.id, session: 'term_mcp1', name: 'Third' })).structuredContent.session.name).toBe('Third')
+    expect((await h.tool(key, 'cancel_session', { workspaceId: ws.id, session: 'term_mcp1' })).structuredContent).toMatchObject({ interrupted: true, canceledQueuedMessages: 0 })
+    await h.tool(key, 'archive_workspace', { workspaceId: ws.id })
+    expect((await h.tool(key, 'unarchive_workspace', { workspaceId: ws.id })).structuredContent.workspace).toMatchObject({ status: 'running', archived: false })
   })
 
   it('rejects bad transport input: method, origin, version header, JSON, unknown method/tool', async () => {
