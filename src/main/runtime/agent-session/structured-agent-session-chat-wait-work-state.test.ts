@@ -77,14 +77,14 @@ function cliClient(open: StructuredCodexRpcHarness) {
       graph: { state: 'ready' }
     },
     _meta: { runtimeId: 'runtime-1' }
-  } as never)
+  })
   vi.spyOn(client, 'call').mockImplementation(async (method: string, params?: unknown) => {
     const response: RpcResponse = await open.call(method, params)
     replies.push({ method, json: JSON.stringify(response) })
     if (!response.ok) {
       throw new RuntimeClientError(response.error.code, response.error.message)
     }
-    return response as never
+    return response
   })
   return { client, replies }
 }
@@ -105,11 +105,11 @@ async function seedRunningTurn(rows: number, newestBytes: number): Promise<void>
   }
   agentMessage('newest', `${NEWEST_MARKER} ${'x'.repeat(newestBytes)}`)
   await vi.waitFor(async () => {
-    const page = (await harness!.call('agentSession.history', {
+    const page = await harness!.call('agentSession.history', {
       sessionId: SESSION,
       direction: 'tail',
       limit: 1
-    })) as { result: { page: { items: { itemId: string }[] } } }
+    })
     expect(JSON.stringify(page)).toContain(NEWEST_MARKER)
   })
 }
@@ -149,7 +149,7 @@ async function sendAndWait(rows: number, newestBytes: number) {
     await vi.advanceTimersByTimeAsync(1_000)
   }
   await sending
-  const printed = JSON.parse(logs.join('\n')) as { result: { entries: { text: string }[] } }
+  const printed: { result: { entries: { text: string }[] } } = JSON.parse(logs.join('\n'))
   return { during, result: printed.result }
 }
 
