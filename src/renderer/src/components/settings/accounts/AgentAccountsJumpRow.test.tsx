@@ -12,9 +12,7 @@ afterEach(() => {
 
 describe('AgentAccountsJumpRow', () => {
   it('stays hidden when the page has only one part', () => {
-    render(
-      <AgentAccountsJumpRow targets={[{ id: 'accounts-this-host', title: 'This computer' }]} />
-    )
+    render(<AgentAccountsJumpRow links={[{ id: 'accounts-this-host', title: 'This computer' }]} />)
     expect(screen.queryByRole('navigation')).toBeNull()
   })
 
@@ -24,7 +22,7 @@ describe('AgentAccountsJumpRow', () => {
     render(
       <>
         <AgentAccountsJumpRow
-          targets={[
+          links={[
             { id: 'accounts-this-host', title: 'This computer' },
             { id: 'accounts-hosts', title: 'Hosts' }
           ]}

@@ -89,7 +89,7 @@ export function renderAccountsSettingsSection(
       {view.isSectionMounted('accounts') ? (
         <>
           <AgentAccountsJumpRow
-            targets={[
+            links={[
               { id: AGENT_ACCOUNTS_HOST_PART_ID, title: hostPartTitle },
               ...additionalParts.map(({ id, title }) => ({ id, title }))
             ]}
