@@ -15,6 +15,8 @@ export function cloudCardStateDetail(
     restarting: boolean
     idleSleepMinutes: number | undefined
     asOf: number | null
+    /** An archived workspace's kept-until date, so the snapshot line names the day. */
+    keptUntil?: number | null
   },
   t: Translate
 ): string | null {
@@ -35,7 +37,7 @@ export function cloudCardStateDetail(
           time: new Intl.DateTimeFormat(getIntlLocale(), { timeStyle: 'short' }).format(args.asOf)
         })
   }
-  return cloudStateDetail(args.state, t)
+  return cloudStateDetail(args.state, t, args.keptUntil)
 }
 
 /** "CPU 13% · Memory 1.8 / 16 GB": the plan's memory, never the VM's own report of it. */

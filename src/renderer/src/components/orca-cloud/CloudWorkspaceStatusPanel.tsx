@@ -156,10 +156,18 @@ export function CloudWorkspaceStatusPanel({
   const detail = unavailable
     ? null
     : cloudCardStateDetail(
-        { state, restarting, idleSleepMinutes: status?.idleSleepMinutes, asOf },
+        {
+          state,
+          restarting,
+          idleSleepMinutes: status?.idleSleepMinutes,
+          asOf,
+          keptUntil: status?.archive?.expiresAt
+        },
         t
       )
   const primary = cloudCardPrimary(rawState, restarting)
+  // The timer and the "As of" time fit beside the state; other states' sentences get their own line.
+  const shortDetail = !restarting && (state === 'running' || state === 'sleeping')
 
   useEffect(() => {
     if (!escapeRef) {
@@ -228,9 +236,11 @@ export function CloudWorkspaceStatusPanel({
                 cloudStateLabel(state, t)
               )}
             </span>
-            {detail ? <> · {detail}</> : null}
+            {detail && shortDetail ? <> · {detail}</> : null}
           </span>
         </div>
+        {/* Longer state lines (archived, not responding, couldn't start) wrap below, never cut off. */}
+        {detail && !shortDetail ? <p className="mt-1 text-muted-foreground">{detail}</p> : null}
       </div>
 
       {unavailable ? (

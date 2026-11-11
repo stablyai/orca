@@ -1,5 +1,6 @@
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { seedCloudSyncView } from '@/lib/orca-cloud/cloud-sync-store'
+import { setArchiveTtlDaysForTest } from '@/lib/orca-cloud/archive-ttl'
 import type { CloudStatusEntry } from '@/lib/orca-cloud/orca-cloud-workspace-store'
 import type { CloudDotState } from '@/lib/orca-cloud/orca-cloud-workspace-state'
 import {
@@ -11,6 +12,8 @@ import { CloudWorkspaceStatusPanel, type CloudCardLayer } from './CloudWorkspace
 import type { CloudCardAttention } from './cloud-workspace-card-model'
 
 const noop = (): void => {}
+// The Archive tooltip's date (the server's TTL comes from /v1/config in the app).
+setArchiveTtlDaysForTest(30)
 const actions = {
   onWake: noop,
   onRestart: noop,
@@ -47,6 +50,12 @@ const asleep: HostedWorkspaceStatus = {
   state: 'sleeping',
   metrics: null,
   uptimeMs: null
+}
+// Archived 9 days ago; the snapshot is deleted 21 days from now.
+const archived: HostedWorkspaceStatus = {
+  ...asleep,
+  state: 'archived',
+  archive: { archivedAt: Date.now() - 9 * 86_400_000, expiresAt: Date.now() + 21 * 86_400_000 }
 }
 const entry = (status: HostedWorkspaceStatus): CloudStatusEntry => ({
   status,
@@ -105,7 +114,7 @@ function card({
           workspaceId={id}
           name="fix-login-redirect"
           state={state}
-          entry={entry(state === 'sleeping' ? asleep : running)}
+          entry={entry(state === 'sleeping' ? asleep : state === 'archived' ? archived : running)}
           pending={undefined}
           actions={actions}
           attention={attention}
@@ -157,5 +166,39 @@ export const menuOpen = defineFixture({
       .querySelector<HTMLButtonElement>('[data-cloud-card-more]')
       ?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
     await new Promise((resolve) => setTimeout(resolve, 200))
+  }
+})
+
+/** Archived: the snapshot line names the day it is deleted; Unarchive is the one action. */
+export const archivedCard = card({ id: 'card-archived', state: 'archived' })
+
+/** ⋯ open with Archive focused: the shared snapshot definition beside it. */
+export const menuArchiveTooltip = defineFixture({
+  width: 640,
+  render: () => (
+    <div className="ms-80 w-72 rounded-md border border-border bg-floating-surface p-3">
+      <CloudWorkspaceStatusPanel
+        workspaceId="card-menu-archive"
+        name="fix-login-redirect"
+        state="running"
+        entry={entry(running)}
+        pending={undefined}
+        actions={actions}
+        attention={null}
+        asOf={AS_OF}
+        detailsOpen={false}
+      />
+    </div>
+  ),
+  interact: async (frame) => {
+    frame
+      .querySelector<HTMLButtonElement>('[data-cloud-card-more]')
+      ?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
+    await new Promise((resolve) => setTimeout(resolve, 200))
+    // Typeahead moves focus to Archive (a plain .focus() doesn't stick in Radix menus).
+    document
+      .querySelector('[role="menu"]')
+      ?.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', bubbles: true }))
+    await new Promise((resolve) => setTimeout(resolve, 900))
   }
 })

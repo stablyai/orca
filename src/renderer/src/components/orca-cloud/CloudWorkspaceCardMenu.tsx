@@ -11,6 +11,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { useTranslate } from '@/i18n/use-translate'
+import { ArchiveSnapshotTooltip } from './ArchiveSnapshotTooltip'
 
 export type CloudCardMenuItems = {
   details: { open: boolean; toggle: () => void }
@@ -67,10 +68,13 @@ export function CloudWorkspaceCardMenu({
         ) : null}
         {destructive ? <DropdownMenuSeparator /> : null}
         {items.archive ? (
-          <DropdownMenuItem disabled={disabled} onSelect={items.archive}>
-            <Archive />
-            {t('orcaCloudWorkspace.archive', 'Archive')}
-          </DropdownMenuItem>
+          // The shared "snapshot" definition, as on every other Archive control.
+          <ArchiveSnapshotTooltip side="left">
+            <DropdownMenuItem disabled={disabled} onSelect={items.archive}>
+              <Archive />
+              {t('orcaCloudWorkspace.archive', 'Archive')}
+            </DropdownMenuItem>
+          </ArchiveSnapshotTooltip>
         ) : null}
         {items.delete ? (
           <DropdownMenuItem variant="destructive" disabled={disabled} onSelect={items.delete}>
