@@ -7,6 +7,7 @@ import path from 'node:path'
 export const CLAUDE_HOOK_EVENT_FIRST_VERSIONS = {
   PreToolUse: '1.0.23',
   PostToolUse: '1.0.23',
+  Notification: '1.0.23',
   Stop: '1.0.31',
   SubagentStop: '1.0.41',
   UserPromptSubmit: '1.0.53',

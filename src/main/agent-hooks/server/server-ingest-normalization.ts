@@ -15,6 +15,12 @@ import {
   type AgentHookSource
 } from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
 import {
+  captureClaudeTaskAdmissionState,
+  restoreClaudeTaskAdmissionState
+} from './server-claude-task-notification-admission'
+import { hasClaudeIdlePromptTaskObservation } from '../../../shared/agent-hook-listener/providers/claude-task-notification-reconciliation'
+import { readClaudeTaskNotificationEvidence } from '../../../shared/agent-hook-listener/providers/claude-task-notification-evidence-reader'
+import {
   bindOpenCodeTuiSession,
   isOpenCodeSharedServerPost
 } from '../../../shared/agent-hook-listener/opencode-session-registry'
@@ -117,11 +123,11 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
     }
   }
 
-  protected normalizeLocalHookPayload(
+  protected async normalizeLocalHookPayload(
     source: AgentHookSource,
     body: unknown,
     isReplay = false
-  ): NormalizedLocalHook {
+  ): Promise<NormalizedLocalHook> {
     if (source !== 'claude' || typeof body !== 'object' || body === null) {
       const event = normalizeHookPayload(this.state, source, body, this.env, {
         admitOpenCodeTui: (identity) => {
@@ -155,24 +161,53 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
     if (!paneKey) {
       return { event: normalizeHookPayload(this.state, source, body, this.env) }
     }
-    const previousRunningTask = this.state.claudeRunningNonAgentTaskPaneKeys.has(paneKey)
-    const previousActiveCron = this.state.claudeActiveSessionCronPaneKeys.has(paneKey)
-    const event = normalizeHookPayload(this.state, source, body, this.env)
+    const rawHookPayload = readHookPayload(body)
+    const eventName = rawHookPayload['hook_event_name']
+    const transcriptEvidence = await readClaudeTaskNotificationEvidence(
+      this.state,
+      paneKey,
+      eventName,
+      rawHookPayload
+    )
+    const tracksTranscriptObservation =
+      eventName === 'Stop' ||
+      eventName === 'StopFailure' ||
+      eventName === 'SubagentStart' ||
+      eventName === 'SubagentStop'
+    const isIdlePrompt =
+      eventName === 'Notification' && rawHookPayload['notification_type'] === 'idle_prompt'
+    const hasIdlePromptTaskObservation =
+      isIdlePrompt && hasClaudeIdlePromptTaskObservation(this.state, paneKey, rawHookPayload)
+    const admissionOptions = {
+      transcript: tracksTranscriptObservation || hasIdlePromptTaskObservation,
+      idlePrompt: hasIdlePromptTaskObservation
+    }
+    const previousAdmissionState = captureClaudeTaskAdmissionState(
+      this.state,
+      paneKey,
+      admissionOptions
+    )
+    const event = normalizeHookPayload(this.state, source, body, this.env, {
+      claudeTaskTranscriptEvidence: transcriptEvidence
+    })
     const transcriptPath = event?.providerSession?.transcriptPath
     if (transcriptPath) {
       // A wrapper's CLAUDE_CONFIG_DIR is only visible here; History scans it too (#23505).
       getClaudeObservedConfigDirs()?.observeTranscriptPath(transcriptPath)
     }
-    const nextRunningTask = this.state.claudeRunningNonAgentTaskPaneKeys.has(paneKey)
-    const nextActiveCron = this.state.claudeActiveSessionCronPaneKeys.has(paneKey)
-    this.setClaudeBackgroundEvidence(paneKey, previousRunningTask, previousActiveCron)
+    const nextAdmissionState = captureClaudeTaskAdmissionState(
+      this.state,
+      paneKey,
+      admissionOptions
+    )
+    restoreClaudeTaskAdmissionState(this.state, paneKey, previousAdmissionState)
     if (!event || event.paneKey !== paneKey) {
       return { event }
     }
     // Nested CLIs inherit pane keys; rejected status must not change the owner's background-work gate.
     return {
       event,
-      onAccepted: () => this.setClaudeBackgroundEvidence(paneKey, nextRunningTask, nextActiveCron)
+      onAccepted: () => restoreClaudeTaskAdmissionState(this.state, paneKey, nextAdmissionState)
     }
   }
 
@@ -183,7 +218,7 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
     }
     const token = this.token
     const statusHookGeneration = this.statusHookGeneration
-    const apply = () => {
+    const apply = async () => {
       if (
         !this.statusHooksEnabled ||
         this.token !== token ||
@@ -191,18 +226,18 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
       ) {
         throw new Error('Status hook spool replay interrupted')
       }
-      this.applySpoolHook(record, body)
+      await this.applySpoolHook(record, body)
     }
     const body = this.normalizeHookBodyPaneKeyAlias(buildSpoolHookBody(record))
     const pending = this.checkHookOwner(record.source, body, answerBy)
     return pending ? pending.then(apply) : apply()
   }
 
-  private applySpoolHook(record: SpoolRecord, body: unknown): void {
+  private async applySpoolHook(record: SpoolRecord, body: unknown): Promise<void> {
     if (!isAgentHookSource(record.source)) {
       return
     }
-    const normalized = this.normalizeLocalHookPayload(record.source, body, true)
+    const normalized = await this.normalizeLocalHookPayload(record.source, body, true)
     if (!normalized.event) {
       return
     }
@@ -232,4 +267,15 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
       this.withdrawReplayObservation(this.resolvePaneKeyAlias(event.paneKey))
     }
   }
+}
+
+function readHookPayload(body: unknown): Record<string, unknown> {
+  if (!isRecord(body) || !isRecord(body.payload)) {
+    return {}
+  }
+  return body.payload
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }

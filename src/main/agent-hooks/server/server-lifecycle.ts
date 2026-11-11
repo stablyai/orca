@@ -142,7 +142,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
           res.end()
           return
         }
-        const normalized = this.normalizeLocalHookPayload(source, aliasedBody)
+        const normalized = await this.normalizeLocalHookPayload(source, aliasedBody)
         if (source === 'muse' && !normalized.event) {
           this.rearmIgnoredMuseHook(aliasedBody)
         }

@@ -1,4 +1,5 @@
 import { normalizeHostTurnRevision } from '../../../shared/agent-hook-listener/transport/agent-hook-interrupt-reconciliation'
+import { applyClaudeRemoteTaskEvidence } from '../../../shared/agent-hook-listener/claude-task-notification-state'
 import { readAgentProcessPresence } from '../../../shared/agent-status/process/agent-process-presence'
 import { trackEmptyPaneKeyHook } from './server-transport-rules'
 import {
@@ -299,11 +300,11 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       event,
       applyClaudeBackgroundWork
         ? () => {
-            if (envelope.claudeRunningNonAgentTask) {
-              this.state.claudeRunningNonAgentTaskPaneKeys.add(paneKey)
-            } else {
-              this.state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
-            }
+            applyClaudeRemoteTaskEvidence(
+              this.state,
+              paneKey,
+              envelope.claudeRunningNonAgentTask === true
+            )
           }
         : undefined,
       'hook',

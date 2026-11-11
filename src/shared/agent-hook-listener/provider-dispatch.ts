@@ -34,6 +34,7 @@ import { normalizeDshEvent } from './providers/dsh-events'
 import { normalizeZCodeEvent } from './providers/zcode-events'
 import { normalizeJcodeEvent } from './providers/jcode-events'
 import { normalizeKiroEvent } from './providers/kiro-events'
+import type { ClaudeTaskNotificationTranscriptEvidence } from '../claude-task-notification-transcript'
 
 export type ProviderDispatchResult = {
   payload: ParsedAgentStatusPayload | null
@@ -58,6 +59,7 @@ export function normalizeProviderEvent(input: {
   envelope: Record<string, unknown>
   extractedPrompt: ExtractedPromptText
   previousOpenCodeMainAgent?: AgentMainAgentStatus
+  claudeTaskTranscriptEvidence?: ClaudeTaskNotificationTranscriptEvidence
 }): ProviderDispatchResult {
   const { state, source, promptText, paneKey, hookPayload, envelope, extractedPrompt } = input
   // Ephemeral side chats share the pane but must not replace its recorded main turn.
@@ -89,7 +91,14 @@ export function normalizeProviderEvent(input: {
       )
       break
     case 'claude':
-      payload = normalizeClaudeEvent(state, eventName, promptText, paneKey, hookPayload)
+      payload = normalizeClaudeEvent(
+        state,
+        eventName,
+        promptText,
+        paneKey,
+        hookPayload,
+        input.claudeTaskTranscriptEvidence
+      )
       break
     case 'codex':
       payload = normalizeCodexEvent(
@@ -204,7 +213,14 @@ export function normalizeProviderEvent(input: {
       )
       break
     case 'qwen-code': {
-      const normalized = normalizeClaudeEvent(state, eventName, promptText, paneKey, hookPayload)
+      const normalized = normalizeClaudeEvent(
+        state,
+        eventName,
+        promptText,
+        paneKey,
+        hookPayload,
+        input.claudeTaskTranscriptEvidence
+      )
       payload = normalized ? { ...normalized, agentType: 'qwen-code' } : null
       break
     }

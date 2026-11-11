@@ -194,7 +194,9 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
         void discovery
           .then(() => {
             if (this.server) {
-              this.applyAssistantMessageRetry(source, body, original, 1, true)
+              void this.applyAssistantMessageRetry(source, body, original, 1, true).catch((err) => {
+                console.error('[agent-hooks] assistant message retry failed:', err)
+              })
             }
           })
           .catch((err) => {
@@ -204,12 +206,16 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
       }
     }
     const timer = setTimeout(() => {
-      try {
-        this.assistantMessageRetryTimers.delete(original.paneKey)
-        this.applyAssistantMessageRetry(source, body, original, attempt + 1, discoveryReady)
-      } catch (err) {
+      this.assistantMessageRetryTimers.delete(original.paneKey)
+      void this.applyAssistantMessageRetry(
+        source,
+        body,
+        original,
+        attempt + 1,
+        discoveryReady
+      ).catch((err) => {
         console.error('[agent-hooks] assistant message retry failed:', err)
-      }
+      })
     }, ASSISTANT_MESSAGE_RETRY_MS)
     this.assistantMessageRetryTimers.set(original.paneKey, timer)
     if (typeof timer.unref === 'function') {
@@ -217,13 +223,13 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     }
   }
 
-  protected applyAssistantMessageRetry(
+  protected async applyAssistantMessageRetry(
     source: AgentHookSource,
     body: unknown,
     original: EnrichedAgentHookEventPayload,
     nextAttempt: number,
     requireExactOriginal: boolean
-  ): void {
+  ): Promise<void> {
     const current = this.state.lastStatusByPaneKey.get(original.paneKey) as
       | EnrichedAgentHookEventPayload
       | undefined
@@ -236,7 +242,7 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     ) {
       return
     }
-    const normalized = this.normalizeLocalHookPayload(source, body)
+    const normalized = await this.normalizeLocalHookPayload(source, body)
     if (!normalized.event?.payload.lastAssistantMessage) {
       this.scheduleAssistantMessageRetry(source, body, original, nextAttempt, requireExactOriginal)
       return

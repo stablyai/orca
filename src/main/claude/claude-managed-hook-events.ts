@@ -20,6 +20,10 @@ export const CLAUDE_EVENTS = [
     eventName: 'Stop',
     definition: { hooks: [{ type: 'command', command: '' }] }
   },
+  {
+    eventName: 'Notification',
+    definition: { matcher: 'idle_prompt', hooks: [{ type: 'command', command: '' }] }
+  },
   // OpenClaude emits StopFailure instead of Stop after API or model errors.
   {
     eventName: 'StopFailure',

@@ -29,6 +29,7 @@ import { readString } from '../tool-input-preview'
 import { readClaudeBatchSettledRequests } from '../claude-settled-permission-requests'
 import { withClaudeToolRequestId } from '../claude-tool-request-identity'
 import { hasSeparateHookSessionAdmission, readPaneSessionContext } from '../pane-provider-session'
+import type { ClaudeTaskNotificationTranscriptEvidence } from '../../claude-task-notification-transcript'
 /** Canonical transport-agnostic normalization entry shared by main and relay listeners. */
 
 export function normalizeHookPayload(
@@ -40,6 +41,7 @@ export function normalizeHookPayload(
     deferCompactOwnershipToClient?: boolean
     previousOpenCodeMainAgent?: AgentMainAgentStatus
     bindingStatusByPaneKey?: ReadonlyMap<string, AgentHookEventPayload>
+    claudeTaskTranscriptEvidence?: ClaudeTaskNotificationTranscriptEvidence
     admitOpenCodeTui?: (
       identity: Pick<
         AgentHookEventPayload,
@@ -234,7 +236,8 @@ export function normalizeHookPayload(
     hookPayload: providerHookPayload,
     envelope: record,
     extractedPrompt,
-    previousOpenCodeMainAgent: options.previousOpenCodeMainAgent
+    previousOpenCodeMainAgent: options.previousOpenCodeMainAgent,
+    claudeTaskTranscriptEvidence: options.claudeTaskTranscriptEvidence
   })
   const providerSessionOnly =
     (source === 'pi' || source === 'prime-agent' || source === 'jcode') &&

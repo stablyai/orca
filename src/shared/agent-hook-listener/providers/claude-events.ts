@@ -9,8 +9,6 @@ import { readClaudeBackgroundAgentTasks } from '../../claude-background-task-inv
 import {
   claudeRosterHasRestoredSnapshotSubagent,
   claudeRosterHasRuntimeWorkingSubagent,
-  foldClaudeBackgroundTasksIntoRoster,
-  isClaudeChildTurnEndEvent,
   reapUnconfirmedRestoredClaudeSubagents,
   upsertWorkingClaudeSubagent
 } from '../../claude-subagent-roster'
@@ -20,12 +18,11 @@ import { shouldIgnoreCompactContinuationUserPromptSubmit } from '../prompt-field
 import { readString } from '../tool-input-preview'
 import {
   buildClaudeCachedLeadStatusPayload,
-  normalizeClaudeSubagentLifecycleEvent
+  normalizeClaudeLifecycleEventIfNeeded
 } from './claude-lifecycle-events'
 import {
   getOrCreateClaudeSubagentRoster,
   setClaudeMainAgentTurnState,
-  updateClaudeRunningNonAgentTask,
   voidClaimsOfReplacedClaudeSession
 } from './claude-roster-state'
 import {
@@ -36,7 +33,16 @@ import {
 import { buildClaudeStatusPayload } from './claude-status-build'
 import { claudeWaitRequest, settleClaudeToolBatch } from './claude-tool-request-wait'
 import { trackClaudeTaskNotificationDelivery } from './claude-task-notification-delivery'
+import { clearClaudeTaskNotificationPane } from '../claude-task-notification-state'
+import {
+  recordClaudeStopTaskInventory as recordStopTaskInventory,
+  readClaudeTurnBoundaryEvidence,
+  resolveClaudeReportedStateName,
+  resolveClaudeTaskWakeupTurn,
+  updateClaudeBackgroundStatus
+} from './claude-task-notification-status'
 import { recordClaudeTeammateSpawn } from './claude-teammate-spawn'
+import type { ClaudeTaskNotificationTranscriptEvidence } from '../../claude-task-notification-transcript'
 
 const CLAUDE_HOOK_AGENT_ID_PREFIX = 'hook-agent-'
 
@@ -45,15 +51,19 @@ export function normalizeClaudeEvent(
   eventName: unknown,
   promptText: string,
   paneKey: string,
-  hookPayload: Record<string, unknown>
+  hookPayload: Record<string, unknown>,
+  transcriptEvidence?: ClaudeTaskNotificationTranscriptEvidence
 ): ParsedAgentStatusPayload | null {
   const eventAgentId = readString(hookPayload, 'agent_id')
-  if (
-    eventName === 'SubagentStart' ||
-    eventName === 'TeammateIdle' ||
-    isClaudeChildTurnEndEvent(eventName, eventAgentId)
-  ) {
-    return normalizeClaudeSubagentLifecycleEvent(state, eventName, paneKey, hookPayload)
+  const lifecycleEvent = normalizeClaudeLifecycleEventIfNeeded(
+    state,
+    eventName,
+    paneKey,
+    hookPayload,
+    transcriptEvidence?.position
+  )
+  if (lifecycleEvent !== undefined) {
+    return lifecycleEvent
   }
   voidClaimsOfReplacedClaudeSession(state, eventName, eventAgentId, paneKey, hookPayload)
   if (eventName === 'SessionStart') {
@@ -65,8 +75,7 @@ export function normalizeClaudeEvent(
     }
     // New sessions must not inherit old child/task/cron gates.
     state.claudeSubagentRosterByPaneKey.delete(paneKey)
-    state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
-    state.claudeActiveSessionCronPaneKeys.delete(paneKey)
+    clearClaudeTaskNotificationPane(state, paneKey)
     state.claudeLaunchedBackgroundTasksByPaneKey.delete(paneKey)
     // New sessions start a new main-agent clock.
     setClaudeMainAgentTurnState(state, paneKey, { state: 'done', stateStartedAt: Date.now() })
@@ -78,7 +87,14 @@ export function normalizeClaudeEvent(
   }
   const previousLead = state.claudeLeadStateByPaneKey.get(paneKey)
   // Only Stop/StopFailure carries a turn verdict; cancellation never retires surviving shell/cron/subagent work.
-  const isTurnBoundary = eventName === 'Stop' || eventName === 'StopFailure'
+  const { isTurnBoundary, reconciledIdlePrompt } = readClaudeTurnBoundaryEvidence(
+    state,
+    paneKey,
+    eventName,
+    eventAgentId,
+    hookPayload,
+    transcriptEvidence
+  )
   // Plain Stop has unknown outcome. Carry inferred cancellation; is_interrupt remains a secondary source for supporting builds.
   const outcome = !isTurnBoundary
     ? undefined
@@ -96,8 +112,6 @@ export function normalizeClaudeEvent(
     recordClaudeTeammateSpawn(state, paneKey, hookPayload)
   }
   const sessionCrons = hookPayload['session_crons']
-  const sessionCronInventoryPresent = Array.isArray(sessionCrons)
-  const hasActiveSessionCron = sessionCronInventoryPresent && sessionCrons.length > 0
 
   if (shouldIgnoreCompactContinuationUserPromptSubmit(eventName, promptText)) {
     return null
@@ -129,34 +143,25 @@ export function normalizeClaudeEvent(
   if (eventName === 'PostToolBatch') {
     return settleClaudeToolBatch(state, eventName, promptText, paneKey, hookPayload, eventAgentId)
   }
-  const reportedStateName =
-    eventName === 'UserPromptSubmit' ||
-    eventName === 'PostToolUse' ||
-    eventName === 'PostToolUseFailure' ||
-    (eventName === 'PreToolUse' && !isAskUserQuestion)
-      ? 'working'
-      : eventName === 'PermissionRequest' || eventName === 'Elicitation' || isAskUserQuestion
-        ? 'waiting'
-        : isTurnBoundary || isManualCompactCompletion
-          ? 'done'
-          : null
+  const reportedStateName = resolveClaudeReportedStateName(
+    eventName,
+    isTurnBoundary,
+    isManualCompactCompletion,
+    isAskUserQuestion,
+    reconciledIdlePrompt
+  )
 
   if (!reportedStateName) {
     return null
   }
-  if (backgroundTasks.present && eventAgentId === undefined) {
-    updateClaudeRunningNonAgentTask(state, paneKey, backgroundTasks.hasRunningNonAgentTask)
-  }
-  if (sessionCronInventoryPresent && eventAgentId === undefined) {
-    if (hasActiveSessionCron) {
-      state.claudeActiveSessionCronPaneKeys.add(paneKey)
-    } else {
-      state.claudeActiveSessionCronPaneKeys.delete(paneKey)
-    }
-  } else if (eventAgentId === undefined && isTurnBoundary && backgroundTasks.present) {
-    // Why: current Claude may omit an empty cron inventory while still emitting background_tasks.
-    state.claudeActiveSessionCronPaneKeys.delete(paneKey)
-  }
+  updateClaudeBackgroundStatus(
+    state,
+    paneKey,
+    backgroundTasks,
+    sessionCrons,
+    eventAgentId,
+    isTurnBoundary
+  )
 
   const eventToolUseId = readFirstString(hookPayload, ['tool_use_id', 'toolUseId'])
   const previousTool = state.lastToolByPaneKey.get(paneKey)
@@ -228,17 +233,8 @@ export function normalizeClaudeEvent(
     })
   }
 
-  if (isTurnBoundary && eventAgentId === undefined) {
-    // Teammates can report running while idle; trust only unambiguous background_tasks entries and retain tracking for older builds.
-    if (backgroundTasks.present) {
-      foldClaudeBackgroundTasksIntoRoster(
-        getOrCreateClaudeSubagentRoster(state, paneKey),
-        backgroundTasks.tasks,
-        Date.now(),
-        { inventoryComplete: !backgroundTasks.truncated }
-      )
-    }
-  }
+  const isLeadTurnBoundary = isTurnBoundary && eventAgentId === undefined
+  recordStopTaskInventory(state, paneKey, backgroundTasks, isLeadTurnBoundary, transcriptEvidence)
   // Preserve the original lead stash through multiple child waits.
   const stateBeforeWait =
     // Without a lead record there is no turn to resume; an answered dialog must not invent work.
@@ -272,10 +268,14 @@ export function normalizeClaudeEvent(
     }
   }
 
-  const taskWakeupTurn =
-    eventName === 'UserPromptSubmit'
-      ? isTaskWakeup
-      : !isTurnBoundary && !isManualCompactCompletion && previousLead?.taskWakeupTurn === true
+  const taskWakeupTurn = resolveClaudeTaskWakeupTurn(
+    eventName,
+    isTaskWakeup,
+    isTurnBoundary,
+    isManualCompactCompletion,
+    reconciledIdlePrompt,
+    previousLead?.taskWakeupTurn === true
+  )
   const resolvedStatus = resolveClaudePaneStatus(state, paneKey, {
     state: reportedStateName,
     ...(taskWakeupTurn ? { taskWakeupTurn: true as const } : {})
@@ -286,7 +286,7 @@ export function normalizeClaudeEvent(
   // Stamp (announce now, pair the later all-clear) only a held turn that already counts as finished; cancelled turns earn none.
   const turnCompletedAt =
     eventAgentId === undefined &&
-    isTurnBoundary &&
+    (isTurnBoundary || reconciledIdlePrompt) &&
     outcome !== 'cancellation' &&
     isAgentStatusHeldOpenByChildWork({
       state: resolvedStatus.stateName,

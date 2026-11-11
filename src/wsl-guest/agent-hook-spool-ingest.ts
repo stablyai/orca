@@ -51,7 +51,7 @@ export function ingestRelayHookSpoolRecord(
   }
   const body = buildSpoolHookBody(record)
   const source = record.source
-  const apply = () => {
+  const apply = async () => {
     if (host.isCurrent && !host.isCurrent()) {
       throw new Error('Relay hook spool replay interrupted')
     }
@@ -63,7 +63,7 @@ export function ingestRelayHookSpoolRecord(
       deferCompactOwnershipToClient: true
     }
     const event = host.providerNormalization
-      ? host.providerNormalization.normalize(state, record.source, body, env, options)
+      ? await host.providerNormalization.normalizeAsync(state, record.source, body, env, options)
       : normalizeHookPayload(state, record.source, body, env, options)
     if (event) {
       host.apply(event, record.source, hookBodyEnv(body), hookBodyVersion(body), {

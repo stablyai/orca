@@ -15,6 +15,7 @@ import type { AgentHookEventPayload } from '../shared/agent-hook-listener/listen
 import type { AgentHookSource } from '../shared/agent-hook-listener/transport/agent-hook-relay'
 import { cacheRelayLegacyAgentStatus } from '../shared/agent-status/transport/agent-status-legacy-relay-cache'
 import { MAX_CACHED_PANES } from './agent-hook-cached-pane-status'
+import { readClaudeTaskNotificationEvidenceFromBody } from '../shared/agent-hook-listener/providers/claude-task-notification-evidence-reader'
 
 /** Forward every provider; only the client knows about desktop-only owner completion. */
 export class RelayProviderHookNormalization {
@@ -26,6 +27,33 @@ export class RelayProviderHookNormalization {
     body: unknown,
     env: string,
     options: Parameters<typeof normalizeHookPayload>[4] = {}
+  ): AgentHookEventPayload | null {
+    return this.normalizeWithOptions(canonical, source, body, env, options)
+  }
+
+  async normalizeAsync(
+    canonical: HookListenerState,
+    source: AgentHookSource,
+    body: unknown,
+    env: string,
+    options: Parameters<typeof normalizeHookPayload>[4] = {}
+  ): Promise<AgentHookEventPayload | null> {
+    if (source !== 'claude') {
+      return this.normalizeWithOptions(canonical, source, body, env, options)
+    }
+    const transcriptEvidence = await readClaudeTaskNotificationEvidenceFromBody(canonical, body)
+    return this.normalizeWithOptions(canonical, source, body, env, {
+      ...options,
+      claudeTaskTranscriptEvidence: transcriptEvidence
+    })
+  }
+
+  private normalizeWithOptions(
+    canonical: HookListenerState,
+    source: AgentHookSource,
+    body: unknown,
+    env: string,
+    options: Parameters<typeof normalizeHookPayload>[4]
   ): AgentHookEventPayload | null {
     // Why: the owner's own provider folds would take the guest's prompt and tools.
     if (isOwnerProviderGuestHook(canonical, source, body, env)) {

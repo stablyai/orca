@@ -255,7 +255,7 @@ export abstract class AgentHookServerState {
     original: EnrichedAgentHookEventPayload,
     nextAttempt: number,
     requireExactOriginal: boolean
-  ): void
+  ): Promise<void>
   protected abstract getPersistedPaneKeyAliases(): LegacyPaneKeyAliasEntry[]
   protected abstract notifyPaneKeyAliasPersistenceListener(): void
   protected abstract boundPaneKeyAliases(): void
@@ -267,7 +267,7 @@ export abstract class AgentHookServerState {
   protected abstract normalizeLocalHookPayload(
     source: AgentHookSource,
     body: unknown
-  ): NormalizedLocalHook
+  ): Promise<NormalizedLocalHook>
   protected abstract setClaudeBackgroundEvidence(
     paneKey: string,
     hasRunningTask: boolean,

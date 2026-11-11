@@ -616,7 +616,7 @@
       "id": "agent-status.claude-task-wakeup-cycle",
       "title": "Claude task wake-ups cannot finish an automation before its lead turn",
       "maturity": "experimental",
-      "protection": "none",
+      "protection": "partial",
       "owner": "agent-status",
       "layer": "execution-host-hooks-and-runtime-wait",
       "surfaces": [
@@ -626,19 +626,53 @@
       ],
       "platforms": ["macos", "linux", "windows"],
       "providers": ["local", "ssh", "wsl", "remote-runtime"],
-      "coveredPlatforms": [],
+      "coveredPlatforms": ["macos"],
       "coveredProviders": [],
       "coverageNotes": "Audit1401 intentionally deletes or reduces the listed sources. No fresh execution result validates their reduced selectors. Historical coverage account: The reduced six-file selector passed 125 cases on Linux, exercising real HTTP hook ingress and the existing runtime automation observer. SSH/WSL ownership remains simulated; no physical remote-host, native macOS/Windows, task capacity or timer/resource-budget claim. Audit1318: src/shared/agent-hook-listener/normalization/agent-hook-listener-claude-task-notification.test.ts: Hand-built task notifications/cap inventories plus a manually assembled normalize/cache/expiry-timer host run under fake clocks with production lease constants and private state. No actual main/relay entry or provider delivery. Intentionally lose owed-task/Monitor/teammate/reset/notification expiry and cancellation-restatement alarms; no equivalent replacement claimed. Reduced selectors need fresh validation; historical full-suite receipts do not validate the changed coverage. No equivalent replacement or physical-provider claim. Audit1401: src/main/ssh/ssh-agent-hook-interrupt-reconciliation.test.ts removed. Loses current-host proof, foreign/disposed/unsubscribed and legacy interrupt dispatch fence alarms. No equivalent replacement coverage is claimed.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/24878",
         "https://github.com/stablyai/orca/issues/23942"
       ],
-      "invariant": "An ended tracked task stays pending until its wake-up and finishing turn end; missing wake-ups expire only after 60 idle seconds. Cancellation remains owned by the executing host, duplicate delivery cannot create a fresh completion veto, and fresh native rest can recover a lost finishing Stop.",
-      "oracle": "No current automated execution oracle is claimed for this gate after Audit1401 retired changed-source receipts. Historical oracle account: Replay captured hook ordering through production HTTP entry points and native ready bytes through the actual automation observer. Check local/relay state, cancellation/new-turn fencing, fresh versus retained rest, zero global status reads during indexed runtime waits.",
-      "commands": [],
-      "testFiles": [],
-      "assertionRefs": [],
-      "evidenceRuns": [],
+      "invariant": "An ended tracked task stays pending until its wake-up and finishing turn end; missing wake-ups expire only after 60 idle seconds. Cancellation remains owned by the executing host, duplicate delivery cannot create a fresh completion veto, and fresh native rest can recover a lost finishing Stop. For the reported missed-SubagentStop path, only a matching provider-authored terminal task notification after that task incarnation's transcript boundary may retire it at idle_prompt; missing or ambiguous evidence remains fail-active.",
+      "oracle": "A narrow current oracle covers transcript provenance, local/remote multi-child retirement, and same-ID resume protection. It does not restore retired task/timer bounds or claim physical remote-provider coverage. Historical oracle account: Replay captured hook ordering through production HTTP entry points and native ready bytes through the actual automation observer. Check local/relay state, cancellation/new-turn fencing, fresh versus retained rest, zero global status reads during indexed runtime waits.",
+      "commands": [
+        "pnpm test src/shared/claude-task-notification-transcript.test.ts src/shared/claude-background-task-status.test.ts src/main/agent-hooks/server/testing/task-wakeup/server-claude-task-wakeup-lifecycle.test.ts src/main/claude/claude-hook-event-versions.test.ts src/main/agent-hooks/server/testing/http/server-hook-http-ingest.test.ts"
+      ],
+      "testFiles": [
+        "src/shared/claude-task-notification-transcript.test.ts",
+        "src/shared/claude-background-task-status.test.ts",
+        "src/main/agent-hooks/server/testing/task-wakeup/server-claude-task-wakeup-lifecycle.test.ts",
+        "src/main/claude/claude-hook-event-versions.test.ts",
+        "src/main/agent-hooks/server/testing/http/server-hook-http-ingest.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/shared/claude-task-notification-transcript.test.ts",
+          "assertions": [
+            "accepts only current-session provider-authored terminal task notifications",
+            "does not let a notification from before a resumed task end that incarnation",
+            "does not accept terminal evidence outside the bounded scan window"
+          ]
+        },
+        {
+          "file": "src/main/agent-hooks/server/testing/task-wakeup/server-claude-task-wakeup-lifecycle.test.ts",
+          "assertions": [
+            "retires only the notified child at an idle prompt boundary",
+            "does not apply an earlier notification to a resumed task with the same id"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-11-09",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm test src/shared/claude-task-notification-transcript.test.ts src/shared/claude-background-task-status.test.ts src/main/agent-hooks/server/testing/task-wakeup/server-claude-task-wakeup-lifecycle.test.ts src/main/claude/claude-hook-event-versions.test.ts src/main/agent-hooks/server/testing/http/server-hook-http-ingest.test.ts",
+          "result": "passed",
+          "durationSeconds": 3.54,
+          "summary": "Test Files 5 passed (5); Tests 80 passed (80). Local and remote-ingress paths are fixture-driven; no physical SSH/WSL or Windows claim."
+        }
+      ],
       "runtimeBudget": {
         "p95Seconds": 30,
         "scope": "Historical prior-selector budget; reduced selector has no new runtime measurement."
@@ -653,12 +687,13 @@
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Historical budget only after Audit1401 changed test sources; no new measurement. Previous account: Audit1297 removed direct task-map capacity and timer/publication count assertions. Indexed runtime read suites remain listed, but the reduced selector has no new run. No current task/timer resource-budget proof is claimed."
+        "evidence": "No timing, CPU, or heap measurement is claimed. The added idle_prompt path opens the current transcript once, reads at most 4 MiB, and retains at most 256 task observations per pane; the focused tests validate the fail-active scan boundary. Historical budget only after Audit1401 changed test sources; previous account: Audit1297 removed direct task-map capacity and timer/publication count assertions. Indexed runtime read suites remain listed, but the reduced selector has no new run. No broader task/timer resource-budget proof is claimed."
       },
       "knownGaps": [
         "Missing notifications intentionally postpone completion up to 60 idle seconds plus the existing runtime polling interval.",
         "Older remote hosts without optional phase/revision metadata retain their previous behavior.",
         "Physical SSH/WSL, native Windows/Linux, packaged Electron and an authenticated end-to-end Claude automation run are unverified.",
+        "The Pi reconnect/tab-workspace spinner in #15317 is a separate renderer-title path, covered by merged #34729 and its web-session-tabs-sync-stale-spinner regression; no reporter retest or physical paired-host replay is known.",
         "Audit1297: src/shared/agent-hook-listener/normalization/agent-hook-listener-claude-reordered-task-notification.test.ts removed. Lose unmatched/restored/foreign-session/end admission and delayed notification/end/launch/rearm ordering alarms. src/shared/agent-hook-listener/providers/claude-owed-notification-resource-contract.test.ts removed. Lose bounded pending notifications, obligation expiration/rearm and stale timer/lease cleanup alarms. No equivalent replacement coverage is claimed.",
         "Audit1297 retires this complete dated receipt because a source in its selector was removed. It does not validate the reduced selector. Original receipt verbatim:\n{\n          \"date\": \"2026-10-06\",\n          \"runner\": \"local\",\n          \"platform\": \"macos\",\n          \"command\": \"ORCA_BACKGROUND_LAUNCH=1 node node_modules/vitest/vitest.mjs run --config config/vitest.config.ts src/main/agent-hooks/server-claude-task-wakeup-lifecycle.test.ts src/main/runtime/tui-idle-claude-task-wakeup.test.ts src/main/runtime/tui-idle-hook-lane-runtime.test.ts src/shared/claude-owed-notification-resource-contract.test.ts src/shared/agent-hook-listener-claude-task-notification.test.ts src/shared/agent-hook-listener-claude-reordered-task-notification.test.ts src/wsl-guest/agent-hook-interrupt-reconciliation.test.ts src/main/ssh/ssh-agent-hook-interrupt-reconciliation.test.ts\",\n          \"currentCommand\": \"ORCA_BACKGROUND_LAUNCH=1 node node_modules/vitest/vitest.mjs run --config config/vitest.config.ts src/main/agent-hooks/server-claude-task-wakeup-lifecycle.test.ts src/main/runtime/tui-idle-claude-task-wakeup.test.ts src/main/runtime/tui-idle-hook-lane-runtime.test.ts src/shared/agent-hook-listener/providers/claude-owed-notification-resource-contract.test.ts src/shared/agent-hook-listener/normalization/agent-hook-listener-claude-task-notification.test.ts src/shared/agent-hook-listener/normalization/agent-hook-listener-claude-reordered-task-notification.test.ts src/wsl-guest/agent-hook-interrupt-reconciliation.test.ts src/main/ssh/ssh-agent-hook-interrupt-reconciliation.test.ts\",\n          \"result\": \"passed\",\n          \"durationSeconds\": 8.62,\n          \"summary\": \"Exact stored command with repository Vitest configuration passes 148 tests across eight files including out-of-order launch/end/delivery controls. Includes real HTTP/relay ingress, 12 blank/padded Agent/Bash/Monitor IDs, captured-native-rest automation completion, duplicate/cancellation controls, owner/phase gates, timer/task bounds and indexed reads. Three upstream interrupt suites pass 28 more tests separately. This dated receipt is unchanged; command now names the relocated test selector, not a new run. Original 2026-10-06 command: ORCA_BACKGROUND_LAUNCH=1 node node_modules/vitest/vitest.mjs run --config config/vitest.config.ts src/main/agent-hooks/server-claude-task-wakeup-lifecycle.test.ts src/main/runtime/tui-idle-claude-task-wakeup.test.ts src/main/runtime/claude-task-wakeup-indexed-read.test.ts src/shared/claude-owed-notification-resource-contract.test.ts src/shared/agent-hook-listener-claude-task-notification.test.ts src/shared/agent-hook-listener-claude-reordered-task-notification.test.ts src/wsl-guest/agent-hook-interrupt-reconciliation.test.ts src/main/ssh/ssh-agent-hook-interrupt-reconciliation.test.ts\"\n        }",
         "Audit1297 retained but unvalidated assertion inventory pending a new run of the reduced command:\n[\n  {\n    \"file\": \"src/main/agent-hooks/server-claude-task-wakeup-lifecycle.test.ts\",\n    \"assertions\": [\n      \"does not reopen notification debt for a duplicate child-end post\",\n      \"waits on captured ready bytes through task finishing or missing wake-up expiry: %s\"\n    ]\n  },\n  {\n    \"file\": \"src/main/runtime/tui-idle-hook-lane-runtime.test.ts\",\n    \"assertions\": [\n      \"reads only its pane with 512 unrelated agents, including an empty index: pending=%s\"\n    ]\n  }\n]",
