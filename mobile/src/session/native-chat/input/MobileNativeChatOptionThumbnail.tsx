@@ -5,7 +5,6 @@ import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { colors, radii, spacing, typography, pressedStyle } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
-import { optionPreviewFont } from './mobile-native-chat-option-preview'
 
 const MAX_HEIGHT = 96 - spacing.sm * 2
 
@@ -96,7 +95,7 @@ const styles = themedStyleSheet(() => ({
     top: 0,
     left: 0,
     transformOrigin: 'top left',
-    fontFamily: optionPreviewFont,
+    fontFamily: typography.monoFamily,
     fontSize: typography.metaSize,
     lineHeight: typography.metaSize * 1.25,
     color: colors.textPrimary,

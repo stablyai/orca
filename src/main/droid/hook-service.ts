@@ -49,7 +49,7 @@ const DROID_EVENTS = [
     eventName: 'PostToolUse',
     definition: { matcher: '*', hooks: [{ type: 'command', command: '' }] }
   },
-  // Droid doctor rejects PermissionRequest. Permission waits arrive on Notification.
+  // Droid has no PermissionRequest hook event; approval waits come from PreToolUse and Notification.
   { eventName: 'Notification', definition: { hooks: [{ type: 'command', command: '' }] } }
 ] as const
 

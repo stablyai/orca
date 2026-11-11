@@ -77,7 +77,7 @@ export function AgentLaunchSetupPanel({
   const argumentsKnown = agentPickerArgumentsKnown(entry, draft)
   const effective = agentPickerEffectiveChoices(entry, draft)
   const argumentsView = agentPickerPanelArguments(entry, draft)
-  const models = agentPickerModels(entry)
+  const models = agentPickerModels(entry, draft.surface)
   const defaultsPending =
     draft.surface === 'chat' ? entry.structuredDefaultsPending : entry.defaultsPending
   const seed = getAgentSessionOptionLaunchCatalog(entry.agent)

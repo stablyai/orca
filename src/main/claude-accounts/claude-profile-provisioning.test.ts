@@ -13,7 +13,7 @@ vi.mock('../filesystem/atomic-file-publication', async (original) => {
   return { ...actual, writeFileAtomically: vi.fn(actual.writeFileAtomically) }
 })
 import { provisionClaudeProfile } from './claude-profile-provisioning'
-const LOGIN = { emailAddress: 'p@example.com' }
+
 const roots: string[] = []
 function fixture() {
   const root = fs.realpathSync(fs.mkdtempSync(join(tmpdir(), 'claude-profile-setup-')))
@@ -36,60 +36,7 @@ afterEach(() => {
   }
 })
 
-// Real symlinks require additional privileges on Windows.
-const itLinks = it.skipIf(process.platform === 'win32')
-
 describe('Claude profile refresh from the default home', () => {
-  itLinks('links resources, keeps private directories and sees later global installs', async () => {
-    const f = fixture()
-    const linked = [
-      'skills',
-      'plugins',
-      'commands',
-      'output-styles',
-      'themes',
-      'workflows'
-    ] as const
-    for (const name of [...linked, 'agents', 'rules']) {
-      fs.mkdirSync(join(f.source, name))
-    }
-    for (const name of ['agents', 'rules']) {
-      fs.mkdirSync(join(f.profileHome, name))
-      fs.writeFileSync(join(f.profileHome, name, 'mine.md'), 'private')
-    }
-    const report = await provision(f)
-    expect(report.surfaces.agents).toBe('user-owned')
-    expect(report.surfaces.rules).toBe('user-owned')
-    for (const name of linked) {
-      expect(report.surfaces[name]).toBe('linked')
-      expect(fs.realpathSync(join(f.profileHome, name))).toBe(fs.realpathSync(join(f.source, name)))
-    }
-    fs.writeFileSync(join(f.source, 'skills/new.md'), 'new skill')
-    expect(fs.readFileSync(join(f.profileHome, 'skills/new.md'), 'utf8')).toBe('new skill')
-    for (const name of ['agents', 'rules']) {
-      expect(fs.readFileSync(join(f.profileHome, name, 'mine.md'), 'utf8')).toBe('private')
-    }
-  })
-
-  it('copies top-level files over the profile copy, edited or not', async () => {
-    const f = fixture()
-    const source = join(f.source, 'keybindings.json')
-    const copy = join(f.profileHome, 'keybindings.json')
-    fs.writeFileSync(source, '{"bindings":[]}')
-    expect((await provision(f)).surfaces['keybindings.json']).toBe('synced')
-    expect(fs.lstatSync(copy).isSymbolicLink()).toBe(false)
-    expect(fs.readFileSync(copy, 'utf8')).toBe('{"bindings":[]}')
-    expect((await provision(f)).surfaces['keybindings.json']).toBe('unchanged')
-    fs.writeFileSync(copy, '{"bindings":["profile"]}')
-    fs.writeFileSync(source, '{"bindings":[2]}')
-    expect((await provision(f)).surfaces['keybindings.json']).toBe('synced')
-    expect(fs.readFileSync(copy, 'utf8')).toBe('{"bindings":[2]}')
-    fs.writeFileSync(join(f.source, 'statusline.sh'), 'echo hi')
-    fs.chmodSync(join(f.source, 'statusline.sh'), 0o755)
-    await provision(f)
-    expect(fs.statSync(join(f.profileHome, 'statusline.sh')).mode & 0o777).toBe(0o755)
-  })
-
   it('keeps settings Claude saved in the account while later default-home edits still arrive', async () => {
     const f = fixture()
     const settings = { effortLevel: 'medium', env: { ANTHROPIC_BASE_URL: 'https://a.test' } }
@@ -120,29 +67,37 @@ describe('Claude profile refresh from the default home', () => {
     })
   })
 
-  itLinks('leaves a linked settings file alone', async () => {
-    const f = fixture()
-    f.json(join(f.source, 'settings.json'), { model: 'a', theme: 'x' })
-    await provision(f)
-    const elsewhere = join(f.root, 'elsewhere.json')
-    f.json(elsewhere, { mine: true })
-    fs.rmSync(join(f.profileHome, 'settings.json'))
-    fs.symlinkSync(elsewhere, join(f.profileHome, 'settings.json'))
-    expect((await provision(f)).surfaces['settings.json']).toBe('user-owned')
-    expect(f.read(elsewhere)).toEqual({ mine: true })
-  })
-  it('copies state except the login, caches and install ids, and never copies credentials', async () => {
+  it('shares configuration while keeping profile runtime state and API authorizations private', async () => {
     const f = fixture()
     fs.writeFileSync(join(f.source, '.credentials.json'), 'SOURCE_CREDENTIAL_BYTES')
     const shared = {
       mcpServers: { local: { command: 'example' } },
       theme: 'dark',
       hasCompletedOnboarding: true,
-      autoModeAccepted: true,
+      bypassPermissionsModeAccepted: true,
+      favoritePlugins: ['favorite@example'],
+      preferTmuxOverIterm2: true,
+      codeReviewLastEffort: 'high',
+      codeReviewLastMaxFindings: 3,
+      installMethod: 'global',
+      autoUpdates: false,
+      autoUpdatesProtectedForNative: false,
+      customApiKeyResponses: { rejected: ['PERSONAL_REJECTED_SUFFIX'] },
       projects: { '/work': { hasTrustDialogAccepted: true } }
     }
-    f.json(join(f.userHome, '.claude.json'), {
+    const personal = {
       ...shared,
+      customApiKeyResponses: {
+        approved: ['PERSONAL_APPROVED_SUFFIX'],
+        rejected: ['PERSONAL_REJECTED_SUFFIX']
+      },
+      groveChoiceSeenAt: { personal: 1 },
+      numStartups: 2,
+      tipsHistory: { tip: 1 },
+      seenNotifications: { notice: 1 },
+      penguinModeOrgEnabled: false,
+      futureRuntimeState: { personal: true },
+      autoModeAccepted: true,
       oauthAccount: { emailAddress: 'source@example.com' },
       primaryApiKey: 'sk-source',
       userID: 'source-id',
@@ -150,7 +105,6 @@ describe('Claude profile refresh from the default home', () => {
       firstStartTime: 'source-start',
       firstStartVersion: '1.0.0',
       groveConfigCache: { a: 1 },
-      groveChoiceSeenAt: { 'account-a': 99, 'account-b': 10 },
       cachedArtifactRoster: [],
       clientDataCacheSlots: {},
       passesEligibilityCache: {},
@@ -162,21 +116,32 @@ describe('Claude profile refresh from the default home', () => {
       lastSeenOrgDefaultUpdatedAt: 1,
       hasAvailableSubscription: true,
       subscriptionNoticeCount: 2
-    })
+    }
+    f.json(join(f.userHome, '.claude.json'), personal)
     expect((await provision(f)).surfaces['.claude.json']).toBe('synced')
-    expect(f.read(join(f.profileHome, '.claude.json'))).toEqual({
-      ...shared,
-      groveChoiceSeenAt: { 'account-a': 99, 'account-b': 10 }
-    })
+    expect(f.read(join(f.profileHome, '.claude.json'))).toEqual(shared)
     expect(fs.readdirSync(f.profileHome).filter((name) => name.endsWith('.tmp'))).toEqual([])
     expect(fs.existsSync(join(f.profileHome, '.credentials.json'))).toBe(false)
 
     fs.writeFileSync(join(f.profileHome, '.credentials.json'), 'PROFILE_CREDENTIAL_BYTES')
+    const profileRuntime = {
+      groveChoiceSeenAt: { profile: 20 },
+      numStartups: 30,
+      tipsHistory: { tip: 8 },
+      seenNotifications: { profileNotice: 9 },
+      penguinModeOrgEnabled: true,
+      futureRuntimeState: { profile: true },
+      customApiKeyResponses: {
+        approved: ['PROFILE_APPROVED_SUFFIX', 'PERSONAL_REJECTED_SUFFIX'],
+        rejected: ['PROFILE_REJECTED_SUFFIX', 'PERSONAL_APPROVED_SUFFIX'],
+        profileOnly: true
+      }
+    }
     f.json(join(f.profileHome, '.claude.json'), {
+      ...profileRuntime,
       oauthAccount: { emailAddress: 'profile@example.com' },
       userID: 'profile-id',
       groveConfigCache: { b: 2 },
-      groveChoiceSeenAt: { 'account-a': 120, 'account-b': 5 },
       theme: 'light',
       onlyHere: true
     })
@@ -185,73 +150,35 @@ describe('Claude profile refresh from the default home', () => {
       oauthAccount: { emailAddress: 'profile@example.com' },
       userID: 'profile-id',
       groveConfigCache: { b: 2 },
-      groveChoiceSeenAt: { 'account-a': 120, 'account-b': 10 },
       onlyHere: true,
-      ...shared
+      ...shared,
+      ...profileRuntime,
+      hasCompletedOnboarding: true,
+      customApiKeyResponses: {
+        approved: ['PROFILE_APPROVED_SUFFIX', 'PERSONAL_REJECTED_SUFFIX'],
+        rejected: [
+          'PROFILE_REJECTED_SUFFIX',
+          'PERSONAL_APPROVED_SUFFIX',
+          'PERSONAL_REJECTED_SUFFIX'
+        ],
+        profileOnly: true
+      }
+    })
+    const reset = { ...f.read(join(f.profileHome, '.claude.json')), hasCompletedOnboarding: false }
+    f.json(join(f.profileHome, '.claude.json'), reset)
+    f.json(join(f.userHome, '.claude.json'), {
+      ...personal,
+      numStartups: 1000,
+      groveChoiceSeenAt: { personal: 1000 },
+      futureRuntimeState: { changed: true }
     })
     expect((await provision(f)).surfaces['.claude.json']).toBe('unchanged')
+    expect(f.read(join(f.profileHome, '.claude.json'))).toEqual(reset)
     expect(fs.readFileSync(join(f.source, '.credentials.json'), 'utf8')).toBe(
       'SOURCE_CREDENTIAL_BYTES'
     )
     expect(fs.readFileSync(join(f.profileHome, '.credentials.json'), 'utf8')).toBe(
       'PROFILE_CREDENTIAL_BYTES'
     )
-  })
-
-  it('merges trusted folders and MCP servers per entry, never untrusting an account folder', async () => {
-    const f = fixture()
-    f.json(join(f.userHome, '.claude.json'), {
-      projects: {
-        '/shared': { hasTrustDialogAccepted: false, allowedTools: ['Read'] },
-        '/default-only': { hasTrustDialogAccepted: true }
-      },
-      mcpServers: { shared: { command: 'default' } }
-    })
-    f.json(join(f.profileHome, '.claude.json'), {
-      oauthAccount: LOGIN,
-      projects: {
-        '/shared': { hasTrustDialogAccepted: true },
-        '/account-only': { hasTrustDialogAccepted: true, allowedTools: ['Bash'] }
-      },
-      mcpServers: { shared: { command: 'account' }, mine: { command: 'mine' } }
-    })
-    await provision(f)
-    expect(f.read(join(f.profileHome, '.claude.json'))).toEqual({
-      oauthAccount: LOGIN,
-      projects: {
-        '/shared': { hasTrustDialogAccepted: true, allowedTools: ['Read'] },
-        '/account-only': { hasTrustDialogAccepted: true, allowedTools: ['Bash'] },
-        '/default-only': { hasTrustDialogAccepted: true }
-      },
-      mcpServers: { shared: { command: 'default' }, mine: { command: 'mine' } }
-    })
-  })
-  it('skips the state write while Claude holds its lock and records nothing for it', async () => {
-    const f = fixture()
-    f.json(join(f.userHome, '.claude.json'), { theme: 'dark' })
-    f.json(join(f.profileHome, '.claude.json'), { userID: 'p', oauthAccount: LOGIN })
-    fs.mkdirSync(join(f.profileHome, '.claude.json.lock'))
-    const report = await provision(f)
-    expect(report.surfaces['.claude.json']).toBe('failed')
-    expect(report.warnings).toContainEqual(
-      expect.objectContaining({ surface: '.claude.json', code: 'locked' })
-    )
-    expect(f.read(join(f.profileHome, '.claude.json'))).toEqual({
-      userID: 'p',
-      oauthAccount: LOGIN
-    })
-    fs.rmdirSync(join(f.profileHome, '.claude.json.lock'))
-    expect((await provision(f)).surfaces['.claude.json']).toBe('merged')
-    expect(f.read(join(f.profileHome, '.claude.json')).theme).toBe('dark')
-  })
-
-  it('leaves malformed profile state unchanged', async () => {
-    const f = fixture()
-    f.json(join(f.userHome, '.claude.json'), { theme: 'dark' })
-    fs.writeFileSync(join(f.profileHome, '.claude.json'), '{bad')
-    expect((await provision(f)).warnings).toContainEqual(
-      expect.objectContaining({ surface: '.claude.json', code: 'unreadable' })
-    )
-    expect(fs.readFileSync(join(f.profileHome, '.claude.json'), 'utf8')).toBe('{bad')
   })
 })

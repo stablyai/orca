@@ -7,7 +7,7 @@ import {
   ORCAD_WINDOWS_CLI_LAUNCHER_FILENAME
 } from '../../shared/orcad-artifacts'
 import { nodeFileContentsEqual } from '../../shared/file-content/node-file-content-equality'
-import { buildUnixCliLauncher } from '../cli/cli-dev-launcher'
+import { buildUnixCliLauncher } from '../cli/launchers/cli-dev-launcher'
 import { writeFileAtomically } from '../filesystem/atomic-file-publication'
 import { resolveOrcadInstallRoot, resolveUserDataPath } from './orcad-app-paths'
 

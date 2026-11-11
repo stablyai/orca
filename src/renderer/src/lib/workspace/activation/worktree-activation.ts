@@ -8,10 +8,8 @@ import { workspaceHasSleepingAgentSessions } from '@/lib/workspace/activation/wo
 import { resumeSleepingAgentSessionsForWorktree } from '@/lib/agent-session/resume/resume-sleeping-agent-session'
 import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-terminal'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../../shared/workspace-scope'
-import {
-  folderWorkspaceActivationBlocked,
-  notifyBlockedFolderWorkspacePath
-} from '../paths/folder-workspace-path-status'
+import { notifyBlockedFolderWorkspacePath } from '../paths/folder-workspace-path-status'
+import { blocksFolderWorkspaceActivation } from '../../../../../shared/folder-workspaces/folder-workspace-path-status'
 import {
   findFolderWorkspaceOwner,
   getRuntimeEnvironmentIdForFolderWorkspace
@@ -81,7 +79,7 @@ export function activateAndRevealFolderWorkspaceWithOutcome(
     },
     { runtimeEnvironmentId }
   )
-  if (folderWorkspaceActivationBlocked(pathStatus)) {
+  if (blocksFolderWorkspaceActivation(pathStatus)) {
     notifyBlockedFolderWorkspacePath(pathStatus, folderWorkspace.folderPath)
     return { refused: { reason: 'path-blocked', failureNotified: true } }
   }

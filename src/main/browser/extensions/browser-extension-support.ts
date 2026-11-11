@@ -1,4 +1,4 @@
-// Why a live flag: the experimental setting turns extensions on and off without a restart, so
+// Why a live flag: the Settings switch turns extensions on and off without a restart, so
 // every entry point asks at call time.
 let supportEnabled = false
 

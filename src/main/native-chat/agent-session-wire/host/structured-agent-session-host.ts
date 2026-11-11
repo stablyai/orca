@@ -62,7 +62,8 @@ export class StructuredAgentSessionHost {
   private readonly lifetime: HostTypes.StructuredAgentSessionConversationLifetime
   private readonly conversationDelivery: conversation.StructuredAgentSessionConversationDelivery
   private readonly eventRecovery: StructuredAgentSessionEventRecovery
-  private readonly backgroundTasks: BackgroundTasks
+  /** History and work-state reads, which open a chat at rest without starting its agent. */
+  readonly backgroundTasks: BackgroundTasks
   readonly restartResume: StructuredAgentSessionRestartResume
 
   readonly usageLimitContinue: ReturnType<typeof usageLimit.start>

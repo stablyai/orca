@@ -8,7 +8,7 @@ import { isImeCompositionKeyDown } from '@/lib/text-input/ime/ime-composition-ke
 import { isBlockingJiraUrlIntent } from '../../../../shared/new-workspace/smart-workspace-source-results'
 import { isBlockingLinearUrlIntent } from '../../../../shared/new-workspace/smart-workspace-linear-intent'
 import { isComposerFieldToFieldFocus } from './smart-workspace-source-popover-focus'
-import { replaceCompletedWorkspaceEmojiShortcode } from '@/lib/workspace-emoji-shortcodes'
+import { replaceCompletedWorkspaceEmojiShortcode } from '@/lib/workspace/display/workspace-emoji-shortcodes'
 import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
