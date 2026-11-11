@@ -1,3 +1,4 @@
+import { withOrcaClaudeChatEntrypoint } from '../../../../shared/agent-launch/startup/claude-chat-entrypoint'
 import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
 import {
   assertStructuredAgentResolutionCurrent,
@@ -91,24 +92,6 @@ async function readClaudeChildEnvSources(deps: ClaudeEnvDeps): Promise<ClaudeChi
   return { ...invocation, overlay: overlay ? cloneDefinedEnv(overlay) : undefined, inheritedEnv }
 }
 
-const CLAUDE_ENTRYPOINT_ENV = 'CLAUDE_CODE_ENTRYPOINT'
-
-// Name Orca as the client instead of the SDK's sdk-ts default or a launching Claude's value.
-export function withOrcaClaudeEntrypoint(
-  inheritedEnv: Record<string, string>,
-  overlay: Record<string, string> | undefined,
-  platform: NodeJS.Platform
-): Record<string, string> {
-  const inherited = { ...inheritedEnv }
-  stripInheritedClaudeSessionEnv(inherited, { platform })
-  // The SDK reads only the exact name and otherwise adds its own default, which Windows would pick.
-  return overlayEnvironmentVariables(
-    { ...inherited, [CLAUDE_ENTRYPOINT_ENV]: 'orca' },
-    overlay,
-    platform
-  )
-}
-
 // Merge onto the shell environment to retain PATH and ambient Anthropic auth.
 export function claudeChildEnv(
   sources: ClaudeChildEnvSources,
@@ -116,13 +99,9 @@ export function claudeChildEnv(
   /** False when the session's seal pairs the CLI runtime itself, behind this app's CLI. */
   { runtimeOnPath = true }: { runtimeOnPath?: boolean } = {}
 ): Record<string, string> {
-  const env = decorateEnv(
-    withOrcaClaudeEntrypoint(
-      withoutInheritedClaudeConfigDir(sources.inheritedEnv, process.platform),
-      sources.overlay,
-      process.platform
-    )
-  )
+  const inherited = withoutInheritedClaudeConfigDir(sources.inheritedEnv, process.platform)
+  stripInheritedClaudeSessionEnv(inherited)
+  const env = decorateEnv(overlayEnvironmentVariables(inherited, sources.overlay, process.platform))
   return runtimeOnPath
     ? withCliRuntimeOnPath(sources.command, env, { platform: process.platform })
     : env
@@ -130,12 +109,12 @@ export function claudeChildEnv(
 
 // Version probes need the launch runtime and PATH, without auth credentials.
 export function claudeProbeEnv(sources: ClaudeChildEnvSources): Record<string, string> {
-  return applyClaudeEnvPatch(
-    claudeChildEnv(sources),
-    {},
-    {
-      stripAuthEnv: true,
-      platform: process.platform
-    }
+  return withOrcaClaudeChatEntrypoint(
+    applyClaudeEnvPatch(
+      claudeChildEnv(sources),
+      {},
+      { stripAuthEnv: true, platform: process.platform }
+    ),
+    process.platform
   )
 }

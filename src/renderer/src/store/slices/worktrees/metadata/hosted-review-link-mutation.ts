@@ -14,23 +14,18 @@ import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { WorktreeMeta } from '../../../../../../shared/worktree/meta-types'
 import { normalizeWorkspaceAttachmentUpdate } from '../../../../../../shared/workspace-attachments/workspace-attachments'
 import { applyDetectedWorktreeUpdates } from '../listing/detected-worktree-meta'
-import type { HostedReviewLinkKey } from '../listing/worktree-slice-types'
+
 import {
   CLEARED_HOSTED_REVIEW_LINK_UPDATES,
   HOSTED_REVIEW_LINK_KEYS,
-  canonicalHostedReviewBranchIdentity
+  canonicalHostedReviewBranchIdentity,
+  type HostedReviewLinkKey
 } from '../../../../../../shared/worktree/hosted-review-links'
 import { deleteDetachedOwners, moveDetachedOwners } from './detached-hosted-review-owners'
 import type {
   HostedReviewClearUpdates,
   HostedReviewContext
 } from '../../../../../../shared/worktree/hosted-review-branch-ownership'
-
-export {
-  CLEARED_HOSTED_REVIEW_LINK_UPDATES,
-  HOSTED_REVIEW_LINK_KEYS,
-  canonicalHostedReviewBranchIdentity
-}
 
 export const hostedReviewLinkMutationGenerationByWorktreeId = new Map<string, number>()
 export const hostedReviewLinkClearTombstonesByCopy = new Map<

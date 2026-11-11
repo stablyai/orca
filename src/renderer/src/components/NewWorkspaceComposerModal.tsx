@@ -3,17 +3,17 @@ import { toast } from 'sonner'
 import {
   formatWorkspaceCreateError,
   getWorkspaceCreateErrorToastMessage
-} from '@/lib/workspace-create-error-format'
+} from '@/lib/workspace/creation/workspace-create-error-format'
 import type {
   AgentPickerDraft,
   AgentPickerEntry
 } from '../../../shared/agent-launch/picker/agent-launch-picker'
 import { DirectWorkItemSetupDialog } from './new-workspace/DirectWorkItemSetupDialog'
-import { agentChoicePending } from '@/lib/host-chat-program'
+import { agentChoicePending } from '@/lib/agent-session/launch/inventory/host-chat-program'
 import type { AgentLaunchSurface } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
 import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store/index'
-import { lazyWithRetry } from '@/lib/lazy-with-retry'
+import { lazyWithRetry } from '@/app-shell/startup/lazy-with-retry'
 import {
   Dialog,
   DialogContent,
@@ -32,14 +32,14 @@ import {
   quickWorkspacePickerInputs,
   pickQuickWorkspaceAgent,
   resolveQuickWorkspaceAgentSelection
-} from '@/lib/quick-workspace-agent-selection'
-import { useAgentsOfferedForLaunch } from '@/lib/host-chat-program-acquisition'
-import { shouldAllowComposerEnterSubmitTarget } from '@/lib/new-workspace-enter-guard'
-import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
+} from '@/lib/workspace/creation/quick-workspace-agent-selection'
+import { useAgentsOfferedForLaunch } from '@/lib/agent-session/launch/inventory/host-chat-program-acquisition'
+import { shouldAllowComposerEnterSubmitTarget } from '@/lib/workspace/creation/new-workspace-enter-guard'
+import { isScreenSubmitShortcut } from '@/lib/keyboard/screen-submit-shortcut'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
-import { getWorkspaceComposerInitialFocusTarget } from '@/lib/workspace-composer-initial-focus'
+import { getWorkspaceComposerInitialFocusTarget } from '@/lib/workspace/creation/workspace-composer-initial-focus'
 import '@/components/sidebar/workspace-creation/folder/folder-workspace-source-repos'
 import { getFolderWorkspacePrimaryActionLabel } from '@/components/sidebar/workspace-creation/folder/folder-workspace-source-selection'
 import { useAgentMenuObservation } from '@/components/tab-bar/use-new-tab-agent-menu-rows'

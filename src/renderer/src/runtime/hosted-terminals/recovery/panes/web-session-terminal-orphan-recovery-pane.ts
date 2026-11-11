@@ -5,8 +5,12 @@ import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pa
 import { runInTerminalRecoveryRpcLane } from '../scheduling/web-session-terminal-orphan-recovery-rpc-lane'
 import {
   cacheStablePaneResolutionFailure,
+  clearSurfaceInventoryAbsence,
+  confirmSurfaceInventoryAbsence,
   readStablePaneResolutionFailure
 } from '../evidence/web-session-terminal-orphan-recovery-cache'
+import { latestTerminalRetirementProof } from '../surfaces/web-session-terminal-orphan-recovery-surface-index'
+import { hostSnapshotAffirmsWorktreeContents } from '../../../web-session-tabs-sync/hydration/host-session-snapshot-authority'
 import type {
   RecoverySurface,
   UnresolvedRecoverySurface
@@ -24,6 +28,9 @@ type PaneResolution = {
   resolved: RecoverySurface[]
   unresolved: UnresolvedRecoverySurface[]
 }
+
+/** `absent`: the host has no terminal for the pane; `owned`: it has one, just not attachable yet. */
+type PaneOutcome = RecoverySurface | 'absent' | 'owned' | null
 
 type ResolvedPaneResponse =
   | { kind: 'connected'; terminal: RuntimeTerminalResolvePane }
@@ -96,7 +103,7 @@ async function resolveOne(args: {
   call: RuntimeCall
   expectedEnvironmentPairingRevision?: number
   isCurrent: () => boolean
-}): Promise<RecoverySurface | null> {
+}): Promise<PaneOutcome> {
   const { surface, snapshot, environmentId, call, expectedEnvironmentPairingRevision, isCurrent } =
     args
   if (!isCurrent()) {
@@ -147,6 +154,11 @@ async function resolveOne(args: {
       if (response?.error.code === 'method_not_found') {
         cacheFailure()
       }
+      // The host also answers this for a live leaf between PTYs, so it is an absence only when the
+      // frame omits the pane too; a pending row means the host still owns it.
+      if (response?.error.code === 'terminal_not_found' && surface.incoming === undefined) {
+        return 'absent'
+      }
       return null
     }
     const resolution = readResolvedPane(response.result)
@@ -155,11 +167,13 @@ async function resolveOne(args: {
       return null
     }
     if (resolution.kind === 'disconnected') {
-      return null
+      // Older hosts keep resolving a closed tab's exited pane as disconnected; only the frame can
+      // tell that apart from a live tab between PTYs.
+      return surface.incoming === undefined ? 'absent' : 'owned'
     }
     const { terminal } = resolution
     if (!matchesSurface(terminal, surface, snapshot.worktree)) {
-      return null
+      return 'owned'
     }
     return resolvedSurface(surface, terminal)
   } catch {
@@ -167,6 +181,9 @@ async function resolveOne(args: {
   }
 }
 
+/** Unbound panes have no handle to list, so they are retired by pane: the host's close record for
+ * the pane, or the same two consecutive authoritative absences that retire listed handles. Any
+ * sign the host still owns the pane restarts the count. Retired panes are in neither result list. */
 export async function resolvePersistedTerminalSurfaces(args: {
   surfaces: readonly UnresolvedRecoverySurface[]
   snapshot: RuntimeMobileSessionTabsResult
@@ -175,7 +192,11 @@ export async function resolvePersistedTerminalSurfaces(args: {
   expectedEnvironmentPairingRevision?: number
   isCurrent: () => boolean
 }): Promise<PaneResolution | null> {
-  const { surfaces, isCurrent } = args
+  const { snapshot, isCurrent } = args
+  const surfaces = args.surfaces.filter(
+    (surface) =>
+      surface.incoming !== undefined || latestTerminalRetirementProof(snapshot, surface) === null
+  )
   if (surfaces.length === 0) {
     return { resolved: [], unresolved: [] }
   }
@@ -191,8 +212,26 @@ export async function resolvePersistedTerminalSurfaces(args: {
   if (!isCurrent()) {
     return null
   }
-  return {
-    resolved: outcomes.flatMap(({ resolved }) => (resolved ? [resolved] : [])),
-    unresolved: outcomes.flatMap(({ surface, resolved }) => (resolved ? [] : [surface]))
+  const resolved: RecoverySurface[] = []
+  const unresolved: UnresolvedRecoverySurface[] = []
+  for (const { surface, resolved: outcome } of outcomes) {
+    const evidence = { ...args, surface }
+    if (outcome !== 'absent') {
+      if (outcome !== null || surface.incoming !== undefined) {
+        clearSurfaceInventoryAbsence(evidence)
+      }
+      if (outcome !== null && outcome !== 'owned') {
+        resolved.push(outcome)
+      } else {
+        unresolved.push(surface)
+      }
+    } else if (
+      // A frame the host did not publish affirms nothing, so it is never an absence.
+      !hostSnapshotAffirmsWorktreeContents(snapshot) ||
+      !confirmSurfaceInventoryAbsence(evidence)
+    ) {
+      unresolved.push(surface)
+    }
   }
+  return { resolved, unresolved }
 }

@@ -31,7 +31,8 @@ describe('useIpcEvents browser tab close routing', () => {
     vi.resetModules()
     vi.unstubAllGlobals()
     // Clear leaked partial mocks so floating browser source validation uses the real resolver.
-    vi.doUnmock('@/lib/floating-workspace-terminal-actions')
+    vi.doUnmock('@/components/floating-terminal/floating-workspace-terminal-actions')
+    vi.doUnmock('@/components/floating-terminal/floating-workspace-tab-creation')
     closeTerminalTabMock.mockReset()
   })
 

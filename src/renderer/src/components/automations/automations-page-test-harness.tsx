@@ -94,7 +94,7 @@ vi.mock('sonner', () => ({
   }
 }))
 
-vi.mock('@/lib/window-visibility-interval', () => ({
+vi.mock('@/lib/window-activity/window-visibility-interval', () => ({
   installWindowVisibilityInterval: () => () => undefined
 }))
 
@@ -113,7 +113,7 @@ vi.mock('@/runtime/repo-hooks/runtime-hooks-client', () => ({
   checkRuntimeHooks: vi.fn(async () => ({ hooks: null, ok: true }))
 }))
 
-vi.mock('@/lib/ensure-hooks-confirmed', () => ({
+vi.mock('@/runtime/repo-hooks/ensure-hooks-confirmed', () => ({
   ensureHooksConfirmed: vi.fn(async () => 'inherit'),
   ensureHooksApproved: vi.fn(async () => ({ decision: 'run' }))
 }))

@@ -1,6 +1,5 @@
 import { useMemo } from 'react'
-import { openDesktopStructuredSession } from '@/lib/activate-ai-vault-structured-session'
-import type { NativeChatStructuredViewProps } from '@/components/native-chat/native-chat-view-types'
+import { openDesktopStructuredSession } from '@/lib/agent-session/open/activate-ai-vault-structured-session'
 import {
   NativeChatForkContext,
   NativeChatForkedFromContext,
@@ -8,9 +7,10 @@ import {
   NativeChatSideChatForkPointContext
 } from '@/components/native-chat/messages/actions/native-chat-fork-context'
 import { NativeChatRewindContext } from '@/components/native-chat/messages/actions/native-chat-rewind-context'
+import { useNativeChatTabOwnerWorktreeId } from '@/components/native-chat/pane/ownership/use-native-chat-tab-owner'
+import type { NativeChatStructuredViewProps } from '@/components/native-chat/native-chat-view-types'
 import type { NativeChatRewindSurface } from '@/components/native-chat/messages/actions/use-native-chat-rewind-host'
 import type { NativeChatPaneForks } from '@/components/native-chat/messages/actions/use-native-chat-fork'
-import { useNativeChatTabOwnerWorktreeId } from '@/components/native-chat/pane/ownership/use-native-chat-tab-owner'
 import { useAppStore } from '@/store'
 import { isTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
 import { NativeChatWorktreeForkDialogHost } from './NativeChatWorktreeForkDialog'

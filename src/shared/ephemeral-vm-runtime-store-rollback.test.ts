@@ -1,6 +1,7 @@
-import { mkdtempSync, readFileSync, rmSync, truncateSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, truncateSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { removeTempDirs } from './testing/remove-temp-dirs.test-support'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   getEphemeralVmRuntimeFeatureStorePath,
@@ -89,10 +90,8 @@ function provisionedRootRecord(): EphemeralVmRuntimeRecord {
 describe('ephemeral VM runtime store rollback projection', () => {
   const tempDirs: string[] = []
 
-  afterEach(() => {
-    for (const dir of tempDirs.splice(0)) {
-      rmSync(dir, { recursive: true, force: true })
-    }
+  afterEach(async () => {
+    await removeTempDirs(tempDirs.splice(0))
   })
 
   function makeUserDataPath(): string {

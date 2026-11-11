@@ -5,7 +5,7 @@ import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { findFirstIndexedWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
 import { isVirtualEditorFile } from '@/store/slices/editor/tabs/editor-tab-content-type'
 import { findRepoForHost } from '@/store/repos/repo-host-identity'
-import { isLocalWindowsDesktopClient } from '@/lib/desktop-window-chrome'
+import { isLocalWindowsDesktopClient } from '@/app-shell/chrome/desktop-window-chrome'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import {
   parseExecutionHostId,

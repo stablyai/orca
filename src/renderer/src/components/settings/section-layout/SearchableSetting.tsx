@@ -2,7 +2,7 @@ import { useContext } from 'react'
 import { SettingsTargetHighlightContext } from './settings-target-highlight'
 import { useAppStateValue } from '@/store/retained-views/app-state-view'
 import type React from 'react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { matchesSettingsSearch, type SettingsSearchEntry } from '../search/settings-search'
 
 type SearchableSettingProps = SettingsSearchEntry & {

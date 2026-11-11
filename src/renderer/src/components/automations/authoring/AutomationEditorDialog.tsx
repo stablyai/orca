@@ -2,7 +2,7 @@ import type { AutomationAuthorityRef } from '../../../../../shared/automations/o
 import React from 'react'
 import { useAppStore } from '@/store/index'
 import { selectAgentLaunchRouteView } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
-import { useChatProgramFacts } from '@/lib/host-chat-program-acquisition'
+import { useChatProgramFacts } from '@/lib/agent-session/launch/inventory/host-chat-program-acquisition'
 import {
   automationChatSupport,
   automationDraftSurface,

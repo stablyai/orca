@@ -10,7 +10,7 @@ import {
   buildLinearWorkspaceApiSettingsUrl
 } from '../../../shared/linear/links'
 import { defaultScopeHost } from '@/runtime/hosts/selection/default-creation-host'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { Button } from '@/components/ui/button'
 import {
@@ -23,8 +23,8 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { cn } from '@/lib/utils'
-import { preventOutsideDismissWhenDirty } from '@/lib/outside-dismiss-guard'
+import { cn } from '@/lib/class-names'
+import { preventOutsideDismissWhenDirty } from '@/lib/overlay-interaction/outside-dismiss-guard'
 import {
   createLinearApiKeyDialogState,
   resolveLinearApiKeyDialogState

@@ -2,7 +2,7 @@ import { useGitHubTextareaImages } from '@/components/github/use-github-textarea
 import type { GitHubImageIntake } from '@/components/github/use-github-image-uploads'
 import { ImeTextarea } from '@/lib/text-input/ime/ime-text-field'
 import React, { useCallback, useId, useMemo, useState } from 'react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { filterGitHubMentionOptions } from '@/components/github/github-mention-option-filter'
 import { GitHubUserAvatar } from '@/components/github/github-user-avatar'
 import type { MentionOption, MentionQuery } from '../page-types'

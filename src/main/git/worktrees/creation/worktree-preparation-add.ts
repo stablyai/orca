@@ -1,3 +1,4 @@
+import { runStandalonePreparation } from './worktree-preparation-standalone'
 import { lstat } from 'node:fs/promises'
 import { isUnsupportedWorktreeAddLockReasonError } from '../../../../shared/git/worktrees/git-worktree-command-capabilities'
 import { resolveWorktreeHostPath } from '../../../../shared/git/metadata/git-metadata-path'
@@ -11,11 +12,11 @@ import {
   WORKTREE_REMOVAL_REGISTRATION_TIMEOUT_MS,
   type GitWorktreeExecOptions
 } from '../worktree-operation-options'
+import type { WorktreePreparationOperation } from './worktree-preparation-operation'
 import {
-  runStandalonePreparation,
-  type WorktreePreparationOperation
-} from './worktree-preparation-operation'
-import { discardPreparedWorktree } from './worktree-preparation-discard'
+  discardPreparedWorktree,
+  type PreparationRemovalOutcome
+} from './worktree-preparation-discard'
 import {
   lockWorktreePreparation,
   verifyWorktreePreparationLock,
@@ -37,6 +38,14 @@ async function isAbsent(worktreePath: string, options: GitWorktreeExecOptions): 
     }
     throw error
   }
+}
+
+/** The owner has fenced its raw work and no add was issued for this unique path. */
+export async function discardUnmaterializedPreparation(
+  path: string,
+  options: GitWorktreeExecOptions
+): Promise<PreparationRemovalOutcome> {
+  return (await isAbsent(path, options)) ? 'removed' : 'revoked'
 }
 
 export async function addLockedWorktreePreparation(
@@ -61,32 +70,50 @@ export async function addLockedWorktreePreparation(
       )
     )
   }
-  const add = async (lockArgs: string[]): Promise<void> => {
-    options.signal?.throwIfAborted()
-    try {
-      await gitExecFileAsync(
-        [
-          ...windowsLongPathGitArgs(repoPath),
-          'worktree',
-          'add',
-          '--detach',
-          '--no-checkout',
-          ...lockArgs,
-          worktreePath,
-          baseRef
-        ],
-        gitExecOptions(repoPath, options)
-      )
-    } finally {
-      invalidateWslLinkedWorktreeGitRouting(worktreePath)
-    }
-  }
   return withLocalGitCapabilityCacheForExecution(
     { cwd: repoPath, wslDistro: options.wslDistro, signal: options.signal },
     async (capabilities) => {
       options.signal?.throwIfAborted()
       const initiallyAbsent = await isAbsent(worktreePath, options)
       options.signal?.throwIfAborted()
+      let issued = false
+      const add = async (lockArgs: string[]): Promise<void> => {
+        options.signal?.throwIfAborted()
+        try {
+          await gitExecFileAsync(
+            [
+              ...windowsLongPathGitArgs(repoPath),
+              'worktree',
+              'add',
+              '--detach',
+              '--no-checkout',
+              ...lockArgs,
+              worktreePath,
+              baseRef
+            ],
+            {
+              ...gitExecOptions(repoPath, options),
+              observeChildTermination: (terminated, writes) => {
+                if (writes) {
+                  issued = true
+                  operation.setDiscard((cleanupOptions) =>
+                    discardPreparedWorktree(
+                      repoPath,
+                      worktreePath,
+                      cleanupOptions,
+                      lockReason,
+                      initiallyAbsent ? null : undefined
+                    )
+                  )
+                }
+                options.observeChildTermination?.(terminated, writes)
+              }
+            }
+          )
+        } finally {
+          invalidateWslLinkedWorktreeGitRouting(worktreePath)
+        }
+      }
       return capabilities.runWithFallback(
         'worktree-add-lock-reason',
         async () => {
@@ -96,10 +123,13 @@ export async function addLockedWorktreePreparation(
             added = true
             const lockPath = await verifyWorktreePreparationLock(worktreePath, lockReason, options)
             operation.setDiscard((cleanupOptions) =>
-              discardPreparedWorktree(repoPath, worktreePath, cleanupOptions, lockReason)
+              discardPreparedWorktree(repoPath, worktreePath, cleanupOptions, lockReason, lockPath)
             )
             return lockPath
           } catch (error) {
+            if (!issued) {
+              throw error
+            }
             operation.setDiscard()
             // A canceled add can leave its marker; a pre-existing checkout is never ours to remove.
             if (
@@ -108,7 +138,13 @@ export async function addLockedWorktreePreparation(
               !(error instanceof WorktreePreparationLockOwnershipError)
             ) {
               operation.setDiscard((cleanupOptions) =>
-                discardPreparedWorktree(repoPath, worktreePath, cleanupOptions, lockReason)
+                discardPreparedWorktree(
+                  repoPath,
+                  worktreePath,
+                  cleanupOptions,
+                  lockReason,
+                  initiallyAbsent ? null : undefined
+                )
               )
             }
             throw error
@@ -126,10 +162,13 @@ export async function addLockedWorktreePreparation(
               operation
             )
             operation.setDiscard((cleanupOptions) =>
-              discardPreparedWorktree(repoPath, worktreePath, cleanupOptions, lockReason)
+              discardPreparedWorktree(repoPath, worktreePath, cleanupOptions, lockReason, lockPath)
             )
             return lockPath
           } catch (error) {
+            if (!issued) {
+              throw error
+            }
             operation.setDiscard()
             if (
               added &&

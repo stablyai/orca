@@ -1,5 +1,6 @@
 import type { LinearIssue } from '../../../../../../shared/linear/issue-types'
-import { consumeLinearIssueRead } from '@/store/slices/linear/linear-issue-publication'
+import '@/store/slices/linear/linear-issue-read'
+import { consumeLinearIssueRead } from '@/store/slices/linear/linear-issue-read-lifecycle'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { PrioritySemaphore } from '../../../../../../shared/priority-semaphore'

@@ -5,7 +5,10 @@ import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-
 import TerminalSearch from '@/components/TerminalSearch'
 import { DaemonActionDialog } from '@/components/shared/useDaemonActions'
 import { AgentSessionContinuationDialog } from '@/components/agent-session-continuation/AgentSessionContinuationDialog'
-import { WORKSPACE_FILE_PATH_MIME, WORKSPACE_FILE_PATHS_MIME } from '@/lib/workspace-file-drag'
+import {
+  WORKSPACE_FILE_PATH_MIME,
+  WORKSPACE_FILE_PATHS_MIME
+} from '@/lib/files/drop/workspace-file-drag'
 import CloseTerminalDialog from '../layout/close/CloseTerminalDialog'
 import TerminalContextMenu from '../context-menu/TerminalContextMenu'
 import TerminalPaneHeaderOverlay from '../titles/TerminalPaneHeaderOverlay'
@@ -53,6 +56,7 @@ export function TerminalPaneSurface({
     agentSessionContinuation,
     agentSessionFork,
     beginPaneDragFromHeader,
+    chatPane,
     closeTerminalLinkActions,
     contextMenu,
     contextMenuCanContinueInNewSession,
@@ -144,6 +148,7 @@ export function TerminalPaneSurface({
         className="absolute inset-0 min-h-0 min-w-0"
         data-terminal-tab-id={tabId}
         data-terminal-chat-view={effectiveChatViewMode && activePaneIsChatLeaf ? 'true' : undefined}
+        data-terminal-chat-pane={effectiveChatViewMode && chatPane ? '' : undefined}
         data-terminal-layout-leaf-ids={expectedLayoutLeafIdsAttr}
         data-pane-title-surface={titleUsesLightSurface ? 'light' : 'dark'}
         style={terminalContainerStyle}
@@ -228,9 +233,7 @@ export function TerminalPaneSurface({
                       )
                   : undefined
               }
-              onOpenNewTerminal={() => {
-                openTerminalBesideTab(tabId)
-              }}
+              onOpenNewTerminal={() => void openTerminalBesideTab(tabId)}
               onClosePane={() => handleRequestClosePane(activePane.id)}
             />,
             activePane.container,

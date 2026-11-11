@@ -1,3 +1,4 @@
+import type { WorkspaceMetadataSet } from '../../../../shared/worktree/workspace-metadata-set'
 import type {
   RuntimeEditorTabReveal,
   RuntimeFileOpenPosition
@@ -49,6 +50,7 @@ export type RuntimeNotifier = {
     // Why: false for metadata-only changes (sort order) that leave Git scan results valid.
     options?: { invalidateGitScans?: boolean }
   ): void
+  workspaceMetadataSet?(set: WorkspaceMetadataSet): void
   worktreeBaseStatus?(event: WorktreeBaseStatusEvent): void
   worktreeRemoteBranchConflict?(event: WorktreeRemoteBranchConflictEvent): void
   reposChanged(): void
@@ -136,7 +138,8 @@ export type RuntimeNotifier = {
   focusTerminal(tabId: string, worktreeId: string, leafId?: string | null): void
   /** Raises the window onto a pane it shows; resolves false when the window does not know the worktree. */
   revealTerminalPane?(target: TerminalPaneRevealTarget): Promise<boolean>
-  focusEditorTab?(tabId: string, worktreeId: string): void
+  /** `userInitiated` lets a chat tab move the window to another worktree. */
+  focusEditorTab?(tabId: string, worktreeId: string, options?: { userInitiated: true }): void
   closeSessionTab?(tabId: string, worktreeId: string): void | Promise<void>
   moveSessionTab?(worktreeId: string, move: RuntimeMobileSessionTabMove): void
   /** The window moves a client's pane to a new tab, since it owns the layout; rejects when it cannot answer. */

@@ -1,5 +1,5 @@
 import { replayIntoTerminal, replayIntoTerminalAsync } from '../../snapshots/replay-guard'
-import { terminalOutputPrefersRenderRefresh } from '@/lib/pane-manager/terminal-complex-script'
+import { terminalOutputPrefersRenderRefresh } from '@/lib/pane-manager/terminal-rendering/terminal-complex-script'
 import {
   buildPostReplayLiveAgentReattachReset,
   POST_REPLAY_DEAD_TUI_RESET,
@@ -9,12 +9,12 @@ import {
   buildKittyKeyboardRestore
 } from '../../../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import { buildFreshShellViewportBlankingSequence } from '../../../../../../shared/terminal/viewport/terminal-fresh-shell-viewport'
-import { flushTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
+import { flushTerminalOutput } from '@/lib/pane-manager/terminal-output/pane-terminal-output-scheduler'
 import {
   getTerminalScrollIntentKind,
   markTerminalFollowOutput
-} from '@/lib/pane-manager/terminal-scroll-intent'
-import { deferTerminalGeometryMutationDuringRebuild } from '@/lib/pane-manager/terminal-scroll-intent-rebuild'
+} from '@/lib/pane-manager/terminal-scroll/terminal-scroll-intent'
+import { deferTerminalGeometryMutationDuringRebuild } from '@/lib/pane-manager/terminal-scroll/terminal-scroll-intent-rebuild'
 
 import type { FreshSpawnOptions } from '../startup/fresh-spawn-types'
 

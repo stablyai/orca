@@ -3,7 +3,7 @@ import { createContext, useContext, useMemo, useRef, type ReactNode } from 'reac
 import type { BridgeRpcClient } from '../../mobile-web-shell/bridge/bridge-rpc-client'
 import { BRIDGE_PAGE_CLIENT_ID } from '../../mobile-web-shell/bridge/bridge-page-client-identity'
 import type { ConnectionState } from './connection-state'
-import type { HostProfile } from '../hosts/host-profile'
+import type { HostProfile } from '../../host-catalog/host-profile'
 import type { RpcClientContextValue } from './rpc-client-context-contract'
 
 const Ctx = createContext<RpcClientContextValue | null>(null)

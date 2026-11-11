@@ -175,7 +175,7 @@ export type TerminalBufferActionRequest = {
   }
 }
 
-// Viewers live above the daemon on orcad; an older daemon rejects this, which callers ignore.
+// Viewers live above the daemon on orcad; gated by focusLossReportSupport (v56, some v55).
 export type ReportFocusLostRequest = {
   id: string
   type: 'reportFocusLost'

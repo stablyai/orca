@@ -215,7 +215,3 @@ export function retireMobileNativeChatInFlightSends(scope: string): void {
     }
   }
 }
-
-export function resetMobileNativeChatInFlightSendsForTests(): void {
-  inFlightSends.clear()
-}

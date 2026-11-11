@@ -1,7 +1,7 @@
 import { translate } from '@/i18n/i18n'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
-import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
-import { isWebClientLocation } from '@/lib/web-client-location'
+import { getRendererAppPlatform } from '@/app-shell/platform/renderer-app-platform'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import type { SettingsSearchEntry } from '../search/settings-search'
 import { translateSearchKeyword } from '../search/settings-search-keywords'
 

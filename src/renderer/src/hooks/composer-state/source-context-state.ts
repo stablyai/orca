@@ -27,7 +27,7 @@ type ComposerSourceContextStateInput = Pick<
 
 import { useCallback, useMemo, useState } from 'react'
 import { getWorkspaceSourceProvider } from '../../../../shared/new-workspace/workspace-source'
-import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
+import type { LinkedWorkItemSummary } from '@/lib/workspace/creation/new-workspace'
 import { getLinearLinkedWorkItemBranchName } from '@/lib/work-items/linear/linear-linked-work-item'
 import {
   type TaskSourceContext,

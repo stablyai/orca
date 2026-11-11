@@ -26,19 +26,23 @@
       "reason": "The page is one document standing in for one screen, so a route it does not render has to be handed to the app that does. The native file is the router; this one posts a navigate notify for a target outside the page's routes and pushes locally for one inside them."
     },
     {
-      "file": "src/transport/hosts/host-store.web.ts",
+      "file": "src/host-catalog/host-store.web.ts",
       "reason": "expo-secure-store resolves to {} on web, so the real store answers loadHosts() with an empty array and every screen that looks this host up paints \"Host not found\" over the host the shell just opened. This one serves the profile init carried, without the credential the bridge already holds."
     },
     {
-      "file": "src/transport/hosts/host-descriptor-persistence.web.ts",
+      "file": "src/host-catalog/host-connection-history.web.ts",
+      "reason": "Recency belongs to the native host list. The host-served page retains the existing no-op and imports no native metadata mutation queue."
+    },
+    {
+      "file": "src/host-descriptors/host-descriptor-persistence.web.ts",
       "reason": "Last-known descriptors belong to the native host list; the page owns no descriptor persistence."
     },
     {
-      "file": "src/transport/hosts/host-removal-lifecycle.web.ts",
+      "file": "src/host-catalog/host-removal-lifecycle.web.ts",
       "reason": "Removing a host is pairing work and the page holds neither the host list nor the credential, so the real lifecycle's removeHost resolved without doing anything and the screen reported success for a host that was still paired. This one refuses with PageHostRemovalUnavailableError, whose message names the app's host list. It is also the fence that keeps push-registration.ts out of the page bundle: the native file's import of it was that subsystem's only path into a page route, and the page has neither the device token nor the gateway client push needs."
     },
     {
-      "file": "src/transport/hosts/host-device-token-store.web.ts",
+      "file": "src/host-credentials/host-device-token-store.web.ts",
       "reason": "expo-secure-store resolves to {} on web, and the bridge carries the RPC, so the page holds no device token."
     },
     {
@@ -198,7 +202,7 @@
       "reason": "react-native-web's keydown handler withholds onSubmitEditing whenever the Enter keydown reports a composition — nativeEvent.isComposing, or the Android keyCode 229 that stands for it — which is a soft keyboard's normal state mid-word, so Enter on the page neither sent the line nor cleared the field while native Android's editor action fired as it always does. Both terminal fields reach their send through onSubmitEditing alone and both are bound here: the live input's carriage return, and the buffered command field's draft. The native file binds nothing, because that editor action needs no help; this one listens for beforeinput and acts on insertLineBreak and insertParagraph, the browser's own end-of-line signals. react-native-web calls preventDefault on every keydown it does submit on, so those events exist only in the cases it dropped and never produce a second carriage return; an IME still choosing a candidate reports insertCompositionText and is left alone."
     },
     {
-      "file": "src/transport/hosts/host-app-version-store.web.ts",
+      "file": "src/host-descriptors/host-app-version-store.web.ts",
       "reason": "The page keeps no record of the host's status.get app version because nothing in it reads one — the reader is the native troubleshoot screen's — and a key the page only writes is not page state, so it is not admitted through page-storage-keys.ts and every mount's write was refused and logged instead."
     },
     {
