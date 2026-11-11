@@ -2,6 +2,7 @@
 // (the same as ⌘⌥⇧L) and confirms in place. Renders nothing for local workspaces or before the
 // number is known.
 import React, { useEffect, useState } from 'react'
+import { Check, Link2 } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { formatOptionalPrimaryShortcutLabel } from '@/hooks/useShortcutLabel'
 import { useTranslate } from '@/i18n/use-translate'
@@ -23,6 +24,8 @@ export function CloudWorkspaceNumberChip({
   const keybindings = useAppStore((s) => s.keybindings)
   const identities = useCloudWorkspaceIdentities()
   const [copied, setCopied] = useState(false)
+  // Hover/focus opens the tooltip; a copy holds it open to confirm, so the chip never changes width.
+  const [tipOpen, setTipOpen] = useState(false)
   useEffect(() => {
     if (!copied) {
       return
@@ -40,7 +43,7 @@ export function CloudWorkspaceNumberChip({
   const copiedLabel = t('auto.components.cloudWorkspaces.linkCopiedShort', 'Link copied')
   return (
     <>
-      <Tooltip>
+      <Tooltip open={tipOpen || copied} onOpenChange={setTipOpen}>
         <TooltipTrigger asChild>
           <button
             type="button"
@@ -54,18 +57,30 @@ export function CloudWorkspaceNumberChip({
               number: label
             })}
             className={cn(
-              'mr-2 flex h-6 items-center rounded-md px-1.5 font-mono text-2xs tabular-nums text-muted-foreground outline-none [-webkit-app-region:no-drag] hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-focus-ring',
-              copied && 'font-sans text-foreground'
+              'mr-2 flex h-6 items-center gap-1 rounded-md px-1.5 font-mono max-[960px]:hidden text-2xs tabular-nums text-muted-foreground outline-none [-webkit-app-region:no-drag] hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-focus-ring',
+              copied && 'text-foreground'
             )}
           >
-            {copied ? copiedLabel : label}
+            {/* The link glyph says what the chip does before anyone hovers it (N-05). */}
+            {copied ? (
+              <Check className="size-3 shrink-0" aria-hidden />
+            ) : (
+              <Link2 className="size-3 shrink-0" aria-hidden />
+            )}
+            {label}
           </button>
         </TooltipTrigger>
         <TooltipContent side="bottom" sideOffset={6}>
-          {t('auto.components.cloudWorkspaces.copyLinkTo', 'Copy link to {{number}}', {
-            number: label
-          })}
-          {shortcut ? <span className="ml-1.5 text-muted-foreground">{shortcut}</span> : null}
+          {copied ? (
+            copiedLabel
+          ) : (
+            <>
+              {t('auto.components.cloudWorkspaces.copyLinkTo', 'Copy link to {{number}}', {
+                number: label
+              })}
+              {shortcut ? <span className="ml-1.5 text-muted-foreground">{shortcut}</span> : null}
+            </>
+          )}
         </TooltipContent>
       </Tooltip>
       <span aria-live="polite" className="sr-only">
