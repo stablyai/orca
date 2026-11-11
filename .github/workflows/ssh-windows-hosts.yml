@@ -62,7 +62,6 @@ on:
       - 'src/shared/shell/launch/shell-argument-quoting.ts'
       - '!src/**/*.test.ts'
       - 'src/main/managed-server/host-state/orcad-windows-host-lane.test.ts'
-      - 'tests/e2e/ssh-orcad-auto-convert.spec.ts'
       - 'tests/e2e/helpers/orcad-convert-host.ts'
       - 'tests/e2e/helpers/orcad-convert-flow.ts'
       - 'tests/e2e/helpers/orcad-upgrade-profile.ts'
@@ -144,7 +143,7 @@ jobs:
         with:
           persist-credentials: false
           # Keep complete server/test trees; missing future imports fail the unchanged builds.
-          # All of src: the orcad-convert cell builds the full e2e app and the bundled CLI.
+          # All of src: the managed CLI cell builds the full e2e app and bundled CLI.
           # mobile: the template ships the mobile web page, which builds from mobile/.
           # cloud: config/tsconfig.vitest-transform.json references the cloud projects, so vitest needs them.
           sparse-checkout: |
@@ -242,10 +241,8 @@ jobs:
           New-Item -ItemType Directory -Force -Path $receipts | Out-Null
           $cells=@($env:CELLS -split ',' | ForEach-Object {$_.Trim()} | Where-Object {$_})
           if(-not $cells.Count){$cells=@('orcad-cmd','orcad-powershell')}
-          # One Windows host runs the app-level conversion; it is last because it switches native modules.
-          if(-not $env:CELLS -and '${{ matrix.arch }}' -eq 'x64' -and '${{ matrix.server }}' -eq 'inbox'){$cells+='orcad-convert'}
           # App cells reach the managed server through an SSH local forward, which provisioning grants to the last accounts only.
-          $appCellIds=@('orcad-convert','orcad-cli-managed','orcad-cli-convert')
+          $appCellIds=@('orcad-cli-managed')
           $cells=@($cells | Where-Object {$appCellIds -notcontains $_})+@($cells | Where-Object {$appCellIds -contains $_})
           $forwarding=@($cells | Where-Object {$appCellIds -contains $_}).Count
           $archive=''

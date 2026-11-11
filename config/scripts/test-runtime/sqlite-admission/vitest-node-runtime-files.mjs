@@ -134,7 +134,6 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/gitlab/gitlab-known-host-retirement.test.ts',
   'src/main/window/main-window-updater-deferred-setup.test.ts',
   'src/renderer/src/components/terminal-pane/host-state/terminal-pane-host-state-memo.test.ts',
-  'src/renderer/src/components/automations/runs/use-automation-runs-dashboard-payload.test.tsx',
   'src/main/native-chat/agent-session-journal/**/*.test.ts',
   'src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-terminal-writer-acquire.test.ts',
   'src/main/runtime/agent-session/records/agent-session-conversation-name-store.test.ts',
