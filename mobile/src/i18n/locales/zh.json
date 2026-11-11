@@ -2450,7 +2450,8 @@
     "tabStrip": {
       "checkingCapabilities": "正在检查桌面支持的功能，请稍后重试",
       "newTab": "新标签页",
-      "quickCommandsUpdateRequired": "使用快捷命令需更新桌面应用"
+      "quickCommandsUpdateRequired": "使用快捷命令需更新桌面应用",
+      "tabStatus": "{{title}}，{{status}}"
     },
     "terminalActionSheetActions": {
       "clearTerminal": "清空终端",

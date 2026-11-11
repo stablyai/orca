@@ -1,5 +1,4 @@
 import { editorTabWorkspace } from '@/store/slices/editor/tabs/workspace-editor-files'
-import type { EditorFileTabProps } from './editor-file-tab-props'
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
@@ -14,15 +13,13 @@ import { detectLanguage } from '../../../../shared/editor-language/editor-langua
 import { FileTypeIcon } from '@/components/FileTypeIcon'
 import { useWorktreeById } from '@/store/workspaces/selection/use-selected-worktree'
 import { getOpenFileExecutionHostId } from '@/lib/workspace/ownership/unified-tab-host-ownership'
-import { resolveReviewRepository } from '@/lib/review-owner'
+import { resolveReviewRepository } from '@/lib/source-control/review/review-owner'
 import { useAppStore } from '@/store/index'
 import { STATUS_COLORS } from '../../lib/source-control/paths/git-path-decoration'
 import { STATUS_LABELS } from '../../../../shared/git/status/git-status-labels'
-
 import { getUntitledFileRoot } from '@/components/editor/untitled-file-rename-path'
 import { preventMiddleButtonDefault } from './middle-button-default-guard'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/overlay-interaction/close-all-context-menus'
-
 import {
   ACTIVE_TAB_INDICATOR_CLASSES,
   getDropIndicatorClasses,
@@ -41,6 +38,7 @@ import { useTabContextMenuOpening } from './tab-context-menu-opening'
 import { editorTabDocumentFolderAccess } from '@/lib/files/access/local-file-access'
 import { useTabCustomEditor } from '@/store/plugins/file-editors/plugin-custom-editors'
 import { PluginContributionIcon } from '../plugins/PluginContributionIcon'
+import type { EditorFileTabProps } from './editor-file-tab-props'
 
 export default function EditorFileTab({
   file,
