@@ -215,6 +215,7 @@ export function TerminalPaneSurface({
       activePane
         ? createPortal(
             <TerminalErrorToast
+              worktreeId={worktreeId}
               error={visibleTerminalError.error}
               resourceLimit={visibleTerminalError.resourceLimit}
               agentId={activeAgentId}
