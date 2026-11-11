@@ -17,10 +17,13 @@ import { getDeleteStateForWorktreeHost } from '../../../sidebar/workspace-action
 export function SourceControlMergedReviewNotice({
   review,
   worktree,
+  statusHeadOid,
   uncommittedCount
 }: {
   review: HostedReviewInfo | null
   worktree: Worktree
+  /** HEAD from the latest successful git status read; null until one completes. */
+  statusHeadOid: string | null
   uncommittedCount: number
 }): React.JSX.Element | null {
   const t = useTranslate()
@@ -29,10 +32,11 @@ export function SourceControlMergedReviewNotice({
   )
   const readiness = resolveMergedReviewWorkspaceReadiness({
     review,
-    headOid: worktree.head,
+    headOid: statusHeadOid,
     uncommittedCount
   })
-  if (!review || !readiness) {
+  // Without a status read the change count is unknown, so say nothing rather than guess.
+  if (!review || !readiness || !statusHeadOid) {
     return null
   }
   const label = `${

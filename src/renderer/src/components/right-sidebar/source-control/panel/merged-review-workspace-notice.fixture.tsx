@@ -18,7 +18,6 @@ const review: HostedReviewInfo = {
 const worktree = {
   id: 'repo-1::/work/app-sync',
   path: '/work/app-sync',
-  head: 'a1b2c3d',
   branch: 'refs/heads/feature/sync-retry',
   isMainWorktree: false
 } as Worktree
@@ -31,7 +30,12 @@ export const safeToDelete = defineFixture({
   width: 300,
   render: () => (
     <Frame>
-      <SourceControlMergedReviewNotice review={review} worktree={worktree} uncommittedCount={0} />
+      <SourceControlMergedReviewNotice
+        review={review}
+        worktree={worktree}
+        statusHeadOid="a1b2c3d"
+        uncommittedCount={0}
+      />
     </Frame>
   )
 })
@@ -40,7 +44,12 @@ export const uncommittedChanges = defineFixture({
   width: 300,
   render: () => (
     <Frame>
-      <SourceControlMergedReviewNotice review={review} worktree={worktree} uncommittedCount={2} />
+      <SourceControlMergedReviewNotice
+        review={review}
+        worktree={worktree}
+        statusHeadOid="a1b2c3d"
+        uncommittedCount={2}
+      />
     </Frame>
   )
 })
@@ -51,7 +60,8 @@ export const headMovedPastReview = defineFixture({
     <Frame>
       <SourceControlMergedReviewNotice
         review={review}
-        worktree={{ ...worktree, head: 'e4f5a6b' }}
+        worktree={worktree}
+        statusHeadOid="e4f5a6b"
         uncommittedCount={0}
       />
     </Frame>
