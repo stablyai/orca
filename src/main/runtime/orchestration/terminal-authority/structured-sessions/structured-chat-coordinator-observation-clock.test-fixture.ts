@@ -5,7 +5,6 @@ import { StructuredAgentSessionStatusFeed } from '../../../../native-chat/agent-
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import { waitForStructuredAgentSessionRecovery } from '../../../agent-session/structured-agent-session-runtime'
 import { awakeNow, createAwakeClock, type AwakeClock } from '../../../../power/awake-clock'
-import { appendFileSync } from 'node:fs'
 import type * as AwakeClockModule from '../../../../power/awake-clock'
 
 // Agent startups read the process-wide awake clock, whose heartbeat is a timer that outlives the
@@ -60,13 +59,6 @@ export function createCoordinatorMailObservationClock(
       await Promise.allSettled(pending)
     }
   }
-  const timers = new Map<Parameters<typeof clearTimeout>[0], { delay: number; stack: string }>()
-  const trace = (event: string, timer: Parameters<typeof clearTimeout>[0], detail?: object) => {
-    const path = process.env.ORCA_MAIL_TIMER_TRACE
-    if (path) {
-      appendFileSync(path, `${JSON.stringify({ event, timer: Number(timer), ...detail })}\n`)
-    }
-  }
   return {
     install(): void {
       pending.clear()
@@ -94,30 +86,6 @@ export function createCoordinatorMailObservationClock(
     drain,
     start(): void {
       vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
-      timers.clear()
-      const after = globalThis.setTimeout
-      const cancel = globalThis.clearTimeout
-      vi.spyOn(globalThis, 'setTimeout').mockImplementation((callback, delay, ...args) => {
-        const created = {
-          delay: delay ?? 0,
-          stack: new Error('coordinator mail timer creation').stack ?? ''
-        }
-        const timer = after(() => {
-          timers.delete(timer)
-          trace('fired', timer)
-          callback(...args)
-        }, delay)
-        timers.set(timer, created)
-        trace('created', timer, created)
-        return timer
-      })
-      vi.spyOn(globalThis, 'clearTimeout').mockImplementation((timer) => {
-        if (timer !== undefined) {
-          trace('cancelled', timer)
-          timers.delete(timer)
-        }
-        return cancel(timer)
-      })
       startFakeTimeAwakeClock()
       active = true
     },
@@ -146,12 +114,8 @@ export function createCoordinatorMailObservationClock(
       // The runtime's orphan mailbox repair must still run against the closed database.
       await vi.advanceTimersByTimeAsync(2_000)
       await waitForStructuredAgentSessionRecovery()
-      trace('drain-start', undefined, { pending: pending.size, timers: [...timers.values()] })
       await drain()
-      trace('drain-end', undefined, { pending: pending.size, timers: [...timers.values()] })
-      expect(vi.getTimerCount(), JSON.stringify([...timers.values()])).toBe(
-        fakeTimeAwakeClock.heartbeats
-      )
+      expect(vi.getTimerCount()).toBe(fakeTimeAwakeClock.heartbeats)
     },
     restore(): void {
       if (active) {

@@ -89,11 +89,11 @@ export function readMailWithdrawal(
   const callerKey = mailWithdrawalCaller(attempt, epoch)
   const fingerprint = deleteFingerprint(attempt.session_id, attempt.operation_id)
   try {
-    const scoped = db
-      .prepare(`SELECT * FROM agent_session_command_receipts WHERE caller_key=?`)
-      .all(callerKey)
+    const select = `SELECT operation_id,session_id,caller_key,method,fingerprint,status,
+      result_json,rejection_json,accepted_at FROM agent_session_command_receipts`
+    const scoped = db.prepare(`${select} WHERE caller_key=?`).all(callerKey)
     const legacy = db
-      .prepare(`SELECT * FROM agent_session_command_receipts
+      .prepare(`${select}
       WHERE session_id=? AND method=? AND fingerprint=? AND caller_key<>?`)
       .all(attempt.session_id, METHOD, fingerprint, callerKey)
     const causes = new Set<'system' | 'person'>()

@@ -149,18 +149,15 @@ export async function checkRunMailbox(args: {
       : {})
   })
   const readPeek = () => db.getUnreadRunMailbox(run.id, 100, typeFilter)
-  const result = (batch: MailboxDeliveryBatch | undefined) =>
-    batch?.finalResponse
-      ? { ...batch.finalResponse, replayed: batch.replayed }
-      : withReportFollowUps(
-          db,
-          deliveryReceipt({
-            mailbox: { runId: run.id },
-            batch,
-            acknowledged,
-            format: params.format === true || params.inject === true
-          })
-        )
+  const result = (batch: MailboxDeliveryBatch | undefined) => {
+    const receipt = deliveryReceipt({
+      mailbox: { runId: run.id },
+      batch,
+      acknowledged,
+      format: params.format === true || params.inject === true
+    })
+    return batch?.finalResponse ? receipt : withReportFollowUps(db, receipt)
+  }
   const takeDelivery = (wakeTypes?: MessageType[], wake?: MessageWake) =>
     args.reconciliation.takeRole({
       mailbox: { runId: run.id, mailboxHandle: address, consumerGeneration: generation, wakeTypes },

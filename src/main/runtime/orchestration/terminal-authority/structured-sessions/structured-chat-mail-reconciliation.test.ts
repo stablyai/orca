@@ -3,6 +3,7 @@ import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/age
 import { formatOrcaSessionAddress } from '../../../../../shared/orca-session-address'
 import { testOrcaSessionId } from '../../../../../shared/orca-session-address-test-fixture'
 import { JournalSqlOwner } from '../../../../native-chat/agent-session-journal/journal-sql-owner'
+import { JournalSqlReaderPool } from '../../../../native-chat/agent-session-journal/journal-sql-reader-pool'
 import type { AgentSessionJournal } from '../../../../native-chat/agent-session-journal/journal-store'
 import { resultOf } from '../../../rpc/orchestration-session-caller-test-fixture'
 import { operationId } from './structured-chat-coordinator-fake-codex-fixture'
@@ -40,6 +41,83 @@ function journalOf(sessionId: string): AgentSessionJournal {
 }
 
 describe('mail checks reconcile the currently owned source attempts', () => {
+  it('keeps accepted whole direct mail consumed when its live lease renews during the source read', async ({
+    onTestFinished
+  }) => {
+    await openChat(COORDINATOR)
+    const chat = await openChat(PEER_CHAT)
+    await coordinatorRunAndTask()
+    const accepted = Promise.withResolvers<void>()
+    const releaseAutomatic = Promise.withResolvers<void>()
+    const observed = Promise.withResolvers<void>()
+    const releaseCheck = Promise.withResolvers<void>()
+    onTestFinished(() => {
+      releaseAutomatic.resolve()
+      releaseCheck.resolve()
+    })
+    const observe = host.mailObservation
+    let held = false
+    vi.spyOn(host, 'mailObservation').mockImplementation(async (...args) => {
+      const answer = await observe(...args)
+      if (!held && answer.state.kind === 'accepted') {
+        held = true
+        accepted.resolve()
+        await releaseAutomatic.promise
+      }
+      return answer
+    })
+    await call(
+      'orchestration.send',
+      {
+        to: formatOrcaSessionAddress(testOrcaSessionId(PEER_CHAT)),
+        subject: 'already accepted',
+        body: 'the complete mail'
+      },
+      { sessionId: COORDINATOR }
+    )
+    await vi.waitFor(() => expect(chat.turns).toHaveLength(1), WAIT)
+    await settleTurn(PEER_CHAT, 0)
+    await accepted.promise
+    const read = JournalSqlReaderPool.prototype.point
+    let heldRead = false
+    vi.spyOn(JournalSqlReaderPool.prototype, 'point').mockImplementation(async function (
+      this: JournalSqlReaderPool,
+      request
+    ) {
+      const answer = await read.call(this, request)
+      if (
+        !heldRead &&
+        request.sessionId === PEER_CHAT &&
+        request.operation.kind === 'mail-observation'
+      ) {
+        heldRead = true
+        observed.resolve()
+        await releaseCheck.promise
+      }
+      return answer
+    })
+    const checking = call('orchestration.check', {}, { sessionId: PEER_CHAT })
+    try {
+      await observed.promise
+      const before = host.deps.store.getConversation(PEER_CHAT)!
+      const now = Math.max(Date.now(), before.ownerObservation.lastRenewedAt ?? 0) + 1
+      await host.deps.store.renewLease({
+        sessionId: PEER_CHAT,
+        fence: before.currentFence,
+        now,
+        childProbe: { outcome: 'identity-matched', matchedOn: ['held-child'] }
+      })
+      expect(host.deps.store.getConversation(PEER_CHAT)!.ownerObservation.lastRenewedAt).toBe(now)
+      releaseCheck.resolve()
+      expect(await checking).toMatchObject({ count: 0, messages: [] })
+      expect(chat.turns.map(turnText).join('\n')).toContain('the complete mail')
+    } finally {
+      releaseCheck.resolve()
+      releaseAutomatic.resolve()
+      await checking
+    }
+  })
+
   it('observes the real handoff that sampled owed before the check claimed its mail', async ({
     onTestFinished
   }) => {

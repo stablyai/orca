@@ -176,18 +176,15 @@ export async function checkWorkerMailbox(args: WorkerMailboxCheckInput) {
       : {}
   const showAll = params.all === true || (params.unread === false && params.peek !== true)
   const readPeek = () => db.getUnreadMessages(address, typeFilter)
-  const result = (batch: MailboxDeliveryBatch | undefined) =>
-    batch?.finalResponse
-      ? { ...batch.finalResponse, replayed: batch.replayed }
-      : withReportFollowUps(
-          db,
-          deliveryReceipt({
-            mailbox: mailboxIdentity,
-            batch,
-            acknowledged: acknowledged?.delivery.id ?? args.runAcknowledged,
-            format: params.format === true || params.inject === true
-          })
-        )
+  const result = (batch: MailboxDeliveryBatch | undefined) => {
+    const receipt = deliveryReceipt({
+      mailbox: mailboxIdentity,
+      batch,
+      acknowledged: acknowledged?.delivery.id ?? args.runAcknowledged,
+      format: params.format === true || params.inject === true
+    })
+    return batch?.finalResponse ? receipt : withReportFollowUps(db, receipt)
+  }
   const takeDelivery = async (wakeTypes?: MessageType[], wake?: MessageWake) => {
     if (args.deferDelivery?.()) {
       return undefined
