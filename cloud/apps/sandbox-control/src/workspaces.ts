@@ -4,7 +4,7 @@
 //   GET   /v1/team/workspaces/:id
 //   PATCH /v1/team/workspaces/:id {title?, branch?, visibility?, section?, archived?, ownerUserId?, tokenUsdMicros?}
 //   POST  /v1/team/workspaces/:id/presence {clientId, state: viewing|typing|left, chatId?}
-//   GET   /v1/team/links/resolve?w=<sandboxId>&c=<chatId>
+//   GET   /v1/team/links/resolve?w=<sandboxId>&c=<chatId>  or  ?org=<slug>&n=<number>&c=<chatId>
 // Access rule: a workspace is visible to its owner, and to every member of the owning org when
 // visibility is `team`. Org owners/admins additionally see private rows' metadata (scope=all) so a
 // departed member's workspaces can be reassigned or archived — metadata only, never access.
@@ -16,6 +16,7 @@ import { memberNamesFor } from './member-names'
 import { recordTokenSpend } from './member-usage'
 import { readSnapshotTimes } from './read-snapshots'
 import { sandboxView } from './wire'
+import { accountForSlug, orgIdOf, slugForAccount } from './org-slugs'
 import { ORCA_CLOUD_OVERAGE_CENTS_PER_HOUR } from '../../../../src/shared/hosted-sandbox/hosted-sandbox-wire'
 
 export const PRESENCE_TTL_MS = 45_000
@@ -171,11 +172,12 @@ function repoView(row: SandboxRow) {
 
 export async function workspaceViews(db: D1Database, caller: SandboxCaller, rows: readonly SandboxRow[], now: number) {
   const ids = rows.map((r) => r.id)
-  const [presence, compute, granted, readAt] = await Promise.all([
+  const [presence, compute, granted, readAt, slug] = await Promise.all([
     presenceFor(db, ids, now),
     computeMsFor(db, ids),
     activeGrantUsers(db, ids, caller.userId),
-    readSnapshotTimes(db, ids)
+    readSnapshotTimes(db, ids),
+    rows.length > 0 ? slugForAccount(db, caller.accountId) : Promise.resolve(null)
   ])
   const referenced = (row: SandboxRow, live: readonly PresenceRow[]) =>
     [row.user_id, row.created_by, row.last_activity_by, ...live.map((p) => p.user_id)].filter(
@@ -197,6 +199,10 @@ export async function workspaceViews(db: D1Database, caller: SandboxCaller, rows
     return {
       ...sandboxView(row),
       title: row.name,
+      // W-123 in its account; null only for a row that predates numbering and was never backfilled.
+      number: row.number ?? null,
+      // The link to copy: org slug + number when both exist, else the sandbox id form.
+      link: workspaceLink(row, slug),
       repo: repoView(row),
       visibility: row.visibility,
       section: row.section,
@@ -425,27 +431,56 @@ export async function reportPresence(
   return { presence: view!.presence }
 }
 
-const LinkQuery = z.object({
-  w: z.string().regex(/^sbx_[0-9a-f]{24}$/),
-  c: z.string().min(1).max(128).regex(/^[A-Za-z0-9_.:-]+$/).optional()
-})
+const ChatParam = z.string().min(1).max(128).regex(/^[A-Za-z0-9_.:-]+$/).optional()
+const LinkQuery = z.union([
+  z.object({ w: z.string().regex(/^sbx_[0-9a-f]{24}$/), c: ChatParam }),
+  z.object({ org: z.string().min(1).max(40), n: z.coerce.number().int().min(1).max(1e9), c: ChatParam })
+])
 
-/** orca://cloud/w/<id>[/c/<chat>] → the workspace if the caller can see it; otherwise not_found. */
+/** A slug link that names a different org than the caller's current one. */
+export class LinkOtherOrgError extends WorkspaceError {
+  constructor(readonly orgId: string | null) {
+    super('not_found', 'other_org')
+  }
+}
+
+/**
+ * orca://cloud/w/<id>[/c/<chat>] or orca://cloud/<slug>/W-<n>[/c/<chat>] → the workspace if the caller
+ * can see it; otherwise not_found. A slug link for another org answers not_found with reason
+ * `other_org` and that org's id, so a client that belongs to it can offer to switch teams.
+ */
 export async function resolveLink(db: D1Database, caller: SandboxCaller, url: URL, now: number) {
   const query = LinkQuery.safeParse(Object.fromEntries(url.searchParams))
   if (!query.success) {
     throw new WorkspaceError('invalid_request')
   }
-  const row = await getSandbox(db, query.data.w)
+  const q = query.data
+  let row: SandboxRow | null
+  if ('w' in q) {
+    row = await getSandbox(db, q.w)
+  } else {
+    const accountId = await accountForSlug(db, q.org)
+    if (!accountId) {
+      throw new WorkspaceError('not_found')
+    }
+    if (accountId !== caller.accountId) {
+      throw new LinkOtherOrgError(orgIdOf(accountId))
+    }
+    row = await db
+      .prepare('SELECT * FROM sandboxes WHERE account_id = ? AND number = ?')
+      .bind(accountId, q.n)
+      .first<SandboxRow>()
+  }
   if (!row || !canSee(caller, row)) {
     // Private, other org, or gone: the link reveals nothing about which.
     throw new WorkspaceError('not_found')
   }
   const [view] = await workspaceViews(db, caller, [row], now)
-  return { workspace: view, chatId: query.data.c ?? null }
+  return { workspace: view, chatId: q.c ?? null }
 }
 
 /** Canonical deep link for a workspace (and optionally a chat in it). */
-export function workspaceLink(id: string, chatId?: string): string {
-  return `orca://cloud/w/${id}${chatId ? `/c/${encodeURIComponent(chatId)}` : ''}`
+export function workspaceLink(row: Pick<SandboxRow, 'id' | 'number'>, slug: string | null, chatId?: string): string {
+  const chat = chatId ? `/c/${encodeURIComponent(chatId)}` : ''
+  return slug && row.number ? `orca://cloud/${slug}/W-${row.number}${chat}` : `orca://cloud/w/${row.id}${chat}`
 }

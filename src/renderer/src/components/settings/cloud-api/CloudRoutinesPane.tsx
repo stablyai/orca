@@ -16,6 +16,7 @@ import { localTimeZone } from './cloud-api-format'
 import { toCloudLoadState, type CloudApiFailure, type CloudLoadState } from './cloud-load-state'
 import { useOrcaCloudApiAvailability } from '@/hooks/useOrcaCloudApiAvailability'
 import { useRequestGeneration } from './use-request-generation'
+import { useOrgRoster } from '../../billing/team/use-org-roster'
 
 const RUNS_PAGE_SIZE = 20
 
@@ -48,6 +49,20 @@ export function CloudRoutinesPane(): React.JSX.Element | null {
   const [installations, setInstallations] = useState<CloudApiInstallation[] | null>(null)
   const [now, setNow] = useState(() => Date.now())
   const timezone = useMemo(() => localTimeZone(), [])
+  // Creators the server can't name come from the team roster, the same directory Home uses.
+  const orgId = useAppStore((s) => s.orcaProfileAuthStatus?.cloud?.activeOrgId ?? null)
+  const roster = useOrgRoster(orgId)
+  const memberNames = useMemo(() => {
+    const names = new Map<string, string>()
+    if (roster.result?.status === 'ok') {
+      for (const m of roster.result.roster.members) {
+        if (m.userId && (m.displayName || m.email)) {
+          names.set(m.userId, m.displayName || m.email)
+        }
+      }
+    }
+    return names
+  }, [roster.result])
   const word = useCallback(
     (failure: CloudApiFailure) => cloudApiErrorCopy(failure.error, t, failure),
     [t]
@@ -126,6 +141,7 @@ export function CloudRoutinesPane(): React.JSX.Element | null {
       onRefresh={() => void load()}
       refreshing={refreshing}
       viewerUserId={viewerUserId}
+      memberNames={memberNames}
       onOpenWorkspace={(sandboxId) => void openRunWorkspace(sandboxId)}
       onLatestRun={(routine, run) => {
         // Keep the row's pill in step with the newest run its open history just fetched.

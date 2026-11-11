@@ -283,6 +283,41 @@ export const runHistory = defineFixture({
   render: () => <CloudRoutinesView {...props} initial={{ historyFor: 'rt_review' }} />
 })
 
+/** Right after Run now: the pill and history say Queued; the button is back to Run now. */
+export const justQueued = defineFixture({
+  width: 820,
+  render: () => (
+    <CloudRoutinesView
+      {...props}
+      routines={{
+        status: 'ok',
+        data: ROUTINES.map((r) =>
+          r.id === 'rt_triage'
+            ? { ...r, lastRun: { id: 'run_q', status: 'queued', finishedAt: null } }
+            : r
+        )
+      }}
+      loadRuns={async () => ({
+        ok: true,
+        data: {
+          runs: [
+            run({
+              id: 'run_q',
+              status: 'queued',
+              trigger: 'manual',
+              createdAt: NOW - 3_000,
+              startedAt: null
+            }),
+            ...RUNS.runs.slice(1)
+          ],
+          nextBefore: null
+        }
+      })}
+      initial={{ historyFor: 'rt_triage' }}
+    />
+  )
+})
+
 export const runHistoryEmpty = defineFixture({
   width: 820,
   render: () => (

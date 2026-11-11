@@ -254,7 +254,21 @@
         "trialHoursLeft_one": "Trial · {{count}} sandbox hour left",
         "trialHoursLeft_other": "Trial · {{count}} sandbox hours left",
         "trialHoursUsed_one": "{{used}} of {{count}} sandbox hour used",
-        "trialHoursUsed_other": "{{used}} of {{count}} sandbox hours used"
+        "trialHoursUsed_other": "{{used}} of {{count}} sandbox hours used",
+        "usage": {
+          "deletedWorkspaces_one": "Deleted workspace",
+          "deletedWorkspaces_other": "{{count}} deleted workspaces",
+          "formerMembers_one": "Former member",
+          "formerMembers_other": "{{count}} former members",
+          "otherMembers_one": "{{count}} other",
+          "otherMembers_other": "{{count}} others",
+          "otherWorkspaces_one": "{{count}} other workspace",
+          "otherWorkspaces_other": "{{count}} other workspaces",
+          "total_one": "{{value}} sandbox hour",
+          "total_other": "{{value}} sandbox hours",
+          "windowTotal_one": "{{value}} sandbox hour in 30 days",
+          "windowTotal_other": "{{value}} sandbox hours in 30 days"
+        }
       },
       "browser-pane": {
         "markup": {
@@ -270,10 +284,8 @@
         "errorSeatSandboxLimitSelf_other": "You already have {{count}} sandboxes running, the most one seat can run. Put one to sleep or delete it, then try again.",
         "errorTeamSandboxLimit_one": "Your team can run {{count}} sandbox at once ({{perSeat}} per seat). Put it to sleep or delete it, then try again.",
         "errorTeamSandboxLimit_other": "Your team can run {{count}} sandboxes at once ({{perSeat}} per seat). Put one to sleep or delete it, then try again.",
-        "listMeta2_one": "{{count}} workspace · {{usage}}",
-        "listMeta2_other": "{{count}} workspaces · {{usage}}",
-        "listSandboxHours_one": "{{hours}} sandbox hour used",
-        "listSandboxHours_other": "{{hours}} sandbox hours used",
+        "listMetaCount_one": "{{count}} workspace",
+        "listMetaCount_other": "{{count}} workspaces",
         "rowSandboxHours_one": "{{hours}} sandbox hour",
         "rowSandboxHours_other": "{{hours}} sandbox hours",
         "sectionCount_one": "{{count}} workspace",
@@ -1571,6 +1583,20 @@
       "lead_other": "{{hours}} sandbox hours to try Orca Cloud. No card needed."
     }
   },
+  "cloudSkillsSync": {
+    "row": {
+      "withheld_one": "Synced without 1 file that looks like a key or credential",
+      "withheld_other": "Synced without {{count}} files that look like keys or credentials"
+    },
+    "summary": {
+      "notSynced_one": "{{count}} found, not synced yet",
+      "notSynced_other": "{{count}} found, not synced yet",
+      "skipped_one": "{{count}} not synced",
+      "skipped_other": "{{count}} not synced",
+      "synced_one": "{{count}} synced",
+      "synced_other": "{{count}} synced"
+    }
+  },
   "codeHost": {
     "bitbucketConnect": {
       "accessTokenRequired": "Enter an access token.",
@@ -2131,14 +2157,10 @@
       "cloudHours": {
         "planChip_one": "{{hours}} sandbox hour left",
         "planChip_other": "{{hours}} sandbox hours left",
-        "planToast_one": "Using sandbox hours · {{hours}} sandbox hour left",
-        "planToast_other": "Using sandbox hours · {{hours}} sandbox hours left",
         "trialChip_one": "Trial · {{hours}} sandbox hour left",
         "trialChip_other": "Trial · {{hours}} sandbox hours left",
         "trialOffered_one": "Trial · {{hours}} sandbox hour left · No card needed",
-        "trialOffered_other": "Trial · {{hours}} sandbox hours left · No card needed",
-        "trialToast_one": "Using sandbox hours · {{hours}} sandbox hour left in your trial",
-        "trialToast_other": "Using sandbox hours · {{hours}} sandbox hours left in your trial"
+        "trialOffered_other": "Trial · {{hours}} sandbox hours left · No card needed"
       },
       "cloudSetup": {
         "trialOffer_one": "{{hours}} sandbox hour to try Orca Cloud",
@@ -2481,6 +2503,9 @@
         "sendingDisabled": "sending diagnostics is disabled",
         "sendingNotConfigured": "sending diagnostics is not configured for this build"
       }
+    },
+    "groups": {
+      "orcaCloud": "Orca Cloud"
     },
     "mcp": {
       "serverCount_one": "{{count}} server",

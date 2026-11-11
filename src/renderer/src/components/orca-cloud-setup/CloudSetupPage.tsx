@@ -3,24 +3,28 @@
 // steps are ticks in the stepper. Browser hops only for sign-in, Stripe and GitHub. When every
 // step is done, the saved prompt starts by itself.
 import React from 'react'
-import { ArrowLeft, Check, Cloud, Copy, ExternalLink, LoaderCircle } from 'lucide-react'
+import { ArrowLeft, Check, Copy, ExternalLink, LoaderCircle, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { useTranslate } from '@/i18n/use-translate'
-import type { CloudSetupStep } from '@/components/new-workspace/run-on/cloud-start-model'
+import type {
+  CloudSetupStep,
+  CloudSetupStepId
+} from '@/components/new-workspace/run-on/cloud-start-model'
 import { CloudSetupErrorNotice } from '@/components/new-workspace/cloud-setup/CloudSetupErrorNotice'
-import { currentStepCopy, stepLabel } from './cloud-setup-page-copy'
+import { currentStepCopy, doneStepCopy, stepLabel, type StepCopy } from './cloud-setup-page-copy'
 import type { CloudSetupFlow } from './use-cloud-setup-flow'
-import { openOrcaCloudAgentAccounts } from '@/components/new-workspace/OrcaCloudAgentSetupRow'
 
 export type CloudSetupPageProps = {
   flow: CloudSetupFlow
   projectName: string | null
   prompt: string
   agentLabel: string | null
-  /** Back to the composer with the prompt, project and agent as they were. */
-  onBack: () => void
+  /** Back from the first step: Create workspace again, with the prompt, project and agent kept. */
+  onBackToComposer: () => void
+  /** The × in the corner: leave setup, keep the draft (nothing starts). */
+  onExit: () => void
   /** "All set": shown for a moment before the workspace starts. */
   starting: boolean
 }
@@ -30,11 +34,17 @@ type StepState = 'done' | 'current' | 'todo'
 function SetupStepper({
   steps,
   current,
-  allDone
+  viewing,
+  allDone,
+  onView
 }: {
   steps: readonly CloudSetupStep[]
   current: CloudSetupStep | null
+  /** A finished step being revisited. */
+  viewing: CloudSetupStepId | null
   allDone: boolean
+  /** Revisit a finished step; null returns to the current one. */
+  onView: (id: CloudSetupStepId | null) => void
 }): React.JSX.Element {
   const t = useTranslate()
   const currentIndex = current ? steps.findIndex((step) => step.id === current.id) : steps.length
@@ -47,9 +57,9 @@ function SetupStepper({
         const state: StepState =
           allDone || index < currentIndex ? 'done' : index === currentIndex ? 'current' : 'todo'
         const label = stepLabel(step, t)
-        return (
-          <li key={step.id} className="flex items-center gap-2" data-setup-page-step={step.id}>
-            {index > 0 ? <span aria-hidden className="h-px w-6 bg-border" /> : null}
+        const shownHere = viewing ? viewing === step.id : state === 'current'
+        const mark = (
+          <>
             <span
               aria-hidden
               className={cn(
@@ -67,7 +77,7 @@ function SetupStepper({
             <span
               className={cn(
                 'text-xs',
-                state === 'current' ? 'font-medium text-foreground' : 'text-muted-foreground'
+                shownHere ? 'font-medium text-foreground' : 'text-muted-foreground'
               )}
             >
               {label}
@@ -79,6 +89,31 @@ function SetupStepper({
                     : ''}
               </span>
             </span>
+          </>
+        )
+        // Finished steps (and the current one, to come back to it) open; future ones don't.
+        const clickable =
+          !allDone && (state === 'done' || (state === 'current' && viewing !== null))
+        return (
+          <li key={step.id} className="flex items-center gap-2" data-setup-page-step={step.id}>
+            {index > 0 ? <span aria-hidden className="h-px w-6 bg-border" /> : null}
+            {clickable ? (
+              <button
+                type="button"
+                aria-current={shownHere ? 'step' : undefined}
+                onClick={() => onView(state === 'current' ? null : step.id)}
+                className="flex items-center gap-2 rounded-sm outline-none focus-visible:ring-1 focus-visible:ring-focus-ring"
+              >
+                {mark}
+              </button>
+            ) : (
+              <span
+                className="flex items-center gap-2"
+                aria-current={shownHere ? 'step' : undefined}
+              >
+                {mark}
+              </span>
+            )}
           </li>
         )
       })}
@@ -95,6 +130,11 @@ function BrowserWaiting({ flow }: { flow: CloudSetupFlow }): React.JSX.Element {
         {t('cloudSetupPage.waitingBrowser', 'Waiting for your browser…')}
       </span>
       <span className="ms-auto flex items-center gap-2">
+        {flow.signingIn ? (
+          <Button type="button" variant="ghost" size="sm" onClick={flow.cancelSignIn}>
+            {t('cloudSetupPage.cancelSignIn', 'Cancel')}
+          </Button>
+        ) : null}
         {flow.copyLink ? (
           <Button type="button" variant="ghost" size="sm" onClick={flow.copyLink}>
             <Copy aria-hidden />
@@ -124,12 +164,22 @@ function StepActions({ flow }: { flow: CloudSetupFlow }): React.JSX.Element | nu
     flow.action === 'choose-plan' ||
     flow.action === 'fix-billing' ||
     flow.action === 'github-install'
-  if (flow.inBrowser && inBrowserAction && !flow.error) {
+  if (flow.signingIn || (flow.inBrowser && inBrowserAction && !flow.error)) {
     return <BrowserWaiting flow={flow} />
   }
   const continueLabel = t('cloudSetupPage.continueInBrowser', 'Continue in browser')
   switch (flow.action) {
     case 'sign-in':
+      return flow.signInDidNotFinish ? (
+        <div className="flex flex-col items-start gap-3">
+          <p role="status" className="text-sm text-muted-foreground">
+            {t('cloudSetupPage.signIn.didNotFinish', 'Sign-in didn’t finish. Try again.')}
+          </p>
+          {browser(continueLabel, flow.continueInBrowser)}
+        </div>
+      ) : (
+        browser(continueLabel, flow.continueInBrowser)
+      )
     case 'choose-plan':
       return browser(continueLabel, flow.continueInBrowser)
     case 'fix-billing':
@@ -152,20 +202,6 @@ function StepActions({ flow }: { flow: CloudSetupFlow }): React.JSX.Element | nu
       )
     case 'switch-team':
       return <div>{flow.teamAction}</div>
-    case 'agent':
-      return (
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            type="button"
-            onClick={flow.current?.action?.onClick ?? openOrcaCloudAgentAccounts}
-          >
-            {flow.current?.action?.label ?? t('cloudSetupPage.agent.setUp', 'Set up once')}
-          </Button>
-          <Button type="button" variant="ghost" onClick={flow.skipAgent}>
-            {t('cloudSetupPage.agent.skip', 'Skip for now')}
-          </Button>
-        </div>
-      )
     case 'needs-repository':
       return flow.current?.action ? (
         <Button type="button" variant="outline" onClick={flow.current.action.onClick}>
@@ -198,50 +234,120 @@ function StepActions({ flow }: { flow: CloudSetupFlow }): React.JSX.Element | nu
   }
 }
 
+function StepBody({ copy, checking }: { copy: StepCopy; checking: boolean }): React.JSX.Element {
+  return (
+    <>
+      {checking ? (
+        <Skeleton className="h-4 w-72" />
+      ) : copy.lead ? (
+        <p className="text-sm leading-relaxed text-muted-foreground">{copy.lead}</p>
+      ) : null}
+      {copy.aside ? <p className="text-sm italic text-muted-foreground">{copy.aside}</p> : null}
+      {copy.note ? <p className="text-xs text-muted-foreground">{copy.note}</p> : null}
+    </>
+  )
+}
+
 export function CloudSetupPage({
   flow,
   projectName,
   prompt,
   agentLabel,
-  onBack,
+  onBackToComposer,
+  onExit,
   starting
 }: CloudSetupPageProps): React.JSX.Element {
   const t = useTranslate()
   const titleId = React.useId()
   const headingRef = React.useRef<HTMLHeadingElement>(null)
+  // A finished step opened from the stepper or Back; null shows the current step.
+  const [viewing, setViewing] = React.useState<CloudSetupStepId | null>(null)
   // Every row reads done but hasn't held yet: still "Checking" until the layer says it's starting.
   const shown: CloudSetupFlow = starting
     ? { ...flow, action: 'done' }
     : flow.action === 'done'
       ? { ...flow, action: 'checking' }
       : flow
-  const copy = currentStepCopy(shown, t, agentLabel)
+  const viewed = viewing && !starting ? flow.steps.find((step) => step.id === viewing) : undefined
+  const copy: StepCopy = viewed ? doneStepCopy(viewed, t, agentLabel) : currentStepCopy(shown, t)
+
+  // Back walks to the previous step; from the first it returns to Create workspace.
+  const back = (): void => {
+    const steps = flow.steps
+    const from = viewing
+      ? steps.findIndex((step) => step.id === viewing)
+      : flow.current
+        ? steps.findIndex((step) => step.id === flow.current?.id)
+        : steps.length
+    const previous = from > 0 ? steps[from - 1] : undefined
+    if (previous && !starting) {
+      setViewing(previous.id)
+      return
+    }
+    // Leaving setup cancels a sign-in this page started (it must not finish behind the user).
+    flow.abandon()
+    onBackToComposer()
+  }
+
+  const exit = (): void => {
+    flow.abandon()
+    onExit()
+  }
+
   // Each new step moves focus to its heading so screen readers hear the change once.
-  const stepKey = `${shown.current?.id ?? 'done'}:${shown.action}`
+  const stepKey = `${viewing ?? shown.current?.id ?? 'done'}:${shown.action}`
   React.useEffect(() => {
     headingRef.current?.focus({ preventScroll: true })
   }, [stepKey])
+
+  const context = [
+    prompt.trim()
+      ? t('cloudSetupPage.headerFor', 'Setting up Orca Cloud for {{name}}', { name: prompt.trim() })
+      : t('cloudSetupPage.header', 'Setting up Orca Cloud'),
+    projectName,
+    agentLabel
+  ]
+    .filter(Boolean)
+    .join(' · ')
+
   return (
     <section
       aria-labelledby={titleId}
       data-cloud-setup-page="true"
       className="flex h-full min-h-0 w-full flex-col overflow-y-auto bg-background scrollbar-sleek"
     >
-      <div className="mx-auto flex w-full max-w-xl flex-1 flex-col px-8 pb-12 pt-10">
-        <div className="flex items-center justify-between gap-3">
-          <Button type="button" variant="ghost" size="sm" className="-ms-2" onClick={onBack}>
-            <ArrowLeft aria-hidden />
-            {t('cloudSetupPage.back', 'Back')}
-          </Button>
-          <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Cloud className="size-3.5" aria-hidden />
-            {t('cloudSetupPage.eyebrow', 'Orca Cloud setup')}
-          </span>
-        </div>
+      <div className="flex shrink-0 items-center gap-3 px-6 pt-5">
+        <Button type="button" variant="ghost" size="sm" className="-ms-2" onClick={back}>
+          <ArrowLeft aria-hidden />
+          {t('cloudSetupPage.back', 'Back')}
+        </Button>
+        <span
+          className="min-w-0 flex-1 truncate text-center text-xs text-muted-foreground"
+          data-cloud-setup-context="true"
+        >
+          {context}
+        </span>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          aria-label={t('cloudSetupPage.exit', 'Exit setup')}
+          title={t('cloudSetupPage.exit', 'Exit setup')}
+          onClick={exit}
+        >
+          <X aria-hidden />
+        </Button>
+      </div>
 
-        <div className="mt-8">
-          <SetupStepper steps={flow.steps} current={flow.current} allDone={starting} />
-        </div>
+      {/* The same optically-centred top offset on every step, so nothing jumps between them. */}
+      <div className="mx-auto w-full max-w-xl px-8 pb-12 pt-[max(2rem,calc(22vh-3.5rem))]">
+        <SetupStepper
+          steps={flow.steps}
+          current={flow.current}
+          viewing={viewing}
+          allDone={starting}
+          onView={setViewing}
+        />
 
         <div className="mt-8 space-y-3">
           <h1
@@ -252,15 +358,10 @@ export function CloudSetupPage({
           >
             {copy.title}
           </h1>
-          {shown.action === 'checking' ? (
-            <Skeleton className="h-4 w-72" />
-          ) : copy.lead ? (
-            <p className="text-sm leading-relaxed text-muted-foreground">{copy.lead}</p>
-          ) : null}
-          {copy.note ? <p className="text-xs text-muted-foreground">{copy.note}</p> : null}
+          <StepBody copy={copy} checking={!viewed && shown.action === 'checking'} />
         </div>
 
-        {flow.error && !starting ? (
+        {flow.error && !starting && !viewed ? (
           <CloudSetupErrorNotice
             error={flow.error}
             canManageBilling={flow.canManageBilling}
@@ -271,24 +372,14 @@ export function CloudSetupPage({
           />
         ) : null}
 
-        <div className="mt-6">
-          <StepActions flow={shown} />
-        </div>
-
-        <div className="mt-12">
-          <div className="rounded-lg border border-border bg-muted/30 px-4 py-3">
-            <div className="text-xs font-medium text-muted-foreground">
-              {t('cloudSetupPage.startsAfter', 'Starts when setup is done')}
-            </div>
-            <div className="mt-1 truncate text-sm text-foreground">
-              {prompt.trim() || t('cloudSetupPage.untitled', 'New cloud workspace')}
-            </div>
-            <div className="mt-0.5 truncate text-xs text-muted-foreground">
-              {[projectName, agentLabel, t('cloudSetupPage.orcaCloud', 'Orca Cloud')]
-                .filter(Boolean)
-                .join(' · ')}
-            </div>
-          </div>
+        <div className="mt-6 flex justify-end">
+          {viewed ? (
+            <Button type="button" onClick={() => setViewing(null)}>
+              {t('cloudSetupPage.continue', 'Continue')}
+            </Button>
+          ) : (
+            <StepActions flow={shown} />
+          )}
         </div>
       </div>
     </section>

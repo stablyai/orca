@@ -1,7 +1,6 @@
 // The status (dot and text) of a cloud agent row that needs sign-in: clicking it opens
 // Settings → Agent accounts, where the fix lives. The rest of the row still opens the pane.
 import React, { useCallback } from 'react'
-import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import { AgentStateDot } from '@/components/AgentStateDot'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -11,10 +10,9 @@ import { openOrcaCloudAgentAccounts } from '@/components/new-workspace/OrcaCloud
 /** What the status shows: its label, the agent's catalog name, and the tooltip naming the fix. */
 export type CloudAgentRowStatusText = { label: string; agentName: string; tooltip: string | null }
 
-/** The composer's "Set up once" target, plus opening Settings, which the sidebar has closed. */
+/** The sidebar row's "Set up once": the focused Orca Cloud sign-in sheet (JA-04). */
 export function openCloudAgentAccountsSettings(): void {
   openOrcaCloudAgentAccounts()
-  useAppStore.getState().openSettingsPage()
 }
 
 /**

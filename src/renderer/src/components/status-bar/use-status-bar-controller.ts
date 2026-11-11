@@ -17,6 +17,7 @@ import { useStatusBarDensity } from './status-bar-density'
 import { getUsageOwnerHostScope, useOwnerUsageRateLimits } from './use-owner-usage-rate-limits'
 import { isOwnerNotSetUpPlaceholder } from './owner-usage-rate-limits'
 import { useTranslate } from '@/i18n/use-translate'
+import { isOrcaCloudEnvironmentId } from '@/lib/orca-cloud/orca-cloud-environment-id'
 
 export function useStatusBarController(floatingTerminalOpen: boolean) {
   const t = useTranslate()
@@ -201,8 +202,10 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok, cursor, zcode, muse },
     usageSettings
   )
-  // Why: one-time nudge — once dismissed, stays hidden even if providers reconnect later.
-  const showEmptyUsageCta = isEmptyUsageState && !usageEmptyStateDismissed
+  // Why: one-time nudge — once dismissed, stays hidden even if providers reconnect later. Never on
+  // Orca Cloud: sandboxes don't publish agent usage, and "No usage on Orca Cloud" reads as hours (JA-07).
+  const onOrcaCloud = remoteOwner !== null && isOrcaCloudEnvironmentId(remoteOwner.environmentId)
+  const showEmptyUsageCta = isEmptyUsageState && !usageEmptyStateDismissed && !onOrcaCloud
   const anyFetching =
     claude?.status === 'fetching' ||
     codex?.status === 'fetching' ||

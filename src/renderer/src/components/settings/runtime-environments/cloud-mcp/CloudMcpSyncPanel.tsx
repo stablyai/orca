@@ -22,7 +22,8 @@ import {
   mcpSyncTimeLabel
 } from './cloud-mcp-sync-copy'
 
-const AGENT_LABEL = { claude: 'Claude Code', codex: 'Codex' } as const
+// Glossary: the catalog name is "Claude", never "Claude Code".
+const AGENT_LABEL = { claude: 'Claude', codex: 'Codex' } as const
 
 export type CloudMcpSyncPanelProps = {
   status: McpSyncStatus

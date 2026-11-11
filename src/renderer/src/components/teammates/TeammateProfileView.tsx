@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils'
 import type { CloudWorkspace } from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
 import type { OrcaOrgRole } from '../../../../shared/orca-profiles'
 import type { TeammateProfile } from '../../../../shared/cloud-workspaces/team-presence-wire'
+import { ProfilePicture } from '../billing/team/TeamAvatar'
 import { roleLabel } from '../billing/team/team-roles'
 import { dotState, statusLabel } from '../cloud-workspaces/CloudWorkspaceRow'
 import {
@@ -33,6 +34,8 @@ export type TeammateProfileViewProps = {
   /** Roster name, else the control plane's, else a short id. */
   name: string
   email: string | null
+  /** Profile picture from the roster (https only); initials when absent or it fails to load. */
+  pictureUrl?: string
   role: OrcaOrgRole | null
   profile: TeammateProfile | null
   /** Set when the profile couldn't load; the header still shows from the roster. */
@@ -46,7 +49,15 @@ export type TeammateProfileViewProps = {
   onTurnOnPokes: () => void
 }
 
-function LargeAvatar({ userId, name }: { userId: string; name: string }): React.JSX.Element {
+function LargeAvatar({
+  userId,
+  name,
+  pictureUrl
+}: {
+  userId: string
+  name: string
+  pictureUrl: string | undefined
+}): React.JSX.Element {
   // Same per-member hue as the small avatars on workspace rows, so a teammate keeps one color.
   const hueStyle: React.CSSProperties & { '--avatar-hue': string } = {
     '--avatar-hue': String(memberHue(userId))
@@ -56,12 +67,13 @@ function LargeAvatar({ userId, name }: { userId: string; name: string }): React.
       aria-hidden
       style={hueStyle}
       className={cn(
-        'inline-flex size-12 shrink-0 select-none items-center justify-center rounded-full text-base font-medium',
+        'relative inline-flex size-12 shrink-0 select-none items-center justify-center overflow-hidden rounded-full text-base font-medium',
         'bg-[hsl(var(--avatar-hue)_45%_88%)] text-[hsl(var(--avatar-hue)_45%_28%)]',
         'dark:bg-[hsl(var(--avatar-hue)_30%_26%)] dark:text-[hsl(var(--avatar-hue)_55%_82%)]'
       )}
     >
       {initials(name)}
+      <ProfilePicture url={pictureUrl} />
     </span>
   )
 }
@@ -142,7 +154,7 @@ export function TeammateProfileView(props: TeammateProfileViewProps): React.JSX.
   return (
     <div className="flex flex-col gap-6" aria-busy={loading || undefined}>
       <header className="flex items-center gap-4 pr-8">
-        <LargeAvatar userId={props.userId} name={props.name} />
+        <LargeAvatar userId={props.userId} name={props.name} pictureUrl={props.pictureUrl} />
         <div className="min-w-0 flex-1">
           <h2
             className="flex min-w-0 items-center gap-2 text-base font-semibold outline-none"

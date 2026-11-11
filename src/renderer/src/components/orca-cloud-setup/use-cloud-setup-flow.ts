@@ -3,6 +3,7 @@
 // one-trip setup session (#255) with its deep-link return (#257), B2's team switch, and the
 // tracker's error parsing (#260). Only the UI moved: from a card in the dialog to this page.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useAppStore } from '@/store'
 import { claimOrcaCloudTrial } from '@/components/billing/claim-trial'
 import {
   invalidateOrcaCloudBilling,
@@ -20,11 +21,7 @@ import {
   reopenCloudSetup
 } from '@/components/new-workspace/cloud-setup/cloud-setup-tracker-actions'
 import { getCloudSetupStarter } from '@/lib/orca-cloud/cloud-setup-session-seam'
-import {
-  isCloudSetupAgentSkipped,
-  rememberCloudSetupAgentSkipped,
-  type CloudSetupPageRequest
-} from '@/lib/orca-cloud/cloud-setup-page-store'
+import type { CloudSetupPageRequest } from '@/lib/orca-cloud/cloud-setup-page-store'
 import { reportCloudSetupProgress } from '@/lib/orca-cloud/cloud-setup-telemetry'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import type { OrcaCloudAvailability } from '../../../../shared/orca-yaml-hook-types'
@@ -80,6 +77,13 @@ function useLiveAvailability(
 export type CloudSetupFlow = CloudSetupPageModel & {
   /** True from the click until the browser opens or the trial answers. */
   busy: boolean
+  /** This page's browser sign-in is pending: the page offers Cancel and keeps Reopen browser live. */
+  signingIn: boolean
+  /** The last sign-in stopped on its own (it timed out): "Sign-in didn’t finish. Try again." */
+  signInDidNotFinish: boolean
+  cancelSignIn: () => void
+  /** Leaving setup (Back): cancels a sign-in this page started. */
+  abandon: () => void
   /** The browser trip is open: the current step reads "Waiting for your browser". */
   inBrowser: boolean
   error: ReturnType<typeof parseCloudSetupError>
@@ -89,7 +93,6 @@ export type CloudSetupFlow = CloudSetupPageModel & {
   startTrial: () => void
   fixBilling: () => void
   installGitHub: () => void
-  skipAgent: () => void
   checkAgain: () => void
   copyLink: (() => void) | null
   reopenBrowser: () => void
@@ -108,7 +111,6 @@ export function useCloudSetupFlow(
   // opened for, so it waits on all of them; a single hop (GitHub install, billing) only on its own.
   const [browserStep, setBrowserStep] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  const [agentSkipped, setAgentSkipped] = useState(() => isCloudSetupAgentSkipped(request.agent))
   const githubOverride = useMemo<CloudSetupStep | null>(
     () => (request.cloudOnlyRepo ? { id: 'github', state: 'done' } : null),
     [request.cloudOnlyRepo]
@@ -127,14 +129,14 @@ export function useCloudSetupFlow(
     githubOverride
   })
   const { steps, held: switchTeam } = useSwitchTeamSteps(rowSteps, !session)
-  const model = cloudSetupPageModel(steps, { agentSkipped, teamSwitch: switchTeam !== null })
+  const model = cloudSetupPageModel(steps, { teamSwitch: switchTeam !== null })
   const error = useMemo(() => {
     const parsed = parseCloudSetupError(session?.error)
     return parsed && session?.teamName ? { ...parsed, teamName: session.teamName } : parsed
   }, [session?.error, session?.teamName])
 
   // Rows derived from billing tick on their own: re-read while a step is waiting elsewhere.
-  const waiting = model.action !== 'done' && model.action !== 'agent'
+  const waiting = model.action !== 'done'
   useEffect(() => {
     if (!waiting || accessOverride) {
       return
@@ -166,6 +168,12 @@ export function useCloudSetupFlow(
     [access, availability]
   )
 
+  const runRef = useRef(0)
+  const [startedSignIn, setStartedSignIn] = useState(false)
+  const signInPending = useAppStore((state) => Boolean(state.orcaProfileSignInProgress))
+  const signInTimedOut = useAppStore((state) => state.orcaProfileSignInEnd === 'timed-out')
+  const signingIn = busy && startedSignIn && signInPending
+
   // One browser trip for everything still open from here (sign-in, team, trial or Checkout, GitHub).
   const continueInBrowser = useCallback(() => {
     const needs = sessionNeedsFrom(stepsRef.current)
@@ -180,9 +188,19 @@ export function useCloudSetupFlow(
       fallback()
       return
     }
+    // Each click is a new run. An older run that ends late (its sign-in was replaced or cancelled)
+    // must not touch the page or open anything.
+    const run = ++runRef.current
+    const isCurrent = (): boolean => run === runRef.current
     setBusy(true)
+    setBrowserStep(null)
+    setStartedSignIn(cloudSetupPageModel(stepsRef.current).current?.id === 'account')
     void start({ repoId: request.repoId, needs })
       .then((opened) => {
+        if (!isCurrent() || (opened && 'cancelled' in opened)) {
+          // Cancelled, timed out or replaced: back to the step's own button; nothing reopens.
+          return
+        }
         markInBrowser()
         if (opened) {
           setSessionId(opened.sessionId)
@@ -190,9 +208,30 @@ export function useCloudSetupFlow(
           fallback()
         }
       })
-      .catch(() => fallback())
-      .finally(() => setBusy(false))
+      .catch(() => {
+        if (isCurrent()) {
+          fallback()
+        }
+      })
+      .finally(() => {
+        if (isCurrent()) {
+          setBusy(false)
+          setStartedSignIn(false)
+        }
+      })
   }, [fallback, markInBrowser, openInstall, request.repoId])
+
+  const cancelSignIn = useCallback(() => {
+    void window.api.orcaProfiles.cancelSignIn().catch(() => {})
+  }, [])
+
+  const abandon = useCallback(() => {
+    if (busy && startedSignIn) {
+      // Back means "not now": the tab this page opened must not sign in behind the user's back.
+      runRef.current++
+      cancelSignIn()
+    }
+  }, [busy, cancelSignIn, startedSignIn])
 
   const startTrial = useCallback(() => {
     setBusy(true)
@@ -217,16 +256,15 @@ export function useCloudSetupFlow(
     void openInstall()
   }, [markInBrowser, openInstall])
 
-  const skipAgent = useCallback(() => {
-    rememberCloudSetupAgentSkipped(request.agent)
-    setAgentSkipped(true)
-  }, [request.agent])
-
   const checkAgain = useCallback(() => void prefetchOrcaCloudBilling(true), [])
 
   return {
     ...model,
-    busy,
+    busy: busy && !signingIn,
+    signingIn,
+    signInDidNotFinish: !busy && signInTimedOut && model.action === 'sign-in',
+    cancelSignIn,
+    abandon,
     inBrowser: browserStep !== null && (sessionId !== null || model.current?.id === browserStep),
     error,
     canManageBilling: access.state === 'no-plan' ? access.canManageBilling : true,
@@ -235,7 +273,6 @@ export function useCloudSetupFlow(
     startTrial,
     fixBilling,
     installGitHub,
-    skipAgent,
     checkAgain,
     copyLink:
       sessionId && canCopyCloudSetupLink(sessionId)

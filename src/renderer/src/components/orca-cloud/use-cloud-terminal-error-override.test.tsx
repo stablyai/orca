@@ -73,4 +73,18 @@ describe('terminal error toast on an Orca Cloud workspace that sleeps', () => {
     const unrelated = render(toast('ws', 'spawn failed: ENOENT'))
     expect(unrelated.container.querySelector('[data-terminal-error-toast]')).not.toBeNull()
   })
+
+  // Glossary lint allowlists these two "VM" match patterns because they are never rendered. If
+  // that ever changes, this fails before the banned word reaches a cloud user.
+  it('never renders the legacy "VM" sleep errors it matches (glossary allowlist)', () => {
+    seed('sleeping')
+    for (const error of [
+      "This workspace's VM is asleep",
+      "This workspace's VM could not wake up"
+    ]) {
+      const { container, unmount } = render(toast('ws', error))
+      expect(container.textContent).not.toMatch(/\bVM\b/)
+      unmount()
+    }
+  })
 })
