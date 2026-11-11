@@ -166,7 +166,10 @@ export function SourceControlContentStatus({
             {
               value0: branchBaseRef
                 ? shortRefLabel(branchBaseRef)
-                : t('auto.components.right.sidebar.source.control.content.status.8deb86bbec', 'base')
+                : t(
+                    'auto.components.right.sidebar.source.control.content.status.8deb86bbec',
+                    'base'
+                  )
             }
           )}
         />
