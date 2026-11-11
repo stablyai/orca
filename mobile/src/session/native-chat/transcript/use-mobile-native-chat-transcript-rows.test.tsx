@@ -4,7 +4,6 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
 import { Harness, Result, userMessage } from './use-mobile-native-chat-turn-disclosure.test-fixture'
-import { codexImageItemBody } from '../../../../../src/main/codex/structured/items/codex-image-item-translation'
 
 function toolRow(id: string): NativeChatMessage {
   return {
@@ -37,12 +36,10 @@ describe('how the structured lane draws its rows, as desktop does', () => {
   it('renders generated output in the shipping answer list through collapse and expansion', () => {
     const generated: NativeChatMessage = {
       ...answer('image'),
-      ...codexImageItemBody({
-        type: 'imageGeneration',
-        id: 'image',
-        status: 'completed',
-        savedPath: '/tmp/elephant.png'
-      })
+      blocks: [
+        { type: 'text' as const, text: 'Generated image', presentation: 'generated-image' },
+        { type: 'image-ref' as const, path: '/tmp/elephant.png' }
+      ]
     }
     const messages = [userMessage('u1'), toolRow('work'), answer('final'), generated]
     act(() => {
@@ -59,7 +56,7 @@ describe('how the structured lane draws its rows, as desktop does', () => {
     const final = read().listMessages.find((row: NativeChatMessage) => row.id === 'final')!
     expect(final.blocks).toEqual([
       { type: 'text', text: 'Done.' },
-      { type: 'image-ref', path: '/tmp/elephant.png' }
+      { type: 'image-ref' as const, path: '/tmp/elephant.png' }
     ])
     expect(read().resolveRow(2, final).foldedAway).not.toBe(true)
     expect(read().resolveRow(1, messages[1]).foldedAway).toBe(true)
@@ -68,7 +65,7 @@ describe('how the structured lane draws its rows, as desktop does', () => {
       read().listMessages.flatMap((row: NativeChatMessage) =>
         row.blocks.filter((block) => block.type === 'image-ref')
       )
-    ).toEqual([{ type: 'image-ref', path: '/tmp/elephant.png' }])
+    ).toEqual([{ type: 'image-ref' as const, path: '/tmp/elephant.png' }])
     expect(read().listMessages.find((row: NativeChatMessage) => row.id === 'final')).toBe(final)
   })
 
@@ -77,12 +74,10 @@ describe('how the structured lane draws its rows, as desktop does', () => {
       userMessage('u1'),
       {
         ...answer('image'),
-        ...codexImageItemBody({
-          type: 'imageGeneration',
-          id: 'image',
-          status: 'completed',
-          savedPath: '/tmp/p.png'
-        })
+        blocks: [
+          { type: 'text' as const, text: 'Generated image', presentation: 'generated-image' },
+          { type: 'image-ref' as const, path: '/tmp/p.png' }
+        ]
       },
       {
         ...answer('final'),
@@ -116,9 +111,9 @@ describe('how the structured lane draws its rows, as desktop does', () => {
     update(false)
     expect(images()).toEqual([])
     update(true)
-    expect(images()).toEqual([{ type: 'image-ref', path: '/tmp/p.png' }])
+    expect(images()).toEqual([{ type: 'image-ref' as const, path: '/tmp/p.png' }])
     act(() => renderer!.root.findByType(Result).props.disclosure.onToggleTurn('u1'))
-    expect(images()).toEqual([{ type: 'image-ref', path: '/tmp/p.png' }])
+    expect(images()).toEqual([{ type: 'image-ref' as const, path: '/tmp/p.png' }])
     update(false)
     expect(images()).toEqual([])
   })
@@ -135,12 +130,10 @@ describe('how the structured lane draws its rows, as desktop does', () => {
         userMessage('u1'),
         {
           ...answer('image'),
-          ...codexImageItemBody({
-            type: 'imageGeneration',
-            id: 'image',
-            status: 'completed',
-            savedPath: '/tmp/p.png'
-          })
+          blocks: [
+            { type: 'text' as const, text: 'Generated image', presentation: 'generated-image' },
+            { type: 'image-ref' as const, path: '/tmp/p.png' }
+          ]
         },
         { ...answer('final'), blocks: texts.map((text) => ({ type: 'text' as const, text })) }
       ]
@@ -161,7 +154,7 @@ describe('how the structured lane draws its rows, as desktop does', () => {
         final.blocks.filter(
           (block: NativeChatMessage['blocks'][number]) => block.type === 'image-ref'
         )
-      ).toEqual(retained ? [{ type: 'image-ref', path: '/tmp/p.png' }] : [])
+      ).toEqual(retained ? [{ type: 'image-ref' as const, path: '/tmp/p.png' }] : [])
     }
   )
 

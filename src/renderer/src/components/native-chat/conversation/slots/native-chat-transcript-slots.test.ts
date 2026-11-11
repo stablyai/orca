@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import * as imageSources from '../../markdown/native-chat-markdown-image-sources'
 import { nativeChatAgentRowWords } from '../../messages/rows/native-chat-message-row-words'
-import { codexImageItemBody } from '../../../../../../main/codex/structured/items/codex-image-item-translation'
 
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 
@@ -62,15 +61,13 @@ function toolRun(id: string): NativeChatMessage {
 }
 
 describe('transcript slots', () => {
-  it('shows production generated output with final prose after settlement and only once when expanded', () => {
+  it('shows completed generated output with final prose after settlement and only once when expanded', () => {
     const generated: NativeChatMessage = {
       ...text('image', ''),
-      ...codexImageItemBody({
-        type: 'imageGeneration',
-        id: 'image',
-        status: 'completed',
-        savedPath: '/tmp/elephant.png'
-      })
+      blocks: [
+        { type: 'text', text: 'Generated image', presentation: 'generated-image' },
+        { type: 'image-ref', path: '/tmp/elephant.png' }
+      ]
     }
     const rows = [
       text('u', 'Generate.', 'user'),
@@ -122,12 +119,10 @@ describe('transcript slots', () => {
   ])('deduplicates only rendered image embeds in %s', (markdown, retained) => {
     const generated: NativeChatMessage = {
       ...text('image', ''),
-      ...codexImageItemBody({
-        type: 'imageGeneration',
-        id: 'image',
-        status: 'completed',
-        savedPath: '/tmp/p.png'
-      })
+      blocks: [
+        { type: 'text', text: 'Generated image', presentation: 'generated-image' },
+        { type: 'image-ref', path: '/tmp/p.png' }
+      ]
     }
     const slots = build([text('u', 'Generate.', 'user'), generated, text('answer', markdown)], {
       turnStatuses: {
@@ -147,12 +142,10 @@ describe('transcript slots', () => {
     (count) => {
       const generated: NativeChatMessage = {
         ...text('image', ''),
-        ...codexImageItemBody({
-          type: 'imageGeneration',
-          id: 'image',
-          status: 'completed',
-          savedPath: '/tmp/p.png'
-        })
+        blocks: [
+          { type: 'text', text: 'Generated image', presentation: 'generated-image' },
+          { type: 'image-ref', path: '/tmp/p.png' }
+        ]
       }
       const rows = [
         text('u', 'Generate.', 'user'),

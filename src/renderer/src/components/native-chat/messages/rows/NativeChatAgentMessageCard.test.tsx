@@ -29,7 +29,6 @@ import {
   type NativeChatVisualOwner
 } from '../../media/visuals/native-chat-visual-owner'
 import { useNativeChatTranscriptSlots } from '../../conversation/slots/use-native-chat-transcript-slots'
-import { codexImageItemBody } from '../../../../../../main/codex/structured/items/codex-image-item-translation'
 import { nativeChatGeneratedImageAnswers } from '../../../../../../shared/native-chat/transcript/native-chat-generated-image-answers'
 import { projectStructuredAgentStartItem } from '../../../../../../shared/structured-agent-start-projection'
 import { projectStructuredQuestionMessages } from '../../../../../../shared/structured-agent-question-projection'
@@ -439,14 +438,13 @@ it('rederives generated attachments when the shipping transcript gains or loses 
   const messages: NativeChatMessage[] = [
     {
       id: 'image',
+      role: 'assistant',
       timestamp: 1,
       source: 'transcript',
-      ...codexImageItemBody({
-        type: 'imageGeneration',
-        id: 'image',
-        status: 'completed',
-        savedPath: '/tmp/p.png'
-      })
+      blocks: [
+        { type: 'text', text: 'Generated image', presentation: 'generated-image' },
+        { type: 'image-ref', path: '/tmp/p.png' }
+      ]
     },
     {
       id: 'answer',
@@ -503,12 +501,10 @@ it('renders expanded generated work as a labelled step while the final answer ow
     role: 'assistant',
     timestamp: 1,
     source: 'transcript',
-    ...codexImageItemBody({
-      type: 'imageGeneration',
-      id: 'generated',
-      status: 'completed',
-      savedPath: '/tmp/p.png'
-    })
+    blocks: [
+      { type: 'text', text: 'Generated image', presentation: 'generated-image' },
+      { type: 'image-ref', path: '/tmp/p.png' }
+    ]
   }
   const answer: NativeChatMessage = {
     id: 'answer',
