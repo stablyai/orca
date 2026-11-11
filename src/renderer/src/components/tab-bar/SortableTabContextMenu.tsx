@@ -17,7 +17,10 @@ import { CopyTabIdMenuItem } from './CopyTabIdMenuItem'
 import { useAllowAutoClose } from './use-allow-auto-close'
 import { CloseSplitPaneMenuItem } from './CloseSplitPaneMenuItem'
 import { jumpToWorktreeFromSidebar } from '@/lib/workspace/activation/worktree-jump-navigation'
-import { resolveWorktreeOperationRoute } from '@/lib/workspace/ownership/worktree-operation-route'
+import {
+  getFloatingWorkspaceOperationRoute,
+  resolveWorktreeOperationRoute
+} from '@/lib/workspace/ownership/worktree-operation-route'
 
 const TAB_COLORS = [
   {
@@ -143,6 +146,7 @@ export function SortableTabContextMenu({
     const hostId =
       state.unifiedTabsByWorktree[tab.worktreeId]?.find((item) => item.id === unifiedTabId)
         ?.executionHostId ??
+      getFloatingWorkspaceOperationRoute(tab.worktreeId)?.executionHostId ??
       resolveWorktreeOperationRoute(
         { ...state, activeWorktreeId: null, activeWorkspaceExecutionHostId: null },
         tab.worktreeId
