@@ -70,6 +70,7 @@ describe('phone PR lookups reuse the desktop’s last result', () => {
     clientKind?: DeviceScope
     reason?: GitHubPRRefreshReason
     userRefresh?: boolean
+    foreground?: boolean
     seedFallback?: number
     fallback?: number
     expected: string
@@ -127,9 +128,17 @@ describe('phone PR lookups reuse the desktop’s last result', () => {
       headOid: 'head-a',
       clientKind: 'runtime',
       expected: 'from fresh lookup'
+    },
+    {
+      label: 'looks up again for a phone that just came back to the foreground',
+      branch: 'phone-foreground',
+      headOid: 'head-a',
+      clientKind: 'mobile',
+      foreground: true,
+      expected: 'from fresh lookup'
     }
   ])('$label', async (testCase) => {
-    const { branch, headOid, clientKind, reason, userRefresh, expected } = testCase
+    const { branch, headOid, clientKind, reason, userRefresh, foreground, expected } = testCase
     await commands.getRepoPRForBranch(
       repo.id,
       branch,
@@ -148,7 +157,8 @@ describe('phone PR lookups reuse the desktop’s last result', () => {
       headOid,
       reason,
       userRefresh,
-      clientKind
+      clientKind,
+      foreground
     )
     expect(outcome.kind === 'found' ? outcome.pr.title : null).toBe(expected)
   })

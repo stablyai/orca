@@ -106,6 +106,8 @@ export async function fetchPRForBranch(
     refresh?: boolean
     // The screen's own timer: the host may answer from its last read at its PR auto-refresh cadence.
     background?: boolean
+    // The app just came back to the foreground: the host must not answer from a recent lookup.
+    foreground?: boolean
   }
 ): Promise<GitHubPrReadOutcome<PRInfo | null>> {
   return observe(true, args.refresh === true)
@@ -138,7 +140,8 @@ export async function fetchPRForBranch(
               ...(args.acceptMergedFallbackPR ? { acceptMergedFallbackPR: true } : {}),
               currentHeadOid: args.currentHeadOid ?? null,
               ...(args.refresh ? { userRefresh: true } : {}),
-              ...(args.background && !args.refresh ? { reason: 'swr' } : {})
+              ...(args.background && !args.refresh ? { reason: 'swr' } : {}),
+              ...(args.foreground && !args.refresh && !args.background ? { foreground: true } : {})
             }),
             contract.options
           )

@@ -54,6 +54,7 @@ export class RuntimeGitHubReviewQueryCommands {
   ): Promise<Awaited<ReturnType<typeof getPRChecks>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
     const connectionId = getRepoRoutingConnectionId(repo)
+    const localGitArgs = this.deps.getLocalGitArgs(repo)
     const read = () =>
       getPRChecks(
         repo.path,
@@ -62,7 +63,7 @@ export class RuntimeGitHubReviewQueryCommands {
         prRepo ?? null,
         options,
         connectionId,
-        ...this.deps.getLocalGitArgs(repo)
+        ...localGitArgs
       )
     // A client's timed checks read is capped by this host's cadence like its PR read; an opened panel,
     // a returned window, a refresh and a changed-state read (noCache) still go to the provider.
@@ -72,14 +73,23 @@ export class RuntimeGitHubReviewQueryCommands {
       options.foreground !== true &&
       options.userRefresh !== true &&
       options.noCache !== true
-    if (!timed) {
-      return read()
+    const key = pacedPRChecksKey(
+      repo.path,
+      connectionId,
+      prNumber,
+      headSha,
+      prRepo ?? null,
+      localGitArgs[0] ?? {}
+    )
+    if (timed) {
+      const paced = readPacedPRChecks(key, getPRAutoRefreshCadence())
+      if (paced) {
+        return paced
+      }
     }
-    const key = pacedPRChecksKey(repo.path, connectionId, prNumber, headSha, prRepo ?? null)
-    const paced = readPacedPRChecks(key, getPRAutoRefreshCadence())
-    if (paced) {
-      return paced
-    }
+    // Every successful full read becomes the host's last answer, so a foreground or manual read
+    // never loses to the older timed one a later timed client would otherwise be handed back.
+    // The start sequence keeps an older read that settles later from replacing a newer answer.
     const start = startPRChecksRead()
     const checks = await read()
     recordPRChecksRead(key, start, checks)

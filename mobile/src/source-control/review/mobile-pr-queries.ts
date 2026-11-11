@@ -1,5 +1,5 @@
 import type { QueryClient, QueryKey } from '@tanstack/react-query'
-import { isBackgroundHostRead } from '../../query/host-read-intent'
+import { isBackgroundHostRead, isForegroundHostRead } from '../../query/host-read-intent'
 import type { PRComment } from '../../../../src/shared/github/comment-types'
 import type { PRCheckDetail } from '../../../../src/shared/github/check-types'
 import {
@@ -167,6 +167,7 @@ export const prBranchReviewQuery = defineHostQuery({
           // Only an action's read re-learns host status; revalidations reuse what this connection knows.
           refresh: read.live,
           background: isBackgroundHostRead(read, previous),
+          foreground: isForegroundHostRead(read, previous),
           previous
         }
       ),

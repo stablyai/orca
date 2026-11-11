@@ -1,7 +1,8 @@
 import { useEffect, useRef, type RefObject } from 'react'
 import {
   REVIEW_REFRESH_COOLDOWN_MS,
-  subscribePRAutoRefreshCadence
+  subscribePRAutoRefreshCadence,
+  type PRAutoRefreshCadence
 } from '../../../../../../shared/review-refresh-policy'
 import { installWindowVisibilityTimeoutPoller } from '@/lib/window-activity/window-visibility-timeout-poller'
 import { getPRRefreshOwnerRuntimeEnvironmentId } from '@/store/github/repositories/repository-routing'
@@ -60,15 +61,18 @@ export function useChecksDetailTimer({
       wakeNextReadRef.current = true
       return
     }
-    const policyDelay = (): number | null => {
+    const ownerCadence = (): PRAutoRefreshCadence => {
       const current = modelRef.current
       // The host that reads these checks owns the cadence: a paired host's setting, else this app's.
-      const cadence = hostPRAutoRefreshCadence(
+      return hostPRAutoRefreshCadence(
         getPRRefreshOwnerRuntimeEnvironmentId({
           cacheKey: current.prCacheKey ?? '',
           executionHostId: current.repo?.executionHostId ?? null
         })
       )
+    }
+    const policyDelay = (cadence: PRAutoRefreshCadence = ownerCadence()): number | null => {
+      const current = modelRef.current
       return policyRef.current.delayMs(
         current.activeGitLabReview?.state ?? current.pr?.state,
         current.activeGitLabReview?.status ?? current.pr?.checksStatus,
@@ -136,7 +140,10 @@ export function useChecksDetailTimer({
         return Number.isFinite(nextAttemptAtRef.current)
           ? Math.max(0, nextAttemptAtRef.current - Date.now())
           : delay
-      }
+      },
+      // Returning to the window is a promised foreground read in every mode: when only the owning
+      // host's cadence (not settled checks) stopped the timer, focus still reads once.
+      refreshOnFocusWhileStopped: () => ownerCadence() === 'off' && policyDelay('default') !== null
     })
     refreshRef.current = cleanup.refresh
     // A cadence change (this app's or the owning host's) re-plans a mounted panel at once: a timer

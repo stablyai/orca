@@ -20,9 +20,27 @@ type Entry = {
   target: VisibleHostedReviewRefreshTarget
   lastAttemptAt: number
   failures: number
+  /** When the last attempt failed; the retry is re-timed from it whenever the cadence changes. */
+  failedAt: number | null
   retryAt: number | null
   discovery: boolean
   foreground: boolean
+}
+
+/** The timed retry a failed read earns under the entry's current cadence: none under "off" (a
+ *  failed read waits for the next window return, selection or refresh), else the longer of the
+ *  cadence interval and an exponential backoff. */
+function retryAtFor(entry: Entry): number | null {
+  if (entry.failedAt === null || entry.failures === 0 || entry.target.cadence === 'off') {
+    return null
+  }
+  return (
+    entry.failedAt +
+    Math.max(
+      entry.target.intervalMs ?? 0,
+      Math.min(900_000, 60_000 * 2 ** Math.min(entry.failures - 1, 4))
+    )
+  )
 }
 
 function discoveryIdentityChanged(
@@ -106,15 +124,8 @@ export function createVisibleHostedReviewRefreshScheduler() {
       } else if (!succeeded || !discoveryIdentityChanged(target, entry.target)) {
         entry.discovery = false
         entry.failures = succeeded ? 0 : entry.failures + 1
-        // Auto-refresh off: a failed read waits for the next window return, selection or refresh.
-        entry.retryAt =
-          succeeded || entry.target.cadence === 'off'
-            ? null
-            : Date.now() +
-              Math.max(
-                entry.target.intervalMs ?? 0,
-                Math.min(900_000, 60_000 * 2 ** Math.min(entry.failures - 1, 4))
-              )
+        entry.failedAt = succeeded ? null : Date.now()
+        entry.retryAt = retryAtFor(entry)
       }
     }
     reconcile()
@@ -201,15 +212,22 @@ export function createVisibleHostedReviewRefreshScheduler() {
             target,
             lastAttemptAt: previous?.lastAttemptAt ?? -Infinity,
             failures: preserveFailure ? previous.failures : 0,
-            retryAt: preserveFailure ? previous.retryAt : null,
+            failedAt: preserveFailure ? previous.failedAt : null,
+            retryAt: null,
             discovery:
               identityChanged ||
               target.fetchedAt === null ||
               Date.now() - target.fetchedAt >= (target.intervalMs ?? 60_000),
             foreground: identityChanged
           }
+          // A kept failure retries by this target's cadence, not the one it failed under.
+          entry.retryAt = retryAtFor(entry)
           entries.set(target.key, entry)
-        } else if (discoveryIdentityChanged(entry.target, target)) {
+          continue
+        }
+        const cadenceChanged =
+          entry.target.cadence !== target.cadence || entry.target.intervalMs !== target.intervalMs
+        if (discoveryIdentityChanged(entry.target, target)) {
           entry.discovery = true
           entry.foreground = true
         } else if (
@@ -218,10 +236,16 @@ export function createVisibleHostedReviewRefreshScheduler() {
             !discoveryIdentityChanged(inFlight.get(target.key)?.target ?? target, target))
         ) {
           entry.failures = 0
+          entry.failedAt = null
           entry.retryAt = null
           entry.discovery = false
         }
         entry.target = target
+        // The owning host's cadence changed: a retry armed under the old cadence is dropped under
+        // "off" and re-timed otherwise, so a stretched cadence never keeps the shorter retry.
+        if (cadenceChanged) {
+          entry.retryAt = retryAtFor(entry)
+        }
       }
       reconcile()
     },

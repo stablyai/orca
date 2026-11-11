@@ -39,8 +39,14 @@ describe('checks detail timer follows PR auto-refresh cadence changes while moun
     _resetPRAutoRefreshCadencesForTests()
   })
 
-  function mount(executionHostId?: `runtime:${string}`) {
+  function mount(
+    executionHostId?: `runtime:${string}`,
+    pr: Partial<NonNullable<ChecksPanelPollingInput['pr']>> = {}
+  ) {
     const overrides: Partial<ChecksPanelPollingInput> = {}
+    if (Object.keys(pr).length > 0) {
+      overrides.pr = { ...createModel().pr!, ...pr }
+    }
     if (executionHostId) {
       overrides.repo = {
         id: 'repo-1',
@@ -116,5 +122,57 @@ describe('checks detail timer follows PR auto-refresh cadence changes while moun
     expect(fetchChecks).toHaveBeenCalledTimes(2)
     // A timer tick on a paired host is a background read the host may pace.
     expect(fetchChecks).toHaveBeenLastCalledWith({ force: false, background: true })
+  })
+
+  async function focusWindow(): Promise<void> {
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'))
+      await vi.advanceTimersByTimeAsync(0)
+    })
+  }
+
+  it('reads fresh checks when the window regains focus while off, without a visibility change', async () => {
+    setPRAutoRefreshCadence('off')
+    const { fetchChecks } = mount()
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    expect(fetchChecks).toHaveBeenCalledTimes(1)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5 * 60_000)
+    })
+    await focusWindow()
+    expect(fetchChecks).toHaveBeenCalledTimes(2)
+    // A focus read is the user looking: the host must not pace it.
+    expect(fetchChecks).toHaveBeenLastCalledWith({ force: false })
+    // Focus starts no timer while off.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60 * 60_000)
+    })
+    expect(fetchChecks).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not re-read on focus while off within the minute after the last read', async () => {
+    setPRAutoRefreshCadence('off')
+    const { fetchChecks } = mount()
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30_000)
+    })
+    await focusWindow()
+    expect(fetchChecks).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not re-read settled checks on focus while off', async () => {
+    setPRAutoRefreshCadence('off')
+    const { fetchChecks } = mount(undefined, { state: 'merged', checksStatus: 'success' })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    expect(fetchChecks).toHaveBeenCalledTimes(1)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5 * 60_000)
+    })
+    await focusWindow()
+    expect(fetchChecks).toHaveBeenCalledTimes(1)
   })
 })

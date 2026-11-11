@@ -81,6 +81,7 @@ export type PrSidebarLoadDeps = {
       currentHeadOid?: string | null
       refresh?: boolean
       background?: boolean
+      foreground?: boolean
     }
   ) => Promise<GitHubPrReadOutcome<PRInfo | null>>
 }
@@ -144,6 +145,8 @@ export async function loadPrBranchReview(
     refresh?: boolean
     /** The screen's timer: the host may pace this read; an action, open or foreground read never is. */
     background?: boolean
+    /** The app just came back: the host reads fresh instead of reusing its own recent lookup. */
+    foreground?: boolean
     previous?: PrBranchReview
   }
 ): Promise<PrBranchReview> {
@@ -192,7 +195,8 @@ export async function loadPrBranchReview(
         : {}),
       currentHeadOid: requestHeadOid,
       ...(args.refresh ? { refresh: true } : {}),
-      ...(args.background && !args.refresh ? { background: true } : {})
+      ...(args.background && !args.refresh ? { background: true } : {}),
+      ...(args.foreground && !args.refresh && !args.background ? { foreground: true } : {})
     })
   }
   let linkedPR = link.linkedPR

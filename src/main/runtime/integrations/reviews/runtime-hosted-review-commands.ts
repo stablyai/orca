@@ -105,8 +105,10 @@ export class RuntimeHostedReviewCommands {
     const lookupOptionArgs: [] | [GitHubPRBranchLookupOptions] =
       Object.keys(lookupOptions).length > 0 ? [lookupOptions] : []
     const connectionId = hostedReviewSshConnectionId(getStoredRepoExecutionHostId(repo))
-    // Desktop callers and reason-carrying refreshes keep their own GitHub read.
-    if (clientKind === 'mobile' && reason === undefined) {
+    // Desktop callers and reason-carrying refreshes keep their own GitHub read. The phone reuse is
+    // for a screen opening right after this host's own lookup; a phone that just came back to the
+    // foreground (`foreground`) is the user looking again and reads fresh.
+    if (clientKind === 'mobile' && reason === undefined && foreground !== true) {
       const recent = await readRecentPhonePROutcome(
         repo.path,
         branch,

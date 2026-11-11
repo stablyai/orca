@@ -5,6 +5,7 @@ import { subscribeRuntimeHostContactRegained } from '@/runtime/hosts/connections
 import type { AppState } from '../../types'
 import {
   forgetHostPRAutoRefreshCadence,
+  hostPRAutoRefreshCadenceGeneration,
   rememberHostPRAutoRefreshCadence
 } from './remote-host-pr-auto-refresh-cadence'
 
@@ -27,26 +28,54 @@ const defaultReader: Reader = async (environmentId) => {
   return result.settings
 }
 
-const inFlight = new Map<string, Promise<void>>()
+type HostRead = {
+  /** Settles after this read and, when a change arrived during it, the trailing read too. */
+  settled: Promise<void>
+  /** A change was reported while the host had not answered: its answer may predate the change. */
+  dirty: boolean
+}
 
-/** Ask the host for its setting; one read per host at a time, failures keep the last known value. */
+const inFlight = new Map<string, HostRead>()
+
+/**
+ * Ask the host for its setting. One read per host at a time; a request made while one is pending
+ * (the host's `settingsChanged`, regained contact) marks it dirty: its answer is not remembered, and
+ * one trailing read follows so the change is never lost. A failed read keeps the last known value.
+ * An answer is also dropped when a newer authoritative value landed meanwhile (a write from the
+ * Settings control, the host being forgotten), so a slow read never reverts it.
+ */
 export function readHostPRAutoRefreshCadence(
   environmentId: string,
   reader: Reader = defaultReader
 ): Promise<void> {
   const pending = inFlight.get(environmentId)
   if (pending) {
-    return pending
+    pending.dirty = true
+    return pending.settled
   }
-  const read = reader(environmentId)
-    .then((settings) => rememberHostPRAutoRefreshCadence(environmentId, settings.prAutoRefresh))
+  return startHostRead(environmentId, reader).settled
+}
+
+function startHostRead(environmentId: string, reader: Reader): HostRead {
+  const generation = hostPRAutoRefreshCadenceGeneration(environmentId)
+  const read: HostRead = { dirty: false, settled: Promise.resolve() }
+  read.settled = reader(environmentId)
+    .then((settings) => {
+      if (!read.dirty && hostPRAutoRefreshCadenceGeneration(environmentId) === generation) {
+        rememberHostPRAutoRefreshCadence(environmentId, settings.prAutoRefresh)
+      }
+    })
     .catch((error: unknown) => {
       console.warn('Failed to read a host’s PR auto-refresh setting:', error)
     })
-    .finally(() => {
+    .then(() => {
       if (inFlight.get(environmentId) === read) {
         inFlight.delete(environmentId)
       }
+      if (read.dirty) {
+        return startHostRead(environmentId, reader).settled
+      }
+      return undefined
     })
   inFlight.set(environmentId, read)
   return read

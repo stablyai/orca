@@ -1,9 +1,17 @@
 import type { PRCheckDetail } from '../../../../shared/github/check-types'
 import type { GitHubOwnerRepo } from '../../../../shared/github/pull-request-types'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import {
   reviewRefreshIntervalMs,
   type PRAutoRefreshCadence
 } from '../../../../shared/review-refresh-policy'
+import {
+  hostedReviewRepoScope,
+  scopeGeneration
+} from '../../../source-control/hosted-review-scope-generations'
+import { githubReadExecutionScope } from '../../github-read-execution-scope'
+import { ghRepoExecOptions, githubRepoContext, type LocalGitExecOptions } from '../../gh-utils'
+import { githubPRStackExecutionScope } from '../github-exec-scope'
 
 const MAX_ENTRIES = 256
 
@@ -13,16 +21,24 @@ type PRChecksLastRead = { start: PRChecksReadStart; checks: PRCheckDetail[] }
 const lastReads = new Map<string, PRChecksLastRead>()
 let readSequence = 0
 
+/** The same identity the provider read itself is coalesced and invalidated by: where the read runs
+ *  (SSH connection or local/WSL), the repository's review generation, and the resolved read scope
+ *  (gh account, cwd, environment). A changed account or a bumped generation is a different key, so
+ *  checks read under the previous credential are never answered to the current one. */
 export function pacedPRChecksKey(
   repoPath: string,
   connectionId: string | null | undefined,
   prNumber: number,
   headSha: string | undefined,
-  prRepo: GitHubOwnerRepo | null
+  prRepo: GitHubOwnerRepo | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): string {
+  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions))
   return JSON.stringify([
-    connectionId ?? null,
+    githubPRStackExecutionScope(connectionId, localGitOptions),
     repoPath,
+    scopeGeneration(hostedReviewRepoScope(repoPath, getRepoExecutionHostId({ connectionId }))),
+    githubReadExecutionScope(ghOptions),
     prNumber,
     headSha ?? null,
     prRepo ? [prRepo.host ?? null, prRepo.owner, prRepo.repo] : null

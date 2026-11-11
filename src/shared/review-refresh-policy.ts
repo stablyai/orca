@@ -84,6 +84,13 @@ export function getPRAutoRefreshCadenceForHost(
   return hostCadences.get(hostKey) ?? 'default'
 }
 
+/** A paired host's remembered setting, or null while that host has not said. Schedulers use
+ *  `getPRAutoRefreshCadenceForHost` (Default meanwhile); a control showing the host's setting
+ *  must not present Default as an answer the host never gave. */
+export function getKnownPRAutoRefreshCadenceForHost(hostKey: string): PRAutoRefreshCadence | null {
+  return hostCadences.get(hostKey) ?? null
+}
+
 /** Fires after any cadence (this process's or a remembered host's) changes, so a mounted timer
  *  can replan instead of waiting for its next tick. */
 export function subscribePRAutoRefreshCadence(listener: () => void): () => void {

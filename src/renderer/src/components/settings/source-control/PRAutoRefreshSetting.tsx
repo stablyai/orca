@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { toast } from 'sonner'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
@@ -11,13 +11,18 @@ import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client
 import { useAppStateValue } from '@/store/retained-views/app-state-view'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import type { SettingsHostScope } from '../host-scope/settings-host-scope'
-import { rememberHostPRAutoRefreshCadence } from '@/store/github/refresh/remote-host-pr-auto-refresh-cadence'
+import {
+  rememberHostPRAutoRefreshCadence,
+  useHostPRAutoRefreshCadence
+} from '@/store/github/refresh/remote-host-pr-auto-refresh-cadence'
+import { readHostPRAutoRefreshCadence } from '@/store/github/refresh/remote-host-pr-auto-refresh-cadence-sync'
 import { PRAutoRefreshControl } from './PRAutoRefreshControl'
 
-type HostCadence = { environmentId: string; cadence: PRAutoRefreshCadence }
-
 /** The cadence belongs to the host that runs the GitHub reads, so a remote host is read and
- *  written through its own settings. */
+ *  written through its own settings. The control shows the one shared copy of that host's setting
+ *  (not a snapshot of its own): a change made from another client, or by the host's own
+ *  `settingsChanged`, is reflected while this row is mounted, so what it shows is what choosing
+ *  an option is compared against. */
 function usePRAutoRefreshHostCadence(
   target: RuntimeClientTarget,
   localSettings: GlobalSettings,
@@ -28,34 +33,15 @@ function usePRAutoRefreshHostCadence(
   update: (cadence: PRAutoRefreshCadence) => Promise<void>
 } {
   const environmentId = runtimeTargetEnvironmentId(target)
-  const [remote, setRemote] = useState<HostCadence | null>(null)
+  const remote = useHostPRAutoRefreshCadence(environmentId)
 
   useEffect(() => {
     if (!environmentId) {
       return
     }
-    let current = true
-    void callRuntimeRpc<{ settings: Partial<GlobalSettings> }>(
-      { kind: 'environment', environmentId },
-      'settings.get',
-      undefined,
-      { timeoutMs: 15_000 }
-    ).then(
-      (result) => {
-        // The host's schedulers in this window follow the host's own setting, not this app's.
-        rememberHostPRAutoRefreshCadence(environmentId, result.settings.prAutoRefresh)
-        if (current) {
-          setRemote({
-            environmentId,
-            cadence: normalizePRAutoRefreshCadence(result.settings.prAutoRefresh)
-          })
-        }
-      },
-      (error: unknown) => console.error('Failed to load host PR auto-refresh setting:', error)
-    )
-    return () => {
-      current = false
-    }
+    // Re-read on mount even when known: the host may have changed while this client had no contact.
+    // The sync's own fences drop the answer if a write or an unpairing lands first.
+    void readHostPRAutoRefreshCadence(environmentId)
   }, [environmentId])
 
   if (!environmentId) {
@@ -67,7 +53,7 @@ function usePRAutoRefreshHostCadence(
     }
   }
   return {
-    cadence: remote?.environmentId === environmentId ? remote.cadence : null,
+    cadence: remote,
     update: async (cadence) => {
       try {
         const result = await callRuntimeRpc<{ settings: Partial<GlobalSettings> }>(
@@ -76,11 +62,8 @@ function usePRAutoRefreshHostCadence(
           { prAutoRefresh: cadence },
           { timeoutMs: 15_000 }
         )
+        // Remembered for the host it was written to, even if Settings has moved on to another host.
         rememberHostPRAutoRefreshCadence(environmentId, result.settings.prAutoRefresh)
-        setRemote({
-          environmentId,
-          cadence: normalizePRAutoRefreshCadence(result.settings.prAutoRefresh)
-        })
       } catch (error) {
         toast.error(
           t(

@@ -127,4 +127,62 @@ describe('visible hosted review scheduler', () => {
     await vi.advanceTimersByTimeAsync(0)
     expect(calls).toEqual([true])
   })
+
+  describe('a cadence change reconciles a retry armed after a failure', () => {
+    it('drops a queued error retry when the owning host’s cadence becomes off', async () => {
+      const refresh = vi.fn(async () => false)
+      const row = target({ fetchedAt: null, intervalMs: 60_000, cadence: 'default', refresh })
+      const scheduler = setup([row])
+      await vi.advanceTimersByTimeAsync(0)
+      expect(refresh).toHaveBeenCalledTimes(1)
+      scheduler.update([{ ...row, cadence: 'off', intervalMs: null }])
+      await vi.advanceTimersByTimeAsync(60 * 60_000)
+      expect(refresh).toHaveBeenCalledTimes(1)
+    })
+
+    it('re-times a queued error retry to a stretched cadence', async () => {
+      const refresh = vi.fn(async () => false)
+      const row = target({ fetchedAt: null, intervalMs: 60_000, cadence: 'default', refresh })
+      const scheduler = setup([row])
+      await vi.advanceTimersByTimeAsync(0)
+      expect(refresh).toHaveBeenCalledTimes(1)
+      scheduler.update([{ ...row, cadence: 'reduced', intervalMs: 5 * 60_000 }])
+      await vi.advanceTimersByTimeAsync(4 * 60_000)
+      expect(refresh).toHaveBeenCalledTimes(1)
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(refresh).toHaveBeenCalledTimes(2)
+    })
+
+    it('arms a retry for a read that failed under off once the cadence is enabled again', async () => {
+      const refresh = vi.fn(async () => false)
+      const row = target({ fetchedAt: null, intervalMs: null, cadence: 'off', refresh })
+      const scheduler = setup([row])
+      await vi.advanceTimersByTimeAsync(0)
+      expect(refresh).toHaveBeenCalledTimes(1)
+      await vi.advanceTimersByTimeAsync(10 * 60_000)
+      expect(refresh).toHaveBeenCalledTimes(1)
+      scheduler.update([{ ...row, cadence: 'default', intervalMs: 60_000 }])
+      await vi.advanceTimersByTimeAsync(0)
+      expect(refresh).toHaveBeenCalledTimes(2)
+    })
+
+    it('a target that comes back after failing retries by the cadence it comes back with', async () => {
+      const refresh = vi.fn(async () => false)
+      // Fetched 31 s ago with a 30 s interval: due now, and not yet stale enough (60 s) for a
+      // re-added target to read once on its own when it comes back.
+      const row = target({
+        fetchedAt: Date.now() - 31_000,
+        intervalMs: 30_000,
+        cadence: 'default',
+        refresh
+      })
+      const scheduler = setup([row])
+      await vi.advanceTimersByTimeAsync(0)
+      expect(refresh).toHaveBeenCalledTimes(1)
+      scheduler.update([])
+      scheduler.update([{ ...row, cadence: 'off', intervalMs: null }])
+      await vi.advanceTimersByTimeAsync(60 * 60_000)
+      expect(refresh).toHaveBeenCalledTimes(1)
+    })
+  })
 })

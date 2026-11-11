@@ -8,6 +8,10 @@ export type WindowVisibilityPollerTrigger = 'timer' | 'visibility' | 'refresh' |
 export function installWindowVisibilityTimeoutPoller(args: {
   run: (context: { trigger: WindowVisibilityPollerTrigger }) => Promise<void> | void
   getDelayMs: () => number | null
+  /** With `getDelayMs` null (no timer): whether the window regaining focus still runs once, because
+   *  the timer was stopped by a setting (PR auto-refresh off) rather than by the data being settled.
+   *  Default: focus only matters while a timer is wanted. */
+  refreshOnFocusWhileStopped?: () => boolean
   cooldownMs?: number
   setTimeoutFn?: (callback: () => void, delayMs: number) => WindowVisibilityTimeoutPollerTimer
   clearTimeoutFn?: (handle: WindowVisibilityTimeoutPollerTimer) => void
@@ -93,8 +97,11 @@ export function installWindowVisibilityTimeoutPoller(args: {
       clearScheduledPoll()
     }
   }
+  // Focus without a visibility change (the user switched apps) is the user coming back: run when a
+  // timer is wanted, or when only a setting stopped it. The run keeps the cooldown and in-flight
+  // guards, and schedules no timer afterwards while the delay stays null.
   const reconcileFocus = (): void => {
-    if (args.getDelayMs() !== null) {
+    if (args.getDelayMs() !== null || args.refreshOnFocusWhileStopped?.() === true) {
       reconcileVisibility()
     }
   }

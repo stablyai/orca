@@ -15,15 +15,43 @@ export function wasAppForegroundedRecently(now = Date.now()): boolean {
 }
 
 /**
- * Whether a PR read is the phone's own timer, which the host may answer from its last read at its
- * PR auto-refresh cadence. An action's read, the first read of a screen, a read that only has a
- * copy from an earlier launch, and a read right after the app came to the foreground are the user
- * looking, so they read fresh in every mode.
+ * What a PR read is to the host:
+ * - `action`: a Refresh or an action's read; it also re-learns host status.
+ * - `open`: the first read of a screen, or one that only has a copy from an earlier launch.
+ * - `foreground`: the app just came back to the foreground; the user is looking again.
+ * - `background`: the screen's own timer, which the host may answer from its last read at its
+ *   PR auto-refresh cadence.
+ * Everything but `background` reads fresh in every mode; `foreground` also bypasses the host's
+ * short reuse of its own desktop lookup, which exists for a screen opening right after it.
  */
+export type HostReadIntent = 'action' | 'open' | 'foreground' | 'background'
+
+export function hostReadIntent(
+  read: HostQueryRead,
+  previous: unknown,
+  recentlyForegrounded: () => boolean = wasAppForegroundedRecently
+): HostReadIntent {
+  if (read.live) {
+    return 'action'
+  }
+  if (previous === undefined || read.previousFromStore) {
+    return 'open'
+  }
+  return recentlyForegrounded() ? 'foreground' : 'background'
+}
+
 export function isBackgroundHostRead(
   read: HostQueryRead,
   previous: unknown,
   recentlyForegrounded: () => boolean = wasAppForegroundedRecently
 ): boolean {
-  return !read.live && previous !== undefined && !read.previousFromStore && !recentlyForegrounded()
+  return hostReadIntent(read, previous, recentlyForegrounded) === 'background'
+}
+
+export function isForegroundHostRead(
+  read: HostQueryRead,
+  previous: unknown,
+  recentlyForegrounded: () => boolean = wasAppForegroundedRecently
+): boolean {
+  return hostReadIntent(read, previous, recentlyForegrounded) === 'foreground'
 }
