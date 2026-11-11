@@ -1,4 +1,4 @@
-import { claudeProfileHistoryDirs } from '../claude-accounts/claude-profile-installed-router'
+import { claudeProfileHistoryDirs } from '../claude-accounts/profiles/routing/claude-profile-installed-router'
 import { homedir } from 'node:os'
 import { extname, join } from 'node:path'
 import type { AgentType } from '../../shared/agent-status/contracts/agent-status-types'
@@ -8,10 +8,10 @@ import {
 } from '../../shared/native-chat/native-chat-agent-support'
 import { isWslUncPath } from '../../shared/wsl-paths'
 import { forEachSessionFile } from '../ai-vault/session-scanner-discovery'
-import { resolveOmpSessionsDir } from '../ai-vault/scanners/omp/omp-session-root'
 import {
   claudeProjectsHostDirs,
   codexHomeSessionsDir,
+  ompSessionsRootDirs,
   uniqueDirs
 } from '../ai-vault/session-scanner-roots'
 import { resolveOrcaManagedCodexHomePath } from '../codex/configuration/homes/codex-home-paths'
@@ -181,8 +181,7 @@ async function resolveSessionFileById(
   }
   if (transcriptAgent === 'omp') {
     const override = options.ompSessionsDir
-    const root = resolveOmpSessionsDir({ sessionsDir: override })
-    return resolveTiered('omp', trimmedId, root ? [root] : [], {
+    return resolveTiered('omp', trimmedId, ompSessionsRootDirs({ ompSessionsDir: override }), {
       wslTier: wslTier && override === undefined,
       signal,
       strictErrors: options.strictErrors

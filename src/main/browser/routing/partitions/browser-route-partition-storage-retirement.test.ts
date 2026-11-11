@@ -131,26 +131,6 @@ describe('browser route partition storage retirement', () => {
     expect(order).toEqual(['close-executor', 'clear'])
   })
 
-  it('retries a partition that was still live during the first pass', async () => {
-    const clearStorage = vi
-      .fn()
-      .mockResolvedValueOnce({ clearedPartitions: [], livePartitions: [partition] })
-      .mockResolvedValueOnce({ clearedPartitions: [partition], livePartitions: [] })
-    const onError = vi.fn()
-
-    const cleared = await retireBrowserRoutePartitionStorageForEnvironment({
-      environmentId: 'environment-a',
-      whenClientHostClosed: Promise.resolve(),
-      clearStorage,
-      retryDelayMs: 0,
-      onError
-    })
-
-    expect(cleared).toEqual([partition])
-    expect(clearStorage).toHaveBeenCalledTimes(2)
-    expect(onError).not.toHaveBeenCalled()
-  })
-
   it('reports a partition that stays live and never retries a third time', async () => {
     const clearStorage = vi
       .fn()

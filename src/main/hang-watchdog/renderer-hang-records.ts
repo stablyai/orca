@@ -13,7 +13,7 @@ import { join } from 'node:path'
 import { parseHangStacks, type HangStacks } from './hang-stacks'
 import { resolveObservabilityConsent } from '../observability'
 import { hasActiveTraceSink } from '../observability/tracer'
-import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
+import { recordDurableCrashBreadcrumb } from '../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
 import { hangCaptureDetails } from './hang-capture-details'
 
 export type RendererHangRecord = HangStacks & {

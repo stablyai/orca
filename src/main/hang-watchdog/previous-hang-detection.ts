@@ -3,7 +3,7 @@ import { rmSync } from 'node:fs'
 import type { CrashReportBreadcrumbData } from '../../shared/crash-reporting'
 import { resolveObservabilityConsent } from '../observability'
 import { hasActiveTraceSink } from '../observability/tracer'
-import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
+import { recordDurableCrashBreadcrumb } from '../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
 import { hangCaptureDetails } from './hang-capture-details'
 import {
   consumeHangDetectionMarker,

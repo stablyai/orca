@@ -17,7 +17,7 @@ import { ORCAD_MIGRATION_BLOB_CHANNEL_RUNTIME_CAPABILITY } from '../../../../sha
 import {
   inspectOrcadMigrationBlobUploads,
   stageOrcadMigrationBlobChunk
-} from '../../../persistence/migrating-orcad-catalog/orcad-migration-blob-staging'
+} from '../../../persistence/migrating-orcad-catalog/blob-transfer/orcad-migration-blob-staging'
 import {
   transferOrcadMigrationBlobs,
   type OrcadMigrationBlobDestination

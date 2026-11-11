@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
-import { preventOutsideDismissWhenDirty } from '@/lib/outside-dismiss-guard'
+import { preventOutsideDismissWhenDirty } from '@/lib/overlay-interaction/outside-dismiss-guard'
 import type { AddRepoDialogStep } from './add-repo-dialog-types'
 import { AddRepoStepIndicator } from './AddRepoStepIndicator'
 

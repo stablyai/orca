@@ -37,7 +37,7 @@ vi.mock(
   async () => (await import('./filesystem-test-harness')).wslUncDeleteMock
 )
 vi.mock(
-  '../../crash-reporting/crash-breadcrumb-store',
+  '../../crash-reporting/breadcrumbs/crash-breadcrumb-store',
   async () => (await import('./filesystem-test-harness')).crashBreadcrumbMock
 )
 vi.mock('../../git/source-control/commit-changes', async (importOriginal) => ({

@@ -34,4 +34,53 @@ describe('managed-home Codex identity', () => {
       workspaceAccountId: null
     })
   })
+
+  it.each([
+    {
+      auth_mode: 'bedrockApiKey',
+      bedrock_api_key: { api_key: 'bedrock-fixture-key', region: 'us-east-2' }
+    },
+    {
+      auth_mode: 'bedrockAccessKeys',
+      bedrock_access_keys: {
+        access_key_id: 'AKIAFIXTUREONLY',
+        secret_access_key: 'fixture-secret',
+        region: 'us-east-2'
+      }
+    }
+  ])('does not attribute $auth_mode to stale ChatGPT tokens', async (credential) => {
+    const home = homeWithAuthJson({
+      ...credential,
+      tokens: {
+        account_id: 'stale-account',
+        id_token: idTokenWithClaims({ email: 'stale@example.com' })
+      }
+    })
+
+    expect(await identity.readFromHome(home, 'account-1')).toEqual({
+      email: null,
+      providerAccountId: null,
+      workspaceLabel: null,
+      workspaceAccountId: null
+    })
+
+    writeFileSync(
+      join(home, 'auth.json'),
+      JSON.stringify({
+        ...credential,
+        auth_mode: 'chatgpt',
+        OPENAI_API_KEY: 'sk-exchanged-key',
+        tokens: {
+          account_id: 'current-account',
+          id_token: idTokenWithClaims({ email: 'current@example.com' })
+        }
+      })
+    )
+    expect(await identity.readFromHome(home, 'account-1')).toEqual({
+      email: 'current@example.com',
+      providerAccountId: 'current-account',
+      workspaceLabel: null,
+      workspaceAccountId: 'current-account'
+    })
+  })
 })

@@ -335,6 +335,8 @@ export const HistoryParams = z
   })
   .strict()
 
+export const WorkStateParams = z.object({ sessionId: SessionId }).strict()
+
 // Not strict: an older host ignores these params entirely, and this host must ignore a newer client's.
 export const SubscribeTurnCompletionsParams = z.object({ includePrompts: z.boolean().optional() })
 

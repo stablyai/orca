@@ -10,7 +10,7 @@ import {
   type WslOrcadAccountEnvDependencies
 } from './wsl-orcad-account-env'
 import type { WslOrcadHostCapabilityVerdict } from './wsl-orcad-host-environments'
-import { runKeyedSerializedOperation } from '../../cli/keyed-promise-queue'
+import { runKeyedSerializedOperation } from '../../../shared/concurrency/keyed-serialized-operations'
 
 export type WslOrcadHostAccountPush = {
   environmentId: string

@@ -27,7 +27,8 @@ import { ProgramStatusRecordSet, type ProgramStatusRecord } from './records'
 /** OSC 7501 `app` ids whose Orca agent id differs. Other apps pass through verbatim. */
 const APP_TO_AGENT_TYPE: Readonly<Record<string, string>> = {
   'claude-code': 'claude',
-  'grok-build': 'grok'
+  'grok-build': 'grok',
+  'kiro-cli': 'kiro'
 }
 
 function agentTypeForProgramStatusApp(app: string | undefined): string | undefined {
@@ -173,7 +174,9 @@ export function createProgramStatusProjector(now: () => number = Date.now): Prog
     const at = now()
     const live = new Set<string>()
     const children: AgentSubagentSnapshot[] = []
-    for (const record of records.descendants()) {
+    // OpenCode keys its records by peer root sessions (its own and other panes'), never by child sessions.
+    const subagentRecords = records.root()?.app === 'opencode' ? [] : records.descendants()
+    for (const record of subagentRecords) {
       const state = subagentState(record)
       if (record.id === null || state === null) {
         continue

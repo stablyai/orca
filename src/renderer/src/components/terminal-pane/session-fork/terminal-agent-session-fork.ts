@@ -1,5 +1,5 @@
 import { toast } from 'sonner'
-import { launchAgentInNewTab } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
+import { launchAgentInNewTabWithOutcome } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
 import { settleAgentTabLaunch } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab-host-agents'
 import { newAgentPromptOutcome } from '@/lib/agent-session/launch/prompt/new-agent-prompt-outcome'
 import { buildAgentSessionForkPrompt } from '@/lib/agent-session/context/agent-session-fork-context'
@@ -16,7 +16,8 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
 import { getLocalProjectExecutionRuntimeContext } from '@/runtime/hosts/preflight/local-preflight-context'
 import { translate } from '@/i18n/i18n'
 import { planAgentSessionLaunch } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
-import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
+
+import { createNonSecureContextUuid } from '../../../../../shared/non-secure-context-uuid'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 
@@ -220,7 +221,7 @@ export async function startAgentSessionFork(fork: PreparedAgentSessionFork): Pro
     return copyAgentSessionForkContext(fork)
   }
   const agentSessionLaunchPlan = planAgentSessionLaunch(useAppStore.getState(), {
-    requestId: newAgentLaunchRequestId(),
+    requestId: createNonSecureContextUuid(),
     agent: fork.agent,
     workspace: { kind: 'git-worktree', worktreeId: forkWorktreeId },
     prompt: fork.prompt,
@@ -231,7 +232,7 @@ export async function startAgentSessionFork(fork: PreparedAgentSessionFork): Pro
     worktreePath: created.worktree.path,
     projectRuntime: sourceProjectRuntime
   })
-  const result = launchAgentInNewTab({
+  const result = launchAgentInNewTabWithOutcome({
     agent: fork.agent,
     worktreeId: forkWorktreeId,
     prompt: fork.prompt,

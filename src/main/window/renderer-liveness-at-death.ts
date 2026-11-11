@@ -1,5 +1,5 @@
 import type { BrowserWindow } from 'electron'
-import { recordCoalescedDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
+import { recordCoalescedDurableCrashBreadcrumb } from '../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
 
 /** Windows killed/exit1 cannot identify Task Manager, EDR or Orca as the cause. Retain prior hang/load state to distinguish users terminating a frozen app from unexplained external kills. */
 export type RendererLivenessAtDeath = {

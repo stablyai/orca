@@ -11,7 +11,7 @@ import {
   type HostWorktreeTarget
 } from '../../shared/worktree/host-qualified-identity'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
-import type { WorktreeMetaWriteListener } from '../persistence/loading-store/write-scheduling'
+import type { WorktreeMetaWriteListener } from '../persistence/loading-store/profile-writing/write-scheduling'
 import { findRepoRowForHostScopedWrite } from '../persistence/tracking-repos/repo-update-operations'
 
 export type GitHubIssueLinkTitleFillStore = {

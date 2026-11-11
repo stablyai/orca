@@ -5,11 +5,11 @@ import { isDefinitiveAbsence } from '../../../shared/definitive-filesystem-absen
 import { readHooksJson } from '../../agent-hooks/installation/configuration/hooks-json-read'
 import { writeHooksJson } from '../../agent-hooks/installation/configuration/hooks-json-write'
 import { defaultClaudeConfigDir } from '../claude-config-dir-pin'
-import { listClaudeProfileHomesAsync } from '../../claude-accounts/claude-profile-homes'
+import { listClaudeProfileHomesAsync } from '../../claude-accounts/profiles/claude-profile-homes'
 import {
   getClaudeObservedConfigDirs,
   getClaudeProfileRouter
-} from '../../claude-accounts/claude-profile-installed-router'
+} from '../../claude-accounts/profiles/routing/claude-profile-installed-router'
 import { resolveClaudeCommand } from '../../codex-cli/command'
 import { claudeLoadsCustomThemes, probeRecentClaudeCliVersion } from '../claude-hook-event-versions'
 import type { ClaudeCodeTheme } from './claude-code-theme'

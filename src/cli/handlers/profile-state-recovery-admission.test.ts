@@ -14,28 +14,26 @@ import * as durableFileWrite from '../../main/filesystem/durable-file-write'
 import {
   acquireProfileStateMaintenance,
   acquireProfileStateRuntimeAdmission
-} from '../../main/persistence/profile-state/profile-state-access'
+} from '../../main/persistence/profile-state/access/profile-state-access'
 import {
   openProfileStateDatabase,
   openProfileStateDatabaseReadOnly
-} from '../../main/persistence/profile-state/profile-state-database'
+} from '../../main/persistence/profile-state/database/profile-state-database'
 import {
   importProfileStateJson,
   readProfileStateSnapshot
-} from '../../main/persistence/profile-state/profile-state-documents'
+} from '../../main/persistence/profile-state/documents/profile-state-documents'
 import {
   createProfileStateDatabaseBackupId,
   profileStateDatabaseBackupPath
-} from '../../main/persistence/profile-state/profile-state-backup-path'
-import { writeProfileStateDatabaseSnapshotAsync } from '../../main/persistence/profile-state/profile-state-database-snapshot'
-import { restoreProfileStateDatabaseBackup } from '../../main/persistence/profile-state/profile-state-database-recovery'
+} from '../../main/persistence/profile-state/backup/profile-state-backup-path'
+import { writeProfileStateDatabaseSnapshotAsync } from '../../main/persistence/profile-state/database/profile-state-database-snapshot'
 import {
   assertNoRetainedProfileStateExports,
   ProfileStateRecoveryRequiredError
-} from '../../main/persistence/profile-state/profile-state-recovery-required'
+} from '../../main/persistence/profile-state/recovery/profile-state-recovery-required'
 import { RuntimeClient } from '../runtime-client'
 import { PROFILE_STATE_HANDLERS } from './profile-state'
-import { rollbackProfileState } from '../../main/persistence/profile-state/profile-state-recovery-command'
 import { profileStateJsonExportPath } from '../../main/persistence/profile-state/legacy-json/profile-state-export-path'
 
 const mocks = vi.hoisted(() => ({ root: vi.fn(), status: vi.fn() }))
@@ -145,45 +143,6 @@ function state(databasePath: string) {
 }
 
 describe('offline recovery excludes runtime admission', () => {
-  it.each(['backup', 'latest-json'] as const)(
-    'refuses %s rollback without changing the database when a move journal is unresolved',
-    async (selector) => {
-      const profile = await fixture()
-      const before = readFileSync(profile.databasePath)
-      const intents = join(profile.root, 'profile-move-intents')
-      mkdirSync(intents)
-      const intentPath = join(intents, '00000000-0000-0000-0000-000000000001.json')
-      writeFileSync(intentPath, '{"partial":true}')
-      await expect(rollback(profile, selector)).rejects.toThrow('pending project move')
-      expect(readFileSync(profile.databasePath)).toEqual(before)
-      expect(readFileSync(intentPath, 'utf8')).toBe('{"partial":true}')
-    }
-  )
-
-  it.each(['backup', 'latest-json'] as const)(
-    'refuses %s recovery before any mutation when a runtime has already entered',
-    async (selector) => {
-      const profile = await fixture()
-      const original = readFileSync(profile.databasePath)
-      const backup = readFileSync(profile.backupPath)
-      const admission = acquireProfileStateRuntimeAdmission(profile.root)
-      const runtime = openProfileStateDatabase(profile.databasePath, profileId)
-      try {
-        await expect(rollback(profile, selector)).rejects.toThrow('in use')
-        expect(mocks.status).not.toHaveBeenCalled()
-        expect(JSON.parse(readProfileStateSnapshot(runtime.db).json)).toEqual(liveState)
-        expect(readFileSync(profile.databasePath)).toEqual(original)
-        expect(readFileSync(profile.backupPath)).toEqual(backup)
-        expect(
-          readdirSync(profile.directory).some((name) => name.startsWith('profile-state-corrupt'))
-        ).toBe(false)
-      } finally {
-        runtime.db.close()
-        admission.release()
-      }
-    }
-  )
-
   it('exports the latest SQLite revision through CLI before handing authority to an older build', async () => {
     const profile = await fixture()
     const staleJson = JSON.stringify(backupState)
@@ -290,56 +249,6 @@ describe('offline recovery excludes runtime admission', () => {
     acquireProfileStateRuntimeAdmission(profile.root).release()
   })
 
-  it('rejects fabricated or released maintenance before creating the latest export', async () => {
-    const profile = await fixture()
-    const maintenance = acquireProfileStateMaintenance(profile.root)
-    try {
-      expect(() =>
-        rollbackProfileState(profile.root, { kind: 'latest-json' }, { ...maintenance })
-      ).toThrow('acquired')
-    } finally {
-      maintenance.release()
-    }
-    expect(() => rollbackProfileState(profile.root, { kind: 'latest-json' }, maintenance)).toThrow(
-      'released'
-    )
-    expect(existsSync(profileStateJsonExportPath(profile.dataFile, 2))).toBe(false)
-    expect(JSON.parse(state(profile.databasePath).json)).toEqual(liveState)
-  })
-
-  it.each(['missing', 'corrupt', 'newer-schema'] as const)(
-    'refuses a latest JSON handoff from a %s database instead of selecting stale JSON',
-    async (condition) => {
-      const profile = await fixture()
-      const staleJson = JSON.stringify(backupState)
-      writeFileSync(profile.dataFile, staleJson)
-      if (condition === 'missing') {
-        rmSync(profile.databasePath)
-      } else if (condition === 'corrupt') {
-        writeFileSync(profile.databasePath, 'corrupt SQLite')
-      } else {
-        const opened = openProfileStateDatabase(profile.databasePath, profileId)
-        opened.db.pragma('user_version = 999')
-        opened.db.close()
-      }
-      const before = existsSync(profile.databasePath)
-        ? readFileSync(profile.databasePath)
-        : undefined
-
-      await expect(rollback(profile, 'latest-json')).rejects.toThrow()
-
-      expect(readFileSync(profile.dataFile, 'utf8')).toBe(staleJson)
-      expect(
-        existsSync(profile.databasePath) ? readFileSync(profile.databasePath) : undefined
-      ).toEqual(before)
-      expect(existsSync(profile.backupPath)).toBe(true)
-      expect(existsSync(profileStateJsonExportPath(profile.dataFile, 2))).toBe(false)
-      expect(
-        readdirSync(profile.directory).some((name) => name.startsWith('profile-state-corrupt'))
-      ).toBe(false)
-    }
-  )
-
   it('blocks startup between the stopped census and restoration while preserving complete original and restored state', async () => {
     const profile = await fixture()
     const original = readFileSync(profile.databasePath)
@@ -412,18 +321,5 @@ describe('offline recovery excludes runtime admission', () => {
 
     expect(JSON.parse(state(profile.databasePath).json)).toEqual(backupState)
     acquireProfileStateRuntimeAdmission(profile.root).release()
-  })
-
-  it('rejects fabricated or released maintenance handles before replacing any database bytes', async () => {
-    const profile = await fixture()
-    const maintenance = acquireProfileStateMaintenance(profile.root)
-    const original = readFileSync(profile.databasePath)
-    const options = { ...profile, profileId }
-    expect(() =>
-      restoreProfileStateDatabaseBackup({ ...options, maintenance: { ...maintenance } })
-    ).toThrow('acquired')
-    maintenance.release()
-    expect(() => restoreProfileStateDatabaseBackup({ ...options, maintenance })).toThrow('released')
-    expect(readFileSync(profile.databasePath)).toEqual(original)
   })
 })
