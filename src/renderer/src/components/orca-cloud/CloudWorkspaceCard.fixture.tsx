@@ -1,4 +1,3 @@
-import React from 'react'
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { seedCloudSyncView } from '@/lib/orca-cloud/cloud-sync-store'
 import type { CloudStatusEntry } from '@/lib/orca-cloud/orca-cloud-workspace-store'
