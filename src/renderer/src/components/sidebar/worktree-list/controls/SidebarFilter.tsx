@@ -10,7 +10,7 @@ import {
   Server,
   SquareTerminal
 } from 'lucide-react'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { Button } from '@/components/ui/button'
 import {
   Command,
@@ -29,7 +29,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { FilterToggleRow } from './FilterToggleRow'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
-import { searchRepos } from '@/lib/repo-search'
+import { searchRepos } from '@/lib/workspace/catalog/repo-search'
 import { clearSidebarFilters, selectSidebarFilterState } from './sidebar-filter-actions'
 import { useWorkspaceOptionsFilterBadge } from './workspace-options-menu-items'
 import { useTranslate } from '@/i18n/use-translate'

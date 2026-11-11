@@ -2,11 +2,11 @@ import { useEffect, useRef, type ReactNode } from 'react'
 import {
   NOTIFICATION_CARD_STACK_BOTTOM,
   NOTIFICATION_CARD_STACK_HEIGHT_VAR
-} from '@/lib/notification-card-stack-height'
+} from '@/lib/notifications/notification-card-stack-height'
 import {
   registerNotificationCardLayoutVarReader,
   setNotificationCardLayoutVar
-} from '@/lib/notification-card-layout-vars'
+} from '@/lib/notifications/notification-card-layout-vars'
 
 const STACK_STYLE = {
   bottom: NOTIFICATION_CARD_STACK_BOTTOM,

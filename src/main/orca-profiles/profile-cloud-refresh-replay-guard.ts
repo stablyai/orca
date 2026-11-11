@@ -1,7 +1,7 @@
 // Lost refresh replies may have rotated the token; replay can revoke the entire token family.
 
 // Briefly block retry loops after ambiguous rotation to avoid replay storms.
-export const AMBIGUOUS_REFRESH_REPLAY_DELAY_MS = 30_000
+export const AMBIGUOUS_REFRESH_REPLAY_DELAY_MS = 10_000
 const AMBIGUOUS_REFRESH_ATTEMPTS_MAX_ENTRIES = 512
 
 type AmbiguousRefreshAttempt = {

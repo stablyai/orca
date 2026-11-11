@@ -3,6 +3,11 @@
 import { types } from 'node:util'
 import type { ZodType } from 'zod'
 import type { RpcContext, RpcTypedMethod, RpcTypedStreamingMethod } from '../../../core'
+import {
+  checkPeerAccess,
+  refusePeerAddressClaim,
+  refuseServerCallFromPeerRun
+} from './peer-run-access'
 
 type ParsedParams<TSchema extends ZodType | null> = TSchema extends ZodType
   ? TSchema['_output']
@@ -28,6 +33,9 @@ export type OrchestrationSubjectKind =
 /** A field naming who is calling, as opposed to what the call acts on. */
 export type OrchestrationCallerField = 'from' | 'terminal' | 'callerTerminalHandle'
 
+/** The pane key a caller sends with its caller field, which only its own host can fill. */
+export type OrchestrationCallerPaneField = 'terminalPaneKey' | 'senderPaneKey'
+
 type FieldOf<P> = P extends object ? Extract<keyof P, string> : never
 
 export type OrchestrationAccessRuleInput<P> = {
@@ -43,6 +51,9 @@ export type OrchestrationAccessRule<P, G> = (input: OrchestrationAccessRuleInput
 export type OrchestrationMethodAccess<P, G> = {
   readonly kind: OrchestrationAccessKind
   readonly caller?: Extract<FieldOf<P>, OrchestrationCallerField>
+  readonly callerPane?: Extract<FieldOf<P>, OrchestrationCallerPaneField>
+  /** The field that sends the call on to a paired server (`--on`). */
+  readonly server?: Extract<FieldOf<P>, 'on'>
   /** Every field naming something the call acts on, kept apart from the caller field. */
   readonly targets: Readonly<Partial<Record<FieldOf<P>, OrchestrationSubjectKind>>>
   /** A read returning a collection; a narrower caller restricts its query, never its page. */
@@ -54,32 +65,55 @@ export type OrchestrationMethodAccess<P, G> = {
 export type OrchestrationMethodAccessDeclaration = {
   readonly kind: OrchestrationAccessKind
   readonly caller?: OrchestrationCallerField
+  readonly callerPane?: OrchestrationCallerPaneField
+  readonly server?: 'on'
   readonly targets: Readonly<Partial<Record<string, OrchestrationSubjectKind>>>
   readonly collection?: true
   readonly rule?: OrchestrationAccessRule<never, unknown>
 }
 
-/** The one access check: every caller on this Orca is held to the method's own rule. */
+/** The one access check: every caller on this Orca is held to the method's own rule, and a paired
+ *  Orca also to the Run it coordinates here. Returns the params the method runs with and its grant. */
 export function checkOrchestrationAccess<P, G>(
   access: OrchestrationMethodAccess<P, G>,
   params: P,
   ctx: RpcContext
-): G {
+): { params: P; grant: G } {
+  const caller = ctx.orchestrationCaller
+  if (caller?.kind !== 'peer') {
+    refusePeerAddressClaim(access.caller && fieldValue(access.caller, params))
+    refusePeerAddressClaim(access.callerPane && fieldValue(access.callerPane, params))
+  }
+  const scoped =
+    caller?.kind === 'peer'
+      ? checkPeerAccess(access, params, ctx.runtime.getOrchestrationDb(), caller)
+      : params
+  if (access.server && fieldValue(access.server, scoped) !== undefined) {
+    refuseServerCallFromPeerRun(ctx, declaredCaller(access.caller, scoped))
+  }
   if (!access.rule) {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: G defaults to undefined exactly when a method declares no rule.
-    return undefined as G
+    return { params: scoped, grant: undefined as G }
   }
-  return access.rule({ params, ctx, caller: declaredCaller(access.caller, params) })
+  return {
+    params: scoped,
+    grant: access.rule({ params: scoped, ctx, caller: declaredCaller(access.caller, scoped) })
+  }
 }
 
 function declaredCaller<P>(
   field: Extract<FieldOf<P>, OrchestrationCallerField> | undefined,
   params: P
 ): string | undefined {
-  if (field === undefined) {
-    return undefined
-  }
-  const value: unknown = params[field]
+  return field === undefined ? undefined : fieldValue(field, params)
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+function fieldValue(field: string, params: unknown): string | undefined {
+  const value: unknown = isRecord(params) ? params[field] : undefined
   return typeof value === 'string' ? value : undefined
 }
 
@@ -154,7 +188,8 @@ export function defineOrchestrationMethod<
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a replay returns the receipt this handler produced when the call was accepted; a promise-returning handler's wrapper is async.
         return replayed.receipt as TResult
       }
-      return handler(params, ctx, checkOrchestrationAccess(access, params, ctx))
+      const checked = checkOrchestrationAccess(access, params, ctx)
+      return handler(checked.params, ctx, checked.grant)
     })
   }
 }
@@ -191,8 +226,10 @@ export function defineOrchestrationStreamingMethod<
     handler: checked(
       handler,
       declaration,
-      (params: ParsedParams<TSchema>, ctx: RpcContext, emit: (result: unknown) => void) =>
-        handler(params, ctx, emit, checkOrchestrationAccess(access, params, ctx))
+      (params: ParsedParams<TSchema>, ctx: RpcContext, emit: (result: unknown) => void) => {
+        const checked = checkOrchestrationAccess(access, params, ctx)
+        return handler(checked.params, ctx, emit, checked.grant)
+      }
     )
   }
 }

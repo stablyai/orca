@@ -1,3 +1,4 @@
+import { retireRemovedWorktreeTerminalNotices } from '../../../terminals/terminal-notice-removal'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import type { WorktreeCatalogVersion } from '../../../../../../shared/worktree/catalog-version'
@@ -16,7 +17,7 @@ import {
   flushPurgedWorkspaceEdits,
   type ConfirmedUnsavedDiscards
 } from './removed-workspace-unsaved-files'
-import { forgetDesktopCreatedServerTabsOf } from '@/lib/desktop-created-server-tabs'
+import { forgetDesktopCreatedServerTabsOf } from '@/store/workspace-layout/frames/desktop-created-server-tabs'
 import type { WorktreeStateBeforeRemoval } from './worktree-state-before-removal'
 
 /** After backend success: unregister browsers before other teardown, then dispose SSH relay only after terminals so mounted panes cannot hit a missing relay. */
@@ -99,6 +100,7 @@ export async function tearDownRemovedWorktreeRendererState(args: {
     requiredExecutionHostId ?? hostId,
     args.confirmedDiscards
   )
+  retireRemovedWorktreeTerminalNotices(beforeRemoval.terminalNotices)
   // Purge destroyed-target projects after row removal so selection clears with the row, not earlier.
   await purgeOrphanedRuntimeSshProjects(get, runtimeCleanup.destroyedSshTargetIds)
   get().removeWorkspaceSpaceWorktrees?.(

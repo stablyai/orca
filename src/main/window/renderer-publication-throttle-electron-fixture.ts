@@ -47,6 +47,7 @@ async function run(): Promise<void> {
       maxHeight: 480,
       everyNthFrame: 1,
       minFrameIntervalMs: 0,
+      holdPaint: () => () => {},
       onFrame: () => {
         frames += 1
         firstFrame()

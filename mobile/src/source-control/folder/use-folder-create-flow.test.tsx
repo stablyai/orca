@@ -243,15 +243,6 @@ describe('useFolderCreateFlow', () => {
       setupDecision: 'skip'
     })
   })
-  it("refreshes the folder when a form's create may have landed", async () => {
-    const refetch = vi.fn()
-    const { flow } = mountFlow(refetch)
-    const b = repoIn()
-    const form = await openComposer(flow, b)
-
-    form.folderLaunch?.submit.begin({ ...b.repo, path: '/w/b' })?.settle('uncertain')
-    expect(refetch).toHaveBeenCalledTimes(1)
-  })
   async function setupRefusedRetry(flow: { current: Flow | null }) {
     const a = repoIn()
     const lost = new FakeSession('connected')

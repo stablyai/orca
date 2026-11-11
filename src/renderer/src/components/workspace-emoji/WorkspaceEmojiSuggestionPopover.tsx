@@ -2,7 +2,7 @@ import { useEffect, useRef, type ComponentProps, type RefObject } from 'react'
 import { Command, CommandGroup, CommandItem, CommandList } from '@/components/ui/command'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import { cn } from '@/lib/class-names'
-import type { WorkspaceEmojiSuggestion } from '@/lib/workspace-emoji-shortcodes'
+import type { StandardEmojiShortcodeEntry } from '../../../../shared/emoji-shortcode-catalog'
 
 type WorkspaceEmojiSuggestionPopoverProps = {
   anchorRef: RefObject<HTMLInputElement | null>
@@ -11,11 +11,11 @@ type WorkspaceEmojiSuggestionPopoverProps = {
   heading: string
   onCommandValueChange: (value: string) => void
   onOpenChange: (open: boolean) => void
-  onSelect: (suggestion: WorkspaceEmojiSuggestion) => void
+  onSelect: (suggestion: StandardEmojiShortcodeEntry) => void
   open: boolean
   portalContainer?: HTMLElement | null
   side?: ComponentProps<typeof PopoverContent>['side']
-  suggestions: readonly WorkspaceEmojiSuggestion[]
+  suggestions: readonly StandardEmojiShortcodeEntry[]
 }
 
 export function WorkspaceEmojiSuggestionPopover({

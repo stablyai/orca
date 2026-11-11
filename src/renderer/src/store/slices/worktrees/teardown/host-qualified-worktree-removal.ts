@@ -27,7 +27,7 @@ import {
   dropConfirmedHostRow,
   resolveSameIdSurvivingHostId
 } from './host-qualified-worktree-row-removal'
-import { ambiguousWorkspaceOwnerMessage } from '@/lib/duplicate-paired-servers'
+import { ambiguousWorkspaceOwnerMessage } from '@/lib/workspace/ownership/duplicate-paired-servers'
 
 type PreservedBranchWorktree = Pick<Worktree, 'displayName' | 'isMainWorktree'> | undefined
 type RemoveWorktreeSliceResult = Awaited<ReturnType<WorktreeSlice['removeWorktree']>>

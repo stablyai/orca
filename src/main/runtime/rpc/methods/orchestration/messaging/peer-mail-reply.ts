@@ -1,5 +1,5 @@
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import type { OrchestrationSessionCaller } from '../../../../orchestration/addressing/orchestration-caller-identity'
+import type { OrchestrationEntryCaller } from '../../../../orchestration/addressing/orchestration-caller-identity'
 import type { PeerMailMessageRow } from '../../../../orchestration/db/federation/peer-mail-store'
 import type { MessageRow } from '../../../../orchestration/db/orchestration-records'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
@@ -21,7 +21,7 @@ export async function replyOverPeerMail(args: {
   original: MessageRow
   route: PeerMailMessageRow
   params: { body: string; from?: string; on?: string }
-  orchestrationCaller: OrchestrationSessionCaller | undefined
+  orchestrationCaller: OrchestrationEntryCaller | undefined
   orchestrationMutation: { callerFingerprint: string; requestId: string } | undefined
   recordMutationReceipt: ((receipt: unknown) => void) | undefined
 }): Promise<unknown> {
@@ -67,7 +67,7 @@ export async function replyOverPeerMail(args: {
     return recordReceiptBeforeNudge(
       args.recordMutationReceipt,
       { message: { id, subject }, to: original.from_handle },
-      () => notifyPeerMailQueued(db),
+      () => notifyPeerMailQueued(db.db),
       { kind: 'messages', targets: [] }
     )
   }

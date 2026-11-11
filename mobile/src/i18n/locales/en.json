@@ -821,6 +821,8 @@
   "webShell": {
     "shellStateScreen": {
       "isolationUnavailable": "This device's WebView is too old to open the workspace safely.",
+      "isolationUnavailableAndroid": "Orca needs Android System WebView or Chrome 101 or newer. Update it from the Play Store, or pick a newer one in Developer options > WebView implementation.",
+      "webViewInUse": "This device has {{name}} {{version}}.",
       "downloadFailed": "The latest app could not be downloaded from this host.",
       "hostProfileUnreadable": "Could not read this host on your device. Try again.",
       "statusUnreadable": "Could not read this host's status. Go back and reopen it.",
@@ -2989,7 +2991,12 @@
       "skip": "Skip",
       "step": "Step {{step}}",
       "other": "Other…",
-      "answerPlaceholder": "Type your answer"
+      "answerPlaceholder": "Type your answer",
+      "optionPreview": "{{option}} preview",
+      "previewPosition": "{{current}} of {{total}}",
+      "chosen": "Chosen",
+      "chooseThis": "Choose this",
+      "viewPreview": "View"
     },
     "permission": {
       "reason": "Reason: ",

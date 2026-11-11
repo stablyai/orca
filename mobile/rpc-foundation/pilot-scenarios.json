@@ -21045,7 +21045,7 @@
       "id": "codex-reset-credit-consumed",
       "operation": "accounts.codex-reset-credit",
       "family": "components.codex-reset-credit",
-      "sites": ["mobile/src/components/codex-reset-credit.ts"],
+      "sites": ["mobile/src/accounts/usage/codex-reset-credit.ts"],
       "schedules": [],
       "deviceStore": {},
       "steps": [

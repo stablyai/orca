@@ -223,6 +223,7 @@ const CASES = {
     })
   },
   peerMailPull: { method: 'orchestration.peerMailPull', params: () => ({ waitMs: 0 }) },
+  peerRunCancel: { method: 'orchestration.peerRunCancel', params: () => ({}) },
   replyHelperQuestion: {
     method: 'orchestration.reply',
     params: (from, ids) => ({ id: ids.helperQuestion, body: 'a', from })
@@ -376,6 +377,7 @@ const EXPECTED: Record<string, string> & Record<keyof typeof CASES, string> = {
     'mail_requires_server_pairing mail_requires_server_pairing mail_requires_server_pairing mail_requires_server_pairing',
   peerMailPull:
     'mail_requires_server_pairing mail_requires_server_pairing mail_requires_server_pairing mail_requires_server_pairing',
+  peerRunCancel: 'forbidden forbidden forbidden forbidden',
   replyHelperQuestion: 'ok consumer_fenced consumer_fenced ok',
   replyMail: 'ok ok ok ok',
   replyQuestion: 'ok consumer_fenced consumer_fenced worker_cannot_coordinate_own_run',
