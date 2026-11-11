@@ -133,33 +133,36 @@ export function CloudWorkspaceGroupView({
             )}
           </h3>
           {collapsible && (canMoveUp || canMoveDown) && (
-            <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  size="icon-xs"
-                  variant="ghost"
-                  aria-label={t(
-                    'auto.components.cloudWorkspaces.sectionActions',
-                    'Actions for section {{name}}',
-                    { name: label }
-                  )}
-                  className={cn(
-                    'opacity-0 group-focus-within/heading:opacity-100 group-hover/heading:opacity-100',
-                    menuOpen && 'opacity-100'
-                  )}
-                >
-                  <MoreHorizontal />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuItem disabled={!canMoveUp} onSelect={() => onMoveSection(-1)}>
-                  {t('auto.components.cloudWorkspaces.moveSectionUp', 'Move section up')}
-                </DropdownMenuItem>
-                <DropdownMenuItem disabled={!canMoveDown} onSelect={() => onMoveSection(1)}>
-                  {t('auto.components.cloudWorkspaces.moveSectionDown', 'Move section down')}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <span
+              className={cn(
+                'opacity-0 group-focus-within/heading:opacity-100 group-hover/heading:opacity-100',
+                menuOpen && 'opacity-100'
+              )}
+            >
+              <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    size="icon-xs"
+                    variant="ghost"
+                    aria-label={t(
+                      'auto.components.cloudWorkspaces.sectionActions',
+                      'Actions for section {{name}}',
+                      { name: label }
+                    )}
+                  >
+                    <MoreHorizontal />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuItem disabled={!canMoveUp} onSelect={() => onMoveSection(-1)}>
+                    {t('auto.components.cloudWorkspaces.moveSectionUp', 'Move section up')}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem disabled={!canMoveDown} onSelect={() => onMoveSection(1)}>
+                    {t('auto.components.cloudWorkspaces.moveSectionDown', 'Move section down')}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </span>
           )}
         </div>
       )}

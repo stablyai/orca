@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
   EMPTY_CLOUD_WORKSPACE_PREFS,
-  type CloudWorkspace,
   type CloudWorkspacePrefsDocument
 } from './cloud-workspaces-wire'
 import {
@@ -15,8 +14,8 @@ import {
 } from './cloud-workspace-arrangement'
 
 const id = (n: number) => `sbx_${String(n).padStart(24, '0')}`
-function ws(n: number, section: string | null = null, archived = false): CloudWorkspace {
-  return { id: id(n), section, archivedAt: archived ? 1 : null } as CloudWorkspace
+function ws(n: number, section: string | null = null, archived = false) {
+  return { id: id(n), section, archivedAt: archived ? 1 : null }
 }
 const doc = (patch: Partial<CloudWorkspacePrefsDocument>): CloudWorkspacePrefsDocument => ({
   ...EMPTY_CLOUD_WORKSPACE_PREFS,

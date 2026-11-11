@@ -5020,7 +5020,8 @@
     "actions": {
       "sleep": "Sleep",
       "sleepCaption": "Sandbox hours stop. Files are kept; agents restart when it wakes.",
-      "archive": "Archive"
+      "archive": "Archive",
+      "pinCaption": "On all your devices. Only you see your pins."
     },
     "sleep": {
       "title": "Sleep {{title}}?",
@@ -5122,7 +5123,12 @@
       "new": "New cloud workspace",
       "createdAgo": "Created {{ago}} ago",
       "createdJustNow": "Created just now",
-      "workspaceRowLabel": "Cloud workspace, {{title}}, {{detail}}"
+      "workspaceRowLabel": "Cloud workspace, {{title}}, {{detail}}",
+      "unpin": "Unpin",
+      "pin": "Pin to top",
+      "pinFailed": "Couldn’t save that change",
+      "pinFailedDetail": "Check your connection and try again.",
+      "pinnedHint": "Pinned"
     },
     "connect": {
       "signedOut": "Sign in to Orca on {{desktop}}, then try again.",
@@ -5231,6 +5237,12 @@
     "idle": {
       "sleeps_one": "Sleeps after {{count}} minute idle.",
       "sleeps_other": "Sleeps after {{count}} minutes idle."
+    },
+    "link": {
+      "opening": "Opening workspace…",
+      "missingTitle": "Can’t open this workspace",
+      "missing": "It’s private, in another team, or deleted. If it’s in another team, switch to it on your computer first.",
+      "home": "Go to Home"
     }
   }
 }

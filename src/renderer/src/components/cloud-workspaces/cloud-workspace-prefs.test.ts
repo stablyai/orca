@@ -20,8 +20,8 @@ const B = `sbx_${'b'.repeat(24)}`
 
 /** A control plane with compare-and-set, plus a hook to simulate another device writing first. */
 function fakeServer() {
-  const server = {
-    document: EMPTY_CLOUD_WORKSPACE_PREFS as CloudWorkspacePrefsDocument,
+  const server: { document: CloudWorkspacePrefsDocument; revision: number } = {
+    document: EMPTY_CLOUD_WORKSPACE_PREFS,
     revision: 0
   }
   const view = () => ({ ok: true as const, value: { ...server, updatedAt: null } })

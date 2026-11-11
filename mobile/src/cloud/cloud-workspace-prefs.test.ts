@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { z } from 'zod'
 
 vi.mock('./cloud-session', () => ({ loadCloudControlPlane: vi.fn() }))
 
@@ -6,13 +7,23 @@ import { setPinned } from '../../../src/shared/cloud-workspaces/cloud-workspace-
 import { editCloudWorkspacePrefsOn, resolveCloudWorkspaceLink } from './cloud-workspace-prefs'
 import type { CloudControlPlane } from './cloud-control-plane-request'
 
+const PutBody = z.object({
+  document: z.object({
+    pinned: z.array(z.string()),
+    order: z.array(z.string()),
+    sections: z.array(z.string()),
+    collapsed: z.array(z.string())
+  }),
+  revision: z.number()
+})
+
 const A = `sbx_${'a'.repeat(24)}`
 const B = `sbx_${'b'.repeat(24)}`
 
 function plane(handler: (method: string, url: URL, body: unknown) => [number, unknown]) {
   const calls: string[] = []
-  const fetchFn = vi.fn(async (input: string, init: RequestInit) => {
-    const url = new URL(input)
+  const fetchFn: typeof fetch = async (input, init = {}) => {
+    const url = new URL(String(input))
     calls.push(`${init.method} ${url.pathname}${url.search}`)
     const [status, body] = handler(
       init.method ?? 'GET',
@@ -20,18 +31,14 @@ function plane(handler: (method: string, url: URL, body: unknown) => [number, un
       init.body ? JSON.parse(String(init.body)) : undefined
     )
     return new Response(JSON.stringify(body), { status })
-  })
-  const p: CloudControlPlane = {
-    baseUrl: 'https://cp.example',
-    token: () => 't',
-    fetch: fetchFn as unknown as typeof fetch
   }
+  const p: CloudControlPlane = { baseUrl: 'https://cp.example', token: () => 't', fetch: fetchFn }
   return { plane: p, calls }
 }
 
 describe('phone prefs sync', () => {
   it('re-applies a pin on top of a desktop that wrote first', async () => {
-    let server = {
+    let server: z.infer<typeof PutBody> = {
       document: { pinned: [B], order: [], sections: [], collapsed: [] },
       revision: 3
     }
@@ -40,7 +47,7 @@ describe('phone prefs sync', () => {
       if (method === 'GET') {
         return [200, { ...server, updatedAt: 1 }]
       }
-      const put = body as { document: typeof server.document; revision: number }
+      const put = PutBody.parse(body)
       if (firstPut) {
         // A desktop wrote between our read and our write.
         firstPut = false

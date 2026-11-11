@@ -189,6 +189,13 @@
     "count": 1
   },
   {
+    "filePath": "src/renderer/src/lib/workspace/search/worktrees/worktree-palette-evidence.ts",
+    "kind": "object-property:accessibilityLabel",
+    "text": "Cloud workspace number",
+    "dynamic": false,
+    "count": 1
+  },
+  {
     "filePath": "src/renderer/src/components/agent/launch-settings/AgentDefaultSurfacePreviews.tsx",
     "kind": "jsx-attribute:title",
     "text": "Claude",
