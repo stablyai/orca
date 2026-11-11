@@ -219,7 +219,14 @@ async function sleepWorkspace(
     try {
       // Reopened mid-sleep, even while the suspend waits its turn: it is the user's again, so
       // its VM keeps running.
-      await deps.suspendVm(worktreeId, () => !reopened())
+      await deps.suspendVm(worktreeId, () => {
+        const wanted = !reopened()
+        if (wanted) {
+          // Committed: tell the window now, so it never offers a Keep awake that can't work.
+          deps.notify({ worktreeId, phase: 'suspending', ...move })
+        }
+        return wanted
+      })
     } catch (error) {
       console.error('[workspace-sleep] host suspension failed', { worktreeId, error })
       vmSuspendFailure = messageOf(error)

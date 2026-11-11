@@ -23,6 +23,11 @@ export function closeOrcaCloudSignInSheet(): void {
   set(false)
 }
 
+/** Whether the sheet is open, outside React (tests, non-component callers). */
+export function isOrcaCloudSignInSheetOpen(): boolean {
+  return open
+}
+
 function subscribe(listener: () => void): () => void {
   listeners.add(listener)
   return () => listeners.delete(listener)

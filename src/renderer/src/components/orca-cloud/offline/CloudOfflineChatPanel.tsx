@@ -152,13 +152,16 @@ export function ChatPanel({
   queued,
   onQueue,
   onCancel,
-  onEdit
+  onEdit,
+  viewOnly = false
 }: {
   chats: CloudOfflineChat[]
   queued: CloudQueuedPrompt[]
   onQueue: (sessionId: string, text: string) => Promise<boolean>
   onCancel: (id: string) => void
   onEdit: (id: string, text: string) => Promise<boolean>
+  /** Kept on screen right after Sleep: sending would wake it, so the composer is off. */
+  viewOnly?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const [selected, setSelected] = useState<string | null>(chats[0]?.sessionId ?? null)
@@ -174,7 +177,7 @@ export function ChatPanel({
   }
   const send = (): void => {
     const text = draft.trim()
-    if (!text || busy) {
+    if (!text || busy || viewOnly) {
       return
     }
     setBusy(true)
@@ -238,7 +241,12 @@ export function ChatPanel({
               send()
             }
           }}
-          placeholder={t('components.orcaCloud.offline.composerPlaceholder', 'Message the agent')}
+          disabled={viewOnly}
+          placeholder={
+            viewOnly
+              ? t('components.orcaCloud.read.wakeToContinue', 'Wake to continue')
+              : t('components.orcaCloud.offline.composerPlaceholder', 'Message the agent')
+          }
           aria-label={t('components.orcaCloud.offline.composerLabel', 'Message to queue')}
           variant="bare"
           className="min-h-14"
@@ -247,7 +255,7 @@ export function ChatPanel({
           <Button
             size="xs"
             variant="default-held"
-            aria-disabled={!draft.trim() || busy || undefined}
+            aria-disabled={!draft.trim() || busy || viewOnly || undefined}
             aria-busy={busy || undefined}
             onClick={send}
           >
