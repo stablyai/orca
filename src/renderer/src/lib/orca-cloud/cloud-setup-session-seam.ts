@@ -71,10 +71,7 @@ export function readCloudSetupSession(sessionId: string | null): CloudSetupSessi
 // Bumped on every change, so a read is cached per (session, revision): useSyncExternalStore needs
 // the same object back until something changed.
 let revision = 0
-const cachedReads = new Map<
-  string,
-  { revision: number; value: CloudSetupSessionSnapshot | null }
->()
+const cachedReads = new Map<string, { revision: number; value: CloudSetupSessionSnapshot | null }>()
 
 /** Call after each poll so open composers re-read their session. */
 export function notifyCloudSetupSessionChanged(): void {

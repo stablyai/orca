@@ -29,8 +29,6 @@ const STEP_OF_PHASE: Partial<Record<CloudTransferProgressEvent['phase'], CloudMo
 /** A move that hasn't settled by now is reported as failed (the pack or download stalled). */
 export const MOVE_TIMEOUT_MS = 15 * 60_000
 
-
-
 export async function runOrcaCloudTransferToLocal(
   workspaceId: string,
   name: string,

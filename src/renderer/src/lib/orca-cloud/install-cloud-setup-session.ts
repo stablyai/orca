@@ -39,7 +39,10 @@ export function setupNeedsFrom(needs: readonly string[]): CloudSetupNeed[] {
  * project always asks for it: the chain marks it done on its own when access is already there.
  * Without it the browser said "You're all set" while the composer still needed GitHub.
  */
-export function sessionNeedsFor(needs: readonly string[], repoUrl: string | undefined): CloudSetupNeed[] {
+export function sessionNeedsFor(
+  needs: readonly string[],
+  repoUrl: string | undefined
+): CloudSetupNeed[] {
   const steps = setupNeedsFrom(needs)
   if (!repoUrl) {
     // Without a GitHub remote there's nothing to install; D3 covers that case in the composer.
