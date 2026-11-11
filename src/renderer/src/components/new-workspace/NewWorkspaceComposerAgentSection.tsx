@@ -99,6 +99,7 @@ export function NewWorkspaceComposerAgentSection({
           emptyLabel={t('auto.components.agent.AgentCombobox.986f946354', 'Blank terminal')}
           defaultAgent={defaultTuiAgent}
           onSetDefault={handleSetDefaultAgent}
+          statusLabels={agentSurfaceRows?.statusLabels}
           onSelectBlankTerminal={() => onQuickAgentChange(null)}
           onPick={(agent, draft, entry) => onQuickAgentChange(agent, draft?.surface, draft, entry)}
         />

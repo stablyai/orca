@@ -28086,5 +28086,14 @@
     },
     "untitled": "New cloud workspace",
     "waitingBrowser": "Waiting for your browser…"
+  },
+  "orcaCloudAgentPicker": {
+    "status": {
+      "ready": "Ready",
+      "setUp": "Set up",
+      "perWorkspace": "Signs in per workspace",
+      "notAvailable": "Not available in cloud",
+      "notSetUp": "Not set up"
+    }
   }
 }

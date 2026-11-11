@@ -2325,6 +2325,12 @@
   "menu": {
     "quitApp": "Quit {{appName}}"
   },
+  "orcaCloudAgentPicker": {
+    "status": {
+      "ready": "Ready",
+      "setUp": "Set up"
+    }
+  },
   "orcaCloudMove": {
     "confirm": {
       "changesCount_one": "{{count}} uncommitted change, plus untracked files",

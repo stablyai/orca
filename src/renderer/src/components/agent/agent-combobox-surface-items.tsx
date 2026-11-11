@@ -29,6 +29,8 @@ export type AgentComboboxSurfaceRows = {
   selection: ReturnType<typeof resolveAgentMenuSelection>
   contextKey?: string
   onPick: (agent: TuiAgent, surface: AgentLaunchSurface) => void
+  /** A muted status per agent row inside the open menu only (Orca Cloud: JA-22). */
+  statusLabels?: ReadonlyMap<TuiAgent, string>
 }
 
 /** The host has not answered what the choices are; a terminal only waiting on its host does not
