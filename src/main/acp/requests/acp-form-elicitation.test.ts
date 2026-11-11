@@ -55,3 +55,90 @@ describe('OMP ask forms', () => {
     expect(presentation.reply(null)).toEqual({ action: 'cancel' })
   })
 })
+
+function singleField(property: Record<string, unknown>, required = true) {
+  return {
+    mode: 'form',
+    message: 'Fill in',
+    requestedSchema: {
+      type: 'object',
+      properties: { value: property },
+      ...(required ? { required: ['value'] } : {})
+    }
+  }
+}
+
+function questionBody(presentation: ReturnType<typeof acpFormElicitationPresentation>) {
+  return presentation.body as unknown as {
+    questions: { freeTextInput?: Record<string, unknown> }[]
+  }
+}
+
+function replyWith(params: unknown, other: string) {
+  const presentation = acpFormElicitationPresentation(params)
+  return presentation.reply({
+    kind: 'answers',
+    answers: [{ questionId: 'q1', optionIds: [], other }]
+  })
+}
+
+describe('ACP numeric elicitation fields', () => {
+  it('accepts a decimal for a number field', () => {
+    expect(replyWith(singleField({ type: 'number' }), '0.5')).toEqual({
+      action: 'accept',
+      content: { value: 0.5 }
+    })
+  })
+
+  it('accepts an integer for an integer field', () => {
+    expect(replyWith(singleField({ type: 'integer' }), '42')).toEqual({
+      action: 'accept',
+      content: { value: 42 }
+    })
+  })
+
+  it('enforces minimum and maximum', () => {
+    const params = singleField({ type: 'number', minimum: 0, maximum: 10 })
+    expect(replyWith(params, '10')).toEqual({ action: 'accept', content: { value: 10 } })
+    expect(() => replyWith(params, '11')).toThrow('Question answer must be a valid number in range')
+    expect(() => replyWith(params, '-1')).toThrow('Question answer must be a valid number in range')
+  })
+
+  it.each(['abc', '1.5', '0x1F', 'Infinity', '1 2'])('rejects %s as an answer', (other) => {
+    const params = singleField({ type: other === '1.5' ? 'integer' : 'number' })
+    expect(() => replyWith(params, other)).toThrow(
+      'Question answer must be a valid number in range'
+    )
+  })
+
+  it('omits a blank optional number', () => {
+    const params = singleField({ type: 'number' }, false)
+    const presentation = acpFormElicitationPresentation(params)
+    expect(questionBody(presentation).questions[0]!.freeTextInput).toMatchObject({
+      allowEmpty: true
+    })
+    expect(replyWith(params, '')).toEqual({ action: 'accept', content: {} })
+  })
+
+  it('rejects a blank required number', () => {
+    const params = singleField({ type: 'number' })
+    const presentation = acpFormElicitationPresentation(params)
+    expect(questionBody(presentation).questions[0]!.freeTextInput).toMatchObject({
+      allowEmpty: false
+    })
+  })
+
+  it('uses a numeric default as the initial value', () => {
+    const presentation = acpFormElicitationPresentation(singleField({ type: 'number', default: 3 }))
+    expect(questionBody(presentation).questions[0]!.freeTextInput).toMatchObject({
+      initialValue: '3'
+    })
+  })
+
+  it('keeps string answers as text', () => {
+    expect(replyWith(singleField({ type: 'string' }), '007')).toEqual({
+      action: 'accept',
+      content: { value: '007' }
+    })
+  })
+})
