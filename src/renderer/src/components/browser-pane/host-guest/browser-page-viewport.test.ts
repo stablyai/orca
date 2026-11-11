@@ -60,6 +60,7 @@ describe('local guest metadata disposal', () => {
     const root = mountSlotViewport('workspace-1')
     const viewport = ensureBrowserPageViewport('page-1', 'workspace-1')!
     let readable = true
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: DOM tag with the native identity method used by these owners.
     const webview = Object.assign(document.createElement('webview'), {
       getWebContentsId: () => {
         if (!readable) {
@@ -122,6 +123,7 @@ describe('local guest metadata disposal', () => {
       await Promise.resolve()
       await Promise.resolve()
       expect(rig.observed).toEqual(mode === 'destroy' ? [null] : [])
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: DOM tag with the only native method used by the cache.
       const replacement = Object.assign(document.createElement('webview'), {
         getWebContentsId: () => 42
       }) as Electron.WebviewTag
