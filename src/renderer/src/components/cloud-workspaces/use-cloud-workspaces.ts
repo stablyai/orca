@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type {
   CloudWorkspace,
-  CloudWorkspaceListQuery
+  CloudWorkspaceListQuery,
+  CloudWorkspaceRoutineRuns
 } from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
 import { availabilityRetryDelay } from '@/lib/availability-retry'
 import { installWindowVisibilityTimeoutPoller } from '@/lib/window-visibility-timeout-poller'
@@ -13,7 +14,13 @@ export type CloudWorkspacesState =
   | { status: 'loading' }
   | { status: 'unavailable' }
   | { status: 'error'; key: string; error: string; reason?: string }
-  | { status: 'ready'; key: string; workspaces: CloudWorkspace[] }
+  | {
+      status: 'ready'
+      key: string
+      workspaces: CloudWorkspace[]
+      /** What the Routine runs switch hides; absent from older control planes. */
+      routineRuns?: CloudWorkspaceRoutineRuns
+    }
 
 // Whether this build talks to an Orca Cloud control plane at all (cached per session). The value
 // is mirrored into a tiny store so surfaces can render nothing until it is known (no flash).
@@ -126,7 +133,12 @@ export function useCloudWorkspaces(
         return
       }
       if (result.ok) {
-        setState({ status: 'ready', key, workspaces: result.value })
+        setState({
+          status: 'ready',
+          key,
+          workspaces: result.value,
+          routineRuns: result.routineRuns
+        })
       } else if (result.error === 'not_configured') {
         stopped = true
         setAvailable(false)

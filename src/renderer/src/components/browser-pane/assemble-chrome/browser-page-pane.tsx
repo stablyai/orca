@@ -22,6 +22,8 @@ import { getOpenableExternalUrl, toDisplayUrl } from '../describe-page/browser-p
 import type { BrowserOverlayViewport } from '../describe-page/browser-annotation-geometry'
 import type { BrowserPagePaneProps } from '../describe-page/browser-page-types'
 import { BrowserPageChromeHeader } from './browser-page-chrome-header'
+import { CloudDesktopTabSurface } from '../../cloud-remote-desktop/CloudDesktopTabSurface'
+import { isCloudRemoteDesktopUrl } from '../../../../../shared/hosted-sandbox/cloud-remote-desktop'
 import { BrowserPageContextMenu } from './browser-page-context-menu'
 import { BrowserPageViewportOverlays } from './browser-page-viewport-overlays'
 import { useBrowserPageAnnotationSend } from '../annotate/use-browser-page-annotation-send'
@@ -329,33 +331,46 @@ export function BrowserPagePane({
         webviewRef={webviewRef}
         onReload={() => reload.reloadWebviewOrRecoverGuest(false)}
       />
-      <BrowserPageChromeHeader
-        chromeHeaderRef={chromeHeaderRef}
-        browserTab={browserTab}
-        workspaceId={workspaceId}
-        worktreeId={worktreeId}
-        sessionProfileId={sessionProfileId}
-        isActive={isActive}
-        webviewRef={webviewRef}
-        addressBarInputRef={addressBarInputRef}
-        dismissAddressBarSuggestionsRef={dismissAddressBarSuggestionsRef}
-        reload={reload}
-        nav={nav}
-        grab={grab}
-        grabAnnotations={grabAnnotations}
-        annotationSend={annotationSend}
-        onOpenFind={() => setFindOpen(true)}
-        markupIsActive={markup.isActive}
-        markupStart={markup.start}
-        markupCancel={markup.cancel}
-        grabElementShortcut={grabElementShortcut}
-        shareableArtifactFile={shareableArtifactFile}
-        currentBrowserUrl={currentBrowserUrl}
-        externalUrl={externalUrl}
-        isBlankTab={isBlankTab}
-        resourceNotice={resourceNotice}
-        setResourceNotice={setResourceNotice}
-      />
+      {isCloudRemoteDesktopUrl(browserTab.url) ? (
+        // A remote desktop tab has no address bar: its own toolbar, and a cover while it can't show.
+        <CloudDesktopTabSurface
+          chromeHeaderRef={chromeHeaderRef}
+          worktreeId={worktreeId}
+          browserPageId={browserTab.id}
+          url={browserTab.url}
+          reload={() => reload.reloadWebviewOrRecoverGuest(false)}
+          navigate={nav.navigateToUrl}
+          viewportContainer={pageViewport?.container ?? null}
+        />
+      ) : (
+        <BrowserPageChromeHeader
+          chromeHeaderRef={chromeHeaderRef}
+          browserTab={browserTab}
+          workspaceId={workspaceId}
+          worktreeId={worktreeId}
+          sessionProfileId={sessionProfileId}
+          isActive={isActive}
+          webviewRef={webviewRef}
+          addressBarInputRef={addressBarInputRef}
+          dismissAddressBarSuggestionsRef={dismissAddressBarSuggestionsRef}
+          reload={reload}
+          nav={nav}
+          grab={grab}
+          grabAnnotations={grabAnnotations}
+          annotationSend={annotationSend}
+          onOpenFind={() => setFindOpen(true)}
+          markupIsActive={markup.isActive}
+          markupStart={markup.start}
+          markupCancel={markup.cancel}
+          grabElementShortcut={grabElementShortcut}
+          shareableArtifactFile={shareableArtifactFile}
+          currentBrowserUrl={currentBrowserUrl}
+          externalUrl={externalUrl}
+          isBlankTab={isBlankTab}
+          resourceNotice={resourceNotice}
+          setResourceNotice={setResourceNotice}
+        />
+      )}
       {pageViewport?.container
         ? createPortal(
             <BrowserPageViewportOverlays

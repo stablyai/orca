@@ -10,7 +10,6 @@ import {
   FAILED_LOG,
   LOG,
   frame,
-  seedCloudAgentAccounts,
   LOG_LINES,
   NOW,
   seedFixtureRepo,
@@ -248,52 +247,43 @@ export const checksSkipped = frame(
   })
 )
 
-const cloudChecks = frame(
-  entry(
-    { environmentCheck: { status: 'failed', checks: FAILED_CHECKS, ...CHECKS_FAILED_AT } },
-    CLOUD_RECIPE
-  )
-)
-// Claude isn't set up through the Orca account: the sign-in warning says where to set it up.
-export const cloudChecksFailed = defineFixture({
-  ...cloudChecks,
-  setup: () => {
-    cloudChecks.setup?.()
-    seedCloudAgentAccounts('none')
+// Orca Cloud stops only on a fatal check; orcad never answered here, so the doctor couldn't run.
+const CLOUD_FATAL_CHECKS: NonNullable<PendingWorktreeCreation['environmentCheck']>['checks'] = [
+  {
+    id: 'environment.doctor',
+    category: 'workspace',
+    status: 'fail',
+    message: 'The environment checks could not finish: Runtime environment is unreachable.'
   }
-})
-// Claude is covered by the Orca account: the sandbox's own sign-in probe isn't shown at all.
-export const cloudChecksAgentCovered = defineFixture({
-  ...cloudChecks,
-  setup: () => {
-    cloudChecks.setup?.()
-    seedCloudAgentAccounts('active')
-  }
-})
+]
+// Rendered relative to the real clock: the note counts down from it.
+const sleepsIn = (ms: number): number => Date.now() + ms
 
-// One failure plus a warning: the title counts failures only, in the singular.
-const cloudChecksOne = frame(
-  entry(
+function cloudFatal(
+  extra: Partial<NonNullable<PendingWorktreeCreation['environmentCheck']>>
+): PendingWorktreeCreation {
+  return entry(
     {
       environmentCheck: {
         status: 'failed',
-        checks: FAILED_CHECKS?.filter((check) => check.id !== 'git.push'),
-        ...CHECKS_FAILED_AT
+        checks: CLOUD_FATAL_CHECKS,
+        ...CHECKS_FAILED_AT,
+        sleepsAt: sleepsIn(5 * 60_000),
+        ...extra
       }
     },
     CLOUD_RECIPE
   )
-)
+}
 
-export const cloudChecksFailedOne = defineFixture({
-  ...cloudChecksOne,
-  setup: () => {
-    cloudChecksOne.setup?.()
-    seedCloudAgentAccounts('none')
-  }
-})
+// Unusable sandbox, still awake: Start again leads, and the note says when it sleeps.
+export const cloudChecksFailed = frame(cloudFatal({}))
+// Five unused minutes later: asleep, so checking again can't help; only Start again or Delete.
+export const cloudChecksAsleep = frame(cloudFatal({ sandbox: 'asleep' }))
+// It couldn't sleep, so it was deleted: nothing is kept, Start again retries on a new one.
+export const cloudChecksDeleted = frame(cloudFatal({ sandbox: 'deleted' }))
 
-// A narrow sheet: the pills keep one column and Delete sandbox wraps under the recovery actions.
+// A narrow sheet: Delete sandbox wraps under the recovery actions.
 export const cloudChecksFailedNarrow = defineFixture({
   ...cloudChecksFailed,
   width: 420
@@ -405,4 +395,3 @@ export const secretsRefused = secretsFrame(
 export const secretsSkipped = secretsFrame(secretsRow(secretsData('admin'), { phase: 'skipped' }))
 
 // The Agents row (spec §5b), as VmBuildSheet:agents*.
-export * from './vm-build-sheet-agents-fixtures'

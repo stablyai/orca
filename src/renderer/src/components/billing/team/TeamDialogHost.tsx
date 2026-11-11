@@ -14,6 +14,7 @@ import { createTeamFailureCopy, mutationFailureCopy } from './team-copy'
 import { clearTeamPageArrival, closeTeamPage, useTeamPageState } from './team-page-store'
 import { useOrgRoster } from './use-org-roster'
 import { useTeamActions } from './use-team-actions'
+import { openTeammateProfile } from '../../teammates/teammate-profile-store'
 import { ORCA_CLOUD_RECIPE_ID } from '../../../../../shared/hosted-sandbox/orca-cloud-recipe-id'
 
 function TeamPageBody({ arrival }: { arrival: ReturnType<typeof useTeamPageState>['arrival'] }) {
@@ -208,6 +209,11 @@ function TeamPageBody({ arrival }: { arrival: ReturnType<typeof useTeamPageState
           initialEphemeralVmRecipeId: ORCA_CLOUD_RECIPE_ID,
           telemetrySource: 'unknown'
         })
+      }}
+      onOpenProfile={(userId) => {
+        // One dialog at a time: the profile replaces the Team page (as in Conductor 0.91).
+        closeTeamPage()
+        openTeammateProfile(userId)
       }}
       onDismissArrival={clearTeamPageArrival}
       onContactSales={(url) => void window.api.shell.openUrl(url)}

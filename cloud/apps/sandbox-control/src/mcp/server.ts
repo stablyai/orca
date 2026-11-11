@@ -5,7 +5,8 @@ import type { ApiCaller } from '../api/caller'
 import { callTool, hasTool, toolError, toolList, type ApiCall } from './tools'
 
 export const PROTOCOL_VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'] as const
-const MAX_BODY_BYTES = 256 * 1024
+// upload_attachment carries up to 5 MB as base64 (~6.7 MB of JSON); everything else is tiny.
+const MAX_BODY_BYTES = 7 * 1024 * 1024 + 512 * 1024
 
 const SERVER_INFO = {
   name: 'orca-cloud',
@@ -16,7 +17,8 @@ const SERVER_INFO = {
 
 const INSTRUCTIONS =
   'Orca Cloud runs coding agents (Claude Code, Codex) in cloud workspaces. Typical flow: list_projects or list_workspaces; ' +
-  'create_workspace (optionally with a first message); send_message to give an agent a task; list_sessions to read its progress; ' +
+  'create_workspace (optionally with a first message); send_message to give an agent a task; list_sessions and read_session to read its progress; ' +
+  'create_session for another chat (pick models with list_models), upload_attachment to hand an agent a file, cancel_session to stop a turn; ' +
   'sleep_workspace when idle and destroy_workspace when done. Destroying is permanent.'
 
 type JsonRpcId = string | number | null

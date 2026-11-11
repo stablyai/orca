@@ -195,6 +195,7 @@ export function registerEphemeralVmHandlers(store: Store, pluginService?: Plugin
           projectId: args.projectId,
           workspaceId: args.workspaceId,
           workspaceName: args.workspaceName,
+          ...(args.idempotencyKey ? { idempotencyKey: args.idempotencyKey } : {}),
           ...(repoUrl ? { repoUrl } : {}),
           ...(args.branch ? { branch: args.branch } : {}),
           ...(sourceRef ? { ref: sourceRef } : {}),

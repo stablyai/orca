@@ -145,3 +145,45 @@ describe('cloud workspaces client: sleep and delete', () => {
     )
   })
 })
+
+describe('cloud workspaces client: routine runs on Home', () => {
+  it('asks for routine runs only when the filter is on, and keeps the routine mark', async () => {
+    const row = {
+      id: SBX,
+      workspaceId: 'routine-run_1',
+      status: 'running',
+      machineSize: 'standard',
+      region: 'pdx1',
+      createdAt: 1,
+      title: 'Nightly · run',
+      repo: null,
+      visibility: 'private',
+      section: null,
+      archivedAt: null,
+      createdBy: 'u1',
+      ownerUserId: 'u1',
+      lastActivityAt: 1,
+      lastActivityBy: null,
+      cost: {
+        computeMs: 0,
+        rateUsdMicrosPerHour: 0,
+        computeUsdMicros: 0,
+        tokenUsdMicros: null,
+        totalUsdMicros: 0
+      },
+      access: 'owner',
+      presence: [],
+      fromRoutine: true
+    }
+    const { client, fetch } = clientAnswering(200, { workspaces: [row] })
+    const listed = (await client.list({ scope: 'mine', archived: 'exclude', routines: 'include' }))
+      .workspaces
+    expect(String(fetch.mock.calls[0]![0])).toBe(
+      'https://cp.example.test/v1/team/workspaces?scope=mine&archived=exclude&routines=include'
+    )
+    expect(listed[0]!.fromRoutine).toBe(true)
+    // Older control planes omit the mark; it is never required.
+    const { fromRoutine: _omitted, ...older } = row
+    expect(CloudWorkspaceSchema.parse(older).fromRoutine).toBeUndefined()
+  })
+})
