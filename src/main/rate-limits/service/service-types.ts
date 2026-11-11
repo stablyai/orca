@@ -1,7 +1,7 @@
 import type { ProviderRateLimits } from '../../../shared/rate-limit-types'
 import type { ZcodePlanSite } from '../../../shared/zcode-plan-sites'
 import type { ClaudeRuntimeAuthPreparation } from '../../claude-accounts/runtime-auth/runtime-auth-types'
-import type { ClaudeAccountSelectionTarget } from '../../claude-accounts/runtime-selection'
+import type { ClaudeAccountSelectionTarget } from '../../claude-accounts/selection/runtime-selection'
 import type { KimiHomeResolution } from '../../kimi/kimi-runtime-home'
 import type { CodexAccountSelectionTarget } from '../../../shared/codex-selection-lane'
 import type { CodexRateLimitHomeResolution } from '../../codex-accounts/runtime-home-service-types'

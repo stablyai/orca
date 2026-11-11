@@ -151,11 +151,6 @@
 1 test-no-real-time-wait:src/main/browser/identity/wire-probes/browser-session-ua-wire-identity.electron.test.ts
 1 test-no-real-time-wait:src/main/browser/network/tunnels/execution-route-socket-duplex.test.ts
 1 test-no-real-time-wait:src/main/browser/network/tunnels/remote-browser-socks-server.test.ts
-1 test-no-real-time-wait:src/main/claude-accounts/claude-login-session.test.ts
-1 test-no-real-time-wait:src/main/claude-accounts/claude-profile-router.test.ts
-1 test-no-real-time-wait:src/main/claude-accounts/claude-profile-wsl-router.test.ts
-1 test-no-real-time-wait:src/main/claude-accounts/runtime-auth-service.test.ts
-1 test-no-real-time-wait:src/main/claude-usage/scanner-incremental-reader.test.ts
 1 test-no-real-time-wait:src/main/claude/claude-agent-sdk-exit-proof.test.ts
 1 test-no-real-time-wait:src/main/claude/claude-agent-sdk-user-message-queue.test.ts
 1 test-no-real-time-wait:src/main/claude/claude-stop-ack-race.test.ts
@@ -646,7 +641,6 @@
 1 test-timeout-needs-reason:src/main/browser/guest-lifecycle/find/browser-find-frame-traversal.electron.test.ts
 1 test-timeout-needs-reason:src/main/browser/identity/wire-probes/browser-session-ua-wire-identity-cross-context.electron.test.ts
 1 test-timeout-needs-reason:src/main/browser/identity/wire-probes/browser-session-ua-wire-identity.electron.test.ts
-3 test-timeout-needs-reason:src/main/claude-usage/scanner-incremental-reader.test.ts
 1 test-timeout-needs-reason:src/main/claude/claude-agent-sdk-exit-proof.test.ts
 1 test-timeout-needs-reason:src/main/claude/claude-background-run-isolation-real-cli.test.ts
 2 test-timeout-needs-reason:src/main/claude/claude-status-line-windows.test.ts

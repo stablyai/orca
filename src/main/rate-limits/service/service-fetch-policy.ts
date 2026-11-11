@@ -8,15 +8,15 @@ import {
 } from './service-types'
 import type { ClaudeRuntimeAuthPreparation } from '../../claude-accounts/runtime-auth/runtime-auth-types'
 import type { ClaudeStatusLineRateLimits } from '../../../shared/claude-statusline-rate-limits'
-import type { NormalizedClaudeAccountSelectionTarget } from '../../claude-accounts/runtime-selection'
+import type { NormalizedClaudeAccountSelectionTarget } from '../../claude-accounts/selection/runtime-selection'
 import type { ProviderRateLimits, RateLimitWindow } from '../../../shared/rate-limit-types'
 import {
   isSameClaudeUsageWindow,
   isStaleClaudeUsageWindow,
   mapClaudeUsageWindow
 } from '../providers/claude/claude-usage-window'
-import { readUserClaudeConfigDir } from '../../claude-accounts/claude-profile-paths'
-import { getClaudeProfileRouter } from '../../claude-accounts/claude-profile-installed-router'
+import { readUserClaudeConfigDir } from '../../claude-accounts/profiles/claude-profile-paths'
+import { getClaudeProfileRouter } from '../../claude-accounts/profiles/routing/claude-profile-installed-router'
 
 export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchTargets {
   protected getMiniMaxCredentialError(message: string): ProviderRateLimits {
