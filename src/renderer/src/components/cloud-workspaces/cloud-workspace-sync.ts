@@ -13,6 +13,7 @@ import {
   setPrefsAccount
 } from './cloud-workspace-prefs'
 import {
+  cloudWorkspaceIdentity,
   refreshCloudWorktreeBindings,
   rememberCloudWorkspaces,
   sandboxIdForWorktree
@@ -22,6 +23,7 @@ import { onWorktreesPinnedByUser } from '@/lib/orca-cloud/worktree-pin-listeners
 
 /** Numbers and links rarely change; Home's own polling refreshes them faster while it is open. */
 const IDENTITY_POLL_MS = 60_000
+const FRONT_RETRY_MS = 5_000
 
 export function installCloudWorkspaceSync(): () => void {
   const api = window.api.cloudWorkspaces
@@ -111,14 +113,38 @@ export function installCloudWorkspaceSync(): () => void {
       }
     })
   )
-  // Pairing a teammate's workspace adds a runtime host; switching workspaces is a cheap re-read.
+  // Switching to a workspace (a new cloud one just created or paired, too) re-reads which local
+  // runtimes are cloud workspaces, and fetches numbers when the one in front has none yet. A
+  // runtime registers a moment after it opens, so a miss is checked once more shortly after.
+  let followUp: ReturnType<typeof setTimeout> | undefined
+  const identifyFront = async (): Promise<boolean> => {
+    await refreshCloudWorktreeBindings()
+    const state = useAppStore.getState()
+    const id = state.activeWorktreeId
+    const sandboxId = id
+      ? sandboxIdForWorktree({ id, hostId: state.activeWorkspaceExecutionHostId })
+      : null
+    if (sandboxId && !cloudWorkspaceIdentity(sandboxId)?.number) {
+      await refreshIdentity()
+    }
+    return sandboxId !== null || !id
+  }
   cleanups.push(
     useAppStore.subscribe((state, previous) => {
-      if (state.activeWorkspaceExecutionHostId !== previous.activeWorkspaceExecutionHostId) {
-        void refreshCloudWorktreeBindings()
+      if (
+        state.activeWorktreeId !== previous.activeWorktreeId ||
+        state.activeWorkspaceExecutionHostId !== previous.activeWorkspaceExecutionHostId
+      ) {
+        clearTimeout(followUp)
+        void identifyFront().then((known) => {
+          if (!known) {
+            followUp = setTimeout(() => void identifyFront(), FRONT_RETRY_MS)
+          }
+        })
       }
     })
   )
+  cleanups.push(() => clearTimeout(followUp))
   return () => {
     cleanups.forEach((cleanup) => cleanup())
     setPrefsAccount(null)
