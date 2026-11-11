@@ -40,6 +40,7 @@ export function CloudGitSetupStripView({
         model={cloudGitSetupStripModel(phase, t)}
         prompt={null}
         actions={actions}
+        wrap
       />
     </div>
   )
