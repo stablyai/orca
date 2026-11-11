@@ -102,7 +102,7 @@ export function AgentChoiceFields({
       : undefined
   const effort = menu?.descriptors.find(({ id }) => id === 'effort')
   const listedModels = live
-    ? (menu?.rows ?? agentPickerModels(live)).filter(({ hidden }) => !hidden)
+    ? (menu?.rows ?? agentPickerModels(live)).filter((row) => !('hidden' in row && row.hidden))
     : (catalog?.models ?? [])
   const unlistedModel =
     selected?.model && !(live ? listedModels.some(({ id }) => id === selected.model) : model)
