@@ -1,7 +1,7 @@
-import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup'
-import type { WorktreeDeleteState } from '@/store/slices/worktrees'
+import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup/workspace-cleanup'
+import type { WorktreeDeleteState } from '@/store/slices/worktrees/teardown/worktree-delete-state-types'
 import { composeWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
-import { resolveWorkspaceCleanupRemovalHostId } from '../../../../shared/workspace-cleanup-host-identity'
+import { resolveWorkspaceCleanupRemovalHostId } from '../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
 
 type DeletionFlagState = Pick<WorktreeDeleteState, 'isDeleting' | 'executionHostId'>
 

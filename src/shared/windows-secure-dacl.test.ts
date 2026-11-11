@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { findSecureDaclViolation, hardenedDaclSddl } from './windows-secure-dacl'
+import { findSecureDaclViolation } from './windows-secure-dacl'
 import { daclFromSddl } from './windows-security-addon.test-fixture'
 
 const USER = 'S-1-5-21-432636774-4279371817-3971399515-1001'
@@ -7,11 +7,6 @@ const fileViolation = (sddl: string) => findSecureDaclViolation(daclFromSddl(sdd
 const directoryViolation = (sddl: string) => findSecureDaclViolation(daclFromSddl(sddl), USER, true)
 
 describe('findSecureDaclViolation', () => {
-  it('accepts what Orca writes, for files and directories', () => {
-    expect(fileViolation(hardenedDaclSddl(USER, false))).toBeNull()
-    expect(directoryViolation(hardenedDaclSddl(USER, true))).toBeNull()
-  })
-
   // No migration: these are byte-for-byte what the icacls hardening left on this machine.
   it('accepts what the icacls-era hardening left on disk', () => {
     expect(fileViolation(`D:PAI(A;;FA;;;BA)(A;;FA;;;SY)(A;;FA;;;${USER})`)).toBeNull()

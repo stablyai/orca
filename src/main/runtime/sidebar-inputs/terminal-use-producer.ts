@@ -3,7 +3,7 @@ import {
   writeWorkspaceRecord,
   type WorkspaceRecordStore
 } from './sort-stamp-records'
-import type { AgentPaneWorkspace } from '../../agent-hooks/agent-transition-detector'
+import type { AgentPaneWorkspace } from '../../agent-hooks/observations/agent-transition-detector'
 
 /** At most one write per workspace per minute; cleanup judges idleness in days. */
 export const TERMINAL_USE_THROTTLE_MS = 60_000

@@ -1,5 +1,5 @@
 // Runs in the isolated world so page scripts cannot access the link reporter or its listeners.
-import type { DocPreviewLinkModifiers } from '../shared/doc-preview-scheme'
+import type { DocPreviewLinkModifiers } from '../shared/document-preview/doc-preview-scheme'
 
 export type DocPreviewExternalLinkReporter = (
   url: string,

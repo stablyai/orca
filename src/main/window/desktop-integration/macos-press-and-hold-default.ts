@@ -2,7 +2,7 @@ import { mkdirSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { runProcessSync } from '@orca/process-host'
 import type { ProcessResult } from '@orca/process-host/process-spec'
-import { writeFileAtomically } from '../../codex-accounts/fs-utils'
+import { writeFileAtomically } from '../../filesystem/atomic-file-publication'
 
 // Opt out of the accent picker once so terminal keys repeat (#14746); later user choices win.
 // The separate defaults process may affect only the next launch. Reverting this also requires deleting the key.

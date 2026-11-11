@@ -1,5 +1,6 @@
 // Shared-home locks need explicit operator confirmation: local silence cannot prove a remote holder exited.
 import { readdirSync, statSync } from 'node:fs'
+import { readdir } from 'node:fs/promises'
 import { createConnection } from 'node:net'
 import { hostname } from 'node:os'
 import { join } from 'node:path'
@@ -16,11 +17,14 @@ import { orcadLockHolderLocality } from './orcad-lock-holder-locality'
 import { ORCAD_LOCK_FRESH_MS, orcadLockPeer, orcadLockSelf } from './orcad-lock-clone-machine'
 import { orcadDataRootIsOnLocalDisk } from './orcad-data-root-locality'
 import { readOrcadProcessIncarnation } from './orcad-process-start-time'
-import { hasErrorCode } from '../daemon/daemon-process-inspection'
+import { hasErrorCode } from '../daemon/endpoint/identity/daemon-process-inspection'
 import { resolveUserDataPath } from './orcad-app-paths'
 import { profileStateAccessMachineIdentity } from '../persistence/profile-state/profile-state-access-identity'
-import { readRuntimeMetadata } from '../runtime/runtime-metadata'
-import { RUNTIME_SOCKET_NAME_REGEX } from '../runtime/runtime-rpc/runtime-rpc-socket-metadata'
+import { readRuntimeMetadata } from '../runtime/rpc/server/runtime-metadata'
+import {
+  RUNTIME_SOCKET_NAME_REGEX,
+  runtimeSocketDirs
+} from '../runtime/rpc/server/runtime-rpc-socket-metadata'
 import {
   ORCAD_RECLAIM_STALE_LOCK_FLAG,
   ORCAD_STALE_LOCK_DATA_ROOT_FLAG,
@@ -176,7 +180,7 @@ async function checkStaleLock(
   if (!(now - writtenMs >= ORCAD_STALE_LOCK_MIN_AGE_MS)) {
     return { refusal: `The lock is less than ${ORCAD_STALE_LOCK_MIN_AGE_MS / 60_000} minutes old.` }
   }
-  const endpoints = holderEndpoints(dataRoot, holder.pid)
+  const endpoints = await holderEndpoints(dataRoot, holder.pid)
   if (!endpoints) {
     return { refusal: 'The runtime record in the data root cannot be read.' }
   }
@@ -205,7 +209,7 @@ async function checkStaleLock(
 }
 
 /** Null leaves endpoints unverifiable when runtime metadata is unreadable. */
-function holderEndpoints(dataRoot: string, pid: number): string[] | null {
+async function holderEndpoints(dataRoot: string, pid: number): Promise<string[] | null> {
   const endpoints = new Set<string>()
   try {
     const metadata = readRuntimeMetadata(dataRoot)
@@ -214,10 +218,12 @@ function holderEndpoints(dataRoot: string, pid: number): string[] | null {
         endpoints.add(transport.endpoint)
       }
     }
-    for (const entry of readdirSync(dataRoot)) {
-      if (RUNTIME_SOCKET_NAME_REGEX.exec(entry)?.[1] === String(pid)) {
-        endpoints.add(join(dataRoot, entry))
-      }
+    for (const dir of runtimeSocketDirs(dataRoot)) {
+      // A long data root relocates the holder's socket; it only listens in a dir this user can read.
+      const entries = dir === dataRoot ? readdirSync(dir) : await readdir(dir).catch(() => [])
+      entries
+        .filter((entry) => RUNTIME_SOCKET_NAME_REGEX.exec(entry)?.[1] === String(pid))
+        .forEach((entry) => endpoints.add(join(dir, entry)))
     }
   } catch {
     return null

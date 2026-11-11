@@ -2,19 +2,23 @@ import type { GitHubAssignableUser } from '../../../../../shared/github/pull-req
 import type { PRComment } from '../../../../../shared/github/comment-types'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import type { MentionOption } from '../page-types'
 
-export function buildMentionOptions({
-  item,
-  comments,
-  participants,
-  assignableUsers
-}: {
-  item: GitHubWorkItem
-  comments: PRComment[]
-  participants: GitHubAssignableUser[]
-  assignableUsers: GitHubAssignableUser[]
-}): MentionOption[] {
+export function buildMentionOptions(
+  {
+    item,
+    comments,
+    participants,
+    assignableUsers
+  }: {
+    item: GitHubWorkItem
+    comments: PRComment[]
+    participants: GitHubAssignableUser[]
+    assignableUsers: GitHubAssignableUser[]
+  },
+  t: Translate = translate
+): MentionOption[] {
   const byLogin = new Map<string, MentionOption>()
   const add = (
     login: string | null | undefined,
@@ -42,27 +46,18 @@ export function buildMentionOptions({
   add(
     item.author,
     item.type === 'pr'
-      ? translate('auto.components.PullRequestPage.mentionSource.prAuthor', 'PR author')
-      : translate('auto.components.PullRequestPage.mentionSource.issueAuthor', 'Issue author')
+      ? t('auto.components.PullRequestPage.mentionSource.prAuthor', 'PR author')
+      : t('auto.components.PullRequestPage.mentionSource.issueAuthor', 'Issue author')
   )
-  const commenter = translate(
-    'auto.components.PullRequestPage.mentionSource.commenter',
-    'Commenter'
-  )
+  const commenter = t('auto.components.PullRequestPage.mentionSource.commenter', 'Commenter')
   for (const comment of comments) {
     add(comment.author, commenter, comment.authorAvatarUrl)
   }
-  const participant = translate(
-    'auto.components.PullRequestPage.mentionSource.participant',
-    'Participant'
-  )
+  const participant = t('auto.components.PullRequestPage.mentionSource.participant', 'Participant')
   for (const user of participants) {
     add(user.login, participant, user.avatarUrl, user.name)
   }
-  const teamMember = translate(
-    'auto.components.PullRequestPage.mentionSource.teamMember',
-    'Team member'
-  )
+  const teamMember = t('auto.components.PullRequestPage.mentionSource.teamMember', 'Team member')
   for (const user of assignableUsers) {
     add(user.login, teamMember, user.avatarUrl, user.name)
   }

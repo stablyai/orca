@@ -1,0 +1,71 @@
+import type { ProjectGroup } from '../../../../shared/project-group-types'
+import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host'
+import { findIndexedProjectGroupOwner } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
+import {
+  getRuntimeTargetHostId,
+  ipcOrRuntimeTargetForHostId
+} from '@/runtime/rpc/targets/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+
+type ProjectGroupOwnerRecord = Pick<ProjectGroup, 'id' | 'connectionId' | 'executionHostId'>
+
+type ProjectGroupOwnerRoutingState = {
+  projectGroups: readonly ProjectGroupOwnerRecord[]
+}
+
+// Normalize legacy padded/invalid host stamps so routing and catalog identity agree.
+
+export function catalogOwnsHost(catalogHostId: string, rowHostId: string): boolean {
+  if (catalogHostId !== LOCAL_EXECUTION_HOST_ID) {
+    return catalogHostId === rowHostId
+  }
+  return parseExecutionHostId(rowHostId)?.kind !== 'runtime'
+}
+
+export function projectGroupMatchesOwnerHost(
+  group: ProjectGroupOwnerRecord,
+  groupId: string,
+  ownerHostId: ExecutionHostId | null
+): boolean {
+  if (group.id !== groupId) {
+    return false
+  }
+  return ownerHostId ? catalogOwnsHost(ownerHostId, getRepoExecutionHostId(group)) : true
+}
+
+/** Resolve catalog ownership and transport together so reconciliation cannot follow focus. */
+export function resolveProjectGroupMutationTarget(
+  state: ProjectGroupOwnerRoutingState,
+  groupId: string,
+  hostId?: ExecutionHostId
+): { target: RuntimeClientTarget; ownerHostId: ExecutionHostId } | null {
+  const owner = findIndexedProjectGroupOwner(state.projectGroups, groupId, hostId)
+  if (!owner) {
+    return null
+  }
+  const ownerHostId = getRepoExecutionHostId(owner)
+  const target = ipcOrRuntimeTargetForHostId(hostId ?? ownerHostId)
+  return target ? { target, ownerHostId } : null
+}
+
+/** Refuse known groups absent from the target catalog; host would silently clear unknown membership. */
+export function isProjectGroupJoinableFromCatalog(
+  projectGroups: readonly ProjectGroupOwnerRecord[],
+  groupId: string,
+  catalog: RuntimeClientTarget
+): boolean {
+  const catalogHostId = getRuntimeTargetHostId(catalog)
+  const copies = projectGroups.filter((group) => group.id === groupId)
+  return (
+    copies.length === 0 ||
+    copies.some((group) => {
+      const groupCatalog = ipcOrRuntimeTargetForHostId(getRepoExecutionHostId(group))
+      return groupCatalog !== null && getRuntimeTargetHostId(groupCatalog) === catalogHostId
+    })
+  )
+}

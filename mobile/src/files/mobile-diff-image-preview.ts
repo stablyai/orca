@@ -1,4 +1,4 @@
-import { buildImageDataUri } from '../../../src/shared/image-data-uri'
+import { buildImageDataUri } from '../../../src/shared/file-preview/image-data-uri'
 
 // Only modifiedDeleted proves deletion; read failures can also return empty modifiedContent with modifiedIsBinary false.
 // Omit kind: the reply reader admits every non-text arm, including unknown host arms.

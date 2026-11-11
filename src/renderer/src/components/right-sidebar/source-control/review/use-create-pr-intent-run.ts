@@ -1,11 +1,17 @@
+import { useSourceControlScope } from '../panel/worktree-scope'
 import { useCallback } from 'react'
 import { translate } from '@/i18n/i18n'
 import { createCreatePrIntentRunToken } from './create-pr-intent-flow'
-import { resolveWorktreeGitCopyNow } from '@/lib/worktree-git-copy'
+import { resolveWorktreeGitCopyNow } from '@/lib/workspace/ownership/worktree-git-copy'
 import type { SourceControlCommitAction } from '../commit/use-commit-action'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
 import type { SourceControlFileListing } from '../listing/use-file-listing'
 import type { SourceControlWorktreeOperationState } from '../panel/use-worktree-operation-state'
+import {
+  createPrIntentRunIsCurrent,
+  setCreatePrIntentNotice
+} from '../panel/worktree-operation-store'
+import type { CreatePrIntentNotice } from '../commit/commit-area-types'
 import type { SourceControlRemoteActionRunner } from '../sync/use-remote-action-runner'
 import { runCreatePrIntentBranchPrep } from './create-pr-intent-branch-prep'
 import { runCreatePrIntentReviewStep } from './create-pr-intent-review-step'
@@ -20,23 +26,16 @@ export function useSourceControlCreatePrIntentRun({
   activeRepo,
   activeWorktreeId,
   branchName,
-  commitDraftsRef,
-  commitErrorsRef,
   createHostedReviewForCreatePrIntent,
-  createPrIntentActiveTargetConflicts,
-  createPrIntentInFlightRef,
-  createPrIntentRunStillOwnsWorktree,
-  createPrIntentRunTokenRef,
   effectiveBaseRef,
   entries,
   generateCommitMessageForCreatePrIntent,
   getCreatePrIntentOperationTarget,
   handleCommit,
-  isCommitting,
-  isCreatingPr,
   isExecutingBulk,
   isGenerating,
   isRemoteOperationActive,
+  operationStore,
   prGenerating,
   provisionalHostedReviewProvider,
   readHostedReviewCreationEligibilityForIntent,
@@ -44,32 +43,23 @@ export function useSourceControlCreatePrIntentRun({
   refreshGitStatusForCreatePrIntent,
   remoteStatus,
   runRemoteAction,
-  setCreatePrIntentInFlightByWorktree,
-  setCreatePrIntentNoticeForWorktree,
   setIsExecutingBulk,
-  updateCommitDrafts,
+  updateCommitDraft,
   worktreePath
 }: {
   activeRepo: SourceControlWorktreeContext['activeRepo']
   activeWorktreeId: string | null
   branchName: string
-  commitDraftsRef: SourceControlWorktreeOperationState['commitDraftsRef']
-  commitErrorsRef: SourceControlWorktreeOperationState['commitErrorsRef']
   createHostedReviewForCreatePrIntent: SourceControlCreatePrIntentReview['createHostedReviewForCreatePrIntent']
-  createPrIntentActiveTargetConflicts: SourceControlWorktreeOperationState['createPrIntentActiveTargetConflicts']
-  createPrIntentInFlightRef: SourceControlWorktreeOperationState['createPrIntentInFlightRef']
-  createPrIntentRunStillOwnsWorktree: SourceControlWorktreeOperationState['createPrIntentRunStillOwnsWorktree']
-  createPrIntentRunTokenRef: SourceControlWorktreeOperationState['createPrIntentRunTokenRef']
   effectiveBaseRef: string | null
   entries: SourceControlWorktreeContext['entries']
   generateCommitMessageForCreatePrIntent: SourceControlCreatePrIntentCommitMessage['generateCommitMessageForCreatePrIntent']
   getCreatePrIntentOperationTarget: SourceControlCreatePrIntentTarget['getCreatePrIntentOperationTarget']
   handleCommit: SourceControlCommitAction['handleCommit']
-  isCommitting: boolean
-  isCreatingPr: boolean
   isExecutingBulk: SourceControlFileListing['isExecutingBulk']
   isGenerating: boolean
   isRemoteOperationActive: boolean
+  operationStore: SourceControlWorktreeOperationState['operationStore']
   prGenerating: boolean
   provisionalHostedReviewProvider: SourceControlHostedReviewProviderHint['provisionalHostedReviewProvider']
   readHostedReviewCreationEligibilityForIntent: SourceControlCreatePrIntentProbes['readHostedReviewCreationEligibilityForIntent']
@@ -77,12 +67,11 @@ export function useSourceControlCreatePrIntentRun({
   refreshGitStatusForCreatePrIntent: SourceControlCreatePrIntentProbes['refreshGitStatusForCreatePrIntent']
   remoteStatus: SourceControlWorktreeContext['remoteStatus']
   runRemoteAction: SourceControlRemoteActionRunner['runRemoteAction']
-  setCreatePrIntentInFlightByWorktree: SourceControlWorktreeOperationState['setCreatePrIntentInFlightByWorktree']
-  setCreatePrIntentNoticeForWorktree: SourceControlWorktreeOperationState['setCreatePrIntentNoticeForWorktree']
   setIsExecutingBulk: SourceControlFileListing['setIsExecutingBulk']
-  updateCommitDrafts: SourceControlWorktreeOperationState['updateCommitDrafts']
+  updateCommitDraft: SourceControlWorktreeOperationState['updateCommitDraft']
   worktreePath: string | null
 }): { runCreatePrIntent: () => Promise<void> } {
+  const scope = useSourceControlScope()
   const runCreatePrIntent = useCallback(async (): Promise<void> => {
     if (
       !activeRepo ||
@@ -90,13 +79,14 @@ export function useSourceControlCreatePrIntentRun({
       !worktreePath ||
       !branchName ||
       isExecutingBulk ||
-      isCommitting ||
       isGenerating ||
       isRemoteOperationActive ||
-      prGenerating ||
-      isCreatingPr ||
-      createPrIntentInFlightRef.current[activeWorktreeId]
+      prGenerating
     ) {
+      return
+    }
+    const { createPrIntentRun, isCommitting, isCreatingPr } = operationStore.getState()
+    if (createPrIntentRun || isCommitting || isCreatingPr) {
       return
     }
 
@@ -110,7 +100,7 @@ export function useSourceControlCreatePrIntentRun({
       // Pin the selected base across asynchronous commit/push steps.
       baseRef: effectiveBaseRef ?? null,
       // The run outlives navigation; its git answers stay on the copy it started from.
-      pinnedCopy: resolveWorktreeGitCopyNow(activeWorktreeId)
+      pinnedCopy: resolveWorktreeGitCopyNow(activeWorktreeId, scope?.executionHostId)
     })
     const operationTarget = getCreatePrIntentOperationTarget(token)
     const snapshot = createCreatePrIntentRunSnapshot({
@@ -118,15 +108,14 @@ export function useSourceControlCreatePrIntentRun({
       initialUpstreamStatus: remoteStatus,
       operationTarget,
       refreshGitStatusForCreatePrIntent,
-      runIsCurrent: () =>
-        createPrIntentRunStillOwnsWorktree(token) && !createPrIntentActiveTargetConflicts(token),
+      runIsCurrent: () => createPrIntentRunIsCurrent(operationStore, token),
       setIsExecutingBulk,
       token
     })
-    createPrIntentRunTokenRef.current[token.worktreeId] = token
-    createPrIntentInFlightRef.current[token.worktreeId] = true
-    setCreatePrIntentInFlightByWorktree((prev) => ({ ...prev, [token.worktreeId]: true }))
-    setCreatePrIntentNoticeForWorktree(token.worktreeId, {
+    const setNotice = (notice: CreatePrIntentNotice | null): void =>
+      setCreatePrIntentNotice(operationStore, notice)
+    operationStore.setState({ createPrIntentRun: token })
+    setNotice({
       tone: 'muted',
       message: translate(
         'auto.components.right.sidebar.SourceControl.d37e68f61d',
@@ -136,16 +125,15 @@ export function useSourceControlCreatePrIntentRun({
 
     try {
       const prepared = await runCreatePrIntentBranchPrep({
-        commitDraftsRef,
-        commitErrorsRef,
         generateCommitMessageForCreatePrIntent,
         handleCommit,
+        operationStore,
         operationTarget,
         runRemoteAction,
-        setCreatePrIntentNoticeForWorktree,
+        setCreatePrIntentNotice: setNotice,
         snapshot,
         token,
-        updateCommitDrafts
+        updateCommitDraft
       })
       if (!prepared) {
         return
@@ -156,14 +144,14 @@ export function useSourceControlCreatePrIntentRun({
         readHostedReviewCreationEligibilityForIntent,
         refreshBranchCompareForCreatePrIntent,
         runRemoteAction,
-        setCreatePrIntentNoticeForWorktree,
+        setCreatePrIntentNotice: setNotice,
         snapshot,
         token
       })
     } catch (error) {
       console.warn('[SourceControl] Create PR intent failed', error)
       if (!snapshot.abortIfStale()) {
-        setCreatePrIntentNoticeForWorktree(token.worktreeId, {
+        setNotice({
           tone: 'destructive',
           message: translate(
             'auto.components.right.sidebar.SourceControl.d7492cafce',
@@ -172,39 +160,27 @@ export function useSourceControlCreatePrIntentRun({
         })
       }
     } finally {
-      if (createPrIntentRunTokenRef.current[token.worktreeId] === token) {
-        createPrIntentInFlightRef.current[token.worktreeId] = false
-        createPrIntentRunTokenRef.current[token.worktreeId] = null
-        if (snapshot.wasAbortedByStaleTarget()) {
-          setCreatePrIntentNoticeForWorktree(token.worktreeId, null)
-        }
-        setCreatePrIntentInFlightByWorktree((prev) => ({
-          ...prev,
-          [token.worktreeId]: false
-        }))
+      if (operationStore.getState().createPrIntentRun === token) {
+        operationStore.setState({
+          createPrIntentRun: null,
+          ...(snapshot.wasAbortedByStaleTarget() ? { createPrIntentNotice: null } : {})
+        })
       }
     }
   }, [
     activeRepo,
     activeWorktreeId,
     branchName,
-    commitDraftsRef,
-    commitErrorsRef,
-    createPrIntentActiveTargetConflicts,
-    createPrIntentInFlightRef,
-    createPrIntentRunStillOwnsWorktree,
-    createPrIntentRunTokenRef,
     createHostedReviewForCreatePrIntent,
     effectiveBaseRef,
     entries,
     generateCommitMessageForCreatePrIntent,
     getCreatePrIntentOperationTarget,
     handleCommit,
-    isCommitting,
-    isCreatingPr,
     isExecutingBulk,
     isGenerating,
     isRemoteOperationActive,
+    operationStore,
     prGenerating,
     readHostedReviewCreationEligibilityForIntent,
     refreshGitStatusForCreatePrIntent,
@@ -212,10 +188,9 @@ export function useSourceControlCreatePrIntentRun({
     provisionalHostedReviewProvider,
     remoteStatus,
     runRemoteAction,
-    setCreatePrIntentInFlightByWorktree,
-    setCreatePrIntentNoticeForWorktree,
+    scope?.executionHostId,
     setIsExecutingBulk,
-    updateCommitDrafts,
+    updateCommitDraft,
     worktreePath
   ])
 

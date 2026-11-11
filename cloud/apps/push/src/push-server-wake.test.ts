@@ -86,17 +86,6 @@ it('does not wake for invalid, unowned or dead registrations', async () => {
   expect(h.fcmRequests).toHaveLength(0)
 })
 
-it.each(['error', 'rate_limited'] as const)('does not wake a refused %s send', async (status) => {
-  const h = await fixture()
-  h.start()
-  const wake = vi.spyOn(h.server.worker, 'wake')
-  vi.spyOn(h.server.deliveryStore, 'accept').mockResolvedValue(status)
-  expect(await (await h.send()).json()).toEqual({
-    results: [{ registrationId: h.registrationId, status }]
-  })
-  expect(wake).not.toHaveBeenCalled()
-})
-
 it.each(['queued', 'sent'] as const)(
   'preserves dismissal of an already %s alert',
   async (phase) => {

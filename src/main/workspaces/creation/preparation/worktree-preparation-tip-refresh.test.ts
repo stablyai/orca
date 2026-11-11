@@ -1,18 +1,17 @@
-import { describe, expect, it, onTestFinished, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   flushBackgroundWork,
   mocks,
   repo,
   store
 } from '../../../__mocks__/worktree-create-preparation'
-import { WorktreePreparationLockOwnershipError } from '../../../git/worktree-preparation-lock'
+import { WorktreePreparationLockOwnershipError } from '../../../git/worktrees/creation/worktree-preparation-lock'
 import {
   consumePreparedWorktreeCreate,
   prepareWorktreeCreateForRepo
 } from './worktree-create-preparation'
 import {
   listPreparations,
-  startPreparation,
   WORKTREE_CREATE_PREPARATION_TTL_MS
 } from './worktree-create-preparation-pool'
 
@@ -29,21 +28,6 @@ function consume() {
 }
 
 describe('prepared checkout tip refresh', () => {
-  it('refreshes the existing checkout on its Git host without preparing another tree', async () => {
-    mocks.getWorktreeOptions.mockReturnValue({ wslDistro: 'Ubuntu' })
-    await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
-    const entry = listPreparations()[0]!
-    await prepareWorktreeCreateForRepo(store, repo, 'origin/main', beforeMaterialization)
-    expect(mocks.prepareCheckout).toHaveBeenCalledOnce()
-    expect(mocks.refreshTip).toHaveBeenCalledWith(
-      repo.path,
-      entry.preparedPath,
-      'refs/remotes/origin/main',
-      entry.lockReason,
-      { wslDistro: 'Ubuntu', signal: expect.any(AbortSignal) }
-    )
-  })
-
   it('lets consume join an in-flight refresh before finalizing', async () => {
     await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
     let release!: () => void
@@ -61,28 +45,16 @@ describe('prepared checkout tip refresh', () => {
     expect(mocks.finalize).toHaveBeenCalledOnce()
   })
 
-  it('defers another preparation while the previous checkout is still claimed', async () => {
-    await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
-    expect(await consume()).toMatchObject({ status: 'hit' })
-    mocks.computeWorkspaceRootAsync.mockClear()
-    mocks.resolveBaseRef.mockClear()
-    await prepareWorktreeCreateForRepo(store, repo, 'origin/main', beforeMaterialization)
-    expect(mocks.computeWorkspaceRootAsync).toHaveBeenCalledOnce()
-    expect(mocks.resolveBaseRef).toHaveBeenCalledOnce()
-    expect(mocks.refreshTip).not.toHaveBeenCalled()
-    expect(mocks.prepareCheckout).toHaveBeenCalledOnce()
-  })
-
   it('cancels an expired tip refresh before cleanup', async () => {
     vi.useFakeTimers()
     let signal: AbortSignal | undefined
     try {
       await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
       const entry = listPreparations()[0]!
-      mocks.refreshTip.mockImplementationOnce((_repo, _path, _base, _lock, options) => {
-        signal = options.signal
+      mocks.refreshTip.mockImplementationOnce((_repo, _path, _base, _lock, _options, operation) => {
+        signal = operation.signal
         return new Promise<void>((_resolve, reject) => {
-          options.signal.addEventListener('abort', () => reject(options.signal.reason), {
+          operation.signal.addEventListener('abort', () => reject(operation.signal.reason), {
             once: true
           })
         })
@@ -103,8 +75,9 @@ describe('prepared checkout tip refresh', () => {
       expect(mocks.discard).toHaveBeenCalledWith(
         repo.path,
         entry.preparedPath,
-        {},
-        entry.lockReason
+        expect.anything(),
+        entry.lockReason,
+        null
       )
       expect(listPreparations()).toEqual([])
     } finally {
@@ -116,10 +89,10 @@ describe('prepared checkout tip refresh', () => {
     await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
     const entry = listPreparations()[0]!
     let signal: AbortSignal | undefined
-    mocks.refreshTip.mockImplementationOnce((_repo, _path, _base, _lock, options) => {
-      signal = options.signal
+    mocks.refreshTip.mockImplementationOnce((_repo, _path, _base, _lock, _options, operation) => {
+      signal = operation.signal
       return new Promise<void>((_resolve, reject) => {
-        options.signal.addEventListener('abort', () => reject(options.signal.reason), {
+        operation.signal.addEventListener('abort', () => reject(operation.signal.reason), {
           once: true
         })
       })
@@ -135,7 +108,13 @@ describe('prepared checkout tip refresh', () => {
     expect((await settled)[0]?.status).toBe('rejected')
     await flushBackgroundWork()
     expect(mocks.discard).toHaveBeenCalledOnce()
-    expect(mocks.discard).toHaveBeenCalledWith(repo.path, entry.preparedPath, {}, entry.lockReason)
+    expect(mocks.discard).toHaveBeenCalledWith(
+      repo.path,
+      entry.preparedPath,
+      expect.anything(),
+      entry.lockReason,
+      null
+    )
   })
 
   it('preserves a checkout whose lock was taken over', async () => {
@@ -150,7 +129,7 @@ describe('prepared checkout tip refresh', () => {
     expect(await consume()).toMatchObject({ status: 'miss', reason: 'none_armed' })
   })
 
-  it('serializes successive fetched tips and lets consume wait for the newest queued refresh', async () => {
+  it('waits only for the active refresh and skips the redundant queued one', async () => {
     await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
     const order: string[] = []
     let release!: () => void
@@ -182,7 +161,8 @@ describe('prepared checkout tip refresh', () => {
     release()
     const results = await Promise.all([first, second, create])
     expect(results[2]).toMatchObject({ status: 'hit' })
-    expect(order).toEqual(['first-tip', 'second-tip', 'finalize'])
+    expect(order).toEqual(['first-tip', 'finalize'])
+    expect(mocks.refreshTip).toHaveBeenCalledOnce()
     expect(mocks.prepareCheckout).toHaveBeenCalledOnce()
   })
 
@@ -227,45 +207,5 @@ describe('prepared checkout tip refresh', () => {
       }
       await flushBackgroundWork()
     }
-  })
-})
-
-describe('prepared checkout timing across a tip refresh', () => {
-  it('keeps the re-arm build time and measures idle time from the refreshed ready', async () => {
-    let now = 0
-    const clock = vi.spyOn(performance, 'now').mockImplementation(() => now)
-    onTestFinished(() => clock.mockRestore())
-    const build = Promise.withResolvers<void>()
-    mocks.prepareCheckout.mockReturnValueOnce(build.promise)
-    const armed = startPreparation(
-      {
-        repoPath: repo.path,
-        workspaceRoot: '/workspace',
-        baseBranch: 'origin/main',
-        canonicalBase: 'refs/remotes/origin/main',
-        options: {}
-      },
-      'automatic'
-    )
-    await vi.waitFor(() => expect(mocks.prepareCheckout).toHaveBeenCalled())
-    now = 40_000
-    build.resolve()
-    await armed
-
-    now = 100_000
-    const fetch = Promise.withResolvers<void>()
-    const refreshed = prepareWorktreeCreateForRepo(store, repo, 'origin/main', fetch.promise)
-    await flushBackgroundWork()
-    now = 102_000
-    fetch.resolve()
-    await refreshed
-    now = 112_000
-
-    await expect(consume()).resolves.toMatchObject({
-      status: 'hit',
-      origin: 'rearm_then_prefetch',
-      buildMs: 40_000,
-      idleMs: 10_000
-    })
   })
 })

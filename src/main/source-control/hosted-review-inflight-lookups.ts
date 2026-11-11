@@ -1,4 +1,4 @@
-import type { HostedReviewForBranchOutcome } from '../../shared/hosted-review'
+import type { HostedReviewForBranchOutcome } from '../../shared/source-control/hosted-review/hosted-review-contracts'
 import {
   HOSTED_REVIEW_LOOKUP_DEADLINE_MS,
   MAX_INFLIGHT_LOOKUPS

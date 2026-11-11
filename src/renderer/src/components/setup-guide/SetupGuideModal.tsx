@@ -17,7 +17,7 @@ import { useAppStore } from '@/store'
 import { FeatureWallSetupChecklist } from '../feature-wall/FeatureWallSetupChecklist'
 import { useSetupGuideProgress } from './use-setup-guide-progress'
 import { useSetupGuideOpenCloseTelemetry } from './use-setup-guide-telemetry'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 const SETUP_GUIDE_CLOSE_LINGER_MS = 300
 
@@ -46,6 +46,7 @@ function SetupGuideModalContent({
   open: boolean
   lingering: boolean
 }): JSX.Element {
+  const t = useTranslate()
   const modalData = useAppStore((s) => s.modalData)
   const closeModal = useAppStore((s) => s.closeModal)
   const setSetupGuideSidebarDismissed = useAppStore((s) => s.setSetupGuideSidebarDismissed)
@@ -145,17 +146,17 @@ function SetupGuideModalContent({
           onClick={handleHideFromSidebar}
           className="absolute right-11 top-3.5 hidden sm:inline-flex"
         >
-          {translate(
+          {t(
             'auto.components.setup.guide.SetupGuideModal.f3b5ffb2a6',
             'Hide checklist from sidebar'
           )}
         </Button>
         <DialogHeader className="gap-1 border-b border-border px-7 py-4">
           <DialogTitle className="text-lg">
-            {translate('auto.components.setup.guide.SetupGuideModal.48a9e5ef2d', 'Getting started')}
+            {t('auto.components.setup.guide.SetupGuideModal.48a9e5ef2d', 'Getting started')}
           </DialogTitle>
           <DialogDescription className="text-sm text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.setup.guide.SetupGuideModal.3598a3ca0c',
               'Finish the core workflows that make Orca useful for parallel agent work.'
             )}

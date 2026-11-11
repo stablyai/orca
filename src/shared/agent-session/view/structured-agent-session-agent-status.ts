@@ -1,11 +1,14 @@
 import type { AgentSessionStatusSummary } from '../agent-session-wire'
-import { foldAgentLeadStatus } from '../../agent-lead-status-fold'
+import { foldAgentLeadStatus } from '../../agent-status/lifecycle/agent-lead-status-fold'
 import {
   agentChildWorkLiveness,
   type AgentChildWorkLivenessCandidate
-} from '../../agent-status-child-work-liveness'
-import type { AgentMainAgentStatus } from '../../main-agent-status'
-import type { AgentStatusState, AgentWorkingMode } from '../../agent-status-types'
+} from '../../agent-status/child-work/agent-status-child-work-liveness'
+import type { AgentMainAgentStatus } from '../../agent-status/lifecycle/main-agent-status'
+import type {
+  AgentStatusState,
+  AgentWorkingMode
+} from '../../agent-status/contracts/agent-status-types'
 import type { StructuredAgentSessionProjectedStatus } from './structured-agent-session-projection'
 
 export type StructuredAgentSessionAgentStatus = {

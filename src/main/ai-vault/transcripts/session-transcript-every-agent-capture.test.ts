@@ -46,7 +46,10 @@ vi.mock(
     }
   }
 )
-import { AI_VAULT_AGENTS, type AiVaultAgent } from '../../../shared/ai-vault-types'
+import {
+  AI_VAULT_AGENTS,
+  type AiVaultAgent
+} from '../../../shared/ai-vault/contracts/ai-vault-types'
 import { scanAiVaultSessions } from '../session-scanner'
 import { writeEveryAgentVault } from '../session-scanner-every-agent-fixture'
 import { resetSessionParseCacheForTests } from '../parse-cache/session-parse-cache-store'

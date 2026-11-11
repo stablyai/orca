@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { LinearIssue } from '../../../shared/linear/issue-types'
 import type { LinearProjectSummary } from '../../../shared/linear/project-types'
-import { normalizeTaskSourceContext } from '../../../shared/task-source-context'
+import { normalizeTaskSourceContext } from '../../../shared/work-items/task-source-context'
 import { LinearIssueProjectSelector } from './linear-issue-project-selector'
 
 const runtimeMocks = vi.hoisted(() => ({
@@ -20,10 +20,10 @@ const storeMocks = vi.hoisted(() => ({
   }
 }))
 
-vi.mock('@/runtime/runtime-linear-project-client', () => ({
+vi.mock('@/runtime/linear/runtime-linear-project-client', () => ({
   linearListProjects: runtimeMocks.linearListProjects
 }))
-vi.mock('@/runtime/runtime-linear-issue-mutations', () => ({
+vi.mock('@/runtime/linear/runtime-linear-issue-client', () => ({
   linearUpdateIssue: runtimeMocks.linearUpdateIssue
 }))
 vi.mock('@/store', () => ({

@@ -1,7 +1,8 @@
 import type WebSocket from 'ws'
-import type { E2EEKeypair } from '../e2ee-keypair'
+import type { E2EEKeypair } from '../rpc/server/pairing/e2ee-keypair'
 import type { MobileSocketWiring } from '../rpc/mobile-socket-wiring'
-import type { RelayBrokerStatus, RelayIdentity } from './relay-session-broker-contract'
+import type { RelayIdentity } from './relay-session-broker-contract'
+import type { MobileRelayStatus as RelayBrokerStatus } from '../../../shared/remote-runtime/relay/mobile-relay-status'
 import type { RelayRegion } from './relay-region-probe'
 
 export type RelayOriginPoolOptions = {

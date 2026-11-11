@@ -4,9 +4,9 @@ import {
   clearSparseCheckoutStateCache,
   clearSparseCheckoutStateCacheForRepo,
   onSparseCheckoutStateChanged
-} from '../../../git/worktree-sparse-checkout-cache'
-import { areWorktreePathsEqual } from '../../../git/worktree-path-comparison'
-import { registerWorktreeChangeInvalidator } from '../../worktree-change-invalidators'
+} from '../../../git/worktrees/sparse-checkout/worktree-sparse-checkout-cache'
+import { areWorktreePathsEqual } from '../../../git/worktrees/catalog/worktree-path-comparison'
+import { registerWorktreeChangeInvalidator } from './worktree-change-invalidators'
 import { notifyWorktreesChanged } from '../../worktree-remote'
 
 /** Invalidate the changed repo, clearing all if unresolved; publish stale-while-revalidate flips as worktree changes. */

@@ -1,8 +1,8 @@
-import { isAskUserQuestionTool } from '../../agent-question-answered-intent'
+import { isAskUserQuestionTool } from '../../agent-status/lifecycle/agent-question-answered-intent'
 import {
   normalizeAgentStatusPayload,
   type ParsedAgentStatusPayload
-} from '../../agent-status-types'
+} from '../../agent-status/contracts/agent-status-types'
 import type { HookListenerState } from '../listener-state'
 import {
   resolvePrompt,

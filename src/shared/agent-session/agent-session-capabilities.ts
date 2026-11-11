@@ -2,6 +2,8 @@
 export type AgentSessionCapabilities = {
   /** Roll the conversation back to before a turn. */
   rewind: boolean
+  /** Native copy into a new chat: through any finished turn, or only the latest one. */
+  fork?: 'checkpoint' | 'tip'
   /** Compact the conversation's context on request: offers the `/compact` command. */
   compact: boolean
   /** `/compact` takes free text that steers the summary; absent where the agent would drop it. */

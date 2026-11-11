@@ -8,17 +8,29 @@ const EXTENSION_BY_MIME: Readonly<Record<string, string>> = {
   'text/csv': 'csv',
   'text/html': 'html',
   'image/png': 'png',
+  'image/apng': 'png',
   'image/jpeg': 'jpg',
+  'image/jpg': 'jpg',
+  'image/pjpeg': 'jpg',
+  'image/bmp': 'bmp',
+  'image/x-bmp': 'bmp',
+  'image/x-ms-bmp': 'bmp',
+  'image/ico': 'ico',
+  'image/x-icon': 'ico',
+  'image/vnd.microsoft.icon': 'ico',
   'image/gif': 'gif',
   'image/webp': 'webp',
   'image/heic': 'heic'
 }
 
-export function mobilePickedFileFallbackName(mime: string, index: number): string {
+export function mobileFileExtensionForMime(mime: string): string {
   const base = mime.split(';')[0]!.trim().toLowerCase()
-  const known = EXTENSION_BY_MIME[base]
   const subtype = base.split('/')[1] ?? ''
-  const extension = known ?? (/^[a-z0-9]{1,8}$/.test(subtype) ? subtype : '')
+  return EXTENSION_BY_MIME[base] ?? (/^[a-z0-9]{1,8}$/.test(subtype) ? subtype : '')
+}
+
+export function mobilePickedFileFallbackName(mime: string, index: number): string {
+  const extension = mobileFileExtensionForMime(mime)
   return extension ? `attachment-${index}.${extension}` : `attachment-${index}`
 }
 

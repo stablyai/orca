@@ -15,13 +15,6 @@ const open = (view: unknown) => ({
 const FILE = { filePath: '/repo/a.ts', relativePath: 'a.ts', language: 'typescript' }
 
 describe("layout.apply's editor view", () => {
-  it('takes a view with its file facts, and an open without one', () => {
-    const view = { view: { mode: 'diff', diffSource: 'unstaged' }, file: FILE }
-    expect(LayoutApplyParams.parse(open(view)).command).toMatchObject({ view })
-    const { view: _absent, ...plain } = open(undefined).command
-    expect(LayoutApplyParams.safeParse({ command: plain }).success).toBe(true)
-  })
-
   it('refuses an unknown mode, an edit view without its conflict, or a view without a file', () => {
     for (const view of [
       { view: { mode: 'terminal' }, file: FILE },

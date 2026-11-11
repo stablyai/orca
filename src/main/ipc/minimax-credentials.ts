@@ -6,7 +6,7 @@ import {
   saveMiniMaxApiKeyCredential,
   saveMiniMaxSessionCookieCredential
 } from '../minimax/minimax-credential-commands'
-import type { RateLimitService } from '../rate-limits/service'
+import type { RateLimitService } from '../rate-limits/service/rate-limit-service'
 
 export function registerMiniMaxCredentialsHandlers(rateLimits: RateLimitService | null): void {
   ipcMain.handle('minimaxCredentials:getStatus', () => getMiniMaxCredentialsStatus())

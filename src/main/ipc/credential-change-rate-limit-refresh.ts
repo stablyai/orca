@@ -1,4 +1,4 @@
-import type { RateLimitService } from '../rate-limits/service'
+import type { RateLimitService } from '../rate-limits/service/rate-limit-service'
 
 /** Refresh usage in the background so callers can return persisted credential status even if refresh fails. */
 export function refreshAfterCredentialChange<T extends Pick<RateLimitService, 'refresh'>>(

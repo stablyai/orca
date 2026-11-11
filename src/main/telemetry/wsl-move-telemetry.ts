@@ -3,7 +3,7 @@
  * waiting for its host, with the phase it reached, a reason code and duration and size buckets.
  * Every raw code is narrowed onto the schema's enums here; nothing a user or host named leaves.
  */
-import type { EventProps } from '../../shared/telemetry-events'
+import type { EventProps } from '../../shared/telemetry-event-classification'
 import {
   WSL_MOVE_REFUSAL_VALUES,
   WSL_MOVE_RESET_REASON_VALUES

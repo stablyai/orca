@@ -1,4 +1,4 @@
-import { taskProviderFailure } from '../../shared/task-provider-failure'
+import { taskProviderFailure } from '../../shared/work-items/task-provider-failure'
 import type { LinearClient } from '@linear/sdk'
 import type { LinearComment } from '../../shared/linear/issue-types'
 import { acquire, release } from './linear-request-concurrency'

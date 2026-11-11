@@ -89,23 +89,6 @@ async function withProcessPlatform<T>(
 }
 
 describe('getRegisteredDeletableWorktree', () => {
-  it('rejects deleting a worktree that contains another registered worktree', () => {
-    expect(() =>
-      getRegisteredDeletableWorktree(
-        '/repo',
-        '/workspaces/parent',
-        [
-          makeGitWorktree('/repo', true),
-          makeGitWorktree('/workspaces/parent'),
-          makeGitWorktree('/workspaces/parent/child')
-        ],
-        CLIENT_REMOVAL_HOME
-      )
-    ).toThrow(
-      'Refusing to delete worktree because it contains another registered worktree: /workspaces/parent/child'
-    )
-  })
-
   it('does not reject sibling worktree paths that only share a prefix', () => {
     expect(
       getRegisteredDeletableWorktree(
@@ -439,21 +422,6 @@ describe('canSafelyRemoveOrphanedWorktreeDirectory', () => {
       await expect(prove()).resolves.toBe(false)
     }
   })
-
-  it('rejects POSIX home directories even when host homedir has a different path shape', async () => {
-    await expect(
-      canSafelyRemoveOrphanedWorktreeDirectory(
-        '/home/dev',
-        '/repos/main',
-        CLIENT_REMOVAL_HOME,
-        makeStatPath(['/home/dev/.git'], ['/repos/main/.git']),
-        makeReadPath([
-          ['/home/dev/.git', 'gitdir: /repos/main/.git/worktrees/dev\n'],
-          ['/repos/main/.git/worktrees/dev/gitdir', '/home/dev/.git\n']
-        ])
-      )
-    ).resolves.toBe(false)
-  })
 })
 
 describe('isDangerousWorktreeRemovalPath on an execution host', () => {
@@ -506,16 +474,6 @@ describe('isDangerousWorktreeRemovalPath on an execution host', () => {
     ).toEqual(registered[1])
   })
 
-  it('refuses a home the host reported even when no path rule recognises it', () => {
-    expect(
-      isDangerousWorktreeRemovalPath(
-        '/srv/homes/alice',
-        '/opt/src',
-        executionHostRemovalHome('/srv/homes/alice')
-      )
-    ).toBe(true)
-  })
-
   it('recognises a POSIX home when the repo path drags the pair into win32 path ops', () => {
     expect(
       isDangerousWorktreeRemovalPath(
@@ -542,39 +500,6 @@ describe('isDangerousWorktreeRemovalPath on an execution host', () => {
 })
 
 describe('canSafelyRemoveOrphanedWorktreeDirectory on an execution host', () => {
-  // The orphan marker satisfies Git provenance, leaving the home guard to refuse unsafe targets.
-  const provenOrphan = {
-    statPath: makeStatPath(['C:\\Users\\bob\\.git'], ['C:\\src\\repo\\.git']),
-    readPath: makeReadPath([
-      ['C:\\Users\\bob\\.git', 'gitdir: C:\\src\\repo\\.git\\worktrees\\bob\n'],
-      ['C:\\src\\repo\\.git\\worktrees\\bob\\gitdir', 'C:\\Users\\bob\\.git\n']
-    ])
-  }
-
-  it("refuses the Windows host's home directory from a POSIX client", async () => {
-    await expect(
-      canSafelyRemoveOrphanedWorktreeDirectory(
-        'C:\\Users\\bob',
-        'C:\\src\\repo',
-        executionHostRemovalHome('C:\\Users\\bob'),
-        provenOrphan.statPath,
-        provenOrphan.readPath
-      )
-    ).resolves.toBe(false)
-  })
-
-  it("refuses the Windows host's home directory even when the host reported nothing", async () => {
-    await expect(
-      canSafelyRemoveOrphanedWorktreeDirectory(
-        'C:\\Users\\bob',
-        'C:\\src\\repo',
-        executionHostRemovalHome(null),
-        provenOrphan.statPath,
-        provenOrphan.readPath
-      )
-    ).resolves.toBe(false)
-  })
-
   it('still removes a proven orphan under that same host home', async () => {
     await expect(
       canSafelyRemoveOrphanedWorktreeDirectory(

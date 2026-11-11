@@ -50,6 +50,7 @@ export function previewMatchesListing(
 function listingIdentity(listing: PluginMarketplaceHostListing): string {
   const release = listing.release
   return [
+    listing.marketplaceSourceId,
     listing.marketplaceCommit,
     release?.commit ?? '',
     release?.contentHash ?? '',
@@ -70,8 +71,9 @@ export function usePluginPageModel({
 }) {
   const plugin = entry.installed
   // Why pinned: a catalog refresh mid-view must never swap the rows above an armed button.
-  const [pinned, setPinned] = useState(entry.listing)
-  const listing = plugin ? entry.listing : pinned
+  const [pinned, setPinned] = useState(entry)
+  const shownEntry = plugin ? entry : pinned
+  const listing = shownEntry.listing
   const [preview, setPreview] = useState<PluginMarketplaceHostInstallPreview | null>(null)
   const [previewFailed, setPreviewFailed] = useState(false)
   const [previewAttempt, setPreviewAttempt] = useState(0)
@@ -99,8 +101,8 @@ export function usePluginPageModel({
   const newerListed =
     !plugin &&
     entry.listing !== null &&
-    pinned !== null &&
-    listingIdentity(entry.listing) !== listingIdentity(pinned)
+    pinned.listing !== null &&
+    listingIdentity(entry.listing) !== listingIdentity(pinned.listing)
   // Why a mismatched preview counts too: it is the catalog's newer release, not what is shown.
   const stale = newerListed || previewMatches === false
   // Why disarm while refreshing: the listing under the button may be replaced any moment.
@@ -183,12 +185,13 @@ export function usePluginPageModel({
     plugin?.images ?? listing?.images ?? shownPreview?.images
   )
   return {
+    entry: shownEntry,
     plugin,
     listing,
     preview: shownPreview,
     previewFailed,
     retryPreview: () => setPreviewAttempt((attempt) => attempt + 1),
-    showNewer: () => setPinned(entry.listing),
+    showNewer: () => setPinned(entry),
     stale,
     disarmed,
     execution,

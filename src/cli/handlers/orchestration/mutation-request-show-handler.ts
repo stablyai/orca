@@ -2,7 +2,7 @@ import type { CommandHandler } from '../../dispatch'
 import { printOrchestrationReceipt } from './agent-view'
 import { getRequiredStringFlag } from '../../flags'
 import { RuntimeClientError } from '../../runtime-client'
-import type { OrchestrationMutationRequestShowResult } from '../../../shared/orchestration-mutation-request'
+import type { OrchestrationMutationRequestShowResult } from '../../../shared/orchestration/orchestration-mutation-request'
 
 export const ORCHESTRATION_REQUEST_SHOW_HANDLER: Record<string, CommandHandler> = {
   'orchestration request-show': async ({ flags, client, json }) => {

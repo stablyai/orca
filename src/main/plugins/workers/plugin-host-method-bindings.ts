@@ -27,6 +27,9 @@ import {
   PLUGIN_WORKSPACE_ACTION_HANDLERS,
   type PluginRuntimeRpc
 } from './plugin-host-workspace-method-bindings'
+import type { PluginAppearanceService } from '../appearance/plugin-appearance-service'
+import type { PluginEditorTypographySource } from '../appearance/plugin-editor-typography'
+import { PluginHostCallError } from './plugin-host-call-scope'
 
 export type { PluginHostCallScope } from './plugin-host-call-scope'
 
@@ -52,6 +55,9 @@ export type PluginDesktopFrameServices = {
 }
 
 export type PluginHostServices = {
+  appearance?: PluginAppearanceService | null
+  /** This Orca's own editor settings; absent where no profile is loaded (relay conformance). */
+  editorTypography?: PluginEditorTypographySource | null
   resolveActiveWorktreeContext(): Promise<PluginWorktreeContext | null>
   listWorktreeTerminals(worktreeId: string): Promise<PluginWorkspaceTerminal[]>
   listAgentStatuses(): readonly PluginAgentStatusRow[]
@@ -112,9 +118,33 @@ const api = PLUGIN_HOST_API
 const OK = { ok: true } as const
 
 const HANDLERS: Record<PluginHostMethodName, BoundPluginHostMethod> = {
+  'appearance.read': bind(api['appearance.read'], async (_params, { services }) => {
+    if (!services.appearance) {
+      throw new PluginHostCallError('unavailable', 'desktop appearance service is unavailable')
+    }
+    return services.appearance.read()
+  }),
+  'appearance.apply': bind(
+    api['appearance.apply'],
+    async (params, { pluginId, services, scope }) => {
+      if (!services.appearance) {
+        throw new PluginHostCallError('unavailable', 'desktop appearance service is unavailable')
+      }
+      return services.appearance.apply(pluginId, params, scope)
+    }
+  ),
+  'editor.readTypography': bind(api['editor.readTypography'], async (_params, { services }) => {
+    if (!services.editorTypography) {
+      throw new PluginHostCallError('unavailable', 'editor settings are unavailable on this host')
+    }
+    return services.editorTypography.read()
+  }),
   'workspace.readContext': bind(api['workspace.readContext'], async (_params, { services }) => {
     const context = await services.resolveActiveWorktreeContext()
-    const terminals = context ? await services.listWorktreeTerminals(context.worktreeId) : []
+    // A remote host may be unreachable; its workspace context still exists, so omit only its terminals.
+    const terminals = context
+      ? await services.listWorktreeTerminals(context.worktreeId).catch(() => [])
+      : []
     return projectPluginWorkspaceContext(context, terminals)
   }),
   'agents.list': bind(api['agents.list'], async (_params, { services }) => {
@@ -122,7 +152,7 @@ const HANDLERS: Record<PluginHostMethodName, BoundPluginHostMethod> = {
     if (!context) {
       return { agents: [] }
     }
-    const terminals = await services.listWorktreeTerminals(context.worktreeId)
+    const terminals = await services.listWorktreeTerminals(context.worktreeId).catch(() => [])
     return {
       agents: projectPluginWorkspaceAgents(
         context.worktreeId,

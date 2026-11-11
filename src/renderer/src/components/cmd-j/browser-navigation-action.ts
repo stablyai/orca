@@ -1,5 +1,6 @@
 import { Globe } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import {
   classifyExplicitUrl,
   classifyHostUrl
@@ -10,21 +11,25 @@ import { runBrowserWorkspaceAction, type CmdJQuickAction } from './quick-actions
 
 export const BROWSER_NAVIGATION_ACTION_ID = 'navigate-to-url'
 
-export function buildCmdJBrowserNavigationAction(query: string): CmdJQuickAction | null {
+export function buildCmdJBrowserNavigationAction(
+  query: string,
+  t: Translate = translate
+): CmdJQuickAction | null {
   const input = query.trim()
   if (!input || isCmdJPaletteQueryTooLarge(input)) {
     return null
   }
   // Why listed domains only: Cmd+J has no file rows to outrank a dotted name such as `App.vue`.
-  const target = classifyExplicitUrl(input) ?? classifyHostUrl(input, { requireListedDomain: true })
+  const target =
+    classifyExplicitUrl(input, t) ?? classifyHostUrl(input, { requireListedDomain: true }, t)
   if (!target || target.kind === 'blocked') {
     return null
   }
   return {
     id: BROWSER_NAVIGATION_ACTION_ID,
     kind: 'action',
-    title: translate('worktreeJumpPalette.goToWebsite', 'Go to {{value0}}', { value0: input }),
-    description: translate('worktreeJumpPalette.openWebsiteInNewTab', 'Open in a new browser tab'),
+    title: t('worktreeJumpPalette.goToWebsite', 'Go to {{value0}}', { value0: input }),
+    description: t('worktreeJumpPalette.openWebsiteInNewTab', 'Open in a new browser tab'),
     icon: Globe,
     verbKeywords: [],
     sourceQuery: input,

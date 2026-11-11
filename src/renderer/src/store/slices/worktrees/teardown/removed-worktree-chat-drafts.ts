@@ -1,23 +1,23 @@
-import { retireNativeChatComposerSubmissionsWhere } from '@/components/native-chat/native-chat-composer-draft-memory'
+import { retireNativeChatComposerSubmissionsWhere } from '@/components/native-chat/drafts/native-chat-composer-draft-memory'
 import {
   nativeChatLaunchPromptDraftOwner,
   launchDraftSource
-} from '@/components/native-chat/native-chat-launch-draft-source'
+} from '@/components/native-chat/drafts/native-chat-launch-draft-source'
 import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
 import type { AppState } from '../../../types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import type { NativeChatComposerDraftOwner } from '@/components/native-chat/native-chat-composer-draft-storage'
+import type { NativeChatComposerDraftOwner } from '@/components/native-chat/drafts/native-chat-composer-draft-storage'
 import {
   deleteNativeChatComposerDraft,
   deleteNativeChatComposerDraftsForTab,
-  deleteNativeChatComposerDraftsOwnedBy,
-  structuredAgentSessionDraftScopeKey
-} from '@/components/native-chat/native-chat-composer-draft-store'
+  deleteNativeChatComposerDraftsOwnedBy
+} from '@/components/native-chat/drafts/native-chat-composer-draft-removal'
+import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/drafts/native-chat-draft-scope'
 import {
   clearNativeChatPendingAttachments,
   dropNativeChatPendingAttachmentsForTab,
   dropNativeChatPendingAttachmentsOwnedBy
-} from '@/components/native-chat/native-chat-pending-attachment-cache'
+} from '@/components/native-chat/attachments/chips/native-chat-pending-attachment-cache'
 
 /** Include owner-tagged open/closed drafts plus tab conversation/pane keys written before owner attribution existed. */
 export type WorkspaceChatDraftKeys = {

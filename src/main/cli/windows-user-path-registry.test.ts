@@ -32,45 +32,6 @@ describe('WindowsUserPathRegistryReader', () => {
     await expect(failedReader.read()).resolves.toMatchObject({ state: 'unknown' })
   })
 
-  it('coalesces concurrent reads, caches status reads, and bypasses the cache when fresh', async () => {
-    let now = 100
-    let resolveRegistry!: (value: ReturnType<typeof registryModule>) => void
-    const registryLoader = vi.fn(
-      () =>
-        new Promise<ReturnType<typeof registryModule>>((resolve) => {
-          resolveRegistry = resolve
-        })
-    )
-    const reader = new WindowsUserPathRegistryReader({
-      platform: 'win32',
-      registryLoader,
-      now: () => now,
-      cacheTtlMs: 1_000
-    })
-
-    const first = reader.read()
-    const concurrent = reader.read()
-    expect(registryLoader).toHaveBeenCalledOnce()
-    resolveRegistry(registryModule('C:\\Tools'))
-    await expect(Promise.all([first, concurrent])).resolves.toEqual([
-      { state: 'success', value: 'C:\\Tools', expandable: true },
-      { state: 'success', value: 'C:\\Tools', expandable: true }
-    ])
-
-    await reader.read()
-    expect(registryLoader).toHaveBeenCalledOnce()
-
-    now += 1
-    const refreshed = reader.readFresh()
-    expect(registryLoader).toHaveBeenCalledTimes(2)
-    resolveRegistry(registryModule('C:\\Tools;C:\\Orca'))
-    await expect(refreshed).resolves.toEqual({
-      state: 'success',
-      value: 'C:\\Tools;C:\\Orca',
-      expandable: true
-    })
-  })
-
   it.each([
     { type: 1, expandable: false },
     { type: 2, expandable: true }

@@ -8,17 +8,17 @@ import {
 } from '../../../shared/orcad-artifacts'
 import { pinnedNodeRuntimeAsset, type NodeRuntimeTarget } from '../../../shared/node-runtime-pin'
 import { randomUUID } from 'node:crypto'
-import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
+import type { OrcadHostTransport } from './orcad-host-transport'
 import {
   execCommand,
   isUnconfirmedSshCommandTermination
 } from '../../ssh/remote-exec/remote-exec-command'
-import { RELAY_REMOTE_DIR } from '../../ssh/remote-exec/remote-frame-protocol'
+import { RELAY_REMOTE_DIR } from './remote-install-root'
 import {
   joinRemotePath,
   remoteDirname,
   type RemoteHostPlatform
-} from '../../ssh/ssh-remote-platform'
+} from '../../ssh/remote-host/ssh-remote-platform'
 import { quotePowerShellLiteral as powerShellLiteral } from '../../../shared/powershell-native-argument'
 import { ORCAD_WINDOWS_COMMAND_LINE_UNSAFE_CODE } from '../../orcad/orcad-host-unavailable'
 import {

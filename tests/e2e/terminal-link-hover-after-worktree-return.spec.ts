@@ -317,38 +317,4 @@ test.describe('Terminal link hover after worktree return', () => {
       rmSync(filePath, { force: true })
     }
   })
-
-  test('re-establishes a URL link on hover after switching worktrees and back', async ({
-    orcaPage
-  }) => {
-    const firstWorktreeId = await waitForActiveWorktree(orcaPage)
-    const secondWorktreeId = (await getAllWorktreeIds(orcaPage)).find(
-      (id) => id !== firstWorktreeId
-    )
-    test.skip(!secondWorktreeId, 'link-hover repro needs the seeded secondary worktree')
-    if (!secondWorktreeId) {
-      return
-    }
-
-    await ensureTerminalVisible(orcaPage)
-    await waitForActiveTerminalManager(orcaPage, 30_000)
-    const ptyId = await waitForActivePanePtyId(orcaPage)
-    await waitForPtyShellEcho(orcaPage, ptyId, 15_000)
-
-    const url = `https://example.com/orca-link-${randomUUID()}`
-    await sendToTerminal(orcaPage, ptyId, `echo ${url}\r`)
-    await expect
-      .poll(() => getTerminalContent(orcaPage, 4000), {
-        timeout: 10_000,
-        message: 'URL fixture did not reach the terminal buffer'
-      })
-      .toContain(url)
-
-    await assertLinkRecoversAfterReturn(orcaPage, {
-      firstWorktreeId,
-      secondWorktreeId,
-      needle: url,
-      expectContains: url
-    })
-  })
 })

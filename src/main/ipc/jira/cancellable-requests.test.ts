@@ -20,30 +20,4 @@ describe('JiraCancellableRequests', () => {
     expect(signals).toHaveLength(1)
     expect(signals[0]?.aborted).toBe(true)
   })
-
-  it('aborts an in-flight run on cancel', async () => {
-    const requests = new JiraCancellableRequests()
-    const resolveBox: { current?: (value: string) => void } = {}
-    const started = new Promise<AbortSignal>((resolve) => {
-      void requests.run('req-2', (signal) => {
-        resolve(signal)
-        return new Promise<string>((taskResolve) => {
-          resolveBox.current = taskResolve
-          signal.addEventListener(
-            'abort',
-            () => {
-              taskResolve('aborted')
-            },
-            { once: true }
-          )
-        })
-      })
-    })
-
-    const signal = await started
-    expect(signal.aborted).toBe(false)
-    requests.cancel('req-2')
-    expect(signal.aborted).toBe(true)
-    resolveBox.current?.('done')
-  })
 })

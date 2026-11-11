@@ -1,6 +1,7 @@
-import type { OrcaRuntimeService, OrchestrationCompatibilityCallerAuthority } from '../orca-runtime'
-import type { OrchestrationDb } from '../orchestration/db'
-import type { LegacyCompatibilityPrincipalRow } from '../orchestration/types'
+import type { OrcaRuntimeService } from '../orca-runtime'
+import type { OrchestrationCompatibilityCallerAuthority } from '../orchestration/terminal-authority/orchestration-compatibility-authority'
+import type { OrchestrationDb } from '../orchestration/db/orchestration-db'
+import type { LegacyCompatibilityPrincipalRow } from '../orchestration/db/orchestration-records'
 import type { LegacyCoordinatorAuthorityProof, RpcRequest } from './core'
 import {
   resolveAttestedLegacyPrincipal,

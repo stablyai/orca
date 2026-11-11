@@ -20,8 +20,12 @@ type GitHubSourceApplicationInput = Pick<
 
 import { useCallback } from 'react'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
-import { resolveGitHubWorkItemIdentity } from '@/lib/github-work-item-identity'
-import { getLinkedWorkItemWorkspaceName, getLinkedWorkItemSuggestedName } from '@/lib/new-workspace'
+import { resolveGitHubWorkItemIdentity } from '../../../../shared/new-workspace/github-work-item-identity'
+import '@/lib/workspace/creation/new-workspace'
+import {
+  getLinkedWorkItemWorkspaceName,
+  getLinkedWorkItemSuggestedName
+} from '../../../../shared/workspace-name'
 import { shouldApplyWorkspaceSourceAutoName } from '../../../../shared/new-workspace/workspace-source'
 
 export function useGitHubSourceApplication(input: GitHubSourceApplicationInput) {

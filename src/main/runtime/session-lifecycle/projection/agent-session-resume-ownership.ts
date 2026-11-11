@@ -2,9 +2,9 @@
 
 import { findPaneSleepingRecord } from './pane-sleeping-record'
 import { hookRowPaneResumeRecord, isPaneLocalHookRow } from './hook-row-pane-resume-record'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { OrcaRuntimeWithApplyMobileSessionTabNavigation } from './apply-mobile-session-tab-navigation'
-import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/runtime-types'
+import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
 import {
   agentProviderSessionsEqual,
   type SleepingAgentSessionRecord

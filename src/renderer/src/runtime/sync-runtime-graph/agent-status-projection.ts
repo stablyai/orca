@@ -1,5 +1,5 @@
 import type { AppState } from '@/store/types'
-import type { AgentMainAgentStatus } from '../../../../shared/main-agent-status'
+import type { AgentMainAgentStatus } from '../../../../shared/agent-status/lifecycle/main-agent-status'
 import { programStatusFacetContent } from '../../../../shared/program-status/facet'
 
 const AGENT_STATUS_SYNC_UPDATED_AT_BUCKET_MS = 30_000
@@ -102,17 +102,4 @@ export function buildRuntimeMobileAgentStatusProjection(
     projection
   }
   return projection
-}
-
-export function buildRuntimeMobileAgentStatusProjectionForTests(
-  agentStatusByPaneKey: AppState['agentStatusByPaneKey']
-): string {
-  return buildRuntimeMobileAgentStatusProjection(agentStatusByPaneKey)
-}
-
-export const AGENT_STATUS_SYNC_UPDATED_AT_BUCKET_MS_FOR_TESTS =
-  AGENT_STATUS_SYNC_UPDATED_AT_BUCKET_MS
-
-export function resetRuntimeMobileAgentStatusProjectionCacheForTests(): void {
-  cachedAgentStatusProjection = null
 }

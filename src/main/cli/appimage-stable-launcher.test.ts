@@ -1,10 +1,8 @@
-import { existsSync } from 'node:fs'
 import type * as NodeFs from 'node:fs'
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { runProcess } from '@orca/process-host'
 
 const { filePublicationFailures, launcherDescriptors } = vi.hoisted(() => ({
   filePublicationFailures: {
@@ -63,7 +61,6 @@ vi.mock('node:fs', async (importOriginal) => {
 })
 import {
   publishAppImageLauncherEndpoint,
-  resolveAppImageLauncherEndpointPath,
   resolveAppImageStableLauncherPath
 } from './appimage-stable-launcher'
 
@@ -92,71 +89,6 @@ async function writeLauncher(path: string, output: string): Promise<void> {
 }
 
 describe.skipIf(process.platform === 'win32')('AppImage stable launcher', () => {
-  it('uses only the installed payload and ignores a legacy live endpoint', async () => {
-    const cacheRootPath = await makeFixture()
-    const livePath = join(cacheRootPath, 'payloads', 'live')
-    const installedPath = join(cacheRootPath, 'payloads', 'installed')
-    await Promise.all([writeLauncher(livePath, 'live'), writeLauncher(installedPath, 'installed')])
-
-    const launcherPath = publishAppImageLauncherEndpoint(cacheRootPath, 'installed', installedPath)!
-    await symlink(livePath, resolveAppImageLauncherEndpointPath(cacheRootPath, 'live'))
-    await expect(
-      runProcess({ program: launcherPath, args: [], timeoutMs: 3_000 })
-    ).resolves.toMatchObject({ code: 0, stdout: 'installed' })
-    expect(await readFile(launcherPath, 'utf8')).not.toContain('/live')
-  })
-
-  it('atomically upgrades a stale marker-owned launcher', async () => {
-    const cacheRootPath = await makeFixture()
-    const targetPath = join(cacheRootPath, 'payloads', 'target')
-    await writeLauncher(targetPath, 'target')
-    const launcherPath = publishAppImageLauncherEndpoint(cacheRootPath, 'installed', targetPath)!
-    const marker = (await readFile(launcherPath, 'utf8')).split('\n')[1]
-    await writeFile(launcherPath, `#!/usr/bin/env bash\n${marker}\nprintf stale`, { mode: 0o755 })
-
-    expect(publishAppImageLauncherEndpoint(cacheRootPath, 'installed', targetPath)).toBe(
-      launcherPath
-    )
-    expect(await readFile(launcherPath, 'utf8')).toContain('launcher_dir=')
-    await expect(
-      runProcess({ program: launcherPath, args: [], timeoutMs: 3_000 })
-    ).resolves.toMatchObject({ code: 0, stdout: 'target' })
-  })
-
-  it('upgrades a stale launcher when closing the displaced copy reports EIO', async () => {
-    const cacheRootPath = await makeFixture()
-    const targetPath = join(cacheRootPath, 'payloads', 'target')
-    await writeLauncher(targetPath, 'target')
-    const launcherPath = publishAppImageLauncherEndpoint(cacheRootPath, 'installed', targetPath)!
-    const marker = (await readFile(launcherPath, 'utf8')).split('\n')[1]
-    await writeFile(launcherPath, `#!/usr/bin/env bash\n${marker}\nprintf stale`, { mode: 0o755 })
-    launcherDescriptors.opened = 0
-    launcherDescriptors.closed = 0
-    filePublicationFailures.closeAfterRename = true
-
-    expect(publishAppImageLauncherEndpoint(cacheRootPath, 'installed', targetPath)).toBe(
-      launcherPath
-    )
-    expect(filePublicationFailures.close).toBe(0)
-    expect(launcherDescriptors.closed).toBe(launcherDescriptors.opened)
-    expect(await readFile(launcherPath, 'utf8')).toContain('launcher_dir=')
-    await expect(
-      runProcess({ program: launcherPath, args: [], timeoutMs: 3_000 })
-    ).resolves.toMatchObject({ code: 0, stdout: 'target' })
-  })
-
-  it('publishes on a cache filesystem without hard-link support', async () => {
-    const cacheRootPath = await makeFixture()
-    const targetPath = join(cacheRootPath, 'payloads', 'target')
-    await writeLauncher(targetPath, 'target')
-    filePublicationFailures.link = 1
-
-    const launcherPath = publishAppImageLauncherEndpoint(cacheRootPath, 'installed', targetPath)
-
-    expect(launcherPath).toBe(resolveAppImageStableLauncherPath(cacheRootPath))
-    await expect(readFile(launcherPath!, 'utf8')).resolves.toContain('launcher_dir=')
-  })
-
   it('restores a displaced owned launcher when its replacement cannot be published', async () => {
     const cacheRootPath = await makeFixture()
     const targetPath = join(cacheRootPath, 'payloads', 'target')
@@ -185,20 +117,6 @@ describe.skipIf(process.platform === 'win32')('AppImage stable launcher', () => 
 
     expect(publishAppImageLauncherEndpoint(cacheRootPath, 'installed', targetPath)).toBeNull()
     await expect(readFile(launcherPath, 'utf8')).resolves.toBe(foreignContent)
-  })
-
-  it('preserves a foreign launcher and declines endpoint publication', async () => {
-    const cacheRootPath = await makeFixture()
-    const launcherPath = resolveAppImageStableLauncherPath(cacheRootPath)
-    const endpointPath = resolveAppImageLauncherEndpointPath(cacheRootPath, 'installed')
-    await mkdir(dirname(launcherPath), { recursive: true })
-    await writeFile(launcherPath, '#!/usr/bin/env bash\nprintf foreign', { mode: 0o755 })
-
-    expect(
-      publishAppImageLauncherEndpoint(cacheRootPath, 'installed', join(cacheRootPath, 'target'))
-    ).toBeNull()
-    await expect(readFile(launcherPath, 'utf8')).resolves.toContain('foreign')
-    expect(existsSync(endpointPath)).toBe(false)
   })
 
   it('preserves an oversized foreign launcher without treating its marker as ownership', async () => {

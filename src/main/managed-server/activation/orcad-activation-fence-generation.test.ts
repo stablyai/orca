@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type * as ExecCommandModule from '../../ssh/remote-exec/remote-exec-command'
-import { unusedOrcadHostTransport } from '../../ssh/unused-host-transport.test-fixture'
+import { unusedOrcadHostTransport } from '../testing/managed-host-transport.test-fixture'
 
 // Execute generated host guards in real local shells.
 const shell = vi.hoisted((): { env: NodeJS.ProcessEnv | undefined } => ({ env: undefined }))
@@ -37,7 +37,7 @@ const { execOrcadRemote } = await import('../install/orcad-remote-runtime-contro
 const { OrcadFenceLostError, runWithOrcadFence } = await import('./orcad-activation-fence-scope')
 const { execOrcadStateMutation } = await import('../host-state/orcad-state-mutation-exec')
 const { clearOrcadStateSnapshotMembersCommand } = await import('../host-state/orcad-state-snapshot')
-const { getRemoteHostPlatform } = await import('../../ssh/ssh-remote-platform')
+const { getRemoteHostPlatform } = await import('../../ssh/remote-host/ssh-remote-platform')
 
 const homes: string[] = []
 afterEach(() => {

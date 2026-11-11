@@ -36,7 +36,8 @@ ORCA orchestration worker-start --spec "<task>" --worktree current --agent codex
 - If a receipt has `next`, follow it. When Orca has nothing for you, end your
   turn.
 - `--worktree current` uses your workspace. Use a new one only when the user
-  asks or sharing would conflict:
+  asks or sharing would conflict: `--worktree new-child --name <short-name>`
+  nests it under yours. For one with no parent, use
   `--worktree new-top-level --repo id:<repoId> --name <short-name>`
   (`ORCA repo list --json` gives the id). If nothing needs to come back to you
   (the user will work in those chats), don't start workers; per workspace run
@@ -105,11 +106,10 @@ assignment does not prove its agent stopped.
 
 `ORCA skills get orchestration --reference references/<file>.md`
 
-| Situation                                      | Reference                                 |
-| ---------------------------------------------- | ----------------------------------------- |
-| Task DAGs, several Runs                        | `references/coordinator-loop.md`          |
-| Child worktrees, SSH, WSL, a connected server  | `references/placement-and-remote.md`      |
-| Group messages                                 | `references/messaging-and-gates.md`       |
-| A failed or unknown worker; retry, stop, reset | `references/recovery-and-cleanup.md`      |
-| Custom argv or terminal layout                 | `references/low-level-topology.md`        |
-| Legacy labels, adopted Runs, takeover          | `references/legacy-contract-migration.md` |
+| Situation                                      | Reference                            |
+| ---------------------------------------------- | ------------------------------------ |
+| Task DAGs, several Runs                        | `references/coordinator-loop.md`     |
+| Child worktrees, SSH, WSL, a connected server  | `references/placement-and-remote.md` |
+| Group messages                                 | `references/messaging-and-gates.md`  |
+| A failed or unknown worker; retry, stop, reset | `references/recovery-and-cleanup.md` |
+| Custom argv or terminal layout                 | `references/low-level-topology.md`   |

@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { DesktopSidebarFactsSchema, type DesktopSidebarFacts } from './desktop-sidebar-facts'
 import type { InstalledSidebarInputs } from './sidebar-inputs-feed-installer'
 import {

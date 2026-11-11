@@ -1,5 +1,10 @@
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import { join } from 'node:path'
+import {
+  KeyedJsonRowCache,
+  parseKeyedJsonRows,
+  type KeyedJsonRow
+} from '../../sqlite/row-cache/keyed-json-row-cache'
+import { nextRetryDelayMs } from '../../sqlite/row-cache/row-cache-failure'
 import type {
   AgentSessionModelOption,
   AgentSessionOptionChoice
@@ -11,11 +16,12 @@ import {
   type AgentModelCatalogListing
 } from './agent-model-catalog-entry'
 import { isStructuredAgentId } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import { isRecord } from '../../../shared/agent-status-child-work-value-guards'
+import { isRecord } from '../../../shared/agent-status/child-work/agent-status-child-work-value-guards'
 
 // Older catalogs lack serviceTiers and cannot safely construct Fast requests.
 const SCHEMA_VERSION = 3
 const SAVE_COALESCE_MS = 500
+const MAX_RETRY_DELAY_MS = 60_000
 
 export type AgentModelCatalogPersistence = {
   load: () => Promise<AgentModelCatalogEntry[]>
@@ -78,7 +84,14 @@ function parseModel(value: unknown): AgentSessionModelOption | null {
     ...(typeof row.supportsAutoMode === 'boolean'
       ? { supportsAutoMode: row.supportsAutoMode }
       : {}),
-    ...(serviceTiers ? { serviceTiers } : {})
+    ...(serviceTiers ? { serviceTiers } : {}),
+    ...(Array.isArray(row.chatEfforts)
+      ? {
+          chatEfforts: row.chatEfforts
+            .map(parseChoice)
+            .filter((choice): choice is AgentSessionOptionChoice => choice !== null)
+        }
+      : {})
   }
 }
 
@@ -159,13 +172,46 @@ function persistedEntry(entry: AgentModelCatalogEntry): unknown {
   }
 }
 
+function parseEntries(values: readonly unknown[]): AgentModelCatalogEntry[] {
+  return values.map(parseEntry).filter((entry): entry is AgentModelCatalogEntry => entry !== null)
+}
+
+function catalogRow(entry: AgentModelCatalogEntry): KeyedJsonRow {
+  return {
+    key: `${entry.agent}\u0000${entry.fingerprint}`,
+    json: JSON.stringify(persistedEntry(entry))
+  }
+}
+
+/** Entries of an older build's file; bytes it cannot use (corrupt, other version) reject it. */
+function legacyEntries(text: string): AgentModelCatalogEntry[] | null {
+  const root = asRecord(JSON.parse(text))
+  if (!root || root.version !== SCHEMA_VERSION || !Array.isArray(root.entries)) {
+    return null
+  }
+  return parseEntries(root.entries)
+}
+
+/** One row per catalog entry, so a save writes only the entries whose listing changed. */
 export function createAgentModelCatalogFilePersistence(
   directory: string
 ): AgentModelCatalogPersistence {
-  const filePath = join(directory, 'agent-model-catalog.json')
+  // Stored state or an older build's file could not be read: this session saves nothing,
+  // leaving both for the next start. Rediscovery refills memory meanwhile.
+  let cold = false
+  const cache = new KeyedJsonRowCache(join(directory, 'agent-model-catalog.db'), {
+    schemaVersion: SCHEMA_VERSION,
+    // Earlier builds rewrote this whole file (megabytes) per change; it is imported once, then removed.
+    legacyPath: join(directory, 'agent-model-catalog.json')
+  })
   let pending: (() => readonly AgentModelCatalogEntry[]) | null = null
   let timer: ReturnType<typeof setTimeout> | null = null
-  let writing = Promise.resolve()
+  let retryDelayMs = SAVE_COALESCE_MS
+
+  const schedule = (delayMs: number): void => {
+    timer ??= setTimeout(flush, delayMs)
+    timer.unref?.()
+  }
 
   const flush = (): Promise<void> => {
     if (timer !== null) {
@@ -174,51 +220,45 @@ export function createAgentModelCatalogFilePersistence(
     }
     const snapshot = pending
     pending = null
-    if (!snapshot) {
-      return writing
-    }
-    const entries = snapshot()
-    writing = writing.then(async () => {
+    if (snapshot && !cold) {
       try {
-        await mkdir(dirname(filePath), { recursive: true })
-        const tmpPath = `${filePath}.tmp`
-        await writeFile(
-          tmpPath,
-          JSON.stringify({
-            version: SCHEMA_VERSION,
-            entries: entries.map(persistedEntry)
-          }),
-          'utf8'
-        )
-        await rename(tmpPath, filePath)
+        cache.write(snapshot().map(catalogRow))
+        retryDelayMs = SAVE_COALESCE_MS
       } catch {
-        // Persistence is optional bookkeeping; preserve the current in-memory catalog.
+        // Optional bookkeeping (a lock elsewhere, a full disk): memory stays authoritative and
+        // the latest snapshot is retried later unless a newer save replaces it.
+        pending ??= snapshot
+        retryDelayMs = nextRetryDelayMs(retryDelayMs, {
+          minMs: SAVE_COALESCE_MS,
+          maxMs: MAX_RETRY_DELAY_MS
+        })
+        schedule(retryDelayMs)
       }
-    })
-    return writing
+    }
+    return Promise.resolve()
   }
 
   return {
     async load() {
-      try {
-        const parsed: unknown = JSON.parse(await readFile(filePath, 'utf8'))
-        const root = asRecord(parsed)
-        if (!root || root.version !== SCHEMA_VERSION || !Array.isArray(root.entries)) {
-          return []
-        }
-        return root.entries
-          .map(parseEntry)
-          .filter((entry): entry is AgentModelCatalogEntry => entry !== null)
-      } catch {
-        return []
+      const loaded = cache.load(legacyEntries)
+      if (loaded.kind === 'unavailable') {
+        cold = true
+        return loaded.legacy ?? []
       }
+      if (loaded.kind === 'rows') {
+        return parseEntries(parseKeyedJsonRows(loaded.rows).map(({ value }) => value))
+      }
+      try {
+        // An older build's file is newer than the rows: save it now, which removes the file.
+        cache.write(loaded.value.map(catalogRow), { importReceipt: loaded.receipt })
+      } catch {
+        cold = true
+      }
+      return loaded.value
     },
     save(snapshot) {
       pending = snapshot
-      if (timer === null) {
-        timer = setTimeout(flush, SAVE_COALESCE_MS)
-        timer.unref?.()
-      }
+      schedule(SAVE_COALESCE_MS)
     },
     flush
   }

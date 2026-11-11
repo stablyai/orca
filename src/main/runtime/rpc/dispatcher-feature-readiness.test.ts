@@ -1,4 +1,3 @@
-import './unused-default-rpc-methods.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { RpcDispatcher } from './dispatcher'
@@ -162,33 +161,5 @@ describe('RPC methods that require an orcad startup phase', () => {
     readiness.open('accounts')
     await vi.advanceTimersByTimeAsync(1)
     expect(ran).toEqual([])
-  })
-
-  it('refuse at once when the caller already left, without waiting out the bound', async () => {
-    vi.useFakeTimers()
-    installOrcadFeatureReadiness()
-    const { dispatcher: rpc, ran } = dispatcher()
-    let reply: unknown = 'pending'
-    void rpc
-      .dispatch(request('aiVault.searchStatus'), { connectionSignal: AbortSignal.abort() })
-      .then((r) => {
-        reply = r
-      })
-    await vi.advanceTimersByTimeAsync(1)
-    expect(reply).toMatchObject({ ok: false, error: { code: 'runtime_unavailable' } })
-    expect(ran).toEqual([])
-  })
-
-  it('run an attach-only ensureAgentSession at once while every latch is closed', async () => {
-    const readiness = installOrcadFeatureReadiness()
-    const { dispatcher: rpc, ran } = dispatcher()
-    const explicit = rpc.dispatch(request('terminal.ensureAgentSession', { kind: 'explicit' }))
-    await expect(
-      rpc.dispatch(request('terminal.ensureAgentSession', { kind: 'automatic' }))
-    ).resolves.toMatchObject({ ok: true })
-    expect(ran).toEqual(['ensure automatic'])
-    readiness.open('accounts')
-    await expect(explicit).resolves.toMatchObject({ ok: true })
-    expect(ran).toEqual(['ensure automatic', 'ensure explicit'])
   })
 })

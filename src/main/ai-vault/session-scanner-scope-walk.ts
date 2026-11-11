@@ -1,6 +1,12 @@
 import { SCAN_ISSUE_LIMIT } from './session-scan-issues'
-import { createAiVaultScopeCwdMatcher } from '../../shared/ai-vault-scope-cwd-match'
-import type { AiVaultScanIssue, AiVaultSession } from '../../shared/ai-vault-types'
+import {
+  aiVaultSessionInScope,
+  createAiVaultScopeCwdMatcher
+} from '../../shared/ai-vault/scanning/ai-vault-scope-cwd-match'
+import type {
+  AiVaultScanIssue,
+  AiVaultSession
+} from '../../shared/ai-vault/contracts/ai-vault-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import { yieldToEventLoop } from '../../shared/event-loop-yield'
 import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
@@ -30,7 +36,11 @@ import type {
   SessionFileCandidate,
   SessionFileDiscovery
 } from './session-scanner-types'
-import { AI_VAULT_SCOPE_CWD_SOURCES, scopeWalksAgentFiles } from './session-scope-cwd'
+import {
+  AI_VAULT_SCOPE_CWD_SOURCES,
+  scopeOnlyScan,
+  scopeWalksAgentFiles
+} from './session-scope-cwd'
 import { sidecarUnchanged } from './parse-cache/session-sidecar-stat'
 import { prioritizeAntigravityTranscriptCandidates } from './scanners/antigravity/antigravity-transcript-candidates'
 
@@ -54,11 +64,14 @@ export async function scanInScopeSessions(args: ScopeScanArgs): Promise<AiVaultS
     return []
   }
   const candidates: SessionFileCandidate[] = []
+  const scopeOnly = scopeOnlyScan(args.options)
+  const inScope = scopeOnly ? createAiVaultScopeCwdMatcher(scopePaths) : null
   const workload = aiVaultScanWorkload(args.options.signal)
   for (const inventory of args.inventory) {
     const files = await selectCwdBucketFiles(inventory, {
       scopePaths,
-      limit: args.limit,
+      // These agents skip the recency pass, so cover what it and this pass show together.
+      limit: scopeOnly ? args.limit * 2 : args.limit,
       excludedFilePaths: args.alreadyParsedFilePaths,
       issues: args.issues,
       signal: args.options.signal
@@ -96,7 +109,9 @@ export async function scanInScopeSessions(args: ScopeScanArgs): Promise<AiVaultS
     issues: args.issues,
     parseStats: args.parseStats,
     signal: args.options.signal,
-    settled: (candidate, parsed) => workload?.settle(candidate, 'bucket', parsed)
+    settled: (candidate, parsed) => workload?.settle(candidate, 'bucket', parsed),
+    // Unverified bucket files are placed by their parsed cwd.
+    admitSession: inScope ? (session) => aiVaultSessionInScope(inScope, session) : undefined
   })
   return [...bucketed, ...walked]
 }
@@ -210,6 +225,7 @@ export async function prepareScopeScan(
           .map((discovery) => discovery.rootDir),
         scopePaths,
         limit: args.limit,
+        scopeOnly: scopeOnlyScan(args.options),
         signal: args.options.signal
       },
       issueLimit
@@ -217,7 +233,7 @@ export async function prepareScopeScan(
     issueLimit -= inventory.issues.length
     inventories.push(inventory)
     if (workload) {
-      for (const paths of inventory.directories) {
+      for (const { paths } of inventory.directories) {
         for (const path of paths) {
           await yieldScanInventory(index++, args.options.signal)
           workload.registerPath(source.layout.agent, path, 'bucket')

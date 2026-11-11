@@ -3,7 +3,7 @@ import type { WebContents } from 'electron'
 import { Terminal } from '@xterm/headless'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   declarePendingPaneSerializer,
   hasPendingRendererSerializerForPaneKey,

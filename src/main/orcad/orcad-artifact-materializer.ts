@@ -23,6 +23,7 @@ import { pinnedNodeRuntimeAsset, type NodeRuntimeTarget } from '../../shared/nod
 import { findOrcadCachePath } from '../node-runtime/orcad-cache-path'
 import type { PinnedRuntimeMaterializeOptions } from '../node-runtime/pinned-runtime-materializer'
 import { readOrcadArtifactVerificationRecord } from './orcad-artifact-verification-record'
+import { orcadArtifactSlotName } from './orcad-artifact-slot-name'
 import {
   isCompleteArtifact,
   rememberVerification,
@@ -104,7 +105,7 @@ export async function assembleOrcadArtifact(args: {
       : null
   let slotFromRecord = false
   const cached = await findOrcadCachePath(
-    (attempt) => join(targetRoot, `${fullVersion}${attempt ? `.repair-${attempt}` : ''}`),
+    (attempt) => join(targetRoot, orcadArtifactSlotName(fullVersion, attempt)),
     async (path) => {
       slotFromRecord = await slotMatchesRecord(path, fullVersion, sources, recordedSlot, nowMs)
       return slotFromRecord || isCompleteArtifact(path, fullVersion, sources, sourceHashes)

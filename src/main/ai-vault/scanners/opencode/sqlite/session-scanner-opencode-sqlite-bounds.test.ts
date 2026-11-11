@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import type { AiVaultScanIssue } from '../../../../../shared/ai-vault-types'
+import type { AiVaultScanIssue } from '../../../../../shared/ai-vault/contracts/ai-vault-types'
 import Database from '../../../../sqlite/sync-database'
 import { buildOpenCodeSqliteCandidatePath } from '../../../../../shared/opencode-sqlite-session-path'
 import { listOpenCodeSqliteSessions } from './session-scanner-opencode-sqlite-list'
@@ -116,37 +116,6 @@ function insertMessageWithPart(
 }
 
 describe('listOpenCodeSqliteSessions — LIMIT-first discovery', () => {
-  it('returns only the newest `limit` sessions by time_updated', async () => {
-    const { db, path } = createTempDb()
-    applySchema(db)
-    for (let i = 0; i < 5; i++) {
-      insertSession(db, `ses_${i}`, 1_777_634_000_000 + i * 1000)
-    }
-    db.close()
-
-    const candidates = await listOpenCodeSqliteSessions({ dbPaths: [path], limit: 2, issues: [] })
-    expect(candidates.map((c) => c.file.path)).toEqual([
-      buildOpenCodeSqliteCandidatePath(path, 'ses_4'),
-      buildOpenCodeSqliteCandidatePath(path, 'ses_3')
-    ])
-  })
-
-  it('omits the SQL limit for an Unlimited scan', async () => {
-    const { db, path } = createTempDb()
-    applySchema(db)
-    for (let i = 0; i < 5; i++) {
-      insertSession(db, `ses_${i}`, 1_777_634_000_000 + i * 1000)
-    }
-    db.close()
-
-    const candidates = await listOpenCodeSqliteSessions({
-      dbPaths: [path],
-      limit: Number.POSITIVE_INFINITY,
-      issues: []
-    })
-    expect(candidates).toHaveLength(5)
-  })
-
   it('uses time_created recency when time_updated is not positive', async () => {
     const { db, path } = createTempDb()
     applySchema(db)

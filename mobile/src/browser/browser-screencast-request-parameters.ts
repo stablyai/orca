@@ -1,4 +1,4 @@
-import type { BrowserScreencastFormat } from '../transport/browser-screencast-protocol'
+import type { BrowserScreencastFormat } from './browser-screencast-protocol'
 
 // Common request assembly lives outside platform siblings so .web cannot self-resolve its native import; only mobile density is passed per platform.
 

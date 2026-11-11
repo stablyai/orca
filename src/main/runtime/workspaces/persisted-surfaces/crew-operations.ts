@@ -1,12 +1,12 @@
-import type { AgentTransitionDetector } from '../../../agent-hooks/agent-transition-detector'
+import type { AgentTransitionDetector } from '../../../agent-hooks/observations/agent-transition-detector'
 import {
   readCrewRuntimeInputs,
   watchCrewRuntimeSources
 } from '../../orchestration/crew/crew-runtime-watch'
 import { CrewReadModel } from '../../orchestration/crew/crew-read-model'
-import { getPublishedHostDescriptor } from '../../host-descriptor'
+import { getPublishedHostDescriptor } from '../../hosts/platform-probe/host-descriptor'
 import { existsSync } from 'node:fs'
-import type { OrchestrationDb } from '../../orchestration/db'
+import type { OrchestrationDb } from '../../orchestration/db/orchestration-db'
 import { OrcaRuntimeWithOrchestrationDatabaseBinding } from './orchestration-database-binding'
 
 export abstract class OrcaRuntimeWithCrewOperations extends OrcaRuntimeWithOrchestrationDatabaseBinding {

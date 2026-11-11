@@ -13,8 +13,8 @@ import {
 import { basename, dirname, join } from 'node:path'
 import process from 'node:process'
 import { OrcadInstanceLockError } from './orcad-data-root-privacy'
-import { readNodeFileSyncWithinLimit } from '../../shared/node-bounded-file-reader'
-import { hasErrorCode } from '../daemon/daemon-process-inspection'
+import { readNodeFileSyncWithinLimit } from '../../shared/file-content/node-bounded-file-reader'
+import { hasErrorCode } from '../daemon/endpoint/identity/daemon-process-inspection'
 
 export const MAX_ORCAD_LOCK_BYTES = 64 * 1024
 // Serialize recovery so reclaimers cannot displace newly published live locks.

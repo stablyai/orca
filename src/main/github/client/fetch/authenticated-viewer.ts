@@ -22,3 +22,18 @@ export async function getAuthenticatedViewer(): Promise<GitHubViewer | null> {
     release()
   }
 }
+
+/** gh keys --cache by token, so a switched account never gets the old login. */
+export async function readViewerLogin(
+  ghOptions: Parameters<typeof ghExecFileAsync>[1]
+): Promise<string | null> {
+  try {
+    const { stdout } = await ghExecFileAsync(
+      ['api', '--cache', '60s', 'user', '--jq', '.login'],
+      ghOptions
+    )
+    return stdout.trim() || null
+  } catch {
+    return null
+  }
+}

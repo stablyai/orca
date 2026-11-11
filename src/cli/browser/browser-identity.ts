@@ -3,7 +3,7 @@ import type {
   BrowserIdentityModeStatus,
   BrowserUserAgentMode
 } from '../../shared/browser-user-agent-mode'
-import { BROWSER_IDENTITY_RUNTIME_CAPABILITY } from '../../shared/browser-runtime-capabilities'
+import { BROWSER_IDENTITY_RUNTIME_CAPABILITY } from '../../shared/browser/runtime/browser-runtime-capabilities'
 import type { RuntimeStatus } from '../../shared/runtime-session-contracts'
 import type { CommandHandler, HandlerContext } from '../dispatch'
 import { getRequiredStringFlag } from '../flags'

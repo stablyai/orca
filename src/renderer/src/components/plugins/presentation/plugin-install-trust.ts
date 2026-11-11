@@ -4,10 +4,8 @@ import type {
   PluginMarketplaceHostListing
 } from '../../../../../preload/api-types'
 import { pluginExecutionProfile } from '../../../../../shared/plugins/contributions/plugin-execution-profile'
-import {
-  parseGitRepositoryIdentity,
-  splitQualifiedPluginKey
-} from '../../../../../shared/plugins/catalog/plugin-marketplace'
+import { splitQualifiedPluginKey } from '../../../../../shared/plugins/catalog/plugin-marketplace'
+import { pluginRepositoryOrigin } from '../../../../../shared/plugins/catalog/plugin-repository-link'
 import { gitUrlPluginPublisher } from '../../../../../shared/plugins/installation/plugin-publisher-derivation'
 import { pluginPointsFromManifest, pluginTrust } from './plugin-access-profile'
 import { pluginTrustWarnings } from './plugin-consent-copy'
@@ -37,18 +35,7 @@ export type PluginInstallTrustPrompt = {
   access: string[]
 }
 
-/** Orca's own reading of a Git URL: `host/owner/repo` plus the owner, never the manifest's claim. */
-export function pluginRepositoryOrigin(
-  url: string,
-  path?: string
-): { owner: string; repository: string } | null {
-  const identity = parseGitRepositoryIdentity(url)
-  if (!identity) {
-    return null
-  }
-  const repository = `${identity.host}/${identity.path}`
-  return { owner: identity.owner, repository: path ? `${repository} (${path})` : repository }
-}
+export { pluginRepositoryOrigin }
 
 const THEME_POINTS = ['themes', 'iconThemes', 'terminalThemes'] as const
 

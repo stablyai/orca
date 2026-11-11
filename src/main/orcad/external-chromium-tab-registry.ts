@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
-import type { RuntimeBrowserCommandHost } from '../runtime/browser/browser-command-contracts'
+import type { RuntimeBrowserCommandHost } from '../runtime/browser/commands/browser-command-contracts'
 import { BrowserError } from '../browser/browser-error'
 import { normalizeBrowserNavigationUrl } from '../../shared/browser-url'
 import type { ExternalChromiumBrowserSession } from './external-chromium-browser-session'

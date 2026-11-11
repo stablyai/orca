@@ -1,10 +1,10 @@
 // Record only target_removed refusals; stale caller fences should not add run-history rows.
 
-import type { AutomationRun } from '../../shared/automations-types'
+import type { AutomationRun } from '../../shared/automations/history/automation-run'
 import {
   AUTOMATION_OWNER_CONFLICT_CODES,
   AutomationOwnerConflictError
-} from '../../shared/automation-owner-conflict'
+} from '../../shared/automations/ownership/automation-owner-conflict'
 
 type RefusableAutomationService = {
   runNow: (automationId: string) => Promise<AutomationRun>

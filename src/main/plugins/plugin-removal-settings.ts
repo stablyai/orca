@@ -1,9 +1,10 @@
 import { pluginThemeSettingsAfterRemoval } from '../../shared/plugin-theme-settings'
+import { pluginFontSettingsAfterRemoval } from '../../shared/plugin-font-settings'
 import { normalizePluginIdList } from '../../shared/plugins/approval/plugin-consent-state'
 import type { Store } from '../persistence/loading-store/store'
 
 /**
- * Forgets a removed plugin's consent, disabled flag, allowed external hosts and theme choices.
+ * Forgets a removed plugin's consent, disabled flag, allowed external hosts, theme and font choices.
  * `keepDisabled`: Orca republishes a copy it ships on the next launch; that copy comes back off.
  */
 export function clearRemovedPluginSettings(
@@ -25,9 +26,10 @@ export function clearRemovedPluginSettings(
       pluginConsents: consents,
       disabledPlugins,
       pluginExternalHostGrants,
-      ...pluginThemeSettingsAfterRemoval(settings, pluginKey)
+      ...pluginThemeSettingsAfterRemoval(settings, pluginKey),
+      ...pluginFontSettingsAfterRemoval(settings, pluginKey)
     },
-    // Why no origin: the uninstalling window must also drop the plugin's theme choices.
+    // Why no origin: the uninstalling window must also drop the plugin's theme and font choices.
     { notifyListeners: true }
   )
 }
