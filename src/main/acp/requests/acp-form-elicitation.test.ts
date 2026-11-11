@@ -100,14 +100,18 @@ describe('ACP numeric elicitation fields', () => {
   it('enforces minimum and maximum', () => {
     const params = singleField({ type: 'number', minimum: 0, maximum: 10 })
     expect(replyWith(params, '10')).toEqual({ action: 'accept', content: { value: 10 } })
-    expect(() => replyWith(params, '11')).toThrow('Question answer must be a valid number in range')
-    expect(() => replyWith(params, '-1')).toThrow('Question answer must be a valid number in range')
+    expect(() => replyWith(params, '11')).toThrow(
+      'Question answer must be a valid number at least 0 at most 10'
+    )
+    expect(() => replyWith(params, '-1')).toThrow(
+      'Question answer must be a valid number at least 0 at most 10'
+    )
   })
 
   it.each(['abc', '1.5', '0x1F', 'Infinity', '1 2'])('rejects %s as an answer', (other) => {
     const params = singleField({ type: other === '1.5' ? 'integer' : 'number' })
     expect(() => replyWith(params, other)).toThrow(
-      'Question answer must be a valid number in range'
+      other === '1.5' ? 'valid integer' : 'valid number'
     )
   })
 

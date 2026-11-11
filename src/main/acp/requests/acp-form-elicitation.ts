@@ -48,7 +48,7 @@ const NUMERIC_TEXT = /^[+-]?(\d+\.?\d*|\.\d+)(e[+-]?\d+)?$/i
 
 const unsupportedForm = () => new AcpRpcError(-32602, 'Unsupported ACP elicitation form')
 
-// A form field with no choices becomes a text answer; enums and arrays become pickable options.
+/** A field with no choices becomes a text answer; enums and arrays become pickable options. */
 function fieldChoices(
   property: z.infer<typeof propertySchema>,
   hasOther: boolean
@@ -76,8 +76,19 @@ function fieldChoices(
   return choices
 }
 
+/** Whether a schema property expects a numeric answer. */
 function isNumeric(property: z.infer<typeof propertySchema>): boolean {
   return property.type === 'number' || property.type === 'integer'
+}
+
+/** Describes the accepted number type and bounds so rejected answers can be corrected. */
+function numericRules(property: z.infer<typeof propertySchema>): string {
+  const bounds = [
+    property.minimum !== undefined ? `at least ${property.minimum}` : undefined,
+    property.maximum !== undefined ? `at most ${property.maximum}` : undefined
+  ].filter(Boolean)
+  const kind = property.type === 'integer' ? 'integer' : 'number'
+  return [kind, ...bounds].join(' ')
 }
 
 /** Keeps form field identity while presenting choices and text on the existing question card. */
@@ -198,7 +209,10 @@ export function acpFormElicitationPresentation(params: unknown): AcpRequestPrese
             (property.minimum !== undefined && value < property.minimum) ||
             (property.maximum !== undefined && value > property.maximum)
           ) {
-            throw new AcpRpcError(-32602, 'Question answer must be a valid number in range')
+            throw new AcpRpcError(
+              -32602,
+              `Question answer must be a valid ${numericRules(property)}`
+            )
           }
           content[key] = value
           continue
