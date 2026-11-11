@@ -1,7 +1,7 @@
 import React from 'react'
 import { Server, ServerOff } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { WorktreeCardController } from './workspace-card/controller/use-worktree-card-controller'
 
 export type WorktreeCardHost = {
