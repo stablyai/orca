@@ -35,7 +35,7 @@
 1 src/renderer/src/lib/workspace/ownership/resolved-worktree-execution-host.ts # P5b-2 must clear: loosely typed state param
 2 src/renderer/src/lib/workspace/ownership/runtime-session-mirror-owners.ts # P5b-2 must clear: optional state fields default to empty
 2 src/renderer/src/lib/workspace/ownership/terminal-worktree-route.ts # P5b-2 must clear: the unattributed-twin check reads both catalogs directly
-3 src/renderer/src/lib/typing-latency/diagnostic-summary.ts # P5b-2 must clear: optional state field
+3 src/renderer/src/diagnostics/typing-latency/diagnostic-summary.ts # P5b-2 must clear: optional state field
 2 src/renderer/src/attention/unread/unread-badge-count.ts # reads a passed-in copy
 1 src/renderer/src/lib/workspace/paths/workspace-directory.ts # P5b-2 must clear: optional state field defaults to empty
 2 src/renderer/src/lib/workspace/ownership/workspace-terminal-host-authority.ts # P5b-2 must clear: optional state fields

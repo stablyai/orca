@@ -409,6 +409,7 @@
       "defaultSurfaceSetAllChat": "全部设为聊天",
       "defaultSurfaceSetAllTerminal": "全部设为终端",
       "sameAsChoice": "与 {{agent}} 相同 · {{choice}}",
+      "modelListFallback": "内置列表。Orca 无法从此主机获取模型列表。",
       "chatUnavailableOnWindows": "{{value0}} Chat 暂不支持 Windows，因此 {{value0}} 会在此主机的终端中打开。macOS 或 Linux 主机上的聊天仍可正常使用。",
       "undetectedCommandHint": "如果 {{agent}} CLI 安装在 PATH 之外，请输入其在此主机上的可执行文件完整路径。"
     },
@@ -10624,7 +10625,7 @@
         },
         "agent-workspace-trust-copy": {
           "title": "Orca 启动智能体时信任该文件夹",
-          "description": "Orca 启动的智能体可以跳过“Do you trust this folder?”提示，因此项目的智能体钩子和设置会立即运行。Orca 会在每个仓库中首次启动智能体时询问一次，你可以在该仓库的设置中更改回答。关闭此项可让智能体始终自行询问。在你没有看着时运行的智能体（例如编排工作进程、自动化以及从手机启动的智能体）如果发出询问，会一直等待，直到你在它的终端中作答。已信任的文件夹仍保持信任。"
+          "description": "Orca 启动的智能体可以跳过“Do you trust this folder?”提示，因此项目的智能体钩子和设置会立即运行。你可以在某个仓库的设置中为该仓库关闭此项。关闭此项可让智能体始终自行询问。在你没有看着时运行的智能体（例如编排工作进程、自动化以及从手机启动的智能体）如果发出询问，会一直等待，直到你在它的终端中作答。已信任的文件夹仍保持信任。"
         },
         "agent-generated-tab-title-copy": {
           "19ad21615a": "自动生成标签页标题",
@@ -18305,14 +18306,10 @@
         }
       },
       "agent-workspace-trust-decision": {
-        "prompt-title": "为智能体信任 {{repo}}？",
-        "prompt-description": "Claude Code 和 Codex 等智能体在加载项目自带的智能体设置和钩子（可以运行命令）之前，会询问“Do you trust this folder?”。Orca 可以在此仓库的每个工作树中替你回答“是”。",
-        "prompt-remembered": "Orca 会记住你对此仓库的回答。你可以在仓库设置中更改。",
         "trust-repository": "信任仓库",
         "let-agents-ask": "让智能体询问",
         "setting-title": "智能体文件夹信任",
         "setting-description": "Orca 在此仓库的工作树中启动的智能体是否跳过“Do you trust this folder?”提示，并立即加载项目的智能体设置和钩子。",
-        "setting-undecided": "尚未决定。下次你在这里启动智能体时，Orca 会询问。",
         "setting-global-off": "已在智能体设置中关闭文件夹信任，因此智能体总会询问。",
         "keyword-trust": "信任",
         "keyword-hooks": "钩子"

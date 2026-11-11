@@ -409,6 +409,7 @@
       "defaultSurfaceSetAllChat": "모두 채팅으로 설정",
       "defaultSurfaceSetAllTerminal": "모두 터미널로 설정",
       "sameAsChoice": "{{agent}}와 동일 · {{choice}}",
+      "modelListFallback": "기본 제공 목록입니다. Orca가 이 호스트에서 모델 목록을 가져오지 못했습니다.",
       "chatUnavailableOnWindows": "{{value0}} Chat은 아직 Windows에서 사용할 수 없으므로 이 호스트에서는 {{value0}}이(가) 터미널에서 열립니다. macOS 또는 Linux 호스트의 채팅은 계속 사용할 수 있습니다.",
       "undetectedCommandHint": "{{agent}} CLI가 PATH 외부에 설치되어 있다면 이 호스트의 실행 파일 전체 경로를 입력하세요."
     },
@@ -10624,7 +10625,7 @@
         },
         "agent-workspace-trust-copy": {
           "title": "Orca가 에이전트를 시작할 때 폴더 신뢰",
-          "description": "Orca가 시작한 에이전트는 \"Do you trust this folder?\" 확인을 건너뛸 수 있으므로, 프로젝트의 에이전트 훅과 설정이 바로 실행됩니다. Orca는 저장소마다 처음 에이전트를 시작할 때 한 번 묻고, 답변은 해당 저장소 설정에서 변경할 수 있습니다. 이 설정을 끄면 에이전트가 항상 확인을 요청합니다. 오케스트레이션 워커, 자동화, 휴대폰에서 시작한 에이전트처럼 사용자가 지켜보지 않는 동안 실행되는 에이전트가 확인을 요청하면 해당 터미널에서 응답할 때까지 기다립니다. 이미 신뢰한 폴더는 계속 신뢰됩니다."
+          "description": "Orca가 시작한 에이전트는 \"Do you trust this folder?\" 확인을 건너뛸 수 있으므로, 프로젝트의 에이전트 훅과 설정이 바로 실행됩니다. 저장소별로 해당 저장소 설정에서 끌 수 있습니다. 이 설정을 끄면 에이전트가 항상 확인을 요청합니다. 오케스트레이션 워커, 자동화, 휴대폰에서 시작한 에이전트처럼 사용자가 지켜보지 않는 동안 실행되는 에이전트가 확인을 요청하면 해당 터미널에서 응답할 때까지 기다립니다. 이미 신뢰한 폴더는 계속 신뢰됩니다."
         },
         "agent-generated-tab-title-copy": {
           "19ad21615a": "탭 제목 자동 생성",
@@ -18305,14 +18306,10 @@
         }
       },
       "agent-workspace-trust-decision": {
-        "prompt-title": "{{repo}}을(를) 에이전트용으로 신뢰할까요?",
-        "prompt-description": "Claude Code, Codex 같은 에이전트는 명령을 실행할 수 있는 프로젝트 자체의 에이전트 설정과 훅을 불러오기 전에 \"Do you trust this folder?\"라고 묻습니다. Orca가 이 저장소의 모든 작업 트리에서 대신 \"예\"라고 답할 수 있습니다.",
-        "prompt-remembered": "Orca는 이 저장소에 대한 답변을 기억합니다. 저장소 설정에서 변경할 수 있습니다.",
         "trust-repository": "저장소 신뢰",
         "let-agents-ask": "에이전트가 묻도록 하기",
         "setting-title": "에이전트 폴더 신뢰",
         "setting-description": "이 저장소의 작업 트리에서 Orca가 시작한 에이전트가 \"Do you trust this folder?\" 확인을 건너뛰고 프로젝트의 에이전트 설정과 훅을 바로 불러올지 정합니다.",
-        "setting-undecided": "아직 정하지 않았습니다. 다음에 여기서 에이전트를 시작하면 Orca가 묻습니다.",
         "setting-global-off": "에이전트 설정에서 폴더 신뢰가 꺼져 있으므로 에이전트가 항상 확인을 요청합니다.",
         "keyword-trust": "신뢰",
         "keyword-hooks": "훅"

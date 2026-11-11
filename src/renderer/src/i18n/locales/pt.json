@@ -1628,6 +1628,7 @@
       "defaultSurfaceSetAllChat": "Definir todos como Chat",
       "defaultSurfaceSetAllTerminal": "Definir todos como Terminal",
       "sameAsChoice": "Igual a {{agent}} · {{choice}}",
+      "modelListFallback": "Lista integrada. O Orca não conseguiu obter uma lista de modelos deste host.",
       "chatUnavailableOnWindows": "O {{value0}} Chat ainda não está disponível no Windows, então o {{value0}} abre em um terminal neste host. Chats em um host macOS ou Linux continuam funcionando.",
       "undetectedCommandHint": "Se a CLI do {{agent}} estiver instalada fora do PATH, informe o caminho completo do executável neste host."
     },
@@ -8709,7 +8710,7 @@
         },
         "agent-workspace-trust-copy": {
           "title": "Confiar na pasta quando o Orca iniciar um agente",
-          "description": "Os agentes iniciados pelo Orca podem pular a pergunta “Você confia nesta pasta?”, para que os hooks e configurações de agentes do projeto sejam executados imediatamente. O Orca pergunta uma vez por repositório, na primeira vez que você inicia um agente nele, e você pode alterar a resposta nas configurações desse repositório. Desative para que os agentes sempre perguntem. Um agente que pergunta enquanto é executado sem sua supervisão, como um worker de orquestração, uma automação ou um agente iniciado pelo celular, espera até você responder no terminal dele. As pastas já confiáveis continuam confiáveis."
+          "description": "Os agentes iniciados pelo Orca podem pular a pergunta “Você confia nesta pasta?”, para que os hooks e configurações de agentes do projeto sejam executados imediatamente. Você pode desativar isso para um repositório nas configurações desse repositório. Desative para que os agentes sempre perguntem. Um agente que pergunta enquanto é executado sem sua supervisão, como um worker de orquestração, uma automação ou um agente iniciado pelo celular, espera até você responder no terminal dele. As pastas já confiáveis continuam confiáveis."
         },
         "MachineNameField": {
           "label": "Nome da máquina",
@@ -20009,14 +20010,10 @@
         }
       },
       "agent-workspace-trust-decision": {
-        "prompt-title": "Confiar em {{repo}} para agentes?",
-        "prompt-description": "Agentes como Claude Code e Codex perguntam “Você confia nesta pasta?” antes de carregar as configurações e hooks de agentes do próprio projeto, que podem executar comandos. O Orca pode responder sim por você em todas as worktrees deste repositório.",
-        "prompt-remembered": "O Orca lembra sua resposta para este repositório. Você pode alterá-la nas configurações do repositório.",
         "trust-repository": "Confiar no repositório",
         "let-agents-ask": "Deixar os agentes perguntarem",
         "setting-title": "Confiança de Pasta para Agentes",
         "setting-description": "Define se os agentes que o Orca inicia nas worktrees deste repositório pulam a pergunta “Você confia nesta pasta?” e carregam imediatamente as configurações e hooks de agentes do projeto.",
-        "setting-undecided": "Ainda não decidido. O Orca vai perguntar na próxima vez que você iniciar um agente aqui.",
         "setting-global-off": "A confiança de pasta está desativada nas configurações de Agentes, então os agentes sempre perguntam.",
         "keyword-trust": "confiança",
         "keyword-hooks": "hooks"

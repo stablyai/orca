@@ -653,6 +653,7 @@
       "defaultSurfaceSetAllChat": "Tout mettre en Chat",
       "defaultSurfaceSetAllTerminal": "Tout mettre en Terminal",
       "sameAsChoice": "Identique à {{agent}} · {{choice}}",
+      "modelListFallback": "Liste intégrée. Orca n’a pas pu obtenir de liste de modèles depuis cet hôte.",
       "chatUnavailableOnWindows": "{{value0}} Chat n’est pas encore disponible sous Windows : {{value0}} s’ouvre donc dans un terminal sur cet hôte. Les chats sur un hôte macOS ou Linux fonctionnent toujours.",
       "undetectedCommandHint": "Si la CLI {{agent}} est installée hors de PATH, saisissez le chemin complet de son exécutable sur cet hôte."
     },
@@ -11168,7 +11169,7 @@
         },
         "agent-workspace-trust-copy": {
           "title": "Faire confiance au dossier quand Orca lance un agent",
-          "description": "Les agents lancés par Orca peuvent ignorer leur question « Do you trust this folder? » : les hooks et paramètres d'agent du projet s'exécutent donc tout de suite. Orca pose la question une fois par dépôt, la première fois que vous y lancez un agent, et vous pouvez modifier la réponse dans les paramètres de ce dépôt. Désactivez cette option pour que les agents posent toujours la question. Un agent qui pose la question alors qu'il tourne sans que vous le surveilliez, comme un worker d'orchestration, une automatisation ou un agent lancé depuis votre téléphone, attend que vous répondiez dans son terminal. Les dossiers déjà approuvés le restent."
+          "description": "Les agents lancés par Orca peuvent ignorer leur question « Do you trust this folder? » : les hooks et paramètres d'agent du projet s'exécutent donc tout de suite. Vous pouvez désactiver cette option pour un dépôt dans les paramètres de ce dépôt. Désactivez cette option pour que les agents posent toujours la question. Un agent qui pose la question alors qu'il tourne sans que vous le surveilliez, comme un worker d'orchestration, une automatisation ou un agent lancé depuis votre téléphone, attend que vous répondiez dans son terminal. Les dossiers déjà approuvés le restent."
         },
         "agent-generated-tab-title-copy": {
           "19ad21615a": "Générer automatiquement les titres des onglets",
@@ -19013,14 +19014,10 @@
         }
       },
       "agent-workspace-trust-decision": {
-        "prompt-title": "Faire confiance à {{repo}} pour les agents ?",
-        "prompt-description": "Les agents comme Claude Code et Codex demandent « Do you trust this folder? » avant de charger les paramètres et hooks d'agent propres au projet, qui peuvent exécuter des commandes. Orca peut répondre oui à votre place dans chaque worktree de ce dépôt.",
-        "prompt-remembered": "Orca mémorise votre réponse pour ce dépôt. Vous pouvez la modifier dans les paramètres du dépôt.",
         "trust-repository": "Faire confiance au dépôt",
         "let-agents-ask": "Laisser les agents demander",
         "setting-title": "Confiance des dossiers pour les agents",
         "setting-description": "Indique si les agents lancés par Orca dans les worktrees de ce dépôt ignorent leur question « Do you trust this folder? » et chargent tout de suite les paramètres et hooks d'agent du projet.",
-        "setting-undecided": "Pas encore décidé. Orca posera la question la prochaine fois que vous lancerez un agent ici.",
         "setting-global-off": "La confiance des dossiers est désactivée dans les paramètres Agents : les agents posent donc toujours la question.",
         "keyword-trust": "confiance",
         "keyword-hooks": "hooks"
