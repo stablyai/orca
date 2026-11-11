@@ -206,6 +206,20 @@ export function noteBeforeCloudReplay(
   })()
 }
 
+/** N-02: what the pane held just before a clearing replay of this same terminal, or null. */
+export function preReplayCopy(leafId: string, ptyId: string, maxAgeMs = 60_000): string | null {
+  const before = preReplay.get(leafId)
+  if (!before || before.ptyId !== ptyId || Date.now() - before.at > maxAgeMs) {
+    return null
+  }
+  return [before.aboveScreen, before.screen].filter((part) => part !== '').join('\r\n')
+}
+
+/** The copy was put back: a later sleep reads the pane itself. */
+export function forgetPreReplayCopy(leafId: string): void {
+  preReplay.delete(leafId)
+}
+
 /** The person scrolled the waking pane: where to put them back after the restore. */
 export function noteWakeViewport(
   leafId: string,
