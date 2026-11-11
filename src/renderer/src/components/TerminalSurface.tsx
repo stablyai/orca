@@ -6,6 +6,7 @@ import { TerminalLegacyWorkspaceSurface } from './TerminalLegacyWorkspaceSurface
 import { TerminalWorkspaceDialogs } from './TerminalWorkspaceDialogs'
 import { WslHostStoppedWorkspaceNotice } from './wsl-host-stopped/WslHostStoppedWorkspaceNotice'
 import { OrcaCloudWorkspaceSurface } from './orca-cloud/OrcaCloudWorkspaceSurface'
+import { CloudGitSetupStrip } from './orca-cloud/CloudGitSetupStrip'
 import type { TerminalController } from './use-terminal-controller'
 
 export function TerminalSurface({
@@ -29,6 +30,7 @@ export function TerminalSurface({
     >
       <EditorAutosaveController />
       <TerminalTitlebarTabs controller={controller} />
+      <CloudGitSetupStrip worktreeId={renderedActiveWorktreeId} />
       <TerminalSplitWorkspaceSurfaces controller={controller} />
       <TerminalLegacyWorkspaceSurface controller={controller} />
       <WslHostStoppedWorkspaceNotice worktreeId={renderedActiveWorktreeId} />
