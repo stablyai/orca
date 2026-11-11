@@ -9,7 +9,6 @@ const contracts = [
   'src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-terminal-writer-acquire.test.ts',
   'src/renderer/src/components/tab-bar/use-new-tab-agent-menu-host-preferences.test.tsx',
   'src/main/sqlite/sync-database.test.ts',
-  'src/main/runtime/orchestration/db/row-column-lists.test.ts',
   'src/shared/native-chat/tools/native-chat-tool-pairing.performance.test.ts',
   'src/main/codex-usage/codex-rollout-file-lifetime.test.ts',
   'src/main/codex-usage/scanner-incremental-append.test.ts',

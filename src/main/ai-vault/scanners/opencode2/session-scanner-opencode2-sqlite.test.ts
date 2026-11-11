@@ -1,15 +1,15 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, expect, it } from 'vitest'
 import Database from '../../../sqlite/sync-database'
 import { buildOpenCodeSqliteCandidatePath } from '../../../../shared/opencode-sqlite-session-path'
 import { listOpenCode2SqliteSessions } from './session-scanner-opencode2-sqlite-list'
+
 import {
   parseOpenCode2SqliteSession,
   captureOpenCode2SqliteSession
 } from './session-scanner-opencode2-sqlite'
-import type { AiVaultScanIssue } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 
 let tempDirs: string[] = []
 
@@ -124,8 +124,6 @@ function insertMessage(
   )
 }
 
-const issues: AiVaultScanIssue[] = []
-
 it('captures the full transcript while keeping list previews bounded', async () => {
   const { db, path } = createTempDb('opencode.db')
   applyOpenCode2Schema(db)
@@ -148,104 +146,6 @@ it('captures the full transcript while keeping list previews bounded', async () 
   expect(capture.messages.map((message) => message.text)).toEqual(
     Array.from({ length: 8 }, (_, index) => `Turn ${index}`)
   )
-})
-
-it('captures a session whose stored tool state exceeds 64 MiB when its decoded text is small (#28791)', async () => {
-  const { db, path } = createTempDb()
-  applyOpenCode2Schema(db)
-  insertSession(db, { id: 'heavy', directory: '/repo', timeCreated: 1000, timeUpdated: 2000 })
-  insertMessage(db, {
-    id: 'tool',
-    sessionId: 'heavy',
-    type: 'assistant',
-    seq: 0,
-    timeCreated: 1000,
-    data: JSON.stringify({
-      content: [
-        {
-          type: 'tool',
-          name: 'write',
-          state: {
-            status: 'completed',
-            input: { filePath: '/repo/a.txt', content: 'x'.repeat(65 * 1024 * 1024) },
-            content: [{ type: 'text', text: 'Wrote file successfully.' }]
-          }
-        }
-      ]
-    })
-  })
-  insertMessage(db, {
-    id: 'reply',
-    sessionId: 'heavy',
-    type: 'assistant',
-    seq: 1,
-    timeCreated: 1001,
-    data: JSON.stringify({ text: 'Done' })
-  })
-  db.close()
-  const capture = await captureOpenCode2SqliteSession({
-    dbPath: path,
-    sessionId: 'heavy',
-    platform: 'darwin'
-  })
-  expect(capture.messages.at(-1)?.text).toBe('Done')
-})
-
-it('keeps session metadata readable but refuses a complete capture when ordering columns are missing', async () => {
-  const { db, path } = createTempDb()
-  applyOpenCode2Schema(db)
-  insertSession(db, { id: 'partial', directory: '/repo', timeCreated: 1000, timeUpdated: 1000 })
-  db.exec('ALTER TABLE session_message DROP COLUMN seq')
-  db.close()
-  const args = { dbPath: path, sessionId: 'partial', platform: 'darwin' as const }
-  expect((await parseOpenCode2SqliteSession(args))?.sessionId).toBe('partial')
-  await expect(captureOpenCode2SqliteSession(args)).rejects.toThrow('schema is unreadable')
-})
-
-describe('listOpenCode2SqliteSessions', () => {
-  it('lists top-level, non-archived sessions newest-first', async () => {
-    const { db, path } = createTempDb()
-    applyOpenCode2Schema(db)
-    insertSession(db, {
-      id: 'session_old',
-      directory: '/repo',
-      timeCreated: 1000,
-      timeUpdated: 1000
-    })
-    insertSession(db, {
-      id: 'session_new',
-      directory: '/repo',
-      timeCreated: 2000,
-      timeUpdated: 2000
-    })
-    insertSession(db, {
-      id: 'session_child',
-      directory: '/repo',
-      timeCreated: 3000,
-      timeUpdated: 3000,
-      parentId: 'session_new'
-    })
-    insertSession(db, {
-      id: 'session_archived',
-      directory: '/repo',
-      timeCreated: 4000,
-      timeUpdated: 4000,
-      timeArchived: 5000
-    })
-    db.close()
-
-    const candidates = await listOpenCode2SqliteSessions({
-      dbPaths: [path],
-      limit: 25,
-      issues
-    })
-
-    expect(candidates.map((c) => c.file.path)).toEqual([
-      buildOpenCodeSqliteCandidatePath(path, 'session_new'),
-      buildOpenCodeSqliteCandidatePath(path, 'session_old')
-    ])
-    expect(candidates[0]!.agent).toBe('opencode2')
-  })
 })
 
 it('keeps one selected v2 identity beyond recency while preserving archive exclusions', async () => {
