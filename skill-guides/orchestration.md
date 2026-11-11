@@ -27,8 +27,13 @@ Orca wakes you with the answer. To hand work off with nothing back, use `orca-cl
 place and use it for every command.
 
 ```text
-ORCA orchestration worker-start --spec "<task>" --worktree current --agent codex
+ORCA orchestration worker-start --spec "<task>" --worktree current --agent <agent>
 ```
+
+`<agent>` is an Orca agent id: one the user named, else the agent you are
+running as when the worker shares your execution host. Otherwise, such as a
+different SSH/WSL host or `--on`, ask the user. `worker-start` does not check
+that the CLI is installed; a missing one fails as an `agent_readiness` timeout.
 
 - Start every independent worker, then **end your turn**. "Report back" and
   "tell me when it's done" still mean end your turn; Orca wakes you and you
