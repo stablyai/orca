@@ -1,0 +1,105 @@
+---
+title: How to use Hermes Agent in Orca ADE
+description: Run Nous Research's Hermes Agent as a native chat in Orca worktrees, with Orca approval cards and a dedicated Hermes profile.
+---
+
+import { Callout } from '@/components/docs/prose'
+
+[Hermes Agent](https://github.com/NousResearch/hermes-agent) by Nous Research can run in Orca as a native chat. Orca starts `hermes acp` in the selected worktree, shows Hermes's replies and tool steps as they stream, and asks you before Hermes edits files or runs flagged commands.
+
+Orca supplies the worktree, the chat, the approval cards, and session history. Hermes supplies its own agent loop, model and provider settings, memory, and skills. See the [Hermes docs](https://hermes-agent.nousresearch.com/docs/) for anything about Hermes itself.
+
+<Callout title="Prerequisite">
+  Install Hermes from the [official repository](https://github.com/NousResearch/hermes-agent) and
+  make sure `hermes --version` works in a terminal. Orca does not install Hermes or supply model
+  access.
+</Callout>
+
+## Set up a profile for Orca
+
+A separate Hermes profile keeps Orca chats away from your other Hermes settings, messaging bots, and history.
+
+1. Create the profile without an alias script. The alias would add an `orca` command that clashes with Orca's own CLI.
+
+   ```sh
+   hermes profile create orca --no-alias
+   ```
+
+1. Sign in or add a provider key for that profile:
+
+   ```sh
+   hermes -p orca setup
+   ```
+
+   Skip messaging platforms when setup offers them. Keep the terminal backend on **Local** so Hermes works in the worktree Orca selected.
+
+1. In Orca, open **Settings → Agents → Hermes**, expand it, and set **Environment** to the profile's full path:
+
+   ```
+   HERMES_HOME=/Users/you/.hermes/profiles/orca
+   ```
+
+   Use an absolute path. A mistyped profile path makes Hermes create a new empty profile instead of reporting an error.
+
+1. Select **Chat** for Hermes, and set **Permissions** to **Ask for approval**.
+
+Start a Hermes chat from the agent picker in any worktree.
+
+## Recommended profile settings
+
+Add these to `~/.hermes/profiles/orca/config.yaml`:
+
+```yaml
+approvals:
+  # Ask the person in Orca, never an auxiliary model.
+  mode: manual
+  # Orca stays the orchestrator: Hermes may not drive Orca's CLI.
+  deny:
+    - 'orca'
+    - 'orca *'
+# Chats read repository content, so they should not rewrite skills or memory in the background.
+skills:
+  creation_nudge_interval: 0
+memory:
+  nudge_interval: 0
+```
+
+Hermes setup may import MCP servers and skills from other agents installed on your machine. Review `mcp_servers` and the `skills` folder of the profile, and remove anything an Orca chat should not have, such as desktop control or social publishing.
+
+<Callout title="What Hermes asks about">
+  Hermes asks Orca before editing files and before commands it considers dangerous. Other commands,
+  code execution, browser control, and web access run without asking. To be asked about every
+  tool call that is not read-only, add a profile plugin that returns `{"action": "approve"}` from a
+  `pre_tool_call` hook; see the [Hermes plugin docs](https://hermes-agent.nousresearch.com/docs/).
+</Callout>
+
+## How Hermes runs
+
+`hermes acp` is a client of the profile's Hermes gateway, and tools run inside that gateway. This affects a few things:
+
+- **Settings changes:** approval settings take effect without a restart, but plugins load only when the gateway starts. Run `hermes gateway restart` after adding or changing a plugin. One gateway can serve several profiles, so this also restarts your other profiles' bots and jobs.
+- **Environment:** Orca starts `hermes acp` with only basic variables, `HERMES_HOME`, and the variables you set for Hermes in Orca. A gateway that was already running, or that runs as a service, keeps its own environment, and that is the environment Hermes tools see. Keep provider keys in the profile's `.env`, not in your shell.
+- **Full access:** Orca approves each Hermes request once on your behalf. Hermes deny rules still apply.
+
+## Troubleshooting
+
+- **The first chat takes a long time to start or times out.** Hermes can take a minute to start, especially with a new profile or when its gateway is not running yet. Start the chat again once `hermes -p orca --version` answers quickly in a terminal.
+- **The chat says Hermes signed out or cannot reach a model.** Run `hermes -p orca setup` again, or check the profile's `.env`.
+- **History from another profile shows up, or Hermes behaves like a different profile.** If you ran `hermes profile use <name>`, Hermes may switch profiles when `HERMES_HOME` points at the Hermes root. Point `HERMES_HOME` at the profile folder itself.
+- **An approval card never appears.** Check `approvals.mode` in the profile. In `smart` mode a Hermes model approves flagged commands on its own.
+
+## Hermes as an MCP server (optional)
+
+To let another tool send messages through Hermes, Hermes can also run as an MCP server. This is separate from the chat integration and is off by default. In current Hermes releases it is the `mcp-serve` plugin:
+
+```sh
+hermes -p orca plugins install mcp-serve
+```
+
+Do not enable its messaging tools unless outgoing messages still require your approval. Orca has not tested this setup.
+
+## Known limitations
+
+- Stopping a chat ends Hermes's turn, but a process that Hermes's code execution had already started can keep running until it finishes.
+- After a denied edit, Hermes may try the same change through another tool. Denials still hold for every tool that asks Orca first.
+- Orca names a new chat by sending your first message to Hermes in a temporary folder.
