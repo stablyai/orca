@@ -1,5 +1,5 @@
-import { useId } from 'react'
-import { Check, ChevronDown, CircleDashed, Minus, RefreshCw } from 'lucide-react'
+import { useId, useState } from 'react'
+import { Check, ChevronDown, ChevronRight, CircleDashed, Minus, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { InlineError } from '@/components/ui/inline-error'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -22,6 +22,9 @@ import {
   cloudSkillsRowNote,
   cloudSkillsRowStateLabel,
   cloudSkillsRowToggleable,
+  cloudSkillsEntryCount,
+  cloudSkillsEntryKeys,
+  cloudSkillsEntryKindLabel,
   cloudSkillsGroupRows,
   type CloudSkillsEntry,
   cloudSkillsSummary
@@ -61,6 +64,7 @@ function ItemRow({
   included,
   disabled,
   isCopy = false,
+  kindLabel,
   onToggle
 }: {
   row: AgentConfigSyncRow
@@ -68,12 +72,14 @@ function ItemRow({
   disabled: boolean
   /** A copy for the other agent: indented under its original, whose switch it follows. */
   isCopy?: boolean
+  /** A row standing for the same skill in both agents' folders: "Claude skill, Codex skill". */
+  kindLabel?: string
   onToggle: (included: boolean) => void
 }): React.JSX.Element {
   const t = useTranslate()
   const note = cloudSkillsRowNote(row, t)
   const name = cloudSkillsDisplayName(row)
-  const kind = cloudSkillsKindLabel(row, t)
+  const kind = kindLabel ?? cloudSkillsKindLabel(row, t)
   return (
     <li className={cn('flex items-center gap-2.5 py-1.5', isCopy && 'pl-6')}>
       <RowIcon row={row} included={included} />
@@ -117,48 +123,89 @@ function ItemRow({
   )
 }
 
+/** A Synced list longer than this starts collapsed; Not synced, the part to act on, never does. */
+const COLLAPSE_SYNCED_OVER = 10
+
 function Group({
   title,
   entries,
   excluded,
   disabled,
+  collapsible = false,
   onToggleItem
 }: {
   title: string
   entries: CloudSkillsEntry[]
   excluded: ReadonlySet<string>
   disabled: boolean
+  collapsible?: boolean
   onToggleItem: (key: string, included: boolean) => void
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const headingId = useId()
+  const listId = useId()
+  const count = cloudSkillsEntryCount(entries)
+  const [open, setOpen] = useState(!collapsible || count <= COLLAPSE_SYNCED_OVER)
   if (entries.length === 0) {
     return null
   }
   return (
     <section aria-labelledby={headingId}>
-      <h4 id={headingId} className="pt-1 text-2xs font-medium text-muted-foreground">
-        {title} · {entries.reduce((sum, entry) => sum + 1 + entry.copies.length, 0)}
-      </h4>
-      <ul>
-        {entries.flatMap(({ row, copies }) => [
-          <ItemRow
-            key={row.key}
-            row={row}
-            included={cloudSkillsRowIncluded(row, excluded)}
-            disabled={disabled}
-            onToggle={(included) => onToggleItem(row.key, included)}
-          />,
-          ...copies.map((copy) => (
-            <ItemRow
-              key={copy.key}
-              row={copy}
-              included={cloudSkillsRowIncluded(copy, excluded)}
-              disabled={disabled}
-              isCopy
-              onToggle={() => {}}
+      {collapsible ? (
+        <h4 id={headingId} className="pt-1">
+          <Button
+            type="button"
+            variant="quiet"
+            size="statusAction"
+            className="-ml-1"
+            aria-expanded={open}
+            aria-controls={listId}
+            onClick={() => setOpen((value) => !value)}
+          >
+            {title} · {count}
+            <ChevronRight
+              aria-hidden
+              className={cn(
+                'size-3 transition-transform motion-reduce:transition-none',
+                open && 'rotate-90'
+              )}
             />
-          ))
-        ])}
+          </Button>
+        </h4>
+      ) : (
+        <h4 id={headingId} className="pt-1 text-2xs font-medium text-muted-foreground">
+          {title} · {count}
+        </h4>
+      )}
+      <ul id={listId} hidden={!open}>
+        {entries.flatMap((entry) => {
+          const { row, twins, copies } = entry
+          const keys = cloudSkillsEntryKeys(entry)
+          return [
+            <ItemRow
+              key={row.key}
+              row={row}
+              included={keys.every((key) => !excluded.has(key))}
+              disabled={disabled}
+              kindLabel={twins.length > 0 ? cloudSkillsEntryKindLabel(entry, t) : undefined}
+              onToggle={(included) => {
+                for (const key of keys) {
+                  onToggleItem(key, included)
+                }
+              }}
+            />,
+            ...copies.map((copy) => (
+              <ItemRow
+                key={copy.key}
+                row={copy}
+                included={cloudSkillsRowIncluded(copy, excluded)}
+                disabled={disabled}
+                isCopy
+                onToggle={() => {}}
+              />
+            ))
+          ]
+        })}
       </ul>
     </section>
   )
@@ -294,6 +341,7 @@ export function CloudSkillsSyncPanel({
         <Group
           title={t('cloudSkillsSync.group.synced', 'Synced')}
           entries={groups.synced}
+          collapsible
           excluded={excluded}
           disabled={status.running}
           onToggleItem={onToggleItem}

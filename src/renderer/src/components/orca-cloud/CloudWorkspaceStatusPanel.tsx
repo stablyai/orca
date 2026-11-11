@@ -37,6 +37,7 @@ import { CloudStateDot } from './CloudStateDot'
 import { CloudSecretsMissingNotice } from '../cloud-secrets-ask/CloudSecretsMissingNotice'
 import { CloudAgentsAndSecretsLink } from '../agent-host-panel/CloudAgentsAndSecretsLink'
 import { cloudStateDetail, cloudStateLabel } from './cloud-state-copy'
+import { CloudWorkspaceSyncSection } from './CloudWorkspaceSyncSection'
 
 export type CloudPanelActions = {
   onWake: () => void
@@ -324,6 +325,8 @@ export function CloudWorkspaceStatusPanel({
           </dl>
         </>
       ) : null}
+
+      {state === 'archived' ? null : <CloudWorkspaceSyncSection workspaceId={workspaceId} />}
 
       {showFooter && actions.onMoveToComputer && canArchive && !restarting ? (
         // Its own row (DS-l): beside Sleep, Archive and Restart it pushed them out of the popover.

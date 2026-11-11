@@ -22,6 +22,7 @@ export type RuntimeFileCommandSurface = Pick<
     | 'listRuntimeMarkdownDocuments'
     | 'pathsExistRuntimeFiles'
     | 'statRuntimeFile'
+    | 'statManyRuntimeFiles'
   > &
   Pick<
     RuntimeFileReads,
@@ -115,6 +116,7 @@ export function installRuntimeFileCommandSurface(
     listRuntimeMarkdownDocuments: fileAccess.listRuntimeMarkdownDocuments.bind(fileAccess),
     pathsExistRuntimeFiles: fileAccess.pathsExistRuntimeFiles.bind(fileAccess),
     statRuntimeFile: fileAccess.statRuntimeFile.bind(fileAccess),
+    statManyRuntimeFiles: fileAccess.statManyRuntimeFiles.bind(fileAccess),
     stagedFileSaves: stagedFileSaveCommands
   } satisfies RuntimeFileCommandSurface)
 }

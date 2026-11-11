@@ -1,4 +1,5 @@
 import { PATH_EXISTENCE_BATCH_MAX } from '../file-access/path-existence-batch'
+import { FILE_STAT_MANY_MAX } from '../file-access/file-stat-many'
 import { FILE_READ_DIR_MAX_PAGE_ENTRIES } from '../file-listing/file-dir-page'
 import { z } from 'zod'
 import { QUICK_OPEN_REMOTE_QUERY_MAX_CODE_UNITS } from '../quick-open/quick-open-path-search'
@@ -7,6 +8,10 @@ import { FileOpen, WorktreeSelector } from './files-target-params'
 
 export const FilePathsExist = WorktreeSelector.extend({
   relativePaths: z.array(z.string()).max(PATH_EXISTENCE_BATCH_MAX)
+})
+
+export const FileStatMany = WorktreeSelector.extend({
+  relativePaths: z.array(z.string().min(1).max(4096)).min(1).max(FILE_STAT_MANY_MAX)
 })
 
 export const FilePathSearch = WorktreeSelector.extend({

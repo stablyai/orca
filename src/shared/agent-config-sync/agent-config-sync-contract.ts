@@ -195,6 +195,8 @@ export type AgentConfigSyncRow = {
   withheldFiles: number
   /** Set on a copy made for the other agent: the key of the item it came from. */
   convertedFrom?: string
+  /** Content identity; the same digest in two agents' folders is one skill shown on one row. */
+  digest?: string
   included: boolean
   state: 'synced' | 'skipped' | 'pending'
   skipReason?: AgentConfigSkipReason
