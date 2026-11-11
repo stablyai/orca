@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest'
-import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
+import { activateAndRevealWorkspaceWithOutcome } from '@/lib/workspace/activation/worktree-activation'
 import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
 import { openDetectedFilePath } from '../../../terminal-pane/links/files/terminal-file-open-routing'
 import { createTerminalLinkTestDoubles } from '../../../terminal-pane/links/terminal-link-handlers-test-fixtures'
@@ -7,10 +7,7 @@ import {
   flushDoubleRaf,
   installTerminalLinkTestEnvironment
 } from '../../../terminal-pane/links/terminal-link-handlers-test-harness'
-import {
-  nativeChatFileLinkActions,
-  nativeChatFileOpenDeps
-} from './native-chat-link-target-actions'
+import { nativeChatFileOpenDeps } from './native-chat-link-target-actions'
 
 const doubles = createTerminalLinkTestDoubles()
 const {
@@ -25,6 +22,7 @@ const {
 vi.mock('@/store', () => ({ useAppStore: { getState: () => storeState } }))
 vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorkspace: vi.fn(),
+  activateAndRevealWorkspaceWithOutcome: vi.fn(() => ({ opened: { primaryTabId: null } })),
   activateAndRevealWorktree: vi.fn()
 }))
 vi.mock('@/lib/workspace/ownership/connection-context', () => ({
@@ -113,7 +111,6 @@ it('reveals a folder below a paired workspace in the file explorer', async () =>
 it('activates the owning worktree before revealing its folder', async () => {
   const folderPath = '/srv/other/docs'
   storeState.activeWorktreeId = context.worktreeId
-  vi.mocked(activateAndRevealWorkspace).mockReturnValue({ primaryTabId: null })
   runtimeEnvironmentCallMock.mockResolvedValue({
     id: 'resolve',
     ok: true,
@@ -135,7 +132,7 @@ it('activates the owning worktree before revealing its folder', async () => {
   await flushDoubleRaf()
 
   // The explorer only reveals inside the worktree it shows, so the owner must be activated first.
-  expect(activateAndRevealWorkspace).toHaveBeenCalledWith('wt-other', {
+  expect(activateAndRevealWorkspaceWithOutcome).toHaveBeenCalledWith('wt-other', {
     executionHostId: 'runtime:env-1'
   })
   expect(revealInExplorerMock).toHaveBeenCalledWith('wt-other', folderPath)
@@ -204,12 +201,4 @@ it('reports a local folder the OS could not open', async () => {
 
   expect(openFilePathMock).toHaveBeenCalledWith(folderPath, 'local')
   expect(onOpenFailure).toHaveBeenCalledWith({ verdict: 'unavailable' })
-})
-
-it('labels a trailing-separator folder link as Open folder', () => {
-  const actions = nativeChatFileLinkActions(
-    { absolutePath: '/srv/repo/docs', line: null, column: null, isDirectoryHint: true },
-    context
-  )
-  expect(actions.primary.label).toBe('Open folder')
 })

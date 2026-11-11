@@ -1,6 +1,6 @@
 import { useAppStore } from '@/store/index'
-import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
-import { getRelativePathInsideRoot, joinPath } from '@/lib/path'
+import { activateAndRevealWorkspaceWithOutcome } from '@/lib/workspace/activation/worktree-activation'
+import { getRelativePathInsideRoot } from '@/lib/path'
 import { isWorkspaceSelected } from '@/lib/workspace/ownership/active-workspace-host'
 import {
   LOCAL_EXECUTION_HOST_ID,
@@ -17,16 +17,21 @@ import type { FileOpenFailure } from './terminal-file-open-failure'
 function revealFolderInWorktree(
   worktreeId: string,
   executionHostId: ExecutionHostId,
-  folderPath: string
-): boolean {
+  folderPath: string,
+  onFailure: (failure: FileOpenFailure) => void
+): void {
   // Why the host too: workspace IDs repeat across hosts, so a same-ID local twin is not the owner.
   if (!isWorkspaceSelected(useAppStore.getState(), { worktreeId, executionHostId })) {
-    if (activateAndRevealWorkspace(worktreeId, { executionHostId }) === false) {
-      return false
+    const outcome = activateAndRevealWorkspaceWithOutcome(worktreeId, { executionHostId })
+    if ('refused' in outcome) {
+      // Why: a blocked folder workspace already said why; a second toast would repeat it.
+      if (!outcome.refused.failureNotified) {
+        onFailure({ verdict: 'unavailable' })
+      }
+      return
     }
   }
   useAppStore.getState().revealInExplorer(worktreeId, folderPath)
-  return true
 }
 
 type FolderOpenArgs = {
@@ -57,28 +62,19 @@ export async function openDetectedFolder(args: FolderOpenArgs): Promise<void> {
   if (hostWorkspaceFile) {
     if (isHostWorkspaceRoot(hostWorkspaceFile)) {
       revealHostWorkspaceRoot(hostWorkspaceFile)
-    } else if (
-      !revealFolderInWorktree(
+    } else {
+      revealFolderInWorktree(
         hostWorkspaceFile.worktreeId,
         hostWorkspaceFile.executionHostId,
-        folderPath
+        folderPath,
+        onFailure
       )
-    ) {
-      onFailure({ verdict: 'unavailable' })
     }
     return
   }
   // Why: this computer's OS can't open an SSH or paired folder; the workspace explorer reads through its host.
-  const relativePath = getRelativePathInsideRoot(folderPath, args.worktreePath)
-  // Why the root's spelling: explorer rows join on the root's separator, and a chat link may differ.
-  if (
-    relativePath !== null &&
-    revealFolderInWorktree(
-      args.worktreeId,
-      args.sourceHostId,
-      joinPath(args.worktreePath, relativePath)
-    )
-  ) {
+  if (getRelativePathInsideRoot(folderPath, args.worktreePath) !== null) {
+    revealFolderInWorktree(args.worktreeId, args.sourceHostId, folderPath, onFailure)
     return
   }
   onFailure({ verdict: 'unavailable' })

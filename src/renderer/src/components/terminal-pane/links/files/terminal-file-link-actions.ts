@@ -123,18 +123,21 @@ export function buildFileLinkActions(
               openDetectedFilePath(filePath, line, column, { ...deps, openWithSystemDefault: true })
           }
         : null
-      : canOpenWithSystemDefault
-        ? {
-            label: t(
-              'auto.components.terminal.pane.TerminalLinkActionPopover.openWithDefaultApp',
-              'Open with default app'
-            ),
-            run: () =>
-              openDetectedFilePath(filePath, line, column, { ...deps, openWithSystemDefault: true })
-          }
-        : // An unmarked folder still reveals in the explorer when clicked.
-          looksLikeFolder
-          ? null
+      : // Why: "Open folder" already opens it with the OS here, or reveals it remotely.
+        looksLikeFolder
+        ? null
+        : canOpenWithSystemDefault
+          ? {
+              label: t(
+                'auto.components.terminal.pane.TerminalLinkActionPopover.openWithDefaultApp',
+                'Open with default app'
+              ),
+              run: () =>
+                openDetectedFilePath(filePath, line, column, {
+                  ...deps,
+                  openWithSystemDefault: true
+                })
+            }
           : {
               label: t(
                 'auto.components.terminal.pane.TerminalLinkActionPopover.downloadOpenWithDefaultApp',
