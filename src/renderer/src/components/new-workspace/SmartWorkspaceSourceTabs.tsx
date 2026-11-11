@@ -14,8 +14,9 @@ export function SmartWorkspaceSourceTabs({
   inputRef?: React.RefObject<HTMLInputElement | null>
   tabsListRef?: React.RefObject<HTMLDivElement | null>
 }): React.JSX.Element {
+  // Why: the wrapper scrolls; TabsList and TabsTrigger own their own spacing and type.
   return (
-    <div className="flex min-w-0 items-center gap-2 border-b border-border/40">
+    <div className="flex min-w-0 items-center gap-2 overflow-x-auto overflow-y-hidden border-b border-border/40 scrollbar-sleek">
       <Tabs
         value={model.mode}
         onValueChange={(value) => {
@@ -29,7 +30,8 @@ export function SmartWorkspaceSourceTabs({
         <TabsList
           ref={tabsListRef}
           variant="line"
-          className="h-7 w-full justify-start gap-3 overflow-x-auto overflow-y-hidden px-0 scrollbar-sleek"
+          size="sm"
+          className="justify-start"
           onFocusCapture={(event) => {
             const previous = event.relatedTarget instanceof HTMLElement ? event.relatedTarget : null
             const list = event.currentTarget
@@ -49,7 +51,7 @@ export function SmartWorkspaceSourceTabs({
                 // Why: icon-only tabs; the label lives in the tooltip and the accessible name.
                 aria-label={label}
                 data-smart-name-mode={id}
-                className="flex-none px-1 text-xs"
+                className="flex-none"
               >
                 <TooltipTrigger>
                   <Icon className="size-3.5" />
