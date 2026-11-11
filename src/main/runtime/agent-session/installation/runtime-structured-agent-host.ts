@@ -2,7 +2,7 @@ import { ensureStructuredAgentModelCatalogOwner } from '../model-catalog/structu
 import type { StructuredAgentModelCatalogDeps } from './structured-agent-runtime-registration-types'
 import { resolveStructuredCodexAccountKind } from '../environment/structured-agent-account-home'
 import { nativeChatShellEnvironmentPolicy } from '../../../../shared/native-chat/native-chat-shell-environment'
-import { claudeStructuredAuthPolicyForSettings } from '../../../claude-accounts/claude-structured-auth-policy'
+import { claudeStructuredAuthPolicyForSettings } from '../../../claude-accounts/runtime-auth/claude-structured-auth-policy'
 import { resolveStructuredAgentCommand } from '../../../native-chat/structured-agent-command-resolution'
 import { structuredAgentConfiguredArgs } from '../../../native-chat/structured-agent-configured-args'
 import { getProfileUserDataPath } from '../../../orca-profiles/profile-storage-paths'

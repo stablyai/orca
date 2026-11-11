@@ -9,7 +9,7 @@ import {
   useState,
   type ReactElement
 } from 'react'
-import type { NativeScrollEvent, NativeSyntheticEvent, ScrollView } from 'react-native'
+import type { NativeScrollEvent, NativeSyntheticEvent, ScrollViewInstance } from 'react-native'
 import { MobileNativeChatPageScroll } from './MobileNativeChatPageScroll'
 import {
   mobileNativeChatReadingDrift,
@@ -41,8 +41,21 @@ const FETCH_REACH_SCREENS = 10
 // Wait for scroll and touch rest before corrections so iOS momentum is not interrupted.
 const REST_MS = 300
 
-type Scroller = MobileNativeChatScrollNode & EventTarget
-type ReadScroller = () => Scroller | null
+type Listen = (type: string, listener: () => void, options: AddEventListenerOptions) => void
+type Scroller = MobileNativeChatScrollNode & {
+  addEventListener: Listen
+  removeEventListener: Listen
+}
+// RN 0.88 types these handles as native tags; on web they are the DOM nodes this list observes.
+function isScroller(node: unknown): node is Scroller {
+  return typeof node === 'object' && node !== null && 'addEventListener' in node
+}
+function isDomNode(node: unknown): node is Element {
+  return typeof node === 'object' && node !== null
+}
+function domElementOf(node: unknown): Element | null {
+  return isDomNode(node) ? node : null
+}
 
 // End anchoring preserves position when history prepends; restore after below-reader changes only at rest or on regroup.
 export function MobileNativeChatPageList({
@@ -61,8 +74,11 @@ export function MobileNativeChatPageList({
   onScroll,
   onNearTop
 }: MobileNativeChatPageListProps): ReactElement {
-  const scroll = useRef<ScrollView>(null)
-  const scroller = useCallback<ReadScroller>(() => scroll.current?.getScrollableNode() ?? null, [])
+  const scroll = useRef<ScrollViewInstance>(null)
+  const scroller = useCallback((): Scroller | null => {
+    const node: unknown = scroll.current?.getScrollableNode()
+    return isScroller(node) ? node : null
+  }, [])
 
   // Hold below-reader growth during a fling: correcting scroll mid-fling stops iOS momentum. Keep the hold in a ref to avoid a render until release.
   const heldRef = useRef<Held | null>(null)
@@ -309,8 +325,8 @@ export function MobileNativeChatPageList({
   // Content and viewport resizes (e.g. the composer growing) bypass commits; restore nested scroll boxes first.
   useEffect(() => {
     const s = scroller()
-    const viewport: Element | null | undefined = scroll.current?.getScrollableNode()
-    const content: Element | null | undefined = scroll.current?.getInnerViewNode()
+    const viewport = domElementOf(scroll.current?.getScrollableNode())
+    const content = domElementOf(scroll.current?.getInnerViewNode())
     if (!s || !viewport || !content || typeof ResizeObserver === 'undefined') {
       return
     }

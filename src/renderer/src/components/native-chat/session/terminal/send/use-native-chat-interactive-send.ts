@@ -23,6 +23,7 @@ import {
   type NativeChatSendHandle
 } from './native-chat-runtime-send'
 import { inferQuestionAnsweredFromCurrentStatus } from '../../../../terminal-pane/agent-status/input-inference/agent-question-answered-inference'
+import { createAgentInterruptInference } from '../../../../terminal-pane/agent-status/input-inference/agent-interrupt-inference'
 
 // Agent TUIs use Escape to cancel questions or deny approvals.
 const ESC = '\x1b'
@@ -157,8 +158,23 @@ export function useNativeChatInteractiveSend(
       inFlightRef.current = sendNativeChatAskAnswer(targetPtyId, [{ raw: ESC }, { raw: ESC }])
       return
     }
-    sendRaw(ESC)
-  }, [agent, cancelInFlight, sendRaw, targetPtyId])
+    // Why: this Escape bypasses xterm.onData; infer like an acknowledged typed Escape, from the status before it.
+    const statusBeforeEscape = useAppStore.getState().agentStatusByPaneKey[paneKey] ?? null
+    void sendRawVerified(ESC).then((accepted) => {
+      if (!accepted) {
+        return
+      }
+      void createAgentInterruptInference({
+        paneKey,
+        getStatusEntry: () => useAppStore.getState().agentStatusByPaneKey[paneKey],
+        inferInterrupt: (request) =>
+          window.api.agentStatus.inferInterrupt(request).catch((err) => {
+            console.warn('[agent-interrupt] native-chat inference failed:', err)
+            return false
+          })
+      }).observeInputIntent('plain-escape', statusBeforeEscape)
+    })
+  }, [agent, cancelInFlight, paneKey, sendRawVerified, targetPtyId])
 
   return { sendAnswer, sendRaw, sendRawVerified, cancelPending: cancelInFlight, cancelAsk, cancel }
 }

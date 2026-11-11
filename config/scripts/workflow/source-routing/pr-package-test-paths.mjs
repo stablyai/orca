@@ -193,7 +193,7 @@ export const WINDOWS_BOUNDARY_TESTS = [
   'src/main/pty/process-retirement/windows-live-tree-kill.win32.test.ts',
   'src/main/wsl/execution/wsl-guest-environment.test.ts',
   'src/main/wsl/execution/wsl-executable-path.win32.test.ts',
-  'src/main/claude-accounts/claude-profile-history-windows.test.ts',
+  'src/main/claude-accounts/profiles/setup/claude-profile-history-windows.test.ts',
   'src/shared/source-scan/source-tree-scan.test.ts',
   'src/main/cli/wsl/wsl-cli-powershell-boundary.test.ts',
   'src/main/cursor/hook-service.test.ts',

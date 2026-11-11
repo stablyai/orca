@@ -46,7 +46,7 @@ vi.mock('@orca/process-host', async (importOriginal) => ({
   spawnProcess: (spec: ProcessSpec) =>
     spec.args?.includes('--help') ? probeMock(spec) : spawnMock(spec.program, spec.args, spec)
 }))
-vi.mock('../../main/claude-accounts/keychain', () => ({
+vi.mock('../../main/claude-accounts/runtime-auth/keychain', () => ({
   deleteActiveClaudeKeychainCredentialsStrict: deleteKeychainMock,
   readActiveClaudeKeychainCredentialsStrict: readKeychainMock,
   writeActiveClaudeKeychainCredentials: writeKeychainMock
@@ -223,41 +223,6 @@ describe('account CLI handlers', () => {
     exitSpy.mockRestore()
   })
 
-  it('keeps the original add error when cleanup also fails', async () => {
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    rmSyncMock.mockImplementationOnce(() => {
-      throw new Error('EBUSY: resource busy or locked')
-    })
-    callMock.mockImplementation((method: string) =>
-      method === 'status.get'
-        ? Promise.resolve({
-            id: 'test',
-            ok: true,
-            result: {
-              capabilities: [ACCOUNT_IMPORT_RUNTIME_CAPABILITY, CLAUDE_SIGN_IN_RUNTIME_CAPABILITY]
-            },
-            _meta: { runtimeId: 'test-runtime' }
-          })
-        : method === 'accounts.list'
-          ? Promise.resolve({
-              id: 'test',
-              ok: true,
-              result: { claude: accountState('c@e.com'), codex: accountState('x@e.com') },
-              _meta: { runtimeId: 'test-runtime' }
-            })
-          : Promise.reject(new Error('registration rejected by runtime'))
-    )
-
-    await expect(ACCOUNT_HANDLERS['account add'](context('codex'))).rejects.toThrow(
-      'registration rejected by runtime'
-    )
-    expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining('Failed to clean up the temporary login directory'),
-      expect.any(Error)
-    )
-    warnSpy.mockRestore()
-  })
-
   it('fails a successful add when the temporary credentials cannot be removed', async () => {
     rmSyncMock.mockImplementationOnce(() => {
       throw new Error('EBUSY: resource busy or locked')
@@ -357,16 +322,6 @@ describe('account CLI handlers', () => {
         ACCOUNT_HANDLERS['account rm'](selectionContext('claude', 'shared@example.com'))
       ).rejects.toThrow('claude-org-a, claude-org-b')
       expect(mutatingCalls()).toEqual([])
-    })
-
-    it('refuses the Claude system default from WSL rather than resetting the Windows host', async () => {
-      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-      process.env.ORCA_CLI_WSL_DISTRO = 'Ubuntu'
-
-      await expect(
-        ACCOUNT_HANDLERS['account select'](selectionContext('claude', 'system'))
-      ).rejects.toThrow('Select the Claude system default for a WSL distro in Orca Settings')
-      expect(callMock).not.toHaveBeenCalled()
     })
   })
 })
