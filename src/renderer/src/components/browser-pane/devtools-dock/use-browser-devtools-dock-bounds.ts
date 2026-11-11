@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { hasVisibleOverlayOver } from '@/lib/visible-overlay'
+import { hasVisibleOverlayOver } from '@/lib/overlay-interaction/visible-overlay'
 import { registerBrowserClientPagePositionSync } from '../browser-client-page-position-driver'
 import {
   isWebviewDragPassthroughActive,

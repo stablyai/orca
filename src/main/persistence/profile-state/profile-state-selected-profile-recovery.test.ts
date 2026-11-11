@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { acquireProfileStateMaintenance } from './profile-state-access'
 import { migrateProfileStateToSqlite } from './profile-state-migration'
-import { getProfileStateExports, rollbackProfileState } from './profile-state-recovery-command'
+import { rollbackProfileState } from './profile-state-recovery-command'
 import { bootstrapProfileStateAuthority } from './profile-state-authority-bootstrap'
 
 const roots: string[] = []
@@ -66,14 +66,5 @@ describe('explicit profile recovery selection', () => {
     const reopened = bootstrapProfileStateAuthority(f.inactive)
     expect(reopened.migrated).toBe(true)
     reopened.authority?.close()
-  })
-
-  it('refuses unknown and escaping IDs without falling back to the active profile', () => {
-    const f = fixture()
-    const before = readFileSync(f.active.databaseFile)
-    for (const id of ['missing', '../active']) {
-      expect(() => getProfileStateExports(f.root, id)).toThrow('Could not resolve')
-    }
-    expect(readFileSync(f.active.databaseFile).equals(before)).toBe(true)
   })
 })

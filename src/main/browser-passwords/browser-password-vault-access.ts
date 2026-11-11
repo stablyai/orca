@@ -1,0 +1,52 @@
+import { session, type Session, type WebContents } from 'electron'
+import { browserSessionRegistry } from '../browser/sessions/profiles/browser-session-registry'
+import { localSshBrowserProfileIdForSession } from '../browser/routing/local-host-partitions/local-ssh-browser-partitions'
+import type { BrowserPasswordStore } from './browser-password-store'
+import { getBrowserPasswordVault } from './browser-password-vaults'
+
+export type BrowserPasswordSettings = {
+  offerToSave: boolean
+  fillRequiresReauth: boolean
+}
+
+const UNCONFIGURED: BrowserPasswordSettings = {
+  offerToSave: false,
+  fillRequiresReauth: false
+}
+
+let readSettings: () => BrowserPasswordSettings = () => UNCONFIGURED
+
+export function setBrowserPasswordSettingsSource(source: () => BrowserPasswordSettings): void {
+  readSettings = source
+}
+
+export function browserPasswordSettings(): BrowserPasswordSettings {
+  return readSettings()
+}
+
+/** The browser profile whose vault serves this session, or null for sessions with no vault. */
+export function browserPasswordProfileIdForSession(webSession: Session): string | null {
+  for (const profile of browserSessionRegistry.listProfiles()) {
+    if (webSession === session.fromPartition(profile.partition)) {
+      return profile.id
+    }
+  }
+  // SSH-routed pages use a proxied partition that still belongs to one browser profile.
+  return localSshBrowserProfileIdForSession(webSession)
+}
+
+export function browserPasswordVaultFor(browserProfileId: string): BrowserPasswordStore {
+  return getBrowserPasswordVault(browserProfileId)
+}
+
+/** The vault a guest may use right now: a profile-backed session with storage sealed. */
+export function browserPasswordVaultForGuest(
+  guest: WebContents
+): { browserProfileId: string; vault: BrowserPasswordStore } | null {
+  const browserProfileId = browserPasswordProfileIdForSession(guest.session)
+  if (!browserProfileId) {
+    return null
+  }
+  const vault = browserPasswordVaultFor(browserProfileId)
+  return vault.availability().available ? { browserProfileId, vault } : null
+}

@@ -1,7 +1,7 @@
-import type { LiveAgentWorktreeStatus } from '@/lib/worktree-activity-state'
-import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup'
+import type { LiveAgentWorktreeStatus } from '../../../../shared/sidebar-list/workspace-activity-facts'
+import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup/workspace-cleanup'
 import { cloneDefaultWorkspaceStatuses } from '../../../../shared/workspace-statuses'
-import { getWorkspaceCleanupCandidateIdentity } from '../../../../shared/workspace-cleanup-host-identity'
+import { getWorkspaceCleanupCandidateIdentity } from '../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
 import {
   buildWorkspaceCleanupFacets,
   type WorkspaceCleanupFacetSources,

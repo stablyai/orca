@@ -3,19 +3,22 @@ import {
   AiVaultSearchResponseSchema,
   AiVaultSearchStatusRequestSchema,
   AiVaultSearchStatusSchema
-} from '../../shared/ai-vault-search-contract'
-import { unavailableSessionSearchStatus } from '../../shared/ai-vault-search-client'
-import { sessionSearchScopeCatalog } from './session-search-scope-catalog'
-import { resolveSessionSearchScope } from './session-search-scope-resolution'
-import type { AiVaultSearchResponse, AiVaultSearchStatus } from '../../shared/ai-vault-search-types'
+} from '../../shared/ai-vault/search/ai-vault-search-contract'
+import { unavailableSessionSearchStatus } from '../../shared/ai-vault/search/ai-vault-search-client'
+import { sessionSearchScopeCatalog } from './scope/session-search-scope-catalog'
+import { resolveSessionSearchScope } from './scope/session-search-scope-resolution'
+import type {
+  AiVaultSearchResponse,
+  AiVaultSearchStatus
+} from '../../shared/ai-vault/search/ai-vault-search-types'
 import {
   redactForTransport,
   redactStatusForTransport,
   type SessionSearchTransport
-} from '../../shared/ai-vault-search-transport'
+} from '../../shared/ai-vault/search/ai-vault-search-transport'
 import type { SessionSearchService } from './session-search-service'
-import { AI_VAULT_AGENTS } from '../../shared/ai-vault-types'
-import { compatibleSearchAgents } from '../../shared/ai-vault-search-agent-compatibility'
+import { AI_VAULT_AGENTS } from '../../shared/ai-vault/contracts/ai-vault-types'
+import { compatibleSearchAgents } from '../../shared/ai-vault/search/ai-vault-search-agent-compatibility'
 
 let service: SessionSearchService | null = null
 

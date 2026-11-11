@@ -18,8 +18,9 @@ import type {
 
 import { readZCodeInteractiveCapability } from '../zcode/interactive-capability'
 import { getPreflightWslTarget } from './preflight-runtime-target'
-import { runAsWslExecUserAct } from '../wsl/wsl-background-exec-gate'
+import { runAsWslExecUserAct } from '../wsl/discovery/wsl-background-exec-gate'
 import { deferRefusedPreflight } from './preflight-wsl-refusal-retry'
+import { agentCommandOverrideDetectionOptions } from '../preflight/installed-agent-detection'
 
 type AgentDetectionRequest = PreflightRuntimeContext & { enabledOnly?: boolean }
 /** Set by a user act (window focus, a click, opening a picker): it may start its WSL distro. */
@@ -38,12 +39,17 @@ function runPreflightAct<T>(
 export function registerPreflightHandlers(store?: Pick<Store, 'getSettings'>): void {
   const detectionOptions = (args?: AgentDetectionRequest) => {
     if (!args?.enabledOnly) {
-      return undefined
+      // Overrides still apply: a configured CLI outside PATH must be listed in every inventory.
+      return agentCommandOverrideDetectionOptions(store?.getSettings().agentCmdOverrides)
     }
     if (!store) {
       throw new Error('Agent detection settings unavailable')
     }
-    return { disabledTuiAgents: store.getSettings().disabledTuiAgents }
+    const settings = store.getSettings()
+    return {
+      disabledTuiAgents: settings.disabledTuiAgents,
+      agentCmdOverrides: settings.agentCmdOverrides
+    }
   }
   ipcMain.handle(
     'preflight:check',

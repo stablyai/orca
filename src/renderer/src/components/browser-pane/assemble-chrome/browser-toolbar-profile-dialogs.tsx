@@ -8,7 +8,7 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type BrowserToolbarProfileDialogsProps = {
   pendingSwitchProfileId: string | null | undefined
@@ -35,6 +35,7 @@ export function BrowserToolbarProfileDialogs({
   onCreateProfile,
   onCancelNewProfile
 }: BrowserToolbarProfileDialogsProps): React.JSX.Element {
+  const t = useTranslate()
   return (
     <>
       <Dialog
@@ -48,13 +49,10 @@ export function BrowserToolbarProfileDialogs({
         <DialogContent className="sm:max-w-sm" showCloseButton={false}>
           <DialogHeader>
             <DialogTitle className="text-base">
-              {translate(
-                'auto.components.browser.pane.BrowserToolbarMenu.fe683eb3b4',
-                'Switch Profile'
-              )}
+              {t('auto.components.browser.pane.BrowserToolbarMenu.fe683eb3b4', 'Switch Profile')}
             </DialogTitle>
             <DialogDescription className="text-xs">
-              {translate(
+              {t(
                 'auto.components.browser.pane.BrowserToolbarMenu.a38f217b46',
                 'Switching profiles will reload this page. Any unsaved form data will be lost.'
               )}
@@ -62,10 +60,10 @@ export function BrowserToolbarProfileDialogs({
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" size="sm" onClick={() => onPendingSwitchChange(false)}>
-              {translate('auto.components.browser.pane.BrowserToolbarMenu.429ef481f9', 'Cancel')}
+              {t('auto.components.browser.pane.BrowserToolbarMenu.429ef481f9', 'Cancel')}
             </Button>
             <Button size="sm" onClick={onConfirmSwitch}>
-              {translate('auto.components.browser.pane.BrowserToolbarMenu.58f2c81542', 'Switch')}
+              {t('auto.components.browser.pane.BrowserToolbarMenu.58f2c81542', 'Switch')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -75,7 +73,7 @@ export function BrowserToolbarProfileDialogs({
         <DialogContent className="sm:max-w-sm" showCloseButton={false}>
           <DialogHeader>
             <DialogTitle className="text-base">
-              {translate(
+              {t(
                 'auto.components.browser.pane.BrowserToolbarMenu.67e9b9fcd6',
                 'New Browser Profile'
               )}
@@ -90,7 +88,7 @@ export function BrowserToolbarProfileDialogs({
             <Input
               value={newProfileName}
               onChange={(e) => onNewProfileNameChange(e.target.value)}
-              placeholder={translate(
+              placeholder={t(
                 'auto.components.browser.pane.BrowserToolbarMenu.64f448fb6e',
                 'Profile name'
               )}
@@ -100,7 +98,7 @@ export function BrowserToolbarProfileDialogs({
             />
             <DialogFooter>
               <Button type="button" variant="outline" size="sm" onClick={onCancelNewProfile}>
-                {translate('auto.components.browser.pane.BrowserToolbarMenu.429ef481f9', 'Cancel')}
+                {t('auto.components.browser.pane.BrowserToolbarMenu.429ef481f9', 'Cancel')}
               </Button>
               <Button
                 type="submit"
@@ -108,14 +106,8 @@ export function BrowserToolbarProfileDialogs({
                 disabled={!newProfileName.trim() || isCreatingProfile}
               >
                 {isCreatingProfile
-                  ? translate(
-                      'auto.components.browser.pane.BrowserToolbarMenu.bf648471c5',
-                      'Creating…'
-                    )
-                  : translate(
-                      'auto.components.browser.pane.BrowserToolbarMenu.569bce8eb1',
-                      'Create'
-                    )}
+                  ? t('auto.components.browser.pane.BrowserToolbarMenu.bf648471c5', 'Creating…')
+                  : t('auto.components.browser.pane.BrowserToolbarMenu.569bce8eb1', 'Create')}
               </Button>
             </DialogFooter>
           </form>

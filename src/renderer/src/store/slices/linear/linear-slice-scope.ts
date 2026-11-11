@@ -1,6 +1,6 @@
 import type { AppState } from '../../types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
-import { getTaskSourceCacheScope } from '../../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
+import { getTaskSourceCacheScope } from '../../../../../shared/work-items/task-source-context'
 import {
   canonicalizeLinearIssueAttributeFilter,
   isEmptyLinearIssueAttributeFilter,
@@ -9,10 +9,13 @@ import {
 import {
   getProviderRuntimeContextKey,
   getEnvironmentRuntimeContextKey
-} from '@/lib/provider-runtime-context'
+} from '@/runtime/hosts/observations/provider-runtime-context'
 import { getLinearCacheGeneration, getLinearMutationGeneration } from './linear-slice-request-state'
-import { defaultScopeSource, rowLessSourceTarget } from '@/lib/default-creation-host'
-import type { RowLessSource } from '@/lib/default-creation-host'
+import {
+  defaultScopeSource,
+  rowLessSourceTarget
+} from '@/runtime/hosts/selection/default-creation-host'
+import type { RowLessSource } from '@/runtime/hosts/selection/default-creation-host'
 
 export function normalizeListAttributeFilter(
   attributeFilter?: LinearIssueAttributeFilter | null

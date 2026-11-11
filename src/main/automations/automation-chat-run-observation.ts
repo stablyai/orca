@@ -5,7 +5,7 @@ import {
   readAgentJournalTurn,
   readAgentJournalTurnOutcome
 } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
-import { createHeadlessAutomationOutputSnapshotBuffer } from './headless-dispatch'
+import { createAutomationOutputSnapshotBuffer } from './automation-launch'
 import type { AutomationRunCompletionObservation } from './run-completion-watcher'
 
 export function resolveChatAutomationRun(
@@ -55,6 +55,12 @@ function observationForResolvedRun(
   }
   const turn = turnItem ? readAgentJournalTurn(turnItem.body) : null
   if (!turn || !turnItem) {
+    if (
+      submission.dispatchState === 'rejected' &&
+      automationAgentDidNotStart(submission.rejection)
+    ) {
+      return { status: 'dispatch_failed', error: automationAgentDidNotStartError(agent) }
+    }
     return submission.dispatchState === 'rejected' || submission.dispatchState === 'unknown'
       ? {
           status: 'dispatch_failed',
@@ -65,7 +71,7 @@ function observationForResolvedRun(
   if (turn.state === 'running') {
     return null
   }
-  const buffer = createHeadlessAutomationOutputSnapshotBuffer()
+  const buffer = createAutomationOutputSnapshotBuffer()
   for (const item of snapshot.items) {
     if (
       item.agentId ||
@@ -113,4 +119,21 @@ function submissionTurn(
           submission.answeredInTurn.turnItemId === item.itemId))
     )
   })
+}
+
+/** Rejections that mean the agent never finished starting, so it never saw the prompt: the start
+ *  passed its limit or was stopped while starting (`hostStopped`), or the agent exited or failed
+ *  while starting. */
+const DID_NOT_START_KINDS: ReadonlySet<string> = new Set([
+  'hostStopped',
+  'providerStartFailed',
+  'startFailed'
+])
+
+export function automationAgentDidNotStart(rejection: { kind: string } | undefined): boolean {
+  return rejection !== undefined && DID_NOT_START_KINDS.has(rejection.kind)
+}
+
+export function automationAgentDidNotStartError(agent: string): string {
+  return `${agent} did not start (the machine may have slept or startup timed out), so it never received this run's prompt. Run the automation again.`
 }

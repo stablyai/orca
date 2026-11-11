@@ -1,36 +1,41 @@
 import React, { useRef, useEffect, useLayoutEffect, useMemo, useState } from 'react'
 import Editor from '@monaco-editor/react'
 import type { editor, IRange } from 'monaco-editor'
-import type { MarkdownDocument } from '../../../../shared/filesystem-entry-types'
+import type { MarkdownDocument } from '../../../../shared/file-listing/file-document'
 import { useAppStore } from '@/store'
-import '@/lib/monaco-setup'
-import { monacoTypographyOptions } from '@/lib/editor-typography'
+import '@/lib/editor/monaco/monaco-setup'
+import { monacoTypographyOptions } from '@/lib/editor/appearance/editor-typography'
 import { useEditorTypography } from '@/hooks/use-editor-typography'
-
 import { useContextualCopySetup } from './useContextualCopySetup'
 import { MonacoGutterContextMenu } from './MonacoGutterContextMenu'
-import { isLinuxUserAgent } from '../terminal-pane/pane-helpers'
+import { isLinuxUserAgent } from '../../app-shell/platform/user-agent-platform'
 import { MAX_TOKENIZATION_LINE_LENGTH } from '@/lib/monaco-languages/monarch-embed-entry-budget'
 import { buildFileEditorWordWrapOptions } from './file-editor-word-wrap-options'
-import { toEditorModelUri } from './editor-model-uri'
-import { getEditorModelOwnerKey } from './editor-model-owner'
+import { resolveFileEditorMinimapEnabled } from '../../../../shared/editor/editor-typography'
+import { toEditorModelUri } from './model-lifetime/identity/editor-model-uri'
+import { getEditorModelOwnerKey } from './model-lifetime/identity/editor-model-owner'
+import {
+  NO_RESOURCE_EVIDENCE,
+  type WorkspaceResource
+} from '@/lib/workspace/ownership/workspace-copy-owner'
 import { getMonacoAutoHeightForContent, isMonacoAutoHeightCapped } from './monaco-auto-height'
 import { monacoFindOptions } from './monaco-find-options'
+import { buildEditorUnicodeHighlightOptions } from './editor-unicode-highlight-options'
 import { useMonacoRevealScheduler } from './use-monaco-reveal-scheduler'
 import type { MonacoContentSyncMode } from './monaco-content-sync'
 import { useMonacoContentSyncBridge } from './use-monaco-content-sync-bridge'
-import { useMonacoMarkdownAnnotations } from './use-monaco-markdown-annotations'
+import { useMonacoMarkdownAnnotations } from './markdown-source-tools/monaco/use-monaco-markdown-annotations'
 import { useMonacoEditorDecorations } from './use-monaco-editor-decorations'
 import { useMonacoEditorMount } from './use-monaco-editor-mount'
 import { snapshotMonacoViewState } from './monaco-view-state-persistence'
-import { MonacoMarkdownAnnotationOverlay } from './MonacoMarkdownAnnotationOverlay'
+import { MonacoMarkdownAnnotationOverlay } from './markdown-source-tools/monaco/MonacoMarkdownAnnotationOverlay'
 import { usePluginSyntaxLanguage } from './use-plugin-syntax-language'
 import {
   PLUGIN_SYNTAX_EDITOR_OPTIONS,
   applyModelLanguage
 } from '@/lib/monaco-languages/plugin-syntax-editor-options'
 import { useMonacoTheme } from '@/hooks/use-monaco-theme'
-import { useEditorModelRekeyCarry } from './editor-model-rekey-carry'
+import { useEditorModelRekeyCarry } from './model-lifetime/identity/editor-model-rekey-carry'
 
 type MonacoEditorProps = {
   fileId: string
@@ -48,6 +53,8 @@ type MonacoEditorProps = {
   revealMatchLength?: number
   markdownDocuments?: MarkdownDocument[]
   worktreeId?: string
+  /** The open file's tab; its review notes belong to the copy it names. */
+  noteSource?: WorkspaceResource
   markdownAnnotationsEnabled?: boolean
   conflictDecorationsEnabled?: boolean
   readOnly?: boolean
@@ -72,6 +79,7 @@ export default function MonacoEditor({
   revealMatchLength,
   markdownDocuments,
   worktreeId,
+  noteSource = NO_RESOURCE_EVIDENCE,
   markdownAnnotationsEnabled = false,
   conflictDecorationsEnabled = false,
   readOnly = false,
@@ -160,6 +168,7 @@ export default function MonacoEditor({
     content,
     language,
     worktreeId,
+    noteSource,
     markdownAnnotationsEnabled
   })
 
@@ -294,7 +303,7 @@ export default function MonacoEditor({
           // This global option also affects diff and Peek; it is defense in depth, not protection from Monarch embedding recursion below the cap.
           maxTokenizationLineLength: MAX_TOKENIZATION_LINE_LENGTH,
           // Monaco 0.55 forcibly disables diff sub-editor minimaps; only file editors honor this setting.
-          minimap: { enabled: settings?.editorMinimapEnabled ?? false },
+          minimap: { enabled: resolveFileEditorMinimapEnabled(settings) },
           scrollBeyondLastLine: false,
           ...PLUGIN_SYNTAX_EDITOR_OPTIONS,
           ...buildFileEditorWordWrapOptions(editorWordWrap),
@@ -302,10 +311,7 @@ export default function MonacoEditor({
           lineNumbers: 'on',
           renderLineHighlight: 'line',
           automaticLayout: true,
-          unicodeHighlight: {
-            ambiguousCharacters: language !== 'markdown',
-            invisibleCharacters: true
-          },
+          unicodeHighlight: buildEditorUnicodeHighlightOptions(language),
           tabSize: 2,
           readOnly,
           scrollbar: autoHeight

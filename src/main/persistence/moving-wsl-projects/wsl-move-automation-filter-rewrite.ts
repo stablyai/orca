@@ -4,8 +4,8 @@
  * carried. Only then does it widen to All hosts, once: the ledgered run never repeats, so a
  * later choice of this desktop stays.
  */
-import type { PersistedAutomationHostFilter } from '../../../shared/automation-host-filter'
-import { hostStableKey } from '../../../shared/automation-owner-key'
+import type { PersistedAutomationHostFilter } from '../../../shared/automations/ownership/automation-host-filter'
+import { hostStableKey } from '../../../shared/automations/ownership/automation-owner-key'
 
 const DESKTOP_SELF_HOST_KEY = hostStableKey({
   authority: { kind: 'desktop' },

@@ -1,6 +1,6 @@
 import { useCallback, useRef } from 'react'
-import type { RpcClient } from '../transport/rpc-client'
-import type { ConnectionState } from '../transport/types'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import type { ConnectionState } from '../transport/connection/connection-state'
 import { getMobileWorkspaceLineageGroupKey } from '../worktree/mobile-workspace-lineage'
 import {
   applyDesktopViewSettings,
@@ -9,7 +9,6 @@ import {
   type MobileViewState,
   type WorkspaceViewSettings
 } from '../worktree/workspace-view-settings'
-import type { Worktree } from '../worktree/workspace-list-sections'
 import {
   changedWorkspaceRowFilters,
   NO_WORKSPACE_ROW_FILTERS
@@ -19,7 +18,7 @@ import {
   hostViewSettingsRead,
   hostViewSettingsWrite
 } from './host-screen-operations'
-import { hostListSettingsRead } from '../transport/settings-read-operations'
+import { hostListSettingsRead } from './host-list-settings-operations'
 import type {
   AgentActivityDisplayMode,
   ProjectOrderBy,
@@ -32,7 +31,7 @@ import {
   useSwitchedHostPendingViewChanges,
   type PendingViewStatus
 } from './use-host-pending-view-changes'
-import type { FilterState } from '../worktree/workspace-list-types'
+import type { FilterState, WorkspaceListItem } from '../worktree/workspace-list-types'
 
 const REFUSED_NOTE = 'The desktop did not take that change.'
 const NOTHING_PENDING: PendingViewStatus = { pending: [], stale: false }
@@ -43,16 +42,20 @@ export function useHostViewSettings(args: {
   state: HostScreenState
 }) {
   const { client, connState, state } = args
-  const { clientRef, setActionError, setShowPinnedInGroups, setView, viewRef } = state
+  const { clientRef, setActionError, setShowPinnedInGroups, setView, viewRef, rememberView } = state
 
   const localEditsRef = useRef(0)
   const pendingViewChanges = useSwitchedHostPendingViewChanges(client)
   const pendingChanges = pendingViewChanges?.controls ?? null
 
-  const applyViewState = useCallback((next: MobileViewState) => {
-    viewRef.current = next
-    setView(next)
-  }, [])
+  const applyViewState = useCallback(
+    (next: MobileViewState) => {
+      viewRef.current = next
+      setView(next)
+      rememberView(next)
+    },
+    [rememberView]
+  )
 
   const syncViewSettingsFromDesktop = useCallback(
     async (options: { resend?: boolean } = {}) => {
@@ -259,8 +262,8 @@ export function useHostViewSettings(args: {
     [client, applyViewState, persistViewSettings, pendingChanges, refused]
   )
   const toggleWorktreeLineage = useCallback(
-    (item: Worktree) =>
-      toggleCollapsed(item.lineageGroupKey ?? getMobileWorkspaceLineageGroupKey(item)),
+    ({ row, view }: WorkspaceListItem) =>
+      toggleCollapsed(view.lineageGroupKey ?? getMobileWorkspaceLineageGroupKey(row)),
     [toggleCollapsed]
   )
 

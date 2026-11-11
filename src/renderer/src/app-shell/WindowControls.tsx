@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 // Windows/Linux replace native chrome with renderer controls.
 export function WindowControls(): React.JSX.Element {
+  const t = useTranslate()
   const [maximized, setMaximized] = useState(false)
   useEffect(() => {
     // Seed maximization from main; transition events alone miss startup-maximized windows.
@@ -22,7 +23,7 @@ export function WindowControls(): React.JSX.Element {
     <div className="window-controls">
       <button
         className="window-controls-btn"
-        aria-label={translate('auto.App.bbb7f90669', 'Minimize')}
+        aria-label={t('auto.App.bbb7f90669', 'Minimize')}
         onClick={() => window.api.ui.minimize()}
       >
         <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden>
@@ -32,9 +33,7 @@ export function WindowControls(): React.JSX.Element {
       <button
         className="window-controls-btn"
         aria-label={
-          maximized
-            ? translate('auto.App.66f0a552e5', 'Restore')
-            : translate('auto.App.c9d6f98459', 'Maximize')
+          maximized ? t('auto.App.66f0a552e5', 'Restore') : t('auto.App.c9d6f98459', 'Maximize')
         }
         onClick={() => window.api.ui.maximize()}
       >
@@ -50,7 +49,7 @@ export function WindowControls(): React.JSX.Element {
       </button>
       <button
         className="window-controls-btn window-controls-close"
-        aria-label={translate('auto.App.e960d18540', 'Close')}
+        aria-label={t('auto.App.e960d18540', 'Close')}
         // Request main’s close event so terminal confirmation runs; sandboxed window.close is unreliable.
         onClick={() => window.api.ui.requestClose()}
       >

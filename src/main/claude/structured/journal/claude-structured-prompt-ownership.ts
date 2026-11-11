@@ -1,9 +1,9 @@
 import {
   AgentSessionPromptAnswerRejectedError,
   AgentSessionPromptUnavailableError
-} from '../../../native-chat/agent-session-wire/structured-agent-session-adapter-errors'
-import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
-import type { StructuredAgentSessionAdapterStop } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter-stop'
+} from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
+import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import type { StructuredAgentSessionAdapterStop } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-stop'
 import { answerClaudePrompt, cancelClaudeTurn } from '../claude-structured-control-actions'
 import { leaveClaudePlanModeOnApproval } from '../../claude-plan-approval-mode'
 import type { ClaudeLateDispatchSettlement } from '../../claude-replay-turn-resolution'

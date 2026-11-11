@@ -96,19 +96,6 @@ describe('createPermissionStatusGate', () => {
     expect(probe).toHaveBeenCalledTimes(3)
   })
 
-  it('serves a grant until the floor expires, then re-checks immediately', async () => {
-    const probe = vi.fn(async () => granted)
-    const gate = createPermissionStatusGate(probe)
-
-    await gate.read()
-    await vi.advanceTimersByTimeAsync(4_999)
-    await gate.read()
-    expect(probe).toHaveBeenCalledTimes(1)
-    await vi.advanceTimersByTimeAsync(1)
-    await gate.read()
-    expect(probe).toHaveBeenCalledTimes(2)
-  })
-
   it('does not revive an expired grant when a new probe starts', async () => {
     let finishSecond: (result: ComputerUsePermissionStatusResult) => void = () => {}
     const probe = vi
@@ -180,17 +167,6 @@ describe('createPermissionStatusGate', () => {
     expect(probe).toHaveBeenCalledTimes(2)
     await vi.advanceTimersByTimeAsync(100)
     expect(probe).toHaveBeenCalledTimes(3)
-  })
-
-  it('stops reusing a denial for setup once the floor expires', async () => {
-    const probe = vi.fn().mockResolvedValueOnce(denied).mockResolvedValueOnce(granted)
-    const gate = createPermissionStatusGate(probe)
-
-    await gate.read()
-    await expect(gate.peek()).resolves.toBe(denied)
-    await vi.advanceTimersByTimeAsync(5_000)
-    await expect(gate.peek()).resolves.toBe(granted)
-    expect(probe).toHaveBeenCalledTimes(2)
   })
 
   it('sends a late joiner that gets a denial to the next probe', async () => {

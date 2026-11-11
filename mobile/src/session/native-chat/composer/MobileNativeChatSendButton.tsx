@@ -1,17 +1,26 @@
 import { useState } from 'react'
+import { Pressable, Text } from 'react-native'
 import { CornerDownRight, ListEnd } from 'lucide-react-native'
 import type {
   NativeChatFollowUpBehavior,
   NativeChatSendFollowUp
-} from '../../../../../src/shared/native-chat-follow-up-behavior'
+} from '../../../../../src/shared/native-chat/input/native-chat-follow-up-behavior'
+import type { NativeChatSteerChordPreview } from '../../../../../src/shared/native-chat/input/use-native-chat-steer-chord-preview'
 import { ActionSheetModal } from '../../../components/ActionSheetModal'
 import { ComposerSendButton } from '../../../components/composer-input/ComposerSendButton'
+import {
+  COMPOSER_CONTROL_HIT_SLOP,
+  composerInputStyles as inputStyles
+} from '../../../components/composer-input/composer-input-styles'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
-import type { MobileNativeChatSendIntent } from '../mobile-native-chat-send'
+import { useKeyboardPersistingTaps } from '../../../platform/keyboard-persisting-taps'
+import { colors } from '../../../theme/mobile-theme'
+import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import type { MobileNativeChatSendIntent } from './mobile-native-chat-send'
 
 const FOLLOW_UP_ICON = { queue: ListEnd, steer: CornerDownRight } as const
 
-/** Send; while the agent works on a host that queues, it shows what a tap does, and holding it offers the other way when that would differ. */
+/** Send, the same arrow as desktop at all times; while the agent works on a host that queues, holding it offers the other way when that would differ (desktop's Cmd/Ctrl+Enter). */
 export function MobileNativeChatSendButton({
   canSend,
   sendFollowUp,
@@ -40,8 +49,7 @@ export function MobileNativeChatSendButton({
         onPress={() => onSend()}
         onLongPress={sendFollowUp?.offersChoice && canSend ? () => setOpen(true) : undefined}
         canSend={canSend}
-        label={action ? label[action] : t('chat.composer.sendMessage', 'Send message')}
-        icon={action ? FOLLOW_UP_ICON[action] : undefined}
+        label={t('chat.composer.sendMessage', 'Send message')}
       />
       <ActionSheetModal
         visible={open}
@@ -57,5 +65,48 @@ export function MobileNativeChatSendButton({
         }))}
       />
     </>
+  )
+}
+
+/** Send while Cmd/Ctrl is held alone: what Cmd/Ctrl+Enter would do, as desktop shows it. */
+export function MobileNativeChatSteerPreviewButton({
+  preview,
+  onPress
+}: {
+  preview: NativeChatSteerChordPreview
+  onPress: () => void
+}): React.JSX.Element {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
+  // A press must leave focus in the field, or its focusout ends the preview before the press lands.
+  const keepsField = useKeyboardPersistingTaps('always')
+  const label =
+    preview === 'queue'
+      ? t('chat.composer.sendQueue', 'Queue')
+      : preview === 'steer'
+        ? t('chat.composer.sendSteer', 'Steer')
+        : t('chat.composer.sendSteerQueued', 'Steer queued')
+  const Icon = preview === 'queue' ? ListEnd : CornerDownRight
+  return (
+    <Pressable
+      ref={keepsField}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      style={({ pressed }) => [inputStyles.sendPreviewButton, pressed && inputStyles.pressed]}
+      onPress={(event) => {
+        // As desktop: the label can change between a double-click's presses (Steer, then Steer queued).
+        const native = event.nativeEvent
+        const detail = 'detail' in native ? native.detail : undefined
+        if (typeof detail !== 'number' || detail <= 1) {
+          onPress()
+        }
+      }}
+      hitSlop={COMPOSER_CONTROL_HIT_SLOP}
+    >
+      <Icon size={14} color={colors.bgBase} strokeWidth={2.4} />
+      <Text style={{ color: colors.bgBase }} numberOfLines={1}>
+        {label}
+      </Text>
+    </Pressable>
   )
 }

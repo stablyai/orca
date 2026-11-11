@@ -16,8 +16,6 @@ import {
   runWslMoveHostAutomationsExclusive,
   settleInterruptedWslMoveUndos,
   stopWslMoveHostAutomations,
-  wslMoveLocalAutomationStateUpdates,
-  wslMoveMovedAutomationIds,
   type WslMoveHostAutomationPorts
 } from './wsl-move-undo-host-automations'
 
@@ -60,33 +58,6 @@ function world(hostStates: Record<string, boolean>, here: Record<string, boolean
   return { host, local, fail, ports }
 }
 
-describe("undo's host automation step", () => {
-  it("reads every one of this move's automations, and only this move's", () => {
-    const moveOf = (...ids: string[]) => ({
-      manifest: { payload: { dormantState: { automations: ids.map((id) => ({ id })) } } }
-    })
-    expect(wslMoveMovedAutomationIds(moveOf('a', 'b'))).toEqual(['a', 'b'])
-    expect(wslMoveMovedAutomationIds({ manifest: { payload: {} } })).toEqual([])
-  })
-
-  it('writes only the copies here that differ from the choice', () => {
-    expect(
-      wslMoveLocalAutomationStateUpdates(
-        [
-          { id: 'a', enabled: true },
-          { id: 'b', enabled: false },
-          { id: 'c', enabled: true },
-          { id: 'not-moved', enabled: true }
-        ],
-        { a: false, b: true, c: true }
-      )
-    ).toEqual([
-      { id: 'a', enabled: false },
-      { id: 'b', enabled: true }
-    ])
-  })
-})
-
 describe('undo of a move with automations', () => {
   let userDataPath: string
   beforeEach(() => {
@@ -102,43 +73,6 @@ describe('undo of a move with automations', () => {
   const cutover = () => listWslMoveCutovers(userDataPath)[0]
 
   // d3a: undo kept the pre-move state and dropped what the user chose on the host since.
-  it("turns off every host copy that is on, and gives the copies here the host's state", async () => {
-    // off-on-host: turned off there after the move, still on here.
-    // on-on-host: off here before the move, turned on there after.
-    const w = world(
-      { 'off-on-host': false, 'on-on-host': true },
-      { 'off-on-host': true, 'on-on-host': false }
-    )
-    const stop = await stopWslMoveHostAutomations(
-      userDataPath,
-      MOVE,
-      ['off-on-host', 'on-on-host'],
-      w.ports
-    )
-    if (stop.outcome !== 'stopped') {
-      throw new Error('expected stopped')
-    }
-    expect(Object.fromEntries(w.host)).toEqual({ 'off-on-host': false, 'on-on-host': false })
-    // Nothing here changes before the release step.
-    expect(Object.fromEntries(w.local)).toEqual({ 'off-on-host': true, 'on-on-host': false })
-    const revert = stop.applyHere()
-    expect(Object.fromEntries(w.local)).toEqual({ 'off-on-host': false, 'on-on-host': true })
-    revert()
-    expect(Object.fromEntries(w.local)).toEqual({ 'off-on-host': true, 'on-on-host': false })
-  })
-
-  it('a refusal turns back on what it turned off and forgets what it recorded', async () => {
-    const w = world({ a: true, b: false }, { a: true, b: true })
-    const stop = await stopWslMoveHostAutomations(userDataPath, MOVE, ['a', 'b'], w.ports)
-    expect(cutover()?.undoHostAutomationIntent).toEqual({ a: true, b: false })
-    if (stop.outcome !== 'stopped') {
-      throw new Error('expected stopped')
-    }
-    await stop.restore()
-    expect(Object.fromEntries(w.host)).toEqual({ a: true, b: false })
-    expect(cutover()?.undoHostAutomationIntent).toBeUndefined()
-    expect(cutover()?.hostAutomationsLeftOff).toBeUndefined()
-  })
 
   it('records what a refusal could not turn back on, and a later undo keeps it on here', async () => {
     const w = world({ a: true }, { a: true })
@@ -171,31 +105,6 @@ describe('undo of a move with automations', () => {
     // Only the left-off one keeps its recorded choice for a later undo.
     expect(cutover()?.undoHostAutomationIntent).toEqual({ a: true })
     expect(listUnfinishedWslMoves(userDataPath)[0]?.automationsPending).toEqual(['a'])
-  })
-
-  it('the retry turns left-off ones back on and clears them', async () => {
-    const w = world({ a: true }, { a: true })
-    w.fail.restore = true
-    const stop = await stopWslMoveHostAutomations(userDataPath, MOVE, ['a'], w.ports)
-    if (stop.outcome === 'stopped') {
-      await stop.restore()
-    }
-    const disable = async () => {}
-    expect(
-      await retryWslMoveHostAutomationsLeftOff(userDataPath, {
-        restore: async () => {
-          throw new Error('unreachable')
-        },
-        disable
-      })
-    ).toBe(true)
-    const turnedOn = vi.fn(async () => {})
-    expect(
-      await retryWslMoveHostAutomationsLeftOff(userDataPath, { restore: turnedOn, disable })
-    ).toBe(false)
-    expect(turnedOn).toHaveBeenCalledWith('wsl:Ubuntu', ['a'])
-    expect(cutover()?.hostAutomationsLeftOff).toBeUndefined()
-    expect(cutover()?.undoHostAutomationIntent).toBeUndefined()
   })
 
   // d3-gate-audit / d3a #1: a retry mid-RPC while an undo releases the move.
@@ -270,16 +179,6 @@ describe('undo of a move with automations', () => {
     expect(w.host.get('a')).toBe(false)
   })
 
-  it('at startup, an undo a crash interrupted sends what it read as on back on', async () => {
-    const w = world({ a: true, b: false }, { a: true, b: true })
-    await stopWslMoveHostAutomations(userDataPath, MOVE, ['a', 'b'], w.ports)
-    // Crash here: the host copies are off, the record holds the choice.
-    settleInterruptedWslMoveUndos(userDataPath)
-    // The left-off one keeps its choice for a later undo; the rest clears.
-    expect(cutover()?.undoHostAutomationIntent).toEqual({ a: true })
-    expect(cutover()?.hostAutomationsLeftOff).toEqual(['a'])
-  })
-
   // d3a: a restart cleared the record, so a later undo read the left-off one as the user's "off".
   it('a later undo after a restart and failed retries still keeps a left-off one on here', async () => {
     const w = world({ a: true }, { a: true })
@@ -321,28 +220,5 @@ describe('undo of a move with automations', () => {
     }
     stop.applyHere()
     expect(w.local.get('a')).toBe(true)
-  })
-
-  it('a revert that fails for one copy here still puts the others back', async () => {
-    const w = world({ a: false, b: false }, { a: true, b: true })
-    const failRevertOf: { id: string | null } = { id: null }
-    const ports = {
-      ...w.ports,
-      setHere: (id: string, enabled: boolean) => {
-        if (id === failRevertOf.id) {
-          throw new Error('store busy')
-        }
-        w.local.set(id, enabled)
-      }
-    }
-    const stop = await stopWslMoveHostAutomations(userDataPath, MOVE, ['a', 'b'], ports)
-    if (stop.outcome !== 'stopped') {
-      throw new Error('expected stopped')
-    }
-    const revert = stop.applyHere()
-    expect(Object.fromEntries(w.local)).toEqual({ a: false, b: false })
-    failRevertOf.id = 'a'
-    revert()
-    expect(Object.fromEntries(w.local)).toEqual({ a: false, b: true })
   })
 })

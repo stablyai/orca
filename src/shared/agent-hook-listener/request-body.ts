@@ -1,7 +1,7 @@
 import type { IncomingMessage } from 'node:http'
 
-import { classifyTruncatedHookRequest } from '../agent-hook-transport-interference'
-import { assertJsonTextStructureWithinLimits } from '../json-text-structure-limit'
+import { classifyTruncatedHookRequest } from './transport/agent-hook-transport-interference'
+import { assertJsonTextStructureWithinLimits } from '../json-stream/json-text-structure-limit'
 
 export const HOOK_REQUEST_MAX_BYTES = 1_000_000
 const HOOK_REQUEST_INITIAL_BUFFER_BYTES = 4 * 1024

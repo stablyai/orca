@@ -1,13 +1,15 @@
+import { agentSenderPublicationPatch } from '../native-chat/agent-senders/agent-sender-publication-patch'
+import { isWebSessionTabsWorktreeRemovalFrame } from './session-tabs-inventory-absence'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
-import { LOCAL_STRUCTURED_SESSION_OWNER } from '../local-structured-session-owner'
+import { LOCAL_STRUCTURED_SESSION_OWNER } from '../native-chat/local-sessions/local-structured-session-owner'
 import type {
   WebSessionTabsBatchContext,
   WebSessionTabsSnapshotApplyOptions,
   WebSessionTabsSyncState
 } from './state'
-import { suppressE2eWebRuntimeBrowserSnapshot } from '../web-runtime-browser-creation-e2e-fault'
+import { suppressE2eWebRuntimeBrowserSnapshot } from '../browser/creation/testing/web-runtime-browser-creation-e2e-fault'
 import { prepareWebSessionTabsSnapshotBase } from './apply-preparation-base'
 import { prepareWebSessionTabsSnapshotBrowser } from './apply-preparation-browser'
 import { prepareWebSessionTabsSnapshotUnified } from './apply-preparation-unified'
@@ -17,7 +19,7 @@ import { applyBrowserRecordUpdates } from './apply-browser-records'
 import { applyWorktreeRecordUpdates } from './apply-worktree-records'
 import { applyActiveStateUpdates } from './apply-active-state'
 import { buildWebSessionTabsFinalPatch } from './apply-final-patch'
-import { isFrameDrawnServerWorkspace } from './frame-drawn-server-workspaces'
+import { isFrameDrawnServerWorkspace } from './frame-drawn-server-workspace-set'
 import { buildFrameDrawnWorkspaceStatusPatch } from './frame-drawn-workspace-status-patch'
 import { indexMirroredTerminalSurfaces } from './mirrored-terminal-handle-index'
 
@@ -38,6 +40,17 @@ export function applyWebSessionTabsSnapshotWithContext(
   ) {
     return state
   }
+  // Received sender scopes were applied at receipt; a removal is no sender revision, so it drops
+  // that worktree's scope only once the tab gates accept the frame that says so.
+  const identityPatch = isWebSessionTabsWorktreeRemovalFrame(rawSnapshot)
+    ? agentSenderPublicationPatch(
+        { agentSenderPublicationsByHost: state.agentSenderPublicationsByHost ?? {} },
+        environmentId === LOCAL_STRUCTURED_SESSION_OWNER ? 'local' : `runtime:${environmentId}`,
+        rawSnapshot.worktree,
+        undefined,
+        true
+      )
+    : {}
   const worktreeId = rawSnapshot.worktree
   // Switch point: ORCA_LAYOUT_OWNER_IS_MAIN && — every mirror write (single, batch, operations) passes here.
   const previousSnapshotTabIds =
@@ -50,7 +63,7 @@ export function applyWebSessionTabsSnapshotWithContext(
       : null
   if (frameDrawnPreviousTabIds) {
     // Server frames own tabs/IDs/focus and writes use server IDs; skip mirror intent ledgers for these workspaces.
-    return buildFrameDrawnWorkspaceStatusPatch(
+    const patch = buildFrameDrawnWorkspaceStatusPatch(
       state,
       rawSnapshot,
       environmentId,
@@ -59,6 +72,7 @@ export function applyWebSessionTabsSnapshotWithContext(
       now,
       batchContext
     )
+    return identityPatch.agentSenderPublicationsByHost ? { ...patch, ...identityPatch } : patch
   }
   // Interim (ledger L240): from here on only for a server without `layout.intents.v1`, until the
   // Phase 2 server cutoff retires the mirror's tab ids, close and focus intents.
@@ -78,5 +92,6 @@ export function applyWebSessionTabsSnapshotWithContext(
   const browserRecords = applyBrowserRecordUpdates(terminalRecords)
   const worktreeRecords = applyWorktreeRecordUpdates(browserRecords)
   const activeState = applyActiveStateUpdates(worktreeRecords)
-  return buildWebSessionTabsFinalPatch(activeState)
+  const patch = buildWebSessionTabsFinalPatch(activeState)
+  return identityPatch.agentSenderPublicationsByHost ? { ...patch, ...identityPatch } : patch
 }

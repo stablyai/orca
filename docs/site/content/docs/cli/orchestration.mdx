@@ -102,6 +102,8 @@ orca orchestration worker-start \
 orca orchestration send --to dispatch:<dispatchId> --subject "Follow-up" --body "…"
 ```
 
+Use `--worktree new-child` instead to nest the server's worktree under your workspace in the sidebar. A server too old to nest across machines still starts the worker, top-level, with a `warning` in the receipt.
+
 Later commands route by Dispatch ID; do not repeat `--on`.
 
 ## Low-level dispatch (custom topology)

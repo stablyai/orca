@@ -1,12 +1,22 @@
-import { previewHookPresence } from '../shared/agent-hook-presence-transition'
-import { hasOtherAgentProcessOwner, isSameAgentProcess } from '../shared/agent-process-presence'
-import { sameAgentStatusTerminalOwner } from '../shared/agent-status-terminal-owner'
-import { cacheRelayLegacyAgentStatus } from '../shared/agent-status-legacy-relay-cache'
+import { previewHookPresence } from '../shared/agent-hook-listener/presence/agent-hook-presence-transition'
+import {
+  hasOtherAgentProcessOwner,
+  isSameAgentProcess
+} from '../shared/agent-status/process/agent-process-presence'
+import {
+  readHookProcessEvidence,
+  restateHookRoot
+} from '../shared/agent-hook-listener/presence/agent-hook-owner-presence'
+import type { HookRootAcquisition } from '../shared/agent-hook-listener/presence/hook-root-attempts'
+import type { HookRootEvidenceReader } from '../shared/agent-hook-listener/presence/hook-process-root-evidence'
+import { sameAgentStatusTerminalOwner } from '../shared/agent-status/identity/agent-status-terminal-owner'
+import { cacheRelayLegacyAgentStatus } from '../shared/agent-status/transport/agent-status-legacy-relay-cache'
 import type { HookListenerState } from '../shared/agent-hook-listener/listener-state'
 import type { AgentHookEventPayload } from '../shared/agent-hook-listener/listener-event'
-import type { AgentHookSource } from '../shared/agent-hook-relay'
+import type { AgentHookSource } from '../shared/agent-hook-listener/transport/agent-hook-relay'
 import { retainClaudeSettledRequests } from '../shared/agent-hook-listener/claude-settled-permission-requests'
-import { reduceHostTurnEnd } from '../shared/agent-hook-turn-end-timing'
+import { reduceHostTurnEnd } from '../shared/agent-hook-listener/state/agent-hook-turn-end-timing'
+import { previousCodexTurnContext } from '../shared/agent-hook-listener/providers/codex-session-start'
 import { buildRelayHookEnvelope } from './agent-hook-envelope-build'
 import type { RelayHookForward } from './agent-hook-server-contract'
 import { MAX_CACHED_PANES, type CachedPaneEnvelopeMeta } from './agent-hook-cached-pane-status'
@@ -32,6 +42,28 @@ export type RelayHookAdmissionOptions = {
   onAccepted?: (event: AgentHookEventPayload) => void
 }
 
+/** The relay's acquisition: a late answer restates the pane's cached row, which forwards like any
+ *  change, so the desktop heals too. */
+export function relayHookRootAcquisition(
+  read: HookRootEvidenceReader | undefined,
+  state: HookListenerState,
+  apply: (event: AgentHookEventPayload) => unknown,
+  answerBy?: number
+): HookRootAcquisition | undefined {
+  return (
+    read && {
+      read,
+      answerBy,
+      reconcile: (completion) => {
+        const event = restateHookRoot(state, completion, 'AgentProcessExit')
+        if (event) {
+          apply(event)
+        }
+      }
+    }
+  )
+}
+
 export function applyRelayHookEvent(
   host: RelayHookAdmissionHost,
   incoming: AgentHookEventPayload,
@@ -44,10 +76,16 @@ export function applyRelayHookEvent(
     return undefined
   }
   const previous = host.state.lastStatusByPaneKey.get(incoming.paneKey)
+  const evidence = readHookProcessEvidence(host.state, previous, {
+    paneKey: incoming.paneKey,
+    process: incoming.agentPresence?.process
+  })
   if (
     previous &&
     !previous.providerSessionOnly &&
     sameAgentStatusTerminalOwner(previous, incoming) &&
+    // A proved root replaces a fallback owner instead of yielding to it.
+    evidence?.verdict !== 'root' &&
     hasOtherAgentProcessOwner(previous.agentPresence, {
       agent: incoming.payload.agentType ?? 'unknown',
       process: incoming.agentPresence?.process
@@ -59,7 +97,14 @@ export function applyRelayHookEvent(
   if (cancellation.hold) {
     return previous
   }
-  const preview = previewHookPresence(cancellation.event, previous)
+  const preview = previewHookPresence(
+    cancellation.event,
+    previous,
+    true,
+    false,
+    evidence?.verdict,
+    evidence?.binding
+  )
   const transitioned = preview.transitioned && {
     ...preview.transitioned,
     statusAdmissionSession: incoming.statusAdmissionSession
@@ -69,9 +114,7 @@ export function applyRelayHookEvent(
   }
   const revised = withRelayClaudeTurnRevision(
     previous,
-    transitioned.agentPresence?.ended
-      ? { ...transitioned, providerSessionOnly: true }
-      : transitioned,
+    preview.exited ? { ...transitioned, providerSessionOnly: true } : transitioned,
     source
   )
   // Why: the relay is this pane's execution host, the only side that sees the event name.
@@ -85,7 +128,12 @@ export function applyRelayHookEvent(
   } = revised
   const event: AgentHookEventPayload = {
     ...unflagged,
-    ...reduceHostTurnEnd(previous, revised, Date.now(), options.isReplay !== true)
+    ...reduceHostTurnEnd(
+      previousCodexTurnContext(previous, revised),
+      revised,
+      Date.now(),
+      options.isReplay !== true
+    )
   }
   // Drop retired-pane posts and cached status so clients cannot auto-resume a ghost pane onto an orphan’s live transcript (#12447).
   if (host.isPaneSurfaceRetired(event.paneKey)) {

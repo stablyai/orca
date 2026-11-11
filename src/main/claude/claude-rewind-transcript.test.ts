@@ -1,3 +1,4 @@
+import './claude-conversation-worker.test-fixture'
 import { randomUUID } from 'node:crypto'
 import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -6,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { claudeProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { AgentSessionRewindRecordSchema } from '../../shared/agent-session/lifecycle/agent-session-rewind'
 import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'
-import { createClaudeStructuredLaunchResolver } from '../runtime/structured-agent-launch-composition.test-support'
+import { createClaudeStructuredLaunchResolver } from '../runtime/agent-session/launch/structured-agent-launch-composition.test-support'
 import { resolveClaudeRewindFork } from './claude-rewind-fork'
 import { claudeSessionIdForRewind } from './structured/claude-structured-session-id'
 
@@ -110,7 +111,8 @@ describe('durable Claude rewind transcripts', () => {
         sessionId: claudeSessionIdForRewind('orca-chat', operationId),
         sourceSessionId: source,
         replacesSessionId: source,
-        materialized: true
+        materialized: true,
+        coverage: []
       })
       if (!fork) {
         throw new Error('fork missing')
@@ -180,6 +182,37 @@ describe('durable Claude rewind transcripts', () => {
       expect(await readFile(path, 'utf8')).toBe(original)
     }
   )
+
+  it('drops the local-command caveat when rewinding to a local command', async () => {
+    const turn = sourceRows[50]
+    const row = (uuid: string, parentUuid: string, content: string, isMeta?: true) => ({
+      ...sourceRows[54],
+      uuid,
+      parentUuid,
+      isMeta,
+      message: { role: 'user', content }
+    })
+    const caveat = row(
+      randomUUID(),
+      turn.uuid,
+      '<local-command-caveat>The command below was run directly in Claude Code.</local-command-caveat>',
+      true
+    )
+    const command = row(randomUUID(), caveat.uuid, '<command-name>/usage</command-name>')
+    const stdout = row(
+      randomUUID(),
+      command.uuid,
+      '<local-command-stdout>ok</local-command-stdout>'
+    )
+    await writeFile(
+      path,
+      `${[...sourceRows.slice(0, 54), caveat, command, stdout].map((r) => JSON.stringify(r)).join('\n')}\n`
+    )
+    const fork = await forkBefore(command.uuid)
+    expect(fork).toMatchObject({ materialized: true, throughEntryId: turn.uuid })
+    const contents = await readFile(join(project, `${fork?.sessionId}.jsonl`), 'utf8')
+    expect(contents).not.toContain('local-command-caveat')
+  })
 
   it('skips a torn transcript line instead of failing the rewind', async () => {
     const damaged = `{broken-json}\n${original}{"type":`

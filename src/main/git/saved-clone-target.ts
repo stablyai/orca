@@ -1,9 +1,9 @@
 import type { ExecutionHostId } from '../../shared/execution-host'
-import { normalizeGitRemoteUrl } from '../../shared/git-remote-identity'
-import { isShowRefNoMatchError } from '../../shared/git-show-ref-no-match'
+import { normalizeGitRemoteUrl } from '../../shared/git/remotes/git-remote-identity'
+import { isShowRefNoMatchError } from '../../shared/git/refs/git-show-ref-no-match'
 import { isFolderRepo } from '../../shared/repo-kind'
 import type { Repo } from '../../shared/repo-types'
-import { runGitProbeOnHost } from '../repo-git-remote-identity'
+import { runGitProbeOnHost } from '../workspaces/catalog/repo-git-remote-identity'
 
 type GitProbe = (args: string[]) => Promise<string>
 
@@ -138,6 +138,6 @@ export async function reuseSavedCloneTarget(
       storedOrigin
         ? 'Orca has that project recorded as a different repository'
         : 'Orca has no record of which repository that project holds, so it cannot tell whether the folder is missing or holds something else'
-    }. Remove the project from Orca or choose another folder.`
+    }. Clone into a different folder name, or remove the project from Orca.`
   )
 }

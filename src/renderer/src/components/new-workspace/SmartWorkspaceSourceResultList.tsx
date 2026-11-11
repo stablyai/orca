@@ -2,10 +2,10 @@ import React from 'react'
 import { isIntegrationCredentialDecryptionError } from '../../../../shared/integration-credential-errors'
 import { Button } from '@/components/ui/button'
 import { CommandGroup, CommandItem, CommandList } from '@/components/ui/command'
-import { translate } from '@/i18n/i18n'
-import { cn } from '@/lib/utils'
-import { getSmartWorkspaceEmptyHint } from '../../../../shared/new-workspace/smart-workspace-source-results'
-import { getRowItemClassName, RowIcon, RowLabel } from './smart-workspace-source-row-content'
+import { useTranslate } from '@/i18n/use-translate'
+import { cn } from '@/lib/class-names'
+import { translateSmartWorkspaceEmptyHint } from './smart-workspace-empty-hint'
+import { RowIcon, RowLabel } from './smart-workspace-source-row-content'
 import type { RowEntry } from './smart-workspace-name-field-model'
 import type { WorkItemSourceSearch } from './use-work-item-source-search'
 
@@ -15,7 +15,8 @@ export function SmartWorkspaceSourceResultList({
   isLinked,
   beforeResults,
   emptyHint,
-  isRowDisabled
+  isRowDisabled,
+  focusBehavior
 }: {
   model: Pick<
     WorkItemSourceSearch,
@@ -40,7 +41,9 @@ export function SmartWorkspaceSourceResultList({
   beforeResults?: React.ReactNode
   emptyHint?: string
   isRowDisabled?: (row: RowEntry) => boolean
+  focusBehavior?: 'page'
 }): React.JSX.Element {
+  const t = useTranslate()
   const {
     mode,
     mrStateFilters,
@@ -74,16 +77,15 @@ export function SmartWorkspaceSourceResultList({
               key={id}
               type="button"
               variant={mrStateFilter === id ? 'secondary' : 'ghost'}
-              size="sm"
+              size="xs"
               onClick={() => setMrStateFilter(id)}
-              className="h-6 px-2 text-xs"
             >
               {label}
             </Button>
           ))}
         </div>
       ) : null}
-      <CommandList className="!max-h-none min-h-0 flex-1 scrollbar-sleek">
+      <CommandList className="!max-h-none min-h-0 flex-1" data-focus-behavior={focusBehavior}>
         {beforeResults}
         {typedTextActionRow ? (
           <div
@@ -95,7 +97,13 @@ export function SmartWorkspaceSourceResultList({
               key={typedTextActionRow.value}
               value={typedTextActionRow.value}
               onSelect={() => onSelect(typedTextActionRow)}
-              className={getRowItemClassName(typedTextActionRow, { pinnedAction: true })}
+              density="workspace"
+              emphasis={
+                typedTextActionRow.kind === 'use-name' ||
+                typedTextActionRow.kind === 'create-branch'
+                  ? 'pinned'
+                  : 'default'
+              }
             >
               <RowIcon row={typedTextActionRow} />
               <RowLabel row={typedTextActionRow} />
@@ -107,13 +115,13 @@ export function SmartWorkspaceSourceResultList({
             {credentialError ? (
               <>
                 <p className="font-medium text-foreground">
-                  {translate(
+                  {t(
                     'auto.components.new.workspace.SmartWorkspaceNameField.linearLoginUnreadableTitle',
                     'Reconnect Linear'
                   )}
                 </p>
                 <p className="mt-0.5 text-muted-foreground">
-                  {translate(
+                  {t(
                     'auto.components.new.workspace.SmartWorkspaceNameField.linearLoginUnreadableBody',
                     'Unable to read saved Linear login. Reconnect it in Settings.'
                   )}
@@ -150,14 +158,14 @@ export function SmartWorkspaceSourceResultList({
             {jiraSource.intent
               ? null
               : mode === 'linear' && linearStatusChecked && !linearStatus.connected
-                ? translate(
+                ? t(
                     'auto.components.new.workspace.SmartWorkspaceNameField.3e8bb1176a',
                     'Connect Linear in Settings to search issues.'
                   )
-                : (emptyHint ?? getSmartWorkspaceEmptyHint(mode))}
+                : (emptyHint ?? translateSmartWorkspaceEmptyHint(mode))}
           </div>
         ) : searchResultRows.length > 0 ? (
-          <CommandGroup className="p-1">
+          <CommandGroup>
             {searchResultRows.map((row) => (
               <CommandItem
                 selection="palette"
@@ -165,7 +173,7 @@ export function SmartWorkspaceSourceResultList({
                 value={row.value}
                 disabled={isLinked?.(row) || isRowDisabled?.(row)}
                 onSelect={() => onSelect(row)}
-                className={getRowItemClassName(row)}
+                density="workspace"
               >
                 <RowIcon row={row} />
                 <RowLabel
@@ -181,7 +189,7 @@ export function SmartWorkspaceSourceResultList({
                 />
                 {isLinked?.(row) ? (
                   <span className="ml-auto shrink-0 text-xs text-muted-foreground">
-                    {translate('workspace.links.linkedResult', 'Linked')}
+                    {t('workspace.links.linkedResult', 'Linked')}
                   </span>
                 ) : null}
               </CommandItem>

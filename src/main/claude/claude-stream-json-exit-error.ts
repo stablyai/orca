@@ -5,7 +5,8 @@ import {
 import type { ProviderProcessExit } from '../provider-process/managed-provider-process'
 import { providerExitStatusText } from '../provider-process/provider-process-exit-status'
 import { providerStderrForDisplay } from '../provider-process/provider-spawn-failure-report'
-import { AgentSessionAcquisitionRefusal } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import { AgentSessionAcquisitionRefusal } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
 import { ClaudeControlRequestError } from './claude-agent-sdk-control-requests'
 
 // Claude Code's own startup refusal: as root it exits before initialize rather than skip permissions.

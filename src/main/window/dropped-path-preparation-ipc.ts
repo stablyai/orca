@@ -2,11 +2,11 @@ import { app, ipcMain, type BrowserWindow } from 'electron'
 import {
   createRejectedNativeFileDropPayload,
   validateNativeFileDropPaths
-} from '../../shared/native-file-drop'
+} from '../../shared/file-import/native-file-drop'
 import type {
   PrepareDroppedPathsRequest,
   PreparedDroppedPaths
-} from '../../shared/native-file-drop-preparation'
+} from '../../shared/file-import/native-file-drop-preparation'
 import { abortWhenRendererGone } from '../ipc/renderer-lifetime-abort'
 import { getDragTempCopyRoot } from './dragged-temp-file-copy'
 import {

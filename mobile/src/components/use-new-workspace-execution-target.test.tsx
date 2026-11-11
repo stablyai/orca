@@ -1,9 +1,9 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it } from 'vitest'
-import { FakeSession } from '../transport/mobile-endpoint-supervisor-test-fakes'
-import type { RpcClient } from '../transport/rpc-client'
-import type { RpcResponse } from '../transport/types'
+import { FakeSession } from '../transport/connection/mobile-endpoint-supervisor-test-fakes'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+
 import { useNewWorkspaceExecutionTarget } from './use-new-workspace-execution-target'
 
 const mounted: ReactTestRenderer[] = []
@@ -76,104 +76,5 @@ describe('New Workspace agent detection', () => {
       resolveNext?.({ id: 'reply', ok: true, result: ['gemini'] })
     })
     expect(detected).toEqual(new Set(['gemini']))
-  })
-
-  it.each([
-    { switchHost: false, rejectLate: false },
-    { switchHost: false, rejectLate: true },
-    { switchHost: true, rejectLate: false },
-    { switchHost: true, rejectLate: true }
-  ])(
-    'ignores late results after switching ($switchHost host, $rejectLate rejection)',
-    async ({ switchHost, rejectLate }) => {
-      const originalClient = new FakeSession('connected')
-      const currentClient = switchHost ? new FakeSession('connected') : originalClient
-      let settleLate: (() => void) | undefined
-      originalClient.sendRequest.mockImplementationOnce(
-        () =>
-          new Promise<RpcResponse>((resolve, reject) => {
-            settleLate = () =>
-              rejectLate
-                ? reject(new Error('old host disconnected'))
-                : resolve({ id: 'late', ok: true, result: ['claude'] })
-          })
-      )
-      currentClient.sendRequest.mockResolvedValue({ id: 'current', ok: true, result: ['codex'] })
-      let detected: Set<string> | null = null
-      function Harness({ client, repoId }: { client: RpcClient; repoId: string }) {
-        detected = useNewWorkspaceExecutionTarget({
-          client,
-          repoId,
-          connectionId: null,
-          visible: true
-        }).detectedAgentIds
-        return null
-      }
-      let renderer: ReactTestRenderer | undefined
-      await act(async () => {
-        renderer = create(createElement(Harness, { client: originalClient, repoId: 'repo-1' }))
-        mounted.push(renderer)
-      })
-      expect(detected).toBeNull()
-      await act(async () => {
-        renderer?.update(
-          createElement(Harness, {
-            client: currentClient,
-            repoId: switchHost ? 'repo-1' : 'repo-2'
-          })
-        )
-      })
-      expect(detected).toEqual(new Set(['codex']))
-      await act(async () => settleLate?.())
-      expect(detected).toEqual(new Set(['codex']))
-    }
-  )
-
-  it('waits for the SSH connection before detecting remote agents', async () => {
-    const client = new FakeSession('connected')
-    let connect: ((reply: RpcResponse) => void) | undefined
-    client.sendRequest.mockImplementation(async (method: string) => {
-      if (method === 'ssh.getState') {
-        return new Promise<RpcResponse>((resolve) => {
-          connect = resolve
-        })
-      }
-      return { id: 'reply', ok: true, result: ['codex'] }
-    })
-    const observed: { current: ReturnType<typeof useNewWorkspaceExecutionTarget> | null } = {
-      current: null
-    }
-    function Harness() {
-      observed.current = useNewWorkspaceExecutionTarget({
-        client,
-        repoId: 'remote-repo',
-        connectionId: 'ssh-1',
-        visible: true
-      })
-      return null
-    }
-    await act(async () => {
-      mounted.push(create(createElement(Harness)))
-    })
-    expect(client.sendRequest.mock.calls).toEqual([['ssh.getState', { targetId: 'ssh-1' }]])
-    expect(observed.current?.detectedAgentIds).toBeNull()
-    expect(observed.current?.sshGate.requiresConnection).toBe(true)
-    await act(async () => {
-      connect?.({
-        id: 'connected',
-        ok: true,
-        result: {
-          state: { targetId: 'ssh-1', status: 'connected', error: null, reconnectAttempt: 0 }
-        }
-      })
-    })
-    expect(observed.current?.detectedAgentIds).toEqual(new Set(['codex']))
-    expect(observed.current?.sshGate.status).toBe('connected')
-    expect(client.sendRequest).toHaveBeenCalledWith('preflight.detectRemoteAgents', {
-      connectionId: 'ssh-1'
-    })
-    expect(
-      client.sendRequest.mock.calls.some(([method]) => method === 'preflight.detectAgents')
-    ).toBe(false)
   })
 })

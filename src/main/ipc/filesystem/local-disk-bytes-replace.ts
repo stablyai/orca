@@ -2,11 +2,14 @@ import { createHash, randomUUID } from 'node:crypto'
 import { createReadStream } from 'node:fs'
 import { chmod, realpath, rm, stat } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
-import type { FileBytesWritePrecondition } from '../../../shared/file-bytes-write'
-import { FILE_WRITE_OK, type FileWriteResult } from '../../../shared/file-write-disk-precondition'
+import type { FileBytesWritePrecondition } from '../../../shared/file-write/file-bytes-write'
+import {
+  FILE_WRITE_OK,
+  type FileWriteResult
+} from '../../../shared/file-write/file-write-disk-precondition'
 import { renameFileWithWindowsRetryAsync } from '../../../shared/windows-retry-file-operations'
-import { windowsFsPath } from '../../wsl/wsl-unc-drive-fs-path'
-import { isENOENT } from './filesystem-path-containment'
+import { windowsFsPath } from '../../wsl/filesystem/wsl-unc-drive-fs-path'
+import { isENOENT } from './access/filesystem-path-containment'
 import { runLocalEditorWrite } from './local-disk-write-precondition'
 import { assertLocalWriteTargetIsRegularFile } from './local-regular-file-read'
 

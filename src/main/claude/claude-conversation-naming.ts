@@ -7,7 +7,7 @@ import {
 } from './claude-naming-generation'
 import type { ClaudeNamingInputs } from './claude-naming-invocation'
 import { renameClaudeTranscript } from './claude-provider-session-rename'
-import type { StructuredAgentSessionAcquireInput } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type { StructuredAgentSessionAcquireInput } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 
 type Intent = {
   record: AgentSessionRecord

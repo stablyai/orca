@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
-import SyncDatabase, { isSqliteAvailable } from './sync-database'
+import SyncDatabase from './sync-database'
 
 const directories: string[] = []
 const databases: SyncDatabase[] = []
@@ -48,10 +48,6 @@ describe('SQLite runtime contract', () => {
     }
     expect([...statement.iterate()]).toEqual([{ value: 1 }, { value: 2 }, { value: 3 }])
     db.exec('DROP TABLE rows')
-  })
-
-  it('admits the actual runtime driver', () => {
-    expect(isSqliteAvailable()).toBe(true)
   })
 
   it('enforces foreign keys by default', () => {

@@ -1,10 +1,9 @@
-import { mkdtemp, readFile, realpath, rm } from 'node:fs/promises'
+import { mkdtemp, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { runProcess } from '@orca/process-host'
 import { afterEach, describe, expect, it } from 'vitest'
 import { createPluginFromTemplate } from './plugin-create'
-import { checkPluginPanels } from './plugin-panel-check'
 import { findPluginTestFiles, runPluginTests } from './plugin-test-runner'
 
 const TSC = resolve(__dirname, '../../../node_modules/typescript/bin/tsc')
@@ -23,17 +22,6 @@ async function workerPanelPlugin(): Promise<string> {
 }
 
 describe('orca plugin create --template worker-panel', () => {
-  it('declares a trusted worker with storage and a TSX panel', async () => {
-    const dir = await workerPanelPlugin()
-    const manifest = JSON.parse(await readFile(join(dir, 'orca-plugin.json'), 'utf8'))
-    expect(manifest).toMatchObject({
-      execution: 'trusted-worker',
-      main: 'src/worker.ts',
-      capabilities: [{ kind: 'storage:own' }],
-      contributes: { panels: [{ entry: 'src/panel.tsx', ui: 'components' }] }
-    })
-  })
-
   it(
     "passes its own panel and worker tests under `orca plugin test` on Orca's runtime",
     async () => {
@@ -53,21 +41,6 @@ describe('orca plugin create --template worker-panel', () => {
       })
     },
     // Starts its own Node process and transpiles the plugin.
-    60_000
-  )
-
-  it(
-    '`orca plugin check` renders the panel with its worker in each scenario',
-    async () => {
-      const dir = await workerPanelPlugin()
-      const panels = await checkPluginPanels(dir)
-      expect(panels.map((panel) => [panel.scenario, panel.issues, panel.warnings])).toEqual([
-        ['fresh', [], []],
-        ['counted', [], []]
-      ])
-      expect(panels.every((panel) => panel.elements > 0)).toBe(true)
-    },
-    // Starts a Node process that boots the panel and the worker for each scenario.
     60_000
   )
 

@@ -1,3 +1,4 @@
+import { normalizePRCheckHeadSha } from '../../../../shared/github/pr-check-head'
 import type { PRCheckDetail } from '../../../../shared/github/check-types'
 import { githubRepositoryWebHost, type GitHubApiRepository } from '../../github-api-repository'
 import {
@@ -16,6 +17,10 @@ import type {
   RestCommitStatus
 } from './pr-checks-graphql-query'
 import { nullableString, nullableNumber, parseActionsRunId } from './check-detail-field-mapping'
+import {
+  checkRunTimes,
+  commitStatusTimes
+} from '../../../../shared/source-control/checks/pr-check-time'
 export function isGraphQLCheckRunContext(
   context: GraphQLStatusCheckContext
 ): context is GraphQLCheckRunContext {
@@ -42,6 +47,7 @@ export function mapGraphQLCheckRunContext(context: GraphQLCheckRunContext): PRCh
     status: mapCheckRunRESTStatus(context.status ?? ''),
     conclusion: mapCheckRunRESTConclusion(context.status ?? '', context.conclusion ?? null),
     url,
+    ...checkRunTimes(context.startedAt, context.completedAt),
     ...(checkRunId !== null ? { checkRunId } : {}),
     ...(typeof workflowRunId === 'number' ? { workflowRunId } : {})
   }
@@ -54,11 +60,13 @@ export function mapGraphQLStatusContext(context: GraphQLStatusContext): PRCheckD
   }
   const url = nullableString(context.targetUrl)
   const workflowRunId = parseActionsRunId(url)
+  const status = mapCommitStatusRESTStatus(context.state ?? '')
   return {
     name,
-    status: mapCommitStatusRESTStatus(context.state ?? ''),
+    status,
     conclusion: mapCommitStatusRESTConclusion(context.state ?? ''),
     url,
+    ...commitStatusTimes(status, context.createdAt),
     ...(workflowRunId !== undefined ? { workflowRunId } : {})
   }
 }
@@ -69,6 +77,7 @@ export function mapRestCheckRun(checkRun: RestCheckRun): PRCheckDetail {
     status: mapCheckRunRESTStatus(checkRun.status),
     conclusion: mapCheckRunRESTConclusion(checkRun.status, checkRun.conclusion),
     url: checkRun.details_url || checkRun.html_url || null,
+    ...checkRunTimes(checkRun.started_at, checkRun.completed_at),
     ...(typeof checkRun.id === 'number' ? { checkRunId: checkRun.id } : {}),
     workflowRunId: parseActionsRunId(checkRun.details_url || checkRun.html_url || null)
   }
@@ -81,11 +90,13 @@ export function mapRestCommitStatus(status: RestCommitStatus): PRCheckDetail | n
   }
   const url = nullableString(status.target_url)
   const workflowRunId = parseActionsRunId(url)
+  const checkStatus = mapCommitStatusRESTStatus(status.state ?? '')
   return {
     name,
-    status: mapCommitStatusRESTStatus(status.state ?? ''),
+    status: checkStatus,
     conclusion: mapCommitStatusRESTConclusion(status.state ?? ''),
     url,
+    ...commitStatusTimes(checkStatus, status.created_at),
     ...(workflowRunId !== undefined ? { workflowRunId } : {})
   }
 }
@@ -105,6 +116,12 @@ export function mapGraphQLPendingApprovalCheckSuite(
       nullableString(suite.url) ??
       (headSha ? getPendingApprovalCheckSuiteUrl(ownerRepo, headSha, suite.databaseId) : null)
   }
+}
+
+export function isPendingApprovalSuiteWithoutRuns(conclusion: unknown, hasRuns: boolean): boolean {
+  return (
+    typeof conclusion === 'string' && conclusion.toLowerCase() === 'action_required' && !hasRuns
+  )
 }
 
 export function mapGraphQLPRChecksResponse(
@@ -137,16 +154,28 @@ export function mapGraphQLPRChecksResponse(
     .map(mapGraphQLStatusContext)
     .filter((check): check is PRCheckDetail => check !== null && !checkRunNames.has(check.name))
   const pendingApprovalChecks = (commit.checkSuites?.nodes ?? [])
-    .filter((suite) => suite.conclusion?.toLowerCase() === 'action_required')
     .filter((suite) => {
       const suiteId = nullableNumber(suite.databaseId)
-      return suiteId === null || !checkSuiteIdsWithRuns.has(suiteId)
+      return isPendingApprovalSuiteWithoutRuns(
+        suite.conclusion,
+        suiteId !== null && checkSuiteIdsWithRuns.has(suiteId)
+      )
     })
     .map((suite, index) =>
       mapGraphQLPendingApprovalCheckSuite(ownerRepo, suite, pullRequest.headRefOid, index)
     )
 
-  return [...checkRuns, ...legacyStatuses, ...pendingApprovalChecks]
+  const observedHeadSha = normalizePRCheckHeadSha(commit.oid)
+  const provedHead =
+    observedHeadSha &&
+    observedHeadSha === normalizePRCheckHeadSha(pullRequest.headRefOid) &&
+    (response.errors === undefined ||
+      (Array.isArray(response.errors) && response.errors.length === 0))
+      ? observedHeadSha
+      : undefined
+  return [...checkRuns, ...legacyStatuses, ...pendingApprovalChecks].map((check) =>
+    provedHead ? { ...check, observedHeadSha: provedHead } : check
+  )
 }
 
 export function getPendingApprovalCheckSuiteName(

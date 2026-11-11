@@ -2,13 +2,14 @@ import { gzipSync } from 'node:zlib'
 import {
   COMPRESSED_FRAMES_CLIENT_CAPABILITY,
   COMPRESSED_FRAME_MIN_BYTES,
+  compressedFramesDisabled,
   encodeCompressedFrame
-} from '../../../shared/paired-e2ee-compressed-frame'
+} from '../../../shared/remote-runtime/e2ee/paired-e2ee-compressed-frame'
 import type { RuntimeCapability } from '../../../shared/protocol-version'
 import type { DesktopMobileE2EEV2OutboundItem } from './mobile-e2ee-v2-desktop-outbound'
 import type { RpcBinarySendOptions } from './rpc-binary-sender'
 
-/** Gzips large text, and binary its sender marked compressible, for phones that read compressed frames. */
+/** Gzips large text, and binary its sender marked compressible, for clients that read compressed frames. */
 export function compressMobileE2EEV2Item(
   item: DesktopMobileE2EEV2OutboundItem,
   clientCapabilities: readonly RuntimeCapability[],
@@ -18,8 +19,8 @@ export function compressMobileE2EEV2Item(
   const eligible = item.kind === 'text' || options?.compressible === true
   if (
     !eligible ||
-    // Field rollback without a release: phones then read plain frames, as from older hosts.
-    process.env.ORCA_DISABLE_MOBILE_COMPRESSED_FRAMES === '1' ||
+    // Clients then read plain frames, as from older hosts.
+    compressedFramesDisabled() ||
     item.plaintext.length < COMPRESSED_FRAME_MIN_BYTES ||
     !clientCapabilities.includes(COMPRESSED_FRAMES_CLIENT_CAPABILITY)
   ) {

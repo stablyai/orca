@@ -1,5 +1,4 @@
 import {
-  assertClipboardImageDimensionsWithinLimit,
   clipboardImageThumbnailSize,
   type ClipboardImageDimensions,
   type ClipboardImageThumbnail
@@ -23,11 +22,8 @@ export function buildClipboardImageThumbnail(
     return null
   }
   const size = image.getSize()
-  try {
-    assertClipboardImageDimensionsWithinLimit(size)
-  } catch {
-    // Oversized images still report through the save call; the probe only
-    // decides whether to show a placeholder, so degrade to "no preview".
+  // Already decoded, and the save downscales oversized images, so only reject degenerate sizes.
+  if (!(size.width > 0 && size.height > 0)) {
     return null
   }
   const thumbnailSize = clipboardImageThumbnailSize(size)

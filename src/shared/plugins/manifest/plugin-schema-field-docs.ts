@@ -9,6 +9,8 @@ export const PLUGIN_DERIVED_PUBLISHER_SINCE = '1.4.246'
 export const PLUGIN_PANEL_UI_SINCE = '1.4.246'
 /** First release whose components panels draw catalog 2 (`ui.catalog` 2: Table, Tree, Tabs, ...). */
 export const PLUGIN_COMPONENTS_CATALOG_2_SINCE = '1.4.247'
+/** First release whose components panels draw catalog 4 (`ui.catalog` 4: Box). */
+export const PLUGIN_COMPONENTS_CATALOG_4_SINCE = '1.4.248'
 /** Build-less `.ts/.tsx/.mts/.jsx` panel and editor files ship with components panels. */
 export const PLUGIN_SOURCE_MODULES_SINCE = PLUGIN_PANEL_UI_SINCE
 /** Panels reach their worker, storage, settings and events; `contributes.settings` arrives. */
@@ -19,6 +21,8 @@ export const PLUGIN_EDITOR_FRAME_SINCE = '1.4.248'
 export const PLUGIN_HOOKS_SINCE = '1.4.248'
 /** Workers act on workspaces, terminals and agents: `workspace:write`, `terminal:read`, `agent:launch`. */
 export const PLUGIN_HOST_ACTIONS_SINCE = '1.4.248'
+/** First release that plays an app theme's `background.videoPath`. */
+export const PLUGIN_THEME_VIDEO_BACKGROUND_SINCE = '1.4.254'
 
 type PluginFieldDoc = {
   description: string

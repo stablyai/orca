@@ -27,6 +27,7 @@ import {
   setTerminalAccessoryBuiltInVisible
 } from '../terminal/terminal-accessory-layout'
 import { MobileSwitch } from './MobileSwitch'
+import { SmartRailRow } from './SmartRailRow'
 
 // Absolutely positioned DragReorderList rows require one fixed height per section.
 const REORDER_ROW_HEIGHT = 56
@@ -148,10 +149,13 @@ export function TerminalShortcutSettings({
     [persistLayout]
   )
 
+  // Resetting the keys leaves the Smart rail setting alone.
   const resetBuiltInKeys = useCallback(() => {
-    const next = defaultLayout()
-    setShortcutLayout(next)
-    persistLayout(next)
+    setShortcutLayout((current) => {
+      const next = { ...defaultLayout(), smartRail: current.smartRail }
+      persistLayout(next)
+      return next
+    })
   }, [defaultLayout, persistLayout])
 
   const reorderCustomKeys = useCallback(
@@ -182,6 +186,18 @@ export function TerminalShortcutSettings({
 
   return (
     <>
+      <SettingsSection>
+        <SmartRailRow
+          enabled={shortcutLayout.smartRail === true}
+          onChange={(enabled) =>
+            setShortcutLayout((current) => {
+              const next = { ...current, smartRail: enabled }
+              persistLayout(next)
+              return next
+            })
+          }
+        />
+      </SettingsSection>
       {hasPad ? (
         <SettingsSection
           title={t('components.terminalShortcutSettings.directionPad', 'DIRECTION PAD')}

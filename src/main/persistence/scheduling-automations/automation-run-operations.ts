@@ -1,22 +1,23 @@
 import { randomUUID } from 'node:crypto'
-import { isFinalAutomationRunStatus } from '../../../shared/automations-types'
-import { invalidateLocalWorktreeMetadataPruneInputs } from '../../local-worktree-metadata-prune-gate'
+import { isFinalAutomationRunStatus } from '../../../shared/automations/history/automation-run'
+import { normalizeSetupSkippedContent } from './automation-setup-skipped-content'
+import { invalidateLocalWorktreeMetadataPruneInputs } from '../../workspaces/catalog/local-worktree-metadata-prune-gate'
+import type { Automation } from '../../../shared/automations/automation-definition'
 import type {
-  Automation,
   AutomationDispatchResult,
   AutomationRun,
   AutomationRunsPage,
   AutomationRunTrigger
-} from '../../../shared/automations-types'
+} from '../../../shared/automations/history/automation-run'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import {
   nextAutomationRunNumber,
   pruneAutomationRuns
-} from '../../../shared/automation-run-retention'
+} from '../../../shared/automations/history/automation-run-retention'
 import {
   compareAutomationRunsNewestFirst,
   paginateAutomationRuns
-} from '../../../shared/automation-run-cursor'
+} from '../../../shared/automations/history/automation-run-cursor'
 import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import {
@@ -227,7 +228,14 @@ export function updateAutomationRun(
     ...resultErrorCodeFields(result, previous),
     startedAt: current.startedAt ?? now,
     dispatchedAt:
-      result.status === 'dispatched' ? (result.dispatchedAt ?? now) : current.dispatchedAt
+      result.status === 'dispatched' ? (result.dispatchedAt ?? now) : current.dispatchedAt,
+    // Later updates (completion) keep the dispatch's note.
+    ...(result.setupSkippedReason === 'setup-changed'
+      ? {
+          setupSkippedReason: result.setupSkippedReason,
+          ...normalizeSetupSkippedContent(result.setupSkippedContent)
+        }
+      : {})
   }
   // Replace the array to invalidate identity-keyed list projections.
   operations.state.automationRuns = operations.state.automationRuns.map((run) =>

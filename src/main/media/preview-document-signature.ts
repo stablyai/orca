@@ -1,4 +1,4 @@
-import type { FilePreview } from '../../shared/file-preview-kind'
+import type { FilePreview } from '../../shared/file-preview/file-preview-kind'
 
 /** pdf.js accepts a PDF header anywhere in the first 1 KiB. */
 export const DOCUMENT_SIGNATURE_PROBE_BYTES = 1024

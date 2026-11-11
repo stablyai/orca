@@ -1,8 +1,8 @@
-import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
-import { revealFloatingWorkspacePanel } from '@/lib/floating-workspace-panel-reveal'
+import { activateTabAndFocusPane } from '@/lib/workspace/tabs/activate-tab-and-focus-pane'
+import { revealFloatingWorkspacePanel } from '@/components/floating-terminal/floating-workspace-panel-reveal'
 import { activateStructuredAgentSessionTab } from '@/lib/agent-session/structured-agent-session-tab-activation'
-import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
-import { jumpToWorktreeFromSidebar } from '@/lib/worktree-jump-navigation'
+import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
+import { jumpToWorktreeFromSidebar } from '@/lib/workspace/activation/worktree-jump-navigation'
 import { useAppStore } from '@/store'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import {
@@ -10,7 +10,7 @@ import {
   getWorktreeExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { findKnownWorktreeById } from '@/store/slices/worktrees/listing/detected-worktree-meta'
 import type { AppState } from '@/store/types'
 import type { AgentPaneThread } from './activity-thread-types'

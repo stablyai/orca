@@ -5,17 +5,17 @@ import {
   getCanonicalUserDataPath,
   migrateMobilePairingDataToCanonicalUserDataPath
 } from '../persistence/loading-store/user-data-path'
-import { OrcaRuntimeRpcServer } from '../runtime/runtime-rpc'
-import { WS_BIND_HOST_LOOPBACK } from '../runtime/runtime-rpc/runtime-rpc-pairing-types'
+import { OrcaRuntimeRpcServer } from '../runtime/rpc/server/runtime-rpc'
+import { resolveServePinnedBindHost } from './serve-pinned-bind-host'
 import { isOrcadSidecarLaunch } from '../window/foreground-activation-policy'
 import { registerMobileHandlers } from '../ipc/mobile'
 import { createRuntimeEnvironmentMobileRelayHosts } from '../ipc/runtime-environments/runtime-environment-mobile-relay-hosts'
 import { getLocalPtyProvider } from '../ipc/pty/provider/registry'
 import { registerHeadlessPtyRuntime } from '../ipc/pty/register-headless-runtime'
 import { LocalPtyProvider } from '../providers/local-pty/local-pty-provider'
-import { publishHeadlessRuntimeGraph } from '../runtime/headless-runtime-graph'
-import { OffscreenBrowserBackend } from '../browser/offscreen-browser-backend'
-import { browserManager } from '../browser/browser-manager'
+import { publishHeadlessRuntimeGraph } from '../runtime/session-graph/headless-runtime-graph'
+import { OffscreenBrowserBackend } from '../browser/backends/offscreen-browser-backend'
+import { browserManager } from '../browser/guest-lifecycle/manager/browser-manager'
 import { getDesktopRelayStatus } from './main-process-relay-status'
 import { startDesktopRelayService } from './main-process-relay-startup'
 import { getServeOptions, getBundledWebClientRoot, printServeReady } from './main-process-serve'
@@ -36,10 +36,10 @@ import { settleServeDesktopActivation } from './serve-desktop-activation'
 import {
   recordRuntimeRpcStartFailure,
   showRuntimeRpcStartupFailureDialog
-} from '../runtime/runtime-rpc-startup-failure'
+} from '../runtime/rpc/server/runtime-rpc-startup-failure'
 import { registerCliForHeadlessServe } from './serve-cli-registration'
 import { startAppImageCopyPreExtraction } from '../cli/appimage-copy-pre-extraction'
-import { scheduleAllPendingHistoryTreeRemovals } from '../terminal-history-deletion'
+import { scheduleAllPendingHistoryTreeRemovals } from '../pty/history/terminal-history-deletion'
 import { triggerStartupNotificationRegistration } from '../ipc/startup-notification-registration'
 import { startDesktopPushService } from './main-process-push-startup'
 import {
@@ -49,11 +49,11 @@ import {
 import { mainProcessState as state } from './main-process-state'
 import { logStartupMilestone } from './startup-diagnostics'
 import { setupHeadlessServeAutoUpdater } from '../window/main-window-updater'
-import { preserveStateBeforeUpdateRestart } from '../update-restart-preservation'
-import { resolveUpdateInstallMode } from '../updater'
+import { preserveStateBeforeUpdateRestart } from '../updater/update-restart-preservation'
+import { resolveUpdateInstallMode } from '../updater/updater-service'
 import { scheduleAgentLaunchRecordWarmup } from './agent-launch-record-warmup'
 import { emitServeBrowserIdentityActionLine } from '../server/serve-stdout-boundary'
-import { getBrowserIdentityModeStatus } from '../browser/browser-identity-mode-store'
+import { getBrowserIdentityModeStatus } from '../browser/identity/mode/browser-identity-mode-store'
 
 type RuntimeService = NonNullable<typeof state.runtime>
 
@@ -81,6 +81,7 @@ function e2eHeadlessServeWithoutBrowser(): boolean {
   )
 }
 
+/** Construct the runtime RPC server with serve-specific bind and port exposure settings. */
 function installRuntimeRpc(
   runtime: RuntimeService,
   serveOptions: ReturnType<typeof getServeOptions> | null
@@ -96,6 +97,10 @@ function installRuntimeRpc(
   }
   // STA-1511: separate dev port from packaged Orca so pairing/repro URLs do not fall back unpredictably.
   const devWsPort = !app.isPackaged && !isE2E ? 6769 : undefined
+  const pinnedBindHost = resolveServePinnedBindHost({
+    orcadSidecar: isOrcadSidecarLaunch(),
+    serveOptions
+  })
   const runtimeRpc = new OrcaRuntimeRpcServer({
     runtime,
     // Pairing must use pre-setName canonical userData or restarts can lose devices.
@@ -103,8 +108,16 @@ function installRuntimeRpc(
     enableWebSocket: true,
     // STA-2370: desktop stays loopback until pairing; serve explicitly opts into remote access and E2E needs harness-wide bind.
     exposeNetworkByDefault: Boolean(serveOptions) || isE2E,
-    // orcad reaches its browser sidecar only over the Unix socket / named pipe; keep its WS off the network (#31895).
-    ...(isOrcadSidecarLaunch() ? { pinnedBindHost: WS_BIND_HOST_LOOPBACK } : {}),
+    ...(pinnedBindHost !== undefined ? { pinnedBindHost } : {}),
+    ...(serveOptions
+      ? {
+          serveNetworkSources: {
+            allowPublic: serveOptions.allowPublic,
+            refusePublic: serveOptions.refusePublic,
+            pairingAddress: serveOptions.pairingAddress
+          }
+        }
+      : {}),
     ...(isE2E ? { wsPort: e2eWsPort } : {}),
     ...(devWsPort !== undefined ? { wsPort: devWsPort } : {}),
     ...(serveOptions?.wsPort !== undefined
@@ -118,6 +131,7 @@ function installRuntimeRpc(
     webClientRoot: getBundledWebClientRoot()
   })
   state.runtimeRpc = runtimeRpc
+  runtime.setAgentSenderPeerKey(() => runtimeRpc.getE2EEPublicKey())
   runtimeRpc.setMobileDesktopRelayHosts(createRuntimeEnvironmentMobileRelayHosts())
   registerMobileHandlers(runtimeRpc, {
     getRelayStatus: getDesktopRelayStatus,
@@ -172,6 +186,7 @@ async function launchServeMode(
   )
   await runtime.refreshRestoredOrchestrationAuthority()
   await runtime.reconcileLegacyWorkerTerminals()
+  runtime.startupWorkerAuthority.finish()
   // Main places unshown live terminals before any client attaches.
   if (ORCA_LAYOUT_OWNER_IS_MAIN) {
     await placeUnshownLiveTerminalsBestEffort(runtime)

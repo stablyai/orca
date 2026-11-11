@@ -20,6 +20,7 @@ export const hooksApi = {
     effectiveContent: string | null
     localFilePath: string
     source: 'local' | 'shared' | 'none'
+    localUntracked?: true
     refusedWslDistro?: string
   }> => ipcRenderer.invoke('hooks:readIssueCommand', args),
 

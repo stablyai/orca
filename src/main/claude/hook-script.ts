@@ -1,24 +1,28 @@
-import { buildHookProcessCapture } from '../agent-hooks/hook-process-capture'
-import type { AgentHookSource } from '../../shared/agent-hook-relay'
-import { buildWindowsAgentHookCurlPostCommand } from '../agent-hooks/installer-utils'
-import { buildPosixAgentHookPostCommand } from '../agent-hooks/hook-post-command'
+import { buildHookProcessCapture } from '../agent-hooks/installation/scripts/hook-process-capture'
+import type { AgentHookSource } from '../../shared/agent-hook-listener/transport/agent-hook-relay'
+import { buildWindowsAgentHookCurlPostCommand } from '../agent-hooks/installation/commands/windows-agent-hook-post-command'
+import {
+  buildPosixAgentHookPostCommand,
+  buildPosixHookMetadataCacheLines
+} from '../agent-hooks/installation/scripts/hook-post-command'
 import {
   buildPosixScrubSafeEnvRestoreLines,
   buildWindowsScrubSafeEnvRestoreLines
-} from '../../shared/agent-hook-scrub-safe-env'
+} from '../../shared/agent-hook-listener/transport/agent-hook-scrub-safe-env'
 import {
   buildPosixCursorReplayGuardLines,
   buildWindowsCursorReplayGuardLines
-} from '../agent-hooks/cursor-replay-guard'
+} from '../agent-hooks/installation/scripts/cursor-replay-guard'
 import {
   buildPosixGrokReplayGuardLines,
   buildWindowsGrokReplayGuardLines
-} from '../agent-hooks/grok-replay-guard'
+} from '../agent-hooks/installation/scripts/grok-replay-guard'
 import {
   buildPosixHookPayloadCapture,
   buildPosixHookSpoolLines,
-  buildWindowsHookEnvironmentGuardLines
-} from '../agent-hooks/hook-stdin-contract'
+  buildWindowsHookEnvironmentGuardLines,
+  POSIX_HOOK_STDIN_EXEC
+} from '../agent-hooks/installation/scripts/hook-stdin-contract'
 import {
   buildPosixClaudeDecisionModeLines,
   buildPosixClaudeDecisionPreludeLines,
@@ -27,7 +31,7 @@ import {
 import {
   WINDOWS_CLAUDE_BACKGROUND_JOB_GUARD,
   buildPosixClaudeBackgroundJobGuardLines
-} from '../agent-hooks/claude-background-job-guard'
+} from '../agent-hooks/installation/scripts/claude-background-job-guard'
 
 export function getManagedScript(
   target: 'local' | 'posix' = 'local',
@@ -76,7 +80,7 @@ export function getManagedScript(
     ...(decides ? buildPosixClaudeDecisionPreludeLines() : ['printf "{}\\n"']),
     // CLAUDE_CODE_SUBPROCESS_ENV_SCRUB drops ORCA_PANE_KEY; restore it before any guard or spool reads it.
     ...buildPosixScrubSafeEnvRestoreLines(),
-    ...buildPosixHookPayloadCapture(),
+    ...buildPosixHookPayloadCapture('exit', POSIX_HOOK_STDIN_EXEC),
     ...(decides ? buildPosixClaudeDecisionModeLines() : []),
     ...(options.skipWhenGrokImportsClaude ? buildPosixGrokReplayGuardLines() : []),
     ...(options.skipWhenCursorImportsClaude ? buildPosixCursorReplayGuardLines() : []),
@@ -100,13 +104,18 @@ export function getManagedScript(
     '  spool_hook_event',
     '  exit 0',
     'fi',
+    ...buildPosixHookMetadataCacheLines(),
     // Keep hook JSON off argv and avoid URL-encoded paths that trigger IDS rules.
     ...(decides
       ? wrapPosixClaudeDecisionPost(
-          buildPosixAgentHookPostCommand(source, { decisionHeaderVar: 'orca_hook_decides' })
+          buildPosixAgentHookPostCommand(source, {
+            decisionHeaderVar: 'orca_hook_decides',
+            cachedMetadata: true
+          })
         )
-      : buildPosixAgentHookPostCommand(source).map((line, index, lines) =>
-          index === lines.length - 1 ? `${line} >/dev/null 2>&1 || spool_hook_event` : line
+      : buildPosixAgentHookPostCommand(source, { cachedMetadata: true }).map(
+          (line, index, lines) =>
+            index === lines.length - 1 ? `${line} >/dev/null 2>&1 || spool_hook_event` : line
         )),
     'exit 0',
     ''

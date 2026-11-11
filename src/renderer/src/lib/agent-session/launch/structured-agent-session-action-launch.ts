@@ -1,30 +1,31 @@
 import { structuredAgentLabel } from './structured-agent-session-launch-label'
 import { translate } from '@/i18n/i18n'
-import { readStructuredChatTabSavedName } from '@/runtime/structured-chat-tab-name'
+import { joinSentences } from '../../../../../shared/sentence-joining'
+import { readStructuredChatTabSavedName } from '@/runtime/native-chat/naming/structured-chat-tab-name'
 import {
   getStructuredLaunchStateBySessionId,
-  notifyStructuredLaunchListeners
-} from './structured-agent-session-launch-registry'
-import { focusTerminalTabSurface } from '../../focus-terminal-tab-surface'
-import type { Tab } from '../../../../../shared/tab-types'
-import type { StructuredAgentLaunchSettlement } from '@/lib/structured-agent-launch-settlement'
-import type { ProvisionalLaunchArgs } from '../structured-agent-session-provisional-tab'
-import { insertUnifiedTabAfterAnchor } from '../../unified-tab-anchor-insertion'
+  publishStructuredLaunchChange
+} from './structured-agent-session-launch-state-store'
+import { focusTerminalTabSurface } from '../../../components/terminal-pane/input/focus/focus-terminal-tab-surface'
+import { insertUnifiedTabAfterAnchor } from '../../workspace/tabs/unified-tab-anchor-insertion'
 import { useAppStore } from '@/store/index'
-import type { OpenedAgentSessionTab } from '../../structured-agent-session-tab-open-through-layout-owner'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
-import { sendLayoutCommandToOwner } from '@/runtime/layout-owner-command'
+import { sendLayoutCommandToOwner } from '@/runtime/workspace-layout/commands/layout-owner-command'
 import {
   declinedTerminalCanOpen,
-  notifyHostDeclined,
-  openDeclinedStructuredLaunchTerminal,
-  type StructuredLaunchTerminal
+  openDeclinedStructuredLaunchTerminal
 } from '@/lib/agent-session/launch/structured-agent-session-launch-admission'
+import type { StructuredLaunchTerminal } from '@/lib/agent-session/launch/structured-agent-session-launch-admission'
+import { notifyHostDeclined } from '@/lib/agent-session/launch/structured-agent-session-launch-admission-notices'
+import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/drafts/native-chat-draft-scope'
+import { nativeChatComposerHasUserContent } from '@/components/native-chat/attachments/chips/native-chat-pending-attachment-cache'
+import { StructuredAgentSessionCreateRefusalError } from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
+import type { Tab } from '../../../../../shared/tab-types'
+import type { StructuredAgentLaunchSettlement } from './continuation/structured-agent-launch-settlement'
+import type { ProvisionalLaunchArgs } from '../structured-agent-session-provisional-tab'
+import type { OpenedAgentSessionTab } from './pane/structured-agent-session-tab-open-through-layout-owner'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
-import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/native-chat-composer-draft-store'
-import { nativeChatComposerHasUserContent } from '@/components/native-chat/native-chat-pending-attachment-cache'
-import { StructuredAgentSessionCreateRefusalError } from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
 
 export function openDeclinedTerminal(
   args: ProvisionalLaunchArgs,
@@ -44,14 +45,16 @@ export function openDeclinedTerminal(
   })
 }
 
-/** Only a foreground action without a prompt to deliver may open before admission. */
+/** Explicit chats keep their input if admission fails; empty foreground actions can also open immediately. */
 export function opensAtAction(args: ProvisionalLaunchArgs): boolean {
   const { plan } = args
   return (
-    args.focusIntent !== undefined &&
-    args.activate !== false &&
-    !plan.resumeFrom &&
-    (!plan.prompt?.trim() || plan.promptDelivery === 'draft')
+    plan.requestedSurface === 'chat' ||
+    (args.focusIntent !== undefined &&
+      args.activate !== false &&
+      !plan.resumeFrom &&
+      !plan.forkFrom &&
+      (!plan.prompt?.trim() || plan.promptDelivery === 'draft'))
   )
 }
 
@@ -95,7 +98,37 @@ export async function openTerminalForDeclinedChat(
         outcome: { status: terminal.opened ? 'created' : 'failed' },
         tabId: terminal.tabId
       }
+  const ownsFailure = () =>
+    launchState &&
+    getStructuredLaunchStateBySessionId(tab.entityId) === launchState &&
+    launchState.callers === attempt &&
+    attempt?.outcome === 'failed' &&
+    !launchState.cancelled
+  const declined = () =>
+    translate(
+      'components.native-chat.structuredSessionHostDeclinedDescription',
+      "This workspace can't run a {{value0}} chat.",
+      { value0: structuredAgentLabel(args.plan.agent) }
+    )
+  // The visible chat is this launch's one failure surface, so its notice says what to do next.
+  const recordCause = (causeText: string): void => {
+    if (!source() || !launchState || !ownsFailure()) {
+      return
+    }
+    launchState.failure = {
+      ...(launchState.failure?.code === 'structured_agent_session_unsupported'
+        ? launchState.failure
+        : {}),
+      kind: 'refused',
+      code: 'structured_agent_session_unsupported',
+      causeText
+    }
+    publishStructuredLaunchChange(launchState.intent.sessionId)
+  }
   if (completed.outcome.status !== 'created') {
+    if (terminal.refusal) {
+      recordCause(joinSentences([declined(), terminal.refusal]))
+    }
     return settlement
   }
   const state = useAppStore.getState()
@@ -103,33 +136,15 @@ export async function openTerminalForDeclinedChat(
   let replacement = (state.unifiedTabsByWorktree[worktreeId] ?? []).find(
     (candidate) => candidate.id === completed.tabId
   )
-  const ownsFailure = () =>
-    launchState &&
-    getStructuredLaunchStateBySessionId(tab.entityId) === launchState &&
-    launchState.callers === attempt &&
-    attempt?.outcome === 'failed' &&
-    !launchState.cancelled
-  if (current && launchState && ownsFailure()) {
-    launchState.failure = {
-      ...(launchState.failure?.code === 'structured_agent_session_unsupported'
-        ? launchState.failure
-        : {}),
-      kind: 'refused',
-      code: 'structured_agent_session_unsupported',
-      causeText: replacement
-        ? translate(
-            'components.native-chat.structuredSessionHostDeclinedDescription',
-            "This workspace can't run a {{value0}} chat.",
-            { value0: structuredAgentLabel(args.plan.agent) }
-          )
-        : translate(
-            'components.native-chat.structuredSessionTerminalNotVisible',
-            "Orca opened {{value0}} in a terminal, but couldn't show it here when the launch finished. Your chat draft was kept.",
-            { value0: structuredAgentLabel(args.plan.agent) }
-          )
-    }
-    notifyStructuredLaunchListeners()
-  }
+  recordCause(
+    replacement
+      ? declined()
+      : translate(
+          'components.native-chat.structuredSessionTerminalNotVisible',
+          "Orca opened {{value0}} in a terminal, but couldn't show it here when the launch finished. Your chat draft was kept.",
+          { value0: structuredAgentLabel(args.plan.agent) }
+        )
+  )
   if (!replacement) {
     return settlement
   }

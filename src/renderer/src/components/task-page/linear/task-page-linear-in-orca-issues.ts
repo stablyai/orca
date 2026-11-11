@@ -3,7 +3,7 @@ import type {
   LinearIssueRead,
   LinearIssueLease,
   LinearIssueView
-} from '@/store/slices/linear/linear-issue-publication'
+} from '@/store/slices/linear/linear-issue-read-lifecycle'
 import type { LinearIssue } from '../../../../../shared/linear/issue-types'
 import type { LinearWorkspace } from '../../../../../shared/linear/workspace-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
@@ -11,8 +11,8 @@ import { parseLinearIssueInput } from '../../../../../shared/linear/links'
 import {
   getTaskSourceCacheScope,
   type TaskSourceContext
-} from '../../../../../shared/task-source-context'
-import { normalizeLinearIdentifier } from '../../../lib/linear-issue-workspace-attachment'
+} from '../../../../../shared/work-items/task-source-context'
+import { normalizeLinearIdentifier } from '../../../lib/work-items/linear/linear-issue-workspace-attachment'
 
 export type LinkedLinearIssueRef = {
   identifier: string

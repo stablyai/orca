@@ -44,31 +44,6 @@ afterEach(() => {
 })
 
 describe('Bitbucket credential connection', () => {
-  it('verifies credentials before saving and reports a stored connection', async () => {
-    const conn = await loadModule()
-    globalThis.fetch = vi.fn(async () =>
-      Response.json({ username: 'ada' })
-    ) as unknown as typeof fetch
-
-    await expect(
-      conn.connectBitbucket({
-        authMode: 'basic',
-        email: 'ada@example.com',
-        apiToken: 'tok'
-      })
-    ).resolves.toEqual({ ok: true, account: 'ada' })
-
-    expect(conn.getBitbucketConnectionStatus()).toEqual({
-      configured: true,
-      source: 'stored',
-      credentialProtection: 'sealed',
-      account: 'ada',
-      authMode: 'basic',
-      email: 'ada@example.com',
-      baseUrl: null
-    })
-  })
-
   it('sends Basic auth built from the entered email and API token', async () => {
     const conn = await loadModule()
     const fetchSpy = vi.fn(async () => Response.json({ username: 'ada' }))
@@ -119,6 +94,30 @@ describe('Bitbucket credential connection', () => {
     expect(conn.getBitbucketConnectionStatus().source).toBe('none')
   })
 
+  it('saves an access token Bitbucket accepts without account access (STA-14576)', async () => {
+    const conn = await loadModule()
+    globalThis.fetch = vi.fn<typeof fetch>(
+      async () => new Response('<html>Forbidden</html>', { status: 403 })
+    )
+    const proxied = await conn.connectBitbucket({ authMode: 'token', accessToken: 'repo-token' })
+    expect(proxied.ok).toBe(false)
+    expect(conn.getBitbucketConnectionStatus().source).toBe('none')
+
+    // Bitbucket's /user answer for every repository, project or workspace access token.
+    globalThis.fetch = vi.fn<typeof fetch>(async () =>
+      Response.json(
+        {
+          type: 'error',
+          error: { message: 'Token is invalid or not supported for this endpoint.' }
+        },
+        { status: 403 }
+      )
+    )
+    const result = await conn.connectBitbucket({ authMode: 'token', accessToken: 'repo-token' })
+    expect(result).toEqual({ ok: true, account: null })
+    expect(conn.getBitbucketConnectionStatus().source).toBe('stored')
+  })
+
   it('rejects an incomplete basic-auth credential before making a request', async () => {
     const conn = await loadModule()
     const fetchSpy = vi.fn()
@@ -130,24 +129,5 @@ describe('Bitbucket credential connection', () => {
     })
     expect(result.ok).toBe(false)
     expect(fetchSpy).not.toHaveBeenCalled()
-  })
-
-  it('reports environment variables as the source and takes precedence over stored creds', async () => {
-    const conn = await loadModule()
-    globalThis.fetch = vi.fn(async () =>
-      Response.json({ username: 'ada' })
-    ) as unknown as typeof fetch
-    await conn.connectBitbucket({
-      authMode: 'basic',
-      email: 'ada@example.com',
-      apiToken: 'tok'
-    })
-
-    process.env.ORCA_BITBUCKET_ACCESS_TOKEN = 'env-token'
-    expect(conn.getBitbucketConnectionStatus()).toMatchObject({
-      configured: true,
-      source: 'environment',
-      authMode: 'token'
-    })
   })
 })

@@ -3,10 +3,11 @@ import {
   disconnectDaemon,
   daemonOwnsFreshPersistentPtys,
   readDaemonPidRecord
-} from '../daemon/daemon-provider-state'
-import { initDaemonPtyProvider } from '../daemon/daemon-provider-init'
-import { resolveTerminalSpawnAdmissionMode } from '../daemon/terminal-spawn-gate'
+} from '../daemon/providers/lifecycle/daemon-provider-state'
+import { initDaemonPtyProvider } from '../daemon/providers/lifecycle/daemon-provider-init'
+import { resolveTerminalSpawnAdmissionMode } from '../daemon/admission/terminal-spawn-admission-mode'
 import { errorMessage } from '../../shared/error-message'
+import { OrcadTerminalsNotDurableError, takeOrcadServeSupervision } from './orcad-serve-supervision'
 
 const WINDOWS_DAEMON_STARTUP_TIMEOUT_MS = 30_000
 
@@ -15,10 +16,12 @@ type OrcadDaemonStartup =
   | { state: 'degraded'; reason: string }
   | { state: 'unavailable'; reason: string }
 
-/** Continue serving without a daemon on failure, but never claim terminal persistence. */
+/** Serve without a daemon only when unsupervised; never claim terminal persistence without one. */
 export async function startOrcadDaemon(
   platform: NodeJS.Platform = process.platform
 ): Promise<OrcadDaemonStartup> {
+  // Taken before the daemon launches so neither it nor its terminals pass it on.
+  const supervised = takeOrcadServeSupervision()
   // Daemons must survive SSH logout; macOS GUI-session retirement would kill their terminals.
   const policy = {
     macosLoginSessionWatch: false,
@@ -36,6 +39,9 @@ export async function startOrcadDaemon(
     })
   } catch (error) {
     const reason = errorMessage(error)
+    if (supervised) {
+      throw new OrcadTerminalsNotDurableError(reason)
+    }
     console.error(
       `[orcad] The terminal daemon did not start: ${reason}\n` +
         '[orcad] Terminals will run in-process and WILL NOT survive an orcad restart.'

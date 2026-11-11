@@ -8,7 +8,7 @@ import {
   parseOrcadMigrationTerminalRestoreHintsDocument,
   type OrcadMigrationTerminalRestoreHint
 } from '../../../shared/orcad-migration/orcad-migration-terminal-restore-hints'
-import type { OrcadMigrationBlobSource } from '../../ssh/orcad-migration-blob-coordinator'
+import type { OrcadMigrationBlobSource } from '../../managed-server/migration/transfers/orcad-migration-blob-coordinator'
 
 export type WslMoveRestoreHintsBlob = {
   descriptor: OrcadMigrationBlobDescriptor

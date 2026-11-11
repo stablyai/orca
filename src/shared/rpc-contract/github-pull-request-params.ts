@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import type { GitHubPRRefreshReason } from '../github/pull-request-refresh-types'
-import { RepoSelector, SlugRepo } from './github-repo-target-params'
+import { OptionalGhAccountExpectation, RepoSelector, SlugRepo } from './github-repo-target-params'
 import { OptionalString, requiredString } from './rpc-param-primitives'
 
 export const OptionalPRRefreshReason = z
@@ -68,6 +68,7 @@ export const PullRequestFileContents = RepoSelector.extend({
 })
 
 export const PullRequestFileViewed = RepoSelector.extend({
+  expectedGhAccount: OptionalGhAccountExpectation,
   prRepo: SlugRepo.nullable().optional(),
   pullRequestId: requiredString('Missing pull request ID'),
   path: requiredString('Missing file path'),

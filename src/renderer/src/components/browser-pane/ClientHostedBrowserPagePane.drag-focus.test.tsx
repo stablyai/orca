@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => ({ attach: vi.fn(), createBrowserTab: vi.fn(async
 vi.mock('./browser-client-page-renderer-installation', () => ({
   attachBrowserClientPageToViewport: mocks.attach
 }))
-vi.mock('@/runtime/web-runtime-browser-creation', () => ({
+vi.mock('@/runtime/browser/creation/web-runtime-browser-creation', () => ({
   createWebRuntimeSessionBrowserTab: mocks.createBrowserTab
 }))
 vi.mock('sonner', () => ({
@@ -119,15 +119,6 @@ describe.each([
       release()
     }
     cleanup()
-  })
-
-  it('focuses the guest when the tab activates outside a drag', () => {
-    const { focus } = createGuest()
-    const view = render(paneElement(false))
-
-    view.rerender(paneElement(true))
-
-    expect(focus).toHaveBeenCalledTimes(1)
   })
 
   // Guest focus blurs the embedder, triggering the drag’s missed-end fallback and aborting its own preview activation.

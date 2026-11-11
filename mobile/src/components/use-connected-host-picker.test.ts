@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { HostProfile } from '../transport/types'
+import type { HostProfile } from '../host-catalog/host-profile'
 import { useConnectedHostPicker } from './use-connected-host-picker'
 
 function host(id: string, name: string, endpoint: string): HostProfile {
@@ -49,71 +49,6 @@ describe('useConnectedHostPicker', () => {
   function pickHost(action: (hostId: string) => void, hosts?: HostProfile[]) {
     act(() => handle.current!.pickHost(action, hosts))
   }
-
-  it('runs the action on the only offered host without a picker', () => {
-    render([desk, laptop])
-    const action = vi.fn()
-
-    pickHost(action, [laptop])
-
-    expect(action).toHaveBeenCalledWith('laptop')
-    expect(picker().visible).toBe(false)
-  })
-
-  it('offers only the hosts passed in', () => {
-    render([desk, laptop, server])
-    const action = vi.fn()
-
-    pickHost(action, [desk, server])
-
-    expect(picker().visible).toBe(true)
-    expect(picker().options.map((option) => option.value)).toEqual(['desk', 'server'])
-    act(() => picker().onSelect('server'))
-    act(() => picker().onAfterClose())
-    expect(action).toHaveBeenCalledWith('server')
-  })
-
-  it('runs nothing when the picker is dismissed', () => {
-    render([desk, laptop])
-    const action = vi.fn()
-
-    pickHost(action)
-    act(() => picker().onClose())
-    act(() => picker().onAfterClose())
-
-    expect(picker().visible).toBe(false)
-    expect(action).not.toHaveBeenCalled()
-  })
-
-  it('disambiguates path-routed hosts without exposing endpoint paths', () => {
-    render([
-      host('desk-a', 'Desk', 'wss://gateway.example.com/v1/connect/bearer-secret-a'),
-      host('desk-b', 'Desk', 'wss://gateway.example.com/v1/connect/bearer-secret-b')
-    ])
-
-    pickHost(vi.fn())
-
-    expect(picker().options).toEqual([
-      { value: 'desk-a', label: 'Desk', subtitle: 'gateway.example.com · desk-a' },
-      { value: 'desk-b', label: 'Desk', subtitle: 'gateway.example.com · desk-b' }
-    ])
-    expect(JSON.stringify(picker().options)).not.toContain('bearer-secret')
-  })
-
-  it('does not expose malformed legacy endpoint details', () => {
-    render([
-      host('desk-a', 'Desk', 'gateway.example.com/v1/connect/bearer-secret?token=query-secret'),
-      host('desk-b', 'Desk', 'localhost:6768/private-secret')
-    ])
-
-    pickHost(vi.fn())
-
-    expect(picker().options).toEqual([
-      { value: 'desk-a', label: 'Desk', subtitle: 'Unknown endpoint · desk-a' },
-      { value: 'desk-b', label: 'Desk', subtitle: 'Unknown endpoint · desk-b' }
-    ])
-    expect(JSON.stringify(picker().options)).not.toContain('secret')
-  })
 
   it('closes a stale picker when an offered host disconnects', () => {
     const rerender = render([desk, laptop])

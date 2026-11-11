@@ -4,8 +4,9 @@ import {
   isLegacyReadOnlyMessage,
   type OrchestrationCheckOutput,
   type OrchestrationMessageSummary
-} from '../../../shared/orchestration-check-output'
-import { escapeTerminalControlCharacters } from '../../../shared/terminal-control-character-escape'
+} from '../../../shared/orchestration/mailbox/orchestration-check-output'
+import { formatReportFollowUpLine } from '../../../shared/orchestration/mailbox/orchestration-report-follow-up'
+import { escapeTerminalControlCharacters } from '../../../shared/terminal/output/terminal-control-character-escape'
 import { formatFieldPairs, orchestrationCliName, type OrchestrationAgentView } from './agent-view'
 import { withReceiptNext } from './receipt-next-text'
 
@@ -20,6 +21,8 @@ export type MessageView = {
   priority?: string
   readOnly?: true
   handled?: boolean
+  /** What to do after a finished task's report, with its command; the runtime chooses it. */
+  followUp?: string
   // Kept nested so sender-written payload can never stand in for Orca's own fields.
   payload?: Record<string, unknown> | string
 }
@@ -44,6 +47,9 @@ export function toMessageView(
       ? { readOnly: true as const }
       : {}),
     ...(options.recipient && message.read !== undefined ? { handled: message.read === 1 } : {}),
+    ...(message.follow_up && !isLegacyReadOnlyMessage(message, options.legacyCompatibilityActive)
+      ? { followUp: formatReportFollowUpLine(message.follow_up, orchestrationCliName()) }
+      : {}),
     ...payloadView(message)
   }
 }
@@ -82,7 +88,7 @@ function nestsDeeperThan(value: unknown, depth: number): boolean {
   return depth === 0 || Object.values(value).some((child) => nestsDeeperThan(child, depth - 1))
 }
 
-export function formatMessageViewText(view: MessageView, replyCommand?: string): string {
+export function formatMessageViewText(view: MessageView, actionLine?: string): string {
   const flags = [
     view.priority === 'urgent' || view.priority === 'high'
       ? `[${view.priority.toUpperCase()}]`
@@ -111,21 +117,27 @@ export function formatMessageViewText(view: MessageView, replyCommand?: string):
       )
     )
   }
-  if (replyCommand) {
-    lines.push(`Reply: ${replyCommand}`)
+  if (actionLine) {
+    lines.push(actionLine)
   }
   return lines.join('\n')
 }
 
-/** Only a question awaits `reply`; reports and escalations name their own follow-up. */
-function replyCommandFor(message: OrchestrationMessageSummary, view: MessageView, checked: string) {
-  if (view.type !== 'question' || view.readOnly) {
+/** Only a question awaits `reply`; a finished task's report names its follow-up instead. */
+function actionLineFor(message: OrchestrationMessageSummary, view: MessageView, checked: string) {
+  if (view.readOnly) {
+    return undefined
+  }
+  if (view.followUp) {
+    return view.followUp
+  }
+  if (view.type !== 'question') {
     return undefined
   }
   const target = message.to_handle ?? checked
   const from =
     target.startsWith('run:') || target.startsWith('dispatch:') ? '' : ` --from ${target}`
-  return `${orchestrationCliName()} orchestration reply --id ${message.id}${from} --body "..."`
+  return `Reply: ${orchestrationCliName()} orchestration reply --id ${message.id}${from} --body "..."`
 }
 
 export type CheckAgentResult = OrchestrationCheckOutput & { replayed?: boolean; next?: string }
@@ -173,7 +185,7 @@ export function checkView(
       }
       const messages = fields.messages
         .map((view, index) =>
-          formatMessageViewText(view, replyCommandFor(value.messages[index], view, checkedTerminal))
+          formatMessageViewText(view, actionLineFor(value.messages[index], view, checkedTerminal))
         )
         .join('\n\n')
       return withReceiptNext(

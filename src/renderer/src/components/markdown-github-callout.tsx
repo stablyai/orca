@@ -8,8 +8,8 @@ import {
   type LucideIcon
 } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
-import { cn } from '@/lib/utils'
-import type { GitHubCalloutKind } from '@/lib/remark-github-callouts'
+import { cn } from '@/lib/class-names'
+import type { GitHubCalloutKind } from '../../../shared/github/github-callouts'
 
 const CALLOUT_PRESENTATIONS: Record<
   GitHubCalloutKind,
@@ -53,7 +53,8 @@ export function MarkdownGitHubCallout({
   title,
   icon,
   className,
-  children
+  children,
+  ...rest
 }: {
   kind: GitHubCalloutKind
   /** Replaces the kind's own label (Note, Tip, ...). */
@@ -61,10 +62,10 @@ export function MarkdownGitHubCallout({
   icon?: React.ReactNode
   className?: string
   children?: React.ReactNode
-}): React.JSX.Element {
+} & Omit<React.HTMLAttributes<HTMLDivElement>, 'title'>): React.JSX.Element {
   const { Icon, label, borderClassName, titleClassName } = CALLOUT_PRESENTATIONS[kind]
   return (
-    <div role="note" data-callout={kind} className={cn(borderClassName, className)}>
+    <div {...rest} role="note" data-callout={kind} className={cn(borderClassName, className)}>
       <div className={cn('flex items-center gap-1.5 font-medium', titleClassName)}>
         {icon ?? <Icon aria-hidden className="size-[1em] shrink-0" />}
         {title ?? label()}

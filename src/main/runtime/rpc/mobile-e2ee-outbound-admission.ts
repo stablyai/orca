@@ -11,7 +11,7 @@ import type {
   MobileE2EEOutboundMemoryBudget,
   MobileE2EEOutboundSocketMemory
 } from './mobile-e2ee-outbound-memory-budget'
-import type { EventProps } from '../../../shared/telemetry-events'
+import type { EventProps } from '../../../shared/telemetry-event-classification'
 import { track } from '../../telemetry/client'
 
 export type MobileE2EEOutboundBudgetEmitter = EventProps<'remote_outbound_budget_close'>['emitter']

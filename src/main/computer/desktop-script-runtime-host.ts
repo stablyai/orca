@@ -4,11 +4,8 @@ import { reportComputerDiagnostic } from './computer-sidecar-diagnostics'
 import { isReplayableTool } from './desktop-script-action'
 import type { BridgeRequest, BridgeResponse } from './desktop-script-provider-types'
 import { DesktopScriptRequestQueue } from './desktop-script-request-queue'
-import {
-  startServeChannel,
-  type DesktopScriptServeChannel,
-  type RuntimeProcessSpawn
-} from './desktop-script-serve-channel'
+import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
+import { startServeChannel, type DesktopScriptServeChannel } from './desktop-script-serve-channel'
 import {
   MAX_START_ATTEMPTS,
   RuntimeHostAvailability,
@@ -27,7 +24,7 @@ const IDLE_SHUTDOWN_MS = 120_000
 export const RUNTIME_HOST_UNAVAILABLE = 'runtime_host_unavailable'
 
 export type DesktopScriptRuntimeHostOptions = {
-  spawn?: RuntimeProcessSpawn
+  spawn?: PipedProcessSpawner
   powerShellPath?: () => string
   requestTimeoutMs?: number
   idleShutdownMs?: number

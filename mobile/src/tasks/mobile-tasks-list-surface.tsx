@@ -24,10 +24,14 @@ export function renderMobileTasksListSurface(
     setLinearConnectError,
     setLinearConnectState,
     setShowLinearConnect,
+    showsKeptRows,
     taskUiReady,
     tasksSupported
   } = model
-  return !tasksSupported ? (
+  // Kept rows are drawn as they were, ahead of connection prompts that a dropped connection resets.
+  return showsKeptRows ? (
+    renderMobileTasksNonProjectLists(model, colorScheme, bottomBarHeight)
+  ) : !tasksSupported ? (
     renderMobileTasksSupportState(model, bottomBarHeight)
   ) : provider === 'jira' && !jiraConnection.connected ? (
     <JiraConnectPrompt

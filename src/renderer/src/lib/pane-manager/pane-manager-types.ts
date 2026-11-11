@@ -1,4 +1,4 @@
-import type { IDisposable, IMarker, Terminal, ITerminalOptions } from '@xterm/xterm'
+import type { IDisposable, Terminal, ITerminalOptions } from '@xterm/xterm'
 import type { FitAddon } from '@xterm/addon-fit'
 import type { ImageAddon } from '@xterm/addon-image'
 import type { LigaturesAddon } from '@xterm/addon-ligatures'
@@ -8,11 +8,12 @@ import type { WebLinksAddon } from '@xterm/addon-web-links'
 import type { WebglAddon } from '@xterm/addon-webgl'
 import type { SerializeAddon } from '@xterm/addon-serialize'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
-import type { TerminalPanePlacement } from '../../../../shared/terminal-pane-placement'
-import type { TerminalWebglAutoDecision } from './terminal-webgl-auto-policy'
+import type { TerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
+import type { TerminalPanePlacement } from '../../../../shared/workspace-layout/terminal-pane-placement'
+import type { ScrollState } from './terminal-scroll/pane-scroll-snapshot'
+import type { TerminalWebglAutoDecision } from './terminal-rendering/terminal-webgl-auto-policy'
 
-export type { TerminalScrollIntentTarget } from './terminal-scroll-intent'
+export type PaneActivationOptions = { focus?: boolean }
 
 /** One-shot spawn/adoption hints belong to creation, separate from persistent ManagedPane state. */
 export type PaneSpawnHints = {
@@ -129,16 +130,6 @@ export type PaneRenderingDiagnostics = {
   hasComplexScriptOutput: boolean
   terminalWebglAutoDecision: TerminalWebglAutoDecision
   hasWebgl: boolean
-}
-
-export type ScrollState = {
-  bufferType: 'normal' | 'alternate'
-  wasAtBottom: boolean
-  viewportY: number
-  baseY: number
-  firstVisibleLineMarker?: IMarker
-  firstVisibleLogicalLineMarker?: IMarker
-  firstVisibleLogicalCellOffset?: number
 }
 
 export type ManagedPaneInternal = {

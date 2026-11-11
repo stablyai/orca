@@ -5,7 +5,7 @@ import {
   withOrcaHookRepoAlwaysTrusted,
   withOrcaHookScriptConfirmed
 } from '../../../src/shared/orca-hook-trust-entries'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { taskUiStateWrite } from './mobile-task-runtime-operations'
 
 export type SetupHookTrust = {
@@ -60,9 +60,14 @@ type HookTrustApproval = {
 export async function persistOrcaHookTrustApproval(
   args: HookTrustApproval & { kind: OrcaHookTrustKind }
 ): Promise<PersistedTrustedOrcaHooks> {
-  const next = args.alwaysTrust
-    ? withOrcaHookRepoAlwaysTrusted(args.trust, args.repoId)
-    : withOrcaHookScriptConfirmed(args.trust, args.repoId, args.kind, args.contentHash)
+  // Repo-wide trust is ignored when the repo id is on two hosts, so keep this script's approval too.
+  const confirmed = withOrcaHookScriptConfirmed(
+    args.trust,
+    args.repoId,
+    args.kind,
+    args.contentHash
+  )
+  const next = args.alwaysTrust ? withOrcaHookRepoAlwaysTrusted(confirmed, args.repoId) : confirmed
   taskUiStateWrite.interpret(
     await taskUiStateWrite.request(args.client, { trustedOrcaHooks: next })
   )

@@ -2,7 +2,7 @@ import { Fragment, useEffect, useState, type JSX } from 'react'
 import { Plus, Search } from 'lucide-react'
 import { usePrefersReducedMotion } from '@/components/feature-wall/feature-wall-modal-helpers'
 import { formatShortcutKeyComboDetails, useShortcutKeyDetails } from '@/hooks/useShortcutLabel'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 const TYPED_QUERY = 'auth'
 // Mirror the real palette’s recent worktrees before typing narrows them.
@@ -40,6 +40,7 @@ const HOLD_BEFORE_TYPING_MS = 700
 const TYPE_INTERVAL_MS = 120
 
 export function CmdJPaletteFeatureTipVisual(): JSX.Element {
+  const t = useTranslate()
   const reducedMotion = usePrefersReducedMotion()
   // Read the live binding to reflect rebindings and platform defaults.
   const shortcut = useShortcutKeyDetails('worktree.palette')
@@ -200,7 +201,7 @@ export function CmdJPaletteFeatureTipVisual(): JSX.Element {
                   <Plus size={13} aria-hidden="true" />
                 </div>
                 <div className="min-w-0 flex-1 truncate text-[12.5px] font-semibold tracking-[-0.01em] text-foreground">
-                  {translate(
+                  {t(
                     'auto.components.feature.tips.CmdJPaletteFeatureTipVisual.ab94e16d44',
                     'Create worktree "{{value0}}"',
                     { value0: renderQuery.trim() }

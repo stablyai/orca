@@ -1,10 +1,14 @@
 import { getDefaultPersistedState, getDefaultWorkspaceSession } from '../../shared/constants'
-import type { Automation, AutomationRun } from '../../shared/automations-types'
+import type { Automation } from '../../shared/automations/automation-definition'
+import type { AutomationRun } from '../../shared/automations/history/automation-run'
 import type { PersistedState } from '../../shared/persisted-state-types'
 import type { Project, ProjectHostSetup } from '../../shared/project-types'
 import type { Repo } from '../../shared/repo-types'
-import type { TerminalTab, TerminalLayoutSnapshot } from '../../shared/terminal-tab-types'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type {
+  TerminalTab,
+  TerminalLayoutSnapshot
+} from '../../shared/workspace-layout/terminal-tab-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 
 const LOCAL_WORKTREE_ID = 'repo-local::/fixture/local'

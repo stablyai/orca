@@ -1,5 +1,5 @@
 import { OrchestrationError } from '../../orchestration-error'
-import type { TaskRow, TaskStatus } from '../../types'
+import type { TaskRow, TaskStatus } from '../orchestration-records'
 import { settleActiveDispatchesForTask } from '../dispatch-context/dispatch-completion'
 import type { OrchestrationDb } from '../orchestration-db'
 import {

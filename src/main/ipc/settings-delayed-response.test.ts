@@ -33,24 +33,24 @@ vi.mock('../ssh/config/ssh-config-parser', () => ({
   sshConfigHostsToTargets: () => []
 }))
 vi.mock('../ghostty/index', () => ({ previewGhosttyImport: vi.fn() }))
-vi.mock('../warp-themes', () => ({ previewWarpThemeImport: vi.fn() }))
+vi.mock('../warp-themes/index', () => ({ previewWarpThemeImport: vi.fn() }))
 vi.mock('../network/proxy-settings', () => ({
   applyElectronProxySettings: applyElectronProxySettingsMock
 }))
-vi.mock('../browser/browser-session-proxy', () => ({
+vi.mock('../browser/sessions/proxy/browser-session-proxy', () => ({
   applyBrowserSessionProxies: vi.fn().mockResolvedValue(undefined)
 }))
-vi.mock('../browser/browser-session-registry', () => ({
+vi.mock('../browser/sessions/profiles/browser-session-registry', () => ({
   browserSessionRegistry: { listProfiles: vi.fn(() => []) }
 }))
-vi.mock('../app-icon', () => ({ applyAppIcon: vi.fn() }))
+vi.mock('../window/desktop-integration/app-icon', () => ({ applyAppIcon: vi.fn() }))
 vi.mock('../ai-vault-search/session-search-enablement', () => ({
   applySessionSearchSettingsChange: vi.fn()
 }))
-vi.mock('../agent-hooks/managed-agent-hook-controls', () => ({
+vi.mock('../agent-hooks/installation/managed-agent-hook-controls', () => ({
   applyAgentStatusHooksEnabled: applyAgentStatusHooksEnabledMock
 }))
-vi.mock('../worktree-root-preparation', () => ({
+vi.mock('../workspaces/creation/worktree-root-preparation', () => ({
   prepareLocalWorktreeRootsForRepos: vi.fn().mockResolvedValue(undefined)
 }))
 vi.mock('../menu/register-app-menu', () => ({ rebuildAppMenu: vi.fn() }))

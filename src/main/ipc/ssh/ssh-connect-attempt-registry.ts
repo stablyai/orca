@@ -1,9 +1,10 @@
 import type { DirectSshAuthority, SshConnectionState } from '../../../shared/ssh-types'
-import { quitTeardownStartGate } from '../../quit-teardown-start-gate'
+import { quitTeardownStartGate } from '../../startup/quit/quit-teardown-start-gate'
 import {
+  getSshProviderAuthority,
   isCurrentSshProviderAuthority,
   rotateSshProviderAuthority
-} from '../../ssh/ssh-provider-authority'
+} from '../../ssh/connection/authority/ssh-provider-authority'
 
 // Preserve credential tracking across macOS window recreation.
 export const credentialRequestedForTarget = new Set<string>()
@@ -12,6 +13,15 @@ export const credentialRequestedForTarget = new Set<string>()
 export type ConnectAttempt = {
   authority: DirectSshAuthority
   promise: Promise<SshConnectionState>
+  /** A retry no user asked for, while `active`: no setup progress, and refusal keeps the host. */
+  quiet?: QuietConnect
+}
+
+/** A user's connect joining the attempt clears `active`, making it an ordinary connect. */
+export type QuietConnect = {
+  active: boolean
+  /** The attempt rotated its authority only once its move succeeded. */
+  rotated: (authority: DirectSshAuthority) => void
 }
 
 export const connectInFlight = new Map<string, ConnectAttempt>()
@@ -31,6 +41,39 @@ export function invalidateConnectAttempt(targetId: string): void {
 
 export function isCurrentConnectAttempt(targetId: string, authority: DirectSshAuthority): boolean {
   return authority.targetId === targetId && isCurrentSshProviderAuthority(authority)
+}
+
+// Connects admitted under the authority an unlink fenced, valid only while its successor is current.
+const carriedAdmissions = new Map<string, { from: DirectSshAuthority; to: DirectSshAuthority }>()
+
+/**
+ * Fences the connect already running, unlike a Disconnect, which also cancels Connects queued
+ * behind it: a Connect the user asks for while a server is unlinked must still run afterwards.
+ */
+export function fenceRunningConnectAttempt(targetId: string): void {
+  const from = getSshProviderAuthority(targetId)
+  invalidateConnectAttempt(targetId)
+  carriedAdmissions.set(targetId, { from, to: getSshProviderAuthority(targetId) })
+}
+
+/** The authority a queued connect may proceed under, or null when a disconnect or reset fenced it. */
+export function admittedConnectAuthority(
+  targetId: string,
+  admission: DirectSshAuthority
+): DirectSshAuthority | null {
+  if (isCurrentConnectAttempt(targetId, admission)) {
+    return admission
+  }
+  const carried = carriedAdmissions.get(targetId)
+  if (
+    carried &&
+    carried.from.providerEpoch === admission.providerEpoch &&
+    carried.from.connectionGeneration === admission.connectionGeneration &&
+    isCurrentConnectAttempt(targetId, carried.to)
+  ) {
+    return carried.to
+  }
+  return null
 }
 
 // Test probes must not flash worktree cards through connected/disconnected broadcasts.

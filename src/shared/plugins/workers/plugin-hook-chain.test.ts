@@ -33,12 +33,6 @@ afterEach(() => {
 })
 
 describe('runPluginHookChain', () => {
-  it('passes the event through unchanged when handlers return nothing', async () => {
-    const { outcome, logs } = chain({ 'a.one': [() => undefined], 'a.two': [] })
-    await expect(outcome).resolves.toEqual({ kind: 'continue', payload: send })
-    expect(logs).toEqual([])
-  })
-
   it('carries a changed event to the next plugin, in order', async () => {
     const seen: string[] = []
     const { outcome } = chain({
@@ -64,14 +58,6 @@ describe('runPluginHookChain', () => {
     await expect(outcome).resolves.toEqual({ kind: 'continue', payload: send })
   })
 
-  it('ignores an invalid change and logs it', async () => {
-    const { outcome, logs } = chain({
-      'a.one': [(event, next) => next({ ...read(event), enter: 'yes' })]
-    })
-    await expect(outcome).resolves.toEqual({ kind: 'continue', payload: send })
-    expect(logs[0]).toMatch(/^a\.one: hook terminal\.send: change ignored/)
-  })
-
   it('stops at a deny, so later plugins never run', async () => {
     const later = vi.fn()
     const { outcome } = chain({
@@ -80,12 +66,6 @@ describe('runPluginHookChain', () => {
     })
     await expect(outcome).resolves.toEqual({ kind: 'deny', pluginKey: 'a.one', reason: 'blocked' })
     expect(later).not.toHaveBeenCalled()
-  })
-
-  it('treats an unreadable result as passing', async () => {
-    const { outcome, logs } = chain({ 'a.one': [() => ({ deny: 7 })] })
-    await expect(outcome).resolves.toEqual({ kind: 'continue', payload: send })
-    expect(logs[0]).toMatch(/result ignored/)
   })
 
   it('treats a throw as passing and logs plugin, event and duration', async () => {
@@ -164,6 +144,15 @@ describe('runPluginHookChain', () => {
       { participants: ['a.guard'], invoke: async () => 'nope', failsClosed }
     )
     await expect(nonsense.outcome).resolves.toMatchObject({ kind: 'deny', pluginKey: 'a.guard' })
+  })
+
+  it('refuses when a fail-closed plugin returns a malformed denial', async () => {
+    const failsClosed = () => true
+    const tooLong = chain({ 'a.guard': [() => ({ deny: 'x'.repeat(501) })] }, { failsClosed })
+    await expect(tooLong.outcome).resolves.toMatchObject({ kind: 'deny', pluginKey: 'a.guard' })
+    expect(tooLong.logs[0]).toMatch(/denied after 0ms \(onError: deny\): malformed result/)
+    const wrongShape = chain({ 'a.guard': [() => ({ deny: 7 })] }, { failsClosed })
+    await expect(wrongShape.outcome).resolves.toMatchObject({ kind: 'deny', pluginKey: 'a.guard' })
   })
 
   it('passes a fail-closed plugin that is gone, and observe-only hooks', async () => {

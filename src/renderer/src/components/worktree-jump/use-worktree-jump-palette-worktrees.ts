@@ -1,16 +1,19 @@
 import { useMemo } from 'react'
-import { getStructuredChatWorktreeIds } from '@/components/sidebar/visible-worktree-activity-inputs'
+import { getStructuredChatWorktreeIds } from '@/components/sidebar/worktree-list/listing/visible-worktree-activity-inputs'
 import { filterWorkspaceRows } from '../../../../shared/workspace-view/workspace-row-filters'
-import { buildDesktopWorkspaceRowFactReader } from '@/components/sidebar/desktop-workspace-row-facts'
+import { buildDesktopWorkspaceRowFactReader } from '@/components/sidebar/worktree-list/listing/desktop-workspace-row-facts'
 import { sortWorktreesSmart } from '../../../../shared/sidebar-list/smart-sort'
 import { buildWorktreeChecksReviewIndex } from '@/components/cmd-j/worktree-checks-review-index'
-import { getLiveAgentStatusByWorktreeId } from '@/lib/worktree-activity-state'
-import { orderEmptyQueryWorktrees } from '@/lib/order-empty-query-worktrees'
+import { getLiveAgentStatusByWorktreeId } from '@/lib/workspace/activity/worktree-activity-state'
+import { orderEmptyQueryWorktrees } from '@/lib/workspace/search/palette/order-empty-query-worktrees'
 import {
   getWorktreePaletteSearchScope,
   searchWorktreeDocuments
-} from '@/lib/worktree-palette-search'
-import { buildPaletteWorktreeIndex, resolvePaletteWorktree } from '@/lib/palette-repo-resolution'
+} from '@/lib/workspace/search/worktrees/worktree-palette-search'
+import {
+  buildPaletteWorktreeIndex,
+  resolvePaletteWorktree
+} from '@/lib/workspace/search/palette-repo-resolution'
 import {
   EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
   getPairedDeviceIdsByEnvironment
