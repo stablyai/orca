@@ -1,4 +1,5 @@
 import type { SidebarFeedDomains } from '../../../shared/sidebar-list/sidebar-feed-domains'
+import { getExecutionHostIdFromWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
 import {
   indexPendingVmCheckouts,
   isPendingVmCheckout,
@@ -8,10 +9,58 @@ import {
 
 /** A VM's primary checkout, registered on its host before the create that owns it finishes. */
 export type HiddenVmCheckout = PendingVmCheckout
-type CheckoutRow = { repoId: string; path: string; isMainWorktree?: boolean }
+type CheckoutRow = {
+  repoId: string
+  path: string
+  isMainWorktree?: boolean
+  hostId?: string
+}
 
-/** What lists filter by: this window's pending VM checkouts and every other window's. */
-export type HiddenVmCheckouts = PendingVmCheckoutIndex
+/**
+ * What lists filter by: this window's pending VM checkouts and every other window's, plus the
+ * Orca Cloud hosts lists scope (withOrcaCloudHosts).
+ */
+export type HiddenVmCheckouts = PendingVmCheckoutIndex & {
+  /** Active-team Orca Cloud hosts: their primary checkout (the sandbox's clone) never lists. */
+  readonly primaryHostIds?: ReadonlySet<string>
+  /** Orca Cloud hosts of another team, or of no team we can resolve: every row hides. */
+  readonly hiddenHostIds?: ReadonlySet<string>
+}
+
+/**
+ * Why: each Orca Cloud workspace is its own sandbox whose clone is registered as the project there,
+ * and the workspace is a worktree beside it (orca-worktree mode). That clone is scaffolding, not a
+ * workspace: listed, every cloud workspace added another identical "<default branch> primary ·
+ * Orca Cloud" row to its project. Another team's sandbox lists nothing at all.
+ */
+export function withOrcaCloudHosts(
+  checkouts: HiddenVmCheckouts,
+  hosts: { primaryHostIds: ReadonlySet<string>; hiddenHostIds: ReadonlySet<string> }
+): HiddenVmCheckouts {
+  return hosts.primaryHostIds.size === 0 && hosts.hiddenHostIds.size === 0
+    ? checkouts
+    : { ...checkouts, primaryHostIds: hosts.primaryHostIds, hiddenHostIds: hosts.hiddenHostIds }
+}
+
+function hidesNothing(checkouts: HiddenVmCheckouts): boolean {
+  return (
+    checkouts.keys.size === 0 && !checkouts.primaryHostIds?.size && !checkouts.hiddenHostIds?.size
+  )
+}
+
+function isHiddenCheckout(
+  checkouts: HiddenVmCheckouts,
+  row: CheckoutRow,
+  hostId: string | undefined = row.hostId
+): boolean {
+  if (hostId && checkouts.hiddenHostIds?.has(hostId)) {
+    return true
+  }
+  if (row.isMainWorktree === true && hostId && checkouts.primaryHostIds?.has(hostId)) {
+    return true
+  }
+  return checkouts.keys.size > 0 && isPendingVmCheckout(checkouts, row)
+}
 
 // Upper bound for a cleaned-up VM's rows to leave the lists (its host is retired asynchronously).
 const HIDDEN_AFTER_CLEANUP_MS = 60_000
@@ -131,28 +180,31 @@ export function readHiddenVmCheckouts(): HiddenVmCheckouts {
   return hidden
 }
 
-/** The window's sidebar list without the primary checkouts of VMs whose creates are in progress. */
+/** The window's sidebar list without hidden VM checkouts, cloud clones and other teams' sandboxes. */
 export function withoutHiddenVmWorktrees<W extends CheckoutRow>(
   worktrees: W[],
   checkouts: HiddenVmCheckouts
 ): W[] {
-  if (checkouts.keys.size === 0) {
+  if (hidesNothing(checkouts)) {
     return worktrees
   }
-  const kept = worktrees.filter((worktree) => !isPendingVmCheckout(checkouts, worktree))
+  const kept = worktrees.filter((worktree) => !isHiddenCheckout(checkouts, worktree))
   return kept.length === worktrees.length ? worktrees : kept
 }
 
-/** Per-repo lists without pending VM checkouts; the same object when nothing matches. */
+/** Per-repo lists without hidden checkouts; the same object when nothing matches. */
 export function withoutHiddenVmWorktreesByRepo<W extends CheckoutRow>(
   worktreesByRepo: Record<string, W[]>,
   checkouts: HiddenVmCheckouts
 ): Record<string, W[]> {
-  if (checkouts.keys.size === 0) {
+  if (hidesNothing(checkouts)) {
     return worktreesByRepo
   }
+  const hostScoped = Boolean(checkouts.primaryHostIds?.size || checkouts.hiddenHostIds?.size)
   let next: Record<string, W[]> | null = null
-  for (const repoId of checkouts.repoIds) {
+  // Host-scoped rows can sit under any repo; pending checkouts only under theirs.
+  const repoIds = hostScoped ? Object.keys(worktreesByRepo) : checkouts.repoIds
+  for (const repoId of repoIds) {
     const list = worktreesByRepo[repoId]
     if (!list) {
       continue
@@ -166,13 +218,15 @@ export function withoutHiddenVmWorktreesByRepo<W extends CheckoutRow>(
   return next ?? worktreesByRepo
 }
 
-function withoutHiddenRows<K, V extends CheckoutRow>(
+function withoutHiddenRows<K extends string, V extends CheckoutRow>(
   rows: ReadonlyMap<K, V>,
   checkouts: HiddenVmCheckouts
 ): ReadonlyMap<K, V> {
   let kept: Map<K, V> | null = null
   for (const [key, row] of rows) {
-    if (isPendingVmCheckout(checkouts, row)) {
+    // Paired-server rows carry their host only in the host-qualified key.
+    const hostId = row.hostId ?? getExecutionHostIdFromWorktreeHostIdentity(key)
+    if (isHiddenCheckout(checkouts, row, hostId)) {
       kept ??= new Map(rows)
       kept.delete(key)
     }
@@ -180,12 +234,12 @@ function withoutHiddenRows<K, V extends CheckoutRow>(
   return kept ?? rows
 }
 
-/** Main's rows without the primary checkouts of VMs whose creates are still in progress. */
+/** Main's rows without hidden VM checkouts, cloud clones and other teams' sandboxes. */
 export function withoutHiddenVmCheckouts(
   domains: SidebarFeedDomains,
   checkouts: HiddenVmCheckouts
 ): SidebarFeedDomains {
-  if (checkouts.keys.size === 0) {
+  if (hidesNothing(checkouts)) {
     return domains
   }
   const workspaces = withoutHiddenRows(domains.workspaces, checkouts)

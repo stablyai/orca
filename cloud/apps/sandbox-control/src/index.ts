@@ -114,6 +114,7 @@ import { egressAccountRoutes, egressSecretHosts, placeholderValues, secretPlaceh
 import { SecretError, handleSecretsRoute, keyringFor, type SecretChange } from './secrets'
 import { refreshAfterSecretChange, refreshSandboxEnv } from './env-refresh'
 import { accountProvider, isSharedWorkspace } from './account-providers'
+import { handleAccountUnauthorized } from './agent-credential-checks'
 import { codexBrokerTick, handleCodexBrokerRoute, type BrokerDeps } from './codex-broker'
 import { refreshCodexLeases } from './codex-credentials'
 import {
@@ -123,7 +124,6 @@ import {
   deleteAgentCredential,
   providerEnabled,
   putClaudeCredential,
-  markAgentCredentialRevoked,
   readUsableAgentCredential
 } from './agent-credentials'
 import {
@@ -371,17 +371,37 @@ function egressRoutes(env: Env, deps: Deps): (row: SandboxRow, host: string) => 
               return provider.format(real)
             },
             ...(provider.extraHeaders ? { extraHeaders: () => (real ? provider.extraHeaders!(real) : {}) } : {}),
-            onUpstreamStatus: (status) => {
+            // Reached only after the real credential was swapped in and sent (denied or unswapped requests
+            // never get here).
+            onUpstreamStatus: (status, request) => {
               if (status === 401) {
-                // The provider no longer accepts it (revoked at the source): stop using it until renewed.
                 const now = (deps.now ?? Date.now)()
                 const waitUntil = (work: Promise<unknown>) => (deps.waitUntil ? deps.waitUntil(work.catch(() => undefined)) : void work.catch(() => undefined))
-                const handled = provider.onUnauthorized
-                  ? keyring.then((ring) => provider.onUnauthorized!({ db: env.SANDBOX_DB, keyring: ring, userId: row.user_id, now, waitUntil }))
-                  : markAgentCredentialRevoked(env.SANDBOX_DB, row.user_id, agent, now)
-                const work = handled.then(() => {
+                // Codex refreshes its lease (which marks the login dead itself); everyone else confirms with one
+                // auth check before revoking, so a transient 401 never signs the person out everywhere.
+                const handled: Promise<boolean> = provider.onUnauthorized
+                  ? keyring.then((ring) => provider.onUnauthorized!({ db: env.SANDBOX_DB, keyring: ring, userId: row.user_id, now, waitUntil })).then(() => true)
+                  : keyring
+                      .then((ring) =>
+                        handleAccountUnauthorized({
+                          db: env.SANDBOX_DB,
+                          keyring: ring,
+                          provider,
+                          userId: row.user_id,
+                          sandboxId: row.id,
+                          path: request.path,
+                          now,
+                          fetch: deps.egressFetch ?? fetch
+                        })
+                      )
+                      .then((outcome) => outcome === 'revoked')
+                // Every running sandbox of this person drops the dead placeholder, not only this one.
+                const work = handled.then(async (changed) => {
+                  if (!changed) {
+                    return
+                  }
                   forgetAccountCredential(row.user_id, agent)
-                  scheduleEnvRefresh(env, deps, row)
+                  await refreshOwnersSandboxes(env, deps, row.user_id)
                 })
                 if (deps.waitUntil) {
                   deps.waitUntil(work.catch(() => undefined))

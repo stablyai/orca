@@ -90,6 +90,18 @@ export const overview = defineFixture({
   )
 })
 
+/** RA-5: the Needs attention filter with nothing in it says so instead of an empty table. */
+export const nothingNeedsAttention = defineFixture({
+  width: 860,
+  render: () => (
+    <Frame
+      {...BASE}
+      initialFilter="attention"
+      rows={overviewRows({ hosts: [LOCAL], probes: OVERVIEW_PROBES, cloud: CLOUD })}
+    />
+  )
+})
+
 export const needsAttention = defineFixture({
   width: 860,
   render: () => (

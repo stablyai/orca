@@ -5,6 +5,7 @@ import {
 } from '../../../../shared/project-host-setup-projection'
 import { resolveProjectHostSetupProjection } from '../../../../shared/project-host-setup-hydration'
 import type { AppState } from '../types'
+import { withAsleepCloudProjectSetups } from './asleep-cloud-project-setups'
 
 const derivedProjectionByRepos = new WeakMap<AppState['repos'], ProjectHostSetupProjection>()
 // Catalog writers replace these readonly arrays; their identities are the invalidation boundary.
@@ -25,12 +26,20 @@ function getDerivedProjection(repos: AppState['repos']): ProjectHostSetupProject
 
 // Object.is selector results must be stable per repos/projects/setups identities or every render retriggers.
 export function getProjectHostSetupProjectionFromState(
-  state: Pick<AppState, 'repos'> & Partial<Pick<AppState, 'projects' | 'projectHostSetups'>>
+  state: Pick<AppState, 'repos'> &
+    Partial<Pick<AppState, 'projects' | 'projectHostSetups' | 'ephemeralVmRuntimesByWorkspaceId'>>
 ): ProjectHostSetupProjection {
-  const { repos, projects, projectHostSetups: setups } = state
-  if (!projects || !setups) {
+  const { repos, projects, projectHostSetups: catalogSetups } = state
+  if (!projects || !catalogSetups) {
     return getDerivedProjection(repos)
   }
+  // Asleep Orca Cloud workspaces keep their project until their runtime's catalog loads (RA-9).
+  const setups = withAsleepCloudProjectSetups(
+    repos,
+    projects,
+    catalogSetups,
+    state.ephemeralVmRuntimesByWorkspaceId
+  )
   let byProjects = resolvedProjectionByCatalog.get(repos)
   if (!byProjects) {
     byProjects = new WeakMap()

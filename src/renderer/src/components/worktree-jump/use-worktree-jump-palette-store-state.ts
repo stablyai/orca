@@ -1,4 +1,4 @@
-import { useMemo, useSyncExternalStore } from 'react'
+import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store/index'
@@ -6,11 +6,11 @@ import { usePluginCommands } from '@/store/plugins/catalog/plugin-contribution-c
 import { usePluginNewFiles } from '@/store/plugins/file-creation/plugin-new-files'
 import { useSettingsNavigationMetadata } from '@/hooks/useSettingsNavigationMetadata'
 import { dedupePaletteWorktrees } from '@/lib/workspace/search/palette-repo-resolution'
+import { withoutHiddenVmWorktreesByRepo } from '@/lib/vm-create-hidden-checkouts'
 import {
-  readHiddenVmCheckouts,
-  subscribeHiddenVmCheckouts,
-  withoutHiddenVmWorktreesByRepo
-} from '@/lib/vm-create-hidden-checkouts'
+  useSidebarHiddenCheckouts,
+  withoutHiddenHostRepos
+} from '@/lib/orca-cloud/use-sidebar-hidden-checkouts'
 import {
   selectPaletteIndexStatusSnapshot,
   selectPaletteStatusInputs
@@ -42,14 +42,19 @@ export function useWorktreeJumpPaletteStoreState({
   const recordFeatureInteraction = useAppStore((state) => state.recordFeatureInteraction)
   const revealSidebarRow = useAppStore((state) => state.revealSidebarRow)
   const storedWorktreesByRepo = useAppStore((state) => selectWorktreesByRepo(state))
-  const hiddenVmCheckouts = useSyncExternalStore(subscribeHiddenVmCheckouts, readHiddenVmCheckouts)
-  // Why: a VM create's checkout is not a workspace until the create adopts it.
+  const storedRepos = useAppStore((state) => state.repos)
+  const hiddenVmCheckouts = useSidebarHiddenCheckouts()
+  // Why: a VM create's checkout is not a workspace until the create adopts it; a cloud clone beside
+  // its workspace is redundant, and another team's sandbox is out of scope.
   const worktreesByRepo = useMemo(
     () => withoutHiddenVmWorktreesByRepo(storedWorktreesByRepo, hiddenVmCheckouts),
     [storedWorktreesByRepo, hiddenVmCheckouts]
   )
   const folderWorkspaces = useAppStore((state) => selectFolderWorkspaces(state))
-  const repos = useAppStore((state) => state.repos)
+  const repos = useMemo(
+    () => withoutHiddenHostRepos(storedRepos, hiddenVmCheckouts),
+    [storedRepos, hiddenVmCheckouts]
+  )
   const projectGroups = useAppStore((state) => state.projectGroups)
   const workspaces = useMemo(
     () =>

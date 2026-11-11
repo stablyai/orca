@@ -1411,7 +1411,8 @@
       "pageDescription": "Sign-ins, account switching and usage for your agents.",
       "thisComputer": "This computer",
       "selectedHost": "Selected host",
-      "hostsTitle": "Hosts"
+      "hostsTitle": "Hosts",
+      "jumpLabel": "Parts of this page"
     }
   },
   "menu": {
@@ -27013,7 +27014,24 @@
     "deleteFailedNamed": "Couldn’t delete {{name}}",
     "productName": "Orca Cloud",
     "cloudMarkLabel": "Cloud workspace · {{state}}",
-    "statusUnavailableTitle": "Couldn’t get the sandbox status."
+    "statusUnavailableTitle": "Couldn’t get the sandbox status.",
+    "files": {
+      "wakeForAll": "Wake the workspace to browse all its files.",
+      "asleep": "Files aren’t available while the workspace is asleep.",
+      "changedAtSleep": "Changed files when this workspace went to sleep · {{time}}",
+      "changedAtSleepNoTime": "Changed files when this workspace went to sleep",
+      "waking": "Waking… the files show when it’s up.",
+      "noChangesAtSleep": "No files had changed when this workspace went to sleep · {{time}}",
+      "noChangesAtSleepNoTime": "No files had changed when this workspace went to sleep",
+      "changedTitle": "Changed files",
+      "moreChanged": "+{{count}} more",
+      "recentCommitsOn": "Recent commits on {{branch}}",
+      "recentCommits": "Recent commits"
+    },
+    "terminal": {
+      "asleepNamed": "{{name}} is asleep. Open it to wake it.",
+      "asleep": "This workspace is asleep. Open it to wake it."
+    }
   },
   "cloudAgentSetup": {
     "loading": "Checking what agents can use…",
@@ -27886,7 +27904,9 @@
     "copyAndOpen": "Copy code and open",
     "unavailable": "Signs in for each cloud workspace",
     "unavailableDetail": "Signing in once with your {{product}} account isn’t available in Orca Cloud yet. Each new cloud workspace asks you to sign in.",
-    "allUnavailable": "Claude and Codex sign in for each cloud workspace for now."
+    "allUnavailable": "Claude and Codex sign in for each cloud workspace for now.",
+    "pasteTokenInstead": "Paste a token instead",
+    "rowMenu": "{{agent}} account options"
   },
   "vmBuildAgents": {
     "menu": {
@@ -27909,7 +27929,6 @@
     "pasteToken": "Paste token",
     "tryAgain": "Try again",
     "dismiss": "Dismiss",
-    "signInAgain": "Sign in again",
     "signInHere": "Sign in for this workspace",
     "checking": "Checking agent sign-in",
     "readyDetail": "Every cloud workspace uses it. Nothing to do here.",
@@ -27933,7 +27952,6 @@
     "offerDetail": "Sign in to {{agents}} once. Every cloud workspace uses it.",
     "stillOpens": "The workspace still opens.",
     "expired": "Your {{agent}} sign-in for Orca Cloud expired",
-    "expiredDetail": "Sign in again once. Every cloud workspace picks it up.",
     "agentSignIn": "{{agent}} sign-in",
     "paused": "Orca account sign-in is paused",
     "pausedDetail": "This sign-in stays with this workspace.",
@@ -27941,7 +27959,8 @@
     "errorDetail": "The workspace still opens. Agents can sign in later.",
     "groupAccount": "{{agents}} from your Orca account",
     "groupKey": "{{agents}} with {{key}}",
-    "notOffered": "Signs in for each cloud workspace for now"
+    "notOffered": "Signs in for each cloud workspace for now",
+    "expiredDetailRenew": "Renew once. Every cloud workspace picks it up."
   },
   "agentAccountsOverview": {
     "action": {
@@ -27980,7 +27999,8 @@
       "cloudNotSetUp": "Not set up",
       "cloudPaused": "Each workspace signs in (temporarily)",
       "apiKeyOverrides": "API key overrides sign-in"
-    }
+    },
+    "nothingNeedsAttention": "Nothing needs attention."
   },
   "agentSignInStrip": {
     "sandbox": "the sandbox",

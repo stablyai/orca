@@ -30,6 +30,47 @@ export type AccountProvider = {
   onUnauthorized?(ctx: { db: D1Database; keyring: Keyring; userId: string; now: number; waitUntil: (work: Promise<unknown>) => void }): Promise<void>
   /** The real value for this person, or null (none, expired, revoked). */
   credential(db: D1Database, keyring: Keyring, userId: string, now: number): Promise<string | null>
+  /**
+   * One cheap server-side auth check with the real credential (spends no model tokens), run before a
+   * provider 401 may revoke it (agent-credential-checks.ts). 'invalid' only for a definite auth failure.
+   */
+  verify?(credential: string, fetchImpl: typeof fetch): Promise<'valid' | 'invalid' | 'unknown'>
+}
+
+/** Anthropic's token counter: authenticated like Messages, free, and nothing is generated. */
+const CLAUDE_CHECK_URL = 'https://api.anthropic.com/v1/messages/count_tokens'
+const CLAUDE_CHECK_MODEL = 'claude-sonnet-4-5'
+
+async function verifyClaudeToken(credential: string, fetchImpl: typeof fetch): Promise<'valid' | 'invalid' | 'unknown'> {
+  let response: Response
+  try {
+    response = await fetchImpl(CLAUDE_CHECK_URL, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${credential}`,
+        'anthropic-beta': 'oauth-2025-04-20',
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify({ model: CLAUDE_CHECK_MODEL, messages: [{ role: 'user', content: 'ok' }] }),
+      signal: AbortSignal.timeout(8_000)
+    })
+  } catch {
+    return 'unknown'
+  }
+  if (response.ok) {
+    return 'valid'
+  }
+  if (response.status !== 401) {
+    // Rate limits, overload, a model name the account can't use, permissions: none of these say the token is dead.
+    return 'unknown'
+  }
+  const body: unknown = await response.json().catch(() => null)
+  const type =
+    body && typeof body === 'object' && 'error' in body && body.error && typeof body.error === 'object' && 'type' in body.error
+      ? body.error.type
+      : null
+  return type === 'authentication_error' ? 'invalid' : 'unknown'
 }
 
 /** D13: a workspace shared with teammates never uses a personal account. Fails closed: only a row
@@ -46,7 +87,8 @@ export const claudeAccount: AccountProvider = {
   sessionEnv: (row) => ({ CLAUDE_CODE_OAUTH_TOKEN: `orca-ph-claude-account-${row.id}` }),
   header: 'authorization',
   format: (credential) => `Bearer ${credential}`,
-  credential: (db, keyring, userId, now) => readUsableAgentCredential(db, keyring, userId, 'claude', now)
+  credential: (db, keyring, userId, now) => readUsableAgentCredential(db, keyring, userId, 'claude', now),
+  verify: verifyClaudeToken
 }
 
 export const ACCOUNT_PROVIDERS: AccountProvider[] = [claudeAccount, codexAccount]

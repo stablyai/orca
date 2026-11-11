@@ -129,8 +129,8 @@ export function buildAgentsRowText(
           agent: agentName(model.agent, t)
         }),
         detail: t(
-          'vmBuildAgents.expiredDetail',
-          'Sign in again once. Every cloud workspace picks it up.'
+          'vmBuildAgents.expiredDetailRenew',
+          'Renew once. Every cloud workspace picks it up.'
         )
       }
     case 'killSwitch':

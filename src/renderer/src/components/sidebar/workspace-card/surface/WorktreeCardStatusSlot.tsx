@@ -1,5 +1,5 @@
 import { getProviderChecksOutcome } from '../../../../../../shared/source-control/checks/provider-check-summary'
-import { useIsCloudWorkspace } from '@/lib/orca-cloud/orca-cloud-workspace-store'
+import { useCloudWorkspace, useIsCloudWorkspace } from '@/lib/orca-cloud/orca-cloud-workspace-store'
 import React from 'react'
 import { Bell, GitBranch, Moon } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -136,7 +136,7 @@ export function WorktreeCardStatusSlot({
   const t = useTranslate()
   const collectionChecks = reviewChecks && reviewChecks.total > 1 ? reviewChecks : undefined
   const isReviewStale = reviewStale || Boolean(collectionChecks?.stale)
-  const status = useWorktreeActivityStatus(worktreeId)
+  const liveStatus = useWorktreeActivityStatus(worktreeId)
   // One subscription per card: rows mount by the hundreds, and every listener runs on each store write.
   const { isSleeping, vmRuntime, vmWaking } = useAppStore(
     useShallow((state) => ({
@@ -147,6 +147,15 @@ export function WorktreeCardStatusSlot({
   )
   // Orca Cloud workspaces show their state on the cloud mark; the VM badge would be a second indicator.
   const isCloud = useIsCloudWorkspace(worktreeId)
+  const cloudAsleep = useCloudWorkspace((state) => {
+    const reported = state.status[worktreeId]?.status?.state
+    return reported === 'sleeping' || reported === 'stopping' || reported === 'archived'
+  })
+  // An asleep sandbox runs no agent: a terminal restored from before the sleep is not activity
+  // (RA-9). Until the first status read, the local VM record says it is suspended.
+  const asleepCloud = isCloud && (cloudAsleep || vmRuntime?.status === 'suspended')
+  const status: WorktreeStatus =
+    asleepCloud && (liveStatus === 'active' || liveStatus === 'working') ? 'inactive' : liveStatus
   const vmHostState =
     vmRuntime && !isCloud ? getEphemeralVmHostState(vmRuntime.status, vmWaking) : null
   // The host glyph's badge carries suspended, waking and provisioning; the lane keeps only the

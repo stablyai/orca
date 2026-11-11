@@ -20,6 +20,7 @@ import {
   productName
 } from './orca-cloud-accounts-copy'
 import type { OrcaCloudAccountsActions } from './orca-cloud-accounts-types'
+import { RemoveConfirmRow } from './OrcaCloudRemoveRow'
 
 export function ActiveRow({
   agent,
@@ -52,46 +53,11 @@ export function ActiveRow({
   }
   if (confirmRemove) {
     return (
-      <RowShell
+      <RemoveConfirmRow
         agent={agent}
-        tone="warning"
-        title={t(
-          'orcaCloudAccounts.removeConfirm',
-          'Remove your {{product}} account from Orca? Cloud workspaces use the team key, or ask you to sign in.',
-          { product }
-        )}
-        actions={
-          <>
-            <Button
-              type="button"
-              variant="destructive"
-              size="sm"
-              disabled={busy}
-              aria-busy={busy || undefined}
-              autoFocus
-              onClick={() =>
-                void run(async () => {
-                  const error = await actions.remove(agent)
-                  if (!error) {
-                    setConfirmRemove(false)
-                  }
-                  return error
-                })
-              }
-            >
-              {t('orcaCloudAccounts.remove', 'Remove')}
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              disabled={busy}
-              onClick={() => setConfirmRemove(false)}
-            >
-              {t('orcaCloudAccounts.cancel', 'Cancel')}
-            </Button>
-          </>
-        }
+        actions={actions}
+        setConfirmRemove={setConfirmRemove}
+        setRowError={setRowError}
       />
     )
   }
