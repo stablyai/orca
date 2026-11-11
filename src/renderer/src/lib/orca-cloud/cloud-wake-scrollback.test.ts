@@ -7,6 +7,8 @@ import {
   finishWakeScrollbackRestore,
   forgetWakeScrollback,
   hasPendingWakeScrollback,
+  noteBeforeCloudReplay,
+  noteWakeViewport,
   wakeScrollbackPreview,
   resetWakeScrollbackForTests
 } from './cloud-wake-scrollback'
@@ -262,6 +264,78 @@ describe('WAKE-SCROLLBACK', () => {
     await write(full, '$ ls\r\nREADME\r\n$ ')
     capture(full, 'leaf-f')
     expect(hasPendingWakeScrollback('leaf-f')).toBe(true)
+  })
+
+  // A sleep nobody clicked on this desktop: no early capture; the VM going down makes the transport
+  // resubscribe, and that replay keeps only the host's 1000 rows before the pane hears "asleep".
+  it("a sleep nobody clicked here: what the pane held before the host's 1000-row resubscribe comes back", async () => {
+    const terminal = pane(10)
+    const seq = Array.from({ length: 2000 }, (_, index) => String(index + 1)).join('\r\n')
+    await write(terminal, `$ seq 1 2000\r\n${seq}\r\n$ sleep 900\r\n`)
+    const cloud = (): boolean => true
+    // The drain, just before the resubscribe's clearing replay.
+    await noteBeforeCloudReplay('leaf-1', terminal, 'remote:env@@term-old', cloud)
+    const last1000 = Array.from({ length: 1000 }, (_, index) => String(index + 1001)).join('\r\n')
+    await write(terminal, `\x1b[2J\x1b[3J\x1b[H${last1000}\r\n$ sleep 900\r\n`)
+    // Only now does the pane hear the workspace is asleep.
+    captureWakeScrollback('leaf-1', terminal, {
+      sleptAt: SLEPT_AT,
+      agentPane: false,
+      maxRows: 5000,
+      ptyId: 'remote:env@@term-old'
+    })
+    armWakeScrollback(['leaf-1'])
+    expect(await wake(terminal, 'leaf-1', '$ ')).toBe(true)
+    const lines = text(terminal)
+    expect(lines[0]).toBe('$ seq 1 2000')
+    expect(lines[1]).toBe('1')
+    expect(lines.at(-2)).toMatch(DIVIDER)
+  })
+
+  it('keeps the pre-replay copy cheap: only over the host replay size, and only for cloud panes', async () => {
+    const small = pane(10)
+    await write(small, '$ ls\r\nREADME\r\n$ ')
+    // Under the host's 1000 rows: the replay keeps it all, so nothing is copied (and no await added).
+    expect(noteBeforeCloudReplay('leaf-s', small, 'remote:env@@t', () => true)).toBeNull()
+    const big = pane(10)
+    await write(big, Array.from({ length: 1500 }, (_, index) => `row ${index}`).join('\r\n'))
+    expect(noteBeforeCloudReplay('leaf-b', big, 'remote:env@@t', () => false)).toBeNull()
+    expect(noteBeforeCloudReplay('leaf-b', big, 'remote:env@@t', () => true)).not.toBeNull()
+  })
+
+  it('times the pre-replay copy of a 10k-line pane (rendered in chunks, off the input path)', async () => {
+    const terminal = new Terminal({
+      cols: 80,
+      rows: 24,
+      scrollback: 10_000,
+      allowProposedApi: true
+    })
+    const lines = Array.from(
+      { length: 10_000 },
+      (_, index) => `\x1b[3${index % 8}mline ${index}\x1b[0m`
+    )
+    await write(terminal, lines.join('\r\n'))
+    vi.useRealTimers()
+    const started = performance.now()
+    await noteBeforeCloudReplay('leaf-10k', terminal, 'remote:env@@t', () => true)
+    const elapsed = performance.now() - started
+    console.info(`[WAKE-SCROLLBACK] pre-replay copy of a 10k-line pane: ${elapsed.toFixed(1)} ms`)
+    expect(elapsed).toBeLessThan(2000)
+  })
+
+  // m4air (c): waking remounts the pane at the bottom; the place the person scrolled to comes back.
+  it('a scroll made while waking survives the remount and is put back after the restore', async () => {
+    const before = pane(5)
+    await write(before, Array.from({ length: 50 }, (_, index) => `row ${index}`).join('\r\n'))
+    capture(before, 'leaf-1')
+    before.scrollToLine(12)
+    noteWakeViewport('leaf-1', before)
+    armWakeScrollback(['leaf-1'])
+    const remounted = pane(5)
+    expect(await wake(remounted, 'leaf-1', '$ ')).toBe(true)
+    const active = remounted.buffer.active
+    expect(active.viewportY).toBe(12)
+    expect(active.getLine(active.viewportY)!.translateToString(true).trimEnd()).toBe('row 12')
   })
 
   it('a person who had scrolled up keeps their place instead of jumping', async () => {

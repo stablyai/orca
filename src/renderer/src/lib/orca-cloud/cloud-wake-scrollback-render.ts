@@ -137,6 +137,27 @@ export function renderBufferRows(buffer: RestoreBuffer, from: number, to: number
   return out
 }
 
+/** `renderBufferRows` in 1000-row chunks, yielding between them (off the input path). */
+export async function renderBufferRowsAsync(
+  buffer: RestoreBuffer,
+  from: number,
+  to: number,
+  chunk = 1000
+): Promise<string> {
+  let out = ''
+  for (let start = Math.max(0, from); start < to; start += chunk) {
+    const end = Math.min(to, start + chunk)
+    if (start > from && !buffer.getLine(start)?.isWrapped) {
+      out += '\r\n'
+    }
+    out += renderBufferRows(buffer, start, end)
+    if (end < to) {
+      await new Promise<void>((resolve) => setTimeout(resolve, 0))
+    }
+  }
+  return out
+}
+
 const ESC = '\x1b'
 const BEL = '\x07'
 

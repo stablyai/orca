@@ -23,6 +23,7 @@ import {
   beginWakeScrollbackRestore,
   finishWakeScrollbackRestore,
   HOLD_RENDER_UNTIL_RESTORED,
+  noteBeforeCloudReplay,
   type WakeScrollbackRestore
 } from '@/lib/orca-cloud/cloud-wake-scrollback'
 
@@ -118,7 +119,20 @@ export function bindReplayDataDrain(session: ConnectPanePtySession): void {
       let replayPayload = data
       let preSleep: WakeScrollbackRestore | null = null
       if (clearBeforeReplay) {
-        // WAKE-SCROLLBACK: a woken cloud pane's pre-sleep output, put back once this snapshot painted.
+        // WAKE-SCROLLBACK: a resubscribe keeps only the host's 1000 rows; keep the fuller copy first
+        // in case a sleep nobody clicked here follows (a teammate, idle auto-sleep).
+        const keptBeforeReplay = noteBeforeCloudReplay(
+          session.pane.leafId,
+          session.pane.terminal,
+          payload.ptyId
+        )
+        if (keptBeforeReplay) {
+          await keptBeforeReplay
+          if (!isCurrentPayload()) {
+            continue
+          }
+        }
+        // A woken cloud pane's pre-sleep output, put back once this snapshot painted.
         preSleep = beginWakeScrollbackRestore(
           session.pane.leafId,
           session.pane.terminal,

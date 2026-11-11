@@ -3,9 +3,12 @@
 // output the pane showed before the sleep is written back above a "Slept 14:02–14:31 · processes
 // stopped" divider, client-side only (nothing reaches the PTY), as rendered text + SGR.
 import { translate } from '@/i18n/i18n'
+import { parseRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
+import { isOrcaCloudEnvironmentId } from './orca-cloud-environment-id'
 import {
   formatSleptRange,
   renderBufferRows,
+  renderBufferRowsAsync,
   sanitizeRestoredText,
   type RestoreBuffer
 } from './cloud-wake-scrollback-render'
@@ -22,7 +25,20 @@ type PendingHistory = {
   armed: boolean
   /** The pre-sleep terminal: a snapshot for a different one belongs to the woken terminal. */
   ptyId: string | null
+  /** The line the person had scrolled up to (kept across the wake's remount), or null at the bottom. */
+  scrolledTo: number | null
 }
+
+/**
+ * The pane just before a clearing replay of its own terminal (a resubscribe, e.g. while the VM
+ * suspends): that replay keeps only the host's 1000 rows. One per pane, replaced, never piled up.
+ */
+type PreReplaySnapshot = { ptyId: string; at: number; aboveScreen: string; screen: string }
+const preReplay = new Map<string, PreReplaySnapshot>()
+/** The host's subscribe/recovery replay keeps this many rows of history. */
+const HOST_REPLAY_ROWS = 1000
+/** A sleep that follows a resubscribe within this long uses what the pane held before it. */
+const PRE_REPLAY_MAX_AGE_MS = 10 * 60_000
 
 // Keyed by the pane's durable leaf id; cleared once restored, or when the pane goes away.
 const SGR = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, 'g')
@@ -30,7 +46,10 @@ const pending = new Map<string, PendingHistory>()
 
 export type ScrollbackSource = {
   rows: number
-  buffer: { normal: RestoreBuffer & { baseY: number } }
+  buffer: {
+    normal: RestoreBuffer & { baseY: number }
+    active?: { viewportY: number; baseY: number }
+  }
 }
 
 function lastTextRow(buffer: RestoreBuffer): number {
@@ -78,12 +97,27 @@ export function captureWakeScrollback(
   }
   const normal = terminal.buffer.normal
   const end = options.agentPane ? normal.baseY : lastTextRow(normal) + 1
-  const text = renderBufferRows(normal, Math.max(0, end - options.maxRows), end)
+  let text = renderBufferRows(normal, Math.max(0, end - options.maxRows), end)
+  // A sleep nobody clicked here (a teammate, idle auto-sleep): the VM was already going down when
+  // the pane heard, and a resubscribe may have cut it to the host's 1000 rows. What it held just
+  // before that replay is the fuller copy.
+  const before = preReplay.get(leafId)
+  if (before && before.ptyId === options.ptyId && Date.now() - before.at < PRE_REPLAY_MAX_AGE_MS) {
+    const fuller = options.agentPane
+      ? before.aboveScreen
+      : [before.aboveScreen, before.screen].filter((part) => part !== '').join('\r\n')
+    if (fuller.split('\r\n').length > text.split('\r\n').length) {
+      text = fuller.split('\r\n').slice(-options.maxRows).join('\r\n')
+    }
+  }
+  preReplay.delete(leafId)
+  const active = terminal.buffer.active
   const entry: PendingHistory = {
     sleptAt: options.sleptAt ?? Date.now(),
     armed: false,
     ptyId: options.ptyId ?? null,
-    text: text.replace(SGR, '').trim() === '' ? null : text
+    text: text.replace(SGR, '').trim() === '' ? null : text,
+    scrolledTo: active && active.viewportY < active.baseY ? active.viewportY : null
   }
   pending.set(leafId, entry)
   if (entry.text !== null || !options.readOnlyCopy) {
@@ -142,6 +176,45 @@ export function hasPendingWakeScrollback(leafId: string): boolean {
 export function forgetWakeScrollback(leafIds: Iterable<string>): void {
   for (const id of leafIds) {
     pending.delete(id)
+    preReplay.delete(id)
+  }
+}
+
+/**
+ * Before a clearing replay on an Orca Cloud pane with no capture pending: keep what the pane holds,
+ * if it holds more than the host's replay keeps. Rendered in chunks, off the input path.
+ */
+export function noteBeforeCloudReplay(
+  leafId: string,
+  terminal: ScrollbackSource,
+  ptyId: string | null,
+  isCloudPane: (ptyId: string) => boolean = (id) =>
+    isOrcaCloudEnvironmentId(parseRemoteRuntimePtyId(id)?.environmentId ?? '')
+): Promise<void> | null {
+  // Decided synchronously, cheapest facts first: a skipped pane adds no await to the replay path.
+  if (!ptyId || pending.has(leafId) || !isCloudPane(ptyId)) {
+    return null
+  }
+  const normal = terminal.buffer?.normal
+  if (!normal || normal.length - terminal.rows <= HOST_REPLAY_ROWS) {
+    return null
+  }
+  return (async () => {
+    const aboveScreen = await renderBufferRowsAsync(normal, 0, normal.baseY)
+    const screen = renderBufferRows(normal, normal.baseY, lastTextRow(normal) + 1)
+    preReplay.set(leafId, { ptyId, at: Date.now(), aboveScreen, screen })
+  })()
+}
+
+/** The person scrolled the waking pane: where to put them back after the restore. */
+export function noteWakeViewport(
+  leafId: string,
+  terminal: { buffer: { active: { viewportY: number; baseY: number } } }
+): void {
+  const entry = pending.get(leafId)
+  if (entry) {
+    const { viewportY, baseY } = terminal.buffer.active
+    entry.scrolledTo = viewportY < baseY ? viewportY : null
   }
 }
 
@@ -193,8 +266,9 @@ export function beginWakeScrollbackRestore(
   }
   const { viewportY, baseY } = terminal.buffer.active
   return {
-    block: `\x1b[0m${sanitizeRestoredText(entry.text)}\x1b[0m\r\n${wakeDividerLine(entry.sleptAt, wokeAt)}`,
-    scrolledTo: viewportY < baseY ? viewportY : null
+    // A remount on wake starts at the bottom: the person's scroll is the one noted before it.
+    scrolledTo: viewportY < baseY ? viewportY : entry.scrolledTo,
+    block: `\x1b[0m${sanitizeRestoredText(entry.text)}\x1b[0m\r\n${wakeDividerLine(entry.sleptAt, wokeAt)}`
   }
 }
 
@@ -267,4 +341,5 @@ export async function finishWakeScrollbackRestore(
 /** Tests only. */
 export function resetWakeScrollbackForTests(): void {
   pending.clear()
+  preReplay.clear()
 }

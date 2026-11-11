@@ -39,7 +39,11 @@ import { makePaneKey } from '../../../../../../../shared/workspace-layout/stable
 import { cloudWokeActionFor, runCloudWokeAction } from '@/lib/orca-cloud/cloud-wake-hint-action'
 import { captureCloudPaneBeforeWake } from '@/lib/orca-cloud/cloud-wake-pane-capture'
 import { useIsWorktreeGoingToSleep } from '@/lib/worktree-sleep-view'
-import { armWakeScrollback, forgetWakeScrollback } from '@/lib/orca-cloud/cloud-wake-scrollback'
+import {
+  armWakeScrollback,
+  forgetWakeScrollback,
+  noteWakeViewport
+} from '@/lib/orca-cloud/cloud-wake-scrollback'
 import { restartPaneExists } from '@/lib/orca-cloud/cloud-agent-restart-pane-watch'
 import { mapPaneTerminalErrors } from '../../../errors/terminal-error-accumulation'
 import type { TerminalPaneController } from '../../../controller/use-terminal-pane-controller'
@@ -186,6 +190,22 @@ export function TerminalPaneRecoveryPortals({
     controller.worktreeId,
     asleepSince
   ])
+  // WAKE-SCROLLBACK: a person scrolling the pane while it sleeps or wakes keeps that place after the
+  // restore, across the wake's remount. Wheel only: writes also scroll, and must not count.
+  useEffect(() => {
+    if (!isCloud || !(cloudAsleep || cloudWaking)) {
+      return
+    }
+    const listening = new AbortController()
+    for (const pane of managedPanes) {
+      pane.container.addEventListener(
+        'wheel',
+        () => requestAnimationFrame(() => noteWakeViewport(pane.leafId, pane.terminal)),
+        { passive: true, signal: listening.signal }
+      )
+    }
+    return () => listening.abort()
+  }, [isCloud, cloudAsleep, cloudWaking, managedPanes])
   // A pane closed, or its tab or workspace went away: drop its kept pre-sleep output.
   const leafIdsRef = useRef<(typeof managedPanes)[number]['leafId'][]>([])
   useEffect(() => {
