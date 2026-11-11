@@ -251,6 +251,7 @@ async function execute({ id, command: c }: SearchWorkerRequest): Promise<SearchW
         id,
         reset,
         candidates: result,
+        coverage: c.command.kind === 'path' && c.command.read ? rows(c.command.path) : undefined,
         deltas: path
           ? [delta(path, previous)]
           : result.withdrawn?.map((row) => delta(row.path, row)),

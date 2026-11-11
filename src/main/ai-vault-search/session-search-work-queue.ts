@@ -11,7 +11,7 @@ export type SessionSearchWorkCommand =
       recent: boolean
       metadata: boolean
     }
-  | { kind: 'next' }
+  | { kind: 'next'; eligibleThrough?: number }
   | { kind: 'stats' }
   | { kind: 'get'; path: string }
   | {
@@ -22,13 +22,33 @@ export type SessionSearchWorkCommand =
     }
   | { kind: 'remove'; path: string }
   | { kind: 'row'; path: string; row?: SessionSearchFileRow }
-export type SessionSearchWorkResult = { size: number; left: number; work?: SessionSearchWork }
+export type SessionSearchWorkResult = {
+  size: number
+  left: number
+  work?: SessionSearchWork
+  works?: SessionSearchWork[]
+  revision?: number
+  eligibleThrough?: number
+}
 
 /** Only active reads cross the boundary; the writer owns ready work and its transitions. */
 export class SessionSearchWorkQueue {
   private store: SessionSearchIndexStore | undefined
   private count = 0
   private remaining = 0
+  private page: SessionSearchWork[] = []
+  private revision: number | undefined
+  private selectedRevision: number | undefined
+  private eligibleThrough: number | undefined
+  beginPass(): void {
+    this.page = []
+    this.eligibleThrough = undefined
+  }
+  selectionCurrent(result: SessionSearchWorkResult): boolean {
+    const current = this.selectedRevision === result.revision
+    this.update(result)
+    return current
+  }
   attach(store: SessionSearchIndexStore): void {
     this.store ??= store
   }
@@ -39,6 +59,10 @@ export class SessionSearchWorkQueue {
     return this.remaining
   }
   update(result: SessionSearchWorkResult): void {
+    if (this.revision !== result.revision) {
+      this.page = []
+      this.revision = result.revision
+    }
     this.count = result.size
     this.remaining = result.left
   }
@@ -62,7 +86,13 @@ export class SessionSearchWorkQueue {
     return !!work && (work.force || work.metadata)
   }
   async next(): Promise<SessionSearchWork | undefined> {
-    return (await this.request({ kind: 'next' })).work
+    if (!this.page.length) {
+      const result = await this.request({ kind: 'next', eligibleThrough: this.eligibleThrough })
+      this.eligibleThrough ??= result.eligibleThrough
+      this.page = result.works ?? (result.work ? [result.work] : [])
+    }
+    this.selectedRevision = this.revision
+    return this.page.shift()
   }
   async get(path: string): Promise<SessionSearchWork | undefined> {
     return (await this.request({ kind: 'get', path })).work

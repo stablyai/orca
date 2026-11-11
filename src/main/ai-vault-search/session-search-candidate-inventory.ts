@@ -45,10 +45,14 @@ export class SessionSearchCandidateInventory extends SessionSearchCandidatePubli
     super.reset()
     this.sourceOrders.clear()
   }
-  async rootFor(candidate: SessionFileCandidate): Promise<string | undefined> {
-    return (
-      await this.request!({ kind: 'path', path: candidate.file.path, agent: candidate.agent })
-    ).rows[0]?.root
+  async readAdmission(candidate: SessionFileCandidate) {
+    const result = await this.request!({
+      kind: 'path',
+      path: candidate.file.path,
+      agent: candidate.agent,
+      read: true
+    })
+    return { root: result.rows.find((row) => row.selected)?.root, work: result.work! }
   }
   async has(path: string, agent?: string | null): Promise<boolean> {
     return (await this.request!({ kind: 'path', path, agent })).rows.length > 0

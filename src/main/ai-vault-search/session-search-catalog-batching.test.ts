@@ -15,6 +15,10 @@ import {
 import { SessionSearchWorkerClient } from './session-search-worker-client'
 import * as filesystem from '../native-chat/wsl-transcript-fs-access'
 import { SessionSearchIndexer } from './session-search-indexer'
+import { SessionSearchWorkerStore } from './session-search-worker-store'
+import { SessionSearchWorkQueue } from './session-search-work-queue'
+import { configureSessionSearchWorkerFixture } from './session-search-worker.test-fixture'
+import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
 
 it.each([40, 400])(
   'batches discovery and replacement metadata for %s retained files',
@@ -146,53 +150,56 @@ it.each([40, 400])(
   }
 )
 
-it('searches the newest known transcript before an older candidate page', async () => {
-  const harness = await openSessionSearchIndexerHarness('ss-newest-page')
-  const clock = new FakeSessionSearchClock()
-  clock.costPerNowMs = 1000
-  const subject = new SessionSearchIndexer({
-    databasePath: harness.databasePath,
-    roots: harness.roots,
-    historyDays: null,
-    clock,
-    passDeadlineMs: 1000,
-    discoveryDeadlineMs: Infinity
-  })
-  try {
-    for (let index = 0; index < 300; index++) {
-      const path = join(harness.claudeProjectDir, `${String(index).padStart(3, '0')}.jsonl`)
-      await writeClaudeTranscript(
-        path,
-        [index === 299 ? 'newestknownneedle' : 'olderknownneedle'],
-        `session-${index}`
-      )
-      const time = new Date(index === 299 ? '2025-01-02' : '2025-01-01')
-      await utimes(path, time, time)
+it.each([40, 400])(
+  'searches the newest known transcript before an older candidate page at %s files',
+  async (population) => {
+    const harness = await openSessionSearchIndexerHarness('ss-newest-page')
+    const clock = new FakeSessionSearchClock()
+    clock.costPerNowMs = 1000
+    const subject = new SessionSearchIndexer({
+      databasePath: harness.databasePath,
+      roots: harness.roots,
+      historyDays: null,
+      clock,
+      passDeadlineMs: 1000,
+      discoveryDeadlineMs: Infinity
+    })
+    try {
+      for (let index = 0; index < population; index++) {
+        const path = join(harness.claudeProjectDir, `${String(index).padStart(3, '0')}.jsonl`)
+        await writeClaudeTranscript(
+          path,
+          [index === population - 1 ? 'newestknownneedle' : 'olderknownneedle'],
+          `session-${index}`
+        )
+        const time = new Date(index === population - 1 ? '2025-01-02' : '2025-01-01')
+        await utimes(path, time, time)
+      }
+      await subject.start()
+      expect(
+        harness.read((db) =>
+          db
+            .prepare(
+              "SELECT count(*) AS n FROM messages_fts WHERE messages_fts MATCH 'newestknownneedle'"
+            )
+            .get()
+        )
+      ).toEqual({ n: 2 })
+      expect(
+        harness.read((db) =>
+          db
+            .prepare(
+              "SELECT count(*) AS n FROM messages_fts WHERE messages_fts MATCH 'olderknownneedle'"
+            )
+            .get()
+        )
+      ).toEqual({ n: 0 })
+    } finally {
+      await subject.close()
+      await harness.cleanup()
     }
-    await subject.start()
-    expect(
-      harness.read((db) =>
-        db
-          .prepare(
-            "SELECT count(*) AS n FROM messages_fts WHERE messages_fts MATCH 'newestknownneedle'"
-          )
-          .get()
-      )
-    ).toEqual({ n: 2 })
-    expect(
-      harness.read((db) =>
-        db
-          .prepare(
-            "SELECT count(*) AS n FROM messages_fts WHERE messages_fts MATCH 'olderknownneedle'"
-          )
-          .get()
-      )
-    ).toEqual({ n: 0 })
-  } finally {
-    await subject.close()
-    await harness.cleanup()
   }
-})
+)
 
 it('redelivers an unaccepted observation and retains a newer rewrite after an older acknowledgement', async () => {
   const harness = await openSessionSearchIndexerHarness('ss-observation-ack')
@@ -369,6 +376,160 @@ it.each([40, 400])(
     } finally {
       traffic.mockRestore()
       await subject.close()
+      await harness.cleanup()
+    }
+  }
+)
+
+it.each([40, 400])(
+  'searches a new change and owed history in the same limited pass with %s changes',
+  async (population) => {
+    const harness = await openSessionSearchIndexerHarness('ss-read-fairness')
+    const clock = new FakeSessionSearchClock()
+    clock.costPerNowMs = 1000
+    const subject = new SessionSearchIndexer({
+      databasePath: harness.databasePath,
+      roots: harness.roots,
+      historyDays: null,
+      clock,
+      passDeadlineMs: 2000,
+      discoveryDeadlineMs: Infinity,
+      fullSweepEveryCycles: 1000
+    })
+    const directory = join(
+      harness.claudeProjectDir,
+      ...Array.from({ length: 8 }, () => 'p'.repeat(90))
+    )
+    const hits = () =>
+      harness.read((db) =>
+        db
+          .prepare(`SELECT DISTINCT s.session_id AS id FROM messages_fts
+          JOIN messages m ON m.id=messages_fts.rowid
+          JOIN sessions s ON s.id=m.session_row_id
+          WHERE messages_fts MATCH 'fairnessneedle' ORDER BY s.session_id`)
+          .all()
+      )
+    try {
+      for (let index = 0; index < 3; index++) {
+        const path = join(directory, `backlog-${index}.jsonl`)
+        await writeClaudeTranscript(path, ['fairnessneedle'], `backlog-${index}`)
+        const time = new Date(Date.UTC(2024, 0, 1) - index * 1000)
+        await utimes(path, time, time)
+      }
+      await subject.start()
+      expect(hits()).toEqual([{ id: 'backlog-0' }, { id: 'backlog-1' }])
+      for (let index = 0; index < population; index++) {
+        const path = join(directory, `changed-${String(index).padStart(3, '0')}.jsonl`)
+        await writeClaudeTranscript(path, ['fairnessneedle'], `changed-${index}`)
+        const time = new Date(Date.UTC(2025, 0, 1) + index * 1000)
+        await utimes(path, time, time)
+      }
+      await subject.reconcile()
+      expect(hits()).toEqual([
+        { id: 'backlog-0' },
+        { id: 'backlog-1' },
+        { id: 'backlog-2' },
+        { id: `changed-${population - 1}` }
+      ])
+    } finally {
+      await subject.close()
+      await harness.cleanup()
+    }
+  }
+)
+
+it.each([40, 400])(
+  'preserves ranked read obligations across bounded pages for %s candidates',
+  async (population) => {
+    const harness = await openSessionSearchIndexerHarness('ss-read-pages')
+    const store = new SessionSearchWorkerStore(harness.databasePath, (error) => {
+      throw error
+    })
+    const queue = new SessionSearchWorkQueue()
+    queue.attach(store)
+    const traffic = vi.spyOn(SessionSearchWorkerClient.prototype, 'request')
+    const candidates: SessionFileCandidate[] = []
+    let largestResponse = 0
+    configureSessionSearchWorkerFixture({
+      prelude: '',
+      data: undefined,
+      onResponse: (response) => {
+        largestResponse = Math.max(largestResponse, JSON.stringify(response).length * 2)
+      }
+    })
+    try {
+      await store.prepare()
+      const prefix = join(harness.root, ...Array.from({ length: 10 }, () => 'p'.repeat(100)))
+      for (let index = 0; index < population; index++) {
+        const candidate: SessionFileCandidate = {
+          agent: 'claude',
+          codexHome: null,
+          file: {
+            path: join(prefix, `${String(population - index).padStart(4, '0')}.jsonl`),
+            mtimeMs: 10000 - Math.floor(index / 4),
+            modifiedAt: '1970-01-01T00:00:10.000Z',
+            sizeBytes: 20
+          }
+        }
+        if (index === 1 || index === 3) {
+          const segments = index === 1 ? 12000 : 6000
+          const windowsRoot = `C:\\${Array.from({ length: segments }, () => 'p').join('\\')}`
+          candidate.agent = 'antigravity'
+          candidate.file.path = `${windowsRoot}\\conversation-${index}.pb`
+          candidate.antigravityHistoryPath = `${windowsRoot}\\history-${index}.pb`
+        }
+        candidates.push(candidate)
+        await queue.enqueue(candidate, store, false, index % 2 === 0)
+      }
+      traffic.mockClear()
+      queue.beginPass()
+      const first = await queue.next()
+      expect(first?.candidate.file.path).toBe(candidates[0].file.path)
+      queue.beginPass()
+      expect(await queue.next()).toEqual(first)
+      await queue.acknowledge(first!, true)
+      const observed: string[] = []
+      for (let index = 1; index < population; index++) {
+        let work = await queue.next()
+        if (index === 1) {
+          await queue.enqueue(candidates[1], store, false, false, true)
+          await queue.enqueue(candidates[2], store, true, true)
+          await queue.acknowledge(work!, false)
+          work = await queue.next()
+          expect(work).toMatchObject({ candidate: candidates[1], metadata: true })
+        }
+        if (index === 2) {
+          expect(work).toMatchObject({ candidate: candidates[2], force: true })
+        }
+        observed.push(work!.candidate.file.path)
+        await queue.acknowledge(work!, false)
+      }
+      expect(observed).toEqual(candidates.slice(1).map((candidate) => candidate.file.path))
+      expect(await queue.next()).toBeUndefined()
+      // Each lane needs a bounded projection per row/byte page; per-file accepted acknowledgements are separate.
+      const pages =
+        Math.ceil(population / 256) +
+        Math.ceil((JSON.stringify(candidates).length * 2) / (128 * 1024))
+      expect(
+        traffic.mock.calls.filter(
+          ([command]) => command.op === 'work' && command.command.kind === 'next'
+        ).length
+      ).toBeLessThanOrEqual(40 + 12 * pages)
+      queue.beginPass()
+      const retry = await queue.next()
+      expect(retry?.candidate.file.path).toBe(candidates[0].file.path)
+      await queue.enqueue(candidates[0], store, false, true, true)
+      await queue.acknowledge(retry!, false)
+      const latest = await queue.next()
+      expect(latest).toMatchObject({ candidate: candidates[0], metadata: true })
+      await queue.acknowledge(latest!, false)
+      expect(await queue.next()).toBeUndefined()
+      expect(largestResponse).toBeLessThanOrEqual(256 * 1024)
+    } finally {
+      configureSessionSearchWorkerFixture()
+      traffic.mockRestore()
+      await store.flush()
+      store.close()
       await harness.cleanup()
     }
   }

@@ -30,6 +30,7 @@ export async function runSessionSearchIndexPass(
   }
 ): Promise<{ stats: SessionParseStats; outOfTime: boolean; left: number }> {
   const stats = createSessionParseStats()
+  queue.beginPass()
   // Retry once per cycle; rotating the failed path cannot monopolize a pass.
   const available = queue.size
   let consumed = 0
@@ -53,7 +54,9 @@ export async function runSessionSearchIndexPass(
     }
     const { candidate } = work
     const path = candidate.file.path
-    await store.prepareCoverage?.([path])
+    if (!options.admit || !store.coverageKnown?.(path)) {
+      await store.prepareCoverage?.([path])
+    }
     let row = store.fileRow(path)
     const cursor = row ? store.indexedFile(path, fileIdentity(candidate.file)) : null
     const entry = work.metadata

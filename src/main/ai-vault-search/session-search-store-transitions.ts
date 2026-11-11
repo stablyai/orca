@@ -94,7 +94,11 @@ export async function transitionSessionSearchCandidates(
     }
   }
   if (command.kind !== 'admit') {
-    return store.catalogCandidates.execute(command)
+    const result = store.catalogCandidates.execute(command)
+    if (command.kind === 'path' && command.read) {
+      return { ...result, work: await store.work({ kind: 'get', path: command.path }) }
+    }
+    return result
   }
   for (const receipt of command.rows) {
     let row = store.catalogCandidates.entry(receipt.key)
@@ -149,6 +153,8 @@ export async function transitionSessionSearchWork(
 ): Promise<SessionSearchWorkResult> {
   queue.attach(store)
   let work
+  let works
+  let eligibleThrough
   switch (command.kind) {
     case 'enqueue':
       if (store.fileRow(command.candidate.file.path)?.state === 'failed') {
@@ -172,7 +178,8 @@ export async function transitionSessionSearchWork(
       work = await queue.get(command.path)
       break
     case 'next':
-      work = await queue.next()
+      eligibleThrough = command.eligibleThrough ?? queue.eligibleThrough
+      works = queue.next(store.connection, eligibleThrough)
       break
     case 'stats':
       break
@@ -222,5 +229,12 @@ export async function transitionSessionSearchWork(
       await queue.rowChanged(command.path, command.row)
       break
   }
-  return { size: queue.size, left: queue.left, work }
+  return {
+    size: queue.size,
+    left: queue.left,
+    work,
+    works,
+    eligibleThrough,
+    revision: queue.revision
+  }
 }

@@ -179,9 +179,17 @@ export async function runSessionSearchPass(
       overdue: readOverdue,
       publications: state.candidates,
       admit: async (work) => {
+        const admission = await state.candidates.readAdmission(work.candidate)
+        if (!state.queue.selectionCurrent(admission.work)) {
+          return undefined
+        }
+        if (admission.work.work?.version !== work.version) {
+          return undefined
+        }
+        work = admission.work.work
         const { candidate } = work
         const path = candidate.file.path
-        const rootDir = await state.candidates.rootFor(candidate)
+        const rootDir = admission.root
         if (rootDir === undefined) {
           await state.queue.acknowledge(work, false)
           return undefined

@@ -222,6 +222,10 @@ export class SessionSearchWorkerStoreBase extends SessionSearchCursorSnapshot {
     if (!response.candidates) {
       throw new Error('Session search candidate catalog unavailable')
     }
+    if (command.kind === 'path' && command.read) {
+      this.projectCoverage(command.path, response.coverage?.[0])
+      this.trimCoverage()
+    }
     return response.candidates
   }
   async work(command: SessionSearchWorkCommand): Promise<SessionSearchWorkResult> {

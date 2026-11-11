@@ -38,7 +38,7 @@ export type SessionSearchCandidateCommand =
       rows: { path: string; agents?: string[]; observation?: SessionSearchRemovalReceipt }[]
     }
   | { kind: 'unowned-page'; rows: { path: string; agent?: string | null }[] }
-  | { kind: 'path'; path: string; agent?: string | null }
+  | { kind: 'path'; path: string; agent?: string | null; read?: boolean }
   | { kind: 'group'; group: string; after?: string }
   | { kind: 'changes'; after?: string; root?: string; agent?: string }
   | { kind: 'rerank'; root: string; agent: string; order: [string, number][]; after?: string }

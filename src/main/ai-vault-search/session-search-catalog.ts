@@ -1,3 +1,4 @@
+import { sessionSearchCatalogPageRows } from './session-search-catalog-query'
 import type SyncDatabase from '../sqlite/sync-database'
 import { transitionSessionSearchCatalog } from './session-search-catalog-transition'
 import { SessionSearchCatalogStorage } from './session-search-catalog-storage'
@@ -248,45 +249,9 @@ export class SessionSearchCatalog extends SessionSearchCatalogStorage {
         }
       }
       case 'page': {
-        const conditions = ['scope = ?', 'key > ?']
-        const values: (string | number)[] = [base.scope, base.after ?? '']
-        if (base.prefix !== undefined) {
-          conditions.push('key >= ?', 'key < ?')
-          values.push(base.prefix, `${base.prefix}\uffff`)
-        }
-        for (const [column, value] of [
-          ['parent', base.parent],
-          ['group_key', base.group],
-          ['ready', base.ready]
-        ] as const) {
-          if (value !== undefined) {
-            conditions.push(`${column} = ?`)
-            values.push(value)
-          }
-        }
-        if (base.throughRevision !== undefined) {
-          conditions.push('tie <= ?')
-          values.push(base.throughRevision)
-        }
-        if (base.beforeRank !== undefined) {
-          conditions.push('rank <= ?')
-          values.push(base.beforeRank)
-        }
         const rows: SessionSearchCatalogRow[] = []
         let bytes = 1024
-        const iterator = this.db
-          .prepare(`SELECT key,value,parent,group_key,rank,ready,tie FROM temp.search_catalog
-            WHERE ${conditions.join(' AND ')} ORDER BY ${base.orderRevision ? 'tie,key' : base.orderRank ? 'rank,tie,key' : 'key'} LIMIT ?`)
-          .iterate(
-            ...values,
-            Math.max(
-              1,
-              Math.min(
-                base.limit ?? SESSION_SEARCH_CATALOG_PAGE_ROWS,
-                SESSION_SEARCH_CATALOG_PAGE_ROWS
-              )
-            )
-          )
+        const iterator = sessionSearchCatalogPageRows(this.db, base)
         for (const value of iterator) {
           const row = this.decode(value)
           const next = this.bytes(row)

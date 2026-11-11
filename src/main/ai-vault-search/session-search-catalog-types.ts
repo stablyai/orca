@@ -28,6 +28,7 @@ export type SessionSearchCatalogRow = {
   tie?: number
 }
 export type SessionSearchInputReceipt = { consumer: string; revision: number }
+export type SessionSearchCatalogPosition = { key: string; rank: number; tie: number }
 export type SessionSearchCatalogBaseCommand = (
   | { kind: 'get'; scope: string; key: string }
   | { kind: 'get-page'; scope: string; keys: string[] }
@@ -44,6 +45,7 @@ export type SessionSearchCatalogBaseCommand = (
       kind: 'page'
       scope: string
       after?: string
+      afterOrder?: SessionSearchCatalogPosition
       parent?: string
       group?: string
       ready?: number
@@ -51,6 +53,7 @@ export type SessionSearchCatalogBaseCommand = (
       orderRevision?: boolean
       throughRevision?: number
       beforeRank?: number
+      eligibleThrough?: number
       limit?: number
       prefix?: string
     }

@@ -2,6 +2,9 @@ import { SessionSearchCatalogClient } from './session-search-catalog-client'
 import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
 import { fileIdentity } from './session-search-file-cursor'
 import { sessionSearchReadDecision } from './session-search-read-decision'
+import type SyncDatabase from '../sqlite/sync-database'
+import { sessionSearchCatalogPageRows } from './session-search-catalog-query'
+import { SESSION_SEARCH_CATALOG_PAGE_BYTES } from './session-search-catalog'
 import type { SessionSearchFileRow, SessionSearchIndexStore } from './session-search-store'
 
 export type SessionSearchWork = {
@@ -10,7 +13,14 @@ export type SessionSearchWork = {
   version: number
   metadata: boolean
 }
-type Queued = { work: SessionSearchWork; lane: string; order: number; due: boolean; rank: number }
+type Queued = {
+  work: SessionSearchWork
+  lane: string
+  order: number
+  due: boolean
+  rank: number
+  deferred: boolean
+}
 
 /** A unique path's obligation lives in the writer even after it leaves the recent list. */
 export class SessionSearchWorkCatalog {
@@ -20,6 +30,10 @@ export class SessionSearchWorkCatalog {
   private chooseChanged = true
   private count = 0
   private due = 0
+  revision = 0
+  get eligibleThrough(): number {
+    return this.order
+  }
 
   attach(store: SessionSearchIndexStore): void {
     this.catalog ??= new SessionSearchCatalogClient('read-work', (command) =>
@@ -63,9 +77,11 @@ export class SessionSearchWorkCatalog {
       lane: existing?.lane ?? (recent ? 'changed' : 'backlog'),
       order: existing?.order ?? ++this.order,
       due: row?.state === 'due',
+      deferred: false,
       rank: -(candidate.file.aliasMtimeMs ?? candidate.file.mtimeMs)
     }
     await this.put(path, value)
+    this.revision++
     this.count += existing ? 0 : 1
     this.due += Number(value.due) - Number(existing?.due ?? false)
   }
@@ -75,16 +91,53 @@ export class SessionSearchWorkCatalog {
     return !!work && (work.force || work.metadata)
   }
 
-  async next(): Promise<SessionSearchWork | undefined> {
-    const preferred = this.chooseChanged ? 'changed' : 'backlog'
-    this.chooseChanged = !this.chooseChanged
-    for (const lane of [preferred, preferred === 'changed' ? 'backlog' : 'changed']) {
-      const page = await this.catalog!.page({ group: lane, orderRank: true, limit: 1 })
-      if (page.rows.length) {
-        return page.rows[0].value.work
+  next(db: SyncDatabase, eligibleThrough = this.order): SessionSearchWork[] {
+    const lanes: ReturnType<typeof sessionSearchCatalogPageRows>[] = []
+    const works: SessionSearchWork[] = []
+    let bytes = 1024
+    let selected = this.chooseChanged ? 0 : 1
+    const exhausted = [false, false]
+    try {
+      for (const lane of ['changed', 'backlog'] as const) {
+        lanes.push(
+          sessionSearchCatalogPageRows(
+            db,
+            { kind: 'page', scope: 'read-work', orderRank: true, eligibleThrough, limit: 256 },
+            lane
+          )
+        )
+      }
+      while (works.length < 256) {
+        if (exhausted[selected]) {
+          selected = 1 - selected
+          if (exhausted[selected]) {
+            break
+          }
+        }
+        const row = lanes[selected].next()
+        if (row.done) {
+          exhausted[selected] = true
+          continue
+        }
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this queue encoded its own catalog record.
+        const work = (JSON.parse(String(row.value.value)) as Queued).work
+        const size = JSON.stringify(work).length * 2 + 64
+        if (works.length && bytes + size > SESSION_SEARCH_CATALOG_PAGE_BYTES) {
+          break
+        }
+        works.push(work)
+        bytes += size
+        if (bytes >= SESSION_SEARCH_CATALOG_PAGE_BYTES) {
+          break
+        }
+        selected = 1 - selected
+      }
+    } finally {
+      for (const lane of lanes) {
+        lane.return?.()
       }
     }
-    return undefined
+    return works
   }
 
   async get(path: string): Promise<SessionSearchWork | undefined> {
@@ -97,6 +150,7 @@ export class SessionSearchWorkCatalog {
     if (entry?.work.version !== work.version) {
       return
     }
+    this.chooseChanged = !this.chooseChanged
     if (retry) {
       await this.put(path, {
         ...entry,
@@ -104,20 +158,22 @@ export class SessionSearchWorkCatalog {
         lane: 'backlog',
         order: ++this.order,
         due: false,
+        deferred: true,
         rank: this.order
       })
       this.due -= Number(entry.due)
     } else {
-      await this.remove(path)
+      await this.remove(path, false)
     }
   }
 
-  async remove(path: string): Promise<void> {
+  async remove(path: string, invalidate = true): Promise<void> {
     const entry = await this.catalog?.get(path)
     if (!entry) {
       return
     }
     await this.catalog!.delete(path)
+    this.revision += Number(invalidate)
     this.count--
     this.due -= Number(entry.due)
   }
@@ -133,6 +189,11 @@ export class SessionSearchWorkCatalog {
   }
 
   private put(path: string, value: Queued): Promise<void> {
-    return this.catalog!.put(path, value, { group: value.lane, rank: value.rank, tie: value.order })
+    return this.catalog!.put(path, value, {
+      group: value.lane,
+      rank: value.rank,
+      tie: value.order,
+      ready: Number(!value.deferred)
+    })
   }
 }

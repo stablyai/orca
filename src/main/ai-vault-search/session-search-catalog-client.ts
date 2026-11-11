@@ -3,6 +3,7 @@ import type {
   SessionSearchCatalogResult,
   SessionSearchCatalogRow
 } from './session-search-catalog'
+import type { SessionSearchCatalogPosition } from './session-search-catalog-types'
 import { sessionSearchRecordPages } from './session-search-catalog-pages'
 import {
   SESSION_SEARCH_CATALOG_PAGE_BYTES,
@@ -161,6 +162,7 @@ export class SessionSearchCatalogClient<T> {
   async page(
     options: {
       after?: string
+      afterOrder?: SessionSearchCatalogPosition
       parent?: string
       group?: string
       ready?: number
@@ -169,12 +171,24 @@ export class SessionSearchCatalogClient<T> {
       limit?: number
       prefix?: string
       throughRevision?: number
+      eligibleThrough?: number
     } = {}
-  ): Promise<{ rows: { key: string; value: T }[]; after?: string }> {
+  ): Promise<{
+    rows: { key: string; value: T }[]
+    after?: string
+    position?: SessionSearchCatalogPosition
+  }> {
     const result = await this.request({ kind: 'page', scope: this.scope, ...options })
     return {
       rows: (result.rows ?? []).map((row) => ({ key: row.key, value: this.decode(row) })),
-      after: result.after
+      after: result.after,
+      position: result.rows?.length
+        ? {
+            key: result.rows.at(-1)!.key,
+            rank: result.rows.at(-1)!.rank,
+            tie: result.rows.at(-1)!.tie ?? 0
+          }
+        : undefined
     }
   }
 
