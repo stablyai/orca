@@ -64,9 +64,7 @@ export function ClientHostedBrowserPagePane({
   const webviewRef = useRef<Electron.WebviewTag | null>(null)
   const addressBarInputRef = useRef<HTMLInputElement | null>(null)
   // Seed retained failures from the page: a fresh null on remount would clear both the error and its certificate record.
-  const activeLoadFailureRef = useRef<NonNullable<typeof browserTab.loadError> | null>(
-    browserTab.loadError ?? null
-  )
+  const loadFailureRef = useRef<BrowserGuestMetadata['loadError']>(browserTab.loadError ?? null)
   const onUpdatePageStateRef = useRef(onUpdatePageState)
   const isActiveRef = useRef(isActive)
   const [attachmentError, setAttachmentError] = useState<string | null>(null)
@@ -133,7 +131,7 @@ export function ClientHostedBrowserPagePane({
     browserTabId: browserTab.id,
     worktreeId,
     webviewRef,
-    activeLoadFailureRef,
+    loadFailureRef,
     onUpdatePageState,
     onSetUrl,
     setAddressBarValue
@@ -231,12 +229,12 @@ export function ClientHostedBrowserPagePane({
         state.kind === 'navigation' ||
         ((state.kind === 'stop' || (state.kind === 'snapshot' && !state.loading)) && validDocument)
       ) {
-        activeLoadFailureRef.current = null
+        loadFailureRef.current = null
       }
       if (state.loadError) {
-        activeLoadFailureRef.current = state.loadError
+        loadFailureRef.current = state.loadError
       }
-      const activeLoadFailure = activeLoadFailureRef.current
+      const activeLoadFailure = loadFailureRef.current
       const observeUrl =
         presentDocument &&
         !activeLoadFailure &&
@@ -272,7 +270,7 @@ export function ClientHostedBrowserPagePane({
     const onNavigate = (): void => setFindOpen(false)
     webview.addEventListener('did-navigate', onNavigate)
     const onFailLoad = createBrowserClientPageLoadFailureHandler(webview, (loadError) => {
-      activeLoadFailureRef.current = loadError
+      loadFailureRef.current = loadError
       updatePageStateFromGuest(browserTab.id, { loading: false, loadError })
     })
     webview.addEventListener('did-fail-load', onFailLoad)
