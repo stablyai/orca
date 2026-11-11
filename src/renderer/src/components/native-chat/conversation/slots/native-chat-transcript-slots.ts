@@ -116,6 +116,7 @@ export function buildNativeChatTranscript(
 } {
   const {
     messages: sourceMessages,
+    imageSources = nativeChatMarkdownImageSources,
     unresolvedRowIds,
     typography,
     turnKeys,
@@ -142,7 +143,7 @@ export function buildNativeChatTranscript(
     sourceMessages,
     turnKeys,
     settledTurnKeys,
-    nativeChatMarkdownImageSources
+    imageSources
   )
   // Share row rendering facts with fold selection so answer detection agrees with visible prose.
   const foldRows = messages.map((message, index) =>

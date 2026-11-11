@@ -1,4 +1,9 @@
-import { useMemo } from 'react'
+import { NativeChatVisualOwnerContext } from '../../media/visuals/native-chat-visual-owner'
+import {
+  nativeChatMarkdownImageSources,
+  nativeChatVisualMarkdownImageSources
+} from '../../markdown/native-chat-markdown-image-sources'
+import { useContext, useMemo } from 'react'
 import {
   nativeChatLiveLine,
   type NativeChatLiveLine
@@ -28,6 +33,10 @@ export function useNativeChatTranscriptSlots({
   forkPoint: NativeChatSideChatForkPoint | null
   liveLine: NativeChatLiveLine | null
 } {
+  const visualOwner = useContext(NativeChatVisualOwnerContext)
+  const imageSources = visualOwner
+    ? nativeChatVisualMarkdownImageSources
+    : nativeChatMarkdownImageSources
   const {
     messages,
     unresolvedRowIds,
@@ -82,6 +91,7 @@ export function useNativeChatTranscriptSlots({
   const { slots, forkPoint } = useMemo(
     () =>
       buildNativeChatTranscript({
+        imageSources,
         messages,
         unresolvedRowIds,
         typography,
@@ -102,6 +112,7 @@ export function useNativeChatTranscriptSlots({
       }),
     [
       expandedTurnKeys,
+      imageSources,
       forkOffer,
       isWorking,
       lifecycleWorking,

@@ -1,3 +1,4 @@
+import { nativeChatVisualRemarkPlugins } from '../media/visuals/native-chat-visual-markdown-syntax'
 import { unified } from 'unified'
 import remarkParse from 'remark-parse'
 import remarkRehype from 'remark-rehype'
@@ -16,42 +17,48 @@ import { commentMarkdownRemarkPlugins } from '../../sidebar/comment-markdown-rem
 import { remarkChatMath } from '../../sidebar/chat-markdown-math'
 import { remarkNativeChatFileDestinations } from './native-chat-markdown-file-destinations'
 
-const parser = unified()
-  .use(remarkParse)
-  .use(remarkUnknownHtmlAsText(commentMarkdownAllowedTagNames))
-  .use(commentMarkdownRemarkPlugins)
-  .use(remarkChatMath)
-  .use(remarkNativeChatFileDestinations)
-  .use(remarkRehype, { allowDangerousHtml: true })
-  .use(rehypeRaw)
-  .use(rehypeSanitize, commentMarkdownSanitizeSchema)
-const sources = new WeakMap<NativeChatMessage['blocks'], readonly string[]>()
+function sourceReader(visuals: boolean) {
+  const parser = unified()
+    .use(remarkParse)
+    .use(remarkUnknownHtmlAsText(commentMarkdownAllowedTagNames))
+    .use(commentMarkdownRemarkPlugins)
+    .use(remarkChatMath)
+    .use(visuals ? nativeChatVisualRemarkPlugins('image-source-discovery') : [])
+    .use(remarkNativeChatFileDestinations)
+    .use(remarkRehype, { allowDangerousHtml: true })
+    .use(rehypeRaw)
+    .use(rehypeSanitize, commentMarkdownSanitizeSchema)
+  const sources = new WeakMap<NativeChatMessage['blocks'], readonly string[]>()
 
-export function nativeChatMarkdownImageSources(message: NativeChatMessage): readonly string[] {
-  const cached = sources.get(message.blocks)
-  if (cached) {
-    return cached
-  }
-  const root = parser.runSync(parser.parse(deriveNativeChatRowContent(message.blocks).markdown))
-  const images: string[] = []
-  function collect(node: Root | RootContent): void {
-    if (
-      node.type === 'element' &&
-      node.tagName === 'img' &&
-      typeof node.properties.src === 'string'
-    ) {
-      const source = commentMarkdownUrlTransform(node.properties.src, 'src', node)
-      if (source) {
-        images.push(source)
+  return function imageSources(message: NativeChatMessage): readonly string[] {
+    const cached = sources.get(message.blocks)
+    if (cached) {
+      return cached
+    }
+    const root = parser.runSync(parser.parse(deriveNativeChatRowContent(message.blocks).markdown))
+    const images: string[] = []
+    function collect(node: Root | RootContent): void {
+      if (
+        node.type === 'element' &&
+        node.tagName === 'img' &&
+        typeof node.properties.src === 'string'
+      ) {
+        const source = commentMarkdownUrlTransform(node.properties.src, 'src', node)
+        if (source) {
+          images.push(source)
+        }
+      }
+      if ('children' in node) {
+        for (const child of node.children) {
+          collect(child)
+        }
       }
     }
-    if ('children' in node) {
-      for (const child of node.children) {
-        collect(child)
-      }
-    }
+    collect(root)
+    sources.set(message.blocks, images)
+    return images
   }
-  collect(root)
-  sources.set(message.blocks, images)
-  return images
 }
+
+export const nativeChatMarkdownImageSources = sourceReader(false)
+export const nativeChatVisualMarkdownImageSources = sourceReader(true)

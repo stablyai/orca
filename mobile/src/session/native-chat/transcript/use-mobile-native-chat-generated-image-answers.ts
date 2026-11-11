@@ -1,8 +1,12 @@
-import { useMemo } from 'react'
+import { useContext, useMemo } from 'react'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
 import type { NativeChatTurnStatus } from '../../../../../src/shared/native-chat/transcript/native-chat-turn-status'
 import { nativeChatGeneratedImageAnswers } from '../../../../../src/shared/native-chat/transcript/native-chat-generated-image-answers'
-import { mobileNativeChatMarkdownImageSources } from './mobile-native-chat-markdown-image-sources'
+import { MobileNativeChatVisualContext } from '../visual/mobile-native-chat-visual-context'
+import {
+  mobileNativeChatMarkdownImageSources,
+  mobileNativeChatVisualMarkdownImageSources
+} from './mobile-native-chat-markdown-image-sources'
 
 export function useMobileNativeChatGeneratedImageAnswers(
   enabled: boolean,
@@ -10,6 +14,10 @@ export function useMobileNativeChatGeneratedImageAnswers(
   turnKeys: readonly (string | undefined)[],
   completedByTurn: Readonly<Record<string, NativeChatTurnStatus>>
 ): readonly NativeChatMessage[] {
+  const visuals = useContext(MobileNativeChatVisualContext)
+  const sources = visuals
+    ? mobileNativeChatVisualMarkdownImageSources
+    : mobileNativeChatMarkdownImageSources
   return useMemo(
     () =>
       enabled
@@ -21,9 +29,9 @@ export function useMobileNativeChatGeneratedImageAnswers(
                 status.workedSeconds != null ? [key] : []
               )
             ),
-            mobileNativeChatMarkdownImageSources
+            sources
           )
         : messages,
-    [enabled, messages, turnKeys, completedByTurn]
+    [enabled, messages, turnKeys, completedByTurn, sources]
   )
 }

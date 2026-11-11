@@ -1,7 +1,13 @@
+import {
+  NativeChatVisualOwnerContext,
+  type NativeChatVisualOwner
+} from '../../media/visuals/native-chat-visual-owner'
+import { useNativeChatTranscriptSlots } from '../../conversation/slots/use-native-chat-transcript-slots'
+import type { PropsWithChildren } from 'react'
 // @vitest-environment happy-dom
 import { NativeChatHostSetupContext } from '../../host-access/native-chat-host-setup'
 import '@testing-library/jest-dom/vitest'
-import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, renderHook, screen, waitFor } from '@testing-library/react'
 import { render } from '../actions/native-chat-tooltip-test-harness'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -69,6 +75,68 @@ function renderMessage(
 }
 
 describe('MessageRow control visibility', () => {
+  it('rederives generated attachments when the shipping transcript gains or loses visual ownership', () => {
+    const messages: NativeChatMessage[] = [
+      {
+        id: 'image',
+        timestamp: 1,
+        source: 'transcript',
+        ...codexImageItemBody({
+          type: 'imageGeneration',
+          id: 'image',
+          status: 'completed',
+          savedPath: '/tmp/p.png'
+        })
+      },
+      {
+        id: 'answer',
+        role: 'assistant',
+        timestamp: 1,
+        source: 'transcript',
+        blocks: [{ type: 'text', text: '::orca-visual{file="plot.html" title="![](/tmp/p.png)"}' }]
+      }
+    ]
+    const input = {
+      messages,
+      turnKeys: ['u', 'u'],
+      liveTurnKey: undefined,
+      receipts: new Map(),
+      turnDiffs: new Map(),
+      expandedTurnKeys: new Set<string>(),
+      turnStatuses: {
+        active: null,
+        completedByTurn: { u: { startedAt: 0, workedSeconds: 3, thinking: false } }
+      },
+      isWorking: false,
+      lifecycleWorking: false,
+      line: { tailRow: null, thinking: false }
+    }
+    let owner: NativeChatVisualOwner | null = null
+    function Wrapper({ children }: PropsWithChildren) {
+      return (
+        <NativeChatVisualOwnerContext.Provider value={owner}>
+          {children}
+        </NativeChatVisualOwnerContext.Provider>
+      )
+    }
+    const { result, rerender } = renderHook(() => useNativeChatTranscriptSlots(input), {
+      wrapper: Wrapper
+    })
+    const attachments = () =>
+      result.current.slots.flatMap((slot) =>
+        slot.kind === 'message' && slot.drawsMessage
+          ? slot.message.blocks.filter((block) => block.type === 'image-ref')
+          : []
+      )
+    expect(attachments()).toEqual([])
+    owner = { target: { kind: 'local' }, worktreeId: 'workspace', sessionId: 'session' }
+    rerender()
+    expect(attachments()).toEqual([{ type: 'image-ref', path: '/tmp/p.png' }])
+    owner = null
+    rerender()
+    expect(attachments()).toEqual([])
+  })
+
   it('renders expanded generated work as a labelled step while the final answer owns its image and controls', () => {
     const source: NativeChatMessage = {
       id: 'generated',
