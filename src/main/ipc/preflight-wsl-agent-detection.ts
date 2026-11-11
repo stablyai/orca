@@ -5,6 +5,7 @@ import { buildPosixCommandPathLookupScript } from '../../shared/posix-command-pa
 import { runWslProcess } from '../wsl/wsl-runner'
 
 const WSL_AGENT_DETECTION_TIMEOUT_MS = 10000
+const WSL_AGENT_BOOT_TIMEOUT_MS = 60_000
 const WSL_AGENT_DETECTION_PREFIX = '__ORCA_AGENT_PATH__'
 
 export type WslPreflightTarget = {
@@ -42,6 +43,19 @@ export async function detectWslCommandsOnPath(
   ].join('\n')
 
   try {
+    if (options.failOnProbeError) {
+      // Cold boot must finish before the short login-PATH and inventory deadlines begin.
+      const ready = await runWslProcess({
+        distro: wslTarget.distro,
+        loginPath: 'none',
+        script: ':',
+        shell: 'sh',
+        timeoutMs: WSL_AGENT_BOOT_TIMEOUT_MS
+      })
+      if (ready.timedOut || ready.code !== 0) {
+        throw new Error('The WSL execution host did not become ready.')
+      }
+    }
     // Use cached login PATH without shell startup banners.
     const result = await runWslProcess({
       distro: wslTarget.distro,

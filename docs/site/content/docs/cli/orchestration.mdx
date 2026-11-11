@@ -60,6 +60,8 @@ Structured workers validate the complete Command setting with the structured lau
 
 Background agent inventory can skip disabled agents, but worker-start validation still uses strict execution-host probes: filtering inventory does not turn a failed WSL probe into a missing-agent verdict.
 
+Strict WSL worker preflight allows up to 60 seconds for the guest to start before the separate 10-second launcher inventory. Startup failure still returns `remote_runtime_unavailable` before worker state is created; this does not change background inventory or establish real-host compatibility.
+
 After starting workers, end your turn. Orca wakes the coordinator when a worker reports, asks, or stops; run the `check` command the wake gives you and handle every message it prints:
 
 ```bash

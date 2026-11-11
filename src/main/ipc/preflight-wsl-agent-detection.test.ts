@@ -24,6 +24,7 @@ describe('detectWslCommandsOnPath', () => {
 
   afterEach(() => {
     vi.restoreAllMocks()
+    vi.useRealTimers()
   })
 
   it('ignores commands whose resolved path is not absolute', async () => {
@@ -38,6 +39,56 @@ describe('detectWslCommandsOnPath', () => {
     const found = await detectWslCommandsOnPath({ distro: 'Ubuntu' }, ['claude', 'codex'])
 
     expect(found).toEqual(new Set())
+  })
+
+  it('waits for a cold guest before starting the strict launcher inventory', async () => {
+    vi.useFakeTimers()
+    let booted = false
+    runWslProcessMock.mockImplementation(async ({ loginPath, timeoutMs }) => {
+      if (!booted) {
+        const { promise, resolve } = Promise.withResolvers<void>()
+        setTimeout(resolve, Math.min(12_000, timeoutMs))
+        await promise
+        if (timeoutMs < 12_000) {
+          return { environmentResolved: false, code: null, timedOut: true, stdout: '', stderr: '' }
+        }
+        booted = true
+      }
+      return {
+        environmentResolved: true,
+        code: 0,
+        timedOut: false,
+        stdout: loginPath === 'preferred' ? '__ORCA_AGENT_PATH__claude\t/usr/bin/claude\n' : '',
+        stderr: ''
+      }
+    })
+
+    const detection = expect(
+      detectWslCommandsOnPath({ distro: 'Ubuntu' }, ['claude'], { failOnProbeError: true })
+    ).resolves.toEqual(new Set(['claude']))
+    await vi.advanceTimersByTimeAsync(12_000)
+    await detection
+  })
+
+  it('rejects failed guest startup rather than accepting a later inventory', async () => {
+    runWslProcessMock.mockResolvedValueOnce({
+      environmentResolved: true,
+      code: 1,
+      timedOut: false,
+      stdout: '',
+      stderr: 'guest startup failed'
+    })
+    runWslProcessMock.mockResolvedValue({
+      environmentResolved: true,
+      code: 0,
+      timedOut: false,
+      stdout: '__ORCA_AGENT_PATH__claude\t/usr/bin/claude\n',
+      stderr: ''
+    })
+
+    await expect(
+      detectWslCommandsOnPath({ distro: 'Ubuntu' }, ['claude'], { failOnProbeError: true })
+    ).rejects.toMatchObject({ code: 'remote_runtime_unavailable' })
   })
   it.each([
     { environmentResolved: false, code: 0, timedOut: false },
