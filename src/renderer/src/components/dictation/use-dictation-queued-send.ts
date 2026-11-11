@@ -51,6 +51,12 @@ export function useSendAfterDictation<Intent>(
       sendMessage(pending.intent)
     }
   }, [landedTick, sendMessage])
+  const dropPendingAutoSend = useCallback(() => {
+    if (pendingRef.current?.handoff) {
+      pendingRef.current.handoff.dispose()
+      pendingRef.current = null
+    }
+  }, [])
   const sendOnceRendered = useCallback((pending: PendingSend<Intent>) => {
     pendingRef.current?.handoff?.dispose()
     pendingRef.current = pending
@@ -67,14 +73,13 @@ export function useSendAfterDictation<Intent>(
       if (composerAutoSends.get(element) === autoSend) {
         composerAutoSends.delete(element)
       }
-      if (pendingRef.current?.handoff) {
-        pendingRef.current.handoff.dispose()
-        pendingRef.current = null
-      }
+      dropPendingAutoSend()
     }
-  }, [root, sendsWhenDictationEnds, sendOnceRendered])
+  }, [root, sendsWhenDictationEnds, sendOnceRendered, dropPendingAutoSend])
   return (intent) => {
     if (!root.current || !composerSendQueue?.(root.current, () => sendOnceRendered({ intent }))) {
+      // An explicit Send replaces a countdown send still waiting for this render.
+      dropPendingAutoSend()
       sendMessage(intent)
     }
   }
