@@ -44,7 +44,8 @@ import type {
   OrcaBillingTrialClaimResult,
   OrcaBillingReturn,
   OrcaBillingStatusResult,
-  OrcaBillingTeamPlansResult
+  OrcaBillingTeamPlansResult,
+  OrcaBillingUsageHistoryResult
 } from '../../shared/orca-billing'
 import type { OrcaCloudSetupReturn } from '../../shared/orca-cloud-setup-link'
 
@@ -112,6 +113,10 @@ export type OrcaProfileApi = {
   cloudSetupLink: (args: { sessionId: string }) => Promise<CloudSetupLinkResult>
   /** Opens the Stripe Customer Portal in the browser. */
   billingOpenPortal: () => Promise<OrcaBillingOpenResult>
+  /** The last 30 days of sandbox hours (breakdowns for owners and admins only). */
+  billingUsageHistory: (args: {
+    utcOffsetMinutes: number
+  }) => Promise<OrcaBillingUsageHistoryResult>
   /** Plan state for other teams the user is on ("Switch to <team>"); never switches teams. */
   billingTeamPlans: (args: { orgIds: string[] }) => Promise<OrcaBillingTeamPlansResult>
   /** Opt in/out of sandbox overage and set the monthly spend cap (org admins). */

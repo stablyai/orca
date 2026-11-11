@@ -11,7 +11,8 @@ import type {
   OrcaBillingOverageResult,
   OrcaBillingStatusResult,
   OrcaBillingTeamPlansResult,
-  OrcaBillingTrialClaimResult
+  OrcaBillingTrialClaimResult,
+  OrcaBillingUsageHistoryResult
 } from '../../shared/orca-billing'
 import { getOrcaCloudAuthConfig } from '../orca-profiles/profile-cloud-auth-config'
 import { runWithFreshOrcaCloudSession } from '../orca-profiles/profile-cloud-session-refresh'
@@ -28,6 +29,7 @@ import {
   type BillingEndpoints
 } from './billing-client'
 import { getBillingEndpoints } from './billing-config'
+import { fetchUsageHistory } from './billing-usage-client'
 import { getBillingDevKeyFile, mintDevBillingToken } from './billing-dev-token'
 import { cleanCloudServiceUrl } from '../../shared/cloud-service-url'
 import { listOrcaProfileOrgMembers } from '../orca-profiles/profile-cloud-org-members-service'
@@ -55,7 +57,10 @@ function prepareDev(userDataPath: string, keyFile: string): Ready {
   if (!cloud) {
     return { ok: false, status: 'signed-out' }
   }
-  const endpoints: BillingEndpoints = { billingApiUrl, billingTokenEndpoint: billingApiUrl }
+  const endpoints: BillingEndpoints = {
+    billingApiUrl,
+    billingTokenEndpoint: billingApiUrl
+  }
   return {
     ok: true,
     run: async (call) => {
@@ -134,6 +139,25 @@ export async function getOrcaBillingStatus(userDataPath: string): Promise<OrcaBi
   try {
     const entitlement = await ready.run((token, endpoints) => fetchEntitlement(endpoints, token))
     return entitlement === 'signed-out' ? { status: 'signed-out' } : { status: 'ok', entitlement }
+  } catch (error) {
+    return { status: 'failed', error: message(error) }
+  }
+}
+
+/** The last 30 days of sandbox hours, with days starting at the viewer's local midnight. */
+export async function getOrcaBillingUsageHistory(
+  userDataPath: string,
+  utcOffsetMinutes: number
+): Promise<OrcaBillingUsageHistoryResult> {
+  const ready = prepare(userDataPath)
+  if (!ready.ok) {
+    return { status: ready.status }
+  }
+  try {
+    const history = await ready.run((token, endpoints) =>
+      fetchUsageHistory(endpoints, token, utcOffsetMinutes)
+    )
+    return history === 'signed-out' ? { status: 'signed-out' } : { status: 'ok', history }
   } catch (error) {
     return { status: 'failed', error: message(error) }
   }

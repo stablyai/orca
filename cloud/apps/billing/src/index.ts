@@ -7,6 +7,7 @@
 //   POST /v1/billing/portal                 -> { url } Stripe Customer Portal
 //   POST /v1/billing/team-plans {orgIds}    other teams' plan state ("Switch to <team>"), read-only
 //   POST /v1/billing/trial                  claim the team's one-time trial -> entitlement (trial.ts)
+//   GET  /v1/billing/usage?utcOffset=       30 days of sandbox hours; top members/sandboxes for admins
 // Stripe:
 //   POST /v1/stripe/webhook                 signed events
 // Sandbox control plane (CONTROL_PLANE_TOKEN):
@@ -50,6 +51,7 @@ import { OverageRequestSchema, updateOverage } from './overage'
 import { LiveModeRefusedError, StripeError, createStripeClient, type StripeClient } from './stripe'
 import { UsageReportSchema, flushMeterReports, recordUsage, validateSegment } from './usage'
 import { handleStripeWebhook } from './webhook'
+import { UsageHistoryQuerySchema, usageHistory } from './usage-history'
 import { renderReturnPage, returnOutcome } from './return-page'
 import {
   BindTeamSchema,
@@ -314,6 +316,19 @@ export async function handleRequest(request: Request, env: Env, ctx: ExecutionCo
           return json({ error: 'unauthorized' }, 401)
         }
         return json(await desktopEntitlement(env, caller, request, now))
+      }
+
+      case 'GET /v1/billing/usage': {
+        // Any member reads the team's daily hours and their own; the breakdown is owners/admins only.
+        const caller = await authenticateDesktop(env, request)
+        if (!caller) {
+          return json({ error: 'unauthorized' }, 401)
+        }
+        const query = UsageHistoryQuerySchema.safeParse(Object.fromEntries(url.searchParams))
+        if (!query.success) {
+          return json({ error: 'invalid_request' }, 400)
+        }
+        return json(await usageHistory(env.BILLING_DB, caller, now, query.data.utcOffset))
       }
 
       case 'POST /v1/billing/trial': {

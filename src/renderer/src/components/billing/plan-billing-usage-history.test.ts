@@ -1,0 +1,75 @@
+import { describe, expect, it } from 'vitest'
+import { translate } from '@/i18n/i18n'
+import {
+  topMemberRows,
+  topWorkspaceRows,
+  usageBarPercent,
+  usageChartMaxHours,
+  usageTotalLine,
+  yourUsageLine
+} from './plan-billing-usage-history'
+import { sampleUsageHistory, sampleUsageNames } from './plan-billing-fixtures'
+
+const HOUR = 3600
+const day = (hours: number) => ({ start: 0, seconds: hours * HOUR })
+
+describe('usage chart scale', () => {
+  it('rounds the busiest day up to 1, 2 or 5 × a power of ten', () => {
+    expect(usageChartMaxHours([day(0)])).toBe(1)
+    expect(usageChartMaxHours([day(0.4)])).toBe(1)
+    expect(usageChartMaxHours([day(1.5), day(0.2)])).toBe(2)
+    expect(usageChartMaxHours([day(5.2)])).toBe(10)
+    expect(usageChartMaxHours([day(3)])).toBe(5)
+    expect(usageChartMaxHours([day(48)])).toBe(50)
+    expect(usageChartMaxHours([day(120)])).toBe(200)
+  })
+
+  it('keeps any used day visible and an idle day empty', () => {
+    expect(usageBarPercent(0, 10)).toBe(0)
+    expect(usageBarPercent(36, 10)).toBe(2)
+    expect(usageBarPercent(5 * HOUR, 10)).toBe(50)
+    expect(usageBarPercent(20 * HOUR, 10)).toBe(100)
+  })
+})
+
+describe('top workspaces and members', () => {
+  it('names members, calls the viewer "You", and keeps unknown ids readable', () => {
+    const rows = topMemberRows(sampleUsageHistory, sampleUsageNames, translate)!
+    expect(rows.map((row) => row.label)).toEqual([
+      'You',
+      'Grace Hopper',
+      'Linus Torvalds',
+      'Former member',
+      'Not attributed to a member'
+    ])
+    expect(rows[0]!.share).toBeCloseTo((18.4 / 48) * 100)
+    expect(rows.at(-1)!.other).toBe(true)
+  })
+
+  it('titles workspaces and folds the rest into one line', () => {
+    const rows = topWorkspaceRows(sampleUsageHistory, sampleUsageNames, translate)!
+    expect(rows.map((row) => row.label)).toEqual([
+      'Checkout retries',
+      'Ledger migration',
+      'Docs search',
+      'Flaky e2e repro',
+      'Deleted workspace',
+      '4 other workspaces'
+    ])
+  })
+
+  it('has no breakdown for members', () => {
+    const memberView = { ...sampleUsageHistory, members: null, sandboxes: null }
+    expect(topMemberRows(memberView, sampleUsageNames, translate)).toBeNull()
+    expect(topWorkspaceRows(memberView, sampleUsageNames, translate)).toBeNull()
+    expect(yourUsageLine(memberView, translate)).toBe(
+      'You used 18.4 of your team’s 48 sandbox hours.'
+    )
+  })
+
+  it('formats totals with the meter’s hours (one decimal, whole numbers bare)', () => {
+    expect(usageTotalLine(48 * HOUR, translate)).toBe('48 sandbox hours')
+    expect(usageTotalLine(HOUR, translate)).toBe('1 sandbox hour')
+    expect(usageTotalLine(0.26 * HOUR, translate)).toBe('0.3 sandbox hours')
+  })
+})

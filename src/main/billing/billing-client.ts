@@ -141,7 +141,10 @@ const EntitlementSchema = z.object({
   interval: z.enum(ORCA_BILLING_INTERVALS).nullable().catch(null),
   seats: seconds,
   seatChange: z
-    .object({ seatsAtRenewal: z.number().int().min(1), effectiveAt: z.number() })
+    .object({
+      seatsAtRenewal: z.number().int().min(1),
+      effectiveAt: z.number()
+    })
     .nullable()
     .catch(null),
   period: window,
@@ -172,7 +175,13 @@ const EntitlementSchema = z.object({
       spentCents: seconds,
       centsPerHour: seconds
     })
-    .catch({ optedIn: false, active: false, spendCapCents: 0, spentCents: 0, centsPerHour: 0 }),
+    .catch({
+      optedIn: false,
+      active: false,
+      spendCapCents: 0,
+      spentCents: 0,
+      centsPerHour: 0
+    }),
   payment: z
     .object({
       pastDueSince: z.number().nullable().catch(null),

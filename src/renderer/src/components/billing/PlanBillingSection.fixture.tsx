@@ -1,6 +1,12 @@
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { PlanBillingView } from './PlanBillingSection'
-import { sampleTeam, sampleTrial, sampleTrialUsedUp } from './plan-billing-fixtures'
+import {
+  sampleTeam,
+  sampleTrial,
+  sampleTrialUsedUp,
+  sampleUsageHistory,
+  sampleUsageNames
+} from './plan-billing-fixtures'
 
 const HOUR = 3600
 
@@ -14,9 +20,19 @@ const handlers = {
   onSeePlans: () => {}
 }
 
+const usage = { status: 'ok', history: sampleUsageHistory, names: sampleUsageNames } as const
+
+// JA-18: "<Team> · Team plan", the last 30 days with top workspaces and members, one cap field.
 export const activeTeam = defineFixture({
-  width: 600,
-  render: () => <PlanBillingView {...handlers} result={{ status: 'ok', entitlement: sampleTeam }} />
+  width: 680,
+  render: () => (
+    <PlanBillingView
+      {...handlers}
+      teamName="Orca Staging Eval Team"
+      usage={usage}
+      result={{ status: 'ok', entitlement: sampleTeam }}
+    />
+  )
 })
 
 export const noPlan = defineFixture({

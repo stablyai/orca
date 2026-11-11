@@ -96,6 +96,7 @@ export const orcaProfilesApi = {
   billingOpenCheckout: (args) => ipcRenderer.invoke('orcaProfiles:billingOpenCheckout', args),
   billingOpenPortal: () => ipcRenderer.invoke('orcaProfiles:billingOpenPortal'),
   billingTeamPlans: (args) => ipcRenderer.invoke('orcaProfiles:billingTeamPlans', args),
+  billingUsageHistory: (args) => ipcRenderer.invoke('orcaProfiles:billingUsageHistory', args),
   cloudSetupStart: (args) => ipcRenderer.invoke('orcaProfiles:cloudSetupStart', args),
   cloudSetupGet: (args) => ipcRenderer.invoke('orcaProfiles:cloudSetupGet', args),
   cloudSetupLink: (args) => ipcRenderer.invoke('orcaProfiles:cloudSetupLink', args),

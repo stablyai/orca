@@ -133,7 +133,11 @@ export type OrcaBillingEntitlement = {
     centsPerHour: number
   }
   /** Failed payment: new starts stop at once; running sandboxes suspend after `graceEndsAt`. */
-  payment: { pastDueSince: number | null; graceEndsAt: number | null; suspendRunning: boolean }
+  payment: {
+    pastDueSince: number | null
+    graceEndsAt: number | null
+    suspendRunning: boolean
+  }
   canStartSandbox: boolean
   reason: OrcaBillingDenyReason | null
   canManageBilling: boolean
@@ -179,6 +183,29 @@ export type OrcaBillingOverageResult =
   | { status: 'forbidden' }
   | { status: 'no-subscription' }
   | { status: 'cap-too-high' }
+  | { status: 'failed'; error: string }
+
+/** The top entries of a usage breakdown, and everything past them in one line. */
+export type OrcaBillingUsageTop = {
+  top: { id: string; seconds: number }[]
+  otherCount: number
+  otherSeconds: number
+}
+
+/** The last 30 days of sandbox hours (Plan & billing). Breakdowns are owners and admins only. */
+export type OrcaBillingUsageHistory = {
+  /** Oldest first; `start` is the viewer's local midnight in epoch ms. */
+  days: { start: number; seconds: number }[]
+  totalSeconds: number
+  yourSeconds: number
+  members: OrcaBillingUsageTop | null
+  sandboxes: OrcaBillingUsageTop | null
+}
+
+export type OrcaBillingUsageHistoryResult =
+  | { status: 'ok'; history: OrcaBillingUsageHistory }
+  | { status: 'unconfigured' }
+  | { status: 'signed-out' }
   | { status: 'failed'; error: string }
 
 /** Another team the signed-in user is on, and its plan state (cloud start B2, "Switch to <team>"). */
@@ -230,9 +257,13 @@ export const ORCA_BILLING_RETURN_CHANNEL = 'billing:return'
 export const ORCA_BILLING_REFRESH_CHANNEL = 'billing:refreshRequested'
 
 /** Target sent with `ui:openSettings` to land on Settings › Orca account (Plan & billing). */
-export const ORCA_PLAN_BILLING_SETTINGS_TARGET = { pane: 'orca-account' } as const
+export const ORCA_PLAN_BILLING_SETTINGS_TARGET = {
+  pane: 'orca-account'
+} as const
 export type OrcaOpenSettingsTarget = typeof ORCA_PLAN_BILLING_SETTINGS_TARGET
-export type OrcaBillingReturn = { kind: 'checkout-success' | 'checkout-cancel' | 'portal' }
+export type OrcaBillingReturn = {
+  kind: 'checkout-success' | 'checkout-cancel' | 'portal'
+}
 
 /** Parses `orca://billing/return?checkout=success|cancel` or `?portal=return`; anything else is null. */
 export function parseOrcaBillingReturnLink(raw: string): OrcaBillingReturn | null {

@@ -7,7 +7,8 @@ import type {
   OrcaBillingOverageResult,
   OrcaBillingStatusResult,
   OrcaBillingTeamPlansResult,
-  OrcaBillingTrialClaimResult
+  OrcaBillingTrialClaimResult,
+  OrcaBillingUsageHistoryResult
 } from '../../../shared/orca-billing'
 import {
   ORCA_BILLING_INTERVALS,
@@ -19,6 +20,7 @@ import {
   claimOrcaBillingTrial,
   getOrcaBillingStatus,
   getOrcaBillingTeamPlans,
+  getOrcaBillingUsageHistory,
   openOrcaBillingCheckout,
   openOrcaBillingPortal,
   setOrcaBillingOverage
@@ -59,6 +61,21 @@ const OverageArgs = z
   })
   .strict()
 
+// Minutes east of UTC (the renderer's -getTimezoneOffset()), so chart days are local days.
+const UsageHistoryArgs = z
+  .object({ utcOffsetMinutes: z.number().int().min(-840).max(840) })
+  .strict()
+
+export function billingUsageHistoryArgsFromUnknown(args: unknown): {
+  utcOffsetMinutes: number
+} {
+  const parsed = UsageHistoryArgs.safeParse(args)
+  if (!parsed.success) {
+    throw new Error('invalid_orca_billing_usage_history')
+  }
+  return parsed.data
+}
+
 const TeamPlansArgs = z
   .object({
     orgIds: z
@@ -73,7 +90,9 @@ const TeamPlansArgs = z
   })
   .strict()
 
-export function billingTeamPlansArgsFromUnknown(args: unknown): { orgIds: string[] } {
+export function billingTeamPlansArgsFromUnknown(args: unknown): {
+  orgIds: string[]
+} {
   const parsed = TeamPlansArgs.safeParse(args)
   if (!parsed.success) {
     throw new Error('invalid_orca_billing_team_plans')
@@ -147,6 +166,14 @@ export function registerOrcaProfileBillingHandlers(store: Store): void {
     'orcaProfiles:billingSetOverage',
     async (_event, rawArgs: unknown): Promise<OrcaBillingOverageResult> =>
       setOrcaBillingOverage(getProfileUserDataPath(), billingOverageArgsFromUnknown(rawArgs))
+  )
+  ipcMain.handle(
+    'orcaProfiles:billingUsageHistory',
+    async (_event, rawArgs: unknown): Promise<OrcaBillingUsageHistoryResult> =>
+      getOrcaBillingUsageHistory(
+        getProfileUserDataPath(),
+        billingUsageHistoryArgsFromUnknown(rawArgs).utcOffsetMinutes
+      )
   )
   ipcMain.handle(
     'orcaProfiles:billingTeamPlans',
