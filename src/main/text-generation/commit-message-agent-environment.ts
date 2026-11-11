@@ -2,7 +2,10 @@ import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-au
 import { applyClaudeEnvPatch } from '../claude-accounts/environment'
 import { readShellStartupEnvVar } from '../pty/shell-startup/shell-startup-env'
 import { parseWslUncPath } from '../../shared/wsl-paths'
-import { stripInheritedClaudeSessionEnv } from '../../shared/agent-launch/startup/claude-parent-session-env'
+import {
+  processEnvWithoutAgentSession,
+  stripInheritedAgentSessionEnv
+} from '../../shared/agent-launch/startup/parent-agent-session-env'
 
 export type CommitMessageAgentEnvironmentResolvers = {
   prepareForCodexLaunch?: (
@@ -22,7 +25,7 @@ export type CommitMessageAgentRuntimeTarget = {
 
 function cloneProcessEnv(): Record<string, string> {
   const env: Record<string, string> = {}
-  for (const [key, value] of Object.entries(process.env)) {
+  for (const [key, value] of Object.entries(processEnvWithoutAgentSession())) {
     if (value !== undefined) {
       env[key] = value
     }
@@ -119,9 +122,7 @@ export async function prepareLocalCommitMessageAgentEnv(
     return { ok: true }
   }
   const base = hostBase ?? cloneProcessEnv()
-  if (agentId === 'claude') {
-    stripInheritedClaudeSessionEnv(base)
-  }
+  stripInheritedAgentSessionEnv(base)
   if (!resolvers) {
     return { ok: true, env: base }
   }

@@ -23,7 +23,7 @@ import type {
 } from '../../../shared/git/clone/clone-target-check'
 import { runWithGitReadCacheInvalidation } from '../../git/source-control/git-read-cache-invalidation'
 import { invalidateAuthorizedRootsCache } from '../../ipc/worktrees/removal/registered-worktree-roots-cache'
-import { detectRepoIconAndUpstream } from '../../repository-icons/repo-icon-autodetect'
+import { detectRepoLocalMetadata } from '../../repository-icons/repo-icon-autodetect'
 import { getRepoName } from '../../git/repo'
 import { inspectGitRepoForRegistrationAsync } from '../../git/repo-detection'
 import { prepareLocalWorktreeRootForRepo } from '../../workspaces/creation/worktree-root-preparation'
@@ -216,7 +216,7 @@ export class RuntimeRepositoryCloneController {
     // cloneRepo validated and cloned locally; runtime row stamps do not change where files live.
     // Register Git's checkout path so the clone stays its own selected checkout.
     const repoPath = (await inspectGitRepoForRegistrationAsync(clonePath)).rootPath
-    const detected = await detectRepoIconAndUpstream({
+    const detected = await detectRepoLocalMetadata({
       repoPath,
       kind: 'git',
       executionHostId: LOCAL_EXECUTION_HOST_ID

@@ -1,11 +1,11 @@
-import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
-import { runBuiltInOrReplacement } from '@/lib/plugin-command-replacements'
-import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'
-import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
+import { canShowRightSidebarForView } from '@/components/right-sidebar/visibility/right-sidebar-visibility'
+import { runBuiltInOrReplacement } from '@/lib/plugins/commands/plugin-command-replacements'
+import { showTerminalShortcutCaptureNotification } from '@/lib/notifications/terminal-shortcut-capture-notification'
+import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/components/floating-terminal/floating-terminal'
 import { subscribeToUnpairedDeviceAuthNotification } from '../unpaired-device-auth-notification'
 import { translate } from '@/i18n/i18n'
 import { toast } from 'sonner'
-import { useAppStore } from '../../store'
+import { useAppStore } from '../../store/index'
 import { openPluginInstallLink } from '../../store/plugins/navigation/plugin-preview-request'
 
 function getShortcutPlatform(): NodeJS.Platform {

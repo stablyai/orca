@@ -1,13 +1,11 @@
 import { canonicalOrchestrationForRow } from '@/runtime/agent-orchestration/visible-agent-orchestration'
 import { resolveAgentSessionStartedAt } from '../../../../../shared/agent-session/lifecycle/agent-session-start-time'
 import { sameAgentStatusTerminalOwner } from '../../../../../shared/agent-status/identity/agent-status-terminal-owner'
+import { resolveAgentStatusLiveEntryTiming } from './agent-status-live-entry-timing'
 import type { AppState } from '../../types'
 import { resolveAgentStatusLiveEntryMainAgent } from './agent-status-live-entry-main-agent'
 import { resolveAgentStatusLiveEntryStateHistory } from '../../../../../shared/agent-status/lifecycle/agent-status-live-entry-state-history'
-import {
-  pickHostTurnEnd,
-  type AgentStatusEntry
-} from '../../../../../shared/agent-status/contracts/agent-status-types'
+import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import type { MigrationUnsupportedPtyEntry } from '../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import {
   agentProviderSessionsEqual,
@@ -122,24 +120,12 @@ export function buildAgentStatusLiveEntry(
   const promptInteractionKey =
     payload.promptInteractionKey ??
     (payload.prompt === existing?.prompt ? existing?.promptInteractionKey : undefined)
-  const stateStartedAt =
-    timing?.stateStartedAt ??
-    (commandCodeNewTurn
-      ? updatedAt
-      : existing && existing.state === payload.state
-        ? existing.stateStartedAt
-        : updatedAt)
-  // Clockless OSC repaints retain host turn start only within the same state; undated transitions must not inherit another turn.
-  const turnStartedAt =
-    timing?.turnStartedAt ??
-    (existing && existing.state === payload.state ? existing.turnStartedAt : undefined)
-  // Why: the end stamp and its disposition are one host fact, inherited together.
-  const turnEnd =
-    timing?.turnEndedAt !== undefined || timing?.turnEndDisposition !== undefined
-      ? pickHostTurnEnd(timing)
-      : existing && existing.state === payload.state
-        ? pickHostTurnEnd(existing)
-        : {}
+  const { stateStartedAt, turnStartedAt, turnEnd } = resolveAgentStatusLiveEntryTiming(
+    existing,
+    identity.agentType,
+    { payload, timing, routing, metadata, updatedAt },
+    commandCodeNewTurn
+  )
   if (
     existing &&
     shouldSuppressInheritedTerminalStatus({

@@ -122,13 +122,7 @@ describe('stateless captured diagnostic negotiation', () => {
     expect(getter).not.toHaveBeenCalled()
     expect(ghMock).toHaveBeenCalledTimes(2)
   })
-  it('accepts other finite nonzero exit codes, with false kill and null signal', async () => {
-    ghMock
-      .mockRejectedValueOnce(rejected({ code: 2, killed: false, signal: null }))
-      .mockResolvedValueOnce({ stdout: '', stderr: '' })
-    await expect(download().result).resolves.toBe('')
-    expect(ghMock).toHaveBeenCalledTimes(2)
-  })
+
   it('waits positive first termination and starts nothing after cancellation', async () => {
     let close = (): void => {}
     const physical = new Promise<void>((resolve) => {

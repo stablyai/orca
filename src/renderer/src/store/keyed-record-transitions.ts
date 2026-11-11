@@ -1,3 +1,5 @@
+import { recordTabRowChanges } from './keyed-tab-row-diff'
+
 // Accepted-write provenance for keyed store records: the writer's helper names what it replaced,
 // so readers update only those keys; anything it did not annotate reads as a full resync.
 
@@ -222,41 +224,12 @@ export function recordDraft<V>(previous: KeyedRecord<V>): RecordDraft<V> {
   return createDraft(previous, (next, keys) => link(next, previous, keys))
 }
 
-function tabRows(record: KeyedSnapshot, key: string): readonly TabRow[] | undefined {
-  const value = Object.hasOwn(record, key) ? record[key] : undefined
-  return Array.isArray(value) ? value : undefined
-}
-
-function changedTabIds(
-  previous: readonly TabRow[] | undefined,
-  next: readonly TabRow[] | undefined,
-  into: Set<string>
-): void {
-  if (previous === next) {
-    return
-  }
-  const before = new Map((previous ?? []).map((tab) => [tab.id, tab]))
-  for (const tab of next ?? []) {
-    if (before.get(tab.id) !== tab) {
-      into.add(tab.id)
-    }
-    before.delete(tab.id)
-  }
-  for (const id of before.keys()) {
-    into.add(id)
-  }
-}
-
 function linkTabBuckets(
   previous: KeyedSnapshot,
   next: KeyedSnapshot,
   keys: Iterable<string>
 ): void {
-  const tabIds = new Set<string>()
-  for (const workspaceId of keys) {
-    changedTabIds(tabRows(previous, workspaceId), tabRows(next, workspaceId), tabIds)
-  }
-  link(next, previous, keys, tabIds)
+  link(next, previous, keys, recordTabRowChanges(previous, next, keys))
 }
 
 /** Tab-bucket form; tab IDs come from diffing only the replaced buckets. */

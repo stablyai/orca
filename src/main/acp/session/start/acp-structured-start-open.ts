@@ -7,6 +7,7 @@ import { acpAgentName } from '../acp-structured-agent-definitions'
 import { acpStartupFailure } from '../children/acp-structured-child'
 import type { AcpStructuredChildren } from '../children/acp-structured-child-lifecycle'
 import { acpStartFailure } from './acp-startup-outcome'
+import { withAcpStartupDiagnostic } from './acp-startup-diagnostic'
 
 /** A start's open answers with the agent's verdict; a child that already ended answers with how
  *  it ended, and an answer its own exit followed is still worded as that exit. */
@@ -40,6 +41,9 @@ export async function openAcpStart(
       throw failure.detail ? withProviderDiagnostic(refusal, failure.detail) : refusal
     })
   } catch (error) {
+    if (child) {
+      withAcpStartupDiagnostic(error, child.connection, child.spec.dialect)
+    }
     throw acpStartFailure(error, child?.connection.exited === true && !child.closeRequested)
   }
 }

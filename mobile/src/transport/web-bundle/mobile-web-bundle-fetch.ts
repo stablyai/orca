@@ -1,10 +1,11 @@
 import { CryptoDigestAlgorithm, digest } from 'expo-crypto'
 import { PrioritySemaphore } from '../../../../src/shared/priority-semaphore'
 import { mobileWebBundleManifestRead } from './mobile-web-bundle-operations'
-import type {
-  MobileWebBundleAssetRead,
-  MobileWebBundleManifestRead,
-  MobileWebBundleManifestReply
+import {
+  shellDownloadedAssets,
+  type MobileWebBundleAssetRead,
+  type MobileWebBundleManifestRead,
+  type MobileWebBundleManifestReply
 } from './mobile-web-bundle-reply-schemas'
 import type { RpcClient } from '../rpc/rpc-client-contract'
 import { MobileWebBundleFetchError } from './mobile-web-bundle-fetch-refusal'
@@ -42,6 +43,7 @@ export const MOBILE_WEB_BUNDLE_WINDOW_STALL_MS = 30_000
 const WINDOW_READ_BACKSTOP_MS =
   (MAX_CONCURRENT_WINDOW_READS + 1) * MOBILE_WEB_BUNDLE_WINDOW_STALL_MS
 
+// Bytes are what the reader moves (a brotli copy where it reads one, else the asset); reused assets add none.
 export type MobileWebBundleFetchProgress = {
   readonly completedAssets: number
   readonly totalAssets: number
@@ -52,7 +54,7 @@ export type MobileWebBundleFetchProgress = {
 export type MobileWebBundleFetchResult = {
   readonly manifest: MobileWebBundleManifestRead
   readonly assets: ReadonlyMap<string, Uint8Array>
-  // stageGeneration must copy every reused asset or fail rather than stage an incomplete tree.
+  // stageGeneration must copy every reused asset or fail rather than stage an incomplete tree (skipped catalogs aside).
   readonly reused: readonly string[]
   readonly totalBytes: number
   readonly elapsedMs: number
@@ -92,10 +94,12 @@ export async function fetchMobileWebBundle(args: {
   const manifest = opened.manifest
   const reader = mobileWebBundleWindowReader(args.client, opened)
   const connection = connectionReadsOf(args.client)
+  // Before reuse: a skipped catalog an older generation lists may not be on disk there either.
+  const wanted = shellDownloadedAssets(manifest)
   const candidates = new Set(
-    args.reusable === undefined ? [] : manifest.assets.filter((entry) => args.reusable?.has(entry))
+    args.reusable === undefined ? [] : wanted.filter((entry) => args.reusable?.has(entry))
   )
-  const fetched = manifest.assets.filter((entry) => !candidates.has(entry))
+  const fetched = wanted.filter((entry) => !candidates.has(entry))
   const assets = new Map<string, Uint8Array>()
   const reused: string[] = []
   let receivedBytes = 0
@@ -180,7 +184,7 @@ export async function fetchMobileWebBundle(args: {
       downloadedAssets += 1
     }
     // Per window, not per asset: the largest asset goes first, so asset completions bunch at the end.
-    receivedBytes += assetBytesCredited(asset, offset, bytes.byteLength)
+    receivedBytes += bytes.byteLength
     reportProgress()
   }
 
@@ -246,7 +250,7 @@ export async function fetchMobileWebBundle(args: {
 
   const countDownload = (entries: readonly MobileWebBundleAssetRead[]): void => {
     downloadAssets += entries.length
-    downloadBytes += entries.reduce((sum, entry) => sum + entry.byteLength, 0)
+    downloadBytes += entries.reduce((sum, entry) => sum + reader.streamLength(entry), 0)
   }
 
   try {
@@ -295,18 +299,6 @@ function planWindowReads(
     }
     return Array.from({ length: count }, (_, index) => ({ asset, offset: index * windowBytes }))
   })
-}
-
-// Progress stays in asset bytes, the unit of the session's total: a window of a brotli copy counts for its
-// share of the asset, and an asset's windows add up to exactly its byteLength.
-function assetBytesCredited(asset: AssetReassembly, offset: number, byteLength: number): number {
-  const streamBytes = asset.stream.byteLength
-  if (streamBytes === asset.entry.byteLength) {
-    return byteLength
-  }
-  const at = (position: number): number =>
-    Math.floor((asset.entry.byteLength * position) / streamBytes)
-  return at(offset + byteLength) - at(offset)
 }
 
 async function verifyReassembledAsset(

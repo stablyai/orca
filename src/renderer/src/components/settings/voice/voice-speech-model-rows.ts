@@ -14,6 +14,11 @@ export type VoiceSpeechModelRowData = {
   quality: SpeechModelQuality | null
 }
 
+/** True while a model's files are being fetched or unpacked. */
+export function isSpeechModelDownloading(state: SpeechModelState | undefined): boolean {
+  return state?.status === 'downloading' || state?.status === 'extracting'
+}
+
 export function speechModelTab(manifest: SpeechModelManifest): VoiceSpeechModelTab {
   return manifest.provider === 'local' ? 'local' : 'cloud'
 }

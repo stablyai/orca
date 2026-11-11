@@ -3,8 +3,8 @@ import { COMPUTER_USE_SKILL_NAME } from '@/lib/skills/installation/agent-feature
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkill
-} from '@/hooks/useInstalledAgentSkills'
-import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
+} from '@/hooks/skills/discovery/useInstalledAgentSkills'
+import { useActiveProjectSkillRuntime } from '@/hooks/skills/runtime/useActiveProjectSkillRuntime'
 import { useAppStore } from '@/store/index'
 import { AgentSkillSetupPanel } from '../../skills/setup/AgentSkillSetupPanel'
 import { useTranslate } from '@/i18n/use-translate'

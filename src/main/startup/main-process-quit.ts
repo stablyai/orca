@@ -39,7 +39,7 @@ import { desktopConnectorCloud } from './main-process-connector-startup'
 import { mainProcessState as state } from './main-process-state'
 import { isDevParentShutdownRequested } from './configure-process'
 import { getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
-import { flushUnsavedCloudSessions } from '../orca-profiles/profile-cloud-session-owner'
+import { flushUnsavedCloudSessions } from '../orca-profiles/cloud-session/profile-cloud-session-owner'
 
 // First will-quit pass awaits teardown; the re-fired pass must exit without starting writes again.
 let daemonDisconnectDone = false
@@ -240,7 +240,8 @@ function installWillQuitHandler(): void {
       state.claudeUsage?.flush(),
       state.codexUsage?.flush(),
       state.openCodeUsage?.flush(),
-      state.museUsage?.flush()
+      state.museUsage?.flush(),
+      state.usageWorktreeHistory?.flush()
     ]).then(() => {})
     disposeDesktopBrowserBridge()
     const browserClientHostShutdown = shutdownPairedRuntimeBrowserClientHosts()

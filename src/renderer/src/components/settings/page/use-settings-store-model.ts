@@ -7,9 +7,9 @@ import { useAppStore } from '../../../store/index'
 import { useProjectHostSetupProjection } from '@/store/projects/use-project-host-setup-projection'
 import { usePluginFontFamilies } from '@/store/plugins/appearance/plugin-fonts'
 import { useSystemPrefersDark } from '@/hooks/theme/use-system-prefers-dark'
-import { isMacUserAgent, isWindowsUserAgent } from '@/lib/user-agent-platform'
+import { isMacUserAgent, isWindowsUserAgent } from '@/app-shell/platform/user-agent-platform'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
-import { isWebClientLocation } from '@/lib/web-client-location'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import {
   COMPUTER_USE_SKILL_NAME,
   LINEAR_AGENT_SKILL_NAMES,
@@ -19,10 +19,10 @@ import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkill,
   useInstalledAgentSkillNames
-} from '@/hooks/useInstalledAgentSkills'
-import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
+} from '@/hooks/skills/discovery/useInstalledAgentSkills'
+import { useActiveProjectSkillRuntime } from '@/hooks/skills/runtime/useActiveProjectSkillRuntime'
 import { useLinearProviderConnected } from '@/hooks/useLinearProviderConnected'
-import { useSkillFreshness } from '@/hooks/useSkillFreshness'
+import { useSkillFreshness } from '@/hooks/skills/freshness/useSkillFreshness'
 import {
   getFallbackTerminalFonts,
   mergeFontSuggestions,

@@ -13,7 +13,7 @@ export function countSqliteCalls(file, contents) {
   }
   const types = new Set()
   const constructors = new Set()
-  const receivers = new Set()
+  const receivers = new Set(file.endsWith('/sqlite/sync-database.ts') ? ['this'] : [])
   const declarations = []
   const calls = []
   const key = (node) => unwrap(node)?.getText(source)

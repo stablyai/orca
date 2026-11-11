@@ -1,5 +1,5 @@
 import { Check } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { IntegrationStepState } from './use-integration-connection-status'
 import { useTranslate } from '@/i18n/use-translate'
 

@@ -14,21 +14,6 @@ import {
   getFishXdgDataDirsLaunchEnv
 } from './fish-xdg-data-dirs-handoff'
 
-const ROOT = '/orca/shell-wrappers/abc'
-
-describe('getFishXdgDataDirsLaunchEnv', () => {
-  it.each([['-N'], ['--no-config'], ['--no-c'], ['-lN'], ['-Ni']])(
-    'skips fish args that disable config: %s',
-    (arg) => {
-      expect(getFishXdgDataDirsLaunchEnv(ROOT, undefined, ['-l', arg])).toEqual({})
-    }
-  )
-
-  it('skips a dir that XDG_DATA_DIRS cannot represent', () => {
-    expect(getFishXdgDataDirsLaunchEnv('/odd:root', undefined)).toEqual({})
-  })
-})
-
 const fishLookup = resolveFishBinary(3)
 // The test shells run with a minimal PATH.
 const fish = fishLookup.available

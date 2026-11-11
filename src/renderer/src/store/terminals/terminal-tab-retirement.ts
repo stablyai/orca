@@ -8,7 +8,7 @@ import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktr
 import {
   resolveTerminalHostOwnership,
   resolveTerminalPtyOwner
-} from '@/lib/terminal-worktree-route'
+} from '@/lib/workspace/ownership/terminal-worktree-route'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { isEphemeralSetupTerminalWorktreeId } from '../../../../shared/ephemeral-setup-terminal-worktree-id'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'

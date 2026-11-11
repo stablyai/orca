@@ -1,11 +1,11 @@
-import type { Repo } from '../../../../../shared/repo-types'
-import type { Worktree } from '../../../../../shared/worktree/types'
 import {
   resolveReviewRepository,
   reviewRepositoryMatchesWorkspace
-} from '../../../lib/review-owner'
+} from '../../../lib/source-control/review/review-owner'
 import { selectRepoByIdForActiveWorkspace } from '../../repos/active-workspace-repository'
 import type { ActiveWorkspaceRepoState } from '../../repos/active-workspace-repository'
+import type { Repo } from '../../../../../shared/repo-types'
+import type { Worktree } from '../../../../../shared/worktree/types'
 
 export function selectReviewRepositoryForWorkspace(
   state: ActiveWorkspaceRepoState,

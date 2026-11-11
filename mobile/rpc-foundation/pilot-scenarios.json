@@ -15811,34 +15811,6 @@
       ]
     },
     {
-      "id": "speech-desktop-start-fulfilled",
-      "operation": "speech.desktop-start",
-      "family": "speech.dictation-start",
-      "sites": ["mobile/src/hooks/mobile-dictation-desktop-start.ts"],
-      "schedules": [],
-      "steps": [
-        {
-          "action": "start",
-          "id": "start"
-        },
-        {
-          "complete": "speech.dictation.start#1",
-          "params": {
-            "dictationId": "dictation-1"
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "started": true
-            }
-          }
-        },
-        {
-          "checkpoint": "recording"
-        }
-      ]
-    },
-    {
       "id": "speech-audio-chunk-acknowledged",
       "operation": "speech.audio-chunk",
       "family": "speech.dictation-chunk",
@@ -16598,90 +16570,6 @@
       ]
     },
     {
-      "id": "notifications-push-registered",
-      "operation": "notifications.push-registration",
-      "family": "notifications.push-registration",
-      "sites": ["mobile/src/notifications/push-registration.ts"],
-      "schedules": [],
-      "steps": [
-        {
-          "action": "register",
-          "id": "register"
-        },
-        {
-          "complete": "notifications.registerPush#1",
-          "params": {
-            "filter": {
-              "onlyWhenDesktopAway": true,
-              "sound": true
-            },
-            "apnsEnvironment": "production",
-            "platform": "ios",
-            "token": "apns-token-1"
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "registered": true,
-              "registrationId": "registration-1"
-            }
-          }
-        },
-        {
-          "action": "unregister",
-          "id": "unregister"
-        },
-        {
-          "complete": "notifications.unregisterPush#1",
-          "params": null,
-          "reply": {
-            "ok": true,
-            "result": {
-              "unregistered": true
-            }
-          }
-        },
-        {
-          "checkpoint": "settled"
-        }
-      ]
-    },
-    {
-      "id": "notifications-push-gateway-rejected",
-      "operation": "notifications.push-registration",
-      "family": "notifications.push-registration",
-      "sites": ["mobile/src/notifications/push-registration.ts"],
-      "schedules": [],
-      "steps": [
-        {
-          "action": "register",
-          "id": "register"
-        },
-        {
-          "complete": "notifications.registerPush#1",
-          "params": {
-            "filter": {
-              "onlyWhenDesktopAway": true,
-              "sound": true
-            },
-            "apnsEnvironment": "production",
-            "platform": "ios",
-            "token": "apns-token-1"
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "registered": false,
-              "reason": "gateway_rejected"
-            }
-          }
-        },
-        {
-          "checkpoint": "not-registered"
-        }
-      ]
-    },
-    {
       "id": "browser-pointer-click-fallback",
       "operation": "browser.page-commands",
       "family": "browser.pointer-click",
@@ -16912,81 +16800,6 @@
         },
         {
           "checkpoint": "typed"
-        }
-      ]
-    },
-    {
-      "id": "browser-dialog-accepted",
-      "operation": "browser.page-commands",
-      "family": "browser.dialog",
-      "sites": [
-        "mobile/src/browser/use-mobile-browser-request.ts",
-        "mobile/src/browser/use-mobile-browser-commands.ts"
-      ],
-      "schedules": [],
-      "steps": [
-        {
-          "action": "mount",
-          "id": "mount"
-        },
-        {
-          "action": "dialog",
-          "id": "dialog"
-        },
-        {
-          "complete": "browser.dialogAccept#1",
-          "params": {
-            "page": "page-1",
-            "worktree": "id:worktree-1"
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "accepted": true
-            }
-          }
-        },
-        {
-          "checkpoint": "dismissed"
-        }
-      ]
-    },
-    {
-      "id": "browser-dialog-dismissed",
-      "operation": "browser.page-commands",
-      "family": "browser.dialog",
-      "sites": [
-        "mobile/src/browser/use-mobile-browser-request.ts",
-        "mobile/src/browser/use-mobile-browser-commands.ts"
-      ],
-      "schedules": [],
-      "steps": [
-        {
-          "action": "mount",
-          "id": "mount"
-        },
-        {
-          "action": "dialog",
-          "id": "dialog",
-          "args": {
-            "accept": false
-          }
-        },
-        {
-          "complete": "browser.dialogDismiss#1",
-          "params": {
-            "page": "page-1",
-            "worktree": "id:worktree-1"
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "dismissed": true
-            }
-          }
-        },
-        {
-          "checkpoint": "dismissed"
         }
       ]
     },
@@ -17440,36 +17253,6 @@
       ]
     },
     {
-      "id": "clipboard-image-upload-start-refused",
-      "operation": "clipboard.image-upload",
-      "family": "clipboard.image-upload",
-      "sites": ["mobile/src/files/attachments/mobile-clipboard-image.ts"],
-      "schedules": [],
-      "steps": [
-        {
-          "action": "remote",
-          "id": "remote"
-        },
-        {
-          "complete": "clipboard.startImageUpload#1",
-          "params": {
-            "connectionId": "connection-1",
-            "expectedBase64Length": 32
-          },
-          "reply": {
-            "ok": false,
-            "error": {
-              "code": "too_large",
-              "message": "Image is too large"
-            }
-          }
-        },
-        {
-          "checkpoint": "start-refused"
-        }
-      ]
-    },
-    {
       "id": "clipboard-image-attachment-upload-refused",
       "operation": "clipboard.image-terminal-attachment",
       "family": "clipboard.image-attachment",
@@ -17579,25 +17362,6 @@
       ]
     },
     {
-      "id": "clipboard-image-attachment-cancelled",
-      "operation": "clipboard.image-terminal-attachment",
-      "family": "clipboard.image-attachment",
-      "sites": [
-        "mobile/src/files/attachments/mobile-image-attachment.ts",
-        "mobile/src/files/attachments/mobile-clipboard-image.ts"
-      ],
-      "schedules": [],
-      "steps": [
-        {
-          "action": "cancelled",
-          "id": "cancelled"
-        },
-        {
-          "checkpoint": "no-wire"
-        }
-      ]
-    },
-    {
       "id": "clipboard-image-attachment-blocked-before-send",
       "operation": "clipboard.image-terminal-attachment",
       "family": "clipboard.image-attachment",
@@ -17650,78 +17414,6 @@
         },
         {
           "checkpoint": "blocked"
-        }
-      ]
-    },
-    {
-      "id": "clipboard-image-attachment-anonymous",
-      "operation": "clipboard.image-terminal-attachment",
-      "family": "clipboard.image-attachment",
-      "sites": [
-        "mobile/src/files/attachments/mobile-image-attachment.ts",
-        "mobile/src/files/attachments/mobile-clipboard-image.ts"
-      ],
-      "schedules": [],
-      "steps": [
-        {
-          "action": "anonymous",
-          "id": "anonymous"
-        },
-        {
-          "complete": "clipboard.startImageUpload#1",
-          "params": {
-            "connectionId": "connection-1",
-            "expectedBase64Length": 32
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "uploadId": "upload-1"
-            }
-          }
-        },
-        {
-          "complete": "clipboard.appendImageUploadChunk#1",
-          "params": {
-            "uploadId": "upload-1",
-            "offset": 0,
-            "contentBase64": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "received": 32
-            }
-          }
-        },
-        {
-          "complete": "clipboard.commitImageUpload#1",
-          "params": {
-            "uploadId": "upload-1"
-          },
-          "reply": {
-            "ok": true,
-            "result": "/tmp/img.png"
-          }
-        },
-        {
-          "complete": "terminal.send#1",
-          "params": {
-            "terminal": "terminal-1",
-            "text": "\u001b[200~/tmp/img.png\u001b[201~ ",
-            "enter": false
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "send": {
-                "accepted": false
-              }
-            }
-          }
-        },
-        {
-          "checkpoint": "rejected"
         }
       ]
     },
@@ -17956,80 +17648,10 @@
       ]
     },
     {
-      "id": "native-chat-image-paste-trailing-image",
-      "operation": "nativeChat.image-paste",
-      "family": "nativeChat.image-paste",
-      "sites": ["mobile/src/session/native-chat/composer/mobile-native-chat-image-send.ts"],
-      "schedules": [],
-      "steps": [
-        {
-          "action": "trailing",
-          "id": "trailing"
-        },
-        {
-          "complete": "terminal.read#1",
-          "params": {
-            "terminal": "terminal-1",
-            "screen": true,
-            "limit": 1
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "terminal": {}
-            }
-          }
-        },
-        {
-          "complete": "terminal.send#1",
-          "params": {
-            "terminal": "terminal-1",
-            "text": "\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b",
-            "enter": false,
-            "client": {
-              "id": "device-token-1",
-              "type": "mobile"
-            }
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "send": {
-                "accepted": true
-              }
-            }
-          }
-        },
-        {
-          "complete": "terminal.send#2",
-          "params": {
-            "terminal": "terminal-1",
-            "text": "\u001b[200~@/tmp/a.png\u001b[201~",
-            "enter": false,
-            "client": {
-              "id": "device-token-1",
-              "type": "mobile"
-            }
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "send": {
-                "accepted": true
-              }
-            }
-          }
-        },
-        {
-          "checkpoint": "pasted"
-        }
-      ]
-    },
-    {
       "id": "native-chat-write-accepted",
       "operation": "nativeChat.terminal-write",
       "family": "nativeChat.terminal-write",
-      "sites": ["mobile/src/session/native-chat/mobile-native-chat-send.ts"],
+      "sites": ["mobile/src/session/native-chat/composer/mobile-native-chat-send.ts"],
       "schedules": [],
       "steps": [
         {
@@ -18065,7 +17687,7 @@
       "id": "native-chat-write-rejected",
       "operation": "nativeChat.terminal-write",
       "family": "nativeChat.terminal-write",
-      "sites": ["mobile/src/session/native-chat/mobile-native-chat-send.ts"],
+      "sites": ["mobile/src/session/native-chat/composer/mobile-native-chat-send.ts"],
       "schedules": [],
       "steps": [
         {
@@ -18101,7 +17723,7 @@
       "id": "native-chat-write-delivery-unknown",
       "operation": "nativeChat.terminal-write",
       "family": "nativeChat.terminal-write",
-      "sites": ["mobile/src/session/native-chat/mobile-native-chat-send.ts"],
+      "sites": ["mobile/src/session/native-chat/composer/mobile-native-chat-send.ts"],
       "schedules": [],
       "steps": [
         {
@@ -18133,7 +17755,7 @@
       "id": "native-chat-write-clear-line",
       "operation": "nativeChat.terminal-write",
       "family": "nativeChat.terminal-write",
-      "sites": ["mobile/src/session/native-chat/mobile-native-chat-send.ts"],
+      "sites": ["mobile/src/session/native-chat/composer/mobile-native-chat-send.ts"],
       "schedules": [],
       "steps": [
         {
@@ -18169,7 +17791,7 @@
       "id": "native-chat-write-typed-command",
       "operation": "nativeChat.terminal-write",
       "family": "nativeChat.terminal-write",
-      "sites": ["mobile/src/session/native-chat/mobile-native-chat-send.ts"],
+      "sites": ["mobile/src/session/native-chat/composer/mobile-native-chat-send.ts"],
       "schedules": [],
       "steps": [
         {
@@ -18840,7 +18462,9 @@
       "id": "structured-launch-unsupported",
       "operation": "agentSession.structured-launch",
       "family": "agentSession.structured-launch",
-      "sites": ["mobile/src/session/mobile-structured-agent-session-launch.ts"],
+      "sites": [
+        "mobile/src/session/native-chat/agent-session/mobile-structured-agent-session-launch.ts"
+      ],
       "schedules": [],
       "steps": [
         {
@@ -18870,7 +18494,9 @@
       "id": "structured-launch-support-refused",
       "operation": "agentSession.structured-launch",
       "family": "agentSession.structured-launch",
-      "sites": ["mobile/src/session/mobile-structured-agent-session-launch.ts"],
+      "sites": [
+        "mobile/src/session/native-chat/agent-session/mobile-structured-agent-session-launch.ts"
+      ],
       "schedules": [],
       "steps": [
         {
@@ -18900,7 +18526,9 @@
       "id": "structured-launch-created",
       "operation": "agentSession.structured-launch",
       "family": "agentSession.structured-launch",
-      "sites": ["mobile/src/session/mobile-structured-agent-session-launch.ts"],
+      "sites": [
+        "mobile/src/session/native-chat/agent-session/mobile-structured-agent-session-launch.ts"
+      ],
       "schedules": [],
       "steps": [
         {
@@ -18951,7 +18579,9 @@
       "id": "structured-launch-definitive-refusal",
       "operation": "agentSession.structured-launch",
       "family": "agentSession.structured-launch",
-      "sites": ["mobile/src/session/mobile-structured-agent-session-launch.ts"],
+      "sites": [
+        "mobile/src/session/native-chat/agent-session/mobile-structured-agent-session-launch.ts"
+      ],
       "schedules": [],
       "steps": [
         {
@@ -19003,7 +18633,9 @@
       "id": "structured-launch-replays-dropped-create",
       "operation": "agentSession.structured-launch",
       "family": "agentSession.structured-launch",
-      "sites": ["mobile/src/session/mobile-structured-agent-session-launch.ts"],
+      "sites": [
+        "mobile/src/session/native-chat/agent-session/mobile-structured-agent-session-launch.ts"
+      ],
       "schedules": [],
       "steps": [
         {
@@ -19443,7 +19075,7 @@
       "id": "native-chat-stop-accepted",
       "operation": "session.native-chat-stop",
       "family": "session.native-chat-stop",
-      "sites": ["mobile/src/session/native-chat/use-mobile-native-chat-stop.ts"],
+      "sites": ["mobile/src/session/native-chat/composer/use-mobile-native-chat-stop.ts"],
       "schedules": [],
       "steps": [
         {
@@ -19504,7 +19136,7 @@
       "id": "native-chat-stop-both-rejected",
       "operation": "session.native-chat-stop",
       "family": "session.native-chat-stop",
-      "sites": ["mobile/src/session/native-chat/use-mobile-native-chat-stop.ts"],
+      "sites": ["mobile/src/session/native-chat/composer/use-mobile-native-chat-stop.ts"],
       "schedules": [],
       "steps": [
         {
@@ -19562,7 +19194,7 @@
       "id": "native-chat-stop-delivery-unknown",
       "operation": "session.native-chat-stop",
       "family": "session.native-chat-stop",
-      "sites": ["mobile/src/session/native-chat/use-mobile-native-chat-stop.ts"],
+      "sites": ["mobile/src/session/native-chat/composer/use-mobile-native-chat-stop.ts"],
       "schedules": [],
       "steps": [
         {
@@ -19962,7 +19594,7 @@
         "mobile/src/source-control/review/use-mobile-diff-review-comment-actions.ts",
         "mobile/src/source-control/review/use-mobile-diff-review-git-actions.ts",
         "mobile/src/source-control/review/use-mobile-diff-review-send-actions.ts",
-        "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
+        "mobile/src/session/native-chat/composer/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
       "steps": [
@@ -20039,7 +19671,7 @@
         "mobile/src/source-control/review/use-mobile-diff-review-comment-actions.ts",
         "mobile/src/source-control/review/use-mobile-diff-review-git-actions.ts",
         "mobile/src/source-control/review/use-mobile-diff-review-send-actions.ts",
-        "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
+        "mobile/src/session/native-chat/composer/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
       "steps": [
@@ -20117,7 +19749,7 @@
         "mobile/src/source-control/review/use-mobile-diff-review-comment-actions.ts",
         "mobile/src/source-control/review/use-mobile-diff-review-git-actions.ts",
         "mobile/src/source-control/review/use-mobile-diff-review-send-actions.ts",
-        "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
+        "mobile/src/session/native-chat/composer/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
       "steps": [
@@ -20152,7 +19784,7 @@
         "mobile/src/source-control/review/use-mobile-diff-review-comment-actions.ts",
         "mobile/src/source-control/review/use-mobile-diff-review-git-actions.ts",
         "mobile/src/source-control/review/use-mobile-diff-review-send-actions.ts",
-        "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
+        "mobile/src/session/native-chat/composer/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
       "steps": [
@@ -20188,7 +19820,7 @@
         "mobile/src/source-control/review/use-mobile-diff-review-comment-actions.ts",
         "mobile/src/source-control/review/use-mobile-diff-review-git-actions.ts",
         "mobile/src/source-control/review/use-mobile-diff-review-send-actions.ts",
-        "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
+        "mobile/src/session/native-chat/composer/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
       "steps": [
@@ -20224,7 +19856,7 @@
         "mobile/src/source-control/review/use-mobile-diff-review-comment-actions.ts",
         "mobile/src/source-control/review/use-mobile-diff-review-git-actions.ts",
         "mobile/src/source-control/review/use-mobile-diff-review-send-actions.ts",
-        "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
+        "mobile/src/session/native-chat/composer/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
       "steps": [
@@ -20280,7 +19912,7 @@
         "mobile/src/source-control/review/use-mobile-diff-review-comment-actions.ts",
         "mobile/src/source-control/review/use-mobile-diff-review-git-actions.ts",
         "mobile/src/source-control/review/use-mobile-diff-review-send-actions.ts",
-        "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
+        "mobile/src/session/native-chat/composer/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
       "steps": [
@@ -20662,59 +20294,6 @@
       ]
     },
     {
-      "id": "native-chat-image-upload-single",
-      "operation": "nativeChat.image-upload",
-      "family": "nativeChat.image-upload",
-      "sites": ["mobile/src/session/native-chat/composer/mobile-native-chat-image-attachment.ts"],
-      "schedules": [],
-      "steps": [
-        {
-          "action": "normal",
-          "id": "normal"
-        },
-        {
-          "complete": "clipboard.startImageUpload#1",
-          "params": {
-            "connectionId": "connection-1",
-            "expectedBase64Length": 32
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "uploadId": "upload-1"
-            }
-          }
-        },
-        {
-          "complete": "clipboard.appendImageUploadChunk#1",
-          "params": {
-            "uploadId": "upload-1",
-            "offset": 0,
-            "contentBase64": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "received": 32
-            }
-          }
-        },
-        {
-          "complete": "clipboard.commitImageUpload#1",
-          "params": {
-            "uploadId": "upload-1"
-          },
-          "reply": {
-            "ok": true,
-            "result": "/tmp/img-1.png"
-          }
-        },
-        {
-          "checkpoint": "uploaded"
-        }
-      ]
-    },
-    {
       "id": "native-chat-image-upload-two",
       "operation": "nativeChat.image-upload",
       "family": "nativeChat.image-upload",
@@ -20872,22 +20451,6 @@
       ]
     },
     {
-      "id": "native-chat-image-upload-cancelled",
-      "operation": "nativeChat.image-upload",
-      "family": "nativeChat.image-upload",
-      "sites": ["mobile/src/session/native-chat/composer/mobile-native-chat-image-attachment.ts"],
-      "schedules": [],
-      "steps": [
-        {
-          "action": "cancelled",
-          "id": "cancelled"
-        },
-        {
-          "checkpoint": "no-wire"
-        }
-      ]
-    },
-    {
       "id": "files-explorer-legacy-fallback",
       "operation": "files.explorer-screen",
       "family": "files.explorer-screen",
@@ -21035,7 +20598,7 @@
       "id": "codex-reset-credit-consumed",
       "operation": "accounts.codex-reset-credit",
       "family": "components.codex-reset-credit",
-      "sites": ["mobile/src/components/codex-reset-credit.ts"],
+      "sites": ["mobile/src/accounts/usage/codex-reset-credit.ts"],
       "schedules": [],
       "deviceStore": {},
       "steps": [
@@ -21114,71 +20677,6 @@
         },
         {
           "checkpoint": "consumed"
-        }
-      ]
-    },
-    {
-      "id": "push-dismissal-tray-reconciled",
-      "operation": "notifications.push-dismissal",
-      "family": "notifications.push-dismissal",
-      "sites": ["mobile/src/notifications/push-dismissal-reconciliation.ts"],
-      "schedules": [],
-      "deviceStore": {
-        "orca:hosts": "[{\"id\":\"host-1\",\"name\":\"Desk\",\"endpoint\":\"wss://desk.test\",\"publicKeyB64\":\"AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=\",\"lastConnected\":1700000000000}]"
-      },
-      "deviceState": {
-        "notificationTray": [
-          {
-            "request": {
-              "identifier": "tray-1",
-              "content": {
-                "data": {
-                  "hostFingerprint": "Yw3NKWbEM2aRElRI",
-                  "kind": "alert",
-                  "notificationId": "note-1",
-                  "notificationEpoch": "epoch-1",
-                  "notificationSeq": 7
-                }
-              }
-            }
-          }
-        ]
-      },
-      "steps": [
-        {
-          "action": "catchup",
-          "id": "catchup"
-        },
-        {
-          "checkpoint": "requested"
-        },
-        {
-          "complete": "notifications.getMissedSince#1",
-          "params": {
-            "lastSeenSeq": 9007199254740991,
-            "deliveredPushes": [
-              {
-                "notificationId": "note-1",
-                "notificationEpoch": "epoch-1",
-                "notificationSeq": 7
-              }
-            ]
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "dismissedPushes": [
-                {
-                  "notificationId": "note-1",
-                  "notificationEpoch": "epoch-1",
-                  "notificationSeq": 7
-                }
-              ]
-            }
-          }
-        },
-        {
-          "checkpoint": "reconciled"
         }
       ]
     },
@@ -21508,108 +21006,6 @@
         },
         {
           "checkpoint": "not-registered"
-        }
-      ]
-    },
-    {
-      "id": "notifications-display-test-rate-limited",
-      "operation": "notifications.display-test-screen",
-      "family": "notifications.display-test-screen",
-      "sites": ["mobile/src/settings/notification-display-test.tsx"],
-      "schedules": [],
-      "deviceStore": {
-        "orca:pushServiceNotificationsEnabled": "true",
-        "orca:hosts": "[{\"id\":\"host-1\",\"name\":\"Desk\",\"endpoint\":\"ws://desk.local:7777\",\"publicKeyB64\":\"AAAA\",\"lastConnected\":1700000000000}]"
-      },
-      "deviceState": {
-        "notificationPermissions": {
-          "status": "granted",
-          "canAskAgain": true
-        },
-        "pushToken": {
-          "type": "ios",
-          "data": "fixture-apns-token"
-        }
-      },
-      "steps": [
-        {
-          "action": "mount",
-          "id": "mount"
-        },
-        {
-          "checkpoint": "mounted"
-        },
-        {
-          "action": "send-test",
-          "id": "press"
-        },
-        {
-          "checkpoint": "sending"
-        },
-        {
-          "complete": "notifications.testPush#1",
-          "params": null,
-          "reply": {
-            "ok": true,
-            "result": {
-              "accepted": false,
-              "reason": "rate_limited"
-            }
-          }
-        },
-        {
-          "checkpoint": "rate-limited"
-        }
-      ]
-    },
-    {
-      "id": "notifications-display-test-unknown-reason",
-      "operation": "notifications.display-test-screen",
-      "family": "notifications.display-test-screen",
-      "sites": ["mobile/src/settings/notification-display-test.tsx"],
-      "schedules": [],
-      "deviceStore": {
-        "orca:pushServiceNotificationsEnabled": "true",
-        "orca:hosts": "[{\"id\":\"host-1\",\"name\":\"Desk\",\"endpoint\":\"ws://desk.local:7777\",\"publicKeyB64\":\"AAAA\",\"lastConnected\":1700000000000}]"
-      },
-      "deviceState": {
-        "notificationPermissions": {
-          "status": "granted",
-          "canAskAgain": true
-        },
-        "pushToken": {
-          "type": "ios",
-          "data": "fixture-apns-token"
-        }
-      },
-      "steps": [
-        {
-          "action": "mount",
-          "id": "mount"
-        },
-        {
-          "checkpoint": "mounted"
-        },
-        {
-          "action": "send-test",
-          "id": "press"
-        },
-        {
-          "checkpoint": "sending"
-        },
-        {
-          "complete": "notifications.testPush#1",
-          "params": null,
-          "reply": {
-            "ok": true,
-            "result": {
-              "accepted": false,
-              "reason": "quota_exceeded"
-            }
-          }
-        },
-        {
-          "checkpoint": "unknown-reason"
         }
       ]
     },
@@ -24889,7 +24285,7 @@
         "mobile/src/source-control/review/use-mobile-diff-review-comment-actions.ts",
         "mobile/src/source-control/review/use-mobile-diff-review-git-actions.ts",
         "mobile/src/source-control/review/use-mobile-diff-review-send-actions.ts",
-        "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
+        "mobile/src/session/native-chat/composer/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
       "steps": [
@@ -24944,7 +24340,7 @@
         "mobile/src/source-control/review/use-mobile-diff-review-comment-actions.ts",
         "mobile/src/source-control/review/use-mobile-diff-review-git-actions.ts",
         "mobile/src/source-control/review/use-mobile-diff-review-send-actions.ts",
-        "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
+        "mobile/src/session/native-chat/composer/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
       "steps": [
@@ -25018,7 +24414,9 @@
       "id": "structured-agent-session-created",
       "operation": "agentSession.structured-launch",
       "family": "agentSession.structured-create",
-      "sites": ["mobile/src/session/mobile-structured-agent-session-launch.ts"],
+      "sites": [
+        "mobile/src/session/native-chat/agent-session/mobile-structured-agent-session-launch.ts"
+      ],
       "schedules": [],
       "steps": [
         {

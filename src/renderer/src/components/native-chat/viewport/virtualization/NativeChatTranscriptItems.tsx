@@ -53,6 +53,10 @@ export function NativeChatTranscriptItems({
                     newRowsMarker={
                       rowKeys[item.index] === newRowsMarker?.key ? newRowsMarker : undefined
                     }
+                    newRowsMarkerBelow={
+                      newRowsMarker?.place === 'above-row' &&
+                      rowKeys[item.index + 1] === newRowsMarker.key
+                    }
                   />
                 </div>
               </Fragment>

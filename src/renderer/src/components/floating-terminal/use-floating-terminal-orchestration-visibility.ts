@@ -2,9 +2,9 @@ import { useCallback, useEffect } from 'react'
 import { isOrcaCliAvailableOnPath } from '@/lib/skills/installation/agent-skill-cli-prerequisite'
 import {
   ORCHESTRATION_SETUP_STATE_EVENT,
-  hasOrchestrationSetupMarker,
+  isOrchestrationSetupEnabled,
   isOrchestrationSetupDismissed
-} from '@/lib/orchestration-setup-state'
+} from '@/components/orchestration/setup/orchestration-setup-state'
 import type { FloatingTerminalPanelLocalState } from './use-floating-terminal-panel-local-state'
 
 type FloatingTerminalOrchestrationVisibilityInput = Pick<
@@ -22,7 +22,7 @@ export function useFloatingTerminalOrchestrationVisibility({
       setShowOrchestrationSetup(false)
       return
     }
-    if (!hasOrchestrationSetupMarker()) {
+    if (!isOrchestrationSetupEnabled()) {
       setShowOrchestrationSetup(true)
       return
     }

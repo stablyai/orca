@@ -1,7 +1,7 @@
 import { OrcadBindAddressError } from '../../shared/orcad-bind-address'
 import { OrcadBundledRuntimeError } from './orcad-bundled-runtime'
 import { OrcadInstanceLockError } from './orcad-data-root-privacy'
-import { ProfileStateAccessError } from '../persistence/profile-state/profile-state-access-error'
+import { ProfileStateAccessError } from '../persistence/profile-state/access/profile-state-access-error'
 import { ORCAD_EXIT_CONFIGURATION } from './orcad-configuration-exit'
 import { SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE } from '../../shared/single-instance-exit-code'
 import { ORCAD_EXIT_TERMINALS_NOT_DURABLE } from '../../shared/serve-supervised-terminal-durability'

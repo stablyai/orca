@@ -2,7 +2,10 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
-import { mediaPlaybackPositionCache, setWithLRU } from '@/lib/scroll-cache'
+import {
+  mediaPlaybackPositionCache,
+  setWithLRU
+} from '@/components/editor/model-lifetime/retention/editor-view-state-cache'
 
 export default function MediaViewer({
   src,

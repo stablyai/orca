@@ -1,5 +1,4 @@
 import { useSourceControlState, useSourceControlScope } from '../panel/worktree-scope'
-import type React from 'react'
 import { Copy, Globe, Hash, Sparkles } from 'lucide-react'
 import {
   ContextMenuContent,
@@ -7,8 +6,9 @@ import {
   ContextMenuSeparator
 } from '@/components/ui/context-menu'
 import { useTranslate } from '@/i18n/use-translate'
+import { getClientCreationActionPolicy } from '@/lib/workspace/creation/surface-policy/client-creation-action-policy'
+import type React from 'react'
 import type { GitHistoryItem } from '../../../../../../shared/git/history/git-history-types'
-import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
 
 export type GitHistoryCommitAction = 'open-remote' | 'copy-hash' | 'copy-message' | 'explain'
 

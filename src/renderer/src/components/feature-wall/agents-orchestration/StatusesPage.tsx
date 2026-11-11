@@ -5,8 +5,8 @@ import { AgentStateDot } from '@/components/AgentStateDot'
 import { getAgentCatalog, type AgentCatalogEntry } from '@/lib/agent-catalog/agent-catalog'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { ClaudeIcon, OpenAIIcon } from '../../status-bar/icons'
-import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
-import { cn } from '@/lib/utils'
+import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 
 type ClaudeActivity = { kind: 'tool'; tool: string; arg: string } | { kind: 'msg'; text: ReactNode }

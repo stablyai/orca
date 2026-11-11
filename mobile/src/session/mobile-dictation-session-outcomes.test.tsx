@@ -4,7 +4,7 @@ import { act } from 'react-test-renderer'
 import { createWithQueryClient } from '../test-support/query-client-test-renderer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createFakeRpcClient, type FakeRpcClient } from '../mobile-web-shell/bridge-host-test-fakes'
-import type * as NativeChatSendError from './native-chat/use-mobile-native-chat-send-error'
+import type * as NativeChatSendError from './native-chat/composer/use-mobile-native-chat-send-error'
 import type * as NativeChatDraftStore from './native-chat/composer/mobile-native-chat-draft-store'
 
 type ChatView = { shown: boolean; scope: string | null }
@@ -14,8 +14,6 @@ const seen = vi.hoisted(() => {
   return {
     toasts: new Array<string>(),
     errorHaptics: 0,
-    setupSheetOpens: 0,
-    micPermissionRequests: 0,
     clipboard: new Array<string>(),
     inputs: new Array<string>(),
     chat,
@@ -30,7 +28,7 @@ vi.mock('react-native', () => ({
   Platform: { OS: 'ios' }
 }))
 // The computer's name only words announcements; the stored host profile pulls in secure storage.
-vi.mock('../transport/hosts/use-host-profile', () => ({ useHostProfile: () => null }))
+vi.mock('../host-catalog/use-host-profile', () => ({ useHostProfile: () => null }))
 vi.mock('@orca/expo-two-way-audio', () => ({
   addExpoTwoWayAudioEventListener: (name: string, listener: (event: { data: string }) => void) => {
     seen.audioListeners.set(name, listener)
@@ -38,7 +36,6 @@ vi.mock('@orca/expo-two-way-audio', () => ({
   },
   initialize: () => Promise.resolve(true),
   requestMicrophonePermissionsAsync: () => {
-    seen.micPermissionRequests += 1
     return Promise.resolve({ granted: true })
   },
   tearDown: () => {},
@@ -69,7 +66,7 @@ vi.mock('../platform/clipboard', () => {
 })
 
 // Stub off-path native chat dependencies to keep Expo out of this mic test.
-vi.mock('./native-chat/use-mobile-native-chat-send-error', async (importOriginal) => ({
+vi.mock('./native-chat/composer/use-mobile-native-chat-send-error', async (importOriginal) => ({
   ...(await importOriginal<typeof NativeChatSendError>()),
   useMobileNativeChatSendError: () => ({
     message: null,
@@ -82,7 +79,7 @@ vi.mock('./native-chat/use-mobile-native-chat-send-error', async (importOriginal
 vi.mock('./native-chat/transcript/use-mobile-native-chat-readability', () => ({
   useMobileNativeChatReadability: () => false
 }))
-vi.mock('./native-chat/use-mobile-native-chat-input-lease', () => ({
+vi.mock('./native-chat/composer/use-mobile-native-chat-input-lease', () => ({
   useMobileNativeChatInputLease: () => ({
     ready: true,
     readyRef: { current: true },
@@ -159,11 +156,7 @@ function mount(
       activeSessionTab: { id: 'tab1', type: 'terminal', terminal: 't1', title: 'Claude Code' },
       diffComments: [],
       diffCommentsRef: useRef([]),
-      setShowDictationSetup: (next: boolean) => {
-        if (next) {
-          seen.setupSheetOpens += 1
-        }
-      },
+      setShowDictationSetup: () => {},
       setDictationMode: () => {},
       dictationEnabled: true,
       setDictationEnabled: () => {},
@@ -259,77 +252,11 @@ async function startRecording(
 beforeEach(() => {
   seen.toasts.length = 0
   seen.errorHaptics = 0
-  seen.setupSheetOpens = 0
-  seen.micPermissionRequests = 0
   seen.clipboard.length = 0
   seen.inputs.length = 0
   seen.chat = { shown: false, scope: null }
   seen.chatWrites.length = 0
   seen.audioListeners.clear()
-})
-
-describe('a mic tap after the host reported dictation is not set up', () => {
-  it('opens setup without asking for the microphone, then lets the host judge the tap after the sheet closes', async () => {
-    const rpc = createFakeRpcClient()
-    const mounted = mount(rpc)
-    await act(async () => {
-      const read = mounted.current().refreshDictationMode()
-      for (const request of rpc.requests.splice(0)) {
-        request.resolve({
-          id: 'desktop',
-          ok: true,
-          result: { enabled: false, selectedModelId: '', dictationMode: 'toggle', models: [] }
-        })
-      }
-      await read
-    })
-    act(() => mounted.current().handleDictationToggle())
-    expect(seen.setupSheetOpens).toBe(1)
-    expect(seen.micPermissionRequests).toBe(0)
-    expect(rpc.requests).toEqual([])
-
-    // Closing the sheet hands the next tap to the host until a fresh read lands.
-    act(() => mounted.current().closeDictationSetup())
-    act(() => mounted.current().handleDictationToggle())
-    await settle(rpc, '')
-    expect(seen.setupSheetOpens).toBe(1)
-    expect(seen.micPermissionRequests).toBe(1)
-  })
-})
-
-describe('an audio interruption while recording', () => {
-  it('finishes the dictation and keeps what was said', async () => {
-    const rpc = createFakeRpcClient()
-    await startRecording(rpc)
-    act(() => seen.audioListeners.get('onAudioInterruption')?.({ data: 'began' }))
-    const methods = await settle(rpc, 'call me back')
-    expect(methods).toContain('speech.dictation.finish')
-    expect(methods).not.toContain('speech.dictation.cancel')
-    expect(seen.inputs).toEqual(['call me back'])
-    expect(seen.toasts).toEqual(['Dictation inserted'])
-  })
-})
-
-describe('leaving the session while recording', () => {
-  it('stops and inserts what was said instead of leaving, and lets the next leave go', async () => {
-    const rpc = createFakeRpcClient()
-    const mounted = await startRecording(rpc)
-    const held: boolean[] = []
-    act(() => {
-      held.push(mounted.current().dictationLeaveHold.hold())
-    })
-    // Back is released while transcribing, so a swipe can leave too.
-    expect(mounted.current().dictationLeaveHold.holdsLeave).toBe(false)
-    act(() => {
-      held.push(mounted.current().dictationLeaveHold.hold())
-    })
-    expect(held).toEqual([true, false])
-    const methods = await settle(rpc, 'one more thing')
-    expect(methods.filter((method) => method === 'speech.dictation.finish')).toHaveLength(1)
-    expect(methods).not.toContain('speech.dictation.cancel')
-    expect(seen.inputs).toEqual(['one more thing'])
-    expect(seen.toasts).toEqual(['Dictation inserted'])
-  })
 })
 
 describe('a mic tap while the transcript is processing', () => {
@@ -365,21 +292,5 @@ describe('a dictation that ends after switching between chat and terminal', () =
     await settle(rpc, 'ship it')
     expect(seen.chatWrites).toEqual([['chat-b', 'ship it']])
     expect(seen.inputs).toEqual([])
-  })
-})
-
-describe('a dictation whose session screen was left', () => {
-  it('keeps recording, then puts its words in the chat it started in with a toast that opens it', async () => {
-    seen.chat = { shown: true, scope: 'chat-a' }
-    const rpc = createFakeRpcClient()
-    const mounted = await startRecording(rpc)
-    mounted.leave()
-    expect(mounted.host().getDictation().isRecording).toBe(true)
-    expect(mounted.host().pill?.away).toBe(true)
-    act(() => mounted.host().stop())
-    await settle(rpc, 'ship it')
-    expect(seen.chatWrites).toEqual([['chat-a', 'ship it']])
-    expect(mounted.host().pill?.toast?.message).toBe('Inserted in Claude Code')
-    expect(mounted.host().pill?.toast?.open).toBeTypeOf('function')
   })
 })

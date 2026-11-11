@@ -5,7 +5,7 @@ import { nativeChatElapsedSeconds } from '../../../../../src/shared/native-chat/
 import {
   formatMobileNativeChatTurnStatusLabel,
   nativeChatTurnStatusCopy
-} from '../native-chat-turn-status-copy'
+} from './native-chat-turn-status-copy'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import type { AgentTurnOutcome } from '../../../../../src/shared/agent-status/lifecycle/agent-turn-outcome'
 import { colors, spacing, typography } from '../../../theme/mobile-theme'

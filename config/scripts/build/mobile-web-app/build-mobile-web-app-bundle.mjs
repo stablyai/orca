@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises'
+import { readFile, readdir } from 'node:fs/promises'
 import { readRouteSnapshot } from '../../mobile-web-app/mobile-web-app-route-snapshot.mjs'
 import { MOBILE_WEB_APP_DEPENDENCY_PATH } from '../../mobile-web-app/mobile-web-app-bundle-dependencies.mjs'
 import { existsSync, realpathSync } from 'node:fs'
@@ -457,6 +457,32 @@ export async function mobileWebAppModuleClosure(entryModules, { absWorkingDir } 
 
 // One lazily imported chunk per UI language; the page fetches only the active one after init.
 const LOCALE_CATALOG_INPUT = /(^|\/)src\/i18n\/locales\/[^/]+\.json$/
+const localeCatalogDir = join(mobileDir, 'src', 'i18n', 'locales')
+
+// The same catalogs as JSON for the host to serve one at a time, to shells that skip the chunks;
+// English is the page's inline fallback, so it has none.
+export async function readLocaleCatalogs(directory = localeCatalogDir) {
+  const names = (await readdir(directory))
+    .filter((name) => name.endsWith('.json') && name !== 'en.json')
+    .sort()
+  return Promise.all(
+    names.map(async (name) => {
+      // Minify: the host sends and the phone keeps the parsed object, not the source layout.
+      const bytes = Buffer.from(
+        JSON.stringify(JSON.parse(await readFile(join(directory, name), 'utf8'))),
+        'utf8'
+      )
+      const sha256 = sha256Hex(bytes)
+      return {
+        locale: name.slice(0, -'.json'.length),
+        bytes,
+        path: `catalogs/${sha256}.json`,
+        sha256,
+        byteLength: bytes.byteLength
+      }
+    })
+  )
+}
 
 function localeCatalogOutputs(metafile) {
   return new Set(
@@ -586,11 +612,13 @@ export async function buildMobileWebAppBundle({
     desktopVersion,
     protocolWindow,
     { script, chunks, images, catalogChunks, entryStaticBytes, chunkCount, routeChunks, routeKeys },
+    catalogs,
     scrollbarStyle
   ] = await Promise.all([
     readDesktopVersion(),
     readProtocolWindow(),
     bundleMobileWebApp({ appDir }),
+    readLocaleCatalogs(),
     readFile(join(projectDir, 'src/shared/styles/scrollbar-sleek.css'), 'utf8').then((style) =>
       // The shared desktop stylesheet can be checked out as CRLF on Windows.
       style.replace(/\r\n/g, '\n')
@@ -598,9 +626,14 @@ export async function buildMobileWebAppBundle({
   ])
   // Names already hash final bytes, so hashedAsset must reproduce them.
   const scriptAsset = hashedAsset(script, 'js')
+  const catalogChunkSet = new Set(catalogChunks)
   const written = [
     scriptAsset,
-    ...[...chunks, ...images].map(({ name, bytes }) => hashedAsset(bytes, extname(name).slice(1)))
+    ...[...chunks, ...images].map((output) => ({
+      ...hashedAsset(output.bytes, extname(output.name).slice(1)),
+      // Shells that read catalogs from the host skip these; older shells download them as before.
+      ...(catalogChunkSet.has(output) ? { kind: 'catalog' } : {})
+    }))
   ]
 
   // Root-absolute URLs survive nested routes; CSP allows only about: base. ESM entry/chunks load under existing self policy.
@@ -624,6 +657,7 @@ export async function buildMobileWebAppBundle({
   const { manifest } = await writeMobileWebBundleTree({
     outDir,
     written: [indexAsset, ...written],
+    catalogs,
     desktopVersion,
     protocolWindow,
     routes: resolveMobileWebPageRoutes(routeKeys, pageRoutes),

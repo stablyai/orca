@@ -1,5 +1,5 @@
 import React from 'react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { getStateLabel } from '@/components/github/work-item-state-presentation'
 import {
   getReviewStateTone,

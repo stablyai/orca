@@ -9,6 +9,7 @@ import { OrchestrationError } from '../../../../orchestration/orchestration-erro
 import {
   buildStructuredJournalArchive,
   captureRetiredLineageArchive,
+  readStructuredLineageArchiveJournal,
   type WorkerStructuredJournalArchive
 } from '../../../../orchestration/workers/archives/structured-worker-journal-archive'
 import {
@@ -228,7 +229,7 @@ export async function captureStructuredWorkerArchive(
 ): Promise<WorkerStructuredJournalArchive> {
   const running = requireRunningStructuredWorker(identity)
   // Open resting journals too and preserve the whole /clear lineage.
-  const page = await readStructuredLineageJournalPage(running.lineage)
+  const page = await readStructuredLineageArchiveJournal(running.lineage)
   if (page) {
     return buildStructuredJournalArchive({
       agent,
