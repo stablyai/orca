@@ -137,15 +137,16 @@ export function useWorktreeRowGeometry(args: {
     [projection, ranges, virtualization.virtualizer]
   )
   const keepsFolderParent = useCallback(
-    (identity: string, point: WorktreeReorderDropPoint | undefined) => {
+    (identity: string, point: WorktreeReorderDropPoint | undefined, contentRect?: DOMRect) => {
       if (point?.retainedFolderIdentities) {
         return point.retainedFolderIdentities.has(identity)
       }
-      const container = scrollRef.current
-      if (!point || !container) {
+      const rect =
+        contentRect ??
+        scrollRef.current?.querySelector('[data-worktree-sidebar-content]')?.getBoundingClientRect()
+      if (!point || !rect) {
         return false
       }
-      const rect = container.getBoundingClientRect()
       const measurements = virtualization.virtualizer.measurementsCache
       return (projection.occurrencesByIdentity.get(identity) ?? []).some((index) => {
         if (rows[index]?.type !== 'folder-workspace') {
@@ -157,9 +158,8 @@ export function useWorktreeRowGeometry(args: {
         if (!first || !last) {
           return false
         }
-        const top = rect.top + first.start - container.scrollTop
-        const bottom =
-          rect.top + last.end - projection.frames[frame.end].after - container.scrollTop
+        const top = rect.top + first.start
+        const bottom = rect.top + last.end - projection.frames[frame.end].after
         return isReorderInsideFolderBounds(point, {
           left: rect.left + frame.left + 4,
           right: rect.right - frame.right,
@@ -171,22 +171,26 @@ export function useWorktreeRowGeometry(args: {
     [projection, rows, scrollRef, virtualization.virtualizer]
   )
   const captureFolderRetention = useCallback(
-    (point: WorktreeReorderDropPoint | undefined) => {
+    (point: WorktreeReorderDropPoint | undefined, folderIdentities: ReadonlySet<string>) => {
       if (!point) {
         return point
       }
       const retainedFolderIdentities = new Set<string>()
-      for (const [identity, indexes] of projection.occurrencesByIdentity) {
-        if (
-          indexes.some((index) => rows[index]?.type === 'folder-workspace') &&
-          keepsFolderParent(identity, point)
-        ) {
-          retainedFolderIdentities.add(identity)
+      if (folderIdentities.size > 0) {
+        const rect = scrollRef.current
+          ?.querySelector('[data-worktree-sidebar-content]')
+          ?.getBoundingClientRect()
+        if (rect) {
+          for (const identity of folderIdentities) {
+            if (keepsFolderParent(identity, point, rect)) {
+              retainedFolderIdentities.add(identity)
+            }
+          }
         }
       }
       return { ...point, retainedFolderIdentities }
     },
-    [keepsFolderParent, projection, rows]
+    [keepsFolderParent, scrollRef]
   )
   return { units, indexes, ranges, getRects, keepsFolderParent, captureFolderRetention }
 }

@@ -72,7 +72,9 @@ export function useWorktreeDocumentDrop(args: {
       event.preventDefault()
       event.stopPropagation()
       const rawDropPoint = getWorktreeReorderDropPoint(event, drop, ctx.scrollRef.current)
-      const dropPoint = ctx.captureFolderRetention?.(rawDropPoint) ?? rawDropPoint
+      const dropPoint =
+        ctx.captureFolderRetention?.(rawDropPoint, session.pickedCopies, session.sourceGroupKey) ??
+        rawDropPoint
       ctx.onReorderWorktrees({
         groups: ctx.worktreeDragGroups,
         sourceGroupKey: session.sourceGroupKey,

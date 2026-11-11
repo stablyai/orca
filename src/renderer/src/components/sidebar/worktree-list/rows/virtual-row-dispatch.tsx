@@ -7,6 +7,7 @@ import type {
 } from '../../../../../../shared/worktree/types'
 import '../../workspace-status/presentation/workspace-status'
 import { getWorkspaceStatus } from '../../../../../../shared/workspace-statuses'
+import { isActiveSidebarWorkspace } from '../../../../../../shared/sidebar-list/active-workspace'
 import type { WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import {
@@ -35,7 +36,7 @@ import type { Translate } from '@/i18n/use-translate'
 
 export type WorktreeVirtualRowContext = {
   dragUnitsByRow: ReadonlyMap<number, { identity: string }>
-  hiddenDragIdentities: ReadonlySet<string>
+  hiddenDragRanges: readonly { start: number; end: number }[]
   projection: LineageRowProjection
   activeFamilyRoots: ReadonlySet<number>
   renderRows: RenderRow[]
@@ -186,7 +187,7 @@ export function renderWorktreeVirtualRow(
   const sourceHidden =
     itemKey !== null &&
     ctx.worktreeDragState.draggingWorktreeId !== null &&
-    ctx.hiddenDragIdentities.has(itemKey)
+    ctx.hiddenDragRanges.some(({ start, end }) => vItem.index >= start && vItem.index <= end)
   const itemPreviewOffset =
     (itemKey
       ? ctx.worktreeDragState.previewOffsetsByWorktreeId.get(
@@ -194,8 +195,19 @@ export function renderWorktreeVirtualRow(
         )
       : 0) ?? 0
   const activeFamily = ctx.activeFamilyRoots.has(frame.root)
-  const expanded = frame.end > vItem.index
   const rootFrame = ctx.projection.frames[frame.root]
+  const rootRow = ctx.renderRows[frame.root]
+  const familyHidden = ctx.hiddenDragRanges.some(
+    ({ start, end }) => frame.root >= start && frame.root <= end
+  )
+  const familyVariant =
+    rootRow.type === 'item' &&
+    isActiveSidebarWorkspace(rootRow.worktree, {
+      worktreeId: ctx.item.activeWorktreeId,
+      hostId: ctx.item.activeWorkspaceExecutionHostId
+    })
+      ? ctx.item.getActiveSurfaceVariant(rootRow)
+      : 'primary'
 
   return (
     <div
@@ -210,16 +222,12 @@ export function renderWorktreeVirtualRow(
       data-workspace-status={itemWorkspaceStatus ?? undefined}
       className={cn(
         'absolute left-0 right-0 top-0',
-        expanded && 'worktree-sidebar-expanded-row',
         activeFamily && frame.root === vItem.index && 'worktree-sidebar-family-root',
-        sourceHidden && 'pointer-events-none opacity-0',
         ctx.worktreeDragState.draggingWorktreeId !== null &&
           'transition-transform duration-150 ease-out will-change-transform'
       )}
       style={{
-        transform: getWorktreeVirtualRowTransform(vItem.start, itemPreviewOffset),
-        paddingTop: frame.before,
-        paddingBottom: frame.closing + frame.after
+        transform: getWorktreeVirtualRowTransform(vItem.start, itemPreviewOffset)
       }}
       onDragOver={
         itemWorkspaceStatus
@@ -233,25 +241,43 @@ export function renderWorktreeVirtualRow(
           : undefined
       }
     >
-      {activeFamily && (
-        <div
-          aria-hidden="true"
-          data-worktree-family-segment=""
-          className={cn(
-            'pointer-events-none absolute border-x',
-            frame.root === vItem.index && 'rounded-t-lg border-t',
-            frame.end === vItem.index && vItem.index === rootFrame.end && 'rounded-b-lg border-b'
-          )}
-          style={{ left: rootFrame.left + 4, right: rootFrame.right, top: 0, bottom: frame.after }}
-        />
-      )}
-      {folder
-        ? renderFolderWorkspaceOption({
-            ctx: ctx.folderWorkspace,
-            row,
-            lineage: { onToggle: folderLineageToggle(ctx, row), childIsActive: activeFamily }
-          })
-        : renderWorktreeItemRow(ctx.item, row, frame, activeFamily && frame.root === vItem.index)}
+      <div
+        className="relative"
+        style={{ paddingTop: frame.before, paddingBottom: frame.closing + frame.after }}
+      >
+        {activeFamily && (
+          <div
+            aria-hidden="true"
+            data-worktree-family-segment={familyVariant}
+            className={cn(
+              'pointer-events-none absolute border-x',
+              familyHidden && 'opacity-0',
+              frame.root === vItem.index && 'rounded-t-lg border-t',
+              frame.end === vItem.index && vItem.index === rootFrame.end && 'rounded-b-lg border-b'
+            )}
+            style={{
+              left: rootFrame.left + 4,
+              right: rootFrame.right,
+              top: 0,
+              bottom: frame.after
+            }}
+          />
+        )}
+        <div className={cn(sourceHidden && 'pointer-events-none opacity-0')}>
+          {folder
+            ? renderFolderWorkspaceOption({
+                ctx: ctx.folderWorkspace,
+                row,
+                lineage: { onToggle: folderLineageToggle(ctx, row), childIsActive: activeFamily }
+              })
+            : renderWorktreeItemRow(
+                ctx.item,
+                row,
+                frame,
+                activeFamily && frame.root === vItem.index
+              )}
+        </div>
+      </div>
     </div>
   )
 }

@@ -112,9 +112,7 @@ export function renderWorktreeItemRow(
         isCurrentWorktree={ctx.currentWorktreeId === itemRow.worktree.id}
         // Why: a child-active parent should look active without the active-card side effects (e.g. SSH reconnect UI).
         isActiveSurface={forceActiveSurface || isActiveWorktree}
-        activeSurfaceVariant={
-          isActiveWorktree && !forceActiveSurface ? ctx.getActiveSurfaceVariant(itemRow) : 'primary'
-        }
+        activeSurfaceVariant={isActiveWorktree ? ctx.getActiveSurfaceVariant(itemRow) : 'primary'}
         isMultiSelected={isMultiSelected}
         revealHighlight={ctx.highlightedRevealRowKey === itemRow.rowKey}
         revealHighlightTone={

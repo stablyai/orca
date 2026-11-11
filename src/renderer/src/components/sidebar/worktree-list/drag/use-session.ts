@@ -48,7 +48,7 @@ export function useWorktreeDragSession(args: {
   geometry: WorktreeRowGeometry
 }) {
   const { rows, scrollRef, geometry } = args
-  const { getRects, captureFolderRetention } = geometry
+  const { getRects } = geometry
   const worktreeDragSessionRef = useRef<WorktreeSidebarDragSession | null>(null)
   // Hold cross-group drop anchors separately so expanding target cards cannot move the line under a still pointer.
   const statusDropAnchorsRef = useRef<Map<string, WorktreeSidebarDropAnchor>>(new Map())
@@ -232,7 +232,6 @@ export function useWorktreeDragSession(args: {
   return useMemo(
     () => ({
       getRects,
-      captureFolderRetention,
       worktreeDragSessionRef,
       statusDropAnchorsRef,
       worktreeDragGroups,
@@ -248,7 +247,6 @@ export function useWorktreeDragSession(args: {
     }),
     [
       getRects,
-      captureFolderRetention,
       computeWorktreeDrop,
       computeWorktreeStatusDrop,
       getReorderDraggedCopies,

@@ -35,10 +35,47 @@ export function useWorktreeLineageDropCommit(args: {
   worktreeLineageById: Record<string, WorktreeLineage>
   worktreeDragGroups: readonly WorktreeDragGroup[]
   keepsFolderParent: (identity: string, point: WorktreeReorderDropPoint | undefined) => boolean
+  captureFolderRetention: (
+    point: WorktreeReorderDropPoint | undefined,
+    folders: ReadonlySet<string>
+  ) => WorktreeReorderDropPoint | undefined
 }) {
   const { repoMap, worktreeMap, worktreeLineageById, worktreeDragGroups, keepsFolderParent } = args
   const worktrees = useAllWorktrees()
   const parentIdentities = useAppStore(selectSidebarLineageParentIdentities)
+  const groupMembers = useMemo(
+    () => new Map(worktreeDragGroups.map((group) => [group.key, new Set(group.worktreeIds)])),
+    [worktreeDragGroups]
+  )
+  const folderParentOf = useCallback(
+    (identity: string) => {
+      const parent = parentIdentities?.get(identity)
+      return parent !== undefined &&
+        parseWorkspaceKey(getWorktreeIdFromHostIdentity(parent))?.type === 'folder'
+        ? parent
+        : undefined
+    },
+    [parentIdentities]
+  )
+  const { captureFolderRetention: captureGeometry } = args
+  const captureFolderRetention = useCallback(
+    (
+      point: WorktreeReorderDropPoint | undefined,
+      pickedCopies: DraggedWorktreeCopies,
+      sourceGroupKey: string
+    ) => {
+      const folders = new Set<string>()
+      for (const copy of pickedCopies) {
+        const identity = getWorktreeHostIdentity(copy)
+        const parent = folderParentOf(identity)
+        if (parent && groupMembers.get(sourceGroupKey)?.has(identity)) {
+          folders.add(parent)
+        }
+      }
+      return captureGeometry(point, folders)
+    },
+    [captureGeometry, folderParentOf, groupMembers]
+  )
   const assignWorktreeParent = useAppStore((s) => s.assignWorktreeParent)
   const assignCrossStoreWorktreeParent = useAppStore((s) => s.assignCrossStoreWorktreeParent)
   const updateWorktreeLineage = useAppStore((s) => s.updateWorktreeLineage)
@@ -184,13 +221,7 @@ export function useWorktreeLineageDropCommit(args: {
         legacyIds,
         pickedCopies: unnestArgs.pickedCopies ?? [],
         sourceGroupIdentities: sourceGroup.worktreeIds,
-        folderParentOf: (identity) => {
-          const parent = parentIdentities?.get(identity)
-          return parent !== undefined &&
-            parseWorkspaceKey(getWorktreeIdFromHostIdentity(parent))?.type === 'folder'
-            ? parent
-            : undefined
-        },
+        folderParentOf,
         keepsFolderParent: (folder) => keepsFolderParent(folder, unnestArgs.dropPoint)
       })
       if (rows.length === 0) {
@@ -202,7 +233,7 @@ export function useWorktreeLineageDropCommit(args: {
     [
       cyclicLineageIds,
       keepsFolderParent,
-      parentIdentities,
+      folderParentOf,
       updateWorktreeLineage,
       worktreeDragGroups,
       worktreeLineageById,
@@ -213,6 +244,7 @@ export function useWorktreeLineageDropCommit(args: {
   return {
     getEligibleLineageDropTarget,
     commitWorktreeLineageParentDrop,
+    captureFolderRetention,
     clearReorderedWorktreeParents
   }
 }

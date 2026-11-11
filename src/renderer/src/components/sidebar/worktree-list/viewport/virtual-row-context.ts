@@ -24,7 +24,7 @@ type BuildArgs = {
   props: VirtualizedWorktreeViewportProps
   projectGroups: readonly ProjectGroup[]
   dragUnitsByRow: ReadonlyMap<number, { identity: string }>
-  hiddenDragIdentities: ReadonlySet<string>
+  hiddenDragRanges: readonly { start: number; end: number }[]
   projection: LineageRowProjection
   activeFamilyRoots: ReadonlySet<number>
   renderRows: RenderRow[]
@@ -57,7 +57,7 @@ export function buildWorktreeVirtualRowContext(args: BuildArgs): WorktreeVirtual
   const { props, runtime, session, statusDrag, headerDrag, primaryActive, reveal } = args
   return {
     dragUnitsByRow: args.dragUnitsByRow,
-    hiddenDragIdentities: args.hiddenDragIdentities,
+    hiddenDragRanges: args.hiddenDragRanges,
     projection: args.projection,
     activeFamilyRoots: args.activeFamilyRoots,
     renderRows: args.renderRows,

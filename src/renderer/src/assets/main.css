@@ -1571,18 +1571,6 @@ html.native-shell .app-layout {
   background: color-mix(in srgb, var(--sidebar-accent) 40%, transparent);
 }
 
-/* Flat descendants retain the enclosing family paint without retaining its cards. */
-.worktree-sidebar-expanded-row [data-worktree-card-surface] {
-  padding-bottom: 0;
-  border-bottom-width: 0;
-}
-
-.worktree-sidebar-family-root [data-worktree-card-surface][data-worktree-card-active] {
-  background: transparent;
-  border-color: transparent;
-  box-shadow: none;
-}
-
 /* Why: one multi-selected look for every list on the card surface (workspaces and
    agents); after the hover rules so it wins, and never on the active/open row. */
 [data-worktree-card-surface][data-worktree-card-selected]:not([data-worktree-card-active]) {
@@ -1593,7 +1581,7 @@ html.native-shell .app-layout {
 
 /* Why: the brighter border carries the selected state; a translucent wash keeps
    card text legible instead of lifting the surface toward the foreground color. */
-[data-worktree-family-segment],
+[data-worktree-family-segment='primary'],
 [data-worktree-card-surface][data-worktree-card-active='primary'] {
   border-color: var(
     --worktree-sidebar-active-border,
@@ -1606,7 +1594,7 @@ html.native-shell .app-layout {
   box-shadow: 0 1px 2px color-mix(in srgb, var(--worktree-sidebar-foreground) 4%, transparent);
 }
 
-.dark [data-worktree-family-segment],
+.dark [data-worktree-family-segment='primary'],
 .dark [data-worktree-card-surface][data-worktree-card-active='primary'] {
   border-color: var(
     --worktree-sidebar-active-border,
@@ -1617,11 +1605,6 @@ html.native-shell .app-layout {
     color-mix(in srgb, var(--worktree-sidebar-foreground) 10%, transparent)
   );
   box-shadow: 0 1px 2px color-mix(in srgb, var(--worktree-sidebar-foreground) 3%, transparent);
-}
-
-/* Continuous segments must not cast a horizontal shadow at every virtual boundary. */
-[data-worktree-family-segment] {
-  box-shadow: none;
 }
 
 /* #15971: the wash matches the pill's fill, so its border carries the shape. A neutral sidebar tint
@@ -1637,16 +1620,32 @@ html.native-shell .app-layout {
   }
 }
 
+[data-worktree-family-segment='secondary'],
 [data-worktree-card-surface][data-worktree-card-active='secondary'] {
   border-color: color-mix(in srgb, var(--sidebar-ring) 25%, transparent);
   background: color-mix(in srgb, var(--sidebar-accent) 45%, transparent);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--sidebar-ring) 15%, transparent);
 }
 
+.dark [data-worktree-family-segment='secondary'],
 .dark [data-worktree-card-surface][data-worktree-card-active='secondary'] {
   border-color: color-mix(in srgb, var(--sidebar-ring) 28%, transparent);
   background: color-mix(in srgb, var(--sidebar-accent) 34%, transparent);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--sidebar-ring) 18%, transparent);
+}
+
+/* Family paint owns the surface in both themes, including secondary occurrences. */
+.worktree-sidebar-family-root [data-worktree-card-surface][data-worktree-card-active],
+.dark .worktree-sidebar-family-root [data-worktree-card-surface][data-worktree-card-active] {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+/* Continuous segments must not cast a horizontal shadow at every virtual boundary. */
+[data-worktree-family-segment],
+.dark [data-worktree-family-segment] {
+  box-shadow: none;
 }
 
 /* #19624: mix text tokens toward sidebar in oklab for theme-stable perceptual dimming; preserve unread amber at full brightness. */

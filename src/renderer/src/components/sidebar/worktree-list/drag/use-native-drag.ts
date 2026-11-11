@@ -230,7 +230,12 @@ export function useWorktreeNativeDrag(args: {
       }
       event.preventDefault()
       const rawDropPoint = getWorktreeReorderDropPoint(event, drop, ctx.scrollRef.current)
-      const dropPoint = ctx.captureFolderRetention?.(rawDropPoint) ?? rawDropPoint
+      const dropPoint =
+        ctx.captureFolderRetention?.(
+          rawDropPoint,
+          dragSession.pickedCopies,
+          dragSession.sourceGroupKey
+        ) ?? rawDropPoint
       ctx.onReorderWorktrees({
         groups: ctx.worktreeDragGroups,
         sourceGroupKey: dragSession.sourceGroupKey,

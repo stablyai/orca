@@ -8,7 +8,7 @@ import { WorktreeListScrollToTopButton } from './WorktreeListScrollToTopButton'
 import { renderWorktreeSidebarDropIndicators } from './drop-indicators'
 import { useWorktreeListScrollToTop } from './use-scroll-to-top'
 import { getActiveDescendantOptionId } from '../navigation/active-descendant-option'
-import { useLineageRowProjection } from '../listing/lineage-row-projection'
+import { useDraggedSubtreeRanges, useLineageRowProjection } from '../listing/lineage-row-projection'
 import { useFolderWorkspacePathStatusRows } from '../listing/use-folder-path-statuses'
 import { useGroupToggleWithScrollAnchor } from './use-group-toggle'
 import { usePendingSidebarReveal } from '../navigation/use-pending-reveal'
@@ -115,9 +115,24 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
   const scrollSuppression = useWorktreeSidebarScrollSuppression(scrollRef)
   const { markDirectScrollInput, markScrollMovement } = scrollSuppression
 
+  const { handleContainerKeyDown, keyboardPreview } = useWorktreeListKeyboardNavigation({
+    rows,
+    activeWorktreeId,
+    activeWorkspaceExecutionHostId: props.activeWorkspaceExecutionHostId,
+    pinnedDisplayPolicy,
+    scrollRef,
+    activeModal: props.activeModal,
+    markDirectScrollInput
+  })
+
+  const rowProps = useMemo(
+    () => withKeyboardPreview(props, keyboardPreview),
+    [keyboardPreview, props]
+  )
+
   const renderRows = rows
   const { projection, activeFamilyRoots, firstHeaderIndex } = useLineageRowProjection({
-    ...props,
+    ...rowProps,
     newCardStyle
   })
 
@@ -153,7 +168,8 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     worktreeMap,
     worktreeLineageById,
     worktreeDragGroups: session.worktreeDragGroups,
-    keepsFolderParent: rowGeometry.keepsFolderParent
+    keepsFolderParent: rowGeometry.keepsFolderParent,
+    captureFolderRetention: rowGeometry.captureFolderRetention
   })
   const runtime = useWorktreeDragRuntime({
     worktreeDragSessionRef: session.worktreeDragSessionRef,
@@ -226,16 +242,6 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
   const { toggleGroupWithScrollAnchor, getLineageToggleHandler } = useGroupToggleWithScrollAnchor({
     scrollRef,
     toggleGroup
-  })
-
-  const { handleContainerKeyDown, keyboardPreview } = useWorktreeListKeyboardNavigation({
-    rows,
-    activeWorktreeId,
-    activeWorkspaceExecutionHostId: props.activeWorkspaceExecutionHostId,
-    pinnedDisplayPolicy,
-    scrollRef,
-    activeModal: props.activeModal,
-    markDirectScrollInput
   })
 
   const dropCtx = useWorktreeDropCommitContext({
@@ -336,15 +342,11 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     markScrollMovement()
   }, [markScrollMovement])
 
-  const rowProps = useMemo(
-    () => withKeyboardPreview(props, keyboardPreview),
-    [keyboardPreview, props]
-  )
-  const draggedKeys = session.worktreeDragSessionRef.current?.reorderDraggedKeys
-  const hiddenDragIdentities = useMemo(() => new Set(draggedKeys), [draggedKeys])
+  const draggingIdentity = runtime.worktreeDragState.draggingWorktreeId
+  const hiddenDragRanges = useDraggedSubtreeRanges(projection, draggingIdentity)
   const rowContext = buildWorktreeVirtualRowContext({
     dragUnitsByRow: rowGeometry.ranges.byRow,
-    hiddenDragIdentities,
+    hiddenDragRanges,
     props: rowProps,
     projection,
     activeFamilyRoots,
@@ -406,6 +408,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
       >
         <div
           role="presentation"
+          data-worktree-sidebar-content
           className="relative w-full"
           style={{ height: `${virtualization.virtualizer.getTotalSize()}px` }}
         >
