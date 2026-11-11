@@ -23,7 +23,7 @@ export function NativeChatResolutionReceipt({
   /** False once the prompting agent ends: report the pending question without implying anyone still waits. */
   awaiting?: boolean
   /** A worker's prompt in its coordinator's chat: who answered it, in place of "Resolved · Answered on <device>". */
-  outcome?: { worker: string; text: string; reason?: string }
+  outcome?: { worker: string; text: string; reason?: { label: string; text: string } }
 }): React.JSX.Element | null {
   const t = useTranslate()
   const askDisclosureKey = disclosureId === undefined ? undefined : `ask:${disclosureId}`
@@ -95,10 +95,8 @@ export function NativeChatResolutionReceipt({
       })}
       {outcome?.reason ? (
         <p className="line-clamp-3 whitespace-pre-wrap break-words">
-          <span className="font-medium">
-            {t('components.native-chat.approval.reason', 'Reason')}:{' '}
-          </span>
-          {outcome.reason}
+          <span className="font-medium">{outcome.reason.label}: </span>
+          {outcome.reason.text}
         </p>
       ) : null}
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">

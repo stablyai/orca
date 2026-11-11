@@ -12,6 +12,7 @@ import {
   isWorkerApprovalDecision,
   workerApprovalCard,
   workerApprovalReceiptBody,
+  workerApprovalReceiptReason,
   workerApprovalReceiptText,
   workerApprovalLapsesAt,
   workerApprovalTimeLeft
@@ -123,9 +124,7 @@ export function NativeChatWorkerApprovalRows({
                 outcome={{
                   worker: entry.worker.label,
                   text: workerApprovalReceiptText(approval, t),
-                  ...(approval.outcome?.by === 'coordinator' && approval.outcome.reason
-                    ? { reason: approval.outcome.reason }
-                    : {})
+                  ...workerApprovalReceiptReason(approval, t)
                 }}
               />
             </div>

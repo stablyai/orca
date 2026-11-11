@@ -82,6 +82,25 @@ export function workerApprovalReceiptText(approval: WorkerApprovalPayload, t: Tr
   }
 }
 
+/** The coordinator's deny reason, labelled by how it reached the worker: with the denial, or as a separate message. */
+export function workerApprovalReceiptReason(
+  approval: WorkerApprovalPayload,
+  t: Translate
+): { reason?: { label: string; text: string } } {
+  const outcome = approval.outcome
+  if (outcome?.by !== 'coordinator' || !outcome.reason) {
+    return {}
+  }
+  return {
+    reason: {
+      label: outcome.reasonDelivered
+        ? t('components.native-chat.approval.reason', 'Reason')
+        : t('components.native-chat.approval.reasonSentAsMessage', 'Reason, sent as a message'),
+      text: outcome.reason
+    }
+  }
+}
+
 /** Seconds left before the agent decides on its own, as m:ss; null once past or unknown. */
 export function workerApprovalTimeLeft(expiresAt: string | undefined, now: number): string | null {
   const left = expiresAt ? Math.ceil((Date.parse(expiresAt) - now) / 1_000) : Number.NaN
