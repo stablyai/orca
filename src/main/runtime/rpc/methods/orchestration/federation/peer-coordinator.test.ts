@@ -208,6 +208,24 @@ describe('a paired Orca coordinating its Run on this server', () => {
     expect(inbox.ok && inbox.result).toMatchObject({ messages: [{ subject: 'mine' }], count: 1 })
   })
 
+  it("reads another Run's work here, as its pairing already can, but still cannot change it", async () => {
+    const { localRun, localWork } = await twoRuns()
+
+    const list = await peerCall('orchestration.workerList', { run: localRun.id, paginate: true })
+    const runs = await peerCall('orchestration.runList', {})
+    const show = await peerCall('orchestration.workerShow', { dispatch: localWork.id })
+
+    expect(list.ok && list.result).toMatchObject({
+      workers: [{ dispatchId: localWork.id }],
+      page: { total: 1 }
+    })
+    expect(runs.ok).toBe(true)
+    expect(show.ok).toBe(true)
+    expect(
+      refused(await peerCall('orchestration.workerKeepOpen', { terminal: 'term_o', keep: true }))
+    ).toBe('forbidden')
+  })
+
   it('sends and replies only inside its own Run, by any address form', async () => {
     const { localRun, localWork } = await twoRuns()
     const question = db.insertMessage({
