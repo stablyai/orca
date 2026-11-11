@@ -26,7 +26,7 @@ import { useSwitchTeamSteps } from '../cloud-setup/use-cloud-setup-tracker'
 import { cloudSetupRequired } from '../../orca-cloud-setup/cloud-setup-page-model'
 import { useRunOnDefault } from './use-run-on-default'
 import { useCloudOnlyCreate, useCloudOnlyRepo } from './use-cloud-only-repo'
-import type { CloudStartView } from './cloud-start-view'
+import { orcaCloudNeedsGitHubRepo, type CloudStartView } from './cloud-start-view'
 import { showCloudAgentNotStartedToast } from '@/lib/orca-cloud/cloud-agent-not-started-toast'
 import { orcaCloudWallNotice, useRunOnPreflightEnabled } from '@/lib/orca-cloud/run-on-preflight'
 import { isOrcaCloudAccountAgent } from '../../../../../shared/orca-cloud-agents/orca-cloud-agents-wire'
@@ -222,9 +222,15 @@ export function useCloudStartComposer({
             onUserPick: markTouched,
             cloudOnly,
             folderProject: cloudOnly.folderProject,
-            wall
+            wall,
+            needsGitHubRepo: orcaCloudNeedsGitHubRepo({
+              cloudSelected,
+              folderProject: cloudOnly.folderProject,
+              pickedRepo: cloudOnly.picked !== null,
+              repoCount: cloudOnly.repos?.length ?? 0
+            })
           },
-    [cloudOnly, markTouched, onSelectOrcaCloud, segment, wall]
+    [cloudOnly, cloudSelected, markTouched, onSelectOrcaCloud, segment, wall]
   )
   if (!view || !cloudSelected) {
     return { view, onPrimary: null, recordCreated }
