@@ -219,7 +219,7 @@ export function OrcaCloudQueuedPrompt({
   return (
     <OrcaCloudQueuedPromptView
       key={creationId}
-      agentName={tuiAgentDisplayName(entry.request.agent) ?? entry.request.agent}
+      agentName={tuiAgentDisplayName(agent) ?? agent}
       prompt={vmCreationFirstPrompt(entry)}
       draft={vmCreationPromptIsDraft(entry)}
       held={held}
