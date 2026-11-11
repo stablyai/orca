@@ -23,12 +23,12 @@ import type {
   TerminalWorkerApprovalHoldsDeps
 } from './terminal-worker-approval-hold'
 import { reportWorkerApprovalClosed } from '../turn-stops/worker-turn-stop-report'
-import {
-  closedApproval,
-  type WorkerApprovalDecision,
-  type WorkerApprovalOutcome,
-  type WorkerApprovalPayload
-} from './worker-approval'
+import { closedApproval } from './worker-approval'
+import type {
+  WorkerApprovalDecision,
+  WorkerApprovalOutcome,
+  WorkerApprovalPayload
+} from '../../../../../shared/orchestration/approvals/worker-approval-payload'
 import { TERMINAL_APPROVAL_ID_PREFIX } from './worker-approval-report'
 
 // Why 500 ms: Esc posts no hook, so only the screen says the dialog left; a click is refused within it.

@@ -1,5 +1,6 @@
 import { structuredAgentSessionDefaultModelChoice } from '../../structured-agent-session-default-model-choice'
 import { expect, it } from 'vitest'
+import { ANTIGRAVITY_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-antigravity'
 import { CLAUDE_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-claude-codex'
 import {
   applyStructuredAgentSessionOptions,
@@ -63,4 +64,20 @@ it('shows the reported execution model while retaining the saved Default choice'
   expect(model.defaultChoice?.selected).toBe(true)
   expect(nativeChatModelPillLabel(model, sayNativeChatSessionOptionEnglish)).toBe('Opus 4.8')
   expect(structuredAgentSessionMessageSelection(state)).toEqual({})
+})
+
+it('shows Auto when the session lists no models, without capturing it for Send', () => {
+  for (const current of [{ acceptedInputSources: {} }, {}]) {
+    const state = applyStructuredAgentSessionOptions(
+      createStructuredAgentSessionOptionState('antigravity', ANTIGRAVITY_SESSION_OPTION_CATALOG),
+      ANTIGRAVITY_SESSION_OPTION_CATALOG,
+      { models: [], current }
+    )
+    const model = structuredAgentSessionOptionSnapshot(state).find(
+      (option) => option.id === 'model'
+    )!
+    expect(nativeChatModelPillLabel(model, sayNativeChatSessionOptionEnglish)).toBe('Auto')
+    expect(model.settable).toBe(false)
+    expect(structuredAgentSessionMessageSelection(state)).not.toHaveProperty('model')
+  }
 })

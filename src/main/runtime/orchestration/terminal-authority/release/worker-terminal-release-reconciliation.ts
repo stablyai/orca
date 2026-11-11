@@ -1,5 +1,6 @@
 import type { WorkerTerminalReleaseRuntime } from './worker-terminal-release-runtime'
-import { inspectRemoteAttachment, releaseRemoteAttachment } from '../../legacy-remote/legacy-remote'
+import { inspectRemoteAttachment } from '../../legacy-remote/federation-attachment-observation'
+import { releaseRemoteAttachment } from '../../legacy-remote/federated-worker-release-host'
 import { completeWorkerTerminalRelease } from '../../../rpc/methods/orchestration/worker/worker-release-completion'
 
 export type WorkerTerminalReleaseReconciliationResult = {

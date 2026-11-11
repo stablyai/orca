@@ -19,7 +19,7 @@ import type { StructuredAgentSessionMutate } from './session/structured/writes/u
 import type { useStructuredAgentSessionOptionState } from './session/options/structured/use-structured-agent-session-option-state'
 import { enqueueSessionOptionSettingsWrite } from './session/options/native-chat-session-option-settings-write'
 
-export function useStructuredAgentSessionModelDefault(args: {
+type ModelDefaultArgs = {
   agent: AgentType
   target: RuntimeClientTarget
   mutate: StructuredAgentSessionMutate
@@ -40,7 +40,96 @@ export function useStructuredAgentSessionModelDefault(args: {
     | 'isCurrentContext'
     | 'updateOptionState'
   >
-}) {
+}
+
+async function resetStructuredAgentSessionModelDefault(args: ModelDefaultArgs, id: string) {
+  const {
+    agent,
+    target,
+    mutate,
+    takesModelDefault,
+    acceptsPicks,
+    fence,
+    launchSeedOptions,
+    lockSnapshotRef
+  } = args
+  const {
+    optionView,
+    optionStateRef,
+    activeOptionRecordRef,
+    optionPicks,
+    controller,
+    writes,
+    beginOptionWrite,
+    isCurrentContext,
+    updateOptionState
+  } = args.source
+
+  const snapshot = () => ({
+    snapshot: lockSnapshotRef.current(
+      structuredAgentSessionOptionSnapshot(
+        optionView(optionStateRef.current, launchSeedOptions, {})
+      )
+    )
+  })
+  if (
+    id !== 'model' ||
+    !takesModelDefault ||
+    !acceptsPicks ||
+    fence === null ||
+    !isCurrentContext() ||
+    writes.current.count > 0 ||
+    controller.pending().length > 0
+  ) {
+    return snapshot()
+  }
+  const targetRecord = optionStateRef.current.record
+  const finish = beginOptionWrite(id)
+  const pick = beginStructuredOptionPick(
+    optionPicks.current,
+    id,
+    STRUCTURED_MODEL_DEFAULT_PICK,
+    false
+  )
+  const sameRecord = () => isCurrentContext() && activeOptionRecordRef.current === targetRecord
+  const current = () => sameRecord() && isLatestStructuredOptionPick(optionPicks.current, pick)
+  updateOptionState((state) => ({ ...state }))
+  let accepted = false
+  try {
+    const result = await mutate<AgentSessionOptionResult>(
+      'agentSession.setOption',
+      'agentSession.setOption',
+      { key: id, value: null }
+    )
+    accepted = Boolean(result)
+    if (result && current()) {
+      controller.abandon()
+      controller.setModelDefault(result.modelDefault === true)
+      updateOptionState((state) =>
+        result.modelDefault
+          ? commitStructuredAgentSessionModelDefault(state, result.options ?? {})
+          : {
+              ...commitStructuredAgentSessionOptionValues(state, result.options ?? {}),
+              modelDefault: false
+            }
+      )
+      if (result.modelDefault) {
+        void enqueueSessionOptionSettingsWrite(target, { type: 'clear-model', agent })
+      }
+    }
+    return snapshot()
+  } finally {
+    if (sameRecord()) {
+      settleStructuredOptionPick(optionPicks.current, pick)
+    }
+    if (current()) {
+      updateOptionState((state) => ({ ...state }))
+    }
+    finish(accepted && current())
+  }
+}
+
+export function useStructuredAgentSessionModelDefault(args: ModelDefaultArgs) {
   const {
     agent,
     target,
@@ -63,70 +152,31 @@ export function useStructuredAgentSessionModelDefault(args: {
     updateOptionState
   } = args.source
   return useCallback(
-    async (id: string) => {
-      const snapshot = () => ({
-        snapshot: lockSnapshotRef.current(
-          structuredAgentSessionOptionSnapshot(
-            optionView(optionStateRef.current, launchSeedOptions, {})
-          )
-        )
-      })
-      if (
-        id !== 'model' ||
-        !takesModelDefault ||
-        !acceptsPicks ||
-        fence === null ||
-        !isCurrentContext() ||
-        writes.current.count > 0 ||
-        controller.pending().length > 0
-      ) {
-        return snapshot()
-      }
-      const targetRecord = optionStateRef.current.record
-      const finish = beginOptionWrite(id)
-      const pick = beginStructuredOptionPick(
-        optionPicks.current,
-        id,
-        STRUCTURED_MODEL_DEFAULT_PICK,
-        false
-      )
-      const sameRecord = () => isCurrentContext() && activeOptionRecordRef.current === targetRecord
-      const current = () => sameRecord() && isLatestStructuredOptionPick(optionPicks.current, pick)
-      updateOptionState((state) => ({ ...state }))
-      let accepted = false
-      try {
-        const result = await mutate<AgentSessionOptionResult>(
-          'agentSession.setOption',
-          'agentSession.setOption',
-          { key: id, value: null }
-        )
-        accepted = Boolean(result)
-        if (result && current()) {
-          controller.abandon()
-          controller.setModelDefault(result.modelDefault === true)
-          updateOptionState((state) =>
-            result.modelDefault
-              ? commitStructuredAgentSessionModelDefault(state, result.options ?? {})
-              : {
-                  ...commitStructuredAgentSessionOptionValues(state, result.options ?? {}),
-                  modelDefault: false
-                }
-          )
-          if (result.modelDefault) {
-            void enqueueSessionOptionSettingsWrite(target, { type: 'clear-model', agent })
+    (id: string) =>
+      resetStructuredAgentSessionModelDefault(
+        {
+          agent,
+          target,
+          mutate,
+          takesModelDefault,
+          acceptsPicks,
+          fence,
+          launchSeedOptions,
+          lockSnapshotRef,
+          source: {
+            optionView,
+            optionStateRef,
+            activeOptionRecordRef,
+            controller,
+            optionPicks,
+            writes,
+            beginOptionWrite,
+            isCurrentContext,
+            updateOptionState
           }
-        }
-        return snapshot()
-      } finally {
-        if (sameRecord()) {
-          settleStructuredOptionPick(optionPicks.current, pick)
-        }
-        if (current()) {
-          updateOptionState((state) => ({ ...state }))
-        }
-        finish(accepted && current())
-      }
-    },
+        },
+        id
+      ),
     [
       acceptsPicks,
       activeOptionRecordRef,

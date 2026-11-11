@@ -240,7 +240,8 @@ function installWillQuitHandler(): void {
       state.claudeUsage?.flush(),
       state.codexUsage?.flush(),
       state.openCodeUsage?.flush(),
-      state.museUsage?.flush()
+      state.museUsage?.flush(),
+      state.usageWorktreeHistory?.flush()
     ]).then(() => {})
     disposeDesktopBrowserBridge()
     const browserClientHostShutdown = shutdownPairedRuntimeBrowserClientHosts()

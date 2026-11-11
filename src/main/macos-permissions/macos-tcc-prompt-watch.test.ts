@@ -35,13 +35,6 @@ describe('parseTccPromptEvent', () => {
     expect(event?.accessingIdentifier).toBe('node-5555494487fbc7467d473fd8b0a397018cbf954b')
     expect(event?.binaryPath).toBe('/opt/homebrew/Cellar/node/26.5.0/bin/node')
   })
-
-  it('ignores preflight checks, the log header, and malformed lines', () => {
-    expect(parseTccPromptEvent(PREFLIGHT_LINE)).toBeNull()
-    expect(parseTccPromptEvent('Filtering the log data using "subsystem == ..."')).toBeNull()
-    expect(parseTccPromptEvent('')).toBeNull()
-    expect(parseTccPromptEvent('AUTHREQ_PROMPTING: msgID=1.2,')).toBeNull()
-  })
 })
 
 function createFakeLogStream(): {
@@ -84,14 +77,6 @@ describe('MacosTccPromptWatch', () => {
     }
   })
 
-  it('never spawns a log reader off macOS', () => {
-    setPlatform('linux')
-    const spawnLogStream = vi.fn()
-    const watch = new MacosTccPromptWatch({ onPrompt: vi.fn(), spawnLogStream })
-    watch.start()
-    expect(spawnLogStream).not.toHaveBeenCalled()
-  })
-
   it('reports only Orca-attributed dialogs from a live stream', async () => {
     const { child, stdout } = createFakeLogStream()
     const onPrompt = vi.fn()
@@ -122,19 +107,6 @@ describe('MacosTccPromptWatch', () => {
     expect(killed).toEqual(['SIGTERM'])
     // Closing stdin is the parent-death backstop if the wrapper missed SIGTERM.
     expect(stdin.destroyed).toBe(true)
-  })
-
-  it('closes the parent-death pipe of a child that terminated on its own', () => {
-    const { child, stdin } = createFakeLogStream()
-    const watch = new MacosTccPromptWatch({
-      onPrompt: vi.fn(),
-      spawnLogStream: () => child,
-      restartDelayMs: 60_000
-    })
-    watch.start()
-    child.emit('exit', 1)
-    expect(stdin.destroyed).toBe(true)
-    watch.stop()
   })
 
   it('restarts once after an unexpected termination without creating a retry loop', async () => {

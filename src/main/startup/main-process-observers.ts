@@ -25,6 +25,7 @@ import { ClaudeUsageStore } from '../claude-usage/store'
 import { CodexUsageStore } from '../codex-usage/store'
 import { OpenCodeUsageStore } from '../opencode-usage/store'
 import { MuseUsageStore } from '../muse-usage/store'
+import { UsageWorktreeHistory } from '../usage/worktree-attribution/usage-worktree-history'
 import { installRepoMaintenanceIdleGate } from '../workspaces/catalog/repo-maintenance-idle-gate'
 import { mainProcessState as state } from './main-process-state'
 import { runAfterFirstWindowShown } from './first-window-deferral'
@@ -146,8 +147,13 @@ export function initializeMainProcessObservers(): void {
   initOnboardingCohortClassifier(store)
   state.stats = new StatsCollector()
   feedAgentSessionStats(state.stats, agentHookServer)
-  state.claudeUsage = new ClaudeUsageStore(store)
-  state.codexUsage = new CodexUsageStore(store)
-  state.openCodeUsage = new OpenCodeUsageStore(store)
-  state.museUsage = new MuseUsageStore(store)
+  const usageWorktrees = new UsageWorktreeHistory(
+    store,
+    join(getCanonicalUserDataPath(), 'orca-usage-worktree-history.json')
+  )
+  state.usageWorktreeHistory = usageWorktrees
+  state.claudeUsage = new ClaudeUsageStore(usageWorktrees)
+  state.codexUsage = new CodexUsageStore(usageWorktrees)
+  state.openCodeUsage = new OpenCodeUsageStore(usageWorktrees)
+  state.museUsage = new MuseUsageStore(usageWorktrees)
 }

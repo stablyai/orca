@@ -88,7 +88,7 @@ ignores:
   - '**/*.test-fixtures.*'
   - '**/__fixtures__/**'
   - 'src/shared/agent-launch/startup/claude-chat-entrypoint.ts'
-  - 'src/shared/agent-launch/startup/claude-parent-session-env.ts'
+  - 'src/shared/agent-launch/startup/parent-agent-session-env.ts'
 rule:
   all:
     - any:
@@ -107,7 +107,7 @@ ignores:
   - '**/*.test-fixtures.*'
   - '**/__fixtures__/**'
   - 'src/shared/agent-launch/startup/claude-chat-entrypoint.ts'
-  - 'src/shared/agent-launch/startup/claude-parent-session-env.ts'
+  - 'src/shared/agent-launch/startup/parent-agent-session-env.ts'
 rule:
   all:
     - any:
