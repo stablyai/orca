@@ -23210,7 +23210,6 @@
       "startInTerminal": "Start {{value0}} in a terminal"
     },
     "newWorkspace": {
-      "agentOptional": "Agent (optional)",
       "createDescription": "Choose the project and workspace name. Select an agent if you want to start one.",
       "setupCheckFailed": "Could not check setup configuration. Try again.",
       "directSetup": {
@@ -23303,7 +23302,8 @@
         "signInSaving": "Saving…",
         "agentWillNotStartShort": "{{agent}} isn’t set up for Orca Cloud, so it won’t start.",
         "agentWillNotStartIn": "{{agent}} isn’t set up for Orca Cloud, so it won’t start in {{workspace}}."
-      }
+      },
+      "agentLabel": "Agent"
     },
     "JiraIssueWorkspace": {
       "pendingChange": "Another issue change is in progress."
