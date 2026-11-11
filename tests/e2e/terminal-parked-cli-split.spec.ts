@@ -315,8 +315,9 @@ test('CLI splits an exact cold-parked tab without stealing the active tab or foc
   }
   expect(await readActiveUiContext(orcaPage)).toEqual(contextBefore)
 
+  await orcaPage.screenshot({ path: testInfo.outputPath('parked-cli-split-focus-preserved.png') })
   await testInfo.attach('parked-cli-split-focus-preserved.png', {
-    body: await orcaPage.screenshot(),
+    path: testInfo.outputPath('parked-cli-split-focus-preserved.png'),
     contentType: 'image/png'
   })
 
@@ -373,8 +374,9 @@ test('CLI splits an exact cold-parked tab without stealing the active tab or foc
   await expectPaneKeyboardRoundTrip(orcaPage, targetTabId, sourcePane.leafId, 'SOURCE')
   await expectPaneKeyboardRoundTrip(orcaPage, targetTabId, createdPane.leafId, 'CREATED')
 
+  await orcaPage.screenshot({ path: testInfo.outputPath('parked-cli-split-final.png') })
   await testInfo.attach('parked-cli-split-final.png', {
-    body: await orcaPage.screenshot(),
+    path: testInfo.outputPath('parked-cli-split-final.png'),
     contentType: 'image/png'
   })
   expect(pageErrors).toEqual([])

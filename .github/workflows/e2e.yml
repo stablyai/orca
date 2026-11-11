@@ -492,7 +492,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: parked-split-proof-${{ strategy.job-index }}${{ inputs.artifact_suffix }}-attempt-${{ github.run_attempt }}
-          path: test-results/**/attachments/parked-cli-split-*.png
+          path: test-results/**/parked-cli-split-*.png
           retention-days: 7
           if-no-files-found: ignore
 
