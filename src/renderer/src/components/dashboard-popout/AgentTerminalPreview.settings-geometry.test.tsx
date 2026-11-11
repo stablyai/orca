@@ -174,6 +174,27 @@ it('ignores a pending connection retired by a metric change', async () => {
   expect(fit).toHaveBeenCalledExactlyOnceWith('pty-1', 50, 15)
 })
 
+it('never resizes the pty after connect or a box resize when claimGrid is false', async () => {
+  const box = { notifyResize: null as (() => void) | null }
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      constructor(callback: () => void) {
+        box.notifyResize = callback
+      }
+      observe = vi.fn()
+      disconnect = vi.fn()
+    }
+  )
+  render(<AgentTerminalPreview ptyId="pty-1" claimGrid={false} />)
+  await settleGeometry()
+  expect(box.notifyResize).not.toBeNull()
+  act(() => box.notifyResize?.())
+  await settleGeometry()
+  expect(connect).toHaveBeenCalledOnce()
+  expect(fit).not.toHaveBeenCalled()
+})
+
 it('cancels an obsolete metric owner grid claim before the next change', async () => {
   render(<AgentTerminalPreview ptyId="pty-1" />)
   await settleGeometry()

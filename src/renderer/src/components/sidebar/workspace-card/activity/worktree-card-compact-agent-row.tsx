@@ -16,6 +16,7 @@ import { agentNoUpdateLabel } from '../../../../../../shared/agent-status/presen
 import { useAgentRowConversationName } from '@/components/dashboard/use-agent-row-conversation-name'
 import { lastEnteredDoneAt } from '@/components/dashboard/agent-finished-timestamp'
 import CacheTimer, { usePromptCacheCountdownForPane } from './CacheTimer'
+import { AgentRowTerminalPeek } from './agent-row-terminal-peek'
 import { formatShortTimeAgo } from '@/lib/time-format/short-time-ago'
 import { agentVerdictStatusLine } from '@/lib/agent-status/presentation/agent-verdict-status-line'
 import { agentRowStoppingLabel } from '@/lib/agent-status/presentation/agent-row-stopping-label'
@@ -166,7 +167,6 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
     secondary,
     t
   )
-  const rowTitle = `${leadingText}${trailingText ? ` - ${trailingText}` : ''}`
   const model = agent.entry.model?.trim() ?? ''
   const shortTime = getCompactAgentTime(agent, now)
   const cacheTimer = usePromptCacheCountdownForPane(agent.paneKey, cacheTimerActive)
@@ -229,7 +229,6 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
           separator=" - "
           dotTitle={sendTargetDisabledReason ? null : undefined}
           tooltipSide="right"
-          lineTitle={!sendTargetDisabledReason}
         />
       ) : (
         <>
@@ -246,10 +245,8 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
               <AgentTypeIcon agentType={agent.agentType} size={13} />
             </span>
           )}
-          <span
-            className="min-w-0 flex-1 truncate"
-            title={sendTargetDisabledReason ? undefined : rowTitle}
-          >
+          {/* No line title: the hover peek shows this agent, and an OS tooltip would paint over it. */}
+          <span className="min-w-0 flex-1 truncate">
             <span className={leadClassName}>{leadingText}</span>
             {trailingText && (
               <span className={highlighted ? 'text-foreground/70' : 'text-muted-foreground/65'}>
@@ -298,7 +295,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
     </>
   )
 
-  return (
+  const row = (
     <div
       draggable={false}
       className={cn(
@@ -329,4 +326,5 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
       {rowBody}
     </div>
   )
+  return <AgentRowTerminalPeek agent={agent}>{row}</AgentRowTerminalPeek>
 })

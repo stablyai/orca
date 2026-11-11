@@ -50,7 +50,9 @@ export function AgentTerminalPreview({
   className,
   onRequestClose,
   linkSource,
-  onBrowserForeground
+  onBrowserForeground,
+  claimGrid = true,
+  interactive = true
 }: {
   ptyId: string
   /** Host-input facts relayed with the card; null routes bytes by client OS. */
@@ -59,6 +61,10 @@ export function AgentTerminalPreview({
   onRequestClose?: () => void
   linkSource?: DashboardPreviewLinkSource
   onBrowserForeground?: () => void
+  /** False never resizes the PTY; the preview scales the PTY's current grid into its box. */
+  claimGrid?: boolean
+  /** False drops every key, paste and IME byte and leaves focus where it is. */
+  interactive?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const containerRef = useRef<HTMLDivElement>(null)
@@ -75,6 +81,7 @@ export function AgentTerminalPreview({
   const macOptionAsAltRef = useRef(macOptionAsAlt)
   const terminalInputRef = useRef(terminalInput)
   const onRequestCloseRef = useRef(onRequestClose)
+  const interactiveRef = useRef(interactive)
   const { terminalTheme: composedTheme, terminalMode } = useMemo(() => {
     if (!settings) {
       return { terminalTheme: null, terminalMode: 'dark' as const }
@@ -98,7 +105,16 @@ export function AgentTerminalPreview({
     macOptionAsAltRef.current = macOptionAsAlt
     terminalInputRef.current = terminalInput
     onRequestCloseRef.current = onRequestClose
-  }, [settings, macOptionAsAlt, terminalInput, onRequestClose, linkSource, onBrowserForeground])
+    interactiveRef.current = interactive
+  }, [
+    settings,
+    macOptionAsAlt,
+    terminalInput,
+    onRequestClose,
+    linkSource,
+    onBrowserForeground,
+    interactive
+  ])
 
   // Font changes retain the replay-driven fit, grid claim and input-owner reset.
   useEffect(() => {
@@ -114,7 +130,9 @@ export function AgentTerminalPreview({
     const previewApi = terminalPreviewApiFor(ptyId)
     let linkDefaults: PreviewTerminalLinkHandler | undefined
     let linkInteraction: ReturnType<typeof installDashboardPreviewLinkInteraction> | null = null
-    const sendInput = (data: string): boolean | Promise<boolean> => previewApi.input(ptyId, data)
+    // Why one gate: keys, paste, IME and link actions all reach the PTY through this function.
+    const sendInput = (data: string): boolean | Promise<boolean> =>
+      interactiveRef.current ? previewApi.input(ptyId, data) : false
     const installLinks = (): void => {
       if (!terminal || !linkSourceRef.current) {
         return
@@ -149,18 +167,20 @@ export function AgentTerminalPreview({
 
     const boxFit = createPreviewBoxFit({ container, getTerminal: () => terminal })
 
-    const gridClaim = createPreviewGridClaim({
-      ptyId,
-      container,
-      getTerminal: () => terminal
-    })
+    const gridClaim = claimGrid
+      ? createPreviewGridClaim({
+          ptyId,
+          container,
+          getTerminal: () => terminal
+        })
+      : null
     // Box growth/shrink (window resize) changes the reachable grid.
     const boxResizeObserver =
       typeof ResizeObserver === 'undefined'
         ? null
         : new ResizeObserver(() => {
             boxFit.schedule()
-            gridClaim.schedule()
+            gridClaim?.schedule()
           })
     if (container.parentElement) {
       boxResizeObserver?.observe(container.parentElement)
@@ -267,8 +287,10 @@ export function AgentTerminalPreview({
         writeReplayed('', requestRefresh)
       }
       boxFit.schedule()
-      gridClaim.schedule()
-      terminal.focus()
+      gridClaim?.schedule()
+      if (interactiveRef.current) {
+        terminal.focus()
+      }
     }
 
     const releaseTerminal = (): void => {
@@ -329,12 +351,13 @@ export function AgentTerminalPreview({
       if (retryTimer) {
         clearTimeout(retryTimer)
       }
-      gridClaim.dispose()
+      gridClaim?.dispose()
       boxResizeObserver?.disconnect()
       releaseTerminal()
     }
   }, [
     ptyId,
+    claimGrid,
     terminalTheme,
     terminalMode,
     terminalMinimumContrastRatio,

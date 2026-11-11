@@ -17,6 +17,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { DashboardAgentRowMessage } from './DashboardAgentRowMessage'
 import { DashboardAgentRowTrailingControls } from './DashboardAgentRowTrailingControls'
 import { DashboardAgentRowToolStep } from './DashboardAgentRowToolStep'
+import { AgentRowTerminalPeek } from '@/components/sidebar/workspace-card/activity/agent-row-terminal-peek'
 import { programStatusAttentionLine } from '../../../../shared/program-status/presentation'
 import {
   agentRowToolInput,
@@ -244,7 +245,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
 
   const titleParts = sendTargetDisabledReason ? [sendTargetDisabledReason, ...tsParts] : tsParts
 
-  return (
+  const row = (
     // Why: no role="button" — nested interactive children (buttons, tooltip triggers) would violate ARIA nesting rules.
     <div
       onClickCapture={handleSendTargetClickCapture}
@@ -405,6 +406,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
       />
     </div>
   )
+  return <AgentRowTerminalPeek agent={agent}>{row}</AgentRowTerminalPeek>
 })
 
 export default DashboardAgentRow

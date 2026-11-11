@@ -384,4 +384,21 @@ describe('AgentTerminalPreview', () => {
     expect(terminalHarness.userInputDispose).toHaveBeenCalledTimes(1)
     expect(unsubscribe).toHaveBeenCalledWith('pty-1')
   })
+
+  it('sends no typed key or paste to the pty when not interactive', async () => {
+    render(<AgentTerminalPreview ptyId="pty-1" interactive={false} />)
+    await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
+    const terminal = terminalHarness.instances[0]!
+    await waitFor(() => expect(terminal.onDataListener).not.toBeNull())
+
+    // Each user-signaled onData is what xterm emits for a typed key and a bracketed paste.
+    act(() => {
+      terminalHarness.userInputListener?.()
+      terminal.onDataListener?.('k')
+      terminalHarness.userInputListener?.()
+      terminal.onDataListener?.('\x1b[200~pasted text\x1b[201~')
+    })
+
+    expect(input).not.toHaveBeenCalled()
+  })
 })
