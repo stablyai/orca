@@ -54,6 +54,8 @@ export class SessionSearchCatalogCandidates {
     switch (command.kind) {
       case 'publication-step':
       case 'admit':
+      case 'remove-page':
+      case 'unowned-page':
         throw new Error('Candidate admission requires the owning search store')
       case 'contested':
         return {

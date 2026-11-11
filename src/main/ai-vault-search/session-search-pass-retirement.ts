@@ -25,25 +25,25 @@ export async function retireSessionSearchPassSources(
   let consumedRetirements = 0
   do {
     const paths: string[] = []
-    while (state.retire.size && paths.length < 512 && consumedRetirements < availableRetirements) {
-      const first = await state.retire.firstEntry()
-      if (!first) {
-        break
-      }
-      await state.retire.delete(first[0])
-      paths.push(first[0])
-      consumedRetirements++
-    }
-    let inspected = 0
-    while (state.retirement && paths.length < 512 && inspected++ < 512) {
+    const queued = await state.retire.firstPage(
+      Math.min(256, availableRetirements - consumedRetirements)
+    )
+    paths.push(...queued.map(([path]) => path))
+    consumedRetirements += queued.length
+    const inspected = []
+    while (state.retirement && paths.length + inspected.length < 256) {
       const row = await state.retirement.next()
       if (row.done) {
         state.retirement = null
         break
       }
-      if (!(await state.candidates.has(row.value.path, row.value.agent))) {
-        paths.push(row.value.path)
-      }
+      inspected.push({ path: row.value.path, agent: row.value.agent })
+    }
+    if (inspected.length) {
+      const queuedPaths = new Set(paths)
+      paths.push(
+        ...(await state.candidates.unowned(inspected)).filter((path) => !queuedPaths.has(path))
+      )
     }
     if (!paths.length) {
       if (!state.retirement || args.discoveryOverdue?.()) {
@@ -61,16 +61,15 @@ export async function retireSessionSearchPassSources(
       directoryLimit: 512,
       signal
     })
-    for (const path of retirement.unchecked) {
-      await state.retire.set(path, path)
-    }
-    for (const path of retirement.unverifiable) {
-      await (
-        [...emptiedRoots].some((root) => isUnderScanRoot(path, root))
-          ? state.retire
-          : state.parkedRetire
-      ).set(path, path)
-    }
+    await state.retire.deletePage(queued.map(([path]) => path))
+    await state.retire.setPage(retirement.unchecked.map((path) => [path, path] as const))
+    const emptied = (path: string) => [...emptiedRoots].some((root) => isUnderScanRoot(path, root))
+    await state.retire.setPage(
+      retirement.unverifiable.filter(emptied).map((path) => [path, path] as const)
+    )
+    await state.parkedRetire.setPage(
+      retirement.unverifiable.filter((path) => !emptied(path)).map((path) => [path, path] as const)
+    )
     degraded.push(...retirement.degradedRoots)
     // Retry refused paths next cycle, but keep advancing the older retirement frontier now.
     batches++

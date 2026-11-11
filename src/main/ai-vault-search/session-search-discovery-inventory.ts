@@ -76,7 +76,7 @@ export class SessionSearchDiscoveryInventory
           observer = new SessionSearchDependencyInventory(
             dependency,
             polling,
-            this.request!,
+            root.inventory.catalogRequest,
             `dependency:${key}:${dependency.path}`
           )
           root.dependencies.set(dependency.path, observer)
@@ -92,19 +92,13 @@ export class SessionSearchDiscoveryInventory
         }
       })
     )
-    for (const { dependency, observer, watch: auxiliary } of auxiliaries) {
+    for (const { observer, watch: auxiliary } of auxiliaries) {
       await observer.begin(
         this.force || this.maintenance || !!(auxiliary?.reconcile && !auxiliary.failed),
         args
       )
-      for await (const key of observer.changedKeys(auxiliary, args, this.overdue)) {
-        for await (const path of observer.owners(key)) {
-          await root.inventory.invalidate(path)
-          if (dependency.metadata) {
-            await this.metadataDebt!.put(path, true)
-          }
-        }
-      }
+      await observer.stageChanges(auxiliary, args, this.overdue)
+      await observer.settleDelivered(root.inventory.scope, this.overdue)
     }
     await root.inventory.retryFailures()
     if (root.fallback || !watching) {
@@ -128,11 +122,9 @@ export class SessionSearchDiscoveryInventory
         await observer.addFiles(paths)
       }
       for (const observer of root.dependencies.values()) {
-        for await (const path of observer.settleDelivered()) {
-          await root.inventory.invalidate(path)
-        }
+        await observer.settleDelivered(root.inventory.scope, this.overdue)
         if (!root.inventory.walking && !root.inventory.refused) {
-          await observer.discardUnowned()
+          await observer.discardUnowned(this.overdue)
         }
       }
       for (const observer of root.dependencies.values()) {

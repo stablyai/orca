@@ -11,6 +11,7 @@ import {
   codexFixture,
   CODEX_FIXTURE_SESSION_ID
 } from '../ai-vault/scanners/codex/session-scanner-codex-fixtures'
+import { SessionSearchWorkerClient } from './session-search-worker-client'
 import { SessionSearchIndexer } from './session-search-indexer'
 import {
   FakeSessionSearchClock,
@@ -38,6 +39,7 @@ it.each([40, 400])(
     })
     const streams = vi.spyOn(filesystem, 'openTranscriptReadStream')
     const slices = vi.spyOn(filesystem, 'readTranscriptSlice')
+    const traffic = vi.spyOn(SessionSearchWorkerClient.prototype, 'request')
     const transcripts = new Set<string>()
     try {
       await mkdir(root, { recursive: true })
@@ -94,9 +96,40 @@ it.each([40, 400])(
           db.prepare("SELECT count(*) AS n FROM sessions WHERE title='Original title'").get()
         )
       ).toEqual({ n: population - 1 })
+      traffic.mockClear()
+      await writeFile(
+        index,
+        ids.map((id) => `${JSON.stringify({ id, thread_name: 'Replaced title' })}\n`).join('')
+      )
+      notifySessionSearchFileChange(index)
+      clock.advance(20000)
+      await subject.settled()
+      expect(
+        harness.read((db) =>
+          db.prepare("SELECT count(*) AS n FROM sessions WHERE title='Replaced title'").get()
+        )
+      ).toEqual({ n: population })
+      const firstRead = traffic.mock.calls.findIndex(
+        ([command]) => command.op === 'work' && command.command.kind === 'next'
+      )
+      const fanout = traffic.mock.calls
+        .slice(0, firstRead === -1 ? undefined : firstRead)
+        .filter(
+          ([command]) =>
+            command.op === 'catalog' &&
+            (command.command.kind === 'dependency-fanout' ||
+              command.command.kind === 'dependency-deliver' ||
+              command.command.kind === 'dirty-page' ||
+              command.command.kind === 'frontier-set' ||
+              command.command.kind === 'get' ||
+              command.command.kind === 'put')
+        )
+      // Accepted changed keys, their reverse owners and physical observations each have one bounded page handoff, plus fixed source phases.
+      expect(fanout.length).toBeLessThanOrEqual(40 + 12 * Math.ceil(population / 256))
     } finally {
       streams.mockRestore()
       slices.mockRestore()
+      traffic.mockRestore()
       await subject.close()
       await harness.cleanup()
     }

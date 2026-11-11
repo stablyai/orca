@@ -194,16 +194,21 @@ it('preserves delivered equal-stat rewrites while Claude and Codex roots drain t
     await subject.start()
     const acceptingA = Promise.withResolvers<void>()
     const observedB = Promise.withResolvers<void>()
+    let blockedClaude = false,
+      blockedCodex = false,
+      observedClaude = false
     const request = SessionSearchWorkerClient.prototype.request
     const intercept = vi
       .spyOn(SessionSearchWorkerClient.prototype, 'request')
       .mockImplementation(async function (this: SessionSearchWorkerClient, command) {
+        const result = await request.call(this, command)
         if (
           command.op === 'catalog' &&
           command.command.scope.includes(harness.roots.claudeProjectsDir!) &&
           command.command.kind === 'page' &&
           command.command.scope.endsWith(':refusals')
         ) {
+          blockedClaude = true
           await acceptingA.promise
         }
         if (
@@ -211,15 +216,16 @@ it('preserves delivered equal-stat rewrites while Claude and Codex roots drain t
           command.command.kind === 'contested' &&
           command.command.rows.some((row) => row.path === codexPath)
         ) {
+          blockedCodex = true
           acceptingA.resolve()
           await observedB.promise
         }
-        const result = await request.call(this, command)
         if (
           command.op === 'catalog' &&
           command.command.kind === 'observe-apply' &&
           command.command.outcomes.some((row) => row.path === path)
         ) {
+          observedClaude = true
           observedB.resolve()
         }
         return result
@@ -244,6 +250,7 @@ it('preserves delivered equal-stat rewrites while Claude and Codex roots drain t
     notifySessionSearchFileChange(path)
     clock.advance(20_000)
     await subject.settled()
+    expect([blockedClaude, blockedCodex, observedClaude]).toEqual([true, true, true])
     expect(
       harness.read((db) =>
         db
@@ -313,10 +320,12 @@ it('publishes title-only metadata changes and retries a refused publication', as
     notifySessionSearchFileChange(index)
     clock.advance(20_000)
     await subject.settled()
+    expect([blockedClaude, blockedCodex, observedClaude]).toEqual([true, true, true])
     expect(title()).toEqual({ title: 'Original title' })
     harness.write((db) => db.exec('DROP TRIGGER refuse_title'))
     clock.advance(20_000)
     await subject.settled()
+    expect([blockedClaude, blockedCodex, observedClaude]).toEqual([true, true, true])
     expect(title()).toEqual({ title: 'Changed title' })
   } finally {
     await subject.close()

@@ -158,7 +158,8 @@ it('advances the discovery suffix during continuous updates and repeated overflo
           )
           .get()
       )
-    for (let cycle = 0; cycle < 2000 && Number(historicalMatches()?.n ?? 0) < 16; cycle++) {
+    // Eighteen directories need at most six phases each, alternating with delivered dirty work.
+    for (let cycle = 0; cycle < 224 && Number(historicalMatches()?.n ?? 0) < 16; cycle++) {
       await appendFile(
         active,
         `${claudeLines(['activeappend'], 'active', cycle * 2 + 10).join('\n')}\n`
@@ -539,11 +540,13 @@ it.each([40, 400])(
       await inventory.invalidate(removed)
       listings.mockClear()
       const found: string[] = []
-      for (let cycle = 0; cycle < 10000 && !found.includes(join(kept, 'kept.jsonl')); cycle++) {
+      // Each retained directory needs at most six phases; cancellation must also settle its frontier.
+      for (let cycle = 0; cycle < 6 * (population + 3) && inventory.pending; cycle++) {
         found.push(
           ...(await inventory.drain(args, () => true, 12)).changes.map((change) => change.file.path)
         )
       }
+      expect(inventory.pending).toBe(false)
       expect(found).toContain(join(kept, 'kept.jsonl'))
       expect(listings.mock.calls.filter(([path]) => path.startsWith(`${removed}/`))).toHaveLength(0)
     } finally {
@@ -569,8 +572,7 @@ it.each([40, 400])(
       extensions: ['.jsonl'],
       issues: []
     }
-    let quanta = 0
-    await inventory.drain(args, () => ++quanta >= Math.ceil(population / 16), 12)
+    await inventory.drain(args, () => true, 12)
     const actual = filesystem.wslGatedReaddir
     let refused = true
     const reads = vi.spyOn(filesystem, 'wslGatedReaddir').mockImplementation((path, ...rest) => {
@@ -586,11 +588,13 @@ it.each([40, 400])(
       await inventory.drain(args, () => reads.mock.calls.length > 0, 12)
       // Expire at the first actual observation; catalog-only continuation does not spend another attempt.
       expect(reads.mock.calls).toHaveLength(1)
-      for (let cycle = 0; cycle < 10000 && inventory.pending; cycle++) {
+      // Three refused observations per child, plus the root membership phases.
+      for (let cycle = 0; cycle < 3 * population + 8 && inventory.pending; cycle++) {
         await inventory.begin(false, args)
         await inventory.retryFailures()
         await inventory.drain(args, () => true, 12)
       }
+      expect(inventory.pending).toBe(false)
       const heldAttempts = reads.mock.calls.length
       await inventory.begin(false, args)
       await inventory.retryFailures()
@@ -774,11 +778,8 @@ it('keeps an accepted alias while its deferred replacement is owed by a held-out
     await subject.reconcile({ full: true })
     expect(matching('canonicalnewneedle')).toEqual({ n: 1 })
     await subject.settled()
-    for (
-      let cycle = 0;
-      cycle < 10000 && Number(matching('predecessorowedneedle')?.n) !== 0;
-      cycle++
-    ) {
+    // Coverage and withdrawal each need a page and an empty-page acknowledgement.
+    for (let cycle = 0; cycle < 6 && Number(matching('predecessorowedneedle')?.n) !== 0; cycle++) {
       await subject.reconcile()
     }
     expect(matching('canonicalnewneedle')).toEqual({ n: 1 })

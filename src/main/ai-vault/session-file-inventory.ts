@@ -71,7 +71,7 @@ export class SessionFileInventory extends SessionInventoryDirectoryWalks {
     return this.failures.size > 0 || this.observations.failures.size > 0
   }
   get walking(): boolean {
-    return this.walks.size > 0 || this.reconcileAgain
+    return this.cancellations.size > 0 || this.walks.size > 0 || this.reconcileAgain
   }
   async reconcile(): Promise<void> {
     if (this.reconciling) {
@@ -128,7 +128,7 @@ export class SessionFileInventory extends SessionInventoryDirectoryWalks {
     }
     let consumed = 0
     while (
-      (this.dirty.size || this.walks.size) &&
+      (this.cancellations.size || this.dirty.size || this.walks.size) &&
       (consumed === 0 || !overdue()) &&
       this.observations.changes.size +
         this.observations.removed.size +
@@ -137,7 +137,9 @@ export class SessionFileInventory extends SessionInventoryDirectoryWalks {
     ) {
       consumed++
       throwIfAiVaultScanCancelled(args.signal)
-      if (this.dirty.size && (!this.walks.size || this.chooseDirty)) {
+      if (this.cancellations.size) {
+        await this.request({ kind: 'directory-cancel-step', scope: this.scope })
+      } else if (this.dirty.size && (!this.walks.size || this.chooseDirty)) {
         this.chooseDirty = false
         await this.drainDirty(args, recentLimit)
       } else {
@@ -148,7 +150,7 @@ export class SessionFileInventory extends SessionInventoryDirectoryWalks {
         }
       }
     }
-    if (!this.walks.size) {
+    if (!this.walks.size && !this.cancellations.size) {
       this.reconciling = false
       if (this.reconcileAgain) {
         this.reconcileAgain = false
@@ -180,18 +182,17 @@ export class SessionFileInventory extends SessionInventoryDirectoryWalks {
     return this.observations.acknowledge(receipts)
   }
   private async drainDirty(args: DiscoverSessionFilesArgs, limit: number): Promise<void> {
-    const first = await this.dirty.firstEntry()
-    if (!first) {
-      return
-    }
-    const [path, force] = first
-    await this.dirty.delete(path)
-    for await (const owner of this.observations.owners(path)) {
-      await this.invalidate(owner, force)
-    }
-    if (this.accepts(path, args)) {
-      await this.observations.observe(path, args, force, limit)
-    } else if (isInsideSessionRoot(this.root, path)) {
+    const page = await this.request({ kind: 'dirty-page', scope: this.scope })
+    const inputs = page.dirtyInputs ?? []
+    await this.observations.observePage(
+      inputs.filter(({ path }) => this.accepts(path, args)),
+      args,
+      limit
+    )
+    for (const { path } of inputs) {
+      if (this.accepts(path, args) || !isInsideSessionRoot(this.root, path)) {
+        continue
+      }
       try {
         const stat = await wslGatedStat(path, 'scan', args.signal)
         await this.failures.delete(path)

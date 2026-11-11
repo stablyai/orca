@@ -32,6 +32,7 @@ export class SessionInventoryDirectoryWalks {
   protected readonly entries: SessionSearchCatalogClient<Entry>
   protected readonly dirty: SessionSearchCatalogFrontier<boolean>
   protected readonly walks: SessionSearchCatalogFrontier<Walk>
+  protected readonly cancellations: SessionSearchCatalogClient<unknown>
   protected readonly trailing: SessionSearchCatalogClient<true>
   protected readonly failures: SessionSearchCatalogRetries
   protected readonly removedDirectories = new Set<string>()
@@ -48,6 +49,7 @@ export class SessionInventoryDirectoryWalks {
     }
     this.directories = new SessionSearchCatalogClient(`${scope}:directories`, this.request)
     this.entries = new SessionSearchCatalogClient(`${scope}:directory-input`, this.request)
+    this.cancellations = new SessionSearchCatalogClient(`${scope}:cancellations`, this.request)
     this.trailing = new SessionSearchCatalogClient(`${scope}:trailing`, this.request)
     this.dirty = new SessionSearchCatalogFrontier(
       new SessionSearchCatalogClient(`${scope}:dirty`, this.request)
@@ -61,6 +63,9 @@ export class SessionInventoryDirectoryWalks {
     this.observations = new SessionInventoryFiles(scope, this.request, (path) =>
       this.schedule(path)
     )
+  }
+  get catalogRequest(): SessionSearchCatalogRequest {
+    return this.request
   }
   protected async addDirectory(path: string): Promise<void> {
     let child = path
@@ -79,22 +84,17 @@ export class SessionInventoryDirectoryWalks {
     if (!isInsideSessionRoot(this.root, path)) {
       return
     }
-    if (remove) {
-      await this.walks.cancelTree(path)
-      await this.dirty.cancelTree(path)
-      await this.trailing.releasePrefix(path)
-    } else if (await this.walks.has(path)) {
-      return
-    }
-    await this.addDirectory(path)
     const rel = relative(this.root, path)
-    await this.walks.set(path, {
+    await this.request({
+      kind: 'directory-schedule',
+      scope: this.scope,
       path,
       depth: rel ? rel.split(/[\\/]/).length : 0,
       reconcile,
-      phase: remove ? 'remove-files' : 'load'
+      remove
     })
   }
+
   protected async drainWalk(
     walk: Walk,
     args: DiscoverSessionFilesArgs,
@@ -146,7 +146,8 @@ export class SessionInventoryDirectoryWalks {
       path: walk.path,
       phase: walk.phase,
       after: walk.after,
-      reconcile: walk.reconcile
+      reconcile: walk.reconcile,
+      depth: walk.depth
     })
     walk.after = page.after
     for (const path of page.removedFiles ?? []) {
@@ -157,9 +158,6 @@ export class SessionInventoryDirectoryWalks {
         walk.phase = walk.phase === 'files' ? 'children' : 'remove-children'
       }
     } else if (walk.phase === 'children' || walk.phase === 'remove-children') {
-      for (const entry of page.directoryPage ?? []) {
-        await this.schedule(entry.key, false, true)
-      }
       if (!walk.after) {
         if (walk.phase === 'remove-children') {
           await this.directories.delete(walk.path)
@@ -172,11 +170,7 @@ export class SessionInventoryDirectoryWalks {
     } else {
       const files: { path: string; force: boolean }[] = []
       for (const entry of page.directoryPage ?? []) {
-        if (entry.directory) {
-          await this.schedule(entry.key, walk.reconcile)
-        } else {
-          files.push({ path: entry.key, force: false })
-        }
+        files.push({ path: entry.key, force: false })
       }
       await this.observations.observePage(files, args, limit)
       if (!walk.after) {

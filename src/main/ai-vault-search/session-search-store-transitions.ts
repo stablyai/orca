@@ -15,6 +15,43 @@ export async function transitionSessionSearchCandidates(
     const publication = await stepSessionSearchPublication(store)
     return { ...store.catalogCandidates.execute({ kind: 'batch', rows: [] }), ...publication }
   }
+  if (command.kind === 'unowned-page') {
+    return {
+      ...store.catalogCandidates.execute({ kind: 'batch', rows: [] }),
+      unowned: command.rows
+        .filter(
+          (row) =>
+            !(row.agent
+              ? store.connection
+                  .prepare('SELECT 1 FROM temp.search_candidates WHERE path=? AND agent=? LIMIT 1')
+                  .get(row.path, row.agent)
+              : store.connection
+                  .prepare('SELECT 1 FROM temp.search_candidates WHERE path=? LIMIT 1')
+                  .get(row.path))
+        )
+        .map((row) => row.path)
+    }
+  }
+  if (command.kind === 'remove-page') {
+    for (const row of command.rows) {
+      store.catalogCandidates.execute({ kind: 'remove', ...row })
+      const agent = store.fileRow(row.path)?.agent
+      if (store.catalogCandidates.execute({ kind: 'path', path: row.path, agent }).rows.length) {
+        continue
+      }
+      await store.work({ kind: 'remove', path: row.path })
+      await store.catalog({
+        kind: 'frontier-set',
+        scope: 'retirement',
+        key: row.path,
+        value: JSON.stringify(row.path)
+      })
+    }
+    return {
+      ...store.catalogCandidates.execute({ kind: 'batch', rows: [] }),
+      work: await store.work({ kind: 'stats' })
+    }
+  }
   if (command.kind !== 'admit') {
     return store.catalogCandidates.execute(command)
   }

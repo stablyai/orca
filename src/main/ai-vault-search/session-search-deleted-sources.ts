@@ -69,6 +69,7 @@ export async function retireDeletedSessionSearchSources(
     degradedRoots: []
   }
   const degraded = new Map<string, string>()
+  await store.prepareCoverage?.(paths.slice(0, 256))
   for (const [index, path] of paths.entries()) {
     // Synthetic paths name entries inside containers, not filesystem objects.
     const synthetic = splitSyntheticSessionSource(path)
@@ -84,7 +85,9 @@ export async function retireDeletedSessionSearchSources(
       emptiedRoots,
       signal
     })
-    await store.prepareCoverage?.([path])
+    if (!store.coverageKnown?.(path)) {
+      await store.prepareCoverage?.([path])
+    }
     const proof = synthetic
       ? await proveSyntheticSource(
           synthetic,

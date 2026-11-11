@@ -1,3 +1,7 @@
+import { transitionSessionSearchDirty } from './session-search-dirty-transition'
+import { transitionSessionSearchDependencyFanout } from './session-search-dependency-fanout'
+import { transitionSessionSearchDirectoryFrontier } from './session-search-directory-frontier'
+import { transitionSessionSearchFrontier } from './session-search-frontier-transition'
 import { transitionSessionSearchContainer } from './session-search-container-transition'
 import { transitionSessionSearchDependency } from './session-search-dependency-transition'
 import { transitionSessionSearchDirectory } from './session-search-directory-transition'
@@ -73,8 +77,17 @@ export class SessionSearchCatalog extends SessionSearchCatalogStorage {
       case 'container-retirement-ack':
       case 'container-retire':
         return transitionSessionSearchContainer(this, command)
+      case 'dirty-page':
+        return transitionSessionSearchDirty(this, command)
+      case 'dependency-deliver':
+      case 'dependency-fanout':
+      case 'dependency-discard':
+        return transitionSessionSearchDependencyFanout(this, command)
       case 'dependency-step':
         return transitionSessionSearchDependency(this, command)
+      case 'directory-schedule':
+      case 'directory-cancel-step':
+        return transitionSessionSearchDirectoryFrontier(this, command)
       case 'directory-step':
         return transitionSessionSearchDirectory(this, command)
       case 'release-parent':
@@ -82,36 +95,10 @@ export class SessionSearchCatalog extends SessionSearchCatalogStorage {
           .prepare('DELETE FROM temp.search_catalog WHERE scope=? AND parent=?')
           .run(command.scope, command.parent)
         return {}
-      case 'frontier-set': {
-        const row = this.read('WHERE scope=? AND key=?', [command.scope, command.key])[0]
-        const order =
-          row?.rank ??
-          Number(
-            this.db
-              .prepare(
-                "SELECT rank FROM temp.search_catalog WHERE scope=? AND group_key='' ORDER BY rank DESC,key DESC LIMIT 1"
-              )
-              .get(command.scope)?.rank ?? 0
-          ) + 1
-        return this.execute({
-          kind: 'put',
-          scope: command.scope,
-          rows: [
-            {
-              key: command.key,
-              value: JSON.stringify({
-                value: JSON.parse(command.value),
-                order,
-                revision: this.nextRevision()
-              }),
-              parent: '',
-              group: '',
-              rank: order,
-              ready: 0
-            }
-          ]
-        })
-      }
+      case 'frontier-set':
+      case 'frontier-set-page':
+      case 'frontier-move':
+        return transitionSessionSearchFrontier(this, command)
       case 'observe-prepare':
       case 'observe-apply':
       case 'observe-ack':
@@ -247,10 +234,14 @@ export class SessionSearchCatalog extends SessionSearchCatalogStorage {
       }
       case 'count': {
         const row = this.db
-          .prepare(`SELECT count(*) AS count FROM temp.search_catalog
-            WHERE scope = ?${command.ready === undefined ? '' : ' AND ready = ?'}`)
-          .get(...(command.ready === undefined ? [command.scope] : [command.scope, command.ready]))
-        return { count: Number(row?.count ?? 0) }
+          .prepare('SELECT n,runnable FROM temp.search_catalog_counts WHERE scope=?')
+          .get(command.scope)
+        const count = Number(row?.n ?? 0),
+          runnable = Number(row?.runnable ?? 0)
+        return {
+          count:
+            command.ready === undefined ? count : command.ready === 1 ? runnable : count - runnable
+        }
       }
       case 'page': {
         const conditions = ['scope = ?', 'key > ?']

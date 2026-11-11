@@ -1,3 +1,10 @@
+import type {
+  SessionSearchDirtyCommand,
+  SessionSearchDirtyResult
+} from './session-search-dirty-transition'
+import type { SessionSearchDependencyFanoutCommand } from './session-search-dependency-fanout'
+import type { SessionSearchDirectoryFrontierCommand } from './session-search-directory-frontier'
+import type { SessionSearchFrontierCommand } from './session-search-frontier-transition'
 import type { SessionSearchContainerCommand } from './session-search-container-transition'
 import type { SessionSearchDependencyCommand } from './session-search-dependency-transition'
 import type {
@@ -19,13 +26,16 @@ export type SessionSearchCatalogRow = {
   tie?: number
 }
 export type SessionSearchCatalogCommand =
+  | SessionSearchDirtyCommand
+  | SessionSearchDependencyFanoutCommand
+  | SessionSearchDirectoryFrontierCommand
+  | SessionSearchFrontierCommand
   | SessionSearchContainerCommand
   | SessionSearchDependencyCommand
   | SessionSearchDirectoryCommand
   | SessionSearchInventoryCommand
   | { kind: 'get'; scope: string; key: string }
   | { kind: 'get-page'; scope: string; keys: string[] }
-  | { kind: 'frontier-set'; scope: string; key: string; value: string }
   | { kind: 'release-parent'; scope: string; parent: string }
   | { kind: 'put'; scope: string; rows: SessionSearchCatalogRow[] }
   | { kind: 'delete'; scope: string; key: string }
@@ -46,8 +56,10 @@ export type SessionSearchCatalogCommand =
       limit?: number
       prefix?: string
     }
-export type SessionSearchCatalogResult = SessionSearchInventoryResult &
+export type SessionSearchCatalogResult = SessionSearchDirtyResult &
+  SessionSearchInventoryResult &
   SessionSearchDirectoryResult & {
+    dependencyMore?: boolean
     invalidProof?: boolean
     scopeCounts?: [string, number, number][]
     rows?: SessionSearchCatalogRow[]

@@ -32,6 +32,8 @@ export type SessionSearchCandidateCommand =
     }
   | { kind: 'contested'; rows: { group: string; path: string }[] }
   | { kind: 'remove'; path: string; agents?: string[] }
+  | { kind: 'remove-page'; rows: { path: string; agents?: string[] }[] }
+  | { kind: 'unowned-page'; rows: { path: string; agent?: string | null }[] }
   | { kind: 'path'; path: string; agent?: string | null }
   | { kind: 'group'; group: string; after?: string }
   | { kind: 'changes'; after?: string }
@@ -58,4 +60,5 @@ export type SessionSearchCandidateResult = SessionSearchPublicationResult & {
   processed?: number
   contested?: string[]
   work?: SessionSearchWorkResult
+  unowned?: string[]
 }

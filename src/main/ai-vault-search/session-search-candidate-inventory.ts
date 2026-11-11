@@ -1,4 +1,5 @@
 import type { SessionSearchCatalogCandidate } from './session-search-catalog-candidates'
+import type { SessionSearchWorkResult } from './session-search-work-queue'
 import { sessionSearchRecordPages } from './session-search-catalog-pages'
 import type { SessionSearchIndexStore } from './session-search-store'
 import { SessionSearchCandidatePublications } from './session-search-candidate-publication'
@@ -51,6 +52,9 @@ export class SessionSearchCandidateInventory extends SessionSearchCandidatePubli
   async has(path: string, agent?: string | null): Promise<boolean> {
     return (await this.request!({ kind: 'path', path, agent })).rows.length > 0
   }
+  async unowned(rows: { path: string; agent?: string | null }[]): Promise<string[]> {
+    return (await this.request!({ kind: 'unowned-page', rows })).unowned ?? []
+  }
   async admitChanges(
     receipts: { key: string; revision: number }[],
     recent: boolean,
@@ -69,6 +73,23 @@ export class SessionSearchCandidateInventory extends SessionSearchCandidatePubli
       await this.request!({ kind: 'consumed', ...row })
     }
   }
+  async remove(
+    paths: ReadonlySet<string>,
+    agents: ReadonlyMap<string, ReadonlySet<string>> = new Map()
+  ) {
+    let work
+    const rows = [...new Set([...paths, ...agents.keys()])].map((path) => ({
+      path,
+      agents: paths.has(path) ? undefined : [...agents.get(path)!]
+    }))
+    for (const page of sessionSearchRecordPages(rows)) {
+      for (const row of page) {
+        this.invalidate(row.path)
+      }
+      work = (await this.request!({ kind: 'remove-page', rows: page })).work
+    }
+    return work
+  }
   async update(
     discoveries: readonly SessionFileDiscovery[],
     removed: ReadonlySet<string>,
@@ -83,6 +104,7 @@ export class SessionSearchCandidateInventory extends SessionSearchCandidatePubli
     suppressed: Set<string>
     forced: Set<string>
     metadata: Set<string>
+    work?: SessionSearchWorkResult
   }> {
     if (!this.request) {
       throw new Error('Session candidate catalog is not attached')
@@ -95,14 +117,7 @@ export class SessionSearchCandidateInventory extends SessionSearchCandidatePubli
         this.sourceOrders.delete(scope)
       }
     }
-    for (const path of new Set([...removed, ...removedCandidates.keys()])) {
-      this.invalidate(path)
-      await this.request({
-        kind: 'remove',
-        path,
-        agents: removed.has(path) ? undefined : [...removedCandidates.get(path)!]
-      })
-    }
+    const work = await this.remove(removed, removedCandidates)
     const rows: (SessionSearchCatalogCandidate & {
       force?: boolean
       metadata?: boolean
@@ -236,6 +251,7 @@ export class SessionSearchCandidateInventory extends SessionSearchCandidatePubli
         .map((row) => row.candidate.file.path)
     )
     return {
+      work,
       receipts: changed.rows.map(({ key, revision }) => ({ key, revision })),
       candidates: changed.rows
         .filter((row) => row.selected)

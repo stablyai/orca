@@ -1,0 +1,56 @@
+import type { SessionSearchCatalog } from './session-search-catalog'
+
+export type SessionSearchFrontierCommand =
+  | { kind: 'frontier-set'; scope: string; key: string; value: string }
+  | { kind: 'frontier-set-page'; scope: string; rows: { key: string; value: string }[] }
+  | { kind: 'frontier-move'; scope: string; target: string }
+
+export function transitionSessionSearchFrontier(
+  catalog: SessionSearchCatalog,
+  command: SessionSearchFrontierCommand
+) {
+  if (command.kind === 'frontier-move') {
+    const page = catalog.execute({ kind: 'page', scope: command.scope, group: '', orderRank: true })
+    for (const row of page.rows ?? []) {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this frontier encoded the matching value wrapper.
+      const value = JSON.parse(row.value) as { value: unknown }
+      catalog.execute({
+        kind: 'frontier-set',
+        scope: command.target,
+        key: row.key,
+        value: JSON.stringify(value.value)
+      })
+    }
+    catalog.execute({
+      kind: 'delete-page',
+      scope: command.scope,
+      keys: (page.rows ?? []).map((row) => row.key)
+    })
+    return catalog.execute({ kind: 'count', scope: command.scope })
+  }
+  const rows = command.kind === 'frontier-set' ? [command] : command.rows
+  for (const item of rows) {
+    const row = catalog.execute({ kind: 'get', scope: command.scope, key: item.key }).rows?.[0]
+    // Reuse the writer's indexed tail instead of projecting all queued entries.
+    const order = row?.rank ?? catalog.frontierOrder(command.scope)
+    catalog.execute({
+      kind: 'put',
+      scope: command.scope,
+      rows: [
+        {
+          key: item.key,
+          value: JSON.stringify({
+            value: JSON.parse(item.value),
+            order,
+            revision: catalog.nextRevision()
+          }),
+          parent: '',
+          group: '',
+          rank: order,
+          ready: 0
+        }
+      ]
+    })
+  }
+  return {}
+}

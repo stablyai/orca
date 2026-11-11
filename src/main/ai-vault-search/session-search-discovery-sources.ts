@@ -182,26 +182,31 @@ export class SessionSearchDiscoverySources {
       if (!this.seen.has(key)) {
         const root = this.roots.get(key)!
         root.retiring = true
-        const paths = await root.inventory.removePage()
-        if (this.acceptRemoved) {
-          await this.acceptRemoved(paths)
-        } else {
-          for (const path of paths) {
-            this.removed.add(path)
+        do {
+          const paths = await root.inventory.removePage()
+          if (this.acceptRemoved) {
+            await this.acceptRemoved(paths)
+          } else {
+            for (const path of paths) {
+              this.removed.add(path)
+            }
           }
-        }
-        await root.inventory.retirePage(paths)
-        if (paths.length || !(await root.inventory.releasePage())) {
-          continue
-        }
-        let released = true
-        for (const dependency of root.dependencies.values()) {
-          released = (await dependency.release()) && released
-        }
-        if (!released) {
-          continue
-        }
-        this.roots.delete(key)
+          await root.inventory.retirePage(paths)
+          if (paths.length) {
+            continue
+          }
+          if (!(await root.inventory.releasePage())) {
+            continue
+          }
+          let released = true
+          for (const dependency of root.dependencies.values()) {
+            released = (await dependency.release()) && released
+          }
+          if (released) {
+            this.roots.delete(key)
+            break
+          }
+        } while (!this.overdue() && !this.owner.signal.aborted)
       }
     }
   }

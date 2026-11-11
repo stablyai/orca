@@ -50,4 +50,15 @@ export class SessionSearchCatalogStorage {
   protected bytes(row: SessionSearchCatalogRow): number {
     return JSON.stringify(row).length * 2 + 64
   }
+  frontierOrder(scope: string): number {
+    return (
+      Number(
+        this.db
+          .prepare(
+            "SELECT rank FROM temp.search_catalog WHERE scope=? AND group_key='' ORDER BY rank DESC,key DESC LIMIT 1"
+          )
+          .get(scope)?.rank ?? 0
+      ) + 1
+    )
+  }
 }

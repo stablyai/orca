@@ -1,3 +1,4 @@
+import { sessionSearchRecordPages } from './session-search-catalog-pages'
 import type { SessionSearchCatalogClient } from './session-search-catalog-client'
 
 type Entry<T> = { value: T; order: number }
@@ -8,6 +9,10 @@ export class SessionSearchCatalogFrontier<T> {
 
   get size(): number {
     return this.catalog.size
+  }
+
+  async refresh(): Promise<void> {
+    await this.catalog.count()
   }
 
   async get(key: string): Promise<T | undefined> {
@@ -27,6 +32,24 @@ export class SessionSearchCatalogFrontier<T> {
     })
   }
 
+  async setPage(values: readonly (readonly [string, T])[]): Promise<void> {
+    for (const rows of sessionSearchRecordPages(
+      values.map(([key, value]) => ({ key, value: JSON.stringify(value) }))
+    )) {
+      await this.catalog.transition({ kind: 'frontier-set-page', scope: this.catalog.scope, rows })
+    }
+  }
+  async movePageTo(target: SessionSearchCatalogFrontier<T>): Promise<void> {
+    await this.catalog.transition({
+      kind: 'frontier-move',
+      scope: this.catalog.scope,
+      target: target.catalog.scope
+    })
+  }
+  async firstPage(limit = 256): Promise<readonly (readonly [string, T])[]> {
+    const page = await this.catalog.page({ group: '', orderRank: true, limit })
+    return page.rows.map(({ key, value }) => [key, value.value] as const)
+  }
   async deletePage(keys: string[]): Promise<void> {
     await this.catalog.transition({ kind: 'delete-page', scope: this.catalog.scope, keys })
   }

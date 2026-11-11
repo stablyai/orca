@@ -33,14 +33,13 @@ export function createSessionSearchJsonlDependency(
   const changes = async function* () {
     while (changed.size) {
       const page = await changed.page()
-      const consumed: string[] = []
-      try {
-        for (const { key } of page.rows) {
-          consumed.push(key)
-          yield key
-        }
-      } finally {
-        await changed.transition({ kind: 'delete-page', scope: changed.scope, keys: consumed })
+      await changed.transition({
+        kind: 'dependency-deliver',
+        scope: owner.scope,
+        keys: page.rows.map(({ key }) => key)
+      })
+      for (const { key } of page.rows) {
+        yield key
       }
     }
   }

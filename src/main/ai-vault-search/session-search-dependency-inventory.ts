@@ -18,8 +18,9 @@ export class SessionSearchDependencyInventory {
   private readonly inventory: SessionFileInventory | undefined
   private readonly observe: SessionDiscoveryDependencyObserver | undefined
   private readonly retries = new SessionObservationRetries()
-  private readonly delivered: SessionSearchCatalogClient<true>
-  private deliveredCount = 0
+  private readonly delivered: SessionSearchCatalogClient<{ after?: string }>
+  private deliveryAfter: string | undefined
+  private discardAfter: string | undefined
   private readonly keys: SessionSearchCatalogClient<string>
   constructor(
     readonly dependency: SessionDiscoveryDependency,
@@ -37,7 +38,10 @@ export class SessionSearchDependencyInventory {
   }
   get pending(): boolean {
     return (
-      this.retries.pending || this.observe?.pending === true || (this.inventory?.pending ?? false)
+      this.retries.pending ||
+      this.delivered.size > 0 ||
+      this.observe?.pending === true ||
+      (this.inventory?.pending ?? false)
     )
   }
   async release(): Promise<boolean> {
@@ -48,39 +52,52 @@ export class SessionSearchDependencyInventory {
     this.retries.report(args.issues)
     await this.inventory?.begin(wake, args)
   }
-  async *settleDelivered(): AsyncGenerator<string> {
-    let after: string | undefined
+  async settleDelivered(physical: string, overdue: () => boolean): Promise<void> {
     do {
-      const page = await this.delivered.page({ after })
-      for (const { key } of page.rows) {
-        let owned = false
-        for await (const owner of this.owners(key)) {
-          yield owner
-          owned = true
-        }
-        if (owned) {
-          await this.delivered.delete(key)
-          this.deliveredCount--
-        }
+      const result = await this.delivered.transition({
+        kind: 'dependency-fanout',
+        scope: this.scope,
+        physical,
+        metadata: this.dependency.metadata === true,
+        after: this.deliveryAfter
+      })
+      this.deliveryAfter = result.after
+      if (!result.dependencyMore && this.deliveryAfter === undefined) {
+        break
       }
-      after = page.after
-    } while (after !== undefined)
+    } while (!overdue())
   }
-  async discardUnowned(): Promise<void> {
-    if (this.deliveredCount) {
-      await this.delivered.release()
-      this.deliveredCount = 0
+  async discardUnowned(overdue: () => boolean): Promise<void> {
+    if (!this.delivered.size) {
+      return
     }
-  }
-  async *owners(key: string): AsyncGenerator<string> {
-    let after: string | undefined
     do {
-      const page = await this.keys.page({ parent: key, after })
-      for (const { key: path } of page.rows) {
-        yield path
+      this.discardAfter = (
+        await this.delivered.transition({
+          kind: 'dependency-discard',
+          scope: this.scope,
+          after: this.discardAfter
+        })
+      ).after
+    } while (this.discardAfter !== undefined && !overdue())
+  }
+  async stageChanges(
+    watch: SessionSearchRootWatch | undefined,
+    args: DiscoverSessionFilesArgs,
+    overdue: () => boolean
+  ): Promise<void> {
+    let keys: string[] = []
+    const flush = async () => {
+      await this.delivered.putPage(keys.map((key) => this.delivered.encode(key, {})))
+      keys = []
+    }
+    for await (const key of this.changedKeys(watch, args, overdue)) {
+      keys.push(key)
+      if (keys.length === 256) {
+        await flush()
       }
-      after = page.after
-    } while (after !== undefined)
+    }
+    await flush()
   }
   async addFile(path: string): Promise<void> {
     await this.addFiles([path])
@@ -105,15 +122,14 @@ export class SessionSearchDependencyInventory {
     overdue: () => boolean
   ): AsyncGenerator<string> {
     if (this.dependency.eventsOnly) {
+      const keys = new Set<string>()
       for (const event of watch?.events.values() ?? []) {
         const key = this.dependency.eventKey?.(event.path)
         if (key) {
-          if (!(await this.delivered.get(key))) {
-            await this.delivered.put(key, true)
-            this.deliveredCount++
-          }
+          keys.add(key)
         }
       }
+      yield* keys
       return
     }
     if (this.observe) {

@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from 'node:fs/promises'
+import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
 import SyncDatabase from '../sqlite/sync-database'
@@ -15,6 +15,8 @@ import {
   openSessionSearchIndexerHarness,
   writeClaudeTranscript
 } from './session-search-indexer-test-fixture'
+import { SessionSearchWorkerClient } from './session-search-worker-client'
+import * as filesystem from '../native-chat/wsl-transcript-fs-access'
 import { SessionSearchIndexer } from './session-search-indexer'
 import { utimes } from 'node:fs/promises'
 
@@ -229,3 +231,122 @@ it('redelivers an unaccepted observation and retains a newer rewrite after an ol
     await harness.cleanup()
   }
 })
+
+it.each([40, 400])(
+  'batches child scheduling and bounds cancellation for %s directories',
+  async (population) => {
+    const harness = await openSessionSearchIndexerHarness('ss-directory-pages')
+    const db = new SyncDatabase('')
+    const catalog = new SessionSearchCatalog(db)
+    const root = join(harness.root, 'inputs')
+    let envelopes = 0
+    const cancelled: number[] = []
+    const inventory = new SessionFileInventory(
+      root,
+      async (command) => {
+        envelopes++
+        const result = catalog.response(command)
+        if (command.kind === 'directory-cancel-step') {
+          cancelled.push(result.processed ?? 0)
+        }
+        return result
+      },
+      'physical:directory-control'
+    )
+    const args: DiscoverSessionFilesArgs = {
+      rootDir: root,
+      agent: 'claude',
+      limit: 0,
+      issues: [],
+      extensions: ['.jsonl']
+    }
+    const listings = vi.spyOn(filesystem, 'wslGatedReaddir')
+    try {
+      for (let n = 0; n < population; n++) {
+        await mkdir(join(root, `child-${n}`), { recursive: true })
+      }
+      await inventory.drain(
+        args,
+        () => listings.mock.calls.some(([path]) => path.startsWith(`${root}/`)),
+        0
+      )
+      // Root load, comparison and scheduling use a fixed set of phases per entry page; one active child adds fixed work.
+      expect(envelopes).toBeLessThanOrEqual(60 + 8 * Math.ceil(population / 256))
+      await rm(root, { recursive: true })
+      await inventory.invalidate(root)
+      listings.mockClear()
+      // Each retained directory has cancellation, removal and completion phases, with no descendant source reads.
+      for (let cycle = 0; cycle < 6 * (population + 1) + 10 && inventory.pending; cycle++) {
+        const delta = await inventory.drain(args, () => true, 0)
+        await inventory.acknowledge(delta.receipts)
+      }
+      expect(inventory.pending).toBe(false)
+      expect(listings.mock.calls.filter(([path]) => path.startsWith(`${root}/`))).toHaveLength(0)
+      expect(cancelled.length).toBeGreaterThan(0)
+      expect(Math.max(...cancelled)).toBeLessThanOrEqual(256)
+    } finally {
+      listings.mockRestore()
+      db.close()
+      await harness.cleanup()
+    }
+  }
+)
+
+it.each([40, 400])(
+  'releases a removed %s-file source through bounded bookkeeping pages',
+  async (population) => {
+    const harness = await openSessionSearchIndexerHarness('ss-release-pages')
+    const clock = new FakeSessionSearchClock()
+    const subject = new SessionSearchIndexer({
+      databasePath: harness.databasePath,
+      roots: harness.roots,
+      historyDays: null,
+      clock
+    })
+    const traffic = vi.spyOn(SessionSearchWorkerClient.prototype, 'request')
+    const matches = () =>
+      harness.read((db) =>
+        db
+          .prepare(
+            "SELECT count(*) AS n FROM messages_fts WHERE messages_fts MATCH 'releasedsourceneedle'"
+          )
+          .get()
+      )
+    try {
+      for (let n = 0; n < population; n++) {
+        await writeClaudeTranscript(
+          join(harness.claudeProjectDir, `${n}.jsonl`),
+          ['releasedsourceneedle'],
+          `session-${n}`
+        )
+      }
+      await subject.start()
+      expect(matches()).toEqual({ n: 2 * population })
+      await rm(harness.claudeProjectDir, { recursive: true })
+      await mkdir(harness.claudeProjectDir)
+      const next = join(harness.root, 'next-projects')
+      await mkdir(next)
+      harness.roots.claudeProjectsDir = next
+      traffic.mockClear()
+      await subject.reconcile({ full: true })
+      await subject.reconcile()
+      expect(matches()).toEqual({ n: 0 })
+      expect(subject.status().phase).toBe('current')
+      const bookkeeping = traffic.mock.calls.filter(
+        ([command]) =>
+          command.op === 'sync' ||
+          command.op === 'catalog' ||
+          command.op === 'candidates' ||
+          command.op === 'work' ||
+          command.op === 'coverage' ||
+          command.op === 'file-page'
+      )
+      // Source release, queue/retirement admission and coverage use fixed phases per page; actual content deletes are separate required output.
+      expect(bookkeeping.length).toBeLessThanOrEqual(200 + 64 * Math.ceil(population / 256))
+    } finally {
+      traffic.mockRestore()
+      await subject.close()
+      await harness.cleanup()
+    }
+  }
+)

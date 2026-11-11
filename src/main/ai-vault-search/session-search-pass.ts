@@ -68,12 +68,10 @@ export async function runSessionSearchPass(
   }
   if (args.full || args.purge) {
     while (state.parkedRetire.size) {
-      const first = await state.parkedRetire.firstEntry()
-      if (!first) {
+      await state.parkedRetire.movePageTo(state.retire)
+      if (args.discoveryOverdue?.()) {
         break
       }
-      await state.retire.set(first[0], first[0])
-      await state.parkedRetire.delete(first[0])
     }
   }
   return withCursorChatMetaScan(async () => {
@@ -95,6 +93,10 @@ export async function runSessionSearchPass(
           partial,
           metadata
         ))
+      if (update.work) {
+        state.queue.update(update.work)
+        await state.retire.refresh()
+      }
       do {
         await state.parkedRetire.deletePage(
           update.candidates.map((candidate) => candidate.file.path)
@@ -126,19 +128,10 @@ export async function runSessionSearchPass(
         if (!paths.length) {
           return
         }
-        await state.candidates.update(
-          [],
-          new Set(paths),
-          { ...args.roots, signal },
-          new Set(),
-          new Map(),
-          true
-        )
-        for (const path of paths) {
-          if (!(await state.candidates.has(path))) {
-            await state.queue.remove(path)
-            await state.retire.set(path, path)
-          }
+        const work = await state.candidates.remove(new Set(paths))
+        if (work) {
+          state.queue.update(work)
+          await state.retire.refresh()
         }
         await accept([], true)
       })
@@ -158,20 +151,6 @@ export async function runSessionSearchPass(
       new Set(),
       state.discovery.removedCandidates
     )
-    for (const path of update.suppressed) {
-      await state.queue.remove(path)
-    }
-    for (const path of new Set([
-      ...state.discovery.removed,
-      ...state.discovery.removedCandidates.keys()
-    ])) {
-      await store.prepareCoverage?.([path])
-      if (await state.candidates.has(path, store.fileRow(path)?.agent)) {
-        continue
-      }
-      await state.queue.remove(path)
-      await state.retire.set(path, path)
-    }
     await accept([], false, update)
     await state.discovery.containers.acknowledgeRetirements()
     if (!state.discovery.pending) {

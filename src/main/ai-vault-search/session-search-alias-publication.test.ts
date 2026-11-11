@@ -112,7 +112,10 @@ it('reconstructs cleanup from committed rows after restart and retries acknowled
     await settle()
   }
   expect(hits('predecessorneedle')).toBe(1)
+  expect(inventory.pendingPublications).toBe(false)
   store.connection.exec('DROP TRIGGER refuse_alias_removal')
+  await settle()
+  expect(hits('predecessorneedle')).toBe(1)
   await settle(true)
   expect(hits('replacementneedle')).toBe(1)
   expect(hits('predecessorneedle')).toBe(0)

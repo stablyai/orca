@@ -9,6 +9,7 @@ export type SessionSearchDirectoryCommand = {
   phase: 'files' | 'children' | 'entries' | 'remove-files' | 'remove-children'
   after?: string
   reconcile: boolean
+  depth: number
 }
 export type SessionSearchDirectoryResult = {
   directoryPage?: { key: string; directory: boolean }[]
@@ -45,13 +46,21 @@ export function transitionSessionSearchDirectory(
   }
   if (command.phase === 'children' || command.phase === 'remove-children') {
     const result = page(directories)
-    return {
-      directoryPage: (result.rows ?? [])
-        .filter(({ key }) => command.phase === 'remove-children' || !incoming(key).directory)
-        .map(({ key }) => ({ key, directory: true })),
-      after: result.after
+    for (const row of result.rows ?? []) {
+      if (command.phase === 'remove-children' || !incoming(row.key).directory) {
+        catalog.execute({
+          kind: 'directory-schedule',
+          scope: command.scope,
+          path: row.key,
+          depth: command.depth + 1,
+          reconcile: false,
+          remove: true
+        })
+      }
     }
+    return { after: result.after }
   }
+
   const result = page(entries)
   const output: NonNullable<SessionSearchDirectoryResult['directoryPage']> = []
   for (const row of result.rows ?? []) {
@@ -75,7 +84,13 @@ export function transitionSessionSearchDirectory(
         })
       }
       if (command.reconcile || !known) {
-        output.push({ key: row.key, directory: true })
+        catalog.execute({
+          kind: 'directory-schedule',
+          scope: command.scope,
+          path: row.key,
+          depth: command.depth + 1,
+          reconcile: command.reconcile
+        })
       }
     } else if (value.file && (command.reconcile || !get(files, row.key))) {
       output.push({ key: row.key, directory: false })
