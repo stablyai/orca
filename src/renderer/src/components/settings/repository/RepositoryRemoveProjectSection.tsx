@@ -182,6 +182,12 @@ export function RepositoryRemoveProjectSection({
   ].join(' · ')
 
   const confirmRemove = (): void => {
+    // Terminals opened elsewhere while confirming must be shown before they are closed.
+    const currentTerminalCount = countSetupTerminalTabs(useAppStore.getState(), setups)
+    if (currentTerminalCount > openTerminalCount) {
+      setOpenTerminalCount(currentTerminalCount)
+      return
+    }
     setDialogOpen(false)
     removeProject()
   }
