@@ -1,4 +1,6 @@
+import { Users } from 'lucide-react'
 import { defineFixture } from '../../component-fixtures/component-fixture'
+import { Button } from '@/components/ui/button'
 import type { CloudSetupStep } from '@/components/new-workspace/run-on/cloud-start-model'
 import { CloudSetupPage } from './CloudSetupPage'
 import { cloudSetupPageModel } from './cloud-setup-page-model'
@@ -6,9 +8,17 @@ import type { CloudSetupFlow } from './use-cloud-setup-flow'
 
 const noop = (): void => {}
 
-function flow(rows: CloudSetupStep[]): CloudSetupFlow {
+// What the app's team-switch hook supplies on "Switch to your team" (its one action).
+const switchTeamAction = (
+  <Button size="sm" variant="outline">
+    <Users aria-hidden />
+    Switch to Orca Staging Eval Team
+  </Button>
+)
+
+function flow(rows: CloudSetupStep[], teamSwitch = false): CloudSetupFlow {
   return {
-    ...cloudSetupPageModel(rows),
+    ...cloudSetupPageModel(rows, { teamSwitch }),
     busy: false,
     signingIn: false,
     signInDidNotFinish: false,
@@ -17,7 +27,7 @@ function flow(rows: CloudSetupStep[]): CloudSetupFlow {
     inBrowser: false,
     error: null,
     canManageBilling: true,
-    teamAction: null,
+    teamAction: teamSwitch ? switchTeamAction : null,
     continueInBrowser: noop,
     startTrial: noop,
     fixBilling: noop,
@@ -28,11 +38,16 @@ function flow(rows: CloudSetupStep[]): CloudSetupFlow {
   }
 }
 
-function page(rows: CloudSetupStep[], agent: 'claude' | 'codex', label: string) {
+function page(
+  rows: CloudSetupStep[],
+  agent: 'claude' | 'codex',
+  label: string,
+  teamSwitch = false
+) {
   return (
     <div className="h-[560px]">
       <CloudSetupPage
-        flow={flow(rows)}
+        flow={flow(rows, teamSwitch)}
         projectName="Hello-World"
         prompt="Fix the flaky checkout test"
         agentLabel={label}
@@ -90,5 +105,42 @@ export const githubLeft = defineFixture({
       ],
       'claude',
       'Claude'
+    )
+})
+
+/** DS-b re-run repro 1: signed out, the repository check hasn't answered: GitHub shows pending. */
+export const signedOutGithubUnknown = defineFixture({
+  width: 1000,
+  render: () =>
+    page(
+      [
+        { id: 'account', state: 'needed', need: 'sign-in', canFix: true },
+        { id: 'plan', state: 'pending', need: 'trial' },
+        { id: 'agent', state: 'optional' }
+      ],
+      'claude',
+      'Claude'
+    )
+})
+
+/** DS-b re-run repro 2: a member with no active team ("Switch to your team"): Plan shows pending. */
+export const teamSwitchPlanUnknown = defineFixture({
+  width: 1000,
+  render: () =>
+    page(
+      [
+        { id: 'account', state: 'done' },
+        {
+          id: 'team',
+          state: 'needed',
+          detail:
+            'Cloud workspaces belong to a team. Orca Staging Eval Team has a Team plan. Switch to start this workspace there.'
+        },
+        { id: 'github', state: 'needed', need: 'github', canFix: true },
+        { id: 'agent', state: 'optional' }
+      ],
+      'claude',
+      'Claude',
+      true
     )
 })
