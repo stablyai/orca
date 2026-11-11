@@ -118,7 +118,13 @@ export async function createPersistedUsageTestFixture(getPath: Mock<() => string
     project,
     state,
     writeResumable,
-    createStore: () => new ClaudeUsageStore({ getRepos: () => [], getAllWorktreeMeta: () => ({}) }),
+    createStore: () =>
+      new ClaudeUsageStore({
+        getRepos: () => [],
+        getAllWorktreeMeta: () => ({}),
+        getRememberedWorktreeDisplayNames: () => new Map(),
+        whenLoaded: async () => {}
+      }),
     decodedSources: async () => {
       const read = await readClaudeUsageSourceCache(sourceRef)
       return normalizeClaudeUsageSourceFiles(read.sources, read.verifiedSources).processedFiles

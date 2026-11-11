@@ -12,7 +12,7 @@ import type {
   MuseUsageSnapshot,
   MuseUsageSummary
 } from '../../shared/muse-usage-types'
-import type { Store } from '../persistence/loading-store/store'
+import type { UsageWorktreeSource } from '../usage/worktree-attribution/usage-worktree-metadata'
 import { UsageProviderStoreLifecycle } from '../usage/provider-lifecycle/usage-provider-store-lifecycle'
 import { splitUsageCacheFileViaWorker } from '../usage/scan-worker/usage-scan-worker-spawn'
 import {
@@ -45,7 +45,7 @@ export class MuseUsageStore extends UsageProviderStoreLifecycle<
   MuseUsagePersistedState,
   'hasAnyMuseData'
 > {
-  constructor(store: Pick<Store, 'getRepos' | 'getAllWorktreeMeta'>) {
+  constructor(store: UsageWorktreeSource) {
     super(store, {
       logTag: '[muse-usage]',
       resolveCacheFile: getMuseUsageFile,

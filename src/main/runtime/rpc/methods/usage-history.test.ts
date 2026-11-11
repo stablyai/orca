@@ -56,13 +56,16 @@ function event(day: string): CodexUsageAttributedEvent {
   }
 }
 
-function boot() {
+function boot(
+  store: Parameters<typeof startOrcadUsageHistory>[1] = {
+    getRepos: () => [],
+    getAllWorktreeMeta: () => ({}),
+    onWorktreeMetaWritten: () => () => {}
+  }
+) {
   const runtime = new OrcaRuntimeService()
-  startOrcadUsageHistory(
-    directory,
-    { getRepos: () => [], getAllWorktreeMeta: () => ({}) },
-    runtime.usageHistory,
-    (cleanup) => cleanups.push(cleanup)
+  startOrcadUsageHistory(directory, store, runtime.usageHistory, (cleanup) =>
+    cleanups.push(cleanup)
   )
   const dispatcher = new RpcDispatcher({ runtime, methods: USAGE_HISTORY_METHODS })
   return {
@@ -102,6 +105,48 @@ afterEach(async () => {
 })
 
 describe('owner historical usage RPC', () => {
+  it('keeps removed worktrees in the daemon scan after shutdown and restart', async () => {
+    const worktreeId = 'fixture-repo::/fixture/removed'
+    const meta: Record<string, { displayName: string }> = {
+      [worktreeId]: { displayName: 'Removed worktree' }
+    }
+    const store = {
+      getRepos: () => [
+        {
+          id: 'fixture-repo',
+          path: '/fixture/repo',
+          displayName: 'Fixture',
+          badgeColor: '#000000',
+          addedAt: 0
+        }
+      ],
+      getAllWorktreeMeta: () => meta,
+      onWorktreeMetaWritten: () => () => {}
+    }
+    boot(store)
+    delete meta[worktreeId]
+    await stop()
+
+    const restarted = boot(store)
+    await restarted.call('usage.setEnabled', { provider: 'codex', enabled: true })
+    expect(await restarted.call('usage.refresh', { provider: 'codex', force: true })).toMatchObject(
+      {
+        ok: true,
+        result: { lastScanError: null }
+      }
+    )
+    expect(scanCodexUsageFilesViaWorker).toHaveBeenLastCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({
+          worktreeId,
+          path: '/fixture/removed',
+          displayName: 'Removed worktree'
+        })
+      ]),
+      expect.anything()
+    )
+  })
+
   it('roundtrips optional account provenance through host RPC and disk, keeping legacy history explicitly unknown', async () => {
     vi.mocked(scanCodexUsageFilesViaWorker).mockResolvedValue(
       codexUsageAggregation.aggregate([

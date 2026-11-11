@@ -12,7 +12,7 @@ export async function installOrcadProfileRuntimeServices({
   registerCleanup
 }: {
   userDataPath: string
-  store: Pick<Store, 'getSettings' | 'getRepos' | 'getAllWorktreeMeta'>
+  store: Pick<Store, 'getSettings' | 'getRepos' | 'getAllWorktreeMeta' | 'onWorktreeMetaWritten'>
   runtime: OrcaRuntimeService
   featureReadiness: Pick<OrcadFeatureReadiness, 'open'>
   registerCleanup: (cleanup: OrcadRuntimeCleanup) => void

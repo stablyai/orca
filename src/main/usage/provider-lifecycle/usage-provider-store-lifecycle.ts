@@ -8,9 +8,11 @@ import {
   AnalyticsSessionIdStore,
   type AnalyticsSessionId
 } from '../reporting/token-usage/analytics-session-id-store'
-import type { Store } from '../../persistence/loading-store/store'
 import { UsageCacheSnapshotWriter } from '../cache/usage-cache-snapshot-writer'
-import { loadKnownUsageWorktreesByRepo } from '../worktree-attribution/usage-worktree-metadata'
+import {
+  loadKnownUsageWorktreesByRepo,
+  type UsageWorktreeSource
+} from '../worktree-attribution/usage-worktree-metadata'
 
 import {
   createWorktreeRefs,
@@ -44,14 +46,14 @@ export abstract class UsageProviderStoreLifecycle<
   private readonly inlineCache = new UsageInlineCachePreservation()
 
   constructor(
-    private readonly store: Pick<Store, 'getRepos' | 'getAllWorktreeMeta'>,
+    private readonly store: UsageWorktreeSource,
     private readonly config: UsageProviderStoreLifecycleConfig<SourceKey, State, DataPresenceKey>
   ) {
     this.writer = new UsageCacheSnapshotWriter(config.logTag, config.resolveCacheFile)
     const defaults = config.createDefaultState()
     this.schemaVersion = defaults.schemaVersion
     this.state = defaults
-    this.loaded = this.load()
+    this.loaded = Promise.all([this.load(), store.whenLoaded()]).then(() => {})
   }
 
   /** Resolves once persisted state is in memory; synchronous readers must wait for it first. */

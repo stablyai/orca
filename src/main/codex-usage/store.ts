@@ -15,7 +15,7 @@ import type {
   CodexUsageSummary
 } from '../../shared/codex-usage-types'
 import type { AutomationRunUsage } from '../../shared/automations/history/automation-run'
-import type { Store } from '../persistence/loading-store/store'
+import type { UsageWorktreeSource } from '../usage/worktree-attribution/usage-worktree-metadata'
 import type { CodexUsagePersistedState } from './types'
 import type { AutomationUsageLookupInput } from './codex-automation-run-attribution'
 import { CODEX_USAGE_SCHEMA_VERSION, codexUsageProvider } from './codex-usage-provider'
@@ -82,7 +82,7 @@ export class CodexUsageStore extends UsageProviderStoreLifecycle<
   CodexUsagePersistedState,
   'hasAnyCodexData'
 > {
-  constructor(store: Pick<Store, 'getRepos' | 'getAllWorktreeMeta'>) {
+  constructor(store: UsageWorktreeSource) {
     super(store, {
       tokenUsage: {
         provider: 'codex',

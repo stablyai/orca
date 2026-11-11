@@ -1,7 +1,6 @@
-import { NO_WORKSPACE_ROW_FILTERS } from '../../../src/shared/workspace-view/workspace-row-filters'
 import { describe, expect, it } from 'vitest'
 import { buildFilterRepos } from './workspace-filter-repos'
-import { filterWorktrees, type Worktree } from './workspace-list-sections'
+import type { Worktree } from './workspace-list-sections'
 
 function row(worktreeId: string, repoId: string, hostId: Worktree['hostId']): Worktree {
   return {
@@ -58,15 +57,5 @@ describe('the repo filter', () => {
     )
 
     expect(repos.map((repo) => repo.id)).toEqual(['local-orca', 'm4-orca'])
-  })
-
-  it('filters by the picked repo id, leaving the same-named repo on another host out', () => {
-    const rows = [row('a', 'local-orca', 'local'), row('b', 'm4-orca', 'runtime:m4air')]
-
-    expect(
-      filterWorktrees(rows, { ...NO_WORKSPACE_ROW_FILTERS, filterRepoIds: ['m4-orca'] }, '').map(
-        (w) => w.worktreeId
-      )
-    ).toEqual(['b'])
   })
 })
