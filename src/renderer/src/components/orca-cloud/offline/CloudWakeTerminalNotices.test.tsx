@@ -55,7 +55,13 @@ describe('CloudAsleepTerminalNotice', () => {
 describe('CloudWokeProcessesNotice', () => {
   it('never reruns by itself; Rerun sends only when clicked', () => {
     const onRerun = vi.fn()
-    render(<CloudWokeProcessesNotice command="pnpm dev" onRerun={onRerun} onDismiss={vi.fn()} />)
+    render(
+      <CloudWokeProcessesNotice
+        action={{ kind: 'rerun', command: 'pnpm dev' }}
+        onAction={onRerun}
+        onDismiss={vi.fn()}
+      />
+    )
     expect(screen.getByText('Woke up · processes stopped while asleep')).toBeTruthy()
     expect(screen.getByRole('button', { name: /Rerun pnpm dev/ }).getAttribute('title')).toBe(
       'pnpm dev'
@@ -63,6 +69,21 @@ describe('CloudWokeProcessesNotice', () => {
     expect(onRerun).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: /Rerun pnpm dev/ }))
     expect(onRerun).toHaveBeenCalledTimes(1)
+  })
+
+  // JA-15: an agent pane offers its Restart, never its input box as a command.
+  it('offers Restart Claude on an agent pane, with no command shown', () => {
+    const onRestart = vi.fn()
+    render(
+      <CloudWokeProcessesNotice
+        action={{ kind: 'restart', agent: 'Claude' }}
+        onAction={onRestart}
+        onDismiss={vi.fn()}
+      />
+    )
+    expect(screen.queryByRole('button', { name: /Rerun/ })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Restart Claude' }))
+    expect(onRestart).toHaveBeenCalledTimes(1)
   })
 
   it('truncates a long command in the middle, keeping both ends', () => {
@@ -77,9 +98,9 @@ describe('CloudWokeProcessesNotice', () => {
     const onDismiss = vi.fn()
     render(
       <CloudWokeProcessesNotice
-        command="pnpm dev"
+        action={{ kind: 'rerun', command: 'pnpm dev' }}
         paneLeafId="leaf-x"
-        onRerun={vi.fn()}
+        onAction={vi.fn()}
         onDismiss={onDismiss}
       />
     )

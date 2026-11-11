@@ -26,7 +26,6 @@ import {
   useWorkspaceUsesAccount
 } from '@/lib/orca-cloud/cloud-running-agent-signout'
 import {
-  beginCloudAgentRestart,
   cloudAgentRestartAttempt,
   cloudAgentRestartStartedFresh,
   dismissCloudAgentRestart,
@@ -38,7 +37,7 @@ import {
   cloudStripWidth,
   type CloudStripActions
 } from './CloudAgentSignInStrip'
-import { watchCloudAgentRestartPane } from '@/lib/orca-cloud/cloud-agent-restart-pane-watch'
+import { startCloudPaneAgentRestart } from '@/lib/orca-cloud/cloud-pane-agent-restart'
 import {
   cloudRestartAttemptModel,
   cloudRestartFreshModel,
@@ -120,11 +119,8 @@ export function CloudRunningStripPortal({
     if (!ptyId) {
       return
     }
-    // Never automatic: the person asked. The pane's own session resumes when it has one.
-    beginCloudAgentRestart(paneKey, { ...args, ptyId }, () =>
-      useAppStore.getState().queuePaneAccountRestarts([ptyId], args.agent)
-    )
-    watchCloudAgentRestartPane(paneKey, worktreeId, args.agent)
+    // The pane's own session resumes when it has one.
+    startCloudPaneAgentRestart({ paneKey, worktreeId, ptyId, ...args })
   }
   // RA-11e: a resume that found no conversation started fresh; say so for a moment, then clear.
   if (cloud && cloudAgentRestartStartedFresh(paneKey, revision)) {

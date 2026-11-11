@@ -17,22 +17,28 @@ export function truncateMiddle(text: string, max = MAX_COMMAND_CHARS): string {
   return `${text.slice(0, head)}…${text.slice(text.length - (keep - head))}`
 }
 
+/** The strip's one action: rerun a plain shell command, or restart the pane's agent. */
+export type CloudWokeAction =
+  | { kind: 'rerun'; command: string }
+  | { kind: 'restart'; agent: string }
+
 /**
  * After a wake, in a pane that was running something when the workspace went to sleep: sleep is a
  * reboot, so the process is gone. A strip at the top of the pane (it reserves its height, so it
- * never covers terminal rows) says so and offers the command back; it never runs it by itself, and
- * it goes away once the person types in the pane (JA-15).
+ * never covers terminal rows) says so and offers it back: Rerun for a shell command, or Restart
+ * for an agent (its input box is never a command). It never acts by itself, and it goes away once
+ * the person types in the pane (JA-15).
  */
 export function CloudWokeProcessesNotice({
-  command,
+  action,
   paneLeafId,
-  onRerun,
+  onAction,
   onDismiss
 }: {
-  command: string
+  action: CloudWokeAction
   /** When set, typing into this pane dismisses the strip. */
   paneLeafId?: string
-  onRerun: () => void
+  onAction: () => void
   onDismiss: () => void
 }): React.JSX.Element {
   const t = useTranslate()
@@ -54,19 +60,34 @@ export function CloudWokeProcessesNotice({
         'Woke up · processes stopped while asleep'
       )}
       primaryAction={
-        <Button
-          type="button"
-          size="xs"
-          variant="outline"
-          onClick={onRerun}
-          title={command}
-          aria-label={t('orcaCloudWorkspace.terminal.rerun', 'Rerun {{command}}', { command })}
-          data-cloud-woke-rerun=""
-        >
-          <RotateCcw />
-          {t('orcaCloudWorkspace.terminal.rerunLabel', 'Rerun')}
-          <span className="font-mono">{truncateMiddle(command)}</span>
-        </Button>
+        action.kind === 'rerun' ? (
+          <Button
+            type="button"
+            size="xs"
+            variant="outline"
+            onClick={onAction}
+            title={action.command}
+            aria-label={t('orcaCloudWorkspace.terminal.rerun', 'Rerun {{command}}', {
+              command: action.command
+            })}
+            data-cloud-woke-rerun=""
+          >
+            <RotateCcw />
+            {t('orcaCloudWorkspace.terminal.rerunLabel', 'Rerun')}
+            <span className="font-mono">{truncateMiddle(action.command)}</span>
+          </Button>
+        ) : (
+          <Button
+            type="button"
+            size="xs"
+            variant="outline"
+            onClick={onAction}
+            data-cloud-woke-restart=""
+          >
+            <RotateCcw />
+            {t('agentSignInStrip.restartAgent', 'Restart {{agent}}', { agent: action.agent })}
+          </Button>
+        )
       }
       onDismiss={onDismiss}
     />
