@@ -31,7 +31,6 @@ import {
   readRestPRCommitStatuses,
   readRestPRCheckSuites
 } from './rest-pr-check-pages'
-import { isCheckRunsPermissionDenied, readActionsJobChecks } from './actions-job-checks'
 export async function getPRChecksViaRestFallback(
   ownerRepo: GitHubApiRepository,
   headSha: string | undefined,
@@ -43,25 +42,15 @@ export async function getPRChecksViaRestFallback(
   }
   await acquire()
   try {
-    let runs: Awaited<ReturnType<typeof readRestPRCheckRuns>> = []
-    let checks: PRCheckDetail[]
-    try {
-      runs = await readRestPRCheckRuns(ownerRepo, headSha, ghOptions, Boolean(noCache))
-      checks = runs.map((run) =>
-        mapRestCheckRun({
-          ...run,
-          name: run.name ?? '',
-          html_url: run.html_url ?? '',
-          details_url: run.details_url ?? null
-        })
-      )
-    } catch (err) {
-      if (!isCheckRunsPermissionDenied(err)) {
-        throw err
-      }
-      // A fine-grained token reads Actions but never check runs: show the workflow jobs.
-      checks = await readActionsJobChecks(ownerRepo, headSha, ghOptions, Boolean(noCache))
-    }
+    const runs = await readRestPRCheckRuns(ownerRepo, headSha, ghOptions, Boolean(noCache))
+    const checks = runs.map((run) =>
+      mapRestCheckRun({
+        ...run,
+        name: run.name ?? '',
+        html_url: run.html_url ?? '',
+        details_url: run.details_url ?? null
+      })
+    )
     const checkRunNames = new Set(checks.map((check) => check.name))
     try {
       const statuses = await readRestPRCommitStatuses(

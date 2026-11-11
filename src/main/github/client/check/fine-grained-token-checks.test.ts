@@ -35,7 +35,16 @@ describe('PR checks for a token without the Checks permission', () => {
         throw forbidden(path)
       }
       if (path.includes('/actions/runs?head_sha=sha-1&')) {
-        return reply({ total_count: 1, workflow_runs: [{ id: 7 }] })
+        return reply({
+          total_count: 2,
+          workflow_runs: [
+            { id: 7, check_suite_id: 70, status: 'completed', conclusion: 'failure' },
+            { id: 8, check_suite_id: 80, status: 'completed', conclusion: 'action_required' }
+          ]
+        })
+      }
+      if (path.includes('/actions/runs/8/jobs?filter=latest&')) {
+        return reply({ total_count: 0, jobs: [] })
       }
       if (path.includes('/actions/runs/7/jobs?filter=latest&')) {
         return reply({
@@ -49,7 +58,14 @@ describe('PR checks for a token without the Checks permission', () => {
               conclusion: 'failure',
               html_url: 'https://github.com/acme/widgets/actions/runs/7/job/71'
             },
-            { id: 72, run_id: 7, name: 'compose', status: 'waiting', conclusion: null }
+            {
+              id: 72,
+              run_id: 7,
+              name: 'compose',
+              status: 'queued',
+              conclusion: null,
+              html_url: 'https://github.com/acme/widgets/actions/runs/7/job/72'
+            }
           ]
         })
       }
@@ -90,7 +106,7 @@ describe('PR checks for a token without the Checks permission', () => {
         name: 'compose',
         status: 'queued',
         conclusion: 'pending',
-        url: null,
+        url: 'https://github.com/acme/widgets/actions/runs/7/job/72',
         checkRunId: 72,
         workflowRunId: 7
       },
@@ -99,6 +115,14 @@ describe('PR checks for a token without the Checks permission', () => {
         status: 'completed',
         conclusion: 'success',
         url: null,
+        checkRunId: undefined,
+        workflowRunId: undefined
+      },
+      {
+        name: 'GitHub Actions #80',
+        status: 'completed',
+        conclusion: 'action_required',
+        url: 'https://github.com/acme/widgets/commits/sha-1/checks#check-suite-80',
         checkRunId: undefined,
         workflowRunId: undefined
       }

@@ -23,6 +23,7 @@ import {
   runCheckDetailsCall
 } from './check-details-admission-lifetime'
 import { snapshotCheckJobLogExecution } from './check-job-log-execution'
+import { isCheckRunsPermissionDenied } from './rest-pr-check-pages'
 export async function getPRCheckDetails(
   repoPath: string,
   args: {
@@ -80,12 +81,23 @@ export async function getPRCheckDetails(
     let checkRun: Record<string, unknown> | null = null
     let output: Record<string, unknown> | null = null
     let annotations: PRCheckRunDetails['annotations'] = []
-    if (args.checkRunId) {
-      const { stdout } = await fetchMetadata([
-        'api',
-        `repos/${ownerRepo.owner}/${ownerRepo.repo}/check-runs/${args.checkRunId}`
-      ])
-      const parsed: unknown = JSON.parse(stdout)
+    const checkRunStdout = args.checkRunId
+      ? await fetchMetadata([
+          'api',
+          `repos/${ownerRepo.owner}/${ownerRepo.repo}/check-runs/${args.checkRunId}`
+        ]).then(
+          ({ stdout }) => stdout,
+          (err: unknown) => {
+            // A fine-grained token still reads the workflow jobs and logs below.
+            if (!args.workflowRunId || !isCheckRunsPermissionDenied(err)) {
+              throw err
+            }
+            return null
+          }
+        )
+      : null
+    if (checkRunStdout !== null) {
+      const parsed: unknown = JSON.parse(checkRunStdout)
       checkRun =
         parsed && typeof parsed === 'object' && !Array.isArray(parsed)
           ? Object.fromEntries(Object.entries(parsed))
