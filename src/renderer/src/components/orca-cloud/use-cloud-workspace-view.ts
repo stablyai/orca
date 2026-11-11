@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { useNow } from '@/hooks/use-now'
+import { useAppStore } from '@/store'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import { useIsSleepingWorktree } from '@/components/sidebar/workspace-actions/sleep/use-worktree-sleep-state'
 import {
@@ -36,6 +37,11 @@ export function useCloudWorkspaceView(workspaceId: string): CloudWorkspaceView {
   const oomDismissed = useCloudWorkspace((s) => s.oomDismissed[workspaceId])
   const pending = useCloudWorkspace((s) => s.pending[workspaceId])
   const sleeping = useIsSleepingWorktree(workspaceId)
+  // The local VM record flips the moment this computer puts it to sleep; the last status read can
+  // still say "ready" for a while, which dropped "Asleep ·" from the row (RA-13).
+  const vmSuspended = useAppStore(
+    (state) => state.ephemeralVmRuntimesByWorkspaceId?.[workspaceId]?.status === 'suspended'
+  )
   // Sleep and wake run through the desktop; re-read when the local record flips. Remounts of
   // virtualized sidebar rows reuse a read from the last 30 s.
   useEffect(() => {
@@ -43,20 +49,26 @@ export function useCloudWorkspaceView(workspaceId: string): CloudWorkspaceView {
       void refreshCloudWorkspaceStatusIfStale(workspaceId)
     }
   }, [isCloud, sleeping, workspaceId])
+  useEffect(() => {
+    if (isCloud && vmSuspended) {
+      void refreshCloudWorkspaceStatus(workspaceId)
+    }
+  }, [isCloud, vmSuspended, workspaceId])
   // Only an unsettled wake needs a clock (it can go stale without an event); settled wakes are
   // removed from the store, so idle workspaces run no timer.
   const ticking = isCloud && wake !== undefined
   const now = useNow(5_000, ticking)
+  const derived = isCloud
+    ? deriveCloudDotState({
+        status: entry?.status ?? null,
+        wake,
+        sleeping,
+        now: Math.max(now, wake?.at ?? 0)
+      })
+    : 'unknown'
   return {
     isCloud,
-    state: isCloud
-      ? deriveCloudDotState({
-          status: entry?.status ?? null,
-          wake,
-          sleeping,
-          now: Math.max(now, wake?.at ?? 0)
-        })
-      : 'unknown',
+    state: derived === 'running' && vmSuspended ? 'sleeping' : derived,
     entry,
     wake,
     oom: visibleOom(oomEvent, oomDismissed),

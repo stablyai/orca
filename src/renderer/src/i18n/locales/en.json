@@ -23487,7 +23487,8 @@
         "noTerminals": "No terminal output was saved.",
         "readOnly": "Read-only",
         "terminalOutput": "Saved output of {{title}}",
-        "noGit": "No source control state was saved."
+        "noGit": "No source control state was saved.",
+        "terminalN": "Terminal {{n}}"
       },
       "read": {
         "wakeToContinue": "Wake to continue",

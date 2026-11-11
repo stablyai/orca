@@ -125,8 +125,14 @@ export function CloudWorkspaceOfflineView(props: CloudOfflineViewProps): React.J
                   </p>
                 ) : (
                   <div className="flex flex-col gap-3">
-                    {snapshot.terminals.map((terminal) => {
-                      const title = terminal.title ?? terminal.handle
+                    {snapshot.terminals.map((terminal, index) => {
+                      // The tab's title, else "Terminal N": never the terminal's internal id (RA-13).
+                      const title =
+                        terminal.title && !terminal.title.startsWith('term_')
+                          ? terminal.title
+                          : t('components.orcaCloud.offline.terminalN', 'Terminal {{n}}', {
+                              n: index + 1
+                            })
                       return (
                         <figure
                           key={terminal.handle}
