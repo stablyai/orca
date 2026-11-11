@@ -612,6 +612,7 @@ import {
   UpdatePaneLayout,
   WorktreeTabSelector
 } from './session-tabs-schemas-params'
+import { SessionReadTerminalHistoryParams } from './session-terminal-history-params'
 import { SessionReadTerminalScrollbackParams } from './session-terminal-scrollback-params'
 import { SidebarSessionBeginParams } from './sidebar-session-params'
 import {
@@ -1486,6 +1487,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'runtime.clientEvents.subscribe': ClientEventsSubscribeParams,
   'runtime.clientEvents.unsubscribe': ClientEventsUnsubscribeParams,
   'runtimeEnvironment.wakeRecipeVm': RecipeVmWakeParams,
+  'session.readTerminalHistory': SessionReadTerminalHistoryParams,
   'session.readTerminalScrollback': SessionReadTerminalScrollbackParams,
   'session.tabs.activate': ActivateTab,
   'session.tabs.close': CloseTab,

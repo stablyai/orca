@@ -5,6 +5,7 @@ import type { TerminalColorOverrides } from './terminal-themes/terminal-color-ov
 import type { TerminalLayoutSnapshot, TerminalTab } from './workspace-layout/terminal-tab-types'
 import type { TuiAgent } from './agent-launch/catalog/tui-agent'
 import type { StructuredAgentId } from './agent-session/lifecycle/agent-session-provider-handle'
+import type { RetainedTerminalStart } from './workspace-layout/retained-terminal-start'
 
 export type RuntimeMobileSessionTerminalTab = {
   type: 'terminal'
@@ -144,9 +145,9 @@ export type RuntimeMobileSessionSnapshotTab =
   | RuntimeMobileSessionBrowserTab
   | RuntimeMobileSessionAgentTab
 
-export type RuntimeMobileSessionTerminalClientTab =
-  | (RuntimeMobileSessionTerminalTab & { status: 'pending-handle'; terminal: null })
-  | (RuntimeMobileSessionTerminalTab & { status: 'ready'; terminal: string })
+export type RuntimeMobileSessionTerminalClientTab = RuntimeMobileSessionTerminalTab & {
+  retainedTerminalStart?: RetainedTerminalStart
+} & ({ status: 'pending-handle'; terminal: null } | { status: 'ready'; terminal: string })
 
 export type RuntimeMobileSessionClientTab =
   | RuntimeMobileSessionTerminalClientTab

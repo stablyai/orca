@@ -11,9 +11,11 @@ import type { RuntimeTerminalCreate } from '../../../../../shared/runtime-termin
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type { SessionOptionValue } from '../../../../../shared/native-chat/input/native-chat-session-options'
 import type { RuntimeCapability } from '../../../../../shared/protocol-version'
+import type { NewGroupSplit } from '../../../../../shared/workspace-layout/workspace-layout-command-types'
 
 export type WebRuntimeTerminalCreateOutcome =
   | { status: 'created' }
+  | { status: 'retained' }
   | { status: 'failed'; message: string }
 
 export type CreateWebRuntimeSessionTerminalArgs = {
@@ -21,6 +23,9 @@ export type CreateWebRuntimeSessionTerminalArgs = {
   environmentId?: string | null
   afterTabId?: string
   targetGroupId?: string
+  split?: NewGroupSplit
+  initialSize?: { cols: number; rows: number }
+  clientMutationId?: string
   command?: string
   /** The Windows shell the terminal runs as, never typed into the host default shell. */
   shell?: string

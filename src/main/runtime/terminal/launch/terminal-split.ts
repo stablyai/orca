@@ -36,6 +36,8 @@ export abstract class OrcaRuntimeWithSplitTerminal extends OrcaRuntimeWithStopEx
     opts: {
       direction?: 'horizontal' | 'vertical'
       command?: string
+      cwd?: string
+      initialSize?: { cols: number; rows: number }
       env?: Record<string, string>
       envToDelete?: string[]
       activate?: boolean
@@ -74,7 +76,8 @@ export abstract class OrcaRuntimeWithSplitTerminal extends OrcaRuntimeWithStopEx
         { worktreeId: leaf.worktreeId, tabId: leaf.tabId, leafId: leaf.leafId },
         {
           direction,
-          ...(cwd ? { cwd } : {}),
+          ...((opts.cwd ?? cwd) ? { cwd: opts.cwd ?? cwd ?? undefined } : {}),
+          ...(opts.initialSize ? { initialSize: opts.initialSize } : {}),
           command: opts.command,
           env: opts.env,
           envToDelete: opts.envToDelete,

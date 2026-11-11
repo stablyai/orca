@@ -10,6 +10,12 @@ import {
 } from '../windows-terminal-shell'
 import { TERMINAL_PANE_SPLIT_SOURCES } from '../feature-education-telemetry'
 import { OptionalExecutionHostId } from './worktree-params'
+import { NewGroupSplit } from './workspace-layout-terminal-tab-params'
+
+export const TerminalInitialSize = z.object({
+  cols: z.number().int().min(1).max(1000),
+  rows: z.number().int().min(1).max(500)
+})
 
 // Refuse at the authoritative host boundary instead of returning an opaque relay spawn failure.
 export const WindowsShellOverrideParam = z
@@ -240,6 +246,11 @@ export const ResumeProviderSessionParam = z.object({
 
 export const TerminalCreateParams = z.object({
   worktree: OptionalString,
+  targetGroupId: OptionalString,
+  afterTabId: OptionalString,
+  split: NewGroupSplit,
+  initialSize: TerminalInitialSize.optional(),
+  viewMode: z.enum(['terminal', 'chat']).optional(),
   clientMutationId: z.string().min(1).max(128).optional(),
   reconcileExisting: z.boolean().optional(),
   command: OptionalString,
@@ -295,6 +306,8 @@ export const TerminalSplit = z
       .optional(),
     command: OptionalString,
     env: z.record(z.string(), z.string()).optional(),
+    envToDelete: z.array(z.string().min(1).max(256)).max(32).optional(),
+    activate: z.boolean().optional(),
     telemetrySource: z.enum(TERMINAL_PANE_SPLIT_SOURCES).optional(),
     // Timed-out split identity, gated on TERMINAL_SPLIT_RETRY_RUNTIME_CAPABILITY; reject blank rather than treating it as a fresh split.
     retrySplit: z.string().min(1, 'Missing split id').optional(),
@@ -308,12 +321,7 @@ export const TerminalSplit = z
       .optional(),
     newLeafId: OptionalString,
     cwd: OptionalString,
-    initialSize: z
-      .object({
-        cols: z.number().int().min(1).max(1000),
-        rows: z.number().int().min(1).max(500)
-      })
-      .optional()
+    initialSize: TerminalInitialSize.optional()
   })
   .superRefine((params, ctx) => {
     if (!params.terminal && !params.pane) {

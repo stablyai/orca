@@ -1,7 +1,10 @@
+import { emptySplitGroup, insertSplitGroup } from '@/store/slices/tabs/tabs-group-actions'
+import type { CreateWebRuntimeSessionTerminalOnHostArgs } from '../creation/terminal-create-contracts'
 import { insertUnifiedTabAfterAnchor } from '../../../lib/workspace/tabs/unified-tab-anchor-insertion'
 import { useAppStore } from '../../../store/index'
 import {
   forgetWebSessionTerminalPlacement,
+  recordWebSessionTerminalPlacement,
   webTerminalPlacementParentTabId
 } from './web-session-terminal-placement'
 import {
@@ -25,7 +28,12 @@ export async function settleWebRuntimeTerminalPlacement(
   environmentId: string,
   worktreeId: string,
   hostTabId: string,
-  placement: { groupId?: string; afterTabId?: string; activate: boolean }
+  placement: {
+    groupId?: string
+    afterTabId?: string
+    activate: boolean
+    canActivate?: () => boolean
+  }
 ): Promise<void> {
   const unifiedTabId = toWebTerminalSurfaceTabId(hostTabId)
   const findTab = () =>
@@ -58,7 +66,7 @@ export async function settleWebRuntimeTerminalPlacement(
     if (tab.groupId !== targetGroup.id) {
       // Snapshot may beat placement recording; repair through the same client-owned move as user drags.
       state.moveUnifiedTabToGroup(unifiedTabId, targetGroup.id, {
-        activate: placement.activate,
+        activate: placement.activate && placement.canActivate?.() !== false,
         recordInteraction: false
       })
     }
@@ -68,5 +76,46 @@ export async function settleWebRuntimeTerminalPlacement(
     }
   } finally {
     forgetWebSessionTerminalPlacement({ environmentId, worktreeId, hostTabId })
+  }
+}
+
+export function projectAcceptedWebRuntimeSplitGroup(
+  args: Pick<CreateWebRuntimeSessionTerminalOnHostArgs, 'worktreeId' | 'split'>,
+  supported: boolean,
+  targetGroupId: string | undefined
+): void {
+  if (supported && args.split && targetGroupId) {
+    const newGroupId = targetGroupId
+    useAppStore.setState((state) =>
+      state.groupsByWorktree[args.worktreeId]?.some((group) => group.id === newGroupId)
+        ? state
+        : insertSplitGroup(
+            state,
+            args.worktreeId,
+            {
+              sourceGroupId: args.split!.besideGroupId,
+              splitDirection: args.split!.direction,
+              activate: false
+            },
+            emptySplitGroup(args.worktreeId, newGroupId)
+          )
+    )
+  }
+}
+
+export function recordAcceptedWebRuntimeTerminalPlacement(
+  args: Pick<CreateWebRuntimeSessionTerminalOnHostArgs, 'worktreeId'>,
+  environmentId: string,
+  createdTabId: string | undefined,
+  targetGroupId: string | undefined
+): void {
+  if (targetGroupId && createdTabId) {
+    // Host drops client-minted group IDs; client placement must land the mirrored tab in the requested pane.
+    recordWebSessionTerminalPlacement({
+      environmentId,
+      worktreeId: args.worktreeId,
+      hostTabId: webTerminalPlacementParentTabId(createdTabId),
+      groupId: targetGroupId
+    })
   }
 }

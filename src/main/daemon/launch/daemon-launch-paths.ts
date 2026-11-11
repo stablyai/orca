@@ -19,11 +19,16 @@ export function getDaemonRuntimeDir(): string {
 }
 
 export function getDaemonHistoryDir(): string {
-  const dir = join(getAppEnvironment().getPath('userData'), 'terminal-history')
+  const dir = daemonHistoryDirPath()
   ensurePrivateDir(dir)
   // Schedule one deferred permission sweep per host, including WSL and SSH servers.
   void scheduleTerminalHistoryPermissionRepair(dir)
   return dir
+}
+
+/** Viewing ended output must not create directories or schedule permission repair. */
+export function daemonHistoryDirPath(): string {
+  return join(getAppEnvironment().getPath('userData'), 'terminal-history')
 }
 
 export function getDaemonEntryPath(): string {

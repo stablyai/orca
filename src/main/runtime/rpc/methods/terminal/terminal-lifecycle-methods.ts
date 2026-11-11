@@ -1,3 +1,4 @@
+import { TERMINAL_FRESH_ADMISSION_PLACEMENT_RUNTIME_CAPABILITY } from '../../../../../shared/session-tabs-runtime-capabilities'
 import { terminalCreateFeatureRequirement } from '../../agent-launch-feature-requirement'
 import { terminalImageViewerSupported } from '../../../terminal/launch/terminal-image-viewer-env'
 import { TERMINAL_WORKSPACE_STOP_METHODS } from './terminal-workspace-stop-methods'
@@ -90,6 +91,12 @@ export const TERMINAL_LIFECYCLE_METHODS = [
             // A CLI command (typed or an agent's) or a window's create is the user's act.
             wslUserAct: true,
             command: params.command,
+            cwd: params.cwd,
+            targetGroupId: params.targetGroupId,
+            afterTabId: params.afterTabId,
+            split: params.split,
+            initialSize: params.initialSize,
+            viewMode: params.viewMode,
             terminalImageViewerSupported: terminalImageViewerSupported(context),
             ...(params.shell ? { shellOverride: params.shell } : {}),
             startupCommandDelivery: params.startupCommandDelivery,
@@ -118,6 +125,16 @@ export const TERMINAL_LIFECYCLE_METHODS = [
             presentation,
             tabId: params.tabId,
             leafId: params.leafId,
+            ...((context.caller?.kind === 'desktop' ||
+              (context.caller?.kind === 'paired-device' &&
+                context.clientKind === 'runtime' &&
+                context.clientCapabilities?.includes(
+                  TERMINAL_FRESH_ADMISSION_PLACEMENT_RUNTIME_CAPABILITY
+                ))) &&
+            params.tabId &&
+            params.leafId
+              ? { keepPaneOnStartFailure: true as const }
+              : {}),
             ...(params.spawnIntent ? { spawnIntent: params.spawnIntent } : {}),
             // A paired window starts its mounted panes here, activation spawns included, and can't tell them apart.
             ...(clientKind === 'runtime' ? { reopensPane: true as const } : {}),
@@ -145,7 +162,7 @@ export const TERMINAL_LIFECYCLE_METHODS = [
     name: 'terminal.split',
     permission: 'workspace',
     params: TerminalSplit,
-    handler: async (params, { runtime }) => ({
+    handler: async (params, { runtime, caller, clientKind, clientCapabilities }) => ({
       split:
         params.pane && !params.terminal
           ? await runtime.splitTerminalPane(params.pane, {
@@ -155,8 +172,15 @@ export const TERMINAL_LIFECYCLE_METHODS = [
               initialSize: params.initialSize,
               command: params.command,
               env: params.env,
+              envToDelete: params.envToDelete,
+              activate: params.activate,
               // The window's split shows why its start failed, as its own spawn did.
-              keepPaneOnStartFailure: true,
+              ...(caller?.kind === 'desktop' ||
+              (caller?.kind === 'paired-device' &&
+                clientKind === 'runtime' &&
+                clientCapabilities?.includes(TERMINAL_FRESH_ADMISSION_PLACEMENT_RUNTIME_CAPABILITY))
+                ? { keepPaneOnStartFailure: true }
+                : {}),
               wslUserAct: true
             })
           : // The schema requires a handle when no pane is named.
@@ -164,6 +188,10 @@ export const TERMINAL_LIFECYCLE_METHODS = [
               direction: params.direction,
               command: params.command,
               env: params.env,
+              envToDelete: params.envToDelete,
+              activate: params.activate,
+              cwd: params.cwd,
+              initialSize: params.initialSize,
               telemetrySource: params.telemetrySource,
               retrySplit: params.retrySplit,
               wslUserAct: true

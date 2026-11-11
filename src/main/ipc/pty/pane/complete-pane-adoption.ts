@@ -130,6 +130,7 @@ export async function completePaneAdoption(
       args.store,
       claim,
       { ...result, isReattach: true },
+      {},
       result.id,
       args.worktreeId,
       args.connectionId ?? null,

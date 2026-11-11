@@ -76,7 +76,14 @@ export function installTerminalPaneMountEvents(args: {
       }
       const splitOptions = {
         ...(detail.newLeafId ? { leafId: detail.newLeafId } : {}),
-        ...(detail.ptyId ? { ptyId: detail.ptyId } : {})
+        ...(detail.ptyId ? { ptyId: detail.ptyId } : {}),
+        ...(detail.ptyId && detail.newLeafId
+          ? {
+              activate:
+                useAppStore.getState().terminalLayoutsByTabId[deps.tabId]?.activeLeafId ===
+                detail.newLeafId
+            }
+          : {})
       }
       if (detail.command) {
         const createdPane = splitPaneWithOneShotStartup(ptyDeps, { command: detail.command }, () =>

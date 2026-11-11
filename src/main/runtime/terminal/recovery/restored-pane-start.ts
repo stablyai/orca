@@ -1,3 +1,4 @@
+import type { PreparedPaneReplacement } from './prepared-pane-replacement'
 // Share one main-owned restored-pane start across CLI, mobile and orchestration triggers; resume only from this workspace's stored terminal/agent.
 
 import { isPtyIdMintedForAnotherWorkspace } from './foreign-pane-bindings'
@@ -14,6 +15,7 @@ export type RestoredPaneStartPlan = {
 
 /** Who asked, which the start keeps: an automatic probe is refused for a slept worktree. */
 export type RestoredPaneTrigger = {
+  preparedReplacement?: PreparedPaneReplacement
   automatic?: boolean
   /** A user's own tab open or Start; without it a stopped WSL distro holds the start. */
   wslUserAct?: true
@@ -59,20 +61,24 @@ export class RestoredPaneStarter {
     const key = makePaneKey(pane.tabId, pane.leafId)
     const running = this.inFlight.get(key)
     if (running) {
+      trigger.preparedReplacement?.releaseUnused()
       return running
     }
     const bound = this.ports.boundPtyId(pane)
     if (bound === null) {
       this.started.delete(key)
+      trigger.preparedReplacement?.releaseUnused()
       return Promise.resolve(null)
     }
     if (this.isOwnLive(pane, bound)) {
       this.started.delete(key)
+      trigger.preparedReplacement?.releaseUnused()
       return Promise.resolve({ id: bound })
     }
     const started = this.started.get(key)
     // Why: until the started terminal's binding is written, the stored layout still names the old one.
     if (started && this.ports.isLive(started.id)) {
+      trigger.preparedReplacement?.releaseUnused()
       return Promise.resolve(started)
     }
     this.started.delete(key)
@@ -88,10 +94,12 @@ export class RestoredPaneStarter {
         if (this.isOwnLive(pane, winner)) {
           return { id: winner }
         }
-        this.ports.failed?.(pane, error)
-        throw error
+        const failure = trigger.preparedReplacement?.settleFailure(error) ?? error
+        this.ports.failed?.(pane, failure)
+        throw failure
       })
       .finally(() => {
+        trigger.preparedReplacement?.releaseUnused()
         if (this.inFlight.get(key) === start) {
           this.inFlight.delete(key)
         }

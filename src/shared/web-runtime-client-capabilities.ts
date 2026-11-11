@@ -1,3 +1,4 @@
+import { TERMINAL_FRESH_ADMISSION_PLACEMENT_RUNTIME_CAPABILITY } from './session-tabs-runtime-capabilities'
 import { GIT_REVERT_CONFLICT_CLIENT_CAPABILITY } from './git/commands/git-commit-action'
 import { GIT_GRAPH_TAB_CAPABILITY } from './source-control/runtime/git-graph-capabilities'
 import { STRUCTURED_AGENT_SESSION_RENDERER_CLIENT_CAPABILITIES } from './agent-session/structured-agent-session-renderer-client-capabilities'
@@ -20,6 +21,7 @@ import {
 
 /** What the browser client advertises in its handshake with the host it is paired to. */
 export const WEB_RUNTIME_CLIENT_CAPABILITIES = [
+  TERMINAL_FRESH_ADMISSION_PLACEMENT_RUNTIME_CAPABILITY,
   GIT_GRAPH_TAB_CAPABILITY,
   GIT_REVERT_CONFLICT_CLIENT_CAPABILITY,
   // The desktop's chat, over the same `agentSession.*` calls.

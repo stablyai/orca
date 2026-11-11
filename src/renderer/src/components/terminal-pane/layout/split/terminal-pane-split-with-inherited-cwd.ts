@@ -10,7 +10,6 @@ import {
 import type { PtyTransport } from '../../pty-transport/pty-transport-types'
 import { resolveSplitCwd, type PaneCwdMap } from './resolve-split-cwd'
 import { recordCreatedTerminalPaneSplit } from './terminal-pane-split-completion'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
 import {
   splitPaneFirstSize,
   splitPaneInMain,
@@ -37,26 +36,36 @@ export function splitTerminalPaneWithInheritedCwd(args: SplitArgs): void {
   const ptyId =
     args.paneTransports.get(args.pane.id)?.getPtyId() ??
     readHostPublishedSplitSourcePtyId(sourcePane)
-  if (splitWebRuntimeTerminal(ptyId, args.direction, args.source, sourcePane)) {
+  const cwd = splitCwd(args, ptyId)
+  const initialSize = splitPaneFirstSize(args.pane.terminal, args.direction)
+  if (
+    splitWebRuntimeTerminal(ptyId, args.direction, args.source, sourcePane, {
+      cwd: 'cwd' in cwd ? cwd.cwd : cwd.cwdPromise,
+      initialSize
+    })
+  ) {
     return
   }
-  // Main starts the split and frames draw it; handle-less server-framed panes use their paired main.
-  if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-    const cwd = splitCwd(args, ptyId)
-    const asToday = (): void => splitLocally(args, () => cwd)
-    const request: SplitInMainRequest = {
-      worktreeId: args.worktreeId,
-      tabId: args.tabId,
-      sourceLeafId: args.pane.leafId,
-      direction: args.direction,
-      cwd: 'cwd' in cwd ? cwd.cwd : cwd.cwdPromise,
-      initialSize: splitPaneFirstSize(args.pane.terminal, args.direction),
-      telemetry: { source: args.source }
-    }
-    if (splitPaneInMain(request, asToday) || splitServerPane(request)) {
-      return
+  const asToday = (): void => {
+    if (isHostTabPane(sourcePane)) {
+      notifyHostTabSplitRefused(sourcePane)
+    } else {
+      splitLocally(args, () => cwd)
     }
   }
+  const request: SplitInMainRequest = {
+    worktreeId: args.worktreeId,
+    tabId: args.tabId,
+    sourceLeafId: args.pane.leafId,
+    direction: args.direction,
+    cwd: 'cwd' in cwd ? cwd.cwd : cwd.cwdPromise,
+    initialSize,
+    telemetry: { source: args.source }
+  }
+  if (splitPaneInMain(request, asToday) || splitServerPane(request, asToday)) {
+    return
+  }
+
   if (isHostTabPane(sourcePane)) {
     notifyHostTabSplitRefused(sourcePane)
     return

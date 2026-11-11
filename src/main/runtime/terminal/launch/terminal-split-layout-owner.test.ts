@@ -125,6 +125,29 @@ describe('a split of a pane the window draws, in a layout-owner build', () => {
     expect(split.tabId).toBe(TAB_ID)
   })
 
+  it('splits with the source tab’s explicit shell instead of the current default', async () => {
+    const { runtime, getSession, setSession, spawn } = setup()
+    const session = getSession()
+    setSession({
+      ...session,
+      tabsByWorktree: {
+        ...session.tabsByWorktree,
+        [TEST_WORKTREE_ID]: session.tabsByWorktree[TEST_WORKTREE_ID]!.map((tab) => ({
+          ...tab,
+          shellOverride: 'powershell.exe'
+        }))
+      }
+    })
+    await runtime.splitTerminalPane(
+      { worktreeId: TEST_WORKTREE_ID, tabId: TAB_ID, leafId: HEADLESS_LEAF_ID },
+      { direction: 'vertical', newLeafId: NEW_LEAF_ID, keepPaneOnStartFailure: true }
+    )
+    expect(spawn.mock.calls[0]![0]).toMatchObject({
+      shellOverride: 'powershell.exe',
+      cwd: '/repo/src'
+    })
+  })
+
   it('a split no one asked to see leaves the phones’ active tab alone; one asked for takes it', async () => {
     const { runtime, handle } = setup()
     const listed = () => runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)

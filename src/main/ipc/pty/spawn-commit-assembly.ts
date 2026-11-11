@@ -56,6 +56,9 @@ export type PtySpawnCommitState = {
     | 'telemetry'
   >
   result: PtySpawnResult
+  stablePaneBindingPersisted?: boolean
+  settledSpawnOutcome?: PtySpawnOutcome
+  preservesEndedPane?: boolean
   provider: IPtyProvider
   cwd: string | undefined
   metadataLeafId: string | null
@@ -151,6 +154,7 @@ export async function commitPtySpawn(input: PtySpawnCommitInput): Promise<PtySpa
       registration.store,
       state.pendingRegistrationClaim,
       result,
+      { preserveEndedBinding: state.preservesEndedPane },
       result.id,
       registration.worktreeId,
       null,
@@ -189,11 +193,11 @@ export async function commitPtySpawn(input: PtySpawnCommitInput): Promise<PtySpa
         state.pendingRegistrationClaim
       )
       state.pendingRegistrationPtyId = null
-      return {
+      return (state.settledSpawnOutcome = {
         kind: 'registration-exited',
         result: input.response,
         ...(terminalStartFailure ? { terminalStartFailure } : {})
-      }
+      })
     }
   } else if (state.pendingRegistrationPtyId) {
     runtime?.cancelPendingPtyRegistration?.(
@@ -203,6 +207,7 @@ export async function commitPtySpawn(input: PtySpawnCommitInput): Promise<PtySpa
     )
     state.pendingRegistrationPtyId = null
   }
+  state.settledSpawnOutcome = { kind: 'committed', result: input.response }
   return publishCommittedPtySpawn(input)
 }
 
@@ -223,6 +228,7 @@ async function commitAdoptedAgentSession(
     input.registration.store,
     state.pendingRegistrationClaim,
     adoptedResult,
+    {},
     result.id,
     surface.worktreeId,
     null,
@@ -237,6 +243,10 @@ async function commitAdoptedAgentSession(
   )
   if (rejectedRegistration) {
     return rejectedRegistration
+  }
+  state.settledSpawnOutcome = {
+    kind: 'adopted',
+    result: { ...input.response, isReattach: true, agentSessionEnsure: adopted }
   }
   runtime?.noteTerminalSpawnCommit?.(result, input.expectedSourceBinding)
   runtime?.registerPreAllocatedHandleForPty(result.id, surface.terminalHandle)

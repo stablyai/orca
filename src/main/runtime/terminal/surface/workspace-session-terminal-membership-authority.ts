@@ -1,11 +1,10 @@
-import type { Tab, TabGroup } from '../../../../shared/tab-types'
 import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode
 } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
-import { pruneTabGroupLayoutAfterRetirement } from './mobile-session-terminal-retirement'
+import { rebaseTerminalGroupPresentation } from './workspace-session-terminal-group-rebase'
 
 function collectLeafIds(node: TerminalPaneLayoutNode | null, ids: Set<string>): void {
   if (!node) {
@@ -51,61 +50,6 @@ function rebaseLayout(
       ...current.ptyIdsByLeafId
     }
   }
-}
-
-function terminalUnifiedTabMatches(tab: Tab, terminalTabIds: ReadonlySet<string>): boolean {
-  return (
-    tab.contentType === 'terminal' &&
-    (terminalTabIds.has(tab.id) || terminalTabIds.has(tab.entityId))
-  )
-}
-
-function rebaseUnifiedTabs(
-  candidate: readonly Tab[],
-  current: readonly Tab[],
-  terminalTabIds: ReadonlySet<string>
-): Tab[] {
-  const result = candidate.filter(
-    (tab) => tab.contentType !== 'terminal' || terminalUnifiedTabMatches(tab, terminalTabIds)
-  )
-  const representedTerminalIds = new Set(
-    result.flatMap((tab) => (tab.contentType === 'terminal' ? [tab.id, tab.entityId] : []))
-  )
-  for (const tab of current) {
-    if (
-      terminalUnifiedTabMatches(tab, terminalTabIds) &&
-      !representedTerminalIds.has(tab.id) &&
-      !representedTerminalIds.has(tab.entityId)
-    ) {
-      result.push(tab)
-    }
-  }
-  return result
-}
-
-function rebaseTabGroups(
-  groups: readonly TabGroup[],
-  validTabIds: ReadonlySet<string>
-): TabGroup[] {
-  return groups.flatMap((group) => {
-    const tabOrder = group.tabOrder.filter((tabId) => validTabIds.has(tabId))
-    if (tabOrder.length === 0) {
-      return []
-    }
-    const tabIds = new Set(tabOrder)
-    const activeTabId =
-      group.activeTabId && tabIds.has(group.activeTabId) ? group.activeTabId : (tabOrder[0] ?? null)
-    const recentTabIds = group.recentTabIds?.filter((tabId) => tabIds.has(tabId))
-    return [
-      {
-        ...group,
-        tabOrder,
-        activeTabId,
-        // Keep empty explicitly or the group spread restores stale tab ids.
-        ...(group.recentTabIds ? { recentTabIds: recentTabIds ?? [] } : {})
-      }
-    ]
-  })
 }
 
 function rebaseIncarnationBindings(
@@ -210,28 +154,26 @@ export function rebaseWorkspaceSessionTerminalMembership(
         delete terminalLayoutsByTabId[tabId]
       }
     }
-    const rebasedUnifiedTabs = rebaseUnifiedTabs(
-      incoming.unifiedTabs?.[worktreeId] ?? [],
-      prior.unifiedTabs?.[worktreeId] ?? [],
+    const presentation = rebaseTerminalGroupPresentation(
+      incoming,
+      prior,
+      worktreeId,
       terminalTabIds
     )
+    const {
+      unifiedTabs: rebasedUnifiedTabs,
+      groups: rebasedGroups,
+      layout: rebasedGroupLayout,
+      validIds: validTabIds
+    } = presentation
     if (includeUnifiedTabs || rebasedUnifiedTabs.length > 0) {
       unifiedTabs[worktreeId] = rebasedUnifiedTabs
       includeUnifiedTabs = true
     }
-    const validTabIds = new Set([...terminalTabIds, ...rebasedUnifiedTabs.map((tab) => tab.id)])
-    const rebasedGroups = rebaseTabGroups(
-      incoming.tabGroups?.[worktreeId] ?? prior.tabGroups?.[worktreeId] ?? [],
-      validTabIds
-    )
     if (includeTabGroups || rebasedGroups.length > 0) {
       tabGroups[worktreeId] = rebasedGroups
       includeTabGroups = true
     }
-    const rebasedGroupLayout = pruneTabGroupLayoutAfterRetirement(
-      incoming.tabGroupLayouts?.[worktreeId] ?? prior.tabGroupLayouts?.[worktreeId],
-      new Set(rebasedGroups.map((group) => group.id))
-    )
     if (rebasedGroupLayout) {
       tabGroupLayouts[worktreeId] = rebasedGroupLayout
       includeTabGroupLayouts = true
@@ -264,4 +206,69 @@ export function rebaseWorkspaceSessionTerminalMembership(
   return rebasedMembership
     ? { ...next, terminalPtyIncarnationsByPaneKey: rebaseIncarnationBindings(next, prior) }
     : next
+}
+
+/** Group/unified patches rebase only their changed workspace buckets, without pane normalization. */
+export function rebaseWorkspaceSessionTerminalGroupPatch(
+  incoming: WorkspaceSessionState,
+  prior: WorkspaceSessionState,
+  worktreeIds: ReadonlySet<string>
+): WorkspaceSessionState {
+  const originalUnifiedTabs = incoming.unifiedTabs ?? {}
+  const originalGroups = incoming.tabGroups ?? {}
+  const originalLayouts = incoming.tabGroupLayouts ?? {}
+  let unifiedTabs = originalUnifiedTabs
+  let tabGroups = originalGroups
+  let tabGroupLayouts = originalLayouts
+  for (const worktreeId of worktreeIds) {
+    const repoId = getRepoIdFromWorktreeId(worktreeId)
+    const revision = prior.terminalTopologyRevisionByRepoId?.[repoId] ?? 0
+    if (revision <= 0 || (incoming.terminalTopologyRevisionByRepoId?.[repoId] ?? 0) > revision) {
+      continue
+    }
+    const presentation = rebaseTerminalGroupPresentation(
+      incoming,
+      prior,
+      worktreeId,
+      new Set((prior.tabsByWorktree?.[worktreeId] ?? []).map((tab) => tab.id))
+    )
+    if (
+      presentation.unifiedTabs !== unifiedTabs?.[worktreeId] &&
+      (unifiedTabs?.[worktreeId] !== undefined || presentation.unifiedTabs.length > 0)
+    ) {
+      if (unifiedTabs === originalUnifiedTabs) {
+        unifiedTabs = { ...unifiedTabs }
+      }
+      unifiedTabs[worktreeId] = presentation.unifiedTabs
+    }
+    if (
+      presentation.groups !== tabGroups?.[worktreeId] &&
+      (tabGroups?.[worktreeId] !== undefined || presentation.groups.length > 0)
+    ) {
+      if (tabGroups === originalGroups) {
+        tabGroups = { ...tabGroups }
+      }
+      tabGroups[worktreeId] = presentation.groups
+    }
+    if ((presentation.layout ?? undefined) !== tabGroupLayouts?.[worktreeId]) {
+      if (tabGroupLayouts === originalLayouts) {
+        tabGroupLayouts = { ...tabGroupLayouts }
+      }
+      if (presentation.layout) {
+        tabGroupLayouts[worktreeId] = presentation.layout
+      } else {
+        delete tabGroupLayouts[worktreeId]
+      }
+    }
+  }
+  return unifiedTabs === originalUnifiedTabs &&
+    tabGroups === originalGroups &&
+    tabGroupLayouts === originalLayouts
+    ? incoming
+    : {
+        ...incoming,
+        ...(unifiedTabs !== originalUnifiedTabs ? { unifiedTabs } : {}),
+        ...(tabGroups !== originalGroups ? { tabGroups } : {}),
+        ...(tabGroupLayouts !== originalLayouts ? { tabGroupLayouts } : {})
+      }
 }

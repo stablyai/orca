@@ -6,7 +6,12 @@ import { sleepingAgentLaunchConfigSchema } from '../workspace-session/workspace-
 import type { TuiAgent } from '../agent-launch/catalog/tui-agent'
 import { isTuiAgent } from '../agent-launch/catalog/tui-agent-config'
 import { LEGACY_MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH } from '../terminal/quick-commands/terminal-quick-command-prompt-limit'
-import { ResumeProviderSessionParam, WindowsShellOverrideParam } from './terminal-unary-params'
+import {
+  ResumeProviderSessionParam,
+  TerminalInitialSize,
+  WindowsShellOverrideParam
+} from './terminal-unary-params'
+import { NewGroupSplit } from './workspace-layout-terminal-tab-params'
 
 export const WorktreeTabSelector = z.object({
   worktree: z
@@ -155,6 +160,8 @@ export const CreateTerminalTab = WorktreeTabSelector.extend({
     .optional(),
   afterTabId: z.string().optional(),
   targetGroupId: z.string().optional(),
+  split: NewGroupSplit,
+  initialSize: TerminalInitialSize.optional(),
   command: z.string().optional(),
   // Why: the shell the terminal IS; a shell sent as `command` runs nested in the host default.
   shell: WindowsShellOverrideParam.optional(),

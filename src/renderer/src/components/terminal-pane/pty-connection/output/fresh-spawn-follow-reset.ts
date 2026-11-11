@@ -137,15 +137,18 @@ export function bindFreshSpawnFollowReset(session: ConnectPanePtySession): void 
    * mirror first. The restore is built after scanning the profile because its
    * `?1049l` moves both records to the other screen's slot.
    */
-  session.writeReplayEpilogue = <T>(
+  function writeReplayEpilogue(profile: string): void
+  function writeReplayEpilogue<T>(profile: string, write: (data: string) => T): T
+  function writeReplayEpilogue(
     profile: string,
-    write: (data: string) => T = session.writeReplayData
-  ): T => {
+    write: (data: string) => unknown = session.writeReplayData
+  ): unknown {
     session.kittyKeyboardModes.scan(profile)
     const kitty = buildKittyKeyboardRestore(session.kittyKeyboardModes.snapshotFlags)
     session.kittyKeyboardModes.scan(kitty)
     return write(`${profile}${kitty}`)
   }
+  session.writeReplayEpilogue = writeReplayEpilogue
 
   /** Picks the post-replay reset profile for a reattach; the caller writes it via writeReplayEpilogue. */
   session.chooseReattachReplayReset = (

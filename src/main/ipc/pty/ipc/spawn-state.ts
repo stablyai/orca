@@ -1,3 +1,4 @@
+import type { PtySpawnOutcome } from '../spawn-outcome'
 import type { PtySpawnSizeSeed } from '../spawn-options-assembly'
 import type { StartupCwdFallback } from '../../../../shared/startup-cwd-fallback'
 import type { PtyRegistrationClaim } from '../../../runtime/terminal/records/runtime-terminal-state-records'
@@ -44,6 +45,8 @@ export type PtyIpcSpawnState = {
   paneSpawnOperation?: PaneSpawnOperation
   stablePaneOwner: StablePaneOwner | null
   stablePaneBindingPersisted: boolean
+  settledSpawnOutcome?: PtySpawnOutcome
+  preservesEndedPane?: boolean
   rejectedRegistrationCandidate: PtySpawnResult | null
   pendingRegistrationPtyId: string | null
   pendingRegistrationClaim?: PtyRegistrationClaim

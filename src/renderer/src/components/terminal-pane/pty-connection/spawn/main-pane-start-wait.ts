@@ -3,7 +3,6 @@
 import { useAppStore } from '@/store/index'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
 import { recordPtyConnectDiagnostic } from '../instrumentation/pty-connect-diagnostics'
-import type { PaneStartStatus } from '../../../../../../shared/workspace-layout/workspace-layout-published'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 import { resolveTerminalTabId } from '../terminal-tab-id'
 import {
@@ -12,50 +11,108 @@ import {
 } from '../../../../../../shared/wsl-distro-stopped-hold'
 import { holdPaneForStoppedWslDistro } from '../../session-restore/wsl-distro/wsl-distro-stopped-hold-state'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { readSavedTerminalHistory } from '../reattach/retained-terminal-history'
+import type { PendingStartupCommand, FreshSpawnOptions } from '../startup/fresh-spawn-types'
+import type { TerminalPaneStart } from '@/store/terminals/terminal-state'
+import { runtimeEnvironmentIdUnlessTwin } from '@/lib/workspace/ownership/resolve-owner'
 
-type PaneStartWait = { connects: Set<() => void>; failed: Set<() => void> }
+type PaneStartWait = {
+  connects: Set<() => void>
+  failed: Set<() => void>
+  allowSavedBinding: boolean
+}
 
 const waiting = new WeakMap<ConnectPanePtySession, PaneStartWait>()
 // A pane's stopped-distro card, cleared when main's start of it ends.
 const heldCards = new WeakMap<ConnectPanePtySession, () => void>()
 
 /** The starts this gate waits on; a sleeping or held pane starts on its first view (C1c). */
-const gated = (status: PaneStartStatus | undefined): boolean =>
-  status === 'starting' || status === 'resuming' || status === 'failed'
+const gated = (start: TerminalPaneStart | undefined): boolean =>
+  start?.status === 'starting' ||
+  start?.status === 'resuming' ||
+  start?.status === 'failed' ||
+  (start?.status === 'held' && start.retainedTerminalStart !== undefined)
+
+type PaneStartState = ReturnType<typeof useAppStore.getState>
+
+function pendingStart(
+  session: ConnectPanePtySession,
+  state: PaneStartState
+): TerminalPaneStart | undefined {
+  const start = state.terminalPaneStartsByPaneKey[session.cacheKey]
+  return (ORCA_LAYOUT_OWNER_IS_MAIN || start?.retainedTerminalStart) &&
+    !(start?.retainedTerminalStart && session.userRestart) &&
+    gated(start)
+    ? start
+    : undefined
+}
+
+function waitsForStartupRestoration(
+  session: ConnectPanePtySession,
+  allowSavedBinding: boolean,
+  state: PaneStartState
+): boolean {
+  if (
+    session.userRestart ||
+    session.runtimeEnvironmentId ||
+    runtimeEnvironmentIdUnlessTwin(state, session.deps.worktreeId)
+  ) {
+    return false
+  }
+  const leafId = session.pane.leafId
+  const tabId = resolveTerminalTabId(state, session.deps.tabId)
+  if (!state.terminalStartupAttempt?.isUnknown(session.deps.worktreeId, tabId, leafId)) {
+    return false
+  }
+  const savedBinding =
+    state.terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId?.[leafId] ||
+    (session.deps.restoredLeafId === leafId && session.deps.restoredPtyIdByLeafId?.[leafId])
+  return !allowSavedBinding || !savedBinding
+}
+
+export function hasUnknownRestoredPaneStart(session: ConnectPanePtySession): boolean {
+  return waitsForStartupRestoration(session, false, useAppStore.getState())
+}
 
 /** Call connect after main’s start ends, or onFailed on its published failure. */
 export function waitsForMainPaneStart(
   session: ConnectPanePtySession,
   connect: () => void,
-  onFailed?: () => void
+  onFailed?: () => void,
+  // An absent attach is no longer evidence for the saved binding's liveness.
+  allowSavedBinding = true
 ): boolean {
-  if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
-    return false
-  }
-  const start = useAppStore.getState().terminalPaneStartsByPaneKey[session.cacheKey]
-  if (!start || !gated(start.status)) {
+  const state = useAppStore.getState()
+  const start = pendingStart(session, state)
+  if (!start && !waitsForStartupRestoration(session, allowSavedBinding, state)) {
+    if (allowSavedBinding && !session.userRestart && hasUnknownRestoredPaneStart(session)) {
+      adoptMainBinding(session, state)
+    }
     return false
   }
   const joined = waiting.get(session)
   if (joined) {
+    joined.allowSavedBinding &&= allowSavedBinding
     joined.connects.add(connect)
     if (onFailed) {
       joined.failed.add(onFailed)
-      if (start.status === 'failed') {
+      if (start?.status === 'failed' || start?.status === 'held') {
         onFailed()
       }
     }
     return true
   }
-  const wait: PaneStartWait = { connects: new Set([connect]), failed: new Set() }
+  const wait: PaneStartWait = { connects: new Set([connect]), failed: new Set(), allowSavedBinding }
   if (onFailed) {
     wait.failed.add(onFailed)
   }
   waiting.set(session, wait)
-  recordPtyConnectDiagnostic(`pane=${session.pane.id} -> WAIT FOR MAIN START (${start.status})`)
+  recordPtyConnectDiagnostic(
+    `pane=${session.pane.id} -> WAIT FOR MAIN START (${start?.status ?? 'startup unknown'})`
+  )
   let shown = start
   const showFailure = (): void => {
-    if (shown.status === 'failed' && !session.disposed) {
+    if ((shown?.status === 'failed' || shown?.status === 'held') && !session.disposed) {
       showPaneStartFailure(session, shown.reason)
       for (const failed of wait.failed) {
         failed()
@@ -64,14 +121,16 @@ export function waitsForMainPaneStart(
   }
   showFailure()
   const unsubscribe = useAppStore.subscribe((state) => {
-    const found = state.terminalPaneStartsByPaneKey[session.cacheKey]
-    const next = found && gated(found.status) ? found : undefined
-    if (next === shown) {
+    const next = pendingStart(session, state)
+    if (next) {
+      if (next !== shown) {
+        shown = next
+        showFailure()
+      }
       return
     }
-    if (next) {
-      shown = next
-      showFailure()
+    shown = undefined
+    if (waitsForStartupRestoration(session, wait.allowSavedBinding, state)) {
       return
     }
     // Main's start ended: the pane is bound to its terminal now, or main took it back.
@@ -113,6 +172,7 @@ export function showPaneStartFailure(
   session: ConnectPanePtySession,
   reason: string | undefined
 ): void {
+  void readSavedTerminalHistory(session)
   // Main publishes the code; an RPC refusal carries the sentence instead.
   const hold = reason ? (findWslDistroHoldInText(reason)?.hold ?? null) : null
   if (hold && !session.disposed && !session.runtimeEnvironmentId) {
@@ -142,4 +202,34 @@ export function showPaneStartFailure(
         : `The terminal could not start: ${reason ?? 'unknown error'}`
     )
   }
+}
+
+export function waitForFreshPaneStart(
+  session: ConnectPanePtySession,
+  startupOverride: PendingStartupCommand | null | undefined,
+  options: FreshSpawnOptions
+): Promise<string | null> | undefined {
+  const waiting = Promise.withResolvers<string | null>()
+  let waitSettled = false
+  const settleWait = (): void => {
+    waitSettled = true
+    waiting.resolve(null)
+  }
+  if (
+    waitsForMainPaneStart(
+      session,
+      () => {
+        if (!waitSettled) {
+          waitSettled = true
+          waiting.resolve(session.startFreshSpawn(startupOverride, options))
+        }
+      },
+      settleWait,
+      false
+    )
+  ) {
+    session.waitTeardowns.push(settleWait)
+    return waiting.promise
+  }
+  return undefined
 }

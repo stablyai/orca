@@ -1,4 +1,5 @@
 import { SessionReadTerminalScrollbackParams } from '../../../../../shared/rpc-contract/session-terminal-scrollback-params'
+import { SessionReadTerminalHistoryParams } from '../../../../../shared/rpc-contract/session-terminal-history-params'
 import { defineMethod } from '../../core'
 import { servesWslMovedPaneHistory } from '../../../../orcad/orcad-migration-wsl-destination'
 
@@ -11,6 +12,16 @@ export const SESSION_TERMINAL_SCROLLBACK_METHODS = [
     params: SessionReadTerminalScrollbackParams,
     handler: async (params, { runtime }) =>
       runtime.readTerminalScrollbackForClient({ worktree: params.worktree, ref: params.ref })
+  })
+]
+
+export const SESSION_TERMINAL_HISTORY_METHODS = [
+  defineMethod({
+    name: 'session.readTerminalHistory',
+    permission: 'workspace',
+    params: SessionReadTerminalHistoryParams,
+    handler: async (params, { runtime, signal }) =>
+      runtime.readTerminalHistoryForClient(params, signal)
   })
 ]
 

@@ -113,6 +113,8 @@ export type WebSessionTabsSnapshotOperation = {
   environmentId: string
   snapshot: RuntimeMobileSessionTabsResult
   runtimeId?: string
+  receivedFrame?: number
+  receivedSnapshot?: RuntimeMobileSessionTabsResult
 }
 
 export type DecidedWebSessionTabsSnapshotOperation = WebSessionTabsSnapshotOperation & {
@@ -127,7 +129,9 @@ export function decideWebSessionTabsSnapshotOperations(
     decision: decideWebSessionTabsSnapshot(
       operation.snapshot,
       operation.environmentId,
-      operation.runtimeId
+      operation.runtimeId,
+      operation.receivedFrame,
+      operation.receivedSnapshot
     )
   }))
 }

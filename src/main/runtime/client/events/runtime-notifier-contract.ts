@@ -1,3 +1,5 @@
+import type { RetainedTerminalStart } from '../../../../shared/workspace-layout/retained-terminal-start'
+import type { NewGroupSplit } from '../../../../shared/workspace-layout/workspace-layout-command-types'
 import type { WorkspaceMetadataSet } from '../../../../shared/worktree/workspace-metadata-set'
 import type {
   RuntimeEditorTabReveal,
@@ -76,7 +78,6 @@ export type RuntimeNotifier = {
   revealTerminalSession?(
     worktreeId: string,
     opts: {
-      ptyId: string
       title?: string | null
       cwd?: string
       launchConfig?: SleepingAgentLaunchConfig
@@ -84,6 +85,7 @@ export type RuntimeNotifier = {
       launchAgent?: TuiAgent
       viewMode?: 'terminal' | 'chat'
       targetGroupId?: string
+      split?: NewGroupSplit
       afterTabId?: string
       shellOverride?: string
       activate?: boolean
@@ -100,7 +102,15 @@ export type RuntimeNotifier = {
         terminalHandle: string
         incarnationId: string
       }
-    }
+    } & (
+      | { ptyId: string; retainedTerminalStart?: never }
+      | {
+          retainedTerminalStart: RetainedTerminalStart
+          ptyId?: never
+          tabId: string
+          leafId: string
+        }
+    )
   ):
     | Promise<{ tabId: string; title?: string | null; identity?: TerminalRevealIdentity }>
     | { tabId: string; title?: string | null; identity?: TerminalRevealIdentity }

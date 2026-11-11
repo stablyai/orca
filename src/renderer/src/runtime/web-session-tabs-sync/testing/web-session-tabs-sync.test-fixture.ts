@@ -65,6 +65,7 @@ export function makeState(
     tabBarOrderByWorktree: {},
     tabsByWorktree: {},
     terminalLayoutsByTabId: {},
+    terminalPaneStartsByPaneKey: {},
     unifiedTabsByWorktree: {},
     unreadTerminalTabs: {},
     sortEpoch: 0,

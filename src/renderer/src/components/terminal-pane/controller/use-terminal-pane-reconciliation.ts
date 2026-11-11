@@ -45,7 +45,8 @@ export function useTerminalPaneReconciliation(controller: TerminalPaneCloseContr
     persistLayoutSnapshot,
     ptyRecoveryStatesByPaneId,
     restoredLayout,
-    hostLayoutLeafIdsRef
+    hostLayoutLeafIdsRef,
+    tabId
   })
 
   useTerminalPaneActivityIsolation({

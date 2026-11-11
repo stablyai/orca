@@ -15,6 +15,7 @@ import type { FloatingTerminalCwdRequest } from '../../shared/ui-chrome-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import type { KeyboardLayoutSnapshot } from '../../shared/keyboard-layout-snapshot'
 import type { KeyboardLayoutChangeEvent } from '../../shared/keyboard-layout-events'
+import type { TerminalStartupRestoration } from '../../shared/workspace-layout/retained-terminal-destination'
 
 export type AppApi = {
   getSystemLanguageDetection?: (
@@ -50,7 +51,7 @@ export type AppApi = {
   /** Waits for shell PATH and managed WSL CLI registration, independently of PTY startup. */
   awaitGitEnvironmentStartupBarrier: () => Promise<void>
   /** Restore durable PTY ownership before renderer adoption. */
-  prepareTerminalStartupRestoration: () => Promise<void>
+  prepareTerminalStartupRestoration: () => Promise<TerminalStartupRestoration | void>
   /** Whether this machine's runtime holds a structured chat, saved or live. */
   holdsStructuredAgentSessions: () => Promise<boolean>
   onStructuredAgentSessionsHeldChanged: (callback: (held: boolean) => void) => () => void

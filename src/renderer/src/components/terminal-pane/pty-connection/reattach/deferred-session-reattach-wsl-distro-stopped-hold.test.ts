@@ -127,7 +127,7 @@ describe('a restored WSL bridge pane whose distro is stopped (E9)', () => {
     await vi.waitFor(() => expect(transport.connect).toHaveBeenCalledTimes(2))
     expect(transport.connect.mock.calls[1]?.[0]).not.toHaveProperty('wslPassiveRestore')
     expect(heldDistro()).toBeNull()
-    expect(fixture.pane.terminal.options.disableStdin).toBe(false)
+    expect(fixture.pane.terminal.options.disableStdin).toBe(true)
   })
 
   const mountAt = async (wallMs: number) => {

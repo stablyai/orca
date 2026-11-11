@@ -15,6 +15,7 @@ import {
   refreshTerminalProviderSnapshotCapabilities
 } from '../components/terminal/terminal-provider-snapshot-capability'
 import { probeTerminalProviderGoneSessions } from '../components/terminal/terminal-provider-gone-sessions'
+import type { RetainedTerminalStartupPreparation } from './retained-terminal-startup-restoration'
 
 type DegradedStartupRecoveryArgs = {
   error: unknown
@@ -22,6 +23,7 @@ type DegradedStartupRecoveryArgs = {
   uiHydrated: boolean
   /** Whether the success path already began terminal reconnect over now-partial state. */
   reconnectStarted: boolean
+  terminalStartupRestoration: RetainedTerminalStartupPreparation
   isCancelled: () => boolean
   hydratePersistedUI: ReturnType<typeof useAppStore.getState>['hydratePersistedUI']
   reconnectPersistedTerminals: (signal: AbortSignal) => Promise<void>
@@ -35,7 +37,7 @@ function forceWorkspaceSessionReady(): void {
     pendingReconnectWorktreeIds: [],
     pendingReconnectTabByWorktree: {},
     pendingReconnectPtyIdByTabId: {},
-    // Release activation gate even on degraded boot or fallback terminals never seed.
+    // Workspace UI and known bindings remain available; unknown starts are not launch permission.
     terminalStartupRestorationReady: true
   })
 }
@@ -64,6 +66,7 @@ export async function recoverFromDegradedStartup(args: DegradedStartupRecoveryAr
     error,
     uiHydrated,
     reconnectStarted,
+    terminalStartupRestoration,
     isCancelled,
     hydratePersistedUI,
     reconnectPersistedTerminals,
@@ -104,15 +107,38 @@ export async function recoverFromDegradedStartup(args: DegradedStartupRecoveryAr
   }
   try {
     await window.api.app.awaitFirstWindowStartupServices()
+    if (isCancelled()) {
+      return
+    }
+    try {
+      await terminalStartupRestoration.prepare()
+    } catch (prepareError) {
+      // Preserve saved-binding reconciliation without certifying unknown startup facts.
+      console.error('[startup] local terminal startup facts are unavailable:', prepareError)
+    }
+    if (isCancelled()) {
+      return
+    }
     await window.api.app.recoverLegacyWorkerTerminalsForRendererStartup()
+    if (isCancelled()) {
+      return
+    }
     const restoredPtyIds = collectTerminalProviderSnapshotPtyIds(useAppStore.getState())
     void probeTerminalProviderGoneSessions(restoredPtyIds)
     await refreshTerminalProviderSnapshotCapabilities(restoredPtyIds)
+    if (isCancelled()) {
+      return
+    }
     await reconnectPersistedTerminals(abortSignal)
+    if (isCancelled()) {
+      return
+    }
     await window.api.app.recoverLegacyWorkerTerminalsForRendererStartup({ afterReconnect: true })
     // Reconnect does not set the success chain’s final flag; release restoration readers on degraded boot too.
     if (!isCancelled()) {
-      useAppStore.setState({ terminalStartupRestorationReady: true })
+      useAppStore.setState({
+        terminalStartupRestorationReady: true
+      })
     }
   } catch (reconnectErr) {
     console.error('[startup] reconnectPersistedTerminals failed in error path:', reconnectErr)

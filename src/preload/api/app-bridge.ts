@@ -12,6 +12,7 @@ import {
 import { prepareAndInvokeAppRestart } from '../renderer-restart-wiring'
 import { awaitBeforeUnloadCheckpoint, startupDiagnosticsEnabled } from '../preload-runtime-support'
 import type { PreloadApi } from '../api-types'
+import type { TerminalStartupRestoration } from '../../shared/workspace-layout/retained-terminal-destination'
 
 export const appApi = {
   getSystemLanguageDetection: (browserPreferences?: readonly string[]) =>
@@ -72,7 +73,7 @@ export const appApi = {
     ipcRenderer.invoke('app:awaitFirstWindowStartupServices'),
   awaitGitEnvironmentStartupBarrier: (): Promise<void> =>
     ipcRenderer.invoke('app:awaitGitEnvironmentStartupBarrier'),
-  prepareTerminalStartupRestoration: (): Promise<void> =>
+  prepareTerminalStartupRestoration: (): Promise<TerminalStartupRestoration | void> =>
     ipcRenderer.invoke('app:prepareTerminalStartupRestoration'),
   holdsStructuredAgentSessions: (): Promise<boolean> =>
     ipcRenderer.invoke('app:holdsStructuredAgentSessions'),

@@ -1,6 +1,9 @@
 {
   "extends": "./tsconfig.web.json",
   "exclude": [
+    "../src/renderer/src/app-shell/startup-retained-save.test.tsx",
+    "../src/renderer/src/app-shell/startup-retained-save.test-fixture.ts",
+    "../src/renderer/src/app-shell/startup-retained-save-history.test-fixture.ts",
     "../src/renderer/src/components/retained-bare-workspace.test.tsx",
     "../src/renderer/src/components/retained-bare-workspace.test-fixture.ts",
     "../src/renderer/src/components/task-page/linear/task-page-linear-detail-query.test.tsx",

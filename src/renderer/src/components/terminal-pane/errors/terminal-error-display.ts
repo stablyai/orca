@@ -41,6 +41,14 @@ const PANE_OWNER_CHANGED_MARKER = 'terminal_pane_owner_changed'
 // Keep the English transport literal as a wire marker; localize it here with the surrounding banner.
 const REMOTE_TERMINAL_CLOSED_MARKER = 'Remote terminal was closed.'
 
+// The host's existing sentence is also understood across mixed-version IPC/RPC envelopes.
+const GIT_STORAGE_TERMINAL_REFUSAL =
+  'This folder contains Git storage, not checked-out files. Open a checkout to start a terminal or chat.'
+
+export function isGitStorageTerminalRefusal(error: string): boolean {
+  return error.includes(GIT_STORAGE_TERMINAL_REFUSAL)
+}
+
 // Why: a lone /g regex carries lastIndex across .test() calls, so each token gets a stateless test form and a /g replace form.
 function tokenPattern(source: string): { match: RegExp; replaceAll: RegExp } {
   return { match: new RegExp(source), replaceAll: new RegExp(source, 'g') }
@@ -92,6 +100,9 @@ export function shouldOfferDaemonRestart(error: string): boolean {
 }
 
 export function isExplainedTerminalError(error: string): boolean {
+  if (isGitStorageTerminalRefusal(error)) {
+    return true
+  }
   return error
     .split('\n')
     .some(
@@ -153,6 +164,14 @@ export function humanizeTerminalError(
   agentId?: string | null,
   t: Translate = translate
 ): string {
+  if (isGitStorageTerminalRefusal(error)) {
+    return unwrapHostRefusalIpcLines(stripClientEnvironmentFooter(error), t)
+      .split('\n')
+      .map((line) =>
+        line.includes(GIT_STORAGE_TERMINAL_REFUSAL) ? GIT_STORAGE_TERMINAL_REFUSAL : line
+      )
+      .join('\n')
+  }
   if (isSshSignInRequiredTerminalError(error)) {
     return describeSshSignInRequiredTerminalError(error, t)
   }

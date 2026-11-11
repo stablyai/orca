@@ -4,9 +4,7 @@ import {
 } from '../../session-restore/newer-daemon/newer-daemon-hold-state'
 import { recordPtyConnectDiagnostic } from '../instrumentation/pty-connect-diagnostics'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
-
-// Clears the saved screen the hold painted so the restore below paints it once.
-const CLEAR_HELD_SCREEN = '\x1b[0m\x1b[2J\x1b[3J\x1b[H'
+import { holdRetainedTerminalHistory } from '../reattach/retained-terminal-history'
 
 /** Hold refused local restores read-only with saved output while a newer daemon may own the session; release reconnects. */
 export function holdForNewerDaemon(
@@ -22,7 +20,7 @@ export function holdForNewerDaemon(
     generation === session.transportStreamGeneration &&
     session.deps.paneTransportsRef.current.get(session.pane.id) === session.transport
   let held = true
-  let paintedScreen = false
+  const image = holdRetainedTerminalHistory(session, sessionId)
   // Why: nothing backs this pane, so keystrokes have nowhere to go.
   terminal.options.disableStdin = true
   const forget = holdPaneForNewerDaemon(session.cacheKey, {
@@ -33,24 +31,21 @@ export function holdForNewerDaemon(
       if (!isCurrent()) {
         return { reopened: false, agentResumed: false }
       }
-      terminal.options.disableStdin = false
-      if (paintedScreen) {
-        session.writeReplayData(CLEAR_HELD_SCREEN)
-      }
       return reconnect()
     }
   })
   session.waitTeardowns.push(forget)
   // Why: a remote pane's layout restore already painted its saved buffer; local panes keep none.
   if (session.deps.restoredViewportBlankingPanesRef?.current.has(session.pane.id)) {
+    image.painted = true
     return
   }
   void window.api.pty
     .readNewerDaemonHeldScreen(sessionId)
     .catch(() => null)
     .then((screen) => {
-      if (screen && held && isCurrent()) {
-        paintedScreen = true
+      if (screen && held && isCurrent() && !image.painted) {
+        image.painted = true
         session.writeReplayData(screen.scrollback)
       }
     })

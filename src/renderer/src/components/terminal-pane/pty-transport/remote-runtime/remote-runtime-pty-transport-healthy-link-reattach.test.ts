@@ -67,6 +67,21 @@ function hostSnapshot(status: 'pending-handle' | 'ready'): unknown {
   }
 }
 
+function legacyReply(method: string) {
+  return {
+    ok: true,
+    result:
+      method === 'status.get'
+        ? {
+            runtimeId: 'legacy-runtime',
+            runtimeProtocolVersion: 3,
+            minCompatibleRuntimeClientVersion: 2,
+            capabilities: []
+          }
+        : {}
+  }
+}
+
 function endLatestStream(): void {
   subscriptionCallbacks?.onResponse({
     ok: true,
@@ -104,7 +119,7 @@ describe('remote runtime PTY reattach on a healthy link', () => {
     runtimeCall.mockImplementation(async (args: { method: string }) =>
       args.method === 'session.tabs.list' || args.method === 'session.tabs.activate'
         ? hostSnapshot(hostReady ? 'ready' : 'pending-handle')
-        : { ok: true, result: {} }
+        : legacyReply(args.method)
     )
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
     const transport = createRemoteRuntimePtyTransport('env-1', {
@@ -135,7 +150,7 @@ describe('remote runtime PTY reattach on a healthy link', () => {
           }
           return readyHostSessionInventoryResponse('terminal-1')
         }
-        return { ok: true, result: {} }
+        return legacyReply(args.method)
       })
 
       endLatestStream()
@@ -156,7 +171,7 @@ describe('remote runtime PTY reattach on a healthy link', () => {
     runtimeCall.mockImplementation(async (args: { method: string }) =>
       args.method === 'session.tabs.list' || args.method === 'session.tabs.activate'
         ? hostSnapshot('pending-handle')
-        : { ok: true, result: {} }
+        : legacyReply(args.method)
     )
 
     endLatestStream()

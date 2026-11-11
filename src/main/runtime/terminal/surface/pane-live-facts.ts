@@ -22,17 +22,25 @@ export class PaneLiveFacts<T> {
     { fact: T; awaits?: AwaitedBind; binding?: string }
   >()
 
-  constructor(private readonly changed: () => void) {}
+  constructor(private readonly changed: (paneKey: string, fact: T) => void) {}
+
+  entries(): IterableIterator<[string, { fact: T; awaits?: AwaitedBind; binding?: string }]> {
+    return this.byPaneKey.entries()
+  }
 
   /** With `awaits`, the fact shows only once the pane binds that terminal. */
   set(paneKey: string, fact: T, awaits?: AwaitedBind): void {
     this.byPaneKey.set(paneKey, { fact, ...(awaits ? { awaits } : {}) })
-    this.changed()
+    this.changed(paneKey, fact)
   }
 
-  clear(paneKey: string): void {
+  clear(paneKey: string, expected?: T): void {
+    const entry = this.byPaneKey.get(paneKey)
+    if (expected !== undefined && entry?.fact !== expected) {
+      return
+    }
     if (this.byPaneKey.delete(paneKey)) {
-      this.changed()
+      this.changed(paneKey, entry!.fact)
     }
   }
 
@@ -53,7 +61,7 @@ export class PaneLiveFacts<T> {
     }
     entry.binding ??= binding
     if (entry.binding !== binding) {
-      this.byPaneKey.delete(paneKey)
+      this.clear(paneKey, entry.fact)
       return null
     }
     return entry.fact

@@ -1,3 +1,4 @@
+import { TERMINAL_FRESH_ADMISSION_PLACEMENT_RUNTIME_CAPABILITY } from './session-tabs-runtime-capabilities'
 import { GIT_REVERT_CONFLICT_CLIENT_CAPABILITY } from './git/commands/git-commit-action'
 import { GIT_GRAPH_TAB_CAPABILITY } from './source-control/runtime/git-graph-capabilities'
 import { STRUCTURED_AGENT_SESSION_RENDERER_CLIENT_CAPABILITIES } from './agent-session/structured-agent-session-renderer-client-capabilities'
@@ -22,6 +23,7 @@ import {
 // Electron clients can decode client-hosted page placement; becoming a page
 // host still requires the separate authenticated browser-client lease.
 export const ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES = [
+  TERMINAL_FRESH_ADMISSION_PLACEMENT_RUNTIME_CAPABILITY,
   GIT_GRAPH_TAB_CAPABILITY,
   GIT_REVERT_CONFLICT_CLIENT_CAPABILITY,
   STRUCTURED_CHAT_START_TELEMETRY_CLIENT_CAPABILITY,

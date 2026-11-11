@@ -1,10 +1,11 @@
+import { prepareRestoredPaneStartup } from '../../terminal/recovery/prepared-restored-pane-startup'
+import { claimMovedPaneHistorySession } from '../../terminal/recovery/moved-pane-history-session'
+import type { WorktreeTerminalSpawnLeaseOptions } from '../../terminal/stop/terminal-update-admission'
+import type { HostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
+import type { PreparedRestoredPaneStartup } from '../../terminal/recovery/prepared-pane-replacement'
 // Restore terminal-less saved panes for pending-row activation and workspace wakes; main-owned layouts also handle triggers outside desktop restore.
 
 import type { OrcaRuntimeWithAgentSessionResumeOwnership as AgentSessionResume } from './agent-session-resume-ownership'
-import type {
-  MobileTerminalCommand,
-  MobileTerminalResumeCommand
-} from '../../terminal/launch/mobile-terminal-startup'
 import { OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs } from './build-headless-mobile-session-browser-tabs'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
@@ -27,15 +28,19 @@ import { isPublishedHeld, reopenHeldPanes } from '../../terminal/recovery/held-p
 import { reopenNewerDaemonTerminals } from '../../../daemon/providers/routing/daemon-newer-protocol-hold'
 import type { NewerDaemonReopenResult } from '../../../../shared/newer-daemon-hold'
 import type { WorkspaceLayoutStream } from '../../terminal/surface/workspace-layout-stream'
-import { getDaemonHistoryDir } from '../../../daemon/launch/daemon-launch-paths'
-import { HistoryReader } from '../../../daemon/history/restoration/history-reader'
-import { servesWslMovedPaneHistory } from '../../../orcad/orcad-migration-wsl-destination'
-import { movedPaneHistorySessionId } from '../../../persistence/migrating-orcad-catalog/orcad-terminal-history-installer'
-import { makePaneKey, parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { agentProviderSessionsEqual } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 
 export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs {
+  abstract acquireWorktreeTerminalSpawn(
+    target: HostWorktreeTarget | undefined,
+    opts?: WorktreeTerminalSpawnLeaseOptions
+  ): Promise<() => void>
+  abstract resolveWorkspaceTerminalStartupCwd(
+    workspace: Pick<TerminalWorkspaceLaunchScope, 'path'>,
+    requestedCwd?: string | null
+  ): string | undefined
   protected abstract resolveAgentLaunchRuntime(
     scope: TerminalWorkspaceLaunchScope,
     agent: TuiAgent | undefined
@@ -155,34 +160,6 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
     return { started: results.every((result) => result.status === 'fulfilled' && result.value) }
   }
 
-  /**
-   * The session a WSL move installed for this pane (its carried checkpoint, interrupted), so its
-   * first start cold-restores that history once like after an app restart; undefined otherwise.
-   */
-  private async claimMovedPaneHistorySession({
-    worktreeId,
-    tabId,
-    leafId
-  }: RestoredPane): Promise<string | undefined> {
-    // Only a WSL host installs moved panes' history; other hosts skip the scope and meta.json reads.
-    if (!servesWslMovedPaneHistory()) {
-      return undefined
-    }
-    try {
-      const workspace = await this.resolveTerminalWorkspaceLaunchScope(`id:${worktreeId}`)
-      // Why never over SSH: only this host's own daemon holds the installed history.
-      if (workspace.connectionId !== null) {
-        return undefined
-      }
-      const sessionId = movedPaneHistorySessionId(worktreeId, makePaneKey(tabId, leafId))
-      const probe = new HistoryReader(getDaemonHistoryDir()).probeRestorableHistory(sessionId)
-      return probe.status === 'restorable' ? sessionId : undefined
-    } catch {
-      // Why: history is best effort; the pane still starts, only without what it showed before.
-      return undefined
-    }
-  }
-
   /** The pane's stored terminal; undefined while unbound, null once main no longer holds it. */
   private storedPaneBinding({
     worktreeId,
@@ -199,6 +176,25 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
     return layout ? layout.ptyIdsByLeafId?.[leafId] : (row.ptyId ?? undefined)
   }
 
+  protected async prepareRestoredPaneStartup(
+    worktreeId: string,
+    tab: RuntimeMobileSessionTerminalTab,
+    wslUserAct?: true
+  ): Promise<PreparedRestoredPaneStartup> {
+    return prepareRestoredPaneStartup({
+      resolveResume: () => this.resolvePaneOwnedResumeStartup(worktreeId, tab),
+      resolveWorkspace: () =>
+        this.resolveTerminalWorkspaceLaunchScope(`id:${worktreeId}`, undefined, {
+          wslUserAct: wslUserAct === true
+        }),
+      resolveCommand: (workspace) =>
+        this.resolveMobileSessionTerminalCommand(workspace, { agent: tab.launchAgent }),
+      resolveLaunchRuntime: (workspace) =>
+        this.resolveAgentLaunchRuntime(workspace, tab.launchAgent),
+      launchAgent: tab.launchAgent
+    })
+  }
+
   /** Starts a pending terminal row in its own pane, resuming the agent the host recorded there. */
   protected async materializePendingMobileSessionTerminal(
     worktreeId: string,
@@ -208,50 +204,38 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
       targetsHost = false,
       targetGroupId,
       sessionId,
-      wslUserAct
+      wslUserAct,
+      preparedReplacement
     }: RestoredPaneTrigger & { sessionId?: string }
   ): Promise<RuntimeMobileSessionCreateTerminalResult> {
-    // Recover undelivered startup commands (#7587) or recorded agent sessions (#27147, #27777); live-session attach skips startup commands, preventing double launches.
-    const resumeStartup = await this.resolvePaneOwnedResumeStartup(worktreeId, tab)
-    // After a claimed-record resume starts, mark that record live.
+    const { resumeStartup, agentStartup } =
+      preparedReplacement?.startup ??
+      (await this.prepareRestoredPaneStartup(worktreeId, tab, wslUserAct))
     const paneKey = `${tab.parentTabId}:${tab.leafId}`
     const resumedRecord =
       ORCA_LAYOUT_OWNER_IS_MAIN && resumeStartup && 'resumeProviderSession' in resumeStartup
         ? this.getWorkspaceSessionForWorktree(worktreeId)?.sleepingAgentSessionsByPaneKey?.[paneKey]
         : undefined
-    let agentStartup: MobileTerminalCommand | MobileTerminalResumeCommand = resumeStartup ?? {}
     const resumeClaim =
       resumeStartup && 'resumeClaim' in resumeStartup ? resumeStartup.resumeClaim : null
-    if (resumeStartup === undefined && tab.launchAgent) {
-      let workspace
-      try {
-        workspace = await this.resolveTerminalWorkspaceLaunchScope(`id:${worktreeId}`, undefined, {
-          wslUserAct: wslUserAct === true
-        })
-        agentStartup = await this.resolveMobileSessionTerminalCommand(workspace, {
-          agent: tab.launchAgent
-        })
-      } catch {
-        // Disabled/unresolvable agents fall back to a tappable shell; runtime repair errors still refuse rather than hide failure under an agent icon.
-        if (workspace) {
-          this.resolveAgentLaunchRuntime(workspace, tab.launchAgent)
-        }
-      }
-    }
     let dispatched = false
     try {
       const startSessionId =
         sessionId ??
-        (await this.claimMovedPaneHistorySession({
-          worktreeId,
-          tabId: tab.parentTabId,
-          leafId: tab.leafId
-        }))
+        (await claimMovedPaneHistorySession(
+          (selector) => this.resolveTerminalWorkspaceLaunchScope(selector),
+          {
+            worktreeId,
+            tabId: tab.parentTabId,
+            leafId: tab.leafId
+          }
+        ))
       const created = await this.createRuntimeOwnedMobileSessionTerminal(
         worktreeId,
         targetsHost,
         undefined,
         {
+          ...(preparedReplacement ? { preparedReplacement } : {}),
           identity: {
             tabId: tab.parentTabId,
             leafId: tab.leafId,

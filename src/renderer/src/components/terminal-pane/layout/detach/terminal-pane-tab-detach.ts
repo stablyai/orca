@@ -32,6 +32,7 @@ export type TerminalPaneTabDetachStore = Pick<
   | 'syncPaneDetachPtyOwnership'
   | 'tabsByWorktree'
   | 'terminalLayoutsByTabId'
+  | 'terminalStartupAttempt'
 >
 
 type TerminalPaneTabDetachManager = {
@@ -230,13 +231,17 @@ function applyMove(
   const split = lastPane ? null : detachTerminalLayoutLeaf(sourceLayout, leafId)
   const movedLayout = lastPane ? sourceLayout : split?.detachedLayout
   // Compute handoff before removing the source pane; its close must detach listeners without killing the PTY.
-  if (
-    !manager ||
-    paneId === undefined ||
-    !movedLayout ||
-    (!lastPane && !manager.detachPaneForExternalMove(paneId))
-  ) {
+  if (!manager || paneId === undefined || !movedLayout) {
     // If source removal failed or the pane/tab vanished, close main’s otherwise-empty target through normal tab-close routing.
+    if (mainMoved) {
+      commitTerminalSurfaceClose(worktreeId, { kind: 'tab', tabId: targetTabId }, 'cleanup')
+    }
+    return null
+  }
+  const startupAttempt = args.getStore().terminalStartupAttempt
+  startupAttempt?.transfer(sourceTabId, targetTabId, leafId)
+  if (!lastPane && !manager.detachPaneForExternalMove(paneId)) {
+    startupAttempt?.transfer(targetTabId, sourceTabId, leafId)
     if (mainMoved) {
       commitTerminalSurfaceClose(worktreeId, { kind: 'tab', tabId: targetTabId }, 'cleanup')
     }
@@ -263,12 +268,13 @@ function applyMove(
       activate: true,
       ...(detachedLayout.chatLeafId ? { viewMode: 'chat' as const } : {}),
       initialPtyId: ptyId ?? undefined,
+      initialLeafId: leafId,
       ...(!ptyId
         ? {
             pendingActivationSpawn: true,
             ...(args.sourcePaneCwd?.cwd ? { startupCwd: args.sourcePaneCwd.cwd } : {})
           }
-        : { initialLeafId: leafId }),
+        : {}),
       recordInteraction: true
     })
   const afterCreateStore = args.getStore()

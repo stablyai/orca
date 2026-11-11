@@ -7,6 +7,7 @@ import { isEphemeralSetupTerminalWorktreeId } from '../../../../../shared/epheme
 import { isLocalExecutionHost } from '../../../../../shared/execution-host'
 import { settleTerminalPaneRecovery } from '../render-health/recovery/terminal-pane-recovery'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
+import { captureTerminalHistoryReadOwner } from './reattach/retained-terminal-history'
 
 export function initializePaneConnectionContext(session: ConnectPanePtySession): void {
   // Inject opaque ORCA_PANE_KEY matching tabId:leafId so global hooks can attribute callbacks without cwd lookup.
@@ -54,6 +55,7 @@ export function initializePaneConnectionContext(session: ConnectPanePtySession):
   session.mirroredRuntimeEnvironmentId = session.ownerContext.mirroredRuntimeEnvironmentId
   session.terminalOwnerUnresolved = session.ownerContext.unresolved
   session.runtimeEnvironmentId = session.ownerContext.runtimeEnvironmentId
+  captureTerminalHistoryReadOwner(session)
   // Why: host-agnostic synthetic ids (floating terminal, inline setup panels) have no repo
   // row by design, and a worktree row stamped 'local' proves its host on its own — both are
   // resolved-local, not pending hydration (#10151). Only when nothing names the host does

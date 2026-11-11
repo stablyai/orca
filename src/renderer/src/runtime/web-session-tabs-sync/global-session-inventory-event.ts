@@ -128,7 +128,13 @@ export function handleGlobalSessionInventoryEvent({
       const decisions = applicable.map(({ index, snapshot }) =>
         unchanged[index]
           ? WEB_SESSION_TABS_FRAME_OUTRANKED
-          : decideWebSessionTabsSnapshot(snapshot, environmentId, runtimeId)
+          : decideWebSessionTabsSnapshot(
+              snapshot,
+              environmentId,
+              runtimeId,
+              receivedFrames[index],
+              event.snapshots[index]!
+            )
       )
       const freshSnapshots = applicable.flatMap(({ snapshot }, index) =>
         decisions[index]!.apply ? [snapshot] : []

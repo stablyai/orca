@@ -6,6 +6,7 @@ import { createTerminalGitHubPRLinkDetector } from '../../../../../../shared/ter
 import { setRendererPtyVisibilityClaim } from '../../pty-transport/delivery/pty-renderer-delivery-claims'
 import { shouldIgnoreStalePanePtyLayoutBinding } from '../reattach/pane-pty-layout-binding'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
+import { acceptRetainedTerminalHistory } from '../reattach/retained-terminal-history'
 
 export function installActivePanePtyBinding(session: ConnectPanePtySession): void {
   session.observeTerminalGitHubPRLink = createTerminalGitHubPRLinkDetector()
@@ -125,7 +126,7 @@ export function installActivePanePtyBinding(session: ConnectPanePtySession): voi
     return true
   }
 
-  session.onPtySpawn = (ptyId: string): void => {
+  session.onPtySpawn = (ptyId: string, accepted?: { fresh: true }): void => {
     // Track actual fresh spawns so unused shell-startup failures remain visible; reattach/cold restore must retain ordinary exit semantics.
     session.spawnedFreshPtyId = ptyId
     // Seed Command Code working state once bound; it has no prompt-start hook, and later hooks refine it.
@@ -133,6 +134,9 @@ export function installActivePanePtyBinding(session: ConnectPanePtySession): voi
     if (!bound) {
       // Late stale spawn callbacks cannot consume startup now owned by a successor pane.
       return
+    }
+    if (accepted?.fresh) {
+      acceptRetainedTerminalHistory(session, true)
     }
     // Spend queued startup only after this pane owns a concrete PTY.
     try {

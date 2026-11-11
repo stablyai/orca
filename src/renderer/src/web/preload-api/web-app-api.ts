@@ -42,7 +42,8 @@ export function createWebAppApi(): Partial<PreloadApi> {
       awaitBeforeUnloadCheckpoint: () => Promise.resolve(),
       awaitFirstWindowStartupServices: () => Promise.resolve(),
       awaitGitEnvironmentStartupBarrier: () => Promise.resolve(),
-      prepareTerminalStartupRestoration: () => Promise.resolve(),
+      // No local runtime: paired start facts arrive through their host's session rows.
+      prepareTerminalStartupRestoration: (): Promise<void> => Promise.resolve(),
       // The browser client has no runtime of its own.
       holdsStructuredAgentSessions: () => Promise.resolve(false),
       onStructuredAgentSessionsHeldChanged: () => () => undefined,

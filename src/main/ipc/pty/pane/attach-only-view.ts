@@ -1,4 +1,3 @@
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { SessionNotFoundError } from '../../../daemon/protocol/daemon-errors'
 import { PANE_NOT_LIVE_ERROR } from '../../../../shared/pane-attach-only-view'
 import {
@@ -35,7 +34,7 @@ export async function attachViewWithoutOwner(
 }
 
 export function attachOnlyViewOf(args: { attachOnlyView?: unknown }): true | undefined {
-  return ORCA_LAYOUT_OWNER_IS_MAIN && args.attachOnlyView === true ? true : undefined
+  return args.attachOnlyView === true ? true : undefined
 }
 
 /** Visible attaches keep main-started PTYs unhidden before snapshot capture, covering dropped bytes in one paint. */

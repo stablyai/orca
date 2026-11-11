@@ -33,6 +33,8 @@ import type { AppState } from '../types'
 import type { TerminalActions } from './terminal-actions'
 import type { AgentPaneLaunchRequest } from '../../../../shared/agent-launch/contracts/agent-pane-launch-request'
 import type { PairedTerminalTabCloseIntentSlice } from './paired-terminal-tab-close-intent-actions'
+import type { RetainedTerminalStart } from '../../../../shared/workspace-layout/retained-terminal-start'
+import type { TerminalStartupAttempt } from './terminal-startup-attempt'
 
 export type TerminalState = {
   tabsByWorktree: Record<string, TerminalTab[]>
@@ -104,6 +106,8 @@ export type TerminalState = {
   workspaceSessionReady: boolean
   /** True after main ownership restoration, renderer PTY adoption, and structured-tab projection settle. */
   terminalStartupRestorationReady: boolean
+  /** Current hydration's unresolved automatic starts; never persisted. */
+  terminalStartupAttempt?: TerminalStartupAttempt
   restoredRuntimeHostIdByWorkspaceSessionKey: Record<string, ExecutionHostId>
   /** Carry non-owning hosts’ same-ID session partitions through owner writes without erasing them; never rendered directly. */
   contestedHostWorkspaceSessions: HostSessionSlices
@@ -151,7 +155,16 @@ export type TerminalSlice = TerminalState & TerminalActions & PairedTerminalTabC
 export type TerminalStoreSet = Parameters<StateCreator<AppState, [], [], AppState>>[0]
 export type TerminalStoreGet = Parameters<StateCreator<AppState, [], [], AppState>>[1]
 
-export type TerminalPaneStart = { status: PaneStartStatus; reason?: string }
+export type TerminalPaneStart = {
+  status: PaneStartStatus
+  reason?: string
+  retainedTerminalStart?: RetainedTerminalStart
+  retainedHostReceipt?: {
+    environmentId: string
+    pairingRevision: number | undefined
+    receivedFrame: number
+  }
+}
 /** `ptyGeneration` tells two starts under one terminal id apart (a daemon session id is reused). */
 export type TerminalPaneResumeOutcome = {
   ptyId: string

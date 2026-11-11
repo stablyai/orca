@@ -1,12 +1,15 @@
+import { assertTerminalCreateClientConnected } from './terminal-create-client-lifetime'
+import { RetainedTerminalStartError } from '../../../../shared/workspace-layout/retained-terminal-start'
 import type { TerminalWorkspaceCreationEvidence } from './terminal-workspace-scope'
-import {
-  recordTerminalLaunchMetadata,
-  resolveTerminalLaunchResult,
-  terminalLaunchPublicFacts
-} from './terminal-launch-result'
-import { revealCreatedTerminal } from './terminal-create-reveal'
+import { resolveTerminalLaunchResult, terminalLaunchPublicFacts } from './terminal-launch-result'
+import { revealCreatedTerminal, revealRetainedFailure } from './terminal-create-reveal'
 import type { PaneSpawnOperation } from '../../../ipc/pty/pane/pane-spawn-operation'
-import { OrcaRuntimeWithTerminalCreateDeduplication } from './terminal-create-deduplication'
+import type { RetainedTerminalAttempt } from './retained-terminal-attempt'
+import {
+  runWithRetainedTerminalAttempt,
+  takeRetainedTerminalAttempt
+} from './retained-terminal-operation'
+import { OrcaRuntimeWithTerminalCreateRegistration } from './terminal-create-registration'
 import { type PaneStartArgsOf, spawnInAdmittedPane } from './runtime-pane-admission'
 import type { TerminalCreateOptions } from './terminal-create-options'
 import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-create-contract'
@@ -21,24 +24,29 @@ import {
 } from '../identity/runtime-terminal-pane-identity'
 import { randomUUID } from 'node:crypto'
 import type { RuntimePtyController } from '../lifecycle/runtime-pty-controller-contract'
-import { SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV } from '../../../../shared/agent-launch/startup/setup-agent-sequencing'
-import { mergeTerminalEnvDeletionKeys } from './runtime-agent-launch-resolution'
 import { terminalSpawnOptions } from './terminal-spawn-options'
 import { createDesktopTerminal } from './orca-runtime-create-terminal-desktop'
-import { terminalCreateTeamAllocation } from './terminal-create-team-allocation'
-import { createIdempotentCallback } from './pty-spawn-commit-callback'
 import {
-  recordPtySurface,
-  spawnSurfaceClaimSequence
-} from '../surface/pty-recorded-surface-topology'
-import { agentLaunchTokenFor, withAgentLaunchToken } from '../../../agent-launch/agent-launch-token'
-import { seedPtyLaunchTitle } from './pty-launch-title'
+  terminalCreateTeamAllocation,
+  prepareTerminalCreateTeamLaunch
+} from './terminal-create-team-allocation'
+import { createIdempotentCallback } from './pty-spawn-commit-callback'
+import { agentLaunchTokenFor } from '../../../agent-launch/agent-launch-token'
 import { migratedPaneRestoreHint } from '../recovery/migrated-pane-restore-cwd'
-import { paneSize, resolvePtyFirstSize } from '../../../ipc/pty/pty-first-size'
+import { terminalCreateGrid } from './terminal-create-grid'
 import * as dependenciesOwner1 from '../../../../shared/workspace-layout/stable-pane-id'
+import type { ReplacedPaneOwner } from '../../../ipc/pty/pane/replaced-pane-owner'
+import { releaseStoppedPaneBinding } from '../../../ipc/pty/pane/pane-owner-replacement'
+import { BareWorkspaceTerminalLaunchError } from '../../../workspaces/catalog/workspace-git-storage'
 
-export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreateDeduplication {
+export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreateRegistration {
   protected abstract paneStartStatusArgs: PaneStartArgsOf
+  abstract beginRetainedTerminalAttempt(
+    worktreeId: string,
+    tabId: string,
+    leafId: string,
+    owner: Pick<NonNullable<PaneSpawnOperation['acquisition']>, 'key' | 'reservation'> | undefined
+  ): RetainedTerminalAttempt | null
 
   async createTerminal(
     selector?: string,
@@ -66,132 +74,121 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
       const launchTitleAt = { sequence: this.nextTitleObservationSequence(), epochMs: Date.now() }
       let cwd = this.resolveWorkspaceTerminalStartupCwd(workspace, launchOpts.cwd) ?? workspace.path
       const session = this.getWorkspaceSessionForWorktree(workspace.id)
-      // The window's latest published active group is where its reveal places the tab.
-      const groupId =
-        launchOpts.targetGroupId ??
-        this.mobileSessionTabsByWorktree.get(workspace.id)?.activeGroupId ??
-        session?.activeGroupIdByWorktree?.[workspace.id]
-      // Unshown workspaces have no measured group; a single group can use the common workspace geometry.
-      const singleGroup =
-        (session?.tabGroups?.[workspace.id]?.length ?? 0) <= 1
-          ? this.singleGroupWorkspaceGridSize
-          : undefined
-      const group = groupId ? this.terminalGroupGridSizes?.[groupId] : undefined
-      const initialSize = resolvePtyFirstSize({ pane: paneSize(session, opts), group, singleGroup })
+      const initialSize = terminalCreateGrid({
+        workspaceId: workspace.id,
+        launchOpts,
+        opts,
+        session,
+        mobileActiveGroupId: this.mobileSessionTabsByWorktree.get(workspace.id)?.activeGroupId,
+        singleGroupWorkspaceGridSize: this.singleGroupWorkspaceGridSize,
+        terminalGroupGridSizes: this.terminalGroupGridSizes
+      })
       let preAllocatedHandle =
         launchOpts.preAllocatedHandle ?? this.createPreAllocatedTerminalHandle()
       let { tabId, leafId, paneKey } = allocateTerminalPaneIdentity(launchOpts)
       const hint = migratedPaneRestoreHint(this.store, workspace, paneKey)
       const commit = createIdempotentCallback(hint.consumeThen(launchOpts.onPtySpawnCommitted))
       // Claimed before any await, so a concurrent create of this pane cannot slip in between.
-      const claimedStablePaneCreate = ptyController.claimStablePaneCreate?.({
-        worktreeId: workspace.id,
-        connectionId: workspace.connectionId,
-        tabId,
-        leafId
-      })
+      const claimedStablePaneCreate = launchOpts.preparedReplacement
+        ? undefined
+        : ptyController.claimStablePaneCreate?.({
+            worktreeId: workspace.id,
+            connectionId: workspace.connectionId,
+            tabId,
+            leafId
+          })
       const releaseStablePaneCreate = createIdempotentCallback(claimedStablePaneCreate)
       const launchToken = agentLaunchTokenFor(launchOpts, randomUUID)
       const teamAllocation = terminalCreateTeamAllocation(this.claudeAgentTeams)
       let effectiveLaunchConfig = launchOpts.launchConfig
+      let absentOwner: ReplacedPaneOwner | null = null
+      let absentOwnerTransferred = false
       let result!: Awaited<ReturnType<NonNullable<RuntimePtyController['spawn']>>>
-      const spawnFresh = async (operation: PaneSpawnOperation) => {
-        const baseEnv = withAgentLaunchToken(launchOpts.env, launchToken)
-        const agentTeams = await teamAllocation
-          .prepare(
-            {
-              launchConfig: launchOpts.launchConfig,
-              command: launchOpts.command,
-              claudeAgentTeamsSourceCommand: launchOpts.claudeAgentTeamsSourceCommand,
-              claudeAgentTeamsMode: this.store?.getSettings?.().claudeAgentTeamsMode,
-              baseEnv: { ...process.env, ...baseEnv },
-              adoptedBeforeLaunch: null
-            },
-            preAllocatedHandle
-          )
-          .catch((error: unknown) => {
-            releaseStablePaneCreate()
-            throw error
-          })
-        const { plan: agentTeamsPlan, sequencedStartupCommand } = agentTeams
-        effectiveLaunchConfig = agentTeams.effectiveLaunchConfig
-        const env = this.buildTerminalWorkspaceEnv(
-          workspace,
-          {
-            ...baseEnv,
-            ...(sequencedStartupCommand
-              ? {
-                  [SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]: sequencedStartupCommand
-                }
-              : {})
-          },
-          agentTeamsPlan?.env
-        )
-        const terminalColorQueryReplies = getTerminalViewerColors()
-        if (launchOpts.signal?.aborted) {
-          throw new Error('client_disconnected')
-        }
-        try {
-          const { launchAgent } = launchOpts
-          launchOpts.onPtySpawnDispatched?.({ launchConfig: effectiveLaunchConfig, launchAgent })
-          result = await spawnInAdmittedPane(this.store, ptyController, {
-            ...initialSize,
-            cwd,
-            command: sequencedStartupCommand
-              ? launchOpts.command
-              : (agentTeamsPlan?.command ?? launchOpts.command),
-            launchAgent: launchOpts.launchAgent,
-            ...(launchOpts.trustWorktreeId ? { trustWorktreeId: launchOpts.trustWorktreeId } : {}),
-            launchConfig: effectiveLaunchConfig,
-            ...(launchToken ? { launchToken } : {}),
-            commandDelivery: 'provider',
-            startupCommandDelivery: launchOpts.startupCommandDelivery,
-            env,
-            envToDelete: mergeTerminalEnvDeletionKeys(
-              launchOpts.envToDelete,
-              agentTeamsPlan?.envToDelete
-            ),
-            resumeProviderSession: launchOpts.resumeProviderSession,
-            ...(launchOpts.resumeOrigin ? { resumeOrigin: launchOpts.resumeOrigin } : {}),
-            telemetry: launchOpts.telemetry,
-            connectionId: workspace.connectionId,
-            worktreeId: workspace.id,
-            resolvedWorkspace: workspace,
-            preAllocatedHandle,
-            tabId,
-            leafId,
-            ...terminalSpawnOptions({
+      const spawnFresh = (operation: PaneSpawnOperation) =>
+        runWithRetainedTerminalAttempt(
+          operation,
+          launchOpts.preparedReplacement
+            ? takeRetainedTerminalAttempt(launchOpts.preparedReplacement)
+            : this.beginRetainedTerminalAttempt(workspace.id, tabId, leafId, operation.acquisition),
+          async () => {
+            const teamLaunch = await prepareTerminalCreateTeamLaunch({
+              allocation: teamAllocation,
               launchOpts,
-              workspace,
+              launchToken,
               preAllocatedHandle,
-              tabId,
-              leafId,
-              terminalColorQueryReplies,
-              launcherSpawnArgs,
-              commit,
-              operation
-            }),
-            ...this.paneStartStatusArgs(launchOpts)
-          })
-        } finally {
-          releaseStablePaneCreate?.()
-        }
-        return result
-      }
+              teamsMode: this.store?.getSettings?.().claudeAgentTeamsMode,
+              releaseStablePaneCreate,
+              buildEnv: (baseEnv, teamEnv) =>
+                this.buildTerminalWorkspaceEnv(workspace, baseEnv, teamEnv)
+            })
+            effectiveLaunchConfig = teamLaunch.launchConfig
+            const terminalColorQueryReplies = getTerminalViewerColors()
+            assertTerminalCreateClientConnected(launchOpts.signal)
+            try {
+              const { launchAgent } = launchOpts
+              launchOpts.onPtySpawnDispatched?.({
+                launchConfig: effectiveLaunchConfig,
+                launchAgent
+              })
+              result = await spawnInAdmittedPane(this.store, ptyController, {
+                ...initialSize,
+                ...(absentOwner
+                  ? {
+                      absentPaneReplacement: {
+                        owner: absentOwner,
+                        accept: () => {
+                          absentOwnerTransferred = true
+                        }
+                      }
+                    }
+                  : {}),
+                ...terminalSpawnOptions({
+                  launchOpts,
+                  workspace,
+                  preAllocatedHandle,
+                  tabId,
+                  leafId,
+                  terminalColorQueryReplies,
+                  launcherSpawnArgs,
+                  commit,
+                  operation,
+                  cwd,
+                  teamLaunch,
+                  launchToken
+                }),
+                ...this.paneStartStatusArgs(launchOpts)
+              })
+            } finally {
+              releaseStablePaneCreate?.()
+            }
+            return result
+          }
+        )
       try {
         // A pane moved from another host reopens where it last was, until a spawn commits.
         cwd = (await hint.peekCwd(launchOpts.cwd)) ?? cwd
-        if (launchOpts.signal?.aborted) {
-          throw new Error('client_disconnected')
-        }
+        assertTerminalCreateClientConnected(launchOpts.signal)
         const adoptedBeforeLaunch = await ptyController.adoptStablePane?.({
           ...initialSize,
+          ...(launchOpts.preparedReplacement
+            ? {
+                reservation: launchOpts.preparedReplacement.reservation,
+                stoppedPtyId: launchOpts.preparedReplacement.stoppedPtyId
+              }
+            : {}),
           cwd,
           connectionId: workspace.connectionId,
           worktreeId: workspace.id,
           preAllocatedHandle,
           tabId,
           leafId,
+          ...(!workspace.connectionId
+            ? {
+                keepAbsentBinding: (owner: ReplacedPaneOwner) => {
+                  absentOwner = owner
+                }
+              }
+            : {}),
           spawnFresh,
           onOutcome: (outcome, operation) => {
             claimedStablePaneCreate?.acceptOutcome?.(outcome, operation)
@@ -221,50 +218,19 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
           ;({ terminalHandle: preAllocatedHandle, tabId, leafId } = launch.surface)
           paneKey = dependenciesOwner1.makePaneKey(tabId, leafId)
         }
-        this.assertCreatedPtyRegistrationAllowed(result)
-        // Provider reattachment still needs this runtime's handle and workspace binding.
-        if (!result.stablePaneOwner) {
-          this.registerPreAllocatedHandleForPty(result.id, preAllocatedHandle)
-          if (result.wslDistro) {
-            this.preparePtyExecutionContext(result.id, result.wslDistro)
-          }
-          this.registerPty(result.id, workspace.id, workspace.connectionId, {
-            tabId,
-            leafId,
-            terminalHandle: preAllocatedHandle,
-            ...(result.incarnationId ? { incarnationId: result.incarnationId } : {})
-          })
-        }
-        const pty = this.getOrCreatePtyWorktreeRecord(result.id)
-        if (pty) {
-          pty.runtimeSessionOwned = true
-          if (!launch.adoptedStablePane) {
-            seedPtyLaunchTitle(pty, launch.effectiveTitle, launchTitleAt, (title, at) =>
-              this.setPtyManagementTitleFromObservedTitle(pty, title, at)
-            )
-          }
-          this.watchLaunchedAgent(
-            pty,
-            recordTerminalLaunchMetadata(pty, result, launch, launchOpts.command)
-          )
-          if (!launch.adoptedStablePane) {
-            this.rememberSavedTerminalLaunchResult(result.id, result)
-          }
-          const standing = spawnSurfaceClaimSequence(this.graphSequence)
-          recordPtySurface(this.terminalIdentity, pty, tabId, paneKey, standing)
-        }
-        const handle = pty ? this.issuePtyHandle(pty) : preAllocatedHandle
-        if (pty && !launch.adoptedStablePane && launchOpts.deferMobileSessionPublish !== true) {
-          this.publishPtyBackedMobileSessionTerminal(workspace.id, pty, {
-            tabId,
-            leafId,
-            title: launch.effectiveTitle ?? null,
-            activate: presentation === 'focused',
-            selectIfNoActiveTab: presentation !== 'background',
-            ...(launch.effectiveViewMode ? { viewMode: launch.effectiveViewMode } : {}),
-            ...(savedStartupCwd !== workspace.path ? { startupCwd: savedStartupCwd } : {})
-          })
-        }
+        const { pty, handle } = this.registerCreatedTerminal({
+          result,
+          preAllocatedHandle,
+          workspace,
+          tabId,
+          leafId,
+          paneKey,
+          launch,
+          launchOpts,
+          launchTitleAt,
+          presentation,
+          savedStartupCwd
+        })
         const reveal = revealCreatedTerminal({
           notifier: this.notifier,
           workspace,
@@ -300,6 +266,18 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
           ...(result.startupCwdFallback ? { startupCwdFallback: result.startupCwdFallback } : {}),
           ...(warning ? { warning } : {})
         }
+      } catch (error) {
+        if (error instanceof RetainedTerminalStartError) {
+          await revealRetainedFailure(this.notifier, error, launchOpts, { cwd, presentation })
+        }
+        if (
+          absentOwner &&
+          !absentOwnerTransferred &&
+          !(error instanceof BareWorkspaceTerminalLaunchError)
+        ) {
+          await releaseStoppedPaneBinding(this.store ?? undefined, absentOwner)
+        }
+        throw error
       } finally {
         teamAllocation.release()
         releaseStablePaneCreate()

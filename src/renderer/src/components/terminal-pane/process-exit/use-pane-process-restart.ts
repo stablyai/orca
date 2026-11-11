@@ -6,6 +6,7 @@ import { releasePaneTransportForRestart } from './pane-restart-transport-handoff
 import { clearPaneTerminalError } from '../errors/terminal-error-accumulation'
 import type { PtyConnectionDeps } from '../pty-connection/pty-connection-deps'
 import type { TerminalPaneCloseController } from '../layout/close/use-terminal-pane-close-actions'
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 
 export function usePaneProcessRestart({
   clearCodexRestartNotice,
@@ -87,14 +88,29 @@ export function usePaneProcessRestart({
       const transport = paneTransportsRef.current.get(paneId)
       const panePtyBinding = panePtyBindingsRef.current.get(paneId)
       const existingPtyId = transport?.getPtyId()
+      const originalPtyId =
+        existingPtyId ??
+        useAppStore.getState().terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId?.[pane.leafId] ??
+        null
+      const restartRecovery =
+        transport?.getExecutionHostId?.() === 'local' &&
+        !transport.getRuntimeEnvironmentId?.() &&
+        !transport.getConnectionId?.() &&
+        (!originalPtyId || !isRemoteRuntimePtyId(originalPtyId))
+          ? { ptyId: originalPtyId, incarnationId: panePtyBinding?.getPtyIncarnationId?.() ?? null }
+          : undefined
       if (existingPtyId) {
         suppressPtyExit(existingPtyId)
         clearCodexRestartNotice(existingPtyId)
-        clearTabPtyId(tabId, existingPtyId)
+        if (!restartRecovery) {
+          clearTabPtyId(tabId, existingPtyId)
+        }
       }
       panePtyBinding?.dispose()
       panePtyBindingsRef.current.delete(paneId)
-      syncPanePtyLayoutBinding(paneId, null)
+      if (!restartRecovery) {
+        syncPanePtyLayoutBinding(paneId, null)
+      }
       const replacesPtyId = releasePaneTransportForRestart(transport)
       paneTransportsRef.current.delete(paneId)
       setCacheTimerStartedAt(makePaneKey(tabId, pane.leafId), null)
@@ -105,7 +121,9 @@ export function usePaneProcessRestart({
         worktreeId,
         cwd,
         startup,
+        explicitPaneRestart: true,
         ...(replacesPtyId ? { replacesPtyId } : {}),
+        ...(restartRecovery ? { restartRecovery } : {}),
         mountFollowsTerminalPark: false,
         paneTransportsRef,
         paneMode2031Ref,

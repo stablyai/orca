@@ -70,6 +70,7 @@ export function createTerminalTabCloseActions(
       }
       settleAttentionRemovedBy(set, get, () =>
         set((s) => {
+          s.terminalStartupAttempt?.close(tabId)
           // Reuse one iterable for all per-tab omissions in this close.
           const closingTabIds = [tabId]
           const omitByTabId = <T>(record: Record<string, T>): Record<string, T> =>
@@ -240,6 +241,10 @@ export function createTerminalTabCloseActions(
             expandedPaneByTabId: nextExpanded,
             canExpandPaneByTabId: nextCanExpand,
             terminalLayoutsByTabId: nextLayouts,
+            terminalPaneStartsByPaneKey: closingTabIds.reduce(
+              (starts, id) => removePaneKeysByTabPrefix(starts, id),
+              s.terminalPaneStartsByPaneKey
+            ),
             localOnlyScrollbackByTabId: nextLocalOnlyScrollback,
             pendingStartupByTabId: nextPendingStartupByTabId,
             automaticAgentResumeClaimsByTabId: nextAutomaticAgentResumeClaimsByTabId,

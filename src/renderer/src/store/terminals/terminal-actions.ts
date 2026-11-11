@@ -71,6 +71,8 @@ export type TerminalActions = {
     options?: {
       pendingActivationSpawn?: boolean
       initialPtyId?: string
+      /** Projection of an accepted host action; never submit another layout create/start. */
+      layoutAlreadyAdmitted?: true
       executionFacts?: TerminalCreationExecutionFacts
       /** Stable leaf identity: an already-live pane's, or a host launch's pane before its process. */
       initialLeafId?: string
@@ -195,7 +197,11 @@ export type TerminalActions = {
   replaceTerminalLayoutPanePtyId: (tabId: string, leafId: string, ptyId: string) => void
   setTabPaneExpanded: (tabId: string, expanded: boolean) => void
   setTabCanExpandPane: (tabId: string, canExpand: boolean) => void
-  setTabLayout: (tabId: string, layout: TerminalLayoutSnapshot | null) => void
+  setTabLayout: (
+    tabId: string,
+    layout: TerminalLayoutSnapshot | null,
+    acceptedLeafId?: string
+  ) => void
   /** Client-local park scrollback for a tab. Never uploaded; read via `resolveLeafScrollback`. */
   setTabLocalOnlyScrollback: (tabId: string, buffersByLeafId: Record<string, string> | null) => void
   syncPaneDetachPtyOwnership: (args: {

@@ -1,10 +1,7 @@
+import { createFreshTerminal } from '@/store/terminals/fresh-terminal-creation'
 import { toast } from 'sonner'
 import { useAppStore } from '../../store/index'
-import { focusTerminalTabSurface } from '../terminal-pane/input/focus/focus-terminal-tab-surface'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
 import { createWebRuntimeSessionBrowserTab } from '../../runtime/browser/creation/web-runtime-browser-creation'
-import { createWebRuntimeSessionTerminal } from '../../runtime/hosted-terminals/creation/web-runtime-terminal-creation'
-import { isWebRuntimeSessionActive } from '../../runtime/web-session-tabs-sync/identity/web-runtime-session-environment'
 import { openTabBarEntry } from '../tab-bar/tab-create-entry-action'
 import type { TabCreateEntryArgs } from '../tab-bar/tab-create-entry-action'
 import { openMobileEmulatorTab } from '@/lib/simulator/launch/open-mobile-emulator-tab'
@@ -28,9 +25,6 @@ export function useTabGroupCreationCommands({
   worktreeId: string
   worktreeState: TabGroupWorktreeSnapshot
 }) {
-  const createTab = useAppStore((state) => state.createTab)
-  const setActiveTab = useAppStore((state) => state.setActiveTab)
-  const setActiveTabType = useAppStore((state) => state.setActiveTabType)
   const createBrowserTab = useAppStore((state) => state.createBrowserTab)
   const openNewBrowserTabInActiveWorkspace = useAppStore(
     (state) => state.openNewBrowserTabInActiveWorkspace
@@ -120,30 +114,7 @@ export function useTabGroupCreationCommands({
       void openNewTerminalTabInActiveWorkspace(groupId)
     },
     newTerminalWithShell: (shellOverride: string) => {
-      void (async () => {
-        const environmentId = runtimeEnvironmentIdOrLocalUnlessTwin(
-          useAppStore.getState(),
-          worktreeId
-        )
-        const outcome = await createWebRuntimeSessionTerminal(
-          {
-            worktreeId,
-            environmentId,
-            targetGroupId: groupId,
-            shell: shellOverride,
-            activate: true
-          },
-          { userAct: true }
-        )
-        if (outcome.status === 'created' || isWebRuntimeSessionActive(environmentId)) {
-          return
-        }
-        const tabId = createBrowserUuid()
-        createTab(worktreeId, groupId, shellOverride, { id: tabId })
-        setActiveTab(tabId)
-        setActiveTabType('terminal', worktreeId)
-        focusTerminalTabSurface(tabId)
-      })()
+      void createFreshTerminal({ worktreeId, groupId, shell: shellOverride })
     }
   }
 }

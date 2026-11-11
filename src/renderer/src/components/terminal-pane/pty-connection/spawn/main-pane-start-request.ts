@@ -60,35 +60,61 @@ export function startPaneThroughMainThenAttach(
   session: ConnectPanePtySession,
   today: () => Promise<string | null>
 ): Promise<string | null> {
-  if (!mainStartsPane(session)) {
-    return today()
-  }
-  if (session.mainStartAttach) {
+  if (mainStartsPane(session) && session.mainStartAttach) {
     // Do not retry main’s own attach-missing verdict; immediate terminal death would otherwise loop starts.
     showPaneStartFailure(session, 'terminal_not_started')
     return Promise.resolve(null)
   }
   return new Promise((resolve) => {
-    const settleNull = (): void => resolve(null)
+    let settled = false
+    const settle = (result: string | null | Promise<string | null>): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      const index = session.waitTeardowns.indexOf(settleNull)
+      if (index !== -1) {
+        session.waitTeardowns.splice(index, 1)
+      }
+      resolve(result)
+    }
+    const settleNull = (): void => settle(null)
     session.waitTeardowns.push(settleNull)
-    const sent = startPaneThroughMain(session, {
-      attach: () => {
-        const ptyId = session.deps.restoredPtyIdByLeafId?.[session.pane.leafId] ?? null
-        if (ptyId) {
-          // Main started a fresh terminal: follow its output, as a window start does.
-          session.resetFreshSpawnFollowOutput()
-          startDeferredSessionReattach(session, ptyId, { afterMainStart: true })
-        }
-        resolve(ptyId)
-      },
-      today: () => {
-        session.mainPaneStartHandedBack = true
-        resolve(today())
-      },
-      refused: settleNull
-    })
-    if (!sent) {
-      resolve(today())
+    const start = (): void => {
+      if (settled) {
+        return
+      }
+      if (session.disposed) {
+        settleNull()
+        return
+      }
+      if (!mainStartsPane(session)) {
+        settle(today())
+        return
+      }
+      const sent = startPaneThroughMain(session, {
+        attach: () => {
+          const ptyId = session.deps.restoredPtyIdByLeafId?.[session.pane.leafId] ?? null
+          if (ptyId) {
+            // Main started a fresh terminal: follow its output, as a window start does.
+            session.resetFreshSpawnFollowOutput()
+            startDeferredSessionReattach(session, ptyId, { afterMainStart: true })
+          }
+          settle(ptyId)
+        },
+        today: () => {
+          session.mainPaneStartHandedBack = true
+          settle(today())
+        },
+        refused: settleNull
+      })
+      if (!sent) {
+        settle(today())
+      }
+    }
+    // A failed saved attach must not become a fresh launch while the local start facts are unknown.
+    if (!waitsForMainPaneStart(session, start, settleNull, false)) {
+      start()
     }
   })
 }

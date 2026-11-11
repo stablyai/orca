@@ -11,6 +11,7 @@ import { LOCAL_CLI_RPC_CALLER } from '../rpc-caller-identity'
 // Short calls that stop on disconnect without long-poll keepalives or admission slots.
 const DISCONNECT_FORWARDED_METHODS = new Set([
   'browser.eval',
+  'session.readTerminalHistory',
   'linear.commentEdit',
   'linear.commentDelete'
 ])

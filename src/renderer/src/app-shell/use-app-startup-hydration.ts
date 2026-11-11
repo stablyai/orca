@@ -46,6 +46,7 @@ import {
   refreshStartupWorktrees
 } from '../startup/startup-worktree-refresh'
 import type { OnboardingState } from '../../../shared/onboarding-state-types'
+import { createRetainedTerminalStartupPreparation } from '../startup/retained-terminal-startup-restoration'
 
 /** Hydrate settings/UI/catalog/session, reconnect and restore terminals before unlocking saves. Failure boots in degraded no-save mode to protect disk state. */
 export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingState) => void): void {
@@ -69,6 +70,7 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
     let uiHydrated = false
     // Recovery must not repeat a partially completed reconnect and double-consume PTY/pending state (#1158).
     let reconnectStarted = false
+    const terminalStartupRestoration = createRetainedTerminalStartupPreparation(() => cancelled)
     void (async () => {
       const startupStartedAt = performance.now()
       logRendererStartupDiagnostic('startup-chain-start')
@@ -214,7 +216,7 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
           // Discovery must not wait for terminal or SSH restoration.
           const startupWorktreeRefresh = refreshStartupWorktrees(actions, () => cancelled)
           await timeRendererStartupStep('prepare-terminal-startup-restoration', () =>
-            window.api.app.prepareTerminalStartupRestoration()
+            terminalStartupRestoration.prepare()
           )
           if (cancelled) {
             return
@@ -269,6 +271,9 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
           await timeRendererStartupStep('terminal-provider-snapshot-capabilities', () =>
             refreshTerminalProviderSnapshotCapabilities(restoredPtyIds)
           )
+          if (cancelled) {
+            return
+          }
           reconnectStarted = true
           await timeRendererStartupStep('reconnect-terminals', () =>
             actions.reconnectPersistedTerminals(abortController.signal)
@@ -311,6 +316,7 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
           error,
           uiHydrated,
           reconnectStarted,
+          terminalStartupRestoration,
           isCancelled: () => cancelled,
           hydratePersistedUI: actions.hydratePersistedUI,
           reconnectPersistedTerminals: actions.reconnectPersistedTerminals,
@@ -322,6 +328,7 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
 
     return () => {
       cancelled = true
+      terminalStartupRestoration.dispose()
       abortController.abort()
     }
   }, [actions])

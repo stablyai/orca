@@ -13,20 +13,25 @@ export type TerminalHistoryCheckpointRead =
   | { status: 'unreadable' }
 
 export async function readTerminalHistoryCheckpoint(
-  path: string
+  path: string,
+  signal?: AbortSignal
 ): Promise<TerminalHistoryCheckpointRead> {
+  signal?.throwIfAborted()
   if (!existsSync(path)) {
     return { status: 'missing' }
   }
   try {
     const value = await readTerminalHistoryJsonAsync<unknown>(
       path,
-      TERMINAL_HISTORY_CHECKPOINT_MAX_BYTES
+      TERMINAL_HISTORY_CHECKPOINT_MAX_BYTES,
+      signal
     )
+    signal?.throwIfAborted()
     return isTerminalCheckpointFile(value)
       ? { status: 'readable', checkpoint: value }
       : { status: 'unreadable' }
   } catch {
+    signal?.throwIfAborted()
     return { status: 'unreadable' }
   }
 }

@@ -41,14 +41,15 @@ describe('reconcileMountedPanesToLayout', () => {
   const reconcile = (
     layout: TerminalPaneLayoutNode,
     isExpanded = false,
-    ptyIdsByLeafId?: Record<string, string>
+    ptyIdsByLeafId?: Record<string, string>,
+    activeLeafId: string | null = null
   ): boolean =>
     reconcileMountedPanesToLayout({
       tabId: TAB,
       manager,
       layout: {
         root: layout,
-        activeLeafId: null,
+        activeLeafId,
         expandedLeafId: null,
         ...(ptyIdsByLeafId ? { ptyIdsByLeafId } : {})
       },
@@ -121,7 +122,10 @@ describe('reconcileMountedPanesToLayout', () => {
     expect(manager.getActivePane()?.leafId).toBe(A)
     const D = '44444444-4444-4444-8444-444444444444'
     reconcile(
-      split('vertical', leaf(A), split('horizontal', leaf(B), split('vertical', leaf(C), leaf(D))))
+      split('vertical', leaf(A), split('horizontal', leaf(B), split('vertical', leaf(C), leaf(D)))),
+      false,
+      undefined,
+      D
     )
     expect(manager.getActivePane()?.leafId).toBe(D)
   })

@@ -71,7 +71,9 @@ export function splitManagedPane(args: SplitManagedPaneArgs): ManagedPane | null
     ratio: args.opts?.ratio,
     newPaneFirst: args.newPaneFirst
   })
-  args.setActivePaneId(newPane.id)
+  if (args.opts?.activate !== false) {
+    args.setActivePaneId(newPane.id)
+  }
   openSplitPane(args, newPane, existing.leafId, args.opts?.cwd)
 
   for (const movedPaneState of movedPaneStates) {
@@ -149,9 +151,13 @@ function openSplitPane(
     ligatures: args.managerOptions.terminalLigaturesEnabled?.(),
     inlineImages: args.managerOptions.terminalInlineImagesEnabled?.()
   })
-  applyPaneOpacity(args.panes.values(), newPane.id, args.styleOptions)
+  if (args.opts?.activate !== false) {
+    applyPaneOpacity(args.panes.values(), newPane.id, args.styleOptions)
+  }
   applyDividerStyles(args.root, args.styleOptions)
-  newPane.terminal.focus()
+  if (args.opts?.activate !== false) {
+    newPane.terminal.focus()
+  }
   updateMultiPaneState(args.getDragCallbacks())
   // Forward creation hints to inherit local cwd or adopt the runtime-spawned PTY in web splits.
   args.publishPaneCreated(newPane, {

@@ -1,3 +1,5 @@
+import { resolveMobileSessionActivationTab } from './mobile-session-tab-activation-target'
+import type { RetainedTerminalStart } from '../../../../shared/workspace-layout/retained-terminal-start'
 import type { RuntimeWorkspaceSelectors as WorkspaceSelectors } from '../../workspaces/workspace-selectors'
 import type { OrcaRuntimeWithApplyMobileSessionTabNavigation as MobileSessionNavigation } from './apply-mobile-session-tab-navigation'
 import type { OrcaRuntimeWithAgentSessionResumeOwnership as AgentSessionResume } from './agent-session-resume-ownership'
@@ -26,6 +28,11 @@ import { paneHoldsSession } from '../../terminal/surface/main-terminal-surfaces'
 import { recordShownTerminalUserOpen } from '../../terminal/lifecycle/run-terminal-client-use'
 import { resolveChatTabActivation } from '../../agent-session/agent-session-tab-identity'
 export abstract class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh extends OrcaRuntimeWithRestoredPaneStart {
+  abstract getRetainedTerminalStart(
+    worktreeId: string,
+    tabId: string,
+    leafId: string
+  ): RetainedTerminalStart | null
   protected abstract toMobileSessionTabsResult(
     snapshot: RuntimeMobileSessionTabsSnapshot
   ): RuntimeMobileSessionTabsResult
@@ -135,6 +142,7 @@ export abstract class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh exten
       clientNavigationId?: string
       navigation?: RuntimeNavigationTarget
       intent?: TabActivationIntent
+      preserveRetainedStart?: true
     } = {}
   ): Promise<RuntimeMobileSessionTabActivationResult> {
     const navigation = opts.navigation ?? (opts.notifyClients === false ? 'caller' : 'all')
@@ -148,22 +156,7 @@ export abstract class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh exten
     worktreeId = this.getExplicitSessionWorktreeIdSelector(worktreeSelector) ?? worktreeId
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
     tabId = resolveChatTabActivation(snapshot?.tabs ?? [], tabId)
-    const directTab = snapshot?.tabs.find((candidate) => candidate.id === tabId)
-    const tab = leafId
-      ? ((directTab?.type === 'terminal' && directTab.leafId === leafId ? directTab : undefined) ??
-        snapshot?.tabs.find(
-          (candidate) =>
-            candidate.type === 'terminal' &&
-            candidate.parentTabId === tabId &&
-            candidate.leafId === leafId
-        ))
-      : (directTab ??
-        snapshot?.tabs.find(
-          (candidate) => candidate.type === 'terminal' && candidate.parentTabId === tabId
-        ) ??
-        snapshot?.tabs.find(
-          (candidate) => candidate.type === 'browser' && candidate.browserWorkspaceId === tabId
-        ))
+    const tab = resolveMobileSessionActivationTab(snapshot, tabId, leafId)
     if (!tab) {
       throw new Error('tab_not_found')
     }
@@ -177,6 +170,10 @@ export abstract class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh exten
       const shouldMaterializePendingTerminal =
         publicTab?.type === 'terminal' &&
         publicTab.status !== 'ready' &&
+        !(
+          opts.preserveRetainedStart &&
+          this.getRetainedTerminalStart(worktreeId, tab.parentTabId, tab.leafId)
+        ) &&
         // Explicit tab opens wake slept panes (#11598); refuse only automatic probes.
         (!automatic ||
           (!this.isDeliberatelyParkedPane(worktreeId, tab) &&

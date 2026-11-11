@@ -165,7 +165,12 @@ export function registerLivePty(
 }
 
 export function committingSpawn<
-  Args extends { worktreeId?: string; tabId?: string; leafId?: string },
+  Args extends {
+    worktreeId?: string
+    tabId?: string
+    leafId?: string
+    admitPreparedSpawn?: () => Promise<void>
+  },
   Result extends { id: string }
 >(
   runtime: OrcaRuntimeService,
@@ -173,6 +178,7 @@ export function committingSpawn<
   hostId = 'local'
 ): (args: Args) => Promise<Result> {
   return async (args) => {
+    await args.admitPreparedSpawn?.()
     const result = await spawn(args)
     if (args.worktreeId && args.tabId && args.leafId && typeof result?.id === 'string') {
       bindPaneFirst(

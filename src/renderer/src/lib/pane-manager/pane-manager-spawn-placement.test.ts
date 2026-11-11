@@ -71,4 +71,24 @@ describe('PaneManager spawn placement hints', () => {
       }
     ])
   })
+
+  it('attaches a host-created split without activating it in a background viewer', () => {
+    const first = manager.createInitialPane({ leafId: LEAF_A })
+    onPaneCreated.mockClear()
+    onActivePaneChange.mockClear()
+
+    const accepted = manager.splitPane(first.id, 'vertical', {
+      leafId: LEAF_B,
+      ptyId: 'pty-accepted',
+      activate: false
+    })
+
+    expect(accepted?.leafId).toBe(LEAF_B)
+    expect(manager.getActivePane()?.leafId).toBe(LEAF_A)
+    expect(onActivePaneChange).not.toHaveBeenCalled()
+    expect(onPaneCreated).toHaveBeenCalledWith(expect.objectContaining({ leafId: LEAF_B }), {
+      ptyId: 'pty-accepted',
+      placement: { kind: 'split', parentLeafId: LEAF_A, direction: 'vertical' }
+    })
+  })
 })

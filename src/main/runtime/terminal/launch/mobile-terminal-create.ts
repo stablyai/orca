@@ -1,3 +1,4 @@
+import type { PreparedPaneReplacement } from '../recovery/prepared-pane-replacement'
 import type { OrcaRuntimeWithScheduleMobileSessionTabsChanged as SessionTabsPublication } from '../../session-tabs/session-tabs-change-publication'
 import { OrcaRuntimeWithFailedStartPanes } from './failed-start-pane'
 import type { WorktreeStartupLaunch } from '../../../../shared/worktree/launch-types'
@@ -11,6 +12,7 @@ import type { RuntimeMobileSessionCreateTerminalResult } from '../../../../share
 import type { RuntimeTerminalPresentation } from '../../../../shared/runtime-terminal-contracts'
 import type { SpawnIntent } from '../../../../shared/terminal/pty/admission/spawn-admission-contract'
 import type { AgentLaunchRuntime } from '../../../../shared/agent-launch/startup/agent-launch-runtime'
+import type { NewGroupSplit } from '../../../../shared/workspace-layout/workspace-layout-command-types'
 import {
   type RuntimeNavigationTarget,
   navigationTargetsHost
@@ -22,10 +24,13 @@ const MOBILE_TERMINAL_CREATE_RESULT_TTL_MS = 60_000
 
 /** A paired client's terminal create request. */
 export type MobileTerminalCreateOptions = {
+  retainAdmittedStart?: true
   terminalImageViewerSupported?: boolean
   afterTabId?: string
   sourceChatFork?: { sessionId: string }
   targetGroupId?: string
+  split?: NewGroupSplit
+  initialSize?: { cols: number; rows: number }
   command?: string
   shellOverride?: string
   cwd?: string
@@ -46,6 +51,8 @@ export type MobileTerminalCreateOptions = {
 }
 
 export type OwnedMobileTerminalCreateOptions = {
+  retainAdmittedStart?: true
+  preparedReplacement?: PreparedPaneReplacement
   /** A paired client's own create or tab open; without it a stopped WSL distro holds the start. */
   wslUserAct?: true
   command?: string
@@ -60,6 +67,8 @@ export type OwnedMobileTerminalCreateOptions = {
   trustWorktreeId?: string
   viewMode?: 'terminal' | 'chat'
   targetGroupId?: string
+  split?: NewGroupSplit
+  initialSize?: { cols: number; rows: number }
   afterDesktopTabId?: string
   presentation?: RuntimeTerminalPresentation
   supportsSplitGroupPlacement?: boolean
@@ -100,6 +109,8 @@ export abstract class OrcaRuntimeWithCreateMobileSessionTerminal extends OrcaRun
       afterTabId?: string
       sourceChatFork?: { sessionId: string }
       targetGroupId?: string
+      split?: NewGroupSplit
+      initialSize?: { cols: number; rows: number }
       command?: string
       shellOverride?: string
       cwd?: string

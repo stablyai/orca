@@ -1,7 +1,9 @@
+import {
+  pruneMobileTerminalDispatchRecipes,
+  type MobileTerminalDispatchRecipe
+} from './mobile-terminal-dispatch-recipes'
 import type { OrcaRuntimeWithScheduleMobileSessionTabsChanged as SessionTabsPublication } from '../../session-tabs/session-tabs-change-publication'
 import { OrcaRuntimeWithResolveMobileSessionTerminalCommand } from './mobile-terminal-startup'
-import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type {
   RuntimeMobileSessionCreateTerminalResult,
   RuntimeMobileSessionTabsSnapshot
@@ -22,8 +24,6 @@ import {
   getHeadlessMobileSessionGroupId
 } from '../surface/mobile-session-layout-projection'
 
-const OWNED_MOBILE_DISPATCH_RECIPE_TTL_MS = 15 * 60_000
-
 export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal extends OrcaRuntimeWithResolveMobileSessionTerminalCommand {
   protected abstract createMobileSessionTabsDelivery(): ReturnType<
     SessionTabsPublication['createMobileSessionTabsDelivery']
@@ -33,24 +33,7 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
     ...args: Parameters<PtyTerminalSummaryMethods['getPtyManualTitle']>
   ): ReturnType<PtyTerminalSummaryMethods['getPtyManualTitle']>
 
-  private readonly ownedMobileDispatchRecipes = new Map<
-    string,
-    {
-      launchConfig?: SleepingAgentLaunchConfig
-      launchAgent?: TuiAgent
-      connectionId: string | null
-      recordedAt: number
-    }
-  >()
-
-  private pruneOwnedMobileDispatchRecipes(): void {
-    const now = Date.now()
-    for (const [handle, recipe] of this.ownedMobileDispatchRecipes) {
-      if (now - recipe.recordedAt >= OWNED_MOBILE_DISPATCH_RECIPE_TTL_MS) {
-        this.ownedMobileDispatchRecipes.delete(handle)
-      }
-    }
-  }
+  private readonly ownedMobileDispatchRecipes = new Map<string, MobileTerminalDispatchRecipe>()
 
   protected async createRuntimeOwnedMobileSessionTerminal(
     worktreeId: string,
@@ -58,7 +41,7 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
     afterTabId?: string,
     opts: OwnedMobileTerminalCreateOptions = {}
   ): Promise<RuntimeMobileSessionCreateTerminalResult> {
-    this.pruneOwnedMobileDispatchRecipes()
+    pruneMobileTerminalDispatchRecipes(this.ownedMobileDispatchRecipes)
     const workspace = await this.resolveTerminalWorkspaceLaunchScope(
       `id:${worktreeId}`,
       undefined,
@@ -82,6 +65,8 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
     const create = (preAllocatedHandle?: string) =>
       this.createTerminal(`id:${worktreeId}`, {
         focus: false,
+        ...(opts.retainAdmittedStart ? { keepPaneOnStartFailure: true as const } : {}),
+        ...(opts.preparedReplacement ? { preparedReplacement: opts.preparedReplacement } : {}),
         ...(opts.presentation ? { presentation: opts.presentation } : {}),
         ...(opts.afterDesktopTabId ? { afterTabId: opts.afterDesktopTabId } : {}),
         onPtySpawnDispatched: (launch) => {
@@ -123,6 +108,8 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
         ...(opts.launchRuntime ? { launchRuntime: opts.launchRuntime } : {}),
         ...(opts.viewMode ? { viewMode: opts.viewMode } : {}),
         ...(opts.targetGroupId ? { targetGroupId: opts.targetGroupId } : {}),
+        ...(opts.split ? { split: opts.split } : {}),
+        ...(opts.initialSize ? { initialSize: opts.initialSize } : {}),
         startupCommandDelivery: opts.startupCommandDelivery,
         ...(opts.identity
           ? {
@@ -253,11 +240,18 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
       afterTabId,
       { afterParentGroup: opts.supportsSplitGroupPlacement !== false }
     )
+    const admittedSession = this.getWorkspaceSessionForWorktree(worktreeId)
+    const admittedGroups = admittedSession?.tabGroups?.[worktreeId]
+    const admittedPlacement =
+      opts.split &&
+      admittedGroups?.some(
+        (group) => group.id === opts.targetGroupId && group.tabOrder.includes(parentTabId)
+      )
     const tabGroups = buildHeadlessMobileSessionTabGroups(
       worktreeId,
       tabs,
       activate ? tab : null,
-      existing?.tabGroups,
+      admittedPlacement ? admittedGroups : existing?.tabGroups,
       opts.targetGroupId ? { tabId: parentTabId, groupId: opts.targetGroupId } : undefined
     )
     if (opts.afterDesktopTabId) {
@@ -289,7 +283,11 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
       activeTabType: activate ? 'terminal' : (existing?.activeTabType ?? null),
       tabGroups,
       // Retain split geometry when adding a tab.
-      ...(existing?.tabGroupLayout ? { tabGroupLayout: existing.tabGroupLayout } : {}),
+      ...(admittedPlacement && admittedSession?.tabGroupLayouts?.[worktreeId]
+        ? { tabGroupLayout: admittedSession.tabGroupLayouts[worktreeId] }
+        : existing?.tabGroupLayout
+          ? { tabGroupLayout: existing.tabGroupLayout }
+          : {}),
       tabs
     }
     // Store adds retirement proofs; emit that snapshot because version-deduping subscribers would miss proofs from a pre-store frame.

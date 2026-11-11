@@ -1,3 +1,5 @@
+import type { prepareTerminalCreateTeamLaunch } from './terminal-create-team-allocation'
+import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import type { TerminalCreateOptions } from './terminal-create-options'
 import type { SpawnIntent } from '../../../../shared/terminal/pty/admission/spawn-admission-contract'
 import type { PaneSpawnOperation } from '../../../ipc/pty/pane/pane-spawn-operation'
@@ -45,10 +47,13 @@ export function terminalSpawnOptions({
   terminalColorQueryReplies,
   launcherSpawnArgs,
   commit,
-  operation
+  operation,
+  cwd,
+  teamLaunch,
+  launchToken
 }: {
   launchOpts: TerminalCreateOptions
-  workspace: { id: string }
+  workspace: TerminalWorkspaceLaunchScope
   preAllocatedHandle: string
   tabId: string
   leafId: string
@@ -56,8 +61,34 @@ export function terminalSpawnOptions({
   launcherSpawnArgs: PairedLauncherSpawnArgs
   commit: () => void
   operation: PaneSpawnOperation
+  cwd: string
+  teamLaunch: Awaited<ReturnType<typeof prepareTerminalCreateTeamLaunch>>
+  launchToken: string | undefined
 }) {
   return {
+    ...(launchOpts.preparedReplacement
+      ? { preparedReplacement: launchOpts.preparedReplacement }
+      : {}),
+    cwd,
+    command: teamLaunch.command,
+    launchAgent: launchOpts.launchAgent,
+    ...(launchOpts.trustWorktreeId ? { trustWorktreeId: launchOpts.trustWorktreeId } : {}),
+    launchConfig: teamLaunch.launchConfig,
+    ...(launchToken ? { launchToken } : {}),
+    commandDelivery: 'provider' as const,
+    startupCommandDelivery: launchOpts.startupCommandDelivery,
+    env: teamLaunch.env,
+    envToDelete: teamLaunch.envToDelete,
+    resumeProviderSession: launchOpts.resumeProviderSession,
+    ...(launchOpts.resumeOrigin ? { resumeOrigin: launchOpts.resumeOrigin } : {}),
+    telemetry: launchOpts.telemetry,
+    connectionId: workspace.connectionId,
+    worktreeId: workspace.id,
+    resolvedWorkspace: workspace,
+    preAllocatedHandle,
+    tabId,
+    leafId,
+
     ...spawnShellInputs(launchOpts),
     ...(terminalColorQueryReplies ? { terminalColorQueryReplies } : {}),
     ...launcherSpawnArgs,
@@ -84,6 +115,7 @@ export function terminalSpawnOptions({
     ...(launchOpts.onPtySpawnCommitted ? { onPtySpawnCommitted: commit } : {}),
     paneSpawnOperation: operation,
     ...newTabIn(launchOpts),
+    ...(launchOpts.split ? { groupSplit: launchOpts.split } : {}),
     ...(launchOpts.afterTabId ? { afterTabId: launchOpts.afterTabId } : {}),
     ...(launchOpts.sessionId ? { sessionId: launchOpts.sessionId } : {}),
     ...(launchOpts.isNewSession ? { isNewSession: true } : {}),

@@ -1,4 +1,4 @@
-import { BARE_WORKSPACE_LAUNCH_ERROR } from '../../../workspaces/catalog/workspace-git-storage'
+import { BareWorkspaceTerminalLaunchError } from '../../../workspaces/catalog/workspace-git-storage'
 import { OrcaRuntimeWithStopExactTerminalsForWorktree } from './worktree-terminal-stop-targets'
 import {
   getConnectionExecutionHostId,
@@ -98,7 +98,7 @@ export abstract class OrcaRuntimeWithStopTerminalsForProject extends OrcaRuntime
   ): Promise<() => void> {
     if (target && (await this.workspaceUsesBareGitStorage(target))) {
       if (!opts.reattachSessionId || !opts.requireAttachOnly) {
-        throw new Error(BARE_WORKSPACE_LAUNCH_ERROR)
+        throw new BareWorkspaceTerminalLaunchError()
       }
       opts.requireAttachOnly()
     }

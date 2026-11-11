@@ -9,6 +9,9 @@ import { resolvePtyBoundActiveLeafId } from '../../components/terminal-pane/layo
 import { resolveTerminalLayoutPtyOwnershipTransfers } from '../../../../shared/workspace-layout/terminal-layout-pty-ownership'
 import { sanitizeTerminalLayoutPaneTitles } from '../../../../shared/workspace-layout/terminal-pane-title-sanitization'
 import type { TerminalLayoutPtyOwnershipTransfer } from './workspace-terminal-hydration-patch'
+import { resolveRootlessTerminalLayoutLeafId } from '../../../../shared/workspace-layout/terminal-pane-tree'
+import { mintStablePaneId } from '@/lib/pane-manager/pane-layout/mint-stable-pane-id'
+import { singlePaneLayoutSnapshot } from './terminal-single-pane-layout'
 
 export function buildWorkspaceTerminalLayoutPlan({
   ownershipTransfersByTabId,
@@ -25,7 +28,7 @@ export function buildWorkspaceTerminalLayoutPlan({
   tabById: ReadonlyMap<string, TerminalTab>
   validTabIds: ReadonlySet<string>
 }): Record<string, TerminalLayoutSnapshot> {
-  return Object.fromEntries(
+  const layouts: Record<string, TerminalLayoutSnapshot> = Object.fromEntries(
     Object.entries(session.terminalLayoutsByTabId)
       .filter(([tabId]) => validTabIds.has(tabId))
       .map(([tabId, persisted]) => {
@@ -56,4 +59,20 @@ export function buildWorkspaceTerminalLayoutPlan({
         return [tabId, { ...sanitized, activeLeafId }]
       })
   )
+  // Name the ordinary initial pane during hydration, before its automatic-start cohort is captured.
+  for (const [tabId, tab] of tabById) {
+    const layout = layouts[tabId]
+    if (layout?.root) {
+      continue
+    }
+    const leafId =
+      resolveRootlessTerminalLayoutLeafId(layout ?? { activeLeafId: null }) ?? mintStablePaneId()
+    layouts[tabId] = {
+      ...singlePaneLayoutSnapshot(leafId, tab.ptyId ?? undefined),
+      ...layout,
+      root: { type: 'leaf', leafId },
+      activeLeafId: leafId
+    }
+  }
+  return layouts
 }

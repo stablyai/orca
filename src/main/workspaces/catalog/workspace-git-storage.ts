@@ -13,6 +13,12 @@ import { assertWslUncPathRunning, wslDistroForPath } from '../../wsl/filesystem/
 export const BARE_WORKSPACE_LAUNCH_ERROR =
   'This folder contains Git storage, not checked-out files. Open a checkout to start a terminal or chat.'
 
+export class BareWorkspaceTerminalLaunchError extends Error {
+  constructor() {
+    super(BARE_WORKSPACE_LAUNCH_ERROR)
+  }
+}
+
 const rootProbes = new Map<string, Promise<boolean>>()
 
 /** Only an authoritative graph or an explicit host Git answer establishes bare storage. */

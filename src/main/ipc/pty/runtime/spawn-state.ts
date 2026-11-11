@@ -1,3 +1,5 @@
+import type { PreparedPtySpawnSettlement } from '../spawn-outcome'
+import type { PreparedPaneReplacement } from '../../../runtime/terminal/recovery/prepared-pane-replacement'
 import type { TerminalViewAttributes } from '../../../../shared/terminal/protocol/queries/terminal-view-attributes'
 import type { PtySpawnSizeSeed } from '../spawn-options-assembly'
 import type { PtySpawnOutcome } from '../spawn-outcome'
@@ -34,6 +36,8 @@ import { localProvider } from '../provider/registry'
 import type { PaneResumeOutcome } from '../../../../shared/workspace-layout/workspace-layout-published'
 import type { StartupCwdFallback } from '../../../../shared/startup-cwd-fallback'
 import type { TerminalWorkspaceLaunchScope } from '../../../runtime/orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
+import type { ReplacedPaneOwner } from '../pane/replaced-pane-owner'
+import type { NewGroupSplit } from '../../../../shared/workspace-layout/workspace-layout-command-types'
 
 export type RuntimePtySpawnState = {
   deps: PtyRuntimeControllerDeps
@@ -101,6 +105,8 @@ export type RuntimePtySpawnState = {
   }
   stablePaneOwner: StablePaneOwner | null
   stablePaneBindingPersisted: boolean
+  settledSpawnOutcome?: PtySpawnOutcome
+  preservesEndedPane?: boolean
   rejectedRegistrationCandidate: PtySpawnResult | null
   pendingRegistrationPtyId: string | null
   pendingRegistrationClaim?: PtyRegistrationClaim
@@ -109,9 +115,11 @@ export type RuntimePtySpawnState = {
   releaseWorktreeSpawn: (() => void) | undefined
   reportPtySpawnCommitted: () => void
   preSpawnHiddenMarkId: string | null
+  replacedPaneOwner?: ReplacedPaneOwner | null
 }
 
 export type RuntimePtySpawnArgs = {
+  preparedReplacement?: PreparedPaneReplacement
   resolvedWorkspace?: TerminalWorkspaceLaunchScope
   cols: number
   rows: number
@@ -150,6 +158,7 @@ export type RuntimePtySpawnArgs = {
   persistHostSessionBinding?: boolean
   expectedSourceBinding?: PtyBindingSourceExpectation
   placement?: TerminalPanePlacement
+  groupSplit?: NewGroupSplit
   terminalKittyKeyboardProtocol?: boolean
   terminalColorQueryReplies?: { foreground?: string; background?: string }
   /** A paired launcher's theme: its PTY answers OSC 10/11 with it over the host-wide theme. */
@@ -165,6 +174,12 @@ export type RuntimePtySpawnArgs = {
   signal?: AbortSignal
   refuseSleptWorktree?: boolean
   onPtySpawnCommitted?: () => void
+  /** Internal layout admission, after prepared host policy accepts and before provider dispatch. */
+  admitPreparedSpawn?: () => Promise<void>
+  /** Settles an admitted start while its reservation and policy lease are still held. */
+  onPreparedSpawnSettlement?: (settlement: PreparedPtySpawnSettlement) => unknown
+  /** Outer adoption owns this absent binding until the runtime context accepts it. */
+  absentPaneReplacement?: { owner: ReplacedPaneOwner; accept: () => void }
   /** Publish fresh resume outcome before writing its pane binding. */
   onResumeOutcome?: (ptyId: string, outcome: PaneResumeOutcome) => void
   paneSpawnOperation?: PaneSpawnOperation

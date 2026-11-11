@@ -51,6 +51,7 @@ export function projectIpcPtyConnectResult(
     }
   }
   if (
+    spawnResult.incarnationId ||
     launchAgent ||
     spawnResult.launchConfig ||
     spawnResult.startupCwdFallback ||

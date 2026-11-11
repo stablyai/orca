@@ -1,3 +1,5 @@
+import { RetainedTerminalStartError } from '../../../../shared/workspace-layout/retained-terminal-start'
+import { revealRetainedTerminalStart } from './terminal-create-reveal'
 // Main writes and starts its owned splits under the proposed pane id; every view attaches to that terminal.
 import { OrcaRuntimeWithSplitPtyBackedTerminal } from './terminal-split-surface'
 import type { RuntimeTerminalSplit } from '../../../../shared/runtime-terminal-contracts'
@@ -15,6 +17,7 @@ import { randomUUID } from 'node:crypto'
 import { paneStartFailure } from '../surface/pane-start-statuses'
 import { collectLeafIds } from '../../../../shared/workspace-layout/terminal-pane-layout-tree'
 import { recordFreshLaunch } from './launch-evidence'
+import { BareWorkspaceTerminalLaunchError } from '../../../workspaces/catalog/workspace-git-storage'
 
 export type SplitPaneSource = { worktreeId: string; tabId: string; leafId: string }
 
@@ -47,7 +50,13 @@ export abstract class OrcaRuntimeWithSplitPaneInMain extends OrcaRuntimeWithSpli
     opts: SplitPaneInMainOptions,
     error: unknown
   ): Promise<never> {
-    if (opts.keepPaneOnStartFailure && opts.newLeafId && isTerminalLeafId(opts.newLeafId)) {
+    if (
+      ORCA_LAYOUT_OWNER_IS_MAIN &&
+      !(error instanceof BareWorkspaceTerminalLaunchError) &&
+      opts.keepPaneOnStartFailure &&
+      opts.newLeafId &&
+      isTerminalLeafId(opts.newLeafId)
+    ) {
       const reply = await this.applyLayoutCommand({
         type: 'splitPane',
         workspace: source.worktreeId,
@@ -80,7 +89,7 @@ export abstract class OrcaRuntimeWithSplitPaneInMain extends OrcaRuntimeWithSpli
     source: SplitPaneSource,
     opts: SplitPaneInMainOptions
   ): Promise<RuntimeTerminalSplit> {
-    if (!ORCA_LAYOUT_OWNER_IS_MAIN || !this.ownsTabLayout(source.worktreeId, source.tabId)) {
+    if (!this.ownsTabLayout(source.worktreeId, source.tabId)) {
       // The window then splits it as before (a paired server's tab, or the window-owned build).
       throw new Error('host_not_owned')
     }
@@ -106,10 +115,22 @@ export abstract class OrcaRuntimeWithSplitPaneInMain extends OrcaRuntimeWithSpli
       undefined,
       { wslUserAct: opts.wslUserAct === true }
     ).catch((error: unknown) => this.keepSplitThatCannotStart(source, opts, error))
+    const sourceSession = this.getWorkspaceSessionForWorktree(source.worktreeId)
+    const sourceLayout = sourceSession?.terminalLayoutsByTabId?.[source.tabId]
+    const sourceTab = sourceSession?.tabsByWorktree?.[source.worktreeId]?.find(
+      (tab) => tab.id === source.tabId
+    )
+    const sourcePtyId = sourceLayout?.ptyIdsByLeafId?.[source.leafId] ?? sourceTab?.ptyId
+    const inheritedCwd =
+      opts.cwd === undefined && sourcePtyId
+        ? await controller.getCwd?.(sourcePtyId).catch(() => null)
+        : undefined
+    const cwd = opts.cwd ?? inheritedCwd ?? sourceTab?.startupCwd ?? workspace.path
     const preAllocatedHandle = this.createPreAllocatedTerminalHandle()
     const result = await spawnInAdmittedPane(this.store, controller, {
       ...resolvePtyFirstSize({ pane: opts.initialSize }),
-      cwd: opts.cwd ?? workspace.path,
+      cwd,
+      ...(sourceTab?.shellOverride ? { shellOverride: sourceTab.shellOverride } : {}),
       command: opts.command,
       commandDelivery: 'provider',
       env: this.buildTerminalWorkspaceEnv(workspace, {
@@ -129,6 +150,23 @@ export abstract class OrcaRuntimeWithSplitPaneInMain extends OrcaRuntimeWithSpli
       ...this.paneStartStatusArgs(
         opts.keepPaneOnStartFailure ? { keepPaneOnStartFailure: true } : {}
       )
+    }).catch(async (error: unknown) => {
+      if (error instanceof RetainedTerminalStartError) {
+        await revealRetainedTerminalStart({
+          notifier: this.notifier,
+          start: error.data.retainedTerminalStart,
+          opts: {
+            cwd,
+            shellOverride: sourceTab?.shellOverride,
+            presentation: opts.activate !== false ? 'focused' : 'background'
+          },
+          splitFromLeafId: source.leafId,
+          splitDirection: opts.direction
+        }).catch((publicationError: unknown) => {
+          console.warn('[terminal] failed to show retained split:', publicationError)
+        })
+      }
+      throw error
     })
     this.registerPreAllocatedHandleForPty(result.id, preAllocatedHandle)
     if (result.wslDistro) {
@@ -156,6 +194,21 @@ export abstract class OrcaRuntimeWithSplitPaneInMain extends OrcaRuntimeWithSpli
       activate: opts.activate !== false,
       split: { splitFromLeafId: source.leafId, direction: opts.direction }
     })
+    if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
+      // The accepted process owns this pane; revealing it must only attach a view.
+      await Promise.resolve(
+        this.notifier?.revealTerminalSession?.(workspace.id, {
+          ptyId: result.id,
+          title: null,
+          activate: opts.activate !== false,
+          tabId: source.tabId,
+          leafId,
+          splitFromLeafId: source.leafId,
+          splitDirection: opts.direction,
+          ...(cwd !== workspace.path ? { cwd } : {})
+        })
+      ).catch(() => undefined)
+    }
     return {
       handle: this.issuePtyHandle(createdPty),
       tabId: source.tabId,

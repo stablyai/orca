@@ -1,4 +1,5 @@
 import { BrowserWindow, ipcMain } from 'electron'
+import { abortWhenRendererGone } from './renderer-lifetime-abort'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type {
   RuntimeRendererSyncWindowGraph,
@@ -92,23 +93,32 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
       if (event.senderFrame !== event.sender.mainFrame) {
         throw new Error('Runtime RPC call must originate from the current main frame')
       }
-      return new RpcDispatcher({ runtime, methods: ALL_RPC_METHODS }).dispatch(
-        {
-          id: 'desktop-ipc',
-          authToken: 'desktop-ipc',
-          // The renderer ships with this main process, so it always speaks the current contract.
-          orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
-          method: args.method,
-          params: args.params
-        },
-        {
-          clientId: 'desktop-renderer',
-          caller: DESKTOP_RPC_CALLER,
-          clientKind: 'runtime',
-          connectionId: desktopSenders.connectionIdFor(event.sender),
-          clientCapabilities: DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES
-        }
-      )
+      const lifetime =
+        args.method === 'session.readTerminalHistory'
+          ? abortWhenRendererGone(event.sender)
+          : undefined
+      try {
+        return await new RpcDispatcher({ runtime, methods: ALL_RPC_METHODS }).dispatch(
+          {
+            id: 'desktop-ipc',
+            authToken: 'desktop-ipc',
+            // The renderer ships with this main process, so it always speaks the current contract.
+            orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
+            method: args.method,
+            params: args.params
+          },
+          {
+            signal: lifetime?.signal,
+            clientId: 'desktop-renderer',
+            caller: DESKTOP_RPC_CALLER,
+            clientKind: 'runtime',
+            connectionId: desktopSenders.connectionIdFor(event.sender),
+            clientCapabilities: DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES
+          }
+        )
+      } finally {
+        lifetime?.dispose()
+      }
     }
   )
 

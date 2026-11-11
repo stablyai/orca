@@ -61,7 +61,10 @@ export type UseTerminalPaneLifecycleDeps = {
   paneKittyKeyboardModesRef: React.RefObject<Map<number, TerminalKittyKeyboardModeTracker>>
   paneLastThemeModeRef: React.RefObject<Map<number, 'dark' | 'light'>>
   panePtyBindingsRef: React.RefObject<
-    Map<number, IDisposable & Partial<Pick<PanePtyBinding, 'getOwnerContext'>>>
+    Map<
+      number,
+      IDisposable & Partial<Pick<PanePtyBinding, 'getOwnerContext' | 'getPtyIncarnationId'>>
+    >
   >
   replayingPanesRef: ReplayingPanesRef
   isActiveRef: React.RefObject<boolean>

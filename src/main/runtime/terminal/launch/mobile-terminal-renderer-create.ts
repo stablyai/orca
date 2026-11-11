@@ -1,3 +1,4 @@
+import { freshMobileTerminalCreateIdentity } from './mobile-terminal-create-identity'
 import { applyRemoteViewerLaunchEnv } from './remote-viewer-launch-env'
 import type { MobileTerminalCommandOptions, MobileTerminalCommand } from './mobile-terminal-startup'
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
@@ -126,7 +127,10 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
       )
     }
     const win = this.getAvailableAuthoritativeWindow()
-    if (!win) {
+    if (
+      !win ||
+      (!workspace.connectionId && !opts.agent && !opts.launchAgent && !opts.launchConfig)
+    ) {
       return await this.createRuntimeOwnedMobileSessionTerminal(
         worktreeId,
         opts.activate !== false,
@@ -143,6 +147,11 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
           ...(opts.trustWorktreeId ? { trustWorktreeId: opts.trustWorktreeId } : {}),
           viewMode: opts.viewMode,
           targetGroupId: opts.targetGroupId,
+          split: opts.split,
+          initialSize: opts.initialSize,
+          ...(opts.retainAdmittedStart ? { retainAdmittedStart: true } : {}),
+          ...freshMobileTerminalCreateIdentity(worktreeId, opts),
+          ...(win && opts.activate !== false ? { presentation: 'focused' as const } : {}),
           ...mainPlacedAfter(
             () => this.mainLayoutTabOfRow(worktreeId, requestedAfterTabId),
             afterDesktopTabId

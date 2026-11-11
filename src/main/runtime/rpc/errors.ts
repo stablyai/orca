@@ -13,13 +13,15 @@ import {
   isAgentSessionRefusalError,
   type AgentSessionRefusalError
 } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
-import type { RpcEnvelopeMeta, RpcFailure, RpcSuccess } from './core'
+import type { RpcEnvelopeMeta, RpcFailure } from './core'
+import { errorResponse } from './rpc-error-response'
 import { CONNECTOR_REPLY_ERROR_CODES } from '../../../shared/rpc-contract/connector-params'
 import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES } from '../../../shared/orchestration/orchestration-session-caller-codes'
 import { ORCHESTRATION_FEDERATION_ERROR_CODES } from '../../../shared/orchestration/orchestration-federation-error-codes'
 import { computerUseErrorRecoveryData } from '../../../shared/computer-use-error-recovery'
 import { COMPUTER_ERROR_CODES } from '../../../shared/computer-use-runtime-types'
 import { TerminalSplitOutcomeError } from '../../../shared/workspace-layout/terminal-split-outcome'
+import { RetainedTerminalStartError } from '../../../shared/workspace-layout/retained-terminal-start'
 import { WslHostWindowsDriveRefusalError } from '../../../shared/wsl-host-windows-drive-refusal'
 import { wslDistroHoldRpcFailure } from '../../../shared/wsl-distro-stopped-hold'
 import { LINEAR_ERROR_CODES } from '../../../shared/linear/agent-access'
@@ -58,24 +60,7 @@ import {
   TERMINAL_SPAWN_DEFERRED_CODE
 } from '../../../shared/terminal/pty/admission/spawn-admission-contract'
 
-export function successResponse(id: string, meta: RpcEnvelopeMeta, result: unknown): RpcSuccess {
-  return { id, ok: true, result, _meta: meta }
-}
-
-export function errorResponse(
-  id: string,
-  meta: RpcEnvelopeMeta,
-  code: string,
-  message: string,
-  data?: unknown
-): RpcFailure {
-  return {
-    id,
-    ok: false,
-    error: data === undefined ? { code, message } : { code, message, data },
-    _meta: meta
-  }
-}
+export { successResponse, errorResponse } from './rpc-error-response'
 
 // Runtime plain Error messages are stable codes; changing this allowlist also requires updating the CLI.
 const RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
@@ -202,6 +187,16 @@ export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknow
   const message = error instanceof Error ? error.message : String(error)
   if (isAgentSessionRefusalError(error)) {
     return agentSessionRefusalErrorResponse(id, meta, error)
+  }
+  if (error instanceof RetainedTerminalStartError) {
+    const held = wslDistroHoldRpcFailure(message)
+    return errorResponse(
+      id,
+      meta,
+      RUNTIME_PASSTHROUGH_CODES.has(message) ? message : 'runtime_error',
+      held?.message ?? formatTerminalStartFailure(error) ?? message,
+      { ...held?.data, ...error.data }
+    )
   }
   // A recipe workspace removal keeps its environment's own code (archive hook, PTY stop, selector).
   if (

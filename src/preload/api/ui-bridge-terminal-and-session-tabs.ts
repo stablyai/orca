@@ -28,6 +28,7 @@ import type {
   RuntimeTerminalPresentation
 } from '../../shared/runtime-types'
 import type { PreloadApi } from '../api-types'
+import type { NewGroupSplit } from '../../shared/workspace-layout/workspace-layout-command-types'
 
 export const uiTerminalAndSessionTabsApi = {
   onCreateTerminal: (
@@ -43,6 +44,7 @@ export const uiTerminalAndSessionTabsApi = {
       launchAgent?: TuiAgent
       viewMode?: 'terminal' | 'chat'
       targetGroupId?: string
+      split?: NewGroupSplit
       afterTabId?: string
       shellOverride?: string
       title?: string
@@ -73,6 +75,7 @@ export const uiTerminalAndSessionTabsApi = {
         launchAgent?: TuiAgent
         viewMode?: 'terminal' | 'chat'
         targetGroupId?: string
+        split?: NewGroupSplit
         afterTabId?: string
         shellOverride?: string
         title?: string

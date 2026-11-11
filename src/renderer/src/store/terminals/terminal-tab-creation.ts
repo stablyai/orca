@@ -44,7 +44,11 @@ export function createTerminalTabCreationActions(
     createTab: (worktreeId, targetGroupId, shellOverride, options) => {
       let tab!: TerminalTab
       const split = options?.split
-      const splitGroupId = split ? createBrowserUuid() : undefined
+      const splitGroupId = split
+        ? options?.layoutAlreadyAdmitted && targetGroupId
+          ? targetGroupId
+          : createBrowserUuid()
+        : undefined
       set((current) => {
         const s = current
         // The split's per-worktree group, layout and focus; each record is built once in the patch below.
@@ -289,7 +293,7 @@ export function createTerminalTabCreationActions(
         }
       })
       // Switch point: main writes the tab under these ids before any later command names it.
-      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      if (ORCA_LAYOUT_OWNER_IS_MAIN && !options?.layoutAlreadyAdmitted) {
         recordCreatedTerminalTabInLayoutOwner(get(), terminalTabCreateCommand(get(), tab), {
           tab,
           store: { getState: get, setState: (patch) => set(patch), subscribe }

@@ -5,6 +5,7 @@ import type { PersistPtyBindingArgs } from '../../../persistence/loading-store/t
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import type { ReplacedPaneOwner } from './replaced-pane-owner'
 import { resolveStablePaneOwner } from './stable-owner'
+import type { StablePaneOwner } from './stable-owner'
 
 /** Caller holds the pane's spawn reservation, so no other spawn can claim the pane meanwhile. */
 export async function stopReplacedPaneOwner(
@@ -18,6 +19,7 @@ export async function stopReplacedPaneOwner(
     paneKey: string | null
     worktreeId: string | undefined
     connectionId: string | null | undefined
+    expectedOwner?: StablePaneOwner | null
   }
 ): Promise<ReplacedPaneOwner> {
   const owner = resolveStablePaneOwner(
@@ -28,6 +30,15 @@ export async function stopReplacedPaneOwner(
     args.connectionId
   )
   if (owner && owner.ptyId !== args.replacesPtyId) {
+    throw new Error('terminal_pane_owner_changed')
+  }
+  if (
+    'expectedOwner' in args &&
+    (owner?.ptyId !== args.expectedOwner?.ptyId ||
+      owner?.runtimeIncarnationId !== args.expectedOwner?.runtimeIncarnationId ||
+      owner?.persistedIncarnationId !== args.expectedOwner?.persistedIncarnationId ||
+      owner?.hasPersistedBinding !== args.expectedOwner?.hasPersistedBinding)
+  ) {
     throw new Error('terminal_pane_owner_changed')
   }
   await deps.stopReplacedPty(args.replacesPtyId)
@@ -67,7 +78,7 @@ export function swapReplacedPaneBinding(
 
 /** Clears a stopped id's binding and keeps the pane; false when another owner took the pane. */
 export async function retireReplacedPaneBinding(
-  store: Store,
+  store: Partial<Pick<Store, 'retirePtyBinding'>>,
   replaced: ReplacedPaneOwner & {
     pane: NonNullable<ReplacedPaneOwner['pane']>
     /** Also fence on the saved incarnation, for an id the host reported absent rather than stopped. */
@@ -75,12 +86,15 @@ export async function retireReplacedPaneBinding(
   }
 ): Promise<boolean> {
   const { hostId, ...pane } = replaced.pane
-  return store.retirePtyBinding({ ...pane, ptyId: replaced.ptyId }, hostId, replaced.absenceFence)
+  return (
+    store.retirePtyBinding?.({ ...pane, ptyId: replaced.ptyId }, hostId, replaced.absenceFence) ??
+    false
+  )
 }
 
 /** Best effort: a failed replacement must not leave the stopped id bound for the remount to reattach. */
 export async function releaseStoppedPaneBinding(
-  store: Store | undefined,
+  store: Partial<Pick<Store, 'retirePtyBinding'>> | undefined,
   replaced: ReplacedPaneOwner
 ): Promise<void> {
   if (!store || !replaced.pane) {

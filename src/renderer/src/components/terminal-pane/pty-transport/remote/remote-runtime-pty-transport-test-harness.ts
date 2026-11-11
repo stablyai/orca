@@ -82,6 +82,17 @@ export function createRemoteRuntimeTransportMocks(
     subscriptionSendBinary.mockReset()
     refreshSessionTabsSnapshot.mockClear()
     runtimeCall.mockImplementation(async (request: { method: string; params?: unknown }) => {
+      if (request.method === 'status.get') {
+        return {
+          ok: true,
+          result: {
+            runtimeId: 'legacy-runtime',
+            runtimeProtocolVersion: 3,
+            minCompatibleRuntimeClientVersion: 2,
+            capabilities: []
+          }
+        }
+      }
       if (request.method === 'session.tabs.activate') {
         const params = request.params as { tabId: string; leafId?: string }
         const resolvedLeafId = params.leafId ?? 'pane:1'

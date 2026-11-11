@@ -13,8 +13,10 @@ const ALT_SCREEN_OFF = '\x1b[?1049l'
 export async function detectColdRestoreFromLegacyScrollback(
   basePath: string,
   sessionId: string,
-  meta: SessionMeta
+  meta: SessionMeta,
+  signal?: AbortSignal
 ): Promise<ColdRestoreInfo | null> {
+  signal?.throwIfAborted()
   const scrollbackPath = join(basePath, getHistorySessionDirName(sessionId), 'scrollback.bin')
   if (!existsSync(scrollbackPath)) {
     return null
@@ -22,8 +24,10 @@ export async function detectColdRestoreFromLegacyScrollback(
   try {
     const scrollback = await readTerminalHistoryTextAsync(
       scrollbackPath,
-      TERMINAL_HISTORY_LEGACY_SCROLLBACK_MAX_BYTES
+      TERMINAL_HISTORY_LEGACY_SCROLLBACK_MAX_BYTES,
+      signal
     )
+    signal?.throwIfAborted()
     const truncated = truncateAltScreen(scrollback)
     return {
       snapshotAnsi: truncated,
@@ -40,6 +44,7 @@ export async function detectColdRestoreFromLegacyScrollback(
       }
     }
   } catch {
+    signal?.throwIfAborted()
     return null
   }
 }

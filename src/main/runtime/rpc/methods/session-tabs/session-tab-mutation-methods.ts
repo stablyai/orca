@@ -1,3 +1,4 @@
+import { TERMINAL_FRESH_ADMISSION_PLACEMENT_RUNTIME_CAPABILITY } from '../../../../../shared/session-tabs-runtime-capabilities'
 import { resolveRuntimeNavigationTarget } from '../../../../../shared/runtime-navigation'
 import { resolveChatTabActivation } from '../../../agent-session/agent-session-tab-identity'
 import { commitLeafMoveAndRekey } from '../../../../ipc/pty/ipc/leaf-move'
@@ -22,7 +23,10 @@ export const SESSION_TAB_MUTATION_METHODS = [
     name: 'session.tabs.activate',
     permission: 'workspace',
     params: ActivateTab,
-    handler: async (params, { runtime, clientKind, pairedDeviceId, clientCapabilities }) => {
+    handler: async (
+      params,
+      { runtime, clientKind, pairedDeviceId, clientCapabilities, caller }
+    ) => {
       const inventory = await runtime.listMobileSessionTabs(params.worktree, pairedDeviceId, {
         includeAgentSenders: false
       })
@@ -33,6 +37,11 @@ export const SESSION_TAB_MUTATION_METHODS = [
       }
       const result = await runtime.activateMobileSessionTab(params.worktree, tabId, params.leafId, {
         includeAgentSenders: clientKind !== 'mobile',
+        ...(caller?.kind === 'paired-device' &&
+        clientKind === 'runtime' &&
+        clientCapabilities?.includes(TERMINAL_FRESH_ADMISSION_PLACEMENT_RUNTIME_CAPABILITY)
+          ? { preserveRetainedStart: true as const }
+          : {}),
         notifyClients: params.notifyClients !== false,
         clientNavigationId: pairedDeviceId,
         ...(params.intent ? { intent: params.intent } : {}),

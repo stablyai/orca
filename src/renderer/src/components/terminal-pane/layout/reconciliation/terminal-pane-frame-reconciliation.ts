@@ -48,13 +48,14 @@ export function reconcileMountedPanesToLayout(args: {
           ? 1 - insertion.ratio
           : insertion.ratio
     const ptyId = layout.ptyIdsByLeafId?.[insertion.newLeafId]
-    const activeBefore = manager.getActivePane()
+    const keepFocus = takePaneMountUnfocused(tabId, insertion.newLeafId)
     const created = manager.splitPaneAroundLeafIds(
       insertion.sourceLeafIds,
       sourcePaneId,
       insertion.direction,
       {
         leafId: insertion.newLeafId,
+        activate: !keepFocus && layout.activeLeafId === insertion.newLeafId,
         placement: insertion.placement,
         ...(ratio !== undefined && { ratio }),
         // Bound already: the pane attaches to main's terminal; unbound, it waits on main's start.
@@ -63,11 +64,6 @@ export function reconcileMountedPanesToLayout(args: {
     )
     if (created) {
       changed = true
-      // As switch-off's startup split: the new pane mounts, focus stays on the source pane.
-      if (activeBefore && takePaneMountUnfocused(tabId, insertion.newLeafId)) {
-        const hadFocus = created.container.contains(document.activeElement)
-        manager.setActivePane(activeBefore.id, { focus: hadFocus })
-      }
     }
   }
 

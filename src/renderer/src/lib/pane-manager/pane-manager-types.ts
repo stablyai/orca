@@ -27,6 +27,8 @@ export type PaneSpawnHints = {
 export type PaneSplitOptions = Omit<PaneSpawnHints, 'placement'> & {
   ratio?: number
   leafId?: string
+  /** Host publication attaches in every view; navigation belongs to its initiating caller. */
+  activate?: boolean
 }
 
 export type ClosedPaneInfo = {
