@@ -208,7 +208,7 @@ describe('session parse cache persistence', () => {
     expect(reused).toEqual(first)
   })
 
-  it('keeps its rows while builds on other schema versions share the folder, and prunes all but one of theirs', async () => {
+  it('keeps its rows while builds on other schema versions share the folder, and prunes all but one of theirs not in use', async () => {
     const root = await makeTempDir()
     const cacheFile = join(root, 'session-parse-cache.json')
     initSessionParseCachePersistence({ filePath: cacheFile, appVersion: APP_VERSION })
@@ -228,18 +228,31 @@ describe('session parse cache persistence', () => {
     await otherBuild('session-parse-cache.sqlite', 8, 3_000)
     await otherBuild('session-parse-cache.v7.sqlite', 7, 2_000)
     await otherBuild('session-parse-cache.v6.sqlite', 6, 1_000)
+    await otherBuild('session-parse-cache.v5.sqlite', 5, 500)
+    const running = new SyncDatabase(join(root, 'session-parse-cache.v5.sqlite'))
+    running.pragma('journal_mode = WAL')
+    running.prepare('SELECT * FROM meta').all()
+    // Still open, yet the least recently written: only the open check keeps it.
+    for (const suffix of ['', '-wal']) {
+      await utimes(join(root, `session-parse-cache.v5.sqlite${suffix}`), 500, 500)
+    }
 
-    simulateRestart(cacheFile)
-    expect(await parse(transcript)).toMatchObject({ reused: 1, fullParses: 0 })
-    expect((await readdir(root)).filter((name) => name.endsWith('.sqlite')).sort()).toEqual(
-      [
-        'session-parse-cache.sqlite',
-        `session-parse-cache.v${SESSION_PARSE_CACHE_SCHEMA_VERSION}.sqlite`
-      ].sort()
-    )
+    try {
+      simulateRestart(cacheFile)
+      expect(await parse(transcript)).toMatchObject({ reused: 1, fullParses: 0 })
+      expect((await readdir(root)).filter((name) => name.endsWith('.sqlite')).sort()).toEqual(
+        [
+          'session-parse-cache.sqlite',
+          'session-parse-cache.v5.sqlite',
+          `session-parse-cache.v${SESSION_PARSE_CACHE_SCHEMA_VERSION}.sqlite`
+        ].sort()
+      )
+    } finally {
+      running.close()
+    }
   })
 
-  it('adopts a pre-versioning file on this schema instead of reparsing after the upgrade', async () => {
+  it('adopts a pre-versioning file on this schema without disturbing a build still using it', async () => {
     const root = await makeTempDir()
     const cacheFile = join(root, 'session-parse-cache.json')
     const transcript = await writeTranscript(root)
@@ -261,23 +274,13 @@ describe('session parse cache persistence', () => {
       // ast-grep-ignore: test-no-wall-clock -- Real database expiry uses current time for persisted row ages.
       Date.now()
     )
-    unversioned.close()
 
-    simulateRestart(cacheFile)
-    expect(await parse(transcript)).toMatchObject({ reused: 1, fullParses: 0 })
-  })
-
-  it('leaves a pre-versioning file in place while another build still has it open', async () => {
-    const root = await makeTempDir()
-    const cacheFile = join(root, 'session-parse-cache.json')
-    const transcript = await writeTranscript(root)
-    const holder = new SessionParseCacheDatabase(join(root, 'session-parse-cache.sqlite'))
     try {
       simulateRestart(cacheFile)
-      expect(await parse(transcript)).toMatchObject({ fullParses: 1 })
-      expect(existsSync(join(root, 'session-parse-cache.sqlite'))).toBe(true)
+      expect(await parse(transcript)).toMatchObject({ reused: 1, fullParses: 0 })
+      expect(unversioned.read(transcript)).toBeDefined()
     } finally {
-      holder.close()
+      unversioned.close()
     }
   })
 

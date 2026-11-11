@@ -36,12 +36,12 @@ describe('AiVaultScanCoordinator', () => {
         key: 'scope',
         force: true,
         onCreate: (id) => {
-          // A read makes the replacement's own progress the visible one.
+          // Reading makes the replacement's own progress the visible one.
           startLocalAiVaultScanProgress('scope', id, () => 2_000).work({
             stage: 'finding',
             agents: [],
             read: { done: 0, total: 0 },
-            contentReads: 50
+            contentBytesRead: 64 * 1024 * 1024
           })
         },
         start: () =>

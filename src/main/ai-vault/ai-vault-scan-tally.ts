@@ -12,7 +12,7 @@ type AgentTally = {
 export class AiVaultScanTally {
   private readonly agents = new Map<AiVaultAgent, AgentTally>()
   private stage: AiVaultScanWork['stage'] = 'finding'
-  private contentReads = 0
+  private contentBytesRead = 0
   readonly workload = new AiVaultScanWorkload()
 
   openSource(agent: AiVaultAgent): () => void {
@@ -48,8 +48,8 @@ export class AiVaultScanTally {
     this.stage = 'reading'
   }
 
-  noteContentRead(): void {
-    this.contentReads++
+  noteContentRead(bytes: number): void {
+    this.contentBytesRead += bytes
   }
 
   snapshot(): AiVaultScanWork {
@@ -81,7 +81,7 @@ export class AiVaultScanTally {
       stage: this.stage,
       agents,
       read: this.stage === 'reading' ? this.workload.total() : { done: 0, total: 0 },
-      contentReads: this.contentReads
+      contentBytesRead: this.contentBytesRead
     }
   }
 

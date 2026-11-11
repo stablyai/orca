@@ -1,5 +1,4 @@
 import { throwIfAiVaultScanCancelled, waitForAiVaultScan } from '../ai-vault-scan-cancellation'
-import { noteAiVaultScanContentRead } from '../ai-vault-scan-progress'
 import { createQoderSessionResumeState } from '../scanners/qoder/session-scanner-qoder-parser'
 import type { AiVaultSession } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import { inSessionParseFileLane } from './session-parse-file-lane'
@@ -196,7 +195,6 @@ async function parseCachedInLane(
     }
   }
 
-  noteAiVaultScanContentRead(signal)
   let enriched: SidecarEnrichment = { session: null, refused: false }
   const sessionForConsumers = async (
     session: AiVaultSession | null

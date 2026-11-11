@@ -1,4 +1,5 @@
 import { throwIfAiVaultScanCancelled, waitForAiVaultScan } from '../ai-vault-scan-cancellation'
+import { noteAiVaultScanContentRead } from '../ai-vault-scan-progress'
 import { createHash } from 'node:crypto'
 import { readTranscriptSlice } from '../../native-chat/wsl-transcript-fs-access'
 import type { AiVaultSession } from '../../../shared/ai-vault/contracts/ai-vault-types'
@@ -122,6 +123,7 @@ export async function readResumableTranscript(
     if (args.stats) {
       args.stats.bytesRead += readResult.bytesRead
     }
+    noteAiVaultScanContentRead(args.signal, readResult.bytesRead)
 
     state.touchFile(file)
 
@@ -189,6 +191,7 @@ export async function readWholeTranscript(
     args.stats.fullParses++
     args.stats.bytesRead += file.sizeBytes ?? 0
   }
+  noteAiVaultScanContentRead(args.signal, file.sizeBytes ?? 0)
   const channel = new TranscriptMessageChannel()
   channel.beginRead({
     candidate: args.candidate,

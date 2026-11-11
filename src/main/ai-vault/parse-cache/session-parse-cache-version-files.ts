@@ -1,5 +1,6 @@
-import { existsSync, readdirSync, renameSync, statSync } from 'node:fs'
+import { existsSync, readdirSync, renameSync, rmSync, statSync } from 'node:fs'
 import { join } from 'node:path'
+import { isTransientSqliteContention } from '../../sqlite/sqlite-read-failure'
 import SyncDatabase from '../../sqlite/sync-database'
 import { removeVersionedCacheDatabase } from '../../sqlite/versioned-cache-database'
 import { SESSION_PARSE_CACHE_SCHEMA_VERSION } from './session-parse-cache-database'
@@ -15,30 +16,33 @@ export function sessionParseCacheDatabasePath(directory: string): string {
   return join(directory, `session-parse-cache.v${SESSION_PARSE_CACHE_SCHEMA_VERSION}.sqlite`)
 }
 
-/** Move a pre-versioning file that is already on this schema, so upgrading reparses nothing. */
+/** Copy a pre-versioning file that is already on this schema, so upgrading reparses nothing. */
 export function adoptUnversionedSessionParseCache(directory: string, path: string): void {
   const unversioned = join(directory, UNVERSIONED_NAME)
   if (existsSync(path) || !existsSync(unversioned)) {
     return
   }
+  // Snapshot into a private file first: a build still using the old file keeps it untouched.
+  const staging = `${path}.adopting`
   try {
-    const db = new SyncDatabase(unversioned)
-    let movable = false
+    rmSync(staging, { force: true })
+    const db = new SyncDatabase(unversioned, { readonly: true })
+    let copied = false
     try {
       const row = db.prepare("SELECT value FROM meta WHERE key = 'schema_version'").get()
-      // Leaving WAL folds every committed row into the file, and is refused while another build holds it.
-      movable =
-        row?.value === String(SESSION_PARSE_CACHE_SCHEMA_VERSION) &&
-        db.pragma('journal_mode = DELETE', { simple: true }) === 'delete'
+      if (row?.value === String(SESSION_PARSE_CACHE_SCHEMA_VERSION)) {
+        db.prepare('VACUUM INTO ?').run(staging)
+        copied = true
+      }
     } finally {
       db.close()
     }
-    if (movable) {
-      renameSync(unversioned, path)
-      removeVersionedCacheDatabase(unversioned, 'fail-fast')
+    if (copied) {
+      renameSync(staging, path)
     }
   } catch {
-    // Unreadable or locked: it is pruned like any other version and this one starts cold.
+    // Unreadable or busy: this version starts cold and the old file is pruned like any other.
+    rmSync(staging, { force: true })
   }
 }
 
@@ -56,11 +60,28 @@ export function pruneOtherSessionParseCacheVersions(directory: string, path: str
   }
   others.sort((left, right) => right.usedAt - left.usedAt)
   for (const stale of others.slice(RETAINED_OTHER_VERSIONS)) {
+    if (openElsewhere(stale.path)) {
+      continue
+    }
     try {
       removeVersionedCacheDatabase(stale.path, 'fail-fast')
     } catch {
-      // Another build may hold it open (Windows); a later start retries.
+      // A later start retries.
     }
+  }
+}
+
+// Leaving WAL needs every other connection closed; unlinking a live file would strand its build's writes.
+function openElsewhere(path: string): boolean {
+  try {
+    const db = new SyncDatabase(path)
+    try {
+      return db.pragma('journal_mode = DELETE', { simple: true }) !== 'delete'
+    } finally {
+      db.close()
+    }
+  } catch (error) {
+    return isTransientSqliteContention(error)
   }
 }
 

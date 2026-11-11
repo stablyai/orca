@@ -174,7 +174,7 @@ export function scopeWalksAgentFiles(
   return (scopePaths?.length ?? 0) > 0 && (kind === 'read' || kind === 'parse')
 }
 
-const HEAD_READ_BYTES = 8 * 1024
+export const HEAD_READ_BYTES = 8 * 1024
 const HEAD_WIDENED_READ_BYTES = 64 * 1024
 
 /** Null means unknown, requiring a full parse; it never proves the transcript is out of scope. */

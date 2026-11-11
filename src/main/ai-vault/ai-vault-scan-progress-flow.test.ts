@@ -153,7 +153,7 @@ it.each(['cutoff', 'bucket', 'filtered'] as const)(
           skipped: total - ids.length
         })
         // Windows hide a rescan the parse cache fully answers.
-        expect((aiVaultScanWork(signal)?.contentReads ?? 0) > 0).toBe(!warm)
+        expect((aiVaultScanWork(signal)?.contentBytesRead ?? 0) > 0).toBe(!warm)
       } finally {
         stop()
       }

@@ -26,7 +26,7 @@ const FINISHED: AiVaultScanProgress = {
     { agent: 'opencode', files: 0, databases: 1, walking: false }
   ],
   read: { done: 2_000, total: 2_000 },
-  contentReads: 0,
+  contentBytesRead: 0,
   startedAt: 0,
   settledAt: 90_000
 }

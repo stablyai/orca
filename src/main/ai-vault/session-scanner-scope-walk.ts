@@ -42,6 +42,7 @@ import type {
 } from './session-scanner-types'
 import {
   AI_VAULT_SCOPE_CWD_SOURCES,
+  HEAD_READ_BYTES,
   scopeOnlyScan,
   scopeWalksAgentFiles
 } from './session-scope-cwd'
@@ -282,7 +283,7 @@ async function mayBeInScope(
   let known = resolve()
   const source = AI_VAULT_SCOPE_CWD_SOURCES[candidate.agent]
   if (known === 'read' && source.kind === 'read') {
-    noteAiVaultScanContentRead(signal)
+    noteAiVaultScanContentRead(signal, Math.min(file.sizeBytes ?? HEAD_READ_BYTES, HEAD_READ_BYTES))
     const read = await source.readCwd(candidate, signal)
     throwIfAiVaultScanCancelled(signal)
     if (read !== null) {
