@@ -48,7 +48,7 @@ export function failureCopy(t: Translate, code: CloudRemoteDesktopToastFailure):
       }
     case 'not_running':
       return {
-        title: t('components.cloudRemoteDesktop.asleepTitle', 'This sandbox is asleep.'),
+        title: t('components.cloudRemoteDesktop.asleepTitle', 'This workspace is asleep.'),
         detail: t(
           'components.cloudRemoteDesktop.asleepDetail',
           'Wake it to open the remote desktop. Your files are safe.'
@@ -77,7 +77,7 @@ export function failureCopy(t: Translate, code: CloudRemoteDesktopToastFailure):
       return {
         title: t(
           'components.cloudRemoteDesktop.startingTitle',
-          'The sandbox is still starting or waking.'
+          'The workspace is still starting or waking.'
         ),
         detail: t(
           'components.cloudRemoteDesktop.startingDetail',
