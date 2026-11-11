@@ -24,24 +24,25 @@ describe('Orca Cloud availability', () => {
 
 describe('setup rows and the setup page', () => {
   const page = (steps: Parameters<typeof cloudSetupPageModel>[0]) =>
-    cloudSetupPageModel(steps, { agentSkipped: true }).action
+    cloudSetupPageModel(steps).action
 
   it('starts directly when the account is entitled', () => {
     const steps = deriveCloudSetupSteps({
       availability: 'offered',
       access: { state: 'entitled', remainingSeconds: 3600 }
     })
-    expect(cloudSetupRequired(steps, { agentSkipped: true })).toBe(false)
+    expect(cloudSetupRequired(steps)).toBe(false)
     expect(page(steps)).toBe('done')
   })
 
-  it('an agent with no account opens the page until it is skipped once', () => {
+  it('an agent with no account never opens the page (PC-1): the create starts at once', () => {
     const steps = deriveCloudSetupSteps({
       availability: 'offered',
       access: { state: 'entitled', remainingSeconds: 3600 }
     })
-    expect(cloudSetupRequired(steps)).toBe(true)
-    expect(cloudSetupPageModel(steps).action).toBe('agent')
+    expect(steps.find((s) => s.id === 'agent')?.state).toBe('optional')
+    expect(cloudSetupRequired(steps)).toBe(false)
+    expect(cloudSetupPageModel(steps).action).toBe('done')
   })
 
   it('signed out: sign-in first, plan checked after sign-in', () => {
@@ -148,7 +149,7 @@ describe('setup rows and the setup page', () => {
       access: { state: 'entitled', remainingSeconds: 3600 },
       github: { id: 'github', state: 'pending', need: 'github', blocksStart: true }
     })
-    expect(cloudSetupRequired(steps, { agentSkipped: true })).toBe(true)
+    expect(cloudSetupRequired(steps)).toBe(true)
     expect(page(steps)).toBe('github-waiting')
   })
 
@@ -189,6 +190,7 @@ describe('setup rows and the setup page', () => {
       { id: 'agent', state: 'loading' }
     ]
     expect(cloudSetupRequired(steps)).toBe(false)
+    expect(cloudSetupPageModel(steps).action).toBe('done')
   })
 })
 
