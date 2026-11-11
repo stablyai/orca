@@ -38,12 +38,16 @@ export async function pasteTextIntoTerminalPane({
   canContinue,
   planOptions
 }: PasteTextIntoTerminalPaneArgs): Promise<TerminalPasteExecutionResult> {
+  // Why: before the program enables bracketed paste, a raw line break in a user's paste submits as Enter.
+  const userPasteIntoStartingTerminal =
+    source !== 'programmatic' && transport?.isHoldingInput?.() === true
   const plan = await planTerminalPasteWithYield({
     text,
     source,
     target: { kind: 'terminal', paneId: pane.id, leafId: pane.leafId, ptyId, runtime },
     forceBracketedPaste: planOptions?.forceBracketedPaste,
-    forceBracketedPasteForMultiline: planOptions?.forceBracketedPasteForMultiline,
+    forceBracketedPasteForMultiline:
+      planOptions?.forceBracketedPasteForMultiline === true || userPasteIntoStartingTerminal,
     windowsInputRecordNewline: planOptions?.windowsInputRecordNewline,
     terminalBracketedPasteMode: pane.terminal.modes?.bracketedPasteMode === true
   })

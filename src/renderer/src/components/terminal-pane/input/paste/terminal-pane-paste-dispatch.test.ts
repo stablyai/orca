@@ -64,6 +64,13 @@ describe('pasteTextIntoTerminalPane into a starting terminal', () => {
     return { status: result.status, written: written.join('') }
   }
 
+  it('holds a pasted line break as pasted text, so only the user’s own Enter submits', async () => {
+    await expect(pasteBeforeConnect('echo hi\n')).resolves.toEqual({
+      status: 'pasted',
+      written: '\x1b[200~echo hi\r\x1b[201~\r'
+    })
+  })
+
   it('refuses a paste too large for one held entry before writing any of it', async () => {
     await expect(pasteBeforeConnect('x'.repeat(70_000))).resolves.toEqual({
       status: 'rejected',
