@@ -97,6 +97,20 @@ afterEach(async () => {
 })
 
 describe('skill bundle manifest generator', () => {
+  it('orders complete manifest paths when a reference file shares a directory stem', async () => {
+    const packageRoot = await createPackage()
+    await mkdir(path.join(packageRoot, 'references', 'refs'), { recursive: true })
+    await writeFile(path.join(packageRoot, 'SKILL.md'), 'skill\n')
+    await writeFile(path.join(packageRoot, 'references', 'refs.md'), 'reference\n')
+    await writeFile(path.join(packageRoot, 'references', 'refs', 'image.webp'), Buffer.from([0]))
+
+    expect((await collectPackageFiles(packageRoot)).map((file) => file.path)).toEqual([
+      'SKILL.md',
+      'references/refs.md',
+      'references/refs/image.webp'
+    ])
+  })
+
   it('keeps SKILL.md bytes only a release tag shipped, off HEAD', async () => {
     const sandbox = await createGeneratorSandbox()
     sandbox.git('init', '-q', '-b', 'main')

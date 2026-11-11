@@ -37,6 +37,8 @@ export type NativeChatMessageListProps = {
   /** Host durations by prompt id; otherwise fall back to a duration observed locally. */
   settledTurns?: NativeChatSettledTurns
   deliveryNotices?: ReadonlyMap<string, NativeChatDeliveryNotice>
+  /** Rows after the conversation that are not part of it, such as workers' open approvals. */
+  trailing?: React.ReactNode
   /** Set while the turn waits on the reader; the live activity line yields to it. */
   awaitingInput?: NativeChatAwaitingInput | null
   turnActivity?: NativeChatTurnActivity | null

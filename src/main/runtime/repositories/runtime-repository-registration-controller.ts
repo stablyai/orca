@@ -16,7 +16,7 @@ import { getClonePathComparisonKey, getSavedProjectPathKeys } from '../../git/re
 import { invalidateAuthorizedRootsCache } from '../../ipc/worktrees/removal/registered-worktree-roots-cache'
 import { isENOENT } from '../../ipc/filesystem/access/filesystem-path-containment'
 import { findProjectAtSameRealPath } from '../../workspaces/catalog/project-realpath-identity'
-import { detectRepoIconAndUpstream } from '../../repository-icons/repo-icon-autodetect'
+import { detectRepoLocalMetadata } from '../../repository-icons/repo-icon-autodetect'
 import { prepareLocalWorktreeRootForRepo } from '../../workspaces/creation/worktree-root-preparation'
 import type { RuntimeStore } from '../construction/runtime-store-contract'
 import { runtimePathsEqual } from '../workspaces/catalog/runtime-worktree-path-identity'
@@ -96,7 +96,7 @@ export class RuntimeRepositoryRegistrationController {
       return this.reuseExisting(store, existing, executionHostId)
     }
     // This controller validated/read the path locally; runtime: is the paired-client address, not another machine.
-    const detected = await detectRepoIconAndUpstream({
+    const detected = await detectRepoLocalMetadata({
       repoPath,
       kind,
       executionHostId: LOCAL_EXECUTION_HOST_ID
@@ -229,7 +229,7 @@ export class RuntimeRepositoryRegistrationController {
       repoKind === 'git'
         ? (await inspectGitRepoForRegistrationAsync(targetPath)).rootPath
         : targetPath
-    const detected = await detectRepoIconAndUpstream({
+    const detected = await detectRepoLocalMetadata({
       repoPath,
       kind: repoKind,
       executionHostId: LOCAL_EXECUTION_HOST_ID

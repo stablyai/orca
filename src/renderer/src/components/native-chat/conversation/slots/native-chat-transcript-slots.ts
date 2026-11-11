@@ -74,6 +74,8 @@ export type NativeChatMessageSlot = {
    *  the last drawn response with words, else the last with images. Absent outside a turn and in
    *  subagent sections. */
   endsResponse?: boolean
+  /** This response is the newest one in the conversation. */
+  latestResponse?: boolean
   /** Response controls under this row may hang into the gap below it: the row draws nothing after
    *  its message, and what follows is the person's own right-aligned bubble or nothing. Absent when
    *  something left-side follows (an agent's card, a notice, a task or subagent row, the turn's bar,
@@ -267,6 +269,19 @@ export function buildNativeChatTranscript(
     if (!lastWordsByTurn.has(turnKey)) {
       slot.endsResponse = true
     }
+  }
+  const latestResponse = drawn.findLast(
+    (slot) =>
+      slot.kind === 'message' &&
+      slot.depth === 0 &&
+      slot.drawsMessage &&
+      !slot.receipt &&
+      slot.message.role === 'assistant' &&
+      (slot.endsResponse === true ||
+        (slot.endsResponse === undefined && nativeChatAgentRowWords(slot.message, t).length > 0))
+  )
+  if (latestResponse?.kind === 'message') {
+    latestResponse.latestResponse = true
   }
   for (let index = 0; index < drawn.length - 1; index += 1) {
     const slot = drawn[index]!

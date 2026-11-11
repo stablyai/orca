@@ -1,7 +1,7 @@
-import { pickAdjacentLinkOpenGroupId } from '@/lib/adjacent-link-open-group'
-export { findNeighbor } from '@/lib/adjacent-link-open-group'
+import { pickAdjacentLinkOpenGroupId } from '@/lib/links/placement/adjacent-link-open-group'
+import { isEditorTabContentType } from './editor-tab-content-type'
+import type { EditorTabContentType } from './editor-tab-content-type'
 import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../../../../shared/tab-types'
-import { isEditorTabContentType, type EditorTabContentType } from './editor-tab-content-type'
 
 type AdjacentEditorOpenInput = {
   layout: TabGroupLayoutNode

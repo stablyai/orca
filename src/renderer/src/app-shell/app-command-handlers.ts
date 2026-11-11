@@ -1,11 +1,11 @@
-import { canShowRightSidebarForView, canToggleRightSidebar } from '@/lib/right-sidebar-visibility'
-import { runBuiltInOrReplacement } from '@/lib/plugin-command-replacements'
-import { isFloatingWorkspacePanelFocused } from '@/lib/floating-workspace-terminal-actions'
-import { hasVisibleOverlay } from '@/lib/visible-overlay'
-import { requestScrollToCurrentWorkspaceRevealAndRename } from '@/lib/scroll-to-current-workspace-status'
+import { canShowRightSidebarForView } from '@/components/right-sidebar/visibility/right-sidebar-visibility'
+import { runBuiltInOrReplacement } from '@/lib/plugins/commands/plugin-command-replacements'
+import { isFloatingWorkspacePanelFocused } from '@/components/floating-terminal/floating-workspace-terminal-actions'
+import { hasVisibleOverlay } from '@/lib/overlay-interaction/visible-overlay'
+import { requestScrollToCurrentWorkspaceRevealAndRename } from '@/lib/workspace/navigation/scroll-to-current-workspace-status'
 import { requestVirtualizedScrollAnchorRecord } from '@/hooks/requestVirtualizedScrollAnchorRecord'
-import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'
-import { shouldShowWorktreeHistoryControls } from '../lib/titlebar-worktree-history-controls'
+import { showTerminalShortcutCaptureNotification } from '@/lib/notifications/terminal-shortcut-capture-notification'
+import { shouldShowWorktreeHistoryControls } from './chrome/titlebar-worktree-history-controls'
 import { TOGGLE_WORKSPACE_BOARD_EVENT } from '../components/sidebar/workspace-board/surface/useWorkspaceBoardPanel'
 import {
   getRenderedLineageChipKeys,
@@ -13,13 +13,13 @@ import {
 } from '../components/sidebar/workspace-card/identity/child-workspaces-toggle-target'
 import { requestTerminalTabRename } from '../components/tab-bar/terminal-tab-rename-request'
 import {
-  deleteHoveredWorkspaceImmediately,
-  resolveHoveredWorkspaceDeleteTarget
-} from '../components/sidebar/workspace-actions/deletion/hovered-workspace-delete'
-import { useAppStore } from '../store'
+  deleteActiveWorkspaceFromShortcut,
+  resolveActiveWorkspaceDeleteTarget
+} from '../components/sidebar/workspace-actions/deletion/active-workspace-delete'
+import { useAppStore } from '../store/index'
 import type { usePluginCommands } from '@/store/plugins/catalog/plugin-contribution-catalog'
 import { isGitRepoKind } from '../../../shared/repo-kind'
-import { openPluginsSettings } from '@/lib/open-plugins-settings'
+import { openPluginsSettings } from '@/components/settings/navigation/open-plugins-settings'
 import { resolveActiveTabRenameTarget } from './active-tab-rename-target'
 import { createPluginsSettingsShortcutHandler } from './plugin-settings-shortcut-handler'
 import type {
@@ -230,12 +230,12 @@ export function createAppCommandHandlers(
           return false
         }
         const store = useAppStore.getState()
-        const target = resolveHoveredWorkspaceDeleteTarget(store)
+        const target = resolveActiveWorkspaceDeleteTarget(store)
         if (!target) {
           return false
         }
         return claim('workspace.delete', () => {
-          deleteHoveredWorkspaceImmediately(store, target)
+          deleteActiveWorkspaceFromShortcut(store, target)
         })
       }
     ],
@@ -270,7 +270,7 @@ export function createAppCommandHandlers(
     [
       'sidebar.right.toggle',
       () =>
-        canToggleRightSidebar(activeView)
+        canShowRightSidebarForView(activeView)
           ? claim('sidebar.right.toggle', () => actions.toggleRightSidebar())
           : false
     ],

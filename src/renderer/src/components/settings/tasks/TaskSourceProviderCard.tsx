@@ -2,7 +2,7 @@ import { useId, useState, type ReactNode } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { IntegrationStatusPill } from '@/components/integration-status-pill'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { getShowInTasksActionLabel, getShowInTasksLabel } from './TaskSourceShowInTasksStep'
 import {
   TASK_PROVIDER_SETUP_STATUS_TONE,

@@ -92,8 +92,7 @@ export class PluginService {
         pluginsDataDir: getPluginsDataDir(this.options.userDataPath),
         desktop: this.options.getDesktopFrameServices?.(),
         panels: pluginPanelBridgeServices(this.panelBridge),
-        statusBar: this.options.statusBar,
-        appearance: this.options.appearance,
+        sinks: this.options,
         audit: this.audit,
         log: (pluginKey) => this.installed.captureLog(pluginKey, 'info')
       })

@@ -12,7 +12,7 @@ import { usePrimeHosts } from '../transport/connection/host-client-hooks'
 import { selectHomeAutoConnectHostIds } from '../transport/hosts/home-host-auto-connect'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { ConnectionState } from '../transport/connection/connection-state'
-import type { HostCatalogEntry, HostProfile } from '../transport/hosts/host-profile'
+import type { HostCatalogEntry, HostProfile } from '../host-catalog/host-profile'
 import { useAllHostClients } from '../transport/connection/use-all-host-clients'
 import {
   readMobileHomeLastConnected,

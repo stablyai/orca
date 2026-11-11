@@ -13,7 +13,7 @@ import {
   type DiscardAllArea
 } from '../../../../../../shared/source-control/listing/source-control-discard-all-sequence'
 import { discardDeletesEntryFile } from './discard-confirmation'
-import { readIpcErrorMessage } from '@/lib/ipc-error'
+import { readIpcErrorMessage } from '@/runtime/errors/ipc-error'
 import {
   dismissSourceControlEntryFailureToast,
   showSourceControlEntryFailureToast

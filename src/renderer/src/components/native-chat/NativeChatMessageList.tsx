@@ -17,7 +17,7 @@ import {
   nativeChatShowsTurnDiffSummary
 } from '../../../../shared/native-chat/native-chat-appearance-settings'
 import { useNativeChatTranscriptProjection } from './conversation/projection/use-native-chat-transcript-projection'
-import { desktopStructuredTranscript } from './conversation/projection/structured-agent-session-message-projection'
+import { useNativeChatQuestionReceipts } from './conversation/projection/use-native-chat-question-receipts'
 import { nativeChatTaskListPredecessors } from '../../../../shared/native-chat/input/native-chat-task-list-history'
 import { NativeChatDockedTaskList } from './tools/tasks/NativeChatDockedTaskList'
 import { useNativeChatTurnStatus } from './conversation/turns/use-native-chat-turn-status'
@@ -76,6 +76,7 @@ export function NativeChatMessageList({
   workingStartedAt,
   settledTurns,
   deliveryNotices,
+  trailing,
   awaitingInput = null,
   turnActivity,
   stopping = false,
@@ -83,11 +84,7 @@ export function NativeChatMessageList({
   structuredAttachments = false
 }: NativeChatMessageListProps): React.JSX.Element {
   const t = useTranslate()
-  const questionTranscript = useMemo(() => desktopStructuredTranscript.stream(), [])
-  const receipts = useMemo(
-    () => (journalItems ? questionTranscript(journalItems).receipts : new Map()),
-    [journalItems, questionTranscript]
-  )
+  const receipts = useNativeChatQuestionReceipts(journalItems)
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const contentRef = useRef<HTMLDivElement | null>(null)
   const disclosures = useNativeChatDisclosures()
@@ -363,6 +360,7 @@ export function NativeChatMessageList({
                     <NativeChatAwaitingInputRow subject={null} pending />
                   ) : null}
                   <NativeChatWaitingTranscriptItems slots={waitingSlots} context={rowContext} />
+                  {trailing}
                 </div>
               </div>
             </div>

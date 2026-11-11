@@ -7,7 +7,7 @@ import { EPHEMERAL_VM_CLEANUP_STOPPED_ERROR } from '../../../../../../shared/eph
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import { ephemeralVmCleanupErrorText } from '@/lib/ephemeral-vm-error-copy'
+import { ephemeralVmCleanupErrorText } from '@/runtime/ephemeral-vm/ephemeral-vm-error-copy'
 import { Button } from '../../../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../../ui/tooltip'
 import { EphemeralVmCleanupStopDialog } from './EphemeralVmCleanupStopDialog'

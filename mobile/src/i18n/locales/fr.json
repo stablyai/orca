@@ -3452,6 +3452,27 @@
     }
   },
   "tasks": {
+    "hostedMerge": {
+      "confirmGitHubMerge": "Fusionner la PR nº {{number}} ?",
+      "confirmGitHubSquash": "Compresser les commits et fusionner la PR nº {{number}} ?",
+      "confirmGitHubRebase": "Rebaser et fusionner la PR nº {{number}} ?",
+      "confirmGitLabMerge": "Fusionner la demande de fusion nº {{number}} ?",
+      "confirmGitLabSquash": "Compresser les commits et fusionner la demande de fusion nº {{number}} ?",
+      "confirmGitLabRebase": "Rebaser et fusionner la demande de fusion nº {{number}} ?",
+      "merged": "Fusionné",
+      "closed": "Fermé",
+      "conflicts": "Conflits",
+      "behind": "En retard",
+      "blocked": "Bloqué",
+      "checksPending": "Vérifications en attente",
+      "ableToMerge": "Fusion possible",
+      "unknown": "Inconnu"
+    },
+    "pagination": {
+      "pageUnreachable": "La page {{page}} dépasse la limite des résultats de recherche GitHub.",
+      "loadPageFailed": "La page {{page}} n’a pas pu être chargée depuis GitHub.",
+      "noMoreResults": "Aucun autre résultat sur la page {{page}}."
+    },
     "composerSource": {
       "baseFailed": "Échec de la résolution de la branche de base.",
       "forkPushWarning": "L'option « Autoriser les modifications des mainteneurs » est désactivée pour cette PR ; le push vers le fork peut être refusé par GitHub."

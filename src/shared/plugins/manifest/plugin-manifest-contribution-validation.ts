@@ -229,7 +229,10 @@ export function validatePluginManifestContributions(
   }
   for (const [index, subscription] of manifest.contributes.events.entries()) {
     const required = PLUGIN_EVENT_CAPABILITY[subscription.on]
-    if (!manifest.capabilities.some((capability) => capability.kind === required)) {
+    if (
+      required !== null &&
+      !manifest.capabilities.some((capability) => capability.kind === required)
+    ) {
       ctx.addIssue({
         code: 'custom',
         path: ['contributes', 'events', index, 'on'],

@@ -4,7 +4,7 @@ import { ArrowUp, CornerDownRight, ListEnd, Mic, Plus, Save, Square } from 'luci
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
-import { getScreenSubmitShortcutLabel } from '@/lib/screen-submit-shortcut'
+import { getScreenSubmitShortcutLabel } from '@/lib/keyboard/screen-submit-shortcut'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import type { NativeChatFollowUpBehavior } from '../../../../../../shared/native-chat/input/native-chat-follow-up-behavior'
 import type {

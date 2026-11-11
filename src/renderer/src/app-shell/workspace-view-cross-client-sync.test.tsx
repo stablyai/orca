@@ -185,6 +185,12 @@ describe('workspace view preferences: cross-client persistence (STA-5781)', () =
     expect(authority.get().sidebarWidth).toBe(320)
   })
 
+  it('saves a changed activity bar position', async () => {
+    act(() => store.setState({ activityBarPosition: 'side' }))
+    await flushDesktopDebounce()
+    expect(authority.get().activityBarPosition).toBe('side')
+  })
+
   it('saves All hosts after flipping back during a host-selection write', async () => {
     holdAcks = true
     act(() => store.getState().setWorkspaceHostScope('local'))
