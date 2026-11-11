@@ -58,10 +58,13 @@ export function useMobileClaudeSessionStatus(args: {
     }
     let cancelled = false
     let methodMissing = false
+    // Polls and refreshes overlap; only the latest request may set the status.
+    let lastRequest = 0
     const params = { agent, sessionId, ...(transcriptPath ? { transcriptPath } : {}) }
     const askHost = async (): Promise<void> => {
+      const request = ++lastRequest
       const response = await claudeSessionStatusRead.request(client, params)
-      if (cancelled) {
+      if (cancelled || request !== lastRequest) {
         return
       }
       if (!response.ok) {

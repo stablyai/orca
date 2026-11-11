@@ -126,6 +126,28 @@ it('drops an answer that arrives after the chat changed', async () => {
   expect(latest?.compactions).toBe(7)
 })
 
+it('keeps a newer answer when an older one for the same chat lands later', async () => {
+  let answerFirst: (reply: Reply) => void = () => {}
+  const replies: Array<Reply | Promise<Reply>> = [
+    new Promise<Reply>((resolve) => {
+      answerFirst = resolve
+    }),
+    rpcSuccess({ status: { ...STATUS, usedTokens: 20000, compactions: 3 } })
+  ]
+  const { client, sendRequest } = clientWith(() => replies.shift() ?? new Promise<Reply>(() => {}))
+  await mount(args(client))
+  await update(args(client, { refreshKey: 'r1' }))
+  await advance(2_000)
+  expect(sendRequest).toHaveBeenCalledTimes(2)
+  expect(latest?.compactions).toBe(3)
+  await act(async () => {
+    answerFirst(rpcSuccess({ status: STATUS }))
+  })
+  await flush()
+  expect(latest?.compactions).toBe(3)
+  expect(latest?.usedTokens).toBe(20000)
+})
+
 it('does not show the previous chat while the new one loads', async () => {
   const { client } = clientWith((sessionId) =>
     sessionId === 'a' ? rpcSuccess({ status: STATUS }) : new Promise<Reply>(() => {})
