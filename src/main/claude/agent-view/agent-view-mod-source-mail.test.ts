@@ -3,7 +3,8 @@ import { expect, it, vi } from 'vitest'
 import { CLAUDE_TERMINAL_MAIL_PATH } from '../../../shared/claude-agent-view'
 import { CLAUDE_AGENT_VIEW_MOD_SOURCE } from './agent-view-mod-source'
 
-type Hook = (api: unknown, event: object, next: () => Promise<object>) => Promise<unknown>
+type HookEvent = Record<string, unknown>
+type Hook = (api: unknown, event: HookEvent, next: () => Promise<HookEvent>) => Promise<unknown>
 type On = (
   event: string,
   matcherOrHook: Hook | { command: string } | { component: string },

@@ -9,6 +9,7 @@ import '../../db/messages/mailbox-routing-page'
 import '../../db/dispatch-row-writer'
 import '../../db/attempt-outcome-projection'
 import { OrchestrationMailboxPointerState } from './mailbox-pointer-state'
+import { OrchestrationMailboxOwner } from '../routing/mailbox-owner'
 import { submitOrchestrationMailboxPointer } from './mailbox-pointer-submit'
 import { settledWriteStub, stubWriteSettlement } from '../../../../providers/settled-pty-write-stub'
 import type { WriteSettlement } from '../../../../../shared/terminal/pty/lifecycle/pty-write-settlement'
@@ -134,7 +135,14 @@ describe('orchestration mailbox pointer submit', () => {
     state.setWatermark(mailboxHandle, 1, ptyId)
     const writePty = vi.fn(settledWriteStub())
     const markMailboxPointerEnterAttempted = vi.fn(() => true)
-    const resolveMailbox = vi.fn(() => mailboxHandle)
+    const mailboxOwner = new OrchestrationMailboxOwner({
+      getDb: () => null,
+      getTerminal: () => null,
+      getTerminalProcessIncarnation: () => null,
+      onRoutedMessageTypes: () => {},
+      onForeignMailboxRouted: () => {}
+    })
+    const resolveMailbox = vi.spyOn(mailboxOwner, 'resolve').mockReturnValue(mailboxHandle)
     const settle = vi.fn(() => {
       state.settleFlight(ptyId, flight)
     })
@@ -145,7 +153,7 @@ describe('orchestration mailbox pointer submit', () => {
 
     submitOrchestrationMailboxPointer(
       {
-        mailboxOwner: { resolve: resolveMailbox } as never,
+        mailboxOwner,
         state,
         getDb: () =>
           ({
