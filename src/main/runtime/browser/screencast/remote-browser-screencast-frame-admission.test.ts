@@ -92,6 +92,7 @@ describe('sendRemoteBrowserScreencastFrame', () => {
       maxHeight: 2160,
       everyNthFrame: 1,
       minFrameIntervalMs: 0,
+      holdPaint: () => () => {},
       onFrame: (bytes) =>
         sendRemoteBrowserScreencastFrame(transport.sendBinary, bytes) !== 'refused'
     })

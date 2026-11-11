@@ -1,29 +1,28 @@
 // Install the import-free hook before react-dom reads it during evaluation; the observer below wraps a per-commit property and can load later.
-import './lib/react-devtools-commit-hook-shim'
-import './lib/react-commit-cascade-observer'
+import './diagnostics/react-commits/react-devtools-commit-hook-shim'
+import './diagnostics/react-commits/react-commit-cascade-observer'
 import './assets/main.css'
 
 import { StrictMode } from 'react'
 import { useTranslation } from 'react-i18next'
 import App from './App'
 import { RecoverableRenderErrorBoundary } from './components/error-boundaries/RecoverableRenderErrorBoundary'
-import {
-  installRendererCrashDiagnostics,
-  recordRendererCrashBreadcrumb
-} from './lib/crash-diagnostics'
+import { installRendererCrashDiagnostics } from './diagnostics/crash-reporting/crash-diagnostics'
+import { recordRendererCrashBreadcrumb } from './diagnostics/crash-reporting/crash-breadcrumb-recorder'
 import { installAutomationHostDiagnostic } from './components/automations/hosts/automation-host-diagnostics'
 import {
   applyCachedPluginAppTheme,
   applyDocumentTheme,
   readCachedPluginAppTheme
 } from './app-shell/appearance/document-theme'
-import { installTypingLatencyDiagnostic } from './lib/typing-latency/diagnostic'
+import { installTypingLatencyDiagnostic } from './diagnostics/typing-latency/diagnostic'
 import { installAppKeyboardRouter } from './lib/keyboard/app-keyboard-router'
-import { shouldEnableReactGrab } from './lib/react-grab-dev-gate'
+import { shouldEnableReactGrab } from './diagnostics/react-commits/react-grab-dev-gate'
 import { I18nProvider } from './i18n/I18nProvider'
 import { useTranslate } from './i18n/use-translate'
-import { getOrCreateRendererRoot } from './lib/react-renderer-root'
-import { primeTerminalWebglAddon } from './lib/pane-manager/pane-webgl-renderer'
+import { getOrCreateRendererRoot } from './app-shell/startup/react-renderer-root'
+import './lib/pane-manager/terminal-rendering/pane-webgl-renderer'
+import { primeTerminalWebglAddon } from './lib/pane-manager/terminal-rendering/terminal-webgl-addon-loader'
 import { SkillWarningPreviewLauncher } from './components/skills/installation/preview/SkillWarningPreviewLauncher'
 import { installBrowserClientPageRenderer } from './components/browser-pane/browser-client-page-renderer-installation'
 import { registerBrowserClientPageGuestMessageHandler } from './components/browser-pane/browser-client-page-retained-elements'

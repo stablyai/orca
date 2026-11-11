@@ -7,7 +7,7 @@ import { makeTab } from '../../terminals/terminal-tab.test-fixture'
 import { makeWorktree } from '../worktrees/worktree.test-fixture'
 import { TEST_REPO } from '../../repos/repo.test-fixture'
 import { createTabsSliceMockApi } from '../tabs/tabs-slice-test-harness'
-import { createUnreadBadgeCountSelector } from '@/lib/unread-badge-count-selector'
+import { createUnreadBadgeCountSelector } from '@/attention/unread/unread-badge-count-selector'
 import {
   resetFloatingWorkspaceUnreadSelectorCacheForTest,
   selectFloatingWorkspaceHasUnread

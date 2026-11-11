@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
-import { safeFitAndThen } from '@/lib/pane-manager/pane-fit'
-import { getFitOverrideForPty } from '@/lib/pane-manager/mobile-fit-overrides'
+import { safeFitAndThen } from '@/lib/pane-manager/terminal-fit/pane-fit'
+import { getFitOverrideForPty } from '@/lib/pane-manager/terminal-fit/mobile-fit-overrides'
 import { isPtyLocked } from '@/lib/pane-manager/mobile-driver-state'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from '../pty-transport/pty-transport-types'

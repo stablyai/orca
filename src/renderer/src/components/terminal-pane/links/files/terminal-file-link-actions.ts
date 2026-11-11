@@ -1,6 +1,3 @@
-import type { FileOpenFailure } from './terminal-file-open-failure'
-import type { LinkActionRequest } from '@/components/link-actions/link-action-request'
-import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
 import { buildHttpLinkActions } from '@/lib/browser/navigation/http-link-destinations'
 import { openDetectedFilePath } from './terminal-file-open-routing'
 import {
@@ -11,13 +8,10 @@ import {
 } from '../../host-files/terminal-file-path-mapping'
 import { isHtmlFilePath, localHtmlFileDestinations } from './local-html-file-destinations'
 import { isTerminalLinkDirectActivation } from '../gestures/terminal-link-activation'
-import {
-  requestTerminalLinkAction,
-  type TerminalLinkActionContext
-} from '../terminal-link-action-request'
+import { requestTerminalLinkAction } from '../terminal-link-action-request'
+import type { TerminalLinkActionContext } from '../terminal-link-action-request'
 import { resolveKnownWorktreeRootPathLink } from './terminal-worktree-path-link'
 import { translate } from '@/i18n/i18n'
-import type { Translate } from '@/i18n/use-translate'
 import {
   getRevealInFileManagerLabel,
   revealInFileManager
@@ -28,7 +22,11 @@ import {
   isLocalPathOpenBlocked
 } from '@/lib/files/os-open/local-path-open-guard'
 import '@/store/slices/editor/tabs/editor-open-target-group'
-import { canOpenLinkInSourceGroup } from '@/lib/link-open-intent'
+import { canOpenLinkInSourceGroup } from '@/lib/links/placement/link-open-intent'
+import type { FileOpenFailure } from './terminal-file-open-failure'
+import type { LinkActionRequest } from '@/components/link-actions/link-action-request'
+import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
+import type { Translate } from '@/i18n/use-translate'
 
 export type TerminalFileLinkActionDeps = {
   worktreeId: string

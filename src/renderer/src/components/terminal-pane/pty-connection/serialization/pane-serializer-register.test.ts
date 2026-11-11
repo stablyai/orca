@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { SerializeAddon } from '@xterm/addon-serialize'
 import { Terminal } from '@xterm/headless'
-import { installTerminalMouseEncodingTracker } from '@/lib/pane-manager/terminal-mouse-encoding-tracker'
+import { installTerminalMouseEncodingTracker } from '@/lib/pane-manager/terminal-protocol/terminal-mouse-encoding-tracker'
 import type { SerializeFn } from '../../snapshots/pty-buffer-serializer'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 import { bindRegisterPaneSerializer } from './pane-serializer-register'

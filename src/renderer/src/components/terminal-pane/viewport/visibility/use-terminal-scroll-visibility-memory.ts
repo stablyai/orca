@@ -1,15 +1,15 @@
 import { useCallback, useEffect, useRef } from 'react'
 import type { Terminal } from '@xterm/xterm'
-import { flushTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
+import { flushTerminalOutput } from '@/lib/pane-manager/terminal-output/pane-terminal-output-scheduler'
 import {
   cancelDeferredScrollRestore,
   captureScrollState,
   getTerminalOutputEpoch
-} from '@/lib/pane-manager/pane-scroll'
+} from '@/lib/pane-manager/terminal-scroll/pane-scroll'
 import {
   getTerminalScrollIntentKind,
   markTerminalFollowOutput
-} from '@/lib/pane-manager/terminal-scroll-intent'
+} from '@/lib/pane-manager/terminal-scroll/terminal-scroll-intent'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { ScrollState } from '@/lib/pane-manager/pane-manager-types'
 

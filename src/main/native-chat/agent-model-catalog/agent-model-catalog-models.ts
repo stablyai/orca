@@ -28,7 +28,7 @@ export function mergedAgentModelCatalogModels(
     // Coarser probe menus must not discard a chat-confirmed effort unless a newer chat menu does.
     const keepsChatMenu =
       older === live && !offersConfigured(model.efforts) && offersConfigured(olderEfforts)
-    const { efforts, effortsKnown } = modelSpecificEfforts
+    const { efforts: keptEfforts, effortsKnown } = modelSpecificEfforts
       ? model.effortsKnown === false && olderModel
         ? olderModel
         : model
@@ -39,6 +39,8 @@ export function mergedAgentModelCatalogModels(
         : model.efforts.length > 0 && !keepsChatMenu
           ? model
           : (olderModel ?? model)
+    // An unobserved per-model menu is another model's; older builds saved such copies.
+    const efforts = modelSpecificEfforts && effortsKnown === false ? [] : keptEfforts
     const defaultEffort = [configuredEffort, listed?.defaultEffort, reported?.defaultEffort].find(
       (effort) => effort !== undefined && efforts.some((choice) => choice.value === effort)
     )

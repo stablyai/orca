@@ -1,7 +1,7 @@
 import type React from 'react'
 import { useState } from 'react'
 import { ChevronRight } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useAppStore } from '../../../store/index'
 import { normalizeSettingsSearchQuery } from '../search/settings-search'
 import { useTranslate } from '@/i18n/use-translate'

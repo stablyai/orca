@@ -24,7 +24,7 @@ export function agentPickerOptions(
 }
 
 export function agentPickerEntryOptions(
-  entry: AgentPickerEntry,
+  entry: Pick<AgentPickerEntry, 'agent' | 'catalog' | 'terminal' | 'textGeneration'>,
   model: string | undefined,
   surface: AgentPickerSurface
 ): CatalogOption[] {
@@ -102,7 +102,9 @@ export function agentPickerPermissions(agent: TuiAgent, surface: AgentPickerSurf
   )
 }
 
-export function agentPickerModels(entry: AgentPickerEntry): AgentPickerModel[] {
+export function agentPickerModels(
+  entry: Pick<AgentPickerEntry, 'agent' | 'catalog'>
+): AgentPickerModel[] {
   if (entry.catalog.origin !== 'unknown') {
     return entry.catalog.models
   }

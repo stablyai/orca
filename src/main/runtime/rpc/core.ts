@@ -20,7 +20,7 @@ import type {
   DelegatedMobileDeviceSyncResult
 } from '../../../shared/delegated-mobile-device-contract'
 import type { OrchestrationCompatibilityEvidence } from '../../../shared/orchestration/orchestration-compatibility-evidence'
-import type { OrchestrationSessionCaller } from '../orchestration/addressing/orchestration-caller-identity'
+import type { OrchestrationEntryCaller } from '../orchestration/addressing/orchestration-caller-identity'
 import type { RpcCallerIdentity } from './rpc-caller-identity'
 import type { OrcadPeerDesktopsResult } from '../../../shared/orcad-peer-desktops-contract'
 import type { RpcBinarySender } from './rpc-binary-sender'
@@ -91,6 +91,8 @@ export type RpcRequest = {
   params?: unknown
   orchestrationContractVersion?: number
   orchestrationRequestId?: string
+  // Untrusted wire input; only a paired Orca's runtime pairing admits it (orchestration-peer-caller).
+  orchestrationPeerRun?: unknown
   compatibilityInvocationId?: string
   orchestrationCompatibilityEvidence?: OrchestrationCompatibilityEvidence
   // Untrusted wire evidence; runtime-source-admission validates it.
@@ -151,8 +153,8 @@ export type RpcContext = {
   replayedMutationReceipt?: unknown
   // Compare declared Run handles against request attestation.
   orchestrationCompatibilityEvidence?: OrchestrationCompatibilityEvidence
-  // Resolve the injected Orca session id once at dispatch; session identity wins.
-  orchestrationCaller?: OrchestrationSessionCaller
+  // Resolved once at dispatch from a session's environment or a paired Orca's pairing; it wins.
+  orchestrationCaller?: OrchestrationEntryCaller
   // Only the trusted compatibility router sets this; params cannot bypass Run consumer binding.
   legacyCoordinatorRunId?: string
   legacyCoordinatorAuthority?: LegacyCoordinatorAuthorityProof

@@ -4,7 +4,7 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { GitHubMarkdownComposer } from '@/components/github/GitHubMarkdownComposer'
 import { githubCommentImageUploadAddress } from '@/components/github/github-comment-image-upload-address'
 import {
