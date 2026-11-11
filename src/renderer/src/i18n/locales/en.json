@@ -1269,8 +1269,7 @@
       "removeAddress": "Remove these checkouts from Orca.",
       "upgrade": {
         "body": "Orca now groups multiple checkouts of the same repo into one project.",
-        "link": "You can change this grouping in <settings>Settings</settings>.",
-        "title": "Your checkouts were combined"
+        "link": "Change this grouping in <settings>Settings</settings>."
       }
     },
     "network": {

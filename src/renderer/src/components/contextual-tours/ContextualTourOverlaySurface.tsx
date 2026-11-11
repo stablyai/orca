@@ -186,7 +186,7 @@ export function ContextualTourOverlaySurface({
     <section
       ref={panelRef}
       aria-live="polite"
-      aria-label={renderState.title}
+      aria-label={renderState.title || renderState.body}
       data-contextual-tour-panel={activeTourId}
       data-placement={floatingPosition?.panelPlacement ?? undefined}
       role="dialog"
@@ -227,21 +227,18 @@ export function ContextualTourOverlaySurface({
         >
           <X />
         </Button>
-        <h2
-          className={cn(
-            'flex items-center gap-2 pr-6 font-semibold tracking-tight text-foreground',
-            isProjectGroupingTip ? 'text-xs' : 'text-sm'
-          )}
-        >
-          {renderState.badge === 'new' ? (
-            <Badge variant="secondary">{t('components.contextualTours.badgeNew', 'New')}</Badge>
-          ) : null}
-          <span className="min-w-0">{renderState.title}</span>
-        </h2>
+        {renderState.title ? (
+          <h2 className="flex items-center gap-2 pr-6 text-sm font-semibold tracking-tight text-foreground">
+            {renderState.badge === 'new' ? (
+              <Badge variant="secondary">{t('components.contextualTours.badgeNew', 'New')}</Badge>
+            ) : null}
+            <span className="min-w-0">{renderState.title}</span>
+          </h2>
+        ) : null}
         <p
           className={cn(
             'text-xs text-muted-foreground',
-            isProjectGroupingTip ? 'mt-1 leading-4' : 'mt-1.5 leading-5'
+            isProjectGroupingTip ? 'pr-6 leading-4' : 'mt-1.5 leading-5'
           )}
         >
           {renderState.body}
@@ -252,7 +249,7 @@ export function ContextualTourOverlaySurface({
               i18n={i18n}
               defaults={t(
                 'settings.projectGrouping.upgrade.link',
-                'You can change this grouping in <settings>Settings</settings>.'
+                'Change this grouping in <settings>Settings</settings>.'
               )}
               components={{
                 settings: (

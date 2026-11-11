@@ -92,10 +92,16 @@ it.each(['Dismiss tour', 'Settings'])(
     vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(100)
     const user = userEvent.setup()
     const view = render(<Tip />)
-    expect(await screen.findByText('Your checkouts were combined')).toBeTruthy()
+    expect(
+      await screen.findByText(
+        'Orca now groups multiple checkouts of the same repo into one project.'
+      )
+    ).toBeTruthy()
     await user.click(await screen.findByRole('button', { name: action }))
     expect(useAppStore.getState().contextualToursSeenIds).toContain('project-grouping-upgrade')
-    expect(screen.queryByText('Your checkouts were combined')).toBeNull()
+    expect(
+      screen.queryByText('Orca now groups multiple checkouts of the same repo into one project.')
+    ).toBeNull()
     if (action === 'Settings') {
       expect(useAppStore.getState().settingsNavigationTarget).toBeNull()
       expect(useAppStore.getState().activeView).toBe('settings')
@@ -121,7 +127,9 @@ it.each(['Dismiss tour', 'Settings'])(
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1000)
     })
-    expect(screen.queryByText('Your checkouts were combined')).toBeNull()
+    expect(
+      screen.queryByText('Orca now groups multiple checkouts of the same repo into one project.')
+    ).toBeNull()
   }
 )
 
@@ -132,7 +140,9 @@ it('consumes the audience when a separate mode is chosen before first display', 
   expect(useAppStore.getState().contextualToursSeenIds).toContain('project-grouping-upgrade')
   act(() => useAppStore.setState({ settings: getDefaultSettings('') }))
   await act(async () => {})
-  expect(screen.queryByText('Your checkouts were combined')).toBeNull()
+  expect(
+    screen.queryByText('Orca now groups multiple checkouts of the same repo into one project.')
+  ).toBeNull()
 })
 
 vi.mock('../settings/updates/GeneralUpdateSettingsSection', () => ({

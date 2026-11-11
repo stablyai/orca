@@ -3,7 +3,7 @@ import type { LocalizedContextualTourStepCopy } from './contextual-tour-step-cop
 
 export function getProjectGroupingUpgradeTipCopy(): LocalizedContextualTourStepCopy {
   return {
-    title: translate('settings.projectGrouping.upgrade.title', 'Your checkouts were combined'),
+    title: '',
     body: translate(
       'settings.projectGrouping.upgrade.body',
       'Orca now groups multiple checkouts of the same repo into one project.'

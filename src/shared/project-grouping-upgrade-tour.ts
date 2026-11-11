@@ -5,7 +5,7 @@ export const PROJECT_GROUPING_TIP_TOUR = {
   steps: [
     {
       id: 'project-grouping-upgrade',
-      title: 'One project for every checkout',
+      title: '',
       body: '',
       targetSelector: '[data-contextual-tour-target="project-grouping-upgrade"]',
       requiredForStart: true,
