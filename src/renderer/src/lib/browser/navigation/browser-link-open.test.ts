@@ -16,6 +16,7 @@ import {
 import type { BrowserLinkTestStore } from './browser-link-open.test-fixture'
 import { openWorkspaceBrowserTabForLink } from '../workspace/workspace-browser-tab-open'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
+import { getDefaultSettings } from '../../../../../shared/orca-profiles/constants'
 import type * as BrowserFocusModule from '@/components/browser-pane/host-guest/input/browser-focus'
 
 const mocks = vi.hoisted(() => ({ getState: vi.fn() }))
@@ -212,5 +213,27 @@ describe('existing open routes with link intent', () => {
       result: { worktreeId: floating }
     })
     expect(store.getState().activeWorktreeId).toBe(WORKSPACE)
+  })
+})
+
+describe('browser destination split preference', () => {
+  it('opens a tab in the lone source pane instead of splitting when splits are off', () => {
+    store.setState((state) => ({
+      settings: { ...getDefaultSettings('/home/dev'), openLinksInAppInSplit: false },
+      groupsByWorktree: { [WORKSPACE]: state.groupsByWorktree[WORKSPACE]!.slice(0, 1) },
+      unifiedTabsByWorktree: {
+        [WORKSPACE]: state.unifiedTabsByWorktree[WORKSPACE]!.slice(0, 1)
+      },
+      activeGroupIdByWorktree: { [WORKSPACE]: 'a' },
+      layoutByWorktree: { [WORKSPACE]: { type: 'leaf', groupId: 'a' } }
+    }))
+    const state = store.getState()
+    expect(
+      selectBrowserLinkDestination(
+        state,
+        browserLinkTestDestination(),
+        captureLinkOpenIntent(state, WORKSPACE, 'source')
+      )
+    ).toEqual({ status: 'ready', groupId: 'a', match: null })
   })
 })

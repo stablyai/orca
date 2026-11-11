@@ -11245,7 +11245,11 @@
             "5a70844e54": "Default search engine",
             "f1da035bcb": "Session & cookies",
             "f6de9e25a0": "Default zoom",
-            "1c2aff8f82": "Default home page"
+            "1c2aff8f82": "Default home page",
+            "linkRoutingSplit": {
+              "split": "split",
+              "pane": "pane"
+            }
           },
           "use": {
             "search": {
@@ -14823,6 +14827,10 @@
           "cancel": "Cancel",
           "confirm": "Remove",
           "unknownHost": "Unknown host"
+        },
+        "BrowserLinkRoutingSplitSetting": {
+          "title": "Open links in a split",
+          "description": "With no browser visible, a link opens in a new pane beside the one you clicked. When off, it opens as a new tab in that pane."
         }
       },
       "right": {

@@ -9,6 +9,7 @@ import { getBrowserSitePermissionsSearchEntry } from './browser-site-permissions
 import {
   getBrowserLinkRoutingDescription,
   getLinkRoutingBackgroundSearchEntry,
+  getLinkRoutingSplitSearchEntry,
   getLinkRoutingModifierDescription,
   getLinkRoutingModifierTitle
 } from './routing/browser-link-routing-copy'
@@ -257,6 +258,7 @@ export function getBrowserPaneSearchEntries(
     getBrowserUserAgentSearchEntry(),
     getBrowserSitePermissionsSearchEntry(),
     getBrowserProfileScopeSearchEntry(),
-    getLinkRoutingBackgroundSearchEntry(t)
+    getLinkRoutingBackgroundSearchEntry(t),
+    getLinkRoutingSplitSearchEntry(t)
   ]
 }

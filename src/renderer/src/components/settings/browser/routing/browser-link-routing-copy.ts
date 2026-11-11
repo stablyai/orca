@@ -119,3 +119,53 @@ export function getLinkRoutingBackgroundSearchEntry(t?: Translate): SettingsSear
     ]
   }
 }
+
+function getLinkRoutingSplitTitle(t: Translate = translate): string {
+  return t('auto.components.settings.BrowserLinkRoutingSplitSetting.title', 'Open links in a split')
+}
+
+function getLinkRoutingSplitDescription(t: Translate = translate): string {
+  return t(
+    'auto.components.settings.BrowserLinkRoutingSplitSetting.description',
+    'With no browser visible, a link opens in a new pane beside the one you clicked. When off, it opens as a new tab in that pane.'
+  )
+}
+
+export function getLinkRoutingSplitSearchEntry(t?: Translate): SettingsSearchEntry {
+  return {
+    title: getLinkRoutingSplitTitle(t),
+    description: getLinkRoutingSplitDescription(t),
+    keywords: [
+      ...translateSearchKeyword(
+        'auto.components.settings.browser.search.2d2d995c58',
+        'browser',
+        undefined,
+        t
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.browser.search.bea27bac4b',
+        'links',
+        undefined,
+        t
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.browser.search.linkRoutingSplit.split',
+        'split',
+        undefined,
+        t
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.browser.search.linkRoutingSplit.pane',
+        'pane',
+        undefined,
+        t
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.browser.search.linkRoutingBackground.tab',
+        'tab',
+        undefined,
+        t
+      )
+    ]
+  }
+}
