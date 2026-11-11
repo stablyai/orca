@@ -32,7 +32,7 @@ const mocks = vi.hoisted(() => {
   }
 })
 
-vi.mock('@/components/browser-pane/host-guest/webview-registry', () => ({
+vi.mock('@/components/browser-pane/host-guest/browser-webview-disposal', () => ({
   closePersistentBrowserPage: vi.fn()
 }))
 vi.mock('../../store', () => ({ useAppStore: { getState: mocks.getState } }))

@@ -12,7 +12,6 @@ import {
 } from './webview-drag-passthrough'
 
 export { acquireWebviewsDragPassthrough } from './webview-drag-passthrough'
-export { closePersistentBrowserPage, replacePersistentWebview } from './browser-webview-disposal'
 
 // Keep guest coordination outside React to break the store/slices → components → store cleanup cycle.
 export const webviewRegistry = new Map<string, Electron.WebviewTag>()

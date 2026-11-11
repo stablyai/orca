@@ -6,12 +6,11 @@ import {
   type BrowserPageWebviewGuestSession
 } from './browser-page-webview-guest-session'
 import {
-  closePersistentBrowserPage,
-  replacePersistentWebview,
   registerPersistentWebview,
   registeredWebContentsIds,
   webviewRegistry
 } from './webview-registry'
+import { closePersistentBrowserPage, replacePersistentWebview } from './browser-webview-disposal'
 import { createBrowserPageWebviewLoadingHandlers } from './browser-page-webview-loading-handlers'
 import {
   admitBrowserPageMount,

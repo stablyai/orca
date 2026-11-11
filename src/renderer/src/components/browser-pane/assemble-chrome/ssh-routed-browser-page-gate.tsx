@@ -4,7 +4,8 @@ import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
 import { DOC_PREVIEW_PARTITION } from '../../../../../shared/document-preview/doc-preview-scheme'
-import { replacePersistentWebview, webviewRegistry } from '../host-guest/webview-registry'
+import { webviewRegistry } from '../host-guest/webview-registry'
+import { replacePersistentWebview } from '../host-guest/browser-webview-disposal'
 import { admitBrowserPageMount } from '../host-guest/browser-page-mount-admission'
 import {
   useSshWorkspaceBrowserRoute,

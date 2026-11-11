@@ -13,11 +13,8 @@ import {
   startBrowserPageAttach,
   waitForBrowserPageReady
 } from '../../../../../main/browser/guest-lifecycle/browser-page-memory'
-import {
-  closePersistentBrowserPage,
-  registeredWebContentsIds,
-  webviewRegistry
-} from './webview-registry'
+import { registeredWebContentsIds, webviewRegistry } from './webview-registry'
+import { closePersistentBrowserPage } from './browser-webview-disposal'
 import { releaseBrowserPageMount } from './browser-page-mount-admission'
 
 export class ProfileTestGuest extends DestroyedGuestTestContents {

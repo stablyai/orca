@@ -25,10 +25,13 @@ vi.mock('@/lib/agent-status/aggregation/worktree-agent-status', async (importOri
   return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
 })
 
-vi.mock('@/components/browser-pane/host-guest/webview-registry', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  closePersistentBrowserPage: vi.fn(() => Promise.resolve())
-}))
+vi.mock(
+  '@/components/browser-pane/host-guest/browser-webview-disposal',
+  async (importOriginal) => ({
+    ...(await importOriginal<object>()),
+    closePersistentBrowserPage: vi.fn(() => Promise.resolve())
+  })
+)
 
 // Main answers the window's layout commands; its frames draw the browser tabs.
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>

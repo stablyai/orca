@@ -8,10 +8,13 @@ const registryMocks = vi.hoisted(() => ({
   webviewRegistry: new Map<string, Electron.WebviewTag>()
 }))
 
-vi.mock('../host-guest/webview-registry', () => ({
+vi.mock('../host-guest/browser-webview-disposal', () => ({
   closePersistentBrowserPage: registryMocks.closePersistentBrowserPage,
+  replacePersistentWebview: registryMocks.replacePersistentWebview
+}))
+
+vi.mock('../host-guest/webview-registry', () => ({
   registerPersistentWebview: registryMocks.registerPersistentWebview,
-  replacePersistentWebview: registryMocks.replacePersistentWebview,
   webviewRegistry: registryMocks.webviewRegistry
 }))
 
