@@ -62,6 +62,8 @@ Background agent inventory can skip disabled agents, but worker-start validation
 
 Strict WSL worker preflight allows up to 60 seconds for the guest to start before the separate 10-second launcher inventory. Startup failure still returns `remote_runtime_unavailable` before worker state is created; this does not change background inventory or establish real-host compatibility.
 
+Existing folder workspaces are validated through their own launch scope, not a synthetic repository ID. A folder without a repository registration still checks the launcher on its actual local, WSL, or remote execution host before worker state is created.
+
 After starting workers, end your turn. Orca wakes the coordinator when a worker reports, asks, or stops; run the `check` command the wake gives you and handle every message it prints:
 
 ```bash

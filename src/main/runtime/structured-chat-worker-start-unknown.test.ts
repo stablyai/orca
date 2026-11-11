@@ -19,6 +19,7 @@ it('keeps a minted worker start unknown after one preamble handover without an e
   const { taskId } = await coordinatorRunAndTask()
   vi.spyOn(runtime, 'validateOrchestrationAgentLauncher').mockImplementation(() => {})
   vi.spyOn(runtime, 'validateOrchestrationAgentLauncherForRepo').mockResolvedValue()
+  vi.spyOn(runtime, 'validateOrchestrationAgentLauncherForWorktree').mockResolvedValue()
   vi.spyOn(runtime, 'getStructuredAgentSessionCreateSupport').mockResolvedValue({ supported: true })
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: placement reads only the workspace identity in this rig.
   vi.spyOn(runtime, 'showManagedTerminalWorkspace').mockResolvedValue({

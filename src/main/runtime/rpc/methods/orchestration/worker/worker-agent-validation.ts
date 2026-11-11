@@ -7,11 +7,16 @@ export async function validateWorkerAgent(
   runtime: OrcaRuntimeService,
   agent: TuiAgent | undefined,
   creationTarget: WorkerWorktreeCreationTarget | undefined,
-  resolvedWorktree: { repoId: string } | undefined,
+  resolvedWorktree: { id: string; repoId: string } | undefined,
   mode: AgentLaunchMode
 ): Promise<void> {
   if (agent) {
-    const repo = creationTarget?.repoSelector ?? `id:${resolvedWorktree!.repoId}`
-    await runtime.validateOrchestrationAgentLauncherForRepo(agent, repo, mode)
+    await (creationTarget
+      ? runtime.validateOrchestrationAgentLauncherForRepo(agent, creationTarget.repoSelector, mode)
+      : runtime.validateOrchestrationAgentLauncherForWorktree(
+          agent,
+          `id:${resolvedWorktree!.id}`,
+          mode
+        ))
   }
 }

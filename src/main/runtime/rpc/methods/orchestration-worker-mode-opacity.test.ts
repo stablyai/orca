@@ -127,6 +127,7 @@ describe('a worker cannot tell which mode it is running in', () => {
     )
     vi.spyOn(runtime, 'validateOrchestrationAgentLauncher').mockImplementation(() => {})
     vi.spyOn(runtime, 'validateOrchestrationAgentLauncherForRepo').mockResolvedValue()
+    vi.spyOn(runtime, 'validateOrchestrationAgentLauncherForWorktree').mockResolvedValue()
     // Raise nesting depth above one so both modes can receive sub-dispatch instructions.
     vi.spyOn(runtime, 'getNestedWorkerMaxDepth').mockReturnValue(3)
     vi.spyOn(runtime, 'showManagedTerminalWorkspace').mockResolvedValue({

@@ -83,6 +83,7 @@ function fakes() {
     showTerminal: async () => ({ worktreeId: WORKTREE }),
     showManagedTerminalWorkspace: async () => ({ id: WORKTREE, repoId: 'repo-1' }),
     validateOrchestrationAgentLauncherForRepo: vi.fn().mockResolvedValue(undefined),
+    validateOrchestrationAgentLauncherForWorktree: vi.fn().mockResolvedValue(undefined),
     getNestedWorkerMaxDepth: () => 3,
     getRuntimeId: () => 'epoch-1',
     ensureStructuredAgentSessionHost: async () => {},

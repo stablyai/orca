@@ -78,6 +78,7 @@ it.each([
       false,
       partialRuntimeStore({ getSettings: () => ({ agentDefaultSurface: 'terminal' }) })
     )
+    vi.spyOn(runtime, 'validateOrchestrationAgentLauncherForWorktree').mockResolvedValue()
     if (scenario === 'federated-metadata-fails') {
       db.db.exec(
         "CREATE TRIGGER launch_metadata_write_failure BEFORE UPDATE OF start_options ON worker_dispatches BEGIN SELECT RAISE(ABORT, 'metadata write unavailable'); END"

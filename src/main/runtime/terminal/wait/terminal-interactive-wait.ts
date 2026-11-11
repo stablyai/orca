@@ -15,7 +15,8 @@ import type {
 
 import {
   validateWorkerAgentEnabled,
-  validateWorkerAgentForRepo
+  validateWorkerAgentForRepo,
+  validateWorkerAgentForWorktree
 } from '../../worker-agent-availability'
 import type { AgentLaunchScope } from '../../session-tabs/structured-session-tab-restoration'
 import { withTimeout } from '../../runtime-async-boundaries'
@@ -213,6 +214,14 @@ export abstract class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRunt
     mode?: Parameters<typeof validateWorkerAgentForRepo>[4]
   ): Promise<void> {
     await validateWorkerAgentForRepo(this, this.requireStore(), agent, repoSelector, mode)
+  }
+
+  async validateOrchestrationAgentLauncherForWorktree(
+    agent: TuiAgent,
+    worktreeSelector: string,
+    mode?: Parameters<typeof validateWorkerAgentForWorktree>[4]
+  ): Promise<void> {
+    await validateWorkerAgentForWorktree(this, this.requireStore(), agent, worktreeSelector, mode)
   }
 
   resolveOrchestrationAgentLauncher(

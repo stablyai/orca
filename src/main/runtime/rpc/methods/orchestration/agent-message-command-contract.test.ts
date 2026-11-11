@@ -107,6 +107,7 @@ it.each([
       partialRuntimeStore({ getSettings: () => ({ agentDefaultSurface: 'terminal' }) }),
       join(current.root, 'home-orchestration.db')
     )
+    vi.spyOn(runtime, 'validateOrchestrationAgentLauncherForWorktree').mockResolvedValue()
     if (federated) {
       vi.spyOn(runtime, 'resolveOrchestrationWorkerServer').mockReturnValue({
         environmentId: 'remote',

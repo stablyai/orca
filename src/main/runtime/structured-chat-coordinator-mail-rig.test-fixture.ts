@@ -274,6 +274,7 @@ export function startRuntime(): OrcaRuntimeService {
   const started = new OrcaRuntimeService(profile)
   started.setOrchestrationDb(db)
   vi.spyOn(started, 'ensureStructuredAgentSessionHost').mockResolvedValue()
+  vi.spyOn(started, 'validateOrchestrationAgentLauncherForWorktree').mockResolvedValue()
   vi.spyOn(started, 'getTerminalPaneKey').mockImplementation((handle) =>
     handle === 'term_worker' ? WORKER_PANE : handle === 'term_worker_2' ? WORKER_2_PANE : null
   )

@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import type * as LocalAgentCliPresence from '../agent-hooks/local-agent-cli-presence'
 import { resolveStructuredAgentCommand } from '../native-chat/structured-agent-command-resolution'
+import type { TerminalWorkspaceLaunchScope } from './runtime-legacy-worker-terminal-recovery-types'
 
 const {
   detectInstalledAgents,
@@ -332,6 +333,70 @@ describe('validateOrchestrationAgentLauncherForRepo', () => {
 
     await expect(
       runtime.validateOrchestrationAgentLauncherForRepo('claude-agent-teams', 'repo-1')
+    ).resolves.toBeUndefined()
+  })
+})
+
+describe('validateOrchestrationAgentLauncherForWorktree', () => {
+  const scope: TerminalWorkspaceLaunchScope = {
+    id: 'folder:worker-folder',
+    path: '/workspace',
+    connectionId: null,
+    repo: null,
+    folderWorkspace: {
+      id: 'worker-folder',
+      projectGroupId: 'group',
+      name: 'Worker folder',
+      folderPath: '/workspace',
+      linkedTask: null,
+      comment: '',
+      isArchived: false,
+      isUnread: false,
+      isPinned: false,
+      sortOrder: 0,
+      lastActivityAt: 0,
+      createdAt: 0,
+      updatedAt: 0
+    }
+  }
+
+  it.each([true, false])(
+    'validates a repo-less folder with launcher present=%s',
+    async (present) => {
+      const runtime = createRuntime()
+      vi.spyOn(runtime, 'resolveTerminalWorkspaceLaunchScope').mockResolvedValue(scope)
+      detectInstalledAgents.mockResolvedValue(present ? ['codex'] : [])
+
+      const validation = runtime.validateOrchestrationAgentLauncherForWorktree('codex', scope.id)
+      await (present
+        ? expect(validation).resolves.toBeUndefined()
+        : expect(validation).rejects.toMatchObject({ code: 'agent_not_available' }))
+    }
+  )
+
+  it('retains remote ownership for a folder without a repository', async () => {
+    const runtime = createRuntime()
+    vi.spyOn(runtime, 'resolveTerminalWorkspaceLaunchScope').mockResolvedValue({
+      ...scope,
+      connectionId: 'ssh-folder'
+    })
+
+    await expect(
+      runtime.validateOrchestrationAgentLauncherForWorktree('codex', scope.id)
+    ).rejects.toMatchObject({ code: 'ssh_host_not_served', connectionId: 'ssh-folder' })
+  })
+
+  it('validates a repo-less UNC folder override inside its WSL guest', async () => {
+    const runtime = createRuntime({ agentCmdOverrides: { codex: '~/bin/codex' } })
+    vi.spyOn(runtime, 'resolveTerminalWorkspaceLaunchScope').mockResolvedValue({
+      ...scope,
+      path: String.raw`\\wsl.localhost\Ubuntu\home\u\workspace`
+    })
+    detectInstalledAgents.mockResolvedValue(['codex'])
+    detectWslCommandsOnPath.mockResolvedValue(new Set(['~/bin/codex']))
+
+    await expect(
+      runtime.validateOrchestrationAgentLauncherForWorktree('codex', scope.id)
     ).resolves.toBeUndefined()
   })
 })

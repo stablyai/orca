@@ -24,6 +24,8 @@ import type { AgentLaunchMode } from '../../shared/agent-launch-intent'
 import { hasExplicitTuiLaunchCommand } from '../../shared/tui-agent-launch-command-override'
 import { resolveStructuredAgentCommand } from '../native-chat/structured-agent-command-resolution'
 import { isAgentSessionPreSpawnError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import { resolveLocalLaunchScopeRuntime } from '../local-project-runtime-resolution'
+import { parseWslUncPath } from '../../shared/wsl-paths'
 
 export function validateWorkerAgentEnabled(
   agent: TuiAgent,
@@ -66,24 +68,56 @@ export async function validateWorkerAgentForRepo(
   })
 }
 
+export async function validateWorkerAgentForWorktree(
+  runtime: Pick<
+    OrcaRuntimeService,
+    'resolveTerminalWorkspaceLaunchScope' | 'validateOrchestrationAgentLauncher'
+  >,
+  store: RuntimeStore,
+  agent: TuiAgent,
+  selector: string,
+  mode: AgentLaunchMode = 'terminal'
+): Promise<void> {
+  runtime.validateOrchestrationAgentLauncher(agent)
+  const scope = await runtime.resolveTerminalWorkspaceLaunchScope(selector)
+  const wsl = scope.connectionId ? null : parseWslUncPath(scope.path)
+  await validateWorkerAgentAvailability({
+    agent,
+    mode,
+    settings: store.getSettings(),
+    repo: scope.repo,
+    cwd: scope.path,
+    connectionId: scope.connectionId,
+    wslDistro: wsl?.distro,
+    projectRuntime: wsl ? undefined : resolveLocalLaunchScopeRuntime(store, scope),
+    platform: agentLaunchPlatformForScope(store, scope)
+  })
+}
+
 export async function validateWorkerAgentAvailability(args: {
   agent: TuiAgent
   mode?: AgentLaunchMode
   settings: Partial<Pick<GlobalSettings, 'agentCmdOverrides' | 'agentDefaultEnv'>>
-  repo: Repo
+  repo: Repo | null
+  cwd?: string
+  connectionId?: string | null
+  wslDistro?: string
   projectRuntime: ProjectExecutionRuntimeResolution | undefined
   platform: NodeJS.Platform
 }): Promise<void> {
   const { agent, settings, repo, projectRuntime, platform } = args
-  const localRuntimeKind =
-    projectRuntime?.status === 'resolved' ? projectRuntime.runtime.kind : undefined
+  const localRuntimeKind = args.wslDistro
+    ? 'wsl'
+    : projectRuntime?.status === 'resolved'
+      ? projectRuntime.runtime.kind
+      : undefined
   let detected: string[]
-  const connectionId = getRepoSshConnectionId(repo)
+  const connectionId = args.connectionId ?? (repo ? getRepoSshConnectionId(repo) : null)
   if (connectionId) {
     throw new SshHostNotServedError(connectionId)
   } else {
     detected = await detectInstalledAgentsWithShellPathHydration(
-      { projectRuntime },
+      { projectRuntime, ...(args.wslDistro ? { wslDistro: args.wslDistro } : {}) },
       { failOnProbeError: true }
     )
     if (
@@ -109,16 +143,15 @@ export async function validateWorkerAgentAvailability(args: {
     if (override) {
       detected = []
     }
-    if (
-      override &&
-      projectRuntime?.status === 'resolved' &&
-      projectRuntime.runtime.kind === 'wsl'
-    ) {
-      const found = await detectWslCommandsOnPath(
-        { distro: projectRuntime.runtime.distro },
-        [override],
-        { failOnProbeError: true }
-      )
+    if (override && localRuntimeKind === 'wsl') {
+      const distro =
+        args.wslDistro ??
+        (projectRuntime?.status === 'resolved' && projectRuntime.runtime.kind === 'wsl'
+          ? projectRuntime.runtime.distro
+          : undefined)
+      const found = await detectWslCommandsOnPath({ distro }, [override], {
+        failOnProbeError: true
+      })
       if (found.has(override)) {
         return
       }
@@ -139,7 +172,7 @@ export async function validateWorkerAgentAvailability(args: {
         if (presence[agent]?.state === 'found') {
           return
         }
-      } else if (await isCommandOnLocalPath(override, { env, cwd: repo.path })) {
+      } else if (await isCommandOnLocalPath(override, { env, cwd: args.cwd ?? repo?.path })) {
         return
       }
     }
