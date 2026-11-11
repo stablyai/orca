@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useAppStore } from '@/store/index'
 import { isWindowVisible } from '@/lib/window-activity/window-visibility-interval'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
+import { subscribePRAutoRefreshCadence } from '../../../shared/review-refresh-policy'
 import { createVisibleHostedReviewRefreshScheduler } from '@/store/slices/hosted-review/refresh/visible-hosted-review-refresh-scheduler'
 import { getWorkspaceReferenceRefreshTargets } from '@/components/sidebar/workspace-card/review/workspace-reference-refresh-targets'
 import {
@@ -33,11 +34,14 @@ export function useVisibleHostedReviewRefresh({ enabled }: { enabled: boolean })
         update()
       }
     })
+    // A changed cadence (this app's or a paired host's) re-plans every target's interval.
+    const unsubscribeCadence = subscribePRAutoRefreshCadence(update)
     update()
     visibilityChanged()
     document.addEventListener('visibilitychange', visibilityChanged)
     return () => {
       unsubscribe()
+      unsubscribeCadence()
       document.removeEventListener('visibilitychange', visibilityChanged)
       scheduler.dispose()
     }

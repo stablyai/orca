@@ -112,6 +112,7 @@ export async function readPacedClientPROutcome(
         {
           linkedPRNumber,
           fallbackPRNumber: linkedPRNumber === null ? fallbackPRNumber : null,
+          acceptMergedFallbackPR: options.acceptMergedFallbackPR === true,
           currentHeadOid: options.currentHeadOid ?? null
         },
         cadence
@@ -189,6 +190,7 @@ export async function getPRForBranchOutcome(
             start,
             linkedPRNumber: linkedPRNumber ?? null,
             fallbackPRNumber: fallbackPRNumber ?? null,
+            acceptMergedFallbackPR: options.acceptMergedFallbackPR === true,
             headOid: options.currentHeadOid ?? null,
             outcome: narrowed ? null : outcome
           })

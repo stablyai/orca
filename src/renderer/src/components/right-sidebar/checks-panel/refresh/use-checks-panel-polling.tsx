@@ -77,12 +77,15 @@ export function useChecksPanelPolling(model: ChecksPanelPollingInput) {
     async ({
       force = false,
       prNumberOverride,
-      wakeWslDistro = false
+      wakeWslDistro = false,
+      background = false
     }: {
       force?: boolean
       prNumberOverride?: number | null
       /** Opening the panel or tab: a user act that may start a stopped WSL distro. */
       wakeWslDistro?: boolean
+      /** The panel's own timer: a paired host may answer from its last read at its cadence. */
+      background?: boolean
     } = {}) => {
       const {
         repo,
@@ -122,7 +125,8 @@ export function useChecksPanelPolling(model: ChecksPanelPollingInput) {
             throwOnError: true,
             repoId: repo.id,
             repoOwnerExecutionHostId: getRepoExecutionHostId(repo),
-            ...(wakeWslDistro ? { wakeWslDistro: true } : {})
+            ...(wakeWslDistro ? { wakeWslDistro: true } : {}),
+            ...(background ? { background: true } : {})
           }
         )
         if (!isCurrentAsyncResult(requestKey)) {

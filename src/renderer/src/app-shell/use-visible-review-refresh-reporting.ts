@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '../store/index'
 import type { AppState } from '../store/types'
 import { rightSidebarShowsPullRequestData } from '../components/right-sidebar/visibility/right-sidebar-visibility'
@@ -8,9 +8,10 @@ import { getVisibleHostedReviewWorkspaces } from '../store/slices/hosted-review/
 import { shouldCoordinateVisibleGitHubReview } from '../store/slices/hosted-review/refresh/visible-hosted-review-refresh-ownership'
 import { getPRRefreshRuntimeRepoTarget } from '../store/github/repositories/repository-routing'
 import {
-  getPRAutoRefreshCadence,
+  prAutoRefreshCadenceRevision,
   reviewRefreshIntervalMs,
-  REVIEW_REFRESH_COOLDOWN_MS
+  REVIEW_REFRESH_COOLDOWN_MS,
+  subscribePRAutoRefreshCadence
 } from '../../../shared/review-refresh-policy'
 import {
   selectDetectedWorktreesByRepo,
@@ -34,7 +35,7 @@ export function visibleReviewWorktreeIdsForState(state: AppState): string[] {
 function reportIdentity(state: AppState): string {
   return JSON.stringify([
     // A new cadence re-reports, so main re-plans each visible PR's next read at the new interval.
-    getPRAutoRefreshCadence(),
+    prAutoRefreshCadenceRevision(),
     state.activeWorktreeId,
     rightSidebarShowsPullRequestData(state),
     state.sshConnectedGeneration,
@@ -96,11 +97,17 @@ type ReviewReportInputs = Pick<AppState, (typeof REPORT_INPUT_KEYS)[number]>
 export function createVisibleReviewReportIdentitySelector(): (state: AppState) => string {
   let previous: ReviewReportInputs | null = null
   let identity = ''
+  let cadenceRevision = -1
   return (state) => {
     const cachedInputs = previous
-    if (cachedInputs && REPORT_INPUT_KEYS.every((key) => cachedInputs[key] === state[key])) {
+    if (
+      cachedInputs &&
+      cadenceRevision === prAutoRefreshCadenceRevision() &&
+      REPORT_INPUT_KEYS.every((key) => cachedInputs[key] === state[key])
+    ) {
       return identity
     }
+    cadenceRevision = prAutoRefreshCadenceRevision()
     // Keep only review inputs so terminal output and agent snapshots can be released.
     previous = {
       activeView: state.activeView,
@@ -163,7 +170,10 @@ export function refreshForegroundVisibleReview(state: AppState): void {
 export function useVisibleReviewRefreshReporting(): void {
   const selectIdentity = useMemo(() => createVisibleReviewReportIdentitySelector(), [])
   const foregroundRef = useRef<string | null>(null)
-  const identity = useAppStore(selectIdentity)
+  // Cadence changes happen outside the store (a paired host answered); re-run the report on them.
+  const [cadenceTick, setCadenceTick] = useState(0)
+  useEffect(() => subscribePRAutoRefreshCadence(() => setCadenceTick((n) => n + 1)), [])
+  const identity = `${useAppStore(selectIdentity)}|${cadenceTick}`
   const report = useAppStore((s) => s.reportVisibleGitHubPRRefreshCandidates)
   useEffect(() => {
     let mounted = true

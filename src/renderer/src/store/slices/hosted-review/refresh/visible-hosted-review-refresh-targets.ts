@@ -17,7 +17,11 @@ import { findIndexedDetectedWorktrees } from '@/lib/workspace/ownership/worktree
 import { findIndexedRepoOwnerForHost } from '@/lib/workspace/ownership/repo-owner-index'
 import { worktreeOwnerHostIds } from '@/lib/workspace/ownership/workspace-catalog-owner-index'
 import { findKnownWorktreeById } from '../../worktrees/listing/detected-worktree-meta'
-import { getPRRefreshRuntimeRepoTarget } from '../../../github/repositories/repository-routing'
+import {
+  getPRRefreshOwnerRuntimeEnvironmentId,
+  getPRRefreshRuntimeRepoTarget
+} from '../../../github/repositories/repository-routing'
+import { hostPRAutoRefreshCadence } from '../../../github/refresh/remote-host-pr-auto-refresh-cadence'
 import type { VisibleHostedReviewRefreshTarget } from './visible-hosted-review-refresh-scheduler'
 import { shouldCoordinateVisibleGitHubReview } from './visible-hosted-review-refresh-ownership'
 import {
@@ -169,6 +173,8 @@ export function getVisibleHostedReviewRefreshTargets(
       prEntry.fetchedAt >= (hostedEntry?.fetchedAt ?? -Infinity)
     const review = usePR ? prEntry.data : hostedEntry?.data
     const fetchedAt = usePR ? prEntry.fetchedAt : (hostedEntry?.fetchedAt ?? null)
+    // The host that runs the read owns the cadence: a paired host's setting, else this app's.
+    const cadence = hostPRAutoRefreshCadence(getPRRefreshOwnerRuntimeEnvironmentId(candidate))
     const target: VisibleHostedReviewRefreshTarget = {
       key,
       revision: `${candidate.currentHeadOid ?? ''}|${linkedReviewHintKey(hints)}`,
@@ -180,13 +186,17 @@ export function getVisibleHostedReviewRefreshTargets(
           ? null
           : fetchedAt,
       selected,
-      intervalMs: reviewRefreshIntervalMs({
-        state: review?.state,
-        checksStatus: usePR ? prEntry.data?.checksStatus : hostedEntry?.data?.status,
-        hasReview: review ? true : fetchedAt !== null ? false : null,
-        selected
-      }),
-      refresh: async (force = true) => {
+      cadence,
+      intervalMs: reviewRefreshIntervalMs(
+        {
+          state: review?.state,
+          checksStatus: usePR ? prEntry.data?.checksStatus : hostedEntry?.data?.status,
+          hasReview: review ? true : fetchedAt !== null ? false : null,
+          selected
+        },
+        cadence
+      ),
+      refresh: async (force = true, _signal, foreground = false) => {
         const before = getState()
         const beforeFetchedAt = knownGitHub
           ? before.prCache[candidate.cacheKey]?.fetchedAt
@@ -195,6 +205,8 @@ export function getVisibleHostedReviewRefreshTargets(
           ? before.fetchPRForBranch(candidate.repoPath, candidate.branch, {
               force: true,
               reason: 'visible',
+              // Window return or a changed identity: the host must answer fresh, not from its pace.
+              ...(foreground ? { foreground: true } : {}),
               repoId: candidate.repoId,
               repoOwnerExecutionHostId: getRepoExecutionHostId(candidate),
               worktreeId: id,

@@ -80,6 +80,7 @@ export type PrSidebarLoadDeps = {
       acceptMergedFallbackPR?: boolean
       currentHeadOid?: string | null
       refresh?: boolean
+      background?: boolean
     }
   ) => Promise<GitHubPrReadOutcome<PRInfo | null>>
 }
@@ -141,6 +142,8 @@ export async function loadPrBranchReview(
     branch: string
     headSha?: string | null
     refresh?: boolean
+    /** The screen's timer: the host may pace this read; an action, open or foreground read never is. */
+    background?: boolean
     previous?: PrBranchReview
   }
 ): Promise<PrBranchReview> {
@@ -188,7 +191,8 @@ export async function loadPrBranchReview(
         ? { acceptMergedFallbackPR: true }
         : {}),
       currentHeadOid: requestHeadOid,
-      ...(args.refresh ? { refresh: true } : {})
+      ...(args.refresh ? { refresh: true } : {}),
+      ...(args.background && !args.refresh ? { background: true } : {})
     })
   }
   let linkedPR = link.linkedPR

@@ -5,7 +5,8 @@ import type {
 import type { PRInfo } from '../../shared/github/pull-request-types'
 import {
   getPRAutoRefreshCadence,
-  reviewRefreshIntervalMs
+  reviewRefreshIntervalMs,
+  type PRAutoRefreshCadence
 } from '../../shared/review-refresh-policy'
 import type { PRRefreshQueue, PRRefreshQueueEntry } from './pr-refresh-queue'
 import type { PRRefreshRetryState } from './pr-refresh-retry-state'
@@ -44,14 +45,20 @@ export function prChecksDone(pr: PRInfo): boolean {
   )
 }
 
+/** The cadence every CI-line watch read follows, current head and earlier heads alike: a chat asked
+ *  for this PR's CI result, so "off" slows the watch to Minimal rather than ending it unanswered. */
+export function prWatchCadence(
+  cadence: PRAutoRefreshCadence = getPRAutoRefreshCadence()
+): Exclude<PRAutoRefreshCadence, 'off'> {
+  return cadence === 'off' ? 'minimal' : cadence
+}
+
 /** A watch's next read: the background cadence, or none once the PR has settled. */
 export function prWatchNextDueAt(outcome: PRRefreshOutcome): number | null {
   if (outcome.kind === 'upstream-error') {
     return null
   }
   const pr = outcome.kind === 'found' ? outcome.pr : null
-  const cadence = getPRAutoRefreshCadence()
-  // A chat asked for this PR's CI result, so "off" slows the watch rather than ending it unanswered.
   const interval = reviewRefreshIntervalMs(
     {
       state: pr?.state ?? null,
@@ -59,7 +66,7 @@ export function prWatchNextDueAt(outcome: PRRefreshOutcome): number | null {
       hasReview: pr !== null,
       selected: false
     },
-    cadence === 'off' ? 'minimal' : cadence
+    prWatchCadence()
   )
   return interval === null ? null : outcome.fetchedAt + interval
 }
@@ -143,7 +150,11 @@ export class PRWatchJobRunner {
 
   afterOutcome(entry: PRRefreshQueueEntry, outcome: PRRefreshOutcome): void {
     if (outcome.kind === 'upstream-error') {
-      this.followUp(entry, this.retry.nextVisibleErrorRetryAt(entry.key, entry.candidate))
+      // Watches keep retrying under "off" (at Minimal), unlike ordinary visible reads.
+      this.followUp(
+        entry,
+        this.retry.nextVisibleErrorRetryAt(entry.key, entry.candidate, prWatchCadence())
+      )
       return
     }
     this.retry.reset(entry.key)

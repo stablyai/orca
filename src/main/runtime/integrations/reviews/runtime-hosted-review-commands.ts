@@ -82,7 +82,9 @@ export class RuntimeHostedReviewCommands {
     currentHeadOid?: string | null,
     reason?: GitHubPRRefreshReason,
     userRefresh?: boolean,
-    clientKind?: DeviceScope
+    clientKind?: DeviceScope,
+    /** The user just came back to this (window return, re-opened screen): read now, within budget. */
+    foreground?: boolean
   ): Promise<PRRefreshOutcome> {
     const repo = await this.deps.resolveRepo(repoSelector)
     const lookupOptions: GitHubPRBranchLookupOptions = {
@@ -118,7 +120,8 @@ export class RuntimeHostedReviewCommands {
       }
     }
     // This host's cadence caps every client's timed reads, so more clients add no GitHub calls.
-    if (reason !== undefined && isBudgetedBackground(reason)) {
+    // A foreground read (the window or screen came back) is budgeted but never served stale.
+    if (reason !== undefined && isBudgetedBackground(reason) && foreground !== true) {
       const paced = await readPacedClientPROutcome(
         repo.path,
         branch,

@@ -1,6 +1,11 @@
 import { useEffect, useRef, type RefObject } from 'react'
-import { REVIEW_REFRESH_COOLDOWN_MS } from '../../../../../../shared/review-refresh-policy'
+import {
+  REVIEW_REFRESH_COOLDOWN_MS,
+  subscribePRAutoRefreshCadence
+} from '../../../../../../shared/review-refresh-policy'
 import { installWindowVisibilityTimeoutPoller } from '@/lib/window-activity/window-visibility-timeout-poller'
+import { getPRRefreshOwnerRuntimeEnvironmentId } from '@/store/github/repositories/repository-routing'
+import { hostPRAutoRefreshCadence } from '@/store/github/refresh/remote-host-pr-auto-refresh-cadence'
 import type { ChecksDetailPollingPolicy } from '../../../../../../shared/github/checks-detail-polling-policy'
 import type { ChecksPanelPollingInput, ChecksPanelPollingState } from './use-checks-panel-polling'
 
@@ -57,14 +62,22 @@ export function useChecksDetailTimer({
     }
     const policyDelay = (): number | null => {
       const current = modelRef.current
+      // The host that reads these checks owns the cadence: a paired host's setting, else this app's.
+      const cadence = hostPRAutoRefreshCadence(
+        getPRRefreshOwnerRuntimeEnvironmentId({
+          cacheKey: current.prCacheKey ?? '',
+          executionHostId: current.repo?.executionHostId ?? null
+        })
+      )
       return policyRef.current.delayMs(
         current.activeGitLabReview?.state ?? current.pr?.state,
         current.activeGitLabReview?.status ?? current.pr?.checksStatus,
-        current.pollIntervalRef.current
+        current.pollIntervalRef.current,
+        cadence
       )
     }
     const cleanup = installWindowVisibilityTimeoutPoller({
-      run: async () => {
+      run: async ({ trigger }) => {
         if (inFlightRef.current?.identity === requestIdentity) {
           return
         }
@@ -88,10 +101,17 @@ export function useChecksDetailTimer({
         nextAttemptAtRef.current = Infinity
         const force = forceNextFetchRef.current
         forceNextFetchRef.current = false
+        // Only the timer's own tick is a background read the host may pace; the window coming
+        // back, the panel opening and a changed aggregate state must read fresh.
+        const background = trigger === 'timer' && !shown && !force
         try {
           await (isGitLabReview
             ? fetchGitLabDetails(shown ? {} : { background: true })
-            : fetchChecks({ force, ...(shown ? { wakeWslDistro: true } : {}) }))
+            : fetchChecks({
+                force,
+                ...(shown ? { wakeWslDistro: true } : {}),
+                ...(background ? { background: true } : {})
+              }))
         } finally {
           if (inFlightRef.current?.token === token) {
             inFlightRef.current = null
@@ -119,8 +139,21 @@ export function useChecksDetailTimer({
       }
     })
     refreshRef.current = cleanup.refresh
+    // A cadence change (this app's or the owning host's) re-plans a mounted panel at once: a timer
+    // stopped under "off" starts again, and one armed for Default is disarmed.
+    const unsubscribeCadence = subscribePRAutoRefreshCadence(() => {
+      if (inFlightRef.current?.identity === requestIdentity) {
+        return
+      }
+      const delay = policyDelay()
+      if (Number.isFinite(lastAttemptAtRef.current)) {
+        nextAttemptAtRef.current = delay === null ? Infinity : lastAttemptAtRef.current + delay
+      }
+      cleanup.replan()
+    })
     return () => {
       refreshRef.current = null
+      unsubscribeCadence()
       cleanup()
     }
   }, [

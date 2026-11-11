@@ -1,7 +1,12 @@
 import type { PRCheckDetail } from './check-types'
 import type { CheckStatus } from './pull-request-types'
 import type { HostedReviewState } from '../source-control/hosted-review/hosted-review-contracts'
-import { reviewRefreshIntervalMs } from '../review-refresh-policy'
+import {
+  getPRAutoRefreshCadence,
+  reviewRefreshIntervalMs,
+  scaleReviewRefreshInterval,
+  type PRAutoRefreshCadence
+} from '../review-refresh-policy'
 
 export function detailedChecksStatus(checks: readonly PRCheckDetail[]): CheckStatus | undefined {
   if (checks.length === 0) {
@@ -64,21 +69,30 @@ export class ChecksDetailPollingPolicy {
     this.failed = true
   }
 
+  /** `cadence`: the setting of the host that reads these checks; null means no timed read, which
+   *  under "off" includes the retry after a failure. */
   delayMs(
     state: HostedReviewState | undefined,
     aggregateStatus: CheckStatus | undefined,
-    backoffMs: number
+    backoffMs: number,
+    cadence: PRAutoRefreshCadence = getPRAutoRefreshCadence()
   ): number | null {
     if (this.failed) {
-      return Math.max(state === 'closed' ? 900_000 : 60_000, backoffMs)
+      return scaleReviewRefreshInterval(
+        Math.max(state === 'closed' ? 900_000 : 60_000, backoffMs),
+        cadence
+      )
     }
     const status = this.hasDetails && this.status !== undefined ? this.status : aggregateStatus
-    const interval = reviewRefreshIntervalMs({
-      state,
-      checksStatus: status,
-      hasReview: true,
-      selected: true
-    })
+    const interval = reviewRefreshIntervalMs(
+      {
+        state,
+        checksStatus: status,
+        hasReview: true,
+        selected: true
+      },
+      cadence
+    )
     if (interval === null) {
       return null
     }

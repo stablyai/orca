@@ -86,6 +86,44 @@ describe('pr-refresh-coordinator auto-refresh cadence', () => {
     expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(1)
   })
 
+  it('does not retry a failed visible read on a timer when off', async () => {
+    const { coordinator } = await loadCoordinatorWithCadence('off')
+    getPRForBranchOutcomeMock.mockImplementation(async () => ({
+      kind: 'upstream-error',
+      errorType: 'unknown',
+      message: 'offline',
+      fetchedAt: Date.now()
+    }))
+    coordinator.reportVisiblePRRefreshCandidates([makeCandidate()], 1, 1)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(1)
+
+    await vi.advanceTimersByTimeAsync(60 * 60_000)
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(1)
+
+    // Selecting the workspace still reads at once.
+    coordinator.enqueuePRRefresh(makeCandidate(), 'active', 80)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('retries a failed visible read no sooner than the stretched interval when reduced', async () => {
+    const { coordinator } = await loadCoordinatorWithCadence('reduced')
+    getPRForBranchOutcomeMock.mockImplementation(async () => ({
+      kind: 'upstream-error',
+      errorType: 'unknown',
+      message: 'offline',
+      fetchedAt: Date.now()
+    }))
+    coordinator.reportVisiblePRRefreshCandidates([makeCandidate()], 1, 1)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(9 * 60_000)
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(60_000 + 1_000)
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(2)
+  })
+
   it('drops a queued follow-up when the cadence changes to off', async () => {
     const { policy, coordinator } = await loadCoordinatorWithCadence('default')
     coordinator.reportVisiblePRRefreshCandidates([makeCandidate()], 1, 1)

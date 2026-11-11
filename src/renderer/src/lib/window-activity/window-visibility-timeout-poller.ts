@@ -2,13 +2,16 @@ import { isWindowVisible } from './window-visibility-interval'
 
 export type WindowVisibilityTimeoutPollerTimer = ReturnType<typeof setTimeout>
 
+/** Why a run started: its own timer, the window coming back, an explicit refresh, or install. */
+export type WindowVisibilityPollerTrigger = 'timer' | 'visibility' | 'refresh' | 'install'
+
 export function installWindowVisibilityTimeoutPoller(args: {
-  run: () => Promise<void> | void
+  run: (context: { trigger: WindowVisibilityPollerTrigger }) => Promise<void> | void
   getDelayMs: () => number | null
   cooldownMs?: number
   setTimeoutFn?: (callback: () => void, delayMs: number) => WindowVisibilityTimeoutPollerTimer
   clearTimeoutFn?: (handle: WindowVisibilityTimeoutPollerTimer) => void
-}): (() => void) & { refresh: () => void } {
+}): (() => void) & { refresh: () => void; replan: () => void } {
   const setTimeoutFn =
     args.setTimeoutFn ??
     ((callback: () => void, delayMs: number): WindowVisibilityTimeoutPollerTimer =>
@@ -40,14 +43,15 @@ export function installWindowVisibilityTimeoutPoller(args: {
     }
     timeoutId = setTimeoutFn(() => {
       timeoutId = null
-      runAndSchedule()
+      runAndSchedule('timer')
     }, remainingMs ?? delayMs)
   }
 
-  function runAndSchedule(explicitRefresh = false): void {
+  function runAndSchedule(trigger: WindowVisibilityPollerTrigger): void {
     if (disposed || !isWindowVisible() || inFlight) {
       return
     }
+    const explicitRefresh = trigger === 'refresh'
     const elapsedMs = Date.now() - lastRunAt
     const cooldownRemainingMs = (args.cooldownMs ?? 0) - elapsedMs
     if (cooldownRemainingMs > 0) {
@@ -55,7 +59,7 @@ export function installWindowVisibilityTimeoutPoller(args: {
         clearScheduledPoll()
         timeoutId = setTimeoutFn(() => {
           timeoutId = null
-          runAndSchedule(true)
+          runAndSchedule('refresh')
         }, cooldownRemainingMs)
       }
       return
@@ -68,7 +72,7 @@ export function installWindowVisibilityTimeoutPoller(args: {
       schedulePoll()
     }
     try {
-      void Promise.resolve(args.run()).then(finish, finish)
+      void Promise.resolve(args.run({ trigger })).then(finish, finish)
     } catch {
       finish()
     }
@@ -84,7 +88,7 @@ export function installWindowVisibilityTimeoutPoller(args: {
         }
         return
       }
-      runAndSchedule()
+      runAndSchedule('visibility')
     } else {
       clearScheduledPoll()
     }
@@ -95,7 +99,7 @@ export function installWindowVisibilityTimeoutPoller(args: {
     }
   }
 
-  runAndSchedule()
+  runAndSchedule('install')
   if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
     window.addEventListener('focus', reconcileFocus)
   }
@@ -113,5 +117,13 @@ export function installWindowVisibilityTimeoutPoller(args: {
       document.removeEventListener('visibilitychange', reconcileVisibility)
     }
   }
-  return Object.assign(cleanup, { refresh: () => runAndSchedule(true) })
+  return Object.assign(cleanup, {
+    refresh: () => runAndSchedule('refresh'),
+    // The delay policy changed: arm or disarm the next tick without running anything now.
+    replan: () => {
+      if (!inFlight) {
+        schedulePoll()
+      }
+    }
+  })
 }

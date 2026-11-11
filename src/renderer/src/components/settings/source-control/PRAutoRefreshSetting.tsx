@@ -11,6 +11,7 @@ import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client
 import { useAppStateValue } from '@/store/retained-views/app-state-view'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import type { SettingsHostScope } from '../host-scope/settings-host-scope'
+import { rememberHostPRAutoRefreshCadence } from '@/store/github/refresh/remote-host-pr-auto-refresh-cadence'
 import { PRAutoRefreshControl } from './PRAutoRefreshControl'
 
 type HostCadence = { environmentId: string; cadence: PRAutoRefreshCadence }
@@ -41,6 +42,8 @@ function usePRAutoRefreshHostCadence(
       { timeoutMs: 15_000 }
     ).then(
       (result) => {
+        // The host's schedulers in this window follow the host's own setting, not this app's.
+        rememberHostPRAutoRefreshCadence(environmentId, result.settings.prAutoRefresh)
         if (current) {
           setRemote({
             environmentId,
@@ -73,6 +76,7 @@ function usePRAutoRefreshHostCadence(
           { prAutoRefresh: cadence },
           { timeoutMs: 15_000 }
         )
+        rememberHostPRAutoRefreshCadence(environmentId, result.settings.prAutoRefresh)
         setRemote({
           environmentId,
           cadence: normalizePRAutoRefreshCadence(result.settings.prAutoRefresh)

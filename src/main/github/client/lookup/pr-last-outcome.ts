@@ -14,6 +14,8 @@ type PRLastOutcome = {
   start: PRLookupStart
   linkedPRNumber: number | null
   fallbackPRNumber: number | null
+  /** Whether a merged fallback PR counted as an answer; it decides between found and no-pr. */
+  acceptMergedFallbackPR: boolean
   /** The checkout HEAD the lookup was asked about; a new commit may have opened or moved a PR. */
   headOid: string | null
   // null: the last lookup was narrowed (CI-line watch), so nothing is reusable until a full one.
@@ -53,6 +55,7 @@ export function readPacedPROutcome(
   request: {
     linkedPRNumber: number | null
     fallbackPRNumber: number | null
+    acceptMergedFallbackPR: boolean
     currentHeadOid: string | null
   },
   cadence: PRAutoRefreshCadence
@@ -62,12 +65,14 @@ export function readPacedPROutcome(
   }
   const entry = lastOutcomes.get(key)
   const outcome = entry?.outcome
+  // Same identity as the in-flight lookup key: one caller's fallback policy never answers another's.
   if (
     !entry ||
     !outcome ||
     outcome.kind === 'upstream-error' ||
     entry.linkedPRNumber !== request.linkedPRNumber ||
     entry.fallbackPRNumber !== request.fallbackPRNumber ||
+    entry.acceptMergedFallbackPR !== request.acceptMergedFallbackPR ||
     entry.headOid !== request.currentHeadOid
   ) {
     return null

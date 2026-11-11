@@ -26,7 +26,8 @@ export const GITHUB_PULL_REQUEST_METHODS = [
         params.currentHeadOid,
         params.reason,
         params.userRefresh,
-        clientKind
+        clientKind,
+        params.foreground
       )
   }),
   defineMethod({
@@ -36,7 +37,9 @@ export const GITHUB_PULL_REQUEST_METHODS = [
     handler: async (params, { runtime }) =>
       runtime.getRepoPRChecks(params.repo, params.prNumber, params.headSha, params.prRepo ?? null, {
         noCache: params.noCache,
-        ...(params.userRefresh === true ? { userRefresh: true } : {})
+        ...(params.userRefresh === true ? { userRefresh: true } : {}),
+        ...(params.reason !== undefined ? { reason: params.reason } : {}),
+        ...(params.foreground === true ? { foreground: true } : {})
       })
   }),
   defineMethod({

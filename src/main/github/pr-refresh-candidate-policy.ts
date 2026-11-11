@@ -1,5 +1,8 @@
 import { shouldAcceptMergedFallbackPR } from '../../shared/github/pr-branch-fallback-rule'
-import { reviewRefreshIntervalMs } from '../../shared/review-refresh-policy'
+import {
+  reviewRefreshIntervalMs,
+  type PRAutoRefreshCadence
+} from '../../shared/review-refresh-policy'
 import type {
   GitHubPRRefreshAlias,
   GitHubPRRefreshCandidate,
@@ -175,14 +178,20 @@ export function hasStaleHead(candidate: GitHubPRRefreshCandidate): boolean {
   )
 }
 
-export function refreshIntervalForCandidate(candidate: GitHubPRRefreshCandidate): number {
+export function refreshIntervalForCandidate(
+  candidate: GitHubPRRefreshCandidate,
+  cadence?: PRAutoRefreshCadence
+): number {
   return (
-    reviewRefreshIntervalMs({
-      state: candidate.cachedPRState,
-      checksStatus: candidate.cachedChecksStatus,
-      hasReview: candidate.cachedHasPR,
-      selected: candidate.isSelected
-    }) ?? Number.POSITIVE_INFINITY
+    reviewRefreshIntervalMs(
+      {
+        state: candidate.cachedPRState,
+        checksStatus: candidate.cachedChecksStatus,
+        hasReview: candidate.cachedHasPR,
+        selected: candidate.isSelected
+      },
+      cadence
+    ) ?? Number.POSITIVE_INFINITY
   )
 }
 

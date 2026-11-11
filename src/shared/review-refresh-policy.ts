@@ -23,16 +23,86 @@ export function normalizePRAutoRefreshCadence(value: unknown): PRAutoRefreshCade
   return isPRAutoRefreshCadence(value) ? value : 'default'
 }
 
-// Why process-wide: every renderer/main caller of the policy must follow the same setting, and each
-// process applies its own host's setting once rather than threading it through every scheduler.
+// Why one cadence per execution host: the setting belongs to the host that runs the GitHub reads
+// and is presented that way ("applies to <host> and every client connected to it"). Each process
+// keeps its own host's setting as the process cadence; a client that schedules work for a paired
+// host keeps that host's setting beside it, keyed by environment id, and never lets its own
+// setting slow or speed another host's timers. A host whose setting is unknown is read as Default,
+// which is also what the host itself enforces for that client's timed reads.
 let processCadence: PRAutoRefreshCadence = 'default'
+const hostCadences = new Map<string, PRAutoRefreshCadence>()
+const cadenceListeners = new Set<() => void>()
+let cadenceRevision = 0
+
+function notifyCadenceChanged(): void {
+  cadenceRevision += 1
+  // A snapshot: a listener may unsubscribe itself or another while we iterate.
+  for (const listener of Array.from(cadenceListeners)) {
+    listener()
+  }
+}
 
 export function setPRAutoRefreshCadence(value: unknown): void {
-  processCadence = normalizePRAutoRefreshCadence(value)
+  const next = normalizePRAutoRefreshCadence(value)
+  if (next === processCadence) {
+    return
+  }
+  processCadence = next
+  notifyCadenceChanged()
 }
 
 export function getPRAutoRefreshCadence(): PRAutoRefreshCadence {
   return processCadence
+}
+
+/** Remember a paired host's own setting; null forgets it (the host is gone or unpaired). */
+export function setPRAutoRefreshCadenceForHost(hostKey: string, value: unknown): void {
+  const before = hostCadences.get(hostKey)
+  if (value === null || value === undefined) {
+    if (before === undefined) {
+      return
+    }
+    hostCadences.delete(hostKey)
+  } else {
+    const next = normalizePRAutoRefreshCadence(value)
+    if (next === before) {
+      return
+    }
+    hostCadences.set(hostKey, next)
+  }
+  notifyCadenceChanged()
+}
+
+/** The cadence that governs work on `hostKey`: this process's own setting for local work (null),
+ *  the remembered setting of a paired host, or Default while that host has not said. */
+export function getPRAutoRefreshCadenceForHost(
+  hostKey: string | null | undefined
+): PRAutoRefreshCadence {
+  if (hostKey === null || hostKey === undefined) {
+    return processCadence
+  }
+  return hostCadences.get(hostKey) ?? 'default'
+}
+
+/** Fires after any cadence (this process's or a remembered host's) changes, so a mounted timer
+ *  can replan instead of waiting for its next tick. */
+export function subscribePRAutoRefreshCadence(listener: () => void): () => void {
+  cadenceListeners.add(listener)
+  return () => {
+    cadenceListeners.delete(listener)
+  }
+}
+
+/** Changes whenever any cadence changes; cheap to put in a memo or report identity. */
+export function prAutoRefreshCadenceRevision(): number {
+  return cadenceRevision
+}
+
+export function _resetPRAutoRefreshCadencesForTests(): void {
+  processCadence = 'default'
+  hostCadences.clear()
+  cadenceListeners.clear()
+  cadenceRevision = 0
 }
 
 /** Stretch a timed interval by the cadence; null means no timed refresh. */

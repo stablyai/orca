@@ -1,8 +1,9 @@
 import type { StructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import type { GitHubPRRefreshCandidate } from '../../../shared/github/pull-request-refresh-types'
 import type { JournalHostDatabase } from '../../native-chat/agent-session-journal/database/journal-host-database'
+import { scaleReviewRefreshInterval } from '../../../shared/review-refresh-policy'
 import { schedulePRWatchRead } from '../pr-refresh-coordinator'
-import { prWatchQueueKey, type PRWatchJob } from '../pr-refresh-watch-jobs'
+import { prWatchCadence, prWatchQueueKey, type PRWatchJob } from '../pr-refresh-watch-jobs'
 import { deletePRPendingHead, readPRPendingHeads } from './pr-check-event-tables'
 import { readPRHeadCheckRollup } from './pr-head-check-read'
 import { parsePRKey } from './pr-watch-types'
@@ -71,6 +72,11 @@ export class PREarlierHeadJobs {
         error
       })
     }
-    return now() + HEAD_CHECKS_INTERVAL_MS
+    // Same stretched cadence as the current head's watch (Reduced 10 min, Minimal and Off 20 min).
+    return (
+      now() +
+      (scaleReviewRefreshInterval(HEAD_CHECKS_INTERVAL_MS, prWatchCadence()) ??
+        HEAD_CHECKS_INTERVAL_MS)
+    )
   }
 }

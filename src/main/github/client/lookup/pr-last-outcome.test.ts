@@ -3,7 +3,12 @@ import type { PRRefreshOutcome } from '../../../../shared/github/pull-request-re
 import type { PRInfo } from '../../../../shared/github/pull-request-types'
 import { readPacedPROutcome, recordPRLastOutcome, startPRLookup } from './pr-last-outcome'
 
-const request = { linkedPRNumber: null, fallbackPRNumber: null, currentHeadOid: 'head-a' }
+const request = {
+  linkedPRNumber: null,
+  fallbackPRNumber: null,
+  acceptMergedFallbackPR: false,
+  currentHeadOid: 'head-a'
+}
 
 function found(overrides: Partial<PRInfo> = {}): PRRefreshOutcome {
   return {
@@ -23,11 +28,17 @@ function found(overrides: Partial<PRInfo> = {}): PRRefreshOutcome {
   }
 }
 
-function record(key: string, outcome: PRRefreshOutcome | null, headOid = 'head-a'): void {
+function record(
+  key: string,
+  outcome: PRRefreshOutcome | null,
+  headOid = 'head-a',
+  acceptMergedFallbackPR = false
+): void {
   recordPRLastOutcome(key, {
     start: startPRLookup(),
     linkedPRNumber: null,
     fallbackPRNumber: null,
+    acceptMergedFallbackPR,
     headOid,
     outcome
   })
@@ -78,6 +89,16 @@ describe('readPacedPROutcome', () => {
 
     record('k-narrowed', null)
     expect(readPacedPROutcome('k-narrowed', request, 'off')).toBeNull()
+  })
+
+  it('asks GitHub again when the request accepts a merged fallback the last one rejected', () => {
+    // No request HEAD, branch gone, fallback #7 merged: false resolves to no-pr, true to found.
+    const rejected: PRRefreshOutcome = { kind: 'no-pr', fetchedAt: Date.now() }
+    record('k-accept', rejected, 'head-a', false)
+    expect(
+      readPacedPROutcome('k-accept', { ...request, acceptMergedFallbackPR: true }, 'off')
+    ).toBeNull()
+    expect(readPacedPROutcome('k-accept', request, 'off')).toBe(rejected)
   })
 
   it('asks GitHub again when the request names another PR', () => {

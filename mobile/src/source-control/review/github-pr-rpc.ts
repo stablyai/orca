@@ -104,6 +104,8 @@ export async function fetchPRForBranch(
     currentHeadOid?: string | null
     // An action's read: re-learn host status, and join no host lookup begun before it.
     refresh?: boolean
+    // The screen's own timer: the host may answer from its last read at its PR auto-refresh cadence.
+    background?: boolean
   }
 ): Promise<GitHubPrReadOutcome<PRInfo | null>> {
   return observe(true, args.refresh === true)
@@ -135,7 +137,8 @@ export async function fetchPRForBranch(
               fallbackPRNumber: args.fallbackPRNumber ?? null,
               ...(args.acceptMergedFallbackPR ? { acceptMergedFallbackPR: true } : {}),
               currentHeadOid: args.currentHeadOid ?? null,
-              ...(args.refresh ? { userRefresh: true } : {})
+              ...(args.refresh ? { userRefresh: true } : {}),
+              ...(args.background && !args.refresh ? { reason: 'swr' } : {})
             }),
             contract.options
           )
@@ -232,6 +235,8 @@ export function fetchPRChecks(
     prRepo?: GitHubPrRepoSlug | null
     // An action's read: past gh's response cache, joining no host read begun before it.
     refresh?: boolean
+    // The screen's own timer: the host may answer from its last read at its PR auto-refresh cadence.
+    background?: boolean
   }
 ): Promise<GitHubPrReadOutcome<PRCheckDetail[]>> {
   return settleGithubPrRead(githubPrChecksRead, () =>
@@ -242,7 +247,8 @@ export function fetchPRChecks(
         worktreeId,
         {
           prNumber: args.prNumber,
-          ...(args.refresh ? { noCache: true, userRefresh: true } : {})
+          ...(args.refresh ? { noCache: true, userRefresh: true } : {}),
+          ...(args.background && !args.refresh ? { reason: 'swr' } : {})
         },
         { prRepo: args.prRepo, headSha: args.headSha }
       )

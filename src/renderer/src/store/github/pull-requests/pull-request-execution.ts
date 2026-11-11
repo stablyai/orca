@@ -105,6 +105,7 @@ export function startPullRequestLookup(args: {
               currentHeadOid: requestHeadOid,
               ...(options?.reason ? { reason: options.reason } : {}),
               ...(options?.userRefresh === true ? { userRefresh: true } : {}),
+              ...(options?.foreground === true ? { foreground: true } : {}),
               ...(fallbackPRNumber !== null
                 ? { fallbackPRNumber, acceptMergedFallbackPR: fallbackPRSource !== null }
                 : {})

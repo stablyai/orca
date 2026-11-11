@@ -1,4 +1,7 @@
-import { REVIEW_REFRESH_COOLDOWN_MS } from '../../../../../../shared/review-refresh-policy'
+import {
+  REVIEW_REFRESH_COOLDOWN_MS,
+  type PRAutoRefreshCadence
+} from '../../../../../../shared/review-refresh-policy'
 
 export type VisibleHostedReviewRefreshTarget = {
   key: string
@@ -7,7 +10,10 @@ export type VisibleHostedReviewRefreshTarget = {
   fetchedAt: number | null
   intervalMs: number | null
   selected: boolean
-  refresh: (force?: boolean, signal?: AbortSignal) => Promise<boolean>
+  /** The owning host's auto-refresh cadence; "off" also stops timed retries after a failure. */
+  cadence?: PRAutoRefreshCadence
+  /** `foreground`: the window came back or the branch identity changed, not a timer tick. */
+  refresh: (force?: boolean, signal?: AbortSignal, foreground?: boolean) => Promise<boolean>
 }
 
 type Entry = {
@@ -16,6 +22,7 @@ type Entry = {
   failures: number
   retryAt: number | null
   discovery: boolean
+  foreground: boolean
 }
 
 function discoveryIdentityChanged(
@@ -99,13 +106,15 @@ export function createVisibleHostedReviewRefreshScheduler() {
       } else if (!succeeded || !discoveryIdentityChanged(target, entry.target)) {
         entry.discovery = false
         entry.failures = succeeded ? 0 : entry.failures + 1
-        entry.retryAt = succeeded
-          ? null
-          : Date.now() +
-            Math.max(
-              entry.target.intervalMs ?? 0,
-              Math.min(900_000, 60_000 * 2 ** Math.min(entry.failures - 1, 4))
-            )
+        // Auto-refresh off: a failed read waits for the next window return, selection or refresh.
+        entry.retryAt =
+          succeeded || entry.target.cadence === 'off'
+            ? null
+            : Date.now() +
+              Math.max(
+                entry.target.intervalMs ?? 0,
+                Math.min(900_000, 60_000 * 2 ** Math.min(entry.failures - 1, 4))
+              )
       }
     }
     reconcile()
@@ -134,13 +143,15 @@ export function createVisibleHostedReviewRefreshScheduler() {
         continue
       }
       const force = entry.discovery || entry.failures > 0 || entry.target.fetchedAt === null
+      const foreground = entry.foreground
       entry.lastAttemptAt = now
       entry.discovery = false
+      entry.foreground = false
       const startedTarget = entry.target
       const controller = new AbortController()
       inFlight.set(key, { target: startedTarget, controller })
       try {
-        void entry.target.refresh(force, controller.signal).then(
+        void entry.target.refresh(force, controller.signal, foreground).then(
           (succeeded) => finish(key, now, startedTarget, succeeded),
           () => finish(key, now, startedTarget, false)
         )
@@ -184,19 +195,23 @@ export function createVisibleHostedReviewRefreshScheduler() {
           const preserveFailure =
             previous !== undefined &&
             (target.fetchedAt ?? -Infinity) <= (previous.target.fetchedAt ?? -Infinity)
+          const identityChanged =
+            previous !== undefined && discoveryIdentityChanged(previous.target, target)
           entry = {
             target,
             lastAttemptAt: previous?.lastAttemptAt ?? -Infinity,
             failures: preserveFailure ? previous.failures : 0,
             retryAt: preserveFailure ? previous.retryAt : null,
             discovery:
-              (previous !== undefined && discoveryIdentityChanged(previous.target, target)) ||
+              identityChanged ||
               target.fetchedAt === null ||
-              Date.now() - target.fetchedAt >= (target.intervalMs ?? 60_000)
+              Date.now() - target.fetchedAt >= (target.intervalMs ?? 60_000),
+            foreground: identityChanged
           }
           entries.set(target.key, entry)
         } else if (discoveryIdentityChanged(entry.target, target)) {
           entry.discovery = true
+          entry.foreground = true
         } else if (
           (target.fetchedAt ?? -Infinity) > (entry.target.fetchedAt ?? -Infinity) &&
           (!inFlight.has(target.key) ||
@@ -221,12 +236,18 @@ export function createVisibleHostedReviewRefreshScheduler() {
         }
       }
       if (visible) {
+        const now = Date.now()
         for (const entry of entries.values()) {
           if (
             entry.target.intervalMs === null &&
-            Date.now() - (entry.target.fetchedAt ?? -Infinity) >= 60_000
+            now - (entry.target.fetchedAt ?? -Infinity) >= 60_000
           ) {
             entry.discovery = true
+          }
+          // A read the window's return makes due now is the user looking; the host must not pace
+          // it. One that is not due yet keeps its timer, which stays a background read.
+          if (dueAt(entry) <= now) {
+            entry.foreground = true
           }
         }
       }

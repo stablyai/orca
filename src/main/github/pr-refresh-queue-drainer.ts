@@ -74,6 +74,10 @@ export class PRRefreshQueueDrainer {
           this.retry.nextVisibleErrorRetryAt(key, this.visibility.candidate(key, candidate)),
         this.retry.manualGateUntil(key)
       )
+      // Auto-refresh off: no timed retry; the next selection, push or manual refresh reads again.
+      if (!Number.isFinite(retryAt)) {
+        return
+      }
       this.queue.protectBackgroundUntil(key, retryAt)
       if (!this.visibility.has(key)) {
         return

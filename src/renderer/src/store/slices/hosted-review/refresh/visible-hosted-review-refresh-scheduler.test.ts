@@ -76,4 +76,55 @@ describe('visible hosted review scheduler', () => {
       }
     }
   )
+
+  it('does not retry a failed read on a timer when the owning host’s cadence is off', async () => {
+    const refresh = vi.fn(async () => false)
+    setup([target({ fetchedAt: null, intervalMs: null, cadence: 'off', selected: true, refresh })])
+    await vi.advanceTimersByTimeAsync(0)
+    expect(refresh).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(60 * 60_000)
+    expect(refresh).toHaveBeenCalledTimes(1)
+  })
+
+  it('still retries a failed read with backoff when the cadence is not off', async () => {
+    const refresh = vi.fn(async () => false)
+    setup([target({ fetchedAt: null, intervalMs: null, cadence: 'default', refresh })])
+    await vi.advanceTimersByTimeAsync(0)
+    expect(refresh).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(refresh).toHaveBeenCalledTimes(2)
+  })
+
+  it('marks a window-return read as foreground and a timer tick as not', async () => {
+    const calls: boolean[] = []
+    const refresh = vi.fn(async (_force?: boolean, _signal?: AbortSignal, foreground = false) => {
+      calls.push(foreground)
+      return true
+    })
+    const scheduler = setup([
+      target({ fetchedAt: Date.now() - 30_000, intervalMs: 60_000, refresh })
+    ])
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(calls).toEqual([false])
+    scheduler.setVisible(false)
+    await vi.advanceTimersByTimeAsync(5 * 60_000)
+    scheduler.setVisible(true)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(calls).toEqual([false, true])
+  })
+
+  it('marks a read after the branch identity changed as foreground', async () => {
+    const calls: boolean[] = []
+    const refresh = vi.fn(async (_force?: boolean, _signal?: AbortSignal, foreground = false) => {
+      calls.push(foreground)
+      return true
+    })
+    const row = target({ fetchedAt: Date.now(), intervalMs: null, cadence: 'off', refresh })
+    const scheduler = setup([row])
+    await vi.advanceTimersByTimeAsync(0)
+    expect(calls).toEqual([])
+    scheduler.update([{ ...row, revision: 'head-2|' }])
+    await vi.advanceTimersByTimeAsync(0)
+    expect(calls).toEqual([true])
+  })
 })

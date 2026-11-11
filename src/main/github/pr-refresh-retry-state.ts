@@ -3,6 +3,10 @@ import type {
   PRRefreshOutcome
 } from '../../shared/github/pull-request-refresh-types'
 import { lookupBackoffDelayMs } from '../source-control/hosted-review-refresh-pacing'
+import {
+  getPRAutoRefreshCadence,
+  type PRAutoRefreshCadence
+} from '../../shared/review-refresh-policy'
 import { refreshIntervalForCandidate } from './pr-refresh-candidate-policy'
 
 export class PRRefreshRetryState {
@@ -30,9 +34,19 @@ export class PRRefreshRetryState {
     return this.manualRetryGates.get(key) ?? 0
   }
 
-  nextVisibleErrorRetryAt(key: string, candidate: GitHubPRRefreshCandidate): number {
+  /** Infinity when the cadence is off: an ordinary visible read that failed waits for the next
+   *  selection, push, window return or manual refresh, not for a timer. */
+  nextVisibleErrorRetryAt(
+    key: string,
+    candidate: GitHubPRRefreshCandidate,
+    cadence: PRAutoRefreshCadence = getPRAutoRefreshCadence()
+  ): number {
     const failures = (this.errorBackoff.get(key)?.failures ?? 0) + 1
-    const interval = refreshIntervalForCandidate(candidate)
+    if (cadence === 'off') {
+      this.errorBackoff.set(key, { failures, retryAt: Number.POSITIVE_INFINITY })
+      return Number.POSITIVE_INFINITY
+    }
+    const interval = refreshIntervalForCandidate(candidate, cadence)
     const retryAt =
       Date.now() +
       Math.max(lookupBackoffDelayMs(failures), Number.isFinite(interval) ? interval : 0)
@@ -42,6 +56,9 @@ export class PRRefreshRetryState {
 
   withErrorSchedule(outcome: PRRefreshOutcome, retryAt: number): PRRefreshOutcome {
     if (outcome.kind !== 'upstream-error') {
+      return outcome
+    }
+    if (!Number.isFinite(retryAt)) {
       return outcome
     }
     const cooldownUntil = outcome.retryDisabledUntil

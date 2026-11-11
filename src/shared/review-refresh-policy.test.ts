@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import {
+  _resetPRAutoRefreshCadencesForTests,
+  getPRAutoRefreshCadenceForHost,
+  prAutoRefreshCadenceRevision,
+  setPRAutoRefreshCadenceForHost,
+  subscribePRAutoRefreshCadence,
   getPRAutoRefreshCadence,
   normalizePRAutoRefreshCadence,
   reviewRefreshIntervalMs,
@@ -45,5 +50,46 @@ describe('review refresh cadence', () => {
     expect(normalizePRAutoRefreshCadence('sometimes')).toBe('default')
     setPRAutoRefreshCadence(42)
     expect(getPRAutoRefreshCadence()).toBe('default')
+  })
+})
+
+describe('per-host PR auto-refresh cadence', () => {
+  afterEach(() => {
+    _resetPRAutoRefreshCadencesForTests()
+  })
+
+  it('reads local work by the process cadence and an unknown host as default', () => {
+    setPRAutoRefreshCadence('off')
+    expect(getPRAutoRefreshCadenceForHost(null)).toBe('off')
+    // A local "off" must not stop a paired host whose own setting is default.
+    expect(getPRAutoRefreshCadenceForHost('env-1')).toBe('default')
+    expect(
+      reviewRefreshIntervalMs({ selected: true }, getPRAutoRefreshCadenceForHost('env-1'))
+    ).toBe(60_000)
+  })
+
+  it('keeps each paired host’s own setting and forgets it when asked', () => {
+    setPRAutoRefreshCadenceForHost('env-1', 'minimal')
+    setPRAutoRefreshCadenceForHost('env-2', 'reduced')
+    expect(getPRAutoRefreshCadenceForHost('env-1')).toBe('minimal')
+    expect(getPRAutoRefreshCadenceForHost('env-2')).toBe('reduced')
+    expect(getPRAutoRefreshCadence()).toBe('default')
+    setPRAutoRefreshCadenceForHost('env-1', null)
+    expect(getPRAutoRefreshCadenceForHost('env-1')).toBe('default')
+  })
+
+  it('notifies subscribers of every change and bumps the revision once per change', () => {
+    const seen: number[] = []
+    const unsubscribe = subscribePRAutoRefreshCadence(() =>
+      seen.push(prAutoRefreshCadenceRevision())
+    )
+    setPRAutoRefreshCadence('reduced')
+    setPRAutoRefreshCadence('reduced')
+    setPRAutoRefreshCadenceForHost('env-1', 'off')
+    setPRAutoRefreshCadenceForHost('env-1', 'off')
+    unsubscribe()
+    setPRAutoRefreshCadence('off')
+    expect(seen).toEqual([1, 2])
+    expect(prAutoRefreshCadenceRevision()).toBe(3)
   })
 })

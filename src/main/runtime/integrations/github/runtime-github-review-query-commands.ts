@@ -7,6 +7,15 @@ import { getPRChecks } from '../../../github/client/check/get-pr-checks'
 import { getPRComments } from '../../../github/client/fetch/get-pr-comments'
 import { getPRFileContents } from '../../../github/work-item-details'
 import { getRepoRoutingConnectionId } from '../../../../shared/execution-host'
+import type { GitHubPRRefreshReason } from '../../../../shared/github/pull-request-refresh-types'
+import { getPRAutoRefreshCadence } from '../../../../shared/review-refresh-policy'
+import { isBudgetedBackground } from '../../../github/pr-refresh-candidate-policy'
+import {
+  pacedPRChecksKey,
+  readPacedPRChecks,
+  recordPRChecksRead,
+  startPRChecksRead
+} from '../../../github/client/check/pr-checks-last-outcome'
 
 type LocalGitArgs = [] | [LocalProjectGhExecOptions]
 
@@ -36,18 +45,45 @@ export class RuntimeGitHubReviewQueryCommands {
     prNumber: number,
     headSha?: string,
     prRepo?: GitHubOwnerRepo | null,
-    options?: { noCache?: boolean; userRefresh?: boolean }
+    options?: {
+      noCache?: boolean
+      userRefresh?: boolean
+      reason?: GitHubPRRefreshReason
+      foreground?: boolean
+    }
   ): Promise<Awaited<ReturnType<typeof getPRChecks>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
-    return getPRChecks(
-      repo.path,
-      prNumber,
-      headSha,
-      prRepo ?? null,
-      options,
-      getRepoRoutingConnectionId(repo),
-      ...this.deps.getLocalGitArgs(repo)
-    )
+    const connectionId = getRepoRoutingConnectionId(repo)
+    const read = () =>
+      getPRChecks(
+        repo.path,
+        prNumber,
+        headSha,
+        prRepo ?? null,
+        options,
+        connectionId,
+        ...this.deps.getLocalGitArgs(repo)
+      )
+    // A client's timed checks read is capped by this host's cadence like its PR read; an opened panel,
+    // a returned window, a refresh and a changed-state read (noCache) still go to the provider.
+    const timed =
+      options?.reason !== undefined &&
+      isBudgetedBackground(options.reason) &&
+      options.foreground !== true &&
+      options.userRefresh !== true &&
+      options.noCache !== true
+    if (!timed) {
+      return read()
+    }
+    const key = pacedPRChecksKey(repo.path, connectionId, prNumber, headSha, prRepo ?? null)
+    const paced = readPacedPRChecks(key, getPRAutoRefreshCadence())
+    if (paced) {
+      return paced
+    }
+    const start = startPRChecksRead()
+    const checks = await read()
+    recordPRChecksRead(key, start, checks)
+    return checks
   }
 
   async getRepoPRCheckDetails(
