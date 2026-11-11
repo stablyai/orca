@@ -190,9 +190,6 @@
 1 test-no-real-time-wait:src/main/git/worktrees/removal/remove-worktree-branch-cleanup.test.ts
 1 test-no-real-time-wait:src/main/git/worktrees/removal/worktree-prune-guard.test.ts
 1 test-no-real-time-wait:src/main/grok/grok-hook-stdin-no-eof.test.ts
-1 test-no-real-time-wait:src/main/ipc/filesystem/watcher-process/parcel-watcher-shallow-file-subscription.test.ts
-1 test-no-real-time-wait:src/main/ipc/filesystem/watcher-process/rebinding-file-watch-noise.test.ts
-1 test-no-real-time-wait:src/main/ipc/filesystem/watcher-process/rebinding-file-watch.test.ts
 4 test-no-real-time-wait:src/main/ipc/runtime-environments/runtime-environment-request-connections.test.ts
 1 test-no-real-time-wait:src/main/ipc/worktrees/creation/worktree-base-directory-poller-marker-fanout.test.ts
 2 test-no-real-time-wait:src/main/ipc/worktrees/git/worktree-git-status-attribution-real-git.test.ts
