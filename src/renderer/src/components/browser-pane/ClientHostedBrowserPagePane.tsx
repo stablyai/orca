@@ -131,7 +131,7 @@ export function ClientHostedBrowserPagePane({
     browserTabId: browserTab.id,
     worktreeId,
     webviewRef,
-    loadFailureRef,
+    activeLoadFailureRef: loadFailureRef,
     onUpdatePageState,
     onSetUrl,
     setAddressBarValue
