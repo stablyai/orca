@@ -22,6 +22,7 @@ import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import {
   getLocalWorkspacePortSections,
+  shouldShowCenteredPortsEmpty,
   shouldShowLocalWorkspacePortSections
 } from './local-workspace-port-sections'
 import { LocalPortSection } from './local-port-section'
@@ -222,6 +223,17 @@ export function LocalWorkspacePortsPanel({
     otherWorkspacePorts,
     externalPorts
   })
+  const remoteOnlyForwards =
+    runtimeForwarding?.forwards.filter(
+      (forward) => !displayScan?.ports.some((port) => port.port === forward.remotePort)
+    ) ?? []
+  const showCenteredEmpty = shouldShowCenteredPortsEmpty(displayScan, {
+    activePorts,
+    otherWorkspacePorts,
+    externalPorts,
+    remoteOnlyForwards,
+    hasFooter: Boolean(footer)
+  })
 
   if (!activeRepoId) {
     return (
@@ -280,7 +292,7 @@ export function LocalWorkspacePortsPanel({
         </div>
       )}
 
-      {showPortSections && (
+      {showPortSections && !showCenteredEmpty && (
         <>
           <LocalPortSection
             id="active"
@@ -326,30 +338,20 @@ export function LocalWorkspacePortsPanel({
           />
         </>
       )}
-      {runtimeForwarding && (
-        <RuntimeForwardedPortsSection
-          forwards={runtimeForwarding.forwards.filter(
-            (forward) => !displayScan?.ports.some((port) => port.port === forward.remotePort)
-          )}
-        />
-      )}
+      {runtimeForwarding && <RuntimeForwardedPortsSection forwards={remoteOnlyForwards} />}
 
-      {!displayScan?.unavailableReason &&
-        displayScan &&
-        activePorts.length === 0 &&
-        otherWorkspacePorts.length === 0 &&
-        externalPorts.length === 0 && (
-          <div className="flex flex-col items-center justify-center flex-1 px-4 text-center text-muted-foreground">
-            <Server size={32} className="mb-3 opacity-50" />
-            <p className="text-sm">
-              {runtimeForwarding ? (
-                <RuntimePortsEmptyText />
-              ) : (
-                t('auto.components.right.sidebar.PortsPanel.a2a9fc6899', 'No local ports detected')
-              )}
-            </p>
-          </div>
-        )}
+      {showCenteredEmpty && (
+        <div className="flex flex-col items-center justify-center flex-1 px-4 text-center text-muted-foreground">
+          <Server size={32} className="mb-3 opacity-50" />
+          <p className="text-sm">
+            {runtimeForwarding ? (
+              <RuntimePortsEmptyText />
+            ) : (
+              t('auto.components.right.sidebar.PortsPanel.a2a9fc6899', 'No local ports detected')
+            )}
+          </p>
+        </div>
+      )}
 
       {footer?.(activePorts)}
 
