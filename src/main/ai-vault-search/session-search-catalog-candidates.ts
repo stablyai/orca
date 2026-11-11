@@ -4,6 +4,7 @@ import type SyncDatabase from '../sqlite/sync-database'
 import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
 import { sessionSearchCandidateAdmission } from './session-search-candidate-admission'
 import { readSessionSearchCandidateRows } from './session-search-candidate-rows'
+import { boundedSessionSearchPage } from './session-search-catalog-pages'
 
 import type {
   SessionSearchCatalogCandidate,
