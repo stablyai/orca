@@ -12,6 +12,7 @@ import {
 } from '../../../pty/environment/windows-path-segment-merge'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { overlayEnvironmentVariables } from '../../../../shared/environment-overlay'
+import { stripInheritedAgentSessionEnv } from '../../../../shared/agent-launch/startup/parent-agent-session-env'
 import {
   nativeChatShellEnvironmentPolicy,
   type NativeChatShellEnvironmentPolicy
@@ -57,15 +58,17 @@ export function structuredAgentBaseEnvironment(input: {
   processEnv?: NodeJS.ProcessEnv
   platform?: NodeJS.Platform
 }): Record<string, string> {
-  if (input.policy.inheritAll) {
-    return definedEnv(input.shellEnv)
-  }
   const platform = input.platform ?? process.platform
-  return overlayEnvironmentVariables(
-    definedEnv(input.processEnv ?? process.env),
-    pickShellVariables(input.shellEnv, input.policy.names, platform),
-    platform
-  )
+  const base = input.policy.inheritAll
+    ? definedEnv(input.shellEnv)
+    : overlayEnvironmentVariables(
+        definedEnv(input.processEnv ?? process.env),
+        pickShellVariables(input.shellEnv, input.policy.names, platform),
+        platform
+      )
+  // The user's per-agent overlay, applied later, owns any deliberate session values.
+  stripInheritedAgentSessionEnv(base, { platform })
+  return base
 }
 
 // Share one capture across launch bursts while discovering newly installed CLIs without restart.

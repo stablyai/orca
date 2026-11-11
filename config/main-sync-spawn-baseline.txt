@@ -15,7 +15,7 @@
 1 src/main/codex-accounts/runtime-home-service-home-routing.ts
 1 src/main/codex-accounts/runtime-home-service-wsl.ts
 1 src/main/codex-accounts/service.ts
-1 src/main/computer/macos-computer-use-permissions.ts
+1 src/main/computer/macos-permissions/macos-computer-use-permissions.ts
 2 src/main/daemon/process-scopes/daemon-cgroup-scope.ts
 1 src/main/daemon/endpoint/identity/daemon-process-identity-query.ts
 1 src/main/daemon/endpoint/identity/daemon-process-start-time.ts
@@ -29,7 +29,7 @@
 1 src/main/ipc/worktree-logic.ts
 2 src/main/window/desktop-integration/macos-press-and-hold-default.ts
 1 src/main/network/macos-tailscale-dns-diagnostic.ts
-1 src/main/opencode/legacy-plugin-acl-retry.ts
+1 src/main/opencode/status-hooks/legacy-plugin-acl-retry.ts
 2 src/main/orcad/node-pty-precondition.ts
 1 src/main/orcad/orcad-data-root-privacy.ts
 2 src/main/persistence/profile-state/access/profile-state-access-identity.ts

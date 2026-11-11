@@ -154,16 +154,6 @@ export const PR_E2E_SOURCE_ROUTES = [
       )
   },
   {
-    id: 'ssh.orcad-auto-convert',
-    specs: ['tests/e2e/ssh-orcad-auto-convert.spec.ts'],
-    matches: (file) =>
-      MANAGED_SSH_HARNESS.test(file) ||
-      (isProductSource(file) &&
-        /^src\/main\/(?:ipc\/(?:ssh\/)?ssh-host-server-|(?:ssh|managed-server\/[a-z-]+)\/(?:ssh-host-server-|orcad-runtime-conversion|orcad-migration-|orcad-retained-source|orcad-runtime-deployment))/.test(
-          file
-        ))
-  },
-  {
     id: 'ssh.orcad-connect-failure',
     specs: [
       'tests/e2e/ssh-orcad-ssh-failure-reason.spec.ts',
