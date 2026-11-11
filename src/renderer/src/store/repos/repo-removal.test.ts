@@ -7,7 +7,7 @@ import { createElement } from 'react'
 import { cleanup, render, fireEvent, screen } from '@testing-library/react'
 import { useAppStore } from '..'
 import { registerUIHandlers } from '../../../../main/ipc/ui'
-import { hydratePersistedUIAfterStartupRead } from '../../lib/startup-ui-hydration'
+import { hydratePersistedUIAfterStartupRead } from '../../app-shell/startup/startup-ui-hydration'
 import {
   listPendingRuntimeRepoRemovals,
   resetPendingRuntimeRepoRemovalsForTests,

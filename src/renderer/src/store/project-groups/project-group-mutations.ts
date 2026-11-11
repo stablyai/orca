@@ -11,7 +11,6 @@ import {
 import type { Repo } from '../../../../shared/repo-types'
 import { selectProjectGroupRemovalTargets } from './project-group-removal-targets'
 import {
-  getProjectGroupHostId,
   isProjectGroupJoinableFromCatalog,
   projectGroupMatchesOwnerHost,
   resolveProjectGroupOwnerHostId,
@@ -65,7 +64,7 @@ export function createProjectGroupMutationActions(
               ).group
         const orderedGroup = await initializeNewRootProjectGroupOrder(target, group, get())
         const ownedGroup = adoptFromEndpoint(target, { kind: 'projectGroup', row: orderedGroup })
-        const ownerHostId = getProjectGroupHostId(ownedGroup)
+        const ownerHostId = getRepoExecutionHostId(ownedGroup)
         set((s) => {
           const existing = s.projectGroups.find((entry) =>
             projectGroupMatchesOwnerHost(entry, ownedGroup.id, ownerHostId)

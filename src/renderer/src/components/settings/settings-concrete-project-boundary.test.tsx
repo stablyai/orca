@@ -16,9 +16,9 @@ import { useSettingsTerminalModel } from './page/use-settings-terminal-model'
 import type { SettingsStoreModel } from './page/use-settings-store-model'
 import type { SettingsRenderContext } from './page/settings-render-context'
 import type { SettingsNavigationModel } from './navigation/use-settings-navigation-model'
-import type * as WindowsTerminalCapabilities from '@/lib/windows-terminal-capabilities'
+import type * as WindowsTerminalCapabilities from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
 
-vi.mock('@/lib/windows-terminal-capabilities', async (importOriginal) => ({
+vi.mock('@/runtime/hosts/capabilities/windows-terminal-capabilities', async (importOriginal) => ({
   ...(await importOriginal<typeof WindowsTerminalCapabilities>()),
   isWindowsTerminalCapabilityHost: () => false,
   useWindowsTerminalCapabilities: () => ({}),

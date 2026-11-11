@@ -9,7 +9,7 @@ import type { WorkItemsCacheSources } from '@/store/github/cache/cache-model'
 import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
 import type { GitHubOwnerRepo } from '../../../../shared/github/pull-request-types'
 import type { Repo } from '../../../../shared/repo-types'
-import { getTaskPageRepoSourceContext } from '../../lib/task-repo-source-context'
+import { getTaskPageRepoSourceContext } from '../../lib/work-items/task-repo-source-context'
 import { getRepoHostIdentity } from '../../../../shared/repo-host-identity'
 import {
   Q1,

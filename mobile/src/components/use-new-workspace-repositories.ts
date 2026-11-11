@@ -3,7 +3,7 @@ import { buildNewWorkspaceGrouping } from './new-workspace-project-targets'
 import type { ProjectGroupingIndex } from '../../../src/shared/project-section-grouping'
 import { useEffect, useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import type { ExecutionHostId } from '../../../src/shared/execution-host'
+import { getRepoExecutionHostId, type ExecutionHostId } from '../../../src/shared/execution-host'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { cachedHostRepos } from '../host-screen/host-list-queries'
 import { listHostRepos } from '../worktree/server-repos'
@@ -24,6 +24,8 @@ export function useNewWorkspaceRepositories(args: {
   serverClients?: ReadonlyMap<ExecutionHostId, RpcClient>
   hostId?: string
   visible: boolean
+  /** Picked once it is listed, in place of the last visited repo. */
+  initialRepo?: { id: string; executionHostId: ExecutionHostId }
 }): {
   repos: MobileWorkspaceRepo[]
   allRepos: MobileWorkspaceRepo[]
@@ -35,7 +37,7 @@ export function useNewWorkspaceRepositories(args: {
   loadError: string | null
   retryLoad: () => void
 } {
-  const { client, serverClients = NO_SERVER_CLIENTS, hostId, visible } = args
+  const { client, serverClients = NO_SERVER_CLIENTS, hostId, visible, initialRepo } = args
   const queryClient = useQueryClient()
   // The host list's repos, so the form opens with them while repo.list answers.
   const [initialRepos] = useState(() => cachedHostRepos<MobileWorkspaceRepo>(queryClient, hostId))
@@ -56,7 +58,15 @@ export function useNewWorkspaceRepositories(args: {
         : [...desktopRepos, ...[...serverRepos.values()].flat()],
     [desktopRepos, serverRepos]
   )
-  const repos = useMemo(() => getNewWorkspaceDialogEligibleRepos(allRepos), [allRepos])
+  const initialRepoId = initialRepo?.id
+  const initialRepoHost = initialRepo?.executionHostId
+  // Opened for one host's folder: every picker offers only that host, whose store holds the folder.
+  const repos = useMemo(() => {
+    const eligible = getNewWorkspaceDialogEligibleRepos(allRepos)
+    return initialRepoHost
+      ? eligible.filter((repo) => getRepoExecutionHostId(repo) === initialRepoHost)
+      : eligible
+  }, [allRepos, initialRepoHost])
   // Derive the pick so it follows updated listings and disappears when its host stops listing it.
   const selectedRepo = useMemo(
     () => refreshMobileNewWorkspaceDialogSelectedRepo(repos, pickedRepo),
@@ -71,7 +81,26 @@ export function useNewWorkspaceRepositories(args: {
     [allRepos, client, ownerCatalog]
   )
   useEffect(() => {
-    if (!visible || !lastVisitedRepo.loaded || selectedRepo || repos.length === 0) {
+    if (!visible || selectedRepo || !initialRepoId) {
+      return
+    }
+    // Waits for its host's listing: a same-id repo on another host is a different repo.
+    const initial = repos.find(
+      (repo) => repo.id === initialRepoId && getRepoExecutionHostId(repo) === initialRepoHost
+    )
+    if (initial) {
+      setSelectedRepo(initial)
+    }
+  }, [initialRepoHost, initialRepoId, repos, selectedRepo, visible])
+
+  useEffect(() => {
+    if (
+      !visible ||
+      initialRepoId ||
+      !lastVisitedRepo.loaded ||
+      selectedRepo ||
+      repos.length === 0
+    ) {
       return
     }
     const preferredRepoId = resolveNewWorkspaceDialogRepoId({
@@ -82,7 +111,7 @@ export function useNewWorkspaceRepositories(args: {
     if (preferredRepo) {
       setSelectedRepo(preferredRepo)
     }
-  }, [lastVisitedRepo.loaded, lastVisitedRepo.repoId, repos, selectedRepo, visible])
+  }, [initialRepoId, lastVisitedRepo.loaded, lastVisitedRepo.repoId, repos, selectedRepo, visible])
 
   useEffect(() => {
     if (!visible || !client) {

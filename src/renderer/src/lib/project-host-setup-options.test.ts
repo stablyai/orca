@@ -1,11 +1,11 @@
 import { buildProjectGroupingIndex } from '../../../shared/project-section-grouping'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import * as dedupeRows from './project-host-setup-row-dedupe'
+import * as dedupeRows from './workspace/creation/project-host-setup-row-dedupe'
 import { getExecutionHostLabel, type ExecutionHostId } from '../../../shared/execution-host'
 import type { ExecutionHostRegistryEntry } from '../../../shared/execution-host/execution-host-registry-entry'
 import type { ProjectHostSetup } from '../../../shared/project-types'
 import type { Repo } from '../../../shared/repo-types'
-import { buildProjectHostSetupOptions } from './project-host-setup-options'
+import { buildProjectHostSetupOptions } from './workspace/creation/project-host-setup-options'
 
 const LOCAL_HOST_LABEL = getExecutionHostLabel('local')
 

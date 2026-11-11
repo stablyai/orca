@@ -8,8 +8,8 @@ import { useAppStore } from '@/store'
 import { getProjectGroupingIndexFromState } from '@/store/projects/project-host-setup-selector'
 import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
 import type { Repo } from '../../../shared/repo-types'
-import { selectProjectCloneUrlPrefill } from '@/lib/project-clone-url-prefill'
-import { buildNewWorkspaceProjectOptions } from '@/lib/new-workspace-project-options'
+import { selectProjectCloneUrlPrefill } from '@/lib/workspace/creation/project-clone-url-prefill'
+import { buildNewWorkspaceProjectOptions } from '@/lib/workspace/creation/new-workspace-project-options'
 
 vi.mock('@/components/ui/tooltip', () => ({
   Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,

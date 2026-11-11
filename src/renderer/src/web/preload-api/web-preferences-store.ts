@@ -72,7 +72,6 @@ export function getStoredSettings(): GlobalSettings {
   const settings = mergeSettings(
     {
       ...defaults,
-      floatingTerminalEnabled: false,
       rightSidebarOpenByDefault: false,
       activeRuntimeEnvironmentId: null
     },
@@ -80,6 +79,7 @@ export function getStoredSettings(): GlobalSettings {
   )
   delete settings.nativeChatAutoContinueAfterUsageLimit
   delete settings.zcodePlanSite
+  settings.floatingTerminalEnabled = false // A browser tab cannot host it, whatever was stored (#40268).
   return settings
 }
 

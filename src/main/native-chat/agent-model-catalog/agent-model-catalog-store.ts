@@ -310,6 +310,8 @@ export class AgentModelCatalogStore {
   pendingListing(
     ...wait: Parameters<AgentModelCatalogListingWaiters['wait']>
   ): ReturnType<AgentModelCatalogListingWaiters['wait']> {
+    // Waiting on a queued listing keeps it queued.
+    this.refreshes.get(wait[0])?.hold(wait[3])
     return this.listingWaiters.wait(...wait)
   }
 

@@ -3,14 +3,15 @@ import React from 'react'
 import { ChevronDown } from 'lucide-react'
 import { ProjectHeaderHostLabel, ProjectHeaderHostTooltip } from './ProjectHeaderHostLabel'
 import type { VirtualItem } from '@tanstack/react-virtual'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { RepoForkIndicator } from '@/components/repo/repo-fork-indicator'
 
 import {
   type FolderWorkspacePathStatus,
   isConfirmedStaleFolderPathStatus
 } from '../../../../../../shared/folder-workspaces/folder-workspace-path-status'
-import { getProjectGroupHostId } from '@/store/project-groups/project-group-owner-routing'
+import '@/store/project-groups/project-group-owner-routing'
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
 import {
   getHeaderDragRepo,
   isSingleHostProjectHeader,
@@ -92,7 +93,7 @@ export function renderWorktreeSectionHeaderRow(
   // Why: rename/delete must route to the host that owns this row, not to whichever host has focus.
   const projectGroupHostIdForHeader =
     row.projectGroup && 'createdFrom' in row.projectGroup
-      ? getProjectGroupHostId(row.projectGroup)
+      ? getRepoExecutionHostId(row.projectGroup)
       : undefined
   const rootProjectHeaderKey = usesRootProjectDrag ? getRootProjectHeaderKey(row) : undefined
   const {

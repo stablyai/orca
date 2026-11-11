@@ -86,10 +86,10 @@ vi.mock('expo-secure-store', () => ({
   setItemAsync: async () => {},
   deleteItemAsync: async () => {}
 }))
-vi.mock('../transport/hosts/host-app-version-store', () => ({
+vi.mock('../host-descriptors/host-app-version-store', () => ({
   recordHostAppVersion: async () => {}
 }))
-vi.mock('../transport/hosts/host-descriptor-recorder', () => ({
+vi.mock('../host-descriptors/host-descriptor-recorder', () => ({
   recordHostDescriptorFromStatus: () => {}
 }))
 vi.mock('../components/AutoHeight', () => ({ AutoHeight: 'AutoHeight' }))

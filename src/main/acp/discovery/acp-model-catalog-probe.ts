@@ -4,6 +4,7 @@ import {
   type StructuredAgentResolutionOperation
 } from '../../native-chat/structured-agent-command-resolution'
 import { homedir } from 'node:os'
+import { setTimeout as delay } from 'node:timers/promises'
 import { join } from 'node:path'
 import type { AgentCliVersionReader } from '../../agent-launch/preflight/agent-cli-version-probe'
 import type { AgentModelCatalogProbe } from '../../native-chat/agent-model-catalog/agent-model-catalog-store'
@@ -190,6 +191,26 @@ export function createAcpModelCatalogProbe(
 const folderlessListing = (spec: AcpLaunchSpec) =>
   new AgentModelCatalogListingStoppedError(`${spec.agent} lists in a chat's folder`)
 
+// OpenCode can answer -32603 while its providers are still opening; a later attempt lists them.
+async function startListingSession(
+  connection: AcpModelCatalogSessionConnection,
+  workspace: string,
+  operation?: StructuredAgentResolutionOperation
+): Promise<AcpSessionStarted> {
+  for (const backoffMs of [250, 500]) {
+    try {
+      return await connection.start({ cwd: workspace, mcpServers: [] })
+    } catch (error) {
+      if (!(error instanceof AcpAgentError && error.code === -32603)) {
+        throw error
+      }
+    }
+    await delay(backoffMs, undefined, { signal: operation?.signal })
+    assertStructuredAgentResolutionCurrent(operation)
+  }
+  return connection.start({ cwd: workspace, mcpServers: [] })
+}
+
 async function readSessionModels(
   spec: AcpLaunchSpec,
   listing: AcpSessionModelDiscovery,
@@ -206,7 +227,7 @@ async function readSessionModels(
   if (!deletes && !listing.sessionFolderArgs) {
     throw new Error(`${spec.agent} cannot delete a session, so it lists its models only in chats`)
   }
-  const started = await connection.start({ cwd: workspace, mcpServers: [] })
+  const started = await startListingSession(connection, workspace, operation)
   let stopped = false
   const cleanup = async (): Promise<void> => {
     stopped = true

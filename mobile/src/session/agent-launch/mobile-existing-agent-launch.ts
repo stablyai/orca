@@ -22,9 +22,9 @@ import {
   isAgentLaunchReservationTakenRefusal
 } from '../../../../src/shared/agent-launch/contracts/agent-launch-replay-refusal'
 import { sendReplayingAmbiguousDelivery } from '../../tasks/replay-on-ambiguous-delivery'
-import { structuredSessionOperationId } from '../structured-session-operation-id'
+import { structuredSessionOperationId } from '../native-chat/agent-session/structured-session-operation-id'
 import { randomV4Uuid } from '../../platform/random-v4-uuid'
-import { rememberMobileCreatedStructuredSession } from '../mobile-created-structured-sessions'
+import { rememberMobileCreatedStructuredSession } from '../native-chat/agent-session/mobile-created-structured-sessions'
 
 // Why: the host waits up to 60s for a terminal agent to become ready before pasting the prompt,
 // so a prompted launch must outlive that wait or the phone reports a launch that is still running.

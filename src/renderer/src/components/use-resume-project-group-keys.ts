@@ -3,7 +3,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../store'
 import { getProjectGroupingIndexFromState } from '../store/projects/project-host-setup-selector'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import type { ResumeWorkspaceGroup } from './native-chat-resume-on-restart-grouping'
+import type { ResumeWorkspaceGroup } from './native-chat-recovery/tree/native-chat-resume-on-restart-grouping'
 
 export function useResumeProjectGroupKeys(
   hostId: ExecutionHostId,

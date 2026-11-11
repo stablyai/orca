@@ -654,7 +654,7 @@ it('shows and edits the selected concrete fork source in the actual issue dialog
 
 it('initializes the real store and keeps prefetch and page source-context exports on the same pure product', async () => {
   const { getTaskPageRepoSourceContext: pureSource } =
-    await import('@/lib/task-repo-source-context')
+    await import('@/lib/work-items/task-repo-source-context')
   expect(getTaskPageRepoSourceContext).toBe(pureSource)
   const repo: Repo = {
     id: 'same',

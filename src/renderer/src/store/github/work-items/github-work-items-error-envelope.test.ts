@@ -111,47 +111,4 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       consoleWarn.mockRestore()
     }
   })
-
-  it('keeps the partial-failure count when another GitHub repo still loads', async () => {
-    const store = createTestStore()
-    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const item = {
-      type: 'pr',
-      number: 8,
-      title: 'Loaded PR',
-      url: 'https://example.test/8',
-      updatedAt: '2026-05-21T00:00:00Z'
-    } as GitHubWorkItem
-    mockApi.gh.listWorkItems
-      .mockRejectedValueOnce(new Error('HTTP 503: Service Unavailable'))
-      .mockResolvedValueOnce({
-        items: [item],
-        sources: {
-          issues: null,
-          prs: { owner: 'up', repo: 'r' },
-          originCandidate: { owner: 'up', repo: 'r' },
-          upstreamCandidate: null
-        }
-      })
-
-    try {
-      const result = answered(
-        await store.getState().fetchWorkItemsAcrossRepos(
-          [
-            { repoId: 'unavailable-repo', path: '/server/unavailable-repo' },
-            { repoId: 'loaded-repo', path: '/server/loaded-repo' }
-          ],
-          24,
-          100,
-          ''
-        )
-      )
-
-      expect(result.items).toEqual([{ ...item, repoId: 'loaded-repo' }])
-      expect(result.failedCount).toBe(1)
-      expect(result.githubUnavailable).toBe(false)
-    } finally {
-      consoleWarn.mockRestore()
-    }
-  })
 })

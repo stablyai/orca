@@ -1,4 +1,4 @@
-import { isWebClientLocation } from '@/lib/web-client-location'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { PROJECT_REPO_FILTER_EXACT_CAPABILITY } from '../../../../shared/project-repo-filter-capability'
 import { buildProjectGroupingIndex } from '../../../../shared/project-section-grouping'
 import { projectHostSetupProjectionFromRepos } from '../../../../shared/project-host-setup-projection'

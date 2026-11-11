@@ -4,7 +4,6 @@ import {
   emptiedWorktreeLandingPatch,
   landOnEmptiedWorktree
 } from './tabs-empty-workspace'
-export { landOnEmptiedWorktree } from './tabs-empty-workspace'
 import { retireRemovedNativeChatDraftPositions } from '@/components/native-chat/drafts/native-chat-draft-position-retirement'
 import { retireStructuredAgentSessionReadOwner } from '@/components/native-chat/session/structured/read/structured-agent-session-read-owner-registry'
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
@@ -33,7 +32,7 @@ import { isEditorTabContentType } from '../editor/tabs/editor-tab-content-type'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
-import { forgetDesktopCreatedServerTab } from '@/lib/desktop-created-server-tabs'
+import { forgetDesktopCreatedServerTab } from '@/store/workspace-layout/frames/desktop-created-server-tabs'
 import { replaceRecordEntries, replaceTabBuckets } from '../../keyed-record-transitions'
 
 export function createTabsCloseActions(

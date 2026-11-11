@@ -15,7 +15,7 @@ async function runArchive(script: string, timeoutMs = 400) {
   const dir = mkdtempSync(join(tmpdir(), 'orca-hook-deadline-'))
   writeFileSync(join(dir, 'orca.yaml'), `scripts:\n  archive: |\n    ${script}\n`)
   try {
-    return await runHook('archive', dir, REPO, dir, undefined, timeoutMs)
+    return await runHook('archive', dir, REPO, dir, undefined, { timeoutMs })
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }

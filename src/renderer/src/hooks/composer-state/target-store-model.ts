@@ -11,7 +11,7 @@ import type {
   Worktree
 } from '../../../../shared/worktree/types'
 import type { ExecutionHostRegistryEntry } from '../../../../shared/execution-host/execution-host-registry-entry'
-import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
+import type { LinkedWorkItemSummary } from '@/lib/workspace/creation/new-workspace'
 import type { ComposerDecisions } from './composer-decisions'
 import type { ComposerStoreActions } from './composer-store-actions'
 import type { SparsePreset } from '../../../../shared/worktree/create-types'
@@ -24,7 +24,7 @@ import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../..
 import type {
   WorkspaceCreationTargetHint,
   WorkspaceCreationProjectScope
-} from '@/lib/project-host-workspace-target'
+} from '@/lib/workspace/creation/project-host-workspace-target'
 
 export type ComposerTargetStoreModel = {
   initialRepoId: string | undefined

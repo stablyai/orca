@@ -7,8 +7,8 @@ import { useAppStore } from '@/store/index'
 import {
   acquireAgentLaunchChoices,
   AgentLaunchChoiceCancelled
-} from '../../../host-chat-program-acquisition'
-import { agentChoicePending } from '../../../host-chat-program'
+} from '../inventory/host-chat-program-acquisition'
+import { agentChoicePending } from '../inventory/host-chat-program'
 import { worktreeLaunchWorkspace } from '../routing/agent-launch-route-input'
 import { isTuiAgentEnabled } from '../../../../../../shared/agent-launch/catalog/tui-agent-selection'
 import type { LaunchSource } from '../../../../../../shared/telemetry-property-schemas'
@@ -20,8 +20,8 @@ import {
 import type { AgentLaunchChoice } from '@/lib/agent-session/launch/routing/agent-menu-selection'
 import type { AgentLaunchRoute } from '@/lib/agent-session/launch/routing/agent-launch-routing'
 import { translate } from '@/i18n/i18n'
-import { resolveWorktreeDisplayName } from '@/lib/worktree-default-display-name'
-import { getResolvedExecutionHostIdForWorktree } from '@/lib/resolved-worktree-execution-host'
+import { resolveWorktreeDisplayName } from '@/lib/workspace/display/worktree-default-display-name'
+import { getResolvedExecutionHostIdForWorktree } from '@/lib/workspace/ownership/resolved-worktree-execution-host'
 import { workspaceNavigationToastAction } from '@/lib/workspace/activation/workspace-navigation-toast-action'
 
 type LaunchAgentSessionContinuationArgs = {

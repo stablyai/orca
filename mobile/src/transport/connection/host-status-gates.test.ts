@@ -11,13 +11,13 @@ vi.mock('react-native', () => ({
 
 const recordHostAppVersionMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
 
-vi.mock('../hosts/host-app-version-store', () => ({
+vi.mock('../../host-descriptors/host-app-version-store', () => ({
   recordHostAppVersion: (...args: unknown[]) => recordHostAppVersionMock(...args)
 }))
 
 const recordDescriptorFromStatusMock = vi.hoisted(() => vi.fn())
 
-vi.mock('../hosts/host-descriptor-recorder', () => ({
+vi.mock('../../host-descriptors/host-descriptor-recorder', () => ({
   recordHostDescriptorFromStatus: (...args: unknown[]) => recordDescriptorFromStatusMock(...args)
 }))
 

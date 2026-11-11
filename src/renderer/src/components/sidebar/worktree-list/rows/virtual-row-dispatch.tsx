@@ -2,7 +2,7 @@ import { getRepoHostIdentity } from '../../../../../../shared/repo-host-identity
 import type { Repo } from '../../../../../../shared/repo-types'
 import React from 'react'
 import type { VirtualItem } from '@tanstack/react-virtual'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type {
   WorkspaceStatus,
   WorkspaceStatusDefinition

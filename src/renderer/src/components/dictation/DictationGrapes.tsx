@@ -1,4 +1,4 @@
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { DICTATION_GRAPES } from '../../../../shared/dictation-audio-meter'
 
 type DictationGrapesProps = {

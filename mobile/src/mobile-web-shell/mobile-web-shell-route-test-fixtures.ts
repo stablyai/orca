@@ -1,5 +1,5 @@
 import './mobile-web-shell-protocol-test-fixtures'
-import type { FakeGenerationFileSystem } from './generation-file-system-fake'
+import type { FakeGenerationFileSystem } from './generations/generation-file-system-fake'
 import type { MobileWebBundleFetchResult } from '../transport/web-bundle/mobile-web-bundle-fetch'
 
 import type {
@@ -22,8 +22,8 @@ import {
   MobileWebBundleManifestReadSchema
 } from '../transport/web-bundle/mobile-web-bundle-reply-schemas'
 
-import { createGenerationStore } from './generation-store'
-import { deriveHostCacheKey } from './host-cache-key'
+import { createGenerationStore } from './generations/generation-store'
+import { deriveHostCacheKey } from './generations/host-cache-key'
 import { useMobileWebShellSession } from './use-mobile-web-shell-session'
 
 export const HOST_ID = 'host-1'

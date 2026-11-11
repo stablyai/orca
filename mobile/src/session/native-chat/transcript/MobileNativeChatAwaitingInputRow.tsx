@@ -8,7 +8,7 @@ import { colors, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { scaledType } from './mobile-native-chat-message-styles'
-import { MobileNativeChatQuestionText } from '../MobileNativeChatQuestionText'
+import { MobileNativeChatQuestionText } from './MobileNativeChatQuestionText'
 
 const ICON_SIZE = 15
 

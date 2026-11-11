@@ -3,7 +3,7 @@ import {
   buildSetupHostOptions,
   getSetupStateLabel
 } from './repository-host-setup-options'
-import { getProjectHostSetupSelectionKey } from '@/lib/project-host-setup-options'
+import { getProjectHostSetupSelectionKey } from '@/lib/workspace/creation/project-host-setup-options'
 import {
   getRepoExecutionHostId,
   getExecutionHostLabel,
@@ -18,7 +18,7 @@ import { getHostDisplayLabelOverrides } from '../../../../../../shared/host-sett
 import type { Repo } from '../../../../../../shared/repo-types'
 import { useAppStore } from '../../../../store/index'
 import { getProjectHostSetupProjectionFromState } from '../../../../store/projects/project-host-setup-selector'
-import { cn } from '../../../../lib/utils'
+import { cn } from '../../../../lib/class-names'
 import { Button } from '../../../ui/button'
 import { Label } from '../../../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../ui/select'

@@ -3,7 +3,7 @@ import {
   buildNewWorkspaceProjectOptions,
   getProjectRowHostSetups,
   getSelectedNewWorkspaceProjectOptionId
-} from './new-workspace-project-options'
+} from './workspace/creation/new-workspace-project-options'
 import { buildProjectGroupingIndex } from '../../../shared/project-section-grouping'
 import type { Project, ProjectHostSetup } from '../../../shared/project-types'
 import type { Repo } from '../../../shared/repo-types'

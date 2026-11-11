@@ -17,7 +17,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { buildProjectGroups } from '../../../../../shared/project-grouping'
 import type { ProjectHostSetup } from '../../../../../shared/project-types'
 import { getProjectSectionRepoLookup } from '../../../../../shared/project-section-reveal'
-import { getRecipeVmSshTargetForHost } from '@/lib/recipe-vm-managed-host'
+import { getRecipeVmSshTargetForHost } from '@/runtime/ephemeral-vm/recipe-vm-managed-host'
 import {
   selectWorktreesByRepo,
   selectDetectedWorktreesByRepo

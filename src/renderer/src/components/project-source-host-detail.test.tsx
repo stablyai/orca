@@ -9,7 +9,7 @@ import { getRepoHostIdentity } from '../../../shared/repo-host-identity'
 import type { Repo } from '../../../shared/repo-types'
 import { TooltipProvider } from './ui/tooltip'
 import TaskProjectSourceCombobox from './task-project-source-combobox'
-import AutomationProjectCombobox from './automations/AutomationProjectCombobox'
+import AutomationProjectCombobox from './automations/authoring/AutomationProjectCombobox'
 import {
   getRepoSourceHostCount,
   getSelectedTaskProjectSource

@@ -1,6 +1,6 @@
 import type { Page } from '@stablyai/playwright-test'
 import { expect } from './orca-app'
-import type { SettingsNavTarget } from '../../../src/renderer/src/lib/settings-navigation-types'
+import type { SettingsNavTarget } from '../../../src/renderer/src/components/settings/navigation/settings-navigation-types'
 import { getProjectGroupingModelFromState } from '../../../src/renderer/src/store/projects/project-host-setup-selector'
 import {
   buildSettingsProjectList,

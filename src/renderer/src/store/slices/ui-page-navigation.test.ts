@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({
   toastError: vi.fn()
 }))
 
-vi.mock('@/lib/active-agent-note-send', () => ({
+vi.mock('@/lib/agent-session/messaging/terminal/active-agent-note-send', () => ({
   activeAgentNotesSendFailureMessage: (
     status: string,
     options: { explicitTarget?: boolean } = {}
@@ -20,7 +20,7 @@ vi.mock('@/lib/active-agent-note-send', () => ({
   sendNotesToActiveAgentSession: mocks.sendNotesToActiveAgentSession
 }))
 
-vi.mock('@/lib/telemetry', () => ({
+vi.mock('@/diagnostics/telemetry/telemetry', () => ({
   track: mocks.track
 }))
 

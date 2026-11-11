@@ -15,7 +15,7 @@ import { createElement, useEffect } from 'react'
 import { type ReactTestRenderer, act } from 'react-test-renderer'
 import { expect, it, vi } from 'vitest'
 import { MOBILE_WEB_BUNDLE_CAPABILITY } from '../../../src/shared/mobile-web-bundle/mobile-web-bundle-capability'
-import { createFakeGenerationFileSystem } from './generation-file-system-fake'
+import { createFakeGenerationFileSystem } from './generations/generation-file-system-fake'
 import WebSocket from 'ws'
 import { createWithQueryClient } from '../test-support/query-client-test-renderer'
 import {

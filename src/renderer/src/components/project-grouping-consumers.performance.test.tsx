@@ -12,10 +12,10 @@ import {
 } from '../store/projects/project-host-setup-selector'
 import { makeWorktree } from '../store/slices/worktrees/worktree.test-fixture'
 import { buildSettingsProjectList } from './settings/navigation/settings-project-list'
-import { buildNewWorkspaceProjectOptions } from '../lib/new-workspace-project-options'
+import { buildNewWorkspaceProjectOptions } from '../lib/workspace/creation/new-workspace-project-options'
 import { useProjectFilterOptions } from './sidebar/use-project-filter-options'
 import { useRecentProjectIds } from './new-workspace/use-recent-project-ids'
-import { groupResumeWorkspacesByRepo } from './native-chat-resume-on-restart-grouping'
+import { groupResumeWorkspacesByRepo } from './native-chat-recovery/tree/native-chat-resume-on-restart-grouping'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 afterEach(() => useAppStore.setState(useAppStore.getInitialState(), true))

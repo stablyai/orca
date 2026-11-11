@@ -4,7 +4,7 @@ import type { BranchSwitchTarget } from '../../../../../shared/git/branch-switch
 import { createStore } from 'zustand/vanilla'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import { gitGraphScope } from '@/lib/git-graph-tab'
+import { gitGraphScope } from '@/lib/source-control/graph/git-graph-tab'
 import { gitGraphOwnerKey } from './git-graph-workspace-navigation'
 import { gitCommitActionsSupported } from '@/runtime/source-control/git/git-commit-actions-capability'
 import {

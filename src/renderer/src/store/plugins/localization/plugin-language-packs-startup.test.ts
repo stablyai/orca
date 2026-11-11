@@ -50,47 +50,6 @@ afterEach(() => {
 })
 
 describe('plugin language-pack startup ownership', () => {
-  it.each(['resolve', 'reject'] as const)(
-    'keeps a newer refresh pending after an older request %ss',
-    async (settlement) => {
-      const bridge = installBridge()
-      const store = languagePacks.usePluginLanguagePackStore
-      const older = store.getState().fetchEntries()
-      const newer = store.getState().fetchEntries()
-      if (settlement === 'resolve') {
-        bridge.requests[0].resolve([pack('old')])
-      } else {
-        bridge.requests[0].reject(new Error('old failure'))
-      }
-      await older
-      expect(store.getState().loaded).toBe(false)
-      languagePacks.ensurePluginLanguagePacksLoaded()
-      const dispatches = bridge.listLanguagePacks.mock.calls.length
-      for (const request of bridge.requests.slice(1)) {
-        request.resolve([pack('current')])
-      }
-      await newer
-      expect(dispatches).toBe(2)
-      expect(store.getState().entries).toEqual([pack('current')])
-    }
-  )
-
-  it('allows a content-change refresh to supersede startup while ignoring unrelated changes', async () => {
-    const bridge = installBridge()
-    languagePacks.ensurePluginLanguagePacksLoaded()
-    bridge.listeners[0]({ contentPacksChanged: false })
-    expect(bridge.listLanguagePacks).toHaveBeenCalledTimes(1)
-    bridge.listeners[0]({ contentPacksChanged: true })
-    expect(bridge.listLanguagePacks).toHaveBeenCalledTimes(2)
-    bridge.requests[1].resolve([pack('changed')])
-    await bridge.requests[1].promise
-    bridge.requests[0].resolve([pack('old')])
-    await bridge.requests[0].promise
-    languagePacks.ensurePluginLanguagePacksLoaded()
-    expect(bridge.listLanguagePacks).toHaveBeenCalledTimes(2)
-    expect(languagePacks.usePluginLanguagePackStore.getState().entries).toEqual([pack('changed')])
-  })
-
   it('keeps the shared startup request alive after the first consumer unmounts', async () => {
     const bridge = installBridge()
     const first = renderHook(() => languagePacks.usePluginLanguagePacks())

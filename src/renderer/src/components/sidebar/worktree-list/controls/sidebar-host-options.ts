@@ -16,7 +16,7 @@ import type {
 } from '../../../../../../shared/execution-host/execution-host-health'
 import type { ExecutionHostRegistryEntry } from '../../../../../../shared/execution-host/execution-host-registry-entry'
 
-import { getExecutionHostHealthLabel } from '@/lib/runtime-host-copy'
+import { getExecutionHostHealthLabel } from '@/runtime/hosts/display/runtime-host-copy'
 import { pickerExecutionHosts } from '../../../../../../shared/execution-host/managed-orcad-execution-host'
 import { getCheckedHostRows } from '../../../../../../shared/workspace-view/workspace-host-visibility'
 import type { RuntimeCompatVerdict } from '../../../../../../shared/protocol-compat'

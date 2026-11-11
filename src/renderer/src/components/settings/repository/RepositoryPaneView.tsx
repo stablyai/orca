@@ -5,6 +5,7 @@ import {
 import type { RepositoryPaneProps } from './repository-pane-types'
 import type { RepositorySettingsSessionState } from './RepositorySettingsSession'
 import type { RepoHookSettings } from '../../../../../shared/orca-yaml-hook-types'
+import { useFolderSetupSupport } from '@/lib/use-folder-setup-supported'
 import { ProjectGroupingSetting } from '../ProjectGroupingSetting'
 import { useCallback, useRef, useState } from 'react'
 import { getRepoKindLabel, isFolderRepo } from '../../../../../shared/repo-kind'
@@ -80,6 +81,7 @@ export function RepositoryPaneView({
       removalSetups
     )
   const isFolder = isFolderRepo(repo)
+  const hooksSupported = useFolderSetupSupport(repo) === 'supported'
   // Bind writes to the switcher-selected owner; same-ID/self-paired repos must not use focused-host fallback.
   const selectedHostId = getRepoExecutionHostId(repo)
   const { updateSelectedRepo } = session
@@ -163,7 +165,8 @@ export function RepositoryPaneView({
   } = getRepositoryPaneSearchMetadata(repo, { isLocalWindowsProject }, t)
 
   const hooksSection =
-    !isFolder && (forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, hooksEntries)) ? (
+    hooksSupported &&
+    (forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, hooksEntries)) ? (
       <RepositoryHooksSection
         controller={session.hooks}
         key="hooks"

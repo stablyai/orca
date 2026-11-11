@@ -16,7 +16,7 @@ import type { WorktreeCardProps } from './workspace-card/controller/worktree-car
 import type WorktreeCardComponent from './workspace-card/surface/WorktreeCard'
 
 import type * as ReactVirtualModule from '@tanstack/react-virtual'
-import type * as DesktopWindowChromeModule from '@/lib/desktop-window-chrome'
+import type * as DesktopWindowChromeModule from '@/app-shell/chrome/desktop-window-chrome'
 import { useMemo, useRef } from 'react'
 import { cleanup } from '@testing-library/react'
 
@@ -101,7 +101,7 @@ afterEach(() => {
   useAppStore.setState(useAppStore.getInitialState(), true)
 })
 
-vi.mock('@/lib/desktop-window-chrome', async (original) => ({
+vi.mock('@/app-shell/chrome/desktop-window-chrome', async (original) => ({
   ...(await original<typeof DesktopWindowChromeModule>()),
   isPairedWebClientWindow: () => true
 }))

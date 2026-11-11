@@ -22,10 +22,10 @@ vi.mock('react-native', () => ({
     }
   }
 }))
-vi.mock('../transport/hosts/host-app-version-store', () => ({
+vi.mock('../host-descriptors/host-app-version-store', () => ({
   recordHostAppVersion: async () => {}
 }))
-vi.mock('../transport/hosts/host-descriptor-recorder', () => ({
+vi.mock('../host-descriptors/host-descriptor-recorder', () => ({
   recordHostDescriptorFromStatus: () => {}
 }))
 import { useHostStatusGates } from '../transport/connection/host-status-gates'

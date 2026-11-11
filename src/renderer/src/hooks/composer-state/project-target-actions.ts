@@ -51,11 +51,11 @@ import {
   getProjectGroupIdFromNewWorkspaceOptionId,
   getProjectRowHostSetups,
   findActionableFolderProjectGroup
-} from '@/lib/new-workspace-project-options'
+} from '@/lib/workspace/creation/new-workspace-project-options'
 import { translate } from '@/i18n/i18n'
 import { getFolderSourceRepos } from '@/components/sidebar/workspace-creation/folder/folder-workspace-source-repos'
-import { getComposerEligibleRepos } from '@/lib/new-workspace-composer-repo'
-import { resolveWorkspaceCreationTarget } from '@/lib/project-host-workspace-target'
+import { getNewWorkspaceDialogEligibleRepos } from '../../../../shared/new-workspace-dialog-repo'
+import { resolveWorkspaceCreationTarget } from '@/lib/workspace/creation/project-host-workspace-target'
 
 export function useProjectTargetActions(input: ProjectTargetActionsInput) {
   const {
@@ -211,7 +211,7 @@ export function useProjectTargetActions(input: ProjectTargetActionsInput) {
       const next = resolveWorkspaceCreationTarget({
         grouping: getProjectGroupingIndexFromState(state),
         settings: state.settings,
-        eligibleRepos: getComposerEligibleRepos(state.repos),
+        eligibleRepos: getNewWorkspaceDialogEligibleRepos(state.repos),
         projects: state.projects,
         projectHostSetups: getProjectRowHostSetups(projectOptions, state.projectHostSetups),
         projectId,

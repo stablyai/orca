@@ -6,24 +6,24 @@ import type { ComposerRuntimeTargetSelectionInput } from './composer-target-inpu
 import { useEffect, useMemo, useRef } from 'react'
 import { getFolderSourceRepos } from '@/components/sidebar/workspace-creation/folder/folder-workspace-source-repos'
 import { parseExecutionHostId, getRepoExecutionHostId } from '../../../../shared/execution-host'
-import { getSelectedRepoSshGate } from '@/lib/new-workspace-ssh-gate'
-import { selectRepoSshGateInput } from '@/lib/repo-ssh-connection'
+import { getSelectedRepoSshGate } from '@/lib/workspace/creation/new-workspace-ssh-gate'
+import { selectRepoSshGateInput } from '@/lib/workspace/catalog/repo-ssh-connection'
 import { useFolderWorkspaceComposerPathStatus } from '@/components/sidebar/workspace-creation/folder/folder-workspace-composer-path-status'
 import { useDetectedAgents } from '@/hooks/useDetectedAgents'
-import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import { resolveWorkspaceCreationTarget } from '@/lib/project-host-workspace-target'
+import { resolveWorkspaceCreationTarget } from '@/lib/workspace/creation/project-host-workspace-target'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
-import { CLIENT_PLATFORM } from '@/lib/new-workspace'
-import { getLocalRepoProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
+import { CLIENT_PLATFORM } from '@/lib/workspace/creation/new-workspace'
+import { getLocalRepoProjectExecutionRuntimeContext } from '@/runtime/hosts/preflight/local-preflight-context'
 import {
   resolveExecutionHostAgentStartupShell,
   resolveRepoExecutionHostPlatform
 } from '@/runtime/hosts/platform/execution-host-facts'
-import type { ExecutionHostPlatformFact } from '@/runtime/hosts/platform/execution-host-platform-fact'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { repoIsRemote } from '../../../../shared/agent-launch/startup/agent-launch-remote'
 import { getRuntimeEnvironmentIdForRepo } from '@/lib/workspace/ownership/repo-runtime-owner'
 import { useEphemeralVmRecipeOptions } from '@/hooks/useEphemeralVmRecipeOptions'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import type { ExecutionHostPlatformFact } from '@/runtime/hosts/platform/execution-host-platform-fact'
 
 export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSelectionInput) {
   const grouping = useAppStore(getProjectGroupingIndexFromState)

@@ -1,4 +1,4 @@
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { recomputeOn } from '@/lib/recompute-on'
 import { AgentStateDot } from '@/components/AgentStateDot'

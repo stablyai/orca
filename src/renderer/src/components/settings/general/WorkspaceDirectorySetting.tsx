@@ -10,14 +10,14 @@ import {
 } from '../../../../../shared/host-setting-overrides'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
 import { normalizeWorkspaceDirInput } from '../../../../../shared/worktree/workspace-dir-input'
-import { isWindowsUserAgent } from '@/lib/user-agent-platform'
+import { isWindowsUserAgent } from '@/app-shell/platform/user-agent-platform'
 import { Button } from '../../ui/button'
 import { Input } from '../../ui/input'
 import { Label } from '../../ui/label'
 import { HostCombobox } from '../../host-picker/HostCombobox'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { useSidebarHostScopeOptions } from '../../sidebar/worktree-list/controls/use-sidebar-host-scope-options'
-import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
+import { isImeCompositionKeyDown } from '@/lib/text-input/ime/ime-composition-keyboard-event'
 import {
   buildHostScopeChoices,
   CLIENT_DEFAULT_SCOPE,

@@ -40,7 +40,7 @@ import { TerminalConfigImportModal } from '../configuration/TerminalConfigImport
 import type { UseTerminalConfigImportReturn } from '../configuration/useTerminalConfigImport'
 import { WarpThemeImportModal } from '../themes/WarpThemeImportModal'
 import type { UseWarpThemeImportReturn } from '../themes/useWarpThemeImport'
-import { isWebClientLocation } from '@/lib/web-client-location'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import ghosttyIcon from '../../../../../../../resources/ghostty.svg'
 import { useTranslate } from '@/i18n/use-translate'
 

@@ -8,7 +8,7 @@ import { projectHostSetupProjectionFromRepos } from '../../../../../../shared/pr
 import { getProjectGroupingIndexFromState } from '@/store/projects/project-host-setup-selector'
 import { usePendingSidebarReveal } from '../navigation/use-pending-reveal'
 import { useSidebarRevealRequests } from '../navigation/use-reveal-requests'
-import { SCROLL_TO_CURRENT_WORKSPACE_REVEAL_REQUEST_EVENT } from '@/lib/scroll-to-current-workspace-status'
+import { SCROLL_TO_CURRENT_WORKSPACE_REVEAL_REQUEST_EVENT } from '@/lib/workspace/navigation/scroll-to-current-workspace-status'
 import { ConfirmationDialogContext } from '@/components/confirmation-dialog-context'
 
 const confirmReveal = async () => true

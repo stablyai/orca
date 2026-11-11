@@ -1,8 +1,8 @@
 import React, { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import NewWorkspaceComposerCard from './NewWorkspaceComposerCard'
-import type { NewWorkspaceProjectOption } from '@/lib/new-workspace-project-options'
-import type { ProjectHostSetupOption } from '@/lib/project-host-setup-options'
+import type { NewWorkspaceProjectOption } from '@/lib/workspace/creation/new-workspace-project-options'
+import type { ProjectHostSetupOption } from '@/lib/workspace/creation/project-host-setup-options'
 
 const cardRoots = new WeakMap<HTMLDivElement, Root>()
 export function unmountCard(container: HTMLDivElement): void {

@@ -58,7 +58,7 @@ function useRepositorySettingsSession({
     [updateSelectedRepo, repoId]
   )
   const hooks = useRepositoryHookSettingsDraft({
-    repo: isFolder ? undefined : repo,
+    repo,
     repoHostIdentity: identity,
     onUpdateHookSettings: updateHooks
   })

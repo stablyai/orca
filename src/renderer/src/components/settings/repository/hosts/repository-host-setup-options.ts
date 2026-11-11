@@ -1,7 +1,7 @@
 import {
   getProjectHostSetupSelectionKey,
   getHostSetupUnavailableDetail
-} from '@/lib/project-host-setup-options'
+} from '@/lib/workspace/creation/project-host-setup-options'
 import {
   getExecutionHostLabel,
   type ExecutionHostId
