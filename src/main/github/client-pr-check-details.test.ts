@@ -106,4 +106,51 @@ describe('getPRCheckDetails', () => {
       vi.useRealTimers()
     }
   })
+
+  it('reads a fine-grained token check from its Actions job when the check run is refused', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    const job = {
+      id: 71,
+      run_id: 7,
+      name: 'pytest',
+      status: 'completed',
+      conclusion: 'success',
+      html_url: 'https://github.com/acme/widgets/actions/runs/7/job/71',
+      started_at: '2026-11-10T10:00:00Z',
+      completed_at: '2026-11-10T10:05:00Z',
+      steps: []
+    }
+    ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      const path = args.at(-1) ?? ''
+      if (path.includes('/check-runs/71')) {
+        throw Object.assign(new Error(`Command failed: gh api ${path}`), {
+          stderr: 'gh: Resource not accessible by personal access token (HTTP 403)\n',
+          stdout: ''
+        })
+      }
+      if (path.endsWith('/actions/jobs/71')) {
+        return { stdout: JSON.stringify(job), stderr: '' }
+      }
+      if (path.includes('/actions/runs/7/jobs')) {
+        return { stdout: JSON.stringify({ jobs: [job] }), stderr: '' }
+      }
+      throw new Error(`unexpected ${path}`)
+    })
+
+    const details = await getPRCheckDetails('/repo-root', {
+      checkRunId: 71,
+      workflowRunId: 7,
+      checkName: 'pytest'
+    })
+
+    expect(details).toMatchObject({
+      name: 'pytest',
+      status: 'completed',
+      conclusion: 'success',
+      url: 'https://github.com/acme/widgets/actions/runs/7/job/71',
+      startedAt: '2026-11-10T10:00:00Z',
+      completedAt: '2026-11-10T10:05:00Z',
+      jobs: [{ id: 71, name: 'pytest', status: 'completed', conclusion: 'success' }]
+    })
+  })
 })
