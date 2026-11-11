@@ -4,6 +4,8 @@ import {
   ArchiveRestore,
   Moon,
   Trash2,
+  ArrowDown,
+  ArrowUp,
   ArrowUpRight,
   BookOpen,
   FolderInput,
@@ -11,6 +13,8 @@ import {
   Link2,
   Lock,
   MoreHorizontal,
+  Pin,
+  PinOff,
   Play,
   RotateCw,
   UserRoundCog,
@@ -66,7 +70,13 @@ export type RowActions = {
   restart?: (w: CloudWorkspace) => void
   /** Delete the sandbox and its disk, after a confirmation. */
   remove: (w: CloudWorkspace) => void
+  /** Pin to the top of Home, synced to your other devices (your own pins, not the team's). */
+  setPinned?: (w: CloudWorkspace, pinned: boolean) => void
+  /** Move one place up (-1) or down (1) within its group, synced like pins. */
+  move?: (w: CloudWorkspace, delta: number) => void
 }
+
+export type RowArrangement = { pinned: boolean; canMoveUp: boolean; canMoveDown: boolean }
 
 /** Placeholder replaced by the inline section editor in CloudWorkspacesHome. */
 export const NEW_SECTION = '\u0000new-section'
@@ -95,7 +105,8 @@ export function CloudWorkspaceRowMenu({
   selfId,
   open,
   onOpenChange,
-  actions
+  actions,
+  arrangement
 }: {
   workspace: CloudWorkspace
   title: string
@@ -108,6 +119,7 @@ export function CloudWorkspaceRowMenu({
   open: boolean
   onOpenChange: (open: boolean) => void
   actions: RowActions
+  arrangement?: RowArrangement
 }): React.JSX.Element {
   const t = useTranslate()
   const keybindings = useAppStore((state) => state.keybindings)
@@ -183,6 +195,32 @@ export function CloudWorkspaceRowMenu({
             {t('auto.components.cloudWorkspaces.open', 'Open')}
             <DropdownMenuShortcut>↵</DropdownMenuShortcut>
           </DropdownMenuItem>
+        )}
+        {arrangement && actions.setPinned && w.archivedAt === null && (
+          <DropdownMenuItem onSelect={() => actions.setPinned?.(w, !arrangement.pinned)}>
+            {arrangement.pinned ? <PinOff /> : <Pin />}
+            {arrangement.pinned
+              ? t('auto.components.cloudWorkspaces.unpin', 'Unpin')
+              : t('auto.components.cloudWorkspaces.pin', 'Pin')}
+          </DropdownMenuItem>
+        )}
+        {arrangement && actions.move && (arrangement.canMoveUp || arrangement.canMoveDown) && (
+          <>
+            <DropdownMenuItem
+              disabled={!arrangement.canMoveUp}
+              onSelect={() => actions.move?.(w, -1)}
+            >
+              <ArrowUp />
+              {t('auto.components.cloudWorkspaces.moveUp', 'Move up')}
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              disabled={!arrangement.canMoveDown}
+              onSelect={() => actions.move?.(w, 1)}
+            >
+              <ArrowDown />
+              {t('auto.components.cloudWorkspaces.moveDown', 'Move down')}
+            </DropdownMenuItem>
+          </>
         )}
         <DropdownMenuItem onSelect={() => actions.copyLink(w)}>
           <Link2 />

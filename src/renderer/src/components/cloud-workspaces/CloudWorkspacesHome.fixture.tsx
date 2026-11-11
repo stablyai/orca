@@ -7,6 +7,8 @@ import {
   workspace
 } from './cloud-workspaces.test-fixture'
 import type { CloudReadSnapshotState } from '../../../../shared/cloud-workspaces/read-snapshot-state'
+import type { CloudWorkspacePrefsDocument } from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
+import { setPrefsAccount } from './cloud-workspace-prefs'
 import { getOrcaAccountKey } from '@/hooks/use-orca-account-key'
 import { writeHomeSwitches } from './cloud-workspaces-home-prefs'
 
@@ -31,6 +33,35 @@ export const teamList = defineFixture({
   },
   render: () => <CloudWorkspacesHome />,
   interact: () => waitFor(() => document.querySelector('[data-cloud-workspace-row]') !== null)
+})
+
+/** Synced prefs: two pins on top (pin order), Payments collapsed, rows in their manual order. */
+export const pinnedAndArranged = defineFixture({
+  width: WIDTH,
+  store: { orcaProfileAuthStatus: AUTH_STATUS },
+  setup: () => {
+    const rows = teamWorkspaces()
+    stubCloudWorkspacesApi(() => Promise.resolve({ ok: true, value: rows }))
+    const document: CloudWorkspacePrefsDocument = {
+      pinned: [rows[3]!.id, rows[0]!.id],
+      order: [rows[2]!.id],
+      sections: ['Payments'],
+      collapsed: []
+    }
+    Object.assign(window.api.cloudWorkspaces, {
+      getPrefs: () =>
+        Promise.resolve({ ok: true as const, value: { document, revision: 3, updatedAt: 1 } }),
+      putPrefs: (next: CloudWorkspacePrefsDocument) =>
+        Promise.resolve({
+          ok: true as const,
+          value: { document: next, revision: 4, updatedAt: 2 }
+        })
+    })
+    setPrefsAccount(`fixture:${Math.random()}`)
+  },
+  render: () => <CloudWorkspacesHome />,
+  interact: () =>
+    waitFor(() => document.querySelector('[data-cloud-workspace-group="pinned"]') !== null)
 })
 
 /** A link pointed at this row; Home rings it while it opens. */
