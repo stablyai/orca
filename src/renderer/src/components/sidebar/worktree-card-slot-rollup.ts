@@ -6,7 +6,7 @@ import {
   fromLineageSlotRecord,
   type LineageSlotRecord
 } from './worktree-card-slot-summary'
-import { useCallback, useMemo } from 'react'
+import { useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
@@ -190,8 +190,20 @@ export function selectLineageLatestAt(
   return at || null
 }
 
+function createLineageLatestAtSelector(source: WorktreeLineageSource) {
+  let inputs: readonly unknown[] = []
+  let at: number | null = null
+  return (state: AppState) => {
+    const next = worktreeAgentProjectionInputs(state)
+    if (!next.every((value, index) => value === inputs[index])) {
+      inputs = next
+      at = selectLineageLatestAt(state, source)
+    }
+    return at
+  }
+}
+
 export function useLineageLatestAt(source: WorktreeLineageSource): number | null {
-  return useAppStore(
-    useCallback((state: AppState) => selectLineageLatestAt(state, source), [source])
-  )
+  const select = useMemo(() => createLineageLatestAtSelector(source), [source])
+  return useAppStore(select)
 }

@@ -11,6 +11,7 @@ import { activateStructuredAgentSessionTab } from '@/lib/agent-session/structure
 import { activateTabAndFocusPane } from '@/lib/workspace/tabs/activate-tab-and-focus-pane'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
+import { workspaceMarkerTabIdsForHost } from '@/store/slices/workspace-attention/workspace-marker-host'
 import {
   paneKeyTabId,
   workspaceLiveMarkerTabIds
@@ -31,6 +32,9 @@ export type SlotTarget = SlotLineSignal & {
   tabId?: string
   /** The user marked the workspace unread; it stands on its own instead of yielding to agents. */
   markedByUser?: boolean
+  /** Completion subjects represented by this tab target; bells remain independent of agent rows. */
+  unreadPaneKeys?: readonly string[]
+  terminalBell?: boolean
   retained: boolean
   agentType: AgentType | null
   entry: AgentStatusEntry | null
@@ -92,17 +96,36 @@ export function expandWorkspaceUnreadTargets(
     if (target.kind !== 'unread' || target.paneKey !== null || target.tabId !== undefined) {
       return [target]
     }
-    const markedByUser = Boolean(state.workspacesMarkedUnreadByUser[target.worktreeId])
-    const tabTargets = workspaceLiveMarkerTabIds(state, target.worktreeId).map(
-      (tabId): SlotTarget => ({ ...target, tabId })
+    const markedByUser = Boolean(
+      state.workspacesMarkedUnreadByUser[
+        composeWorktreeHostIdentity(target.executionHostId ?? 'local', target.worktreeId)
+      ]
     )
+    const ownedTabs = workspaceMarkerTabIdsForHost(state, target.worktreeId, target.executionHostId)
+    const completionKeys = Object.keys(state.unreadAgentCompletionPanes)
+    const representedTabs = getStructuredAgentSessionTabsByPaneKey(
+      state.unifiedTabsByWorktree[target.worktreeId]
+    )
+    const structuredKeysByTabId = new Map([...representedTabs].map(([key, tab]) => [tab.id, key]))
+    const tabTargets = workspaceLiveMarkerTabIds(state, target.worktreeId)
+      .filter((tabId) => ownedTabs.has(tabId))
+      .map((tabId): SlotTarget => ({
+        ...target,
+        tabId,
+        terminalBell: state.unreadTerminalTabs[tabId] === 'terminal-bell',
+        unreadPaneKeys: completionKeys.filter(
+          (key) =>
+            paneKeyTabId(key) === tabId &&
+            (!structuredKeysByTabId.has(tabId) || structuredKeysByTabId.get(tabId) === key)
+        )
+      }))
     return tabTargets.length === 0 || markedByUser
       ? [...tabTargets, { ...target, markedByUser }]
       : tabTargets
   })
 }
 
-function workspaceKey(target: SlotTarget): string {
+function workspaceKey(target: SlotTarget) {
   return composeWorktreeHostIdentity(target.executionHostId, target.worktreeId)
 }
 
@@ -113,20 +136,27 @@ export function slotTargetsOfKind(
 ): SlotTarget[] {
   const ofKind = targets.filter((target) => target.kind === kind)
   const agentTargets = ofKind.filter((target) => target.paneKey !== null)
-  const withAgent = new Set(agentTargets.map(workspaceKey))
   const agentTabs = new Set(
     agentTargets.map((target) => `${workspaceKey(target)}\n${paneKeyTabId(target.paneKey!) ?? ''}`)
+  )
+  const agentPanes = new Set(
+    agentTargets.map((target) => `${workspaceKey(target)}\n${target.paneKey}`)
   )
   const seen = new Set<string>()
   return ofKind
     .filter((target) => {
-      if (target.paneKey !== null || target.markedByUser) {
+      if (target.paneKey !== null || target.markedByUser || target.terminalBell) {
         return true
+      }
+      if (target.tabId !== undefined && target.unreadPaneKeys?.length) {
+        return !target.unreadPaneKeys.every((key) =>
+          agentPanes.has(`${workspaceKey(target)}\n${key}`)
+        )
       }
       // A marker tab whose agent already has its own target is that agent's unread, not another one.
       return target.tabId !== undefined
         ? !agentTabs.has(`${workspaceKey(target)}\n${target.tabId}`)
-        : !withAgent.has(workspaceKey(target))
+        : true
     })
     .filter((target) => {
       const key = `${workspaceKey(target)}\n${target.paneKey ?? ''}\n${target.tabId ?? ''}`
@@ -137,6 +167,18 @@ export function slotTargetsOfKind(
       return true
     })
     .sort((a, b) => (b.at ?? 0) - (a.at ?? 0))
+}
+
+/** Only the unread sources not already represented by the card's visible agent rows. */
+export function workspaceUnreadTargetsOutsideAgentRows(
+  state: AppState,
+  target: SlotTarget,
+  visibleAgents: readonly SlotTarget[]
+): SlotTarget[] {
+  return slotTargetsOfKind(
+    [...visibleAgents, ...expandWorkspaceUnreadTargets(state, [target])],
+    'unread'
+  ).filter((candidate) => candidate.paneKey === null)
 }
 
 /** Open the target the way its own row would, after unfolding its card's agent list. */

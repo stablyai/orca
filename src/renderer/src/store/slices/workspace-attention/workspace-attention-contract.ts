@@ -2,6 +2,7 @@ import type { StateCreator } from 'zustand'
 import type { StoredAgentAttentionUnread } from '@/attention/agent-attention-contract'
 import type { AgentAttentionUnreadWrite } from '@/attention/agent-attention-policy'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { HostScopedWorktreeKey } from '../../../../../shared/worktree/host-qualified-identity'
 import type { AppState } from '../../types'
 
 export type WorkspaceAttentionSet = Parameters<StateCreator<AppState>>[0]
@@ -38,8 +39,8 @@ export type WorkspaceAttentionSlice = {
     screen: OnScreenAttention,
     options: { screenArrived: boolean; markersRead?: boolean }
   ) => void
-  /** Workspaces the user marked unread this session, so the slot can say so instead of guessing. Renderer-local. */
-  workspacesMarkedUnreadByUser: Record<string, true>
+  /** Host-qualified workspaces the user marked unread this session. Renderer-local. */
+  workspacesMarkedUnreadByUser: Partial<Record<HostScopedWorktreeKey, true>>
   /** Sidebar "Mark as read" (also removes every marker and reads every agent in the workspace) / "Mark as unread". */
   setWorkspaceUnreadByUser: (
     worktreeId: string,

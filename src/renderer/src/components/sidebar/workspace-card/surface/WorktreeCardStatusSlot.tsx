@@ -13,6 +13,7 @@ import { FilledBellIcon } from '../identity/worktree-card-glyphs'
 import { checksLabel } from '../review/workspace-review-check-label'
 import StatusIndicator from './StatusIndicator'
 import { useWorktreeActivityStatus } from '../activity/use-worktree-activity-status'
+import { laneStatusWithLineage } from './worktree-card-lineage-lane-status'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store/index'
 import {
@@ -35,6 +36,8 @@ type WorktreeCardStatusSlotProps = {
   showStatus: boolean
   showUnreadAction: boolean
   isUnread: boolean
+  /** A collapsed descendant's needs-you, failed or working state; replaces a quieter own status. */
+  lineageStatus?: WorktreeStatus | null
   unreadTooltip: string
   onToggleUnread: React.MouseEventHandler<HTMLButtonElement>
   onPointerDown: React.PointerEventHandler<HTMLButtonElement>
@@ -126,6 +129,7 @@ export function WorktreeCardStatusSlot({
   showStatus,
   showUnreadAction,
   isUnread,
+  lineageStatus = null,
   unreadTooltip,
   onToggleUnread,
   onPointerDown,
@@ -140,7 +144,7 @@ export function WorktreeCardStatusSlot({
   const t = useTranslate()
   const collectionChecks = reviewChecks && reviewChecks.total > 1 ? reviewChecks : undefined
   const isReviewStale = reviewStale || Boolean(collectionChecks?.stale)
-  const status = useWorktreeActivityStatus(worktreeId)
+  const status = laneStatusWithLineage(useWorktreeActivityStatus(worktreeId), lineageStatus)
   // One subscription per card: rows mount by the hundreds, and every listener runs on each store write.
   const { isSleeping, vmRuntime, vmWaking } = useAppStore(
     useShallow((state) => ({

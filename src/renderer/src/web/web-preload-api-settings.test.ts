@@ -52,6 +52,30 @@ describe('web settings preload API', () => {
     })
   })
 
+  it('retains a local details-row choice when an older paired host omits it', async () => {
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(): Promise<RuntimeRpcResponse<unknown>> {
+          return Promise.resolve({
+            id: 'settings',
+            ok: true,
+            result: { settings: {} },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+        close(): void {}
+      }
+    }))
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+    await globals.window.api.settings.get()
+    await globals.window.api.settings.set({ worktreeCardDetailsRow: false })
+
+    expect((await globals.window.api.settings.get()).worktreeCardDetailsRow).toBe(false)
+  })
+
   it('arms the OSC 52 notice when ui.get is the read that runs the migration', async () => {
     // Seed after module load to model another tab’s storage update; first ui.get must migrate settings before snapshotting UI or it erases the one-shot notice arm.
     const globals = installBrowserGlobals('Linux')

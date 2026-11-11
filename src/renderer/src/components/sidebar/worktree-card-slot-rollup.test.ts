@@ -19,7 +19,11 @@ import {
   selectCollapsedLineageSlots,
   selectLineageLatestAt
 } from './worktree-card-slot-rollup'
-import { slotTargetsOfKind, workspaceUnreadTarget } from './worktree-card-slot-targets'
+import {
+  slotTargetsOfKind,
+  workspaceUnreadTarget,
+  workspaceUnreadTargetsOutsideAgentRows
+} from './worktree-card-slot-targets'
 import { fromLineageSlotRecord } from './worktree-card-slot-summary'
 
 function collapsedSlot(...args: Parameters<typeof selectCollapsedLineageSlots>) {
@@ -61,7 +65,10 @@ beforeEach(() => {
     runtimeAgentOrchestrationByPaneKey: {},
     paneForegroundAgentByPaneKey: {},
     worktreesByRepo: {},
-    repos: []
+    repos: [],
+    unreadTerminalTabs: {},
+    unreadAgentCompletionPanes: {},
+    workspacesMarkedUnreadByUser: {}
   })
 })
 afterEach(() => {
@@ -140,6 +147,66 @@ it('expires hidden working evidence on the same freshness tick as agent rows', (
   vi.setSystemTime(20_000_000)
   useAppStore.setState({ agentStatusEpoch: 2 })
   expect(collapsedSlot(useAppStore.getState(), [identity])).toBeNull()
+})
+
+it('keeps independent bells and completion panes in title targets alongside a visible unread agent', () => {
+  useAppStore.setState({
+    tabsByWorktree: {
+      child: ['agent', 'shell', 'remote'].map((id) =>
+        makeTab({
+          id,
+          worktreeId: 'child',
+          ptyId: id === 'remote' ? 'remote:box@@shell' : `pty-${id}`,
+          title: ''
+        })
+      )
+    },
+    agentStatusByPaneKey: { [pane('agent')]: entry('agent', { state: 'done' }) },
+    unreadAgentCompletionPanes: { [pane('agent')]: 'agent-completion' },
+    unreadTerminalTabs: { shell: 'terminal-bell', remote: 'terminal-bell' }
+  })
+  const target = workspaceUnreadTarget('child', 1_950_000, 'local')
+  const visibleAgents = collectLineageSlotTargets(useAppStore.getState(), [identity])
+  expect(
+    workspaceUnreadTargetsOutsideAgentRows(useAppStore.getState(), target, visibleAgents).map(
+      (target) => target.tabId
+    )
+  ).toEqual(['shell'])
+
+  useAppStore.setState({ unreadTerminalTabs: {} })
+  expect(
+    workspaceUnreadTargetsOutsideAgentRows(useAppStore.getState(), target, visibleAgents)
+  ).toEqual([])
+
+  const otherPane = 'agent:22222222-2222-4222-8222-222222222222'
+  useAppStore.setState({
+    unreadAgentCompletionPanes: {
+      [pane('agent')]: 'agent-completion',
+      [otherPane]: 'agent-completion'
+    }
+  })
+  expect(
+    workspaceUnreadTargetsOutsideAgentRows(useAppStore.getState(), target, visibleAgents).map(
+      (target) => target.tabId
+    )
+  ).toEqual(['agent'])
+
+  useAppStore.setState({
+    unreadAgentCompletionPanes: { [pane('agent')]: 'agent-completion' },
+    workspacesMarkedUnreadByUser: { [identity]: true }
+  })
+  expect(
+    workspaceUnreadTargetsOutsideAgentRows(useAppStore.getState(), target, visibleAgents).map(
+      (target) => ({ paneKey: target.paneKey, tabId: target.tabId, marked: target.markedByUser })
+    )
+  ).toEqual([{ paneKey: null, tabId: undefined, marked: true }])
+
+  useAppStore.setState({ unreadAgentCompletionPanes: {}, workspacesMarkedUnreadByUser: {} })
+  expect(
+    workspaceUnreadTargetsOutsideAgentRows(useAppStore.getState(), target, visibleAgents).map(
+      (target) => ({ paneKey: target.paneKey, tabId: target.tabId, marked: target.markedByUser })
+    )
+  ).toEqual([{ paneKey: null, tabId: undefined, marked: false }])
 })
 
 it('updates hidden subtree attention after status changes, acknowledgement, and freshness expiry', () => {

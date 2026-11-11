@@ -46,13 +46,6 @@ export function hasLiveTabMarker(sources: LiveMarkerSources, workspaceId: string
   )
 }
 
-export function workspaceMarkerTabIds(
-  sources: LiveMarkerSources,
-  workspaceId: string
-): Set<string> {
-  return new Set(workspaceMarkerTabs(sources, workspaceId).map((tab) => tab.id))
-}
-
 /** The live tabs holding a tab or completion marker: where the workspace's unread actually is. */
 export function workspaceLiveMarkerTabIds(
   sources: LiveMarkerSources & { unreadAgentCompletionPanes: MarkerRecord },

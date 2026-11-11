@@ -4,7 +4,10 @@ import { cn } from '@/lib/class-names'
 import { useWslHostOffForRepo } from '../../use-wsl-host-off-review'
 import { WorktreeCardStatusSlot } from './WorktreeCardStatusSlot'
 import type { WorktreeCardController } from '../controller/use-worktree-card-controller'
-import { useWorktreeCardRolledUpUnread } from './worktree-card-title-status'
+import {
+  useWorktreeCardLineageLaneStatus,
+  useWorktreeCardRolledUpUnread
+} from './worktree-card-title-status'
 
 /** The card's leading status lane: activity, review and the unread toggle or dot. */
 export function WorktreeCardStatusLane({
@@ -15,8 +18,9 @@ export function WorktreeCardStatusLane({
   showUnreadAction: boolean
 }): React.JSX.Element {
   const reviewStale = useWslHostOffForRepo(card.repo)
-  // The dot also speaks for folded agents and collapsed child workspaces.
+  // The dot also speaks for its agents and collapsed child workspaces.
   const rolledUpUnread = useWorktreeCardRolledUpUnread()
+  const lineageStatus = useWorktreeCardLineageLaneStatus()
   return (
     <div
       className={cn(
@@ -31,6 +35,7 @@ export function WorktreeCardStatusLane({
         showStatus={card.showStatus}
         showUnreadAction={showUnreadAction}
         isUnread={card.worktree.isUnread || rolledUpUnread}
+        lineageStatus={lineageStatus}
         unreadTooltip={card.unreadTooltip}
         onPointerDown={card.stopQuickActionPointerPropagation}
         onToggleUnread={card.handleToggleUnreadQuick}

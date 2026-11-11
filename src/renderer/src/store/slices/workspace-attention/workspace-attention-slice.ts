@@ -15,7 +15,13 @@ import {
   settleWorkspaceUnreadFlag,
   noteWorkspaceRead
 } from './workspace-unread-flag'
-import { workspaceMarkerTabIds, workspaceMarkerTabs, paneKeyTabId } from './workspace-live-markers'
+import { workspaceMarkerTabs, paneKeyTabId } from './workspace-live-markers'
+import { workspaceMarkerTabIdsForHost } from './workspace-marker-host'
+import {
+  composeWorktreeHostIdentity,
+  type HostScopedWorktreeKey
+} from '../../../../../shared/worktree/host-qualified-identity'
+import { getResolvedExecutionHostIdForWorktree } from '@/lib/workspace/ownership/resolved-worktree-execution-host'
 import { getAgentPaneExecutionHost } from '../agent-status/agent-pane-execution-host'
 import { resolveAgentStatusWorktreeId } from '../../../../../shared/agent-status/identity/agent-status-worktree-attribution'
 import { isTabOnScreen } from '@/hooks/agent-auto-ack-targets'
@@ -74,20 +80,23 @@ export const createWorkspaceAttentionSlice: StateCreator<
     return removed
   }
   const paneAttentionEnabled = (): boolean => get().settings?.experimentalTerminalAttention === true
-  const setWorkspacesMarkedUnreadByUser = (worktreeIds: readonly string[], marked: boolean): void =>
+  const setWorkspacesMarkedUnreadByUser = (
+    identities: readonly HostScopedWorktreeKey[],
+    marked: boolean
+  ): void =>
     set((s) => {
-      const changed = worktreeIds.filter(
-        (worktreeId) => Boolean(s.workspacesMarkedUnreadByUser[worktreeId]) !== marked
+      const changed = identities.filter(
+        (identity) => Boolean(s.workspacesMarkedUnreadByUser[identity]) !== marked
       )
       if (changed.length === 0) {
         return s
       }
       const next = { ...s.workspacesMarkedUnreadByUser }
-      for (const worktreeId of changed) {
+      for (const identity of changed) {
         if (marked) {
-          next[worktreeId] = true
+          next[identity] = true
         } else {
-          delete next[worktreeId]
+          delete next[identity]
         }
       }
       return { workspacesMarkedUnreadByUser: next }
@@ -128,7 +137,15 @@ export const createWorkspaceAttentionSlice: StateCreator<
     readOnScreenAttention: ({ workspaceIds, targets }, { screenArrived, markersRead }) => {
       // Arriving fulfils "come back to this", even while other tabs still hold markers.
       if (screenArrived) {
-        setWorkspacesMarkedUnreadByUser(workspaceIds, false)
+        const state = get()
+        setWorkspacesMarkedUnreadByUser(
+          workspaceIds.flatMap((id) => {
+            const host =
+              onScreenHostId(state, id) ?? getResolvedExecutionHostIdForWorktree(state, id)
+            return host ? [composeWorktreeHostIdentity(host, id)] : []
+          }),
+          false
+        )
       }
       // Agent acknowledgement may already have removed this scan's completion markers.
       if (
@@ -143,14 +160,18 @@ export const createWorkspaceAttentionSlice: StateCreator<
     },
     workspacesMarkedUnreadByUser: {},
     setWorkspaceUnreadByUser: (worktreeId, isUnread, executionHostId) => {
-      setWorkspacesMarkedUnreadByUser([worktreeId], isUnread)
+      setWorkspacesMarkedUnreadByUser(
+        [composeWorktreeHostIdentity(executionHostId, worktreeId)],
+        isUnread
+      )
       if (isUnread) {
         void get().updateWorktreeMeta(worktreeId, { isUnread }, { executionHostId })
         return
       }
       noteWorkspaceRead(worktreeId)
-      const removed = removeAndDismiss(workspaceMarkerTabIds(get(), worktreeId))
-      // Update only the clicked host’s row; markers stay workspace-wide because tab keys omit host.
+      const removed = removeAndDismiss(
+        workspaceMarkerTabIdsForHost(get(), worktreeId, executionHostId)
+      )
       void get().updateWorktreeMeta(worktreeId, { isUnread }, { executionHostId })
       // Mark read reads the agents too, or their lines keep the dot the user just cleared.
       // Journal-positioned chat alerts retire only with this explicit read that bounds them.

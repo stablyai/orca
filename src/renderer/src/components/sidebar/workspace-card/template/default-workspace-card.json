@@ -23,7 +23,7 @@
     "ports": "options.show.ports && ports.count > 0",
     "indicators": "vars.details || vars.ports",
     "metaIndicators": "!vars.compact && vars.metaRow && vars.indicators",
-    "titleIndicators": "vars.compact && vars.indicators",
+    "titleIndicators": "!vars.metaRow && vars.indicators",
     "hasMetaRow": "vars.metaRow ? vars.metaRepo || vars.hostBadge || vars.folderInMeta || vars.branch || vars.identityInMeta || vars.detachedInMeta || vars.conflict || git.cacheTimerActive || vars.metaIndicators : vars.conflict || git.cacheTimerActive",
     "star": "vars.compact && ws.isMain && !vars.folder",
     "headerActions": "vars.star || place.deleteQuickAction",
@@ -73,6 +73,11 @@
                   "el": "SparseBadge",
                   "when": "ws.isSparse",
                   "props": { "hasHoverDetails": "=vars.hoverDetails && !ws.isRenaming" }
+                },
+                {
+                  "el": "HostBadge",
+                  "when": "vars.newStyle && !vars.metaRow && vars.hostBadge",
+                  "props": { "label": "=vars.hostLabel" }
                 },
                 {
                   "el": "Row",
@@ -130,7 +135,7 @@
                 { "el": "MetaRepoBadge", "when": "vars.metaRepo" },
                 {
                   "el": "HostBadge",
-                  "when": "vars.hostBadge",
+                  "when": "vars.metaRow && vars.hostBadge",
                   "props": { "label": "=vars.hostLabel" }
                 },
                 {
