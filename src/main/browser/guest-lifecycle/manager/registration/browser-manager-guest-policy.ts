@@ -10,6 +10,7 @@ import {
 import { getDocPreviewGrant } from '../../../document-preview/doc-preview-grant-registry'
 import { setupGuestEscapeForwarding } from '../../input/shortcuts/browser-guest-escape-forwarding'
 import { setupGuestShortcutForwarding } from '../../input/shortcuts/browser-guest-shortcut-forwarding'
+import { forwardGuestMousePress } from '../../input/browser-guest-mouse-press'
 import { installGuestDevToolsCloseShortcut } from '../../devtools/browser-guest-devtools-close-shortcut'
 
 export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestCleanup {
@@ -93,11 +94,14 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
     host: Electron.WebContents
   ): void {
     const disposeDocPolicy = installDocPreviewGuestPolicy(guest, host)
+    const readBrowserPageId = (): string | null => {
+      const grantId = readDocPreviewGuestBoundGrantId(guest)
+      return (grantId && getDocPreviewGrant(grantId)?.browserPageId) || null
+    }
     const disposeEscapeForwarding = setupGuestEscapeForwarding({
       guest,
       resolveTarget: () => {
-        const grantId = readDocPreviewGuestBoundGrantId(guest)
-        const browserPageId = grantId ? getDocPreviewGrant(grantId)?.browserPageId : undefined
+        const browserPageId = readBrowserPageId()
         return browserPageId ? { browserPageId, renderer: host } : null
       },
       hasActiveGrabOp: (browserPageId) => this.hasActiveGrabOp(browserPageId)
@@ -111,6 +115,15 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
       getKeybindings: () => this.settingsResolver?.().keybindings,
       browserPage: false
     })
+    // Why: a press in the preview never reaches the host DOM, so its split stays inactive and
+    // forwarded shortcuts like Close would act on another split (#22144).
+    const reportPress = (_event: Electron.Event, mouse: Electron.MouseInputEvent): void => {
+      const browserPageId = mouse.type === 'mouseDown' ? readBrowserPageId() : null
+      if (browserPageId && !host.isDestroyed()) {
+        forwardGuestMousePress(guest, browserPageId, () => host, mouse)
+      }
+    }
+    guest.on('before-mouse-event', reportPress)
     const handleDestroyed = (): void => {
       this.cleanupGuestPolicyAttachment(guest.id)
     }
@@ -123,6 +136,7 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
       try {
         guest.off('destroyed', handleDestroyed)
         guest.off('will-prevent-unload', allowPageUnload)
+        guest.off('before-mouse-event', reportPress)
       } catch {
         // guest may already be destroyed
       }
