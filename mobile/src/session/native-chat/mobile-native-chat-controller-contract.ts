@@ -2,6 +2,7 @@ import type { NativeChatSkillDiscoverySnapshot } from '../../../../src/shared/na
 import type { AgentSessionRewindSurface } from '../../../../src/shared/agent-session/lifecycle/rewind/agent-session-rewind-request'
 import type { NativeChatSendFollowUp } from '../../../../src/shared/native-chat/input/composer/native-chat-follow-up-behavior'
 import type { StructuredMobileSendAttachment } from './composer/delivery/use-mobile-structured-send-with-outcome'
+import type { ClaudeSessionStatus } from '../../../../src/shared/native-chat/claude-session-status'
 import type { MobileSessionView } from '../../storage/session-view-preferences'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 import type {
@@ -104,6 +105,7 @@ export type MobileNativeChatController = {
   nativeChatQueued: MobileStructuredQueuedMessageControls
   nativeChatBackgroundTasks: MobileStructuredBackgroundTasks | null
   nativeChatContextUsage: NativeChatContextUsageSummary | null
+  nativeChatClaudeSessionStatus: ClaudeSessionStatus | null
   nativeChatInterruptedContinue: MobileStructuredInterruptedContinue | null
   nativeChatThreadGoal: MobileStructuredThreadGoal | null
   nativeChatMcpPanel: MobileStructuredMcpPanel | null

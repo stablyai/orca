@@ -7,6 +7,7 @@ import type { ConnectionState } from '../../../transport/connection/connection-s
 import { useMobileNativeChatSession } from './use-mobile-native-chat-session'
 import { useMobileStructuredAgentSession } from '../agent-session/use-mobile-structured-agent-session'
 import { useMobileStructuredSessionCommands } from '../composer/commands/use-mobile-structured-session-commands'
+import { useMobileClaudeSessionStatus } from '../use-mobile-claude-session-status'
 import type { MobileNativeChatResolution } from './mobile-native-chat-eligibility'
 import type { MobileNativeChatSendErrorReporter } from '../composer/delivery/use-mobile-native-chat-send-error'
 
@@ -48,6 +49,7 @@ export function useMobileNativeChatSessionLane({
   structuredSession: ReturnType<typeof useMobileStructuredAgentSession>
   session: ReturnType<typeof useMobileNativeChatSession>
   sessionCommands: ReturnType<typeof useMobileStructuredSessionCommands>
+  claudeSessionStatus: ReturnType<typeof useMobileClaudeSessionStatus>
 } {
   const appendComposerText: MobileComposerWriter = Object.assign(
     useCallback((text: string) => appendComposerTextRef.current(text), [appendComposerTextRef]),
@@ -69,6 +71,14 @@ export function useMobileNativeChatSessionLane({
     agent: structured ? null : agent,
     sessionId: structured ? null : sessionId,
     transcriptPath: structured ? null : (resolution?.transcriptPath ?? null)
+  })
+  const claudeSessionStatus = useMobileClaudeSessionStatus({
+    client,
+    agent,
+    sessionId,
+    transcriptPath: resolution?.transcriptPath ?? undefined,
+    refreshKey: `${bridgeSession.messages.length}:${bridgeSession.messages.at(-1)?.id ?? ''}`,
+    enabled: enabled && !structured && agent === 'claude'
   })
   const structuredSession = useMobileStructuredAgentSession({
     itemLink,
@@ -94,6 +104,7 @@ export function useMobileNativeChatSessionLane({
   return {
     structuredSession,
     session: structured ? structuredSession.session : bridgeSession,
-    sessionCommands
+    sessionCommands,
+    claudeSessionStatus
   }
 }
