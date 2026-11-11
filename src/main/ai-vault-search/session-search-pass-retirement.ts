@@ -104,7 +104,7 @@ export async function retireSessionSearchPassSources(
         state.retirement = null
       }
     }
-    if ((!state.retirement && !queued.length) || args.discoveryOverdue?.()) {
+    if ((!state.retirement && !queued.length && !unit) || args.discoveryOverdue?.()) {
       break
     }
   }

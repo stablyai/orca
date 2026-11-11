@@ -24,6 +24,7 @@ export async function discoverOpenCodeSessions(args: {
   signal?: AbortSignal
   enumerationComplete?: boolean
 }): Promise<SessionFileDiscovery> {
+  const rootDir = join(args.storageDir, 'session')
   const walksScope = scopeWalksAgentFiles('opencode', args.scopePaths)
   const listSqlite = (
     scopePaths?: readonly string[],
@@ -40,7 +41,7 @@ export async function discoverOpenCodeSessions(args: {
     })
   const [fileDiscovery, sqliteDiscovery, sqliteScopeCandidates] = await Promise.all([
     discoverFiles({
-      rootDir: join(args.storageDir, 'session'),
+      rootDir,
       limit: args.limitPerAgent,
       agent: 'opencode',
       issues: args.issues,
@@ -66,7 +67,7 @@ export async function discoverOpenCodeSessions(args: {
         args.issues.push(...requestIssues)
         return {
           agent: 'opencode',
-          rootDir: args.storageDir,
+          rootDir,
           files: candidates.map((candidate) => candidate.file),
           complete: !requestIssues.some((issue) => issue.kind !== 'notice')
         }

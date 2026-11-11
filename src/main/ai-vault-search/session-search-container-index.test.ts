@@ -57,6 +57,7 @@ it.each(['refused', 'lost response'] as const)(
     const request = SessionSearchWorkerClient.prototype.request
     let injected = false,
       proofRefused = false
+    let retainedOnProofRefusal: number | undefined
     const handoff = vi
       .spyOn(SessionSearchWorkerClient.prototype, 'request')
       .mockImplementation(async function (this: SessionSearchWorkerClient, command) {
@@ -82,6 +83,7 @@ it.each(['refused', 'lost response'] as const)(
           command.command.keys
         ) {
           proofRefused = true
+          retainedOnProofRefusal = openEngine().search({ query: 'admissionowedtext' }).hits.length
           throw new SessionSearchOperationError('fixture membership projection refused')
         }
         return request.call(this, command)
@@ -93,6 +95,9 @@ it.each(['refused', 'lost response'] as const)(
       expect(openEngine().search({ query: 'admissionowedtext' }).hits).toHaveLength(1)
       await finishPendingObservation(subject)
       expect(proofRefused).toBe(fault === 'lost response')
+      if (fault === 'lost response') {
+        expect(retainedOnProofRefusal).toBe(1)
+      }
       expect(openEngine().search({ query: 'admissionowedtext' }).hits).toHaveLength(0)
       expect(openEngine().search({ query: 'admissionkeepertext' }).hits).toHaveLength(1)
       expect(subject.status().phase).toBe('current')
@@ -243,16 +248,21 @@ it('resumes interrupted omission work fairly without repeating either full obser
     await subject.reconcile({ full: true })
     expect(openEngine().search({ query: 'firstomissiontext' }).hits.length).toBeGreaterThan(0)
     const engine = openEngine()
-    for (
-      let turn = 0;
-      turn < 100 && engine.search({ query: 'secondomissiontext' }).hits.length;
-      turn++
-    ) {
+    let smallOwnerFinishedFirst = false
+    for (let turn = 0; turn < 100; turn++) {
+      if (
+        !engine.search({ query: 'secondomissiontext' }).hits.length &&
+        engine.search({ query: 'firstomissiontext' }).hits.length > 0
+      ) {
+        smallOwnerFinishedFirst = true
+      }
+      if (subject.status().phase === 'current') {
+        break
+      }
       await subject.reconcile()
     }
+    expect(smallOwnerFinishedFirst).toBe(true)
     expect(engine.search({ query: 'secondomissiontext' }).hits).toHaveLength(0)
-    expect(engine.search({ query: 'firstomissiontext' }).hits.length).toBeGreaterThan(0)
-    await finishPendingObservation(subject)
     expect(engine.search({ query: 'firstomissiontext' }).hits).toHaveLength(0)
     expect(engine.search({ query: 'fairkeepertext' }).hits).toHaveLength(2)
     for (const path of [dbPath(), other]) {

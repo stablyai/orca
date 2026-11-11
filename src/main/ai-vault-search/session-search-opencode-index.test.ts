@@ -9,7 +9,7 @@ import {
   openCodeObservation,
   openCodeListObservations
 } from './session-search-opencode-index.test-fixture'
-import { rename, rm, writeFile } from 'node:fs/promises'
+import { mkdir, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { expect, it, vi } from 'vitest'
 import * as filesystem from '../native-chat/wsl-transcript-fs-access'
@@ -144,6 +144,21 @@ it.each([40, 400])(
 )
 
 it('keeps a duplicate physical row and promotes it when the selected database disappears', async () => {
+  const storage = harness.roots.opencodeStorageDir
+  for (const [id, text] of [
+    ['ses_shared', 'legacycopyneedle'],
+    ['ses_legacy', 'legacyonlyneedle']
+  ]) {
+    const sessionPath = join(storage, 'session', 'project', `${id}.json`)
+    const messagePath = join(storage, 'message', id, 'message.json')
+    await mkdir(dirname(sessionPath), { recursive: true })
+    await mkdir(dirname(messagePath), { recursive: true })
+    await writeFile(sessionPath, JSON.stringify({ id, title: text }))
+    await writeFile(
+      messagePath,
+      JSON.stringify({ role: 'user', content: [{ type: 'text', text }] })
+    )
+  }
   const alternative = join(harness.root, 'opencode-db', 'opencode-alternative.db')
   writeOpenCodeSqliteDatabase(dbPath(), [
     { id: 'ses_shared', turns: [{ role: 'user', parts: ['winningcopyneedle'] }] },
@@ -167,6 +182,14 @@ it('keeps a duplicate physical row and promotes it when the selected database di
   await subject.reconcile({ full: true })
   expect(openEngine().search({ query: 'winningcopyneedle' }).hits).toHaveLength(1)
   expect(openEngine().search({ query: 'alternativecopyneedle' }).hits).toHaveLength(0)
+  expect(openEngine().search({ query: 'legacycopyneedle' }).hits).toHaveLength(0)
+  expect(openEngine().search({ query: 'legacyonlyneedle' }).hits).toHaveLength(1)
+  appendOpenCodeSqliteTurn(dbPath(), 'ses_shared', {
+    role: 'assistant',
+    parts: ['mixedsourceupdateneedle']
+  })
+  await subject.reconcile()
+  expect(openEngine().search({ query: 'mixedsourceupdateneedle' }).hits).toHaveLength(1)
   await rm(dbPath())
   paths = [alternative]
   await subject.reconcile({ full: true })
@@ -175,6 +198,14 @@ it('keeps a duplicate physical row and promotes it when the selected database di
   )
   expect(openEngine().search({ query: 'winningcopyneedle' }).hits).toHaveLength(0)
   expect(openEngine().search({ query: 'primaryonlyneedle' }).hits).toHaveLength(0)
+  await rm(alternative)
+  paths = []
+  await subject.reconcile({ full: true })
+  await finishPendingObservation(subject)
+  expect(openEngine().search({ query: 'legacycopyneedle' }).hits[0]?.sessionId).toBe('ses_shared')
+  expect(openEngine().search({ query: 'alternativecopyneedle' }).hits).toHaveLength(0)
+  expect(openEngine().search({ query: 'legacyonlyneedle' }).hits).toHaveLength(1)
+  expect(subject.status().phase).toBe('current')
 })
 
 it('retains refused database membership while healthy owners settle and retries only the refused full observation', async () => {
@@ -451,6 +482,8 @@ it('retains a restored old row when a family listing loses the earlier absence p
   ownIndexer(subject)
   await subject.start()
   await finishPendingObservation(subject)
+  expect(subject.status().filesIndexed).toBe(533)
+  expect(openEngine().search({ query: 'restoredoldneedle' }).hits).toHaveLength(1)
   for (let cycle = 0; cycle < 8; cycle++) {
     clock.advance(20000)
     await subject.settled()
