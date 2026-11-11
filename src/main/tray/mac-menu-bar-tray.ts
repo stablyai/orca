@@ -78,7 +78,7 @@ export class MacMenuBarTray {
       return
     }
     const snapshot: MenuBarSnapshot = {
-      images: this.image.getScaleFactors().map((scale) => ({
+      images: [...new Set(this.image.getScaleFactors())].map((scale) => ({
         scale,
         png: this.image.toPNG({ scaleFactor: scale }).toString('base64')
       })),
