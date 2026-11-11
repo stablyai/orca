@@ -36,10 +36,11 @@ function reopenComposer(request: CloudSetupPageRequest, autoStart: boolean): voi
     ...(hiddenStart ? { cloudAutoStart: true } : {})
   })
   if (hiddenStart) {
-    // The page stays up until the start screen is active: nothing under it may flash.
+    // The page stays up until the start screen has painted: nothing under it may flash.
     closeSetupPageWhenCreateTakesOver({
       getState: () => useAppStore.getState(),
       subscribe: (listener) => useAppStore.subscribe(listener),
+      startScreenShown: () => document.querySelector('[data-vm-build-sheet]') !== null,
       closePage: closeCloudSetupPage,
       setTimer: (callback, ms) => window.setTimeout(callback, ms),
       clearTimer: (handle) => window.clearTimeout(handle as number)
