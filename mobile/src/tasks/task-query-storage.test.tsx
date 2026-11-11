@@ -163,7 +163,8 @@ describe('Tasks lists kept on the phone', () => {
         labels: [],
         updatedAt: '2026-11-10T06:51:00.000Z',
         author: 'octocat',
-        repoId: 'repo-1'
+        repoId: 'repo-1',
+        repoName: 'orca'
       }
     }
     const openIssues = { provider: 'github', kind: 'issues', query: 'is:issue is:open', repos: '' }
