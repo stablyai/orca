@@ -16,6 +16,7 @@ import {
 import { DEFAULT_EGRESS_ALLOWLIST, compileNetworkPolicy, gitBasicAuthorization, type CredentialRoute } from './network-policy'
 import { applyQueuedRevokes } from './grant-revokes'
 import { ensureEntryPoints } from './golden-images'
+import { RUNTIME_REFRESH_SCRIPT, type RuntimeBundle } from './runtime-bundles'
 import { memberPlaceholder, type MemberGitIdentity } from './github-user-tokens'
 import { connectedMembers, memberGitConfigs } from './member-git'
 import type { RetentionConfig } from './retention'
@@ -107,6 +108,11 @@ export type LifecycleDeps = {
   }
   /** Work that may finish after the response (Worker ctx.waitUntil); absent means fire-and-forget. */
   background?: (work: Promise<unknown>) => void
+  /**
+   * ENV-STALE: the region's active golden runtime bundle and a signed download URL, for the boot step that
+   * brings an older image's orcad current (runtime-bundles.ts). Absent = no refresh.
+   */
+  runtimeRefresh?: (region: string, now: number) => Promise<{ bundle: RuntimeBundle; url: string } | null>
   /** Best-effort side effects of a session starting or ending (workspace tokens, see api/settings.ts). */
   hooks?: {
     afterBoot?(row: SandboxRow, sessionId: string): Promise<unknown>
@@ -385,8 +391,10 @@ async function boot(
           deps.provider.updateNetworkPolicy(state.session.id, egressPolicy(deps, routed, prep.minted?.token, prep.memberPlaceholders))
         )
       : Promise.resolve(),
-    options.timer.time('orcad', async () =>
-      startOrcad(deps.provider, state, {
+    options.timer.time('orcad', async () => {
+      // Inside the orcad phase (no new build-sheet step): an older image's orcad is brought current first.
+      await refreshRuntime(deps, row, state.session.id)
+      return startOrcad(deps.provider, state, {
         sandboxId: row.id,
         // The workspace's name, else its repo's: never the provider's per-boot VM id.
         hostname: workspaceHostname(row.name ?? (row.repo_url ? parseGitHubRepo(row.repo_url)?.repo : null)),
@@ -400,7 +408,7 @@ async function boot(
           : undefined,
         prelude: options.prelude
       })
-    )
+    })
   ])
   const readyAt = deps.now()
   const running = await claim(deps, row, {
@@ -463,6 +471,44 @@ async function memberPlaceholdersFor(deps: LifecycleDeps, row: SandboxRow): Prom
 }
 
 export const MEMBERS_COMMAND = '/opt/orca/bin/orca-sandbox-members'
+
+/**
+ * ENV-STALE boot step: a sandbox whose orcad is behind its region's active golden (booted from an environment
+ * build snapshot, or resumed from an older image) installs the golden's runtime bundle before orcad starts.
+ * Best effort and quiet: any failure keeps the old orcad, and every outcome is logged with its timing.
+ */
+export async function refreshRuntime(deps: LifecycleDeps, row: SandboxRow, sessionId: string): Promise<string | null> {
+  if (!deps.runtimeRefresh) {
+    return null
+  }
+  const started = deps.now()
+  let result = 'error'
+  let target: string | null = null
+  try {
+    const plan = await deps.runtimeRefresh(row.region, started)
+    if (!plan) {
+      result = 'no_bundle'
+      return result
+    }
+    target = plan.bundle.commit
+    const run = await deps.provider.runCommand(sessionId, {
+      command: 'bash',
+      args: ['-c', RUNTIME_REFRESH_SCRIPT],
+      env: { WANT: plan.bundle.commit, SHA: plan.bundle.sha256, RT: plan.bundle.runtime, URL: plan.url },
+      sudo: true,
+      timeoutMs: 40_000
+    })
+    result = run.stdout.trim().split('\n').pop() ?? 'error'
+    return result
+  } catch {
+    return result
+  } finally {
+    const [outcome, from] = result.split(' ')
+    console.log(
+      JSON.stringify({ event: 'runtime_refresh', sandboxId: row.id, outcome, from: from ?? null, to: target, ms: deps.now() - started })
+    )
+  }
+}
 
 /**
  * Who may push from this workspace changed (boot, grant, revoke): refresh the egress routes and the

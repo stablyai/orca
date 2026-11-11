@@ -63,6 +63,7 @@ import { handleRoutineHook, isRoutineHookPath } from './routines/hooks'
 import { tickRoutines } from './routines/runs'
 import { activeGoldenSnapshots, advanceGoldenImages } from './golden-images'
 import { sandboxRegions, seedRegion } from './regions'
+import { handleRuntimeBundleRoute, runtimeBundleFor, runtimeBundleUrl } from './runtime-bundles'
 import { NO_CREDENTIALS, handleEgressProxy, type CredentialBroker, type ProxiedRoute } from './egress-proxy'
 import {
   BillingUnavailableError,
@@ -278,6 +279,31 @@ function workspaceConfig(env: Env, deps: Deps): WorkspaceConfig {
     centsPerHour,
     background: deps.waitUntil,
     sleep: deps.sleep
+  }
+}
+
+/** Where golden builds upload their runtime bundle (ENV-STALE); absent when not configured. */
+function runtimeBundleConfig(env: Env): { baseUrl: string; secret: string } | undefined {
+  const baseUrl = publicOrigin(env)
+  return env.RUNTIME_BUNDLES && env.CONTROL_PLANE_TOKEN && baseUrl ? { baseUrl, secret: env.CONTROL_PLANE_TOKEN } : undefined
+}
+
+/** The region's active golden as a runtime bundle plus a short-lived download URL (ENV-STALE boot step). */
+function runtimeRefreshFor(env: Env): LifecycleDeps['runtimeRefresh'] {
+  const config = runtimeBundleConfig(env)
+  const store = env.RUNTIME_BUNDLES
+  if (!config || !store || env.RUNTIME_REFRESH === 'off') {
+    return undefined
+  }
+  return async (region, now) => {
+    const active = await env.SANDBOX_DB.prepare(
+      `SELECT bundle_sha256 FROM golden_images WHERE region = ? AND status = 'active' ORDER BY activated_at DESC LIMIT 1`
+    )
+      .bind(region)
+      .first<{ bundle_sha256: string | null }>()
+    const commit = active?.bundle_sha256?.startsWith('git:') ? active.bundle_sha256.slice('git:'.length) : null
+    const bundle = commit ? await runtimeBundleFor(store, commit) : null
+    return bundle ? { bundle, url: await runtimeBundleUrl(config.baseUrl, config.secret, 'GET', bundle.commit, now) } : null
   }
 }
 
@@ -840,6 +866,7 @@ export async function lifecycleDeps(env: Env, deps: Deps): Promise<LifecycleDeps
     retention: deps.retention ?? retentionFromEnv(env),
     background: deps.waitUntil,
     publicRepoCheck: deps.publicRepoCheck ?? ((repoUrl) => githubRepoIsPublic(repoUrl)),
+    runtimeRefresh: runtimeRefreshFor(env),
     hooks: {
       afterBoot: (row, sessionId) =>
         provisionWorkspaceToken({ db: env.SANDBOX_DB, provider, now: deps.now ?? Date.now, apiUrl: publicOrigin(env) }, row, sessionId),
@@ -990,7 +1017,8 @@ async function advanceGoldenImagesFromEnv(env: Env): Promise<void> {
             source: env.GOLDEN_IMAGE_SOURCE,
             github,
             seedSnapshotId: region === seeded ? env.GOLDEN_SNAPSHOT_ID : undefined,
-            refreshBeforeMs: env.GOLDEN_REFRESH_BEFORE_HOURS ? Number(env.GOLDEN_REFRESH_BEFORE_HOURS) * 3_600_000 : undefined
+            refreshBeforeMs: env.GOLDEN_REFRESH_BEFORE_HOURS ? Number(env.GOLDEN_REFRESH_BEFORE_HOURS) * 3_600_000 : undefined,
+            runtimeBundle: runtimeBundleConfig(env)
           }
         })
         if (tick !== 'idle') {
@@ -1122,6 +1150,15 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
     const shared = await shareGateway(request, url, env, deps)
     if (shared) {
       return shared
+    }
+    // Signed by the control plane (no bearer): golden builds upload, booting sandboxes download.
+    const bundle = await handleRuntimeBundleRoute(request, url, {
+      store: env.RUNTIME_BUNDLES,
+      secret: env.CONTROL_PLANE_TOKEN,
+      now: (deps.now ?? Date.now)()
+    })
+    if (bundle) {
+      return bundle
     }
     if (url.pathname === '/v1/egress/proxy' || url.pathname.startsWith('/v1/egress/proxy/')) {
       if (!env.VERCEL_TEAM_ID || !env.VERCEL_PROJECT_ID) {
