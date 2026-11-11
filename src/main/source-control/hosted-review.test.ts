@@ -26,10 +26,9 @@ const {
   getGiteaPullRequestForBranchMock: vi.fn()
 }))
 
-vi.mock('../gitlab/client', () => ({
+vi.mock('../gitlab/merge-requests/merge-request-lookup', () => ({
   getProjectSlug: getProjectSlugMock,
   getMergeRequestForBranch: getMergeRequestForBranchMock,
-  // Preserve provider errors as unavailable rather than false review absence.
   getMergeRequestForBranchOrThrow: getMergeRequestForBranchMock,
   getMergeRequest: vi.fn()
 }))

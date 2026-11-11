@@ -24,8 +24,10 @@ vi.mock('../../../agent-hooks/wsl-relay/wsl-hook-relay-manager', () => ({
 vi.mock('../../../pi/titlebar-extension-service', () => ({
   piTitlebarExtensionService: { buildPtyEnv: () => ({}), buildFreshOmpEnv: () => ({}) }
 }))
-vi.mock('../../../cli/orca-cli-child-path', () => ({ prependOrcaCliDirToChildPath: () => {} }))
-vi.mock('../../../cli/wsl-managed-cli', () => ({
+vi.mock('../../../cli/launchers/orca-cli-child-path', () => ({
+  prependOrcaCliDirToChildPath: () => {}
+}))
+vi.mock('../../../cli/wsl/wsl-managed-cli', () => ({
   getManagedWslCliDir: () => undefined,
   getWslCliCommandName: () => 'orca-ide'
 }))

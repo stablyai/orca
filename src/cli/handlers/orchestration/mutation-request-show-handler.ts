@@ -1,14 +1,18 @@
 import type { CommandHandler } from '../../dispatch'
 import { printOrchestrationReceipt } from './agent-view'
-import { getRequiredStringFlag } from '../../flags'
+import { getOptionalStringFlag, getRequiredStringFlag } from '../../flags'
 import { RuntimeClientError } from '../../runtime-client'
 import type { OrchestrationMutationRequestShowResult } from '../../../shared/orchestration/orchestration-mutation-request'
 
 export const ORCHESTRATION_REQUEST_SHOW_HANDLER: Record<string, CommandHandler> = {
   'orchestration request-show': async ({ flags, client, json }) => {
     const request = getRequiredStringFlag(flags, 'request')
+    const on = getOptionalStringFlag(flags, 'on')
     const result = await client
-      .call<OrchestrationMutationRequestShowResult>('orchestration.requestShow', { request })
+      .call<OrchestrationMutationRequestShowResult>('orchestration.requestShow', {
+        request,
+        ...(on ? { on } : {})
+      })
       .catch((error: unknown) => {
         if (error instanceof RuntimeClientError && error.code === 'method_not_found') {
           throw new RuntimeClientError(

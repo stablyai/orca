@@ -24,7 +24,7 @@ import { callStructuredAgentSession } from '@/runtime/native-chat/requests/struc
 import { executionHostIdForStructuredTarget } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import { NativeChatOrcaStopContext } from '@/components/native-chat/messages/notices/native-chat-orca-stop-context'
 import type { NativeChatOrcaStopView } from '@/components/native-chat/messages/notices/native-chat-orca-stop-context'
-import { nativeChatMessageCopyText } from '../../../../../shared/native-chat/transcript/native-chat-message-copy-text'
+import { resolveNativeChatSessionContext } from '@/components/native-chat/pane/routing/native-chat-session-context'
 import type { AgentSessionOptionsResult } from '../../../../../shared/agent-session/options/agent-session-options-result'
 import type { NativeChatMessage } from '../../../../../shared/native-chat/native-chat-types'
 import type { NativeChatStructuredViewProps } from '@/components/native-chat/native-chat-view-types'
@@ -96,6 +96,7 @@ export function NativeChatUsageLimitActionsProvider({
   const canHandOff =
     active &&
     pane.isVisible &&
+    recovery.epoch &&
     directory &&
     isTuiAgent(pane.agent) &&
     directory.runtimeEnvironmentId ===
@@ -131,7 +132,7 @@ export function NativeChatUsageLimitActionsProvider({
     }
   }
   const openHandOff = useCallback(async (): Promise<void> => {
-    if (!canHandOff || !directory || !isTuiAgent(pane.agent)) {
+    if (!canHandOff || !directory || !recovery.epoch || !isTuiAgent(pane.agent)) {
       return
     }
     const current = intent.current
@@ -141,30 +142,27 @@ export function NativeChatUsageLimitActionsProvider({
     current.pending = true
     setPreparing(current.key)
     const onStarted = view.onUsageLimitHandOffStarted
-    const options = await callStructuredAgentSession<AgentSessionOptionsResult>(
-      pane.target,
-      'agentSession.options',
-      { sessionId: pane.sessionId }
-    ).catch((error: unknown) => {
-      console.warn('Could not read saved chat context for hand-off', error)
-      return null
+    const context = await resolveNativeChatSessionContext({
+      target: pane.target,
+      sessionId: pane.sessionId,
+      worktreeId: directory.worktreeId,
+      epoch: recovery.epoch,
+      messages
     })
     if (intent.current !== current) {
       return
     }
     setPreparing(null)
-    const transcriptPath = options?.transcriptPath
+    if (!context) {
+      current.pending = false
+      return
+    }
     const source = {
       sourceKind: 'chat' as const,
       sourceAgent: pane.agent,
       sourceTitle: chatTab?.customLabel?.trim() || conversationName || chatTab?.label,
       sourceWorkingDirectory: directory.worktreePath,
-      transcriptPath,
-      capturedText: transcriptPath
-        ? ''
-        : messages
-            .map((message) => `${message.role}: ${nativeChatMessageCopyText(message)}`)
-            .join('\n\n')
+      ...context
     }
     if (buildAgentSessionContinuationPrompt(source, 'focused')) {
       setPrepared({
@@ -190,6 +188,7 @@ export function NativeChatUsageLimitActionsProvider({
     pane.groupId,
     pane.sessionId,
     pane.target,
+    recovery.epoch,
     chatTab,
     conversationName,
     messages,
