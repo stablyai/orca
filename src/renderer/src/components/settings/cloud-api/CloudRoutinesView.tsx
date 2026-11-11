@@ -48,6 +48,8 @@ export type CloudRoutinesViewProps = {
   fixtureNow?: number
   /** Routines someone else created name their creator; null while unknown. */
   viewerUserId?: string | null
+  /** Team roster names by user id (the same directory Home uses), for creators the server can't name. */
+  memberNames?: ReadonlyMap<string, string>
   /** A refresh is running while the current list stays on screen. */
   refreshing?: boolean
   /** Fixtures: start with the editor, history or delete confirmation open. */
@@ -183,6 +185,7 @@ export function CloudRoutinesView(props: CloudRoutinesViewProps): React.JSX.Elem
                 onOpenWorkspace={props.onOpenWorkspace}
                 fixedNow={props.fixtureNow}
                 viewerUserId={props.viewerUserId ?? null}
+                memberNames={props.memberNames}
                 onRunNow={async () => {
                   const failure = await props.onRunNow(routine)
                   if (!failure) {

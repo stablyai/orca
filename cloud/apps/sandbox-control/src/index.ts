@@ -1146,7 +1146,12 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
       return await internalInstallUrl(env, deps, url)
     }
     if (url.pathname.startsWith('/v1/internal/')) {
-      if (!(await isOperator(request, env.OPERATOR_TOKEN))) {
+      // Auth's member-removed push holds a token good for that one route, not the operator token.
+      const memberRemovedOnly =
+        url.pathname === '/v1/internal/org-members/removed' &&
+        request.method === 'POST' &&
+        (await isOperator(request, env.MEMBER_REMOVED_TOKEN))
+      if (!memberRemovedOnly && !(await isOperator(request, env.OPERATOR_TOKEN))) {
         return fail('not_found', 404)
       }
       const life = await lifecycleDeps(env, deps)
