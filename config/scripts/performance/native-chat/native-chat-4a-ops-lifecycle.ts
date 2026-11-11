@@ -1,4 +1,5 @@
 // 4a process-lifecycle rows: cold/warm open and rewind; first launch on the seeded profile lives in the conversion module.
+import { composerEnabledAt, unwatchMarker } from './native-chat-4a-visibility'
 import { seededChats, unconvertedOpenTarget } from './native-chat-4a-fixture'
 import { markerSeenAt, rendererNow, rendererTime, rpc, watchMarkers } from './native-chat-4a-probes'
 import type { Sample } from './native-chat-4a-report'
@@ -32,15 +33,27 @@ export async function openTo(
   issued?: () => Record<string, number>
 ): Promise<Sample> {
   return measured(ctx, async () => {
-    await watchMarkers(page(ctx), [marker])
     const startedAt = await rendererNow(page(ctx))
-    await openChatTab(page(ctx), chat.worktreeId, chat.sessionId)
-    const observed = issued?.() ?? {}
-    const tailAt = await markerSeenAt(page(ctx), marker, 600_000)
-    await waitForControls(page(ctx), 600_000)
-    return {
-      e2eMs: (await rendererNow(page(ctx))) - startedAt,
-      extra: { tailVisibleMs: tailAt - startedAt, ...observed }
+    await watchMarkers(page(ctx), [marker], true)
+    try {
+      await openChatTab(page(ctx), chat.worktreeId, chat.sessionId)
+      const observed = issued?.() ?? {}
+      const [tailAt, composerAt] = await Promise.all([
+        markerSeenAt(page(ctx), marker, 600_000),
+        composerEnabledAt(page(ctx), marker, 600_000)
+      ])
+      const driverAt = await rendererNow(page(ctx))
+      return {
+        e2eMs: Math.max(tailAt, composerAt) - startedAt,
+        extra: {
+          tailVisibleMs: tailAt - startedAt,
+          composerEnabledMs: composerAt - startedAt,
+          driverCompletionMs: driverAt - startedAt,
+          ...observed
+        }
+      }
+    } finally {
+      await unwatchMarker(page(ctx), marker)
     }
   })
 }
@@ -150,6 +163,12 @@ export async function rewindRows(ctx: RunContext): Promise<void> {
   await waitForControls(page(ctx))
   const rewindOnce = async (itemId: string, goneMarker: string): Promise<Sample> => {
     const epoch = (await history(page(ctx), largeSessionId, 'tail', 1)).page.epoch
+    const markerLocator = page(ctx).getByText(goneMarker, { exact: false }).last()
+    await markerLocator.waitFor({ state: 'visible' })
+    const markerElement = await markerLocator.elementHandle()
+    if (!markerElement) {
+      throw new Error('rewind marker not mounted')
+    }
     return measured(ctx, async () => {
       const competingTag = tagFor('rewind-compete')
       const [answer, competing] = await Promise.all([
@@ -161,16 +180,13 @@ export async function rewindRows(ctx: RunContext): Promise<void> {
       ])
       const goneAt = await page(ctx)
         .waitForFunction(
-          (marker) => {
-            const root = [...document.querySelectorAll('[data-native-chat-root="true"]')].find(
-              (candidate) => candidate.checkVisibility()
-            )
-            return root && !root.textContent?.includes(marker) ? performance.now() : false
-          },
-          goneMarker,
+          (element) =>
+            !element.isConnected || !element.checkVisibility() ? performance.now() : false,
+          markerElement,
           { timeout: 600_000, polling: 16 }
         )
         .then(rendererTime)
+      await markerElement.dispose()
       await waitForDurable(page(ctx), other, `4A-TAIL-${competingTag}`)
       return {
         hostMs: answer.hostMs,

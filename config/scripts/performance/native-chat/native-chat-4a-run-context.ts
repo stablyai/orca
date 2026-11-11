@@ -34,9 +34,15 @@ export async function measured(
   action: (startedAt: number) => Promise<Omit<Sample, 'work'>>
 ): Promise<Sample> {
   const done = await hostWorkMark(ctx.launch.app)
-  const startedAt = await rendererNow(page(ctx))
-  const sample = await action(startedAt)
-  return { ...sample, work: await done() }
+  let sample: Omit<Sample, 'work'>
+  let work
+  try {
+    const startedAt = await rendererNow(page(ctx))
+    sample = await action(startedAt)
+  } finally {
+    work = await done()
+  }
+  return { ...sample, work }
 }
 
 /** Run a row's samples, recording a failure as the row's skip reason instead of losing the whole family. */

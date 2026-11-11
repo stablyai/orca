@@ -115,7 +115,7 @@ async function toolRun(turn, index, outputBytes, runMs, id = `toolu_4a_${turn}_$
     await write({
       type: 'system',
       subtype: 'task_started',
-      task_id: `task-${turn}-${index}`,
+      task_id: `task-${id}`,
       tool_use_id: id,
       description: 'run',
       task_type: 'local_bash',
@@ -134,6 +134,18 @@ async function toolRun(turn, index, outputBytes, runMs, id = `toolu_4a_${turn}_$
     },
     extra
   )
+  if (runMs > 0) {
+    await write({
+      type: 'system',
+      subtype: 'task_notification',
+      task_id: `task-${id}`,
+      tool_use_id: id,
+      status: 'completed',
+      summary: 'Command completed',
+      uuid: randomUUID(),
+      session_id: sessionId
+    })
+  }
 }
 
 /** Shapes for history/detail: an oversized ordinary message, huge completed tool originals, one above the detail cap. */
@@ -270,7 +282,13 @@ async function runOp(op, signal) {
   const tag = op.tag ?? `t${turn}`
   if (op.op === 'history') {
     for (let index = 1; index <= (op.tools ?? 8) && !signal.aborted; index += 1) {
-      await toolRun(turn, index, op.toolOutputBytes ?? 2000, op.toolRunMs ?? 0)
+      await toolRun(
+        turn,
+        index,
+        op.toolOutputBytes ?? 2000,
+        op.toolRunMs ?? 0,
+        op.toolIdPrefix ? `toolu_4a_${op.toolIdPrefix}_${index}` : undefined
+      )
     }
     await assistant([{ type: 'text', text: `4A-TAIL-${tag} ${prose(op.replyBytes ?? 1500, tag)}` }])
     return

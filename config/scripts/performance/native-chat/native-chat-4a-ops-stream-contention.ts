@@ -25,6 +25,7 @@ import {
   type StreamCase
 } from './native-chat-4a-workloads'
 import type { Sample } from './native-chat-4a-report'
+import { burstCallIds, completedBurst } from './native-chat-4a-burst-history'
 
 export async function competingSend(
   ctx: RunContext,
@@ -152,7 +153,7 @@ export async function liveToolBurstRows(ctx: RunContext): Promise<void> {
   const other = ctx.manifest.fillerSessionIds[1] ?? ctx.manifest.fillerSessionIds[0]!
   const row = addRow(ctx, {
     family: 'streaming',
-    operation: 'live eight-tool burst with competing send',
+    operation: 'live serial eight-tool burst with competing send',
     variant: 'large retained chat',
     context: {
       tools: 8,
@@ -164,16 +165,14 @@ export async function liveToolBurstRows(ctx: RunContext): Promise<void> {
     }
   })
   await sampled(ctx, row, ctx.workload.stream.samples, async (index) => {
-    const existing = new Set(
-      (await history(page(ctx), sessionId, 'tail', 40)).page.items.map((item) => item.itemId)
-    )
     const file = chatDatabasePath(ctx.launch.userDataDir)
     if (!file) {
       throw new Error('no chat database; live contention not exercised')
     }
-    const observer = runningToolsObserver(file, sessionId)
-    const runningTools = () => observer.read().filter((id) => !existing.has(id))
     const tag = tagFor('burst')
+    const expected = burstCallIds(tag)
+    const observer = runningToolsObserver(file, sessionId, expected)
+    const runningTools = () => observer.read()
     const stopPressure = samplePressure(ctx.launch.app, ctx.launch.userDataDir)
     let pressure
     let sample
@@ -197,6 +196,7 @@ export async function liveToolBurstRows(ctx: RunContext): Promise<void> {
               epoch: observer.epoch,
               afterPosition: observer.position,
               burstTag: tag,
+              expectedCallIds: expected,
               count: live.length,
               itemIds: live
             })
@@ -208,18 +208,11 @@ export async function liveToolBurstRows(ctx: RunContext): Promise<void> {
           }),
           (async () => {
             await waitForDurable(page(ctx), sessionId, `4A-TAIL-${tag}`, 300_000, 25)
-            const tail = await waitForIdle(page(ctx), sessionId, 300_000)
-            const completed = tail.items.filter(
-              (item) =>
-                !existing.has(item.itemId) &&
-                item.body?.kind === 'tool-call' &&
-                item.body.state === 'completed'
-            ).length
-            if (completed !== 8) {
-              throw new Error(`burst completed ${completed} tools, expected 8`)
-            }
+            await waitForIdle(page(ctx), sessionId, 300_000)
+            const proof = await completedBurst(page(ctx), sessionId, expected)
+            row.context[`completedBurst.sample${index + 1}`] = JSON.stringify(proof)
             const done = await waitForWorking(page(ctx), false, 300_000)
-            return { completed, done }
+            return { completed: proof.completed, done }
           })()
         ])
         if (otherSend.status === 'rejected') {
