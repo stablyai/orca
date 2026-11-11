@@ -1,4 +1,5 @@
 import { fleetWorkerIdentity } from '../../../../../shared/orchestration/fleet/orchestration-fleet-agent-status-evidence'
+import { ORCHESTRATION_FLEET_PAGE_MAX } from '../../../../../shared/orchestration/fleet/orchestration-fleet-projection'
 import { SETTLED_WORKER_STATES } from '../../../../../shared/orchestration/fleet/orchestration-fleet-worker-projection'
 import type { OrchestrationDb } from '../orchestration-db'
 import { WORKER_TERMINAL_HANDED_ON_SQL } from './worker-terminal-inventory-counts'
@@ -30,10 +31,11 @@ function ownerKeys(row: CandidateRow): string[] {
 
 /**
  * The Run's Dispatches whose worker-list outcome can be in_progress or whose next action can be
- * other than none, plus one other owner of each handle or pane they use, since a shared identity
+ * other than none, grouped by the newest-first page worker-list projects them in. Each group adds
+ * one other owner of every handle or pane its candidates use, since a page that shares an identity
  * withholds status evidence. Everything else is settled history that projects to none.
  */
-export function listWorkerReportWaitCandidates(this: OrchestrationDb, runId: string): string[] {
+export function listWorkerReportWaitCandidates(this: OrchestrationDb, runId: string): string[][] {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the query selects exactly these columns.
   const rows = this.db
     .prepare(
@@ -54,23 +56,35 @@ export function listWorkerReportWaitCandidates(this: OrchestrationDb, runId: str
          FROM dispatch_contexts d
          LEFT JOIN worker_dispatches w ON w.dispatch_id = d.id
          LEFT JOIN worker_terminal_resources r ON r.owner_dispatch_id = d.id
-        WHERE d.run_id = ?`
+        WHERE d.run_id = ?
+        ORDER BY d.rowid DESC`
     )
     .all(runId) as CandidateRow[]
   // Without a possibly running worker the hint cannot apply, so nothing needs projecting.
   if (!rows.some((row) => row.may_run === 1)) {
     return []
   }
+  const groups: string[][] = []
+  for (let offset = 0; offset < rows.length; offset += ORCHESTRATION_FLEET_PAGE_MAX) {
+    const group = keptRowsOfPage(rows.slice(offset, offset + ORCHESTRATION_FLEET_PAGE_MAX))
+    if (group.length > 0) {
+      groups.push(group)
+    }
+  }
+  return groups
+}
+
+function keptRowsOfPage(page: CandidateRow[]): string[] {
   const isCandidate = (row: CandidateRow) => row.may_run === 1 || row.may_owe_action === 1
-  const kept = rows.filter(isCandidate)
+  const kept = page.filter(isCandidate)
   // One more owner already makes a key shared; further owners change nothing.
   const unshared = new Set(kept.flatMap(ownerKeys))
-  for (const row of rows) {
+  for (const row of page) {
     const claimed = isCandidate(row) ? [] : ownerKeys(row).filter((key) => unshared.has(key))
     if (claimed.length > 0) {
       claimed.forEach((key) => unshared.delete(key))
       kept.push(row)
     }
   }
-  return [...new Set(kept.map((row) => row.dispatch_id))]
+  return kept.map((row) => row.dispatch_id)
 }

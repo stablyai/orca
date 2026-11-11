@@ -152,6 +152,7 @@ export function getAllMessages(this: OrchestrationDb, toHandle: string, limit = 
 }
 
 export function getMessageById(this: OrchestrationDb, id: string): MessageRow | undefined {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the column list names every column of the row type, and a missing one fails compilation.
   const message = this.db
     .prepare(`SELECT ${MESSAGE_COLUMN_LIST} FROM messages WHERE id = ?`)
     .get(id) as MessageRow | undefined

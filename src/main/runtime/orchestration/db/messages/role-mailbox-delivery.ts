@@ -11,6 +11,7 @@ import { DELIVERY_COLUMN_LIST } from '../row-column-lists'
 const OUTSTANDING_IN_MAILBOX = "mailbox_handle = ? AND mailbox_handle != ''"
 
 export function getDeliveryRaw(this: OrchestrationDb, id: string): DeliveryRow | undefined {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the column list names every column of the row type, and a missing one fails compilation.
   return this.db.prepare(`SELECT ${DELIVERY_COLUMN_LIST} FROM deliveries WHERE id = ?`).get(id) as
     | DeliveryRow
     | undefined

@@ -189,6 +189,7 @@ export function getMutationReceipt(
   callerFingerprint: string,
   requestId: string
 ): MutationReceiptRow | undefined {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the column list names every column of the row type, and a missing one fails compilation.
   return this.db
     .prepare(
       `SELECT ${MUTATION_RECEIPT_COLUMN_LIST} FROM mutation_receipts

@@ -3,10 +3,11 @@ import type { WorkerTerminalListState } from '../../../../orchestration/terminal
 /** Order by databaseId; keep createdAt/dispatchId so older peers can decode new cursors. */
 type WorkerListCursorAfter = { createdAt: string; dispatchId: string; databaseId?: number }
 
-/** The first page's count of the pinned snapshot; later pages repeat it instead of rescanning. */
+/** The first page's count of the pinned snapshot; later pages with the same filter repeat it instead of rescanning. */
 export type WorkerListInventory = {
   total: number
   counts: Partial<Record<WorkerTerminalListState, number>>
+  terminalState?: WorkerTerminalListState
 }
 
 type WorkerListCursorV1 = {
@@ -93,8 +94,10 @@ function isWorkerListInventory(value: unknown): value is WorkerListInventory {
   if (typeof value !== 'object' || value === null) {
     return false
   }
-  const { total, counts } = value as Partial<WorkerListInventory>
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every field is checked below before the value is trusted.
+  const { total, counts, terminalState } = value as Partial<WorkerListInventory>
   return (
+    (terminalState === undefined || typeof terminalState === 'string') &&
     Number.isSafeInteger(total) &&
     Number(total) >= 0 &&
     typeof counts === 'object' &&

@@ -7,6 +7,7 @@ export function getFederatedDispatch(
   this: OrchestrationDb,
   dispatchId: string
 ): FederatedDispatchRow | undefined {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the column list names every column of the row type, and a missing one fails compilation.
   return this.db
     .prepare(
       `SELECT ${FEDERATED_DISPATCH_COLUMN_LIST} FROM federated_dispatches WHERE dispatch_id = ?`

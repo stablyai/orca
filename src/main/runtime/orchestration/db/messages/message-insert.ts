@@ -87,6 +87,7 @@ export function insertMessage(this: OrchestrationDb, msg: MessageInsert): Messag
   // Mail filed in a peer Run is queued home by trigger in this statement.
   notifyPeerMailQueued(this.db)
   return exposeMessageTimestamps(
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the column list names every column of the row type, and a missing one fails compilation.
     this.db
       .prepare(`SELECT ${MESSAGE_COLUMN_LIST} FROM messages WHERE id = ?`)
       .get(id) as MessageRow

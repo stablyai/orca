@@ -11,6 +11,7 @@ import type { OrchestrationDb } from '../orchestration-db'
 import { LEGACY_ADOPTION_COLUMN_LIST } from '../row-column-lists'
 
 export function getLegacyAdoption(this: OrchestrationDb): LegacyAdoptionRow | undefined {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the column list names every column of the row type, and a missing one fails compilation.
   return this.db
     .prepare(`SELECT ${LEGACY_ADOPTION_COLUMN_LIST} FROM legacy_adoptions WHERE source_run_id = ?`)
     .get(LEGACY_RUN_ID) as LegacyAdoptionRow | undefined

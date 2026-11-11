@@ -127,6 +127,7 @@ export function getDispatchContextById(
   this: OrchestrationDb,
   dispatchId: string
 ): DispatchContextRow | undefined {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the column list names every column of the row type, and a missing one fails compilation.
   return this.db
     .prepare(`SELECT ${DISPATCH_CONTEXT_COLUMN_LIST} FROM dispatch_contexts WHERE id = ?`)
     .get(dispatchId) as DispatchContextRow | undefined

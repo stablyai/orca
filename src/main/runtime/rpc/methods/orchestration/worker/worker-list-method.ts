@@ -210,16 +210,20 @@ async function projectWorkerListPageWithFilteredSnapshot(
   })
   // Derive totals and counts from the same pinned membership; live filter scans can count rows the cursor cannot reach.
   const pinnedCount = filteredSnapshot?.dispatchIds.length
+  const carried = snapshotCursor?.version === 3 ? undefined : snapshotCursor?.inventory
   const inventory: WorkerListInventory =
     pinnedCount !== undefined && params.terminalState
       ? { total: pinnedCount, counts: { [params.terminalState]: pinnedCount } }
-      : snapshotCursor?.version !== 3 && snapshotCursor?.inventory
-        ? snapshotCursor.inventory
-        : db.countWorkerTerminalInventory({
-            runId: params.run,
-            terminalState: params.terminalState,
-            snapshot: args.snapshot
-          })
+      : carried && carried.terminalState === params.terminalState
+        ? carried
+        : {
+            ...db.countWorkerTerminalInventory({
+              runId: params.run,
+              terminalState: params.terminalState,
+              snapshot: args.snapshot
+            }),
+            ...(params.terminalState ? { terminalState: params.terminalState } : {})
+          }
   const nextRow = pageRows.at(-1)
   fleet.page = {
     limit,
