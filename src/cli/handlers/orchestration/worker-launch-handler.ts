@@ -73,7 +73,8 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
       displayName: getOptionalStringFlag(flags, 'display-name'),
       comment: getOptionalStringFlag(flags, 'comment'),
       setup: getOptionalStringFlag(flags, 'setup'),
-      agent: getOptionalStringFlag(flags, 'agent'),
+      // Omitted --agent falls back to the Settings default, so an empty one must error.
+      agent: getPresentStringFlag(flags, 'agent'),
       model,
       effort,
       terminal,

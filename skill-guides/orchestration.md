@@ -27,12 +27,14 @@ Orca wakes you with the answer. To hand work off with nothing back, use `orca-cl
 place and use it for every command.
 
 ```text
-ORCA orchestration worker-start --spec "<task>" --worktree current --agent codex
+ORCA orchestration worker-start --spec "<task>" --worktree current
 ```
 
 - Start every independent worker, then **end your turn**. "Report back" and
   "tell me when it's done" still mean end your turn; Orca wakes you and you
   report then.
+- Omitting `--agent` launches the worker host's Settings default agent; name one
+  only when the user or task calls for it.
 - If a receipt has `next`, follow it. When Orca has nothing for you, end your
   turn.
 - `--worktree current` uses your workspace. Use a new one only when the user
