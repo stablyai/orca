@@ -282,7 +282,7 @@ it('keeps the actual implicit and explicitly chosen checkout through control sav
   act(() => useAppStore.setState({ repos }))
   const user = userEvent.setup()
   async function choose(label: string | RegExp) {
-    await user.click(screen.getByRole('combobox', { name: 'Group checkouts' }))
+    await user.click(screen.getByRole('combobox', { name: /^Group checkouts$/i }))
     await user.click(screen.getByRole('option', { name: label }))
   }
   expect(screen.getByText(first.path, { selector: 'p.max-w-3xl' })).toBeTruthy()
@@ -293,20 +293,20 @@ it('keeps the actual implicit and explicitly chosen checkout through control sav
   await user.clear(template())
   await user.type(template(), 'unsaved command')
   await user.type(args(), '--unsaved-args')
-  await user.click(screen.getByRole('button', { name: 'New Preset' }))
-  await user.type(screen.getByRole('textbox', { name: 'Name' }), 'unsaved preset')
-  await user.click(screen.getByRole('combobox', { name: 'Add a folder' }))
+  await user.click(screen.getByRole('button', { name: /^New Preset$/i }))
+  await user.type(screen.getByRole('textbox', { name: /^Name$/i }), 'unsaved preset')
+  await user.click(screen.getByRole('combobox', { name: /^Add a folder$/i }))
   await user.type(screen.getByPlaceholderText('Find a folder, or type any path…'), 'src')
   await user.keyboard('{Enter}')
   await user.type(screen.getByPlaceholderText('example.com'), 'https://harbor.example')
   const custom = screen.getByPlaceholderText('e.g. ollama run llama3.1 {prompt}')
   await user.click(within(custom.parentElement!).getByRole('combobox'))
-  await user.click(screen.getByRole('option', { name: 'Repository command' }))
+  await user.click(screen.getByRole('option', { name: /^Repository command$/i }))
   commits.length = 0
   await choose('Separate by folder')
   expect(template().value).toBe('unsaved command')
   expect(args().value).toBe('--unsaved-args')
-  expect(screen.getByRole('textbox', { name: 'Name' })).toHaveProperty('value', 'unsaved preset')
+  expect(screen.getByRole('textbox', { name: /^Name$/i })).toHaveProperty('value', 'unsaved preset')
   expect(screen.getByPlaceholderText('example.com')).toHaveProperty(
     'value',
     'https://harbor.example'
@@ -325,7 +325,7 @@ it('keeps the actual implicit and explicitly chosen checkout through control sav
   await waitFor(() =>
     expect(document.getElementById('repo-a-source-control-ai-commitMessage')).toBeNull()
   )
-  expect(screen.getByRole('textbox', { name: 'Name' })).toHaveProperty('value', 'unsaved preset')
+  expect(screen.getByRole('textbox', { name: /^Name$/i })).toHaveProperty('value', 'unsaved preset')
   // Keep the actual setting-title query through a source-only gap: neither search nor navigation changed.
   const beforeGapSection = selectedSection
   const explicitWritesBeforeGap = writeRepo.mock.calls.filter(
@@ -338,11 +338,11 @@ it('keeps the actual implicit and explicitly chosen checkout through control sav
   expect(visibleCount).toBe(0)
   expect(document.querySelector('input[id^="repo-display-name-"]')).toBeNull()
   expect(screen.getByText('No settings found for "sparse checkout presets"')).toBeTruthy()
-  expect(screen.queryByRole('button', { name: 'Save preset' })).toBeNull()
+  expect(screen.queryByRole('button', { name: /^Save preset$/i })).toBeNull()
   expect(document.getElementById('repo-a-source-control-ai-commitMessage')).toBeNull()
   const unavailableDuringGap = screen.queryByText(/available hosts/i) !== null
   act(() => useAppStore.setState({ repos: [first, twin] }))
-  expect(screen.getByRole('textbox', { name: 'Name' })).toHaveProperty('value', 'unsaved preset')
+  expect(screen.getByRole('textbox', { name: /^Name$/i })).toHaveProperty('value', 'unsaved preset')
   expect(screen.getByText('src', { exact: true })).toBeTruthy()
   expect(unavailableDuringGap).toBe(true)
   expect(savePreset).not.toHaveBeenCalled()
@@ -356,8 +356,8 @@ it('keeps the actual implicit and explicitly chosen checkout through control sav
   expect(screen.getByText('No settings found for "no-match-pg9-current-session"')).toBeTruthy()
   expect(document.querySelector('input[id^="repo-display-name-"]')).toBeNull()
   act(() => useAppStore.getState().setSettingsSearchQuery('sparse checkout presets'))
-  await waitFor(() => expect(screen.getByRole('textbox', { name: 'Name' })).toBeTruthy())
-  expect(screen.getByRole('textbox', { name: 'Name' })).toHaveProperty('value', 'unsaved preset')
+  await waitFor(() => expect(screen.getByRole('textbox', { name: /^Name$/i })).toBeTruthy())
+  expect(screen.getByRole('textbox', { name: /^Name$/i })).toHaveProperty('value', 'unsaved preset')
   expect(screen.getByText('src', { exact: true })).toBeTruthy()
   expect(savePreset).not.toHaveBeenCalled()
   expect(writeRepo.mock.calls.filter(([args]) => args.updates.sourceControlAi)).toHaveLength(
@@ -396,10 +396,10 @@ it('keeps the actual implicit and explicitly chosen checkout through control sav
   )
   // Exact Repo absence suspends a dirty script timer while the single issue watcher and all pending inputs survive.
   vi.useFakeTimers()
-  fireEvent.change(screen.getByRole('textbox', { name: 'Setup Script' }), {
+  fireEvent.change(screen.getByRole('textbox', { name: /^Setup Script$/i }), {
     target: { value: 'echo pending setup' }
   })
-  fireEvent.change(screen.getByRole('textbox', { name: 'Custom GitHub Issue Command' }), {
+  fireEvent.change(screen.getByRole('textbox', { name: /^Custom GitHub Issue Command$/i }), {
     target: { value: 'pending issue' }
   })
   const issueReads = readIssue.mock.calls.length
@@ -408,7 +408,7 @@ it('keeps the actual implicit and explicitly chosen checkout through control sav
   const scriptBefore = scriptWrites()
   act(() => useAppStore.setState({ repos: [second, twin] }))
   expect(document.querySelector('input[id^="repo-display-name-"]')).toBeNull()
-  expect(screen.queryByText('Source Control AI', { selector: 'h3' })).toBeNull()
+  expect(screen.queryByText(/source control ai/i, { selector: 'h3' })).toBeNull()
   act(() => vi.advanceTimersByTime(1000))
   expect(scriptWrites()).toBe(scriptBefore)
   act(() =>
@@ -422,8 +422,8 @@ it('keeps the actual implicit and explicitly chosen checkout through control sav
   )
   expect(template().value).toBe('unsaved command')
   expect(args().value).toBe('--unsaved-args')
-  expect(screen.getByRole('textbox', { name: 'Name' })).toHaveProperty('value', 'unsaved preset')
-  expect(screen.getByRole('textbox', { name: 'Custom GitHub Issue Command' })).toHaveProperty(
+  expect(screen.getByRole('textbox', { name: /^Name$/i })).toHaveProperty('value', 'unsaved preset')
+  expect(screen.getByRole('textbox', { name: /^Custom GitHub Issue Command$/i })).toHaveProperty(
     'value',
     'pending issue'
   )
@@ -432,13 +432,13 @@ it('keeps the actual implicit and explicitly chosen checkout through control sav
     within(
       screen.getByPlaceholderText('e.g. ollama run llama3.1 {prompt}').parentElement!
     ).getByRole('combobox').textContent
-  ).toContain('Repository command')
+  ).toMatch(/repository command/i)
   await act(async () => {
     vi.advanceTimersByTime(700)
   })
   expect(scriptWrites()).toBe(scriptBefore + 1)
   vi.useRealTimers()
-  fireEvent.blur(screen.getByRole('textbox', { name: 'Custom GitHub Issue Command' }))
+  fireEvent.blur(screen.getByRole('textbox', { name: /^Custom GitHub Issue Command$/i }))
   await waitFor(() =>
     expect(writeIssue).toHaveBeenCalledWith({
       repoId: 'a',
@@ -447,7 +447,7 @@ it('keeps the actual implicit and explicitly chosen checkout through control sav
       wakeWslDistro: true
     })
   )
-  await user.click(screen.getByRole('button', { name: 'Favicon' }))
+  await user.click(screen.getByRole('button', { name: /^Favicon$/i }))
   await waitFor(() =>
     expect(
       writeRepo.mock.calls.some(
@@ -458,7 +458,7 @@ it('keeps the actual implicit and explicitly chosen checkout through control sav
       )
     ).toBe(true)
   )
-  await user.click(screen.getByRole('button', { name: 'Add Path' }))
+  await user.click(screen.getByRole('button', { name: /^Add Path$/i }))
   await user.type(
     screen.getByPlaceholderText('Type a path (e.g. .env or node_modules)…'),
     '.pending-env'
@@ -468,20 +468,20 @@ it('keeps the actual implicit and explicitly chosen checkout through control sav
     'value',
     '.pending-env'
   )
-  await user.click(screen.getByRole('option', { name: 'Add .pending-env' }))
+  await user.click(screen.getByRole('option', { name: /^Add \.pending-env$/i }))
   await waitFor(() =>
     expect(
       writeRepo.mock.calls.some(([args]) => args.updates.symlinkPaths?.includes('.pending-env'))
     ).toBe(true)
   )
-  await user.click(screen.getByRole('button', { name: 'Save preset' }))
+  await user.click(screen.getByRole('button', { name: /^Save preset$/i }))
   expect(savePreset).toHaveBeenCalledWith(
     expect.objectContaining({ repoId: 'a', name: 'unsaved preset', directories: ['src'] })
   )
   // Failed explicit Save retains both fields; a successful captured Save cannot clear newer typing.
   writeRepo.mockRejectedValueOnce(new Error('save refused'))
   const quiet = vi.spyOn(console, 'error').mockImplementation(() => {})
-  await user.click(within(recipe()).getByRole('button', { name: 'Save' }))
+  await user.click(within(recipe()).getByRole('button', { name: /^Save$/i }))
   await waitFor(() =>
     expect(screen.getByText('Failed to save Source Control AI settings.')).toBeTruthy()
   )
@@ -494,7 +494,7 @@ it('keeps the actual implicit and explicitly chosen checkout through control sav
     })
     return undefined
   })
-  await user.click(within(recipe()).getByRole('button', { name: 'Save' }))
+  await user.click(within(recipe()).getByRole('button', { name: /^Save$/i }))
   await waitFor(() => expect(finishWrite).toBeTypeOf('function'))
   await user.type(template(), ' newer')
   act(() =>
@@ -513,7 +513,7 @@ it('keeps the actual implicit and explicitly chosen checkout through control sav
     })
     return undefined
   })
-  await user.click(within(recipe()).getByRole('button', { name: 'Save' }))
+  await user.click(within(recipe()).getByRole('button', { name: /^Save$/i }))
   await waitFor(() => expect(finishOld).toBeTypeOf('function'))
   act(() => selectTwin())
   expect(screen.getByText(twin.path, { selector: 'p.max-w-3xl' })).toBeTruthy()
@@ -599,19 +599,19 @@ it('keeps the actual implicit and explicitly chosen checkout through control sav
   await choose('Separate by folder')
   await user.clear(template())
   await user.type(template(), 'retire only on committed removal')
-  await user.click(screen.getByRole('button', { name: 'Remove Project' }))
+  await user.click(screen.getByRole('button', { name: /^Remove Project$/i }))
   await user.click(screen.getByText('Identity', { selector: 'h3' }))
   expect(removeForHost).not.toHaveBeenCalled()
   expect(template().value).toBe('retire only on committed removal')
   removeForHost.mockRejectedValueOnce(new Error('host refused removal'))
   const quietRemoval = vi.spyOn(console, 'error').mockImplementation(() => {})
-  await user.click(screen.getByRole('button', { name: 'Remove Project' }))
-  await user.click(screen.getByRole('button', { name: 'Confirm Remove Project' }))
+  await user.click(screen.getByRole('button', { name: /^Remove Project$/i }))
+  await user.click(screen.getByRole('button', { name: /^Confirm Remove Project$/i }))
   await waitFor(() => expect(removeForHost).toHaveBeenCalledTimes(1))
   quietRemoval.mockRestore()
   expect(template().value).toBe('retire only on committed removal')
-  await user.click(screen.getByRole('button', { name: 'Remove Project' }))
-  await user.click(screen.getByRole('button', { name: 'Confirm Remove Project' }))
+  await user.click(screen.getByRole('button', { name: /^Remove Project$/i }))
+  await user.click(screen.getByRole('button', { name: /^Confirm Remove Project$/i }))
   await waitFor(() =>
     expect(
       useAppStore
@@ -632,16 +632,16 @@ it('keeps the actual implicit and explicitly chosen checkout through control sav
     useAppStore.getState().openSettingsTarget({ pane: 'repo', repoId: first.id, hostId: 'local' })
   )
   expect(template().value).not.toBe('retire only on committed removal')
-  expect(screen.queryByRole('textbox', { name: 'Name' })).toBeNull()
+  expect(screen.queryByRole('textbox', { name: /^Name$/i })).toBeNull()
   await user.clear(template())
   await user.type(template(), 'retire on Settings close')
   act(() => markGlobalDirty())
   discardAllowed = false
-  await user.click(screen.getByRole('button', { name: 'Back to app' }))
+  await user.click(screen.getByRole('button', { name: /^Back to app$/i }))
   expect(useAppStore.getState().activeView).toBe('settings')
   expect(template().value).toBe('retire on Settings close')
   discardAllowed = true
-  await user.click(screen.getByRole('button', { name: 'Back to app' }))
+  await user.click(screen.getByRole('button', { name: /^Back to app$/i }))
   expect(useAppStore.getState().activeView).not.toBe('settings')
   expect(document.querySelector('.settings-view-shell')).toBeNull()
   act(() => useAppStore.setState({ repos }))
