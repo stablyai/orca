@@ -1,4 +1,5 @@
 import type { TabGroupLayoutNode } from '../tab-types'
+import { equalizeWeight } from './terminal-pane-tree'
 
 export function buildSplitNode(
   existingGroupId: string,
@@ -51,6 +52,63 @@ export function updateSplitRatio(
     return { ...root, second: updateSplitRatio(root.second, rest, ratio) }
   }
   return root
+}
+
+/** Gives each same-axis split its share of groups; returns `node` itself when nothing changes. */
+function equalizeSplitRun(node: TabGroupLayoutNode, direction: string): TabGroupLayoutNode {
+  if (node.type !== 'split' || node.direction !== direction) {
+    return node
+  }
+  const first = equalizeSplitRun(node.first, direction)
+  const second = equalizeSplitRun(node.second, direction)
+  const firstWeight = equalizeWeight(first, direction)
+  const ratio = firstWeight / (firstWeight + equalizeWeight(second, direction))
+  // Why: an unchanged run must keep its identity so the store commit is a no-op (STA-3328).
+  return first === node.first && second === node.second && (node.ratio ?? 0.5) === ratio
+    ? node
+    : { ...node, first, second, ratio }
+}
+
+/**
+ * Equalizes every group laid out along the axis of the split at `path`, however the binary
+ * tree nests them; cross-axis splits keep their ratios. Returns `root` when nothing changes.
+ */
+export function equalizeSplitRunRatios(
+  root: TabGroupLayoutNode,
+  path: string[]
+): TabGroupLayoutNode {
+  const ancestors: Extract<TabGroupLayoutNode, { type: 'split' }>[] = []
+  let node = root
+  for (const segment of path) {
+    if (node.type !== 'split' || (segment !== 'first' && segment !== 'second')) {
+      return root
+    }
+    ancestors.push(node)
+    node = node[segment]
+  }
+  if (node.type !== 'split') {
+    return root
+  }
+  const direction = node.direction
+  let runRootDepth = path.length
+  while (runRootDepth > 0 && ancestors[runRootDepth - 1].direction === direction) {
+    runRootDepth -= 1
+  }
+  const rebuild = (current: TabGroupLayoutNode, depth: number): TabGroupLayoutNode => {
+    if (depth === runRootDepth) {
+      return equalizeSplitRun(current, direction)
+    }
+    if (current.type !== 'split') {
+      return current
+    }
+    if (path[depth] === 'first') {
+      const first = rebuild(current.first, depth + 1)
+      return first === current.first ? current : { ...current, first }
+    }
+    const second = rebuild(current.second, depth + 1)
+    return second === current.second ? current : { ...current, second }
+  }
+  return rebuild(root, 0)
 }
 
 function findFirstLeaf(root: TabGroupLayoutNode): string {

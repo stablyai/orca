@@ -7,7 +7,10 @@ import {
 } from '@/runtime/workspace-layout/frames/layout-frame-position'
 import { createTestStore, seedStore } from '@/store/testing/app-store-test-fixture'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
-import { dropTabThroughLayoutOwner } from './tab-group-layout-owner-commands'
+import {
+  dropTabThroughLayoutOwner,
+  equalizeGroupRunThroughLayoutOwner
+} from './tab-group-layout-owner-commands'
 import { LOCAL_LAYOUT_APPLY_ORIGIN } from '@/runtime/workspace-layout/server/server-layout-apply-routes'
 import { pendingMovedTabSelections } from '@/runtime/workspace-layout/intents/layout-owner-pane-intents'
 
@@ -124,5 +127,64 @@ describe('dropTabThroughLayoutOwner', () => {
     dropTabThroughLayoutOwner(WT, { kind: 'move', tabId: 'a', groupId: right })
     lastHandlers().asToday()
     expect(orderOf(right)).toEqual(['c', 'a'])
+  })
+})
+
+describe('equalizeGroupRunThroughLayoutOwner', () => {
+  // Three groups side by side, nested as left | (right | third) at 50/25/25.
+  function seededRow(innerRatio: number): void {
+    const { left, right } = seeded()
+    store().setState((state) => ({
+      layoutByWorktree: {
+        ...state.layoutByWorktree,
+        [WT]: {
+          type: 'split',
+          direction: 'horizontal',
+          ratio: 0.5,
+          first: { type: 'leaf', groupId: left },
+          second: {
+            type: 'split',
+            direction: 'horizontal',
+            ratio: innerRatio,
+            first: { type: 'leaf', groupId: right },
+            second: { type: 'leaf', groupId: 'third' }
+          }
+        }
+      }
+    }))
+  }
+  const ratiosOf = () => {
+    const root = store().getState().layoutByWorktree[WT]!
+    return root.type === 'split' && root.second.type === 'split'
+      ? [root.ratio, root.second.ratio]
+      : null
+  }
+
+  it('draws the equal row locally and sends every changed ratio in one command', () => {
+    seededRow(0.7)
+
+    equalizeGroupRunThroughLayoutOwner(WT, 'second')
+
+    expect(ratiosOf()).toEqual([1 / 3, 0.5])
+    expect(mocks.send).toHaveBeenCalledTimes(1)
+    const [worktreeId, command] = mocks.send.mock.calls[0]!
+    expect(worktreeId).toBe(WT)
+    expect(command).toMatchObject({ type: 'setGroupRatios' })
+    expect(
+      command.type === 'setGroupRatios' && command.ratios.map((r) => [r.path, r.ratio])
+    ).toEqual([
+      ['', 1 / 3],
+      ['second', 0.5]
+    ])
+  })
+
+  it('sends nothing when the row is already equal', () => {
+    seededRow(0.5)
+    equalizeGroupRunThroughLayoutOwner(WT, 'second')
+    mocks.send.mockReset()
+
+    equalizeGroupRunThroughLayoutOwner(WT, '')
+
+    expect(mocks.send).not.toHaveBeenCalled()
   })
 })

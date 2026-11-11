@@ -1,4 +1,5 @@
 import { holdPtyResizesForPaneSubtrees } from './pane-pty-resize-hold'
+import { equalizeSameAxisPaneRun } from './pane-tree-equalization'
 
 export type DividerCallbacks = {
   refitPanesUnder: (el: HTMLElement) => void
@@ -255,17 +256,14 @@ export function attachDividerDrag(
   }
 
   const onDoubleClick = (): void => {
-    const prev = divider.previousElementSibling as HTMLElement | null
-    const next = divider.nextElementSibling as HTMLElement | null
-    if (!prev || !next) {
+    // Why: panes nest as a binary tree, so resetting only this divider's two
+    // siblings leaves three side-by-side panes at 50/25/25.
+    const runRoot = divider.parentElement && equalizeSameAxisPaneRun(divider.parentElement)
+    if (!runRoot) {
       return
     }
 
-    prev.style.flex = '1 1 0%'
-    next.style.flex = '1 1 0%'
-
-    callbacks.refitPanesUnder(prev)
-    callbacks.refitPanesUnder(next)
+    callbacks.refitPanesUnder(runRoot)
     callbacks.onLayoutChanged?.()
     callbacks.onDividerRatiosCommitted?.()
   }
